@@ -24,7 +24,7 @@ class LMDBBlockStore[F[_]] private (val env: Env[ByteBuffer], path: Path, blocks
     metricsF: Metrics[F]
 ) extends BlockStore[F] {
 
-  private implicit val metricsSource: Metrics.Source =
+  implicit private val metricsSource: Metrics.Source =
     Metrics.Source(BlockStorageMetricsSource, "lmdb")
 
   implicit class RichBlockHash(byteVector: BlockHash) {

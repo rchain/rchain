@@ -785,16 +785,15 @@ object Reduce {
                            _ <- charge[M](
                                  listAppendCost(rhs.ps.toVector)
                                )
-                         } yield
-                           Expr(
-                             EListBody(
-                               EList(
-                                 lhs.ps ++ rhs.ps,
-                                 lhs.locallyFree union rhs.locallyFree,
-                                 lhs.connectiveUsed || rhs.connectiveUsed
-                               )
+                         } yield Expr(
+                           EListBody(
+                             EList(
+                               lhs.ps ++ rhs.ps,
+                               lhs.locallyFree union rhs.locallyFree,
+                               lhs.connectiveUsed || rhs.connectiveUsed
                              )
                            )
+                         )
                        case (lhs: EMapBody, rhs: EMapBody) =>
                          for {
                            resultPar <- union(lhs, List[Par](rhs))

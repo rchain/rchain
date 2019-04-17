@@ -25,7 +25,7 @@ class SslSessionClientCallInterceptor[ReqT, RespT](next: ClientCall[ReqT, RespT]
     extends ClientCall[ReqT, RespT] {
   self =>
 
-  private implicit val logSource: LogSource = LogSource(this.getClass)
+  implicit private val logSource: LogSource = LogSource(this.getClass)
   private val log                           = Log.logId
 
   def cancel(message: String, cause: Throwable): Unit = next.cancel(message, cause)

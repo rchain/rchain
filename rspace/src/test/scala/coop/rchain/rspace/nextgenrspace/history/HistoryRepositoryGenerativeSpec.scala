@@ -1,7 +1,12 @@
 package coop.rchain.rspace.nextgenrspace.history
 
-import cats.effect.Sync
+import cats.effect.{Resource, Sync}
+import java.nio.ByteBuffer
+import java.nio.file.{Files, Path}
+
 import coop.rchain.rspace.{
+  Blake2b256Hash,
+  Context,
   DeleteContinuations,
   DeleteData,
   DeleteJoins,
@@ -22,26 +27,61 @@ import org.scalatest.prop.GeneratorDrivenPropertyChecks
 import scodec.Codec
 import monix.execution.Scheduler.Implicits.global
 import cats.implicits._
+import coop.rchain.rspace.nextgenrspace.history.History.Trie
+import org.lmdbjava.{Dbi, EnvFlags}
+import org.lmdbjava.DbiFlags.MDB_CREATE
 
 import scala.concurrent.duration._
 
-class HistoryRepositoryGenerativeSpec
-    extends FlatSpec
-    with Matchers
-    with OptionValues
-    with GeneratorDrivenPropertyChecks
-    with InMemoryHistoryRepositoryTestBase {
+class LMDBHistoryRepositoryGenerativeSpec extends HistoryRepositoryGenerativeDefinition {
+  implicit val propertyCheckConfigParam: PropertyCheckConfiguration =
+    PropertyCheckConfiguration(minSuccessful = 2)
 
+  val emptyRoot: Trie               = EmptyTrie
+  val emptyRootHash: Blake2b256Hash = Trie.hash(emptyRoot)(History.codecTrie)
+
+  def lmdbConfig = {
+    val dbDir: Path = Files.createTempDirectory("rchain-storage-test-")
+    StoreConfig(
+      dbDir.toAbsolutePath.toString,
+      1024L * 1024L * 4096L,
+      2,
+      2048,
+      List(EnvFlags.MDB_NOTLS)
+    )
+  }
+
+  def lmdbHistoryStore =
+    HistoryStoreInstances.historyStore(StoreInstances.lmdbStore[Task](lmdbConfig))
+
+  def lmdbPointerBlockStore =
+    PointerBlockStoreInstances.pointerBlockStore(StoreInstances.lmdbStore[Task](lmdbConfig))
+
+  def lmdbColdStore =
+    ColdStoreInstances.coldStore(StoreInstances.lmdbStore[Task](lmdbConfig))
+
+  override def repo: HistoryRepository[Task, String, Pattern, String, StringsCaptor] = {
+    val hs = lmdbHistoryStore
+    val cs = lmdbColdStore
+    val pb = lmdbPointerBlockStore
+    val emptyHistory =
+      new History[Task](emptyRootHash, hs, pb)
+    val repository: HistoryRepository[Task, String, Pattern, String, StringsCaptor] =
+      HistoryRepositoryImpl.apply[Task, String, Pattern, String, StringsCaptor](
+        emptyHistory,
+        cs
+      )
+    repository
+  }
+}
+
+class InmemHistoryRepositoryGenerativeSpec
+    extends HistoryRepositoryGenerativeDefinition
+    with InMemoryHistoryRepositoryTestBase {
   implicit val propertyCheckConfigParam: PropertyCheckConfiguration =
     PropertyCheckConfiguration(minSuccessful = 10)
 
-  implicit val codecString: Codec[String]   = implicitly[Serialize[String]].toCodec
-  implicit val codecP: Codec[Pattern]       = implicitly[Serialize[Pattern]].toCodec
-  implicit val codecK: Codec[StringsCaptor] = implicitly[Serialize[StringsCaptor]].toCodec
-
-  "HistoryRepository" should "accept all HotStoreActions" in forAll(
-    distinctListOf(arbitraryHotStoreActions)
-  ) { actions: List[HotStoreAction] =>
+  override def repo: HistoryRepository[Task, String, Pattern, String, StringsCaptor] = {
     val emptyHistory =
       new History[Task](emptyRootHash, inMemHistoryStore, inMemPointerBlockStore)
     val repository: HistoryRepository[Task, String, Pattern, String, StringsCaptor] =
@@ -49,6 +89,26 @@ class HistoryRepositoryGenerativeSpec
         emptyHistory,
         inMemColdStore
       )
+    repository
+  }
+}
+
+abstract class HistoryRepositoryGenerativeDefinition
+    extends FlatSpec
+    with Matchers
+    with OptionValues
+    with GeneratorDrivenPropertyChecks {
+
+  implicit val codecString: Codec[String]   = implicitly[Serialize[String]].toCodec
+  implicit val codecP: Codec[Pattern]       = implicitly[Serialize[Pattern]].toCodec
+  implicit val codecK: Codec[StringsCaptor] = implicitly[Serialize[StringsCaptor]].toCodec
+
+  def repo: HistoryRepository[Task, String, Pattern, String, StringsCaptor]
+
+  "HistoryRepository" should "accept all HotStoreActions" in forAll(
+    distinctListOf(arbitraryHotStoreActions)
+  ) { actions: List[HotStoreAction] =>
+    val repository = repo
     actions
       .foldLeftM(repository) { (repo, action) =>
         for {

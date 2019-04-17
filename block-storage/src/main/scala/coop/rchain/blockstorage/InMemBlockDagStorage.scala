@@ -163,13 +163,12 @@ object InMemBlockDagStorage {
       dataLookupRef           <- Ref.of[F, Map[BlockHash, BlockMetadata]](Map.empty)
       topoSortRef             <- Ref.of[F, Vector[Vector[BlockHash]]](Vector.empty)
       equivocationsTrackerRef <- Ref.of[F, Set[EquivocationRecord]](Set.empty)
-    } yield
-      new InMemBlockDagStorage[F](
-        lock,
-        latestMessagesRef,
-        childMapRef,
-        dataLookupRef,
-        topoSortRef,
-        equivocationsTrackerRef
-      )
+    } yield new InMemBlockDagStorage[F](
+      lock,
+      latestMessagesRef,
+      childMapRef,
+      dataLookupRef,
+      topoSortRef,
+      equivocationsTrackerRef
+    )
 }

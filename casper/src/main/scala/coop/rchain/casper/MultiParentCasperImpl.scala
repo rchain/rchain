@@ -45,7 +45,7 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Sync: ConnectionsCell: Trans
 )(implicit state: Cell[F, CasperState])
     extends MultiParentCasper[F] {
 
-  private implicit val logSource: LogSource = LogSource(this.getClass)
+  implicit private val logSource: LogSource = LogSource(this.getClass)
 
   type Validator = ByteString
 

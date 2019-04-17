@@ -21,6 +21,7 @@ import coop.rchain.shared.LogSource
 import scala.collection.immutable
 
 object ProtoUtil {
+
   /*
    * c is in the blockchain of b iff c == b or c is in the blockchain of the main parent of b
    */

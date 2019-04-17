@@ -29,15 +29,14 @@ object blockImplicits {
       timestamp       <- arbitrary[Long]
       parentsHashList <- arbitrary[Seq[ByteString]]
       justifications  <- arbitrary[Seq[Justification]]
-    } yield
-      BlockMessage(blockHash = hash)
-        .withHeader(
-          Header()
-            .withParentsHashList(parentsHashList)
-            .withVersion(version)
-            .withTimestamp(timestamp)
-        )
-        .withSender(validator)
+    } yield BlockMessage(blockHash = hash)
+      .withHeader(
+        Header()
+          .withParentsHashList(parentsHashList)
+          .withVersion(version)
+          .withTimestamp(timestamp)
+      )
+      .withSender(validator)
 
   val blockElementsGen: Gen[List[BlockMessage]] =
     Gen.listOf(blockElementGen)

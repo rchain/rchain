@@ -48,13 +48,13 @@ class InMemoryTrieStore[K, V]
       }
     }
 
-  override private[rspace] def getRoot(
+  private[rspace] override def getRoot(
       txn: InMemTransaction[State[K, V]],
       branch: Branch
   ): Option[Blake2b256Hash] =
     txn.readState(state => state._dbRoot.get(branch))
 
-  override private[rspace] def persistAndGetRoot(
+  private[rspace] override def persistAndGetRoot(
       txn: InMemTransaction[State[K, V]],
       branch: Branch
   ): Option[Blake2b256Hash] =
@@ -66,7 +66,7 @@ class InMemoryTrieStore[K, V]
         currentRoot
       }
 
-  override private[rspace] def putRoot(
+  private[rspace] override def putRoot(
       txn: InMemTransaction[State[K, V]],
       branch: Branch,
       hash: Blake2b256Hash
@@ -80,7 +80,7 @@ class InMemoryTrieStore[K, V]
       state => state._dbPastRoots
     )
 
-  override private[rspace] def validateAndPutRoot(
+  private[rspace] override def validateAndPutRoot(
       txn: InMemTransaction[State[K, V]],
       branch: Branch,
       hash: Blake2b256Hash
@@ -97,31 +97,31 @@ class InMemoryTrieStore[K, V]
       }
       .orElse(throw new Exception(s"Unknown root."))
 
-  override private[rspace] def put(
+  private[rspace] override def put(
       txn: InMemTransaction[State[K, V]],
       key: Blake2b256Hash,
       value: Trie[K, V]
   ): Unit =
     txn.writeState(state => (state.changeTrie(state._dbTrie + (key -> value)), ()))
 
-  override private[rspace] def get(
+  private[rspace] override def get(
       txn: InMemTransaction[State[K, V]],
       key: Blake2b256Hash
   ): Option[Trie[K, V]] =
     txn.readState(state => state._dbTrie.get(key))
 
-  override private[rspace] def toMap: Map[Blake2b256Hash, Trie[K, V]] =
+  private[rspace] override def toMap: Map[Blake2b256Hash, Trie[K, V]] =
     withTxn(createTxnRead()) { txn =>
       txn.readState(state => state._dbTrie)
     }
 
-  override private[rspace] def clear(txn: InMemTransaction[State[K, V]]): Unit =
+  private[rspace] override def clear(txn: InMemTransaction[State[K, V]]): Unit =
     txn.writeState(_ => (State.empty, ()))
 
-  override private[rspace] def getEmptyRoot(txn: InMemTransaction[State[K, V]]) =
+  private[rspace] override def getEmptyRoot(txn: InMemTransaction[State[K, V]]) =
     txn.readState(_._dbEmptyRoot.getOrElse(throw new LookupException("Empty root not found")))
 
-  override private[rspace] def putEmptyRoot(
+  private[rspace] override def putEmptyRoot(
       txn: InMemTransaction[State[K, V]],
       hash: Blake2b256Hash
   ): Unit =

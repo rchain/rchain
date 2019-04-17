@@ -1066,7 +1066,7 @@ trait MixedReplayRSpaceTestsBase[C, P, A, K] extends ReplayRSpaceTestsBase[C, P,
       sk: Serialize[K],
       oC: Ordering[C]
   ): S = {
-    lazy implicit val s: Sync[Task]      = implicitly[Sync[Task]]
+    implicit lazy val s: Sync[Task]      = implicitly[Sync[Task]]
     implicit val log: Log[Task]          = Log.log[Task]
     implicit val metricsF: Metrics[Task] = new Metrics.MetricsNOP[Task]()
 
@@ -1175,8 +1175,8 @@ trait FaultyStoreReplayRSpaceTestsBase[C, P, A, K] extends ReplayRSpaceTestsBase
         trieStore,
         Branch.REPLAY
       ) {
-        override private[rspace] def createTxnWrite()
-          : InMemTransaction[coop.rchain.rspace.State[C, P, A, K]] =
+        private[rspace] override def createTxnWrite()
+            : InMemTransaction[coop.rchain.rspace.State[C, P, A, K]] =
           throw new RuntimeException("Couldn't write to underlying store")
       }
 

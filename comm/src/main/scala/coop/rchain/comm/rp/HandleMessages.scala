@@ -18,8 +18,8 @@ import coop.rchain.shared._
 
 object HandleMessages {
 
-  private implicit val logSource: LogSource = LogSource(this.getClass)
-  private implicit val metricsSource: Metrics.Source =
+  implicit private val logSource: LogSource = LogSource(this.getClass)
+  implicit private val metricsSource: Metrics.Source =
     Metrics.Source(CommMetricsSource, "rp.handle")
 
   def handle[F[_]: Monad: Sync: Log: Time: Metrics: TransportLayer: ErrorHandler: PacketHandler: ConnectionsCell: RPConfAsk](
@@ -65,11 +65,10 @@ object HandleMessages {
     for {
       local               <- RPConfAsk[F].reader(_.local)
       maybeResponsePacket <- PacketHandler[F].handlePacket(remote, packet)
-    } yield
-      maybeResponsePacket
-        .fold(notHandled(noResponseForRequest))(
-          m => handledWithMessage(ProtocolHelper.protocol(local).withPacket(m))
-        )
+    } yield maybeResponsePacket
+      .fold(notHandled(noResponseForRequest))(
+        m => handledWithMessage(ProtocolHelper.protocol(local).withPacket(m))
+      )
 
   def handleProtocolHandshakeResponse[F[_]: Monad: TransportLayer: Metrics: ConnectionsCell: Log: RPConfAsk](
       peer: PeerNode

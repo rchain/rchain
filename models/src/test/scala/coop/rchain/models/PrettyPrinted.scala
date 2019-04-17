@@ -9,7 +9,7 @@ case class PrettyPrinted[T](value: T, toStr: T => String) {
 object PrettyPrinted {
 
   implicit def arbitraryPrettyPrintedFromPretty[T: Arbitrary: Pretty]
-    : Arbitrary[PrettyPrinted[T]] = {
+      : Arbitrary[PrettyPrinted[T]] = {
     val gen = implicitly[Arbitrary[T]].arbitrary
     Arbitrary(gen.map(PrettyPrinted(_, Pretty[T].pretty(_, 0))))
   }

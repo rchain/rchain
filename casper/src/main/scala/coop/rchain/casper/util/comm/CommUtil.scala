@@ -26,7 +26,7 @@ import scala.concurrent.duration._
 
 object CommUtil {
 
-  private implicit val logSource: LogSource = LogSource(this.getClass)
+  implicit private val logSource: LogSource = LogSource(this.getClass)
 
   def sendBlock[F[_]: Monad: ConnectionsCell: TransportLayer: Log: Time: ErrorHandler: RPConfAsk](
       b: BlockMessage
@@ -50,7 +50,7 @@ object CommUtil {
   }
 
   def sendForkChoiceTipRequest[F[_]: Monad: ConnectionsCell: TransportLayer: Log: Time: RPConfAsk]
-    : F[Unit] = {
+      : F[Unit] = {
     val serialized = ForkChoiceTipRequest().toByteString
     for {
       _ <- sendToPeers[F](transport.ForkChoiceTipRequest, serialized)

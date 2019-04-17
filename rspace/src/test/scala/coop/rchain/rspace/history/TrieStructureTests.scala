@@ -276,7 +276,7 @@ class TrieStructureTests[F[_]: Sync]
     }
   }
 
-  private[this] implicit def liftHexToBlake(hex: String): Blake2b256Hash =
+  implicit private[this] def liftHexToBlake(hex: String): Blake2b256Hash =
     Blake2b256Hash.fromHex(hex)
 
   private[this] def expectNode(

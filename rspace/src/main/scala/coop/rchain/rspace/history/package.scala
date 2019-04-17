@@ -19,7 +19,7 @@ package object history {
 
   private[this] type Parents[K, V] = Seq[(Int, Trie[K, V])]
 
-  private[this] implicit class ParentsOps[K, V](val parents: Parents[K, V]) extends AnyVal {
+  implicit private[this] class ParentsOps[K, V](val parents: Parents[K, V]) extends AnyVal {
 
     def countPathLength: Long =
       parents

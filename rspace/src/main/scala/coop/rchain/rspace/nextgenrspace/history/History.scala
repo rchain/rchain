@@ -55,11 +55,10 @@ final case class History[F[_]: Sync](
       )
       nodeToPB        <- storePointerBlock(pointerBlock)
       maybeSkipToNode = skipOrValue(prefixPath, nodeToPB)
-    } yield
-      (
-        incomingTrie :: maybeSkipToExisting :: maybeSkipToIncoming :: nodeToPB :: maybeSkipToNode :: Nil,
-        maybeSkipToNode
-      )
+    } yield (
+      incomingTrie :: maybeSkipToExisting :: maybeSkipToIncoming :: nodeToPB :: maybeSkipToNode :: Nil,
+      maybeSkipToNode
+    )
 
   // TODO consider an indexedseq
   private def rebalanceInsert(
@@ -279,6 +278,12 @@ final case class History[F[_]: Sync](
 
   private[history] def findPath(key: KeyPath): F[(Trie, TriePath)] =
     findPath(key, root)
+
+  def close(): F[Unit] =
+    for {
+      _ <- historyStore.close()
+      _ <- pointerBlockStore.close()
+    } yield ()
 }
 
 object History {

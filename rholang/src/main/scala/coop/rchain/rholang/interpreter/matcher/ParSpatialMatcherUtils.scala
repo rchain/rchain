@@ -54,27 +54,26 @@ private[matcher] object ParSpatialMatcherUtils {
       subMatches  <- minMaxSubsets(par.matches, matchMin, matchMax)
       subIds      <- minMaxSubsets(par.ids, idMin, idMax)
       subBundles  <- minMaxSubsets(par.bundles, bundleMin, bundleMax)
-    } yield
-      (
-        Par(
-          subSends._1,
-          subReceives._1,
-          subNews._1,
-          subExprs._1,
-          subMatches._1,
-          subIds._1,
-          subBundles._1
-        ),
-        Par(
-          subSends._2,
-          subReceives._2,
-          subNews._2,
-          subExprs._2,
-          subMatches._2,
-          subIds._2,
-          subBundles._2
-        )
+    } yield (
+      Par(
+        subSends._1,
+        subReceives._1,
+        subNews._1,
+        subExprs._1,
+        subMatches._1,
+        subIds._1,
+        subBundles._1
+      ),
+      Par(
+        subSends._2,
+        subReceives._2,
+        subNews._2,
+        subExprs._2,
+        subMatches._2,
+        subIds._2,
+        subBundles._2
       )
+    )
   }
 
   def minMaxSubsets[A](as: Seq[A], minSize: Int, maxSize: Int): Stream[(Seq[A], Seq[A])] = {

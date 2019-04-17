@@ -26,7 +26,7 @@ object Validate {
   type Signature = Array[Byte]
 
   val DRIFT                                 = 15000 // 15 seconds
-  private implicit val logSource: LogSource = LogSource(this.getClass)
+  implicit private val logSource: LogSource = LogSource(this.getClass)
   val signatureVerifiers: Map[String, (Data, Signature, PublicKey) => Boolean] =
     Map(
       "ed25519" -> Ed25519.verify
@@ -686,12 +686,11 @@ object Validate {
                            dag,
                            runtimeManager
                          )
-    } yield
-      maybeStateHash match {
-        case Left(ex)       => Left(ex)
-        case Right(Some(_)) => Right(Valid)
-        case Right(None)    => Left(InvalidTransaction)
-      }
+    } yield maybeStateHash match {
+      case Left(ex)       => Left(ex)
+      case Right(Some(_)) => Right(Valid)
+      case Right(None)    => Left(InvalidTransaction)
+    }
 
   /**
     * If block contains an invalid justification block B and the creator of B is still bonded,

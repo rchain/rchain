@@ -37,7 +37,7 @@ final case class CasperConf(
 )
 
 object CasperConf {
-  private implicit val logSource: LogSource = LogSource(this.getClass)
+  implicit private val logSource: LogSource = LogSource(this.getClass)
 
   @SuppressWarnings(Array("org.wartremover.warts.Throw")) // TODO remove throw
   def parseValidatorsFile[F[_]: Monad: Sync: Log](

@@ -60,7 +60,7 @@ final class BlockDagFileStorage[F[_]: Concurrent: Sync: Log: BlockStore: RaiseIO
     equivocationTrackerCrcPath: Path,
     state: MonadState[F, BlockDagFileStorageState[F]]
 ) extends BlockDagStorage[F] {
-  private implicit val logSource = LogSource(BlockDagFileStorage.getClass)
+  implicit private val logSource = LogSource(BlockDagFileStorage.getClass)
 
   private[this] def getLatestMessages: F[Map[Validator, BlockHash]] =
     state.get.map(_.latestMessages)
@@ -552,7 +552,7 @@ final class BlockDagFileStorage[F[_]: Concurrent: Sync: Log: BlockStore: RaiseIO
 
 @SuppressWarnings(Array("org.wartremover.warts.NonUnitStatements")) // TODO remove
 object BlockDagFileStorage {
-  private implicit val logSource       = LogSource(BlockDagFileStorage.getClass)
+  implicit private val logSource       = LogSource(BlockDagFileStorage.getClass)
   private val checkpointPattern: Regex = "([0-9]+)-([0-9]+)".r
 
   final case class Config(
@@ -812,7 +812,7 @@ object BlockDagFileStorage {
           if (withoutLastCalculatedCrcValue == readEquivocationsTrackerCrc) {
             val lastRecord = equivocationsTracker.last
             val lastRecordSize
-              : Long = 32L + 4L + 4L + lastRecord.equivocationDetectedBlockHashes.size * 32
+                : Long = 32L + 4L + 4L + lastRecord.equivocationDetectedBlockHashes.size * 32
             for {
               length <- equivocationsTrackerRandomAccessIo.length
               _      <- equivocationsTrackerRandomAccessIo.setLength(length - lastRecordSize)
@@ -990,18 +990,17 @@ object BlockDagFileStorage {
         equivocationsTrackerLogOutputStream = equivocationsTrackerLogOutputStream,
         equivocationsTrackerCrc = calculatedEquivocationsTrackerCrc
       )
-    } yield
-      new BlockDagFileStorage[F](
-        lock,
-        config.latestMessagesLogPath,
-        config.latestMessagesCrcPath,
-        config.latestMessagesLogMaxSizeFactor,
-        config.blockMetadataLogPath,
-        config.blockMetadataCrcPath,
-        config.equivocationsTrackerLogPath,
-        config.equivocationsTrackerCrcPath,
-        new AtomicMonadState[F, BlockDagFileStorageState[F]](AtomicAny(state))
-      )
+    } yield new BlockDagFileStorage[F](
+      lock,
+      config.latestMessagesLogPath,
+      config.latestMessagesCrcPath,
+      config.latestMessagesLogMaxSizeFactor,
+      config.blockMetadataLogPath,
+      config.blockMetadataCrcPath,
+      config.equivocationsTrackerLogPath,
+      config.equivocationsTrackerCrcPath,
+      new AtomicMonadState[F, BlockDagFileStorageState[F]](AtomicAny(state))
+    )
   }
 
   def createEmptyFromGenesis[F[_]: Concurrent: Sync: Log: BlockStore](
@@ -1065,17 +1064,16 @@ object BlockDagFileStorage {
         equivocationsTrackerLogOutputStream = equivocationsTrackerLogOutputStream,
         equivocationsTrackerCrc = equivocationsTrackerCrc
       )
-    } yield
-      new BlockDagFileStorage[F](
-        lock,
-        config.latestMessagesLogPath,
-        config.latestMessagesCrcPath,
-        config.latestMessagesLogMaxSizeFactor,
-        config.blockMetadataLogPath,
-        config.blockMetadataCrcPath,
-        config.equivocationsTrackerLogPath,
-        config.equivocationsTrackerCrcPath,
-        new AtomicMonadState[F, BlockDagFileStorageState[F]](AtomicAny(state))
-      )
+    } yield new BlockDagFileStorage[F](
+      lock,
+      config.latestMessagesLogPath,
+      config.latestMessagesCrcPath,
+      config.latestMessagesLogMaxSizeFactor,
+      config.blockMetadataLogPath,
+      config.blockMetadataCrcPath,
+      config.equivocationsTrackerLogPath,
+      config.equivocationsTrackerCrcPath,
+      new AtomicMonadState[F, BlockDagFileStorageState[F]](AtomicAny(state))
+    )
   }
 }

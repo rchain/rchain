@@ -19,7 +19,7 @@ class SslSessionServerInterceptor() extends ServerInterceptor {
       next: ServerCallHandler[ReqT, RespT]
   ): ServerCall.Listener[ReqT] = new InterceptionListener(next.startCall(call, headers), call)
 
-  private implicit val logSource: LogSource = LogSource(this.getClass)
+  implicit private val logSource: LogSource = LogSource(this.getClass)
   private val log                           = Log.logId
 
   private class InterceptionListener[ReqT, RespT](

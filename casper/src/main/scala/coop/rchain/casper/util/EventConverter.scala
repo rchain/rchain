@@ -12,13 +12,13 @@ import coop.rchain.rspace.trace.{
 }
 
 object EventConverter {
-  private implicit def byteStringToBlake2b256Hash(hash: ByteString): Blake2b256Hash =
+  implicit private def byteStringToBlake2b256Hash(hash: ByteString): Blake2b256Hash =
     Blake2b256Hash.fromByteArray(hash.toByteArray)
 
-  private implicit def blake2b256HashToByteString(hash: Blake2b256Hash): ByteString =
+  implicit private def blake2b256HashToByteString(hash: Blake2b256Hash): ByteString =
     ByteString.copyFrom(hash.bytes.toArray)
 
-  private implicit def blake2b256HashesToByteStrings(hashes: Seq[Blake2b256Hash]): Seq[ByteString] =
+  implicit private def blake2b256HashesToByteStrings(hashes: Seq[Blake2b256Hash]): Seq[ByteString] =
     hashes.map(blake2b256HashToByteString)
 
   def toCasperEvent(event: RspaceEvent): Event = event match {

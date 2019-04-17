@@ -26,7 +26,7 @@ class DeployParamsSpec extends fixture.FlatSpec with Matchers {
   implicit val logF: Log[Task]            = new Log.NOPLog[Task]
   implicit val noopMetrics: Metrics[Task] = new metrics.Metrics.MetricsNOP[Task]
 
-  override protected def withFixture(test: OneArgTest): Outcome = {
+  protected override def withFixture(test: OneArgTest): Outcome = {
     val randomInt = scala.util.Random.nextInt
     val dbDir     = Files.createTempDirectory(s"rchain-storage-test-$randomInt")
     val size      = 1024L * 1024 * 10

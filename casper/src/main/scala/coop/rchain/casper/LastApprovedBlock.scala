@@ -32,6 +32,6 @@ object LastApprovedBlock extends LastApprovedBlockInstances {
 
 sealed abstract class LastApprovedBlockInstances {
   implicit def eitherTLastApprovedBlock[E, F[_]: Monad: MaybeCell[?[_], ApprovedBlock]]
-    : MaybeCell[EitherT[F, E, ?], ApprovedBlock] =
+      : MaybeCell[EitherT[F, E, ?], ApprovedBlock] =
     LastApprovedBlock.forTrans[F, EitherT[?[_], E, ?]]
 }

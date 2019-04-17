@@ -375,11 +375,10 @@ class BlockDagFileStorageTest extends BlockDagStorageTest {
               secondStorage <- createAtDefaultLocation(dagDataDir)(blockStore)
               result        <- lookupElements(blockElements, secondStorage)
               _             <- secondStorage.close()
-            } yield
-              testLookupElementsResult(
-                result,
-                blockElements ++ secondBlockElements ++ thirdBlockElements
-              )
+            } yield testLookupElementsResult(
+              result,
+              blockElements ++ secondBlockElements ++ thirdBlockElements
+            )
           }
       }
     }
@@ -479,11 +478,10 @@ class BlockDagFileStorageTest extends BlockDagStorageTest {
           secondStorage <- createAtDefaultLocation(dagDataDir)(blockStore)
           result        <- lookupElements(blockElements, secondStorage)
           _             <- secondStorage.close()
-        } yield
-          testLookupElementsResult(
-            result,
-            blockElements
-          )
+        } yield testLookupElementsResult(
+          result,
+          blockElements
+        )
       }
     }
 

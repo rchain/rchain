@@ -69,7 +69,7 @@ class Rev[A](
       wallets.map(rhoCode).mkString(" |\n")
     }
 
-  final override val term: Par = InterpreterUtil.mkTerm(code).right.get
+  override final val term: Par = InterpreterUtil.mkTerm(code).right.get
 }
 
 class PreWalletRev(

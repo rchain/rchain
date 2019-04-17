@@ -7,7 +7,7 @@ import coop.rchain.comm.PeerNode
 import coop.rchain.metrics.Metrics
 
 object KademliaHandleRPC {
-  private implicit val metricsSource: Metrics.Source = DiscoveryMetricsSource
+  implicit private val metricsSource: Metrics.Source = DiscoveryMetricsSource
 
   def handlePing[F[_]: Monad: KademliaStore: Metrics](peer: PeerNode): F[Unit] =
     Metrics[F]

@@ -63,7 +63,7 @@ class NodeRuntime private[node] (
     reporter = UncaughtExceptionLogger
   )
 
-  private implicit val logSource: LogSource = LogSource(this.getClass)
+  implicit private val logSource: LogSource = LogSource(this.getClass)
 
   implicit def eiterTrpConfAsk(implicit ev: RPConfAsk[Task]): RPConfAsk[Effect] =
     new EitherTApplicativeAsk[Task, RPConf, CommError]
@@ -159,14 +159,13 @@ class NodeRuntime private[node] (
             Kamon.addReporter(new JmxReporter())
             if (conf.kamon.sigar) SystemMetrics.startCollecting()
           }.toEffect
-    } yield
-      Servers(
-        kademliaRPCServer,
-        transportServer,
-        externalApiServer,
-        internalApiServer,
-        httpServerFiber
-      )
+    } yield Servers(
+      kademliaRPCServer,
+      transportServer,
+      externalApiServer,
+      internalApiServer,
+      httpServerFiber
+    )
   }
 
   def clearResources(servers: Servers, runtime: Runtime[Task], casperRuntime: Runtime[Task])(

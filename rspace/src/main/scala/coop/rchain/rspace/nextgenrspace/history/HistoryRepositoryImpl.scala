@@ -150,4 +150,10 @@ final case class HistoryRepositoryImpl[F[_]: Sync, C, P, A, K](
       historyActions <- storeLeaves(trieActions)
       nextHistory    <- history.process(historyActions)
     } yield this.copy(history = nextHistory)
+
+  override def close(): F[Unit] =
+    for {
+      _ <- leafStore.close()
+      _ <- history.close()
+    } yield ()
 }

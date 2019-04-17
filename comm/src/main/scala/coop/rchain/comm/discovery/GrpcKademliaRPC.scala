@@ -24,7 +24,7 @@ class GrpcKademliaRPC(timeout: FiniteDuration)(
     metrics: Metrics[Task]
 ) extends KademliaRPC[Task] {
 
-  private implicit val metricsSource: Metrics.Source =
+  implicit private val metricsSource: Metrics.Source =
     Metrics.Source(CommMetricsSource, "discovery.kademlia.grpc")
 
   def ping(peer: PeerNode): Task[Boolean] =

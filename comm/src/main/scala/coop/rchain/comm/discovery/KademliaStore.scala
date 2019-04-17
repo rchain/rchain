@@ -23,7 +23,7 @@ object KademliaStore extends KademliaStoreInstances {
 
 sealed abstract class KademliaStoreInstances {
   implicit def eitherTKademliaStore[E, F[_]: Functor: KademliaStore]
-    : KademliaStore[EitherT[F, E, ?]] =
+      : KademliaStore[EitherT[F, E, ?]] =
     new KademliaStore[EitherT[F, E, ?]] {
 
       def peers: EitherT[F, E, Seq[PeerNode]] =
@@ -47,7 +47,7 @@ sealed abstract class KademliaStoreInstances {
 
   def table[F[_]: Sync: KademliaRPC: Metrics](id: NodeIdentifier): KademliaStore[F] =
     new KademliaStore[F] {
-      private implicit val metricsSource: Metrics.Source = DiscoveryMetricsSource
+      implicit private val metricsSource: Metrics.Source = DiscoveryMetricsSource
       private val table                                  = PeerTable[PeerNode, F](id.key)
 
       def peers: F[Seq[PeerNode]]                   = table.peers
