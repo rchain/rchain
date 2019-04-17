@@ -708,6 +708,41 @@ trait HotStoreSpec[F[_], M[_]] extends FlatSpec with Matchers with GeneratorDriv
       }
   }
 
+  "removeJoin" should "not remove a join when a continuation is present" in forAll(
+    Arbitrary.arbitrary[Channel],
+    Arbitrary.arbitrary[Continuation],
+    arbitraryNonEmptyVectorOfJoins
+  ) {
+    (
+        channel: Channel,
+        continuation: Continuation,
+        cachedJoins: Joins
+    ) =>
+      fixture { (state, history, hotStore) =>
+        {
+          for {
+            _ <- state.modify(
+                  _ =>
+                    Cache(
+                      joins = TrieMap(
+                        channel -> cachedJoins
+                      )
+                    )
+                )
+            toRemove = Random.shuffle(cachedJoins).head
+            _        <- hotStore.putContinuation(toRemove, continuation)
+            res      <- hotStore.removeJoin(channel, toRemove).attempt
+            cache    <- state.read
+            _ <- Sync[F].delay {
+                  res shouldBe a[Right[_, _]]
+                  cache.joins(channel) shouldEqual cachedJoins
+                }
+          } yield ()
+        }
+      }
+
+  }
+
   "changes" should "return information to be persisted in history" in forAll {
     (
         channels: Vector[Channel],
