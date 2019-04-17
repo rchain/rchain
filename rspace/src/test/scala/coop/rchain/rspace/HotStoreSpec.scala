@@ -43,7 +43,7 @@ trait HotStoreSpec[F[_], M[_]] extends FlatSpec with Matchers with GeneratorDriv
   def fixture(
       f: (
           Cell[F, Cache[String, Pattern, String, StringsCaptor]],
-          History[F],
+          History[F, String, Pattern, String, StringsCaptor],
           HotStore[F, String, Pattern, String, StringsCaptor]
       ) => F[Unit]
   ): Unit
@@ -708,6 +708,41 @@ trait HotStoreSpec[F[_], M[_]] extends FlatSpec with Matchers with GeneratorDriv
       }
   }
 
+  "removeJoin" should "not remove a join when a continuation is present" in forAll(
+    Arbitrary.arbitrary[Channel],
+    Arbitrary.arbitrary[Continuation],
+    arbitraryNonEmptyVectorOfJoins
+  ) {
+    (
+        channel: Channel,
+        continuation: Continuation,
+        cachedJoins: Joins
+    ) =>
+      fixture { (state, history, hotStore) =>
+        {
+          for {
+            _ <- state.modify(
+                  _ =>
+                    Cache(
+                      joins = TrieMap(
+                        channel -> cachedJoins
+                      )
+                    )
+                )
+            toRemove = Random.shuffle(cachedJoins).head
+            _        <- hotStore.putContinuation(toRemove, continuation)
+            res      <- hotStore.removeJoin(channel, toRemove).attempt
+            cache    <- state.read
+            _ <- Sync[F].delay {
+                  res shouldBe a[Right[_, _]]
+                  cache.joins(channel) shouldEqual cachedJoins
+                }
+          } yield ()
+        }
+      }
+
+  }
+
   "changes" should "return information to be persisted in history" in forAll {
     (
         channels: Vector[Channel],
@@ -986,28 +1021,28 @@ trait HotStoreSpec[F[_], M[_]] extends FlatSpec with Matchers with GeneratorDriv
     }
 }
 
-class History[F[_]: Sync](implicit R: Cell[F, Cache[String, Pattern, String, StringsCaptor]])
-    extends HistoryReader[F, String, Pattern, String, StringsCaptor] {
+class History[F[_]: Sync, C, P, A, K](implicit R: Cell[F, Cache[C, P, A, K]])
+    extends HistoryReader[F, C, P, A, K] {
 
-  def getJoins(channel: String): F[Seq[Seq[String]]] =
+  def getJoins(channel: C): F[Seq[Seq[C]]] =
     R.read.map(_.joins.get(channel).toSeq.flatten)
-  def putJoins(channel: String, joins: Seq[Seq[String]]): F[Unit] = R.flatModify { prev =>
+  def putJoins(channel: C, joins: Seq[Seq[C]]): F[Unit] = R.flatModify { prev =>
     Sync[F].delay(prev.joins.put(channel, joins)).map(_ => prev)
   }
 
-  def getData(channel: String): F[Seq[Datum[String]]] =
+  def getData(channel: C): F[Seq[Datum[A]]] =
     R.read.map(_.data.get(channel).toSeq.flatten)
-  def putData(channel: String, data: Seq[Datum[String]]): F[Unit] = R.flatModify { prev =>
+  def putData(channel: C, data: Seq[Datum[A]]): F[Unit] = R.flatModify { prev =>
     Sync[F].delay(prev.data.put(channel, data)).map(_ => prev)
   }
 
   def getContinuations(
-      channels: Seq[String]
-  ): F[Seq[WaitingContinuation[Pattern, StringsCaptor]]] =
+      channels: Seq[C]
+  ): F[Seq[WaitingContinuation[P, K]]] =
     R.read.map(_.continuations.get(channels).toSeq.flatten)
   def putContinuations(
-      channels: Seq[String],
-      continuations: Seq[WaitingContinuation[Pattern, StringsCaptor]]
+      channels: Seq[C],
+      continuations: Seq[WaitingContinuation[P, K]]
   ): F[Unit] = R.flatModify { prev =>
     Sync[F].delay(prev.continuations.put(channels, continuations)).map(_ => prev)
   }
@@ -1023,7 +1058,7 @@ trait InMemHotStoreSpec extends HotStoreSpec[Task, Task.Par] {
   override def fixture(
       f: (
           Cell[F, Cache[String, Pattern, String, StringsCaptor]],
-          History[F],
+          History[F, String, Pattern, String, StringsCaptor],
           HotStore[F, String, Pattern, String, StringsCaptor]
       ) => F[Unit]
   ) =
@@ -1033,7 +1068,7 @@ trait InMemHotStoreSpec extends HotStoreSpec[Task, Task.Par] {
                      )
       history = {
         implicit val hs = historyState
-        new History[F]
+        new History[F, String, Pattern, String, StringsCaptor]
       }
       cache <- C
       hotStore = {

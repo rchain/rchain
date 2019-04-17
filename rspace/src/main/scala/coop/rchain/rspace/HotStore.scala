@@ -186,8 +186,9 @@ private class InMemHotStore[F[_]: Sync, C, P, A, K](
 
   def removeJoin(channel: C, join: Seq[C]): F[Unit] =
     for {
-      joins <- internalGetJoins(channel)
-      _ <- S.flatModify { cache =>
+      joins         <- internalGetJoins(channel)
+      continuations <- getContinuations(join)
+      _ <- if (continuations.isEmpty) S.flatModify { cache =>
             val index = cache.joins(channel).indexOf(join)
             removeIndex(cache.joins(channel), index) >>= { updated =>
               Sync[F]
@@ -196,7 +197,7 @@ private class InMemHotStore[F[_]: Sync, C, P, A, K](
                 }
                 .map(_ => cache)
             }
-          }
+          } else Applicative[F].unit
     } yield ()
 
   def changes(): F[Seq[HotStoreAction]] =
