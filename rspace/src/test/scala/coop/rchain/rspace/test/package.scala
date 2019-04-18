@@ -4,7 +4,8 @@ import java.nio.ByteBuffer
 import java.nio.file.attribute.BasicFileAttributes
 import java.nio.file.{FileVisitResult, Files, Path, SimpleFileVisitor}
 
-import cats.Id
+import cats._
+import cats.implicits._
 import cats.effect.{Concurrent, ContextShift, ExitCase, Fiber}
 import coop.rchain.rspace.history.{Branch, ITrieStore, Leaf, Node, Skip, Trie}
 import coop.rchain.shared.Language.ignore
@@ -101,5 +102,10 @@ package object test {
       .collect {
         case e: HA if clazz.isInstance(e) => e
       }
+  }
+
+  implicit class StoreOps[F[_]: Functor, C, P, A, K](val store: HotStore[F, C, P, A, K]) {
+    def isEmpty(): F[Boolean] =
+      store.changes().map(collectActions[InsertAction]).map(_.isEmpty)
   }
 }
