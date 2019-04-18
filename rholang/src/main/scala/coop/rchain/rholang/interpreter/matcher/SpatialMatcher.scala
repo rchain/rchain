@@ -74,10 +74,9 @@ object SpatialMatcher extends SpatialMatcherInstances {
   implicit def forTuple[F[_]: FlatMap, A, B, C, D](
       implicit matcherAC: SpatialMatcher[F, A, C],
       matcherBD: SpatialMatcher[F, B, D]
-  ): SpatialMatcher[F, (A, B), (C, D)] = new SpatialMatcher[F, (A, B), (C, D)] {
-    override def spatialMatch(target: (A, B), pattern: (C, D)): F[Unit] =
+  ): SpatialMatcher[F, (A, B), (C, D)] =
+    (target: (A, B), pattern: (C, D)) =>
       matcherAC.spatialMatch(target._1, pattern._1) >> matcherBD.spatialMatch(target._2, pattern._2)
-  }
 
   // This helper function is useful in several productions
   def foldMatch[F[_]: Splittable: Alternative: Monad: _error: _cost: _freeMap: _short, T, P](
