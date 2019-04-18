@@ -75,8 +75,8 @@ class SslSessionClientCallInterceptor[ReqT, RespT](next: ClientCall[ReqT, RespT]
               }
             }
           } else {
-            log.warn(s"Wrong network id $nid. Closing connection")
-            close(Status.PERMISSION_DENIED.withDescription(s"Wrong network id $nid"))
+            log.warn(s"Wrong network id '$nid'. Closing connection")
+            close(Status.PERMISSION_DENIED.withDescription(s"Wrong network id '$nid'"))
           }
         case TLResponse(_) =>
           log.warn(s"Malformed response $message")
