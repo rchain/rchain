@@ -62,18 +62,20 @@ class CreateBlockAPITest extends FlatSpec with Matchers {
 
     def testProgram(blockApiLock: Semaphore[Effect])(
         implicit casperRef: MultiParentCasperRef[Effect]
-    ): Effect[(ApiErr[DeployServiceResponse], ApiErr[DeployServiceResponse])] =
+    ): Effect[(ApiErr[DeployServiceResponse], ApiErr[DeployServiceResponse], ApiErr[DeployServiceResponse])] =
       EitherT.liftF(
         for {
           t1 <- createBlock(deploys.head, blockApiLock).value.start
           _  <- Time[Task].sleep(2.second)
           t2 <- createBlock(deploys.last, blockApiLock).value.start //should fail because other not done
+          t3 <- createBlock(deploys.last, blockApiLock).value.start //should fail because other not done
           r1 <- t1.join
           r2 <- t2.join
-        } yield (r1.right.get, r2.right.get)
+          r3 <- t3.join
+        } yield (r1.right.get, r2.right.get, r3.right.get)
       )
 
-    val (response1, response2) = (for {
+    val (response1, response2, response3) = (for {
       casperRef    <- MultiParentCasperRef.of[Effect]
       _            <- casperRef.set(casper)
       blockApiLock <- Semaphore[Effect](1)
@@ -82,7 +84,9 @@ class CreateBlockAPITest extends FlatSpec with Matchers {
 
     response1 shouldBe a[Right[_, DeployServiceResponse]]
     response2 shouldBe a[Left[_, DeployServiceResponse]]
+    response3 shouldBe a[Left[_, DeployServiceResponse]]
     response2.left.get shouldBe "Error: There is another propose in progress."
+    response3.left.get shouldBe "Error: There is another propose in progress."
 
     node.tearDown()
   }
