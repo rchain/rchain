@@ -50,11 +50,10 @@ class GrpcKademliaRPC(networkId: String, timeout: FiniteDuration)(
                       _.sendLookup(lookup)
                         .timer("lookup-time")
                     ).attempt
-    } yield
-      responseErr.fold(
-        kp(Seq.empty[PeerNode]),
-        r => if (r.networkId == networkId) r.nodes.map(toPeerNode) else Seq.empty[PeerNode]
-      )
+    } yield responseErr.fold(
+      kp(Seq.empty[PeerNode]),
+      r => if (r.networkId == networkId) r.nodes.map(toPeerNode) else Seq.empty[PeerNode]
+    )
 
   private def withClient[A](peer: PeerNode, timeout: FiniteDuration, enforce: Boolean = false)(
       f: KademliaRPCServiceStub => Task[A]
