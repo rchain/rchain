@@ -71,13 +71,6 @@ object SpatialMatcher extends SpatialMatcherInstances {
 
   def apply[F[_], T, P](implicit sm: SpatialMatcher[F, T, P]) = sm
 
-  implicit def forTuple[F[_]: FlatMap, A, B, C, D](
-      implicit matcherAC: SpatialMatcher[F, A, C],
-      matcherBD: SpatialMatcher[F, B, D]
-  ): SpatialMatcher[F, (A, B), (C, D)] =
-    (target: (A, B), pattern: (C, D)) =>
-      matcherAC.spatialMatch(target._1, pattern._1) >> matcherBD.spatialMatch(target._2, pattern._2)
-
   // This helper function is useful in several productions
   def foldMatch[F[_]: Splittable: Alternative: Monad: _error: _cost: _freeMap: _short, T, P](
       tlist: Seq[T],
@@ -286,6 +279,13 @@ trait SpatialMatcherInstances {
   // match, and not about how it matched inside. The tricky part goes into
   // the par/par matcher.
   import Splittable.SplittableOps
+
+  implicit def forTuple[F[_]: FlatMap, A, B, C, D](
+      implicit matcherAC: SpatialMatcher[F, A, C],
+      matcherBD: SpatialMatcher[F, B, D]
+  ): SpatialMatcher[F, (A, B), (C, D)] =
+    (target: (A, B), pattern: (C, D)) =>
+      matcherAC.spatialMatch(target._1, pattern._1) >> matcherBD.spatialMatch(target._2, pattern._2)
 
   implicit def connectiveMatcher[F[_]: Splittable: Alternative: Monad: _error: _cost: _freeMap: _short]
       : SpatialMatcher[F, Par, Connective] =
