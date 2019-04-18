@@ -37,11 +37,8 @@ class ManyValidatorsTest
     val v1 = bonds(0).validator
 
     val testProgram = for {
-      blockStore <- BlockDagStorageTestFixture.createBlockStorage[Task](blockStoreDir)
-      blockDagStorage <- BlockDagStorageTestFixture.createBlockDagStorage(blockDagStorageDir)(
-                          log,
-                          blockStore
-                        )
+      blockStore             <- BlockDagStorageTestFixture.createBlockStorage[Task](blockStoreDir)
+      blockDagStorage        <- BlockDagStorageTestFixture.createBlockDagStorage(blockDagStorageDir)
       indexedBlockDagStorage <- IndexedBlockDagStorage.create(blockDagStorage)
       genesis <- createGenesis[Task](bonds = bonds)(
                   Monad[Task],
@@ -61,10 +58,7 @@ class ManyValidatorsTest
               initialLatestMessages
             )
           }
-      newBlockDagStorage <- BlockDagStorageTestFixture.createBlockDagStorage(blockDagStorageDir)(
-                             log,
-                             blockStore
-                           )
+      newBlockDagStorage        <- BlockDagStorageTestFixture.createBlockDagStorage(blockDagStorageDir)
       newIndexedBlockDagStorage <- IndexedBlockDagStorage.create(newBlockDagStorage)
       dag                       <- newIndexedBlockDagStorage.getRepresentation
       tips                      <- Estimator.tips[Task](dag, genesis)(Monad[Task])

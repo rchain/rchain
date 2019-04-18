@@ -48,6 +48,7 @@ object ConfigMapper {
         add(keys.DataDir, run.dataDir)
         add(keys.StoreType, run.storeType)
         add(keys.StoreSize, run.casperBlockStoreSize)
+        add(keys.DagStorageSize, run.casperBlockDagStorageSize)
         add(keys.MapSize, run.mapSize)
         add(keys.MaxConnections, run.maxNumOfConnections)
         add(keys.MaxMessageSize, run.maxMessageSize)

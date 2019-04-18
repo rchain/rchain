@@ -47,6 +47,7 @@ object Server {
     val Standalone       = "standalone"
     val DataDir          = "data-dir"
     val StoreSize        = "store-size"
+    val DagStorageSize   = "dag-storage-size"
     val MapSize          = "map-size"
     val MaxConnections   = "max-connections"
     val MaxMessageSize   = "max-message-size"
@@ -90,6 +91,7 @@ object Server {
       dataDir = server.getPath(keys.DataDir),
       storeType = storeType,
       storeSize = server.getBytes(keys.StoreSize),
+      dagStorageSize = server.getBytes(keys.DagStorageSize),
       mapSize = server.getBytes(keys.MapSize),
       maxNumOfConnections = server.getInt(keys.MaxConnections),
       maxMessageSize = server.getBytes(keys.MaxMessageSize).toInt,

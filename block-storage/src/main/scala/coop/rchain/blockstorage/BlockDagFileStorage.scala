@@ -1,9 +1,7 @@
 package coop.rchain.blockstorage
 
-import java.io._
 import java.nio.{BufferUnderflowException, ByteBuffer}
-import java.nio.file.{Files, Path, StandardCopyOption}
-import java.util.stream.Collectors
+import java.nio.file.{Path, StandardCopyOption}
 
 import cats.Monad
 import cats.implicits._
@@ -22,14 +20,15 @@ import coop.rchain.blockstorage.util.io._
 import coop.rchain.blockstorage.util.io.IOError
 import coop.rchain.casper.protocol.BlockMessage
 import coop.rchain.crypto.codec.Base16
-import coop.rchain.models.EquivocationRecord.SequenceNumber
 import coop.rchain.models.{BlockMetadata, EquivocationRecord}
 import coop.rchain.shared.{AtomicMonadState, Log, LogSource}
+import coop.rchain.shared.ByteStringOps._
 import monix.execution.atomic.AtomicAny
+import org.lmdbjava.DbiFlags.MDB_CREATE
+import org.lmdbjava.{Env, EnvFlags}
 
 import scala.ref.WeakReference
 import scala.util.matching.Regex
-import collection.JavaConverters._
 
 private final case class BlockDagFileStorageState[F[_]: Sync](
     latestMessages: Map[Validator, BlockHash],
@@ -49,8 +48,9 @@ private final case class BlockDagFileStorageState[F[_]: Sync](
 )
 
 @SuppressWarnings(Array("org.wartremover.warts.NonUnitStatements")) // TODO remove!!
-final class BlockDagFileStorage[F[_]: Concurrent: Sync: Log: BlockStore: RaiseIOError] private (
+final class BlockDagFileStorage[F[_]: Concurrent: Sync: Log: RaiseIOError] private (
     lock: Semaphore[F],
+    blockNumberIndex: LmdbDbi[F, ByteBuffer],
     latestMessagesDataFilePath: Path,
     latestMessagesCrcFilePath: Path,
     latestMessagesLogMaxSizeFactor: Int,
@@ -159,6 +159,22 @@ final class BlockDagFileStorage[F[_]: Concurrent: Sync: Log: BlockStore: RaiseIO
   private[this] def modifyBlockMetadataCrc(f: Crc32[F] => Crc32[F]): F[Unit] =
     state.modify(s => s.copy(blockMetadataCrc = f(s.blockMetadataCrc)))
 
+  private[this] def getBlockNumber(blockHash: BlockHash): F[Option[Long]] =
+    blockNumberIndex.withReadTxn { txn =>
+      blockNumberIndex
+        .get(txn, blockHash.toDirectByteBuffer)
+        .map(_.getLong)
+    }
+
+  private[this] def putBlockNumber(blockHash: BlockHash, blockNumber: Long): F[Unit] =
+    blockNumberIndex.withWriteTxn { txn =>
+      blockNumberIndex.put(
+        txn,
+        blockHash.toDirectByteBuffer,
+        blockNumber.toByteString.toDirectByteBuffer
+      )
+    }
+
   private case class FileDagRepresentation(
       latestMessagesMap: Map[Validator, BlockHash],
       childMap: Map[BlockHash, Set[BlockHash]],
@@ -166,35 +182,47 @@ final class BlockDagFileStorage[F[_]: Concurrent: Sync: Log: BlockStore: RaiseIO
       topoSortVector: Vector[Vector[BlockHash]],
       sortOffset: Long
   ) extends BlockDagRepresentation[F] {
+    private def findAndAccessCheckpoint[R](
+        blockHash: BlockHash,
+        loadFromCheckpoint: CheckpointedDagInfo => Option[R]
+    ): F[Option[R]] =
+      for {
+        blockNumberOpt <- getBlockNumber(blockHash)
+        result <- blockNumberOpt match {
+                   case Some(blockNumber) =>
+                     if (blockNumber >= sortOffset) {
+                       none[R].pure[F]
+                     } else {
+                       lock.withPermit(
+                         loadCheckpoint(blockNumber).map(_.flatMap(loadFromCheckpoint))
+                       )
+                     }
+                   case None =>
+                     none[R].pure[F]
+                 }
+      } yield result
+
     def children(blockHash: BlockHash): F[Option[Set[BlockHash]]] =
       for {
         result <- childMap.get(blockHash) match {
-                   case Some(children) =>
-                     Option(children).pure[F]
+                   case children: Some[Set[BlockHash]] =>
+                     Monad[F].pure[Option[Set[BlockHash]]](children)
                    case None =>
-                     for {
-                       blockOpt <- BlockStore[F].get(blockHash)
-                       result <- blockOpt match {
-                                  case Some(block) =>
-                                    val number = blockNumber(block)
-                                    if (number >= sortOffset) {
-                                      none[Set[BlockHash]].pure[F]
-                                    } else {
-                                      lock.withPermit(
-                                        for {
-                                          oldDagInfo <- loadCheckpoint(number)
-                                        } yield oldDagInfo.flatMap(_.childMap.get(blockHash))
-                                      )
-                                    }
-                                  case None => none[Set[BlockHash]].pure[F]
-                                }
-                     } yield result
+                     findAndAccessCheckpoint(blockHash, _.childMap.get(blockHash))
                  }
       } yield result
     def lookup(blockHash: BlockHash): F[Option[BlockMetadata]] =
-      dataLookup.get(blockHash).pure[F]
+      dataLookup.get(blockHash) match {
+        case blockMetadata: Some[BlockMetadata] =>
+          Monad[F].pure[Option[BlockMetadata]](blockMetadata)
+        case None =>
+          findAndAccessCheckpoint(blockHash, _.dataLookup.get(blockHash))
+      }
     def contains(blockHash: BlockHash): F[Boolean] =
-      dataLookup.get(blockHash).fold(false.pure[F])(_ => true.pure[F])
+      dataLookup.get(blockHash) match {
+        case Some(_) => true.pure[F]
+        case None    => getBlockNumber(blockHash).map(_.isDefined)
+      }
     def topoSort(startBlockNumber: Long): F[Vector[Vector[BlockHash]]] =
       if (startBlockNumber >= sortOffset) {
         val offset = startBlockNumber - sortOffset
@@ -487,6 +515,7 @@ final class BlockDagFileStorage[F[_]: Concurrent: Sync: Log: BlockStore: RaiseIO
                         case (acc, (validator, blockHash)) => acc.updated(validator, blockHash)
                       }
                     }
+                _ <- putBlockNumber(block.blockHash, blockNumber(block))
                 _ <- updateLatestMessagesFile(newValidatorsWithSenderLatestMessages.toList)
                 _ <- updateDataLookupFile(blockMetadata)
               } yield ()
@@ -534,6 +563,9 @@ final class BlockDagFileStorage[F[_]: Concurrent: Sync: Log: BlockStore: RaiseIO
         _ <- setLatestMessagesLogSize(0)
         _ <- setLatestMessagesCrc(newLatestMessagesCrc)
         _ <- setBlockMetadataCrc(newBlockMetadataCrc)
+        _ <- blockNumberIndex.withWriteTxn { txn =>
+              blockNumberIndex.drop(txn)
+            }
       } yield ()
     )
 
@@ -546,6 +578,7 @@ final class BlockDagFileStorage[F[_]: Concurrent: Sync: Log: BlockStore: RaiseIO
         _                                   <- blockMetadataLogOutputStream.close
         equivocationsTrackerLogOutputStream <- getEquivocationsTrackerLogOutputStream
         _                                   <- equivocationsTrackerLogOutputStream.close
+        _                                   <- blockNumberIndex.close
       } yield ()
     )
 }
@@ -563,7 +596,12 @@ object BlockDagFileStorage {
       equivocationsTrackerLogPath: Path,
       equivocationsTrackerCrcPath: Path,
       checkpointsDirPath: Path,
-      latestMessagesLogMaxSizeFactor: Int = 10
+      blockNumberIndexPath: Path,
+      mapSize: Long,
+      latestMessagesLogMaxSizeFactor: Int = 10,
+      maxDbs: Int = 1,
+      maxReaders: Int = 126,
+      noTls: Boolean = true
   )
 
   private[blockstorage] final case class CheckpointedDagInfo(
@@ -897,12 +935,35 @@ object BlockDagFileStorage {
                }
     } yield result
 
-  def create[F[_]: Concurrent: Sync: Log: BlockStore](
+  private def loadBlockNumberIndexLmdbDbi[F[_]: Sync: Log: RaiseIOError](
+      config: Config
+  ): F[LmdbDbi[F, ByteBuffer]] =
+    for {
+      _ <- notExists[F](config.blockNumberIndexPath).ifM(
+            makeDirectory[F](config.blockNumberIndexPath) >> ().pure[F],
+            ().pure[F]
+          )
+      env <- Sync[F].delay {
+              val flags = if (config.noTls) List(EnvFlags.MDB_NOTLS) else List.empty
+              Env
+                .create()
+                .setMapSize(config.mapSize)
+                .setMaxDbs(config.maxDbs)
+                .setMaxReaders(config.maxReaders)
+                .open(config.blockNumberIndexPath.toFile, flags: _*)
+            }
+      dbi <- Sync[F].delay {
+              env.openDbi(s"block_dag_storage_block_number_index", MDB_CREATE)
+            }
+    } yield LmdbDbi[F, ByteBuffer](env, dbi)
+
+  def create[F[_]: Concurrent: Sync: Log](
       config: Config
   ): F[BlockDagFileStorage[F]] = {
     implicit val raiseIOError: RaiseIOError[F] = IOError.raiseIOErrorThroughSync[F]
     for {
       lock                  <- Semaphore[F](1)
+      blockNumberIndex      <- loadBlockNumberIndexLmdbDbi(config)
       readLatestMessagesCrc <- readCrc[F](config.latestMessagesCrcPath)
       latestMessagesFileResource = Resource.make(
         RandomAccessIO.open[F](config.latestMessagesLogPath, RandomAccessIO.ReadWrite)
@@ -992,6 +1053,7 @@ object BlockDagFileStorage {
       )
     } yield new BlockDagFileStorage[F](
       lock,
+      blockNumberIndex,
       config.latestMessagesLogPath,
       config.latestMessagesCrcPath,
       config.latestMessagesLogMaxSizeFactor,
@@ -1003,13 +1065,14 @@ object BlockDagFileStorage {
     )
   }
 
-  def createEmptyFromGenesis[F[_]: Concurrent: Sync: Log: BlockStore](
+  def createEmptyFromGenesis[F[_]: Concurrent: Sync: Log](
       config: Config,
       genesis: BlockMessage
   ): F[BlockDagFileStorage[F]] = {
     implicit val raiseIOError: RaiseIOError[F] = IOError.raiseIOErrorThroughSync[F]
     for {
       lock                  <- Semaphore[F](1)
+      blockNumberIndex      <- loadBlockNumberIndexLmdbDbi(config)
       _                     <- createFile[F](config.latestMessagesLogPath)
       _                     <- createFile[F](config.latestMessagesCrcPath)
       genesisBonds          = BlockMessageUtil.bonds(genesis)
@@ -1066,6 +1129,7 @@ object BlockDagFileStorage {
       )
     } yield new BlockDagFileStorage[F](
       lock,
+      blockNumberIndex,
       config.latestMessagesLogPath,
       config.latestMessagesCrcPath,
       config.latestMessagesLogMaxSizeFactor,

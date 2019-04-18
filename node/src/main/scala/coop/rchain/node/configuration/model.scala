@@ -24,6 +24,7 @@ final case class Server(
     mapSize: Long,
     storeType: StoreType,
     storeSize: Long,
+    dagStorageSize: Long,
     maxNumOfConnections: Int,
     maxMessageSize: Int,
     packetChunkSize: Int,

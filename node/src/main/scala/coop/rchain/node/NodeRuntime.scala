@@ -401,7 +401,7 @@ class NodeRuntime private[node] (
     _             <- mkDirs(conf.server.dataDir)
     _             <- mkDirs(blockstorePath)
     _             <- mkDirs(dagStoragePath)
-    blockstoreEnv = Context.env(blockstorePath, 100L * 1024L * 1024L * 4096L)
+    blockstoreEnv = Context.env(blockstorePath, 8L * 1024L * 1024L * 1024L)
     blockStore <- FileLMDBIndexBlockStore
                    .create[Effect](blockstoreEnv, blockstorePath)(
                      Concurrent[Effect],
@@ -417,13 +417,14 @@ class NodeRuntime private[node] (
       equivocationsTrackerLogPath = dagStoragePath.resolve("equivocationsTrackerLogPath"),
       equivocationsTrackerCrcPath = dagStoragePath.resolve("equivocationsTrackerCrcPath"),
       checkpointsDirPath = dagStoragePath.resolve("checkpointsDirPath"),
+      blockNumberIndexPath = dagStoragePath.resolve("blockNumberIndexPath"),
+      mapSize = 8L * 1024L * 1024L * 1024L,
       latestMessagesLogMaxSizeFactor = 10
     )
     blockDagStorage <- BlockDagFileStorage.create[Effect](dagConfig)(
                         Concurrent[Effect],
                         Sync[Effect],
-                        Log.eitherTLog(Monad[Task], log),
-                        blockStore
+                        Log.eitherTLog(Monad[Task], log)
                       )
     oracle = SafetyOracle.cliqueOracle[Effect](Monad[Effect], Log.eitherTLog(Monad[Task], log))
     runtime <- {
