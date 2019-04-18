@@ -19,6 +19,8 @@ import coop.rchain.shared.Resources
 
 abstract class TransportLayerRuntime[F[_]: Monad: Timer, E <: Environment] {
 
+  val networkId = "test"
+
   def createEnvironment(port: Int): F[E]
 
   def createTransportLayer(env: E): F[TransportLayer[F]]
@@ -196,7 +198,7 @@ abstract class TransportLayerRuntime[F[_]: Monad: Timer, E <: Environment] {
       local: PeerNode,
       remote: PeerNode
   ): F[CommErr[Unit]] = {
-    val msg = ProtocolHelper.heartbeat(local)
+    val msg = ProtocolHelper.heartbeat(local, networkId)
     transport.send(remote, msg)
   }
 
@@ -205,7 +207,7 @@ abstract class TransportLayerRuntime[F[_]: Monad: Timer, E <: Environment] {
       local: PeerNode,
       remotes: PeerNode*
   ): F[Seq[CommErr[Unit]]] = {
-    val msg = ProtocolHelper.heartbeat(local)
+    val msg = ProtocolHelper.heartbeat(local, networkId)
     transport.broadcast(remotes, msg)
   }
 

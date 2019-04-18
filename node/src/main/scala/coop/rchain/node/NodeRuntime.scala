@@ -100,12 +100,14 @@ class NodeRuntime private[node] (
       jvmMetrics: JvmMetrics[Task],
       connectionsCell: ConnectionsCell[Task],
       concurrent: Concurrent[Effect],
-      metrics: Metrics[Task]
+      metrics: Metrics[Task],
+      rPConfAsk: RPConfAsk[Task]
   ): Effect[Servers] = {
     implicit val s: Scheduler = scheduler
     for {
       kademliaRPCServer <- discovery
                             .acquireKademliaRPCServer(
+                              conf.server.networkId,
                               kademliaPort,
                               KademliaHandleRPC.handlePing[Task],
                               KademliaHandleRPC.handleLookup[Task]
@@ -114,13 +116,14 @@ class NodeRuntime private[node] (
       transportServer <- Task
                           .delay(
                             GrpcTransportServer.acquireServer(
-                              port,
+                              conf.server.networkId,
+                              conf.server.port,
                               conf.tls.certificate,
                               conf.tls.key,
                               conf.grpcServer.maxMessageSize,
                               conf.server.dataDir.resolve("tmp").resolve("comm"),
                               conf.server.messageConsumers
-                            )(grpcScheduler, log)
+                            )(grpcScheduler, rPConfAsk, log)
                           )
                           .toEffect
       externalApiServer <- api
@@ -317,7 +320,14 @@ class NodeRuntime private[node] (
   ) // TODO read from conf
 
   private def rpConf(local: PeerNode, bootstrapNode: Option[PeerNode]) =
-    RPConf(local, bootstrapNode, defaultTimeout, conf.server.maxNumOfConnections, rpClearConnConf)
+    RPConf(
+      local,
+      conf.server.networkId,
+      bootstrapNode,
+      defaultTimeout,
+      conf.server.maxNumOfConnections,
+      rpClearConnConf
+    )
 
   // TODO this should use existing algebra
   private def mkDirs(path: Path): Effect[Unit] =
@@ -366,6 +376,7 @@ class NodeRuntime private[node] (
           )
     transport <- effects
                   .transportClient(
+                    conf.server.networkId,
                     conf.tls.certificate,
                     conf.tls.key,
                     conf.server.maxMessageSize,
@@ -373,7 +384,11 @@ class NodeRuntime private[node] (
                     commTmpFolder
                   )(grpcScheduler, log, metrics)
                   .toEffect
-    kademliaRPC   = effects.kademliaRPC(defaultTimeout)(grpcScheduler, peerNodeAsk, metrics)
+    kademliaRPC = effects.kademliaRPC(conf.server.networkId, defaultTimeout)(
+      grpcScheduler,
+      peerNodeAsk,
+      metrics
+    )
     kademliaStore = effects.kademliaStore(id)(kademliaRPC, metrics)
     _             <- initPeer.fold(Task.unit.toEffect)(p => kademliaStore.updateLastSeen(p).toEffect)
     nodeDiscovery = effects.nodeDiscovery(id)(kademliaStore, kademliaRPC)

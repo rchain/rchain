@@ -79,7 +79,7 @@ class TransportLayerTestImpl[F[_]: Monad]()(
     stream(Seq(peer), blob)
 
   def stream(peers: Seq[PeerNode], blob: Blob): F[Unit] =
-    broadcast(peers, protocol(blob.sender).withPacket(blob.packet)).void
+    broadcast(peers, protocol(blob.sender, "test").withPacket(blob.packet)).void
 
   def clear(peer: PeerNode): F[Unit] =
     TestNetwork.clear(peer)

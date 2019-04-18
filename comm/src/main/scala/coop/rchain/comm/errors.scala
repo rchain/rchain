@@ -1,9 +1,11 @@
 package coop.rchain.comm
 
 import java.nio.file._
+
+import cats.data._
+
+import coop.rchain.catscontrib._
 import coop.rchain.comm.protocol.routing._
-import cats._, cats.data._, cats.implicits._
-import coop.rchain.catscontrib._, Catscontrib._, ski._
 
 // TODO we need lower level errors and general error, for now all in one place
 // TODO cleanup unused errors (UDP trash)
@@ -22,6 +24,7 @@ final case object EncryptionHandshakeIncorrectlySigned              extends Comm
 final case object BootstrapNotProvided                              extends CommError
 final case class PeerNodeNotFound(peer: PeerNode)                   extends CommError
 final case class PeerUnavailable(peer: PeerNode)                    extends CommError
+final case class WrongNetwork(peer: PeerNode, msg: String)          extends CommError
 final case class MessageToLarge(peer: PeerNode)                     extends CommError
 final case class MalformedMessage(pm: Protocol)                     extends CommError
 final case object CouldNotConnectToBootstrap                        extends CommError
@@ -48,24 +51,25 @@ object CommError {
   type CommErrT[F[_], A] = EitherT[F, CommError, A]
   type CommErr[A]        = Either[CommError, A]
 
-  def unknownCommError(msg: String): CommError           = UnknownCommError(msg)
-  def unknownProtocol(msg: String): CommError            = UnknownProtocolError(msg)
-  def parseError(msg: String): CommError                 = ParseError(msg)
-  def protocolException(th: Throwable): CommError        = ProtocolException(th)
-  def headerNotAvailable: CommError                      = HeaderNotAvailable
-  def peerNodeNotFound(peer: PeerNode): CommError        = PeerNodeNotFound(peer)
-  def peerUnavailable(peer: PeerNode): CommError         = PeerUnavailable(peer)
-  def messageToLarge(peer: PeerNode): CommError          = MessageToLarge(peer)
-  def publicKeyNotAvailable(peer: PeerNode): CommError   = PublicKeyNotAvailable(peer)
-  def couldNotConnectToBootstrap: CommError              = CouldNotConnectToBootstrap
-  def internalCommunicationError(msg: String): CommError = InternalCommunicationError(msg)
-  def malformedMessage(pm: Protocol): CommError          = MalformedMessage(pm)
-  def noResponseForRequest: CommError                    = NoResponseForRequest
-  def upstreamNotAvailable: CommError                    = UpstreamNotAvailable
-  def unexpectedMessage(msgStr: String): CommError       = UnexpectedMessage(msgStr)
-  def senderNotAvailable: CommError                      = SenderNotAvailable
-  def pongNotReceivedForPing(peer: PeerNode): CommError  = PongNotReceivedForPing(peer)
-  def timeout: CommError                                 = TimeOut
+  def unknownCommError(msg: String): CommError             = UnknownCommError(msg)
+  def unknownProtocol(msg: String): CommError              = UnknownProtocolError(msg)
+  def parseError(msg: String): CommError                   = ParseError(msg)
+  def protocolException(th: Throwable): CommError          = ProtocolException(th)
+  def headerNotAvailable: CommError                        = HeaderNotAvailable
+  def peerNodeNotFound(peer: PeerNode): CommError          = PeerNodeNotFound(peer)
+  def peerUnavailable(peer: PeerNode): CommError           = PeerUnavailable(peer)
+  def wrongNetwork(peer: PeerNode, msg: String): CommError = WrongNetwork(peer, msg)
+  def messageToLarge(peer: PeerNode): CommError            = MessageToLarge(peer)
+  def publicKeyNotAvailable(peer: PeerNode): CommError     = PublicKeyNotAvailable(peer)
+  def couldNotConnectToBootstrap: CommError                = CouldNotConnectToBootstrap
+  def internalCommunicationError(msg: String): CommError   = InternalCommunicationError(msg)
+  def malformedMessage(pm: Protocol): CommError            = MalformedMessage(pm)
+  def noResponseForRequest: CommError                      = NoResponseForRequest
+  def upstreamNotAvailable: CommError                      = UpstreamNotAvailable
+  def unexpectedMessage(msgStr: String): CommError         = UnexpectedMessage(msgStr)
+  def senderNotAvailable: CommError                        = SenderNotAvailable
+  def pongNotReceivedForPing(peer: PeerNode): CommError    = PongNotReceivedForPing(peer)
+  def timeout: CommError                                   = TimeOut
   def unableToStorePacket(packet: Packet, th: Throwable): CommError =
     UnableToStorePacket(packet, th)
   def unableToRestorePacket(path: Path, th: Throwable) = UnableToRestorePacket(path, th)

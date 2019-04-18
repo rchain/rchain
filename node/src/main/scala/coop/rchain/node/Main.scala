@@ -3,11 +3,13 @@ package coop.rchain.node
 import scala.collection.JavaConverters._
 import scala.tools.jline.console._
 import completer.StringsCompleter
+
 import cats.implicits._
+
 import coop.rchain.casper.util.comm._
+import coop.rchain.casper.util.BondingUtil
 import coop.rchain.catscontrib._
 import coop.rchain.catscontrib.TaskContrib._
-import coop.rchain.casper.util.BondingUtil
 import coop.rchain.comm._
 import coop.rchain.metrics
 import coop.rchain.metrics.Metrics
@@ -16,6 +18,7 @@ import coop.rchain.node.diagnostics.client.GrpcDiagnosticsService
 import coop.rchain.node.effects._
 import coop.rchain.shared._
 import coop.rchain.shared.StringOps._
+
 import monix.eval.Task
 import monix.execution.Scheduler
 import org.slf4j.LoggerFactory
@@ -143,7 +146,8 @@ object Main {
           log.info(s"Starting with profile ${conf.profile}"),
           log.info(s"Using configuration file: ${conf.configurationFile}"),
           if (!conf.configurationFile.toFile.exists()) log.warn("Configuration file not found!")
-          else Task.unit
+          else Task.unit,
+          log.info(s"Running on network: ${conf.server.networkId}")
         )
       )
       .void

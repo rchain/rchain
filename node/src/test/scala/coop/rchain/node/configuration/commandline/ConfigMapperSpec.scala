@@ -19,6 +19,7 @@ class ConfigMapperSpec extends FunSuite with Matchers {
     val args =
       Seq(
         "run",
+        "--network testnet",
         "--host 1.2.3.4",
         "--dynamic-host-address",
         "--no-upnp",
@@ -43,6 +44,7 @@ class ConfigMapperSpec extends FunSuite with Matchers {
 
     val expectedServer =
       configuration.Server(
+        networkId = "testnet",
         host = Some("1.2.3.4"),
         port = 40400,
         httpPort = 40403,

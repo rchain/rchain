@@ -34,6 +34,7 @@ object Server {
   val Key = s"${Configuration.Key}.server"
 
   object keys {
+    val NetworkId        = "network-id"
     val Bootstrap        = "bootstrap"
     val StoreType        = "store-type"
     val Host             = "host"
@@ -76,6 +77,7 @@ object Server {
     val messageConsumers = Math.max(Runtime.getRuntime.availableProcessors(), 2)
 
     configuration.Server(
+      networkId = server.getString(keys.NetworkId),
       host = server.getStringOpt(keys.Host),
       dynamicHostAddress = server.getBoolean(keys.HostDynamic),
       noUpnp = !server.getBoolean(keys.Upnp),

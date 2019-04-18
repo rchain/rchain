@@ -70,7 +70,7 @@ trait TaskTests[C, P, A, R, K] extends StorageTestsBase[Task, C, P, R, K] {
   import coop.rchain.catscontrib.TaskContrib._
   import scala.concurrent.ExecutionContext
 
-  override implicit val concurrentF: Concurrent[Task] =
+  implicit override val concurrentF: Concurrent[Task] =
     new monix.eval.instances.CatsConcurrentEffectForTask()(
       monix.execution.Scheduler.Implicits.global,
       Task.defaultOptions
@@ -78,8 +78,8 @@ trait TaskTests[C, P, A, R, K] extends StorageTestsBase[Task, C, P, R, K] {
   implicit val logF: Log[Task]         = Log.log[Task]
   implicit val metricsF: Metrics[Task] = new Metrics.MetricsNOP[Task]()
 
-  override implicit val monadF: Monad[Task] = concurrentF
-  override implicit val contextShiftF: ContextShift[Task] = new ContextShift[Task] {
+  implicit override val monadF: Monad[Task] = concurrentF
+  implicit override val contextShiftF: ContextShift[Task] = new ContextShift[Task] {
     override def shift: Task[Unit] =
       Task.shift
     override def evalOn[B](ec: ExecutionContext)(fa: Task[B]): Task[B] =

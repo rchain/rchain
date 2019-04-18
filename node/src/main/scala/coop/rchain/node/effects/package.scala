@@ -45,14 +45,15 @@ package object effects {
       def sleep(duration: FiniteDuration): Task[Unit] = timer.sleep(duration)
     }
 
-  def kademliaRPC(timeout: FiniteDuration)(
+  def kademliaRPC(networkId: String, timeout: FiniteDuration)(
       implicit
       scheduler: Scheduler,
       peerNodeAsk: PeerNodeAsk[Task],
       metrics: Metrics[Task]
-  ): KademliaRPC[Task] = new GrpcKademliaRPC(timeout)
+  ): KademliaRPC[Task] = new GrpcKademliaRPC(networkId, timeout)
 
   def transportClient(
+      networkId: String,
       certPath: Path,
       keyPath: Path,
       maxMessageSize: Int,
@@ -66,7 +67,7 @@ package object effects {
     Task.delay {
       val cert = Resources.withResource(Source.fromFile(certPath.toFile))(_.mkString)
       val key  = Resources.withResource(Source.fromFile(keyPath.toFile))(_.mkString)
-      new GrpcTransportClient(cert, key, maxMessageSize, packetChunkSize, folder, 1000)
+      new GrpcTransportClient(networkId, cert, key, maxMessageSize, packetChunkSize, folder, 1000)
     }
 
   def consoleIO(consoleReader: ConsoleReader): ConsoleIO[Task] = new JLineConsoleIO(consoleReader)

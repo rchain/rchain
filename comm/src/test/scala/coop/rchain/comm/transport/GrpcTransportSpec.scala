@@ -20,9 +20,10 @@ class GrpcTransportSpec extends WordSpecLike with Matchers with Inside {
 
   implicit val metrics: Metrics[Task] = new Metrics.MetricsNOP
   implicit val scheduler: Scheduler   = Scheduler.Implicits.global
+  private val networkId               = "test"
   private val peerLocal               = createPeerNode
   private val peerRemote              = createPeerNode
-  private val msg                     = ProtocolHelper.heartbeat(peerLocal)
+  private val msg                     = ProtocolHelper.heartbeat(peerLocal, networkId)
 
   private def createPeerNode: PeerNode = {
     val b = Array.ofDim[Byte](4)
@@ -157,9 +158,13 @@ class GrpcTransportSpec extends WordSpecLike with Matchers with Inside {
       "deliver a list of Chuncks" in {
         val stub   = new TestTransportLayer(Task.raiseError(testThrowable))
         val blob   = Blob(peerLocal, Packet("N/A", bigContent))
-        val chunks = Chunker.chunkIt(blob, messageSize).runSyncUnsafe().toList
+        val chunks = Chunker.chunkIt(networkId, blob, messageSize).runSyncUnsafe().toList
         val result =
-          GrpcTransport.stream(peerRemote, blob, messageSize).run(stub).attempt.runSyncUnsafe()
+          GrpcTransport
+            .stream(networkId, peerRemote, blob, messageSize)
+            .run(stub)
+            .attempt
+            .runSyncUnsafe()
 
         result shouldBe Right(Right(()))
         stub.streamMessages.length shouldBe 1

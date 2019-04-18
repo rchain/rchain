@@ -25,6 +25,7 @@ import monix.execution.Scheduler
 import monix.reactive.Observable
 
 class GrpcTransportClient(
+    networkId: String,
     cert: String,
     key: String,
     maxMessageSize: Int,
@@ -86,7 +87,7 @@ class GrpcTransportClient(
               .maxInboundMessageSize(maxMessageSize)
               .negotiationType(NegotiationType.TLS)
               .sslContext(clientSslContext)
-              .intercept(new SslSessionClientInterceptor())
+              .intercept(new SslSessionClientInterceptor(networkId))
               .overrideAuthority(peer.id.toString)
               .build()
           }
@@ -135,7 +136,7 @@ class GrpcTransportClient(
         PacketOps.restore[Task](path) >>= {
           case Right(packet) =>
             withClient(peer, timeout(packet))(
-              GrpcTransport.stream(peer, Blob(sender, packet), packetChunkSize)
+              GrpcTransport.stream(networkId, peer, Blob(sender, packet), packetChunkSize)
             ).flatMap {
               case Left(error @ PeerUnavailable(_)) =>
                 log.debug(

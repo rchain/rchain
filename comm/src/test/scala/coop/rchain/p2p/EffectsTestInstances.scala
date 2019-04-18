@@ -18,6 +18,8 @@ import coop.rchain.comm.protocol.routing._
 /** Eagerly evaluated instances to do reasoning about applied effects */
 object EffectsTestInstances {
 
+  val networkId = "test"
+
   class LogicalTime[F[_]: Sync] extends Time[F] {
     var clock: Long = 0
 
@@ -54,7 +56,7 @@ object EffectsTestInstances {
       clearConnections: ClearConnectionsConf = ClearConnectionsConf(1)
   ) =
     new ConstApplicativeAsk[F, RPConf](
-      RPConf(local, Some(local), defaultTimeout, 20, clearConnections)
+      RPConf(local, networkId, Some(local), defaultTimeout, 20, clearConnections)
     )
 
   class TransportLayerStub[F[_]: Sync: Applicative] extends TransportLayer[F] {
@@ -94,7 +96,7 @@ object EffectsTestInstances {
       stream(Seq(peer), blob)
 
     def stream(peers: Seq[PeerNode], blob: Blob): F[Unit] =
-      broadcast(peers, ProtocolHelper.protocol(blob.sender).withPacket(blob.packet)).void
+      broadcast(peers, ProtocolHelper.protocol(blob.sender, networkId).withPacket(blob.packet)).void
 
     def disconnect(peer: PeerNode): F[Unit] =
       Sync[F].delay {

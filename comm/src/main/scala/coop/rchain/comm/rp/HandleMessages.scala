@@ -63,11 +63,11 @@ object HandleMessages {
       packet: Packet
   ): F[CommunicationResponse] =
     for {
-      local               <- RPConfAsk[F].reader(_.local)
+      conf                <- RPConfAsk[F].ask
       maybeResponsePacket <- PacketHandler[F].handlePacket(remote, packet)
     } yield maybeResponsePacket
       .fold(notHandled(noResponseForRequest))(
-        m => handledWithMessage(ProtocolHelper.protocol(local).withPacket(m))
+        m => handledWithMessage(ProtocolHelper.protocol(conf.local, conf.networkId).withPacket(m))
       )
 
   def handleProtocolHandshakeResponse[F[_]: Monad: TransportLayer: Metrics: ConnectionsCell: Log: RPConfAsk](
@@ -83,8 +83,8 @@ object HandleMessages {
       protocolHandshake: ProtocolHandshake
   ): F[CommunicationResponse] =
     for {
-      local    <- RPConfAsk[F].reader(_.local)
-      response = ProtocolHelper.protocolHandshakeResponse(local)
+      conf     <- RPConfAsk[F].ask
+      response = ProtocolHelper.protocolHandshakeResponse(conf.local, conf.networkId)
       _        <- TransportLayer[F].send(peer, response) >>= ErrorHandler[F].fromEither
       _        <- Log[F].info(s"Responded to protocol handshake request from $peer")
       _        <- ConnectionsCell[F].flatModify(_.addConnAndReport[F](peer))

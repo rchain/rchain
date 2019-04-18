@@ -100,9 +100,9 @@ object Connect {
 
     def sendHeartbeat(peer: PeerNode): F[(PeerNode, CommErr[Unit])] =
       for {
-        local <- RPConfAsk[F].reader(_.local)
-        hb    = heartbeat(local)
-        res   <- TransportLayer[F].send(peer, hb)
+        conf <- RPConfAsk[F].ask
+        hb   = heartbeat(conf.local, conf.networkId)
+        res  <- TransportLayer[F].send(peer, hb)
       } yield (peer, res)
 
     def clear(connections: Connections): F[Int] =
@@ -132,10 +132,14 @@ object Connect {
       conn: (PeerNode, FiniteDuration) => F[Unit]
   ): F[List[PeerNode]] =
     for {
-      connections       <- ConnectionsCell[F].read.map(_.toSet)
-      tout              <- RPConfAsk[F].reader(_.defaultTimeout)
-      peers             <- NodeDiscovery[F].peers.map(_.filterNot(connections.contains).toList)
-      responses         <- peers.traverse(p => ErrorHandler[F].attempt(conn(p, tout)))
+      connections <- ConnectionsCell[F].read.map(_.toSet)
+      tout        <- RPConfAsk[F].reader(_.defaultTimeout)
+      peers       <- NodeDiscovery[F].peers.map(_.filterNot(connections.contains).toList)
+      responses   <- peers.traverse(p => ErrorHandler[F].attempt(conn(p, tout)))
+      _ <- responses.collect {
+            case Left(WrongNetwork(peer, msg)) =>
+              Log[F].warn(s"Can't connect to peer $peer. $msg")
+          }.sequence
       peersAndResponses = peers.zip(responses)
     } yield peersAndResponses.filter(_._2.isRight).map(_._1)
 
@@ -145,13 +149,13 @@ object Connect {
   ): F[Unit] =
     (
       for {
-        address  <- peer.toAddress.pure[F]
-        _        <- Log[F].debug(s"Connecting to $address")
-        _        <- Metrics[F].incrementCounter("connect")
-        _        <- Log[F].debug(s"Initialize protocol handshake to $address")
-        local    <- RPConfAsk[F].reader(_.local)
-        ph       = protocolHandshake(local)
-        response <- TransportLayer[F].send(peer, ph) >>= ErrorHandler[F].fromEither
+        address <- peer.toAddress.pure[F]
+        _       <- Log[F].debug(s"Connecting to $address")
+        _       <- Metrics[F].incrementCounter("connect")
+        _       <- Log[F].debug(s"Initialize protocol handshake to $address")
+        conf    <- RPConfAsk[F].ask
+        ph      = protocolHandshake(conf.local, conf.networkId)
+        _       <- TransportLayer[F].send(peer, ph) >>= ErrorHandler[F].fromEither
       } yield ()
     ).timer("connect-time")
 

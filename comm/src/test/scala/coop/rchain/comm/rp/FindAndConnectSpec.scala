@@ -120,6 +120,7 @@ class FindAndConnectSpec extends FunSpec with Matchers with BeforeAndAfterEach w
         clearConnections = ClearConnectionsConf(numOfConnectionsPinged),
         defaultTimeout = defaultTimeout,
         local = peer("src"),
+        networkId = "test",
         bootstrap = None,
         maxNumOfConnections = maxNumOfConnections
       )

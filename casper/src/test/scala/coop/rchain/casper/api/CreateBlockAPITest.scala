@@ -62,7 +62,9 @@ class CreateBlockAPITest extends FlatSpec with Matchers {
 
     def testProgram(blockApiLock: Semaphore[Effect])(
         implicit casperRef: MultiParentCasperRef[Effect]
-    ): Effect[(ApiErr[DeployServiceResponse], ApiErr[DeployServiceResponse], ApiErr[DeployServiceResponse])] =
+    ): Effect[
+      (ApiErr[DeployServiceResponse], ApiErr[DeployServiceResponse], ApiErr[DeployServiceResponse])
+    ] =
       EitherT.liftF(
         for {
           t1 <- createBlock(deploys.head, blockApiLock).value.start

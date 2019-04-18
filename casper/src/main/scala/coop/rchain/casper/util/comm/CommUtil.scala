@@ -64,8 +64,8 @@ object CommUtil {
   ): F[Unit] =
     for {
       peers <- ConnectionsCell.random[F]
-      local <- RPConfAsk[F].reader(_.local)
-      msg   = packet(local, pType, serializedMessage)
+      conf  <- RPConfAsk[F].ask
+      msg   = packet(conf.local, conf.networkId, pType, serializedMessage)
       _     <- TransportLayer[F].broadcast(peers, msg)
     } yield ()
 
@@ -85,11 +85,10 @@ object CommUtil {
   ): F[Unit] = {
     val request = ApprovedBlockRequest("PleaseSendMeAnApprovedBlock").toByteString
     for {
-      maybeBootstrap <- RPConfAsk[F].reader(_.bootstrap)
-      local          <- RPConfAsk[F].reader(_.local)
-      _ <- maybeBootstrap match {
+      conf <- RPConfAsk[F].ask
+      _ <- conf.bootstrap match {
             case Some(bootstrap) =>
-              val msg = packet(local, transport.ApprovedBlockRequest, request)
+              val msg = packet(conf.local, conf.networkId, transport.ApprovedBlockRequest, request)
               TransportLayer[F].send(bootstrap, msg).flatMap {
                 case Right(_) =>
                   Log[F].info(s"Successfully sent ApprovedBlockRequest to $bootstrap")
