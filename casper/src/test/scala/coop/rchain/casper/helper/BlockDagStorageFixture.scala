@@ -36,11 +36,8 @@ trait BlockDagStorageFixture extends BeforeAndAfter { self: Suite =>
         implicit val metrics = new MetricsNOP[Task]()
         implicit val log     = new Log.NOPLog[Task]()
         for {
-          blockStore <- BlockDagStorageTestFixture.createBlockStorage[Task](blockStorageDir)
-          blockDagStorage <- BlockDagStorageTestFixture.createBlockDagStorage(blockDagStorageDir)(
-                              log,
-                              blockStore
-                            )
+          blockStore             <- BlockDagStorageTestFixture.createBlockStorage[Task](blockStorageDir)
+          blockDagStorage        <- BlockDagStorageTestFixture.createBlockDagStorage(blockDagStorageDir)
           indexedBlockDagStorage <- IndexedBlockDagStorage.create(blockDagStorage)
           result                 <- f(blockStore)(indexedBlockDagStorage)
         } yield result
@@ -103,8 +100,7 @@ object BlockDagStorageTestFixture {
   }
 
   def createBlockDagStorage(blockDagStorageDir: Path)(
-      implicit log: Log[Task],
-      blockStore: BlockStore[Task]
+      implicit log: Log[Task]
   ): Task[BlockDagStorage[Task]] =
     BlockDagFileStorage.create[Task](
       BlockDagFileStorage.Config(
