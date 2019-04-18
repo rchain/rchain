@@ -94,4 +94,12 @@ package object test {
       println("---------------------")
     }
 
+  import scala.reflect.ClassTag
+  def collectActions[HA <: HotStoreAction: ClassTag](changes: Seq[HotStoreAction]): Seq[HA] = {
+    val clazz = implicitly[ClassTag[HA]].runtimeClass
+    changes
+      .collect {
+        case e: HA if clazz.isInstance(e) => e
+      }
+  }
 }
