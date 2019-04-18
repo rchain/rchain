@@ -939,8 +939,10 @@ object BlockDagFileStorage {
       config: Config
   ): F[LmdbDbi[F, ByteBuffer]] =
     for {
-      notExists <- notExists[F](config.blockNumberIndexPath)
-      _         <- if (notExists) makeDirectory[F](config.blockNumberIndexPath) else ().pure[F]
+      _ <- notExists[F](config.blockNumberIndexPath).ifM(
+            makeDirectory[F](config.blockNumberIndexPath) >> ().pure[F],
+            ().pure[F]
+          )
       env <- Sync[F].delay {
               val flags = if (config.noTls) List(EnvFlags.MDB_NOTLS) else List.empty
               Env
@@ -1050,17 +1052,17 @@ object BlockDagFileStorage {
         equivocationsTrackerCrc = calculatedEquivocationsTrackerCrc
       )
     } yield new BlockDagFileStorage[F](
-        lock,
-        blockNumberIndex,
-        config.latestMessagesLogPath,
-        config.latestMessagesCrcPath,
-        config.latestMessagesLogMaxSizeFactor,
-        config.blockMetadataLogPath,
-        config.blockMetadataCrcPath,
-        config.equivocationsTrackerLogPath,
-        config.equivocationsTrackerCrcPath,
-        new AtomicMonadState[F, BlockDagFileStorageState[F]](AtomicAny(state))
-      )
+      lock,
+      blockNumberIndex,
+      config.latestMessagesLogPath,
+      config.latestMessagesCrcPath,
+      config.latestMessagesLogMaxSizeFactor,
+      config.blockMetadataLogPath,
+      config.blockMetadataCrcPath,
+      config.equivocationsTrackerLogPath,
+      config.equivocationsTrackerCrcPath,
+      new AtomicMonadState[F, BlockDagFileStorageState[F]](AtomicAny(state))
+    )
   }
 
   def createEmptyFromGenesis[F[_]: Concurrent: Sync: Log](
@@ -1126,16 +1128,16 @@ object BlockDagFileStorage {
         equivocationsTrackerCrc = equivocationsTrackerCrc
       )
     } yield new BlockDagFileStorage[F](
-        lock,
-        blockNumberIndex,
-        config.latestMessagesLogPath,
-        config.latestMessagesCrcPath,
-        config.latestMessagesLogMaxSizeFactor,
-        config.blockMetadataLogPath,
-        config.blockMetadataCrcPath,
-        config.equivocationsTrackerLogPath,
-        config.equivocationsTrackerCrcPath,
-        new AtomicMonadState[F, BlockDagFileStorageState[F]](AtomicAny(state))
-      )
+      lock,
+      blockNumberIndex,
+      config.latestMessagesLogPath,
+      config.latestMessagesCrcPath,
+      config.latestMessagesLogMaxSizeFactor,
+      config.blockMetadataLogPath,
+      config.blockMetadataCrcPath,
+      config.equivocationsTrackerLogPath,
+      config.equivocationsTrackerCrcPath,
+      new AtomicMonadState[F, BlockDagFileStorageState[F]](AtomicAny(state))
+    )
   }
 }
