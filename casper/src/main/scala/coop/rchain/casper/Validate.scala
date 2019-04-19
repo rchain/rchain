@@ -245,8 +245,7 @@ object Validate {
     } yield result
 
   /**
-    * Validate no deploy by the same (user, millisecond timestamp)
-    * has been produced in the chain
+    * Validate no deploy with the same sig has been produced in the chain
     *
     * Agnostic of non-parent justifications
     */
@@ -258,7 +257,7 @@ object Validate {
     val deployKeySet = (for {
       bd <- block.body.toList
       r  <- bd.deploys.flatMap(_.deploy)
-    } yield (r.deployer, r.timestamp)).toSet
+    } yield r.sig).toSet
 
     for {
       initParents         <- ProtoUtil.unsafeGetParents[F](block)
@@ -274,7 +273,7 @@ object Validate {
                                  ProtoUtil
                                    .deploys(b)
                                    .flatMap(_.deploy)
-                                   .exists(d => deployKeySet.contains((d.deployer, d.timestamp)))
+                                   .exists(d => deployKeySet.contains(d.sig))
                                }
       maybeError <- maybeDuplicatedBlock
                      .traverse(
@@ -284,13 +283,13 @@ object Validate {
                          val duplicatedDeploy = ProtoUtil
                            .deploys(duplicatedBlock)
                            .flatMap(_.deploy)
-                           .find(d => deployKeySet.contains((d.deployer, d.timestamp)))
+                           .find(d => deployKeySet.contains(d.sig))
                            .get
                          val term            = duplicatedDeploy.term
                          val deployerString  = PrettyPrinter.buildString(duplicatedDeploy.deployer)
                          val timestampString = duplicatedDeploy.timestamp.toString
                          val message =
-                           s"found deploy $term with the same (user $deployerString, millisecond timestamp $timestampString) in the block $blockHashString as current block $currentBlockHashString"
+                           s"found deploy [$term (user $deployerString, millisecond timestamp $timestampString)] with the same sig in the block $blockHashString as current block $currentBlockHashString"
                          Log[F].warn(
                            ignore(
                              block,

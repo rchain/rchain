@@ -391,6 +391,33 @@ class ValidateTest
       } yield result
   }
 
+  "Repeat deploy validation" should "return valid for empty blocks" in withStorage {
+    implicit blockStore => implicit blockDagStorage =>
+      for {
+        _      <- createChain[Task](2)
+        block  <- blockDagStorage.lookupByIdUnsafe(0)
+        block2 <- blockDagStorage.lookupByIdUnsafe(1)
+        dag    <- blockDagStorage.getRepresentation
+        _      <- Validate.repeatDeploy[Task](block, dag, 50) shouldBeF Right(Valid)
+        _      <- Validate.repeatDeploy[Task](block2, dag, 50) shouldBeF Right(Valid)
+      } yield ()
+  }
+
+  it should "not accept blocks with a repeated deploy" in withStorage {
+    implicit blockStore => implicit blockDagStorage =>
+      for {
+        deploy  <- ConstructDeploy.basicProcessedDeploy[Task](0)
+        genesis <- createGenesis[Task](deploys = Seq(deploy))
+        block1 <- createBlock[Task](
+                   Seq(genesis.blockHash),
+                   genesis,
+                   deploys = Seq(deploy)
+                 )
+        dag <- blockDagStorage.getRepresentation
+        _   <- Validate.repeatDeploy[Task](block1, dag, 50) shouldBeF Left(InvalidRepeatDeploy)
+      } yield ()
+  }
+
   "Sender validation" should "return true for genesis and blocks from bonded validators and false otherwise" in withStorage {
     implicit blockStore => implicit blockDagStorage =>
       val validator = generateValidator("Validator")
