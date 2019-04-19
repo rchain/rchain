@@ -52,7 +52,7 @@ trait RuntimeManager[F[_]] {
   def emptyStateHash: ByteString
 }
 
-class RuntimeManagerImpl[F[_]: Concurrent] private[rholang] (
+class RuntimeManagerImpl[F[_]: Concurrent : Sync] private[rholang] (
     val emptyStateHash: ByteString,
     runtimeContainer: MVar[F, Runtime[F]]
 ) extends RuntimeManager[F] {
@@ -71,12 +71,10 @@ class RuntimeManagerImpl[F[_]: Concurrent] private[rholang] (
         for {
           evalR                     <- newEval(deploy :: Nil, runtime, start)
           (_, Seq(processedDeploy)) = evalR
-          result <- if (processedDeploy.status.isFailed) Seq.empty[Datum[ListParWithRandom]].pure[F]
-                   else {
-                     val r: F[Seq[Datum[ListParWithRandom]]] =
-                       runtime.space.getData(name).map(_.toSeq)
-                     r
-                   }
+          result <- if (processedDeploy.status.isFailed)
+                      Sync[F].raiseError(new Exception("Evaluation error:" + processedDeploy.status))
+                    else
+                      runtime.space.getData(name).map(_.toSeq)
         } yield result.flatMap(_.a.pars)
       }(runtime => runtimeContainer.put(runtime))
 
