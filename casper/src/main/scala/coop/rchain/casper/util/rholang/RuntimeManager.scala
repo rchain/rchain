@@ -9,7 +9,7 @@ import com.google.protobuf.ByteString
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
 import coop.rchain.casper.util.{ConstructDeploy, ProtoUtil}
-import coop.rchain.catscontrib.Catscontrib._
+import coop.rchain.catscontrib.Catscontrib.ToMonadOps
 import coop.rchain.catscontrib.MonadTrans
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.models.Expr.ExprInstance.GString
@@ -25,8 +25,6 @@ import coop.rchain.rholang.interpreter.{
 }
 import coop.rchain.rspace.internal.Datum
 import coop.rchain.rspace.{Blake2b256Hash, ReplayException}
-
-import scala.collection.immutable
 
 trait RuntimeManager[F[_]] {
   def captureResults(start: StateHash, deploy: DeployData, name: String = "__SCALA__"): F[Seq[Par]]
