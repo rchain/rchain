@@ -40,6 +40,7 @@ service DeployService {
   // Get dag
   // Returns on success VisualizeBlocksResponse
   rpc visualizeDag(VisualizeDagQuery) returns (Either) {}
+  rpc machineVerifiableDag(MachineVerifyQuery) returns (Either) {}
   // Returns on success BlockInfoWithoutTuplespace
   rpc showMainChain(BlocksQuery) returns (stream Either) {}
   // Get a summary of blocks on the blockchain.
@@ -128,6 +129,14 @@ message VisualizeDagQuery {
 }
 
 message VisualizeBlocksResponse {
+  string content = 1;
+}
+
+message MachineVerifyQuery {
+
+}
+
+message MachineVerifyResponse {
   string content = 1;
 }
 

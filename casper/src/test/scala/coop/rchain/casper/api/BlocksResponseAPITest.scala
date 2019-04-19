@@ -167,14 +167,15 @@ class BlocksResponseAPITest
         casperRef          <- MultiParentCasperRef.of[Task]
         _                  <- casperRef.set(casperEffect)
         cliqueOracleEffect = SafetyOracle.cliqueOracle[Task](Sync[Task], logEff)
-        blocksResponse <- BlockAPI.showBlocks[Task](Int.MaxValue)(
+        blocksResponse <- BlockAPI.showBlocks[Task](Some(Int.MaxValue))(
                            Sync[Task],
                            casperRef,
                            logEff,
                            cliqueOracleEffect,
                            blockStore
                          )
-      } yield blocksResponse.length should be(8) // TODO: Switch to 4 when we implement block height correctly
+      } yield
+        blocksResponse.right.get.length should be(8) // TODO: Switch to 4 when we implement block height correctly
   }
 
   it should "return until depth" in withStorage { implicit blockStore => implicit blockDagStorage =>
@@ -239,13 +240,14 @@ class BlocksResponseAPITest
       casperRef          <- MultiParentCasperRef.of[Task]
       _                  <- casperRef.set(casperEffect)
       cliqueOracleEffect = SafetyOracle.cliqueOracle[Task](Sync[Task], logEff)
-      blocksResponse <- BlockAPI.showBlocks[Task](2)(
+      blocksResponse <- BlockAPI.showBlocks[Task](Some(2))(
                          Sync[Task],
                          casperRef,
                          logEff,
                          cliqueOracleEffect,
                          blockStore
                        )
-    } yield blocksResponse.length should be(2) // TODO: Switch to 3 when we implement block height correctly
+    } yield
+      blocksResponse.right.get.length should be(2) // TODO: Switch to 3 when we implement block height correctly
   }
 }

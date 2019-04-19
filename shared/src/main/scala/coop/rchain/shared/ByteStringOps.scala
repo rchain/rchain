@@ -16,4 +16,8 @@ object ByteStringOps {
       buffer
     }
   }
+
+  implicit class RichByteArray(arr: Array[Byte]) {
+    def toByteString: ByteString = ByteString.copyFrom(arr)
+  }
 }

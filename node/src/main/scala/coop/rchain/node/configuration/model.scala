@@ -69,6 +69,7 @@ final case object Propose                                                  exten
 final case class ShowBlock(hash: String)                                   extends Command
 final case class ShowBlocks(depth: Int)                                    extends Command
 final case class VisualizeDag(depth: Int, showJustificationLines: Boolean) extends Command
+final case object MachineVerifiableDag                                     extends Command
 final case object Run                                                      extends Command
 final case object Help                                                     extends Command
 final case class DataAtName(name: Name)                                    extends Command

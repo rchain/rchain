@@ -89,9 +89,10 @@ object Main {
       case ShowBlocks(depth) => DeployRuntime.showBlocks[Task](depth)
       case VisualizeDag(depth, showJustificationLines) =>
         DeployRuntime.visualizeDag[Task](depth, showJustificationLines)
-      case DataAtName(name)  => DeployRuntime.listenForDataAtName[Task](name)
-      case ContAtName(names) => DeployRuntime.listenForContinuationAtName[Task](names)
-      case Run               => nodeProgram(conf)
+      case MachineVerifiableDag => DeployRuntime.machineVerifiableDag[Task]
+      case DataAtName(name)     => DeployRuntime.listenForDataAtName[Task](name)
+      case ContAtName(names)    => DeployRuntime.listenForContinuationAtName[Task](names)
+      case Run                  => nodeProgram(conf)
       case BondingDeployGen(bondKey, ethAddress, amount, secKey, pubKey) =>
         implicit val noopMetrics: Metrics[Task] = new metrics.Metrics.MetricsNOP[Task]
         BondingUtil
