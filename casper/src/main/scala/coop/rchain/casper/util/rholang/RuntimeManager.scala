@@ -74,6 +74,20 @@ class RuntimeManagerImpl[F[_]: Concurrent] private[rholang] (
       evaluateResult                           <- doInj(deploy, runtime.reducer, runtime.errorLog)(runtime.cost)
     } yield evaluateResult
 
+  private def replayComputeEffect(
+      runtime: Runtime[F]
+  )(start: Blake2b256Hash, processedDeploy: InternalProcessedDeploy): F[EvaluateResult] = {
+    import processedDeploy._
+    for {
+      _ <- runtime.replaySpace.rig(start, log.toList)
+      (codeHash, phloPrice, userId, timestamp) = ProtoUtil.getRholangDeployParams(
+        deploy
+      )
+      _         <- runtime.shortLeashParams.setParams(codeHash, phloPrice, userId, timestamp)
+      injResult <- doInj(deploy, runtime.replayReducer, runtime.errorLog)(runtime.cost)
+    } yield injResult
+  }
+
   /**
     * @note `replayEval` does not need to reset the evaluation store,
     *       merely the replay store. Hence, `replayComputeState` uses
@@ -226,16 +240,12 @@ class RuntimeManagerImpl[F[_]: Concurrent] private[rholang] (
     ): F[Either[(Option[DeployData], Failed), StateHash]] =
       Concurrent[F].defer {
         terms match {
-          case InternalProcessedDeploy(deploy, _, log, status) +: rem =>
-            val (codeHash, phloPrice, userId, timestamp) = ProtoUtil.getRholangDeployParams(
-              deploy
-            )
+          case processedDeploy +: rem =>
+            import processedDeploy._
             for {
-              _         <- runtime.shortLeashParams.setParams(codeHash, phloPrice, userId, timestamp)
-              _         <- runtime.replaySpace.rig(hash, log.toList)
-              injResult <- doInj(deploy, runtime.replayReducer, runtime.errorLog)(runtime.cost)
+              replayEvaluateResult <- replayComputeEffect(runtime)(hash, processedDeploy)
               //TODO: compare replay deploy cost to given deploy cost
-              EvaluateResult(cost, errors) = injResult
+              EvaluateResult(cost, errors) = replayEvaluateResult
               cont <- DeployStatus.fromErrors(errors) match {
                        case int: InternalErrors => Left(Some(deploy) -> int).pure[F]
                        case replayStatus =>
