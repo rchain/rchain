@@ -11,14 +11,20 @@ import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.rspace._
 import coop.rchain.rspace.history.Branch
 import coop.rchain.rspace.internal._
+import coop.rchain.rspace.nextgenrspace.history.HistoryRepository
 import coop.rchain.rspace.trace.{Produce, _}
-import coop.rchain.shared.Log
+import coop.rchain.shared.{Cell, Log}
 import scodec.Codec
+import monix.execution.atomic.AtomicAny
 
 import scala.collection.JavaConverters._
 import scala.concurrent.ExecutionContext
 
-class ReplayRSpace[F[_], C, P, A, R, K](store: HotStore[F, C, P, A, K], branch: Branch)(
+class ReplayRSpace[F[_], C, P, A, R, K](
+    historyRepository: HistoryRepository[F, C, P, A, K],
+    storeAtom: AtomicAny[HotStore[F, C, P, A, K]],
+    branch: Branch
+)(
     implicit
     serializeC: Serialize[C],
     serializeP: Serialize[P],
@@ -29,13 +35,20 @@ class ReplayRSpace[F[_], C, P, A, R, K](store: HotStore[F, C, P, A, K], branch: 
     contextShift: ContextShift[F],
     scheduler: ExecutionContext,
     metricsF: Metrics[F]
-) extends RSpaceOps[F, C, P, A, R, K](store, branch)
+) extends RSpaceOps[F, C, P, A, R, K](storeAtom, branch)
     with IReplaySpace[F, C, P, A, R, K] {
 
   protected[this] override val logger: Logger = Logger[this.type]
 
   implicit private[this] val MetricsSource: Metrics.Source =
     Metrics.Source(RSpaceMetricsSource, "replay")
+
+  //TODO close in some F state abstraction
+  val historyRepositoryAtom: AtomicAny[HistoryRepository[F, C, P, A, K]] = AtomicAny(
+    historyRepository
+  )
+
+  def store: HotStore[F, C, P, A, K] = storeAtom.get()
 
   private[this] val consumeCommLabel = "comm.consume"
   private[this] val produceCommLabel = "comm.produce"
@@ -387,15 +400,46 @@ class ReplayRSpace[F[_], C, P, A, R, K](store: HotStore[F, C, P, A, K], branch: 
         updatedReplays.removeBinding(produceRef, commRef)
     }
 
-  def createCheckpoint(): F[Checkpoint] = ???
+  private def createCache: F[Cell[F, Cache[C, P, A, K]]] =
+    Cell.refCell[F, Cache[C, P, A, K]](Cache())
 
-  override def clear(): F[Unit] =
+  private def createNewHotStore(historyReader: HistoryReader[F, C, P, A, K]): F[Unit] =
     for {
-      _ <- syncF.delay {
-            replayData.clear()
-          }
-      _ <- super.clear()
+      cache <- createCache
+      nextHotStore = {
+        implicit val C: Cell[F, Cache[C, P, A, K]]    = cache
+        implicit val HR: HistoryReader[F, C, P, A, K] = historyReader
+        HotStore.inMem
+      }
+      _ = storeAtom.set(nextHotStore)
     } yield ()
+
+  override def createCheckpoint(): F[Checkpoint] =
+    for {
+      isEmpty <- syncF.delay(replayData.isEmpty)
+      checkpoint <- isEmpty.fold(
+                     syncF.defer {
+                       for {
+                         changes     <- storeAtom.get().changes()
+                         nextHistory <- historyRepositoryAtom.get().checkpoint(changes.toList)
+                         _           <- createNewHotStore(nextHistory)
+                       } yield (Checkpoint(nextHistory.history.root, Seq.empty))
+                     }, {
+                       val msg =
+                         s"unused comm event: replayData multimap has ${replayData.size} elements left"
+                       logF.error(msg) *> syncF.raiseError[Checkpoint](new ReplayException(msg))
+                     }
+                   )
+    } yield checkpoint
+
+  override def reset(root: Blake2b256Hash): F[Unit] =
+    for {
+      nextHistory <- historyRepositoryAtom.get().reset(root)
+      _           = historyRepositoryAtom.set(nextHistory)
+      _           <- createNewHotStore(nextHistory)
+    } yield ()
+
+  override def clear(): F[Unit] = syncF.delay { replayData.clear() }
 
   protected[rspace] def isDirty(root: Blake2b256Hash): F[Boolean] = true.pure[F]
 
@@ -404,7 +448,11 @@ class ReplayRSpace[F[_], C, P, A, R, K](store: HotStore[F, C, P, A, K], branch: 
 
 object ReplayRSpace {
 
-  def create[F[_], C, P, A, R, K](store: HotStore[F, C, P, A, K], branch: Branch)(
+  def create[F[_], C, P, A, R, K](
+      historyRepository: HistoryRepository[F, C, P, A, K],
+      store: HotStore[F, C, P, A, K],
+      branch: Branch
+  )(
       implicit
       sc: Serialize[C],
       sp: Serialize[P],
@@ -418,7 +466,7 @@ object ReplayRSpace {
   ): F[ReplayRSpace[F, C, P, A, R, K]] = {
 
     val space: ReplayRSpace[F, C, P, A, R, K] =
-      new ReplayRSpace[F, C, P, A, R, K](store, branch)
+      new ReplayRSpace[F, C, P, A, R, K](historyRepository, AtomicAny(store), branch)
 
     space.pure[F]
   }
