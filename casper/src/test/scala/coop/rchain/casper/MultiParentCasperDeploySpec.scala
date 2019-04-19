@@ -1,6 +1,8 @@
 package coop.rchain.casper
 
 import com.google.protobuf.ByteString
+import cats.implicits._
+import coop.rchain.casper.MultiParentCasper.ignoreDoppelgangerCheck
 import coop.rchain.casper.helper.HashSetCasperTestNode
 import coop.rchain.casper.helper.HashSetCasperTestNode.Effect
 import coop.rchain.casper.scalatestcontrib._
@@ -104,6 +106,27 @@ class MultiParentCasperDeploySpec extends FlatSpec with Matchers with Inspectors
       deployResult <- casper.deploy(incorrectDeploy)
       _            <- node.tearDown()
     } yield deployResult should be(Left(SignatureVerificationFailed))
+  }
+
+  it should "not create a block with a repeated deploy" in effectTest {
+    implicit val timeEff = new LogicalTime[Effect]
+
+    for {
+      nodes              <- HashSetCasperTestNode.networkEff(validatorKeys.take(2), genesis)
+      List(node0, node1) = nodes.toList
+      casper0            = node0.casperEff
+      deploy             <- ConstructDeploy.basicDeployData[Effect](0)
+      _                  <- casper0.deploy(deploy)
+      createBlockResult  <- casper0.createBlock
+      Created(block)     = createBlockResult
+      _                  <- casper0.addBlock(block, ignoreDoppelgangerCheck[Effect])
+      _                  <- node1.receive()
+      casper1            = node1.casperEff
+      _                  <- casper1.deploy(deploy)
+      createBlockResult2 <- casper1.createBlock
+      _                  = createBlockResult2 should be(NoNewDeploys)
+      _                  <- nodes.toList.traverse(_.tearDownNode())
+    } yield ()
   }
 
   it should "fail when deploying with insufficient phlos" in effectTest {
