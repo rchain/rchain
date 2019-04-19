@@ -9,8 +9,8 @@ import coop.rchain.casper.helper.HashSetCasperTestNode.Effect
 import coop.rchain.casper.helper.{BlockUtil, HashSetCasperTestNode}
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.scalatestcontrib._
-import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.casper.util.comm.TestNetwork
+import coop.rchain.casper.util.{ConstructDeploy, ProtoUtil}
 import coop.rchain.catscontrib.TaskContrib.TaskOps
 import coop.rchain.comm.rp.ProtocolHelper.packet
 import coop.rchain.comm.transport

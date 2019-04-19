@@ -3,13 +3,12 @@ package coop.rchain.casper.genesis.contracts
 import cats.Traverse
 import cats.effect.Concurrent
 import cats.implicits._
-import coop.rchain.casper.ConstructDeploy
 import coop.rchain.casper.MultiParentCasperTestUtil.createBonds
 import coop.rchain.casper.genesis.Genesis
 import coop.rchain.casper.protocol.DeployData
-import coop.rchain.casper.util.BondingUtil
 import coop.rchain.casper.util.rholang.RuntimeManager
 import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
+import coop.rchain.casper.util.{BondingUtil, ConstructDeploy}
 import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.signatures.Ed25519

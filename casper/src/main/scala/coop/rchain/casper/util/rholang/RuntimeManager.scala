@@ -7,8 +7,8 @@ import cats.effect.concurrent.MVar
 import cats.implicits._
 import com.google.protobuf.ByteString
 import coop.rchain.casper.protocol._
-import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
+import coop.rchain.casper.util.{ConstructDeploy, ProtoUtil}
 import coop.rchain.catscontrib.Catscontrib._
 import coop.rchain.catscontrib.MonadTrans
 import coop.rchain.crypto.hash.Blake2b512Random
@@ -17,7 +17,6 @@ import coop.rchain.models._
 import coop.rchain.rholang.interpreter.accounting._
 import coop.rchain.rholang.interpreter.storage.StoragePrinter
 import coop.rchain.rholang.interpreter.{
-  accounting,
   ChargingReducer,
   ErrorLog,
   EvaluateResult,
@@ -120,14 +119,6 @@ class RuntimeManagerImpl[F[_]: Concurrent] private[rholang] (
         case Left(_)      => None
       }
 
-  private def sourceDeploy(source: String, timestamp: Long, phlos: Long): DeployData =
-    DeployData(
-      deployer = ByteString.EMPTY,
-      timestamp = timestamp,
-      term = source,
-      phloLimit = phlos
-    )
-
   def computeBonds(hash: StateHash): F[Seq[Bond]] = {
     val bondsQuery =
       """new rl(`rho:registry:lookup`), SystemInstancesCh, posCh in {
@@ -138,7 +129,7 @@ class RuntimeManagerImpl[F[_]: Concurrent] private[rholang] (
         |  }
         |}""".stripMargin
 
-    val bondsQueryTerm = sourceDeploy(bondsQuery, 0L, accounting.MAX_VALUE)
+    val bondsQueryTerm = ConstructDeploy.sourceDeployNow(bondsQuery)
     captureResults(hash, bondsQueryTerm)
       .ensureOr(
         bondsPar =>
@@ -307,6 +298,7 @@ class RuntimeManagerImpl[F[_]: Concurrent] private[rholang] (
 }
 
 object RuntimeManager {
+
   type StateHash = ByteString
 
   def fromRuntime[F[_]: Concurrent: Sync](

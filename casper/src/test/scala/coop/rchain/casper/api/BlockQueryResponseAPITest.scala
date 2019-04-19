@@ -9,7 +9,7 @@ import coop.rchain.casper.MultiParentCasperRef.MultiParentCasperRef
 import coop.rchain.casper._
 import coop.rchain.casper.helper.{BlockDagStorageFixture, NoOpsCasperEffect}
 import coop.rchain.casper.protocol._
-import coop.rchain.casper.util.ProtoUtil
+import coop.rchain.casper.util.{ConstructDeploy, ProtoUtil}
 import coop.rchain.metrics.Metrics
 import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.crypto.signatures.Ed25519

@@ -13,7 +13,7 @@ import coop.rchain.blockstorage.{
   BlockStore,
   IndexedBlockDagStorage
 }
-import coop.rchain.casper.ConstructDeploy
+import coop.rchain.casper.util.ConstructDeploy
 import coop.rchain.casper.helper.BlockGenerator._
 import coop.rchain.casper.helper._
 import coop.rchain.casper.protocol._

@@ -2,11 +2,10 @@ package coop.rchain.casper.util.rholang
 
 import cats.Id
 import cats.effect.Resource
-import coop.rchain.casper.ConstructDeploy
 import coop.rchain.casper.genesis.contracts.StandardDeploys
 import coop.rchain.casper.protocol.DeployData
-import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.casper.util.rholang.Resources._
+import coop.rchain.casper.util.{ConstructDeploy, ProtoUtil}
 import coop.rchain.catscontrib.effect.implicits._
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.metrics

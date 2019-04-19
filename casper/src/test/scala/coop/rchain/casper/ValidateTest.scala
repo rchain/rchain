@@ -15,9 +15,9 @@ import coop.rchain.casper.protocol.Event.EventInstance
 import coop.rchain.casper.protocol._
 
 import coop.rchain.casper.scalatestcontrib._
-import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.casper.util.rholang.Resources.mkRuntimeManager
 import coop.rchain.casper.util.rholang.{InterpreterUtil, RuntimeManager}
+import coop.rchain.casper.util.{ConstructDeploy, ProtoUtil}
 import coop.rchain.crypto.PrivateKey
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.signatures.Ed25519
