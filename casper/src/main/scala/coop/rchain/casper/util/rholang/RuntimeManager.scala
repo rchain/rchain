@@ -41,7 +41,7 @@ trait RuntimeManager[F[_]] {
   def computeBonds(hash: StateHash): F[Seq[Bond]]
   def getData(hash: StateHash)(channel: Par): F[Seq[Par]]
   def getContinuation(hash: StateHash)(
-      channels: immutable.Seq[Par]
+      channels: Seq[Par]
   ): F[Seq[(Seq[BindPattern], Par)]]
   def emptyStateHash: StateHash
 }
@@ -164,7 +164,7 @@ class RuntimeManagerImpl[F[_]: Concurrent] private[rholang] (
 
   def getContinuation(
       hash: StateHash
-  )(channels: immutable.Seq[Par]): F[Seq[(Seq[BindPattern], Par)]] =
+  )(channels: Seq[Par]): F[Seq[(Seq[BindPattern], Par)]] =
     withResetRuntime(hash)(
       _.space
         .getWaitingContinuations(channels)
@@ -352,9 +352,7 @@ object RuntimeManager {
       override def getData(hash: StateHash)(channel: Par): T[F, scala.Seq[Par]] =
         runtimeManager.getData(hash)(channel).liftM[T]
 
-      override def getContinuation(hash: StateHash)(
-          channels: scala.collection.immutable.Seq[Par]
-      ): T[F, scala.Seq[(scala.Seq[BindPattern], Par)]] =
+      override def getContinuation(hash: StateHash)(channels: Seq[Par]): T[F, scala.Seq[(scala.Seq[BindPattern], Par)]] =
         runtimeManager.getContinuation(hash)(channels).liftM[T]
 
       override val emptyStateHash: StateHash = runtimeManager.emptyStateHash
