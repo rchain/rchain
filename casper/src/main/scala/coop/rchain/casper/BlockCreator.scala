@@ -16,9 +16,13 @@ import coop.rchain.casper.util.ProtoUtil.{
 import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
 import coop.rchain.casper.util.rholang._
 import coop.rchain.crypto.{PrivateKey, PublicKey}
+import coop.rchain.metrics.Metrics
 import coop.rchain.shared.{Cell, Log, Time}
 
 object BlockCreator {
+  private[this] val CreateBlockMetricsSource =
+    Metrics.Source(CasperMetricsSource, "create-block")
+
   /*
    * Overview of createBlock
    *
@@ -40,9 +44,11 @@ object BlockCreator {
       version: Long,
       expirationThreshold: Int,
       runtimeManager: RuntimeManager[F]
-  )(implicit state: Cell[F, CasperState]): F[CreateBlockStatus] =
+  )(implicit state: Cell[F, CasperState], metricsF: Metrics[F]): F[CreateBlockStatus] =
     for {
+      span           <- metricsF.span(CreateBlockMetricsSource)
       tipHashes      <- Estimator.tips[F](dag, genesis)
+      _              <- span.mark("after-estimator")
       parents        <- EstimatorHelper.chooseNonConflicting[F](tipHashes, dag)
       maxBlockNumber = ProtoUtil.maxBlockNumber(parents)
       _              <- updateDeployHistory[F](state, maxBlockNumber)
@@ -67,6 +73,8 @@ object BlockCreator {
       signedBlock <- unsignedBlock.mapF(
                       signBlock(_, dag, publicKey, privateKey, sigAlgorithm, shardId)
                     )
+      _ <- span.mark("block-signed")
+      _ <- span.close()
     } yield signedBlock
 
   /*

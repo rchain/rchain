@@ -11,16 +11,17 @@ import coop.rchain.casper.protocol.{BlockMessage, Bond}
 import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.casper.util.rholang.{InterpreterUtil, RuntimeManager}
 import coop.rchain.crypto.codec.Base16
-import coop.rchain.metrics
-import coop.rchain.metrics.Metrics
 import coop.rchain.p2p.EffectsTestInstances.{LogStub, LogicalTime}
 import coop.rchain.rholang.interpreter.Runtime
 import coop.rchain.rholang.interpreter.storage.StoragePrinter
 import coop.rchain.shared.PathOps.RichPath
 import coop.rchain.shared.StoreType
+import org.scalatest.{BeforeAndAfterEach, FlatSpec, Matchers}
+import java.nio.file.Path
+import coop.rchain.metrics
+import coop.rchain.metrics.{Metrics, NoopSpan}
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
-import org.scalatest.{FlatSpec, Matchers}
 
 class GenesisTest extends FlatSpec with Matchers with BlockDagStorageFixture {
   import GenesisTest._
@@ -162,11 +163,13 @@ class GenesisTest extends FlatSpec with Matchers with BlockDagStorageFixture {
             genesis <- fromInputFiles()(runtimeManager, genesisPath, log, time)
             _       <- BlockStore[Task].put(genesis.blockHash, genesis)
             dag     <- blockDagStorage.getRepresentation
+            span    = new NoopSpan[Task]
             maybePostGenesisStateHash <- InterpreterUtil
                                           .validateBlockCheckpoint[Task](
                                             genesis,
                                             dag,
-                                            runtimeManager
+                                            runtimeManager,
+                                            span
                                           )
           } yield maybePostGenesisStateHash should matchPattern { case Right(Some(_)) => }
       }

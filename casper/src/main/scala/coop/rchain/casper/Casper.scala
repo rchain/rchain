@@ -16,6 +16,7 @@ import coop.rchain.casper.Estimator.Validator
 import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
 import coop.rchain.catscontrib.ski.kp2
+import coop.rchain.metrics.Metrics
 
 sealed trait DeployError
 final case class ParsingError(details: String)          extends DeployError
@@ -84,21 +85,27 @@ object MultiParentCasper extends MultiParentCasperInstances {
 }
 
 sealed abstract class MultiParentCasperInstances {
+  implicit private[this] val MetricsSource: Metrics.Source =
+    Metrics.Source(CasperMetricsSource, "casper")
+  private[this] val genesisLabel = Metrics.Source(MetricsSource, "genesis")
 
-  def hashSetCasper[F[_]: Sync: Concurrent: ConnectionsCell: TransportLayer: Log: Time: ErrorHandler: SafetyOracle: BlockStore: RPConfAsk: BlockDagStorage](
+  def hashSetCasper[F[_]: Sync: Metrics: Concurrent: ConnectionsCell: TransportLayer: Log: Time: ErrorHandler: SafetyOracle: BlockStore: RPConfAsk: BlockDagStorage](
       runtimeManager: RuntimeManager[F],
       validatorId: Option[ValidatorIdentity],
       genesis: BlockMessage,
       shardId: String
   ): F[MultiParentCasper[F]] =
     for {
-      dag <- BlockDagStorage[F].getRepresentation
+      genesisSpan <- Metrics[F].span(genesisLabel)
+      dag         <- BlockDagStorage[F].getRepresentation
       maybePostGenesisStateHash <- InterpreterUtil
                                     .validateBlockCheckpoint[F](
                                       genesis,
                                       dag,
-                                      runtimeManager
+                                      runtimeManager,
+                                      genesisSpan
                                     )
+      _ <- genesisSpan.close()
       postGenesisStateHash <- maybePostGenesisStateHash match {
                                case Left(BlockException(ex)) => Sync[F].raiseError[StateHash](ex)
                                case Right(None) =>

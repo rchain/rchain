@@ -1,16 +1,21 @@
 package coop.rchain.casper
 
+import scala.collection.immutable.HashMap
+
+import coop.rchain.casper.protocol.Bond
+import coop.rchain.metrics.Metrics
 import coop.rchain.casper.Estimator.Validator
 import coop.rchain.casper.helper.BlockGenerator._
 import coop.rchain.casper.helper.BlockUtil.generateValidator
 import coop.rchain.casper.helper.{BlockDagStorageFixture, BlockGenerator}
-import coop.rchain.casper.protocol.Bond
+
+import com.google.protobuf.ByteString
 import monix.eval.Task
 import org.scalatest.{FlatSpec, Matchers}
 
-import scala.collection.immutable.HashMap
-
 class EstimatorTest extends FlatSpec with Matchers with BlockGenerator with BlockDagStorageFixture {
+  implicit val metricsEff = new Metrics.MetricsNOP[Task]
+
   "Estimator on empty latestMessages" should "return the genesis regardless of DAG" in withStorage {
     implicit blockStore => implicit blockDagStorage =>
       val v1     = generateValidator("Validator One")

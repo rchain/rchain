@@ -34,7 +34,7 @@ import coop.rchain.comm.rp.HandleMessages.handle
 import coop.rchain.crypto.PrivateKey
 import coop.rchain.crypto.signatures.Ed25519
 import coop.rchain.metrics
-import coop.rchain.metrics.Metrics
+import coop.rchain.metrics.{Metrics, NoopSpan}
 import coop.rchain.p2p.EffectsTestInstances._
 import coop.rchain.p2p.effects.PacketHandler
 import coop.rchain.rholang.interpreter.Runtime
@@ -110,6 +110,8 @@ class HashSetCasperTestNode[F[_]](
     casperPacketHandler.handle
   )
 
+  val span = new NoopSpan[F]
+
   def initialize(): F[Unit] =
     // pre-population removed from internals of Casper
     blockStore.put(genesis.blockHash, genesis) *>
@@ -118,7 +120,8 @@ class HashSetCasperTestNode[F[_]](
           .validateBlockCheckpoint[F](
             genesis,
             dag,
-            runtimeManager
+            runtimeManager,
+            span
           )
           .void
       }

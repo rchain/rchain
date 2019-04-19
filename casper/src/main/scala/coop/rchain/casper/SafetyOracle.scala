@@ -2,16 +2,18 @@ package coop.rchain.casper
 
 import cats.Monad
 import cats.implicits._
+
 import coop.rchain.catscontrib._
 import Catscontrib._
 import cats.data.OptionT
+
 import coop.rchain.blockstorage.BlockDagRepresentation
 import coop.rchain.casper.Estimator.Validator
 import coop.rchain.casper.protocol.Justification
 import coop.rchain.casper.util.ProtoUtil._
 import coop.rchain.casper.util.{Clique, DagOperations, ProtoUtil}
 import coop.rchain.models.BlockMetadata
-import coop.rchain.shared.Log
+import coop.rchain.metrics.Metrics
 import coop.rchain.shared.{Log, StreamT}
 
 /*
@@ -54,8 +56,10 @@ object SafetyOracle extends SafetyOracleInstances {
 }
 
 sealed abstract class SafetyOracleInstances {
-  def cliqueOracle[F[_]: Monad: Log]: SafetyOracle[F] =
+  def cliqueOracle[F[_]: Monad: Log: Metrics]: SafetyOracle[F] =
     new SafetyOracle[F] {
+      private val SafetyOracleMetricsSource: Metrics.Source =
+        Metrics.Source(CasperMetricsSource, "safety-oracle")
 
       /**
         * To have a maximum clique of half the total weight,
@@ -68,11 +72,14 @@ sealed abstract class SafetyOracleInstances {
           candidateBlockHash: BlockHash
       ): F[Float] =
         for {
+          span        <- Metrics[F].span(SafetyOracleMetricsSource)
           totalWeight <- computeTotalWeight(blockDag, candidateBlockHash)
+          _           <- span.mark("total-weight")
           agreeingValidatorToWeight <- computeAgreeingValidatorToWeight(
                                         blockDag,
                                         candidateBlockHash
                                       )
+          _ <- span.mark("agreeing-validator-to-weight")
           maxCliqueWeight <- if (2L * agreeingValidatorToWeight.values.sum < totalWeight) {
                               0L.pure[F]
                             } else {
@@ -82,7 +89,9 @@ sealed abstract class SafetyOracleInstances {
                                 agreeingValidatorToWeight
                               )
                             }
+          _              <- span.mark("max-clique-weight")
           faultTolerance = 2 * maxCliqueWeight - totalWeight
+          _              <- span.close()
         } yield faultTolerance.toFloat / totalWeight
 
       private def computeTotalWeight(
