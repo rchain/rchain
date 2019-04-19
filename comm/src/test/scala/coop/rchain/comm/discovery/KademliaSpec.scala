@@ -4,8 +4,6 @@ import scala.collection.mutable
 
 import cats.Id
 
-import coop.rchain.comm.protocol.routing._
-import coop.rchain.catscontrib._, Catscontrib._
 import coop.rchain.catscontrib.effect.implicits._
 import coop.rchain.comm._
 
@@ -22,143 +20,144 @@ class KademliaSpec extends FunSpec with Matchers with BeforeAndAfterEach {
   val DISTANCE_4 = Some(4)
   val DISTANCE_6 = Some(6)
 
-  var table       = PeerTable[PeerNode](local.key, 3)
-  var pingedPeers = mutable.MutableList.empty[PeerNode]
-
-  override def beforeEach(): Unit = {
-    table = PeerTable[PeerNode](local.key, 3)
-    pingedPeers = mutable.MutableList.empty[PeerNode]
-    // peer1-4 distance is 4
-    table.distance(peer1) shouldBe DISTANCE_4
-    table.distance(peer2) shouldBe DISTANCE_4
-    table.distance(peer3) shouldBe DISTANCE_4
-    table.distance(peer4) shouldBe DISTANCE_4
-  }
-
   describe("A PeertTable with 1 byte addresses and k = 3") {
     describe("when adding a peer to an empty table") {
       it("should add it to a bucket according to its distance") {
         // given
-        implicit val ping: KademliaRPC[Id] = pingOk
+        implicit val ping: KademliaRPCMock = pingOk
+        val table                          = PeerTable[PeerNode, Id](local.key, 3)
         table.distance(peer0) shouldBe DISTANCE_6
         // when
-        table.updateLastSeen[Id](peer0)
+        table.updateLastSeen(peer0)
         // then
-        bucketEntriesAt(DISTANCE_6) shouldEqual Seq(peer0)
+        bucketEntriesAt(DISTANCE_6, table) shouldEqual Seq(peer0)
       }
 
       it("should not ping the peer") {
         // given
-        implicit val ping: KademliaRPC[Id] = pingOk
+        implicit val ping: KademliaRPCMock = pingOk
+        val table                          = PeerTable[PeerNode, Id](local.key, 3)
         // when
-        table.updateLastSeen[Id](peer0)
+        table.updateLastSeen(peer0)
         // then
-        pingedPeers shouldEqual Seq.empty[PeerNode]
+        ping.pingedPeers shouldEqual Seq.empty[PeerNode]
       }
     }
 
     describe("when adding a peer when that peer already exists but with different IP") {
       it("should replace peer with new entry (the one with new IP)") {
         // given
-        implicit val ping: KademliaRPC[Id] = pingOk
-        table.updateLastSeen[Id](peer1)
+        implicit val ping: KademliaRPCMock = pingOk
+        val table                          = PeerTable[PeerNode, Id](local.key, 3)
+        table.updateLastSeen(peer1)
         // when
         val newPeer1 = peer1.copy(endpoint = Endpoint("otherIP", 0, 0))
-        table.updateLastSeen[Id](newPeer1)
+        table.updateLastSeen(newPeer1)
         // then
-        bucketEntriesAt(DISTANCE_4) shouldEqual Seq(newPeer1)
+        bucketEntriesAt(DISTANCE_4, table) shouldEqual Seq(newPeer1)
       }
 
       it("should move peer to the end of the bucket (meaning it's been seen lately)") {
         // given
-        implicit val ping: KademliaRPC[Id] = pingOk
-        table.updateLastSeen[Id](peer2)
-        table.updateLastSeen[Id](peer1)
-        table.updateLastSeen[Id](peer3)
-        bucketEntriesAt(DISTANCE_4) shouldEqual Seq(peer2, peer1, peer3)
+        implicit val ping: KademliaRPCMock = pingOk
+        val table                          = PeerTable[PeerNode, Id](local.key, 3)
+        table.updateLastSeen(peer2)
+        table.updateLastSeen(peer1)
+        table.updateLastSeen(peer3)
+        bucketEntriesAt(DISTANCE_4, table) shouldEqual Seq(peer2, peer1, peer3)
         // when
         val newPeer1 = peer1.copy(endpoint = Endpoint("otherIP", 0, 0))
-        table.updateLastSeen[Id](newPeer1)
+        table.updateLastSeen(newPeer1)
         // then
-        bucketEntriesAt(DISTANCE_4) shouldEqual Seq(peer2, peer3, newPeer1)
+        bucketEntriesAt(DISTANCE_4, table) shouldEqual Seq(peer2, peer3, newPeer1)
       }
     }
 
     describe("when adding a peer to a table, where corresponding bucket is filled but not full") {
       it("should add peer to the end of the bucket (meaning it's been seen lately)") {
         // given
-        implicit val ping: KademliaRPC[Id] = pingOk
-        table.updateLastSeen[Id](peer2)
-        table.updateLastSeen[Id](peer3)
-        bucketEntriesAt(DISTANCE_4) shouldEqual Seq(peer2, peer3)
+        implicit val ping: KademliaRPCMock = pingOk
+        val table                          = PeerTable[PeerNode, Id](local.key, 3)
+        table.updateLastSeen(peer2)
+        table.updateLastSeen(peer3)
+        bucketEntriesAt(DISTANCE_4, table) shouldEqual Seq(peer2, peer3)
         // when
-        table.updateLastSeen[Id](peer1)
+        table.updateLastSeen(peer1)
         // then
-        bucketEntriesAt(DISTANCE_4) shouldEqual Seq(peer2, peer3, peer1)
+        bucketEntriesAt(DISTANCE_4, table) shouldEqual Seq(peer2, peer3, peer1)
       }
 
       it("no peers should be pinged") {
         // given
-        implicit val ping: KademliaRPC[Id] = pingOk
-        table.updateLastSeen[Id](peer2)
-        table.updateLastSeen[Id](peer3)
-        bucketEntriesAt(DISTANCE_4) shouldEqual Seq(peer2, peer3)
+        implicit val ping: KademliaRPCMock = pingOk
+        val table                          = PeerTable[PeerNode, Id](local.key, 3)
+        table.updateLastSeen(peer2)
+        table.updateLastSeen(peer3)
+        bucketEntriesAt(DISTANCE_4, table) shouldEqual Seq(peer2, peer3)
         // when
-        table.updateLastSeen[Id](peer1)
+        table.updateLastSeen(peer1)
         // then
-        pingedPeers shouldEqual Seq.empty[PeerNode]
+        ping.pingedPeers shouldEqual Seq.empty[PeerNode]
       }
     }
 
     describe("when adding a peer to a table, where corresponding bucket is full") {
       it("should ping the oldest peer to check if it responds") {
         // given
-        implicit val ping: KademliaRPC[Id] = pingOk
-        thatBucket4IsFull
+        implicit val ping: KademliaRPCMock = pingOk
+        val table                          = PeerTable[PeerNode, Id](local.key, 3)
+        thatBucket4IsFull(table)
         // when
-        table.updateLastSeen[Id](peer4)
+        table.updateLastSeen(peer4)
         // then
-        pingedPeers shouldEqual Seq(peer1)
+        ping.pingedPeers shouldEqual Seq(peer1)
       }
 
       describe("and oldest peer IS responding to ping") {
         it("should drop the new peer") {
           // given
-          implicit val ping: KademliaRPC[Id] = pingOk
-          thatBucket4IsFull
+          implicit val ping: KademliaRPCMock = pingOk
+          val table                          = PeerTable[PeerNode, Id](local.key, 3)
+          thatBucket4IsFull(table)
           // when
-          table.updateLastSeen[Id](peer4)
+          table.updateLastSeen(peer4)
           // then
-          bucketEntriesAt(DISTANCE_4) shouldEqual Seq(peer2, peer3, peer1)
+          bucketEntriesAt(DISTANCE_4, table) shouldEqual Seq(peer2, peer3, peer1)
         }
       }
       describe("and oldest peer is NOT responding to ping") {
         it("should add the new peer and drop the oldest one") {
           // given
-          implicit val ping: KademliaRPC[Id] = pingFail
-          thatBucket4IsFull
+          implicit val ping: KademliaRPCMock = pingFail
+          val table                          = PeerTable[PeerNode, Id](local.key, 3)
+          thatBucket4IsFull(table)
           // when
-          table.updateLastSeen[Id](peer4)
+          table.updateLastSeen(peer4)
           // then
-          bucketEntriesAt(DISTANCE_4) shouldEqual Seq(peer2, peer3, peer4)
+          bucketEntriesAt(DISTANCE_4, table) shouldEqual Seq(peer2, peer3, peer4)
         }
       }
     }
   }
 
-  private def thatBucket4IsFull(implicit ev: KademliaRPC[Id]): Unit = {
-    table.updateLastSeen[Id](peer1)
-    table.updateLastSeen[Id](peer2)
-    table.updateLastSeen[Id](peer3)
+  private def thatBucket4IsFull(table: PeerTable[PeerNode, Id]): Unit = {
+    table.updateLastSeen(peer1)
+    table.updateLastSeen(peer2)
+    table.updateLastSeen(peer3)
   }
 
-  private def bucketEntriesAt(distance: Option[Int]): Seq[PeerNode] =
+  private def bucketEntriesAt(
+      distance: Option[Int],
+      table: PeerTable[PeerNode, Id]
+  ): Seq[PeerNode] =
     distance.map(d => table.table(d).map(_.entry)).getOrElse(Seq.empty[PeerNode])
 
-  private val pingOk: KademliaRPC[Id]   = new KademliaRPCMock(returns = true)
-  private val pingFail: KademliaRPC[Id] = new KademliaRPCMock(returns = false)
+  private val pingOk: KademliaRPCMock   = new KademliaRPCMock(returns = true)
+  private val pingFail: KademliaRPCMock = new KademliaRPCMock(returns = false)
 
   private class KademliaRPCMock(returns: Boolean) extends KademliaRPC[Id] {
+    val pingedPeers: mutable.MutableList[PeerNode] = mutable.MutableList.empty[PeerNode]
+
     def ping(peer: PeerNode): Boolean = {
       pingedPeers += peer
       returns
@@ -171,6 +170,8 @@ class KademliaSpec extends FunSpec with Matchers with BeforeAndAfterEach {
     def shutdown(): Id[Unit] = ()
   }
 
-  private def createPeer(id: String): PeerNode =
-    PeerNode(NodeIdentifier(Seq(id.b)), Endpoint(id, 0, 0))
+  private def createPeer(id: String): PeerNode = {
+    val bytes = (Integer.parseInt(id, 2) & 0xFF).toByte
+    PeerNode(NodeIdentifier(Seq(bytes)), Endpoint(id, 0, 0))
+  }
 }

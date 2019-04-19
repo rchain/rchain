@@ -177,6 +177,9 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
     val secureRandomNonBlocking =
       opt[Flag](descr = "Use a non blocking secure random instance")
 
+    val network =
+      opt[String](descr = "ID of the RChain network")
+
     val port =
       opt[Int](short = 'p', descr = s"Network port to use. Defaults to $DefaultPort")
 
@@ -279,7 +282,7 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
     val storeType = opt[StoreType](required = false, descr = "Type of RSpace backing store")
 
     val maxNumOfConnections =
-      opt[Int](descr = "Maximum number of peers allowed to connect to the node")
+      opt[Int](descr = "Number of connected peers picked randomly for broadcasting and streaming")
 
     val maxMessageSize =
       opt[Int](descr = "Maximum size of message that can be received via transport layer")
@@ -295,6 +298,9 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
 
     val casperBlockStoreSize =
       opt[Long](required = false, descr = "Casper BlockStore map size (in bytes)")
+
+    val casperBlockDagStorageSize =
+      opt[Long](required = false, descr = "Casper BlockDagStorage map size (in bytes)")
 
     val casperLatestMessagesDataPath =
       opt[Path](required = false, descr = "Path to latest messages data file")
@@ -341,13 +347,6 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
   }
   addSubcommand(eval)
 
-  val deployDemo = new Subcommand("deploy-demo") {
-    descr(
-      "Demo sending some placeholder Deploy operations to Casper on an existing running node at regular intervals"
-    )
-  }
-  addSubcommand(deployDemo)
-
   val hexCheck: String => Boolean     = _.matches("[0-9a-fA-F]+")
   val addressCheck: String => Boolean = addr => addr.startsWith("0x") && hexCheck(addr.drop(2))
 
@@ -378,7 +377,7 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
       required = true
     )
 
-    val validAfterBlockNumber = opt[Int](
+    val validAfterBlockNumber = opt[Long](
       descr =
         "Set this value to one less than the current block height: you have 50 blocks to get this transaction into the chain."
     )
@@ -437,6 +436,13 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
       )
   }
   addSubcommand(visualizeBlocks)
+
+  val machineVerifiableDag = new Subcommand("mvdag") {
+    descr(
+      "Machine Verifiable Dag"
+    )
+  }
+  addSubcommand(machineVerifiableDag)
 
   def listenAtName[R](name: String, desc: String)(
       implicit conv: ValueConverter[List[String] => R]

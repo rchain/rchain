@@ -175,7 +175,7 @@ class RegistrySpec extends FlatSpec with Matchers with RegistryTester {
 
   def checkResult(
       result: Map[
-        scala.collection.immutable.Seq[Par],
+        Seq[Par],
         Row[BindPattern, ListParWithRandom, TaggedContinuation]
       ],
       s: String,
@@ -677,7 +677,7 @@ class RegistrySpec extends FlatSpec with Matchers with RegistryTester {
       implicit val env = Env[Par]()
       val resultTask = for {
         _ <- reducer.eval(completePar)
-      } yield space.store.toMap
+      } yield space.toMap
       Await.result(resultTask.runToFuture, EvaluateTimeout)
     }
 

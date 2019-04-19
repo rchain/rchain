@@ -6,12 +6,12 @@ import cats.data.ReaderT
 import cats.syntax.either._
 import cats.syntax.option._
 
+import coop.rchain.catscontrib.ski._
 import coop.rchain.comm._
 import coop.rchain.comm.protocol.routing.{RoutingGrpcMonix, _}
 import coop.rchain.comm.CommError._
 import coop.rchain.metrics.implicits._
 import coop.rchain.metrics.Metrics
-import coop.rchain.catscontrib.ski._
 
 import io.grpc.{Status, StatusRuntimeException}
 import monix.eval.Task
@@ -20,7 +20,7 @@ import monix.reactive.Observable
 object GrpcTransport {
 
   type Request[A] = ReaderT[Task, RoutingGrpcMonix.TransportLayer, CommErr[A]]
-  private implicit val metricsSource: Metrics.Source =
+  implicit private val metricsSource: Metrics.Source =
     Metrics.Source(CommMetricsSource, "rp.transport")
 
   private def transport(
@@ -45,6 +45,17 @@ object GrpcTransport {
         case sre: StatusRuntimeException =>
           sre.getStatus.getCode == Status.Code.DEADLINE_EXCEEDED
         case _ => false
+      }
+  }
+
+  private object PeerWrongNetwork {
+    def unapply(e: Throwable): Option[String] =
+      e match {
+        case sre: StatusRuntimeException =>
+          if (sre.getStatus.getCode == Status.Code.PERMISSION_DENIED)
+            Some(sre.getStatus.getDescription)
+          else None
+        case _ => None
       }
   }
 
@@ -77,10 +88,11 @@ object GrpcTransport {
   ): CommErr[R] =
     response
       .leftMap {
-        case PeerTimeout()        => CommError.timeout
-        case PeerUnavailable()    => peerUnavailable(peer)
-        case PeerMessageToLarge() => messageToLarge(peer)
-        case e                    => protocolException(e)
+        case PeerTimeout()         => CommError.timeout
+        case PeerUnavailable()     => peerUnavailable(peer)
+        case PeerMessageToLarge()  => messageToLarge(peer)
+        case PeerWrongNetwork(msg) => wrongNetwork(peer, msg)
+        case e                     => protocolException(e)
       }
 
   def send(peer: PeerNode, msg: Protocol)(implicit metrics: Metrics[Task]): Request[Unit] =
@@ -96,9 +108,9 @@ object GrpcTransport {
                })
     } yield result
 
-  def stream(peer: PeerNode, blob: Blob, packetChunkSize: Int): Request[Unit] =
+  def stream(networkId: String, peer: PeerNode, blob: Blob, packetChunkSize: Int): Request[Unit] =
     ReaderT(
-      _.stream(Observable.fromIterator(Chunker.chunkIt(blob, packetChunkSize))).attempt
+      _.stream(Observable.fromIterator(Chunker.chunkIt(networkId, blob, packetChunkSize))).attempt
         .map(r => processError(peer, r.map(kp(()))))
     )
 }

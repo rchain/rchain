@@ -122,11 +122,10 @@ object GraphzGenerator {
             Map(timeEntry -> List(ValidatorBlock(blockHash, parents, justifications)))
           Map(blockSenderHash -> validatorBlocks)
       }
-    } yield
-      acc.copy(
-        timeseries = timeEntry :: acc.timeseries,
-        validators = acc.validators |+| Foldable[List].fold(validators)
-      )
+    } yield acc.copy(
+      timeseries = timeEntry :: acc.timeseries,
+      validators = acc.validators |+| Foldable[List].fold(validators)
+    )
 
   private def initGraph[G[_]: Monad: GraphSerializer](name: String): G[Graphz[G]] =
     Graphz[G](

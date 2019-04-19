@@ -3,11 +3,11 @@ package coop.rchain.casper
 import scala.collection.immutable.HashMap
 
 import coop.rchain.casper.protocol.Bond
+import coop.rchain.metrics.Metrics
 import coop.rchain.casper.Estimator.Validator
-import coop.rchain.casper.helper.{BlockDagStorageFixture, BlockGenerator}
 import coop.rchain.casper.helper.BlockGenerator._
 import coop.rchain.casper.helper.BlockUtil.generateValidator
-import coop.rchain.metrics.Metrics
+import coop.rchain.casper.helper.{BlockDagStorageFixture, BlockGenerator}
 
 import com.google.protobuf.ByteString
 import monix.eval.Task
@@ -24,45 +24,52 @@ class EstimatorTest extends FlatSpec with Matchers with BlockGenerator with Bloc
       val v2Bond = Bond(v2, 3)
       val bonds  = Seq(v1Bond, v2Bond)
       for {
-        genesis <- createBlock[Task](Seq(), ByteString.EMPTY, bonds)
+        genesis <- createGenesis[Task](bonds = bonds)
         b2 <- createBlock[Task](
                Seq(genesis.blockHash),
+               genesis,
                v2,
                bonds,
                HashMap(v1 -> genesis.blockHash, v2 -> genesis.blockHash)
              )
         b3 <- createBlock[Task](
                Seq(genesis.blockHash),
+               genesis,
                v1,
                bonds,
                HashMap(v1 -> genesis.blockHash, v2 -> genesis.blockHash)
              )
         b4 <- createBlock[Task](
                Seq(b2.blockHash),
+               genesis,
                v2,
                bonds,
                HashMap(v1 -> genesis.blockHash, v2 -> b2.blockHash)
              )
         b5 <- createBlock[Task](
                Seq(b2.blockHash),
+               genesis,
                v1,
                bonds,
                HashMap(v1 -> b3.blockHash, v2 -> b2.blockHash)
              )
         b6 <- createBlock[Task](
                Seq(b4.blockHash),
+               genesis,
                v2,
                bonds,
                HashMap(v1 -> b5.blockHash, v2 -> b4.blockHash)
              )
         b7 <- createBlock[Task](
                Seq(b4.blockHash),
+               genesis,
                v1,
                bonds,
                HashMap(v1 -> b5.blockHash, v2 -> b4.blockHash)
              )
         b8 <- createBlock[Task](
                Seq(b7.blockHash),
+               genesis,
                v1,
                bonds,
                HashMap(v1 -> b7.blockHash, v2 -> b4.blockHash)
@@ -85,45 +92,52 @@ class EstimatorTest extends FlatSpec with Matchers with BlockGenerator with Bloc
       val v2Bond = Bond(v2, 3)
       val bonds  = Seq(v1Bond, v2Bond)
       for {
-        genesis <- createBlock[Task](Seq(), ByteString.EMPTY, bonds)
+        genesis <- createGenesis[Task](bonds = bonds)
         b2 <- createBlock[Task](
                Seq(genesis.blockHash),
+               genesis,
                v2,
                bonds,
                HashMap(v1 -> genesis.blockHash, v2 -> genesis.blockHash)
              )
         b3 <- createBlock[Task](
                Seq(genesis.blockHash),
+               genesis,
                v1,
                bonds,
                HashMap(v1 -> genesis.blockHash, v2 -> genesis.blockHash)
              )
         b4 <- createBlock[Task](
                Seq(b2.blockHash),
+               genesis,
                v2,
                bonds,
                HashMap(v1 -> genesis.blockHash, v2 -> b2.blockHash)
              )
         b5 <- createBlock[Task](
                Seq(b2.blockHash),
+               genesis,
                v1,
                bonds,
                HashMap(v1 -> b3.blockHash, v2 -> b2.blockHash)
              )
         b6 <- createBlock[Task](
                Seq(b4.blockHash),
+               genesis,
                v2,
                bonds,
                HashMap(v1 -> b5.blockHash, v2 -> b4.blockHash)
              )
         b7 <- createBlock[Task](
                Seq(b4.blockHash),
+               genesis,
                v1,
                bonds,
                HashMap(v1 -> b5.blockHash, v2 -> b4.blockHash)
              )
         b8 <- createBlock[Task](
                Seq(b7.blockHash),
+               genesis,
                v1,
                bonds,
                HashMap(v1 -> b7.blockHash, v2 -> b4.blockHash)
@@ -154,45 +168,52 @@ class EstimatorTest extends FlatSpec with Matchers with BlockGenerator with Bloc
       val v3Bond = Bond(v3, 15)
       val bonds  = Seq(v1Bond, v2Bond, v3Bond)
       for {
-        genesis <- createBlock[Task](Seq(), ByteString.EMPTY, bonds)
+        genesis <- createGenesis[Task](bonds = bonds)
         b2 <- createBlock[Task](
                Seq(genesis.blockHash),
+               genesis,
                v2,
                bonds,
                HashMap(v1 -> genesis.blockHash, v2 -> genesis.blockHash, v3 -> genesis.blockHash)
              )
         b3 <- createBlock[Task](
                Seq(genesis.blockHash),
+               genesis,
                v1,
                bonds,
                HashMap(v1 -> genesis.blockHash, v2 -> genesis.blockHash, v3 -> genesis.blockHash)
              )
         b4 <- createBlock[Task](
                Seq(b2.blockHash),
+               genesis,
                v3,
                bonds,
                HashMap(v1 -> genesis.blockHash, v2 -> b2.blockHash, v3 -> b2.blockHash)
              )
         b5 <- createBlock[Task](
                Seq(b3.blockHash),
+               genesis,
                v2,
                bonds,
                HashMap(v1 -> b3.blockHash, v2 -> b2.blockHash, v3 -> genesis.blockHash)
              )
         b6 <- createBlock[Task](
                Seq(b4.blockHash),
+               genesis,
                v1,
                bonds,
                HashMap(v1 -> b3.blockHash, v2 -> b2.blockHash, v3 -> b4.blockHash)
              )
         b7 <- createBlock[Task](
                Seq(b5.blockHash),
+               genesis,
                v3,
                bonds,
                HashMap(v1 -> b3.blockHash, v2 -> b5.blockHash, v3 -> b4.blockHash)
              )
         b8 <- createBlock[Task](
                Seq(b6.blockHash),
+               genesis,
                v2,
                bonds,
                HashMap(v1 -> b6.blockHash, v2 -> b5.blockHash, v3 -> b4.blockHash)

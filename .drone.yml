@@ -58,20 +58,36 @@ clone:
 
 pipeline:
 
+  # since sbt starts compilation anew after copying/renaming the project, let's start all pr-* jobs at once
+  # let's also compile together with the (now smaller) unit tests
+
   # pr build
 
-  pr-compile:
+  pr-lint:
     <<: *pr_build_conditions
-    <<: *sbtcompileenv
+    group: parallel
+    <<: *sbttestenv
     commands:
-      - sbt update rholang/bnfc:generate test:compile
+      - cp -r . ../step.lint && cd ../step.lint
+      # Disable parallelism during scalafmtCheckAll. See https://github.com/scalameta/scalafmt/issues/1399.
+      - sbt "set Global / concurrentRestrictions := Seq(Tags.limitAll(1))" scalafmtCheckAll
 
   pr-run-unit-tests:
     <<: *pr_build_conditions
     group: parallel
     <<: *sbttestenv
     commands:
-      - sbt test it:test
+      - cp -r . ../step.run-unit-tests && cd ../step.run-unit-tests
+      - _JAVA_OPTIONS="$_JAVA_OPTIONS -Xss2m" sbt update rholang/bnfc:generate test:compile
+      - sbt "set test in casper := {}" test it:test
+
+  pr-run-casper-tests:
+    <<: *pr_build_conditions
+    group: parallel
+    <<: *sbttestenv
+    commands:
+      - cp -r . ../step.run-casper-tests && cd ../step.run-casper-tests
+      - sbt update rholang/bnfc:generate casper/test
 
   # full build
 
@@ -98,7 +114,15 @@ pipeline:
     <<: *sbttestenv
     commands:
       - cp -r . ../step.run-unit-tests && cd ../step.run-unit-tests
-      - sbt test it:test
+      - sbt "set test in casper := {}" test it:test
+
+  run-casper-tests:
+    <<: *branch_build_conditions
+    group: parallel
+    <<: *sbttestenv
+    commands:
+      - cp -r . ../step.run-casper-tests && cd ../step.run-casper-tests
+      - sbt casper/test
 
   run-integration-tests:
     <<: *branch_build_conditions

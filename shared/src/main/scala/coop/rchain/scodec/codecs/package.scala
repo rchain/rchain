@@ -3,7 +3,6 @@ package coop.rchain.scodec
 import scodec.{Attempt, Codec, Err}
 
 import cats._, cats.data._, cats.implicits._
-import scala.collection.immutable.Seq
 
 package object codecs {
 

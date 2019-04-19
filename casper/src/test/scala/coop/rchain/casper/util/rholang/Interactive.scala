@@ -18,6 +18,8 @@ import coop.rchain.models.Expr.ExprInstance.{GInt, GString}
 import coop.rchain.catscontrib.TaskContrib._
 import scala.collection.mutable
 
+import scala.concurrent.duration._
+
 /**
   * This is a really handy class for working interactively with
   * Rholang at the Scala console.
@@ -41,7 +43,7 @@ import scala.collection.mutable
   * }}}
   */
 class Interactive private (runtime: Runtime[Task])(implicit scheduler: Scheduler) {
-  private implicit val rand = Blake2b512Random(128)
+  implicit private val rand = Blake2b512Random(128)
 
   private val prettyPrinter = PrettyPrinter()
 
@@ -50,10 +52,10 @@ class Interactive private (runtime: Runtime[Task])(implicit scheduler: Scheduler
 
   def checkpointNames: List[String] = checkpoints.keys.toList
 
-  def tuplespace: String = StoragePrinter.prettyPrint(runtime.space.store)
+  def tuplespace: String = StoragePrinter.prettyPrint(runtime.space)
 
   def eval(code: String): Unit = {
-    TestUtil.eval(code, runtime)
+    TestUtil.eval(code, runtime).runSyncUnsafe(Duration.Inf)
     val errors = runtime.errorLog.readAndClearErrorVector().unsafeRunSync
     if (errors.nonEmpty) {
       println("Errors during execution:")
@@ -94,7 +96,6 @@ class Interactive private (runtime: Runtime[Task])(implicit scheduler: Scheduler
 object Interactive {
   def apply(): Interactive = {
     implicit val scheduler = Scheduler.io("rhoang-interpreter")
-    implicit val log       = new Log.NOPLog[Task]
-    new Interactive(TestUtil.runtime())
+    new Interactive(TestUtil.runtime[Task, Task.Par]().runSyncUnsafe(5.seconds))
   }
 }

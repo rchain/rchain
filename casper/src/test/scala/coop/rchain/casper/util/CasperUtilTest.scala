@@ -6,6 +6,11 @@ import org.scalatest.{FlatSpec, Matchers}
 import coop.rchain.catscontrib._
 import coop.rchain.casper.helper.{BlockDagStorageFixture, BlockGenerator}
 import cats.implicits._
+import cats.mtl.MonadState
+import cats.mtl.implicits._
+import coop.rchain.blockstorage.BlockStore
+import coop.rchain.casper.ConstructDeploy
+import coop.rchain.casper.Estimator.{BlockHash, Validator}
 import coop.rchain.casper.helper.BlockGenerator
 import coop.rchain.casper.helper.BlockGenerator._
 import coop.rchain.casper.helper.BlockUtil.generateValidator
@@ -25,9 +30,9 @@ class CasperUtilTest
   "isInMainChain" should "classify appropriately" in withStorage {
     implicit blockStore => implicit blockDagStorage =>
       for {
-        genesis <- createBlock[Task](Seq())
-        b2      <- createBlock[Task](Seq(genesis.blockHash))
-        b3      <- createBlock[Task](Seq(b2.blockHash))
+        genesis <- createGenesis[Task]()
+        b2      <- createBlock[Task](Seq(genesis.blockHash), genesis)
+        b3      <- createBlock[Task](Seq(b2.blockHash), genesis)
 
         dag <- blockDagStorage.getRepresentation
 
@@ -41,10 +46,10 @@ class CasperUtilTest
   "isInMainChain" should "classify diamond DAGs appropriately" in withStorage {
     implicit blockStore => implicit blockDagStorage =>
       for {
-        genesis <- createBlock[Task](Seq())
-        b2      <- createBlock[Task](Seq(genesis.blockHash))
-        b3      <- createBlock[Task](Seq(genesis.blockHash))
-        b4      <- createBlock[Task](Seq(b2.blockHash, b3.blockHash))
+        genesis <- createGenesis[Task]()
+        b2      <- createBlock[Task](Seq(genesis.blockHash), genesis)
+        b3      <- createBlock[Task](Seq(genesis.blockHash), genesis)
+        b4      <- createBlock[Task](Seq(b2.blockHash, b3.blockHash), genesis)
 
         dag <- blockDagStorage.getRepresentation
 
@@ -63,14 +68,14 @@ class CasperUtilTest
       val v2 = generateValidator("Validator Two")
 
       for {
-        genesis <- createBlock[Task](Seq(), ByteString.EMPTY)
-        b2      <- createBlock[Task](Seq(genesis.blockHash), v2)
-        b3      <- createBlock[Task](Seq(genesis.blockHash), v1)
-        b4      <- createBlock[Task](Seq(b2.blockHash), v2)
-        b5      <- createBlock[Task](Seq(b2.blockHash), v1)
-        b6      <- createBlock[Task](Seq(b4.blockHash), v2)
-        b7      <- createBlock[Task](Seq(b4.blockHash), v1)
-        b8      <- createBlock[Task](Seq(b7.blockHash), v1)
+        genesis <- createGenesis[Task]()
+        b2      <- createBlock[Task](Seq(genesis.blockHash), genesis, v2)
+        b3      <- createBlock[Task](Seq(genesis.blockHash), genesis, v1)
+        b4      <- createBlock[Task](Seq(b2.blockHash), genesis, v2)
+        b5      <- createBlock[Task](Seq(b2.blockHash), genesis, v1)
+        b6      <- createBlock[Task](Seq(b4.blockHash), genesis, v2)
+        b7      <- createBlock[Task](Seq(b4.blockHash), genesis, v1)
+        b8      <- createBlock[Task](Seq(b7.blockHash), genesis, v1)
 
         dag <- blockDagStorage.getRepresentation
 

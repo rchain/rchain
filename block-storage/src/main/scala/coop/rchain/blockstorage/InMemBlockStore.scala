@@ -18,7 +18,7 @@ class InMemBlockStore[F[_]] private ()(
     metricsF: Metrics[F]
 ) extends BlockStore[F] {
 
-  private implicit val metricsSource: Metrics.Source =
+  implicit private val metricsSource: Metrics.Source =
     Metrics.Source(BlockStorageMetricsSource, "in-mem")
 
   def get(blockHash: BlockHash): F[Option[BlockMessage]] =

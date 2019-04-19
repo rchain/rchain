@@ -7,6 +7,6 @@ import scala.concurrent.duration._
 class EitherSpec
     extends RhoSpec(
       CompiledRholangSource("EitherTest.rho"),
-      Seq(StandardDeploys.either),
-      10.seconds
+      Seq.empty,
+      20.seconds
     )

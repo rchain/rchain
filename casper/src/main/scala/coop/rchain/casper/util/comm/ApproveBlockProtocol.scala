@@ -34,7 +34,8 @@ trait ApproveBlockProtocol[F[_]] {
 
 abstract class ApproveBlockProtocolInstances {
   implicit def eitherTApproveBlockProtocol[E, F[_]: Monad: ApproveBlockProtocol[?[_]]]
-    : ApproveBlockProtocol[EitherT[F, E, ?]] = ApproveBlockProtocol.forTrans[F, EitherT[?[_], E, ?]]
+      : ApproveBlockProtocol[EitherT[F, E, ?]] =
+    ApproveBlockProtocol.forTrans[F, EitherT[?[_], E, ?]]
 }
 
 object ApproveBlockProtocol {
@@ -50,7 +51,7 @@ object ApproveBlockProtocol {
 
   //For usage in tests only
   def unsafe[F[_]: Sync: ConnectionsCell: TransportLayer: Log: Time: Metrics: RPConfAsk: LastApprovedBlock](
-      block: BlockMessage,
+      genesisBlock: BlockMessage,
       trustedValidators: Set[ByteString],
       requiredSigs: Int,
       duration: FiniteDuration,
@@ -59,7 +60,7 @@ object ApproveBlockProtocol {
       start: Long
   ): ApproveBlockProtocol[F] =
     new ApproveBlockProtocolImpl[F](
-      block,
+      genesisBlock,
       requiredSigs,
       trustedValidators,
       start,
@@ -69,7 +70,7 @@ object ApproveBlockProtocol {
     )
 
   def of[F[_]: Sync: ConnectionsCell: TransportLayer: Log: Time: Metrics: RPConfAsk: LastApprovedBlock](
-      block: BlockMessage,
+      genesisBlock: BlockMessage,
       trustedValidators: Set[ByteString],
       requiredSigs: Int,
       duration: FiniteDuration,
@@ -78,19 +79,18 @@ object ApproveBlockProtocol {
     for {
       now   <- Time[F].currentMillis
       sigsF <- Ref.of[F, Set[Signature]](Set.empty)
-    } yield
-      new ApproveBlockProtocolImpl[F](
-        block,
-        requiredSigs,
-        trustedValidators,
-        now,
-        duration,
-        interval,
-        sigsF
-      )
+    } yield new ApproveBlockProtocolImpl[F](
+      genesisBlock,
+      requiredSigs,
+      trustedValidators,
+      now,
+      duration,
+      interval,
+      sigsF
+    )
 
   private class ApproveBlockProtocolImpl[F[_]: Sync: ConnectionsCell: TransportLayer: Log: Time: Metrics: RPConfAsk: LastApprovedBlock](
-      val block: BlockMessage,
+      val genesisBlock: BlockMessage,
       val requiredSigs: Int,
       val trustedValidators: Set[ByteString],
       val start: Long,
@@ -98,14 +98,14 @@ object ApproveBlockProtocol {
       val interval: FiniteDuration,
       private val sigsF: Ref[F, Set[Signature]]
   ) extends ApproveBlockProtocol[F] {
-    private implicit val logSource: LogSource = LogSource(this.getClass)
-    private implicit val metricsSource: Metrics.Source =
+    implicit private val logSource: LogSource = LogSource(this.getClass)
+    implicit private val metricsSource: Metrics.Source =
       Metrics.Source(CasperMetricsSource, "approve-block")
 
-    private val candidate                 = ApprovedBlockCandidate(Some(block), requiredSigs)
+    private val candidate                 = ApprovedBlockCandidate(Some(genesisBlock), requiredSigs)
     private val u                         = UnapprovedBlock(Some(candidate), start, duration.toMillis)
     private val serializedUnapprovedBlock = u.toByteString
-    private val candidateHash             = PrettyPrinter.buildString(block.blockHash)
+    private val candidateHash             = PrettyPrinter.buildString(genesisBlock.blockHash)
     private val sigData                   = Blake2b256.hash(candidate.toByteArray)
 
     def addApproval(a: BlockApproval): F[Unit] = {

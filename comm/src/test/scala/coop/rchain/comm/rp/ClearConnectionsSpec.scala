@@ -27,6 +27,7 @@ class ClearConnectionsSpec
   import ScalaTestCats._
 
   val src: PeerNode      = peer("src")
+  val networkId          = "test"
   implicit val transport = new TransportLayerStub[Id]
   implicit val log       = new Log.NOPLog[Id]
   implicit val metric    = new Metrics.MetricsNOP[Id]
@@ -138,15 +139,17 @@ class ClearConnectionsSpec
   ): RPConfAsk[Id] =
     new ConstApplicativeAsk(
       RPConf(
-        clearConnections = ClearConnetionsConf(maxNumOfConnections, numOfConnectionsPinged),
+        clearConnections = ClearConnectionsConf(numOfConnectionsPinged),
         defaultTimeout = 1.milli,
         local = peer("src"),
-        bootstrap = None
+        networkId = networkId,
+        bootstrap = None,
+        maxNumOfConnections = maxNumOfConnections
       )
     )
 
   def alwaysSuccess: Protocol => CommErr[Protocol] =
-    kp(Right(heartbeat(peer("src"))))
+    kp(Right(heartbeat(peer("src"), networkId)))
 
   def alwaysFail: Protocol => CommErr[Protocol] =
     kp(Left(timeout))

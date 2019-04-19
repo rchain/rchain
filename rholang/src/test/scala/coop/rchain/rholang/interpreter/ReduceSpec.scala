@@ -29,6 +29,7 @@ import monix.execution.Scheduler.Implicits.global
 import org.scalatest.{Assertion, FlatSpec, Matchers}
 
 import scala.collection.immutable.BitSet
+import scala.collection.mutable
 import scala.collection.mutable.HashMap
 import scala.concurrent.Await
 import scala.concurrent.duration._
@@ -75,7 +76,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
 
   def checkData(
       result: Map[
-        scala.collection.immutable.Seq[Par],
+        Seq[Par],
         Row[BindPattern, ListParWithRandom, TaggedContinuation]
       ]
   )(channel: Par, data: Seq[Par], rand: Blake2b512Random): Assertion =
@@ -100,7 +101,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
 
   def checkContinuation(
       result: Map[
-        scala.collection.immutable.Seq[Par],
+        Seq[Par],
         Row[BindPattern, ListParWithRandom, TaggedContinuation]
       ]
   )(channels: List[Par], bindPatterns: List[BindPattern], body: ParWithRandom): Assertion =
@@ -206,7 +207,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
         val resultTask   = reducer.eval(bundleSend)(env, splitRand)
         val inspectTask = for {
           _ <- resultTask
-        } yield space.store.toMap
+        } yield space.toMap
         Await.result(inspectTask.runToFuture, 3.seconds)
     }
 
@@ -228,7 +229,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
     val receiveResult = withTestSpace(errorLog) {
       case TestFixture(space, reducer) =>
         implicit val env = Env[Par]()
-        val task         = reducer.eval(receive).map(_ => space.store.toMap)
+        val task         = reducer.eval(receive).map(_ => space.toMap)
         Await.result(task.runToFuture, 3.seconds)
     }
     receiveResult should be(HashMap.empty)
@@ -246,7 +247,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
       case TestFixture(space, reducer) =>
         implicit val env = Env[Par]()
 
-        val task = reducer.eval(send).map(_ => space.store.toMap)
+        val task = reducer.eval(send).map(_ => space.toMap)
         Await.result(task.runToFuture, 3.seconds)
     }
     sendResult should be(HashMap.empty)
@@ -267,7 +268,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
         val resultTask   = reducer.eval(send)(env, splitRand)
         val inspectTask = for {
           _ <- resultTask
-        } yield space.store.toMap
+        } yield space.toMap
         Await.result(inspectTask.runToFuture, 3.seconds)
     }
 
@@ -288,7 +289,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
     val result = withTestSpace(errorLog) {
       case TestFixture(space, reducer) =>
         implicit val env = Env[Par]()
-        val task         = reducer.eval(send)(env, splitRand).map(_ => space.store.toMap)
+        val task         = reducer.eval(send)(env, splitRand).map(_ => space.toMap)
         Await.result(task.runToFuture, 3.seconds)
     }
 
@@ -320,7 +321,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
         val resultTask   = reducer.eval(receive)(env, splitRand)
         val inspectTask = for {
           _ <- resultTask
-        } yield space.store.toMap
+        } yield space.toMap
         Await.result(inspectTask.runToFuture, 3.seconds)
     }
     val bindPattern = BindPattern(
@@ -356,7 +357,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
     val result = withTestSpace(errorLog) {
       case TestFixture(space, reducer) =>
         implicit val env = Env[Par]()
-        val task         = reducer.eval(receive)(env, splitRand).map(_ => space.store.toMap)
+        val task         = reducer.eval(receive)(env, splitRand).map(_ => space.toMap)
         Await.result(task.runToFuture, 3.seconds)
     }
 
@@ -396,7 +397,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
         val inspectTaskSendFirst = for {
           _ <- reducer.eval(send)(env, splitRand0)
           _ <- reducer.eval(receive)(env, splitRand1)
-        } yield space.store.toMap
+        } yield space.toMap
         Await.result(inspectTaskSendFirst.runToFuture, 3.seconds)
     }
 
@@ -411,7 +412,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
         val inspectTaskReceiveFirst = for {
           _ <- reducer.eval(receive)(env, splitRand1)
           _ <- reducer.eval(send)(env, splitRand0)
-        } yield space.store.toMap
+        } yield space.toMap
         Await.result(inspectTaskReceiveFirst.runToFuture, 3.seconds)
     }
 
@@ -446,7 +447,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
         val inspectTaskSendFirst = for {
           _ <- reducer.eval(send)(env, splitRand0)
           _ <- reducer.eval(receive)(env, splitRand1)
-        } yield space.store.toMap
+        } yield space.toMap
         Await.result(inspectTaskSendFirst.runToFuture, 3.seconds)
     }
 
@@ -461,7 +462,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
         val inspectTaskReceiveFirst = for {
           _ <- reducer.eval(receive)(env, splitRand1)
           _ <- reducer.eval(send)(env, splitRand0)
-        } yield space.store.toMap
+        } yield space.toMap
         Await.result(inspectTaskReceiveFirst.runToFuture, 3.seconds)
     }
 
@@ -497,7 +498,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
         val inspectTaskSendFirst = for {
           _ <- reducer.eval(send)(env, splitRand0)
           _ <- reducer.eval(receive)(env, splitRand1)
-        } yield space.store.toMap
+        } yield space.toMap
         Await.result(inspectTaskSendFirst.runToFuture, 3.seconds)
     }
 
@@ -512,7 +513,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
         val inspectTaskReceiveFirst = for {
           _ <- reducer.eval(receive)(env, splitRand1)
           _ <- reducer.eval(send)(env, splitRand0)
-        } yield space.store.toMap
+        } yield space.toMap
         Await.result(inspectTaskReceiveFirst.runToFuture, 3.seconds)
     }
     checkData(receiveFirstResult)(channel, Seq(GString("Success")), mergeRand)
@@ -549,7 +550,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
         val inspectTaskSendFirst = for {
           _ <- reducer.eval(send)(env, splitRand0)
           _ <- reducer.eval(receive)(env, splitRand1)
-        } yield space.store.toMap
+        } yield space.toMap
         Await.result(inspectTaskSendFirst.runToFuture, 3.seconds)
     }
 
@@ -569,7 +570,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
         val inspectTaskReceiveFirst = for {
           _ <- reducer.eval(receive)(env, splitRand1)
           _ <- reducer.eval(send)(env, splitRand0)
-        } yield space.store.toMap
+        } yield space.toMap
         Await.result(inspectTaskReceiveFirst.runToFuture, 3.seconds)
     }
 
@@ -585,7 +586,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
         implicit val env = Env[Par]()
         val inspectTaskReceiveFirst = for {
           _ <- reducer.eval(Par(receives = Seq(receive), sends = Seq(send)))(env, baseRand)
-        } yield space.store.toMap
+        } yield space.toMap
         Await.result(inspectTaskReceiveFirst.runToFuture, 3.seconds)
     }
 
@@ -628,7 +629,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
         val matchTask = reducer.eval(matchTerm)(env, splitRand)
         val inspectTask = for {
           _ <- matchTask
-        } yield space.store.toMap
+        } yield space.toMap
         Await.result(inspectTask.runToFuture, 3.seconds)
     }
 
@@ -674,7 +675,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
           _ <- reducer.eval(send1)(env, splitRand0)
           _ <- reducer.eval(send2)(env, splitRand1)
           _ <- reducer.eval(receive)(env, splitRand2)
-        } yield space.store.toMap
+        } yield space.toMap
         Await.result(inspectTaskSendFirst.runToFuture, 3.seconds)
     }
 
@@ -690,7 +691,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
           _ <- reducer.eval(receive)(env, splitRand2)
           _ <- reducer.eval(send1)(env, splitRand0)
           _ <- reducer.eval(send2)(env, splitRand1)
-        } yield space.store.toMap
+        } yield space.toMap
         Await.result(inspectTaskReceiveFirst.runToFuture, 3.seconds)
     }
 
@@ -704,7 +705,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
           _ <- reducer.eval(send1)(env, splitRand0)
           _ <- reducer.eval(receive)(env, splitRand2)
           _ <- reducer.eval(send2)(env, splitRand1)
-        } yield space.store.toMap
+        } yield space.toMap
         Await.result(inspectTaskInterleaved.runToFuture, 3.seconds)
     }
 
@@ -732,7 +733,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
         val task = for {
           _ <- reducer.eval(receive)(env, splitRand1)
           _ <- reducer.eval(send)(env, splitRand0)
-        } yield space.store.toMap
+        } yield space.toMap
         Await.result(task.runToFuture, 3.seconds)
     }
 
@@ -775,7 +776,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
         val nthTask      = reducer.eval(nthCallEvalToSend)(env, splitRand)
         val inspectTask = for {
           _ <- nthTask
-        } yield space.store.toMap
+        } yield space.toMap
         Await.result(inspectTask.runToFuture, 3.seconds)
     }
 
@@ -846,7 +847,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
         val nthTask      = reducer.eval(newProc)(env, splitRand)
         val inspectTask = for {
           _ <- nthTask
-        } yield space.store.toMap
+        } yield space.toMap
         Await.result(inspectTask.runToFuture, 3.seconds)
     }
 
@@ -900,7 +901,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
         val nthTask      = reducer.eval(send)(env, splitRand)
         val inspectTask = for {
           _ <- nthTask
-        } yield space.store.toMap
+        } yield space.toMap
         Await.result(inspectTask.runToFuture, 3.seconds)
     }
 
@@ -947,7 +948,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
       case TestFixture(space, reducer) =>
         val env         = Env[Par]()
         val task        = reducer.eval(wrapWithSend(toByteArrayCall))(env, splitRand)
-        val inspectTask = for { _ <- task } yield space.store.toMap
+        val inspectTask = for { _ <- task } yield space.toMap
         Await.result(inspectTask.runToFuture, 3.seconds)
     }
 
@@ -974,7 +975,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
       case TestFixture(space, reducer) =>
         val env         = Env.makeEnv[Par](GPrivateBuilder("one"), GPrivateBuilder("zero"))
         val task        = reducer.eval(wrapWithSend(toByteArrayCall))(env, splitRand)
-        val inspectTask = for { _ <- task } yield space.store.toMap
+        val inspectTask = for { _ <- task } yield space.toMap
         Await.result(inspectTask.runToFuture, 3.seconds)
     }
 
@@ -998,7 +999,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
         val nthTask      = reducer.eval(toByteArrayWithArgumentsCall)
         val inspectTask = for {
           _ <- nthTask
-        } yield space.store.toMap
+        } yield space.toMap
         Await.result(inspectTask.runToFuture, 3.seconds)
     }
     result should be(HashMap.empty)
@@ -1020,7 +1021,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
       case TestFixture(space, reducer) =>
         val env         = Env[Par]()
         val task        = reducer.eval(wrapWithSend(toByteArrayCall))(env, splitRand)
-        val inspectTask = for { _ <- task } yield space.store.toMap
+        val inspectTask = for { _ <- task } yield space.toMap
         Await.result(inspectTask.runToFuture, 3.seconds)
     }
 
@@ -1045,7 +1046,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
       case TestFixture(space, reducer) =>
         val env         = Env[Par]()
         val task        = reducer.eval(wrapWithSend(toUtf8BytesCall))(env, splitRand)
-        val inspectTask = for { _ <- task } yield space.store.toMap
+        val inspectTask = for { _ <- task } yield space.toMap
         Await.result(inspectTask.runToFuture, 3.seconds)
     }
 
@@ -1074,7 +1075,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
         val nthTask      = reducer.eval(toUtfBytesWithArgumentsCall)
         val inspectTask = for {
           _ <- nthTask
-        } yield space.store.toMap
+        } yield space.toMap
         Await.result(inspectTask.runToFuture, 3.seconds)
     }
     result should be(HashMap.empty)
@@ -1093,7 +1094,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
         val nthTask      = reducer.eval(toUtfBytesCall)
         val inspectTask = for {
           _ <- nthTask
-        } yield space.store.toMap
+        } yield space.toMap
         Await.result(inspectTask.runToFuture, 3.seconds)
     }
     result should be(HashMap.empty)
@@ -1139,7 +1140,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
       case TestFixture(space, reducer) =>
         val env         = Env[Par]()
         val task        = reducer.eval(proc)(env, splitRandSrc)
-        val inspectTask = for { _ <- task } yield space.store.toMap
+        val inspectTask = for { _ <- task } yield space.toMap
         Await.result(inspectTask.runToFuture, 3.seconds)
     }
 
@@ -1170,7 +1171,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
       case TestFixture(space, reducer) =>
         val env         = Env[Par]()
         val task        = reducer.eval(proc)(env, splitRandSrc)
-        val inspectTask = for { _ <- task } yield space.store.toMap
+        val inspectTask = for { _ <- task } yield space.toMap
         Await.result(inspectTask.runToFuture, 3.seconds)
     }
     val channel: Par = GString("result")
@@ -1213,7 +1214,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
       case TestFixture(space, reducer) =>
         val env         = Env[Par]()
         val task        = reducer.eval(proc)(env, baseRand)
-        val inspectTask = for { _ <- task } yield space.store.toMap
+        val inspectTask = for { _ <- task } yield space.toMap
         Await.result(inspectTask.runToFuture, 3.seconds)
     }
 
@@ -1910,4 +1911,136 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
     )
   }
 
+  it should "return an error when `toList` is called with arguments" in {
+    implicit val errorLog: ErrorLog[Task] = new ErrorLog[Task]()
+    val toListCall: EMethod =
+      EMethod(
+        "toList",
+        EList(List()),
+        List[Par](GInt(1L))
+      )
+
+    val result = withTestSpace(errorLog) {
+      case TestFixture(space, reducer) =>
+        implicit val env = Env[Par]()
+        val nthTask      = reducer.eval(toListCall)
+        val inspectTask = for {
+          _ <- nthTask
+        } yield space.toMap
+        Await.result(inspectTask.runToFuture, 3.seconds)
+    }
+    result should be(mutable.HashMap.empty)
+    errorLog.readAndClearErrorVector().unsafeRunSync should be(
+      Vector(MethodArgumentNumberMismatch("toList", 0, 1))
+    )
+  }
+
+  it should "transform Set(1, 2, 3) into a [1, 2, 3]" in {
+    implicit val errorLog: ErrorLog[Task] = new ErrorLog[Task]()
+    val toListCall: EMethod =
+      EMethod(
+        "toList",
+        ESetBody(
+          ParSet(
+            List(
+              GInt(1L),
+              GInt(2L),
+              GInt(3L)
+            )
+          )
+        ),
+        List[Par]()
+      )
+
+    val result: Par = withTestSpace(errorLog) {
+      case TestFixture(_, reducer) =>
+        implicit val env: Env[Par] = Env[Par]()
+        val toListTask             = reducer.evalExpr(toListCall)
+        Await.result(toListTask.runToFuture, 3.seconds)
+    }
+    val resultList =
+      EListBody(
+        EList(
+          List[Par](
+            GInt(1L),
+            GInt(2L),
+            GInt(3L)
+          )
+        )
+      )
+    result.exprs should be(Seq(Expr(resultList)))
+    errorLog.readAndClearErrorVector().unsafeRunSync should be(Vector.empty[InterpreterError])
+  }
+
+  it should "transform {'a':1, 'b':2, 'c':3} into [('a',1), ('b',2), ('c',3)]" in {
+    implicit val errorLog: ErrorLog[Task] = new ErrorLog[Task]()
+    val toListCall: EMethod =
+      EMethod(
+        "toList",
+        EMapBody(
+          ParMap(
+            List[(Par, Par)](
+              (GString("a"), GInt(1L)),
+              (GString("b"), GInt(2L)),
+              (GString("c"), GInt(3L))
+            )
+          )
+        ),
+        List[Par]()
+      )
+    val result: Par = withTestSpace(errorLog) {
+      case TestFixture(_, reducer) =>
+        implicit val env: Env[Par] = Env[Par]()
+        val toListTask             = reducer.evalExpr(toListCall)
+        Await.result(toListTask.runToFuture, 3.seconds)
+    }
+    val resultList =
+      EListBody(
+        EList(
+          List[Par](
+            ETupleBody(ETuple(Seq(GString("a"), GInt(1L)))),
+            ETupleBody(ETuple(Seq(GString("b"), GInt(2L)))),
+            ETupleBody(ETuple(Seq(GString("c"), GInt(3L))))
+          )
+        )
+      )
+    result.exprs should be(Seq(Expr(resultList)))
+    errorLog.readAndClearErrorVector().unsafeRunSync should be(Vector.empty[InterpreterError])
+  }
+
+  it should "transform (1, 2, 3) into [1, 2, 3]" in {
+    implicit val errorLog: ErrorLog[Task] = new ErrorLog[Task]()
+    val toListCall: EMethod =
+      EMethod(
+        "toList",
+        ETupleBody(
+          ETuple(
+            List[Par](
+              GInt(1L),
+              GInt(2L),
+              GInt(3L)
+            )
+          )
+        ),
+        List[Par]()
+      )
+    val result: Par = withTestSpace(errorLog) {
+      case TestFixture(_, reducer) =>
+        implicit val env: Env[Par] = Env[Par]()
+        val toListTask             = reducer.evalExpr(toListCall)
+        Await.result(toListTask.runToFuture, 3.seconds)
+    }
+    val resultList =
+      EListBody(
+        EList(
+          List[Par](
+            GInt(1L),
+            GInt(2L),
+            GInt(3L)
+          )
+        )
+      )
+    result.exprs should be(Seq(Expr(resultList)))
+    errorLog.readAndClearErrorVector().unsafeRunSync should be(Vector.empty[InterpreterError])
+  }
 }

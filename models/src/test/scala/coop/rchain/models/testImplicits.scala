@@ -8,8 +8,9 @@ import org.scalacheck.{Arbitrary, Gen, Shrink}
 import scala.collection.immutable.BitSet
 
 object testImplicits {
-  val genBitSet = for { bitMask <- Arbitrary.arbitrary[Array[Long]] } yield
-    BitSet.fromBitMask(bitMask)
+  val genBitSet = for { bitMask <- Arbitrary.arbitrary[Array[Long]] } yield BitSet.fromBitMask(
+    bitMask
+  )
   implicit val arbBitSet: Arbitrary[BitSet] = Arbitrary(genBitSet)
 
   //FIXME this is broken, and makes our tests blind for mishandling Option

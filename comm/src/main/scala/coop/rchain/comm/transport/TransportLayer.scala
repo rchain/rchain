@@ -1,20 +1,20 @@
 package coop.rchain.comm.transport
 
-import scala.concurrent.duration.FiniteDuration
+import cats._
+import cats.data._
 
-import cats._, cats.data._, cats.implicits._
-import coop.rchain.comm.{CommError, PeerNode}, CommError.CommErr
-import coop.rchain.comm.rp.ProtocolHelper
-import coop.rchain.shared._
+import coop.rchain.comm.{CommError, PeerNode}
+import CommError.CommErr
 import coop.rchain.comm.protocol.routing._
+import coop.rchain.shared._
 
 final case class Blob(sender: PeerNode, packet: Packet)
 
 trait TransportLayer[F[_]] {
   def send(peer: PeerNode, msg: Protocol): F[CommErr[Unit]]
   def broadcast(peers: Seq[PeerNode], msg: Protocol): F[Seq[CommErr[Unit]]]
+  def stream(peer: PeerNode, blob: Blob): F[Unit]
   def stream(peers: Seq[PeerNode], blob: Blob): F[Unit]
-  def disconnect(peer: PeerNode): F[Unit]
 }
 
 object TransportLayer extends TransportLayerInstances {
@@ -36,10 +36,10 @@ sealed abstract class TransportLayerInstances {
       ): EitherT[F, CommError, Seq[CommErr[Unit]]] =
         EitherT.liftF(evF.broadcast(peers, msg))
 
+      def stream(peer: PeerNode, blob: Blob): EitherT[F, CommError, Unit] =
+        EitherT.liftF(evF.stream(peer, blob))
+
       def stream(peers: Seq[PeerNode], blob: Blob): EitherT[F, CommError, Unit] =
         EitherT.liftF(evF.stream(peers, blob))
-
-      def disconnect(peer: PeerNode): EitherT[F, CommError, Unit] =
-        EitherT.liftF(evF.disconnect(peer))
     }
 }

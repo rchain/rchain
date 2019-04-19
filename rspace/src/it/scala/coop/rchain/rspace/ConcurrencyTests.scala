@@ -17,7 +17,7 @@ trait ConcurrencyTests
   def version: String
 
   "CORE-589 produce and consume in a multi-threaded fashion" should
-    "show high performance" in withTestSpaceNonF { space =>
+    "show high performance" in withTestSpaceNonF { (_, space) =>
     val arrResults      = new Array[Long](Runtime.getRuntime.availableProcessors)
     val iterationsCount = 500
 
@@ -94,7 +94,7 @@ trait ConcurrencyTests
         s"${min.formatted("%.2f")} ms; max: ${max.formatted("%.2f")} ms")
   }
 
-  "produce and consume with monix.Tasks" should "work" in withTestSpaceNonF { space =>
+  "produce and consume with monix.Tasks" should "work" in withTestSpaceNonF { (_, space) =>
     val tasksCount      = Runtime.getRuntime.availableProcessors
     val iterationsCount = 500
 

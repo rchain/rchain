@@ -14,13 +14,12 @@ import scodec.Codec
 import scodec.bits.ByteVector
 
 import scala.annotation.tailrec
-import scala.collection.immutable
 
 package object history {
 
   private[this] type Parents[K, V] = Seq[(Int, Trie[K, V])]
 
-  private[this] implicit class ParentsOps[K, V](val parents: Parents[K, V]) extends AnyVal {
+  implicit private[this] class ParentsOps[K, V](val parents: Parents[K, V]) extends AnyVal {
 
     def countPathLength: Long =
       parents
@@ -116,9 +115,9 @@ package object history {
 
   @SuppressWarnings(Array("org.wartremover.warts.Throw"))
   // TODO stop throwing exceptions
-  def lookup[T, K, V](store: ITrieStore[T, K, V], branch: Branch, keys: immutable.Seq[K])(
+  def lookup[T, K, V](store: ITrieStore[T, K, V], branch: Branch, keys: Seq[K])(
       implicit codecK: Codec[K]
-  ): Option[immutable.Seq[V]] =
+  ): Option[Seq[V]] =
     if (keys.isEmpty) {
       throw new IllegalArgumentException("keys can't be empty")
     } else {

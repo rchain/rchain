@@ -10,19 +10,15 @@ import coop.rchain.rspace.trace.{
   Event => RspaceEvent,
   Produce => RspaceProduce
 }
-import scala.collection.immutable.Seq
 
 object EventConverter {
-  private implicit def byteStringToBlake2b256Hash(hash: ByteString): Blake2b256Hash =
+  implicit private def byteStringToBlake2b256Hash(hash: ByteString): Blake2b256Hash =
     Blake2b256Hash.fromByteArray(hash.toByteArray)
 
-  private implicit def byteStringsToBlake2b256Hashes(hashes: Seq[ByteString]): Seq[Blake2b256Hash] =
-    hashes.map(byteStringToBlake2b256Hash)
-
-  private implicit def blake2b256HashToByteString(hash: Blake2b256Hash): ByteString =
+  implicit private def blake2b256HashToByteString(hash: Blake2b256Hash): ByteString =
     ByteString.copyFrom(hash.bytes.toArray)
 
-  private implicit def blake2b256HashesToByteStrings(hashes: Seq[Blake2b256Hash]): Seq[ByteString] =
+  implicit private def blake2b256HashesToByteStrings(hashes: Seq[Blake2b256Hash]): Seq[ByteString] =
     hashes.map(blake2b256HashToByteString)
 
   def toCasperEvent(event: RspaceEvent): Event = event match {
@@ -55,6 +51,7 @@ object EventConverter {
       )
   }
 
+  @SuppressWarnings(Array("org.wartremover.warts.Throw"))
   def toRspaceEvent(event: Event): RspaceEvent = event match {
     case Event(Produce(produce: ProduceEvent)) =>
       RspaceProduce.fromHash(produce.channelsHash, produce.hash, produce.sequenceNumber)
@@ -78,5 +75,6 @@ object EventConverter {
         ),
         rspaceProduces
       )
+    case _ => throw new RuntimeException("Could not calculate toRspaceEvent")
   }
 }

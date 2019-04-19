@@ -126,31 +126,6 @@ class InMemBlockStoreTest extends BlockStoreTest {
   }
 }
 
-class LMDBBlockStoreTest extends BlockStoreTest {
-
-  import java.nio.file.{Files, Path}
-
-  private[this] def mkTmpDir(): Path = Files.createTempDirectory("block-store-test-")
-  private[this] val mapSize: Long    = 100L * 1024L * 1024L * 4096L
-
-  override def withStore[R](f: BlockStore[Task] => Task[R]): R = {
-    val dbDir                           = mkTmpDir()
-    val env                             = Context.env(dbDir, mapSize)
-    implicit val metrics: Metrics[Task] = new MetricsNOP[Task]()
-    val store                           = LMDBBlockStore.create[Task](env, dbDir)
-    val test = for {
-      _      <- store.find(_ => true).map(map => assert(map.isEmpty))
-      result <- f(store)
-    } yield result
-    try {
-      test.unsafeRunSync
-    } finally {
-      env.close()
-      dbDir.recursivelyDelete()
-    }
-  }
-}
-
 class FileLMDBIndexBlockStoreTest extends BlockStoreTest {
   val scheduler = Scheduler.fixedPool("block-storage-test-scheduler", 4)
 

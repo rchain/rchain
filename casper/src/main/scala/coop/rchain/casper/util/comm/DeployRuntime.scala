@@ -47,6 +47,9 @@ object DeployRuntime {
   ): F[Unit] =
     gracefulExit(DeployService[F].visualizeDag(VisualizeDagQuery(depth, showJustificationLines)))
 
+  def machineVerifiableDag[F[_]: Monad: Sync: DeployService]: F[Unit] =
+    gracefulExit(DeployService[F].machineVerifiableDag(MachineVerifyQuery()))
+
   def listenForDataAtName[F[_]: Functor: Sync: DeployService: Time](
       name: Id[Name]
   ): F[Unit] =
@@ -71,7 +74,7 @@ object DeployRuntime {
   def deployFileProgram[F[_]: Monad: Sync: DeployService](
       phloLimit: Long,
       phloPrice: Long,
-      validAfterBlock: Int,
+      validAfterBlock: Long,
       maybePrivateKey: Option[PrivateKey],
       file: String
   ): F[Unit] =
@@ -92,29 +95,12 @@ object DeployRuntime {
               .withValidAfterBlockNumber(validAfterBlock)
               .withTimestamp(timestamp)
 
-            signedData = maybePrivateKey.fold(d)(SignDeployment(_, d))
+            signedData = maybePrivateKey.fold(d)(SignDeployment.sign(_, d))
 
             response <- DeployService[F].deploy(signedData)
           } yield response.map(r => s"Response: $r")
       }
     )
-
-  //Simulates user requests by randomly deploying things to Casper.
-  def deployDemoProgram[F[_]: Monad: Sync: Time: DeployService]: F[Unit] =
-    singleDeploy[F].forever
-
-  private def singleDeploy[F[_]: Monad: Time: Sync: DeployService]: F[Unit] =
-    for {
-      id <- Sync[F].delay { scala.util.Random.nextInt(100) }
-      d  <- ProtoUtil.basicDeployData[F](id)
-      _ <- Sync[F].delay {
-            println(s"Sending the following to Casper: ${d.term}")
-          }
-      response <- DeployService[F].deploy(d)
-      msg      = response.fold(_.mkString(System.lineSeparator()), "Response: " + _)
-      _        <- Sync[F].delay(println(msg))
-      _        <- Time[F].sleep(4.seconds)
-    } yield ()
 
   private def gracefulExit[F[_]: Monad: Sync, A](
       program: F[Either[Seq[String], String]]

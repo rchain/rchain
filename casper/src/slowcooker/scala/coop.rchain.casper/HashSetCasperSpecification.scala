@@ -4,7 +4,8 @@ import cats.data.EitherT
 import cats.effect.Sync
 import cats.implicits._
 import coop.rchain.casper.MultiParentCasper.ignoreDoppelgangerCheck
-import coop.rchain.casper.genesis.contracts.{Faucet, PreWallet}
+import coop.rchain.casper.genesis.Genesis
+import coop.rchain.casper.genesis.contracts._
 import coop.rchain.casper.helper.HashSetCasperTestNode
 import coop.rchain.casper.helper.HashSetCasperTestNode.Effect
 import coop.rchain.casper.protocol.{BlockMessage, DeployData}
@@ -18,6 +19,8 @@ import monix.execution.Scheduler.Implicits.global
 import coop.rchain.catscontrib._
 import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.comm.CommError
+import coop.rchain.crypto.{PrivateKey, PublicKey}
+import coop.rchain.rholang.interpreter.util.RevAddress
 import monix.eval.Task
 import org.scalacheck._
 import org.scalacheck.commands.Commands
@@ -42,30 +45,45 @@ class NodeBox(val node: HashSetCasperTestNode[Effect], var lastBlock: Option[Blo
 }
 
 object HashSetCasperActions {
-  import HashSetCasperTest._
-
-  type ValidatorKey = Array[Byte]
+  import MultiParentCasperTestUtil._
 
   def context(
       amount: Int,
-      bondsGen: Seq[ValidatorKey] => Map[ValidatorKey, Long]
-  ): (BlockMessage, immutable.IndexedSeq[ValidatorKey]) = {
+      bondsGen: Seq[PublicKey] => Map[PublicKey, Long]
+  ): (BlockMessage, immutable.IndexedSeq[PrivateKey]) = {
     val (validatorKeys, validators) = (1 to amount).map(_ => Ed25519.newKeyPair).unzip
     val (_, ethPubKeys)             = (1 to amount).map(_ => Secp256k1.newKeyPair).unzip
     val ethAddresses =
       ethPubKeys.map(pk => "0x" + Base16.encode(Keccak256.hash(pk.bytes.drop(1)).takeRight(20)))
-    val wallets     = ethAddresses.map(addr => PreWallet(addr, BigInt(10001)))
-    val bonds       = bondsGen(validators)
-    val minimumBond = 100L
+    val wallets = ethAddresses.map(addr => PreWallet(addr, BigInt(10001)))
+    val bonds   = bondsGen(validators)
     val genesis =
-      buildGenesis(wallets, bonds, minimumBond, Long.MaxValue, Faucet.basicWalletFaucet, 0L)
+      buildGenesis(
+        Genesis(
+          shardId = "HashSetCasperSpecification",
+          wallets = wallets,
+          proofOfStake = ProofOfStake(
+            minimumBond = 0L,
+            maximumBond = Long.MaxValue,
+            validators = bonds.toSeq.map(Validator.tupled)
+          ),
+          faucet = true,
+          genesisPk = Ed25519.newKeyPair._2,
+          timestamp = 0L,
+          vaults = bonds.toList.map {
+            case (pk, stake) =>
+              RevAddress.fromPublicKey(pk).map(Vault(_, stake))
+          }.flattenOption,
+          supply = Long.MaxValue
+        )
+      )
     (genesis, validatorKeys)
   }
 
   def deploy(
       node: HashSetCasperTestNode[Effect],
       deployData: DeployData
-  ): Effect[Either[Throwable, Unit]] =
+  ): Effect[Either[DeployError, Unit]] =
     node.casperEff.deploy(deployData)
 
   def create(node: HashSetCasperTestNode[Effect]): EitherT[Task, CommError, BlockMessage] =
@@ -83,7 +101,7 @@ object HashSetCasperActions {
     )
 
   def deployment(i: Int, ts: Long = System.currentTimeMillis()): DeployData =
-    ProtoUtil.sourceDeploy(s"new x in { x!(0) }", ts, accounting.MAX_VALUE)
+    ConstructDeploy.sourceDeploy(s"new x in { x!(0) }", ts, accounting.MAX_VALUE)
 
   implicit class EffectOps[A](f: Effect[A]) {
     def result: A = f.value.unsafeRunSync.right.get

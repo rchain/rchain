@@ -2,7 +2,7 @@ package coop.rchain.casper.api
 
 import cats.implicits._
 
-import coop.rchain.casper.{Created, HashSetCasperTest}
+import coop.rchain.casper.{ConstructDeploy, Created, MultiParentCasperTestUtil}
 import coop.rchain.casper.helper.HashSetCasperTestNode
 import coop.rchain.casper.helper.HashSetCasperTestNode.Effect
 import coop.rchain.casper.MultiParentCasper.ignoreDoppelgangerCheck
@@ -21,7 +21,7 @@ import org.scalatest._
 
 class ListeningNameAPITest extends FlatSpec with Matchers with Inside {
 
-  import HashSetCasperTest._
+  import coop.rchain.casper.MultiParentCasperTestUtil._
 
   private val (validatorKeys, validators) = (1 to 4).map(_ => Ed25519.newKeyPair).unzip
   private val bonds                       = createBonds(validators)
@@ -33,11 +33,11 @@ class ListeningNameAPITest extends FlatSpec with Matchers with Inside {
 
     def basicDeployData: DeployData = {
       val timestamp = System.currentTimeMillis()
-      DeployData()
-        .withDeployer(ByteString.EMPTY)
-        .withTimestamp(timestamp)
-        .withTerm("@{ 3 | 2 | 1 }!(0)")
-        .withPhloLimit(accounting.MAX_VALUE)
+      ConstructDeploy.sourceDeploy(
+        source = "@{ 3 | 2 | 1 }!(0)",
+        timestamp = timestamp,
+        phlos = accounting.MAX_VALUE
+      )
     }
 
     for {
@@ -70,7 +70,9 @@ class ListeningNameAPITest extends FlatSpec with Matchers with Inside {
       implicit val timeEff = new LogicalTime[Effect]
       for {
         deployDatas <- (0 to 7).toList
-                        .traverse[Effect, DeployData](_ => ProtoUtil.basicDeployData[Effect](0))
+                        .traverse[Effect, DeployData](
+                          _ => ConstructDeploy.basicDeployData[Effect](0)
+                        )
 
         createBlock1Result <- nodes(0).casperEff
                                .deploy(deployDatas(0)) *> nodes(0).casperEff.createBlock

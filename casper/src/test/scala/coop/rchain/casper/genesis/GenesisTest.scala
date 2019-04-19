@@ -1,31 +1,27 @@
 package coop.rchain.casper.genesis
 
 import java.io.PrintWriter
-import java.nio.file.Files
+import java.nio.file.{Files, Path}
 
-import cats.Id
+import cats.effect.Sync
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockStore
-import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.casper.helper.BlockDagStorageFixture
 import coop.rchain.casper.protocol.{BlockMessage, Bond}
 import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.casper.util.rholang.{InterpreterUtil, RuntimeManager}
-import coop.rchain.catscontrib._
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.p2p.EffectsTestInstances.{LogStub, LogicalTime}
 import coop.rchain.rholang.interpreter.Runtime
 import coop.rchain.rholang.interpreter.storage.StoragePrinter
 import coop.rchain.shared.PathOps.RichPath
 import coop.rchain.shared.StoreType
-import monix.execution.Scheduler.Implicits.global
 import org.scalatest.{BeforeAndAfterEach, FlatSpec, Matchers}
 import java.nio.file.Path
-
-import cats.effect.Sync
 import coop.rchain.metrics
 import coop.rchain.metrics.{Metrics, NoopSpan}
 import monix.eval.Task
+import monix.execution.Scheduler.Implicits.global
 
 class GenesisTest extends FlatSpec with Matchers with BlockDagStorageFixture {
   import GenesisTest._
@@ -72,10 +68,9 @@ class GenesisTest extends FlatSpec with Matchers with BlockDagStorageFixture {
         time: LogicalTime[Task]
     ) =>
       for {
-        _      <- fromInputFiles()(runtimeManager, genesisPath, log, time)
-        _      = log.warns.find(_.contains("bonds")) should be(None)
-        result = log.infos.count(_.contains("Created validator")) should be(numValidators)
-      } yield result
+        _ <- fromInputFiles()(runtimeManager, genesisPath, log, time)
+        _ = log.warns.find(_.contains("bonds")) should be(None)
+      } yield log.infos.count(_.contains("Created validator")) should be(numValidators)
   }
 
   it should "generate random validators, with a warning, when bonds file does not exist" in withGenResources {
@@ -97,8 +92,7 @@ class GenesisTest extends FlatSpec with Matchers with BlockDagStorageFixture {
         ) should be(
           1
         )
-        result = log.infos.count(_.contains("Created validator")) should be(numValidators)
-      } yield result
+      } yield log.infos.count(_.contains("Created validator")) should be(numValidators)
   }
 
   it should "generate random validators, with a warning, when bonds file cannot be parsed" in withGenResources {
@@ -126,8 +120,7 @@ class GenesisTest extends FlatSpec with Matchers with BlockDagStorageFixture {
         ) should be(
           1
         )
-        result = log.infos.count(_.contains("Created validator")) should be(numValidators)
-      } yield result
+      } yield log.infos.count(_.contains("Created validator")) should be(numValidators)
   }
 
   it should "create a genesis block with the right bonds when a proper bonds file is given" in withGenResources {
@@ -153,10 +146,7 @@ class GenesisTest extends FlatSpec with Matchers with BlockDagStorageFixture {
           .map {
             case (v, i) => Bond(ByteString.copyFrom(Base16.unsafeDecode(v)), i.toLong)
           }
-          .forall(
-            bonds.contains(_)
-          ) should be(true)
-      } yield result
+      } yield result.forall(bonds.contains(_)) should be(true)
   }
 
   it should "create a valid genesis block" in withStorage {
@@ -203,10 +193,7 @@ class GenesisTest extends FlatSpec with Matchers with BlockDagStorageFixture {
           .map {
             case (v, i) => Bond(ByteString.copyFrom(Base16.unsafeDecode(v)), i.toLong)
           }
-          .forall(
-            bonds.contains(_)
-          ) should be(true)
-      } yield result
+      } yield result.forall(bonds.contains(_)) should be(true)
   }
 
   it should "parse the wallets file and include it in the genesis state" in withRawGenResources {
@@ -217,14 +204,14 @@ class GenesisTest extends FlatSpec with Matchers with BlockDagStorageFixture {
       for {
         runtimeManager  <- RuntimeManager.fromRuntime(runtime)
         _               <- fromInputFiles()(runtimeManager, genesisPath, log, time)
-        storageContents = StoragePrinter.prettyPrint(runtime.space.store)
+        storageContents = StoragePrinter.prettyPrint(runtime.space)
       } yield walletAddresses.forall(storageContents contains _._1) should be(true)
   }
 
 }
 
 object GenesisTest {
-  val storageSize     = 1024L * 1024
+  val storageSize     = 3024L * 1024
   def storageLocation = Files.createTempDirectory(s"casper-genesis-test-runtime")
   def genesisPath     = Files.createTempDirectory(s"casper-genesis-test")
   val numValidators   = 5

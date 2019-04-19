@@ -1,20 +1,20 @@
 package coop.rchain.rspace.history
 
 import java.nio.ByteBuffer
-import java.nio.charset.StandardCharsets
 import java.nio.file.Path
 
 import cats.effect.Sync
 
 import scala.collection.JavaConverters._
-import coop.rchain.rspace.{Blake2b256Hash, LMDBOps, Serialize, _}
+import coop.rchain.rspace.{Blake2b256Hash, LMDBOps, _}
 import coop.rchain.rspace.internal._
+import coop.rchain.rspace.util.stringCodec
 import coop.rchain.shared.ByteVectorOps._
 import coop.rchain.shared.Resources.withResource
 import org.lmdbjava._
 import org.lmdbjava.DbiFlags.MDB_CREATE
 import scodec.Codec
-import scodec.bits.{BitVector, ByteVector}
+import scodec.bits.BitVector
 
 @SuppressWarnings(Array("org.wartremover.warts.Throw", "org.wartremover.warts.NonUnitStatements")) // TODO stop throwing exceptions
 class LMDBTrieStore[F[_], K, V] private (
@@ -32,7 +32,7 @@ class LMDBTrieStore[F[_], K, V] private (
 ) extends ITrieStore[Txn[ByteBuffer], K, V]
     with LMDBOps[F] {
 
-  override protected def metricsSource: String = RSpaceMetricsSource + ".history.lmdb"
+  protected override def metricsSource: String = RSpaceMetricsSource + ".history.lmdb"
 
   private[rspace] def put(txn: Txn[ByteBuffer], key: Blake2b256Hash, value: Trie[K, V]): Unit =
     _dbTrie.put(txn, key, value)
@@ -106,12 +106,12 @@ class LMDBTrieStore[F[_], K, V] private (
       }
       .getOrElse(throw new Exception(s"Unknown root."))
 
-  override private[rspace] def getEmptyRoot(txn: Txn[ByteBuffer]) =
+  private[rspace] override def getEmptyRoot(txn: Txn[ByteBuffer]) =
     Option(_dbEmptyRoots.get(txn, LMDBTrieStore.emptyRootKey))
       .map(bytes => Codec[Blake2b256Hash].decode(BitVector(bytes)).map(_.value).get)
       .getOrElse(throw new Exception(s"Missing empty root."))
 
-  override private[rspace] def putEmptyRoot(txn: Txn[ByteBuffer], hash: Blake2b256Hash): Unit =
+  private[rspace] override def putEmptyRoot(txn: Txn[ByteBuffer], hash: Blake2b256Hash): Unit =
     _dbEmptyRoots
       .put(
         txn,
@@ -134,17 +134,6 @@ object LMDBTrieStore {
     val dbPastRoots: Dbi[ByteBuffer] = env.openDbi("PastRoots", MDB_CREATE)
     new LMDBTrieStore[F, K, V](env, path, dbTrie, dbRoots, dbPastRoots, dbEmptyRoot)
   }
-
-  private val stringSerialize: Serialize[String] = new Serialize[String] {
-
-    def encode(a: String): ByteVector =
-      ByteVector.view(a.getBytes(StandardCharsets.UTF_8))
-
-    def decode(bytes: ByteVector): Either[Throwable, String] =
-      Right(new String(bytes.toArray, StandardCharsets.UTF_8))
-  }
-
-  private val stringCodec: Codec[String] = stringSerialize.toCodec
 
   private val emptyRootKey = stringCodec.encode("emptyRoot").get.bytes.toDirectByteBuffer
 }

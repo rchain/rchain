@@ -29,10 +29,8 @@ import monix.execution.Scheduler
 import org.scalatest.{FlatSpec, Matchers}
 
 class CreateBlockAPITest extends FlatSpec with Matchers {
-  import HashSetCasperTest._
+  import MultiParentCasperTestUtil._
   import HashSetCasperTestNode.Effect
-
-  private implicit val scheduler: Scheduler = Scheduler.fixedPool("create-block-api-test", 4)
 
   private val (validatorKeys, validators) = (1 to 4).map(_ => Ed25519.newKeyPair).unzip
   private val bonds                       = createBonds(validators)
@@ -52,7 +50,7 @@ class CreateBlockAPITest extends FlatSpec with Matchers {
     val deploys = List(
       "@0!(0) | for(_ <- @0){ @1!(1) }",
       "for(_ <- @1){ @2!(2) }"
-    ).map(ProtoUtil.sourceDeploy(_, System.currentTimeMillis(), accounting.MAX_VALUE))
+    ).map(ConstructDeploy.sourceDeploy(_, System.currentTimeMillis(), accounting.MAX_VALUE))
 
     def createBlock(deploy: DeployData, blockApiLock: Semaphore[Effect])(
         implicit casperRef: MultiParentCasperRef[Effect]
@@ -64,27 +62,33 @@ class CreateBlockAPITest extends FlatSpec with Matchers {
 
     def testProgram(blockApiLock: Semaphore[Effect])(
         implicit casperRef: MultiParentCasperRef[Effect]
-    ): Effect[(ApiErr[DeployServiceResponse], ApiErr[DeployServiceResponse])] =
+    ): Effect[
+      (ApiErr[DeployServiceResponse], ApiErr[DeployServiceResponse], ApiErr[DeployServiceResponse])
+    ] =
       EitherT.liftF(
         for {
           t1 <- createBlock(deploys.head, blockApiLock).value.start
           _  <- Time[Task].sleep(2.second)
           t2 <- createBlock(deploys.last, blockApiLock).value.start //should fail because other not done
+          t3 <- createBlock(deploys.last, blockApiLock).value.start //should fail because other not done
           r1 <- t1.join
           r2 <- t2.join
-        } yield (r1.right.get, r2.right.get)
+          r3 <- t3.join
+        } yield (r1.right.get, r2.right.get, r3.right.get)
       )
 
-    val (response1, response2) = (for {
+    val (response1, response2, response3) = (for {
       casperRef    <- MultiParentCasperRef.of[Effect]
       _            <- casperRef.set(casper)
       blockApiLock <- Semaphore[Effect](1)
       result       <- testProgram(blockApiLock)(casperRef)
     } yield result).value.unsafeRunSync.right.get
 
-    response1 shouldBe a[Right[String, DeployServiceResponse]]
-    response2 shouldBe a[Left[String, DeployServiceResponse]]
+    response1 shouldBe a[Right[_, DeployServiceResponse]]
+    response2 shouldBe a[Left[_, DeployServiceResponse]]
+    response3 shouldBe a[Left[_, DeployServiceResponse]]
     response2.left.get shouldBe "Error: There is another propose in progress."
+    response3.left.get shouldBe "Error: There is another propose in progress."
 
     node.tearDown()
   }
@@ -96,9 +100,9 @@ private class SleepingMultiParentCasperImpl[F[_]: Monad: Time](underlying: Multi
   def addBlock(
       b: BlockMessage,
       handleDoppelganger: (BlockMessage, Validator) => F[Unit]
-  ): F[BlockStatus]                                     = underlying.addBlock(b, ignoreDoppelgangerCheck[F])
-  def contains(b: BlockMessage): F[Boolean]             = underlying.contains(b)
-  def deploy(d: DeployData): F[Either[Throwable, Unit]] = underlying.deploy(d)
+  ): F[BlockStatus]                                       = underlying.addBlock(b, ignoreDoppelgangerCheck[F])
+  def contains(b: BlockMessage): F[Boolean]               = underlying.contains(b)
+  def deploy(d: DeployData): F[Either[DeployError, Unit]] = underlying.deploy(d)
   def estimator(dag: BlockDagRepresentation[F]): F[IndexedSeq[BlockHash]] =
     underlying.estimator(dag)
   def blockDag: F[BlockDagRepresentation[F]] = underlying.blockDag

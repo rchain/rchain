@@ -11,6 +11,7 @@ object Clique {
   }
 
   // e is a list of undirected edges
+  @SuppressWarnings(Array("org.wartremover.warts.Throw"))
   def findCliquesRecursive[A](e: List[(A, A)]): Stream[List[A]] = {
     val adj = getAdj(e)
 
@@ -34,6 +35,7 @@ object Clique {
             val adjQ = adj.getOrElse(elem, Set())
             expand(ans :+ elem, (P &~ s) & adjQ, (P ++ s) & adjQ)
           }
+          case _ => throw new RuntimeException("Could not calculate findCliquesRecursive")
         }
       }
 

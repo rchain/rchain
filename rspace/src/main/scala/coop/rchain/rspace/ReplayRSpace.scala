@@ -14,7 +14,6 @@ import coop.rchain.shared.Log
 import scodec.Codec
 
 import scala.collection.JavaConverters._
-import scala.collection.immutable.Seq
 import scala.concurrent.ExecutionContext
 
 class ReplayRSpace[F[_], C, P, A, R, K](store: IStore[F, C, P, A, K], branch: Branch)(
@@ -31,9 +30,9 @@ class ReplayRSpace[F[_], C, P, A, R, K](store: IStore[F, C, P, A, K], branch: Br
 ) extends RSpaceOps[F, C, P, A, R, K](store, branch)
     with IReplaySpace[F, C, P, A, R, K] {
 
-  override protected[this] val logger: Logger = Logger[this.type]
+  protected[this] override val logger: Logger = Logger[this.type]
 
-  private[this] implicit val MetricsSource: Metrics.Source =
+  implicit private[this] val MetricsSource: Metrics.Source =
     Metrics.Source(RSpaceMetricsSource, "replay")
 
   private[this] val consumeCommLabel = "comm.consume"
@@ -260,11 +259,10 @@ class ReplayRSpace[F[_], C, P, A, R, K](store: IStore[F, C, P, A, K], branch: Br
                              matchCandidates,
                              channelToIndexedDataList.toMap
                            )
-            } yield
-              firstMatch match {
-                case None             => remaining.asLeft[MaybeProduceCandidate]
-                case produceCandidate => produceCandidate.asRight[Seq[Seq[C]]]
-              }
+            } yield firstMatch match {
+              case None             => remaining.asLeft[MaybeProduceCandidate]
+              case produceCandidate => produceCandidate.asRight[Seq[Seq[C]]]
+            }
         }
       groupedChannels.tailRecM(go)
     }
@@ -424,6 +422,7 @@ class ReplayRSpace[F[_], C, P, A, R, K](store: IStore[F, C, P, A, K], branch: Br
     } yield ()
 
   protected[rspace] def isDirty(root: Blake2b256Hash): F[Boolean] = true.pure[F]
+
 }
 
 object ReplayRSpace {
@@ -439,6 +438,29 @@ object ReplayRSpace {
       contextShift: ContextShift[F],
       scheduler: ExecutionContext,
       metricsF: Metrics[F]
+  ): F[ReplayRSpace[F, C, P, A, R, K]] =
+    context match {
+      case lmdbContext: LMDBContext[F, C, P, A, K] =>
+        create(LMDBStore.create[F, C, P, A, K](lmdbContext, branch), branch)
+
+      case memContext: InMemoryContext[F, C, P, A, K] =>
+        create(InMemoryStore.create(memContext.trieStore, branch), branch)
+
+      case mixedContext: MixedContext[F, C, P, A, K] =>
+        create(LockFreeInMemoryStore.create(mixedContext.trieStore, branch), branch)
+    }
+
+  def create[F[_], C, P, A, R, K](store: IStore[F, C, P, A, K], branch: Branch)(
+      implicit
+      sc: Serialize[C],
+      sp: Serialize[P],
+      sa: Serialize[A],
+      sk: Serialize[K],
+      concurrent: Concurrent[F],
+      logF: Log[F],
+      contextShift: ContextShift[F],
+      scheduler: ExecutionContext,
+      metricsF: Metrics[F]
   ): F[ReplayRSpace[F, C, P, A, R, K]] = {
 
     implicit val codecC: Codec[C] = sc.toCodec
@@ -446,18 +468,8 @@ object ReplayRSpace {
     implicit val codecA: Codec[A] = sa.toCodec
     implicit val codecK: Codec[K] = sk.toCodec
 
-    val mainStore: IStore[F, C, P, A, K] = context match {
-      case lmdbContext: LMDBContext[F, C, P, A, K] =>
-        LMDBStore.create[F, C, P, A, K](lmdbContext, branch)
-
-      case memContext: InMemoryContext[F, C, P, A, K] =>
-        InMemoryStore.create(memContext.trieStore, branch)
-
-      case mixedContext: MixedContext[F, C, P, A, K] =>
-        LockFreeInMemoryStore.create(mixedContext.trieStore, branch)
-    }
-
-    val replaySpace = new ReplayRSpace[F, C, P, A, R, K](mainStore, branch)
+    val space: ReplayRSpace[F, C, P, A, R, K] =
+      new ReplayRSpace[F, C, P, A, R, K](store, branch)
 
     /*
      * history.initialize returns true if the history trie contains no root (i.e. is empty).
@@ -465,11 +477,10 @@ object ReplayRSpace {
      * In this case, we create a checkpoint for the empty store so that we can reset
      * to the empty store state with the clear method.
      */
-    if (history.initialize(mainStore.trieStore, branch)) {
-      replaySpace.createCheckpoint().map(_ => replaySpace)
+    if (history.initialize(store.trieStore, branch)) {
+      space.createCheckpoint().map(_ => space)
     } else {
-      replaySpace.pure[F]
+      space.pure[F]
     }
   }
-
 }

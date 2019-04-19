@@ -218,11 +218,10 @@ sealed abstract class StreamT[F[_], +A] { self =>
           for {
             tailAF <- lazyTailA
             tailBF <- lazyTailB
-          } yield
-            for {
-              tailA <- tailAF
-              tailB <- tailBF
-            } yield tailA.zip(tailB)
+          } yield for {
+            tailA <- tailAF
+            tailB <- tailBF
+          } yield tailA.zip(tailB)
         )
 
       case (_: SNil[F], _) => StreamT.empty[F, (A, B)]
@@ -258,9 +257,8 @@ object StreamT {
     for {
       tailF       <- lazyTail
       mappedTailF <- mappedLazyTail
-    } yield
-      for {
-        mappedTail <- mappedTailF
-        lazyTail   <- tailF
-      } yield mappedTail ++ lazyTail.flatMap[B](f)
+    } yield for {
+      mappedTail <- mappedTailF
+      lazyTail   <- tailF
+    } yield mappedTail ++ lazyTail.flatMap[B](f)
 }

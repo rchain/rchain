@@ -26,7 +26,6 @@ abstract class TransportLayerSpec[F[_]: Monad: cats.effect.Timer, E <: Environme
         new TwoNodesRuntime[CommErr[Unit]]() {
           def execute(
               transportLayer: TransportLayer[F],
-              transportLayerShutdown: TransportLayerShutdown[F],
               local: PeerNode,
               remote: PeerNode
           ): F[CommErr[Unit]] = sendHeartbeat(transportLayer, local, remote)
@@ -47,7 +46,6 @@ abstract class TransportLayerSpec[F[_]: Monad: cats.effect.Timer, E <: Environme
         new ThreeNodesRuntime[Seq[CommErr[Unit]]]() {
           def execute(
               transportLayer: TransportLayer[F],
-              transportLayerShutdown: TransportLayerShutdown[F],
               local: PeerNode,
               remote1: PeerNode,
               remote2: PeerNode
@@ -70,49 +68,6 @@ abstract class TransportLayerSpec[F[_]: Monad: cats.effect.Timer, E <: Environme
         }
     }
 
-    "shutting down" when {
-
-      "sending a message" should {
-        "not send the message" in
-          new TwoNodesRuntime[CommErr[Unit]]() {
-            def execute(
-                transportLayer: TransportLayer[F],
-                transportLayerShutdown: TransportLayerShutdown[F],
-                local: PeerNode,
-                remote: PeerNode
-            ): F[CommErr[Unit]] =
-              for {
-                _ <- transportLayerShutdown(ProtocolHelper.disconnect(local))
-                r <- sendHeartbeat(transportLayer, local, remote)
-              } yield r
-
-            run(false)
-            protocolDispatcher.received shouldBe 'empty
-          }
-      }
-
-      "broadcasting a message" should {
-        "not send any messages" in
-          new ThreeNodesRuntime[Seq[CommErr[Unit]]]() {
-            def execute(
-                transportLayer: TransportLayer[F],
-                transportLayerShutdown: TransportLayerShutdown[F],
-                local: PeerNode,
-                remote1: PeerNode,
-                remote2: PeerNode
-            ): F[Seq[CommErr[Unit]]] =
-              for {
-                _ <- transportLayerShutdown(ProtocolHelper.disconnect(local))
-                r <- broadcastHeartbeat(transportLayer, local, remote1, remote2)
-              } yield r
-
-            run(false)
-            protocolDispatcher.received shouldBe 'empty
-          }
-      }
-
-    }
-
     val bigContent: ByteString = {
       val b = 128.toByte
       ProtocolHelper.toProtocolBytes(
@@ -125,12 +80,11 @@ abstract class TransportLayerSpec[F[_]: Monad: cats.effect.Timer, E <: Environme
         new TwoNodesRuntime[Unit]() {
           def execute(
               transportLayer: TransportLayer[F],
-              transportLayerShutdown: TransportLayerShutdown[F],
               local: PeerNode,
               remote: PeerNode
           ): F[Unit] =
             transportLayer.stream(
-              List(remote),
+              remote,
               Blob(local, Packet(BlockMessage.id, bigContent))
             )
 
@@ -147,7 +101,6 @@ abstract class TransportLayerSpec[F[_]: Monad: cats.effect.Timer, E <: Environme
         new ThreeNodesRuntime[Unit]() {
           def execute(
               transportLayer: TransportLayer[F],
-              transportLayerShutdown: TransportLayerShutdown[F],
               local: PeerNode,
               remote1: PeerNode,
               remote2: PeerNode
@@ -162,10 +115,10 @@ abstract class TransportLayerSpec[F[_]: Monad: cats.effect.Timer, E <: Environme
           streamDispatcher.received should have length 2
           val (_, blob1) = streamDispatcher.received(0)
           val (_, blob2) = streamDispatcher.received(1)
-          blob1.packet.typeId shouldBe ("N/A")
-          blob1.packet.content shouldBe (bigContent)
-          blob2.packet.typeId shouldBe ("N/A")
-          blob2.packet.content shouldBe (bigContent)
+          blob1.packet.typeId shouldBe "N/A"
+          blob1.packet.content shouldBe bigContent
+          blob2.packet.typeId shouldBe "N/A"
+          blob2.packet.content shouldBe bigContent
         }
       }
 

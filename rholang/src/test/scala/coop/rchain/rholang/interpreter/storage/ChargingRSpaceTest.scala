@@ -341,7 +341,7 @@ class ChargingRSpaceTest extends fixture.FlatSpec with TripleEqualsSupport with 
 
   override type FixtureParam = TestFixture
 
-  override protected def withFixture(test: OneArgTest): Outcome = {
+  protected override def withFixture(test: OneArgTest): Outcome = {
     val cost: _cost[Task] = CostAccounting.emptyCost[Task].runSyncUnsafe(1.second)
     def mkChargingRspace(rhoISpace: RhoISpace[Task]): Task[ChargingRSpace] = {
       val s = implicitly[Sync[Task]]

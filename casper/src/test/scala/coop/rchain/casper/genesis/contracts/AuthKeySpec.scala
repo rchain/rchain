@@ -8,6 +8,6 @@ import scala.concurrent.duration._
 class AuthKeySpec
     extends RhoSpec(
       CompiledRholangSource("AuthKeyTest.rho"),
-      Seq(StandardDeploys.authKey),
-      10.seconds
+      Seq.empty,
+      20.seconds
     )

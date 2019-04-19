@@ -18,6 +18,7 @@ trait DeployService[F[_]] {
   def showBlock(q: BlockQuery): F[Either[Seq[String], String]]
   def showBlocks(q: BlocksQuery): F[Either[Seq[String], String]]
   def visualizeDag(q: VisualizeDagQuery): F[Either[Seq[String], String]]
+  def machineVerifiableDag(q: MachineVerifyQuery): F[Either[Seq[String], String]]
   def listenForDataAtName(request: DataAtNameQuery): F[Either[Seq[String], Seq[DataWithBlockInfo]]]
   def listenForContinuationAtName(
       request: ContinuationAtNameQuery
@@ -52,6 +53,9 @@ class GrpcDeployService(host: String, port: Int, maxMessageSize: Int)
 
   def visualizeDag(q: VisualizeDagQuery): Task[Either[Seq[String], String]] =
     stub.visualizeDag(q).map(_.toEither[VisualizeBlocksResponse].map(_.content))
+
+  def machineVerifiableDag(q: MachineVerifyQuery): Task[Either[Seq[String], String]] =
+    stub.machineVerifiableDag(q).map(_.toEither[MachineVerifyResponse].map(_.content))
 
   def showBlocks(q: BlocksQuery): Task[Either[Seq[String], String]] =
     stub

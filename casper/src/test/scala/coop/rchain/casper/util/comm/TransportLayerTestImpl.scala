@@ -59,7 +59,7 @@ object TestNetwork {
           }
     } yield ()
 
-  def empty[F[_]](implicit sync: Sync[F], monadF: Monad[F]): TestNetwork[F] =
+  def empty[F[_]](implicit sync: Sync[F]): TestNetwork[F] =
     new AtomicMonadState[F, NodeMessageQueues](AtomicAny(Map.empty))
 }
 
@@ -75,10 +75,11 @@ class TransportLayerTestImpl[F[_]: Monad]()(
   def broadcast(peers: Seq[PeerNode], msg: Protocol): F[Seq[CommErr[Unit]]] =
     peers.toList.traverse(send(_, msg)).map(_.toSeq)
 
-  def stream(peers: Seq[PeerNode], blob: Blob): F[Unit] =
-    broadcast(peers, protocol(blob.sender).withPacket(blob.packet)).void
+  def stream(peer: PeerNode, blob: Blob): F[Unit] =
+    stream(Seq(peer), blob)
 
-  def disconnect(peer: PeerNode): F[Unit] = ???
+  def stream(peers: Seq[PeerNode], blob: Blob): F[Unit] =
+    broadcast(peers, protocol(blob.sender, "test").withPacket(blob.packet)).void
 
   def clear(peer: PeerNode): F[Unit] =
     TestNetwork.clear(peer)

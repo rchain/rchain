@@ -110,6 +110,21 @@ class InterpreterSpec extends FlatSpec with Matchers {
     )
   }
 
+  it should "signal syntax errors to the caller" in {
+    val badRholang = "new f, x in { f(x) }"
+    val EvaluateResult(_, errors) =
+      mkRuntime(tmpPrefix, mapSize)
+        .use { runtime =>
+          for {
+            res <- execute(runtime, badRholang)
+          } yield (res)
+        }
+        .runSyncUnsafe(maxDuration)
+
+    errors should not be empty
+    errors(0) shouldBe a[coop.rchain.rholang.interpreter.errors.SyntaxError]
+  }
+
   it should "capture rholang parsing errors and charge for parsing" in {
     val badRholang = """ for(@x <- @"x"; @y <- @"y"){ @"xy"!(x + y) | @"x"!(1) | @"y"!("hi") """
     val EvaluateResult(cost, errors) =
@@ -143,7 +158,7 @@ class InterpreterSpec extends FlatSpec with Matchers {
   }
 
   private def storageContents(runtime: Runtime[Task]): String =
-    StoragePrinter.prettyPrint(runtime.space.store)
+    StoragePrinter.prettyPrint(runtime.space)
 
   private def success(runtime: Runtime[Task], rho: String): Task[Unit] =
     execute(runtime, rho).map(

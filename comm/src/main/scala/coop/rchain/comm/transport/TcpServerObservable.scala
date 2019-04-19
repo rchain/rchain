@@ -1,18 +1,18 @@
 package coop.rchain.comm.transport
 
 import java.nio.file.Path
-import scala.concurrent.TimeoutException
+
 import scala.concurrent.duration._
-import scala.util.control.NonFatal
 
 import cats.implicits._
-import coop.rchain.catscontrib.ski._
-import coop.rchain.shared._, Compression._
-import coop.rchain.comm.{CommError, PeerNode}
-import coop.rchain.comm.protocol.routing._
-import coop.rchain.comm.rp.ProtocolHelper
 
-import com.google.protobuf.ByteString
+import coop.rchain.catscontrib.ski._
+import coop.rchain.comm.PeerNode
+import coop.rchain.comm.protocol.routing._
+import coop.rchain.comm.rp.Connect.RPConfAsk
+import coop.rchain.comm.rp.ProtocolHelper
+import coop.rchain.shared._
+
 import io.grpc.netty.NettyServerBuilder
 import io.netty.handler.ssl.SslContext
 import monix.eval.Task
@@ -22,6 +22,7 @@ import monix.reactive.observers.Subscriber
 import monix.reactive.OverflowStrategy._
 
 class TcpServerObservable(
+    networkId: String,
     port: Int,
     serverSslContext: SslContext,
     maxMessageSize: Int,
@@ -29,8 +30,11 @@ class TcpServerObservable(
     blobBufferSize: Int = 32,
     askTimeout: FiniteDuration = 5.second,
     tempFolder: Path
-)(implicit scheduler: Scheduler, logger: Log[Task])
-    extends Observable[ServerMessage] {
+)(
+    implicit scheduler: Scheduler,
+    rPConfAsk: RPConfAsk[Task],
+    logger: Log[Task]
+) extends Observable[ServerMessage] {
 
   def unsafeSubscribeFn(subscriber: Subscriber[ServerMessage]): Cancelable = {
 
@@ -44,10 +48,13 @@ class TcpServerObservable(
       def send(request: TLRequest): Task[TLResponse] =
         request.protocol
           .fold(internalServerError("protocol not available in request").pure[Task]) { protocol =>
-            Task.delay(bufferTell.pushNext(Send(protocol))).map {
-              case false => internalServerError("message dropped")
-              case true  => noResponse
-            }
+            rPConfAsk.reader(_.local) >>= (
+                src =>
+                  Task.delay(bufferTell.pushNext(Send(protocol))).map {
+                    case false => internalServerError("message dropped")
+                    case true  => noResponse(src)
+                  }
+              )
           }
 
       def stream(observable: Observable[Chunk]): Task[ChunkResponse] = {
@@ -55,7 +62,7 @@ class TcpServerObservable(
         // TODO RCHAIN-2792
         val neverBreak: StreamHandler.CircuitBreaker = kp(false)
 
-        (StreamHandler.handleStream(tempFolder, observable, neverBreak) >>= {
+        (StreamHandler.handleStream(networkId, tempFolder, observable, neverBreak) >>= {
           case Left(ex)   => logger.error(s"Could not receive stream! Details: ${ex.getMessage}", ex)
           case Right(msg) => Task.delay(bufferBlobMessage.pushNext(msg)).as(())
         }).as(ChunkResponse())
@@ -69,8 +76,10 @@ class TcpServerObservable(
             .InternalServerError(InternalServerError(ProtocolHelper.toProtocolBytes(msg)))
         )
 
-      private def noResponse: TLResponse =
-        TLResponse(TLResponse.Payload.NoResponse(NoResponse()))
+      private def noResponse(src: PeerNode): TLResponse =
+        TLResponse(
+          TLResponse.Payload.NoResponse(NoResponse(Some(ProtocolHelper.header(src, networkId))))
+        )
     }
 
     val mergeSubscription = merged.subscribe(subscriber)
@@ -81,7 +90,7 @@ class TcpServerObservable(
       .maxMessageSize(maxMessageSize)
       .sslContext(serverSslContext)
       .addService(RoutingGrpcMonix.bindService(service, scheduler))
-      .intercept(new SslSessionServerInterceptor())
+      .intercept(new SslSessionServerInterceptor(networkId))
       .build
       .start
 

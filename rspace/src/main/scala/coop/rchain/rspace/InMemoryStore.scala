@@ -2,7 +2,6 @@ package coop.rchain.rspace
 
 import cats.effect.Sync
 
-import scala.collection.immutable.Seq
 import cats.implicits._
 import coop.rchain.catscontrib.ski.kp
 import coop.rchain.rspace.history.{Branch, ITrieStore}
@@ -41,10 +40,10 @@ class InMemoryStore[F[_], T, C, P, A, K](
 
   type TrieTransaction = T
 
-  private implicit val codecC: Codec[C] = sc.toCodec
-  private implicit val codecP: Codec[P] = sp.toCodec
-  private implicit val codecA: Codec[A] = sa.toCodec
-  private implicit val codecK: Codec[K] = sk.toCodec
+  implicit private val codecC: Codec[C] = sc.toCodec
+  implicit private val codecP: Codec[P] = sp.toCodec
+  implicit private val codecA: Codec[A] = sa.toCodec
+  implicit private val codecK: Codec[K] = sk.toCodec
 
   override def emptyState: State[C, P, A, K] = State.empty
 

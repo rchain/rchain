@@ -146,7 +146,7 @@ sealed abstract class RegexPattern {
 
   final def toFsm(alphabet: Set[Char]): Fsm = toFsm(Some(alphabet))
 
-  final override def equals(obj: scala.Any): Boolean = obj match {
+  override final def equals(obj: scala.Any): Boolean = obj match {
     case pattern: RegexPattern => equivalent(pattern)
     case _                     => false
   }
@@ -411,8 +411,8 @@ object CharClassPattern extends ParsedPattern {
             Some(CharClassPattern(parseState.collectedChars, negateCharSet), endIndex)
           } else {
             val startCharSet
-              : RegexPattern = CharClassPattern(parseState.collectedChars) //no negation!
-            val unionCharSet = parseState.collectedUnionClasses.foldLeft(startCharSet)(_.union(_))
+                : RegexPattern = CharClassPattern(parseState.collectedChars) //no negation!
+            val unionCharSet   = parseState.collectedUnionClasses.foldLeft(startCharSet)(_.union(_))
             Some(if (negateCharSet) unionCharSet.negated else unionCharSet, endIndex)
           }
         }

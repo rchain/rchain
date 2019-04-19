@@ -36,12 +36,8 @@ trait BlockDagStorageFixture extends BeforeAndAfter { self: Suite =>
         implicit val metrics = new MetricsNOP[Task]()
         implicit val log     = new Log.NOPLog[Task]()
         for {
-          blockStore <- BlockDagStorageTestFixture.createBlockStorage[Task](blockStorageDir)
-          blockDagStorage <- BlockDagStorageTestFixture.createBlockDagStorage(blockDagStorageDir)(
-                              metrics,
-                              log,
-                              blockStore
-                            )
+          blockStore             <- BlockDagStorageTestFixture.createBlockStorage[Task](blockStorageDir)
+          blockDagStorage        <- BlockDagStorageTestFixture.createBlockDagStorage(blockDagStorageDir)
           indexedBlockDagStorage <- IndexedBlockDagStorage.create(blockDagStorage)
           result                 <- f(blockStore)(indexedBlockDagStorage)
         } yield result
@@ -104,9 +100,7 @@ object BlockDagStorageTestFixture {
   }
 
   def createBlockDagStorage(blockDagStorageDir: Path)(
-      implicit metrics: Metrics[Task],
-      log: Log[Task],
-      blockStore: BlockStore[Task]
+      implicit log: Log[Task]
   ): Task[BlockDagStorage[Task]] =
     BlockDagFileStorage.create[Task](
       BlockDagFileStorage.Config(
@@ -116,7 +110,9 @@ object BlockDagStorageTestFixture {
         blockDagStorageDir.resolve("block-metadata-crc"),
         blockDagStorageDir.resolve("equivocations-tracker-data"),
         blockDagStorageDir.resolve("equivocations-tracker-crc"),
-        blockDagStorageDir.resolve("checkpoints")
+        blockDagStorageDir.resolve("checkpoints"),
+        blockDagStorageDir.resolve("block-number-index"),
+        mapSize
       )
     )
 }

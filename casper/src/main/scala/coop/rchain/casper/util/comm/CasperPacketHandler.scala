@@ -13,13 +13,6 @@ import coop.rchain.casper.MultiParentCasperRef.MultiParentCasperRef
 import coop.rchain.casper._
 import coop.rchain.casper.genesis.Genesis
 import coop.rchain.casper.protocol._
-import coop.rchain.casper.util.comm.CasperPacketHandler.{
-  insertIntoBlockAndDagStore,
-  ApprovedBlockReceivedHandler,
-  BootstrapCasperHandler,
-  CasperPacketHandlerImpl,
-  CasperPacketHandlerInternal
-}
 import coop.rchain.casper.util.rholang.RuntimeManager
 import coop.rchain.catscontrib.Catscontrib._
 import coop.rchain.catscontrib.MonadTrans
@@ -30,16 +23,15 @@ import coop.rchain.comm.rp.Connect.{ConnectionsCell, RPConfAsk}
 import coop.rchain.comm.transport.{Blob, TransportLayer}
 import coop.rchain.comm.{transport, PeerNode}
 import coop.rchain.metrics.Metrics
-import coop.rchain.p2p.effects.PacketHandler
 import coop.rchain.shared.{Log, LogSource, Time}
 import monix.eval.Task
 import monix.execution.Scheduler
-import coop.rchain.catscontrib.ski._
+
 import scala.concurrent.duration.FiniteDuration
 import scala.util.Try
 
 object CasperPacketHandler extends CasperPacketHandlerInstances {
-  private implicit val logSource: LogSource = LogSource(this.getClass)
+  implicit private val logSource: LogSource = LogSource(this.getClass)
 
   def apply[F[_]](implicit ev: CasperPacketHandler[F]): CasperPacketHandler[F] = ev
 
@@ -209,7 +201,7 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
         _ <- Log[F].info("Received ApprovedBlock message while in GenesisValidatorHandler state.")
         casperO <- onApprovedBlockTransition(
                     ab,
-                    Set(ByteString.copyFrom(validatorId.publicKey)),
+                    Set(ByteString.copyFrom(validatorId.publicKey.bytes)),
                     runtimeManager,
                     Some(validatorId),
                     shardId
@@ -410,7 +402,7 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
         maybeMsg = serialized.map(
           serializedMessage => Blob(local, Packet(transport.BlockMessage.id, serializedMessage))
         )
-        _        <- maybeMsg.traverse(msg => TransportLayer[F].stream(Seq(peer), msg))
+        _        <- maybeMsg.traverse(msg => TransportLayer[F].stream(peer, msg))
         hash     = PrettyPrinter.buildString(br.hash)
         logIntro = s"Received request for block $hash from $peer."
         _ <- block match {
@@ -428,7 +420,7 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
         tip   <- MultiParentCasper.forkChoiceTip
         local <- RPConfAsk[F].reader(_.local)
         msg   = Blob(local, Packet(transport.BlockMessage.id, tip.toByteString))
-        _     <- TransportLayer[F].stream(Seq(peer), msg)
+        _     <- TransportLayer[F].stream(peer, msg)
         _     <- Log[F].info(s"Sending Block ${tip.blockHash} to $peer")
       } yield ()
 
@@ -440,7 +432,7 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
         local <- RPConfAsk[F].reader(_.local)
         _     <- Log[F].info(s"Received ApprovedBlockRequest from $peer")
         msg   = Blob(local, Packet(transport.ApprovedBlock.id, approvedBlock.toByteString))
-        _     <- TransportLayer[F].stream(Seq(peer), msg)
+        _     <- TransportLayer[F].stream(peer, msg)
         _     <- Log[F].info(s"Sending ApprovedBlock to $peer")
       } yield ()
 
@@ -452,7 +444,8 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
       private val cphI: Ref[F, CasperPacketHandlerInternal[F]]
   ) extends CasperPacketHandler[F] {
 
-    override def init: F[Unit] = cphI.get >>= (_.init)
+    override def init: F[Unit] =
+      Log[F].info("Executing init of CasperPacketHandlerImpl") >> cphI.get >>= (_.init)
 
     override def handle(peer: PeerNode): PartialFunction[Packet, F[Unit]] =
       Function
@@ -593,7 +586,7 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
   ): F[Unit] =
     for {
       _ <- BlockStore[F].put(genesis.blockHash, genesis)
-      _ <- BlockDagStorage[F].insert(genesis, invalid = false)
+      _ <- BlockDagStorage[F].insert(genesis, genesis, invalid = false)
       _ <- BlockStore[F].putApprovedBlock(approvedBlock)
     } yield ()
 
@@ -603,10 +596,10 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
     new CasperPacketHandler[T[F, ?]] {
       override def init: T[F, Unit] = C.init.liftM[T]
 
-      override def handle(peer: PeerNode): PartialFunction[Packet, T[F, Unit]] =
-        PartialFunction { (p: Packet) =>
+      override def handle(peer: PeerNode): PartialFunction[Packet, T[F, Unit]] = {
+        case (p: Packet) =>
           C.handle(peer)(p).liftM[T]
-        }
+      }
     }
 
   private def sendNoApprovedBlockAvailable[F[_]: RPConfAsk: TransportLayer: Monad](
@@ -617,7 +610,7 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
       local <- RPConfAsk[F].reader(_.local)
       //TODO remove NoApprovedBlockAvailable.nodeIdentifier, use `sender` provided by TransportLayer
       msg = Blob(local, noApprovedBlockAvailable(local, identifier))
-      _   <- TransportLayer[F].stream(Seq(peer), msg)
+      _   <- TransportLayer[F].stream(peer, msg)
     } yield ()
 
   private def noApprovedBlockAvailable(peer: PeerNode, identifier: String): Packet = Packet(
@@ -634,5 +627,5 @@ trait CasperPacketHandler[F[_]] {
 
 abstract class CasperPacketHandlerInstances {
   implicit def eitherTCasperPacketHandler[E, F[_]: Monad: CasperPacketHandler[?[_]]]
-    : CasperPacketHandler[EitherT[F, E, ?]] = CasperPacketHandler.forTrans[F, EitherT[?[_], E, ?]]
+      : CasperPacketHandler[EitherT[F, E, ?]] = CasperPacketHandler.forTrans[F, EitherT[?[_], E, ?]]
 }

@@ -19,9 +19,11 @@ import coop.rchain.shared.Resources
 
 abstract class TransportLayerRuntime[F[_]: Monad: Timer, E <: Environment] {
 
+  val networkId = "test"
+
   def createEnvironment(port: Int): F[E]
 
-  def createTransportLayer(env: E): F[(TransportLayer[F], TransportLayerShutdown[F])]
+  def createTransportLayer(env: E): F[TransportLayer[F]]
   def createTransportLayerServer(env: E): F[TransportLayerServer[F]]
 
   def createDispatcherCallback: F[DispatcherCallback[F]]
@@ -66,7 +68,6 @@ abstract class TransportLayerRuntime[F[_]: Monad: Timer, E <: Environment] {
   ) extends Runtime[A] {
     def execute(
         transportLayer: TransportLayer[F],
-        transportLayerShutdown: TransportLayerShutdown[F],
         local: PeerNode,
         remote: PeerNode
     ): F[A]
@@ -75,28 +76,26 @@ abstract class TransportLayerRuntime[F[_]: Monad: Timer, E <: Environment] {
       extract(
         twoNodesEnvironment { (e1, e2) =>
           for {
-            tl                  <- createTransportLayer(e1)
-            (localTl, shutdown) = tl
-            remoteTls           <- createTransportLayerServer(e2)
-            local               = e1.peer
-            remote              = e2.peer
-            cb                  <- createDispatcherCallback
+            tl        <- createTransportLayer(e1)
+            localTl   = tl
+            remoteTls <- createTransportLayerServer(e2)
+            local     = e1.peer
+            remote    = e2.peer
+            cb        <- createDispatcherCallback
             server <- remoteTls.receive(
                        protocolDispatcher.dispatch(remote, cb),
                        streamDispatcher.dispatch(remote, cb)
                      )
-            r <- execute(localTl, shutdown, local, remote)
+            r <- execute(localTl, local, remote)
             _ <- if (blockUntilDispatched) cb.waitUntilDispatched()
                 else implicitly[Timer[F]].sleep(1.second)
-            _ <- shutdown(ProtocolHelper.disconnect(local))
             _ = server.cancel()
-          } yield
-            new TwoNodesResult {
-              def localNode: PeerNode        = local
-              def remoteNode: PeerNode       = remote
-              def remoteNodes: Seq[PeerNode] = Seq(remote)
-              def apply(): A                 = r
-            }
+          } yield new TwoNodesResult {
+            def localNode: PeerNode        = local
+            def remoteNode: PeerNode       = remote
+            def remoteNodes: Seq[PeerNode] = Seq(remote)
+            def apply(): A                 = r
+          }
         }
       )
 
@@ -112,7 +111,6 @@ abstract class TransportLayerRuntime[F[_]: Monad: Timer, E <: Environment] {
   ) extends Runtime[A] {
     def execute(
         transportLayer: TransportLayer[F],
-        transportLayerShutdown: TransportLayerShutdown[F],
         local: PeerNode,
         remote: PeerNode
     ): F[A]
@@ -121,18 +119,16 @@ abstract class TransportLayerRuntime[F[_]: Monad: Timer, E <: Environment] {
       extract(
         twoNodesEnvironment { (e1, e2) =>
           for {
-            tl                  <- createTransportLayer(e1)
-            (localTl, shutdown) = tl
-            local               = e1.peer
-            remote              = e2.peer
-            r                   <- execute(localTl, shutdown, local, remote)
-            _                   <- shutdown(ProtocolHelper.disconnect(local))
-          } yield
-            new TwoNodesResult {
-              def localNode: PeerNode  = local
-              def remoteNode: PeerNode = remote
-              def apply(): A           = r
-            }
+            tl      <- createTransportLayer(e1)
+            localTl = tl
+            local   = e1.peer
+            remote  = e2.peer
+            r       <- execute(localTl, local, remote)
+          } yield new TwoNodesResult {
+            def localNode: PeerNode  = local
+            def remoteNode: PeerNode = remote
+            def apply(): A           = r
+          }
         }
       )
 
@@ -148,7 +144,6 @@ abstract class TransportLayerRuntime[F[_]: Monad: Timer, E <: Environment] {
   ) extends Runtime[A] {
     def execute(
         transportLayer: TransportLayer[F],
-        transportLayerShutdown: TransportLayerShutdown[F],
         local: PeerNode,
         remote1: PeerNode,
         remote2: PeerNode
@@ -158,16 +153,16 @@ abstract class TransportLayerRuntime[F[_]: Monad: Timer, E <: Environment] {
       extract(
         threeNodesEnvironment { (e1, e2, e3) =>
           for {
-            tl                  <- createTransportLayer(e1)
-            (localTl, shutdown) = tl
-            remoteTls1          <- createTransportLayerServer(e2)
-            remoteTls2          <- createTransportLayerServer(e3)
-            local               = e1.peer
-            remote1             = e2.peer
-            remote2             = e3.peer
-            cbl                 <- createDispatcherCallback
-            cb1                 <- createDispatcherCallback
-            cb2                 <- createDispatcherCallback
+            tl         <- createTransportLayer(e1)
+            localTl    = tl
+            remoteTls1 <- createTransportLayerServer(e2)
+            remoteTls2 <- createTransportLayerServer(e3)
+            local      = e1.peer
+            remote1    = e2.peer
+            remote2    = e3.peer
+            cbl        <- createDispatcherCallback
+            cb1        <- createDispatcherCallback
+            cb2        <- createDispatcherCallback
             server1 <- remoteTls1.receive(
                         protocolDispatcher.dispatch(remote1, cb1),
                         streamDispatcher.dispatch(remote1, cb1)
@@ -176,21 +171,19 @@ abstract class TransportLayerRuntime[F[_]: Monad: Timer, E <: Environment] {
                         protocolDispatcher.dispatch(remote2, cb2),
                         streamDispatcher.dispatch(remote2, cb2)
                       )
-            r <- execute(localTl, shutdown, local, remote1, remote2)
+            r <- execute(localTl, local, remote1, remote2)
             _ <- if (blockUntilDispatched) cb1.waitUntilDispatched()
                 else implicitly[Timer[F]].sleep(1.second)
             _ <- if (blockUntilDispatched) cb2.waitUntilDispatched()
                 else implicitly[Timer[F]].sleep(1.second)
-            _ <- shutdown(ProtocolHelper.disconnect(local))
             _ = server1.cancel()
             _ = server2.cancel()
-          } yield
-            new ThreeNodesResult {
-              def localNode: PeerNode   = local
-              def remoteNode1: PeerNode = remote1
-              def remoteNode2: PeerNode = remote2
-              def apply(): A            = r
-            }
+          } yield new ThreeNodesResult {
+            def localNode: PeerNode   = local
+            def remoteNode1: PeerNode = remote1
+            def remoteNode2: PeerNode = remote2
+            def apply(): A            = r
+          }
         }
       )
 
@@ -205,7 +198,7 @@ abstract class TransportLayerRuntime[F[_]: Monad: Timer, E <: Environment] {
       local: PeerNode,
       remote: PeerNode
   ): F[CommErr[Unit]] = {
-    val msg = ProtocolHelper.heartbeat(local)
+    val msg = ProtocolHelper.heartbeat(local, networkId)
     transport.send(remote, msg)
   }
 
@@ -214,7 +207,7 @@ abstract class TransportLayerRuntime[F[_]: Monad: Timer, E <: Environment] {
       local: PeerNode,
       remotes: PeerNode*
   ): F[Seq[CommErr[Unit]]] = {
-    val msg = ProtocolHelper.heartbeat(local)
+    val msg = ProtocolHelper.heartbeat(local, networkId)
     transport.broadcast(remotes, msg)
   }
 
@@ -258,7 +251,7 @@ object Dispatcher {
     )
 
   def internalCommunicationErrorDispatcher[F[_]: Monad: Timer]
-    : Dispatcher[F, Protocol, CommunicationResponse] =
+      : Dispatcher[F, Protocol, CommunicationResponse] =
     new Dispatcher[F, Protocol, CommunicationResponse](
       _ => CommunicationResponse.notHandled(InternalCommunicationError("Test")),
       ignore = _.message.isDisconnect

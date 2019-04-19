@@ -1,14 +1,9 @@
 package coop.rchain.comm.discovery
 
-import coop.rchain.comm.transport._
-
 import cats.Monad
 import cats.data.EitherT
-import coop.rchain.catscontrib.Catscontrib._
-import coop.rchain.catscontrib.{MonadTrans, _}
-import coop.rchain.comm.{CommError, PeerNode}, CommError.CommErr
-import coop.rchain.comm.rp.ProtocolHelper
-import coop.rchain.comm.protocol.routing._
+
+import coop.rchain.comm.{NodeIdentifier, PeerNode}
 
 trait NodeDiscovery[F[_]] {
   def discover: F[Unit]
@@ -17,18 +12,24 @@ trait NodeDiscovery[F[_]] {
 
 object NodeDiscovery extends NodeDiscoveryInstances {
   def apply[F[_]](implicit L: NodeDiscovery[F]): NodeDiscovery[F] = L
-
-  def forTrans[F[_]: Monad, T[_[_], _]: MonadTrans](
-      implicit C: NodeDiscovery[F]
-  ): NodeDiscovery[T[F, ?]] =
-    new NodeDiscovery[T[F, ?]] {
-      def discover: T[F, Unit]       = C.discover.liftM[T]
-      def peers: T[F, Seq[PeerNode]] = C.peers.liftM[T]
-    }
 }
 
 sealed abstract class NodeDiscoveryInstances {
-  implicit def eitherTNodeDiscovery[E, F[_]: Monad: NodeDiscovery[?[_]]]
-    : NodeDiscovery[EitherT[F, E, ?]] =
-    NodeDiscovery.forTrans[F, EitherT[?[_], E, ?]]
+
+  implicit def eitherTNodeDiscovery[E, F[_]: Monad: NodeDiscovery]
+      : NodeDiscovery[EitherT[F, E, ?]] =
+    new NodeDiscovery[EitherT[F, E, ?]] {
+
+      def discover: EitherT[F, E, Unit] =
+        EitherT.liftF(NodeDiscovery[F].discover)
+
+      def peers: EitherT[F, E, Seq[PeerNode]] =
+        EitherT.liftF(NodeDiscovery[F].peers)
+    }
+
+  def kademlia[F[_]: Monad: KademliaStore: KademliaRPC](id: NodeIdentifier): NodeDiscovery[F] =
+    new NodeDiscovery[F] {
+      def discover: F[Unit]       = KademliaNodeDiscovery.discover(id)
+      def peers: F[Seq[PeerNode]] = KademliaNodeDiscovery.peers
+    }
 }

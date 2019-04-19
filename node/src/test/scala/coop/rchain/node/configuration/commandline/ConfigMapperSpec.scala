@@ -19,6 +19,7 @@ class ConfigMapperSpec extends FunSuite with Matchers {
     val args =
       Seq(
         "run",
+        "--network testnet",
         "--host 1.2.3.4",
         "--dynamic-host-address",
         "--no-upnp",
@@ -31,6 +32,7 @@ class ConfigMapperSpec extends FunSuite with Matchers {
         "--data-dir /root/.rnode",
         "--store-type lmdb",
         "--casper-block-store-size 2000",
+        "--casper-block-dag-storage-size 3000",
         "--map-size 1000",
         "--max-num-of-connections 500",
         "--packet-chunk-size 64",
@@ -43,6 +45,7 @@ class ConfigMapperSpec extends FunSuite with Matchers {
 
     val expectedServer =
       configuration.Server(
+        networkId = "testnet",
         host = Some("1.2.3.4"),
         port = 40400,
         httpPort = 40403,
@@ -61,6 +64,7 @@ class ConfigMapperSpec extends FunSuite with Matchers {
         mapSize = 1000,
         storeType = StoreType.LMDB,
         storeSize = 2000,
+        dagStorageSize = 3000,
         maxNumOfConnections = 500,
         maxMessageSize = 256,
         packetChunkSize = 64,

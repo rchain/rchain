@@ -9,41 +9,51 @@ import cats.{Applicative, Foldable, Monad}
 import com.google.protobuf.ByteString
 import coop.rchain.casper.genesis.contracts._
 import coop.rchain.casper.protocol._
-import coop.rchain.casper.util.ProtoUtil.{blockHeader, stringToByteString, unsignedBlockProto}
-import coop.rchain.casper.util.{EventConverter, Sorting}
-import coop.rchain.casper.util.rholang.{ProcessedDeployUtil, RuntimeManager}
+import coop.rchain.casper.util.ProtoUtil.{blockHeader, unsignedBlockProto}
+import coop.rchain.casper.util.Sorting.byteArrayOrdering
 import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
-import coop.rchain.casper.util.{EventConverter, Sorting}
-import coop.rchain.catscontrib._
+import coop.rchain.casper.util.rholang.{ProcessedDeployUtil, RuntimeManager}
+import coop.rchain.crypto.PublicKey
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.signatures.Ed25519
+import coop.rchain.rholang.interpreter.accounting
+import coop.rchain.rholang.interpreter.util.RevAddress
 import coop.rchain.shared.{Log, LogSource, Time}
-import monix.execution.Scheduler
 
 import scala.io.Source
 import scala.util.{Failure, Success, Try}
-import coop.rchain.casper.util.Sorting.byteArrayOrdering
-import coop.rchain.rholang.interpreter.accounting
-import monix.eval.Task
 
-import scala.concurrent.duration.Duration
+final case class Genesis(
+    shardId: String,
+    timestamp: Long,
+    wallets: Seq[PreWallet],
+    proofOfStake: ProofOfStake,
+    faucet: Boolean,
+    genesisPk: PublicKey,
+    vaults: Seq[Vault],
+    supply: Long
+)
 
 object Genesis {
 
-  private implicit val logSource: LogSource = LogSource(this.getClass)
+  implicit private val logSource: LogSource = LogSource(this.getClass)
 
   def defaultBlessedTerms(
       timestamp: Long,
-      posParams: ProofOfStakeParams,
+      posParams: ProofOfStake,
       wallets: Seq[PreWallet],
-      faucetCode: String => String
-  ): List[DeployData] =
-    List(
+      faucetCode: String => String,
+      genesisPk: PublicKey,
+      vaults: Seq[Vault],
+      supply: Long
+  ): Seq[DeployData] =
+    Seq(
       StandardDeploys.listOps,
       StandardDeploys.either,
       StandardDeploys.nonNegativeNumber,
       StandardDeploys.makeMint,
       StandardDeploys.makePoS,
+      StandardDeploys.PoS,
       StandardDeploys.basicWallet,
       StandardDeploys.basicWalletFaucet,
       StandardDeploys.walletCheck,
@@ -51,27 +61,126 @@ object Genesis {
       StandardDeploys.lockbox,
       StandardDeploys.authKey,
       StandardDeploys.rev(wallets, faucetCode, posParams),
-      StandardDeploys.revVault
+      StandardDeploys.revVault,
+      StandardDeploys.revGenerator(genesisPk, vaults, supply),
+      StandardDeploys.poSGenerator(genesisPk, posParams)
+    ) ++ posParams.validators.map { validator =>
+      DeployData(
+        deployer = ByteString.copyFrom(validator.pk.bytes),
+        timestamp = System.currentTimeMillis(),
+        term = validator.code,
+        phloLimit = accounting.MAX_VALUE
+      )
+    }
+
+  //TODO: Decide on version number and shard identifier
+  def fromInputFiles[F[_]: Concurrent: Sync: Log: Time](
+      maybeBondsPath: Option[String],
+      numValidators: Int,
+      genesisPath: Path,
+      maybeWalletsPath: Option[String],
+      minimumBond: Long,
+      maximumBond: Long,
+      faucet: Boolean,
+      runtimeManager: RuntimeManager[F],
+      shardId: String,
+      deployTimestamp: Option[Long]
+  ): F[BlockMessage] =
+    for {
+      timestamp <- deployTimestamp.fold(Time[F].currentMillis)(_.pure[F])
+      bondsFile <- toFile[F](maybeBondsPath, genesisPath.resolve("bonds.txt"))
+      _ <- bondsFile.fold[F[Unit]](
+            maybeBondsPath.fold(().pure[F])(
+              path =>
+                Log[F].warn(
+                  s"Specified bonds file $path does not exist. Falling back on generating random validators."
+                )
+            )
+          )(_ => ().pure[F])
+      walletsFile <- toFile[F](maybeWalletsPath, genesisPath.resolve("wallets.txt"))
+      wallets     <- getWallets[F](walletsFile, maybeWalletsPath)
+      bonds       <- getBonds[F](bondsFile, numValidators, genesisPath)
+      vaults <- bonds.toList.foldMapM {
+                 case (pk, stake) =>
+                   RevAddress.fromPublicKey(pk) match {
+                     case Some(ra) => List(Vault(ra, stake)).pure[F]
+                     case None =>
+                       Log[F].warn(
+                         s"Validator public key $pk is invalid. Proceeding without entry."
+                       ) *> List.empty[Vault].pure[F]
+                   }
+               }
+      validators = bonds.toSeq.map(Validator.tupled)
+      genesisBlock <- createGenesisBlock(
+                       runtimeManager,
+                       Genesis(
+                         shardId = shardId,
+                         timestamp = timestamp,
+                         wallets = wallets,
+                         proofOfStake = ProofOfStake(
+                           minimumBond = minimumBond,
+                           maximumBond = maximumBond,
+                           validators = validators
+                         ),
+                         faucet = faucet,
+                         genesisPk = Ed25519.newKeyPair._2,
+                         vaults = vaults,
+                         supply = Long.MaxValue
+                       )
+                     )
+    } yield genesisBlock
+
+  def createGenesisBlock[F[_]: Concurrent](
+      runtimeManager: RuntimeManager[F],
+      genesis: Genesis
+  ): F[BlockMessage] = {
+    import genesis._
+
+    val initial = withoutContracts(
+      bonds = proofOfStake.validators.flatMap(Validator.unapply).toMap,
+      timestamp = 1L,
+      version = 1L,
+      shardId = shardId
     )
 
-  def withContracts[F[_]: Concurrent](
+    val faucetCode = if (faucet) Faucet.basicWalletFaucet _ else Faucet.noopFaucet
+
+    withContracts(
+      initial,
+      proofOfStake,
+      wallets,
+      faucetCode,
+      runtimeManager.emptyStateHash,
+      runtimeManager,
+      timestamp,
+      genesisPk,
+      vaults,
+      Long.MaxValue
+    )
+  }
+
+  //TODO simplify and/or remove the with* methods
+  private def withContracts[F[_]: Concurrent](
       initial: BlockMessage,
-      posParams: ProofOfStakeParams,
+      posParams: ProofOfStake,
       wallets: Seq[PreWallet],
       faucetCode: String => String,
       startHash: StateHash,
       runtimeManager: RuntimeManager[F],
-      timestamp: Long
+      timestamp: Long,
+      genesisPk: PublicKey,
+      vaults: Seq[Vault],
+      supply: Long
   ): F[BlockMessage] =
     withContracts(
-      defaultBlessedTerms(timestamp, posParams, wallets, faucetCode),
+      defaultBlessedTerms(timestamp, posParams, wallets, faucetCode, genesisPk, vaults, supply),
       initial,
       startHash,
       runtimeManager
     )
 
-  def withContracts[F[_]: Concurrent](
-      blessedTerms: List[DeployData],
+  private def withContracts[F[_]: Concurrent](
+      blessedTerms: Seq[DeployData],
       initial: BlockMessage,
       startHash: StateHash,
       runtimeManager: RuntimeManager[F]
@@ -94,17 +203,17 @@ object Genesis {
           unsignedBlockProto(body, header, List.empty[Justification], initial.shardId)
       }
 
-  def withoutContracts(
-      bonds: Map[Array[Byte], Long],
+  private def withoutContracts(
+      bonds: Map[PublicKey, Long],
       version: Long,
       timestamp: Long,
       shardId: String
   ): BlockMessage = {
-    import Sorting.byteArrayOrdering
+    import coop.rchain.crypto.util.Sorting.publicKeyOrdering
     //sort to have deterministic order (to get reproducible hash)
     val bondsProto = bonds.toIndexedSeq.sorted.map {
       case (pk, stake) =>
-        val validator = ByteString.copyFrom(pk)
+        val validator = ByteString.copyFrom(pk.bytes)
         Bond(validator, stake)
     }
 
@@ -118,47 +227,7 @@ object Genesis {
     unsignedBlockProto(body, header, List.empty[Justification], shardId)
   }
 
-  //TODO: Decide on version number and shard identifier
-  def fromInputFiles[F[_]: Concurrent: Sync: Log: Time](
-      maybeBondsPath: Option[String],
-      numValidators: Int,
-      genesisPath: Path,
-      maybeWalletsPath: Option[String],
-      minimumBond: Long,
-      maximumBond: Long,
-      faucet: Boolean,
-      runtimeManager: RuntimeManager[F],
-      shardId: String,
-      deployTimestamp: Option[Long]
-  ): F[BlockMessage] =
-    for {
-      bondsFile <- toFile[F](maybeBondsPath, genesisPath.resolve("bonds.txt"))
-      _ <- bondsFile.fold[F[Unit]](
-            maybeBondsPath.fold(().pure[F])(
-              path =>
-                Log[F].warn(
-                  s"Specified bonds file $path does not exist. Falling back on generating random validators."
-                )
-            )
-          )(_ => ().pure[F])
-      walletsFile <- toFile[F](maybeWalletsPath, genesisPath.resolve("wallets.txt"))
-      wallets     <- getWallets[F](walletsFile, maybeWalletsPath)
-      bonds       <- getBonds[F](bondsFile, numValidators, genesisPath)
-      timestamp   <- deployTimestamp.fold(Time[F].currentMillis)(_.pure[F])
-      initial     = withoutContracts(bonds = bonds, timestamp = 1L, version = 1L, shardId = shardId)
-      validators  = bonds.map(bond => ProofOfStakeValidator(bond._1, bond._2)).toSeq
-      faucetCode  = if (faucet) Faucet.basicWalletFaucet(_) else Faucet.noopFaucet
-      withContr <- withContracts(
-                    initial,
-                    ProofOfStakeParams(minimumBond, maximumBond, validators),
-                    wallets,
-                    faucetCode,
-                    runtimeManager.emptyStateHash,
-                    runtimeManager,
-                    timestamp
-                  )
-    } yield withContr
-
+  //FIXME delay and simplify this
   def toFile[F[_]: Applicative: Log](
       maybePath: Option[String],
       defaultPath: Path
@@ -222,37 +291,11 @@ object Genesis {
     }
   }
 
-  def getBondedValidators[F[_]: Monad: Sync: Log](bondsFile: Option[String]): F[Set[ByteString]] =
-    bondsFile match {
-      case None => Set.empty[ByteString].pure[F]
-      case Some(file) =>
-        Sync[F]
-          .delay {
-            Try {
-              Source
-                .fromFile(file)
-                .getLines()
-                .map(line => {
-                  val Array(pk, _) = line.trim.split(" ")
-                  ByteString.copyFrom(Base16.unsafeDecode(pk))
-                })
-                .toSet
-            }
-          }
-          .flatMap {
-            case Failure(th) =>
-              Log[F]
-                .warn(s"Failed to parse bonded validators file $file for reason ${th.getMessage}")
-                .map(_ => Set.empty)
-            case Success(x) => x.pure[F]
-          }
-    }
-
   def getBonds[F[_]: Monad: Sync: Log](
       bondsFile: Option[File],
       numValidators: Int,
       genesisPath: Path
-  ): F[Map[Array[Byte], Long]] =
+  ): F[Map[PublicKey, Long]] =
     bondsFile match {
       case Some(file) =>
         Sync[F]
@@ -263,7 +306,7 @@ object Genesis {
                 .getLines()
                 .map(line => {
                   val Array(pk, stake) = line.trim.split(" ")
-                  Base16.unsafeDecode(pk) -> (stake.toLong)
+                  PublicKey(Base16.unsafeDecode(pk)) -> (stake.toLong)
                 })
                 .toMap
             }
@@ -281,7 +324,7 @@ object Genesis {
   private def newValidators[F[_]: Monad: Sync: Log](
       numValidators: Int,
       genesisPath: Path
-  ): F[Map[Array[Byte], Long]] = {
+  ): F[Map[PublicKey, Long]] = {
     val keys         = Vector.fill(numValidators)(Ed25519.newKeyPair)
     val (_, pubKeys) = keys.unzip
     val bonds        = pubKeys.zipWithIndex.toMap.mapValues(_.toLong + 1L)
@@ -292,8 +335,8 @@ object Genesis {
         Sync[F].delay {
           keys.foreach { //create files showing the secret key for each public key
             case (sec, pub) =>
-              val sk      = Base16.encode(sec)
-              val pk      = Base16.encode(pub)
+              val sk      = Base16.encode(sec.bytes)
+              val pk      = Base16.encode(pub.bytes)
               val skFile  = genesisPath.resolve(s"$pk.sk").toFile
               val printer = new PrintWriter(skFile)
               printer.println(sk)
@@ -305,9 +348,9 @@ object Genesis {
     for {
       _       <- skFiles
       printer <- Sync[F].delay { new PrintWriter(genBondsFile) }
-      _ <- Foldable[List].foldM[F, (Array[Byte], Long), Unit](bonds.toList, ()) {
+      _ <- Foldable[List].foldM[F, (PublicKey, Long), Unit](bonds.toList, ()) {
             case (_, (pub, stake)) =>
-              val pk = Base16.encode(pub)
+              val pk = Base16.encode(pub.bytes)
               Log[F].info(s"Created validator $pk with bond $stake") *>
                 Sync[F].delay { printer.println(s"$pk $stake") }
           }

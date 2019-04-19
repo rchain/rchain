@@ -5,13 +5,12 @@ import scala.collection.mutable
 
 import coop.rchain.blockstorage.{BlockStore, IndexedBlockDagStorage}
 import coop.rchain.blockstorage.BlockDagRepresentation.Validator
-import coop.rchain.casper.helper.{BlockDagStorageFixture, BlockGenerator}
+import coop.rchain.metrics.Metrics
 import coop.rchain.casper.helper.BlockGenerator._
 import coop.rchain.casper.helper.BlockUtil.generateValidator
+import coop.rchain.casper.helper.{BlockDagStorageFixture, BlockGenerator}
 import coop.rchain.casper.protocol.{BlockMessage, Bond}
-import coop.rchain.metrics.Metrics
 import coop.rchain.p2p.EffectsTestInstances.LogStub
-
 import com.google.protobuf.ByteString
 import monix.eval.Task
 import org.scalatest.{FlatSpec, Matchers}
@@ -31,31 +30,32 @@ class CliqueOracleTest
       m: mutable.Map[Validator, BlockMessage]
   ): Map[Validator, BlockMessage] = m.toMap
 
-  def createBlock(bonds: Seq[Bond])(creator: ByteString)(
+  def createBlock(bonds: Seq[Bond])(genesis: BlockMessage)(creator: ByteString)(
       parent: BlockMessage,
       justifications: Map[Validator, BlockMessage]
   )(implicit store: BlockStore[Task], dagStore: IndexedBlockDagStorage[Task]): Task[BlockMessage] =
     createBlock[Task](
       Seq(parent.blockHash),
-      creator,
-      bonds,
-      justifications.map { case (v, bm) => (v, bm.blockHash) }
+      genesis,
+      creator = creator,
+      bonds = bonds,
+      justifications = justifications.map { case (v, bm) => (v, bm.blockHash) }
     )
 
   // See [[/docs/casper/images/cbc-casper_ping_pong_diagram.png]]
   it should "detect finality as appropriate" in withStorage {
     implicit blockStore => implicit blockDagStorage =>
-      val v1       = generateValidator("Validator One")
-      val v2       = generateValidator("Validator Two")
-      val v1Bond   = Bond(v1, 2)
-      val v2Bond   = Bond(v2, 3)
-      val bonds    = Seq(v1Bond, v2Bond)
-      val creator1 = createBlock(bonds)(v1) _
-      val creator2 = createBlock(bonds)(v2) _
+      val v1     = generateValidator("Validator One")
+      val v2     = generateValidator("Validator Two")
+      val v1Bond = Bond(v1, 2)
+      val v2Bond = Bond(v2, 3)
+      val bonds  = Seq(v1Bond, v2Bond)
 
       implicit val cliqueOracleEffect = SafetyOracle.cliqueOracle[Task]
       for {
-        genesis              <- createBlock[Task](Seq(), ByteString.EMPTY, bonds)
+        genesis              <- createGenesis[Task](bonds = bonds)
+        creator1             = createBlock(bonds)(genesis)(v1) _
+        creator2             = createBlock(bonds)(genesis)(v2) _
         genesisJustification = HashMap(v1 -> genesis, v2 -> genesis)
         b2                   <- creator2(genesis, genesisJustification)
         b3                   <- creator1(genesis, genesisJustification)
@@ -80,20 +80,20 @@ class CliqueOracleTest
   // See [[/docs/casper/images/no_finalizable_block_mistake_with_no_disagreement_check.png]]
   it should "detect possible disagreements appropriately" in withStorage {
     implicit blockStore => implicit blockDagStorage =>
-      val v1       = generateValidator("Validator One")
-      val v2       = generateValidator("Validator Two")
-      val v3       = generateValidator("Validator Three")
-      val v1Bond   = Bond(v1, 25)
-      val v2Bond   = Bond(v2, 20)
-      val v3Bond   = Bond(v3, 15)
-      val bonds    = Seq(v1Bond, v2Bond, v3Bond)
-      val creator1 = createBlock(bonds)(v1) _
-      val creator2 = createBlock(bonds)(v2) _
-      val creator3 = createBlock(bonds)(v3) _
+      val v1     = generateValidator("Validator One")
+      val v2     = generateValidator("Validator Two")
+      val v3     = generateValidator("Validator Three")
+      val v1Bond = Bond(v1, 25)
+      val v2Bond = Bond(v2, 20)
+      val v3Bond = Bond(v3, 15)
+      val bonds  = Seq(v1Bond, v2Bond, v3Bond)
 
       implicit val cliqueOracleEffect = SafetyOracle.cliqueOracle[Task]
       for {
-        genesis              <- createBlock[Task](Seq(), ByteString.EMPTY, bonds)
+        genesis              <- createGenesis[Task](bonds = bonds)
+        creator1             = createBlock(bonds)(genesis)(v1) _
+        creator2             = createBlock(bonds)(genesis)(v2) _
+        creator3             = createBlock(bonds)(genesis)(v3) _
         genesisJustification = HashMap(v1 -> genesis, v2 -> genesis, v3 -> genesis)
         b2                   <- creator2(genesis, genesisJustification)
         b3                   <- creator1(genesis, genesisJustification)
@@ -119,17 +119,12 @@ class CliqueOracleTest
   // See [[/docs/casper/images/no_majority_fork_safe_after_union.png]]
   it should "identify no majority fork safe after union" in withStorage {
     implicit blockStore => implicit blockDagStorage =>
-      val v0       = generateValidator("Validator Zero")
-      val v1       = generateValidator("Validator One")
-      val v2       = generateValidator("Validator Two")
-      val v3       = generateValidator("Validator Three")
-      val v4       = generateValidator("Validator Four")
-      val bonds    = Seq(Bond(v0, 500), Bond(v1, 450), Bond(v2, 600), Bond(v3, 400), Bond(v4, 525))
-      val creator0 = createBlock(bonds)(v0) _
-      val creator1 = createBlock(bonds)(v1) _
-      val creator2 = createBlock(bonds)(v2) _
-      val creator3 = createBlock(bonds)(v3) _
-      val creator4 = createBlock(bonds)(v4) _
+      val v0    = generateValidator("Validator Zero")
+      val v1    = generateValidator("Validator One")
+      val v2    = generateValidator("Validator Two")
+      val v3    = generateValidator("Validator Three")
+      val v4    = generateValidator("Validator Four")
+      val bonds = Seq(Bond(v0, 500), Bond(v1, 450), Bond(v2, 600), Bond(v3, 400), Bond(v4, 525))
 
       implicit val cliqueOracleEffect = SafetyOracle.cliqueOracle[Task]
       /*
@@ -142,8 +137,13 @@ class CliqueOracleTest
        */
 
       for {
-        ge  <- createBlock[Task](Seq(), ByteString.EMPTY, bonds)
-        gjL = mutable.HashMap(v0 -> ge, v1 -> ge, v2 -> ge, v3 -> ge, v4 -> ge)
+        ge       <- createGenesis[Task](bonds = bonds)
+        creator0 = createBlock(bonds)(ge)(v0) _
+        creator1 = createBlock(bonds)(ge)(v1) _
+        creator2 = createBlock(bonds)(ge)(v2) _
+        creator3 = createBlock(bonds)(ge)(v3) _
+        creator4 = createBlock(bonds)(ge)(v4) _
+        gjL      = mutable.HashMap(v0 -> ge, v1 -> ge, v2 -> ge, v3 -> ge, v4 -> ge)
 
         /*
          create left hand side of fork and check for no safety

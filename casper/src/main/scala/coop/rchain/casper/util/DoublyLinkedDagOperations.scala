@@ -88,7 +88,7 @@ object DoublyLinkedDagOperations {
     }
     new DoublyLinkedDag[A] {
       override val parentToChildAdjacencyList
-        : Map[A, Set[A]]                                      = dag.parentToChildAdjacencyList - element
+          : Map[A, Set[A]]                                    = dag.parentToChildAdjacencyList - element
       override val childToParentAdjacencyList: Map[A, Set[A]] = updatedChildToParentAdjacencyList
       override val dependencyFree: Set[A]                     = dag.dependencyFree ++ newDependencyFree - element
     }

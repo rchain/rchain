@@ -18,8 +18,8 @@ import coop.rchain.shared._
 
 object HandleMessages {
 
-  private implicit val logSource: LogSource = LogSource(this.getClass)
-  private implicit val metricsSource: Metrics.Source =
+  implicit private val logSource: LogSource = LogSource(this.getClass)
+  implicit private val metricsSource: Metrics.Source =
     Metrics.Source(CommMetricsSource, "rp.handle")
 
   def handle[F[_]: Monad: Sync: Log: Time: Metrics: TransportLayer: ErrorHandler: PacketHandler: ConnectionsCell: RPConfAsk](
@@ -54,7 +54,6 @@ object HandleMessages {
   ): F[CommunicationResponse] =
     for {
       _ <- Log[F].info(s"Forgetting about ${sender.toAddress}.")
-      _ <- TransportLayer[F].disconnect(sender)
       _ <- ConnectionsCell[F].flatModify(_.removeConnAndReport[F](sender))
       _ <- Metrics[F].incrementCounter("disconnect")
     } yield handledWithoutMessage
@@ -64,66 +63,38 @@ object HandleMessages {
       packet: Packet
   ): F[CommunicationResponse] =
     for {
-      local               <- RPConfAsk[F].reader(_.local)
+      conf                <- RPConfAsk[F].ask
       maybeResponsePacket <- PacketHandler[F].handlePacket(remote, packet)
-    } yield
-      maybeResponsePacket
-        .fold(notHandled(noResponseForRequest))(
-          m => handledWithMessage(ProtocolHelper.protocol(local).withPacket(m))
-        )
+    } yield maybeResponsePacket
+      .fold(notHandled(noResponseForRequest))(
+        m => handledWithMessage(ProtocolHelper.protocol(conf.local, conf.networkId).withPacket(m))
+      )
 
   def handleProtocolHandshakeResponse[F[_]: Monad: TransportLayer: Metrics: ConnectionsCell: Log: RPConfAsk](
       peer: PeerNode
-  ): F[CommunicationResponse] = {
-    def addPeer(): F[Unit] =
-      for {
-        _ <- Log[F].debug(s"Received protocol handshake response from $peer.")
-        _ <- ConnectionsCell[F].flatModify(_.addConnAndReport[F](peer))
-      } yield ()
-
-    def sendDisconnect(): F[Unit] =
-      for {
-        _ <- Log[F].debug(
-              s"Ignoring handshake response from $peer. Maximum number of connections exceeded"
-            )
-        local <- RPConfAsk[F].reader(_.local)
-        _     <- TransportLayer[F].send(peer, ProtocolHelper.disconnect(local))
-      } yield ()
-
-    Connect
-      .hasMaxNumberOfConnections[F]
-      .ifM(
-        sendDisconnect(),
-        addPeer()
-      )
-      .map(kp(handledWithoutMessage))
-  }
+  ): F[CommunicationResponse] =
+    for {
+      _ <- Log[F].debug(s"Received protocol handshake response from $peer.")
+      _ <- ConnectionsCell[F].flatModify(_.addConnAndReport[F](peer))
+    } yield handledWithoutMessage
 
   def handleProtocolHandshake[F[_]: Monad: TransportLayer: Log: ErrorHandler: ConnectionsCell: RPConfAsk: Metrics](
       peer: PeerNode,
       protocolHandshake: ProtocolHandshake
-  ): F[CommunicationResponse] = {
-    def sendHandshakeResponse(): F[Unit] =
-      for {
-        local    <- RPConfAsk[F].reader(_.local)
-        response = ProtocolHelper.protocolHandshakeResponse(local)
-        _        <- TransportLayer[F].send(peer, response) >>= ErrorHandler[F].fromEither
-        _        <- Log[F].info(s"Responded to protocol handshake request from $peer")
-        _        <- ConnectionsCell[F].flatModify(_.addConnAndReport[F](peer))
-      } yield ()
+  ): F[CommunicationResponse] =
+    for {
+      conf     <- RPConfAsk[F].ask
+      response = ProtocolHelper.protocolHandshakeResponse(conf.local, conf.networkId)
+      _        <- TransportLayer[F].send(peer, response) >>= ErrorHandler[F].fromEither
+      _        <- Log[F].info(s"Responded to protocol handshake request from $peer")
+      _        <- ConnectionsCell[F].flatModify(_.addConnAndReport[F](peer))
+    } yield handledWithoutMessage
 
-    Connect
-      .hasMaxNumberOfConnections[F]
-      .ifM(
-        Log[F].debug(s"Ignoring handshake from $peer. Maximum number of connections exceeded"),
-        sendHandshakeResponse()
-      )
-      .map(kp(handledWithoutMessage))
-  }
-
-  def handleHeartbeat[F[_]: Monad: Time: TransportLayer: ErrorHandler: RPConfAsk](
+  def handleHeartbeat[F[_]: Monad: ConnectionsCell](
       peer: PeerNode,
       heartbeat: Heartbeat
-  ): F[CommunicationResponse] = handledWithoutMessage.pure[F]
-
+  ): F[CommunicationResponse] =
+    ConnectionsCell[F]
+      .flatModify(_.refreshConn[F](peer))
+      .map(kp(handledWithoutMessage))
 }

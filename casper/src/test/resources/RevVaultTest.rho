@@ -164,7 +164,6 @@ match (
       } |
 
       contract testInvalidRevAddress(rhoSpec, RevVault, ackCh) = {
-        stdout!("testInvalidRevAddress") |
         new aliceVaultCh, res, resOk in {
           withVaultAndIdentityOf!(alicePubKey, *aliceVaultCh) |
           for (aliceVault, @aliceVaultKey <- aliceVaultCh) {
@@ -188,8 +187,7 @@ match (
                 for (@(true, vault) <- vaultCh; _ <- identityChanged) {
                   @RevVault!("deployerAuthKey", *authKeyCh) |
                   for (@authKey <- authKeyCh) {
-                    ret!(vault, authKey) |
-                    @authKey!("challenge", *stdout)
+                    ret!(vault, authKey)
                   }
                 }
               }

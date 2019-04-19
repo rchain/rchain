@@ -9,7 +9,6 @@ import com.google.protobuf.ByteString
 import coop.rchain.casper.LastApprovedBlock.LastApprovedBlock
 import coop.rchain.casper._
 import coop.rchain.casper.protocol._
-
 import coop.rchain.comm.CommError.ErrorHandler
 import coop.rchain.comm.discovery._
 import coop.rchain.comm.protocol.routing.Packet
@@ -17,7 +16,7 @@ import coop.rchain.comm.rp.Connect.RPConfAsk
 import coop.rchain.comm.rp._
 import coop.rchain.comm.rp.ProtocolHelper.{packet, toPacket}
 import coop.rchain.comm.transport.{Blob, PacketType, TransportLayer}
-import coop.rchain.comm.{transport, PeerNode}
+import coop.rchain.comm.{transport, CommError, PeerNode}
 import coop.rchain.comm.rp.ProtocolHelper
 import coop.rchain.metrics.Metrics
 import coop.rchain.p2p.effects._
@@ -27,7 +26,7 @@ import scala.concurrent.duration._
 
 object CommUtil {
 
-  private implicit val logSource: LogSource = LogSource(this.getClass)
+  implicit private val logSource: LogSource = LogSource(this.getClass)
 
   def sendBlock[F[_]: Monad: ConnectionsCell: TransportLayer: Log: Time: ErrorHandler: RPConfAsk](
       b: BlockMessage
@@ -51,7 +50,7 @@ object CommUtil {
   }
 
   def sendForkChoiceTipRequest[F[_]: Monad: ConnectionsCell: TransportLayer: Log: Time: RPConfAsk]
-    : F[Unit] = {
+      : F[Unit] = {
     val serialized = ForkChoiceTipRequest().toByteString
     for {
       _ <- sendToPeers[F](transport.ForkChoiceTipRequest, serialized)
@@ -64,9 +63,9 @@ object CommUtil {
       serializedMessage: ByteString
   ): F[Unit] =
     for {
-      peers <- ConnectionsCell[F].read
-      local <- RPConfAsk[F].reader(_.local)
-      msg   = packet(local, pType, serializedMessage)
+      peers <- ConnectionsCell.random[F]
+      conf  <- RPConfAsk[F].ask
+      msg   = packet(conf.local, conf.networkId, pType, serializedMessage)
       _     <- TransportLayer[F].broadcast(peers, msg)
     } yield ()
 
@@ -75,7 +74,7 @@ object CommUtil {
       serializedMessage: ByteString
   ): F[Unit] =
     for {
-      peers <- ConnectionsCell[F].read
+      peers <- ConnectionsCell.random[F]
       local <- RPConfAsk[F].reader(_.local)
       msg   = Blob(local, Packet(pType.id, serializedMessage))
       _     <- TransportLayer[F].stream(peers, msg)
@@ -86,12 +85,18 @@ object CommUtil {
   ): F[Unit] = {
     val request = ApprovedBlockRequest("PleaseSendMeAnApprovedBlock").toByteString
     for {
-      maybeBootstrap <- RPConfAsk[F].reader(_.bootstrap)
-      local          <- RPConfAsk[F].reader(_.local)
-      _ <- maybeBootstrap match {
+      conf <- RPConfAsk[F].ask
+      _ <- conf.bootstrap match {
             case Some(bootstrap) =>
-              val msg = packet(local, transport.ApprovedBlockRequest, request)
-              TransportLayer[F].send(bootstrap, msg)
+              val msg = packet(conf.local, conf.networkId, transport.ApprovedBlockRequest, request)
+              TransportLayer[F].send(bootstrap, msg).flatMap {
+                case Right(_) =>
+                  Log[F].info(s"Successfully sent ApprovedBlockRequest to $bootstrap")
+                case Left(error) =>
+                  Log[F].warn(
+                    s"Failed to send ApprovedBlockRequest to $bootstrap because of ${CommError.errorMessage(error)}"
+                  )
+              }
             case None => Log[F].warn("Cannot request for an approved block as standalone")
           }
     } yield ()

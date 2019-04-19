@@ -18,7 +18,6 @@ import coop.rchain.rspace.util._
 import org.lightningj.util.ZBase32
 
 import scala.annotation.tailrec
-import scala.collection.immutable.Seq
 import scala.collection.{Seq => RootSeq}
 import scala.concurrent.Await
 import scala.concurrent.duration._

@@ -16,7 +16,6 @@ import coop.rchain.shared.SyncVarOps._
 import org.lmdbjava.Txn
 import scodec.Codec
 
-import scala.collection.immutable.Seq
 import scala.concurrent.ExecutionContext
 import scala.util.Random
 
@@ -37,9 +36,9 @@ class RSpace[F[_], C, P, A, R, K] private[rspace] (
 ) extends RSpaceOps[F, C, P, A, R, K](store, branch)
     with ISpace[F, C, P, A, R, K] {
 
-  override protected[this] val logger: Logger = Logger[this.type]
+  protected[this] override val logger: Logger = Logger[this.type]
 
-  private[this] implicit val MetricsSource: Source = RSpaceMetricsSource
+  implicit private[this] val MetricsSource: Source = RSpaceMetricsSource
   private[this] val consumeCommLabel               = "comm.consume"
   private[this] val produceCommLabel               = "comm.produce"
   private[this] val consumeSpanLabel               = Metrics.Source(MetricsSource, "consume")
@@ -294,11 +293,10 @@ class RSpace[F[_], C, P, A, R, K] private[rspace] (
                            matchCandidates,
                            channelToIndexedDataList.toMap
                          )
-          } yield
-            firstMatch match {
-              case None             => remaining.asLeft[MaybeProduceCandidate]
-              case produceCandidate => produceCandidate.asRight[Seq[CandidateChannels]]
-            }
+          } yield firstMatch match {
+            case None             => remaining.asLeft[MaybeProduceCandidate]
+            case produceCandidate => produceCandidate.asRight[Seq[CandidateChannels]]
+          }
       }
     groupedChannels.tailRecM(go)
   }
@@ -451,7 +449,7 @@ class RSpace[F[_], C, P, A, R, K] private[rspace] (
       Checkpoint(root, events)
     }
 
-  override protected[rspace] def isDirty(root: Blake2b256Hash): F[Boolean] = store.withWriteTxnF {
+  protected[rspace] override def isDirty(root: Blake2b256Hash): F[Boolean] = store.withWriteTxnF {
     txn =>
       store
         .withTrieTxn(txn) { trieTxn =>

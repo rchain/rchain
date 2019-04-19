@@ -16,8 +16,6 @@ import coop.rchain.rspace.util._
 import scala.concurrent.ExecutionContext
 import scodec.bits.ByteVector
 
-import scala.collection.immutable.Seq
-import scala.collection.mutable
 import scala.collection.mutable.ListBuffer
 import scala.concurrent.ExecutionContext.Implicits.global
 
@@ -69,7 +67,7 @@ object AddressBookExample {
   class EntriesCaptor extends ((Seq[Entry]) => Unit) with Serializable {
 
     @transient
-    private final lazy val res: ListBuffer[Seq[Entry]] = mutable.ListBuffer.empty[Seq[Entry]]
+    private final lazy val res: ListBuffer[Seq[Entry]] = ListBuffer.empty[Seq[Entry]]
 
     final def results: Seq[Seq[Entry]] = res.toList
 
@@ -282,7 +280,7 @@ object AddressBookExample {
 
     runKs(Seq(cres1, cres2))
 
-    Console.printf(space.store.toMap.toString())
+    Console.printf(space.toMap.toString())
 
     context.close()
   }

@@ -1,22 +1,23 @@
 package coop.rchain.casper.genesis.contracts
 
 import coop.rchain.casper.util.rholang.InterpreterUtil
-import coop.rchain.rholang.build.CompiledRholangSource
 import coop.rchain.models.Par
+import coop.rchain.rholang.build.CompiledRholangSource
 
 class Rev[A](
     rhoCode: A => String,
     wallets: Seq[A],
     faucetCode: String => String,
-    posParams: ProofOfStakeParams
+    posParams: ProofOfStake
 ) extends CompiledRholangSource {
   private val initialTotalBond = posParams.validators.foldLeft(0L) {
     case (acc, v) => acc + v.stake
   }
-  private val initialBondsCode = ProofOfStake.initialBondsCode(posParams.validators)
 
   private val minimumBond = posParams.minimumBond
   private val maximumBond = posParams.maximumBond
+
+  final val path = "<synthetic in Rev.scala>"
 
   final val code = s"""
     |//requires MakeMint, BasicWallet, WalletCheck, MakePoS
@@ -48,7 +49,7 @@ class Rev[A](
     |      //PoS purse and contract creation
     |      @revMint!("makePurse", $initialTotalBond, *posPurseCh) |
     |      for(@posPurse <- posPurseCh) {
-    |        @MakePoS!(posPurse, $minimumBond, $maximumBond, $initialBondsCode, *posCh) |
+    |        @MakePoS!(posPurse, $minimumBond, $maximumBond, ${posParams.initialBondsCode}, *posCh) |
     |        for(@pos <- posCh) {
     |          @SystemInstancesRegistry!("register", "pos", bundle+{pos})
     |        }
@@ -68,11 +69,11 @@ class Rev[A](
       wallets.map(rhoCode).mkString(" |\n")
     }
 
-  final override val term: Par = InterpreterUtil.mkTerm(code).right.get
+  override final val term: Par = InterpreterUtil.mkTerm(code).right.get
 }
 
 class PreWalletRev(
     wallets: Seq[PreWallet],
     faucetCode: String => String,
-    posParams: ProofOfStakeParams
+    posParams: ProofOfStake
 ) extends Rev[PreWallet](PreWallet.rhoCode, wallets, faucetCode, posParams)

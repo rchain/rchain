@@ -23,11 +23,17 @@ object Connect {
   type Connections           = List[Connection]
   type ConnectionsCell[F[_]] = Cell[F, Connections]
 
-  private implicit val metricsSource: Metrics.Source =
+  implicit private val metricsSource: Metrics.Source =
     Metrics.Source(CommMetricsSource, "rp.connect")
 
   object ConnectionsCell {
     def apply[F[_]](implicit ev: ConnectionsCell[F]): ConnectionsCell[F] = ev
+
+    def random[F[_]: Monad: ConnectionsCell: RPConfAsk]: F[Connections] =
+      for {
+        max   <- RPConfAsk[F].reader(_.maxNumOfConnections)
+        peers <- ConnectionsCell[F].read
+      } yield Random.shuffle(peers).take(max)
   }
 
   object Connections {
@@ -62,6 +68,14 @@ object Connect {
         newConnections.pure[F]
       }
 
+      def refreshConn[F[_]: Monad](connection: Connection): F[Connections] = {
+        val newConnections = connections.partition(_.id == connection.id) match {
+          case (peer, rest) if peer.isEmpty => rest
+          case (peer, rest)                 => rest ++ peer
+        }
+        newConnections.pure[F]
+      }
+
       def reportConn[F[_]: Monad: Log: Metrics]: F[Connections] = {
         val size = connections.size.toLong
         Log[F].info(s"Peers: $size") >>
@@ -79,25 +93,16 @@ object Connect {
     def apply[F[_]](implicit ev: ApplicativeAsk[F, RPConf]): ApplicativeAsk[F, RPConf] = ev
   }
 
-  private implicit val logSource: LogSource = LogSource(this.getClass)
-
-  def freeConnectionSlots[F[_]: Monad: ConnectionsCell: RPConfAsk]: F[Int] =
-    for {
-      connections <- ConnectionsCell[F].read
-      max         <- RPConfAsk[F].reader(_.clearConnections.maxNumOfConnections)
-    } yield max - connections.length
-
-  def hasMaxNumberOfConnections[F[_]: Monad: ConnectionsCell: RPConfAsk]: F[Boolean] =
-    freeConnectionSlots[F].map(_ <= 0)
+  implicit private val logSource: LogSource = LogSource(this.getClass)
 
   def clearConnections[F[_]: Sync: Monad: Time: ConnectionsCell: RPConfAsk: TransportLayer: Log: Metrics]
-    : F[Int] = {
+      : F[Int] = {
 
     def sendHeartbeat(peer: PeerNode): F[(PeerNode, CommErr[Unit])] =
       for {
-        local <- RPConfAsk[F].reader(_.local)
-        hb    = heartbeat(local)
-        res   <- TransportLayer[F].send(peer, hb)
+        conf <- RPConfAsk[F].ask
+        hb   = heartbeat(conf.local, conf.networkId)
+        res  <- TransportLayer[F].send(peer, hb)
       } yield (peer, res)
 
     def clear(connections: Connections): F[Int] =
@@ -115,58 +120,42 @@ object Connect {
 
     for {
       connections <- ConnectionsCell[F].read
-      max         <- RPConfAsk[F].reader(_.clearConnections.maxNumOfConnections)
-      cleared     <- if (connections.size > ((max * 2) / 3)) clear(connections) else 0.pure[F]
+      cleared     <- clear(connections)
       _           <- if (cleared > 0) ConnectionsCell[F].read >>= (_.reportConn[F]) else connections.pure[F]
     } yield cleared
   }
 
-  def resetConnections[F[_]: Monad: ConnectionsCell: RPConfAsk: TransportLayer: Log: Metrics]
-    : F[Unit] =
-    ConnectionsCell[F].flatModify { connections =>
-      for {
-        local  <- RPConfAsk[F].reader(_.local)
-        _      <- TransportLayer[F].broadcast(connections, disconnect(local))
-        _      <- connections.traverse(TransportLayer[F].disconnect)
-        result <- connections.removeConn[F](connections)
-      } yield result
-    }
+  def resetConnections[F[_]: Monad: ConnectionsCell]: F[Unit] =
+    ConnectionsCell[F].flatModify(c => c.removeConn[F](c))
 
-  def findAndConnect[F[_]: Sync: Monad: Log: Time: Metrics: NodeDiscovery: ErrorHandler: ConnectionsCell: RPConfAsk](
+  def findAndConnect[F[_]: Monad: Log: NodeDiscovery: ErrorHandler: ConnectionsCell: RPConfAsk](
       conn: (PeerNode, FiniteDuration) => F[Unit]
-  ): F[List[PeerNode]] = {
-    def find(): F[List[PeerNode]] =
-      for {
-        count             <- freeConnectionSlots[F]
-        connections       <- ConnectionsCell[F].read.map(_.toSet)
-        tout              <- RPConfAsk[F].reader(_.defaultTimeout)
-        ndPeers           <- NodeDiscovery[F].peers
-        peers             = Random.shuffle(ndPeers).toStream.filterNot(connections.contains).take(count).toList
-        responses         <- peers.traverse(p => ErrorHandler[F].attempt(conn(p, tout)))
-        peersAndResponses = peers.zip(responses)
-        _ <- peersAndResponses.traverse {
-              case (peer, Left(error)) =>
-                Log[F].debug(s"Failed to connect to ${peer.toAddress}. Reason: ${error.message}")
-              case _ => ().pure[F]
-            }
-      } yield peersAndResponses.filter(_._2.isRight).map(_._1)
+  ): F[List[PeerNode]] =
+    for {
+      connections <- ConnectionsCell[F].read.map(_.toSet)
+      tout        <- RPConfAsk[F].reader(_.defaultTimeout)
+      peers       <- NodeDiscovery[F].peers.map(_.filterNot(connections.contains).toList)
+      responses   <- peers.traverse(p => ErrorHandler[F].attempt(conn(p, tout)))
+      _ <- responses.collect {
+            case Left(WrongNetwork(peer, msg)) =>
+              Log[F].warn(s"Can't connect to peer $peer. $msg")
+          }.sequence
+      peersAndResponses = peers.zip(responses)
+    } yield peersAndResponses.filter(_._2.isRight).map(_._1)
 
-    hasMaxNumberOfConnections[F].ifM(List.empty[PeerNode].pure[F], find())
-  }
-
-  def connect[F[_]: Sync: Monad: Log: Time: Metrics: TransportLayer: ErrorHandler: ConnectionsCell: RPConfAsk](
+  def connect[F[_]: Monad: Log: Metrics: TransportLayer: ErrorHandler: RPConfAsk](
       peer: PeerNode,
       timeout: FiniteDuration
   ): F[Unit] =
     (
       for {
-        address  <- Sync[F].delay(peer.toAddress)
-        _        <- Log[F].debug(s"Connecting to $address")
-        _        <- Metrics[F].incrementCounter("connect")
-        _        <- Log[F].debug(s"Initialize protocol handshake to $address")
-        local    <- RPConfAsk[F].reader(_.local)
-        ph       = protocolHandshake(local)
-        response <- TransportLayer[F].send(peer, ph) >>= ErrorHandler[F].fromEither
+        address <- peer.toAddress.pure[F]
+        _       <- Log[F].debug(s"Connecting to $address")
+        _       <- Metrics[F].incrementCounter("connect")
+        _       <- Log[F].debug(s"Initialize protocol handshake to $address")
+        conf    <- RPConfAsk[F].ask
+        ph      = protocolHandshake(conf.local, conf.networkId)
+        _       <- TransportLayer[F].send(peer, ph) >>= ErrorHandler[F].fromEither
       } yield ()
     ).timer("connect-time")
 

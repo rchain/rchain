@@ -25,6 +25,7 @@ class ConnectSpec
   val defaultTimeout: FiniteDuration = FiniteDuration(1, MILLISECONDS)
   val src: PeerNode                  = peerNode("src", 40400)
   val remote: PeerNode               = peerNode("remote", 40401)
+  val networkId                      = "test"
 
   type Effect[A] = CommErrT[Id, A]
 
@@ -65,7 +66,7 @@ class ConnectSpec
   }
 
   def alwaysSuccess: Protocol => CommErr[Protocol] =
-    kp(Right(protocolHandshake(src)))
+    kp(Right(protocolHandshake(src, networkId)))
 
   private def endpoint(port: Int): Endpoint = Endpoint("host", port, port)
   private def peerNode(name: String, port: Int): PeerNode =

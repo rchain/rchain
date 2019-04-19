@@ -82,7 +82,7 @@ trait StreamTInstances0 extends StreamTInstances1 {
     override def liftM[G[_]: Monad, A](a: G[A]): StreamT[G, A] =
       StreamT.liftF(a)
 
-    override implicit def apply[G[_]: Monad]: Monad[StreamT[G, ?]] =
+    implicit override def apply[G[_]: Monad]: Monad[StreamT[G, ?]] =
       streamTMonad[G]
   }
 

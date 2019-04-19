@@ -1,22 +1,22 @@
 package coop.rchain.casper.util
 
-import cats._
-import cats.effect._
-import cats.implicits._
-import coop.rchain.catscontrib.TaskContrib._
-import coop.rchain.casper.util.rholang.RuntimeManager
-import coop.rchain.casper.util.ProtoUtil.sourceDeploy
-import coop.rchain.crypto.codec.Base16
-import coop.rchain.crypto.hash.{Blake2b256, Keccak256}
-import coop.rchain.crypto.signatures.{Ed25519, Secp256k1}
-import coop.rchain.rholang.interpreter.{accounting, Runtime}
-import coop.rchain.shared.PathOps.RichPath
-import coop.rchain.shared.StoreType
-import coop.rchain.shared.Log
 import java.io.PrintWriter
 import java.nio.file.{Files, Path}
 
+import cats._
+import cats.effect._
+import cats.implicits._
+import com.google.protobuf.ByteString
+import coop.rchain.casper.protocol._
+import coop.rchain.casper.util.rholang.RuntimeManager
+import coop.rchain.crypto.PrivateKey
+import coop.rchain.crypto.codec.Base16
+import coop.rchain.crypto.hash.{Blake2b256, Keccak256}
+import coop.rchain.crypto.signatures.{Secp256k1, SignaturesAlg}
 import coop.rchain.metrics.Metrics
+import coop.rchain.rholang.interpreter.{accounting, Runtime}
+import coop.rchain.shared.PathOps.RichPath
+import coop.rchain.shared.{Log, StoreType}
 
 import scala.concurrent.ExecutionContext
 
@@ -67,6 +67,14 @@ object BondingUtil {
       transferStatusOut(ethAddress),
       pubKey,
       Base16.unsafeDecode(secKey)
+    )
+
+  private def sourceDeploy(source: String, timestamp: Long, phlos: Long): DeployData =
+    DeployData(
+      deployer = ByteString.EMPTY,
+      timestamp = timestamp,
+      term = source,
+      phloLimit = phlos
     )
 
   def preWalletUnlockDeploy[F[_]: Concurrent](
@@ -147,19 +155,15 @@ object BondingUtil {
       amount: Long,
       sigAlgorithm: String,
       pubKey: String,
-      secKey: Array[Byte]
+      secKey: PrivateKey
   )(implicit runtimeManager: RuntimeManager[F]): F[String] =
     for {
-      sigFunc <- sigAlgorithm match {
-                  case "ed25519"   => ((d: Array[Byte]) => Ed25519.sign(d, secKey)).pure[F]
-                  case "secp256k1" => ((d: Array[Byte]) => Secp256k1.sign(d, secKey)).pure[F]
-                  case _ =>
-                    Sync[F].raiseError(
-                      new IllegalArgumentException(
-                        "sigAlgorithm must be one of ed25519 or secp256k1"
-                      )
-                    )
-                }
+      sigFunc <- Sync[F].fromOption(
+                  SignaturesAlg(sigAlgorithm).map(s => (d: Array[Byte]) => s.sign(d, secKey)),
+                  new IllegalArgumentException(
+                    "sigAlgorithm must be one of ed25519 or secp256k1"
+                  )
+                )
       nonce           = 0 //first and only time we will use this fresh wallet
       destination     = bondingForwarderAddress(pubKey)
       statusOut       = transferStatusOut(pubKey)
@@ -247,7 +251,12 @@ object BondingUtil {
     runtimeManagerResource.use(
       implicit runtimeManager =>
         for {
-          bondCode    <- faucetBondDeploy[F](amount, sigAlgorithm, pubKey, Base16.unsafeDecode(secKey))
+          bondCode <- faucetBondDeploy[F](
+                       amount,
+                       sigAlgorithm,
+                       pubKey,
+                       PrivateKey(Base16.unsafeDecode(secKey))
+                     )
           forwardCode = bondingForwarderDeploy(pubKey, pubKey)
           _           <- writeFile[F](s"forward_${pubKey}.rho", forwardCode)
           _           <- writeFile[F](s"bond_${pubKey}.rho", bondCode)

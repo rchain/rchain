@@ -88,7 +88,11 @@ final class InMemBlockDagStorage[F[_]: Concurrent: Sync: Log: BlockStore](
       _              <- lock.release
     } yield InMemBlockDagRepresentation(latestMessages, childMap, dataLookup, topoSort)
 
-  override def insert(block: BlockMessage, invalid: Boolean): F[BlockDagRepresentation[F]] =
+  override def insert(
+      block: BlockMessage,
+      genesis: BlockMessage,
+      invalid: Boolean
+  ): F[BlockDagRepresentation[F]] =
     for {
       _ <- lock.acquire
       _ <- dataLookupRef.update(_.updated(block.blockHash, BlockMetadata.fromBlock(block, invalid)))
@@ -105,21 +109,27 @@ final class InMemBlockDagStorage[F[_]: Concurrent: Sync: Log: BlockStore](
         .map(_.validator)
         .toSet
         .diff(block.justifications.map(_.validator).toSet)
-      newValidatorsWithSender <- if (block.sender.isEmpty) {
-                                  // Ignore empty sender for special cases such as genesis block
-                                  Log[F].warn(
-                                    s"Block ${Base16.encode(block.blockHash.toByteArray)} sender is empty"
-                                  ) *> newValidators.pure[F]
-                                } else if (block.sender.size() == 32) {
-                                  (newValidators + block.sender).pure[F]
-                                } else {
-                                  Sync[F].raiseError[Set[ByteString]](
-                                    BlockSenderIsMalformed(block)
-                                  )
-                                }
+      newValidatorsLatestMessages = newValidators.map(v => (v, genesis.blockHash))
+      newValidatorsWithSenderLatestMessages <- if (block.sender.isEmpty) {
+                                                // Ignore empty sender for special cases such as genesis block
+                                                Log[F].warn(
+                                                  s"Block ${Base16.encode(block.blockHash.toByteArray)} sender is empty"
+                                                ) *> newValidatorsLatestMessages.pure[F]
+                                              } else if (block.sender.size() == 32) {
+                                                (newValidatorsLatestMessages + (
+                                                  (
+                                                    block.sender,
+                                                    block.blockHash
+                                                  )
+                                                )).pure[F]
+                                              } else {
+                                                Sync[F].raiseError[Set[(ByteString, ByteString)]](
+                                                  BlockSenderIsMalformed(block)
+                                                )
+                                              }
       _ <- latestMessagesRef.update { latestMessages =>
-            newValidatorsWithSender.foldLeft(latestMessages) {
-              case (acc, v) => acc.updated(v, block.blockHash)
+            newValidatorsWithSenderLatestMessages.foldLeft(latestMessages) {
+              case (acc, (validator, blockHash)) => acc.updated(validator, blockHash)
             }
           }
       _   <- lock.release
@@ -153,13 +163,12 @@ object InMemBlockDagStorage {
       dataLookupRef           <- Ref.of[F, Map[BlockHash, BlockMetadata]](Map.empty)
       topoSortRef             <- Ref.of[F, Vector[Vector[BlockHash]]](Vector.empty)
       equivocationsTrackerRef <- Ref.of[F, Set[EquivocationRecord]](Set.empty)
-    } yield
-      new InMemBlockDagStorage[F](
-        lock,
-        latestMessagesRef,
-        childMapRef,
-        dataLookupRef,
-        topoSortRef,
-        equivocationsTrackerRef
-      )
+    } yield new InMemBlockDagStorage[F](
+      lock,
+      latestMessagesRef,
+      childMapRef,
+      dataLookupRef,
+      topoSortRef,
+      equivocationsTrackerRef
+    )
 }

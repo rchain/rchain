@@ -25,12 +25,11 @@ object PrettyPrinter {
       mainParent <- header.parentsHashList.headOption
       body       <- b.body
       postState  <- body.state
-    } yield
-      s"Block #${postState.blockNumber} (${buildString(b.blockHash)}) " +
-        s"-- Sender ID ${buildString(b.sender)} " +
-        s"-- M Parent Hash ${buildString(mainParent)} " +
-        s"-- Contents ${buildString(postState)}" +
-        s"-- Shard ID ${limit(b.shardId, 10)}"
+    } yield s"Block #${postState.blockNumber} (${buildString(b.blockHash)}) " +
+      s"-- Sender ID ${buildString(b.sender)} " +
+      s"-- M Parent Hash ${buildString(mainParent)} " +
+      s"-- Contents ${buildString(postState)}" +
+      s"-- Shard ID ${limit(b.shardId, 10)}"
     blockString match {
       case Some(str) => str
       case None      => s"Block ${buildString(b.blockHash)} with missing elements"
@@ -49,9 +48,8 @@ object PrettyPrinter {
       deployData <- d.deploy
       pCost      <- d.cost
       cost       = pCost.cost
-    } yield
-      s"User: ${buildStringNoLimit(deployData.deployer)}, Cost: ${cost.toString} " +
-        s"${buildString(deployData)}"
+    } yield s"User: ${buildStringNoLimit(deployData.deployer)}, Cost: ${cost.toString} " +
+      s"${buildString(deployData)}"
     deployString.getOrElse("No deploy data")
   }
 

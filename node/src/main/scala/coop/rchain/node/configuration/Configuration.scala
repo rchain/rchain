@@ -136,7 +136,9 @@ object Configuration {
       dataDir.resolve("casper-block-dag-file-storage-block-metadata-crc"),
       dataDir.resolve("casper-block-dag-file-storage-equivocation-tracker-log"),
       dataDir.resolve("casper-block-dag-file-storage-equivocation-tracker-crc"),
-      dataDir.resolve("casper-block-dag-file-storage-checkpoints")
+      dataDir.resolve("casper-block-dag-file-storage-checkpoints"),
+      dataDir.resolve("casper-block-dag-file-storage-block-number-index"),
+      server.dagStorageSize
     )
     val blockStorage =
       FileLMDBIndexBlockStore.Config(
@@ -189,22 +191,22 @@ object Configuration {
         Deploy(
           phloLimit(),
           phloPrice(),
-          validAfterBlockNumber.getOrElse(-1),
+          validAfterBlockNumber.getOrElse(-1L),
           privateKey.toOption,
           location()
         )
-      case Some(options.deployDemo) => DeployDemo
-      case Some(options.propose)    => Propose
-      case Some(options.showBlock)  => ShowBlock(options.showBlock.hash())
+      case Some(options.propose)   => Propose
+      case Some(options.showBlock) => ShowBlock(options.showBlock.hash())
       case Some(options.showBlocks) =>
         import options.showBlocks._
         ShowBlocks(depth.getOrElse(1))
       case Some(options.visualizeBlocks) =>
         import options.visualizeBlocks._
         VisualizeDag(depth.getOrElse(-1), showJustificationLines.getOrElse(false))
-      case Some(options.run)        => Run
-      case Some(options.dataAtName) => DataAtName(options.dataAtName.name())
-      case Some(options.contAtName) => ContAtName(options.contAtName.name())
+      case Some(options.machineVerifiableDag) => MachineVerifiableDag
+      case Some(options.run)                  => Run
+      case Some(options.dataAtName)           => DataAtName(options.dataAtName.name())
+      case Some(options.contAtName)           => ContAtName(options.contAtName.name())
       case Some(options.bondingDeployGen) =>
         import options.bondingDeployGen._
         BondingDeployGen(bondKey(), ethAddr(), amount(), privateKey(), publicKey())

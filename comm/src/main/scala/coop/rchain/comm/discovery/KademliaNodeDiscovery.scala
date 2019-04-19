@@ -1,83 +1,32 @@
 package coop.rchain.comm.discovery
 
 import scala.collection.mutable
-import scala.concurrent.duration._
 
 import cats._
 import cats.implicits._
-import cats.effect._
 
-import coop.rchain.catscontrib._
-import Catscontrib._
 import coop.rchain.comm._
-import coop.rchain.metrics.Metrics
-import coop.rchain.shared._
 
 object KademliaNodeDiscovery {
-  def create[F[_]: Monad: Sync: Log: Time: Metrics: KademliaRPC](
-      id: NodeIdentifier,
-      defaultTimeout: FiniteDuration
-  )(init: Option[PeerNode]): F[KademliaNodeDiscovery[F]] =
-    for {
-      knd <- new KademliaNodeDiscovery[F](id, defaultTimeout).pure[F]
-      _   <- init.fold(().pure[F])(p => knd.addNode(p))
-    } yield knd
-
-}
-
-private[discovery] class KademliaNodeDiscovery[F[_]: Monad: Sync: Log: Time: Metrics: KademliaRPC](
-    id: NodeIdentifier,
-    timeout: FiniteDuration
-) extends NodeDiscovery[F] {
-
-  private val table = PeerTable[PeerNode](id.key)
-  private implicit val metricsSource: Metrics.Source =
-    Metrics.Source(CommMetricsSource, "discovery.kademlia")
-
-  // TODO inline usage
-  private[discovery] def addNode(peer: PeerNode): F[Unit] =
-    for {
-      _ <- table.updateLastSeen[F](peer)
-      _ <- Metrics[F].setGauge("peers", table.peers.length.toLong)
-    } yield ()
-
-  private def pingHandler(peer: PeerNode): F[Unit] =
-    addNode(peer) >> Metrics[F].incrementCounter("handle.ping")
-
-  private def lookupHandler(peer: PeerNode, id: Array[Byte]): F[Seq[PeerNode]] =
-    for {
-      peers <- Sync[F].delay(table.lookup(id))
-      _     <- Metrics[F].incrementCounter("handle.lookup")
-      _     <- addNode(peer)
-    } yield peers
-
-  def discover: F[Unit] = {
-
-    val initRPC = KademliaRPC[F].receive(pingHandler, lookupHandler)
-
-    val findNewAndAdd = for {
-      _     <- Time[F].sleep(9.seconds)
-      peers <- findMorePeers(10).map(_.toList)
-      _     <- peers.traverse(addNode)
-    } yield ()
-
-    initRPC >> findNewAndAdd.forever
-  }
 
   /**
     * Return up to `limit` candidate peers.
     *
-    * Curently, this function determines the distances in the table that are
+    * Currently, this function determines the distances in the table that are
     * least populated and searches for more peers to fill those. It asks one
     * node for peers at one distance, then moves on to the next node and
     * distance. The queried nodes are not in any particular order. For now, this
     * function should be called with a relatively small `limit` parameter like
-    * 10 to avoid making too many unproductive networking calls.
+    * 10 to avoid making too many unproductive network calls.
     */
-  private def findMorePeers(limit: Int): F[Seq[PeerNode]] = {
-    val dists = table.sparseness().toArray
-
-    def find(peerSet: Set[PeerNode], potentials: Set[PeerNode], i: Int): F[Seq[PeerNode]] =
+  def discover[F[_]: Monad: KademliaStore: KademliaRPC](id: NodeIdentifier): F[Unit] = {
+    def find(
+        limit: Int,
+        dists: Array[Int],
+        peerSet: Set[PeerNode],
+        potentials: Set[PeerNode],
+        i: Int
+    ): F[List[PeerNode]] =
       if (peerSet.nonEmpty && potentials.size < limit && i < dists.length) {
         val dist = dists(i)
         /*
@@ -89,23 +38,26 @@ private[discovery] class KademliaNodeDiscovery[F[_]: Monad: Sync: Log: Time: Met
         val byteIndex    = dist / 8
         val differentBit = 1 << (dist % 8)
         target(byteIndex) = (target(byteIndex) ^ differentBit).toByte // A key at a distance dist from me
-        KademliaRPC[F]
-          .lookup(target, peerSet.head)
-          .map { results =>
-            potentials ++ results.filter(
-              r =>
-                !potentials.contains(r)
-                  && r.id.key != id.key
-                  && table.find(r.id.key).isEmpty
-            )
-          } >>= (find(peerSet.tail, _, i + 1))
+
+        KademliaRPC[F].lookup(target, peerSet.head) >>= (filter(_, potentials)) >>= (
+            ps => find(limit, dists, peerSet.tail, potentials ++ ps, i + 1)
+        )
       } else {
-        potentials.toSeq.pure[F]
+        potentials.toList.pure[F]
       }
 
-    find(table.peers.toSet, Set(), 0)
+    def filter(peers: Seq[PeerNode], potentials: Set[PeerNode]): F[List[PeerNode]] =
+      peers.toList
+        .filterNot(p => potentials.contains(p) || p.id.key == id.key)
+        .filterA(p => KademliaStore[F].find(p.id.key).map(_.isEmpty))
+
+    for {
+      peers  <- KademliaStore[F].peers
+      dists  <- KademliaStore[F].sparseness
+      result <- find(10, dists.toArray, peers.toSet, Set(), 0)
+      _      <- result.traverse(KademliaStore[F].updateLastSeen)
+    } yield ()
   }
 
-  def peers: F[Seq[PeerNode]] = Sync[F].delay(table.peers)
-
+  def peers[F[_]: KademliaStore]: F[Seq[PeerNode]] = KademliaStore[F].peers
 }

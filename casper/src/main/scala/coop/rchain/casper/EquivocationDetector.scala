@@ -9,7 +9,7 @@ import coop.rchain.blockstorage.{
   BlockStore,
   EquivocationsTracker
 }
-import coop.rchain.casper.Estimator.{BlockHash, Validator}
+import coop.rchain.casper.Estimator.Validator
 import coop.rchain.casper.protocol.{BlockMessage, Bond}
 import coop.rchain.casper.util.{DagOperations, DoublyLinkedDag, ProtoUtil}
 import coop.rchain.casper.util.ProtoUtil.{
@@ -23,7 +23,7 @@ import coop.rchain.shared.{Cell, Log, LogSource}
 
 object EquivocationDetector {
 
-  private implicit val logSource: LogSource = LogSource(this.getClass)
+  implicit private val logSource: LogSource = LogSource(this.getClass)
 
   def checkEquivocations[F[_]: Monad: Log](
       blockBufferDependencyDag: DoublyLinkedDag[BlockHash],

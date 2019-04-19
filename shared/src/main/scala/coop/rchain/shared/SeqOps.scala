@@ -1,7 +1,5 @@
 package coop.rchain.shared
 
-import scala.collection.immutable.Seq
-
 object SeqOps {
 
   /** Drops the 'i'th element of a list.

@@ -1,6 +1,7 @@
 package coop.rchain.crypto.signatures
 
 import coop.rchain.crypto
+import coop.rchain.crypto.{PrivateKey, PublicKey}
 import org.abstractj.kalium.keys._
 
 object Ed25519 extends SignaturesAlg {
@@ -10,11 +11,11 @@ object Ed25519 extends SignaturesAlg {
   val name: String = "Ed25519".toLowerCase
 
   //TODO: Make use of strongly typed keys
-  def newKeyPair: (Array[Byte], Array[Byte]) = {
+  def newKeyPair: (PrivateKey, PublicKey) = {
     val key = new SigningKey()
     val sec = key.toBytes
     val pub = key.getVerifyKey.toBytes
-    (sec, pub)
+    (PrivateKey(sec), PublicKey(pub))
   }
 
   /**

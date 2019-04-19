@@ -1,10 +1,11 @@
 package coop.rchain.casper.util.comm
 
 import cats.effect.concurrent.Ref
-import coop.rchain.comm.rp.Connect, Connect._
+import coop.rchain.comm.rp.Connect
+import Connect._
 import coop.rchain.shared._
 import com.google.protobuf.ByteString
-import coop.rchain.casper.HashSetCasperTest
+import coop.rchain.casper.MultiParentCasperTestUtil
 import coop.rchain.casper.helper.HashSetCasperTestNode
 import coop.rchain.casper.protocol._
 import coop.rchain.catscontrib.TaskContrib._
@@ -24,9 +25,10 @@ import scala.concurrent.duration._
 import org.scalatest.{FlatSpec, Matchers}
 import coop.rchain.casper.LastApprovedBlock.LastApprovedBlock
 import coop.rchain.casper.util.comm.ApproveBlockProtocolTest.TestFixture
-import coop.rchain.casper.{HashSetCasperTest, LastApprovedBlock}
+import coop.rchain.casper.{LastApprovedBlock, MultiParentCasperTestUtil}
 import org.scalatest.{Assertion, FlatSpec, Matchers}
 import coop.rchain.casper.util.TestTime
+import coop.rchain.crypto.{PrivateKey, PublicKey}
 
 import scala.util.Success
 
@@ -82,9 +84,9 @@ class ApproveBlockProtocolTest extends FlatSpec with Matchers {
     implicit val logStub     = new LogStub[Task]()
     implicit val metricsTest = new MetricsTestImpl[Task]()
 
-    val (validatorSk, validatorPk) = Ed25519.newKeyPair
+    val (_, validatorPk) = Ed25519.newKeyPair
     val TestFixture(_, abp, candidate, _, sigs) =
-      ApproveBlockProtocolTest.createProtocol(10, 100.milliseconds, 1.millisecond, Set(validatorSk))
+      ApproveBlockProtocolTest.createProtocol(10, 100.milliseconds, 1.millisecond, Set(validatorPk))
     val a = ApproveBlockProtocolTest.invalidApproval(candidate)
 
     val cancelToken = abp.run().start.runToFuture
@@ -106,7 +108,7 @@ class ApproveBlockProtocolTest extends FlatSpec with Matchers {
     implicit val metricsTest = new MetricsTestImpl[Task]()
 
     val sigs = (1 to n).map(_ => Ed25519.newKeyPair)
-    val TestFixture(lab, abp, candidate, startTime, sigsF) =
+    val TestFixture(lab, abp, candidate, startTime, _) =
       ApproveBlockProtocolTest.createProtocol(
         n,
         duration = d,
@@ -182,11 +184,11 @@ class ApproveBlockProtocolTest extends FlatSpec with Matchers {
   }
 
   it should "skip the duration and create and approved block immediately if the required signatures is zero" in {
-    val d: FiniteDuration          = 30.milliseconds
-    val (validatorSk, validatorPk) = Ed25519.newKeyPair
-    implicit val ctx               = TestScheduler()
-    implicit val logStub           = new LogStub[Task]()
-    implicit val metricsTest       = new MetricsTestImpl[Task]()
+    val d: FiniteDuration    = 30.milliseconds
+    val (_, validatorPk)     = Ed25519.newKeyPair
+    implicit val ctx         = TestScheduler()
+    implicit val logStub     = new LogStub[Task]()
+    implicit val metricsTest = new MetricsTestImpl[Task]()
 
     val TestFixture(lab, abp, _, startTime, _) =
       ApproveBlockProtocolTest.createProtocol(
@@ -213,8 +215,8 @@ class ApproveBlockProtocolTest extends FlatSpec with Matchers {
     implicit val logStub     = new LogStub[Task]()
     implicit val metricsTest = new MetricsTestImpl[Task]()
 
-    val (validatorSk, validatorPk) = Ed25519.newKeyPair
-    val (invalidSk, invalidPk)     = Ed25519.newKeyPair
+    val (_, validatorPk)       = Ed25519.newKeyPair
+    val (invalidSk, invalidPk) = Ed25519.newKeyPair
     val TestFixture(_, abp, candidate, _, sigsF) =
       ApproveBlockProtocolTest.createProtocol(10, 100.milliseconds, 1.millisecond, Set(validatorPk))
     val a = ApproveBlockProtocolTest.approval(candidate, invalidSk, invalidPk)
@@ -299,14 +301,14 @@ class ApproveBlockProtocolTest extends FlatSpec with Matchers {
 object ApproveBlockProtocolTest {
   def approval(
       c: ApprovedBlockCandidate,
-      validatorSk: Array[Byte],
-      validatorPk: Array[Byte]
+      validatorSk: PrivateKey,
+      validatorPk: PublicKey
   ): BlockApproval = {
     val sigData = Blake2b256.hash(c.toByteArray)
     val sig     = Ed25519.sign(sigData, validatorSk)
     BlockApproval(
       Some(c),
-      Some(Signature(ByteString.copyFrom(validatorPk), "ed25519", ByteString.copyFrom(sig)))
+      Some(Signature(ByteString.copyFrom(validatorPk.bytes), "ed25519", ByteString.copyFrom(sig)))
     )
   }
 
@@ -316,7 +318,7 @@ object ApproveBlockProtocolTest {
     val sig      = Ed25519.sign(sigData, sk)
     BlockApproval(
       Some(c),
-      Some(Signature(ByteString.copyFrom(pk), "ed25519", ByteString.copyFrom(sig)))
+      Some(Signature(ByteString.copyFrom(pk.bytes), "ed25519", ByteString.copyFrom(sig)))
     )
   }
 
@@ -332,7 +334,7 @@ object ApproveBlockProtocolTest {
       requiredSigs: Int,
       duration: FiniteDuration,
       interval: FiniteDuration,
-      validatorsPk: Set[Array[Byte]]
+      validatorsPk: Set[PublicKey]
   )(implicit logStub: LogStub[Task], metrics: MetricsTestImpl[Task]): TestFixture = {
     implicit val time            = TestTime.instance
     implicit val transportLayer  = new TransportLayerStub[Task]
@@ -342,15 +344,14 @@ object ApproveBlockProtocolTest {
     implicit val connectionsCell = Cell.mvarCell[Task, Connections](List(src)).unsafeRunSync
     implicit val lab             = LastApprovedBlock.unsafe[Task](None)
 
-    val (sk, pk)   = Ed25519.newKeyPair
-    val bonds      = HashSetCasperTest.createBonds(Seq(pk))
-    val genesis    = HashSetCasperTest.createGenesis(bonds)
-    val validators = validatorsPk.map(ByteString.copyFrom(_))
+    val (_, pk)    = Ed25519.newKeyPair
+    val bonds      = MultiParentCasperTestUtil.createBonds(Seq(pk))
+    val genesis    = MultiParentCasperTestUtil.createGenesis(bonds)
+    val validators = validatorsPk.map(pk => ByteString.copyFrom(pk.bytes))
     val candidate  = ApprovedBlockCandidate(Some(genesis), requiredSigs)
     val sigs       = Ref.unsafe[Task, Set[Signature]](Set.empty)
     val startTime  = System.currentTimeMillis()
 
-    val node = HashSetCasperTestNode.standaloneEff(genesis, sk)
     val protocol = ApproveBlockProtocol
       .unsafe[Task](genesis, validators, requiredSigs, duration, interval, sigs, startTime)
 

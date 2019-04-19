@@ -119,13 +119,21 @@ class RuntimeManagerImpl[F[_]: Concurrent] private[rholang] (
     Sync[F]
       .bracket(runtimeContainer.take) { runtime =>
         val blakeHash = Blake2b256Hash.fromByteArray(hash.toByteArray)
-        runtime.space.reset(blakeHash).map(_ => StoragePrinter.prettyPrint(runtime.space.store))
+        runtime.space.reset(blakeHash).map(_ => StoragePrinter.prettyPrint(runtime.space))
       }(runtime => runtimeContainer.put(runtime))
       .attempt
       .map {
         case Right(print) => Some(print)
         case Left(_)      => None
       }
+
+  private def sourceDeploy(source: String, timestamp: Long, phlos: Long): DeployData =
+    DeployData(
+      deployer = ByteString.EMPTY,
+      timestamp = timestamp,
+      term = source,
+      phloLimit = phlos
+    )
 
   def computeBonds(hash: StateHash): F[Seq[Bond]] = {
     val bondsQuery =
@@ -137,8 +145,7 @@ class RuntimeManagerImpl[F[_]: Concurrent] private[rholang] (
         |  }
         |}""".stripMargin
 
-    val bondsQueryTerm =
-      ProtoUtil.sourceDeploy(bondsQuery, 0L, accounting.MAX_VALUE)
+    val bondsQueryTerm = sourceDeploy(bondsQuery, 0L, accounting.MAX_VALUE)
     captureResults(hash, bondsQueryTerm)
       .ensureOr(
         bondsPar =>
@@ -270,6 +277,12 @@ class RuntimeManagerImpl[F[_]: Concurrent] private[rholang] (
                                  Either
                                    .left[(Option[DeployData], Failed), StateHash](
                                      none[DeployData] -> UnusedCommEvent(ex)
+                                   )
+                                   .pure[F]
+                               case Left(ex) =>
+                                 Either
+                                   .left[(Option[DeployData], Failed), StateHash](
+                                     none[DeployData] -> UserErrors(Vector(ex))
                                    )
                                    .pure[F]
                              }

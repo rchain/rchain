@@ -34,6 +34,7 @@ object Server {
   val Key = s"${Configuration.Key}.server"
 
   object keys {
+    val NetworkId        = "network-id"
     val Bootstrap        = "bootstrap"
     val StoreType        = "store-type"
     val Host             = "host"
@@ -46,6 +47,7 @@ object Server {
     val Standalone       = "standalone"
     val DataDir          = "data-dir"
     val StoreSize        = "store-size"
+    val DagStorageSize   = "dag-storage-size"
     val MapSize          = "map-size"
     val MaxConnections   = "max-connections"
     val MaxMessageSize   = "max-message-size"
@@ -76,6 +78,7 @@ object Server {
     val messageConsumers = Math.max(Runtime.getRuntime.availableProcessors(), 2)
 
     configuration.Server(
+      networkId = server.getString(keys.NetworkId),
       host = server.getStringOpt(keys.Host),
       dynamicHostAddress = server.getBoolean(keys.HostDynamic),
       noUpnp = !server.getBoolean(keys.Upnp),
@@ -88,6 +91,7 @@ object Server {
       dataDir = server.getPath(keys.DataDir),
       storeType = storeType,
       storeSize = server.getBytes(keys.StoreSize),
+      dagStorageSize = server.getBytes(keys.DagStorageSize),
       mapSize = server.getBytes(keys.MapSize),
       maxNumOfConnections = server.getInt(keys.MaxConnections),
       maxMessageSize = server.getBytes(keys.MaxMessageSize).toInt,

@@ -12,5 +12,8 @@ new stdout(`rho:io:stdout`) in {
   stdout!(["a", "b", "c", "d"].length()) |
 
   // prints ["a", "b", "c", "d"]
-  stdout!(["a", "b"] ++ ["c", "d"])
+  stdout!(["a", "b"] ++ ["c", "d"]) |
+
+  // prints ["a", "b"]
+  stdout!(["a", "b"].toList())
 }

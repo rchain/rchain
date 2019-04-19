@@ -2,8 +2,8 @@ package coop.rchain.shared
 
 import cats._
 import cats.data._
-import cats.effect.Concurrent
-import cats.effect.concurrent.MVar
+import cats.effect.{Concurrent, Sync}
+import cats.effect.concurrent.{MVar, Ref}
 import cats.syntax.applicative._
 import cats.syntax.applicativeError._
 import cats.syntax.flatMap._
@@ -38,6 +38,26 @@ object Cell extends CellInstances0 {
           } yield ()
 
         def read: F[S] = mvar.read
+      }
+    }
+
+  def refCell[F[_]: Sync, S](initalState: S): F[Cell[F, S]] =
+    Ref[F].of(initalState) map { ref =>
+      new Cell[F, S] {
+        def modify(f: S => S): F[Unit] = ref.modify { in =>
+          (f(in), ())
+        }
+
+        def flatModify(f: S => F[S]): F[Unit] =
+          for {
+            s <- ref.get
+            _ <- f(s).attempt.flatMap {
+                  case Left(e)   => e.raiseError[F, Unit]
+                  case Right(ns) => ref.set(ns)
+                }
+          } yield ()
+
+        def read: F[S] = ref.get
       }
     }
 

@@ -6,8 +6,11 @@ import coop.rchain.comm.PeerNode
 
 final case class RPConf(
     local: PeerNode,
+    networkId: String,
     bootstrap: Option[PeerNode],
     defaultTimeout: FiniteDuration,
-    clearConnections: ClearConnetionsConf
+    maxNumOfConnections: Int,
+    clearConnections: ClearConnectionsConf
 )
-final case class ClearConnetionsConf(maxNumOfConnections: Int, numOfConnectionsPinged: Int)
+
+final case class ClearConnectionsConf(numOfConnectionsPinged: Int)

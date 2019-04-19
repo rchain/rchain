@@ -27,7 +27,7 @@ object Validate {
   type Signature = Array[Byte]
 
   val DRIFT                                 = 15000 // 15 seconds
-  private implicit val logSource: LogSource = LogSource(this.getClass)
+  implicit private val logSource: LogSource = LogSource(this.getClass)
   val signatureVerifiers: Map[String, (Data, Signature, PublicKey) => Boolean] =
     Map(
       "ed25519" -> Ed25519.verify
@@ -279,26 +279,40 @@ object Validate {
       initParents         <- ProtoUtil.unsafeGetParents[F](block)
       maxBlockNumber      = ProtoUtil.maxBlockNumber(initParents)
       earliestBlockNumber = maxBlockNumber + 1 - expirationThreshold
-      duplicatedBlock <- DagOperations
-                          .bfTraverseF[F, BlockMessage](initParents)(
-                            b =>
-                              ProtoUtil.unsafeGetParentsAboveBlockNumber[F](b, earliestBlockNumber)
-                          )
-                          .find { b =>
-                            ProtoUtil
-                              .deploys(b)
-                              .flatMap(_.deploy)
-                              .exists(d => deployKeySet.contains((d.deployer, d.timestamp)))
-                          }
-      maybeError <- duplicatedBlock
+      maybeDuplicatedBlock <- DagOperations
+                               .bfTraverseF[F, BlockMessage](initParents)(
+                                 b =>
+                                   ProtoUtil
+                                     .unsafeGetParentsAboveBlockNumber[F](b, earliestBlockNumber)
+                               )
+                               .find { b =>
+                                 ProtoUtil
+                                   .deploys(b)
+                                   .flatMap(_.deploy)
+                                   .exists(d => deployKeySet.contains((d.deployer, d.timestamp)))
+                               }
+      maybeError <- maybeDuplicatedBlock
                      .traverse(
-                       b =>
+                       duplicatedBlock => {
+                         val currentBlockHashString = PrettyPrinter.buildString(block.blockHash)
+                         val blockHashString        = PrettyPrinter.buildString(duplicatedBlock.blockHash)
+                         val duplicatedDeploy = ProtoUtil
+                           .deploys(duplicatedBlock)
+                           .flatMap(_.deploy)
+                           .find(d => deployKeySet.contains((d.deployer, d.timestamp)))
+                           .get
+                         val term            = duplicatedDeploy.term
+                         val deployerString  = PrettyPrinter.buildString(duplicatedDeploy.deployer)
+                         val timestampString = duplicatedDeploy.timestamp.toString
+                         val message =
+                           s"found deploy $term with the same (user $deployerString, millisecond timestamp $timestampString) in the block $blockHashString as current block $currentBlockHashString"
                          Log[F].warn(
                            ignore(
                              block,
-                             s"found deploy by the same (user, millisecond timestamp) produced in the block ${b.blockHash}"
+                             message
                            )
                          ) >> InvalidRepeatDeploy.pure[F]
+                       }
                      )
     } yield maybeError.toLeft(Valid)
   }
@@ -689,12 +703,11 @@ object Validate {
                            runtimeManager,
                            span
                          )
-    } yield
-      maybeStateHash match {
-        case Left(ex)       => Left(ex)
-        case Right(Some(_)) => Right(Valid)
-        case Right(None)    => Left(InvalidTransaction)
-      }
+    } yield maybeStateHash match {
+      case Left(ex)       => Left(ex)
+      case Right(Some(_)) => Right(Valid)
+      case Right(None)    => Left(InvalidTransaction)
+    }
 
   /**
     * If block contains an invalid justification block B and the creator of B is still bonded,

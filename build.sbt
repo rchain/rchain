@@ -24,18 +24,37 @@ lazy val projectSettings = Seq(
   wartremoverExcluded += sourceManaged.value,
   wartremoverErrors in (Compile, compile) ++= Warts.allBut(
     // those we want
-    Wart.DefaultArguments, Wart.ImplicitParameter, Wart.ImplicitConversion,
-    Wart.LeakingSealed, Wart.Recursion,
+    Wart.DefaultArguments,
+    Wart.ImplicitParameter,
+    Wart.ImplicitConversion,
+    Wart.LeakingSealed,
+    Wart.Recursion,
     // those don't want
-    Wart.Overloading, Wart.Nothing,
-    Wart.Equals, Wart.PublicInference, Wart.TraversableOps, Wart.ArrayEquals,
-    Wart.While, Wart.Any, Wart.Product, Wart.Serializable, Wart.OptionPartial,
-    Wart.EitherProjectionPartial, Wart.Option2Iterable, Wart.ToString, Wart.JavaConversions,
-    Wart.MutableDataStructures, Wart.FinalVal, Wart.Null, Wart.AsInstanceOf, Wart.ExplicitImplicitTypes,
-    Wart.StringPlusAny, Wart.AnyVal
+    Wart.Overloading,
+    Wart.Nothing,
+    Wart.Equals,
+    Wart.PublicInference,
+    Wart.TraversableOps,
+    Wart.ArrayEquals,
+    Wart.While,
+    Wart.Any,
+    Wart.Product,
+    Wart.Serializable,
+    Wart.OptionPartial,
+    Wart.EitherProjectionPartial,
+    Wart.Option2Iterable,
+    Wart.ToString,
+    Wart.JavaConversions,
+    Wart.MutableDataStructures,
+    Wart.FinalVal,
+    Wart.Null,
+    Wart.AsInstanceOf,
+    Wart.ExplicitImplicitTypes,
+    Wart.StringPlusAny,
+    Wart.AnyVal
   ),
   scalafmtOnCompile := sys.env.get("CI").isEmpty, // disable in CI environments
-  scapegoatVersion in ThisBuild := "1.3.4",
+  scapegoatVersion in ThisBuild := "1.3.8",
   testOptions in Test += Tests.Argument("-oD"), //output test durations
   dependencyOverrides ++= Seq(
     "io.kamon" %% "kamon-core" % kamonVersion
@@ -57,20 +76,20 @@ lazy val projectSettings = Seq(
     // The scala compiler includes native bindings for jansi under the same path jansi does.
     // This should pick the ones provided by jansi.
     case path if path.startsWith("META-INF/native/") && path.contains("jansi") => MergeStrategy.last
-    case path => MergeStrategy.defaultMergeStrategy(path)
+    case path                                                                  => MergeStrategy.defaultMergeStrategy(path)
   }
 ) ++
 // skip api doc generation if SKIP_DOC env variable is defined
-Seq(sys.env.get("SKIP_DOC")).flatMap { _ =>
-  Seq(
-    publishArtifact in (Compile, packageDoc) := false,
-    publishArtifact in packageDoc := false,
-    sources in (Compile, doc) := Seq.empty
-  )
-}
+  Seq(sys.env.get("SKIP_DOC")).flatMap { _ =>
+    Seq(
+      publishArtifact in (Compile, packageDoc) := false,
+      publishArtifact in packageDoc := false,
+      sources in (Compile, doc) := Seq.empty
+    )
+  }
 
 // a namespace for generative tests (or other tests that take a long time)
-lazy val SlowcookerTest = config("slowcooker") extend(Test)
+lazy val SlowcookerTest = config("slowcooker") extend (Test)
 
 lazy val coverageSettings = Seq(
   coverageMinimum := 90,
@@ -83,6 +102,14 @@ lazy val coverageSettings = Seq(
 
 lazy val compilerSettings = CompilerSettings.options ++ Seq(
   crossScalaVersions := Seq("2.11.12", scalaVersion.value)
+)
+
+// TOOD will become compilerSettings once this is turned on for blockstore
+lazy val almostCompilerSettings = Seq(
+  "-Xfatal-warnings",
+  "-unchecked",
+  "-deprecation",
+  "-feature"
 )
 
 // Before starting sbt export YOURKIT_AGENT set to the profiling agent appropriate
@@ -101,12 +128,7 @@ lazy val shared = (project in file("shared"))
   .settings(commonSettings: _*)
   .settings(
     version := "0.1",
-    scalacOptions ++= Seq(
-      "-Xfatal-warnings",
-      "-unchecked",
-      "-deprecation",
-      "-feature"
-    ),
+    scalacOptions ++= almostCompilerSettings,
     libraryDependencies ++= commonDependencies ++ Seq(
       catsCore,
       catsEffect,
@@ -126,27 +148,24 @@ lazy val graphz = (project in file("graphz"))
   .settings(commonSettings: _*)
   .settings(
     version := "0.1",
-    scalacOptions ++= Seq(
-      "-Xfatal-warnings",
-      "-unchecked",
-      "-deprecation",
-      "-feature"
-    ),
+    scalacOptions ++= almostCompilerSettings,
     libraryDependencies ++= commonDependencies ++ Seq(
       catsCore,
       catsEffect,
       catsMtl
     )
-  ).dependsOn(shared)
+  )
+  .dependsOn(shared)
 
 lazy val casper = (project in file("casper"))
   .configs(SlowcookerTest)
   .settings(commonSettings: _*)
   .settings(rholangSettings: _*)
-  .settings(inConfig(SlowcookerTest)(Defaults.testSettings) : _*)
+  .settings(inConfig(SlowcookerTest)(Defaults.testSettings): _*)
   .settings(inConfig(SlowcookerTest)(org.scalafmt.sbt.ScalafmtPlugin.scalafmtConfigSettings))
   .settings(
     name := "casper",
+    scalacOptions ++= almostCompilerSettings,
     libraryDependencies ++= commonDependencies ++ protobufLibDependencies ++ Seq(
       catsCore,
       catsMtl,
@@ -162,19 +181,14 @@ lazy val casper = (project in file("casper"))
     crypto,
     models,
     rspace,
-    rholang      % "compile->compile;test->test"
+    rholang % "compile->compile;test->test"
   )
 
 lazy val comm = (project in file("comm"))
   .settings(commonSettings: _*)
   .settings(
     version := "0.1",
-    scalacOptions ++= Seq(
-      "-Xfatal-warnings",
-      "-unchecked",
-      "-deprecation",
-      "-feature"
-    ),
+    scalacOptions ++= almostCompilerSettings,
     dependencyOverrides += "org.slf4j" % "slf4j-api" % "1.7.25",
     libraryDependencies ++= commonDependencies ++ kamonDependencies ++ protobufDependencies ++ Seq(
       grpcNetty,
@@ -200,12 +214,7 @@ lazy val crypto = (project in file("crypto"))
   .settings(commonSettings: _*)
   .settings(
     name := "crypto",
-    scalacOptions ++= Seq(
-      "-Xfatal-warnings",
-      "-unchecked",
-      "-deprecation",
-      "-feature"
-    ),
+    scalacOptions ++= almostCompilerSettings,
     libraryDependencies ++= commonDependencies ++ protobufLibDependencies ++ Seq(
       guava,
       bouncyCastle,
@@ -243,14 +252,9 @@ lazy val node = (project in file("node"))
   .settings(commonSettings: _*)
   .enablePlugins(RpmPlugin, DebianPlugin, JavaAppPackaging, BuildInfoPlugin)
   .settings(
-    version := "0.9.1" + git.gitHeadCommit.value.map(".git" + _.take(8)).getOrElse(""),
+    version := "0.9.3" + git.gitHeadCommit.value.map(".git" + _.take(8)).getOrElse(""),
     name := "rnode",
-    scalacOptions ++= Seq(
-      "-Xfatal-warnings",
-      "-unchecked",
-      "-deprecation",
-      "-feature"
-    ),
+    scalacOptions ++= almostCompilerSettings,
     maintainer := "RChain Cooperative https://www.rchain.coop/",
     packageSummary := "RChain Node",
     packageDescription := "RChain Node - the RChain blockchain node server software.",
@@ -309,8 +313,10 @@ lazy val node = (project in file("node"))
     /* Dockerization */
     dockerUsername := Some(organization.value),
     dockerAliases ++=
-      sys.env.get("DRONE_BUILD_NUMBER")
-        .toSeq.map(num => dockerAlias.value.withTag(Some(s"DRONE-${num}"))),
+      sys.env
+        .get("DRONE_BUILD_NUMBER")
+        .toSeq
+        .map(num => dockerAlias.value.withTag(Some(s"DRONE-${num}"))),
     dockerUpdateLatest := sys.env.get("DRONE").isEmpty,
     dockerBaseImage := "openjdk:11-jre-slim",
     dockerCommands := {
@@ -386,7 +392,7 @@ lazy val rholang = (project in file("rholang"))
     ),
     publishArtifact in (Compile, packageDoc) := false,
     publishArtifact in packageDoc := false,
-    sources in (Compile,doc) := Seq.empty,
+    sources in (Compile, doc) := Seq.empty,
     libraryDependencies ++= commonDependencies ++ Seq(
       catsMtl,
       catsEffect,
@@ -447,7 +453,6 @@ lazy val rspace = (project in file("rspace"))
     Defaults.itSettings,
     name := "rspace",
     version := "0.2.1-SNAPSHOT",
-
     libraryDependencies ++= commonDependencies ++ kamonDependencies ++ Seq(
       lmdbjava,
       catsCore,

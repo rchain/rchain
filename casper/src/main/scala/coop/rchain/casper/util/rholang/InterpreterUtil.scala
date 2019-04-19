@@ -20,7 +20,7 @@ import monix.eval.Coeval
 
 object InterpreterUtil {
 
-  private implicit val logSource: LogSource = LogSource(this.getClass)
+  implicit private val logSource: LogSource = LogSource(this.getClass)
 
   def mkTerm(rho: String): Either[Throwable, Par] =
     ParBuilder[Coeval].buildNormalizedTerm(rho).runAttempt
@@ -89,6 +89,7 @@ object InterpreterUtil {
         }
     }
 
+  @SuppressWarnings(Array("org.wartremover.warts.Throw"))
   private def processPreStateHash[F[_]: Sync: Log: BlockStore](
       runtimeManager: RuntimeManager[F],
       preStateHash: StateHash,
@@ -121,6 +122,8 @@ object InterpreterUtil {
               Log[F].warn(s"Found unknown failure") *> Right(none[StateHash])
                 .leftCast[BlockException]
                 .pure[F]
+            case UnusedCommEvent(_) =>
+              Sync[F].raiseError(new RuntimeException("found UnusedCommEvent"))
           }
         case Left((None, status)) =>
           status match {
@@ -128,6 +131,11 @@ object InterpreterUtil {
               Log[F].warn(s"Found unused comm event ${ex.getMessage}") *> Right(none[StateHash])
                 .leftCast[BlockException]
                 .pure[F]
+            case InternalErrors(_) => throw new RuntimeException("found InternalErrors")
+            case ReplayStatusMismatch(_, _) =>
+              throw new RuntimeException("found ReplayStatusMismatch")
+            case UnknownFailure => throw new RuntimeException("found UnknownFailure")
+            case UserErrors(_)  => throw new RuntimeException("found UserErrors")
           }
         case Right(computedStateHash) =>
           if (tsHash.contains(computedStateHash)) {
@@ -212,20 +220,19 @@ object InterpreterUtil {
                                                 deploys,
                                                 time
                                               )
-                             } yield
-                               replayResult match {
-                                 case result @ Right(_) => result.leftCast[Throwable]
-                                 case Left((_, status)) =>
-                                   val parentHashes =
-                                     parents.map(
-                                       p => Base16.encode(p.blockHash.toByteArray).take(8)
-                                     )
-                                   Left(
-                                     new Exception(
-                                       s"Failed status while computing post state of $parentHashes: $status"
-                                     )
+                             } yield replayResult match {
+                               case result @ Right(_) => result.leftCast[Throwable]
+                               case Left((_, status)) =>
+                                 val parentHashes =
+                                   parents.map(
+                                     p => Base16.encode(p.blockHash.toByteArray).take(8)
                                    )
-                               }
+                                 Left(
+                                   new Exception(
+                                     s"Failed status while computing post state of $parentHashes: $status"
+                                   )
+                                 )
+                             }
                            case Left(_) => acc.pure[F]
                          }
                      }

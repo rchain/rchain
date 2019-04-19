@@ -8,16 +8,21 @@ import scala.util.Random
 
 import cats._
 import cats.effect.Timer
-import cats.effect.concurrent.MVar
 import cats.implicits._
 
 import coop.rchain.comm._
+import coop.rchain.grpc.Server
 
 abstract class KademliaRPCRuntime[F[_]: Monad: Timer, E <: Environment] {
 
   def createEnvironment(port: Int): F[E]
 
   def createKademliaRPC(env: E): F[KademliaRPC[F]]
+  def createKademliaRPCServer(
+      env: E,
+      pingHandler: PeerNode => F[Unit],
+      lookupHandler: (PeerNode, Array[Byte]) => F[Seq[PeerNode]]
+  ): F[Server[F]]
 
   def extract[A](fa: F[A]): A
 
@@ -50,27 +55,22 @@ abstract class KademliaRPCRuntime[F[_]: Monad: Timer, E <: Environment] {
       extract(
         twoNodesEnvironment { (e1, e2) =>
           for {
-            localRpc  <- createKademliaRPC(e1)
-            remoteRpc <- createKademliaRPC(e2)
-            local     = e1.peer
-            remote    = e2.peer
-            _ <- localRpc.receive(
-                  Handler.pingHandler[F].handle(local),
-                  Handler.lookupHandlerNil[F].handle(local)
-                )
-            _ <- remoteRpc.receive(
-                  pingHandler.handle(remote),
-                  lookupHandler.handle(remote)
-                )
+            local    <- e1.peer.pure[F]
+            remote   = e2.peer
+            localRpc <- createKademliaRPC(e1)
+            remoteRpc <- createKademliaRPCServer(
+                          e2,
+                          pingHandler.handle(remote),
+                          lookupHandler.handle(remote)
+                        )
+            _ <- remoteRpc.start
             r <- execute(localRpc, local, remote)
-            _ <- remoteRpc.shutdown()
-            _ <- localRpc.shutdown()
-          } yield
-            new TwoNodesResult {
-              def localNode: PeerNode  = local
-              def remoteNode: PeerNode = remote
-              def apply(): A           = r
-            }
+            _ <- remoteRpc.stop
+          } yield new TwoNodesResult {
+            def localNode: PeerNode  = local
+            def remoteNode: PeerNode = remote
+            def apply(): A           = r
+          }
         }
       )
 
@@ -92,18 +92,12 @@ abstract class KademliaRPCRuntime[F[_]: Monad: Timer, E <: Environment] {
             localRpc <- createKademliaRPC(e1)
             local    = e1.peer
             remote   = e2.peer
-            _ <- localRpc.receive(
-                  Handler.pingHandler[F].handle(local),
-                  Handler.lookupHandlerNil[F].handle(local)
-                )
-            r <- execute(localRpc, local, remote)
-            _ <- localRpc.shutdown()
-          } yield
-            new TwoNodesResult {
-              def localNode: PeerNode  = local
-              def remoteNode: PeerNode = remote
-              def apply(): A           = r
-            }
+            r        <- execute(localRpc, local, remote)
+          } yield new TwoNodesResult {
+            def localNode: PeerNode  = local
+            def remoteNode: PeerNode = remote
+            def apply(): A           = r
+          }
         }
       )
 

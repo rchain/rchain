@@ -4,7 +4,14 @@ import coop.rchain.crypto.PublicKey
 import coop.rchain.crypto.hash.Blake2b256
 import coop.rchain.rholang.interpreter.util.codec.Base58
 
-final case class Address(val prefix: Array[Byte], val keyHash: Array[Byte])
+final case class Address(prefix: Array[Byte], keyHash: Array[Byte], checksum: Array[Byte]) {
+
+  def toBase58: String = {
+    val payload = prefix ++ keyHash
+    val address = payload ++ checksum
+    Base58.encode(address)
+  }
+}
 
 class AddressTools(prefix: Array[Byte], keyLength: Int, checksumLength: Int) {
   private def computeChecksum(toCheck: Array[Byte]): Array[Byte] =
@@ -16,13 +23,12 @@ class AddressTools(prefix: Array[Byte], keyLength: Int, checksumLength: Int) {
     * @param pk the public key from which the address is derived
     * @return None if the key length is invalid or Some if the address was created successfully
     */
-  def fromPublicKey(pk: PublicKey): Option[String] =
+  def fromPublicKey(pk: PublicKey): Option[Address] =
     if (keyLength == pk.bytes.length) {
       val keyHash = Blake2b256.hash(pk.bytes)
       val payload = prefix ++ keyHash
-      val address = payload ++ computeChecksum(payload)
 
-      Some(Base58.encode(address))
+      Some(Address(prefix, keyHash, computeChecksum(payload)))
     } else None
 
   def isValid(address: String): Boolean = parse(address).isRight
@@ -42,15 +48,16 @@ class AddressTools(prefix: Array[Byte], keyLength: Int, checksumLength: Int) {
       val computedChecksum    = computeChecksum(payload)
 
       if (computedChecksum.deep == checksum.deep)
-        Right(payload)
+        Right((payload, checksum))
       else
         Left("Invalid checksum")
     }
 
-    def parsePayload(payload: Array[Byte]) = {
+    def parseKeyHash(payload: Array[Byte]) = {
       val (actualPrefix, keyHash) = payload.splitAt(prefix.length)
 
-      if (actualPrefix.deep == prefix.deep) Right(Address(actualPrefix, keyHash))
+      if (actualPrefix.deep == prefix.deep)
+        Right(keyHash)
       else Left("Invalid prefix")
     }
 
@@ -58,9 +65,10 @@ class AddressTools(prefix: Array[Byte], keyLength: Int, checksumLength: Int) {
       decodedAddress <- Base58
                          .decode(address)
                          .toRight("Invalid Base58 encoding")
-      _       <- validateLength(decodedAddress)
-      payload <- validateChecksum(decodedAddress)
-      address <- parsePayload(payload)
-    } yield address
+      _                   <- validateLength(decodedAddress)
+      payloadAndChecksum  <- validateChecksum(decodedAddress)
+      (payload, checksum) = payloadAndChecksum
+      keyHash             <- parseKeyHash(payload)
+    } yield Address(prefix, keyHash, checksum)
   }
 }

@@ -1,14 +1,16 @@
 package coop.rchain.comm.transport
 
+import java.nio.file._
+
 import scala.concurrent.duration.Duration
 
 import coop.rchain.comm._
+import coop.rchain.comm.rp.Connect.RPConfAsk
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.util.{CertificateHelper, CertificatePrinter}
-import coop.rchain.shared.Log
-import java.nio.file._
-
 import coop.rchain.metrics.Metrics
+import coop.rchain.p2p.EffectsTestInstances._
+import coop.rchain.shared.Log
 
 import monix.catnap.MVar
 import monix.eval.Task
@@ -47,20 +49,18 @@ class TcpTransportLayerSpec
 
   def createTransportLayer(
       env: TcpTlsEnvironment
-  ): Task[(TransportLayer[Task], TransportLayerShutdown[Task])] =
-    for {
-      client <- CachedConnections[Task, TcpConnTag].map { implicit cache =>
-                 new GrpcTransportClient(
-                   env.cert,
-                   env.key,
-                   maxMessageSize,
-                   maxMessageSize,
-                   tempFolder,
-                   100
-                 )
-               }
-      _ <- client.start()
-    } yield (client, new TransportLayerShutdown(client.shutdown))
+  ): Task[TransportLayer[Task]] =
+    Task.delay(
+      new GrpcTransportClient(
+        networkId,
+        env.cert,
+        env.key,
+        maxMessageSize,
+        maxMessageSize,
+        tempFolder,
+        100
+      )
+    )
 
   def extract[A](fa: Task[A]): A = fa.runSyncUnsafe(Duration.Inf)
 
@@ -69,7 +69,8 @@ class TcpTransportLayerSpec
 
   def createTransportLayerServer(env: TcpTlsEnvironment): Task[TransportLayerServer[Task]] =
     Task.delay {
-      new GrpcTransportServer(env.port, env.cert, env.key, maxMessageSize, tempFolder, 4)
+      implicit val rPConfAsk: RPConfAsk[Task] = createRPConfAsk[Task](env.peer)
+      new GrpcTransportServer(networkId, env.port, env.cert, env.key, maxMessageSize, tempFolder, 4)
     }
 }
 

@@ -3,8 +3,6 @@ package coop.rchain.rspace
 import cats.Id
 import coop.rchain.rspace.internal._
 
-import scala.collection.immutable.Seq
-
 final case class Result[R](value: R, persistent: Boolean)
 final case class ContResult[C, P, R](
     value: R,
@@ -124,7 +122,8 @@ trait ISpace[F[_], C, P, A, R, K] {
     */
   protected[rspace] def isDirty(root: Blake2b256Hash): F[Boolean]
 
-  val store: IStore[F, C, P, A, K]
+  def toMap: Map[Seq[C], Row[P, A, K]]
+
 }
 
 object ISpace {

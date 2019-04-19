@@ -1,10 +1,9 @@
 package coop.rchain.casper.util.comm
 
-import cats.Monad
+import cats.Traverse
 import cats.data.EitherT
 import cats.effect.Concurrent
 import cats.implicits._
-import cats.kernel.Eq
 import com.google.protobuf.ByteString
 import coop.rchain.casper.ValidatorIdentity
 import coop.rchain.casper.genesis.Genesis
@@ -15,17 +14,17 @@ import coop.rchain.casper.util.rholang.{
   ProcessedDeployUtil,
   RuntimeManager
 }
-
 import coop.rchain.catscontrib.Catscontrib._
 import coop.rchain.comm.CommError.ErrorHandler
 import coop.rchain.comm.protocol.routing.Packet
 import coop.rchain.comm.rp.Connect.RPConfAsk
-import coop.rchain.comm.rp.ProtocolHelper.packet
 import coop.rchain.comm.transport.{Blob, TransportLayer}
 import coop.rchain.comm.{transport, PeerNode}
+import coop.rchain.crypto.PublicKey
 import coop.rchain.crypto.hash.Blake2b256
+import coop.rchain.crypto.signatures.Ed25519
+import coop.rchain.rholang.interpreter.util.RevAddress
 import coop.rchain.shared._
-import monix.execution.Scheduler
 
 import scala.util.Try
 
@@ -36,15 +35,15 @@ import scala.util.Try
 class BlockApproverProtocol(
     validatorId: ValidatorIdentity,
     deployTimestamp: Long,
-    bonds: Map[Array[Byte], Long],
+    bonds: Map[PublicKey, Long],
     wallets: Seq[PreWallet],
     minimumBond: Long,
     maximumBond: Long,
     faucet: Boolean,
     requiredSigs: Int
 ) {
-  private implicit val logSource: LogSource = LogSource(this.getClass)
-  private val _bonds                        = bonds.map(e => ByteString.copyFrom(e._1) -> e._2)
+  implicit private val logSource: LogSource = LogSource(this.getClass)
+  private val _bonds                        = bonds.map(e => ByteString.copyFrom(e._1.bytes) -> e._2)
 
   def unapprovedBlockPacketHandler[F[_]: Concurrent: TransportLayer: Log: Time: ErrorHandler: RPConfAsk](
       peer: PeerNode,
@@ -75,7 +74,7 @@ class BlockApproverProtocol(
                 .getApproval(candidate, validatorId)
                 .toByteString
               msg = Blob(local, Packet(transport.BlockApproval.id, serializedApproval))
-              _   <- TransportLayer[F].stream(Seq(peer), msg)
+              _   <- TransportLayer[F].stream(peer, msg)
               _ <- Log[F].info(
                     s"Received expected candidate from $peer. Approval sent in response."
                   )
@@ -126,11 +125,27 @@ object BlockApproverProtocol {
         _ <- (blockBonds == bonds)
               .either(())
               .or("Block bonds don't match expected.")
-        validators = blockBonds.toSeq.map(b => ProofOfStakeValidator(b._1.toByteArray, b._2))
-        posParams  = ProofOfStakeParams(minimumBond, maximumBond, validators)
-        faucetCode = if (faucet) Faucet.basicWalletFaucet(_) else Faucet.noopFaucet
+        validators = blockBonds.toSeq.map {
+          case (pk, stake) =>
+            Validator(PublicKey(pk.toByteArray), stake)
+        }
+        posParams      = ProofOfStake(minimumBond, maximumBond, validators)
+        faucetCode     = if (faucet) Faucet.basicWalletFaucet(_) else Faucet.noopFaucet
+        (_, genesisPk) = Ed25519.newKeyPair
+        vaults = Traverse[List]
+          .traverse(posParams.validators.map(_.pk).toList)(RevAddress.fromPublicKey)
+          .get
+          .map(Vault(_, 1000L))
         genesisBlessedContracts = Genesis
-          .defaultBlessedTerms(timestamp, posParams, wallets, faucetCode)
+          .defaultBlessedTerms(
+            timestamp,
+            posParams,
+            wallets,
+            faucetCode,
+            genesisPk,
+            vaults,
+            Long.MaxValue
+          )
           .toSet
         blockDeploys          = body.deploys.flatMap(ProcessedDeployUtil.toInternal)
         genesisBlessedDeploys = genesisBlessedContracts

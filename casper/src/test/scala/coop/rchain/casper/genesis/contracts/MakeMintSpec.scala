@@ -8,9 +8,6 @@ import scala.concurrent.duration._
 class MakeMintSpec
     extends RhoSpec(
       CompiledRholangSource("MakeMintTest.rho"),
-      Seq(
-        StandardDeploys.nonNegativeNumber,
-        StandardDeploys.makeMint
-      ),
-      10.seconds
+      Seq.empty,
+      20.seconds
     )

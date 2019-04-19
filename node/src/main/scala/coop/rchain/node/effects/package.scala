@@ -2,15 +2,18 @@ package coop.rchain.node
 
 import java.nio.file.Path
 
+import scala.concurrent.duration._
+import scala.io.Source
+import scala.tools.jline.console._
+
 import cats.effect.Timer
 import cats.mtl._
+import cats.Applicative
 
-import coop.rchain.catscontrib._
-import coop.rchain.comm.CachedConnections.ConnectionsCache
 import coop.rchain.comm._
 import coop.rchain.comm.discovery._
-import coop.rchain.comm.rp.Connect._
 import coop.rchain.comm.rp._
+import coop.rchain.comm.rp.Connect._
 import coop.rchain.comm.transport._
 import coop.rchain.metrics.Metrics
 import coop.rchain.shared._
@@ -18,24 +21,22 @@ import coop.rchain.shared._
 import monix.eval._
 import monix.execution._
 import monix.execution.atomic.AtomicAny
-import scala.concurrent.duration._
-import scala.io.Source
-import scala.tools.jline.console._
-
-import cats.Applicative
 
 package object effects {
 
   def log: Log[Task] = Log.log
 
-  def nodeDiscovery(id: NodeIdentifier, defaultTimeout: FiniteDuration)(init: Option[PeerNode])(
+  def kademliaStore(id: NodeIdentifier)(
       implicit
-      log: Log[Task],
-      time: Time[Task],
-      metrics: Metrics[Task],
+      kademliaRPC: KademliaRPC[Task],
+      metrics: Metrics[Task]
+  ): KademliaStore[Task] = KademliaStore.table(id)
+
+  def nodeDiscovery(id: NodeIdentifier)(
+      implicit
+      kademliaStore: KademliaStore[Task],
       kademliaRPC: KademliaRPC[Task]
-  ): Task[NodeDiscovery[Task]] =
-    KademliaNodeDiscovery.create[Task](id, defaultTimeout)(init)
+  ): NodeDiscovery[Task] = NodeDiscovery.kademlia(id)
 
   def time(implicit timer: Timer[Task]): Time[Task] =
     new Time[Task] {
@@ -44,16 +45,15 @@ package object effects {
       def sleep(duration: FiniteDuration): Task[Unit] = timer.sleep(duration)
     }
 
-  def kademliaRPC(port: Int, timeout: FiniteDuration)(
+  def kademliaRPC(networkId: String, timeout: FiniteDuration)(
       implicit
       scheduler: Scheduler,
       peerNodeAsk: PeerNodeAsk[Task],
-      metrics: Metrics[Task],
-      log: Log[Task],
-      cache: ConnectionsCache[Task, KademliaConnTag]
-  ): KademliaRPC[Task] = new GrpcKademliaRPC(port, timeout)
+      metrics: Metrics[Task]
+  ): KademliaRPC[Task] = new GrpcKademliaRPC(networkId, timeout)
 
   def transportClient(
+      networkId: String,
       certPath: Path,
       keyPath: Path,
       maxMessageSize: Int,
@@ -62,21 +62,13 @@ package object effects {
   )(
       implicit scheduler: Scheduler,
       log: Log[Task],
-      metrics: Metrics[Task],
-      cache: ConnectionsCache[Task, TcpConnTag]
-  ): Task[(TransportLayer[Task], TransportLayerShutdown[Task])] = {
-    val create =
-      Task.delay {
-        val cert = Resources.withResource(Source.fromFile(certPath.toFile))(_.mkString)
-        val key  = Resources.withResource(Source.fromFile(keyPath.toFile))(_.mkString)
-        new GrpcTransportClient(cert, key, maxMessageSize, packetChunkSize, folder, 1000)
-      }
-
-    for {
-      client <- create
-      _      <- client.start()
-    } yield (client, new TransportLayerShutdown(client.shutdown))
-  }
+      metrics: Metrics[Task]
+  ): Task[TransportLayer[Task]] =
+    Task.delay {
+      val cert = Resources.withResource(Source.fromFile(certPath.toFile))(_.mkString)
+      val key  = Resources.withResource(Source.fromFile(keyPath.toFile))(_.mkString)
+      new GrpcTransportClient(networkId, cert, key, maxMessageSize, packetChunkSize, folder, 1000)
+    }
 
   def consoleIO(consoleReader: ConsoleReader): ConsoleIO[Task] = new JLineConsoleIO(consoleReader)
 

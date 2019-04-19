@@ -10,6 +10,7 @@ object Wallet {
   /**
     * Produces Rholang code which adds a wallet to the blockchain based on the
     * given Wallet case class.
+    *
     * @param w the Wallet object containing the information which will go
     *          on the blockchain.
     * @return  Rholang code to add the wallet to the blockchain.

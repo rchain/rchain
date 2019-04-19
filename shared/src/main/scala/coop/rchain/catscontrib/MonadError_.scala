@@ -23,6 +23,6 @@ object MonadError_ {
 
   implicit def fromCatsMonadError[F[_], E](implicit ev: MonadError[F, E]): MonadError_[F, E] =
     new MonadError_[F, E] {
-      override implicit val instance: MonadError[F, E] = ev
+      implicit override val instance: MonadError[F, E] = ev
     }
 }

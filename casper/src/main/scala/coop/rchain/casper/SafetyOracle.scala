@@ -8,13 +8,11 @@ import Catscontrib._
 import cats.data.OptionT
 
 import coop.rchain.blockstorage.BlockDagRepresentation
-import coop.rchain.casper.Estimator.{BlockHash, Validator}
+import coop.rchain.casper.Estimator.Validator
 import coop.rchain.casper.protocol.Justification
 import coop.rchain.casper.util.ProtoUtil._
 import coop.rchain.casper.util.{Clique, DagOperations, ProtoUtil}
 import coop.rchain.models.BlockMetadata
-import coop.rchain.shared.Log
-import coop.rchain.catscontrib.ski.id
 import coop.rchain.metrics.Metrics
 import coop.rchain.shared.{Log, StreamT}
 
@@ -186,7 +184,7 @@ sealed abstract class SafetyOracleInstances {
                        potentialDisagreement =>
                          computeCompatibility(blockDag, candidateBlockHash, potentialDisagreement)
                      }))
-          } yield result).fold(false)(id)
+          } yield result).fold(false)(identity)
 
         def computeAgreementGraphEdges: F[List[(Validator, Validator)]] =
           (for {

@@ -23,9 +23,7 @@ trait StorageExamplesTests[F[_]]
     with TestImplicitHelpers {
 
   "CORE-365: A joined consume on duplicate channels followed by two produces on that channel" should
-    "return a continuation and the produced data" in withTestSpace { space =>
-    val store = space.store
-
+    "return a continuation and the produced data" in withTestSpace { (store, space) =>
     for {
       r1 <- space
              .consume(
@@ -45,9 +43,7 @@ trait StorageExamplesTests[F[_]]
   }
 
   "CORE-365: Two produces on the same channel followed by a joined consume on duplicates of that channel" should
-    "return a continuation and the produced data" in withTestSpace { space =>
-    val store = space.store
-
+    "return a continuation and the produced data" in withTestSpace { (store, space) =>
     for {
       r1 <- space.produce(Channel("friends"), bob, persist = false)
       _  = r1 shouldBe None
@@ -67,9 +63,7 @@ trait StorageExamplesTests[F[_]]
   }
 
   "CORE-365: A joined consume on duplicate channels given twice followed by three produces" should
-    "return a continuation and the produced data" in withTestSpace { space =>
-    val store = space.store
-
+    "return a continuation and the produced data" in withTestSpace { (store, space) =>
     for {
       r1 <- space
              .consume(
@@ -96,9 +90,7 @@ trait StorageExamplesTests[F[_]]
   }
 
   "CORE-365: A joined consume on multiple duplicate channels followed by the requisite produces" should
-    "return a continuation and the produced data" in withTestSpace { space =>
-    val store = space.store
-
+    "return a continuation and the produced data" in withTestSpace { (store, space) =>
     for {
       r1 <- space
              .consume(
@@ -157,9 +149,7 @@ trait StorageExamplesTests[F[_]]
   }
 
   "CORE-365: Multiple produces on multiple duplicate channels followed by the requisite consume" should
-    "return a continuation and the produced data" in withTestSpace { space =>
-    val store = space.store
-
+    "return a continuation and the produced data" in withTestSpace { (store, space) =>
     for {
       r1 <- space.produce(Channel("friends"), bob, persist = false)
       r2 <- space.produce(Channel("family"), carol, persist = false)
@@ -218,8 +208,7 @@ trait StorageExamplesTests[F[_]]
   }
 
   "CORE-365: A joined consume on multiple mixed up duplicate channels followed by the requisite produces" should
-    "return a continuation and the produced data" in withTestSpace { space =>
-    val store = space.store
+    "return a continuation and the produced data" in withTestSpace { (store, space) =>
     for {
       r1 <- space
              .consume(
@@ -286,7 +275,7 @@ abstract class MixedInMemoryStoreStorageExamplesTestsBase[F[_]]
   val dbDir: Path   = Files.createTempDirectory("rchain-storage-test-")
   val mapSize: Long = 1024L * 1024L * 1024L
 
-  override def withTestSpace[R](f: T => F[R]): R = {
+  override def withTestSpace[R](f: (ST, T) => F[R]): R = {
 
     implicit val cg: Codec[GNAT[Channel, Pattern, Entry, EntriesCaptor]] = codecGNAT(
       serializeChannel.toCodec,
@@ -297,27 +286,28 @@ abstract class MixedInMemoryStoreStorageExamplesTestsBase[F[_]]
 
     val branch = Branch("inmem")
 
-    val ctx: Context[F, Channel, Pattern, Entry, EntriesCaptor] =
-      Context.createMixed(dbDir, mapSize)
+    val env = Context.env(dbDir, mapSize)
+
+    val trieStore = LMDBTrieStore
+      .create[F, Blake2b256Hash, GNAT[Channel, Pattern, Entry, EntriesCaptor]](env, dbDir)
+    val testStore = LockFreeInMemoryStore.create(trieStore, branch)
 
     run(for {
       testSpace <- RSpace.create[F, Channel, Pattern, Entry, Entry, EntriesCaptor](
-                    ctx,
+                    testStore,
                     branch
                   )
-      testStore = testSpace.store
-      trieStore = testStore.trieStore
-      _         <- testStore.withWriteTxnF(testStore.clear)
-      _         = trieStore.withTxn(trieStore.createTxnWrite())(trieStore.clear)
-      _         = initialize(trieStore, branch)
-      res       <- f(testSpace)
+      //_         <- testStore.withWriteTxnF(testStore.clear)
+      //_         = trieStore.withTxn(trieStore.createTxnWrite())(trieStore.clear)
+      _   = initialize(trieStore, branch)
+      res <- f(testStore, testSpace)
     } yield {
       try {
         res
       } finally {
         trieStore.close()
         testStore.close()
-        ctx.close()
+        env.close()
       }
     })
   }
@@ -331,7 +321,7 @@ abstract class MixedInMemoryStoreStorageExamplesTestsBase[F[_]]
 abstract class InMemoryStoreStorageExamplesTestsBase[F[_]]
     extends StorageTestsBase[F, Channel, Pattern, Entry, EntriesCaptor] {
 
-  override def withTestSpace[R](f: T => F[R]): R = {
+  override def withTestSpace[R](f: (ST, T) => F[R]): R = {
 
     implicit val cg: Codec[GNAT[Channel, Pattern, Entry, EntriesCaptor]] = codecGNAT(
       serializeChannel.toCodec,
@@ -342,19 +332,19 @@ abstract class InMemoryStoreStorageExamplesTestsBase[F[_]]
 
     val branch = Branch("inmem")
 
-    val ctx: Context[F, Channel, Pattern, Entry, EntriesCaptor] = Context.createInMemory()
+    val trieStore =
+      InMemoryTrieStore.create[Blake2b256Hash, GNAT[Channel, Pattern, Entry, EntriesCaptor]]()
+    val testStore = InMemoryStore.create(trieStore, branch)
 
     run(for {
       testSpace <- RSpace.create[F, Channel, Pattern, Entry, Entry, EntriesCaptor](
-                    ctx,
+                    testStore,
                     branch
                   )
-      testStore = testSpace.store
-      trieStore = testStore.trieStore
-      _         <- testStore.withWriteTxnF(testStore.clear)
-      _         <- trieStore.withTxn(trieStore.createTxnWrite())(trieStore.clear).pure[F]
-      _         = initialize(trieStore, branch)
-      res       <- f(testSpace)
+      //_         <- testStore.withWriteTxnF(testStore.clear)
+      //_         <- trieStore.withTxn(trieStore.createTxnWrite())(trieStore.clear).pure[F]
+      _   = initialize(trieStore, branch)
+      res <- f(testStore, testSpace)
     } yield {
       try {
         res
@@ -374,7 +364,7 @@ abstract class LMDBStoreStorageExamplesTestBase[F[_]]
   val mapSize: Long  = 1024L * 1024L * 1024L
   val noTls: Boolean = false
 
-  override def withTestSpace[R](f: T => F[R]): R = {
+  override def withTestSpace[R](f: (ST, T) => F[R]): R = {
     val context   = Context.create[F, Channel, Pattern, Entry, EntriesCaptor](dbDir, mapSize, noTls)
     val testStore = LMDBStore.create[F, Channel, Pattern, Entry, EntriesCaptor](context)
     run(for {
@@ -383,7 +373,7 @@ abstract class LMDBStoreStorageExamplesTestBase[F[_]]
                     Branch.MASTER
                   )
       _   <- testStore.withWriteTxnF(testStore.clear)
-      res <- f(testSpace)
+      res <- f(testStore, testSpace)
     } yield {
       try {
         res

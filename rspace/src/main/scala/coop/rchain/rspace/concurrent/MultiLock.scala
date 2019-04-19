@@ -3,7 +3,6 @@ package coop.rchain.rspace.concurrent
 import cats.implicits._
 import cats.effect.Concurrent
 import cats.effect.concurrent.Semaphore
-import scala.collection.immutable.Seq
 
 import scala.collection.concurrent.TrieMap
 

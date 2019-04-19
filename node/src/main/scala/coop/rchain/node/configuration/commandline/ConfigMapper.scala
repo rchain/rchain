@@ -35,6 +35,7 @@ object ConfigMapper {
       {
         import Server._
         val add = addToMap(Key)
+        add(keys.NetworkId, run.network)
         add(keys.Host, run.host)
         add(keys.HostDynamic, run.dynamicHostAddress)
         add(keys.Upnp, run.noUpnp.map(kp(false)))
@@ -47,6 +48,7 @@ object ConfigMapper {
         add(keys.DataDir, run.dataDir)
         add(keys.StoreType, run.storeType)
         add(keys.StoreSize, run.casperBlockStoreSize)
+        add(keys.DagStorageSize, run.casperBlockDagStorageSize)
         add(keys.MapSize, run.mapSize)
         add(keys.MaxConnections, run.maxNumOfConnections)
         add(keys.MaxMessageSize, run.maxMessageSize)
