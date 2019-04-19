@@ -17,13 +17,12 @@ import coop.rchain.models._
 import coop.rchain.rholang.interpreter.accounting._
 import coop.rchain.rholang.interpreter.storage.StoragePrinter
 import coop.rchain.rholang.interpreter.{
-  ChargingReducer,
-  ErrorLog,
-  EvaluateResult,
-  Interpreter,
-  Runtime
-}
-import coop.rchain.rspace.internal.Datum
+    ChargingReducer,
+    ErrorLog,
+    EvaluateResult,
+    Interpreter,
+    Runtime
+  }
 import coop.rchain.rspace.{Blake2b256Hash, ReplayException}
 
 trait RuntimeManager[F[_]] {
@@ -62,12 +61,19 @@ class RuntimeManagerImpl[F[_]: Concurrent] private[rholang] (
     withResetRuntime(start) { runtime =>
       //TODO: Is better error handling needed here?
       for {
-        evalR                     <- newEval(deploy :: Nil, runtime, start)
-        (_, Seq(processedDeploy)) = evalR
-        result <- if (processedDeploy.status.isFailed) Seq.empty[Datum[ListParWithRandom]].pure[F]
-                 else runtime.space.getData(name).map(_.toSeq)
-      } yield result.flatMap(_.a.pars)
+        evaluateResult <- computeEffect(runtime)(deploy)
+        result <- if (evaluateResult.errors.isEmpty) getData(runtime)(name) else Seq.empty[Par].pure[F]
+      } yield result
     }
+
+  private def computeEffect(runtime: Runtime[F])(deploy: DeployData): F[EvaluateResult] =
+    for {
+      runtimeParameters                        <- ProtoUtil.getRholangDeployParams(deploy).pure[F]
+      (codeHash, phloPrice, userId, timestamp) = runtimeParameters
+      _                                        <- runtime.shortLeashParams.setParams(codeHash, phloPrice, userId, timestamp)
+      evaluateResult                           <- doInj(deploy, runtime.reducer, runtime.errorLog)(runtime.cost)
+    } yield evaluateResult
+
   /**
     * @note `replayEval` does not need to reset the evaluation store,
     *       merely the replay store. Hence, `replayComputeState` uses
@@ -128,7 +134,7 @@ class RuntimeManagerImpl[F[_]: Concurrent] private[rholang] (
         bondsPar =>
           new IllegalArgumentException(
             s"Incorrect number of results from query of current bonds: ${bondsPar.size}"
-        )
+          )
       )(bondsPar => bondsPar.size == 1)
       .map { bondsPar =>
         toBondSeq(bondsPar.head)
@@ -155,7 +161,10 @@ class RuntimeManagerImpl[F[_]: Concurrent] private[rholang] (
     }.toList
 
   def getData(hash: StateHash)(channel: Par): F[Seq[Par]] =
-    withResetRuntime(hash)(_.space.getData(channel).map(_.flatMap(_.a.pars)))
+    withResetRuntime(hash)(getData(_)(channel))
+
+  private def getData(runtime: Runtime[F])(channel: Par): F[Seq[Par]] =
+    runtime.space.getData(channel).map(_.flatMap(_.a.pars))
 
   def getContinuation(
       hash: StateHash
@@ -184,15 +193,12 @@ class RuntimeManagerImpl[F[_]: Concurrent] private[rholang] (
         terms match {
           case deploy +: rem =>
             for {
-              runtimeParameters <- ProtoUtil.getRholangDeployParams(deploy).pure[F]
-              (codeHash, phloPrice, userId, timestamp) = runtimeParameters
-              _                                      <- runtime.shortLeashParams.setParams(codeHash, phloPrice, userId, timestamp)
-              injResult                              <- doInj(deploy, runtime.reducer, runtime.errorLog)(runtime.cost)
-              EvaluateResult(evaluationCost, errors) = injResult
-              newCheckpoint                          <- runtime.space.createCheckpoint()
+              evaluateResult               <- computeEffect(runtime)(deploy)
+              EvaluateResult(cost, errors) = evaluateResult
+              newCheckpoint                <- runtime.space.createCheckpoint()
               deployResult = InternalProcessedDeploy(
                 deploy,
-                Cost.toProto(evaluationCost),
+                Cost.toProto(cost),
                 newCheckpoint.log,
                 DeployStatus.fromErrors(errors)
               )
@@ -347,7 +353,9 @@ object RuntimeManager {
       override def getData(hash: StateHash)(channel: Par): T[F, scala.Seq[Par]] =
         runtimeManager.getData(hash)(channel).liftM[T]
 
-      override def getContinuation(hash: StateHash)(channels: Seq[Par]): T[F, scala.Seq[(scala.Seq[BindPattern], Par)]] =
+      override def getContinuation(
+          hash: StateHash
+      )(channels: Seq[Par]): T[F, scala.Seq[(scala.Seq[BindPattern], Par)]] =
         runtimeManager.getContinuation(hash)(channels).liftM[T]
 
       override val emptyStateHash: StateHash = runtimeManager.emptyStateHash
