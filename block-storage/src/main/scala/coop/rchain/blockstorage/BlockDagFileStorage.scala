@@ -23,6 +23,7 @@ import coop.rchain.crypto.codec.Base16
 import coop.rchain.models.{BlockMetadata, EquivocationRecord}
 import coop.rchain.shared.{AtomicMonadState, Log, LogSource}
 import coop.rchain.shared.ByteStringOps._
+import coop.rchain.shared.Language.ignore
 import monix.execution.atomic.AtomicAny
 import org.lmdbjava.DbiFlags.MDB_CREATE
 import org.lmdbjava.{Env, EnvFlags}
@@ -47,7 +48,6 @@ private final case class BlockDagFileStorageState[F[_]: Sync](
     equivocationsTrackerCrc: Crc32[F]
 )
 
-@SuppressWarnings(Array("org.wartremover.warts.NonUnitStatements")) // TODO remove!!
 final class BlockDagFileStorage[F[_]: Concurrent: Sync: Log: RaiseIOError] private (
     lock: Semaphore[F],
     blockNumberIndex: LmdbDbi[F, ByteBuffer],
@@ -168,11 +168,13 @@ final class BlockDagFileStorage[F[_]: Concurrent: Sync: Log: RaiseIOError] priva
 
   private[this] def putBlockNumber(blockHash: BlockHash, blockNumber: Long): F[Unit] =
     blockNumberIndex.withWriteTxn { txn =>
-      blockNumberIndex.put(
-        txn,
-        blockHash.toDirectByteBuffer,
-        blockNumber.toByteString.toDirectByteBuffer
-      )
+      ignore {
+        blockNumberIndex.put(
+          txn,
+          blockHash.toDirectByteBuffer,
+          blockNumber.toByteString.toDirectByteBuffer
+        )
+      }
     }
 
   private case class FileDagRepresentation(
@@ -375,8 +377,8 @@ final class BlockDagFileStorage[F[_]: Concurrent: Sync: Log: RaiseIOError] priva
       _ <- latestMessages.toList.traverse_ {
             case (validator, blockHash) =>
               Sync[F].delay {
-                dataByteBuffer.put(validator.toByteArray)
-                dataByteBuffer.put(blockHash.toByteArray)
+                ignore { dataByteBuffer.put(validator.toByteArray) }
+                ignore { dataByteBuffer.put(blockHash.toByteArray) }
               }
           }
       _                <- writeToFile[F](tmpSquashedData, dataByteBuffer.array())
@@ -583,7 +585,6 @@ final class BlockDagFileStorage[F[_]: Concurrent: Sync: Log: RaiseIOError] priva
     )
 }
 
-@SuppressWarnings(Array("org.wartremover.warts.NonUnitStatements")) // TODO remove
 object BlockDagFileStorage {
   implicit private val logSource       = LogSource(BlockDagFileStorage.getClass)
   private val checkpointPattern: Regex = "([0-9]+)-([0-9]+)".r
@@ -679,7 +680,7 @@ object BlockDagFileStorage {
     readRec(List.empty, 0)
   }
 
-  private def validateLatestMessagesData[F[_]: Monad](
+  private def validateLatestMessagesData[F[_]: Sync](
       latestMessagesRaf: RandomAccessIO[F],
       readLatestMessagesCrc: Long,
       latestMessagesCrcPath: Path,
@@ -698,9 +699,7 @@ object BlockDagFileStorage {
               _      <- latestMessagesRaf.setLength(length - 64)
             } yield (latestMessagesList.init.toMap, withoutLastCalculatedCrc)
           } else {
-            // TODO: Restore latest messages from the persisted DAG
-            latestMessagesRaf.setLength(0)
-            (Map.empty[Validator, BlockHash], Crc32.empty[F]()).pure[F]
+            Sync[F].raiseError[(Map[Validator, BlockHash], Crc32[F])](LatestMessagesLogIsCorrupted)
           }
         }
       }
@@ -743,7 +742,7 @@ object BlockDagFileStorage {
     readRec(List.empty)
   }
 
-  private def validateDataLookupData[F[_]: Monad](
+  private def validateDataLookupData[F[_]: Sync](
       dataLookupRandomAccessFile: RandomAccessIO[F],
       readDataLookupCrc: Long,
       dataLookupCrcPath: Path,
@@ -764,15 +763,11 @@ object BlockDagFileStorage {
               _      <- dataLookupRandomAccessFile.setLength(length - lastDataLookupEntrySize)
             } yield (dataLookupList.init, withoutLastCalculatedCrc)
           } else {
-            // TODO: Restore data lookup from block storage
-            dataLookupRandomAccessFile.setLength(0)
-            (List.empty[(BlockHash, BlockMetadata)], Crc32.empty[F]()).pure[F]
+            Sync[F].raiseError[(List[(BlockHash, BlockMetadata)], Crc32[F])](DataLookupIsCorrupted)
           }
         }
       } else {
-        // TODO: Restore data lookup from block storage
-        dataLookupRandomAccessFile.setLength(0)
-        (List.empty[(BlockHash, BlockMetadata)], Crc32.empty[F]()).pure[F]
+        Sync[F].raiseError[(List[(BlockHash, BlockMetadata)], Crc32[F])](DataLookupIsCorrupted)
       }
     }
   }

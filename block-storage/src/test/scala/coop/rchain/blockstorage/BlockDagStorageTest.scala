@@ -31,6 +31,7 @@ trait BlockDagStorageTest
     extends FlatSpecLike
     with Matchers
     with OptionValues
+    with EitherValues
     with GeneratorDrivenPropertyChecks
     with BeforeAndAfterAll {
   val scheduler = Scheduler.fixedPool("block-dag-storage-test-scheduler", 4)
@@ -343,20 +344,14 @@ class BlockDagFileStorageTest extends BlockDagStorageTest {
     }
   }
 
-  it should "be able to handle fully corrupted latest messages log file" in withDagStorageLocation {
+  it should "fail at fully corrupted latest messages log file" in withDagStorageLocation {
     dagDataDir =>
       val garbageBytes = Array.fill[Byte](789)(0)
       for {
-        _                   <- Sync[Task].delay { Random.nextBytes(garbageBytes) }
-        _                   <- Sync[Task].delay { Files.write(defaultLatestMessagesLog(dagDataDir), garbageBytes) }
-        storage             <- createAtDefaultLocation(dagDataDir)
-        dag                 <- storage.getRepresentation
-        latestMessageHashes <- dag.latestMessageHashes
-        latestMessages      <- dag.latestMessages
-        _                   <- storage.close()
-        _                   = latestMessageHashes.size shouldBe 0
-        result              = latestMessages.size shouldBe 0
-      } yield result
+        _              <- Sync[Task].delay { Random.nextBytes(garbageBytes) }
+        _              <- Sync[Task].delay { Files.write(defaultLatestMessagesLog(dagDataDir), garbageBytes) }
+        storageAttempt <- createAtDefaultLocation(dagDataDir).attempt
+      } yield storageAttempt.left.value shouldBe LatestMessagesLogIsCorrupted
   }
 
   it should "be able to restore after squashing latest messages" in {
