@@ -24,8 +24,6 @@ import coop.rchain.comm.transport.{Blob, TransportLayer}
 import coop.rchain.comm.{transport, PeerNode}
 import coop.rchain.metrics.Metrics
 import coop.rchain.shared.{Log, LogSource, Time}
-import monix.eval.Task
-import monix.execution.Scheduler
 
 import scala.concurrent.duration.FiniteDuration
 import scala.util.Try
@@ -38,9 +36,8 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
   def of[F[_]: LastApprovedBlock: Metrics: BlockStore: ConnectionsCell: NodeDiscovery: TransportLayer: ErrorHandler: RPConfAsk: SafetyOracle: Sync: Concurrent: Time: Log: MultiParentCasperRef: BlockDagStorage](
       conf: CasperConf,
       delay: FiniteDuration,
-      runtimeManager: RuntimeManager[F],
-      toTask: F[_] => Task[_]
-  )(implicit scheduler: Scheduler): F[CasperPacketHandler[F]] =
+      runtimeManager: RuntimeManager[F]
+  ): F[CasperPacketHandler[F]] =
     BlockStore[F].getApprovedBlock.flatMap {
       case Some(approvedBlock) =>
         // We have an approved block so the network is already up and so no genesis ceremony needed.
@@ -120,19 +117,16 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
             standalone <- Ref.of[F, CasperPacketHandlerInternal[F]](
                            new StandaloneCasperHandler[F](abp)
                          )
-            _ <- Sync[F].delay {
-                  val _ = toTask(
-                    StandaloneCasperHandler
-                      .approveBlockInterval(
-                        conf.approveGenesisInterval,
-                        conf.shardId,
-                        runtimeManager,
-                        validatorId,
-                        standalone
-                      )
-                  ).forkAndForget.runToFuture
-                  ().pure[F]
-                }
+            _ <- Concurrent[F].start(
+                  StandaloneCasperHandler
+                    .approveBlockInterval[F](
+                      conf.approveGenesisInterval,
+                      conf.shardId,
+                      runtimeManager,
+                      validatorId,
+                      standalone
+                    )
+                )
           } yield new CasperPacketHandlerImpl[F](standalone)
         } else {
           for {

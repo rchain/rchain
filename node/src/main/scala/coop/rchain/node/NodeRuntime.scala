@@ -454,8 +454,7 @@ class NodeRuntime private[node] (
                             .of[Effect](
                               conf.casper,
                               defaultTimeout,
-                              RuntimeManager.eitherTRuntimeManager(runtimeManager),
-                              _.value
+                              RuntimeManager.eitherTRuntimeManager(runtimeManager)
                             )(
                               labEff,
                               Metrics.eitherT(Monad[Task], metrics),
@@ -471,8 +470,7 @@ class NodeRuntime private[node] (
                               Time.eitherTTime(Monad[Task], time),
                               Log.eitherTLog(Monad[Task], log),
                               multiParentCasperRef,
-                              blockDagStorage,
-                              scheduler
+                              blockDagStorage
                             )
     packetHandler = PacketHandler.pf[Effect](casperPacketHandler.handle)(
       Applicative[Effect],
