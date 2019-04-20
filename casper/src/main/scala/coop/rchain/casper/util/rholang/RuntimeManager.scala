@@ -65,11 +65,7 @@ class RuntimeManagerImpl[F[_]: Concurrent] private[rholang] (
         evalR                     <- newEval(deploy :: Nil, runtime, start)
         (_, Seq(processedDeploy)) = evalR
         result <- if (processedDeploy.status.isFailed) Seq.empty[Datum[ListParWithRandom]].pure[F]
-                 else {
-                   val r: F[Seq[Datum[ListParWithRandom]]] =
-                     runtime.space.getData(name).map(_.toSeq)
-                   r
-                 }
+                 else runtime.space.getData(name).map(_.toSeq)
       } yield result.flatMap(_.a.pars)
     }
   /**
@@ -127,13 +123,12 @@ class RuntimeManagerImpl[F[_]: Concurrent] private[rholang] (
         |  }
         |}""".stripMargin
 
-    val bondsQueryTerm = ConstructDeploy.sourceDeployNow(bondsQuery)
-    captureResults(hash, bondsQueryTerm)
+    captureResults(hash, ConstructDeploy.sourceDeployNow(bondsQuery))
       .ensureOr(
         bondsPar =>
           new IllegalArgumentException(
             s"Incorrect number of results from query of current bonds: ${bondsPar.size}"
-          )
+        )
       )(bondsPar => bondsPar.size == 1)
       .map { bondsPar =>
         toBondSeq(bondsPar.head)
