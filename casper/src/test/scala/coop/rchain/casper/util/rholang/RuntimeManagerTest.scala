@@ -2,29 +2,65 @@ package coop.rchain.casper.util.rholang
 
 import cats.Id
 import cats.effect.Resource
-import coop.rchain.casper.genesis.contracts.StandardDeploys
+import com.google.protobuf.ByteString
+import coop.rchain.casper.genesis.contracts.{ProofOfStake, StandardDeploys, Validator, Vault}
 import coop.rchain.casper.protocol.DeployData
 import coop.rchain.casper.util.rholang.Resources._
+import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
 import coop.rchain.casper.util.{ConstructDeploy, ProtoUtil}
 import coop.rchain.catscontrib.effect.implicits._
+import coop.rchain.crypto.PublicKey
+import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.hash.Blake2b512Random
+import coop.rchain.crypto.signatures.Ed25519
 import coop.rchain.metrics
 import coop.rchain.metrics.Metrics
 import coop.rchain.p2p.EffectsTestInstances.LogicalTime
 import coop.rchain.rholang.Resources.mkRuntime
 import coop.rchain.rholang.interpreter.accounting.Cost
-import coop.rchain.rholang.interpreter.{accounting, ParBuilder}
+import coop.rchain.rholang.interpreter.util.RevAddress
+import coop.rchain.rholang.interpreter.{ParBuilder, accounting}
 import coop.rchain.shared.Log
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
 import org.scalatest.{FlatSpec, Matchers}
 
 import scala.concurrent.duration._
+import coop.rchain.rholang.interpreter.{ParBuilder, accounting}
 
 class RuntimeManagerTest extends FlatSpec with Matchers {
 
   private val runtimeManager: Resource[Task, RuntimeManager[Task]] =
     mkRuntimeManager("casper-runtime-manager-test")
+
+  private def withTestFixture[A](test: (StateHash, RuntimeManager[Task], PublicKey) => Task[A]): A =
+    runtimeManager
+      .use { mgr =>
+        val (_, genesisPk) = Ed25519.newKeyPair
+        val genesisTerms = Seq(
+          StandardDeploys.listOps,
+          StandardDeploys.either,
+          StandardDeploys.nonNegativeNumber,
+          StandardDeploys.makeMint,
+          StandardDeploys.PoS,
+          StandardDeploys.authKey,
+          StandardDeploys.revVault,
+          StandardDeploys.revGenerator(
+            genesisPk,
+            Seq.empty[Vault],
+            Long.MaxValue
+          ),
+          StandardDeploys
+            .poSGenerator(
+              genesisPk,
+              ProofOfStake(0L, Long.MaxValue, Seq(Validator(genesisPk, 0L)))
+            )
+        )
+        mgr.computeState(mgr.emptyStateHash)(genesisTerms).flatMap {
+          case (start, _) => test(start, mgr, genesisPk)
+        }
+      }
+      .runSyncUnsafe(30.seconds)
 
   "computeState" should "capture rholang errors" in {
     val badRholang = """ for(@x <- @"x"; @y <- @"y"){ @"xy"!(x + y) } | @"x"!(1) | @"y"!("hi") """
@@ -35,6 +71,13 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
         .runSyncUnsafe(10.seconds)
 
     result.status.isFailed should be(true)
+  }
+
+  "computeBalance" should "compute vault balances accurately" in withTestFixture {
+    case (start, mgr, genesisPk) =>
+      mgr.computeBalance(start)(ByteString.copyFrom(genesisPk.bytes)).map { balance0 =>
+        balance0 should be(Long.MaxValue)
+      }
   }
 
   it should "capture rholang parsing errors and charge for parsing" in {
