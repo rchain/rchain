@@ -630,7 +630,7 @@ trait HotStoreSpec[F[_], M[_]] extends FlatSpec with Matchers with GeneratorDriv
             toRemove = historyJoins.get(index.toLong).getOrElse(join)
             res      <- hotStore.removeJoin(channel, toRemove).attempt
             cache    <- state.read
-            _        <- checkRemoval(res, cache.joins(channel), historyJoins, index)
+            _        <- checkRemoval(res, cache.joins(channel), historyJoins, index, shouldFail = false)
           } yield ()
         }
       }
@@ -660,7 +660,7 @@ trait HotStoreSpec[F[_], M[_]] extends FlatSpec with Matchers with GeneratorDriv
                   )
               res   <- hotStore.removeJoin(channel, toRemove).attempt
               cache <- state.read
-              _     <- checkRemoval(res, cache.joins(channel), cachedJoins, index)
+              _     <- checkRemoval(res, cache.joins(channel), cachedJoins, index, shouldFail = false)
             } yield ()
           }
         }
@@ -693,7 +693,8 @@ trait HotStoreSpec[F[_], M[_]] extends FlatSpec with Matchers with GeneratorDriv
               cache    <- state.read
               _ <- if (!cachedJoins.contains(toRemove))
                     Sync[F].delay {
-                      res shouldBe a[Left[_, _]]
+                      res shouldBe a[Right[_, _]]
+                      cache.joins(channel) shouldEqual cachedJoins
                     } else
                     for {
                       cache <- state.read
@@ -850,10 +851,14 @@ trait HotStoreSpec[F[_], M[_]] extends FlatSpec with Matchers with GeneratorDriv
       res: Either[Throwable, Unit],
       actual: Seq[T],
       initial: Seq[T],
-      index: Int
+      index: Int,
+      shouldFail: Boolean = true
   ): F[Assertion] = S.delay {
     if (index < 0 || index >= initial.size) {
-      res shouldBe a[Left[_, _]]
+      if (shouldFail)
+        res shouldBe a[Left[_, _]]
+      else
+        res shouldBe a[Right[_, _]]
       actual shouldEqual initial
     } else {
       res shouldBe a[Right[_, _]]

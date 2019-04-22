@@ -190,13 +190,13 @@ private class InMemHotStore[F[_]: Sync, C, P, A, K](
       continuations <- getContinuations(join)
       _ <- if (continuations.isEmpty) S.flatModify { cache =>
             val index = cache.joins(channel).indexOf(join)
-            removeIndex(cache.joins(channel), index) >>= { updated =>
+            if (index != -1) removeIndex(cache.joins(channel), index) >>= { updated =>
               Sync[F]
                 .delay {
                   cache.joins.put(channel, updated)
                 }
                 .map(_ => cache)
-            }
+            } else cache.pure[F]
           } else Applicative[F].unit
     } yield ()
 
