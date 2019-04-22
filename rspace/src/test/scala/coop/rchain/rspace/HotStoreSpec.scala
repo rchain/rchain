@@ -218,7 +218,12 @@ trait HotStoreSpec[F[_], M[_]] extends FlatSpec with Matchers with GeneratorDriv
             _     <- history.putContinuations(channels, historyContinuations)
             res   <- hotStore.removeContinuation(channels, index).attempt
             cache <- state.read
-            _     <- checkRemoval(res, cache.continuations(channels), historyContinuations, index)
+            _ <- checkRemovalWorksOrFailsOnError(
+                  res,
+                  cache.continuations(channels),
+                  historyContinuations,
+                  index
+                )
           } yield ()
         }
       }
@@ -245,7 +250,12 @@ trait HotStoreSpec[F[_], M[_]] extends FlatSpec with Matchers with GeneratorDriv
                 )
             res   <- hotStore.removeContinuation(channels, index).attempt
             cache <- state.read
-            _     <- checkRemoval(res, cache.continuations(channels), cachedContinuations, index)
+            _ <- checkRemovalWorksOrFailsOnError(
+                  res,
+                  cache.continuations(channels),
+                  cachedContinuations,
+                  index
+                )
           } yield ()
         }
       }
@@ -280,7 +290,7 @@ trait HotStoreSpec[F[_], M[_]] extends FlatSpec with Matchers with GeneratorDriv
                   } else
                   // index of the removed continuation includes the installed
                   hotStore.getContinuations(channels) >>= { continuations =>
-                    checkRemoval(
+                    checkRemovalWorksOrFailsOnError(
                       res,
                       continuations,
                       installedContinuation +: cachedContinuations,
@@ -392,7 +402,7 @@ trait HotStoreSpec[F[_], M[_]] extends FlatSpec with Matchers with GeneratorDriv
             _     <- history.putData(channel, historyData)
             res   <- hotStore.removeDatum(channel, index).attempt
             cache <- state.read
-            _     <- checkRemoval(res, cache.data(channel), historyData, index)
+            _     <- checkRemovalWorksOrFailsOnError(res, cache.data(channel), historyData, index)
           } yield ()
         }
       }
@@ -419,7 +429,7 @@ trait HotStoreSpec[F[_], M[_]] extends FlatSpec with Matchers with GeneratorDriv
                 )
             res   <- hotStore.removeDatum(channel, index).attempt
             cache <- state.read
-            _     <- checkRemoval(res, cache.data(channel), cachedData, index)
+            _     <- checkRemovalWorksOrFailsOnError(res, cache.data(channel), cachedData, index)
           } yield ()
         }
       }
@@ -630,7 +640,12 @@ trait HotStoreSpec[F[_], M[_]] extends FlatSpec with Matchers with GeneratorDriv
             toRemove = historyJoins.get(index.toLong).getOrElse(join)
             res      <- hotStore.removeJoin(channel, toRemove).attempt
             cache    <- state.read
-            _        <- checkRemoval(res, cache.joins(channel), historyJoins, index, shouldFail = false)
+            _ <- checkRemovalWorksOrIgnoresErrors(
+                  res,
+                  cache.joins(channel),
+                  historyJoins,
+                  index
+                )
           } yield ()
         }
       }
@@ -660,7 +675,7 @@ trait HotStoreSpec[F[_], M[_]] extends FlatSpec with Matchers with GeneratorDriv
                   )
               res   <- hotStore.removeJoin(channel, toRemove).attempt
               cache <- state.read
-              _     <- checkRemoval(res, cache.joins(channel), cachedJoins, index, shouldFail = false)
+              _     <- checkRemovalWorksOrIgnoresErrors(res, cache.joins(channel), cachedJoins, index)
             } yield ()
           }
         }
@@ -847,18 +862,31 @@ trait HotStoreSpec[F[_], M[_]] extends FlatSpec with Matchers with GeneratorDriv
       }
   }
 
-  private def checkRemoval[T](
+  private def checkRemovalWorksOrFailsOnError[T](
       res: Either[Throwable, Unit],
       actual: Seq[T],
       initial: Seq[T],
-      index: Int,
-      shouldFail: Boolean = true
+      index: Int
   ): F[Assertion] = S.delay {
     if (index < 0 || index >= initial.size) {
-      if (shouldFail)
-        res shouldBe a[Left[_, _]]
-      else
-        res shouldBe a[Right[_, _]]
+      res shouldBe a[Left[_, _]]
+      actual shouldEqual initial
+    } else {
+      res shouldBe a[Right[_, _]]
+      actual shouldEqual initial.zipWithIndex
+        .filter { case (_, i) => i != index }
+        .map(_._1)
+    }
+  }
+
+  private def checkRemovalWorksOrIgnoresErrors[T](
+      res: Either[Throwable, Unit],
+      actual: Seq[T],
+      initial: Seq[T],
+      index: Int
+  ): F[Assertion] = S.delay {
+    if (index < 0 || index >= initial.size) {
+      res shouldBe a[Right[_, _]]
       actual shouldEqual initial
     } else {
       res shouldBe a[Right[_, _]]
