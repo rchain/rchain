@@ -406,7 +406,7 @@ trait StorageActionsTests[F[_]]
   }
 
   "A joined consume with the same channel given twice followed by a produce" should
-    "not raise any errors (CORE-365)" ignore withTestSpace { (store, space) =>
+    "not raise any errors (CORE-365)" in withTestSpace { (store, space) =>
     val channels = List("ch1", "ch1")
 
     for {
