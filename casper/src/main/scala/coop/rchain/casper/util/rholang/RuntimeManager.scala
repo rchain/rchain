@@ -2,8 +2,8 @@ package coop.rchain.casper.util.rholang
 
 import cats._
 import cats.data.EitherT
-import cats.effect._
 import cats.effect.concurrent.MVar
+import cats.effect.{Sync, _}
 import cats.implicits._
 import com.google.protobuf.ByteString
 import coop.rchain.casper.protocol._
@@ -14,12 +14,23 @@ import coop.rchain.catscontrib.MonadTrans
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.models.Expr.ExprInstance.GString
+import coop.rchain.models.Var.VarInstance.FreeVar
 import coop.rchain.models._
+import coop.rchain.models.rholang.implicits._
 import coop.rchain.rholang.interpreter.accounting._
 import coop.rchain.rholang.interpreter.errors.BugFoundError
 import coop.rchain.rholang.interpreter.storage.StoragePrinter
-import coop.rchain.rholang.interpreter.{ChargingReducer, ErrorLog, EvaluateResult, Interpreter, RhoType, Runtime}
-import coop.rchain.rspace.{Blake2b256Hash, ReplayException, trace}
+import coop.rchain.rholang.interpreter.storage.implicits.matchListPar
+import coop.rchain.rholang.interpreter.{
+    ChargingReducer,
+    ErrorLog,
+    EvaluateResult,
+    Interpreter,
+    RhoType,
+    Runtime,
+    PrettyPrinter => RholangPrinter
+  }
+import coop.rchain.rspace.{trace, Blake2b256Hash, Checkpoint, ReplayException}
 
 trait RuntimeManager[F[_]] {
   def captureResults(start: StateHash, deploy: DeployData, name: String = "__SCALA__"): F[Seq[Par]]
@@ -35,6 +46,7 @@ trait RuntimeManager[F[_]] {
   def storageRepr(hash: StateHash): F[Option[String]]
   def computeBonds(hash: StateHash): F[Seq[Bond]]
   def computeBalance(start: StateHash)(user: ByteString): F[Long]
+  def computeDeployPayment(start: StateHash)(user: ByteString, amount: Long): F[StateHash]
   def getData(hash: StateHash)(channel: Par): F[Seq[Par]]
   def getContinuation(hash: StateHash)(
       channels: Seq[Par]
@@ -157,7 +169,7 @@ class RuntimeManagerImpl[F[_]: Concurrent] private[rholang] (
     computeEffect(runtime)(
       ConstructDeploy.sourceDeployNow(balanceQuerySource(user)).withDeployer(user)
     ) >> {
-      getData(runtime)() >>= {
+      getResult(runtime)() >>= {
         case Seq(RhoType.Number(balance)) => balance.pure[F]
         case Seq(RhoType.String(error)) =>
           BugFoundError(s"Balance query failed unexpectedly: $error").raiseError[F, Long]
@@ -191,6 +203,38 @@ class RuntimeManagerImpl[F[_]: Concurrent] private[rholang] (
        | }
      """.stripMargin
 
+  def computeDeployPayment(start: StateHash)(user: ByteString, amount: Long): F[StateHash] =
+    withResetRuntime(start)(
+      computeDeployPayment(_)(user, amount).map(cp => ByteString.copyFrom(cp.root.bytes.toArray))
+    )
+
+  private def computeDeployPayment(
+      runtime: Runtime[F]
+  )(user: ByteString, amount: Long): F[Checkpoint] =
+    computeEffect(runtime)(
+      ConstructDeploy.sourceDeployNow(deployPaymentSource(amount)).withDeployer(user)
+    ) >>
+      getResult(runtime)() >>= {
+      case Seq(RhoType.Boolean(true)) =>
+        runtime.space.createCheckpoint()
+      case Seq(RhoType.String(error)) =>
+          BugFoundError(s"Deploy payment failed unexpectedly: $error").raiseError[F, Checkpoint]
+      case other =>
+        BugFoundError(
+          s"Deploy payment returned unexpected result: ${other.map(RholangPrinter().buildString(_))}"
+        ).raiseError[F, Checkpoint]
+    }
+
+  private def deployPaymentSource(amount: Long, name: String = "__SCALA__"): String =
+    s"""
+       | new rl(`rho:registry:lookup`), poSCh in {
+       |   rl!(`rho:id:cnec3pa8prp4out3yc8facon6grm3xbsotpd4ckjfx8ghuw77xadzt`, *poSCh) |
+       |   for(@(_, PoS) <- poSCh) {
+       |     @PoS!("pay", $amount, "$name")
+       |   }
+       | }
+       """.stripMargin
+
   private def withRuntime[A](f: Runtime[F] => F[A]): F[A] =
     Sync[F].bracket(runtimeContainer.take)(f)(runtimeContainer.put)
 
@@ -215,8 +259,23 @@ class RuntimeManagerImpl[F[_]: Concurrent] private[rholang] (
 
   private def getData(
       runtime: Runtime[F]
-  )(channel: Par = Par().withExprs(Seq(Expr(GString("__SCALA__"))))): F[Seq[Par]] =
+  )(channel: Par): F[Seq[Par]] =
     runtime.space.getData(channel).map(_.flatMap(_.a.pars))
+
+  private def getResult(
+      runtime: Runtime[F]
+  )(name: String = "__SCALA__"): F[Seq[Par]] = {
+
+    val channel                 = Par().withExprs(Seq(Expr(GString(name))))
+    val pattern                 = BindPattern(Seq(EVar(FreeVar(0))), freeCount = 1)
+    val cont                    = TaggedContinuation().withParBody(ParWithRandom(Par()))
+    implicit val cost: _cost[F] = runtime.cost
+
+    runtime.space.consume(Seq(channel), Seq(pattern), cont, persist = false)(matchListPar).map {
+      case Some((_, dataList)) => dataList.flatMap(_.value.pars)
+      case None                => Seq.empty[Par]
+    }
+  }
 
   def getContinuation(
       hash: StateHash
@@ -401,6 +460,11 @@ object RuntimeManager {
 
       override def computeBalance(start: StateHash)(user: ByteString): T[F, Long] =
         runtimeManager.computeBalance(start)(user).liftM[T]
+
+      override def computeDeployPayment(
+          start: StateHash
+      )(user: ByteString, amount: Long): T[F, StateHash] =
+        runtimeManager.computeDeployPayment(start)(user, amount).liftM[T]
 
       override def getData(hash: StateHash)(channel: Par): T[F, scala.Seq[Par]] =
         runtimeManager.getData(hash)(channel).liftM[T]

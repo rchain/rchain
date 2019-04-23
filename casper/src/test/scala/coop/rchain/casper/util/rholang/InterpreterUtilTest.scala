@@ -16,7 +16,7 @@ import coop.rchain.metrics
 import coop.rchain.metrics.{Metrics, NoopSpan}
 import coop.rchain.models.PCost
 import coop.rchain.p2p.EffectsTestInstances.LogStub
-import coop.rchain.rholang.interpreter.{Runtime, accounting}
+import coop.rchain.rholang.interpreter.{accounting, Runtime}
 import coop.rchain.shared.StoreType
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global

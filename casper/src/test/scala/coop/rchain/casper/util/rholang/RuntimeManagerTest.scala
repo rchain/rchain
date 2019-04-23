@@ -19,7 +19,7 @@ import coop.rchain.p2p.EffectsTestInstances.LogicalTime
 import coop.rchain.rholang.Resources.mkRuntime
 import coop.rchain.rholang.interpreter.accounting.Cost
 import coop.rchain.rholang.interpreter.util.RevAddress
-import coop.rchain.rholang.interpreter.{ParBuilder, accounting}
+import coop.rchain.rholang.interpreter.{accounting, ParBuilder}
 import coop.rchain.shared.Log
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
@@ -71,6 +71,22 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
         .runSyncUnsafe(10.seconds)
 
     result.status.isFailed should be(true)
+  }
+
+  "computeDeployPayment" should "transfer REV from the deployer's vault to the PoS vault" in withTestFixture {
+    case (start, mgr, genesisPk) =>
+      val genesisId = ByteString.copyFrom(genesisPk.bytes)
+      val posId = ByteString.copyFrom(
+        Base16.unsafeDecode("cc87bf7747a8c176714b417ca14a63897b07572876c5e38a7896b6007738ef81")
+      )
+      mgr.computeDeployPayment(start)(genesisId, 100L).flatMap { finish =>
+        mgr.computeBalance(finish)(genesisId).flatMap { balance0 =>
+          mgr.computeBalance(finish)(posId).map { balance1 =>
+            balance0 should be(Long.MaxValue - 100L)
+            balance1 should be(100L)
+          }
+        }
+      }
   }
 
   "computeBalance" should "compute vault balances accurately" in withTestFixture {
