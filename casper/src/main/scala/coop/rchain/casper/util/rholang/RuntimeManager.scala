@@ -19,7 +19,7 @@ import coop.rchain.rholang.interpreter.accounting._
 import coop.rchain.rholang.interpreter.errors.BugFoundError
 import coop.rchain.rholang.interpreter.storage.StoragePrinter
 import coop.rchain.rholang.interpreter.{ChargingReducer, ErrorLog, EvaluateResult, Interpreter, RhoType, Runtime}
-import coop.rchain.rspace.{Blake2b256Hash, ReplayException}
+import coop.rchain.rspace.{Blake2b256Hash, ReplayException, trace}
 
 trait RuntimeManager[F[_]] {
   def captureResults(start: StateHash, deploy: DeployData, name: String = "__SCALA__"): F[Seq[Par]]
@@ -76,7 +76,7 @@ class RuntimeManagerImpl[F[_]: Concurrent] private[rholang] (
   )(start: Blake2b256Hash, processedDeploy: InternalProcessedDeploy): F[EvaluateResult] = {
     import processedDeploy._
     for {
-      _                                        <- runtime.replaySpace.rig(start, log.toList)
+      _                                        <- runtime.replaySpace.rig(start, deployLog.toList)
       (codeHash, phloPrice, userId, timestamp) = ProtoUtil.getRholangDeployParams(deploy)
       _                                        <- runtime.shortLeashParams.setParams(codeHash, phloPrice, userId, timestamp)
       injResult                                <- doInj(deploy, runtime.replayReducer, runtime.errorLog)(runtime.cost)
@@ -252,6 +252,7 @@ class RuntimeManagerImpl[F[_]: Concurrent] private[rholang] (
                 deploy,
                 Cost.toProto(cost),
                 newCheckpoint.log,
+                Seq.empty[trace.Event],
                 DeployStatus.fromErrors(errors)
               )
               cont <- if (errors.isEmpty)
