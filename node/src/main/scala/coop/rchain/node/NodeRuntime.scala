@@ -13,7 +13,7 @@ import cats.implicits._
 import coop.rchain.blockstorage._
 import coop.rchain.casper._
 import coop.rchain.casper.MultiParentCasperRef.MultiParentCasperRef
-import coop.rchain.casper.util.comm.CasperPacketHandler
+import coop.rchain.casper.util.comm.{CasperInit, CasperPacketHandler}
 import coop.rchain.casper.util.rholang.RuntimeManager
 import coop.rchain.catscontrib._
 import coop.rchain.catscontrib.Catscontrib._
@@ -459,9 +459,11 @@ class NodeRuntime private[node] (
     runtimeManager <- RuntimeManager.fromRuntime[Task](casperRuntime).toEffect
     casperPacketHandler <- CasperPacketHandler
                             .of[Effect](
-                              conf.casper,
-                              defaultTimeout,
-                              RuntimeManager.eitherTRuntimeManager(runtimeManager),
+                              new CasperInit(
+                                conf.casper,
+                                defaultTimeout,
+                                RuntimeManager.eitherTRuntimeManager(runtimeManager)
+                              ),
                               _.value
                             )(
                               labEff,
