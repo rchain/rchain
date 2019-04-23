@@ -100,10 +100,10 @@ def test_catch_up_next_round(command_line_options: CommandLineOptions, random_ge
                                 expected_blocks_count + 1,
                             )
 
-                            validator1_vdag = validator1.get_vdag()
-                            validator2_vdag = validator2.get_vdag()
-                            validator3_vdag = validator3.get_vdag()
-                            validator4_vdag = validator4.get_vdag()
+                            validator1_vdag = validator1.get_mvdag()
+                            validator2_vdag = validator2.get_mvdag()
+                            validator3_vdag = validator3.get_mvdag()
+                            validator4_vdag = validator4.get_mvdag()
 
                             assert validator1_vdag == validator4_vdag
                             assert validator2_vdag == validator4_vdag
