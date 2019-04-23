@@ -81,7 +81,7 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
                  init.conf.shardId
                )
       _                   <- MultiParentCasperRef[F].set(casper)
-      _                   <- Log[F].info("Making a transition to ApprovedBlockRecievedHandler state.")
+      _                   <- Log[F].info("Making a transition to ApprovedBlockReceivedHandler state.")
       abh                 = new ApprovedBlockReceivedHandler[F](casper, approvedBlock)
       validator           <- Ref.of[F, CasperPacketHandlerInternal[F]](abh)
       casperPacketHandler = new CasperPacketHandlerImpl[F](validator)
@@ -336,7 +336,7 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
                                 shardId
                               )
                      _   <- MultiParentCasperRef[F].set(casper)
-                     _   <- Log[F].info("Making a transition to ApprovedBlockRecievedHandler state.")
+                     _   <- Log[F].info("Making a transition to ApprovedBlockReceivedHandler state.")
                      abh = new ApprovedBlockReceivedHandler[F](casper, approvedBlock)
                      _   <- capserHandlerInternal.set(abh)
                      _   <- CommUtil.sendForkChoiceTipRequest[F]
@@ -507,7 +507,7 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
                 for {
                   _ <- MultiParentCasperRef[F].set(casperInstance)
                   _ <- Log[F].info(
-                        "Making a transition to ApprovedBlockRecievedHandler state."
+                        "Making a transition to ApprovedBlockReceivedHandler state."
                       )
                   abr = new ApprovedBlockReceivedHandler(casperInstance, ab)
                   _   <- cphI.set(abr)
