@@ -59,7 +59,6 @@ object Genesis {
       StandardDeploys.nonNegativeNumber,
       StandardDeploys.makeMint,
       StandardDeploys.makePoS,
-      StandardDeploys.PoS,
       StandardDeploys.basicWallet,
       StandardDeploys.basicWalletFaucet,
       StandardDeploys.walletCheck,
@@ -69,15 +68,8 @@ object Genesis {
       StandardDeploys.rev(wallets, faucetCode, posParams),
       StandardDeploys.revVault,
       StandardDeploys.revGenerator(genesisPk, vaults, supply),
-      StandardDeploys.poSGenerator(genesisPk, posParams)
-    ) ++ posParams.validators.map { validator =>
-      DeployData(
-        deployer = ByteString.copyFrom(validator.pk.bytes),
-        timestamp = System.currentTimeMillis(),
-        term = validator.code,
-        phloLimit = accounting.MAX_VALUE
-      )
-    }
+      StandardDeploys.poSGenerator(posParams)
+    )
 
   //TODO: Decide on version number and shard identifier
   def fromInputFiles[F[_]: Concurrent: Sync: Log: Time: RaiseIOError](

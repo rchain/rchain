@@ -207,13 +207,15 @@ class RuntimeManagerImpl[F[_]: Concurrent] private[rholang] (
       ConstructDeploy.sourceDeployNow(deployPaymentSource(amount)).withDeployer(user)
     ) >>
       getResult(runtime)() >>= {
-      case Seq(RhoType.Boolean(true)) =>
+      case Seq(RhoType.Tuple2(RhoType.Boolean(true), Par.defaultInstance)) =>
         runtime.space.createCheckpoint()
-      case Seq(RhoType.String(error)) =>
+      case Seq(RhoType.Tuple2(RhoType.Boolean(false), RhoType.String(error))) =>
         BugFoundError(s"Deploy payment failed unexpectedly: $error").raiseError[F, Checkpoint]
+      case Seq() => BugFoundError("Expected response message was not received").raiseError[F, Checkpoint]
       case other =>
+        val contentAsStr = other.map(RholangPrinter().buildString(_)).mkString(",")
         BugFoundError(
-          s"Deploy payment returned unexpected result: ${other.map(RholangPrinter().buildString(_))}"
+          s"Deploy payment returned unexpected result: [$contentAsStr ]"
         ).raiseError[F, Checkpoint]
     }
 

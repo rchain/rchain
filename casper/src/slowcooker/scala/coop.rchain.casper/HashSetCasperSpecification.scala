@@ -9,18 +9,19 @@ import coop.rchain.casper.genesis.contracts._
 import coop.rchain.casper.helper.HashSetCasperTestNode
 import coop.rchain.casper.helper.HashSetCasperTestNode._
 import coop.rchain.casper.protocol.{BlockMessage, DeployData}
-import coop.rchain.casper.util.ConstructDeploy
+import coop.rchain.casper.util.{ConstructDeploy, ProtoUtil}
 import coop.rchain.casper.util.comm.TestNetwork
-import coop.rchain.catscontrib.TaskContrib._
-import coop.rchain.comm.CommError
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.hash.Keccak256
 import coop.rchain.crypto.signatures.{Ed25519, Secp256k1}
-import coop.rchain.crypto.{PrivateKey, PublicKey}
 import coop.rchain.rholang.interpreter.accounting
+import monix.execution.Scheduler.Implicits.global
+import coop.rchain.catscontrib._
+import coop.rchain.catscontrib.TaskContrib._
+import coop.rchain.comm.CommError
+import coop.rchain.crypto.{PrivateKey, PublicKey}
 import coop.rchain.rholang.interpreter.util.RevAddress
 import monix.eval.Task
-import monix.execution.Scheduler.Implicits.global
 import org.scalacheck._
 import org.scalacheck.commands.Commands
 
@@ -154,16 +155,16 @@ object HashSetCasperSpecification extends Commands {
   override def genInitialState: Gen[State] =
     for {
       count <- Gen.chooseNum(2, 4)
-      ids   = 0 to count
-      nodes <- Gen.sequence[List[RNode], RNode](ids.map(genRNode))
+      ids        = 0 to count
+      nodes      <- Gen.sequence[List[RNode], RNode](ids.map(genRNode))
     } yield nodes
 
   def genRNode(i: Int): Gen[RNode] = Gen.const(RNode(i, s"validator-$i", deployed = false))
 
   override def genCommand(state: State): Gen[Command] =
     for {
-      idx  <- Gen.chooseNum(0, state.size - 1)
-      node = state(idx)
+      idx <- Gen.chooseNum(0, state.size - 1)
+      node     = state(idx)
       command <- Gen.frequency(
                   (2, genDeployOrPropose(node)),
                   (1, genReceive(node))

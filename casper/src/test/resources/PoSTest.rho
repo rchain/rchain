@@ -3,32 +3,256 @@
 //requires Pos, RhoSpec
 
 match (
-  "cc87bf7747a8c176714b417ca14a63897b07572876c5e38a7896b6007738ef81".hexToBytes(),
-  "11112GofKy1v5mPWZjZEYBByvpZ4ahYJp6vFN1hgGCn7L543rFSpyA"
+  "cc87bf7747a8c176714b417ca14a63897b07572876c5e38a7896b6007738ef81".hexToBytes()
 ) {
-
-  (genesisPubKey, genesisRevAddress) => {
-
-    new rl(`rho:registry:lookup`),
-        RhoSpecCh,
-        PosCh,
-        setup,
-        test,
-        test_different_deployer,
-        ackCh in {
-
+  posPubKey => {
+    new
+      rl(`rho:registry:lookup`),
+      stdlog(`rho:io:stdlog`),
+      revAddressOps(`rho:rev:address`),
+      posRevAddressCh, posVaultCh,
+      RhoSpecCh, PoSCh, RevVaultCh,
+      setup, prepareUser,
+      test_make_pos_succeeds, test_bonding_succeeds,
+      test_multiple_bonding_succeeds,
+      test_bonding_fails_if_deposit_fails,
+      test_bonding_fails_if_already_bonded,
+      test_bonding_fails_if_bond_too_small,
+      test_pay_succeeds,
+      test_bonding_failure
+    in {
+      revAddressOps!("fromPublicKey", posPubKey, *posRevAddressCh) |
+      rl!(`rho:id:1o93uitkrjfubh43jt19owanuezhntag5wh74c6ur5feuotpi73q8z`, *RevVaultCh) |
+      rl!(`rho:id:cnec3pa8prp4out3yc8facon6grm3xbsotpd4ckjfx8ghuw77xadzt`, *PoSCh) |
       rl!(`rho:id:6wnujzcraztjfg941skrtbdkdgbko8nuaqihuhn15s66oz8ro5gwbb`, *RhoSpecCh) |
-      rl!(`rho:id:cnec3pa8prp4out3yc8facon6grm3xbsotpd4ckjfx8ghuw77xadzt`, *PosCh) |
-      for(@(_, RhoSpec) <- RhoSpecCh; @(_, PoS) <- PosCh) {
+      for(@(_, RhoSpec) <- RhoSpecCh;
+          @(_, PoS) <- PoSCh;
+          @(_, RevVault) <- RevVaultCh;
+          @posRevAddress <- posRevAddressCh) {
+        stdlog!("info", {"posRevAddress":posRevAddress}) |
 
-        @RhoSpec!("testSuite", *setup, [("work", *test),]) |
+        @RevVault!("findOrCreateGenesisVault", posRevAddress, 10000, *posVaultCh) |
+        for(@(true, posVault) <- posVaultCh) {
+          @RhoSpec!("testSuite", *setup,
+            [
+              ("PoS is created with empty bonds", *test_make_pos_succeeds),
+              ("bonding success", *test_bonding_succeeds),
+              ("bonding fails if deposit fails", *test_bonding_fails_if_deposit_fails),
+              ("multiple bondings work", *test_multiple_bonding_succeeds),
+              ("payment works", *test_pay_succeeds),
+              ("bonding fails if already bonded", *test_bonding_fails_if_already_bonded),
+              ("bonding fails is bond is too small", *test_bonding_fails_if_bond_too_small)
+            ]) |
 
-        contract setup(returnCh) = {
-          returnCh!(Nil)
-        } |
+          contract setup(retCh) = {
+            retCh!({})
+          } |
 
-        contract test(rhoSpec, _, ackCh) = {
-          rhoSpec!("assert", (Nil, "!=", PoS), "there is PoS", *ackCh)
+          contract prepareUser(@pk, @vaultAmount, retCh) = {
+            new setDeployData(`rho:test:deploy:set`), identitySet, revAddrCh, vaultCh in {
+              setDeployData!("userId", pk.hexToBytes(), *identitySet) |
+              revAddressOps!("fromPublicKey", pk.hexToBytes(), *revAddrCh) |
+              for (_ <- identitySet; @revAddress <- revAddrCh) {
+                @RevVault!("findOrCreateGenesisVault", revAddress, vaultAmount, *vaultCh) |
+                for (@(true, vault) <- vaultCh) {
+                  retCh!(pk.hexToBytes(), revAddress, vault)
+                }
+              }
+            }
+          } |
+
+          contract test_make_pos_succeeds(rhoSpec, _, ackCh) = {
+            new retCh in {
+              @PoS!("getBonds", *retCh) |
+              for ( @bonds <- retCh) {
+                rhoSpec!("assert",
+                  bonds.size() >= 0,
+                  "some bonds map should be received",
+                  *ackCh
+                )
+              }
+            }
+          } |
+
+          contract test_bonding_succeeds(rhoSpec, _, ackCh) = {
+            new setupCh, retCh, initialPosBalanceCh, finalPosBalanceCh,
+                initialUserBalanceCh, finalUserBalanceCh in {
+              prepareUser!("1111111111111111111111111111111111111111111111111111111111111111", 10000, *setupCh) |
+              for (@user1PubKey, _, @user1Vault <- setupCh) {
+                @posVault!("balance", *initialPosBalanceCh) |
+                @user1Vault!("balance", *initialUserBalanceCh) |
+                for(@initialPosBalance <- initialPosBalanceCh;
+                    @initialUserBalance <- initialUserBalanceCh) {
+                  @PoS!("bond", 100, *retCh) |
+                  for ( @(true, _) <- retCh) {
+                    @PoS!("getBonds", *retCh) |
+                    @posVault!("balance", *finalPosBalanceCh) |
+                    @user1Vault!("balance", *finalUserBalanceCh) |
+                    for(@finalPosBalance <- finalPosBalanceCh;
+                        @finalUserBalance <- finalUserBalanceCh;
+                        @bonds <- retCh) {
+                      stdlog!("info", {"finalPosBalance": finalPosBalance, "finalUserBalance":finalUserBalance, "bonds":bonds}) |
+                      match bonds.get(user1PubKey) {
+                        (bondAmount, _) => {
+                          rhoSpec!("assertMany",
+                            [
+                              ((100, "==", bondAmount), "the new bond is expected in the final map"),
+                              ((initialUserBalance - finalUserBalance, "==", 100), "the user account decreases"),
+                              ((finalPosBalance - initialPosBalance, "==", 100), "the pos account increases"),
+                            ],
+                            *ackCh
+                          )
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          } |
+
+          contract test_multiple_bonding_succeeds(rhoSpec, _, ackCh) = {
+            new setupCh, retCh, initialPosBalanceCh, finalPosBalanceCh,
+                initialUser1BalanceCh, finalUser1BalanceCh,
+                initialUser2BalanceCh, finalUser2BalanceCh in {
+              prepareUser!("2222222222222222222222222222222222222222222222222222222222222222", 10000, *setupCh) |
+              for (@user1PubKey, _, @user1Vault <- setupCh) {
+                @posVault!("balance", *initialPosBalanceCh) |
+                @user1Vault!("balance", *initialUser1BalanceCh) |
+                for(@initialPosBalance <- initialPosBalanceCh;
+                    @initialUser1Balance <- initialUser1BalanceCh) {
+                  @PoS!("bond", 100, *retCh) |
+                  for ( @(true, _) <- retCh) {
+                    stdlog!("info", "first bond") |
+                    prepareUser!("3333333333333333333333333333333333333333333333333333333333333333", 10000, *setupCh) |
+                    for(@user2PubKey, _, @user2Vault <- setupCh) {
+                      @user2Vault!("balance", *initialUser2BalanceCh) |
+                      for (@initialUser2Balance <- initialUser2BalanceCh) {
+                        stdlog!("info", {"initialPosBalance" :initialPosBalance, "initialUser1Balance":initialUser1Balance, "initialUser2Balance":initialUser2Balance}) |
+                        @PoS!("bond", 200, *retCh) |
+                        for ( @(true, _) <- retCh) {
+
+                          @PoS!("getBonds", *retCh) |
+                          @posVault!("balance", *finalPosBalanceCh) |
+                          @user1Vault!("balance", *finalUser1BalanceCh) |
+                          @user2Vault!("balance", *finalUser2BalanceCh) |
+                          for(@finalPosBalance <- finalPosBalanceCh;
+                              @finalUser1Balance <- finalUser1BalanceCh;
+                              @finalUser2Balance <- finalUser2BalanceCh;
+                              @bonds <- retCh) {
+                            match (bonds.get(user1PubKey), bonds.get(user2PubKey)) {
+                              ((bondAmount1, _), (bondAmount2, _)) => {
+                                rhoSpec!("assertMany",
+                                  [
+                                    ((100, "==", bondAmount1), "the user1 bond is expected in the final map"),
+                                    ((200, "==", bondAmount2), "the user2 bond is expected in the final map"),
+                                    ((initialUser1Balance - finalUser1Balance, "==", 100), "the user1 account decreases"),
+                                    ((initialUser2Balance - finalUser2Balance, "==", 200), "the user2 account decreases"),
+                                    ((finalPosBalance - initialPosBalance, "==", 300), "the pos account increases"),
+                                  ],
+                                  *ackCh
+                                )
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          } |
+
+          contract test_pay_succeeds(rhoSpec, _, ackCh) = {
+            new setupCh, retCh, initialPosBalanceCh, finalPosBalanceCh,
+                initialUser1BalanceCh, finalUser1BalanceCh in {
+              prepareUser!("4444444444444444444444444444444444444444444444444444444444444444", 10000, *setupCh) |
+              for (@user1PubKey, _, @user1Vault <- setupCh) {
+                @posVault!("balance", *initialPosBalanceCh) |
+                @user1Vault!("balance", *initialUser1BalanceCh) |
+                for(@initialPosBalance <- initialPosBalanceCh;
+                    @initialUser1Balance <- initialUser1BalanceCh) {
+                  @PoS!("pay", 100, *retCh) |
+                  for ( @(true, _) <- retCh) {
+
+                    @posVault!("balance", *finalPosBalanceCh) |
+                    @user1Vault!("balance", *finalUser1BalanceCh) |
+                    for(@finalPosBalance <- finalPosBalanceCh;
+                        @finalUser1Balance <- finalUser1BalanceCh) {
+                      rhoSpec!("assertMany",
+                        [
+                          ((initialUser1Balance - finalUser1Balance, "==", 100), "the user account decreases"),
+                          ((finalPosBalance - initialPosBalance, "==", 100), "the pos account increases"),
+                        ],
+                        *ackCh
+                      )
+                    }
+                  }
+                }
+              }
+            }
+          } |
+
+          contract test_bonding_fails_if_deposit_fails(rhoSpec, _, ackCh) = {
+            test_bonding_failure!(*rhoSpec, "5555555555555555555555555555555555555555555555555555555555555555", 10000, 20000, "Bond deposit failed: Insufficient funds", *ackCh)
+          } |
+
+          contract test_bonding_fails_if_bond_too_small(rhoSpec, _, ackCh) = {
+            test_bonding_failure!(*rhoSpec, "6666666666666666666666666666666666666666666666666666666666666666", 10000, -1, "Bond is less than minimum!", *ackCh)
+          } |
+
+          contract test_bonding_fails_if_already_bonded(rhoSpec, _, ackCh) = {
+            new setupCh, initialBondsCh, bond1Ch, bond2Ch, bondsCh in {
+              prepareUser!("7777777777777777777777777777777777777777777777777777777777777777", 10000, *setupCh) |
+              for (@user1PubKey, _, _ <- setupCh) {
+                @PoS!("bond", 150, *bond1Ch) |
+                for ( @(result1, _) <- bond1Ch) {
+                  @PoS!("getBonds", *initialBondsCh) |
+                  for ( @initialBonds <- initialBondsCh) {
+                    @PoS!("bond", 150, *bond2Ch) |
+                    for ( @(result2, msg2) <- bond2Ch) {
+                      @PoS!("getBonds", *bondsCh) |
+                      rhoSpec!("assertMany",
+                        [
+                          ((result1, "==", true), "the first bond should succeed"),
+                          ((result2, "==", false), "the second bond should fail"),
+                          ((msg2, "==", "Public key is already bonded."), "the message should be as expected"),
+                          ((initialBonds, "== <-", *bondsCh), "the bonds map remains unchanged")
+                        ],
+                        *ackCh
+                      )
+                    }
+                  }
+                }
+              }
+            }
+          } |
+
+
+          contract test_bonding_failure(rhoSpec, @pk, @vaultAmount, @transferAmount, @expectedMsg, ackCh) = {
+            new setupCh, retCh, bondsCh in {
+              prepareUser!(pk, vaultAmount, *setupCh) |
+              for (_, _, _ <- setupCh) {
+                @PoS!("getBonds", *bondsCh) |
+                for (@initialBonds <- bondsCh) {
+                  @PoS!("bond", transferAmount, *retCh) |
+
+                  for ( @(result, msg) <- retCh) {
+                    @PoS!("getBonds", *bondsCh) |
+                    rhoSpec!("assertMany",
+                      [
+                        ((msg, "==", expectedMsg), "the message should be as epected"),
+                        ((result, "==", false), "the bond should fail"),
+                        ((initialBonds, "== <-", *bondsCh), "the bonds map remains unchanged")
+                      ],
+                      *ackCh
+                    )
+                  }
+                }
+              }
+            }
+          }
         }
       }
     }

@@ -49,7 +49,7 @@ class Rev[A](
     |      //PoS purse and contract creation
     |      @revMint!("makePurse", $initialTotalBond, *posPurseCh) |
     |      for(@posPurse <- posPurseCh) {
-    |        @MakePoS!(posPurse, $minimumBond, $maximumBond, ${posParams.initialBondsCode}, *posCh) |
+    |        @MakePoS!(posPurse, $minimumBond, $maximumBond, ${ProofOfStake.initialBonds(posParams.validators)}, *posCh) |
     |        for(@pos <- posCh) {
     |          @SystemInstancesRegistry!("register", "pos", bundle+{pos})
     |        }
