@@ -97,6 +97,13 @@ object ProtoUtil {
           validator == block.sender
       }
 
+  def creatorJustification(block: BlockMetadata): Option[Justification] =
+    block.justifications
+      .find {
+        case Justification(validator: Validator, _) =>
+          validator == block.sender
+      }
+
   /**
     * Since the creator justification is unique
     * we don't need to return a list. However, the bfTraverseF
@@ -422,4 +429,48 @@ object ProtoUtil {
     (missingParents union missingJustifications).toList
   }
 
+  // Return hashes of all blocks that are yet to be seen by the passed in block
+  def unseenBlockHashes[F[_]: Sync: BlockStore](
+      dag: BlockDagRepresentation[F],
+      block: BlockMessage
+  ): F[Set[BlockHash]] =
+    for {
+      latestMessages        <- dag.latestMessages
+      latestMessagesOfBlock <- ProtoUtil.toLatestMessage(block.justifications, dag)
+      result <- latestMessages.toList
+                 .traverse {
+                   case (validator, latestMessage) =>
+                     val lastSeenBlockHash = latestMessagesOfBlock(validator)
+                     DagOperations
+                       .bfTraverseF(List(latestMessage))(
+                         block => getCreatorJustificationUnlessGoal(dag, block, lastSeenBlockHash)
+                       )
+                       .map(_.blockHash)
+                       .toSet
+                 }
+                 .map(_.flatten.toSet)
+    } yield result -- latestMessagesOfBlock.values.map(_.blockHash) - block.blockHash
+
+  private def getCreatorJustificationUnlessGoal[F[_]: Sync: BlockStore](
+      dag: BlockDagRepresentation[F],
+      block: BlockMetadata,
+      goal: BlockMetadata
+  ): F[List[BlockMetadata]] =
+    ProtoUtil.creatorJustification(block) match {
+      case Some(Justification(_, hash)) =>
+        dag.lookup(hash).flatMap {
+          case Some(creatorJustification) =>
+            if (creatorJustification == goal) {
+              List.empty[BlockMetadata].pure[F]
+            } else {
+              List(creatorJustification).pure[F]
+            }
+          case None =>
+            Sync[F].raiseError[List[BlockMetadata]](
+              new RuntimeException(s"Missing block hash $hash in block dag.")
+            )
+        }
+      case None =>
+        List.empty[BlockMetadata].pure[F]
+    }
 }
