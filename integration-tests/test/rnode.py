@@ -8,6 +8,7 @@ from logging import Logger
 import threading
 from threading import Event
 import contextlib
+from collections import defaultdict
 from multiprocessing import Queue, Process
 from typing import (
     Dict,
@@ -16,7 +17,7 @@ from typing import (
     Optional,
     Generator,
     AbstractSet,
-)
+    Set)
 
 from docker.client import DockerClient
 from docker.models.containers import Container
@@ -285,6 +286,9 @@ class Node:
 
     def get_mvdag(self) -> str:
         return self.rnode_command('mvdag')
+
+    def get_parsed_mvdag(self) -> Dict[str, Set[str]]:
+        return parse_mvdag_str(self.get_mvdag())
 
     def deploy_string(self, rholang_code: str) -> str:
         quoted_rholang = shlex.quote(rholang_code)
@@ -723,3 +727,13 @@ def ready_bootstrap(
     with docker_network(context, context.docker) as network:
         with started_bootstrap(context=context, network=network, mount_dir=context.mount_dir, cli_flags=cli_flags, cli_options=cli_options, wallets_file=wallets_file) as node:
             yield node
+
+
+def parse_mvdag_str(mvdag_output: str) -> Dict[str, Set[str]]:
+    dag_dict: Dict[str, Set[str]] = defaultdict(set)
+
+    lines = mvdag_output.splitlines()
+    for line in lines:
+        parent_hash, child_hash = line.split(' ')
+        dag_dict[parent_hash].add(child_hash)
+    return dag_dict
