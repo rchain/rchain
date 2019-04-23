@@ -155,16 +155,16 @@ object HashSetCasperSpecification extends Commands {
   override def genInitialState: Gen[State] =
     for {
       count <- Gen.chooseNum(2, 4)
-      ids        = 0 to count
-      nodes      <- Gen.sequence[List[RNode], RNode](ids.map(genRNode))
+      ids   = 0 to count
+      nodes <- Gen.sequence[List[RNode], RNode](ids.map(genRNode))
     } yield nodes
 
   def genRNode(i: Int): Gen[RNode] = Gen.const(RNode(i, s"validator-$i", deployed = false))
 
   override def genCommand(state: State): Gen[Command] =
     for {
-      idx <- Gen.chooseNum(0, state.size - 1)
-      node     = state(idx)
+      idx  <- Gen.chooseNum(0, state.size - 1)
+      node = state(idx)
       command <- Gen.frequency(
                   (2, genDeployOrPropose(node)),
                   (1, genReceive(node))

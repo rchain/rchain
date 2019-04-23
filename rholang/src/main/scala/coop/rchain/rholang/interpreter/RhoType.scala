@@ -46,7 +46,7 @@ object RhoType {
 
     def unapply(p: Par): Option[(Par, Par)] =
       p.singleExpr().collect {
-        case Expr(ETupleBody(ETuple(Seq(a,b), _, _))) => (a,b)
+        case Expr(ETupleBody(ETuple(Seq(a, b), _, _))) => (a, b)
       }
   }
 }

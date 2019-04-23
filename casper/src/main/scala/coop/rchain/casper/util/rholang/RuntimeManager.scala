@@ -211,7 +211,8 @@ class RuntimeManagerImpl[F[_]: Concurrent] private[rholang] (
         runtime.space.createCheckpoint()
       case Seq(RhoType.Tuple2(RhoType.Boolean(false), RhoType.String(error))) =>
         BugFoundError(s"Deploy payment failed unexpectedly: $error").raiseError[F, Checkpoint]
-      case Seq() => BugFoundError("Expected response message was not received").raiseError[F, Checkpoint]
+      case Seq() =>
+        BugFoundError("Expected response message was not received").raiseError[F, Checkpoint]
       case other =>
         val contentAsStr = other.map(RholangPrinter().buildString(_)).mkString(",")
         BugFoundError(
