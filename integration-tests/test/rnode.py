@@ -280,6 +280,9 @@ class Node:
     def deploy(self, rho_file_path: str) -> str:
         return self.rnode_command('deploy', '--private-key=b18e1d0045995ec3d010c387ccfeb984d783af8fbb0f40fa7db126d889f6dadd', '--phlo-limit=1000000', '--phlo-price=1', rho_file_path)
 
+    def get_vdag(self) -> str:
+        return self.rnode_command('vdag')
+
     def deploy_string(self, rholang_code: str) -> str:
         quoted_rholang = shlex.quote(rholang_code)
         return self.shell_out('sh', '-c', 'echo {quoted_rholang} >/tmp/deploy_string.rho && {rnode_binary} deploy --private-key=b18e1d0045995ec3d010c387ccfeb984d783af8fbb0f40fa7db126d889f6dadd --phlo-limit=10000000000 --phlo-price=1 /tmp/deploy_string.rho'.format(
