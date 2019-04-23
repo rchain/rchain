@@ -18,7 +18,8 @@ new PoS, rs(`rho:registry:insertSigned:ed25519`), uriOut in {
 
  for (@minimumBond, @maximumBond <- PoS) {
 
-    match "11112GofKy1v5mPWZjZEYBByvpZ4ahYJp6vFN1hgGCn7L543rFSpyA" {
+ // TODO: Move this code into genesis.contracts.ProofOfStake to parameterize it over public key and address.
+    match "1111jXe5SseJpLMkUbXQN9k9aNHifUVgKm1pew3fwydaahdtvRRo1" {
 
       posRevAddress => {
 
