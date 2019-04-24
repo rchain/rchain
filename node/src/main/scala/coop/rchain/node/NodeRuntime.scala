@@ -416,6 +416,8 @@ class NodeRuntime private[node] (
       blockMetadataCrcPath = dagStoragePath.resolve("blockMetadataCrcPath"),
       equivocationsTrackerLogPath = dagStoragePath.resolve("equivocationsTrackerLogPath"),
       equivocationsTrackerCrcPath = dagStoragePath.resolve("equivocationsTrackerCrcPath"),
+      invalidBlocksLogPath = dagStoragePath.resolve("invalidBlocksLogPath"),
+      invalidBlocksCrcPath = dagStoragePath.resolve("invalidBlocksCrcPath"),
       checkpointsDirPath = dagStoragePath.resolve("checkpointsDirPath"),
       blockNumberIndexPath = dagStoragePath.resolve("blockNumberIndexPath"),
       mapSize = 8L * 1024L * 1024L * 1024L,
