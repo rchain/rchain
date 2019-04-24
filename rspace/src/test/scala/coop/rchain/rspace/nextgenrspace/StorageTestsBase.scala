@@ -1,20 +1,22 @@
 package coop.rchain.rspace.nextgenrspace
 
-import java.nio.file.{Files, Path}
+import java.nio.file.{Files, Path, Paths}
 
 import cats._
 import cats.implicits._
 import cats.effect._
 import com.typesafe.scalalogging.Logger
-import com.google.common.collect.HashMultiset
 import coop.rchain.metrics.Metrics
-
-import scala.collection.JavaConverters._
 import coop.rchain.rspace._
+import coop.rchain.rspace.examples.StringExamples
 import coop.rchain.rspace.examples.StringExamples._
 import coop.rchain.rspace.examples.StringExamples.implicits._
 import coop.rchain.rspace.history._
-import coop.rchain.rspace.internal._
+import coop.rchain.rspace.nextgenrspace.history.{
+  HistoryRepositoryInstances,
+  LMDBRSpaceStorageConfig,
+  StoreConfig
+}
 import coop.rchain.shared.Cell
 import coop.rchain.shared.PathOps._
 import coop.rchain.shared.Log
@@ -24,8 +26,8 @@ import scala.concurrent.ExecutionContext
 import scodec.Codec
 
 import scala.concurrent.ExecutionContext.Implicits.global
-
 import monix.eval.Task
+import org.lmdbjava.EnvFlags
 
 trait StorageTestsBase[F[_], C, P, A, K] extends FlatSpec with Matchers with OptionValues {
   type T  = ISpace[F, C, P, A, A, K]
@@ -97,28 +99,52 @@ abstract class InMemoryHotStoreTestsBase[F[_]]
   override def withTestSpace[S](f: (ST, T) => F[S]): S = {
     val branch = Branch("inmem")
 
+    implicit val patternCodec: Codec[Pattern] = StringExamples.implicits.patternSerialize.toCodec
+    implicit val stringCodec: Codec[String]   = StringExamples.implicits.stringSerialize.toCodec
+    implicit val stringCaptorCodec: Codec[StringsCaptor] =
+      StringExamples.implicits.stringClosureSerialize.toCodec
+
+    val dbDir: Path   = Files.createTempDirectory("rchain-storage-test-")
+    val mapSize: Long = 1024L * 1024L * 1024L
+
+    def storeConfig(name: String): StoreConfig =
+      StoreConfig(
+        Files.createDirectories(dbDir.resolve(name)).toString,
+        mapSize,
+        2,
+        2048,
+        List(EnvFlags.MDB_NOTLS)
+      )
+
+    val config = LMDBRSpaceStorageConfig(
+      storeConfig("cold"),
+      storeConfig("history"),
+      storeConfig("pointers"),
+      storeConfig("roots")
+    )
+
     run(for {
-      historyState <- Cell.refCell[F, Cache[String, Pattern, String, StringsCaptor]](
-                       Cache[String, Pattern, String, StringsCaptor]()
-                     )
-      historyReader = {
-        implicit val h = historyState
-        new History[F, String, Pattern, String, StringsCaptor]
-      }
+      historyRepository <- HistoryRepositoryInstances
+                            .lmdbRepository[F, String, Pattern, String, StringsCaptor](config)
       cache <- Cell.refCell[F, Cache[String, Pattern, String, StringsCaptor]](
                 Cache[String, Pattern, String, StringsCaptor]()
               )
       testStore = {
-        implicit val hr = historyReader
-        implicit val c  = cache
+        implicit val hr: HistoryReader[F, String, Pattern, String, StringsCaptor] =
+          historyRepository
+        implicit val c = cache
         HotStore.inMem[F, String, Pattern, String, StringsCaptor]
       }
       testSpace <- RSpace.create[F, String, Pattern, String, String, StringsCaptor](
+                    historyRepository,
                     testStore,
                     branch
                   )
       res <- f(testStore, testSpace)
-    } yield { res })
+    } yield {
+      dbDir.recursivelyDelete()
+      res
+    })
   }
 
   override def afterAll(): Unit =

@@ -1,7 +1,5 @@
 package coop.rchain.rspace.nextgenrspace
 
-import java.nio.ByteBuffer
-
 import cats.effect.{Concurrent, ContextShift}
 import cats.implicits._
 import com.typesafe.scalalogging.Logger
@@ -11,17 +9,18 @@ import coop.rchain.metrics.Metrics.Source
 import coop.rchain.rspace._
 import coop.rchain.rspace.history.Branch
 import coop.rchain.rspace.internal._
+import coop.rchain.rspace.nextgenrspace.history.{HistoryRepository, HistoryRepositoryInstances}
 import coop.rchain.rspace.trace._
-import coop.rchain.shared.Log
+import coop.rchain.shared.{Cell, Log}
 import coop.rchain.shared.SyncVarOps._
-import org.lmdbjava.Txn
-import scodec.Codec
+import monix.execution.atomic.AtomicAny
 
 import scala.concurrent.ExecutionContext
 import scala.util.Random
 
 class RSpace[F[_], C, P, A, R, K] private[rspace] (
-    store: HotStore[F, C, P, A, K],
+    historyRepository: HistoryRepository[F, C, P, A, K],
+    storeAtom: AtomicAny[HotStore[F, C, P, A, K]],
     branch: Branch
 )(
     implicit
@@ -34,8 +33,15 @@ class RSpace[F[_], C, P, A, R, K] private[rspace] (
     contextShift: ContextShift[F],
     scheduler: ExecutionContext,
     metricsF: Metrics[F]
-) extends RSpaceOps[F, C, P, A, R, K](store, branch)
+) extends RSpaceOps[F, C, P, A, R, K](storeAtom, branch)
     with ISpace[F, C, P, A, R, K] {
+
+  //TODO close in some F state abstraction
+  val historyRepositoryAtom: AtomicAny[HistoryRepository[F, C, P, A, K]] = AtomicAny(
+    historyRepository
+  )
+
+  def store: HotStore[F, C, P, A, K] = storeAtom.get()
 
   protected[this] override val logger: Logger = Logger[this.type]
 
@@ -58,7 +64,7 @@ class RSpace[F[_], C, P, A, R, K] private[rspace] (
       .traverse { c: C =>
         for {
           data <- store.getData(c)
-        } yield (c -> Random.shuffle(data.zipWithIndex))
+        } yield c -> Random.shuffle(data.zipWithIndex)
       }
       .map(_.toMap)
 
@@ -273,7 +279,7 @@ class RSpace[F[_], C, P, A, R, K] private[rspace] (
                                                  if (c == batChannel)
                                                    (data, -1) +: as
                                                  else as
-                                               }
+                                             }
                                            )
                                        }
             firstMatch <- extractFirstMatch(
@@ -281,10 +287,11 @@ class RSpace[F[_], C, P, A, R, K] private[rspace] (
                            matchCandidates,
                            channelToIndexedDataList.toMap
                          )
-          } yield firstMatch match {
-            case None             => remaining.asLeft[MaybeProduceCandidate]
-            case produceCandidate => produceCandidate.asRight[Seq[CandidateChannels]]
-          }
+          } yield
+            firstMatch match {
+              case None             => remaining.asLeft[MaybeProduceCandidate]
+              case produceCandidate => produceCandidate.asRight[Seq[CandidateChannels]]
+            }
       }
     groupedChannels.tailRecM(go)
   }
@@ -418,7 +425,37 @@ class RSpace[F[_], C, P, A, R, K] private[rspace] (
       } yield result
     }
 
-  override def createCheckpoint(): F[Checkpoint] = ???
+  private def createCache: F[Cell[F, Cache[C, P, A, K]]] =
+    Cell.refCell[F, Cache[C, P, A, K]](Cache())
+
+  private def createNewHotStore(historyReader: HistoryReader[F, C, P, A, K]): F[Unit] =
+    for {
+      cache <- createCache
+      nextHotStore = {
+        implicit val C: Cell[F, Cache[C, P, A, K]]    = cache
+        implicit val HR: HistoryReader[F, C, P, A, K] = historyReader
+        HotStore.inMem
+      }
+      _ = storeAtom.set(nextHotStore)
+    } yield ()
+
+  override def createCheckpoint(): F[Checkpoint] =
+    for {
+      changes     <- storeAtom.get().changes()
+      nextHistory <- historyRepositoryAtom.get().checkpoint(changes.toList)
+      _           <- createNewHotStore(nextHistory)
+      log         = eventLog.take()
+      _           = eventLog.put(Seq.empty)
+    } yield Checkpoint(nextHistory.history.root, log)
+
+  override def reset(root: Blake2b256Hash): F[Unit] =
+    for {
+      nextHistory <- historyRepositoryAtom.get().reset(root)
+      _           = historyRepositoryAtom.set(nextHistory)
+      _           = eventLog.take()
+      _           = eventLog.put(Seq.empty)
+      _           <- createNewHotStore(nextHistory)
+    } yield ()
 
   protected[rspace] override def isDirty(root: Blake2b256Hash): F[Boolean] = ???
 
@@ -427,7 +464,11 @@ class RSpace[F[_], C, P, A, R, K] private[rspace] (
 
 object RSpace {
 
-  def create[F[_], C, P, A, R, K](store: HotStore[F, C, P, A, K], branch: Branch)(
+  def create[F[_], C, P, A, R, K](
+      historyRepository: HistoryRepository[F, C, P, A, K],
+      store: HotStore[F, C, P, A, K],
+      branch: Branch
+  )(
       implicit
       sc: Serialize[C],
       sp: Serialize[P],
@@ -439,9 +480,8 @@ object RSpace {
       scheduler: ExecutionContext,
       metricsF: Metrics[F]
   ): F[ISpace[F, C, P, A, R, K]] = {
-
     val space: ISpace[F, C, P, A, R, K] =
-      new RSpace[F, C, P, A, R, K](store, branch)
+      new RSpace[F, C, P, A, R, K](historyRepository, AtomicAny(store), branch)
 
     space.pure[F]
 

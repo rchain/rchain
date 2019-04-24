@@ -23,10 +23,6 @@ import scala.concurrent.SyncVar
   */
 private[rspace] trait SpaceMatcher[F[_], C, P, A, R, K] extends ISpace[F, C, P, A, R, K] {
 
-  val store: HotStore[F, C, P, A, K]
-
-  val branch: Branch
-
   protected[this] val eventLog: SyncVar[Log] =
     SyncVarOps.create[Log](Seq.empty)
 
@@ -65,12 +61,6 @@ private[rspace] trait SpaceMatcher[F[_], C, P, A, R, K] extends ISpace[F, C, P, 
         }
       case _ => none[MatchingDataCandidate].pure[F]
     }
-
-  def getData(channel: C): F[Seq[Datum[A]]] =
-    store.getData(channel)
-
-  def getWaitingContinuations(channels: Seq[C]): F[Seq[WaitingContinuation[P, K]]] =
-    store.getContinuations(channels)
 
   /** Iterates through (channel, pattern) pairs looking for matching data.
     *

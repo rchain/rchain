@@ -1,24 +1,23 @@
 package coop.rchain.rspace.nextgenrspace
 
-import cats.Monad
 import cats.effect.{Concurrent, Sync}
 import cats.implicits._
 import com.typesafe.scalalogging.Logger
 import coop.rchain.catscontrib._
-import coop.rchain.catscontrib.ski._
 import coop.rchain.rspace._
 import coop.rchain.rspace.concurrent.{ConcurrentTwoStepLockF, TwoStepLock}
-import coop.rchain.rspace.history.{Branch, Leaf}
+import coop.rchain.rspace.history.Branch
 import coop.rchain.rspace.internal._
 import coop.rchain.rspace.trace.Consume
 import coop.rchain.shared.Log
 import coop.rchain.shared.SyncVarOps._
+import monix.execution.atomic.AtomicAny
 
 import scala.concurrent.SyncVar
 import scala.util.Random
 
 abstract class RSpaceOps[F[_]: Concurrent, C, P, A, R, K](
-    val store: HotStore[F, C, P, A, K],
+    val storeAtom: AtomicAny[HotStore[F, C, P, A, K]],
     val branch: Branch
 )(
     implicit
@@ -27,6 +26,14 @@ abstract class RSpaceOps[F[_]: Concurrent, C, P, A, R, K](
     serializeK: Serialize[K],
     logF: Log[F]
 ) extends SpaceMatcher[F, C, P, A, R, K] {
+
+  def store: HotStore[F, C, P, A, K]
+
+  def getData(channel: C): F[Seq[Datum[A]]] =
+    store.getData(channel)
+
+  def getWaitingContinuations(channels: Seq[C]): F[Seq[WaitingContinuation[P, K]]] =
+    store.getContinuations(channels)
 
   implicit val codecC = serializeC.toCodec
 
@@ -111,7 +118,7 @@ abstract class RSpaceOps[F[_]: Concurrent, C, P, A, R, K](
                                  .traverse { c =>
                                    for {
                                      data <- store.getData(c)
-                                   } yield (c -> Random.shuffle(data.zipWithIndex))
+                                   } yield c -> Random.shuffle(data.zipWithIndex)
                                  }
         options <- extractDataCandidates(channels.zip(patterns), channelToIndexedData.toMap, Nil)
                     .map(_.sequence)
@@ -160,7 +167,6 @@ abstract class RSpaceOps[F[_]: Concurrent, C, P, A, R, K](
 
   protected[rspace] def isDirty(root: Blake2b256Hash): F[Boolean]
 
-  override def reset(root: Blake2b256Hash): F[Unit] = ???
-  override def clear(): F[Unit]                     = ???
+  override def clear(): F[Unit] = ???
 
 }
