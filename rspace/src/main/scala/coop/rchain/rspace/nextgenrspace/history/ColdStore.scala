@@ -4,11 +4,10 @@ import cats.implicits._
 import cats.effect.Sync
 import coop.rchain.rspace.Blake2b256Hash
 import scodec.Codec
-import scodec.bits.{BitVector, ByteVector}
+import scodec.bits.ByteVector
 import scodec.codecs.{discriminated, uint2}
 import coop.rchain.rspace.internal.codecByteVector
 import coop.rchain.shared.AttemptOps.RichAttempt
-import coop.rchain.shared.ByteVectorOps.RichByteVector
 
 trait ColdStore[F[_]] {
   def put(hash: Blake2b256Hash, data: PersistedData): F[Unit]

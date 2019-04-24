@@ -10,12 +10,48 @@ import History._
 import cats.{Applicative, FlatMap}
 import cats.effect.Sync
 import cats.implicits._
+import Trie.{LeafPointer, PointerBlockPointer, TriePointer}
+
 sealed trait Trie
 sealed trait NonEmptyTrie                                   extends Trie
 case object EmptyTrie                                       extends Trie
 final case class Skip(affix: ByteVector, hash: TriePointer) extends NonEmptyTrie
 final case class Node(hash: PointerBlockPointer)            extends NonEmptyTrie
 final case class Leaf(hash: LeafPointer)                    extends NonEmptyTrie
+
+object Trie {
+
+  type PointerBlockPointer = Blake2b256Hash
+  type TriePointer         = Blake2b256Hash
+  type LeafPointer         = Blake2b256Hash
+
+  def hash(trie: Trie): Blake2b256Hash =
+    codecTrie
+      .encode(trie)
+      .map((vector: BitVector) => Blake2b256Hash.create(vector.toByteVector))
+      .get
+
+  private val codecNode  = Blake2b256Hash.codecBlake2b256Hash
+  private val codecLeaf  = Blake2b256Hash.codecBlake2b256Hash
+  private val codecSkip  = codecByteVector :: Blake2b256Hash.codecBlake2b256Hash
+  private val codecEmpty = provide(EmptyTrie)
+
+  implicit def codecTrie: Codec[Trie] =
+    discriminated[Trie]
+      .by(uint2)
+      .subcaseP(0) {
+        case n: Node => n
+      }(codecNode.as[Node])
+      .subcaseP(1) {
+        case s: Skip => s
+      }(codecSkip.as[Skip])
+      .subcaseP(2) {
+        case emptyTrie: EmptyTrie.type => emptyTrie
+      }(codecEmpty)
+      .subcaseP(3) {
+        case l: Leaf => l
+      }(codecLeaf.as[Leaf])
+}
 
 final case class TriePath(nodes: Vector[Trie], conflicting: Option[Trie], edges: KeyPath) {
   def append(affix: KeyPath, t: Trie): TriePath =
@@ -288,6 +324,10 @@ final case class History[F[_]: Sync](
 
 object History {
 
+  val emptyRoot: Trie = EmptyTrie
+  val emptyRootHash: Blake2b256Hash =
+    Trie.hash(emptyRoot)
+
   def skipOrFetch[F[_]: Applicative](
       path: KeyPath,
       pointer: Blake2b256Hash,
@@ -331,38 +371,5 @@ object History {
     }
 
   type KeyPath = Seq[Byte]
-
-  type PointerBlockPointer = Blake2b256Hash
-  type TriePointer         = Blake2b256Hash
-  type LeafPointer         = Blake2b256Hash
-
-  object Trie {
-    def hash(trie: Trie)(implicit codecTrie: Codec[Trie]): Blake2b256Hash =
-      codecTrie
-        .encode(trie)
-        .map((vector: BitVector) => Blake2b256Hash.create(vector.toByteVector))
-        .get
-  }
-
-  private val codecNode  = Blake2b256Hash.codecBlake2b256Hash
-  private val codecLeaf  = Blake2b256Hash.codecBlake2b256Hash
-  private val codecSkip  = codecByteVector :: Blake2b256Hash.codecBlake2b256Hash
-  private val codecEmpty = provide(EmptyTrie)
-
-  implicit def codecTrie: Codec[Trie] =
-    discriminated[Trie]
-      .by(uint2)
-      .subcaseP(0) {
-        case n: Node => n
-      }(codecNode.as[Node])
-      .subcaseP(1) {
-        case s: Skip => s
-      }(codecSkip.as[Skip])
-      .subcaseP(2) {
-        case emptyTrie: EmptyTrie.type => emptyTrie
-      }(codecEmpty)
-      .subcaseP(3) {
-        case l: Leaf => l
-      }(codecLeaf.as[Leaf])
 
 }

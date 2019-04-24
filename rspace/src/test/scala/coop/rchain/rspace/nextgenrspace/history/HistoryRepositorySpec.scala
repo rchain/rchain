@@ -17,7 +17,7 @@ import org.scalatest.{FlatSpec, Matchers, OptionValues}
 import scala.concurrent.duration._
 import monix.execution.Scheduler.Implicits.global
 import coop.rchain.rspace.internal.{Datum, WaitingContinuation}
-import coop.rchain.rspace.nextgenrspace.history.TestData.randomBlake
+import coop.rchain.rspace.nextgenrspace.history.TestData.{randomBlake, zerosBlake}
 import coop.rchain.rspace.trace.{Consume, Produce}
 
 import scala.collection.concurrent.TrieMap
@@ -37,7 +37,7 @@ class HistoryRepositorySpec
     val testDatum = datum(1)
     val data      = InsertData[String, String](testChannelDataPrefix, testDatum :: Nil)
     for {
-      nextRepo <- repo.process(data :: Nil)
+      nextRepo <- repo.checkpoint(data :: Nil)
       data     <- nextRepo.getData(testChannelDataPrefix)
       fetched  = data.head
       _        = fetched shouldBe testDatum
@@ -62,7 +62,7 @@ class HistoryRepositorySpec
     val deleteElements: Vector[HotStoreAction] = dataDelete ++ joinsDelete ++ contsDelete
 
     for {
-      nextRepo             <- repo.process(elems.toList)
+      nextRepo             <- repo.checkpoint(elems.toList)
       fetchedData          <- data.traverse(d => nextRepo.getData(d.channel))
       _                    = fetchedData shouldBe data.map(_.data)
       fetchedContinuations <- conts.traverse(d => nextRepo.getContinuations(d.channels))
@@ -70,7 +70,7 @@ class HistoryRepositorySpec
       fetchedJoins         <- joins.traverse(d => nextRepo.getJoins(d.channel))
       _                    = fetchedJoins shouldBe joins.map(_.joins)
 
-      deletedRepo <- nextRepo.process(deleteElements.toList)
+      deletedRepo <- nextRepo.checkpoint(deleteElements.toList)
 
       fetchedData          <- data.traverse(d => nextRepo.getData(d.channel))
       _                    = fetchedData shouldBe data.map(_.data)
@@ -85,6 +85,23 @@ class HistoryRepositorySpec
       _                    = fetchedContinuations.flatten shouldBe empty
       fetchedJoins         <- joins.traverse(d => deletedRepo.getJoins(d.channel))
       _                    = fetchedJoins.flatten shouldBe empty
+    } yield ()
+  }
+
+  it should "not allow switching to a not existing root" in withEmptyRepository { repo =>
+    repo.reset(zerosBlake).attempt.map {
+      case Left(RuntimeException("unknown root")) => ()
+      case _                                      => fail("Expected a failure")
+    }
+  }
+
+  it should "record next root as valid" in withEmptyRepository { repo =>
+    val testDatum = datum(1)
+    val data      = InsertData[String, String](testChannelDataPrefix, testDatum :: Nil)
+    for {
+      nextRepo <- repo.checkpoint(data :: Nil)
+      _        <- repo.reset(History.emptyRootHash)
+      _        <- repo.reset(nextRepo.history.root)
     } yield ()
   }
 
@@ -114,14 +131,58 @@ class HistoryRepositorySpec
   protected def withEmptyRepository(f: TestHistoryRepository => Task[Unit]): Unit = {
     implicit val codecString: Codec[String] = util.stringCodec
     val emptyHistory =
-      new History[Task](emptyRootHash, inMemHistoryStore, inMemPointerBlockStore)
-    val repo: TestHistoryRepository =
-      HistoryRepositoryImpl[Task, String, String, String, String](emptyHistory, inMemColdStore)
-    f(repo).runSyncUnsafe(20.seconds)
+      new History[Task](History.emptyRootHash, inMemHistoryStore, inMemPointerBlockStore)
+    val pastRoots = rootRepository
+
+    (for {
+      _ <- pastRoots.commit(History.emptyRootHash)
+      repo = HistoryRepositoryImpl[Task, String, String, String, String](
+        emptyHistory,
+        pastRoots,
+        inMemColdStore
+      )
+      _ <- f(repo)
+    } yield ()).runSyncUnsafe(20.seconds)
   }
 }
 
+object RuntimeException {
+  def unapply(arg: RuntimeException): Option[String] = Option(arg.getMessage)
+}
+
 trait InMemoryHistoryRepositoryTestBase extends InMemoryHistoryTestBase {
+  def inmemRootsStore =
+    new RootsStore[Task] {
+      var roots: Set[Blake2b256Hash]               = Set.empty
+      var maybeCurrentRoot: Option[Blake2b256Hash] = None
+
+      override def currentRoot(): Task[Option[Blake2b256Hash]] =
+        Task.delay {
+          maybeCurrentRoot
+        }
+
+      override def validateRoot(key: Blake2b256Hash): Task[Option[Blake2b256Hash]] =
+        Task.delay {
+          if (roots.contains(key)) {
+            maybeCurrentRoot = Some(key)
+            maybeCurrentRoot
+          } else {
+            None
+          }
+        }
+
+      override def recordRoot(key: Blake2b256Hash): Task[Unit] =
+        Task.delay {
+          maybeCurrentRoot = Some(key)
+          roots += key
+        }
+
+      override def close(): Task[Unit] = Task.delay(())
+    }
+
+  def rootRepository =
+    new RootRepository[Task](inmemRootsStore)
+
   def inMemColdStore: ColdStore[Task] = new ColdStore[Task] {
     val data: TrieMap[Blake2b256Hash, PersistedData] = TrieMap.empty
 
