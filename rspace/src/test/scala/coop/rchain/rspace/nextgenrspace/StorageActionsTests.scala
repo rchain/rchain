@@ -1,30 +1,14 @@
 package coop.rchain.rspace.nextgenrspace
 
-import java.lang.{Byte => JByte}
-
-import cats._
 import cats.effect._
 import cats.implicits._
-import coop.rchain.metrics.Metrics
-import coop.rchain.shared.Log
 import coop.rchain.rspace._
-import coop.rchain.rspace.StableHashProvider._
 import coop.rchain.rspace.examples.StringExamples._
 import coop.rchain.rspace.examples.StringExamples.implicits._
-import coop.rchain.rspace.history.{Leaf, LeafPointer, Node, NodePointer, PointerBlock, Skip, Trie}
 import coop.rchain.rspace.util._
 import coop.rchain.rspace.internal._
-import coop.rchain.rspace.trace.{COMM, Consume, Produce}
-import org.scalacheck.Prop
-import org.scalatest._
 import org.scalatest.prop.{Checkers, GeneratorDrivenPropertyChecks}
 import scodec.Codec
-
-import coop.rchain.rspace.test.ArbitraryInstances._
-import monix.eval.Coeval
-import org.scalatest.enablers.Definition
-
-import scala.util.Random
 
 import monix.eval.Task
 
@@ -43,7 +27,7 @@ trait StorageActionsTests[F[_]]
   implicit val codecK: Codec[StringsCaptor] = implicitly[Serialize[StringsCaptor]].toCodec
 
   "produce" should
-    "persist a piece of data in the store" in withTestSpace { (store, space) =>
+    "persist a piece of data in the store" in fixture { (store, _, space) =>
     val channel = "ch1"
     val key     = List(channel)
 
@@ -62,7 +46,7 @@ trait StorageActionsTests[F[_]]
   }
 
   "producing twice on the same channel" should
-    "persist two pieces of data in the store" in withTestSpace { (store, space) =>
+    "persist two pieces of data in the store" in fixture { (store, _, space) =>
     val channel = "ch1"
     val key     = List(channel)
 
@@ -91,7 +75,7 @@ trait StorageActionsTests[F[_]]
   }
 
   "consuming on one channel" should
-    "persist a continuation in the store" in withTestSpace { (store, space) =>
+    "persist a continuation in the store" in fixture { (store, _, space) =>
     val channel  = "ch1"
     val key      = List(channel)
     val patterns = List(Wildcard)
@@ -115,7 +99,7 @@ trait StorageActionsTests[F[_]]
   }
 
   "consuming on three channels" should
-    "persist a continuation in the store" in withTestSpace { (store, space) =>
+    "persist a continuation in the store" in fixture { (store, _, space) =>
     val key      = List("ch1", "ch2", "ch3")
     val patterns = List(Wildcard, Wildcard, Wildcard)
 
@@ -138,7 +122,7 @@ trait StorageActionsTests[F[_]]
   }
 
   "producing and then consuming on the same channel" should
-    "return the continuation and data" in withTestSpace { (store, space) =>
+    "return the continuation and data" in fixture { (store, _, space) =>
     val channel = "ch1"
     val key     = List(channel)
 
@@ -163,8 +147,8 @@ trait StorageActionsTests[F[_]]
     } yield ()
   }
 
-  "producing three times then doing consuming three times" should "work" in withTestSpace {
-    (store, space) =>
+  "producing three times then doing consuming three times" should "work" in fixture {
+    (store, _, space) =>
       for {
         r1            <- space.produce("ch1", "datum1", persist = false)
         r2            <- space.produce("ch1", "datum2", persist = false)
@@ -187,7 +171,7 @@ trait StorageActionsTests[F[_]]
   }
 
   "producing on channel, consuming on that channel and another, and then producing on the other channel" should
-    "return a continuation and all the data" in withTestSpace { (store, space) =>
+    "return a continuation and all the data" in fixture { (store, _, space) =>
     val produceKey1 = List("ch1")
     val produceKey2 = List("ch2")
 
@@ -228,7 +212,7 @@ trait StorageActionsTests[F[_]]
   }
 
   "producing on three different channels and then consuming once on all three" should
-    "return the continuation and all the data" in withTestSpace { (store, space) =>
+    "return the continuation and all the data" in fixture { (store, _, space) =>
     val produceKey1 = List("ch1")
     val produceKey2 = List("ch2")
     val produceKey3 = List("ch3")
@@ -278,7 +262,7 @@ trait StorageActionsTests[F[_]]
   }
 
   "producing three times on the same channel then consuming three times on the same channel" should
-    "return three pairs of continuations and data" in withTestSpace { (store, space) =>
+    "return three pairs of continuations and data" in fixture { (store, _, space) =>
     val captor = new StringsCaptor
 
     val key = List("ch1")
@@ -311,8 +295,8 @@ trait StorageActionsTests[F[_]]
   }
 
   "consuming three times on the same channel, then producing three times on that channel" should
-    "return three continuations, each paired with distinct pieces of data" in withTestSpace {
-    (store, space) =>
+    "return three continuations, each paired with distinct pieces of data" in fixture {
+    (store, _, space) =>
       for {
         _  <- space.consume(List("ch1"), List(Wildcard), new StringsCaptor, persist = false)
         _  <- space.consume(List("ch1"), List(Wildcard), new StringsCaptor, persist = false)
@@ -340,49 +324,48 @@ trait StorageActionsTests[F[_]]
   }
 
   "consuming three times on the same channel with non-trivial matches, then producing three times on that channel" should
-    "return three continuations, each paired with matching data" in withTestSpace {
-    (store, space) =>
-      for {
-        _ <- space.consume(
-              List("ch1"),
-              List(StringMatch("datum1")),
-              new StringsCaptor,
-              persist = false
-            )
-        _ <- space.consume(
-              List("ch1"),
-              List(StringMatch("datum2")),
-              new StringsCaptor,
-              persist = false
-            )
-        _ <- space.consume(
-              List("ch1"),
-              List(StringMatch("datum3")),
-              new StringsCaptor,
-              persist = false
-            )
+    "return three continuations, each paired with matching data" in fixture { (store, _, space) =>
+    for {
+      _ <- space.consume(
+            List("ch1"),
+            List(StringMatch("datum1")),
+            new StringsCaptor,
+            persist = false
+          )
+      _ <- space.consume(
+            List("ch1"),
+            List(StringMatch("datum2")),
+            new StringsCaptor,
+            persist = false
+          )
+      _ <- space.consume(
+            List("ch1"),
+            List(StringMatch("datum3")),
+            new StringsCaptor,
+            persist = false
+          )
 
-        r1 <- space.produce("ch1", "datum1", persist = false)
-        r2 <- space.produce("ch1", "datum2", persist = false)
-        r3 <- space.produce("ch1", "datum3", persist = false)
+      r1 <- space.produce("ch1", "datum1", persist = false)
+      r2 <- space.produce("ch1", "datum2", persist = false)
+      r3 <- space.produce("ch1", "datum3", persist = false)
 
-        _ = r1 shouldBe defined
-        _ = r2 shouldBe defined
-        _ = r3 shouldBe defined
+      _ = r1 shouldBe defined
+      _ = r2 shouldBe defined
+      _ = r3 shouldBe defined
 
-        _ = List(r1, r2, r3)
-          .map(unpackOption)
-          .foreach(runK)
+      _ = List(r1, r2, r3)
+        .map(unpackOption)
+        .foreach(runK)
 
-        _             = getK(r1).results shouldBe List(List("datum1"))
-        _             = getK(r2).results shouldBe List(List("datum2"))
-        _             = getK(r3).results shouldBe List(List("datum3"))
-        insertActions <- store.changes().map(collectActions[InsertAction])
-      } yield (insertActions shouldBe empty)
+      _             = getK(r1).results shouldBe List(List("datum1"))
+      _             = getK(r2).results shouldBe List(List("datum2"))
+      _             = getK(r3).results shouldBe List(List("datum3"))
+      insertActions <- store.changes().map(collectActions[InsertAction])
+    } yield (insertActions shouldBe empty)
   }
 
   "consuming on two channels, producing on one, then producing on the other" should
-    "return a continuation with both pieces of data" in withTestSpace { (store, space) =>
+    "return a continuation with both pieces of data" in fixture { (store, _, space) =>
     for {
       r1 <- space.consume(
              List("ch1", "ch2"),
@@ -406,7 +389,7 @@ trait StorageActionsTests[F[_]]
   }
 
   "A joined consume with the same channel given twice followed by a produce" should
-    "not raise any errors (CORE-365)" in withTestSpace { (store, space) =>
+    "not raise any errors (CORE-365)" in fixture { (store, _, space) =>
     val channels = List("ch1", "ch1")
 
     for {
@@ -431,7 +414,7 @@ trait StorageActionsTests[F[_]]
   }
 
   "consuming twice on the same channels with different patterns, and then producing on those channels" should
-    "return continuations with the expected data" in withTestSpace { (store, space) =>
+    "return continuations with the expected data" in fixture { (store, _, space) =>
     val channels = List("ch1", "ch2")
 
     for {
@@ -471,8 +454,7 @@ trait StorageActionsTests[F[_]]
 
   }
 
-  "consuming and producing with non-trivial matches" should
-    "work" in withTestSpace { (store, space) =>
+  "consuming and producing with non-trivial matches" should "work" in fixture { (store, _, space) =>
     for {
       r1 <- space.consume(
              List("ch1", "ch2"),
@@ -503,7 +485,7 @@ trait StorageActionsTests[F[_]]
   }
 
   "consuming twice and producing twice with non-trivial matches" should
-    "work" in withTestSpace { (store, space) =>
+    "work" in fixture { (store, _, space) =>
     for {
       r1 <- space.consume(
              List("ch1"),
@@ -537,7 +519,7 @@ trait StorageActionsTests[F[_]]
 
   "consuming on two channels, consuming on one of those channels, and then producing on both of those channels separately" should
     "return a continuation paired with one piece of data" in
-    withTestSpace { (store, space) =>
+    fixture { (store, _, space) =>
       for {
         _ <- space.consume(
               List("ch1", "ch2"),
@@ -572,7 +554,7 @@ trait StorageActionsTests[F[_]]
   /* Persist tests */
 
   "producing and then doing a persistent consume on the same channel" should
-    "return the continuation and data" in withTestSpace { (store, space) =>
+    "return the continuation and data" in fixture { (store, _, space) =>
     val key = List("ch1")
 
     for {
@@ -599,8 +581,8 @@ trait StorageActionsTests[F[_]]
   }
 
   "producing, doing a persistent consume, and producing again on the same channel" should
-    "return the continuation for the first produce, and then the second produce" in withTestSpace {
-    (store, space) =>
+    "return the continuation for the first produce, and then the second produce" in fixture {
+    (store, _, space) =>
       val key = List("ch1")
 
       for {
@@ -634,8 +616,8 @@ trait StorageActionsTests[F[_]]
       } yield (getK(r4).results should contain theSameElementsAs List(List("datum2")))
   }
 
-  "doing a persistent consume and producing multiple times" should "work" ignore withTestSpace {
-    (store, space) =>
+  "doing a persistent consume and producing multiple times" should "work" ignore fixture {
+    (store, _, space) =>
       for {
         r1 <- space.consume(List("ch1"), List(Wildcard), new StringsCaptor, persist = true)
         _  <- store.getData("ch1").map(_ shouldBe Nil)
@@ -659,7 +641,7 @@ trait StorageActionsTests[F[_]]
       } yield (getK(r3).results should contain theSameElementsAs List(List("datum2")))
   }
 
-  "consuming and doing a persistient produce" should "work" in withTestSpace { (store, space) =>
+  "consuming and doing a persistient produce" should "work" in fixture { (store, _, space) =>
     for {
       r1 <- space.consume(List("ch1"), List(Wildcard), new StringsCaptor, persist = false)
       _  = r1 shouldBe None
@@ -681,8 +663,8 @@ trait StorageActionsTests[F[_]]
     } yield ()
   }
 
-  "consuming, doing a persistient produce, and consuming again" should "work" in withTestSpace {
-    (store, space) =>
+  "consuming, doing a persistient produce, and consuming again" should "work" in fixture {
+    (store, _, space) =>
       for {
         r1 <- space.consume(List("ch1"), List(Wildcard), new StringsCaptor, persist = false)
 
@@ -712,33 +694,32 @@ trait StorageActionsTests[F[_]]
       } yield (getK(r4).results should contain theSameElementsAs List(List("datum1")))
   }
 
-  "doing a persistent produce and consuming twice" should "work" in withTestSpace {
-    (store, space) =>
-      for {
-        r1 <- space.produce("ch1", "datum1", persist = true)
-        _  <- store.getData("ch1") map (_ shouldBe List(Datum.create("ch1", "datum1", true)))
-        _  <- store.getContinuations(List("ch1")) map (_ shouldBe Nil)
-        _  = r1 shouldBe None
+  "doing a persistent produce and consuming twice" should "work" in fixture { (store, _, space) =>
+    for {
+      r1 <- space.produce("ch1", "datum1", persist = true)
+      _  <- store.getData("ch1") map (_ shouldBe List(Datum.create("ch1", "datum1", true)))
+      _  <- store.getContinuations(List("ch1")) map (_ shouldBe Nil)
+      _  = r1 shouldBe None
 
-        r2 <- space.consume(List("ch1"), List(Wildcard), new StringsCaptor, persist = false)
-        _  <- store.getData("ch1") map (_ shouldBe List(Datum.create("ch1", "datum1", true)))
-        _  <- store.getContinuations(List("ch1")) map (_ shouldBe Nil)
-        _  = r2 shouldBe defined
+      r2 <- space.consume(List("ch1"), List(Wildcard), new StringsCaptor, persist = false)
+      _  <- store.getData("ch1") map (_ shouldBe List(Datum.create("ch1", "datum1", true)))
+      _  <- store.getContinuations(List("ch1")) map (_ shouldBe Nil)
+      _  = r2 shouldBe defined
 
-        _ = runK(r2)
-        _ = getK(r2).results should contain theSameElementsAs List(List("datum1"))
+      _ = runK(r2)
+      _ = getK(r2).results should contain theSameElementsAs List(List("datum1"))
 
-        r3 <- space.consume(List("ch1"), List(Wildcard), new StringsCaptor, persist = false)
-        _  <- store.getData("ch1") map (_ shouldBe List(Datum.create("ch1", "datum1", true)))
-        _  <- store.getContinuations(List("ch1")) map (_ shouldBe Nil)
+      r3 <- space.consume(List("ch1"), List(Wildcard), new StringsCaptor, persist = false)
+      _  <- store.getData("ch1") map (_ shouldBe List(Datum.create("ch1", "datum1", true)))
+      _  <- store.getContinuations(List("ch1")) map (_ shouldBe Nil)
 
-        _ = r3 shouldBe defined
-        _ = runK(r3)
-      } yield (getK(r3).results should contain theSameElementsAs List(List("datum1")))
+      _ = r3 shouldBe defined
+      _ = runK(r3)
+    } yield (getK(r3).results should contain theSameElementsAs List(List("datum1")))
   }
 
-  "producing three times and doing a persistent consume" should "work" in withTestSpace {
-    (store, space) =>
+  "producing three times and doing a persistent consume" should "work" in fixture {
+    (store, _, space) =>
       for {
         r1 <- space.produce("ch1", "datum1", persist = false)
         r2 <- space.produce("ch1", "datum2", persist = false)
@@ -791,8 +772,8 @@ trait StorageActionsTests[F[_]]
 
   }
 
-  "A persistent produce" should "be available for multiple matches (CORE-633)" in withTestSpace {
-    (store, space) =>
+  "A persistent produce" should "be available for multiple matches (CORE-633)" in fixture {
+    (store, _, space) =>
       val channel = "chan"
 
       for {
@@ -810,22 +791,92 @@ trait StorageActionsTests[F[_]]
       } yield (getK(r2).results should contain(List("datum", "datum")))
   }
 
-  "an install" should "not allow installing after a produce operation" in withTestSpace {
-    (store, space) =>
-      val channel  = "ch1"
-      val datum    = "datum1"
-      val key      = List(channel)
+  "reset" should "change the state of the store, and reset the trie updates log" in fixture {
+    (_, storeAtom, space) =>
+      val key      = List("ch1")
       val patterns = List(Wildcard)
 
       for {
-        _   <- space.produce(channel, datum, persist = false)
-        res <- Sync[F].attempt(space.install(key, patterns, new StringsCaptor))
-        ex  = res.left.get
-      } yield (ex.getMessage shouldBe "Installing can be done only on startup")
+        checkpoint0          <- space.createCheckpoint()
+        r                    <- space.consume(key, patterns, new StringsCaptor, persist = false)
+        _                    = r shouldBe None
+        postCheckpoint0Store = storeAtom.get()
+        checkpoint0Changes <- postCheckpoint0Store
+                               .changes()
+                               .map(
+                                 collectActions[InsertContinuations[String, Pattern, StringsCaptor]]
+                               )
+        _ = checkpoint0Changes.isEmpty shouldBe false
+        _ = checkpoint0Changes.length shouldBe 1
+
+        _              <- space.reset(checkpoint0.root)
+        postResetStore = storeAtom.get()
+        resetChanges   <- postResetStore.changes()
+        _              = resetChanges.isEmpty shouldBe true
+        _              = resetChanges.length shouldBe 0
+
+        checkpoint1 <- space.createCheckpoint()
+      } yield checkpoint1.log shouldBe empty
+  }
+
+  val emptyRootHash: Blake2b256Hash =
+    Blake2b256Hash.fromHex("45b0cfc220ceec5b7c1c62c4d4193d38e4eba48e8815729ce75f9c0ab0e4c1c0")
+
+  "consume and produce a match and then createCheckpoint" should "result in an empty TrieStore" in
+    fixture { (_, _, space) =>
+      val channels = List("ch1")
+
+      for {
+        checkpointInit <- space.createCheckpoint()
+        _              = checkpointInit.root shouldBe emptyRootHash
+        r1             <- space.consume(channels, List(Wildcard), new StringsCaptor, persist = false)
+        _              = r1 shouldBe None
+        r2             <- space.produce(channels.head, "datum", persist = false)
+        _              = r2 shouldBe defined
+        checkpoint     <- space.createCheckpoint()
+        _              = checkpoint.root shouldBe emptyRootHash
+      } yield ()
+    }
+
+  "produce a bunch and then createCheckpoint, consume on same channels" should "result in checkpoint pointing at empty state" in
+    forAll(minSuccessful(50)) { data: List[String] =>
+      fixture { (_, _, space) =>
+        def consume(channel: String) = space.consume(
+          channel :: Nil,
+          List(Wildcard),
+          new StringsCaptor,
+          persist = false
+        )
+        for {
+          _           <- data.traverse(channel => space.produce(channel, "data", false))
+          checkpoint1 <- space.createCheckpoint()
+          _           <- data.traverse(channel => consume(channel).map(_ shouldBe defined))
+          checkpoint2 <- space.createCheckpoint()
+          _           <- data.traverse(channel => consume(channel).map(_ shouldBe empty))
+          _           = checkpoint2.root shouldBe emptyRootHash
+          _           <- space.reset(checkpoint1.root)
+          _           <- data.traverse(channel => consume(channel).map(_ shouldBe defined))
+          checkpoint3 <- space.createCheckpoint()
+          _           = checkpoint3.root shouldBe emptyRootHash
+        } yield ()
+      }
+    }
+
+  "an install" should "not allow installing after a produce operation" in fixture { (_, _, space) =>
+    val channel  = "ch1"
+    val datum    = "datum1"
+    val key      = List(channel)
+    val patterns = List(Wildcard)
+
+    for {
+      _   <- space.produce(channel, datum, persist = false)
+      res <- Sync[F].attempt(space.install(key, patterns, new StringsCaptor))
+      ex  = res.left.get
+    } yield (ex.getMessage shouldBe "Installing can be done only on startup")
   }
 
   "consuming with a list of patterns that is a different length than the list of channels" should
-    "raise error" in withTestSpace { (store, space) =>
+    "raise error" in fixture { (store, _, space) =>
     for {
       res <- Sync[F].attempt(
               space.consume(List("ch1", "ch2"), List(Wildcard), new StringsCaptor, persist = false)

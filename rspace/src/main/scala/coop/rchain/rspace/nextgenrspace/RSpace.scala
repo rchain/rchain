@@ -1,6 +1,6 @@
 package coop.rchain.rspace.nextgenrspace
 
-import cats.effect.{Concurrent, ContextShift}
+import cats.effect.{Concurrent, ContextShift, Sync}
 import cats.implicits._
 import com.typesafe.scalalogging.Logger
 import coop.rchain.catscontrib._
@@ -279,7 +279,7 @@ class RSpace[F[_], C, P, A, R, K] private[rspace] (
                                                  if (c == batChannel)
                                                    (data, -1) +: as
                                                  else as
-                                             }
+                                               }
                                            )
                                        }
             firstMatch <- extractFirstMatch(
@@ -287,11 +287,10 @@ class RSpace[F[_], C, P, A, R, K] private[rspace] (
                            matchCandidates,
                            channelToIndexedDataList.toMap
                          )
-          } yield
-            firstMatch match {
-              case None             => remaining.asLeft[MaybeProduceCandidate]
-              case produceCandidate => produceCandidate.asRight[Seq[CandidateChannels]]
-            }
+          } yield firstMatch match {
+            case None             => remaining.asLeft[MaybeProduceCandidate]
+            case produceCandidate => produceCandidate.asRight[Seq[CandidateChannels]]
+          }
       }
     groupedChannels.tailRecM(go)
   }
@@ -430,13 +429,9 @@ class RSpace[F[_], C, P, A, R, K] private[rspace] (
 
   private def createNewHotStore(historyReader: HistoryReader[F, C, P, A, K]): F[Unit] =
     for {
-      cache <- createCache
-      nextHotStore = {
-        implicit val C: Cell[F, Cache[C, P, A, K]]    = cache
-        implicit val HR: HistoryReader[F, C, P, A, K] = historyReader
-        HotStore.inMem
-      }
-      _ = storeAtom.set(nextHotStore)
+      cache        <- createCache
+      nextHotStore = HotStore.inMem(Sync[F], cache, historyReader)
+      _            = storeAtom.set(nextHotStore)
     } yield ()
 
   override def createCheckpoint(): F[Checkpoint] =
