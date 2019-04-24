@@ -338,6 +338,14 @@ final class BlockDagFileStorage[F[_]: Concurrent: Sync: Log: RaiseIOError] priva
                }
     } yield result
 
+  private def updateCrcFile(newCrc: Crc32[F], crcFilePath: Path): F[Unit] =
+    for {
+      newCrcBytes <- newCrc.bytes
+      tmpCrc      <- createSameDirectoryTemporaryFile(crcFilePath)
+      _           <- writeToFile[F](tmpCrc, newCrcBytes)
+      _           <- replaceFile(tmpCrc, crcFilePath)
+    } yield ()
+
   private def updateLatestMessagesFile(newLatestMessages: List[(Validator, BlockHash)]): F[Unit] =
     for {
       latestMessagesCrc <- getLatestMessagesCrc
@@ -349,19 +357,11 @@ final class BlockDagFileStorage[F[_]: Concurrent: Sync: Log: RaiseIOError] priva
                 _                             <- latestMessagesLogOutputStream.write(toAppend)
                 _                             <- latestMessagesLogOutputStream.flush
                 _ <- latestMessagesCrc.update(toAppend).flatMap { _ =>
-                      updateLatestMessagesCrcFile(latestMessagesCrc)
+                      updateCrcFile(latestMessagesCrc, latestMessagesCrcFilePath)
                     }
               } yield ()
           }
       _ <- modifyLatestMessagesLogSize(_ + 1)
-    } yield ()
-
-  private def updateLatestMessagesCrcFile(newCrc: Crc32[F]): F[Unit] =
-    for {
-      newCrcBytes <- newCrc.bytes
-      tmpCrc      <- createSameDirectoryTemporaryFile(latestMessagesCrcFilePath)
-      _           <- writeToFile[F](tmpCrc, newCrcBytes)
-      _           <- replaceFile(tmpCrc, latestMessagesCrcFilePath)
     } yield ()
 
   private def replaceFile(from: Path, to: Path): F[Path] =
@@ -416,15 +416,7 @@ final class BlockDagFileStorage[F[_]: Concurrent: Sync: Log: RaiseIOError] priva
       _                      <- dataLookupOutputStream.write(toAppend)
       _                      <- dataLookupOutputStream.flush
       _                      <- dataLookupCrc.update(toAppend)
-      _                      <- updateDataLookupCrcFile(dataLookupCrc)
-    } yield ()
-
-  private def updateDataLookupCrcFile(newCrc: Crc32[F]): F[Unit] =
-    for {
-      newCrcBytes <- newCrc.bytes
-      tmpCrc      <- createSameDirectoryTemporaryFile(blockMetadataCrcPath)
-      _           <- writeToFile[F](tmpCrc, newCrcBytes)
-      _           <- replaceFile(tmpCrc, blockMetadataCrcPath)
+      _                      <- updateCrcFile(dataLookupCrc, blockMetadataCrcPath)
     } yield ()
 
   private def updateEquivocationsTrackerFile(equivocationRecord: EquivocationRecord): F[Unit] =
@@ -435,7 +427,7 @@ final class BlockDagFileStorage[F[_]: Concurrent: Sync: Log: RaiseIOError] priva
       _                                   <- equivocationsTrackerLogOutputStream.write(toAppend)
       _                                   <- equivocationsTrackerLogOutputStream.flush
       _                                   <- equivocationsTrackerCrc.update(toAppend)
-      _                                   <- updateEquivocationsTrackerCrcFile(equivocationsTrackerCrc)
+      _                                   <- updateCrcFile(equivocationsTrackerCrc, equivocationTrackerCrcPath)
     } yield ()
 
   private def updateEquivocationsTrackerCrcFile(newCrc: Crc32[F]): F[Unit] =
