@@ -285,7 +285,7 @@ class Node:
         return self.rnode_command('vdag')
 
     def get_mvdag(self) -> str:
-        return self.rnode_command('mvdag')
+        return self.rnode_command('mvdag', stderr=False)
 
     def get_parsed_mvdag(self) -> Dict[str, Set[str]]:
         return parse_mvdag_str(self.get_mvdag())
