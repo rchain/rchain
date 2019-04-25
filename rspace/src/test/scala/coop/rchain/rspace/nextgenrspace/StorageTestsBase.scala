@@ -96,7 +96,7 @@ trait StorageTestsBase[F[_], C, P, A, K] extends FlatSpec with Matchers with Opt
     run(for {
       historyRepository    <- HistoryRepositoryInstances.lmdbRepository[F, C, P, A, K](config)
       cache                <- Cell.refCell[F, Cache[C, P, A, K]](Cache[C, P, A, K]())
-      testStore            = HotStore.inMem[F, C, P, A, K](Sync[F], cache, historyRepository)
+      testStore            = HotStore.inMem[F, C, P, A, K](Sync[F], cache, historyRepository, codecP, codecK)
       spaceAndStore        <- createISpace(historyRepository, testStore, branch)
       (store, atom, space) = spaceAndStore
       res                  <- f(store, atom, space)

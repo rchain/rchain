@@ -4,8 +4,11 @@ import cats._
 import cats.implicits._
 import cats.effect._
 import cats.effect.implicits._
+import coop.rchain.catscontrib.mtl.implicits._
 import coop.rchain.shared.Cell
-import coop.rchain.rspace.internal.{Datum, WaitingContinuation}
+import coop.rchain.rspace.internal._
+import coop.rchain.rspace.Serialize._
+import scodec.Codec
 
 import scala.collection.concurrent.TrieMap
 
@@ -39,14 +42,21 @@ final case class Cache[C, P, A, K](
 
 private class InMemHotStore[F[_]: Sync, C, P, A, K](
     implicit S: Cell[F, Cache[C, P, A, K]],
-    HR: HistoryReader[F, C, P, A, K]
+    HR: HistoryReader[F, C, P, A, K],
+    cp: Codec[P],
+    ck: Codec[K]
 ) extends HotStore[F, C, P, A, K] {
 
   def getContinuations(channels: Seq[C]): F[Seq[WaitingContinuation[P, K]]] =
     for {
       cached <- internalGetContinuations(channels)
       state  <- S.read
-    } yield (state.installedContinuations.get(channels) ++: cached)
+      result = state.installedContinuations.get(channels) ++: cached
+      res <- {
+        implicit val codec = fromCodec(implicitly[Codec[Seq[WaitingContinuation[P, K]]]])
+        roundTrip[F, Seq[WaitingContinuation[P, K]]](result)
+      }
+    } yield res
 
   private[this] def internalGetContinuations(channels: Seq[C]): F[Seq[WaitingContinuation[P, K]]] =
     for {
@@ -234,13 +244,16 @@ private class InMemHotStore[F[_]: Sync, C, P, A, K](
           s"Tried to remove index ${index} from a Vector of size ${col.size}"
         )
       )
+
 }
 
 object HotStore {
 
   def inMem[F[_]: Sync, C, P, A, K](
       implicit S: Cell[F, Cache[C, P, A, K]],
-      HR: HistoryReader[F, C, P, A, K]
+      HR: HistoryReader[F, C, P, A, K],
+      cp: Codec[P],
+      ck: Codec[K]
   ): HotStore[F, C, P, A, K] =
     new InMemHotStore[F, C, P, A, K]
 

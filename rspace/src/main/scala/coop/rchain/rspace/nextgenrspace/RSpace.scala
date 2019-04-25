@@ -429,9 +429,15 @@ class RSpace[F[_], C, P, A, R, K] private[rspace] (
 
   private def createNewHotStore(historyReader: HistoryReader[F, C, P, A, K]): F[Unit] =
     for {
-      cache        <- createCache
-      nextHotStore = HotStore.inMem(Sync[F], cache, historyReader)
-      _            = storeAtom.set(nextHotStore)
+      cache <- createCache
+      nextHotStore = HotStore.inMem(
+        Sync[F],
+        cache,
+        historyReader,
+        serializeP.toCodec,
+        serializeK.toCodec
+      )
+      _ = storeAtom.set(nextHotStore)
     } yield ()
 
   override def createCheckpoint(): F[Checkpoint] =
