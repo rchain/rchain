@@ -14,14 +14,6 @@ import coop.rchain.casper.genesis.contracts._
 import coop.rchain.casper.helper.{BlockDagStorageTestFixture, NoOpsCasperEffect}
 import coop.rchain.casper.protocol.{NoApprovedBlockAvailable, _}
 import coop.rchain.casper.util.TestTime
-import coop.rchain.casper.util.comm.CasperPacketHandler.{
-  ApprovedBlockReceivedHandler,
-  BootstrapCasperHandler,
-  CasperPacketHandlerImpl,
-  CasperPacketHandlerInternal,
-  GenesisValidatorHandler,
-  StandaloneCasperHandler
-}
 import coop.rchain.casper.util.comm.CasperPacketHandlerSpec._
 import coop.rchain.casper.util.rholang.RuntimeManager
 import coop.rchain.catscontrib.ApplicativeError_
@@ -149,7 +141,7 @@ class CasperPacketHandlerSpec extends WordSpec {
           Ref.unsafe[Task, CasperPacketHandlerInternal[Task]](
             new GenesisValidatorHandler(runtimeManager, validatorId, shardId, bap)
           )
-        val packetHandler     = new CasperPacketHandlerImpl[Task](ref)
+        val packetHandler     = new CasperPacketHandler[Task](ref)
         val expectedCandidate = ApprovedBlockCandidate(Some(genesis), requiredSigs)
 
         val unapprovedBlock  = BlockApproverProtocolTest.createUnapproved(requiredSigs, genesis)
@@ -180,7 +172,7 @@ class CasperPacketHandlerSpec extends WordSpec {
           Ref.unsafe[Task, CasperPacketHandlerInternal[Task]](
             new GenesisValidatorHandler(runtimeManager, validatorId, shardId, bap)
           )
-        val packetHandler = new CasperPacketHandlerImpl[Task](ref)
+        val packetHandler = new CasperPacketHandler[Task](ref)
 
         val approvedBlockRequest = ApprovedBlockRequest("test")
         val packet1              = Packet(transport.ApprovedBlockRequest.id, approvedBlockRequest.toByteString)
@@ -238,7 +230,7 @@ class CasperPacketHandlerSpec extends WordSpec {
           )
           standaloneCasper    = new StandaloneCasperHandler[Task](abp)
           refCasper           <- Ref.of[Task, CasperPacketHandlerInternal[Task]](standaloneCasper)
-          casperPacketHandler = new CasperPacketHandlerImpl[Task](refCasper)
+          casperPacketHandler = new CasperPacketHandler[Task](refCasper)
           c1                  = abp.run().forkAndForget.runToFuture
           c2 = StandaloneCasperHandler
             .approveBlockInterval(
@@ -319,7 +311,7 @@ class CasperPacketHandlerSpec extends WordSpec {
 
         val test = for {
           refCasper           <- Ref.of[Task, CasperPacketHandlerInternal[Task]](bootstrapCasper)
-          casperPacketHandler = new CasperPacketHandlerImpl[Task](refCasper)
+          casperPacketHandler = new CasperPacketHandler[Task](refCasper)
           _                   <- casperPacketHandler.handle(local).apply(approvedPacket)
           casperO             <- MultiParentCasperRef[Task].get
           _                   = assert(casperO.isDefined)
@@ -376,7 +368,7 @@ class CasperPacketHandlerSpec extends WordSpec {
       val refCasper = Ref.unsafe[Task, CasperPacketHandlerInternal[Task]](
         new ApprovedBlockReceivedHandler[Task](casper, approvedBlock)
       )
-      val casperPacketHandler = new CasperPacketHandlerImpl[Task](refCasper)
+      val casperPacketHandler = new CasperPacketHandler[Task](refCasper)
 
       transportLayer.setResponses(_ => p => Right(p))
 
