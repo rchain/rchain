@@ -71,28 +71,22 @@ class RuntimeManagerImpl[F[_]: Concurrent] private[rholang] (
       //TODO: Is better error handling needed here?
       for {
         evaluateResult <- computeEffect(runtime)(deploy)
-        result <- if (evaluateResult.errors.isEmpty) getData(runtime)(name) else Seq.empty[Par].pure[F]
+        result <- if (evaluateResult.errors.isEmpty) getData(runtime)(name)
+               else Seq.empty[Par].pure[F]
       } yield result
     }
 
   private def computeEffect(runtime: Runtime[F])(deploy: DeployData): F[EvaluateResult] =
-    for {
-      runtimeParameters                        <- ProtoUtil.getRholangDeployParams(deploy).pure[F]
-      (codeHash, phloPrice, userId, timestamp) = runtimeParameters
-      _                                        <- runtime.shortLeashParams.setParams(codeHash, phloPrice, userId, timestamp)
-      evaluateResult                           <- doInj(deploy, runtime.reducer, runtime.errorLog)(runtime.cost)
-    } yield evaluateResult
+    runtime.deployParametersRef.set(ProtoUtil.getRholangDeployParams(deploy)) >>
+      doInj(deploy, runtime.reducer, runtime.errorLog)(runtime.cost)
 
   private def replayComputeEffect(
       runtime: Runtime[F]
   )(start: Blake2b256Hash, processedDeploy: InternalProcessedDeploy): F[EvaluateResult] = {
     import processedDeploy._
-    for {
-      _                                        <- runtime.replaySpace.rig(start, deployLog.toList)
-      (codeHash, phloPrice, userId, timestamp) = ProtoUtil.getRholangDeployParams(deploy)
-      _                                        <- runtime.shortLeashParams.setParams(codeHash, phloPrice, userId, timestamp)
-      injResult                                <- doInj(deploy, runtime.replayReducer, runtime.errorLog)(runtime.cost)
-    } yield injResult
+    runtime.replaySpace.rig(start, deployLog.toList) >>
+      runtime.deployParametersRef.set(ProtoUtil.getRholangDeployParams(deploy)) >>
+      doInj(deploy, runtime.replayReducer, runtime.errorLog)(runtime.cost)
   }
 
   /**

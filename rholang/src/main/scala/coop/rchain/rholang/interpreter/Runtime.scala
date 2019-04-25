@@ -8,7 +8,6 @@ import cats.effect.{Concurrent, ContextShift, Sync}
 import cats.implicits._
 import cats.mtl.FunctorTell
 import com.google.protobuf.ByteString
-import coop.rchain.catscontrib.mtl.implicits._
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.metrics.Metrics
 import coop.rchain.models.Expr.ExprInstance.GString
@@ -16,16 +15,15 @@ import coop.rchain.models.TaggedContinuation.TaggedCont.ScalaBodyRef
 import coop.rchain.models.Var.VarInstance.FreeVar
 import coop.rchain.models._
 import coop.rchain.models.rholang.implicits._
-import coop.rchain.rholang.interpreter.Runtime.ShortLeashParamsStorage.ShortLeashParameters
 import coop.rchain.rholang.interpreter.Runtime._
-import coop.rchain.rholang.interpreter.accounting.{loggingCost, noOpCostLog, _}
-import coop.rchain.rholang.interpreter.errors.{InterpreterError, SetupError}
+import coop.rchain.rholang.interpreter.accounting.{noOpCostLog, _}
+import coop.rchain.rholang.interpreter.errors.SetupError
 import coop.rchain.rholang.interpreter.storage.implicits._
 import coop.rchain.rspace._
 import coop.rchain.rspace.history.Branch
 import coop.rchain.rspace.pure.PureRSpace
-import coop.rchain.shared.{Log, StoreType}
 import coop.rchain.shared.StoreType._
+import coop.rchain.shared.{Log, StoreType}
 
 import scala.concurrent.ExecutionContext
 
@@ -37,7 +35,7 @@ class Runtime[F[_]: Sync] private (
     val errorLog: ErrorLog[F],
     val cost: _cost[F],
     val context: RhoContext[F],
-    val shortLeashParams: Runtime.ShortLeashParamsStorage[F],
+    val deployParametersRef: Ref[F, DeployParameters],
     val blockTime: Runtime.BlockTime[F]
 ) {
   def readAndClearErrorVector(): F[Vector[Throwable]] = errorLog.readAndClearErrorVector()
@@ -78,42 +76,6 @@ object Runtime {
   type Arity     = Int
   type Remainder = Option[Var]
   type BodyRef   = Long
-
-  class ShortLeashParamsStorage[F[_]] private (
-      private val params: Ref[F, ShortLeashParameters]
-  ) {
-    def setParams(codeHash: Par, phloRate: Par, userId: Par, timestamp: Par): F[Unit] =
-      params.set(ShortLeashParameters(codeHash, phloRate, userId, timestamp))
-
-    /**
-      * updates the content of the storage and returns the new value
-      * @param update a function which takes the current value and returns the new one
-      * @return the updated value
-      */
-    def updateParams(
-        update: ShortLeashParameters => ShortLeashParameters
-    ): F[ShortLeashParameters] =
-      params.modify(v => {
-        val newV = update(v)
-        (newV, newV)
-      })
-
-    def getParams: F[ShortLeashParameters] = params.get
-  }
-
-  object ShortLeashParamsStorage {
-    final case class ShortLeashParameters(codeHash: Par, phloRate: Par, userId: Par, timestamp: Par)
-    object ShortLeashParameters {
-      val empty: ShortLeashParameters = ShortLeashParameters(Par(), Par(), Par(), Par())
-    }
-    def apply[F[_]]()(implicit F: Sync[F]): F[ShortLeashParamsStorage[F]] =
-      Ref[F].of(ShortLeashParameters.empty).map(new ShortLeashParamsStorage(_))
-
-    def unsafe[F[_]]()(implicit F: Sync[F]): ShortLeashParamsStorage[F] =
-      new ShortLeashParamsStorage[F](
-        Ref.unsafe[F, ShortLeashParamsStorage.ShortLeashParameters](ShortLeashParameters.empty)
-      )
-  }
 
   class BlockTime[F[_]](val timestamp: Ref[F, Par]) {
     def setParams(timestamp: Par)(implicit F: Sync[F]): F[Unit] =
@@ -206,7 +168,7 @@ object Runtime {
         space: RhoISpace[F],
         dispatcher: RhoDispatch[F],
         registry: Registry[F],
-        shortLeashParams: ShortLeashParamsStorage[F],
+        deployParametersRef: Ref[F, DeployParameters],
         blockTime: BlockTime[F]
     ) {
       val systemProcesses = SystemProcesses[F](dispatcher, space)
@@ -275,7 +237,7 @@ object Runtime {
       FixedChannels.GET_DEPLOY_PARAMS,
       1,
       BodyRefs.GET_DEPLOY_PARAMS, { ctx =>
-        ctx.systemProcesses.getDeployParams(ctx.shortLeashParams)
+        ctx.systemProcesses.getDeployParams(ctx.deployParametersRef)
       }
     ),
     SystemProcess.Definition[F](
@@ -331,7 +293,7 @@ object Runtime {
         space: RhoISpace[F],
         dispatcher: RhoDispatch[F],
         registry: Registry[F],
-        shortLeashParams: ShortLeashParamsStorage[F],
+        deployParametersRef: Ref[F, DeployParameters],
         blockTime: BlockTime[F]
     ): RhoDispatchMap[F] = {
       val systemProcesses = SystemProcesses[F](dispatcher, space)
@@ -356,7 +318,7 @@ object Runtime {
         (stdSystemProcesses[F] ++ extraSystemProcesses)
           .map(
             _.toDispatchTable(
-              SystemProcess.Context(space, dispatcher, registry, shortLeashParams, blockTime)
+              SystemProcess.Context(space, dispatcher, registry, deployParametersRef, blockTime)
             )
           )
     }
@@ -365,8 +327,7 @@ object Runtime {
       "rho:registry:lookup" -> Bundle(FixedChannels.REG_LOOKUP, writeFlag = true)
     ) ++ (stdSystemProcesses[F] ++ extraSystemProcesses).map(_.toUrnMap)
 
-    val shortLeashParams = ShortLeashParamsStorage.unsafe[F]()
-    val blockTime        = BlockTime.unsafe[F]()
+    val blockTime = BlockTime.unsafe[F]()
 
     val procDefs: List[(Name, Arity, Remainder, BodyRef)] = {
       import BodyRefs._
@@ -382,6 +343,7 @@ object Runtime {
 
     for {
       setup                         <- setupRSpace[F](dataDir, mapSize, storeType)
+      deployParametersRef           <- Ref.of(DeployParameters.empty)
       (context, space, replaySpace) = setup
       (reducer, replayReducer) = {
         lazy val replayDispatchTable: RhoDispatchMap[F] =
@@ -389,12 +351,12 @@ object Runtime {
             replaySpace,
             replayDispatcher,
             replayRegistry,
-            shortLeashParams,
+            deployParametersRef,
             blockTime
           )
 
         lazy val dispatchTable: RhoDispatchMap[F] =
-          dispatchTableCreator(space, dispatcher, registry, shortLeashParams, blockTime)
+          dispatchTableCreator(space, dispatcher, registry, deployParametersRef, blockTime)
 
         lazy val (dispatcher, reducer, registry) =
           RholangAndScalaDispatcher.create(space, dispatchTable, urnMap)
@@ -414,7 +376,7 @@ object Runtime {
         errorLog,
         cost,
         context,
-        shortLeashParams,
+        deployParametersRef,
         blockTime
       )
     }

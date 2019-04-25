@@ -12,9 +12,8 @@ import coop.rchain.models._
 import coop.rchain.models.rholang.implicits._
 import coop.rchain.rholang.interpreter.Runtime.RhoISpace
 import coop.rchain.rholang.interpreter.accounting.Cost
-import coop.rchain.shared.Log
 import coop.rchain.shared.PathOps._
-import coop.rchain.shared.StoreType
+import coop.rchain.shared.{Log, StoreType}
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
 import org.scalatest.{fixture, Assertion, Matchers, Outcome}
@@ -63,9 +62,8 @@ class DeployParamsSpec extends fixture.FlatSpec with Matchers {
     val phloRate: Par     = GInt(98765)
     val timestamp: Par    = GInt(1234567890)
     val send              = Send(Runtime.FixedChannels.GET_DEPLOY_PARAMS, List(ackChannel))
-    val shortLeashParams  = runtime.shortLeashParams
     val task = for {
-      _ <- shortLeashParams.setParams(empty, phloRate, empty, timestamp)
+      _ <- runtime.deployParametersRef.set(DeployParameters(empty, phloRate, empty, timestamp))
       _ <- runtime.reducer.eval(send)
     } yield ()
     Await.result(task.runToFuture, 3.seconds)
