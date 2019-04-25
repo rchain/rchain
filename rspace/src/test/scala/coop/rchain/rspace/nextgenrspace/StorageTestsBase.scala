@@ -79,7 +79,7 @@ trait StorageTestsBase[F[_], C, P, A, K] extends FlatSpec with Matchers with Opt
 
     def storeConfig(name: String): StoreConfig =
       StoreConfig(
-        Files.createDirectories(dbDir.resolve(name)).toString,
+        Files.createDirectories(dbDir.resolve(name)),
         mapSize,
         2,
         2048,

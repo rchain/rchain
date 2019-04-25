@@ -3,7 +3,6 @@ package coop.rchain.rspace.nextgenrspace.history
 import cats.implicits._
 import cats.effect.Sync
 import coop.rchain.rspace.{Blake2b256Hash, HistoryReader, HotStoreAction}
-import org.lmdbjava.EnvFlags
 import scodec.Codec
 
 trait HistoryRepository[F[_], C, P, A, K] extends HistoryReader[F, C, P, A, K] {
@@ -16,14 +15,6 @@ trait HistoryRepository[F[_], C, P, A, K] extends HistoryReader[F, C, P, A, K] {
   def close(): F[Unit]
 }
 
-final case class LMDBStorageConfig(
-    path: String,
-    mapSize: Long,
-    maxReaders: Int = 2048,
-    maxDbs: Int = 2,
-    flags: List[EnvFlags] = Nil,
-    dbNamePrefix: String = "db"
-)
 final case class LMDBRSpaceStorageConfig(
     coldStore: StoreConfig,
     historyStore: StoreConfig,

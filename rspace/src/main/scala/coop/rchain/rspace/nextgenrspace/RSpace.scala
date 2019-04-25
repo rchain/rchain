@@ -424,32 +424,24 @@ class RSpace[F[_], C, P, A, R, K] private[rspace] (
       } yield result
     }
 
-  private def createCache: F[Cell[F, Cache[C, P, A, K]]] =
-    Cell.refCell[F, Cache[C, P, A, K]](Cache())
-
-  private def createNewHotStore(historyReader: HistoryReader[F, C, P, A, K]): F[Unit] =
-    for {
-      cache        <- createCache
-      nextHotStore = HotStore.inMem(Sync[F], cache, historyReader)
-      _            = storeAtom.set(nextHotStore)
-    } yield ()
-
   override def createCheckpoint(): F[Checkpoint] =
     for {
-      changes     <- storeAtom.get().changes()
-      nextHistory <- historyRepositoryAtom.get().checkpoint(changes.toList)
-      _           <- createNewHotStore(nextHistory)
-      log         = eventLog.take()
-      _           = eventLog.put(Seq.empty)
+      changes      <- storeAtom.get().changes()
+      nextHistory  <- historyRepositoryAtom.get().checkpoint(changes.toList)
+      nextHotStore <- RSpace.createNewHotStore(nextHistory)
+      _            = storeAtom.set(nextHotStore)
+      log          = eventLog.take()
+      _            = eventLog.put(Seq.empty)
     } yield Checkpoint(nextHistory.history.root, log)
 
   override def reset(root: Blake2b256Hash): F[Unit] =
     for {
-      nextHistory <- historyRepositoryAtom.get().reset(root)
-      _           = historyRepositoryAtom.set(nextHistory)
-      _           = eventLog.take()
-      _           = eventLog.put(Seq.empty)
-      _           <- createNewHotStore(nextHistory)
+      nextHistory  <- historyRepositoryAtom.get().reset(root)
+      _            = historyRepositoryAtom.set(nextHistory)
+      _            = eventLog.take()
+      _            = eventLog.put(Seq.empty)
+      nextHotStore <- RSpace.createNewHotStore(nextHistory)
+      _            = storeAtom.set(nextHotStore)
     } yield ()
 
   protected[rspace] override def isDirty(root: Blake2b256Hash): F[Boolean] = ???
@@ -458,6 +450,17 @@ class RSpace[F[_], C, P, A, R, K] private[rspace] (
 }
 
 object RSpace {
+
+  def createCache[F[_]: Sync, C, P, A, K]: F[Cell[F, Cache[C, P, A, K]]] =
+    Cell.refCell[F, Cache[C, P, A, K]](Cache())
+
+  def createNewHotStore[F[_]: Sync, C, P, A, K](
+      historyReader: HistoryReader[F, C, P, A, K]
+  ): F[HotStore[F, C, P, A, K]] =
+    for {
+      cache        <- createCache[F, C, P, A, K]
+      nextHotStore = HotStore.inMem(Sync[F], cache, historyReader)
+    } yield nextHotStore
 
   def create[F[_], C, P, A, R, K](
       historyRepository: HistoryRepository[F, C, P, A, K],
@@ -481,4 +484,24 @@ object RSpace {
     space.pure[F]
 
   }
+
+  def create[F[_], C, P, A, R, K](
+      historyRepository: HistoryRepository[F, C, P, A, K],
+      branch: Branch
+  )(
+      implicit
+      sc: Serialize[C],
+      sp: Serialize[P],
+      sa: Serialize[A],
+      sk: Serialize[K],
+      concurrent: Concurrent[F],
+      logF: Log[F],
+      contextShift: ContextShift[F],
+      scheduler: ExecutionContext,
+      metricsF: Metrics[F]
+  ): F[ISpace[F, C, P, A, R, K]] =
+    for {
+      hotStore <- createNewHotStore(historyRepository)
+      space    <- create[F, C, P, A, R, K](historyRepository, hotStore, branch)
+    } yield space
 }

@@ -39,7 +39,7 @@ class LMDBHistoryRepositoryGenerativeSpec extends HistoryRepositoryGenerativeDef
   def lmdbConfig = {
     val dbDir: Path = Files.createTempDirectory("rchain-storage-test-")
     StoreConfig(
-      dbDir.toAbsolutePath.toString,
+      dbDir,
       1024L * 1024L * 4096L,
       2,
       2048,

@@ -6,6 +6,7 @@ import java.nio.file.Path
 import cats.effect.Sync
 import coop.rchain.rspace.history.{Branch, ITrieStore, InMemoryTrieStore, LMDBTrieStore}
 import coop.rchain.rspace.internal.GNAT
+import coop.rchain.rspace.nextgenrspace.history.HistoryRepository
 import org.lmdbjava.{Env, EnvFlags, Txn}
 import scodec.Codec
 
@@ -79,6 +80,19 @@ private[rspace] class MixedContext[F[_], C, P, A, K] private[rspace] (
     trieStore.close()
     env.close()
   }
+}
+
+class RSpace2Context[F[_], C, P, A, K](historyRepository: HistoryRepository[F, C, P, A, K])
+    extends Context[F, C, P, A, K] {
+  override def close(): Unit = ()
+
+  override def createStore(branch: Branch)(
+      implicit sc: Serialize[C],
+      sp: Serialize[P],
+      sa: Serialize[A],
+      sk: Serialize[K],
+      syncF: Sync[F]
+  ): IStore[F, C, P, A, K] = ???
 }
 
 object Context {

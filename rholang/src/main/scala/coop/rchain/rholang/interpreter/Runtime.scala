@@ -22,10 +22,17 @@ import coop.rchain.rholang.interpreter.accounting.{loggingCost, noOpCostLog, _}
 import coop.rchain.rholang.interpreter.errors.{InterpreterError, SetupError}
 import coop.rchain.rholang.interpreter.storage.implicits._
 import coop.rchain.rspace._
+import coop.rchain.rspace.nextgenrspace.{RSpace => NRSpace}
 import coop.rchain.rspace.history.Branch
+import coop.rchain.rspace.nextgenrspace.history.{
+  HistoryRepositoryInstances,
+  LMDBRSpaceStorageConfig,
+  StoreConfig
+}
 import coop.rchain.rspace.pure.PureRSpace
 import coop.rchain.shared.{Log, StoreType}
 import coop.rchain.shared.StoreType._
+import scodec.Codec
 
 import scala.concurrent.ExecutionContext
 
@@ -306,13 +313,13 @@ object Runtime {
       P: Parallel[F, M],
       executionContext: ExecutionContext
   ): F[Runtime[F]] =
-    (for {
+    for {
       cost <- CostAccounting.emptyCost[F]
       runtime <- {
         implicit val c = cost
         create(dataDir, mapSize, storeType, extraSystemProcesses)
       }
-    } yield (runtime))
+    } yield runtime
 
   def create[F[_]: ContextShift: Concurrent: Log: Metrics, M[_]](
       dataDir: Path,
@@ -487,6 +494,39 @@ object Runtime {
                       ](context, Branch.REPLAY)
       } yield ((context, space, replaySpace))
 
+    def createSpace2(
+        dataDir: Path,
+        mapSize: Long
+    ): F[(RhoContext[F], RhoISpace[F], RhoReplayISpace[F])] = {
+      val dataDirv2                                     = dataDir.resolve("v2")
+      val coldStore                                     = StoreConfig(dataDirv2.resolve("cold"), mapSize)
+      val historyStore                                  = StoreConfig(dataDirv2.resolve("history"), mapSize)
+      val pointerBlockStore                             = StoreConfig(dataDirv2.resolve("pointer"), mapSize)
+      val rootsStore                                    = StoreConfig(dataDirv2.resolve("roots"), mapSize)
+      val config                                        = LMDBRSpaceStorageConfig(coldStore, historyStore, pointerBlockStore, rootsStore)
+      implicit val codecPar: Codec[Par]                 = implicitly[Serialize[Par]].toCodec
+      implicit val codecBindPattern: Codec[BindPattern] = implicitly[Serialize[BindPattern]].toCodec
+      implicit val codecListParWithRandom: Codec[ListParWithRandom] =
+        implicitly[Serialize[ListParWithRandom]].toCodec
+      implicit val codecTaggedContinuation: Codec[TaggedContinuation] =
+        implicitly[Serialize[TaggedContinuation]].toCodec
+      for {
+        hr <- HistoryRepositoryInstances
+               .lmdbRepository[F, Par, BindPattern, ListParWithRandom, TaggedContinuation](config)
+        context = new coop.rchain.rspace.RSpace2Context(hr)
+        branch  = Branch("v2")
+        space <- NRSpace.create[
+                  F,
+                  Par,
+                  BindPattern,
+                  ListParWithRandom,
+                  ListParWithRandom,
+                  TaggedContinuation
+                ](hr, branch)
+        replaySpace = ???
+      } yield ((context, space, replaySpace))
+    }
+
     def checkCreateDataDir: F[Unit] =
       for {
         notexists <- Sync[F].delay(Files.notExists(dataDir))
@@ -500,6 +540,8 @@ object Runtime {
         checkCreateDataDir >> createSpace(Context.create(dataDir, mapSize, true))
       case Mixed =>
         checkCreateDataDir >> createSpace(Context.createMixed(dataDir, mapSize))
+      case RSpace2 =>
+        checkCreateDataDir >> createSpace2(dataDir, mapSize)
     }
   }
 }
