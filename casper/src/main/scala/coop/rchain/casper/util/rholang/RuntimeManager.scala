@@ -14,16 +14,16 @@ import coop.rchain.catscontrib.MonadTrans
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.models.Expr.ExprInstance.GString
 import coop.rchain.models._
-import coop.rchain.rholang.interpreter.Interpreter
 import coop.rchain.rholang.interpreter.accounting._
 import coop.rchain.rholang.interpreter.storage.StoragePrinter
 import coop.rchain.rholang.interpreter.{
-  accounting,
-  ChargingReducer,
-  ErrorLog,
-  EvaluateResult,
-  Runtime
-}
+    accounting,
+    ChargingReducer,
+    ErrorLog,
+    EvaluateResult,
+    Interpreter,
+    Runtime
+  }
 import coop.rchain.rspace.internal.Datum
 import coop.rchain.rspace.{Blake2b256Hash, ReplayException}
 
@@ -32,21 +32,17 @@ import scala.collection.immutable
 trait RuntimeManager[F[_]] {
   def captureResults(start: StateHash, deploy: DeployData, name: String = "__SCALA__"): F[Seq[Par]]
   def captureResults(start: StateHash, deploy: DeployData, name: Par): F[Seq[Par]]
-  def replayComputeState(
-      hash: StateHash,
+  def replayComputeState(hash: StateHash)(
       terms: Seq[InternalProcessedDeploy],
       time: Option[Long] = None
   ): F[Either[(Option[DeployData], Failed), StateHash]]
   def computeState(
-      hash: StateHash,
-      terms: Seq[DeployData],
-      time: Option[Long] = None
-  ): F[(StateHash, Seq[InternalProcessedDeploy])]
+      hash: StateHash
+  )(terms: Seq[DeployData], time: Option[Long] = None): F[(StateHash, Seq[InternalProcessedDeploy])]
   def storageRepr(hash: StateHash): F[Option[String]]
   def computeBonds(hash: StateHash): F[Seq[Bond]]
-  def getData(hash: ByteString, channel: Par): F[Seq[Par]]
-  def getContinuation(
-      hash: ByteString,
+  def getData(hash: ByteString)(channel: Par): F[Seq[Par]]
+  def getContinuation(hash: ByteString)(
       channels: immutable.Seq[Par]
   ): F[Seq[(Seq[BindPattern], Par)]]
   def emptyStateHash: ByteString
@@ -80,8 +76,7 @@ class RuntimeManagerImpl[F[_]: Concurrent] private[rholang] (
         } yield result.flatMap(_.a.pars)
       }(runtime => runtimeContainer.put(runtime))
 
-  def replayComputeState(
-      hash: StateHash,
+  def replayComputeState(hash: StateHash)(
       terms: Seq[InternalProcessedDeploy],
       time: Option[Long] = None
   ): F[Either[(Option[DeployData], Failed), StateHash]] =
@@ -92,8 +87,7 @@ class RuntimeManagerImpl[F[_]: Concurrent] private[rholang] (
       } yield result
     }(runtime => runtimeContainer.put(runtime))
 
-  def computeState(
-      hash: StateHash,
+  def computeState(hash: StateHash)(
       terms: Seq[DeployData],
       time: Option[Long] = None
   ): F[(StateHash, Seq[InternalProcessedDeploy])] =
@@ -151,14 +145,14 @@ class RuntimeManagerImpl[F[_]: Concurrent] private[rholang] (
         bondsPar =>
           new IllegalArgumentException(
             s"Incorrect number of results from query of current bonds: ${bondsPar.size}"
-          )
+        )
       )(bondsPar => bondsPar.size == 1)
       .map { bondsPar =>
         toBondSeq(bondsPar.head)
       }
   }
 
-  private def withResetRuntime[R](hash: StateHash, block: Runtime[F] => F[R]) =
+  private def withResetRuntime[R](hash: StateHash)(block: Runtime[F] => F[R]) =
     Sync[F].bracket(runtimeContainer.take) { runtime =>
       val blakeHash = Blake2b256Hash.fromByteArray(hash.toByteArray)
       runtime.space.reset(blakeHash).flatMap(_ => block(runtime))
@@ -170,21 +164,19 @@ class RuntimeManagerImpl[F[_]: Concurrent] private[rholang] (
         assert(validator.exprs.length == 1, "Validator in bonds map wasn't a single string.")
         assert(bond.exprs.length == 1, "Stake in bonds map wasn't a single integer.")
         val validatorName = validator.exprs.head.getGByteArray
-        val stakeAmount   = bond.exprs.head.getETupleBody.ps.head.exprs.head.getGInt
+        val stakeAmount = bond.exprs.head.getETupleBody.ps.head.exprs.head.getGInt
         Bond(validatorName, stakeAmount)
     }.toList
 
-  def getData(hash: ByteString, channel: Par): F[Seq[Par]] =
-    withResetRuntime(hash, runtime => {
+  def getData(hash: ByteString)(channel: Par): F[Seq[Par]] =
+    withResetRuntime(hash)(runtime => {
       runtime.space.getData(channel).map(_.flatMap(_.a.pars))
     })
 
   def getContinuation(
-      hash: ByteString,
-      channels: immutable.Seq[Par]
-  ): F[Seq[(Seq[BindPattern], Par)]] =
-    withResetRuntime(
-      hash,
+      hash: ByteString
+  )(channels: immutable.Seq[Par]): F[Seq[(Seq[BindPattern], Par)]] =
+    withResetRuntime(hash)(
       runtime => {
         runtime.space
           .getWaitingContinuations(channels)
@@ -307,7 +299,6 @@ class RuntimeManagerImpl[F[_]: Concurrent] private[rholang] (
       reducer: ChargingReducer[F],
       errorLog: ErrorLog[F]
   )(implicit C: _cost[F]) = {
-    import coop.rchain.catscontrib.mtl.implicits._
     implicit val rand: Blake2b512Random = Blake2b512Random(
       DeployData.toByteArray(ProtoUtil.stripDeployData(deploy))
     )
@@ -355,38 +346,31 @@ object RuntimeManager {
           name: Par
       ): T[F, scala.Seq[Par]] = runtimeManager.captureResults(start, deploy, name).liftM[T]
 
-      override def replayComputeState(
-          hash: RuntimeManager.StateHash,
+      override def replayComputeState(hash: RuntimeManager.StateHash)(
           terms: scala.Seq[InternalProcessedDeploy],
           time: Option[Long]
       ): T[F, scala.Either[(Option[DeployData], Failed), RuntimeManager.StateHash]] =
-        runtimeManager.replayComputeState(hash, terms, time).liftM[T]
+        runtimeManager.replayComputeState(hash)(terms, time).liftM[T]
 
-      override def computeState(
-          hash: RuntimeManager.StateHash,
-          terms: scala.Seq[DeployData],
-          time: Option[Long]
-      ): T[F, (RuntimeManager.StateHash, scala.Seq[InternalProcessedDeploy])] =
-        runtimeManager.computeState(hash, terms, time).liftM[T]
+      override def computeState(hash: RuntimeManager.StateHash)(
+      terms: scala.Seq[DeployData],
+      time: Option[Long]
+  ): T[F, (RuntimeManager.StateHash, scala.Seq[InternalProcessedDeploy])] =
+    runtimeManager.computeState(hash)(terms, time).liftM[T]
 
-      override def storageRepr(
-          hash: RuntimeManager.StateHash
-      ): T[F, Option[String]] = runtimeManager.storageRepr(hash).liftM[T]
+      override def storageRepr(hash: RuntimeManager.StateHash): T[F, Option[String]] =
+    runtimeManager.storageRepr(hash).liftM[T]
 
-      override def computeBonds(
-          hash: RuntimeManager.StateHash
-      ): T[F, scala.Seq[Bond]] = runtimeManager.computeBonds(hash).liftM[T]
+      override def computeBonds(hash: RuntimeManager.StateHash): T[F, scala.Seq[Bond]] =
+        runtimeManager.computeBonds(hash).liftM[T]
 
-      override def getData(
-          hash: ByteString,
-          channel: Par
-      ): T[F, scala.Seq[Par]] = runtimeManager.getData(hash, channel).liftM[T]
+      override def getData(hash: ByteString)(channel: Par): T[F, scala.Seq[Par]] =
+        runtimeManager.getData(hash)(channel).liftM[T]
 
-      override def getContinuation(
-          hash: ByteString,
+      override def getContinuation(hash: ByteString)(
           channels: scala.collection.immutable.Seq[Par]
       ): T[F, scala.Seq[(scala.Seq[BindPattern], Par)]] =
-        runtimeManager.getContinuation(hash, channels).liftM[T]
+        runtimeManager.getContinuation(hash)(channels).liftM[T]
 
       override val emptyStateHash: ByteString = runtimeManager.emptyStateHash
     }

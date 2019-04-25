@@ -1,18 +1,16 @@
 package coop.rchain.casper.api
 
-import scala.collection.immutable
-
 import cats.Monad
 import cats.effect.concurrent.Semaphore
 import cats.effect.{Concurrent, Sync}
 import cats.implicits._
-
+import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.{BlockDagRepresentation, BlockStore}
-import coop.rchain.casper._
 import coop.rchain.casper.DeployError._
 import coop.rchain.casper.Estimator.BlockHash
 import coop.rchain.casper.MultiParentCasper.ignoreDoppelgangerCheck
 import coop.rchain.casper.MultiParentCasperRef.MultiParentCasperRef
+import coop.rchain.casper._
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.rholang.RuntimeManager
 import coop.rchain.casper.util.{EventConverter, ProtoUtil}
@@ -26,7 +24,7 @@ import coop.rchain.rspace.StableHashProvider
 import coop.rchain.rspace.trace._
 import coop.rchain.shared.Log
 
-import com.google.protobuf.ByteString
+import scala.collection.immutable
 
 object BlockAPI {
 
@@ -180,7 +178,7 @@ object BlockAPI {
       val stateHash =
         ProtoUtil.tuplespace(block).get
       for {
-        data      <- runtimeManager.getData(stateHash, sortedListeningName)
+        data      <- runtimeManager.getData(stateHash)(sortedListeningName)
         blockInfo <- getBlockInfoWithoutTuplespace[F](block)
       } yield Option[DataWithBlockInfo](DataWithBlockInfo(data, Some(blockInfo)))
     } else {
@@ -196,7 +194,7 @@ object BlockAPI {
       val stateHash =
         ProtoUtil.tuplespace(block).get
       for {
-        continuations <- runtimeManager.getContinuation(stateHash, sortedListeningNames)
+        continuations <- runtimeManager.getContinuation(stateHash)(sortedListeningNames)
         continuationInfos = continuations.map(
           continuation => WaitingContinuationInfo(continuation._1, Some(continuation._2))
         )

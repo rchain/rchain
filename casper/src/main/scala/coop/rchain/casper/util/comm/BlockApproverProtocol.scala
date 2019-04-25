@@ -10,16 +10,16 @@ import coop.rchain.casper.genesis.Genesis
 import coop.rchain.casper.genesis.contracts._
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.rholang.{
-  InternalProcessedDeploy,
-  ProcessedDeployUtil,
-  RuntimeManager
-}
+    InternalProcessedDeploy,
+    ProcessedDeployUtil,
+    RuntimeManager
+  }
 import coop.rchain.catscontrib.Catscontrib._
 import coop.rchain.comm.CommError.ErrorHandler
 import coop.rchain.comm.protocol.routing.Packet
 import coop.rchain.comm.rp.Connect.RPConfAsk
 import coop.rchain.comm.transport.{Blob, TransportLayer}
-import coop.rchain.comm.{transport, PeerNode}
+import coop.rchain.comm.{PeerNode, transport}
 import coop.rchain.crypto.PublicKey
 import coop.rchain.crypto.hash.Blake2b256
 import coop.rchain.crypto.signatures.Ed25519
@@ -159,7 +159,7 @@ object BlockApproverProtocol {
       (blockDeploys, postState) = result
       stateHash <- EitherT(
                     runtimeManager
-                      .replayComputeState(runtimeManager.emptyStateHash, blockDeploys)
+                      .replayComputeState(runtimeManager.emptyStateHash)(blockDeploys)
                   ).leftMap { case (_, status) => s"Failed status during replay: $status." }
       _ <- EitherT(
             (stateHash == postState.postStateHash)
