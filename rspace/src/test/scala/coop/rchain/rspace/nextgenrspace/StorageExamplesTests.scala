@@ -7,6 +7,7 @@ import cats._
 import cats.implicits._
 import cats.effect.Sync
 import coop.rchain.rspace._
+import coop.rchain.rspace.examples.AddressBookExample
 import coop.rchain.rspace.examples.AddressBookExample._
 import coop.rchain.rspace.examples.AddressBookExample.implicits._
 import coop.rchain.rspace.history.{initialize, Branch, ITrieStore, InMemoryTrieStore, LMDBTrieStore}
@@ -19,14 +20,14 @@ import org.scalatest.BeforeAndAfterAll
 import scodec.Codec
 
 import scala.concurrent.ExecutionContext.Implicits.global
-
 import monix.eval.Task
+import monix.execution.atomic.AtomicAny
 
 trait StorageExamplesTests[F[_]]
     extends StorageTestsBase[F, Channel, Pattern, Entry, EntriesCaptor] {
 
   "CORE-365: A joined consume on duplicate channels followed by two produces on that channel" should
-    "return a continuation and the produced data" in withTestSpace { (store, space) =>
+    "return a continuation and the produced data" in fixture { (store, _, space) =>
     for {
       r1 <- space
              .consume(
@@ -48,7 +49,7 @@ trait StorageExamplesTests[F[_]]
   }
 
   "CORE-365: Two produces on the same channel followed by a joined consume on duplicates of that channel" should
-    "return a continuation and the produced data" in withTestSpace { (store, space) =>
+    "return a continuation and the produced data" in fixture { (store, _, space) =>
     for {
       r1 <- space.produce(Channel("friends"), bob, persist = false)
       _  = r1 shouldBe None
@@ -68,7 +69,7 @@ trait StorageExamplesTests[F[_]]
   }
 
   "CORE-365: A joined consume on duplicate channels given twice followed by three produces" should
-    "return a continuation and the produced data" in withTestSpace { (store, space) =>
+    "return a continuation and the produced data" in fixture { (store, _, space) =>
     for {
       r1 <- space
              .consume(
@@ -95,7 +96,7 @@ trait StorageExamplesTests[F[_]]
   }
 
   "CORE-365: A joined consume on multiple duplicate channels followed by the requisite produces" should
-    "return a continuation and the produced data" in withTestSpace { (store, space) =>
+    "return a continuation and the produced data" in fixture { (store, _, space) =>
     for {
       r1 <- space
              .consume(
@@ -154,7 +155,7 @@ trait StorageExamplesTests[F[_]]
   }
 
   "CORE-365: Multiple produces on multiple duplicate channels followed by the requisite consume" should
-    "return a continuation and the produced data" in withTestSpace { (store, space) =>
+    "return a continuation and the produced data" in fixture { (store, _, space) =>
     for {
       r1 <- space.produce(Channel("friends"), bob, persist = false)
       r2 <- space.produce(Channel("family"), carol, persist = false)
@@ -213,7 +214,7 @@ trait StorageExamplesTests[F[_]]
   }
 
   "CORE-365: A joined consume on multiple mixed up duplicate channels followed by the requisite produces" should
-    "return a continuation and the produced data" in withTestSpace { (store, space) =>
+    "return a continuation and the produced data" in fixture { (store, _, space) =>
     for {
       r1 <- space
              .consume(
@@ -276,40 +277,21 @@ trait StorageExamplesTests[F[_]]
 abstract class InMemoryHotStoreStorageExamplesTestsBase[F[_]]
     extends StorageTestsBase[F, Channel, Pattern, Entry, EntriesCaptor] {
 
-  override def withTestSpace[R](f: (ST, T) => F[R]): R = {
+  implicit val channelCodec: Codec[Channel] = AddressBookExample.implicits.serializeChannel.toCodec
+  implicit val patternCodec: Codec[Pattern] = AddressBookExample.implicits.serializePattern.toCodec
+  implicit val entryCodec: Codec[Entry]     = AddressBookExample.implicits.serializeInfo.toCodec
+  implicit val entryCaptorCodec: Codec[EntriesCaptor] =
+    AddressBookExample.implicits.serializeEntriesCaptor.toCodec
 
-    /*
-    implicit val cg: Codec[GNAT[Channel, Pattern, Entry, EntriesCaptor]] = codecGNAT(
-      serializeChannel.toCodec,
-      serializePattern.toCodec,
-      serializeInfo.toCodec,
-      serializeEntriesCaptor.toCodec
-    )*/
-
-    val branch = Branch("inmem")
-
-    run(for {
-      historyState <- Cell.refCell[F, Cache[Channel, Pattern, Entry, EntriesCaptor]](
-                       Cache[Channel, Pattern, Entry, EntriesCaptor]()
-                     )
-      historyReader = {
-        implicit val h = historyState
-        new History[F, Channel, Pattern, Entry, EntriesCaptor]
+  override def fixture[R](f: (ST, AtST, T) => F[R]): R = {
+    val creator: (HR, ST, Branch) => F[(ST, AtST, T)] =
+      (hr, ts, b) => {
+        val atomicStore = AtomicAny(ts)
+        val space =
+          new RSpace[F, Channel, Pattern, Entry, Entry, EntriesCaptor](hr, atomicStore, b)
+        Applicative[F].pure((ts, atomicStore, space))
       }
-      cache <- Cell.refCell[F, Cache[Channel, Pattern, Entry, EntriesCaptor]](
-                Cache[Channel, Pattern, Entry, EntriesCaptor]()
-              )
-      testStore = {
-        implicit val hr = historyReader
-        implicit val c  = cache
-        HotStore.inMem[F, Channel, Pattern, Entry, EntriesCaptor]
-      }
-      testSpace <- RSpace.create[F, Channel, Pattern, Entry, Entry, EntriesCaptor](
-                    testStore,
-                    branch
-                  )
-      res <- f(testStore, testSpace)
-    } yield { res })
+    setupTestingSpace(creator, f)
   }
 }
 

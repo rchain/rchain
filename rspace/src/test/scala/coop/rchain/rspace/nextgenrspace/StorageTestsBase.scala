@@ -1,20 +1,23 @@
 package coop.rchain.rspace.nextgenrspace
 
-import java.nio.file.{Files, Path}
+import java.nio.file.{Files, Path, Paths}
 
 import cats._
 import cats.implicits._
 import cats.effect._
 import com.typesafe.scalalogging.Logger
-import com.google.common.collect.HashMultiset
 import coop.rchain.metrics.Metrics
-
-import scala.collection.JavaConverters._
 import coop.rchain.rspace._
+import coop.rchain.rspace.examples.StringExamples
 import coop.rchain.rspace.examples.StringExamples._
 import coop.rchain.rspace.examples.StringExamples.implicits._
 import coop.rchain.rspace.history._
-import coop.rchain.rspace.internal._
+import coop.rchain.rspace.nextgenrspace.history.{
+  HistoryRepository,
+  HistoryRepositoryInstances,
+  LMDBRSpaceStorageConfig,
+  StoreConfig
+}
 import coop.rchain.shared.Cell
 import coop.rchain.shared.PathOps._
 import coop.rchain.shared.Log
@@ -24,12 +27,15 @@ import scala.concurrent.ExecutionContext
 import scodec.Codec
 
 import scala.concurrent.ExecutionContext.Implicits.global
-
 import monix.eval.Task
+import monix.execution.atomic.AtomicAny
+import org.lmdbjava.EnvFlags
 
 trait StorageTestsBase[F[_], C, P, A, K] extends FlatSpec with Matchers with OptionValues {
-  type T  = ISpace[F, C, P, A, A, K]
-  type ST = HotStore[F, C, P, A, K]
+  type T    = ISpace[F, C, P, A, A, K]
+  type ST   = HotStore[F, C, P, A, K]
+  type HR   = HistoryRepository[F, C, P, A, K]
+  type AtST = AtomicAny[ST]
 
   implicit def concurrentF: Concurrent[F]
   implicit def logF: Log[F]
@@ -46,9 +52,11 @@ trait StorageTestsBase[F[_], C, P, A, K] extends FlatSpec with Matchers with Opt
 
   /** A fixture for creating and running a test with a fresh instance of the test store.
     */
-  def withTestSpace[R](f: (ST, T) => F[R]): R
-  def withTestSpaceNonF[R](f: (ST, T) => R): R =
-    withTestSpace((st: ST, t: T) => concurrentF.delay(f(st, t)))
+  def fixture[R](f: (ST, AtST, T) => F[R]): R
+
+  def fixtureNonF[R](f: (ST, AtST, T) => R): R =
+    fixture((st: ST, ast: AtST, t: T) => concurrentF.delay(f(st, ast, t)))
+
   def run[S](f: F[S]): S
 
   import scala.reflect.ClassTag
@@ -58,6 +66,44 @@ trait StorageTestsBase[F[_], C, P, A, K] extends FlatSpec with Matchers with Opt
       .collect {
         case e: HA if clazz.isInstance(e) => e
       }
+  }
+
+  protected def setupTestingSpace[S, STORE](
+      createISpace: (HR, ST, Branch) => F[(ST, AtST, T)],
+      f: (ST, AtST, T) => F[S]
+  )(implicit codecC: Codec[C], codecP: Codec[P], codecA: Codec[A], codecK: Codec[K]): S = {
+    val branch = Branch("inmem")
+
+    val dbDir: Path   = Files.createTempDirectory("rchain-storage-test-")
+    val mapSize: Long = 1024L * 1024L * 1024L
+
+    def storeConfig(name: String): StoreConfig =
+      StoreConfig(
+        Files.createDirectories(dbDir.resolve(name)).toString,
+        mapSize,
+        2,
+        2048,
+        List(EnvFlags.MDB_NOTLS)
+      )
+
+    val config = LMDBRSpaceStorageConfig(
+      storeConfig("cold"),
+      storeConfig("history"),
+      storeConfig("pointers"),
+      storeConfig("roots")
+    )
+
+    run(for {
+      historyRepository    <- HistoryRepositoryInstances.lmdbRepository[F, C, P, A, K](config)
+      cache                <- Cell.refCell[F, Cache[C, P, A, K]](Cache[C, P, A, K]())
+      testStore            = HotStore.inMem[F, C, P, A, K](Sync[F], cache, historyRepository)
+      spaceAndStore        <- createISpace(historyRepository, testStore, branch)
+      (store, atom, space) = spaceAndStore
+      res                  <- f(store, atom, space)
+      _                    <- Sync[F].delay(dbDir.recursivelyDelete())
+    } yield {
+      res
+    })
   }
 }
 
@@ -94,31 +140,20 @@ abstract class InMemoryHotStoreTestsBase[F[_]]
     extends StorageTestsBase[F, String, Pattern, String, StringsCaptor]
     with BeforeAndAfterAll {
 
-  override def withTestSpace[S](f: (ST, T) => F[S]): S = {
-    val branch = Branch("inmem")
+  implicit val patternCodec: Codec[Pattern] = StringExamples.implicits.patternSerialize.toCodec
+  implicit val stringCodec: Codec[String]   = StringExamples.implicits.stringSerialize.toCodec
+  implicit val stringCaptorCodec: Codec[StringsCaptor] =
+    StringExamples.implicits.stringClosureSerialize.toCodec
 
-    run(for {
-      historyState <- Cell.refCell[F, Cache[String, Pattern, String, StringsCaptor]](
-                       Cache[String, Pattern, String, StringsCaptor]()
-                     )
-      historyReader = {
-        implicit val h = historyState
-        new History[F, String, Pattern, String, StringsCaptor]
+  override def fixture[S](f: (ST, AtST, T) => F[S]): S = {
+    val creator: (HR, ST, Branch) => F[(ST, AtST, T)] =
+      (hr, ts, b) => {
+        val atomicStore = AtomicAny(ts)
+        val space =
+          new RSpace[F, String, Pattern, String, String, StringsCaptor](hr, atomicStore, b)
+        Applicative[F].pure((ts, atomicStore, space))
       }
-      cache <- Cell.refCell[F, Cache[String, Pattern, String, StringsCaptor]](
-                Cache[String, Pattern, String, StringsCaptor]()
-              )
-      testStore = {
-        implicit val hr = historyReader
-        implicit val c  = cache
-        HotStore.inMem[F, String, Pattern, String, StringsCaptor]
-      }
-      testSpace <- RSpace.create[F, String, Pattern, String, String, StringsCaptor](
-                    testStore,
-                    branch
-                  )
-      res <- f(testStore, testSpace)
-    } yield { res })
+    setupTestingSpace(creator, f)
   }
 
   override def afterAll(): Unit =
