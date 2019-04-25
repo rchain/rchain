@@ -61,42 +61,45 @@ class RuntimeManagerImpl[F[_]: Concurrent] private[rholang] (
     captureResults(start, deploy, Par().withExprs(Seq(Expr(GString(name)))))
 
   def captureResults(start: StateHash, deploy: DeployData, name: Par): F[Seq[Par]] =
-    Sync[F]
-      .bracket(runtimeContainer.take) { runtime =>
-        //TODO: Is better error handling needed here?
-        for {
-          evalR                     <- newEval(deploy :: Nil, runtime, start)
-          (_, Seq(processedDeploy)) = evalR
-          result <- if (processedDeploy.status.isFailed) Seq.empty[Datum[ListParWithRandom]].pure[F]
-                   else {
-                     val r: F[Seq[Datum[ListParWithRandom]]] =
-                       runtime.space.getData(name).map(_.toSeq)
-                     r
-                   }
-        } yield result.flatMap(_.a.pars)
-      }(runtime => runtimeContainer.put(runtime))
-
+    withResetRuntime(start) { runtime =>
+      //TODO: Is better error handling needed here?
+      for {
+        evalR                     <- newEval(deploy :: Nil, runtime, start)
+        (_, Seq(processedDeploy)) = evalR
+        result <- if (processedDeploy.status.isFailed) Seq.empty[Datum[ListParWithRandom]].pure[F]
+                 else {
+                   val r: F[Seq[Datum[ListParWithRandom]]] =
+                     runtime.space.getData(name).map(_.toSeq)
+                   r
+                 }
+      } yield result.flatMap(_.a.pars)
+    }
+  /**
+    * @note `replayEval` does not need to reset the evaluation store,
+    *       merely the replay store. Hence, `replayComputeState` uses
+    *       `withRuntime` rather than `withResetRuntime`.
+    */
   def replayComputeState(hash: StateHash)(
       terms: Seq[InternalProcessedDeploy],
       time: Option[Long] = None
   ): F[Either[(Option[DeployData], Failed), StateHash]] =
-    Sync[F].bracket(runtimeContainer.take) { runtime =>
+    withRuntime { runtime =>
       for {
         _      <- setTimestamp(time, runtime)
         result <- replayEval(terms, runtime, hash)
       } yield result
-    }(runtime => runtimeContainer.put(runtime))
+    }
 
   def computeState(hash: StateHash)(
       terms: Seq[DeployData],
       time: Option[Long] = None
   ): F[(StateHash, Seq[InternalProcessedDeploy])] =
-    Sync[F].bracket(runtimeContainer.take) { runtime =>
+    withResetRuntime(hash) { runtime =>
       for {
         _      <- setTimestamp(time, runtime)
         result <- newEval(terms, runtime, hash)
       } yield result
-    }(runtime => runtimeContainer.put(runtime))
+    }
 
   private def setTimestamp(
       time: Option[Long],
@@ -110,12 +113,7 @@ class RuntimeManagerImpl[F[_]: Concurrent] private[rholang] (
     }
 
   def storageRepr(hash: StateHash): F[Option[String]] =
-    Sync[F]
-      .bracket(runtimeContainer.take) { runtime =>
-        val blakeHash = Blake2b256Hash.fromByteArray(hash.toByteArray)
-        runtime.space.reset(blakeHash).map(_ => StoragePrinter.prettyPrint(runtime.space))
-      }(runtime => runtimeContainer.put(runtime))
-      .attempt
+    withResetRuntime(hash)(runtime => StoragePrinter.prettyPrint(runtime.space).pure[F]).attempt
       .map {
         case Right(print) => Some(print)
         case Left(_)      => None
@@ -152,11 +150,14 @@ class RuntimeManagerImpl[F[_]: Concurrent] private[rholang] (
       }
   }
 
+  private def withRuntime[A](f: Runtime[F] => F[A]): F[A] =
+    Sync[F].bracket(runtimeContainer.take)(f)(runtimeContainer.put)
+
   private def withResetRuntime[R](hash: StateHash)(block: Runtime[F] => F[R]) =
-    Sync[F].bracket(runtimeContainer.take) { runtime =>
-      val blakeHash = Blake2b256Hash.fromByteArray(hash.toByteArray)
-      runtime.space.reset(blakeHash).flatMap(_ => block(runtime))
-    }(runtime => runtimeContainer.put(runtime))
+    withRuntime(
+      runtime =>
+        runtime.space.reset(Blake2b256Hash.fromByteArray(hash.toByteArray)) >> block(runtime)
+    )
 
   private def toBondSeq(bondsMap: Par): Seq[Bond] =
     bondsMap.exprs.head.getEMapBody.ps.map {
@@ -164,29 +165,23 @@ class RuntimeManagerImpl[F[_]: Concurrent] private[rholang] (
         assert(validator.exprs.length == 1, "Validator in bonds map wasn't a single string.")
         assert(bond.exprs.length == 1, "Stake in bonds map wasn't a single integer.")
         val validatorName = validator.exprs.head.getGByteArray
-        val stakeAmount = bond.exprs.head.getETupleBody.ps.head.exprs.head.getGInt
+        val stakeAmount   = bond.exprs.head.getETupleBody.ps.head.exprs.head.getGInt
         Bond(validatorName, stakeAmount)
     }.toList
 
   def getData(hash: ByteString)(channel: Par): F[Seq[Par]] =
-    withResetRuntime(hash)(runtime => {
-      runtime.space.getData(channel).map(_.flatMap(_.a.pars))
-    })
+    withResetRuntime(hash)(_.space.getData(channel).map(_.flatMap(_.a.pars)))
 
   def getContinuation(
       hash: ByteString
   )(channels: immutable.Seq[Par]): F[Seq[(Seq[BindPattern], Par)]] =
     withResetRuntime(hash)(
-      runtime => {
-        runtime.space
-          .getWaitingContinuations(channels)
-          .map(
-            results =>
-              for {
-                result <- results.filter(_.continuation.taggedCont.isParBody)
-              } yield (result.patterns, result.continuation.taggedCont.parBody.get.body)
-          )
-      }
+      _.space
+        .getWaitingContinuations(channels)
+        .map(
+          _.filter(_.continuation.taggedCont.isParBody)
+            .map(result => (result.patterns, result.continuation.taggedCont.parBody.get.body))
+        )
     )
 
   private def newEval(
@@ -204,10 +199,8 @@ class RuntimeManagerImpl[F[_]: Concurrent] private[rholang] (
         terms match {
           case deploy +: rem =>
             for {
-              _ <- runtime.space.reset(hash)
-              (codeHash, phloPrice, userId, timestamp) = ProtoUtil.getRholangDeployParams(
-                deploy
-              )
+              runtimeParameters <- ProtoUtil.getRholangDeployParams(deploy).pure[F]
+              (codeHash, phloPrice, userId, timestamp) = runtimeParameters
               _                                      <- runtime.shortLeashParams.setParams(codeHash, phloPrice, userId, timestamp)
               injResult                              <- doInj(deploy, runtime.reducer, runtime.errorLog)(runtime.cost)
               EvaluateResult(evaluationCost, errors) = injResult
@@ -353,13 +346,13 @@ object RuntimeManager {
         runtimeManager.replayComputeState(hash)(terms, time).liftM[T]
 
       override def computeState(hash: RuntimeManager.StateHash)(
-      terms: scala.Seq[DeployData],
-      time: Option[Long]
-  ): T[F, (RuntimeManager.StateHash, scala.Seq[InternalProcessedDeploy])] =
-    runtimeManager.computeState(hash)(terms, time).liftM[T]
+          terms: scala.Seq[DeployData],
+          time: Option[Long]
+      ): T[F, (RuntimeManager.StateHash, scala.Seq[InternalProcessedDeploy])] =
+        runtimeManager.computeState(hash)(terms, time).liftM[T]
 
       override def storageRepr(hash: RuntimeManager.StateHash): T[F, Option[String]] =
-    runtimeManager.storageRepr(hash).liftM[T]
+        runtimeManager.storageRepr(hash).liftM[T]
 
       override def computeBonds(hash: RuntimeManager.StateHash): T[F, scala.Seq[Bond]] =
         runtimeManager.computeBonds(hash).liftM[T]

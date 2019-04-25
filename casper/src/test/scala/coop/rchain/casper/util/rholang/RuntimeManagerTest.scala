@@ -23,6 +23,7 @@ import org.scalatest.{FlatSpec, Matchers}
 import scala.concurrent.duration._
 
 class RuntimeManagerTest extends FlatSpec with Matchers {
+
   private val runtimeManager: Resource[Task, RuntimeManager[Task]] =
     mkRuntimeManager("casper-runtime-manager-test")
 
@@ -102,8 +103,10 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
     )
 
     val result =
-      runtimeManager.use { mgr =>
-          mgr.computeState(mgr.emptyStateHash)(Seq(StandardDeploys.nonNegativeNumber, deployData))
+      runtimeManager
+        .use { mgr =>
+          mgr
+            .computeState(mgr.emptyStateHash)(Seq(StandardDeploys.nonNegativeNumber, deployData))
             .flatMap { result =>
               val hash = result._1
               mgr
@@ -178,7 +181,7 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
           t,
           System.currentTimeMillis(),
           accounting.MAX_VALUE
-      )
+        )
     )
     val (_, firstDeploy) =
       runtimeManager
