@@ -568,79 +568,27 @@ class CasperPacketHandler[F[_]: Monad: RPConfAsk: BlockStore: ConnectionsCell: T
     Log[F].info("Executing init of CasperPacketHandlerImpl") >> cphI.get >>= (_.init)
 
   def handle(peer: PeerNode): PartialFunction[Packet, F[Unit]] =
-    Function
-      .unlift(
-        (p: Packet) =>
-          packetToBlockRequest(p) orElse
-            packetToForkChoiceTipRequest(p) orElse
-            packetToApprovedBlock(p) orElse
-            packetToApprovedBlockRequest(p) orElse
-            packetToBlockMessage(p) orElse
-            packetToBlockApproval(p) orElse
-            packetToUnapprovedBlock(p) orElse
-            packetToNoApprovedBlockAvailable(p)
-      )
-      .andThen {
-        case br: BlockRequest           => cphI.get >>= (_.handleBlockRequest(peer, br))
-        case fctr: ForkChoiceTipRequest => cphI.get >>= (_.handleForkChoiceTipRequest(peer, fctr))
-        case ab: ApprovedBlock =>
-          cphI.get >>= (_.handleApprovedBlock(ab)) >>= {
-            case None => ().pure[F]
-            case Some(casperInstance) =>
-              for {
-                _ <- MultiParentCasperRef[F].set(casperInstance)
-                _ <- Log[F].info(
-                      "Making a transition to ApprovedBlockReceivedHandler state."
-                    )
-                abr = new ApprovedBlockReceivedHandler(casperInstance, ab)
-                _   <- cphI.set(abr)
-                _   <- CommUtil.sendForkChoiceTipRequest[F]
-              } yield ()
-          }
-        case abr: ApprovedBlockRequest     => cphI.get >>= (_.handleApprovedBlockRequest(peer, abr))
-        case bm: BlockMessage              => cphI.get >>= (_.handleBlockMessage(peer, bm))
-        case ba: BlockApproval             => cphI.get >>= (_.handleBlockApproval(ba))
-        case ub: UnapprovedBlock           => cphI.get >>= (_.handleUnapprovedBlock(peer, ub))
-        case nab: NoApprovedBlockAvailable => cphI.get >>= (_.handleNoApprovedBlockAvailable(nab))
-      }
-
-  private def packetToBlockMessage(msg: Packet): Option[BlockMessage] =
-    if (msg.typeId == transport.BlockMessage.id)
-      Try(BlockMessage.parseFrom(msg.content.toByteArray)).toOption
-    else None
-
-  private def packetToApprovedBlock(msg: Packet): Option[ApprovedBlock] =
-    if (msg.typeId == transport.ApprovedBlock.id)
-      Try(ApprovedBlock.parseFrom(msg.content.toByteArray)).toOption
-    else None
-
-  private def packetToApprovedBlockRequest(msg: Packet): Option[ApprovedBlockRequest] =
-    if (msg.typeId == transport.ApprovedBlockRequest.id)
-      Try(ApprovedBlockRequest.parseFrom(msg.content.toByteArray)).toOption
-    else None
-
-  private def packetToBlockRequest(msg: Packet): Option[BlockRequest] =
-    if (msg.typeId == transport.BlockRequest.id)
-      Try(BlockRequest.parseFrom(msg.content.toByteArray)).toOption
-    else None
-
-  private def packetToForkChoiceTipRequest(msg: Packet): Option[ForkChoiceTipRequest] =
-    if (msg.typeId == transport.ForkChoiceTipRequest.id)
-      Try(ForkChoiceTipRequest.parseFrom(msg.content.toByteArray)).toOption
-    else None
-
-  private def packetToBlockApproval(msg: Packet): Option[BlockApproval] =
-    if (msg.typeId == transport.BlockApproval.id)
-      Try(BlockApproval.parseFrom(msg.content.toByteArray)).toOption
-    else None
-
-  private def packetToUnapprovedBlock(msg: Packet): Option[UnapprovedBlock] =
-    if (msg.typeId == transport.UnapprovedBlock.id)
-      Try(UnapprovedBlock.parseFrom(msg.content.toByteArray)).toOption
-    else None
-
-  private def packetToNoApprovedBlockAvailable(msg: Packet): Option[NoApprovedBlockAvailable] =
-    if (msg.typeId == transport.NoApprovedBlockAvailable.id)
-      Try(NoApprovedBlockAvailable.parseFrom(msg.content.toByteArray)).toOption
-    else None
+    Function.unlift(toCasperMessage).andThen {
+      case br: BlockRequest           => cphI.get >>= (_.handleBlockRequest(peer, br))
+      case fctr: ForkChoiceTipRequest => cphI.get >>= (_.handleForkChoiceTipRequest(peer, fctr))
+      case ab: ApprovedBlock =>
+        cphI.get >>= (_.handleApprovedBlock(ab)) >>= {
+          case None => ().pure[F]
+          case Some(casperInstance) =>
+            for {
+              _ <- MultiParentCasperRef[F].set(casperInstance)
+              _ <- Log[F].info(
+                    "Making a transition to ApprovedBlockReceivedHandler state."
+                  )
+              abr = new ApprovedBlockReceivedHandler(casperInstance, ab)
+              _   <- cphI.set(abr)
+              _   <- CommUtil.sendForkChoiceTipRequest[F]
+            } yield ()
+        }
+      case abr: ApprovedBlockRequest     => cphI.get >>= (_.handleApprovedBlockRequest(peer, abr))
+      case bm: BlockMessage              => cphI.get >>= (_.handleBlockMessage(peer, bm))
+      case ba: BlockApproval             => cphI.get >>= (_.handleBlockApproval(ba))
+      case ub: UnapprovedBlock           => cphI.get >>= (_.handleUnapprovedBlock(peer, ub))
+      case nab: NoApprovedBlockAvailable => cphI.get >>= (_.handleNoApprovedBlockAvailable(nab))
+    }
 }

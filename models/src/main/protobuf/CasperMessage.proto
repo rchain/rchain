@@ -18,6 +18,8 @@ import "Either.proto";
 option (scalapb.options) = {
   package_name: "coop.rchain.casper.protocol"
   flat_package: true
+  single_file: true
+  preamble: "sealed trait CasperMessage"
 };
 
 // --------- DeployService  --------
@@ -78,6 +80,7 @@ message DeployData {
 }
 
 message BlockRequest {
+  option (scalapb.message).extends = "CasperMessage";
   //Fields are redundant to allow for validity check.
   //Such a check can definitively distinguish this
   //from other message types with similar serializations.
@@ -86,6 +89,7 @@ message BlockRequest {
 }
 
 message ForkChoiceTipRequest {
+  option (scalapb.message).extends = "CasperMessage";
 }
 
 message FindDeployInBlockQuery {
@@ -218,6 +222,7 @@ message ApprovedBlockCandidate {
 }
 
 message UnapprovedBlock {
+  option (scalapb.message).extends = "CasperMessage";
   ApprovedBlockCandidate candidate = 1;
   int64                  timestamp = 2;
   int64                  duration  = 3;
@@ -230,20 +235,24 @@ message Signature {
 }
 
 message BlockApproval {
+  option (scalapb.message).extends = "CasperMessage";
   ApprovedBlockCandidate candidate = 1;
   Signature              sig       = 2;
 }
 
 message ApprovedBlock  {
+  option (scalapb.message).extends = "CasperMessage";
   ApprovedBlockCandidate candidate = 1;
   repeated Signature     sigs      = 2;
 }
 
 message ApprovedBlockRequest {
+  option (scalapb.message).extends = "CasperMessage";
   string identifier = 1;
 }
 
 message NoApprovedBlockAvailable {
+  option (scalapb.message).extends = "CasperMessage";
   string identifier = 1;
   string nodeIdentifer = 2;
 }
@@ -252,6 +261,7 @@ message NoApprovedBlockAvailable {
 
 // --------- Core Protocol  --------
 message BlockMessage {
+  option (scalapb.message).extends = "CasperMessage";  
   bytes                  blockHash      = 1; // obtained by hashing the information in the header
   Header                 header         = 2;
   Body                   body           = 3;
