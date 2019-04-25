@@ -72,7 +72,7 @@ class RuntimeManagerImpl[F[_]: Concurrent] private[rholang] (
       for {
         evaluateResult <- computeEffect(runtime)(deploy)
         result <- if (evaluateResult.errors.isEmpty) getData(runtime)(name)
-               else Seq.empty[Par].pure[F]
+                 else Seq.empty[Par].pure[F]
       } yield result
     }
 
@@ -134,27 +134,28 @@ class RuntimeManagerImpl[F[_]: Concurrent] private[rholang] (
         case Left(_)      => None
       }
 
-  def computeBonds(hash: StateHash): F[Seq[Bond]] = {
-    val bondsQuery =
-      """new rl(`rho:registry:lookup`), SystemInstancesCh, posCh in {
-        |  rl!(`rho:id:wdwc36f4ixa6xacck3ddepmgueum7zueuczgthcqp6771kdu8jogm8`, *SystemInstancesCh) |
-        |  for(@(_, SystemInstancesRegistry) <- SystemInstancesCh) {
-        |    @SystemInstancesRegistry!("lookup", "pos", *posCh) |
-        |    for(pos <- posCh){ pos!("getBonds", "__SCALA__") }
-        |  }
-        |}""".stripMargin
-
-    captureResults(hash, ConstructDeploy.sourceDeployNow(bondsQuery))
+  def computeBonds(hash: StateHash): F[Seq[Bond]] =
+    captureResults(hash, ConstructDeploy.sourceDeployNow(bondsQuerySource()))
       .ensureOr(
         bondsPar =>
           new IllegalArgumentException(
-            s"Incorrect number of results from query of current bonds: ${bondsPar.size}"
-          )
+    s"Incorrect number of results from query of current bonds: ${bondsPar.size}"
+  )
       )(bondsPar => bondsPar.size == 1)
       .map { bondsPar =>
         toBondSeq(bondsPar.head)
       }
-  }
+
+  private def bondsQuerySource(name: String = "__SCALA__"): String =
+    s"""
+       | new rl(`rho:registry:lookup`), SystemInstancesCh, posCh in {
+       |   rl!(`rho:id:wdwc36f4ixa6xacck3ddepmgueum7zueuczgthcqp6771kdu8jogm8`, *SystemInstancesCh) |
+       |   for(@(_, SystemInstancesRegistry) <- SystemInstancesCh) {
+       |     @SystemInstancesRegistry!("lookup", "pos", *posCh) |
+       |     for(pos <- posCh){ pos!("getBonds", "$name") }
+       |   }
+       | }
+     """.stripMargin
 
   def computeBalance(start: StateHash)(user: ByteString): F[Long] =
     withResetRuntime(start)(computeBalance(_)(user))
