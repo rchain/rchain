@@ -161,7 +161,7 @@ object InterpreterUtil {
       possiblePreStateHash <- computeParentsPostState[F](parents, dag, runtimeManager)
       result <- possiblePreStateHash match {
                  case Right(preStateHash) =>
-          runtimeManager.computeState(preStateHash)(deploys, time).map {
+                   runtimeManager.computeState(preStateHash)(deploys, time).map {
                      case (postStateHash, processedDeploys) =>
                        Right(preStateHash, postStateHash, processedDeploys)
                    }
