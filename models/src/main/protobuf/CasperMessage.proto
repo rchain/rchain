@@ -36,11 +36,6 @@ message ForkChoiceTipRequest {
   option (scalapb.message).extends = "CasperMessage";
 }
 
-
-message MaybeBlockMessage {
-  BlockMessage block = 1;
-}
-
 // ---------- Signing Protocol ---------
 message ApprovedBlockCandidate {
   BlockMessage block        = 1;

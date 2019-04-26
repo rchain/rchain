@@ -143,7 +143,6 @@ object HashM extends HashMDerivation {
   implicit val DeployDataHash             = gen[DeployData]
   implicit val FindDeployInBlockQueryHash = gen[FindDeployInBlockQuery]
   implicit val HeaderHash                 = gen[Header]
-  implicit val MaybeBlockMessageHash      = gen[MaybeBlockMessage]
   implicit val ProcessedDeployHash        = gen[ProcessedDeploy]
   implicit val RChainStateHash            = gen[RChainState]
   implicit val UnapprovedBlockHash        = gen[UnapprovedBlock]
