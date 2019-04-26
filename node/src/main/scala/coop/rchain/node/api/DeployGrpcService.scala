@@ -31,8 +31,8 @@ private[api] object DeployGrpcService {
       blockApiLock: Semaphore[F]
   )(
       implicit worker: Scheduler
-  ): CasperMessageGrpcMonix.DeployService =
-    new CasperMessageGrpcMonix.DeployService {
+  ): DeployServiceGrpcMonix.DeployService =
+    new DeployServiceGrpcMonix.DeployService {
 
       private def defer[A <: StacksafeMessage[A]](
           task: F[Either[String, A]]
