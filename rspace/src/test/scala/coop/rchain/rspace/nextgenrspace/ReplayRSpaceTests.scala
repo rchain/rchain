@@ -731,7 +731,7 @@ trait ReplayRSpaceTests extends ReplayRSpaceTestsBase[String, Pattern, String, S
     cp1.root shouldBe cp2.root
   }
 
-  "an install" should "be available after resetting to a checkpoint" ignore fixture {
+  "an install" should "be available after resetting to a checkpoint" in fixture {
     (store, replayStore, space, replaySpace) =>
       val channel      = "ch1"
       val datum        = "datum1"
