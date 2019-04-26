@@ -616,7 +616,7 @@ trait StorageActionsTests[F[_]]
       } yield (getK(r4).results should contain theSameElementsAs List(List("datum2")))
   }
 
-  "doing a persistent consume and producing multiple times" should "work" ignore fixture {
+  "doing a persistent consume and producing multiple times" should "work" in fixture {
     (store, _, space) =>
       for {
         r1 <- space.consume(List("ch1"), List(Wildcard), new StringsCaptor, persist = true)

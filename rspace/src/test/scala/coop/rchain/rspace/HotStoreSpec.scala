@@ -833,7 +833,14 @@ trait HotStoreSpec[F[_], M[_]] extends FlatSpec with Matchers with GeneratorDriv
       }
   }
 
-  "concurrent continuation operations on disjoint channels" should "not mess up the cache" in forAll {
+  "concurrent continuation operations on disjoint channels" should "not mess up the cache" in forAll(
+    Gen.nonEmptyContainerOf[Vector, Channel](Arbitrary.arbitrary[Channel]),
+    Gen.nonEmptyContainerOf[Vector, Channel](Arbitrary.arbitrary[Channel]),
+    Gen.containerOfN[Vector, Continuation](10, Arbitrary.arbitrary[Continuation]),
+    Gen.containerOfN[Vector, Continuation](10, Arbitrary.arbitrary[Continuation]),
+    Arbitrary.arbitrary[Continuation],
+    Arbitrary.arbitrary[Continuation]
+  ) {
     (
         channels1: Vector[Channel],
         channels2: Vector[Channel],
@@ -860,6 +867,7 @@ trait HotStoreSpec[F[_], M[_]] extends FlatSpec with Matchers with GeneratorDriv
           }
         }
       }
+
   }
 
   private def checkRemovalWorksOrFailsOnError[T](
@@ -1107,6 +1115,8 @@ trait InMemHotStoreSpec extends HotStoreSpec[Task, Task.Par] {
       hotStore = {
         implicit val hr = history
         implicit val c  = cache
+        implicit val cp = patternSerialize.toCodec
+        implicit val ck = stringClosureSerialize.toCodec
         HotStore.inMem[Task, String, Pattern, String, StringsCaptor]
       }
       res <- f(cache, history, hotStore)

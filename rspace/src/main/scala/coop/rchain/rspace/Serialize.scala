@@ -4,7 +4,9 @@ import scodec.{Attempt, Codec, DecodeResult, Err, SizeBound}
 import scodec.bits.{BitVector, ByteVector}
 import scodec.codecs._
 import scodec.interop.cats._
+import cats.Applicative
 import cats.implicits._
+import cats.mtl._
 
 /**
   * Type class for serializing and deserializing values
@@ -30,6 +32,14 @@ object Serialize {
         .toEither
         .fold(err => Left(new Exception(err.message)), v => Right(v.value))
   }
+
+  def roundTrip[F[_]: Applicative, E: Serialize](
+      k: E
+  )(implicit FR: FunctorRaise[F, Throwable]): F[E] =
+    Serialize[E].decode(Serialize[E].encode(k)) match {
+      case Left(ex)     => FR.raise(ex)
+      case Right(value) => value.pure[F]
+    }
 
   implicit class RichSerialize[A](val instance: Serialize[A]) extends AnyVal {
 
