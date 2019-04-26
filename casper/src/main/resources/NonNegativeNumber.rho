@@ -17,7 +17,7 @@ new NonNegativeNumber, rs(`rho:registry:insertSigned:ed25519`), uriOut in {
       contract this(@"add", @x, success) = {
         if (x >= 0) {
           for(@v <- valueStore){
-            if (v + x > v) {
+            if (v + x >= v) {
               valueStore!(v + x) | success!(true)
             } else {
               //overflow

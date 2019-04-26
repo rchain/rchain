@@ -11,7 +11,7 @@ import coop.rchain.casper.helper.HashSetCasperTestNode.Effect
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.scalatestcontrib._
 import coop.rchain.casper.util.comm.TestNetwork
-import coop.rchain.casper.util.{BondingUtil, ProtoUtil}
+import coop.rchain.casper.util.{BondingUtil, ConstructDeploy, ProtoUtil}
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.hash.Keccak256
 import coop.rchain.crypto.signatures.{Ed25519, Secp256k1}

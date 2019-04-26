@@ -3,9 +3,8 @@ package coop.rchain.casper.util.rholang
 import cats.Monad
 import cats.effect._
 import cats.implicits._
-import coop.rchain.blockstorage.BlockDagRepresentation
 import com.google.protobuf.ByteString
-import coop.rchain.blockstorage.BlockStore
+import coop.rchain.blockstorage.{BlockDagRepresentation, BlockStore}
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
 import coop.rchain.casper.util.{DagOperations, ProtoUtil}
@@ -99,7 +98,7 @@ object InterpreterUtil {
       time: Option[Long]
   ): F[Either[BlockException, Option[StateHash]]] =
     runtimeManager
-      .replayComputeState(preStateHash, internalDeploys, time)
+      .replayComputeState(preStateHash)(internalDeploys, time)
       .flatMap {
         case Left((Some(deploy), status)) =>
           status match {
@@ -162,7 +161,7 @@ object InterpreterUtil {
       possiblePreStateHash <- computeParentsPostState[F](parents, dag, runtimeManager)
       result <- possiblePreStateHash match {
                  case Right(preStateHash) =>
-                   runtimeManager.computeState(preStateHash, deploys, time).map {
+                   runtimeManager.computeState(preStateHash)(deploys, time).map {
                      case (postStateHash, processedDeploys) =>
                        Right(preStateHash, postStateHash, processedDeploys)
                    }
@@ -215,8 +214,7 @@ object InterpreterUtil {
                                block.getBody.deploys.flatMap(ProcessedDeployUtil.toInternal)
                              val time = Some(block.header.get.timestamp)
                              for {
-                               replayResult <- runtimeManager.replayComputeState(
-                                                stateHash,
+                               replayResult <- runtimeManager.replayComputeState(stateHash)(
                                                 deploys,
                                                 time
                                               )

@@ -5,16 +5,10 @@ import cats.effect.Sync
 import cats.implicits._
 import coop.rchain.blockstorage.{BlockDagRepresentation, BlockStore}
 import coop.rchain.casper.protocol._
-import coop.rchain.casper.util.{DagOperations, ProtoUtil}
-import coop.rchain.casper.util.ProtoUtil.{
-  blockHeader,
-  bonds,
-  signBlock,
-  toJustification,
-  unsignedBlockProto
-}
+import coop.rchain.casper.util.ProtoUtil._
 import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
 import coop.rchain.casper.util.rholang._
+import coop.rchain.casper.util.{DagOperations, ProtoUtil}
 import coop.rchain.crypto.{PrivateKey, PublicKey}
 import coop.rchain.metrics.Metrics
 import coop.rchain.shared.{Cell, Log, Time}
@@ -207,7 +201,7 @@ object BlockCreator {
   ): F[List[Unit]] =
     internalErrors.toList
       .traverse {
-        case InternalProcessedDeploy(deploy, _, _, InternalErrors(errors)) =>
+        case InternalProcessedDeploy(deploy, _, _, _, InternalErrors(errors)) =>
           val errorsMessage = errors.map(_.getMessage).mkString("\n")
           Log[F].error(
             s"Internal error encountered while processing deploy ${PrettyPrinter

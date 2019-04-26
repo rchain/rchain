@@ -19,8 +19,6 @@ import coop.rchain.rholang.interpreter.accounting.Cost
 import coop.rchain.rholang.interpreter.util.RevAddress
 import coop.rchain.rholang.interpreter.{accounting, ParBuilder, Runtime, TestRuntime}
 import coop.rchain.shared.Log
-import cats.implicits._
-import coop.rchain.casper.util.rholang.RuntimeManager
 
 import scala.concurrent.ExecutionContext
 
@@ -57,15 +55,12 @@ object TestUtil {
     for {
       runtime        <- TestUtil.runtime[F, G](additionalSystemProcesses)
       runtimeManager <- RuntimeManager.fromRuntime(runtime)
-
-      _ <- genesisSetup(runtimeManager)
-
-      _ <- evalDeploy(rhoSpecDeploy, runtime)
-      _ <- otherLibs.toList.traverse(evalDeploy(_, runtime))
-
+      _              <- genesisSetup(runtimeManager)
+      _              <- evalDeploy(rhoSpecDeploy, runtime)
+      _              <- otherLibs.toList.traverse(evalDeploy(_, runtime))
       // reset the deployParams.userId before executing the test
       // otherwise it'd execute as the deployer of last deployed contract
-      _ <- runtime.shortLeashParams.updateParams(old => old.copy(userId = Par()))
+      _ <- runtime.deployParametersRef.update(_.copy(userId = Par()))
     } yield (runtime)
 
   // TODO: Have this function take an additional "Genesis" argument.

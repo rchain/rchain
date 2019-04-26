@@ -9,19 +9,18 @@ import coop.rchain.casper.genesis.contracts._
 import coop.rchain.casper.helper.HashSetCasperTestNode
 import coop.rchain.casper.helper.HashSetCasperTestNode.Effect
 import coop.rchain.casper.protocol.{BlockMessage, DeployData}
-import coop.rchain.casper.util.ProtoUtil
+import coop.rchain.casper.util.ConstructDeploy
 import coop.rchain.casper.util.comm.TestNetwork
+import coop.rchain.catscontrib.TaskContrib._
+import coop.rchain.comm.CommError
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.hash.Keccak256
 import coop.rchain.crypto.signatures.{Ed25519, Secp256k1}
-import coop.rchain.rholang.interpreter.accounting
-import monix.execution.Scheduler.Implicits.global
-import coop.rchain.catscontrib._
-import coop.rchain.catscontrib.TaskContrib._
-import coop.rchain.comm.CommError
 import coop.rchain.crypto.{PrivateKey, PublicKey}
+import coop.rchain.rholang.interpreter.accounting
 import coop.rchain.rholang.interpreter.util.RevAddress
 import monix.eval.Task
+import monix.execution.Scheduler.Implicits.global
 import org.scalacheck._
 import org.scalacheck.commands.Commands
 

@@ -1,21 +1,24 @@
 package coop.rchain.casper.util.rholang
 
-import coop.rchain.casper.ConstructDeploy
 import cats.Id
 import cats.effect.Resource
-import coop.rchain.catscontrib.TaskContrib._
-import coop.rchain.casper.genesis.contracts.StandardDeploys
+import com.google.protobuf.ByteString
+import coop.rchain.casper.genesis.contracts.{ProofOfStake, StandardDeploys, Validator, Vault}
 import coop.rchain.casper.protocol.DeployData
-import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.casper.util.rholang.Resources._
+import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
+import coop.rchain.casper.util.{ConstructDeploy, ProtoUtil}
 import coop.rchain.catscontrib.effect.implicits._
+import coop.rchain.crypto.PublicKey
+import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.hash.Blake2b512Random
+import coop.rchain.crypto.signatures.Ed25519
 import coop.rchain.metrics
 import coop.rchain.metrics.Metrics
 import coop.rchain.p2p.EffectsTestInstances.LogicalTime
 import coop.rchain.rholang.Resources.mkRuntime
-import coop.rchain.rholang.interpreter.{accounting, ParBuilder}
 import coop.rchain.rholang.interpreter.accounting.Cost
+import coop.rchain.rholang.interpreter.{accounting, ParBuilder}
 import coop.rchain.shared.Log
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
@@ -24,18 +27,71 @@ import org.scalatest.{FlatSpec, Matchers}
 import scala.concurrent.duration._
 
 class RuntimeManagerTest extends FlatSpec with Matchers {
+
   private val runtimeManager: Resource[Task, RuntimeManager[Task]] =
     mkRuntimeManager("casper-runtime-manager-test")
+
+  private def withTestFixture[A](test: (StateHash, RuntimeManager[Task], PublicKey) => Task[A]): A =
+    runtimeManager
+      .use { mgr =>
+        val (_, genesisPk) = Ed25519.newKeyPair
+        val genesisTerms = Seq(
+          StandardDeploys.listOps,
+          StandardDeploys.either,
+          StandardDeploys.nonNegativeNumber,
+          StandardDeploys.makeMint,
+          StandardDeploys.PoS,
+          StandardDeploys.authKey,
+          StandardDeploys.revVault,
+          StandardDeploys.revGenerator(
+            genesisPk,
+            Seq.empty[Vault],
+            Long.MaxValue
+          ),
+          StandardDeploys
+            .poSGenerator(
+              genesisPk,
+              ProofOfStake(0L, Long.MaxValue, Seq(Validator(genesisPk, 0L)))
+            )
+        )
+        mgr.computeState(mgr.emptyStateHash)(genesisTerms).flatMap {
+          case (start, _) => test(start, mgr, genesisPk)
+        }
+      }
+      .runSyncUnsafe(30.seconds)
 
   "computeState" should "capture rholang errors" in {
     val badRholang = """ for(@x <- @"x"; @y <- @"y"){ @"xy"!(x + y) } | @"x"!(1) | @"y"!("hi") """
     val deploy     = ConstructDeploy.sourceDeployNow(badRholang)
     val (_, Seq(result)) =
       runtimeManager
-        .use(mgr => mgr.computeState(mgr.emptyStateHash, deploy :: Nil))
+        .use(mgr => mgr.computeState(mgr.emptyStateHash)(deploy :: Nil))
         .runSyncUnsafe(10.seconds)
 
     result.status.isFailed should be(true)
+  }
+
+  "computeDeployPayment" should "transfer REV from the deployer's vault to the PoS vault" in withTestFixture {
+    case (start, mgr, genesisPk) =>
+      val genesisId = ByteString.copyFrom(genesisPk.bytes)
+      val posId = ByteString.copyFrom(
+        Base16.unsafeDecode("cc87bf7747a8c176714b417ca14a63897b07572876c5e38a7896b6007738ef81")
+      )
+      mgr.computeDeployPayment(start)(genesisId, 100L).flatMap { finish =>
+        mgr.computeBalance(finish)(genesisId).flatMap { balance0 =>
+          mgr.computeBalance(finish)(posId).map { balance1 =>
+            balance0 should be(Long.MaxValue - 100L)
+            balance1 should be(100L)
+          }
+        }
+      }
+  }
+
+  "computeBalance" should "compute vault balances accurately" in withTestFixture {
+    case (start, mgr, genesisPk) =>
+      mgr.computeBalance(start)(ByteString.copyFrom(genesisPk.bytes)).map { balance0 =>
+        balance0 should be(Long.MaxValue)
+      }
   }
 
   it should "capture rholang parsing errors and charge for parsing" in {
@@ -43,7 +99,7 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
     val deploy     = ConstructDeploy.sourceDeployNow(badRholang)
     val (_, Seq(result)) =
       runtimeManager
-        .use(mgr => mgr.computeState(mgr.emptyStateHash, deploy :: Nil))
+        .use(mgr => mgr.computeState(mgr.emptyStateHash)(deploy :: Nil))
         .runSyncUnsafe(10.seconds)
 
     result.status.isFailed should be(true)
@@ -76,8 +132,7 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
                  .use {
                    case runtimeManager =>
                      for {
-                       state <- runtimeManager.computeState(
-                                 runtimeManager.emptyStateHash,
+                       state <- runtimeManager.computeState(runtimeManager.emptyStateHash)(
                                  deploy :: Nil
                                )
                        result = state._2.head
@@ -107,7 +162,7 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
       runtimeManager
         .use { mgr =>
           mgr
-            .computeState(mgr.emptyStateHash, Seq(StandardDeploys.nonNegativeNumber, deployData))
+            .computeState(mgr.emptyStateHash)(Seq(StandardDeploys.nonNegativeNumber, deployData))
             .flatMap { result =>
               val hash = result._1
               mgr
@@ -160,7 +215,7 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
       runtimeManager
         .use { m =>
           val hash = m.emptyStateHash
-          m.computeState(hash, terms)
+          m.computeState(hash)(terms)
             .map(_ => hash)
         }
 
@@ -186,17 +241,17 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
     )
     val (_, firstDeploy) =
       runtimeManager
-        .use(mgr => mgr.computeState(mgr.emptyStateHash, deploy.head :: Nil))
+        .use(mgr => mgr.computeState(mgr.emptyStateHash)(deploy.head :: Nil))
         .runSyncUnsafe(10.seconds)
 
     val (_, secondDeploy) =
       runtimeManager
-        .use(mgr => mgr.computeState(mgr.emptyStateHash, deploy.drop(1).head :: Nil))
+        .use(mgr => mgr.computeState(mgr.emptyStateHash)(deploy.drop(1).head :: Nil))
         .runSyncUnsafe(10.seconds)
 
     val (_, compoundDeploy) =
       runtimeManager
-        .use(mgr => mgr.computeState(mgr.emptyStateHash, deploy))
+        .use(mgr => mgr.computeState(mgr.emptyStateHash)(deploy))
         .runSyncUnsafe(10.seconds)
 
     assert(firstDeploy.size == 1)

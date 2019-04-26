@@ -157,6 +157,25 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Sync: ConnectionsCell: Trans
       bufferContains = state.blockBuffer.contains(b.blockHash)
     } yield (dagContains || bufferContains)
 
+  /**
+    * @note The deployer vault balance is not verified here exclusively
+    *       because any viable state-hash from which the vault balance can
+    *       be computed is necessarily a post-state hash. A balance check only
+    *       at deployment-time would introduce the following bug:
+    *
+    *       Suppose a deployer issues $n deployments, where each deployment
+    *       costs $m phlo and each deployment is to be included in the next block.
+    *       If the deployer's vault balance $b at the most recent post-state hash $s
+    *       is greater than or equal to $m, and the deployer's account balance is
+    *       computed at $s for all $n deployment, then deployment $i+1 would fail
+    *       only after deployment $i was processed, resulting in $n * $m amount of
+    *       total work performed. To allow users to issue > 1 deployment per block,
+    *       vault balances must be calculated dynamically. Of course, we can always
+    *       perform a preliminary balance check at deploy-time to catch the first
+    *       deployment.
+    * @param deployData
+    * @return
+    */
   private def validateDeploy(deployData: DeployData): Either[DeployError, Unit] = deployData match {
     case d if (d.sig == ByteString.EMPTY)      => missingSignature.asLeft[Unit]
     case d if (d.sigAlgorithm == "")           => missingSignatureAlgorithm.asLeft[Unit]

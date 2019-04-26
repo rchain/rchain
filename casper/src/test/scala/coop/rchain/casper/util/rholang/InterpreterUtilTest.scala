@@ -2,37 +2,25 @@ package coop.rchain.casper.util.rholang
 
 import java.nio.file.Files
 
-import cats.mtl.implicits._
-import cats.{Id, Monad}
 import cats.implicits._
 import com.google.protobuf.ByteString
-import coop.rchain.catscontrib.TaskContrib._
-import coop.rchain.blockstorage.{
-  BlockDagRepresentation,
-  BlockDagStorage,
-  BlockStore,
-  IndexedBlockDagStorage
-}
-import coop.rchain.casper.ConstructDeploy
+import coop.rchain.blockstorage.{BlockDagRepresentation, BlockStore}
 import coop.rchain.casper.helper.BlockGenerator._
 import coop.rchain.casper.helper._
 import coop.rchain.casper.protocol._
-import coop.rchain.casper.util.ProtoUtil
+import coop.rchain.casper.util.ConstructDeploy
 import coop.rchain.casper.util.rholang.InterpreterUtil._
 import coop.rchain.casper.util.rholang.Resources.mkRuntimeManager
-import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
+import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.metrics
 import coop.rchain.metrics.{Metrics, NoopSpan}
-import coop.rchain.rholang.interpreter.Runtime
 import coop.rchain.models.PCost
 import coop.rchain.p2p.EffectsTestInstances.LogStub
-import coop.rchain.rholang.interpreter.accounting
-import coop.rchain.shared.{StoreType, Time}
+import coop.rchain.rholang.interpreter.{accounting, Runtime}
+import coop.rchain.shared.StoreType
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
 import org.scalatest._
-
-import scala.concurrent.duration._
 
 class InterpreterUtilTest
     extends FlatSpec
