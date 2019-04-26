@@ -400,20 +400,6 @@ class ReplayRSpace[F[_], C, P, A, R, K](
         updatedReplays.removeBinding(produceRef, commRef)
     }
 
-  private def createCache: F[Cell[F, Cache[C, P, A, K]]] =
-    Cell.refCell[F, Cache[C, P, A, K]](Cache())
-
-  private def createNewHotStore(historyReader: HistoryReader[F, C, P, A, K]): F[Unit] =
-    for {
-      cache <- createCache
-      nextHotStore = {
-        implicit val C: Cell[F, Cache[C, P, A, K]]    = cache
-        implicit val HR: HistoryReader[F, C, P, A, K] = historyReader
-        HotStore.inMem
-      }
-      _ = storeAtom.set(nextHotStore)
-    } yield ()
-
   override def createCheckpoint(): F[Checkpoint] =
     for {
       isEmpty <- syncF.delay(replayData.isEmpty)
@@ -422,7 +408,7 @@ class ReplayRSpace[F[_], C, P, A, R, K](
                        for {
                          changes     <- storeAtom.get().changes()
                          nextHistory <- historyRepositoryAtom.get().checkpoint(changes.toList)
-                         _           <- createNewHotStore(nextHistory)
+                         _           <- createNewHotStore(nextHistory)(serializeP.toCodec, serializeK.toCodec)
                        } yield (Checkpoint(nextHistory.history.root, Seq.empty))
                      }, {
                        val msg =
@@ -436,7 +422,8 @@ class ReplayRSpace[F[_], C, P, A, R, K](
     for {
       nextHistory <- historyRepositoryAtom.get().reset(root)
       _           = historyRepositoryAtom.set(nextHistory)
-      _           <- createNewHotStore(nextHistory)
+      _           <- createNewHotStore(nextHistory)(serializeP.toCodec, serializeK.toCodec)
+      _           <- restoreInstalls()
     } yield ()
 
   override def clear(): F[Unit] = syncF.delay { replayData.clear() }

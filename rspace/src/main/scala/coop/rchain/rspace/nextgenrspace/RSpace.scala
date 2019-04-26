@@ -424,27 +424,11 @@ class RSpace[F[_], C, P, A, R, K] private[rspace] (
       } yield result
     }
 
-  private def createCache: F[Cell[F, Cache[C, P, A, K]]] =
-    Cell.refCell[F, Cache[C, P, A, K]](Cache())
-
-  private def createNewHotStore(historyReader: HistoryReader[F, C, P, A, K]): F[Unit] =
-    for {
-      cache <- createCache
-      nextHotStore = HotStore.inMem(
-        Sync[F],
-        cache,
-        historyReader,
-        serializeP.toCodec,
-        serializeK.toCodec
-      )
-      _ = storeAtom.set(nextHotStore)
-    } yield ()
-
   override def createCheckpoint(): F[Checkpoint] =
     for {
       changes     <- storeAtom.get().changes()
       nextHistory <- historyRepositoryAtom.get().checkpoint(changes.toList)
-      _           <- createNewHotStore(nextHistory)
+      _           <- createNewHotStore(nextHistory)(serializeP.toCodec, serializeK.toCodec)
       log         = eventLog.take()
       _           = eventLog.put(Seq.empty)
     } yield Checkpoint(nextHistory.history.root, log)
@@ -455,7 +439,8 @@ class RSpace[F[_], C, P, A, R, K] private[rspace] (
       _           = historyRepositoryAtom.set(nextHistory)
       _           = eventLog.take()
       _           = eventLog.put(Seq.empty)
-      _           <- createNewHotStore(nextHistory)
+      _           <- createNewHotStore(nextHistory)(serializeP.toCodec, serializeK.toCodec)
+      _           <- restoreInstalls()
     } yield ()
 
   protected[rspace] override def isDirty(root: Blake2b256Hash): F[Boolean] = ???
