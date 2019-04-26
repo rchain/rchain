@@ -46,28 +46,6 @@ object CasperPacketHandler {
     NoApprovedBlockAvailable(identifier, peer.toString).toByteString
   )
 
-  private def handleDoppelganger[F[_]: Monad: Log](
-      peer: PeerNode,
-      b: BlockMessage,
-      self: Validator
-  ): F[Unit] =
-    if (b.sender == self) {
-      Log[F].warn(
-        s"There is another node $peer proposing using the same private key as you. Or did you restart your node?"
-      )
-    } else {
-      ().pure[F]
-    }
-
-  def handleNewBlock[F[_]: Monad: MultiParentCasper: TransportLayer: Log: Time: ErrorHandler](
-      peer: PeerNode,
-      b: BlockMessage
-  ): F[Unit] =
-    for {
-      _ <- Log[F].info(s"Received ${PrettyPrinter.buildString(b)}.")
-      _ <- MultiParentCasper[F].addBlock(b, handleDoppelganger[F](peer, _, _))
-    } yield ()
-
   /*
    * Note the ordering of the insertions is important.
    * We always want the block dag store to be a subset of the block store.
@@ -504,14 +482,36 @@ class ApprovedBlockReceivedHandler[F[_]: RPConfAsk: BlockStore: Monad: Connectio
   override def handleBlockApproval(b: BlockApproval): F[Unit] =
     noop
 
+  private def handleDoppelganger(
+      peer: PeerNode,
+      b: BlockMessage,
+      self: Validator
+  ): F[Unit] =
+    if (b.sender == self) {
+      Log[F].warn(
+        s"There is another node $peer proposing using the same private key as you. Or did you restart your node?"
+      )
+    } else {
+      ().pure[F]
+    }
+
+  private def handleNewBlock(
+      peer: PeerNode,
+      b: BlockMessage
+  ): F[Unit] =
+    for {
+      _ <- Log[F].info(s"Received ${PrettyPrinter.buildString(b)}.")
+      _ <- MultiParentCasper[F].addBlock(b, handleDoppelganger(peer, _, _))
+    } yield ()
+
   override def handleBlockMessage(peer: PeerNode, b: BlockMessage): F[Unit] =
     for {
       isOldBlock <- MultiParentCasper[F].contains(b)
-      _ <- if (isOldBlock) {
+      _ <- if (isOldBlock)
             Log[F].info(s"Received block ${PrettyPrinter.buildString(b.blockHash)} again.")
-          } else {
-            CasperPacketHandler.handleNewBlock[F](peer, b)
-          }
+          else
+            handleNewBlock(peer, b)
+
     } yield ()
 
   override def handleBlockRequest(peer: PeerNode, br: BlockRequest): F[Unit] =
