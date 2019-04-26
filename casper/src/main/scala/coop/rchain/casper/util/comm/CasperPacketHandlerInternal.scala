@@ -60,7 +60,7 @@ object CasperPacketHandlerInternal {
                       init.conf.shardId,
                       validatorId,
                       validators,
-                      CommUtil.requestApprovedBlock[F](init.delay)
+                      CommUtil.requestApprovedBlock[F]
                     )
                   }
       casperPacketHandler = new CasperPacketHandler[F](bootstrap)

@@ -461,7 +461,6 @@ class NodeRuntime private[node] (
                             .of[Effect](
                               new CasperInit(
                                 conf.casper,
-                                defaultTimeout,
                                 RuntimeManager.eitherTRuntimeManager(runtimeManager)
                               ),
                               _.value

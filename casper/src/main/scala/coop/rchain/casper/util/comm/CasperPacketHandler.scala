@@ -32,7 +32,6 @@ import scala.util.Try
 
 class CasperInit[F[_]](
     val conf: CasperConf,
-    val delay: FiniteDuration,
     val runtimeManager: RuntimeManager[F]
 )
 
