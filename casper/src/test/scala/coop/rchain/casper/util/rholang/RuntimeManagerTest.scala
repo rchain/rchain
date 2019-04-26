@@ -18,7 +18,6 @@ import coop.rchain.metrics.Metrics
 import coop.rchain.p2p.EffectsTestInstances.LogicalTime
 import coop.rchain.rholang.Resources.mkRuntime
 import coop.rchain.rholang.interpreter.accounting.Cost
-import coop.rchain.rholang.interpreter.util.RevAddress
 import coop.rchain.rholang.interpreter.{accounting, ParBuilder}
 import coop.rchain.shared.Log
 import monix.eval.Task
@@ -26,7 +25,6 @@ import monix.execution.Scheduler.Implicits.global
 import org.scalatest.{FlatSpec, Matchers}
 
 import scala.concurrent.duration._
-import coop.rchain.rholang.interpreter.{ParBuilder, accounting}
 
 class RuntimeManagerTest extends FlatSpec with Matchers {
 

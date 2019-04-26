@@ -139,8 +139,8 @@ class RuntimeManagerImpl[F[_]: Concurrent] private[rholang] (
       .ensureOr(
         bondsPar =>
           new IllegalArgumentException(
-    s"Incorrect number of results from query of current bonds: ${bondsPar.size}"
-  )
+            s"Incorrect number of results from query of current bonds: ${bondsPar.size}"
+          )
       )(bondsPar => bondsPar.size == 1)
       .map { bondsPar =>
         toBondSeq(bondsPar.head)
@@ -213,7 +213,7 @@ class RuntimeManagerImpl[F[_]: Concurrent] private[rholang] (
       case Seq(RhoType.Boolean(true)) =>
         runtime.space.createCheckpoint()
       case Seq(RhoType.String(error)) =>
-          BugFoundError(s"Deploy payment failed unexpectedly: $error").raiseError[F, Checkpoint]
+        BugFoundError(s"Deploy payment failed unexpectedly: $error").raiseError[F, Checkpoint]
       case other =>
         BugFoundError(
           s"Deploy payment returned unexpected result: ${other.map(RholangPrinter().buildString(_))}"
