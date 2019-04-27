@@ -4,7 +4,7 @@ import cats.implicits._
 import coop.rchain.casper.MultiParentCasper.ignoreDoppelgangerCheck
 import coop.rchain.casper.helper.HashSetCasperTestNode
 import coop.rchain.casper.helper.HashSetCasperTestNode.Effect
-import coop.rchain.casper.util.ConstructDeploy
+import coop.rchain.casper.util.{ConstructDeploy, TestEd25519}
 import coop.rchain.crypto.signatures.Ed25519
 import coop.rchain.rholang.interpreter.accounting
 import monix.execution.Scheduler.Implicits.global
@@ -12,7 +12,7 @@ import org.scalatest.{FlatSpec, Matchers}
 
 class RholangBuildTest extends FlatSpec with Matchers {
 
-  val (validatorKeys, validators) = (1 to 4).map(_ => Ed25519.newKeyPair).unzip
+  val (validatorKeys, validators) = TestEd25519.keypairs(4).unzip
   val bonds                       = MultiParentCasperTestUtil.createBonds(validators)
   val genesis                     = MultiParentCasperTestUtil.createGenesis(bonds)
 

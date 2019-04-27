@@ -32,7 +32,7 @@ class CreateBlockAPITest extends FlatSpec with Matchers {
   import MultiParentCasperTestUtil._
   import HashSetCasperTestNode.Effect
 
-  private val (validatorKeys, validators) = (1 to 4).map(_ => Ed25519.newKeyPair).unzip
+  private val (validatorKeys, validators) = TestEd25519.keypairs(4).unzip
   private val bonds                       = createBonds(validators)
   private val genesis                     = createGenesis(bonds)
 

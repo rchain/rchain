@@ -10,7 +10,7 @@ import coop.rchain.casper.helper.{BlockUtil, HashSetCasperTestNode}
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.scalatestcontrib._
 import coop.rchain.casper.util.comm.TestNetwork
-import coop.rchain.casper.util.{ConstructDeploy, ProtoUtil}
+import coop.rchain.casper.util.{ConstructDeploy, ProtoUtil, TestEd25519}
 import coop.rchain.catscontrib.TaskContrib.TaskOps
 import coop.rchain.comm.rp.ProtocolHelper.packet
 import coop.rchain.comm.transport
@@ -31,7 +31,7 @@ class MultiParentCasperAddBlockSpec extends FlatSpec with Matchers with Inspecto
 
   implicit val timeEff = new LogicalTime[Effect]
 
-  private val (validatorKeys, validatorPks) = (1 to 4).map(_ => Ed25519.newKeyPair).unzip
+  private val (validatorKeys, validatorPks) = TestEd25519.keypairs(4).unzip
   private val genesis = buildGenesis(
     buildGenesisParameters(4, createBonds(validatorPks))
   )

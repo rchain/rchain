@@ -35,6 +35,8 @@ final case class Genesis(
 )
 
 object Genesis {
+  val value  = Ed25519.newKeyPair
+  val values = Vector.fill(10)(Ed25519.newKeyPair)
 
   implicit private val logSource: LogSource = LogSource(this.getClass)
 
@@ -123,7 +125,7 @@ object Genesis {
                            validators = validators
                          ),
                          faucet = faucet,
-                         genesisPk = Ed25519.newKeyPair._2,
+                         genesisPk = value._2,
                          vaults = vaults,
                          supply = Long.MaxValue
                        )
@@ -325,7 +327,7 @@ object Genesis {
       numValidators: Int,
       genesisPath: Path
   ): F[Map[PublicKey, Long]] = {
-    val keys         = Vector.fill(numValidators)(Ed25519.newKeyPair)
+    val keys         = values.take(numValidators)
     val (_, pubKeys) = keys.unzip
     val bonds        = pubKeys.zipWithIndex.toMap.mapValues(_.toLong + 1L)
     val genBondsFile = genesisPath.resolve(s"bonds.txt").toFile

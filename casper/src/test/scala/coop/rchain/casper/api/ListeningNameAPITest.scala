@@ -8,7 +8,7 @@ import coop.rchain.casper.helper.HashSetCasperTestNode
 import coop.rchain.casper.helper.HashSetCasperTestNode.Effect
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.scalatestcontrib._
-import coop.rchain.casper.util.ConstructDeploy
+import coop.rchain.casper.util.{ConstructDeploy, TestEd25519}
 import coop.rchain.crypto.signatures.Ed25519
 import coop.rchain.models.Expr.ExprInstance.GInt
 import coop.rchain.models._
@@ -21,7 +21,7 @@ class ListeningNameAPITest extends FlatSpec with Matchers with Inside {
 
   import coop.rchain.casper.MultiParentCasperTestUtil._
 
-  private val (validatorKeys, validators) = (1 to 4).map(_ => Ed25519.newKeyPair).unzip
+  private val (validatorKeys, validators) = TestEd25519.keypairs(4).unzip
   private val bonds                       = createBonds(validators)
   private val genesis                     = createGenesis(bonds)
 

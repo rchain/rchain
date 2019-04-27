@@ -13,7 +13,7 @@ import coop.rchain.casper.genesis.Genesis
 import coop.rchain.casper.genesis.contracts._
 import coop.rchain.casper.helper.{BlockDagStorageTestFixture, NoOpsCasperEffect}
 import coop.rchain.casper.protocol.{NoApprovedBlockAvailable, _}
-import coop.rchain.casper.util.TestTime
+import coop.rchain.casper.util.{TestEd25519, TestTime}
 import coop.rchain.casper.util.comm.CasperPacketHandler.{
   ApprovedBlockReceivedHandler,
   BootstrapCasperHandler,
@@ -354,7 +354,7 @@ class CasperPacketHandlerSpec extends WordSpec {
       val fixture = setup()
       import fixture._
 
-      val (_, validators)        = (1 to 4).map(_ => Ed25519.newKeyPair).unzip
+      val (_, validators)        = TestEd25519.keypairs(4).unzip
       val bonds                  = MultiParentCasperTestUtil.createBonds(validators)
       val genesis                = MultiParentCasperTestUtil.createGenesis(bonds)
       val approvedBlockCandidate = ApprovedBlockCandidate(block = Some(genesis))
