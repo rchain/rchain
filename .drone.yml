@@ -77,6 +77,8 @@ pipeline:
     group: parallel
     <<: *sbttestenv
     commands:
+      - rm /dev/random
+      - mknod /dev/random c 1 9
       - cp -r . ../step.run-unit-tests && cd ../step.run-unit-tests
       - _JAVA_OPTIONS="$_JAVA_OPTIONS -Xss2m" sbt update rholang/bnfc:generate test:compile slowcooker:compile
       - sbt "set test in casper := {}" test it:test
@@ -87,6 +89,8 @@ pipeline:
     <<: *sbttestenv
     commands:
       - cp -r . ../step.run-casper-tests && cd ../step.run-casper-tests
+      - rm /dev/random
+      - mknod /dev/random c 1 9
       - sbt update rholang/bnfc:generate casper/test
 
   # full build
