@@ -8,7 +8,7 @@ import coop.rchain.casper.genesis.Genesis
 import coop.rchain.casper.protocol.DeployData
 import coop.rchain.casper.util.rholang.RuntimeManager
 import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
-import coop.rchain.casper.util.{BondingUtil, ConstructDeploy, TestEd25519}
+import coop.rchain.casper.util.{BondingUtil, ConstructDeploy}
 import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.signatures.Ed25519
@@ -43,7 +43,7 @@ class RevIssuanceTest extends FlatSpec with Matchers {
     val ethAddress      = "0x041e1eec23d118f0c4ffc814d4f415ac3ef3dcff"
     val initBalance     = 37
     val wallet          = PreWallet(ethAddress, initBalance)
-    val (_, validators) = TestEd25519.keypairs(4).unzip
+    val (_, validators) = (1 to 4).map(_ => Ed25519.newKeyPair).unzip
     val bonds           = createBonds(validators)
     val posValidators   = bonds.map(Validator.tupled).toSeq
     val (_, genesisPk)  = Ed25519.newKeyPair

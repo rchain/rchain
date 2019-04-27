@@ -17,7 +17,7 @@ import coop.rchain.casper.protocol._
 import coop.rchain.casper.scalatestcontrib._
 import coop.rchain.casper.util.rholang.Resources.mkRuntimeManager
 import coop.rchain.casper.util.rholang.{InterpreterUtil, RuntimeManager}
-import coop.rchain.casper.util.{ConstructDeploy, ProtoUtil, TestEd25519}
+import coop.rchain.casper.util.{ConstructDeploy, ProtoUtil}
 import coop.rchain.crypto.PrivateKey
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.signatures.Ed25519
@@ -679,7 +679,7 @@ class ValidateTest
 
   "Bonds cache validation" should "succeed on a valid block and fail on modified bonds" in withStorage {
     implicit blockStore => implicit blockDagStorage =>
-      val (_, validators) = TestEd25519.keypairs(4).unzip
+      val (_, validators) = (1 to 4).map(_ => Ed25519.newKeyPair).unzip
       val bonds           = MultiParentCasperTestUtil.createBonds(validators)
       val genesis         = MultiParentCasperTestUtil.createGenesis(bonds)
 

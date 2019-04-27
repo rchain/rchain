@@ -5,7 +5,7 @@ import coop.rchain.casper.MultiParentCasper.ignoreDoppelgangerCheck
 import coop.rchain.casper.helper.HashSetCasperTestNode
 import coop.rchain.casper.helper.HashSetCasperTestNode.Effect
 import coop.rchain.casper.scalatestcontrib._
-import coop.rchain.casper.util.{ConstructDeploy, ProtoUtil, TestEd25519}
+import coop.rchain.casper.util.{ConstructDeploy, ProtoUtil}
 import coop.rchain.crypto.PrivateKey
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.signatures.Ed25519
@@ -20,7 +20,7 @@ class MultiParentCasperRholangSpec extends FlatSpec with Matchers with Inspector
 
   implicit val timeEff = new LogicalTime[Effect]
 
-  private val (validatorKeys, validatorPks) = TestEd25519.keypairs(4).unzip
+  private val (validatorKeys, validatorPks) = (1 to 4).map(_ => Ed25519.newKeyPair).unzip
   private val genesis = buildGenesis(
     buildGenesisParameters(4, createBonds(validatorPks))
   )

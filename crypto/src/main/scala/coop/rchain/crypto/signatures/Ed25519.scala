@@ -1,13 +1,10 @@
 package coop.rchain.crypto.signatures
 
-import com.typesafe.scalalogging.Logger
 import coop.rchain.crypto
 import coop.rchain.crypto.{PrivateKey, PublicKey}
 import org.abstractj.kalium.keys._
 
 object Ed25519 extends SignaturesAlg {
-
-  val log = Logger[Ed25519.type]
 
   val keyLength = 32
 
@@ -15,11 +12,9 @@ object Ed25519 extends SignaturesAlg {
 
   //TODO: Make use of strongly typed keys
   def newKeyPair: (PrivateKey, PublicKey) = {
-    log.info(new RuntimeException().getStackTrace()(1).toString)
     val key = new SigningKey()
     val sec = key.toBytes
     val pub = key.getVerifyKey.toBytes
-    log.info(new RuntimeException().getStackTrace()(1).toString)
     (PrivateKey(sec), PublicKey(pub))
   }
 

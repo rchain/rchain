@@ -11,7 +11,7 @@ import coop.rchain.casper.helper.HashSetCasperTestNode.Effect
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.scalatestcontrib._
 import coop.rchain.casper.util.comm.TestNetwork
-import coop.rchain.casper.util.{BondingUtil, ConstructDeploy, ProtoUtil, TestEd25519}
+import coop.rchain.casper.util.{BondingUtil, ConstructDeploy, ProtoUtil}
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.hash.Keccak256
 import coop.rchain.crypto.signatures.{Ed25519, Secp256k1}
@@ -29,7 +29,7 @@ class MultiParentCasperBondingSpec extends FlatSpec with Matchers with Inspector
   implicit val timeEff = new LogicalTime[Effect]
 
   private val (otherSk, otherPk)            = Ed25519.newKeyPair
-  private val (validatorKeys, validatorPks) = TestEd25519.keypairs(4).unzip
+  private val (validatorKeys, validatorPks) = (1 to 4).map(_ => Ed25519.newKeyPair).unzip
   private val (ethPivKeys, ethPubKeys)      = (1 to 4).map(_ => Secp256k1.newKeyPair).unzip
   private val ethAddresses =
     ethPubKeys.map(pk => "0x" + Base16.encode(Keccak256.hash(pk.bytes.drop(1)).takeRight(20)))
