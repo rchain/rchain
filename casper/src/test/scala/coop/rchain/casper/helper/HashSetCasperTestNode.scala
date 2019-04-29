@@ -215,6 +215,8 @@ object HashSetCasperTestNode {
                             blockDagDir.resolve("block-metadata-crc"),
                             blockDagDir.resolve("equivocations-tracker-data"),
                             blockDagDir.resolve("equivocations-tracker-crc"),
+                            blockDagDir.resolve("invalid-blocks-data"),
+                            blockDagDir.resolve("invalid-blocks-crc"),
                             blockDagDir.resolve("checkpoints"),
                             blockDagDir.resolve("block-number-index"),
                             mapSize
@@ -301,8 +303,10 @@ object HashSetCasperTestNode {
                                     blockDagDir.resolve("latest-messages-crc"),
                                     blockDagDir.resolve("block-metadata-data"),
                                     blockDagDir.resolve("block-metadata-crc"),
+                                    blockDagDir.resolve("equivocations-tracker-data"),
                                     blockDagDir.resolve("equivocations-tracker-crc"),
-                                    blockDagDir.resolve("equivocations-tracker-crc"),
+                                    blockDagDir.resolve("invalid-blocks-data"),
+                                    blockDagDir.resolve("invalid-blocks-crc"),
                                     blockDagDir.resolve("checkpoints"),
                                     blockDagDir.resolve("block-number-index"),
                                     mapSize

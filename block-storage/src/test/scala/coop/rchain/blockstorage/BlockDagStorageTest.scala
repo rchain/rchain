@@ -120,6 +120,12 @@ class BlockDagFileStorageTest extends BlockDagStorageTest {
   private def defaultEquivocationsTrackerCrc(dagDataDir: Path): Path =
     dagDataDir.resolve("equivocations-tracker-checksum")
 
+  private def defaultInvalidBlocksLog(dagDataDir: Path): Path =
+    dagDataDir.resolve("invalid-blocks-data")
+
+  private def defaultInvalidBlocksCrc(dagDataDir: Path): Path =
+    dagDataDir.resolve("invalid-blocks-checksum")
+
   private def defaultCheckpointsDir(dagDataDir: Path): Path =
     dagDataDir.resolve("checkpoints")
 
@@ -147,6 +153,8 @@ class BlockDagFileStorageTest extends BlockDagStorageTest {
         defaultBlockMetadataCrc(dagDataDir),
         defaultEquivocationsTrackerLog(dagDataDir),
         defaultEquivocationsTrackerCrc(dagDataDir),
+        defaultInvalidBlocksLog(dagDataDir),
+        defaultInvalidBlocksCrc(dagDataDir),
         defaultCheckpointsDir(dagDataDir),
         defaultBlockNumberIndex(dagDataDir),
         100L * 1024L * 1024L * 4096L,
@@ -446,6 +454,22 @@ class BlockDagFileStorageTest extends BlockDagStorageTest {
             } yield testLookupElementsResult(result, blockElements)
           }
         }
+      }
+    }
+  }
+
+  it should "be able to restore invalid blocks on startup" in {
+    forAll(blockElementsWithParentsGen, minSize(0), sizeRange(10)) { blockElements =>
+      withDagStorageLocation { dagDataDir =>
+        for {
+          firstStorage  <- createAtDefaultLocation(dagDataDir)
+          _             <- blockElements.traverse_(firstStorage.insert(_, genesis, true))
+          _             <- firstStorage.close()
+          secondStorage <- createAtDefaultLocation(dagDataDir)
+          dag           <- secondStorage.getRepresentation
+          invalidBlocks <- dag.invalidBlocks
+          _             <- secondStorage.close()
+        } yield invalidBlocks shouldBe blockElements.map(BlockMetadata.fromBlock(_, true)).toSet
       }
     }
   }
