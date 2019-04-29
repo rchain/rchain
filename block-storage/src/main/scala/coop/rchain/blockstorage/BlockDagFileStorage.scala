@@ -922,10 +922,8 @@ object BlockDagFileStorage {
 
   private def readInvalidBlocksLog[F[_]: Sync](
       randomAccessIO: RandomAccessIO[F]
-  ): F[List[BlockMetadata]] = {
-    def readRec(
-        result: List[BlockMetadata]
-    ): F[List[BlockMetadata]] =
+  ): F[List[BlockMetadata]] =
+    Monad[F].tailRecM[List[BlockMetadata], List[BlockMetadata]](List.empty) { result =>
       for {
         blockSizeOpt <- randomAccessIO.readInt
         result <- blockSizeOpt match {
@@ -934,14 +932,12 @@ object BlockDagFileStorage {
                      for {
                        _             <- randomAccessIO.readFully(blockMetaBytes)
                        blockMetadata <- Sync[F].delay { BlockMetadata.fromBytes(blockMetaBytes) }
-                       result        <- readRec(blockMetadata :: result)
-                     } yield result
+                     } yield (blockMetadata :: result).asLeft[List[BlockMetadata]]
                    case None =>
-                     result.reverse.pure[F]
+                     result.reverse.asRight[List[BlockMetadata]].pure[F]
                  }
       } yield result
-    readRec(List.empty)
-  }
+    }
 
   private def validateInvalidBlocks[F[_]: Sync](
       randomAccessIO: RandomAccessIO[F],
