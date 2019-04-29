@@ -17,35 +17,35 @@ import coop.rchain.rspace.{
 import coop.rchain.rspace.examples.StringExamples._
 import coop.rchain.rspace.examples.StringExamples.implicits._
 import coop.rchain.rspace.test.ArbitraryInstances.{arbitraryDatumString, _}
-import coop.rchain.shared.GeneratorUtils.distinctListOf
 import monix.eval.Task
-import org.scalacheck.{Arbitrary, Gen}
-import org.scalatest.{FlatSpec, Matchers, OptionValues}
+import org.scalacheck.{Arbitrary, Gen, Shrink}
+import org.scalatest.{Assertion, BeforeAndAfterAll, FlatSpec, Matchers, OptionValues}
 import org.scalatest.prop.GeneratorDrivenPropertyChecks
 import scodec.Codec
 import monix.execution.Scheduler.Implicits.global
 import cats.implicits._
+import coop.rchain.rspace.internal.{Datum, WaitingContinuation}
 import org.lmdbjava.EnvFlags
+import coop.rchain.shared.PathOps._
 
 import scala.concurrent.duration._
 
-class LMDBHistoryRepositoryGenerativeSpec extends HistoryRepositoryGenerativeDefinition {
-  implicit val propertyCheckConfigParam: PropertyCheckConfiguration =
-    PropertyCheckConfiguration(minSuccessful = 2)
-
+class LMDBHistoryRepositoryGenerativeSpec
+    extends HistoryRepositoryGenerativeDefinition
+    with BeforeAndAfterAll {
   val emptyRoot: Trie               = EmptyTrie
   val emptyRootHash: Blake2b256Hash = Trie.hash(emptyRoot)
 
-  def lmdbConfig = {
-    val dbDir: Path = Files.createTempDirectory("rchain-storage-test-")
+  val dbDir: Path = Files.createTempDirectory("rchain-storage-test-")
+
+  def lmdbConfig =
     StoreConfig(
-      dbDir.toAbsolutePath.toString,
+      Files.createTempDirectory(dbDir, "test-").toAbsolutePath.toString,
       1024L * 1024L * 4096L,
       2,
       2048,
       List(EnvFlags.MDB_NOTLS)
     )
-  }
 
   def lmdbHistoryStore =
     HistoryStoreInstances.historyStore(StoreInstances.lmdbStore[Task](lmdbConfig))
@@ -73,13 +73,14 @@ class LMDBHistoryRepositoryGenerativeSpec extends HistoryRepositoryGenerativeDef
       )
     repository
   }
+
+  protected override def afterAll(): Unit =
+    dbDir.recursivelyDelete()
 }
 
 class InmemHistoryRepositoryGenerativeSpec
     extends HistoryRepositoryGenerativeDefinition
     with InMemoryHistoryRepositoryTestBase {
-  implicit val propertyCheckConfigParam: PropertyCheckConfiguration =
-    PropertyCheckConfiguration(minSuccessful = 10)
 
   override def repo: HistoryRepository[Task, String, Pattern, String, StringsCaptor] = {
     val emptyHistory =
@@ -104,21 +105,35 @@ abstract class HistoryRepositoryGenerativeDefinition
   implicit val codecP: Codec[Pattern]       = implicitly[Serialize[Pattern]].toCodec
   implicit val codecK: Codec[StringsCaptor] = implicitly[Serialize[StringsCaptor]].toCodec
 
+  implicit def noShrink[T]: Shrink[T] = Shrink.shrinkAny
+
   def repo: HistoryRepository[Task, String, Pattern, String, StringsCaptor]
 
-  "HistoryRepository" should "accept all HotStoreActions" in forAll(
-    distinctListOf(arbitraryHotStoreActions)
-  ) { actions: List[HotStoreAction] =>
-    val repository = repo
-    actions
-      .foldLeftM(repository) { (repo, action) =>
-        for {
-          next <- repo.checkpoint(action :: Nil)
-          _    <- checkActionResult(action, next)
-        } yield next
-      }
-      .runSyncUnsafe(20.seconds)
+  "HistoryRepository" should "accept all HotStoreActions" in forAll(minSize(1),
+                                                                    sizeRange(50),
+                                                                    minSuccessful(10)) {
+    actions: List[HotStoreAction] =>
+      val repository = repo
+      actions
+        .foldLeftM(repository) { (repo, action) =>
+          for {
+            next <- repo.checkpoint(action :: Nil)
+            _    <- checkActionResult(action, next)
+          } yield next
+        }
+        .runSyncUnsafe(20.seconds)
   }
+
+  def checkData(seq: Seq[Datum[String]], data: Seq[Datum[Any]]): Assertion =
+    seq should contain theSameElementsAs data
+
+  def checkJoins(seq: Seq[Seq[String]], joins: Seq[Seq[Any]]): Assertion =
+    seq.toSet.map((v: Seq[String]) => v.toSet) should contain theSameElementsAs joins.toSet.map(
+      (v: Seq[Any]) => v.toSet)
+
+  def checkContinuations(seq: Seq[WaitingContinuation[Pattern, StringsCaptor]],
+                         conts: Seq[WaitingContinuation[Any, Any]]): Assertion =
+    seq should contain theSameElementsAs conts
 
   def checkActionResult(
       action: HotStoreAction,
@@ -126,11 +141,11 @@ abstract class HistoryRepositoryGenerativeDefinition
   ): Task[Unit] =
     action match {
       case InsertData(channel: String, data) =>
-        repo.getData(channel).map(_ shouldBe data)
+        repo.getData(channel).map(checkData(_, data))
       case InsertJoins(channel: String, joins) =>
-        repo.getJoins(channel).map(_ shouldBe joins)
+        repo.getJoins(channel).map(checkJoins(_, joins))
       case InsertContinuations(channels, conts) =>
-        repo.getContinuations(channels.asInstanceOf[Seq[String]]).map(_ shouldBe conts)
+        repo.getContinuations(channels.asInstanceOf[Seq[String]]).map(checkContinuations(_, conts))
       case DeleteData(channel: String) =>
         repo.getData(channel).map(_ shouldBe empty)
       case DeleteJoins(channel: String) =>
@@ -140,7 +155,10 @@ abstract class HistoryRepositoryGenerativeDefinition
       case _ => Sync[Task].raiseError(new RuntimeException("unknown action"))
     }
 
-  implicit def arbitraryHotStoreActions: Arbitrary[HotStoreAction] = Arbitrary(
+  implicit def limitedArbitraryHotStoreActions: Arbitrary[List[HotStoreAction]] =
+    Arbitrary(Gen.listOf(arbitraryHotStoreActions.arbitrary))
+
+  def arbitraryHotStoreActions: Arbitrary[HotStoreAction] = Arbitrary(
     Gen.frequency(
       (10, arbitraryInsertContinuation.arbitrary),
       (10, arbitraryInsertData.arbitrary),
@@ -152,32 +170,43 @@ abstract class HistoryRepositoryGenerativeDefinition
   )
 
   def stringGen: Gen[String] = Arbitrary.arbitrary[String]
+  def distinctStrings: Gen[List[String]] =
+    Gen.sized(sz => Gen.containerOfN[Set, String](sz, stringGen).map(_.toList))
+
+  def genDatumString: Gen[Datum[String]] = arbitraryDatumString.arbitrary
+  def genContinuation: Gen[WaitingContinuation[Pattern, StringsCaptor]] =
+    arbitraryWaitingContinuation.arbitrary
 
   def arbitraryInsertData: Arbitrary[InsertData[String, String]] = Arbitrary(
     for {
       channel <- Arbitrary.arbitrary[String]
-      data    <- distinctListOf(arbitraryDatumString)
+      sz      <- Gen.size
+      data    <- Gen.containerOfN[Set, Datum[String]](sz, genDatumString).map(_.toList)
     } yield InsertData(channel, data)
   )
 
   def arbitraryInsertContinuation: Arbitrary[InsertContinuations[String, Pattern, StringsCaptor]] =
     Arbitrary(
       for {
-        channels <- distinctListOf(Arbitrary(stringGen))
-        data     <- distinctListOf(arbitraryWaitingContinuation)
+        channels <- distinctStrings
+        sz       <- Gen.size
+        data <- Gen
+                 .containerOfN[Set, WaitingContinuation[Pattern, StringsCaptor]](sz,
+                                                                                 genContinuation)
+                 .map(_.toList)
       } yield InsertContinuations(channels, data)
     )
 
   def arbitraryInsertJoins: Arbitrary[InsertJoins[String]] = Arbitrary(
     for {
       channel <- Arbitrary.arbitrary[String]
-      data    <- distinctListOf(Arbitrary(distinctListOf(Arbitrary(stringGen))))
+      data    <- Gen.listOf(distinctStrings)
     } yield InsertJoins(channel, data)
   )
 
   def arbitraryDeleteContinuation: Arbitrary[DeleteContinuations[String]] = Arbitrary(
     for {
-      channels <- distinctListOf(Arbitrary(stringGen))
+      channels <- distinctStrings
     } yield DeleteContinuations(channels)
   )
 
