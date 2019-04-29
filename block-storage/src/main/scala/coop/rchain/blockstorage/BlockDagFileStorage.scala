@@ -939,38 +939,45 @@ object BlockDagFileStorage {
       } yield result
     }
 
+  private def truncateInvalidBlocksLog[F[_]: Sync](
+      randomAccessIO: RandomAccessIO[F],
+      invalidBlocks: List[BlockMetadata]
+  ): F[Unit] = {
+    val lastRecord = invalidBlocks.last
+    // Size of the byte array (4 bytes) and the actual byte array
+    val lastRecordSize: Long = 4L + lastRecord.toByteString.size
+    for {
+      length <- randomAccessIO.length
+      _      <- randomAccessIO.setLength(length - lastRecordSize)
+    } yield ()
+  }
+
   private def validateInvalidBlocks[F[_]: Sync](
       randomAccessIO: RandomAccessIO[F],
       readInvalidBlocksCrc: Long,
       invalidBlocks: List[BlockMetadata]
   ): F[(List[BlockMetadata], Crc32[F])] = {
     val fullCalculatedCrc = calculateInvalidBlocksCrc[F](invalidBlocks)
-    fullCalculatedCrc.value.flatMap { fullCalculatedCrcValue =>
-      if (fullCalculatedCrcValue == readInvalidBlocksCrc) {
-        (invalidBlocks, fullCalculatedCrc).pure[F]
-      } else if (invalidBlocks.nonEmpty) {
-        val withoutLastCalculatedCrc =
-          calculateInvalidBlocksCrc[F](invalidBlocks.init)
-        withoutLastCalculatedCrc.value.flatMap { withoutLastCalculatedCrcValue =>
-          if (withoutLastCalculatedCrcValue == readInvalidBlocksCrc) {
-            val lastRecord           = invalidBlocks.last
-            val lastRecordSize: Long = 4L + lastRecord.toByteString.size
+    Monad[F].ifM(fullCalculatedCrc.value.map(_ == readInvalidBlocksCrc))(
+      (invalidBlocks, fullCalculatedCrc).pure[F],
+      invalidBlocks match {
+        case Nil =>
+          Sync[F].raiseError[(List[BlockMetadata], Crc32[F])](
+            InvalidBlocksIsCorrupted
+          )
+        case _ :: _ =>
+          // Trying to delete the last log entry
+          val withoutLastCalculatedCrc = calculateInvalidBlocksCrc[F](invalidBlocks.init)
+          Monad[F].ifM(withoutLastCalculatedCrc.value.map(_ == readInvalidBlocksCrc))(
             for {
-              length <- randomAccessIO.length
-              _      <- randomAccessIO.setLength(length - lastRecordSize)
-            } yield (invalidBlocks.init, withoutLastCalculatedCrc)
-          } else {
+              _ <- truncateInvalidBlocksLog(randomAccessIO, invalidBlocks)
+            } yield (invalidBlocks.init, withoutLastCalculatedCrc),
             Sync[F].raiseError[(List[BlockMetadata], Crc32[F])](
               InvalidBlocksIsCorrupted
             )
-          }
-        }
-      } else {
-        Sync[F].raiseError[(List[BlockMetadata], Crc32[F])](
-          InvalidBlocksIsCorrupted
-        )
+          )
       }
-    }
+    )
   }
 
   private def extractChildMap(
