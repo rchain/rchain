@@ -500,7 +500,7 @@ trait ReplayRSpaceTests extends ReplayRSpaceTestsBase[String, Pattern, String, S
       } yield ()
     }
 
-  "Picking 100 datums from 100 waiting datums while doing a bunch of other junk" should "replay correctly" ignore
+  "Picking 100 datums from 100 waiting datums while doing a bunch of other junk" should "replay correctly" in
     fixture { (store, replayStore, space, replaySpace) =>
       for {
         emptyPoint <- space.createCheckpoint()
