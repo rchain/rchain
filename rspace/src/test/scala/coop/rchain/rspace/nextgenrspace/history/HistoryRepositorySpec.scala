@@ -68,16 +68,18 @@ class HistoryRepositorySpec
       fetchedContinuations <- conts.traverse(d => nextRepo.getContinuations(d.channels))
       _                    = fetchedContinuations shouldBe conts.map(_.continuations)
       fetchedJoins         <- joins.traverse(d => nextRepo.getJoins(d.channel))
-      _                    = fetchedJoins shouldBe joins.map(_.joins)
-
-      deletedRepo <- nextRepo.checkpoint(deleteElements.toList)
+      allJoins             = fetchedJoins.toSet.flatten.flatten
+      expectedJoins        = joins.toSet.flatMap((j: InsertJoins[String]) => j.joins).flatten
+      _                    = allJoins should contain theSameElementsAs expectedJoins
+      deletedRepo          <- nextRepo.checkpoint(deleteElements.toList)
 
       fetchedData          <- data.traverse(d => nextRepo.getData(d.channel))
       _                    = fetchedData shouldBe data.map(_.data)
       fetchedContinuations <- conts.traverse(d => nextRepo.getContinuations(d.channels))
       _                    = fetchedContinuations shouldBe conts.map(_.continuations)
       fetchedJoins         <- joins.traverse(d => nextRepo.getJoins(d.channel))
-      _                    = fetchedJoins shouldBe joins.map(_.joins)
+      allJoins             = fetchedJoins.toSet.flatten.flatten
+      _                    = allJoins should contain theSameElementsAs expectedJoins
 
       fetchedData          <- data.traverse(d => deletedRepo.getData(d.channel))
       _                    = fetchedData.flatten shouldBe empty

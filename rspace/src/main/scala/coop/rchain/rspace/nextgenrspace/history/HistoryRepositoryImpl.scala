@@ -1,11 +1,13 @@
 package coop.rchain.rspace.nextgenrspace.history
 
 import java.nio.charset.StandardCharsets
+
 import cats.Applicative
 import cats.effect.Sync
 import cats.implicits._
 import coop.rchain.rspace.{
   internal,
+  util,
   Blake2b256Hash,
   DeleteContinuations,
   DeleteData,
@@ -20,6 +22,7 @@ import coop.rchain.rspace.{
 import coop.rchain.rspace.internal._
 import scodec.Codec
 import scodec.bits.{BitVector, ByteVector}
+import HistoryRepositoryImpl._
 
 final case class HistoryRepositoryImpl[F[_]: Sync, C, P, A, K](
     history: History[F],
@@ -56,13 +59,10 @@ final case class HistoryRepositoryImpl[F[_]: Sync, C, P, A, K](
     Blake2b256Hash.create(joinChannelBits.toByteVector)
   }
 
-  def decode[R](bv: ByteVector)(implicit codecR: Codec[R]): Seq[R] =
-    Codec.decode[Seq[R]](bv.bits).get.value
-
   override def getJoins(channel: C): F[Seq[Seq[C]]] =
     fetchData(hashJoinsChannel(channel)).flatMap {
       case Some(JoinsLeaf(bytes)) =>
-        decode[Seq[C]](bytes).pure[F]
+        decodeJoins[C](bytes).pure[F]
       case Some(p) =>
         Sync[F].raiseError[Seq[Seq[C]]](
           new RuntimeException(
@@ -75,7 +75,7 @@ final case class HistoryRepositoryImpl[F[_]: Sync, C, P, A, K](
   override def getData(channel: C): F[Seq[internal.Datum[A]]] =
     fetchData(hashChannel(channel)).flatMap {
       case Some(DataLeaf(bytes)) =>
-        decode[internal.Datum[A]](bytes).pure[F]
+        decodeSorted[internal.Datum[A]](bytes).pure[F]
       case Some(p) =>
         Sync[F].raiseError[Seq[internal.Datum[A]]](
           new RuntimeException(
@@ -88,7 +88,7 @@ final case class HistoryRepositoryImpl[F[_]: Sync, C, P, A, K](
   override def getContinuations(channels: Seq[C]): F[Seq[internal.WaitingContinuation[P, K]]] =
     fetchData(hashChannels(channels)).flatMap {
       case Some(ContinuationsLeaf(bytes)) =>
-        decode[internal.WaitingContinuation[P, K]](bytes).pure[F]
+        decodeSorted[internal.WaitingContinuation[P, K]](bytes).pure[F]
       case Some(p) =>
         Sync[F].raiseError[Seq[internal.WaitingContinuation[P, K]]](
           new RuntimeException(
@@ -104,14 +104,13 @@ final case class HistoryRepositoryImpl[F[_]: Sync, C, P, A, K](
     actions.map {
       case i: InsertData[C, A] =>
         val key      = hashChannel(i.channel)
-        val data     = Codec.encode[Seq[internal.Datum[A]]](i.data).get.toByteVector
+        val data     = encodeData(i.data)
         val dataLeaf = DataLeaf(data)
         val dataHash = Blake2b256Hash.create(data)
         (dataHash, Some(dataLeaf), InsertAction(key.bytes.toSeq.toList, dataHash))
       case i: InsertContinuations[C, P, K] =>
-        val key = hashChannels(i.channels)
-        val data =
-          Codec.encode[Seq[internal.WaitingContinuation[P, K]]](i.continuations).get.toByteVector
+        val key               = hashChannels(i.channels)
+        val data              = encodeContinuations(i.continuations)
         val continuationsLeaf = ContinuationsLeaf(data)
         val continuationsHash = Blake2b256Hash.create(data)
         (
@@ -121,7 +120,7 @@ final case class HistoryRepositoryImpl[F[_]: Sync, C, P, A, K](
         )
       case i: InsertJoins[C] =>
         val key       = hashJoinsChannel(i.channel)
-        val data      = codecJoin.encode(i.joins).get.toByteVector
+        val data      = encodeJoins(i.joins)
         val joinsLeaf = JoinsLeaf(data)
         val joinsHash = Blake2b256Hash.create(data)
         (joinsHash, Some(joinsLeaf), InsertAction(key.bytes.toSeq.toList, joinsHash))
@@ -164,4 +163,49 @@ final case class HistoryRepositoryImpl[F[_]: Sync, C, P, A, K](
       _ <- rootsRepository.close()
       _ <- history.close()
     } yield ()
+}
+
+object HistoryRepositoryImpl {
+  val codecSeqByteVector: Codec[Seq[ByteVector]] = codecSeq(codecByteVector)
+
+  private def decodeSorted[D](data: ByteVector)(implicit codec: Codec[D]): Seq[D] =
+    codecSeqByteVector.decode(data.bits).get.value.map(bv => codec.decode(bv.bits).get.value)
+
+  private def encodeSorted[D](data: Seq[D])(implicit codec: Codec[D]): ByteVector =
+    codecSeqByteVector
+      .encode(
+        data
+          .map(d => Codec.encode[D](d).get.toByteVector)
+          .sorted(util.ordByteVector)
+      )
+      .get
+      .toByteVector
+
+  def encodeData[A](data: Seq[internal.Datum[A]])(implicit codec: Codec[Datum[A]]): ByteVector =
+    encodeSorted(data)
+
+  def encodeContinuations[P, K](
+      continuations: Seq[internal.WaitingContinuation[P, K]]
+  )(implicit codec: Codec[WaitingContinuation[P, K]]): ByteVector =
+    encodeSorted(continuations)
+
+  def decodeJoins[C](data: ByteVector)(implicit codec: Codec[C]): Seq[Seq[C]] =
+    codecSeqByteVector
+      .decode(data.bits)
+      .get
+      .value
+      .map(bv =>
+        codecSeqByteVector.decode(bv.bits).get.value.map(v => codec.decode(v.bits).get.value))
+
+  def encodeJoins[C](joins: Seq[Seq[C]])(implicit codec: Codec[C]): ByteVector =
+    codecSeqByteVector
+      .encode(
+        joins
+          .map(
+            channels => encodeSorted(channels)
+          )
+          .sorted(util.ordByteVector)
+      )
+      .get
+      .toByteVector
 }
