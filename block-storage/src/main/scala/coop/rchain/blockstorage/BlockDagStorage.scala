@@ -34,6 +34,7 @@ trait BlockDagRepresentation[F[_]] {
   def latestMessage(validator: Validator): F[Option[BlockMetadata]]
   def latestMessageHashes: F[Map[Validator, BlockHash]]
   def latestMessages: F[Map[Validator, BlockMetadata]]
+  def invalidBlocks: F[Set[BlockMetadata]]
 }
 
 object BlockDagRepresentation {

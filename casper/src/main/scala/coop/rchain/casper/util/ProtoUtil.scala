@@ -16,7 +16,7 @@ import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.hash.Blake2b256
 import coop.rchain.crypto.{PrivateKey, PublicKey}
 import coop.rchain.models._
-import coop.rchain.shared.LogSource
+import coop.rchain.rholang.interpreter.DeployParameters
 
 import scala.collection.immutable
 
@@ -396,11 +396,11 @@ object ProtoUtil {
     Par(exprs = Seq(Expr(Expr.ExprInstance.GByteArray(ByteString.copyFrom(hash)))))
   }
 
-  def getRholangDeployParams(dd: DeployData): (Par, Par, Par, Par) = {
+  def getRholangDeployParams(dd: DeployData): DeployParameters = {
     val phloPrice: Par = Par(exprs = Seq(Expr(Expr.ExprInstance.GInt(dd.phloPrice))))
     val userId: Par    = Par(exprs = Seq(Expr(Expr.ExprInstance.GByteArray(dd.deployer))))
     val timestamp: Par = Par(exprs = Seq(Expr(Expr.ExprInstance.GInt(dd.timestamp))))
-    (computeCodeHash(dd), phloPrice, userId, timestamp)
+    DeployParameters(computeCodeHash(dd), phloPrice, userId, timestamp)
   }
 
   def dependenciesHashesOf(b: BlockMessage): List[BlockHash] = {

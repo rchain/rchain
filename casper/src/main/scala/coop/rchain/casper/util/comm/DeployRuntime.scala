@@ -47,6 +47,9 @@ object DeployRuntime {
   ): F[Unit] =
     gracefulExit(DeployService[F].visualizeDag(VisualizeDagQuery(depth, showJustificationLines)))
 
+  def machineVerifiableDag[F[_]: Monad: Sync: DeployService]: F[Unit] =
+    gracefulExit(DeployService[F].machineVerifiableDag(MachineVerifyQuery()))
+
   def listenForDataAtName[F[_]: Functor: Sync: DeployService: Time](
       name: Id[Name]
   ): F[Unit] =

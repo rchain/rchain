@@ -78,7 +78,7 @@ pipeline:
     <<: *sbttestenv
     commands:
       - cp -r . ../step.run-unit-tests && cd ../step.run-unit-tests
-      - _JAVA_OPTIONS="$_JAVA_OPTIONS -Xss2m" sbt update rholang/bnfc:generate test:compile
+      - _JAVA_OPTIONS="$_JAVA_OPTIONS -Xss2m" sbt update rholang/bnfc:generate test:compile slowcooker:compile
       - sbt "set test in casper := {}" test it:test
 
   pr-run-casper-tests:
@@ -95,7 +95,7 @@ pipeline:
     <<: *branch_build_conditions
     <<: *sbtcompileenv
     commands:
-      - sbt update rholang/bnfc:generate test:compile
+      - sbt update rholang/bnfc:generate test:compile slowcooker:compile
 
   docker-build:
     <<: *branch_build_conditions

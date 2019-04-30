@@ -5,20 +5,18 @@ import cats.effect.Sync
 import cats.implicits._
 import coop.rchain.blockstorage.{BlockDagRepresentation, BlockStore}
 import coop.rchain.casper.protocol._
-import coop.rchain.casper.util.{DagOperations, ProtoUtil}
-import coop.rchain.casper.util.ProtoUtil.{
-  blockHeader,
-  bonds,
-  signBlock,
-  toJustification,
-  unsignedBlockProto
-}
+import coop.rchain.casper.util.ProtoUtil._
 import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
 import coop.rchain.casper.util.rholang._
+import coop.rchain.casper.util.{DagOperations, ProtoUtil}
 import coop.rchain.crypto.{PrivateKey, PublicKey}
+import coop.rchain.metrics.Metrics
 import coop.rchain.shared.{Cell, Log, Time}
 
 object BlockCreator {
+  private[this] val CreateBlockMetricsSource =
+    Metrics.Source(CasperMetricsSource, "create-block")
+
   /*
    * Overview of createBlock
    *
@@ -40,9 +38,11 @@ object BlockCreator {
       version: Long,
       expirationThreshold: Int,
       runtimeManager: RuntimeManager[F]
-  )(implicit state: Cell[F, CasperState]): F[CreateBlockStatus] =
+  )(implicit state: Cell[F, CasperState], metricsF: Metrics[F]): F[CreateBlockStatus] =
     for {
+      span           <- metricsF.span(CreateBlockMetricsSource)
       tipHashes      <- Estimator.tips[F](dag, genesis)
+      _              <- span.mark("after-estimator")
       parents        <- EstimatorHelper.chooseNonConflicting[F](tipHashes, dag)
       maxBlockNumber = ProtoUtil.maxBlockNumber(parents)
       _              <- updateDeployHistory[F](state, maxBlockNumber)
@@ -67,6 +67,8 @@ object BlockCreator {
       signedBlock <- unsignedBlock.mapF(
                       signBlock(_, dag, publicKey, privateKey, sigAlgorithm, shardId)
                     )
+      _ <- span.mark("block-signed")
+      _ <- span.close()
     } yield signedBlock
 
   /*
@@ -199,7 +201,7 @@ object BlockCreator {
   ): F[List[Unit]] =
     internalErrors.toList
       .traverse {
-        case InternalProcessedDeploy(deploy, _, _, InternalErrors(errors)) =>
+        case InternalProcessedDeploy(deploy, _, _, _, InternalErrors(errors)) =>
           val errorsMessage = errors.map(_.getMessage).mkString("\n")
           Log[F].error(
             s"Internal error encountered while processing deploy ${PrettyPrinter

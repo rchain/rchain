@@ -61,7 +61,7 @@ class ManyValidatorsTest
       newBlockDagStorage        <- BlockDagStorageTestFixture.createBlockDagStorage(blockDagStorageDir)
       newIndexedBlockDagStorage <- IndexedBlockDagStorage.create(newBlockDagStorage)
       dag                       <- newIndexedBlockDagStorage.getRepresentation
-      tips                      <- Estimator.tips[Task](dag, genesis)(Monad[Task])
+      tips                      <- Estimator.tips[Task](dag, genesis)
       casperEffect <- NoOpsCasperEffect[Task](
                        HashMap.empty[BlockHash, BlockMessage],
                        tips.toIndexedSeq
@@ -70,7 +70,7 @@ class ManyValidatorsTest
       casperRef          <- MultiParentCasperRef.of[Task]
       _                  <- casperRef.set(casperEffect)
       cliqueOracleEffect = SafetyOracle.cliqueOracle[Task]
-      result <- BlockAPI.showBlocks[Task](Int.MaxValue)(
+      result <- BlockAPI.showBlocks[Task](Some(Int.MaxValue))(
                  Monad[Task],
                  casperRef,
                  logEff,
@@ -78,6 +78,6 @@ class ManyValidatorsTest
                  blockStore
                )
     } yield result
-    testProgram.runSyncUnsafe(1 minute)(scheduler, CanBlock.permit)
+    testProgram.runSyncUnsafe(1.minute)(scheduler, CanBlock.permit)
   }
 }

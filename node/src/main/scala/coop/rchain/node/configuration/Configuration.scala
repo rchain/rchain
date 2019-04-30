@@ -136,6 +136,8 @@ object Configuration {
       dataDir.resolve("casper-block-dag-file-storage-block-metadata-crc"),
       dataDir.resolve("casper-block-dag-file-storage-equivocation-tracker-log"),
       dataDir.resolve("casper-block-dag-file-storage-equivocation-tracker-crc"),
+      dataDir.resolve("casper-block-dag-file-storage-invalid-blocks-log"),
+      dataDir.resolve("casper-block-dag-file-storage-invalid-blocks-crc"),
       dataDir.resolve("casper-block-dag-file-storage-checkpoints"),
       dataDir.resolve("casper-block-dag-file-storage-block-number-index"),
       server.dagStorageSize
@@ -203,9 +205,10 @@ object Configuration {
       case Some(options.visualizeBlocks) =>
         import options.visualizeBlocks._
         VisualizeDag(depth.getOrElse(-1), showJustificationLines.getOrElse(false))
-      case Some(options.run)        => Run
-      case Some(options.dataAtName) => DataAtName(options.dataAtName.name())
-      case Some(options.contAtName) => ContAtName(options.contAtName.name())
+      case Some(options.machineVerifiableDag) => MachineVerifiableDag
+      case Some(options.run)                  => Run
+      case Some(options.dataAtName)           => DataAtName(options.dataAtName.name())
+      case Some(options.contAtName)           => ContAtName(options.contAtName.name())
       case Some(options.bondingDeployGen) =>
         import options.bondingDeployGen._
         BondingDeployGen(bondKey(), ethAddr(), amount(), privateKey(), publicKey())

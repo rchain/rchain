@@ -18,7 +18,8 @@ new PoS, rs(`rho:registry:insertSigned:ed25519`), uriOut in {
 
  for (@minimumBond, @maximumBond <- PoS) {
 
-    match "11112GofKy1v5mPWZjZEYBByvpZ4ahYJp6vFN1hgGCn7L543rFSpyA" {
+ // TODO: Move this code into genesis.contracts.ProofOfStake to parameterize it over public key and address.
+    match "1111jXe5SseJpLMkUbXQN9k9aNHifUVgKm1pew3fwydaahdtvRRo1" {
 
       posRevAddress => {
 
@@ -121,7 +122,7 @@ new PoS, rs(`rho:registry:insertSigned:ed25519`), uriOut in {
               }
 
               //Assuming that user public key is valid, a vault should always be returned.
-              | contract deposit (@amount, return) = {
+              | contract deposit (@revAmount, return) = {
                 new parametersCh,
                   vaultCh,
                   revAddressCh,
@@ -134,7 +135,7 @@ new PoS, rs(`rho:registry:insertSigned:ed25519`), uriOut in {
                       | for (@(true, vault) <- vaultCh) {
                         @RevVault!("deployerAuthKey", *authKeyCh)
                         | for (userAuthKey <- authKeyCh){
-                          @vault!("transfer", posRevAddress, amount, *userAuthKey, *return)
+                          @vault!("transfer", posRevAddress, revAmount, *userAuthKey, *return)
                         }
                       }
                     }
@@ -152,14 +153,14 @@ new PoS, rs(`rho:registry:insertSigned:ed25519`), uriOut in {
                 }
               }
 
-              | contract PoS (@"pay", @amount, return) = {
+              | contract PoS (@"pay", @revAmount, return) = {
                 new parametersCh, depositRet in {
-                  deposit!(amount, *depositRet)
+                  deposit!(revAmount, *depositRet)
                   | getParameters!(*parametersCh)
                   | for (@depositResult <- depositRet; @codeHash, @phloRate, @userPk, @timestamp <- parametersCh; lastPayment <- paymentStore) {
                     match depositResult {
-                      (true, Nil) => { paymentStore!([codeHash, userPk, timestamp, phloRate * amount]) | return!(phloRate *amount) }
-                      (false, err) => { paymentStore!([codeHash, userPk, timestamp, 0]) | return!(0) }
+                      (true, Nil) => { paymentStore!([codeHash, userPk, timestamp, revAmount]) | return!(true) }
+                      (false, err) => { paymentStore!([codeHash, userPk, timestamp, 0]) | return!(err) }
                     }
                   }
                 }

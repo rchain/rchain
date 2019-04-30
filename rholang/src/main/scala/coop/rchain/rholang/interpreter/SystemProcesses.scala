@@ -1,15 +1,15 @@
 package coop.rchain.rholang.interpreter
 
-import cats.effect.{Concurrent, Sync}
+import cats.effect.Concurrent
+import cats.effect.concurrent.Ref
 import cats.implicits._
 import coop.rchain.crypto.PublicKey
 import coop.rchain.crypto.hash.{Blake2b256, Keccak256, Sha256}
 import coop.rchain.crypto.signatures.{Ed25519, Secp256k1}
 import coop.rchain.models._
 import coop.rchain.models.rholang.implicits._
-import coop.rchain.rholang.interpreter.Runtime.{BlockTime, RhoISpace, ShortLeashParamsStorage}
+import coop.rchain.rholang.interpreter.Runtime.{BlockTime, RhoISpace}
 import coop.rchain.rholang.interpreter.util.RevAddress
-import coop.rchain.rholang.interpreter.util.codec.Base58
 import coop.rchain.rspace.{ContResult, Result}
 
 import scala.util.Try
@@ -29,7 +29,7 @@ trait SystemProcesses[F[_]] {
   def sha256Hash: Contract[F]
   def keccak256Hash: Contract[F]
   def blake2b256Hash: Contract[F]
-  def getDeployParams(deployParameters: ShortLeashParamsStorage[F]): Contract[F]
+  def getDeployParams(runtimeParametersRef: Ref[F, DeployParameters]): Contract[F]
   def blockTime(timestamp: BlockTime[F]): Contract[F]
   def validateRevAddress: Contract[F]
 }
@@ -159,14 +159,13 @@ object SystemProcesses {
         hashContract("blake2b256Hash", Blake2b256.hash)
 
       // TODO: rename this system process to "deployParameters"?
-      def getDeployParams(
-          shortLeashParams: Runtime.ShortLeashParamsStorage[F]
-      ): Contract[F] = {
+      def getDeployParams(runtimeParametersRef: Ref[F, DeployParameters]): Contract[F] = {
         case isContractCall(produce, Seq(ack)) =>
           for {
-            params <- shortLeashParams.getParams
+            params                                                  <- runtimeParametersRef.get
+            DeployParameters(codeHash, phloRate, userId, timestamp) = params
             _ <- produce(
-                  Seq(params.codeHash, params.phloRate, params.userId, params.timestamp),
+              Seq(codeHash, phloRate, userId, timestamp),
                   ack
                 )
           } yield ()

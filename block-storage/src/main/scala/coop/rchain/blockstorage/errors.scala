@@ -15,6 +15,9 @@ final case class BlockSenderIsMalformed(block: BlockMessage)                  ex
 final case class CheckpointDoesNotExist(offset: Long)                         extends StorageError
 final case object LatestMessagesLogIsMalformed                                extends StorageError
 final case object EquivocationsTrackerLogIsMalformed                          extends StorageError
+final case object LatestMessagesLogIsCorrupted                                extends StorageError
+final case object DataLookupIsCorrupted                                       extends StorageError
+final case object InvalidBlocksIsCorrupted                                    extends StorageError
 
 object StorageError {
   type StorageErr[A]        = Either[StorageError, A]
@@ -36,6 +39,12 @@ object StorageError {
         "Latest messages log is malformed"
       case EquivocationsTrackerLogIsMalformed =>
         "Equivocations tracker log is malformed"
+      case LatestMessagesLogIsCorrupted =>
+        "Latest messages log is corrupted"
+      case DataLookupIsCorrupted =>
+        "Data lookup log is corrupted"
+      case InvalidBlocksIsCorrupted =>
+        "Invalid blocks log is corrupted"
     }
 
   implicit class StorageErrorToMessage(storageError: StorageError) {

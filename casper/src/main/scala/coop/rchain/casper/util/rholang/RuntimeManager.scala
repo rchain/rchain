@@ -2,58 +2,60 @@ package coop.rchain.casper.util.rholang
 
 import cats._
 import cats.data.EitherT
-import cats.effect._
 import cats.effect.concurrent.MVar
+import cats.effect.{Sync, _}
 import cats.implicits._
 import com.google.protobuf.ByteString
 import coop.rchain.casper.protocol._
-import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
-import coop.rchain.catscontrib.Catscontrib._
+import coop.rchain.casper.util.{ConstructDeploy, ProtoUtil}
+import coop.rchain.catscontrib.Catscontrib.ToMonadOps
 import coop.rchain.catscontrib.MonadTrans
+import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.models.Expr.ExprInstance.GString
+import coop.rchain.models.Var.VarInstance.FreeVar
 import coop.rchain.models._
-import coop.rchain.rholang.interpreter.Interpreter
+import coop.rchain.models.rholang.implicits._
 import coop.rchain.rholang.interpreter.accounting._
+import coop.rchain.rholang.interpreter.errors.BugFoundError
 import coop.rchain.rholang.interpreter.storage.StoragePrinter
+import coop.rchain.rholang.interpreter.storage.implicits.matchListPar
 import coop.rchain.rholang.interpreter.{
-  accounting,
-  ChargingReducer,
-  ErrorLog,
-  EvaluateResult,
-  Runtime
-}
-import coop.rchain.rspace.internal.Datum
-import coop.rchain.rspace.{Blake2b256Hash, ReplayException}
-
-import scala.collection.immutable
+    ChargingReducer,
+    ErrorLog,
+    EvaluateResult,
+    Interpreter,
+    RhoType,
+    Runtime,
+    PrettyPrinter => RholangPrinter
+  }
+import coop.rchain.rspace.{trace, Blake2b256Hash, Checkpoint, ReplayException}
 
 trait RuntimeManager[F[_]] {
   def captureResults(start: StateHash, deploy: DeployData, name: String = "__SCALA__"): F[Seq[Par]]
   def captureResults(start: StateHash, deploy: DeployData, name: Par): F[Seq[Par]]
-  def replayComputeState(
-      hash: StateHash,
+  def replayComputeState(hash: StateHash)(
       terms: Seq[InternalProcessedDeploy],
       time: Option[Long] = None
   ): F[Either[(Option[DeployData], Failed), StateHash]]
-  def computeState(
-      hash: StateHash,
+  def computeState(hash: StateHash)(
       terms: Seq[DeployData],
       time: Option[Long] = None
   ): F[(StateHash, Seq[InternalProcessedDeploy])]
   def storageRepr(hash: StateHash): F[Option[String]]
   def computeBonds(hash: StateHash): F[Seq[Bond]]
-  def getData(hash: ByteString, channel: Par): F[Seq[Par]]
-  def getContinuation(
-      hash: ByteString,
-      channels: immutable.Seq[Par]
+  def computeBalance(start: StateHash)(user: ByteString): F[Long]
+  def computeDeployPayment(start: StateHash)(user: ByteString, amount: Long): F[StateHash]
+  def getData(hash: StateHash)(channel: Par): F[Seq[Par]]
+  def getContinuation(hash: StateHash)(
+      channels: Seq[Par]
   ): F[Seq[(Seq[BindPattern], Par)]]
-  def emptyStateHash: ByteString
+  def emptyStateHash: StateHash
 }
 
 class RuntimeManagerImpl[F[_]: Concurrent] private[rholang] (
-    val emptyStateHash: ByteString,
+    val emptyStateHash: StateHash,
     runtimeContainer: MVar[F, Runtime[F]]
 ) extends RuntimeManager[F] {
 
@@ -65,44 +67,54 @@ class RuntimeManagerImpl[F[_]: Concurrent] private[rholang] (
     captureResults(start, deploy, Par().withExprs(Seq(Expr(GString(name)))))
 
   def captureResults(start: StateHash, deploy: DeployData, name: Par): F[Seq[Par]] =
-    Sync[F]
-      .bracket(runtimeContainer.take) { runtime =>
-        //TODO: Is better error handling needed here?
-        for {
-          evalR                     <- newEval(deploy :: Nil, runtime, start)
-          (_, Seq(processedDeploy)) = evalR
-          result <- if (processedDeploy.status.isFailed) Seq.empty[Datum[ListParWithRandom]].pure[F]
-                   else {
-                     val r: F[Seq[Datum[ListParWithRandom]]] =
-                       runtime.space.getData(name).map(_.toSeq)
-                     r
-                   }
-        } yield result.flatMap(_.a.pars)
-      }(runtime => runtimeContainer.put(runtime))
+    withResetRuntime(start) { runtime =>
+      //TODO: Is better error handling needed here?
+      for {
+        evaluateResult <- computeEffect(runtime)(deploy)
+        result <- if (evaluateResult.errors.isEmpty) getData(runtime)(name)
+                 else Seq.empty[Par].pure[F]
+      } yield result
+    }
 
-  def replayComputeState(
-      hash: StateHash,
+  private def computeEffect(runtime: Runtime[F])(deploy: DeployData): F[EvaluateResult] =
+    runtime.deployParametersRef.set(ProtoUtil.getRholangDeployParams(deploy)) >>
+      doInj(deploy, runtime.reducer, runtime.errorLog)(runtime.cost)
+
+  private def replayComputeEffect(
+      runtime: Runtime[F]
+  )(start: Blake2b256Hash, processedDeploy: InternalProcessedDeploy): F[EvaluateResult] = {
+    import processedDeploy._
+    runtime.replaySpace.rig(start, deployLog.toList) >>
+      runtime.deployParametersRef.set(ProtoUtil.getRholangDeployParams(deploy)) >>
+      doInj(deploy, runtime.replayReducer, runtime.errorLog)(runtime.cost)
+  }
+
+  /**
+    * @note `replayEval` does not need to reset the evaluation store,
+    *       merely the replay store. Hence, `replayComputeState` uses
+    *       `withRuntime` rather than `withResetRuntime`.
+    */
+  def replayComputeState(hash: StateHash)(
       terms: Seq[InternalProcessedDeploy],
       time: Option[Long] = None
   ): F[Either[(Option[DeployData], Failed), StateHash]] =
-    Sync[F].bracket(runtimeContainer.take) { runtime =>
+    withRuntime { runtime =>
       for {
         _      <- setTimestamp(time, runtime)
         result <- replayEval(terms, runtime, hash)
       } yield result
-    }(runtime => runtimeContainer.put(runtime))
+    }
 
-  def computeState(
-      hash: StateHash,
+  def computeState(hash: StateHash)(
       terms: Seq[DeployData],
       time: Option[Long] = None
   ): F[(StateHash, Seq[InternalProcessedDeploy])] =
-    Sync[F].bracket(runtimeContainer.take) { runtime =>
+    withResetRuntime(hash) { runtime =>
       for {
         _      <- setTimestamp(time, runtime)
         result <- newEval(terms, runtime, hash)
       } yield result
-    }(runtime => runtimeContainer.put(runtime))
+    }
 
   private def setTimestamp(
       time: Option[Long],
@@ -116,37 +128,14 @@ class RuntimeManagerImpl[F[_]: Concurrent] private[rholang] (
     }
 
   def storageRepr(hash: StateHash): F[Option[String]] =
-    Sync[F]
-      .bracket(runtimeContainer.take) { runtime =>
-        val blakeHash = Blake2b256Hash.fromByteArray(hash.toByteArray)
-        runtime.space.reset(blakeHash).map(_ => StoragePrinter.prettyPrint(runtime.space))
-      }(runtime => runtimeContainer.put(runtime))
-      .attempt
+    withResetRuntime(hash)(runtime => StoragePrinter.prettyPrint(runtime.space).pure[F]).attempt
       .map {
         case Right(print) => Some(print)
         case Left(_)      => None
       }
 
-  private def sourceDeploy(source: String, timestamp: Long, phlos: Long): DeployData =
-    DeployData(
-      deployer = ByteString.EMPTY,
-      timestamp = timestamp,
-      term = source,
-      phloLimit = phlos
-    )
-
-  def computeBonds(hash: StateHash): F[Seq[Bond]] = {
-    val bondsQuery =
-      """new rl(`rho:registry:lookup`), SystemInstancesCh, posCh in {
-        |  rl!(`rho:id:wdwc36f4ixa6xacck3ddepmgueum7zueuczgthcqp6771kdu8jogm8`, *SystemInstancesCh) |
-        |  for(@(_, SystemInstancesRegistry) <- SystemInstancesCh) {
-        |    @SystemInstancesRegistry!("lookup", "pos", *posCh) |
-        |    for(pos <- posCh){ pos!("getBonds", "__SCALA__") }
-        |  }
-        |}""".stripMargin
-
-    val bondsQueryTerm = sourceDeploy(bondsQuery, 0L, accounting.MAX_VALUE)
-    captureResults(hash, bondsQueryTerm)
+  def computeBonds(hash: StateHash): F[Seq[Bond]] =
+    captureResults(hash, ConstructDeploy.sourceDeployNow(bondsQuerySource()))
       .ensureOr(
         bondsPar =>
           new IllegalArgumentException(
@@ -156,13 +145,99 @@ class RuntimeManagerImpl[F[_]: Concurrent] private[rholang] (
       .map { bondsPar =>
         toBondSeq(bondsPar.head)
       }
-  }
 
-  private def withResetRuntime[R](hash: StateHash, block: Runtime[F] => F[R]) =
-    Sync[F].bracket(runtimeContainer.take) { runtime =>
-      val blakeHash = Blake2b256Hash.fromByteArray(hash.toByteArray)
-      runtime.space.reset(blakeHash).flatMap(_ => block(runtime))
-    }(runtime => runtimeContainer.put(runtime))
+  private def bondsQuerySource(name: String = "__SCALA__"): String =
+    s"""
+       | new rl(`rho:registry:lookup`), SystemInstancesCh, posCh in {
+       |   rl!(`rho:id:wdwc36f4ixa6xacck3ddepmgueum7zueuczgthcqp6771kdu8jogm8`, *SystemInstancesCh) |
+       |   for(@(_, SystemInstancesRegistry) <- SystemInstancesCh) {
+       |     @SystemInstancesRegistry!("lookup", "pos", *posCh) |
+       |     for(pos <- posCh){ pos!("getBonds", "$name") }
+       |   }
+       | }
+     """.stripMargin
+
+  def computeBalance(start: StateHash)(user: ByteString): F[Long] =
+    withResetRuntime(start)(computeBalance(_)(user))
+
+  private def computeBalance(runtime: Runtime[F])(user: ByteString): F[Long] =
+    computeEffect(runtime)(
+      ConstructDeploy.sourceDeployNow(balanceQuerySource(user)).withDeployer(user)
+    ) >> {
+      getResult(runtime)() >>= {
+        case Seq(RhoType.Number(balance)) => balance.pure[F]
+        case Seq(RhoType.String(error)) =>
+          BugFoundError(s"Balance query failed unexpectedly: $error").raiseError[F, Long]
+        case other =>
+          BugFoundError(s"Balance query returned unexpected result: $other").raiseError[F, Long]
+      }
+    }
+
+  private def balanceQuerySource(user: ByteString, name: String = "__SCALA__"): String =
+    s"""
+       | new rl(`rho:registry:lookup`), revAddressOps(`rho:rev:address`), revVaultCh in {
+       |   rl!(`rho:id:1o93uitkrjfubh43jt19owanuezhntag5wh74c6ur5feuotpi73q8z`, *revVaultCh)
+       |   | for (@(_, RevVault) <- revVaultCh) {
+       |     new vaultCh, revAddressCh in {
+       |       revAddressOps!("fromPublicKey", "${Base16.encode(user.toByteArray)}".hexToBytes(), *revAddressCh)
+       |       | for(@revAddress <- revAddressCh) {
+       |         @RevVault!("findOrCreate", revAddress, *vaultCh)
+       |         | for(@vaultEither <- vaultCh){
+       |           match vaultEither {
+       |             (true, vault) => {
+       |               @vault!("balance", "$name")
+       |             }
+       |             (false, error) => {
+       |               @"$name"!(error)
+       |             }
+       |           }
+       |         }
+       |       }
+       |     }
+       |   }
+       | }
+     """.stripMargin
+
+  def computeDeployPayment(start: StateHash)(user: ByteString, amount: Long): F[StateHash] =
+    withResetRuntime(start)(
+      computeDeployPayment(_)(user, amount).map(cp => ByteString.copyFrom(cp.root.bytes.toArray))
+    )
+
+  private def computeDeployPayment(
+      runtime: Runtime[F]
+  )(user: ByteString, amount: Long): F[Checkpoint] =
+    computeEffect(runtime)(
+      ConstructDeploy.sourceDeployNow(deployPaymentSource(amount)).withDeployer(user)
+    ) >>
+      getResult(runtime)() >>= {
+      case Seq(RhoType.Boolean(true)) =>
+        runtime.space.createCheckpoint()
+      case Seq(RhoType.String(error)) =>
+        BugFoundError(s"Deploy payment failed unexpectedly: $error").raiseError[F, Checkpoint]
+      case other =>
+        BugFoundError(
+          s"Deploy payment returned unexpected result: ${other.map(RholangPrinter().buildString(_))}"
+        ).raiseError[F, Checkpoint]
+    }
+
+  private def deployPaymentSource(amount: Long, name: String = "__SCALA__"): String =
+    s"""
+       | new rl(`rho:registry:lookup`), poSCh in {
+       |   rl!(`rho:id:cnec3pa8prp4out3yc8facon6grm3xbsotpd4ckjfx8ghuw77xadzt`, *poSCh) |
+       |   for(@(_, PoS) <- poSCh) {
+       |     @PoS!("pay", $amount, "$name")
+       |   }
+       | }
+       """.stripMargin
+
+  private def withRuntime[A](f: Runtime[F] => F[A]): F[A] =
+    Sync[F].bracket(runtimeContainer.take)(f)(runtimeContainer.put)
+
+  private def withResetRuntime[R](hash: StateHash)(block: Runtime[F] => F[R]) =
+    withRuntime(
+      runtime =>
+        runtime.space.reset(Blake2b256Hash.fromByteArray(hash.toByteArray)) >> block(runtime)
+    )
 
   private def toBondSeq(bondsMap: Par): Seq[Bond] =
     bondsMap.exprs.head.getEMapBody.ps.map {
@@ -174,27 +249,39 @@ class RuntimeManagerImpl[F[_]: Concurrent] private[rholang] (
         Bond(validatorName, stakeAmount)
     }.toList
 
-  def getData(hash: ByteString, channel: Par): F[Seq[Par]] =
-    withResetRuntime(hash, runtime => {
-      runtime.space.getData(channel).map(_.flatMap(_.a.pars))
-    })
+  def getData(hash: StateHash)(channel: Par): F[Seq[Par]] =
+    withResetRuntime(hash)(getData(_)(channel))
+
+  private def getData(
+      runtime: Runtime[F]
+  )(channel: Par): F[Seq[Par]] =
+    runtime.space.getData(channel).map(_.flatMap(_.a.pars))
+
+  private def getResult(
+      runtime: Runtime[F]
+  )(name: String = "__SCALA__"): F[Seq[Par]] = {
+
+    val channel                 = Par().withExprs(Seq(Expr(GString(name))))
+    val pattern                 = BindPattern(Seq(EVar(FreeVar(0))), freeCount = 1)
+    val cont                    = TaggedContinuation().withParBody(ParWithRandom(Par()))
+    implicit val cost: _cost[F] = runtime.cost
+
+    runtime.space.consume(Seq(channel), Seq(pattern), cont, persist = false)(matchListPar).map {
+      case Some((_, dataList)) => dataList.flatMap(_.value.pars)
+      case None                => Seq.empty[Par]
+    }
+  }
 
   def getContinuation(
-      hash: ByteString,
-      channels: immutable.Seq[Par]
-  ): F[Seq[(Seq[BindPattern], Par)]] =
-    withResetRuntime(
-      hash,
-      runtime => {
-        runtime.space
-          .getWaitingContinuations(channels)
-          .map(
-            results =>
-              for {
-                result <- results.filter(_.continuation.taggedCont.isParBody)
-              } yield (result.patterns, result.continuation.taggedCont.parBody.get.body)
-          )
-      }
+      hash: StateHash
+  )(channels: Seq[Par]): F[Seq[(Seq[BindPattern], Par)]] =
+    withResetRuntime(hash)(
+      _.space
+        .getWaitingContinuations(channels)
+        .map(
+          _.filter(_.continuation.taggedCont.isParBody)
+            .map(result => (result.patterns, result.continuation.taggedCont.parBody.get.body))
+        )
     )
 
   private def newEval(
@@ -212,18 +299,14 @@ class RuntimeManagerImpl[F[_]: Concurrent] private[rholang] (
         terms match {
           case deploy +: rem =>
             for {
-              _ <- runtime.space.reset(hash)
-              (codeHash, phloPrice, userId, timestamp) = ProtoUtil.getRholangDeployParams(
-                deploy
-              )
-              _                                      <- runtime.shortLeashParams.setParams(codeHash, phloPrice, userId, timestamp)
-              injResult                              <- doInj(deploy, runtime.reducer, runtime.errorLog)(runtime.cost)
-              EvaluateResult(evaluationCost, errors) = injResult
-              newCheckpoint                          <- runtime.space.createCheckpoint()
+              evaluateResult               <- computeEffect(runtime)(deploy)
+              EvaluateResult(cost, errors) = evaluateResult
+              newCheckpoint                <- runtime.space.createCheckpoint()
               deployResult = InternalProcessedDeploy(
                 deploy,
-                Cost.toProto(evaluationCost),
+                Cost.toProto(cost),
                 newCheckpoint.log,
+                Seq.empty[trace.Event],
                 DeployStatus.fromErrors(errors)
               )
               cont <- if (errors.isEmpty)
@@ -250,16 +333,12 @@ class RuntimeManagerImpl[F[_]: Concurrent] private[rholang] (
     ): F[Either[(Option[DeployData], Failed), StateHash]] =
       Concurrent[F].defer {
         terms match {
-          case InternalProcessedDeploy(deploy, _, log, status) +: rem =>
-            val (codeHash, phloPrice, userId, timestamp) = ProtoUtil.getRholangDeployParams(
-              deploy
-            )
+          case processedDeploy +: rem =>
+            import processedDeploy._
             for {
-              _         <- runtime.shortLeashParams.setParams(codeHash, phloPrice, userId, timestamp)
-              _         <- runtime.replaySpace.rig(hash, log.toList)
-              injResult <- doInj(deploy, runtime.replayReducer, runtime.errorLog)(runtime.cost)
+              replayEvaluateResult <- replayComputeEffect(runtime)(hash, processedDeploy)
               //TODO: compare replay deploy cost to given deploy cost
-              EvaluateResult(cost, errors) = injResult
+              EvaluateResult(cost, errors) = replayEvaluateResult
               cont <- DeployStatus.fromErrors(errors) match {
                        case int: InternalErrors => Left(Some(deploy) -> int).pure[F]
                        case replayStatus =>
@@ -307,7 +386,6 @@ class RuntimeManagerImpl[F[_]: Concurrent] private[rholang] (
       reducer: ChargingReducer[F],
       errorLog: ErrorLog[F]
   )(implicit C: _cost[F]) = {
-    import coop.rchain.catscontrib.mtl.implicits._
     implicit val rand: Blake2b512Random = Blake2b512Random(
       DeployData.toByteArray(ProtoUtil.stripDeployData(deploy))
     )
@@ -322,6 +400,7 @@ class RuntimeManagerImpl[F[_]: Concurrent] private[rholang] (
 }
 
 object RuntimeManager {
+
   type StateHash = ByteString
 
   def fromRuntime[F[_]: Concurrent: Sync](
@@ -343,52 +422,54 @@ object RuntimeManager {
       runtimeManager: RuntimeManager[F]
   ): RuntimeManager[T[F, ?]] =
     new RuntimeManager[T[F, ?]] {
+
       override def captureResults(
-          start: RuntimeManager.StateHash,
+          start: StateHash,
           deploy: DeployData,
           name: String
       ): T[F, scala.Seq[Par]] = runtimeManager.captureResults(start, deploy, name).liftM[T]
 
       override def captureResults(
-          start: RuntimeManager.StateHash,
+          start: StateHash,
           deploy: DeployData,
           name: Par
       ): T[F, scala.Seq[Par]] = runtimeManager.captureResults(start, deploy, name).liftM[T]
 
-      override def replayComputeState(
-          hash: RuntimeManager.StateHash,
+      override def replayComputeState(hash: StateHash)(
           terms: scala.Seq[InternalProcessedDeploy],
           time: Option[Long]
-      ): T[F, scala.Either[(Option[DeployData], Failed), RuntimeManager.StateHash]] =
-        runtimeManager.replayComputeState(hash, terms, time).liftM[T]
+      ): T[F, scala.Either[(Option[DeployData], Failed), StateHash]] =
+        runtimeManager.replayComputeState(hash)(terms, time).liftM[T]
 
-      override def computeState(
-          hash: RuntimeManager.StateHash,
+      override def computeState(hash: StateHash)(
           terms: scala.Seq[DeployData],
           time: Option[Long]
-      ): T[F, (RuntimeManager.StateHash, scala.Seq[InternalProcessedDeploy])] =
-        runtimeManager.computeState(hash, terms, time).liftM[T]
+      ): T[F, (StateHash, scala.Seq[InternalProcessedDeploy])] =
+        runtimeManager.computeState(hash)(terms, time).liftM[T]
 
-      override def storageRepr(
-          hash: RuntimeManager.StateHash
-      ): T[F, Option[String]] = runtimeManager.storageRepr(hash).liftM[T]
+      override def storageRepr(hash: StateHash): T[F, Option[String]] =
+        runtimeManager.storageRepr(hash).liftM[T]
 
-      override def computeBonds(
-          hash: RuntimeManager.StateHash
-      ): T[F, scala.Seq[Bond]] = runtimeManager.computeBonds(hash).liftM[T]
+      override def computeBonds(hash: StateHash): T[F, scala.Seq[Bond]] =
+        runtimeManager.computeBonds(hash).liftM[T]
 
-      override def getData(
-          hash: ByteString,
-          channel: Par
-      ): T[F, scala.Seq[Par]] = runtimeManager.getData(hash, channel).liftM[T]
+      override def computeBalance(start: StateHash)(user: ByteString): T[F, Long] =
+        runtimeManager.computeBalance(start)(user).liftM[T]
+
+      override def computeDeployPayment(
+          start: StateHash
+      )(user: ByteString, amount: Long): T[F, StateHash] =
+        runtimeManager.computeDeployPayment(start)(user, amount).liftM[T]
+
+      override def getData(hash: StateHash)(channel: Par): T[F, scala.Seq[Par]] =
+        runtimeManager.getData(hash)(channel).liftM[T]
 
       override def getContinuation(
-          hash: ByteString,
-          channels: scala.collection.immutable.Seq[Par]
-      ): T[F, scala.Seq[(scala.Seq[BindPattern], Par)]] =
-        runtimeManager.getContinuation(hash, channels).liftM[T]
+          hash: StateHash
+      )(channels: Seq[Par]): T[F, scala.Seq[(scala.Seq[BindPattern], Par)]] =
+        runtimeManager.getContinuation(hash)(channels).liftM[T]
 
-      override val emptyStateHash: ByteString = runtimeManager.emptyStateHash
+      override val emptyStateHash: StateHash = runtimeManager.emptyStateHash
     }
 
   def eitherTRuntimeManager[E, F[_]: Monad](

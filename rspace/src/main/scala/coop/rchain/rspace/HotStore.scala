@@ -4,8 +4,11 @@ import cats._
 import cats.implicits._
 import cats.effect._
 import cats.effect.implicits._
+import coop.rchain.catscontrib.mtl.implicits._
 import coop.rchain.shared.Cell
-import coop.rchain.rspace.internal.{Datum, WaitingContinuation}
+import coop.rchain.rspace.internal._
+import coop.rchain.rspace.Serialize._
+import scodec.Codec
 
 import scala.collection.concurrent.TrieMap
 
@@ -39,14 +42,21 @@ final case class Cache[C, P, A, K](
 
 private class InMemHotStore[F[_]: Sync, C, P, A, K](
     implicit S: Cell[F, Cache[C, P, A, K]],
-    HR: HistoryReader[F, C, P, A, K]
+    HR: HistoryReader[F, C, P, A, K],
+    cp: Codec[P],
+    ck: Codec[K]
 ) extends HotStore[F, C, P, A, K] {
 
   def getContinuations(channels: Seq[C]): F[Seq[WaitingContinuation[P, K]]] =
     for {
       cached <- internalGetContinuations(channels)
       state  <- S.read
-    } yield (state.installedContinuations.get(channels) ++: cached)
+      result = state.installedContinuations.get(channels) ++: cached
+      res <- {
+        implicit val codec = fromCodec(implicitly[Codec[Seq[WaitingContinuation[P, K]]]])
+        roundTrip[F, Seq[WaitingContinuation[P, K]]](result)
+      }
+    } yield res
 
   private[this] def internalGetContinuations(channels: Seq[C]): F[Seq[WaitingContinuation[P, K]]] =
     for {
@@ -55,12 +65,10 @@ private class InMemHotStore[F[_]: Sync, C, P, A, K](
               case None =>
                 for {
                   historyContinuations <- HR.getContinuations(channels)
-                  _ <- S.flatModify { c =>
+                  _ <- S.flatModify { cache =>
                         Sync[F]
-                          .delay(c.continuations.putIfAbsent(channels, historyContinuations))
-                          .map { _ =>
-                            c
-                          }
+                          .delay(cache.continuations.putIfAbsent(channels, historyContinuations))
+                          .as(cache)
                       }
                 } yield (historyContinuations)
               case Some(continuations) => Applicative[F].pure(continuations)
@@ -71,7 +79,7 @@ private class InMemHotStore[F[_]: Sync, C, P, A, K](
     for {
       continuations <- internalGetContinuations(channels)
       _ <- S.flatModify { cache =>
-            Sync[F].delay(cache.continuations.put(channels, wc +: continuations)).map(_ => cache)
+            Sync[F].delay(cache.continuations.put(channels, wc +: continuations)).as(cache)
           }
     } yield ()
 
@@ -101,7 +109,7 @@ private class InMemHotStore[F[_]: Sync, C, P, A, K](
                       case None    => cache.continuations.put(channels, updated)
                     }
                   }
-                  .map(_ => cache)
+                  .as(cache)
               }
             }
     } yield ()
@@ -113,8 +121,8 @@ private class InMemHotStore[F[_]: Sync, C, P, A, K](
               case None =>
                 for {
                   historyData <- HR.getData(channel)
-                  _ <- S.flatModify { c =>
-                        Sync[F].delay(c.data.putIfAbsent(channel, historyData)).map(_ => c)
+                  _ <- S.flatModify { cache =>
+                        Sync[F].delay(cache.data.putIfAbsent(channel, historyData)).as(cache)
                       }
                 } yield (historyData)
               case Some(data) => Applicative[F].pure(data)
@@ -125,7 +133,7 @@ private class InMemHotStore[F[_]: Sync, C, P, A, K](
     for {
       data <- getData(channel)
       _ <- S.flatModify { cache =>
-            Sync[F].delay(cache.data.put(channel, datum +: data)).map(_ => cache)
+            Sync[F].delay(cache.data.put(channel, datum +: data)).as(cache)
           }
     } yield ()
 
@@ -138,7 +146,7 @@ private class InMemHotStore[F[_]: Sync, C, P, A, K](
                 .delay {
                   cache.data.put(channel, updated)
                 }
-                .map(_ => cache)
+                .as(cache)
             }
           }
     } yield ()
@@ -156,8 +164,8 @@ private class InMemHotStore[F[_]: Sync, C, P, A, K](
               case None =>
                 for {
                   historyJoins <- HR.getJoins(channel)
-                  _ <- S.flatModify { c =>
-                        Sync[F].delay(c.joins.putIfAbsent(channel, historyJoins)).map(_ => c)
+                  _ <- S.flatModify { cache =>
+                        Sync[F].delay(cache.joins.putIfAbsent(channel, historyJoins)).as(cache)
                       }
                 } yield (historyJoins)
               case Some(joins) => Applicative[F].pure(joins)
@@ -168,7 +176,7 @@ private class InMemHotStore[F[_]: Sync, C, P, A, K](
     for {
       joins <- getJoins(channel)
       _ <- if (!joins.contains(join)) S.flatModify { cache =>
-            Sync[F].delay(cache.joins.put(channel, join +: joins)).map(_ => cache)
+            Sync[F].delay(cache.joins.put(channel, join +: joins)).as(cache)
           } else Applicative[F].unit
     } yield ()
 
@@ -190,13 +198,13 @@ private class InMemHotStore[F[_]: Sync, C, P, A, K](
       continuations <- getContinuations(join)
       _ <- if (continuations.isEmpty) S.flatModify { cache =>
             val index = cache.joins(channel).indexOf(join)
-            removeIndex(cache.joins(channel), index) >>= { updated =>
+            if (index != -1) removeIndex(cache.joins(channel), index) >>= { updated =>
               Sync[F]
                 .delay {
                   cache.joins.put(channel, updated)
                 }
-                .map(_ => cache)
-            }
+                .as(cache)
+            } else cache.pure[F]
           } else Applicative[F].unit
     } yield ()
 
@@ -236,13 +244,16 @@ private class InMemHotStore[F[_]: Sync, C, P, A, K](
           s"Tried to remove index ${index} from a Vector of size ${col.size}"
         )
       )
+
 }
 
 object HotStore {
 
   def inMem[F[_]: Sync, C, P, A, K](
       implicit S: Cell[F, Cache[C, P, A, K]],
-      HR: HistoryReader[F, C, P, A, K]
+      HR: HistoryReader[F, C, P, A, K],
+      cp: Codec[P],
+      ck: Codec[K]
   ): HotStore[F, C, P, A, K] =
     new InMemHotStore[F, C, P, A, K]
 

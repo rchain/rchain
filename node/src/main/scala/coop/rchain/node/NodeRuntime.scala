@@ -416,6 +416,8 @@ class NodeRuntime private[node] (
       blockMetadataCrcPath = dagStoragePath.resolve("blockMetadataCrcPath"),
       equivocationsTrackerLogPath = dagStoragePath.resolve("equivocationsTrackerLogPath"),
       equivocationsTrackerCrcPath = dagStoragePath.resolve("equivocationsTrackerCrcPath"),
+      invalidBlocksLogPath = dagStoragePath.resolve("invalidBlocksLogPath"),
+      invalidBlocksCrcPath = dagStoragePath.resolve("invalidBlocksCrcPath"),
       checkpointsDirPath = dagStoragePath.resolve("checkpointsDirPath"),
       blockNumberIndexPath = dagStoragePath.resolve("blockNumberIndexPath"),
       mapSize = 8L * 1024L * 1024L * 1024L,
@@ -426,7 +428,12 @@ class NodeRuntime private[node] (
                         Sync[Effect],
                         Log.eitherTLog(Monad[Task], log)
                       )
-    oracle = SafetyOracle.cliqueOracle[Effect](Monad[Effect], Log.eitherTLog(Monad[Task], log))
+    oracle = SafetyOracle
+      .cliqueOracle[Effect](
+        Monad[Effect],
+        Log.eitherTLog(Monad[Task], log),
+        Metrics.eitherT(Monad[Task], metrics)
+      )
     runtime <- {
       implicit val s                = rspaceScheduler
       implicit val m: Metrics[Task] = metrics

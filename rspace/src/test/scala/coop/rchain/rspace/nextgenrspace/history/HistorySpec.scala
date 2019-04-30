@@ -7,7 +7,7 @@ import scala.concurrent.duration._
 import monix.execution.Scheduler.Implicits.global
 import TestData._
 import coop.rchain.rspace.Blake2b256Hash
-import History.{codecTrie, KeyPath, Trie}
+import History.KeyPath
 import scodec.bits.ByteVector
 import cats.implicits._
 
@@ -79,7 +79,7 @@ class HistorySpec extends FlatSpec with Matchers with OptionValues with InMemory
 
   protected def withEmptyTrie(f: History[Task] => Task[Unit]): Unit = {
     val emptyHistory =
-      new History[Task](emptyRootHash, inMemHistoryStore, inMemPointerBlockStore)
+      new History[Task](History.emptyRootHash, inMemHistoryStore, inMemPointerBlockStore)
     f(emptyHistory).runSyncUnsafe(20.seconds)
   }
 
@@ -101,6 +101,9 @@ object TestData {
 
   def randomBlake: Blake2b256Hash =
     Blake2b256Hash.create(Random.alphanumeric.take(32).map(_.toByte).toArray)
+
+  def zerosBlake: Blake2b256Hash =
+    Blake2b256Hash.create(List.fill(32)(0).map(_.toByte).toArray)
 
   def insert(k: KeyPath) =
     InsertAction(k, randomBlake)

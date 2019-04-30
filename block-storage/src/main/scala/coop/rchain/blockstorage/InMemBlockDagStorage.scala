@@ -23,13 +23,15 @@ final class InMemBlockDagStorage[F[_]: Concurrent: Sync: Log: BlockStore](
     childMapRef: Ref[F, Map[BlockHash, Set[BlockHash]]],
     dataLookupRef: Ref[F, Map[BlockHash, BlockMetadata]],
     topoSortRef: Ref[F, Vector[Vector[BlockHash]]],
-    equivocationsTrackerRef: Ref[F, Set[EquivocationRecord]]
+    equivocationsTrackerRef: Ref[F, Set[EquivocationRecord]],
+    invalidBlocksRef: Ref[F, Set[BlockMetadata]]
 ) extends BlockDagStorage[F] {
   final case class InMemBlockDagRepresentation(
       latestMessagesMap: Map[Validator, BlockHash],
       childMap: Map[BlockHash, Set[BlockHash]],
       dataLookup: Map[BlockHash, BlockMetadata],
-      topoSortVector: Vector[Vector[BlockHash]]
+      topoSortVector: Vector[Vector[BlockHash]],
+      invalidBlocksSet: Set[BlockMetadata]
   ) extends BlockDagRepresentation[F] {
     def children(blockHash: BlockHash): F[Option[Set[BlockHash]]] =
       childMap.get(blockHash).pure[F]
@@ -58,6 +60,8 @@ final class InMemBlockDagStorage[F[_]: Concurrent: Sync: Log: BlockStore](
           case (validator, hash) => lookup(hash).map(validator -> _.get)
         }
         .map(_.toMap)
+    def invalidBlocks: F[Set[BlockMetadata]] =
+      invalidBlocksSet.pure[F]
   }
 
   object InMemEquivocationsTracker extends EquivocationsTracker[F] {
@@ -85,8 +89,15 @@ final class InMemBlockDagStorage[F[_]: Concurrent: Sync: Log: BlockStore](
       childMap       <- childMapRef.get
       dataLookup     <- dataLookupRef.get
       topoSort       <- topoSortRef.get
+      invalidBlocks  <- invalidBlocksRef.get
       _              <- lock.release
-    } yield InMemBlockDagRepresentation(latestMessages, childMap, dataLookup, topoSort)
+    } yield InMemBlockDagRepresentation(
+      latestMessages,
+      childMap,
+      dataLookup,
+      topoSort,
+      invalidBlocks
+    )
 
   override def insert(
       block: BlockMessage,
@@ -94,8 +105,9 @@ final class InMemBlockDagStorage[F[_]: Concurrent: Sync: Log: BlockStore](
       invalid: Boolean
   ): F[BlockDagRepresentation[F]] =
     for {
-      _ <- lock.acquire
-      _ <- dataLookupRef.update(_.updated(block.blockHash, BlockMetadata.fromBlock(block, invalid)))
+      _             <- lock.acquire
+      blockMetadata = BlockMetadata.fromBlock(block, invalid)
+      _             <- dataLookupRef.update(_.updated(block.blockHash, blockMetadata))
       _ <- childMapRef.update(
             childMap =>
               parentHashes(block).foldLeft(childMap) {
@@ -132,6 +144,7 @@ final class InMemBlockDagStorage[F[_]: Concurrent: Sync: Log: BlockStore](
               case (acc, (validator, blockHash)) => acc.updated(validator, blockHash)
             }
           }
+      _   <- if (invalid) invalidBlocksRef.update(_ + blockMetadata) else ().pure[F]
       _   <- lock.release
       dag <- getRepresentation
     } yield dag
@@ -163,12 +176,14 @@ object InMemBlockDagStorage {
       dataLookupRef           <- Ref.of[F, Map[BlockHash, BlockMetadata]](Map.empty)
       topoSortRef             <- Ref.of[F, Vector[Vector[BlockHash]]](Vector.empty)
       equivocationsTrackerRef <- Ref.of[F, Set[EquivocationRecord]](Set.empty)
+      invalidBlocksRef        <- Ref.of[F, Set[BlockMetadata]](Set.empty)
     } yield new InMemBlockDagStorage[F](
       lock,
       latestMessagesRef,
       childMapRef,
       dataLookupRef,
       topoSortRef,
-      equivocationsTrackerRef
+      equivocationsTrackerRef,
+      invalidBlocksRef
     )
 }

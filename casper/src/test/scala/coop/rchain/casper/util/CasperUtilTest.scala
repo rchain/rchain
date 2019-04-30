@@ -1,26 +1,12 @@
 package coop.rchain.casper.util
 
-import ProtoUtil._
-import com.google.protobuf.ByteString
-import org.scalatest.{FlatSpec, Matchers}
-import coop.rchain.catscontrib._
 import coop.rchain.casper.helper.{BlockDagStorageFixture, BlockGenerator}
-import cats.implicits._
-import cats.mtl.MonadState
-import cats.mtl.implicits._
-import coop.rchain.blockstorage.BlockStore
-import coop.rchain.casper.ConstructDeploy
-import coop.rchain.casper.Estimator.{BlockHash, Validator}
-import coop.rchain.casper.helper.BlockGenerator
 import coop.rchain.casper.helper.BlockGenerator._
 import coop.rchain.casper.helper.BlockUtil.generateValidator
 import coop.rchain.casper.scalatestcontrib._
+import coop.rchain.casper.util.ProtoUtil._
 import monix.eval.Task
-
-import scala.concurrent.duration._
-import monix.execution.Scheduler.Implicits.global
-
-import scala.collection.immutable.{HashMap, HashSet}
+import org.scalatest.{FlatSpec, Matchers}
 
 class CasperUtilTest
     extends FlatSpec

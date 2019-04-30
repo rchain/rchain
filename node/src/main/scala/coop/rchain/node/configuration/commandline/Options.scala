@@ -437,6 +437,13 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
   }
   addSubcommand(visualizeBlocks)
 
+  val machineVerifiableDag = new Subcommand("mvdag") {
+    descr(
+      "Machine Verifiable Dag"
+    )
+  }
+  addSubcommand(machineVerifiableDag)
+
   def listenAtName[R](name: String, desc: String)(
       implicit conv: ValueConverter[List[String] => R]
   ) = new Subcommand(name) {

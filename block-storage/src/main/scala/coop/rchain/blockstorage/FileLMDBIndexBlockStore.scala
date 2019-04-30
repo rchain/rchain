@@ -20,6 +20,7 @@ import coop.rchain.blockstorage.util.io._
 import coop.rchain.blockstorage.util.io.IOError
 import coop.rchain.shared.{AtomicMonadState, Log}
 import coop.rchain.shared.ByteStringOps._
+import coop.rchain.shared.Language.ignore
 import monix.execution.atomic.AtomicAny
 import org.lmdbjava.DbiFlags.MDB_CREATE
 import org.lmdbjava._
@@ -32,7 +33,6 @@ private final case class FileLMDBIndexBlockStoreState[F[_]: Sync](
     currentIndex: Int
 )
 
-@SuppressWarnings(Array("org.wartremover.warts.NonUnitStatements"))
 class FileLMDBIndexBlockStore[F[_]: Monad: Sync: RaiseIOError: Log] private (
     lock: Semaphore[F],
     index: LmdbDbi[F, ByteBuffer],
@@ -150,11 +150,13 @@ class FileLMDBIndexBlockStore[F[_]: Monad: Sync: RaiseIOError: Log] private (
         _                         <- randomAccessFile.writeInt(blockMessageByteArray.length)
         _                         <- randomAccessFile.write(blockMessageByteArray)
         _ <- index.withWriteTxn { txn =>
-              index.put(
-                txn,
-                blockHash.toDirectByteBuffer,
-                currentIndex.toByteString.concat(endOfFileOffset.toByteString).toDirectByteBuffer
-              )
+              ignore {
+                index.put(
+                  txn,
+                  blockHash.toDirectByteBuffer,
+                  currentIndex.toByteString.concat(endOfFileOffset.toByteString).toDirectByteBuffer
+                )
+              }
             }
       } yield ()
     )

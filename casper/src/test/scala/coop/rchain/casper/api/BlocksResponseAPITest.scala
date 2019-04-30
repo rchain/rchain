@@ -1,20 +1,21 @@
 package coop.rchain.casper.api
 
-import cats.Id
+import scala.collection.immutable.HashMap
+
 import cats.effect.Sync
-import com.google.protobuf.ByteString
-import coop.rchain.blockstorage.{BlockStore, IndexedBlockDagStorage}
+
+import coop.rchain.casper._
 import coop.rchain.casper.Estimator.BlockHash
-import coop.rchain.casper.protocol._
-import coop.rchain.casper.{genesis, _}
 import coop.rchain.casper.helper._
 import coop.rchain.casper.helper.BlockGenerator._
 import coop.rchain.casper.helper.BlockUtil.generateValidator
+import coop.rchain.casper.protocol._
+import coop.rchain.metrics.Metrics
 import coop.rchain.p2p.EffectsTestInstances.LogStub
+
+import com.google.protobuf.ByteString
 import monix.eval.Task
 import org.scalatest.{FlatSpec, Matchers}
-
-import scala.collection.immutable.HashMap
 
 // See [[/docs/casper/images/no_finalizable_block_mistake_with_no_disagreement_check.png]]
 class BlocksResponseAPITest
@@ -84,8 +85,9 @@ class BlocksResponseAPITest
                bonds,
                HashMap(v1 -> b6.blockHash, v2 -> b5.blockHash, v3 -> b4.blockHash)
              )
-        dag  <- blockDagStorage.getRepresentation
-        tips <- Estimator.tips[Task](dag, genesis)
+        dag        <- blockDagStorage.getRepresentation
+        metricsEff = new Metrics.MetricsNOP[Task]
+        tips       <- Estimator.tips[Task](dag, genesis)(Sync[Task], metricsEff)
         casperEffect <- NoOpsCasperEffect[Task](
                          HashMap.empty[BlockHash, BlockMessage],
                          tips
@@ -93,7 +95,7 @@ class BlocksResponseAPITest
         logEff             = new LogStub[Task]
         casperRef          <- MultiParentCasperRef.of[Task]
         _                  <- casperRef.set(casperEffect)
-        cliqueOracleEffect = SafetyOracle.cliqueOracle[Task](Sync[Task], logEff)
+        cliqueOracleEffect = SafetyOracle.cliqueOracle[Task](Sync[Task], logEff, metricsEff)
         blocksResponse <- BlockAPI.showMainChain[Task](Int.MaxValue)(
                            Sync[Task],
                            casperRef,
@@ -157,8 +159,9 @@ class BlocksResponseAPITest
                bonds,
                HashMap(v1 -> b6.blockHash, v2 -> b5.blockHash, v3 -> b4.blockHash)
              )
-        dag  <- blockDagStorage.getRepresentation
-        tips <- Estimator.tips[Task](dag, genesis)
+        dag        <- blockDagStorage.getRepresentation
+        metricsEff = new Metrics.MetricsNOP[Task]
+        tips       <- Estimator.tips[Task](dag, genesis)(Sync[Task], metricsEff)
         casperEffect <- NoOpsCasperEffect[Task](
                          HashMap.empty[BlockHash, BlockMessage],
                          tips
@@ -166,15 +169,15 @@ class BlocksResponseAPITest
         logEff             = new LogStub[Task]
         casperRef          <- MultiParentCasperRef.of[Task]
         _                  <- casperRef.set(casperEffect)
-        cliqueOracleEffect = SafetyOracle.cliqueOracle[Task](Sync[Task], logEff)
-        blocksResponse <- BlockAPI.showBlocks[Task](Int.MaxValue)(
+        cliqueOracleEffect = SafetyOracle.cliqueOracle[Task](Sync[Task], logEff, metricsEff)
+        blocksResponse <- BlockAPI.showBlocks[Task](Some(Int.MaxValue))(
                            Sync[Task],
                            casperRef,
                            logEff,
                            cliqueOracleEffect,
                            blockStore
                          )
-      } yield blocksResponse.length should be(8) // TODO: Switch to 4 when we implement block height correctly
+      } yield blocksResponse.right.get.length should be(8) // TODO: Switch to 4 when we implement block height correctly
   }
 
   it should "return until depth" in withStorage { implicit blockStore => implicit blockDagStorage =>
@@ -229,8 +232,9 @@ class BlocksResponseAPITest
              bonds,
              HashMap(v1 -> b6.blockHash, v2 -> b5.blockHash, v3 -> b4.blockHash)
            )
-      dag  <- blockDagStorage.getRepresentation
-      tips <- Estimator.tips[Task](dag, genesis)
+      dag        <- blockDagStorage.getRepresentation
+      metricsEff = new Metrics.MetricsNOP[Task]
+      tips       <- Estimator.tips[Task](dag, genesis)(Sync[Task], metricsEff)
       casperEffect <- NoOpsCasperEffect[Task](
                        HashMap.empty[BlockHash, BlockMessage],
                        tips
@@ -238,14 +242,14 @@ class BlocksResponseAPITest
       logEff             = new LogStub[Task]
       casperRef          <- MultiParentCasperRef.of[Task]
       _                  <- casperRef.set(casperEffect)
-      cliqueOracleEffect = SafetyOracle.cliqueOracle[Task](Sync[Task], logEff)
-      blocksResponse <- BlockAPI.showBlocks[Task](2)(
+      cliqueOracleEffect = SafetyOracle.cliqueOracle[Task](Sync[Task], logEff, metricsEff)
+      blocksResponse <- BlockAPI.showBlocks[Task](Some(2))(
                          Sync[Task],
                          casperRef,
                          logEff,
                          cliqueOracleEffect,
                          blockStore
                        )
-    } yield blocksResponse.length should be(2) // TODO: Switch to 3 when we implement block height correctly
+    } yield blocksResponse.right.get.length should be(2) // TODO: Switch to 3 when we implement block height correctly
   }
 }

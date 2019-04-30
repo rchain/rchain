@@ -3,14 +3,14 @@ package coop.rchain.casper.util.rholang
 import cats.Monad
 import cats.effect._
 import cats.implicits._
-import coop.rchain.blockstorage.BlockDagRepresentation
 import com.google.protobuf.ByteString
-import coop.rchain.blockstorage.BlockStore
+import coop.rchain.blockstorage.{BlockDagRepresentation, BlockStore}
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
 import coop.rchain.casper.util.{DagOperations, ProtoUtil}
 import coop.rchain.casper.{BlockException, PrettyPrinter}
 import coop.rchain.crypto.codec.Base16
+import coop.rchain.metrics.Span
 import coop.rchain.models.{BlockMetadata, Par}
 import coop.rchain.rholang.interpreter.ParBuilder
 import coop.rchain.rspace.ReplayException
@@ -29,7 +29,8 @@ object InterpreterUtil {
   def validateBlockCheckpoint[F[_]: Sync: Log: BlockStore](
       b: BlockMessage,
       dag: BlockDagRepresentation[F],
-      runtimeManager: RuntimeManager[F]
+      runtimeManager: RuntimeManager[F],
+      span: Span[F]
   ): F[Either[BlockException, Option[StateHash]]] = {
     val preStateHash    = ProtoUtil.preStateHash(b)
     val tsHash          = ProtoUtil.tuplespace(b)
@@ -37,13 +38,16 @@ object InterpreterUtil {
     val internalDeploys = deploys.flatMap(ProcessedDeployUtil.toInternal)
     val timestamp       = Some(b.header.get.timestamp) // TODO: Ensure header exists through type
     for {
+      _       <- span.mark("before-unsafe-get-parents")
       parents <- ProtoUtil.unsafeGetParents[F](b)
+      _       <- span.mark("before-compute-parents-post-state")
       possiblePreStateHash <- computeParentsPostState[F](
                                parents,
                                dag,
                                runtimeManager
                              )
       _ <- Log[F].info(s"Computed parents post state for ${PrettyPrinter.buildString(b)}.")
+      _ <- span.mark("before-process-pre-state-hash")
       result <- processPossiblePreStateHash[F](
                  runtimeManager,
                  preStateHash,
@@ -94,7 +98,7 @@ object InterpreterUtil {
       time: Option[Long]
   ): F[Either[BlockException, Option[StateHash]]] =
     runtimeManager
-      .replayComputeState(preStateHash, internalDeploys, time)
+      .replayComputeState(preStateHash)(internalDeploys, time)
       .flatMap {
         case Left((Some(deploy), status)) =>
           status match {
@@ -157,7 +161,7 @@ object InterpreterUtil {
       possiblePreStateHash <- computeParentsPostState[F](parents, dag, runtimeManager)
       result <- possiblePreStateHash match {
                  case Right(preStateHash) =>
-                   runtimeManager.computeState(preStateHash, deploys, time).map {
+                   runtimeManager.computeState(preStateHash)(deploys, time).map {
                      case (postStateHash, processedDeploys) =>
                        Right(preStateHash, postStateHash, processedDeploys)
                    }
@@ -210,8 +214,7 @@ object InterpreterUtil {
                                block.getBody.deploys.flatMap(ProcessedDeployUtil.toInternal)
                              val time = Some(block.header.get.timestamp)
                              for {
-                               replayResult <- runtimeManager.replayComputeState(
-                                                stateHash,
+                               replayResult <- runtimeManager.replayComputeState(stateHash)(
                                                 deploys,
                                                 time
                                               )

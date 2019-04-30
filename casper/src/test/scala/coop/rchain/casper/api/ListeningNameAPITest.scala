@@ -1,21 +1,19 @@
 package coop.rchain.casper.api
 
 import cats.implicits._
-
-import coop.rchain.casper.{ConstructDeploy, Created, MultiParentCasperTestUtil}
+import com.google.protobuf.ByteString
+import coop.rchain.casper.Created
+import coop.rchain.casper.MultiParentCasper.ignoreDoppelgangerCheck
 import coop.rchain.casper.helper.HashSetCasperTestNode
 import coop.rchain.casper.helper.HashSetCasperTestNode.Effect
-import coop.rchain.casper.MultiParentCasper.ignoreDoppelgangerCheck
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.scalatestcontrib._
-import coop.rchain.casper.util.ProtoUtil
+import coop.rchain.casper.util.ConstructDeploy
 import coop.rchain.crypto.signatures.Ed25519
-import coop.rchain.models._
 import coop.rchain.models.Expr.ExprInstance.GInt
+import coop.rchain.models._
 import coop.rchain.p2p.EffectsTestInstances.LogicalTime
 import coop.rchain.rholang.interpreter.accounting
-
-import com.google.protobuf.ByteString
 import monix.execution.Scheduler.Implicits.global
 import org.scalatest._
 

@@ -186,7 +186,7 @@ object Genesis {
       runtimeManager: RuntimeManager[F]
   ): F[BlockMessage] =
     runtimeManager
-      .computeState(startHash, blessedTerms)
+      .computeState(startHash)(blessedTerms)
       .map {
         case (stateHash, processedDeploys) =>
           val stateWithContracts = for {

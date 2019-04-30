@@ -78,7 +78,6 @@ object RhoSpec {
 
       result <- testResultCollector.getResult
     } yield result
-
 }
 
 class RhoSpec(

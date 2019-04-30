@@ -1,6 +1,6 @@
 package coop.rchain.rspace.nextgenrspace.history
+
 import coop.rchain.rspace.Blake2b256Hash
-import coop.rchain.rspace.nextgenrspace.history.History.codecTrie
 import scodec.Codec
 import scodec.bits.BitVector
 import scodec.codecs.{provide, vectorOfN}
@@ -29,7 +29,7 @@ object PointerBlock {
   implicit val codecPointerBlock: Codec[PointerBlock] =
     vectorOfN(
       provide(length),
-      codecTrie
+      Trie.codecTrie
     ).as[PointerBlock]
 
   def hash(pb: PointerBlock): Blake2b256Hash =
