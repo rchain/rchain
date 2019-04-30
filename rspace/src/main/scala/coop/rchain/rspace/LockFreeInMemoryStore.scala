@@ -2,6 +2,7 @@ package coop.rchain.rspace
 
 import cats.effect.Sync
 import cats.implicits._
+import com.typesafe.scalalogging.Logger
 import coop.rchain.catscontrib.ski.kp
 
 import scala.collection.concurrent.TrieMap
@@ -246,13 +247,38 @@ class LockFreeInMemoryStore[F[_], T, C, P, A, K](
   private[this] def isOrphaned(gnat: GNAT[C, P, A, K]): Boolean =
     gnat.data.isEmpty && gnat.wks.isEmpty
 
-  protected def processTrieUpdate(update: TrieUpdate[C, P, A, K]): Unit =
+  protected[this] val dataLogger: Logger = Logger("coop.rchain.rspace.datametrics")
+
+  private def measure(value: TrieUpdate[C, P, A, K]): Unit =
+    dataLogger.whenDebugEnabled {
+      val maybeData = value match {
+        case _ @TrieUpdate(_, operation, channelsHash, gnat) =>
+          val hex     = channelsHash.bytes.toHex
+          val data    = gnat.data
+          val dataLen = Codec[Seq[Datum[A]]].encode(data).get.size
+          val wks     = gnat.wks
+          val wksLen  = Codec[Seq[WaitingContinuation[P, K]]].encode(wks).get.size
+          val gnatLen = Codec[GNAT[C, P, A, K]].encode(gnat).get.size
+          Some((hex, gnatLen, operation.toString, data.size, dataLen, wks.size, wksLen))
+        case _ => None
+      }
+      maybeData.foreach {
+        case (key, size, action, datumSize, datumLen, continuationSize, continuationLen) =>
+          dataLogger.debug(
+            s"$key;$size;$action;$datumSize;$datumLen;$continuationLen;$continuationSize"
+          )
+      }
+    }
+
+  protected def processTrieUpdate(update: TrieUpdate[C, P, A, K]): Unit = {
+    measure(update)
     update match {
       case TrieUpdate(_, Insert, channelsHash, gnat) =>
         history.insert(trieStore, trieBranch, channelsHash, canonicalize(gnat))
       case TrieUpdate(_, Delete, channelsHash, gnat) =>
         history.delete(trieStore, trieBranch, channelsHash, canonicalize(gnat))
     }
+  }
 
   private[rspace] def bulkInsert(
       txn: Transaction,
