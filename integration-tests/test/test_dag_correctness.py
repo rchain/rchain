@@ -30,6 +30,7 @@ def test_fault_tolerance(command_line_options: CommandLineOptions, docker_client
     assert False
 
 
+@pytest.mark.xfail
 def test_catch_up_next_round(command_line_options: CommandLineOptions, random_generator: Random, docker_client: DockerClient) -> None:
     peers_keypairs = [BONDED_VALIDATOR_KEY_1, BONDED_VALIDATOR_KEY_2, BONDED_VALIDATOR_KEY_3, BONDED_VALIDATOR_KEY_4]
     contract_path = '/opt/docker/examples/tut-hello.rho'
