@@ -1,7 +1,7 @@
 package coop.rchain.rspace.nextgenrspace
 
 import cats.Applicative
-import cats.effect.{Concurrent, ContextShift}
+import cats.effect.{Concurrent, ContextShift, Sync}
 import cats.implicits._
 import com.google.common.collect.Multiset
 import com.typesafe.scalalogging.Logger
@@ -20,7 +20,7 @@ import monix.execution.atomic.AtomicAny
 import scala.collection.JavaConverters._
 import scala.concurrent.ExecutionContext
 
-class ReplayRSpace[F[_], C, P, A, R, K](
+class ReplayRSpace[F[_]: Sync, C, P, A, R, K](
     historyRepository: HistoryRepository[F, C, P, A, K],
     storeAtom: AtomicAny[HotStore[F, C, P, A, K]],
     branch: Branch
@@ -122,8 +122,7 @@ class ReplayRSpace[F[_], C, P, A, R, K](
       for {
         _       <- metricsF.incrementCounter(consumeCommLabel)
         commRef <- syncF.delay { COMM(consumeRef, mats.map(_.datum.source)) }
-        //fixme replace with raiseError
-        _ = assert(comms.contains(commRef), "COMM Event was not contained in the trace")
+        _       <- assertF(comms.contains(commRef), "COMM Event was not contained in the trace")
         r <- mats.toList
               .sortBy(_.datumIndex)(Ordering[Int].reverse)
               .traverse {
@@ -149,17 +148,14 @@ class ReplayRSpace[F[_], C, P, A, R, K](
               }
       } yield r
 
-    @SuppressWarnings(Array("org.wartremover.warts.Throw"))
-    // TODO stop throwing exceptions
     def getCommOrDataCandidates(comms: Seq[COMM]): F[Either[COMM, Seq[DataCandidate[C, R]]]] = {
       type COMMOrData = Either[COMM, Seq[DataCandidate[C, R]]]
       def go(comms: Seq[COMM]): F[Either[Seq[COMM], Either[COMM, Seq[DataCandidate[C, R]]]]] =
         comms match {
           case Nil =>
             val msg = "List comms must not be empty"
-            //fixme replace with raiseError
             logger.error(msg)
-            throw new IllegalArgumentException(msg)
+            Sync[F].raiseError(new IllegalArgumentException(msg))
           case commRef :: Nil =>
             runMatcher(commRef).map {
               case Some(x) => x.asRight[COMM].asRight[Seq[COMM]]
@@ -270,8 +266,6 @@ class ReplayRSpace[F[_], C, P, A, R, K](
       groupedChannels.tailRecM(go)
     }
 
-    @SuppressWarnings(Array("org.wartremover.warts.Throw"))
-    // TODO stop throwing exceptions
     def getCommOrProduceCandidate(
         comms: Seq[COMM],
         produceRef: Produce,
@@ -282,9 +276,8 @@ class ReplayRSpace[F[_], C, P, A, R, K](
         comms match {
           case Nil =>
             val msg = "comms must not be empty"
-            //fixme replace with raiseError
             logger.error(msg)
-            throw new IllegalArgumentException(msg)
+            Sync[F].raiseError(new IllegalArgumentException(msg))
           case commRef :: Nil =>
             runMatcher(commRef, produceRef, groupedChannels) map {
               case Some(x) => x.asRight[COMM].asRight[Seq[COMM]]
@@ -324,8 +317,7 @@ class ReplayRSpace[F[_], C, P, A, R, K](
           for {
             _       <- metricsF.incrementCounter(produceCommLabel)
             commRef <- syncF.delay { COMM(consumeRef, dataCandidates.map(_.datum.source)) }
-            //fixme replace with raiseError
-            _ = assert(comms.contains(commRef), "COMM Event was not contained in the trace")
+            _       <- assertF(comms.contains(commRef), "COMM Event was not contained in the trace")
             _ <- if (!persistK) {
                   store.removeContinuation(channels, continuationIndex)
                 } else {
@@ -384,6 +376,13 @@ class ReplayRSpace[F[_], C, P, A, R, K](
                }
     } yield result
   }
+
+  private def assertF(predicate: Boolean, errorMsg: String): F[Unit] =
+    if (!predicate)
+      Sync[F].raiseError(
+        new IllegalStateException(errorMsg)
+      )
+    else ().pure[F]
 
   @SuppressWarnings(Array("org.wartremover.warts.NonUnitStatements"))
   @inline
