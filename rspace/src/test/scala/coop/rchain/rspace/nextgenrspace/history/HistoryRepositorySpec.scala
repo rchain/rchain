@@ -48,6 +48,30 @@ class HistoryRepositorySpec
   val testChannelJoinsPrefix         = "channel-joins"
   val testChannelContinuationsPrefix = "channel-continuations"
 
+  it should "allow insert of joins, datum and continuation on same channel" in withEmptyRepository {
+    repo =>
+      val channel          = testChannelDataPrefix
+      val testDatum        = datum(1)
+      val data             = InsertData[String, String](channel, testDatum :: Nil)
+      val testJoins        = join(1)
+      val joins            = InsertJoins[String](channel, testJoins)
+      val testContinuation = continuation(1)
+      val continuations =
+        InsertContinuations[String, String, String](channel :: Nil, testContinuation :: Nil)
+      for {
+        nextRepo            <- repo.checkpoint(data :: joins :: continuations :: Nil)
+        fetchedData         <- nextRepo.getData(channel)
+        fetchedContinuation <- nextRepo.getContinuations(channel :: Nil)
+        fetchedJoins        <- nextRepo.getJoins(channel)
+        _                   = fetchedData should have size 1
+        _                   = fetchedData.head shouldBe testDatum
+        _                   = fetchedContinuation should have size 1
+        _                   = fetchedContinuation.head shouldBe testContinuation
+        _                   = fetchedJoins should have size 2
+        _                   = fetchedJoins.toSet.flatten.flatten should contain theSameElementsAs joins.joins.toSet.flatten.flatten
+      } yield ()
+  }
+
   it should "process insert and delete of thirty mixed elements" in withEmptyRepository { repo =>
     val data  = (0 to 10).map(insertDatum).toVector
     val joins = (0 to 10).map(insertJoin).toVector

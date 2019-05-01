@@ -165,7 +165,7 @@ object SystemProcesses {
             params                                                  <- runtimeParametersRef.get
             DeployParameters(codeHash, phloRate, userId, timestamp) = params
             _ <- produce(
-              Seq(codeHash, phloRate, userId, timestamp),
+                  Seq(codeHash, phloRate, userId, timestamp),
                   ack
                 )
           } yield ()

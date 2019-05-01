@@ -22,14 +22,14 @@ import coop.rchain.rholang.interpreter.errors.BugFoundError
 import coop.rchain.rholang.interpreter.storage.StoragePrinter
 import coop.rchain.rholang.interpreter.storage.implicits.matchListPar
 import coop.rchain.rholang.interpreter.{
-    ChargingReducer,
-    ErrorLog,
-    EvaluateResult,
-    Interpreter,
-    RhoType,
-    Runtime,
-    PrettyPrinter => RholangPrinter
-  }
+  ChargingReducer,
+  ErrorLog,
+  EvaluateResult,
+  Interpreter,
+  RhoType,
+  Runtime,
+  PrettyPrinter => RholangPrinter
+}
 import coop.rchain.rspace.{trace, Blake2b256Hash, Checkpoint, ReplayException}
 
 trait RuntimeManager[F[_]] {

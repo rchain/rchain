@@ -109,19 +109,20 @@ abstract class HistoryRepositoryGenerativeDefinition
 
   def repo: HistoryRepository[Task, String, Pattern, String, StringsCaptor]
 
-  "HistoryRepository" should "accept all HotStoreActions" in forAll(minSize(1),
-                                                                    sizeRange(50),
-                                                                    minSuccessful(10)) {
-    actions: List[HotStoreAction] =>
-      val repository = repo
-      actions
-        .foldLeftM(repository) { (repo, action) =>
-          for {
-            next <- repo.checkpoint(action :: Nil)
-            _    <- checkActionResult(action, next)
-          } yield next
-        }
-        .runSyncUnsafe(20.seconds)
+  "HistoryRepository" should "accept all HotStoreActions" in forAll(
+    minSize(1),
+    sizeRange(50),
+    minSuccessful(10)
+  ) { actions: List[HotStoreAction] =>
+    val repository = repo
+    actions
+      .foldLeftM(repository) { (repo, action) =>
+        for {
+          next <- repo.checkpoint(action :: Nil)
+          _    <- checkActionResult(action, next)
+        } yield next
+      }
+      .runSyncUnsafe(20.seconds)
   }
 
   def checkData(seq: Seq[Datum[String]], data: Seq[Datum[Any]]): Assertion =
@@ -129,10 +130,13 @@ abstract class HistoryRepositoryGenerativeDefinition
 
   def checkJoins(seq: Seq[Seq[String]], joins: Seq[Seq[Any]]): Assertion =
     seq.toSet.map((v: Seq[String]) => v.toSet) should contain theSameElementsAs joins.toSet.map(
-      (v: Seq[Any]) => v.toSet)
+      (v: Seq[Any]) => v.toSet
+    )
 
-  def checkContinuations(seq: Seq[WaitingContinuation[Pattern, StringsCaptor]],
-                         conts: Seq[WaitingContinuation[Any, Any]]): Assertion =
+  def checkContinuations(
+      seq: Seq[WaitingContinuation[Pattern, StringsCaptor]],
+      conts: Seq[WaitingContinuation[Any, Any]]
+  ): Assertion =
     seq should contain theSameElementsAs conts
 
   def checkActionResult(
@@ -191,8 +195,10 @@ abstract class HistoryRepositoryGenerativeDefinition
         channels <- distinctStrings
         sz       <- Gen.size
         data <- Gen
-                 .containerOfN[Set, WaitingContinuation[Pattern, StringsCaptor]](sz,
-                                                                                 genContinuation)
+                 .containerOfN[Set, WaitingContinuation[Pattern, StringsCaptor]](
+                   sz,
+                   genContinuation
+                 )
                  .map(_.toList)
       } yield InsertContinuations(channels, data)
     )
