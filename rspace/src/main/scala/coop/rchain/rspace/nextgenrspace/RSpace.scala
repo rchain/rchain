@@ -33,13 +33,8 @@ class RSpace[F[_], C, P, A, R, K] private[rspace] (
     contextShift: ContextShift[F],
     scheduler: ExecutionContext,
     metricsF: Metrics[F]
-) extends RSpaceOps[F, C, P, A, R, K](storeAtom, branch)
+) extends RSpaceOps[F, C, P, A, R, K](historyRepository, storeAtom, branch)
     with ISpace[F, C, P, A, R, K] {
-
-  //TODO close in some F state abstraction
-  val historyRepositoryAtom: AtomicAny[HistoryRepository[F, C, P, A, K]] = AtomicAny(
-    historyRepository
-  )
 
   def store: HotStore[F, C, P, A, K] = storeAtom.get()
 
