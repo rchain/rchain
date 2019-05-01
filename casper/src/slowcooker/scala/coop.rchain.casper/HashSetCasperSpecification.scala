@@ -1,13 +1,13 @@
 package coop.rchain.casper
 
 import cats.data.EitherT
-import cats.effect.Sync
+import cats.effect.{Resource, Sync}
 import cats.implicits._
 import coop.rchain.casper.MultiParentCasper.ignoreDoppelgangerCheck
 import coop.rchain.casper.genesis.Genesis
 import coop.rchain.casper.genesis.contracts._
 import coop.rchain.casper.helper.HashSetCasperTestNode
-import coop.rchain.casper.helper.HashSetCasperTestNode.Effect
+import coop.rchain.casper.helper.HashSetCasperTestNode._
 import coop.rchain.casper.protocol.{BlockMessage, DeployData}
 import coop.rchain.casper.util.ConstructDeploy
 import coop.rchain.casper.util.comm.TestNetwork
@@ -111,8 +111,12 @@ object HashSetCasperSpecification extends Commands {
   implicit def noShrink[T]: Shrink[T] = Shrink.shrinkAny
   import HashSetCasperActions._
 
+  type Close[F[_]] = F[Unit]
+
+  case class CloseableNodes(nodes: List[NodeBox], closeNodes: Close[Effect])
+
   override type State = List[RNode]
-  override type Sut   = List[NodeBox] // System Under Test
+  override type Sut   = CloseableNodes // System Under Test
 
   override def canCreateNewSut(
       newState: State,
@@ -131,18 +135,20 @@ object HashSetCasperSpecification extends Commands {
 
     val network = TestNetwork.empty[Effect]
 
-    val nodes = HashSetCasperTestNode
+    val nodesResource = HashSetCasperTestNode
       .networkEff(validatorKeys.take(state.size), genesis, testNetwork = network)
       .map(_.toList)
 
     print(":")
 
-    nodes.result.map(new NodeBox(_, None))
+    val (nodes, releaseF) = nodesResource.allocated.result
+
+    CloseableNodes(nodes.map(new NodeBox(_, None)), releaseF)
   }
 
   override def destroySut(sut: Sut): Unit = {
     print(".")
-    sut.traverse_(_.node.tearDown()).result
+    sut.closeNodes.result
   }
 
   override def genInitialState: Gen[State] =
@@ -178,7 +184,7 @@ object HashSetCasperSpecification extends Commands {
     override type Result = List[String]
 
     override def run(sut: Sut): Result = {
-      val validator    = sut(node.idx)
+      val validator    = sut.nodes(node.idx)
       val blockMessage = (deploy(validator.node, deployment(0)) >> create(validator.node)).result
       validator.update(Some(blockMessage))
       validator.node.logEff.errors ++ validator.node.logEff.warns
@@ -201,7 +207,7 @@ object HashSetCasperSpecification extends Commands {
     override type Result = (BlockStatus, List[String])
 
     override def run(sut: Sut): Result = {
-      val validator = sut(node.idx)
+      val validator = sut.nodes(node.idx)
       val result    = add(validator.node, validator.lastBlock.get).result.right.get
       validator.update(None)
       (result, validator.node.logEff.errors ++ validator.node.logEff.warns)
@@ -219,7 +225,7 @@ object HashSetCasperSpecification extends Commands {
     override type Result = (BlockStatus, List[String])
 
     override def run(sut: Sut): Result = {
-      val validator = sut(node.idx).node
+      val validator = sut.nodes(node.idx).node
       val result = (deploy(validator, deployment(0)) >> create(validator) >>= (
           b => add(validator, b)
       )).result.right.get
@@ -237,7 +243,7 @@ object HashSetCasperSpecification extends Commands {
     override type Result = List[String]
 
     override def run(sut: Sut): List[String] = {
-      val validator = sut(node.idx).node
+      val validator = sut.nodes(node.idx).node
       validator.receive().result
       validator.logEff.errors ++ validator.logEff.warns
     }

@@ -4,7 +4,7 @@ import cats.implicits._
 import coop.rchain.casper.MultiParentCasperTestUtil
 import coop.rchain.casper.genesis.Genesis
 import coop.rchain.casper.genesis.contracts._
-import coop.rchain.casper.helper.HashSetCasperTestNode.Effect
+import coop.rchain.casper.helper.HashSetCasperTestNode._
 import coop.rchain.casper.helper.{BlockDagStorageTestFixture, HashSetCasperTestNode}
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.scalatestcontrib._
@@ -122,20 +122,19 @@ object BlockApproverProtocolTest {
           supply = Long.MaxValue
         )
       )
-
-    for {
-      nodes <- HashSetCasperTestNode.networkEff(Vector(sk), genesis)
-      node  = nodes.head
-    } yield new BlockApproverProtocol(
-      node.validatorId,
-      deployTimestamp,
-      bonds,
-      wallets,
-      1L,
-      Long.MaxValue,
-      false,
-      requiredSigs
-    ) -> node
+    HashSetCasperTestNode.networkEff(Vector(sk), genesis).use { nodes =>
+      val node = nodes.head
+      (new BlockApproverProtocol(
+        node.validatorId,
+        deployTimestamp,
+        bonds,
+        wallets,
+        1L,
+        Long.MaxValue,
+        false,
+        requiredSigs
+      ) -> node).pure[Effect]
+    }
   }
 
 }

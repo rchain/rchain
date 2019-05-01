@@ -37,7 +37,6 @@ object MultiParentCasperTestUtil {
       bs     <- BlockDagStorageTestFixture.createBlockStorage[Effect](node.blockStoreDir)
       result <- f(bs)
       _      <- bs.close()
-      _      <- Sync[Effect].delay { node.blockStoreDir.recursivelyDelete() }
     } yield result
 
   def blockTuplespaceContents(
