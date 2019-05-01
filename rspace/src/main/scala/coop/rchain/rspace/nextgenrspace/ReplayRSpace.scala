@@ -136,8 +136,10 @@ class ReplayRSpace[F[_]: Sync, C, P, A, R, K](
                   s"consume: data found for <patterns: $patterns> at <channels: $channels>"
                 )
               }
-              .map { _ =>
+              .flatMap { _ =>
                 removeBindingsFor(commRef)
+              }
+              .map { _ =>
                 val contSequenceNumber = commRef.nextSequenceNumber
                 Some(
                   (
@@ -333,8 +335,8 @@ class ReplayRSpace[F[_]: Sync, C, P, A, R, K](
                         store.removeJoin(candidateChannel, channels)
                   }
             _ <- logF.debug(s"produce: matching continuation found at <channels: $channels>")
+            _ <- removeBindingsFor(commRef)
             r <- syncF.delay {
-                  removeBindingsFor(commRef)
                   val contSequenceNumber = commRef.nextSequenceNumber
                   Some(
                     (
@@ -385,14 +387,14 @@ class ReplayRSpace[F[_]: Sync, C, P, A, R, K](
     else ().pure[F]
 
   @SuppressWarnings(Array("org.wartremover.warts.NonUnitStatements"))
-  @inline
   private def removeBindingsFor(
       commRef: COMM
-  ): Unit =
+  ): F[Unit] = Sync[F].delay {
     commRef.produces.foldLeft(replayData.removeBinding(commRef.consume, commRef)) {
       case (updatedReplays, produceRef) =>
         updatedReplays.removeBinding(produceRef, commRef)
     }
+  }
 
   override def createCheckpoint(): F[Checkpoint] =
     for {
