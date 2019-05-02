@@ -68,17 +68,13 @@ class ProtoUtilTest extends FlatSpec with Matchers with GeneratorDrivenPropertyC
         createBlockResult <- casper.createBlock
         Created(block0)   = createBlockResult
         _                 <- casper.addBlock(block0, ignoreDoppelgangerCheck[Effect])
-        _ <- (1 to 8).toList.traverse_[Effect, Unit] { i =>
-              for {
-                deploy            <- ConstructDeploy.basicDeployData[Effect](i)
-                createBlockResult <- casper.deploy(deploy) *> casper.createBlock
-                Created(block)    = createBlockResult
-                _                 <- casper.addBlock(block, ignoreDoppelgangerCheck[Effect])
-              } yield ()
-            }
+        deploy            <- ConstructDeploy.basicDeployData[Effect](1)
+        createBlockResult <- casper.deploy(deploy) >> casper.createBlock
+        Created(block1)   = createBlockResult
+        _                 <- casper.addBlock(block1, ignoreDoppelgangerCheck[Effect])
         dag               <- casper.blockDag
         unseenBlockHashes <- ProtoUtil.unseenBlockHashes[Effect](dag, block0)
-        _                 = unseenBlockHashes.size should be(8)
+        _                 = unseenBlockHashes should be(Set(block1.blockHash))
       } yield ()
     }
   }
