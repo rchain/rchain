@@ -115,14 +115,14 @@ trait ReplayRSpaceTests extends ReplayRSpaceTestsBase[String, Pattern, String, S
 
         resultConsume <- space.consume(channels, patterns, continuation, false)
         resultProduce <- space.produce(channels(0), datum, false)
-        rigPont       <- space.createCheckpoint()
+        rigPoint       <- space.createCheckpoint()
 
         _ = resultConsume shouldBe None
         _ = resultProduce shouldBe Some(
           (ContResult(continuation, false, channels, patterns, 1), List(Result(datum, false)))
         )
 
-        _ <- replaySpace.rig(emptyPoint.root, rigPont.log)
+        _ <- replaySpace.rig(emptyPoint.root, rigPoint.log)
 
         replayResultConsume <- replaySpace.consume(channels, patterns, continuation, false)
         replayResultProduce <- replaySpace.produce(channels(0), datum, false)
@@ -130,7 +130,7 @@ trait ReplayRSpaceTests extends ReplayRSpaceTestsBase[String, Pattern, String, S
 
         _ = replayResultConsume shouldBe None
         _ = replayResultProduce shouldBe resultProduce
-        _ = finalPoint.root shouldBe rigPont.root
+        _ = finalPoint.root shouldBe rigPoint.root
         _ = replaySpace.replayData shouldBe empty
       } yield ()
     }
