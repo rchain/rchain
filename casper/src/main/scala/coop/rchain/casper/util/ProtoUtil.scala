@@ -98,11 +98,7 @@ object ProtoUtil {
       }
 
   def creatorJustification(block: BlockMetadata): Option[Justification] =
-    block.justifications
-      .find {
-        case Justification(validator: Validator, _) =>
-          validator == block.sender
-      }
+    block.justifications.find(justification => justification.validator == block.sender)
 
   /**
     * Since the creator justification is unique
