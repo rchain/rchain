@@ -34,7 +34,7 @@ class ProtoUtilTest extends FlatSpec with Matchers with GeneratorDrivenPropertyC
 
   private val (validatorKeys, validatorPks) = (1 to 4).map(_ => Ed25519.newKeyPair).unzip
   private val genesis = buildGenesis(
-    buildGenesisParameters(4, createBonds(validatorPks))
+    buildGenesisParameters(validatorKeys.length, createBonds(validatorPks))
   )
 
   "unseenBlockHashes" should "return empty for a single block dag" in effectTest {
