@@ -1,12 +1,12 @@
 new
   rl(`rho:registry:lookup`), RevVaultCh,
-  stdout(`rho:io:stdout`), log
+  stdout(`rho:io:stdout`)
 in {
 
   rl!(`rho:id:1o93uitkrjfubh43jt19owanuezhntag5wh74c6ur5feuotpi73q8z`, *RevVaultCh) |
   for (@(_, RevVault) <- RevVaultCh) {
 
-    log!(("3.transfer_funds.rho")) |
+    stdout!(("3.transfer_funds.rho")) |
 
     // REPLACE THE REV ADDRESSES HERE vvv
     match (
@@ -21,22 +21,19 @@ in {
           @RevVault!("deployerAuthKey", *revVaultkeyCh) |
           for (@(true, vault) <- vaultCh; key <- revVaultkeyCh) {
 
-            log!(("Beginning transfer of ", amount, "REV from", from, "to", to)) |
+            stdout!(("Beginning transfer of ", amount, "REV from", from, "to", to)) |
 
             new resultCh in {
               @vault!("transfer", to, amount, *key, *resultCh) |
               for (@result <- resultCh) {
 
-                log!(("Finished transfer of ", amount, "REV to", to, "result was:", result))
+                stdout!(("Finished transfer of ", amount, "REV to", to, "result was:", result))
               }
             }
           }
         }
       }
     }
-  } |
-
-  contract log(@data) = {
-    @"DEMO"!(data) | stdout!(data)
   }
+
 }
