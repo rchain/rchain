@@ -278,8 +278,8 @@ class Node:
     def eval(self, rho_file_path: str) -> str:
         return self.rnode_command('eval', rho_file_path)
 
-    def deploy(self, rho_file_path: str) -> str:
-        return self.rnode_command('deploy', '--private-key=b18e1d0045995ec3d010c387ccfeb984d783af8fbb0f40fa7db126d889f6dadd', '--phlo-limit=1000000', '--phlo-price=1', rho_file_path)
+    def deploy(self, rho_file_path: str, private_key: str) -> str:
+        return self.rnode_command('deploy', '--private-key={}'.format(private_key), '--phlo-limit=1000000', '--phlo-price=1', rho_file_path)
 
     def get_vdag(self) -> str:
         return self.rnode_command('vdag')
@@ -290,11 +290,12 @@ class Node:
     def get_parsed_mvdag(self) -> Dict[str, Set[str]]:
         return parse_mvdag_str(self.get_mvdag())
 
-    def deploy_string(self, rholang_code: str) -> str:
+    def deploy_string(self, rholang_code: str, private_key: str) -> str:
         quoted_rholang = shlex.quote(rholang_code)
-        return self.shell_out('sh', '-c', 'echo {quoted_rholang} >/tmp/deploy_string.rho && {rnode_binary} deploy --private-key=b18e1d0045995ec3d010c387ccfeb984d783af8fbb0f40fa7db126d889f6dadd --phlo-limit=10000000000 --phlo-price=1 /tmp/deploy_string.rho'.format(
+        return self.shell_out('sh', '-c', 'echo {quoted_rholang} >/tmp/deploy_string.rho && {rnode_binary} deploy --private-key={private_key} --phlo-limit=10000000000 --phlo-price=1 /tmp/deploy_string.rho'.format(
             rnode_binary=rnode_binary,
             quoted_rholang=quoted_rholang,
+            private_key=private_key
         ))
 
     def propose(self) -> str:

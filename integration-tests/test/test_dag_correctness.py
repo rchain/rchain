@@ -42,13 +42,13 @@ def test_catch_up_next_round(command_line_options: CommandLineOptions, random_ge
                         wait_for_peers_count_at_least(context, validator2, 3)
                         wait_for_peers_count_at_least(context, validator3, 3)
 
-                        deploy1 = DeployThread("validator1", validator1, contract_path, 10)
+                        deploy1 = DeployThread("validator1", validator1, contract_path, 10, BONDED_VALIDATOR_KEY_1.private_key)
                         deploy1.start()
 
-                        deploy2 = DeployThread("validator2", validator2, contract_path, 10)
+                        deploy2 = DeployThread("validator2", validator2, contract_path, 10, BONDED_VALIDATOR_KEY_2.private_key)
                         deploy2.start()
 
-                        deploy3 = DeployThread("validator3", validator3, contract_path, 10)
+                        deploy3 = DeployThread("validator3", validator3, contract_path, 10, BONDED_VALIDATOR_KEY_3.private_key)
                         deploy3.start()
 
 
@@ -75,7 +75,7 @@ def test_catch_up_next_round(command_line_options: CommandLineOptions, random_ge
 
                         with bootstrap_connected_peer(context=context, bootstrap=bootstrap_node, name='bonded-validator-4', keypair=BONDED_VALIDATOR_KEY_4) as validator4:
 
-                            deploy4 = DeployThread("catch_up", validator1, contract_path, 1)
+                            deploy4 = DeployThread("catch_up", validator1, contract_path, 1, BONDED_VALIDATOR_KEY_1.private_key)
                             deploy4.start()
                             deploy4.join()
 
