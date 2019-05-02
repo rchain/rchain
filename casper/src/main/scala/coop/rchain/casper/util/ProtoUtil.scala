@@ -436,13 +436,22 @@ object ProtoUtil {
       result <- latestMessages.toList
                  .traverse {
                    case (validator, latestMessage) =>
-                     val lastSeenBlockHash = latestMessagesOfBlock(validator)
-                     DagOperations
-                       .bfTraverseF(List(latestMessage))(
-                         block => getCreatorJustificationUnlessGoal(dag, block, lastSeenBlockHash)
-                       )
-                       .map(_.blockHash)
-                       .toSet
+                     latestMessagesOfBlock.get(validator) match {
+                       case Some(latestMessageOfBlockByValidator) =>
+                         DagOperations
+                           .bfTraverseF(List(latestMessage))(
+                             block =>
+                               getCreatorJustificationUnlessGoal(
+                                 dag,
+                                 block,
+                                 latestMessageOfBlockByValidator
+                               )
+                           )
+                           .map(_.blockHash)
+                           .toSet
+                       case None =>
+                         Set.empty[BlockHash].pure[F]
+                     }
                  }
                  .map(_.flatten.toSet)
     } yield result -- latestMessagesOfBlock.values.map(_.blockHash) - block.blockHash
