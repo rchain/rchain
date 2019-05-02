@@ -59,15 +59,6 @@ trait StorageTestsBase[F[_], C, P, A, K] extends FlatSpec with Matchers with Opt
 
   def run[S](f: F[S]): S
 
-  import scala.reflect.ClassTag
-  def collectActions[HA <: HotStoreAction: ClassTag](changes: Seq[HotStoreAction]): Seq[HA] = {
-    val clazz = implicitly[ClassTag[HA]].runtimeClass
-    changes
-      .collect {
-        case e: HA if clazz.isInstance(e) => e
-      }
-  }
-
   protected def setupTestingSpace[S, STORE](
       createISpace: (HR, ST, Branch) => F[(ST, AtST, T)],
       f: (ST, AtST, T) => F[S]

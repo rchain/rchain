@@ -50,7 +50,7 @@ class NodeStarted(LogsContainMessage):
 
 class ApprovedBlockReceivedHandlerStateEntered(LogsContainMessage):
     def __init__(self, node: 'Node') -> None:
-        super().__init__(node, 'Making a transition to ApprovedBlockRecievedHandler state.')
+        super().__init__(node, 'Making a transition to ApprovedBlockReceivedHandler state.')
 
 
 class ApprovedBlockReceived(LogsContainMessage):

@@ -9,14 +9,17 @@ import coop.rchain.rspace.concurrent.{ConcurrentTwoStepLockF, TwoStepLock}
 import coop.rchain.rspace.history.Branch
 import coop.rchain.rspace.internal._
 import coop.rchain.rspace.trace.Consume
-import coop.rchain.shared.Log
+import coop.rchain.rspace.nextgenrspace.history.HistoryRepository
+import coop.rchain.shared.{Cell, Log}
 import coop.rchain.shared.SyncVarOps._
 import monix.execution.atomic.AtomicAny
 
 import scala.concurrent.SyncVar
 import scala.util.Random
+import scodec.Codec
 
 abstract class RSpaceOps[F[_]: Concurrent, C, P, A, R, K](
+    historyRepository: HistoryRepository[F, C, P, A, K],
     val storeAtom: AtomicAny[HotStore[F, C, P, A, K]],
     val branch: Branch
 )(
@@ -26,6 +29,11 @@ abstract class RSpaceOps[F[_]: Concurrent, C, P, A, R, K](
     serializeK: Serialize[K],
     logF: Log[F]
 ) extends SpaceMatcher[F, C, P, A, R, K] {
+
+  //TODO close in some F state abstraction
+  protected val historyRepositoryAtom: AtomicAny[HistoryRepository[F, C, P, A, K]] = AtomicAny(
+    historyRepository
+  )
 
   def store: HotStore[F, C, P, A, K]
 
@@ -168,5 +176,17 @@ abstract class RSpaceOps[F[_]: Concurrent, C, P, A, R, K](
   protected[rspace] def isDirty(root: Blake2b256Hash): F[Boolean]
 
   override def clear(): F[Unit] = ???
+
+  protected def createCache: F[Cell[F, Cache[C, P, A, K]]] =
+    Cell.refCell[F, Cache[C, P, A, K]](Cache())
+
+  protected def createNewHotStore(
+      historyReader: HistoryReader[F, C, P, A, K]
+  )(implicit cp: Codec[P], ck: Codec[K]): F[Unit] =
+    for {
+      cache        <- createCache
+      nextHotStore = HotStore.inMem(Sync[F], cache, historyReader, cp, ck)
+      _            = storeAtom.set(nextHotStore)
+    } yield ()
 
 }
