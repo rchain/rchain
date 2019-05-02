@@ -3,7 +3,7 @@ package coop.rchain.casper
 import cats.implicits._
 import coop.rchain.casper.MultiParentCasper.ignoreDoppelgangerCheck
 import coop.rchain.casper.helper.HashSetCasperTestNode
-import coop.rchain.casper.helper.HashSetCasperTestNode.Effect
+import coop.rchain.casper.helper.HashSetCasperTestNode._
 import coop.rchain.casper.scalatestcontrib._
 import coop.rchain.casper.util.{ConstructDeploy, ProtoUtil}
 import coop.rchain.crypto.signatures.Ed25519
@@ -24,135 +24,139 @@ class MultiParentCasperMergeSpec extends FlatSpec with Matchers with Inspectors 
   )
 
   "HashSetCasper" should "handle multi-parent blocks correctly" in effectTest {
-    for {
-      nodes       <- HashSetCasperTestNode.networkEff(validatorKeys.take(2), genesis)
-      deployData0 <- ConstructDeploy.basicDeployData[Effect](0)
-      deployData2 <- ConstructDeploy.basicDeployData[Effect](2)
-      deploys = Vector(
-        deployData0,
-        ConstructDeploy.sourceDeploy(
-          "@1!(1) | for(@x <- @1){ @1!(x) }",
-          System.currentTimeMillis(),
-          accounting.MAX_VALUE
-        ),
-        deployData2
-      )
-      createBlockResult0 <- nodes(0).casperEff.deploy(deploys(0)) *> nodes(0).casperEff.createBlock
-      createBlockResult1 <- nodes(1).casperEff.deploy(deploys(1)) *> nodes(1).casperEff.createBlock
-      Created(block0)    = createBlockResult0
-      Created(block1)    = createBlockResult1
-      _                  <- nodes(0).casperEff.addBlock(block0, ignoreDoppelgangerCheck[Effect])
-      _                  <- nodes(1).casperEff.addBlock(block1, ignoreDoppelgangerCheck[Effect])
-      _                  <- nodes(0).receive()
-      _                  <- nodes(1).receive()
-      _                  <- nodes(0).receive()
-      _                  <- nodes(1).receive()
+    HashSetCasperTestNode.networkEff(validatorKeys.take(2), genesis).use { nodes =>
+      for {
+        deployData0 <- ConstructDeploy.basicDeployData[Effect](0)
+        deployData2 <- ConstructDeploy.basicDeployData[Effect](2)
+        deploys = Vector(
+          deployData0,
+          ConstructDeploy.sourceDeploy(
+            "@1!(1) | for(@x <- @1){ @1!(x) }",
+            System.currentTimeMillis(),
+            accounting.MAX_VALUE
+          ),
+          deployData2
+        )
+        createBlockResult0 <- nodes(0).casperEff
+                               .deploy(deploys(0)) *> nodes(0).casperEff.createBlock
+        createBlockResult1 <- nodes(1).casperEff
+                               .deploy(deploys(1)) *> nodes(1).casperEff.createBlock
+        Created(block0) = createBlockResult0
+        Created(block1) = createBlockResult1
+        _               <- nodes(0).casperEff.addBlock(block0, ignoreDoppelgangerCheck[Effect])
+        _               <- nodes(1).casperEff.addBlock(block1, ignoreDoppelgangerCheck[Effect])
+        _               <- nodes(0).receive()
+        _               <- nodes(1).receive()
+        _               <- nodes(0).receive()
+        _               <- nodes(1).receive()
 
-      //multiparent block joining block0 and block1 since they do not conflict
-      multiparentCreateBlockResult <- nodes(0).casperEff
-                                       .deploy(deploys(2)) *> nodes(0).casperEff.createBlock
-      Created(multiparentBlock) = multiparentCreateBlockResult
-      _                         <- nodes(0).casperEff.addBlock(multiparentBlock, ignoreDoppelgangerCheck[Effect])
-      _                         <- nodes(1).receive()
+        //multiparent block joining block0 and block1 since they do not conflict
+        multiparentCreateBlockResult <- nodes(0).casperEff
+                                         .deploy(deploys(2)) *> nodes(0).casperEff.createBlock
+        Created(multiparentBlock) = multiparentCreateBlockResult
+        _                         <- nodes(0).casperEff.addBlock(multiparentBlock, ignoreDoppelgangerCheck[Effect])
+        _                         <- nodes(1).receive()
 
-      _ = nodes(0).logEff.warns.isEmpty shouldBe true
-      _ = nodes(1).logEff.warns.isEmpty shouldBe true
-      _ = multiparentBlock.header.get.parentsHashList.size shouldBe 2
-      _ = nodes(0).casperEff.contains(multiparentBlock) shouldBeF true
-      _ = nodes(1).casperEff.contains(multiparentBlock) shouldBeF true
+        _ = nodes(0).logEff.warns.isEmpty shouldBe true
+        _ = nodes(1).logEff.warns.isEmpty shouldBe true
+        _ = multiparentBlock.header.get.parentsHashList.size shouldBe 2
+        _ = nodes(0).casperEff.contains(multiparentBlock) shouldBeF true
+        _ = nodes(1).casperEff.contains(multiparentBlock) shouldBeF true
 
-      finalTuplespace <- nodes(0).casperEff
-                          .storageContents(ProtoUtil.postStateHash(multiparentBlock))
-      _      = finalTuplespace.contains("@{0}!(0)") shouldBe true
-      _      = finalTuplespace.contains("@{1}!(1)") shouldBe true
-      result = finalTuplespace.contains("@{2}!(2)") shouldBe true
-
-      _ <- nodes.map(_.tearDown()).toList.sequence
-    } yield result
+        finalTuplespace <- nodes(0).casperEff
+                            .storageContents(ProtoUtil.postStateHash(multiparentBlock))
+        _      = finalTuplespace.contains("@{0}!(0)") shouldBe true
+        _      = finalTuplespace.contains("@{1}!(1)") shouldBe true
+        result = finalTuplespace.contains("@{2}!(2)") shouldBe true
+      } yield result
+    }
   }
 
   it should "handle multi-parent blocks correctly when they operate on stdout" ignore effectTest {
     def echoContract(no: Int) = s"""new stdout(`rho:io:stdout`) in { stdout!("Contract $no") }"""
     val time                  = System.currentTimeMillis()
-    for {
-      nodes <- HashSetCasperTestNode.networkEff(validatorKeys.take(2), genesis)
-      deploys = Vector(
+    HashSetCasperTestNode.networkEff(validatorKeys.take(2), genesis).use { nodes =>
+      val deploys = Vector(
         ConstructDeploy.sourceDeploy(echoContract(1), time + 1, accounting.MAX_VALUE),
         ConstructDeploy.sourceDeploy(echoContract(2), time + 2, accounting.MAX_VALUE)
       )
-      createBlockResult0 <- nodes(0).casperEff.deploy(deploys(0)) *> nodes(0).casperEff.createBlock
-      createBlockResult1 <- nodes(1).casperEff.deploy(deploys(1)) *> nodes(1).casperEff.createBlock
-      Created(block0)    = createBlockResult0
-      Created(block1)    = createBlockResult1
-      _                  <- nodes(0).casperEff.addBlock(block0, ignoreDoppelgangerCheck[Effect])
-      _                  <- nodes(1).casperEff.addBlock(block1, ignoreDoppelgangerCheck[Effect])
-      _                  <- nodes(0).receive()
-      _                  <- nodes(1).receive()
-      _                  <- nodes(0).receive()
-      _                  <- nodes(1).receive()
+      for {
+        createBlockResult0 <- nodes(0).casperEff
+                               .deploy(deploys(0)) *> nodes(0).casperEff.createBlock
+        createBlockResult1 <- nodes(1).casperEff
+                               .deploy(deploys(1)) *> nodes(1).casperEff.createBlock
+        Created(block0) = createBlockResult0
+        Created(block1) = createBlockResult1
+        _               <- nodes(0).casperEff.addBlock(block0, ignoreDoppelgangerCheck[Effect])
+        _               <- nodes(1).casperEff.addBlock(block1, ignoreDoppelgangerCheck[Effect])
+        _               <- nodes(0).receive()
+        _               <- nodes(1).receive()
+        _               <- nodes(0).receive()
+        _               <- nodes(1).receive()
 
-      //multiparent block joining block0 and block1 since they do not conflict
-      multiparentCreateBlockResult <- nodes(0).casperEff
-                                       .deploy(deploys(1)) *> nodes(0).casperEff.createBlock
-      Created(multiparentBlock) = multiparentCreateBlockResult
-      _                         <- nodes(0).casperEff.addBlock(multiparentBlock, ignoreDoppelgangerCheck[Effect])
-      _                         <- nodes(1).receive()
+        //multiparent block joining block0 and block1 since they do not conflict
+        multiparentCreateBlockResult <- nodes(0).casperEff
+                                         .deploy(deploys(1)) *> nodes(0).casperEff.createBlock
+        Created(multiparentBlock) = multiparentCreateBlockResult
+        _                         <- nodes(0).casperEff.addBlock(multiparentBlock, ignoreDoppelgangerCheck[Effect])
+        _                         <- nodes(1).receive()
 
-      _ = nodes(0).logEff.warns.isEmpty shouldBe true
-      _ = nodes(1).logEff.warns.isEmpty shouldBe true
-      _ = multiparentBlock.header.get.parentsHashList.size shouldBe 2
-      _ = nodes(0).casperEff.contains(multiparentBlock) shouldBeF true
-      _ = nodes(1).casperEff.contains(multiparentBlock) shouldBeF true
-      _ <- nodes.map(_.tearDown()).toList.sequence
-    } yield ()
+        _ = nodes(0).logEff.warns.isEmpty shouldBe true
+        _ = nodes(1).logEff.warns.isEmpty shouldBe true
+        _ = multiparentBlock.header.get.parentsHashList.size shouldBe 2
+        _ = nodes(0).casperEff.contains(multiparentBlock) shouldBeF true
+        _ = nodes(1).casperEff.contains(multiparentBlock) shouldBeF true
+      } yield ()
+    }
   }
 
   it should "not merge blocks that touch the same channel" in effectTest {
-    for {
-      nodes    <- HashSetCasperTestNode.networkEff(validatorKeys.take(2), genesis)
-      current0 <- timeEff.currentMillis
-      deploy0 = ConstructDeploy.sourceDeploy(
-        "@1!(47)",
-        current0,
-        accounting.MAX_VALUE
-      )
-      current1 <- timeEff.currentMillis
-      deploy1 = ConstructDeploy.sourceDeploy(
-        "for(@x <- @1){ @1!(x) }",
-        current1,
-        accounting.MAX_VALUE
-      )
-      deploy2 <- ConstructDeploy.basicDeployData[Effect](2)
-      deploys = Vector(
-        deploy0,
-        deploy1,
-        deploy2
-      )
-      createBlock0Result <- nodes(0).casperEff.deploy(deploys(0)) *> nodes(0).casperEff.createBlock
-      Created(block0)    = createBlock0Result
-      createBlock1Result <- nodes(1).casperEff.deploy(deploys(1)) *> nodes(1).casperEff.createBlock
-      Created(block1)    = createBlock1Result
-      _                  <- nodes(0).casperEff.addBlock(block0, ignoreDoppelgangerCheck[Effect])
-      _                  <- nodes(1).casperEff.addBlock(block1, ignoreDoppelgangerCheck[Effect])
-      _                  <- nodes(0).receive()
-      _                  <- nodes(1).receive()
-      _                  <- nodes(0).receive()
-      _                  <- nodes(1).receive()
+    HashSetCasperTestNode.networkEff(validatorKeys.take(2), genesis).use { nodes =>
+      for {
+        current0 <- timeEff.currentMillis
+        deploy0 = ConstructDeploy.sourceDeploy(
+          "@1!(47)",
+          current0,
+          accounting.MAX_VALUE
+        )
+        current1 <- timeEff.currentMillis
+        deploy1 = ConstructDeploy.sourceDeploy(
+          "for(@x <- @1){ @1!(x) }",
+          current1,
+          accounting.MAX_VALUE
+        )
+        deploy2 <- ConstructDeploy.basicDeployData[Effect](2)
+        deploys = Vector(
+          deploy0,
+          deploy1,
+          deploy2
+        )
+        createBlock0Result <- nodes(0).casperEff
+                               .deploy(deploys(0)) *> nodes(0).casperEff.createBlock
+        Created(block0) = createBlock0Result
+        createBlock1Result <- nodes(1).casperEff
+                               .deploy(deploys(1)) *> nodes(1).casperEff.createBlock
+        Created(block1) = createBlock1Result
+        _               <- nodes(0).casperEff.addBlock(block0, ignoreDoppelgangerCheck[Effect])
+        _               <- nodes(1).casperEff.addBlock(block1, ignoreDoppelgangerCheck[Effect])
+        _               <- nodes(0).receive()
+        _               <- nodes(1).receive()
+        _               <- nodes(0).receive()
+        _               <- nodes(1).receive()
 
-      createSingleParentBlockResult <- nodes(0).casperEff
-                                        .deploy(deploys(2)) *> nodes(0).casperEff.createBlock
-      Created(singleParentBlock) = createSingleParentBlockResult
-      _                          <- nodes(0).casperEff.addBlock(singleParentBlock, ignoreDoppelgangerCheck[Effect])
-      _                          <- nodes(1).receive()
+        createSingleParentBlockResult <- nodes(0).casperEff
+                                          .deploy(deploys(2)) *> nodes(0).casperEff.createBlock
+        Created(singleParentBlock) = createSingleParentBlockResult
+        _                          <- nodes(0).casperEff.addBlock(singleParentBlock, ignoreDoppelgangerCheck[Effect])
+        _                          <- nodes(1).receive()
 
-      _      = nodes(0).logEff.warns.isEmpty shouldBe true
-      _      = nodes(1).logEff.warns.isEmpty shouldBe true
-      _      = singleParentBlock.header.get.parentsHashList.size shouldBe 1
-      _      <- nodes(0).casperEff.contains(singleParentBlock) shouldBeF true
-      result <- nodes(1).casperEff.contains(singleParentBlock) shouldBeF true
-
-      _ <- nodes.map(_.tearDown()).toList.sequence
-    } yield result
+        _      = nodes(0).logEff.warns.isEmpty shouldBe true
+        _      = nodes(1).logEff.warns.isEmpty shouldBe true
+        _      = singleParentBlock.header.get.parentsHashList.size shouldBe 1
+        _      <- nodes(0).casperEff.contains(singleParentBlock) shouldBeF true
+        result <- nodes(1).casperEff.contains(singleParentBlock) shouldBeF true
+      } yield result
+    }
   }
 
   it should "not produce UnusedCommEvent while merging non conflicting blocks in the presence of conflicting ones" in effectTest {
@@ -237,84 +241,82 @@ class MultiParentCasperMergeSpec extends FlatSpec with Matchers with Inspectors 
         |  }
         |}
       """.stripMargin
+    HashSetCasperTestNode.networkEff(validatorKeys.take(3), genesis).use { nodes =>
+      val n1     = nodes(0)
+      val n2     = nodes(1)
+      val n3     = nodes(2)
+      val short  = defineDeploy("new x in { x!(0) }", 1L)
+      val time   = defineDeploy(timeRho, 3L)
+      val tuples = defineDeploy(tuplesRho, 2L)
+      val reg    = defineDeploy(registryRho, 4L)
+      for {
+        cB1N3Result   <- n3.casperEff.deploy(short) *> n3.casperEff.createBlock
+        Created(b1n3) = cB1N3Result
+        _             <- n3.casperEff.addBlock(b1n3, ignoreDoppelgangerCheck[Effect])
 
-    for {
-      nodes  <- HashSetCasperTestNode.networkEff(validatorKeys.take(3), genesis)
-      n1     = nodes(0)
-      n2     = nodes(1)
-      n3     = nodes(2)
-      short  = defineDeploy("new x in { x!(0) }", 1L)
-      time   = defineDeploy(timeRho, 3L)
-      tuples = defineDeploy(tuplesRho, 2L)
-      reg    = defineDeploy(registryRho, 4L)
+        cB1N2Result   <- n2.casperEff.deploy(time) *> n2.casperEff.createBlock
+        Created(b1n2) = cB1N2Result
+        _             <- n2.casperEff.addBlock(b1n2, ignoreDoppelgangerCheck[Effect])
 
-      cB1N3Result   <- n3.casperEff.deploy(short) *> n3.casperEff.createBlock
-      Created(b1n3) = cB1N3Result
-      _             <- n3.casperEff.addBlock(b1n3, ignoreDoppelgangerCheck[Effect])
+        cB1N1Result   <- n1.casperEff.deploy(tuples) *> n1.casperEff.createBlock
+        Created(b1n1) = cB1N1Result
+        _             <- n1.casperEff.addBlock(b1n1, ignoreDoppelgangerCheck[Effect])
 
-      cB1N2Result   <- n2.casperEff.deploy(time) *> n2.casperEff.createBlock
-      Created(b1n2) = cB1N2Result
-      _             <- n2.casperEff.addBlock(b1n2, ignoreDoppelgangerCheck[Effect])
+        _ <- n2.receive()
 
-      cB1N1Result   <- n1.casperEff.deploy(tuples) *> n1.casperEff.createBlock
-      Created(b1n1) = cB1N1Result
-      _             <- n1.casperEff.addBlock(b1n1, ignoreDoppelgangerCheck[Effect])
-
-      _ <- n2.receive()
-
-      cB2N2Result   <- n2.casperEff.deploy(reg) *> n2.casperEff.createBlock
-      Created(b2n2) = cB2N2Result
-
-      _ <- nodes.map(_.tearDown()).toList.sequence
-    } yield ()
+        cB2N2Result   <- n2.casperEff.deploy(reg) *> n2.casperEff.createBlock
+        Created(b2n2) = cB2N2Result
+      } yield ()
+    }
   }
 
   it should "not merge blocks that touch the same channel involving joins" in effectTest {
-    for {
-      nodes    <- HashSetCasperTestNode.networkEff(validatorKeys.take(2), genesis)
-      current0 <- timeEff.currentMillis
-      deploy0 = ConstructDeploy.sourceDeploy(
-        "@1!(47)",
-        current0,
-        accounting.MAX_VALUE
-      )
-      current1 <- timeEff.currentMillis
-      deploy1 = ConstructDeploy.sourceDeploy(
-        "for(@x <- @1; @y <- @2){ @1!(x) }",
-        current1,
-        accounting.MAX_VALUE
-      )
-      deploy2 <- ConstructDeploy.basicDeployData[Effect](2)
-      deploys = Vector(
-        deploy0,
-        deploy1,
-        deploy2
-      )
+    HashSetCasperTestNode.networkEff(validatorKeys.take(2), genesis).use { nodes =>
+      for {
+        current0 <- timeEff.currentMillis
+        deploy0 = ConstructDeploy.sourceDeploy(
+          "@1!(47)",
+          current0,
+          accounting.MAX_VALUE
+        )
+        current1 <- timeEff.currentMillis
+        deploy1 = ConstructDeploy.sourceDeploy(
+          "for(@x <- @1; @y <- @2){ @1!(x) }",
+          current1,
+          accounting.MAX_VALUE
+        )
+        deploy2 <- ConstructDeploy.basicDeployData[Effect](2)
+        deploys = Vector(
+          deploy0,
+          deploy1,
+          deploy2
+        )
 
-      createBlock0Result <- nodes(0).casperEff.deploy(deploys(0)) *> nodes(0).casperEff.createBlock
-      Created(block0)    = createBlock0Result
-      createBlock1Result <- nodes(1).casperEff.deploy(deploys(1)) *> nodes(1).casperEff.createBlock
-      Created(block1)    = createBlock1Result
-      _                  <- nodes(0).casperEff.addBlock(block0, ignoreDoppelgangerCheck[Effect])
-      _                  <- nodes(1).casperEff.addBlock(block1, ignoreDoppelgangerCheck[Effect])
-      _                  <- nodes(0).receive()
-      _                  <- nodes(1).receive()
-      _                  <- nodes(0).receive()
-      _                  <- nodes(1).receive()
+        createBlock0Result <- nodes(0).casperEff
+                               .deploy(deploys(0)) *> nodes(0).casperEff.createBlock
+        Created(block0) = createBlock0Result
+        createBlock1Result <- nodes(1).casperEff
+                               .deploy(deploys(1)) *> nodes(1).casperEff.createBlock
+        Created(block1) = createBlock1Result
+        _               <- nodes(0).casperEff.addBlock(block0, ignoreDoppelgangerCheck[Effect])
+        _               <- nodes(1).casperEff.addBlock(block1, ignoreDoppelgangerCheck[Effect])
+        _               <- nodes(0).receive()
+        _               <- nodes(1).receive()
+        _               <- nodes(0).receive()
+        _               <- nodes(1).receive()
 
-      createSingleParentBlockResult <- nodes(0).casperEff
-                                        .deploy(deploys(2)) *> nodes(0).casperEff.createBlock
-      Created(singleParentBlock) = createSingleParentBlockResult
-      _                          <- nodes(0).casperEff.addBlock(singleParentBlock, ignoreDoppelgangerCheck[Effect])
-      _                          <- nodes(1).receive()
+        createSingleParentBlockResult <- nodes(0).casperEff
+                                          .deploy(deploys(2)) *> nodes(0).casperEff.createBlock
+        Created(singleParentBlock) = createSingleParentBlockResult
+        _                          <- nodes(0).casperEff.addBlock(singleParentBlock, ignoreDoppelgangerCheck[Effect])
+        _                          <- nodes(1).receive()
 
-      _      = nodes(0).logEff.warns.isEmpty shouldBe true
-      _      = nodes(1).logEff.warns.isEmpty shouldBe true
-      _      = singleParentBlock.header.get.parentsHashList.size shouldBe 1
-      _      <- nodes(0).casperEff.contains(singleParentBlock) shouldBeF true
-      result <- nodes(1).casperEff.contains(singleParentBlock) shouldBeF true
-
-      _ <- nodes.map(_.tearDown()).toList.sequence
-    } yield result
+        _      = nodes(0).logEff.warns.isEmpty shouldBe true
+        _      = nodes(1).logEff.warns.isEmpty shouldBe true
+        _      = singleParentBlock.header.get.parentsHashList.size shouldBe 1
+        _      <- nodes(0).casperEff.contains(singleParentBlock) shouldBeF true
+        result <- nodes(1).casperEff.contains(singleParentBlock) shouldBeF true
+      } yield result
+    }
   }
 }

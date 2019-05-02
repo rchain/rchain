@@ -5,7 +5,7 @@ import com.google.protobuf.ByteString
 import coop.rchain.casper.Created
 import coop.rchain.casper.MultiParentCasper.ignoreDoppelgangerCheck
 import coop.rchain.casper.helper.HashSetCasperTestNode
-import coop.rchain.casper.helper.HashSetCasperTestNode.Effect
+import coop.rchain.casper.helper.HashSetCasperTestNode._
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.scalatestcontrib._
 import coop.rchain.casper.util.ConstructDeploy
@@ -26,40 +26,44 @@ class ListeningNameAPITest extends FlatSpec with Matchers with Inside {
   private val genesis                     = createGenesis(bonds)
 
   "getListeningNameDataResponse" should "work with unsorted channels" in effectTest {
-    val node = HashSetCasperTestNode.standaloneEff(genesis, validatorKeys.head)
-    import node._
+    HashSetCasperTestNode.standaloneEff(genesis, validatorKeys.head).use { node =>
+      import node._
 
-    def basicDeployData: DeployData = {
-      val timestamp = System.currentTimeMillis()
-      ConstructDeploy.sourceDeploy(
-        source = "@{ 3 | 2 | 1 }!(0)",
-        timestamp = timestamp,
-        phlos = accounting.MAX_VALUE
-      )
-    }
-
-    for {
-      createBlockResult <- node.casperEff.deploy(basicDeployData) *> node.casperEff.createBlock
-      Created(block)    = createBlockResult
-      _                 <- node.casperEff.addBlock(block, ignoreDoppelgangerCheck[Effect])
-
-      listeningName = Par().copy(exprs = Seq(Expr(GInt(2)), Expr(GInt(1)), Expr(GInt(3))))
-      resultData    = Par().copy(exprs = Seq(Expr(GInt(0))))
-      listeningNameResponse1 <- BlockAPI
-                                 .getListeningNameDataResponse[Effect](Int.MaxValue, listeningName)
-      _ = inside(listeningNameResponse1) {
-        case Right(ListeningNameDataResponse(blockResults, l)) =>
-          val data1   = blockResults.map(_.postBlockData)
-          val blocks1 = blockResults.map(_.block)
-          data1 should be(List(List(resultData)))
-          blocks1.length should be(1)
-          l should be(1)
+      def basicDeployData: DeployData = {
+        val timestamp = System.currentTimeMillis()
+        ConstructDeploy.sourceDeploy(
+          source = "@{ 3 | 2 | 1 }!(0)",
+          timestamp = timestamp,
+          phlos = accounting.MAX_VALUE
+        )
       }
-    } yield ()
+
+      for {
+        createBlockResult <- node.casperEff.deploy(basicDeployData) *> node.casperEff.createBlock
+        Created(block)    = createBlockResult
+        _                 <- node.casperEff.addBlock(block, ignoreDoppelgangerCheck[Effect])
+
+        listeningName = Par().copy(exprs = Seq(Expr(GInt(2)), Expr(GInt(1)), Expr(GInt(3))))
+        resultData    = Par().copy(exprs = Seq(Expr(GInt(0))))
+        listeningNameResponse1 <- BlockAPI
+                                   .getListeningNameDataResponse[Effect](
+                                     Int.MaxValue,
+                                     listeningName
+                                   )
+        _ = inside(listeningNameResponse1) {
+          case Right(ListeningNameDataResponse(blockResults, l)) =>
+            val data1   = blockResults.map(_.postBlockData)
+            val blocks1 = blockResults.map(_.block)
+            data1 should be(List(List(resultData)))
+            blocks1.length should be(1)
+            l should be(1)
+        }
+      } yield ()
+    }
   }
 
   it should "work across a chain" in effectTest {
-    HashSetCasperTestNode.networkEff(validatorKeys.take(3), genesis).flatMap { nodes =>
+    HashSetCasperTestNode.networkEff(validatorKeys.take(3), genesis).use { nodes =>
       implicit val nodeZeroCasperRef          = nodes(0).multiparentCasperRef
       implicit val nodeZeroSafetyOracleEffect = nodes(0).cliqueOracleEffect
       implicit val nodeZeroLogEffect          = nodes(0).logEff
@@ -196,68 +200,68 @@ class ListeningNameAPITest extends FlatSpec with Matchers with Inside {
         _ = inside(listeningNameResponse3UntilDepth2) {
           case Right(ListeningNameDataResponse(_, l)) => l should be(2)
         }
-        _ = nodes.foreach(_.tearDown())
       } yield ()
     }
   }
 
   "getListeningNameContinuationResponse" should "work with unsorted channels" in {
-    val node = HashSetCasperTestNode.standaloneEff(genesis, validatorKeys.head)
-    import node._
+    HashSetCasperTestNode.standaloneEff(genesis, validatorKeys.head).use { node =>
+      import node._
 
-    def basicDeployData: DeployData = {
-      val timestamp = System.currentTimeMillis()
-      DeployData()
-        .withDeployer(ByteString.EMPTY)
-        .withTimestamp(timestamp)
-        .withTerm("for (@0 <- @{ 3 | 2 | 1 }; @1 <- @{ 2 | 1 }) { 0 }")
-        .withPhloLimit(accounting.MAX_VALUE)
+      def basicDeployData: DeployData = {
+        val timestamp = System.currentTimeMillis()
+        DeployData()
+          .withDeployer(ByteString.EMPTY)
+          .withTimestamp(timestamp)
+          .withTerm("for (@0 <- @{ 3 | 2 | 1 }; @1 <- @{ 2 | 1 }) { 0 }")
+          .withPhloLimit(accounting.MAX_VALUE)
+      }
+
+      for {
+        createBlockResult <- node.casperEff.deploy(basicDeployData) *> node.casperEff.createBlock
+        Created(block)    = createBlockResult
+        _                 <- node.casperEff.addBlock(block, ignoreDoppelgangerCheck[Effect])
+
+        listeningNamesShuffled1 = List(
+          Par().copy(exprs = Seq(Expr(GInt(1)), Expr(GInt(2)))),
+          Par().copy(exprs = Seq(Expr(GInt(2)), Expr(GInt(1)), Expr(GInt(3))))
+        )
+        desiredResult = WaitingContinuationInfo(
+          List(
+            BindPattern(Vector(Par().copy(exprs = Vector(Expr(GInt(1))))), None, 0),
+            BindPattern(Vector(Par().copy(exprs = Vector(Expr(GInt(0))))), None, 0)
+          ),
+          Some(Par().copy(exprs = Vector(Expr(GInt(0)))))
+        )
+        listeningNameResponse1 <- BlockAPI.getListeningNameContinuationResponse[Effect](
+                                   Int.MaxValue,
+                                   listeningNamesShuffled1
+                                 )
+        _ = inside(listeningNameResponse1) {
+          case Right(ListeningNameContinuationResponse(blockResults, l)) =>
+            val continuations1 = blockResults.map(_.postBlockContinuations)
+            val blocks1        = blockResults.map(_.block)
+            continuations1 should be(List(List(desiredResult)))
+            blocks1.length should be(1)
+            l should be(1)
+        }
+        listeningNamesShuffled2 = List(
+          Par().copy(exprs = Seq(Expr(GInt(2)), Expr(GInt(1)), Expr(GInt(3)))),
+          Par().copy(exprs = Seq(Expr(GInt(1)), Expr(GInt(2))))
+        )
+        listeningNameResponse2 <- BlockAPI.getListeningNameContinuationResponse[Effect](
+                                   Int.MaxValue,
+                                   listeningNamesShuffled2
+                                 )
+        _ = inside(listeningNameResponse2) {
+          case Right(ListeningNameContinuationResponse(blockResults, l)) =>
+            val continuations2 = blockResults.map(_.postBlockContinuations)
+            val blocks2        = blockResults.map(_.block)
+            continuations2 should be(List(List(desiredResult)))
+            blocks2.length should be(1)
+            l should be(1)
+        }
+      } yield ()
     }
-
-    for {
-      createBlockResult <- node.casperEff.deploy(basicDeployData) *> node.casperEff.createBlock
-      Created(block)    = createBlockResult
-      _                 <- node.casperEff.addBlock(block, ignoreDoppelgangerCheck[Effect])
-
-      listeningNamesShuffled1 = List(
-        Par().copy(exprs = Seq(Expr(GInt(1)), Expr(GInt(2)))),
-        Par().copy(exprs = Seq(Expr(GInt(2)), Expr(GInt(1)), Expr(GInt(3))))
-      )
-      desiredResult = WaitingContinuationInfo(
-        List(
-          BindPattern(Vector(Par().copy(exprs = Vector(Expr(GInt(1))))), None, 0),
-          BindPattern(Vector(Par().copy(exprs = Vector(Expr(GInt(0))))), None, 0)
-        ),
-        Some(Par().copy(exprs = Vector(Expr(GInt(0)))))
-      )
-      listeningNameResponse1 <- BlockAPI.getListeningNameContinuationResponse[Effect](
-                                 Int.MaxValue,
-                                 listeningNamesShuffled1
-                               )
-      _ = inside(listeningNameResponse1) {
-        case Right(ListeningNameContinuationResponse(blockResults, l)) =>
-          val continuations1 = blockResults.map(_.postBlockContinuations)
-          val blocks1        = blockResults.map(_.block)
-          continuations1 should be(List(List(desiredResult)))
-          blocks1.length should be(1)
-          l should be(1)
-      }
-      listeningNamesShuffled2 = List(
-        Par().copy(exprs = Seq(Expr(GInt(2)), Expr(GInt(1)), Expr(GInt(3)))),
-        Par().copy(exprs = Seq(Expr(GInt(1)), Expr(GInt(2))))
-      )
-      listeningNameResponse2 <- BlockAPI.getListeningNameContinuationResponse[Effect](
-                                 Int.MaxValue,
-                                 listeningNamesShuffled2
-                               )
-      _ = inside(listeningNameResponse2) {
-        case Right(ListeningNameContinuationResponse(blockResults, l)) =>
-          val continuations2 = blockResults.map(_.postBlockContinuations)
-          val blocks2        = blockResults.map(_.block)
-          continuations2 should be(List(List(desiredResult)))
-          blocks2.length should be(1)
-          l should be(1)
-      }
-    } yield ()
   }
 }

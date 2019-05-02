@@ -7,7 +7,7 @@ import coop.rchain.casper.MultiParentCasper.ignoreDoppelgangerCheck
 import coop.rchain.casper.genesis.Genesis
 import coop.rchain.casper.genesis.contracts._
 import coop.rchain.casper.helper.HashSetCasperTestNode
-import coop.rchain.casper.helper.HashSetCasperTestNode.Effect
+import coop.rchain.casper.helper.HashSetCasperTestNode._
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.scalatestcontrib._
 import coop.rchain.casper.util.comm.TestNetwork
@@ -60,168 +60,168 @@ class MultiParentCasperBondingSpec extends FlatSpec with Matchers with Inspector
   //put a new casper instance at the start of each
   //test since we cannot reset it
   "MultiParentCasper" should "allow bonding" in effectTest {
-    for {
-      nodes <- HashSetCasperTestNode.networkEff(
-                validatorKeys :+ otherSk,
-                genesis,
-                storageSize = 1024L * 1024 * 10
-              )
-      runtimeManager = nodes(0).runtimeManager
-      pubKey         = Base16.encode(ethPubKeys.head.bytes.drop(1))
-      secKey         = ethPivKeys.head.bytes
-      ethAddress     = ethAddresses.head
-      bondKey        = Base16.encode(otherPk.bytes)
-      walletUnlockDeploy <- RevIssuanceTest.preWalletUnlockDeploy(
-                             ethAddress,
-                             pubKey,
-                             secKey,
-                             "unlockOut"
-                           )(Concurrent[Effect], runtimeManager)
-      bondingForwarderAddress = BondingUtil.bondingForwarderAddress(ethAddress)
-      bondingForwarderDeploy = ConstructDeploy.sourceDeploy(
-        BondingUtil.bondingForwarderDeploy(bondKey, ethAddress),
-        System.currentTimeMillis(),
-        accounting.MAX_VALUE
+    HashSetCasperTestNode
+      .networkEff(
+        validatorKeys :+ otherSk,
+        genesis,
+        storageSize = 1024L * 1024 * 10
       )
-      transferStatusOut = BondingUtil.transferStatusOut(ethAddress)
-      bondingTransferDeploy <- RevIssuanceTest.walletTransferDeploy(
-                                0,
-                                wallets.head.initRevBalance.toLong,
-                                bondingForwarderAddress,
-                                transferStatusOut,
-                                pubKey,
-                                secKey
-                              )(Concurrent[Effect], runtimeManager)
+      .use { nodes =>
+        val runtimeManager = nodes(0).runtimeManager
+        val pubKey         = Base16.encode(ethPubKeys.head.bytes.drop(1))
+        val secKey         = ethPivKeys.head.bytes
+        val ethAddress     = ethAddresses.head
+        val bondKey        = Base16.encode(otherPk.bytes)
+        for {
+          walletUnlockDeploy <- RevIssuanceTest.preWalletUnlockDeploy(
+                                 ethAddress,
+                                 pubKey,
+                                 secKey,
+                                 "unlockOut"
+                               )(Concurrent[Effect], runtimeManager)
+          bondingForwarderAddress = BondingUtil.bondingForwarderAddress(ethAddress)
+          bondingForwarderDeploy = ConstructDeploy.sourceDeploy(
+            BondingUtil.bondingForwarderDeploy(bondKey, ethAddress),
+            System.currentTimeMillis(),
+            accounting.MAX_VALUE
+          )
+          transferStatusOut = BondingUtil.transferStatusOut(ethAddress)
+          bondingTransferDeploy <- RevIssuanceTest.walletTransferDeploy(
+                                    0,
+                                    wallets.head.initRevBalance.toLong,
+                                    bondingForwarderAddress,
+                                    transferStatusOut,
+                                    pubKey,
+                                    secKey
+                                  )(Concurrent[Effect], runtimeManager)
 
-      createBlock1Result <- nodes(0).casperEff.deploy(walletUnlockDeploy) *> nodes(0).casperEff
-                             .deploy(bondingForwarderDeploy) *> nodes(0).casperEff.createBlock
-      Created(block1) = createBlock1Result
-      block1Status    <- nodes(0).casperEff.addBlock(block1, ignoreDoppelgangerCheck[Effect])
-      _               <- nodes.toList.traverse_(_.receive()) //send to all peers
+          createBlock1Result <- nodes(0).casperEff.deploy(walletUnlockDeploy) *> nodes(0).casperEff
+                                 .deploy(bondingForwarderDeploy) *> nodes(0).casperEff.createBlock
+          Created(block1) = createBlock1Result
+          block1Status    <- nodes(0).casperEff.addBlock(block1, ignoreDoppelgangerCheck[Effect])
+          _               <- nodes.toList.traverse_(_.receive()) //send to all peers
 
-      createBlock2Result <- nodes(1).casperEff
-                             .deploy(bondingTransferDeploy) *> nodes(1).casperEff.createBlock
-      Created(block2) = createBlock2Result
-      block2Status    <- nodes(1).casperEff.addBlock(block2, ignoreDoppelgangerCheck[Effect])
-      _               <- nodes.toList.traverse_(_.receive())
+          createBlock2Result <- nodes(1).casperEff
+                                 .deploy(bondingTransferDeploy) *> nodes(1).casperEff.createBlock
+          Created(block2) = createBlock2Result
+          block2Status    <- nodes(1).casperEff.addBlock(block2, ignoreDoppelgangerCheck[Effect])
+          _               <- nodes.toList.traverse_(_.receive())
 
-      helloWorldDeploy = ConstructDeploy.sourceDeploy(
-        """new s(`rho:io:stdout`) in { s!("Hello, World!") }""",
-        System.currentTimeMillis(),
-        accounting.MAX_VALUE
-      )
-      //new validator does deploy/propose
-      createBlock3Result <- nodes.last.casperEff
-                             .deploy(helloWorldDeploy) *> nodes.last.casperEff.createBlock
-      Created(block3) = createBlock3Result
-      block3Status    <- nodes.last.casperEff.addBlock(block3, ignoreDoppelgangerCheck[Effect])
+          helloWorldDeploy = ConstructDeploy.sourceDeploy(
+            """new s(`rho:io:stdout`) in { s!("Hello, World!") }""",
+            System.currentTimeMillis(),
+            accounting.MAX_VALUE
+          )
+          //new validator does deploy/propose
+          createBlock3Result <- nodes.last.casperEff
+                                 .deploy(helloWorldDeploy) *> nodes.last.casperEff.createBlock
+          Created(block3) = createBlock3Result
+          block3Status    <- nodes.last.casperEff.addBlock(block3, ignoreDoppelgangerCheck[Effect])
 
-      //previous validator does deploy/propose
-      createBlock3PrimeResult <- nodes.head.casperEff
-                                  .deploy(helloWorldDeploy) *> nodes.head.casperEff.createBlock
-      Created(block3Prime) = createBlock3PrimeResult
-      block3PrimeStatus <- nodes.head.casperEff
-                            .addBlock(block3Prime, ignoreDoppelgangerCheck[Effect])
+          //previous validator does deploy/propose
+          createBlock3PrimeResult <- nodes.head.casperEff
+                                      .deploy(helloWorldDeploy) *> nodes.head.casperEff.createBlock
+          Created(block3Prime) = createBlock3PrimeResult
+          block3PrimeStatus <- nodes.head.casperEff
+                                .addBlock(block3Prime, ignoreDoppelgangerCheck[Effect])
 
-      _ <- nodes.toList.traverse_(_.receive()) //all nodes get the blocks
+          _ <- nodes.toList.traverse_(_.receive()) //all nodes get the blocks
 
-      _ = block1Status shouldBe Valid
-      _ = block2Status shouldBe Valid
-      _ = block3Status shouldBe Valid
-      _ = block3PrimeStatus shouldBe Valid
-      _ = nodes.forall(_.logEff.warns.isEmpty) shouldBe true
+          _ = block1Status shouldBe Valid
+          _ = block2Status shouldBe Valid
+          _ = block3Status shouldBe Valid
+          _ = block3PrimeStatus shouldBe Valid
+          _ = nodes.forall(_.logEff.warns.isEmpty) shouldBe true
 
-      rankedValidatorQuery = ConstructDeploy.sourceDeploy(
-        """new rl(`rho:registry:lookup`), SystemInstancesCh, posCh in {
-          |  rl!(`rho:id:wdwc36f4ixa6xacck3ddepmgueum7zueuczgthcqp6771kdu8jogm8`, *SystemInstancesCh) |
-          |  for(@(_, SystemInstancesRegistry) <- SystemInstancesCh) {
-          |    @SystemInstancesRegistry!("lookup", "pos", *posCh) |
-          |    for(pos <- posCh){
-          |      new bondsCh, getRanking in {
-          |        contract getRanking(@bonds, @acc, return) = {
-          |          match bonds {
-          |            {key:(stake, _, _, index) ...rest} => {
-          |              getRanking!(rest, acc ++ [(key, stake, index)], *return)
-          |            }
-          |            _ => { return!(acc) }
-          |          }
-          |        } |
-          |        pos!("getBonds", *bondsCh) | for(@bonds <- bondsCh) {
-          |          getRanking!(bonds, [], "__SCALA__")
-          |        }
-          |      }
-          |    }
-          |  }
-          |}""".stripMargin,
-        0L,
-        accounting.MAX_VALUE
-      )
-      validatorBondsAndRanksT <- runtimeManager
-                                  .captureResults(
-                                    ProtoUtil.postStateHash(block1),
-                                    rankedValidatorQuery
-                                  )
+          rankedValidatorQuery = ConstructDeploy.sourceDeploy(
+            """new rl(`rho:registry:lookup`), SystemInstancesCh, posCh in {
+            |  rl!(`rho:id:wdwc36f4ixa6xacck3ddepmgueum7zueuczgthcqp6771kdu8jogm8`, *SystemInstancesCh) |
+            |  for(@(_, SystemInstancesRegistry) <- SystemInstancesCh) {
+            |    @SystemInstancesRegistry!("lookup", "pos", *posCh) |
+            |    for(pos <- posCh){
+            |      new bondsCh, getRanking in {
+            |        contract getRanking(@bonds, @acc, return) = {
+            |          match bonds {
+            |            {key:(stake, _, _, index) ...rest} => {
+            |              getRanking!(rest, acc ++ [(key, stake, index)], *return)
+            |            }
+            |            _ => { return!(acc) }
+            |          }
+            |        } |
+            |        pos!("getBonds", *bondsCh) | for(@bonds <- bondsCh) {
+            |          getRanking!(bonds, [], "__SCALA__")
+            |        }
+            |      }
+            |    }
+            |  }
+            |}""".stripMargin,
+            0L,
+            accounting.MAX_VALUE
+          )
+          validatorBondsAndRanksT <- runtimeManager
+                                      .captureResults(
+                                        ProtoUtil.postStateHash(block1),
+                                        rankedValidatorQuery
+                                      )
 
-      validatorBondsAndRanks = validatorBondsAndRanksT.head.exprs.head.getEListBody.ps
-        .map(
-          _.exprs.head.getETupleBody.ps match {
-            case Seq(a, b, c) =>
-              (a.exprs.head.getGByteArray, b.exprs.head.getGInt, c.exprs.head.getGInt.toInt)
-          }
-        )
+          validatorBondsAndRanks = validatorBondsAndRanksT.head.exprs.head.getEListBody.ps
+            .map(
+              _.exprs.head.getETupleBody.ps match {
+                case Seq(a, b, c) =>
+                  (a.exprs.head.getGByteArray, b.exprs.head.getGInt, c.exprs.head.getGInt.toInt)
+              }
+            )
 
-      correctBonds = validatorBondsAndRanks.map {
-        case (keyA, stake, _) =>
-          Bond(keyA, stake)
-      }.toSet + Bond(
-        ByteString.copyFrom(otherPk.bytes),
-        wallets.head.initRevBalance.toLong
-      )
+          correctBonds = validatorBondsAndRanks.map {
+            case (keyA, stake, _) =>
+              Bond(keyA, stake)
+          }.toSet + Bond(
+            ByteString.copyFrom(otherPk.bytes),
+            wallets.head.initRevBalance.toLong
+          )
 
-      newBonds = block2.getBody.getState.bonds
-      result   = newBonds.toSet shouldBe correctBonds
-
-      _ <- nodes.map(_.tearDown()).toList.sequence
-    } yield result
+          newBonds = block2.getBody.getState.bonds
+          result   = newBonds.toSet shouldBe correctBonds
+        } yield result
+      }
   }
 
   it should "allow bonding via the faucet" in effectTest {
-    val node = HashSetCasperTestNode.standaloneEff(genesis, validatorKeys.head)
-    import node.casperEff
+    HashSetCasperTestNode.standaloneEff(genesis, validatorKeys.head).use { node =>
+      import node.casperEff
 
-    implicit val runtimeManager = node.runtimeManager
-    val (sk, pk)                = Ed25519.newKeyPair
-    val pkStr                   = Base16.encode(pk.bytes)
-    val amount                  = 314L
-    val forwardCode             = BondingUtil.bondingForwarderDeploy(pkStr, pkStr)
+      implicit val runtimeManager = node.runtimeManager
+      val (sk, pk)                = Ed25519.newKeyPair
+      val pkStr                   = Base16.encode(pk.bytes)
+      val amount                  = 314L
+      val forwardCode             = BondingUtil.bondingForwarderDeploy(pkStr, pkStr)
 
-    for {
-      bondingCode <- BondingUtil.faucetBondDeploy[Effect](amount, "ed25519", pkStr, sk)
-      forwardDeploy = ConstructDeploy.sourceDeploy(
-        forwardCode,
-        System.currentTimeMillis(),
-        accounting.MAX_VALUE
-      )
-      bondingDeploy = ConstructDeploy.sourceDeploy(
-        bondingCode,
-        forwardDeploy.timestamp + 1,
-        accounting.MAX_VALUE
-      )
+      for {
+        bondingCode <- BondingUtil.faucetBondDeploy[Effect](amount, "ed25519", pkStr, sk)
+        forwardDeploy = ConstructDeploy.sourceDeploy(
+          forwardCode,
+          System.currentTimeMillis(),
+          accounting.MAX_VALUE
+        )
+        bondingDeploy = ConstructDeploy.sourceDeploy(
+          bondingCode,
+          forwardDeploy.timestamp + 1,
+          accounting.MAX_VALUE
+        )
 
-      createBlockResult1 <- casperEff.deploy(forwardDeploy) *> casperEff.createBlock
-      Created(block1)    = createBlockResult1
-      block1Status       <- casperEff.addBlock(block1, ignoreDoppelgangerCheck[Effect])
-      createBlockResult2 <- casperEff.deploy(bondingDeploy) *> casperEff.createBlock
-      Created(block2)    = createBlockResult2
-      block2Status       <- casperEff.addBlock(block2, ignoreDoppelgangerCheck[Effect])
-      oldBonds           = block1.getBody.getState.bonds
-      newBonds           = block2.getBody.getState.bonds
-      _                  = block1Status shouldBe Valid
-      _                  = block2Status shouldBe Valid
-      result             = (oldBonds.size + 1) shouldBe newBonds.size
-
-      _ <- node.tearDown()
-    } yield result
+        createBlockResult1 <- casperEff.deploy(forwardDeploy) *> casperEff.createBlock
+        Created(block1)    = createBlockResult1
+        block1Status       <- casperEff.addBlock(block1, ignoreDoppelgangerCheck[Effect])
+        createBlockResult2 <- casperEff.deploy(bondingDeploy) *> casperEff.createBlock
+        Created(block2)    = createBlockResult2
+        block2Status       <- casperEff.addBlock(block2, ignoreDoppelgangerCheck[Effect])
+        oldBonds           = block1.getBody.getState.bonds
+        newBonds           = block2.getBody.getState.bonds
+        _                  = block1Status shouldBe Valid
+        _                  = block2Status shouldBe Valid
+        result             = (oldBonds.size + 1) shouldBe newBonds.size
+      } yield result
+    }
   }
 
   it should "allow bonding in an existing network" in effectTest {
@@ -286,28 +286,32 @@ class MultiParentCasperBondingSpec extends FlatSpec with Matchers with Inspector
 
     val network = TestNetwork.empty[Effect]
 
-    for {
-      nodes <- HashSetCasperTestNode
-                .networkEff(validatorKeys.take(3), genesis, testNetwork = network)
-                .map(_.toList)
-      _        <- stepSplit(nodes)
-      _        <- stepSplit(nodes)
-      (sk, pk) = Ed25519.newKeyPair
-      newNode  = HashSetCasperTestNode.standaloneEff(genesis, sk, testNetwork = network)
-      _        <- bond(nodes(0), (sk, pk))
-      all      <- HashSetCasperTestNode.rigConnectionsF[Effect](newNode, nodes)
+    HashSetCasperTestNode
+      .networkEff(validatorKeys.take(3), genesis, testNetwork = network)
+      .map(_.toList)
+      .use { nodes =>
+        for {
+          _        <- stepSplit(nodes)
+          _        <- stepSplit(nodes)
+          (sk, pk) = Ed25519.newKeyPair
+          _ <- HashSetCasperTestNode.standaloneEff(genesis, sk, testNetwork = network).use {
+                newNode =>
+                  for {
+                    _   <- bond(nodes(0), (sk, pk))
+                    all <- HashSetCasperTestNode.rigConnectionsF[Effect](newNode, nodes)
 
-      s1 <- stepSplit(all)
-      _ = forAll(s1) { v =>
-        v.isRight should be(true)
+                    s1 <- stepSplit(all)
+                    _ = forAll(s1) { v =>
+                      v.isRight should be(true)
+                    }
+                    s2 <- stepSplit(all)
+                    _ = forAll(s2) { v =>
+                      v.isRight should be(true)
+                    }
+                  } yield ()
+              }
+        } yield ()
       }
-      s2 <- stepSplit(all)
-      _ = forAll(s2) { v =>
-        v.isRight should be(true)
-      }
-
-      _ <- all.map(_.tearDown()).sequence
-    } yield ()
   }
 
   it should "not fail if the forkchoice changes after a bonding event" in effectTest {
@@ -322,79 +326,78 @@ class MultiParentCasperBondingSpec extends FlatSpec with Matchers with Inspector
           )
         )
       )
-    for {
-      nodes <- HashSetCasperTestNode.networkEff(localValidators, localGenesis)
+    HashSetCasperTestNode.networkEff(localValidators, localGenesis).use { nodes =>
+      val rm          = nodes.head.runtimeManager
+      val (sk, pk)    = Ed25519.newKeyPair
+      val pkStr       = Base16.encode(pk.bytes)
+      val forwardCode = BondingUtil.bondingForwarderDeploy(pkStr, pkStr)
+      for {
+        bondingCode <- BondingUtil
+                        .faucetBondDeploy[Effect](50, "ed25519", pkStr, sk)(
+                          Concurrent[Effect],
+                          rm
+                        )
+        forwardDeploy = ConstructDeploy.sourceDeploy(
+          forwardCode,
+          System.currentTimeMillis(),
+          accounting.MAX_VALUE
+        )
+        bondingDeploy = ConstructDeploy.sourceDeploy(
+          bondingCode,
+          forwardDeploy.timestamp + 1,
+          accounting.MAX_VALUE
+        )
 
-      rm          = nodes.head.runtimeManager
-      (sk, pk)    = Ed25519.newKeyPair
-      pkStr       = Base16.encode(pk.bytes)
-      forwardCode = BondingUtil.bondingForwarderDeploy(pkStr, pkStr)
-      bondingCode <- BondingUtil
-                      .faucetBondDeploy[Effect](50, "ed25519", pkStr, sk)(
-                        Concurrent[Effect],
-                        rm
-                      )
-      forwardDeploy = ConstructDeploy.sourceDeploy(
-        forwardCode,
-        System.currentTimeMillis(),
-        accounting.MAX_VALUE
-      )
-      bondingDeploy = ConstructDeploy.sourceDeploy(
-        bondingCode,
-        forwardDeploy.timestamp + 1,
-        accounting.MAX_VALUE
-      )
+        _                    <- nodes.head.casperEff.deploy(forwardDeploy)
+        _                    <- nodes.head.casperEff.deploy(bondingDeploy)
+        createBlockResult1   <- nodes.head.casperEff.createBlock
+        Created(bondedBlock) = createBlockResult1
 
-      _                    <- nodes.head.casperEff.deploy(forwardDeploy)
-      _                    <- nodes.head.casperEff.deploy(bondingDeploy)
-      createBlockResult1   <- nodes.head.casperEff.createBlock
-      Created(bondedBlock) = createBlockResult1
+        bondedBlockStatus <- nodes.head.casperEff
+                              .addBlock(bondedBlock, ignoreDoppelgangerCheck[Effect])
+        _ <- nodes(1).receive()
+        _ <- nodes.head.receive()
+        _ <- nodes(2).transportLayerEff.clear(nodes(2).local) //nodes(2) misses bonding
 
-      bondedBlockStatus <- nodes.head.casperEff
-                            .addBlock(bondedBlock, ignoreDoppelgangerCheck[Effect])
-      _ <- nodes(1).receive()
-      _ <- nodes.head.receive()
-      _ <- nodes(2).transportLayerEff.clear(nodes(2).local) //nodes(2) misses bonding
+        createBlockResult2 <- {
+          val n = nodes(1)
+          import n.casperEff._
+          (ConstructDeploy.basicDeployData[Effect](0) >>= deploy) *> createBlock
+        }
+        Created(block2) = createBlockResult2
+        status2         <- nodes(1).casperEff.addBlock(block2, ignoreDoppelgangerCheck[Effect])
+        _               <- nodes.head.receive()
+        _               <- nodes(1).receive()
+        _ <- nodes(2).transportLayerEff
+              .clear(nodes(2).local) //nodes(2) misses block built on bonding
 
-      createBlockResult2 <- {
-        val n = nodes(1)
-        import n.casperEff._
-        (ConstructDeploy.basicDeployData[Effect](0) >>= deploy) *> createBlock
-      }
-      Created(block2) = createBlockResult2
-      status2         <- nodes(1).casperEff.addBlock(block2, ignoreDoppelgangerCheck[Effect])
-      _               <- nodes.head.receive()
-      _               <- nodes(1).receive()
-      _               <- nodes(2).transportLayerEff.clear(nodes(2).local) //nodes(2) misses block built on bonding
+        createBlockResult3 <- { //nodes(2) proposes a block
+          val n = nodes(2)
+          import n.casperEff._
+          (ConstructDeploy.basicDeployData[Effect](1) >>= deploy) *> createBlock
+        }
+        Created(block3) = createBlockResult3
+        status3         <- nodes(2).casperEff.addBlock(block3, ignoreDoppelgangerCheck[Effect])
+        _               <- nodes.toList.traverse_(_.receive())
+        //Since weight of nodes(2) is higher than nodes(0) and nodes(1)
+        //their fork-choice changes, thus the new validator
+        //is no longer bonded
 
-      createBlockResult3 <- { //nodes(2) proposes a block
-        val n = nodes(2)
-        import n.casperEff._
-        (ConstructDeploy.basicDeployData[Effect](1) >>= deploy) *> createBlock
-      }
-      Created(block3) = createBlockResult3
-      status3         <- nodes(2).casperEff.addBlock(block3, ignoreDoppelgangerCheck[Effect])
-      _               <- nodes.toList.traverse_(_.receive())
-      //Since weight of nodes(2) is higher than nodes(0) and nodes(1)
-      //their fork-choice changes, thus the new validator
-      //is no longer bonded
+        createBlockResult4 <- { //nodes(0) proposes a new block
+          val n = nodes.head
+          import n.casperEff._
+          (ConstructDeploy.basicDeployData[Effect](2) >>= deploy) *> createBlock
+        }
+        Created(block4) = createBlockResult4
+        status4         <- nodes.head.casperEff.addBlock(block4, ignoreDoppelgangerCheck[Effect])
+        _               <- nodes.toList.traverse_(_.receive())
 
-      createBlockResult4 <- { //nodes(0) proposes a new block
-        val n = nodes.head
-        import n.casperEff._
-        (ConstructDeploy.basicDeployData[Effect](2) >>= deploy) *> createBlock
-      }
-      Created(block4) = createBlockResult4
-      status4         <- nodes.head.casperEff.addBlock(block4, ignoreDoppelgangerCheck[Effect])
-      _               <- nodes.toList.traverse_(_.receive())
-
-      _      = bondedBlockStatus shouldBe Valid
-      _      = status2 shouldBe Valid
-      _      = status3 shouldBe Valid
-      result = status4 shouldBe Valid
-      _      = nodes.foreach(_.logEff.warns shouldBe Nil)
-
-      _ <- nodes.map(_.tearDown()).toList.sequence
-    } yield result
+        _      = bondedBlockStatus shouldBe Valid
+        _      = status2 shouldBe Valid
+        _      = status3 shouldBe Valid
+        result = status4 shouldBe Valid
+        _      = nodes.foreach(_.logEff.warns shouldBe Nil)
+      } yield result
+    }
   }
 }

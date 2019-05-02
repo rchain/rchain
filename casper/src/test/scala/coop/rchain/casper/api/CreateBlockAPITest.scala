@@ -10,6 +10,7 @@ import cats.implicits._
 import coop.rchain.blockstorage.BlockDagRepresentation
 import coop.rchain.casper._
 import coop.rchain.casper.helper.HashSetCasperTestNode
+import coop.rchain.casper.helper.HashSetCasperTestNode._
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util._
 import coop.rchain.casper.util.rholang._
@@ -45,52 +46,57 @@ class CreateBlockAPITest extends FlatSpec with Matchers {
       def nanoTime: Task[Long]                        = timer.clock.monotonic(NANOSECONDS)
       def sleep(duration: FiniteDuration): Task[Unit] = timer.sleep(duration)
     }
-    val node   = HashSetCasperTestNode.standaloneEff(genesis, validatorKeys.head)
-    val casper = new SleepingMultiParentCasperImpl[Effect](node.casperEff)
-    val deploys = List(
-      "@0!(0) | for(_ <- @0){ @1!(1) }",
-      "for(_ <- @1){ @2!(2) }"
-    ).map(ConstructDeploy.sourceDeploy(_, System.currentTimeMillis(), accounting.MAX_VALUE))
+    HashSetCasperTestNode.standaloneEff(genesis, validatorKeys.head).use { node =>
+      val casper = new SleepingMultiParentCasperImpl[Effect](node.casperEff)
+      val deploys = List(
+        "@0!(0) | for(_ <- @0){ @1!(1) }",
+        "for(_ <- @1){ @2!(2) }"
+      ).map(ConstructDeploy.sourceDeploy(_, System.currentTimeMillis(), accounting.MAX_VALUE))
 
-    def createBlock(deploy: DeployData, blockApiLock: Semaphore[Effect])(
-        implicit casperRef: MultiParentCasperRef[Effect]
-    ): Effect[ApiErr[DeployServiceResponse]] =
-      for {
-        _ <- BlockAPI.deploy[Effect](deploy)
-        r <- BlockAPI.createBlock[Effect](blockApiLock)
-      } yield r
-
-    def testProgram(blockApiLock: Semaphore[Effect])(
-        implicit casperRef: MultiParentCasperRef[Effect]
-    ): Effect[
-      (ApiErr[DeployServiceResponse], ApiErr[DeployServiceResponse], ApiErr[DeployServiceResponse])
-    ] =
-      EitherT.liftF(
+      def createBlock(deploy: DeployData, blockApiLock: Semaphore[Effect])(
+          implicit casperRef: MultiParentCasperRef[Effect]
+      ): Effect[ApiErr[DeployServiceResponse]] =
         for {
-          t1 <- createBlock(deploys.head, blockApiLock).value.start
-          _  <- Time[Task].sleep(2.second)
-          t2 <- createBlock(deploys.last, blockApiLock).value.start //should fail because other not done
-          t3 <- createBlock(deploys.last, blockApiLock).value.start //should fail because other not done
-          r1 <- t1.join
-          r2 <- t2.join
-          r3 <- t3.join
-        } yield (r1.right.get, r2.right.get, r3.right.get)
-      )
+          _ <- BlockAPI.deploy[Effect](deploy)
+          r <- BlockAPI.createBlock[Effect](blockApiLock)
+        } yield r
 
-    val (response1, response2, response3) = (for {
-      casperRef    <- MultiParentCasperRef.of[Effect]
-      _            <- casperRef.set(casper)
-      blockApiLock <- Semaphore[Effect](1)
-      result       <- testProgram(blockApiLock)(casperRef)
-    } yield result).value.unsafeRunSync.right.get
+      def testProgram(blockApiLock: Semaphore[Effect])(
+          implicit casperRef: MultiParentCasperRef[Effect]
+      ): Effect[
+        (
+            ApiErr[DeployServiceResponse],
+            ApiErr[DeployServiceResponse],
+            ApiErr[DeployServiceResponse]
+        )
+      ] =
+        EitherT.liftF(
+          for {
+            t1 <- createBlock(deploys.head, blockApiLock).value.start
+            _  <- Time[Task].sleep(2.second)
+            t2 <- createBlock(deploys.last, blockApiLock).value.start //should fail because other not done
+            t3 <- createBlock(deploys.last, blockApiLock).value.start //should fail because other not done
+            r1 <- t1.join
+            r2 <- t2.join
+            r3 <- t3.join
+          } yield (r1.right.get, r2.right.get, r3.right.get)
+        )
 
-    response1 shouldBe a[Right[_, DeployServiceResponse]]
-    response2 shouldBe a[Left[_, DeployServiceResponse]]
-    response3 shouldBe a[Left[_, DeployServiceResponse]]
-    response2.left.get shouldBe "Error: There is another propose in progress."
-    response3.left.get shouldBe "Error: There is another propose in progress."
+      val (response1, response2, response3) = (for {
+        casperRef    <- MultiParentCasperRef.of[Effect]
+        _            <- casperRef.set(casper)
+        blockApiLock <- Semaphore[Effect](1)
+        result       <- testProgram(blockApiLock)(casperRef)
+      } yield result).value.unsafeRunSync.right.get
 
-    node.tearDown()
+      response1 shouldBe a[Right[_, DeployServiceResponse]]
+      response2 shouldBe a[Left[_, DeployServiceResponse]]
+      response3 shouldBe a[Left[_, DeployServiceResponse]]
+      response2.left.get shouldBe "Error: There is another propose in progress."
+      response3.left.get shouldBe "Error: There is another propose in progress."
+
+      ().pure[Effect]
+    }
   }
 }
 

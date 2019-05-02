@@ -4,8 +4,7 @@ import java.nio.ByteBuffer
 import java.nio.file.{Files, Path}
 import java.util.zip.CRC32
 
-import cats.Id
-import cats.effect.{Concurrent, Sync}
+import cats.effect.{Concurrent, Resource, Sync}
 import cats.syntax.functor._
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockDagRepresentation.Validator
@@ -117,4 +116,20 @@ object BlockDagStorageTestFixture {
         mapSize
       )
     )
+
+  def createDirectories[F[_]: Concurrent]: Resource[F, (Path, Path)] =
+    Resource.make[F, (Path, Path)] {
+      Sync[F].delay {
+        (
+          Files.createTempDirectory("casper-block-storage-test-"),
+          Files.createTempDirectory("casper-block-dag-storage-test-")
+        )
+      }
+    } {
+      case (blockStoreDir, blockDagDir) =>
+        Sync[F].delay {
+          blockStoreDir.recursivelyDelete()
+          blockDagDir.recursivelyDelete()
+        }
+    }
 }
