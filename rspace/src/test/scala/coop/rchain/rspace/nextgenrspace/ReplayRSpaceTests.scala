@@ -859,7 +859,6 @@ trait ReplayRSpaceTests extends ReplayRSpaceTestsBase[String, Pattern, String, S
 
       for {
         emptyCh <- space.createCheckpoint()
-        //some maliciously 'random' play order
         _ <- space.produce(channel1, data3, false, 0) shouldBeF noMatch
         _ <- space.produce(channel1, data3, false, 0) shouldBeF noMatch
         _ <- space.produce(channel2, data1, false, 0) shouldBeF noMatch
@@ -877,7 +876,6 @@ trait ReplayRSpaceTests extends ReplayRSpaceTestsBase[String, Pattern, String, S
         //rig
         _ <- replaySpace.rig(emptyCh.root, afterPlay.log)
 
-        //some maliciously 'random' replay order
         _ <- replaySpace.produce(channel1, data3, false, 0) shouldBeF noMatch
         _ <- replaySpace.produce(channel1, data3, false, 0) shouldBeF noMatch
         _ <- replaySpace.produce(channel2, data1, false, 0) shouldBeF noMatch
