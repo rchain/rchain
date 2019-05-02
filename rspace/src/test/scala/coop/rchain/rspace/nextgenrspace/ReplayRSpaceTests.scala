@@ -118,7 +118,9 @@ trait ReplayRSpaceTests extends ReplayRSpaceTestsBase[String, Pattern, String, S
         rigPont       <- space.createCheckpoint()
 
         _ = resultConsume shouldBe None
-        _ = resultProduce shouldBe defined
+        _ = resultProduce shouldBe Some(
+          (ContResult(continuation, false, channels, patterns, 1), List(Result(datum, false)))
+        )
 
         _ <- replaySpace.rig(emptyPoint.root, rigPont.log)
 
