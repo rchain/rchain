@@ -61,7 +61,7 @@ trait ReplayRSpaceTests extends ReplayRSpaceTestsBase[String, Pattern, String, S
   )(
       implicit matcher: Match[Task, P, A, R]
   ): Task[List[Option[(ContResult[C, P, K], Seq[Result[R]])]]] =
-    range.toList.parTraverse { i: Int =>
+    shuffle(range).toList.parTraverse { i: Int =>
       logger.debug("Started consume {}", i)
       space
         .consume(channelsCreator(i), patterns, continuationCreator(i), persist)
@@ -80,7 +80,7 @@ trait ReplayRSpaceTests extends ReplayRSpaceTestsBase[String, Pattern, String, S
   )(
       implicit matcher: Match[Task, P, A, R]
   ): Task[List[Option[(ContResult[C, P, K], Seq[Result[R]])]]] =
-    range.toList.parTraverse { i: Int =>
+    shuffle(range).toList.parTraverse { i: Int =>
       logger.debug("Started produce {}", i)
       space.produce(channelCreator(i), datumCreator(i), persist).map { r =>
         logger.debug("Finished produce {}", i)
@@ -163,7 +163,7 @@ trait ReplayRSpaceTests extends ReplayRSpaceTestsBase[String, Pattern, String, S
           _        <- replaySpace.rig(emptyPoint.root, rigPoint.log)
           _ <- produceMany(
                 replaySpace,
-                shuffle(range),
+                range,
                 channelCreator = kp("ch1"),
                 datumCreator = i => s"datum$i",
                 persist = false
@@ -211,14 +211,14 @@ trait ReplayRSpaceTests extends ReplayRSpaceTestsBase[String, Pattern, String, S
 
           _ <- produceMany(
                 replaySpace,
-                shuffle(range),
+                range,
                 channelCreator = kp("ch1"),
                 datumCreator = i => s"datum$i",
                 persist = false
               )
           replayResults <- consumeMany(
                             replaySpace,
-                            shuffle(range),
+                            range,
                             channelsCreator = kp(List("ch1")),
                             patterns = List(Wildcard),
                             continuationCreator = i => s"continuation$i",
@@ -263,14 +263,14 @@ trait ReplayRSpaceTests extends ReplayRSpaceTestsBase[String, Pattern, String, S
 
         _ <- produceMany(
               replaySpace,
-              shuffle(range),
+              range,
               channelCreator = kp("ch1"),
               datumCreator = i => s"datum$i",
               persist = true
             )
         replayResults <- consumeMany(
                           replaySpace,
-                          shuffle(range),
+                          range,
                           channelsCreator = kp(List("ch1")),
                           patterns = List(Wildcard),
                           continuationCreator = i => s"continuation$i",
@@ -309,7 +309,7 @@ trait ReplayRSpaceTests extends ReplayRSpaceTestsBase[String, Pattern, String, S
         _        <- replaySpace.rig(emptyPoint.root, rigPoint.log)
         _ <- consumeMany(
               replaySpace,
-              shuffle(range),
+              range,
               channelsCreator = kp(List("ch1")),
               patterns = List(Wildcard),
               continuationCreator = i => s"continuation$i",
@@ -359,7 +359,7 @@ trait ReplayRSpaceTests extends ReplayRSpaceTestsBase[String, Pattern, String, S
 
         _ <- consumeMany(
               replaySpace,
-              shuffle(range),
+              range,
               channelsCreator = kp(List("ch1")),
               patterns = List(Wildcard),
               continuationCreator = i => s"continuation$i",
@@ -367,7 +367,7 @@ trait ReplayRSpaceTests extends ReplayRSpaceTestsBase[String, Pattern, String, S
             )
         replayResults <- produceMany(
                           replaySpace,
-                          shuffle(range),
+                          range,
                           channelCreator = kp("ch1"),
                           datumCreator = i => s"datum$i",
                           persist = false
@@ -411,7 +411,7 @@ trait ReplayRSpaceTests extends ReplayRSpaceTestsBase[String, Pattern, String, S
 
         _ <- consumeMany(
               replaySpace,
-              shuffle(range),
+              range,
               channelsCreator = kp(List("ch1")),
               patterns = List(Wildcard),
               continuationCreator = i => s"continuation$i",
@@ -419,7 +419,7 @@ trait ReplayRSpaceTests extends ReplayRSpaceTestsBase[String, Pattern, String, S
             )
         replayResults <- produceMany(
                           replaySpace,
-                          shuffle(range),
+                          range,
                           channelCreator = kp("ch1"),
                           datumCreator = i => s"datum$i",
                           persist = false
@@ -470,7 +470,7 @@ trait ReplayRSpaceTests extends ReplayRSpaceTestsBase[String, Pattern, String, S
 
         _ <- consumeMany(
               replaySpace,
-              shuffle(range),
+              range,
               channelsCreator = kp(List("ch1", "ch2")),
               patterns = List(Wildcard, Wildcard),
               continuationCreator = i => s"continuation$i",
@@ -478,14 +478,14 @@ trait ReplayRSpaceTests extends ReplayRSpaceTestsBase[String, Pattern, String, S
             )
         _ <- produceMany(
               replaySpace,
-              shuffle(range),
+              range,
               channelCreator = kp("ch1"),
               datumCreator = kp("datum1"),
               persist = false
             )
         replayResults <- produceMany(
                           replaySpace,
-                          shuffle(range),
+                          range,
                           channelCreator = kp("ch2"),
                           datumCreator = kp("datum2"),
                           persist = false
@@ -542,14 +542,14 @@ trait ReplayRSpaceTests extends ReplayRSpaceTestsBase[String, Pattern, String, S
 
         _ <- produceMany(
               replaySpace,
-              range = shuffle(0 until n toList),
+              range = 0 until n toList,
               channelCreator = kp("ch1"),
               datumCreator = i => s"datum$i",
               persist = false
             )
         _ <- consumeMany(
               replaySpace,
-              range = shuffle(n + 1 until n + 10 toList),
+              range = n + 1 until n + 10 toList,
               channelsCreator = i => List(s"ch$i"),
               patterns = List(Wildcard),
               continuationCreator = i => s"continuation$i",
@@ -557,14 +557,14 @@ trait ReplayRSpaceTests extends ReplayRSpaceTestsBase[String, Pattern, String, S
             )
         _ <- produceMany(
               replaySpace,
-              range = shuffle(n + 11 until n + 20 toList),
+              range = n + 11 until n + 20 toList,
               channelCreator = i => s"ch$i",
               datumCreator = i => s"datum$i",
               persist = false
             )
         replayResults <- consumeMany(
                           replaySpace,
-                          range = shuffle(0 until n toList),
+                          range = 0 until n toList,
                           channelsCreator = kp(List("ch1")),
                           patterns = List(Wildcard),
                           continuationCreator = i => s"continuation$i",
@@ -622,7 +622,7 @@ trait ReplayRSpaceTests extends ReplayRSpaceTestsBase[String, Pattern, String, S
 
         _ <- consumeMany(
               replaySpace,
-              range = shuffle(0 until n toList),
+              range = 0 until n toList,
               channelsCreator = i => List(s"ch$i"),
               patterns = List(Wildcard),
               continuationCreator = i => s"continuation$i",
@@ -630,14 +630,14 @@ trait ReplayRSpaceTests extends ReplayRSpaceTestsBase[String, Pattern, String, S
             )
         _ <- produceMany(
               replaySpace,
-              range = shuffle(n + 1 until n + 10 toList),
+              range = n + 1 until n + 10 toList,
               channelCreator = kp("ch1"),
               datumCreator = i => s"datum$i",
               persist = false
             )
         _ <- consumeMany(
               replaySpace,
-              range = shuffle(n + 11 until n + 20 toList),
+              range = n + 11 until n + 20 toList,
               channelsCreator = kp(List("ch1")),
               patterns = List(Wildcard),
               continuationCreator = i => s"continuation$i",
@@ -645,7 +645,7 @@ trait ReplayRSpaceTests extends ReplayRSpaceTestsBase[String, Pattern, String, S
             )
         replayResults <- produceMany(
                           replaySpace,
-                          range = shuffle(0 until n toList),
+                          range = 0 until n toList,
                           channelCreator = i => s"ch$i",
                           datumCreator = i => s"datum$i",
                           persist = false
