@@ -75,9 +75,14 @@ class SslSessionClientCallInterceptor[ReqT, RespT](next: ClientCall[ReqT, RespT]
               }
             }
           } else {
-            log.warn(s"Wrong network id '$nid'. Closing connection")
-            close(Status.PERMISSION_DENIED.withDescription(s"Wrong network id '$nid'"))
+            val nidStr = if (nid.isEmpty) "<empty>" else nid
+            log.warn(s"Wrong network id '$nidStr'. Closing connection")
+            close(Status.PERMISSION_DENIED.withDescription(s"Wrong network id '$nidStr'"))
           }
+
+        case TLResponse(Payload.InternalServerError(_)) =>
+          next.onMessage(message)
+
         case TLResponse(_) =>
           log.warn(s"Malformed response $message")
           close(Status.INVALID_ARGUMENT.withDescription("Malformed message"))
