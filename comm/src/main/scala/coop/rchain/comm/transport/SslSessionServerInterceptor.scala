@@ -67,10 +67,13 @@ class SslSessionServerInterceptor(networkID: String) extends ServerInterceptor {
               }
             }
           } else {
-            log.warn(s"Wrong network id '$nid'. Closing connection")
+            val nidStr = if (nid.isEmpty) "<empty>" else nid
+            log.warn(s"Wrong network id '$nidStr'. Closing connection")
             close(
               Status.PERMISSION_DENIED
-                .withDescription(s"Wrong network id '$nid'. This node runs on network '$networkID'")
+                .withDescription(
+                  s"Wrong network id '$nidStr'. This node runs on network '$networkID'"
+                )
             )
           }
         case TLRequest(_) =>
