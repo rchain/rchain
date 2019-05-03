@@ -96,7 +96,7 @@ class Interactive private (runtime: Runtime[Task])(implicit scheduler: Scheduler
 }
 object Interactive {
   def apply(): Interactive = {
-    implicit val scheduler                 = Scheduler.io("rhoang-interpreter")
+    implicit val scheduler                 = Scheduler.io("rholang-interpreter")
     implicit val logger: Log[Task]         = Log.log[Task]
     implicit val metricsEff: Metrics[Task] = new Metrics.MetricsNOP[Task]
     new Interactive(
