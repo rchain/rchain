@@ -10,6 +10,8 @@ import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.crypto.signatures.Ed25519
 import coop.rchain.casper.genesis.contracts.TestUtil
 import coop.rchain.casper.protocol.DeployData
+import coop.rchain.metrics.Metrics
+import coop.rchain.rholang.Resources._
 import coop.rchain.rholang.build.CompiledRholangSource
 import coop.rchain.rholang.interpreter.Runtime
 import coop.rchain.rholang.interpreter.Runtime.SystemProcess
@@ -21,7 +23,9 @@ import org.scalatest.{AppendedClues, FlatSpec, Matchers}
 import scala.concurrent.duration.{Duration, FiniteDuration}
 
 object RhoSpec {
-  implicit val logger: Log[Task] = Log.log[Task]
+
+  implicit val logger: Log[Task]         = Log.log[Task]
+  implicit val metricsEff: Metrics[Task] = new Metrics.MetricsNOP[Task]
 
   private def testFrameworkContracts[F[_]: Log: Concurrent](
       testResultCollector: TestResultCollector[F]
@@ -61,23 +65,30 @@ object RhoSpec {
       otherLibs: Seq[DeployData],
       timeout: FiniteDuration
   ): Task[TestResult] =
-    for {
-      _                   <- logger.info("Starting tests from " + testObject.path)
-      testResultCollector <- TestResultCollector[Task]
+    TestResultCollector[Task].flatMap { testResultCollector =>
+      mkRuntime[Task, Task.Par](
+        s"rhoSpec-${testObject.path}",
+        10 * 1024 * 1024,
+        testFrameworkContracts(testResultCollector)
+      ).use { runtime =>
+        for {
 
-      runtime <- TestUtil.setupRuntime[Task, Task.Par](
-                  TestUtil.defaultGenesisSetup,
-                  otherLibs,
-                  testFrameworkContracts(testResultCollector)
-                )
+          _ <- logger.info("Starting tests from " + testObject.path)
+          _ <- Runtime.injectEmptyRegistryRoot[Task](runtime.space, runtime.replaySpace)
+          _ <- TestUtil.setupRuntime[Task, Task.Par](
+                runtime,
+                TestUtil.defaultGenesisSetup,
+                otherLibs
+              )
+          rand = Blake2b512Random(128)
+          _ <- TestUtil
+                .eval(testObject.code, runtime)(implicitly, rand.splitShort(1))
+                .timeout(timeout)
 
-      rand = Blake2b512Random(128)
-      _ <- TestUtil
-            .eval(testObject.code, runtime)(implicitly, rand.splitShort(1))
-            .timeout(timeout)
-
-      result <- testResultCollector.getResult
-    } yield result
+          result <- testResultCollector.getResult
+        } yield result
+      }
+    }
 }
 
 class RhoSpec(

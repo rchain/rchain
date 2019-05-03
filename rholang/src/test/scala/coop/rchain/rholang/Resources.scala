@@ -13,7 +13,7 @@ import coop.rchain.metrics.Metrics
 import coop.rchain.models._
 import coop.rchain.rholang.interpreter.accounting._
 import coop.rchain.rholang.interpreter.Runtime
-import coop.rchain.rholang.interpreter.Runtime.{RhoContext, RhoISpace}
+import coop.rchain.rholang.interpreter.Runtime.{RhoContext, RhoISpace, SystemProcess}
 import coop.rchain.rholang.interpreter.errors.InterpreterError
 import coop.rchain.rspace.history.Branch
 import coop.rchain.rspace.{Context, RSpace}
@@ -68,7 +68,8 @@ object Resources {
 
   def mkRuntime[F[_]: ContextShift: Concurrent: Log: Metrics, M[_]: Parallel[F, ?[_]]](
       prefix: String,
-      storageSize: Long = 1024 * 1024
+      storageSize: Long = 1024 * 1024,
+      additionalSystemProcesses: Seq[SystemProcess.Definition[F]] = Seq.empty
   )(implicit scheduler: Scheduler): Resource[F, Runtime[F]] =
     mkTempDir[F](prefix)
       .flatMap { tmpDir =>
@@ -77,7 +78,7 @@ object Resources {
             cost <- CostAccounting.emptyCost[F]
             runtime <- {
               implicit val c = cost
-              Runtime.create[F, M](tmpDir, storageSize, StoreType.LMDB)
+              Runtime.create[F, M](tmpDir, storageSize, StoreType.LMDB, additionalSystemProcesses)
             }
           } yield (runtime)
         }(
