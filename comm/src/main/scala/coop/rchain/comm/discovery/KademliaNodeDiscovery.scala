@@ -1,6 +1,7 @@
 package coop.rchain.comm.discovery
 
 import scala.collection.mutable
+import scala.util.Random
 
 import cats._
 import cats.implicits._
@@ -23,7 +24,7 @@ object KademliaNodeDiscovery {
     def find(
         limit: Int,
         dists: Array[Int],
-        peerSet: Set[PeerNode],
+        peerSet: List[PeerNode],
         potentials: Set[PeerNode],
         i: Int
     ): F[List[PeerNode]] =
@@ -54,7 +55,7 @@ object KademliaNodeDiscovery {
     for {
       peers  <- KademliaStore[F].peers
       dists  <- KademliaStore[F].sparseness
-      result <- find(10, dists.toArray, peers.toSet, Set(), 0)
+      result <- find(10, dists.toArray, Random.shuffle(peers.toList), Set(), 0)
       _      <- result.traverse(KademliaStore[F].updateLastSeen)
     } yield ()
   }
