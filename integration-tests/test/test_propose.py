@@ -20,5 +20,5 @@ def test_propose(command_line_options: CommandLineOptions, random_generator: Ran
             relative_paths = bootstrap_node.shell_out('sh', '-c', 'ls /opt/docker/examples/*.rho').splitlines()
             relative_path = random_generator.choice(relative_paths)
             full_path = os.path.join('/opt/docker/examples', relative_path)
-            bootstrap_node.deploy(full_path)
+            bootstrap_node.deploy(full_path, context.bootstrap_keypair.private_key)
             bootstrap_node.propose()

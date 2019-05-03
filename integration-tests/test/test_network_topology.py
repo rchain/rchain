@@ -79,7 +79,7 @@ def deploy_block(node: Node, expected_string: str, contract_name: str) -> str:
         '-e', 's/@placeholder@/{}/g'.format(expected_string),
         container_contract_file_path,
     )
-    node.deploy(container_contract_file_path)
+    node.deploy(container_contract_file_path, '3596e2e5fd14b24a6d84af04b7f0a8f13e3e68ee2ca91dc4b19550f12e61502c')
     block_hash = node.propose()
     return block_hash
 

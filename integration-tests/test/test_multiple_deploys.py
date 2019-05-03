@@ -19,16 +19,17 @@ from .wait import (
 
 
 class DeployThread(threading.Thread):
-    def __init__(self, name: str, node: Node, contract: str, count: int) -> None:
+    def __init__(self, name: str, node: Node, contract: str, count: int, private_key: str) -> None:
         threading.Thread.__init__(self)
         self.name = name
         self.node = node
         self.contract = contract
         self.count = count
+        self.private_key = private_key
 
     def run(self) -> None:
         for _ in range(self.count):
-            self.node.deploy(self.contract)
+            self.node.deploy(self.contract, self.private_key)
             self.node.propose()
 
 
@@ -48,7 +49,7 @@ def test_multiple_deploys_at_once(command_line_options: CommandLineOptions, rand
                     with bootstrap_connected_peer(context=context, bootstrap=bootstrap_node, name='bonded-validator-3', keypair=BONDED_VALIDATOR_KEY_3) as no3:
                         wait_for_peers_count_at_least(context, no1, 3)
 
-                        deploy1 = DeployThread("node1", no1, contract_path, 1)
+                        deploy1 = DeployThread("node1", no1, contract_path, 1, BONDED_VALIDATOR_KEY_1.private_key)
                         deploy1.start()
 
                         expected_blocks_count = 1
@@ -58,10 +59,10 @@ def test_multiple_deploys_at_once(command_line_options: CommandLineOptions, rand
                             expected_blocks_count,
                         )
 
-                        deploy2 = DeployThread("node2", no2, contract_path, 3)
+                        deploy2 = DeployThread("node2", no2, contract_path, 3, BONDED_VALIDATOR_KEY_2.private_key)
                         deploy2.start()
 
-                        deploy3 = DeployThread("node3", no3, contract_path, 3)
+                        deploy3 = DeployThread("node3", no3, contract_path, 3, BONDED_VALIDATOR_KEY_3.private_key)
                         deploy3.start()
 
                         expected_blocks_count = 7
