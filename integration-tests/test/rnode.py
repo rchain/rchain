@@ -3,8 +3,9 @@ import os
 import queue
 import shlex
 import string
+import shutil
 import logging
-from logging import Logger
+from logging import (Logger)
 import threading
 from threading import Event
 import contextlib
@@ -165,7 +166,7 @@ def extract_block_hash_from_propose_output(propose_output: str) -> str:
     return match.group(1)
 
 
-class Node:
+class Node:  # pylint: disable=R0904
     def __init__(self, *, container: Container, deploy_dir: str, command_timeout: int, network: str) -> None:
         self.container = container
         self.local_deploy_dir = deploy_dir
@@ -333,6 +334,30 @@ class Node:
     def log_lines(self) -> List[str]:
         log_content = self.logs()
         return Node.__log_message_rx.split(log_content)
+
+    def deploy_contract_with_substitution(self, substitute_dict: Dict[str, str], rho_file_path: str, private_key: str) -> str:
+        # Supposed that you have a contract with content like below.
+        #
+        # new x in { x!("#DATA") }
+        #
+        # If you pass a dict {'#DATA': "123456"} as substitute_dict args in this func,
+        # this method would substitute the string #DATA in the contract with 123456, which turns out to be
+        #
+        # new x in { x!("123456") }
+        #
+        # And then deploy the contract in the node
+        shutil.copyfile(rho_file_path, os.path.join(self.local_deploy_dir, os.path.basename(rho_file_path)))
+        container_contract_file_path = os.path.join(self.remote_deploy_dir, os.path.basename(rho_file_path))
+        substitute_rules = ';'.join(['s/{}/{}/g'.format(key, value) for key, value in substitute_dict.items()])
+        self.shell_out(
+            'sed',
+            '-i',
+            '-e', substitute_rules,
+            container_contract_file_path,
+        )
+        self.deploy(container_contract_file_path, private_key)
+        block_hash = self.propose()
+        return block_hash
 
 
 class LoggingThread(threading.Thread):
