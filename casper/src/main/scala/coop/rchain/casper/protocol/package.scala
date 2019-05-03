@@ -17,42 +17,40 @@ package object protocol {
       packetToNoApprovedBlockAvailable(packet)
 
   private def packetToBlockMessage(msg: Packet): Option[BlockMessage] =
-    if (msg.typeId == transport.BlockMessage.id)
-      Try(BlockMessage.parseFrom(msg.content.toByteArray)).toOption
-    else None
-
+    convert[BlockMessage](msg, transport.BlockMessage, BlockMessage.parseFrom)
   private def packetToApprovedBlock(msg: Packet): Option[ApprovedBlock] =
-    if (msg.typeId == transport.ApprovedBlock.id)
-      Try(ApprovedBlock.parseFrom(msg.content.toByteArray)).toOption
-    else None
-
+    convert[ApprovedBlock](msg, transport.ApprovedBlock, ApprovedBlock.parseFrom)
   private def packetToApprovedBlockRequest(msg: Packet): Option[ApprovedBlockRequest] =
-    if (msg.typeId == transport.ApprovedBlockRequest.id)
-      Try(ApprovedBlockRequest.parseFrom(msg.content.toByteArray)).toOption
-    else None
-
+    convert[ApprovedBlockRequest](
+      msg,
+      transport.ApprovedBlockRequest,
+      ApprovedBlockRequest.parseFrom
+    )
   private def packetToBlockRequest(msg: Packet): Option[BlockRequest] =
-    if (msg.typeId == transport.BlockRequest.id)
-      Try(BlockRequest.parseFrom(msg.content.toByteArray)).toOption
-    else None
-
+    convert[BlockRequest](msg, transport.BlockRequest, BlockRequest.parseFrom)
   private def packetToForkChoiceTipRequest(msg: Packet): Option[ForkChoiceTipRequest] =
-    if (msg.typeId == transport.ForkChoiceTipRequest.id)
-      Try(ForkChoiceTipRequest.parseFrom(msg.content.toByteArray)).toOption
-    else None
-
+    convert[ForkChoiceTipRequest](
+      msg,
+      transport.ForkChoiceTipRequest,
+      ForkChoiceTipRequest.parseFrom
+    )
   private def packetToBlockApproval(msg: Packet): Option[BlockApproval] =
-    if (msg.typeId == transport.BlockApproval.id)
-      Try(BlockApproval.parseFrom(msg.content.toByteArray)).toOption
-    else None
-
+    convert[BlockApproval](msg, transport.BlockApproval, BlockApproval.parseFrom)
   private def packetToUnapprovedBlock(msg: Packet): Option[UnapprovedBlock] =
-    if (msg.typeId == transport.UnapprovedBlock.id)
-      Try(UnapprovedBlock.parseFrom(msg.content.toByteArray)).toOption
-    else None
-
+    convert[UnapprovedBlock](msg, transport.UnapprovedBlock, UnapprovedBlock.parseFrom)
   private def packetToNoApprovedBlockAvailable(msg: Packet): Option[NoApprovedBlockAvailable] =
-    if (msg.typeId == transport.NoApprovedBlockAvailable.id)
-      Try(NoApprovedBlockAvailable.parseFrom(msg.content.toByteArray)).toOption
+    convert[NoApprovedBlockAvailable](
+      msg,
+      transport.NoApprovedBlockAvailable,
+      NoApprovedBlockAvailable.parseFrom
+    )
+
+  private def convert[A](
+      msg: Packet,
+      pt: transport.PacketType,
+      parse: Array[Byte] => A
+  ): Option[A] =
+    if (msg.typeId == pt.id)
+      Try(parse(msg.content.toByteArray)).toOption
     else None
 }
