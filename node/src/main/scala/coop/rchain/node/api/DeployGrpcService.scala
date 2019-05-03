@@ -1,6 +1,8 @@
 package coop.rchain.node.api
 
-import cats._, cats.data._, cats.implicits._
+import cats._
+import cats.data._
+import cats.implicits._
 import cats.effect.concurrent.Semaphore
 import cats.effect.Concurrent
 import cats.mtl.implicits._
@@ -59,22 +61,28 @@ private[api] object DeployGrpcService {
       override def showBlock(q: BlockQuery): Task[GrpcEither] =
         defer(BlockAPI.showBlock[F](q))
 
-      override def visualizeDag(q: VisualizeDagQuery): Task[GrpcEither] = {
-        type Effect[A] = StateT[Id, StringBuffer, A]
-        implicit val ser: GraphSerializer[Effect]       = new StringSerializer[Effect]
-        val stringify: Effect[Graphz[Effect]] => String = _.runS(new StringBuffer).toString
+      override def visualizeDag(q: VisualizeDagQuery): Observable[GrpcEither] = {
+        type Effect[A] = StateT[Id, Vector[String], A]
+        implicit val ser: GraphSerializer[Effect] = new ListSerializer[Effect]
+        val serialize: Effect[Graphz[Effect]] => List[VisualizeBlocksResponse] =
+          _.runS(Vector.empty).toList.map(VisualizeBlocksResponse(_))
 
         val depth  = if (q.depth <= 0) None else Some(q.depth)
         val config = GraphConfig(q.showJustificationLines)
 
-        defer(
-          BlockAPI
-            .visualizeDag[F, Effect](
-              depth,
-              (ts, lfb) => GraphzGenerator.dagAsCluster[F, Effect](ts, lfb, config),
-              stringify
+        Observable
+          .fromTask(
+            deferList[VisualizeBlocksResponse](
+              Functor[F].map(
+                BlockAPI.visualizeDag[F, Effect, List[VisualizeBlocksResponse]](
+                  depth,
+                  (ts, lfb) => GraphzGenerator.dagAsCluster[F, Effect](ts, lfb, config),
+                  serialize
+                )
+              )(_.getOrElse(List.empty[VisualizeBlocksResponse]))
             )
-        )
+          )
+          .flatMap(Observable.fromIterable)
       }
 
       override def machineVerifiableDag(q: MachineVerifyQuery): Task[GrpcEither] =
