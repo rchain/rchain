@@ -114,7 +114,7 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
     implicit val metricsEff: Metrics[Task] = new metrics.Metrics.MetricsNOP[Task]
 
     (for {
-      reductionCost <- mkRuntime("casper-runtime")
+      reductionCost <- mkRuntime[Task, Task.Par]("casper-runtime")
                         .use { runtime =>
                           implicit val rand: Blake2b512Random = Blake2b512Random(
                             DeployData.toByteArray(ProtoUtil.stripDeployData(deploy))

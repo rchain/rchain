@@ -2,6 +2,8 @@ package coop.rchain.rholang
 import java.io.File
 import java.nio.file.{Files, Path}
 
+import cats._
+import cats.implicits._
 import cats.Applicative
 import cats.effect.ExitCase.Error
 import cats.effect.{Concurrent, ContextShift, Resource}
@@ -60,27 +62,22 @@ object Resources {
       ](context, Branch(branch))
     }
 
-    mkTempDir(prefix)
+    mkTempDir(prefix)(implicitly[Concurrent[F]])
       .flatMap(tmpDir => Resource.make(mkRspace(tmpDir))(_.close()))
   }
 
-  def mkRuntime(
+  def mkRuntime[F[_]: ContextShift: Concurrent: Log: Metrics, M[_]: Parallel[F, ?[_]]](
       prefix: String,
-      storageSize: Long = 1024 * 1024,
-      storeType: StoreType = StoreType.LMDB
-  )(
-      implicit log: Log[Task],
-      scheduler: Scheduler,
-      metrics: Metrics[Task]
-  ): Resource[Task, Runtime[Task]] =
-    mkTempDir[Task](prefix)
+      storageSize: Long = 1024 * 1024
+  )(implicit scheduler: Scheduler): Resource[F, Runtime[F]] =
+    mkTempDir[F](prefix)
       .flatMap { tmpDir =>
-        Resource.make[Task, Runtime[Task]] {
+        Resource.make[F, Runtime[F]] {
           for {
-            cost <- CostAccounting.emptyCost[Task]
+            cost <- CostAccounting.emptyCost[F]
             runtime <- {
               implicit val c = cost
-              Runtime.create[Task, Task.Par](tmpDir, storageSize, storeType)
+              Runtime.create[F, M](tmpDir, storageSize, StoreType.LMDB)
             }
           } yield (runtime)
         }(
