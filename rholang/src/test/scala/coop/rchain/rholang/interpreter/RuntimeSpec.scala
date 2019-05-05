@@ -51,7 +51,7 @@ class RuntimeSpec extends FlatSpec with Matchers {
     assert(execute(rho).errors.nonEmpty, s"Expected $rho to fail - it didn't.")
 
   private def execute(source: String): EvaluateResult =
-    mkRuntime(tmpPrefix, mapSize)
+    mkRuntime[Task, Task.Par](tmpPrefix, mapSize)
       .use { runtime =>
         implicit val c = runtime.cost
         Interpreter[Task].evaluate(runtime, source)

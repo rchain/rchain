@@ -12,7 +12,8 @@ import java.nio.file.{Files, Path, Paths}
 import coop.rchain.rholang.interpreter.{PrettyPrinter, Runtime}
 import coop.rchain.rspace.Checkpoint
 import coop.rchain.shared.StoreType.InMem
-import coop.rchain.shared.Log
+import coop.rchain.shared.{Log, StoreType}
+import coop.rchain.metrics.Metrics
 import coop.rchain.models._
 import coop.rchain.models.Expr.ExprInstance.{GInt, GString}
 import coop.rchain.catscontrib.TaskContrib._
@@ -95,7 +96,17 @@ class Interactive private (runtime: Runtime[Task])(implicit scheduler: Scheduler
 }
 object Interactive {
   def apply(): Interactive = {
-    implicit val scheduler = Scheduler.io("rhoang-interpreter")
-    new Interactive(TestUtil.runtime[Task, Task.Par]().runSyncUnsafe(5.seconds))
+    implicit val scheduler                 = Scheduler.io("rholang-interpreter")
+    implicit val logger: Log[Task]         = Log.log[Task]
+    implicit val metricsEff: Metrics[Task] = new Metrics.MetricsNOP[Task]
+    new Interactive(
+      Runtime
+        .createWithEmptyCost[Task, Task.Par](
+          Files.createTempDirectory("interactive"),
+          1024 * 1024,
+          StoreType.LMDB
+        )
+        .runSyncUnsafe(5.seconds)
+    )
   }
 }

@@ -46,7 +46,7 @@ class CompilerTests extends FunSuite with Matchers {
   }
 
   private def execute(file: Path): EvaluateResult =
-    mkRuntime(tmpPrefix, mapSize)
+    mkRuntime[Task, Task.Par](tmpPrefix, mapSize)
       .use { runtime =>
         Resources.withResource(Source.fromFile(file.toString))(
           fileContents => {

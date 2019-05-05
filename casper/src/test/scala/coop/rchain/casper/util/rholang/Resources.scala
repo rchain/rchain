@@ -22,7 +22,7 @@ object Resources {
     implicit val log: Log[Task]            = new Log.NOPLog[Task]
     implicit val metricsEff: Metrics[Task] = new metrics.Metrics.MetricsNOP[Task]
     for {
-      runtime        <- mkRuntime(prefix)
+      runtime        <- mkRuntime[Task, Task.Par](prefix)
       runtimeManager <- Resource.liftF(RuntimeManager.fromRuntime[Task](runtime))
     } yield ((runtime, runtimeManager))
   }
@@ -35,7 +35,7 @@ object Resources {
     implicit val log: Log[Task]            = new Log.NOPLog[Task]
     implicit val metricsEff: Metrics[Task] = new metrics.Metrics.MetricsNOP[Task]
 
-    mkRuntime(prefix)
+    mkRuntime[Task, Task.Par](prefix)
       .flatMap { runtime =>
         Resource.liftF(RuntimeManager.fromRuntime[Task](runtime))
       }

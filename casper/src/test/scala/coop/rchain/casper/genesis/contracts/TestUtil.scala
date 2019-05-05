@@ -17,7 +17,7 @@ import coop.rchain.rholang.build.CompiledRholangSource
 import coop.rchain.rholang.interpreter.Runtime.SystemProcess
 import coop.rchain.rholang.interpreter.accounting.Cost
 import coop.rchain.rholang.interpreter.util.RevAddress
-import coop.rchain.rholang.interpreter.{accounting, ParBuilder, Runtime, TestRuntime}
+import coop.rchain.rholang.interpreter.{accounting, ParBuilder, Runtime}
 import coop.rchain.shared.Log
 
 import scala.concurrent.ExecutionContext
@@ -34,26 +34,12 @@ object TestUtil {
       phloLimit = accounting.MAX_VALUE
     )
 
-  def runtime[F[_]: Concurrent: ContextShift, G[_]](
-      extraServices: Seq[SystemProcess.Definition[F]] = Seq.empty
-  )(implicit context: ExecutionContext, parallel: Parallel[F, G]): F[Runtime[F]] = {
-    implicit val log: Log[F]            = new Log.NOPLog[F]
-    implicit val metricsEff: Metrics[F] = new metrics.Metrics.MetricsNOP[F]
-    for {
-      runtime <- TestRuntime.create[F, G](extraServices)
-      _       <- Runtime.injectEmptyRegistryRoot[F](runtime.space, runtime.replaySpace)
-    } yield runtime
-  }
-
   def setupRuntime[F[_]: Concurrent: ContextShift, G[_]: Parallel[F, ?[_]]](
+      runtime: Runtime[F],
       genesisSetup: RuntimeManager[F] => F[BlockMessage],
-      otherLibs: Seq[DeployData],
-      additionalSystemProcesses: Seq[SystemProcess.Definition[F]]
-  )(
-      implicit context: ExecutionContext
+      otherLibs: Seq[DeployData]
   ): F[Runtime[F]] =
     for {
-      runtime        <- TestUtil.runtime[F, G](additionalSystemProcesses)
       runtimeManager <- RuntimeManager.fromRuntime(runtime)
       _              <- genesisSetup(runtimeManager)
       _              <- evalDeploy(rhoSpecDeploy, runtime)

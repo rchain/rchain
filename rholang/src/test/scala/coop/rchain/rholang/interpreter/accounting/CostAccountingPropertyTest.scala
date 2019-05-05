@@ -10,7 +10,7 @@ import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.metrics
 import coop.rchain.metrics.Metrics
 import coop.rchain.models._
-import coop.rchain.rholang.Resources.mkRhoISpace
+import coop.rchain.rholang.Resources._
 import coop.rchain.rholang.interpreter.Runtime.{RhoContext, RhoISpace}
 import coop.rchain.rholang.interpreter.{PrettyPrinter => PP, _}
 import coop.rchain.rholang.interpreter.errors.OutOfPhlogistonsError
@@ -108,19 +108,21 @@ object CostAccountingPropertyTest {
     implicit val logF: Log[Task]            = new Log.NOPLog[Task]
     implicit val noopMetrics: Metrics[Task] = new metrics.Metrics.MetricsNOP[Task]
 
-    for {
-      runtime <- TestRuntime.create[Task, Task.Par]()
-      _       <- runtime.reducer.setPhlo(Cost.UNSAFE_MAX)
-      _       <- Runtime.injectEmptyRegistryRoot[Task](runtime.space, runtime.replaySpace)
-      cost    <- CostAccounting.emptyCost[Task]
-      res <- {
-        implicit val c = cost
-        procs.toStream
-          .traverse(execute(runtime, _))
-          .map(_.sum)
-      }
-    } yield res
+    val prefix = "cost-accounting-property-test"
+    mkRuntime[Task, Task.Par](prefix, 1024 * 1024).use { runtime =>
+      for {
+        _    <- runtime.reducer.setPhlo(Cost.UNSAFE_MAX)
+        _    <- Runtime.injectEmptyRegistryRoot[Task](runtime.space, runtime.replaySpace)
+        cost <- CostAccounting.emptyCost[Task]
+        res <- {
+          implicit val c = cost
+          procs.toStream
+            .traverse(execute(runtime, _))
+            .map(_.sum)
+        }
+      } yield res
 
+    }
   }
 
 }
