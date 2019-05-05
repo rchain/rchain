@@ -380,9 +380,11 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Sync: ConnectionsCell: Trans
          */
         Log[F].info(
           s"Did not add block ${PrettyPrinter.buildString(block.blockHash)} as that would add an equivocation to the BlockDAG"
-        ) *> dag.pure[F]
+        ) >> dag.pure[F]
       case InvalidUnslashableBlock =>
-        handleInvalidBlockEffect(status, block)
+        Log[F].warn(
+          s"Recording invalid block ${PrettyPrinter.buildString(block.blockHash)} for ${status.toString}."
+        ) >> dag.pure[F]
       case InvalidFollows =>
         handleInvalidBlockEffect(status, block)
       case InvalidBlockNumber =>
