@@ -68,6 +68,15 @@ trait BlockDagStorageTest
       }
     }
   }
+
+  it should "be able to handle checking if contains a block with empty hash" in {
+    withDagStorage { dagStorage =>
+      for {
+        dag        <- dagStorage.getRepresentation
+        ifContains <- dag.contains(ByteString.EMPTY)
+      } yield ifContains shouldBe false
+    }
+  }
 }
 
 class BlockDagFileStorageTest extends BlockDagStorageTest {

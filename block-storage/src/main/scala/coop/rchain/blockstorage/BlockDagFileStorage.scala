@@ -239,9 +239,13 @@ final class BlockDagFileStorage[F[_]: Concurrent: Sync: Log: RaiseIOError] priva
           findAndAccessCheckpoint(blockHash, _.dataLookup.get(blockHash))
       }
     def contains(blockHash: BlockHash): F[Boolean] =
-      dataLookup.get(blockHash) match {
-        case Some(_) => true.pure[F]
-        case None    => getBlockNumber(blockHash).map(_.isDefined)
+      if (blockHash.size == 32) {
+        dataLookup.get(blockHash) match {
+          case Some(_) => true.pure[F]
+          case None    => getBlockNumber(blockHash).map(_.isDefined)
+        }
+      } else {
+        false.pure[F]
       }
     def topoSort(startBlockNumber: Long): F[Vector[Vector[BlockHash]]] =
       if (startBlockNumber >= sortOffset) {
