@@ -22,14 +22,14 @@ object Estimator {
   private val Tips1MetricsSource: Metrics.Source = Metrics.Source(EstimatorMetricsSource, "tips1")
 
   def tips[F[_]: Monad: Metrics](
-      blockDag: BlockDagRepresentation[F],
-      genesis: BlockMessage
+                                  dag: BlockDagRepresentation[F],
+                                  genesis: BlockMessage
   ): F[IndexedSeq[BlockHash]] =
     for {
       span                <- Metrics[F].span(Tips0MetricsSource)
-      latestMessageHashes <- blockDag.latestMessageHashes
+      latestMessageHashes <- dag.latestMessageHashes
       _                   <- span.mark("latest-message-hashes")
-      result              <- Estimator.tips[F](blockDag, genesis, latestMessageHashes)
+      result              <- Estimator.tips[F](dag, genesis, latestMessageHashes)
       _                   <- span.close()
     } yield result
 
@@ -37,17 +37,17 @@ object Estimator {
     * When the BlockDag has an empty latestMessages, tips will return IndexedSeq(genesis.blockHash)
     */
   def tips[F[_]: Monad: Metrics](
-      blockDag: BlockDagRepresentation[F],
-      genesis: BlockMessage,
-      latestMessagesHashes: Map[Validator, BlockHash]
+                                  dag: BlockDagRepresentation[F],
+                                  genesis: BlockMessage,
+                                  latestMessagesHashes: Map[Validator, BlockHash]
   ): F[IndexedSeq[BlockHash]] =
     for {
       span                       <- Metrics[F].span(Tips1MetricsSource)
-      lca                        <- calculateLCA(blockDag, BlockMetadata.fromBlock(genesis, false), latestMessagesHashes)
+      lca                        <- calculateLCA(dag, BlockMetadata.fromBlock(genesis, false), latestMessagesHashes)
       _                          <- span.mark("lca")
-      scoresMap                  <- buildScoresMap(blockDag, latestMessagesHashes, lca)
+      scoresMap                  <- buildScoresMap(dag, latestMessagesHashes, lca)
       _                          <- span.mark("score-map")
-      rankedLatestMessagesHashes <- rankForkchoices(List(lca), blockDag, scoresMap)
+      rankedLatestMessagesHashes <- rankForkchoices(List(lca), dag, scoresMap)
       _                          <- span.mark("ranked-latest-messages-hashes")
       _                          <- span.close()
     } yield rankedLatestMessagesHashes
