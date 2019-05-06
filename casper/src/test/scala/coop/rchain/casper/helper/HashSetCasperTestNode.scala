@@ -15,7 +15,7 @@ import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.casper.util.comm.{
   ApprovedBlockReceivedHandler,
   CasperPacketHandler,
-  CasperPacketHandlerInternal
+  CasperEngine
 }
 import coop.rchain.casper.util.comm.TestNetwork.TestNetwork
 import coop.rchain.casper.util.comm._
@@ -98,7 +98,7 @@ class HashSetCasperTestNode[F[_]](
 
   val handlerInternal = new ApprovedBlockReceivedHandler(casperEff, approvedBlock)
   val casperPacketHandler =
-    new CasperPacketHandler[F](Ref.unsafe[F, CasperPacketHandlerInternal[F]](handlerInternal))
+    new CasperPacketHandler[F](Ref.unsafe[F, CasperEngine[F]](handlerInternal))
   implicit val packetHandlerEff = PacketHandler.pf[F](
     casperPacketHandler.handle
   )

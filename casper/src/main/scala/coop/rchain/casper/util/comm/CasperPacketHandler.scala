@@ -37,7 +37,7 @@ class CasperInit[F[_]](
 
 object CasperPacketHandler {
   implicit private val logSource: LogSource = LogSource(this.getClass)
-  import CasperPacketHandlerInternal._
+  import CasperEngine._
 
   def apply[F[_]](implicit ev: CasperPacketHandler[F]): CasperPacketHandler[F] = ev
 
@@ -83,7 +83,7 @@ object CasperPacketHandler {
       _                   <- MultiParentCasperRef[F].set(casper)
       _                   <- Log[F].info("Making a transition to ApprovedBlockReceivedHandler state.")
       abh                 = new ApprovedBlockReceivedHandler[F](casper, approvedBlock)
-      validator           <- Ref.of[F, CasperPacketHandlerInternal[F]](abh)
+      validator           <- Ref.of[F, CasperEngine[F]](abh)
       casperPacketHandler = new CasperPacketHandler[F](validator)
     } yield casperPacketHandler
 
@@ -113,7 +113,7 @@ object CasperPacketHandler {
         init.conf.hasFaucet,
         init.conf.requiredSigs
       )
-      gv <- Ref.of[F, CasperPacketHandlerInternal[F]](
+      gv <- Ref.of[F, CasperEngine[F]](
              new GenesisValidatorHandler(
                init.runtimeManager,
                validatorId.get,
@@ -152,7 +152,7 @@ object CasperPacketHandler {
                 init.conf.approveGenesisDuration,
                 init.conf.approveGenesisInterval
               )
-      standalone <- Ref.of[F, CasperPacketHandlerInternal[F]](
+      standalone <- Ref.of[F, CasperEngine[F]](
                      new StandaloneCasperHandler[F](abp)
                    )
       // TODO OMG Fix, use Concurrent+!11
@@ -174,7 +174,7 @@ object CasperPacketHandler {
 }
 
 class CasperPacketHandler[F[_]: Monad: RPConfAsk: BlockStore: ConnectionsCell: TransportLayer: Log: Time: ErrorHandler: LastApprovedBlock: MultiParentCasperRef](
-    private val cphI: Ref[F, CasperPacketHandlerInternal[F]]
+    private val cphI: Ref[F, CasperEngine[F]]
 ) {
 
   def init: F[Unit] =

@@ -30,7 +30,7 @@ import monix.execution.Scheduler
 import scala.concurrent.duration.FiniteDuration
 import scala.util.Try
 
-trait CasperPacketHandlerInternal[F[_]] {
+trait CasperEngine[F[_]] {
 
   def applicative: Applicative[F]
 
@@ -47,14 +47,14 @@ trait CasperPacketHandlerInternal[F[_]] {
   def handleNoApprovedBlockAvailable(na: NoApprovedBlockAvailable): F[Unit]         = noop
 }
 
-object CasperPacketHandlerInternal {
+object CasperEngine {
   def connectAndQueryApprovedBlock[F[_]: Monad: Sync: LastApprovedBlock: ErrorHandler: Time: MultiParentCasperRef: Log: RPConfAsk: BlockStore: ConnectionsCell: TransportLayer: Metrics: Concurrent: SafetyOracle: BlockDagStorage](
       init: CasperInit[F]
   ): F[CasperPacketHandler[F]] =
     for {
       validators  <- CasperConf.parseValidatorsFile[F](init.conf.knownValidatorsFile)
       validatorId <- ValidatorIdentity.fromConfig[F](init.conf)
-      bootstrap <- Ref.of[F, CasperPacketHandlerInternal[F]] {
+      bootstrap <- Ref.of[F, CasperEngine[F]] {
                     new BootstrapCasperHandler(
                       init.runtimeManager,
                       init.conf.shardId,
@@ -137,8 +137,8 @@ class GenesisValidatorHandler[F[_]: Sync: Metrics: Concurrent: ConnectionsCell: 
     validatorId: ValidatorIdentity,
     shardId: String,
     blockApprover: BlockApproverProtocol
-) extends CasperPacketHandlerInternal[F] {
-  import CasperPacketHandlerInternal._
+) extends CasperEngine[F] {
+  import CasperEngine._
   def applicative: Applicative[F] = Applicative[F]
 
   override def handleApprovedBlock(
@@ -180,8 +180,8 @@ class GenesisValidatorHandler[F[_]: Sync: Metrics: Concurrent: ConnectionsCell: 
     **/
 class StandaloneCasperHandler[F[_]: Sync: ConnectionsCell: BlockStore: TransportLayer: Log: Time: ErrorHandler: SafetyOracle: RPConfAsk: LastApprovedBlock](
     approveProtocol: ApproveBlockProtocol[F]
-) extends CasperPacketHandlerInternal[F] {
-  import CasperPacketHandlerInternal._
+) extends CasperEngine[F] {
+  import CasperEngine._
   def applicative: Applicative[F] = Applicative[F]
 
   override def init: F[Unit] = approveProtocol.run()
@@ -204,13 +204,13 @@ class StandaloneCasperHandler[F[_]: Sync: ConnectionsCell: BlockStore: Transport
 }
 
 object StandaloneCasperHandler {
-  import CasperPacketHandlerInternal._
+  import CasperEngine._
   def approveBlockInterval[F[_]: Sync: Metrics: Concurrent: ConnectionsCell: BlockStore: TransportLayer: Log: Time: ErrorHandler: SafetyOracle: RPConfAsk: LastApprovedBlock: MultiParentCasperRef: BlockDagStorage](
       interval: FiniteDuration,
       shardId: String,
       runtimeManager: RuntimeManager[F],
       validatorId: Option[ValidatorIdentity],
-      capserHandlerInternal: Ref[F, CasperPacketHandlerInternal[F]]
+      capserHandlerInternal: Ref[F, CasperEngine[F]]
   ): F[Unit] =
     for {
       _                  <- Time[F].sleep(interval)
@@ -254,8 +254,8 @@ class BootstrapCasperHandler[F[_]: Sync: Metrics: Concurrent: ConnectionsCell: B
     validatorId: Option[ValidatorIdentity],
     validators: Set[ByteString],
     theInit: F[Unit]
-) extends CasperPacketHandlerInternal[F] {
-  import CasperPacketHandlerInternal._
+) extends CasperEngine[F] {
+  import CasperEngine._
   def applicative: Applicative[F] = Applicative[F]
 
   override def init: F[Unit] = theInit
@@ -289,7 +289,7 @@ class BootstrapCasperHandler[F[_]: Sync: Metrics: Concurrent: ConnectionsCell: B
 class ApprovedBlockReceivedHandler[F[_]: RPConfAsk: BlockStore: Monad: ConnectionsCell: TransportLayer: Log: Time: ErrorHandler](
     private val casper: MultiParentCasper[F],
     approvedBlock: ApprovedBlock
-) extends CasperPacketHandlerInternal[F] {
+) extends CasperEngine[F] {
 
   implicit val _casper            = casper
   def applicative: Applicative[F] = Applicative[F]

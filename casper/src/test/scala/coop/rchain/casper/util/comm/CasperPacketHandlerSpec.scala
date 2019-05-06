@@ -138,7 +138,7 @@ class CasperPacketHandlerSpec extends WordSpec {
         import fixture._
 
         val ref =
-          Ref.unsafe[Task, CasperPacketHandlerInternal[Task]](
+          Ref.unsafe[Task, CasperEngine[Task]](
             new GenesisValidatorHandler(runtimeManager, validatorId, shardId, bap)
           )
         val packetHandler     = new CasperPacketHandler[Task](ref)
@@ -169,7 +169,7 @@ class CasperPacketHandlerSpec extends WordSpec {
         import fixture._
 
         val ref =
-          Ref.unsafe[Task, CasperPacketHandlerInternal[Task]](
+          Ref.unsafe[Task, CasperEngine[Task]](
             new GenesisValidatorHandler(runtimeManager, validatorId, shardId, bap)
           )
         val packetHandler = new CasperPacketHandler[Task](ref)
@@ -229,7 +229,7 @@ class CasperPacketHandlerSpec extends WordSpec {
             startTime
           )
           standaloneCasper    = new StandaloneCasperHandler[Task](abp)
-          refCasper           <- Ref.of[Task, CasperPacketHandlerInternal[Task]](standaloneCasper)
+          refCasper           <- Ref.of[Task, CasperEngine[Task]](standaloneCasper)
           casperPacketHandler = new CasperPacketHandler[Task](refCasper)
           c1                  = abp.run().forkAndForget.runToFuture
           c2 = StandaloneCasperHandler
@@ -310,7 +310,7 @@ class CasperPacketHandlerSpec extends WordSpec {
         val approvedPacket = Packet(transport.ApprovedBlock.id, approvedBlock.toByteString)
 
         val test = for {
-          refCasper           <- Ref.of[Task, CasperPacketHandlerInternal[Task]](bootstrapCasper)
+          refCasper           <- Ref.of[Task, CasperEngine[Task]](bootstrapCasper)
           casperPacketHandler = new CasperPacketHandler[Task](refCasper)
           _                   <- casperPacketHandler.handle(local).apply(approvedPacket)
           casperO             <- MultiParentCasperRef[Task].get
@@ -365,7 +365,7 @@ class CasperPacketHandlerSpec extends WordSpec {
 
       implicit val casper = NoOpsCasperEffect[Task]().unsafeRunSync
 
-      val refCasper = Ref.unsafe[Task, CasperPacketHandlerInternal[Task]](
+      val refCasper = Ref.unsafe[Task, CasperEngine[Task]](
         new ApprovedBlockReceivedHandler[Task](casper, approvedBlock)
       )
       val casperPacketHandler = new CasperPacketHandler[Task](refCasper)
