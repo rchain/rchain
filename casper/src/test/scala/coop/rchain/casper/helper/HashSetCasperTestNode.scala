@@ -12,11 +12,8 @@ import coop.rchain.casper._
 import coop.rchain.casper.helper.BlockDagStorageTestFixture.mapSize
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.ProtoUtil
-import coop.rchain.casper.util.comm.{
-  ApprovedBlockReceivedHandler,
-  CasperPacketHandler,
-  CasperEngine
-}
+import coop.rchain.casper.util.comm.CasperPacketHandler
+import coop.rchain.casper.engine.{ApprovedBlockReceivedHandler, CasperEngine}
 import coop.rchain.casper.util.comm.TestNetwork.TestNetwork
 import coop.rchain.casper.util.comm._
 import coop.rchain.casper.util.rholang.{InterpreterUtil, RuntimeManager}

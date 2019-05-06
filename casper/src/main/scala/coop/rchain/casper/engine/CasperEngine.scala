@@ -1,4 +1,4 @@
-package coop.rchain.casper.util.comm
+package coop.rchain.casper.engine
 
 import cats.data.EitherT
 import cats.effect.concurrent.Ref
@@ -11,6 +11,7 @@ import coop.rchain.casper.Estimator.Validator
 import coop.rchain.casper.LastApprovedBlock.LastApprovedBlock
 import coop.rchain.casper.MultiParentCasperRef.MultiParentCasperRef
 import coop.rchain.casper._
+import coop.rchain.casper.util.comm.CommUtil
 import coop.rchain.casper.genesis.Genesis
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.rholang.RuntimeManager
@@ -48,23 +49,6 @@ trait CasperEngine[F[_]] {
 }
 
 object CasperEngine {
-  def connectAndQueryApprovedBlock[F[_]: Monad: Sync: LastApprovedBlock: ErrorHandler: Time: MultiParentCasperRef: Log: RPConfAsk: BlockStore: ConnectionsCell: TransportLayer: Metrics: Concurrent: SafetyOracle: BlockDagStorage](
-      init: CasperInit[F]
-  ): F[CasperPacketHandler[F]] =
-    for {
-      validators  <- CasperConf.parseValidatorsFile[F](init.conf.knownValidatorsFile)
-      validatorId <- ValidatorIdentity.fromConfig[F](init.conf)
-      bootstrap <- Ref.of[F, CasperEngine[F]] {
-                    new BootstrapCasperHandler(
-                      init.runtimeManager,
-                      init.conf.shardId,
-                      validatorId,
-                      validators,
-                      CommUtil.requestApprovedBlock[F]
-                    )
-                  }
-      casperPacketHandler = new CasperPacketHandler[F](bootstrap)
-    } yield casperPacketHandler
 
   /*
    * Note the ordering of the insertions is important.

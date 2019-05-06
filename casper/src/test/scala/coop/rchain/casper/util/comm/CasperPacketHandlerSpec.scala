@@ -11,6 +11,7 @@ import coop.rchain.casper.MultiParentCasperTestUtil.createBonds
 import coop.rchain.casper._
 import coop.rchain.casper.genesis.Genesis
 import coop.rchain.casper.genesis.contracts._
+import coop.rchain.casper.engine._
 import coop.rchain.casper.helper.{BlockDagStorageTestFixture, NoOpsCasperEffect}
 import coop.rchain.casper.protocol.{NoApprovedBlockAvailable, _}
 import coop.rchain.casper.util.TestTime

@@ -1,4 +1,4 @@
-package coop.rchain.casper.util.comm
+package coop.rchain.casper.engine
 
 import cats.effect.concurrent.Ref
 import coop.rchain.comm.rp.Connect
@@ -20,11 +20,10 @@ import coop.rchain.shared.Log.NOPLog
 import coop.rchain.shared.{Cell, Time}
 import monix.eval.Task
 import monix.execution.schedulers.TestScheduler
-
 import scala.concurrent.duration._
 import org.scalatest.{FlatSpec, Matchers}
 import coop.rchain.casper.LastApprovedBlock.LastApprovedBlock
-import coop.rchain.casper.util.comm.ApproveBlockProtocolTest.TestFixture
+import coop.rchain.casper.engine.ApproveBlockProtocolTest.TestFixture
 import coop.rchain.casper.{LastApprovedBlock, MultiParentCasperTestUtil}
 import org.scalatest.{Assertion, FlatSpec, Matchers}
 import coop.rchain.casper.util.TestTime

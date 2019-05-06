@@ -1,4 +1,4 @@
-package coop.rchain.casper.util.comm
+package coop.rchain.casper.engine
 
 import cats.implicits._
 import coop.rchain.casper.MultiParentCasperTestUtil
@@ -9,6 +9,7 @@ import coop.rchain.casper.helper.{BlockDagStorageTestFixture, HashSetCasperTestN
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.scalatestcontrib._
 import coop.rchain.casper.util.rholang.RuntimeManager
+import coop.rchain.casper.util.comm.TestNetwork
 import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.comm.protocol.routing.Packet
 import coop.rchain.comm.transport

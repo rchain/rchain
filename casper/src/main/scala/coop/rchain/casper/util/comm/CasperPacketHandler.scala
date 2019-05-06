@@ -11,6 +11,7 @@ import coop.rchain.casper.Estimator.Validator
 import coop.rchain.casper.LastApprovedBlock.LastApprovedBlock
 import coop.rchain.casper.MultiParentCasperRef.MultiParentCasperRef
 import coop.rchain.casper._
+import coop.rchain.casper.engine._
 import coop.rchain.casper.genesis.Genesis
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.rholang.RuntimeManager
@@ -171,6 +172,23 @@ object CasperPacketHandler {
           }
     } yield new CasperPacketHandler[F](standalone)
 
+  def connectAndQueryApprovedBlock[F[_]: Monad: Sync: LastApprovedBlock: ErrorHandler: Time: MultiParentCasperRef: Log: RPConfAsk: BlockStore: ConnectionsCell: TransportLayer: Metrics: Concurrent: SafetyOracle: BlockDagStorage](
+      init: CasperInit[F]
+  ): F[CasperPacketHandler[F]] =
+    for {
+      validators  <- CasperConf.parseValidatorsFile[F](init.conf.knownValidatorsFile)
+      validatorId <- ValidatorIdentity.fromConfig[F](init.conf)
+      bootstrap <- Ref.of[F, CasperEngine[F]] {
+                    new BootstrapCasperHandler(
+                      init.runtimeManager,
+                      init.conf.shardId,
+                      validatorId,
+                      validators,
+                      CommUtil.requestApprovedBlock[F]
+                    )
+                  }
+      casperPacketHandler = new CasperPacketHandler[F](bootstrap)
+    } yield casperPacketHandler
 }
 
 class CasperPacketHandler[F[_]: Monad: RPConfAsk: BlockStore: ConnectionsCell: TransportLayer: Log: Time: ErrorHandler: LastApprovedBlock: MultiParentCasperRef](
