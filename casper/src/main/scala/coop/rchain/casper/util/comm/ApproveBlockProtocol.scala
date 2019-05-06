@@ -146,7 +146,10 @@ object ApproveBlockProtocol {
     private def signedByTrustedValidator(a: BlockApproval): Boolean =
       a.sig.fold(false)(s => trustedValidators.contains(s.publicKey))
 
-    def run(): F[Unit] = internalRun()
+    def run(): F[Unit] =
+      Log[F].info("Start execution of ApprovedBlockProtocol") >>
+        internalRun() >>
+        Log[F].info("Finished execution of ApprovedBlockProtocol")
 
     private def internalRun(): F[Unit] =
       for {
