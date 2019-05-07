@@ -126,9 +126,8 @@ trait IStore[F[_], C, P, A, K] {
           value
             .sorted(Ordering.by((tu: TrieUpdate[C, P, A, K]) => tu.count).reverse)
             .headOption match {
-            case Some(TrieUpdate(_, Delete, _, _))          => List.empty
-            case Some(insert @ TrieUpdate(_, Insert, _, _)) => List(insert)
-            case _                                          => value
+            case Some(v) => List(v)
+            case _       => value
           }
       }
       .toList

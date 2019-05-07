@@ -223,7 +223,7 @@ trait IStoreTests
       }
     }
 
-  it should "remove all operations from history with the same hash when last operation is delete" in
+  it should "remove all but last operation from history with the same hash when last operation is delete" in
     forAll("gnat1", "gnat2") {
       withTestSpaceNonF {
         (store, space) =>
@@ -232,27 +232,32 @@ trait IStoreTests
                 gnat1: GNAT[String, Pattern, String, StringsCaptor],
                 gnat2: GNAT[String, Pattern, String, StringsCaptor]
             ) =>
-              val gnat1Ops = List(
-                TrieUpdate(0, Insert, store.hashChannels(gnat1.channels), gnat1),
-                TrieUpdate(1, Delete, store.hashChannels(gnat1.channels), gnat1)
-              )
-              val gnat2Ops = List(TrieUpdate(2, Insert, store.hashChannels(gnat2.channels), gnat2))
-              val history  = gnat1Ops ++ gnat2Ops
-              store.collapse(history) shouldBe gnat2Ops
+              whenever(gnat1.channels != gnat2.channels) {
+                val del = TrieUpdate(1, Delete, store.hashChannels(gnat1.channels), gnat1)
+                val gnat1Ops = List(
+                  TrieUpdate(0, Insert, store.hashChannels(gnat1.channels), gnat1),
+                  del
+                )
+                val gnat2Ops =
+                  List(TrieUpdate(2, Insert, store.hashChannels(gnat2.channels), gnat2))
+                val history = gnat1Ops ++ gnat2Ops
+                store.collapse(history) should contain theSameElementsAs del :: gnat2Ops
+              }
           }
       }
     }
 
-  it should "remove all operations from history with the same hash when last operation is delete - longer case with same hash" in
+  it should "remove all but last operation from history with the same hash when last operation is delete - longer case with same hash" in
     forAll("gnat1") { (gnat1: GNAT[String, Pattern, String, StringsCaptor]) =>
       withTestSpaceNonF { (store, space) =>
+        val del = TrieUpdate(3, Delete, store.hashChannels(gnat1.channels), gnat1)
         val gnatOps = List(
           TrieUpdate(0, Insert, store.hashChannels(gnat1.channels), gnat1),
           TrieUpdate(1, Insert, store.hashChannels(gnat1.channels), gnat1),
           TrieUpdate(2, Insert, store.hashChannels(gnat1.channels), gnat1),
-          TrieUpdate(3, Delete, store.hashChannels(gnat1.channels), gnat1)
+          del
         )
-        store.collapse(gnatOps) shouldBe empty
+        store.collapse(gnatOps) shouldBe Seq(del)
       }
     }
 
