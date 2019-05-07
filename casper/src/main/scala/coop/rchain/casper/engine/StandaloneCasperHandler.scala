@@ -46,10 +46,6 @@ class StandaloneCasperHandler[F[_]: Sync: ConnectionsCell: BlockStore: Transport
 
   override def init: F[Unit] = approveProtocol.run()
 
-  override def handleApprovedBlock(
-      ab: ApprovedBlock
-  ): F[Option[MultiParentCasper[F]]] =
-    none[MultiParentCasper[F]].pure[F]
   override def handleApprovedBlockRequest(
       peer: PeerNode,
       br: ApprovedBlockRequest
