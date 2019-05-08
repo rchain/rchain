@@ -11,6 +11,8 @@ import coop.rchain.casper.util.{DagOperations, ProtoUtil}
 import coop.rchain.casper.{BlockException, PrettyPrinter}
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.metrics.Span
+import coop.rchain.models.BlockHash.BlockHash
+import coop.rchain.models.Validator.Validator
 import coop.rchain.models.{BlockMetadata, Par}
 import coop.rchain.rholang.interpreter.ParBuilder
 import coop.rchain.rspace.ReplayException
@@ -43,14 +45,21 @@ object InterpreterUtil {
       _                    <- span.mark("before-compute-parents-post-state")
       possiblePreStateHash <- computeParentsPostState[F](parents, dag, runtimeManager, span)
       _                    <- Log[F].info(s"Computed parents post state for ${PrettyPrinter.buildString(b)}.")
-      _                    <- span.mark("before-process-pre-state-hash")
+      invalidBlocksSet     <- dag.invalidBlocks
+      unseenBlocksSet      <- ProtoUtil.unseenBlockHashes(dag, b)
+      seenInvalidBlocksSet = invalidBlocksSet.filterNot(
+        block => unseenBlocksSet.contains(block.blockHash)
+      ) // TODO: Write test in which switching this to .filter makes it fail
+      invalidBlocks = seenInvalidBlocksSet.map(block => (block.blockHash, block.sender)).toMap
+      _             <- span.mark("before-process-pre-state-hash")
       result <- processPossiblePreStateHash[F](
                  runtimeManager,
                  preStateHash,
                  tsHash,
                  internalDeploys,
                  possiblePreStateHash,
-                 timestamp
+                 timestamp,
+                 invalidBlocks
                )
     } yield result
   }
@@ -61,7 +70,8 @@ object InterpreterUtil {
       tsHash: Option[StateHash],
       internalDeploys: Seq[InternalProcessedDeploy],
       possiblePreStateHash: Either[Throwable, StateHash],
-      blockTime: Long
+      blockTime: Long,
+      invalidBlocks: Map[BlockHash, Validator]
   ): F[Either[BlockException, Option[StateHash]]] =
     possiblePreStateHash match {
       case Left(ex) =>
@@ -74,7 +84,8 @@ object InterpreterUtil {
             tsHash,
             internalDeploys,
             possiblePreStateHash,
-            blockTime
+            blockTime,
+            invalidBlocks
           )
         } else {
           Log[F].warn(
@@ -91,10 +102,11 @@ object InterpreterUtil {
       tsHash: Option[StateHash],
       internalDeploys: Seq[InternalProcessedDeploy],
       possiblePreStateHash: Either[Throwable, StateHash],
-      blockTime: Long
+      blockTime: Long,
+      invalidBlocks: Map[BlockHash, Validator]
   ): F[Either[BlockException, Option[StateHash]]] =
     runtimeManager
-      .replayComputeState(preStateHash)(internalDeploys, blockTime)
+      .replayComputeState(preStateHash)(internalDeploys, blockTime, invalidBlocks)
       .flatMap {
         case Left((Some(deploy), status)) =>
           status match {
@@ -149,16 +161,19 @@ object InterpreterUtil {
       dag: BlockDagRepresentation[F],
       runtimeManager: RuntimeManager[F],
       blockTime: Long,
-      span: Span[F]
+      span: Span[F],
+      invalidBlocks: Map[BlockHash, Validator] = Map.empty[BlockHash, Validator]
   ): F[Either[Throwable, (StateHash, StateHash, Seq[InternalProcessedDeploy])]] =
     for {
       possiblePreStateHash <- computeParentsPostState[F](parents, dag, runtimeManager, span)
       result <- possiblePreStateHash match {
                  case Right(preStateHash) =>
-                   runtimeManager.computeState(preStateHash)(deploys, blockTime).map {
-                     case (postStateHash, processedDeploys) =>
-                       (preStateHash, postStateHash, processedDeploys).asRight[Throwable]
-                   }
+                   runtimeManager
+                     .computeState(preStateHash)(deploys, blockTime, invalidBlocks)
+                     .map {
+                       case (postStateHash, processedDeploys) =>
+                         (preStateHash, postStateHash, processedDeploys).asRight[Throwable]
+                     }
                  case Left(err) =>
                    err.asLeft[(StateHash, StateHash, Seq[InternalProcessedDeploy])].pure[F]
                }
@@ -208,9 +223,18 @@ object InterpreterUtil {
                                block.getBody.deploys
                                  .flatMap(InternalProcessedDeploy.fromProcessedDeploy)
                              for {
+                               invalidBlocksSet <- dag.invalidBlocks
+                               unseenBlocksSet  <- ProtoUtil.unseenBlockHashes(dag, block)
+                               seenInvalidBlocksSet = invalidBlocksSet.filterNot(
+                                 block => unseenBlocksSet.contains(block.blockHash)
+                               )
+                               invalidBlocks = seenInvalidBlocksSet
+                                 .map(block => (block.blockHash, block.sender))
+                                 .toMap
                                replayResult <- runtimeManager.replayComputeState(stateHash)(
                                                 deploys,
-                                                block.header.get.timestamp
+                                                block.header.get.timestamp,
+                                                invalidBlocks
                                               )
                              } yield replayResult match {
                                case result @ Right(_) => result.leftCast[Throwable]

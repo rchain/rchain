@@ -12,6 +12,7 @@ import coop.rchain.blockstorage.{BlockDagRepresentation, BlockDagStorage, BlockS
 import coop.rchain.casper.CasperState.CasperStateCell
 import coop.rchain.casper.DeployError._
 import coop.rchain.casper.protocol._
+import coop.rchain.casper.util.ConstructDeploy.{defaultSec, sourceDeploy}
 import coop.rchain.casper.util.ProtoUtil._
 import coop.rchain.casper.util._
 import coop.rchain.casper.util.comm.CommUtil
@@ -21,11 +22,13 @@ import coop.rchain.catscontrib.BooleanF._
 import coop.rchain.catscontrib.ski._
 import coop.rchain.comm.rp.Connect.{ConnectionsCell, RPConfAsk}
 import coop.rchain.comm.transport.TransportLayer
+import coop.rchain.crypto.PrivateKey
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.EquivocationRecord
 import coop.rchain.models.Validator.Validator
+import coop.rchain.rholang.interpreter.accounting
 import coop.rchain.shared._
 
 /**

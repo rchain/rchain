@@ -3,16 +3,19 @@ package coop.rchain.casper
 import cats.Monad
 import cats.effect.Sync
 import cats.implicits._
-
 import coop.rchain.blockstorage.{BlockDagRepresentation, BlockStore}
 import coop.rchain.casper.CasperState.CasperStateCell
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.ProtoUtil._
 import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
 import coop.rchain.casper.util.rholang._
-import coop.rchain.casper.util.{DagOperations, ProtoUtil}
+import coop.rchain.casper.util.{ConstructDeploy, DagOperations, ProtoUtil}
+import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.{PrivateKey, PublicKey}
 import coop.rchain.metrics.{Metrics, Span}
+import coop.rchain.models.BlockHash.BlockHash
+import coop.rchain.models.Validator.Validator
+import coop.rchain.rholang.interpreter.accounting
 import coop.rchain.shared.{Cell, Log, Time}
 
 object BlockCreator {
@@ -42,15 +45,38 @@ object BlockCreator {
       runtimeManager: RuntimeManager[F]
   )(implicit state: CasperStateCell[F], metricsF: Metrics[F]): F[CreateBlockStatus] =
     for {
-      span           <- metricsF.span(CreateBlockMetricsSource)
-      tipHashes      <- Estimator.tips[F](dag, genesis)
-      _              <- span.mark("after-estimator")
-      parents        <- EstimatorHelper.chooseNonConflicting[F](tipHashes, dag)
-      maxBlockNumber = ProtoUtil.maxBlockNumber(parents)
-      _              <- updateDeployHistory[F](state, maxBlockNumber)
-      deploys        <- extractDeploys[F](dag, parents, maxBlockNumber, expirationThreshold)
-      justifications <- computeJustifications[F](dag, parents)
-      now            <- Time[F].currentMillis
+      span                  <- metricsF.span(CreateBlockMetricsSource)
+      tipHashes             <- Estimator.tips[F](dag, genesis)
+      _                     <- span.mark("after-estimator")
+      parents               <- EstimatorHelper.chooseNonConflicting[F](tipHashes, dag)
+      maxBlockNumber        = ProtoUtil.maxBlockNumber(parents)
+      invalidLatestMessages <- ProtoUtil.invalidLatestMessages[F](dag)
+      _ <- invalidLatestMessages.values.toList.traverse { invalidBlockHash =>
+            // TODO: Note this snippet calls the new PoS contract so it will currently do nothing
+            val encodedInvalidBlockHash = Base16.encode(invalidBlockHash.toByteArray)
+            val deploy = ConstructDeploy.sourceDeploy(
+              s"""
+                 |new rl(`rho:registry:lookup`), posCh in {
+                 |  rl!(`rho:id:cnec3pa8prp4out3yc8facon6grm3xbsotpd4ckjfx8ghuw77xadzt`, *posCh) |
+                 |  for(@(_, PoS) <- posCh) {
+                 |    @PoS!("slash", "$encodedInvalidBlockHash".hexToBytes(), "IGNOREFORNOW")
+                 |  }
+                 |}
+            """.stripMargin,
+              System.currentTimeMillis(),
+              accounting.MAX_VALUE,
+              sec = privateKey
+            )
+            Cell[F, CasperState].modify { s =>
+              s.copy(deployHistory = s.deployHistory + deploy)
+            }
+          }
+      _                <- updateDeployHistory[F](state, maxBlockNumber)
+      deploys          <- extractDeploys[F](dag, parents, maxBlockNumber, expirationThreshold)
+      justifications   <- computeJustifications[F](dag, parents)
+      now              <- Time[F].currentMillis
+      invalidBlocksSet <- dag.invalidBlocks
+      invalidBlocks    = invalidBlocksSet.map(block => (block.blockHash, block.sender)).toMap
       unsignedBlock <- if (deploys.nonEmpty || parents.length > 1) {
                         processDeploysAndCreateBlock[F](
                           dag,
@@ -62,6 +88,7 @@ object BlockCreator {
                           shardId,
                           version,
                           now,
+                          invalidBlocks,
                           span
                         )
                       } else {
@@ -160,6 +187,7 @@ object BlockCreator {
       shardId: String,
       version: Long,
       now: Long,
+      invalidBlocks: Map[BlockHash, Validator],
       span: Span[F]
   ): F[CreateBlockStatus] =
     InterpreterUtil
@@ -169,7 +197,8 @@ object BlockCreator {
         dag,
         runtimeManager,
         now,
-        span
+        span,
+        invalidBlocks
       )
       .flatMap {
         case Left(ex) =>

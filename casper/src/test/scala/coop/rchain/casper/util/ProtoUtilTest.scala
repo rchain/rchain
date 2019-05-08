@@ -9,7 +9,8 @@ import coop.rchain.models.blockImplicits._
 import org.scalatest._
 import org.scalatest.prop.GeneratorDrivenPropertyChecks
 import coop.rchain.casper.scalatestcontrib._
-import coop.rchain.crypto.signatures.Ed25519
+import coop.rchain.crypto.signatures.Secp256k1
+import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.p2p.EffectsTestInstances.LogicalTime
 import monix.execution.Scheduler.Implicits.global
 
@@ -32,7 +33,7 @@ class ProtoUtilTest extends FlatSpec with Matchers with GeneratorDrivenPropertyC
 
   implicit val timeEff = new LogicalTime[Effect]
 
-  private val (validatorKeys, validatorPks) = (1 to 4).map(_ => Ed25519.newKeyPair).unzip
+  private val (validatorKeys, validatorPks) = (1 to 4).map(_ => Secp256k1.newKeyPair).unzip
   private val genesis = buildGenesis(
     buildGenesisParameters(validatorKeys.length, createBonds(validatorPks))
   )

@@ -83,6 +83,23 @@ new  PoS,
                   deposit!(userPk, amount, *returnCh)
                 }
               }
+            } |
+
+            contract PoS(@"slash", @blockHash, return) = {
+              new userCh, invalidBlocksCh, getInvalidBlocks(`rho:casper:invalidBlocks`) in {
+                getInvalidBlocks!(*invalidBlocksCh) |
+                getUser!(*userCh) |
+                for (@invalidBlocks <- invalidBlocksCh; @bonds <- bondsCh; @userPk <- userCh) {
+                  new toBeSlashed in {
+                    toBeSlashed!(invalidBlocks.getOrElse(blockHash, userPk)) |
+                    for (@validator <- toBeSlashed) {
+                      // TODO: Transfer to coop wallet instead of just simply setting bonds to 0
+                      bondsCh!(bonds.set(validator, [0, bonds.get(validator).nth(1)])) |
+                      return!(true)
+                    }
+                  }
+                }
+              }
             }
           }
         } |

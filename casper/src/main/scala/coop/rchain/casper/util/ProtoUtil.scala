@@ -21,6 +21,7 @@ import coop.rchain.models._
 import coop.rchain.rholang.interpreter.DeployParameters
 
 import scala.collection.immutable
+import scala.collection.immutable.Map
 
 object ProtoUtil {
 
@@ -477,5 +478,25 @@ object ProtoUtil {
         }
       case None =>
         List.empty[BlockMetadata].pure[F]
+    }
+
+  def invalidLatestMessages[F[_]: Monad](
+      dag: BlockDagRepresentation[F]
+  ): F[Map[Validator, BlockHash]] =
+    dag.latestMessages.flatMap(
+      latestMessages =>
+        invalidLatestMessages(dag, latestMessages.map {
+          case (validator, block) => (validator, block.blockHash)
+        })
+    )
+
+  def invalidLatestMessages[F[_]: Monad](
+      dag: BlockDagRepresentation[F],
+      latestMessagesHashes: Map[Validator, BlockHash]
+  ): F[Map[Validator, BlockHash]] =
+    dag.invalidBlocks.map { invalidBlocks =>
+      latestMessagesHashes.filter {
+        case (_, blockHash) => invalidBlocks.map(_.blockHash).contains(blockHash)
+      }
     }
 }
