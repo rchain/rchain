@@ -88,24 +88,29 @@ object CasperEngine {
       shardId: String
   ): F[Option[MultiParentCasper[F]]] =
     for {
+      _       <- Log[F].info("Received ApprovedBlock message.")
       isValid <- Validate.approvedBlock[F](b, validators)
-      casper <- if (isValid) {
-                 for {
-                   _       <- Log[F].info("Valid ApprovedBlock received!")
-                   genesis = b.candidate.flatMap(_.block).get
-                   _       <- insertIntoBlockAndDagStore[F](genesis, b)
-                   _       <- LastApprovedBlock[F].set(b)
-                   casper <- MultiParentCasper
-                              .hashSetCasper[F](
-                                runtimeManager,
-                                validatorId,
-                                genesis,
-                                shardId
-                              )
-                 } yield Option(casper)
-               } else
-                 Log[F]
-                   .info("Invalid ApprovedBlock received; refusing to add.")
-                   .map(_ => none[MultiParentCasper[F]])
-    } yield casper
+      maybeCasper <- if (isValid) {
+                      for {
+                        _       <- Log[F].info("Valid ApprovedBlock received!")
+                        genesis = b.candidate.flatMap(_.block).get
+                        _       <- insertIntoBlockAndDagStore[F](genesis, b)
+                        _       <- LastApprovedBlock[F].set(b)
+                        casper <- MultiParentCasper
+                                   .hashSetCasper[F](
+                                     runtimeManager,
+                                     validatorId,
+                                     genesis,
+                                     shardId
+                                   )
+                      } yield Option(casper)
+                    } else
+                      Log[F]
+                        .info("Invalid ApprovedBlock received; refusing to add.")
+                        .map(_ => none[MultiParentCasper[F]])
+      _ <- maybeCasper.fold(Log[F].warn("MultiParentCasper instance not created."))(
+            _ => Log[F].info("MultiParentCasper instance created.")
+          )
+
+    } yield maybeCasper
 }

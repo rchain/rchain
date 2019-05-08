@@ -49,19 +49,13 @@ class GenesisValidatorHandler[F[_]: Sync: Metrics: Concurrent: ConnectionsCell: 
   override def handleApprovedBlock(
       ab: ApprovedBlock
   ): F[Option[MultiParentCasper[F]]] =
-    for {
-      _ <- Log[F].info("Received ApprovedBlock message while in GenesisValidatorHandler state.")
-      casperO <- onApprovedBlockTransition(
-                  ab,
-                  Set(ByteString.copyFrom(validatorId.publicKey.bytes)),
-                  runtimeManager,
-                  Some(validatorId),
-                  shardId
-                )
-      _ <- casperO.fold(Log[F].warn("MultiParentCasper instance not created."))(
-            _ => Log[F].info("MultiParentCasper instance created.")
-          )
-    } yield casperO
+    onApprovedBlockTransition(
+      ab,
+      Set(ByteString.copyFrom(validatorId.publicKey.bytes)),
+      runtimeManager,
+      Some(validatorId),
+      shardId
+    )
 
   override def handleApprovedBlockRequest(
       peer: PeerNode,
