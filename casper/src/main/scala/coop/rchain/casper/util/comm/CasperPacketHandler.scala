@@ -11,7 +11,7 @@ import coop.rchain.casper.Estimator.Validator
 import coop.rchain.casper.LastApprovedBlock.LastApprovedBlock
 import coop.rchain.casper.MultiParentCasperRef.MultiParentCasperRef
 import coop.rchain.casper._
-import coop.rchain.casper.engine._
+import coop.rchain.casper.engine._, EngineCell._
 import coop.rchain.casper.genesis.Genesis
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.rholang.RuntimeManager
@@ -42,7 +42,7 @@ object CasperPacketHandler {
 
   def apply[F[_]](implicit ev: CasperPacketHandler[F]): CasperPacketHandler[F] = ev
 
-  def of[F[_]: LastApprovedBlock: Metrics: BlockStore: ConnectionsCell: NodeDiscovery: TransportLayer: ErrorHandler: RPConfAsk: SafetyOracle: Sync: Concurrent: Time: Log: MultiParentCasperRef: BlockDagStorage](
+  def of[F[_]: LastApprovedBlock: Metrics: BlockStore: ConnectionsCell: NodeDiscovery: TransportLayer: ErrorHandler: RPConfAsk: SafetyOracle: Sync: Concurrent: Time: Log: MultiParentCasperRef: BlockDagStorage: EngineCell](
       init: CasperInit[F],
       toTask: F[_] => Task[_]
   )(implicit scheduler: Scheduler): F[CasperPacketHandler[F]] =
@@ -68,7 +68,7 @@ object CasperPacketHandler {
       case (msg, action) => Log[F].info(msg) >> action
     }
 
-  def connectToExistingNetwork[F[_]: LastApprovedBlock: Metrics: BlockStore: ConnectionsCell: NodeDiscovery: TransportLayer: ErrorHandler: RPConfAsk: SafetyOracle: Concurrent: Time: Log: MultiParentCasperRef: BlockDagStorage](
+  def connectToExistingNetwork[F[_]: LastApprovedBlock: Metrics: BlockStore: ConnectionsCell: NodeDiscovery: TransportLayer: ErrorHandler: RPConfAsk: SafetyOracle: Concurrent: Time: Log: MultiParentCasperRef: BlockDagStorage: EngineCell](
       approvedBlock: ApprovedBlock,
       init: CasperInit[F]
   ): F[CasperPacketHandler[F]] =
@@ -81,14 +81,13 @@ object CasperPacketHandler {
                  genesis,
                  init.conf.shardId
                )
-      _                   <- MultiParentCasperRef[F].set(casper)
-      _                   <- Log[F].info("Making a transition to ApprovedBlockReceivedHandler state.")
-      abh                 = new ApprovedBlockReceivedHandler[F](casper, approvedBlock)
-      validator           <- Ref.of[F, CasperEngine[F]](abh)
-      casperPacketHandler = new CasperPacketHandler[F](validator)
-    } yield casperPacketHandler
+      _   <- MultiParentCasperRef[F].set(casper)
+      _   <- Log[F].info("Making a transition to ApprovedBlockReceivedHandler state.")
+      abh = new ApprovedBlockReceivedHandler[F](casper, approvedBlock)
+      _   <- EngineCell[F].set(abh)
+    } yield new CasperPacketHandler[F]
 
-  def connectAsGenesisValidator[F[_]: Monad: Sync: Metrics: LastApprovedBlock: ErrorHandler: Time: Concurrent: MultiParentCasperRef: Log: RPConfAsk: BlockStore: ConnectionsCell: TransportLayer: SafetyOracle: BlockDagStorage](
+  def connectAsGenesisValidator[F[_]: Monad: Sync: Metrics: LastApprovedBlock: ErrorHandler: Time: Concurrent: MultiParentCasperRef: Log: RPConfAsk: BlockStore: ConnectionsCell: TransportLayer: SafetyOracle: BlockDagStorage: EngineCell](
       init: CasperInit[F]
   ): F[CasperPacketHandler[F]] =
     for {
@@ -114,17 +113,17 @@ object CasperPacketHandler {
         init.conf.hasFaucet,
         init.conf.requiredSigs
       )
-      gv <- Ref.of[F, CasperEngine[F]](
-             new GenesisValidatorHandler(
-               init.runtimeManager,
-               validatorId.get,
-               init.conf.shardId,
-               bap
-             )
-           )
-    } yield new CasperPacketHandler[F](gv)
+      _ <- EngineCell[F].set(
+            new GenesisValidatorHandler(
+              init.runtimeManager,
+              validatorId.get,
+              init.conf.shardId,
+              bap
+            )
+          )
+    } yield new CasperPacketHandler[F]
 
-  def initBootstrap[F[_]: Monad: Sync: LastApprovedBlock: ErrorHandler: Time: MultiParentCasperRef: Log: RPConfAsk: BlockStore: ConnectionsCell: TransportLayer: Concurrent: Metrics: SafetyOracle: BlockDagStorage](
+  def initBootstrap[F[_]: Monad: Sync: LastApprovedBlock: ErrorHandler: Time: MultiParentCasperRef: Log: RPConfAsk: BlockStore: ConnectionsCell: TransportLayer: Concurrent: Metrics: SafetyOracle: BlockDagStorage: EngineCell](
       init: CasperInit[F],
       toTask: F[_] => Task[_]
   )(implicit scheduler: Scheduler): F[CasperPacketHandler[F]] =
@@ -153,9 +152,6 @@ object CasperPacketHandler {
                 init.conf.approveGenesisDuration,
                 init.conf.approveGenesisInterval
               )
-      standalone <- Ref.of[F, CasperEngine[F]](
-                     new StandaloneCasperHandler[F](abp)
-                   )
       // TODO OMG Fix, use Concurrent+!11
       _ <- Sync[F].delay {
             val _ = toTask(
@@ -164,46 +160,45 @@ object CasperPacketHandler {
                   init.conf.approveGenesisInterval,
                   init.conf.shardId,
                   init.runtimeManager,
-                  validatorId,
-                  standalone
+                  validatorId
                 )
             ).forkAndForget.runToFuture
             ().pure[F]
           }
-    } yield new CasperPacketHandler[F](standalone)
+      _ <- EngineCell[F].set(new StandaloneCasperHandler[F](abp))
+    } yield new CasperPacketHandler[F]
 
-  def connectAndQueryApprovedBlock[F[_]: Monad: Sync: LastApprovedBlock: ErrorHandler: Time: MultiParentCasperRef: Log: RPConfAsk: BlockStore: ConnectionsCell: TransportLayer: Metrics: Concurrent: SafetyOracle: BlockDagStorage](
+  def connectAndQueryApprovedBlock[F[_]: Monad: Sync: LastApprovedBlock: ErrorHandler: Time: MultiParentCasperRef: Log: RPConfAsk: BlockStore: ConnectionsCell: TransportLayer: Metrics: Concurrent: SafetyOracle: BlockDagStorage: EngineCell](
       init: CasperInit[F]
   ): F[CasperPacketHandler[F]] =
     for {
       validators  <- CasperConf.parseValidatorsFile[F](init.conf.knownValidatorsFile)
       validatorId <- ValidatorIdentity.fromConfig[F](init.conf)
-      bootstrap <- Ref.of[F, CasperEngine[F]] {
-                    new BootstrapCasperHandler(
-                      init.runtimeManager,
-                      init.conf.shardId,
-                      validatorId,
-                      validators,
-                      CommUtil.requestApprovedBlock[F]
-                    )
-                  }
-      casperPacketHandler = new CasperPacketHandler[F](bootstrap)
+      _ <- EngineCell[F].set(
+            new BootstrapCasperHandler(
+              init.runtimeManager,
+              init.conf.shardId,
+              validatorId,
+              validators,
+              CommUtil.requestApprovedBlock[F]
+            )
+          )
+      casperPacketHandler = new CasperPacketHandler[F]
     } yield casperPacketHandler
 }
 
-class CasperPacketHandler[F[_]: Monad: RPConfAsk: BlockStore: ConnectionsCell: TransportLayer: Log: Time: ErrorHandler: LastApprovedBlock: MultiParentCasperRef](
-    private val cphI: Ref[F, CasperEngine[F]]
-) {
+class CasperPacketHandler[F[_]: Monad: RPConfAsk: BlockStore: ConnectionsCell: TransportLayer: Log: Time: ErrorHandler: LastApprovedBlock: MultiParentCasperRef: EngineCell] {
 
   def init: F[Unit] =
-    Log[F].info("Executing init of CasperPacketHandlerImpl") >> cphI.get >>= (_.init)
+    Log[F].info("Executing init of CasperPacketHandlerImpl") >> EngineCell[F].read >>= (_.init)
 
   def handle(peer: PeerNode): PartialFunction[Packet, F[Unit]] =
     Function.unlift(toCasperMessage).andThen {
-      case br: BlockRequest           => cphI.get >>= (_.handleBlockRequest(peer, br))
-      case fctr: ForkChoiceTipRequest => cphI.get >>= (_.handleForkChoiceTipRequest(peer, fctr))
+      case br: BlockRequest => EngineCell[F].read >>= (_.handleBlockRequest(peer, br))
+      case fctr: ForkChoiceTipRequest =>
+        EngineCell[F].read >>= (_.handleForkChoiceTipRequest(peer, fctr))
       case ab: ApprovedBlock =>
-        cphI.get >>= (_.handleApprovedBlock(ab)) >>= {
+        EngineCell[F].read >>= (_.handleApprovedBlock(ab)) >>= {
           case None => ().pure[F]
           case Some(casperInstance) =>
             for {
@@ -212,14 +207,16 @@ class CasperPacketHandler[F[_]: Monad: RPConfAsk: BlockStore: ConnectionsCell: T
                     "Making a transition to ApprovedBlockReceivedHandler state."
                   )
               abr = new ApprovedBlockReceivedHandler(casperInstance, ab)
-              _   <- cphI.set(abr)
+              _   <- EngineCell[F].set(abr)
               _   <- CommUtil.sendForkChoiceTipRequest[F]
             } yield ()
         }
-      case abr: ApprovedBlockRequest     => cphI.get >>= (_.handleApprovedBlockRequest(peer, abr))
-      case bm: BlockMessage              => cphI.get >>= (_.handleBlockMessage(peer, bm))
-      case ba: BlockApproval             => cphI.get >>= (_.handleBlockApproval(ba))
-      case ub: UnapprovedBlock           => cphI.get >>= (_.handleUnapprovedBlock(peer, ub))
-      case nab: NoApprovedBlockAvailable => cphI.get >>= (_.handleNoApprovedBlockAvailable(nab))
+      case abr: ApprovedBlockRequest =>
+        EngineCell[F].read >>= (_.handleApprovedBlockRequest(peer, abr))
+      case bm: BlockMessage    => EngineCell[F].read >>= (_.handleBlockMessage(peer, bm))
+      case ba: BlockApproval   => EngineCell[F].read >>= (_.handleBlockApproval(ba))
+      case ub: UnapprovedBlock => EngineCell[F].read >>= (_.handleUnapprovedBlock(peer, ub))
+      case nab: NoApprovedBlockAvailable =>
+        EngineCell[F].read >>= (_.handleNoApprovedBlockAvailable(nab))
     }
 }

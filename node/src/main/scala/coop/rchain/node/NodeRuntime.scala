@@ -12,6 +12,7 @@ import cats.implicits._
 
 import coop.rchain.blockstorage._
 import coop.rchain.casper._
+import coop.rchain.casper.engine._, EngineCell._
 import coop.rchain.casper.MultiParentCasperRef.MultiParentCasperRef
 import coop.rchain.casper.util.comm.{CasperInit, CasperPacketHandler}
 import coop.rchain.casper.util.rholang.RuntimeManager
@@ -456,6 +457,7 @@ class NodeRuntime private[node] (
         )
         .toEffect
     }
+    engineCell     <- EngineCell.init[Effect]
     runtimeManager <- RuntimeManager.fromRuntime[Task](casperRuntime).toEffect
     casperPacketHandler <- CasperPacketHandler
                             .of[Effect](
@@ -480,6 +482,7 @@ class NodeRuntime private[node] (
                               Log.eitherTLog(Monad[Task], log),
                               multiParentCasperRef,
                               blockDagStorage,
+                              engineCell,
                               scheduler
                             )
     packetHandler = PacketHandler.pf[Effect](casperPacketHandler.handle)(

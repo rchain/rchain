@@ -50,6 +50,10 @@ trait CasperEngine[F[_]] {
 
 object CasperEngine {
 
+  def noop[F[_]: Applicative] = new CasperEngine[F] {
+    override def applicative: Applicative[F] = Applicative[F]
+  }
+
   /*
    * Note the ordering of the insertions is important.
    * We always want the block dag store to be a subset of the block store.

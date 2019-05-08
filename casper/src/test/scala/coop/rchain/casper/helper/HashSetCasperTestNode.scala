@@ -13,7 +13,7 @@ import coop.rchain.casper.helper.BlockDagStorageTestFixture.mapSize
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.casper.util.comm.CasperPacketHandler
-import coop.rchain.casper.engine.{ApprovedBlockReceivedHandler, CasperEngine}
+import coop.rchain.casper.engine._, EngineCell._
 import coop.rchain.casper.util.comm.TestNetwork.TestNetwork
 import coop.rchain.casper.util.comm._
 import coop.rchain.casper.util.rholang.{InterpreterUtil, RuntimeManager}
@@ -93,9 +93,9 @@ class HashSetCasperTestNode[F[_]](
 
   implicit val multiparentCasperRef = MultiParentCasperRef.unsafe[F](Some(casperEff))
 
-  val handlerInternal = new ApprovedBlockReceivedHandler(casperEff, approvedBlock)
-  val casperPacketHandler =
-    new CasperPacketHandler[F](Ref.unsafe[F, CasperEngine[F]](handlerInternal))
+  val engine                             = new ApprovedBlockReceivedHandler(casperEff, approvedBlock)
+  implicit val engineCell: EngineCell[F] = Cell.unsafe[F, CasperEngine[F]](engine)
+  val casperPacketHandler                = new CasperPacketHandler[F]
   implicit val packetHandlerEff = PacketHandler.pf[F](
     casperPacketHandler.handle
   )

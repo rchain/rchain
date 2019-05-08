@@ -1,5 +1,6 @@
 package coop.rchain.casper.engine
 
+import EngineCell._
 import cats.data.EitherT
 import cats.effect.concurrent.Ref
 import cats.effect.{Concurrent, Sync}
@@ -27,7 +28,6 @@ import coop.rchain.metrics.Metrics
 import coop.rchain.shared.{Log, LogSource, Time}
 import monix.eval.Task
 import monix.execution.Scheduler
-
 import scala.concurrent.duration.FiniteDuration
 import scala.util.Try
 
@@ -61,12 +61,11 @@ class StandaloneCasperHandler[F[_]: Sync: ConnectionsCell: BlockStore: Transport
 
 object StandaloneCasperHandler {
   import CasperEngine._
-  def approveBlockInterval[F[_]: Sync: Metrics: Concurrent: ConnectionsCell: BlockStore: TransportLayer: Log: Time: ErrorHandler: SafetyOracle: RPConfAsk: LastApprovedBlock: MultiParentCasperRef: BlockDagStorage](
+  def approveBlockInterval[F[_]: Sync: Metrics: Concurrent: ConnectionsCell: BlockStore: TransportLayer: Log: Time: ErrorHandler: SafetyOracle: RPConfAsk: LastApprovedBlock: MultiParentCasperRef: BlockDagStorage: EngineCell](
       interval: FiniteDuration,
       shardId: String,
       runtimeManager: RuntimeManager[F],
-      validatorId: Option[ValidatorIdentity],
-      capserHandlerInternal: Ref[F, CasperEngine[F]]
+      validatorId: Option[ValidatorIdentity]
   ): F[Unit] =
     for {
       _                  <- Time[F].sleep(interval)
@@ -77,8 +76,7 @@ object StandaloneCasperHandler {
                    interval,
                    shardId,
                    runtimeManager,
-                   validatorId,
-                   capserHandlerInternal
+                   validatorId
                  )
                case Some(approvedBlock) =>
                  val genesis = approvedBlock.candidate.flatMap(_.block).get
@@ -93,7 +91,7 @@ object StandaloneCasperHandler {
                    _   <- MultiParentCasperRef[F].set(casper)
                    _   <- Log[F].info("Making a transition to ApprovedBlockReceivedHandler state.")
                    abh = new ApprovedBlockReceivedHandler[F](casper, approvedBlock)
-                   _   <- capserHandlerInternal.set(abh)
+                   _   <- EngineCell[F].set(abh)
                    _   <- CommUtil.sendForkChoiceTipRequest[F]
                  } yield ()
              }
