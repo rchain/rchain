@@ -5,4 +5,4 @@ import coop.rchain.rholang.build.CompiledRholangSource
 import scala.concurrent.duration._
 
 class RhoSpecContractSpec
-    extends RhoSpec(CompiledRholangSource("RhoSpecContractTest.rho"), Seq.empty, 20.seconds)
+    extends RhoSpec(CompiledRholangSource("RhoSpecContractTest.rho"), Seq.empty, 60.seconds)

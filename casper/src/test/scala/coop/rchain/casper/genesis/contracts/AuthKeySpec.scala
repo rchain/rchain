@@ -9,5 +9,5 @@ class AuthKeySpec
     extends RhoSpec(
       CompiledRholangSource("AuthKeyTest.rho"),
       Seq.empty,
-      20.seconds
+      60.seconds
     )
