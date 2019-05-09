@@ -31,14 +31,7 @@ import monix.execution.Scheduler
 import scala.concurrent.duration.FiniteDuration
 import scala.util.Try
 
-/** Node in this state is will send out an [[UnapprovedBlock]] message to all peers
-  * and will wait for [[BlockApproval]] messages forwarding handling of those to instance of [[ApproveBlockProtocol]] class.
-  * After enough [[BlockApproval]]s has been received it will create an [[ApprovedBlock]] and send it to peers.
-  *
-  *
-  * For all other messages it will return `F[None]`.
-    **/
-class StandaloneCasperHandler[F[_]: Sync: ConnectionsCell: BlockStore: TransportLayer: Log: Time: ErrorHandler: SafetyOracle: RPConfAsk: LastApprovedBlock](
+class GenesisCeremonyMaster[F[_]: Sync: ConnectionsCell: BlockStore: TransportLayer: Log: Time: ErrorHandler: SafetyOracle: RPConfAsk: LastApprovedBlock](
     approveProtocol: ApproveBlockProtocol[F]
 ) extends Engine[F] {
   import Engine._
@@ -54,7 +47,7 @@ class StandaloneCasperHandler[F[_]: Sync: ConnectionsCell: BlockStore: Transport
   }
 }
 
-object StandaloneCasperHandler {
+object GenesisCeremonyMaster {
   import Engine._
   def approveBlockInterval[F[_]: Sync: Metrics: Concurrent: ConnectionsCell: BlockStore: TransportLayer: Log: Time: ErrorHandler: SafetyOracle: RPConfAsk: LastApprovedBlock: MultiParentCasperRef: BlockDagStorage: EngineCell](
       interval: FiniteDuration,

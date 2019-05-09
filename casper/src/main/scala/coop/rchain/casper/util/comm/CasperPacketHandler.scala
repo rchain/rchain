@@ -152,7 +152,7 @@ object CasperPacketHandler {
       // TODO OMG Fix, use Concurrent+!11
       _ <- Sync[F].delay {
             val _ = toTask(
-              StandaloneCasperHandler
+              GenesisCeremonyMaster
                 .approveBlockInterval(
                   init.conf.approveGenesisInterval,
                   init.conf.shardId,
@@ -162,7 +162,7 @@ object CasperPacketHandler {
             ).forkAndForget.runToFuture
             ().pure[F]
           }
-      _ <- EngineCell[F].set(new StandaloneCasperHandler[F](abp))
+      _ <- EngineCell[F].set(new GenesisCeremonyMaster[F](abp))
     } yield new CasperPacketHandler[F]
 
   def connectAndQueryApprovedBlock[F[_]: Monad: Sync: LastApprovedBlock: ErrorHandler: Time: MultiParentCasperRef: Log: RPConfAsk: BlockStore: ConnectionsCell: TransportLayer: Metrics: Concurrent: SafetyOracle: BlockDagStorage: EngineCell](
