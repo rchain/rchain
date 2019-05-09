@@ -81,10 +81,7 @@ object CasperPacketHandler {
                  genesis,
                  init.conf.shardId
                )
-      _   <- MultiParentCasperRef[F].set(casper)
-      _   <- Log[F].info("Making a transition to ApprovedBlockReceivedHandler state.")
-      abh = new ApprovedBlockReceivedHandler[F](casper, approvedBlock)
-      _   <- EngineCell[F].set(abh)
+      _ <- CasperEngine.transitionToApprovedBlockReceivedHandler[F](casper, approvedBlock)
     } yield new CasperPacketHandler[F]
 
   def connectAsGenesisValidator[F[_]: Monad: Sync: Metrics: LastApprovedBlock: ErrorHandler: Time: Concurrent: MultiParentCasperRef: Log: RPConfAsk: BlockStore: ConnectionsCell: TransportLayer: SafetyOracle: BlockDagStorage: EngineCell](
@@ -198,19 +195,7 @@ class CasperPacketHandler[F[_]: Monad: RPConfAsk: BlockStore: ConnectionsCell: T
       case fctr: ForkChoiceTipRequest =>
         EngineCell[F].read >>= (_.handleForkChoiceTipRequest(peer, fctr))
       case ab: ApprovedBlock =>
-        EngineCell[F].read >>= (_.handleApprovedBlock(ab)) >>= {
-          case None => ().pure[F]
-          case Some(casperInstance) =>
-            for {
-              _ <- MultiParentCasperRef[F].set(casperInstance)
-              _ <- Log[F].info(
-                    "Making a transition to ApprovedBlockReceivedHandler state."
-                  )
-              abr = new ApprovedBlockReceivedHandler(casperInstance, ab)
-              _   <- EngineCell[F].set(abr)
-              _   <- CommUtil.sendForkChoiceTipRequest[F]
-            } yield ()
-        }
+        EngineCell[F].read >>= (_.handleApprovedBlock(ab))
       case abr: ApprovedBlockRequest =>
         EngineCell[F].read >>= (_.handleApprovedBlockRequest(peer, abr))
       case bm: BlockMessage    => EngineCell[F].read >>= (_.handleBlockMessage(peer, bm))

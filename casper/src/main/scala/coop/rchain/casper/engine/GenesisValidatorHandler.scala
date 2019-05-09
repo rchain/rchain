@@ -11,6 +11,7 @@ import coop.rchain.casper.Estimator.Validator
 import coop.rchain.casper.LastApprovedBlock.LastApprovedBlock
 import coop.rchain.casper.MultiParentCasperRef.MultiParentCasperRef
 import coop.rchain.casper._
+import coop.rchain.casper.engine._, EngineCell._
 import coop.rchain.casper.util.comm.CommUtil
 import coop.rchain.casper.genesis.Genesis
 import coop.rchain.casper.protocol._
@@ -37,7 +38,7 @@ import scala.util.Try
   *
   * When in this state node can't handle any other message type so it will return `F[None]`
     **/
-class GenesisValidatorHandler[F[_]: Sync: Metrics: Concurrent: ConnectionsCell: TransportLayer: Log: Time: SafetyOracle: ErrorHandler: RPConfAsk: BlockStore: LastApprovedBlock: BlockDagStorage](
+class GenesisValidatorHandler[F[_]: Sync: Metrics: Concurrent: ConnectionsCell: TransportLayer: Log: Time: SafetyOracle: ErrorHandler: RPConfAsk: BlockStore: LastApprovedBlock: BlockDagStorage: EngineCell: MultiParentCasperRef](
     runtimeManager: RuntimeManager[F],
     validatorId: ValidatorIdentity,
     shardId: String,
@@ -48,7 +49,7 @@ class GenesisValidatorHandler[F[_]: Sync: Metrics: Concurrent: ConnectionsCell: 
 
   override def handleApprovedBlock(
       ab: ApprovedBlock
-  ): F[Option[MultiParentCasper[F]]] =
+  ): F[Unit] =
     onApprovedBlockTransition(
       ab,
       Set(ByteString.copyFrom(validatorId.publicKey.bytes)),

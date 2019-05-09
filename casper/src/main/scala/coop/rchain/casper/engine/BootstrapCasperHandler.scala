@@ -11,6 +11,7 @@ import coop.rchain.casper.Estimator.Validator
 import coop.rchain.casper.LastApprovedBlock.LastApprovedBlock
 import coop.rchain.casper.MultiParentCasperRef.MultiParentCasperRef
 import coop.rchain.casper._
+import coop.rchain.casper.engine._, EngineCell._
 import coop.rchain.casper.util.comm.CommUtil
 import coop.rchain.casper.genesis.Genesis
 import coop.rchain.casper.protocol._
@@ -35,7 +36,7 @@ import scala.util.Try
   * and will wait for the [[ApprovedBlock]] message to arrive. Until then  it will respond with
   * `F[None]` to all other message types.
     **/
-class BootstrapCasperHandler[F[_]: Sync: Metrics: Concurrent: ConnectionsCell: BlockStore: TransportLayer: Log: Time: ErrorHandler: SafetyOracle: RPConfAsk: LastApprovedBlock: BlockDagStorage](
+class BootstrapCasperHandler[F[_]: Sync: Metrics: Concurrent: ConnectionsCell: BlockStore: TransportLayer: Log: Time: ErrorHandler: SafetyOracle: RPConfAsk: LastApprovedBlock: BlockDagStorage: MultiParentCasperRef: EngineCell](
     runtimeManager: RuntimeManager[F],
     shardId: String,
     validatorId: Option[ValidatorIdentity],
@@ -54,7 +55,7 @@ class BootstrapCasperHandler[F[_]: Sync: Metrics: Concurrent: ConnectionsCell: B
 
   override def handleApprovedBlock(
       ab: ApprovedBlock
-  ): F[Option[MultiParentCasper[F]]] =
+  ): F[Unit] =
     onApprovedBlockTransition(
       ab,
       validators,

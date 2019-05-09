@@ -1,5 +1,6 @@
 package coop.rchain.casper.engine
 
+import EngineCell._
 import cats.data.EitherT
 import cats.effect.concurrent.Ref
 import cats.effect.{Concurrent, Sync}
@@ -35,17 +36,17 @@ trait CasperEngine[F[_]] {
 
   def applicative: Applicative[F]
 
-  val noop: F[Unit]                                                                   = applicative.unit
+  val noop: F[Unit] = applicative.unit
+
   def init: F[Unit]                                                                   = noop
   def handleBlockMessage(peer: PeerNode, bm: BlockMessage): F[Unit]                   = noop
   def handleBlockRequest(peer: PeerNode, br: BlockRequest): F[Unit]                   = noop
   def handleForkChoiceTipRequest(peer: PeerNode, fctr: ForkChoiceTipRequest): F[Unit] = noop
-  def handleApprovedBlock(ab: ApprovedBlock): F[Option[MultiParentCasper[F]]] =
-    applicative.pure(none[MultiParentCasper[F]])
-  def handleApprovedBlockRequest(peer: PeerNode, br: ApprovedBlockRequest): F[Unit] = noop
-  def handleUnapprovedBlock(peer: PeerNode, ub: UnapprovedBlock): F[Unit]           = noop
-  def handleBlockApproval(ba: BlockApproval): F[Unit]                               = noop
-  def handleNoApprovedBlockAvailable(na: NoApprovedBlockAvailable): F[Unit]         = noop
+  def handleApprovedBlock(ab: ApprovedBlock): F[Unit]                                 = noop
+  def handleApprovedBlockRequest(peer: PeerNode, br: ApprovedBlockRequest): F[Unit]   = noop
+  def handleUnapprovedBlock(peer: PeerNode, ub: UnapprovedBlock): F[Unit]             = noop
+  def handleBlockApproval(ba: BlockApproval): F[Unit]                                 = noop
+  def handleNoApprovedBlockAvailable(na: NoApprovedBlockAvailable): F[Unit]           = noop
 }
 
 object CasperEngine {
@@ -84,22 +85,34 @@ object CasperEngine {
       _   <- TransportLayer[F].stream(peer, msg)
     } yield ()
 
-  def onApprovedBlockTransition[F[_]: Sync: Metrics: Concurrent: Time: ErrorHandler: SafetyOracle: RPConfAsk: TransportLayer: ConnectionsCell: Log: BlockStore: LastApprovedBlock: BlockDagStorage](
-      b: ApprovedBlock,
+  def transitionToApprovedBlockReceivedHandler[F[_]: Monad: MultiParentCasperRef: EngineCell: Log: RPConfAsk: BlockStore: ConnectionsCell: TransportLayer: Time: ErrorHandler](
+      casper: MultiParentCasper[F],
+      approvedBlock: ApprovedBlock
+  ): F[Unit] =
+    for {
+      _   <- MultiParentCasperRef[F].set(casper)
+      _   <- Log[F].info("Making a transition to ApprovedBlockReceivedHandler state.")
+      abh = new ApprovedBlockReceivedHandler[F](casper, approvedBlock)
+      _   <- EngineCell[F].set(abh)
+
+    } yield ()
+
+  def onApprovedBlockTransition[F[_]: Sync: Metrics: Concurrent: Time: ErrorHandler: SafetyOracle: RPConfAsk: TransportLayer: ConnectionsCell: Log: BlockStore: LastApprovedBlock: BlockDagStorage: EngineCell: MultiParentCasperRef](
+      approvedBlock: ApprovedBlock,
       validators: Set[ByteString],
       runtimeManager: RuntimeManager[F],
       validatorId: Option[ValidatorIdentity],
       shardId: String
-  ): F[Option[MultiParentCasper[F]]] =
+  ): F[Unit] =
     for {
       _       <- Log[F].info("Received ApprovedBlock message.")
-      isValid <- Validate.approvedBlock[F](b, validators)
+      isValid <- Validate.approvedBlock[F](approvedBlock, validators)
       maybeCasper <- if (isValid) {
                       for {
                         _       <- Log[F].info("Valid ApprovedBlock received!")
-                        genesis = b.candidate.flatMap(_.block).get
-                        _       <- insertIntoBlockAndDagStore[F](genesis, b)
-                        _       <- LastApprovedBlock[F].set(b)
+                        genesis = approvedBlock.candidate.flatMap(_.block).get
+                        _       <- insertIntoBlockAndDagStore[F](genesis, approvedBlock)
+                        _       <- LastApprovedBlock[F].set(approvedBlock)
                         casper <- MultiParentCasper
                                    .hashSetCasper[F](
                                      runtimeManager,
@@ -107,6 +120,9 @@ object CasperEngine {
                                      genesis,
                                      shardId
                                    )
+                        _ <- CasperEngine
+                              .transitionToApprovedBlockReceivedHandler[F](casper, approvedBlock)
+                        _ <- CommUtil.sendForkChoiceTipRequest[F]
                       } yield Option(casper)
                     } else
                       Log[F]
@@ -116,5 +132,5 @@ object CasperEngine {
             _ => Log[F].info("MultiParentCasper instance created.")
           )
 
-    } yield maybeCasper
+    } yield ()
 }

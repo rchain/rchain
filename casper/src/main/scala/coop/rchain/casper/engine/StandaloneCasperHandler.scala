@@ -88,11 +88,9 @@ object StandaloneCasperHandler {
                               genesis,
                               shardId
                             )
-                   _   <- MultiParentCasperRef[F].set(casper)
-                   _   <- Log[F].info("Making a transition to ApprovedBlockReceivedHandler state.")
-                   abh = new ApprovedBlockReceivedHandler[F](casper, approvedBlock)
-                   _   <- EngineCell[F].set(abh)
-                   _   <- CommUtil.sendForkChoiceTipRequest[F]
+                   _ <- CasperEngine
+                         .transitionToApprovedBlockReceivedHandler[F](casper, approvedBlock)
+                   _ <- CommUtil.sendForkChoiceTipRequest[F]
                  } yield ()
              }
     } yield cont

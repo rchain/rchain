@@ -137,14 +137,17 @@ class CasperPacketHandlerSpec extends WordSpec {
         val fixture      = setup()
         import fixture._
 
-        val engine                                = new GenesisValidatorHandler(runtimeManager, validatorId, shardId, bap)
-        implicit val engineCell: EngineCell[Task] = Cell.unsafe[Task, CasperEngine[Task]](engine)
-        val packetHandler                         = new CasperPacketHandler[Task]
-        val expectedCandidate                     = ApprovedBlockCandidate(Some(genesis), requiredSigs)
+        implicit val engineCell: EngineCell[Task] =
+          Cell.unsafe[Task, CasperEngine[Task]](CasperEngine.noop)
+        val packetHandler     = new CasperPacketHandler[Task]
+        val expectedCandidate = ApprovedBlockCandidate(Some(genesis), requiredSigs)
 
         val unapprovedBlock  = BlockApproverProtocolTest.createUnapproved(requiredSigs, genesis)
         val unapprovedPacket = BlockApproverProtocolTest.unapprovedToPacket(unapprovedBlock)
         val test = for {
+          _ <- engineCell.set(
+                new GenesisValidatorHandler(runtimeManager, validatorId, shardId, bap)
+              )
           _             <- packetHandler.handle(local).apply(unapprovedPacket)
           blockApproval = BlockApproverProtocol.getBlockApproval(expectedCandidate, validatorId)
           expectedPacket = ProtocolHelper.packet(
@@ -166,13 +169,16 @@ class CasperPacketHandlerSpec extends WordSpec {
         val fixture      = setup()
         import fixture._
 
-        val engine                                = new GenesisValidatorHandler(runtimeManager, validatorId, shardId, bap)
-        implicit val engineCell: EngineCell[Task] = Cell.unsafe[Task, CasperEngine[Task]](engine)
-        val packetHandler                         = new CasperPacketHandler[Task]
+        implicit val engineCell: EngineCell[Task] =
+          Cell.unsafe[Task, CasperEngine[Task]](CasperEngine.noop)
+        val packetHandler = new CasperPacketHandler[Task]
 
         val approvedBlockRequest = ApprovedBlockRequest("test")
         val packet1              = Packet(transport.ApprovedBlockRequest.id, approvedBlockRequest.toByteString)
         val test = for {
+          _ <- engineCell.set(
+                new GenesisValidatorHandler(runtimeManager, validatorId, shardId, bap)
+              )
           _    <- packetHandler.handle(local)(packet1)
           head = transportLayer.requests.head
           response = packet(
