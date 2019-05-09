@@ -32,7 +32,7 @@ import monix.execution.Scheduler
 import scala.concurrent.duration.FiniteDuration
 import scala.util.Try
 
-trait CasperEngine[F[_]] {
+trait Engine[F[_]] {
 
   def applicative: Applicative[F]
 
@@ -49,9 +49,9 @@ trait CasperEngine[F[_]] {
   def handleNoApprovedBlockAvailable(na: NoApprovedBlockAvailable): F[Unit]           = noop
 }
 
-object CasperEngine {
+object Engine {
 
-  def noop[F[_]: Applicative] = new CasperEngine[F] {
+  def noop[F[_]: Applicative] = new Engine[F] {
     override def applicative: Applicative[F] = Applicative[F]
   }
 
@@ -120,7 +120,7 @@ object CasperEngine {
                                      genesis,
                                      shardId
                                    )
-                        _ <- CasperEngine
+                        _ <- Engine
                               .transitionToApprovedBlockReceivedHandler[F](casper, approvedBlock)
                         _ <- CommUtil.sendForkChoiceTipRequest[F]
                       } yield Option(casper)

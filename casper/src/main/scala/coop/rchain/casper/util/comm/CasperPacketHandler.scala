@@ -38,7 +38,7 @@ class CasperInit[F[_]](
 
 object CasperPacketHandler {
   implicit private val logSource: LogSource = LogSource(this.getClass)
-  import CasperEngine._
+  import Engine._
 
   def apply[F[_]](implicit ev: CasperPacketHandler[F]): CasperPacketHandler[F] = ev
 
@@ -81,7 +81,7 @@ object CasperPacketHandler {
                  genesis,
                  init.conf.shardId
                )
-      _ <- CasperEngine.transitionToApprovedBlockReceivedHandler[F](casper, approvedBlock)
+      _ <- Engine.transitionToApprovedBlockReceivedHandler[F](casper, approvedBlock)
     } yield new CasperPacketHandler[F]
 
   def connectAsGenesisValidator[F[_]: Monad: Sync: Metrics: LastApprovedBlock: ErrorHandler: Time: Concurrent: MultiParentCasperRef: Log: RPConfAsk: BlockStore: ConnectionsCell: TransportLayer: SafetyOracle: BlockDagStorage: EngineCell](

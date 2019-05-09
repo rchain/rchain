@@ -5,8 +5,8 @@ import cats.effect._
 import coop.rchain.shared.Cell
 
 object EngineCell {
-  type EngineCell[F[_]] = Cell[F, CasperEngine[F]]
+  type EngineCell[F[_]] = Cell[F, Engine[F]]
   def apply[F[_]](implicit ev: EngineCell[F]): EngineCell[F] = ev
   def init[F[_]: Concurrent]: F[EngineCell[F]] =
-    Cell.mvarCell[F, CasperEngine[F]](CasperEngine.noop)
+    Cell.mvarCell[F, Engine[F]](Engine.noop)
 }

@@ -42,8 +42,8 @@ class BootstrapCasperHandler[F[_]: Sync: Metrics: Concurrent: ConnectionsCell: B
     validatorId: Option[ValidatorIdentity],
     validators: Set[ByteString],
     theInit: F[Unit]
-) extends CasperEngine[F] {
-  import CasperEngine._
+) extends Engine[F] {
+  import Engine._
   def applicative: Applicative[F] = Applicative[F]
 
   override def init: F[Unit] = theInit

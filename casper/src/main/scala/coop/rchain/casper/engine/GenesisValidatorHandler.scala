@@ -43,8 +43,8 @@ class GenesisValidatorHandler[F[_]: Sync: Metrics: Concurrent: ConnectionsCell: 
     validatorId: ValidatorIdentity,
     shardId: String,
     blockApprover: BlockApproverProtocol
-) extends CasperEngine[F] {
-  import CasperEngine._
+) extends Engine[F] {
+  import Engine._
   def applicative: Applicative[F] = Applicative[F]
 
   override def handleApprovedBlock(

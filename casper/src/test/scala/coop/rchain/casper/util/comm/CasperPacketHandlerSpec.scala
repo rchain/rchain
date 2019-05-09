@@ -138,7 +138,7 @@ class CasperPacketHandlerSpec extends WordSpec {
         import fixture._
 
         implicit val engineCell: EngineCell[Task] =
-          Cell.unsafe[Task, CasperEngine[Task]](CasperEngine.noop)
+          Cell.unsafe[Task, Engine[Task]](Engine.noop)
         val packetHandler     = new CasperPacketHandler[Task]
         val expectedCandidate = ApprovedBlockCandidate(Some(genesis), requiredSigs)
 
@@ -170,7 +170,7 @@ class CasperPacketHandlerSpec extends WordSpec {
         import fixture._
 
         implicit val engineCell: EngineCell[Task] =
-          Cell.unsafe[Task, CasperEngine[Task]](CasperEngine.noop)
+          Cell.unsafe[Task, Engine[Task]](Engine.noop)
         val packetHandler = new CasperPacketHandler[Task]
 
         val approvedBlockRequest = ApprovedBlockRequest("test")
@@ -219,7 +219,7 @@ class CasperPacketHandlerSpec extends WordSpec {
                      }
           } yield casper
 
-        implicit val engineCell = Cell.unsafe[Task, CasperEngine[Task]](CasperEngine.noop)
+        implicit val engineCell = Cell.unsafe[Task, Engine[Task]](Engine.noop)
 
         val test = for {
           sigs <- Ref.of[Task, Set[Signature]](Set.empty)
@@ -284,7 +284,7 @@ class CasperPacketHandlerSpec extends WordSpec {
 
         val theInit = Task.unit
 
-        implicit val engineCell = Cell.unsafe[Task, CasperEngine[Task]](CasperEngine.noop)
+        implicit val engineCell = Cell.unsafe[Task, Engine[Task]](Engine.noop)
 
         // interval and duration don't really matter since we don't require and signs from validators
         val bootstrapCasper =
@@ -372,7 +372,7 @@ class CasperPacketHandlerSpec extends WordSpec {
       val engine =
         new ApprovedBlockReceivedHandler[Task](casper, approvedBlock)
 
-      implicit val engineCell = Cell.unsafe[Task, CasperEngine[Task]](engine)
+      implicit val engineCell = Cell.unsafe[Task, Engine[Task]](engine)
       val casperPacketHandler = new CasperPacketHandler[Task]
 
       transportLayer.setResponses(_ => p => Right(p))

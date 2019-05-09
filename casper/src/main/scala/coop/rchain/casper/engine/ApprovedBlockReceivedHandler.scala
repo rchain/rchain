@@ -39,7 +39,7 @@ import scala.util.Try
 class ApprovedBlockReceivedHandler[F[_]: RPConfAsk: BlockStore: Monad: ConnectionsCell: TransportLayer: Log: Time: ErrorHandler](
     private val casper: MultiParentCasper[F],
     approvedBlock: ApprovedBlock
-) extends CasperEngine[F] {
+) extends Engine[F] {
 
   implicit val _casper            = casper
   def applicative: Applicative[F] = Applicative[F]

@@ -40,8 +40,8 @@ import scala.util.Try
     **/
 class StandaloneCasperHandler[F[_]: Sync: ConnectionsCell: BlockStore: TransportLayer: Log: Time: ErrorHandler: SafetyOracle: RPConfAsk: LastApprovedBlock](
     approveProtocol: ApproveBlockProtocol[F]
-) extends CasperEngine[F] {
-  import CasperEngine._
+) extends Engine[F] {
+  import Engine._
   def applicative: Applicative[F] = Applicative[F]
 
   override def init: F[Unit] = approveProtocol.run()
@@ -60,7 +60,7 @@ class StandaloneCasperHandler[F[_]: Sync: ConnectionsCell: BlockStore: Transport
 }
 
 object StandaloneCasperHandler {
-  import CasperEngine._
+  import Engine._
   def approveBlockInterval[F[_]: Sync: Metrics: Concurrent: ConnectionsCell: BlockStore: TransportLayer: Log: Time: ErrorHandler: SafetyOracle: RPConfAsk: LastApprovedBlock: MultiParentCasperRef: BlockDagStorage: EngineCell](
       interval: FiniteDuration,
       shardId: String,
@@ -88,7 +88,7 @@ object StandaloneCasperHandler {
                               genesis,
                               shardId
                             )
-                   _ <- CasperEngine
+                   _ <- Engine
                          .transitionToApprovedBlockReceivedHandler[F](casper, approvedBlock)
                    _ <- CommUtil.sendForkChoiceTipRequest[F]
                  } yield ()
