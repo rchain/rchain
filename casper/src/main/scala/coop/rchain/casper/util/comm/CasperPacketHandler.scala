@@ -111,7 +111,7 @@ object CasperPacketHandler {
         init.conf.requiredSigs
       )
       _ <- EngineCell[F].set(
-            new GenesisValidatorHandler(
+            new GenesisValidator(
               init.runtimeManager,
               validatorId.get,
               init.conf.shardId,

@@ -32,14 +32,8 @@ import monix.execution.Scheduler
 import scala.concurrent.duration.FiniteDuration
 import scala.util.Try
 
-/** Node in this state is a genesis block validator. It will respond only to
-  * [[UnapprovedBlock]] messages forwarding the logic of handling this message to
-  * instance of [[BlockApproverProtocol]] class.
-  *
-  * When in this state node can't handle any other message type so it will return `F[None]`
-    **/
-class GenesisValidatorHandler[F[_]: Sync: Metrics: Concurrent: ConnectionsCell: TransportLayer: Log: Time: SafetyOracle: ErrorHandler: RPConfAsk: BlockStore: LastApprovedBlock: BlockDagStorage: EngineCell: MultiParentCasperRef](
-    runtimeManager: RuntimeManager[F],
+class GenesisValidator[F[_]: Sync: Metrics: Concurrent: ConnectionsCell: TransportLayer: Log: Time: SafetyOracle: ErrorHandler: RPConfAsk: BlockStore: LastApprovedBlock: BlockDagStorage: EngineCell: MultiParentCasperRef](
+    rm: RuntimeManager[F],
     validatorId: ValidatorIdentity,
     shardId: String,
     blockApprover: BlockApproverProtocol
@@ -52,12 +46,12 @@ class GenesisValidatorHandler[F[_]: Sync: Metrics: Concurrent: ConnectionsCell: 
       onApprovedBlockTransition(
         ab,
         Set(ByteString.copyFrom(validatorId.publicKey.bytes)),
-        runtimeManager,
+        rm,
         Some(validatorId),
         shardId
       )
     case br: ApprovedBlockRequest     => sendNoApprovedBlockAvailable(peer, br.identifier)
-    case ub: UnapprovedBlock          => blockApprover.unapprovedBlockPacketHandler(peer, ub, runtimeManager)
+    case ub: UnapprovedBlock          => blockApprover.unapprovedBlockPacketHandler(peer, ub, rm)
     case na: NoApprovedBlockAvailable => logNoApprovedBlockAvailable[F](na.nodeIdentifer)
     case _                            => noop
   }
