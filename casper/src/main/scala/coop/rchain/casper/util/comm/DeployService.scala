@@ -52,7 +52,15 @@ class GrpcDeployService(host: String, port: Int, maxMessageSize: Int)
     stub.showBlock(q).map(_.toEither[BlockQueryResponse].map(_.toProtoString))
 
   def visualizeDag(q: VisualizeDagQuery): Task[Either[Seq[String], String]] =
-    stub.visualizeDag(q).map(_.toEither[VisualizeBlocksResponse].map(_.content))
+    stub
+      .visualizeDag(q)
+      .map(_.toEither[VisualizeBlocksResponse].map(_.content))
+      .toListL
+      .map { bs =>
+        val (l, r) = bs.partition(_.isLeft)
+        if (l.isEmpty) Right(r.map(_.right.get).mkString)
+        else Left(l.flatMap(_.left.get))
+      }
 
   def machineVerifiableDag(q: MachineVerifyQuery): Task[Either[Seq[String], String]] =
     stub.machineVerifiableDag(q).map(_.toEither[MachineVerifyResponse].map(_.content))

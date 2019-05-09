@@ -1,10 +1,10 @@
 package coop.rchain.graphz
 
+import java.io.FileOutputStream
+
 import cats._, cats.data._, cats.implicits._
 import cats.effect.Sync
 import cats.mtl._
-
-import java.io.FileOutputStream
 
 trait GraphSerializer[F[_]] {
   def push(str: String, suffix: String = "\n"): F[Unit]
@@ -14,6 +14,12 @@ class StringSerializer[F[_]: Applicative: MonadState[?[_], StringBuffer]]
     extends GraphSerializer[F] {
   def push(str: String, suffix: String): F[Unit] =
     MonadState[F, StringBuffer].modify(sb => sb.append(str + suffix))
+}
+
+class ListSerializer[F[_]: Applicative: MonadState[?[_], Vector[String]]]
+    extends GraphSerializer[F] {
+  def push(str: String, suffix: String): F[Unit] =
+    MonadState[F, Vector[String]].modify(_ :+ (str + suffix))
 }
 
 class FileSerializer[F[_]: Sync](fos: FileOutputStream) extends GraphSerializer[F] {

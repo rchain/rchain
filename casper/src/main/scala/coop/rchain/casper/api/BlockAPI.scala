@@ -260,18 +260,19 @@ object BlockAPI {
 
   def visualizeDag[
       F[_]: Monad: Sync: MultiParentCasperRef: Log: SafetyOracle: BlockStore,
-      G[_]: Monad: GraphSerializer
+      G[_]: Monad: GraphSerializer,
+      R
   ](
       depth: Option[Int],
       visualizer: (Vector[Vector[BlockHash]], String) => F[G[Graphz[G]]],
-      stringify: G[Graphz[G]] => String
-  ): Effect[F, VisualizeBlocksResponse] =
-    toposortDag[F, VisualizeBlocksResponse](depth) {
+      serialize: G[Graphz[G]] => R
+  ): Effect[F, R] =
+    toposortDag[F, R](depth) {
       case (casper, topoSort) =>
         for {
           lfb   <- casper.lastFinalizedBlock
           graph <- visualizer(topoSort, PrettyPrinter.buildString(lfb.blockHash))
-        } yield VisualizeBlocksResponse(stringify(graph)).asRight[Error]
+        } yield serialize(graph).asRight[Error]
     }
 
   def machineVerifiableDag[
@@ -279,9 +280,8 @@ object BlockAPI {
   ]: Effect[F, MachineVerifyResponse] =
     toposortDag[F, MachineVerifyResponse](maybeDepth = None) {
       case (_, topoSort) =>
-        val fetchParents: BlockHash => F[List[BlockHash]] = {
-          case blockHash =>
-            ProtoUtil.unsafeGetBlock[F](blockHash) map (_.getHeader.parentsHashList.toList)
+        val fetchParents: BlockHash => F[List[BlockHash]] = { blockHash =>
+          ProtoUtil.unsafeGetBlock[F](blockHash) map (_.getHeader.parentsHashList.toList)
         }
 
         MachineVerifiableDag[F](topoSort, fetchParents)

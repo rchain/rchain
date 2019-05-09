@@ -39,7 +39,7 @@ service DeployService {
   rpc showBlock(BlockQuery) returns (Either) {}
   // Get dag
   // Returns on success VisualizeBlocksResponse
-  rpc visualizeDag(VisualizeDagQuery) returns (Either) {}
+  rpc visualizeDag(VisualizeDagQuery) returns (stream Either) {}
   rpc machineVerifiableDag(MachineVerifyQuery) returns (Either) {}
   // Returns on success BlockInfoWithoutTuplespace
   rpc showMainChain(BlocksQuery) returns (stream Either) {}
