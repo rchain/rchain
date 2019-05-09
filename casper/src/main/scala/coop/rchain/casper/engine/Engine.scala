@@ -35,18 +35,10 @@ import scala.util.Try
 trait Engine[F[_]] {
 
   def applicative: Applicative[F]
-
   val noop: F[Unit] = applicative.unit
 
-  def init: F[Unit]                                                                   = noop
-  def handleBlockMessage(peer: PeerNode, bm: BlockMessage): F[Unit]                   = noop
-  def handleBlockRequest(peer: PeerNode, br: BlockRequest): F[Unit]                   = noop
-  def handleForkChoiceTipRequest(peer: PeerNode, fctr: ForkChoiceTipRequest): F[Unit] = noop
-  def handleApprovedBlock(ab: ApprovedBlock): F[Unit]                                 = noop
-  def handleApprovedBlockRequest(peer: PeerNode, br: ApprovedBlockRequest): F[Unit]   = noop
-  def handleUnapprovedBlock(peer: PeerNode, ub: UnapprovedBlock): F[Unit]             = noop
-  def handleBlockApproval(ba: BlockApproval): F[Unit]                                 = noop
-  def handleNoApprovedBlockAvailable(na: NoApprovedBlockAvailable): F[Unit]           = noop
+  def init: F[Unit]                                       = noop
+  def handle(peer: PeerNode, msg: CasperMessage): F[Unit] = noop
 }
 
 object Engine {
@@ -54,6 +46,9 @@ object Engine {
   def noop[F[_]: Applicative] = new Engine[F] {
     override def applicative: Applicative[F] = Applicative[F]
   }
+
+  def logNoApprovedBlockAvailable[F[_]: Log](identifier: String): F[Unit] =
+    Log[F].info(s"No approved block available on node $identifier")
 
   /*
    * Note the ordering of the insertions is important.

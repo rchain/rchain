@@ -40,6 +40,7 @@ class ApprovedBlockReceivedHandler[F[_]: RPConfAsk: BlockStore: Monad: Connectio
     private val casper: MultiParentCasper[F],
     approvedBlock: ApprovedBlock
 ) extends Engine[F] {
+  import Engine._
 
   implicit val _casper            = casper
   def applicative: Applicative[F] = Applicative[F]
@@ -55,16 +56,16 @@ class ApprovedBlockReceivedHandler[F[_]: RPConfAsk: BlockStore: Monad: Connectio
       )
     } else ().pure[F]
 
-  private def handleNewBlock(
-      peer: PeerNode,
-      b: BlockMessage
-  ): F[Unit] =
-    for {
-      _ <- Log[F].info(s"Received ${PrettyPrinter.buildString(b)}.")
-      _ <- MultiParentCasper[F].addBlock(b, handleDoppelganger(peer, _, _))
-    } yield ()
+  override def handle(peer: PeerNode, msg: CasperMessage): F[Unit] = msg match {
+    case b: BlockMessage              => handleBlockMessage(peer, b)
+    case br: BlockRequest             => handleBlockRequest(peer, br)
+    case fctr: ForkChoiceTipRequest   => handleForkChoiceTipRequest(peer, fctr)
+    case abr: ApprovedBlockRequest    => handleApprovedBlockRequest(peer, abr)
+    case na: NoApprovedBlockAvailable => logNoApprovedBlockAvailable[F](na.nodeIdentifer)
+    case _                            => noop
+  }
 
-  override def handleBlockMessage(peer: PeerNode, b: BlockMessage): F[Unit] =
+  private def handleBlockMessage(peer: PeerNode, b: BlockMessage): F[Unit] =
     for {
       isOldBlock <- MultiParentCasper[F].contains(b)
       _ <- if (isOldBlock)
@@ -74,7 +75,16 @@ class ApprovedBlockReceivedHandler[F[_]: RPConfAsk: BlockStore: Monad: Connectio
 
     } yield ()
 
-  override def handleBlockRequest(peer: PeerNode, br: BlockRequest): F[Unit] =
+  private def handleNewBlock(
+      peer: PeerNode,
+      b: BlockMessage
+  ): F[Unit] =
+    for {
+      _ <- Log[F].info(s"Received ${PrettyPrinter.buildString(b)}.")
+      _ <- MultiParentCasper[F].addBlock(b, handleDoppelganger(peer, _, _))
+    } yield ()
+
+  private def handleBlockRequest(peer: PeerNode, br: BlockRequest): F[Unit] =
     for {
       local      <- RPConfAsk[F].reader(_.local)
       block      <- BlockStore[F].get(br.hash) // TODO: Refactor
@@ -91,7 +101,7 @@ class ApprovedBlockReceivedHandler[F[_]: RPConfAsk: BlockStore: Monad: Connectio
           }
     } yield ()
 
-  override def handleForkChoiceTipRequest(
+  private def handleForkChoiceTipRequest(
       peer: PeerNode,
       fctr: ForkChoiceTipRequest
   ): F[Unit] =
@@ -104,7 +114,7 @@ class ApprovedBlockReceivedHandler[F[_]: RPConfAsk: BlockStore: Monad: Connectio
       _     <- Log[F].info(s"Sending Block ${tip.blockHash} to $peer")
     } yield ()
 
-  override def handleApprovedBlockRequest(
+  private def handleApprovedBlockRequest(
       peer: PeerNode,
       br: ApprovedBlockRequest
   ): F[Unit] =
@@ -116,6 +126,4 @@ class ApprovedBlockReceivedHandler[F[_]: RPConfAsk: BlockStore: Monad: Connectio
       _     <- Log[F].info(s"Sending ApprovedBlock to $peer")
     } yield ()
 
-  override def handleNoApprovedBlockAvailable(na: NoApprovedBlockAvailable): F[Unit] =
-    Log[F].info(s"No approved block available on node ${na.nodeIdentifer}")
 }

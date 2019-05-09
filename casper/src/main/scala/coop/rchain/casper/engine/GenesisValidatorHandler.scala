@@ -47,26 +47,18 @@ class GenesisValidatorHandler[F[_]: Sync: Metrics: Concurrent: ConnectionsCell: 
   import Engine._
   def applicative: Applicative[F] = Applicative[F]
 
-  override def handleApprovedBlock(
-      ab: ApprovedBlock
-  ): F[Unit] =
-    onApprovedBlockTransition(
-      ab,
-      Set(ByteString.copyFrom(validatorId.publicKey.bytes)),
-      runtimeManager,
-      Some(validatorId),
-      shardId
-    )
-
-  override def handleApprovedBlockRequest(
-      peer: PeerNode,
-      br: ApprovedBlockRequest
-  ): F[Unit] =
-    sendNoApprovedBlockAvailable(peer, br.identifier)
-
-  override def handleUnapprovedBlock(peer: PeerNode, ub: UnapprovedBlock): F[Unit] =
-    blockApprover.unapprovedBlockPacketHandler(peer, ub, runtimeManager)
-
-  override def handleNoApprovedBlockAvailable(na: NoApprovedBlockAvailable): F[Unit] =
-    Log[F].info(s"No approved block available on node ${na.nodeIdentifer}")
+  override def handle(peer: PeerNode, msg: CasperMessage): F[Unit] = msg match {
+    case ab: ApprovedBlock =>
+      onApprovedBlockTransition(
+        ab,
+        Set(ByteString.copyFrom(validatorId.publicKey.bytes)),
+        runtimeManager,
+        Some(validatorId),
+        shardId
+      )
+    case br: ApprovedBlockRequest     => sendNoApprovedBlockAvailable(peer, br.identifier)
+    case ub: UnapprovedBlock          => blockApprover.unapprovedBlockPacketHandler(peer, ub, runtimeManager)
+    case na: NoApprovedBlockAvailable => logNoApprovedBlockAvailable[F](na.nodeIdentifer)
+    case _                            => noop
+  }
 }

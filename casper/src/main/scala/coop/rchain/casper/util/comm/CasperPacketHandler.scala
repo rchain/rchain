@@ -191,17 +191,6 @@ class CasperPacketHandler[F[_]: Monad: RPConfAsk: BlockStore: ConnectionsCell: T
 
   def handle(peer: PeerNode): PartialFunction[Packet, F[Unit]] =
     Function.unlift(toCasperMessage).andThen {
-      case br: BlockRequest => EngineCell[F].read >>= (_.handleBlockRequest(peer, br))
-      case fctr: ForkChoiceTipRequest =>
-        EngineCell[F].read >>= (_.handleForkChoiceTipRequest(peer, fctr))
-      case ab: ApprovedBlock =>
-        EngineCell[F].read >>= (_.handleApprovedBlock(ab))
-      case abr: ApprovedBlockRequest =>
-        EngineCell[F].read >>= (_.handleApprovedBlockRequest(peer, abr))
-      case bm: BlockMessage    => EngineCell[F].read >>= (_.handleBlockMessage(peer, bm))
-      case ba: BlockApproval   => EngineCell[F].read >>= (_.handleBlockApproval(ba))
-      case ub: UnapprovedBlock => EngineCell[F].read >>= (_.handleUnapprovedBlock(peer, ub))
-      case nab: NoApprovedBlockAvailable =>
-        EngineCell[F].read >>= (_.handleNoApprovedBlockAvailable(nab))
+      case cm => EngineCell[F].read >>= (_.handle(peer, cm))
     }
 }

@@ -46,17 +46,12 @@ class StandaloneCasperHandler[F[_]: Sync: ConnectionsCell: BlockStore: Transport
 
   override def init: F[Unit] = approveProtocol.run()
 
-  override def handleApprovedBlockRequest(
-      peer: PeerNode,
-      br: ApprovedBlockRequest
-  ): F[Unit] =
-    sendNoApprovedBlockAvailable(peer, br.identifier)
-
-  override def handleBlockApproval(ba: BlockApproval): F[Unit] =
-    approveProtocol.addApproval(ba)
-
-  override def handleNoApprovedBlockAvailable(na: NoApprovedBlockAvailable): F[Unit] =
-    Log[F].info(s"No approved block available on node ${na.nodeIdentifer}")
+  override def handle(peer: PeerNode, msg: CasperMessage): F[Unit] = msg match {
+    case br: ApprovedBlockRequest     => sendNoApprovedBlockAvailable(peer, br.identifier)
+    case ba: BlockApproval            => approveProtocol.addApproval(ba)
+    case na: NoApprovedBlockAvailable => logNoApprovedBlockAvailable[F](na.nodeIdentifer)
+    case _                            => noop
+  }
 }
 
 object StandaloneCasperHandler {

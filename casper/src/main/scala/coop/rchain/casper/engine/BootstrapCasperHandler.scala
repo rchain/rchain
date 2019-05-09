@@ -48,23 +48,18 @@ class BootstrapCasperHandler[F[_]: Sync: Metrics: Concurrent: ConnectionsCell: B
 
   override def init: F[Unit] = theInit
 
-  override def handleApprovedBlockRequest(
-      peer: PeerNode,
-      br: ApprovedBlockRequest
-  ): F[Unit] = sendNoApprovedBlockAvailable(peer, br.identifier)
-
-  override def handleApprovedBlock(
-      ab: ApprovedBlock
-  ): F[Unit] =
-    onApprovedBlockTransition(
-      ab,
-      validators,
-      runtimeManager,
-      validatorId,
-      shardId
-    )
-
-  override def handleNoApprovedBlockAvailable(na: NoApprovedBlockAvailable): F[Unit] =
-    Log[F].info(s"No approved block available on node ${na.nodeIdentifer}")
+  override def handle(peer: PeerNode, msg: CasperMessage): F[Unit] = msg match {
+    case ab: ApprovedBlock =>
+      onApprovedBlockTransition(
+        ab,
+        validators,
+        runtimeManager,
+        validatorId,
+        shardId
+      )
+    case br: ApprovedBlockRequest     => sendNoApprovedBlockAvailable(peer, br.identifier)
+    case na: NoApprovedBlockAvailable => logNoApprovedBlockAvailable[F](na.nodeIdentifer)
+    case _                            => noop
+  }
 
 }
