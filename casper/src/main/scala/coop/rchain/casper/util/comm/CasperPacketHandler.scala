@@ -172,7 +172,7 @@ object CasperPacketHandler {
       validators  <- CasperConf.parseValidatorsFile[F](init.conf.knownValidatorsFile)
       validatorId <- ValidatorIdentity.fromConfig[F](init.conf)
       _ <- EngineCell[F].set(
-            new BootstrapCasperHandler(
+            new Initializing(
               init.runtimeManager,
               init.conf.shardId,
               validatorId,
