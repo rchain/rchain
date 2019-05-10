@@ -14,7 +14,6 @@ import coop.rchain.casper.engine._, EngineCell._
 import coop.rchain.casper.helper.{BlockDagStorageTestFixture, NoOpsCasperEffect}
 import coop.rchain.casper.protocol.{NoApprovedBlockAvailable, _}
 import coop.rchain.casper.util.TestTime
-import coop.rchain.casper.util.comm.CasperPacketHandlerSpec._
 import coop.rchain.casper.util.rholang.RuntimeManager
 import coop.rchain.catscontrib.ApplicativeError_
 import coop.rchain.catscontrib.TaskContrib._
@@ -39,7 +38,7 @@ import scala.concurrent.duration._
 
 class GenesisCeremonyMasterSpec extends WordSpec {
   "GenesisCeremonyMaster" should {
-    "make a transition to ApprovedBlockReceivedHandler state after block has been approved" in {
+    "make a transition to Running state after block has been approved" in {
       import monix.execution.Scheduler.Implicits.global
       val fixture = Setup()
       import fixture._
@@ -96,7 +95,7 @@ class GenesisCeremonyMasterSpec extends WordSpec {
         _               = assert(blockO.isDefined)
         _               = assert(blockO.contains(genesis))
         handlerInternal <- EngineCell[Task].read
-        _               = assert(handlerInternal.isInstanceOf[ApprovedBlockReceivedHandler[Task]])
+        _               = assert(handlerInternal.isInstanceOf[Running[Task]])
         // assert that we really serve last approved block
         lastApprovedBlock <- LastApprovedBlock[Task].get
         _                 = assert(lastApprovedBlock.isDefined)

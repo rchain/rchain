@@ -77,7 +77,7 @@ object GenesisCeremonyMaster {
                               shardId
                             )
                    _ <- Engine
-                         .transitionToApprovedBlockReceivedHandler[F](casper, approvedBlock)
+                         .transitionToRunning[F](casper, approvedBlock)
                    _ <- CommUtil.sendForkChoiceTipRequest[F]
                  } yield ()
              }

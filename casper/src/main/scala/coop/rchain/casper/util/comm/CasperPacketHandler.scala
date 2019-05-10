@@ -81,7 +81,7 @@ object CasperPacketHandler {
                  genesis,
                  init.conf.shardId
                )
-      _ <- Engine.transitionToApprovedBlockReceivedHandler[F](casper, approvedBlock)
+      _ <- Engine.transitionToRunning[F](casper, approvedBlock)
     } yield new CasperPacketHandler[F]
 
   def connectAsGenesisValidator[F[_]: Monad: Sync: Metrics: LastApprovedBlock: ErrorHandler: Time: Concurrent: MultiParentCasperRef: Log: RPConfAsk: BlockStore: ConnectionsCell: TransportLayer: SafetyOracle: BlockDagStorage: EngineCell](

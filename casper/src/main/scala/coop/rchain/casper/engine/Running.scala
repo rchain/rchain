@@ -36,7 +36,7 @@ import scala.util.Try
   *
   * In the future it will be possible to create checkpoint with new [[ApprovedBlock]].
     **/
-class ApprovedBlockReceivedHandler[F[_]: RPConfAsk: BlockStore: Monad: ConnectionsCell: TransportLayer: Log: Time: ErrorHandler](
+class Running[F[_]: RPConfAsk: BlockStore: Monad: ConnectionsCell: TransportLayer: Log: Time: ErrorHandler](
     private val casper: MultiParentCasper[F],
     approvedBlock: ApprovedBlock
 ) extends Engine[F] {

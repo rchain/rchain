@@ -14,7 +14,6 @@ import coop.rchain.casper.engine._, EngineCell._
 import coop.rchain.casper.helper.{BlockDagStorageTestFixture, NoOpsCasperEffect}
 import coop.rchain.casper.protocol.{NoApprovedBlockAvailable, _}
 import coop.rchain.casper.util.TestTime
-import coop.rchain.casper.util.comm.CasperPacketHandlerSpec._
 import coop.rchain.casper.util.rholang.RuntimeManager
 import coop.rchain.catscontrib.ApplicativeError_
 import coop.rchain.catscontrib.TaskContrib._

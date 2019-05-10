@@ -80,14 +80,14 @@ object Engine {
       _   <- TransportLayer[F].stream(peer, msg)
     } yield ()
 
-  def transitionToApprovedBlockReceivedHandler[F[_]: Monad: MultiParentCasperRef: EngineCell: Log: RPConfAsk: BlockStore: ConnectionsCell: TransportLayer: Time: ErrorHandler](
+  def transitionToRunning[F[_]: Monad: MultiParentCasperRef: EngineCell: Log: RPConfAsk: BlockStore: ConnectionsCell: TransportLayer: Time: ErrorHandler](
       casper: MultiParentCasper[F],
       approvedBlock: ApprovedBlock
   ): F[Unit] =
     for {
       _   <- MultiParentCasperRef[F].set(casper)
-      _   <- Log[F].info("Making a transition to ApprovedBlockReceivedHandler state.")
-      abh = new ApprovedBlockReceivedHandler[F](casper, approvedBlock)
+      _   <- Log[F].info("Making a transition to Running state.")
+      abh = new Running[F](casper, approvedBlock)
       _   <- EngineCell[F].set(abh)
 
     } yield ()
@@ -116,7 +116,7 @@ object Engine {
                                      shardId
                                    )
                         _ <- Engine
-                              .transitionToApprovedBlockReceivedHandler[F](casper, approvedBlock)
+                              .transitionToRunning[F](casper, approvedBlock)
                         _ <- CommUtil.sendForkChoiceTipRequest[F]
                       } yield Option(casper)
                     } else
