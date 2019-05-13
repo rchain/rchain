@@ -163,7 +163,7 @@ class DebruijnInterpreter[M[_], F[_]](
             case e: OutOfPhlogistonsError.type =>
               e.raiseError[M, Unit]
             case e =>
-              fTell.tell(e) *> ().pure[M]
+              fTell.tell(e) >> ().pure[M]
           }
 
       mkJob(terms, handler)
@@ -309,8 +309,8 @@ class DebruijnInterpreter[M[_], F[_]](
     */
   private def eval(
       valproc: Var
-  )(implicit env: Env[Par]): M[Par] = // TODO: Use >> instead of *>
-    charge[M](VAR_EVAL_COST) *> {
+  )(implicit env: Env[Par]): M[Par] =
+    charge[M](VAR_EVAL_COST) >> {
       valproc.varInstance match {
         case BoundVar(level) =>
           env.get(level) match {
@@ -426,7 +426,7 @@ class DebruijnInterpreter[M[_], F[_]](
       }
     }
 
-    charge[M](newBindingsCost(neu.bindCount)) *> // TODO: Replace *> with >>
+    charge[M](newBindingsCost(neu.bindCount)) >>
       alloc(neu.bindCount, neu.uri).flatMap(eval(neu.p)(_, rand, sequenceNumber))
   }
 
@@ -563,17 +563,17 @@ class DebruijnInterpreter[M[_], F[_]](
                    }
         } yield result
 
-      case ELtBody(ELt(p1, p2)) => // TODO: Replace <* with <<
-        relop(p1, p2, (_ < _), (_ < _), (_ < _)) <* charge[M](COMPARISON_COST)
+      case ELtBody(ELt(p1, p2)) =>
+        charge[M](COMPARISON_COST) >> relop(p1, p2, (_ < _), (_ < _), (_ < _))
 
       case ELteBody(ELte(p1, p2)) =>
-        relop(p1, p2, (_ <= _), (_ <= _), (_ <= _)) <* charge[M](COMPARISON_COST)
+        charge[M](COMPARISON_COST) >> relop(p1, p2, (_ <= _), (_ <= _), (_ <= _))
 
       case EGtBody(EGt(p1, p2)) =>
-        relop(p1, p2, (_ > _), (_ > _), (_ > _)) <* charge[M](COMPARISON_COST)
+        charge[M](COMPARISON_COST) >> relop(p1, p2, (_ > _), (_ > _), (_ > _))
 
       case EGteBody(EGte(p1, p2)) =>
-        relop(p1, p2, (_ >= _), (_ >= _), (_ >= _)) <* charge[M](COMPARISON_COST)
+        charge[M](COMPARISON_COST) >> relop(p1, p2, (_ >= _), (_ >= _), (_ >= _))
 
       case EEqBody(EEq(p1, p2)) =>
         for {
@@ -916,7 +916,7 @@ class DebruijnInterpreter[M[_], F[_]](
             ESetBody(base @ ParSet(basePs, _, _, _)),
             ESetBody(other @ ParSet(otherPs, _, _, _))
             ) =>
-          charge[M](unionCost(otherPs.size)) *> // TODO: Replace *> with >>
+          charge[M](unionCost(otherPs.size)) >>
             Expr(
               ESetBody(
                 ParSet(
@@ -931,7 +931,7 @@ class DebruijnInterpreter[M[_], F[_]](
             EMapBody(base @ ParMap(baseMap, _, _, _)),
             EMapBody(other @ ParMap(otherMap, _, _, _))
             ) =>
-          charge[M](unionCost(otherMap.size)) *> // TODO: Replace *> with >>
+          charge[M](unionCost(otherMap.size)) >>
             Expr(
               EMapBody(
                 ParMap(
@@ -964,11 +964,11 @@ class DebruijnInterpreter[M[_], F[_]](
         case (ESetBody(ParSet(basePs, _, _, _)), ESetBody(ParSet(otherPs, _, _, _))) =>
           // diff is implemented in terms of foldLeft that at each step
           // removes one element from the collection.
-          charge[M](diffCost(otherPs.size)) *> // TODO: Replace *> with >>
+          charge[M](diffCost(otherPs.size)) >>
             Expr(ESetBody(ParSet(basePs.sortedPars.toSet.diff(otherPs.sortedPars.toSet).toSeq)))
               .pure[M]
         case (EMapBody(ParMap(basePs, _, _, _)), EMapBody(ParMap(otherPs, _, _, _))) =>
-          charge[M](diffCost(otherPs.size)) *> // TODO: Replace *> with >>
+          charge[M](diffCost(otherPs.size)) >>
             Expr(EMapBody(ParMap(basePs -- otherPs.keys))).pure[M]
         case (other, _) =>
           MethodNotDefined("diff", other.typ).raiseError[M, Expr]
@@ -1253,10 +1253,10 @@ class DebruijnInterpreter[M[_], F[_]](
         case e: EListBody =>
           (e: Par).pure[M]
         case ESetBody(ParSet(ps, _, _, _)) =>
-          charge[M](toListCost(ps.size)) *> // TODO: Replace *> with >>
+          charge[M](toListCost(ps.size)) >>
             (EList(ps.toList): Par).pure[M]
         case EMapBody(ParMap(ps, _, _, _)) =>
-          charge[M](toListCost(ps.size)) *> // TODO: Replace *> with >>
+          charge[M](toListCost(ps.size)) >>
             (EList(
               ps.toSeq.map {
                 case (k, v) =>
@@ -1264,7 +1264,7 @@ class DebruijnInterpreter[M[_], F[_]](
               }
             ): Par).pure[M]
         case ETupleBody(ETuple(ps, _, _)) =>
-          charge[M](toListCost(ps.size)) *> // TODO: Replace *> with >>
+          charge[M](toListCost(ps.size)) >>
             (EList(ps.toList): Par).pure[M]
         case other =>
           MethodNotDefined("toList", other.typ).raiseError[M, Par]
