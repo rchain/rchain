@@ -24,8 +24,6 @@ import monix.eval.Coeval
 import scala.collection.immutable.BitSet
 import scala.util.Try
 
-// Notes: Caution, a type annotation is often needed for Env.
-
 /** Reduce is the interface for evaluating Rholang expressions.
   *
   * @tparam M The kind of Monad used for evaluation.
@@ -71,7 +69,6 @@ object Reduce {
       * @param chan  The channel on which data is being sent.
       * @param data  The par objects holding the processes being sent.
       * @param persistent  True if the write should remain in the tuplespace indefinitely.
-      * @param env  An environment marking the execution context.
       * @return  An optional continuation resulting from a match in the tuplespace.
       */
     private def produce(
@@ -89,8 +86,6 @@ object Reduce {
       * @param binds  A Seq of pattern, channel pairs. Each pattern is a Seq[Par].
       *               The Seq is for arity matching, and each term in the Seq is a name pattern.
       * @param body  A Par object which will be run in the envirnoment resulting from the match.
-      * @param env  The current environment, to which the matches will be added before resuming
-      *             execution in body
       * @return  An optional continuation resulting from a match. The body of the continuation
       *          will be @param body if the continuation is not None.
       */
@@ -179,17 +174,6 @@ object Reduce {
 
     }
 
-    /** WanderUnordered is the non-deterministic analogue
-      * of traverse - it parallelizes eval.
-      *
-      * 1. For a Par, parallelize the interpretation of each list
-      *    of processes in the Par. That's the outer wander.
-      * 2. For each process list, parallelize the interpretation
-      *    of each process in the list. That's the inner wander.
-      *
-      * @param par
-      * @return
-      */
     override def eval(par: Par)(
         implicit env: Env[Par],
         rand: Blake2b512Random,
