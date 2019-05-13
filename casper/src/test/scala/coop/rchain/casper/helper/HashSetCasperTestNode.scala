@@ -95,10 +95,7 @@ class HashSetCasperTestNode[F[_]](
 
   val engine                             = new Running(casperEff, approvedBlock)
   implicit val engineCell: EngineCell[F] = Cell.unsafe[F, Engine[F]](engine)
-  val casperPacketHandler                = new CasperPacketHandler[F]
-  implicit val packetHandlerEff = PacketHandler.pf[F](
-    casperPacketHandler.handle
-  )
+  implicit val packetHandlerEff          = CasperPacketHandler[F]
 
   val span = new NoopSpan[F]
 

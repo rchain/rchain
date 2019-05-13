@@ -12,9 +12,9 @@ import cats.implicits._
 
 import coop.rchain.blockstorage._
 import coop.rchain.casper._
-import coop.rchain.casper.engine._, EngineCell._
+import coop.rchain.casper.engine._, EngineCell._, CasperLaunch.CasperInit
 import coop.rchain.casper.MultiParentCasperRef.MultiParentCasperRef
-import coop.rchain.casper.util.comm.{CasperInit, CasperPacketHandler}
+import coop.rchain.casper.util.comm.CasperPacketHandler
 import coop.rchain.casper.util.rholang.RuntimeManager
 import coop.rchain.catscontrib._
 import coop.rchain.catscontrib.Catscontrib._
@@ -209,8 +209,7 @@ class NodeRuntime private[node] (
 
   private def nodeProgram(
       runtime: Runtime[Task],
-      casperRuntime: Runtime[Task],
-      casperPacketHandler: CasperPacketHandler[Effect]
+      casperRuntime: Runtime[Task]
   )(
       implicit
       time: Time[Task],
@@ -228,7 +227,8 @@ class NodeRuntime private[node] (
       packetHandler: PacketHandler[Effect],
       casperConstructor: MultiParentCasperRef[Effect],
       nodeCoreMetrics: NodeMetrics[Task],
-      jvmMetrics: JvmMetrics[Task]
+      jvmMetrics: JvmMetrics[Task],
+      engineCell: EngineCell[Effect]
   ): Effect[Unit] = {
 
     val info: Effect[Unit] =
@@ -297,7 +297,7 @@ class NodeRuntime private[node] (
       _       <- Task.defer(loop.forever.value).executeOn(loopScheduler).start.toEffect
       _ <- if (conf.server.standalone) ().pure[Effect]
           else Log[Effect].info(s"Waiting for first connection.") >> waitForFirstConnetion
-      _ <- Concurrent[Effect].start(casperPacketHandler.init)
+      _ <- Concurrent[Effect].start(EngineCell[Effect].read >>= (_.init))
       _ <- Task.defer(casperLoop.forever.value).executeOn(loopScheduler).toEffect
     } yield ()
   }
@@ -457,44 +457,40 @@ class NodeRuntime private[node] (
         )
         .toEffect
     }
-    engineCell     <- EngineCell.init[Effect]
     runtimeManager <- RuntimeManager.fromRuntime[Task](casperRuntime).toEffect
-    casperPacketHandler <- CasperPacketHandler
-                            .of[Effect](
-                              new CasperInit(
-                                conf.casper,
-                                RuntimeManager.eitherTRuntimeManager(runtimeManager)
-                              ),
-                              _.value
-                            )(
-                              labEff,
-                              Metrics.eitherT(Monad[Task], metrics),
-                              blockStore,
-                              Cell.eitherTCell(Monad[Task], rpConnections),
-                              NodeDiscovery.eitherTNodeDiscovery(Monad[Task], nodeDiscovery),
-                              TransportLayer.eitherTTransportLayer(Monad[Task], log, transport),
-                              ErrorHandler[Effect],
-                              eiterTrpConfAsk(rpConfAsk),
-                              oracle,
-                              Sync[Effect],
-                              Concurrent[Effect],
-                              Time.eitherTTime(Monad[Task], time),
-                              Log.eitherTLog(Monad[Task], log),
-                              multiParentCasperRef,
-                              blockDagStorage,
-                              engineCell,
-                              scheduler
-                            )
-    packetHandler = PacketHandler.pf[Effect](casperPacketHandler.handle)(
-      Applicative[Effect],
-      Log.eitherTLog(Monad[Task], log),
-      ErrorHandler[Effect]
+    engineCell     <- EngineCell.init[Effect]
+    casperInit = new CasperInit[Effect](
+      conf.casper,
+      RuntimeManager.eitherTRuntimeManager(runtimeManager)
     )
+    _ <- CasperLaunch[Effect](casperInit, _.value)(
+          labEff,
+          Metrics.eitherT(Monad[Task], metrics),
+          blockStore,
+          Cell.eitherTCell(Monad[Task], rpConnections),
+          NodeDiscovery.eitherTNodeDiscovery(Monad[Task], nodeDiscovery),
+          TransportLayer.eitherTTransportLayer(Monad[Task], log, transport),
+          ErrorHandler[Effect],
+          eiterTrpConfAsk(rpConfAsk),
+          oracle,
+          Sync[Effect],
+          Concurrent[Effect],
+          Time.eitherTTime(Monad[Task], time),
+          Log.eitherTLog(Monad[Task], log),
+          multiParentCasperRef,
+          blockDagStorage,
+          engineCell,
+          scheduler
+        )
+    packetHandler = {
+      implicit val ev: EngineCell[Effect] = engineCell
+      CasperPacketHandler[Effect]
+    }
     nodeCoreMetrics = diagnostics.effects.nodeCoreMetrics[Task]
     jvmMetrics      = diagnostics.effects.jvmMetrics[Task]
 
     // 4. run the node program.
-    program = nodeProgram(runtime, casperRuntime, casperPacketHandler)(
+    program = nodeProgram(runtime, casperRuntime)(
       time,
       rpConfState,
       rpConfAsk,
@@ -510,7 +506,8 @@ class NodeRuntime private[node] (
       packetHandler,
       multiParentCasperRef,
       nodeCoreMetrics,
-      jvmMetrics
+      jvmMetrics,
+      engineCell
     )
     _ <- handleUnrecoverableErrors(program)
   } yield ()
