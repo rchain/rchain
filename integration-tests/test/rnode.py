@@ -166,7 +166,7 @@ def extract_block_hash_from_propose_output(propose_output: str) -> str:
     return match.group(1)
 
 
-class Node:  # pylint: disable=R0904
+class Node:
     def __init__(self, *, container: Container, deploy_dir: str, command_timeout: int, network: str) -> None:
         self.container = container
         self.local_deploy_dir = deploy_dir
