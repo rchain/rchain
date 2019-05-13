@@ -12,6 +12,7 @@ from .rnode import (
     parse_show_blocks_output,
     parse_show_block_output,
     extract_validator_stake_from_bonds_validator_str,
+    extract_validator_stake_from_deploy_cost_str,
     parse_mvdag_str,
 )
 from .conftest import (
@@ -109,6 +110,8 @@ blockInfo {
   bondsValidatorList: "043c56051a613623cd024976427c073fe9c198ac2b98315a4baff9d333fbb42e: 15"
   bondsValidatorList: "1cd8bf79a2c1bd0afa160f6cdfeb8597257e48135c9bf5e4823f2875a1492c97: 2"
   bondsValidatorList: "23bb89653c1d43578ed421e655e7a0ed9f3ed2e7eab820ad7739277e380cafa3: 81"
+  deployCost: "User: , Cost: 132 DeployData #1553171134886 -- new x in { x!(0) }\\n}"
+  deployCost: "User: , Cost: 132 DeployData #1553171478932 -- new x in { x!(0) }\\n}"
 }
 
 '''
@@ -127,11 +130,12 @@ blockInfo {
     assert output['mainParentHash'] == '""'
     assert output['sender'] == '""'
     assert output['shardId'] == '"rchain"'
-    assert output['bondsValidatorList'] == '02ab69930f74b931209df3ce54e3993674ab3e7c98f715608a5e74048b332821: 43,043c56051a613623cd024976427c073fe9c198ac2b98315a4baff9d333fbb42e: 15,1cd8bf79a2c1bd0afa160f6cdfeb8597257e48135c9bf5e4823f2875a1492c97: 2,23bb89653c1d43578ed421e655e7a0ed9f3ed2e7eab820ad7739277e380cafa3: 81'
+    assert output['bondsValidatorList'] == '02ab69930f74b931209df3ce54e3993674ab3e7c98f715608a5e74048b332821: 43#$043c56051a613623cd024976427c073fe9c198ac2b98315a4baff9d333fbb42e: 15#$1cd8bf79a2c1bd0afa160f6cdfeb8597257e48135c9bf5e4823f2875a1492c97: 2#$23bb89653c1d43578ed421e655e7a0ed9f3ed2e7eab820ad7739277e380cafa3: 81'
+    assert output['deployCost'] == r'User: , Cost: 132 DeployData #1553171134886 -- new x in { x!(0) }\\n}#$User: , Cost: 132 DeployData #1553171478932 -- new x in { x!(0) }\\n}'
 
 
 def test_extract_validator_stake_from_bonds_validator_str() -> None:
-    input = r'''02ab69930f74b931209df3ce54e3993674ab3e7c98f715608a5e74048b332821: 43,043c56051a613623cd024976427c073fe9c198ac2b98315a4baff9d333fbb42e: 15,1cd8bf79a2c1bd0afa160f6cdfeb8597257e48135c9bf5e4823f2875a1492c97: 2,23bb89653c1d43578ed421e655e7a0ed9f3ed2e7eab820ad7739277e380cafa3: 81'''
+    input = r'''02ab69930f74b931209df3ce54e3993674ab3e7c98f715608a5e74048b332821: 43#$043c56051a613623cd024976427c073fe9c198ac2b98315a4baff9d333fbb42e: 15#$1cd8bf79a2c1bd0afa160f6cdfeb8597257e48135c9bf5e4823f2875a1492c97: 2#$23bb89653c1d43578ed421e655e7a0ed9f3ed2e7eab820ad7739277e380cafa3: 81'''
     validator_stake = extract_validator_stake_from_bonds_validator_str(input)
 
     assert validator_stake['02ab69930f74b931209df3ce54e3993674ab3e7c98f715608a5e74048b332821'] == 43
@@ -142,6 +146,14 @@ def test_extract_validator_stake_from_bonds_validator_str() -> None:
 def test_extract_block_hash_from_propose_output() -> None:
     response = "Response: Success! Block a91208047c... created and added.\n"
     assert extract_block_hash_from_propose_output(response) == "a91208047c"
+
+
+def test_extract_validator_stake_from_deploy_cost_str() -> None:
+    input = r'User: 23bb89653c1d43578ed421e655e7a0ed9f3ed2e7eab820ad7739277e380cafa3, Cost: 132 DeployData #1553171134886 -- new x in { x!(0) }\\n}#$User: 1cd8bf79a2c1bd0afa160f6cdfeb8597257e48135c9bf5e4823f2875a1492c97, Cost: 132 DeployData #1553171478932 -- new x in { x!(0) }\\n}'
+    deploy_cost = extract_validator_stake_from_deploy_cost_str(input)
+    assert deploy_cost['23bb89653c1d43578ed421e655e7a0ed9f3ed2e7eab820ad7739277e380cafa3'] == 132
+    assert deploy_cost['1cd8bf79a2c1bd0afa160f6cdfeb8597257e48135c9bf5e4823f2875a1492c97'] == 132
+
 
 
 def test_make_wallets_file_lines() -> None:
