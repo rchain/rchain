@@ -53,8 +53,6 @@ class Interactive private (runtime: Runtime[Task])(implicit scheduler: Scheduler
 
   def checkpointNames: List[String] = checkpoints.keys.toList
 
-  def tuplespace: String = StoragePrinter.prettyPrint(runtime.space)
-
   def eval(code: String): Unit = {
     TestUtil.eval(code, runtime).runSyncUnsafe(Duration.Inf)
     val errors = runtime.errorLog.readAndClearErrorVector().unsafeRunSync

@@ -122,7 +122,8 @@ trait ISpace[F[_], C, P, A, R, K] {
     */
   protected[rspace] def isDirty(root: Blake2b256Hash): F[Boolean]
 
-  def toMap: Map[Seq[C], Row[P, A, K]]
+  // TODO: this should not be exposed
+  def toMap: F[Map[Seq[C], Row[P, A, K]]]
 
 }
 

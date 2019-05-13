@@ -199,5 +199,5 @@ abstract class RSpaceOps[F[_]: Concurrent, C, P, A, R, K](
       }
       .flatMap(root => reset(root))
 
-  override def toMap: Map[Seq[C], Row[P, A, K]] = store.toMap
+  override def toMap: F[Map[Seq[C], Row[P, A, K]]] = Sync[F].delay(store.toMap)
 }

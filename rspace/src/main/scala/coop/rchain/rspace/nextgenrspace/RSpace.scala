@@ -439,8 +439,6 @@ class RSpace[F[_], C, P, A, R, K] private[rspace] (
     } yield ()
 
   protected[rspace] override def isDirty(root: Blake2b256Hash): F[Boolean] = ???
-
-  def toMap: Map[Seq[C], Row[P, A, K]] = ???
 }
 
 object RSpace {

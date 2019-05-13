@@ -204,7 +204,7 @@ class GenesisTest extends FlatSpec with Matchers with BlockDagStorageFixture {
       for {
         runtimeManager  <- RuntimeManager.fromRuntime(runtime)
         _               <- fromInputFiles()(runtimeManager, genesisPath, log, time)
-        storageContents = StoragePrinter.prettyPrint(runtime.space)
+        storageContents <- StoragePrinter.prettyPrint(runtime.space)
       } yield walletAddresses.forall(storageContents contains _._1) should be(true)
   }
 

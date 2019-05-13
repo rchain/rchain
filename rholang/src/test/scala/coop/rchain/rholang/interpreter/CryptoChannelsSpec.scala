@@ -2,6 +2,7 @@ package coop.rchain.rholang.interpreter
 
 import java.nio.file.Files
 
+import cats.implicits._
 import com.google.protobuf.ByteString
 import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.crypto.codec.Base16
@@ -64,12 +65,16 @@ class CryptoChannelsSpec
 
   def assertStoreContains(
       space: RhoISpace[Task]
-  )(ackChannel: GString)(data: ListParWithRandom): Assertion = {
+  )(ackChannel: GString)(data: ListParWithRandom): Task[Assertion] = {
     val channel: Par = ackChannel
-    val datum        = space.toMap(List(channel)).data.head
-    assert(datum.a.pars == data.pars)
-    assert(datum.a.randomState == data.randomState)
-    assert(!datum.persist)
+    for {
+      spaceMap <- space.toMap
+      datum    = spaceMap(List(channel)).data.head
+    } yield {
+      assert(datum.a.pars == data.pars)
+      assert(datum.a.randomState == data.randomState)
+      assert(!datum.persist)
+    }
   }
 
   def hashingChannel(
@@ -88,7 +93,7 @@ class CryptoChannelsSpec
     val ackChannel                  = GString("x")
     implicit val emptyEnv: Env[Par] = Env[Par]()
 
-    val storeContainsTest: ListParWithRandom => Assertion =
+    val storeContainsTest: ListParWithRandom => Task[Assertion] =
       assertStoreContains(store)(ackChannel)(_)
 
     forAll { par: Par =>
@@ -100,8 +105,8 @@ class CryptoChannelsSpec
       // 1. meet with the system process in the tuplespace
       // 2. hash input array
       // 3. send result on supplied ack channel
-      Await.result(reduce.eval(send).runToFuture, 3.seconds)
-      storeContainsTest(ListParWithRandom(Seq(expected), rand))
+      (reduce.eval(send) >>
+        storeContainsTest(ListParWithRandom(Seq(expected), rand))).runSyncUnsafe(3.seconds)
       clearStore(ackChannel)
     }
   }
@@ -139,7 +144,7 @@ class CryptoChannelsSpec
 
       val ackChannel                  = GString("x")
       implicit val emptyEnv: Env[Par] = Env[Par]()
-      val storeContainsTest: ListParWithRandom => Assertion =
+      val storeContainsTest: ListParWithRandom => Task[Assertion] =
         assertStoreContains(space)(ackChannel)
 
       forAll { par: Par =>
@@ -152,7 +157,7 @@ class CryptoChannelsSpec
         val pubKeyPar     = byteArrayToExpr(pubKey)
 
         val refVerify = Secp256k1.verify(parByteArray, signature, pubKey)
-        assert(refVerify === true)
+        assert(refVerify == true)
 
         val send = Send(
           secp256k1VerifyhashChannel,
@@ -160,10 +165,10 @@ class CryptoChannelsSpec
           persistent = false,
           BitSet()
         )
-        Await.result(reduce.eval(send).runToFuture, 3.seconds)
-        storeContainsTest(
-          ListParWithRandom(Seq(Expr(GBool(true))), rand)
-        )
+        (reduce.eval(send) >>
+          storeContainsTest(
+            ListParWithRandom(Seq(Expr(GBool(true))), rand)
+          )).runSyncUnsafe(3.seconds)
         clearStore(ackChannel)
       }
   }
@@ -179,7 +184,7 @@ class CryptoChannelsSpec
 
       val ackChannel                  = GString("x")
       implicit val emptyEnv: Env[Par] = Env[Par]()
-      val storeContainsTest: ListParWithRandom => Assertion =
+      val storeContainsTest: ListParWithRandom => Task[Assertion] =
         assertStoreContains(space)(ackChannel)
 
       forAll { par: Par =>
@@ -192,7 +197,7 @@ class CryptoChannelsSpec
         val pubKeyPar     = byteArrayToExpr(pubKey.bytes)
 
         val refVerify = Ed25519.verify(parByteArray, signature, pubKey)
-        assert(refVerify === true)
+        assert(refVerify == true)
 
         val send = Send(
           ed25519VerifyChannel,
@@ -200,10 +205,9 @@ class CryptoChannelsSpec
           persistent = false,
           BitSet()
         )
-        Await.result(reduce.eval(send).runToFuture, 3.seconds)
-        storeContainsTest(
+        (reduce.eval(send) >> storeContainsTest(
           ListParWithRandom(List(Expr(GBool(true))), rand)
-        )
+        )).runSyncUnsafe(3.seconds)
         clearStore(ackChannel)
       }
   }

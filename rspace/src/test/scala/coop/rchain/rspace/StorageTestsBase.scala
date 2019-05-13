@@ -69,12 +69,13 @@ trait StorageTestsBase[F[_], C, P, A, K] extends FlatSpec with Matchers with Opt
       .traverse {
         case (State(checkpoint, rawExpectedContents, expectedJoins), chunkNo) =>
           for {
-            _ <- space.reset(checkpoint)
+            _        <- space.reset(checkpoint)
+            spaceMap <- space.toMap
           } yield {
             val num = "%02d".format(chunkNo)
 
             val expectedContents = convertMap(rawExpectedContents)
-            val actualContents   = convertMap(space.toMap)
+            val actualContents   = convertMap(spaceMap)
 
             val contentsTest = expectedContents == actualContents
 

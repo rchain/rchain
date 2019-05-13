@@ -128,7 +128,7 @@ class RuntimeManagerImpl[F[_]: Concurrent] private[rholang] (
     }
 
   def storageRepr(hash: StateHash): F[Option[String]] =
-    withResetRuntime(hash)(runtime => StoragePrinter.prettyPrint(runtime.space).pure[F]).attempt
+    withResetRuntime(hash)(runtime => StoragePrinter.prettyPrint(runtime.space)).attempt
       .map {
         case Right(print) => Some(print)
         case Left(_)      => None

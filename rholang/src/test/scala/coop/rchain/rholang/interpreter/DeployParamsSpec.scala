@@ -45,12 +45,15 @@ class DeployParamsSpec extends fixture.FlatSpec with Matchers {
       space: RhoISpace[Task],
       ackChannel: Par,
       data: ListParWithRandom
-  ): Assertion = {
-    val datum = space.toMap(List(ackChannel)).data.head
-    assert(datum.a.pars == data.pars)
-    assert(datum.a.randomState == data.randomState)
-    assert(!datum.persist)
-  }
+  ): Task[Assertion] =
+    for {
+      spaceMap <- space.toMap
+      datum    = spaceMap(List(ackChannel)).data.head
+    } yield {
+      assert(datum.a.pars == data.pars)
+      assert(datum.a.randomState == data.randomState)
+      assert(!datum.persist)
+    }
 
   override type FixtureParam = Runtime[Task]
 
@@ -62,15 +65,15 @@ class DeployParamsSpec extends fixture.FlatSpec with Matchers {
     val phloRate: Par     = GInt(98765)
     val timestamp: Par    = GInt(1234567890)
     val send              = Send(Runtime.FixedChannels.GET_DEPLOY_PARAMS, List(ackChannel))
-    val task = for {
+    (for {
       _ <- runtime.deployParametersRef.set(DeployParameters(empty, phloRate, empty, timestamp))
       _ <- runtime.reducer.eval(send)
-    } yield ()
-    Await.result(task.runToFuture, 3.seconds)
-    assertStoreContains(
-      runtime.space,
-      ackChannel,
-      ListParWithRandom(List(empty, phloRate, empty, timestamp), rand)
-    )
+      _ <- assertStoreContains(
+            runtime.space,
+            ackChannel,
+            ListParWithRandom(List(empty, phloRate, empty, timestamp), rand)
+          )
+    } yield ()).runSyncUnsafe(3.seconds)
+
   }
 }
