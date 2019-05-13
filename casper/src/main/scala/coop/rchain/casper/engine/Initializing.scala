@@ -62,4 +62,40 @@ class Initializing[F[_]: Sync: Metrics: Concurrent: ConnectionsCell: BlockStore:
     case _                            => noop
   }
 
+  private def onApprovedBlockTransition(
+      approvedBlock: ApprovedBlock,
+      validators: Set[ByteString],
+      runtimeManager: RuntimeManager[F],
+      validatorId: Option[ValidatorIdentity],
+      shardId: String
+  ): F[Unit] =
+    for {
+      _       <- Log[F].info("Received ApprovedBlock message.")
+      isValid <- Validate.approvedBlock[F](approvedBlock, validators)
+      maybeCasper <- if (isValid) {
+                      for {
+                        _       <- Log[F].info("Valid ApprovedBlock received!")
+                        genesis = approvedBlock.candidate.flatMap(_.block).get
+                        _       <- insertIntoBlockAndDagStore[F](genesis, approvedBlock)
+                        _       <- LastApprovedBlock[F].set(approvedBlock)
+                        casper <- MultiParentCasper
+                                   .hashSetCasper[F](
+                                     runtimeManager,
+                                     validatorId,
+                                     genesis,
+                                     shardId
+                                   )
+                        _ <- Engine
+                              .transitionToRunning[F](casper, approvedBlock)
+                        _ <- CommUtil.sendForkChoiceTipRequest[F]
+                      } yield Option(casper)
+                    } else
+                      Log[F]
+                        .info("Invalid ApprovedBlock received; refusing to add.")
+                        .map(_ => none[MultiParentCasper[F]])
+      _ <- maybeCasper.fold(Log[F].warn("MultiParentCasper instance not created."))(
+            _ => Log[F].info("MultiParentCasper instance created.")
+          )
+
+    } yield ()
 }

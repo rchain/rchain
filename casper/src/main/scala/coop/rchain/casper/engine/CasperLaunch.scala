@@ -167,14 +167,12 @@ object CasperLaunch {
     for {
       validators  <- CasperConf.parseValidatorsFile[F](init.conf.knownValidatorsFile)
       validatorId <- ValidatorIdentity.fromConfig[F](init.conf)
-      _ <- EngineCell[F].set(
-            new Initializing(
-              init.runtimeManager,
-              init.conf.shardId,
-              validatorId,
-              validators,
-              CommUtil.requestApprovedBlock[F]
-            )
+      _ <- Engine.tranistionToInitializing(
+            init.runtimeManager,
+            init.conf.shardId,
+            validatorId,
+            validators,
+            CommUtil.requestApprovedBlock[F]
           )
     } yield ()
 }
