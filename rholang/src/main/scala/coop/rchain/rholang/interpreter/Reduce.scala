@@ -1301,9 +1301,8 @@ class DebruijnInterpreter[M[_], F[_]](
       "toList"      -> toList
     )
 
-  // TODO: Replace !x.y.isEmpty with x.y.nonEmpty
   def evalSingleExpr(p: Par)(implicit env: Env[Par]): M[Expr] =
-    if (!p.sends.isEmpty || !p.receives.isEmpty || !p.news.isEmpty || !p.matches.isEmpty || !p.ids.isEmpty || !p.bundles.isEmpty)
+    if (p.sends.nonEmpty || p.receives.nonEmpty || p.news.nonEmpty || p.matches.nonEmpty || p.ids.nonEmpty || p.bundles.nonEmpty)
       ReduceError("Error: parallel or non expression found where expression expected.")
         .raiseError[M, Expr]
     else
@@ -1315,7 +1314,7 @@ class DebruijnInterpreter[M[_], F[_]](
   def evalToLong(
       p: Par
   )(implicit env: Env[Par]): M[Long] =
-    if (!p.sends.isEmpty || !p.receives.isEmpty || !p.news.isEmpty || !p.matches.isEmpty || !p.ids.isEmpty || !p.bundles.isEmpty)
+    if (p.sends.nonEmpty || p.receives.nonEmpty || p.news.nonEmpty || p.matches.nonEmpty || p.ids.nonEmpty || p.bundles.nonEmpty)
       ReduceError("Error: parallel or non expression found where expression expected.")
         .raiseError[M, Long]
     else
@@ -1345,7 +1344,7 @@ class DebruijnInterpreter[M[_], F[_]](
   def evalToBool(
       p: Par
   )(implicit env: Env[Par]): M[Boolean] =
-    if (!p.sends.isEmpty || !p.receives.isEmpty || !p.news.isEmpty || !p.matches.isEmpty || !p.ids.isEmpty || !p.bundles.isEmpty)
+    if (p.sends.nonEmpty || p.receives.nonEmpty || p.news.nonEmpty || p.matches.nonEmpty || p.ids.nonEmpty || p.bundles.nonEmpty)
       ReduceError("Error: parallel or non expression found where expression expected.")
         .raiseError[M, Boolean]
     else
