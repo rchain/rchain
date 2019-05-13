@@ -6,7 +6,7 @@ import cats.effect.concurrent.Semaphore
 import coop.rchain.blockstorage.BlockStore
 import coop.rchain.casper.MultiParentCasperRef.MultiParentCasperRef
 import coop.rchain.casper.SafetyOracle
-import coop.rchain.casper.protocol.CasperMessageGrpcMonix
+import coop.rchain.casper.protocol.DeployServiceGrpcMonix
 import coop.rchain.catscontrib._
 import coop.rchain.comm.discovery._
 import coop.rchain.comm.rp.Connect.ConnectionsCell
@@ -61,7 +61,7 @@ package object api {
         .executor(grpcExecutor)
         .maxMessageSize(maxMessageSize)
         .addService(
-          CasperMessageGrpcMonix
+          DeployServiceGrpcMonix
             .bindService(DeployGrpcService.instance(blockApiLock), grpcExecutor)
         )
         .build

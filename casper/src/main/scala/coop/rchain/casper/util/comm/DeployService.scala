@@ -40,7 +40,7 @@ class GrpcDeployService(host: String, port: Int, maxMessageSize: Int)
       .usePlaintext()
       .build
 
-  private val stub = CasperMessageGrpcMonix.stub(channel)
+  private val stub = DeployServiceGrpcMonix.stub(channel)
 
   def deploy(d: DeployData): Task[Either[Seq[String], String]] =
     stub.doDeploy(d).map(_.toEither[DeployServiceResponse].map(_.message))
