@@ -1,7 +1,5 @@
 package coop.rchain.rholang.interpreter
 
-import cats.effect.concurrent.Semaphore
-import coop.rchain.catscontrib.mtl.implicits._
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.metrics
 import coop.rchain.metrics.Metrics
@@ -9,20 +7,18 @@ import coop.rchain.models.Expr.ExprInstance.{EVarBody, GString}
 import coop.rchain.models.Var.VarInstance.FreeVar
 import coop.rchain.models._
 import coop.rchain.models.rholang.implicits._
-import coop.rchain.rholang.interpreter.Reduce.DebruijnInterpreter
+import coop.rchain.rholang.Resources.mkRhoISpace
+import coop.rchain.rholang.interpreter.Runtime.RhoISpace
 import coop.rchain.rholang.interpreter.accounting._
 import coop.rchain.rholang.interpreter.errors.OutOfPhlogistonsError
 import coop.rchain.rholang.interpreter.storage.implicits._
-import coop.rchain.rholang.interpreter.storage.{ChargingRSpace, ChargingRSpaceTest, Tuplespace}
+import coop.rchain.rholang.interpreter.storage.{ChargingRSpace, Tuplespace}
 import coop.rchain.rspace.internal.{Datum, Row}
-import monix.eval.{Coeval, Task}
+import coop.rchain.shared.Log
+import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
 import org.scalactic.TripleEqualsSupport
 import org.scalatest.{FlatSpec, Matchers}
-import coop.rchain.rholang.Resources.mkRhoISpace
-import coop.rchain.rholang.interpreter.Runtime.RhoISpace
-import coop.rchain.rspace.internal
-import coop.rchain.shared.Log
 
 import scala.concurrent.duration._
 

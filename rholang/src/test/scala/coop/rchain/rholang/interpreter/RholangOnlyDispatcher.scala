@@ -4,16 +4,13 @@ import cats.Parallel
 import cats.effect.Sync
 import cats.implicits._
 import cats.mtl.FunctorTell
-import coop.rchain.catscontrib.mtl.implicits._
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.models.TaggedContinuation.TaggedCont.{Empty, ParBody, ScalaBodyRef}
 import coop.rchain.models._
 import coop.rchain.rholang.interpreter.Runtime.RhoISpace
 import coop.rchain.rholang.interpreter.accounting._
-import coop.rchain.rholang.interpreter.accounting.CostAccounting._
 import coop.rchain.rholang.interpreter.storage.Tuplespace
 import coop.rchain.rholang.interpreter.storage.implicits._
-import coop.rchain.rspace.Match
 import coop.rchain.rspace.pure.PureRSpace
 
 object RholangOnlyDispatcher {
@@ -34,7 +31,7 @@ object RholangOnlyDispatcher {
     lazy val tuplespaceAlg = Tuplespace.rspaceTuplespace(pureSpace, dispatcher)
 
     implicit lazy val reducer: Reduce[M] =
-      new Reduce.DebruijnInterpreter[M, F](tuplespaceAlg, urnMap)
+      new DebruijnInterpreter[M, F](tuplespaceAlg, urnMap)
 
     val chargingReducer: ChargingReducer[M] = ChargingReducer[M]
 

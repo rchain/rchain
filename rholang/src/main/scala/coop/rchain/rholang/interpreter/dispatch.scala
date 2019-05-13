@@ -3,7 +3,6 @@ package coop.rchain.rholang.interpreter
 import cats.Parallel
 import cats.effect.Sync
 import cats.mtl.FunctorTell
-import coop.rchain.catscontrib.mtl.implicits._
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.models.TaggedContinuation.TaggedCont.{Empty, ParBody, ScalaBodyRef}
 import coop.rchain.models._
@@ -69,7 +68,7 @@ object RholangAndScalaDispatcher {
       new RholangAndScalaDispatcher(dispatchTable)
 
     implicit lazy val reducer: Reduce[M] =
-      new Reduce.DebruijnInterpreter[M, F](tuplespaceAlg, urnMap)
+      new DebruijnInterpreter[M, F](tuplespaceAlg, urnMap)
 
     lazy val tuplespaceAlg = Tuplespace.rspaceTuplespace(chargingRSpace, dispatcher)
 
