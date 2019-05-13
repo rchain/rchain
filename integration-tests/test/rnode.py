@@ -350,7 +350,7 @@ class Node:
         """
         shutil.copyfile(rho_file_path, os.path.join(self.local_deploy_dir, os.path.basename(rho_file_path)))
         container_contract_file_path = os.path.join(self.remote_deploy_dir, os.path.basename(rho_file_path))
-        substitute_rules = ';'.join([r's/{}/{}/g'.format(key, value) for key, value in substitute_dict.items()])
+        substitute_rules = ';'.join([r's/{}/{}/g'.format(key.replace(r'/', r'\/'), value.replace(r'/', r'\/')) for key, value in substitute_dict.items()])
         self.shell_out(
             'sed',
             '-i',

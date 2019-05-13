@@ -64,8 +64,6 @@ disable=
     format,
     line-too-long,
     logging-format-interpolation,
-
-    # Node generate this
     too-many-public-methods,
 
     # pytest fixtures generate this
