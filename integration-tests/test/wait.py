@@ -1,7 +1,7 @@
 import re
 import time
 import logging
-from typing import TYPE_CHECKING, Pattern
+from typing import TYPE_CHECKING, Pattern, Match
 import typing_extensions
 
 import pytest
@@ -86,6 +86,16 @@ class LogsReMatch:
         match = self.pattern.search(self.node.logs())
         return bool(match)
 
+class LogsReMatchWithResult(LogsReMatch):
+    def __init__(self, node: 'Node', pattern: Pattern) -> None:
+        super(LogsReMatchWithResult, self).__init__(node, pattern)
+        self.result: Match
+
+    def is_satisfied(self) -> bool:
+        match = self.pattern.search(self.node.logs())
+        if match is not None:
+            self.result = match
+        return bool(match)
 
 class HasAtLeastPeers:
     def __init__(self, node: 'Node', minimum_peers_number: int) -> None:
@@ -261,3 +271,9 @@ def wait_for_approved_block_received_handler(context: TestingContext, node: 'Nod
 def wait_for_log_match(context: TestingContext, node: 'Node', pattern: Pattern) -> None:
     predicate = LogsReMatch(node, pattern)
     wait_using_wall_clock_time_or_fail(predicate, context.command_timeout)
+
+
+def wait_for_log_match_result(context: TestingContext, node: 'Node', pattern: Pattern) -> Match:
+    predicate = LogsReMatchWithResult(node, pattern)
+    wait_using_wall_clock_time_or_fail(predicate, context.command_timeout)
+    return predicate.result
