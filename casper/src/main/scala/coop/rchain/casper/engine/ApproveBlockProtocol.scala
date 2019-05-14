@@ -1,4 +1,4 @@
-package coop.rchain.casper.util.comm
+package coop.rchain.casper.engine
 
 import scala.concurrent.duration._
 
@@ -13,6 +13,7 @@ import coop.rchain.casper.LastApprovedBlock.LastApprovedBlock
 import coop.rchain.casper.protocol._
 import coop.rchain.catscontrib.MonadTrans
 import coop.rchain.catscontrib.Catscontrib._
+import coop.rchain.casper.util.comm.CommUtil
 import coop.rchain.comm.rp.Connect.{ConnectionsCell, RPConfAsk}
 import coop.rchain.comm.transport
 import coop.rchain.comm.transport.TransportLayer
@@ -146,7 +147,10 @@ object ApproveBlockProtocol {
     private def signedByTrustedValidator(a: BlockApproval): Boolean =
       a.sig.fold(false)(s => trustedValidators.contains(s.publicKey))
 
-    def run(): F[Unit] = internalRun()
+    def run(): F[Unit] =
+      Log[F].info("Start execution of ApprovedBlockProtocol") >>
+        internalRun() >>
+        Log[F].info("Finished execution of ApprovedBlockProtocol")
 
     private def internalRun(): F[Unit] =
       for {

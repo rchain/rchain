@@ -9,8 +9,10 @@ import cats.syntax.applicativeError._
 import cats.syntax.flatMap._
 import cats.syntax.functor._
 import cats.syntax.either._
+import coop.rchain.catscontrib.ski._
 
 trait Cell[F[_], S] {
+  def set(s: S): F[Unit] = modify(kp(s))
   def modify(f: S => S): F[Unit]
   def flatModify(f: S => F[S]): F[Unit]
   def read: F[S]

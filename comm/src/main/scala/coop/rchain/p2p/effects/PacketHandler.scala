@@ -7,7 +7,7 @@ import coop.rchain.catscontrib._, Catscontrib._
 import coop.rchain.shared._
 
 trait PacketHandler[F[_]] {
-  def handlePacket(peer: PeerNode, packet: Packet): F[Option[Packet]]
+  def handlePacket(peer: PeerNode, packet: Packet): F[Unit]
 }
 
 object PacketHandler extends PacketHandlerInstances {
@@ -19,7 +19,7 @@ object PacketHandler extends PacketHandlerInstances {
       implicit C: PacketHandler[F]
   ): PacketHandler[T[F, ?]] =
     new PacketHandler[T[F, ?]] {
-      def handlePacket(peer: PeerNode, packet: Packet): T[F, Option[Packet]] =
+      def handlePacket(peer: PeerNode, packet: Packet): T[F, Unit] =
         C.handlePacket(peer, packet).liftM[T]
     }
 
@@ -29,19 +29,18 @@ object PacketHandler extends PacketHandlerInstances {
       errorHandler: ApplicativeError_[F, CommError]
   ): PacketHandler[F] =
     new PacketHandler[F] {
-      def handlePacket(peer: PeerNode, packet: Packet): F[Option[Packet]] = {
+      def handlePacket(peer: PeerNode, packet: Packet): F[Unit] = {
         val errorMsg = s"Unable to handle packet $packet"
         val pf       = pfForPeer(peer)
-        if (pf.isDefinedAt(packet)) pf(packet).as(None)
+        if (pf.isDefinedAt(packet)) pf(packet)
         else
           Log[F].error(errorMsg) *> errorHandler
             .raiseError(CommError.unknownProtocol(errorMsg))
-            .as(none[Packet])
       }
     }
 
   class NOPPacketHandler[F[_]: Applicative] extends PacketHandler[F] {
-    def handlePacket(peer: PeerNode, packet: Packet): F[Option[Packet]] = packet.some.pure[F]
+    def handlePacket(peer: PeerNode, packet: Packet): F[Unit] = ().pure[F]
   }
 
 }

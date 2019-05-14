@@ -111,11 +111,11 @@
 * `ceremonyMaster` sends `UnapprovedBlock` to `validatorA` and `validatorB`
 * `validatorA` and `validatorB` receives `UnapprovedBlock`
 * `validatorA` and `validatorB` send back `BlockApproval`
-* `ceremonyMaster` transitions to `ApprovedBlockReceivedHandler` once requirements are met for duration and required sigs
+* `ceremonyMaster` transitions to `Running` once requirements are met for duration and required sigs
 * `ceremonyMaster` sends `ApprovedBlock` to `validatorA` and `validatorB`
-* `validatorA` and `validatorB` transition to ApprovedBlockReceivedHandler
+* `validatorA` and `validatorB` transition to Running
 * `ceremonyMaster`, `validatorA` and `validatorB` tip points to block (genesis) where it has no parent and Bonds holds `validatorA` and `validatorB`
-* `readOnlyA` transitions to `ApprovedBlockReceivedHandler`
+* `readOnlyA` transitions to `Running`
 
 
 #### A NOT successful genesis ceremony (not enough sigs)
@@ -137,7 +137,7 @@
 * `validatorC` joins p2p, pointing on `ceremonyMaster` as bootstrap
 * `validatorC` sends `ApprovedBlockRequest` to `ceremonyMaster`
 * `ceremonyMaster` sends `ApprovedBlock` to `validatorC`
-* `validatorC` transitions to `ApprovedBlockReceivedHandler`
+* `validatorC` transitions to `Running`
 * `validatorC` tip points to block (genesis) where it has no parent and Bonds holds `validatorA` and `validatorB`
 
 ## Contract deployment

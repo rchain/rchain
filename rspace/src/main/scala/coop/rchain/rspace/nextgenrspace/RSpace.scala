@@ -1,5 +1,7 @@
 package coop.rchain.rspace.nextgenrspace
 
+import java.nio.file.{Files, Path}
+
 import cats.effect.{Concurrent, ContextShift, Sync}
 import cats.implicits._
 import com.typesafe.scalalogging.Logger
@@ -463,6 +465,71 @@ object RSpace {
       new RSpace[F, C, P, A, R, K](historyRepository, AtomicAny(store), branch)
 
     space.pure[F]
+
+  }
+
+  def create[F[_], C, P, A, R, K](
+      dataDir: Path,
+      mapSize: Long,
+      branch: Branch
+  )(
+      implicit
+      sc: Serialize[C],
+      sp: Serialize[P],
+      sa: Serialize[A],
+      sk: Serialize[K],
+      concurrent: Concurrent[F],
+      logF: Log[F],
+      contextShift: ContextShift[F],
+      scheduler: ExecutionContext,
+      metricsF: Metrics[F]
+  ): F[ISpace[F, C, P, A, R, K]] =
+    setUp[F, C, P, A, R, K](dataDir, mapSize, branch).map {
+      case (historyReader, store) =>
+        new RSpace[F, C, P, A, R, K](historyReader, AtomicAny(store), branch)
+    }
+
+  def setUp[F[_], C, P, A, R, K](
+      dataDir: Path,
+      mapSize: Long,
+      branch: Branch
+  )(
+      implicit
+      sc: Serialize[C],
+      sp: Serialize[P],
+      sa: Serialize[A],
+      sk: Serialize[K],
+      concurrent: Concurrent[F]
+  ): F[(HistoryRepository[F, C, P, A, K], HotStore[F, C, P, A, K])] = {
+
+    import coop.rchain.rspace.nextgenrspace.history._
+    implicit val cc = sc.toCodec
+    implicit val cp = sp.toCodec
+    implicit val ca = sa.toCodec
+    implicit val ck = sk.toCodec
+
+    val coldStore         = StoreConfig(dataDir.resolve("cold"), mapSize)
+    val historyStore      = StoreConfig(dataDir.resolve("history"), mapSize)
+    val pointerBlockStore = StoreConfig(dataDir.resolve("pointer"), mapSize)
+    val rootsStore        = StoreConfig(dataDir.resolve("roots"), mapSize)
+    val config            = LMDBRSpaceStorageConfig(coldStore, historyStore, pointerBlockStore, rootsStore)
+
+    def checkCreateDir(dir: Path): F[Unit] =
+      for {
+        notexists <- Sync[F].delay(Files.notExists(dir))
+        _         <- if (notexists) Sync[F].delay(Files.createDirectories(dir)) else ().pure[F]
+      } yield ()
+
+    for {
+      _ <- checkCreateDir(coldStore.path)
+      _ <- checkCreateDir(historyStore.path)
+      _ <- checkCreateDir(pointerBlockStore.path)
+      _ <- checkCreateDir(rootsStore.path)
+      historyReader <- HistoryRepositoryInstances
+                        .lmdbRepository[F, C, P, A, K](config)
+      cache <- Cell.refCell[F, Cache[C, P, A, K]](Cache())
+      store = HotStore.inMem(Sync[F], cache, historyReader, cp, ck)
+    } yield (historyReader, store)
 
   }
 }

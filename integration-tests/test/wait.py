@@ -48,9 +48,9 @@ class NodeStarted(LogsContainMessage):
         super().__init__(node, 'coop.rchain.node.NodeRuntime - Listening for traffic on rnode')
 
 
-class ApprovedBlockReceivedHandlerStateEntered(LogsContainMessage):
+class RunningStateEntered(LogsContainMessage):
     def __init__(self, node: 'Node') -> None:
-        super().__init__(node, 'Making a transition to ApprovedBlockReceivedHandler state.')
+        super().__init__(node, 'Making a transition to Running state.')
 
 
 class ApprovedBlockReceived(LogsContainMessage):
@@ -60,17 +60,17 @@ class ApprovedBlockReceived(LogsContainMessage):
 
 class SentUnapprovedBlock(LogsContainMessage):
     def __init__(self, node: 'Node') -> None:
-        super().__init__(node, 'c.r.c.u.c.ApproveBlockProtocol$ApproveBlockProtocolImpl - APPROVAL: Sent UnapprovedBlock')
+        super().__init__(node, 'c.r.c.e.ApproveBlockProtocol$ApproveBlockProtocolImpl - APPROVAL: Sent UnapprovedBlock')
 
 
 class BlockApproval(LogsContainMessage):
     def __init__(self, node: 'Node') -> None:
-        super().__init__(node, 'c.r.c.u.c.ApproveBlockProtocol$ApproveBlockProtocolImpl - APPROVAL: received block approval from')
+        super().__init__(node, 'c.r.c.e.ApproveBlockProtocol$ApproveBlockProtocolImpl - APPROVAL: received block approval from')
 
 
 class SentApprovedBlock(LogsContainMessage):
     def __init__(self, node: 'Node') -> None:
-        super().__init__(node, 'c.r.c.u.c.ApproveBlockProtocol$ApproveBlockProtocolImpl - APPROVAL: Sent ApprovedBlock')
+        super().__init__(node, 'c.r.c.e.ApproveBlockProtocol$ApproveBlockProtocolImpl - APPROVAL: Sent ApprovedBlock')
 
 
 class LogsReMatch:
@@ -209,7 +209,7 @@ def wait_for_node_started(context: TestingContext, node: 'Node') -> None:
 
 
 def wait_for_approved_block_received_handler_state(context: TestingContext, node: 'Node') -> None:
-    predicate = ApprovedBlockReceivedHandlerStateEntered(node)
+    predicate = RunningStateEntered(node)
     wait_using_wall_clock_time_or_fail(predicate, context.node_startup_timeout)
 
 
@@ -254,7 +254,7 @@ def wait_for_sent_approved_block(context: TestingContext, node: 'Node') -> None:
 
 
 def wait_for_approved_block_received_handler(context: TestingContext, node: 'Node') -> None:
-    predicate = ApprovedBlockReceivedHandlerStateEntered(node)
+    predicate = RunningStateEntered(node)
     wait_using_wall_clock_time(predicate, context.network_converge_timeout)
 
 

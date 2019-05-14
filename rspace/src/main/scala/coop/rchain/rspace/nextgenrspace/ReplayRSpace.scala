@@ -1,5 +1,7 @@
 package coop.rchain.rspace.nextgenrspace
 
+import java.nio.file.Path
+
 import cats.Applicative
 import cats.effect.{Concurrent, ContextShift, Sync}
 import cats.implicits._
@@ -451,4 +453,25 @@ object ReplayRSpace {
 
     space.pure[F]
   }
+
+  def create[F[_], C, P, A, R, K](
+      dataDir: Path,
+      mapSize: Long,
+      branch: Branch
+  )(
+      implicit
+      sc: Serialize[C],
+      sp: Serialize[P],
+      sa: Serialize[A],
+      sk: Serialize[K],
+      concurrent: Concurrent[F],
+      logF: Log[F],
+      contextShift: ContextShift[F],
+      scheduler: ExecutionContext,
+      metricsF: Metrics[F]
+  ): F[IReplaySpace[F, C, P, A, R, K]] =
+    RSpace.setUp[F, C, P, A, R, K](dataDir, mapSize, branch).map {
+      case (historyReader, store) =>
+        new ReplayRSpace[F, C, P, A, R, K](historyReader, AtomicAny(store), branch)
+    }
 }
