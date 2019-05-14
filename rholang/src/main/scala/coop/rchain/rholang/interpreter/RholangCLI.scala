@@ -5,6 +5,7 @@ import java.nio.file.{Files, Path}
 import java.util.concurrent.TimeoutException
 
 import cats._
+import cats.effect.Sync
 import cats.implicits._
 import coop.rchain.shared.StoreType
 import coop.rchain.catscontrib.mtl.implicits._
@@ -123,10 +124,10 @@ object RholangCLI {
     Console.println(PrettyPrinter().buildString(normalizedTerm))
   }
 
-  private def printStorageContents[F[_]: FlatMap](space: RhoISpace[F]): F[Unit] = {
-    Console.println("\nStorage Contents:")
-    StoragePrinter.prettyPrint(space).map(Console.println)
-  }
+  private def printStorageContents[F[_]: Sync](space: RhoISpace[F]): F[Unit] =
+    Sync[F].delay {
+      Console.println("\nStorage Contents:")
+    } >> StoragePrinter.prettyPrint(space).map(Console.println)
 
   private def printCost(cost: Cost): Unit =
     Console.println(s"Estimated deploy cost: $cost")
