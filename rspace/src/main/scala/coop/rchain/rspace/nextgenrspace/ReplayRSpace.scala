@@ -425,8 +425,6 @@ class ReplayRSpace[F[_]: Sync, C, P, A, R, K](
   override def clear(): F[Unit] = syncF.delay { replayData.clear() }
 
   protected[rspace] def isDirty(root: Blake2b256Hash): F[Boolean] = true.pure[F]
-
-  def toMap: Map[Seq[C], Row[P, A, K]] = Map.empty
 }
 
 object ReplayRSpace {

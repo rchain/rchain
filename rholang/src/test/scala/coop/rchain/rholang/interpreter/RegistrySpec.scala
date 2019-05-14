@@ -1,5 +1,6 @@
 package coop.rchain.rholang.interpreter
 
+import cats.implicits._
 import com.google.protobuf.ByteString
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.hash.{Blake2b256, Blake2b512Random}
@@ -675,9 +676,7 @@ class RegistrySpec extends FlatSpec with Matchers with RegistryTester {
   private def evaluate(completePar: Par)(implicit rand: Blake2b512Random) =
     withRegistryAndTestSpace { (reducer, space) =>
       implicit val env = Env[Par]()
-      val resultTask = for {
-        _ <- reducer.eval(completePar)
-      } yield space.toMap
+      val resultTask   = reducer.eval(completePar) >> space.toMap
       Await.result(resultTask.runToFuture, EvaluateTimeout)
     }
 

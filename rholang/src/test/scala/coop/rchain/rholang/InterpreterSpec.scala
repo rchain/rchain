@@ -35,16 +35,16 @@ class InterpreterSpec extends FlatSpec with Matchers {
     val (initStorage, beforeError, afterError, afterSend, finalContent) =
       mkRuntime[Task, Task.Par](tmpPrefix, mapSize)
         .use { runtime =>
-          val initStorage = storageContents(runtime)
           for {
+            initStorage  <- storageContents(runtime)
             _            <- success(runtime, sendRho)
-            beforeError  = storageContents(runtime)
+            beforeError  <- storageContents(runtime)
             _            <- failure(runtime, "@1!(1) | @2!(3.noSuchMethod())")
-            afterError   = storageContents(runtime)
+            afterError   <- storageContents(runtime)
             _            <- success(runtime, "new stdout(`rho:io:stdout`) in { stdout!(42) }")
-            afterSend    = storageContents(runtime)
+            afterSend    <- storageContents(runtime)
             _            <- success(runtime, "for (_ <- @0) { Nil }")
-            finalContent = storageContents(runtime)
+            finalContent <- storageContents(runtime)
           } yield (initStorage, beforeError, afterError, afterSend, finalContent)
         }
         .runSyncUnsafe(maxDuration)
@@ -88,7 +88,7 @@ class InterpreterSpec extends FlatSpec with Matchers {
             """.stripMargin
               )
 
-          contents = storageContents(runtime)
+          contents <- storageContents(runtime)
         } yield contents
       }
       .runSyncUnsafe(maxDuration)
@@ -157,7 +157,7 @@ class InterpreterSpec extends FlatSpec with Matchers {
     cost.value shouldEqual (parsingCost(sendRho).value)
   }
 
-  private def storageContents(runtime: Runtime[Task]): String =
+  private def storageContents(runtime: Runtime[Task]): Task[String] =
     StoragePrinter.prettyPrint(runtime.space)
 
   private def success(runtime: Runtime[Task], rho: String): Task[Unit] =

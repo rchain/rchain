@@ -4,6 +4,9 @@ import java.io.{BufferedOutputStream, FileOutputStream, FileReader, IOException,
 import java.nio.file.{Files, Path}
 import java.util.concurrent.TimeoutException
 
+import cats._
+import cats.effect.Sync
+import cats.implicits._
 import coop.rchain.shared.StoreType
 import coop.rchain.catscontrib.mtl.implicits._
 import coop.rchain.catscontrib.TaskContrib._
@@ -121,10 +124,10 @@ object RholangCLI {
     Console.println(PrettyPrinter().buildString(normalizedTerm))
   }
 
-  private def printStorageContents[F[_]](space: RhoISpace[F]): Unit = {
-    Console.println("\nStorage Contents:")
-    Console.println(StoragePrinter.prettyPrint(space))
-  }
+  private def printStorageContents[F[_]: Sync](space: RhoISpace[F]): F[Unit] =
+    Sync[F].delay {
+      Console.println("\nStorage Contents:")
+    } >> StoragePrinter.prettyPrint(space).map(Console.println)
 
   private def printCost(cost: Cost): Unit =
     Console.println(s"Estimated deploy cost: $cost")
@@ -240,7 +243,7 @@ object RholangCLI {
 
     Try(waitForSuccess(evaluatorTask.runToFuture)).map { _ok =>
       if (!quiet) {
-        printStorageContents(runtime.space)
+        printStorageContents(runtime.space).unsafeRunSync
       }
     }
   }
