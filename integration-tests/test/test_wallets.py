@@ -36,9 +36,14 @@ def create_genesis_vault(context: TestingContext, node: Node, rev_addr: str, ini
     )
     wait_for_log_match(context, node, create_vault_success_pattern)
 
-def transfer_funds(context: TestingContext, node: Node, from_rev_addr: str, to_rev_addr: str, amount: int, private_key: str) -> bool:
+def transfer_funds(context: TestingContext, node: Node, from_rev_addr: str, to_rev_addr: str, amount: int, private_key: str) -> str:
+    """
+    Transfer rev from one vault to another vault.
+    If the transfer is processed successfully, it would return a str "Nil".
+    If the transfer fail to be processed, it would return the reason why it failed like "Invalid AuthKey".
+    """
     log_marker = random_string(context, 10)
-    transfer_funds_result_pattern= re.compile('"{} (Successfully|Failing) reason: (?P<reason>[a-zA-Z0-9]*)"'.format(log_marker))
+    transfer_funds_result_pattern = re.compile('"{} (Successfully|Failing) reason: (?P<reason>[a-zA-Z0-9]*)"'.format(log_marker))
     node.deploy_contract_with_substitution(
         substitute_dict={"%FROM": from_rev_addr, "%TO": to_rev_addr, "%AMOUNT": str(amount), "%LOG_MARKER": log_marker},
         rho_file_path="resources/wallets/transfer_funds.rho",
@@ -46,25 +51,25 @@ def transfer_funds(context: TestingContext, node: Node, from_rev_addr: str, to_r
     )
     transfer_result_match = wait_for_log_match_result(context, node, transfer_funds_result_pattern)
     reason = transfer_result_match.group('reason')
-    return reason == 'Nil'
+    return reason
 
-def check_balance(context: TestingContext, node: Node, rev_addr: str, private_key: str) -> int:
+def get_vault_balance(context: TestingContext, node: Node, rev_addr: str, private_key: str) -> int:
     log_marker = random_string(context, 10)
     check_balance_pattern = re.compile('"{} Vault (?P<rev_addr>[a-zA-Z0-9]*) balance is (?P<balance>[0-9]*)"'.format(log_marker))
     node.deploy_contract_with_substitution(
         substitute_dict={"%REV_ADDR": rev_addr, "%LOG_MARKER": log_marker},
-        rho_file_path="resources/wallets/check_balance.rho",
+        rho_file_path="resources/wallets/get_vault_balance.rho",
         private_key=private_key
     )
     check_balance_match = wait_for_log_match_result(context, node, check_balance_pattern)
     return int(check_balance_match.group("balance"))
 
-def know_ones_rev_addr(context: TestingContext, node: Node, public_key: str, private_key: str) -> str:
+def get_rev_address_by_public_key(context: TestingContext, node: Node, public_key: str, private_key: str) -> str:
     log_marker = random_string(context, 10)
     public_key_rev_addr_pattern = re.compile('"{} RevAddress for pubKey {} is (?P<rev_addr>[a-zA-Z0-9]*)"'.format(log_marker, public_key))
     node.deploy_contract_with_substitution(
         substitute_dict={"%PUB_KEY": public_key, "%LOG_MARKER": log_marker},
-        rho_file_path="resources/wallets/know_ones_revaddress.rho",
+        rho_file_path="resources/wallets/get_rev_address_by_public_key.rho",
         private_key=private_key
     )
     pattern_match = wait_for_log_match_result(context, node, public_key_rev_addr_pattern)
@@ -76,26 +81,28 @@ def test_alice_pay_bob(command_line_options: CommandLineOptions, docker_client: 
         with docker_network_with_started_bootstrap(context=context) as bootstrap_node:
             alice_init_vault_value = 5000
             transfer_amount = 100
-            alice_rev_address = know_ones_rev_addr(context, bootstrap_node, ALICE_KEY.public_key, ALICE_KEY.private_key)
-            bob_rev_address = know_ones_rev_addr(context, bootstrap_node, BOB_KEY.public_key, BOB_KEY.private_key)
+            alice_rev_address = get_rev_address_by_public_key(context, bootstrap_node, ALICE_KEY.public_key, ALICE_KEY.private_key)
+            bob_rev_address = get_rev_address_by_public_key(context, bootstrap_node, BOB_KEY.public_key, BOB_KEY.private_key)
             create_genesis_vault(context, bootstrap_node, alice_rev_address, alice_init_vault_value, ALICE_KEY.private_key)
-            alice_balance = check_balance(context, bootstrap_node, alice_rev_address, ALICE_KEY.private_key)
-            bob_balance = check_balance(context, bootstrap_node, bob_rev_address, BOB_KEY.private_key)
+            alice_balance = get_vault_balance(context, bootstrap_node, alice_rev_address, ALICE_KEY.private_key)
+            bob_balance = get_vault_balance(context, bootstrap_node, bob_rev_address, BOB_KEY.private_key)
             assert alice_balance == alice_init_vault_value
             assert bob_balance == 0
 
-            assert transfer_funds(context, bootstrap_node, alice_rev_address, bob_rev_address, transfer_amount, ALICE_KEY.private_key)
+            result = transfer_funds(context, bootstrap_node, alice_rev_address, bob_rev_address, transfer_amount, ALICE_KEY.private_key)
+            assert result == "Nil"
 
-            alice_balance = check_balance(context, bootstrap_node, alice_rev_address, ALICE_KEY.private_key)
+            alice_balance = get_vault_balance(context, bootstrap_node, alice_rev_address, ALICE_KEY.private_key)
             assert alice_balance == alice_init_vault_value - transfer_amount
 
-            bob_balance = check_balance(context, bootstrap_node, bob_rev_address, BOB_KEY.private_key)
+            bob_balance = get_vault_balance(context, bootstrap_node, bob_rev_address, BOB_KEY.private_key)
             assert bob_balance == transfer_amount
 
-            assert transfer_funds(context, bootstrap_node, bob_rev_address, alice_rev_address, transfer_amount, BOB_KEY.private_key)
+            result =  transfer_funds(context, bootstrap_node, bob_rev_address, alice_rev_address, transfer_amount, BOB_KEY.private_key)
+            assert result == "Nil"
 
-            alice_balance = check_balance(context, bootstrap_node, alice_rev_address, ALICE_KEY.private_key)
+            alice_balance = get_vault_balance(context, bootstrap_node, alice_rev_address, ALICE_KEY.private_key)
             assert alice_balance == 5000
 
-            bob_balance = check_balance(context, bootstrap_node, bob_rev_address, BOB_KEY.private_key)
+            bob_balance = get_vault_balance(context, bootstrap_node, bob_rev_address, BOB_KEY.private_key)
             assert bob_balance == 0
