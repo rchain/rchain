@@ -1,5 +1,7 @@
 package coop.rchain.rspace.nextgenrspace
 
+import java.nio.file.{Files, Path}
+
 import cats.effect.{Concurrent, ContextShift, Sync}
 import cats.implicits._
 import com.typesafe.scalalogging.Logger
@@ -465,8 +467,6 @@ object RSpace {
     space.pure[F]
 
   }
-
-  import java.nio.file.{Files, Path}
 
   def create[F[_], C, P, A, R, K](
       dataDir: Path,

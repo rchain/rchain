@@ -1,5 +1,7 @@
 package coop.rchain.rspace.nextgenrspace
 
+import java.nio.file.Path
+
 import cats.Applicative
 import cats.effect.{Concurrent, ContextShift, Sync}
 import cats.implicits._
@@ -451,8 +453,6 @@ object ReplayRSpace {
 
     space.pure[F]
   }
-
-  import java.nio.file.{Files, Path}
 
   def create[F[_], C, P, A, R, K](
       dataDir: Path,
