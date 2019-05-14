@@ -859,7 +859,7 @@ trait InMemoryReplayRSpaceTestsBase[C, P, A, K] extends ReplayRSpaceTestsBase[C,
 
     def storeConfig(name: String): StoreConfig =
       StoreConfig(
-        Files.createDirectories(dbDir.resolve(name)).toString,
+        Files.createDirectories(dbDir.resolve(name)),
         mapSize,
         2,
         2048,

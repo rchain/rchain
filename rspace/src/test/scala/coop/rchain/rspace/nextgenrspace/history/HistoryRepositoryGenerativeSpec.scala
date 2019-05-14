@@ -40,7 +40,7 @@ class LMDBHistoryRepositoryGenerativeSpec
 
   def lmdbConfig =
     StoreConfig(
-      Files.createTempDirectory(dbDir, "test-").toAbsolutePath.toString,
+      Files.createTempDirectory(dbDir, "test-"),
       1024L * 1024L * 4096L,
       2,
       2048,

@@ -1,7 +1,7 @@
 package coop.rchain.rspace.nextgenrspace.history
 
 import java.nio.ByteBuffer
-import java.nio.file.Paths
+import java.nio.file.{Path, Paths}
 
 import cats.implicits._
 import cats.effect.Sync
@@ -22,11 +22,11 @@ trait Store[F[_]] {
 }
 
 final case class StoreConfig(
-    path: String,
+    path: Path,
     mapSize: Long,
-    maxDbs: Int,
-    maxReaders: Int,
-    flags: List[EnvFlags]
+    maxDbs: Int = 2,
+    maxReaders: Int = 2048,
+    flags: List[EnvFlags] = List(EnvFlags.MDB_NOTLS)
 )
 
 object StoreInstances {
@@ -36,7 +36,7 @@ object StoreInstances {
       .setMapSize(config.mapSize)
       .setMaxDbs(config.maxDbs)
       .setMaxReaders(config.maxReaders)
-      .open(Paths.get(config.path).toFile, config.flags: _*)
+      .open(config.path.toFile, config.flags: _*)
     val dbi = env.openDbi("db", MDB_CREATE)
     LMDBStore(env, dbi)
   }
