@@ -1,10 +1,10 @@
 new
   RevAddress(`rho:rev:address`), RevVaultCh,
   revAddrCh,
-  stdout(`rho:io:stdout`), log
+  stdout(`rho:io:stdout`)
 in {
 
-  log!(("1.know_ones_revaddress.rho")) |
+  stdout!(("1.know_ones_revaddress.rho")) |
 
   // REPLACE THE PUB_KEY HERE vvv
   match "%PUB_KEY" {
@@ -13,12 +13,9 @@ in {
       RevAddress!("fromPublicKey", pubKey.hexToBytes(), *revAddrCh) |
 
       for (@revAddress <- revAddrCh) {
-        log!(("RevAddress for pubKey", pubKey, "is", revAddress))
+        stdout!(("RevAddress for pubKey", pubKey, "is", revAddress))
       }
     }
-  } |
-
-  contract log(@data) = {
-    @"DEMO"!(data) | stdout!(data)
   }
+
 }
