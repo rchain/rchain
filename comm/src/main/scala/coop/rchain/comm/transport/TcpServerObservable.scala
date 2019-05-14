@@ -6,7 +6,6 @@ import scala.concurrent.duration._
 
 import cats.implicits._
 
-import coop.rchain.catscontrib.ski._
 import coop.rchain.comm.PeerNode
 import coop.rchain.comm.protocol.routing._
 import coop.rchain.comm.rp.Connect.RPConfAsk
@@ -26,6 +25,7 @@ class TcpServerObservable(
     port: Int,
     serverSslContext: SslContext,
     maxMessageSize: Int,
+    maxStreamMessageSize: Long,
     tellBufferSize: Int = 1024,
     blobBufferSize: Int = 32,
     askTimeout: FiniteDuration = 5.second,
@@ -59,10 +59,9 @@ class TcpServerObservable(
 
       def stream(observable: Observable[Chunk]): Task[ChunkResponse] = {
 
-        // TODO RCHAIN-2792
-        val neverBreak: StreamHandler.CircuitBreaker = kp(false)
+        val circuitBreaker: StreamHandler.CircuitBreaker = _ > maxStreamMessageSize
 
-        (StreamHandler.handleStream(networkId, tempFolder, observable, neverBreak) >>= {
+        (StreamHandler.handleStream(networkId, tempFolder, observable, circuitBreaker) >>= {
           case Left(ex)   => logger.error(s"Could not receive stream! Details: ${ex.getMessage}", ex)
           case Right(msg) => Task.delay(bufferBlobMessage.pushNext(msg)).as(())
         }).as(ChunkResponse())

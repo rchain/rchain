@@ -45,7 +45,8 @@ class TcpTransportLayerSpec
       TcpTlsEnvironment(host, port, cert, key, peer)
     }
 
-  val maxMessageSize: Int = 256 * 1024
+  val maxMessageSize: Int        = 256 * 1024
+  val maxStreamMessageSize: Long = 1024 * 1024 * 200
 
   def createTransportLayer(
       env: TcpTlsEnvironment
@@ -70,7 +71,16 @@ class TcpTransportLayerSpec
   def createTransportLayerServer(env: TcpTlsEnvironment): Task[TransportLayerServer[Task]] =
     Task.delay {
       implicit val rPConfAsk: RPConfAsk[Task] = createRPConfAsk[Task](env.peer)
-      new GrpcTransportServer(networkId, env.port, env.cert, env.key, maxMessageSize, tempFolder, 4)
+      new GrpcTransportServer(
+        networkId,
+        env.port,
+        env.cert,
+        env.key,
+        maxMessageSize,
+        maxStreamMessageSize,
+        tempFolder,
+        4
+      )
     }
 }
 

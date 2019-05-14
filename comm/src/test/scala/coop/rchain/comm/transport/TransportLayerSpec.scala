@@ -68,7 +68,7 @@ abstract class TransportLayerSpec[F[_]: Monad: cats.effect.Timer, E <: Environme
         }
     }
 
-    val bigContent: ByteString = {
+    lazy val bigContent: ByteString = {
       val b = 128.toByte
       ProtocolHelper.toProtocolBytes(
         Array.fill((4 * maxMessageSize) + (maxMessageSize / 2))(b)

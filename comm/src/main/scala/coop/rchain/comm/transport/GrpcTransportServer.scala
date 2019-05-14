@@ -34,6 +34,7 @@ class GrpcTransportServer(
     cert: String,
     key: String,
     maxMessageSize: Int,
+    maxStreamMessageSize: Long,
     tempFolder: Path,
     parallelism: Int
 )(
@@ -85,6 +86,7 @@ class GrpcTransportServer(
         port,
         serverSslContext,
         maxMessageSize,
+        maxStreamMessageSize,
         tempFolder = tempFolder
       ).mapParallelUnordered(parallelism)(dispatchInternal)
         .subscribe()(queueScheduler)
@@ -100,6 +102,7 @@ object GrpcTransportServer {
       certPath: Path,
       keyPath: Path,
       maxMessageSize: Int,
+      maxStreamMessageSize: Long,
       folder: Path,
       parallelism: Int
   )(
@@ -110,7 +113,16 @@ object GrpcTransportServer {
     val cert = Resources.withResource(Source.fromFile(certPath.toFile))(_.mkString)
     val key  = Resources.withResource(Source.fromFile(keyPath.toFile))(_.mkString)
     new TransportServer(
-      new GrpcTransportServer(networkId, port, cert, key, maxMessageSize, folder, parallelism)
+      new GrpcTransportServer(
+        networkId,
+        port,
+        cert,
+        key,
+        maxMessageSize,
+        maxStreamMessageSize,
+        folder,
+        parallelism
+      )
     )
   }
 }
