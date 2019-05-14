@@ -483,7 +483,24 @@ object RSpace {
       contextShift: ContextShift[F],
       scheduler: ExecutionContext,
       metricsF: Metrics[F]
-  ): F[ISpace[F, C, P, A, R, K]] = {
+  ): F[ISpace[F, C, P, A, R, K]] =
+    setUp[F, C, P, A, R, K](dataDir, mapSize, branch).map {
+      case (historyReader, store) =>
+        new RSpace[F, C, P, A, R, K](historyReader, AtomicAny(store), branch)
+    }
+
+  def setUp[F[_], C, P, A, R, K](
+      dataDir: Path,
+      mapSize: Long,
+      branch: Branch
+  )(
+      implicit
+      sc: Serialize[C],
+      sp: Serialize[P],
+      sa: Serialize[A],
+      sk: Serialize[K],
+      concurrent: Concurrent[F]
+  ): F[(HistoryRepository[F, C, P, A, K], HotStore[F, C, P, A, K])] = {
 
     import coop.rchain.rspace.nextgenrspace.history._
     implicit val cc = sc.toCodec
@@ -512,8 +529,7 @@ object RSpace {
                         .lmdbRepository[F, C, P, A, K](config)
       cache <- Cell.refCell[F, Cache[C, P, A, K]](Cache())
       store = HotStore.inMem(Sync[F], cache, historyReader, cp, ck)
-      space = new RSpace[F, C, P, A, R, K](historyReader, AtomicAny(store), branch)
-    } yield space
+    } yield (historyReader, store)
 
   }
 }
