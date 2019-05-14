@@ -64,6 +64,7 @@ disable=
     format,
     line-too-long,
     logging-format-interpolation,
+    too-many-public-methods,
 
     # pytest fixtures generate this
     redefined-outer-name,

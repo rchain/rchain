@@ -1,5 +1,4 @@
 import os
-import shutil
 import contextlib
 from random import Random
 from typing import (
@@ -69,21 +68,6 @@ def complete_network(context: TestingContext) -> Generator[Network, None, None]:
             yield network
 
 
-def deploy_block(node: Node, expected_string: str, contract_name: str) -> str:
-    local_contract_file_path = os.path.join('resources', contract_name)
-    shutil.copyfile(local_contract_file_path, f"{node.local_deploy_dir}/{contract_name}")
-    container_contract_file_path = '{}/{}'.format(node.remote_deploy_dir, contract_name)
-    node.shell_out(
-        'sed',
-        '-i',
-        '-e', 's/@placeholder@/{}/g'.format(expected_string),
-        container_contract_file_path,
-    )
-    node.deploy(container_contract_file_path, '3596e2e5fd14b24a6d84af04b7f0a8f13e3e68ee2ca91dc4b19550f12e61502c')
-    block_hash = node.propose()
-    return block_hash
-
-
 def make_expected_string(node: Node, random_token: str) -> str:
     return "<{name}:{random_token}>".format(name=node.container.name, random_token=random_token)
 
@@ -96,12 +80,12 @@ def test_casper_propose_and_deploy(command_line_options: CommandLineOptions, ran
     with conftest.testing_context(command_line_options, random_generator, docker_client) as context:
         with complete_network(context) as network:
             token_size = 20
-            contract_name = 'contract.rho'
+            contract_path = os.path.join('resources', 'contract.rho')
             for node in network.nodes:
                 random_token = random_string(context, token_size)
 
                 expected_string = make_expected_string(node, random_token)
-                block_hash = deploy_block(node, expected_string, contract_name)
+                block_hash = node.deploy_contract_with_substitution({"@placeholder@": expected_string}, contract_path, '3596e2e5fd14b24a6d84af04b7f0a8f13e3e68ee2ca91dc4b19550f12e61502c')
 
                 expected_string = make_expected_string(node, random_token)
                 other_nodes = [n for n in network.nodes if n.container.name != node.container.name]
