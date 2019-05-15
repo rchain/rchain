@@ -19,7 +19,8 @@ import coop.rchain.rholang.interpreter.Runtime._
 import coop.rchain.rholang.interpreter.accounting.{noOpCostLog, _}
 import coop.rchain.rholang.interpreter.errors.SetupError
 import coop.rchain.rholang.interpreter.storage.implicits._
-import coop.rchain.rspace._
+import coop.rchain.rspace.{RSpace => _, ReplayRSpace => _, _}
+import coop.rchain.rspace.nextgenrspace.{RSpace, ReplayRSpace}
 import coop.rchain.rspace.history.Branch
 import coop.rchain.rspace.nextgenrspace.{RSpace => NextRSpace}
 import coop.rchain.rspace.pure.PureRSpace
@@ -483,7 +484,7 @@ object Runtime {
                   ListParWithRandom,
                   ListParWithRandom,
                   TaggedContinuation
-                ](context, Branch.MASTER)
+                ](dataDir, mapSize, Branch.MASTER)
         replaySpace <- ReplayRSpace.create[
                         F,
                         Par,
@@ -491,7 +492,7 @@ object Runtime {
                         ListParWithRandom,
                         ListParWithRandom,
                         TaggedContinuation
-                      ](context, Branch.REPLAY)
+                      ](dataDir, mapSize, Branch.REPLAY)
       } yield ((context, space, replaySpace))
 
     def createNextSpace(
