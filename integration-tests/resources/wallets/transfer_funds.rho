@@ -1,0 +1,44 @@
+new
+  rl(`rho:registry:lookup`), RevVaultCh,
+  stdout(`rho:io:stdout`), log
+in {
+
+  rl!(`rho:id:1o93uitkrjfubh43jt19owanuezhntag5wh74c6ur5feuotpi73q8z`, *RevVaultCh) |
+  for (@(_, RevVault) <- RevVaultCh) {
+
+    log!(("3.transfer_funds.rho")) |
+
+    // REPLACE THE REV ADDRESSES HERE vvv
+    match (
+      "%FROM",
+      "%TO",
+      %AMOUNT
+    ) {
+      (from, to, amount) => {
+
+        new vaultCh, revVaultkeyCh in {
+          @RevVault!("findOrCreate", from, *vaultCh) |
+          @RevVault!("deployerAuthKey", *revVaultkeyCh) |
+          for (@(true, vault) <- vaultCh; key <- revVaultkeyCh) {
+
+            log!(("Beginning transfer of ", amount, "REV from", from, "to", to)) |
+
+            new resultCh in {
+              @vault!("transfer", to, amount, *key, *resultCh) |
+              for (@result <- resultCh) {
+                match result{
+                  (true, _) =>{log!("%LOG_MARKER Successfully reason: Nil" )}
+                  (false, reason) => {log!("%LOG_MARKER Failing reason: ${reason}" %%{"reason": reason})}
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  } |
+
+  contract log(@data) = {
+    @"DEMO"!(data) | stdout!(data)
+  }
+}

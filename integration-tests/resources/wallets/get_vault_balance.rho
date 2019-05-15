@@ -1,0 +1,38 @@
+new
+  rl(`rho:registry:lookup`), RevVaultCh,
+  vaultCh, balanceCh,
+  stdout(`rho:io:stdout`), log
+in {
+
+  // we'll consider making RevVault a system contract under `rho:rev:vault`
+  rl!(`rho:id:1o93uitkrjfubh43jt19owanuezhntag5wh74c6ur5feuotpi73q8z`, *RevVaultCh) |
+  for (@(_, RevVault) <- RevVaultCh) {
+
+
+    // REPLACE THE REV ADDRESS HERE vvv
+    match "%REV_ADDR" {
+      revAddress => {
+
+        log!(("Accessing vault at RevAddress", revAddress)) |
+
+        // most RevVault methods return an `Either[String, A] = (false, String) \/ (true, A)`
+        @RevVault!("findOrCreate", revAddress, *vaultCh) |
+        for (@(true, vault) <- vaultCh) {
+
+          log!("Obtained vault, checking balance") |
+
+          @vault!("balance", *balanceCh) |
+          for (@balance <- balanceCh) {
+
+            log!("%LOG_MARKER Vault %REV_ADDR balance is ${balance}" %%{"balance":balance})
+          }
+        }
+      }
+    }
+
+  } |
+
+  contract log(@data) = {
+    @"DEMO"!(data) | stdout!(data)
+  }
+}
