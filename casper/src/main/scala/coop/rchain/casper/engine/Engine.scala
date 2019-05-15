@@ -92,40 +92,12 @@ object Engine {
 
     } yield ()
 
-  def onApprovedBlockTransition[F[_]: Sync: Metrics: Concurrent: Time: ErrorHandler: SafetyOracle: RPConfAsk: TransportLayer: ConnectionsCell: Log: BlockStore: LastApprovedBlock: BlockDagStorage: EngineCell: MultiParentCasperRef](
-      approvedBlock: ApprovedBlock,
-      validators: Set[ByteString],
-      runtimeManager: RuntimeManager[F],
+  def tranistionToInitializing[F[_]: Concurrent: Metrics: Monad: MultiParentCasperRef: EngineCell: Log: RPConfAsk: BlockStore: ConnectionsCell: TransportLayer: Time: ErrorHandler: SafetyOracle: LastApprovedBlock: BlockDagStorage](
+      rm: RuntimeManager[F],
+      shardId: String,
       validatorId: Option[ValidatorIdentity],
-      shardId: String
-  ): F[Unit] =
-    for {
-      _       <- Log[F].info("Received ApprovedBlock message.")
-      isValid <- Validate.approvedBlock[F](approvedBlock, validators)
-      maybeCasper <- if (isValid) {
-                      for {
-                        _       <- Log[F].info("Valid ApprovedBlock received!")
-                        genesis = approvedBlock.candidate.flatMap(_.block).get
-                        _       <- insertIntoBlockAndDagStore[F](genesis, approvedBlock)
-                        _       <- LastApprovedBlock[F].set(approvedBlock)
-                        casper <- MultiParentCasper
-                                   .hashSetCasper[F](
-                                     runtimeManager,
-                                     validatorId,
-                                     genesis,
-                                     shardId
-                                   )
-                        _ <- Engine
-                              .transitionToRunning[F](casper, approvedBlock)
-                        _ <- CommUtil.sendForkChoiceTipRequest[F]
-                      } yield Option(casper)
-                    } else
-                      Log[F]
-                        .info("Invalid ApprovedBlock received; refusing to add.")
-                        .map(_ => none[MultiParentCasper[F]])
-      _ <- maybeCasper.fold(Log[F].warn("MultiParentCasper instance not created."))(
-            _ => Log[F].info("MultiParentCasper instance created.")
-          )
+      validators: Set[ByteString],
+      init: F[Unit]
+  ): F[Unit] = EngineCell[F].set(new Initializing(rm, shardId, validatorId, validators, init))
 
-    } yield ()
 }

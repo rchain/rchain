@@ -42,16 +42,12 @@ class GenesisValidator[F[_]: Sync: Metrics: Concurrent: ConnectionsCell: Transpo
   def applicative: Applicative[F] = Applicative[F]
 
   override def handle(peer: PeerNode, msg: CasperMessage): F[Unit] = msg match {
-    case ab: ApprovedBlock =>
-      onApprovedBlockTransition(
-        ab,
-        Set(ByteString.copyFrom(validatorId.publicKey.bytes)),
-        rm,
-        Some(validatorId),
-        shardId
-      )
-    case br: ApprovedBlockRequest     => sendNoApprovedBlockAvailable(peer, br.identifier)
-    case ub: UnapprovedBlock          => blockApprover.unapprovedBlockPacketHandler(peer, ub, rm)
+    case br: ApprovedBlockRequest => sendNoApprovedBlockAvailable(peer, br.identifier)
+    case ub: UnapprovedBlock =>
+      blockApprover.unapprovedBlockPacketHandler(peer, ub, rm) >> {
+        val validators = Set(ByteString.copyFrom(validatorId.publicKey.bytes))
+        Engine.tranistionToInitializing(rm, shardId, Some(validatorId), validators, init = noop)
+      }
     case na: NoApprovedBlockAvailable => logNoApprovedBlockAvailable[F](na.nodeIdentifer)
     case _                            => noop
   }
