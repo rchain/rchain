@@ -62,19 +62,17 @@ object Validate {
             if verifySig(candidateBytesDigest, signature.sig.toByteArray, publicKey.toByteArray)
           } yield publicKey).toSet
 
-        if (signatories.size >= requiredSignatures && requiredValidators.forall(
-              signatories.contains
-            ))
+        if (signatories.size >= requiredSignatures && requiredValidators.subsetOf(signatories))
           true.pure[F]
         else
           Log[F]
             .warn("Received invalid ApprovedBlock message not containing enough valid signatures.")
-            .map(_ => false)
+            .as(false)
 
       case None =>
         Log[F]
           .warn("Received invalid ApprovedBlock message not containing any candidate.")
-          .map(_ => false)
+          .as(false)
     }
   }
 
