@@ -418,7 +418,7 @@ class ReplayRSpace[F[_]: Sync, C, P, A, R, K](
                    )
     } yield checkpoint
 
-  override def clear(): F[Unit] = syncF.delay { replayData.clear() }
+  override def clear(): F[Unit] = syncF.delay { replayData.clear() } >> super.clear()
 
   protected[rspace] def isDirty(root: Blake2b256Hash): F[Boolean] = true.pure[F]
 }

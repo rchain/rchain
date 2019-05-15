@@ -187,7 +187,20 @@ abstract class RSpaceOps[F[_]: Concurrent, C, P, A, R, K](
       _           <- restoreInstalls()
     } yield ()
 
-  override def clear(): F[Unit] = Sync[F].unit
+  override def clear(): F[Unit] =
+    for {
+      cache <- createCache
+      nextHotStore <- Sync[F].delay {
+                       HotStore.inMem(
+                         Sync[F],
+                         cache,
+                         historyRepository,
+                         serializeP.toCodec,
+                         serializeK.toCodec
+                       )
+                     }
+      _ <- Sync[F].delay(storeAtom.set(nextHotStore))
+    } yield ()
 
   protected def createCache: F[Cell[F, Cache[C, P, A, K]]] =
     Cell.refCell[F, Cache[C, P, A, K]](Cache())
