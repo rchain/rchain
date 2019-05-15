@@ -1,29 +1,30 @@
 package coop.rchain.comm.transport
 
-import StreamHandler.CircuitBreaker
-import java.io.{File, FileNotFoundException}
 import java.nio.file._
 import java.util.UUID
-import org.scalatest._
-import coop.rchain.comm._
-import coop.rchain.shared.Log
-import coop.rchain.comm.protocol.routing._
+
 import scala.util.Random
-import monix.eval.Task
-import monix.reactive.Observable
+
+import StreamHandler.CircuitBreaker
 import coop.rchain.catscontrib.TaskContrib._
-import cats._, cats.data._, cats.implicits._
 import coop.rchain.catscontrib.ski._
-import monix.execution.Scheduler.Implicits.global
+import coop.rchain.comm._
+import coop.rchain.comm.protocol.routing._
+import coop.rchain.shared.Log
+
 import com.google.protobuf.ByteString
+import monix.eval.Task
+import monix.execution.Scheduler.Implicits.global
+import monix.reactive.Observable
+import org.scalatest._
 
-class StreamHandlerSpec extends FunSpec with Matchers with BeforeAndAfterEach {
+class StreamHandlerSpec extends FunSpec with Matchers with Inside with BeforeAndAfterEach {
 
-  implicit val log = new Log.NOPLog[Task]()
+  implicit val log: Log.NOPLog[Task] = new Log.NOPLog[Task]()
 
   val networkId = "test"
 
-  var tempFolder: Path = null
+  var tempFolder: Path = _
 
   override def beforeEach(): Unit =
     tempFolder = Files.createTempDirectory("rchain")
@@ -44,10 +45,7 @@ class StreamHandlerSpec extends FunSpec with Matchers with BeforeAndAfterEach {
 
     it("should contain sender and message type information") {
       // given
-      val stream = createStream(
-        sender = "sender",
-        typeId = BlockMessage.id
-      )
+      val stream = createStream(typeId = BlockMessage.id)
       // when
       val msg: StreamMessage = handleStream(stream)
       // then
@@ -75,7 +73,7 @@ class StreamHandlerSpec extends FunSpec with Matchers with BeforeAndAfterEach {
       // given
       val stream = createStream()
       val nonExistingWithPersmission =
-        FileSystems.getDefault().getPath("~/.rchaintest/" + UUID.randomUUID.toString + "/")
+        FileSystems.getDefault.getPath("~/.rchaintest/" + UUID.randomUUID.toString + "/")
       // when
       val msg: StreamMessage = handleStream(stream, folder = nonExistingWithPersmission)
       // then
@@ -88,9 +86,11 @@ class StreamHandlerSpec extends FunSpec with Matchers with BeforeAndAfterEach {
       val breakOnSndChunk: CircuitBreaker = read => read > messageSize
       val stream                          = createStream(messageSize = messageSize)
       // when
-      val err: Throwable = handleStreamErr(stream, circuitBreaker = breakOnSndChunk)
+      val err: StreamHandler.StreamError = handleStreamErr(stream, circuitBreaker = breakOnSndChunk)
       // then
-      err.getMessage shouldBe ("Circuit was broken")
+      inside(err) {
+        case StreamHandler.StreamError.CircuitBroken => ()
+      }
       tempFolder.toFile.list() should be(empty)
     }
 
@@ -106,9 +106,12 @@ class StreamHandlerSpec extends FunSpec with Matchers with BeforeAndAfterEach {
           case Nil => throw new RuntimeException("")
         })
       // when
-      val err: Throwable = handleStreamErr(streamWithIncompleteHeader)
+      // when
+      val err: StreamHandler.StreamError = handleStreamErr(streamWithIncompleteHeader)
       // then
-      err.getMessage should startWith("received not full stream message, will not process")
+      inside(err) {
+        case StreamHandler.StreamError.NotFullMessage(_) =>
+      }
       tempFolder.toFile.list() should be(empty)
     }
 
@@ -120,9 +123,11 @@ class StreamHandlerSpec extends FunSpec with Matchers with BeforeAndAfterEach {
           case _         => throw new RuntimeException("")
         })
       // when
-      val err: Throwable = handleStreamErr(streamWithoutHeader)
+      val err: StreamHandler.StreamError = handleStreamErr(streamWithoutHeader)
       // then
-      err.getMessage should startWith("received not full stream message, will not process")
+      inside(err) {
+        case StreamHandler.StreamError.NotFullMessage(_) =>
+      }
       tempFolder.toFile.list() should be(empty)
     }
 
@@ -134,12 +139,13 @@ class StreamHandlerSpec extends FunSpec with Matchers with BeforeAndAfterEach {
           case _                    => throw new RuntimeException("")
         })
       // when
-      val err: Throwable = handleStreamErr(incompleteStream)
+      val err: StreamHandler.StreamError = handleStreamErr(incompleteStream)
       // then
-      err.getMessage should startWith("received not full stream message, will not process")
+      inside(err) {
+        case StreamHandler.StreamError.NotFullMessage(_) =>
+      }
       tempFolder.toFile.list() should be(empty)
     }
-
   }
 
   private def handleStream(stream: Observable[Chunk], folder: Path = tempFolder): StreamMessage =
@@ -153,7 +159,7 @@ class StreamHandlerSpec extends FunSpec with Matchers with BeforeAndAfterEach {
       stream: Observable[Chunk],
       folder: Path = tempFolder,
       circuitBreaker: StreamHandler.CircuitBreaker = neverBreak
-  ): Throwable =
+  ): StreamHandler.StreamError =
     StreamHandler
       .handleStream(networkId, folder, stream, circuitBreaker = circuitBreaker)
       .unsafeRunSync
@@ -186,5 +192,4 @@ class StreamHandlerSpec extends FunSpec with Matchers with BeforeAndAfterEach {
     PeerNode(NodeIdentifier(name.getBytes), Endpoint("", 80, 80))
 
   private val neverBreak: CircuitBreaker = kp(false)
-
 }

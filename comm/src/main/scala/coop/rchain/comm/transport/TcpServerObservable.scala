@@ -58,14 +58,16 @@ class TcpServerObservable(
           }
 
       def stream(observable: Observable[Chunk]): Task[ChunkResponse] = {
+        import StreamHandler._
+        import StreamError.StreamErrorToMessage
 
         val circuitBreaker: StreamHandler.CircuitBreaker = _ > maxStreamMessageSize
 
-        (StreamHandler.handleStream(networkId, tempFolder, observable, circuitBreaker) >>= {
-          case Left(ex)   => logger.error(s"Could not receive stream! Details: ${ex.getMessage}", ex)
-          case Right(msg) => Task.delay(bufferBlobMessage.pushNext(msg)).as(())
+        (handleStream(networkId, tempFolder, observable, circuitBreaker) >>= {
+          case Left(error @ StreamError.Unexpected(t)) => logger.error(error.message, t)
+          case Left(error)                             => logger.warn(error.message)
+          case Right(msg)                              => Task.delay(bufferBlobMessage.pushNext(msg)).as(())
         }).as(ChunkResponse())
-
       }
 
       // TODO InternalServerError should take msg in constructor
