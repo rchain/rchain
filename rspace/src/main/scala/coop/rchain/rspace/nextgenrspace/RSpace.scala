@@ -433,16 +433,6 @@ class RSpace[F[_], C, P, A, R, K] private[rspace] (
       _           <- restoreInstalls()
     } yield Checkpoint(nextHistory.history.root, log)
 
-  override def reset(root: Blake2b256Hash): F[Unit] =
-    for {
-      nextHistory <- historyRepositoryAtom.get().reset(root)
-      _           = historyRepositoryAtom.set(nextHistory)
-      _           = eventLog.take()
-      _           = eventLog.put(Seq.empty)
-      _           <- createNewHotStore(nextHistory)(serializeP.toCodec, serializeK.toCodec)
-      _           <- restoreInstalls()
-    } yield ()
-
   protected[rspace] override def isDirty(root: Blake2b256Hash): F[Boolean] = ???
 }
 
