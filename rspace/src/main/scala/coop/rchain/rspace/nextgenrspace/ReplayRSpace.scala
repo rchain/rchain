@@ -406,7 +406,6 @@ class ReplayRSpace[F[_]: Sync, C, P, A, R, K](
                        for {
                          changes     <- storeAtom.get().changes()
                          nextHistory <- historyRepositoryAtom.get().checkpoint(changes.toList)
-                         _           <- createNewHotStore(nextHistory)(serializeP.toCodec, serializeK.toCodec)
                        } yield (Checkpoint(nextHistory.history.root, Seq.empty))
                      }, {
                        val msg =

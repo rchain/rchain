@@ -425,7 +425,6 @@ class RSpace[F[_], C, P, A, R, K] private[rspace] (
     for {
       changes     <- storeAtom.get().changes()
       nextHistory <- historyRepositoryAtom.get().checkpoint(changes.toList)
-      _           <- createNewHotStore(nextHistory)(serializeP.toCodec, serializeK.toCodec)
       log         = eventLog.take()
       _           = eventLog.put(Seq.empty)
     } yield Checkpoint(nextHistory.history.root, log)
