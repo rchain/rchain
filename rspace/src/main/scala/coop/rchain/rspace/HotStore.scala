@@ -6,6 +6,7 @@ import cats.effect._
 import cats.effect.implicits._
 import coop.rchain.catscontrib.mtl.implicits._
 import coop.rchain.shared.Cell
+import coop.rchain.shared.MapOps._
 import coop.rchain.rspace.internal._
 import coop.rchain.rspace.Serialize._
 import scodec.Codec
@@ -28,6 +29,7 @@ trait HotStore[F[_], C, P, A, K] {
   def removeJoin(channel: C, join: Seq[C]): F[Unit]
 
   def changes(): F[Seq[HotStoreAction]]
+  def toMap: F[Map[Seq[C], Row[P, A, K]]]
 }
 
 final case class Cache[C, P, A, K](
@@ -245,6 +247,13 @@ private class InMemHotStore[F[_]: Sync, C, P, A, K](
         )
       )
 
+  def toMap: F[Map[Seq[C], Row[P, A, K]]] =
+    for {
+      cache         <- S.read
+      data          = cache.data.readOnlySnapshot().map { case (k, v) => (Seq(k), v) }.toMap
+      continuations = (cache.continuations ++ cache.installedContinuations.mapValues(Seq(_))).toMap
+      merged        = merge(data, continuations, Seq.empty[Datum[A]], Seq.empty[WaitingContinuation[P, K]])
+    } yield merged.mapValues { case (d, k) => Row(d, k) }
 }
 
 object HotStore {

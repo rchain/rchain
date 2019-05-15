@@ -175,7 +175,7 @@ abstract class RSpaceOps[F[_]: Concurrent, C, P, A, R, K](
 
   protected[rspace] def isDirty(root: Blake2b256Hash): F[Boolean]
 
-  def toMap: F[Map[Seq[C], Row[P, A, K]]] = Map.empty.pure[F]
+  def toMap: F[Map[Seq[C], Row[P, A, K]]] = storeAtom.get().toMap
 
   override def reset(root: Blake2b256Hash): F[Unit] =
     for {
