@@ -52,11 +52,11 @@ sealed trait RhoTestAssertion {
 
 case class RhoAssertTrue(testName: String, override val isSuccess: Boolean, clue: String)
     extends RhoTestAssertion
-case class RhoAssertEquals(testName: String, expected: Any, actual: Any, clue: String)
+case class RhoAssertEquals(testName: String, expected: Par, actual: Par, clue: String)
     extends RhoTestAssertion {
   override val isSuccess: Boolean = actual == expected
 }
-case class RhoAssertNotEquals(testName: String, unexpected: Any, actual: Any, clue: String)
+case class RhoAssertNotEquals(testName: String, unexpected: Par, actual: Par, clue: String)
     extends RhoTestAssertion {
   override val isSuccess: Boolean = actual != unexpected
 }
