@@ -11,6 +11,8 @@ import coop.rchain.casper.util.BondingUtil
 import coop.rchain.catscontrib._
 import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.comm._
+import coop.rchain.crypto.codec.Base16
+import coop.rchain.crypto.signatures.Ed25519
 import coop.rchain.metrics
 import coop.rchain.metrics.Metrics
 import coop.rchain.node.configuration._
@@ -92,6 +94,7 @@ object Main {
       case MachineVerifiableDag => DeployRuntime.machineVerifiableDag[Task]
       case DataAtName(name)     => DeployRuntime.listenForDataAtName[Task](name)
       case ContAtName(names)    => DeployRuntime.listenForContinuationAtName[Task](names)
+      case Keygen               => generateKey(conf)
       case Run                  => nodeProgram(conf)
       case BondingDeployGen(bondKey, ethAddress, amount, secKey, pubKey) =>
         implicit val noopMetrics: Metrics[Task] = new metrics.Metrics.MetricsNOP[Task]
@@ -111,6 +114,14 @@ object Main {
           deployService.close()
         }
     )
+  }
+
+  private def generateKey(conf: Configuration): Task[Unit] = {
+    val (sec, pub) = Ed25519.newKeyPair
+    val sk         = Base16.encode(sec.bytes)
+    val pk         = Base16.encode(pub.bytes)
+    ConsoleIO[Task].println(s"Generated public key: $pk") >>
+      ConsoleIO[Task].println(s"Generated private key: $sk")
   }
 
   private def nodeProgram(conf: Configuration)(implicit scheduler: Scheduler): Task[Unit] = {
