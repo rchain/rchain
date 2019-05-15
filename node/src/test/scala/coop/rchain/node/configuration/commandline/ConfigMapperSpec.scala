@@ -37,6 +37,7 @@ class ConfigMapperSpec extends FunSuite with Matchers {
         "--max-num-of-connections 500",
         "--packet-chunk-size 64",
         "--max-message-size 256",
+        "--max-stream-message-size 200",
         "--message-consumers 8"
       ).mkString(" ")
 
@@ -67,6 +68,7 @@ class ConfigMapperSpec extends FunSuite with Matchers {
         dagStorageSize = 3000,
         maxNumOfConnections = 500,
         maxMessageSize = 256,
+        maxStreamMessageSize = 200,
         packetChunkSize = 64,
         messageConsumers = 8
       )

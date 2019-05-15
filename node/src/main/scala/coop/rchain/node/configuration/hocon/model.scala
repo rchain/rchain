@@ -34,25 +34,26 @@ object Server {
   val Key = s"${Configuration.Key}.server"
 
   object keys {
-    val NetworkId        = "network-id"
-    val Bootstrap        = "bootstrap"
-    val StoreType        = "store-type"
-    val Host             = "host"
-    val HostDynamic      = "host-dynamic"
-    val Upnp             = "upnp"
-    val Port             = "port"
-    val PortHttp         = "port-http"
-    val PortKademlia     = "port-kademlia"
-    val SendTimeout      = "send-timeout"
-    val Standalone       = "standalone"
-    val DataDir          = "data-dir"
-    val StoreSize        = "store-size"
-    val DagStorageSize   = "dag-storage-size"
-    val MapSize          = "map-size"
-    val MaxConnections   = "max-connections"
-    val MaxMessageSize   = "max-message-size"
-    val PacketChunkSize  = "packet-chunk-size"
-    val MessageConsumers = "message-consumers"
+    val NetworkId            = "network-id"
+    val Bootstrap            = "bootstrap"
+    val StoreType            = "store-type"
+    val Host                 = "host"
+    val HostDynamic          = "host-dynamic"
+    val Upnp                 = "upnp"
+    val Port                 = "port"
+    val PortHttp             = "port-http"
+    val PortKademlia         = "port-kademlia"
+    val SendTimeout          = "send-timeout"
+    val Standalone           = "standalone"
+    val DataDir              = "data-dir"
+    val StoreSize            = "store-size"
+    val DagStorageSize       = "dag-storage-size"
+    val MapSize              = "map-size"
+    val MaxConnections       = "max-connections"
+    val MaxMessageSize       = "max-message-size"
+    val MaxStreamMessageSize = "max-stream-message-size"
+    val PacketChunkSize      = "packet-chunk-size"
+    val MessageConsumers     = "message-consumers"
   }
 
   @SuppressWarnings(Array("org.wartremover.warts.Throw"))
@@ -95,6 +96,7 @@ object Server {
       mapSize = server.getBytes(keys.MapSize),
       maxNumOfConnections = server.getInt(keys.MaxConnections),
       maxMessageSize = server.getBytes(keys.MaxMessageSize).toInt,
+      maxStreamMessageSize = server.getBytes(keys.MaxStreamMessageSize),
       packetChunkSize = server.getBytes(keys.PacketChunkSize).toInt,
       messageConsumers = server.getIntOpt(keys.MessageConsumers).getOrElse(messageConsumers)
     )

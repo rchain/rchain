@@ -27,6 +27,7 @@ final case class Server(
     dagStorageSize: Long,
     maxNumOfConnections: Int,
     maxMessageSize: Int,
+    maxStreamMessageSize: Long,
     packetChunkSize: Int,
     messageConsumers: Int
 )
