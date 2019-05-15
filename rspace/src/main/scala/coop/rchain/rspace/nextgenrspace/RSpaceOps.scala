@@ -177,6 +177,16 @@ abstract class RSpaceOps[F[_]: Concurrent, C, P, A, R, K](
 
   def toMap: F[Map[Seq[C], Row[P, A, K]]] = Map.empty.pure[F]
 
+  override def reset(root: Blake2b256Hash): F[Unit] =
+    for {
+      nextHistory <- historyRepositoryAtom.get().reset(root)
+      _           = historyRepositoryAtom.set(nextHistory)
+      _           = eventLog.take()
+      _           = eventLog.put(Seq.empty)
+      _           <- createNewHotStore(nextHistory)(serializeP.toCodec, serializeK.toCodec)
+      _           <- restoreInstalls()
+    } yield ()
+
   override def clear(): F[Unit] = ???
 
   protected def createCache: F[Cell[F, Cache[C, P, A, K]]] =

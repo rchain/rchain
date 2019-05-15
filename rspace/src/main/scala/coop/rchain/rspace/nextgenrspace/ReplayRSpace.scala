@@ -416,14 +416,6 @@ class ReplayRSpace[F[_]: Sync, C, P, A, R, K](
                    )
     } yield checkpoint
 
-  override def reset(root: Blake2b256Hash): F[Unit] =
-    for {
-      nextHistory <- historyRepositoryAtom.get().reset(root)
-      _           = historyRepositoryAtom.set(nextHistory)
-      _           <- createNewHotStore(nextHistory)(serializeP.toCodec, serializeK.toCodec)
-      _           <- restoreInstalls()
-    } yield ()
-
   override def clear(): F[Unit] = syncF.delay { replayData.clear() }
 
   protected[rspace] def isDirty(root: Blake2b256Hash): F[Boolean] = true.pure[F]
