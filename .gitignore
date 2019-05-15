@@ -15,6 +15,10 @@ bin
 #################
 target
 
+# Bloop output #
+#################
+.bloop
+
 # Intellij IDEA Project Files
 #############################
 *.iml
