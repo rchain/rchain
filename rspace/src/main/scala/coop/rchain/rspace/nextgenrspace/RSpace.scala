@@ -425,8 +425,11 @@ class RSpace[F[_], C, P, A, R, K] private[rspace] (
     for {
       changes     <- storeAtom.get().changes()
       nextHistory <- historyRepositoryAtom.get().checkpoint(changes.toList)
+      _           = historyRepositoryAtom.set(nextHistory)
       log         = eventLog.take()
       _           = eventLog.put(Seq.empty)
+      _           <- createNewHotStore(nextHistory)(serializeP.toCodec, serializeK.toCodec)
+      _           <- restoreInstalls()
     } yield Checkpoint(nextHistory.history.root, log)
 
   protected[rspace] override def isDirty(root: Blake2b256Hash): F[Boolean] = true.pure[F]

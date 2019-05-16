@@ -793,20 +793,16 @@ trait StorageActionsTests[F[_]]
       } yield (getK(r2).results should contain(List("datum", "datum")))
   }
 
-  "createCheckpoint" should "not clear the store contents" in fixture { (_, storeAtom, space) =>
+  "createCheckpoint" should "clear the store contents" in fixture { (_, storeAtom, space) =>
     val key1     = List("ch1")
     val patterns = List(Wildcard)
 
     for {
-      _      <- space.consume(key1, patterns, new StringsCaptor, persist = false)
-      _      <- space.createCheckpoint()
-      store0 = storeAtom.get()
-      checkpoint0Changes <- store0
-                             .changes()
-                             .map(
-                               collectActions[InsertContinuations[String, Pattern, StringsCaptor]]
-                             )
-      _ = checkpoint0Changes.length shouldBe 1
+      _                  <- space.consume(key1, patterns, new StringsCaptor, persist = false)
+      _                  <- space.createCheckpoint()
+      store0             = storeAtom.get()
+      checkpoint0Changes <- store0.changes()
+      _                  = checkpoint0Changes.length shouldBe 0
     } yield ()
   }
 
