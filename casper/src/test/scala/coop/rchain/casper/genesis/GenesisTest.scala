@@ -16,15 +16,16 @@ import coop.rchain.rholang.interpreter.Runtime
 import coop.rchain.rholang.interpreter.storage.StoragePrinter
 import coop.rchain.shared.PathOps.RichPath
 import coop.rchain.shared.StoreType
-import org.scalatest.{BeforeAndAfterEach, FlatSpec, Matchers}
+import org.scalatest.{BeforeAndAfterEach, EitherValues, FlatSpec, Matchers}
 import java.nio.file.Path
+
 import coop.rchain.blockstorage.util.io.IOError
 import coop.rchain.metrics
 import coop.rchain.metrics.{Metrics, NoopSpan}
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
 
-class GenesisTest extends FlatSpec with Matchers with BlockDagStorageFixture {
+class GenesisTest extends FlatSpec with Matchers with EitherValues with BlockDagStorageFixture {
   import GenesisTest._
 
   val validators = Seq(
@@ -71,12 +72,16 @@ class GenesisTest extends FlatSpec with Matchers with BlockDagStorageFixture {
       ) =>
         for {
           _ <- fromInputFiles()(runtimeManager, genesisPath, log, time)
-          _ = log.warns.find(_.contains("bonds")) should be(None)
+          _ = log.warns.count(
+            _.contains(
+              "Bonds file was not specified and default bonds file does not exist. Falling back on generating random validators."
+            )
+          ) should be(1)
         } yield log.infos.count(_.contains("Created validator")) should be(numValidators)
     }
   )
 
-  it should "generate random validators, with a warning, when bonds file does not exist" in taskTest(
+  it should "fail with error when bonds file does not exist" in taskTest(
     withGenResources {
       (
           runtimeManager: RuntimeManager[Task],
@@ -85,22 +90,19 @@ class GenesisTest extends FlatSpec with Matchers with BlockDagStorageFixture {
           time: LogicalTime[Task]
       ) =>
         for {
-          _ <- fromInputFiles(maybeBondsPath = Some("not/a/real/file"))(
-                runtimeManager,
-                genesisPath,
-                log,
-                time
-              )
-          _ = log.warns.count(
-            _.contains("does not exist. Falling back on generating random validators.")
-          ) should be(
-            1
-          )
-        } yield log.infos.count(_.contains("Created validator")) should be(numValidators)
+          genesisAttempt <- fromInputFiles(maybeBondsPath = Some("not/a/real/file"))(
+                             runtimeManager,
+                             genesisPath,
+                             log,
+                             time
+                           ).attempt
+        } yield genesisAttempt.left.value.getMessage should be(
+          "Specified bonds file not/a/real/file does not exist"
+        )
     }
   )
 
-  it should "generate random validators, with a warning, when bonds file cannot be parsed" in taskTest(
+  it should "fail with error when bonds file cannot be parsed" in taskTest(
     withGenResources {
       (
           runtimeManager: RuntimeManager[Task],
@@ -115,18 +117,15 @@ class GenesisTest extends FlatSpec with Matchers with BlockDagStorageFixture {
         pw.close()
 
         for {
-          _ <- fromInputFiles(maybeBondsPath = Some(badBondsFile))(
-                runtimeManager,
-                genesisPath,
-                log,
-                time
-              )
-          _ = log.warns.count(
-            _.contains("cannot be parsed. Falling back on generating random validators.")
-          ) should be(
-            1
-          )
-        } yield log.infos.count(_.contains("Created validator")) should be(numValidators)
+          genesisAttempt <- fromInputFiles(maybeBondsPath = Some(badBondsFile))(
+                             runtimeManager,
+                             genesisPath,
+                             log,
+                             time
+                           ).attempt
+        } yield genesisAttempt.left.value.getMessage should include(
+          "misformatted.txt cannot be parsed"
+        )
     }
   )
 
