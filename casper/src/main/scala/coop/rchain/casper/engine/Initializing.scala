@@ -79,12 +79,7 @@ class Initializing[F[_]: Sync: Metrics: Concurrent: ConnectionsCell: BlockStore:
                         _       <- insertIntoBlockAndDagStore[F](genesis, approvedBlock)
                         _       <- LastApprovedBlock[F].set(approvedBlock)
                         casper <- MultiParentCasper
-                                   .hashSetCasper[F](
-                                     runtimeManager,
-                                     validatorId,
-                                     genesis,
-                                     shardId
-                                   )
+                                   .hashSetCasper[F](runtimeManager, validatorId, genesis, shardId)
                         _ <- Engine
                               .transitionToRunning[F](casper, approvedBlock)
                         _ <- CommUtil.sendForkChoiceTipRequest[F]

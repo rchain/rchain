@@ -71,12 +71,8 @@ object CasperLaunch {
     for {
       validatorId <- ValidatorIdentity.fromConfig[F](init.conf)
       genesis     = approvedBlock.candidate.flatMap(_.block).get
-      casper <- MultiParentCasper.hashSetCasper[F](
-                 init.runtimeManager,
-                 validatorId,
-                 genesis,
-                 init.conf.shardId
-               )
+      casper <- MultiParentCasper
+                 .hashSetCasper[F](init.runtimeManager, validatorId, genesis, init.conf.shardId)
       _ <- Engine.transitionToRunning[F](casper, approvedBlock)
     } yield ()
 
@@ -84,11 +80,10 @@ object CasperLaunch {
       init: CasperInit[F]
   ): F[Unit] =
     for {
-      walletsFile <- Genesis
-                      .toFile[F](
-                        init.conf.walletsFile,
-                        init.conf.genesisPath.resolve("wallets.txt")
-                      )
+      walletsFile <- Genesis.toFile[F](
+                      init.conf.walletsFile,
+                      init.conf.genesisPath.resolve("wallets.txt")
+                    )
       wallets   <- Genesis.getWallets[F](walletsFile, init.conf.walletsFile)
       timestamp <- init.conf.deployTimestamp.fold(Time[F].currentMillis)(_.pure[F])
       bondsFile <- Genesis
@@ -107,12 +102,7 @@ object CasperLaunch {
         init.conf.requiredSigs
       )
       _ <- EngineCell[F].set(
-            new GenesisValidator(
-              init.runtimeManager,
-              validatorId.get,
-              init.conf.shardId,
-              bap
-            )
+            new GenesisValidator(init.runtimeManager, validatorId.get, init.conf.shardId, bap)
           )
     } yield ()
 

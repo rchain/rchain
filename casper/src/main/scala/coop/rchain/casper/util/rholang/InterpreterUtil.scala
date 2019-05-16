@@ -38,16 +38,12 @@ object InterpreterUtil {
     val internalDeploys = deploys.flatMap(ProcessedDeployUtil.toInternal)
     val timestamp       = Some(b.header.get.timestamp) // TODO: Ensure header exists through type
     for {
-      _       <- span.mark("before-unsafe-get-parents")
-      parents <- ProtoUtil.unsafeGetParents[F](b)
-      _       <- span.mark("before-compute-parents-post-state")
-      possiblePreStateHash <- computeParentsPostState[F](
-                               parents,
-                               dag,
-                               runtimeManager
-                             )
-      _ <- Log[F].info(s"Computed parents post state for ${PrettyPrinter.buildString(b)}.")
-      _ <- span.mark("before-process-pre-state-hash")
+      _                    <- span.mark("before-unsafe-get-parents")
+      parents              <- ProtoUtil.unsafeGetParents[F](b)
+      _                    <- span.mark("before-compute-parents-post-state")
+      possiblePreStateHash <- computeParentsPostState[F](parents, dag, runtimeManager)
+      _                    <- Log[F].info(s"Computed parents post state for ${PrettyPrinter.buildString(b)}.")
+      _                    <- span.mark("before-process-pre-state-hash")
       result <- processPossiblePreStateHash[F](
                  runtimeManager,
                  preStateHash,
@@ -186,12 +182,7 @@ object InterpreterUtil {
         Right(parentStateHash).leftCast[Throwable].pure[F]
 
       case (_, initStateHash) +: _ =>
-        computeMultiParentsPostState[F](
-          parents,
-          dag,
-          runtimeManager,
-          initStateHash
-        )
+        computeMultiParentsPostState[F](parents, dag, runtimeManager, initStateHash)
     }
   }
   // In the case of multiple parents we need to apply all of the deploys that have been
@@ -275,11 +266,6 @@ object InterpreterUtil {
         "Received a different genesis block."
       )
 
-      result <- computeDeploysCheckpoint[F](
-                 parents,
-                 deploys,
-                 dag,
-                 runtimeManager
-               )
+      result <- computeDeploysCheckpoint[F](parents, deploys, dag, runtimeManager)
     } yield result
 }

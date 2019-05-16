@@ -60,22 +60,13 @@ object GenesisCeremonyMaster {
       lastApprovedBlockO <- LastApprovedBlock[F].get
       cont <- lastApprovedBlockO match {
                case None =>
-                 approveBlockInterval[F](
-                   interval,
-                   shardId,
-                   runtimeManager,
-                   validatorId
-                 )
+                 approveBlockInterval[F](interval, shardId, runtimeManager, validatorId)
                case Some(approvedBlock) =>
                  val genesis = approvedBlock.candidate.flatMap(_.block).get
                  for {
                    _ <- insertIntoBlockAndDagStore[F](genesis, approvedBlock)
-                   casper <- MultiParentCasper.hashSetCasper[F](
-                              runtimeManager,
-                              validatorId,
-                              genesis,
-                              shardId
-                            )
+                   casper <- MultiParentCasper
+                              .hashSetCasper[F](runtimeManager, validatorId, genesis, shardId)
                    _ <- Engine
                          .transitionToRunning[F](casper, approvedBlock)
                    _ <- CommUtil.sendForkChoiceTipRequest[F]
