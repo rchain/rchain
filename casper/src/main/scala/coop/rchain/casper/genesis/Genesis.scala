@@ -146,38 +146,12 @@ object Genesis {
     val faucetCode = if (faucet) Faucet.basicWalletFaucet _ else Faucet.noopFaucet
 
     withContracts(
+      defaultBlessedTerms(timestamp, proofOfStake, wallets, faucetCode, genesisPk, vaults, supply = Long.MaxValue),
       initial,
-      proofOfStake,
-      wallets,
-      faucetCode,
-      runtimeManager.emptyStateHash,
-      runtimeManager,
-      timestamp,
-      genesisPk,
-      vaults,
-      Long.MaxValue
-    )
-  }
-
-  //TODO simplify and/or remove the with* methods
-  private def withContracts[F[_]: Concurrent](
-      initial: BlockMessage,
-      posParams: ProofOfStake,
-      wallets: Seq[PreWallet],
-      faucetCode: String => String,
-      startHash: StateHash,
-      runtimeManager: RuntimeManager[F],
-      timestamp: Long,
-      genesisPk: PublicKey,
-      vaults: Seq[Vault],
-      supply: Long
-  ): F[BlockMessage] =
-    withContracts(
-      defaultBlessedTerms(timestamp, posParams, wallets, faucetCode, genesisPk, vaults, supply),
-      initial,
-      startHash,
+      startHash = runtimeManager.emptyStateHash,
       runtimeManager
     )
+  }
 
   private def withContracts[F[_]: Concurrent](
       blessedTerms: Seq[DeployData],
