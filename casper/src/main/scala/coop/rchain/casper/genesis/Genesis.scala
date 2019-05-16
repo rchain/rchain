@@ -12,7 +12,11 @@ import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.ProtoUtil.{blockHeader, unsignedBlockProto}
 import coop.rchain.casper.util.Sorting.byteArrayOrdering
 import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
-import coop.rchain.casper.util.rholang.{ProcessedDeployUtil, RuntimeManager}
+import coop.rchain.casper.util.rholang.{
+  InternalProcessedDeploy,
+  ProcessedDeployUtil,
+  RuntimeManager
+}
 import coop.rchain.crypto.PublicKey
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.signatures.Ed25519
@@ -161,19 +165,28 @@ object Genesis {
       .computeState(startHash)(blessedTerms)
       .map {
         case (stateHash, processedDeploys) =>
-          val stateWithContracts = for {
-            bd <- initial.body
-            ps <- bd.state
-          } yield ps.withPreStateHash(runtimeManager.emptyStateHash).withPostStateHash(stateHash)
-          val version   = initial.header.get.version
-          val timestamp = initial.header.get.timestamp
-          val blockDeploys =
-            processedDeploys.filterNot(_.status.isFailed).map(ProcessedDeployUtil.fromInternal)
-          val sortedDeploys = blockDeploys.map(d => d.copy(log = d.log.sortBy(_.toByteArray)))
-          val body          = Body(state = stateWithContracts, deploys = sortedDeploys)
-          val header        = blockHeader(body, List.empty[ByteString], version, timestamp)
-          unsignedBlockProto(body, header, List.empty[Justification], initial.shardId)
+          createInternalProcessedDeploy(initial, startHash, stateHash, processedDeploys)
       }
+  }
+
+  private def createInternalProcessedDeploy(
+      initial: BlockMessage,
+      startHash: StateHash,
+      stateHash: StateHash,
+      processedDeploys: Seq[InternalProcessedDeploy]
+  ): BlockMessage = {
+    val stateWithContracts = for {
+      bd <- initial.body
+      ps <- bd.state
+    } yield ps.withPreStateHash(startHash).withPostStateHash(stateHash)
+    val version   = initial.header.get.version
+    val timestamp = initial.header.get.timestamp
+    val blockDeploys =
+      processedDeploys.filterNot(_.status.isFailed).map(ProcessedDeployUtil.fromInternal)
+    val sortedDeploys = blockDeploys.map(d => d.copy(log = d.log.sortBy(_.toByteArray)))
+    val body          = Body(state = stateWithContracts, deploys = sortedDeploys)
+    val header        = blockHeader(body, List.empty[StateHash], version, timestamp)
+    unsignedBlockProto(body, header, List.empty[Justification], initial.shardId)
   }
 
   private def withoutContracts(
