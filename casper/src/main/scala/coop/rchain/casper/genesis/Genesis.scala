@@ -87,9 +87,8 @@ object Genesis {
       deployTimestamp: Option[Long]
   ): F[BlockMessage] =
     for {
-      timestamp   <- deployTimestamp.fold(Time[F].currentMillis)(_.pure[F])
-      walletsFile <- toFile[F](maybeWalletsPath, genesisPath.resolve("wallets.txt"))
-      wallets     <- getWallets[F](walletsFile, maybeWalletsPath)
+      timestamp <- deployTimestamp.fold(Time[F].currentMillis)(_.pure[F])
+      wallets   <- getWallets[F](maybeWalletsPath, genesisPath.resolve("wallets.txt"))
       bonds <- getBonds[F](
                 maybeBondsPath,
                 genesisPath.resolve("bonds.txt"),
@@ -246,14 +245,16 @@ object Genesis {
     }
 
   def getWallets[F[_]: Monad: Sync: Log](
-      walletsFile: Option[File],
-      maybeWalletsPath: Option[String]
+      maybeWalletsPath: Option[String],
+      defaultWalletPath: Path
   ): F[Seq[PreWallet]] = {
     def walletFromFile(file: File): F[Seq[PreWallet]] =
       for {
-        maybeLines <- Sync[F].delay { Try(Source.fromFile(file).getLines().toList) }
+        maybeLines <- Sync[F].bracket(Sync[F].delay(Source.fromFile(file)))(
+                       source => Sync[F].delay(source.getLines.toList).attempt
+                     )(source => Sync[F].delay(source.close))
         wallets <- maybeLines match {
-                    case Success(lines) =>
+                    case Right(lines) =>
                       lines
                         .traverse(PreWallet.fromLine(_) match {
                           case Right(wallet) => wallet.some.pure[F]
@@ -263,7 +264,7 @@ object Genesis {
                               .map(_ => none[PreWallet])
                         })
                         .map(_.flatten)
-                    case Failure(ex) =>
+                    case Left(ex) =>
                       Log[F]
                         .warn(
                           s"Failed to read ${file.getAbsolutePath()} for reason: ${ex.getMessage}"
@@ -272,18 +273,25 @@ object Genesis {
                   }
       } yield wallets
 
-    (walletsFile, maybeWalletsPath) match {
-      case (Some(file), _) => walletFromFile(file)
-      case (None, Some(path)) =>
-        Log[F]
-          .warn(s"Specified wallets file $path does not exist. No wallets will exist at genesis.")
-          .map(_ => Seq.empty[PreWallet])
-      case (None, None) =>
-        Log[F]
-          .warn(
-            s"No wallets file specified and no default file found. No wallets will exist at genesis."
-          )
-          .map(_ => Seq.empty[PreWallet])
+    maybeWalletsPath match {
+      case Some(walletsPath) =>
+        val walletsFile = new File(walletsPath)
+        if (walletsFile.exists()) {
+          walletFromFile(walletsFile)
+        } else {
+          Sync[F].raiseError(new Exception(s"Specified wallets file $walletsPath does not exist"))
+        }
+      case None =>
+        val defaultWalletsFile = defaultWalletPath.toFile
+        if (defaultWalletsFile.exists()) {
+          walletFromFile(defaultWalletsFile)
+        } else {
+          Log[F]
+            .warn(
+              "No wallets file specified and no default file found. No wallets will exist at genesis."
+            )
+            .map(_ => Seq.empty[PreWallet])
+        }
     }
   }
 

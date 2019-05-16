@@ -80,11 +80,10 @@ object CasperLaunch {
       init: CasperInit[F]
   ): F[Unit] =
     for {
-      walletsFile <- Genesis.toFile[F](
-                      init.conf.walletsFile,
-                      init.conf.genesisPath.resolve("wallets.txt")
-                    )
-      wallets   <- Genesis.getWallets[F](walletsFile, init.conf.walletsFile)
+      wallets <- Genesis.getWallets[F](
+                  init.conf.walletsFile,
+                  init.conf.genesisPath.resolve("wallets.txt")
+                )
       timestamp <- init.conf.deployTimestamp.fold(Time[F].currentMillis)(_.pure[F])
       bonds <- Genesis.getBonds[F](
                 init.conf.bondsFile,
