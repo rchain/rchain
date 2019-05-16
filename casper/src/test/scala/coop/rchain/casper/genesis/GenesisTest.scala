@@ -61,94 +61,102 @@ class GenesisTest extends FlatSpec with Matchers with BlockDagStorageFixture {
     pw.close()
   }
 
-  "Genesis.fromInputFiles" should "generate random validators when no bonds file is given" in withGenResources {
-    (
-        runtimeManager: RuntimeManager[Task],
-        genesisPath: Path,
-        log: LogStub[Task],
-        time: LogicalTime[Task]
-    ) =>
-      for {
-        _ <- fromInputFiles()(runtimeManager, genesisPath, log, time)
-        _ = log.warns.find(_.contains("bonds")) should be(None)
-      } yield log.infos.count(_.contains("Created validator")) should be(numValidators)
-  }
+  "Genesis.fromInputFiles" should "generate random validators when no bonds file is given" in taskTest(
+    withGenResources {
+      (
+          runtimeManager: RuntimeManager[Task],
+          genesisPath: Path,
+          log: LogStub[Task],
+          time: LogicalTime[Task]
+      ) =>
+        for {
+          _ <- fromInputFiles()(runtimeManager, genesisPath, log, time)
+          _ = log.warns.find(_.contains("bonds")) should be(None)
+        } yield log.infos.count(_.contains("Created validator")) should be(numValidators)
+    }
+  )
 
-  it should "generate random validators, with a warning, when bonds file does not exist" in withGenResources {
-    (
-        runtimeManager: RuntimeManager[Task],
-        genesisPath: Path,
-        log: LogStub[Task],
-        time: LogicalTime[Task]
-    ) =>
-      for {
-        _ <- fromInputFiles(maybeBondsPath = Some("not/a/real/file"))(
-              runtimeManager,
-              genesisPath,
-              log,
-              time
-            )
-        _ = log.warns.count(
-          _.contains("does not exist. Falling back on generating random validators.")
-        ) should be(
-          1
-        )
-      } yield log.infos.count(_.contains("Created validator")) should be(numValidators)
-  }
+  it should "generate random validators, with a warning, when bonds file does not exist" in taskTest(
+    withGenResources {
+      (
+          runtimeManager: RuntimeManager[Task],
+          genesisPath: Path,
+          log: LogStub[Task],
+          time: LogicalTime[Task]
+      ) =>
+        for {
+          _ <- fromInputFiles(maybeBondsPath = Some("not/a/real/file"))(
+                runtimeManager,
+                genesisPath,
+                log,
+                time
+              )
+          _ = log.warns.count(
+            _.contains("does not exist. Falling back on generating random validators.")
+          ) should be(
+            1
+          )
+        } yield log.infos.count(_.contains("Created validator")) should be(numValidators)
+    }
+  )
 
-  it should "generate random validators, with a warning, when bonds file cannot be parsed" in withGenResources {
-    (
-        runtimeManager: RuntimeManager[Task],
-        genesisPath: Path,
-        log: LogStub[Task],
-        time: LogicalTime[Task]
-    ) =>
-      val badBondsFile = genesisPath.resolve("misformatted.txt").toString
+  it should "generate random validators, with a warning, when bonds file cannot be parsed" in taskTest(
+    withGenResources {
+      (
+          runtimeManager: RuntimeManager[Task],
+          genesisPath: Path,
+          log: LogStub[Task],
+          time: LogicalTime[Task]
+      ) =>
+        val badBondsFile = genesisPath.resolve("misformatted.txt").toString
 
-      val pw = new PrintWriter(badBondsFile)
-      pw.println("xzy 1\nabc 123 7")
-      pw.close()
+        val pw = new PrintWriter(badBondsFile)
+        pw.println("xzy 1\nabc 123 7")
+        pw.close()
 
-      for {
-        _ <- fromInputFiles(maybeBondsPath = Some(badBondsFile))(
-              runtimeManager,
-              genesisPath,
-              log,
-              time
-            )
-        _ = log.warns.count(
-          _.contains("cannot be parsed. Falling back on generating random validators.")
-        ) should be(
-          1
-        )
-      } yield log.infos.count(_.contains("Created validator")) should be(numValidators)
-  }
+        for {
+          _ <- fromInputFiles(maybeBondsPath = Some(badBondsFile))(
+                runtimeManager,
+                genesisPath,
+                log,
+                time
+              )
+          _ = log.warns.count(
+            _.contains("cannot be parsed. Falling back on generating random validators.")
+          ) should be(
+            1
+          )
+        } yield log.infos.count(_.contains("Created validator")) should be(numValidators)
+    }
+  )
 
-  it should "create a genesis block with the right bonds when a proper bonds file is given" in withGenResources {
-    (
-        runtimeManager: RuntimeManager[Task],
-        genesisPath: Path,
-        log: LogStub[Task],
-        time: LogicalTime[Task]
-    ) =>
-      val bondsFile = genesisPath.resolve("givenBonds.txt").toString
-      printBonds(bondsFile)
+  it should "create a genesis block with the right bonds when a proper bonds file is given" in taskTest(
+    withGenResources {
+      (
+          runtimeManager: RuntimeManager[Task],
+          genesisPath: Path,
+          log: LogStub[Task],
+          time: LogicalTime[Task]
+      ) =>
+        val bondsFile = genesisPath.resolve("givenBonds.txt").toString
+        printBonds(bondsFile)
 
-      for {
-        genesis <- fromInputFiles(maybeBondsPath = Some(bondsFile))(
-                    runtimeManager,
-                    genesisPath,
-                    log,
-                    time
-                  )
-        bonds = ProtoUtil.bonds(genesis)
-        _     = log.infos.isEmpty should be(true)
-        result = validators
-          .map {
-            case (v, i) => Bond(ByteString.copyFrom(Base16.unsafeDecode(v)), i.toLong)
-          }
-      } yield result.forall(bonds.contains(_)) should be(true)
-  }
+        for {
+          genesis <- fromInputFiles(maybeBondsPath = Some(bondsFile))(
+                      runtimeManager,
+                      genesisPath,
+                      log,
+                      time
+                    )
+          bonds = ProtoUtil.bonds(genesis)
+          _     = log.infos.isEmpty should be(true)
+          result = validators
+            .map {
+              case (v, i) => Bond(ByteString.copyFrom(Base16.unsafeDecode(v)), i.toLong)
+            }
+        } yield result.forall(bonds.contains(_)) should be(true)
+    }
+  )
 
   it should "create a valid genesis block" in withStorage {
     implicit blockStore => implicit blockDagStorage =>
@@ -176,7 +184,7 @@ class GenesisTest extends FlatSpec with Matchers with BlockDagStorageFixture {
       }
   }
 
-  it should "detect an existing bonds file in the default location" in withGenResources {
+  it should "detect an existing bonds file in the default location" in taskTest(withGenResources {
     (
         runtimeManager: RuntimeManager[Task],
         genesisPath: Path,
@@ -195,19 +203,21 @@ class GenesisTest extends FlatSpec with Matchers with BlockDagStorageFixture {
             case (v, i) => Bond(ByteString.copyFrom(Base16.unsafeDecode(v)), i.toLong)
           }
       } yield result.forall(bonds.contains(_)) should be(true)
-  }
+  })
 
-  it should "parse the wallets file and include it in the genesis state" in withRawGenResources {
-    (runtime: Runtime[Task], genesisPath: Path, log: LogStub[Task], time: LogicalTime[Task]) =>
-      val walletsFile = genesisPath.resolve("wallets.txt").toString
-      printWallets(walletsFile)
+  it should "parse the wallets file and include it in the genesis state" in taskTest(
+    withRawGenResources {
+      (runtime: Runtime[Task], genesisPath: Path, log: LogStub[Task], time: LogicalTime[Task]) =>
+        val walletsFile = genesisPath.resolve("wallets.txt").toString
+        printWallets(walletsFile)
 
-      for {
-        runtimeManager  <- RuntimeManager.fromRuntime(runtime)
-        _               <- fromInputFiles()(runtimeManager, genesisPath, log, time)
-        storageContents <- StoragePrinter.prettyPrint(runtime.space)
-      } yield walletAddresses.forall(storageContents contains _._1) should be(true)
-  }
+        for {
+          runtimeManager  <- RuntimeManager.fromRuntime(runtime)
+          _               <- fromInputFiles()(runtimeManager, genesisPath, log, time)
+          storageContents <- StoragePrinter.prettyPrint(runtime.space)
+        } yield walletAddresses.forall(storageContents contains _._1) should be(true)
+    }
+  )
 
 }
 
@@ -278,4 +288,7 @@ object GenesisTest {
       (runtime: Runtime[Task], genesisPath: Path, log: LogStub[Task], time: LogicalTime[Task]) =>
         RuntimeManager.fromRuntime(runtime).flatMap(body(_, genesisPath, log, time))
     }
+
+  def taskTest[R](f: Task[R]): R =
+    f.runSyncUnsafe()
 }
