@@ -145,20 +145,18 @@ object Genesis {
 
     val faucetCode = if (faucet) Faucet.basicWalletFaucet _ else Faucet.noopFaucet
 
-    withContracts(
-      defaultBlessedTerms(timestamp, proofOfStake, wallets, faucetCode, genesisPk, vaults, supply = Long.MaxValue),
-      initial,
-      startHash = runtimeManager.emptyStateHash,
-      runtimeManager
+    val blessedTerms = defaultBlessedTerms(
+      timestamp,
+      proofOfStake,
+      wallets,
+      faucetCode,
+      genesisPk,
+      vaults,
+      supply = Long.MaxValue
     )
-  }
 
-  private def withContracts[F[_]: Concurrent](
-      blessedTerms: Seq[DeployData],
-      initial: BlockMessage,
-      startHash: StateHash,
-      runtimeManager: RuntimeManager[F]
-  ): F[BlockMessage] =
+    val startHash = runtimeManager.emptyStateHash
+
     runtimeManager
       .computeState(startHash)(blessedTerms)
       .map {
@@ -176,6 +174,7 @@ object Genesis {
           val header        = blockHeader(body, List.empty[ByteString], version, timestamp)
           unsignedBlockProto(body, header, List.empty[Justification], initial.shardId)
       }
+  }
 
   private def withoutContracts(
       bonds: Map[PublicKey, Long],
