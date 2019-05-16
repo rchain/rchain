@@ -13,6 +13,9 @@ content delivery.
 tutorials and documentation, project planning information, events calendar,
 and information for how to engage with this project.
 
+## Use the public testnet
+The RChain Cooperative maintains a public testnet running the latest version of RNode. Learn more at [RChain public testnet information](https://rchain.atlassian.net/wiki/spaces/CORE/pages/678756429/RChain+public+testnet+information).
+
 ## Installation
 ### Docker
 
