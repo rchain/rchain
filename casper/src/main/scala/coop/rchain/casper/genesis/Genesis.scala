@@ -87,19 +87,15 @@ object Genesis {
       deployTimestamp: Option[Long]
   ): F[BlockMessage] =
     for {
-      timestamp <- deployTimestamp.fold(Time[F].currentMillis)(_.pure[F])
-      bondsFile <- toFile[F](maybeBondsPath, genesisPath.resolve("bonds.txt"))
-      _ <- bondsFile.fold[F[Unit]](
-            maybeBondsPath.fold(().pure[F])(
-              path =>
-                Log[F].warn(
-                  s"Specified bonds file $path does not exist. Falling back on generating random validators."
-                )
-            )
-          )(_ => ().pure[F])
+      timestamp   <- deployTimestamp.fold(Time[F].currentMillis)(_.pure[F])
       walletsFile <- toFile[F](maybeWalletsPath, genesisPath.resolve("wallets.txt"))
       wallets     <- getWallets[F](walletsFile, maybeWalletsPath)
-      bonds       <- getBonds[F](bondsFile, numValidators, genesisPath)
+      bonds <- getBonds[F](
+                maybeBondsPath,
+                genesisPath.resolve("bonds.txt"),
+                numValidators,
+                genesisPath
+              )
       vaults <- bonds.toList.foldMapM {
                  case (pk, stake) =>
                    RevAddress.fromPublicKey(pk) match {
@@ -291,34 +287,52 @@ object Genesis {
     }
   }
 
+  private def readBonds[F[_]: Sync](
+      bondsFile: File
+  ): F[Map[PublicKey, Long]] =
+    Sync[F]
+      .bracket(Sync[F].delay(Source.fromFile(bondsFile)))(
+        source => Sync[F].delay(source.getLines)
+      )(source => Sync[F].delay(source.close))
+      .map { lines =>
+        Try {
+          lines
+            .map(line => {
+              val Array(pk, stake) = line.trim.split(" ")
+              PublicKey(Base16.unsafeDecode(pk)) -> stake.toLong
+            })
+            .toMap
+        }
+      }
+      .flatMap {
+        case Success(bonds) => bonds.pure[F]
+        case Failure(_) =>
+          Sync[F].raiseError(new Exception(s"Bonds file ${bondsFile.getPath} cannot be parsed"))
+      }
+
   def getBonds[F[_]: Monad: Sync: Log](
-      bondsFile: Option[File],
+      maybeBondsPath: Option[String],
+      defaultBondsPath: Path,
       numValidators: Int,
       genesisPath: Path
   ): F[Map[PublicKey, Long]] =
-    bondsFile match {
-      case Some(file) =>
-        Sync[F]
-          .delay {
-            Try {
-              Source
-                .fromFile(file)
-                .getLines()
-                .map(line => {
-                  val Array(pk, stake) = line.trim.split(" ")
-                  PublicKey(Base16.unsafeDecode(pk)) -> (stake.toLong)
-                })
-                .toMap
-            }
-          }
-          .flatMap {
-            case Success(bonds) => bonds.pure[F]
-            case Failure(_) =>
-              Log[F].warn(
-                s"Bonds file ${file.getPath} cannot be parsed. Falling back on generating random validators."
-              ) *> newValidators[F](numValidators, genesisPath)
-          }
-      case None => newValidators[F](numValidators, genesisPath)
+    maybeBondsPath match {
+      case Some(bondsPath) =>
+        val bondsFile = new File(bondsPath)
+        if (bondsFile.exists()) {
+          readBonds(bondsFile)
+        } else {
+          Sync[F].raiseError(new Exception(s"Specified bonds file $bondsPath does not exist"))
+        }
+      case None =>
+        val defaultBondsFile = defaultBondsPath.toFile
+        if (defaultBondsFile.exists()) {
+          readBonds(defaultBondsFile)
+        } else {
+          Log[F].warn(
+            s"Bonds file was not specified and default bonds file does not exist. Falling back on generating random validators."
+          ) >> newValidators[F](numValidators, genesisPath)
+        }
     }
 
   private def newValidators[F[_]: Monad: Sync: Log](

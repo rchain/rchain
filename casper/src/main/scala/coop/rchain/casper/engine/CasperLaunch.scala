@@ -86,10 +86,12 @@ object CasperLaunch {
                     )
       wallets   <- Genesis.getWallets[F](walletsFile, init.conf.walletsFile)
       timestamp <- init.conf.deployTimestamp.fold(Time[F].currentMillis)(_.pure[F])
-      bondsFile <- Genesis
-                    .toFile[F](init.conf.bondsFile, init.conf.genesisPath.resolve("bonds.txt"))
-      bonds <- Genesis
-                .getBonds[F](bondsFile, init.conf.numValidators, init.conf.genesisPath)
+      bonds <- Genesis.getBonds[F](
+                init.conf.bondsFile,
+                init.conf.genesisPath.resolve("bonds.txt"),
+                init.conf.numValidators,
+                init.conf.genesisPath
+              )
       validatorId <- ValidatorIdentity.fromConfig[F](init.conf)
       bap = new BlockApproverProtocol(
         validatorId.get,
