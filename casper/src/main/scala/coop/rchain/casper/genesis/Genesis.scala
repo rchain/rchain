@@ -140,13 +140,6 @@ object Genesis {
   ): F[BlockMessage] = {
     import genesis._
 
-    val initial = withoutContracts(
-      bonds = proofOfStake.validators.flatMap(Validator.unapply).toMap,
-      timestamp = 1L,
-      version = 1L,
-      shardId = shardId
-    )
-
     val faucetCode = if (faucet) Faucet.basicWalletFaucet _ else Faucet.noopFaucet
 
     val blessedTerms = defaultBlessedTerms(
@@ -165,52 +158,45 @@ object Genesis {
       .computeState(startHash)(blessedTerms)
       .map {
         case (stateHash, processedDeploys) =>
-          createInternalProcessedDeploy(initial, startHash, stateHash, processedDeploys)
+          createInternalProcessedDeploy(genesis, startHash, stateHash, processedDeploys)
       }
   }
 
   private def createInternalProcessedDeploy(
-      initial: BlockMessage,
+      genesis: Genesis,
       startHash: StateHash,
       stateHash: StateHash,
       processedDeploys: Seq[InternalProcessedDeploy]
   ): BlockMessage = {
-    val stateWithContracts = for {
-      bd <- initial.body
-      ps <- bd.state
-    } yield ps.withPreStateHash(startHash).withPostStateHash(stateHash)
-    val version   = initial.header.get.version
-    val timestamp = initial.header.get.timestamp
+    import genesis._
+
+    val state = RChainState(
+      blockNumber = 0,
+      bonds = bondsProto(proofOfStake),
+      preStateHash = startHash,
+      postStateHash = stateHash
+    )
+
     val blockDeploys =
       processedDeploys.filterNot(_.status.isFailed).map(ProcessedDeployUtil.fromInternal)
     val sortedDeploys = blockDeploys.map(d => d.copy(log = d.log.sortBy(_.toByteArray)))
-    val body          = Body(state = stateWithContracts, deploys = sortedDeploys)
-    val header        = blockHeader(body, List.empty[StateHash], version, timestamp)
-    unsignedBlockProto(body, header, List.empty[Justification], initial.shardId)
+
+    val body    = Body(state = Some(state), deploys = sortedDeploys)
+    val version = 1L //FIXME make this part of Genesis, and pass it from upstream
+    val header  = blockHeader(body, List.empty[StateHash], version, timestamp)
+
+    unsignedBlockProto(body, header, List.empty[Justification], shardId)
   }
 
-  private def withoutContracts(
-      bonds: Map[PublicKey, Long],
-      version: Long,
-      timestamp: Long,
-      shardId: String
-  ): BlockMessage = {
+  private def bondsProto(proofOfStake: ProofOfStake): Seq[Bond] = {
+    val bonds = proofOfStake.validators.flatMap(Validator.unapply).toMap
     import coop.rchain.crypto.util.Sorting.publicKeyOrdering
     //sort to have deterministic order (to get reproducible hash)
-    val bondsProto = bonds.toIndexedSeq.sorted.map {
+    bonds.toIndexedSeq.sorted.map {
       case (pk, stake) =>
         val validator = ByteString.copyFrom(pk.bytes)
         Bond(validator, stake)
     }
-
-    val state = RChainState()
-      .withBlockNumber(0)
-      .withBonds(bondsProto)
-    val body = Body()
-      .withState(state)
-    val header = blockHeader(body, List.empty[ByteString], version, timestamp)
-
-    unsignedBlockProto(body, header, List.empty[Justification], shardId)
   }
 
   //FIXME delay and simplify this
