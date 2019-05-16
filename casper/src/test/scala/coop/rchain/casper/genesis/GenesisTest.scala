@@ -18,6 +18,7 @@ import coop.rchain.shared.PathOps.RichPath
 import coop.rchain.shared.StoreType
 import org.scalatest.{BeforeAndAfterEach, FlatSpec, Matchers}
 import java.nio.file.Path
+import coop.rchain.blockstorage.util.io.IOError
 import coop.rchain.metrics
 import coop.rchain.metrics.{Metrics, NoopSpan}
 import monix.eval.Task
@@ -216,6 +217,8 @@ object GenesisTest {
   def genesisPath     = Files.createTempDirectory(s"casper-genesis-test")
   val numValidators   = 5
   val rchainShardId   = "rchain"
+
+  implicit val raiseIOError = IOError.raiseIOErrorThroughSync[Task]
 
   def fromInputFiles(
       maybeBondsPath: Option[String] = None,
