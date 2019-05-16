@@ -1,18 +1,21 @@
 package coop.rchain.casper.genesis.contracts
 
-import cats.Traverse
 import cats.effect.Concurrent
 import cats.implicits._
+import com.google.protobuf.ByteString
 import coop.rchain.casper.MultiParentCasperTestUtil.createBonds
+import coop.rchain.casper.SignDeployment
 import coop.rchain.casper.genesis.Genesis
 import coop.rchain.casper.protocol.DeployData
-import coop.rchain.casper.util.rholang.RuntimeManager
+import coop.rchain.casper.util.rholang.{InterpreterUtil, RuntimeManager}
 import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
 import coop.rchain.casper.util.{BondingUtil, ConstructDeploy}
 import coop.rchain.catscontrib.TaskContrib._
+import coop.rchain.crypto.{PrivateKey, PublicKey}
 import coop.rchain.crypto.codec.Base16
-import coop.rchain.crypto.signatures.Ed25519
 import coop.rchain.metrics.Metrics
+import coop.rchain.crypto.hash.Keccak256
+import coop.rchain.crypto.signatures.{Ed25519, Secp256k1}
 import coop.rchain.models.Expr.ExprInstance.GString
 import coop.rchain.models._
 import coop.rchain.rholang.Resources._
@@ -29,107 +32,106 @@ class RevIssuanceTest extends FlatSpec with Matchers {
   implicit val logger: Log[Task]         = Log.log[Task]
   implicit val metricsEff: Metrics[Task] = new Metrics.MetricsNOP[Task]
 
-  private def getDataUnsafe(
-      runtimeManager: RuntimeManager[Task],
-      postTransferHash: StateHash,
-      transferStatusOut: String
-  ) = {
-    val transferSuccess = runtimeManager
-      .getData(postTransferHash)(Par().copy(exprs = Seq(Expr(GString(transferStatusOut)))))
-      .unsafeRunSync
-    transferSuccess
-  }
-
   "Rev" should "be issued and accessible based on inputs from Ethereum" in {
-    mkRuntime[Task, Task.Par]("rev-issuance-test").use { activeRuntime =>
-      val runtimeManager = RuntimeManager.fromRuntime(activeRuntime).unsafeRunSync
-      val emptyHash      = runtimeManager.emptyStateHash
+    mkRuntime[Task, Task.Par]("rev-issuance-test", 1024 * 1024 * 16L)
+      .use { activeRuntime =>
+        val secKey =
+          Base16.unsafeDecode("a68a6e6cca30f81bd24a719f3145d20e8424bd7b396309b0708a16c7d8000b76")
+        val pubKey = Secp256k1.toPublic(secKey)
+        val prefix = "0x"
+        val ethAddress = prefix + Base16
+          .encode(Keccak256.hash(pubKey.drop(1)))
+          .takeRight(40)
+        val revAddress  = RevAddress.fromEthAddress(ethAddress.drop(2))
+        val initBalance = 100000L
+        val vaults      = List(Vault(revAddress, initBalance))
 
-      val ethAddress      = "0x041e1eec23d118f0c4ffc814d4f415ac3ef3dcff"
-      val initBalance     = 37
-      val wallet          = PreWallet(ethAddress, initBalance)
-      val (_, validators) = (1 to 4).map(_ => Ed25519.newKeyPair).unzip
-      val bonds           = createBonds(validators)
-      val posValidators   = bonds.map(Validator.tupled).toSeq
-      val (_, genesisPk)  = Ed25519.newKeyPair
-      val vaults = Traverse[List]
-        .traverse(posValidators.map(_.pk).toList)(RevAddress.fromPublicKey)
-        .get
-        .map(Vault(_, 1000L))
-      val genesisDeploys =
-        Genesis.defaultBlessedTerms(
-          0L,
-          ProofOfStake(1L, Long.MaxValue, posValidators),
-          wallet :: Nil,
-          Faucet.noopFaucet,
-          genesisPk,
-          vaults,
-          Long.MaxValue
-        )
+        // These are unused but are inserted due to require(validators.nonEmpty)
+        val (_, validators) = (1 to 4).map(_ => Ed25519.newKeyPair).unzip
+        val bonds           = createBonds(validators)
+        val posValidators   = bonds.map(Validator.tupled).toSeq
 
-      val secKey =
-        Base16.unsafeDecode("a68a6e6cca30f81bd24a719f3145d20e8424bd7b396309b0708a16c7d8000b76")
-      val pubKey =
-        "f700a417754b775d95421973bdbdadb2d23c8a5af46f1829b1431f5c136e549e8a0d61aa0c793f1a614f8e437711c7758473c6ceb0859ac7e9e07911ca66b5c4"
+        val (_, genesisPk) = Ed25519.newKeyPair
 
-      val statusOut = "out"
-      val unlockDeployData =
-        RevIssuanceTest
-          .preWalletUnlockDeploy[Task](ethAddress, pubKey, secKey, statusOut)(
-            Concurrent[Task],
-            runtimeManager
+        val genesisDeploys =
+          Genesis.defaultBlessedTerms(
+            0L,
+            ProofOfStake(1L, Long.MaxValue, posValidators),
+            Nil,
+            Faucet.noopFaucet,
+            genesisPk,
+            vaults,
+            Long.MaxValue
           )
-          .unsafeRunSync
 
-      val nonce             = 0
-      val amount            = 15L
-      val destination       = "deposit"
-      val transferStatusOut = "tOut"
-      val transferDeployData = RevIssuanceTest
-        .walletTransferDeploy(
-          nonce,
+        val from   = revAddress
+        val amount = 15L
+        val destinationPublicKey = PublicKey(
+          Base16.unsafeDecode("7e59141cbc0dfb24ca0e4fe57666895190740778871744be3cec262147e02f56")
+        )
+        val destinationRevAddress = RevAddress.fromPublicKey(destinationPublicKey).get
+        val transferStatusOut     = "tOut"
+        val transferDeployData = RevIssuanceTest.walletTransfer(
+          from,
           amount,
-          destination,
+          destinationRevAddress,
           transferStatusOut,
-          pubKey,
           secKey
-        )(Concurrent[Task], runtimeManager)
-        .unsafeRunSync
-      val (postGenHash, _) =
-        runtimeManager.computeState(emptyHash)(genesisDeploys).runSyncUnsafe(20.seconds)
-      val (postUnlockHash, _) =
-        runtimeManager.computeState(postGenHash)(unlockDeployData :: Nil).runSyncUnsafe(10.seconds)
-      val unlockResult = getDataUnsafe(runtimeManager, postUnlockHash, statusOut)
-      assert(unlockResult.head.exprs.head.getETupleBody.ps.head.exprs.head.getGBool) //assert unlock success
-
-      val (postTransferHash, _) =
-        runtimeManager
-          .computeState(postUnlockHash)(transferDeployData :: Nil)
-          .runSyncUnsafe(10.seconds)
-      val transferSuccess = getDataUnsafe(runtimeManager, postTransferHash, transferStatusOut)
-      val transferResult  = getDataUnsafe(runtimeManager, postTransferHash, destination)
-      assert(transferSuccess.head.exprs.head.getGString == "Success") //assert transfer success
-      assert(transferResult.nonEmpty)
-
-      activeRuntime.close()
-    }
+        )
+        for {
+          runtimeManager        <- RuntimeManager.fromRuntime(activeRuntime)
+          emptyHash             = runtimeManager.emptyStateHash
+          postGenState          <- runtimeManager.computeState(emptyHash)(genesisDeploys)
+          (postGenHash, _)      = postGenState
+          postDeployState       <- runtimeManager.computeState(postGenHash)(transferDeployData :: Nil)
+          (postTransferHash, _) = postDeployState
+          transferSuccess <- runtimeManager.getData(postTransferHash)(
+                              Par().copy(exprs = Seq(Expr(GString(transferStatusOut))))
+                            )
+          _ = assert(transferSuccess.head.exprs.head.getGInt == 15) //assert transfer success
+        } yield ()
+      }
+      .runSyncUnsafe(60.seconds)
   }
 }
 
 object RevIssuanceTest {
-  def preWalletUnlockDeploy[F[_]: Concurrent](
-      ethAddress: String,
-      pubKey: String,
-      secKey: Array[Byte],
-      statusOut: String
-  )(implicit runtimeManager: RuntimeManager[F]): F[DeployData] =
-    BondingUtil.preWalletUnlockDeploy[F](ethAddress, pubKey, secKey, statusOut).map { code =>
-      ConstructDeploy.sourceDeploy(
-        code,
-        System.currentTimeMillis(),
-        accounting.MAX_VALUE
-      )
-    }
+  private def walletTransfer(
+      from: RevAddress,
+      amount: Long,
+      destination: RevAddress,
+      transferStatusOut: String,
+      secKey: Array[Byte]
+  ): DeployData = {
+    val transferDeployCode =
+      s"""
+         |new rl(`rho:registry:lookup`), revVaultCh, vaultCh, revVaultKeyCh, stdout(`rho:io:stdout`), resultCh, destinationCh, balanceCh in {
+         |  rl!(`rho:id:1o93uitkrjfubh43jt19owanuezhntag5wh74c6ur5feuotpi73q8z`, *revVaultCh) |
+         |  for(@(_, RevVault) <- revVaultCh) {
+         |    @RevVault!("findOrCreate", "${from.toBase58}", *vaultCh) |
+         |    @RevVault!("deployerAuthKey", *revVaultKeyCh) |
+         |    for (@(true, vault) <- vaultCh; key <- revVaultKeyCh) {
+         |      @RevVault!("findOrCreate", "${destination.toBase58}", *destinationCh) | // Creates vault in case it doesn't exist
+         |      @vault!("transfer", "${destination.toBase58}", $amount, *key, *resultCh) |
+         |      for (@(true, Nil) <- resultCh) {
+         |        for (@(true, destinationVault) <- destinationCh) {
+         |          @destinationVault!("balance", *balanceCh) |
+         |          for (@balance <- balanceCh) {
+         |            @"$transferStatusOut"!(balance)
+         |          }
+         |        }
+         |      }
+         |    }
+         |  }
+         |}""".stripMargin
+    val data = DeployData(
+      deployer = ByteString.copyFrom(Secp256k1.toPublic(secKey)),
+      timestamp = System.currentTimeMillis(),
+      term = transferDeployCode,
+      phloLimit = accounting.MAX_VALUE
+    )
+    SignDeployment.sign(PrivateKey(secKey), data, Secp256k1)
+  }
 
   def walletTransferDeploy[F[_]: Concurrent](
       nonce: Int,

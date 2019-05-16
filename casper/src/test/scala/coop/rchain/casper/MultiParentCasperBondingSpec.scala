@@ -11,6 +11,7 @@ import coop.rchain.casper.helper.HashSetCasperTestNode._
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.scalatestcontrib._
 import coop.rchain.casper.util.comm.TestNetwork
+import coop.rchain.casper.util.rholang.RuntimeManager
 import coop.rchain.casper.util.{BondingUtil, ConstructDeploy, ProtoUtil}
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.hash.Keccak256
@@ -57,6 +58,20 @@ class MultiParentCasperBondingSpec extends FlatSpec with Matchers with Inspector
 
   private val genesis = buildGenesis(genesisParameters)
 
+  def preWalletUnlockDeploy[F[_]: Concurrent](
+      ethAddress: String,
+      pubKey: String,
+      secKey: Array[Byte],
+      statusOut: String
+  )(implicit runtimeManager: RuntimeManager[F]): F[DeployData] =
+    BondingUtil.preWalletUnlockDeploy[F](ethAddress, pubKey, secKey, statusOut).map { code =>
+      ConstructDeploy.sourceDeploy(
+        code,
+        System.currentTimeMillis(),
+        accounting.MAX_VALUE
+      )
+    }
+
   //put a new casper instance at the start of each
   //test since we cannot reset it
   "MultiParentCasper" should "allow bonding" in effectTest {
@@ -73,7 +88,7 @@ class MultiParentCasperBondingSpec extends FlatSpec with Matchers with Inspector
         val ethAddress     = ethAddresses.head
         val bondKey        = Base16.encode(otherPk.bytes)
         for {
-          walletUnlockDeploy <- RevIssuanceTest.preWalletUnlockDeploy(
+          walletUnlockDeploy <- preWalletUnlockDeploy(
                                  ethAddress,
                                  pubKey,
                                  secKey,

@@ -1,6 +1,7 @@
 package coop.rchain.rholang.interpreter.util
 import coop.rchain.crypto.PublicKey
 import coop.rchain.crypto.codec.Base16
+import coop.rchain.crypto.hash.Keccak256
 
 final case class RevAddress(address: Address) {
 
@@ -14,6 +15,9 @@ object RevAddress {
   private val prefix  = Base16.unsafeDecode(coinId + version)
 
   private val tools = new AddressTools(prefix, keyLength = 32, checksumLength = 4)
+
+  def fromEthAddress(ethAddress: String): RevAddress =
+    RevAddress(tools.fromEthAddress(ethAddress))
 
   def fromPublicKey(pk: PublicKey): Option[RevAddress] =
     tools.fromPublicKey(pk).map(RevAddress(_))
