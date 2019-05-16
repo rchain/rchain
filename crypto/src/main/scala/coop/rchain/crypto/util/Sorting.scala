@@ -5,9 +5,8 @@ import coop.rchain.crypto.codec.Base16
 
 object Sorting {
 
-  implicit val byteArrayOrdering: Ordering[Array[Byte]] =
-    Ordering.by(Base16.encode)
+  implicit val byteArrayOrdering = Ordering.by((_: Array[Byte]).toIterable)
 
-  implicit val publicKeyOrdering: Ordering[PublicKey] =
-    (x: PublicKey, y: PublicKey) => byteArrayOrdering.compare(x.bytes, y.bytes)
+  implicit val publicKeyOrdering: Ordering[PublicKey] = Ordering.by[PublicKey, Array[Byte]](_.bytes)
+
 }
