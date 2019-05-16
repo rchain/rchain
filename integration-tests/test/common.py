@@ -69,6 +69,11 @@ class WaitTimeoutError(Exception):
         self.predicate = predicate
         self.timeout = timeout
 
+class TransderFundsError(Exception):
+    def __init__(self, reason: str) -> None:
+        super().__init__()
+        self.reason = reason
+
 
 def random_string(context: TestingContext, length: int) -> str:
     return ''.join(context.random_generator.choice(string.ascii_letters) for m in range(length))

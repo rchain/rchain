@@ -1,6 +1,6 @@
-
 from random import Random
 import re
+import pytest
 from docker.client import DockerClient
 
 from .common import (
@@ -14,7 +14,10 @@ from .conftest import (
 from .rnode import (
     Node,
 )
-from .common import TestingContext
+from .common import (
+    TestingContext,
+    TransderFundsError,
+)
 from . import conftest
 from .wait import (
     wait_for_log_match,
@@ -39,11 +42,11 @@ def create_genesis_vault(context: TestingContext, node: Node, rev_addr: str, ini
     )
     wait_for_log_match(context, node, create_vault_success_pattern)
 
-def transfer_funds(context: TestingContext, node: Node, from_rev_addr: str, to_rev_addr: str, amount: int, private_key: str) -> str:
+def transfer_funds(context: TestingContext, node: Node, from_rev_addr: str, to_rev_addr: str, amount: int, private_key: str) -> None:
     """
     Transfer rev from one vault to another vault.
-    If the transfer is processed successfully, it would return a str "Nil".
-    If the transfer fail to be processed, it would return the reason why it failed like "Invalid AuthKey".
+    If the transfer is processed successfully, it would return None.
+    If the transfer fail to be processed, it would raise "TransferFundsError".
     """
     log_marker = random_string(context, 10)
     transfer_funds_result_pattern = re.compile('"{} (Successfully|Failing) reason: (?P<reason>[a-zA-Z0-9 ]*)"'.format(log_marker))
@@ -54,7 +57,8 @@ def transfer_funds(context: TestingContext, node: Node, from_rev_addr: str, to_r
     )
     transfer_result_match = wait_for_log_match_result(context, node, transfer_funds_result_pattern)
     reason = transfer_result_match.group('reason')
-    return reason
+    if reason != "Nil":
+        raise TransderFundsError(reason)
 
 def get_vault_balance(context: TestingContext, node: Node, rev_addr: str, private_key: str) -> int:
     log_marker = random_string(context, 10)
@@ -90,8 +94,7 @@ def test_alice_pay_bob(started_standalone_bootstrap_node: Node, command_line_opt
         assert alice_balance == ALICE_GENESIS_VAULT_AMOUNT
         assert bob_balance == 0
 
-        result = transfer_funds(context, started_standalone_bootstrap_node, alice_rev_address, bob_rev_address, transfer_amount, ALICE_KEY.private_key)
-        assert result == "Nil"
+        transfer_funds(context, started_standalone_bootstrap_node, alice_rev_address, bob_rev_address, transfer_amount, ALICE_KEY.private_key)
 
         alice_balance = get_vault_balance(context, started_standalone_bootstrap_node, alice_rev_address, ALICE_KEY.private_key)
         assert alice_balance == ALICE_GENESIS_VAULT_AMOUNT - transfer_amount
@@ -99,8 +102,7 @@ def test_alice_pay_bob(started_standalone_bootstrap_node: Node, command_line_opt
         bob_balance = get_vault_balance(context, started_standalone_bootstrap_node, bob_rev_address, BOB_KEY.private_key)
         assert bob_balance == transfer_amount
 
-        result =  transfer_funds(context, started_standalone_bootstrap_node, bob_rev_address, alice_rev_address, transfer_amount, BOB_KEY.private_key)
-        assert result == "Nil"
+        transfer_funds(context, started_standalone_bootstrap_node, bob_rev_address, alice_rev_address, transfer_amount, BOB_KEY.private_key)
 
         alice_balance = get_vault_balance(context, started_standalone_bootstrap_node, alice_rev_address, ALICE_KEY.private_key)
         assert alice_balance == ALICE_GENESIS_VAULT_AMOUNT
@@ -119,6 +121,6 @@ def test_transfer_failed_with_invalid_key(started_standalone_bootstrap_node: Nod
 
         assert charlie_balance == CHARLIE_GENESIS_VAULT_AMOUNT
 
-        result = transfer_funds(context, started_standalone_bootstrap_node, charlie_rev_address, alice_rev_address, 100, ALICE_KEY.private_key)
+        with pytest.raises(TransderFundsError):
+            transfer_funds(context, started_standalone_bootstrap_node, charlie_rev_address, alice_rev_address, 100, ALICE_KEY.private_key)
 
-        assert result == 'Invalid AuthKey'
