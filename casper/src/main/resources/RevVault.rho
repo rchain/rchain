@@ -57,8 +57,7 @@ in {
           }
         } |
 
-        //FIXME remove this, create standard vaults instead and do a `_deposit` to them somehow
-        contract RevVault(@"findOrCreateGenesisVault", @ownerRevAddress, @initialAmount, ret) = {
+        for (@"findOrCreateGenesisVault", @ownerRevAddress, @initialAmount, ret <- RevVault) {
           new findOrCreateGenesisVault in {
             _getOrCreate!(ownerRevAddress, *findOrCreateGenesisVault, *ret) |
             for (retCh <- findOrCreateGenesisVault) {
