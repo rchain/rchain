@@ -42,37 +42,37 @@ object Validate {
     s"Ignoring block ${PrettyPrinter.buildString(b.blockHash)} because $reason"
 
   def approvedBlock[F[_]: Applicative: Log](
-      a: ApprovedBlock,
+      approvedBlock: ApprovedBlock,
       requiredValidators: Set[ByteString]
   ): F[Boolean] = {
-    val maybeSigData = for {
-      c     <- a.candidate
-      bytes = c.toByteArray
+    val maybeCandidateBytesDigest = for {
+      candidate <- approvedBlock.candidate
+      bytes     = candidate.toByteArray
     } yield Blake2b256.hash(bytes)
 
-    val requiredSigs = a.candidate.map(_.requiredSigs).getOrElse(0)
+    val requiredSignatures = approvedBlock.candidate.map(_.requiredSigs).getOrElse(0)
 
-    maybeSigData match {
-      case Some(sigData) =>
-        val validatedSigs =
+    maybeCandidateBytesDigest match {
+      case Some(candidateBytesDigest) =>
+        val signatories =
           (for {
-            s      <- a.sigs
-            verify <- signatureVerifiers.get(s.algorithm)
-            pk     = s.publicKey
-            if verify(sigData, s.sig.toByteArray, pk.toByteArray)
-          } yield pk).toSet
+            signature <- approvedBlock.sigs
+            verifySig <- signatureVerifiers.get(signature.algorithm)
+            publicKey = signature.publicKey
+            if verifySig(candidateBytesDigest, signature.sig.toByteArray, publicKey.toByteArray)
+          } yield publicKey).toSet
 
-        if (validatedSigs.size >= requiredSigs && requiredValidators.forall(validatedSigs.contains))
+        if (signatories.size >= requiredSignatures && requiredValidators.subsetOf(signatories))
           true.pure[F]
         else
           Log[F]
             .warn("Received invalid ApprovedBlock message not containing enough valid signatures.")
-            .map(_ => false)
+            .as(false)
 
       case None =>
         Log[F]
           .warn("Received invalid ApprovedBlock message not containing any candidate.")
-          .map(_ => false)
+          .as(false)
     }
   }
 
