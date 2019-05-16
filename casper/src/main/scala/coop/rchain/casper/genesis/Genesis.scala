@@ -222,28 +222,6 @@ object Genesis {
     unsignedBlockProto(body, header, List.empty[Justification], shardId)
   }
 
-  //FIXME delay and simplify this
-  def toFile[F[_]: Applicative: Log](
-      maybePath: Option[String],
-      defaultPath: Path
-  ): F[Option[File]] =
-    maybePath match {
-      case Some(path) =>
-        val f = new File(path)
-        if (f.exists) f.some.pure[F]
-        else {
-          none[File].pure[F]
-        }
-
-      case None =>
-        val default = defaultPath.toFile
-        if (default.exists) {
-          Log[F].info(
-            s"Found default file ${default.getPath}."
-          ) *> default.some.pure[F]
-        } else none[File].pure[F]
-    }
-
   def getWallets[F[_]: Monad: Sync: Log](
       maybeWalletsPath: Option[String],
       defaultWalletPath: Path
