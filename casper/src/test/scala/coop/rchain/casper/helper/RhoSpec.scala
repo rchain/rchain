@@ -21,6 +21,7 @@ import monix.execution.Scheduler.Implicits.global
 import org.scalatest.{AppendedClues, FlatSpec, Matchers}
 
 import scala.concurrent.duration.{Duration, FiniteDuration}
+import coop.rchain.rholang.interpreter.PrettyPrinter
 
 object RhoSpec {
 
@@ -98,6 +99,9 @@ class RhoSpec(
 ) extends FlatSpec
     with AppendedClues
     with Matchers {
+
+  private val printer = PrettyPrinter()
+
   def mkTest(test: (String, Map[Long, List[RhoTestAssertion]])): Unit =
     test match {
       case (testName, testAttempts) =>
@@ -113,10 +117,16 @@ class RhoSpec(
         it should testName in {
           assertions.foreach {
             case RhoAssertEquals(_, expected, actual, clue) =>
+              printer.buildString(actual) should be(printer.buildString(expected)) withClue clueMsg(
+                clue
+              )
               actual should be(expected) withClue clueMsg(clue)
             case RhoAssertNotEquals(_, unexpected, actual, clue) =>
+              printer.buildString(actual) should not be (printer
+                .buildString(unexpected)) withClue clueMsg(clue)
               actual should not be (unexpected) withClue clueMsg(clue)
-            case RhoAssertTrue(_, v, clue) => v should be(true) withClue clueMsg(clue)
+            case RhoAssertTrue(_, v, clue) =>
+              v should be(true) withClue clueMsg(clue)
           }
         }
     }
