@@ -191,16 +191,23 @@ class MultiParentCasperBondingSpec extends FlatSpec with Matchers with Inspector
       import node.casperEff
 
       implicit val runtimeManager = node.runtimeManager
-      val (sk, pk)                = Ed25519.newKeyPair
-      val pkStr                   = Base16.encode(pk.bytes)
-      val amount                  = 314L
-      val forwardCode             = BondingUtil.bondingForwarderDeploy(pkStr, pkStr)
+      val (sk, pk) = (
+        PrivateKey(
+          Base16.unsafeDecode("9131c372fbbfda757de5a2158dea788e6aa6459e03b89af79d2f9b2a4f4104c1")
+        ),
+        PublicKey(
+          Base16.unsafeDecode("6e0a7a930c1c04a2125fc0ae96b04c4c4e92451e1f565288369f84c2812b69e4")
+        )
+      )
+      val pkStr       = Base16.encode(pk.bytes)
+      val amount      = 314L
+      val forwardCode = BondingUtil.bondingForwarderDeploy(pkStr, pkStr)
 
       for {
         bondingCode <- BondingUtil.faucetBondDeploy[Effect](amount, "ed25519", pkStr, sk)
         forwardDeploy = ConstructDeploy.sourceDeploy(
           forwardCode,
-          System.currentTimeMillis(),
+          0L,
           accounting.MAX_VALUE
         )
         bondingDeploy = ConstructDeploy.sourceDeploy(
