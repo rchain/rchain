@@ -18,7 +18,7 @@ class FindAndConnectSpec extends FunSpec with Matchers with BeforeAndAfterEach w
 
   import ScalaTestCats._
 
-  type Effect[A] = EitherT[Id, CommError, A]
+  type Effect[A] = Id[A]
 
   val src: PeerNode              = peer("src")
   val deftimeout: FiniteDuration = FiniteDuration(1, MILLISECONDS)
@@ -125,8 +125,4 @@ class FindAndConnectSpec extends FunSpec with Matchers with BeforeAndAfterEach w
         maxNumOfConnections = maxNumOfConnections
       )
     )
-
-  implicit def eiterTrpConfAsk: RPConfAsk[Effect] =
-    new EitherTApplicativeAsk[Id, RPConf, CommError]
-
 }

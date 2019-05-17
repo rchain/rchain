@@ -22,7 +22,7 @@ import coop.rchain.catscontrib.Catscontrib._
 import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.catscontrib.ski._
 import coop.rchain.comm._
-import coop.rchain.comm.CommError.ErrorHandler
+
 import coop.rchain.comm.discovery._
 import coop.rchain.comm.rp._
 import coop.rchain.comm.rp.Connect.{ConnectionsCell, RPConfAsk, RPConfState}
@@ -472,7 +472,6 @@ class NodeRuntime private[node] (
           Cell.eitherTCell(Monad[Task], rpConnections),
           NodeDiscovery.eitherTNodeDiscovery(Monad[Task], nodeDiscovery),
           TransportLayer.eitherTTransportLayer(Monad[Task], log, transport),
-          ErrorHandler[Effect],
           eiterTrpConfAsk(rpConfAsk),
           oracle,
           Sync[Effect],
