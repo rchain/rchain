@@ -49,7 +49,7 @@ class ConnectSpec
         // given
         transportLayerEff.setResponses(kp(alwaysSuccess))
         // when
-        Connect.connect[Effect](remote, defaultTimeout)
+        Connect.connect[Effect](remote)
         // then
         transportLayerEff.requests.size should be(1)
         val Protocol(_, Protocol.Message.ProtocolHandshake(_)) = transportLayerEff.requests(0).msg

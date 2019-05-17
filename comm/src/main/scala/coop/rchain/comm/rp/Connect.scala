@@ -128,14 +128,13 @@ object Connect {
   def resetConnections[F[_]: Monad: ConnectionsCell]: F[Unit] =
     ConnectionsCell[F].flatModify(c => c.removeConn[F](c))
 
-  def findAndConnect[F[_]: Monad: Log: NodeDiscovery: ErrorHandler: ConnectionsCell: RPConfAsk](
-      conn: (PeerNode, FiniteDuration) => F[Unit]
+  def findAndConnect[F[_]: Monad: Log: NodeDiscovery: ConnectionsCell](
+      conn: PeerNode => F[CommErr[Unit]]
   ): F[List[PeerNode]] =
     for {
       connections <- ConnectionsCell[F].read.map(_.toSet)
-      tout        <- RPConfAsk[F].reader(_.defaultTimeout)
       peers       <- NodeDiscovery[F].peers.map(_.filterNot(connections.contains).toList)
-      responses   <- peers.traverse(p => ErrorHandler[F].attempt(conn(p, tout)))
+      responses   <- peers.traverse(conn)
       _ <- responses.collect {
             case Left(WrongNetwork(peer, msg)) =>
               Log[F].warn(s"Can't connect to peer $peer. $msg")
@@ -143,10 +142,9 @@ object Connect {
       peersAndResponses = peers.zip(responses)
     } yield peersAndResponses.filter(_._2.isRight).map(_._1)
 
-  def connect[F[_]: Monad: Log: Metrics: TransportLayer: ErrorHandler: RPConfAsk](
-      peer: PeerNode,
-      timeout: FiniteDuration
-  ): F[Unit] =
+  def connect[F[_]: Monad: Log: Metrics: TransportLayer: RPConfAsk](
+      peer: PeerNode
+  ): F[CommErr[Unit]] =
     (
       for {
         address <- peer.toAddress.pure[F]
@@ -155,8 +153,8 @@ object Connect {
         _       <- Log[F].debug(s"Initialize protocol handshake to $address")
         conf    <- RPConfAsk[F].ask
         ph      = protocolHandshake(conf.local, conf.networkId)
-        _       <- TransportLayer[F].send(peer, ph) >>= ErrorHandler[F].fromEither
-      } yield ()
+        res     <- TransportLayer[F].send(peer, ph)
+      } yield res
     ).timer("connect-time")
 
 }
