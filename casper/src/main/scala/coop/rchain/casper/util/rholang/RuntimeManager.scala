@@ -100,7 +100,7 @@ class RuntimeManagerImpl[F[_]: Concurrent] private[rholang] (
   ): F[Either[(Option[DeployData], Failed), StateHash]] =
     withRuntime { runtime =>
       for {
-        _      <- setTimestamp(blockTime, runtime)
+        _      <- setBlockTime(blockTime, runtime)
         result <- replayEval(terms, runtime, hash)
       } yield result
     }
@@ -111,12 +111,12 @@ class RuntimeManagerImpl[F[_]: Concurrent] private[rholang] (
   ): F[(StateHash, Seq[InternalProcessedDeploy])] =
     withResetRuntime(hash) { runtime =>
       for {
-        _      <- setTimestamp(blockTime, runtime)
+        _      <- setBlockTime(blockTime, runtime)
         result <- newEval(terms, runtime, hash)
       } yield result
     }
 
-  private def setTimestamp(
+  private def setBlockTime(
       blockTime: Long,
       runtime: Runtime[F]
   ): F[Unit] = {
