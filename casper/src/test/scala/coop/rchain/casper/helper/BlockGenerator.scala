@@ -26,7 +26,7 @@ import scala.language.higherKinds
 object BlockGenerator {
   implicit val timeEff = new LogicalTime[Task]
 
-  def updateChainWithBlockStateUpdate[F[_]: Sync: BlockStore: IndexedBlockDagStorage](
+  def updateChainWithBlockStateUpdate[F[_]: Sync: BlockStore: IndexedBlockDagStorage: Time](
       id: Int,
       genesis: BlockMessage,
       runtimeManager: RuntimeManager[F]
@@ -44,7 +44,7 @@ object BlockGenerator {
       _                                 <- injectPostStateHash[F](id, b, genesis, postStateHash, processedDeploys)
     } yield b
 
-  def computeBlockCheckpoint[F[_]: Sync: BlockStore](
+  def computeBlockCheckpoint[F[_]: Sync: BlockStore: Time](
       b: BlockMessage,
       genesis: BlockMessage,
       dag: BlockDagRepresentation[F],
@@ -70,7 +70,7 @@ object BlockGenerator {
       IndexedBlockDagStorage[F].inject(id, updatedBlock, genesis, false)
   }
 
-  private def computeBlockCheckpointFromDeploys[F[_]: Sync: BlockStore](
+  private def computeBlockCheckpointFromDeploys[F[_]: Sync: BlockStore: Time](
       b: BlockMessage,
       genesis: BlockMessage,
       dag: BlockDagRepresentation[F],
@@ -78,7 +78,6 @@ object BlockGenerator {
   ): F[Either[Throwable, (StateHash, StateHash, Seq[InternalProcessedDeploy])]] =
     for {
       parents <- ProtoUtil.unsafeGetParents[F](b)
-
       deploys = ProtoUtil.deploys(b).flatMap(_.deploy)
 
       _ = assert(
@@ -86,12 +85,13 @@ object BlockGenerator {
         "Received a different genesis block."
       )
 
+      now <- Time[F].currentMillis
       result <- computeDeploysCheckpoint[F](
                  parents,
                  deploys,
                  dag,
                  runtimeManager,
-                 System.currentTimeMillis()
+                 now
                )
     } yield result
 }
