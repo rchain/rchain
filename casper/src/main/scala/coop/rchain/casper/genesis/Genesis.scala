@@ -12,7 +12,11 @@ import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.ProtoUtil.{blockHeader, unsignedBlockProto}
 import coop.rchain.casper.util.Sorting.byteArrayOrdering
 import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
-import coop.rchain.casper.util.rholang.{ProcessedDeployUtil, RuntimeManager}
+import coop.rchain.casper.util.rholang.{
+  InternalProcessedDeploy,
+  ProcessedDeployUtil,
+  RuntimeManager
+}
 import coop.rchain.crypto.PublicKey
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.signatures.Ed25519
@@ -136,95 +140,63 @@ object Genesis {
   ): F[BlockMessage] = {
     import genesis._
 
-    val initial = withoutContracts(
-      bonds = proofOfStake.validators.flatMap(Validator.unapply).toMap,
-      timestamp = 1L,
-      version = 1L,
-      shardId = shardId
-    )
-
     val faucetCode = if (faucet) Faucet.basicWalletFaucet _ else Faucet.noopFaucet
 
-    withContracts(
-      initial,
+    val blessedTerms = defaultBlessedTerms(
+      timestamp,
       proofOfStake,
       wallets,
       faucetCode,
-      runtimeManager.emptyStateHash,
-      runtimeManager,
-      timestamp,
       genesisPk,
       vaults,
-      Long.MaxValue
-    )
-  }
-
-  //TODO simplify and/or remove the with* methods
-  private def withContracts[F[_]: Concurrent](
-      initial: BlockMessage,
-      posParams: ProofOfStake,
-      wallets: Seq[PreWallet],
-      faucetCode: String => String,
-      startHash: StateHash,
-      runtimeManager: RuntimeManager[F],
-      timestamp: Long,
-      genesisPk: PublicKey,
-      vaults: Seq[Vault],
-      supply: Long
-  ): F[BlockMessage] =
-    withContracts(
-      defaultBlessedTerms(timestamp, posParams, wallets, faucetCode, genesisPk, vaults, supply),
-      initial,
-      startHash,
-      runtimeManager
+      supply = Long.MaxValue
     )
 
-  private def withContracts[F[_]: Concurrent](
-      blessedTerms: Seq[DeployData],
-      initial: BlockMessage,
-      startHash: StateHash,
-      runtimeManager: RuntimeManager[F]
-  ): F[BlockMessage] =
+    val startHash = runtimeManager.emptyStateHash
+
     runtimeManager
       .computeState(startHash)(blessedTerms)
       .map {
         case (stateHash, processedDeploys) =>
-          val stateWithContracts = for {
-            bd <- initial.body
-            ps <- bd.state
-          } yield ps.withPreStateHash(runtimeManager.emptyStateHash).withPostStateHash(stateHash)
-          val version   = initial.header.get.version
-          val timestamp = initial.header.get.timestamp
-          val blockDeploys =
-            processedDeploys.filterNot(_.status.isFailed).map(ProcessedDeployUtil.fromInternal)
-          val sortedDeploys = blockDeploys.map(d => d.copy(log = d.log.sortBy(_.toByteArray)))
-          val body          = Body(state = stateWithContracts, deploys = sortedDeploys)
-          val header        = blockHeader(body, List.empty[ByteString], version, timestamp)
-          unsignedBlockProto(body, header, List.empty[Justification], initial.shardId)
+          createInternalProcessedDeploy(genesis, startHash, stateHash, processedDeploys)
       }
+  }
 
-  private def withoutContracts(
-      bonds: Map[PublicKey, Long],
-      version: Long,
-      timestamp: Long,
-      shardId: String
+  private def createInternalProcessedDeploy(
+      genesis: Genesis,
+      startHash: StateHash,
+      stateHash: StateHash,
+      processedDeploys: Seq[InternalProcessedDeploy]
   ): BlockMessage = {
+    import genesis._
+
+    val state = RChainState(
+      blockNumber = 0,
+      bonds = bondsProto(proofOfStake),
+      preStateHash = startHash,
+      postStateHash = stateHash
+    )
+
+    val blockDeploys =
+      processedDeploys.filterNot(_.status.isFailed).map(ProcessedDeployUtil.fromInternal)
+    val sortedDeploys = blockDeploys.map(d => d.copy(log = d.log.sortBy(_.toByteArray)))
+
+    val body    = Body(state = Some(state), deploys = sortedDeploys)
+    val version = 1L //FIXME make this part of Genesis, and pass it from upstream
+    val header  = blockHeader(body, List.empty[StateHash], version, timestamp)
+
+    unsignedBlockProto(body, header, List.empty[Justification], shardId)
+  }
+
+  private def bondsProto(proofOfStake: ProofOfStake): Seq[Bond] = {
+    val bonds = proofOfStake.validators.flatMap(Validator.unapply).toMap
     import coop.rchain.crypto.util.Sorting.publicKeyOrdering
     //sort to have deterministic order (to get reproducible hash)
-    val bondsProto = bonds.toIndexedSeq.sorted.map {
+    bonds.toIndexedSeq.sorted.map {
       case (pk, stake) =>
         val validator = ByteString.copyFrom(pk.bytes)
         Bond(validator, stake)
     }
-
-    val state = RChainState()
-      .withBlockNumber(0)
-      .withBonds(bondsProto)
-    val body = Body()
-      .withState(state)
-    val header = blockHeader(body, List.empty[ByteString], version, timestamp)
-
-    unsignedBlockProto(body, header, List.empty[Justification], shardId)
   }
 
   //FIXME delay and simplify this
