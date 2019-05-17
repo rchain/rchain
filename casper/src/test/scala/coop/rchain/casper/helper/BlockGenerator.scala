@@ -8,9 +8,9 @@ import coop.rchain.blockstorage._
 import coop.rchain.casper.Estimator.{BlockHash, Validator}
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.ProtoUtil
-import coop.rchain.casper.util.rholang.{InterpreterUtil, ProcessedDeployUtil, RuntimeManager}
+import coop.rchain.casper.util.rholang.InterpreterUtil.computeDeploysCheckpoint
 import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
-import coop.rchain.catscontrib._
+import coop.rchain.casper.util.rholang.{InternalProcessedDeploy, ProcessedDeployUtil, RuntimeManager}
 import coop.rchain.crypto.hash.Blake2b256
 import coop.rchain.p2p.EffectsTestInstances.LogicalTime
 import coop.rchain.shared.Time
@@ -47,8 +47,7 @@ object BlockGenerator {
       runtimeManager: RuntimeManager[F]
   ): F[(StateHash, Seq[ProcessedDeploy])] =
     for {
-      result <- InterpreterUtil
-                 .computeBlockCheckpointFromDeploys[F](b, genesis, dag, runtimeManager)
+      result <- computeBlockCheckpointFromDeploys[F](b, genesis, dag, runtimeManager)
       Right((preStateHash, postStateHash, processedDeploys)) = result
     } yield (postStateHash, processedDeploys.map(ProcessedDeployUtil.fromInternal))
 
@@ -66,6 +65,25 @@ object BlockGenerator {
     BlockStore[F].put(b.blockHash, updatedBlock) *>
       IndexedBlockDagStorage[F].inject(id, updatedBlock, genesis, false)
   }
+
+  private def computeBlockCheckpointFromDeploys[F[_]: Sync: BlockStore](
+      b: BlockMessage,
+      genesis: BlockMessage,
+      dag: BlockDagRepresentation[F],
+      runtimeManager: RuntimeManager[F]
+  ): F[Either[Throwable, (StateHash, StateHash, Seq[InternalProcessedDeploy])]] =
+    for {
+      parents <- ProtoUtil.unsafeGetParents[F](b)
+
+      deploys = ProtoUtil.deploys(b).flatMap(_.deploy)
+
+      _ = assert(
+        parents.nonEmpty || (parents.isEmpty && b == genesis),
+        "Received a different genesis block."
+      )
+
+      result <- computeDeploysCheckpoint[F](parents, deploys, dag, runtimeManager)
+    } yield result
 }
 
 trait BlockGenerator {
