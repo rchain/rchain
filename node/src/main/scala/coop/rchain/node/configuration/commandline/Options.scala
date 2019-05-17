@@ -333,6 +333,11 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
   }
   addSubcommand(run)
 
+  val keygen = new Subcommand("keygen") {
+    descr("Generate a public/private ed25519 key pair.")
+  }
+  addSubcommand(keygen)
+
   val repl = new Subcommand("repl") {
     descr("Starts a thin client, that will connect to existing node. See grpcHost and grpcPort.")
   }
