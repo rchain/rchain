@@ -43,6 +43,10 @@ trait RuntimeManager[F[_]] {
       terms: Seq[DeployData],
       blockTime: Long
   ): F[(StateHash, Seq[InternalProcessedDeploy])]
+  def computeGenesis(
+      terms: Seq[DeployData],
+      blockTime: Long
+  ): F[(StateHash, StateHash, Seq[InternalProcessedDeploy])]
   def storageRepr(hash: StateHash): F[Option[String]]
   def computeBonds(hash: StateHash): F[Seq[Bond]]
   def computeBalance(start: StateHash)(user: ByteString): F[Long]
@@ -115,6 +119,19 @@ class RuntimeManagerImpl[F[_]: Concurrent] private[rholang] (
         result <- newEval(terms, runtime, hash)
       } yield result
     }
+
+  def computeGenesis(
+      terms: Seq[DeployData],
+      blockTime: Long
+  ): F[(StateHash, StateHash, Seq[InternalProcessedDeploy])] = {
+    val startHash = emptyStateHash
+    withResetRuntime(startHash) { runtime =>
+      for {
+        _          <- setBlockTime(blockTime, runtime)
+        evalResult <- newEval(terms, runtime, startHash)
+      } yield (startHash, evalResult._1, evalResult._2)
+    }
+  }
 
   private def setBlockTime(
       blockTime: Long,
@@ -443,6 +460,12 @@ object RuntimeManager {
           blockTime: Long
       ): T[F, (StateHash, scala.Seq[InternalProcessedDeploy])] =
         runtimeManager.computeState(hash)(terms, blockTime).liftM[T]
+
+      def computeGenesis(
+          terms: Seq[DeployData],
+          blockTime: Long
+      ): T[F, (StateHash, StateHash, Seq[InternalProcessedDeploy])] =
+        runtimeManager.computeGenesis(terms, blockTime).liftM[T]
 
       override def storageRepr(hash: StateHash): T[F, Option[String]] =
         runtimeManager.storageRepr(hash).liftM[T]
