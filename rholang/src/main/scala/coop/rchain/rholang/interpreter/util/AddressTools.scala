@@ -28,9 +28,7 @@ class AddressTools(prefix: Array[Byte], keyLength: Int, checksumLength: Int) {
   def fromPublicKey(pk: PublicKey): Option[Address] =
     if (keyLength == pk.bytes.length || pk.bytes.length == 65) { // TODO: Clean up for secp256k1
       val ethAddress = Base16.encode(Keccak256.hash(pk.bytes.drop(1))).takeRight(40)
-      val keyHash    = Keccak256.hash(Base16.unsafeDecode(ethAddress))
-      val payload    = prefix ++ keyHash
-      Some(Address(prefix, keyHash, computeChecksum(payload)))
+      Some(fromEthAddress(ethAddress))
     } else None
 
   def fromEthAddress(ethAddress: String): Address = {
