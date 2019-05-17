@@ -30,31 +30,7 @@ class Measure[C, P, A, K](
 
   protected[this] val dataLogger: Logger = Logger("coop.rchain.rspace.datametrics")
 
-  protected def _measure(
-      action: HotStoreAction,
-      b: Blake2b256Hash,
-      p: Option[PersistedData],
-      h: HistoryAction
-  ) = {
-    val triUpdate = for {
-      x <- p
-      c <- action match {
-            case InsertData(channel, data) =>
-              Some((Insert, b, GNAT(Seq(channel), data, Seq[WaitingContinuation[P, K]]())))
-            case InsertJoins(_, _) => None
-            case InsertContinuations(channels, continuations) =>
-              Some((Insert, b, GNAT(channels, Seq[Datum[A]](), continuations)))
-            case DeleteData(channel) =>
-              Some(
-                (Delete, b, GNAT(Seq(channel), Seq[Datum[A]](), Seq[WaitingContinuation[P, K]]()))
-              )
-            case _ => None
-          }
-      v = TrieUpdate(x.bytes.size, c._1, c._2, c._3)
-    } yield v
-    triUpdate.map(x => measure(measure(x)))
-  }
-  private def measure(value: TrieUpdate[C, P, A, K]): Unit =
+  protected def measure(value: TrieUpdate[C, P, A, K]): Unit =
     dataLogger.whenDebugEnabled {
       val maybeData = value match {
         case _ @TrieUpdate(_, operation, channelsHash, gnat) =>

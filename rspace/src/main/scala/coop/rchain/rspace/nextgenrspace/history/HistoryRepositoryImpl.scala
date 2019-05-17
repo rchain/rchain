@@ -1,7 +1,6 @@
 package coop.rchain.rspace.nextgenrspace.history
 
 import java.nio.charset.StandardCharsets
-
 import cats.Applicative
 import cats.effect.Sync
 import cats.implicits._
@@ -22,6 +21,7 @@ import coop.rchain.rspace.internal._
 import scodec.Codec
 import scodec.bits.{BitVector, ByteVector}
 import HistoryRepositoryImpl._
+import com.typesafe.scalalogging.Logger
 
 final case class HistoryRepositoryImpl[F[_]: Sync, C, P, A, K](
     history: History[F],
@@ -110,6 +110,93 @@ final case class HistoryRepositoryImpl[F[_]: Sync, C, P, A, K](
     }
 
   type Result = (Blake2b256Hash, Option[PersistedData], HistoryAction)
+  case class MeasureJurnal(
+      key: String,
+      size: Long,
+      action: String,
+      datumSize: Int,
+      datumLen: Long,
+      continuationsLength: Long,
+      continuationsSize: Int
+  )
+
+  protected[this] val dataLogger: Logger = Logger("coop.rchain.rspace.datametrics")
+  protected def asMeasureJournal(actions: List[HotStoreAction]): List[MeasureJurnal] =
+    actions.map {
+      case i: InsertData[C, A] =>
+        val key      = hashDataChannel(i.channel)
+        val data     = encodeData(i.data)
+        val dataLeaf = DataLeaf(data)
+        MeasureJurnal(
+          key = key.bytes.toHex,
+          size = data.toBitVector.size,
+          action = "InsertData",
+          datumSize = 0,
+          datumLen = dataLeaf.bytes.size,
+          continuationsLength = 0L,
+          continuationsSize = 0
+        )
+      case i: InsertContinuations[C, P, K] =>
+        val key               = hashContinuationsChannels(i.channels)
+        val data              = encodeContinuations(i.continuations)
+        val continuationsLeaf = ContinuationsLeaf(data)
+        MeasureJurnal(
+          key = key.bytes.toHex,
+          size = data.size,
+          action = "InsertContinu",
+          datumSize = 0,
+          datumLen = 0L,
+          continuationsLength = continuationsLeaf.bytes.toBitVector.size,
+          continuationsSize = continuationsLeaf.bytes.size.toInt
+        )
+      case i: InsertJoins[C] =>
+        val key       = hashJoinsChannel(i.channel)
+        val data      = encodeJoins(i.joins)
+        val joinsLeaf = JoinsLeaf(data)
+        MeasureJurnal(
+          key = key.bytes.toHex,
+          size = data.size,
+          action = "InsertContinu",
+          datumSize = 0,
+          datumLen = 0L,
+          continuationsLength = joinsLeaf.bytes.toBitVector.size,
+          continuationsSize = joinsLeaf.bytes.size.toInt
+        )
+      case d: DeleteData[C] =>
+        val key = hashDataChannel(d.channel)
+        MeasureJurnal(
+          key = key.bytes.toHex,
+          size = 0,
+          action = "DeleteData",
+          datumSize = 0,
+          datumLen = 0L,
+          continuationsLength = 0,
+          continuationsSize = 0
+        )
+      case d: DeleteContinuations[C] =>
+        val key = hashContinuationsChannels(d.channels)
+        MeasureJurnal(
+          key = key.bytes.toHex,
+          size = 0,
+          action = "DeleteData",
+          datumSize = 0,
+          datumLen = 0L,
+          continuationsLength = 0,
+          continuationsSize = 0
+        )
+      case d: DeleteJoins[C] =>
+        val key = hashJoinsChannel(d.channel)
+        MeasureJurnal(
+          key = key.bytes.toHex,
+          size = 0,
+          action = "DeleteData",
+          datumSize = 0,
+          datumLen = 0L,
+          continuationsLength = 0,
+          continuationsSize = 0
+        )
+
+    }
 
   private def transform(actions: List[HotStoreAction]): List[Result] =
     actions.map {
@@ -157,7 +244,13 @@ final case class HistoryRepositoryImpl[F[_]: Sync, C, P, A, K](
   override def checkpoint(actions: List[HotStoreAction]): F[HistoryRepository[F, C, P, A, K]] =
     for {
       trieActions <- Applicative[F].pure(transform(actions))
-      //      _ = measure(trieActions) //TODO call measure here
+      journal     = asMeasureJournal(actions)
+      _ = journal.foreach(
+        j =>
+          dataLogger.debug(
+            s"${j.key};${j.size};${j.action};${j.datumSize};${j.datumLen};${j.continuationsLength};${j.continuationsSize}"
+          )
+      )
       historyActions <- storeLeaves(trieActions)
       next           <- history.process(historyActions)
       _              <- rootsRepository.commit(next.root)
