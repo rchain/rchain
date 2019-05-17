@@ -496,9 +496,9 @@ package object history {
             case Node(_) =>
               logger.debug(s"workingRootHash: $currentRootHash")
               false
-            // If the "tip" is equal to a leaf containing the given key and value, commence
+            // If the "tip" is equal to a leaf containing the given key, commence
             // with the deletion process.
-            case leaf @ Leaf(_, _) if leaf == Leaf(key, value) =>
+            case Leaf(leafKey, _) if key == leafKey =>
               val (hd, nodesToRehash, newNodes) = deleteLeaf(store, txn, parents)
               val rehashedNodes                 = rehash[K, V](hd, nodesToRehash)
               val nodesToInsert                 = newNodes ++ rehashedNodes
@@ -506,6 +506,10 @@ package object history {
               store.putRoot(txn, branch, newRootHash)
               logger.debug(s"workingRootHash: $newRootHash")
               true
+            // A Skip means that the value does not exist in the trie
+            case Skip(_, _) =>
+              logger.debug(s"workingRootHash: $currentRootHash")
+              false
             // The entry is not in the trie
             case Leaf(_, _) =>
               logger.debug(s"workingRootHash: $currentRootHash")

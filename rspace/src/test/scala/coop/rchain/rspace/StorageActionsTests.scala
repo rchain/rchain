@@ -835,6 +835,36 @@ trait StorageActionsTests[F[_]]
       } yield (getK(r3).results should contain theSameElementsAs List(List("datum1")))
   }
 
+  "doing a produce and consuming" should "result in a delete action in given channel" in withTestSpace {
+    (store, space) =>
+      for {
+        r1       <- space.produce("ch1", "datum1", persist = false)
+        _        = r1 shouldBe None
+        _        <- space.createCheckpoint()
+        r2       <- space.consume(List("ch1"), List(Wildcard), new StringsCaptor, persist = false)
+        _        = r2 shouldBe defined
+        updates1 = store.getTrieUpdates
+        _        = updates1 should have size 1
+        _ = updates1.head match {
+          case TrieUpdate(_, Delete, _, _) => succeed
+          case _                           => fail
+        }
+        _        <- space.createCheckpoint()
+        r3       <- space.consume(List("ch1"), List(Wildcard), new StringsCaptor, persist = false)
+        _        = r3 shouldBe empty
+        _        <- space.createCheckpoint()
+        r4       <- space.produce("ch1", "datum1", persist = false)
+        _        = r4 shouldBe defined
+        updates2 = store.getTrieUpdates
+        _        = updates2 should have size 1
+        _ = updates2.head match {
+          case TrieUpdate(_, Delete, _, _) => succeed
+          case _                           => fail
+        }
+
+      } yield ()
+  }
+
   "producing three times and doing a persistent consume" should "work" in withTestSpace {
     (store, space) =>
       for {
