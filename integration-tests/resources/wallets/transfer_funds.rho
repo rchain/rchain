@@ -27,7 +27,7 @@ in {
               @vault!("transfer", to, amount, *key, *resultCh) |
               for (@result <- resultCh) {
                 match result{
-                  (true, _) =>{log!("%LOG_MARKER Successfully reason: Nil" )}
+                  (true, _) =>{log!("%LOG_MARKER Successfully reason: ${reason}" %%{"reason": "Nil"})}
                   (false, reason) => {log!("%LOG_MARKER Failing reason: ${reason}" %%{"reason": reason})}
                 }
               }
