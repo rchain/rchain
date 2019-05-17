@@ -2,6 +2,7 @@ package coop.rchain.rholang.interpreter
 
 import cats.Parallel
 import cats.effect.Sync
+import cats.effect.concurrent.Ref
 import cats.mtl.FunctorTell
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.models.TaggedContinuation.TaggedCont.{Empty, ParBody, ScalaBodyRef}
@@ -55,7 +56,8 @@ object RholangAndScalaDispatcher {
   def create[M[_], F[_]](
       tuplespace: RhoISpace[M],
       dispatchTable: => Map[Long, (Seq[ListParWithRandom], Int) => M[Unit]],
-      urnMap: Map[String, Par]
+      urnMap: Map[String, Par],
+      deployParametersRef: Ref[M, DeployParameters]
   )(
       implicit
       cost: _cost[M],
@@ -68,7 +70,7 @@ object RholangAndScalaDispatcher {
       new RholangAndScalaDispatcher(dispatchTable)
 
     implicit lazy val reducer: Reduce[M] =
-      new DebruijnInterpreter[M, F](tuplespaceAlg, urnMap)
+      new DebruijnInterpreter[M, F](tuplespaceAlg, urnMap, deployParametersRef)
 
     lazy val tuplespaceAlg = Tuplespace.rspaceTuplespace(chargingRSpace, dispatcher)
 

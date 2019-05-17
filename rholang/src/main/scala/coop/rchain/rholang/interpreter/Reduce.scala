@@ -20,6 +20,7 @@ import coop.rchain.rholang.interpreter.matcher.SpatialMatcher.spatialMatchAndCha
 import coop.rchain.rholang.interpreter.storage.Tuplespace
 import coop.rchain.rspace.Serialize
 import monix.eval.Coeval
+import cats.effect.concurrent.Ref
 
 import scala.collection.immutable.BitSet
 import scala.util.Try
@@ -52,7 +53,8 @@ trait Reduce[M[_]] {
 
 class DebruijnInterpreter[M[_], F[_]](
     tuplespaceAlg: Tuplespace[M],
-    urnMap: Map[String, Par]
+    urnMap: Map[String, Par],
+    deployParametersRef: Ref[M, DeployParameters]
 )(
     implicit parallel: cats.Parallel[M, F],
     s: Sync[M],
