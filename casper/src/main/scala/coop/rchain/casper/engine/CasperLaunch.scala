@@ -13,6 +13,7 @@ import coop.rchain.casper.MultiParentCasperRef.MultiParentCasperRef
 import coop.rchain.casper._
 import coop.rchain.casper.util.comm._
 import coop.rchain.casper.engine._, EngineCell._
+import coop.rchain.blockstorage.util.io.IOError.RaiseIOError
 import coop.rchain.casper.genesis.Genesis
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.rholang.RuntimeManager
@@ -38,7 +39,7 @@ object CasperLaunch {
       val conf: CasperConf,
       val runtimeManager: RuntimeManager[F]
   )
-  def apply[F[_]: LastApprovedBlock: Metrics: BlockStore: ConnectionsCell: NodeDiscovery: TransportLayer: ErrorHandler: RPConfAsk: SafetyOracle: Sync: Concurrent: Time: Log: MultiParentCasperRef: BlockDagStorage: EngineCell](
+  def apply[F[_]: LastApprovedBlock: Metrics: BlockStore: ConnectionsCell: NodeDiscovery: TransportLayer: ErrorHandler: RPConfAsk: SafetyOracle: Sync: Concurrent: Time: Log: MultiParentCasperRef: BlockDagStorage: EngineCell: RaiseIOError](
       init: CasperInit[F],
       toTask: F[_] => Task[_]
   )(implicit scheduler: Scheduler): F[Unit] =
@@ -76,20 +77,21 @@ object CasperLaunch {
       _ <- Engine.transitionToRunning[F](casper, approvedBlock)
     } yield ()
 
-  def connectAsGenesisValidator[F[_]: Monad: Sync: Metrics: LastApprovedBlock: ErrorHandler: Time: Concurrent: MultiParentCasperRef: Log: RPConfAsk: BlockStore: ConnectionsCell: TransportLayer: SafetyOracle: BlockDagStorage: EngineCell](
+  def connectAsGenesisValidator[F[_]: Monad: Sync: Metrics: LastApprovedBlock: ErrorHandler: Time: Concurrent: MultiParentCasperRef: Log: RPConfAsk: BlockStore: ConnectionsCell: TransportLayer: SafetyOracle: BlockDagStorage: EngineCell: RaiseIOError](
       init: CasperInit[F]
   ): F[Unit] =
     for {
-      walletsFile <- Genesis.toFile[F](
-                      init.conf.walletsFile,
-                      init.conf.genesisPath.resolve("wallets.txt")
-                    )
-      wallets   <- Genesis.getWallets[F](walletsFile, init.conf.walletsFile)
+      wallets <- Genesis.getWallets[F](
+                  init.conf.walletsFile,
+                  init.conf.genesisPath.resolve("wallets.txt")
+                )
       timestamp <- init.conf.deployTimestamp.fold(Time[F].currentMillis)(_.pure[F])
-      bondsFile <- Genesis
-                    .toFile[F](init.conf.bondsFile, init.conf.genesisPath.resolve("bonds.txt"))
-      bonds <- Genesis
-                .getBonds[F](bondsFile, init.conf.numValidators, init.conf.genesisPath)
+      bonds <- Genesis.getBonds[F](
+                init.conf.bondsFile,
+                init.conf.genesisPath.resolve("bonds.txt"),
+                init.conf.numValidators,
+                init.conf.genesisPath
+              )
       validatorId <- ValidatorIdentity.fromConfig[F](init.conf)
       bap = new BlockApproverProtocol(
         validatorId.get,
@@ -106,7 +108,7 @@ object CasperLaunch {
           )
     } yield ()
 
-  def initBootstrap[F[_]: Monad: Sync: LastApprovedBlock: ErrorHandler: Time: MultiParentCasperRef: Log: RPConfAsk: BlockStore: ConnectionsCell: TransportLayer: Concurrent: Metrics: SafetyOracle: BlockDagStorage: EngineCell](
+  def initBootstrap[F[_]: Monad: Sync: LastApprovedBlock: ErrorHandler: Time: MultiParentCasperRef: Log: RPConfAsk: BlockStore: ConnectionsCell: TransportLayer: Concurrent: Metrics: SafetyOracle: BlockDagStorage: EngineCell: RaiseIOError](
       init: CasperInit[F],
       toTask: F[_] => Task[_]
   )(implicit scheduler: Scheduler): F[Unit] =

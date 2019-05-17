@@ -37,11 +37,11 @@ trait RuntimeManager[F[_]] {
   def captureResults(start: StateHash, deploy: DeployData, name: Par): F[Seq[Par]]
   def replayComputeState(hash: StateHash)(
       terms: Seq[InternalProcessedDeploy],
-      time: Option[Long] = None
+      blockTime: Long
   ): F[Either[(Option[DeployData], Failed), StateHash]]
   def computeState(hash: StateHash)(
       terms: Seq[DeployData],
-      time: Option[Long] = None
+      blockTime: Long
   ): F[(StateHash, Seq[InternalProcessedDeploy])]
   def storageRepr(hash: StateHash): F[Option[String]]
   def computeBonds(hash: StateHash): F[Seq[Bond]]
@@ -96,36 +96,33 @@ class RuntimeManagerImpl[F[_]: Concurrent] private[rholang] (
     */
   def replayComputeState(hash: StateHash)(
       terms: Seq[InternalProcessedDeploy],
-      time: Option[Long] = None
+      blockTime: Long
   ): F[Either[(Option[DeployData], Failed), StateHash]] =
     withRuntime { runtime =>
       for {
-        _      <- setTimestamp(time, runtime)
+        _      <- setBlockTime(blockTime, runtime)
         result <- replayEval(terms, runtime, hash)
       } yield result
     }
 
   def computeState(hash: StateHash)(
       terms: Seq[DeployData],
-      time: Option[Long] = None
+      blockTime: Long
   ): F[(StateHash, Seq[InternalProcessedDeploy])] =
     withResetRuntime(hash) { runtime =>
       for {
-        _      <- setTimestamp(time, runtime)
+        _      <- setBlockTime(blockTime, runtime)
         result <- newEval(terms, runtime, hash)
       } yield result
     }
 
-  private def setTimestamp(
-      time: Option[Long],
+  private def setBlockTime(
+      blockTime: Long,
       runtime: Runtime[F]
-  ): F[Unit] =
-    time match {
-      case Some(t) =>
-        val timestamp: Par = Par(exprs = Seq(Expr(Expr.ExprInstance.GInt(t))))
-        runtime.blockTime.setParams(timestamp)
-      case None => ().pure[F]
-    }
+  ): F[Unit] = {
+    val timestamp: Par = Par(exprs = Seq(Expr(Expr.ExprInstance.GInt(blockTime))))
+    runtime.blockTime.setParams(timestamp)
+  }
 
   def storageRepr(hash: StateHash): F[Option[String]] =
     withResetRuntime(hash)(runtime => StoragePrinter.prettyPrint(runtime.space)).attempt
@@ -437,15 +434,15 @@ object RuntimeManager {
 
       override def replayComputeState(hash: StateHash)(
           terms: scala.Seq[InternalProcessedDeploy],
-          time: Option[Long]
+          blockTime: Long
       ): T[F, scala.Either[(Option[DeployData], Failed), StateHash]] =
-        runtimeManager.replayComputeState(hash)(terms, time).liftM[T]
+        runtimeManager.replayComputeState(hash)(terms, blockTime).liftM[T]
 
       override def computeState(hash: StateHash)(
           terms: scala.Seq[DeployData],
-          time: Option[Long]
+          blockTime: Long
       ): T[F, (StateHash, scala.Seq[InternalProcessedDeploy])] =
-        runtimeManager.computeState(hash)(terms, time).liftM[T]
+        runtimeManager.computeState(hash)(terms, blockTime).liftM[T]
 
       override def storageRepr(hash: StateHash): T[F, Option[String]] =
         runtimeManager.storageRepr(hash).liftM[T]

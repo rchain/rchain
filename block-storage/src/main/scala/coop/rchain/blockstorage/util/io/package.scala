@@ -66,6 +66,9 @@ package object io {
   def notExists[F[_]: Sync: RaiseIOError](path: Path): F[Boolean] =
     handleIo(Files.notExists(path), UnexpectedIOError.apply)
 
+  def exists[F[_]: Sync: RaiseIOError](path: Path): F[Boolean] =
+    handleIo(Files.exists(path), UnexpectedIOError.apply)
+
   def makeDirectory[F[_]: Sync: RaiseIOError](dirPath: Path): F[Path] =
     handleIo(Files.createDirectories(dirPath), UnexpectedIOError.apply)
 

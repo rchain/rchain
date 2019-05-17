@@ -1,12 +1,14 @@
 package coop.rchain.casper.genesis
 
 import java.io.{File, PrintWriter}
-import java.nio.file.Path
+import java.nio.file.{Path, Paths}
 
 import cats.effect.{Concurrent, Sync}
 import cats.implicits._
 import cats.{Applicative, Foldable, Monad}
 import com.google.protobuf.ByteString
+import coop.rchain.blockstorage.util.io._
+import coop.rchain.blockstorage.util.io.IOError.RaiseIOError
 import coop.rchain.casper.genesis.contracts._
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.ProtoUtil.{blockHeader, unsignedBlockProto}
@@ -78,7 +80,7 @@ object Genesis {
     }
 
   //TODO: Decide on version number and shard identifier
-  def fromInputFiles[F[_]: Concurrent: Sync: Log: Time](
+  def fromInputFiles[F[_]: Concurrent: Sync: Log: Time: RaiseIOError](
       maybeBondsPath: Option[String],
       numValidators: Int,
       genesisPath: Path,
@@ -92,18 +94,13 @@ object Genesis {
   ): F[BlockMessage] =
     for {
       timestamp <- deployTimestamp.fold(Time[F].currentMillis)(_.pure[F])
-      bondsFile <- toFile[F](maybeBondsPath, genesisPath.resolve("bonds.txt"))
-      _ <- bondsFile.fold[F[Unit]](
-            maybeBondsPath.fold(().pure[F])(
-              path =>
-                Log[F].warn(
-                  s"Specified bonds file $path does not exist. Falling back on generating random validators."
-                )
-            )
-          )(_ => ().pure[F])
-      walletsFile <- toFile[F](maybeWalletsPath, genesisPath.resolve("wallets.txt"))
-      wallets     <- getWallets[F](walletsFile, maybeWalletsPath)
-      bonds       <- getBonds[F](bondsFile, numValidators, genesisPath)
+      wallets   <- getWallets[F](maybeWalletsPath, genesisPath.resolve("wallets.txt"))
+      bonds <- getBonds[F](
+                maybeBondsPath,
+                genesisPath.resolve("bonds.txt"),
+                numValidators,
+                genesisPath
+              )
       vaults <- bonds.toList.foldMapM {
                  case (pk, stake) =>
                    RevAddress.fromPublicKey(pk) match {
@@ -155,7 +152,7 @@ object Genesis {
     val startHash = runtimeManager.emptyStateHash
 
     runtimeManager
-      .computeState(startHash)(blessedTerms)
+      .computeState(startHash)(blessedTerms, timestamp)
       .map {
         case (stateHash, processedDeploys) =>
           createInternalProcessedDeploy(genesis, startHash, stateHash, processedDeploys)
@@ -199,37 +196,15 @@ object Genesis {
     }
   }
 
-  //FIXME delay and simplify this
-  def toFile[F[_]: Applicative: Log](
-      maybePath: Option[String],
-      defaultPath: Path
-  ): F[Option[File]] =
-    maybePath match {
-      case Some(path) =>
-        val f = new File(path)
-        if (f.exists) f.some.pure[F]
-        else {
-          none[File].pure[F]
-        }
-
-      case None =>
-        val default = defaultPath.toFile
-        if (default.exists) {
-          Log[F].info(
-            s"Found default file ${default.getPath}."
-          ) *> default.some.pure[F]
-        } else none[File].pure[F]
-    }
-
-  def getWallets[F[_]: Monad: Sync: Log](
-      walletsFile: Option[File],
-      maybeWalletsPath: Option[String]
+  def getWallets[F[_]: Sync: Log: RaiseIOError](
+      maybeWalletsPath: Option[String],
+      defaultWalletPath: Path
   ): F[Seq[PreWallet]] = {
-    def walletFromFile(file: File): F[Seq[PreWallet]] =
+    def walletFromFile(walletsPath: Path): F[Seq[PreWallet]] =
       for {
-        maybeLines <- Sync[F].delay { Try(Source.fromFile(file).getLines().toList) }
+        maybeLines <- SourceIO.open(walletsPath).use(_.getLines).attempt
         wallets <- maybeLines match {
-                    case Success(lines) =>
+                    case Right(lines) =>
                       lines
                         .traverse(PreWallet.fromLine(_) match {
                           case Right(wallet) => wallet.some.pure[F]
@@ -239,58 +214,78 @@ object Genesis {
                               .map(_ => none[PreWallet])
                         })
                         .map(_.flatten)
-                    case Failure(ex) =>
+                    case Left(ex) =>
                       Log[F]
                         .warn(
-                          s"Failed to read ${file.getAbsolutePath()} for reason: ${ex.getMessage}"
+                          s"Failed to read ${walletsPath.toAbsolutePath} for reason: ${ex.getMessage}"
                         )
                         .map(_ => Seq.empty[PreWallet])
                   }
       } yield wallets
 
-    (walletsFile, maybeWalletsPath) match {
-      case (Some(file), _) => walletFromFile(file)
-      case (None, Some(path)) =>
-        Log[F]
-          .warn(s"Specified wallets file $path does not exist. No wallets will exist at genesis.")
-          .map(_ => Seq.empty[PreWallet])
-      case (None, None) =>
-        Log[F]
-          .warn(
-            s"No wallets file specified and no default file found. No wallets will exist at genesis."
-          )
-          .map(_ => Seq.empty[PreWallet])
+    maybeWalletsPath match {
+      case Some(walletsPathStr) =>
+        val walletsPath = Paths.get(walletsPathStr)
+        Monad[F].ifM(exists(walletsPath))(
+          walletFromFile(walletsPath),
+          Sync[F].raiseError(new Exception(s"Specified wallets file $walletsPath does not exist"))
+        )
+      case None =>
+        Monad[F].ifM(exists(defaultWalletPath))(
+          Log[F].info(s"Using default file $defaultWalletPath") >> walletFromFile(
+            defaultWalletPath
+          ),
+          Log[F]
+            .warn(
+              "No wallets file specified and no default file found. No wallets will exist at genesis."
+            )
+            .map(_ => Seq.empty[PreWallet])
+        )
     }
   }
 
-  def getBonds[F[_]: Monad: Sync: Log](
-      bondsFile: Option[File],
+  private def readBonds[F[_]: Sync: RaiseIOError](
+      bondsPath: Path
+  ): F[Map[PublicKey, Long]] =
+    SourceIO
+      .open[F](bondsPath)
+      .use(_.getLines)
+      .map { lines =>
+        Try {
+          lines
+            .map(line => {
+              val Array(pk, stake) = line.trim.split(" ")
+              PublicKey(Base16.unsafeDecode(pk)) -> stake.toLong
+            })
+            .toMap
+        }
+      }
+      .flatMap {
+        case Success(bonds) => bonds.pure[F]
+        case Failure(_) =>
+          Sync[F].raiseError(new Exception(s"Bonds file $bondsPath cannot be parsed"))
+      }
+
+  def getBonds[F[_]: Sync: Log: RaiseIOError](
+      maybeBondsPath: Option[String],
+      defaultBondsPath: Path,
       numValidators: Int,
       genesisPath: Path
   ): F[Map[PublicKey, Long]] =
-    bondsFile match {
-      case Some(file) =>
-        Sync[F]
-          .delay {
-            Try {
-              Source
-                .fromFile(file)
-                .getLines()
-                .map(line => {
-                  val Array(pk, stake) = line.trim.split(" ")
-                  PublicKey(Base16.unsafeDecode(pk)) -> (stake.toLong)
-                })
-                .toMap
-            }
-          }
-          .flatMap {
-            case Success(bonds) => bonds.pure[F]
-            case Failure(_) =>
-              Log[F].warn(
-                s"Bonds file ${file.getPath} cannot be parsed. Falling back on generating random validators."
-              ) *> newValidators[F](numValidators, genesisPath)
-          }
-      case None => newValidators[F](numValidators, genesisPath)
+    maybeBondsPath match {
+      case Some(bondsPathStr) =>
+        val bondsPath = Paths.get(bondsPathStr)
+        Monad[F].ifM(exists(bondsPath))(
+          readBonds(bondsPath),
+          Sync[F].raiseError(new Exception(s"Specified bonds file $bondsPath does not exist"))
+        )
+      case None =>
+        Monad[F].ifM(exists(defaultBondsPath))(
+          Log[F].info(s"Using default file $defaultBondsPath") >> readBonds(defaultBondsPath),
+          Log[F].warn(
+            s"Bonds file was not specified and default bonds file does not exist. Falling back on generating random validators."
+          ) >> newValidators[F](numValidators, genesisPath)
+        )
     }
 
   private def newValidators[F[_]: Monad: Sync: Log](
