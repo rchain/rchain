@@ -27,27 +27,26 @@ class InterpreterSpec extends FlatSpec with Matchers {
 
     val sendRho = "@{0}!(0)"
 
-    val (initStorage, beforeError, afterError, afterSend, finalContent) =
-      mkRuntime[Task](tmpPrefix, mapSize)
-        .use { runtime =>
-          for {
-            initStorage  <- storageContents(runtime)
-            _            <- success(runtime, sendRho)
-            beforeError  <- storageContents(runtime)
-            _            <- failure(runtime, "@1!(1) | @2!(3.noSuchMethod())")
-            afterError   <- storageContents(runtime)
-            _            <- success(runtime, "new stdout(`rho:io:stdout`) in { stdout!(42) }")
-            afterSend    <- storageContents(runtime)
-            _            <- success(runtime, "for (_ <- @0) { Nil }")
-            finalContent <- storageContents(runtime)
-          } yield (initStorage, beforeError, afterError, afterSend, finalContent)
-        }
-        .runSyncUnsafe(maxDuration)
-
-    assert(beforeError.contains(sendRho))
-    assert(afterError == beforeError)
-    assert(afterSend == beforeError)
-    assert(finalContent == initStorage)
+    mkRuntime[Task](tmpPrefix, mapSize)
+      .use { runtime =>
+        for {
+          initStorage           <- storageContents(runtime)
+          _                     <- success(runtime, sendRho)
+          beforeError           <- storageContents(runtime)
+          _                     = assert(beforeError.contains(sendRho))
+          beforeErrorCheckpoint <- runtime.space.createCheckpoint()
+          _                     <- failure(runtime, "@1!(1) | @2!(3.noSuchMethod())")
+          afterErrorCheckpoint  <- runtime.space.createCheckpoint()
+          _                     = assert(afterErrorCheckpoint.root == beforeErrorCheckpoint.root)
+          _                     <- success(runtime, "new stdout(`rho:io:stdout`) in { stdout!(42) }")
+          afterSendCheckpoint   <- runtime.space.createCheckpoint()
+          _                     = assert(afterSendCheckpoint.root == beforeErrorCheckpoint.root)
+          _                     <- success(runtime, "for (_ <- @0) { Nil }")
+          finalContent          <- storageContents(runtime)
+          _                     = assert(finalContent == initStorage)
+        } yield ()
+      }
+      .runSyncUnsafe(maxDuration)
   }
 
   it should "yield correct results for the PrimeCheck contract" in {
