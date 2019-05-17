@@ -155,7 +155,7 @@ object Genesis {
     val startHash = runtimeManager.emptyStateHash
 
     runtimeManager
-      .computeState(startHash)(blessedTerms)
+      .computeState(startHash)(blessedTerms, timestamp)
       .map {
         case (stateHash, processedDeploys) =>
           createInternalProcessedDeploy(genesis, startHash, stateHash, processedDeploys)

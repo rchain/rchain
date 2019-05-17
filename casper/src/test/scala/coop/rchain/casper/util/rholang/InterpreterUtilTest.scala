@@ -2,6 +2,7 @@ package coop.rchain.casper.util.rholang
 
 import java.nio.file.Files
 
+import cats.effect.Sync
 import cats.implicits._
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.{BlockDagRepresentation, BlockStore}
@@ -11,6 +12,7 @@ import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.ConstructDeploy
 import coop.rchain.casper.util.rholang.InterpreterUtil._
 import coop.rchain.casper.util.rholang.Resources.mkRuntimeManager
+import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
 import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.metrics
 import coop.rchain.metrics.{Metrics, NoopSpan}
@@ -38,6 +40,20 @@ class InterpreterUtilTest
       .unsafeRunSync
 
   val runtimeManager = RuntimeManager.fromRuntime(activeRuntime).unsafeRunSync
+
+  def computeDeploysCheckpoint[F[_]: Sync: BlockStore](
+      parents: Seq[BlockMessage],
+      deploys: Seq[DeployData],
+      dag: BlockDagRepresentation[F],
+      runtimeManager: RuntimeManager[F]
+  ): F[Either[Throwable, (StateHash, StateHash, Seq[InternalProcessedDeploy])]] =
+    InterpreterUtil.computeDeploysCheckpoint(
+      parents,
+      deploys,
+      dag,
+      runtimeManager,
+      System.currentTimeMillis()
+    )
 
   "computeBlockCheckpoint" should "compute the final post-state of a chain properly" in withStorage {
     implicit blockStore => implicit blockDagStorage =>

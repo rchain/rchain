@@ -37,11 +37,11 @@ trait RuntimeManager[F[_]] {
   def captureResults(start: StateHash, deploy: DeployData, name: Par): F[Seq[Par]]
   def replayComputeState(hash: StateHash)(
       terms: Seq[InternalProcessedDeploy],
-      time: Option[Long] = None
+      time: Long
   ): F[Either[(Option[DeployData], Failed), StateHash]]
   def computeState(hash: StateHash)(
       terms: Seq[DeployData],
-      time: Option[Long] = None
+      time: Long
   ): F[(StateHash, Seq[InternalProcessedDeploy])]
   def storageRepr(hash: StateHash): F[Option[String]]
   def computeBonds(hash: StateHash): F[Seq[Bond]]
@@ -96,7 +96,7 @@ class RuntimeManagerImpl[F[_]: Concurrent] private[rholang] (
     */
   def replayComputeState(hash: StateHash)(
       terms: Seq[InternalProcessedDeploy],
-      time: Option[Long] = None
+      time: Long
   ): F[Either[(Option[DeployData], Failed), StateHash]] =
     withRuntime { runtime =>
       for {
@@ -107,7 +107,7 @@ class RuntimeManagerImpl[F[_]: Concurrent] private[rholang] (
 
   def computeState(hash: StateHash)(
       terms: Seq[DeployData],
-      time: Option[Long] = None
+      time: Long
   ): F[(StateHash, Seq[InternalProcessedDeploy])] =
     withResetRuntime(hash) { runtime =>
       for {
@@ -117,14 +117,11 @@ class RuntimeManagerImpl[F[_]: Concurrent] private[rholang] (
     }
 
   private def setTimestamp(
-      time: Option[Long],
+      time: Long,
       runtime: Runtime[F]
-  ): F[Unit] =
-    time match {
-      case Some(t) =>
-        val timestamp: Par = Par(exprs = Seq(Expr(Expr.ExprInstance.GInt(t))))
-        runtime.blockTime.setParams(timestamp)
-      case None => ().pure[F]
+  ): F[Unit] = {
+      val timestamp: Par = Par(exprs = Seq(Expr(Expr.ExprInstance.GInt(time))))
+      runtime.blockTime.setParams(timestamp)
     }
 
   def storageRepr(hash: StateHash): F[Option[String]] =
@@ -437,13 +434,13 @@ object RuntimeManager {
 
       override def replayComputeState(hash: StateHash)(
           terms: scala.Seq[InternalProcessedDeploy],
-          time: Option[Long]
+          time: Long
       ): T[F, scala.Either[(Option[DeployData], Failed), StateHash]] =
         runtimeManager.replayComputeState(hash)(terms, time).liftM[T]
 
       override def computeState(hash: StateHash)(
           terms: scala.Seq[DeployData],
-          time: Option[Long]
+          time: Long
       ): T[F, (StateHash, scala.Seq[InternalProcessedDeploy])] =
         runtimeManager.computeState(hash)(terms, time).liftM[T]
 

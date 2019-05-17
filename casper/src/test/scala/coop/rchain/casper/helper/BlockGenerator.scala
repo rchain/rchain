@@ -10,7 +10,11 @@ import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.casper.util.rholang.InterpreterUtil.computeDeploysCheckpoint
 import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
-import coop.rchain.casper.util.rholang.{InternalProcessedDeploy, ProcessedDeployUtil, RuntimeManager}
+import coop.rchain.casper.util.rholang.{
+  InternalProcessedDeploy,
+  ProcessedDeployUtil,
+  RuntimeManager
+}
 import coop.rchain.crypto.hash.Blake2b256
 import coop.rchain.p2p.EffectsTestInstances.LogicalTime
 import coop.rchain.shared.Time
@@ -47,7 +51,7 @@ object BlockGenerator {
       runtimeManager: RuntimeManager[F]
   ): F[(StateHash, Seq[ProcessedDeploy])] =
     for {
-      result <- computeBlockCheckpointFromDeploys[F](b, genesis, dag, runtimeManager)
+      result                                                 <- computeBlockCheckpointFromDeploys[F](b, genesis, dag, runtimeManager)
       Right((preStateHash, postStateHash, processedDeploys)) = result
     } yield (postStateHash, processedDeploys.map(ProcessedDeployUtil.fromInternal))
 
@@ -82,7 +86,13 @@ object BlockGenerator {
         "Received a different genesis block."
       )
 
-      result <- computeDeploysCheckpoint[F](parents, deploys, dag, runtimeManager)
+      result <- computeDeploysCheckpoint[F](
+                 parents,
+                 deploys,
+                 dag,
+                 runtimeManager,
+                 System.currentTimeMillis()
+               )
     } yield result
 }
 

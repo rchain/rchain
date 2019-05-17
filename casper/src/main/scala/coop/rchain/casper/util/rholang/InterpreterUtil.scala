@@ -36,7 +36,7 @@ object InterpreterUtil {
     val tsHash          = ProtoUtil.tuplespace(b)
     val deploys         = ProtoUtil.deploys(b)
     val internalDeploys = deploys.flatMap(ProcessedDeployUtil.toInternal)
-    val timestamp       = Some(b.header.get.timestamp) // TODO: Ensure header exists through type
+    val timestamp       = b.header.get.timestamp // TODO: Ensure header exists through type
     for {
       _                    <- span.mark("before-unsafe-get-parents")
       parents              <- ProtoUtil.unsafeGetParents[F](b)
@@ -61,7 +61,7 @@ object InterpreterUtil {
       tsHash: Option[StateHash],
       internalDeploys: Seq[InternalProcessedDeploy],
       possiblePreStateHash: Either[Throwable, StateHash],
-      time: Option[Long]
+      time: Long
   ): F[Either[BlockException, Option[StateHash]]] =
     possiblePreStateHash match {
       case Left(ex) =>
@@ -91,7 +91,7 @@ object InterpreterUtil {
       tsHash: Option[StateHash],
       internalDeploys: Seq[InternalProcessedDeploy],
       possiblePreStateHash: Either[Throwable, StateHash],
-      time: Option[Long]
+      time: Long
   ): F[Either[BlockException, Option[StateHash]]] =
     runtimeManager
       .replayComputeState(preStateHash)(internalDeploys, time)
@@ -151,7 +151,7 @@ object InterpreterUtil {
       deploys: Seq[DeployData],
       dag: BlockDagRepresentation[F],
       runtimeManager: RuntimeManager[F],
-      time: Option[Long] = None
+      time: Long
   ): F[Either[Throwable, (StateHash, StateHash, Seq[InternalProcessedDeploy])]] =
     for {
       possiblePreStateHash <- computeParentsPostState[F](parents, dag, runtimeManager)
@@ -203,11 +203,10 @@ object InterpreterUtil {
                            case Right(stateHash) =>
                              val deploys =
                                block.getBody.deploys.flatMap(ProcessedDeployUtil.toInternal)
-                             val time = Some(block.header.get.timestamp)
                              for {
                                replayResult <- runtimeManager.replayComputeState(stateHash)(
                                                 deploys,
-                                                time
+                                                block.header.get.timestamp
                                               )
                              } yield replayResult match {
                                case result @ Right(_) => result.leftCast[Throwable]

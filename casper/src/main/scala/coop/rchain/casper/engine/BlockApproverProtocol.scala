@@ -157,9 +157,10 @@ object BlockApproverProtocol {
     (for {
       result                    <- EitherT(validate.pure[F])
       (blockDeploys, postState) = result
+      time                      = candidate.block.get.header.get.timestamp
       stateHash <- EitherT(
                     runtimeManager
-                      .replayComputeState(runtimeManager.emptyStateHash)(blockDeploys)
+                      .replayComputeState(runtimeManager.emptyStateHash)(blockDeploys, time)
                   ).leftMap { case (_, status) => s"Failed status during replay: $status." }
       _ <- EitherT(
             (stateHash == postState.postStateHash)

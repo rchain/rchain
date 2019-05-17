@@ -164,7 +164,7 @@ object BlockCreator {
         deploys,
         dag,
         runtimeManager,
-        Some(now)
+        now
       )
       .flatMap {
         case Left(ex) =>
