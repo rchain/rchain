@@ -61,7 +61,7 @@ object InterpreterUtil {
       tsHash: Option[StateHash],
       internalDeploys: Seq[InternalProcessedDeploy],
       possiblePreStateHash: Either[Throwable, StateHash],
-      time: Long
+      blockTime: Long
   ): F[Either[BlockException, Option[StateHash]]] =
     possiblePreStateHash match {
       case Left(ex) =>
@@ -74,7 +74,7 @@ object InterpreterUtil {
             tsHash,
             internalDeploys,
             possiblePreStateHash,
-            time
+            blockTime
           )
         } else {
           Log[F].warn(
@@ -91,10 +91,10 @@ object InterpreterUtil {
       tsHash: Option[StateHash],
       internalDeploys: Seq[InternalProcessedDeploy],
       possiblePreStateHash: Either[Throwable, StateHash],
-      time: Long
+      blockTime: Long
   ): F[Either[BlockException, Option[StateHash]]] =
     runtimeManager
-      .replayComputeState(preStateHash)(internalDeploys, time)
+      .replayComputeState(preStateHash)(internalDeploys, blockTime)
       .flatMap {
         case Left((Some(deploy), status)) =>
           status match {
@@ -151,13 +151,13 @@ object InterpreterUtil {
       deploys: Seq[DeployData],
       dag: BlockDagRepresentation[F],
       runtimeManager: RuntimeManager[F],
-      time: Long
+      blockTime: Long
   ): F[Either[Throwable, (StateHash, StateHash, Seq[InternalProcessedDeploy])]] =
     for {
       possiblePreStateHash <- computeParentsPostState[F](parents, dag, runtimeManager)
       result <- possiblePreStateHash match {
                  case Right(preStateHash) =>
-                   runtimeManager.computeState(preStateHash)(deploys, time).map {
+                   runtimeManager.computeState(preStateHash)(deploys, blockTime).map {
                      case (postStateHash, processedDeploys) =>
                        Right(preStateHash, postStateHash, processedDeploys)
                    }
