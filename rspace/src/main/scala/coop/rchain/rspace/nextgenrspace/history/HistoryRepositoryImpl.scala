@@ -156,7 +156,8 @@ final case class HistoryRepositoryImpl[F[_]: Sync, C, P, A, K](
 
   override def checkpoint(actions: List[HotStoreAction]): F[HistoryRepository[F, C, P, A, K]] =
     for {
-      trieActions    <- Applicative[F].pure(transform(actions))
+      trieActions <- Applicative[F].pure(transform(actions))
+      //      _ = measure(trieActions) //TODO call measure here
       historyActions <- storeLeaves(trieActions)
       next           <- history.process(historyActions)
       _              <- rootsRepository.commit(next.root)
