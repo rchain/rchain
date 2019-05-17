@@ -15,7 +15,6 @@ import coop.rchain.casper.util.rholang.{
   RuntimeManager
 }
 import coop.rchain.catscontrib.Catscontrib._
-import coop.rchain.comm.CommError.ErrorHandler
 import coop.rchain.comm.protocol.routing.Packet
 import coop.rchain.comm.rp.Connect.RPConfAsk
 import coop.rchain.comm.transport.{Blob, TransportLayer}
@@ -45,7 +44,7 @@ class BlockApproverProtocol(
   implicit private val logSource: LogSource = LogSource(this.getClass)
   private val _bonds                        = bonds.map(e => ByteString.copyFrom(e._1.bytes) -> e._2)
 
-  def unapprovedBlockPacketHandler[F[_]: Concurrent: TransportLayer: Log: Time: ErrorHandler: RPConfAsk](
+  def unapprovedBlockPacketHandler[F[_]: Concurrent: TransportLayer: Log: Time: RPConfAsk](
       peer: PeerNode,
       u: UnapprovedBlock,
       runtimeManager: RuntimeManager[F]

@@ -9,7 +9,6 @@ import com.google.protobuf.ByteString
 import coop.rchain.casper.LastApprovedBlock.LastApprovedBlock
 import coop.rchain.casper._
 import coop.rchain.casper.protocol._
-import coop.rchain.comm.CommError.ErrorHandler
 import coop.rchain.comm.discovery._
 import coop.rchain.comm.protocol.routing.Packet
 import coop.rchain.comm.rp.Connect.RPConfAsk
@@ -28,7 +27,7 @@ object CommUtil {
 
   implicit private val logSource: LogSource = LogSource(this.getClass)
 
-  def sendBlock[F[_]: Monad: ConnectionsCell: TransportLayer: Log: Time: ErrorHandler: RPConfAsk](
+  def sendBlock[F[_]: Monad: ConnectionsCell: TransportLayer: Log: Time: RPConfAsk](
       b: BlockMessage
   ): F[Unit] = {
     val serializedBlock = b.toByteString
@@ -38,7 +37,7 @@ object CommUtil {
     } yield ()
   }
 
-  def sendBlockRequest[F[_]: Monad: ConnectionsCell: TransportLayer: Log: Time: ErrorHandler: RPConfAsk](
+  def sendBlockRequest[F[_]: Monad: ConnectionsCell: TransportLayer: Log: Time: RPConfAsk](
       r: BlockRequest
   ): F[Unit] = {
     val serialized = r.toByteString
@@ -80,7 +79,7 @@ object CommUtil {
       _     <- TransportLayer[F].stream(peers, msg)
     } yield ()
 
-  def requestApprovedBlock[F[_]: Monad: Sync: LastApprovedBlock: Log: Time: Metrics: TransportLayer: ConnectionsCell: ErrorHandler: RPConfAsk]
+  def requestApprovedBlock[F[_]: Monad: Sync: LastApprovedBlock: Log: Time: Metrics: TransportLayer: ConnectionsCell: RPConfAsk]
       : F[Unit] = {
     val request = ApprovedBlockRequest("PleaseSendMeAnApprovedBlock").toByteString
     for {
