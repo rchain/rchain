@@ -106,7 +106,7 @@ class BlocksResponseAPITest
       } yield blocksResponse.length should be(5)
   }
 
-  "showBlocks" should "return all blocks" in withStorage {
+  "getBlocks" should "return all blocks" in withStorage {
     implicit blockStore => implicit blockDagStorage =>
       for {
         genesis <- createGenesis[Task](bonds = bonds)
@@ -170,7 +170,7 @@ class BlocksResponseAPITest
         casperRef          <- MultiParentCasperRef.of[Task]
         _                  <- casperRef.set(casperEffect)
         cliqueOracleEffect = SafetyOracle.cliqueOracle[Task](Sync[Task], logEff, metricsEff)
-        blocksResponse <- BlockAPI.showBlocks[Task](Some(Int.MaxValue))(
+        blocksResponse <- BlockAPI.getBlocks[Task](Some(Int.MaxValue))(
                            Sync[Task],
                            casperRef,
                            logEff,
@@ -243,7 +243,7 @@ class BlocksResponseAPITest
       casperRef          <- MultiParentCasperRef.of[Task]
       _                  <- casperRef.set(casperEffect)
       cliqueOracleEffect = SafetyOracle.cliqueOracle[Task](Sync[Task], logEff, metricsEff)
-      blocksResponse <- BlockAPI.showBlocks[Task](Some(2))(
+      blocksResponse <- BlockAPI.getBlocks[Task](Some(2))(
                          Sync[Task],
                          casperRef,
                          logEff,

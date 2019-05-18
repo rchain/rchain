@@ -35,11 +35,11 @@ object DeployRuntime {
       } yield response.map(r => s"Response: $r")
     )
 
-  def showBlock[F[_]: Monad: Sync: DeployService](hash: String): F[Unit] =
-    gracefulExit(DeployService[F].showBlock(BlockQuery(hash)))
+  def getBlock[F[_]: Monad: Sync: DeployService](hash: String): F[Unit] =
+    gracefulExit(DeployService[F].getBlock(BlockQuery(hash)))
 
-  def showBlocks[F[_]: Monad: Sync: DeployService](depth: Int): F[Unit] =
-    gracefulExit(DeployService[F].showBlocks(BlocksQuery(depth)))
+  def getBlocks[F[_]: Monad: Sync: DeployService](depth: Int): F[Unit] =
+    gracefulExit(DeployService[F].getBlocks(BlocksQuery(depth)))
 
   def visualizeDag[F[_]: Monad: Sync: DeployService](
       depth: Int,

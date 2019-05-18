@@ -15,8 +15,8 @@ import monix.eval.Task
 trait DeployService[F[_]] {
   def deploy(d: DeployData): F[Either[Seq[String], String]]
   def createBlock(): F[Either[Seq[String], String]] //create block and add to Casper internal state
-  def showBlock(q: BlockQuery): F[Either[Seq[String], String]]
-  def showBlocks(q: BlocksQuery): F[Either[Seq[String], String]]
+  def getBlock(q: BlockQuery): F[Either[Seq[String], String]]
+  def getBlocks(q: BlocksQuery): F[Either[Seq[String], String]]
   def visualizeDag(q: VisualizeDagQuery): F[Either[Seq[String], String]]
   def machineVerifiableDag(q: MachineVerifyQuery): F[Either[Seq[String], String]]
   def listenForDataAtName(request: DataAtNameQuery): F[Either[Seq[String], Seq[DataWithBlockInfo]]]
@@ -48,8 +48,8 @@ class GrpcDeployService(host: String, port: Int, maxMessageSize: Int)
   def createBlock(): Task[Either[Seq[String], String]] =
     stub.createBlock(Empty()).map(_.toEither[DeployServiceResponse].map(_.message))
 
-  def showBlock(q: BlockQuery): Task[Either[Seq[String], String]] =
-    stub.showBlock(q).map(_.toEither[BlockQueryResponse].map(_.toProtoString))
+  def getBlock(q: BlockQuery): Task[Either[Seq[String], String]] =
+    stub.getBlock(q).map(_.toEither[BlockQueryResponse].map(_.toProtoString))
 
   def visualizeDag(q: VisualizeDagQuery): Task[Either[Seq[String], String]] =
     stub
@@ -65,9 +65,9 @@ class GrpcDeployService(host: String, port: Int, maxMessageSize: Int)
   def machineVerifiableDag(q: MachineVerifyQuery): Task[Either[Seq[String], String]] =
     stub.machineVerifiableDag(q).map(_.toEither[MachineVerifyResponse].map(_.content))
 
-  def showBlocks(q: BlocksQuery): Task[Either[Seq[String], String]] =
+  def getBlocks(q: BlocksQuery): Task[Either[Seq[String], String]] =
     stub
-      .showBlocks(q)
+      .getBlocks(q)
       .map(_.toEither[BlockInfoWithoutTuplespace].map { bi =>
         s"""
          |------------- block ${bi.blockNumber} ---------------

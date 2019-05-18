@@ -24,7 +24,7 @@ class ManyValidatorsTest
     with Matchers
     with BlockGenerator
     with BlockDagStorageFixture {
-  "Show blocks" should "be processed quickly for a node with 300 validators" in {
+  "Get blocks" should "be processed quickly for a node with 300 validators" in {
     val blockDagStorageDir = BlockDagStorageTestFixture.blockDagStorageDir
     val blockStoreDir      = BlockDagStorageTestFixture.blockStorageDir
     implicit val metrics   = new MetricsNOP[Task]()
@@ -70,7 +70,7 @@ class ManyValidatorsTest
       casperRef          <- MultiParentCasperRef.of[Task]
       _                  <- casperRef.set(casperEffect)
       cliqueOracleEffect = SafetyOracle.cliqueOracle[Task]
-      result <- BlockAPI.showBlocks[Task](Some(Int.MaxValue))(
+      result <- BlockAPI.getBlocks[Task](Some(Int.MaxValue))(
                  Monad[Task],
                  casperRef,
                  logEff,
