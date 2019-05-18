@@ -1,5 +1,7 @@
 package coop.rchain.comm.discovery
 
+import java.util
+
 import cats.{catsInstancesForId => _, _}
 
 import coop.rchain.catscontrib.effect.implicits._
@@ -104,11 +106,15 @@ class DistanceSpec extends FlatSpec with Matchers {
     }
 
     it should s"return min(k, ${8 * width}) peers on lookup" in {
-      val table = PeerTable[PeerNode, Id](kr)
-      for (k <- oneOffs(kr)) {
+      val table     = PeerTable[PeerNode, Id](kr)
+      val krOneOffs = oneOffs(kr)
+      for (k <- krOneOffs) {
         table.updateLastSeen(PeerNode(NodeIdentifier(k), endpoint))
       }
-      table.lookup(randBytes(width)).size should be(scala.math.min(table.k, 8 * width))
+      val randomKey = randBytes(width)
+      val expected =
+        if (krOneOffs.exists(util.Arrays.equals(_, randomKey))) 8 * width - 1 else 8 * width
+      table.lookup(randomKey).size should be(scala.math.min(table.k, expected))
     }
 
     it should "not return sought peer on lookup" in {
