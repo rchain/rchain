@@ -83,15 +83,15 @@ final case class HistoryRepositoryImpl[F[_]: Sync, C, P, A, K](
 
   override def checkpoint(actions: List[HotStoreAction]): F[HistoryRepository[F, C, P, A, K]] =
     for {
-      a <- Applicative[F].pure(historyTransformer.transform(actions))
+      journalResultTuple <- Applicative[F].pure(historyTransformer.transform(actions))
 
-      _ = a.foreach(
+      _ = journalResultTuple.foreach(
         j =>
           dataLogger.debug(
             s"${j._1.key};${j._1.size};${j._1.action};${j._1.datumSize};${j._1.datumLen};${j._1.continuationsLength};${j._1.continuationsSize}"
           )
       )
-      historyActions <- storeLeaves(a.map(z => z._2))
+      historyActions <- storeLeaves(journalResultTuple.map(z => z._2))
       next           <- history.process(historyActions)
       _              <- rootsRepository.commit(next.root)
     } yield this.copy(history = next)
