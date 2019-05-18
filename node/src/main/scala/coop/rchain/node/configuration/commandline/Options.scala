@@ -148,11 +148,6 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
   val grpcMaxMessageSize =
     opt[Int](descr = "Maximum size of message that can be sent via gRPC API")
 
-  val diagnostics = new Subcommand("diagnostics") {
-    descr("Node diagnostics")
-  }
-  addSubcommand(diagnostics)
-
   val run = new Subcommand("run") {
 
     val dynamicHostAddress = opt[Flag](descr = "Host IP address changes dynamically")

@@ -95,8 +95,6 @@ class NodeRuntime private[node] (
       blockStore: BlockStore[Task],
       oracle: SafetyOracle[Task],
       multiParentCasperRef: MultiParentCasperRef[Task],
-      nodeCoreMetrics: NodeMetrics[Task],
-      jvmMetrics: JvmMetrics[Task],
       connectionsCell: ConnectionsCell[Task],
       concurrent: Concurrent[Task],
       metrics: Metrics[Task],
@@ -156,7 +154,6 @@ class NodeRuntime private[node] (
             if (conf.kamon.influxDbUdp) Kamon.addReporter(new UdpInfluxDBReporter())
             if (conf.kamon.prometheus) Kamon.addReporter(prometheusReporter)
             if (conf.kamon.zipkin) Kamon.addReporter(new ZipkinReporter())
-            Kamon.addReporter(new JmxReporter())
             if (conf.kamon.sigar) SystemMetrics.startCollecting()
           }
     } yield Servers(
@@ -222,8 +219,6 @@ class NodeRuntime private[node] (
       oracle: SafetyOracle[Task],
       packetHandler: PacketHandler[Task],
       casperConstructor: MultiParentCasperRef[Task],
-      nodeCoreMetrics: NodeMetrics[Task],
-      jvmMetrics: JvmMetrics[Task],
       engineCell: EngineCell[Task]
   ): Task[Unit] = {
 
@@ -479,8 +474,6 @@ class NodeRuntime private[node] (
       implicit val ev: EngineCell[Task] = engineCell
       CasperPacketHandler[Task]
     }
-    nodeCoreMetrics = diagnostics.effects.nodeCoreMetrics[Task]
-    jvmMetrics      = diagnostics.effects.jvmMetrics[Task]
 
     // 4. run the node program.
     program = nodeProgram(runtime, casperRuntime)(
@@ -498,8 +491,6 @@ class NodeRuntime private[node] (
       oracle,
       packetHandler,
       multiParentCasperRef,
-      nodeCoreMetrics,
-      jvmMetrics,
       engineCell
     )
     _ <- handleUnrecoverableErrors(program)

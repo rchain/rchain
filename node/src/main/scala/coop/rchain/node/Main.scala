@@ -16,7 +16,6 @@ import coop.rchain.crypto.signatures.Ed25519
 import coop.rchain.metrics
 import coop.rchain.metrics.Metrics
 import coop.rchain.node.configuration._
-import coop.rchain.node.diagnostics.client.GrpcDiagnosticsService
 import coop.rchain.node.effects._
 import coop.rchain.shared._
 import coop.rchain.shared.StringOps._
@@ -58,12 +57,6 @@ object Main {
         conf.grpcServer.portInternal,
         conf.grpcServer.maxMessageSize
       )
-    implicit val diagnosticsService: GrpcDiagnosticsService =
-      new diagnostics.client.GrpcDiagnosticsService(
-        conf.grpcServer.host,
-        conf.grpcServer.portInternal,
-        conf.grpcServer.maxMessageSize
-      )
     implicit val deployService: GrpcDeployService =
       new GrpcDeployService(
         conf.grpcServer.host,
@@ -76,7 +69,6 @@ object Main {
     val program = conf.command match {
       case Eval(files) => new ReplRuntime().evalProgram[Task](files)
       case Repl        => new ReplRuntime().replProgram[Task].as(())
-      case Diagnostics => diagnostics.client.Runtime.diagnosticsProgram[Task]
       case Deploy(phlo, phloPrice, validAfterBlock, privateKey, location) =>
         DeployRuntime
           .deployFileProgram[Task](
@@ -110,7 +102,6 @@ object Main {
       _ =>
         Task.delay {
           replService.close()
-          diagnosticsService.close()
           deployService.close()
         }
     )
