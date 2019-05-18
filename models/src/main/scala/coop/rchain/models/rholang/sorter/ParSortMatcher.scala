@@ -29,7 +29,7 @@ private[sorter] object ParSortMatcher extends Sortable[Par] {
         locallyFree = par.locallyFree,
         connectiveUsed = par.connectiveUsed
       )
-      connectiveUsedScore = if (par.connectiveUsed) 1 else 0
+      connectiveUsedScore = if (par.connectiveUsed) 1L else 0L
       parScore = Node(
         Score.PAR,
         sends.map(_.score) ++
