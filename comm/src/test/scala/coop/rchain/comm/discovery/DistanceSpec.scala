@@ -42,7 +42,7 @@ class DistanceSpec extends FlatSpec with Matchers {
         j <- 7 to 0 by -1
       } yield {
         val k1 = Array.fill(key.length)(0.toByte)
-        Array.copy(k1, 0, key, 0, key.length)
+        Array.copy(key, 0, k1, 0, k1.length)
         k1(i) = (k1(i) ^ (1 << j).toByte).toByte
         k1
       }
