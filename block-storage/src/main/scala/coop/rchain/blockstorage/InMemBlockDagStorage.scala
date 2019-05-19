@@ -26,7 +26,7 @@ final class InMemBlockDagStorage[F[_]: Concurrent: Sync: Log: BlockStore](
     equivocationsTrackerRef: Ref[F, Set[EquivocationRecord]],
     invalidBlocksRef: Ref[F, Set[BlockMetadata]]
 ) extends BlockDagStorage[F] {
-  final case class InMemBlockDagRepresentation(
+  private case class InMemBlockDagRepresentation(
       latestMessagesMap: Map[Validator, BlockHash],
       childMap: Map[BlockHash, Set[BlockHash]],
       dataLookup: Map[BlockHash, BlockMetadata],

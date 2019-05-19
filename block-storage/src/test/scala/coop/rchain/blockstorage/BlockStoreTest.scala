@@ -135,10 +135,9 @@ class FileLMDBIndexBlockStoreTest extends BlockStoreTest {
   private[this] val mapSize: Long    = 100L * 1024L * 1024L * 4096L
 
   override def withStore[R](f: BlockStore[Task] => Task[R]): R = {
-    val dbDir                           = mkTmpDir()
-    implicit val metrics: Metrics[Task] = new MetricsNOP[Task]()
-    implicit val log: Log[Task]         = new Log.NOPLog[Task]()
-    val env                             = Context.env(dbDir, mapSize)
+    val dbDir                   = mkTmpDir()
+    implicit val log: Log[Task] = new Log.NOPLog[Task]()
+    val env                     = Context.env(dbDir, mapSize)
     val test = for {
       store  <- FileLMDBIndexBlockStore.create[Task](env, dbDir).map(_.right.get)
       _      <- store.find(_ => true).map(map => assert(map.isEmpty))
@@ -153,9 +152,8 @@ class FileLMDBIndexBlockStoreTest extends BlockStoreTest {
   }
 
   private def createBlockStore(blockStoreDataDir: Path): Task[BlockStore[Task]] = {
-    implicit val metrics = new MetricsNOP[Task]()
-    implicit val log     = new Log.NOPLog[Task]()
-    val env              = Context.env(blockStoreDataDir, 100L * 1024L * 1024L * 4096L)
+    implicit val log = new Log.NOPLog[Task]()
+    val env          = Context.env(blockStoreDataDir, 100L * 1024L * 1024L * 4096L)
     FileLMDBIndexBlockStore.create[Task](env, blockStoreDataDir).map(_.right.get)
   }
 
