@@ -37,8 +37,8 @@ object ProtoM extends DescriptorPimps {
             .sortBy(_.getNumber)
             .toList
             .traverse[Coeval, Unit](f => {
-              val fieldValue = message.getField(f)
-              val default    = defaultInstance.getField(f)
+              val fieldValue = message.getFieldByNumber(f.getNumber)
+              val default    = defaultInstance.getFieldByNumber(f.getNumber)
               if (fieldValue != default)
                 writeField(out, fieldValue, f)
               else Monad[Coeval].pure(())
@@ -127,7 +127,9 @@ object ProtoM extends DescriptorPimps {
         case FIXED32  => out.writeFixed32   (field.getNumber, value.asInstanceOf[Int])
         case BOOL     => out.writeBool      (field.getNumber, value.asInstanceOf[Boolean])
         case STRING   => out.writeString    (field.getNumber, value.asInstanceOf[String])
-        case GROUP    => out.writeGroup     (field.getNumber, value.asInstanceOf[MessageLite])
+        case GROUP    => throw new UnsupportedOperationException(
+          "Groups are not supported, because they're deprecated in protobuf"
+        )
         case MESSAGE  => out.writeMessage   (field.getNumber, value.asInstanceOf[MessageLite])
         case BYTES    => out.writeBytes     (field.getNumber, value.asInstanceOf[ByteString])
         case UINT32   => out.writeUInt32    (field.getNumber, value.asInstanceOf[Int])
@@ -154,8 +156,8 @@ object ProtoM extends DescriptorPimps {
             "Unknown fields are not supported"
           )
       fieldSizes <- descriptor.fields.toList.traverse[Coeval, Int](f => {
-                     val fieldValue = message.getField(f)
-                     val default    = defaultInstance.getField(f)
+                     val fieldValue = message.getFieldByNumber(f.getNumber)
+                     val default    = defaultInstance.getFieldByNumber(f.getNumber)
                      if (fieldValue != default)
                        fieldSize(fieldValue, f)
                      else Monad[Coeval].pure(0)
@@ -228,7 +230,9 @@ object ProtoM extends DescriptorPimps {
         case FIXED32  => computeFixed32Size    (field.getNumber, value.asInstanceOf[Int])
         case BOOL     => computeBoolSize       (field.getNumber, value.asInstanceOf[Boolean])
         case STRING   => computeStringSize     (field.getNumber, value.asInstanceOf[String])
-        case GROUP    => computeGroupSize      (field.getNumber, value.asInstanceOf[MessageLite])
+        case GROUP    => throw new UnsupportedOperationException(
+          "Groups are not supported, because they're deprecated in protobuf"
+        )
         case MESSAGE  => computeMessageSize    (field.getNumber, value.asInstanceOf[MessageLite])
         case BYTES    => computeBytesSize      (field.getNumber, value.asInstanceOf[ByteString])
         case UINT32   => computeUInt32Size     (field.getNumber, value.asInstanceOf[Int])
