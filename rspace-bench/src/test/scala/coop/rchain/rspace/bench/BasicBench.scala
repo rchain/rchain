@@ -161,7 +161,7 @@ object BasicBench {
       Arbitrary(
         for {
           v <- Gen.posNum[Int]
-        } yield GInt(v)
+        } yield GInt(v.toLong)
       )
 
     def onePar(i: GInt) = List(
