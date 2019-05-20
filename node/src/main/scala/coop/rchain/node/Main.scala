@@ -129,26 +129,12 @@ object Main {
     // https://www.slf4j.org/legacy.html#jul-to-slf4j
     SLF4JBridgeHandler.removeHandlersForRootLogger()
     SLF4JBridgeHandler.install()
-
-    val node =
-      for {
-        _       <- log.info(VersionInfo.get).toEffect
-        _       <- logConfiguration(conf).toEffect
-        runtime <- NodeRuntime(conf)
-        _       <- runtime.main
-      } yield ()
-
-    node.value >>= {
-      case Right(_) =>
-        Task.unit
-      case Left(CouldNotConnectToBootstrap) =>
-        log.error("Node could not connect to bootstrap node.")
-      case Left(InitializationError(msg)) =>
-        log.error(msg) >>
-          Task.delay(System.exit(-1))
-      case Left(error) =>
-        log.error(s"Failed! Reason: '$error")
-    }
+    for {
+      _       <- log.info(VersionInfo.get).toEffect
+      _       <- logConfiguration(conf).toEffect
+      runtime <- NodeRuntime(conf)
+      _       <- runtime.main
+    } yield ()
   }
 
   private def logConfiguration(conf: Configuration): Task[Unit] =

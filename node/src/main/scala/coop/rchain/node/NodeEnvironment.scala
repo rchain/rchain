@@ -5,9 +5,7 @@ import java.security.cert.X509Certificate
 
 import scala.util._
 
-import cats.data.EitherT.{leftT, rightT}
-import cats.syntax.applicativeError._
-import cats.syntax.either._
+import cats._, cats.data._, cats.implicits._
 
 import coop.rchain.comm._
 import coop.rchain.crypto.codec.Base16
@@ -19,6 +17,8 @@ import monix.eval.Task
 import monix.execution.Scheduler
 
 object NodeEnvironment {
+
+  class InitializationException(msg: String) extends RuntimeException
 
   def create(conf: Configuration)(implicit log: Log[Task]): Effect[NodeIdentifier] =
     for {
@@ -33,15 +33,21 @@ object NodeEnvironment {
     } yield NodeIdentifier(name)
 
   private def isValid(pred: Boolean, msg: String): Effect[Unit] =
-    if (pred) Left[CommError, Unit](InitializationError(msg)).toEitherT
-    else Right(()).toEitherT
+    if (pred) Task.raiseError(new RuntimeException(msg))
+    else Task.unit
 
   private def name(conf: Configuration): Effect[String] = {
     val certificate: Effect[X509Certificate] =
       Task
         .delay(CertificateHelper.fromFile(conf.tls.certificate.toFile))
-        .attemptT
-        .leftMap(e => InitializationError(s"Failed to read the X.509 certificate: ${e.getMessage}"))
+        .attempt
+        .map(
+          _.leftMap(
+            e =>
+              new InitializationException(s"Failed to read the X.509 certificate: ${e.getMessage}")
+          )
+        )
+        .flatMap(e => Task.fromEither(e))
 
     for {
       cert <- certificate
@@ -52,12 +58,12 @@ object NodeEnvironment {
 
   private def certBase16(maybePubAddr: Option[Array[Byte]]): Effect[String] =
     maybePubAddr match {
-      case Some(bytes) => rightT(Base16.encode(bytes))
+      case Some(bytes) => Base16.encode(bytes).pure[Effect]
       case None =>
-        leftT(
-          InitializationError(
+        Task.fromEither(
+          new InitializationException(
             "Certificate must contain a secp256r1 EC Public Key"
-          )
+          ).asLeft[String]
         )
     }
 

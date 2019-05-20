@@ -11,14 +11,10 @@ import monix.eval.Task
 
 package object node {
 
-  /** Final Effect + helper methods */
   type CommErrT[F[_], A] = EitherT[F, CommError, A]
-  type Effect[A]         = CommErrT[Task, A]
+  type Effect[A]         = Task[A]
 
-  implicit class EitherEffectOps[A](e: Either[CommError, A]) {
-    def toEffect: Effect[A] = EitherT[Task, CommError, A](e.pure[Task])
-  }
   implicit class TaskEffectOps[A](t: Task[A]) {
-    def toEffect: Effect[A] = t.liftM[CommErrT]
+    def toEffect: Effect[A] = t
   }
 }

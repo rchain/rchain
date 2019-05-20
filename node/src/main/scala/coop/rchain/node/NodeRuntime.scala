@@ -67,9 +67,6 @@ class NodeRuntime private[node] (
 
   implicit private val logSource: LogSource = LogSource(this.getClass)
 
-  implicit def eiterTrpConfAsk(implicit ev: RPConfAsk[Task]): RPConfAsk[Effect] =
-    new EitherTApplicativeAsk[Task, RPConf, CommError]
-
   import ApplicativeError_._
 
   /** Configuration */
@@ -180,7 +177,7 @@ class NodeRuntime private[node] (
   ): Unit =
     (for {
       _ <- log.info("Shutting down API servers...")
-      _ <- servers.externalApiServer.stop.value
+      _ <- servers.externalApiServer.stop
       _ <- servers.internalApiServer.stop
       _ <- log.info("Shutting down Kademlia RPC server...")
       _ <- servers.kademliaRPCServer.stop
@@ -194,9 +191,9 @@ class NodeRuntime private[node] (
       _ <- log.info("Shutting down Casper runtime ...")
       _ <- casperRuntime.close()
       _ <- log.info("Bringing DagStorage down ...")
-      _ <- blockDagStorage.close().value
+      _ <- blockDagStorage.close()
       _ <- log.info("Bringing BlockStore down ...")
-      _ <- blockStore.close().value
+      _ <- blockStore.close()
       _ <- log.info("Goodbye.")
     } yield ()).unsafeRunSync(scheduler)
 
@@ -289,17 +286,17 @@ class NodeRuntime private[node] (
       _ <- Log[Effect].info(
             s"Kademlia RPC server started at $host:${servers.kademliaRPCServer.port}"
           )
-      _ <- servers.transportServer.startWithEffects(
+      _ <- servers.transportServer.start(
             pm => HandleMessages.handle[Effect](pm),
-            blob => packetHandler.handlePacket(blob.sender, blob.packet).as(())
+            blob => packetHandler.handlePacket(blob.sender, blob.packet)
           )
       address = s"rnode://$id@$host?protocol=$port&discovery=$kademliaPort"
       _       <- Log[Effect].info(s"Listening for traffic on $address.")
-      _       <- Task.defer(loop.forever.value).executeOn(loopScheduler).start.toEffect
+      _       <- Task.defer(loop.forever).executeOn(loopScheduler).start
       _ <- if (conf.server.standalone) ().pure[Effect]
           else Log[Effect].info(s"Waiting for first connection.") >> waitForFirstConnetion
       _ <- Concurrent[Effect].start(EngineCell[Effect].read >>= (_.init))
-      _ <- Task.defer(casperLoop.forever.value).executeOn(loopScheduler).toEffect
+      _ <- Task.defer(casperLoop.forever).executeOn(loopScheduler)
     } yield ()
   }
 
@@ -308,14 +305,12 @@ class NodeRuntime private[node] (
     * configured enviornment and they mean immediate termination of the program
     */
   private def handleUnrecoverableErrors(prog: Effect[Unit]): Effect[Unit] =
-    EitherT[Task, CommError, Unit](
-      prog.value
-        .onErrorHandleWith { th =>
-          log.error("Caught unhandable error. Exiting. Stacktrace below.") *> Task.delay {
-            th.printStackTrace()
-          }
-        } *> exit0.as(Right(()))
-    )
+    prog
+      .onErrorHandleWith { th =>
+        log.error("Caught unhandable error. Exiting. Stacktrace below.") *> Task.delay {
+          th.printStackTrace()
+        }
+      } *> exit0.as(Right(()))
 
   private val rpClearConnConf = ClearConnectionsConf(
     numOfConnectionsPinged = 10
@@ -368,7 +363,6 @@ class NodeRuntime private[node] (
     timerTask            = Task.timer
     multiParentCasperRef <- MultiParentCasperRef.of[Effect]
     lab                  <- LastApprovedBlock.of[Task].toEffect
-    labEff               = LastApprovedBlock.eitherTLastApprovedBlock[CommError, Task](Monad[Task], lab)
     commTmpFolder        = conf.server.dataDir.resolve("tmp").resolve("comm")
     _ <- commTmpFolder.toFile
           .exists()
@@ -408,7 +402,7 @@ class NodeRuntime private[node] (
                    .create[Effect](blockstoreEnv, blockstorePath)(
                      Concurrent[Effect],
                      Sync[Effect],
-                     Log.eitherTLog(Monad[Task], log)
+                     log
                    )
                    .map(_.right.get) // TODO handle errors
     dagConfig = BlockDagFileStorage.Config(
@@ -428,13 +422,13 @@ class NodeRuntime private[node] (
     blockDagStorage <- BlockDagFileStorage.create[Effect](dagConfig)(
                         Concurrent[Effect],
                         Sync[Effect],
-                        Log.eitherTLog(Monad[Task], log)
+                        log
                       )
     oracle = SafetyOracle
       .cliqueOracle[Effect](
         Monad[Effect],
-        Log.eitherTLog(Monad[Task], log),
-        Metrics.eitherT(Monad[Task], metrics)
+        log,
+        metrics
       )
     runtime <- {
       implicit val s                = rspaceScheduler
@@ -463,21 +457,21 @@ class NodeRuntime private[node] (
     raiseIOError   = IOError.raiseIOErrorThroughSync[Effect]
     casperInit = new CasperInit[Effect](
       conf.casper,
-      RuntimeManager.eitherTRuntimeManager(runtimeManager)
+      runtimeManager
     )
-    _ <- CasperLaunch[Effect](casperInit, _.value)(
-          labEff,
-          Metrics.eitherT(Monad[Task], metrics),
+    _ <- CasperLaunch[Task](casperInit, identity)(
+          lab,
+          metrics,
           blockStore,
-          Cell.eitherTCell(Monad[Task], rpConnections),
-          NodeDiscovery.eitherTNodeDiscovery(Monad[Task], nodeDiscovery),
-          TransportLayer.eitherTTransportLayer(Monad[Task], log, transport),
-          eiterTrpConfAsk(rpConfAsk),
+          rpConnections,
+          nodeDiscovery,
+          transport,
+          rpConfAsk,
           oracle,
           Sync[Effect],
           Concurrent[Effect],
-          Time.eitherTTime(Monad[Task], time),
-          Log.eitherTLog(Monad[Task], log),
+          time,
+          log,
           multiParentCasperRef,
           blockDagStorage,
           engineCell,
