@@ -63,23 +63,24 @@ class GrpcTransportClient(
     Scheduler.fixedPool("tl-client-stream-queue", parallelism, reporter = UncaughtExceptionLogger)
   )
 
-  // TODO FIX-ME No throwing exceptions!
-  @SuppressWarnings(Array("org.wartremover.warts.Throw"))
-  private lazy val clientSslContext: SslContext =
-    try {
-      GrpcSslContexts.forClient
-        .trustManager(HostnameTrustManagerFactory.Instance)
-        .keyManager(certInputStream, keyInputStream)
-        .build
-    } catch {
-      case e: Throwable =>
-        println(e.getMessage)
-        throw e
-    }
+  private val clientSslContextTask: Task[SslContext] =
+    Task
+      .evalOnce {
+        GrpcSslContexts.forClient
+          .trustManager(HostnameTrustManagerFactory.Instance)
+          .keyManager(certInputStream, keyInputStream)
+          .build
+      }
+      .attempt
+      .flatMap {
+        case Right(sslContext) => sslContext.pure[Task]
+        case Left(t)           => Task.raiseError[SslContext](t)
+      }
 
   private def clientChannel(peer: PeerNode): Task[ManagedChannel] =
     for {
-      _ <- log.debug(s"Creating new channel to peer ${peer.toAddress}")
+      _                <- log.debug(s"Creating new channel to peer ${peer.toAddress}")
+      clientSslContext <- clientSslContextTask
       c <- Task.delay {
             NettyChannelBuilder
               .forAddress(peer.endpoint.host, peer.endpoint.tcpPort)
