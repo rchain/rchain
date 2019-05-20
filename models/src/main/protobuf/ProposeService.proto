@@ -1,0 +1,17 @@
+syntax = "proto3";
+package coop.rchain.casper.protocol;
+
+import "CasperMessage.proto";
+import "google/protobuf/empty.proto";
+import "Either.proto";
+import "scalapb/scalapb.proto";
+
+option (scalapb.options) = {
+  package_name: "coop.rchain.casper.protocol"
+  flat_package: true
+  single_file: true
+};
+
+service ProposeService {
+  rpc propose(google.protobuf.Empty) returns (Either) {}
+}

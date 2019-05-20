@@ -135,7 +135,8 @@ class NodeRuntime private[node] (
                             .acquireInternalServer(
                               conf.grpcServer.portInternal,
                               runtime,
-                              grpcScheduler
+                              grpcScheduler,
+                              blockApiLock
                             )
 
       prometheusReporter = new NewPrometheusReporter()
