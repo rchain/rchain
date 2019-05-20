@@ -130,8 +130,8 @@ object Main {
     SLF4JBridgeHandler.removeHandlersForRootLogger()
     SLF4JBridgeHandler.install()
     for {
-      _       <- log.info(VersionInfo.get).toEffect
-      _       <- logConfiguration(conf).toEffect
+      _       <- log.info(VersionInfo.get)
+      _       <- logConfiguration(conf)
       runtime <- NodeRuntime(conf)
       _       <- runtime.main
     } yield ()
