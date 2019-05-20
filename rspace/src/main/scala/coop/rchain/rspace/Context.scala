@@ -81,6 +81,18 @@ private[rspace] class MixedContext[F[_], C, P, A, K] private[rspace] (
   }
 }
 
+class NoopContext[F[_], C, P, A, K] extends Context[F, C, P, A, K] {
+  override def close(): Unit = ()
+
+  override def createStore(branch: Branch)(
+      implicit sc: Serialize[C],
+      sp: Serialize[P],
+      sa: Serialize[A],
+      sk: Serialize[K],
+      syncF: Sync[F]
+  ): IStore[F, C, P, A, K] = ???
+}
+
 object Context {
 
   def env(

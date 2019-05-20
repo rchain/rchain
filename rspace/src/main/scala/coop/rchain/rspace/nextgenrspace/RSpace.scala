@@ -16,6 +16,7 @@ import coop.rchain.rspace.trace._
 import coop.rchain.shared.{Cell, Log}
 import coop.rchain.shared.SyncVarOps._
 import monix.execution.atomic.AtomicAny
+import scodec.Codec
 
 import scala.concurrent.ExecutionContext
 import scala.util.Random
@@ -425,9 +426,11 @@ class RSpace[F[_], C, P, A, R, K] private[rspace] (
     for {
       changes     <- storeAtom.get().changes()
       nextHistory <- historyRepositoryAtom.get().checkpoint(changes.toList)
+      _           = historyRepositoryAtom.set(nextHistory)
       _           <- createNewHotStore(nextHistory)(serializeP.toCodec, serializeK.toCodec)
       log         = eventLog.take()
       _           = eventLog.put(Seq.empty)
+      _           <- restoreInstalls()
     } yield Checkpoint(nextHistory.history.root, log)
 
   override def reset(root: Blake2b256Hash): F[Unit] =
@@ -466,6 +469,32 @@ object RSpace {
 
     space.pure[F]
 
+  }
+
+  def createWithReplay[F[_], C, P, A, R, K](dataDir: Path, mapSize: Long)(
+      implicit
+      sc: Serialize[C],
+      sp: Serialize[P],
+      sa: Serialize[A],
+      sk: Serialize[K],
+      concurrent: Concurrent[F],
+      logF: Log[F],
+      contextShift: ContextShift[F],
+      scheduler: ExecutionContext,
+      metricsF: Metrics[F]
+  ): F[(ISpace[F, C, P, A, R, K], IReplaySpace[F, C, P, A, R, K])] = {
+    val v2Dir = dataDir.resolve("v2")
+    for {
+      setup                  <- setUp[F, C, P, A, R, K](v2Dir, mapSize, Branch.MASTER)
+      (historyReader, store) = setup
+      space                  = new RSpace[F, C, P, A, R, K](historyReader, AtomicAny(store), Branch.MASTER)
+      replayStore            <- inMemoryStore(historyReader)(sp.toCodec, sk.toCodec, concurrent)
+      replay = new ReplayRSpace[F, C, P, A, R, K](
+        historyReader,
+        AtomicAny(replayStore),
+        Branch.REPLAY
+      )
+    } yield (space, replay)
   }
 
   def create[F[_], C, P, A, R, K](
@@ -527,9 +556,16 @@ object RSpace {
       _ <- checkCreateDir(rootsStore.path)
       historyReader <- HistoryRepositoryInstances
                         .lmdbRepository[F, C, P, A, K](config)
-      cache <- Cell.refCell[F, Cache[C, P, A, K]](Cache())
-      store = HotStore.inMem(Sync[F], cache, historyReader, cp, ck)
+      store <- inMemoryStore(historyReader)
     } yield (historyReader, store)
 
   }
+
+  private def inMemoryStore[F[_], C, P, A, K](
+      historyReader: HistoryReader[F, C, P, A, K]
+  )(implicit cp: Codec[P], ck: Codec[K], sync: Sync[F]) =
+    for {
+      cache <- Cell.refCell[F, Cache[C, P, A, K]](Cache())
+      store = HotStore.inMem(Sync[F], cache, historyReader, cp, ck)
+    } yield store
 }
