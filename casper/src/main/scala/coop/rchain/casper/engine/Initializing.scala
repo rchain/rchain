@@ -18,7 +18,6 @@ import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.rholang.RuntimeManager
 import coop.rchain.catscontrib.Catscontrib._
 import coop.rchain.catscontrib.MonadTrans
-import coop.rchain.comm.CommError.ErrorHandler
 import coop.rchain.comm.discovery.NodeDiscovery
 import coop.rchain.comm.protocol.routing.Packet
 import coop.rchain.comm.rp.Connect.{ConnectionsCell, RPConfAsk}
@@ -36,7 +35,7 @@ import scala.util.Try
   * and will wait for the [[ApprovedBlock]] message to arrive. Until then  it will respond with
   * `F[None]` to all other message types.
     **/
-class Initializing[F[_]: Sync: Metrics: Concurrent: ConnectionsCell: BlockStore: TransportLayer: Log: Time: ErrorHandler: SafetyOracle: RPConfAsk: LastApprovedBlock: BlockDagStorage: MultiParentCasperRef: EngineCell](
+class Initializing[F[_]: Sync: Metrics: Concurrent: ConnectionsCell: BlockStore: TransportLayer: Log: Time: SafetyOracle: RPConfAsk: LastApprovedBlock: BlockDagStorage: MultiParentCasperRef: EngineCell](
     runtimeManager: RuntimeManager[F],
     shardId: String,
     validatorId: Option[ValidatorIdentity],

@@ -21,7 +21,7 @@ import coop.rchain.catscontrib.Catscontrib._
 import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.catscontrib.effect.implicits._
 import coop.rchain.catscontrib.ski._
-import coop.rchain.comm.CommError.ErrorHandler
+
 import coop.rchain.comm._
 import coop.rchain.comm.protocol.routing._
 import coop.rchain.comm.rp.Connect
@@ -52,7 +52,6 @@ class HashSetCasperTestNode[F[_]](
     val genesis: BlockMessage,
     sk: PrivateKey,
     logicalTime: LogicalTime[F],
-    implicit val errorHandlerEff: ErrorHandler[F],
     val blockDagDir: Path,
     val blockStoreDir: Path,
     blockProcessingLock: Semaphore[F],
@@ -162,8 +161,7 @@ object HashSetCasperTestNode {
       storageSize: Long,
       createRuntime: (Path, Long) => Resource[F, RuntimeManager[F]]
   )(
-      implicit errorHandler: ErrorHandler[F],
-      concurrentF: Concurrent[F],
+      implicit concurrentF: Concurrent[F],
       testNetworkF: TestNetwork[F]
   ): Resource[F, HashSetCasperTestNode[F]] = {
     val name                        = "standalone"
@@ -217,7 +215,6 @@ object HashSetCasperTestNode {
                    genesis,
                    sk,
                    logicalTime,
-                   errorHandler,
                    blockDagDir,
                    blockStoreDir,
                    blockProcessingLock,
@@ -253,7 +250,6 @@ object HashSetCasperTestNode {
           storageSize,
           createRuntime
         )(
-          ApplicativeError_[Effect, CommError],
           Concurrent[Effect],
           testNetwork
         )
@@ -265,8 +261,7 @@ object HashSetCasperTestNode {
       storageSize: Long,
       createRuntime: (Path, Long) => Resource[F, RuntimeManager[F]]
   )(
-      implicit errorHandler: ErrorHandler[F],
-      concurrentF: Concurrent[F],
+      implicit concurrentF: Concurrent[F],
       testNetworkF: TestNetwork[F]
   ): Resource[F, IndexedSeq[HashSetCasperTestNode[F]]] = {
     val n                           = sks.length
@@ -333,7 +328,6 @@ object HashSetCasperTestNode {
                            genesis,
                            sk,
                            logicalTime,
-                           errorHandler,
                            blockDagDir,
                            blockStoreDir,
                            semaphore,
@@ -388,7 +382,6 @@ object HashSetCasperTestNode {
       storageSize,
       createRuntime
     )(
-      ApplicativeError_[Effect, CommError],
       Concurrent[Effect],
       testNetwork
     )

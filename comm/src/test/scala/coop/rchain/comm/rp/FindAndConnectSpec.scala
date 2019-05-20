@@ -18,7 +18,7 @@ class FindAndConnectSpec extends FunSpec with Matchers with BeforeAndAfterEach w
 
   import ScalaTestCats._
 
-  type Effect[A] = EitherT[Id, CommError, A]
+  type Effect[A] = Id[A]
 
   val src: PeerNode              = peer("src")
   val deftimeout: FiniteDuration = FiniteDuration(1, MILLISECONDS)
@@ -37,10 +37,10 @@ class FindAndConnectSpec extends FunSpec with Matchers with BeforeAndAfterEach w
     connectCalled = List.empty[PeerNode]
   }
 
-  val connect: (PeerNode, FiniteDuration) => Effect[Unit] = (peer, to) => {
+  val connect: PeerNode => Effect[CommErr[Unit]] = (peer) => {
     connectCalled = connectCalled :+ peer
-    if (willConnectSuccessfully.contains(peer)) ().pure[Effect]
-    else EitherT[Id, CommError, Unit](Left(timeout))
+    if (willConnectSuccessfully.contains(peer)) ().asRight[CommError].pure[Effect]
+    else CommError.timeout.asLeft[Unit].pure[Effect]
   }
 
   describe("Node when called to find and connect") {
@@ -62,7 +62,7 @@ class FindAndConnectSpec extends FunSpec with Matchers with BeforeAndAfterEach w
         implicit val connections = mkConnections()
         willConnectSuccessfully = List(peer("A"), peer("C"))
         // when
-        val result = Connect.findAndConnect[Effect](connect).value.right.get
+        val result = Connect.findAndConnect[Effect](connect)
         // then
         result.size shouldBe (2)
         result should contain(peer("A"))
@@ -90,7 +90,7 @@ class FindAndConnectSpec extends FunSpec with Matchers with BeforeAndAfterEach w
         implicit val connections = mkConnections(peer("B"))
         willConnectSuccessfully = List(peer("A"))
         // when
-        val result = Connect.findAndConnect[Effect](connect).value.right.get
+        val result = Connect.findAndConnect[Effect](connect)
         // then
         result.size shouldBe (1)
         result should contain(peer("A"))
@@ -125,8 +125,4 @@ class FindAndConnectSpec extends FunSpec with Matchers with BeforeAndAfterEach w
         maxNumOfConnections = maxNumOfConnections
       )
     )
-
-  implicit def eiterTrpConfAsk: RPConfAsk[Effect] =
-    new EitherTApplicativeAsk[Id, RPConf, CommError]
-
 }

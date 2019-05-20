@@ -18,7 +18,7 @@ import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.rholang.RuntimeManager
 import coop.rchain.catscontrib.Catscontrib._
 import coop.rchain.catscontrib.MonadTrans
-import coop.rchain.comm.CommError.ErrorHandler
+
 import coop.rchain.comm.discovery.NodeDiscovery
 import coop.rchain.comm.protocol.routing.Packet
 import coop.rchain.comm.rp.Connect.{ConnectionsCell, RPConfAsk}
@@ -54,7 +54,7 @@ object Engine {
    * Note the ordering of the insertions is important.
    * We always want the block dag store to be a subset of the block store.
    */
-  def insertIntoBlockAndDagStore[F[_]: Sync: Concurrent: ErrorHandler: TransportLayer: ConnectionsCell: Log: BlockStore: BlockDagStorage](
+  def insertIntoBlockAndDagStore[F[_]: Sync: Concurrent: TransportLayer: ConnectionsCell: Log: BlockStore: BlockDagStorage](
       genesis: BlockMessage,
       approvedBlock: ApprovedBlock
   ): F[Unit] =
@@ -80,7 +80,7 @@ object Engine {
       _   <- TransportLayer[F].stream(peer, msg)
     } yield ()
 
-  def transitionToRunning[F[_]: Monad: MultiParentCasperRef: EngineCell: Log: RPConfAsk: BlockStore: ConnectionsCell: TransportLayer: Time: ErrorHandler](
+  def transitionToRunning[F[_]: Monad: MultiParentCasperRef: EngineCell: Log: RPConfAsk: BlockStore: ConnectionsCell: TransportLayer: Time](
       casper: MultiParentCasper[F],
       approvedBlock: ApprovedBlock
   ): F[Unit] =
@@ -92,7 +92,7 @@ object Engine {
 
     } yield ()
 
-  def tranistionToInitializing[F[_]: Concurrent: Metrics: Monad: MultiParentCasperRef: EngineCell: Log: RPConfAsk: BlockStore: ConnectionsCell: TransportLayer: Time: ErrorHandler: SafetyOracle: LastApprovedBlock: BlockDagStorage](
+  def tranistionToInitializing[F[_]: Concurrent: Metrics: Monad: MultiParentCasperRef: EngineCell: Log: RPConfAsk: BlockStore: ConnectionsCell: TransportLayer: Time: SafetyOracle: LastApprovedBlock: BlockDagStorage](
       rm: RuntimeManager[F],
       shardId: String,
       validatorId: Option[ValidatorIdentity],

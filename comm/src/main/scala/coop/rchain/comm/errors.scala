@@ -10,7 +10,6 @@ import coop.rchain.comm.protocol.routing._
 // TODO we need lower level errors and general error, for now all in one place
 // TODO cleanup unused errors (UDP trash)
 sealed trait CommError
-final case class InitializationError(msg: String)                   extends CommError
 final case class UnknownCommError(msg: String)                      extends CommError
 final case class DatagramSizeError(size: Int)                       extends CommError
 final case class DatagramFramingError(ex: Exception)                extends CommError
@@ -40,13 +39,6 @@ final case class UnableToRestorePacket(path: Path, th: Throwable)   extends Comm
 // TODO add Show instance
 
 object CommError {
-
-  type ErrorHandler[F[_]] = ApplicativeError_[F, CommError]
-
-  object ErrorHandler {
-    def apply[F[_]](implicit ev: ApplicativeError_[F, CommError]): ApplicativeError_[F, CommError] =
-      ev
-  }
 
   type CommErrT[F[_], A] = EitherT[F, CommError, A]
   type CommErr[A]        = Either[CommError, A]

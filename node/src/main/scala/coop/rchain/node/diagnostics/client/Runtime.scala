@@ -14,8 +14,8 @@ object Runtime {
 
   type ErrorHandler[F[_]] = ApplicativeError_[F, Throwable]
 
-  def diagnosticsProgram[F[_]: Monad: ErrorHandler: ConsoleIO: DiagnosticsService]: F[Unit] = {
-    val program = for {
+  def diagnosticsProgram[F[_]: Monad: ConsoleIO: DiagnosticsService]: F[Unit] =
+    for {
       peersRP <- DiagnosticsService[F].listPeers
       _       <- ConsoleIO[F].println(showPeers(peersRP, "connected"))
       peersND <- DiagnosticsService[F].listDiscoveredPeers
@@ -34,18 +34,6 @@ object Runtime {
       _       <- ConsoleIO[F].println(showThreads(threads))
       _       <- ConsoleIO[F].close
     } yield ()
-
-    for {
-      result <- program.attempt
-      _ <- result match {
-            case Left(ex) => ConsoleIO[F].println(s"Error: ${processError(ex).getMessage}")
-            case _        => ().pure[F]
-          }
-    } yield ()
-  }
-
-  private def processError(t: Throwable): Throwable =
-    Option(t.getCause).getOrElse(t)
 
   def showPeers(peers: Seq[PeerNode], peerType: String): String =
     List(

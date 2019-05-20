@@ -137,27 +137,6 @@ class TransportServer(server: GrpcTransportServer) {
 
   import CommunicationResponse._
 
-  def startWithEffects(
-      dispatch: Protocol => EitherT[Task, CommError, CommunicationResponse],
-      handleStreamed: Blob => EitherT[Task, CommError, Unit]
-  )(implicit log: Log[Task]): EitherT[Task, CommError, Unit] = {
-    val dis: Protocol => Task[CommunicationResponse] = msg =>
-      dispatch(msg).value.flatMap {
-        case Left(err) =>
-          Log[Task].error(
-            s"Error while handling message. Error: ${err.message}"
-          ) >> Task.now(notHandled(err))
-        case Right(m) => Task.now(m)
-      }
-    val hb: Blob => Task[Unit] = b =>
-      handleStreamed(b).value.flatMap {
-        case Left(err) =>
-          Log[Task].error(s"Error while handling streamed Packet message. Error: ${err.message}")
-        case Right(_) => Task.unit
-      }
-    EitherT.liftF(start(dis, hb))
-  }
-
   def stop(): Task[Unit] =
     ref
       .getAndSet(None)
