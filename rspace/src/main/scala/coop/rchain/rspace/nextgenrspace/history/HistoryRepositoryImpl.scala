@@ -81,19 +81,15 @@ final case class HistoryRepositoryImpl[F[_]: Sync, C, P, A, K](
 
   protected[this] val dataLogger: Logger = Logger("coop.rchain.rspace.datametrics")
 
+  private def measure(actions: List[HotStoreAction]): Unit =
+    actions.foreach(a => dataLogger.debug(s"${historyTransformer.measure(a)}"))
+
   override def checkpoint(actions: List[HotStoreAction]): F[HistoryRepository[F, C, P, A, K]] =
     for {
-      journalResultTuple <- Applicative[F].pure(historyTransformer.transform(actions))
-      _ = dataLogger.whenDebugEnabled {
-        journalResultTuple.foreach(
-          j =>
-            dataLogger.debug(
-              s"${j._1.key};${j._1.size};${j._1.action};${j._1.datumSize};${j._1.datumLen};${j._1.continuationsLength};${j._1.continuationsSize}"
-            )
-        )
-      }
-      historyActions <- storeLeaves(journalResultTuple.map(z => z._2))
+      trieActions    <- Applicative[F].pure(historyTransformer.transform(actions))
+      historyActions <- storeLeaves(trieActions)
       next           <- history.process(historyActions)
+      _              = dataLogger.whenDebugEnabled(measure(actions))
       _              <- rootsRepository.commit(next.root)
     } yield this.copy(history = next)
 

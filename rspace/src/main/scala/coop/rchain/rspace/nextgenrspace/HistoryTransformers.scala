@@ -89,105 +89,41 @@ class HistoryTransformers[C, P, A, K](
   def decode[R](bv: ByteVector)(implicit codecR: Codec[R]): Seq[R] =
     Codec.decode[Seq[R]](bv.bits).get.value
 
-  def transform(actions: List[HotStoreAction]): List[JournalResultTuple] =
+  def transform(actions: List[HotStoreAction]): List[Result] =
     actions.map {
       case i: InsertData[C, A] =>
         val key      = hashDataChannel(i.channel)
         val data     = encodeData(i.data)
         val dataLeaf = DataLeaf(data)
         val dataHash = Blake2b256Hash.create(data)
-        (
-          MeasureJournal(
-            key = key.bytes.toHex,
-            size = data.toBitVector.size,
-            action = "InsertData",
-            datumSize = 0,
-            datumLen = dataLeaf.bytes.size,
-            continuationsLength = 0L,
-            continuationsSize = 0
-          ),
-          (dataHash, Some(dataLeaf), InsertAction(key.bytes.toSeq.toList, dataHash))
-        )
+        (dataHash, Some(dataLeaf), InsertAction(key.bytes.toSeq.toList, dataHash))
       case i: InsertContinuations[C, P, K] =>
         val key               = hashContinuationsChannels(i.channels)
         val data              = encodeContinuations(i.continuations)
         val continuationsLeaf = ContinuationsLeaf(data)
         val continuationsHash = Blake2b256Hash.create(data)
         (
-          MeasureJournal(
-            key = key.bytes.toHex,
-            size = data.size,
-            action = "InsertContinuations",
-            datumSize = 0,
-            datumLen = 0L,
-            continuationsLength = continuationsLeaf.bytes.toBitVector.size,
-            continuationsSize = continuationsLeaf.bytes.size.toInt
-          ),
-          (
-            continuationsHash,
-            Some(continuationsLeaf),
-            InsertAction(key.bytes.toSeq.toList, continuationsHash)
-          )
+          continuationsHash,
+          Some(continuationsLeaf),
+          InsertAction(key.bytes.toSeq.toList, continuationsHash)
         )
       case i: InsertJoins[C] =>
         val key       = hashJoinsChannel(i.channel)
         val data      = encodeJoins(i.joins)
         val joinsLeaf = JoinsLeaf(data)
         val joinsHash = Blake2b256Hash.create(data)
-        (
-          MeasureJournal(
-            key = key.bytes.toHex,
-            size = data.size,
-            action = "InsertContinu",
-            datumSize = 0,
-            datumLen = 0L,
-            continuationsLength = joinsLeaf.bytes.toBitVector.size,
-            continuationsSize = joinsLeaf.bytes.size.toInt
-          ),
-          (joinsHash, Some(joinsLeaf), InsertAction(key.bytes.toSeq.toList, joinsHash))
-        )
+        (joinsHash, Some(joinsLeaf), InsertAction(key.bytes.toSeq.toList, joinsHash))
       case d: DeleteData[C] =>
         val key = hashDataChannel(d.channel)
-        (
-          MeasureJournal(
-            key = key.bytes.toHex,
-            size = 0,
-            action = "DeleteData",
-            datumSize = 0,
-            datumLen = 0L,
-            continuationsLength = 0,
-            continuationsSize = 0
-          ),
-          (key, None, DeleteAction(key.bytes.toSeq.toList))
-        )
+        (key, None, DeleteAction(key.bytes.toSeq.toList))
       case d: DeleteContinuations[C] =>
         val key = hashContinuationsChannels(d.channels)
-        (
-          MeasureJournal(
-            key = key.bytes.toHex,
-            size = 0,
-            action = "DeleteData",
-            datumSize = 0,
-            datumLen = 0L,
-            continuationsLength = 0,
-            continuationsSize = 0
-          ),
-          (key, None, DeleteAction(key.bytes.toSeq.toList))
-        )
+        (key, None, DeleteAction(key.bytes.toSeq.toList))
       case d: DeleteJoins[C] =>
         val key = hashJoinsChannel(d.channel)
-        (
-          MeasureJournal(
-            key = key.bytes.toHex,
-            size = 0,
-            action = "DeleteData",
-            datumSize = 0,
-            datumLen = 0L,
-            continuationsLength = 0,
-            continuationsSize = 0
-          ),
-          (key, None, DeleteAction(key.bytes.toSeq.toList))
-        )
+        (key, None, DeleteAction(key.bytes.toSeq.toList))
     }
+
+  def measure(action: HotStoreAction): String = ???
 
 }
