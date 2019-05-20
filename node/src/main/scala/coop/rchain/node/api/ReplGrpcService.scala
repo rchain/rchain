@@ -19,7 +19,6 @@ import coop.rchain.catscontrib._
 import Catscontrib._
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.node.model.repl._
-import coop.rchain.node.model.diagnostics._
 import coop.rchain.rholang.interpreter.{RholangCLI, Runtime}
 import coop.rchain.rholang.interpreter.accounting._
 import coop.rchain.rholang.interpreter.storage.StoragePrinter
@@ -29,7 +28,6 @@ import com.google.protobuf.ByteString
 import java.io.{Reader, StringReader}
 
 import coop.rchain.casper.api.BlockAPI
-import coop.rchain.node.diagnostics.{JvmMetrics, NodeMetrics}
 import coop.rchain.rholang.interpreter.errors.InterpreterError
 import coop.rchain.comm.transport._
 import coop.rchain.comm.discovery._

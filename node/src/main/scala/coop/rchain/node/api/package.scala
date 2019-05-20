@@ -11,8 +11,6 @@ import coop.rchain.catscontrib._
 import coop.rchain.comm.discovery._
 import coop.rchain.comm.rp.Connect.ConnectionsCell
 import coop.rchain.grpc.{GrpcServer, Server}
-import coop.rchain.node.diagnostics.{JvmMetrics, NodeMetrics}
-import coop.rchain.node.model.diagnostics._
 import coop.rchain.node.model.repl._
 import coop.rchain.rholang.interpreter.Runtime
 import coop.rchain.shared._
@@ -31,13 +29,7 @@ package object api {
       port: Int,
       runtime: Runtime[Task],
       grpcExecutor: Scheduler
-  )(
-      implicit worker: Scheduler,
-      nodeDiscovery: NodeDiscovery[Task],
-      jvmMetrics: JvmMetrics[Task],
-      nodeMetrics: NodeMetrics[Task],
-      connectionsCell: ConnectionsCell[Task]
-  ): Task[Server[Task]] =
+  )(implicit worker: Scheduler): Task[Server[Task]] =
     GrpcServer[Task](
       NettyServerBuilder
         .forPort(port)
@@ -46,7 +38,6 @@ package object api {
         .addService(
           ReplGrpcMonix.bindService(new ReplGrpcService(runtime, worker), grpcExecutor)
         )
-        .addService(DiagnosticsGrpcMonix.bindService(diagnostics.effects.grpc, grpcExecutor))
         .build
     )
 
