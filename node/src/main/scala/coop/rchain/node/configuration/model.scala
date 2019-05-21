@@ -70,7 +70,7 @@ final case class ShowBlocks(depth: Int)                                    exten
 final case class VisualizeDag(depth: Int, showJustificationLines: Boolean) extends Command
 final case object MachineVerifiableDag                                     extends Command
 final case object Run                                                      extends Command
-final case object Keygen                                                   extends Command
+final case class Keygen(algorithm: String)                                 extends Command
 final case object Help                                                     extends Command
 final case class DataAtName(name: Name)                                    extends Command
 final case class ContAtName(names: List[Name])                             extends Command

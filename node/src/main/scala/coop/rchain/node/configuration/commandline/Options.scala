@@ -329,7 +329,13 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
   addSubcommand(run)
 
   val keygen = new Subcommand("keygen") {
-    descr("Generate a public/private ed25519 key pair.")
+    descr("Generate a public/private key pair.")
+
+    val algorithm = opt[String](
+      descr = "Algorithm to be used for key generation. Must be one of ed25519 or secp256k1.",
+      validate = (s: String) => { s == "ed25519" || s == "secp256k1" },
+      required = true
+    )
   }
   addSubcommand(keygen)
 
