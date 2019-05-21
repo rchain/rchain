@@ -289,7 +289,7 @@ object BlockAPI {
           .map(MachineVerifyResponse(_).asRight[Error])
     }
 
-  def showBlocks[F[_]: Monad: MultiParentCasperRef: Log: SafetyOracle: BlockStore](
+  def getBlocks[F[_]: Monad: MultiParentCasperRef: Log: SafetyOracle: BlockStore](
       depth: Option[Int]
   ): Effect[F, List[BlockInfoWithoutTuplespace]] =
     toposortDag[F, List[BlockInfoWithoutTuplespace]](depth) {
@@ -375,12 +375,12 @@ object BlockAPI {
       .traverse(ProtoUtil.unsafeGetBlock[F])
       .map(blocks => blocks.find(ProtoUtil.containsDeploy(_, user, timestamp)))
 
-  def showBlock[F[_]: Monad: MultiParentCasperRef: Log: SafetyOracle: BlockStore](
+  def getBlock[F[_]: Monad: MultiParentCasperRef: Log: SafetyOracle: BlockStore](
       q: BlockQuery
   ): Effect[F, BlockQueryResponse] = {
 
     val errorMessage =
-      "Could not show block, casper instance was not available yet."
+      "Could not get block, casper instance was not available yet."
 
     def casperResponse(
         implicit casper: MultiParentCasper[F]

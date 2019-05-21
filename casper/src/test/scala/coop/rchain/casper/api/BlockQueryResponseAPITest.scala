@@ -83,13 +83,13 @@ class BlockQueryResponseAPITest
   val deployCostList: List[String] = randomDeploys.map(PrettyPrinter.buildString)
   // TODO: Test tsCheckpoint:
   // we should be able to stub in a tuplespace dump but there is currently no way to do that.
-  "showBlock" should "return successful block info response" in withStorage {
+  "getBlock" should "return successful block info response" in withStorage {
     implicit blockStore => implicit blockDagStorage =>
       for {
         effects                                 <- effectsForSimpleCasperSetup(blockStore, blockDagStorage)
         (logEff, casperRef, cliqueOracleEffect) = effects
         q                                       = BlockQuery(hash = secondBlockQuery)
-        blockQueryResponse <- BlockAPI.showBlock[Task](q)(
+        blockQueryResponse <- BlockAPI.getBlock[Task](q)(
                                Sync[Task],
                                casperRef,
                                logEff,
@@ -120,7 +120,7 @@ class BlockQueryResponseAPITest
         effects                                 <- emptyEffects(blockStore, blockDagStorage)
         (logEff, casperRef, cliqueOracleEffect) = effects
         q                                       = BlockQuery(hash = badTestHashQuery)
-        blockQueryResponse <- BlockAPI.showBlock[Task](q)(
+        blockQueryResponse <- BlockAPI.getBlock[Task](q)(
                                Sync[Task],
                                casperRef,
                                logEff,

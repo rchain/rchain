@@ -36,7 +36,7 @@ service DeployService {
   rpc createBlock(google.protobuf.Empty) returns (Either) {}
   // Get details about a particular block.
   // Returns on success BlockQueryResponse
-  rpc showBlock(BlockQuery) returns (Either) {}
+  rpc getBlock(BlockQuery) returns (Either) {}
   // Get dag
   // Returns on success VisualizeBlocksResponse
   rpc visualizeDag(VisualizeDagQuery) returns (stream Either) {}
@@ -45,7 +45,7 @@ service DeployService {
   rpc showMainChain(BlocksQuery) returns (stream Either) {}
   // Get a summary of blocks on the blockchain.
   // Returns on success BlockInfoWithoutTuplespace
-  rpc showBlocks(BlocksQuery) returns (stream Either) {}
+  rpc getBlocks(BlocksQuery) returns (stream Either) {}
   // Find data sent to a name.
   // Returns on success ListeningNameDataResponse
   rpc listenForDataAtName(DataAtNameQuery) returns (Either) {}

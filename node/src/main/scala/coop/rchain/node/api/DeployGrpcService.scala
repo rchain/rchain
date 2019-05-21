@@ -58,8 +58,8 @@ private[api] object DeployGrpcService {
       override def createBlock(e: Empty): Task[GrpcEither] =
         defer(BlockAPI.createBlock[F](blockApiLock))
 
-      override def showBlock(q: BlockQuery): Task[GrpcEither] =
-        defer(BlockAPI.showBlock[F](q))
+      override def getBlock(q: BlockQuery): Task[GrpcEither] =
+        defer(BlockAPI.getBlock[F](q))
 
       override def visualizeDag(q: VisualizeDagQuery): Observable[GrpcEither] = {
         type Effect[A] = StateT[Id, Vector[String], A]
@@ -88,11 +88,11 @@ private[api] object DeployGrpcService {
       override def machineVerifiableDag(q: MachineVerifyQuery): Task[GrpcEither] =
         defer(BlockAPI.machineVerifiableDag[F])
 
-      override def showBlocks(request: BlocksQuery): Observable[GrpcEither] =
+      override def getBlocks(request: BlocksQuery): Observable[GrpcEither] =
         Observable
           .fromTask(
             deferList[BlockInfoWithoutTuplespace](
-              Functor[F].map(BlockAPI.showBlocks[F](Some(request.depth)))(
+              Functor[F].map(BlockAPI.getBlocks[F](Some(request.depth)))(
                 _.getOrElse(List.empty[BlockInfoWithoutTuplespace])
               )
             )
