@@ -65,12 +65,13 @@ class HashSetCasperTestNode[F[_]](
     val casperState: Cell[F, CasperState]
 ) {
 
-  implicit val logEff             = new LogStub[F]
-  implicit val timeEff            = logicalTime
-  implicit val connectionsCell    = Cell.unsafe[F, Connections](Connect.Connections.empty)
-  implicit val transportLayerEff  = tle
-  implicit val cliqueOracleEffect = SafetyOracle.cliqueOracle[F]
-  implicit val rpConfAsk          = createRPConfAsk[F](local)
+  implicit val logEff                       = new LogStub[F]
+  implicit val timeEff                      = logicalTime
+  implicit val connectionsCell              = Cell.unsafe[F, Connections](Connect.Connections.empty)
+  implicit val transportLayerEff            = tle
+  implicit val cliqueOracleEffect           = SafetyOracle.cliqueOracle[F]
+  implicit val lastFinalizedBlockCalculator = LastFinalizedBlockCalculator[F](0f)
+  implicit val rpConfAsk                    = createRPConfAsk[F](local)
 
   val defaultTimeout: FiniteDuration = FiniteDuration(1000, MILLISECONDS)
 

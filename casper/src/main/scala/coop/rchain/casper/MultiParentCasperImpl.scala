@@ -38,7 +38,7 @@ final case class CasperState(
     dependencyDag: DoublyLinkedDag[BlockHash] = BlockDependencyDag.empty
 )
 
-class MultiParentCasperImpl[F[_]: Sync: Concurrent: Sync: ConnectionsCell: TransportLayer: Log: Time: SafetyOracle: BlockStore: RPConfAsk: BlockDagStorage](
+class MultiParentCasperImpl[F[_]: Sync: Concurrent: Sync: ConnectionsCell: TransportLayer: Log: Time: SafetyOracle: LastFinalizedBlockCalculator: BlockStore: RPConfAsk: BlockDagStorage](
     runtimeManager: RuntimeManager[F],
     validatorId: Option[ValidatorIdentity],
     genesis: BlockMessage,
@@ -233,8 +233,8 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Sync: ConnectionsCell: Trans
     for {
       dag                    <- blockDag
       lastFinalizedBlockHash <- lastFinalizedBlockHashContainer.get
-      updatedLastFinalizedBlockHash <- LastFinalizedBlockCalculator
-                                        .run[F](dag, lastFinalizedBlockHash)
+      updatedLastFinalizedBlockHash <- LastFinalizedBlockCalculator[F]
+                                        .run(dag, lastFinalizedBlockHash)
       _            <- lastFinalizedBlockHashContainer.set(updatedLastFinalizedBlockHash)
       blockMessage <- ProtoUtil.unsafeGetBlock[F](updatedLastFinalizedBlockHash)
     } yield blockMessage
