@@ -304,35 +304,33 @@ class RuntimeManagerImpl[F[_]: Concurrent] private[rholang] (
       initHash: StateHash
   ): F[(StateHash, Seq[InternalProcessedDeploy])] = {
 
-    def doEval(
-        terms: Seq[DeployData],
-        hash: Blake2b256Hash,
-        acc: Seq[InternalProcessedDeploy]
-    ): F[(StateHash, Seq[InternalProcessedDeploy])] =
-      Concurrent[F].defer {
-        terms match {
-          case deploy +: rem =>
-            for {
-              evaluateResult               <- computeEffect(runtime)(deploy)
-              EvaluateResult(cost, errors) = evaluateResult
-              newCheckpoint                <- runtime.space.createCheckpoint()
-              deployResult = InternalProcessedDeploy(
-                deploy,
-                Cost.toProto(cost),
-                newCheckpoint.log,
-                Seq.empty[trace.Event],
-                DeployStatus.fromErrors(errors)
-              )
-              cont <- if (errors.isEmpty)
-                       doEval(rem, newCheckpoint.root, acc :+ deployResult)
-                     else doEval(rem, hash, acc :+ deployResult)
-            } yield cont
+    type Acc = (Blake2b256Hash, Seq[InternalProcessedDeploy])
 
-          case _ => (ByteString.copyFrom(hash.bytes.toArray), acc).pure[F]
-        }
+    def evalSingle(acc: Acc, deploy: DeployData): F[Acc] = {
+      val (hash, deployResults) = acc
+      for {
+        evaluateResult               <- computeEffect(runtime)(deploy)
+        EvaluateResult(cost, errors) = evaluateResult
+        newCheckpoint                <- runtime.space.createCheckpoint()
+        deployResult = InternalProcessedDeploy(
+          deploy,
+          Cost.toProto(cost),
+          newCheckpoint.log,
+          Seq.empty[trace.Event],
+          DeployStatus.fromErrors(errors)
+        )
+        newHash = if (errors.isEmpty) newCheckpoint.root else hash
+      } yield (newHash, deployResults :+ deployResult)
+    }
+
+    val initHashBlake = Blake2b256Hash.fromByteArray(initHash.toByteArray)
+    terms.toList
+      .foldM[F, Acc]((initHashBlake, Seq.empty))(evalSingle)
+      .map {
+        case (hash, deployResults) =>
+          val hashByteString = ByteString.copyFrom(hash.bytes.toArray)
+          (hashByteString, deployResults)
       }
-
-    doEval(terms, Blake2b256Hash.fromByteArray(initHash.toByteArray), Vector.empty)
   }
 
   private def replayEval(
