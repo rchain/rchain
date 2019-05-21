@@ -343,16 +343,14 @@ object ApproveBlockProtocolTest {
     implicit val connectionsCell = Cell.mvarCell[Task, Connections](List(src)).unsafeRunSync
     implicit val lab             = LastApprovedBlock.unsafe[Task](None)
 
-    val (_, pk)    = Ed25519.newKeyPair
-    val bonds      = MultiParentCasperTestUtil.createBonds(Seq(pk))
-    val genesis    = MultiParentCasperTestUtil.createGenesis(bonds)
-    val validators = validatorsPk.map(pk => ByteString.copyFrom(pk.bytes))
-    val candidate  = ApprovedBlockCandidate(Some(genesis), requiredSigs)
-    val sigs       = Ref.unsafe[Task, Set[Signature]](Set.empty)
-    val startTime  = System.currentTimeMillis()
+    val bonds     = MultiParentCasperTestUtil.createBonds(validatorsPk)
+    val genesis   = MultiParentCasperTestUtil.createGenesis(bonds)
+    val candidate = ApprovedBlockCandidate(Some(genesis), requiredSigs)
+    val sigs      = Ref.unsafe[Task, Set[Signature]](Set.empty)
+    val startTime = System.currentTimeMillis()
 
     val protocol = ApproveBlockProtocol
-      .unsafe[Task](genesis, validators, requiredSigs, duration, interval, sigs, startTime)
+      .unsafe[Task](genesis, requiredSigs, duration, interval, sigs, startTime)
 
     TestFixture(lab, protocol, candidate, startTime, sigs)
   }

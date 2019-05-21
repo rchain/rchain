@@ -59,7 +59,7 @@ object MultiParentCasperTestUtil {
                       .captureResults(ProtoUtil.postStateHash(block), query)
     } yield (blockStatus, queryResult)
 
-  def createBonds(validators: Seq[PublicKey]): Map[PublicKey, Long] =
+  def createBonds(validators: Iterable[PublicKey]): Map[PublicKey, Long] =
     validators.zipWithIndex.map { case (v, i) => v -> (2L * i.toLong + 1L) }.toMap
 
   def createGenesis(bonds: Map[PublicKey, Long]): BlockMessage =
@@ -95,7 +95,7 @@ object MultiParentCasperTestUtil {
 
   def buildGenesis(genesisParameters: Genesis): BlockMessage = {
     val storageDirectory                   = Files.createTempDirectory(s"hash-set-casper-test-genesis")
-    val storageSize: Long                  = 3024L * 1024
+    val storageSize: Long                  = 5 * 1024 * 1024L
     implicit val log: Log.NOPLog[Task]     = new Log.NOPLog[Task]
     implicit val metricsEff: Metrics[Task] = new metrics.Metrics.MetricsNOP[Task]
     (for {
