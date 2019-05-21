@@ -141,19 +141,11 @@ class BlockDagFileStorageTest extends BlockDagStorageTest {
   private def defaultBlockNumberIndex(dagDataDir: Path): Path =
     dagDataDir.resolve("block-number-index")
 
-  private def createBlockStore(blockStoreDataDir: Path): Task[BlockStore[Task]] = {
-    implicit val metrics = new MetricsNOP[Task]()
-    implicit val log     = new Log.NOPLog[Task]()
-    val env              = Context.env(blockStoreDataDir, 100L * 1024L * 1024L * 4096L)
-    FileLMDBIndexBlockStore.create[Task](env, blockStoreDataDir).map(_.right.get)
-  }
-
   private def createAtDefaultLocation(
       dagDataDir: Path,
       maxSizeFactor: Int = 10
   ): Task[BlockDagFileStorage[Task]] = {
-    implicit val log     = new shared.Log.NOPLog[Task]()
-    implicit val metrics = new MetricsNOP[Task]()
+    implicit val log = new shared.Log.NOPLog[Task]()
     BlockDagFileStorage.create[Task](
       BlockDagFileStorage.Config(
         defaultLatestMessagesLog(dagDataDir),

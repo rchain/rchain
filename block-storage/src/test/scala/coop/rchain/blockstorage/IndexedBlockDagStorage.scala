@@ -37,7 +37,7 @@ final class IndexedBlockDagStorage[F[_]: Monad](
       body              = block.body.get
       header            = block.header.get
       currentId         <- currentIdRef.get
-      nextId            = if (block.seqNum == 0) currentId + 1L else block.seqNum
+      nextId            = if (block.seqNum == 0) currentId + 1L else block.seqNum.toLong
       dag               <- underlying.getRepresentation
       nextCreatorSeqNum <- dag.latestMessage(block.sender).map(_.fold(-1)(_.seqNum) + 1)
       newPostState      = body.getState.withBlockNumber(nextId)
@@ -54,7 +54,7 @@ final class IndexedBlockDagStorage[F[_]: Monad](
   def inject(index: Int, block: BlockMessage, genesis: BlockMessage, invalid: Boolean): F[Unit] =
     for {
       _ <- lock.acquire
-      _ <- idToBlocksRef.update(_.updated(index, block))
+      _ <- idToBlocksRef.update(_.updated(index.toLong, block))
       _ <- underlying.insert(block, genesis, invalid)
       _ <- lock.release
     } yield ()
@@ -76,11 +76,11 @@ final class IndexedBlockDagStorage[F[_]: Monad](
   def lookupById(id: Int): F[Option[BlockMessage]] =
     for {
       idToBlocks <- idToBlocksRef.get
-    } yield idToBlocks.get(id)
+    } yield idToBlocks.get(id.toLong)
   def lookupByIdUnsafe(id: Int): F[BlockMessage] =
     for {
       idToBlocks <- idToBlocksRef.get
-    } yield idToBlocks(id)
+    } yield idToBlocks(id.toLong)
 }
 
 object IndexedBlockDagStorage {

@@ -17,8 +17,8 @@ private[sorter] object SendSortMatcher extends Sortable[Send] {
         locallyFree = s.locallyFree,
         connectiveUsed = s.connectiveUsed
       )
-      persistentScore     = if (s.persistent) 1 else 0
-      connectiveUsedScore = if (s.connectiveUsed) 1 else 0
+      persistentScore     = if (s.persistent) 1L else 0L
+      connectiveUsedScore = if (s.connectiveUsed) 1L else 0L
       sendScore = Node(
         Score.SEND,
         Seq(Leaf(persistentScore)) ++ Seq(sortedChan.score) ++ sortedData.map(_.score) ++ Seq(

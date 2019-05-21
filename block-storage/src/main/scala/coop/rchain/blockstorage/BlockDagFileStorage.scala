@@ -112,10 +112,6 @@ final class BlockDagFileStorage[F[_]: Concurrent: Sync: Log: RaiseIOError] priva
     state.modify(s => s.copy(topoSort = v))
   private[this] def setEquviocationsTracker(v: Set[EquivocationRecord]): F[Unit] =
     state.modify(s => s.copy(equivocationsTracker = v))
-  private[this] def setSortOffset(v: Long): F[Unit] =
-    state.modify(s => s.copy(sortOffset = v))
-  private[this] def setCheckpoints(v: List[Checkpoint]): F[Unit] =
-    state.modify(s => s.copy(checkpoints = v))
   private[this] def setLatestMessagesLogOutputStream(v: FileOutputStreamIO[F]): F[Unit] =
     state.modify(s => s.copy(latestMessagesLogOutputStream = v))
   private[this] def setLatestMessagesLogSize(v: Int): F[Unit] =
@@ -127,10 +123,6 @@ final class BlockDagFileStorage[F[_]: Concurrent: Sync: Log: RaiseIOError] priva
   private[this] def setBlockMetadataCrc(v: Crc32[F]): F[Unit] =
     state.modify(s => s.copy(blockMetadataCrc = v))
   private[this] def setEquivocationsTrackerLogOutputStream(v: FileOutputStreamIO[F]): F[Unit] =
-    state.modify(s => s.copy(equivocationsTrackerLogOutputStream = v))
-  private[this] def setEquivocationsTrackerCrc(v: Crc32[F]): F[Unit] =
-    state.modify(s => s.copy(equivocationsTrackerCrc = v))
-  private[this] def setInvalidBlocksLogOutputStream(v: FileOutputStreamIO[F]): F[Unit] =
     state.modify(s => s.copy(equivocationsTrackerLogOutputStream = v))
 
   private[this] def modifyLatestMessages(
@@ -157,24 +149,10 @@ final class BlockDagFileStorage[F[_]: Concurrent: Sync: Log: RaiseIOError] priva
       f: Set[BlockMetadata] => Set[BlockMetadata]
   ): F[Unit] =
     state.modify(s => s.copy(invalidBlocks = f(s.invalidBlocks)))
-  private[this] def modifySortOffset(f: Long => Long): F[Unit] =
-    state.modify(s => s.copy(sortOffset = f(s.sortOffset)))
   private[this] def modifyCheckpoints(f: List[Checkpoint] => List[Checkpoint]): F[Unit] =
     state.modify(s => s.copy(checkpoints = f(s.checkpoints)))
-  private[this] def modifyLatestMessagesLogOutputStream(
-      f: FileOutputStreamIO[F] => FileOutputStreamIO[F]
-  ): F[Unit] =
-    state.modify(s => s.copy(latestMessagesLogOutputStream = f(s.latestMessagesLogOutputStream)))
   private[this] def modifyLatestMessagesLogSize(f: Int => Int): F[Unit] =
     state.modify(s => s.copy(latestMessagesLogSize = f(s.latestMessagesLogSize)))
-  private[this] def modifyLatestMessagesCrc(f: Crc32[F] => Crc32[F]): F[Unit] =
-    state.modify(s => s.copy(latestMessagesCrc = f(s.latestMessagesCrc)))
-  private[this] def modifyBlockMetadataLogOutputStream(
-      f: FileOutputStreamIO[F] => FileOutputStreamIO[F]
-  ): F[Unit] =
-    state.modify(s => s.copy(blockMetadataLogOutputStream = f(s.blockMetadataLogOutputStream)))
-  private[this] def modifyBlockMetadataCrc(f: Crc32[F] => Crc32[F]): F[Unit] =
-    state.modify(s => s.copy(blockMetadataCrc = f(s.blockMetadataCrc)))
 
   private[this] def getBlockNumber(blockHash: BlockHash): F[Option[Long]] =
     blockNumberIndex.withReadTxn { txn =>

@@ -31,7 +31,8 @@ private[sorter] object ConnectiveSortMatcher extends Sortable[Connective] {
           Node(Score.CONNECTIVE_NOT, scoredPar.score)
         )
       case v @ VarRefBody(VarRef(index, depth)) =>
-        ScoredTerm(Connective(v), Leaves(Score.CONNECTIVE_VARREF, index, depth)).pure[F]
+        ScoredTerm(Connective(v), Leaves(Score.CONNECTIVE_VARREF, index.toLong, depth.toLong))
+          .pure[F]
       case v @ ConnBool(b) =>
         ScoredTerm(Connective(v), Leaves(Score.CONNECTIVE_BOOL, if (b) 1 else 0)).pure[F]
       case v @ ConnInt(b) =>

@@ -1,7 +1,7 @@
 package coop.rchain.models
-import org.scalatest.{Assertion, Assertions}
+import org.scalatest.{Assertion, Assertions => ScalaTestAssertions}
 
-object Assertions extends Assertions {
+object Assertions extends ScalaTestAssertions {
 
   def assertEqual[A: Pretty](result: A, expected: A): Assertion =
     assert(

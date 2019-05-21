@@ -17,7 +17,7 @@ import scala.runtime.ScalaRunTime
 class HashMSpec extends FlatSpec with PropertyChecks with Matchers {
 
   implicit override val generatorDrivenConfig =
-    PropertyCheckConfig(maxSize = 100, minSuccessful = 50)
+    PropertyCheckConfiguration(sizeRange = 100, minSuccessful = 50)
 
   behavior of "HashM"
 
