@@ -1,15 +1,28 @@
 package coop.rchain.rspace.nextgenrspace.history
 
+import java.nio.charset.StandardCharsets
+
 import cats.Applicative
 import cats.effect.Sync
 import cats.implicits._
-import coop.rchain.rspace.{internal, util, Blake2b256Hash, HotStoreAction}
+import coop.rchain.rspace.{
+  internal,
+  util,
+  Blake2b256Hash,
+  DeleteContinuations,
+  DeleteData,
+  DeleteJoins,
+  HotStoreAction,
+  InsertContinuations,
+  InsertData,
+  InsertJoins,
+  Serialize
+}
 import coop.rchain.rspace.internal._
 import scodec.Codec
-import scodec.bits.ByteVector
+import scodec.bits.{BitVector, ByteVector}
 import HistoryRepositoryImpl._
 import com.typesafe.scalalogging.Logger
-import HistoryTransformers._
 
 final case class HistoryRepositoryImpl[F[_]: Sync, C, P, A, K](
     history: History[F],
@@ -17,10 +30,12 @@ final case class HistoryRepositoryImpl[F[_]: Sync, C, P, A, K](
     leafStore: ColdStore[F]
 )(implicit codecC: Codec[C], codecP: Codec[P], codecA: Codec[A], codecK: Codec[K])
     extends HistoryRepository[F, C, P, A, K] {
+  val joinSuffixBits                = BitVector("-joins".getBytes(StandardCharsets.UTF_8))
+  val dataSuffixBits                = BitVector("-data".getBytes(StandardCharsets.UTF_8))
+  val continuationSuffixBits        = BitVector("-continuation".getBytes(StandardCharsets.UTF_8))
   val codecJoin: Codec[Seq[Seq[C]]] = codecSeq(codecSeq(codecC))
 
-  private val historyTransformer =
-    HistoryTransformers.create[C, P, A, K]()(codecC, codecP, codecA, codecK)
+  implicit val serializeC: Serialize[C] = Serialize.fromCodec(codecC)
 
   private def fetchData(key: Blake2b256Hash): F[Option[PersistedData]] =
     history.findPath(key.bytes.toSeq.toList).flatMap {
@@ -30,11 +45,34 @@ final case class HistoryRepositoryImpl[F[_]: Sync, C, P, A, K](
           case EmptyTrie      => Applicative[F].pure(None)
           case _ =>
             Sync[F].raiseError(new RuntimeException(s"unexpected data at key $key, data: $trie"))
+
         }
     }
 
+  private def hashWithSuffix(bits: BitVector, suffix: BitVector): Blake2b256Hash = {
+    val suffixed = bits ++ suffix
+    Blake2b256Hash.create(suffixed.toByteVector)
+  }
+
+  private def hashJoinsChannel(channel: C): Blake2b256Hash =
+    hashWithSuffix(codecC.encode(channel).get, joinSuffixBits)
+
+  private def hashContinuationsChannels(channels: Seq[C]): Blake2b256Hash = {
+    val chs = channels
+      .map(c => serializeC.encode(c))
+      .sorted(util.ordByteVector)
+    val channelsBits = codecSeq(codecByteVector).encode(chs).get
+    hashWithSuffix(channelsBits, continuationSuffixBits)
+  }
+
+  private def hashDataChannel(channel: C): Blake2b256Hash =
+    hashWithSuffix(codecC.encode(channel).get, dataSuffixBits)
+
+  def decode[R](bv: ByteVector)(implicit codecR: Codec[R]): Seq[R] =
+    Codec.decode[Seq[R]](bv.bits).get.value
+
   override def getJoins(channel: C): F[Seq[Seq[C]]] =
-    fetchData(historyTransformer.hashJoinsChannel(channel)).flatMap {
+    fetchData(hashJoinsChannel(channel)).flatMap {
       case Some(JoinsLeaf(bytes)) =>
         decodeJoins[C](bytes).pure[F]
       case Some(p) =>
@@ -47,7 +85,7 @@ final case class HistoryRepositoryImpl[F[_]: Sync, C, P, A, K](
     }
 
   override def getData(channel: C): F[Seq[internal.Datum[A]]] =
-    fetchData(historyTransformer.hashDataChannel(channel)).flatMap {
+    fetchData(hashDataChannel(channel)).flatMap {
       case Some(DataLeaf(bytes)) =>
         decodeSorted[internal.Datum[A]](bytes).pure[F]
       case Some(p) =>
@@ -60,7 +98,7 @@ final case class HistoryRepositoryImpl[F[_]: Sync, C, P, A, K](
     }
 
   override def getContinuations(channels: Seq[C]): F[Seq[internal.WaitingContinuation[P, K]]] =
-    fetchData(historyTransformer.hashContinuationsChannels(channels)).flatMap {
+    fetchData(hashContinuationsChannels(channels)).flatMap {
       case Some(ContinuationsLeaf(bytes)) =>
         decodeSorted[internal.WaitingContinuation[P, K]](bytes).pure[F]
       case Some(p) =>
@@ -71,6 +109,84 @@ final case class HistoryRepositoryImpl[F[_]: Sync, C, P, A, K](
         )
       case None => Seq.empty[internal.WaitingContinuation[P, K]].pure[F]
     }
+
+  type Result = (Blake2b256Hash, Option[PersistedData], HistoryAction)
+
+  protected[this] val dataLogger: Logger = Logger("coop.rchain.rspace.datametrics")
+
+  private def measure(actions: List[HotStoreAction]): Unit =
+    dataLogger.whenDebugEnabled {
+      computeMeasure(actions).foreach(p => dataLogger.debug(p))
+    }
+
+  private def computeMeasure(actions: List[HotStoreAction]): List[String] =
+    actions.map {
+      case i: InsertData[C, A] =>
+        val key                                   = hashDataChannel(i.channel).bytes
+        val data                                  = encodeData(i.data)
+        val dataHash                              = Blake2b256Hash.create(data)
+        val (continuationsSize, continuationsLen) = (0, 0)
+        s"${key.toHex};${key.length + data.length};${classOf[InsertData[C, A]].getName};${i.data.length}${dataHash.bytes.length};$continuationsSize;$continuationsLen;"
+      case i: InsertContinuations[C, P, K] =>
+        val key                 = hashContinuationsChannels(i.channels).bytes
+        val data                = encodeContinuations(i.continuations)
+        val continuationsHash   = Blake2b256Hash.create(data)
+        val (dataSize, dataLen) = (0, 0)
+        s"${key.toHex};${key.length + data.length};${classOf[InsertContinuations[C, P, K]].getName};$dataSize;$dataLen;${i.continuations.length};${continuationsHash.bytes.length}"
+      case i: InsertJoins[C] =>
+        val key                                                      = hashJoinsChannel(i.channel).bytes
+        val data                                                     = encodeJoins(i.joins)
+        val (dataSize, dataLen, continuationsSize, continuationsLen) = (0, 0, 0, 0)
+        s"${key.toHex};${key.length + data.length};${classOf[InsertJoins[C]].getName};$dataSize;$dataLen;$continuationsSize;$continuationsLen;"
+      case d: DeleteData[C] =>
+        val key                                                      = hashDataChannel(d.channel).bytes
+        val (dataSize, dataLen, continuationsSize, continuationsLen) = (0, 0, 0, 0)
+        s"${key.toHex};${key.length};${classOf[DeleteData[C]].getName};$dataSize;$dataLen;$continuationsSize;$continuationsLen;"
+      case d: DeleteContinuations[C] =>
+        val key                                                      = hashContinuationsChannels(d.channels).bytes
+        val (dataSize, dataLen, continuationsSize, continuationsLen) = (0, 0, 0, 0)
+        s"${key.toHex};${key.length};${classOf[DeleteContinuations[C]].getName};$dataSize;$dataLen;$continuationsSize;$continuationsLen;"
+      case d: DeleteJoins[C] =>
+        val key                                                      = hashJoinsChannel(d.channel).bytes
+        val (dataSize, dataLen, continuationsSize, continuationsLen) = (0, 0, 0, 0)
+        s"${key.toHex};${key.length};${classOf[DeleteContinuations[C]].getName};$dataSize;$dataLen;$continuationsSize;$continuationsLen;"
+    }
+
+  private def transform(actions: List[HotStoreAction]): List[Result] =
+    actions.map {
+      case i: InsertData[C, A] =>
+        val key      = hashDataChannel(i.channel)
+        val data     = encodeData(i.data)
+        val dataLeaf = DataLeaf(data)
+        val dataHash = Blake2b256Hash.create(data)
+        (dataHash, Some(dataLeaf), InsertAction(key.bytes.toSeq.toList, dataHash))
+      case i: InsertContinuations[C, P, K] =>
+        val key               = hashContinuationsChannels(i.channels)
+        val data              = encodeContinuations(i.continuations)
+        val continuationsLeaf = ContinuationsLeaf(data)
+        val continuationsHash = Blake2b256Hash.create(data)
+        (
+          continuationsHash,
+          Some(continuationsLeaf),
+          InsertAction(key.bytes.toSeq.toList, continuationsHash)
+        )
+      case i: InsertJoins[C] =>
+        val key       = hashJoinsChannel(i.channel)
+        val data      = encodeJoins(i.joins)
+        val joinsLeaf = JoinsLeaf(data)
+        val joinsHash = Blake2b256Hash.create(data)
+        (joinsHash, Some(joinsLeaf), InsertAction(key.bytes.toSeq.toList, joinsHash))
+      case d: DeleteData[C] =>
+        val key = hashDataChannel(d.channel)
+        (key, None, DeleteAction(key.bytes.toSeq.toList))
+      case d: DeleteContinuations[C] =>
+        val key = hashContinuationsChannels(d.channels)
+        (key, None, DeleteAction(key.bytes.toSeq.toList))
+      case d: DeleteJoins[C] =>
+        val key = hashJoinsChannel(d.channel)
+        (key, None, DeleteAction(key.bytes.toSeq.toList))
+    }
+
   private def storeLeaves(leafs: List[Result]): F[List[HistoryAction]] =
     leafs.traverse {
       case (key, Some(data), historyAction) =>
@@ -79,18 +195,13 @@ final case class HistoryRepositoryImpl[F[_]: Sync, C, P, A, K](
         Applicative[F].pure(historyAction)
     }
 
-  protected[this] val dataLogger: Logger = Logger("coop.rchain.rspace.datametrics")
-
-  private def measure(actions: List[HotStoreAction]): Unit =
-    actions.foreach(a => dataLogger.debug(s"${historyTransformer.measure(a)}"))
-
   override def checkpoint(actions: List[HotStoreAction]): F[HistoryRepository[F, C, P, A, K]] =
     for {
-      trieActions    <- Applicative[F].pure(historyTransformer.transform(actions))
+      trieActions    <- Applicative[F].pure(transform(actions))
       historyActions <- storeLeaves(trieActions)
       next           <- history.process(historyActions)
-      _              = dataLogger.whenDebugEnabled(measure(actions))
       _              <- rootsRepository.commit(next.root)
+      _              = measure(actions)
     } yield this.copy(history = next)
 
   override def reset(root: Blake2b256Hash): F[HistoryRepository[F, C, P, A, K]] =
@@ -123,6 +234,15 @@ object HistoryRepositoryImpl {
       .get
       .toByteVector
 
+  private def encodeUnsorted[D](data: Seq[D])(implicit codec: Codec[D]): ByteVector =
+    codecSeqByteVector
+      .encode(
+        data
+          .map(d => Codec.encode[D](d).get.toByteVector)
+      )
+      .get
+      .toByteVector
+
   def encodeData[A](data: Seq[internal.Datum[A]])(implicit codec: Codec[Datum[A]]): ByteVector =
     encodeSorted(data)
 
@@ -145,9 +265,8 @@ object HistoryRepositoryImpl {
       .encode(
         joins
           .map(
-            channels => encodeSorted(channels)
+            channels => encodeUnsorted(channels)
           )
-          .sorted(util.ordByteVector)
       )
       .get
       .toByteVector
