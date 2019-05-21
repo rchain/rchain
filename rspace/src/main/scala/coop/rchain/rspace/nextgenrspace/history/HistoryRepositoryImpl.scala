@@ -122,34 +122,26 @@ final case class HistoryRepositoryImpl[F[_]: Sync, C, P, A, K](
   private def computeMeasure(actions: List[HotStoreAction]): List[String] =
     actions.map {
       case i: InsertData[C, A] =>
-        val key                                   = hashDataChannel(i.channel).bytes
-        val data                                  = encodeData(i.data)
-        val dataHash                              = Blake2b256Hash.create(data)
-        val (continuationsSize, continuationsLen) = (0, 0)
-        s"${key.toHex};${key.length + data.length};${classOf[InsertData[C, A]].getName};${i.data.length}${dataHash.bytes.length};$continuationsSize;$continuationsLen;"
+        val key  = hashDataChannel(i.channel).bytes
+        val data = encodeData(i.data)
+        s"${key.toHex};insert-data;${data.length};${i.data.length}"
       case i: InsertContinuations[C, P, K] =>
-        val key                 = hashContinuationsChannels(i.channels).bytes
-        val data                = encodeContinuations(i.continuations)
-        val continuationsHash   = Blake2b256Hash.create(data)
-        val (dataSize, dataLen) = (0, 0)
-        s"${key.toHex};${key.length + data.length};${classOf[InsertContinuations[C, P, K]].getName};$dataSize;$dataLen;${i.continuations.length};${continuationsHash.bytes.length}"
+        val key  = hashContinuationsChannels(i.channels).bytes
+        val data = encodeContinuations(i.continuations)
+        s"${key.toHex};insert-continuation;${data.length};${i.continuations.length}"
       case i: InsertJoins[C] =>
-        val key                                                      = hashJoinsChannel(i.channel).bytes
-        val data                                                     = encodeJoins(i.joins)
-        val (dataSize, dataLen, continuationsSize, continuationsLen) = (0, 0, 0, 0)
-        s"${key.toHex};${key.length + data.length};${classOf[InsertJoins[C]].getName};$dataSize;$dataLen;$continuationsSize;$continuationsLen;"
+        val key  = hashJoinsChannel(i.channel).bytes
+        val data = encodeJoins(i.joins)
+        s"${key.toHex};insert-join;${data.length}"
       case d: DeleteData[C] =>
-        val key                                                      = hashDataChannel(d.channel).bytes
-        val (dataSize, dataLen, continuationsSize, continuationsLen) = (0, 0, 0, 0)
-        s"${key.toHex};${key.length};${classOf[DeleteData[C]].getName};$dataSize;$dataLen;$continuationsSize;$continuationsLen;"
+        val key = hashDataChannel(d.channel).bytes
+        s"${key.toHex};delete-data;0"
       case d: DeleteContinuations[C] =>
-        val key                                                      = hashContinuationsChannels(d.channels).bytes
-        val (dataSize, dataLen, continuationsSize, continuationsLen) = (0, 0, 0, 0)
-        s"${key.toHex};${key.length};${classOf[DeleteContinuations[C]].getName};$dataSize;$dataLen;$continuationsSize;$continuationsLen;"
+        val key = hashContinuationsChannels(d.channels).bytes
+        s"${key.toHex};delete-continuation;0"
       case d: DeleteJoins[C] =>
-        val key                                                      = hashJoinsChannel(d.channel).bytes
-        val (dataSize, dataLen, continuationsSize, continuationsLen) = (0, 0, 0, 0)
-        s"${key.toHex};${key.length};${classOf[DeleteContinuations[C]].getName};$dataSize;$dataLen;$continuationsSize;$continuationsLen;"
+        val key = hashJoinsChannel(d.channel).bytes
+        s"${key.toHex};delete-join;0"
     }
 
   private def transform(actions: List[HotStoreAction]): List[Result] =
