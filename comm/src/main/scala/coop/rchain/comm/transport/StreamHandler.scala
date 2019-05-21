@@ -6,8 +6,8 @@ import java.nio.file.{Files, Path}
 import cats.data._
 import cats.implicits._
 
-import coop.rchain.shared.GracefulClose._
 import coop.rchain.shared.{Log, _}
+import coop.rchain.shared.GracefulClose._
 import coop.rchain.shared.PathOps._
 import Compression._
 import coop.rchain.comm.PeerNode
@@ -21,6 +21,34 @@ import monix.reactive.Observable
 object StreamHandler {
 
   type CircuitBreaker = Long => Boolean
+
+  sealed trait StreamError
+  object StreamError {
+    type StreamErr[A] = Either[StreamError, A]
+
+    case object WrongNetworkId                        extends StreamError
+    case object CircuitBroken                         extends StreamError
+    final case class NotFullMessage(streamed: String) extends StreamError
+    final case class Unexpected(error: Throwable)     extends StreamError
+
+    val wrongNetworkId: StreamError                   = WrongNetworkId
+    val circuitBroken: StreamError                    = CircuitBroken
+    def notFullMessage(streamed: String): StreamError = NotFullMessage(streamed)
+    def unexpected(error: Throwable): StreamError     = Unexpected(error)
+
+    def errorMessage(error: StreamError): String =
+      error match {
+        case WrongNetworkId => "Could not receive stream! Wrong network id."
+        case CircuitBroken  => "Could not receive stream! Circuit was broken."
+        case NotFullMessage(streamed) =>
+          s"Received not full stream message, will not process. $streamed"
+        case Unexpected(t) => s"Could not receive stream! ${t.getMessage}"
+      }
+
+    implicit class StreamErrorToMessage(error: StreamError) {
+      val message: String = StreamError.errorMessage(error)
+    }
+  }
 
   private final case class Streamed(
       sender: Option[PeerNode] = None,
@@ -39,7 +67,7 @@ object StreamHandler {
       folder: Path,
       stream: Observable[Chunk],
       circuitBreaker: CircuitBreaker
-  )(implicit log: Log[Task]): Task[Either[Throwable, StreamMessage]] =
+  )(implicit log: Log[Task]): Task[Either[StreamError, StreamMessage]] =
     init(folder)
       .bracketE { initStmd =>
         (collect(networkId, initStmd, stream, circuitBreaker) >>= toResult).value
@@ -57,7 +85,7 @@ object StreamHandler {
           gracefullyClose[Task](stmd.fos).as(())
       })
       .attempt
-      .map(_.flatten)
+      .map(_.leftMap(StreamError.unexpected).flatten)
 
   private def init(folder: Path): Task[Streamed] =
     for {
@@ -71,7 +99,7 @@ object StreamHandler {
       init: Streamed,
       stream: Observable[Chunk],
       circuitBreaker: CircuitBreaker
-  ): EitherT[Task, Throwable, Streamed] = {
+  ): EitherT[Task, StreamError, Streamed] = {
 
     def collectStream: Task[Streamed] =
       stream.foldWhileLeftL(init) {
@@ -103,20 +131,19 @@ object StreamHandler {
 
     EitherT(collectStream.attempt.map {
       case Right(stmd) if stmd.wrongNetwork =>
-        new RuntimeException("Wrong network id").asLeft
+        StreamError.wrongNetworkId.asLeft
       case Right(stmd) if stmd.circuitBroken =>
-        new RuntimeException("Circuit was broken").asLeft
-      case res => res
+        StreamError.circuitBroken.asLeft
+      case Right(stmd) => stmd.asRight
+      case Left(t)     => StreamError.unexpected(t).asLeft
     })
 
   }
 
   private def toResult(
       stmd: Streamed
-  ): EitherT[Task, Throwable, StreamMessage] = {
-    val notFullError = new RuntimeException(
-      s"received not full stream message, will not process. $stmd"
-    ).asLeft[StreamMessage]
+  ): EitherT[Task, StreamError, StreamMessage] = {
+    val notFullError = StreamError.notFullMessage(stmd.toString).asLeft[StreamMessage]
 
     EitherT(Task.delay {
       stmd match {
@@ -132,9 +159,8 @@ object StreamHandler {
             _
             ) =>
           val result =
-            StreamMessage(sender, packetType, path, compressed, contentLength).asRight[Throwable]
-          if (!compressed && readSoFar != contentLength)
-            notFullError
+            StreamMessage(sender, packetType, path, compressed, contentLength).asRight[StreamError]
+          if (!compressed && readSoFar != contentLength) notFullError
           else result
 
         case _ => notFullError

@@ -282,6 +282,9 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
     val maxMessageSize =
       opt[Int](descr = "Maximum size of message that can be received via transport layer")
 
+    val maxStreamMessageSize =
+      opt[Long](descr = "Maximum size of messages that can be received via transport layer streams")
+
     val packetChunkSize =
       opt[Int](descr = "Chunk size for streaming packets between nodes")
 
