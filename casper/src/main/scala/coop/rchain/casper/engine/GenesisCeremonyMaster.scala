@@ -1,35 +1,24 @@
 package coop.rchain.casper.engine
 
-import EngineCell._
-import cats.data.EitherT
-import cats.effect.concurrent.Ref
+import scala.concurrent.duration.FiniteDuration
+
 import cats.effect.{Concurrent, Sync}
 import cats.implicits._
-import cats.{Applicative, Monad}
-import com.google.protobuf.ByteString
+import cats.Applicative
+
+import EngineCell._
 import coop.rchain.blockstorage.{BlockDagStorage, BlockStore}
-import coop.rchain.casper.Estimator.Validator
+import coop.rchain.casper._
 import coop.rchain.casper.LastApprovedBlock.LastApprovedBlock
 import coop.rchain.casper.MultiParentCasperRef.MultiParentCasperRef
-import coop.rchain.casper._
-import coop.rchain.casper.util.comm.CommUtil
-import coop.rchain.casper.genesis.Genesis
 import coop.rchain.casper.protocol._
+import coop.rchain.casper.util.comm.CommUtil
 import coop.rchain.casper.util.rholang.RuntimeManager
-import coop.rchain.catscontrib.Catscontrib._
-import coop.rchain.catscontrib.MonadTrans
-
-import coop.rchain.comm.discovery.NodeDiscovery
-import coop.rchain.comm.protocol.routing.Packet
 import coop.rchain.comm.rp.Connect.{ConnectionsCell, RPConfAsk}
-import coop.rchain.comm.transport.{Blob, TransportLayer}
-import coop.rchain.comm.{transport, PeerNode}
+import coop.rchain.comm.transport.TransportLayer
+import coop.rchain.comm.PeerNode
 import coop.rchain.metrics.Metrics
-import coop.rchain.shared.{Log, LogSource, Time}
-import monix.eval.Task
-import monix.execution.Scheduler
-import scala.concurrent.duration.FiniteDuration
-import scala.util.Try
+import coop.rchain.shared._
 
 class GenesisCeremonyMaster[F[_]: Sync: ConnectionsCell: BlockStore: TransportLayer: Log: Time: SafetyOracle: RPConfAsk: LastApprovedBlock](
     approveProtocol: ApproveBlockProtocol[F]
@@ -49,7 +38,7 @@ class GenesisCeremonyMaster[F[_]: Sync: ConnectionsCell: BlockStore: TransportLa
 
 object GenesisCeremonyMaster {
   import Engine._
-  def approveBlockInterval[F[_]: Sync: Metrics: Concurrent: ConnectionsCell: BlockStore: TransportLayer: Log: Time: SafetyOracle: RPConfAsk: LastApprovedBlock: MultiParentCasperRef: BlockDagStorage: EngineCell](
+  def approveBlockInterval[F[_]: Sync: Metrics: Concurrent: ConnectionsCell: BlockStore: TransportLayer: Log: EventLog: Time: SafetyOracle: RPConfAsk: LastApprovedBlock: MultiParentCasperRef: BlockDagStorage: EngineCell](
       interval: FiniteDuration,
       shardId: String,
       runtimeManager: RuntimeManager[F],

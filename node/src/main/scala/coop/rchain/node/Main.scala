@@ -8,9 +8,7 @@ import cats.implicits._
 
 import coop.rchain.casper.util.comm._
 import coop.rchain.casper.util.BondingUtil
-import coop.rchain.catscontrib._
 import coop.rchain.catscontrib.TaskContrib._
-import coop.rchain.comm._
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.signatures.Ed25519
 import coop.rchain.metrics
@@ -27,8 +25,9 @@ import org.slf4j.bridge.SLF4JBridgeHandler
 
 object Main {
 
-  implicit private val logSource: LogSource = LogSource(this.getClass)
-  implicit private val log: Log[Task]       = effects.log
+  implicit private val logSource: LogSource     = LogSource(this.getClass)
+  implicit private val log: Log[Task]           = effects.log
+  implicit private val eventLog: EventLog[Task] = EventLog.eventLogger
 
   @SuppressWarnings(Array("org.wartremover.warts.NonUnitStatements"))
   def main(args: Array[String]): Unit = {

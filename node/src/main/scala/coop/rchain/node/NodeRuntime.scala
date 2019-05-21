@@ -49,7 +49,10 @@ class NodeRuntime private[node] (
     conf: Configuration,
     id: NodeIdentifier,
     scheduler: Scheduler
-)(implicit log: Log[Task]) {
+)(
+    implicit log: Log[Task],
+    eventLog: EventLog[Task]
+) {
 
   private[this] val loopScheduler =
     Scheduler.fixedPool("loop", 4, reporter = UncaughtExceptionLogger)
@@ -286,6 +289,7 @@ class NodeRuntime private[node] (
           )
       address = s"rnode://$id@$host?protocol=$port&discovery=$kademliaPort"
       _       <- Log[Task].info(s"Listening for traffic on $address.")
+      _       <- EventLog[Task].publish(Event.NodeStarted)
       _       <- Task.defer(loop.forever).executeOn(loopScheduler).start
       _ <- if (conf.server.standalone) ().pure[Task]
           else Log[Task].info(s"Waiting for first connection.") >> waitForFirstConnetion
@@ -465,6 +469,7 @@ class NodeRuntime private[node] (
           Concurrent[Task],
           time,
           log,
+          eventLog,
           multiParentCasperRef,
           blockDagStorage,
           engineCell,
@@ -502,7 +507,7 @@ class NodeRuntime private[node] (
 object NodeRuntime {
   def apply(
       conf: Configuration
-  )(implicit scheduler: Scheduler, log: Log[Task]): Task[NodeRuntime] =
+  )(implicit scheduler: Scheduler, log: Log[Task], eventLog: EventLog[Task]): Task[NodeRuntime] =
     for {
       id      <- NodeEnvironment.create(conf)
       runtime <- Task.delay(new NodeRuntime(conf, id, scheduler))

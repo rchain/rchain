@@ -145,4 +145,13 @@ object EffectsTestInstances {
     }
   }
 
+  class EventLogStub[F[_]: Applicative] extends EventLog[F] {
+    var events: List[Event] = List.empty[Event]
+
+    def publish(event: Event): F[Unit] = {
+      events = events :+ event
+      ().pure[F]
+    }
+  }
+
 }

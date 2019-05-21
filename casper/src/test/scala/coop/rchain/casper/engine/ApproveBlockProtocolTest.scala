@@ -1,43 +1,37 @@
 package coop.rchain.casper.engine
 
+import scala.concurrent.duration._
+import scala.util.Success
+
 import cats.effect.concurrent.Ref
-import coop.rchain.comm.rp.Connect
-import Connect._
-import coop.rchain.shared._
-import com.google.protobuf.ByteString
-import coop.rchain.casper.MultiParentCasperTestUtil
-import coop.rchain.casper.helper.HashSetCasperTestNode
+
+import coop.rchain.casper.{LastApprovedBlock, MultiParentCasperTestUtil}
 import coop.rchain.casper.protocol._
+import coop.rchain.casper.LastApprovedBlock.LastApprovedBlock
+import coop.rchain.casper.engine.ApproveBlockProtocolTest.TestFixture
+import coop.rchain.casper.util.TestTime
 import coop.rchain.catscontrib.TaskContrib._
-import coop.rchain.catscontrib._
-import coop.rchain.comm.rp.Connect
+import coop.rchain.comm._
 import coop.rchain.comm.rp.Connect.Connections
-import coop.rchain.comm.{Endpoint, NodeIdentifier, PeerNode}
+import coop.rchain.crypto.{PrivateKey, PublicKey}
 import coop.rchain.crypto.hash.Blake2b256
 import coop.rchain.crypto.signatures.Ed25519
 import coop.rchain.p2p.EffectsTestInstances._
-import coop.rchain.shared.Log.NOPLog
-import coop.rchain.shared.{Cell, Time}
+import coop.rchain.shared.{Cell, _}
+
+import com.google.protobuf.ByteString
 import monix.eval.Task
 import monix.execution.schedulers.TestScheduler
-import scala.concurrent.duration._
-import org.scalatest.{FlatSpec, Matchers}
-import coop.rchain.casper.LastApprovedBlock.LastApprovedBlock
-import coop.rchain.casper.engine.ApproveBlockProtocolTest.TestFixture
-import coop.rchain.casper.{LastApprovedBlock, MultiParentCasperTestUtil}
-import org.scalatest.{Assertion, FlatSpec, Matchers}
-import coop.rchain.casper.util.TestTime
-import coop.rchain.crypto.{PrivateKey, PublicKey}
-
-import scala.util.Success
+import org.scalatest._
 
 class ApproveBlockProtocolTest extends FlatSpec with Matchers {
   private val METRICS_APPROVAL_COUNTER_NAME = "rchain.casper.approve-block.genesis"
 
   "ApproveBlockProtocol" should "add valid signatures it receives to its state" in {
-    implicit val ctx         = TestScheduler()
-    implicit val logStub     = new LogStub[Task]()
-    implicit val metricsTest = new MetricsTestImpl[Task]()
+    implicit val ctx          = TestScheduler()
+    implicit val logStub      = new LogStub[Task]()
+    implicit val eventLogStub = new EventLogStub[Task]()
+    implicit val metricsTest  = new MetricsTestImpl[Task]()
 
     val (validatorSk, validatorPk) = Ed25519.newKeyPair
     val TestFixture(_, abp, candidate, _, sigsF) =
@@ -55,9 +49,10 @@ class ApproveBlockProtocolTest extends FlatSpec with Matchers {
   }
 
   it should "not change the number of signatures in its state if the same one is given multiple times" in {
-    implicit val ctx         = TestScheduler()
-    implicit val logStub     = new LogStub[Task]()
-    implicit val metricsTest = new MetricsTestImpl[Task]()
+    implicit val ctx          = TestScheduler()
+    implicit val logStub      = new LogStub[Task]()
+    implicit val eventLogStub = new EventLogStub[Task]()
+    implicit val metricsTest  = new MetricsTestImpl[Task]()
 
     val (validatorSk, validatorPk) = Ed25519.newKeyPair
     val TestFixture(_, abp, candidate, _, sigsF) =
@@ -79,9 +74,10 @@ class ApproveBlockProtocolTest extends FlatSpec with Matchers {
   }
 
   it should "not add invalid signatures it receives to its state" in {
-    implicit val ctx         = TestScheduler()
-    implicit val logStub     = new LogStub[Task]()
-    implicit val metricsTest = new MetricsTestImpl[Task]()
+    implicit val ctx          = TestScheduler()
+    implicit val logStub      = new LogStub[Task]()
+    implicit val eventLogStub = new EventLogStub[Task]()
+    implicit val metricsTest  = new MetricsTestImpl[Task]()
 
     val (_, validatorPk) = Ed25519.newKeyPair
     val TestFixture(_, abp, candidate, _, sigs) =
@@ -100,11 +96,12 @@ class ApproveBlockProtocolTest extends FlatSpec with Matchers {
   }
 
   it should "create an approved block if at least the correct number of signatures is collected after the duration has elapsed" in {
-    val n: Int               = 10
-    val d: FiniteDuration    = 30.milliseconds
-    implicit val ctx         = TestScheduler()
-    implicit val logStub     = new LogStub[Task]()
-    implicit val metricsTest = new MetricsTestImpl[Task]()
+    val n: Int                = 10
+    val d: FiniteDuration     = 30.milliseconds
+    implicit val ctx          = TestScheduler()
+    implicit val logStub      = new LogStub[Task]()
+    implicit val eventLogStub = new EventLogStub[Task]()
+    implicit val metricsTest  = new MetricsTestImpl[Task]()
 
     val sigs = (1 to n).map(_ => Ed25519.newKeyPair)
     val TestFixture(lab, abp, candidate, startTime, _) =
@@ -134,12 +131,13 @@ class ApproveBlockProtocolTest extends FlatSpec with Matchers {
   }
 
   it should "continue collecting signatures if not enough are collected after the duration has elapsed" in {
-    val n: Int               = 10
-    val d: FiniteDuration    = 30.milliseconds
-    val sigs                 = (1 to n).map(_ => Ed25519.newKeyPair)
-    implicit val ctx         = TestScheduler()
-    implicit val logStub     = new LogStub[Task]()
-    implicit val metricsTest = new MetricsTestImpl[Task]()
+    val n: Int                = 10
+    val d: FiniteDuration     = 30.milliseconds
+    val sigs                  = (1 to n).map(_ => Ed25519.newKeyPair)
+    implicit val ctx          = TestScheduler()
+    implicit val logStub      = new LogStub[Task]()
+    implicit val eventLogStub = new EventLogStub[Task]()
+    implicit val metricsTest  = new MetricsTestImpl[Task]()
 
     val TestFixture(lab, abp, candidate, startTime, _) =
       ApproveBlockProtocolTest.createProtocol(
@@ -183,11 +181,12 @@ class ApproveBlockProtocolTest extends FlatSpec with Matchers {
   }
 
   it should "skip the duration and create and approved block immediately if the required signatures is zero" in {
-    val d: FiniteDuration    = 30.milliseconds
-    val (_, validatorPk)     = Ed25519.newKeyPair
-    implicit val ctx         = TestScheduler()
-    implicit val logStub     = new LogStub[Task]()
-    implicit val metricsTest = new MetricsTestImpl[Task]()
+    val d: FiniteDuration     = 30.milliseconds
+    val (_, validatorPk)      = Ed25519.newKeyPair
+    implicit val ctx          = TestScheduler()
+    implicit val logStub      = new LogStub[Task]()
+    implicit val eventLogStub = new EventLogStub[Task]()
+    implicit val metricsTest  = new MetricsTestImpl[Task]()
 
     val TestFixture(lab, abp, _, startTime, _) =
       ApproveBlockProtocolTest.createProtocol(
@@ -210,9 +209,10 @@ class ApproveBlockProtocolTest extends FlatSpec with Matchers {
   }
 
   it should "not accept BlockApproved messages signed by not trusted validators" in {
-    implicit val ctx         = TestScheduler()
-    implicit val logStub     = new LogStub[Task]()
-    implicit val metricsTest = new MetricsTestImpl[Task]()
+    implicit val ctx          = TestScheduler()
+    implicit val logStub      = new LogStub[Task]()
+    implicit val eventLogStub = new EventLogStub[Task]()
+    implicit val metricsTest  = new MetricsTestImpl[Task]()
 
     val (_, validatorPk)       = Ed25519.newKeyPair
     val (invalidSk, invalidPk) = Ed25519.newKeyPair
@@ -238,6 +238,7 @@ class ApproveBlockProtocolTest extends FlatSpec with Matchers {
   it should "send UnapprovedBlock message to peers at every interval" in {
     implicit val ctx               = TestScheduler()
     implicit val logStub           = new LogStub[Task]()
+    implicit val eventLogStub      = new EventLogStub[Task]()
     implicit val metricsTest       = new MetricsTestImpl[Task]()
     val (validatorSk, validatorPk) = Ed25519.newKeyPair
     val TestFixture(_, abp, candidate, _, sigsF) =
@@ -266,6 +267,7 @@ class ApproveBlockProtocolTest extends FlatSpec with Matchers {
   it should "send ApprovedBlock message to peers once an approved block is created" in {
     implicit val ctx               = TestScheduler()
     implicit val logStub           = new LogStub[Task]()
+    implicit val eventLogStub      = new EventLogStub[Task]()
     implicit val metricsTest       = new MetricsTestImpl[Task]()
     val (validatorSk, validatorPk) = Ed25519.newKeyPair
     val TestFixture(_, abp, candidate, startTime, sigsF) =
@@ -334,7 +336,11 @@ object ApproveBlockProtocolTest {
       duration: FiniteDuration,
       interval: FiniteDuration,
       validatorsPk: Set[PublicKey]
-  )(implicit logStub: LogStub[Task], metrics: MetricsTestImpl[Task]): TestFixture = {
+  )(
+      implicit logStub: LogStub[Task],
+      eventLogStub: EventLogStub[Task],
+      metrics: MetricsTestImpl[Task]
+  ): TestFixture = {
     implicit val time            = TestTime.instance
     implicit val transportLayer  = new TransportLayerStub[Task]
     val src: PeerNode            = peerNode("src", 40400)
