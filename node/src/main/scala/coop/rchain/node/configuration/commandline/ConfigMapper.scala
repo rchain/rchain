@@ -55,6 +55,7 @@ object ConfigMapper {
         add(keys.MaxStreamMessageSize, run.maxStreamMessageSize)
         add(keys.PacketChunkSize, run.packetChunkSize)
         add(keys.MessageConsumers, run.messageConsumers)
+        add(keys.FaultToleranceThreshold, run.faultToleranceThreshold)
       }
 
       {
@@ -113,6 +114,7 @@ object ConfigMapper {
     implicit val flagConverter: OptionConverter[Options.Flag] = (f: Options.Flag) => f
     implicit val intConverter: OptionConverter[Int]           = (i: Int) => i
     implicit val longConverter: OptionConverter[Long]         = (l: Long) => l
+    implicit val floatConverter: OptionConverter[Float]       = (f: Float) => f
     implicit val pathConverter: OptionConverter[Path]         = (p: Path) => p.toString
     implicit val peerNodeConverter: OptionConverter[PeerNode] = (p: PeerNode) => p.toAddress
     implicit val storeTypeConverter: OptionConverter[StoreType] =

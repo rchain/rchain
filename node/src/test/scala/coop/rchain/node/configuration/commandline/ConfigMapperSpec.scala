@@ -38,7 +38,8 @@ class ConfigMapperSpec extends FunSuite with Matchers {
         "--packet-chunk-size 64",
         "--max-message-size 256",
         "--max-stream-message-size 200",
-        "--message-consumers 8"
+        "--message-consumers 8",
+        "--fault-tolerance-threshold 0.2"
       ).mkString(" ")
 
     val options = Options(args.split(' '))
@@ -70,7 +71,8 @@ class ConfigMapperSpec extends FunSuite with Matchers {
         maxMessageSize = 256,
         maxStreamMessageSize = 200,
         packetChunkSize = 64,
-        messageConsumers = 8
+        messageConsumers = 8,
+        faultToleranceThreshold = 0.2f
       )
 
     val server = hocon.Server.fromConfig(config)
