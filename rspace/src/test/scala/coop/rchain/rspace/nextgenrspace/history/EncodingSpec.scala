@@ -43,14 +43,14 @@ class EncodingSpec extends FlatSpec with Matchers with GeneratorDrivenPropertyCh
       Blake2b256Hash.create(bytes1) shouldBe Blake2b256Hash.create(bytes3)
   }
 
-  "Joins list encode" should "return same hash for different orderings of each channel list" in forAll {
-    (j1: Join, j2: Join, j3: Join) =>
-      val bytes1 = HistoryRepositoryImpl.encodeJoins(j1 :: j2 :: j3 :: Nil)
-      val bytes2 = HistoryRepositoryImpl.encodeJoins(j3 :: j2 :: j1 :: Nil)
-      val bytes3 = HistoryRepositoryImpl.encodeJoins(j2 :: j3 :: j1 :: Nil)
-      val bytes4 = HistoryRepositoryImpl.encodeJoins(j1 :: j3 :: j2 :: Nil)
-      Blake2b256Hash.create(bytes1) shouldBe Blake2b256Hash.create(bytes2)
-      Blake2b256Hash.create(bytes1) shouldBe Blake2b256Hash.create(bytes3)
-      Blake2b256Hash.create(bytes1) shouldBe Blake2b256Hash.create(bytes4)
+  "Joins list encode" should "preserve channel orderings" in forAll { (j1: Join, j2: Join) =>
+    whenever(j1 != j2) {
+      val joins         = j1 :: j2 :: Nil
+      val bytes         = HistoryRepositoryImpl.encodeJoins(joins)
+      val reversedBytes = HistoryRepositoryImpl.encodeJoins(joins.reverse)
+
+      HistoryRepositoryImpl.decodeJoins(bytes)(codecChannel) shouldBe (joins)
+      HistoryRepositoryImpl.decodeJoins(reversedBytes)(codecChannel) shouldBe (joins.reverse)
+    }
   }
 }
