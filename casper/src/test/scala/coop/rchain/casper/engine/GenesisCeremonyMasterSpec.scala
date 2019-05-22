@@ -64,7 +64,6 @@ class GenesisCeremonyMasterSpec extends WordSpec {
         sigs <- Ref.of[Task, Set[Signature]](Set.empty)
         abp = ApproveBlockProtocol.unsafe[Task](
           genesis,
-          Set(ByteString.copyFrom(validatorPk.bytes)),
           requiredSigns,
           duration,
           interval,

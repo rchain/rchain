@@ -126,13 +126,9 @@ object CasperLaunch {
                   init.conf.deployTimestamp
                 )
       validatorId <- ValidatorIdentity.fromConfig[F](init.conf)
-      bondedValidators = genesis.body
-        .flatMap(_.state.map(_.bonds.map(_.validator).toSet))
-        .getOrElse(Set.empty)
       abp <- ApproveBlockProtocol
               .of[F](
                 genesis,
-                bondedValidators,
                 init.conf.requiredSigs,
                 init.conf.approveGenesisDuration,
                 init.conf.approveGenesisInterval

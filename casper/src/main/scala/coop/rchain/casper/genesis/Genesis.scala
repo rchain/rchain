@@ -149,12 +149,10 @@ object Genesis {
       supply = Long.MaxValue
     )
 
-    val startHash = runtimeManager.emptyStateHash
-
     runtimeManager
-      .computeState(startHash)(blessedTerms, timestamp)
+      .computeGenesis(blessedTerms, timestamp)
       .map {
-        case (stateHash, processedDeploys) =>
+        case (startHash, stateHash, processedDeploys) =>
           createInternalProcessedDeploy(genesis, startHash, stateHash, processedDeploys)
       }
   }

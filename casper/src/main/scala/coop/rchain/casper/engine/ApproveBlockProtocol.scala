@@ -53,7 +53,6 @@ object ApproveBlockProtocol {
   //For usage in tests only
   def unsafe[F[_]: Sync: ConnectionsCell: TransportLayer: Log: Time: Metrics: RPConfAsk: LastApprovedBlock](
       genesisBlock: BlockMessage,
-      trustedValidators: Set[ByteString],
       requiredSigs: Int,
       duration: FiniteDuration,
       interval: FiniteDuration,
@@ -63,7 +62,6 @@ object ApproveBlockProtocol {
     new ApproveBlockProtocolImpl[F](
       genesisBlock,
       requiredSigs,
-      trustedValidators,
       start,
       duration,
       interval,
@@ -72,7 +70,6 @@ object ApproveBlockProtocol {
 
   def of[F[_]: Sync: ConnectionsCell: TransportLayer: Log: Time: Metrics: RPConfAsk: LastApprovedBlock](
       genesisBlock: BlockMessage,
-      trustedValidators: Set[ByteString],
       requiredSigs: Int,
       duration: FiniteDuration,
       interval: FiniteDuration
@@ -83,7 +80,6 @@ object ApproveBlockProtocol {
     } yield new ApproveBlockProtocolImpl[F](
       genesisBlock,
       requiredSigs,
-      trustedValidators,
       now,
       duration,
       interval,
@@ -93,7 +89,6 @@ object ApproveBlockProtocol {
   private class ApproveBlockProtocolImpl[F[_]: Sync: ConnectionsCell: TransportLayer: Log: Time: Metrics: RPConfAsk: LastApprovedBlock](
       val genesisBlock: BlockMessage,
       val requiredSigs: Int,
-      val trustedValidators: Set[ByteString],
       val start: Long,
       val duration: FiniteDuration,
       val interval: FiniteDuration,
@@ -103,6 +98,9 @@ object ApproveBlockProtocol {
     implicit private val metricsSource: Metrics.Source =
       Metrics.Source(CasperMetricsSource, "approve-block")
 
+    private val trustedValidators = genesisBlock.body
+      .flatMap(_.state.map(_.bonds.map(_.validator).toSet))
+      .getOrElse(Set.empty)
     private val candidate                 = ApprovedBlockCandidate(Some(genesisBlock), requiredSigs)
     private val u                         = UnapprovedBlock(Some(candidate), start, duration.toMillis)
     private val serializedUnapprovedBlock = u.toByteString
