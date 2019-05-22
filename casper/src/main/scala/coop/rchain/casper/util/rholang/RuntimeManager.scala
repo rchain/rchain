@@ -309,6 +309,7 @@ class RuntimeManagerImpl[F[_]: Concurrent] private[rholang] (
     def evalSingle(acc: Acc, deploy: DeployData): F[Acc] = {
       val (hash, deployResults) = acc
       for {
+        _                            <- runtime.space.reset(hash)
         evaluateResult               <- computeEffect(runtime)(deploy)
         EvaluateResult(cost, errors) = evaluateResult
         newCheckpoint                <- runtime.space.createCheckpoint()
