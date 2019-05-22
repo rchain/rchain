@@ -63,8 +63,16 @@ class Initializing[F[_]: Sync: Metrics: Concurrent: ConnectionsCell: BlockStore:
       isValid <- Validate.approvedBlock[F](approvedBlock, validators)
       maybeCasper <- if (isValid) {
                       for {
-                        _       <- Log[F].info("Valid ApprovedBlock received!")
-                        _       <- EventLog[F].publish(shared.Event.ApprovedBlockReceived)
+                        _ <- Log[F].info("Valid ApprovedBlock received!")
+                        _ <- EventLog[F].publish(
+                              shared.Event.ApprovedBlockReceived(
+                                approvedBlock.candidate
+                                  .flatMap(
+                                    _.block.map(b => PrettyPrinter.buildStringNoLimit(b.blockHash))
+                                  )
+                                  .getOrElse("")
+                              )
+                            )
                         genesis = approvedBlock.candidate.flatMap(_.block).get
                         _       <- insertIntoBlockAndDagStore[F](genesis, approvedBlock)
                         _       <- LastApprovedBlock[F].set(approvedBlock)

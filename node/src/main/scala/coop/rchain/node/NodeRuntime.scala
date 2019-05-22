@@ -73,8 +73,6 @@ class NodeRuntime private[node] (
   import ApplicativeError_._
 
   /** Configuration */
-  private val port              = conf.server.port
-  private val kademliaPort      = conf.server.kademliaPort
   private val blockstorePath    = conf.server.dataDir.resolve("blockstore")
   private val dagStoragePath    = conf.server.dataDir.resolve("dagstorage")
   private val storagePath       = conf.server.dataDir.resolve("rspace")
@@ -108,7 +106,7 @@ class NodeRuntime private[node] (
       kademliaRPCServer <- discovery
                             .acquireKademliaRPCServer(
                               conf.server.networkId,
-                              kademliaPort,
+                              conf.server.kademliaPort,
                               KademliaHandleRPC.handlePing[Task],
                               KademliaHandleRPC.handleLookup[Task]
                             )(grpcScheduler)
@@ -287,9 +285,9 @@ class NodeRuntime private[node] (
             pm => HandleMessages.handle[Task](pm),
             blob => packetHandler.handlePacket(blob.sender, blob.packet)
           )
-      address = s"rnode://$id@$host?protocol=$port&discovery=$kademliaPort"
+      address = local.toAddress
       _       <- Log[Task].info(s"Listening for traffic on $address.")
-      _       <- EventLog[Task].publish(Event.NodeStarted)
+      _       <- EventLog[Task].publish(Event.NodeStarted(address))
       _       <- Task.defer(loop.forever).executeOn(loopScheduler).start
       _ <- if (conf.server.standalone) ().pure[Task]
           else Log[Task].info(s"Waiting for first connection.") >> waitForFirstConnetion

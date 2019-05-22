@@ -74,9 +74,15 @@ object Engine {
       approvedBlock: ApprovedBlock
   ): F[Unit] =
     for {
-      _   <- MultiParentCasperRef[F].set(casper)
-      _   <- Log[F].info("Making a transition to Running state.")
-      _   <- EventLog[F].publish(shared.Event.EnteredRunningState)
+      _ <- MultiParentCasperRef[F].set(casper)
+      _ <- Log[F].info("Making a transition to Running state.")
+      _ <- EventLog[F].publish(
+            shared.Event.EnteredRunningState(
+              approvedBlock.candidate
+                .flatMap(_.block.map(b => PrettyPrinter.buildStringNoLimit(b.blockHash)))
+                .getOrElse("")
+            )
+          )
       abh = new Running[F](casper, approvedBlock)
       _   <- EngineCell[F].set(abh)
 

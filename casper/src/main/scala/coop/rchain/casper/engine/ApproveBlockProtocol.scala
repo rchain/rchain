@@ -140,7 +140,14 @@ object ApproveBlockProtocol {
                 Metrics[F].incrementCounter("genesis")
               else ().pure[F]
           _ <- Log[F].info(s"APPROVAL: received block approval from $sender")
-          _ <- EventLog[F].publish(shared.Event.BlockApprovalReceived)
+          _ <- EventLog[F].publish(
+                shared.Event.BlockApprovalReceived(
+                  a.candidate
+                    .flatMap(_.block.map(b => PrettyPrinter.buildStringNoLimit(b.blockHash)))
+                    .getOrElse(""),
+                  sender
+                )
+              )
         } yield (),
         Log[F].warn(s"APPROVAL: ignoring invalid block approval from $sender")
       )
@@ -169,7 +176,7 @@ object ApproveBlockProtocol {
         _ <- Log[F].info(s"APPROVAL: Beginning send of UnapprovedBlock $candidateHash to peers...")
         _ <- CommUtil.streamToPeers[F](transport.UnapprovedBlock, serializedUnapprovedBlock)
         _ <- Log[F].info(s"APPROVAL: Sent UnapprovedBlock $candidateHash to peers.")
-        _ <- EventLog[F].publish(shared.Event.SentUnapprovedBlock)
+        _ <- EventLog[F].publish(shared.Event.SentUnapprovedBlock(candidateHash))
       } yield ()
 
     private def completeIf(time: Long, signatures: Set[Signature]): F[Unit] =
@@ -194,7 +201,7 @@ object ApproveBlockProtocol {
                       )
                   _ <- CommUtil.streamToPeers[F](transport.ApprovedBlock, serializedApprovedBlock)
                   _ <- Log[F].info(s"APPROVAL: Sent ApprovedBlock $candidateHash to peers.")
-                  _ <- EventLog[F].publish(shared.Event.SentApprovedBlock)
+                  _ <- EventLog[F].publish(shared.Event.SentApprovedBlock(candidateHash))
                 } yield ()
             }
       } yield ()

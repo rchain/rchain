@@ -2,12 +2,12 @@ package coop.rchain.shared
 
 sealed trait Event
 object Event {
-  object NodeStarted           extends Event
-  object EnteredRunningState   extends Event
-  object ApprovedBlockReceived extends Event
-  object SentUnapprovedBlock   extends Event
-  object BlockApprovalReceived extends Event
-  object SentApprovedBlock     extends Event
+  final case class NodeStarted(address: String)                             extends Event
+  final case class EnteredRunningState(blockHash: String)                   extends Event
+  final case class ApprovedBlockReceived(blockHash: String)                 extends Event
+  final case class SentUnapprovedBlock(blockHash: String)                   extends Event
+  final case class BlockApprovalReceived(blockHash: String, sender: String) extends Event
+  final case class SentApprovedBlock(blockHash: String)                     extends Event
 }
 
 trait EventLog[F[_]] {
