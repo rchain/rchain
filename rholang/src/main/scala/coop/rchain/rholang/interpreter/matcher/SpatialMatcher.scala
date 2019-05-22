@@ -6,12 +6,13 @@ import cats.effect.implicits._
 import cats.implicits._
 import cats.mtl._
 import cats.mtl.implicits._
-import cats.{Functor, FlatMap, Monad, MonoidK, Eval => _}
+import cats.{FlatMap, Functor, Monad, MonoidK, Eval => _}
 import coop.rchain.catscontrib._
 import coop.rchain.catscontrib.mtl.implicits._
 import coop.rchain.models.Connective.ConnectiveInstance
 import coop.rchain.models.Connective.ConnectiveInstance._
 import coop.rchain.models.Expr.ExprInstance._
+import coop.rchain.models.GUnforgeable.UnfInstance.{GDeployerAuthBody, GPrivateBody}
 import coop.rchain.models.Var.VarInstance.{FreeVar, Wildcard}
 import coop.rchain.models._
 import coop.rchain.models.rholang.implicits.{VectorPar, _}
@@ -442,10 +443,10 @@ trait SpatialMatcherInstances {
               varLevel,
               wildcard
             )
-        _ <- listMatchSingle_[F, GPrivate](
-              remainder.ids,
-              pattern.ids,
-              (p, i) => p.withIds(i),
+        _ <- listMatchSingle_[F, GUnforgeable](
+              remainder.unforgeables,
+              pattern.unforgeables,
+              (p, i) => p.withUnforgeables(i),
               varLevel,
               wildcard
             )
@@ -575,6 +576,17 @@ trait SpatialMatcherInstances {
         _ <- foldMatch(target.cases, pattern.cases)
       } yield ()
 
+  implicit def unfSpatialMatcherInstance[F[_]: Splittable: Alternative: Monad: _error: _cost: _freeMap: _short]
+      : SpatialMatcher[F, GUnforgeable, GUnforgeable] =
+    (target, pattern) =>
+      (target.unfInstance, pattern.unfInstance) match {
+        case (GPrivateBody(tgprivate), GPrivateBody(pgprivate)) =>
+          spatialMatch(tgprivate, pgprivate)
+        case (GDeployerAuthBody(tda), GDeployerAuthBody(pda)) =>
+          spatialMatch(tda, pda)
+        case _ => MonoidK[F].empty[Unit]
+      }
+
   /**
     * Note that currently there should be no way to put a GPrivate in a pattern
     * because patterns start with an empty environment.
@@ -582,6 +594,15 @@ trait SpatialMatcherInstances {
     */
   implicit def gprivateSpatialMatcherInstance[F[_]: Splittable: Alternative: Monad: _error: _cost: _freeMap]
       : SpatialMatcher[F, GPrivate, GPrivate] =
+    (target, pattern) =>
+      if (target == pattern) {
+        val cost = equalityCheckCost(target, pattern)
+        charge[F](cost) *> ().pure[F]
+      } else
+        MonoidK[F].empty
+
+  implicit def gdeployerAuthSpatialMatcherInstance[F[_]: Splittable: Alternative: Monad: _error: _cost: _freeMap]
+      : SpatialMatcher[F, GDeployerAuth, GDeployerAuth] =
     (target, pattern) =>
       if (target == pattern) {
         val cost = equalityCheckCost(target, pattern)

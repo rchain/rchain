@@ -102,8 +102,8 @@ class MultiParentCasperRholangSpec extends FlatSpec with Matchers with Inspector
 
       //val skStr = "6061f3ea36d0419d1e9e23c33bba88ed1435427fa2a8f7300ff210b4e9f18a14"
       val pkStr = "16989775f3f207a717134216816d3c9d97b0bfb8d560b29485f23f6ead435f09"
-      val sigStr = "51c2b091559745d51c7270189911d9d894d538f76150ed67d164705dcf0af52" +
-        "e101fa06396db2b2ac21a4bfbe3461567b5f8b3d2e666c377cb92d96bc38e2c08"
+      val sigStr = "ff2c3c3f1854dd97ae5b569b08d0984e6d68b74ad6cea9eb9cd72e891660edd" +
+        "a1c9a4471b31dd6dd1c8f9a8629f88db14188e6c00d8a63b2131e69eda2172009"
       val amount = 157L
       val createWalletCode =
         s"""new

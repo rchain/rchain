@@ -44,7 +44,7 @@ in {
   rs!(
     "08a0f8fccace949453dcb6a885e9f50dd96a58ed51c49fc2e346aa4d42ffb7c1".hexToBytes(), 
     (9223372036854775807, bundle+{*SystemInstancesRegistry}), 
-    "fbf76226c16f1327058fba896fe4d43f69b3707981ae7b8498de6fcbc36c4bbe66885904dde6a8a4f5cdf8e74f035f8e505b895a381833d3ecfb717748bc8b0d".hexToBytes(), 
+    "436617c931fb6a5bf8dcd62d23847937028c67e78e355f49b1e3d3b835c9b230f9a71192becf7b22079ad0631dce32248fe0b2ac6e0a9a09c09903cfc0574e02".hexToBytes(),
     *uriOut
   )
 }

@@ -177,7 +177,7 @@ in {
         rs!(
           "f59e613088fd7e2e8a371b5115701f3a4f53f35ea6f60433923153ee7fbf83fd".hexToBytes(),
           (9223372036854775807, bundle+{*RevVault}),
-          "cd16cb789f128767d2d1224b931d0d5d47dce130266c72839d09d38bc9070a365234e0d9cce4a04e7ac4a1648db1b2ec1ba55751d0ead2c465dbfb55a5d13f01".hexToBytes(),
+          "af73d1c41dbf8dfea57f5d5a043515c27573a39282a2aaa68205ec2080303959e6502ffee16bdecaa14a6e1fe8692d6fabf642b6204a282477d988c7a676060b".hexToBytes(),
           *uriOut
         )
 

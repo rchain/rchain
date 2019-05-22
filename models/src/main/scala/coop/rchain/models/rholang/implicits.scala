@@ -7,8 +7,10 @@ import coop.rchain.models.Expr.ExprInstance._
 import coop.rchain.models.Var.VarInstance
 import coop.rchain.models.Var.VarInstance.{BoundVar, FreeVar, Wildcard}
 import coop.rchain.models._
-
 import com.google.protobuf.ByteString
+import coop.rchain.models.GUnforgeable.UnfInstance
+import coop.rchain.models.GUnforgeable.UnfInstance.{GDeployerAuthBody, GPrivateBody}
+
 import scala.collection.immutable.{BitSet, Vector}
 
 object implicits {
@@ -124,6 +126,16 @@ object implicits {
     new Expr(exprInstance = EMinusMinusBody(e))
   implicit def fromEMinusMinus(e: EMinusMinus): Expr = apply(e)
 
+  // GUnforgeable Related
+  def apply(u: UnfInstance)                                  = new GUnforgeable(unfInstance = u)
+  implicit def fromUnfInstance(e: UnfInstance): GUnforgeable = apply(e)
+
+  def apply(g: GPrivate): GUnforgeable                 = new GUnforgeable(unfInstance = GPrivateBody(g))
+  implicit def fromGPrivate(g: GPrivate): GUnforgeable = apply(g)
+
+  def apply(g: GDeployerAuth): GUnforgeable                      = new GUnforgeable(unfInstance = GDeployerAuthBody(g))
+  implicit def fromGDeployerAuth(g: GDeployerAuth): GUnforgeable = apply(g)
+
   // Par Related
   def apply(): Par = new Par()
   def apply(s: Send): Par =
@@ -144,9 +156,12 @@ object implicits {
     )
   def apply(m: Match): Par =
     new Par(matches = Vector(m), locallyFree = m.locallyFree, connectiveUsed = m.connectiveUsed)
-  def apply(g: GPrivate): Par =
-    new Par(ids = Vector(g), locallyFree = BitSet(), connectiveUsed = false)
-
+  def apply(g: GUnforgeable): Par =
+    new Par(
+      unforgeables = Vector(g),
+      locallyFree = BitSet(),
+      connectiveUsed = false
+    )
   def apply(b: Bundle): Par =
     new Par(
       bundles = Vector(b),
@@ -157,14 +172,14 @@ object implicits {
   def apply(c: Connective): Par =
     new Par(connectives = Vector(c), connectiveUsed = ConnectiveLocallyFree.connectiveUsed(c))
 
-  implicit def fromSend(s: Send): Par                             = apply(s)
-  implicit def fromReceive(r: Receive): Par                       = apply(r)
-  implicit def fromNew(n: New): Par                               = apply(n)
-  implicit def fromExpr[T](e: T)(implicit toExpr: T => Expr): Par = apply(e)
-  implicit def fromMatch(m: Match): Par                           = apply(m)
-  implicit def fromGPrivate(g: GPrivate): Par                     = apply(g)
-  implicit def fromBundle(b: Bundle): Par                         = apply(b)
-  implicit def fromConnective(c: Connective): Par                 = apply(c)
+  implicit def fromSend(s: Send): Par                                                     = apply(s)
+  implicit def fromReceive(r: Receive): Par                                               = apply(r)
+  implicit def fromNew(n: New): Par                                                       = apply(n)
+  implicit def fromExpr[T](e: T)(implicit toExpr: T => Expr): Par                         = apply(e)
+  implicit def fromMatch(m: Match): Par                                                   = apply(m)
+  implicit def fromGUnforgeable[T](g: T)(implicit toGUnforgeable: T => GUnforgeable): Par = apply(g)
+  implicit def fromBundle(b: Bundle): Par                                                 = apply(b)
+  implicit def fromConnective(c: Connective): Par                                         = apply(c)
 
   object VectorPar {
     def apply(): Par = new Par(
@@ -173,17 +188,20 @@ object implicits {
       news = Vector.empty[New],
       exprs = Vector.empty[Expr],
       matches = Vector.empty[Match],
-      ids = Vector.empty[GPrivate],
+      unforgeables = Vector.empty[GUnforgeable],
       bundles = Vector.empty[Bundle],
       connectives = Vector.empty[Connective]
     )
   }
 
   object GPrivateBuilder {
-    def apply(): GPrivate =
-      new GPrivate(ByteString.copyFromUtf8(java.util.UUID.randomUUID.toString))
-    def apply(s: String): GPrivate     = new GPrivate(ByteString.copyFromUtf8(s))
-    def apply(b: ByteString): GPrivate = new GPrivate(b)
+    def apply(): GUnforgeable =
+      GUnforgeable(
+        GPrivateBody(new GPrivate(ByteString.copyFromUtf8(java.util.UUID.randomUUID.toString)))
+      )
+    def apply(s: String): GUnforgeable =
+      GUnforgeable(GPrivateBody(new GPrivate(ByteString.copyFromUtf8(s))))
+    def apply(b: ByteString): GUnforgeable = GUnforgeable(GPrivateBody(new GPrivate(b)))
   }
 
   implicit class RichExprInstance(exprInstance: ExprInstance) {
@@ -260,7 +278,7 @@ object implicits {
       }
 
     def singleBundle(): Option[Bundle] =
-      if (p.sends.isEmpty && p.receives.isEmpty && p.news.isEmpty && p.exprs.isEmpty && p.matches.isEmpty && p.ids.isEmpty && p.connectives.isEmpty) {
+      if (p.sends.isEmpty && p.receives.isEmpty && p.news.isEmpty && p.exprs.isEmpty && p.matches.isEmpty && p.unforgeables.isEmpty && p.connectives.isEmpty) {
         p.bundles.toList match {
           case Seq(single) => Some(single)
           case _           => None
@@ -283,7 +301,7 @@ object implicits {
         that.news ++ p.news,
         that.exprs ++ p.exprs,
         that.matches ++ p.matches,
-        that.ids ++ p.ids,
+        that.unforgeables ++ p.unforgeables,
         that.bundles ++ p.bundles,
         that.connectives ++ p.connectives,
         that.locallyFree | p.locallyFree,
@@ -305,6 +323,13 @@ object implicits {
     def connectiveUsed(s: Send)          = s.connectiveUsed
     def locallyFree(s: Send, depth: Int) = s.locallyFree
   }
+
+  implicit val UnforgeableLocallyFree: HasLocallyFree[GUnforgeable] =
+    new HasLocallyFree[GUnforgeable] {
+      def connectiveUsed(unf: GUnforgeable)                     = false
+      def locallyFree(source: GUnforgeable, depth: Int): BitSet = BitSet()
+    }
+
   implicit val ExprLocallyFree: HasLocallyFree[Expr] = new HasLocallyFree[Expr] {
     def connectiveUsed(e: Expr) =
       e.exprInstance match {
@@ -373,11 +398,6 @@ object implicits {
         case EMinusMinusBody(EMinusMinus(p1, p2))         => p1.locallyFree | p2.locallyFree
         case ExprInstance.Empty                           => BitSet()
       }
-  }
-
-  implicit val GPrivateLocallyFree: HasLocallyFree[GPrivate] = new HasLocallyFree[GPrivate] {
-    def connectiveUsed(g: GPrivate)          = false
-    def locallyFree(g: GPrivate, depth: Int) = BitSet()
   }
 
   implicit val NewLocallyFree: HasLocallyFree[New] = new HasLocallyFree[New] {

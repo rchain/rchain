@@ -78,6 +78,9 @@ object KryoSerializers {
   val ExprSerializer =
     emptyReplacingSerializer[Expr](_.exprInstance.isEmpty, Expr())
 
+  val UnfSerializer =
+    emptyReplacingSerializer[GUnforgeable](_.unfInstance.isEmpty, GUnforgeable())
+
   val ConnectiveSerializer =
     emptyReplacingSerializer[Connective](_.connectiveInstance.isEmpty, Connective())
 
@@ -90,6 +93,7 @@ object KryoSerializers {
   kryo.register(classOf[TaggedContinuation], TaggedContinuationSerializer)
   kryo.register(classOf[Var], VarSerializer)
   kryo.register(classOf[Expr], ExprSerializer)
+  kryo.register(classOf[GUnforgeable], UnfSerializer)
   kryo.register(classOf[Connective], ConnectiveSerializer)
   kryo.register(None.getClass, NoneSerializer)
 

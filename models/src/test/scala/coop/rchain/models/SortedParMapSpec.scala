@@ -70,7 +70,7 @@ class SortedParMapSpec extends FlatSpec with PropertyChecks with Matchers {
   it should "be equal when it is equal" in {
     val ps = Map(
       Par() -> Par(
-        ids = Seq(
+        unforgeables = Seq(
           GPrivate(
             ByteString.copyFrom(
               Array[Byte](
@@ -108,7 +108,7 @@ class SortedParMapSpec extends FlatSpec with PropertyChecks with Matchers {
         )
       ),
       Par(
-        ids = Seq(
+        unforgeables = Seq(
           GPrivate()
         )
       ),

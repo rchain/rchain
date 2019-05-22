@@ -158,7 +158,7 @@ new PoS,
       registryInsert!(
         "cc87bf7747a8c176714b417ca14a63897b07572876c5e38a7896b6007738ef81".hexToBytes(),
         (9223372036854775807, bundle+{*PoS}),
-        "7ff160accda7f76f14f2ae132aaae140ac22b2671e561a58a566bff1a01e49cf372201a5df678aba5ff09171b6af966906deffbf8933efeeddb69a4c204b0503".hexToBytes(),
+        "dd39acf8dae0e985cd2c46cf6143c0da9edc8ec5a9d11256496a580a50f35a8b362d27b0ef04c7e8fc2e2b557c5d6a453ded7744ae6a80ac2762a1b93e789506".hexToBytes(),
         *uriCh
       )
     }

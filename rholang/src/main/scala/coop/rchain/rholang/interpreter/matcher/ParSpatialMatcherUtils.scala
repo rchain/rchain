@@ -35,7 +35,7 @@ private[matcher] object ParSpatialMatcherUtils {
     val newMax     = math.min(max.news, par.news.size - minPrune.news)
     val exprMax    = math.min(max.exprs, par.exprs.size - minPrune.exprs)
     val matchMax   = math.min(max.matches, par.matches.size - minPrune.matches)
-    val idMax      = math.min(max.ids, par.ids.size - minPrune.ids)
+    val unfMax     = math.min(max.unforgeables, par.unforgeables.size - minPrune.unforgeables)
     val bundleMax  = math.min(max.bundles, par.bundles.size - minPrune.bundles)
 
     val sendMin    = math.max(min.sends, par.sends.size - maxPrune.sends)
@@ -43,7 +43,7 @@ private[matcher] object ParSpatialMatcherUtils {
     val newMin     = math.max(min.news, par.news.size - maxPrune.news)
     val exprMin    = math.max(min.exprs, par.exprs.size - maxPrune.exprs)
     val matchMin   = math.max(min.matches, par.matches.size - maxPrune.matches)
-    val idMin      = math.max(min.ids, par.ids.size - maxPrune.ids)
+    val unfMin     = math.max(min.unforgeables, par.unforgeables.size - maxPrune.unforgeables)
     val bundleMin  = math.max(min.bundles, par.bundles.size - maxPrune.bundles)
 
     for {
@@ -52,7 +52,7 @@ private[matcher] object ParSpatialMatcherUtils {
       subNews     <- minMaxSubsets(par.news, newMin, newMax)
       subExprs    <- minMaxSubsets(par.exprs, exprMin, exprMax)
       subMatches  <- minMaxSubsets(par.matches, matchMin, matchMax)
-      subIds      <- minMaxSubsets(par.ids, idMin, idMax)
+      subUnfs     <- minMaxSubsets(par.unforgeables, unfMin, unfMax)
       subBundles  <- minMaxSubsets(par.bundles, bundleMin, bundleMax)
     } yield (
       Par(
@@ -61,7 +61,7 @@ private[matcher] object ParSpatialMatcherUtils {
         subNews._1,
         subExprs._1,
         subMatches._1,
-        subIds._1,
+        subUnfs._1,
         subBundles._1
       ),
       Par(
@@ -70,7 +70,7 @@ private[matcher] object ParSpatialMatcherUtils {
         subNews._2,
         subExprs._2,
         subMatches._2,
-        subIds._2,
+        subUnfs._2,
         subBundles._2
       )
     )
