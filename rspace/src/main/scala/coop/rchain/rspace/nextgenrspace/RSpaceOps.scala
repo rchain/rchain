@@ -177,7 +177,7 @@ abstract class RSpaceOps[F[_]: Concurrent, C, P, A, R, K](
 
   def toMap: F[Map[Seq[C], Row[P, A, K]]] = Map.empty.pure[F]
 
-  override def clear(): F[Unit] = ???
+  override def clear(): F[Unit] = Sync[F].unit
 
   protected def createCache: F[Cell[F, Cache[C, P, A, K]]] =
     Cell.refCell[F, Cache[C, P, A, K]](Cache())

@@ -22,6 +22,7 @@ import coop.rchain.rholang.interpreter.storage.implicits._
 import coop.rchain.rspace._
 import coop.rchain.rspace.history.Branch
 import coop.rchain.rspace.pure.PureRSpace
+import coop.rchain.rspace.nextgenrspace.{RSpace => NextRSpace, ReplayRSpace => NextReplayRSpace}
 import coop.rchain.shared.StoreType._
 import coop.rchain.shared.{Log, StoreType}
 
@@ -449,6 +450,22 @@ object Runtime {
                       ](context, Branch.REPLAY)
       } yield ((context, space, replaySpace))
 
+    def createNextSpace(
+        dataDir: Path,
+        mapSize: Long
+    ): F[(RhoContext[F], RhoISpace[F], RhoReplayISpace[F])] =
+      for {
+        withReplay <- NextRSpace.createWithReplay[
+                       F,
+                       Par,
+                       BindPattern,
+                       ListParWithRandom,
+                       ListParWithRandom,
+                       TaggedContinuation
+                     ](dataDir, mapSize)
+        (space, replay) = withReplay
+      } yield (new NoopContext(), space, replay)
+
     def checkCreateDataDir: F[Unit] =
       for {
         notexists <- Sync[F].delay(Files.notExists(dataDir))
@@ -462,6 +479,8 @@ object Runtime {
         checkCreateDataDir >> createSpace(Context.create(dataDir, mapSize, true))
       case Mixed =>
         checkCreateDataDir >> createSpace(Context.createMixed(dataDir, mapSize))
+      case RSpace2 =>
+        checkCreateDataDir >> createNextSpace(dataDir, mapSize)
     }
   }
 }
