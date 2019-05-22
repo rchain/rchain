@@ -20,15 +20,18 @@ trait IReplaySpace[F[_], C, P, A, R, K] extends ISpace[F, C, P, A, R, K] {
   def rig(startRoot: Blake2b256Hash, log: trace.Log)(implicit syncF: Sync[F]): F[Unit] =
     syncF
       .delay {
-        // create a set of the "new" IOEvents
-        val newStuff: Set[Event] = log.filter {
+        val (ioEvents, commEvents) = log.partition {
           case _: Produce => true
           case _: Consume => true
-          case _          => false
-        }.toSet
+          case _: COMM    => false
+        }
+
+        // create a set of the "new" IOEvents
+        val newStuff = ioEvents.toSet
+
         // create and prepare the ReplayData table
         replayData.clear()
-        log.foreach {
+        commEvents.foreach {
           case comm @ COMM(consume, produces) =>
             (consume +: produces).foreach { ioEvent =>
               if (newStuff(ioEvent)) {
