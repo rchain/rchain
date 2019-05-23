@@ -65,6 +65,7 @@ final case class Deploy(
     phloPrice: Long,
     validAfterBlock: Long,
     privateKey: Option[PrivateKey],
+    privateKeyPath: Option[Path],
     location: String
 ) extends Command
 final case class FindDeploy(id: Array[Byte])                               extends Command

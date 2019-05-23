@@ -68,15 +68,44 @@ object Main {
     val program = conf.command match {
       case Eval(files) => new ReplRuntime().evalProgram[Task](files)
       case Repl        => new ReplRuntime().replProgram[Task].as(())
-      case Deploy(phlo, phloPrice, validAfterBlock, privateKey, location) =>
-        DeployRuntime
-          .deployFileProgram[Task](
-            phlo,
-            phloPrice,
-            validAfterBlock,
-            privateKey,
-            location
-          )
+      case Deploy(
+          phlo,
+          phloPrice,
+          validAfterBlock,
+          maybePrivateKey,
+          maybePrivateKeyPath,
+          location
+          ) =>
+        (maybePrivateKey, maybePrivateKeyPath) match {
+          case (Some(privateKey), _) =>
+            DeployRuntime.deployFileProgram[Task](
+              phlo,
+              phloPrice,
+              validAfterBlock,
+              Some(privateKey),
+              location
+            )
+          case (None, Some(privateKeyPath)) =>
+            for {
+              password   <- ConsoleIO[Task].readPassword("Password for private key file: ")
+              privateKey <- Secp256k1.parsePemFile[Task](privateKeyPath, password)
+              _ <- DeployRuntime.deployFileProgram[Task](
+                    phlo,
+                    phloPrice,
+                    validAfterBlock,
+                    Some(privateKey),
+                    location
+                  )
+            } yield ()
+          case (None, None) =>
+            DeployRuntime.deployFileProgram[Task](
+              phlo,
+              phloPrice,
+              validAfterBlock,
+              None,
+              location
+            )
+        }
       case FindDeploy(deployId) => DeployRuntime.findDeploy[Task](deployId)
       case Propose              => DeployRuntime.propose[Task]()
       case ShowBlock(hash)      => DeployRuntime.getBlock[Task](hash)

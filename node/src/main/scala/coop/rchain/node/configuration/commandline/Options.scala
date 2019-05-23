@@ -409,11 +409,17 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
 
     val privateKey = opt[PrivateKey](
       descr = "The deployer's ed25519 private key encoded as Base16.",
-      required = false
+      required = false,
+      hidden = true
     )(
       Base16Converter
         .flatMap(validateLength(Ed25519.keyLength))
         .map(PrivateKey)
+    )
+
+    val privateKeyPath = opt[Path](
+      descr = "The deployer's file with encrypted private key.",
+      required = false
     )
 
     val location = trailArg[String](required = true)

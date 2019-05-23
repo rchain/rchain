@@ -194,6 +194,7 @@ object Configuration {
           phloPrice(),
           validAfterBlockNumber.getOrElse(-1L),
           privateKey.toOption,
+          privateKeyPath.toOption,
           location()
         )
       case Some(options.findDeploy) => FindDeploy(options.findDeploy.deployId())
