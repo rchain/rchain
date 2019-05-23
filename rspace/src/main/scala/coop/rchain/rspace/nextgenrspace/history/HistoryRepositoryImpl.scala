@@ -3,7 +3,7 @@ package coop.rchain.rspace.nextgenrspace.history
 import java.nio.charset.StandardCharsets
 
 import cats.Applicative
-import cats.effect.Sync
+import cats.effect.{IO, Sync}
 import cats.implicits._
 import coop.rchain.rspace.{
   internal,
@@ -23,6 +23,7 @@ import scodec.Codec
 import scodec.bits.{BitVector, ByteVector}
 import HistoryRepositoryImpl._
 import com.typesafe.scalalogging.Logger
+import monix.execution.schedulers.TestScheduler.Task
 
 final case class HistoryRepositoryImpl[F[_]: Sync, C, P, A, K](
     history: History[F],
@@ -112,12 +113,16 @@ final case class HistoryRepositoryImpl[F[_]: Sync, C, P, A, K](
 
   type Result = (Blake2b256Hash, Option[PersistedData], HistoryAction)
 
-  protected[this] val dataLogger: Logger = Logger("coop.rchain.rspace.datametrics")
+  protected[this] val dataLogger: F[Logger] =
+    Sync[F].delay(Logger("coop.rchain.rspace.datametrics"))
 
-  private def measure(actions: List[HotStoreAction]): Unit =
-    dataLogger.whenDebugEnabled {
-      computeMeasure(actions).foreach(p => dataLogger.debug(p))
-    }
+  private def measure(actions: List[HotStoreAction]): F[Unit] =
+    for {
+      d <- dataLogger
+      _ = d.whenDebugEnabled {
+        computeMeasure(actions).foreach(p => d.debug(p))
+      }
+    } yield ()
 
   private def computeMeasure(actions: List[HotStoreAction]): List[String] =
     actions.map {
