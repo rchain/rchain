@@ -1,48 +1,42 @@
 package coop.rchain.casper.engine
 
-import cats.effect.concurrent.Ref
+import cats._
 import cats.effect.{Concurrent, ContextShift}
-import cats._, cats.data._, cats.implicits._
-import com.google.protobuf.ByteString
+import cats.effect.concurrent.Ref
+import cats.implicits._
+
+import coop.rchain.blockstorage._
 import coop.rchain.blockstorage.BlockStore.BlockHash
-import coop.rchain.blockstorage.{BlockDagRepresentation, InMemBlockDagStorage, InMemBlockStore}
-import coop.rchain.casper.MultiParentCasperTestUtil.createBonds
 import coop.rchain.casper._
+import coop.rchain.casper.MultiParentCasperTestUtil.createBonds
 import coop.rchain.casper.genesis.Genesis
 import coop.rchain.casper.genesis.contracts._
-import coop.rchain.casper.engine._, EngineCell._
-import coop.rchain.casper.helper.{BlockDagStorageTestFixture, NoOpsCasperEffect}
-import coop.rchain.casper.protocol.{NoApprovedBlockAvailable, _}
+import coop.rchain.casper.helper.BlockDagStorageTestFixture
+import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.TestTime
 import coop.rchain.casper.util.rholang.RuntimeManager
 import coop.rchain.catscontrib.ApplicativeError_
 import coop.rchain.catscontrib.TaskContrib._
-import coop.rchain.comm.protocol.routing.Packet
+import coop.rchain.comm._
 import coop.rchain.comm.rp.Connect.{Connections, ConnectionsCell}
-import coop.rchain.comm.rp.ProtocolHelper
-import coop.rchain.comm.rp.ProtocolHelper._
-import coop.rchain.comm.{transport, _}
-import coop.rchain.crypto.codec.Base16
-import coop.rchain.crypto.hash.Blake2b256
 import coop.rchain.crypto.signatures.Ed25519
 import coop.rchain.metrics.Metrics.MetricsNOP
 import coop.rchain.p2p.EffectsTestInstances._
 import coop.rchain.rholang.interpreter.Runtime
 import coop.rchain.rholang.interpreter.util.RevAddress
 import coop.rchain.shared.{Cell, StoreType}
+
 import monix.eval.Task
 import monix.execution.Scheduler
-import org.scalatest.WordSpec
-
-import scala.concurrent.duration._
 
 object Setup {
   def apply() = new {
-    implicit val log     = new LogStub[Task]
-    implicit val metrics = new MetricsNOP[Task]
-    val networkId        = "test"
-    val scheduler        = Scheduler.io("test")
-    val runtimeDir       = BlockDagStorageTestFixture.blockStorageDir
+    implicit val log          = new LogStub[Task]
+    implicit val eventLogStub = new EventLogStub[Task]
+    implicit val metrics      = new MetricsNOP[Task]
+    val networkId             = "test"
+    val scheduler             = Scheduler.io("test")
+    val runtimeDir            = BlockDagStorageTestFixture.blockStorageDir
     val activeRuntime =
       Runtime
         .createWithEmptyCost[Task, Task.Par](runtimeDir, 3024L * 1024, StoreType.LMDB)(
