@@ -1,0 +1,166 @@
+// Rholang macro parameters:
+// minimumBond - the minimum bond allowed by the PoS
+// maximumBond - the maximum bond allowed by PoS
+// initialBonds - the initial bonds map
+
+/*
+The table below describes the required computations and their dependencies
+
+No. | Dependency | Computation method | Result
+----+------------+--------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------
+1.  |            | given              | sk = d70491c21a5ba44ffb60a97d9bfbf3f3839b997bde107a3a8ab6872594282740
+2.  |            | given              | timestamp = 1553862086627
+3.  |            | lastNonce          | nonce = 9223372036854775807
+4.  | 1,         | ed25519            | pk = cc87bf7747a8c176714b417ca14a63897b07572876c5e38a7896b6007738ef81
+5.  | 4, 2,      | genIds             | uname = Unforgeable(0xf974f799067b34be1acb7b565e0b160edb23df3e3ad58f200af183ae48b458cd)
+6.  | 3, 5,      | registry           | value = (9223372036854775807, bundle+ {   Unforgeable(0xf974f799067b34be1acb7b565e0b160edb23df3e3ad58f200af183ae48b458cd) })
+7.  | 6,         | protobuf           | toSign = 2a3eaa013b0a0d2a0b10feffffffffffffffff010a2a5a280a243a220a20f974f799067b34be1acb7b565e0b160edb23df3e3ad58f200af183ae48b458cd1001
+8.  | 7, 1,      | ed25519            | sig = 7ff160accda7f76f14f2ae132aaae140ac22b2671e561a58a566bff1a01e49cf372201a5df678aba5ff09171b6af966906deffbf8933efeeddb69a4c204b0503
+9.  | 4,         | registry           | uri = rho:id:cnec3pa8prp4out3yc8facon6grm3xbsotpd4ckjfx8ghuw77xadzt
+----+------------+--------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------
+*/
+
+new PoS,
+    registryLookup(`rho:registry:lookup`),
+    revAddressOps(`rho:rev:address`),
+    revVaultCh,
+    getUser,
+    getCurrentUserAddress,
+    getCurrentUserVault,
+    getMVar,
+    runMVar,
+    deposit in {
+  registryLookup!(`rho:id:1o93uitkrjfubh43jt19owanuezhntag5wh74c6ur5feuotpi73q8z`, *revVaultCh) |
+
+  for(@(_, RevVault) <- revVaultCh) {
+    new posRevAddressCh in {
+
+      getCurrentUserAddress!(*posRevAddressCh) |
+      for(@posRevAddress <- posRevAddressCh) {
+        new bondsCh, posVaultCh in {
+          @RevVault!("findOrCreate", posRevAddress, *posVaultCh) |
+          for (@(true, _) <- posVaultCh) {
+
+            bondsCh!($$initialBonds$$) |
+            contract PoS (@"getBonds", returnCh) = {
+              getMVar!(*bondsCh, *returnCh)
+            } |
+
+            contract PoS (@"bond", @amount, returnCh) = {
+              new userCh, depositCh, processCh in {
+                runMVar!(*bondsCh, *processCh, *returnCh) |
+
+                getUser!(*userCh) |
+                for(@bonds, resultCh <- processCh;
+                    @userPk <- userCh) {
+                  if (bonds.contains(userPk)) {
+                    resultCh!(bonds, (false, "Public key is already bonded."))
+                  } else if (amount < $$minimumBond$$) {
+                    resultCh!(bonds, (false, "Bond is less than minimum!"))
+                  } else if (amount > $$maximumBond$$) {
+                    resultCh!(bonds, (false, "Bond is greater than maximum!"))
+                  } else {
+                    deposit!(userPk, amount, *depositCh) |
+                    for(@depositResult <- depositCh) {
+                      match depositResult {
+                        (true, _) => {
+                          resultCh!(
+                            bonds.set(userPk,(amount, bonds.size() + 1)),
+                            depositResult)
+                        }
+
+                        (false, errorMsg) => {
+                          resultCh!(bonds, (false, "Bond deposit failed: " ++ errorMsg))
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            } |
+
+            contract PoS (@"pay", @amount, returnCh) = {
+              new vaultCh, transferCh, userCh in {
+                getUser!(*userCh) |
+
+                for(@userPk <- userCh) {
+                  deposit!(userPk, amount, *returnCh)
+                }
+              }
+            }
+          }
+        } |
+
+        contract deposit (@fromUserPk, @amount, returnCh) = {
+          new vaultCh,
+              revAddressCh,
+              authKeyCh in {
+            @RevVault!("deployerAuthKey", *authKeyCh) |
+            for (@authKey <- authKeyCh) {
+              revAddressOps!("fromPublicKey", fromUserPk, *revAddressCh) |
+              for (@fromRevAddress <- revAddressCh) {
+                @RevVault!("findOrCreate", fromRevAddress, *vaultCh) |
+                for (@(true, fromVault) <- vaultCh) {
+                  @fromVault!("transfer", posRevAddress, amount, authKey, *returnCh)
+                }
+              }
+            }
+          }
+        }
+      } |
+
+      contract getMVar(varCh, returnCh) = {
+        for (@v <- varCh) {
+          varCh!(v) |
+          returnCh!(v)
+        }
+      } |
+      contract runMVar(varCh, processCh, returnCh) = {
+        new resultCh in {
+          for (@v <- varCh) {
+            processCh!(v, *resultCh) |
+            for (@newV, @result <- resultCh) {
+              varCh!(newV) |
+              returnCh!(result)
+            }
+          }
+        }
+      } |
+
+      contract getUser (returnCh) = {
+        new parametersCh, getParameters(`rho:deploy:params`) in {
+          getParameters!(*parametersCh) |
+          for (_, _, @userPk, _ <- parametersCh) {
+            returnCh!(userPk)
+          }
+        }
+      } |
+
+      contract getCurrentUserAddress(returnCh) = {
+        new userCh in {
+          getUser!(*userCh) |
+          for (@userPk <- userCh) {
+            revAddressOps!("fromPublicKey", userPk, *returnCh)
+          }
+        }
+      } |
+
+      contract getCurrentUserVault(returnCh) = {
+        new revAddressCh in {
+          getCurrentUserAddress!(*revAddressCh) |
+          for (@revAddress <- revAddressCh) {
+            @RevVault!("findOrCreate", revAddress, *returnCh)
+          }
+        }
+      }
+    } |
+    new registryInsert(`rho:registry:insertSigned:ed25519`),uriCh in {
+      registryInsert!(
+        "cc87bf7747a8c176714b417ca14a63897b07572876c5e38a7896b6007738ef81".hexToBytes(),
+        (9223372036854775807, bundle+{*PoS}),
+        "7ff160accda7f76f14f2ae132aaae140ac22b2671e561a58a566bff1a01e49cf372201a5df678aba5ff09171b6af966906deffbf8933efeeddb69a4c204b0503".hexToBytes(),
+        *uriCh
+      )
+    }
+  }
+}

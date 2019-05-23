@@ -53,12 +53,6 @@ object StandardDeploys {
       "0cbe092b27e04a944c7ac184619f3abeacffdd823ded94113ae918a63e55d5f2",
       1540221220574L
     )
-  def PoS: DeployData =
-    toDeploy(
-      CompiledRholangSource("PoS.rho"),
-      "d70491c21a5ba44ffb60a97d9bfbf3f3839b997bde107a3a8ab6872594282740",
-      1553862086627L
-    )
   def basicWallet: DeployData =
     toDeploy(
       CompiledRholangSource("BasicWallet.rho"),
@@ -111,11 +105,11 @@ object StandardDeploys {
       1551879405043L
     )
 
-  def poSGenerator(genesisPk: PublicKey, poS: ProofOfStake): DeployData =
+  def poSGenerator(poS: ProofOfStake): DeployData =
     toDeploy(
       poS,
-      Base16.encode(genesisPk.bytes),
-      System.currentTimeMillis()
+      "cc87bf7747a8c176714b417ca14a63897b07572876c5e38a7896b6007738ef81",
+      1553862086627L
     )
 
   def revGenerator(genesisPk: PublicKey, vaults: Seq[Vault], supply: Long): DeployData =

@@ -224,13 +224,16 @@ class RuntimeManagerImpl[F[_]: Concurrent] private[rholang] (
       ConstructDeploy.sourceDeployNow(deployPaymentSource(amount)).withDeployer(user)
     ) >>
       getResult(runtime)() >>= {
-      case Seq(RhoType.Boolean(true)) =>
+      case Seq(RhoType.Tuple2(RhoType.Boolean(true), Par.defaultInstance)) =>
         runtime.space.createCheckpoint()
-      case Seq(RhoType.String(error)) =>
+      case Seq(RhoType.Tuple2(RhoType.Boolean(false), RhoType.String(error))) =>
         BugFoundError(s"Deploy payment failed unexpectedly: $error").raiseError[F, Checkpoint]
+      case Seq() =>
+        BugFoundError("Expected response message was not received").raiseError[F, Checkpoint]
       case other =>
+        val contentAsStr = other.map(RholangPrinter().buildString(_)).mkString(",")
         BugFoundError(
-          s"Deploy payment returned unexpected result: ${other.map(RholangPrinter().buildString(_))}"
+          s"Deploy payment returned unexpected result: [$contentAsStr ]"
         ).raiseError[F, Checkpoint]
     }
 
@@ -304,35 +307,34 @@ class RuntimeManagerImpl[F[_]: Concurrent] private[rholang] (
       initHash: StateHash
   ): F[(StateHash, Seq[InternalProcessedDeploy])] = {
 
-    def doEval(
-        terms: Seq[DeployData],
-        hash: Blake2b256Hash,
-        acc: Seq[InternalProcessedDeploy]
-    ): F[(StateHash, Seq[InternalProcessedDeploy])] =
-      Concurrent[F].defer {
-        terms match {
-          case deploy +: rem =>
-            for {
-              evaluateResult               <- computeEffect(runtime)(deploy)
-              EvaluateResult(cost, errors) = evaluateResult
-              newCheckpoint                <- runtime.space.createCheckpoint()
-              deployResult = InternalProcessedDeploy(
-                deploy,
-                Cost.toProto(cost),
-                newCheckpoint.log,
-                Seq.empty[trace.Event],
-                DeployStatus.fromErrors(errors)
-              )
-              cont <- if (errors.isEmpty)
-                       doEval(rem, newCheckpoint.root, acc :+ deployResult)
-                     else doEval(rem, hash, acc :+ deployResult)
-            } yield cont
+    type Acc = (Blake2b256Hash, Seq[InternalProcessedDeploy])
 
-          case _ => (ByteString.copyFrom(hash.bytes.toArray), acc).pure[F]
-        }
+    def evalSingle(acc: Acc, deploy: DeployData): F[Acc] = {
+      val (hash, deployResults) = acc
+      for {
+        _                            <- runtime.space.reset(hash)
+        evaluateResult               <- computeEffect(runtime)(deploy)
+        EvaluateResult(cost, errors) = evaluateResult
+        newCheckpoint                <- runtime.space.createCheckpoint()
+        deployResult = InternalProcessedDeploy(
+          deploy,
+          Cost.toProto(cost),
+          newCheckpoint.log,
+          Seq.empty[trace.Event],
+          DeployStatus.fromErrors(errors)
+        )
+        newHash = if (errors.isEmpty) newCheckpoint.root else hash
+      } yield (newHash, deployResults :+ deployResult)
+    }
+
+    val initHashBlake = Blake2b256Hash.fromByteArray(initHash.toByteArray)
+    terms.toList
+      .foldM[F, Acc]((initHashBlake, Seq.empty))(evalSingle)
+      .map {
+        case (hash, deployResults) =>
+          val hashByteString = ByteString.copyFrom(hash.bytes.toArray)
+          (hashByteString, deployResults)
       }
-
-    doEval(terms, Blake2b256Hash.fromByteArray(initHash.toByteArray), Vector.empty)
   }
 
   private def replayEval(

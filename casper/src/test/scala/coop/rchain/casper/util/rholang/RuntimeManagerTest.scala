@@ -40,7 +40,6 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
           StandardDeploys.either,
           StandardDeploys.nonNegativeNumber,
           StandardDeploys.makeMint,
-          StandardDeploys.PoS,
           StandardDeploys.authKey,
           StandardDeploys.revVault,
           StandardDeploys.revGenerator(
@@ -50,7 +49,6 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
           ),
           StandardDeploys
             .poSGenerator(
-              genesisPk,
               ProofOfStake(0L, Long.MaxValue, Seq(Validator(genesisPk, 0L)))
             )
         )
