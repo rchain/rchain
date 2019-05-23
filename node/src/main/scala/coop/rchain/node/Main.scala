@@ -12,7 +12,7 @@ import coop.rchain.catscontrib._
 import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.comm._
 import coop.rchain.crypto.codec.Base16
-import coop.rchain.crypto.signatures.Ed25519
+import coop.rchain.crypto.signatures.{Ed25519, Secp256k1}
 import coop.rchain.metrics
 import coop.rchain.metrics.Metrics
 import coop.rchain.node.configuration._
@@ -86,7 +86,7 @@ object Main {
       case MachineVerifiableDag => DeployRuntime.machineVerifiableDag[Task]
       case DataAtName(name)     => DeployRuntime.listenForDataAtName[Task](name)
       case ContAtName(names)    => DeployRuntime.listenForContinuationAtName[Task](names)
-      case Keygen               => generateKey(conf)
+      case Keygen(algorithm)    => generateKey(conf, algorithm)
       case Run                  => nodeProgram(conf)
       case BondingDeployGen(bondKey, ethAddress, amount, secKey, pubKey) =>
         implicit val noopMetrics: Metrics[Task] = new metrics.Metrics.MetricsNOP[Task]
@@ -107,13 +107,19 @@ object Main {
     )
   }
 
-  private def generateKey(conf: Configuration): Task[Unit] = {
-    val (sec, pub) = Ed25519.newKeyPair
-    val sk         = Base16.encode(sec.bytes)
-    val pk         = Base16.encode(pub.bytes)
-    ConsoleIO[Task].println(s"Generated public key: $pk") >>
-      ConsoleIO[Task].println(s"Generated private key: $sk")
-  }
+  private def generateKey(conf: Configuration, algorithm: String): Task[Unit] =
+    for {
+      keyPair <- algorithm.toLowerCase match {
+                  case Ed25519.name   => Ed25519.newKeyPair.pure[Task]
+                  case Secp256k1.name => Secp256k1.newKeyPair.pure[Task]
+                  case _              => Task.raiseError(new IllegalStateException("Invalid algorithm name"))
+                }
+      (sec, pub) = keyPair
+      sk         = Base16.encode(sec.bytes)
+      pk         = Base16.encode(pub.bytes)
+      _ <- ConsoleIO[Task].println(s"Generated public key: $pk") >>
+            ConsoleIO[Task].println(s"Generated private key: $sk")
+    } yield ()
 
   private def nodeProgram(conf: Configuration)(implicit scheduler: Scheduler): Task[Unit] = {
     // XXX: Enable it earlier once we have JDK with https://bugs.openjdk.java.net/browse/JDK-8218960 fixed
