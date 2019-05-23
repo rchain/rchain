@@ -5,6 +5,7 @@ trait SignaturesAlg {
   def verify(data: Array[Byte], signature: Array[Byte], pub: Array[Byte]): Boolean
   def sign(data: Array[Byte], sec: Array[Byte]): Array[Byte]
   def toPublic(sec: PrivateKey): PublicKey
+  def newKeyPair: (PrivateKey, PublicKey)
   def name: String
 
   def verify(data: Array[Byte], signature: Array[Byte], pub: PublicKey): Boolean =

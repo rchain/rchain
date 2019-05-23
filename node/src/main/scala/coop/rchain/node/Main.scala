@@ -1,5 +1,7 @@
 package coop.rchain.node
 
+import java.nio.file.Path
+
 import scala.collection.JavaConverters._
 import scala.tools.jline.console._
 import completer.StringsCompleter
@@ -10,8 +12,8 @@ import coop.rchain.casper.util.comm._
 import coop.rchain.casper.util.BondingUtil
 import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.crypto.PrivateKey
-import coop.rchain.crypto.codec.Base16
-import coop.rchain.crypto.signatures.{Ed25519, Secp256k1}
+import coop.rchain.crypto.signatures.{Secp256k1, SignaturesAlg}
+import coop.rchain.crypto.util.KeyUtil
 import coop.rchain.metrics
 import coop.rchain.metrics.Metrics
 import coop.rchain.node.configuration._
@@ -112,12 +114,12 @@ object Main {
       case ShowBlocks(depth)    => DeployRuntime.getBlocks[Task](depth)
       case VisualizeDag(depth, showJustificationLines) =>
         DeployRuntime.visualizeDag[Task](depth, showJustificationLines)
-      case MachineVerifiableDag => DeployRuntime.machineVerifiableDag[Task]
-      case DataAtName(name)     => DeployRuntime.listenForDataAtName[Task](name)
-      case ContAtName(names)    => DeployRuntime.listenForContinuationAtName[Task](names)
-      case Keygen(algorithm)    => generateKey(conf, algorithm)
-      case LastFinalizedBlock   => DeployRuntime.lastFinalizedBlock[Task]
-      case Run                  => nodeProgram(conf)
+      case MachineVerifiableDag              => DeployRuntime.machineVerifiableDag[Task]
+      case DataAtName(name)                  => DeployRuntime.listenForDataAtName[Task](name)
+      case ContAtName(names)                 => DeployRuntime.listenForContinuationAtName[Task](names)
+      case Keygen(algorithm, privateKeyPath) => generateKey(conf, algorithm, privateKeyPath)
+      case LastFinalizedBlock                => DeployRuntime.lastFinalizedBlock[Task]
+      case Run                               => nodeProgram(conf)
       case BondingDeployGen(bondKey, ethAddress, amount, secKey, pubKey) =>
         implicit val noopMetrics: Metrics[Task] = new metrics.Metrics.MetricsNOP[Task]
         BondingUtil
@@ -137,18 +139,41 @@ object Main {
     )
   }
 
-  private def generateKey(conf: Configuration, algorithm: String): Task[Unit] =
+  private def generateKey(
+      conf: Configuration,
+      algorithm: String,
+      privateKeyPath: Path
+  ): Task[Unit] =
     for {
-      keyPair <- algorithm.toLowerCase match {
-                  case Ed25519.name   => Ed25519.newKeyPair.pure[Task]
-                  case Secp256k1.name => Secp256k1.newKeyPair.pure[Task]
-                  case _              => Task.raiseError(new IllegalStateException("Invalid algorithm name"))
-                }
-      (sec, pub) = keyPair
-      sk         = Base16.encode(sec.bytes)
-      pk         = Base16.encode(pub.bytes)
-      _ <- ConsoleIO[Task].println(s"Generated public key: $pk") >>
-            ConsoleIO[Task].println(s"Generated private key: $sk")
+      password       <- ConsoleIO[Task].readPassword("Password for generated private key file: ")
+      passwordRepeat <- ConsoleIO[Task].readPassword("Repeat password: ")
+      _ <- if (password != passwordRepeat) {
+            ConsoleIO[Task].println("Passwords do not match. Try again.") >> generateKey(
+              conf,
+              algorithm,
+              privateKeyPath
+            )
+          } else if (password.isEmpty) {
+            ConsoleIO[Task].println("Password is empty. Try again.") >> generateKey(
+              conf,
+              algorithm,
+              privateKeyPath
+            )
+          } else {
+            for {
+              sigAlgorithm <- SignaturesAlg(algorithm)
+                               .map(_.pure[Task])
+                               .getOrElse(
+                                 Task
+                                   .raiseError(new IllegalStateException("Invalid algorithm name"))
+                               )
+              (sk, _) = sigAlgorithm.newKeyPair
+              _       <- KeyUtil.writePrivateKey(sk, sigAlgorithm, password, privateKeyPath)
+              _ <- ConsoleIO[Task].println(
+                    s"Successfully generated private key: ${privateKeyPath.toAbsolutePath}"
+                  )
+            } yield ()
+          }
     } yield ()
 
   private def nodeProgram(conf: Configuration)(implicit scheduler: Scheduler): Task[Unit] = {

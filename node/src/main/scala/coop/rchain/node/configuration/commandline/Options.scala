@@ -348,6 +348,11 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
       validate = (s: String) => { s == "ed25519" || s == "secp256k1" },
       required = true
     )
+
+    val privateKeyPath = opt[Path](
+      descr = "Path to the file where the encoded private key will be written to.",
+      required = true
+    )
   }
   addSubcommand(keygen)
 
