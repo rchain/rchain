@@ -204,7 +204,8 @@ lazy val crypto = (project in file("crypto"))
     name := "crypto",
     libraryDependencies ++= commonDependencies ++ protobufLibDependencies ++ Seq(
       guava,
-      bouncyCastle,
+      bouncyPkixCastle,
+      bouncyProvCastle,
       scalacheck,
       kalium,
       jaxb,
