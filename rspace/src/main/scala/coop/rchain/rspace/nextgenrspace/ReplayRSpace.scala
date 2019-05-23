@@ -407,7 +407,7 @@ class ReplayRSpace[F[_]: Sync, C, P, A, R, K](
                          changes     <- storeAtom.get().changes()
                          nextHistory <- historyRepositoryAtom.get().checkpoint(changes.toList)
                          _           = historyRepositoryAtom.set(nextHistory)
-                         _           <- createNewHotStore(nextHistory)(serializeP.toCodec, serializeK.toCodec)
+                         _           <- createNewHotStore(nextHistory)(serializeK.toCodec)
                          _           <- restoreInstalls()
                        } yield (Checkpoint(nextHistory.history.root, Seq.empty))
                      }, {

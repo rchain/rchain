@@ -183,7 +183,7 @@ abstract class RSpaceOps[F[_]: Concurrent, C, P, A, R, K](
       _           = historyRepositoryAtom.set(nextHistory)
       _           = eventLog.take()
       _           = eventLog.put(Seq.empty)
-      _           <- createNewHotStore(nextHistory)(serializeP.toCodec, serializeK.toCodec)
+      _           <- createNewHotStore(nextHistory)(serializeK.toCodec)
       _           <- restoreInstalls()
     } yield ()
 
@@ -194,10 +194,10 @@ abstract class RSpaceOps[F[_]: Concurrent, C, P, A, R, K](
 
   protected def createNewHotStore(
       historyReader: HistoryReader[F, C, P, A, K]
-  )(implicit cp: Codec[P], ck: Codec[K]): F[Unit] =
+  )(implicit ck: Codec[K]): F[Unit] =
     for {
       cache        <- createCache
-      nextHotStore = HotStore.inMem(Sync[F], cache, historyReader, cp, ck)
+      nextHotStore = HotStore.inMem(Sync[F], cache, historyReader, ck)
       _            = storeAtom.set(nextHotStore)
     } yield ()
 
