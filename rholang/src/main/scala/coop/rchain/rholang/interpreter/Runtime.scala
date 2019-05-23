@@ -413,12 +413,10 @@ object Runtime {
               replayResult match {
                 case None => F.unit
                 case Some(_) =>
-                  F.raiseError(
-                    SetupError("Registry insertion in replay fired continuation.")
-                  )
+                  SetupError("Registry insertion in replay fired continuation.").raiseError[F, Unit]
               }
             case Some(_) =>
-              F.raiseError(SetupError("Registry insertion fired continuation."))
+              SetupError("Registry insertion fired continuation.").raiseError[F, Unit]
           }
     } yield ()
   }
