@@ -1,12 +1,10 @@
 package coop.rchain.rholang.interpreter
 
-import cats._
 import cats.effect.Sync
 import cats.implicits._
 import cats.mtl.FunctorTell
 import cats.{Applicative, FlatMap, Foldable, Parallel, Eval => _}
 import com.google.protobuf.ByteString
-import coop.rchain.catscontrib.mtl._
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.models.Expr.ExprInstance._
@@ -15,15 +13,13 @@ import coop.rchain.models.Var.VarInstance.{BoundVar, FreeVar, Wildcard}
 import coop.rchain.models.rholang.implicits._
 import coop.rchain.models.serialization.implicits._
 import coop.rchain.models.{Match, MatchCase, _}
-import coop.rchain.rholang.interpreter._
 import coop.rchain.rholang.interpreter.Substitute.{charge => _, _}
 import coop.rchain.rholang.interpreter.accounting._
 import coop.rchain.rholang.interpreter.errors._
-import coop.rchain.rholang.interpreter.matcher._
+import coop.rchain.rholang.interpreter.matcher.SpatialMatcher.spatialMatchAndCharge
 import coop.rchain.rholang.interpreter.storage.Tuplespace
 import coop.rchain.rspace.Serialize
 import monix.eval.Coeval
-import SpatialMatcher.spatialMatchAndCharge
 
 import scala.collection.immutable.BitSet
 import scala.util.Try
@@ -261,6 +257,7 @@ object Reduce {
       * 3. Evaluate any top level expressions in the data being sent.
       * 4. Call produce
       * 5. If produce returned a continuation, evaluate it.
+      *
       * @param send An output process
       * @param env An execution context
       * @return
@@ -276,7 +273,7 @@ object Reduce {
         unbundled <- subChan.singleBundle() match {
                       case Some(value) =>
                         if (!value.writeFlag) {
-                          s.raiseError(ReduceError("Trying to send on non-writeable channel."))
+                          s.raiseError[Par](ReduceError("Trying to send on non-writeable channel."))
                         } else {
                           s.pure(value.body)
                         }
@@ -487,7 +484,7 @@ object Reduce {
         unbndl <- subst.singleBundle() match {
                    case Some(value) =>
                      if (!value.readFlag) {
-                       s.raiseError(ReduceError("Trying to read from non-readable channel."))
+                       s.raiseError[Par](ReduceError("Trying to read from non-readable channel."))
                      } else {
                        s.pure(value.body)
                      }
@@ -528,7 +525,7 @@ object Reduce {
             evaledArgs   <- arguments.toList.traverse(expr => evalExpr(expr))
             resultPar <- methodLookup match {
                           case None =>
-                            s.raiseError(ReduceError("Unimplemented method: " + method))
+                            s.raiseError[Par](ReduceError("Unimplemented method: " + method))
                           case Some(f) => f(evaledTarget, evaledArgs)
                         }
           } yield resultPar
@@ -557,7 +554,7 @@ object Reduce {
                      case (GString(s1), GString(s2)) =>
                        Applicative[M].pure(GBool(relops(s1, s2)))
                      case _ =>
-                       s.raiseError(ReduceError("Unexpected compare: " + v1 + " vs. " + v2))
+                       s.raiseError[GBool](ReduceError("Unexpected compare: " + v1 + " vs. " + v2))
                    }
         } yield result
 
@@ -608,9 +605,9 @@ object Reduce {
                            resultExp <- evalSingleExpr(resultPar)
                          } yield resultExp
                        case (_: GInt, other) =>
-                         s.raiseError(OperatorExpectedError("+", "Int", other.typ))
+                         s.raiseError[Expr](OperatorExpectedError("+", "Int", other.typ))
                        case (other, _) =>
-                         s.raiseError(OperatorNotDefined("+", other.typ))
+                         s.raiseError[Expr](OperatorNotDefined("+", other.typ))
                      }
           } yield result
         case EMinusBody(EMinus(p1, p2)) =>
@@ -635,9 +632,9 @@ object Reduce {
                            resultExp <- evalSingleExpr(resultPar)
                          } yield resultExp
                        case (_: GInt, other) =>
-                         s.raiseError(OperatorExpectedError("-", "Int", other.typ))
+                         s.raiseError[Expr](OperatorExpectedError("-", "Int", other.typ))
                        case (other, _) =>
-                         s.raiseError(OperatorNotDefined("-", other.typ))
+                         s.raiseError[Expr](OperatorNotDefined("-", other.typ))
                      }
           } yield result
         case ELtBody(ELt(p1, p2)) =>
@@ -757,9 +754,9 @@ object Reduce {
                            s.pure(GString(lhs))
                          }
                        case (_: GString, other) =>
-                         s.raiseError(OperatorExpectedError("%%", "Map", other.typ))
+                         s.raiseError[GString](OperatorExpectedError("%%", "Map", other.typ))
                        case (other, _) =>
-                         s.raiseError(OperatorNotDefined("%%", other.typ))
+                         s.raiseError[GString](OperatorNotDefined("%%", other.typ))
                      }
           } yield result
         case EPlusPlusBody(EPlusPlus(p1, p2)) =>
@@ -805,15 +802,15 @@ object Reduce {
                            resultExp <- evalSingleExpr(resultPar)
                          } yield resultExp
                        case (_: GString, other) =>
-                         s.raiseError(OperatorExpectedError("++", "String", other.typ))
+                         s.raiseError[Expr](OperatorExpectedError("++", "String", other.typ))
                        case (_: EListBody, other) =>
-                         s.raiseError(OperatorExpectedError("++", "List", other.typ))
+                         s.raiseError[Expr](OperatorExpectedError("++", "List", other.typ))
                        case (_: EMapBody, other) =>
-                         s.raiseError(OperatorExpectedError("++", "Map", other.typ))
+                         s.raiseError[Expr](OperatorExpectedError("++", "Map", other.typ))
                        case (_: ESetBody, other) =>
-                         s.raiseError(OperatorExpectedError("++", "Set", other.typ))
+                         s.raiseError[Expr](OperatorExpectedError("++", "Set", other.typ))
                        case (other, _) =>
-                         s.raiseError(OperatorNotDefined("++", other.typ))
+                         s.raiseError[Expr](OperatorNotDefined("++", other.typ))
                      }
           } yield result
         case EMinusMinusBody(EMinusMinus(p1, p2)) =>
@@ -828,9 +825,9 @@ object Reduce {
                            resultExp <- evalSingleExpr(resultPar)
                          } yield resultExp
                        case (_: ESetBody, other) =>
-                         s.raiseError(OperatorExpectedError("--", "Set", other.typ))
+                         s.raiseError[Expr](OperatorExpectedError("--", "Set", other.typ))
                        case (other, _) =>
-                         s.raiseError(OperatorNotDefined("--", other.typ))
+                         s.raiseError[Expr](OperatorNotDefined("--", other.typ))
                      }
           } yield result
         case EVarBody(EVar(v)) =>
@@ -875,7 +872,7 @@ object Reduce {
             evaledArgs   <- arguments.toList.traverse(expr => evalExpr(expr))
             resultPar <- methodLookup match {
                           case None =>
-                            s.raiseError(ReduceError("Unimplemented method: " + method))
+                            s.raiseError[Par](ReduceError("Unimplemented method: " + method))
                           case Some(f) => f(evaledTarget, evaledArgs)
                         }
             resultExpr <- evalSingleExpr(resultPar)
@@ -924,7 +921,7 @@ object Reduce {
                            Left(ReduceError("Error: index out of bound: " + nth))
                          })
                        case _ =>
-                         s.raiseError(
+                         s.raiseError[Par](
                            ReduceError(
                              "Error: nth applied to something that wasn't a list or tuple."
                            )
@@ -978,7 +975,7 @@ object Reduce {
                 _           <- charge[M](hexToBytesCost(encoded))
                 encodingRes = Try(ByteString.copyFrom(Base16.unsafeDecode(encoded)))
                 res <- encodingRes.fold(
-                        th => s.raiseError(decodingError(th)),
+                        th => s.raiseError[Par](decodingError(th)),
                         ba => Applicative[M].pure[Par](Expr(GByteArray(ba)))
                       )
               } yield res
@@ -1016,7 +1013,7 @@ object Reduce {
       def locallyFreeUnion(base: Coeval[BitSet], other: Coeval[BitSet]): Coeval[BitSet] =
         base.flatMap(b => other.map(o => b | o))
 
-      def union(baseExpr: Expr, otherExpr: Expr) =
+      def union(baseExpr: Expr, otherExpr: Expr): M[Expr] =
         (baseExpr.exprInstance, otherExpr.exprInstance) match {
           case (
               ESetBody(base @ ParSet(basePs, _, _, _)),
@@ -1048,7 +1045,7 @@ object Reduce {
                 )
               )
           case (other, _) =>
-            s.raiseError(MethodNotDefined("union", other.typ))
+            s.raiseError[Expr](MethodNotDefined("union", other.typ))
         }
 
       override def apply(
@@ -1057,7 +1054,7 @@ object Reduce {
       )(implicit env: Env[Par]): M[Par] =
         for {
           _ <- if (args.length != 1)
-                s.raiseError(MethodArgumentNumberMismatch("union", 1, args.length))
+                s.raiseError[Unit](MethodArgumentNumberMismatch("union", 1, args.length))
               else Applicative[M].unit
           baseExpr  <- evalSingleExpr(p)
           otherExpr <- evalSingleExpr(args(0))
@@ -1066,7 +1063,7 @@ object Reduce {
     }
 
     private[this] val diff: Method = new Method() {
-      def diff(baseExpr: Expr, otherExpr: Expr) =
+      def diff(baseExpr: Expr, otherExpr: Expr): M[Expr] =
         (baseExpr.exprInstance, otherExpr.exprInstance) match {
           case (
               ESetBody(ParSet(basePs, _, _, _)),
@@ -1096,7 +1093,7 @@ object Reduce {
       )(implicit env: Env[Par]): M[Par] =
         for {
           _ <- if (args.length != 1)
-                s.raiseError(MethodArgumentNumberMismatch("diff", 1, args.length))
+                s.raiseError[Unit](MethodArgumentNumberMismatch("diff", 1, args.length))
               else Applicative[M].unit
           baseExpr  <- evalSingleExpr(p)
           otherExpr <- evalSingleExpr(args(0))
@@ -1105,7 +1102,7 @@ object Reduce {
     }
 
     private[this] val add: Method = new Method() {
-      def add(baseExpr: Expr, par: Par) =
+      def add(baseExpr: Expr, par: Par): M[Expr] =
         baseExpr.exprInstance match {
           case ESetBody(base @ ParSet(basePs, _, _, _)) =>
             Applicative[M].pure[Expr](
@@ -1130,7 +1127,7 @@ object Reduce {
       )(implicit env: Env[Par]): M[Par] =
         for {
           _ <- if (args.length != 1)
-                s.raiseError(MethodArgumentNumberMismatch("add", 1, args.length))
+                s.raiseError[Unit](MethodArgumentNumberMismatch("add", 1, args.length))
               else Applicative[M].unit
           baseExpr <- evalSingleExpr(p)
           element  <- evalExpr(args(0))
@@ -1174,7 +1171,7 @@ object Reduce {
       )(implicit env: Env[Par]): M[Par] =
         for {
           _ <- if (args.length != 1)
-                s.raiseError(MethodArgumentNumberMismatch("delete", 1, args.length))
+                s.raiseError[Unit](MethodArgumentNumberMismatch("delete", 1, args.length))
               else Applicative[M].unit
           baseExpr <- evalSingleExpr(p)
           element  <- evalExpr(args(0))
@@ -1197,7 +1194,7 @@ object Reduce {
       override def apply(p: Par, args: Seq[Par])(implicit env: Env[Par]): M[Par] =
         for {
           _ <- if (args.length != 1)
-                s.raiseError(MethodArgumentNumberMismatch("contains", 1, args.length))
+                s.raiseError[Unit](MethodArgumentNumberMismatch("contains", 1, args.length))
               else Applicative[M].unit
           baseExpr <- evalSingleExpr(p)
           element  <- evalExpr(args(0))
@@ -1221,7 +1218,7 @@ object Reduce {
       )(implicit env: Env[Par]): M[Par] =
         for {
           _ <- if (args.length != 1)
-                s.raiseError(MethodArgumentNumberMismatch("get", 1, args.length))
+                s.raiseError[Unit](MethodArgumentNumberMismatch("get", 1, args.length))
               else Applicative[M].unit
           baseExpr <- evalSingleExpr(p)
           key      <- evalExpr(args(0))
@@ -1245,7 +1242,7 @@ object Reduce {
       )(implicit env: Env[Par]): M[Par] =
         for {
           _ <- if (args.length != 2)
-                s.raiseError(MethodArgumentNumberMismatch("getOrElse", 2, args.length))
+                s.raiseError[Unit](MethodArgumentNumberMismatch("getOrElse", 2, args.length))
               else Applicative[M].unit
           baseExpr <- evalSingleExpr(p)
           key      <- evalExpr(args(0))
@@ -1270,7 +1267,7 @@ object Reduce {
       )(implicit env: Env[Par]): M[Par] =
         for {
           _ <- if (args.length != 2)
-                s.raiseError(MethodArgumentNumberMismatch("set", 2, args.length))
+                s.raiseError[Unit](MethodArgumentNumberMismatch("set", 2, args.length))
               else Applicative[M].unit
           baseExpr <- evalSingleExpr(p)
           key      <- evalExpr(args(0))
@@ -1286,7 +1283,7 @@ object Reduce {
           case EMapBody(ParMap(basePs, _, _, _)) =>
             Applicative[M].pure[Par](ParSet(basePs.keys.toSeq))
           case other =>
-            s.raiseError(MethodNotDefined("keys", other.typ))
+            s.raiseError[Par](MethodNotDefined("keys", other.typ))
         }
 
       override def apply(
@@ -1295,7 +1292,7 @@ object Reduce {
       )(implicit env: Env[Par]): M[Par] =
         for {
           _ <- if (args.length != 0)
-                s.raiseError(MethodArgumentNumberMismatch("keys", 0, args.length))
+                s.raiseError[Unit](MethodArgumentNumberMismatch("keys", 0, args.length))
               else Applicative[M].unit
           baseExpr <- evalSingleExpr(p)
           result   <- keys(baseExpr)
@@ -1322,7 +1319,7 @@ object Reduce {
       )(implicit env: Env[Par]): M[Par] =
         for {
           _ <- if (args.length != 0)
-                s.raiseError(MethodArgumentNumberMismatch("size", 0, args.length))
+                s.raiseError[Unit](MethodArgumentNumberMismatch("size", 0, args.length))
               else Applicative[M].unit
           baseExpr <- evalSingleExpr(p)
           result   <- size(baseExpr)
@@ -1348,7 +1345,7 @@ object Reduce {
       )(implicit env: Env[Par]): M[Par] =
         for {
           _ <- if (args.length != 0)
-                s.raiseError(MethodArgumentNumberMismatch("length", 0, args.length))
+                s.raiseError[Unit](MethodArgumentNumberMismatch("length", 0, args.length))
               else Applicative[M].unit
           baseExpr <- evalSingleExpr(p)
           result   <- length(baseExpr)
@@ -1384,7 +1381,7 @@ object Reduce {
       )(implicit env: Env[Par]): M[Par] =
         for {
           _ <- if (args.length != 2)
-                s.raiseError(MethodArgumentNumberMismatch("slice", 2, args.length))
+                s.raiseError[Unit](MethodArgumentNumberMismatch("slice", 2, args.length))
               else Applicative[M].unit
           baseExpr   <- evalSingleExpr(p)
           fromArgRaw <- evalToLong(args(0))
@@ -1418,13 +1415,13 @@ object Reduce {
             charge[M](toListCost(ps.size)) *>
               Applicative[M].pure[Par](EList(ps.toList))
           case other =>
-            s.raiseError(MethodNotDefined("toList", other.typ))
+            s.raiseError[Par](MethodNotDefined("toList", other.typ))
         }
 
       override def apply(p: Par, args: Seq[Par])(implicit env: Env[Par]): M[Par] =
         for {
           _ <- if (args.nonEmpty)
-                s.raiseError(MethodArgumentNumberMismatch("toList", 0, args.length))
+                s.raiseError[Unit](MethodArgumentNumberMismatch("toList", 0, args.length))
               else s.unit
           baseExpr <- evalSingleExpr(p)
           result   <- toList(baseExpr)
@@ -1488,7 +1485,7 @@ object Reduce {
               result <- evaled.exprInstance match {
                          case GInt(v) => Applicative[M].pure(v)
                          case _ =>
-                           s.raiseError(
+                           s.raiseError[Long](
                              ReduceError("Error: expression didn't evaluate to integer.")
                            )
                        }
@@ -1519,7 +1516,7 @@ object Reduce {
               result <- evaled.exprInstance match {
                          case GBool(b) => Applicative[M].pure(b)
                          case _ =>
-                           s.raiseError(
+                           s.raiseError[Boolean](
                              ReduceError("Error: expression didn't evaluate to boolean.")
                            )
                        }
