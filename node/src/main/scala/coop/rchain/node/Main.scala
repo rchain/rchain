@@ -9,6 +9,7 @@ import cats.implicits._
 import coop.rchain.casper.util.comm._
 import coop.rchain.casper.util.BondingUtil
 import coop.rchain.catscontrib.TaskContrib._
+import coop.rchain.crypto.PrivateKey
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.signatures.{Ed25519, Secp256k1}
 import coop.rchain.metrics
@@ -24,6 +25,7 @@ import org.slf4j.LoggerFactory
 import org.slf4j.bridge.SLF4JBridgeHandler
 
 object Main {
+  private val RNodeDeployerPasswordEnvVar = "RNODE_DEPLOYER_PASSWORD"
 
   implicit private val logSource: LogSource     = LogSource(this.getClass)
   implicit private val log: Log[Task]           = effects.log
@@ -65,6 +67,8 @@ object Main {
 
     implicit val time: Time[Task] = effects.time
 
+    implicit val envVars: EnvVars[Task] = EnvVars.envVars
+
     val program = conf.command match {
       case Eval(files) => new ReplRuntime().evalProgram[Task](files)
       case Repl        => new ReplRuntime().replProgram[Task].as(())
@@ -76,36 +80,32 @@ object Main {
           maybePrivateKeyPath,
           location
           ) =>
-        (maybePrivateKey, maybePrivateKeyPath) match {
-          case (Some(privateKey), _) =>
-            DeployRuntime.deployFileProgram[Task](
-              phlo,
-              phloPrice,
-              validAfterBlock,
-              Some(privateKey),
-              location
-            )
-          case (None, Some(privateKeyPath)) =>
-            for {
-              password   <- ConsoleIO[Task].readPassword("Password for private key file: ")
-              privateKey <- Secp256k1.parsePemFile[Task](privateKeyPath, password)
-              _ <- DeployRuntime.deployFileProgram[Task](
-                    phlo,
-                    phloPrice,
-                    validAfterBlock,
-                    Some(privateKey),
-                    location
-                  )
-            } yield ()
-          case (None, None) =>
-            DeployRuntime.deployFileProgram[Task](
-              phlo,
-              phloPrice,
-              validAfterBlock,
-              None,
-              location
-            )
-        }
+        def decryptPrivateKey(encryptedPrivateKeyPath: Path): Task[PrivateKey] =
+          for {
+            maybePassword <- EnvVars[Task].get(RNodeDeployerPasswordEnvVar)
+            password <- maybePassword
+                         .map(p => p.pure[Task])
+                         .getOrElse(ConsoleIO[Task].readPassword("Password for private key file: "))
+
+            privateKey <- Secp256k1.parsePemFile[Task](encryptedPrivateKeyPath, password)
+          } yield privateKey
+
+        val getPrivateKey =
+          maybePrivateKey
+            .map(_.pure[Task])
+            .orElse(maybePrivateKeyPath.map(decryptPrivateKey))
+            .sequence
+
+        for {
+          privateKey <- getPrivateKey
+          _ <- DeployRuntime.deployFileProgram[Task](
+                phlo,
+                phloPrice,
+                validAfterBlock,
+                privateKey,
+                location
+              )
+        } yield ()
       case FindDeploy(deployId) => DeployRuntime.findDeploy[Task](deployId)
       case Propose              => DeployRuntime.propose[Task]()
       case ShowBlock(hash)      => DeployRuntime.getBlock[Task](hash)
