@@ -13,7 +13,7 @@ object RevAddress {
   private val version = "00"
   private val prefix  = Base16.unsafeDecode(coinId + version)
 
-  private val tools = new AddressTools(prefix, keyLength = 32, checksumLength = 4)
+  private val tools = new AddressTools(prefix, keyLength = 65, checksumLength = 4)
 
   def fromPublicKey(pk: PublicKey): Option[RevAddress] =
     tools.fromPublicKey(pk).map(RevAddress(_))

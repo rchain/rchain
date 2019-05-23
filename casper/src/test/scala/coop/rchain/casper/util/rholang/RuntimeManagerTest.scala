@@ -12,7 +12,7 @@ import coop.rchain.catscontrib.effect.implicits._
 import coop.rchain.crypto.PublicKey
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.hash.Blake2b512Random
-import coop.rchain.crypto.signatures.Ed25519
+import coop.rchain.crypto.signatures.Secp256k1
 import coop.rchain.metrics
 import coop.rchain.metrics.Metrics
 import coop.rchain.p2p.EffectsTestInstances.LogicalTime
@@ -34,7 +34,7 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
   private def withTestFixture[A](test: (StateHash, RuntimeManager[Task], PublicKey) => Task[A]): A =
     runtimeManager
       .use { mgr =>
-        val (_, genesisPk) = Ed25519.newKeyPair
+        val (_, genesisPk) = Secp256k1.newKeyPair
         val genesisTerms = Seq(
           StandardDeploys.listOps,
           StandardDeploys.either,

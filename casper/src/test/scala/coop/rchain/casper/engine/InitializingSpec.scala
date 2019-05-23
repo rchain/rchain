@@ -1,17 +1,15 @@
 package coop.rchain.casper.engine
 
 import cats.implicits._
-
 import coop.rchain.casper._
 import coop.rchain.casper.protocol._
 import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.comm.rp.ProtocolHelper._
 import coop.rchain.comm.transport
 import coop.rchain.crypto.hash.Blake2b256
-import coop.rchain.crypto.signatures.Ed25519
 import coop.rchain.shared.Cell
-
 import com.google.protobuf.ByteString
+import coop.rchain.crypto.signatures.Secp256k1
 import monix.eval.Task
 import org.scalatest.WordSpec
 
@@ -45,9 +43,9 @@ class InitializingSpec extends WordSpec {
         sigs = Seq(
           Signature(
             ByteString.copyFrom(validatorPk.bytes),
-            "ed25519",
+            "secp256k1",
             ByteString.copyFrom(
-              Ed25519.sign(Blake2b256.hash(approvedBlockCandidate.toByteArray), validatorSk)
+              Secp256k1.sign(Blake2b256.hash(approvedBlockCandidate.toByteArray), validatorSk)
             )
           )
         )

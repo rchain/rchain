@@ -13,7 +13,7 @@ import coop.rchain.casper.util.comm.TestNetwork
 import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.comm.protocol.routing.Packet
 import coop.rchain.comm.transport
-import coop.rchain.crypto.signatures.Ed25519
+import coop.rchain.crypto.signatures.Secp256k1
 import coop.rchain.crypto.{PrivateKey, PublicKey}
 import coop.rchain.metrics
 import coop.rchain.metrics.Metrics
@@ -31,7 +31,7 @@ class BlockApproverProtocolTest extends FlatSpec with Matchers {
 
   "BlockApproverProtocol" should "respond to valid ApprovedBlockCandidates" in {
     val n                          = 8
-    val (validatorSk, validatorPk) = Ed25519.newKeyPair
+    val (validatorSk, validatorPk) = Secp256k1.newKeyPair
     val bonds                      = Map(validatorPk -> 10L)
     createProtocol(n, Seq.empty, validatorSk, bonds).flatMap {
       case (approver, node) =>
@@ -55,7 +55,7 @@ class BlockApproverProtocolTest extends FlatSpec with Matchers {
 
   it should "log a warning for invalid ApprovedBlockCandidates" in effectTest {
     val n                          = 8
-    val (validatorSk, validatorPk) = Ed25519.newKeyPair
+    val (validatorSk, validatorPk) = Secp256k1.newKeyPair
     val bonds                      = Map(validatorPk -> 10L)
     createProtocol(n, Seq.empty, validatorSk, bonds).flatMap {
       case (approver, node) =>
@@ -115,7 +115,7 @@ object BlockApproverProtocolTest {
             validators = bonds.map(Validator.tupled).toSeq
           ),
           faucet = false,
-          genesisPk = Ed25519.newKeyPair._2,
+          genesisPk = Secp256k1.newKeyPair._2,
           vaults = bonds.toList.map {
             case (pk, stake) =>
               RevAddress.fromPublicKey(pk).map(Vault(_, stake))

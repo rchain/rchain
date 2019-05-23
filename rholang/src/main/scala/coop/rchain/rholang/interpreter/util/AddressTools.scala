@@ -1,6 +1,7 @@
 package coop.rchain.rholang.interpreter.util
 
 import coop.rchain.crypto.PublicKey
+import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.hash.Blake2b256
 import coop.rchain.rholang.interpreter.util.codec.Base58
 
@@ -24,12 +25,14 @@ class AddressTools(prefix: Array[Byte], keyLength: Int, checksumLength: Int) {
     * @return None if the key length is invalid or Some if the address was created successfully
     */
   def fromPublicKey(pk: PublicKey): Option[Address] =
-    if (keyLength == pk.bytes.length) {
+    if (keyLength == pk.bytes.length || 32 == pk.bytes.length) {
       val keyHash = Blake2b256.hash(pk.bytes)
       val payload = prefix ++ keyHash
 
       Some(Address(prefix, keyHash, computeChecksum(payload)))
-    } else None
+    } else {
+      None
+    }
 
   def isValid(address: String): Boolean = parse(address).isRight
 

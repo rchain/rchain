@@ -7,7 +7,6 @@ import coop.rchain.casper.genesis.contracts.{Faucet, PreWallet, ProofOfStake, Te
 import coop.rchain.casper.protocol.{BlockMessage, DeployData}
 import coop.rchain.casper.util.rholang.RuntimeManager
 import coop.rchain.crypto.hash.Blake2b512Random
-import coop.rchain.crypto.signatures.Ed25519
 import coop.rchain.casper.genesis.contracts.TestUtil
 import coop.rchain.casper.protocol.DeployData
 import coop.rchain.metrics.Metrics

@@ -13,7 +13,8 @@ import coop.rchain.casper.helper.BlockDagStorageTestFixture.mapSize
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.casper.util.comm.CasperPacketHandler
-import coop.rchain.casper.engine._, EngineCell._
+import coop.rchain.casper.engine._
+import EngineCell._
 import coop.rchain.casper.util.comm.TestNetwork.TestNetwork
 import coop.rchain.casper.util.comm._
 import coop.rchain.casper.util.rholang.{InterpreterUtil, RuntimeManager}
@@ -21,14 +22,13 @@ import coop.rchain.catscontrib.Catscontrib._
 import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.catscontrib.effect.implicits._
 import coop.rchain.catscontrib.ski._
-
 import coop.rchain.comm._
 import coop.rchain.comm.protocol.routing._
 import coop.rchain.comm.rp.Connect
 import coop.rchain.comm.rp.Connect._
 import coop.rchain.comm.rp.HandleMessages.handle
 import coop.rchain.crypto.PrivateKey
-import coop.rchain.crypto.signatures.Ed25519
+import coop.rchain.crypto.signatures.Secp256k1
 import coop.rchain.metrics
 import coop.rchain.metrics.{Metrics, NoopSpan}
 import coop.rchain.p2p.EffectsTestInstances._
@@ -74,7 +74,7 @@ class HashSetCasperTestNode[F[_]](
 
   val defaultTimeout: FiniteDuration = FiniteDuration(1000, MILLISECONDS)
 
-  val validatorId = ValidatorIdentity(Ed25519.toPublic(sk), sk, "ed25519")
+  val validatorId = ValidatorIdentity(Secp256k1.toPublic(sk), sk, "secp256k1")
 
   val approvedBlock = ApprovedBlock(candidate = Some(ApprovedBlockCandidate(block = Some(genesis))))
 

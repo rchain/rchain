@@ -31,7 +31,7 @@ class ManyValidatorsTest
     implicit val log       = new Log.NOPLog[Task]()
     val bonds = Seq
       .fill(300)(
-        ByteString.copyFromUtf8(Random.nextString(20)).substring(0, 32)
+        ByteString.copyFromUtf8(Random.nextString(30)).substring(0, 65)
       )
       .map(Bond(_, 10))
     val v1 = bonds(0).validator

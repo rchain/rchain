@@ -1,14 +1,17 @@
 package coop.rchain.casper
 
 import cats.implicits._
+import com.google.protobuf.ByteString
 import coop.rchain.casper.MultiParentCasper.ignoreDoppelgangerCheck
 import coop.rchain.casper.helper.HashSetCasperTestNode
 import coop.rchain.casper.helper.HashSetCasperTestNode._
+import coop.rchain.casper.protocol.DeployData
 import coop.rchain.casper.scalatestcontrib._
+import coop.rchain.casper.util.ConstructDeploy.sign
 import coop.rchain.casper.util.{ConstructDeploy, ProtoUtil}
-import coop.rchain.crypto.PrivateKey
+import coop.rchain.crypto.{PrivateKey, PublicKey}
 import coop.rchain.crypto.codec.Base16
-import coop.rchain.crypto.signatures.Ed25519
+import coop.rchain.crypto.signatures.{Ed25519, Secp256k1}
 import coop.rchain.p2p.EffectsTestInstances.LogicalTime
 import coop.rchain.rholang.interpreter.accounting
 import monix.execution.Scheduler.Implicits.global
@@ -20,7 +23,7 @@ class MultiParentCasperRholangSpec extends FlatSpec with Matchers with Inspector
 
   implicit val timeEff = new LogicalTime[Effect]
 
-  private val (validatorKeys, validatorPks) = (1 to 4).map(_ => Ed25519.newKeyPair).unzip
+  private val (validatorKeys, validatorPks) = (1 to 4).map(_ => Secp256k1.newKeyPair).unzip
   private val genesis = buildGenesis(
     buildGenesisParameters(4, createBonds(validatorPks))
   )
@@ -71,19 +74,17 @@ class MultiParentCasperRholangSpec extends FlatSpec with Matchers with Inspector
         createBlockResult <- casperEff.createBlock
         Created(block)    = createBlockResult
         blockStatus       <- casperEff.addBlock(block, ignoreDoppelgangerCheck[Effect])
-        id <- casperEff
-               .storageContents(ProtoUtil.postStateHash(block))
-               .map(
-                 _.split('|')
-                   .find(
-                     _.contains(
-                       //based on the timestamp of registerDeploy, this is uriCh
-                       "@{Unforgeable(0xe2615f3fd74c2b83230a3bfc44001d38aded3d2ade5e9b15ffd20e8566d3426f)}!"
-                     )
-                   )
-                   .get
-                   .split('`')(1)
-               )
+        contents          <- casperEff.storageContents(ProtoUtil.postStateHash(block))
+        id = contents
+          .split('|')
+          .find(
+            _.contains(
+              //based on the timestamp of registerDeploy, this is uriCh
+              "@{Unforgeable(0x61099068fff2d34a6f46c588e8e5ec0e9e131f08e3abe5cd3e3d15289dae7c65)}!"
+            )
+          )
+          .get
+          .split('`')(1)
         callDeploy = ConstructDeploy.sourceDeploy(
           s"""new rl(`rho:registry:lookup`), helloCh, out in {
              |  rl!(`$id`, *helloCh) |
@@ -110,10 +111,13 @@ class MultiParentCasperRholangSpec extends FlatSpec with Matchers with Inspector
     HashSetCasperTestNode.standaloneEff(genesis, validatorKeys.head).use { node =>
       import node.casperEff
 
-      //val skStr = "6061f3ea36d0419d1e9e23c33bba88ed1435427fa2a8f7300ff210b4e9f18a14"
-      val pkStr = "16989775f3f207a717134216816d3c9d97b0bfb8d560b29485f23f6ead435f09"
-      val sigStr = "51c2b091559745d51c7270189911d9d894d538f76150ed67d164705dcf0af52" +
-        "e101fa06396db2b2ac21a4bfbe3461567b5f8b3d2e666c377cb92d96bc38e2c08"
+      val sec = PrivateKey(
+        Base16.unsafeDecode("0cd69275df1c81ab1487a97c5f8c6e8e091372147261657a2bb9b81e0c53e7b5")
+      )
+      val pk    = Ed25519.toPublic(sec)
+      val pkStr = Base16.encode(pk.bytes)
+      val sigStr =
+        "a5b9842c858cc918f1cfc48ae5800f61eac63b4fdb35111d3f8e8ffe964ca6b93a850afb2f1151962626842f1db57f9cd812c86b172926bea0a2de85d216ae05"
       val amount = 157L
       val createWalletCode =
         s"""new
@@ -134,15 +138,14 @@ class MultiParentCasperRholangSpec extends FlatSpec with Matchers with Inspector
            |  )
            |}""".stripMargin
 
-      //with the fixed user+timestamp we know that walletCh is registered at `rho:id:mrs88izurkgki71dpjqamzg6tgcjd6sk476c9msks7tumw4a6e39or`
-      val createWalletDeploy = ConstructDeploy.sourceDeploy(
-        source = createWalletCode,
-        timestamp = 1540570144121L,
-        phlos = accounting.MAX_VALUE,
-        sec = PrivateKey(
-          Base16.unsafeDecode("6061f3ea36d0419d1e9e23c33bba88ed1435427fa2a8f7300ff210b4e9f18a14")
-        )
+      // with the fixed user+timestamp we know that walletCh is registered at `rho:id:3sc1hdncdeftigmrjw7w7warxmom64o5mociy1fkb5ja55rb7rahww`
+      val createWalletDeployData = DeployData(
+        deployer = ByteString.copyFrom(pk.bytes),
+        timestamp = 1558995791260L,
+        term = createWalletCode,
+        phloLimit = accounting.MAX_VALUE
       )
+      val createWalletDeploy = SignDeployment.sign(sec, createWalletDeployData, Ed25519)
 
       for {
         createBlockResult <- casperEff.deploy(createWalletDeploy) *> casperEff.createBlock
@@ -152,16 +155,14 @@ class MultiParentCasperRholangSpec extends FlatSpec with Matchers with Inspector
           s"""new
              |  rl(`rho:registry:lookup`), walletFeedCh
              |in {
-             |  rl!(`rho:id:mrs88izurkgki71dpjqamzg6tgcjd6sk476c9msks7tumw4a6e39or`, *walletFeedCh) |
+             |  rl!(`rho:id:3sc1hdncdeftigmrjw7w7warxmom64o5mociy1fkb5ja55rb7rahww`, *walletFeedCh) |
              |  for(@(_, walletFeed) <- walletFeedCh) {
              |    for(wallet <- @walletFeed) { wallet!("getBalance", "__SCALA__") }
              |  }
              |}""".stripMargin,
           0L,
           accounting.MAX_VALUE,
-          sec = PrivateKey(
-            Base16.unsafeDecode("6061f3ea36d0419d1e9e23c33bba88ed1435427fa2a8f7300ff210b4e9f18a14")
-          )
+          sec = sec
         )
         newWalletBalance <- node.runtimeManager
                              .captureResults(

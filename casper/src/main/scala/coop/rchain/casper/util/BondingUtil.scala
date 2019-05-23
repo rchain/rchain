@@ -173,7 +173,7 @@ object BondingUtil {
                |  rl!(`rho:id:wdwc36f4ixa6xacck3ddepmgueum7zueuczgthcqp6771kdu8jogm8`, *SystemInstancesCh) |
                |  for(@(_, SystemInstancesRegistry) <- SystemInstancesCh) {
                |    @SystemInstancesRegistry!("lookup", "faucet", *faucetCh) |
-               |    for(faucet <- faucetCh){ faucet!($amount, "ed25519", "$pubKey", *walletCh) } |
+               |    for(faucet <- faucetCh){ faucet!($amount, "secp256k1", "$pubKey", *walletCh) } |
                |    for(@[wallet] <- walletCh) {
                |      @wallet!("transfer", $amount, $nonce, "${Base16.encode(transferSig)}", "$destination", "$statusOut")
                |    }

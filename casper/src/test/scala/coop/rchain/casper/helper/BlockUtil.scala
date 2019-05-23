@@ -18,7 +18,7 @@ object BlockUtil {
   }
 
   def generateValidator(prefix: String = ""): ByteString =
-    ByteString.copyFromUtf8(prefix + Random.nextString(20)).substring(0, 32)
+    ByteString.copyFromUtf8(prefix + Random.nextString(30)).substring(0, 65)
 
   def generateHash(prefix: String = ""): BlockHash =
     ByteString.copyFromUtf8(prefix + Random.nextString(20)).substring(0, 32)

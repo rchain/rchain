@@ -14,7 +14,7 @@ import coop.rchain.casper.util.comm.TestNetwork
 import coop.rchain.casper.util.{BondingUtil, ConstructDeploy, ProtoUtil}
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.hash.Keccak256
-import coop.rchain.crypto.signatures.{Ed25519, Secp256k1}
+import coop.rchain.crypto.signatures.Secp256k1
 import coop.rchain.crypto.{PrivateKey, PublicKey}
 import coop.rchain.p2p.EffectsTestInstances.LogicalTime
 import coop.rchain.rholang.interpreter.accounting
@@ -28,8 +28,8 @@ class MultiParentCasperBondingSpec extends FlatSpec with Matchers with Inspector
 
   implicit val timeEff = new LogicalTime[Effect]
 
-  private val (otherSk, otherPk)            = Ed25519.newKeyPair
-  private val (validatorKeys, validatorPks) = (1 to 4).map(_ => Ed25519.newKeyPair).unzip
+  private val (otherSk, otherPk)            = Secp256k1.newKeyPair
+  private val (validatorKeys, validatorPks) = (1 to 4).map(_ => Secp256k1.newKeyPair).unzip
   private val (ethPivKeys, ethPubKeys)      = (1 to 4).map(_ => Secp256k1.newKeyPair).unzip
   private val ethAddresses =
     ethPubKeys.map(pk => "0x" + Base16.encode(Keccak256.hash(pk.bytes.drop(1)).takeRight(20)))
@@ -47,7 +47,7 @@ class MultiParentCasperBondingSpec extends FlatSpec with Matchers with Inspector
         validators = bonds.map(Validator.tupled).toSeq
       ),
       faucet = true,
-      genesisPk = Ed25519.newKeyPair._2,
+      genesisPk = Secp256k1.newKeyPair._2,
       vaults = bonds.toList.map {
         case (pk, stake) =>
           RevAddress.fromPublicKey(pk).map(Vault(_, stake))
@@ -204,7 +204,7 @@ class MultiParentCasperBondingSpec extends FlatSpec with Matchers with Inspector
       val forwardCode = BondingUtil.bondingForwarderDeploy(pkStr, pkStr)
 
       for {
-        bondingCode <- BondingUtil.faucetBondDeploy[Effect](amount, "ed25519", pkStr, sk)
+        bondingCode <- BondingUtil.faucetBondDeploy[Effect](amount, "secp256k1", pkStr, sk)
         forwardDeploy = ConstructDeploy.sourceDeploy(
           forwardCode,
           0L,
@@ -270,7 +270,7 @@ class MultiParentCasperBondingSpec extends FlatSpec with Matchers with Inspector
       val amount                  = 314L
       val forwardCode             = BondingUtil.bondingForwarderDeploy(pkStr, pkStr)
       for {
-        bondingCode <- BondingUtil.faucetBondDeploy[Effect](amount, "ed25519", pkStr, sk)
+        bondingCode <- BondingUtil.faucetBondDeploy[Effect](amount, "secp256k1", pkStr, sk)
         forwardDeploy = ConstructDeploy.sourceDeploy(
           forwardCode,
           System.currentTimeMillis(),
@@ -300,7 +300,7 @@ class MultiParentCasperBondingSpec extends FlatSpec with Matchers with Inspector
         for {
           _        <- stepSplit(nodes)
           _        <- stepSplit(nodes)
-          (sk, pk) = Ed25519.newKeyPair
+          (sk, pk) = Secp256k1.newKeyPair
           _ <- HashSetCasperTestNode.standaloneEff(genesis, sk, testNetwork = network).use {
                 newNode =>
                   for {
@@ -323,7 +323,7 @@ class MultiParentCasperBondingSpec extends FlatSpec with Matchers with Inspector
 
   it should "not fail if the forkchoice changes after a bonding event" in effectTest {
     val localValidators = validatorKeys.take(3)
-    val localBonds      = localValidators.map(Ed25519.toPublic).zip(List(10L, 30L, 5000L)).toMap
+    val localBonds      = localValidators.map(Secp256k1.toPublic).zip(List(10L, 30L, 5000L)).toMap
     val localGenesis =
       buildGenesis(
         genesisParameters.copy(
@@ -335,12 +335,12 @@ class MultiParentCasperBondingSpec extends FlatSpec with Matchers with Inspector
       )
     HashSetCasperTestNode.networkEff(localValidators, localGenesis).use { nodes =>
       val rm          = nodes.head.runtimeManager
-      val (sk, pk)    = Ed25519.newKeyPair
+      val (sk, pk)    = Secp256k1.newKeyPair
       val pkStr       = Base16.encode(pk.bytes)
       val forwardCode = BondingUtil.bondingForwarderDeploy(pkStr, pkStr)
       for {
         bondingCode <- BondingUtil
-                        .faucetBondDeploy[Effect](50, "ed25519", pkStr, sk)(
+                        .faucetBondDeploy[Effect](50, "secp256k1", pkStr, sk)(
                           Concurrent[Effect],
                           rm
                         )

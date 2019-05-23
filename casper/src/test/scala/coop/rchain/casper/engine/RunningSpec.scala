@@ -9,9 +9,8 @@ import coop.rchain.comm.rp.ProtocolHelper._
 import coop.rchain.comm.transport
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.hash.Blake2b256
-import coop.rchain.crypto.signatures.Ed25519
-
 import com.google.protobuf.ByteString
+import coop.rchain.crypto.signatures.Secp256k1
 import monix.eval.Task
 import org.scalatest.WordSpec
 
@@ -22,7 +21,7 @@ class RunningSpec extends WordSpec {
     val fixture = Setup()
     import fixture._
 
-    val (_, validators)        = (1 to 4).map(_ => Ed25519.newKeyPair).unzip
+    val (_, validators)        = (1 to 4).map(_ => Secp256k1.newKeyPair).unzip
     val bonds                  = MultiParentCasperTestUtil.createBonds(validators)
     val genesis                = MultiParentCasperTestUtil.createGenesis(bonds)
     val approvedBlockCandidate = ApprovedBlockCandidate(block = Some(genesis))
@@ -31,9 +30,9 @@ class RunningSpec extends WordSpec {
       sigs = Seq(
         Signature(
           ByteString.copyFrom(validatorPk.bytes),
-          "ed25519",
+          "secp256k1",
           ByteString.copyFrom(
-            Ed25519.sign(Blake2b256.hash(approvedBlockCandidate.toByteArray), validatorSk)
+            Secp256k1.sign(Blake2b256.hash(approvedBlockCandidate.toByteArray), validatorSk)
           )
         )
       )

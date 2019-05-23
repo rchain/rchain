@@ -504,7 +504,7 @@ final class BlockDagFileStorage[F[_]: Concurrent: Sync: Log: RaiseIOError] priva
                                                           Log[F].warn(
                                                             s"Block ${Base16.encode(block.blockHash.toByteArray)} sender is empty"
                                                           ) *> newValidatorsLatestMessages.pure[F]
-                                                        } else if (block.sender.size() == 32) {
+                                                        } else if (block.sender.size() == 65) {
                                                           (newValidatorsLatestMessages + (
                                                             (
                                                               block.sender,
@@ -512,6 +512,9 @@ final class BlockDagFileStorage[F[_]: Concurrent: Sync: Log: RaiseIOError] priva
                                                             )
                                                           )).pure[F]
                                                         } else {
+                                                          println(
+                                                            Base16.encode(block.sender.toByteArray)
+                                                          )
                                                           Sync[F].raiseError[Set[
                                                             (ByteString, ByteString)
                                                           ]](
@@ -664,7 +667,7 @@ object BlockDagFileStorage {
         result: List[(Validator, BlockHash)],
         logSize: Int
     ): F[(List[(Validator, BlockHash)], Int)] = {
-      val validatorPk = Array.fill[Byte](32)(0)
+      val validatorPk = Array.fill[Byte](65)(0)
       val blockHash   = Array.fill[Byte](32)(0)
       for {
         validatorPkRead <- randomAccessIO.readFully(validatorPk)

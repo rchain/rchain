@@ -4,7 +4,6 @@ import cats._
 import cats.effect.{Concurrent, ContextShift}
 import cats.effect.concurrent.Ref
 import cats.implicits._
-
 import coop.rchain.blockstorage._
 import coop.rchain.blockstorage.BlockStore.BlockHash
 import coop.rchain.casper._
@@ -19,13 +18,12 @@ import coop.rchain.catscontrib.ApplicativeError_
 import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.comm._
 import coop.rchain.comm.rp.Connect.{Connections, ConnectionsCell}
-import coop.rchain.crypto.signatures.Ed25519
+import coop.rchain.crypto.signatures.Secp256k1
 import coop.rchain.metrics.Metrics.MetricsNOP
 import coop.rchain.p2p.EffectsTestInstances._
 import coop.rchain.rholang.interpreter.Runtime
 import coop.rchain.rholang.interpreter.util.RevAddress
 import coop.rchain.shared.{Cell, StoreType}
-
 import monix.eval.Task
 import monix.execution.Scheduler
 
@@ -51,8 +49,8 @@ object Setup {
 
     val runtimeManager = RuntimeManager.fromRuntime(activeRuntime).unsafeRunSync(scheduler)
 
-    val (genesisSk, genesisPk)     = Ed25519.newKeyPair
-    val (validatorSk, validatorPk) = Ed25519.newKeyPair
+    val (genesisSk, genesisPk)     = Secp256k1.newKeyPair
+    val (validatorSk, validatorPk) = Secp256k1.newKeyPair
     val bonds                      = createBonds(Seq(validatorPk))
     val requiredSigs               = 1
     val shardId                    = "test-shardId"

@@ -15,7 +15,7 @@ import coop.rchain.catscontrib.TaskContrib.TaskOps
 import coop.rchain.comm.rp.ProtocolHelper.packet
 import coop.rchain.comm.transport
 import coop.rchain.crypto.hash.Blake2b256
-import coop.rchain.crypto.signatures.Ed25519
+import coop.rchain.crypto.signatures.Secp256k1
 import coop.rchain.p2p.EffectsTestInstances.LogicalTime
 import coop.rchain.rholang.interpreter.accounting
 import monix.eval.Task
@@ -31,7 +31,7 @@ class MultiParentCasperAddBlockSpec extends FlatSpec with Matchers with Inspecto
 
   implicit val timeEff = new LogicalTime[Effect]
 
-  private val (validatorKeys, validatorPks) = (1 to 4).map(_ => Ed25519.newKeyPair).unzip
+  private val (validatorKeys, validatorPks) = (1 to 4).map(_ => Secp256k1.newKeyPair).unzip
   private val genesis = buildGenesis(
     buildGenesisParameters(4, createBonds(validatorPks))
   )
@@ -199,7 +199,7 @@ class MultiParentCasperAddBlockSpec extends FlatSpec with Matchers with Inspecto
   }
 
   it should "reject blocks not from bonded validators" in effectTest {
-    HashSetCasperTestNode.standaloneEff(genesis, Ed25519.newKeyPair._1).use { node =>
+    HashSetCasperTestNode.standaloneEff(genesis, Secp256k1.newKeyPair._1).use { node =>
       import node._
       implicit val timeEff = new LogicalTime[Effect]
 
@@ -478,7 +478,7 @@ class MultiParentCasperAddBlockSpec extends FlatSpec with Matchers with Inspecto
 
   it should "estimate parent properly" in effectTest {
 
-    val (validatorKeys, validatorPks) = (1 to 5).map(_ => Ed25519.newKeyPair).unzip
+    val (validatorKeys, validatorPks) = (1 to 5).map(_ => Secp256k1.newKeyPair).unzip
 
     def deployment(i: Int, ts: Long): DeployData =
       ConstructDeploy.sourceDeploy(s"new x in { x!(0) }", ts, accounting.MAX_VALUE)
@@ -566,7 +566,7 @@ class MultiParentCasperAddBlockSpec extends FlatSpec with Matchers with Inspecto
         dag,
         validatorPks(1),
         validatorKeys(1),
-        "ed25519",
+        "secp256k1",
         "rchain"
       )
     }

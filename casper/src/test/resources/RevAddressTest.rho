@@ -41,23 +41,23 @@ in {
     new r1, r2, r3 in {
       revAddress!(
         "fromPublicKey",
-        "0000000000000000000000000000000000000000000000000000000000000000".hexToBytes(),
+        "0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000".hexToBytes(),
         *r1
       ) |
       revAddress!(
         "fromPublicKey",
-        "1111111111111111111111111111111111111111111111111111111111111111".hexToBytes(),
+        "1111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111".hexToBytes(),
         *r2
       ) |
       revAddress!(
         "fromPublicKey",
-        "2222222222222222222222222222222222222222222222222222222222222222".hexToBytes(),
+        "2222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222".hexToBytes(),
         *r3
       ) |
       rhoSpec!("assertMany", [
-        (("111123jwD7acNy6vfYwzWXAbnSQ8z8Bv24cCkVcVbd6SuP2LtFK7w7", "== <-", *r1), "correct RevAddress"),
-        (("11112comWwT626KfXkvnWRHDwPDm4VefqSr6ijvinhVHGTuXe6wWmk", "== <-", *r2), "correct RevAddress"),
-        (("11112ipm5NY9BqyQ3p3sUx8pdFWV5jFQ5qqMcUzZWe19hwz3USbHBG", "== <-", *r3), "correct RevAddress"),
+        (("11112c4Z48VufA19YCWdUoXrXKKVza16dix2xUa5q3TpnRLcZAQg7d", "== <-", *r1), "correct RevAddress"),
+        (("1111vQiDiLGjHgjV1D7j6EbXHyStToU3iQ3eWA394p3rzYFocXGtv", "== <-", *r2), "correct RevAddress"),
+        (("11112nT39uWFt9J3CT7hi87JRmnWsQuMh1oDjfhkyfcGnjV54Umn1n", "== <-", *r3), "correct RevAddress"),
       ], *ackCh)
     }
   } |

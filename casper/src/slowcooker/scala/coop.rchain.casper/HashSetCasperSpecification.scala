@@ -51,7 +51,7 @@ object HashSetCasperActions {
       amount: Int,
       bondsGen: Seq[PublicKey] => Map[PublicKey, Long]
   ): (BlockMessage, immutable.IndexedSeq[PrivateKey]) = {
-    val (validatorKeys, validators) = (1 to amount).map(_ => Ed25519.newKeyPair).unzip
+    val (validatorKeys, validators) = (1 to amount).map(_ => Secp256k1.newKeyPair).unzip
     val (_, ethPubKeys)             = (1 to amount).map(_ => Secp256k1.newKeyPair).unzip
     val ethAddresses =
       ethPubKeys.map(pk => "0x" + Base16.encode(Keccak256.hash(pk.bytes.drop(1)).takeRight(20)))
@@ -68,7 +68,7 @@ object HashSetCasperActions {
             validators = bonds.toSeq.map(Validator.tupled)
           ),
           faucet = true,
-          genesisPk = Ed25519.newKeyPair._2,
+          genesisPk = Secp256k1.newKeyPair._2,
           timestamp = 0L,
           vaults = bonds.toList.map {
             case (pk, stake) =>

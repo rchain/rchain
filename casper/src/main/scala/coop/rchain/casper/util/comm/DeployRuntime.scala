@@ -23,7 +23,6 @@ import com.google.protobuf.ByteString
 import coop.rchain.casper.SignDeployment
 import coop.rchain.crypto.PrivateKey
 import coop.rchain.crypto.hash.Blake2b256
-import coop.rchain.crypto.signatures.Ed25519
 import coop.rchain.shared.ThrowableOps._
 
 object DeployRuntime {

@@ -3,7 +3,6 @@ package coop.rchain.casper
 import cats.effect.{Concurrent, Sync}
 import cats.{Applicative, Monad}
 import cats.implicits._
-
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.{BlockDagRepresentation, BlockStore}
 import coop.rchain.catscontrib._
@@ -15,10 +14,11 @@ import coop.rchain.casper.util.ProtoUtil.{blockNumber, bonds}
 import coop.rchain.casper.util.rholang.{InterpreterUtil, RuntimeManager}
 import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
 import coop.rchain.crypto.hash.Blake2b256
-import coop.rchain.crypto.signatures.Ed25519
+import coop.rchain.crypto.signatures.{Ed25519, Secp256k1}
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.models.BlockMetadata
 import coop.rchain.shared._
+
 import scala.util.{Failure, Success, Try}
 
 object Validate {
@@ -30,7 +30,7 @@ object Validate {
   implicit private val logSource: LogSource = LogSource(this.getClass)
   val signatureVerifiers: Map[String, (Data, Signature, PublicKey) => Boolean] =
     Map(
-      "ed25519" -> Ed25519.verify
+      "secp256k1" -> Secp256k1.verify
     )
 
   def signature(d: Data, sig: protocol.Signature): Boolean =

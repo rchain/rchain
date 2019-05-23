@@ -9,7 +9,7 @@ import coop.rchain.casper.protocol.{BlockMessage, DeployData}
 import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.casper.util.rholang.RuntimeManager
 import coop.rchain.crypto.hash.Blake2b512Random
-import coop.rchain.crypto.signatures.Ed25519
+import coop.rchain.crypto.signatures.Secp256k1
 import coop.rchain.metrics
 import coop.rchain.metrics.Metrics
 import coop.rchain.models.Par
@@ -52,7 +52,7 @@ object TestUtil {
   // TODO: Have this function take an additional "Genesis" argument.
   def defaultGenesisSetup[F[_]: Concurrent](runtimeManager: RuntimeManager[F]): F[BlockMessage] = {
 
-    val (_, validatorPks) = (1 to 4).map(_ => Ed25519.newKeyPair).unzip
+    val (_, validatorPks) = (1 to 4).map(_ => Secp256k1.newKeyPair).unzip
     val bonds             = createBonds(validatorPks)
 
     Genesis.createGenesisBlock(
@@ -69,7 +69,7 @@ object TestUtil {
           validators = bonds.map(Validator.tupled).toSeq
         ),
         faucet = false,
-        genesisPk = Ed25519.newKeyPair._2,
+        genesisPk = Secp256k1.newKeyPair._2,
         vaults = bonds.toList.map {
           case (pk, stake) =>
             RevAddress.fromPublicKey(pk).map(Vault(_, stake))

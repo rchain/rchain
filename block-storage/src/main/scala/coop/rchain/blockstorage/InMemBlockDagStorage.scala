@@ -127,7 +127,7 @@ final class InMemBlockDagStorage[F[_]: Concurrent: Sync: Log: BlockStore](
                                                 Log[F].warn(
                                                   s"Block ${Base16.encode(block.blockHash.toByteArray)} sender is empty"
                                                 ) *> newValidatorsLatestMessages.pure[F]
-                                              } else if (block.sender.size() == 32) {
+                                              } else if (block.sender.size() == 65) {
                                                 (newValidatorsLatestMessages + (
                                                   (
                                                     block.sender,
