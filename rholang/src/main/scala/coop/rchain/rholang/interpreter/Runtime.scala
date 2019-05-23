@@ -21,8 +21,8 @@ import coop.rchain.rholang.interpreter.errors.SetupError
 import coop.rchain.rholang.interpreter.storage.implicits._
 import coop.rchain.rspace._
 import coop.rchain.rspace.history.Branch
+import coop.rchain.rspace.nextgenrspace.{RSpace => NextRSpace}
 import coop.rchain.rspace.pure.PureRSpace
-import coop.rchain.rspace.nextgenrspace.{RSpace => NextRSpace, ReplayRSpace => NextReplayRSpace}
 import coop.rchain.shared.StoreType._
 import coop.rchain.shared.{Log, StoreType}
 
@@ -414,11 +414,11 @@ object Runtime {
                 case None => F.unit
                 case Some(_) =>
                   F.raiseError(
-                    new SetupError("Registry insertion in replay fired continuation.")
+                    SetupError("Registry insertion in replay fired continuation.")
                   )
               }
             case Some(_) =>
-              F.raiseError(new SetupError("Registry insertion fired continuation."))
+              F.raiseError(SetupError("Registry insertion fired continuation."))
           }
     } yield ()
   }
