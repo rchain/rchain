@@ -467,7 +467,8 @@ object Runtime {
     def checkCreateDataDir: F[Unit] =
       for {
         notexists <- Sync[F].delay(Files.notExists(dataDir))
-        _         <- if (notexists) Sync[F].delay(Files.createDirectories(dataDir)) else ().pure[F]
+        _ <- if (notexists) Sync[F].delay(Files.createDirectories(dataDir)) >> ().pure[F]
+            else ().pure[F]
       } yield ()
 
     storeType match {
