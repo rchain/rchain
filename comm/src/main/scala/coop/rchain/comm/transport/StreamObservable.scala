@@ -18,6 +18,9 @@ final case class StreamToPeers(peers: Seq[PeerNode], path: Path, sender: PeerNod
 class StreamObservable(bufferSize: Int, folder: Path)(implicit log: Log[Task], scheduler: Scheduler)
     extends Observable[StreamToPeers] {
 
+  val LogRetryEvery: Int         = 60 // With a delay of 1 second log every minute
+  val RetryDelay: FiniteDuration = 1.second
+
   private val subject = buffer.LimitedBufferObservable.dropNew[StreamToPeers](bufferSize)
 
   def stream(peers: List[PeerNode], blob: Blob): Task[Unit] = {
@@ -31,15 +34,20 @@ class StreamObservable(bufferSize: Int, folder: Path)(implicit log: Log[Task], s
     def push(file: Path): Task[Boolean] =
       Task.delay(subject.pushNext(StreamToPeers(peers, file, blob.sender)))
 
-    def propose(file: Path): Task[Unit] =
-      push(file) >>= (_.fold(Task.unit, retry(file)))
+    def propose(file: Path, retryCount: Int): Task[Unit] =
+      push(file) >>= (_.fold(Task.unit, retry(file, retryCount)))
 
-    def retry(file: Path): Task[Unit] =
+    def retry(file: Path, retryCount: Int): Task[Unit] =
       Task
-        .defer(log.warn("Retrying push to client stream") >> propose(file))
-        .delayExecution(1.second)
+        .defer(logRetry(retryCount) >> propose(file, retryCount + 1))
+        .delayExecution(RetryDelay)
 
-    storeBlob >>= (_.fold(Task.unit)(propose))
+    def logRetry(retryCount: Int): Task[Unit] =
+      if (retryCount % LogRetryEvery == 0)
+        log.warn(s"Client stream message queue is full. Retrying push. Retry $retryCount")
+      else Task.unit
+
+    storeBlob >>= (_.fold(Task.unit)(propose(_, 1)))
   }
 
   def unsafeSubscribeFn(subscriber: Subscriber[StreamToPeers]): Cancelable = {
