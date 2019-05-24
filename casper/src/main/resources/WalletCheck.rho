@@ -18,7 +18,7 @@ new
   rl(`rho:registry:lookup`), BasicWalletCh, claimContractStore,
   walletStore
 in {
-  rl!(`rho:id:3yicxut5xtx5tnmnneta7actof4yse3xangw4awzt8c8owqmddgyms`, *BasicWalletCh) |
+  rl!(`rho:id:basicWallet`, *BasicWalletCh) |
   for(@(_, BasicWallet) <- BasicWalletCh) {
     claimContractStore!({}) |
     walletStore!({}) |

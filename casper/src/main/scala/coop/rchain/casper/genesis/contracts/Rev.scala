@@ -25,11 +25,11 @@ class Rev[A](
     |  rl(`rho:registry:lookup`), MakeMintCh, WalletCheckCh, BasicWalletCh,
     |  MakePoSCh, SystemInstancesCh, revMintCh, posPurseCh, rev, posCh
     |in {
-    |  rl!(`rho:id:exunyijimapk7z43g3bbr69awqdz54kyroj9q43jgu3dh567fxsftx`, *MakeMintCh) |
-    |  rl!(`rho:id:oqez475nmxx9ktciscbhps18wnmnwtm6egziohc3rkdzekkmsrpuyt`, *WalletCheckCh) |
-    |  rl!(`rho:id:3yicxut5xtx5tnmnneta7actof4yse3xangw4awzt8c8owqmddgyms`, *BasicWalletCh) |
-    |  rl!(`rho:id:nqt875jea4rr83383ys6guzsbebg6k7o7uhrint6d7km67886c4y4s`, *MakePoSCh) |
-    |  rl!(`rho:id:wdwc36f4ixa6xacck3ddepmgueum7zueuczgthcqp6771kdu8jogm8`, *SystemInstancesCh) |
+    |  rl!(`rho:id:makeMint`, *MakeMintCh) |
+    |  rl!(`rho:id:walletCheck`, *WalletCheckCh) |
+    |  rl!(`rho:id:basicWallet`, *BasicWalletCh) |
+    |  rl!(`rho:id:makePos`, *MakePoSCh) |
+    |  rl!(`rho:id:systemInstancesRegistry`, *SystemInstancesCh) |
     |  for(
     |    @(_, MakeMint) <- MakeMintCh; @(_, WalletCheck) <- WalletCheckCh;
     |    @(_, BasicWallet) <- BasicWalletCh; @(_, MakePoS) <- MakePoSCh;

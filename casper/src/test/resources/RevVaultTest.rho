@@ -54,7 +54,7 @@ match (
 
       contract setup(ret) = {
         new RevVaultCh, identitySet in {
-          rl!(`rho:id:1o93uitkrjfubh43jt19owanuezhntag5wh74c6ur5feuotpi73q8z`, *RevVaultCh) |
+          rl!(`rho:id:revVault`, *RevVaultCh) |
           setDeployData!("userId", genesisPubKey, *identitySet) |
           for (@(_, RevVault) <- RevVaultCh; _ <- identitySet) {
             ret!(RevVault)
@@ -175,7 +175,7 @@ match (
       } |
 
       new RevVaultCh in {
-        rl!(`rho:id:1o93uitkrjfubh43jt19owanuezhntag5wh74c6ur5feuotpi73q8z`, *RevVaultCh) |
+        rl!(`rho:id:revVault`, *RevVaultCh) |
         for (@(_, RevVault) <- RevVaultCh) {
 
           contract withVaultAndIdentityOf(@pubKey, ret) = {
@@ -203,7 +203,7 @@ match (
         }
       } |
 
-      rl!(`rho:id:dputnspi15oxxnyymjrpu7rkaok3bjkiwq84z7cqcrx4ktqfpyapn4`, *ListOpsCh) |
+      rl!(`rho:id:listOps`, *ListOpsCh) |
       for(@(_, ListOps) <- ListOpsCh) {
 
         contract assertBalances(when, @balances, rhoSpec, ret) = {

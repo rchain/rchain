@@ -4,8 +4,7 @@ new
   stdout(`rho:io:stdout`), log
 in {
 
-  // we'll consider making RevVault a system contract under `rho:rev:vault`
-  rl!(`rho:id:1o93uitkrjfubh43jt19owanuezhntag5wh74c6ur5feuotpi73q8z`, *RevVaultCh) |
+  rl!(`rho:id:revVault`, *RevVaultCh) |
   for (@(_, RevVault) <- RevVaultCh) {
 
 

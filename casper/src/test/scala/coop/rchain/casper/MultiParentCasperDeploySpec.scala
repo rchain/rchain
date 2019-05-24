@@ -184,7 +184,7 @@ class MultiParentCasperDeploySpec extends FlatSpec with Matchers with Inspectors
            |  paymentForward, walletCh, rl(`rho:registry:lookup`),
            |  SystemInstancesCh, faucetCh, posCh
            |in {
-           |  rl!(`rho:id:wdwc36f4ixa6xacck3ddepmgueum7zueuczgthcqp6771kdu8jogm8`, *SystemInstancesCh) |
+           |  rl!(`rho:id:systemInstancesRegistry`, *SystemInstancesCh) |
            |  for(@(_, SystemInstancesRegistry) <- SystemInstancesCh) {
            |    @SystemInstancesRegistry!("lookup", "pos", *posCh) |
            |    @SystemInstancesRegistry!("lookup", "faucet", *faucetCh) |
@@ -209,7 +209,7 @@ class MultiParentCasperDeploySpec extends FlatSpec with Matchers with Inspectors
         paymentQuery = ConstructDeploy
           .sourceDeploy(
             """new rl(`rho:registry:lookup`), SystemInstancesCh, posCh in {
-              |  rl!(`rho:id:wdwc36f4ixa6xacck3ddepmgueum7zueuczgthcqp6771kdu8jogm8`, *SystemInstancesCh) |
+              |  rl!(`rho:id:systemInstancesRegistry`, *SystemInstancesCh) |
               |  for(@(_, SystemInstancesRegistry) <- SystemInstancesCh) {
               |    @SystemInstancesRegistry!("lookup", "pos", *posCh) |
               |    for(pos <- posCh){ pos!("lastPayment", "__SCALA__") }
