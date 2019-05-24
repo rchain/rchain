@@ -116,7 +116,7 @@ class RuntimeManagerImpl[F[_]: Concurrent] private[rholang] (
     withResetRuntime(hash) { runtime =>
       for {
         _      <- setBlockTime(blockTime, runtime)
-        result <- newEval(terms, runtime, hash)
+        result <- processDeploys(terms, hash, processDeploy(runtime))
       } yield result
     }
 
@@ -128,7 +128,7 @@ class RuntimeManagerImpl[F[_]: Concurrent] private[rholang] (
     withResetRuntime(startHash) { runtime =>
       for {
         _          <- setBlockTime(blockTime, runtime)
-        evalResult <- newEval(terms, runtime, startHash)
+        evalResult <- processDeploys(terms, startHash, processDeploy(runtime))
       } yield (startHash, evalResult._1, evalResult._2)
     }
   }
@@ -300,25 +300,23 @@ class RuntimeManagerImpl[F[_]: Concurrent] private[rholang] (
         )
     )
 
-  private def newEval(
+  private def processDeploys(
       terms: Seq[DeployData],
-      runtime: Runtime[F],
-      initHash: StateHash
+      initHash: StateHash,
+      processDeploy: (Blake2b256Hash, DeployData) => F[(Blake2b256Hash, InternalProcessedDeploy)]
   ): F[(StateHash, Seq[InternalProcessedDeploy])] = {
-
-    type Acc = (Blake2b256Hash, Seq[InternalProcessedDeploy])
 
     val initHashBlake = blakeFromByteString(initHash)
     terms.toList
-      .foldM[F, Acc]((initHashBlake, Seq.empty)) {
+      .foldM((initHashBlake, Seq.empty[InternalProcessedDeploy])) {
         case ((hash, results), deploy) => {
-          evalSingle(runtime)(hash, deploy).map(_.bimap(identity, results :+ _))
+          processDeploy(hash, deploy).map(_.bimap(identity, results :+ _))
         }
       }
       .map(_.bimap(blakeToByteString, x => x))
   }
 
-  private def evalSingle(runtime: Runtime[F])(
+  private def processDeploy(runtime: Runtime[F])(
       startHash: Blake2b256Hash,
       deploy: DeployData
   ): F[(Blake2b256Hash, InternalProcessedDeploy)] =
