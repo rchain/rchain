@@ -308,29 +308,34 @@ class RuntimeManagerImpl[F[_]: Concurrent] private[rholang] (
 
     type Acc = (Blake2b256Hash, Seq[InternalProcessedDeploy])
 
-    def evalSingle(acc: Acc, deploy: DeployData): F[Acc] = {
-      val (hash, deployResults) = acc
-      for {
-        _                            <- runtime.space.reset(hash)
-        evaluateResult               <- computeEffect(runtime)(deploy)
-        EvaluateResult(cost, errors) = evaluateResult
-        newCheckpoint                <- runtime.space.createCheckpoint()
-        deployResult = InternalProcessedDeploy(
-          deploy,
-          Cost.toProto(cost),
-          newCheckpoint.log,
-          Seq.empty[trace.Event],
-          DeployStatus.fromErrors(errors)
-        )
-        newHash = if (errors.isEmpty) newCheckpoint.root else hash
-      } yield (newHash, deployResults :+ deployResult)
-    }
-
     val initHashBlake = blakeFromByteString(initHash)
     terms.toList
-      .foldM[F, Acc]((initHashBlake, Seq.empty))(evalSingle)
+      .foldM[F, Acc]((initHashBlake, Seq.empty)) {
+        case ((hash, results), deploy) => {
+          evalSingle(runtime)(hash, deploy).map(_.bimap(identity, results :+ _))
+        }
+      }
       .map(_.bimap(blakeToByteString, x => x))
   }
+
+  private def evalSingle(runtime: Runtime[F])(
+      startHash: Blake2b256Hash,
+      deploy: DeployData
+  ): F[(Blake2b256Hash, InternalProcessedDeploy)] =
+    for {
+      _                            <- runtime.space.reset(startHash)
+      evaluateResult               <- computeEffect(runtime)(deploy)
+      EvaluateResult(cost, errors) = evaluateResult
+      newCheckpoint                <- runtime.space.createCheckpoint()
+      deployResult = InternalProcessedDeploy(
+        deploy,
+        Cost.toProto(cost),
+        newCheckpoint.log,
+        Seq.empty[trace.Event],
+        DeployStatus.fromErrors(errors)
+      )
+      newHash = if (errors.isEmpty) newCheckpoint.root else startHash
+    } yield (newHash, deployResult)
 
   private def replayEval(
       terms: Seq[InternalProcessedDeploy],
