@@ -250,10 +250,9 @@ class RuntimeManagerImpl[F[_]: Concurrent] private[rholang] (
   private def withRuntime[A](f: Runtime[F] => F[A]): F[A] =
     Sync[F].bracket(runtimeContainer.take)(f)(runtimeContainer.put)
 
-  private def withResetRuntime[R](hash: StateHash)(block: Runtime[F] => F[R]) =
+  private def withResetRuntime[R](hash: StateHash)(block: Runtime[F] => F[R]): F[R] =
     withRuntime(
-      runtime =>
-        runtime.space.reset(Blake2b256Hash.fromByteArray(hash.toByteArray)) >> block(runtime)
+      runtime => runtime.space.reset(blakeFromByteString(hash)) >> block(runtime)
     )
 
   private def toBondSeq(bondsMap: Par): Seq[Bond] =
@@ -327,7 +326,7 @@ class RuntimeManagerImpl[F[_]: Concurrent] private[rholang] (
       } yield (newHash, deployResults :+ deployResult)
     }
 
-    val initHashBlake = Blake2b256Hash.fromByteArray(initHash.toByteArray)
+    val initHashBlake = blakeFromByteString(initHash)
     terms.toList
       .foldM[F, Acc]((initHashBlake, Seq.empty))(evalSingle)
       .map {
@@ -394,7 +393,7 @@ class RuntimeManagerImpl[F[_]: Concurrent] private[rholang] (
         }
       }
 
-    doReplayEval(terms, Blake2b256Hash.fromByteArray(initHash.toByteArray))
+    doReplayEval(terms, blakeFromByteString(initHash))
   }
 
   private[this] def doInj(
@@ -412,6 +411,9 @@ class RuntimeManagerImpl[F[_]: Concurrent] private[rholang] (
       Cost(deploy.phloLimit)
     )
   }
+
+  private def blakeFromByteString[R](hash: StateHash): Blake2b256Hash =
+    Blake2b256Hash.fromByteArray(hash.toByteArray)
 
   private def blakeToByteString(hash: Blake2b256Hash): ByteString =
     ByteString.copyFrom(hash.bytes.toArray)
