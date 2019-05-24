@@ -10,7 +10,7 @@ import coop.rchain.casper.helper.{BlockUtil, HashSetCasperTestNode}
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.scalatestcontrib._
 import coop.rchain.casper.util.comm.TestNetwork
-import coop.rchain.casper.util.{ConstructDeploy, ProtoUtil}
+import coop.rchain.casper.util.{ConstructDeploy, ProtoUtil, RSpaceUtil}
 import coop.rchain.catscontrib.TaskContrib.TaskOps
 import coop.rchain.comm.rp.ProtocolHelper.packet
 import coop.rchain.comm.transport
@@ -28,6 +28,7 @@ import scala.collection.immutable
 class MultiParentCasperAddBlockSpec extends FlatSpec with Matchers with Inspectors {
 
   import MultiParentCasperTestUtil._
+  import RSpaceUtil._
 
   implicit val timeEff = new LogicalTime[Effect]
 
@@ -92,10 +93,11 @@ class MultiParentCasperAddBlockSpec extends FlatSpec with Matchers with Inspecto
   }
 
   it should "be able to create a chain of blocks from different deploys" in effectTest {
-    HashSetCasperTestNode.standaloneEff(genesis, validatorKeys.head).use { node =>
+    HashSetCasperTestNode.standaloneEff(genesis, validatorKeys.head).use { implicit node =>
       import node._
+      implicit val rm = node.runtimeManager
 
-      val start = System.currentTimeMillis()
+      val start = 0L
 
       val deployDatas = Vector(
         "contract @\"add\"(@x, @y, ret) = { ret!(x + y) }",
@@ -122,8 +124,13 @@ class MultiParentCasperAddBlockSpec extends FlatSpec with Matchers with Inspecto
         dag      <- MultiParentCasper[Effect].blockDag
         estimate <- MultiParentCasper[Effect].estimator(dag)
         _        = estimate shouldBe IndexedSeq(signedBlock2.blockHash)
-        result   = storage.contains("!(12)") should be(true)
-      } yield result
+        // channel is deterministic because of the fixed timestamp
+        data <- getDataAtPrivateChannel[Effect](
+                 signedBlock2,
+                 "272b27b8d34180d6d8bb73ff951190ec9db69ae08015f8a9d7d95e1d94fc38a6"
+               )
+        _ = data shouldBe Seq("12")
+      } yield ()
     }
   }
 

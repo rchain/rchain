@@ -39,6 +39,7 @@ object MultiParentCasperTestUtil {
       _      <- bs.close()
     } yield result
 
+  // TODO: remove
   def blockTuplespaceContents(
       block: BlockMessage
   )(implicit casper: MultiParentCasper[Effect]): Effect[String] = {
