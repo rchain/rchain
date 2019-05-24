@@ -14,7 +14,7 @@ final case class Validator(pk: PublicKey, stake: Long) extends CompiledRholangSo
   val code: String =
     s"""
        | new rl(`rho:registry:lookup`), PoSCh in {
-       |   rl!(`rho:id:pos`, *PoSCh)
+       |   rl!(`rho:blessed:pos`, *PoSCh)
        |   | for (@(_, PoS) <- PoSCh) {
        |     @PoS!("bond", $stake, Nil)
        |   }

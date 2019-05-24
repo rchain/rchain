@@ -867,27 +867,13 @@ class RegistryImpl[F[_]](
         try {
           val Some(Expr(GUri(uri))) = key.singleExpr
           if (uri.startsWith("rho:id:")) {
-            val initialTail = uri.substring("rho:id:".length)
-            val tail        = blessedContractResolver.getOrElse(initialTail, initialTail)
-            if (tail.size != 54) {
-              localFail()
-            } else {
-              // Could fail
-              // 256 bits plus 14 bit crc-14
-              val bytes: Array[Byte] = ZBase32.decode(tail, 270)
-              val crc: Short =
-                ((bytes(32).toShort & 0xff) | ((bytes(33).toShort & 0xfc) << 6)).toShort
-              if (crc == CRC14.compute(bytes.view.slice(0, 32))) {
-                val args = RootSeq(
-                  ListParWithRandom(
-                    Seq(parByteArray(ByteString.copyFrom(bytes, 0, 32)), ret),
-                    rand
-                  )
-                )
-                lookup(args, sequenceNumber)
-              } else {
-                localFail()
-              }
+            val id = uri.substring("rho:id:".length)
+            handleRhoIdLookup(id, sequenceNumber, ret, rand, localFail _, uri)
+          } else if (uri.startsWith("rho:blessed:")) {
+            val tail = uri.substring("rho:blessed:".length)
+            blessedContractResolver.get(tail) match {
+              case Some(id) => handleRhoIdLookup(id, sequenceNumber, ret, rand, localFail _, uri)
+              case None     => localFail()
             }
           } else {
             localFail()
@@ -897,6 +883,35 @@ class RegistryImpl[F[_]](
           case _: IllegalArgumentException => localFail()
         }
       case _ => F.unit
+    }
+
+  private def handleRhoIdLookup(
+      id: String,
+      sequenceNumber: Int,
+      ret: Par,
+      rand: Blake2b512Random,
+      localFail: () => F[Unit],
+      uri: String
+  ) =
+    if (id.size != 54) {
+      localFail()
+    } else {
+      // Could fail
+      // 256 bits plus 14 bit crc-14
+      val bytes: Array[Byte] = ZBase32.decode(id, 270)
+      val crc: Short =
+        ((bytes(32).toShort & 0xff) | ((bytes(33).toShort & 0xfc) << 6)).toShort
+      if (crc == CRC14.compute(bytes.view.slice(0, 32))) {
+        val args = RootSeq(
+          ListParWithRandom(
+            Seq(parByteArray(ByteString.copyFrom(bytes, 0, 32)), ret),
+            rand
+          )
+        )
+        lookup(args, sequenceNumber)
+      } else {
+        localFail()
+      }
     }
 
   def publicRegisterRandom(args: RootSeq[ListParWithRandom], sequenceNumber: Int): F[Unit] =

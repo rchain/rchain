@@ -22,7 +22,7 @@ in {
       ])
   } |
 
-  rl!(`rho:id:nonNegativeNumber`, *NonNegativeNumberCh) |
+  rl!(`rho:blessed:nonNegativeNumber`, *NonNegativeNumberCh) |
   for(@(_, NonNegativeNumber) <- NonNegativeNumberCh) {
     contract setup(returnCh) = {
       returnCh!([])

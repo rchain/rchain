@@ -156,7 +156,7 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
     val captureChannel = "__PURSEVALUE__"
     val deployData = ConstructDeploy.sourceDeploy(
       s"""new rl(`rho:registry:lookup`), NonNegativeNumberCh in {
-         |  rl!(`rho:id:nonNegativeNumber`, *NonNegativeNumberCh) |
+         |  rl!(`rho:blessed:nonNegativeNumber`, *NonNegativeNumberCh) |
          |  for(@(_, NonNegativeNumber) <- NonNegativeNumberCh) {
          |    @NonNegativeNumber!($purseValue, "nn")
          |  }

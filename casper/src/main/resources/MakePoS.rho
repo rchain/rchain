@@ -13,8 +13,8 @@ new
   MakePoS, rs(`rho:registry:insertSigned:ed25519`), uriOut,
   rl(`rho:registry:lookup`), ListOpsCh, EitherCh
 in {
-  rl!(`rho:id:listOps`, *ListOpsCh) |
-  rl!(`rho:id:either`, *EitherCh) |
+  rl!(`rho:blessed:listOps`, *ListOpsCh) |
+  rl!(`rho:blessed:either`, *EitherCh) |
   for(@(_, ListOps) <- ListOpsCh; @(_, Either) <- EitherCh) {
     contract MakePoS(purse, @minimumBond, @maximumBond, @initBonds, return) = {
       new 

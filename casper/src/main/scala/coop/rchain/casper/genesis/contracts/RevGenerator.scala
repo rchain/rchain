@@ -14,7 +14,7 @@ final case class RevGenerator(genesisAddress: RevAddress, userVaults: Seq[Vault]
 
   val code: String =
     s""" new rl(`rho:registry:lookup`), revVaultCh in {
-       #   rl!(`rho:id:revVault`, *revVaultCh)
+       #   rl!(`rho:blessed:revVault`, *revVaultCh)
        #   | for (@(_, RevVault) <- revVaultCh) {
        #     new genesisVaultCh in {
        #       @RevVault!(

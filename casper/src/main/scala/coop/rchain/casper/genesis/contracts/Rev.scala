@@ -25,11 +25,11 @@ class Rev[A](
     |  rl(`rho:registry:lookup`), MakeMintCh, WalletCheckCh, BasicWalletCh,
     |  MakePoSCh, SystemInstancesCh, revMintCh, posPurseCh, rev, posCh
     |in {
-    |  rl!(`rho:id:makeMint`, *MakeMintCh) |
-    |  rl!(`rho:id:walletCheck`, *WalletCheckCh) |
-    |  rl!(`rho:id:basicWallet`, *BasicWalletCh) |
-    |  rl!(`rho:id:makePos`, *MakePoSCh) |
-    |  rl!(`rho:id:systemInstancesRegistry`, *SystemInstancesCh) |
+    |  rl!(`rho:blessed:makeMint`, *MakeMintCh) |
+    |  rl!(`rho:blessed:walletCheck`, *WalletCheckCh) |
+    |  rl!(`rho:blessed:basicWallet`, *BasicWalletCh) |
+    |  rl!(`rho:blessed:makePos`, *MakePoSCh) |
+    |  rl!(`rho:blessed:systemInstancesRegistry`, *SystemInstancesCh) |
     |  for(
     |    @(_, MakeMint) <- MakeMintCh; @(_, WalletCheck) <- WalletCheckCh;
     |    @(_, BasicWallet) <- BasicWalletCh; @(_, MakePoS) <- MakePoSCh;

@@ -163,7 +163,7 @@ class RuntimeManagerImpl[F[_]: Concurrent] private[rholang] (
   private def bondsQuerySource(name: String = "__SCALA__"): String =
     s"""
        | new rl(`rho:registry:lookup`), SystemInstancesCh, posCh in {
-       |   rl!(`rho:id:systemInstancesRegistry`, *SystemInstancesCh) |
+       |   rl!(`rho:blessed:systemInstancesRegistry`, *SystemInstancesCh) |
        |   for(@(_, SystemInstancesRegistry) <- SystemInstancesCh) {
        |     @SystemInstancesRegistry!("lookup", "pos", *posCh) |
        |     for(pos <- posCh){ pos!("getBonds", "$name") }
@@ -190,7 +190,7 @@ class RuntimeManagerImpl[F[_]: Concurrent] private[rholang] (
   private def balanceQuerySource(user: ByteString, name: String = "__SCALA__"): String =
     s"""
        | new rl(`rho:registry:lookup`), revAddressOps(`rho:rev:address`), revVaultCh in {
-       |   rl!(`rho:id:revVault`, *revVaultCh)
+       |   rl!(`rho:blessed:revVault`, *revVaultCh)
        |   | for (@(_, RevVault) <- revVaultCh) {
        |     new vaultCh, revAddressCh in {
        |       revAddressOps!("fromPublicKey", "${Base16.encode(user.toByteArray)}".hexToBytes(), *revAddressCh)
@@ -240,7 +240,7 @@ class RuntimeManagerImpl[F[_]: Concurrent] private[rholang] (
   private def deployPaymentSource(amount: Long, name: String = "__SCALA__"): String =
     s"""
        | new rl(`rho:registry:lookup`), poSCh in {
-       |   rl!(`rho:id:pos`, *poSCh) |
+       |   rl!(`rho:blessed:pos`, *poSCh) |
        |   for(@(_, PoS) <- poSCh) {
        |     @PoS!("pay", $amount, "$name")
        |   }
