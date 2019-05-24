@@ -18,6 +18,7 @@ import coop.rchain.rspace.util._
 import org.lightningj.util.ZBase32
 
 import scala.annotation.tailrec
+import scala.collection.immutable.HashMap
 import scala.collection.{Seq => RootSeq}
 import scala.concurrent.Await
 import scala.concurrent.duration._
@@ -842,6 +843,23 @@ class RegistryImpl[F[_]](
       case _ => F.unit
     }
 
+  // TODO: Extract hardcoded id:<whatever> and maybe even pass in this resolver itself
+  val blessedContractResolver = HashMap[String, String](
+    "authKey"                 -> "4njqcsc65mt8xrfx9nsz7je7oucgywgd1tj1n1gjtw3ndsophyisro",
+    "basicWallet"             -> "3yicxut5xtx5tnmnneta7actof4yse3xangw4awzt8c8owqmddgyms",
+    "basicWalletFaucet"       -> "r3pfwhwyzfg3n3yhcndwuszkszr11rjdbksizz4eqbqnwg5w49kfo7",
+    "either"                  -> "j6trahbxycumerwpr5qype7j43b7eqh8auebwsa9nn68if47gswh73",
+    "listOps"                 -> "dputnspi15oxxnyymjrpu7rkaok3bjkiwq84z7cqcrx4ktqfpyapn4",
+    "lockbox"                 -> "9dsr55z1js13x346yhhecx66ns486i3yqf6jafrd9p9hdrrbxjqmyu",
+    "makeMint"                -> "exunyijimapk7z43g3bbr69awqdz54kyroj9q43jgu3dh567fxsftx",
+    "makePos"                 -> "nqt875jea4rr83383ys6guzsbebg6k7o7uhrint6d7km67886c4y4s",
+    "nonNegativeNumber"       -> "nd74ztexkao5awjhj95e3octkza7tydwiy7euthnyrt5ihgi9rj495",
+    "pos"                     -> "cnec3pa8prp4out3yc8facon6grm3xbsotpd4ckjfx8ghuw77xadzt",
+    "revVault"                -> "1o93uitkrjfubh43jt19owanuezhntag5wh74c6ur5feuotpi73q8z",
+    "systemInstancesRegistry" -> "wdwc36f4ixa6xacck3ddepmgueum7zueuczgthcqp6771kdu8jogm8",
+    "walletCheck"             -> "oqez475nmxx9ktciscbhps18wnmnwtm6egziohc3rkdzekkmsrpuyt"
+  )
+
   def publicLookup(args: RootSeq[ListParWithRandom], sequenceNumber: Int): F[Unit] =
     args match {
       case Seq(ListParWithRandom(Seq(key, ret), rand)) =>
@@ -849,7 +867,8 @@ class RegistryImpl[F[_]](
         try {
           val Some(Expr(GUri(uri))) = key.singleExpr
           if (uri.startsWith("rho:id:")) {
-            val tail = uri.substring("rho:id:".length)
+            val initialTail = uri.substring("rho:id:".length)
+            val tail        = blessedContractResolver.getOrElse(initialTail, initialTail)
             if (tail.size != 54) {
               localFail()
             } else {
