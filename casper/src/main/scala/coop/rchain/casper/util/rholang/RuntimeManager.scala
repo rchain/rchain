@@ -401,7 +401,7 @@ class RuntimeManagerImpl[F[_]: Concurrent] private[rholang] (
       deploy: DeployData,
       reducer: ChargingReducer[F],
       errorLog: ErrorLog[F]
-  )(implicit C: _cost[F]) = {
+  )(implicit C: _cost[F]): F[EvaluateResult] = {
     implicit val rand: Blake2b512Random = Blake2b512Random(
       DeployData.toByteArray(ProtoUtil.stripDeployData(deploy))
     )
