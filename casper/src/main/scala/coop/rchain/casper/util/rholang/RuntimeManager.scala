@@ -329,11 +329,7 @@ class RuntimeManagerImpl[F[_]: Concurrent] private[rholang] (
     val initHashBlake = blakeFromByteString(initHash)
     terms.toList
       .foldM[F, Acc]((initHashBlake, Seq.empty))(evalSingle)
-      .map {
-        case (hash, deployResults) =>
-          val hashByteString = blakeToByteString(hash)
-          (hashByteString, deployResults)
-      }
+      .map(_.bimap(blakeToByteString, x => x))
   }
 
   private def replayEval(
