@@ -3,7 +3,7 @@ package coop.rchain.rspace.nextgenrspace.history
 import java.nio.charset.StandardCharsets
 
 import cats.Applicative
-import cats.effect.Sync
+import cats.effect.{IO, Sync}
 import cats.implicits._
 import coop.rchain.rspace.{
   internal,
@@ -22,6 +22,8 @@ import coop.rchain.rspace.internal._
 import scodec.Codec
 import scodec.bits.{BitVector, ByteVector}
 import HistoryRepositoryImpl._
+import com.typesafe.scalalogging.Logger
+import monix.execution.schedulers.TestScheduler.Task
 
 final case class HistoryRepositoryImpl[F[_]: Sync, C, P, A, K](
     history: History[F],
@@ -111,6 +113,42 @@ final case class HistoryRepositoryImpl[F[_]: Sync, C, P, A, K](
 
   type Result = (Blake2b256Hash, Option[PersistedData], HistoryAction)
 
+  protected[this] val dataLogger: F[Logger] =
+    Sync[F].delay(Logger("coop.rchain.rspace.datametrics"))
+
+  private def measure(actions: List[HotStoreAction]): F[Unit] =
+    for {
+      d <- dataLogger
+      _ = d.whenDebugEnabled {
+        computeMeasure(actions).foreach(p => d.debug(p))
+      }
+    } yield ()
+
+  private def computeMeasure(actions: List[HotStoreAction]): List[String] =
+    actions.map {
+      case i: InsertData[C, A] =>
+        val key  = hashDataChannel(i.channel).bytes
+        val data = encodeData(i.data)
+        s"${key.toHex};insert-data;${data.length};${i.data.length}"
+      case i: InsertContinuations[C, P, K] =>
+        val key  = hashContinuationsChannels(i.channels).bytes
+        val data = encodeContinuations(i.continuations)
+        s"${key.toHex};insert-continuation;${data.length};${i.continuations.length}"
+      case i: InsertJoins[C] =>
+        val key  = hashJoinsChannel(i.channel).bytes
+        val data = encodeJoins(i.joins)
+        s"${key.toHex};insert-join;${data.length}"
+      case d: DeleteData[C] =>
+        val key = hashDataChannel(d.channel).bytes
+        s"${key.toHex};delete-data;0"
+      case d: DeleteContinuations[C] =>
+        val key = hashContinuationsChannels(d.channels).bytes
+        s"${key.toHex};delete-continuation;0"
+      case d: DeleteJoins[C] =>
+        val key = hashJoinsChannel(d.channel).bytes
+        s"${key.toHex};delete-join;0"
+    }
+
   private def transform(actions: List[HotStoreAction]): List[Result] =
     actions.map {
       case i: InsertData[C, A] =>
@@ -160,6 +198,7 @@ final case class HistoryRepositoryImpl[F[_]: Sync, C, P, A, K](
       historyActions <- storeLeaves(trieActions)
       next           <- history.process(historyActions)
       _              <- rootsRepository.commit(next.root)
+      _              = measure(actions)
     } yield this.copy(history = next)
 
   override def reset(root: Blake2b256Hash): F[HistoryRepository[F, C, P, A, K]] =
