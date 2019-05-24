@@ -356,10 +356,13 @@ class RuntimeManagerImpl[F[_]: Concurrent] private[rholang] (
               //TODO: compare replay deploy cost to given deploy cost
               EvaluateResult(cost, errors) = replayEvaluateResult
               cont <- DeployStatus.fromErrors(errors) match {
-                       case int: InternalErrors => Left((Some(deploy), int)).pure[F]
+                       case int: InternalErrors =>
+                         (deploy.some, int: Failed).asLeft[StateHash].pure[F]
                        case replayStatus =>
                          if (status.isFailed != replayStatus.isFailed)
-                           Left((Some(deploy), ReplayStatusMismatch(replayStatus, status))).pure[F]
+                           (deploy.some, ReplayStatusMismatch(replayStatus, status): Failed)
+                             .asLeft[StateHash]
+                             .pure[F]
                          else if (errors.nonEmpty) doReplayEval(rem, hash)
                          else {
                            runtime.replaySpace
@@ -369,16 +372,12 @@ class RuntimeManagerImpl[F[_]: Concurrent] private[rholang] (
                                case Right(newCheckpoint) =>
                                  doReplayEval(rem, newCheckpoint.root)
                                case Left(ex: ReplayException) =>
-                                 Either
-                                   .left[(Option[DeployData], Failed), StateHash](
-                                     (none[DeployData], UnusedCommEvent(ex))
-                                   )
+                                 (none[DeployData], UnusedCommEvent(ex): Failed)
+                                   .asLeft[StateHash]
                                    .pure[F]
                                case Left(ex) =>
-                                 Either
-                                   .left[(Option[DeployData], Failed), StateHash](
-                                     (none[DeployData], UserErrors(Vector(ex)))
-                                   )
+                                 (none[DeployData], UserErrors(Vector(ex)): Failed)
+                                   .asLeft[StateHash]
                                    .pure[F]
                              }
                          }
