@@ -214,7 +214,7 @@ class RuntimeManagerImpl[F[_]: Concurrent] private[rholang] (
 
   def computeDeployPayment(start: StateHash)(user: ByteString, amount: Long): F[StateHash] =
     withResetRuntime(start)(
-      computeDeployPayment(_)(user, amount).map(cp => ByteString.copyFrom(cp.root.bytes.toArray))
+      computeDeployPayment(_)(user, amount).map(cp => blakeToByteString(cp.root))
     )
 
   private def computeDeployPayment(
@@ -332,7 +332,7 @@ class RuntimeManagerImpl[F[_]: Concurrent] private[rholang] (
       .foldM[F, Acc]((initHashBlake, Seq.empty))(evalSingle)
       .map {
         case (hash, deployResults) =>
-          val hashByteString = ByteString.copyFrom(hash.bytes.toArray)
+          val hashByteString = blakeToByteString(hash)
           (hashByteString, deployResults)
       }
   }
@@ -388,7 +388,7 @@ class RuntimeManagerImpl[F[_]: Concurrent] private[rholang] (
           case _ =>
             Either
               .right[(Option[DeployData], Failed), StateHash](
-                ByteString.copyFrom(hash.bytes.toArray)
+                blakeToByteString(hash)
               )
               .pure[F]
         }
@@ -413,6 +413,8 @@ class RuntimeManagerImpl[F[_]: Concurrent] private[rholang] (
     )
   }
 
+  private def blakeToByteString(hash: Blake2b256Hash): ByteString =
+    ByteString.copyFrom(hash.bytes.toArray)
 }
 
 object RuntimeManager {
