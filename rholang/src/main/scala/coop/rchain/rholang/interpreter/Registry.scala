@@ -898,26 +898,26 @@ class RegistryImpl[F[_]](
       rand: Blake2b512Random,
       localFail: () => F[Unit],
       uri: String
-  ) =
-    if (id.size != 54) {
-      localFail()
-    } else {
-      // Could fail
+  ): F[Unit] =
+    Try {
       // 256 bits plus 14 bit crc-14
-      val bytes: Array[Byte] = ZBase32.decode(id, 270)
-      val crc: Short =
-        ((bytes(32).toShort & 0xff) | ((bytes(33).toShort & 0xfc) << 6)).toShort
-      if (crc == CRC14.compute(bytes.view.slice(0, 32))) {
-        val args = RootSeq(
-          ListParWithRandom(
-            Seq(parByteArray(ByteString.copyFrom(bytes, 0, 32)), ret),
-            rand
+      ZBase32.decode(id, 270)
+    } match {
+      case Success(bytes) =>
+        val crc: Short =
+          ((bytes(32).toShort & 0xff) | ((bytes(33).toShort & 0xfc) << 6)).toShort
+        if (crc == CRC14.compute(bytes.view.slice(0, 32))) {
+          val args = RootSeq(
+            ListParWithRandom(
+              Seq(parByteArray(ByteString.copyFrom(bytes, 0, 32)), ret),
+              rand
+            )
           )
-        )
-        lookup(args, sequenceNumber)
-      } else {
-        localFail()
-      }
+          lookup(args, sequenceNumber)
+        } else {
+          localFail()
+        }
+      case Failure(_) => localFail()
     }
 
   def publicRegisterRandom(args: RootSeq[ListParWithRandom], sequenceNumber: Int): F[Unit] =
