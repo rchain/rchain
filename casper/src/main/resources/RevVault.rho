@@ -21,9 +21,9 @@ new
   _getOrCreate,
   _revVault
 in {
-  rl!(`rho:blessed:makeMint`, *MakeMintCh) |
-  rl!(`rho:blessed:authKey`, *AuthKeyCh) |
-  rl!(`rho:blessed:either`, *EitherCh) |
+  rl!(`rho:lang:makeMint`, *MakeMintCh) |
+  rl!(`rho:lang:authKey`, *AuthKeyCh) |
+  rl!(`rho:lang:either`, *EitherCh) |
   for(@(_, MakeMint) <- MakeMintCh; @(_, AuthKey) <- AuthKeyCh; @(_, Either) <- EitherCh) {
 
     new mintCh, vaultMapStore in {

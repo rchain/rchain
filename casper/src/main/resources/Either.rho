@@ -13,7 +13,7 @@
 //  ==> signature == 29c68a1d8e792eeaf88158cfcb9a6038ebdfea81c7193025c41f3f3b6731e53c3d593b8d773df11caee97d5933623eb9fa60992cab75b770cacfb873f6182c0a
 //URI derived from pk == `rho:id:j6trahbxycumerwpr5qype7j43b7eqh8auebwsa9nn68if47gswh73`
 new Either, rs(`rho:registry:insertSigned:ed25519`), uriOut, rl(`rho:registry:lookup`), ListOpsCh in {
-  rl!(`rho:blessed:listOps`, *ListOpsCh) |
+  rl!(`rho:lang:listOps`, *ListOpsCh) |
   for(@(_, ListOps) <- ListOpsCh) {
 
     // Like fromNillable, except it takes `valueCh` and reads it to obtain the `value` parameter

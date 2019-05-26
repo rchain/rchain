@@ -120,7 +120,7 @@ class MultiParentCasperRholangSpec extends FlatSpec with Matchers with Inspector
            |  walletCh, rl(`rho:registry:lookup`), SystemInstancesCh, faucetCh,
            |  rs(`rho:registry:insertSigned:ed25519`), uriOut
            |in {
-           |  rl!(`rho:blessed:systemInstancesRegistry`, *SystemInstancesCh) |
+           |  rl!(`rho:lang:systemInstancesRegistry`, *SystemInstancesCh) |
            |  for(@(_, SystemInstancesRegistry) <- SystemInstancesCh) {
            |    @SystemInstancesRegistry!("lookup", "faucet", *faucetCh) |
            |    for(faucet <- faucetCh){ faucet!($amount, "ed25519", "$pkStr", *walletCh) } |

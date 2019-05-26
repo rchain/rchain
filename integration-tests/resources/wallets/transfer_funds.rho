@@ -3,7 +3,7 @@ new
   stdout(`rho:io:stdout`), log
 in {
 
-  rl!(`rho:blessed:revVault`, *RevVaultCh) |
+  rl!(`rho:rchain:revVault`, *RevVaultCh) |
   for (@(_, RevVault) <- RevVaultCh) {
 
     log!(("3.transfer_funds.rho")) |

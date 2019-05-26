@@ -1,6 +1,6 @@
 package coop.rchain.rholang.interpreter
 import com.google.protobuf.ByteString
-import coop.rchain.models.Expr.ExprInstance.{ETupleBody, GBool, GByteArray, GInt, GString}
+import coop.rchain.models.Expr.ExprInstance._
 import coop.rchain.models.{ETuple, Expr, Par}
 
 object RhoType {
@@ -48,5 +48,14 @@ object RhoType {
       p.singleExpr().collect {
         case Expr(ETupleBody(ETuple(Seq(a, b), _, _))) => (a, b)
       }
+  }
+
+  object Uri {
+    def unapply(p: Par): Option[String] =
+      p.singleExpr().collect {
+        case Expr(GUri(s)) => s
+      }
+
+    def apply(s: String): Par = GString(s)
   }
 }

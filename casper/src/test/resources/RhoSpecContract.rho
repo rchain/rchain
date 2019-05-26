@@ -20,7 +20,7 @@ new
   uriOut
 in {
   stdlog!("debug", "Loading RhoSpec") |
-  rl!(`rho:blessed:listOps`, *ListOpsCh) |
+  rl!(`rho:lang:listOps`, *ListOpsCh) |
   for(@(_, ListOps) <- ListOpsCh) {
     contract RhoSpec(@"testSuite", setup, @tests) = {
       stdlog!("debug", "Defining the testSuite") |

@@ -16,7 +16,7 @@ new
   MakeMint, rs(`rho:registry:insertSigned:ed25519`), uriOut,
   rl(`rho:registry:lookup`), NonNegativeNumberCh
 in {
-  rl!(`rho:blessed:nonNegativeNumber`, *NonNegativeNumberCh) |
+  rl!(`rho:lang:nonNegativeNumber`, *NonNegativeNumberCh) |
   for(@(_, NonNegativeNumber) <- NonNegativeNumberCh) {
     contract MakeMint(return) = {
       new thisMint, internalMakePurse, decr in {
