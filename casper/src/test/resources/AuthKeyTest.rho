@@ -11,7 +11,7 @@ new
 in {
   stdlog!("info", "Starting AuthKey test") |
   rl!(`rho:id:6wnujzcraztjfg941skrtbdkdgbko8nuaqihuhn15s66oz8ro5gwbb`, *RhoSpecCh) |
-  rl!(`rho:lang:authKey`, *AuthKeyCh) |
+  rl!(`rho:rchain:authKey`, *AuthKeyCh) |
   for(@(_, RhoSpec) <- RhoSpecCh; @(_, AuthKey) <- AuthKeyCh) {
     stdlog!("info", "RhoSpec and AuthKey found") |
     @RhoSpec!("testSuite", *setup,
