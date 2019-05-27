@@ -49,7 +49,6 @@ trait RuntimeManager[F[_]] {
   ): F[(StateHash, StateHash, Seq[InternalProcessedDeploy])]
   def storageRepr(hash: StateHash): F[Option[String]]
   def computeBonds(hash: StateHash): F[Seq[Bond]]
-  def computeBalance(start: StateHash)(user: ByteString): F[Long]
   def computeDeployPayment(start: StateHash)(user: ByteString, amount: Long): F[StateHash]
   def getData(hash: StateHash)(channel: Par): F[Seq[Par]]
   def getContinuation(hash: StateHash)(
@@ -167,47 +166,6 @@ class RuntimeManagerImpl[F[_]: Concurrent] private[rholang] (
        |   for(@(_, SystemInstancesRegistry) <- SystemInstancesCh) {
        |     @SystemInstancesRegistry!("lookup", "pos", *posCh) |
        |     for(pos <- posCh){ pos!("getBonds", "$name") }
-       |   }
-       | }
-     """.stripMargin
-
-  def computeBalance(start: StateHash)(user: ByteString): F[Long] =
-    withResetRuntime(start)(computeBalance(_)(user))
-
-  private def computeBalance(runtime: Runtime[F])(user: ByteString): F[Long] =
-    computeEffect(runtime)(
-      ConstructDeploy.sourceDeployNow(balanceQuerySource(user)).withDeployer(user)
-    ) >> {
-      getResult(runtime)() >>= {
-        case Seq(RhoType.Number(balance)) => balance.pure[F]
-        case Seq(RhoType.String(error)) =>
-          BugFoundError(s"Balance query failed unexpectedly: $error").raiseError[F, Long]
-        case other =>
-          BugFoundError(s"Balance query returned unexpected result: $other").raiseError[F, Long]
-      }
-    }
-
-  private def balanceQuerySource(user: ByteString, name: String = "__SCALA__"): String =
-    s"""
-       | new rl(`rho:registry:lookup`), revAddressOps(`rho:rev:address`), revVaultCh in {
-       |   rl!(`rho:rchain:revVault`, *revVaultCh)
-       |   | for (@(_, RevVault) <- revVaultCh) {
-       |     new vaultCh, revAddressCh in {
-       |       revAddressOps!("fromPublicKey", "${Base16.encode(user.toByteArray)}".hexToBytes(), *revAddressCh)
-       |       | for(@revAddress <- revAddressCh) {
-       |         @RevVault!("findOrCreate", revAddress, *vaultCh)
-       |         | for(@vaultEither <- vaultCh){
-       |           match vaultEither {
-       |             (true, vault) => {
-       |               @vault!("balance", "$name")
-       |             }
-       |             (false, error) => {
-       |               @"$name"!(error)
-       |             }
-       |           }
-       |         }
-       |       }
-       |     }
        |   }
        | }
      """.stripMargin
@@ -470,9 +428,6 @@ object RuntimeManager {
 
       override def computeBonds(hash: StateHash): T[F, scala.Seq[Bond]] =
         runtimeManager.computeBonds(hash).liftM[T]
-
-      override def computeBalance(start: StateHash)(user: ByteString): T[F, Long] =
-        runtimeManager.computeBalance(start)(user).liftM[T]
 
       override def computeDeployPayment(
           start: StateHash
