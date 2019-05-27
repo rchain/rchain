@@ -80,7 +80,7 @@ object InterpreterUtil {
           Log[F].warn(
             s"Computed pre-state hash ${PrettyPrinter.buildString(computedPreStateHash)} does not equal block's pre-state hash ${PrettyPrinter
               .buildString(preStateHash)}"
-          ) *> Right(none[StateHash]).leftCast[BlockException].pure[F]
+          ) >> Right(none[StateHash]).leftCast[BlockException].pure[F]
         }
     }
 
@@ -104,15 +104,15 @@ object InterpreterUtil {
                   .buildString(deploy)}: ${exs.mkString("\n")}")
               ).asLeft[Option[StateHash]].pure[F]
             case UserErrors(errors: Vector[Throwable]) =>
-              Log[F].warn(s"Found user error(s) ${errors.map(_.getMessage).mkString("\n")}") *>
+              Log[F].warn(s"Found user error(s) ${errors.map(_.getMessage).mkString("\n")}") >>
                 none[StateHash].asRight[BlockException].pure[F]
             case ReplayStatusMismatch(replay: DeployStatus, orig: DeployStatus) =>
               Log[F].warn(
                 s"Found replay status mismatch; replay failure is ${replay.isFailed} and orig failure is ${orig.isFailed}"
-              ) *>
+              ) >>
                 none[StateHash].asRight[BlockException].pure[F]
             case UnknownFailure =>
-              Log[F].warn(s"Found unknown failure") *>
+              Log[F].warn(s"Found unknown failure") >>
                 none[StateHash].asRight[BlockException].pure[F]
             case UnusedCommEvent(_) =>
               Sync[F].raiseError(new RuntimeException("found UnusedCommEvent"))
@@ -120,7 +120,7 @@ object InterpreterUtil {
         case Left((None, status)) =>
           status match {
             case UnusedCommEvent(ex: ReplayException) =>
-              Log[F].warn(s"Found unused comm event ${ex.getMessage}") *>
+              Log[F].warn(s"Found unused comm event ${ex.getMessage}") >>
                 none[StateHash].asRight[BlockException].pure[F]
             case InternalErrors(_) => throw new RuntimeException("found InternalErrors")
             case ReplayStatusMismatch(_, _) =>
@@ -137,7 +137,7 @@ object InterpreterUtil {
             // return no state hash, do not update the state hash set
             Log[F].warn(
               s"Tuplespace hash ${tsHash.getOrElse(ByteString.EMPTY)} does not match computed hash $computedStateHash."
-            ) *>
+            ) >>
               none[StateHash].asRight[BlockException].pure[F]
 
           }
