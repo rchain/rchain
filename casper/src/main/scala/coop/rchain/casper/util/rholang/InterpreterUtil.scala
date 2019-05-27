@@ -65,7 +65,7 @@ object InterpreterUtil {
   ): F[Either[BlockException, Option[StateHash]]] =
     possiblePreStateHash match {
       case Left(ex) =>
-        Left(BlockException(ex)).rightCast[Option[StateHash]].pure[F]
+        BlockException(ex).asLeft[Option[StateHash]].pure[F]
       case Right(computedPreStateHash) =>
         if (preStateHash == computedPreStateHash) {
           processPreStateHash[F](
@@ -99,33 +99,29 @@ object InterpreterUtil {
         case Left((Some(deploy), status)) =>
           status match {
             case InternalErrors(exs) =>
-              Left(
-                BlockException(
-                  new Exception(s"Internal errors encountered while processing ${PrettyPrinter
-                    .buildString(deploy)}: ${exs.mkString("\n")}")
-                )
-              ).rightCast[Option[StateHash]].pure[F]
+              BlockException(
+                new Exception(s"Internal errors encountered while processing ${PrettyPrinter
+                  .buildString(deploy)}: ${exs.mkString("\n")}")
+              ).asLeft[Option[StateHash]].pure[F]
             case UserErrors(errors: Vector[Throwable]) =>
-              Log[F].warn(s"Found user error(s) ${errors.map(_.getMessage).mkString("\n")}") *> Right(
-                none[StateHash]
-              ).leftCast[BlockException].pure[F]
+              Log[F].warn(s"Found user error(s) ${errors.map(_.getMessage).mkString("\n")}") *>
+                none[StateHash].asRight[BlockException].pure[F]
             case ReplayStatusMismatch(replay: DeployStatus, orig: DeployStatus) =>
               Log[F].warn(
                 s"Found replay status mismatch; replay failure is ${replay.isFailed} and orig failure is ${orig.isFailed}"
-              ) *> Right(none[StateHash]).leftCast[BlockException].pure[F]
+              ) *>
+                none[StateHash].asRight[BlockException].pure[F]
             case UnknownFailure =>
-              Log[F].warn(s"Found unknown failure") *> Right(none[StateHash])
-                .leftCast[BlockException]
-                .pure[F]
+              Log[F].warn(s"Found unknown failure") *>
+                none[StateHash].asRight[BlockException].pure[F]
             case UnusedCommEvent(_) =>
               Sync[F].raiseError(new RuntimeException("found UnusedCommEvent"))
           }
         case Left((None, status)) =>
           status match {
             case UnusedCommEvent(ex: ReplayException) =>
-              Log[F].warn(s"Found unused comm event ${ex.getMessage}") *> Right(none[StateHash])
-                .leftCast[BlockException]
-                .pure[F]
+              Log[F].warn(s"Found unused comm event ${ex.getMessage}") *>
+                none[StateHash].asRight[BlockException].pure[F]
             case InternalErrors(_) => throw new RuntimeException("found InternalErrors")
             case ReplayStatusMismatch(_, _) =>
               throw new RuntimeException("found ReplayStatusMismatch")
@@ -135,13 +131,14 @@ object InterpreterUtil {
         case Right(computedStateHash) =>
           if (tsHash.contains(computedStateHash)) {
             // state hash in block matches computed hash!
-            Right(Option(computedStateHash)).leftCast[BlockException].pure[F]
+            computedStateHash.some.asRight[BlockException].pure[F]
           } else {
             // state hash in block does not match computed hash -- invalid!
             // return no state hash, do not update the state hash set
             Log[F].warn(
               s"Tuplespace hash ${tsHash.getOrElse(ByteString.EMPTY)} does not match computed hash $computedStateHash."
-            ) *> Right(none[StateHash]).leftCast[BlockException].pure[F]
+            ) *>
+              none[StateHash].asRight[BlockException].pure[F]
 
           }
       }
@@ -159,10 +156,10 @@ object InterpreterUtil {
                  case Right(preStateHash) =>
                    runtimeManager.computeState(preStateHash)(deploys, blockTime).map {
                      case (postStateHash, processedDeploys) =>
-                       Right(preStateHash, postStateHash, processedDeploys)
+                       (preStateHash, postStateHash, processedDeploys).asRight[Throwable]
                    }
                  case Left(err) =>
-                   Left(err).pure[F]
+                   err.asLeft[(StateHash, StateHash, Seq[InternalProcessedDeploy])].pure[F]
                }
     } yield result
 
@@ -176,10 +173,10 @@ object InterpreterUtil {
     parentTuplespaces match {
       // For genesis, use empty trie's root hash
       case Seq() =>
-        Right(runtimeManager.emptyStateHash).leftCast[Throwable].pure[F]
+        runtimeManager.emptyStateHash.asRight[Throwable].pure[F]
 
       case Seq((_, parentStateHash)) =>
-        Right(parentStateHash).leftCast[Throwable].pure[F]
+        parentStateHash.asRight[Throwable].pure[F]
 
       case (_, initStateHash) +: _ =>
         computeMultiParentsPostState[F](parents, dag, runtimeManager, initStateHash)
