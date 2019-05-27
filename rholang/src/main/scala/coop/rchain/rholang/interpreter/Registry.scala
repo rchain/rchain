@@ -875,19 +875,19 @@ class RegistryImpl[F[_]](
   def publicLookup(args: RootSeq[ListParWithRandom], sequenceNumber: Int): F[Unit] =
     args match {
       case Seq(ListParWithRandom(Seq(RhoType.Uri(uri), ret), rand)) =>
-        def localFail() = fail(ret, rand, sequenceNumber)
-        val idUri       = WithPrefix("rho:id:")
-        val langUri     = WithPrefix("rho:lang:")
-        val rchainUri   = WithPrefix("rho:rchain:")
+        val idUri     = WithPrefix("rho:id:")
+        val langUri   = WithPrefix("rho:lang:")
+        val rchainUri = WithPrefix("rho:rchain:")
 
-        uri match {
-          case idUri(id) => handleRhoIdLookup(id, sequenceNumber, ret, rand, localFail _, uri)
+        val result = uri match {
+          case idUri(id) => handleRhoIdLookup(id, sequenceNumber, ret, rand, uri)
           case langUri(BlessedContract(id)) =>
-            handleRhoIdLookup(id, sequenceNumber, ret, rand, localFail _, uri)
+            handleRhoIdLookup(id, sequenceNumber, ret, rand, uri)
           case rchainUri(BlessedContract(id)) =>
-            handleRhoIdLookup(id, sequenceNumber, ret, rand, localFail _, uri)
-          case _ => localFail()
+            handleRhoIdLookup(id, sequenceNumber, ret, rand, uri)
+          case _ => None
         }
+        result.getOrElse(fail(ret, rand, sequenceNumber))
       case _ => F.unit
     }
 
@@ -896,29 +896,26 @@ class RegistryImpl[F[_]](
       sequenceNumber: Int,
       ret: Par,
       rand: Blake2b512Random,
-      localFail: () => F[Unit],
       uri: String
-  ): F[Unit] =
-    Try {
-      // 256 bits plus 14 bit crc-14
-      ZBase32.decode(id, 270)
-    } match {
-      case Success(bytes) =>
-        val crc: Short =
-          ((bytes(32).toShort & 0xff) | ((bytes(33).toShort & 0xfc) << 6)).toShort
-        if (crc == CRC14.compute(bytes.view.slice(0, 32))) {
-          val args = RootSeq(
-            ListParWithRandom(
-              Seq(parByteArray(ByteString.copyFrom(bytes, 0, 32)), ret),
-              rand
-            )
-          )
-          lookup(args, sequenceNumber)
-        } else {
-          localFail()
-        }
-      case Failure(_) => localFail()
-    }
+  ): Option[F[Unit]] =
+    for {
+      bytes   <- Try { ZBase32.decode(id, 270) }.toOption
+      payload <- verifyCrc(bytes)
+      args = Seq(
+        ListParWithRandom(
+          Seq(parByteArray(ByteString.copyFrom(payload)), ret),
+          rand
+        )
+      )
+    } yield lookup(args, sequenceNumber)
+
+  private def verifyCrc(bytes: Array[Byte]): Option[Array[Byte]] = {
+    val crc = ((bytes(32).toShort & 0xff) | ((bytes(33).toShort & 0xfc) << 6)).toShort
+
+    if (crc == CRC14.compute(bytes.view.slice(0, 32)))
+      Some(bytes.slice(0, 32))
+    else None
+  }
 
   def publicRegisterRandom(args: RootSeq[ListParWithRandom], sequenceNumber: Int): F[Unit] =
     args match {
