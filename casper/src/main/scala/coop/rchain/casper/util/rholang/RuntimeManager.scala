@@ -341,13 +341,12 @@ class RuntimeManagerImpl[F[_]: Concurrent] private[rholang] (
       } yield cont
     }
 
-    val result = terms.toList.foldM(
-      Blake2b256Hash.fromByteString(initHash).asRight[(Option[DeployData], Failed)]
-    ) {
-      case (Left(x), _)          => x.asLeft[Blake2b256Hash].pure[F]
-      case (Right(hash), deploy) => replaySingle(hash, deploy)
+    val initHashBlake = Blake2b256Hash.fromByteString(initHash)
+    val result = terms.toList.foldM(initHashBlake.asRight[(Option[DeployData], Failed)]) {
+      case (hash, deploy) =>
+        hash.flatTraverse(replaySingle(_, deploy))
     }
-    result.map(_.map(_.toByteString))
+    result.nested.map(_.toByteString).value
   }
 
   private[this] def doInj(
