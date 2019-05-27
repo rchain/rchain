@@ -1,5 +1,6 @@
 package coop.rchain.rspace
 
+import com.google.protobuf.ByteString
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.hash.Blake2b256
 import coop.rchain.rspace.internal.codecSeq
@@ -25,6 +26,9 @@ class Blake2b256Hash private (val bytes: ByteVector) {
 
   override def hashCode(): Int =
     bytes.hashCode
+
+  def toByteString: ByteString =
+    ByteString.copyFrom(bytes.toArray)
 }
 
 object Blake2b256Hash {
@@ -59,6 +63,9 @@ object Blake2b256Hash {
 
   def fromByteArray(bytes: Array[Byte]): Blake2b256Hash =
     new Blake2b256Hash(ByteVector(bytes))
+
+  def fromByteString(byteString: ByteString): Blake2b256Hash =
+    new Blake2b256Hash(ByteVector(byteString.toByteArray))
 
   implicit val codecBlake2b256Hash: Codec[Blake2b256Hash] =
     fixedSizeBytes(length.toLong, bytes).as[Blake2b256Hash]
