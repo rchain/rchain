@@ -846,7 +846,7 @@ class RegistryImpl[F[_]](
 
   // TODO: Extract hardcoded id:<whatever> and maybe even pass in this resolver itself
   object BlessedContract {
-    private val idMap: HashMap[String, String] = HashMap[String, String](
+    private val idMap = Map[String, String](
       "authKey"                 -> "4njqcsc65mt8xrfx9nsz7je7oucgywgd1tj1n1gjtw3ndsophyisro",
       "basicWallet"             -> "3yicxut5xtx5tnmnneta7actof4yse3xangw4awzt8c8owqmddgyms",
       "basicWalletFaucet"       -> "r3pfwhwyzfg3n3yhcndwuszkszr11rjdbksizz4eqbqnwg5w49kfo7",
