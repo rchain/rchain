@@ -56,6 +56,6 @@ object RhoType {
         case Expr(GUri(s)) => s
       }
 
-    def apply(s: String): Par = GString(s)
+    def apply(s: String): Par = GUri(s)
   }
 }
