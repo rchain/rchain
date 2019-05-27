@@ -214,7 +214,7 @@ class RuntimeManagerImpl[F[_]: Concurrent] private[rholang] (
 
   def computeDeployPayment(start: StateHash)(user: ByteString, amount: Long): F[StateHash] =
     withResetRuntime(start)(
-      computeDeployPayment(_)(user, amount).map(cp => blakeToByteString(cp.root))
+      computeDeployPayment(_)(user, amount).map(_.root.toByteString)
     )
 
   private def computeDeployPayment(
@@ -252,7 +252,7 @@ class RuntimeManagerImpl[F[_]: Concurrent] private[rholang] (
 
   private def withResetRuntime[R](hash: StateHash)(block: Runtime[F] => F[R]): F[R] =
     withRuntime(
-      runtime => runtime.space.reset(blakeFromByteString(hash)) >> block(runtime)
+      runtime => runtime.space.reset(Blake2b256Hash.fromByteString(hash)) >> block(runtime)
     )
 
   private def toBondSeq(bondsMap: Par): Seq[Bond] =
@@ -306,14 +306,14 @@ class RuntimeManagerImpl[F[_]: Concurrent] private[rholang] (
       processDeploy: (Blake2b256Hash, DeployData) => F[(Blake2b256Hash, InternalProcessedDeploy)]
   ): F[(StateHash, Seq[InternalProcessedDeploy])] = {
 
-    val initHashBlake = blakeFromByteString(initHash)
+    val initHashBlake = Blake2b256Hash.fromByteString(initHash)
     terms.toList
       .foldM((initHashBlake, Seq.empty[InternalProcessedDeploy])) {
         case ((hash, results), deploy) => {
           processDeploy(hash, deploy).map(_.bimap(identity, results :+ _))
         }
       }
-      .map(_.bimap(blakeToByteString, x => x))
+      .map(_.bimap(_.toByteString, x => x))
   }
 
   private def processDeploy(runtime: Runtime[F])(
@@ -385,13 +385,13 @@ class RuntimeManagerImpl[F[_]: Concurrent] private[rholang] (
           case _ =>
             Either
               .right[(Option[DeployData], Failed), StateHash](
-                blakeToByteString(hash)
+                hash.toByteString
               )
               .pure[F]
         }
       }
 
-    doReplayEval(terms, blakeFromByteString(initHash))
+    doReplayEval(terms, Blake2b256Hash.fromByteString(initHash))
   }
 
   private[this] def doInj(
@@ -409,12 +409,6 @@ class RuntimeManagerImpl[F[_]: Concurrent] private[rholang] (
       Cost(deploy.phloLimit)
     )
   }
-
-  private def blakeFromByteString[R](hash: StateHash): Blake2b256Hash =
-    Blake2b256Hash.fromByteArray(hash.toByteArray)
-
-  private def blakeToByteString(hash: Blake2b256Hash): ByteString =
-    ByteString.copyFrom(hash.bytes.toArray)
 }
 
 object RuntimeManager {
