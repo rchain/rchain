@@ -9,7 +9,7 @@ import coop.rchain.rspace.concurrent.{ConcurrentTwoStepLockF, TwoStepLock}
 import coop.rchain.rspace.history.Branch
 import coop.rchain.rspace.internal._
 import coop.rchain.rspace.trace.Consume
-import coop.rchain.rspace.nextgenrspace.history.HistoryRepository
+import coop.rchain.rspace.nextgenrspace.history.{History, HistoryRepository}
 import coop.rchain.shared.{Cell, Log}
 import coop.rchain.shared.SyncVarOps._
 import monix.execution.atomic.AtomicAny
@@ -187,20 +187,7 @@ abstract class RSpaceOps[F[_]: Concurrent, C, P, A, R, K](
       _           <- restoreInstalls()
     } yield ()
 
-  override def clear(): F[Unit] =
-    for {
-      cache <- createCache
-      nextHotStore <- Sync[F].delay {
-                       HotStore.inMem(
-                         Sync[F],
-                         cache,
-                         historyRepository,
-                         serializeP.toCodec,
-                         serializeK.toCodec
-                       )
-                     }
-      _ <- Sync[F].delay(storeAtom.set(nextHotStore))
-    } yield ()
+  override def clear(): F[Unit] = reset(History.emptyRootHash)
 
   protected def createCache: F[Cell[F, Cache[C, P, A, K]]] =
     Cell.refCell[F, Cache[C, P, A, K]](Cache())
