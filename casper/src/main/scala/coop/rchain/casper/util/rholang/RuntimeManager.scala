@@ -299,57 +299,55 @@ class RuntimeManagerImpl[F[_]: Concurrent] private[rholang] (
       initHash: StateHash
   ): F[Either[(Option[DeployData], Failed), StateHash]] = {
 
-    def doReplayEval(
-        terms: Seq[InternalProcessedDeploy],
-        hash: Blake2b256Hash
-    ): F[Either[(Option[DeployData], Failed), StateHash]] =
-      Concurrent[F].defer {
-        terms match {
-          case processedDeploy +: rem =>
-            import processedDeploy._
-            for {
-              replayEvaluateResult <- replayComputeEffect(runtime)(hash, processedDeploy)
-              //TODO: compare replay deploy cost to given deploy cost
-              EvaluateResult(cost, errors) = replayEvaluateResult
-              cont <- DeployStatus.fromErrors(errors) match {
-                       case int: InternalErrors =>
-                         (deploy.some, int: Failed).asLeft[StateHash].pure[F]
-                       case replayStatus =>
-                         if (status.isFailed != replayStatus.isFailed)
-                           (deploy.some, ReplayStatusMismatch(replayStatus, status): Failed)
-                             .asLeft[StateHash]
+    def replaySingle(
+        hash: Blake2b256Hash,
+        processedDeploy: InternalProcessedDeploy
+    ): F[Either[(Option[DeployData], Failed), Blake2b256Hash]] = {
+      import processedDeploy._
+      for {
+        replayEvaluateResult <- replayComputeEffect(runtime)(hash, processedDeploy)
+        //TODO: compare replay deploy cost to given deploy cost
+        EvaluateResult(cost, errors) = replayEvaluateResult
+        cont <- DeployStatus.fromErrors(errors) match {
+                 case int: InternalErrors =>
+                   (deploy.some, int: Failed).asLeft[Blake2b256Hash].pure[F]
+                 case replayStatus =>
+                   if (status.isFailed != replayStatus.isFailed)
+                     (deploy.some, ReplayStatusMismatch(replayStatus, status): Failed)
+                       .asLeft[Blake2b256Hash]
+                       .pure[F]
+                   else if (errors.nonEmpty)
+                     hash.asRight[(Option[DeployData], Failed)].pure[F]
+                   else {
+                     runtime.replaySpace
+                       .createCheckpoint()
+                       .attempt
+                       .flatMap {
+                         case Right(newCheckpoint) =>
+                           newCheckpoint.root
+                             .asRight[(Option[DeployData], Failed)]
                              .pure[F]
-                         else if (errors.nonEmpty) doReplayEval(rem, hash)
-                         else {
-                           runtime.replaySpace
-                             .createCheckpoint()
-                             .attempt
-                             .flatMap {
-                               case Right(newCheckpoint) =>
-                                 doReplayEval(rem, newCheckpoint.root)
-                               case Left(ex: ReplayException) =>
-                                 (none[DeployData], UnusedCommEvent(ex): Failed)
-                                   .asLeft[StateHash]
-                                   .pure[F]
-                               case Left(ex) =>
-                                 (none[DeployData], UserErrors(Vector(ex)): Failed)
-                                   .asLeft[StateHash]
-                                   .pure[F]
-                             }
-                         }
-                     }
-            } yield cont
+                         case Left(ex: ReplayException) =>
+                           (none[DeployData], UnusedCommEvent(ex): Failed)
+                             .asLeft[Blake2b256Hash]
+                             .pure[F]
+                         case Left(ex) =>
+                           (none[DeployData], UserErrors(Vector(ex)): Failed)
+                             .asLeft[Blake2b256Hash]
+                             .pure[F]
+                       }
+                   }
+               }
+      } yield cont
+    }
 
-          case _ =>
-            Either
-              .right[(Option[DeployData], Failed), StateHash](
-                hash.toByteString
-              )
-              .pure[F]
-        }
-      }
-
-    doReplayEval(terms, Blake2b256Hash.fromByteString(initHash))
+    val result = terms.toList.foldM(
+      Blake2b256Hash.fromByteString(initHash).asRight[(Option[DeployData], Failed)]
+    ) {
+      case (Left(x), _)          => x.asLeft[Blake2b256Hash].pure[F]
+      case (Right(hash), deploy) => replaySingle(hash, deploy)
+    }
+    result.map(_.map(_.toByteString))
   }
 
   private[this] def doInj(
