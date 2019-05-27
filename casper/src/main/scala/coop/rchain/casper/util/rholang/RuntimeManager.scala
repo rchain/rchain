@@ -104,7 +104,7 @@ class RuntimeManagerImpl[F[_]: Concurrent] private[rholang] (
     withRuntime { runtime =>
       for {
         _      <- setBlockTime(blockTime, runtime)
-        result <- replayEval(terms, runtime, hash)
+        result <- replayDeploys(terms, runtime, hash)
       } yield result
     }
 
@@ -293,13 +293,13 @@ class RuntimeManagerImpl[F[_]: Concurrent] private[rholang] (
       newHash = if (errors.isEmpty) newCheckpoint.root else startHash
     } yield (newHash, deployResult)
 
-  private def replayEval(
+  private def replayDeploys(
       terms: Seq[InternalProcessedDeploy],
       runtime: Runtime[F],
       initHash: StateHash
   ): F[Either[(Option[DeployData], Failed), StateHash]] = {
 
-    def replaySingle(
+    def replayDeploy(
         hash: Blake2b256Hash,
         processedDeploy: InternalProcessedDeploy
     ): F[Either[(Option[DeployData], Failed), Blake2b256Hash]] = {
@@ -344,7 +344,7 @@ class RuntimeManagerImpl[F[_]: Concurrent] private[rholang] (
     val initHashBlake = Blake2b256Hash.fromByteString(initHash)
     val result = terms.toList.foldM(initHashBlake.asRight[(Option[DeployData], Failed)]) {
       case (hash, deploy) =>
-        hash.flatTraverse(replaySingle(_, deploy))
+        hash.flatTraverse(replayDeploy(_, deploy))
     }
     result.nested.map(_.toByteString).value
   }
