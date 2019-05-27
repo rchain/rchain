@@ -19,7 +19,7 @@ The RChain Cooperative maintains a public testnet running the latest version of 
 ## Installation
 ### Docker
 
-`$ docker pull rnode/rnode`
+`$ docker pull rchain/rnode`
 
 ### Debian/Ubuntu
 

@@ -25,7 +25,7 @@ in {
   
   contract setup(retCh) = {
     new MakeMintCh, mintACh, mintBCh in {
-      rl!(`rho:id:exunyijimapk7z43g3bbr69awqdz54kyroj9q43jgu3dh567fxsftx`, *MakeMintCh) |
+      rl!(`rho:lang:makeMint`, *MakeMintCh) |
       for(@(_, MakeMint) <- MakeMintCh) {
         @MakeMint!(*mintACh) | @MakeMint!(*mintBCh) |
         for(mintA <- mintACh; mintB <- mintBCh) {

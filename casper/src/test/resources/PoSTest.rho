@@ -22,8 +22,8 @@ match (
       test_bonding_failure
     in {
       revAddressOps!("fromPublicKey", posPubKey, *posRevAddressCh) |
-      rl!(`rho:id:1o93uitkrjfubh43jt19owanuezhntag5wh74c6ur5feuotpi73q8z`, *RevVaultCh) |
-      rl!(`rho:id:cnec3pa8prp4out3yc8facon6grm3xbsotpd4ckjfx8ghuw77xadzt`, *PoSCh) |
+      rl!(`rho:rchain:revVault`, *RevVaultCh) |
+      rl!(`rho:rchain:pos`, *PoSCh) |
       rl!(`rho:id:6wnujzcraztjfg941skrtbdkdgbko8nuaqihuhn15s66oz8ro5gwbb`, *RhoSpecCh) |
       for(@(_, RhoSpec) <- RhoSpecCh;
           @(_, PoS) <- PoSCh;

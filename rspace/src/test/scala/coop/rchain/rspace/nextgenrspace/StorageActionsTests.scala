@@ -9,6 +9,7 @@ import coop.rchain.rspace.history.{Leaf, LeafPointer, Node, NodePointer, Pointer
 import coop.rchain.rspace.test._
 import coop.rchain.rspace.util._
 import coop.rchain.rspace.internal._
+import coop.rchain.rspace.nextgenrspace.history.History
 import org.scalatest.prop.{Checkers, GeneratorDrivenPropertyChecks}
 import scodec.Codec
 
@@ -791,6 +792,44 @@ trait StorageActionsTests[F[_]]
         _ = r2 shouldBe defined
         _ = runK(r2)
       } yield (getK(r2).results should contain(List("datum", "datum")))
+  }
+
+  "clear" should "reset to the same hash on multiple runs" in fixture { (store, _, space) =>
+    val key      = List("ch1")
+    val patterns = List(Wildcard)
+
+    for {
+      emptyCheckpoint <- space.createCheckpoint()
+      //put some data so the checkpoint is != empty
+      _           <- space.consume(key, patterns, new StringsCaptor, persist = false)
+      checkpoint0 <- space.createCheckpoint()
+      _           = checkpoint0.log should not be empty
+      _           <- space.createCheckpoint()
+      _           <- space.clear()
+      //force clearing of trie store state
+      _ <- space.clear()
+      //the checkpointing mechanism should not interfere with the empty root
+      checkpoint2 <- space.createCheckpoint()
+      _           = checkpoint2.log shouldBe empty
+    } yield (checkpoint2.root shouldBe emptyCheckpoint.root)
+  }
+
+  "createCheckpoint on an empty store" should "return the expected hash" in fixture {
+    (_, _, space) =>
+      space.createCheckpoint().map(_.root shouldBe History.emptyRootHash)
+  }
+
+  "createCheckpoint" should "clear the store contents" in fixture { (_, storeAtom, space) =>
+    val key1     = List("ch1")
+    val patterns = List(Wildcard)
+
+    for {
+      _                  <- space.consume(key1, patterns, new StringsCaptor, persist = false)
+      _                  <- space.createCheckpoint()
+      store0             = storeAtom.get()
+      checkpoint0Changes <- store0.changes()
+      _                  = checkpoint0Changes.length shouldBe 0
+    } yield ()
   }
 
   "reset" should "change the state of the store, and reset the trie updates log" in fixture {

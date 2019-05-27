@@ -427,21 +427,11 @@ class RSpace[F[_], C, P, A, R, K] private[rspace] (
       changes     <- storeAtom.get().changes()
       nextHistory <- historyRepositoryAtom.get().checkpoint(changes.toList)
       _           = historyRepositoryAtom.set(nextHistory)
-      _           <- createNewHotStore(nextHistory)(serializeP.toCodec, serializeK.toCodec)
+      _           <- createNewHotStore(nextHistory)(serializeK.toCodec)
       log         = eventLog.take()
       _           = eventLog.put(Seq.empty)
       _           <- restoreInstalls()
     } yield Checkpoint(nextHistory.history.root, log)
-
-  override def reset(root: Blake2b256Hash): F[Unit] =
-    for {
-      nextHistory <- historyRepositoryAtom.get().reset(root)
-      _           = historyRepositoryAtom.set(nextHistory)
-      _           = eventLog.take()
-      _           = eventLog.put(Seq.empty)
-      _           <- createNewHotStore(nextHistory)(serializeP.toCodec, serializeK.toCodec)
-      _           <- restoreInstalls()
-    } yield ()
 
   protected[rspace] override def isDirty(root: Blake2b256Hash): F[Boolean] = ???
 }
@@ -488,7 +478,7 @@ object RSpace {
       setup                  <- setUp[F, C, P, A, R, K](v2Dir, mapSize, Branch.MASTER)
       (historyReader, store) = setup
       space                  = new RSpace[F, C, P, A, R, K](historyReader, AtomicAny(store), Branch.MASTER)
-      replayStore            <- inMemoryStore(historyReader)(sp.toCodec, sk.toCodec, concurrent)
+      replayStore            <- inMemoryStore(historyReader)(sk.toCodec, concurrent)
       replay = new ReplayRSpace[F, C, P, A, R, K](
         historyReader,
         AtomicAny(replayStore),
@@ -563,9 +553,9 @@ object RSpace {
 
   private def inMemoryStore[F[_], C, P, A, K](
       historyReader: HistoryReader[F, C, P, A, K]
-  )(implicit cp: Codec[P], ck: Codec[K], sync: Sync[F]) =
+  )(implicit ck: Codec[K], sync: Sync[F]) =
     for {
       cache <- Cell.refCell[F, Cache[C, P, A, K]](Cache())
-      store = HotStore.inMem(Sync[F], cache, historyReader, cp, ck)
+      store = HotStore.inMem(Sync[F], cache, historyReader, ck)
     } yield store
 }
