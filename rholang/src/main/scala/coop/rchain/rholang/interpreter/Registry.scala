@@ -862,7 +862,7 @@ class RegistryImpl[F[_]](
       "walletCheck"             -> "oqez475nmxx9ktciscbhps18wnmnwtm6egziohc3rkdzekkmsrpuyt"
     )
 
-    def unapply(s: String) = idMap.get(s)
+    def unapply(s: String): Option[String] = idMap.get(s)
   }
 
   case class WithPrefix(prefix: String) {
