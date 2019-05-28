@@ -86,12 +86,9 @@ class RuntimeManagerImpl[F[_]: Concurrent] private[rholang] (
     runtime.deployParametersRef.set(ProtoUtil.getRholangDeployParams(deploy)) >>
       doInj(deploy, runtime.reducer, runtime.errorLog)(runtime.cost)
 
-  private def replayComputeEffect(
-      runtime: Runtime[F]
-  )(start: Blake2b256Hash, processedDeploy: InternalProcessedDeploy): F[EvaluateResult] = {
+  private def replayComputeEffect(runtime: Runtime[F], processedDeploy: InternalProcessedDeploy): F[EvaluateResult] = {
     import processedDeploy._
-    runtime.replaySpace.resetAndRig(start, deployLog.toList) >>
-      runtime.deployParametersRef.set(ProtoUtil.getRholangDeployParams(deploy)) >>
+    runtime.deployParametersRef.set(ProtoUtil.getRholangDeployParams(deploy)) >>
       doInj(deploy, runtime.replayReducer, runtime.errorLog)(runtime.cost)
   }
 
@@ -319,7 +316,8 @@ class RuntimeManagerImpl[F[_]: Concurrent] private[rholang] (
   ): F[Either[ReplayFailure, Blake2b256Hash]] = {
     import processedDeploy._
     for {
-      replayEvaluateResult <- replayComputeEffect(runtime)(hash, processedDeploy)
+      _ <- runtime.replaySpace.resetAndRig(hash, processedDeploy.deployLog)
+      replayEvaluateResult <- replayComputeEffect(runtime, processedDeploy)
       //TODO: compare replay deploy cost to given deploy cost
       EvaluateResult(cost, errors) = replayEvaluateResult
       cont <- DeployStatus.fromErrors(errors) match {
