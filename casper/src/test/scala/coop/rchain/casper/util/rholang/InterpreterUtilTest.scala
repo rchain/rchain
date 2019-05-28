@@ -542,7 +542,7 @@ class InterpreterUtilTest
                               )
           Right((preStateHash, computedTsHash, processedDeploys)) = deploysCheckpoint
           block <- createGenesis[Task](
-                    deploys = processedDeploys.map(ProcessedDeployUtil.fromInternal),
+                    deploys = processedDeploys.map(_.toProcessedDeploy),
                     tsHash = computedTsHash,
                     preStateHash = preStateHash
                   )
@@ -600,7 +600,7 @@ class InterpreterUtilTest
                               )
           Right((preStateHash, computedTsHash, processedDeploys)) = deploysCheckpoint
           block <- createGenesis[Task](
-                    deploys = processedDeploys.map(ProcessedDeployUtil.fromInternal),
+                    deploys = processedDeploys.map(_.toProcessedDeploy),
                     tsHash = computedTsHash,
                     preStateHash = preStateHash
                   )
@@ -660,7 +660,7 @@ class InterpreterUtilTest
                               )
           Right((preStateHash, computedTsHash, processedDeploys)) = deploysCheckpoint
           block <- createGenesis[Task](
-                    deploys = processedDeploys.map(ProcessedDeployUtil.fromInternal),
+                    deploys = processedDeploys.map(_.toProcessedDeploy),
                     tsHash = computedTsHash,
                     preStateHash = preStateHash
                   )
@@ -717,7 +717,7 @@ class InterpreterUtilTest
                               )
           Right((preStateHash, computedTsHash, processedDeploys)) = deploysCheckpoint
           block <- createGenesis[Task](
-                    deploys = processedDeploys.map(ProcessedDeployUtil.fromInternal),
+                    deploys = processedDeploys.map(_.toProcessedDeploy),
                     tsHash = computedTsHash,
                     preStateHash = preStateHash
                   )
@@ -767,7 +767,7 @@ class InterpreterUtilTest
                                 )
             Right((preStateHash, computedTsHash, processedDeploys)) = deploysCheckpoint
             block <- createGenesis[Task](
-                      deploys = processedDeploys.map(ProcessedDeployUtil.fromInternal),
+                      deploys = processedDeploys.map(_.toProcessedDeploy),
                       tsHash = computedTsHash,
                       preStateHash = preStateHash
                     )
@@ -797,7 +797,7 @@ class InterpreterUtilTest
                                 runtimeManager
                               )
           Right((preStateHash, computedTsHash, processedDeploys)) = deploysCheckpoint
-          intProcessedDeploys                                     = processedDeploys.map(ProcessedDeployUtil.fromInternal)
+          intProcessedDeploys                                     = processedDeploys.map(_.toProcessedDeploy)
           //create single deploy with log that includes excess comm events
           badProcessedDeploy = intProcessedDeploys.head.copy(
             log = intProcessedDeploys.head.log ++ intProcessedDeploys.last.log
@@ -848,7 +848,7 @@ class InterpreterUtilTest
                                 )
             Right((preStateHash, computedTsHash, processedDeploys)) = deploysCheckpoint
             block <- createGenesis[Task](
-                      deploys = processedDeploys.map(ProcessedDeployUtil.fromInternal),
+                      deploys = processedDeploys.map(_.toProcessedDeploy),
                       tsHash = computedTsHash,
                       preStateHash = preStateHash
                     )

@@ -35,7 +35,7 @@ object InterpreterUtil {
     val preStateHash    = ProtoUtil.preStateHash(b)
     val tsHash          = ProtoUtil.tuplespace(b)
     val deploys         = ProtoUtil.deploys(b)
-    val internalDeploys = deploys.flatMap(ProcessedDeployUtil.toInternal)
+    val internalDeploys = deploys.flatMap(InternalProcessedDeploy.fromProcessedDeploy)
     val timestamp       = b.header.get.timestamp // TODO: Ensure header exists through type
     for {
       _                    <- span.mark("before-unsafe-get-parents")
@@ -199,7 +199,8 @@ object InterpreterUtil {
                          acc match {
                            case Right(stateHash) =>
                              val deploys =
-                               block.getBody.deploys.flatMap(ProcessedDeployUtil.toInternal)
+                               block.getBody.deploys
+                                 .flatMap(InternalProcessedDeploy.fromProcessedDeploy)
                              for {
                                replayResult <- runtimeManager.replayComputeState(stateHash)(
                                                 deploys,
