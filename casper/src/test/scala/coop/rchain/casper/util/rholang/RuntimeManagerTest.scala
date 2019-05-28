@@ -31,33 +31,6 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
   private val runtimeManager: Resource[Task, RuntimeManager[Task]] =
     mkRuntimeManager("casper-runtime-manager-test")
 
-  private def withTestFixture[A](test: (StateHash, RuntimeManager[Task], PublicKey) => Task[A]): A =
-    runtimeManager
-      .use { mgr =>
-        val (_, genesisPk) = Ed25519.newKeyPair
-        val genesisTerms = Seq(
-          StandardDeploys.listOps,
-          StandardDeploys.either,
-          StandardDeploys.nonNegativeNumber,
-          StandardDeploys.makeMint,
-          StandardDeploys.authKey,
-          StandardDeploys.revVault,
-          StandardDeploys.revGenerator(
-            genesisPk,
-            Seq.empty[Vault],
-            Long.MaxValue
-          ),
-          StandardDeploys
-            .poSGenerator(
-              ProofOfStake(0L, Long.MaxValue, Seq(Validator(genesisPk, 0L)))
-            )
-        )
-        mgr.computeState(mgr.emptyStateHash)(genesisTerms, System.currentTimeMillis()).flatMap {
-          case (start, _) => test(start, mgr, genesisPk)
-        }
-      }
-      .runSyncUnsafe(30.seconds)
-
   private def computeState[F[_]](
       runtimeManager: RuntimeManager[F],
       startHash: StateHash,
@@ -74,29 +47,6 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
         .runSyncUnsafe(10.seconds)
 
     result.status.isFailed should be(true)
-  }
-
-  "computeDeployPayment" should "transfer REV from the deployer's vault to the PoS vault" in withTestFixture {
-    case (start, mgr, genesisPk) =>
-      val genesisId = ByteString.copyFrom(genesisPk.bytes)
-      val posId = ByteString.copyFrom(
-        Base16.unsafeDecode("cc87bf7747a8c176714b417ca14a63897b07572876c5e38a7896b6007738ef81")
-      )
-      mgr.computeDeployPayment(start)(genesisId, 100L).flatMap { finish =>
-        mgr.computeBalance(finish)(genesisId).flatMap { balance0 =>
-          mgr.computeBalance(finish)(posId).map { balance1 =>
-            balance0 should be(Long.MaxValue - 100L)
-            balance1 should be(100L)
-          }
-        }
-      }
-  }
-
-  "computeBalance" should "compute vault balances accurately" in withTestFixture {
-    case (start, mgr, genesisPk) =>
-      mgr.computeBalance(start)(ByteString.copyFrom(genesisPk.bytes)).map { balance0 =>
-        balance0 should be(Long.MaxValue)
-      }
   }
 
   it should "capture rholang parsing errors and charge for parsing" in {

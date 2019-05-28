@@ -231,7 +231,7 @@ object BlockCreator {
     val body = Body()
       .withState(postState)
       .withDeploys(
-        persistableDeploys.map(ProcessedDeployUtil.fromInternal)
+        persistableDeploys.map(_.toProcessedDeploy)
       )
     val header = blockHeader(body, p.map(_.blockHash), version, now)
     val block  = unsignedBlockProto(body, header, justifications, shardId)

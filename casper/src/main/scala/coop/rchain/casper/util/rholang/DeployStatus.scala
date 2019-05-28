@@ -14,17 +14,18 @@ sealed trait DeployStatus { self =>
     case _                 => false
   }
 }
+
 final case object Succeeded                                                     extends DeployStatus
 sealed trait Failed                                                             extends DeployStatus
 final case class UnusedCommEvent(ex: ReplayException)                           extends Failed
 final case class ReplayStatusMismatch(replay: DeployStatus, orig: DeployStatus) extends Failed
 final case object UnknownFailure                                                extends Failed
-final case class UserErrors(errors: Vector[Throwable])                          extends Failed
-final case class InternalErrors(errors: Vector[Throwable])                      extends Failed
+final case class UserErrors(errors: Seq[Throwable])                             extends Failed
+final case class InternalErrors(errors: Seq[Throwable])                         extends Failed
 //TODO add fatal error related to rspace closed after https://github.com/rchain/rchain/pull/1339 is merged
 
 object DeployStatus {
-  def fromErrors(errors: Vector[Throwable]): DeployStatus = {
+  def fromErrors(errors: Seq[Throwable]): DeployStatus = {
     val (userErrors, internalErrors) = errors.partition {
       case _: InterpreterError => true
       case _                   => false
@@ -32,7 +33,7 @@ object DeployStatus {
 
     internalErrors
       .collectFirst { case ex: ReplayException => ex }
-      .fold[DeployStatus](
+      .fold(
         if (internalErrors.nonEmpty) InternalErrors(internalErrors)
         else if (userErrors.nonEmpty) UserErrors(userErrors)
         else Succeeded

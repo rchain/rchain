@@ -10,11 +10,7 @@ import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.casper.util.rholang.InterpreterUtil.computeDeploysCheckpoint
 import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
-import coop.rchain.casper.util.rholang.{
-  InternalProcessedDeploy,
-  ProcessedDeployUtil,
-  RuntimeManager
-}
+import coop.rchain.casper.util.rholang.{InternalProcessedDeploy, RuntimeManager}
 import coop.rchain.crypto.hash.Blake2b256
 import coop.rchain.p2p.EffectsTestInstances.LogicalTime
 import coop.rchain.shared.Time
@@ -53,7 +49,7 @@ object BlockGenerator {
     for {
       result                                                 <- computeBlockCheckpointFromDeploys[F](b, genesis, dag, runtimeManager)
       Right((preStateHash, postStateHash, processedDeploys)) = result
-    } yield (postStateHash, processedDeploys.map(ProcessedDeployUtil.fromInternal))
+    } yield (postStateHash, processedDeploys.map(_.toProcessedDeploy))
 
   def injectPostStateHash[F[_]: Monad: BlockStore: IndexedBlockDagStorage](
       id: Int,

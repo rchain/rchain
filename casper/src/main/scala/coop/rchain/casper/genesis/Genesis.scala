@@ -14,11 +14,7 @@ import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.ProtoUtil.{blockHeader, unsignedBlockProto}
 import coop.rchain.casper.util.Sorting.byteArrayOrdering
 import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
-import coop.rchain.casper.util.rholang.{
-  InternalProcessedDeploy,
-  ProcessedDeployUtil,
-  RuntimeManager
-}
+import coop.rchain.casper.util.rholang.{InternalProcessedDeploy, RuntimeManager}
 import coop.rchain.crypto.PublicKey
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.signatures.Ed25519
@@ -165,7 +161,7 @@ object Genesis {
     )
 
     val blockDeploys =
-      processedDeploys.filterNot(_.status.isFailed).map(ProcessedDeployUtil.fromInternal)
+      processedDeploys.filterNot(_.status.isFailed).map(_.toProcessedDeploy)
     val sortedDeploys = blockDeploys.map(d => d.copy(log = d.log.sortBy(_.toByteArray)))
 
     val body    = Body(state = Some(state), deploys = sortedDeploys)
