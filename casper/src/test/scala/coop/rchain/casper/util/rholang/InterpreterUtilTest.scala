@@ -4,6 +4,7 @@ import java.nio.file.Files
 
 import cats.effect.Sync
 import cats.implicits._
+
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.{BlockDagRepresentation, BlockStore}
 import coop.rchain.casper.helper.BlockGenerator._
@@ -16,11 +17,12 @@ import coop.rchain.casper.util.rholang.Resources.mkRuntimeManager
 import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
 import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.metrics
-import coop.rchain.metrics.{Metrics, NoopSpan}
+import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.models.PCost
 import coop.rchain.p2p.EffectsTestInstances.LogStub
 import coop.rchain.rholang.interpreter.{accounting, Runtime}
 import coop.rchain.shared.StoreType
+
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
 import org.scalatest._
@@ -46,14 +48,16 @@ class InterpreterUtilTest
       parents: Seq[BlockMessage],
       deploys: Seq[DeployData],
       dag: BlockDagRepresentation[F],
-      runtimeManager: RuntimeManager[F]
+      runtimeManager: RuntimeManager[F],
+      span0: Span[F]
   ): F[Either[Throwable, (StateHash, StateHash, Seq[InternalProcessedDeploy])]] =
     InterpreterUtil.computeDeploysCheckpoint(
       parents,
       deploys,
       dag,
       runtimeManager,
-      System.currentTimeMillis()
+      System.currentTimeMillis(),
+      span0
     )
 
   "computeBlockCheckpoint" should "compute the final post-state of a chain properly" in withStorage {
@@ -426,7 +430,7 @@ class InterpreterUtilTest
       deploy: DeployData*
   )(implicit blockStore: BlockStore[Task]): Task[Seq[InternalProcessedDeploy]] =
     for {
-      computeResult         <- computeDeploysCheckpoint[Task](Seq.empty, deploy, dag, runtimeManager)
+      computeResult         <- computeDeploysCheckpoint[Task](Seq.empty, deploy, dag, runtimeManager, span)
       Right((_, _, result)) = computeResult
     } yield result
 
@@ -538,7 +542,8 @@ class InterpreterUtilTest
                                 Seq.empty,
                                 deploys,
                                 dag1,
-                                runtimeManager
+                                runtimeManager,
+                                span
                               )
           Right((preStateHash, computedTsHash, processedDeploys)) = deploysCheckpoint
           block <- createGenesis[Task](
@@ -596,7 +601,8 @@ class InterpreterUtilTest
                                 Seq.empty,
                                 deploys,
                                 dag1,
-                                runtimeManager
+                                runtimeManager,
+                                span
                               )
           Right((preStateHash, computedTsHash, processedDeploys)) = deploysCheckpoint
           block <- createGenesis[Task](
@@ -656,7 +662,8 @@ class InterpreterUtilTest
                                 Seq.empty,
                                 deploys,
                                 dag1,
-                                runtimeManager
+                                runtimeManager,
+                                span
                               )
           Right((preStateHash, computedTsHash, processedDeploys)) = deploysCheckpoint
           block <- createGenesis[Task](
@@ -713,7 +720,8 @@ class InterpreterUtilTest
                                 Seq.empty,
                                 deploys,
                                 dag1,
-                                runtimeManager
+                                runtimeManager,
+                                span
                               )
           Right((preStateHash, computedTsHash, processedDeploys)) = deploysCheckpoint
           block <- createGenesis[Task](
@@ -763,7 +771,8 @@ class InterpreterUtilTest
                                   Seq.empty,
                                   deploys,
                                   dag1,
-                                  runtimeManager
+                                  runtimeManager,
+                                  span
                                 )
             Right((preStateHash, computedTsHash, processedDeploys)) = deploysCheckpoint
             block <- createGenesis[Task](
@@ -794,7 +803,8 @@ class InterpreterUtilTest
                                 Seq.empty,
                                 deploys,
                                 dag1,
-                                runtimeManager
+                                runtimeManager,
+                                span
                               )
           Right((preStateHash, computedTsHash, processedDeploys)) = deploysCheckpoint
           intProcessedDeploys                                     = processedDeploys.map(ProcessedDeployUtil.fromInternal)
@@ -844,7 +854,8 @@ class InterpreterUtilTest
                                   Seq.empty,
                                   deploys,
                                   dag1,
-                                  runtimeManager
+                                  runtimeManager,
+                                  span
                                 )
             Right((preStateHash, computedTsHash, processedDeploys)) = deploysCheckpoint
             block <- createGenesis[Task](

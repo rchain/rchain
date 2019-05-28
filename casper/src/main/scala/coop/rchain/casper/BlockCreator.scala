@@ -3,6 +3,7 @@ package coop.rchain.casper
 import cats.Monad
 import cats.effect.Sync
 import cats.implicits._
+
 import coop.rchain.blockstorage.{BlockDagRepresentation, BlockStore}
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.ProtoUtil._
@@ -10,7 +11,7 @@ import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
 import coop.rchain.casper.util.rholang._
 import coop.rchain.casper.util.{DagOperations, ProtoUtil}
 import coop.rchain.crypto.{PrivateKey, PublicKey}
-import coop.rchain.metrics.Metrics
+import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.shared.{Cell, Log, Time}
 
 object BlockCreator {
@@ -59,7 +60,8 @@ object BlockCreator {
                           maxBlockNumber,
                           shardId,
                           version,
-                          now
+                          now,
+                          span
                         )
                       } else {
                         CreateBlockStatus.noNewDeploys.pure[F]
@@ -156,7 +158,8 @@ object BlockCreator {
       maxBlockNumber: Long,
       shardId: String,
       version: Long,
-      now: Long
+      now: Long,
+      span: Span[F]
   ): F[CreateBlockStatus] =
     InterpreterUtil
       .computeDeploysCheckpoint[F](
@@ -164,7 +167,8 @@ object BlockCreator {
         deploys,
         dag,
         runtimeManager,
-        now
+        now,
+        span
       )
       .flatMap {
         case Left(ex) =>

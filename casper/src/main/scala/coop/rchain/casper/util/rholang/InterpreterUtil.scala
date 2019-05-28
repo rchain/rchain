@@ -41,7 +41,7 @@ object InterpreterUtil {
       _                    <- span.mark("before-unsafe-get-parents")
       parents              <- ProtoUtil.unsafeGetParents[F](b)
       _                    <- span.mark("before-compute-parents-post-state")
-      possiblePreStateHash <- computeParentsPostState[F](parents, dag, runtimeManager)
+      possiblePreStateHash <- computeParentsPostState[F](parents, dag, runtimeManager, span)
       _                    <- Log[F].info(s"Computed parents post state for ${PrettyPrinter.buildString(b)}.")
       _                    <- span.mark("before-process-pre-state-hash")
       result <- processPossiblePreStateHash[F](
@@ -151,10 +151,11 @@ object InterpreterUtil {
       deploys: Seq[DeployData],
       dag: BlockDagRepresentation[F],
       runtimeManager: RuntimeManager[F],
-      blockTime: Long
+      blockTime: Long,
+      span: Span[F]
   ): F[Either[Throwable, (StateHash, StateHash, Seq[InternalProcessedDeploy])]] =
     for {
-      possiblePreStateHash <- computeParentsPostState[F](parents, dag, runtimeManager)
+      possiblePreStateHash <- computeParentsPostState[F](parents, dag, runtimeManager, span)
       result <- possiblePreStateHash match {
                  case Right(preStateHash) =>
                    runtimeManager.computeState(preStateHash)(deploys, blockTime).map {
@@ -169,7 +170,8 @@ object InterpreterUtil {
   private def computeParentsPostState[F[_]: Sync: BlockStore](
       parents: Seq[BlockMessage],
       dag: BlockDagRepresentation[F],
-      runtimeManager: RuntimeManager[F]
+      runtimeManager: RuntimeManager[F],
+      span: Span[F]
   ): F[Either[Throwable, StateHash]] = {
     val parentTuplespaces = parents.flatMap(p => ProtoUtil.tuplespace(p).map(p -> _))
 
@@ -182,7 +184,7 @@ object InterpreterUtil {
         Right(parentStateHash).leftCast[Throwable].pure[F]
 
       case (_, initStateHash) +: _ =>
-        computeMultiParentsPostState[F](parents, dag, runtimeManager, initStateHash)
+        computeMultiParentsPostState[F](parents, dag, runtimeManager, initStateHash, span)
     }
   }
   // In the case of multiple parents we need to apply all of the deploys that have been
@@ -192,11 +194,15 @@ object InterpreterUtil {
       parents: Seq[BlockMessage],
       dag: BlockDagRepresentation[F],
       runtimeManager: RuntimeManager[F],
-      initStateHash: StateHash
+      initStateHash: StateHash,
+      span: Span[F]
   ): F[Either[Throwable, StateHash]] =
     for {
+      _                  <- span.mark("before-compute-parents-post-state-find-multi-parents")
       blockHashesToApply <- findMultiParentsBlockHashesForReplay(parents, dag)
+      _                  <- span.mark("before-compute-parents-post-state-get-blocks")
       blocksToApply      <- blockHashesToApply.traverse(b => ProtoUtil.unsafeGetBlock[F](b.blockHash))
+      _                  <- span.mark("before-compute-parents-post-state-replay")
       replayResult <- blocksToApply.toList.foldM(Right(initStateHash).leftCast[Throwable]) {
                        (acc, block) =>
                          acc match {

@@ -3,6 +3,7 @@ package coop.rchain.casper.helper
 import cats._
 import cats.effect._
 import cats.implicits._
+
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage._
 import coop.rchain.casper.Estimator.{BlockHash, Validator}
@@ -18,15 +19,21 @@ import coop.rchain.casper.util.rholang.{
 import coop.rchain.crypto.hash.Blake2b256
 import coop.rchain.p2p.EffectsTestInstances.LogicalTime
 import coop.rchain.shared.Time
-import monix.eval.Task
 
+import monix.eval.Task
 import scala.collection.immutable.HashMap
 import scala.language.higherKinds
+
+import coop.rchain.casper.CasperMetricsSource
+import coop.rchain.metrics.{Metrics, Span}
 
 object BlockGenerator {
   implicit val timeEff = new LogicalTime[Task]
 
-  def updateChainWithBlockStateUpdate[F[_]: Sync: BlockStore: IndexedBlockDagStorage: Time](
+  private[this] val GenerateBlockMetricsSource =
+    Metrics.Source(CasperMetricsSource, "generate-block")
+
+  def updateChainWithBlockStateUpdate[F[_]: Sync: BlockStore: IndexedBlockDagStorage: Time: Metrics](
       id: Int,
       genesis: BlockMessage,
       runtimeManager: RuntimeManager[F]
@@ -44,14 +51,15 @@ object BlockGenerator {
       _                                 <- injectPostStateHash[F](id, b, genesis, postStateHash, processedDeploys)
     } yield b
 
-  def computeBlockCheckpoint[F[_]: Sync: BlockStore: Time](
+  def computeBlockCheckpoint[F[_]: Sync: BlockStore: Time: Metrics](
       b: BlockMessage,
       genesis: BlockMessage,
       dag: BlockDagRepresentation[F],
       runtimeManager: RuntimeManager[F]
   ): F[(StateHash, Seq[ProcessedDeploy])] =
     for {
-      result                                                 <- computeBlockCheckpointFromDeploys[F](b, genesis, dag, runtimeManager)
+      span                                                   <- Metrics[F].span(GenerateBlockMetricsSource)
+      result                                                 <- computeBlockCheckpointFromDeploys[F](b, genesis, dag, runtimeManager, span)
       Right((preStateHash, postStateHash, processedDeploys)) = result
     } yield (postStateHash, processedDeploys.map(ProcessedDeployUtil.fromInternal))
 
@@ -67,14 +75,15 @@ object BlockGenerator {
       b.getBody.withState(updatedBlockPostState).withDeploys(processedDeploys)
     val updatedBlock = b.withBody(updatedBlockBody)
     BlockStore[F].put(b.blockHash, updatedBlock) *>
-      IndexedBlockDagStorage[F].inject(id, updatedBlock, genesis, false)
+      IndexedBlockDagStorage[F].inject(id, updatedBlock, genesis, invalid = false)
   }
 
   private def computeBlockCheckpointFromDeploys[F[_]: Sync: BlockStore: Time](
       b: BlockMessage,
       genesis: BlockMessage,
       dag: BlockDagRepresentation[F],
-      runtimeManager: RuntimeManager[F]
+      runtimeManager: RuntimeManager[F],
+      span: Span[F]
   ): F[Either[Throwable, (StateHash, StateHash, Seq[InternalProcessedDeploy])]] =
     for {
       parents <- ProtoUtil.unsafeGetParents[F](b)
@@ -91,7 +100,8 @@ object BlockGenerator {
                  deploys,
                  dag,
                  runtimeManager,
-                 now
+                 now,
+                 span
                )
     } yield result
 }
