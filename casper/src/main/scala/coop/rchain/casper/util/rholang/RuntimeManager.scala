@@ -33,12 +33,15 @@ import coop.rchain.rholang.interpreter.{
 import coop.rchain.rspace.{trace, Blake2b256Hash, Checkpoint, ReplayException}
 
 trait RuntimeManager[F[_]] {
+
+  type ReplayFailure = (Option[DeployData], Failed)
+
   def captureResults(start: StateHash, deploy: DeployData, name: String = "__SCALA__"): F[Seq[Par]]
   def captureResults(start: StateHash, deploy: DeployData, name: Par): F[Seq[Par]]
   def replayComputeState(hash: StateHash)(
       terms: Seq[InternalProcessedDeploy],
       blockTime: Long
-  ): F[Either[(Option[DeployData], Failed), StateHash]]
+  ): F[Either[ReplayFailure, StateHash]]
   def computeState(hash: StateHash)(
       terms: Seq[DeployData],
       blockTime: Long
@@ -100,7 +103,7 @@ class RuntimeManagerImpl[F[_]: Concurrent] private[rholang] (
   def replayComputeState(hash: StateHash)(
       terms: Seq[InternalProcessedDeploy],
       blockTime: Long
-  ): F[Either[(Option[DeployData], Failed), StateHash]] =
+  ): F[Either[ReplayFailure, StateHash]] =
     withRuntime { runtime =>
       for {
         _      <- setBlockTime(blockTime, runtime)
@@ -299,11 +302,11 @@ class RuntimeManagerImpl[F[_]: Concurrent] private[rholang] (
       replayDeploy: (
           Blake2b256Hash,
           InternalProcessedDeploy
-      ) => F[Either[(Option[DeployData], Failed), Blake2b256Hash]]
-  ): F[Either[(Option[DeployData], Failed), StateHash]] = {
+      ) => F[Either[ReplayFailure, Blake2b256Hash]]
+  ): F[Either[ReplayFailure, StateHash]] = {
 
     val initHashBlake = Blake2b256Hash.fromByteString(initHash)
-    val result = terms.toList.foldM(initHashBlake.asRight[(Option[DeployData], Failed)]) {
+    val result = terms.toList.foldM(initHashBlake.asRight[ReplayFailure]) {
       case (hash, deploy) =>
         hash.flatTraverse(replayDeploy(_, deploy))
     }
@@ -313,7 +316,7 @@ class RuntimeManagerImpl[F[_]: Concurrent] private[rholang] (
   private def replayDeploy(runtime: Runtime[F])(
       hash: Blake2b256Hash,
       processedDeploy: InternalProcessedDeploy
-  ): F[Either[(Option[DeployData], Failed), Blake2b256Hash]] = {
+  ): F[Either[ReplayFailure, Blake2b256Hash]] = {
     import processedDeploy._
     for {
       replayEvaluateResult <- replayComputeEffect(runtime)(hash, processedDeploy)
@@ -328,7 +331,7 @@ class RuntimeManagerImpl[F[_]: Concurrent] private[rholang] (
                      .asLeft[Blake2b256Hash]
                      .pure[F]
                  else if (errors.nonEmpty)
-                   hash.asRight[(Option[DeployData], Failed)].pure[F]
+                   hash.asRight[ReplayFailure].pure[F]
                  else {
                    runtime.replaySpace
                      .createCheckpoint()
@@ -336,7 +339,7 @@ class RuntimeManagerImpl[F[_]: Concurrent] private[rholang] (
                      .flatMap {
                        case Right(newCheckpoint) =>
                          newCheckpoint.root
-                           .asRight[(Option[DeployData], Failed)]
+                           .asRight[ReplayFailure]
                            .pure[F]
                        case Left(ex: ReplayException) =>
                          (none[DeployData], UnusedCommEvent(ex): Failed)
@@ -408,7 +411,7 @@ object RuntimeManager {
       override def replayComputeState(hash: StateHash)(
           terms: scala.Seq[InternalProcessedDeploy],
           blockTime: Long
-      ): T[F, scala.Either[(Option[DeployData], Failed), StateHash]] =
+      ): T[F, scala.Either[ReplayFailure, StateHash]] =
         runtimeManager.replayComputeState(hash)(terms, blockTime).liftM[T]
 
       override def computeState(hash: StateHash)(
