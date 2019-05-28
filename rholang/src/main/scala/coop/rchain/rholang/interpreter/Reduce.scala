@@ -416,16 +416,28 @@ class DebruijnInterpreter[M[_], F[_]](
         _env.put(addr)
       }
 
-      def addUrn(newEnv: Env[Par], urn: String): Either[ReduceError, Env[Par]] =
-        urnMap.get(urn) match {
-          case Some(p) => newEnv.put(p).asRight[ReduceError]
-          case None    => ReduceError(s"Unknown urn for new: $urn").asLeft[Env[Par]]
-        }
+      def addUrn(
+          deployParameters: DeployParameters
+      )(newEnv: Env[Par], urn: String): Either[ReduceError, Env[Par]] =
+        if (urn == "rho:deployer:auth") {
+          val bs = deployParameters.userId.exprs.headOption match {
+            case Some(Expr(GByteArray(byteString))) => byteString
+            case _                                  => ByteString.EMPTY
+          }
+          newEnv.put(Par(unforgeables = Vector(GDeployerAuth(bs)))).asRight[ReduceError]
+        } else
+          urnMap.get(urn) match {
+            case Some(p) => newEnv.put(p).asRight[ReduceError]
+            case None    => ReduceError(s"Unknown urn for new: $urn").asLeft[Env[Par]]
+          }
 
-      urns.toList.foldM(simpleNews)(addUrn) match {
-        case Right(env) => env.pure[M]
-        case Left(e)    => e.raiseError[M, Env[Par]]
-      }
+      deployParametersRef.get.flatMap(
+        params =>
+          urns.toList.foldM(simpleNews)(addUrn(params)) match {
+            case Right(env) => env.pure[M]
+            case Left(e)    => e.raiseError[M, Env[Par]]
+          }
+      )
     }
 
     charge[M](newBindingsCost(neu.bindCount)) >>
