@@ -21,8 +21,8 @@ import coop.rchain.rholang.interpreter.errors.SetupError
 import coop.rchain.rholang.interpreter.storage.implicits._
 import coop.rchain.rspace._
 import coop.rchain.rspace.history.Branch
+import coop.rchain.rspace.nextgenrspace.{RSpace => NextRSpace}
 import coop.rchain.rspace.pure.PureRSpace
-import coop.rchain.rspace.nextgenrspace.{RSpace => NextRSpace, ReplayRSpace => NextReplayRSpace}
 import coop.rchain.shared.StoreType._
 import coop.rchain.shared.{Log, StoreType}
 
@@ -413,12 +413,10 @@ object Runtime {
               replayResult match {
                 case None => F.unit
                 case Some(_) =>
-                  F.raiseError(
-                    new SetupError("Registry insertion in replay fired continuation.")
-                  )
+                  SetupError("Registry insertion in replay fired continuation.").raiseError[F, Unit]
               }
             case Some(_) =>
-              F.raiseError(new SetupError("Registry insertion fired continuation."))
+              SetupError("Registry insertion fired continuation.").raiseError[F, Unit]
           }
     } yield ()
   }
@@ -469,7 +467,8 @@ object Runtime {
     def checkCreateDataDir: F[Unit] =
       for {
         notexists <- Sync[F].delay(Files.notExists(dataDir))
-        _         <- if (notexists) Sync[F].delay(Files.createDirectories(dataDir)) else ().pure[F]
+        _ <- if (notexists) Sync[F].delay(Files.createDirectories(dataDir)) >> ().pure[F]
+            else ().pure[F]
       } yield ()
 
     storeType match {

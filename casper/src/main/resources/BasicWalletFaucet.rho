@@ -15,7 +15,7 @@ new
   BasicWalletFaucet, rs(`rho:registry:insertSigned:ed25519`), uriOut,
   rl(`rho:registry:lookup`), BasicWalletCh
 in {
-  rl!(`rho:id:3yicxut5xtx5tnmnneta7actof4yse3xangw4awzt8c8owqmddgyms`, *BasicWalletCh) |
+  rl!(`rho:lang:basicWallet`, *BasicWalletCh) |
   for(@(_, BasicWallet) <- BasicWalletCh) {
     contract BasicWalletFaucet(mint, return) = {
       new this in {

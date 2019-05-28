@@ -10,6 +10,7 @@ import coop.rchain.casper.helper.BlockGenerator._
 import coop.rchain.casper.helper._
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.ConstructDeploy
+import coop.rchain.casper.util.RSpaceUtil._
 import coop.rchain.casper.util.rholang.InterpreterUtil._
 import coop.rchain.casper.util.rholang.Resources.mkRuntimeManager
 import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
@@ -93,7 +94,7 @@ class InterpreterUtilTest
        *         genesis
        */
 
-      mkRuntimeManager("interpreter-util-test").use { runtimeManager =>
+      mkRuntimeManager("interpreter-util-test").use { implicit runtimeManager =>
         for {
           genesis                                     <- createGenesis[Task](deploys = genesisDeploysCost)
           b1                                          <- createBlock[Task](Seq(genesis.blockHash), genesis, deploys = b1DeploysCost)
@@ -109,20 +110,15 @@ class InterpreterUtilTest
                 postGenStateHash,
                 postGenProcessedDeploys
               )
-          genPostStateT <- runtimeManager.storageRepr(postGenStateHash)
-          genPostState  = genPostStateT.get
-
-          _                                         = genPostState.contains("@{2}!(2)") should be(true)
-          _                                         = genPostState.contains("@{123}!(5)") should be(true)
+          _                                         <- getDataAtPublicChannel[Task](postGenStateHash, 2).map(_ shouldBe Seq("2"))
+          _                                         <- getDataAtPublicChannel[Task](postGenStateHash, 123).map(_ shouldBe Seq("5"))
           dag2                                      <- blockDagStorage.getRepresentation
           blockCheckpointB1                         <- computeBlockCheckpoint(b1, genesis, dag2, runtimeManager)
           (postB1StateHash, postB1ProcessedDeploys) = blockCheckpointB1
           _                                         <- injectPostStateHash[Task](1, b1, genesis, postB1StateHash, postB1ProcessedDeploys)
-          b1PostStateT                              <- runtimeManager.storageRepr(postB1StateHash)
-          b1PostState                               = b1PostStateT.get
-          _                                         = b1PostState.contains("@{1}!(1)") should be(true)
-          _                                         = b1PostState.contains("@{123}!(5)") should be(true)
-          _                                         = b1PostState.contains("@{456}!(10)") should be(true)
+          _                                         <- getDataAtPublicChannel[Task](postB1StateHash, 1).map(_ shouldBe Seq("1"))
+          _                                         <- getDataAtPublicChannel[Task](postB1StateHash, 123).map(_ shouldBe Seq("5"))
+          _                                         <- getDataAtPublicChannel[Task](postB1StateHash, 456).map(_ shouldBe Seq("10"))
           dag3                                      <- blockDagStorage.getRepresentation
           blockCheckpointB2 <- computeBlockCheckpoint(
                                 b2,
@@ -141,13 +137,10 @@ class InterpreterUtilTest
                                 runtimeManager
                               )
           (postb3StateHash, _) = blockCheckpointB4
-          b3PostStateT         <- runtimeManager.storageRepr(postb3StateHash)
-          b3PostState          = b3PostStateT.get
-
-          _      = b3PostState.contains("@{1}!(1)") should be(true)
-          _      = b3PostState.contains("@{1}!(15)") should be(true)
-          result = b3PostState.contains("@{7}!(7)") should be(true)
-        } yield result
+          _ <- getDataAtPublicChannel[Task](postb3StateHash, 1)
+                .map(_ should contain theSameElementsAs Seq("1", "15"))
+          _ <- getDataAtPublicChannel[Task](postb3StateHash, 7).map(_ shouldBe Seq("7"))
+        } yield ()
       }
   }
 
@@ -189,7 +182,7 @@ class InterpreterUtilTest
        *         \    /
        *         genesis
        */
-      mkRuntimeManager("interpreter-util-test").use { runtimeManager =>
+      mkRuntimeManager("interpreter-util-test").use { implicit runtimeManager =>
         for {
           genesis <- createGenesis[Task](deploys = genesisDeploysWithCost)
           b1      <- createBlock[Task](Seq(genesis.blockHash), genesis, deploys = b1DeploysWithCost)
@@ -236,13 +229,10 @@ class InterpreterUtilTest
                                 runtimeManager
                               )
           (postb3StateHash, _) = blockCheckpointB3
-          b3PostStateT         <- runtimeManager.storageRepr(postb3StateHash)
-          b3PostState          = b3PostStateT.get
-
-          _      = b3PostState.contains("@{1}!(15)") should be(true)
-          _      = b3PostState.contains("@{5}!(5)") should be(true)
-          result = b3PostState.contains("@{6}!(6)") should be(true)
-        } yield result
+          _                    <- getDataAtPublicChannel[Task](postb3StateHash, 1).map(_ shouldBe Seq("15"))
+          _                    <- getDataAtPublicChannel[Task](postb3StateHash, 5).map(_ shouldBe Seq("5"))
+          _                    <- getDataAtPublicChannel[Task](postb3StateHash, 6).map(_ shouldBe Seq("6"))
+        } yield ()
       }
   }
 

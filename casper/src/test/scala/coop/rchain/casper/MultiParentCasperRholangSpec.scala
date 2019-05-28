@@ -8,8 +8,8 @@ import coop.rchain.casper.helper.HashSetCasperTestNode._
 import coop.rchain.casper.protocol.DeployData
 import coop.rchain.casper.scalatestcontrib._
 import coop.rchain.casper.util.ConstructDeploy.sign
-import coop.rchain.casper.util.{ConstructDeploy, ProtoUtil}
 import coop.rchain.crypto.{PrivateKey, PublicKey}
+import coop.rchain.casper.util.{ConstructDeploy, ProtoUtil, RSpaceUtil}
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.signatures.{Ed25519, Secp256k1}
 import coop.rchain.p2p.EffectsTestInstances.LogicalTime
@@ -20,6 +20,7 @@ import org.scalatest.{FlatSpec, Inspectors, Matchers}
 class MultiParentCasperRholangSpec extends FlatSpec with Matchers with Inspectors {
 
   import MultiParentCasperTestUtil._
+  import RSpaceUtil._
 
   implicit val timeEff = new LogicalTime[Effect]
 
@@ -31,8 +32,9 @@ class MultiParentCasperRholangSpec extends FlatSpec with Matchers with Inspector
   //put a new casper instance at the start of each
   //test since we cannot reset it
   "MultiParentCasper" should "create blocks based on deploys" in effectTest {
-    HashSetCasperTestNode.standaloneEff(genesis, validatorKeys.head).use { node =>
+    HashSetCasperTestNode.standaloneEff(genesis, validatorKeys.head).use { implicit node =>
       implicit val casper = node.casperEff
+      implicit val rm     = node.runtimeManager
 
       for {
         deploy <- ConstructDeploy.basicDeployData[Effect](0)
@@ -42,22 +44,21 @@ class MultiParentCasperRholangSpec extends FlatSpec with Matchers with Inspector
         Created(block)    = createBlockResult
         deploys           = block.body.get.deploys.flatMap(_.deploy)
         parents           = ProtoUtil.parentHashes(block)
-        storage           <- blockTuplespaceContents(block)
 
         _      = parents.size should be(1)
         _      = parents.head should be(genesis.blockHash)
         _      = deploys.size should be(1)
         _      = deploys.head should be(deploy)
-        result = storage.contains("@{0}!(0)") should be(true)
+        data   <- getDataAtPublicChannel[Effect](block, 0)
+        result = data shouldBe Seq("0")
       } yield result
     }
   }
 
   it should "be able to use the registry" in effectTest {
-    HashSetCasperTestNode.standaloneEff(genesis, validatorKeys.head).use { node =>
+    HashSetCasperTestNode.standaloneEff(genesis, validatorKeys.head).use { implicit node =>
       import node.casperEff
-
-      def now = System.currentTimeMillis()
+      implicit val rm = node.runtimeManager
 
       val registerDeploy = ConstructDeploy.sourceDeploy(
         """new uriCh, rr(`rho:registry:insertArbitrary`), hello in {
@@ -74,24 +75,12 @@ class MultiParentCasperRholangSpec extends FlatSpec with Matchers with Inspector
         createBlockResult <- casperEff.createBlock
         Created(block)    = createBlockResult
         blockStatus       <- casperEff.addBlock(block, ignoreDoppelgangerCheck[Effect])
-        contents          <- casperEff.storageContents(ProtoUtil.postStateHash(block))
-        id = contents
-          .split('|')
-          .find(
-            _.contains(
-              //based on the timestamp of registerDeploy, this is uriCh
-              "@{Unforgeable(0x61099068fff2d34a6f46c588e8e5ec0e9e131f08e3abe5cd3e3d15289dae7c65)}!"
-            )
-          )
-          .get
-          .split('`')(1)
         callDeploy = ConstructDeploy.sourceDeploy(
           s"""new rl(`rho:registry:lookup`), helloCh, out in {
-             |  rl!(`$id`, *helloCh) |
+             |  rl!(`rho:id:dwg79f7rkqqsz9458tnh4i6nw3yrnurufihg3zicn9nsrp18o9imwk`, *helloCh) |
              |  for(hello <- helloCh){ hello!("World", *out) }
-             |}
-      """.stripMargin,
-          now,
+             |}""".stripMargin,
+          1539788365119L,
           accounting.MAX_VALUE
         )
         _                  <- casperEff.deploy(callDeploy)
@@ -100,10 +89,12 @@ class MultiParentCasperRholangSpec extends FlatSpec with Matchers with Inspector
         block2Status       <- casperEff.addBlock(block2, ignoreDoppelgangerCheck[Effect])
         _                  = blockStatus shouldBe Valid
         _                  = block2Status shouldBe Valid
-        result <- casperEff
-                   .storageContents(ProtoUtil.postStateHash(block2))
-                   .map(_.contains("Hello, World!")) shouldBeF true
-      } yield result
+        data <- getDataAtPrivateChannel[Effect](
+                 block2,
+                 "83bbcd6ab7ba905e577e943672ac9e9fbf9917e1be496b2a6620c0821850af93"
+               )
+        _ = data shouldBe Seq("\"Hello, World!\"")
+      } yield ()
     }
   }
 
@@ -124,7 +115,7 @@ class MultiParentCasperRholangSpec extends FlatSpec with Matchers with Inspector
            |  walletCh, rl(`rho:registry:lookup`), SystemInstancesCh, faucetCh,
            |  rs(`rho:registry:insertSigned:ed25519`), uriOut
            |in {
-           |  rl!(`rho:id:wdwc36f4ixa6xacck3ddepmgueum7zueuczgthcqp6771kdu8jogm8`, *SystemInstancesCh) |
+           |  rl!(`rho:lang:systemInstancesRegistry`, *SystemInstancesCh) |
            |  for(@(_, SystemInstancesRegistry) <- SystemInstancesCh) {
            |    @SystemInstancesRegistry!("lookup", "faucet", *faucetCh) |
            |    for(faucet <- faucetCh){ faucet!($amount, "ed25519", "$pkStr", *walletCh) } |

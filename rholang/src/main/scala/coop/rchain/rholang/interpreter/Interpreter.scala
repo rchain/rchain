@@ -1,12 +1,9 @@
 package coop.rchain.rholang.interpreter
 
-import cats._
 import cats.effect._
 import cats.implicits._
-import coop.rchain.catscontrib.mtl.implicits._
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.rholang.interpreter.accounting._
-import coop.rchain.rholang.interpreter.errors._
 
 final case class EvaluateResult(cost: Cost, errors: Vector[Throwable])
 
@@ -72,7 +69,6 @@ object Interpreter {
                   case Left(error) =>
                     EvaluateResult(parsingCost, Vector(error)).pure[F]
                 }
-          _ <- C.get
         } yield res
 
       }

@@ -27,7 +27,7 @@ object BondingUtil {
 
   def bondingForwarderDeploy(bondKey: String, ethAddress: String): String =
     s"""new rl(`rho:registry:lookup`), SystemInstancesCh, posCh in {
-       |  rl!(`rho:id:wdwc36f4ixa6xacck3ddepmgueum7zueuczgthcqp6771kdu8jogm8`, *SystemInstancesCh) |
+       |  rl!(`rho:lang:systemInstancesRegistry`, *SystemInstancesCh) |
        |  for(@(_, SystemInstancesRegistry) <- SystemInstancesCh) {
        |    @SystemInstancesRegistry!("lookup", "pos", *posCh) |
        |    for(@purse <- @"${bondingForwarderAddress(ethAddress)}"; pos <- posCh){
@@ -103,7 +103,7 @@ object BondingUtil {
       _             = assert(Secp256k1.verify(unlockSigData, unlockSig, Base16.unsafeDecode("04" + pubKey)))
       sigString     = Base16.encode(unlockSig)
     } yield s"""new rl(`rho:registry:lookup`), WalletCheckCh in {
-           |  rl!(`rho:id:oqez475nmxx9ktciscbhps18wnmnwtm6egziohc3rkdzekkmsrpuyt`, *WalletCheckCh) |
+           |  rl!(`rho:lang:walletCheck`, *WalletCheckCh) |
            |  for(@(_, WalletCheck) <- WalletCheckCh) {
            |    @WalletCheck!("claim", "$ethAddress", "$pubKey", "$sigString", "$statusOut")
            |  }
@@ -142,7 +142,7 @@ object BondingUtil {
       transferSigData <- walletTransferSigData[F](nonce, amount, destination)
       transferSig     = Secp256k1.sign(transferSigData, secKey)
     } yield s"""new rl(`rho:registry:lookup`), WalletCheckCh, result in {
-               |  rl!(`rho:id:oqez475nmxx9ktciscbhps18wnmnwtm6egziohc3rkdzekkmsrpuyt`, *WalletCheckCh) |
+               |  rl!(`rho:lang:walletCheck`, *WalletCheckCh) |
                |  for(@(_, WalletCheck) <- WalletCheckCh) {
                |    @WalletCheck!("access", "$pubKey", *result) |
                |    for(@(true, wallet) <- result) {
@@ -170,7 +170,7 @@ object BondingUtil {
       transferSigData <- walletTransferSigData(nonce, amount, destination)
       transferSig     = sigFunc(transferSigData)
     } yield s"""new rl(`rho:registry:lookup`), SystemInstancesCh, walletCh, faucetCh in {
-               |  rl!(`rho:id:wdwc36f4ixa6xacck3ddepmgueum7zueuczgthcqp6771kdu8jogm8`, *SystemInstancesCh) |
+               |  rl!(`rho:lang:systemInstancesRegistry`, *SystemInstancesCh) |
                |  for(@(_, SystemInstancesRegistry) <- SystemInstancesCh) {
                |    @SystemInstancesRegistry!("lookup", "faucet", *faucetCh) |
                |    for(faucet <- faucetCh){ faucet!($amount, "secp256k1", "$pubKey", *walletCh) } |

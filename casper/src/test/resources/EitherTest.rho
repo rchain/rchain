@@ -26,7 +26,7 @@ in {
   contract divide10By(@divisor, ret) = { divide!(10, divisor, *ret)} |
   contract divide8By(@divisor, ret) = { divide! (8, divisor, *ret)} |
 
-  rl!(`rho:id:j6trahbxycumerwpr5qype7j43b7eqh8auebwsa9nn68if47gswh73`, *EitherCh) |
+  rl!(`rho:lang:either`, *EitherCh) |
   for(@(_, Either) <- EitherCh) {
 
     stdlog!("info", "Either & RhoSpec ready") |

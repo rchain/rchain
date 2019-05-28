@@ -18,9 +18,11 @@ import coop.rchain.rspace.util._
 import org.lightningj.util.ZBase32
 
 import scala.annotation.tailrec
+import scala.collection.immutable.HashMap
 import scala.collection.{Seq => RootSeq}
 import scala.concurrent.Await
 import scala.concurrent.duration._
+import scala.util.{Failure, Success, Try}
 
 /**
   * Registry implements a radix tree for public lookup of one-sided bundles.
@@ -842,43 +844,78 @@ class RegistryImpl[F[_]](
       case _ => F.unit
     }
 
+  // TODO: Extract hardcoded id:<whatever> and maybe even pass in this resolver itself
+  object BlessedContract {
+    private val idMap = Map[String, String](
+      "authKey"                 -> "4njqcsc65mt8xrfx9nsz7je7oucgywgd1tj1n1gjtw3ndsophyisro",
+      "basicWallet"             -> "3yicxut5xtx5tnmnneta7actof4yse3xangw4awzt8c8owqmddgyms",
+      "basicWalletFaucet"       -> "r3pfwhwyzfg3n3yhcndwuszkszr11rjdbksizz4eqbqnwg5w49kfo7",
+      "either"                  -> "j6trahbxycumerwpr5qype7j43b7eqh8auebwsa9nn68if47gswh73",
+      "listOps"                 -> "dputnspi15oxxnyymjrpu7rkaok3bjkiwq84z7cqcrx4ktqfpyapn4",
+      "lockbox"                 -> "9dsr55z1js13x346yhhecx66ns486i3yqf6jafrd9p9hdrrbxjqmyu",
+      "makeMint"                -> "exunyijimapk7z43g3bbr69awqdz54kyroj9q43jgu3dh567fxsftx",
+      "makePos"                 -> "nqt875jea4rr83383ys6guzsbebg6k7o7uhrint6d7km67886c4y4s",
+      "nonNegativeNumber"       -> "nd74ztexkao5awjhj95e3octkza7tydwiy7euthnyrt5ihgi9rj495",
+      "pos"                     -> "cnec3pa8prp4out3yc8facon6grm3xbsotpd4ckjfx8ghuw77xadzt",
+      "revVault"                -> "1o93uitkrjfubh43jt19owanuezhntag5wh74c6ur5feuotpi73q8z",
+      "systemInstancesRegistry" -> "wdwc36f4ixa6xacck3ddepmgueum7zueuczgthcqp6771kdu8jogm8",
+      "walletCheck"             -> "oqez475nmxx9ktciscbhps18wnmnwtm6egziohc3rkdzekkmsrpuyt"
+    )
+
+    def unapply(s: String): Option[String] = idMap.get(s)
+  }
+
+  case class WithPrefix(prefix: String) {
+    def unapply(s: String): Option[String] =
+      if (s.startsWith(prefix))
+        Some(s.substring(prefix.length))
+      else None
+  }
+
   def publicLookup(args: RootSeq[ListParWithRandom], sequenceNumber: Int): F[Unit] =
     args match {
-      case Seq(ListParWithRandom(Seq(key, ret), rand)) =>
-        def localFail() = fail(ret, rand, sequenceNumber)
-        try {
-          val Some(Expr(GUri(uri))) = key.singleExpr
-          if (uri.startsWith("rho:id:")) {
-            val tail = uri.substring("rho:id:".length)
-            if (tail.size != 54) {
-              localFail()
-            } else {
-              // Could fail
-              // 256 bits plus 14 bit crc-14
-              val bytes: Array[Byte] = ZBase32.decode(tail, 270)
-              val crc: Short =
-                ((bytes(32).toShort & 0xff) | ((bytes(33).toShort & 0xfc) << 6)).toShort
-              if (crc == CRC14.compute(bytes.view.slice(0, 32))) {
-                val args = RootSeq(
-                  ListParWithRandom(
-                    Seq(parByteArray(ByteString.copyFrom(bytes, 0, 32)), ret),
-                    rand
-                  )
-                )
-                lookup(args, sequenceNumber)
-              } else {
-                localFail()
-              }
-            }
-          } else {
-            localFail()
-          }
-        } catch {
-          case _: MatchError               => localFail()
-          case _: IllegalArgumentException => localFail()
+      case Seq(ListParWithRandom(Seq(RhoType.Uri(uri), ret), rand)) =>
+        val idUri     = WithPrefix("rho:id:")
+        val langUri   = WithPrefix("rho:lang:")
+        val rchainUri = WithPrefix("rho:rchain:")
+
+        val result = uri match {
+          case idUri(id) => handleRhoIdLookup(id, sequenceNumber, ret, rand, uri)
+          case langUri(BlessedContract(id)) =>
+            handleRhoIdLookup(id, sequenceNumber, ret, rand, uri)
+          case rchainUri(BlessedContract(id)) =>
+            handleRhoIdLookup(id, sequenceNumber, ret, rand, uri)
+          case _ => None
         }
+        result.getOrElse(fail(ret, rand, sequenceNumber))
       case _ => F.unit
     }
+
+  private def handleRhoIdLookup(
+      id: String,
+      sequenceNumber: Int,
+      ret: Par,
+      rand: Blake2b512Random,
+      uri: String
+  ): Option[F[Unit]] =
+    for {
+      bytes   <- Try { ZBase32.decode(id, 270) }.toOption
+      payload <- verifyCrc(bytes)
+      args = Seq(
+        ListParWithRandom(
+          Seq(parByteArray(ByteString.copyFrom(payload)), ret),
+          rand
+        )
+      )
+    } yield lookup(args, sequenceNumber)
+
+  private def verifyCrc(bytes: Array[Byte]): Option[Array[Byte]] = {
+    val crc = ((bytes(32).toShort & 0xff) | ((bytes(33).toShort & 0xfc) << 6)).toShort
+
+    if (crc == CRC14.compute(bytes.view.slice(0, 32)))
+      Some(bytes.slice(0, 32))
+    else None
+  }
 
   def publicRegisterRandom(args: RootSeq[ListParWithRandom], sequenceNumber: Int): F[Unit] =
     args match {

@@ -9,7 +9,7 @@ import coop.rchain.rspace.concurrent.{ConcurrentTwoStepLockF, TwoStepLock}
 import coop.rchain.rspace.history.Branch
 import coop.rchain.rspace.internal._
 import coop.rchain.rspace.trace.Consume
-import coop.rchain.rspace.nextgenrspace.history.HistoryRepository
+import coop.rchain.rspace.nextgenrspace.history.{History, HistoryRepository}
 import coop.rchain.shared.{Cell, Log}
 import coop.rchain.shared.SyncVarOps._
 import monix.execution.atomic.AtomicAny
@@ -177,17 +177,27 @@ abstract class RSpaceOps[F[_]: Concurrent, C, P, A, R, K](
 
   def toMap: F[Map[Seq[C], Row[P, A, K]]] = Map.empty.pure[F]
 
-  override def clear(): F[Unit] = Sync[F].unit
+  override def reset(root: Blake2b256Hash): F[Unit] =
+    for {
+      nextHistory <- historyRepositoryAtom.get().reset(root)
+      _           = historyRepositoryAtom.set(nextHistory)
+      _           = eventLog.take()
+      _           = eventLog.put(Seq.empty)
+      _           <- createNewHotStore(nextHistory)(serializeK.toCodec)
+      _           <- restoreInstalls()
+    } yield ()
+
+  override def clear(): F[Unit] = reset(History.emptyRootHash)
 
   protected def createCache: F[Cell[F, Cache[C, P, A, K]]] =
     Cell.refCell[F, Cache[C, P, A, K]](Cache())
 
   protected def createNewHotStore(
       historyReader: HistoryReader[F, C, P, A, K]
-  )(implicit cp: Codec[P], ck: Codec[K]): F[Unit] =
+  )(implicit ck: Codec[K]): F[Unit] =
     for {
       cache        <- createCache
-      nextHotStore = HotStore.inMem(Sync[F], cache, historyReader, cp, ck)
+      nextHotStore = HotStore.inMem(Sync[F], cache, historyReader, ck)
       _            = storeAtom.set(nextHotStore)
     } yield ()
 

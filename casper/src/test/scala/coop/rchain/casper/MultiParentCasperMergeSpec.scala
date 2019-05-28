@@ -5,8 +5,8 @@ import coop.rchain.casper.MultiParentCasper.ignoreDoppelgangerCheck
 import coop.rchain.casper.helper.HashSetCasperTestNode
 import coop.rchain.casper.helper.HashSetCasperTestNode._
 import coop.rchain.casper.scalatestcontrib._
-import coop.rchain.casper.util.{ConstructDeploy, ProtoUtil}
-import coop.rchain.crypto.signatures.Secp256k1
+import coop.rchain.crypto.signatures.{Secp256k1, Ed25519}
+import coop.rchain.casper.util.{ConstructDeploy, ProtoUtil, RSpaceUtil}
 import coop.rchain.p2p.EffectsTestInstances.LogicalTime
 import coop.rchain.rholang.interpreter.accounting
 import monix.execution.Scheduler.Implicits.global
@@ -15,6 +15,7 @@ import org.scalatest.{FlatSpec, Inspectors, Matchers}
 class MultiParentCasperMergeSpec extends FlatSpec with Matchers with Inspectors {
 
   import MultiParentCasperTestUtil._
+  import RSpaceUtil._
 
   implicit val timeEff = new LogicalTime[Effect]
 
@@ -25,6 +26,7 @@ class MultiParentCasperMergeSpec extends FlatSpec with Matchers with Inspectors 
 
   "HashSetCasper" should "handle multi-parent blocks correctly" in effectTest {
     HashSetCasperTestNode.networkEff(validatorKeys.take(2), genesis).use { nodes =>
+      implicit val rm = nodes(1).runtimeManager
       for {
         deployData0 <- ConstructDeploy.basicDeployData[Effect](0)
         deployData2 <- ConstructDeploy.basicDeployData[Effect](2)
@@ -62,13 +64,10 @@ class MultiParentCasperMergeSpec extends FlatSpec with Matchers with Inspectors 
         _ = multiparentBlock.header.get.parentsHashList.size shouldBe 2
         _ = nodes(0).casperEff.contains(multiparentBlock) shouldBeF true
         _ = nodes(1).casperEff.contains(multiparentBlock) shouldBeF true
-
-        finalTuplespace <- nodes(0).casperEff
-                            .storageContents(ProtoUtil.postStateHash(multiparentBlock))
-        _      = finalTuplespace.contains("@{0}!(0)") shouldBe true
-        _      = finalTuplespace.contains("@{1}!(1)") shouldBe true
-        result = finalTuplespace.contains("@{2}!(2)") shouldBe true
-      } yield result
+        _ <- getDataAtPublicChannel[Effect](multiparentBlock, 0).map(_ shouldBe Seq("0"))
+        _ <- getDataAtPublicChannel[Effect](multiparentBlock, 1).map(_ shouldBe Seq("1"))
+        _ <- getDataAtPublicChannel[Effect](multiparentBlock, 2).map(_ shouldBe Seq("2"))
+      } yield ()
     }
   }
 

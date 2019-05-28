@@ -468,33 +468,7 @@ lazy val rspace = (project in file("rspace"))
     },
     publishArtifact in Test := false,
     licenses := Seq("Apache-2.0" -> url("https://www.apache.org/licenses/LICENSE-2.0")),
-    homepage := Some(url("https://www.rchain.coop")),
-    developers := List(
-      Developer(
-        id = "guardbotmk3",
-        name = "Kyle Butt",
-        email = "kyle@pyrofex.net",
-        url = url("https://www.pyrofex.net")
-      ),
-      Developer(
-        id = "ys-pyrofex",
-        name = "Yaraslau Levashkevich",
-        email = "yaraslau@pyrofex.net",
-        url = url("https://www.pyrofex.net")
-      ),
-      Developer(
-        id = "KentShikama",
-        name = "Kent Shikama",
-        email = "kent@kentshikama.com",
-        url = url("https://www.rchain.coop")
-      ),
-      Developer(
-        id = "henrytill",
-        name = "Henry Till",
-        email = "henrytill@gmail.com",
-        url = url("https://www.pyrofex.net")
-      )
-    )
+    homepage := Some(url("https://www.rchain.coop"))
   )
   .dependsOn(shared % "compile->compile;test->test", crypto)
 

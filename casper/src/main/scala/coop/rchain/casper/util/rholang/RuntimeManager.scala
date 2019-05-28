@@ -116,7 +116,7 @@ class RuntimeManagerImpl[F[_]: Concurrent] private[rholang] (
     withResetRuntime(hash) { runtime =>
       for {
         _      <- setBlockTime(blockTime, runtime)
-        result <- newEval(terms, runtime, hash)
+        result <- processDeploys(terms, hash, processDeploy(runtime))
       } yield result
     }
 
@@ -128,7 +128,7 @@ class RuntimeManagerImpl[F[_]: Concurrent] private[rholang] (
     withResetRuntime(startHash) { runtime =>
       for {
         _          <- setBlockTime(blockTime, runtime)
-        evalResult <- newEval(terms, runtime, startHash)
+        evalResult <- processDeploys(terms, startHash, processDeploy(runtime))
       } yield (startHash, evalResult._1, evalResult._2)
     }
   }
@@ -163,7 +163,7 @@ class RuntimeManagerImpl[F[_]: Concurrent] private[rholang] (
   private def bondsQuerySource(name: String = "__SCALA__"): String =
     s"""
        | new rl(`rho:registry:lookup`), SystemInstancesCh, posCh in {
-       |   rl!(`rho:id:wdwc36f4ixa6xacck3ddepmgueum7zueuczgthcqp6771kdu8jogm8`, *SystemInstancesCh) |
+       |   rl!(`rho:lang:systemInstancesRegistry`, *SystemInstancesCh) |
        |   for(@(_, SystemInstancesRegistry) <- SystemInstancesCh) {
        |     @SystemInstancesRegistry!("lookup", "pos", *posCh) |
        |     for(pos <- posCh){ pos!("getBonds", "$name") }
@@ -190,7 +190,7 @@ class RuntimeManagerImpl[F[_]: Concurrent] private[rholang] (
   private def balanceQuerySource(user: ByteString, name: String = "__SCALA__"): String =
     s"""
        | new rl(`rho:registry:lookup`), revAddressOps(`rho:rev:address`), revVaultCh in {
-       |   rl!(`rho:id:1o93uitkrjfubh43jt19owanuezhntag5wh74c6ur5feuotpi73q8z`, *revVaultCh)
+       |   rl!(`rho:rchain:revVault`, *revVaultCh)
        |   | for (@(_, RevVault) <- revVaultCh) {
        |     new vaultCh, revAddressCh in {
        |       revAddressOps!("fromPublicKey", "${Base16.encode(user.toByteArray)}".hexToBytes(), *revAddressCh)
@@ -214,7 +214,7 @@ class RuntimeManagerImpl[F[_]: Concurrent] private[rholang] (
 
   def computeDeployPayment(start: StateHash)(user: ByteString, amount: Long): F[StateHash] =
     withResetRuntime(start)(
-      computeDeployPayment(_)(user, amount).map(cp => ByteString.copyFrom(cp.root.bytes.toArray))
+      computeDeployPayment(_)(user, amount).map(_.root.toByteString)
     )
 
   private def computeDeployPayment(
@@ -240,7 +240,7 @@ class RuntimeManagerImpl[F[_]: Concurrent] private[rholang] (
   private def deployPaymentSource(amount: Long, name: String = "__SCALA__"): String =
     s"""
        | new rl(`rho:registry:lookup`), poSCh in {
-       |   rl!(`rho:id:cnec3pa8prp4out3yc8facon6grm3xbsotpd4ckjfx8ghuw77xadzt`, *poSCh) |
+       |   rl!(`rho:rchain:pos`, *poSCh) |
        |   for(@(_, PoS) <- poSCh) {
        |     @PoS!("pay", $amount, "$name")
        |   }
@@ -250,10 +250,9 @@ class RuntimeManagerImpl[F[_]: Concurrent] private[rholang] (
   private def withRuntime[A](f: Runtime[F] => F[A]): F[A] =
     Sync[F].bracket(runtimeContainer.take)(f)(runtimeContainer.put)
 
-  private def withResetRuntime[R](hash: StateHash)(block: Runtime[F] => F[R]) =
+  private def withResetRuntime[R](hash: StateHash)(block: Runtime[F] => F[R]): F[R] =
     withRuntime(
-      runtime =>
-        runtime.space.reset(Blake2b256Hash.fromByteArray(hash.toByteArray)) >> block(runtime)
+      runtime => runtime.space.reset(Blake2b256Hash.fromByteString(hash)) >> block(runtime)
     )
 
   private def toBondSeq(bondsMap: Par): Seq[Bond] =
@@ -301,41 +300,40 @@ class RuntimeManagerImpl[F[_]: Concurrent] private[rholang] (
         )
     )
 
-  private def newEval(
+  private def processDeploys(
       terms: Seq[DeployData],
-      runtime: Runtime[F],
-      initHash: StateHash
+      initHash: StateHash,
+      processDeploy: (Blake2b256Hash, DeployData) => F[(Blake2b256Hash, InternalProcessedDeploy)]
   ): F[(StateHash, Seq[InternalProcessedDeploy])] = {
 
-    type Acc = (Blake2b256Hash, Seq[InternalProcessedDeploy])
-
-    def evalSingle(acc: Acc, deploy: DeployData): F[Acc] = {
-      val (hash, deployResults) = acc
-      for {
-        _                            <- runtime.space.reset(hash)
-        evaluateResult               <- computeEffect(runtime)(deploy)
-        EvaluateResult(cost, errors) = evaluateResult
-        newCheckpoint                <- runtime.space.createCheckpoint()
-        deployResult = InternalProcessedDeploy(
-          deploy,
-          Cost.toProto(cost),
-          newCheckpoint.log,
-          Seq.empty[trace.Event],
-          DeployStatus.fromErrors(errors)
-        )
-        newHash = if (errors.isEmpty) newCheckpoint.root else hash
-      } yield (newHash, deployResults :+ deployResult)
-    }
-
-    val initHashBlake = Blake2b256Hash.fromByteArray(initHash.toByteArray)
+    val initHashBlake = Blake2b256Hash.fromByteString(initHash)
     terms.toList
-      .foldM[F, Acc]((initHashBlake, Seq.empty))(evalSingle)
-      .map {
-        case (hash, deployResults) =>
-          val hashByteString = ByteString.copyFrom(hash.bytes.toArray)
-          (hashByteString, deployResults)
+      .foldM((initHashBlake, Seq.empty[InternalProcessedDeploy])) {
+        case ((hash, results), deploy) => {
+          processDeploy(hash, deploy).map(_.bimap(identity, results :+ _))
+        }
       }
+      .map(_.bimap(_.toByteString, x => x))
   }
+
+  private def processDeploy(runtime: Runtime[F])(
+      startHash: Blake2b256Hash,
+      deploy: DeployData
+  ): F[(Blake2b256Hash, InternalProcessedDeploy)] =
+    for {
+      _                            <- runtime.space.reset(startHash)
+      evaluateResult               <- computeEffect(runtime)(deploy)
+      EvaluateResult(cost, errors) = evaluateResult
+      newCheckpoint                <- runtime.space.createCheckpoint()
+      deployResult = InternalProcessedDeploy(
+        deploy,
+        Cost.toProto(cost),
+        newCheckpoint.log,
+        Seq.empty[trace.Event],
+        DeployStatus.fromErrors(errors)
+      )
+      newHash = if (errors.isEmpty) newCheckpoint.root else startHash
+    } yield (newHash, deployResult)
 
   private def replayEval(
       terms: Seq[InternalProcessedDeploy],
@@ -356,10 +354,13 @@ class RuntimeManagerImpl[F[_]: Concurrent] private[rholang] (
               //TODO: compare replay deploy cost to given deploy cost
               EvaluateResult(cost, errors) = replayEvaluateResult
               cont <- DeployStatus.fromErrors(errors) match {
-                       case int: InternalErrors => Left(Some(deploy) -> int).pure[F]
+                       case int: InternalErrors =>
+                         (deploy.some, int: Failed).asLeft[StateHash].pure[F]
                        case replayStatus =>
                          if (status.isFailed != replayStatus.isFailed)
-                           Left(Some(deploy) -> ReplayStatusMismatch(replayStatus, status)).pure[F]
+                           (deploy.some, ReplayStatusMismatch(replayStatus, status): Failed)
+                             .asLeft[StateHash]
+                             .pure[F]
                          else if (errors.nonEmpty) doReplayEval(rem, hash)
                          else {
                            runtime.replaySpace
@@ -369,16 +370,12 @@ class RuntimeManagerImpl[F[_]: Concurrent] private[rholang] (
                                case Right(newCheckpoint) =>
                                  doReplayEval(rem, newCheckpoint.root)
                                case Left(ex: ReplayException) =>
-                                 Either
-                                   .left[(Option[DeployData], Failed), StateHash](
-                                     none[DeployData] -> UnusedCommEvent(ex)
-                                   )
+                                 (none[DeployData], UnusedCommEvent(ex): Failed)
+                                   .asLeft[StateHash]
                                    .pure[F]
                                case Left(ex) =>
-                                 Either
-                                   .left[(Option[DeployData], Failed), StateHash](
-                                     none[DeployData] -> UserErrors(Vector(ex))
-                                   )
+                                 (none[DeployData], UserErrors(Vector(ex)): Failed)
+                                   .asLeft[StateHash]
                                    .pure[F]
                              }
                          }
@@ -388,20 +385,20 @@ class RuntimeManagerImpl[F[_]: Concurrent] private[rholang] (
           case _ =>
             Either
               .right[(Option[DeployData], Failed), StateHash](
-                ByteString.copyFrom(hash.bytes.toArray)
+                hash.toByteString
               )
               .pure[F]
         }
       }
 
-    doReplayEval(terms, Blake2b256Hash.fromByteArray(initHash.toByteArray))
+    doReplayEval(terms, Blake2b256Hash.fromByteString(initHash))
   }
 
   private[this] def doInj(
       deploy: DeployData,
       reducer: ChargingReducer[F],
       errorLog: ErrorLog[F]
-  )(implicit C: _cost[F]) = {
+  )(implicit C: _cost[F]): F[EvaluateResult] = {
     implicit val rand: Blake2b512Random = Blake2b512Random(
       DeployData.toByteArray(ProtoUtil.stripDeployData(deploy))
     )
@@ -412,7 +409,6 @@ class RuntimeManagerImpl[F[_]: Concurrent] private[rholang] (
       Cost(deploy.phloLimit)
     )
   }
-
 }
 
 object RuntimeManager {

@@ -30,7 +30,7 @@ new PoS,
     getMVar,
     runMVar,
     deposit in {
-  registryLookup!(`rho:id:1o93uitkrjfubh43jt19owanuezhntag5wh74c6ur5feuotpi73q8z`, *revVaultCh) |
+  registryLookup!(`rho:rchain:revVault`, *revVaultCh) |
 
   for(@(_, RevVault) <- revVaultCh) {
     new posRevAddressCh in {

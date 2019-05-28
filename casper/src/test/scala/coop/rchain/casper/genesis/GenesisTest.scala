@@ -8,7 +8,7 @@ import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockStore
 import coop.rchain.casper.helper.BlockDagStorageFixture
 import coop.rchain.casper.protocol.{BlockMessage, Bond}
-import coop.rchain.casper.util.ProtoUtil
+import coop.rchain.casper.util.{ProtoUtil, RSpaceUtil}
 import coop.rchain.casper.util.rholang.{InterpreterUtil, RuntimeManager}
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.p2p.EffectsTestInstances.{LogStub, LogicalTime}
@@ -36,7 +36,7 @@ class GenesisTest extends FlatSpec with Matchers with EitherValues with BlockDag
   val walletAddresses = Seq(
     "0x20356b6fae3a94db5f01bdd45347faFad3dd18ef",
     "0x041e1eec23d118f0c4ffc814d4f415ac3ef3dcff"
-  ).zipWithIndex
+  )
 
   def printBonds(bondsFile: String): Unit = {
     val pw = new PrintWriter(bondsFile)
@@ -53,7 +53,7 @@ class GenesisTest extends FlatSpec with Matchers with EitherValues with BlockDag
   def printWallets(walletsFile: String): Unit = {
     val pw = new PrintWriter(walletsFile)
     pw.println(
-      walletAddresses
+      walletAddresses.zipWithIndex
         .map {
           case (v, i) => s"$v,$i,0"
         }
@@ -210,11 +210,26 @@ class GenesisTest extends FlatSpec with Matchers with EitherValues with BlockDag
         val walletsFile = genesisPath.resolve("wallets.txt").toString
         printWallets(walletsFile)
 
+        import RSpaceUtil._
         for {
-          runtimeManager  <- RuntimeManager.fromRuntime(runtime)
-          _               <- fromInputFiles()(runtimeManager, genesisPath, log, time)
-          storageContents <- StoragePrinter.prettyPrint(runtime.space)
-        } yield walletAddresses.forall(storageContents contains _._1) should be(true)
+          runtimeManager <- RuntimeManager.fromRuntime(runtime)
+          blockMessage <- fromInputFiles(deployTimestamp = Some(0L))(
+                           runtimeManager,
+                           genesisPath,
+                           log,
+                           time
+                         )
+          data <- {
+            implicit val rm = runtimeManager
+            getDataAtPrivateChannel[Task](
+              blockMessage,
+              "591d98d76d87741fc9b8d1b9bdce8f8e51c7573c91c419b7210ca700cf7651e9"
+            ).map(_.head)
+          }
+          _ = walletAddresses.map { wallet =>
+            data should (include(wallet))
+          }
+        } yield ()
     }
   )
 

@@ -2,23 +2,17 @@ package coop.rchain.rholang
 import java.io.File
 import java.nio.file.{Files, Path}
 
-import cats._
-import cats.implicits._
-import cats.Applicative
 import cats.effect.ExitCase.Error
 import cats.effect.{Concurrent, ContextShift, Resource}
-import cats.effect.concurrent.Semaphore
+import cats.{Applicative, Parallel}
 import com.typesafe.scalalogging.Logger
 import coop.rchain.metrics.Metrics
 import coop.rchain.models._
-import coop.rchain.rholang.interpreter.accounting._
 import coop.rchain.rholang.interpreter.Runtime
 import coop.rchain.rholang.interpreter.Runtime.{RhoContext, RhoISpace, SystemProcess}
-import coop.rchain.rholang.interpreter.errors.InterpreterError
 import coop.rchain.rspace.history.Branch
 import coop.rchain.rspace.{Context, RSpace}
 import coop.rchain.shared.{Log, StoreType}
-import monix.eval.Task
 import monix.execution.Scheduler
 
 import scala.reflect.io.Directory
@@ -45,6 +39,7 @@ object Resources {
       branch: String = "test",
       mapSize: Long = 1024L * 1024L * 4
   ): Resource[F, RhoISpace[F]] = {
+
     import coop.rchain.rholang.interpreter.storage.implicits._
 
     import scala.concurrent.ExecutionContext.Implicits.global
@@ -71,18 +66,10 @@ object Resources {
       storageSize: Long = 1024 * 1024,
       additionalSystemProcesses: Seq[SystemProcess.Definition[F]] = Seq.empty
   )(implicit scheduler: Scheduler): Resource[F, Runtime[F]] =
-    mkTempDir[F](prefix)
-      .flatMap { tmpDir =>
-        Resource.make[F, Runtime[F]] {
-          for {
-            cost <- CostAccounting.emptyCost[F]
-            runtime <- {
-              implicit val c = cost
-              Runtime.create[F, M](tmpDir, storageSize, StoreType.LMDB, additionalSystemProcesses)
-            }
-          } yield (runtime)
-        }(
-          rt => rt.close()
-        )
-      }
+    mkTempDir[F](prefix).flatMap { tmpDir =>
+      Resource.make[F, Runtime[F]](
+        Runtime
+          .createWithEmptyCost[F, M](tmpDir, storageSize, StoreType.LMDB, additionalSystemProcesses)
+      )(_.close())
+    }
 }

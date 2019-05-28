@@ -21,9 +21,9 @@ new
   _getOrCreate,
   _revVault
 in {
-  rl!(`rho:id:exunyijimapk7z43g3bbr69awqdz54kyroj9q43jgu3dh567fxsftx`, *MakeMintCh) |
-  rl!(`rho:id:4njqcsc65mt8xrfx9nsz7je7oucgywgd1tj1n1gjtw3ndsophyisro`, *AuthKeyCh) |
-  rl!(`rho:id:j6trahbxycumerwpr5qype7j43b7eqh8auebwsa9nn68if47gswh73`, *EitherCh) |
+  rl!(`rho:lang:makeMint`, *MakeMintCh) |
+  rl!(`rho:rchain:authKey`, *AuthKeyCh) |
+  rl!(`rho:lang:either`, *EitherCh) |
   for(@(_, MakeMint) <- MakeMintCh; @(_, AuthKey) <- AuthKeyCh; @(_, Either) <- EitherCh) {
 
     new mintCh, vaultMapStore in {
