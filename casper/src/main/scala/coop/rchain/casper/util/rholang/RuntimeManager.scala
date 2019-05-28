@@ -183,7 +183,7 @@ class RuntimeManagerImpl[F[_]: Concurrent] private[rholang] (
   )(user: ByteString, amount: Long): F[Checkpoint] =
     computeEffect(runtime)(
       ConstructDeploy.sourceDeployNow(deployPaymentSource(amount)).withDeployer(user)
-    ) >>
+    ).ensure(BugFoundError("Deploy payment failed unexpectedly"))(_.errors.isEmpty) >>
       getResult(runtime)() >>= {
       case Seq(RhoType.Tuple2(RhoType.Boolean(true), Par.defaultInstance)) =>
         runtime.space.createCheckpoint()
