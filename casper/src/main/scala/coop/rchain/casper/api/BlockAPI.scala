@@ -40,7 +40,13 @@ object BlockAPI {
       casper
         .deploy(d)
         .map(
-          _.bimap(err => err.show, _ => DeployServiceResponse("Success!"))
+          _.bimap(
+            err => err.show,
+            res =>
+              DeployServiceResponse(
+                s"Success!\nDeployId is: ${PrettyPrinter.buildStringNoLimit(res)}"
+              )
+          )
         )
 
     val errorMessage = "Could not deploy, casper instance was not available yet."

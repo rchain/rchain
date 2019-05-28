@@ -192,9 +192,9 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Sync: ConnectionsCell: Trans
       }
   }
 
-  def deploy(d: DeployData): F[Either[DeployError, Unit]] =
+  def deploy(d: DeployData): F[Either[DeployError, ByteString]] =
     validateDeploy(d).fold(
-      _.asLeft[Unit].pure[F],
+      _.asLeft[ByteString].pure[F],
       kp(
         InterpreterUtil
           .mkTerm(d.term)
@@ -205,13 +205,13 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Sync: ConnectionsCell: Trans
       )
     )
 
-  def addDeploy(deploy: DeployData): F[Unit] =
+  def addDeploy(deploy: DeployData): F[ByteString] =
     for {
       _ <- Cell[F, CasperState].modify { s =>
             s.copy(deployHistory = s.deployHistory + deploy)
           }
       _ <- Log[F].info(s"Received ${PrettyPrinter.buildString(deploy)}")
-    } yield ()
+    } yield (deploy.sig)
 
   def estimator(dag: BlockDagRepresentation[F]): F[IndexedSeq[BlockHash]] =
     Estimator.tips[F](dag, genesis)
