@@ -9,11 +9,7 @@ import coop.rchain.casper.ValidatorIdentity
 import coop.rchain.casper.genesis.Genesis
 import coop.rchain.casper.genesis.contracts._
 import coop.rchain.casper.protocol._
-import coop.rchain.casper.util.rholang.{
-  InternalProcessedDeploy,
-  ProcessedDeployUtil,
-  RuntimeManager
-}
+import coop.rchain.casper.util.rholang.{InternalProcessedDeploy, RuntimeManager}
 import coop.rchain.catscontrib.Catscontrib._
 import coop.rchain.comm.protocol.routing.Packet
 import coop.rchain.comm.rp.Connect.RPConfAsk
@@ -146,7 +142,7 @@ object BlockApproverProtocol {
             Long.MaxValue
           )
           .toSet
-        blockDeploys          = body.deploys.flatMap(ProcessedDeployUtil.toInternal)
+        blockDeploys          = body.deploys.flatMap(InternalProcessedDeploy.fromProcessedDeploy)
         genesisBlessedDeploys = genesisBlessedContracts
         _ <- (blockDeploys.size == genesisBlessedContracts.size)
               .either(())

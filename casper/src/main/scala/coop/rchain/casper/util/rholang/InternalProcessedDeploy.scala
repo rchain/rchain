@@ -12,25 +12,25 @@ final case class InternalProcessedDeploy(
     deployLog: Seq[trace.Event],
     paymentLog: Seq[trace.Event],
     status: DeployStatus
-)
+) {
 
-object ProcessedDeployUtil {
+  def toProcessedDeploy: ProcessedDeploy =
+    ProcessedDeploy(
+      deploy = Some(deploy),
+      cost = Some(cost),
+      log = deployLog.map(EventConverter.toCasperEvent),
+      errored = status.isFailed
+    )
 
-  def toInternal(pd: ProcessedDeploy): Option[InternalProcessedDeploy] =
+}
+
+object InternalProcessedDeploy {
+
+  def fromProcessedDeploy(pd: ProcessedDeploy): Option[InternalProcessedDeploy] =
     for {
       d <- pd.deploy
       c <- pd.cost
       l = pd.log.map(EventConverter.toRspaceEvent)
       s = if (pd.errored) UnknownFailure else Succeeded
     } yield InternalProcessedDeploy(d, c, l, Seq.empty[trace.Event], s)
-
-  def fromInternal(ipd: InternalProcessedDeploy): ProcessedDeploy = ipd match {
-    case InternalProcessedDeploy(deploy, cost, deployLog, _, status) =>
-      ProcessedDeploy(
-        deploy = Some(deploy),
-        cost = Some(cost),
-        log = deployLog.map(EventConverter.toCasperEvent),
-        errored = status.isFailed
-      )
-  }
 }
