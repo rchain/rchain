@@ -420,11 +420,11 @@ class DebruijnInterpreter[M[_], F[_]](
           deployParameters: DeployParameters
       )(newEnv: Env[Par], urn: String): Either[ReduceError, Env[Par]] =
         if (urn == "rho:deployer:auth") {
-          val bs = deployParameters.userId.exprs.headOption match {
-            case Some(Expr(GByteArray(byteString))) => byteString
-            case _                                  => ByteString.EMPTY
+          deployParameters.userId.exprs.headOption match {
+            case Some(Expr(GByteArray(bs))) =>
+              newEnv.put(Par(unforgeables = Vector(GDeployerAuth(bs)))).asRight[ReduceError]
+            case _ => ReduceError("No deploy parameters set").asLeft[Env[Par]]
           }
-          newEnv.put(Par(unforgeables = Vector(GDeployerAuth(bs)))).asRight[ReduceError]
         } else
           urnMap.get(urn) match {
             case Some(p) => newEnv.put(p).asRight[ReduceError]
