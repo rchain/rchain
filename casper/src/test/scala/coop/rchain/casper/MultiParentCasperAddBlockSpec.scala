@@ -101,7 +101,7 @@ class MultiParentCasperAddBlockSpec extends FlatSpec with Matchers with Inspecto
 
       val deployDatas = Vector(
         "contract @\"add\"(@x, @y, ret) = { ret!(x + y) }",
-        "new unforgable in { @\"add\"!(5, 7, *unforgable) }"
+        "new unforgable, stdout(`rho:io:stdout`) in { @\"add\"!(5, 7, *unforgable) | stdout!([\"hi\", *unforgable]) }"
       ).zipWithIndex
         .map(s => ConstructDeploy.sourceDeploy(s._1, start + s._2, accounting.MAX_VALUE))
 
@@ -127,7 +127,7 @@ class MultiParentCasperAddBlockSpec extends FlatSpec with Matchers with Inspecto
         // channel is deterministic because of the fixed timestamp
         data <- getDataAtPrivateChannel[Effect](
                  signedBlock2,
-                 "272b27b8d34180d6d8bb73ff951190ec9db69ae08015f8a9d7d95e1d94fc38a6"
+                 "ad0dd958a6acf8e58c2ecfdbf5f23b3c5beb74a7091c21a10c79cbb0b591872d"
                )
         _ = data shouldBe Seq("12")
       } yield ()
