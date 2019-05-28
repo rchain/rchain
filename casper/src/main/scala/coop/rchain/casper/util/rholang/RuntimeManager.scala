@@ -204,7 +204,7 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics] private[rholang] (
       runtime: Runtime[F],
       reducer: ChargingReducer[F],
       space: RhoISpace[F]
-  )(user: ByteString, amount: Long): F[Checkpoint] =
+  )(user: ByteString, amount: Long): F[Either[String, Checkpoint]] =
     for {
       _ <- computeEffect(runtime, reducer)(
             ConstructDeploy.sourceDeployNow(deployPaymentSource(amount)).withDeployer(user)
@@ -212,18 +212,19 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics] private[rholang] (
       consumeResult <- getResult(runtime, space)()
       result <- consumeResult match {
                  case Seq(RhoType.Tuple2(RhoType.Boolean(true), Par.defaultInstance)) =>
-                   space.createCheckpoint()
+                   space.createCheckpoint().map(_.asRight[String])
                  case Seq(RhoType.Tuple2(RhoType.Boolean(false), RhoType.String(error))) =>
-                   BugFoundError(s"Deploy payment failed unexpectedly: $error")
-                     .raiseError[F, Checkpoint]
+                   error
+                     .asLeft[Checkpoint]
+                     .pure[F]
                  case Seq() =>
                    BugFoundError("Expected response message was not received")
-                     .raiseError[F, Checkpoint]
+                     .raiseError[F, Either[String, Checkpoint]]
                  case other =>
                    val contentAsStr = other.map(RholangPrinter().buildString(_)).mkString(",")
                    BugFoundError(
                      s"Deploy payment returned unexpected result: [$contentAsStr ]"
-                   ).raiseError[F, Checkpoint]
+                   ).raiseError[F, Either[String, Checkpoint]]
                }
     } yield result
 
