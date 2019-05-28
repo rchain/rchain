@@ -61,7 +61,6 @@ trait RuntimeManager[F[_]] {
       blockTime: Long
   ): F[(StateHash, StateHash, Seq[InternalProcessedDeploy])]
   def computeBonds(startHash: StateHash): F[Seq[Bond]]
-  def computeDeployPayment(startHash: StateHash)(user: ByteString, amount: Long): F[StateHash]
   def getData(hash: StateHash)(channel: Par): F[Seq[Par]]
   def getContinuation(hash: StateHash)(
       channels: Seq[Par]
@@ -200,13 +199,6 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics] private[rholang] (
        #   }
        # }
        """.stripMargin('#')
-
-  def computeDeployPayment(start: StateHash)(user: ByteString, amount: Long): F[StateHash] =
-    withResetRuntimeLock(start)(
-      runtime =>
-        computeDeployPayment(runtime, runtime.reducer, runtime.space)(user, amount)
-          .map(_.root.toByteString)
-    )
 
   private def computeDeployPayment(
       runtime: Runtime[F],
@@ -472,11 +464,6 @@ object RuntimeManager {
 
       override def computeBonds(hash: StateHash): T[F, Seq[Bond]] =
         runtimeManager.computeBonds(hash).liftM[T]
-
-      override def computeDeployPayment(
-          start: StateHash
-      )(user: ByteString, amount: Long): T[F, StateHash] =
-        runtimeManager.computeDeployPayment(start)(user, amount).liftM[T]
 
       override def getData(hash: StateHash)(channel: Par): T[F, Seq[Par]] =
         runtimeManager.getData(hash)(channel).liftM[T]
