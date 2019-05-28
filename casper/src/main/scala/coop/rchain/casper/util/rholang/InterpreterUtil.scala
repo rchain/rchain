@@ -103,7 +103,7 @@ object InterpreterUtil {
                 new Exception(s"Internal errors encountered while processing ${PrettyPrinter
                   .buildString(deploy)}: ${exs.mkString("\n")}")
               ).asLeft[Option[StateHash]].pure[F]
-            case UserErrors(errors: Vector[Throwable]) =>
+            case UserErrors(errors: Seq[Throwable]) =>
               Log[F].warn(s"Found user error(s) ${errors.map(_.getMessage).mkString("\n")}") >>
                 none[StateHash].asRight[BlockException].pure[F]
             case ReplayStatusMismatch(replay: DeployStatus, orig: DeployStatus) =>
