@@ -198,7 +198,7 @@ object Validate {
                         )
       _ <- span.mark("before-repeat-deploy-validation")
       repeatedDeployStatus <- timestampStatus.joinRight.traverse(
-                               _ => Validate.repeatDeploy[F](block, dag, expirationThreshold)
+                               _ => Validate.repeatDeploy[F](block, dag, expirationThreshold, span)
                              )
       _ <- span.mark("before-block-number-validation")
       blockNumberStatus <- repeatedDeployStatus.joinRight.traverse(
@@ -267,7 +267,8 @@ object Validate {
   def repeatDeploy[F[_]: Monad: Log: BlockStore](
       block: BlockMessage,
       dag: BlockDagRepresentation[F],
-      expirationThreshold: Int
+      expirationThreshold: Int,
+      span: Span[F]
   ): F[Either[InvalidBlock, ValidBlock]] = {
     val deployKeySet = (for {
       bd <- block.body.toList
@@ -275,9 +276,11 @@ object Validate {
     } yield r.sig).toSet
 
     for {
+      _                   <- span.mark("before-repeat-deploy-get-parents")
       initParents         <- ProtoUtil.unsafeGetParents[F](block)
       maxBlockNumber      = ProtoUtil.maxBlockNumber(initParents)
       earliestBlockNumber = maxBlockNumber + 1 - expirationThreshold
+      _                   <- span.mark("before-repeat-deploy-duplicate-block")
       maybeDuplicatedBlock <- DagOperations
                                .bfTraverseF[F, BlockMessage](initParents)(
                                  b =>
@@ -290,6 +293,7 @@ object Validate {
                                    .flatMap(_.deploy)
                                    .exists(d => deployKeySet.contains(d.sig))
                                }
+      _ <- span.mark("before-repeat-deploy-duplicate-block-log")
       maybeError <- maybeDuplicatedBlock
                      .traverse(
                        duplicatedBlock => {
