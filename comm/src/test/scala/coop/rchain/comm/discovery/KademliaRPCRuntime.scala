@@ -1,10 +1,9 @@
 package coop.rchain.comm.discovery
 
-import java.util.concurrent.atomic.AtomicInteger
+import java.net.ServerSocket
 
 import scala.collection.mutable
 import scala.concurrent.duration._
-import scala.util.Random
 
 import cats._
 import cats.effect.Timer
@@ -12,6 +11,7 @@ import cats.implicits._
 
 import coop.rchain.comm._
 import coop.rchain.grpc.Server
+import coop.rchain.shared.Resources
 
 abstract class KademliaRPCRuntime[F[_]: Monad: Timer, E <: Environment] {
 
@@ -26,12 +26,16 @@ abstract class KademliaRPCRuntime[F[_]: Monad: Timer, E <: Environment] {
 
   def extract[A](fa: F[A]): A
 
-  private val nextPort = new AtomicInteger((Random.nextInt(100) + 500 + 1) * 100)
+  private def getFreePort: Int =
+    Resources.withResource(new ServerSocket(0)) { s =>
+      s.setReuseAddress(true)
+      s.getLocalPort
+    }
 
   def twoNodesEnvironment[A](block: (E, E) => F[A]): F[A] =
     for {
-      e1 <- createEnvironment(nextPort.incrementAndGet())
-      e2 <- createEnvironment(nextPort.incrementAndGet())
+      e1 <- createEnvironment(getFreePort)
+      e2 <- createEnvironment(getFreePort)
       r  <- block(e1, e2)
     } yield r
 

@@ -126,11 +126,34 @@ object Main {
     SLF4JBridgeHandler.removeHandlersForRootLogger()
     SLF4JBridgeHandler.install()
     for {
+      _       <- checkPorts(conf)
       _       <- log.info(VersionInfo.get)
       _       <- logConfiguration(conf)
       runtime <- NodeRuntime(conf)
       _       <- runtime.main
     } yield ()
+  }
+
+  private def checkPorts(conf: Configuration): Task[Unit] = {
+    def isLocalPortAvailable(port: Int): Task[Boolean] =
+      Task
+        .delay(new java.net.ServerSocket(port).close())
+        .attempt
+        .map(_.isRight)
+        .ifM(
+          true.pure[Task],
+          log.error(s"Port $port is already in use!").as(false)
+        )
+
+    List(
+      conf.server.port,
+      conf.server.kademliaPort,
+      conf.server.httpPort,
+      conf.grpcServer.portExternal,
+      conf.grpcServer.portInternal
+    ).traverse(isLocalPortAvailable)
+      .map(_.forall(identity))
+      .ifM(Task.unit, Task.delay(System.exit(1)))
   }
 
   private def logConfiguration(conf: Configuration): Task[Unit] =
