@@ -23,7 +23,7 @@ FIX_COST_RHO_CONTRACTS = {
     "contract_2.rho": 69,
     "contract_3.rho": 76,
     "contract_4.rho": 83,
-    "contract_5.rho": 1936,
+    "contract_5.rho": 1970,
 }
 
 def test_propose_cost(started_standalone_bootstrap_node: Node, random_generator: Random) -> None:
