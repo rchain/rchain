@@ -74,12 +74,12 @@ class RuntimeManagerImpl[F[_]: Concurrent] private[rholang] (
 
   def captureResults(start: StateHash, deploy: DeployData, name: Par): F[Seq[Par]] =
     withResetRuntime(start) { runtime =>
-      //TODO: Is better error handling needed here?
-      for {
-        evaluateResult <- computeEffect(runtime)(deploy)
-        result <- if (evaluateResult.errors.isEmpty) getData(runtime)(name)
-                 else Seq.empty[Par].pure[F]
-      } yield result
+      computeEffect(runtime)(deploy)
+        .ensure(
+          BugFoundError("Unexpected error while capturing results from rholang")
+        )(
+          _.errors.isEmpty
+        ) >> getData(runtime)(name)
     }
 
   private def computeEffect(runtime: Runtime[F])(deploy: DeployData): F[EvaluateResult] =
