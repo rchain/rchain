@@ -5,6 +5,7 @@ import cats.implicits._
 import cats.{Applicative, Monad}
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.{BlockDagRepresentation, BlockDagStorage, BlockStore}
+import coop.rchain.casper._
 import coop.rchain.casper.DeployError
 import coop.rchain.casper.protocol.{BlockMessage, DeployData}
 import coop.rchain.casper.util.rholang.RuntimeManager
@@ -31,7 +32,7 @@ class NoOpsCasperEffect[F[_]: Sync: BlockStore: BlockDagStorage] private (
       _ <- BlockStore[F].put(b.blockHash, b)
     } yield BlockStatus.valid
   def contains(b: BlockMessage): F[Boolean] = false.pure[F]
-  def deploy(r: DeployData): F[Either[DeployError, ByteString]] =
+  def deploy(r: DeployData): F[Either[DeployError, DeployId]] =
     Applicative[F].pure(Right(ByteString.EMPTY))
   def estimator(dag: BlockDagRepresentation[F]): F[IndexedSeq[BlockHash]] =
     estimatorFunc.pure[F]

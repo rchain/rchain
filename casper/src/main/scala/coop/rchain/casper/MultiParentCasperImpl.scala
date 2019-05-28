@@ -192,9 +192,9 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Sync: ConnectionsCell: Trans
       }
   }
 
-  def deploy(d: DeployData): F[Either[DeployError, ByteString]] =
+  def deploy(d: DeployData): F[Either[DeployError, DeployId]] =
     validateDeploy(d).fold(
-      _.asLeft[ByteString].pure[F],
+      _.asLeft[DeployId].pure[F],
       kp(
         InterpreterUtil
           .mkTerm(d.term)
@@ -205,7 +205,7 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Sync: ConnectionsCell: Trans
       )
     )
 
-  def addDeploy(deploy: DeployData): F[ByteString] =
+  def addDeploy(deploy: DeployData): F[DeployId] =
     for {
       _ <- Cell[F, CasperState].modify { s =>
             s.copy(deployHistory = s.deployHistory + deploy)
