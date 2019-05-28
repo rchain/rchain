@@ -400,24 +400,24 @@ object RuntimeManager {
           start: StateHash,
           deploy: DeployData,
           name: String
-      ): T[F, scala.Seq[Par]] = runtimeManager.captureResults(start, deploy, name).liftM[T]
+      ): T[F, Seq[Par]] = runtimeManager.captureResults(start, deploy, name).liftM[T]
 
       override def captureResults(
           start: StateHash,
           deploy: DeployData,
           name: Par
-      ): T[F, scala.Seq[Par]] = runtimeManager.captureResults(start, deploy, name).liftM[T]
+      ): T[F, Seq[Par]] = runtimeManager.captureResults(start, deploy, name).liftM[T]
 
       override def replayComputeState(hash: StateHash)(
-          terms: scala.Seq[InternalProcessedDeploy],
+          terms: Seq[InternalProcessedDeploy],
           blockTime: Long
-      ): T[F, scala.Either[ReplayFailure, StateHash]] =
+      ): T[F, Either[ReplayFailure, StateHash]] =
         runtimeManager.replayComputeState(hash)(terms, blockTime).liftM[T]
 
       override def computeState(hash: StateHash)(
-          terms: scala.Seq[DeployData],
+          terms: Seq[DeployData],
           blockTime: Long
-      ): T[F, (StateHash, scala.Seq[InternalProcessedDeploy])] =
+      ): T[F, (StateHash, Seq[InternalProcessedDeploy])] =
         runtimeManager.computeState(hash)(terms, blockTime).liftM[T]
 
       def computeGenesis(
@@ -429,7 +429,7 @@ object RuntimeManager {
       override def storageRepr(hash: StateHash): T[F, Option[String]] =
         runtimeManager.storageRepr(hash).liftM[T]
 
-      override def computeBonds(hash: StateHash): T[F, scala.Seq[Bond]] =
+      override def computeBonds(hash: StateHash): T[F, Seq[Bond]] =
         runtimeManager.computeBonds(hash).liftM[T]
 
       override def computeDeployPayment(
@@ -437,12 +437,12 @@ object RuntimeManager {
       )(user: ByteString, amount: Long): T[F, StateHash] =
         runtimeManager.computeDeployPayment(start)(user, amount).liftM[T]
 
-      override def getData(hash: StateHash)(channel: Par): T[F, scala.Seq[Par]] =
+      override def getData(hash: StateHash)(channel: Par): T[F, Seq[Par]] =
         runtimeManager.getData(hash)(channel).liftM[T]
 
       override def getContinuation(
           hash: StateHash
-      )(channels: Seq[Par]): T[F, scala.Seq[(scala.Seq[BindPattern], Par)]] =
+      )(channels: Seq[Par]): T[F, Seq[(Seq[BindPattern], Par)]] =
         runtimeManager.getContinuation(hash)(channels).liftM[T]
 
       override val emptyStateHash: StateHash = runtimeManager.emptyStateHash
