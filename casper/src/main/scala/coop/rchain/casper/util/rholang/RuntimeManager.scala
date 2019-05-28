@@ -90,7 +90,7 @@ class RuntimeManagerImpl[F[_]: Concurrent] private[rholang] (
       runtime: Runtime[F]
   )(start: Blake2b256Hash, processedDeploy: InternalProcessedDeploy): F[EvaluateResult] = {
     import processedDeploy._
-    runtime.replaySpace.rig(start, deployLog.toList) >>
+    runtime.replaySpace.resetAndRig(start, deployLog.toList) >>
       runtime.deployParametersRef.set(ProtoUtil.getRholangDeployParams(deploy)) >>
       doInj(deploy, runtime.replayReducer, runtime.errorLog)(runtime.cost)
   }
