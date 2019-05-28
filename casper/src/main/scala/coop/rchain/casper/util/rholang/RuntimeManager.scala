@@ -114,11 +114,13 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics] private[rholang] (
   ): F[Either[ReplayFailure, StateHash]] =
     withRuntimeLock { runtime =>
       for {
-        span   <- Metrics[F].span(replayComputeStateLabel)
+        span <- Metrics[F].span(replayComputeStateLabel)
         _      <- runtime.blockData.setParams(blockData)
-        _      <- setInvalidBlocks(invalidBlocks, runtime)
-        _      <- span.mark("before-replay-deploys")
-        result <- replayDeploys(startHash, terms, replayDeploy(runtime, span))
+        _    <- setInvalidBlocks(invalidBlocks, runtime)
+        _    <- span.mark("before-replay-deploys")
+        replayFunction = if (isGenesis) replayDeploy(runtime, span) _
+        else replayDeployWithPayment(runtime, span) _
+        result <- replayDeploys(startHash, terms, replayFunction)
         _      <- span.close()
       } yield result
     }
@@ -134,7 +136,7 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics] private[rholang] (
         _      <- runtime.blockData.setParams(blockData)
         _      <- setInvalidBlocks(invalidBlocks, runtime)
         _      <- span.mark("before-process-deploys")
-        result <- processDeploys(startHash, terms, processDeploy(runtime, span))
+        result <- processDeploys(startHash, terms, processDeployWithPayment(runtime, span))
         _      <- span.close()
       } yield result
     }
@@ -334,6 +336,26 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics] private[rholang] (
       _       <- span.mark("process-deploy-finished")
     } yield (newHash, deployResult)
 
+  private def processDeployWithPayment(runtime: Runtime[F], span: Span[F])(
+      startHash: Blake2b256Hash,
+      deploy: DeployData
+  ): F[(Blake2b256Hash, InternalProcessedDeploy)] =
+    for {
+      _ <- runtime.space.reset(startHash)
+      payResult <- computeDeployPayment(runtime, runtime.reducer, runtime.space)(
+                    deploy.deployer,
+                    deploy.phloLimit * deploy.phloPrice,
+                    deploy.timestamp
+                  )
+      result <- payResult.fold(
+                 error => (startHash, InternalProcessedDeploy.failedPayment(deploy, error)).pure[F],
+                 postPaymentCheckpoint =>
+                   processDeploy(runtime, span)(postPaymentCheckpoint.root, deploy)
+                     .map(_.bimap(x => x, _.copy(paymentLog = postPaymentCheckpoint.log)))
+               )
+      //FIXME add refund of remaining phlo
+    } yield result
+
   private def replayDeploys(
       startHash: StateHash,
       terms: Seq[InternalProcessedDeploy],
@@ -351,6 +373,37 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics] private[rholang] (
     result.nested.map(_.toByteString).value
   }
 
+  private def replayDeployWithPayment(runtime: Runtime[F], span: Span[F])(
+      startHash: Blake2b256Hash,
+      processedDeploy: InternalProcessedDeploy
+  ): F[Either[ReplayFailure, Blake2b256Hash]] =
+    for {
+      deploy <- processedDeploy.deploy.pure[F]
+      _      <- runtime.replaySpace.resetAndRig(startHash, processedDeploy.paymentLog)
+      payResult <- computeDeployPayment(runtime, runtime.replayReducer, runtime.replaySpace)(
+                    deploy.deployer,
+                    deploy.phloLimit * deploy.phloPrice,
+                    deploy.timestamp
+                  )
+      result <- payResult.fold(
+                 error =>
+                   ((deploy.some, UnknownFailure: Failed /* FIXME */ ))
+                     .asLeft[Blake2b256Hash]
+                     .pure[F],
+                 postPaymentCheckpoint =>
+                   replayDeploy(runtime, span)(postPaymentCheckpoint.root, processedDeploy)
+               )
+      //FIXME add refund of remaining phlo
+    } yield result
+
+  /*
+
+- do printlns for the test, get a grip what's the context
+- yea.h.hhh...
+  - add _.reducer parameter to computeDeployPayment
+
+   */
+
   private def replayDeploy(runtime: Runtime[F], span: Span[F])(
       startHash: Blake2b256Hash,
       processedDeploy: InternalProcessedDeploy
@@ -358,7 +411,7 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics] private[rholang] (
     import processedDeploy._
     for {
       _                    <- span.mark("before-replay-deploy-reset-rig")
-      _                    <- runtime.replaySpace.resetAndRig(hash, processedDeploy.deployLog)
+      _                    <- runtime.replaySpace.resetAndRig(startHash, processedDeploy.deployLog)
       _                    <- span.mark("before-replay-deploy-compute-effect")
       replayEvaluateResult <- computeEffect(runtime, runtime.replayReducer)(processedDeploy.deploy)
       //TODO: compare replay deploy cost to given deploy cost
@@ -373,7 +426,7 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics] private[rholang] (
                      .asLeft[Blake2b256Hash]
                      .pure[F]
                  else if (errors.nonEmpty)
-                   hash.asRight[ReplayFailure].pure[F]
+                   startHash.asRight[ReplayFailure].pure[F]
                  else
                    for {
                      _             <- span.mark("before-replay-deploy-create-checkpoint")
