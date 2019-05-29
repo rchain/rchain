@@ -14,12 +14,13 @@ import coop.rchain.casper.helper.HashSetCasperTestNode._
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util._
 import coop.rchain.casper.util.rholang._
-import coop.rchain.casper.Estimator.Validator
 import coop.rchain.casper.MultiParentCasper.ignoreDoppelgangerCheck
 import coop.rchain.casper.MultiParentCasperRef.MultiParentCasperRef
 import coop.rchain.casper.api.BlockAPI.ApiErr
 import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.crypto.signatures.Ed25519
+import coop.rchain.models.BlockHash.BlockHash
+import coop.rchain.models.Validator.Validator
 import coop.rchain.p2p.EffectsTestInstances._
 import coop.rchain.rholang.interpreter.accounting
 import coop.rchain.shared.Time

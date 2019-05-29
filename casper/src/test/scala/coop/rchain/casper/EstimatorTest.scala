@@ -4,10 +4,11 @@ import scala.collection.immutable.HashMap
 
 import coop.rchain.casper.protocol.Bond
 import coop.rchain.metrics.Metrics
-import coop.rchain.casper.Estimator.Validator
 import coop.rchain.casper.helper.BlockGenerator._
 import coop.rchain.casper.helper.BlockUtil.generateValidator
 import coop.rchain.casper.helper.{BlockDagStorageFixture, BlockGenerator}
+import coop.rchain.models.BlockHash.BlockHash
+import coop.rchain.models.Validator.Validator
 
 import com.google.protobuf.ByteString
 import monix.eval.Task

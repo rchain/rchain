@@ -9,7 +9,6 @@ import cats.implicits._
 import cats.effect.concurrent.Semaphore
 import cats.mtl.MonadState
 import com.google.protobuf.ByteString
-import coop.rchain.blockstorage.BlockStore.BlockHash
 import coop.rchain.blockstorage.FileLMDBIndexBlockStore.Checkpoint
 import coop.rchain.blockstorage.StorageError.StorageErr
 import coop.rchain.casper.protocol.{ApprovedBlock, BlockMessage}
@@ -18,6 +17,7 @@ import coop.rchain.blockstorage.util.byteOps._
 import coop.rchain.blockstorage.util.io.IOError.RaiseIOError
 import coop.rchain.blockstorage.util.io._
 import coop.rchain.blockstorage.util.io.IOError
+import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.shared.{AtomicMonadState, Log}
 import coop.rchain.shared.ByteStringOps._
 import coop.rchain.shared.Language.ignore

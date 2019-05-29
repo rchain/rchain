@@ -2,32 +2,46 @@ package coop.rchain.models
 
 import com.google.protobuf.ByteString
 import coop.rchain.casper.protocol._
+import coop.rchain.models.BlockHash.BlockHash
+import coop.rchain.models.Validator.Validator
 import coop.rchain.shared.GeneratorUtils._
 import org.scalacheck.Arbitrary.arbitrary
 import org.scalacheck.{Arbitrary, Gen}
 import org.scalacheck.Gen.listOfN
+import org.scalacheck.util.Buildable
 
 object blockImplicits {
 
-  val blockHashGen: Gen[ByteString] = for {
-    byteArray <- listOfN(32, arbitrary[Byte])
+  val blockHashGen: Gen[BlockHash] = for {
+    byteArray <- listOfN(BlockHash.Length, arbitrary[Byte])
   } yield ByteString.copyFrom(byteArray.toArray)
 
-  implicit val arbitraryHash: Arbitrary[ByteString] = Arbitrary(blockHashGen)
+  val validatorGen: Gen[Validator] = for {
+    byteArray <- listOfN(Validator.Length, arbitrary[Byte])
+  } yield ByteString.copyFrom(byteArray.toArray)
+
+  val arbitraryHash: Arbitrary[BlockHash]      = Arbitrary(blockHashGen)
+  val arbitraryValidator: Arbitrary[Validator] = Arbitrary(validatorGen)
+  val arbitraryValidators: Arbitrary[Seq[Validator]] =
+    Arbitrary.arbContainer[Seq, Validator](
+      arbitraryValidator,
+      Buildable.buildableCanBuildFrom,
+      identity
+    )
 
   val justificationGen: Gen[Justification] = for {
-    latestBlockHash <- arbitrary[ByteString]
+    latestBlockHash <- arbitrary[BlockHash](arbitraryHash)
   } yield Justification().withLatestBlockHash(latestBlockHash)
 
   implicit val arbitraryJustification: Arbitrary[Justification] = Arbitrary(justificationGen)
 
   val blockElementGen: Gen[BlockMessage] =
     for {
-      hash            <- arbitrary[ByteString]
-      validator       <- arbitrary[ByteString]
+      hash            <- arbitrary[BlockHash](arbitraryHash)
+      validator       <- arbitrary[Validator](arbitraryValidator)
       version         <- arbitrary[Long]
       timestamp       <- arbitrary[Long]
-      parentsHashList <- arbitrary[Seq[ByteString]]
+      parentsHashList <- arbitrary[Seq[Validator]](arbitraryValidators)
       justifications  <- arbitrary[Seq[Justification]]
     } yield BlockMessage(blockHash = hash)
       .withHeader(

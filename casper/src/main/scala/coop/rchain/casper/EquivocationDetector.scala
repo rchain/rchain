@@ -9,7 +9,6 @@ import coop.rchain.blockstorage.{
   BlockStore,
   EquivocationsTracker
 }
-import coop.rchain.casper.Estimator.Validator
 import coop.rchain.casper.protocol.{BlockMessage, Bond}
 import coop.rchain.casper.util.{DagOperations, DoublyLinkedDag, ProtoUtil}
 import coop.rchain.casper.util.ProtoUtil.{
@@ -17,7 +16,9 @@ import coop.rchain.casper.util.ProtoUtil.{
   getCreatorJustificationAsListUntilGoalInMemory,
   toLatestMessageHashes
 }
+import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.EquivocationRecord.SequenceNumber
+import coop.rchain.models.Validator.Validator
 import coop.rchain.models._
 import coop.rchain.shared.{Cell, Log, LogSource}
 

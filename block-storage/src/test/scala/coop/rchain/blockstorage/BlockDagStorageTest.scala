@@ -5,16 +5,17 @@ import java.nio.file.StandardOpenOption
 import cats.implicits._
 import coop.rchain.shared.PathOps._
 import coop.rchain.catscontrib.TaskContrib.TaskOps
-
 import cats.effect.Sync
 import com.google.protobuf.ByteString
-import coop.rchain.blockstorage.BlockDagRepresentation.Validator
-import coop.rchain.blockstorage.BlockStore.BlockHash
 import coop.rchain.blockstorage.util.byteOps._
 import coop.rchain.blockstorage.util.io.IOError.RaiseIOError
 import coop.rchain.blockstorage.util.io._
 import coop.rchain.casper.protocol.BlockMessage
 import coop.rchain.metrics.Metrics.MetricsNOP
+import coop.rchain.models.BlockHash.BlockHash
+import coop.rchain.models.BlockHash
+import coop.rchain.models.Validator.Validator
+import coop.rchain.models.Validator
 import coop.rchain.models.{BlockMetadata, EquivocationRecord}
 import coop.rchain.models.blockImplicits._
 import coop.rchain.rspace.Context
@@ -311,7 +312,7 @@ class BlockDagFileStorageTest extends BlockDagStorageTest {
           firstStorage <- createAtDefaultLocation(dagDataDir)
           _            <- blockElements.traverse_(firstStorage.insert(_, genesis, false))
           _            <- firstStorage.close()
-          garbageBytes = Array.fill[Byte](64)(0)
+          garbageBytes = Array.fill[Byte](Validator.Length + BlockHash.Length)(0)
           _            <- Sync[Task].delay { Random.nextBytes(garbageBytes) }
           _ <- Sync[Task].delay {
                 Files.write(
@@ -388,7 +389,7 @@ class BlockDagFileStorageTest extends BlockDagStorageTest {
 
   it should "be able to restore equivocations tracker on startup" in {
     forAll(blockElementsWithParentsGen, minSize(0), sizeRange(10)) { blockElements =>
-      forAll(blockHashGen) { equivocator =>
+      forAll(validatorGen) { equivocator =>
         forAll(blockHashGen) { blockHash =>
           withDagStorageLocation { dagDataDir =>
             for {
@@ -417,7 +418,7 @@ class BlockDagFileStorageTest extends BlockDagStorageTest {
 
   it should "be able to restore equivocations tracker on startup with appended garbage equivocation record" in {
     forAll(blockElementsWithParentsGen, minSize(0), sizeRange(10)) { blockElements =>
-      forAll(blockHashGen) { equivocator =>
+      forAll(validatorGen) { equivocator =>
         forAll(blockHashGen) { blockHash =>
           withDagStorageLocation { dagDataDir =>
             for {
@@ -432,9 +433,9 @@ class BlockDagFileStorageTest extends BlockDagStorageTest {
                     tracker.insertEquivocationRecord(record)
                   }
               _                  <- firstStorage.close()
-              garbageEquivocator = Array.fill[Byte](32)(0)
+              garbageEquivocator = Array.fill[Byte](Validator.Length)(0)
               _                  <- Sync[Task].delay { Random.nextBytes(garbageEquivocator) }
-              garbageBlockHash   = Array.fill[Byte](32)(0)
+              garbageBlockHash   = Array.fill[Byte](BlockHash.Length)(0)
               _                  <- Sync[Task].delay { Random.nextBytes(garbageBlockHash) }
               garbageRecord = EquivocationRecord(
                 ByteString.copyFrom(garbageEquivocator),

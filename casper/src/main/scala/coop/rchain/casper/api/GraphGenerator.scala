@@ -1,7 +1,7 @@
 package coop.rchain.casper.api
 
 import coop.rchain.blockstorage.{BlockDagRepresentation, BlockStore}
-import coop.rchain.casper._, Estimator.BlockHash, MultiParentCasperRef.MultiParentCasperRef
+import coop.rchain.casper._, MultiParentCasperRef.MultiParentCasperRef
 import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.graphz._
 import coop.rchain.shared.Log
@@ -13,6 +13,7 @@ import cats.mtl._
 import cats.mtl.implicits._
 import coop.rchain.catscontrib.Catscontrib._
 import coop.rchain.catscontrib.ski._
+import coop.rchain.models.BlockHash.BlockHash
 
 final case class ValidatorBlock(
     blockHash: String,

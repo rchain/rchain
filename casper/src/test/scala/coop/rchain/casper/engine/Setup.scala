@@ -6,7 +6,6 @@ import cats.effect.concurrent.Ref
 import cats.implicits._
 
 import coop.rchain.blockstorage._
-import coop.rchain.blockstorage.BlockStore.BlockHash
 import coop.rchain.casper._
 import coop.rchain.casper.MultiParentCasperTestUtil.createBonds
 import coop.rchain.casper.genesis.Genesis
@@ -20,6 +19,7 @@ import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.comm._
 import coop.rchain.comm.rp.Connect.{Connections, ConnectionsCell}
 import coop.rchain.crypto.signatures.Ed25519
+import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.metrics.Metrics.MetricsNOP
 import coop.rchain.p2p.EffectsTestInstances._
 import coop.rchain.rholang.interpreter.Runtime

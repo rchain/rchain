@@ -9,6 +9,7 @@ import coop.rchain.casper.helper.BlockGenerator._
 import coop.rchain.casper.helper._
 import coop.rchain.casper.protocol.{BlockMessage, Bond}
 import coop.rchain.metrics.Metrics.MetricsNOP
+import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.p2p.EffectsTestInstances.LogStub
 import coop.rchain.shared.{Log, Time}
 import monix.eval.Task

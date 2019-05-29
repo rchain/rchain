@@ -1,9 +1,8 @@
 package coop.rchain.blockstorage
 
-import com.google.protobuf.ByteString
-import coop.rchain.blockstorage.BlockDagRepresentation.Validator
-import coop.rchain.blockstorage.BlockStore.BlockHash
 import coop.rchain.casper.protocol.BlockMessage
+import coop.rchain.models.BlockHash.BlockHash
+import coop.rchain.models.Validator.Validator
 import coop.rchain.models.{BlockMetadata, EquivocationRecord}
 
 trait BlockDagStorage[F[_]] {
@@ -35,10 +34,6 @@ trait BlockDagRepresentation[F[_]] {
   def latestMessageHashes: F[Map[Validator, BlockHash]]
   def latestMessages: F[Map[Validator, BlockMetadata]]
   def invalidBlocks: F[Set[BlockMetadata]]
-}
-
-object BlockDagRepresentation {
-  type Validator = ByteString
 }
 
 trait EquivocationsTracker[F[_]] {

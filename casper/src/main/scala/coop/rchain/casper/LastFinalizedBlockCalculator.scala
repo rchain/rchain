@@ -7,6 +7,7 @@ import coop.rchain.blockstorage.{BlockDagRepresentation, BlockDagStorage, BlockS
 import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.shared.{Cell, Log}
 import coop.rchain.catscontrib.ListContrib
+import coop.rchain.models.BlockHash.BlockHash
 
 object LastFinalizedBlockCalculator {
   // TODO: Extract hardcoded fault tolerance threshold

@@ -4,12 +4,12 @@ import scala.collection.immutable.HashMap
 import scala.collection.mutable
 
 import coop.rchain.blockstorage.{BlockStore, IndexedBlockDagStorage}
-import coop.rchain.blockstorage.BlockDagRepresentation.Validator
 import coop.rchain.metrics.Metrics
 import coop.rchain.casper.helper.BlockGenerator._
 import coop.rchain.casper.helper.BlockUtil.generateValidator
 import coop.rchain.casper.helper.{BlockDagStorageFixture, BlockGenerator}
 import coop.rchain.casper.protocol.{BlockMessage, Bond}
+import coop.rchain.models.Validator.Validator
 import coop.rchain.p2p.EffectsTestInstances.LogStub
 import com.google.protobuf.ByteString
 import monix.eval.Task
