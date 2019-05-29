@@ -7,6 +7,7 @@ import coop.rchain.blockstorage.{BlockDagRepresentation, BlockStore}
 import coop.rchain.casper.protocol.Event.EventInstance.{Comm, Consume, Produce}
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.{DagOperations, ProtoUtil}
+import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.BlockMetadata
 import coop.rchain.shared.Log
 

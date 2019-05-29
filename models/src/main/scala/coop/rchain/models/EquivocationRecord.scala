@@ -1,7 +1,8 @@
 package coop.rchain.models
 
-import com.google.protobuf.ByteString
+import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.EquivocationRecord._
+import coop.rchain.models.Validator.Validator
 
 /**
   * A summary of the neglected equivocation algorithm is as follows.
@@ -44,6 +45,4 @@ final case class EquivocationRecord(
 
 object EquivocationRecord {
   type SequenceNumber = Int
-  type Validator      = ByteString
-  type BlockHash      = ByteString
 }

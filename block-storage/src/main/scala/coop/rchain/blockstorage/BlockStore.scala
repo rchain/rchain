@@ -2,14 +2,12 @@ package coop.rchain.blockstorage
 
 import cats.Applicative
 import cats.implicits._
-import com.google.protobuf.ByteString
 import coop.rchain.casper.protocol.{ApprovedBlock, BlockMessage}
+import coop.rchain.models.BlockHash.BlockHash
 
 import scala.language.higherKinds
 
 trait BlockStore[F[_]] {
-  import BlockStore.BlockHash
-
   def put(blockMessage: BlockMessage): F[Unit] =
     put((blockMessage.blockHash, blockMessage))
 
@@ -42,7 +40,4 @@ trait BlockStore[F[_]] {
 object BlockStore {
 
   def apply[F[_]](implicit ev: BlockStore[F]): BlockStore[F] = ev
-
-  type BlockHash = ByteString
-
 }

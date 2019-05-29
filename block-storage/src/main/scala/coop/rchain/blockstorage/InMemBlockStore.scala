@@ -4,9 +4,9 @@ import cats._
 import cats.effect.Sync
 import cats.effect.concurrent.Ref
 import cats.implicits._
-import coop.rchain.blockstorage.BlockStore.BlockHash
 import coop.rchain.casper.protocol.{ApprovedBlock, BlockMessage}
 import coop.rchain.metrics.Metrics
+import coop.rchain.models.BlockHash.BlockHash
 
 import scala.language.higherKinds
 

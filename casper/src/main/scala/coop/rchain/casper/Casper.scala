@@ -1,7 +1,9 @@
 package coop.rchain.casper
 
 import coop.rchain.comm.rp.Connect.{ConnectionsCell, RPConfAsk}
-import cats._, cats.data._, cats.implicits._
+import cats._
+import cats.data._
+import cats.implicits._
 import cats.effect.{Concurrent, Sync}
 import com.google.protobuf.ByteString
 import coop.rchain.casper.protocol._
@@ -11,11 +13,12 @@ import coop.rchain.comm.transport.TransportLayer
 import coop.rchain.shared._
 import cats.effect.concurrent.Semaphore
 import coop.rchain.blockstorage.{BlockDagRepresentation, BlockDagStorage, BlockStore}
-import coop.rchain.casper.Estimator.Validator
 import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
 import coop.rchain.catscontrib.ski.kp2
 import coop.rchain.metrics.Metrics
+import coop.rchain.models.BlockHash.BlockHash
+import coop.rchain.models.Validator.Validator
 
 sealed trait DeployError
 final case class ParsingError(details: String)          extends DeployError

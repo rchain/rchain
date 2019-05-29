@@ -5,12 +5,12 @@ import scala.collection.immutable.HashMap
 import cats.effect.Sync
 
 import coop.rchain.casper._
-import coop.rchain.casper.Estimator.BlockHash
 import coop.rchain.casper.helper._
 import coop.rchain.casper.helper.BlockGenerator._
 import coop.rchain.casper.helper.BlockUtil.generateValidator
 import coop.rchain.casper.protocol._
 import coop.rchain.metrics.Metrics
+import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.p2p.EffectsTestInstances.LogStub
 
 import com.google.protobuf.ByteString

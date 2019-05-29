@@ -2,6 +2,7 @@ package coop.rchain.casper.api
 
 import coop.rchain.casper._
 import coop.rchain.crypto.hash.Blake2b256
+import coop.rchain.models.BlockHash.BlockHash
 
 import coop.rchain.shared.ByteStringOps._
 import cats._, cats.data._, cats.implicits._

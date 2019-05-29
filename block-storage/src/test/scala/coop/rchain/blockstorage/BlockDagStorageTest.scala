@@ -5,16 +5,15 @@ import java.nio.file.StandardOpenOption
 import cats.implicits._
 import coop.rchain.shared.PathOps._
 import coop.rchain.catscontrib.TaskContrib.TaskOps
-
 import cats.effect.Sync
 import com.google.protobuf.ByteString
-import coop.rchain.blockstorage.BlockDagRepresentation.Validator
-import coop.rchain.blockstorage.BlockStore.BlockHash
 import coop.rchain.blockstorage.util.byteOps._
 import coop.rchain.blockstorage.util.io.IOError.RaiseIOError
 import coop.rchain.blockstorage.util.io._
 import coop.rchain.casper.protocol.BlockMessage
 import coop.rchain.metrics.Metrics.MetricsNOP
+import coop.rchain.models.BlockHash.BlockHash
+import coop.rchain.models.Validator.Validator
 import coop.rchain.models.{BlockMetadata, EquivocationRecord}
 import coop.rchain.models.blockImplicits._
 import coop.rchain.rspace.Context

@@ -6,7 +6,6 @@ import scala.language.higherKinds
 import cats._
 import cats.implicits._
 import com.google.protobuf.ByteString
-import coop.rchain.blockstorage.BlockStore.BlockHash
 import coop.rchain.casper.protocol._
 import coop.rchain.rspace.Context
 import coop.rchain.shared.PathOps._
@@ -17,6 +16,7 @@ import coop.rchain.blockstorage.InMemBlockStore.emptyMapRef
 import coop.rchain.metrics.Metrics
 import coop.rchain.metrics.Metrics.MetricsNOP
 import coop.rchain.catscontrib.TaskContrib._
+import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.shared.Log
 import monix.eval.Task
 import monix.execution.Scheduler

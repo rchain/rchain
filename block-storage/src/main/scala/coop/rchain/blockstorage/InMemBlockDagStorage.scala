@@ -4,15 +4,15 @@ import cats.effect.concurrent.{Ref, Semaphore}
 import cats.effect.{Concurrent, Sync}
 import cats.implicits._
 import com.google.protobuf.ByteString
-import coop.rchain.blockstorage.BlockDagRepresentation.Validator
-import coop.rchain.blockstorage.BlockStore.BlockHash
 import coop.rchain.blockstorage.StorageError.StorageErr
 import coop.rchain.blockstorage.util.BlockMessageUtil.{bonds, parentHashes}
 import coop.rchain.blockstorage.util.{BlockMessageUtil, TopologicalSortUtil}
 import coop.rchain.casper.protocol.BlockMessage
 import coop.rchain.crypto.codec.Base16
+import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.{BlockMetadata, EquivocationRecord}
 import coop.rchain.models.EquivocationRecord.SequenceNumber
+import coop.rchain.models.Validator.Validator
 import coop.rchain.shared.Log
 
 import scala.collection.immutable.HashSet

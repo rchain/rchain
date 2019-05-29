@@ -1,7 +1,7 @@
 package coop.rchain.blockstorage.util
 
-import coop.rchain.blockstorage.BlockStore.BlockHash
 import coop.rchain.casper.protocol.BlockMessage
+import coop.rchain.models.BlockHash.BlockHash
 
 object TopologicalSortUtil {
   type BlockSort = Vector[Vector[BlockHash]]

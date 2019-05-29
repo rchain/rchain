@@ -1,6 +1,6 @@
 package coop.rchain.casper.util
 
-import coop.rchain.casper.Estimator.BlockHash
+import coop.rchain.models.BlockHash.BlockHash
 
 import scala.collection.immutable.{HashMap, HashSet}
 

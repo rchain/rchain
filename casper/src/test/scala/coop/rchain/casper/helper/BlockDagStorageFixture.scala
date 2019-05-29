@@ -7,13 +7,13 @@ import java.util.zip.CRC32
 import cats.effect.{Concurrent, Resource, Sync}
 import cats.syntax.functor._
 import com.google.protobuf.ByteString
-import coop.rchain.blockstorage.BlockDagRepresentation.Validator
 import coop.rchain.blockstorage._
 import coop.rchain.casper.protocol.BlockMessage
 
 import coop.rchain.catscontrib.TaskContrib.TaskOps
 import coop.rchain.metrics.Metrics
 import coop.rchain.metrics.Metrics.MetricsNOP
+import coop.rchain.models.Validator.Validator
 import coop.rchain.rspace.Context
 import coop.rchain.shared.Log
 import org.scalatest.{BeforeAndAfter, Suite}

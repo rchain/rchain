@@ -8,12 +8,13 @@ import Catscontrib._
 import cats.data.OptionT
 
 import coop.rchain.blockstorage.BlockDagRepresentation
-import coop.rchain.casper.Estimator.Validator
 import coop.rchain.casper.protocol.Justification
 import coop.rchain.casper.util.ProtoUtil._
 import coop.rchain.casper.util.{Clique, DagOperations, ProtoUtil}
 import coop.rchain.models.BlockMetadata
 import coop.rchain.metrics.Metrics
+import coop.rchain.models.BlockHash.BlockHash
+import coop.rchain.models.Validator.Validator
 import coop.rchain.shared.{Log, StreamT}
 
 /*

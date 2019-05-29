@@ -2,9 +2,9 @@ package coop.rchain.blockstorage.util
 import java.nio.ByteBuffer
 
 import com.google.protobuf.ByteString
-import coop.rchain.blockstorage.BlockDagRepresentation.Validator
-import coop.rchain.blockstorage.BlockStore.BlockHash
+import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.EquivocationRecord
+import coop.rchain.models.Validator.Validator
 import coop.rchain.shared.Language.ignore
 
 object byteOps {

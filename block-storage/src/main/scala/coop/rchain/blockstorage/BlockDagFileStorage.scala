@@ -10,8 +10,6 @@ import cats.effect.concurrent.Semaphore
 import cats.mtl.MonadState
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockDagFileStorage.{Checkpoint, CheckpointedDagInfo}
-import coop.rchain.blockstorage.BlockDagRepresentation.Validator
-import coop.rchain.blockstorage.BlockStore.BlockHash
 import coop.rchain.blockstorage.util.BlockMessageUtil.{blockNumber, bonds, parentHashes}
 import coop.rchain.blockstorage.util.{BlockMessageUtil, Crc32, TopologicalSortUtil}
 import coop.rchain.blockstorage.util.byteOps._
@@ -20,6 +18,8 @@ import coop.rchain.blockstorage.util.io._
 import coop.rchain.blockstorage.util.io.IOError
 import coop.rchain.casper.protocol.BlockMessage
 import coop.rchain.crypto.codec.Base16
+import coop.rchain.models.BlockHash.BlockHash
+import coop.rchain.models.Validator.Validator
 import coop.rchain.models.{BlockMetadata, EquivocationRecord}
 import coop.rchain.shared.{AtomicMonadState, Log, LogSource}
 import coop.rchain.shared.ByteStringOps._

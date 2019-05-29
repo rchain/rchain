@@ -22,7 +22,9 @@ import coop.rchain.comm.rp.Connect.{ConnectionsCell, RPConfAsk}
 import coop.rchain.comm.transport.TransportLayer
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.metrics.{Metrics, Span}
+import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.EquivocationRecord
+import coop.rchain.models.Validator.Validator
 import coop.rchain.shared._
 
 /**
@@ -49,8 +51,6 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Sync: ConnectionsCell: Trans
     extends MultiParentCasper[F] {
 
   implicit private val logSource: LogSource = LogSource(this.getClass)
-
-  type Validator = ByteString
 
   //TODO: Extract hardcoded version and expirationThreshold
   private val version             = 1L
