@@ -51,6 +51,7 @@ object Server {
     val DagStorageSize          = "dag-storage-size"
     val MapSize                 = "map-size"
     val MaxConnections          = "max-connections"
+    val AllowPrivateAddresses   = "allow-private-addresses"
     val MaxMessageSize          = "max-message-size"
     val MaxStreamMessageSize    = "max-stream-message-size"
     val PacketChunkSize         = "packet-chunk-size"
@@ -97,6 +98,7 @@ object Server {
       dagStorageSize = server.getBytes(keys.DagStorageSize),
       mapSize = server.getBytes(keys.MapSize),
       maxNumOfConnections = server.getInt(keys.MaxConnections),
+      allowPrivateAddresses = server.getBoolean(keys.AllowPrivateAddresses),
       maxMessageSize = server.getBytes(keys.MaxMessageSize).toInt,
       maxStreamMessageSize = server.getBytes(keys.MaxStreamMessageSize),
       packetChunkSize = server.getBytes(keys.PacketChunkSize).toInt,

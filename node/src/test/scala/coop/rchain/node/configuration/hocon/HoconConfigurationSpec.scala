@@ -35,6 +35,7 @@ class HoconConfigurationSpec extends FunSuite with Matchers {
       |    dag-storage-size = 512M
       |    map-size = 1G
       |    max-connections = 500
+      |    allow-private-addresses = true
       |    max-message-size = 256K
       |    max-stream-message-size = 200M
       |    packet-chunk-size = 64K
@@ -67,6 +68,7 @@ class HoconConfigurationSpec extends FunSuite with Matchers {
         storeSize = 1024 * 1024 * 1024,
         dagStorageSize = 512 * 1024 * 1024,
         maxNumOfConnections = 500,
+        allowPrivateAddresses = true,
         maxMessageSize = 256 * 1024,
         maxStreamMessageSize = 200 * 1024 * 1024,
         packetChunkSize = 64 * 1024,

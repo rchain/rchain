@@ -26,6 +26,7 @@ final case class Server(
     storeSize: Long,
     dagStorageSize: Long,
     maxNumOfConnections: Int,
+    allowPrivateAddresses: Boolean,
     maxMessageSize: Int,
     maxStreamMessageSize: Long,
     packetChunkSize: Int,

@@ -279,6 +279,9 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
     val maxNumOfConnections =
       opt[Int](descr = "Number of connected peers picked randomly for broadcasting and streaming")
 
+    val allowPrivateAddresses =
+      opt[Flag](descr = "Allow connections to peers with private network addresses")
+
     val maxMessageSize =
       opt[Int](descr = "Maximum size of message that can be received via transport layer")
 

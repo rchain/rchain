@@ -51,6 +51,7 @@ object ConfigMapper {
         add(keys.DagStorageSize, run.casperBlockDagStorageSize)
         add(keys.MapSize, run.mapSize)
         add(keys.MaxConnections, run.maxNumOfConnections)
+        add(keys.AllowPrivateAddresses, run.allowPrivateAddresses)
         add(keys.MaxMessageSize, run.maxMessageSize)
         add(keys.MaxStreamMessageSize, run.maxStreamMessageSize)
         add(keys.PacketChunkSize, run.packetChunkSize)
