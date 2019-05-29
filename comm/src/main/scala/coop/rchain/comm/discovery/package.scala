@@ -1,5 +1,10 @@
 package coop.rchain.comm
 
+import java.net.InetAddress
+
+import scala.util.Try
+
+import coop.rchain.catscontrib.ski.kp
 import coop.rchain.grpc.{GrpcServer, Server}
 import coop.rchain.metrics.Metrics
 
@@ -41,4 +46,20 @@ package object discovery {
       .withHost(ByteString.copyFromUtf8(n.endpoint.host))
       .withUdpPort(n.endpoint.udpPort)
       .withTcpPort(n.endpoint.tcpPort)
+
+  def isValidInetAddress(host: String): Boolean =
+    Try(InetAddress.getByName(host))
+      .fold(kp(false), !_.isAnyLocalAddress)
+
+  def isValidPublicInetAddress(host: String): Boolean =
+    Try(InetAddress.getByName(host))
+      .fold(
+        kp(false),
+        a =>
+          !(a.isAnyLocalAddress ||
+            a.isLinkLocalAddress ||
+            a.isLoopbackAddress ||
+            a.isMulticastAddress ||
+            a.isSiteLocalAddress)
+      )
 }

@@ -45,12 +45,12 @@ package object effects {
       def sleep(duration: FiniteDuration): Task[Unit] = timer.sleep(duration)
     }
 
-  def kademliaRPC(networkId: String, timeout: FiniteDuration)(
+  def kademliaRPC(networkId: String, timeout: FiniteDuration, allowPrivateAddresses: Boolean)(
       implicit
       scheduler: Scheduler,
       peerNodeAsk: PeerNodeAsk[Task],
       metrics: Metrics[Task]
-  ): KademliaRPC[Task] = new GrpcKademliaRPC(networkId, timeout)
+  ): KademliaRPC[Task] = new GrpcKademliaRPC(networkId, timeout, allowPrivateAddresses)
 
   def transportClient(
       networkId: String,

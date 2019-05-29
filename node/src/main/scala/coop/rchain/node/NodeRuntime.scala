@@ -375,7 +375,7 @@ class NodeRuntime private[node] (
                     commTmpFolder
                   )(grpcScheduler, log, metrics)
 
-    kademliaRPC = effects.kademliaRPC(conf.server.networkId, defaultTimeout)(
+    kademliaRPC = effects.kademliaRPC(conf.server.networkId, defaultTimeout, true)(
       grpcScheduler,
       peerNodeAsk,
       metrics
