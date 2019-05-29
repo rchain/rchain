@@ -33,7 +33,7 @@ trait BlockDagStorageFixture extends BeforeAndAfter { self: Suite =>
     } {
       case (blockDagStorageDir, blockStorageDir) =>
         implicit val metrics = new MetricsNOP[Task]()
-        implicit val log     = new Log.NOPLog[Task]()
+        implicit val log     = Log.log[Task]
         for {
           blockStore             <- BlockDagStorageTestFixture.createBlockStorage[Task](blockStorageDir)
           blockDagStorage        <- BlockDagStorageTestFixture.createBlockDagStorage(blockDagStorageDir)
