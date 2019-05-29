@@ -17,7 +17,7 @@ trait IReplaySpace[F[_], C, P, A, R, K] extends ISpace[F, C, P, A, R, K] {
     *  @param startRoot A [Blake2b256Hash] representing the intial state
     *  @param log A [Log] with permitted operations
     */
-  def rig(startRoot: Blake2b256Hash, log: trace.Log)(implicit syncF: Sync[F]): F[Unit] =
+  def resetAndRig(startRoot: Blake2b256Hash, log: trace.Log)(implicit syncF: Sync[F]): F[Unit] =
     syncF
       .delay {
         val (ioEvents, commEvents) = log.partition {

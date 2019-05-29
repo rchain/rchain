@@ -56,12 +56,12 @@ abstract class ReplayWideBenchState extends WideBenchBaseState {
     assert(createTest(setupTerm)(readErrors, runtime.reducer, rand).unsafeRunSync.isEmpty)
     (for {
       setupCheckpoint <- runtime.space.createCheckpoint()
-      _               <- runtime.replaySpace.rig(setupCheckpoint.root, setupCheckpoint.log)
+      _               <- runtime.replaySpace.resetAndRig(setupCheckpoint.root, setupCheckpoint.log)
       _               = assert(createTest(setupTerm)(readErrors, runtime.reducer, rand).unsafeRunSync.isEmpty)
       runTask         = createTest(setupTerm)(readErrors, runtime.reducer, rand)
       _               = assert(runTask.unsafeRunSync.isEmpty)
       checkpoint      <- runtime.space.createCheckpoint()
-      _               <- runtime.replaySpace.rig(checkpoint.root, checkpoint.log)
+      _               <- runtime.replaySpace.resetAndRig(checkpoint.root, checkpoint.log)
       _               = runReplayTask = createTest(setupTerm)(readErrors, runtime.reducer, rand)
     } yield ()).unsafeRunSync
   }

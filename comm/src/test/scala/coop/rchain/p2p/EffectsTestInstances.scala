@@ -1,19 +1,18 @@
 package coop.rchain.p2p
 
-import scala.concurrent.duration.{FiniteDuration, MILLISECONDS}
-
 import cats._
-import cats.implicits._
 import cats.effect._
-
-import coop.rchain.comm.rp._
-import coop.rchain.catscontrib._
+import cats.implicits._
 import coop.rchain.comm.CommError._
 import coop.rchain.comm._
-import coop.rchain.comm.transport._
 import coop.rchain.comm.discovery._
-import coop.rchain.shared._
 import coop.rchain.comm.protocol.routing._
+import coop.rchain.comm.rp._
+import coop.rchain.comm.transport._
+import coop.rchain.shared.Log.NOPLog
+import coop.rchain.shared._
+
+import scala.concurrent.duration.{FiniteDuration, MILLISECONDS}
 
 /** Eagerly evaluated instances to do reasoning about applied effects */
 object EffectsTestInstances {
@@ -108,7 +107,9 @@ object EffectsTestInstances {
     def start(): F[Unit] = ???
   }
 
-  class LogStub[F[_]: Applicative] extends Log[F] {
+  class LogStub[F[_]: Applicative](delegate: Log[F]) extends Log[F] {
+
+    def this() = this(new NOPLog[F]())
 
     var debugs: List[String] = List.empty[String]
     var infos: List[String]  = List.empty[String]
@@ -125,23 +126,23 @@ object EffectsTestInstances {
     def trace(msg: => String)(implicit ev: LogSource): F[Unit] = ().pure[F]
     def debug(msg: => String)(implicit ev: LogSource): F[Unit] = {
       debugs = debugs :+ msg
-      ().pure[F]
+      delegate.debug(msg)
     }
     def info(msg: => String)(implicit ev: LogSource): F[Unit] = {
       infos = infos :+ msg
-      ().pure[F]
+      delegate.info(msg)
     }
     def warn(msg: => String)(implicit ev: LogSource): F[Unit] = {
       warns = warns :+ msg
-      ().pure[F]
+      delegate.warn(msg)
     }
     def error(msg: => String)(implicit ev: LogSource): F[Unit] = {
       errors = errors :+ msg
-      ().pure[F]
+      delegate.error(msg)
     }
     def error(msg: => String, cause: scala.Throwable)(implicit ev: LogSource): F[Unit] = {
       errors = errors :+ msg
-      ().pure[F]
+      delegate.error(msg, cause)
     }
   }
 

@@ -66,7 +66,7 @@ object ReplayRSpaceBench {
 
     def initSpace() = {
       val rigPoint = space.createCheckpoint()
-      replaySpace.rig(rigPoint.root, rigPoint.log)
+      replaySpace.resetAndRig(rigPoint.root, rigPoint.log)
     }
 
     @Setup
