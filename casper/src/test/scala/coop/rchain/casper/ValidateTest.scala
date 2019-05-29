@@ -404,8 +404,8 @@ class ValidateTest
         block  <- blockDagStorage.lookupByIdUnsafe(0)
         block2 <- blockDagStorage.lookupByIdUnsafe(1)
         dag    <- blockDagStorage.getRepresentation
-        _      <- Validate.repeatDeploy[Task](block, dag, 50) shouldBeF Right(Valid)
-        _      <- Validate.repeatDeploy[Task](block2, dag, 50) shouldBeF Right(Valid)
+        _      <- Validate.repeatDeploy[Task](block, dag, 50, span) shouldBeF Right(Valid)
+        _      <- Validate.repeatDeploy[Task](block2, dag, 50, span) shouldBeF Right(Valid)
       } yield ()
   }
 
@@ -420,7 +420,7 @@ class ValidateTest
                    deploys = Seq(deploy)
                  )
         dag <- blockDagStorage.getRepresentation
-        _   <- Validate.repeatDeploy[Task](block1, dag, 50) shouldBeF Left(InvalidRepeatDeploy)
+        _   <- Validate.repeatDeploy[Task](block1, dag, 50, span) shouldBeF Left(InvalidRepeatDeploy)
       } yield ()
   }
 
