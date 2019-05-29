@@ -83,7 +83,7 @@ object HashSetCasperActions {
   def deploy(
       node: HashSetCasperTestNode[Effect],
       deployData: DeployData
-  ): Effect[Either[DeployError, Unit]] =
+  ): Effect[Either[DeployError, DeployId]] =
     node.casperEff.deploy(deployData)
 
   def create(node: HashSetCasperTestNode[Effect]): EitherT[Task, CommError, BlockMessage] =
