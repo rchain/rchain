@@ -209,14 +209,18 @@ object ProtoUtil {
       .map(parents => parents.filter(p => ProtoUtil.blockNumber(p) >= blockNumber))
 
   def containsDeploy(b: BlockMessage, user: ByteString, timestamp: Long): Boolean =
-    deploys(b).toStream
-      .flatMap(getDeployData)
-      .exists(deployData => deployData.deployer == user && deployData.timestamp == timestamp)
+    containsDeploy(
+      b,
+      deployData => deployData.deployer == user && deployData.timestamp == timestamp
+    )
 
   def containsDeploy(b: BlockMessage, deployId: ByteString): Boolean =
+    containsDeploy(b, deployData => deployData.sig == deployId)
+
+  private def containsDeploy(b: BlockMessage, predicate: DeployData => Boolean) =
     deploys(b).toStream
       .flatMap(getDeployData)
-      .exists(deployData => deployData.sig == deployId)
+      .exists(predicate)
 
   private def getDeployData(d: ProcessedDeploy): Option[DeployData] = d.deploy
 
