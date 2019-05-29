@@ -206,7 +206,7 @@ class BlockQueryResponseAPITest
                                blockStore
                              )
         _ = inside(blockQueryResponse) {
-          case Right(BlockQueryResponse(Some(blockInfo))) =>
+          case Right(LightBlockQueryResponse(Some(blockInfo))) =>
             blockInfo.blockHash should be(secondHashString)
             blockInfo.blockSize should be(secondBlock.serializedSize.toString)
             blockInfo.blockNumber should be(blockNumber)
@@ -216,9 +216,6 @@ class BlockQueryResponseAPITest
             blockInfo.mainParentHash should be(genesisHashString)
             blockInfo.parentsHashList should be(parentsString)
             blockInfo.sender should be(senderString)
-            blockInfo.shardId should be(shardId)
-            blockInfo.bondsValidatorList should be(bondValidatorHashList)
-            blockInfo.deployCost should be(deployCostList)
         }
       } yield ()
   }

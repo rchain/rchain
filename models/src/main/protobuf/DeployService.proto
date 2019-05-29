@@ -56,7 +56,7 @@ service DeployService {
   // Returns on success BlockQueryResponse
   rpc findBlockWithDeploy(FindDeployInBlockQuery) returns (Either) {}
   // Find block containing a deploy.
-  // Returns on success BlockQueryResponse
+  // Returns on success LightBlockQueryResponse
   rpc findDeploy(FindDeployQuery) returns (Either) {}
   // Preview new top-level unforgeable names (for example, to compute signatures over them).
   // Returns on success PrivateNamePreviewResponse
@@ -96,6 +96,10 @@ message DeployServiceResponse {
 
 message BlockQueryResponse {
   BlockInfo blockInfo = 1;
+}
+
+message LightBlockQueryResponse {
+  BlockInfoWithoutTuplespace blockInfo = 1;
 }
 
 message VisualizeDagQuery {
