@@ -594,21 +594,17 @@ trait SpatialMatcherInstances {
     */
   implicit def gprivateSpatialMatcherInstance[F[_]: Splittable: Alternative: Monad: _error: _cost: _freeMap]
       : SpatialMatcher[F, GPrivate, GPrivate] =
-    (target, pattern) =>
-      if (target == pattern) {
-        val cost = equalityCheckCost(target, pattern)
-        charge[F](cost) *> ().pure[F]
-      } else
-        MonoidK[F].empty
+    (target, pattern) => {
+      val cost = equalityCheckCost(target, pattern)
+      charge[F](cost) *> ().pure[F]
+    }
 
   implicit def gdeployerAuthSpatialMatcherInstance[F[_]: Splittable: Alternative: Monad: _error: _cost: _freeMap]
       : SpatialMatcher[F, GDeployerAuth, GDeployerAuth] =
-    (target, pattern) =>
-      if (target == pattern) {
-        val cost = equalityCheckCost(target, pattern)
-        charge[F](cost) *> ().pure[F]
-      } else
-        MonoidK[F].empty
+    (target, pattern) => {
+      val cost = equalityCheckCost(target, pattern)
+      charge[F](cost) *> ().pure[F]
+    }
 
   implicit def receiveBindSpatialMatcherInstance[F[_]: Splittable: Alternative: Monad: _error: _cost: _freeMap: _short]
       : SpatialMatcher[F, ReceiveBind, ReceiveBind] =
