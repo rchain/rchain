@@ -9,6 +9,7 @@ import cats.effect.{Concurrent, Sync}
 import cats.implicits._
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.{BlockDagRepresentation, BlockDagStorage, BlockStore}
+import coop.rchain.casper.CasperState.CasperStateCell
 import coop.rchain.casper.DeployError._
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.ProtoUtil._
@@ -38,6 +39,10 @@ final case class CasperState(
     dependencyDag: DoublyLinkedDag[BlockHash] = BlockDependencyDag.empty
 )
 
+object CasperState {
+  type CasperStateCell[F[_]] = Cell[F, CasperState]
+}
+
 class MultiParentCasperImpl[F[_]: Sync: Concurrent: Sync: ConnectionsCell: TransportLayer: Log: Time: SafetyOracle: LastFinalizedBlockCalculator: BlockStore: RPConfAsk: BlockDagStorage](
     runtimeManager: RuntimeManager[F],
     validatorId: Option[ValidatorIdentity],
@@ -45,7 +50,7 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Sync: ConnectionsCell: Trans
     postGenesisStateHash: StateHash,
     shardId: String,
     blockProcessingLock: Semaphore[F]
-)(implicit state: Cell[F, CasperState], metricsF: Metrics[F])
+)(implicit state: CasperStateCell[F], metricsF: Metrics[F])
     extends MultiParentCasper[F] {
 
   implicit private val logSource: LogSource = LogSource(this.getClass)

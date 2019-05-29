@@ -3,15 +3,16 @@ package coop.rchain.casper
 import cats.effect.{Concurrent, Sync}
 import cats.implicits._
 import coop.rchain.blockstorage.{BlockDagRepresentation, BlockDagStorage, BlockStore}
+import coop.rchain.casper.CasperState.CasperStateCell
 import coop.rchain.casper.util.ProtoUtil
-import coop.rchain.shared.{Cell, Log}
+import coop.rchain.shared.Log
 import coop.rchain.catscontrib.ListContrib
 
 final class LastFinalizedBlockCalculator[F[_]: Sync: Log: Concurrent: BlockStore: BlockDagStorage: SafetyOracle](
     faultToleranceThreshold: Float
 ) {
   def run(dag: BlockDagRepresentation[F], lastFinalizedBlockHash: BlockHash)(
-      implicit state: Cell[F, CasperState]
+      implicit state: CasperStateCell[F]
   ): F[BlockHash] =
     for {
       maybeChildrenHashes <- dag.children(lastFinalizedBlockHash)
@@ -33,7 +34,7 @@ final class LastFinalizedBlockCalculator[F[_]: Sync: Log: Concurrent: BlockStore
 
   private def removeDeploysInFinalizedBlock(
       finalizedChildHash: BlockHash
-  )(implicit state: Cell[F, CasperState]): F[Unit] =
+  )(implicit state: CasperStateCell[F]): F[Unit] =
     for {
       block              <- ProtoUtil.unsafeGetBlock[F](finalizedChildHash)
       deploys            = block.body.get.deploys.map(_.deploy.get).toList
