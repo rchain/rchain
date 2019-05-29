@@ -74,7 +74,7 @@ class RuntimeManagerImpl[F[_]: Concurrent] private[rholang] (
 
   def captureResults(start: StateHash, deploy: DeployData, name: Par): F[Seq[Par]] =
     withResetRuntime(start) { runtime =>
-      computeEffect(runtime)(deploy)
+      computeEffect(runtime, runtime.reducer)(deploy)
         .ensure(
           BugFoundError("Unexpected error while capturing results from rholang")
         )(
@@ -82,13 +82,11 @@ class RuntimeManagerImpl[F[_]: Concurrent] private[rholang] (
         ) >> getData(runtime)(name)
     }
 
-  private def computeEffect(runtime: Runtime[F])(deploy: DeployData): F[EvaluateResult] =
+  private def computeEffect(runtime: Runtime[F], reducer: ChargingReducer[F])(
+      deploy: DeployData
+  ): F[EvaluateResult] =
     runtime.deployParametersRef.set(ProtoUtil.getRholangDeployParams(deploy)) >>
-      doInj(deploy, runtime.reducer, runtime.errorLog)(runtime.cost)
-
-  private def replayComputeEffect(runtime: Runtime[F], deploy: DeployData): F[EvaluateResult] =
-    runtime.deployParametersRef.set(ProtoUtil.getRholangDeployParams(deploy)) >>
-      doInj(deploy, runtime.replayReducer, runtime.errorLog)(runtime.cost)
+      doInj(deploy, reducer, runtime.errorLog)(runtime.cost)
 
   /**
     * @note `replayEval` does not need to reset the evaluation store,
@@ -176,7 +174,7 @@ class RuntimeManagerImpl[F[_]: Concurrent] private[rholang] (
   private def computeDeployPayment(
       runtime: Runtime[F]
   )(user: ByteString, amount: Long): F[Checkpoint] =
-    computeEffect(runtime)(
+    computeEffect(runtime, runtime.reducer)(
       ConstructDeploy.sourceDeployNow(deployPaymentSource(amount)).withDeployer(user)
     ).ensure(BugFoundError("Deploy payment failed unexpectedly"))(_.errors.isEmpty) >>
       getResult(runtime)() >>= {
@@ -278,7 +276,7 @@ class RuntimeManagerImpl[F[_]: Concurrent] private[rholang] (
   ): F[(Blake2b256Hash, InternalProcessedDeploy)] =
     for {
       _                            <- runtime.space.reset(startHash)
-      evaluateResult               <- computeEffect(runtime)(deploy)
+      evaluateResult               <- computeEffect(runtime, runtime.reducer)(deploy)
       EvaluateResult(cost, errors) = evaluateResult
       newCheckpoint                <- runtime.space.createCheckpoint()
       deployResult = InternalProcessedDeploy(
@@ -315,7 +313,7 @@ class RuntimeManagerImpl[F[_]: Concurrent] private[rholang] (
     import processedDeploy._
     for {
       _                    <- runtime.replaySpace.resetAndRig(hash, processedDeploy.deployLog)
-      replayEvaluateResult <- replayComputeEffect(runtime, processedDeploy.deploy)
+      replayEvaluateResult <- computeEffect(runtime, runtime.replayReducer)(processedDeploy.deploy)
       //TODO: compare replay deploy cost to given deploy cost
       EvaluateResult(cost, errors) = replayEvaluateResult
       cont <- DeployStatus.fromErrors(errors) match {
