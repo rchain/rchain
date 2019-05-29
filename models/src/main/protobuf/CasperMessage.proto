@@ -140,7 +140,8 @@ message ProcessedDeploy {
     DeployData deploy = 1;
     PCost cost = 2 ;
     repeated Event log = 3; //the new terms and comm. rule reductions from this deploy
-    bool errored = 4; //true if deploy encountered a user error
+    repeated Event paymentLog = 4; //the comm. rule reductions from the payment for the deploy
+    bool errored = 5; //true if deploy encountered a user error
 }
 
 message Body {

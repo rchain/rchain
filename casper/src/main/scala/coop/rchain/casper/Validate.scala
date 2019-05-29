@@ -6,7 +6,6 @@ import cats.implicits._
 
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.{BlockDagRepresentation, BlockStore}
-import coop.rchain.catscontrib._
 import coop.rchain.casper.protocol.Event.EventInstance
 import coop.rchain.casper.protocol.{ApprovedBlock, BlockMessage, Justification}
 import coop.rchain.casper.util.{DagOperations, ProtoUtil}
@@ -153,7 +152,13 @@ object Validate {
       } yield false
     } else if (b.body.get.deploys.flatMap(_.log).exists(_.eventInstance == EventInstance.Empty)) {
       for {
-        _ <- Log[F].warn(ignore(b, s"one of block comm reduction events is empty."))
+        _ <- Log[F].warn(ignore(b, s"one of block deploy comm reduction events is empty."))
+      } yield false
+    } else if (b.body.get.deploys
+      .flatMap(_.paymentLog)
+      .exists(_.eventInstance == EventInstance.Empty)) {
+      for {
+        _ <- Log[F].warn(ignore(b, s"one of block payment comm reduction events is empty."))
       } yield false
     } else {
       true.pure[F]

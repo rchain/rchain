@@ -162,7 +162,7 @@ object Genesis {
 
     val blockDeploys =
       processedDeploys.filterNot(_.status.isFailed).map(_.toProcessedDeploy)
-    val sortedDeploys = blockDeploys.map(d => d.copy(log = d.log.sortBy(_.toByteArray)))
+    val sortedDeploys = blockDeploys.map(d => d.copy(log = d.log.sortBy(_.toByteArray), paymentLog = d.paymentLog.sortBy(_.toByteArray)))
 
     val body    = Body(state = Some(state), deploys = sortedDeploys)
     val version = 1L //FIXME make this part of Genesis, and pass it from upstream

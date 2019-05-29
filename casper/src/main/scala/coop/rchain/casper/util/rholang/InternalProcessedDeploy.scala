@@ -19,6 +19,7 @@ final case class InternalProcessedDeploy(
       deploy = Some(deploy),
       cost = Some(cost),
       log = deployLog.map(EventConverter.toCasperEvent),
+      paymentLog = paymentLog.map(EventConverter.toCasperEvent),
       errored = status.isFailed
     )
 
@@ -31,6 +32,7 @@ object InternalProcessedDeploy {
       d <- pd.deploy
       c <- pd.cost
       l = pd.log.map(EventConverter.toRspaceEvent)
+      p = pd.paymentLog.map(EventConverter.toRspaceEvent)
       s = if (pd.errored) UnknownFailure else Succeeded
-    } yield InternalProcessedDeploy(d, c, l, Seq.empty[trace.Event], s)
+    } yield InternalProcessedDeploy(d, c, l, p, s)
 }
