@@ -16,7 +16,9 @@ private[sorter] object ParSortMatcher extends Sortable[Par] {
       connectives <- par.connectives.toList
                       .traverse(Sortable[Connective].sortMatch[F])
                       .map(_.sorted)
-      ids = par.ids.map(g => ScoredTerm(g, Node(Score.PRIVATE, Leaf(g.id)))).sorted
+      unforgeables <- par.unforgeables.toList
+                       .traverse(Sortable[GUnforgeable].sortMatch[F])
+                       .map(_.sorted)
       sortedPar = Par(
         sends = sends.map(_.term),
         receives = receives.map(_.term),
@@ -25,7 +27,7 @@ private[sorter] object ParSortMatcher extends Sortable[Par] {
         matches = matches.map(_.term),
         bundles = bundles.map(_.term),
         connectives = connectives.map(_.term),
-        ids = ids.map(_.term),
+        unforgeables = unforgeables.map(_.term),
         locallyFree = par.locallyFree,
         connectiveUsed = par.connectiveUsed
       )
@@ -39,7 +41,7 @@ private[sorter] object ParSortMatcher extends Sortable[Par] {
           matches.map(_.score) ++
           bundles.map(_.score) ++
           connectives.map(_.score) ++
-          ids.map(_.score) ++
+          unforgeables.map(_.score) ++
           Seq(Leaf(connectiveUsedScore)): _*
       )
     } yield ScoredTerm(sortedPar, parScore)

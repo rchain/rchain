@@ -60,7 +60,7 @@ new NonNegativeNumber, rs(`rho:registry:insertSigned:ed25519`), uriOut in {
   rs!(
     "d89a1e6d2b8f53595b3d0d47effd48f0e537d19d847ad5811cf5216157a3a63c".hexToBytes(), 
     (9223372036854775807, bundle+{*NonNegativeNumber}), 
-    "992a8bbeaed194951667e38ec9b4bc0e1d50c4fdaf564a67ae4d90bfbe2439b5e85b53afb81b33075446ef5c5729bbfbb5b95b73aaeb17b05e2ead12ce226c07".hexToBytes(), 
+    "afdcf5113c2a63117bb84c9f79d2b7cc6c84accff5bf1c0f2d6b451e6bbbefafb9638a92229e04dcaa59cd3428bb5745ebbc1a6e92ff0fc1f6fe56cd689f7707".hexToBytes(),
     *uriOut
   )
 }

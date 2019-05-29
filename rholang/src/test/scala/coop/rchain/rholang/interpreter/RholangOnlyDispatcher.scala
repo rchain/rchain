@@ -2,6 +2,7 @@ package coop.rchain.rholang.interpreter
 
 import cats.Parallel
 import cats.effect.Sync
+import cats.effect.concurrent.Ref
 import cats.implicits._
 import cats.mtl.FunctorTell
 import coop.rchain.crypto.hash.Blake2b512Random
@@ -31,7 +32,11 @@ object RholangOnlyDispatcher {
     lazy val tuplespaceAlg = Tuplespace.rspaceTuplespace(pureSpace, dispatcher)
 
     implicit lazy val reducer: Reduce[M] =
-      new DebruijnInterpreter[M, F](tuplespaceAlg, urnMap)
+      new DebruijnInterpreter[M, F](
+        tuplespaceAlg,
+        urnMap,
+        Ref.unsafe[M, DeployParameters](DeployParameters.empty)
+      )
 
     val chargingReducer: ChargingReducer[M] = ChargingReducer[M]
 

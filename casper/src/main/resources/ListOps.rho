@@ -173,7 +173,7 @@ new ListOps, rs(`rho:registry:insertSigned:ed25519`), uriOut in {
   rs!(
     "1d325ed35924b606264d4beaee7f78214aaecb23f6f3816055bc8bbe94280b5a".hexToBytes(), 
     (9223372036854775807, bundle+{*ListOps}), 
-    "08a3bea68f6a05cd69720b30814cb7b5228e1f88c8a84bdba229039ff5ce23e08a1f90b1a16ec70bfe9674b39d355f7038b4e30549a8de968315cc3b11cb830a".hexToBytes(), 
+    "7830243afa5c252b5338def1cffd20a600cc37bf8e1dad1dc858853d1510fee4652d2fccd38e409ce41ae96d49e295e5991d125479c0b1d6244f5e3bcf12a40a".hexToBytes(),
     *uriOut
   )
 }

@@ -178,7 +178,7 @@ object Substitute {
               receives = receives,
               news = news,
               matches = matches,
-              ids = term.ids,
+              unforgeables = term.unforgeables,
               connectives = Nil,
               locallyFree = term.locallyFree.until(env.shift),
               connectiveUsed = term.connectiveUsed

@@ -360,10 +360,15 @@ object Runtime {
           dispatchTableCreator(space, dispatcher, registry, deployParametersRef, blockTime)
 
         lazy val (dispatcher, reducer, registry) =
-          RholangAndScalaDispatcher.create(space, dispatchTable, urnMap)
+          RholangAndScalaDispatcher.create(space, dispatchTable, urnMap, deployParametersRef)
 
         lazy val (replayDispatcher, replayReducer, replayRegistry) =
-          RholangAndScalaDispatcher.create(replaySpace, replayDispatchTable, urnMap)
+          RholangAndScalaDispatcher.create(
+            replaySpace,
+            replayDispatchTable,
+            urnMap,
+            deployParametersRef
+          )
         (reducer, replayReducer)
       }
       res <- introduceSystemProcesses(space, replaySpace, procDefs)

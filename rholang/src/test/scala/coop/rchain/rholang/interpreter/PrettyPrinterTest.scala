@@ -145,7 +145,7 @@ class ProcPrinterSpec extends FlatSpec with Matchers {
   "Par" should "Print" in {
     val source: Par = Par(
       exprs = Seq(GInt(0), GBool(true), GString("2"), GUri("www.3cheese.com")),
-      ids = Seq(GPrivateBuilder("4"), GPrivateBuilder("5"))
+      unforgeables = Seq(GPrivateBuilder("4"), GPrivateBuilder("5"))
     )
     val result = PrettyPrinter().buildString(source)
     val target = "0 |\ntrue |\n\"2\" |\n`www.3cheese.com` |\nUnforgeable(0x34) |\nUnforgeable(0x35)"

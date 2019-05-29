@@ -20,6 +20,7 @@ import coop.rchain.rholang.interpreter.matcher.SpatialMatcher.spatialMatchAndCha
 import coop.rchain.rholang.interpreter.storage.Tuplespace
 import coop.rchain.rspace.Serialize
 import monix.eval.Coeval
+import cats.effect.concurrent.Ref
 
 import scala.collection.immutable.BitSet
 import scala.util.Try
@@ -52,7 +53,8 @@ trait Reduce[M[_]] {
 
 class DebruijnInterpreter[M[_], F[_]](
     tuplespaceAlg: Tuplespace[M],
-    urnMap: Map[String, Par]
+    urnMap: Map[String, Par],
+    deployParametersRef: Ref[M, DeployParameters]
 )(
     implicit parallel: cats.Parallel[M, F],
     s: Sync[M],
@@ -414,16 +416,28 @@ class DebruijnInterpreter[M[_], F[_]](
         _env.put(addr)
       }
 
-      def addUrn(newEnv: Env[Par], urn: String): Either[ReduceError, Env[Par]] =
-        urnMap.get(urn) match {
-          case Some(p) => newEnv.put(p).asRight[ReduceError]
-          case None    => ReduceError(s"Unknown urn for new: $urn").asLeft[Env[Par]]
-        }
+      def addUrn(
+          deployParameters: DeployParameters
+      )(newEnv: Env[Par], urn: String): Either[ReduceError, Env[Par]] =
+        if (urn == "rho:deployer:auth") {
+          deployParameters.userId.exprs.headOption match {
+            case Some(Expr(GByteArray(bs))) =>
+              newEnv.put(Par(unforgeables = Vector(GDeployerAuth(bs)))).asRight[ReduceError]
+            case _ => ReduceError("No deploy parameters set").asLeft[Env[Par]]
+          }
+        } else
+          urnMap.get(urn) match {
+            case Some(p) => newEnv.put(p).asRight[ReduceError]
+            case None    => ReduceError(s"Unknown urn for new: $urn").asLeft[Env[Par]]
+          }
 
-      urns.toList.foldM(simpleNews)(addUrn) match {
-        case Right(env) => env.pure[M]
-        case Left(e)    => e.raiseError[M, Env[Par]]
-      }
+      deployParametersRef.get.flatMap(
+        params =>
+          urns.toList.foldM(simpleNews)(addUrn(params)) match {
+            case Right(env) => env.pure[M]
+            case Left(e)    => e.raiseError[M, Env[Par]]
+          }
+      )
     }
 
     charge[M](newBindingsCost(neu.bindCount)) >>
@@ -1302,7 +1316,7 @@ class DebruijnInterpreter[M[_], F[_]](
     )
 
   def evalSingleExpr(p: Par)(implicit env: Env[Par]): M[Expr] =
-    if (p.sends.nonEmpty || p.receives.nonEmpty || p.news.nonEmpty || p.matches.nonEmpty || p.ids.nonEmpty || p.bundles.nonEmpty)
+    if (p.sends.nonEmpty || p.receives.nonEmpty || p.news.nonEmpty || p.matches.nonEmpty || p.unforgeables.nonEmpty || p.bundles.nonEmpty)
       ReduceError("Error: parallel or non expression found where expression expected.")
         .raiseError[M, Expr]
     else
@@ -1314,7 +1328,7 @@ class DebruijnInterpreter[M[_], F[_]](
   def evalToLong(
       p: Par
   )(implicit env: Env[Par]): M[Long] =
-    if (p.sends.nonEmpty || p.receives.nonEmpty || p.news.nonEmpty || p.matches.nonEmpty || p.ids.nonEmpty || p.bundles.nonEmpty)
+    if (p.sends.nonEmpty || p.receives.nonEmpty || p.news.nonEmpty || p.matches.nonEmpty || p.unforgeables.nonEmpty || p.bundles.nonEmpty)
       ReduceError("Error: parallel or non expression found where expression expected.")
         .raiseError[M, Long]
     else
@@ -1344,7 +1358,7 @@ class DebruijnInterpreter[M[_], F[_]](
   def evalToBool(
       p: Par
   )(implicit env: Env[Par]): M[Boolean] =
-    if (p.sends.nonEmpty || p.receives.nonEmpty || p.news.nonEmpty || p.matches.nonEmpty || p.ids.nonEmpty || p.bundles.nonEmpty)
+    if (p.sends.nonEmpty || p.receives.nonEmpty || p.news.nonEmpty || p.matches.nonEmpty || p.unforgeables.nonEmpty || p.bundles.nonEmpty)
       ReduceError("Error: parallel or non expression found where expression expected.")
         .raiseError[M, Boolean]
     else

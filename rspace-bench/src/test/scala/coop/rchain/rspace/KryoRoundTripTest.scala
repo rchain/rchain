@@ -12,6 +12,7 @@ class KryoRoundTripTest extends FlatSpec with PropertyChecks with Matchers {
     PropertyCheckConfiguration(minSuccessful = 50, sizeRange = 250)
 
   implicit val exprSerialize               = KryoSerializers.serializer(classOf[Expr])
+  implicit val unfSerialize                = KryoSerializers.serializer(classOf[GUnforgeable])
   implicit val parSerialize                = KryoSerializers.serializer(classOf[Par])
   implicit val bindPatternSerialize        = KryoSerializers.serializer(classOf[BindPattern])
   implicit val listParWithRandomSerialize  = KryoSerializers.serializer(classOf[ListParWithRandom])

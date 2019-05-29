@@ -30,7 +30,7 @@ message Par {
     repeated New news = 4;
     repeated Expr exprs = 5;
     repeated Match matches = 6;
-    repeated GPrivate ids = 7;  // unforgeable names
+    repeated GUnforgeable unforgeables = 7;  // unforgeable names
     repeated Bundle bundles = 11;
     repeated Connective connectives = 8;
     bytes locallyFree = 9 [(scalapb.field).type = "coop.rchain.models.AlwaysEqual[scala.collection.immutable.BitSet]"];
@@ -376,6 +376,16 @@ message ConnectiveBody {
 // Unforgeable names resulting from `new x { ... }`
 // These should only occur as the program is being evaluated. There is no way in
 // the grammar to construct them.
+message GUnforgeable {
+    oneof unf_instance {
+        GPrivate g_private_body = 1;
+        GDeployerAuth g_deployer_auth_body = 2;
+    }
+}
 message GPrivate {
     bytes id = 1;
+}
+
+message GDeployerAuth {
+    bytes publicKey = 1;
 }

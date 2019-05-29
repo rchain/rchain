@@ -1,5 +1,6 @@
 package coop.rchain.rholang.interpreter
 
+import cats.effect.concurrent.Ref
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.metrics
 import coop.rchain.metrics.Metrics
@@ -83,9 +84,13 @@ class CostAccountingReducerTest extends FlatSpec with Matchers with TripleEquals
     implicit val errorLog = new ErrorLog[Task]()
     implicit val rand     = Blake2b512Random(128)
     implicit val cost     = CostAccounting.initialCost[Task](Cost(1000)).runSyncUnsafe(1.second)
-    val reducer           = new DebruijnInterpreter[Task, Task.Par](tuplespaceAlg, Map.empty)
-    val send              = Send(Par(exprs = Seq(GString("x"))), Seq(Par()))
-    val test              = reducer.inj(send).attempt.runSyncUnsafe(1.second)
+    val reducer = new DebruijnInterpreter[Task, Task.Par](
+      tuplespaceAlg,
+      Map.empty,
+      Ref.unsafe[Task, DeployParameters](DeployParameters.empty)
+    )
+    val send = Send(Par(exprs = Seq(GString("x"))), Seq(Par()))
+    val test = reducer.inj(send).attempt.runSyncUnsafe(1.second)
     assert(test === Left(OutOfPhlogistonsError))
   }
 
@@ -118,7 +123,12 @@ class CostAccountingReducerTest extends FlatSpec with Matchers with TripleEquals
 
       lazy val (_, reducer, _) =
         RholangAndScalaDispatcher
-          .create[Task, Task.Par](pureRSpace, Map.empty, Map.empty)
+          .create[Task, Task.Par](
+            pureRSpace,
+            Map.empty,
+            Map.empty,
+            Ref.unsafe(DeployParameters.empty)
+          )
 
       def plainSendCost(p: Par): Cost = {
         val storageCost = ChargingRSpace.storageCostProduce(

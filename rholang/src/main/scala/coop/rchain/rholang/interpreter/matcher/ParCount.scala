@@ -13,7 +13,7 @@ private[matcher] final case class ParCount(
     news: Int = 0,
     exprs: Int = 0,
     matches: Int = 0,
-    ids: Int = 0,
+    unforgeables: Int = 0,
     bundles: Int = 0
 ) {
 
@@ -30,7 +30,7 @@ private[matcher] final case class ParCount(
       news = op(news, other.news),
       exprs = op(exprs, other.exprs),
       matches = op(matches, other.matches),
-      ids = op(ids, other.ids),
+      unforgeables = op(unforgeables, other.unforgeables),
       bundles = op(bundles, other.bundles)
     )
 
@@ -51,7 +51,7 @@ private[matcher] object ParCount {
       news = par.news.size,
       matches = par.matches.size,
       exprs = par.exprs.size,
-      ids = par.ids.size,
+      unforgeables = par.unforgeables.size,
       bundles = par.bundles.size
     )
 
@@ -62,7 +62,7 @@ private[matcher] object ParCount {
       news = Int.MaxValue,
       matches = Int.MaxValue,
       exprs = Int.MaxValue,
-      ids = Int.MaxValue,
+      unforgeables = Int.MaxValue,
       bundles = Int.MaxValue
     )
 

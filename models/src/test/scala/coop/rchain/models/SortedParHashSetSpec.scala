@@ -88,7 +88,7 @@ class SortedParHashSetSpec extends FlatSpec with PropertyChecks with Matchers {
   it should "be equal when it is equal" in {
     val elements: Seq[Par] = Seq(
       Par(
-        ids = Seq(
+        unforgeables = Seq(
           GPrivate(
             ByteString.copyFrom(
               Array[Byte](

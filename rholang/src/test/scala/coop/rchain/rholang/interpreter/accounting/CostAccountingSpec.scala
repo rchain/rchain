@@ -84,7 +84,7 @@ class CostAccountingSpec extends FlatSpec with Matchers with PropertyChecks with
           38 => Nil
           42 => @3!(42)
         }
-     """.stripMargin, 634L)
+     """.stripMargin, 638L)
   )
 
   "Total cost of evaluation" should "be equal to the sum of all costs in the log" in {

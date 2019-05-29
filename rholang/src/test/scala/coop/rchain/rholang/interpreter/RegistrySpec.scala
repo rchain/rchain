@@ -1,6 +1,7 @@
 package coop.rchain.rholang.interpreter
 
 import cats.implicits._
+import cats.effect.concurrent.Ref
 import com.google.protobuf.ByteString
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.hash.{Blake2b256, Blake2b512Random}
@@ -62,7 +63,12 @@ trait RegistryTester extends PersistentStoreTester {
         lazy val dispatchTable: RhoDispatchMap[Task] = dispatchTableCreator(registry)
         lazy val (dispatcher @ _, reducer, registry) =
           RholangAndScalaDispatcher
-            .create(space, dispatchTable, Registry.testingUrnMap)
+            .create(
+              space,
+              dispatchTable,
+              Registry.testingUrnMap,
+              Ref.unsafe[Task, DeployParameters](DeployParameters.empty)
+            )
         reducer.setPhlo(Cost.UNSAFE_MAX).runSyncUnsafe(1.second)
         registry.testInstall().runSyncUnsafe(1.second)
         f(reducer, space)

@@ -125,15 +125,16 @@ trait ScoreTree {
     final val ABSENT = 0
 
     // Ground types
-    final val BOOL    = 1
-    final val INT     = 2
-    final val STRING  = 3
-    final val URI     = 4
-    final val PRIVATE = 5
-    final val ELIST   = 6
-    final val ETUPLE  = 7
-    final val ESET    = 8
-    final val EMAP    = 9
+    final val BOOL          = 1
+    final val INT           = 2
+    final val STRING        = 3
+    final val URI           = 4
+    final val PRIVATE       = 5
+    final val ELIST         = 6
+    final val ETUPLE        = 7
+    final val ESET          = 8
+    final val EMAP          = 9
+    final val DEPLOYER_AUTH = 10
 
     // Vars
     final val BOUND_VAR = 50
