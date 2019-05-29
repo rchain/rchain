@@ -55,9 +55,16 @@ service DeployService {
   // Find block from a deploy.
   // Returns on success BlockQueryResponse
   rpc findBlockWithDeploy(FindDeployInBlockQuery) returns (Either) {}
+  // Find block containing a deploy.
+  // Returns on success BlockQueryResponse
+  rpc findDeploy(FindDeployQuery) returns (Either) {}
   // Preview new top-level unforgeable names (for example, to compute signatures over them).
   // Returns on success PrivateNamePreviewResponse
   rpc previewPrivateNames(PrivateNamePreviewQuery) returns (Either) {}
+}
+
+message FindDeployQuery {
+  bytes deployId = 1;
 }
 
 message FindDeployInBlockQuery {

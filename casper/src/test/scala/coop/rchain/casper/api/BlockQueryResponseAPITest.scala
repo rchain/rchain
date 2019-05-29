@@ -12,6 +12,7 @@ import coop.rchain.casper.util.{ConstructDeploy, ProtoUtil}
 import coop.rchain.metrics.Metrics
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.catscontrib.TaskContrib._
+import coop.rchain.crypto.PrivateKey
 import coop.rchain.crypto.signatures.Ed25519
 import coop.rchain.p2p.EffectsTestInstances.{LogStub, LogicalTime}
 import monix.eval.Task
@@ -186,6 +187,59 @@ class BlockQueryResponseAPITest
           case Left(msg) =>
             msg should be(
               s"Error: Failure to find block containing deploy signed by  with timestamp $timestamp"
+            )
+        }
+      } yield ()
+  }
+
+  "findDeploy" should "return successful block info response when a block contains the deploy with given signature" in withStorage {
+    implicit blockStore => implicit blockDagStorage =>
+      for {
+        effects                                 <- effectsForSimpleCasperSetup(blockStore, blockDagStorage)
+        (logEff, casperRef, cliqueOracleEffect) = effects
+        deployId                                = SignDeployment.sign(PrivateKey(sk.bytes), randomDeploys.head.deploy.get).sig
+        blockQueryResponse <- BlockAPI.findDeploy[Task](deployId)(
+                               Sync[Task],
+                               casperRef,
+                               logEff,
+                               cliqueOracleEffect,
+                               blockStore
+                             )
+        _ = inside(blockQueryResponse) {
+          case Right(BlockQueryResponse(Some(blockInfo))) =>
+            blockInfo.blockHash should be(secondHashString)
+            blockInfo.blockSize should be(secondBlock.serializedSize.toString)
+            blockInfo.blockNumber should be(blockNumber)
+            blockInfo.version should be(version)
+            blockInfo.deployCount should be(deployCount)
+            blockInfo.faultTolerance should be(faultTolerance)
+            blockInfo.mainParentHash should be(genesisHashString)
+            blockInfo.parentsHashList should be(parentsString)
+            blockInfo.sender should be(senderString)
+            blockInfo.shardId should be(shardId)
+            blockInfo.bondsValidatorList should be(bondValidatorHashList)
+            blockInfo.deployCost should be(deployCostList)
+        }
+      } yield ()
+  }
+
+  it should "return an error when no block contains the deploy with the given signature" in withStorage {
+    implicit blockStore => implicit blockDagStorage =>
+      for {
+        effects                                 <- emptyEffects(blockStore, blockDagStorage)
+        (logEff, casperRef, cliqueOracleEffect) = effects
+        deployId                                = ByteString.copyFrom("asdfQwertyUiopxyzcbv".getBytes)
+        blockQueryResponse <- BlockAPI.findDeploy[Task](deployId)(
+                               Sync[Task],
+                               casperRef,
+                               logEff,
+                               cliqueOracleEffect,
+                               blockStore
+                             )
+        _ = inside(blockQueryResponse) {
+          case Left(msg) =>
+            msg should be(
+              s"Couldn't find block containing deploy with id: ${PrettyPrinter.buildStringNoLimit(deployId)}"
             )
         }
       } yield ()

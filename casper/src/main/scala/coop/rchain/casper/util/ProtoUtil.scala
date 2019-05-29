@@ -213,6 +213,11 @@ object ProtoUtil {
       .flatMap(getDeployData)
       .exists(deployData => deployData.deployer == user && deployData.timestamp == timestamp)
 
+  def containsDeploy(b: BlockMessage, deployId: ByteString): Boolean =
+    deploys(b).toStream
+      .flatMap(getDeployData)
+      .exists(deployData => deployData.sig == deployId)
+
   private def getDeployData(d: ProcessedDeploy): Option[DeployData] = d.deploy
 
   def deploys(b: BlockMessage): Seq[ProcessedDeploy] =

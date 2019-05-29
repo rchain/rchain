@@ -337,6 +337,41 @@ object BlockAPI {
     )
   }
 
+  def findDeploy[F[_]: Monad: MultiParentCasperRef: Log: SafetyOracle: BlockStore](
+      id: ByteString
+  ): Effect[F, BlockQueryResponse] = {
+    val errorMessage =
+      "Could not find block with deploy, casper instance was not available yet."
+
+    def casperResponse(
+        implicit casper: MultiParentCasper[F]
+    ): Effect[F, BlockQueryResponse] =
+      for {
+        dag               <- MultiParentCasper[F].blockDag
+        allBlocksTopoSort <- dag.topoSort(0L)
+        maybeBlock <- allBlocksTopoSort.flatten.reverse.toStream
+                       .traverse(ProtoUtil.unsafeGetBlock[F])
+                       .map(blocks => blocks.find(ProtoUtil.containsDeploy(_, id)))
+        blockQueryResponse <- maybeBlock.traverse(getFullBlockInfo[F])
+      } yield blockQueryResponse.fold(
+        s"Couldn't find block containing deploy with id: ${PrettyPrinter
+          .buildStringNoLimit(id)}".asLeft[BlockQueryResponse]
+      )(
+        blockInfo =>
+          BlockQueryResponse(
+            blockInfo = Some(blockInfo)
+          ).asRight
+      )
+
+    MultiParentCasperRef.withCasper[F, ApiErr[BlockQueryResponse]](
+      casperResponse(_),
+      Log[F]
+        .warn(errorMessage)
+        .as(s"Error: errorMessage".asLeft)
+    )
+
+  }
+
   // TODO: Replace with call to BlockStore
   def findBlockWithDeploy[F[_]: Monad: MultiParentCasperRef: Log: SafetyOracle: BlockStore](
       user: ByteString,
