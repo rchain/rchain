@@ -19,7 +19,9 @@ import coop.rchain.blockstorage.util.io.IOError
 import coop.rchain.casper.protocol.BlockMessage
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.models.BlockHash.BlockHash
+import coop.rchain.models.BlockHash
 import coop.rchain.models.Validator.Validator
+import coop.rchain.models.Validator
 import coop.rchain.models.{BlockMetadata, EquivocationRecord}
 import coop.rchain.shared.{AtomicMonadState, Log, LogSource}
 import coop.rchain.shared.ByteStringOps._
@@ -217,7 +219,7 @@ final class BlockDagFileStorage[F[_]: Concurrent: Sync: Log: RaiseIOError] priva
           findAndAccessCheckpoint(blockHash, _.dataLookup.get(blockHash))
       }
     def contains(blockHash: BlockHash): F[Boolean] =
-      if (blockHash.size == 32) {
+      if (blockHash.size == BlockHash.Length) {
         dataLookup.get(blockHash) match {
           case Some(_) => true.pure[F]
           case None    => getBlockNumber(blockHash).map(_.isDefined)
@@ -376,7 +378,9 @@ final class BlockDagFileStorage[F[_]: Concurrent: Sync: Log: RaiseIOError] priva
       _                             <- latestMessagesLogOutputStream.close
       tmpSquashedData               <- createSameDirectoryTemporaryFile(latestMessagesDataFilePath)
       tmpSquashedCrc                <- createSameDirectoryTemporaryFile(latestMessagesCrcFilePath)
-      dataByteBuffer                = ByteBuffer.allocate(64 * latestMessages.size)
+      dataByteBuffer = ByteBuffer.allocate(
+        (Validator.Length + BlockHash.Length) * latestMessages.size
+      )
       _ <- latestMessages.toList.traverse_ {
             case (validator, blockHash) =>
               Sync[F].delay {
@@ -478,7 +482,7 @@ final class BlockDagFileStorage[F[_]: Concurrent: Sync: Log: RaiseIOError] priva
               for {
                 _             <- squashLatestMessagesDataFileIfNeeded()
                 blockMetadata = BlockMetadata.fromBlock(block, invalid)
-                _             = assert(block.blockHash.size == 32)
+                _             = assert(block.blockHash.size == BlockHash.Length)
                 _             <- if (invalid) modifyInvalidBlocks(_ + blockMetadata) else ().pure[F]
                 _             <- modifyDataLookup(_.updated(block.blockHash, blockMetadata))
                 _ <- modifyChildMap(
@@ -504,7 +508,8 @@ final class BlockDagFileStorage[F[_]: Concurrent: Sync: Log: RaiseIOError] priva
                                                           Log[F].warn(
                                                             s"Block ${Base16.encode(block.blockHash.toByteArray)} sender is empty"
                                                           ) *> newValidatorsLatestMessages.pure[F]
-                                                        } else if (block.sender.size() == 32) {
+                                                        } else if (block.sender
+                                                                     .size() == Validator.Length) {
                                                           (newValidatorsLatestMessages + (
                                                             (
                                                               block.sender,
@@ -595,6 +600,8 @@ final class BlockDagFileStorage[F[_]: Concurrent: Sync: Log: RaiseIOError] priva
 }
 
 object BlockDagFileStorage {
+  val IntSize = 4L
+
   implicit private val logSource       = LogSource(BlockDagFileStorage.getClass)
   private val checkpointPattern: Regex = "([0-9]+)-([0-9]+)".r
 
@@ -664,8 +671,8 @@ object BlockDagFileStorage {
         result: List[(Validator, BlockHash)],
         logSize: Int
     ): F[(List[(Validator, BlockHash)], Int)] = {
-      val validatorPk = Array.fill[Byte](32)(0)
-      val blockHash   = Array.fill[Byte](32)(0)
+      val validatorPk = Array.fill[Byte](Validator.Length)(0)
+      val blockHash   = Array.fill[Byte](BlockHash.Length)(0)
       for {
         validatorPkRead <- randomAccessIO.readFully(validatorPk)
         blockHashRead   <- randomAccessIO.readFully(blockHash)
@@ -707,7 +714,7 @@ object BlockDagFileStorage {
           if (withoutLastCalculatedCrcValue == readLatestMessagesCrc) {
             for {
               length <- latestMessagesRaf.length
-              _      <- latestMessagesRaf.setLength(length - 64)
+              _      <- latestMessagesRaf.setLength(length - (Validator.Length + BlockHash.Length))
             } yield (latestMessagesList.init.toMap, withoutLastCalculatedCrc)
           } else {
             Sync[F].raiseError[(Map[Validator, BlockHash], Crc32[F])](LatestMessagesLogIsCorrupted)
@@ -768,7 +775,7 @@ object BlockDagFileStorage {
         withoutLastCalculatedCrc.value.flatMap { withoutLastCalculatedCrcValue =>
           if (withoutLastCalculatedCrcValue == readDataLookupCrc) {
             val byteString                    = dataLookupList.last._2.toByteString
-            val lastDataLookupEntrySize: Long = 4L + byteString.size()
+            val lastDataLookupEntrySize: Long = IntSize + byteString.size()
             for {
               length <- dataLookupRandomAccessFile.length
               _      <- dataLookupRandomAccessFile.setLength(length - lastDataLookupEntrySize)
@@ -801,7 +808,7 @@ object BlockDagFileStorage {
     def readRec(
         accumulator: List[EquivocationRecord]
     ): F[List[EquivocationRecord]] = {
-      val equivocatorBytes = Array.ofDim[Byte](32)
+      val equivocatorBytes = Array.ofDim[Byte](Validator.Length)
       for {
         equivocatorRead     <- randomAccessIO.readFully(equivocatorBytes)
         sequenceNumberOpt   <- randomAccessIO.readInt
@@ -810,7 +817,7 @@ object BlockDagFileStorage {
                    case (Some(()), Some(sequenceNumber), Some(blockHashSetSize)) =>
                      for {
                        blockHashes <- (0 until blockHashSetSize).toList.traverse { _ =>
-                                       val blockHashBytes = Array.ofDim[Byte](32)
+                                       val blockHashBytes = Array.ofDim[Byte](BlockHash.Length)
                                        randomAccessIO.readFully(blockHashBytes).flatMap {
                                          case Some(()) =>
                                            ByteString.copyFrom(blockHashBytes).pure[F]
@@ -854,9 +861,9 @@ object BlockDagFileStorage {
           calculateEquivocationsTrackerCrc[F](equivocationsTracker.init)
         withoutLastCalculatedCrc.value.flatMap { withoutLastCalculatedCrcValue =>
           if (withoutLastCalculatedCrcValue == readEquivocationsTrackerCrc) {
-            val lastRecord = equivocationsTracker.last
-            val lastRecordSize
-                : Long = 32L + 4L + 4L + lastRecord.equivocationDetectedBlockHashes.size * 32
+            val lastRecord           = equivocationsTracker.last
+            val blockHashesSize      = lastRecord.equivocationDetectedBlockHashes.size * BlockHash.Length
+            val lastRecordSize: Long = Validator.Length + IntSize + IntSize + blockHashesSize
             for {
               length <- equivocationsTrackerRandomAccessIo.length
               _      <- equivocationsTrackerRandomAccessIo.setLength(length - lastRecordSize)
@@ -927,7 +934,7 @@ object BlockDagFileStorage {
   ): F[Unit] = {
     val lastRecord = invalidBlocks.last
     // Size of the byte array (4 bytes) and the actual byte array
-    val lastRecordSize: Long = 4L + lastRecord.toByteString.size
+    val lastRecordSize: Long = IntSize + lastRecord.toByteString.size
     for {
       length <- randomAccessIO.length
       _      <- randomAccessIO.setLength(length - lastRecordSize)

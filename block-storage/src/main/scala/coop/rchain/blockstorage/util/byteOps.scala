@@ -3,19 +3,25 @@ import java.nio.ByteBuffer
 
 import com.google.protobuf.ByteString
 import coop.rchain.models.BlockHash.BlockHash
+import coop.rchain.models.BlockHash
 import coop.rchain.models.EquivocationRecord
 import coop.rchain.models.Validator.Validator
+import coop.rchain.models.Validator
 import coop.rchain.shared.Language.ignore
 
 object byteOps {
   implicit class ByteBufferRich(val byteBuffer: ByteBuffer) extends AnyVal {
     def getBlockHash(): BlockHash = {
-      val blockHashBytes = Array.ofDim[Byte](32)
+      val blockHashBytes = Array.ofDim[Byte](BlockHash.Length)
       ignore { byteBuffer.get(blockHashBytes) }
       ByteString.copyFrom(blockHashBytes)
     }
 
-    def getValidator(): Validator = getBlockHash()
+    def getValidator(): Validator = {
+      val validatorBytes = Array.ofDim[Byte](Validator.Length)
+      ignore { byteBuffer.get(validatorBytes) }
+      ByteString.copyFrom(validatorBytes)
+    }
   }
 
   implicit class IntRich(val value: Int) extends AnyVal {

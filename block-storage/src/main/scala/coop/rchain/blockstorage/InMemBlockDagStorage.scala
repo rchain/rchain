@@ -10,6 +10,7 @@ import coop.rchain.blockstorage.util.{BlockMessageUtil, TopologicalSortUtil}
 import coop.rchain.casper.protocol.BlockMessage
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.models.BlockHash.BlockHash
+import coop.rchain.models.BlockHash
 import coop.rchain.models.{BlockMetadata, EquivocationRecord}
 import coop.rchain.models.EquivocationRecord.SequenceNumber
 import coop.rchain.models.Validator.Validator
@@ -127,7 +128,7 @@ final class InMemBlockDagStorage[F[_]: Concurrent: Sync: Log: BlockStore](
                                                 Log[F].warn(
                                                   s"Block ${Base16.encode(block.blockHash.toByteArray)} sender is empty"
                                                 ) *> newValidatorsLatestMessages.pure[F]
-                                              } else if (block.sender.size() == 32) {
+                                              } else if (block.sender.size() == BlockHash.Length) {
                                                 (newValidatorsLatestMessages + (
                                                   (
                                                     block.sender,
