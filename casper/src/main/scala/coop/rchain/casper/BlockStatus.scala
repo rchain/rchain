@@ -31,6 +31,7 @@ final case object AdmissibleEquivocation extends InvalidBlock with Slashable
 final case object IgnorableEquivocation   extends InvalidBlock
 final case object InvalidUnslashableBlock extends InvalidBlock
 final case object MissingBlocks           extends InvalidBlock
+final case object DeployNotSigned         extends InvalidBlock with Slashable
 
 final case object InvalidBlockNumber      extends InvalidBlock with Slashable
 final case object InvalidRepeatDeploy     extends InvalidBlock with Slashable

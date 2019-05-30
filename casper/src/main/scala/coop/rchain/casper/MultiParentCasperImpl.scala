@@ -391,6 +391,8 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: ConnectionsCell: TransportLa
         ) >> dag.pure[F]
       case InvalidFollows =>
         handleInvalidBlockEffect(status, block)
+      case DeployNotSigned =>
+        handleInvalidBlockEffect(status, block)
       case InvalidBlockNumber =>
         handleInvalidBlockEffect(status, block)
       case InvalidParents =>

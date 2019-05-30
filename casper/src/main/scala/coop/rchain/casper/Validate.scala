@@ -199,6 +199,8 @@ object Validate {
       _ <- EitherT(Validate.missingBlocks[F](block, dag))
       _ <- EitherT.liftF(span.mark("before-timestamp-validation"))
       _ <- EitherT(Validate.timestamp[F](block, dag))
+      _ <- EitherT.liftF(span.mark("before-valid-deploy-signatures"))
+      _ <- validDeploySignatures[F](block)
       _ <- EitherT.liftF(span.mark("before-repeat-deploy-validation"))
       _ <- EitherT(Validate.repeatDeploy[F](block, dag, expirationThreshold))
       _ <- EitherT.liftF(span.mark("before-block-number-validation"))
@@ -220,6 +222,22 @@ object Validate {
     } yield Valid
 
     getBlockSummary.value
+  }
+
+  def validDeploySignatures[F[_]: Applicative](
+      block: BlockMessage
+  ): EitherT[F, InvalidBlock, Unit] = {
+    def allDeploysValid: Option[Boolean] =
+      block.body >>= (_.deploys.toList
+        .traverse { pd =>
+          pd.deploy >>= (SignDeployment.verify)
+        }
+        .map(bs => bs.foldLeft(true)(_ && _)))
+
+    EitherT(allDeploysValid match {
+      case Some(true) => ().asRight[InvalidBlock].pure[F]
+      case _          => (DeployNotSigned: InvalidBlock).asLeft[Unit].pure[F]
+    })
   }
 
   /**
