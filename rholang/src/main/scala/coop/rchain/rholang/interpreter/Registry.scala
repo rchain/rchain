@@ -977,7 +977,7 @@ class RegistryImpl[F[_]](
           val Some(Expr(GInt(_)))              = nonce.singleExpr
           // Then check the signature
           val Some(Expr(GByteArray(sigBytes))) = sig.singleExpr
-          if (keyBytes.size == Validator.Length && sigBytes.size == 71 &&
+          if (keyBytes.size == Validator.Length &&
               Secp256k1.verify(
                 Blake2b256.hash(value.toByteArray),
                 sigBytes.toByteArray,
