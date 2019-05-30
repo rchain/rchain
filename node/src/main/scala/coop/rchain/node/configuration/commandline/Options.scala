@@ -494,10 +494,10 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
     descr(
       "Searches for a block containing the deploy with provided id."
     )
-    val deployId = opt[String](
-      descr = "Id of the depoy.",
+    val deployId = opt[Array[Byte]](
+      descr = "Id of the deploy.",
       required = true
-    )
+    )(Base16Converter)
   }
   addSubcommand(findDeploy)
 

@@ -73,18 +73,10 @@ object DeployRuntime {
     }
 
   def findDeploy[F[_]: Functor: Sync: Time: DeployService](
-      deployId: String
+      deployId: Array[Byte]
   ): F[Unit] =
     gracefulExit(
-      EitherT
-        .fromOption[F](
-          Base16.decode(deployId).map(_.toByteString),
-          Seq("The deploy-id should be a Base16 encoded string")
-        )
-        .flatMap { deployIdBytes =>
-          EitherT(DeployService[F].findDeploy(FindDeployQuery(deployIdBytes)))
-        }
-        .value
+      DeployService[F].findDeploy(FindDeployQuery(deployId.toByteString))
     )
 
 //Accepts a Rholang source file and deploys it to Casper
