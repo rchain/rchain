@@ -17,8 +17,6 @@ class RholangBuildTest extends FlatSpec with Matchers {
   val bonds                       = MultiParentCasperTestUtil.createBonds(validators)
   val genesis                     = MultiParentCasperTestUtil.createGenesis(bonds)
 
-  //put a new casper instance at the start of each
-  //test since we cannot reset it
   "Our build system" should "allow import of rholang sources into scala code" in effectTest {
     HashSetCasperTestNode
       .standaloneEff(genesis, validatorKeys.last)
