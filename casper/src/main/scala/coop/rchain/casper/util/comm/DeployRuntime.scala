@@ -76,7 +76,15 @@ object DeployRuntime {
       deployId: String
   ): F[Unit] =
     gracefulExit(
-      DeployService[F].findDeploy(FindDeployQuery(Base16.unsafeDecode(deployId).toByteString))
+      EitherT
+        .fromOption[F](
+          Base16.decode(deployId).map(_.toByteString),
+          Seq("The deploy-id should be a Base16 encoded string")
+        )
+        .flatMap { deployIdBytes =>
+          EitherT(DeployService[F].findDeploy(FindDeployQuery(deployIdBytes)))
+        }
+        .value
     )
 
 //Accepts a Rholang source file and deploys it to Casper
