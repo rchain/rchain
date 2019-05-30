@@ -8,6 +8,7 @@ from typing import (
     Any,
     List,
     Generator,
+    Dict,
 )
 
 import pytest
@@ -66,15 +67,13 @@ def command_line_options(request: Any) -> Generator[CommandLineOptions, None, No
     yield command_line_options
 
 
-
 @contextlib.contextmanager
-def temporary_bonds_file(random_generator: Random, validator_keys: List[PrivateKey]) -> Generator[str, None, None]:
-    (fd, file) = tempfile.mkstemp(prefix="rchain-bonds-file-", suffix=".txt")
+def temporary_bonds_file(validator_bonds_dict: Dict[PrivateKey, int]) -> Generator[str, None, None]:
+    (fd, file) = tempfile.mkstemp(prefix="rchain-bonds-file-", suffix=".txt", dir="/tmp")
     try:
         with os.fdopen(fd, "w") as f:
-            for pair in validator_keys:
-                bond = random_generator.randint(1, 100)
-                f.write("{} {}\n".format(pair.get_public_key().to_hex(), bond))
+            for private_key, bond in validator_bonds_dict.items():
+                f.write("{} {}\n".format(private_key.get_public_key().to_hex(), bond))
         yield file
     finally:
         os.unlink(file)
@@ -120,14 +119,20 @@ def random_generator(command_line_options: CommandLineOptions) -> Generator[Rand
 
 
 @contextlib.contextmanager
-def testing_context(command_line_options: CommandLineOptions, random_generator: Random, docker_client: DockerClient, bootstrap_key: PrivateKey = None, peers_keys: List[PrivateKey] = None, network_peers: int = 2) -> Generator[TestingContext, None, None]:
+def testing_context(command_line_options: CommandLineOptions, random_generator: Random, docker_client: DockerClient, bootstrap_key: PrivateKey = None, peers_keys: List[PrivateKey] = None, network_peers: int = 2, validator_bonds_dict: Dict[PrivateKey, int] = None) -> Generator[TestingContext, None, None]:
     if bootstrap_key is None:
         bootstrap_key = PREGENERATED_KEYPAIRS[0]
     if peers_keys is None:
         peers_keys = PREGENERATED_KEYPAIRS[1:][:network_peers]
 
-    bonds_file_keypairs = [bootstrap_key] + peers_keys
-    with temporary_bonds_file(random_generator, bonds_file_keypairs) as bonds_file:
+
+    if validator_bonds_dict is None:
+        bonds_file_keys = [bootstrap_key] + peers_keys
+        validator_bonds_dict = dict()
+        for private_key in bonds_file_keys:
+            validator_bonds_dict[private_key] = random_generator.randint(1, 100)
+
+    with temporary_bonds_file(validator_bonds_dict) as bonds_file:
         context = TestingContext(
             bonds_file=bonds_file,
             bootstrap_key=bootstrap_key,
