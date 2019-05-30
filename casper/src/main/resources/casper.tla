@@ -189,7 +189,12 @@ InitHandlesApprovedBlock == \E n \in nodes :
   /\ UNCHANGED << nodes, nOutMsg, nOutStreamMsg >>
 
 InitHandlesApprovedBlockRequest == DoNotHandle("init", "ApprovedBlockRequest")
-InitHandlesUnapprovedBlock      == DoNotHandle("init", "UnapprovedBlock")
+
+InitHandlesUnapprovedBlock      == \E n \in nodes :
+  /\ Handling(n, "init", "UnapprovedBlock")
+  /\ StreamMsg(NewBlockApproval, n, Sender(n))
+  /\ UNCHANGED << nodes, nStatus, nOutMsg >>
+
 InitHandlesBlockApproval        == DoNotHandle("init", "BlockApproval")
 
 (***************************************************************************)
