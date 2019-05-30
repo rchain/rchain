@@ -490,6 +490,17 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
   addSubcommand(dataAtName)
   addSubcommand(contAtName)
 
+  val findDeploy = new Subcommand("find-deploy") {
+    descr(
+      "Searches for a block containing the deploy with provided id."
+    )
+    val deployId = opt[Array[Byte]](
+      descr = "Id of the deploy.",
+      required = true
+    )(Base16Converter)
+  }
+  addSubcommand(findDeploy)
+
   val propose = new Subcommand("propose") {
     descr(
       "Force Casper (on an existing running node) to propose a block based on its accumulated deploys."

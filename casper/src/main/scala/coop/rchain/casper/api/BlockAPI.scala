@@ -40,7 +40,13 @@ object BlockAPI {
       casper
         .deploy(d)
         .map(
-          _.bimap(err => err.show, _ => DeployServiceResponse("Success!"))
+          _.bimap(
+            err => err.show,
+            res =>
+              DeployServiceResponse(
+                s"Success!\nDeployId is: ${PrettyPrinter.buildStringNoLimit(res)}"
+              )
+          )
         )
 
     val errorMessage = "Could not deploy, casper instance was not available yet."
@@ -330,6 +336,32 @@ object BlockAPI {
       Log[F].warn(errorMessage).as(List.empty[BlockInfoWithoutTuplespace])
     )
   }
+
+  def findDeploy[F[_]: Monad: MultiParentCasperRef: Log: SafetyOracle: BlockStore](
+      id: DeployId
+  ): Effect[F, LightBlockQueryResponse] =
+    MultiParentCasperRef.withCasper[F, ApiErr[LightBlockQueryResponse]](
+      implicit casper =>
+        for {
+          dag               <- casper.blockDag
+          allBlocksTopoSort <- dag.topoSort(0L)
+          maybeBlock <- allBlocksTopoSort.flatten.reverse.toStream
+                         .traverse(ProtoUtil.unsafeGetBlock[F])
+                         .map(_.find(ProtoUtil.containsDeploy(_, ByteString.copyFrom(id))))
+          response <- maybeBlock.traverse(getBlockInfoWithoutTuplespace[F])
+        } yield response.fold(
+          s"Couldn't find block containing deploy with id: ${PrettyPrinter
+            .buildStringNoLimit(id)}".asLeft[LightBlockQueryResponse]
+        )(
+          blockInfo =>
+            LightBlockQueryResponse(
+              blockInfo = Some(blockInfo)
+            ).asRight
+        ),
+      Log[F]
+        .warn("Could not find block with deploy, casper instance was not available yet.")
+        .as(s"Error: errorMessage".asLeft)
+    )
 
   // TODO: Replace with call to BlockStore
   def findBlockWithDeploy[F[_]: Monad: MultiParentCasperRef: Log: SafetyOracle: BlockStore](

@@ -10,7 +10,8 @@ import coop.rchain.rholang.interpreter.{PrettyPrinter => RholangPP}
 
 object PrettyPrinter {
 
-  def buildStringNoLimit(b: ByteString): String = Base16.encode(b.toByteArray)
+  def buildStringNoLimit(b: Array[Byte]): String = Base16.encode(b)
+  def buildStringNoLimit(b: ByteString): String  = Base16.encode(b.toByteArray)
 
   def buildString(t: GeneratedMessage): String =
     t match {

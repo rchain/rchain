@@ -18,10 +18,12 @@ import coop.rchain.catscontrib.Catscontrib._
 import coop.rchain.catscontrib.ski._
 import coop.rchain.models.Par
 import coop.rchain.shared.Time
+import coop.rchain.shared.ByteStringOps._
 import cats.syntax.either._
 import com.google.protobuf.ByteString
 import coop.rchain.casper.SignDeployment
 import coop.rchain.crypto.PrivateKey
+import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.hash.Blake2b256
 import coop.rchain.crypto.signatures.Ed25519
 import coop.rchain.shared.ThrowableOps._
@@ -69,6 +71,13 @@ object DeployRuntime {
         EitherT(DeployService[F].listenForContinuationAtName(request))
       }.map(kp("")).value
     }
+
+  def findDeploy[F[_]: Functor: Sync: Time: DeployService](
+      deployId: Array[Byte]
+  ): F[Unit] =
+    gracefulExit(
+      DeployService[F].findDeploy(FindDeployQuery(deployId.toByteString))
+    )
 
 //Accepts a Rholang source file and deploys it to Casper
   def deployFileProgram[F[_]: Monad: Sync: DeployService](

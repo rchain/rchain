@@ -66,6 +66,7 @@ final case class Deploy(
     privateKey: Option[PrivateKey],
     location: String
 ) extends Command
+final case class FindDeploy(id: Array[Byte])                               extends Command
 final case object Propose                                                  extends Command
 final case class ShowBlock(hash: String)                                   extends Command
 final case class ShowBlocks(depth: Int)                                    extends Command

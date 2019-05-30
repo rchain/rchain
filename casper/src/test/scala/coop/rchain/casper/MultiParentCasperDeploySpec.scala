@@ -26,17 +26,18 @@ class MultiParentCasperDeploySpec extends FlatSpec with Matchers with Inspectors
     buildGenesisParameters(4, createBonds(validatorPks))
   )
 
-  "MultiParentCasper" should "accept deploys" in effectTest {
+  "MultiParentCasper" should "accept a deploy and return it's id" in effectTest {
     HashSetCasperTestNode.standaloneEff(genesis, validatorKeys.head).use { node =>
       import node._
       implicit val timeEff = new LogicalTime[Effect]
 
       for {
-        deploy <- ConstructDeploy.basicDeployData[Effect](0)
-        _      <- MultiParentCasper[Effect].deploy(deploy)
-
-        _      = logEff.infos.size should be(2)
-        result = logEff.infos(1).contains("Received Deploy") should be(true)
+        deploy   <- ConstructDeploy.basicDeployData[Effect](0)
+        res      <- MultiParentCasper[Effect].deploy(deploy)
+        deployId = res.right.get
+        _        = deployId shouldBe ConstructDeploy.sign(deploy).sig.toByteArray
+        _        = logEff.infos.size should be(2)
+        result   = logEff.infos(1).contains("Received Deploy") should be(true)
       } yield result
     }
   }
