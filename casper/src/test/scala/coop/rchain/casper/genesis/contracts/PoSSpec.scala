@@ -5,6 +5,7 @@ import coop.rchain.rholang.build.CompiledRholangSource
 
 import scala.concurrent.duration._
 
+// TODO:NOW
 class PoSSpec
     extends RhoSpec(
       CompiledRholangSource("PoSTest.rho"),

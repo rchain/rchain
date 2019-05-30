@@ -1,17 +1,22 @@
-//scalapackage coop.rchain.rholang
+/*
+ The table below describes the required computations and their dependencies
 
-//Registry info:
-//  sk: 78623a45fb0de7c4bc35c7099e8037c09721fff814e58d419b0e1b21f5a630bb
-//  pk: 7e59141cbc0dfb24ca0e4fe57666895190740778871744be3cec262147e02f56
-//  user == pk
-//  timestamp: 1552131653401
-//Resulting unforgable name: Unforgeable(0xbcfcd4f7ab0b4e1f6c1018f38c42d9721180b9fc92ba4bbe8f00b5010513f80e)
-//  ==> signature data == 2a3eaa013b0a0d2a0b10feffffffffffffffff010a2a5a280a243a220a20d7da018b7065def0035d962198cf1581a6aae7509aff8ca75a4035ac5a2ce49c1001
-//  ==> signature == 5af8389f2e933cc7e3e701dbf53b75ac0a3ba05265a3fb166f010cf3b301a4837351f0ec752b334620f7efd56b9971ebedd9e6c137efcefe2bfa44627d866d0c
-//URI derived from pk == `rho:id:9dsr55z1js13x346yhhecx66ns486i3yqf6jafrd9p9hdrrbxjqmyu`
-new
+ No. | Dependency | Computation method | Result
+ ----+------------+--------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------
+ 1.  |            | given              | sk = 48a494f02a3af37ff9f110815c58407993b3ee7b282aa05562766acae34fad2b
+ 2.  |            | given              | timestamp = 1559156146649
+ 3.  |            | lastNonce          | nonce = 9223372036854775807
+ 4.  | 1,         | secp256k1          | pk = 04c1a88afc0810d0b7e4dea817f458c9d0a1913ec3459fb91bb9acdf0d867873d5144366275c5a63b0225a5167c6a838bb02285072d7177dc9f6407aaba87bca93
+ 5.  | 4, 2,      | genIds             | uname = Unforgeable(0x61a47068f8b14054beb31fd7b7f580623ff90104c04f7e4dac105ec52f379688)
+ 6.  | 3, 5,      | registry           | value = (9223372036854775807, bundle+ {   Unforgeable(0x61a47068f8b14054beb31fd7b7f580623ff90104c04f7e4dac105ec52f379688) })
+ 7.  | 6,         | protobuf           | toSign = 2a40aa013d0a0d2a0b10feffffffffffffffff010a2c5a2a0a263a240a220a2061a47068f8b14054beb31fd7b7f580623ff90104c04f7e4dac105ec52f3796881001
+ 8.  | 7, 1,      | secp256k1          | sig = 3044022003fd0de5e01c9bb6d593c74c83f757f2c54bde58ed01b85e1d431cab12bf05d3022012d5b3cb23574e4e2bd15ade65e2593af0876f5b20d0f68d40d3f1a7495f52ca
+ 9.  | 4,         | registry           | uri = rho:id:w5zfefaasr5euzu1x551wwbgnt8o1c4345r3cgcwa1guyfre36fihu
+ ----+------------+--------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------
+ */
+new 
   Lockbox,
-  rs(`rho:registry:insertSigned:ed25519`),
+  rs(`rho:registry:insertSigned:secp256k1`),
   uriOut,
   getDeployData(`rho:deploy:params`)
 in {
@@ -53,9 +58,11 @@ in {
     }
   } |
   rs!(
-    "7e59141cbc0dfb24ca0e4fe57666895190740778871744be3cec262147e02f56".hexToBytes(),
+    "04c1a88afc0810d0b7e4dea817f458c9d0a1913ec3459fb91bb9acdf0d867873d5144366275c5a63b0225a5167c6a838bb02285072d7177dc9f6407aaba87bca93".hexToBytes(),
     (9223372036854775807, bundle+{*Lockbox}),
-    "37be9c1f33aa59861db84931f49310d973744f3a64146471c98dbe20b4e1eb113094d2dbff72adef65f0a9a49b986fed85ac56b512562893b39a8717f0555b04".hexToBytes(),
+    "3044022003fd0de5e01c9bb6d593c74c83f757f2c54bde58ed01b85e1d431cab12bf05d3022012d5b3cb23574e4e2bd15ade65e2593af0876f5b20d0f68d40d3f1a7495f52ca".hexToBytes(),
     *uriOut
   )
 }
+  
+  

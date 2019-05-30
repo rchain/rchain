@@ -17,7 +17,8 @@ import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
 import coop.rchain.casper.util.rholang.{InternalProcessedDeploy, RuntimeManager}
 import coop.rchain.crypto.PublicKey
 import coop.rchain.crypto.codec.Base16
-import coop.rchain.crypto.signatures.Ed25519
+import coop.rchain.crypto.signatures.Secp256k1
+import coop.rchain.rholang.interpreter.accounting
 import coop.rchain.rholang.interpreter.util.RevAddress
 import coop.rchain.shared.{Log, LogSource, Time}
 
@@ -110,7 +111,7 @@ object Genesis {
                            validators = validators
                          ),
                          faucet = faucet,
-                         genesisPk = Ed25519.newKeyPair._2,
+                         genesisPk = Secp256k1.newKeyPair._2,
                          vaults = vaults,
                          supply = Long.MaxValue
                        )
@@ -282,7 +283,7 @@ object Genesis {
       numValidators: Int,
       genesisPath: Path
   ): F[Map[PublicKey, Long]] = {
-    val keys         = Vector.fill(numValidators)(Ed25519.newKeyPair)
+    val keys         = Vector.fill(numValidators)(Secp256k1.newKeyPair)
     val (_, pubKeys) = keys.unzip
     val bonds        = pubKeys.zipWithIndex.toMap.mapValues(_.toLong + 1L)
     val genBondsFile = genesisPath.resolve(s"bonds.txt").toFile

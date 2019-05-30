@@ -1,19 +1,21 @@
-// The table below describes the required computations and their dependencies
-//
-// No. | Dependency | Computation method | Result
-// ----+------------+--------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------
-// 1.  |            | given              | sk = be8ae000e4d2f29c73f792705314d71b6c0d56d7c640c6b4df9fabf90518c623
-// 2.  |            | given              | timestamp = 1551879405043
-// 3.  |            | lastNonce          | nonce = 9223372036854775807
-// 4.  | 1,         | ed25519            | pk = f59e613088fd7e2e8a371b5115701f3a4f53f35ea6f60433923153ee7fbf83fd
-// 5.  | 4, 2,      | genIds             | uname = Unforgeable(0x5df3b04a7cc9aaa9dad1afa7b9bc9b1df9d6ccc76c5dff3c4d2d89b1ba6a3e8b)
-// 6.  | 3, 5,      | registry           | value = (9223372036854775807, bundle+ {   Unforgeable(0x5df3b04a7cc9aaa9dad1afa7b9bc9b1df9d6ccc76c5dff3c4d2d89b1ba6a3e8b) })
-// 7.  | 6,         | protobuf           | toSign = 2a3eaa013b0a0d2a0b10feffffffffffffffff010a2a5a280a243a220a205df3b04a7cc9aaa9dad1afa7b9bc9b1df9d6ccc76c5dff3c4d2d89b1ba6a3e8b1001
-// 8.  | 7, 1,      | ed25519            | sig = cd16cb789f128767d2d1224b931d0d5d47dce130266c72839d09d38bc9070a365234e0d9cce4a04e7ac4a1648db1b2ec1ba55751d0ead2c465dbfb55a5d13f01
-// 9.  | 4,         | registry           | uri = rho:id:1o93uitkrjfubh43jt19owanuezhntag5wh74c6ur5feuotpi73q8z
-// ----+------------+--------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------
-new
-  RevVault, rs(`rho:registry:insertSigned:ed25519`), uriOut,
+/*
+ The table below describes the required computations and their dependencies
+
+ No. | Dependency | Computation method | Result
+ ----+------------+--------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------
+ 1.  |            | given              | sk = 27e5718bf55dd673cc09f13c2bcf12ed7949b178aef5dcb6cd492ad422d05e9d
+ 2.  |            | given              | timestamp = 1559156183943
+ 3.  |            | lastNonce          | nonce = 9223372036854775807
+ 4.  | 1,         | secp256k1          | pk = 040f035630a5d2199184890b4b6b83440c842da0b6becca539f788f7b35d6e873561f673cd6ebe2e32236398a86f29dad992e8fba32534734300fcc5104bcfea0e
+ 5.  | 4, 2,      | genIds             | uname = Unforgeable(0x263f45f2ca50669ef4011a57d3a10270c1250d52ed99f212a6332d8ffe57d3be)
+ 6.  | 3, 5,      | registry           | value = (9223372036854775807, bundle+ {   Unforgeable(0x263f45f2ca50669ef4011a57d3a10270c1250d52ed99f212a6332d8ffe57d3be) })
+ 7.  | 6,         | protobuf           | toSign = 2a40aa013d0a0d2a0b10feffffffffffffffff010a2c5a2a0a263a240a220a20263f45f2ca50669ef4011a57d3a10270c1250d52ed99f212a6332d8ffe57d3be1001
+ 8.  | 7, 1,      | secp256k1          | sig = 30450221008af89d676c4cd6b3d41e90da89b03a1e83f161fc8c4ad22c9edc903db3a9f4c402204e35e29e40a5f2b2f431d3cc63b87fb52c33716b3ce331a2a19b9660c3690c18
+ 9.  | 4,         | registry           | uri = rho:id:6zcfqnwnaqcwpeyuysx1rm48ndr6sgsbbgjuwf45i5nor3io7dr76j
+ ----+------------+--------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------
+ */
+new 
+  RevVault, rs(`rho:registry:insertSigned:secp256k1`), uriOut,
   rl(`rho:registry:lookup`), RevAddress(`rho:rev:address`), MakeMintCh, AuthKeyCh, EitherCh,
   _getIdentity,
   _makeVault,
@@ -175,13 +177,14 @@ in {
         } |
 
         rs!(
-          "f59e613088fd7e2e8a371b5115701f3a4f53f35ea6f60433923153ee7fbf83fd".hexToBytes(),
+          "040f035630a5d2199184890b4b6b83440c842da0b6becca539f788f7b35d6e873561f673cd6ebe2e32236398a86f29dad992e8fba32534734300fcc5104bcfea0e".hexToBytes(),
           (9223372036854775807, bundle+{*RevVault}),
-          "af73d1c41dbf8dfea57f5d5a043515c27573a39282a2aaa68205ec2080303959e6502ffee16bdecaa14a6e1fe8692d6fabf642b6204a282477d988c7a676060b".hexToBytes(),
+          "30450221008af89d676c4cd6b3d41e90da89b03a1e83f161fc8c4ad22c9edc903db3a9f4c402204e35e29e40a5f2b2f431d3cc63b87fb52c33716b3ce331a2a19b9660c3690c18".hexToBytes(),
           *uriOut
         )
-
       }
     }
   }
 }
+  
+  

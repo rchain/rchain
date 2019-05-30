@@ -1,18 +1,21 @@
-//scalapackage coop.rchain.rholang.mint
+/*
+ The table below describes the required computations and their dependencies
 
-//requires MakeMint, BasicWallet
-
-//Registry info:
-//  sk: 4d2235db0581c423e4982bbf3609478198e19551f9f51afd5d405da5c368e93a
-//  pk: 7645ec68813655c4be91dc60f759804c64e5f84319d18c66e40bbfb3a202ddc8
-//  user == pk
-//  timestamp: 1540228756441
-//Resulting unforgable name: Unforgeable(0x3b88933c23a6b2129868bf36bff0f3b512b0d43b32803052dc632f4720ccc214)
-//  ==> signature data == 2a3eaa013b0a0d2a0b10feffffffffffffffff010a2a5a280a243a220a203b88933c23a6b2129868bf36bff0f3b512b0d43b32803052dc632f4720ccc2141001
-//  ==> signature == b65137544d4ebd3abe448729bad76a462869c93f9d3c6f8fee1ab250dc5aea34b372f6b39c0ef59eab9ea72b775b37c15dec1e4fa2df62f9c5179cd03bba3801
-//URI derived from pk == `rho:id:r3pfwhwyzfg3n3yhcndwuszkszr11rjdbksizz4eqbqnwg5w49kfo7`
-new
-  BasicWalletFaucet, rs(`rho:registry:insertSigned:ed25519`), uriOut,
+ No. | Dependency | Computation method | Result
+ ----+------------+--------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------
+ 1.  |            | given              | sk = b6f13c229bed13b1a5ba639bcef93e4316983e1edf01c4e67edf8c5a685f30a9
+ 2.  |            | given              | timestamp = 1559156052144
+ 3.  |            | lastNonce          | nonce = 9223372036854775807
+ 4.  | 1,         | secp256k1          | pk = 04137e903dff809e6f307009eeb2fe13b8490e8d6f612b3f293aa5d7960156f807b2a86face1f184d2fc4b7eb659fdb8e69f8bc801d9265a34c3e1ce74fd5be937
+ 5.  | 4, 2,      | genIds             | uname = Unforgeable(0x0483e8263c258cb1daabdd8b5ee19ea4f34f61573ca72b1c9c5f0ce277d9e3f7)
+ 6.  | 3, 5,      | registry           | value = (9223372036854775807, bundle+ {   Unforgeable(0x0483e8263c258cb1daabdd8b5ee19ea4f34f61573ca72b1c9c5f0ce277d9e3f7) })
+ 7.  | 6,         | protobuf           | toSign = 2a40aa013d0a0d2a0b10feffffffffffffffff010a2c5a2a0a263a240a220a200483e8263c258cb1daabdd8b5ee19ea4f34f61573ca72b1c9c5f0ce277d9e3f71001
+ 8.  | 7, 1,      | secp256k1          | sig = 304402207dd84431a7b55515ba2ada42ca664afb46685dafbe93c54ba94ec2c645bb5e7e022056524758407cefd3fdc4525489e7c05a11bc68c5c9bd49d12c27a71ee10c988c
+ 9.  | 4,         | registry           | uri = rho:id:mjp8ac3zk41pyk64a64r64po7azcc4gca4x5sq37in34irsxqdjd6q
+ ----+------------+--------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------
+ */
+new 
+  BasicWalletFaucet, rs(`rho:registry:insertSigned:secp256k1`), uriOut,
   rl(`rho:registry:lookup`), BasicWalletCh
 in {
   rl!(`rho:lang:basicWallet`, *BasicWalletCh) |
@@ -32,9 +35,11 @@ in {
     }
   } |
   rs!(
-    "7645ec68813655c4be91dc60f759804c64e5f84319d18c66e40bbfb3a202ddc8".hexToBytes(), 
-    (9223372036854775807, bundle+{*BasicWalletFaucet}), 
-    "90cb720ec4ccf9227e346ebdec4658b79430cfcc95af54e6fca354ca7ddb83b9b0cc83851f61413e2b21f903f20390637476568b08ca0e44fc9af1c895a81d06".hexToBytes(),
+    "04137e903dff809e6f307009eeb2fe13b8490e8d6f612b3f293aa5d7960156f807b2a86face1f184d2fc4b7eb659fdb8e69f8bc801d9265a34c3e1ce74fd5be937".hexToBytes(),
+    (9223372036854775807, bundle+{*BasicWalletFaucet}),
+    "304402207dd84431a7b55515ba2ada42ca664afb46685dafbe93c54ba94ec2c645bb5e7e022056524758407cefd3fdc4525489e7c05a11bc68c5c9bd49d12c27a71ee10c988c".hexToBytes(),
     *uriOut
   )
 }
+  
+  

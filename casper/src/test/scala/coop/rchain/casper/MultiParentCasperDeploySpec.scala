@@ -8,7 +8,7 @@ import coop.rchain.casper.helper.HashSetCasperTestNode._
 import coop.rchain.casper.scalatestcontrib._
 import coop.rchain.casper.util.{ConstructDeploy, ProtoUtil}
 import coop.rchain.crypto.codec.Base16
-import coop.rchain.crypto.signatures.Ed25519
+import coop.rchain.crypto.signatures.Secp256k1
 import coop.rchain.models.{Expr, Par}
 import coop.rchain.p2p.EffectsTestInstances.LogicalTime
 import coop.rchain.rholang.interpreter.{accounting, DeployParameters}
@@ -21,7 +21,7 @@ class MultiParentCasperDeploySpec extends FlatSpec with Matchers with Inspectors
 
   implicit val timeEff = new LogicalTime[Effect]
 
-  private val (validatorKeys, validatorPks) = (1 to 4).map(_ => Ed25519.newKeyPair).unzip
+  private val (validatorKeys, validatorPks) = (1 to 4).map(_ => Secp256k1.newKeyPair).unzip
   private val genesis = buildGenesis(
     buildGenesisParameters(4, createBonds(validatorPks))
   )
@@ -160,7 +160,7 @@ class MultiParentCasperDeploySpec extends FlatSpec with Matchers with Inspectors
 
   it should "allow paying for deploys" in effectTest {
     HashSetCasperTestNode.standaloneEff(genesis, validatorKeys.head).use { node =>
-      val (sk, pk)  = Ed25519.newKeyPair
+      val (sk, pk)  = Secp256k1.newKeyPair
       val timestamp = System.currentTimeMillis()
       val phloPrice = 1L
       val amount    = 847L
@@ -179,7 +179,7 @@ class MultiParentCasperDeploySpec extends FlatSpec with Matchers with Inspectors
                               sigDeployData
                             )
         sigData     = capturedResults.head.exprs.head.getGByteArray
-        sig         = Base16.encode(Ed25519.sign(sigData.toByteArray, sk))
+        sig         = Base16.encode(Secp256k1.sign(sigData.toByteArray, sk))
         pkStr       = Base16.encode(pk.bytes)
         paymentCode = s"""new
            |  paymentForward, walletCh, rl(`rho:registry:lookup`),
@@ -190,7 +190,7 @@ class MultiParentCasperDeploySpec extends FlatSpec with Matchers with Inspectors
            |    @SystemInstancesRegistry!("lookup", "pos", *posCh) |
            |    @SystemInstancesRegistry!("lookup", "faucet", *faucetCh) |
            |    for(faucet <- faucetCh; pos <- posCh){
-           |      faucet!($amount, "ed25519", "$pkStr", *walletCh) |
+           |      faucet!($amount, "secp256k1", "$pkStr", *walletCh) |
            |      for(@[wallet] <- walletCh) {
            |        @wallet!("transfer", $amount, 0, "$sig", *paymentForward, Nil) |
            |        for(@purse <- paymentForward){ pos!("pay", purse, Nil) }

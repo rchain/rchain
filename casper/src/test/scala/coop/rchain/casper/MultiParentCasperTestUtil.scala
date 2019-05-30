@@ -17,7 +17,7 @@ import coop.rchain.catscontrib.TaskContrib.TaskOps
 import coop.rchain.crypto.PublicKey
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.hash.Keccak256
-import coop.rchain.crypto.signatures.{Ed25519, Secp256k1}
+import coop.rchain.crypto.signatures.Secp256k1
 import coop.rchain.metrics
 import coop.rchain.metrics.Metrics
 import coop.rchain.models.Par
@@ -85,7 +85,7 @@ object MultiParentCasperTestUtil {
         validators = bonds.map(Validator.tupled).toSeq
       ),
       faucet = true,
-      genesisPk = Ed25519.newKeyPair._2,
+      genesisPk = Secp256k1.newKeyPair._2,
       vaults = bonds.toList.map {
         case (pk, stake) =>
           RevAddress.fromPublicKey(pk).map(Vault(_, stake))

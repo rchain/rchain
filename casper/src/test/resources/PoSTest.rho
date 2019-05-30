@@ -3,7 +3,7 @@
 //requires Pos, RhoSpec
 
 match (
-  "cc87bf7747a8c176714b417ca14a63897b07572876c5e38a7896b6007738ef81".hexToBytes()
+  "047b43d6548b72813b89ac1b9f9ca67624a8b372feedd71d4e2da036384a3e1236812227e524e6f237cde5f80dbb921cac12e6500791e9a9ed1254a745a816fe1f".hexToBytes()
 ) {
   posPubKey => {
     new
@@ -24,7 +24,7 @@ match (
       revAddressOps!("fromPublicKey", posPubKey, *posRevAddressCh) |
       rl!(`rho:rchain:revVault`, *RevVaultCh) |
       rl!(`rho:rchain:pos`, *PoSCh) |
-      rl!(`rho:id:6wnujzcraztjfg941skrtbdkdgbko8nuaqihuhn15s66oz8ro5gwbb`, *RhoSpecCh) |
+      rl!(`rho:id:zphjgsfy13h1k85isc8rtwtgt3t9zzt5pjd5ihykfmyapfc4wt3x5h`, *RhoSpecCh) |
       for(@(_, RhoSpec) <- RhoSpecCh;
           @(_, PoS) <- PoSCh;
           @(_, RevVault) <- RevVaultCh;
@@ -77,7 +77,7 @@ match (
           contract test_bonding_succeeds(rhoSpec, _, ackCh) = {
             new setupCh, retCh, initialPosBalanceCh, finalPosBalanceCh,
                 initialUserBalanceCh, finalUserBalanceCh in {
-              prepareUser!("1111111111111111111111111111111111111111111111111111111111111111", 10000, *setupCh) |
+              prepareUser!("1111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111", 10000, *setupCh) |
               for (@user1PubKey, _, @user1Vault <- setupCh) {
                 @posVault!("balance", *initialPosBalanceCh) |
                 @user1Vault!("balance", *initialUserBalanceCh) |
@@ -115,7 +115,7 @@ match (
             new setupCh, retCh, initialPosBalanceCh, finalPosBalanceCh,
                 initialUser1BalanceCh, finalUser1BalanceCh,
                 initialUser2BalanceCh, finalUser2BalanceCh in {
-              prepareUser!("2222222222222222222222222222222222222222222222222222222222222222", 10000, *setupCh) |
+              prepareUser!("2222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222", 10000, *setupCh) |
               for (@user1PubKey, _, @user1Vault <- setupCh) {
                 @posVault!("balance", *initialPosBalanceCh) |
                 @user1Vault!("balance", *initialUser1BalanceCh) |
@@ -124,7 +124,7 @@ match (
                   @PoS!("bond", 100, *retCh) |
                   for ( @(true, _) <- retCh) {
                     stdlog!("info", "first bond") |
-                    prepareUser!("3333333333333333333333333333333333333333333333333333333333333333", 10000, *setupCh) |
+                    prepareUser!("3333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333", 10000, *setupCh) |
                     for(@user2PubKey, _, @user2Vault <- setupCh) {
                       @user2Vault!("balance", *initialUser2BalanceCh) |
                       for (@initialUser2Balance <- initialUser2BalanceCh) {
@@ -167,7 +167,7 @@ match (
           contract test_pay_succeeds(rhoSpec, _, ackCh) = {
             new setupCh, retCh, initialPosBalanceCh, finalPosBalanceCh,
                 initialUser1BalanceCh, finalUser1BalanceCh in {
-              prepareUser!("4444444444444444444444444444444444444444444444444444444444444444", 10000, *setupCh) |
+              prepareUser!("4444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444", 10000, *setupCh) |
               for (@user1PubKey, _, @user1Vault <- setupCh) {
                 @posVault!("balance", *initialPosBalanceCh) |
                 @user1Vault!("balance", *initialUser1BalanceCh) |
@@ -195,16 +195,16 @@ match (
           } |
 
           contract test_bonding_fails_if_deposit_fails(rhoSpec, _, ackCh) = {
-            test_bonding_failure!(*rhoSpec, "5555555555555555555555555555555555555555555555555555555555555555", 10000, 20000, "Bond deposit failed: Insufficient funds", *ackCh)
+            test_bonding_failure!(*rhoSpec, "5555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555", 10000, 20000, "Bond deposit failed: Insufficient funds", *ackCh)
           } |
 
           contract test_bonding_fails_if_bond_too_small(rhoSpec, _, ackCh) = {
-            test_bonding_failure!(*rhoSpec, "6666666666666666666666666666666666666666666666666666666666666666", 10000, -1, "Bond is less than minimum!", *ackCh)
+            test_bonding_failure!(*rhoSpec, "6666666666666666666666666666666666666666666666666666666666666666666666666666666666666666666666666666666666666666666666666666666666", 10000, -1, "Bond is less than minimum!", *ackCh)
           } |
 
           contract test_bonding_fails_if_already_bonded(rhoSpec, _, ackCh) = {
             new setupCh, initialBondsCh, bond1Ch, bond2Ch, bondsCh in {
-              prepareUser!("7777777777777777777777777777777777777777777777777777777777777777", 10000, *setupCh) |
+              prepareUser!("7777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777", 10000, *setupCh) |
               for (@user1PubKey, _, _ <- setupCh) {
                 @PoS!("bond", 150, *bond1Ch) |
                 for ( @(result1, _) <- bond1Ch) {

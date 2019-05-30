@@ -1,6 +1,7 @@
 package coop.rchain.rholang.interpreter.util
 import coop.rchain.crypto.PublicKey
 import coop.rchain.crypto.codec.Base16
+import coop.rchain.models.Validator
 
 final case class RevAddress(address: Address) {
 
@@ -13,7 +14,7 @@ object RevAddress {
   private val version = "00"
   private val prefix  = Base16.unsafeDecode(coinId + version)
 
-  private val tools = new AddressTools(prefix, keyLength = 32, checksumLength = 4)
+  private val tools = new AddressTools(prefix, keyLength = Validator.Length, checksumLength = 4)
 
   def fromPublicKey(pk: PublicKey): Option[RevAddress] =
     tools.fromPublicKey(pk).map(RevAddress(_))

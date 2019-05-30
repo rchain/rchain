@@ -25,7 +25,7 @@ import coop.rchain.casper.SignDeployment
 import coop.rchain.crypto.PrivateKey
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.hash.Blake2b256
-import coop.rchain.crypto.signatures.Ed25519
+import coop.rchain.crypto.signatures.Secp256k1
 import coop.rchain.shared.ThrowableOps._
 
 object DeployRuntime {

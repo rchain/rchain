@@ -12,8 +12,8 @@ import coop.rchain.casper.util.{ConstructDeploy, ProtoUtil}
 import coop.rchain.metrics.Metrics
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.catscontrib.TaskContrib._
+import coop.rchain.crypto.signatures.Secp256k1
 import coop.rchain.crypto.PrivateKey
-import coop.rchain.crypto.signatures.Ed25519
 import coop.rchain.p2p.EffectsTestInstances.{LogStub, LogicalTime}
 import monix.eval.Task
 import org.scalatest._
@@ -26,7 +26,7 @@ class BlockQueryResponseAPITest
     with Inside
     with BlockDagStorageFixture {
   implicit val timeEff = new LogicalTime[Task]
-  private val (sk, pk) = Ed25519.newKeyPair
+  private val (sk, pk) = Secp256k1.newKeyPair
   val secondBlockQuery = "1234"
   val badTestHashQuery = "No such a hash"
 
@@ -34,7 +34,7 @@ class BlockQueryResponseAPITest
   val version           = 1L
 
   val senderString: String =
-    "3456789101112131415161718192345678910111213141516171819261718192"
+    "3456789101112131415161718192345678910111213141516171819261718192113456789101112131415161718192345678910111213141516171819261718192"
   val sender: ByteString = ProtoUtil.stringToByteString(senderString)
   val bondsValidator     = Bond(sender, 1)
 

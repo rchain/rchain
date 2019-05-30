@@ -226,7 +226,7 @@ object Runtime {
       }
     ),
     SystemProcess.Definition[F](
-      "rho:registry:insertSigned:ed25519",
+      "rho:registry:insertSigned:secp256k1",
       FixedChannels.REG_INSERT_SIGNED,
       4,
       BodyRefs.REG_PUBLIC_REGISTER_SIGNED, { ctx =>

@@ -6,7 +6,7 @@ import com.google.protobuf.ByteString
 import com.google.protobuf.ByteString.ByteIterator
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.hash.{Blake2b256, Blake2b512Random}
-import coop.rchain.crypto.signatures.{Ed25519, Secp256k1}
+import coop.rchain.crypto.signatures.Secp256k1
 import coop.rchain.models.Expr.ExprInstance._
 import coop.rchain.models.TaggedContinuation.TaggedCont.ScalaBodyRef
 import coop.rchain.models.Var.VarInstance.FreeVar
@@ -847,19 +847,19 @@ class RegistryImpl[F[_]](
   // TODO: Extract hardcoded id:<whatever> and maybe even pass in this resolver itself
   object BlessedContract {
     private val idMap = Map[String, String](
-      "authKey"                 -> "4njqcsc65mt8xrfx9nsz7je7oucgywgd1tj1n1gjtw3ndsophyisro",
-      "basicWallet"             -> "3yicxut5xtx5tnmnneta7actof4yse3xangw4awzt8c8owqmddgyms",
-      "basicWalletFaucet"       -> "r3pfwhwyzfg3n3yhcndwuszkszr11rjdbksizz4eqbqnwg5w49kfo7",
-      "either"                  -> "j6trahbxycumerwpr5qype7j43b7eqh8auebwsa9nn68if47gswh73",
-      "listOps"                 -> "dputnspi15oxxnyymjrpu7rkaok3bjkiwq84z7cqcrx4ktqfpyapn4",
-      "lockbox"                 -> "9dsr55z1js13x346yhhecx66ns486i3yqf6jafrd9p9hdrrbxjqmyu",
-      "makeMint"                -> "exunyijimapk7z43g3bbr69awqdz54kyroj9q43jgu3dh567fxsftx",
-      "makePos"                 -> "nqt875jea4rr83383ys6guzsbebg6k7o7uhrint6d7km67886c4y4s",
-      "nonNegativeNumber"       -> "nd74ztexkao5awjhj95e3octkza7tydwiy7euthnyrt5ihgi9rj495",
-      "pos"                     -> "cnec3pa8prp4out3yc8facon6grm3xbsotpd4ckjfx8ghuw77xadzt",
-      "revVault"                -> "1o93uitkrjfubh43jt19owanuezhntag5wh74c6ur5feuotpi73q8z",
-      "systemInstancesRegistry" -> "wdwc36f4ixa6xacck3ddepmgueum7zueuczgthcqp6771kdu8jogm8",
-      "walletCheck"             -> "oqez475nmxx9ktciscbhps18wnmnwtm6egziohc3rkdzekkmsrpuyt"
+      "authKey"                 -> "1qw5ehmq1x49dey4eadr1h4ncm361w3536asho7dr38iyookwcsp6i",
+      "basicWallet"             -> "3m6iwxy7kq4wdhw4hsm5qghdxckduxtfnzgj86zy1mht3a7dsyxcuf",
+      "basicWalletFaucet"       -> "mjp8ac3zk41pyk64a64r64po7azcc4gca4x5sq37in34irsxqdjd6q",
+      "either"                  -> "qrh6mgfp5z6orgchgszyxnuonanz7hw3amgrprqtciia6astt66ypn",
+      "listOps"                 -> "6fzorimqngeedepkrizgiqms6zjt76zjeciktt1eifequy4osz35ks",
+      "lockbox"                 -> "w5zfefaasr5euzu1x551wwbgnt8o1c4345r3cgcwa1guyfre36fihu",
+      "makeMint"                -> "asysrwfgzf8bf7sxkiowp4b3tcsy4f8ombi3w96ysox4u3qdmn1wbc",
+      "makePos"                 -> "ko5q4wr5qu4a54cynf44hbk7hbzawpa4qxigzo7rc157rjqhwuo4mt",
+      "nonNegativeNumber"       -> "hxyadh1ffypra47ry9mk6b8r1i33ar1w9wjsez4khfe9huzrfcytx9",
+      "pos"                     -> "m3xk7h8r54dtqtwsrnxqzhe81baswey66nzw6m533nyd45ptyoybqr",
+      "revVault"                -> "6zcfqnwnaqcwpeyuysx1rm48ndr6sgsbbgjuwf45i5nor3io7dr76j",
+      "systemInstancesRegistry" -> "i41dt8gymg1d3ar7ditjwxmtnqtuw6chznhxci3696tffyrd3ppeaf",
+      "walletCheck"             -> "5ssrgy91wskd46gjjo6qamxhg88t1fymb5ekgzfksgyeubgq3nucc9"
     )
 
     def unapply(s: String): Option[String] = idMap.get(s)
@@ -977,8 +977,12 @@ class RegistryImpl[F[_]](
           val Some(Expr(GInt(_)))              = nonce.singleExpr
           // Then check the signature
           val Some(Expr(GByteArray(sigBytes))) = sig.singleExpr
-          if (keyBytes.size == 32 && sigBytes.size == 64 &&
-              Ed25519.verify(value.toByteArray, sigBytes.toByteArray, keyBytes.toByteArray)) {
+          if (keyBytes.size == Validator.Length && sigBytes.size == 71 &&
+              Secp256k1.verify(
+                Blake2b256.hash(value.toByteArray),
+                sigBytes.toByteArray,
+                keyBytes.toByteArray
+              )) {
             val curryChan: Par  = GPrivate(ByteString.copyFrom(rand.next()))
             val resultChan: Par = GPrivate(ByteString.copyFrom(rand.next()))
             val hashKeyBytes    = Blake2b256.hash(keyBytes.toByteArray)
@@ -1053,12 +1057,12 @@ object Registry {
   def byteName(b: Byte): Par = GPrivate(ByteString.copyFrom(Array[Byte](b)))
 
   val testingUrnMap: Map[String, Par] = Map(
-    "rho:registry:testing:lookup"       -> byteName(10),
-    "rho:registry:testing:insert"       -> byteName(12),
-    "rho:registry:testing:delete"       -> byteName(14),
-    "rho:registry:lookup"               -> byteName(17),
-    "rho:registry:insertArbitrary"      -> byteName(18),
-    "rho:registry:insertSigned:ed25519" -> byteName(19)
+    "rho:registry:testing:lookup"         -> byteName(10),
+    "rho:registry:testing:insert"         -> byteName(12),
+    "rho:registry:testing:delete"         -> byteName(14),
+    "rho:registry:lookup"                 -> byteName(17),
+    "rho:registry:insertArbitrary"        -> byteName(18),
+    "rho:registry:insertSigned:secp256k1" -> byteName(19)
   )
 
   object CRC14 {

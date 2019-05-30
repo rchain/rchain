@@ -17,7 +17,7 @@ import coop.rchain.casper.util.rholang.{InterpreterUtil, RuntimeManager}
 import coop.rchain.casper.util.{ConstructDeploy, ProtoUtil}
 import coop.rchain.crypto.PrivateKey
 import coop.rchain.crypto.codec.Base16
-import coop.rchain.crypto.signatures.Ed25519
+import coop.rchain.crypto.signatures.Secp256k1
 import coop.rchain.metrics.{Metrics, NoopSpan}
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.Validator.Validator
@@ -39,7 +39,6 @@ class ValidateTest
   implicit val log                        = new LogStub[Task]
   implicit val noopMetrics: Metrics[Task] = new Metrics.MetricsNOP[Task]
   val span                                = new NoopSpan[Task]
-  val ed25519                             = "ed25519"
 
   override def beforeEach(): Unit = {
     log.reset()
@@ -97,11 +96,11 @@ class ValidateTest
   def signedBlock(
       i: Int
   )(implicit sk: PrivateKey, blockDagStorage: IndexedBlockDagStorage[Task]): Task[BlockMessage] = {
-    val pk = Ed25519.toPublic(sk)
+    val pk = Secp256k1.toPublic(sk)
     for {
       block  <- blockDagStorage.lookupByIdUnsafe(i)
       dag    <- blockDagStorage.getRepresentation
-      result <- ProtoUtil.signBlock[Task](block, dag, pk, sk, "ed25519", "rchain")
+      result <- ProtoUtil.signBlock[Task](block, dag, pk, sk, "secp256k1", "rchain")
     } yield result
   }
 
@@ -136,12 +135,12 @@ class ValidateTest
       } yield result
   }
 
-  it should "return false on invalid ed25519 signatures" in withStorage {
+  it should "return false on invalid secp256k1 signatures" in withStorage {
     implicit blockStore => implicit blockDagStorage =>
-      implicit val (sk, _) = Ed25519.newKeyPair
+      implicit val (sk, _) = Secp256k1.newKeyPair
       for {
         _            <- createChain[Task](6)
-        (_, wrongPk) = Ed25519.newKeyPair
+        (_, wrongPk) = Secp256k1.newKeyPair
         empty        = ByteString.EMPTY
         invalidKey   = ByteString.copyFrom(Base16.unsafeDecode("abcdef1234567890"))
         block0       <- signedBlock(0).map(_.withSender(empty))
@@ -157,10 +156,10 @@ class ValidateTest
       } yield result
   }
 
-  it should "return true on valid ed25519 signatures" in withStorage {
+  it should "return true on valid secp256k1 signatures" in withStorage {
     implicit blockStore => implicit blockDagStorage =>
       val n                = 6
-      implicit val (sk, _) = Ed25519.newKeyPair
+      implicit val (sk, _) = Secp256k1.newKeyPair
       for {
         _ <- createChain[Task](n)
         condition <- (0 until n).toList.forallM[Task] { i =>
@@ -528,13 +527,13 @@ class ValidateTest
         _        <- createChain[Task](2)
         block    <- blockDagStorage.lookupByIdUnsafe(1)
         dag      <- blockDagStorage.getRepresentation
-        (sk, pk) = Ed25519.newKeyPair
+        (sk, pk) = Secp256k1.newKeyPair
         signedBlock <- ProtoUtil.signBlock[Task](
                         block.withBlockNumber(17).withSeqNum(1),
                         dag,
                         pk,
                         sk,
-                        "ed25519",
+                        "secp256k1",
                         "rchain"
                       )
         _ <- Validate.blockSummary[Task](
@@ -701,7 +700,7 @@ class ValidateTest
 
   "Bonds cache validation" should "succeed on a valid block and fail on modified bonds" in withStorage {
     implicit blockStore => implicit blockDagStorage =>
-      val (_, validators) = (1 to 4).map(_ => Ed25519.newKeyPair).unzip
+      val (_, validators) = (1 to 4).map(_ => Secp256k1.newKeyPair).unzip
       val bonds           = MultiParentCasperTestUtil.createBonds(validators)
       val genesis         = MultiParentCasperTestUtil.createGenesis(bonds)
 
@@ -733,11 +732,11 @@ class ValidateTest
 
   "Field format validation" should "succeed on a valid block and fail on empty fields" in withStorage {
     _ => implicit blockDagStorage =>
-      val (sk, pk) = Ed25519.newKeyPair
+      val (sk, pk) = Secp256k1.newKeyPair
       val block    = MultiParentCasperTestUtil.createGenesis(Map(pk -> 1))
       for {
         dag     <- blockDagStorage.getRepresentation
-        genesis <- ProtoUtil.signBlock[Task](block, dag, pk, sk, "ed25519", "rchain")
+        genesis <- ProtoUtil.signBlock[Task](block, dag, pk, sk, "secp256k1", "rchain")
         _       <- Validate.formatOfFields[Task](genesis) shouldBeF true
         _       <- Validate.formatOfFields[Task](genesis.withBlockHash(ByteString.EMPTY)) shouldBeF false
         _       <- Validate.formatOfFields[Task](genesis.clearHeader) shouldBeF false
@@ -766,11 +765,11 @@ class ValidateTest
 
   "Block hash format validation" should "fail on invalid hash" in withStorage {
     _ => implicit blockDagStorage =>
-      val (sk, pk) = Ed25519.newKeyPair
+      val (sk, pk) = Secp256k1.newKeyPair
       val block    = MultiParentCasperTestUtil.createGenesis(Map(pk -> 1))
       for {
         dag     <- blockDagStorage.getRepresentation
-        genesis <- ProtoUtil.signBlock[Task](block, dag, pk, sk, "ed25519", "rchain")
+        genesis <- ProtoUtil.signBlock[Task](block, dag, pk, sk, "secp256k1", "rchain")
         _       <- Validate.blockHash[Task](genesis) shouldBeF Right(Valid)
         result <- Validate.blockHash[Task](
                    genesis.withBlockHash(ByteString.copyFromUtf8("123"))
@@ -780,11 +779,11 @@ class ValidateTest
 
   "Block deploy count validation" should "fail on invalid number of deploys" in withStorage {
     _ => implicit blockDagStorage =>
-      val (sk, pk) = Ed25519.newKeyPair
+      val (sk, pk) = Secp256k1.newKeyPair
       val block    = MultiParentCasperTestUtil.createGenesis(Map(pk -> 1))
       for {
         dag     <- blockDagStorage.getRepresentation
-        genesis <- ProtoUtil.signBlock[Task](block, dag, pk, sk, "ed25519", "rchain")
+        genesis <- ProtoUtil.signBlock[Task](block, dag, pk, sk, "secp256k1", "rchain")
         _       <- Validate.deployCount[Task](genesis) shouldBeF Right(Valid)
         result <- Validate.deployCount[Task](
                    genesis.withHeader(genesis.header.get.withDeployCount(100))
@@ -793,11 +792,11 @@ class ValidateTest
   }
 
   "Block version validation" should "work" in withStorage { _ => implicit blockDagStorage =>
-    val (sk, pk) = Ed25519.newKeyPair
+    val (sk, pk) = Secp256k1.newKeyPair
     val block    = MultiParentCasperTestUtil.createGenesis(Map(pk -> 1))
     for {
       dag     <- blockDagStorage.getRepresentation
-      genesis <- ProtoUtil.signBlock(block, dag, pk, sk, "ed25519", "rchain")
+      genesis <- ProtoUtil.signBlock(block, dag, pk, sk, "secp256k1", "rchain")
       _       <- Validate.version[Task](genesis, -1) shouldBeF false
       result  <- Validate.version[Task](genesis, 1) shouldBeF true
     } yield result

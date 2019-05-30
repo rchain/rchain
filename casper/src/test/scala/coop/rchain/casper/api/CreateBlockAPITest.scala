@@ -18,7 +18,7 @@ import coop.rchain.casper.MultiParentCasper.ignoreDoppelgangerCheck
 import coop.rchain.casper.MultiParentCasperRef.MultiParentCasperRef
 import coop.rchain.casper.api.BlockAPI.ApiErr
 import coop.rchain.catscontrib.TaskContrib._
-import coop.rchain.crypto.signatures.Ed25519
+import coop.rchain.crypto.signatures.Secp256k1
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.Validator.Validator
 import coop.rchain.p2p.EffectsTestInstances._
@@ -34,7 +34,7 @@ class CreateBlockAPITest extends FlatSpec with Matchers {
   import MultiParentCasperTestUtil._
   import HashSetCasperTestNode.Effect
 
-  private val (validatorKeys, validators) = (1 to 4).map(_ => Ed25519.newKeyPair).unzip
+  private val (validatorKeys, validators) = (1 to 4).map(_ => Secp256k1.newKeyPair).unzip
   private val bonds                       = createBonds(validators)
   private val genesis                     = createGenesis(bonds)
 

@@ -1,20 +1,21 @@
-//scalapackage coop.rchain.rholang.wallet
+/*
+ The table below describes the required computations and their dependencies
 
-// WalletCheck: holds funds until a public key with the given hash is presented,
-//     then creates a wallet with that public key and those funds.
-
-
-//Registry info:
-//  sk: e1726ef3da05912e2ffd1777bac30a391b626899f1215d9f145b0c05a6284061
-//  pk: 852a03854f285b36a44c7e84b1c07d30352196de60b593522653ba5e71c8e016
-//  user == pk
-//  timestamp: 1540218618622
-//Resulting unforgable name: Unforgeable(0xd1c1a398c665521341cde512ebc6273fcd5af9db6cfa276b64b43718cad1d2b2)
-//  ==> signature data == 2a3eaa013b0a0d2a0b10feffffffffffffffff010a2a5a280a243a220a20d1c1a398c665521341cde512ebc6273fcd5af9db6cfa276b64b43718cad1d2b21001
-//  ==> signature == 1bcdbfd224989e15070fd54ee1b2a00e68879deb7e273f9a57d1f4b264f38a7f4cafe200f5c80551fb9e218d4c32f465264f1c1e2041cb5eded90c4f75519409
-//URI derived from pk == `rho:id:oqez475nmxx9ktciscbhps18wnmnwtm6egziohc3rkdzekkmsrpuyt`
-new
-  WalletCheck, rs(`rho:registry:insertSigned:ed25519`), uriOut,
+ No. | Dependency | Computation method | Result
+ ----+------------+--------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------
+ 1.  |            | given              | sk = 8efb9d149ffe4065f591e9428ee7eeeaa59d88426b721244b43f5e28e9f75349
+ 2.  |            | given              | timestamp = 1559156388100
+ 3.  |            | lastNonce          | nonce = 9223372036854775807
+ 4.  | 1,         | secp256k1          | pk = 04a3070d2f090e8015d2a34adcb4c82b8e21aa56f15a8dff2690d0c316e07bec8e393d1a218b581bc2025d435ff2c7151f7b04ee1e162a608f458d3bf8fb16908f
+ 5.  | 4, 2,      | genIds             | uname = Unforgeable(0x4ca8ca1cff2656b3a1f7765bf3819416ce6f9f9e44102229a2622c98cd65de22)
+ 6.  | 3, 5,      | registry           | value = (9223372036854775807, bundle+ {   Unforgeable(0x4ca8ca1cff2656b3a1f7765bf3819416ce6f9f9e44102229a2622c98cd65de22) })
+ 7.  | 6,         | protobuf           | toSign = 2a40aa013d0a0d2a0b10feffffffffffffffff010a2c5a2a0a263a240a220a204ca8ca1cff2656b3a1f7765bf3819416ce6f9f9e44102229a2622c98cd65de221001
+ 8.  | 7, 1,      | secp256k1          | sig = 3045022100bce7a465fcab95a5d2bcd27c99f9d6d912393ee7966dc46ec4ce60c80a382085022068c953950b87226c51267e90f8368f26457026d75e7ee54d4a4c447f785d4079
+ 9.  | 4,         | registry           | uri = rho:id:5ssrgy91wskd46gjjo6qamxhg88t1fymb5ekgzfksgyeubgq3nucc9
+ ----+------------+--------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------
+ */
+new 
+  WalletCheck, rs(`rho:registry:insertSigned:secp256k1`), uriOut,
   rl(`rho:registry:lookup`), BasicWalletCh, claimContractStore,
   walletStore
 in {
@@ -131,9 +132,11 @@ in {
     }
   } |
   rs!(
-    "852a03854f285b36a44c7e84b1c07d30352196de60b593522653ba5e71c8e016".hexToBytes(), 
-    (9223372036854775807, bundle+{*WalletCheck}), 
-    "96d5d6ff26b90eaaa819947419589bf31f0a098a82ec0d23a29e4ac622013a7caa091e53dad64e69defdda637d1747ea870b2d08b235559781eb8129a3f24c0b".hexToBytes(),
+    "04a3070d2f090e8015d2a34adcb4c82b8e21aa56f15a8dff2690d0c316e07bec8e393d1a218b581bc2025d435ff2c7151f7b04ee1e162a608f458d3bf8fb16908f".hexToBytes(),
+    (9223372036854775807, bundle+{*WalletCheck}),
+    "3045022100bce7a465fcab95a5d2bcd27c99f9d6d912393ee7966dc46ec4ce60c80a382085022068c953950b87226c51267e90f8368f26457026d75e7ee54d4a4c447f785d4079".hexToBytes(),
     *uriOut
   )
 }
+  
+  

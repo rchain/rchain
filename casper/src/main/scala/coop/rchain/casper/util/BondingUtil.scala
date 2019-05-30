@@ -31,7 +31,7 @@ object BondingUtil {
        |  for(@(_, SystemInstancesRegistry) <- SystemInstancesCh) {
        |    @SystemInstancesRegistry!("lookup", "pos", *posCh) |
        |    for(@purse <- @"${bondingForwarderAddress(ethAddress)}"; pos <- posCh){
-       |      pos!("bond", "$bondKey".hexToBytes(), "ed25519Verify", purse, "$ethAddress", "${bondingStatusOut(
+       |      pos!("bond", "$bondKey".hexToBytes(), "secp256k1", purse, "$ethAddress", "${bondingStatusOut(
          ethAddress
        )}")
        |    }
@@ -173,7 +173,7 @@ object BondingUtil {
                |  rl!(`rho:lang:systemInstancesRegistry`, *SystemInstancesCh) |
                |  for(@(_, SystemInstancesRegistry) <- SystemInstancesCh) {
                |    @SystemInstancesRegistry!("lookup", "faucet", *faucetCh) |
-               |    for(faucet <- faucetCh){ faucet!($amount, "ed25519", "$pubKey", *walletCh) } |
+               |    for(faucet <- faucetCh){ faucet!($amount, "secp256k1", "$pubKey", *walletCh) } |
                |    for(@[wallet] <- walletCh) {
                |      @wallet!("transfer", $amount, $nonce, "${Base16.encode(transferSig)}", "$destination", "$statusOut")
                |    }

@@ -10,7 +10,7 @@ test_create_purse, test_cross_currency_deposit, test_deposit, test_split,
   split, getBalance, deposit
 in {
   new RhoSpecCh in {
-    rl!(`rho:id:6wnujzcraztjfg941skrtbdkdgbko8nuaqihuhn15s66oz8ro5gwbb`, *RhoSpecCh) |
+    rl!(`rho:id:zphjgsfy13h1k85isc8rtwtgt3t9zzt5pjd5ihykfmyapfc4wt3x5h`, *RhoSpecCh) |
     for(@(_, RhoSpec) <- RhoSpecCh) {
       @RhoSpec!("testSuite", *setup,
         [

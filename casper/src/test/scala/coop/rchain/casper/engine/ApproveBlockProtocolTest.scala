@@ -15,7 +15,7 @@ import coop.rchain.comm._
 import coop.rchain.comm.rp.Connect.Connections
 import coop.rchain.crypto.{PrivateKey, PublicKey}
 import coop.rchain.crypto.hash.Blake2b256
-import coop.rchain.crypto.signatures.Ed25519
+import coop.rchain.crypto.signatures.Secp256k1
 import coop.rchain.p2p.EffectsTestInstances._
 import coop.rchain.shared.{Cell, _}
 
@@ -33,7 +33,7 @@ class ApproveBlockProtocolTest extends FlatSpec with Matchers {
     implicit val eventLogStub = new EventLogStub[Task]()
     implicit val metricsTest  = new MetricsTestImpl[Task]()
 
-    val (validatorSk, validatorPk) = Ed25519.newKeyPair
+    val (validatorSk, validatorPk) = Secp256k1.newKeyPair
     val TestFixture(_, abp, candidate, _, sigsF) =
       ApproveBlockProtocolTest.createProtocol(10, 100.milliseconds, 1.millisecond, Set(validatorPk))
     val a = ApproveBlockProtocolTest.approval(candidate, validatorSk, validatorPk)
@@ -54,7 +54,7 @@ class ApproveBlockProtocolTest extends FlatSpec with Matchers {
     implicit val eventLogStub = new EventLogStub[Task]()
     implicit val metricsTest  = new MetricsTestImpl[Task]()
 
-    val (validatorSk, validatorPk) = Ed25519.newKeyPair
+    val (validatorSk, validatorPk) = Secp256k1.newKeyPair
     val TestFixture(_, abp, candidate, _, sigsF) =
       ApproveBlockProtocolTest.createProtocol(10, 100.milliseconds, 1.millisecond, Set(validatorPk))
     val a = ApproveBlockProtocolTest.approval(candidate, validatorSk, validatorPk)
@@ -79,7 +79,7 @@ class ApproveBlockProtocolTest extends FlatSpec with Matchers {
     implicit val eventLogStub = new EventLogStub[Task]()
     implicit val metricsTest  = new MetricsTestImpl[Task]()
 
-    val (_, validatorPk) = Ed25519.newKeyPair
+    val (_, validatorPk) = Secp256k1.newKeyPair
     val TestFixture(_, abp, candidate, _, sigs) =
       ApproveBlockProtocolTest.createProtocol(10, 100.milliseconds, 1.millisecond, Set(validatorPk))
     val a = ApproveBlockProtocolTest.invalidApproval(candidate)
@@ -103,7 +103,7 @@ class ApproveBlockProtocolTest extends FlatSpec with Matchers {
     implicit val eventLogStub = new EventLogStub[Task]()
     implicit val metricsTest  = new MetricsTestImpl[Task]()
 
-    val sigs = (1 to n).map(_ => Ed25519.newKeyPair)
+    val sigs = (1 to n).map(_ => Secp256k1.newKeyPair)
     val TestFixture(lab, abp, candidate, startTime, _) =
       ApproveBlockProtocolTest.createProtocol(
         n,
@@ -133,7 +133,7 @@ class ApproveBlockProtocolTest extends FlatSpec with Matchers {
   it should "continue collecting signatures if not enough are collected after the duration has elapsed" in {
     val n: Int                = 10
     val d: FiniteDuration     = 30.milliseconds
-    val sigs                  = (1 to n).map(_ => Ed25519.newKeyPair)
+    val sigs                  = (1 to n).map(_ => Secp256k1.newKeyPair)
     implicit val ctx          = TestScheduler()
     implicit val logStub      = new LogStub[Task]()
     implicit val eventLogStub = new EventLogStub[Task]()
@@ -182,7 +182,7 @@ class ApproveBlockProtocolTest extends FlatSpec with Matchers {
 
   it should "skip the duration and create and approved block immediately if the required signatures is zero" in {
     val d: FiniteDuration     = 30.milliseconds
-    val (_, validatorPk)      = Ed25519.newKeyPair
+    val (_, validatorPk)      = Secp256k1.newKeyPair
     implicit val ctx          = TestScheduler()
     implicit val logStub      = new LogStub[Task]()
     implicit val eventLogStub = new EventLogStub[Task]()
@@ -214,8 +214,8 @@ class ApproveBlockProtocolTest extends FlatSpec with Matchers {
     implicit val eventLogStub = new EventLogStub[Task]()
     implicit val metricsTest  = new MetricsTestImpl[Task]()
 
-    val (_, validatorPk)       = Ed25519.newKeyPair
-    val (invalidSk, invalidPk) = Ed25519.newKeyPair
+    val (_, validatorPk)       = Secp256k1.newKeyPair
+    val (invalidSk, invalidPk) = Secp256k1.newKeyPair
     val TestFixture(_, abp, candidate, _, sigsF) =
       ApproveBlockProtocolTest.createProtocol(10, 100.milliseconds, 1.millisecond, Set(validatorPk))
     val a = ApproveBlockProtocolTest.approval(candidate, invalidSk, invalidPk)
@@ -240,7 +240,7 @@ class ApproveBlockProtocolTest extends FlatSpec with Matchers {
     implicit val logStub           = new LogStub[Task]()
     implicit val eventLogStub      = new EventLogStub[Task]()
     implicit val metricsTest       = new MetricsTestImpl[Task]()
-    val (validatorSk, validatorPk) = Ed25519.newKeyPair
+    val (validatorSk, validatorPk) = Secp256k1.newKeyPair
     val TestFixture(_, abp, candidate, _, sigsF) =
       ApproveBlockProtocolTest.createProtocol(10, 100.milliseconds, 5.millisecond, Set(validatorPk))
 
@@ -269,7 +269,7 @@ class ApproveBlockProtocolTest extends FlatSpec with Matchers {
     implicit val logStub           = new LogStub[Task]()
     implicit val eventLogStub      = new EventLogStub[Task]()
     implicit val metricsTest       = new MetricsTestImpl[Task]()
-    val (validatorSk, validatorPk) = Ed25519.newKeyPair
+    val (validatorSk, validatorPk) = Secp256k1.newKeyPair
     val TestFixture(_, abp, candidate, startTime, sigsF) =
       ApproveBlockProtocolTest.createProtocol(1, 2.milliseconds, 1.millisecond, Set(validatorPk))
 
@@ -306,20 +306,20 @@ object ApproveBlockProtocolTest {
       validatorPk: PublicKey
   ): BlockApproval = {
     val sigData = Blake2b256.hash(c.toByteArray)
-    val sig     = Ed25519.sign(sigData, validatorSk)
+    val sig     = Secp256k1.sign(sigData, validatorSk)
     BlockApproval(
       Some(c),
-      Some(Signature(ByteString.copyFrom(validatorPk.bytes), "ed25519", ByteString.copyFrom(sig)))
+      Some(Signature(ByteString.copyFrom(validatorPk.bytes), "secp256k1", ByteString.copyFrom(sig)))
     )
   }
 
   def invalidApproval(c: ApprovedBlockCandidate): BlockApproval = {
-    val (sk, pk) = Ed25519.newKeyPair
+    val (sk, pk) = Secp256k1.newKeyPair
     val sigData  = Blake2b256.hash(c.toByteArray ++ "wrong data".toArray.map(_.toByte))
-    val sig      = Ed25519.sign(sigData, sk)
+    val sig      = Secp256k1.sign(sigData, sk)
     BlockApproval(
       Some(c),
-      Some(Signature(ByteString.copyFrom(pk.bytes), "ed25519", ByteString.copyFrom(sig)))
+      Some(Signature(ByteString.copyFrom(pk.bytes), "secp256k1", ByteString.copyFrom(sig)))
     )
   }
 

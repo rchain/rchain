@@ -9,7 +9,7 @@ import coop.rchain.casper.protocol.{BlockMessage, DeployData}
 import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.casper.util.rholang.RuntimeManager
 import coop.rchain.crypto.hash.Blake2b512Random
-import coop.rchain.crypto.signatures.Ed25519
+import coop.rchain.crypto.signatures.Secp256k1
 import coop.rchain.metrics
 import coop.rchain.metrics.Metrics
 import coop.rchain.models.Par
@@ -27,9 +27,9 @@ object TestUtil {
   private val rhoSpecDeploy: DeployData =
     DeployData(
       deployer = ProtoUtil.stringToByteString(
-        "4ae94eb0b2d7df529f7ae68863221d5adda402fc54303a3d90a8a7a279326828"
+        "0401f5d998c9be9b1a753771920c6e968def63fe95b20c71a163a7f7311b6131ac65a49f796b5947fa9d94b0542895e7b7ebe8b91eefcbc5c7604aaf281922ccac"
       ),
-      timestamp = 1539808849271L,
+      timestamp = 1559158671800L,
       term = CompiledRholangSource("RhoSpecContract.rho").code,
       phloLimit = accounting.MAX_VALUE
     )
@@ -52,7 +52,7 @@ object TestUtil {
   // TODO: Have this function take an additional "Genesis" argument.
   def defaultGenesisSetup[F[_]: Concurrent](runtimeManager: RuntimeManager[F]): F[BlockMessage] = {
 
-    val (_, validatorPks) = (1 to 4).map(_ => Ed25519.newKeyPair).unzip
+    val (_, validatorPks) = (1 to 4).map(_ => Secp256k1.newKeyPair).unzip
     val bonds             = createBonds(validatorPks)
 
     Genesis.createGenesisBlock(
@@ -69,7 +69,7 @@ object TestUtil {
           validators = bonds.map(Validator.tupled).toSeq
         ),
         faucet = false,
-        genesisPk = Ed25519.newKeyPair._2,
+        genesisPk = Secp256k1.newKeyPair._2,
         vaults = bonds.toList.map {
           case (pk, stake) =>
             RevAddress.fromPublicKey(pk).map(Vault(_, stake))

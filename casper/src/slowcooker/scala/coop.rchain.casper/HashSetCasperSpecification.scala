@@ -13,12 +13,12 @@ import coop.rchain.casper.util.{ConstructDeploy, ProtoUtil}
 import coop.rchain.casper.util.comm.TestNetwork
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.hash.Keccak256
-import coop.rchain.crypto.signatures.{Ed25519, Secp256k1}
 import coop.rchain.rholang.interpreter.accounting
 import monix.execution.Scheduler.Implicits.global
 import coop.rchain.catscontrib._
 import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.comm.CommError
+import coop.rchain.crypto.signatures.Secp256k1
 import coop.rchain.crypto.{PrivateKey, PublicKey}
 import coop.rchain.rholang.interpreter.util.RevAddress
 import monix.eval.Task
@@ -51,7 +51,7 @@ object HashSetCasperActions {
       amount: Int,
       bondsGen: Seq[PublicKey] => Map[PublicKey, Long]
   ): (BlockMessage, immutable.IndexedSeq[PrivateKey]) = {
-    val (validatorKeys, validators) = (1 to amount).map(_ => Ed25519.newKeyPair).unzip
+    val (validatorKeys, validators) = (1 to amount).map(_ => Secp256k1.newKeyPair).unzip
     val (_, ethPubKeys)             = (1 to amount).map(_ => Secp256k1.newKeyPair).unzip
     val ethAddresses =
       ethPubKeys.map(pk => "0x" + Base16.encode(Keccak256.hash(pk.bytes.drop(1)).takeRight(20)))
@@ -68,7 +68,7 @@ object HashSetCasperActions {
             validators = bonds.toSeq.map(Validator.tupled)
           ),
           faucet = true,
-          genesisPk = Ed25519.newKeyPair._2,
+          genesisPk = Secp256k1.newKeyPair._2,
           timestamp = 0L,
           vaults = bonds.toList.map {
             case (pk, stake) =>

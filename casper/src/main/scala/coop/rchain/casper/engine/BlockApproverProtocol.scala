@@ -17,7 +17,7 @@ import coop.rchain.comm.transport.{Blob, TransportLayer}
 import coop.rchain.comm.{transport, PeerNode}
 import coop.rchain.crypto.PublicKey
 import coop.rchain.crypto.hash.Blake2b256
-import coop.rchain.crypto.signatures.Ed25519
+import coop.rchain.crypto.signatures.Secp256k1
 import coop.rchain.rholang.interpreter.util.RevAddress
 import coop.rchain.shared._
 
@@ -126,7 +126,7 @@ object BlockApproverProtocol {
         }
         posParams      = ProofOfStake(minimumBond, maximumBond, validators)
         faucetCode     = if (faucet) Faucet.basicWalletFaucet(_) else Faucet.noopFaucet
-        (_, genesisPk) = Ed25519.newKeyPair
+        (_, genesisPk) = Secp256k1.newKeyPair
         vaults = Traverse[List]
           .traverse(posParams.validators.map(_.pk).toList)(RevAddress.fromPublicKey)
           .get

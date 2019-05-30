@@ -8,7 +8,7 @@ import coop.rchain.casper.scalatestcontrib._
 import coop.rchain.casper.util.{ConstructDeploy, ProtoUtil, RSpaceUtil}
 import coop.rchain.crypto.PrivateKey
 import coop.rchain.crypto.codec.Base16
-import coop.rchain.crypto.signatures.Ed25519
+import coop.rchain.crypto.signatures.Secp256k1
 import coop.rchain.p2p.EffectsTestInstances.LogicalTime
 import coop.rchain.rholang.interpreter.accounting
 import monix.execution.Scheduler.Implicits.global
@@ -21,7 +21,7 @@ class MultiParentCasperRholangSpec extends FlatSpec with Matchers with Inspector
 
   implicit val timeEff = new LogicalTime[Effect]
 
-  private val (validatorKeys, validatorPks) = (1 to 4).map(_ => Ed25519.newKeyPair).unzip
+  private val (validatorKeys, validatorPks) = (1 to 4).map(_ => Secp256k1.newKeyPair).unzip
   private val genesis = buildGenesis(
     buildGenesisParameters(4, createBonds(validatorPks))
   )
@@ -72,7 +72,7 @@ class MultiParentCasperRholangSpec extends FlatSpec with Matchers with Inspector
         createBlockResult <- casperEff.createBlock
         Created(block)    = createBlockResult
         blockStatus       <- casperEff.addBlock(block, ignoreDoppelgangerCheck[Effect])
-        id                = "rho:id:h7ezekh7ad65ti3ukk7ij65k3b57dr7osiyhocjddwyg7pyuraw3mq"
+        id                = "rho:id:dwg79f7rkqqsz9458tnh4i6nw3yrnurufihg3zicn9nsrp18o9imwk"
         callDeploy = ConstructDeploy.sourceDeploy(
           s"""new rl(`rho:registry:lookup`), helloCh, out in {
              |  rl!(`$id`, *helloCh) |
@@ -89,7 +89,7 @@ class MultiParentCasperRholangSpec extends FlatSpec with Matchers with Inspector
         _                  = block2Status shouldBe Valid
         data <- getDataAtPrivateChannel[Effect](
                  block2,
-                 "83bbcd6ab7ba905e577e943672ac9e9fbf9917e1be496b2a6620c0821850af93"
+                 "2da67f1ca63808777eba9144a5cac519783afc6070dd08642ac6aa5ed51b98d8"
                )
         _ = data shouldBe Seq("\"Hello, World!\"")
       } yield ()
@@ -108,12 +108,12 @@ class MultiParentCasperRholangSpec extends FlatSpec with Matchers with Inspector
       val createWalletCode =
         s"""new
            |  walletCh, rl(`rho:registry:lookup`), SystemInstancesCh, faucetCh,
-           |  rs(`rho:registry:insertSigned:ed25519`), uriOut
+           |  rs(`rho:registry:insertSigned:secp256k1`), uriOut
            |in {
            |  rl!(`rho:lang:systemInstancesRegistry`, *SystemInstancesCh) |
            |  for(@(_, SystemInstancesRegistry) <- SystemInstancesCh) {
            |    @SystemInstancesRegistry!("lookup", "faucet", *faucetCh) |
-           |    for(faucet <- faucetCh){ faucet!($amount, "ed25519", "$pkStr", *walletCh) } |
+           |    for(faucet <- faucetCh){ faucet!($amount, "secp256k1", "$pkStr", *walletCh) } |
            |    for(@[wallet] <- walletCh){ walletCh!!(wallet) }
            |  } |
            |  rs!(

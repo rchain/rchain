@@ -28,7 +28,7 @@ import coop.rchain.comm.rp.Connect
 import coop.rchain.comm.rp.Connect._
 import coop.rchain.comm.rp.HandleMessages.handle
 import coop.rchain.crypto.PrivateKey
-import coop.rchain.crypto.signatures.Ed25519
+import coop.rchain.crypto.signatures.Secp256k1
 import coop.rchain.metrics
 import coop.rchain.metrics.{Metrics, NoopSpan}
 import coop.rchain.p2p.EffectsTestInstances._
@@ -75,7 +75,7 @@ class HashSetCasperTestNode[F[_]](
 
   val defaultTimeout: FiniteDuration = FiniteDuration(1000, MILLISECONDS)
 
-  val validatorId = ValidatorIdentity(Ed25519.toPublic(sk), sk, "ed25519")
+  val validatorId = ValidatorIdentity(Secp256k1.toPublic(sk), sk, "secp256k1")
 
   val approvedBlock = ApprovedBlock(candidate = Some(ApprovedBlockCandidate(block = Some(genesis))))
 

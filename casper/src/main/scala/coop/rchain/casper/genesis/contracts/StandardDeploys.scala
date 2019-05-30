@@ -26,70 +26,70 @@ object StandardDeploys {
 
   def listOps: DeployData = toDeploy(
     CompiledRholangSource("ListOps.rho"),
-    "1d325ed35924b606264d4beaee7f78214aaecb23f6f3816055bc8bbe94280b5a",
-    1539711168714L
+    "040126690519dc9b0f52876cb13458e15697794dd87d7c6477707c7efa4cce8a36b634eab5056bd4e3ba385ab14a638e4ac7d3b3e4968da3d66933fc04bc7038b5",
+    1559156082324L
   )
   def either: DeployData =
     toDeploy(
       CompiledRholangSource("Either.rho"),
-      "89a6d9c47f360e8ce145f8fe3c773786dc86bd0e70d19643d02b0eb126473c55",
-      1539794228064L
+      "04c71f6c7b87edf4bec14f16f715ee49c6fea918549abdf06c734d384b60ba922990317cc4bf68da8c85b455a65595cf7007f1e54bfd6be26ffee53d1ea6d7406b",
+      1559156217509L
     )
   def nonNegativeNumber: DeployData =
     toDeploy(
       CompiledRholangSource("NonNegativeNumber.rho"),
-      "d89a1e6d2b8f53595b3d0d47effd48f0e537d19d847ad5811cf5216157a3a63c",
-      1539963224985L
+      "04e1559d809924e564dce57e34646e155b144d2a504ce7ee519d7a5108fd42f1038d08d745e5ea21cb53d6aa7c7174a768fa373207a83bc947a20c6a02ece7a60e",
+      1559156251792L
     )
   def makeMint: DeployData =
     toDeploy(
       CompiledRholangSource("MakeMint.rho"),
-      "d9ba2075d355755060205605f4cdbd5ecd3cce5ed1f39690f34772f7c9aa30ab",
-      1539969637029L
+      "0470256c078e105d2958b9cf66f2161d83368f483c0219790277fb726a459be7f56a9a48bbecf72bcaed6a3515bd0a144faf6a6a8de8f6c9b3b7dff297eb371f28",
+      1559156452968L
     )
   def makePoS: DeployData =
     toDeploy(
       CompiledRholangSource("MakePoS.rho"),
-      "0cbe092b27e04a944c7ac184619f3abeacffdd823ded94113ae918a63e55d5f2",
-      1540221220574L
+      "04990b358a69aa4e36dd8811f010416ffb09bd53d3c5fa8bc91a585a88e161fb299d241c6a7dd977bf9017ef507bf965d0aa4a12919d521775407c3830c59974c7",
+      1559156284416L
     )
   def basicWallet: DeployData =
     toDeploy(
       CompiledRholangSource("BasicWallet.rho"),
-      "d72d0a7c0c9378b4874efbf871ae8089dd81f2ed3c54159fffeaba6e6fca4236",
-      1540214070797L
+      "043b9a8358561912d2dd0fc94b5c6c01dce2b97c91b34f698aa3dabbefd5c6fd5c4ac2d5db0232545d44de1ee66e1f4828bbb0933e2227c3a6240429f0ef47c233",
+      1559156113243L
     )
   def basicWalletFaucet: DeployData =
     toDeploy(
       CompiledRholangSource("BasicWalletFaucet.rho"),
-      "7645ec68813655c4be91dc60f759804c64e5f84319d18c66e40bbfb3a202ddc8",
-      1540228756441L
+      "04137e903dff809e6f307009eeb2fe13b8490e8d6f612b3f293aa5d7960156f807b2a86face1f184d2fc4b7eb659fdb8e69f8bc801d9265a34c3e1ce74fd5be937",
+      1559156052144L
     )
   def walletCheck: DeployData =
     toDeploy(
       CompiledRholangSource("WalletCheck.rho"),
-      "852a03854f285b36a44c7e84b1c07d30352196de60b593522653ba5e71c8e016",
-      1540218618622L
+      "04a3070d2f090e8015d2a34adcb4c82b8e21aa56f15a8dff2690d0c316e07bec8e393d1a218b581bc2025d435ff2c7151f7b04ee1e162a608f458d3bf8fb16908f",
+      1559156388100L
     )
   def systemInstances: DeployData =
     toDeploy(
       CompiledRholangSource("SystemInstancesRegistry.rho"),
-      "08a0f8fccace949453dcb6a885e9f50dd96a58ed51c49fc2e346aa4d42ffb7c1",
-      1540563894858L
+      "0481acb8311189b166adf15aa021caacfd4bc224234d39311e8bf533e73d71f408b8c5ade7304b7556c5a6317593cb8089268294cdd3b5b8feb6819986c74aa0af",
+      1559156320965L
     )
 
   def authKey: DeployData =
     toDeploy(
       CompiledRholangSource("AuthKey.rho"),
-      "b07ab04ff922adc0fd7963e4a17759643a15e51ae8843053499c0d0ebc2cd869",
-      1553607754230L
+      "04f4b4417f930e6fab5765ac0defcf9fce169982acfd046e7c27f9b14c0804014623c0439e5c8035e9607599a549303b5b6b90cd9685e6965278bddca65dac7510",
+      1559156356769L
     )
 
   def lockbox: DeployData =
     toDeploy(
       CompiledRholangSource("Lockbox.rho"),
-      "7e59141cbc0dfb24ca0e4fe57666895190740778871744be3cec262147e02f56",
-      1552131653401L
+      "04c1a88afc0810d0b7e4dea817f458c9d0a1913ec3459fb91bb9acdf0d867873d5144366275c5a63b0225a5167c6a838bb02285072d7177dc9f6407aaba87bca93",
+      1559156146649L
     )
 
   def rev(
@@ -101,15 +101,15 @@ object StandardDeploys {
   def revVault: DeployData =
     toDeploy(
       CompiledRholangSource("RevVault.rho"),
-      "be8ae000e4d2f29c73f792705314d71b6c0d56d7c640c6b4df9fabf90518c623",
-      1551879405043L
+      "040f035630a5d2199184890b4b6b83440c842da0b6becca539f788f7b35d6e873561f673cd6ebe2e32236398a86f29dad992e8fba32534734300fcc5104bcfea0e",
+      1559156183943L
     )
 
   def poSGenerator(poS: ProofOfStake): DeployData =
     toDeploy(
       poS,
-      "cc87bf7747a8c176714b417ca14a63897b07572876c5e38a7896b6007738ef81",
-      1553862086627L
+      "047b43d6548b72813b89ac1b9f9ca67624a8b372feedd71d4e2da036384a3e1236812227e524e6f237cde5f80dbb921cac12e6500791e9a9ed1254a745a816fe1f",
+      1559156420651L
     )
 
   def revGenerator(genesisPk: PublicKey, vaults: Seq[Vault], supply: Long): DeployData =
