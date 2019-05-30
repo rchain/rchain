@@ -1,8 +1,8 @@
 package coop.rchain.casper
 
 import cats.effect.{Concurrent, Sync}
-import cats.implicits._
-import cats.{Applicative, Monad}
+import cats._, cats.data._, cats.implicits._
+
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.{BlockDagRepresentation, BlockStore}
 import coop.rchain.casper.protocol.Event.EventInstance
@@ -183,66 +183,44 @@ object Validate {
   /*
    * TODO: Double check ordering of validity checks
    */
-  def blockSummary[F[_]: Sync: Log: Time: BlockStore: Metrics: Span](
+  def blockSummary[F[_]: Sync: Log: Time: BlockStore: Metrics](
       block: BlockMessage,
       genesis: BlockMessage,
       dag: BlockDagRepresentation[F],
       shardId: String,
       expirationThreshold: Int
-  ): F[Either[BlockStatus, ValidBlock]] =
-    for {
-      _                 <- Span[F].mark("before-block-hash-validation")
-      blockHashStatus   <- Validate.blockHash[F](block)
-      _                 <- Span[F].mark("before-deploy-count-validation")
-      deployCountStatus <- blockHashStatus.traverse(_ => Validate.deployCount[F](block))
-      _                 <- Span[F].mark("before-missing-blocks-validation")
-      missingBlockStatus <- deployCountStatus.joinRight.traverse(
-                             _ => Validate.missingBlocks[F](block, dag)
-                           )
-      _ <- Span[F].mark("before-timestamp-validation")
-      timestampStatus <- missingBlockStatus.joinRight.traverse(
-                          _ => Validate.timestamp[F](block, dag)
-                        )
-      _ <- Span[F].mark("before-repeat-deploy-validation")
-      repeatedDeployStatus <- timestampStatus.joinRight.traverse(
-                               _ => Validate.repeatDeploy[F](block, dag, expirationThreshold)
-                             )
-      _ <- Span[F].mark("before-block-number-validation")
-      blockNumberStatus <- repeatedDeployStatus.joinRight.traverse(
-                            _ => Validate.blockNumber[F](block, dag)
-                          )
-      _ <- Span[F].mark("before-future-transaction-validation")
-      futureTransactionStatus <- blockNumberStatus.joinRight.traverse(
-                                  _ => Validate.futureTransaction[F](block)
-                                )
-      _ <- Span[F].mark("before-transaction-expired-validation")
-      transactionExpirationStatus <- futureTransactionStatus.joinRight.traverse(
-                                      _ =>
-                                        Validate
-                                          .transactionExpiration[F](block, expirationThreshold)
-                                    )
-      _ <- Span[F].mark("before-justification-follows-validation")
-      followsStatus <- transactionExpirationStatus.joinRight.traverse(
-                        _ => Validate.justificationFollows[F](block, genesis, dag)
-                      )
-      _ <- Span[F].mark("before-parents-validation")
-      parentsStatus <- followsStatus.joinRight.traverse(
-                        _ => Validate.parents[F](block, genesis, dag)
-                      )
-      _ <- Span[F].mark("before-sequence-number-validation")
-      sequenceNumberStatus <- parentsStatus.joinRight.traverse(
-                               _ => Validate.sequenceNumber[F](block, dag)
-                             )
-      _ <- Span[F].mark("before-justification-regression-validation")
-      justificationRegressionsStatus <- sequenceNumberStatus.joinRight.traverse(
-                                         _ =>
-                                           Validate.justificationRegressions[F](block, genesis, dag)
-                                       )
-      _ <- Span[F].mark("before-shrad-identifier-validation")
-      shardIdentifierStatus <- justificationRegressionsStatus.joinRight.traverse(
-                                _ => Validate.shardIdentifier[F](block, shardId)
-                              )
-    } yield shardIdentifierStatus.joinRight
+  )(implicit span: Span[F]): F[Either[BlockStatus, ValidBlock]] = {
+    val getBlockSummary: EitherT[F, BlockStatus, ValidBlock] = for {
+      _ <- EitherT.liftF(span.mark("before-block-hash-validation"))
+      _ <- EitherT(Validate.blockHash[F](block))
+      _ <- EitherT.liftF(span.mark("before-deploy-count-validation"))
+      _ <- EitherT(Validate.deployCount[F](block))
+      _ <- EitherT.liftF(span.mark("before-missing-blocks-validation"))
+      _ <- EitherT(Validate.missingBlocks[F](block, dag))
+      _ <- EitherT.liftF(span.mark("before-timestamp-validation"))
+      _ <- EitherT(Validate.timestamp[F](block, dag))
+      _ <- EitherT.liftF(span.mark("before-repeat-deploy-validation"))
+      _ <- EitherT(Validate.repeatDeploy[F](block, dag, expirationThreshold))
+      _ <- EitherT.liftF(span.mark("before-block-number-validation"))
+      _ <- EitherT(Validate.blockNumber[F](block, dag))
+      _ <- EitherT.liftF(span.mark("before-future-transaction-validation"))
+      _ <- EitherT(Validate.futureTransaction[F](block))
+      _ <- EitherT.liftF(span.mark("before-transaction-expired-validation"))
+      _ <- EitherT(Validate.transactionExpiration[F](block, expirationThreshold))
+      _ <- EitherT.liftF(span.mark("before-justification-follows-validation"))
+      _ <- EitherT(Validate.justificationFollows[F](block, genesis, dag))
+      _ <- EitherT.liftF(span.mark("before-parents-validation"))
+      _ <- EitherT(Validate.parents[F](block, genesis, dag))
+      _ <- EitherT.liftF(span.mark("before-sequence-number-validation"))
+      _ <- EitherT(Validate.sequenceNumber[F](block, dag))
+      _ <- EitherT.liftF(span.mark("before-justification-regression-validation"))
+      _ <- EitherT(Validate.justificationRegressions[F](block, genesis, dag))
+      _ <- EitherT.liftF(span.mark("before-shrad-identifier-validation"))
+      _ <- EitherT(Validate.shardIdentifier[F](block, shardId))
+    } yield Valid
+
+    getBlockSummary.value
+  }
 
   /**
     * Works with either efficient justifications or full explicit justifications
@@ -475,7 +453,7 @@ object Validate {
   def shardIdentifier[F[_]: Monad: Log: BlockStore](
       b: BlockMessage,
       shardId: String
-  ): F[Either[InvalidBlock, ValidBlock]] =
+  ): F[Either[BlockStatus, ValidBlock]] =
     if (b.shardId == shardId) {
       Applicative[F].pure(Right(Valid))
     } else {
