@@ -123,14 +123,23 @@ SuccessFromNewToInit == \E n \in nodes :
 
 FailedFromNewToInit == \E n \in nodes :
   /\ nStatus[n] = "init"
-  /\ nOutMsg[n] = Some(SentMsgStatus("failed", Pack(NewApprovedBlockRequest, n, Bootstrap(n))))  
-  /\ nOutMsg' = [nOutMsg EXCEPT ![n] = None]
+  /\ nOutMsg[n] = Some(SentMsgStatus("failed", Pack(NewApprovedBlockRequest, n, Bootstrap(n))))
+  /\ SendMsg(NewApprovedBlockRequest, n, Bootstrap(n))  
+  /\ UNCHANGED << nodes, nInMsg, nOutStreamMsg, nStatus >>
+
+ResendWhileInit == \E n \in nodes :
+  /\ nStatus[n] = "init"
+  /\ nOutMsg[n] = None
+  /\ ~(Pack(NewApprovedBlockRequest, n, Bootstrap(n)) \in SeqToSet(nInMsg[Bootstrap(n)]))
+  /\ ~(Pack(NewApprovedBlock, Bootstrap(n), n) \in SeqToSet(nOutStreamMsg[Bootstrap(n)]))
+  /\ SendMsg(NewApprovedBlockRequest, n, Bootstrap(n))
   /\ UNCHANGED << nodes, nInMsg, nOutStreamMsg, nStatus >>
 
 FromNewToInit ==
   \/ LaunchFromNewToInit
   \/ SuccessFromNewToInit
   \/ FailedFromNewToInit
+  \/ ResendWhileInit
 
 CMBroadcastUnapprovedBlock == \E n \in nodes :
   /\ nStatus[n] = "ceremony_master"
