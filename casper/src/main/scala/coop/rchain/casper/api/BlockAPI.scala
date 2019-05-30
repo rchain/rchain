@@ -213,7 +213,7 @@ object BlockAPI {
     val serializedLog = for {
       bd    <- block.body.toSeq
       pd    <- bd.deploys
-      event <- pd.log
+      event <- pd.deployLog
     } yield event
     val log =
       serializedLog.map(EventConverter.toRspaceEvent)

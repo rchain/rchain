@@ -1,17 +1,16 @@
 package coop.rchain.casper
 
 import cats.effect.{Concurrent, Sync}
-import cats.{Applicative, Monad}
 import cats.implicits._
-
+import cats.{Applicative, Monad}
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.{BlockDagRepresentation, BlockStore}
 import coop.rchain.casper.protocol.Event.EventInstance
 import coop.rchain.casper.protocol.{ApprovedBlock, BlockMessage, Justification}
-import coop.rchain.casper.util.{DagOperations, ProtoUtil}
-import coop.rchain.casper.util.ProtoUtil.{blockNumber, bonds}
-import coop.rchain.casper.util.rholang.{InterpreterUtil, RuntimeManager}
+import coop.rchain.casper.util.ProtoUtil.bonds
 import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
+import coop.rchain.casper.util.rholang.{InterpreterUtil, RuntimeManager}
+import coop.rchain.casper.util.{DagOperations, ProtoUtil}
 import coop.rchain.crypto.hash.Blake2b256
 import coop.rchain.crypto.signatures.Ed25519
 import coop.rchain.metrics.{Metrics, Span}
@@ -19,7 +18,8 @@ import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.BlockMetadata
 import coop.rchain.models.Validator.Validator
 import coop.rchain.shared._
-import scala.util.{Failure, Success, Try}
+
+import scala.util.{Success, Try}
 
 object Validate {
   type PublicKey = Array[Byte]
@@ -150,13 +150,15 @@ object Validate {
       for {
         _ <- Log[F].warn(ignore(b, s"block post state is missing."))
       } yield false
-    } else if (b.body.get.deploys.flatMap(_.log).exists(_.eventInstance == EventInstance.Empty)) {
+    } else if (b.body.get.deploys
+                 .flatMap(_.deployLog)
+                 .exists(_.eventInstance == EventInstance.Empty)) {
       for {
         _ <- Log[F].warn(ignore(b, s"one of block deploy comm reduction events is empty."))
       } yield false
     } else if (b.body.get.deploys
-      .flatMap(_.paymentLog)
-      .exists(_.eventInstance == EventInstance.Empty)) {
+                 .flatMap(_.paymentLog)
+                 .exists(_.eventInstance == EventInstance.Empty)) {
       for {
         _ <- Log[F].warn(ignore(b, s"one of block payment comm reduction events is empty."))
       } yield false

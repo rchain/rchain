@@ -4,7 +4,6 @@ import java.nio.file.Files
 
 import cats.effect.Sync
 import cats.implicits._
-
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.{BlockDagRepresentation, BlockStore}
 import coop.rchain.casper.helper.BlockGenerator._
@@ -20,9 +19,8 @@ import coop.rchain.metrics
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.models.PCost
 import coop.rchain.p2p.EffectsTestInstances.LogStub
-import coop.rchain.rholang.interpreter.{accounting, Runtime}
+import coop.rchain.rholang.interpreter.{Runtime, accounting}
 import coop.rchain.shared.StoreType
-
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
 import org.scalatest._
@@ -810,7 +808,7 @@ class InterpreterUtilTest
           intProcessedDeploys                                     = processedDeploys.map(_.toProcessedDeploy)
           //create single deploy with log that includes excess comm events
           badProcessedDeploy = intProcessedDeploys.head.copy(
-            log = intProcessedDeploys.head.log ++ intProcessedDeploys.last.log
+            deployLog = intProcessedDeploys.head.deployLog ++ intProcessedDeploys.last.deployLog
           )
           block <- createGenesis[Task](
                     deploys = Seq(badProcessedDeploy, intProcessedDeploys.last),
