@@ -5,7 +5,6 @@ import coop.rchain.casper.util.EventConverter
 import coop.rchain.models.PCost
 import coop.rchain.rspace.trace
 
-// TODO: Add post-state to individual InternalProcessedDeploy.
 final case class InternalProcessedDeploy(
     deploy: DeployData,
     cost: PCost,
@@ -18,7 +17,8 @@ final case class InternalProcessedDeploy(
     ProcessedDeploy(
       deploy = Some(deploy),
       cost = Some(cost),
-      log = deployLog.map(EventConverter.toCasperEvent),
+      deployLog = deployLog.map(EventConverter.toCasperEvent),
+      paymentLog = paymentLog.map(EventConverter.toCasperEvent),
       errored = status.isFailed
     )
 
@@ -30,7 +30,8 @@ object InternalProcessedDeploy {
     for {
       d <- pd.deploy
       c <- pd.cost
-      l = pd.log.map(EventConverter.toRspaceEvent)
+      l = pd.deployLog.map(EventConverter.toRspaceEvent)
+      p = pd.paymentLog.map(EventConverter.toRspaceEvent)
       s = if (pd.errored) UnknownFailure else Succeeded
-    } yield InternalProcessedDeploy(d, c, l, Seq.empty[trace.Event], s)
+    } yield InternalProcessedDeploy(d, c, l, p, s)
 }

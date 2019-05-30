@@ -1,14 +1,14 @@
 package coop.rchain.casper.genesis
 
-import java.io.{File, PrintWriter}
+import java.io.PrintWriter
 import java.nio.file.{Path, Paths}
 
 import cats.effect.{Concurrent, Sync}
 import cats.implicits._
-import cats.{Applicative, Foldable, Monad}
+import cats.{Foldable, Monad}
 import com.google.protobuf.ByteString
-import coop.rchain.blockstorage.util.io._
 import coop.rchain.blockstorage.util.io.IOError.RaiseIOError
+import coop.rchain.blockstorage.util.io._
 import coop.rchain.casper.genesis.contracts._
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.ProtoUtil.{blockHeader, unsignedBlockProto}
@@ -18,11 +18,9 @@ import coop.rchain.casper.util.rholang.{InternalProcessedDeploy, RuntimeManager}
 import coop.rchain.crypto.PublicKey
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.signatures.Ed25519
-import coop.rchain.rholang.interpreter.accounting
 import coop.rchain.rholang.interpreter.util.RevAddress
 import coop.rchain.shared.{Log, LogSource, Time}
 
-import scala.io.Source
 import scala.util.{Failure, Success, Try}
 
 final case class Genesis(
@@ -162,7 +160,13 @@ object Genesis {
 
     val blockDeploys =
       processedDeploys.filterNot(_.status.isFailed).map(_.toProcessedDeploy)
-    val sortedDeploys = blockDeploys.map(d => d.copy(log = d.log.sortBy(_.toByteArray)))
+    val sortedDeploys = blockDeploys.map(
+      d =>
+        d.copy(
+          deployLog = d.deployLog.sortBy(_.toByteArray),
+          paymentLog = d.paymentLog.sortBy(_.toByteArray)
+        )
+    )
 
     val body    = Body(state = Some(state), deploys = sortedDeploys)
     val version = 1L //FIXME make this part of Genesis, and pass it from upstream

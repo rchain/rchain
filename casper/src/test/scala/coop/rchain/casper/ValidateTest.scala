@@ -4,7 +4,6 @@ import java.nio.file.Files
 
 import cats.Monad
 import cats.implicits._
-
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.{BlockStore, IndexedBlockDagStorage}
 import coop.rchain.casper.helper.BlockGenerator._
@@ -12,9 +11,6 @@ import coop.rchain.casper.helper.BlockUtil.generateValidator
 import coop.rchain.casper.helper.{BlockDagStorageFixture, BlockGenerator}
 import coop.rchain.casper.protocol.Event.EventInstance
 import coop.rchain.casper.protocol._
-import coop.rchain.models.BlockHash.BlockHash
-import coop.rchain.models.Validator.Validator
-
 import coop.rchain.casper.scalatestcontrib._
 import coop.rchain.casper.util.rholang.Resources.mkRuntimeManager
 import coop.rchain.casper.util.rholang.{InterpreterUtil, RuntimeManager}
@@ -23,15 +19,13 @@ import coop.rchain.crypto.PrivateKey
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.signatures.Ed25519
 import coop.rchain.metrics.{Metrics, NoopSpan}
+import coop.rchain.models.BlockHash.BlockHash
+import coop.rchain.models.Validator.Validator
+import coop.rchain.p2p.EffectsTestInstances.LogStub
 import coop.rchain.rholang.interpreter.Runtime
 import coop.rchain.shared.{StoreType, Time}
-
-import com.google.protobuf.ByteString
-import monix.execution.Scheduler.Implicits.global
-import org.scalatest._
-import coop.rchain.metrics
-import coop.rchain.p2p.EffectsTestInstances.LogStub
 import monix.eval.Task
+import monix.execution.Scheduler.Implicits.global
 import org.scalatest.{BeforeAndAfterEach, FlatSpec, Matchers}
 
 import scala.collection.immutable.HashMap
@@ -762,7 +756,8 @@ class ValidateTest
                    genesis.withBody(
                      genesis.body.get
                        .withDeploys(
-                         genesis.body.get.deploys.map(_.withLog(List(Event(EventInstance.Empty))))
+                         genesis.body.get.deploys
+                           .map(_.withDeployLog(List(Event(EventInstance.Empty))))
                        )
                    )
                  ) shouldBeF false
