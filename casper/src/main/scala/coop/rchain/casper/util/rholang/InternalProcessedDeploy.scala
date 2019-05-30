@@ -5,7 +5,6 @@ import coop.rchain.casper.util.EventConverter
 import coop.rchain.models.PCost
 import coop.rchain.rspace.trace
 
-// TODO: Add post-state to individual InternalProcessedDeploy.
 final case class InternalProcessedDeploy(
     deploy: DeployData,
     cost: PCost,
