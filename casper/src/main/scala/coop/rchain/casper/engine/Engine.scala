@@ -88,7 +88,7 @@ object Engine {
 
     } yield ()
 
-  def tranistionToInitializing[F[_]: Concurrent: Metrics: Monad: MultiParentCasperRef: EngineCell: Log: EventLog: RPConfAsk: BlockStore: ConnectionsCell: TransportLayer: Time: SafetyOracle: LastApprovedBlock: BlockDagStorage](
+  def tranistionToInitializing[F[_]: Concurrent: Metrics: Monad: MultiParentCasperRef: EngineCell: Log: EventLog: RPConfAsk: BlockStore: ConnectionsCell: TransportLayer: Time: SafetyOracle: LastFinalizedBlockCalculator: LastApprovedBlock: BlockDagStorage](
       rm: RuntimeManager[F],
       shardId: String,
       validatorId: Option[ValidatorIdentity],

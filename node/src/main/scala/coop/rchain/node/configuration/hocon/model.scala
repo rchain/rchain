@@ -23,6 +23,7 @@ object Configuration {
     def getStringOpt(path: String): Option[String] = getOpt(path, _.getString)
     def getLongOpt(path: String): Option[Long]     = getOpt(path, _.getLong)
     def getIntOpt(path: String): Option[Int]       = getOpt(path, _.getInt)
+    def getFloat(path: String): Float              = underlying.getDouble(path).toFloat
     def getPath(path: String): Path                = Paths.get(underlying.getString(path))
     def getPathOpt(path: String): Option[Path]     = getOpt(path, _.getPath)
     def getFiniteDuration(path: String): FiniteDuration =
@@ -34,26 +35,27 @@ object Server {
   val Key = s"${Configuration.Key}.server"
 
   object keys {
-    val NetworkId            = "network-id"
-    val Bootstrap            = "bootstrap"
-    val StoreType            = "store-type"
-    val Host                 = "host"
-    val HostDynamic          = "host-dynamic"
-    val Upnp                 = "upnp"
-    val Port                 = "port"
-    val PortHttp             = "port-http"
-    val PortKademlia         = "port-kademlia"
-    val SendTimeout          = "send-timeout"
-    val Standalone           = "standalone"
-    val DataDir              = "data-dir"
-    val StoreSize            = "store-size"
-    val DagStorageSize       = "dag-storage-size"
-    val MapSize              = "map-size"
-    val MaxConnections       = "max-connections"
-    val MaxMessageSize       = "max-message-size"
-    val MaxStreamMessageSize = "max-stream-message-size"
-    val PacketChunkSize      = "packet-chunk-size"
-    val MessageConsumers     = "message-consumers"
+    val NetworkId               = "network-id"
+    val Bootstrap               = "bootstrap"
+    val StoreType               = "store-type"
+    val Host                    = "host"
+    val HostDynamic             = "host-dynamic"
+    val Upnp                    = "upnp"
+    val Port                    = "port"
+    val PortHttp                = "port-http"
+    val PortKademlia            = "port-kademlia"
+    val SendTimeout             = "send-timeout"
+    val Standalone              = "standalone"
+    val DataDir                 = "data-dir"
+    val StoreSize               = "store-size"
+    val DagStorageSize          = "dag-storage-size"
+    val MapSize                 = "map-size"
+    val MaxConnections          = "max-connections"
+    val MaxMessageSize          = "max-message-size"
+    val MaxStreamMessageSize    = "max-stream-message-size"
+    val PacketChunkSize         = "packet-chunk-size"
+    val MessageConsumers        = "message-consumers"
+    val FaultToleranceThreshold = "fault-tolerance-threshold"
   }
 
   @SuppressWarnings(Array("org.wartremover.warts.Throw"))
@@ -98,7 +100,8 @@ object Server {
       maxMessageSize = server.getBytes(keys.MaxMessageSize).toInt,
       maxStreamMessageSize = server.getBytes(keys.MaxStreamMessageSize),
       packetChunkSize = server.getBytes(keys.PacketChunkSize).toInt,
-      messageConsumers = server.getIntOpt(keys.MessageConsumers).getOrElse(messageConsumers)
+      messageConsumers = server.getIntOpt(keys.MessageConsumers).getOrElse(messageConsumers),
+      faultToleranceThreshold = server.getFloat(keys.FaultToleranceThreshold)
     )
   }
 }

@@ -328,6 +328,11 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
     val shardId = opt[String](
       descr = "Identifier of the shard this node is connected to."
     )
+
+    val faultToleranceThreshold = opt[Float](
+      descr = "Float value representing that the node tolerates up " +
+        "to fault-tolerance-threshold fraction of the total weight to equivocate."
+    )
   }
   addSubcommand(run)
 

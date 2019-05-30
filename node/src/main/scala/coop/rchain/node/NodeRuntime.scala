@@ -425,6 +425,14 @@ class NodeRuntime private[node] (
         log,
         metrics
       )
+    lastFinalizedBlockCalculator = LastFinalizedBlockCalculator[Task](0f)(
+      Sync[Task],
+      log,
+      Concurrent[Task],
+      blockStore,
+      blockDagStorage,
+      oracle
+    )
     runtime <- {
       implicit val s                = rspaceScheduler
       implicit val m: Metrics[Task] = metrics
@@ -463,6 +471,7 @@ class NodeRuntime private[node] (
           transport,
           rpConfAsk,
           oracle,
+          lastFinalizedBlockCalculator,
           Sync[Task],
           Concurrent[Task],
           time,

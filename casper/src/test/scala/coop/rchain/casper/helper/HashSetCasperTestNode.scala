@@ -13,7 +13,7 @@ import coop.rchain.casper.helper.BlockDagStorageTestFixture.mapSize
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.casper.util.comm.CasperPacketHandler
-import coop.rchain.casper.engine._, EngineCell._
+import coop.rchain.casper.engine._, EngineCell._, CasperState.CasperStateCell
 import coop.rchain.casper.util.comm.TestNetwork.TestNetwork
 import coop.rchain.casper.util.comm._
 import coop.rchain.casper.util.rholang.{InterpreterUtil, RuntimeManager}
@@ -62,15 +62,16 @@ class HashSetCasperTestNode[F[_]](
     val blockStore: BlockStore[F],
     val blockDagStorage: BlockDagStorage[F],
     val metricEff: Metrics[F],
-    val casperState: Cell[F, CasperState]
+    val casperState: CasperStateCell[F]
 ) {
 
-  implicit val logEff             = new LogStub[F]
-  implicit val timeEff            = logicalTime
-  implicit val connectionsCell    = Cell.unsafe[F, Connections](Connect.Connections.empty)
-  implicit val transportLayerEff  = tle
-  implicit val cliqueOracleEffect = SafetyOracle.cliqueOracle[F]
-  implicit val rpConfAsk          = createRPConfAsk[F](local)
+  implicit val logEff                       = new LogStub[F]
+  implicit val timeEff                      = logicalTime
+  implicit val connectionsCell              = Cell.unsafe[F, Connections](Connect.Connections.empty)
+  implicit val transportLayerEff            = tle
+  implicit val cliqueOracleEffect           = SafetyOracle.cliqueOracle[F]
+  implicit val lastFinalizedBlockCalculator = LastFinalizedBlockCalculator[F](0f)
+  implicit val rpConfAsk                    = createRPConfAsk[F](local)
 
   val defaultTimeout: FiniteDuration = FiniteDuration(1000, MILLISECONDS)
 

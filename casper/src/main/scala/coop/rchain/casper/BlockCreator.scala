@@ -5,6 +5,7 @@ import cats.effect.Sync
 import cats.implicits._
 
 import coop.rchain.blockstorage.{BlockDagRepresentation, BlockStore}
+import coop.rchain.casper.CasperState.CasperStateCell
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.ProtoUtil._
 import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
@@ -39,7 +40,7 @@ object BlockCreator {
       version: Long,
       expirationThreshold: Int,
       runtimeManager: RuntimeManager[F]
-  )(implicit state: Cell[F, CasperState], metricsF: Metrics[F]): F[CreateBlockStatus] =
+  )(implicit state: CasperStateCell[F], metricsF: Metrics[F]): F[CreateBlockStatus] =
     for {
       span           <- metricsF.span(CreateBlockMetricsSource)
       tipHashes      <- Estimator.tips[F](dag, genesis)
@@ -82,7 +83,7 @@ object BlockCreator {
    * TODO: Make more developer friendly by introducing Option instead of a magic number
    */
   private def updateDeployHistory[F[_]: Sync: Log: Time: BlockStore](
-      state: Cell[F, CasperState],
+      state: CasperStateCell[F],
       maxBlockNumber: Long
   ): F[Unit] = {
     def updateDeployValidAfterBlock(deployData: DeployData, max: Long): DeployData =
@@ -105,7 +106,7 @@ object BlockCreator {
       parents: Seq[BlockMessage],
       maxBlockNumber: Long,
       expirationThreshold: Int
-  )(implicit state: Cell[F, CasperState]): F[Seq[DeployData]] =
+  )(implicit state: CasperStateCell[F]): F[Seq[DeployData]] =
     for {
       state               <- state.read
       currentBlockNumber  = maxBlockNumber + 1

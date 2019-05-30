@@ -1,22 +1,20 @@
 package coop.rchain.casper
 
-import cats.Monad
 import cats.effect.{Concurrent, Sync}
 import cats.implicits._
 import coop.rchain.blockstorage.{BlockDagRepresentation, BlockDagStorage, BlockStore}
+import coop.rchain.casper.CasperState.CasperStateCell
 import coop.rchain.casper.util.ProtoUtil
-import coop.rchain.shared.{Cell, Log}
+import coop.rchain.shared.Log
 import coop.rchain.catscontrib.ListContrib
 import coop.rchain.models.BlockHash.BlockHash
 
-object LastFinalizedBlockCalculator {
-  // TODO: Extract hardcoded fault tolerance threshold
-  private val faultToleranceThreshold = 0f
-
-  def run[F[_]: Monad: Log: Sync: Concurrent: BlockStore: BlockDagStorage: SafetyOracle](
-      dag: BlockDagRepresentation[F],
-      lastFinalizedBlockHash: BlockHash
-  )(implicit state: Cell[F, CasperState]): F[BlockHash] =
+final class LastFinalizedBlockCalculator[F[_]: Sync: Log: Concurrent: BlockStore: BlockDagStorage: SafetyOracle](
+    faultToleranceThreshold: Float
+) {
+  def run(dag: BlockDagRepresentation[F], lastFinalizedBlockHash: BlockHash)(
+      implicit state: CasperStateCell[F]
+  ): F[BlockHash] =
     for {
       maybeChildrenHashes <- dag.children(lastFinalizedBlockHash)
       childrenHashes      = maybeChildrenHashes.getOrElse(Set.empty[BlockHash]).toList
@@ -27,7 +25,7 @@ object LastFinalizedBlockCalculator {
                             )
       newFinalizedBlock <- maybeFinalizedChild match {
                             case Some(finalizedChild) =>
-                              removeDeploysInFinalizedBlock[F](finalizedChild) *> run[F](
+                              removeDeploysInFinalizedBlock(finalizedChild) *> run(
                                 dag,
                                 finalizedChild
                               )
@@ -35,9 +33,9 @@ object LastFinalizedBlockCalculator {
                           }
     } yield newFinalizedBlock
 
-  private def removeDeploysInFinalizedBlock[F[_]: Monad: Log: Sync: Concurrent: BlockStore: BlockDagStorage: SafetyOracle](
+  private def removeDeploysInFinalizedBlock(
       finalizedChildHash: BlockHash
-  )(implicit state: Cell[F, CasperState]): F[Unit] =
+  )(implicit state: CasperStateCell[F]): F[Unit] =
     for {
       block              <- ProtoUtil.unsafeGetBlock[F](finalizedChildHash)
       deploys            = block.body.get.deploys.map(_.deploy.get).toList
@@ -61,7 +59,7 @@ object LastFinalizedBlockCalculator {
    *
    * TODO: Implement the second pass in BlockAPI
    */
-  private def isGreaterThanFaultToleranceThreshold[F[_]: Monad: Log: Sync: Concurrent: BlockStore: BlockDagStorage: SafetyOracle](
+  private def isGreaterThanFaultToleranceThreshold(
       dag: BlockDagRepresentation[F],
       blockHash: BlockHash
   ): F[Boolean] =
@@ -72,4 +70,14 @@ object LastFinalizedBlockCalculator {
           )
     } yield faultTolerance > faultToleranceThreshold
 
+}
+
+object LastFinalizedBlockCalculator {
+  def apply[F[_]](implicit ev: LastFinalizedBlockCalculator[F]): LastFinalizedBlockCalculator[F] =
+    ev
+
+  def apply[F[_]: Sync: Log: Concurrent: BlockStore: BlockDagStorage: SafetyOracle](
+      faultToleranceThreshold: Float
+  ): LastFinalizedBlockCalculator[F] =
+    new LastFinalizedBlockCalculator[F](faultToleranceThreshold)
 }

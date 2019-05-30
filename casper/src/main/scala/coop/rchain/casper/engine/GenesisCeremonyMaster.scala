@@ -38,7 +38,7 @@ class GenesisCeremonyMaster[F[_]: Sync: ConnectionsCell: BlockStore: TransportLa
 
 object GenesisCeremonyMaster {
   import Engine._
-  def approveBlockInterval[F[_]: Sync: Metrics: Concurrent: ConnectionsCell: BlockStore: TransportLayer: Log: EventLog: Time: SafetyOracle: RPConfAsk: LastApprovedBlock: MultiParentCasperRef: BlockDagStorage: EngineCell](
+  def approveBlockInterval[F[_]: Sync: Metrics: Concurrent: ConnectionsCell: BlockStore: TransportLayer: Log: EventLog: Time: SafetyOracle: LastFinalizedBlockCalculator: RPConfAsk: LastApprovedBlock: MultiParentCasperRef: BlockDagStorage: EngineCell](
       interval: FiniteDuration,
       shardId: String,
       runtimeManager: RuntimeManager[F],
