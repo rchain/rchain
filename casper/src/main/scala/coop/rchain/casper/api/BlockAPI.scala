@@ -338,7 +338,7 @@ object BlockAPI {
   }
 
   def findDeploy[F[_]: Monad: MultiParentCasperRef: Log: SafetyOracle: BlockStore](
-      id: ByteString
+      id: DeployId
   ): Effect[F, LightBlockQueryResponse] =
     MultiParentCasperRef.withCasper[F, ApiErr[LightBlockQueryResponse]](
       implicit casper =>
@@ -347,7 +347,7 @@ object BlockAPI {
           allBlocksTopoSort <- dag.topoSort(0L)
           maybeBlock <- allBlocksTopoSort.flatten.reverse.toStream
                          .traverse(ProtoUtil.unsafeGetBlock[F])
-                         .map(_.find(ProtoUtil.containsDeploy(_, id)))
+                         .map(_.find(ProtoUtil.containsDeploy(_, ByteString.copyFrom(id))))
           response <- maybeBlock.traverse(getBlockInfoWithoutTuplespace[F])
         } yield response.fold(
           s"Couldn't find block containing deploy with id: ${PrettyPrinter

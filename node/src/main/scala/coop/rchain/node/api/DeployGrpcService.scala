@@ -116,7 +116,7 @@ private[api] object DeployGrpcService {
         defer(BlockAPI.findBlockWithDeploy[F](request.user, request.timestamp))
 
       override def findDeploy(request: FindDeployQuery): Task[GrpcEither] =
-        defer(BlockAPI.findDeploy[F](request.deployId))
+        defer(BlockAPI.findDeploy[F](request.deployId.toByteArray))
 
       override def previewPrivateNames(
           request: PrivateNamePreviewQuery
