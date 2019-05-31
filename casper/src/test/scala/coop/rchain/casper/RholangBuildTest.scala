@@ -26,15 +26,15 @@ class RholangBuildTest extends FlatSpec with Matchers {
         implicit val rm = node.runtimeManager
 
         val code =
-          """new double, rl(`rho:registry:lookup`), ListOpsCh, time(`rho:block:timestamp`), timeRtn, stdout(`rho:io:stdout`) in {
+          """new double, rl(`rho:registry:lookup`), ListOpsCh, time(`rho:block:timestamp`), timeRtn, stdout(`rho:io:stdout`), doubleRet ,timestampRet in {
           |  contract double(@x, ret) = { ret!(2 * x) } |
           |  rl!(`rho:lang:listOps`, *ListOpsCh) |
           |  for(@(_, ListOps) <- ListOpsCh) {
-          |    @ListOps!("map", [2, 3, 5, 7], *double, 1)
+          |    @ListOps!("map", [2, 3, 5, 7], *double, *doubleRet)
           |  } |
           |  time!(*timeRtn) |
           |  for (@timestamp <- timeRtn) {
-          |    @2!("The timestamp is ${timestamp}" %% {"timestamp" : timestamp})
+          |    timestampRet!("The timestamp is ${timestamp}" %% {"timestamp" : timestamp})
           |  }
           |}""".stripMargin
         val deploy = ConstructDeploy.sourceDeploy(code, 1L, accounting.MAX_VALUE)
@@ -44,9 +44,14 @@ class RholangBuildTest extends FlatSpec with Matchers {
           Created(signedBlock) = createBlockResult
           _                    <- MultiParentCasper[Effect].addBlock(signedBlock, ignoreDoppelgangerCheck[Effect])
           _                    = logEff.warns should be(Nil)
-          _                    <- getDataAtPublicChannel[Effect](signedBlock, 1).map(_ shouldBe Seq("[4, 6, 10, 14]"))
-          _ <- getDataAtPublicChannel[Effect](signedBlock, 2)
-                .map(_ shouldBe Seq("\"The timestamp is 1\""))
+          _ <- getDataAtPrivateChannel[Effect](
+                signedBlock,
+                "512d1953abf723978ac70213b6c2cf26b066e508b0e54013d04e9e85974c5760"
+              ).map(_ shouldBe Seq("[4, 6, 10, 14]"))
+          _ <- getDataAtPrivateChannel[Effect](
+                signedBlock,
+                "cb4ce87e153bb97d7022d5fe971cfecd7d8be729180d54596afba31a6326c92d"
+              ).map(_ shouldBe Seq("\"The timestamp is 1\""))
         } yield ()
       }
   }
