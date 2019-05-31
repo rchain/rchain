@@ -110,7 +110,7 @@ class RuntimeManagerImpl[F[_]: Concurrent] private[rholang] (
       terms: Seq[DeployData],
       blockTime: Long
   ): F[(StateHash, Seq[InternalProcessedDeploy])] =
-    withResetRuntimeLock(startHash) { runtime =>
+    withRuntimeLock { runtime =>
       for {
         _      <- setBlockTime(blockTime, runtime)
         result <- processDeploys(startHash, terms, processDeploy(runtime))
@@ -122,7 +122,7 @@ class RuntimeManagerImpl[F[_]: Concurrent] private[rholang] (
       blockTime: Long
   ): F[(StateHash, StateHash, Seq[InternalProcessedDeploy])] = {
     val startHash = emptyStateHash
-    withResetRuntimeLock(startHash) { runtime =>
+    withRuntimeLock { runtime =>
       for {
         _          <- setBlockTime(blockTime, runtime)
         evalResult <- processDeploys(startHash, terms, processDeploy(runtime))
