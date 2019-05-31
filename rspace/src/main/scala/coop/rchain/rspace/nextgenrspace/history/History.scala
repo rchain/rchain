@@ -46,8 +46,9 @@ sealed trait Trie
 sealed trait NonEmptyTrie extends Trie
 case object EmptyTrie     extends Trie
 final case class Skip(affix: ByteVector, ptr: ValuePointer) extends NonEmptyTrie {
-  def hash: Blake2b256Hash = Blake2b256Hash.create(encode.toByteVector)
-  def encode: BitVector    = codecSkip.encode(this).get
+  lazy val encoded: BitVector = Trie.codecSkip.encode(this).get
+
+  lazy val hash: Blake2b256Hash = Blake2b256Hash.create(encoded.toByteVector)
 }
 
 final case class PointerBlock private (toVector: Vector[TriePointer]) extends NonEmptyTrie {
@@ -58,9 +59,9 @@ final case class PointerBlock private (toVector: Vector[TriePointer]) extends No
 
   def countNonEmpty: Int = toVector.count(_ != EmptyPointer)
 
-  def hash: Blake2b256Hash = Blake2b256Hash.create(encode.toByteVector)
+  lazy val encoded: BitVector = PointerBlock.codecPointerBlock.encode(this).get
 
-  def encode: BitVector = PointerBlock.codecPointerBlock.encode(this).get
+  lazy val hash: Blake2b256Hash = Blake2b256Hash.create(encoded.toByteVector)
 
   override def toString: String = {
     val pbs =
@@ -90,6 +91,15 @@ object Trie {
 
   val codecSkip: Codec[Skip] = (codecByteVector :: codecTrieValuePointer).as[Skip]
 
+  val memoizingSkipCodec: Codec[Skip] =
+    Codec.apply((s: Skip) => Attempt.successful(s.encoded), codecSkip.decode)
+
+  val memoizingPointerBlockCodec: Codec[PointerBlock] =
+    Codec.apply(
+      (s: PointerBlock) => Attempt.successful(s.encoded),
+      PointerBlock.codecPointerBlock.decode
+    )
+
   val codecTrie: Codec[Trie] =
     discriminated[Trie]
       .by(uint2)
@@ -98,10 +108,10 @@ object Trie {
       }(provide(EmptyTrie))
       .subcaseP(1) {
         case s: Skip => s
-      }(codecSkip)
+      }(memoizingSkipCodec)
       .subcaseP(2) {
         case pb: PointerBlock => pb
-      }(PointerBlock.codecPointerBlock)
+      }(memoizingPointerBlockCodec)
 
   implicit def codecTriePointer: Codec[TriePointer] =
     discriminated[TriePointer]
