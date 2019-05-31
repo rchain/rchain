@@ -42,8 +42,8 @@ final case class HistoryRepositoryImpl[F[_]: Sync, C, P, A, K](
     history.find(key.bytes.toSeq.toList).flatMap {
       case (trie, _) =>
         trie match {
-          case Leaf(dataHash) => leafStore.get(dataHash)
-          case EmptyTrie      => Applicative[F].pure(None)
+          case LeafPointer(dataHash) => leafStore.get(dataHash)
+          case EmptyPointer          => Applicative[F].pure(None)
           case _ =>
             Sync[F].raiseError(new RuntimeException(s"unexpected data at key $key, data: $trie"))
 

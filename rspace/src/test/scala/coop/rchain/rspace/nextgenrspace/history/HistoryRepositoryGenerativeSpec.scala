@@ -33,8 +33,6 @@ import scala.concurrent.duration._
 class LMDBHistoryRepositoryGenerativeSpec
     extends HistoryRepositoryGenerativeDefinition
     with BeforeAndAfterAll {
-  val emptyRoot: Trie               = EmptyTrie
-  val emptyRootHash: Blake2b256Hash = Trie.hash(emptyRoot)
 
   val dbDir: Path = Files.createTempDirectory("rchain-storage-test-")
 
@@ -65,7 +63,7 @@ class LMDBHistoryRepositoryGenerativeSpec
   override def repo: HistoryRepository[Task, String, Pattern, String, StringsCaptor] = {
     val emptyHistory =
       HistoryInstances
-        .noMerging(emptyRootHash, lmdbHistoryStore, lmdbPointerBlockStore)
+        .noMerging(History.emptyRootHash, lmdbHistoryStore, lmdbPointerBlockStore)
     val repository: HistoryRepository[Task, String, Pattern, String, StringsCaptor] =
       HistoryRepositoryImpl.apply[Task, String, Pattern, String, StringsCaptor](
         emptyHistory,

@@ -21,9 +21,8 @@ class HistorySpec extends FlatSpec with Matchers with OptionValues with InMemory
       result     <- newHistory.find(_zeros)
       (_, path)  = result
       _ = path match {
-        case skip +: leaf =>
-          leaf shouldBe Vector(Leaf(data.head.hash))
-          skip shouldBe Skip(_zeros, Trie.hash(leaf.head))
+        case skip =>
+          skip shouldBe Vector(Skip(_zeros, LeafPointer(data.head.hash)))
       }
     } yield ()
   }
@@ -36,7 +35,7 @@ class HistorySpec extends FlatSpec with Matchers with OptionValues with InMemory
       _                   = results should have size 10
       (_, headPath)       = results.head
       secondTrieOnPath    = headPath.tail.head
-      _                   = secondTrieOnPath shouldBe a[Node]
+      _                   = secondTrieOnPath shouldBe a[PointerBlock]
       allFirstTriesOnPath = results.map(_._2.head).toSet
       _                   = allFirstTriesOnPath should have size 1
       firstSkip           = allFirstTriesOnPath.head
@@ -44,18 +43,31 @@ class HistorySpec extends FlatSpec with Matchers with OptionValues with InMemory
     } yield ()
   }
 
+  "deletion of a leaf" should "result in empty store" in withEmptyTrie { emptyHistory =>
+    val insertions = insert(_zeros) :: Nil
+    val deletions  = delete(_zeros) :: Nil
+    for {
+      historyOne  <- emptyHistory.process(insertions)
+      historyTwo  <- historyOne.process(deletions)
+      result      <- historyTwo.find(_zeros)
+      (ptr, path) = result
+      _           = path should have size 0
+      _           = ptr shouldBe a[EmptyPointer.type]
+    } yield ()
+  }
+
   "deletion of a leaf" should "collapse two skips" in withEmptyTrie { emptyHistory =>
     val inserts   = insert(_zeros) :: insert(_zerosOnes) :: Nil
     val deletions = delete(_zeros) :: Nil
     for {
-      historyOne <- emptyHistory.process(inserts)
-      historyTwo <- historyOne.process(deletions)
-      result     <- historyTwo.find(_zerosOnes)
-      (_, path)  = result
-      _          = path should have size 2
-      _          = path.head shouldBe a[Skip]
-      _          = path.last shouldBe a[Leaf]
-      _          = skipShouldHaveAffix(path.head, _zerosOnes)
+      historyOne  <- emptyHistory.process(inserts)
+      historyTwo  <- historyOne.process(deletions)
+      result      <- historyTwo.find(_zerosOnes)
+      (ptr, path) = result
+      _           = path should have size 1
+      _           = path.head shouldBe a[Skip]
+      _           = skipShouldHaveAffix(path.head, _zerosOnes)
+      _           = ptr shouldBe a[LeafPointer]
     } yield ()
   }
 

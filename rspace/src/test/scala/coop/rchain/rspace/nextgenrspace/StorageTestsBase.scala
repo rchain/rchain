@@ -80,7 +80,6 @@ trait StorageTestsBase[F[_], C, P, A, K] extends FlatSpec with Matchers with Opt
     val config = LMDBRSpaceStorageConfig(
       storeConfig("cold"),
       storeConfig("history"),
-      storeConfig("pointers"),
       storeConfig("roots")
     )
 

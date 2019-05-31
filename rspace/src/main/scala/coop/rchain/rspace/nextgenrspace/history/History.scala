@@ -1,46 +1,27 @@
 package coop.rchain.rspace.nextgenrspace.history
 
 import coop.rchain.rspace.Blake2b256Hash
-import scodec.Codec
+import scodec.{Attempt, Codec}
 import scodec.bits.{BitVector, ByteVector}
-import scodec.codecs.{discriminated, provide, uint2, vectorOfN}
+import scodec.codecs.{discriminated, provide, uint, uint2, vectorOfN}
 import coop.rchain.rspace.internal.codecByteVector
 import coop.rchain.shared.AttemptOps._
 import History._
-import cats.Applicative
-import Trie.{LeafPointer, PointerBlockPointer, TriePointer}
+import coop.rchain.rspace.nextgenrspace.history.Trie.codecSkip
 
 trait History[F[_]] {
   def process(actions: List[HistoryAction]): F[History[F]]
   def root: Blake2b256Hash
-  def find(key: KeyPath): F[(Trie, Vector[Trie])]
+  def find(key: KeyPath): F[(TriePointer, Vector[Trie])]
   def close(): F[Unit]
   def reset(root: Blake2b256Hash): History[F]
 }
 
 object History {
 
-  val emptyRoot: Trie = EmptyTrie
-  val emptyRootHash: Blake2b256Hash =
-    Trie.hash(emptyRoot)
-
-  def skipOrFetch[F[_]: Applicative](
-      path: KeyPath,
-      pointer: Blake2b256Hash,
-      fetch: Blake2b256Hash => F[Trie]
-  ): F[Trie] =
-    if (path.isEmpty) {
-      fetch(pointer)
-    } else {
-      Applicative[F].pure(Skip(ByteVector(path), pointer))
-    }
-
-  def skipOrValue(path: KeyPath, t: Trie): Trie =
-    if (path.isEmpty) {
-      t
-    } else {
-      skip(t, path)
-    }
+  val emptyRoot: Trie               = EmptyTrie
+  private[this] def encodeEmptyRoot = Trie.codecTrie.encode(emptyRoot).get.toByteVector
+  val emptyRootHash: Blake2b256Hash = Blake2b256Hash.create(encodeEmptyRoot)
 
   // this mapping is kept explicit on purpose
   @inline
@@ -55,95 +36,120 @@ object History {
   def commonPrefix(l: KeyPath, r: KeyPath): KeyPath =
     (l.view, r.view).zipped.takeWhile { case (ll, rr) => ll == rr }.map(_._1).toSeq
 
-  def skip(t: Trie, affix: KeyPath): Skip =
-    Skip(ByteVector(affix), Trie.hash(t))
-
-  def pointTo(idx: Byte, t: Trie): Trie =
-    t match {
-      case Skip(affix, p) => Skip(idx +: affix, p)
-      case n: Node        => Skip(ByteVector(idx), Trie.hash(n))
-      case l: Leaf        => Skip(ByteVector(idx), Trie.hash(l))
-      case EmptyTrie      => EmptyTrie
-    }
+  def skip(pb: PointerBlock, affix: KeyPath): Trie =
+    Skip(ByteVector(affix), NodePointer(pb.hash))
 
   type KeyPath = Seq[Byte]
-
 }
 
 sealed trait Trie
-sealed trait NonEmptyTrie                                   extends Trie
-case object EmptyTrie                                       extends Trie
-final case class Skip(affix: ByteVector, hash: TriePointer) extends NonEmptyTrie
-final case class Node(hash: PointerBlockPointer)            extends NonEmptyTrie
-final case class Leaf(hash: LeafPointer)                    extends NonEmptyTrie
-
-object Trie {
-
-  type PointerBlockPointer = Blake2b256Hash
-  type TriePointer         = Blake2b256Hash
-  type LeafPointer         = Blake2b256Hash
-
-  def hash(trie: Trie): Blake2b256Hash =
-    codecTrie
-      .encode(trie)
-      .map((vector: BitVector) => Blake2b256Hash.create(vector.toByteVector))
-      .get
-
-  private val codecNode  = Blake2b256Hash.codecBlake2b256Hash
-  private val codecLeaf  = Blake2b256Hash.codecBlake2b256Hash
-  private val codecSkip  = codecByteVector :: Blake2b256Hash.codecBlake2b256Hash
-  private val codecEmpty = provide(EmptyTrie)
-
-  implicit def codecTrie: Codec[Trie] =
-    discriminated[Trie]
-      .by(uint2)
-      .subcaseP(0) {
-        case n: Node => n
-      }(codecNode.as[Node])
-      .subcaseP(1) {
-        case s: Skip => s
-      }(codecSkip.as[Skip])
-      .subcaseP(2) {
-        case emptyTrie: EmptyTrie.type => emptyTrie
-      }(codecEmpty)
-      .subcaseP(3) {
-        case l: Leaf => l
-      }(codecLeaf.as[Leaf])
+sealed trait NonEmptyTrie extends Trie
+case object EmptyTrie     extends Trie
+final case class Skip(affix: ByteVector, ptr: ValuePointer) extends NonEmptyTrie {
+  def hash: Blake2b256Hash = Blake2b256Hash.create(encode.toByteVector)
+  def encode: BitVector    = codecSkip.encode(this).get
 }
 
-final case class PointerBlock private (toVector: Vector[Trie]) {
-  def updated(tuples: List[(Int, Trie)]): PointerBlock =
+final case class PointerBlock private (toVector: Vector[TriePointer]) extends NonEmptyTrie {
+  def updated(tuples: List[(Int, TriePointer)]): PointerBlock =
     new PointerBlock(tuples.foldLeft(toVector) { (vec, curr) =>
       vec.updated(curr._1, curr._2)
     })
 
-  def countNonEmpty: Int = toVector.count(_ != EmptyTrie)
+  def countNonEmpty: Int = toVector.count(_ != EmptyPointer)
+
+  def hash: Blake2b256Hash = Blake2b256Hash.create(encode.toByteVector)
+
+  def encode: BitVector = PointerBlock.codecPointerBlock.encode(this).get
+
+  override def toString: String = {
+    val pbs =
+      toVector.zipWithIndex.filter { case (v, _) => v != EmptyPointer }.map(_.swap).mkString(";")
+    s"PB($hash: $pbs)"
+  }
+}
+
+sealed trait TriePointer
+sealed trait NonEmptyTriePointer extends TriePointer {
+  def hash: Blake2b256Hash
+}
+case object EmptyPointer  extends TriePointer
+sealed trait ValuePointer extends NonEmptyTriePointer
+
+final case class LeafPointer(hash: Blake2b256Hash) extends ValuePointer
+final case class SkipPointer(hash: Blake2b256Hash) extends NonEmptyTriePointer
+final case class NodePointer(hash: Blake2b256Hash) extends ValuePointer
+
+object Trie {
+  def hash(trie: Trie): Blake2b256Hash =
+    trie match {
+      case pb: PointerBlock  => pb.hash
+      case s: Skip           => s.hash
+      case _: EmptyTrie.type => History.emptyRootHash
+    }
+
+  val codecSkip: Codec[Skip] = (codecByteVector :: codecTrieValuePointer).as[Skip]
+
+  val codecTrie: Codec[Trie] =
+    discriminated[Trie]
+      .by(uint2)
+      .subcaseP(0) {
+        case e: EmptyTrie.type => e
+      }(provide(EmptyTrie))
+      .subcaseP(1) {
+        case s: Skip => s
+      }(codecSkip)
+      .subcaseP(2) {
+        case pb: PointerBlock => pb
+      }(PointerBlock.codecPointerBlock)
+
+  implicit def codecTriePointer: Codec[TriePointer] =
+    discriminated[TriePointer]
+      .by(uint2)
+      .subcaseP(0) {
+        case p: EmptyPointer.type => p
+      }(provide(EmptyPointer))
+      .subcaseP(1) {
+        case p: LeafPointer => p
+      }(Blake2b256Hash.codecBlake2b256Hash.as[LeafPointer])
+      .subcaseP(2) {
+        case p: SkipPointer => p
+      }(Blake2b256Hash.codecBlake2b256Hash.as[SkipPointer])
+      .subcaseP(3) {
+        case p: NodePointer => p
+      }(Blake2b256Hash.codecBlake2b256Hash.as[NodePointer])
+
+  implicit def codecTrieValuePointer: Codec[ValuePointer] =
+    discriminated[ValuePointer]
+      .by(uint(1))
+      .subcaseP(0) {
+        case p: LeafPointer => p
+      }(Blake2b256Hash.codecBlake2b256Hash.as[LeafPointer])
+      .subcaseP(1) {
+        case p: NodePointer => p
+      }(Blake2b256Hash.codecBlake2b256Hash.as[NodePointer])
+
 }
 
 object PointerBlock {
   val length = 256
 
-  def create(): PointerBlock = new PointerBlock(Vector.fill(length)(EmptyTrie))
+  def create(): PointerBlock = new PointerBlock(Vector.fill(length)(EmptyPointer))
 
-  def create(first: (Int, Trie)): PointerBlock =
+  def create(first: (Int, TriePointer)): PointerBlock =
     PointerBlock.create().updated(List(first))
 
-  def create(first: (Int, Trie), second: (Int, Trie)): PointerBlock =
+  def create(first: (Int, TriePointer), second: (Int, TriePointer)): PointerBlock =
     PointerBlock.create().updated(List(first, second))
 
+  // consider using zlib
   implicit val codecPointerBlock: Codec[PointerBlock] =
     vectorOfN(
       provide(length),
-      Trie.codecTrie
+      Trie.codecTriePointer
     ).as[PointerBlock]
 
-  def hash(pb: PointerBlock): Blake2b256Hash =
-    codecPointerBlock
-      .encode(pb)
-      .map((vector: BitVector) => Blake2b256Hash.create(vector.toByteArray))
-      .get
-
-  def unapply(arg: PointerBlock): Option[Vector[Trie]] = Option(arg.toVector)
+  def unapply(arg: PointerBlock): Option[Vector[TriePointer]] = Option(arg.toVector)
 }
 
 final case class TriePath(nodes: Vector[Trie], conflicting: Option[Trie], edges: KeyPath) {
