@@ -90,11 +90,6 @@ class RuntimeManagerImpl[F[_]: Concurrent] private[rholang] (
     runtime.deployParametersRef.set(ProtoUtil.getRholangDeployParams(deploy)) >>
       doInj(deploy, reducer, runtime.errorLog)(runtime.cost)
 
-  /**
-    * @note `replayEval` does not need to reset the evaluation store,
-    *       merely the replay store. Hence, `replayComputeState` uses
-    *       `withRuntimeLock` rather than `withResetRuntimeLock`.
-    */
   def replayComputeState(startHash: StateHash)(
       terms: Seq[InternalProcessedDeploy],
       blockTime: Long
