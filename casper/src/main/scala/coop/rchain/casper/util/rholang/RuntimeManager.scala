@@ -16,6 +16,7 @@ import coop.rchain.models.Expr.ExprInstance.GString
 import coop.rchain.models.Var.VarInstance.FreeVar
 import coop.rchain.models._
 import coop.rchain.models.rholang.implicits._
+import coop.rchain.rholang.interpreter.Runtime.RhoISpace
 import coop.rchain.rholang.interpreter.accounting._
 import coop.rchain.rholang.interpreter.errors.BugFoundError
 import coop.rchain.rholang.interpreter.storage.StoragePrinter
@@ -167,20 +168,24 @@ class RuntimeManagerImpl[F[_]: Concurrent] private[rholang] (
 
   def computeDeployPayment(start: StateHash)(user: ByteString, amount: Long): F[StateHash] =
     withResetRuntimeLock(start)(
-      computeDeployPayment(_)(user, amount).map(_.root.toByteString)
+      runtime =>
+        computeDeployPayment(runtime, runtime.reducer, runtime.space)(user, amount)
+          .map(_.root.toByteString)
     )
 
   private def computeDeployPayment(
-      runtime: Runtime[F]
+      runtime: Runtime[F],
+      reducer: ChargingReducer[F],
+      space: RhoISpace[F]
   )(user: ByteString, amount: Long): F[Checkpoint] =
     for {
-      _ <- computeEffect(runtime, runtime.reducer)(
+      _ <- computeEffect(runtime, reducer)(
             ConstructDeploy.sourceDeployNow(deployPaymentSource(amount)).withDeployer(user)
           ).ensure(BugFoundError("Deploy payment failed unexpectedly"))(_.errors.isEmpty)
-      consumeResult <- getResult(runtime)()
+      consumeResult <- getResult(runtime, space)()
       result <- consumeResult match {
                  case Seq(RhoType.Tuple2(RhoType.Boolean(true), Par.defaultInstance)) =>
-                   runtime.space.createCheckpoint()
+                   space.createCheckpoint()
                  case Seq(RhoType.Tuple2(RhoType.Boolean(false), RhoType.String(error))) =>
                    BugFoundError(s"Deploy payment failed unexpectedly: $error")
                      .raiseError[F, Checkpoint]
@@ -231,16 +236,16 @@ class RuntimeManagerImpl[F[_]: Concurrent] private[rholang] (
   )(channel: Par): F[Seq[Par]] =
     runtime.space.getData(channel).map(_.flatMap(_.a.pars))
 
-  private def getResult(
-      runtime: Runtime[F]
-  )(name: String = "__SCALA__"): F[Seq[Par]] = {
+  private def getResult(runtime: Runtime[F], space: RhoISpace[F])(
+      name: String = "__SCALA__"
+  ): F[Seq[Par]] = {
 
     val channel                 = Par().withExprs(Seq(Expr(GString(name))))
     val pattern                 = BindPattern(Seq(EVar(FreeVar(0))), freeCount = 1)
     val cont                    = TaggedContinuation().withParBody(ParWithRandom(Par()))
     implicit val cost: _cost[F] = runtime.cost
 
-    runtime.space.consume(Seq(channel), Seq(pattern), cont, persist = false)(matchListPar).map {
+    space.consume(Seq(channel), Seq(pattern), cont, persist = false)(matchListPar).map {
       case Some((_, dataList)) => dataList.flatMap(_.value.pars)
       case None                => Seq.empty[Par]
     }
