@@ -333,7 +333,7 @@ class Node:
             '--amount={}'.format(bond_amount),
             '--private-key={}'.format(private_key),
             '--public-key={}'.format(public_key),
-            '--sig-algorithm=ed25519',
+            '--sig-algorithm=secp256k1',
         )
 
     def cat_forward_file(self, public_key: str) -> str:
