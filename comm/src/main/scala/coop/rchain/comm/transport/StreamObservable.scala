@@ -1,17 +1,20 @@
 package coop.rchain.comm.transport
 
+import java.nio.file._
+
+import scala.concurrent.duration._
+
+import cats.implicits._
+
 import PacketOps._
-import coop.rchain.comm._
-import cats._, cats.data._, cats.implicits._
-import coop.rchain.shared.Log
+import coop.rchain.catscontrib.Catscontrib._
 import coop.rchain.comm.PeerNode
+import coop.rchain.shared.Log
+
 import monix.eval.Task
 import monix.execution.{Cancelable, Scheduler}
 import monix.reactive.Observable
 import monix.reactive.observers.Subscriber
-import java.nio.file._
-import scala.concurrent.duration._
-import coop.rchain.catscontrib.Catscontrib._
 
 final case class StreamToPeers(peers: Seq[PeerNode], path: Path, sender: PeerNode)
 
@@ -35,7 +38,10 @@ class StreamObservable(bufferSize: Int, folder: Path)(implicit log: Log[Task], s
       Task.delay(subject.pushNext(StreamToPeers(peers, file, blob.sender)))
 
     def propose(file: Path, retryCount: Int): Task[Unit] =
-      push(file) >>= (_.fold(Task.unit, retry(file, retryCount)))
+      push(file) >>= (_.fold(
+        log.debug(s"Enqueued for streaming packet $file"),
+        retry(file, retryCount)
+      ))
 
     def retry(file: Path, retryCount: Int): Task[Unit] =
       Task
