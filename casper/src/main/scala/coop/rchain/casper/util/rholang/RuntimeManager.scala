@@ -173,22 +173,27 @@ class RuntimeManagerImpl[F[_]: Concurrent] private[rholang] (
   private def computeDeployPayment(
       runtime: Runtime[F]
   )(user: ByteString, amount: Long): F[Checkpoint] =
-    computeEffect(runtime, runtime.reducer)(
-      ConstructDeploy.sourceDeployNow(deployPaymentSource(amount)).withDeployer(user)
-    ).ensure(BugFoundError("Deploy payment failed unexpectedly"))(_.errors.isEmpty) >>
-      getResult(runtime)() >>= {
-      case Seq(RhoType.Tuple2(RhoType.Boolean(true), Par.defaultInstance)) =>
-        runtime.space.createCheckpoint()
-      case Seq(RhoType.Tuple2(RhoType.Boolean(false), RhoType.String(error))) =>
-        BugFoundError(s"Deploy payment failed unexpectedly: $error").raiseError[F, Checkpoint]
-      case Seq() =>
-        BugFoundError("Expected response message was not received").raiseError[F, Checkpoint]
-      case other =>
-        val contentAsStr = other.map(RholangPrinter().buildString(_)).mkString(",")
-        BugFoundError(
-          s"Deploy payment returned unexpected result: [$contentAsStr ]"
-        ).raiseError[F, Checkpoint]
-    }
+    for {
+      _ <- computeEffect(runtime, runtime.reducer)(
+            ConstructDeploy.sourceDeployNow(deployPaymentSource(amount)).withDeployer(user)
+          ).ensure(BugFoundError("Deploy payment failed unexpectedly"))(_.errors.isEmpty)
+      consumeResult <- getResult(runtime)()
+      result <- consumeResult match {
+                 case Seq(RhoType.Tuple2(RhoType.Boolean(true), Par.defaultInstance)) =>
+                   runtime.space.createCheckpoint()
+                 case Seq(RhoType.Tuple2(RhoType.Boolean(false), RhoType.String(error))) =>
+                   BugFoundError(s"Deploy payment failed unexpectedly: $error")
+                     .raiseError[F, Checkpoint]
+                 case Seq() =>
+                   BugFoundError("Expected response message was not received")
+                     .raiseError[F, Checkpoint]
+                 case other =>
+                   val contentAsStr = other.map(RholangPrinter().buildString(_)).mkString(",")
+                   BugFoundError(
+                     s"Deploy payment returned unexpected result: [$contentAsStr ]"
+                   ).raiseError[F, Checkpoint]
+               }
+    } yield result
 
   private def deployPaymentSource(amount: Long, name: String = "__SCALA__"): String =
     s"""
