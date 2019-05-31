@@ -293,6 +293,22 @@ object HistoryInstances {
 
   }
 
+  final case class MergingHistory[F[_]: Sync](
+      root: Blake2b256Hash,
+      historyStore: HistoryStore[F]
+  ) extends History[F] {
+    override def process(actions: List[HistoryAction]): F[History[F]] = ???
+
+    override def find(key: KeyPath): F[(TriePointer, Vector[Trie])] = ???
+
+    override def close(): F[Unit] = historyStore.close()
+
+    override def reset(root: Blake2b256Hash): History[F] = this.copy(root = root)
+  }
+
   def noMerging[F[_]: Sync](root: Blake2b256Hash, historyStore: HistoryStore[F]): History[F] =
     new SimplisticHistory[F](root, historyStore)
+
+  def merging[F[_]: Sync](root: Blake2b256Hash, historyStore: HistoryStore[F]): History[F] =
+    new MergingHistory[F](root, historyStore)
 }
