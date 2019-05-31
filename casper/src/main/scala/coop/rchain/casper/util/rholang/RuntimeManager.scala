@@ -48,7 +48,8 @@ trait RuntimeManager[F[_]] {
   def replayComputeState(startHash: StateHash)(
       terms: Seq[InternalProcessedDeploy],
       blockData: BlockData,
-      invalidBlocks: Map[BlockHash, Validator]
+      invalidBlocks: Map[BlockHash, Validator],
+      isGenesis: Boolean
   ): F[Either[(Option[DeployData], Failed), StateHash]]
   def computeState(hash: StateHash)(
       terms: Seq[DeployData],
@@ -109,7 +110,8 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics] private[rholang] (
   def replayComputeState(startHash: StateHash)(
       terms: Seq[InternalProcessedDeploy],
       blockData: BlockData,
-      invalidBlocks: Map[BlockHash, Validator] = Map.empty[BlockHash, Validator]
+      invalidBlocks: Map[BlockHash, Validator] = Map.empty[BlockHash, Validator],
+      isGenesis: Boolean //FIXME have a better way of knowing this. Pass the replayDeploy function maybe?
   ): F[Either[ReplayFailure, StateHash]] =
     withRuntimeLock { runtime =>
       for {
@@ -450,9 +452,10 @@ object RuntimeManager {
       override def replayComputeState(hash: StateHash)(
           terms: Seq[InternalProcessedDeploy],
           blockData: BlockData,
-          invalidBlocks: Map[BlockHash, Validator]
+          invalidBlocks: Map[BlockHash, Validator],
+          isGenesis: Boolean
       ): T[F, Either[ReplayFailure, StateHash]] =
-        runtimeManager.replayComputeState(hash)(terms, blockData, invalidBlocks).liftM[T]
+        runtimeManager.replayComputeState(hash)(terms, blockData, invalidBlocks, isGenesis).liftM[T]
 
       override def computeState(hash: StateHash)(
           terms: Seq[DeployData],

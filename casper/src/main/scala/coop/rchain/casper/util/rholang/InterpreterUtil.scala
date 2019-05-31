@@ -62,7 +62,8 @@ object InterpreterUtil {
                  internalDeploys,
                  possiblePreStateHash,
                  BlockData(timestamp, blockNumber),
-                 invalidBlocks
+                 invalidBlocks,
+                 isGenesis = b.header.get.parentsHashList.isEmpty
                )
     } yield result
   }
@@ -74,7 +75,8 @@ object InterpreterUtil {
       internalDeploys: Seq[InternalProcessedDeploy],
       possiblePreStateHash: Either[Throwable, StateHash],
       blockData: BlockData,
-      invalidBlocks: Map[BlockHash, Validator]
+      invalidBlocks: Map[BlockHash, Validator],
+      isGenesis: Boolean
   ): F[Either[BlockException, Option[StateHash]]] =
     possiblePreStateHash match {
       case Left(ex) =>
@@ -88,7 +90,8 @@ object InterpreterUtil {
             internalDeploys,
             possiblePreStateHash,
             blockData,
-            invalidBlocks
+            invalidBlocks,
+            isGenesis
           )
         } else {
           Log[F].warn(
@@ -106,10 +109,11 @@ object InterpreterUtil {
       internalDeploys: Seq[InternalProcessedDeploy],
       possiblePreStateHash: Either[Throwable, StateHash],
       blockData: BlockData,
-      invalidBlocks: Map[BlockHash, Validator]
+      invalidBlocks: Map[BlockHash, Validator],
+      isGenesis: Boolean
   ): F[Either[BlockException, Option[StateHash]]] =
     runtimeManager
-      .replayComputeState(preStateHash)(internalDeploys, blockData, invalidBlocks)
+      .replayComputeState(preStateHash)(internalDeploys, blockData, invalidBlocks, isGenesis)
       .flatMap {
         case Left((Some(deploy), status)) =>
           status match {
@@ -236,7 +240,8 @@ object InterpreterUtil {
                                replayResult <- runtimeManager.replayComputeState(stateHash)(
                                                 deploys,
                                                 BlockData(timestamp, blockNumber),
-                                                invalidBlocks
+                                                invalidBlocks,
+                                                isGenesis = parents.isEmpty //should always be false
                                               )
                              } yield replayResult match {
                                case result @ Right(_) => result.leftCast[Throwable]
