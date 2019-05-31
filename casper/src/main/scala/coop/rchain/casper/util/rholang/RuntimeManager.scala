@@ -11,7 +11,6 @@ import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
 import coop.rchain.casper.util.{ConstructDeploy, ProtoUtil}
 import coop.rchain.catscontrib.Catscontrib.ToMonadOps
 import coop.rchain.catscontrib.MonadTrans
-import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.models.Expr.ExprInstance.GString
 import coop.rchain.models.Var.VarInstance.FreeVar
@@ -36,9 +35,12 @@ trait RuntimeManager[F[_]] {
 
   type ReplayFailure = (Option[DeployData], Failed)
 
-  def captureResults(start: StateHash, deploy: DeployData, name: String = "__SCALA__"): F[Seq[Par]]
-  def captureResults(start: StateHash, deploy: DeployData, name: Par): F[Seq[Par]]
-  def replayComputeState(hash: StateHash)(
+  def captureResults(
+      start: StateHash,
+      deploy: DeployData,
+      name: String = "__SCALA__"
+  ): F[Seq[Par]]
+  def replayComputeState(startHash: StateHash)(
       terms: Seq[InternalProcessedDeploy],
       blockTime: Long
   ): F[Either[ReplayFailure, StateHash]]
@@ -394,12 +396,6 @@ object RuntimeManager {
           start: StateHash,
           deploy: DeployData,
           name: String
-      ): T[F, Seq[Par]] = runtimeManager.captureResults(start, deploy, name).liftM[T]
-
-      override def captureResults(
-          start: StateHash,
-          deploy: DeployData,
-          name: Par
       ): T[F, Seq[Par]] = runtimeManager.captureResults(start, deploy, name).liftM[T]
 
       override def replayComputeState(hash: StateHash)(
