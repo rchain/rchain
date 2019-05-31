@@ -97,11 +97,11 @@ class HistoryGenerativeSpec
     (insertResult, allUniqueData.toList)
   }
 
-  def fetchData(h: History[Task], data: Data): (Trie, TriePath) =
+  def fetchData(h: History[Task], data: Data): (Trie, Vector[Trie]) =
     fetchData(h, data._1)
 
-  def fetchData(h: History[Task], k: Key): (Trie, TriePath) =
-    h.findPath(k).runSyncUnsafe(20.seconds)
+  def fetchData(h: History[Task], k: Key): (Trie, Vector[Trie]) =
+    h.find(k).runSyncUnsafe(20.seconds)
 }
 
 trait InMemoryHistoryTestBase {

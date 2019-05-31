@@ -12,5 +12,5 @@ object HistoryInstances {
       historyStore: HistoryStore[F],
       pointerBlockStore: PointerBlockStore[F]
   ): History[F] =
-    new History[F](root, historyStore, pointerBlockStore)
+    new SimplisticHistory[F](root, historyStore, pointerBlockStore)
 }

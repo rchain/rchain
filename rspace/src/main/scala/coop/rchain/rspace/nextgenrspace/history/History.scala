@@ -3,7 +3,7 @@ package coop.rchain.rspace.nextgenrspace.history
 import coop.rchain.rspace.Blake2b256Hash
 import scodec.Codec
 import scodec.bits.{BitVector, ByteVector}
-import scodec.codecs.{discriminated, provide, uint2}
+import scodec.codecs.{discriminated, provide, uint2, vectorOfN}
 import coop.rchain.rspace.internal.codecByteVector
 import coop.rchain.shared.AttemptOps._
 import History._
@@ -97,11 +97,19 @@ object TriePath {
   def empty: TriePath = TriePath(Vector(), None, Nil)
 }
 
-final case class History[F[_]: Sync](
+trait History[F[_]] {
+  def process(actions: List[HistoryAction]): F[History[F]]
+  def root: Blake2b256Hash
+  def find(key: KeyPath): F[(Trie, Vector[Trie])]
+  def close(): F[Unit]
+  def reset(root: Blake2b256Hash): History[F]
+}
+
+final case class SimplisticHistory[F[_]: Sync](
     root: Blake2b256Hash,
     historyStore: HistoryStore[F],
     pointerBlockStore: PointerBlockStore[F]
-) {
+) extends History[F] {
 
   private def storePointerBlock(pb: PointerBlock): F[Node] = {
     val hash = PointerBlock.hash(pb)
@@ -349,6 +357,12 @@ final case class History[F[_]: Sync](
 
   private[history] def findPath(key: KeyPath): F[(Trie, TriePath)] =
     findPath(key, root)
+
+  def find(key: KeyPath): F[(Trie, Vector[Trie])] = findPath(key).map {
+    case (trie, path) => (trie, path.nodes)
+  }
+
+  def reset(root: Blake2b256Hash): History[F] = this.copy(root = root)
 
   def close(): F[Unit] =
     for {

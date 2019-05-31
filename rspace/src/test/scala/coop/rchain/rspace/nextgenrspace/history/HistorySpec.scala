@@ -18,9 +18,9 @@ class HistorySpec extends FlatSpec with Matchers with OptionValues with InMemory
     val data = insert(_zeros) :: Nil
     for {
       newHistory <- emptyHistory.process(data)
-      result     <- newHistory.findPath(_zeros)
+      result     <- newHistory.find(_zeros)
       (_, path)  = result
-      _ = path.nodes match {
+      _ = path match {
         case skip +: leaf =>
           leaf shouldBe Vector(Leaf(data.head.hash))
           skip shouldBe Skip(_zeros, Trie.hash(leaf.head))
@@ -32,12 +32,12 @@ class HistorySpec extends FlatSpec with Matchers with OptionValues with InMemory
     val data = List.range(0, 10).map(zerosAnd).map(k => InsertAction(k, randomBlake))
     for {
       newHistory          <- emptyHistory.process(data)
-      results             <- data.traverse(action => newHistory.findPath(action.key))
+      results             <- data.traverse(action => newHistory.find(action.key))
       _                   = results should have size 10
       (_, headPath)       = results.head
-      secondTrieOnPath    = headPath.nodes.tail.head
+      secondTrieOnPath    = headPath.tail.head
       _                   = secondTrieOnPath shouldBe a[Node]
-      allFirstTriesOnPath = results.map(_._2.nodes.head).toSet
+      allFirstTriesOnPath = results.map(_._2.head).toSet
       _                   = allFirstTriesOnPath should have size 1
       firstSkip           = allFirstTriesOnPath.head
       _                   = skipShouldHaveAffix(firstSkip, _31zeros)
@@ -50,12 +50,12 @@ class HistorySpec extends FlatSpec with Matchers with OptionValues with InMemory
     for {
       historyOne <- emptyHistory.process(inserts)
       historyTwo <- historyOne.process(deletions)
-      result     <- historyTwo.findPath(_zerosOnes)
+      result     <- historyTwo.find(_zerosOnes)
       (_, path)  = result
-      _          = path.nodes should have size 2
-      _          = path.nodes.head shouldBe a[Skip]
-      _          = path.nodes.last shouldBe a[Leaf]
-      _          = skipShouldHaveAffix(path.nodes.head, _zerosOnes)
+      _          = path should have size 2
+      _          = path.head shouldBe a[Skip]
+      _          = path.last shouldBe a[Leaf]
+      _          = skipShouldHaveAffix(path.head, _zerosOnes)
     } yield ()
   }
 
@@ -64,10 +64,10 @@ class HistorySpec extends FlatSpec with Matchers with OptionValues with InMemory
     val insertTwo = insert(_zeros) :: Nil
     for {
       historyOne       <- emptyHistory.process(insertOne)
-      resultOnePre     <- historyOne.findPath(_zeros)
+      resultOnePre     <- historyOne.find(_zeros)
       historyTwo       <- historyOne.process(insertTwo)
-      resultOnePost    <- historyOne.findPath(_zeros)
-      resultTwo        <- historyTwo.findPath(_zeros)
+      resultOnePost    <- historyOne.find(_zeros)
+      resultTwo        <- historyTwo.find(_zeros)
       (leafOnePre, _)  = resultOnePre
       (leafOnePost, _) = resultOnePost
       (leafTwo, _)     = resultTwo
