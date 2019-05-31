@@ -505,16 +505,13 @@ object BlockAPI {
       bondsValidatorList: Seq[Bond],
       processedDeploys: Seq[ProcessedDeploy]
   ): F[BlockInfo] =
-    for {
-      tsDesc <- MultiParentCasper[F].storageContents(tsHash)
-    } yield BlockInfo(
+    BlockInfo(
       blockHash = PrettyPrinter.buildStringNoLimit(block.blockHash),
       blockSize = block.serializedSize.toString,
       blockNumber = ProtoUtil.blockNumber(block),
       version = version,
       deployCount = deployCount,
       tupleSpaceHash = PrettyPrinter.buildStringNoLimit(tsHash),
-      tupleSpaceDump = tsDesc,
       timestamp = timestamp,
       faultTolerance = normalizedFaultTolerance - initialFault, // TODO: Fix
       mainParentHash = PrettyPrinter.buildStringNoLimit(mainParent),
@@ -523,7 +520,7 @@ object BlockAPI {
       shardId = block.shardId,
       bondsValidatorList = bondsValidatorList.map(PrettyPrinter.buildString),
       deployCost = processedDeploys.map(PrettyPrinter.buildString)
-    )
+    ).pure[F]
 
   private def constructBlockInfoWithoutTuplespace[F[_]: Monad: MultiParentCasper: SafetyOracle: BlockStore](
       block: BlockMessage,
