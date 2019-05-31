@@ -204,10 +204,12 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics] private[rholang] (
       runtime: Runtime[F],
       reducer: ChargingReducer[F],
       space: RhoISpace[F]
-  )(user: ByteString, amount: Long): F[Either[String, Checkpoint]] =
+  )(user: ByteString, time: Long, amount: Long): F[Either[String, Checkpoint]] =
     for {
       _ <- computeEffect(runtime, reducer)(
-            ConstructDeploy.sourceDeployNow(deployPaymentSource(amount)).withDeployer(user)
+            ConstructDeploy
+              .sourceDeploy(deployPaymentSource(amount), time, Int.MaxValue)
+              .withDeployer(user)
           ).ensure(BugFoundError("Deploy payment failed unexpectedly"))(_.errors.isEmpty)
       consumeResult <- getResult(runtime, space)()
       result <- consumeResult match {
@@ -348,7 +350,7 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics] private[rholang] (
   }
 
   private def replayDeploy(runtime: Runtime[F], span: Span[F])(
-      hash: Blake2b256Hash,
+      startHash: Blake2b256Hash,
       processedDeploy: InternalProcessedDeploy
   ): F[Either[ReplayFailure, Blake2b256Hash]] = {
     import processedDeploy._
