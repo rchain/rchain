@@ -72,7 +72,19 @@ object MultiParentCasperTestUtil {
         validators = bonds.map(Validator.tupled).toSeq
       ),
       genesisPk = Secp256k1.newKeyPair._2,
-      vaults = bonds.toList.map {
+      vaults = Vault(
+        RevAddress
+          .fromPublicKey(
+            PublicKey(
+              Base16
+                .unsafeDecode(
+                  "04f700a417754b775d95421973bdbdadb2d23c8a5af46f1829b1431f5c136e549e8a0d61aa0c793f1a614f8e437711c7758473c6ceb0859ac7e9e07911ca66b5c4"
+                )
+            )
+          )
+          .get,
+        900000
+      ) :: bonds.toList.map {
         case (pk, stake) =>
           RevAddress.fromPublicKey(pk).map(Vault(_, stake))
       }.flattenOption,

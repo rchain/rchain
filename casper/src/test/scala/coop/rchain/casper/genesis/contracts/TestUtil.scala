@@ -8,19 +8,15 @@ import coop.rchain.casper.genesis.Genesis
 import coop.rchain.casper.protocol.{BlockMessage, DeployData}
 import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.casper.util.rholang.RuntimeManager
+import coop.rchain.crypto.PublicKey
+import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.crypto.signatures.Secp256k1
-import coop.rchain.metrics
-import coop.rchain.metrics.Metrics
 import coop.rchain.models.Par
 import coop.rchain.rholang.build.CompiledRholangSource
-import coop.rchain.rholang.interpreter.Runtime.SystemProcess
 import coop.rchain.rholang.interpreter.accounting.Cost
 import coop.rchain.rholang.interpreter.util.RevAddress
 import coop.rchain.rholang.interpreter.{accounting, ParBuilder, ParBuilderUtil, Runtime}
-import coop.rchain.shared.Log
-
-import scala.concurrent.ExecutionContext
 
 object TestUtil {
 
@@ -66,7 +62,19 @@ object TestUtil {
           validators = bonds.map(Validator.tupled).toSeq
         ),
         genesisPk = Secp256k1.newKeyPair._2,
-        vaults = bonds.toList.map {
+        vaults = Vault(
+          RevAddress
+            .fromPublicKey(
+              PublicKey(
+                Base16
+                  .unsafeDecode(
+                    "04f700a417754b775d95421973bdbdadb2d23c8a5af46f1829b1431f5c136e549e8a0d61aa0c793f1a614f8e437711c7758473c6ceb0859ac7e9e07911ca66b5c4"
+                  )
+              )
+            )
+            .get,
+          900000
+        ) :: bonds.toList.map {
           case (pk, stake) =>
             RevAddress.fromPublicKey(pk).map(Vault(_, stake))
         }.flattenOption,
