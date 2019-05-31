@@ -208,6 +208,7 @@ object Configuration {
       case Some(options.machineVerifiableDag) => MachineVerifiableDag
       case Some(options.run)                  => Run
       case Some(options.keygen)               => Keygen(options.keygen.algorithm())
+      case Some(options.lastFinalizedBlock)   => LastFinalizedBlock
       case Some(options.dataAtName)           => DataAtName(options.dataAtName.name())
       case Some(options.contAtName)           => ContAtName(options.contAtName.name())
       case Some(options.bondingDeployGen) =>

@@ -24,6 +24,7 @@ trait DeployService[F[_]] {
   def listenForContinuationAtName(
       request: ContinuationAtNameQuery
   ): F[Either[Seq[String], Seq[ContinuationsWithBlockInfo]]]
+  def lastFinalizedBlock: F[Either[Seq[String], String]]
 }
 
 object DeployService {
@@ -106,6 +107,10 @@ class GrpcDeployService(host: String, port: Int, maxMessageSize: Int)
       .listenForContinuationAtName(request)
       .map(_.toEither[ListeningNameContinuationResponse].map(_.blockResults))
 
+  def lastFinalizedBlock: Task[Either[Seq[String], String]] =
+    stub
+      .lastFinalizedBlock(LastFinalizedBlockQuery())
+      .map(_.toEither[LastFinalizedBlockResponse].map(_.toProtoString))
   @SuppressWarnings(Array("org.wartremover.warts.NonUnitStatements"))
   override def close(): Unit = {
     val terminated = channel.shutdown().awaitTermination(10, TimeUnit.SECONDS)

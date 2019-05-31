@@ -87,6 +87,7 @@ object Main {
       case DataAtName(name)     => DeployRuntime.listenForDataAtName[Task](name)
       case ContAtName(names)    => DeployRuntime.listenForContinuationAtName[Task](names)
       case Keygen(algorithm)    => generateKey(conf, algorithm)
+      case LastFinalizedBlock   => DeployRuntime.lastFinalizedBlock[Task]
       case Run                  => nodeProgram(conf)
       case BondingDeployGen(bondKey, ethAddress, amount, secKey, pubKey) =>
         implicit val noopMetrics: Metrics[Task] = new metrics.Metrics.MetricsNOP[Task]

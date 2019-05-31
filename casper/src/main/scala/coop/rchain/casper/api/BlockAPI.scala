@@ -590,4 +590,17 @@ object BlockAPI {
     val ids     = (0 until safeQty).map(_ => ByteString.copyFrom(rand.next()))
     PrivateNamePreviewResponse(ids).asRight[String].pure[F]
   }
+
+  def lastFinalizedBlock[F[_]: Monad: MultiParentCasperRef: SafetyOracle: BlockStore: Log]
+      : Effect[F, LastFinalizedBlockResponse] = {
+    val errorMessage = "Could not get last finalized block, casper instance was not available yet."
+    MultiParentCasperRef.withCasper[F, ApiErr[LastFinalizedBlockResponse]](
+      implicit casper =>
+        for {
+          lastFinalizedBlock <- casper.lastFinalizedBlock
+          blockInfo          <- getFullBlockInfo[F](lastFinalizedBlock)
+        } yield LastFinalizedBlockResponse(blockInfo = Some(blockInfo)).asRight,
+      Log[F].warn(errorMessage).as(s"Error: $errorMessage".asLeft)
+    )
+  }
 }
