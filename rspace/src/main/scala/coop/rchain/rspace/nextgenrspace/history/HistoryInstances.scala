@@ -13,8 +13,7 @@ object HistoryInstances {
 
   final case class SimplisticHistory[F[_]: Sync](
       root: Blake2b256Hash,
-      historyStore: HistoryStore[F],
-      pointerBlockStore: PointerBlockStore[F]
+      historyStore: HistoryStore[F]
   ) extends History[F] {
 
     def skip(path: History.KeyPath, ptr: ValuePointer): (TriePointer, Option[Trie]) =
@@ -313,10 +312,6 @@ object HistoryInstances {
 
   }
 
-  def noMerging[F[_]: Sync](
-      root: Blake2b256Hash,
-      historyStore: HistoryStore[F],
-      pointerBlockStore: PointerBlockStore[F]
-  ): History[F] =
-    new SimplisticHistory[F](root, historyStore, pointerBlockStore)
+  def noMerging[F[_]: Sync](root: Blake2b256Hash, historyStore: HistoryStore[F]): History[F] =
+    new SimplisticHistory[F](root, historyStore)
 }

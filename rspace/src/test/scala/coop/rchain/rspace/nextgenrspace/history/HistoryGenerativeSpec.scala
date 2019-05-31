@@ -32,8 +32,7 @@ class HistoryGenerativeSpec
   "history" should "accept new leafs (insert, update, delete)" in forAll(
     distinctListOf(arbitraryInsertAction)
   ) { actions: List[Data] =>
-    val emptyHistory =
-      HistoryInstances.noMerging[Task](emptyRootHash, inMemHistoryStore, inMemPointerBlockStore)
+    val emptyHistory = HistoryInstances.noMerging[Task](emptyRootHash, inMemHistoryStore)
 
     val emptyState = Map.empty[Key, (Data, History[Task])] // accumulate actions performed on the trie
 
@@ -105,17 +104,6 @@ class HistoryGenerativeSpec
 }
 
 trait InMemoryHistoryTestBase {
-  def inMemPointerBlockStore: PointerBlockStore[Task] = new PointerBlockStore[Task] {
-    val data: TrieMap[Blake2b256Hash, PointerBlock] = TrieMap.empty
-
-    override def put(key: Blake2b256Hash, pb: PointerBlock): Task[Unit] =
-      Task.delay { data.put(key, pb) }
-
-    override def get(key: Blake2b256Hash): Task[Option[PointerBlock]] =
-      Task.delay { data.get(key) }
-
-    override def close(): Task[Unit] = Task.now(())
-  }
 
   def inMemHistoryStore: HistoryStore[Task] = new HistoryStore[Task] {
     val data: TrieMap[Blake2b256Hash, Trie] = TrieMap.empty
