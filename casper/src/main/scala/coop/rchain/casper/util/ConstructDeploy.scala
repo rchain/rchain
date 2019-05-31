@@ -14,7 +14,7 @@ import coop.rchain.shared.Time
 object ConstructDeploy {
 
   private val defaultSec = PrivateKey(
-    Base16.unsafeDecode("b18e1d0045995ec3d010c387ccfeb984d783af8fbb0f40fa7db126d889f6dadd")
+    Base16.unsafeDecode("a68a6e6cca30f81bd24a719f3145d20e8424bd7b396309b0708a16c7d8000b76")
   )
 
   def sign(deploy: DeployData, sec: PrivateKey = defaultSec): DeployData =
@@ -50,7 +50,7 @@ object ConstructDeploy {
   def basicDeployData[F[_]: Monad: Time](
       id: Int,
       sec: PrivateKey = defaultSec,
-      phlos: Long = accounting.MAX_VALUE
+      phlos: Long = 100
   ): F[DeployData] =
     Time[F].currentMillis.map { now =>
       val data = DeployData()
@@ -58,6 +58,7 @@ object ConstructDeploy {
         .withTimestamp(now)
         .withTerm(s"@${id}!($id)")
         .withPhloLimit(phlos)
+        .withPhloPrice(1)
       sign(data, sec)
     }
 

@@ -4,6 +4,7 @@ import cats.effect.Sync
 import cats.implicits._
 import coop.rchain.rspace.trace._
 import coop.rchain.rspace.internal._
+import coop.rchain.shared.Debug
 
 trait IReplaySpace[F[_], C, P, A, R, K] extends ISpace[F, C, P, A, R, K] {
 
@@ -18,6 +19,7 @@ trait IReplaySpace[F[_], C, P, A, R, K] extends ISpace[F, C, P, A, R, K] {
     *  @param log A [Log] with permitted operations
     */
   def resetAndRig(startRoot: Blake2b256Hash, log: trace.Log)(implicit syncF: Sync[F]): F[Unit] =
+    Debug.print(startRoot, log.size) >>
     syncF
       .delay {
         val (ioEvents, commEvents) = log.partition {
