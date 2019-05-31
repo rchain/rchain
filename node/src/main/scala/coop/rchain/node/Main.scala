@@ -140,7 +140,7 @@ object Main {
     conf.server.host.fold(Task.unit) { h =>
       Task
         .now(conf.server.allowPrivateAddresses)
-        .ifM(Task.delay(isValidInetAddress(h)), Task.delay(isValidPublicInetAddress(h)))
+        .ifM(isValidInetAddress[Task](h), isValidPublicInetAddress[Task](h))
         .ifM(
           Task.unit,
           log.error(s"Host network address $h is not valid") >> Task.delay(System.exit(1))

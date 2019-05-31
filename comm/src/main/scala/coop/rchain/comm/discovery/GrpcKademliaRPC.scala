@@ -50,16 +50,16 @@ class GrpcKademliaRPC(networkId: String, timeout: FiniteDuration, allowPrivateAd
                       _.sendLookup(lookup)
                         .timer("lookup-time")
                     ).attempt
-    } yield responseErr.fold(
-      kp(Seq.empty[PeerNode]),
-      r =>
-        if (r.networkId == networkId) r.nodes.map(toPeerNode).filter(isValidPeer)
-        else Seq.empty[PeerNode]
-    )
+      peers <- responseErr match {
+                case Right(r) if r.networkId == networkId =>
+                  r.nodes.map(toPeerNode).toList.filterA(isValidPeer)
+                case _ => Seq.empty[PeerNode].pure[Task]
+              }
+    } yield peers
 
-  private def isValidPeer(peer: PeerNode): Boolean =
-    if (allowPrivateAddresses) isValidInetAddress(peer.endpoint.host)
-    else isValidPublicInetAddress(peer.endpoint.host)
+  private def isValidPeer(peer: PeerNode): Task[Boolean] =
+    if (allowPrivateAddresses) isValidInetAddress[Task](peer.endpoint.host)
+    else isValidPublicInetAddress[Task](peer.endpoint.host)
 
   private def withClient[A](peer: PeerNode, timeout: FiniteDuration, enforce: Boolean = false)(
       f: KademliaRPCServiceStub => Task[A]
