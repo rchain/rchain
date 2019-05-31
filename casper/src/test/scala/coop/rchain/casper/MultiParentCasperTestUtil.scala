@@ -58,8 +58,7 @@ object MultiParentCasperTestUtil {
   def createGenesis(bonds: Map[PublicKey, Long]): BlockMessage =
     buildGenesis(
       buildGenesisParameters(users = 0, bonds).copy(
-        shardId = "HashSetCasperTest",
-        faucet = false
+        shardId = "HashSetCasperTest"
       )
     )
 
@@ -76,7 +75,6 @@ object MultiParentCasperTestUtil {
         maximumBond = Long.MaxValue,
         validators = bonds.map(Validator.tupled).toSeq
       ),
-      faucet = true,
       genesisPk = Secp256k1.newKeyPair._2,
       vaults = bonds.toList.map {
         case (pk, stake) =>

@@ -61,7 +61,6 @@ class RevIssuanceTest extends FlatSpec with Matchers {
           0L,
           ProofOfStake(1L, Long.MaxValue, posValidators),
           wallet :: Nil,
-          Faucet.noopFaucet,
           genesisPk,
           vaults,
           Long.MaxValue

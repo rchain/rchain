@@ -114,7 +114,6 @@ object BlockApproverProtocolTest {
             maximumBond = Long.MaxValue,
             validators = bonds.map(Validator.tupled).toSeq
           ),
-          faucet = false,
           genesisPk = Secp256k1.newKeyPair._2,
           vaults = bonds.toList.map {
             case (pk, stake) =>

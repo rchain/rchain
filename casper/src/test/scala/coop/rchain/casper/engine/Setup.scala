@@ -68,7 +68,6 @@ object Setup {
             maximumBond = Long.MaxValue,
             validators = bonds.map(Validator.tupled).toSeq
           ),
-          faucet = false,
           genesisPk = genesisPk,
           vaults = bonds.toList.map {
             case (pk, stake) =>
