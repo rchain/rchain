@@ -210,7 +210,9 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics] private[rholang] (
             ConstructDeploy
               .sourceDeploy(deployPaymentSource(amount), time, Int.MaxValue)
               .withDeployer(user)
-          ).ensure(BugFoundError("Deploy payment failed unexpectedly"))(_.errors.isEmpty)
+          ).ensureOr(r => BugFoundError("Deploy payment failed unexpectedly" + r.errors))(
+            _.errors.isEmpty
+          )
       consumeResult <- getResult(runtime, space)()
       result <- consumeResult match {
                  case Seq(RhoType.Tuple2(RhoType.Boolean(true), Par.defaultInstance)) =>
