@@ -75,7 +75,7 @@ class RuntimeManagerImpl[F[_]: Concurrent] private[rholang] (
     captureResults(start, deploy, Par().withExprs(Seq(Expr(GString(name)))))
 
   def captureResults(start: StateHash, deploy: DeployData, name: Par): F[Seq[Par]] =
-    withResetRuntime(start) { runtime =>
+    withResetRuntimeLock(start) { runtime =>
       computeEffect(runtime, runtime.reducer)(deploy)
         .ensure(
           BugFoundError("Unexpected error while capturing results from rholang")
@@ -93,13 +93,13 @@ class RuntimeManagerImpl[F[_]: Concurrent] private[rholang] (
   /**
     * @note `replayEval` does not need to reset the evaluation store,
     *       merely the replay store. Hence, `replayComputeState` uses
-    *       `withRuntime` rather than `withResetRuntime`.
+    *       `withRuntimeLock` rather than `withResetRuntimeLock`.
     */
   def replayComputeState(startHash: StateHash)(
       terms: Seq[InternalProcessedDeploy],
       blockTime: Long
   ): F[Either[ReplayFailure, StateHash]] =
-    withRuntime { runtime =>
+    withRuntimeLock { runtime =>
       for {
         _      <- setBlockTime(blockTime, runtime)
         result <- replayDeploys(startHash, terms, replayDeploy(runtime))
@@ -110,7 +110,7 @@ class RuntimeManagerImpl[F[_]: Concurrent] private[rholang] (
       terms: Seq[DeployData],
       blockTime: Long
   ): F[(StateHash, Seq[InternalProcessedDeploy])] =
-    withResetRuntime(startHash) { runtime =>
+    withResetRuntimeLock(startHash) { runtime =>
       for {
         _      <- setBlockTime(blockTime, runtime)
         result <- processDeploys(startHash, terms, processDeploy(runtime))
@@ -122,7 +122,7 @@ class RuntimeManagerImpl[F[_]: Concurrent] private[rholang] (
       blockTime: Long
   ): F[(StateHash, StateHash, Seq[InternalProcessedDeploy])] = {
     val startHash = emptyStateHash
-    withResetRuntime(startHash) { runtime =>
+    withResetRuntimeLock(startHash) { runtime =>
       for {
         _          <- setBlockTime(blockTime, runtime)
         evalResult <- processDeploys(startHash, terms, processDeploy(runtime))
@@ -139,7 +139,7 @@ class RuntimeManagerImpl[F[_]: Concurrent] private[rholang] (
   }
 
   def storageRepr(hash: StateHash): F[Option[String]] =
-    withResetRuntime(hash)(runtime => StoragePrinter.prettyPrint(runtime.space)).attempt
+    withResetRuntimeLock(hash)(runtime => StoragePrinter.prettyPrint(runtime.space)).attempt
       .map {
         case Right(print) => Some(print)
         case Left(_)      => None
@@ -169,7 +169,7 @@ class RuntimeManagerImpl[F[_]: Concurrent] private[rholang] (
      """.stripMargin
 
   def computeDeployPayment(start: StateHash)(user: ByteString, amount: Long): F[StateHash] =
-    withResetRuntime(start)(
+    withResetRuntimeLock(start)(
       computeDeployPayment(_)(user, amount).map(_.root.toByteString)
     )
 
@@ -203,11 +203,11 @@ class RuntimeManagerImpl[F[_]: Concurrent] private[rholang] (
        | }
        """.stripMargin
 
-  private def withRuntime[A](f: Runtime[F] => F[A]): F[A] =
+  private def withRuntimeLock[A](f: Runtime[F] => F[A]): F[A] =
     Sync[F].bracket(runtimeContainer.take)(f)(runtimeContainer.put)
 
-  private def withResetRuntime[R](hash: StateHash)(block: Runtime[F] => F[R]): F[R] =
-    withRuntime(
+  private def withResetRuntimeLock[R](hash: StateHash)(block: Runtime[F] => F[R]): F[R] =
+    withRuntimeLock(
       runtime => runtime.space.reset(Blake2b256Hash.fromByteString(hash)) >> block(runtime)
     )
 
@@ -222,7 +222,7 @@ class RuntimeManagerImpl[F[_]: Concurrent] private[rholang] (
     }.toList
 
   def getData(hash: StateHash)(channel: Par): F[Seq[Par]] =
-    withResetRuntime(hash)(getData(_)(channel))
+    withResetRuntimeLock(hash)(getData(_)(channel))
 
   private def getData(
       runtime: Runtime[F]
@@ -247,7 +247,7 @@ class RuntimeManagerImpl[F[_]: Concurrent] private[rholang] (
   def getContinuation(
       hash: StateHash
   )(channels: Seq[Par]): F[Seq[(Seq[BindPattern], Par)]] =
-    withResetRuntime(hash)(
+    withResetRuntimeLock(hash)(
       _.space
         .getWaitingContinuations(channels)
         .map(
