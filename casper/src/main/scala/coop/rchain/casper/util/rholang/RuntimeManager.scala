@@ -36,7 +36,7 @@ trait RuntimeManager[F[_]] {
   type ReplayFailure = (Option[DeployData], Failed)
 
   def captureResults(
-      start: StateHash,
+      startHash: StateHash,
       deploy: DeployData,
       name: String = "__SCALA__"
   ): F[Seq[Par]]
@@ -44,7 +44,7 @@ trait RuntimeManager[F[_]] {
       terms: Seq[InternalProcessedDeploy],
       blockTime: Long
   ): F[Either[ReplayFailure, StateHash]]
-  def computeState(hash: StateHash)(
+  def computeState(startHash: StateHash)(
       terms: Seq[DeployData],
       blockTime: Long
   ): F[(StateHash, Seq[InternalProcessedDeploy])]
@@ -53,8 +53,8 @@ trait RuntimeManager[F[_]] {
       blockTime: Long
   ): F[(StateHash, StateHash, Seq[InternalProcessedDeploy])]
   def storageRepr(hash: StateHash): F[Option[String]]
-  def computeBonds(hash: StateHash): F[Seq[Bond]]
-  def computeDeployPayment(start: StateHash)(user: ByteString, amount: Long): F[StateHash]
+  def computeBonds(startHash: StateHash): F[Seq[Bond]]
+  def computeDeployPayment(startHash: StateHash)(user: ByteString, amount: Long): F[StateHash]
   def getData(hash: StateHash)(channel: Par): F[Seq[Par]]
   def getContinuation(hash: StateHash)(
       channels: Seq[Par]
@@ -95,25 +95,25 @@ class RuntimeManagerImpl[F[_]: Concurrent] private[rholang] (
     *       merely the replay store. Hence, `replayComputeState` uses
     *       `withRuntime` rather than `withResetRuntime`.
     */
-  def replayComputeState(hash: StateHash)(
+  def replayComputeState(startHash: StateHash)(
       terms: Seq[InternalProcessedDeploy],
       blockTime: Long
   ): F[Either[ReplayFailure, StateHash]] =
     withRuntime { runtime =>
       for {
         _      <- setBlockTime(blockTime, runtime)
-        result <- replayDeploys(hash, terms, replayDeploy(runtime))
+        result <- replayDeploys(startHash, terms, replayDeploy(runtime))
       } yield result
     }
 
-  def computeState(hash: StateHash)(
+  def computeState(startHash: StateHash)(
       terms: Seq[DeployData],
       blockTime: Long
   ): F[(StateHash, Seq[InternalProcessedDeploy])] =
-    withResetRuntime(hash) { runtime =>
+    withResetRuntime(startHash) { runtime =>
       for {
         _      <- setBlockTime(blockTime, runtime)
-        result <- processDeploys(terms, hash, processDeploy(runtime))
+        result <- processDeploys(startHash, terms, processDeploy(runtime))
       } yield result
     }
 
@@ -125,7 +125,7 @@ class RuntimeManagerImpl[F[_]: Concurrent] private[rholang] (
     withResetRuntime(startHash) { runtime =>
       for {
         _          <- setBlockTime(blockTime, runtime)
-        evalResult <- processDeploys(terms, startHash, processDeploy(runtime))
+        evalResult <- processDeploys(startHash, terms, processDeploy(runtime))
       } yield (startHash, evalResult._1, evalResult._2)
     }
   }
@@ -257,14 +257,14 @@ class RuntimeManagerImpl[F[_]: Concurrent] private[rholang] (
     )
 
   private def processDeploys(
+      startHash: StateHash,
       terms: Seq[DeployData],
-      initHash: StateHash,
       processDeploy: (Blake2b256Hash, DeployData) => F[(Blake2b256Hash, InternalProcessedDeploy)]
   ): F[(StateHash, Seq[InternalProcessedDeploy])] = {
 
-    val initHashBlake = Blake2b256Hash.fromByteString(initHash)
+    val startHashBlake = Blake2b256Hash.fromByteString(startHash)
     terms.toList
-      .foldM((initHashBlake, Seq.empty[InternalProcessedDeploy])) {
+      .foldM((startHashBlake, Seq.empty[InternalProcessedDeploy])) {
         case ((hash, results), deploy) => {
           processDeploy(hash, deploy).map(_.bimap(identity, results :+ _))
         }
@@ -292,7 +292,7 @@ class RuntimeManagerImpl[F[_]: Concurrent] private[rholang] (
     } yield (newHash, deployResult)
 
   private def replayDeploys(
-      initHash: StateHash,
+      startHash: StateHash,
       terms: Seq[InternalProcessedDeploy],
       replayDeploy: (
           Blake2b256Hash,
@@ -300,8 +300,8 @@ class RuntimeManagerImpl[F[_]: Concurrent] private[rholang] (
       ) => F[Either[ReplayFailure, Blake2b256Hash]]
   ): F[Either[ReplayFailure, StateHash]] = {
 
-    val initHashBlake = Blake2b256Hash.fromByteString(initHash)
-    val result = terms.toList.foldM(initHashBlake.asRight[ReplayFailure]) {
+    val startHashBlake = Blake2b256Hash.fromByteString(startHash)
+    val result = terms.toList.foldM(startHashBlake.asRight[ReplayFailure]) {
       case (hash, deploy) =>
         hash.flatTraverse(replayDeploy(_, deploy))
     }
