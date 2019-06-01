@@ -19,7 +19,7 @@ new
   rl(`rho:registry:lookup`), BasicWalletCh, claimContractStore,
   walletStore
 in {
-  rl!(`rho:lang:basicWallet`, *BasicWalletCh) |
+  rl!(`rho:rchain:basicWallet`, *BasicWalletCh) |
   for(@(_, BasicWallet) <- BasicWalletCh) {
     claimContractStore!({}) |
     walletStore!({}) |

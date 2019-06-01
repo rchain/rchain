@@ -11,7 +11,7 @@ object Faucet {
   //TODO: use registry instead of public names
   def basicWalletFaucet(mintName: String): String =
     s"""new rl(`rho:registry:lookup`), BasicWalletFaucetCh, faucetCh in {
-       |  rl!(`rho:lang:basicWalletFaucet`, *BasicWalletFaucetCh) |
+       |  rl!(`rho:rchain:basicWalletFaucet`, *BasicWalletFaucetCh) |
        |  for(@(_, BasicWalletFaucet) <- BasicWalletFaucetCh) {
        |    @BasicWalletFaucet!($mintName, *faucetCh) |
        |    for(@faucet <- faucetCh){

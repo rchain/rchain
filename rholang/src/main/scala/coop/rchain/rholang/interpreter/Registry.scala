@@ -845,25 +845,37 @@ class RegistryImpl[F[_]](
     }
 
   // TODO: Extract hardcoded id:<whatever> and maybe even pass in this resolver itself
-  object BlessedContract {
-    private val idMap = Map[String, String](
+  class BlessedContracts(prefix: String, idMap: Map[String, String]) {
+    private val matcher = WithPrefix(prefix + ":")
+
+    def unapply(uri: String): Option[String] =
+      matcher.unapply(uri) >>= idMap.get
+  }
+
+  private val LangContract = new BlessedContracts(
+    "rho:lang",
+    Map[String, String](
+      "either"            -> "qrh6mgfp5z6orgchgszyxnuonanz7hw3amgrprqtciia6astt66ypn",
+      "listOps"           -> "6fzorimqngeedepkrizgiqms6zjt76zjeciktt1eifequy4osz35ks",
+      "nonNegativeNumber" -> "hxyadh1ffypra47ry9mk6b8r1i33ar1w9wjsez4khfe9huzrfcytx9"
+    )
+  )
+
+  private val RChainContract = new BlessedContracts(
+    "rho:rchain",
+    Map[String, String](
       "authKey"                 -> "1qw5ehmq1x49dey4eadr1h4ncm361w3536asho7dr38iyookwcsp6i",
       "basicWallet"             -> "3m6iwxy7kq4wdhw4hsm5qghdxckduxtfnzgj86zy1mht3a7dsyxcuf",
       "basicWalletFaucet"       -> "mjp8ac3zk41pyk64a64r64po7azcc4gca4x5sq37in34irsxqdjd6q",
-      "either"                  -> "qrh6mgfp5z6orgchgszyxnuonanz7hw3amgrprqtciia6astt66ypn",
-      "listOps"                 -> "6fzorimqngeedepkrizgiqms6zjt76zjeciktt1eifequy4osz35ks",
       "lockbox"                 -> "w5zfefaasr5euzu1x551wwbgnt8o1c4345r3cgcwa1guyfre36fihu",
       "makeMint"                -> "asysrwfgzf8bf7sxkiowp4b3tcsy4f8ombi3w96ysox4u3qdmn1wbc",
       "makePos"                 -> "ko5q4wr5qu4a54cynf44hbk7hbzawpa4qxigzo7rc157rjqhwuo4mt",
-      "nonNegativeNumber"       -> "hxyadh1ffypra47ry9mk6b8r1i33ar1w9wjsez4khfe9huzrfcytx9",
       "pos"                     -> "m3xk7h8r54dtqtwsrnxqzhe81baswey66nzw6m533nyd45ptyoybqr",
       "revVault"                -> "6zcfqnwnaqcwpeyuysx1rm48ndr6sgsbbgjuwf45i5nor3io7dr76j",
       "systemInstancesRegistry" -> "i41dt8gymg1d3ar7ditjwxmtnqtuw6chznhxci3696tffyrd3ppeaf",
       "walletCheck"             -> "5ssrgy91wskd46gjjo6qamxhg88t1fymb5ekgzfksgyeubgq3nucc9"
     )
-
-    def unapply(s: String): Option[String] = idMap.get(s)
-  }
+  )
 
   case class WithPrefix(prefix: String) {
     def unapply(s: String): Option[String] =
@@ -875,15 +887,14 @@ class RegistryImpl[F[_]](
   def publicLookup(args: RootSeq[ListParWithRandom], sequenceNumber: Int): F[Unit] =
     args match {
       case Seq(ListParWithRandom(Seq(RhoType.Uri(uri), ret), rand)) =>
-        val idUri     = WithPrefix("rho:id:")
-        val langUri   = WithPrefix("rho:lang:")
-        val rchainUri = WithPrefix("rho:rchain:")
+        val idUri = WithPrefix("rho:id:")
 
         val result = uri match {
-          case idUri(id) => handleRhoIdLookup(id, sequenceNumber, ret, rand, uri)
-          case langUri(BlessedContract(id)) =>
+          case idUri(id) =>
             handleRhoIdLookup(id, sequenceNumber, ret, rand, uri)
-          case rchainUri(BlessedContract(id)) =>
+          case LangContract(id) =>
+            handleRhoIdLookup(id, sequenceNumber, ret, rand, uri)
+          case RChainContract(id) =>
             handleRhoIdLookup(id, sequenceNumber, ret, rand, uri)
           case _ => None
         }

@@ -23,7 +23,7 @@ match (
     in {
       stdlog!("info", "Starting Lockbox test") |
       rl!(`rho:id:zphjgsfy13h1k85isc8rtwtgt3t9zzt5pjd5ihykfmyapfc4wt3x5h`, *RhoSpecCh) |
-      rl!(`rho:lang:lockbox`, *LockboxCh) |
+      rl!(`rho:rchain:lockbox`, *LockboxCh) |
       for(@(_, RhoSpec) <- RhoSpecCh; @(_, Lockbox) <- LockboxCh) {
         stdlog!("info", "RhoSpec and Lockbox found") |
         @RhoSpec!("testSuite", *setup,
