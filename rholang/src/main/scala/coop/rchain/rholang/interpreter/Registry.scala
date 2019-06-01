@@ -15,6 +15,7 @@ import coop.rchain.models.rholang.implicits._
 import coop.rchain.rholang.interpreter.Runtime.BodyRefs
 import coop.rchain.rholang.interpreter.storage.implicits._
 import coop.rchain.rspace.util._
+import coop.rchain.shared.Matcher.WithPrefix
 import org.lightningj.util.ZBase32
 
 import scala.annotation.tailrec
@@ -876,13 +877,6 @@ class RegistryImpl[F[_]](
       "walletCheck"             -> "5ssrgy91wskd46gjjo6qamxhg88t1fymb5ekgzfksgyeubgq3nucc9"
     )
   )
-
-  case class WithPrefix(prefix: String) {
-    def unapply(s: String): Option[String] =
-      if (s.startsWith(prefix))
-        Some(s.substring(prefix.length))
-      else None
-  }
 
   def publicLookup(args: RootSeq[ListParWithRandom], sequenceNumber: Int): F[Unit] =
     args match {
