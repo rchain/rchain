@@ -74,6 +74,11 @@ class UnexpectedProposeOutputFormatError(Exception):
         super().__init__()
         self.output = output
 
+class UnexpectedDeployOutputFormatError(Exception):
+    def __init__(self, output: str) -> None:
+        super().__init__()
+        self.output = output
+
 
 def extract_block_count_from_show_blocks(show_blocks_output: str) -> int:
     lines = show_blocks_output.splitlines()
@@ -91,7 +96,7 @@ def extract_block_count_from_show_blocks(show_blocks_output: str) -> int:
 
 
 def parse_show_blocks_key_value_line(line: str) -> Tuple[str, str]:
-    match = re.match(r'(?P<key>[^:]*): (?P<value>.*)', line.strip())
+    match = re.match(r'(?P<key>[^:]*): "?(?P<value>.*(?<!"))', line.strip())
     if match is None:
         raise UnexpectedShowBlocksOutputFormatError(line)
     return (match.group('key'), match.group('value'))
@@ -294,7 +299,7 @@ class Node:
         return self.rnode_command('eval', rho_file_path)
 
     def deploy(self, rho_file_path: str, private_key: str) -> str:
-        return self.rnode_command('deploy', '--private-key={}'.format(private_key), '--phlo-limit=1000000', '--phlo-price=1', rho_file_path)
+        return extract_deploy_id_from_deploy_output(self.rnode_command('deploy', '--private-key={}'.format(private_key), '--phlo-limit=1000000', '--phlo-price=1', rho_file_path, stderr=False))
 
     def get_vdag(self) -> str:
         return self.rnode_command('vdag')
@@ -307,11 +312,15 @@ class Node:
 
     def deploy_string(self, rholang_code: str, private_key: str) -> str:
         quoted_rholang = shlex.quote(rholang_code)
-        return self.shell_out('sh', '-c', 'echo {quoted_rholang} >/tmp/deploy_string.rho && {rnode_binary} deploy --private-key={private_key} --phlo-limit=10000000000 --phlo-price=1 /tmp/deploy_string.rho'.format(
+        deploy_out = self.shell_out('sh', '-c', 'echo {quoted_rholang} >/tmp/deploy_string.rho && {rnode_binary} deploy --private-key={private_key} --phlo-limit=10000000000 --phlo-price=1 /tmp/deploy_string.rho'.format(
             rnode_binary=rnode_binary,
             quoted_rholang=quoted_rholang,
             private_key=private_key
-        ))
+        ), stderr=False)
+        return extract_deploy_id_from_deploy_output(deploy_out)
+
+    def find_deploy(self, deploy_id: str) -> Dict[str, str]:
+        return parse_show_block_output(self.rnode_command("find-deploy", "--deploy-id", deploy_id, stderr=False))
 
     def propose(self) -> str:
         output = self.rnode_command('propose', stderr=False)
@@ -779,3 +788,9 @@ def parse_mvdag_str(mvdag_output: str) -> Dict[str, Set[str]]:
         parent_hash, child_hash = line.split(' ')
         dag_dict[parent_hash].add(child_hash)
     return dag_dict
+
+def extract_deploy_id_from_deploy_output(deploy_output: str) -> str:
+    match = re.match(r'Response: Success!\nDeployId is: ([0-9a-f]+)', deploy_output.strip())
+    if match is None:
+        raise UnexpectedDeployOutputFormatError(deploy_output)
+    return match.group(1)

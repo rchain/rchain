@@ -36,3 +36,15 @@ def test_propose_cost(started_standalone_bootstrap_node: Node, random_generator:
     block_info = parse_show_block_output(output)
     cost = extract_validator_stake_from_deploy_cost_str(block_info['deployCost'])
     assert contract_cost == cost[DEPLOY_KEY.public_key]
+
+
+def test_find_block_by_deploy_id(started_standalone_bootstrap_node: Node, random_generator: Random) -> None:
+    relative_paths = started_standalone_bootstrap_node.shell_out('sh', '-c', 'ls /opt/docker/examples/*.rho').splitlines()
+    relative_path = random_generator.choice(relative_paths)
+    full_path = os.path.join('/opt/docker/examples', relative_path)
+    deploy_id = started_standalone_bootstrap_node.deploy(full_path, DEPLOY_KEY.private_key)
+    block_hash = started_standalone_bootstrap_node.propose()
+    block_info = started_standalone_bootstrap_node.find_deploy(deploy_id)
+
+    # block_hash is not a full hash but omiited one like 1964aa120ae
+    assert block_info['blockHash'][:10] == block_hash[:10]

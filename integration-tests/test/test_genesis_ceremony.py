@@ -69,19 +69,19 @@ def test_successful_genesis_ceremony(command_line_options: CommandLineOptions, r
                             ceremony_master_blocks = ceremony_master.show_blocks_parsed(2)
                             assert len(ceremony_master_blocks) == 1
                             ceremony_master_genesis_block = ceremony_master_blocks[0]
-                            assert ceremony_master_genesis_block['mainParentHash'] == '""'
+                            assert ceremony_master_genesis_block['mainParentHash'] == ''
 
                             validator_a_blocks = validator_a.show_blocks_parsed(2)
                             assert len(validator_a_blocks) == 1
                             validator_a_genesis_block = validator_a_blocks[0]
                             assert validator_a_genesis_block['blockHash'] == ceremony_master_genesis_block['blockHash']
-                            assert validator_a_genesis_block['mainParentHash'] == '""'
+                            assert validator_a_genesis_block['mainParentHash'] == ''
 
                             validator_b_blocks = validator_b.show_blocks_parsed(2)
                             assert len(validator_b_blocks) == 1
                             validator_b_genesis_block = validator_b_blocks[0]
                             assert validator_b_genesis_block['blockHash'] == ceremony_master_genesis_block['blockHash']
-                            assert validator_b_genesis_block['mainParentHash'] == '""'
+                            assert validator_b_genesis_block['mainParentHash'] == ''
 
                             wait_for_approved_block_received_handler_state(context, readonly_a)
 
@@ -121,19 +121,19 @@ def test_validator_catching_up(command_line_options: CommandLineOptions, random_
                         ceremony_master_blocks = ceremony_master.show_blocks_parsed(2)
                         assert len(ceremony_master_blocks) == 1
                         ceremony_master_genesis_block = ceremony_master_blocks[0]
-                        assert ceremony_master_genesis_block['mainParentHash'] == '""'
+                        assert ceremony_master_genesis_block['mainParentHash'] == ''
 
                         validator_a_blocks = validator_a.show_blocks_parsed(2)
                         assert len(validator_a_blocks) == 1
                         validator_a_genesis_block = validator_a_blocks[0]
                         assert validator_a_genesis_block['blockHash'] == ceremony_master_genesis_block['blockHash']
-                        assert validator_a_genesis_block['mainParentHash'] == '""'
+                        assert validator_a_genesis_block['mainParentHash'] == ''
 
                         validator_b_blocks = validator_b.show_blocks_parsed(2)
                         assert len(validator_b_blocks) == 1
                         validator_b_genesis_block = validator_b_blocks[0]
                         assert validator_b_genesis_block['blockHash'] == ceremony_master_genesis_block['blockHash']
-                        assert validator_b_genesis_block['mainParentHash'] == '""'
+                        assert validator_b_genesis_block['mainParentHash'] == ''
 
                         with started_peer(context=context, network=ceremony_master.network, bootstrap=ceremony_master, name='validator-c', keypair=VALIDATOR_C_KEYPAIR) as validator_c:
                             wait_for_approved_block_received_handler_state(context, validator_c)
@@ -142,7 +142,7 @@ def test_validator_catching_up(command_line_options: CommandLineOptions, random_
                             assert len(validator_c_blocks) == 1
                             validator_c_genesis_block = validator_c_blocks[0]
                             assert validator_c_genesis_block['blockHash'] == ceremony_master_genesis_block['blockHash']
-                            assert validator_c_genesis_block['mainParentHash'] == '""'
+                            assert validator_c_genesis_block['mainParentHash'] == ''
 
                             validator_c_genesis_block_info = validator_c.show_block_parsed(validator_c_genesis_block['blockHash'].strip('"'))
                             validator_c_bonds_validator_stake = extract_validator_stake_from_bonds_validator_str(validator_c_genesis_block_info['bondsValidatorList'])
