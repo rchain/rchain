@@ -46,11 +46,11 @@ class RholangBuildTest extends FlatSpec with Matchers {
           _                    = logEff.warns should be(Nil)
           _ <- getDataAtPrivateChannel[Effect](
                 signedBlock,
-                "512d1953abf723978ac70213b6c2cf26b066e508b0e54013d04e9e85974c5760"
+                "cc7214cc9a111bfa8af931f001ce129ec5d7c7d641b4cb6b5c3166444a47c5ec"
               ).map(_ shouldBe Seq("[4, 6, 10, 14]"))
           _ <- getDataAtPrivateChannel[Effect](
                 signedBlock,
-                "cb4ce87e153bb97d7022d5fe971cfecd7d8be729180d54596afba31a6326c92d"
+                "870decec96bb14dd556d56320de0338be14d5eb82c44be43cb225f870cdd239c"
               ).map(_ shouldBe Seq("\"The timestamp is 1\""))
         } yield ()
       }
