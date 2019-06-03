@@ -186,43 +186,6 @@ class MultiParentCasperBondingSpec extends FlatSpec with Matchers with Inspector
       }
   }
 
-  it should "allow bonding via the faucet" in effectTest {
-    HashSetCasperTestNode.standaloneEff(genesis, validatorKeys.head).use { node =>
-      import node.casperEff
-
-      implicit val runtimeManager = node.runtimeManager
-      val (sk, pk)                = Secp256k1.newKeyPair
-      val pkStr                   = Base16.encode(pk.bytes)
-      val amount                  = 314L
-      val forwardCode             = BondingUtil.bondingForwarderDeploy(pkStr, pkStr)
-
-      for {
-        bondingCode <- BondingUtil.faucetBondDeploy[Effect](amount, "secp256k1", pkStr, sk)
-        forwardDeploy = ConstructDeploy.sourceDeploy(
-          forwardCode,
-          0L,
-          accounting.MAX_VALUE
-        )
-        bondingDeploy = ConstructDeploy.sourceDeploy(
-          bondingCode,
-          forwardDeploy.timestamp + 1,
-          accounting.MAX_VALUE
-        )
-
-        createBlockResult1 <- casperEff.deploy(forwardDeploy) *> casperEff.createBlock
-        Created(block1)    = createBlockResult1
-        block1Status       <- casperEff.addBlock(block1, ignoreDoppelgangerCheck[Effect])
-        createBlockResult2 <- casperEff.deploy(bondingDeploy) *> casperEff.createBlock
-        Created(block2)    = createBlockResult2
-        block2Status       <- casperEff.addBlock(block2, ignoreDoppelgangerCheck[Effect])
-        oldBonds           = block1.getBody.getState.bonds
-        newBonds           = block2.getBody.getState.bonds
-        _                  = block1Status shouldBe Valid
-        _                  = block2Status shouldBe Valid
-        result             = (oldBonds.size + 1) shouldBe newBonds.size
-      } yield result
-    }
-  }
 
   it should "allow bonding in an existing network" in effectTest {
     def deployment(i: Int): DeployData =
