@@ -1,10 +1,12 @@
 package coop.rchain.casper
 
+import cats._, cats.data._, cats.implicits._
 import coop.rchain.casper.protocol.DeployData
 import coop.rchain.crypto.{PrivateKey, PublicKey}
 import coop.rchain.crypto.hash.Blake2b256
 import coop.rchain.crypto.signatures._
 import com.google.protobuf.ByteString
+import scala.util.Try
 
 object SignDeployment {
 
@@ -28,10 +30,10 @@ object SignDeployment {
   }
 
   def verify(deployData: DeployData): Option[Boolean] =
-    SignaturesAlg(deployData.sigAlgorithm).map { alg =>
+    SignaturesAlg(deployData.sigAlgorithm) >>= { alg =>
       val toVerify = clear(deployData).toByteString.toByteArray
       val hash     = Blake2b256.hash(toVerify)
-      alg.verify(hash, deployData.sig.toByteArray, PublicKey(deployData.deployer.toByteArray))
+      Try(alg.verify(hash, deployData.sig.toByteArray, PublicKey(deployData.deployer.toByteArray))).toOption
     }
 
 }
