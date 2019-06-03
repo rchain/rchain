@@ -1,20 +1,21 @@
-//scalapackage coop.rchain.rholang.registry
+/*
+ The table below describes the required computations and their dependencies
 
-//The purpose of this contract is to allow users to
-//look up the various instances of system contracts that
-//were created in the genesis block.
-
-//Registry info:
-//  sk: 7f2a3526664f04096067654705776950e2e475a1479d3569d8d7423e27bad603
-//  pk: 08a0f8fccace949453dcb6a885e9f50dd96a58ed51c49fc2e346aa4d42ffb7c1
-//  user == pk
-//  timestamp: 1540563894858
-//Resulting unforgable name: Unforgeable(0xeaf4d685675c199b2a2cceef521dacaaa711cd70c7d082c20d154507e5c58407) 
-//  ==> signature data == 2a3eaa013b0a0d2a0b10feffffffffffffffff010a2a5a280a243a220a20eaf4d685675c199b2a2cceef521dacaaa711cd70c7d082c20d154507e5c584071001
-//  ==> signature == fbf76226c16f1327058fba896fe4d43f69b3707981ae7b8498de6fcbc36c4bbe66885904dde6a8a4f5cdf8e74f035f8e505b895a381833d3ecfb717748bc8b0d
-//URI derived from pk == `rho:id:wdwc36f4ixa6xacck3ddepmgueum7zueuczgthcqp6771kdu8jogm8`
-new
-  SystemInstancesRegistry, rs(`rho:registry:insertSigned:ed25519`), uriOut,
+ No. | Dependency | Computation method | Result
+ ----+------------+--------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------
+ 1.  |            | given              | sk = 291aaf3c5278221d81d06a463cc5ea9fa6ff773a3f2c7f62da5bd0efd92f3839
+ 2.  |            | given              | timestamp = 1559156320965
+ 3.  |            | lastNonce          | nonce = 9223372036854775807
+ 4.  | 1,         | secp256k1          | pk = 0481acb8311189b166adf15aa021caacfd4bc224234d39311e8bf533e73d71f408b8c5ade7304b7556c5a6317593cb8089268294cdd3b5b8feb6819986c74aa0af
+ 5.  | 4, 2,      | genIds             | uname = Unforgeable(0x6cd75a683533af49eb9d8cd1d71fc24577cfa6099502eef95668d7a0a9887686)
+ 6.  | 3, 5,      | registry           | value = (9223372036854775807, bundle+ {   Unforgeable(0x6cd75a683533af49eb9d8cd1d71fc24577cfa6099502eef95668d7a0a9887686) })
+ 7.  | 6,         | protobuf           | toSign = 2a40aa013d0a0d2a0b10feffffffffffffffff010a2c5a2a0a263a240a220a206cd75a683533af49eb9d8cd1d71fc24577cfa6099502eef95668d7a0a98876861001
+ 8.  | 7, 1,      | secp256k1          | sig = 304402201b6599bb8eec26c32c56cffa5b74a78ef57988576bab94b734e613dd56309c5a02205e64001e57d8888f93c78cf2064a4d4338b0062281c9e56c8a480ca001b03c95
+ 9.  | 4,         | registry           | uri = rho:id:i41dt8gymg1d3ar7ditjwxmtnqtuw6chznhxci3696tffyrd3ppeaf
+ ----+------------+--------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------
+ */
+new 
+  SystemInstancesRegistry, rs(`rho:registry:insertSigned:secp256k1`), uriOut,
   faucetStore, posStore, revStore
 in {
   contract SystemInstancesRegistry(@"lookup", @systemContract, return) = {
@@ -42,9 +43,11 @@ in {
   } |
   
   rs!(
-    "08a0f8fccace949453dcb6a885e9f50dd96a58ed51c49fc2e346aa4d42ffb7c1".hexToBytes(), 
-    (9223372036854775807, bundle+{*SystemInstancesRegistry}), 
-    "436617c931fb6a5bf8dcd62d23847937028c67e78e355f49b1e3d3b835c9b230f9a71192becf7b22079ad0631dce32248fe0b2ac6e0a9a09c09903cfc0574e02".hexToBytes(),
+    "0481acb8311189b166adf15aa021caacfd4bc224234d39311e8bf533e73d71f408b8c5ade7304b7556c5a6317593cb8089268294cdd3b5b8feb6819986c74aa0af".hexToBytes(),
+    (9223372036854775807, bundle+{*SystemInstancesRegistry}),
+    "304402201b6599bb8eec26c32c56cffa5b74a78ef57988576bab94b734e613dd56309c5a02205e64001e57d8888f93c78cf2064a4d4338b0062281c9e56c8a480ca001b03c95".hexToBytes(),
     *uriOut
   )
 }
+  
+  

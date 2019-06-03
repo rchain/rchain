@@ -1,17 +1,22 @@
-//scalapackage coop.rchain.rholang.unittest
+/*
+ The table below describes the required computations and their dependencies
 
-//Registry info:
-//  sk: adf1e344dd34979255aeaaf5703a586fba52246d9940ef58572572db339316d3
-//  pk: 4ae94eb0b2d7df529f7ae68863221d5adda402fc54303a3d90a8a7a279326828
-//  user == pk
-//  timestamp: 1539808849271
-//Resulting unforgable name: RhoSpec == Unforgeable(0xbc4bad752f043b9e488ddfc1c69370a89700f4852f318a79d0b50d88f44e1210)
-//  ==> signature data == 2a3eaa013b0a0d2a0b10feffffffffffffffff010a2a5a280a243a220a20bc4bad752f043b9e488ddfc1c69370a89700f4852f318a79d0b50d88f44e12101001
-//  ==> signature == 07aa40b3bcb61b91816d7f7763ed3b7abccfeb99688ecec75cd76099f1552010bc523980fb476c990b982a46a9f36649097b8c02b590ae72a2bac4a7a790490b
-//URI derived from pk == `rho:id:6wnujzcraztjfg941skrtbdkdgbko8nuaqihuhn15s66oz8ro5gwbb`
+ No. | Dependency | Computation method | Result
+ ----+------------+--------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------
+ 1.  |            | given              | sk = abaa20c1d578612b568a7c3d9b16e81c68d73b931af92cf79727e02011c558c6
+ 2.  |            | given              | timestamp = 1559158671800
+ 3.  |            | lastNonce          | nonce = 9223372036854775807
+ 4.  | 1,         | secp256k1          | pk = 0401f5d998c9be9b1a753771920c6e968def63fe95b20c71a163a7f7311b6131ac65a49f796b5947fa9d94b0542895e7b7ebe8b91eefcbc5c7604aaf281922ccac
+ 5.  | 4, 2,      | genIds             | uname = Unforgeable(0x5c04ddd01410f4996d4193d2923c5a205bf6d0f3f7b85d5a9ae953604496c21d)
+ 6.  | 3, 5,      | registry           | value = (9223372036854775807, bundle+ {   Unforgeable(0x5c04ddd01410f4996d4193d2923c5a205bf6d0f3f7b85d5a9ae953604496c21d) })
+ 7.  | 6,         | protobuf           | toSign = 2a40aa013d0a0d2a0b10feffffffffffffffff010a2c5a2a0a263a240a220a205c04ddd01410f4996d4193d2923c5a205bf6d0f3f7b85d5a9ae953604496c21d1001
+ 8.  | 7, 1,      | secp256k1          | sig = 3045022100da7b26ef5f88fa5fd52f01d58a5b8d997b82fd8850a4f8a1683d0474a80203ed02205d95090a6915f45c8e4241558775831049d48b8a9d9103a0c0a3e34ede4a007c
+ 9.  | 4,         | registry           | uri = rho:id:zphjgsfy13h1k85isc8rtwtgt3t9zzt5pjd5ihykfmyapfc4wt3x5h
+ ----+------------+--------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------
+ */
 new
   RhoSpec,
-  rs(`rho:registry:insertSigned:ed25519`),
+  rs(`rho:registry:insertSigned:secp256k1`),
   rl(`rho:registry:lookup`),
   stdlog(`rho:io:stdlog`),
   ListOpsCh,
@@ -114,9 +119,9 @@ in {
   } |
 
   rs!(
-    "4ae94eb0b2d7df529f7ae68863221d5adda402fc54303a3d90a8a7a279326828".hexToBytes(),
+    "0401f5d998c9be9b1a753771920c6e968def63fe95b20c71a163a7f7311b6131ac65a49f796b5947fa9d94b0542895e7b7ebe8b91eefcbc5c7604aaf281922ccac".hexToBytes(),
     (9223372036854775807, bundle+{*RhoSpec}),
-    "a09bd6bdc38b8606bc5017c391e0a3717c3f8059baa59af1425f6b6a2f7ca7e09046a982968d0d0fba226ea44fd63cde51886d6e5983b0842196004984f63703".hexToBytes(),
+    "3045022100da7b26ef5f88fa5fd52f01d58a5b8d997b82fd8850a4f8a1683d0474a80203ed02205d95090a6915f45c8e4241558775831049d48b8a9d9103a0c0a3e34ede4a007c".hexToBytes(),
     *uriOut
   )
 }

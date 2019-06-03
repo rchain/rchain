@@ -223,11 +223,11 @@ class GenesisTest extends FlatSpec with Matchers with EitherValues with BlockDag
             implicit val rm = runtimeManager
             getDataAtPrivateChannel[Task](
               blockMessage,
-              "591d98d76d87741fc9b8d1b9bdce8f8e51c7573c91c419b7210ca700cf7651e9"
+              "253fd2155493024567f66cf787e208feae9d3d24ae2f479c79ab3e8b98c3e6c6"
             ).map(_.head)
           }
           _ = walletAddresses.map { wallet =>
-            data should (include(wallet))
+            data should include(wallet)
           }
         } yield ()
     }

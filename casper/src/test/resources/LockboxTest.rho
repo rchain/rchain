@@ -1,9 +1,9 @@
 // Match a list of known valid publicKey -> RevAddress pairs to bind them to veriables
 match (
-    "1111111111111111111111111111111111111111111111111111111111111111".hexToBytes(),
-    "11112comWwT626KfXkvnWRHDwPDm4VefqSr6ijvinhVHGTuXe6wWmk",
-    "2222222222222222222222222222222222222222222222222222222222222222".hexToBytes(),
-    "11112ipm5NY9BqyQ3p3sUx8pdFWV5jFQ5qqMcUzZWe19hwz3USbHBG"
+    "1111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111".hexToBytes(),
+    "1111vQiDiLGjHgjV1D7j6EbXHyStToU3iQ3eWA394p3rzYFocXGtv",
+    "2222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222".hexToBytes(),
+    "11112nT39uWFt9J3CT7hi87JRmnWsQuMh1oDjfhkyfcGnjV54Umn1n"
 ) {
   (
     alicePubKey,
@@ -22,7 +22,7 @@ match (
       protectedChannel
     in {
       stdlog!("info", "Starting Lockbox test") |
-      rl!(`rho:id:6wnujzcraztjfg941skrtbdkdgbko8nuaqihuhn15s66oz8ro5gwbb`, *RhoSpecCh) |
+      rl!(`rho:id:zphjgsfy13h1k85isc8rtwtgt3t9zzt5pjd5ihykfmyapfc4wt3x5h`, *RhoSpecCh) |
       rl!(`rho:lang:lockbox`, *LockboxCh) |
       for(@(_, RhoSpec) <- RhoSpecCh; @(_, Lockbox) <- LockboxCh) {
         stdlog!("info", "RhoSpec and Lockbox found") |

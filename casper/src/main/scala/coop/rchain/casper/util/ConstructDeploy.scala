@@ -7,7 +7,7 @@ import coop.rchain.casper.SignDeployment
 import coop.rchain.casper.protocol.{DeployData, ProcessedDeploy}
 import coop.rchain.crypto.PrivateKey
 import coop.rchain.crypto.codec.Base16
-import coop.rchain.crypto.signatures.Ed25519
+import coop.rchain.crypto.signatures.Secp256k1
 import coop.rchain.rholang.interpreter.accounting
 import coop.rchain.shared.Time
 
@@ -18,7 +18,7 @@ object ConstructDeploy {
   )
 
   def sign(deploy: DeployData, sec: PrivateKey = defaultSec): DeployData =
-    SignDeployment.sign(sec, deploy, Ed25519)
+    SignDeployment.sign(sec, deploy, Secp256k1)
 
   def sourceDeploy(
       source: String,
@@ -28,7 +28,7 @@ object ConstructDeploy {
       sec: PrivateKey = defaultSec
   ): DeployData = {
     val data = DeployData(
-      deployer = ByteString.copyFrom(Ed25519.toPublic(sec).bytes),
+      deployer = ByteString.copyFrom(Secp256k1.toPublic(sec).bytes),
       timestamp = timestamp,
       term = source,
       phloLimit = phlos,
@@ -51,7 +51,7 @@ object ConstructDeploy {
   ): F[DeployData] =
     Time[F].currentMillis.map { now =>
       val data = DeployData()
-        .withDeployer(ByteString.copyFrom(Ed25519.toPublic(sec).bytes))
+        .withDeployer(ByteString.copyFrom(Secp256k1.toPublic(sec).bytes))
         .withTimestamp(now)
         .withTerm(s"@${id}!($id)")
         .withPhloLimit(phlos)

@@ -1,18 +1,21 @@
-//scalapackage coop.rchain.rholang.wallet
+/*
+ The table below describes the required computations and their dependencies
 
-//assumes standard purse API from MakeMint
-
-//Registry info:
-//  sk: 59ba0d3ff3e690290a78ab0916a90f0c155fdeeb644bb5d4bec9324c743d4ec1
-//  pk: d72d0a7c0c9378b4874efbf871ae8089dd81f2ed3c54159fffeaba6e6fca4236
-//  user == pk
-//  timestamp: 1540214070797
-//Resulting unforgable name: Unforgeable(0xce1fd2fa486cdd055a7da9b60f4a403cd579ee78baeaa3e6a186ca72e6b24fce)
-//  ==> signature data == 2a3eaa013b0a0d2a0b10feffffffffffffffff010a2a5a280a243a220a20ce1fd2fa486cdd055a7da9b60f4a403cd579ee78baeaa3e6a186ca72e6b24fce1001
-//  ==> signature == 8f7275d2d4506e2a8b84330157cecfc697c42f11b2c7261efca47d777d25c82a208077b948408bb5cbbff82242cd1a644496aae157b8650186a8ad93418a0a00
-//URI derived from pk == `rho:id:3yicxut5xtx5tnmnneta7actof4yse3xangw4awzt8c8owqmddgyms`
-new
-  BasicWallet, rs(`rho:registry:insertSigned:ed25519`), uriOut
+ No. | Dependency | Computation method | Result
+ ----+------------+--------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------
+ 1.  |            | given              | sk = b97f282ce7d7d83c1abb5aa8f544e84f25bd96d75b6cb990b9b6ea2a1fc260f0
+ 2.  |            | given              | timestamp = 1559156113243
+ 3.  |            | lastNonce          | nonce = 9223372036854775807
+ 4.  | 1,         | secp256k1          | pk = 043b9a8358561912d2dd0fc94b5c6c01dce2b97c91b34f698aa3dabbefd5c6fd5c4ac2d5db0232545d44de1ee66e1f4828bbb0933e2227c3a6240429f0ef47c233
+ 5.  | 4, 2,      | genIds             | uname = Unforgeable(0xc274979cec5d4e0f9f6ef7b7c1236254b1eeb8869f0dad6df87649a9660c58f9)
+ 6.  | 3, 5,      | registry           | value = (9223372036854775807, bundle+ {   Unforgeable(0xc274979cec5d4e0f9f6ef7b7c1236254b1eeb8869f0dad6df87649a9660c58f9) })
+ 7.  | 6,         | protobuf           | toSign = 2a40aa013d0a0d2a0b10feffffffffffffffff010a2c5a2a0a263a240a220a20c274979cec5d4e0f9f6ef7b7c1236254b1eeb8869f0dad6df87649a9660c58f91001
+ 8.  | 7, 1,      | secp256k1          | sig = 304402203501600daa0f184741370b76858a6b96aaceedf602a74636b5c30eb6f8c8432402200c18f0c6eaca0765674573731b5548d649a6b3fc3dc0480d3f377877fb5bcde5
+ 9.  | 4,         | registry           | uri = rho:id:3m6iwxy7kq4wdhw4hsm5qghdxckduxtfnzgj86zy1mht3a7dsyxcuf
+ ----+------------+--------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------
+ */
+new 
+  BasicWallet, rs(`rho:registry:insertSigned:secp256k1`), uriOut
 in {
   contract BasicWallet(purse, @algorithm, @pk, return) = {
     new cryptoVerifyCh in {
@@ -87,9 +90,11 @@ in {
     }
   } |
   rs!(
-    "d72d0a7c0c9378b4874efbf871ae8089dd81f2ed3c54159fffeaba6e6fca4236".hexToBytes(), 
-    (9223372036854775807, bundle+{*BasicWallet}), 
-    "436174b493ba4af6c3f1fa865f6588e873b08d039e180849c7c5ca269fa451c4297747b30bdad88751bf40f27ad3b92b7eb19e514d4757f31dfda63d4ca21806".hexToBytes(),
+    "043b9a8358561912d2dd0fc94b5c6c01dce2b97c91b34f698aa3dabbefd5c6fd5c4ac2d5db0232545d44de1ee66e1f4828bbb0933e2227c3a6240429f0ef47c233".hexToBytes(),
+    (9223372036854775807, bundle+{*BasicWallet}),
+    "304402203501600daa0f184741370b76858a6b96aaceedf602a74636b5c30eb6f8c8432402200c18f0c6eaca0765674573731b5548d649a6b3fc3dc0480d3f377877fb5bcde5".hexToBytes(),
     *uriOut
   )
 }
+  
+  

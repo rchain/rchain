@@ -1,26 +1,20 @@
-// Rholang macro parameters:
-// minimumBond - the minimum bond allowed by the PoS
-// maximumBond - the maximum bond allowed by PoS
-// initialBonds - the initial bonds map
-
 /*
-The table below describes the required computations and their dependencies
+ The table below describes the required computations and their dependencies
 
-No. | Dependency | Computation method | Result
-----+------------+--------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------
-1.  |            | given              | sk = d70491c21a5ba44ffb60a97d9bfbf3f3839b997bde107a3a8ab6872594282740
-2.  |            | given              | timestamp = 1553862086627
-3.  |            | lastNonce          | nonce = 9223372036854775807
-4.  | 1,         | ed25519            | pk = cc87bf7747a8c176714b417ca14a63897b07572876c5e38a7896b6007738ef81
-5.  | 4, 2,      | genIds             | uname = Unforgeable(0xf974f799067b34be1acb7b565e0b160edb23df3e3ad58f200af183ae48b458cd)
-6.  | 3, 5,      | registry           | value = (9223372036854775807, bundle+ {   Unforgeable(0xf974f799067b34be1acb7b565e0b160edb23df3e3ad58f200af183ae48b458cd) })
-7.  | 6,         | protobuf           | toSign = 2a3eaa013b0a0d2a0b10feffffffffffffffff010a2a5a280a243a220a20f974f799067b34be1acb7b565e0b160edb23df3e3ad58f200af183ae48b458cd1001
-8.  | 7, 1,      | ed25519            | sig = 7ff160accda7f76f14f2ae132aaae140ac22b2671e561a58a566bff1a01e49cf372201a5df678aba5ff09171b6af966906deffbf8933efeeddb69a4c204b0503
-9.  | 4,         | registry           | uri = rho:id:cnec3pa8prp4out3yc8facon6grm3xbsotpd4ckjfx8ghuw77xadzt
-----+------------+--------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------
-*/
-
-new PoS,
+ No. | Dependency | Computation method | Result
+ ----+------------+--------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------
+ 1.  |            | given              | sk = a9585a0687761139ab3587a4938fb5ab9fcba675c79fefba889859674046d4a5
+ 2.  |            | given              | timestamp = 1559156420651
+ 3.  |            | lastNonce          | nonce = 9223372036854775807
+ 4.  | 1,         | secp256k1          | pk = 047b43d6548b72813b89ac1b9f9ca67624a8b372feedd71d4e2da036384a3e1236812227e524e6f237cde5f80dbb921cac12e6500791e9a9ed1254a745a816fe1f
+ 5.  | 4, 2,      | genIds             | uname = Unforgeable(0xa32c1649f1700469f125ea85f9c2a220072e593ae617213782d738e389639d3b)
+ 6.  | 3, 5,      | registry           | value = (9223372036854775807, bundle+ {   Unforgeable(0xa32c1649f1700469f125ea85f9c2a220072e593ae617213782d738e389639d3b) })
+ 7.  | 6,         | protobuf           | toSign = 2a40aa013d0a0d2a0b10feffffffffffffffff010a2c5a2a0a263a240a220a20a32c1649f1700469f125ea85f9c2a220072e593ae617213782d738e389639d3b1001
+ 8.  | 7, 1,      | secp256k1          | sig = 3044022054ff4bae3984252b116e41e28d98bb5533eaa39aec2729228159166e2784f641022066a0fd99e7ea33df812fab095cbe61250f9548bce6da3ec4c6a90c741b94087f
+ 9.  | 4,         | registry           | uri = rho:id:m3xk7h8r54dtqtwsrnxqzhe81baswey66nzw6m533nyd45ptyoybqr
+ ----+------------+--------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------
+ */
+new  PoS,
     registryLookup(`rho:registry:lookup`),
     revAddressOps(`rho:rev:address`),
     revVaultCh,
@@ -29,7 +23,9 @@ new PoS,
     getCurrentUserVault,
     getMVar,
     runMVar,
-    deposit in {
+    deposit,
+    rs(`rho:registry:insertSigned:secp256k1`),
+    uriOut in {
   registryLookup!(`rho:rchain:revVault`, *revVaultCh) |
 
   for(@(_, RevVault) <- revVaultCh) {
@@ -154,13 +150,11 @@ new PoS,
         }
       }
     } |
-    new registryInsert(`rho:registry:insertSigned:ed25519`),uriCh in {
-      registryInsert!(
-        "cc87bf7747a8c176714b417ca14a63897b07572876c5e38a7896b6007738ef81".hexToBytes(),
-        (9223372036854775807, bundle+{*PoS}),
-        "dd39acf8dae0e985cd2c46cf6143c0da9edc8ec5a9d11256496a580a50f35a8b362d27b0ef04c7e8fc2e2b557c5d6a453ded7744ae6a80ac2762a1b93e789506".hexToBytes(),
-        *uriCh
-      )
-    }
+    rs!("047b43d6548b72813b89ac1b9f9ca67624a8b372feedd71d4e2da036384a3e1236812227e524e6f237cde5f80dbb921cac12e6500791e9a9ed1254a745a816fe1f".hexToBytes(),
+    (9223372036854775807, bundle+{*PoS}),
+    "3044022054ff4bae3984252b116e41e28d98bb5533eaa39aec2729228159166e2784f641022066a0fd99e7ea33df812fab095cbe61250f9548bce6da3ec4c6a90c741b94087f".hexToBytes(),
+    *uriOut)
   }
 }
+  
+  

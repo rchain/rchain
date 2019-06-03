@@ -12,7 +12,7 @@ import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
 import coop.rchain.casper.util.rholang.{InterpreterUtil, RuntimeManager}
 import coop.rchain.casper.util.{DagOperations, ProtoUtil}
 import coop.rchain.crypto.hash.Blake2b256
-import coop.rchain.crypto.signatures.Ed25519
+import coop.rchain.crypto.signatures.Secp256k1
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.BlockMetadata
@@ -30,7 +30,7 @@ object Validate {
   implicit private val logSource: LogSource = LogSource(this.getClass)
   val signatureVerifiers: Map[String, (Data, Signature, PublicKey) => Boolean] =
     Map(
-      "ed25519" -> Ed25519.verify
+      "secp256k1" -> Secp256k1.verify
     )
 
   def signature(d: Data, sig: protocol.Signature): Boolean =

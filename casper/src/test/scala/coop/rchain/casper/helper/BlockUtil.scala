@@ -5,6 +5,7 @@ import coop.rchain.casper.protocol.BlockMessage
 import coop.rchain.casper.util.ProtoUtil.hashSignedBlock
 import coop.rchain.casper.util.implicits._
 import coop.rchain.crypto.PrivateKey
+import coop.rchain.models.{BlockHash, Validator}
 import coop.rchain.models.BlockHash.BlockHash
 
 import scala.util.Random
@@ -17,9 +18,15 @@ object BlockUtil {
     b.withBlockHash(blockHash).withSig(sig)
   }
 
-  def generateValidator(prefix: String = ""): ByteString =
-    ByteString.copyFromUtf8(prefix + Random.nextString(20)).substring(0, 32)
+  def generateValidator(prefix: String = ""): ByteString = {
+    val array = Array.ofDim[Byte](Validator.Length)
+    Random.nextBytes(array)
+    ByteString.copyFrom(array)
+  }
 
-  def generateHash(prefix: String = ""): BlockHash =
-    ByteString.copyFromUtf8(prefix + Random.nextString(20)).substring(0, 32)
+  def generateHash(prefix: String = ""): BlockHash = {
+    val array = Array.ofDim[Byte](BlockHash.Length)
+    Random.nextBytes(array)
+    ByteString.copyFrom(array)
+  }
 }

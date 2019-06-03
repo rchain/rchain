@@ -7,7 +7,7 @@ import coop.rchain.casper.util.ConstructDeploy
 import coop.rchain.casper.util.rholang.Resources._
 import coop.rchain.crypto.PrivateKey
 import coop.rchain.crypto.codec.Base16
-import coop.rchain.crypto.signatures.Ed25519
+import coop.rchain.crypto.signatures.Secp256k1
 import coop.rchain.models.Expr.ExprInstance.GBool
 import coop.rchain.models.rholang.implicits._
 import coop.rchain.models.{GDeployerAuth, Par}
@@ -38,7 +38,7 @@ class DeployerAuthTest extends FlatSpec with Matchers {
     val sk = PrivateKey(
       Base16.unsafeDecode("b18e1d0045995ec3d010c387ccfeb984d783af8fbb0f40fa7db126d889f6dadd")
     )
-    val pk             = ByteString.copyFrom(Ed25519.toPublic(sk).bytes)
+    val pk             = ByteString.copyFrom(Secp256k1.toPublic(sk).bytes)
     val captureChannel = "__DEPLOYER_AUTH_VALUE__"
     val result =
       runtimeManager

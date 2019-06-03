@@ -8,7 +8,7 @@ from .rnode import (
 )
 from .common import KeyPair
 
-DEPLOY_KEY = KeyPair(private_key='632a21e0176c4daed1ca78f08f98885f61d2050e0391e31eae59ff1a35ccca7f', public_key='15ab05a878ddce564865e591ff5927613b341e39572065dfeaa0b8b442b6084b')
+DEPLOY_KEY = KeyPair(private_key='632a21e0176c4daed1ca78f08f98885f61d2050e0391e31eae59ff1a35ccca7f', public_key='040d09c2c290d458d666df9be22fe77cc71711bc052656bc089662c803ad61568a647585acda4974ea63dd7f820d1f349a498684e2527941140c5e0386441a2177')
 
 
 def test_propose(started_standalone_bootstrap_node: Node, random_generator: Random) -> None:

@@ -1,18 +1,20 @@
-//scalapackage coop.rchain.rholang.collection
+/*
+ The table below describes the required computations and their dependencies
 
-//Requires ListOps
-//Represents Either[A, B] as (false, A) or (true, B)
-
-//Registry info:
-//  sk: 7545b56525751bf79daa6cf3ee5757632ea6f37bfa61e93aafc4449d8510df9b
-//  pk: 89a6d9c47f360e8ce145f8fe3c773786dc86bd0e70d19643d02b0eb126473c55
-//  user == pk
-//  timestamp: 1539794228064
-//Resulting unforgable name: Either == Unforgeable(0x9521551b4a8ae2cf0ba83aaf6996652b81d6a83d70985bc6f16ac6eb35f2f2dd)
-//  ==> signature data == 2a3eaa013b0a0d2a0b10feffffffffffffffff010a2a5a280a243a220a209521551b4a8ae2cf0ba83aaf6996652b81d6a83d70985bc6f16ac6eb35f2f2dd1001
-//  ==> signature == 29c68a1d8e792eeaf88158cfcb9a6038ebdfea81c7193025c41f3f3b6731e53c3d593b8d773df11caee97d5933623eb9fa60992cab75b770cacfb873f6182c0a
-//URI derived from pk == `rho:id:j6trahbxycumerwpr5qype7j43b7eqh8auebwsa9nn68if47gswh73`
-new Either, rs(`rho:registry:insertSigned:ed25519`), uriOut, rl(`rho:registry:lookup`), ListOpsCh in {
+ No. | Dependency | Computation method | Result
+ ----+------------+--------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------
+ 1.  |            | given              | sk = 5248f8913f8572d8227a3c7787b54bd8263389f7209adc1422e36bb2beb160dc
+ 2.  |            | given              | timestamp = 1559156217509
+ 3.  |            | lastNonce          | nonce = 9223372036854775807
+ 4.  | 1,         | secp256k1          | pk = 04c71f6c7b87edf4bec14f16f715ee49c6fea918549abdf06c734d384b60ba922990317cc4bf68da8c85b455a65595cf7007f1e54bfd6be26ffee53d1ea6d7406b
+ 5.  | 4, 2,      | genIds             | uname = Unforgeable(0xcaad4e983dedd6c5ae42384b6d87ba6f77997cdf6bb75b8e5f3ffa2133e6b45d)
+ 6.  | 3, 5,      | registry           | value = (9223372036854775807, bundle+ {   Unforgeable(0xcaad4e983dedd6c5ae42384b6d87ba6f77997cdf6bb75b8e5f3ffa2133e6b45d) })
+ 7.  | 6,         | protobuf           | toSign = 2a40aa013d0a0d2a0b10feffffffffffffffff010a2c5a2a0a263a240a220a20caad4e983dedd6c5ae42384b6d87ba6f77997cdf6bb75b8e5f3ffa2133e6b45d1001
+ 8.  | 7, 1,      | secp256k1          | sig = 3045022100aa2bbdd706e157efb6df78156f1520c6422ff651728ccff69d5bffbf901767eb0220799a0451c72c284b1da128f0e4031125dbed9ac8b9de6ce5b0e4d35562ade877
+ 9.  | 4,         | registry           | uri = rho:id:qrh6mgfp5z6orgchgszyxnuonanz7hw3amgrprqtciia6astt66ypn
+ ----+------------+--------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------
+ */
+new  Either, rs(`rho:registry:insertSigned:secp256k1`), uriOut, rl(`rho:registry:lookup`), ListOpsCh in {
   rl!(`rho:lang:listOps`, *ListOpsCh) |
   for(@(_, ListOps) <- ListOpsCh) {
 
@@ -174,9 +176,11 @@ new Either, rs(`rho:registry:insertSigned:ed25519`), uriOut, rl(`rho:registry:lo
   } |
   
   rs!(
-    "89a6d9c47f360e8ce145f8fe3c773786dc86bd0e70d19643d02b0eb126473c55".hexToBytes(), 
-    (9223372036854775807, bundle+{*Either}), 
-    "f3ee6ae8ce17f9d9af91c400eeffe60bbec4b214554967b372d2cdf0578c45ca1d42d5a6ce61617f03b8b9f09bf751654687cf7142dce70350d04f96e6c55702".hexToBytes(),
+    "04c71f6c7b87edf4bec14f16f715ee49c6fea918549abdf06c734d384b60ba922990317cc4bf68da8c85b455a65595cf7007f1e54bfd6be26ffee53d1ea6d7406b".hexToBytes(),
+    (9223372036854775807, bundle+{*Either}),
+    "3045022100aa2bbdd706e157efb6df78156f1520c6422ff651728ccff69d5bffbf901767eb0220799a0451c72c284b1da128f0e4031125dbed9ac8b9de6ce5b0e4d35562ade877".hexToBytes(),
     *uriOut
   )
 }
+  
+  

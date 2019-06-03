@@ -18,7 +18,7 @@ import coop.rchain.catscontrib.ApplicativeError_
 import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.comm._
 import coop.rchain.comm.rp.Connect.{Connections, ConnectionsCell}
-import coop.rchain.crypto.signatures.Ed25519
+import coop.rchain.crypto.signatures.Secp256k1
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.metrics.Metrics.MetricsNOP
 import coop.rchain.p2p.EffectsTestInstances._
@@ -51,8 +51,8 @@ object Setup {
 
     val runtimeManager = RuntimeManager.fromRuntime(activeRuntime).unsafeRunSync(scheduler)
 
-    val (genesisSk, genesisPk)     = Ed25519.newKeyPair
-    val (validatorSk, validatorPk) = Ed25519.newKeyPair
+    val (genesisSk, genesisPk)     = Secp256k1.newKeyPair
+    val (validatorSk, validatorPk) = Secp256k1.newKeyPair
     val bonds                      = createBonds(Seq(validatorPk))
     val requiredSigs               = 1
     val shardId                    = "test-shardId"
@@ -77,7 +77,7 @@ object Setup {
           supply = Long.MaxValue
         )
       )
-    val validatorId = ValidatorIdentity(validatorPk, validatorSk, "ed25519")
+    val validatorId = ValidatorIdentity(validatorPk, validatorSk, "secp256k1")
     val bap = new BlockApproverProtocol(
       validatorId,
       deployTimestamp,

@@ -8,7 +8,7 @@ new
   test_operations_with_negative_numbers, test_subtract_too_much, test_add_successful,
   test_subtract_successful, test_fail_on_overflow
 in {
-  rl!(`rho:id:6wnujzcraztjfg941skrtbdkdgbko8nuaqihuhn15s66oz8ro5gwbb`, *RhoSpecCh) |
+  rl!(`rho:id:zphjgsfy13h1k85isc8rtwtgt3t9zzt5pjd5ihykfmyapfc4wt3x5h`, *RhoSpecCh) |
   for(@(_, RhoSpec) <- RhoSpecCh) {
     @RhoSpec!("testSuite", *setup,
       [

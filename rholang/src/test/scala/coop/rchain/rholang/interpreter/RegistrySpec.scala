@@ -547,9 +547,9 @@ class RegistrySpec extends FlatSpec with Matchers with RegistryTester {
 
   "Signed Insert" should "work like plain insert if the signatures match" in {
     // Secret key:
-    // d039d5c634ad95d968fc18368d81b97aaecd32fc7cf6eec07a97c5ac9f9fcb5b11afb9a5fa2b3e194b701987b3531a93dbdf790dac26f8a2502cfa5d529f6b4d
+    // 84e1aa32db02b53a4024d8a3fb460f37d30996bfa566f1df953c1c14b694b618
     // Public key:
-    // 11afb9a5fa2b3e194b701987b3531a93dbdf790dac26f8a2502cfa5d529f6b4d
+    // 049d575d3b375ea985dfa087a3e7511c0e3903ce6042407cd83cfc22a8b8b32b78b3070169f20a1d050c78ec13d9ea7653e78119bb3963d470fa989d19ebfdf8bf
     // The signatures here are over the serialized representation of the nonce, value tuple.
     // To recreate the signatures, you can do something like the following:
     // val key = Base16.decode("<secret key goes here>")
@@ -557,33 +557,33 @@ class RegistrySpec extends FlatSpec with Matchers with RegistryTester {
     // val sig = Ed25519.sign(toSign.toByteArray, key)
     val registerString =
       """
-      new rr(`rho:registry:insertSigned:ed25519`), rl(`rho:registry:lookup`), ack in {
-        rr!("11afb9a5fa2b3e194b701987b3531a93dbdf790dac26f8a2502cfa5d529f6b4d".hexToBytes(),
+      new rr(`rho:registry:insertSigned:secp256k1`), rl(`rho:registry:lookup`), ack in {
+        rr!("049d575d3b375ea985dfa087a3e7511c0e3903ce6042407cd83cfc22a8b8b32b78b3070169f20a1d050c78ec13d9ea7653e78119bb3963d470fa989d19ebfdf8bf".hexToBytes(),
             (789, "entry"),
-            "20c3b7da06565933400cb61301ffa14df82ef09b046c8152e02e8047d6f69ee2c2a2e4114db7ceb01eb828dfc98c15e40a502f9d85c58ca03734cab549e85e0d".hexToBytes(),
+            "3045022100ea044a4ef79dde5707fefbca9a96699372e49b0e1bbea90b51b933b2bc91d8620220167bd71626f4abb417d6a10db9fddcbe0050f9c98956419a32753b49e1549829".hexToBytes(),
             *ack) |
         for(@{uri /\ Uri} <- ack) { // merge0
           rl!(uri, *ack) |
           for(@result <- ack) { // merge1
             @"result0"!(result) |
-            rr!("11afb9a5fa2b3e194b701987b3531a93dbdf790dac26f8a2502cfa5d529f6b4d".hexToBytes(),
+            rr!("049d575d3b375ea985dfa087a3e7511c0e3903ce6042407cd83cfc22a8b8b32b78b3070169f20a1d050c78ec13d9ea7653e78119bb3963d470fa989d19ebfdf8bf".hexToBytes(),
               (788, "entryFail"),
-              "dfe3caf2888f16734da0ffe555a6f67240147d6663d6a036b607398383eea0b362678e98e42a0de6b559780c34ab6e3b4dff0f3a57061ce8936659762ca98700".hexToBytes(),
+              "30450221009557f072051e7157d5d09f4919cd1b16df2603d985e5971a64bf8763f2db59c502205a49c8dae5ee385adca9a3540eb580b1abedab2c24fc873edd8475a1f8ffad2c".hexToBytes(),
               *ack) |
             for(@Nil <- ack) { // merge2
               rl!(uri, *ack) |
               for(@result <- ack) { // merge3
                 @"result1"!(result) |
-                rr!("11afb9a5fa2b3e194b701987b3531a93dbdf790dac26f8a2502cfa5d529f6b4d".hexToBytes(),
+                rr!("049d575d3b375ea985dfa087a3e7511c0e3903ce6042407cd83cfc22a8b8b32b78b3070169f20a1d050c78ec13d9ea7653e78119bb3963d470fa989d19ebfdf8bf".hexToBytes(),
                   (790, "entryReplace"),
-                  "3eb0a5de797833970e7ce23def0c0e1f7c0a21c25f178f143800119d95f033624ecc3924d73e052d62e5f74e97e5528382428ffa0796ead322636916b46cb60a".hexToBytes(),
+                  "30450221009b5dcfd466a0fe6b524e05742bc7a23129394bac5ca3de730fd8fbd84b14a42a022079d65c2470d740820547d858d3176dff6cc32ac34f42dbd841e055d671a03118".hexToBytes(),
                   *ack) |
                 for(@{uri2 /\ Uri} <- ack) { // merge4
                   @"result2"!(uri == uri2) |
                   rl!(uri2, *ack) |
                   for(@result <- ack) { // merge5
                     @"result3"!(result) |
-                    rr!("11afb9a5fa2b3e194b701987b3531a93dbdf790dac26f8a2502cfa5d529f6b4d".hexToBytes(),
+                    rr!("049d575d3b375ea985dfa087a3e7511c0e3903ce6042407cd83cfc22a8b8b32b78b3070169f20a1d050c78ec13d9ea7653e78119bb3963d470fa989d19ebfdf8bf".hexToBytes(),
                       (791, "entrySigShort"),
                       "".hexToBytes(),
                       *ack) |
@@ -591,7 +591,7 @@ class RegistrySpec extends FlatSpec with Matchers with RegistryTester {
                       rl!(uri, *ack) |
                       for(@result <- ack) { // merge7
                         @"result4"!(result) |
-                        rr!("11afb9a5fa2b3e194b701987b3531a93dbdf790dac26f8a2502cfa5d529f6b4d".hexToBytes(),
+                        rr!("049d575d3b375ea985dfa087a3e7511c0e3903ce6042407cd83cfc22a8b8b32b78b3070169f20a1d050c78ec13d9ea7653e78119bb3963d470fa989d19ebfdf8bf".hexToBytes(),
                           (792, "entrySigFail"),
                           "00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000".hexToBytes(),
                           *ack) |
@@ -664,7 +664,9 @@ class RegistrySpec extends FlatSpec with Matchers with RegistryTester {
     val expectedUri = Registry.buildURI(
       Blake2b256
         .hash(
-          Base16.unsafeDecode("11afb9a5fa2b3e194b701987b3531a93dbdf790dac26f8a2502cfa5d529f6b4d")
+          Base16.unsafeDecode(
+            "049d575d3b375ea985dfa087a3e7511c0e3903ce6042407cd83cfc22a8b8b32b78b3070169f20a1d050c78ec13d9ea7653e78119bb3963d470fa989d19ebfdf8bf"
+          )
         )
     )
 

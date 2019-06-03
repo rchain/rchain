@@ -1,17 +1,20 @@
-//scalapackage coop.rchain.rholang.math
+/*
+ The table below describes the required computations and their dependencies
 
-//This is a contract to explicitly implement the int >= 0 behavioural type
-
-//Registry info:
-//  sk: 32cc47a15b4fe26f94042bb12914440a2d83f5f097f652a73ca4c6302a700ab0
-//  pk: d89a1e6d2b8f53595b3d0d47effd48f0e537d19d847ad5811cf5216157a3a63c
-//  user == pk
-//  timestamp: 1539963224985
-//Resulting unforgable name: Unforgeable(0x289e512cb46e7491c54d8e42c5f997c2a85be7e1222dcf9810ac24bf960748e0)
-//  ==> signature data == 2a3eaa013b0a0d2a0b10feffffffffffffffff010a2a5a280a243a220a20289e512cb46e7491c54d8e42c5f997c2a85be7e1222dcf9810ac24bf960748e01001
-//  ==> signature == 992a8bbeaed194951667e38ec9b4bc0e1d50c4fdaf564a67ae4d90bfbe2439b5e85b53afb81b33075446ef5c5729bbfbb5b95b73aaeb17b05e2ead12ce226c07
-//URI derived from pk == `rho:id:nd74ztexkao5awjhj95e3octkza7tydwiy7euthnyrt5ihgi9rj495`
-new NonNegativeNumber, rs(`rho:registry:insertSigned:ed25519`), uriOut in {
+ No. | Dependency | Computation method | Result
+ ----+------------+--------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------
+ 1.  |            | given              | sk = e33c9f1e925819d04733db4ec8539a84507c9e9abd32822059349449fe03997d
+ 2.  |            | given              | timestamp = 1559156251792
+ 3.  |            | lastNonce          | nonce = 9223372036854775807
+ 4.  | 1,         | secp256k1          | pk = 04e1559d809924e564dce57e34646e155b144d2a504ce7ee519d7a5108fd42f1038d08d745e5ea21cb53d6aa7c7174a768fa373207a83bc947a20c6a02ece7a60e
+ 5.  | 4, 2,      | genIds             | uname = Unforgeable(0x61657f51076320deb7358dfcfc1f703be818ee08876c8b8efbfdf6e9d3020bcd)
+ 6.  | 3, 5,      | registry           | value = (9223372036854775807, bundle+ {   Unforgeable(0x61657f51076320deb7358dfcfc1f703be818ee08876c8b8efbfdf6e9d3020bcd) })
+ 7.  | 6,         | protobuf           | toSign = 2a40aa013d0a0d2a0b10feffffffffffffffff010a2c5a2a0a263a240a220a2061657f51076320deb7358dfcfc1f703be818ee08876c8b8efbfdf6e9d3020bcd1001
+ 8.  | 7, 1,      | secp256k1          | sig = 304402202b27c904bcecd83a7355db7f235fbe447c692079325deeefacba62c8ee236eb9022077b97df4e21784897e6da490b4b60c420a1db64b5807ad98acefa0a38c7f6f22
+ 9.  | 4,         | registry           | uri = rho:id:hxyadh1ffypra47ry9mk6b8r1i33ar1w9wjsez4khfe9huzrfcytx9
+ ----+------------+--------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------
+ */
+new  NonNegativeNumber, rs(`rho:registry:insertSigned:secp256k1`), uriOut in {
   contract NonNegativeNumber(@init, return) = {
     new this, valueStore in {
       contract this(@"add", @x, success) = {
@@ -58,9 +61,11 @@ new NonNegativeNumber, rs(`rho:registry:insertSigned:ed25519`), uriOut in {
   } |
   
   rs!(
-    "d89a1e6d2b8f53595b3d0d47effd48f0e537d19d847ad5811cf5216157a3a63c".hexToBytes(), 
-    (9223372036854775807, bundle+{*NonNegativeNumber}), 
-    "afdcf5113c2a63117bb84c9f79d2b7cc6c84accff5bf1c0f2d6b451e6bbbefafb9638a92229e04dcaa59cd3428bb5745ebbc1a6e92ff0fc1f6fe56cd689f7707".hexToBytes(),
+    "04e1559d809924e564dce57e34646e155b144d2a504ce7ee519d7a5108fd42f1038d08d745e5ea21cb53d6aa7c7174a768fa373207a83bc947a20c6a02ece7a60e".hexToBytes(),
+    (9223372036854775807, bundle+{*NonNegativeNumber}),
+    "304402202b27c904bcecd83a7355db7f235fbe447c692079325deeefacba62c8ee236eb9022077b97df4e21784897e6da490b4b60c420a1db64b5807ad98acefa0a38c7f6f22".hexToBytes(),
     *uriOut
   )
 }
+  
+  

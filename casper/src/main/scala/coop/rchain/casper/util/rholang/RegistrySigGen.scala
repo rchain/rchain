@@ -4,9 +4,9 @@ import com.google.protobuf.ByteString
 import coop.rchain.casper.protocol.DeployData
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.hash.{Blake2b256, Blake2b512Random}
-import coop.rchain.crypto.signatures.Ed25519
+import coop.rchain.crypto.signatures.Secp256k1
 import coop.rchain.crypto.{PrivateKey, PublicKey}
-import coop.rchain.models.Expr.ExprInstance.GInt
+import coop.rchain.models.Expr.ExprInstance.{GInt, GString}
 import coop.rchain.models.rholang.implicits._
 import coop.rchain.models.{Bundle, ETuple, GPrivate, Par}
 import coop.rchain.rholang.interpreter.{PrettyPrinter, Registry}
@@ -14,8 +14,8 @@ import coop.rchain.rholang.interpreter.{PrettyPrinter, Registry}
 /**
   * A signed insertion into the RChain registry.
   *
-  * The `rho:registry:insertSigned:ed25519` system contract takes a
-  * value to insert into the registry along with an ed25519 public key
+  * The `rho:registry:insertSigned:secp256k1` system contract takes a
+  * value to insert into the registry along with an secp256k1 public key
   * and signature.  The value must be a pair (tuple of size 2) whose
   * first item is an integer nonce.
   *
@@ -29,7 +29,7 @@ final case class InsertSigned(pk: Hex, value: (Long, Contract), sig: Hex) {
 
   override def toString() = s"""
     |new
-    |  ${contract.varName}, rs(`rho:registry:insertSigned:ed25519`), uriOut
+    |  ${contract.varName}, rs(`rho:registry:insertSigned:secp256k1`), uriOut
     |in {
     |  contract ${contract.varName}(...) = {
     |     ...
@@ -73,11 +73,11 @@ final case class Derivation(
     | 1.  |            | given              | sk = ${sk}
     | 2.  |            | given              | timestamp = ${timestamp}
     | 3.  |            | lastNonce          | nonce = ${result.nonce}
-    | 4.  | 1,         | ed25519            | pk = ${result.pk}
+    | 4.  | 1,         | secp256k1          | pk = ${result.pk}
     | 5.  | 4, 2,      | genIds             | uname = ${pprint(uname)}
     | 6.  | 3, 5,      | registry           | value = ${pprint(toSign)}
     | 7.  | 6,         | protobuf           | toSign = ${Hex(toSign.toByteArray)}
-    | 8.  | 7, 1,      | ed25519            | sig = ${result.sig}
+    | 8.  | 7, 1,      | secp256k1          | sig = ${result.sig}
     | 9.  | 4,         | registry           | uri = ${uri}
     | ----+------------+--------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------
     | */
@@ -104,8 +104,8 @@ object Args {
   ): Args = {
     val keyPair =
       skOption
-        .map(sk => (sk, Ed25519.toPublic(sk)))
-        .getOrElse(Ed25519.newKeyPair)
+        .map(sk => (sk, Secp256k1.toPublic(sk)))
+        .getOrElse(Secp256k1.newKeyPair)
 
     val id =
       unforgeableNameStr
@@ -150,7 +150,7 @@ object RegistrySigGen {
     * sbt runMain coop.rchain.casper.util.rholang.RegistrySigGen contractName [timestamp] [privateKey] [unforgeableName]
     *
     * Example:
-    * runMain coop.rchain.casper.util.rholang.RegistrySigGen MyContract 1539808849271 adf1e344dd34979255aeaaf5703a586fba52246d9940ef58572572db339316d3 bc4bad752f043b9e488ddfc1c69370a89700f4852f318a79d0b50d88f44e1210
+    * runMain coop.rchain.casper.util.rholang.RegistrySigGen MyContract 1559158671800 abaa20c1d578612b568a7c3d9b16e81c68d73b931af92cf79727e02011c558c6 bc4bad752f043b9e488ddfc1c69370a89700f4852f318a79d0b50d88f44e1210
     *
     * For a new contract one should provide only the contract name.
     *
@@ -158,7 +158,25 @@ object RegistrySigGen {
     */
   def main(argv: Array[String]) = {
     // these could be command-line args...
-    val info = RegistrySigGen.deriveFrom(Args.parse(argv))
+    //val info = RegistrySigGen.deriveFrom(Args.parse(argv))
+    val (key, pub) = (
+      PrivateKey(
+        Base16.unsafeDecode("84e1aa32db02b53a4024d8a3fb460f37d30996bfa566f1df953c1c14b694b618")
+      ),
+      PublicKey(
+        Base16.unsafeDecode(
+          "049d575d3b375ea985dfa087a3e7511c0e3903ce6042407cd83cfc22a8b8b32b78b3070169f20a1d050c78ec13d9ea7653e78119bb3963d470fa989d19ebfdf8bf"
+        )
+      )
+    )
+    val toSign: Par = ETuple(Seq(GInt(790), GString("entryReplace")))
+    val hash        = Blake2b256.hash(toSign.toByteArray)
+    println(Base16.encode(key.bytes))
+    println(Base16.encode(pub.bytes))
+    println(hash)
+    println(hash.length)
+    val sig  = Secp256k1.sign(hash, key.bytes)
+    val info = Base16.encode(sig)
     System.out.println(info)
   }
 
@@ -183,8 +201,8 @@ object RegistrySigGen {
   }
 
   /**
-    * Derive a signature for use with rho:registry:insertSigned:ed25519
-    * from an ed25519 key pair and a timestamp. The `contractName` is a
+    * Derive a signature for use with rho:registry:insertSigned:secp256k1
+    * from an secp256k1 key pair and a timestamp. The `contractName` is a
     * hint/label; it doesn't affect the signature.
     */
   def deriveFrom(args: Args) = {
@@ -199,7 +217,7 @@ object RegistrySigGen {
 
     // Now we can sign the value that goes in the registry.
     val toSign: Par = ETuple(Seq(GInt(lastNonce), access))
-    val sig         = Ed25519.sign(toSign.toByteArray, secKey)
+    val sig         = Secp256k1.sign(Blake2b256.hash(toSign.toByteArray), secKey)
 
     val keyHash = Blake2b256.hash(pubKey.bytes)
     val uri     = Registry.buildURI(keyHash)

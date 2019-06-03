@@ -10,6 +10,7 @@ import coop.rchain.casper.helper._
 import coop.rchain.casper.protocol.{BlockMessage, Bond}
 import coop.rchain.metrics.Metrics.MetricsNOP
 import coop.rchain.models.BlockHash.BlockHash
+import coop.rchain.models.Validator
 import coop.rchain.p2p.EffectsTestInstances.LogStub
 import coop.rchain.shared.{Log, Time}
 import monix.eval.Task
@@ -31,9 +32,11 @@ class ManyValidatorsTest
     implicit val metrics   = new MetricsNOP[Task]()
     implicit val log       = new Log.NOPLog[Task]()
     val bonds = Seq
-      .fill(300)(
-        ByteString.copyFromUtf8(Random.nextString(20)).substring(0, 32)
-      )
+      .fill(300) {
+        val array = Array.ofDim[Byte](Validator.Length)
+        Random.nextBytes(array)
+        ByteString.copyFrom(array)
+      }
       .map(Bond(_, 10))
     val v1 = bonds(0).validator
 

@@ -15,7 +15,7 @@ import coop.rchain.catscontrib.TaskContrib.TaskOps
 import coop.rchain.comm.rp.ProtocolHelper.packet
 import coop.rchain.comm.transport
 import coop.rchain.crypto.hash.Blake2b256
-import coop.rchain.crypto.signatures.Ed25519
+import coop.rchain.crypto.signatures.Secp256k1
 import coop.rchain.p2p.EffectsTestInstances.LogicalTime
 import coop.rchain.rholang.interpreter.accounting
 import monix.eval.Task
@@ -32,7 +32,7 @@ class MultiParentCasperAddBlockSpec extends FlatSpec with Matchers with Inspecto
 
   implicit val timeEff = new LogicalTime[Effect]
 
-  private val (validatorKeys, validatorPks) = (1 to 4).map(_ => Ed25519.newKeyPair).unzip
+  private val (validatorKeys, validatorPks) = (1 to 4).map(_ => Secp256k1.newKeyPair).unzip
   private val genesis = buildGenesis(
     buildGenesisParameters(4, createBonds(validatorPks))
   )
@@ -117,17 +117,15 @@ class MultiParentCasperAddBlockSpec extends FlatSpec with Matchers with Inspecto
                              ].createBlock
         Created(signedBlock2) = createBlockResult2
         _                     <- MultiParentCasper[Effect].addBlock(signedBlock2, ignoreDoppelgangerCheck[Effect])
-        storage               <- blockTuplespaceContents(signedBlock2)
-
-        _        = logEff.warns should be(Nil)
-        _        = ProtoUtil.parentHashes(signedBlock2) should be(Seq(signedBlock1.blockHash))
-        dag      <- MultiParentCasper[Effect].blockDag
-        estimate <- MultiParentCasper[Effect].estimator(dag)
-        _        = estimate shouldBe IndexedSeq(signedBlock2.blockHash)
+        _                     = logEff.warns should be(Nil)
+        _                     = ProtoUtil.parentHashes(signedBlock2) should be(Seq(signedBlock1.blockHash))
+        dag                   <- MultiParentCasper[Effect].blockDag
+        estimate              <- MultiParentCasper[Effect].estimator(dag)
+        _                     = estimate shouldBe IndexedSeq(signedBlock2.blockHash)
         // channel is deterministic because of the fixed timestamp
         data <- getDataAtPrivateChannel[Effect](
                  signedBlock2,
-                 "272b27b8d34180d6d8bb73ff951190ec9db69ae08015f8a9d7d95e1d94fc38a6"
+                 "ad0dd958a6acf8e58c2ecfdbf5f23b3c5beb74a7091c21a10c79cbb0b591872d"
                )
         _ = data shouldBe Seq("12")
       } yield ()
@@ -206,7 +204,7 @@ class MultiParentCasperAddBlockSpec extends FlatSpec with Matchers with Inspecto
   }
 
   it should "reject blocks not from bonded validators" in effectTest {
-    HashSetCasperTestNode.standaloneEff(genesis, Ed25519.newKeyPair._1).use { node =>
+    HashSetCasperTestNode.standaloneEff(genesis, Secp256k1.newKeyPair._1).use { node =>
       import node._
       implicit val timeEff = new LogicalTime[Effect]
 
@@ -485,7 +483,7 @@ class MultiParentCasperAddBlockSpec extends FlatSpec with Matchers with Inspecto
 
   it should "estimate parent properly" in effectTest {
 
-    val (validatorKeys, validatorPks) = (1 to 5).map(_ => Ed25519.newKeyPair).unzip
+    val (validatorKeys, validatorPks) = (1 to 5).map(_ => Secp256k1.newKeyPair).unzip
 
     def deployment(i: Int, ts: Long): DeployData =
       ConstructDeploy.sourceDeploy(s"new x in { x!(0) }", ts, accounting.MAX_VALUE)
@@ -573,7 +571,7 @@ class MultiParentCasperAddBlockSpec extends FlatSpec with Matchers with Inspecto
         dag,
         validatorPks(1),
         validatorKeys(1),
-        "ed25519",
+        "secp256k1",
         "rchain"
       )
     }
