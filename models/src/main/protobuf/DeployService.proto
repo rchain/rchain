@@ -41,10 +41,10 @@ service DeployService {
   // Returns on success VisualizeBlocksResponse
   rpc visualizeDag(VisualizeDagQuery) returns (stream Either) {}
   rpc machineVerifiableDag(MachineVerifyQuery) returns (Either) {}
-  // Returns on success BlockInfoWithoutTuplespace
+  // Returns on success LightBlockInfo
   rpc showMainChain(BlocksQuery) returns (stream Either) {}
   // Get a summary of blocks on the blockchain.
-  // Returns on success BlockInfoWithoutTuplespace
+  // Returns on success LightBlockInfo
   rpc getBlocks(BlocksQuery) returns (stream Either) {}
   // Find data sent to a name.
   // Returns on success ListeningNameDataResponse
@@ -102,7 +102,7 @@ message BlockQueryResponse {
 }
 
 message LightBlockQueryResponse {
-  BlockInfoWithoutTuplespace blockInfo = 1;
+  LightBlockInfo blockInfo = 1;
 }
 
 message VisualizeDagQuery {
@@ -143,14 +143,14 @@ message PrivateNamePreviewResponse {
 }
 
 message LastFinalizedBlockQuery {
-  
+
 }
 
 message LastFinalizedBlockResponse {
   BlockInfo blockInfo = 1;
 }
 
-message BlockInfoWithoutTuplespace {
+message LightBlockInfo {
   string blockHash = 1;
   string blockSize = 2;
   int64 blockNumber = 3;
@@ -184,12 +184,12 @@ message BlockInfo {
 
 message DataWithBlockInfo {
   repeated Par postBlockData = 1;
-  BlockInfoWithoutTuplespace block = 2;
+  LightBlockInfo block = 2;
 }
 
 message ContinuationsWithBlockInfo {
   repeated WaitingContinuationInfo postBlockContinuations = 1;
-  BlockInfoWithoutTuplespace block = 2;
+  LightBlockInfo block = 2;
 }
 
 message WaitingContinuationInfo {

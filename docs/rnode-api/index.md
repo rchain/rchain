@@ -9,7 +9,7 @@
     - [ApprovedBlockRequest](#coop.rchain.casper.protocol.ApprovedBlockRequest)
     - [BlockApproval](#coop.rchain.casper.protocol.BlockApproval)
     - [BlockInfo](#coop.rchain.casper.protocol.BlockInfo)
-    - [BlockInfoWithoutTuplespace](#coop.rchain.casper.protocol.BlockInfoWithoutTuplespace)
+    - [LightBlockInfo](#coop.rchain.casper.protocol.LightBlockInfo)
     - [BlockMessage](#coop.rchain.casper.protocol.BlockMessage)
     - [BlockQuery](#coop.rchain.casper.protocol.BlockQuery)
     - [BlockQueryResponse](#coop.rchain.casper.protocol.BlockQueryResponse)
@@ -42,11 +42,11 @@
     - [Signature](#coop.rchain.casper.protocol.Signature)
     - [UnapprovedBlock](#coop.rchain.casper.protocol.UnapprovedBlock)
     - [WaitingContinuationInfo](#coop.rchain.casper.protocol.WaitingContinuationInfo)
-  
-  
-  
+
+
+
     - [DeployService](#coop.rchain.casper.protocol.DeployService)
-  
+
 
 - [RhoTypes.proto](#RhoTypes.proto)
     - [BindPattern](#.BindPattern)
@@ -95,10 +95,10 @@
     - [Var](#.Var)
     - [Var.WildcardMsg](#.Var.WildcardMsg)
     - [VarRef](#.VarRef)
-  
-  
-  
-  
+
+
+
+
 
 - [diagnostics.proto](#diagnostics.proto)
     - [GarbageCollector](#coop.rchain.node.model.GarbageCollector)
@@ -112,11 +112,11 @@
     - [Peers](#coop.rchain.node.model.Peers)
     - [ProcessCpu](#coop.rchain.node.model.ProcessCpu)
     - [Threads](#coop.rchain.node.model.Threads)
-  
-  
-  
+
+
+
     - [Diagnostics](#coop.rchain.node.model.Diagnostics)
-  
+
 
 - [Scalar Value Types](#scalar-value-types)
 
@@ -219,9 +219,9 @@ For node clients, see BlockMessage for actual Casper protocol Block representati
 
 
 
-<a name="coop.rchain.casper.protocol.BlockInfoWithoutTuplespace"/>
+<a name="coop.rchain.casper.protocol.LightBlockInfo"/>
 
-### BlockInfoWithoutTuplespace
+### LightBlockInfo
 
 
 
@@ -421,7 +421,7 @@ For node clients, see BlockMessage for actual Casper protocol Block representati
 | Field | Type | Label | Description |
 | ----- | ---- | ----- | ----------- |
 | postBlockContinuations | [WaitingContinuationInfo](#coop.rchain.casper.protocol.WaitingContinuationInfo) | repeated |  |
-| block | [BlockInfoWithoutTuplespace](#coop.rchain.casper.protocol.BlockInfoWithoutTuplespace) |  |  |
+| block | [LightBlockInfo](#coop.rchain.casper.protocol.LightBlockInfo) |  |  |
 
 
 
@@ -453,7 +453,7 @@ For node clients, see BlockMessage for actual Casper protocol Block representati
 | Field | Type | Label | Description |
 | ----- | ---- | ----- | ----------- |
 | postBlockData | [Par](#Par) | repeated |  |
-| block | [BlockInfoWithoutTuplespace](#coop.rchain.casper.protocol.BlockInfoWithoutTuplespace) |  |  |
+| block | [LightBlockInfo](#coop.rchain.casper.protocol.LightBlockInfo) |  |  |
 
 
 
@@ -786,11 +786,11 @@ Note: deploys are uniquely keyed by `user`, `timestamp`.
 
 
 
- 
 
- 
 
- 
+
+
+
 
 
 <a name="coop.rchain.casper.protocol.DeployService"/>
@@ -807,14 +807,14 @@ To get results back, use `listenForDataAtName`.
 | DoDeploy | [DeployData](#coop.rchain.casper.protocol.DeployData) | [DeployServiceResponse](#coop.rchain.casper.protocol.DeployData) | Queue deployment of Rholang code (or fail to parse). |
 | createBlock | [.google.protobuf.Empty](#google.protobuf.Empty) | [DeployServiceResponse](#google.protobuf.Empty) | Add a block including all pending deploys. |
 | getBlock | [BlockQuery](#coop.rchain.casper.protocol.BlockQuery) | [BlockQueryResponse](#coop.rchain.casper.protocol.BlockQuery) | Get details about a particular block. |
-| showMainChain | [BlocksQuery](#coop.rchain.casper.protocol.BlocksQuery) | [BlockInfoWithoutTuplespace](#coop.rchain.casper.protocol.BlocksQuery) |  |
-| getBlocks | [BlocksQuery](#coop.rchain.casper.protocol.BlocksQuery) | [BlockInfoWithoutTuplespace](#coop.rchain.casper.protocol.BlocksQuery) | Get a summary of blocks on the blockchain. |
+| showMainChain | [BlocksQuery](#coop.rchain.casper.protocol.BlocksQuery) | [LightBlockInfo](#coop.rchain.casper.protocol.BlocksQuery) |  |
+| getBlocks | [BlocksQuery](#coop.rchain.casper.protocol.BlocksQuery) | [LightBlockInfo](#coop.rchain.casper.protocol.BlocksQuery) | Get a summary of blocks on the blockchain. |
 | listenForDataAtName | [DataAtNameQuery](#coop.rchain.casper.protocol.DataAtNameQuery) | [ListeningNameDataResponse](#coop.rchain.casper.protocol.DataAtNameQuery) | Find data sent to a name. |
 | listenForContinuationAtName | [ContinuationAtNameQuery](#coop.rchain.casper.protocol.ContinuationAtNameQuery) | [ListeningNameContinuationResponse](#coop.rchain.casper.protocol.ContinuationAtNameQuery) | Find processes receiving on a name. |
 | findBlockWithDeploy | [FindDeployInBlockQuery](#coop.rchain.casper.protocol.FindDeployInBlockQuery) | [BlockQueryResponse](#coop.rchain.casper.protocol.FindDeployInBlockQuery) | Find block from a deploy. |
 | previewPrivateNames | [PrivateNamePreviewQuery](#coop.rchain.casper.protocol.PrivateNamePreviewQuery) | [PrivateNamePreviewResponse](#coop.rchain.casper.protocol.PrivateNamePreviewQuery) | Preview new top-level unforgeable names (for example, to compute signatures over them). |
 
- 
+
 
 
 
@@ -1645,13 +1645,13 @@ These are DeBruijn levels
 
 
 
- 
 
- 
 
- 
 
- 
+
+
+
+
 
 
 
@@ -1852,11 +1852,11 @@ These are DeBruijn levels
 
 
 
- 
 
- 
 
- 
+
+
+
 
 
 <a name="coop.rchain.node.model.Diagnostics"/>
@@ -1875,7 +1875,7 @@ These are DeBruijn levels
 | GetThreads | [.google.protobuf.Empty](#google.protobuf.Empty) | [Threads](#google.protobuf.Empty) |  |
 | GetNodeCoreMetrics | [.google.protobuf.Empty](#google.protobuf.Empty) | [NodeCoreMetrics](#google.protobuf.Empty) |  |
 
- 
+
 
 
 
@@ -1898,4 +1898,3 @@ These are DeBruijn levels
 | <a name="bool" /> bool |  | bool | boolean | boolean |
 | <a name="string" /> string | A string must always contain UTF-8 encoded or 7-bit ASCII text. | string | String | str/unicode |
 | <a name="bytes" /> bytes | May contain any arbitrary sequence of bytes. | string | ByteString | str |
-
