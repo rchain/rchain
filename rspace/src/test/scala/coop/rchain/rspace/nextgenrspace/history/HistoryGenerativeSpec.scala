@@ -33,7 +33,7 @@ class HistoryGenerativeSpec
     distinctListOf(arbitraryInsertAction)
   ) { actions: List[Data] =>
     val emptyHistory =
-      new History[Task](emptyRootHash, inMemHistoryStore, inMemPointerBlockStore)
+      HistoryInstances.noMerging[Task](emptyRootHash, inMemHistoryStore, inMemPointerBlockStore)
 
     val emptyState = Map.empty[Key, (Data, History[Task])] // accumulate actions performed on the trie
 

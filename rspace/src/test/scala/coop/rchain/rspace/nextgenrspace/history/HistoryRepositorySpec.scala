@@ -157,7 +157,8 @@ class HistoryRepositorySpec
   protected def withEmptyRepository(f: TestHistoryRepository => Task[Unit]): Unit = {
     implicit val codecString: Codec[String] = util.stringCodec
     val emptyHistory =
-      new History[Task](History.emptyRootHash, inMemHistoryStore, inMemPointerBlockStore)
+      HistoryInstances
+        .noMerging[Task](History.emptyRootHash, inMemHistoryStore, inMemPointerBlockStore)
     val pastRoots = rootRepository
 
     (for {

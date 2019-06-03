@@ -54,7 +54,7 @@ object HistoryRepositoryInstances {
       pointerBlockStore = PointerBlockStoreInstances.pointerBlockStore[F](
         pointerLMDBStore
       )
-      history = History(currentRoot, historyStore, pointerBlockStore)
+      history = HistoryInstances.noMerging(currentRoot, historyStore, pointerBlockStore)
     } yield HistoryRepositoryImpl[F, C, P, A, K](history, rootsRepository, coldStore)
   }
 }

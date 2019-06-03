@@ -64,7 +64,8 @@ class LMDBHistoryRepositoryGenerativeSpec
 
   override def repo: HistoryRepository[Task, String, Pattern, String, StringsCaptor] = {
     val emptyHistory =
-      new History[Task](emptyRootHash, lmdbHistoryStore, lmdbPointerBlockStore)
+      HistoryInstances
+        .noMerging(emptyRootHash, lmdbHistoryStore, lmdbPointerBlockStore)
     val repository: HistoryRepository[Task, String, Pattern, String, StringsCaptor] =
       HistoryRepositoryImpl.apply[Task, String, Pattern, String, StringsCaptor](
         emptyHistory,
@@ -84,7 +85,8 @@ class InmemHistoryRepositoryGenerativeSpec
 
   override def repo: HistoryRepository[Task, String, Pattern, String, StringsCaptor] = {
     val emptyHistory =
-      new History[Task](History.emptyRootHash, inMemHistoryStore, inMemPointerBlockStore)
+      HistoryInstances
+        .noMerging[Task](History.emptyRootHash, inMemHistoryStore, inMemPointerBlockStore)
     val repository: HistoryRepository[Task, String, Pattern, String, StringsCaptor] =
       HistoryRepositoryImpl.apply[Task, String, Pattern, String, StringsCaptor](
         emptyHistory,
