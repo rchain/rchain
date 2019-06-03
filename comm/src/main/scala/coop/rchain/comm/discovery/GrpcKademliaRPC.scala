@@ -17,7 +17,7 @@ import io.grpc.netty._
 import monix.eval._
 import monix.execution._
 
-class GrpcKademliaRPC(networkId: String, timeout: FiniteDuration)(
+class GrpcKademliaRPC(networkId: String, timeout: FiniteDuration, allowPrivateAddresses: Boolean)(
     implicit
     scheduler: Scheduler,
     peerNodeAsk: PeerNodeAsk[Task],
@@ -50,10 +50,16 @@ class GrpcKademliaRPC(networkId: String, timeout: FiniteDuration)(
                       _.sendLookup(lookup)
                         .timer("lookup-time")
                     ).attempt
-    } yield responseErr.fold(
-      kp(Seq.empty[PeerNode]),
-      r => if (r.networkId == networkId) r.nodes.map(toPeerNode) else Seq.empty[PeerNode]
-    )
+      peers <- responseErr match {
+                case Right(r) if r.networkId == networkId =>
+                  r.nodes.map(toPeerNode).toList.filterA(isValidPeer)
+                case _ => Seq.empty[PeerNode].pure[Task]
+              }
+    } yield peers
+
+  private def isValidPeer(peer: PeerNode): Task[Boolean] =
+    if (allowPrivateAddresses) isValidInetAddress[Task](peer.endpoint.host)
+    else isValidPublicInetAddress[Task](peer.endpoint.host)
 
   private def withClient[A](peer: PeerNode, timeout: FiniteDuration, enforce: Boolean = false)(
       f: KademliaRPCServiceStub => Task[A]

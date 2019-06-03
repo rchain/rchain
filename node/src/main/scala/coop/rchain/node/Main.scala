@@ -127,12 +127,26 @@ object Main {
     SLF4JBridgeHandler.removeHandlersForRootLogger()
     SLF4JBridgeHandler.install()
     for {
+      _       <- checkHost(conf)
       _       <- checkPorts(conf)
       _       <- log.info(VersionInfo.get)
       _       <- logConfiguration(conf)
       runtime <- NodeRuntime(conf)
       _       <- runtime.main
     } yield ()
+  }
+
+  private def checkHost(conf: Configuration): Task[Unit] = {
+    import coop.rchain.comm._
+    conf.server.host.fold(Task.unit) { h =>
+      Task
+        .now(conf.server.allowPrivateAddresses)
+        .ifM(isValidInetAddress[Task](h), isValidPublicInetAddress[Task](h))
+        .ifM(
+          Task.unit,
+          log.error(s"Host network address $h is not valid") >> Task.delay(System.exit(1))
+        )
+    }
   }
 
   private def checkPorts(conf: Configuration): Task[Unit] = {
