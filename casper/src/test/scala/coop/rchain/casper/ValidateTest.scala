@@ -28,7 +28,7 @@ import coop.rchain.shared.Time
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
 import org.scalatest.{BeforeAndAfterEach, FlatSpec, Matchers}
-
+import com.google.protobuf.ByteString
 import scala.collection.immutable.HashMap
 
 class ValidateTest
@@ -786,6 +786,53 @@ class ValidateTest
                    genesis.withHeader(genesis.header.get.withDeployCount(100))
                  ) shouldBeF Left(InvalidDeployCount)
       } yield result
+  }
+
+  "Block validDeploySignatures" should "succeed if all deploys are signed correctly" in withStorage {
+    implicit blockStorey =>
+      implicit blockDagStorage =>
+        // given
+        val context  = buildGenesis()
+        val (sk, pk) = context.validatorKeyPairs.head
+        for {
+          dag     <- blockDagStorage.getRepresentation
+          deploy1 <- ConstructDeploy.basicProcessedDeploy[Task](0)
+          deploy2 <- ConstructDeploy.basicProcessedDeploy[Task](0)
+          deploy3 <- ConstructDeploy.basicProcessedDeploy[Task](0)
+          genesis <- ProtoUtil
+                      .signBlock[Task](context.genesisBlock, dag, pk, sk, "ed25519", "rchain")
+          block <- createBlock[Task](
+                    Seq(genesis.blockHash),
+                    genesis,
+                    deploys = Seq(deploy1, deploy2, deploy3)
+                  )
+          // when
+          validationResult <- Validate.validDeploySignatures[Task](block).value
+          // then
+        } yield validationResult shouldBe Right(())
+  }
+
+  it should "fail if one of deploys is not properly signed" in withStorage {
+    implicit blockStore => implicit blockDagStorage =>
+      val context  = buildGenesis()
+      val (sk, pk) = context.validatorKeyPairs.head
+      for {
+        dag     <- blockDagStorage.getRepresentation
+        deploy1 <- ConstructDeploy.basicProcessedDeploy[Task](0)
+        deploy2 <- ConstructDeploy
+                    .basicProcessedDeploy[Task](0)
+                    .map(pd => pd.copy(deploy = pd.deploy.map(d => d.copy(sig = ByteString.EMPTY))))
+        deploy3 <- ConstructDeploy.basicProcessedDeploy[Task](0)
+        genesis <- ProtoUtil.signBlock[Task](context.genesisBlock, dag, pk, sk, "ed25519", "rchain")
+        block <- createBlock[Task](
+                  Seq(genesis.blockHash),
+                  genesis,
+                  deploys = Seq(deploy1, deploy2, deploy3)
+                )
+        // when
+        validationResult <- Validate.validDeploySignatures[Task](block).value
+        // then
+      } yield validationResult shouldBe Left(DeployNotSigned)
   }
 
   "Block version validation" should "work" in withStorage { _ => implicit blockDagStorage =>
