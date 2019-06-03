@@ -3,9 +3,11 @@ package coop.rchain.casper
 import java.nio.file.Files
 
 import cats.Monad
+import cats.effect.Sync
 import cats.implicits._
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.{BlockStore, IndexedBlockDagStorage}
+import coop.rchain.casper.genesis.contracts.TestUtil
 import coop.rchain.casper.helper.BlockGenerator._
 import coop.rchain.casper.helper.BlockUtil.generateValidator
 import coop.rchain.casper.helper.{BlockDagStorageFixture, BlockGenerator}
@@ -441,9 +443,6 @@ class ValidateTest
         generateValidator("Validator 2"),
         generateValidator("Validator 3")
       )
-      val bonds = validators.zipWithIndex.map {
-        case (v, i) => Bond(v, 2L * i.toLong + 1L)
-      }
 
       def latestMessages(messages: Seq[BlockMessage]): Map[Validator, BlockHash] =
         messages.map(b => b.sender -> b.blockHash).toMap
@@ -461,17 +460,16 @@ class ValidateTest
                     parents.map(_.blockHash),
                     genesis,
                     creator = validators(validator),
-                    bonds = bonds,
+                    bonds = genesis.body.get.state.get.bonds,
                     deploys = Seq(deploy),
                     justifications = latestMessages(justifications)
                   )
         } yield block
 
-      mkRuntimeManager("casper-util-test")
+      mkRuntimeManager("casper-util-test", storageSize = 10 * 1024 * 1024)
         .use { runtimeManager =>
           for {
-
-            b0 <- createGenesis[Task](bonds = bonds)
+            b0 <- TestUtil.defaultGenesisSetup[Task](runtimeManager)
             b1 <- createValidatorBlock[Task](Seq(b0), b0, Seq.empty, 0)
             b2 <- createValidatorBlock[Task](Seq(b0), b0, Seq.empty, 1)
             b3 <- createValidatorBlock[Task](Seq(b0), b0, Seq.empty, 2)
