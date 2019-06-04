@@ -13,6 +13,9 @@ content delivery.
 tutorials and documentation, project planning information, events calendar,
 and information for how to engage with this project.
 
+## Note on the use of this software
+This code has not yet completed a security review. We strongly recommend that you do not use it in production or to transfer items of material value. We take no responsibility for any loss you may incur through the use of this code.
+
 ## Use the public testnet
 The RChain Cooperative maintains a public testnet running the latest version of RNode. Learn more at [RChain public testnet information](https://rchain.atlassian.net/wiki/spaces/CORE/pages/678756429/RChain+public+testnet+information).
 
