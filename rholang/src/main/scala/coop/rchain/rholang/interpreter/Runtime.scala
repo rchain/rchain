@@ -134,7 +134,7 @@ object Runtime {
     val REG_PUBLIC_REGISTER_SIGNED: Long   = 20L
     val REG_NONCE_INSERT_CALLBACK: Long    = 21L
     val GET_DEPLOY_PARAMS: Long            = 22L
-    val GET_TIMESTAMP: Long                = 23L
+    val GET_BLOCK_DATA: Long               = 23L
     val GET_INVALID_BLOCKS: Long           = 24L
     val REV_ADDRESS: Long                  = 25L
   }
@@ -155,7 +155,7 @@ object Runtime {
     val REG_INSERT_RANDOM: Par  = byteName(10)
     val REG_INSERT_SIGNED: Par  = byteName(11)
     val GET_DEPLOY_PARAMS: Par  = byteName(12)
-    val GET_TIMESTAMP: Par      = byteName(13)
+    val GET_BLOCK_DATA: Par     = byteName(13)
     val GET_INVALID_BLOCKS: Par = byteName(14)
     val REV_ADDRESS: Par        = byteName(15)
   }
@@ -261,11 +261,11 @@ object Runtime {
       }
     ),
     SystemProcess.Definition[F](
-      "rho:block:timestamp",
-      FixedChannels.GET_TIMESTAMP,
+      "rho:block:data",
+      FixedChannels.GET_BLOCK_DATA,
       1,
-      BodyRefs.GET_TIMESTAMP, { ctx =>
-        ctx.systemProcesses.blockTime(ctx.blockTime)
+      BodyRefs.GET_BLOCK_DATA, { ctx =>
+        ctx.systemProcesses.getBlockData(ctx.blockTime)
       }
     ),
     SystemProcess.Definition[F](

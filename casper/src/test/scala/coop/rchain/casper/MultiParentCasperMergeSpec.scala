@@ -230,9 +230,9 @@ class MultiParentCasperMergeSpec extends FlatSpec with Matchers with Inspectors 
       """.stripMargin
     val timeRho =
       """
-        |new timestamp(`rho:block:timestamp`), stdout(`rho:io:stdout`), tCh in {
-        |  timestamp!(*tCh) |
-        |  for(@t <- tCh) {
+        |new getBlockData(`rho:block:data`), stdout(`rho:io:stdout`), tCh in {
+        |  getBlockData!(*tCh) |
+        |  for(@_, @t <- tCh) {
         |    match t {
         |      Nil => { stdout!("no block time; no blocks yet? Not connected to Casper network?") }
         |      _ => { stdout!({"block time": t}) }
