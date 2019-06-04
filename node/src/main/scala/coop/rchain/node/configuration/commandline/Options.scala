@@ -350,6 +350,13 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
   }
   addSubcommand(keygen)
 
+  val lastFinalizedBlock = new Subcommand("last-finalized-block") {
+    descr(
+      "View properties of the last finalized block known by Casper on an existing running node."
+    )
+  }
+  addSubcommand(lastFinalizedBlock)
+
   val repl = new Subcommand("repl") {
     descr("Starts a thin client, that will connect to existing node. See grpcHost and grpcPort.")
   }

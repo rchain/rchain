@@ -8,7 +8,7 @@ status = [
 required_approvals = 2
 
 # Number of seconds from when a merge commit is created to when its statuses must pass.
-timeout_sec = 10800 #3h
+timeout_sec = 14400 #4h
 
 # A marker in the PR description that indicates boilerplate that does not belong in the merge-commit message.
 cut_body_after = "## Overview"

@@ -122,5 +122,8 @@ private[api] object DeployGrpcService {
           request: PrivateNamePreviewQuery
       ): Task[GrpcEither] =
         defer(BlockAPI.previewPrivateNames[F](request.user, request.timestamp, request.nameQty))
+
+      override def lastFinalizedBlock(request: LastFinalizedBlockQuery): Task[GrpcEither] =
+        defer(BlockAPI.lastFinalizedBlock[F])
     }
 }

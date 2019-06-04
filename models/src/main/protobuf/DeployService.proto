@@ -61,6 +61,9 @@ service DeployService {
   // Preview new top-level unforgeable names (for example, to compute signatures over them).
   // Returns on success PrivateNamePreviewResponse
   rpc previewPrivateNames(PrivateNamePreviewQuery) returns (Either) {}
+  // Get details about a particular block.
+  // Returns on success BlockQueryResponse
+  rpc lastFinalizedBlock(LastFinalizedBlockQuery) returns (Either) {}
 }
 
 message FindDeployQuery {
@@ -137,6 +140,14 @@ message PrivateNamePreviewQuery {
 
 message PrivateNamePreviewResponse {
   repeated bytes ids  = 1; // a la GPrivate
+}
+
+message LastFinalizedBlockQuery {
+  
+}
+
+message LastFinalizedBlockResponse {
+  BlockInfo blockInfo = 1;
 }
 
 message BlockInfoWithoutTuplespace {
