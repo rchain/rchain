@@ -48,20 +48,20 @@ class GrpcTransportServer(
   private val queueScheduler =
     Scheduler.fixedPool("tl-dispatcher-server", parallelism, reporter = UncaughtExceptionLogger)
 
-  // TODO FIX-ME No throwing exceptions!
-  @SuppressWarnings(Array("org.wartremover.warts.Throw"))
-  private lazy val serverSslContext: SslContext =
-    try {
-      GrpcSslContexts
-        .configure(SslContextBuilder.forServer(certInputStream, keyInputStream))
-        .trustManager(HostnameTrustManagerFactory.Instance)
-        .clientAuth(ClientAuth.REQUIRE)
-        .build()
-    } catch {
-      case e: Throwable =>
-        e.printStackTrace()
-        throw e
-    }
+  private val serverSslContextTask: Task[SslContext] =
+    Task
+      .evalOnce {
+        GrpcSslContexts
+          .configure(SslContextBuilder.forServer(certInputStream, keyInputStream))
+          .trustManager(HostnameTrustManagerFactory.Instance)
+          .clientAuth(ClientAuth.REQUIRE)
+          .build()
+      }
+      .attempt
+      .flatMap {
+        case Right(sslContext) => sslContext.pure[Task]
+        case Left(t)           => Task.raiseError[SslContext](t)
+      }
 
   def receive(
       dispatch: Protocol => Task[CommunicationResponse],
@@ -80,17 +80,20 @@ class GrpcTransportServer(
       case _ => Task.unit // sender timeout
     }
 
-    Task.delay {
-      new TcpServerObservable(
-        networkId: String,
-        port,
-        serverSslContext,
-        maxMessageSize,
-        maxStreamMessageSize,
-        tempFolder = tempFolder
-      ).mapParallelUnordered(parallelism)(dispatchInternal)
-        .subscribe()(queueScheduler)
-    }
+    for {
+      serverSslContext <- serverSslContextTask
+      result <- Task.delay {
+                 new TcpServerObservable(
+                   networkId: String,
+                   port,
+                   serverSslContext,
+                   maxMessageSize,
+                   maxStreamMessageSize,
+                   tempFolder = tempFolder
+                 ).mapParallelUnordered(parallelism)(dispatchInternal)
+                   .subscribe()(queueScheduler)
+               }
+    } yield result
   }
 
 }
