@@ -65,7 +65,7 @@ class HashSetCasperTestNode[F[_]](
     val casperState: CasperStateCell[F]
 ) {
 
-  implicit val logEff                       = new LogStub[F]
+  implicit val logEff                       = new LogStub[F](Log.log[F])
   implicit val timeEff                      = logicalTime
   implicit val connectionsCell              = Cell.unsafe[F, Connections](Connect.Connections.empty)
   implicit val transportLayerEff            = tle
@@ -125,7 +125,7 @@ object HashSetCasperTestNode {
   def createRuntime(storageDirectory: Path, storageSize: Long)(
       implicit scheduler: Scheduler
   ): Resource[Effect, RuntimeManager[Effect]] = {
-    implicit val log                       = new Log.NOPLog[Task]()
+    implicit val log                       = Log.log[Task]
     implicit val metricsEff: Metrics[Task] = new metrics.Metrics.MetricsNOP[Task]
     val activeRuntime =
       Runtime
@@ -170,7 +170,7 @@ object HashSetCasperTestNode {
     val tle                         = new TransportLayerTestImpl[F]()
     val tls                         = new TransportLayerServerTestImpl[F](identity)
     val logicalTime: LogicalTime[F] = new LogicalTime[F]
-    implicit val log                = new Log.NOPLog[F]()
+    implicit val log                = Log.log[F]
     implicit val metricEff          = new Metrics.MetricsNOP[F]
     val env                         = Context.env(blockStoreDir, mapSize)
     for {
@@ -279,7 +279,7 @@ object HashSetCasperTestNode {
           case ((n, p), sk) =>
             val tle                = new TransportLayerTestImpl[F]()
             val tls                = new TransportLayerServerTestImpl[F](p)
-            implicit val log       = new Log.NOPLog[F]()
+            implicit val log       = Log.log[F]
             implicit val metricEff = new Metrics.MetricsNOP[F]
             for {
               storageDirectories           <- BlockDagStorageTestFixture.createDirectories[F]

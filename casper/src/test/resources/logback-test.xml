@@ -1,18 +1,19 @@
 <configuration>
 
-  <statusListener class="ch.qos.logback.core.status.NopStatusListener" />
+    <statusListener class="ch.qos.logback.core.status.NopStatusListener"/>
 
-  <appender name="STDOUT" class="ch.qos.logback.core.ConsoleAppender">
-    <!-- encoders are  by default assigned the type ch.qos.logback.classic.encoder.PatternLayoutEncoder -->
-    <encoder>
-      <pattern>%d{HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n</pattern>
-    </encoder>
-  </appender>
+    <appender name="STDOUT" class="ch.qos.logback.core.ConsoleAppender">
+        <!-- encoders are  by default assigned the type ch.qos.logback.classic.encoder.PatternLayoutEncoder -->
+        <encoder>
+            <pattern>%d{HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n</pattern>
+        </encoder>
+    </appender>
 
-  <logger name="coop.rchain.rspace" level="warn" />
-  
-  <root level="info">
-    <appender-ref ref="STDOUT" />
-  </root>
+    <!--This is needed for RhoSpec tests output-->
+    <logger name="coop.rchain.casper.helper.RhoLoggerContract" level="info"/>
+
+    <root level="warn">
+        <appender-ref ref="STDOUT"/>
+    </root>
 
 </configuration>

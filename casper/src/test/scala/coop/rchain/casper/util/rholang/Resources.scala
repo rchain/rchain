@@ -19,7 +19,7 @@ object Resources {
       storageSize: Int = 1024 * 1024,
       storeType: StoreType = StoreType.LMDB
   )(implicit scheduler: Scheduler): Resource[Task, (Runtime[Task], RuntimeManager[Task])] = {
-    implicit val log: Log[Task]            = new Log.NOPLog[Task]
+    implicit val log: Log[Task]            = Log.log[Task]
     implicit val metricsEff: Metrics[Task] = new metrics.Metrics.MetricsNOP[Task]
     for {
       runtime        <- mkRuntime[Task, Task.Par](prefix)
@@ -32,7 +32,7 @@ object Resources {
       storageSize: Int = 1024 * 1024,
       storeType: StoreType = StoreType.LMDB
   )(implicit scheduler: Scheduler): Resource[Task, RuntimeManager[Task]] = {
-    implicit val log: Log[Task]            = new Log.NOPLog[Task]
+    implicit val log: Log[Task]            = Log.log[Task]
     implicit val metricsEff: Metrics[Task] = new metrics.Metrics.MetricsNOP[Task]
 
     mkRuntime[Task, Task.Par](prefix)

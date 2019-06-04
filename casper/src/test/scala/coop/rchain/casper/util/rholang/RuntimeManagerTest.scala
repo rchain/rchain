@@ -65,7 +65,7 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
     val correctRholang = """ for(@x <- @"x"; @y <- @"y"){ @"xy"!(x + y) | @"x"!(1) | @"y"!(2) }"""
     val deploy         = ConstructDeploy.sourceDeployNow(correctRholang)
 
-    implicit val log: Log[Task]            = new Log.NOPLog[Task]
+    implicit val log: Log[Task]            = Log.log[Task]
     implicit val metricsEff: Metrics[Task] = new metrics.Metrics.MetricsNOP[Task]
 
     (for {
