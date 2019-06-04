@@ -1,17 +1,17 @@
 package coop.rchain.comm.transport
 
-import org.scalatest._
-import java.io.File
 import java.nio.file._
-import coop.rchain.comm._, CommError.CommErr
-import coop.rchain.comm.rp.ProtocolHelper
-import cats._, cats.data._, cats.implicits._
-import coop.rchain.comm.protocol.routing._
-import com.google.protobuf.ByteString
-import cats.effect.Sync
-import org.scalacheck.Gen
-import org.scalatest.prop.GeneratorDrivenPropertyChecks
+
 import scala.util.Random
+
+import coop.rchain.comm.protocol.routing._
+
+import com.google.protobuf.ByteString
+import monix.eval.Task
+import monix.execution.Scheduler
+import org.scalacheck.Gen
+import org.scalatest._
+import org.scalatest.prop.GeneratorDrivenPropertyChecks
 
 class PacketStoreRestoreSpec
     extends FunSpec
@@ -21,7 +21,8 @@ class PacketStoreRestoreSpec
 
   import PacketOps._
 
-  var tempFolder: Path = null
+  implicit val scheduler: Scheduler = Scheduler.Implicits.global
+  var tempFolder: Path              = _
 
   override def beforeEach(): Unit =
     tempFolder = Files.createTempDirectory("rchain")
@@ -36,19 +37,17 @@ class PacketStoreRestoreSpec
         val parent = tempFolder.resolve("inner").resolve("folder")
         val packet = Packet(BlockMessage.id, ByteString.copyFrom(content))
         // when
-        val storedIn = packet.store[Id](parent).right.get
-        val restored = PacketOps.restore[Id](storedIn).right.get
+        val storedIn = packet.store[Task](parent).runSyncUnsafe().right.get
+        val restored = PacketOps.restore[Task](storedIn).runSyncUnsafe().right.get
         // then
-        storedIn.toFile.exists() shouldBe (true)
-        storedIn.getParent shouldBe (parent)
-        packet shouldBe (restored)
+        storedIn.toFile.exists() shouldBe true
+        storedIn.getParent shouldBe parent
+        packet shouldBe restored
       }
     }
   }
 
-  val contentGen =
+  val contentGen: Gen[Array[Byte]] =
     for (n <- Gen.choose(10, 50000))
       yield Array.fill(n)((Random.nextInt(256) - 128).toByte)
-
-  implicit val syncId: Sync[Id] = coop.rchain.catscontrib.effect.implicits.syncId
 }

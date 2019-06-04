@@ -88,11 +88,8 @@ object StreamHandler {
       .map(_.leftMap(StreamError.unexpected).flatten)
 
   private def init(folder: Path): Task[Streamed] =
-    for {
-      packetFile <- createPacketFile[Task](folder, "_packet_streamed.bts")
-      file       = packetFile.file
-      fos        = packetFile.fos
-    } yield Streamed(fos = fos, path = file)
+    createPacketFile[Task](folder, "_packet_streamed.bts")
+      .map { case (file, fos) => Streamed(fos = fos, path = file) }
 
   private def collect(
       networkId: String,

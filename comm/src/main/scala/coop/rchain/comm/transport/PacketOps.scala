@@ -7,63 +7,46 @@ import java.util.Date
 
 import scala.util.Random
 
-import cats.data._
-import cats.effect.Sync
+import cats.effect.{Resource, Sync}
 import cats.implicits._
 
-import coop.rchain.catscontrib.ski.kp
 import coop.rchain.comm.CommError
-import coop.rchain.shared.GracefulClose._
 import CommError._
 import coop.rchain.comm.protocol.routing._
 import coop.rchain.crypto.codec.Base16
 
 object PacketOps {
 
-  def restore[F[_]: Sync](file: Path): F[CommErr[Packet]] = {
-    def fileInputStream: F[CommErr[FileInputStream]] =
-      Sync[F]
-        .delay(new FileInputStream(file.toFile))
-        .attempt
-        .map(_.fold(unableToRestorePacket(file, _).asLeft, _.asRight))
-
-    def parseFrom(fin: FileInputStream): F[CommErr[Packet]] =
-      for {
-        packetErr <- Sync[F].delay(Packet.parseFrom(fin)).attempt
-        _         <- gracefullyClose(fin)
-      } yield packetErr.fold(unableToRestorePacket(file, _).asLeft, _.asRight)
-
-    (for {
-      fin    <- EitherT(fileInputStream)
-      packet <- EitherT(parseFrom(fin))
-    } yield packet).value
-  }
+  def restore[F[_]: Sync](file: Path): F[CommErr[Packet]] =
+    Resource
+      .fromAutoCloseable(Sync[F].delay(new FileInputStream(file.toFile)))
+      .use(fin => Sync[F].delay(Packet.parseFrom(fin)))
+      .attempt
+      .map(_.fold(unableToRestorePacket(file, _).asLeft, _.asRight))
 
   implicit class RichPacket(packet: Packet) {
     def store[F[_]: Sync](folder: Path): F[CommErr[Path]] =
-      for {
-        packetFile <- createPacketFile[F](folder, "_packet.bts")
-        fos        = packetFile.fos
-        orErr <- Sync[F].delay {
-                  fos.write(packet.toByteArray)
-                  fos.flush()
-                }.attempt
-        closeErr <- gracefullyClose(fos)
-      } yield closeErr
-        .map(kp(orErr))
-        .joinRight
-        .fold(unableToStorePacket(packet, _).asLeft, kp(packetFile.file.asRight))
+      Resource
+        .make(createPacketFile[F](folder, "_packet.bts")) {
+          case (_, fos) => Sync[F].delay(fos.close())
+        }
+        .use {
+          case (file, fos) =>
+            Sync[F].delay {
+              fos.write(packet.toByteArray)
+              fos.flush()
+              file
+            }
+        }
+        .attempt
+        .map(_.fold(unableToStorePacket(packet, _).asLeft, _.asRight))
   }
 
-  final case class PacketFile(file: Path, fos: FileOutputStream)
-
-  def createPacketFile[F[_]: Sync](folder: Path, postfix: String): F[PacketFile] =
+  def createPacketFile[F[_]: Sync](folder: Path, postfix: String): F[(Path, FileOutputStream)] =
     for {
-      _        <- Sync[F].delay(folder.toFile.mkdirs())
-      fileName <- Sync[F].delay(timestamp + postfix)
-      file     <- Sync[F].delay(folder.resolve(fileName))
-      fos      <- Sync[F].delay(new FileOutputStream(file.toFile))
-    } yield PacketFile(file, fos)
+      _    <- Sync[F].delay(folder.toFile.mkdirs())
+      file <- Sync[F].delay(folder.resolve(timestamp + postfix))
+    } yield (file, new FileOutputStream(file.toFile))
 
   private val TS_FORMAT = "yyyyMMddHHmmss"
 
