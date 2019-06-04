@@ -187,6 +187,10 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
           s"Kademlia port used for node discovery based on Kademlia algorithm. Defaults to $DefaultKademliaPort"
       )
 
+    val useRandomPorts = opt[Boolean](
+      descr = "Use random ports in case RChain Protocol port and/or Kademlia port are not free."
+    )
+
     val numValidators = opt[Int](descr = "Number of validators at genesis.")
     val bondsFile = opt[String](
       descr = "Plain text file consisting of lines of the form `<pk> <stake>`, " +

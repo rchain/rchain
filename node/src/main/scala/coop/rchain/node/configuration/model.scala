@@ -15,6 +15,7 @@ final case class Server(
     port: Int,
     httpPort: Int,
     kademliaPort: Int,
+    useRandomPorts: Boolean,
     dynamicHostAddress: Boolean,
     noUpnp: Boolean,
     defaultTimeout: FiniteDuration,

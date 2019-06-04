@@ -26,6 +26,7 @@ class HoconConfigurationSpec extends FunSuite with Matchers {
       |    port = 40400
       |    port-http = 40403
       |    port-kademlia = 40404
+      |    use-random-ports = true
       |    send-timeout = 2 seconds
       |    standalone = true
       |    bootstrap = "rnode://de6eed5d00cf080fc587eeb412cb31a75fd10358@52.119.8.109?protocol=40400&discovery=40404"
@@ -52,6 +53,7 @@ class HoconConfigurationSpec extends FunSuite with Matchers {
         port = 40400,
         httpPort = 40403,
         kademliaPort = 40404,
+        useRandomPorts = true,
         dynamicHostAddress = true,
         noUpnp = true,
         defaultTimeout = 2.seconds,
