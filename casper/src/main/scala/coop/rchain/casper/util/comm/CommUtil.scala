@@ -1,5 +1,6 @@
 package coop.rchain.casper.util.comm
 
+import scala.concurrent.duration._
 import coop.rchain.comm.rp.Connect.{ConnectionsCell, RPConfAsk}
 import com.google.protobuf.ByteString
 import cats.Monad
@@ -8,9 +9,11 @@ import cats.effect._
 import com.google.protobuf.ByteString
 import coop.rchain.casper.LastApprovedBlock.LastApprovedBlock
 import coop.rchain.casper._
+import coop.rchain.casper.engine._, EngineCell._
+import coop.rchain.casper.MultiParentCasperRef.MultiParentCasperRef
 import coop.rchain.casper.protocol._
 import coop.rchain.comm.discovery._
-import coop.rchain.comm.protocol.routing.Packet
+import coop.rchain.comm.protocol.routing.{Packet, Protocol}
 import coop.rchain.comm.rp.Connect.RPConfAsk
 import coop.rchain.comm.rp._
 import coop.rchain.comm.rp.ProtocolHelper.{packet, toPacket}
@@ -79,24 +82,30 @@ object CommUtil {
       _     <- TransportLayer[F].stream(peers, msg)
     } yield ()
 
-  def requestApprovedBlock[F[_]: Monad: Sync: LastApprovedBlock: Log: Time: Metrics: TransportLayer: ConnectionsCell: RPConfAsk]
+  def requestApprovedBlock[F[_]: Monad: Concurrent: EngineCell: LastApprovedBlock: Log: Time: Metrics: TransportLayer: ConnectionsCell: RPConfAsk: EngineCell: MultiParentCasperRef]
       : F[Unit] = {
+
+    def keepOnRequestingTillRunning(bootstrap: PeerNode, msg: Protocol): F[Unit] =
+      TransportLayer[F].send(bootstrap, msg) >>= {
+        case Right(_) =>
+          Log[F].info(s"Successfully sent ApprovedBlockRequest to $bootstrap")
+        case Left(error) =>
+          Log[F].warn(
+            s"Failed to send ApprovedBlockRequest to $bootstrap because of ${CommError.errorMessage(error)}. Retrying in 10 seconds..."
+          ) >> Time[F].sleep(10 seconds) >> keepOnRequestingTillRunning(bootstrap, msg)
+      }
+
     val request = ApprovedBlockRequest("PleaseSendMeAnApprovedBlock").toByteString
-    for {
-      conf <- RPConfAsk[F].ask
-      _ <- conf.bootstrap match {
-            case Some(bootstrap) =>
-              val msg = packet(conf.local, conf.networkId, transport.ApprovedBlockRequest, request)
-              TransportLayer[F].send(bootstrap, msg).flatMap {
-                case Right(_) =>
-                  Log[F].info(s"Successfully sent ApprovedBlockRequest to $bootstrap")
-                case Left(error) =>
-                  Log[F].warn(
-                    s"Failed to send ApprovedBlockRequest to $bootstrap because of ${CommError.errorMessage(error)}"
-                  )
-              }
-            case None => Log[F].warn("Cannot request for an approved block as standalone")
-          }
-    } yield ()
+    RPConfAsk[F].ask >>= {
+      case conf =>
+        conf.bootstrap match {
+          case Some(bootstrap) =>
+            val msg = packet(conf.local, conf.networkId, transport.ApprovedBlockRequest, request)
+            Log[F].info("Starting to request ApprovedBlockRequest") >>
+              Concurrent[F].start(keepOnRequestingTillRunning(bootstrap, msg)).as(())
+          case None =>
+            Log[F].warn("Cannot request for an approved block as standalone") // TODO we should exit here
+        }
+    }
   }
 }
