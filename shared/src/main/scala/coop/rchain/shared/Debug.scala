@@ -22,15 +22,18 @@ import cats.effect.Sync
   *  the following will be written into the stdout:
   *
   * {{{
-  *   someMethod (SomeClass.scala:123)
-  *     x = 42
-  *     y = Hi!
-  *     Base16.encode(z.toByteArray) = "0xCOFFEE"
+  *   1234.567 someMethod (SomeClass.scala:123)
+  *              x = 42
+  *              y = Hi!
+  *              Base16.encode(z.toByteArray) = "0xCOFFEE"
   * }}}
   *
   * Works best with IntelliJ's AwesomeConsole plugin, which makes the source location a hyperlink (!).
   */
 object Debug {
+
+  // It's actually 'this class' loading time', but is good enough for having a relative measure
+  private val startupTime = System.currentTimeMillis()
 
   def print[F[_]: Sync](values: sourcecode.Text[Any]*)(
       implicit enclosing: sourcecode.Enclosing,
@@ -47,11 +50,14 @@ object Debug {
 
     val name     = suffixAfterLast(".", enclosing.value)
     val filename = suffixAfterLast("/", file.value)
+
+    val valueIndent = f"${""}%11s" //11 spaces. 8 for timestamp field, one for space past it, 2 for indent from method
     val valuesText =
       if (values.isEmpty) ""
-      else "\n" + values.map(v => s"\t${v.source} = ${v.value}").mkString("\n")
+      else "\n" + values.map(v => s"$valueIndent${v.source} = ${v.value}").mkString("\n")
+    val timestamp = (System.currentTimeMillis() - startupTime) / 1e3d
 
-    s"$name($filename:${line.value})$valuesText"
+    f"$timestamp% 8.3f $name($filename:${line.value})$valuesText"
   }
 
   private def suffixAfterLast(pattern: String, string: String): String = {
@@ -59,5 +65,4 @@ object Debug {
     val start = Math.max(-1, Math.min(pos + pattern.length, string.length))
     string.substring(start)
   }
-
 }
