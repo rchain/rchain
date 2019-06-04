@@ -32,14 +32,15 @@ object HistoryInstances {
       }
 
     private def divideSkip(
-        incomingTail: KeyPath,
-        incomingIdx: Byte,
+        incomingPath: KeyPath,
+        affix: ByteVector,
         incomingPointer: ValuePointer,
-        existingTail: KeyPath,
-        existingIdx: Byte,
-        existingPointer: ValuePointer,
-        prefixPath: KeyPath
+        existingPointer: ValuePointer
     ): (List[Trie], TriePointer) = {
+      val affixBytes                                 = affix.toSeq.toList
+      val prefixPath                                 = commonPrefix(incomingPath, affixBytes)
+      val incomingIdx :: incomingTail                = incomingPath.drop(prefixPath.size)
+      val existingIdx :: existingTail                = affixBytes.drop(prefixPath.size)
       val (newExistingPointer, maybeNewExistingSkip) = skip(existingTail, existingPointer)
       val (newIncomingPointer, maybeIncomingSkip)    = skip(incomingTail, incomingPointer)
       val pointerBlock = PointerBlock.create(
@@ -48,12 +49,8 @@ object HistoryInstances {
       )
       val pbPtr                            = NodePointer(pointerBlock.hash)
       val (topLevelPtr, maybeTopLevelSkip) = skip(prefixPath, pbPtr)
-      val nodes = maybeTopLevelSkip match {
-        case Some(value) => pointerBlock :: value :: Nil
-        case None        => pointerBlock :: Nil
-      }
-      val res = (maybeNewExistingSkip.toList ++ maybeIncomingSkip.toList) ++ nodes
-      (res, topLevelPtr)
+      val res                              = maybeNewExistingSkip ++ maybeIncomingSkip ++ Some(pointerBlock) ++ maybeTopLevelSkip
+      (res.toList, topLevelPtr)
     }
 
     // TODO consider an indexedseq
@@ -71,18 +68,11 @@ object HistoryInstances {
           Applicative[F].pure(Skip(ByteVector(common), newLeaf) :: Nil)
 
         case TriePath(Vector(), Some(Skip(affix, existingPointer)), Nil) => // split skip at root
-          val affixBytes                   = affix.toSeq.toList
-          val prefixPath                   = commonPrefix(affixBytes, remainingPath)
-          val incomingHead :: incomingTail = remainingPath.drop(prefixPath.size)
-          val existingHead :: existingTail = affixBytes.drop(prefixPath.size)
           val (dividedElems, _) = divideSkip(
-            incomingTail,
-            incomingHead,
+            remainingPath,
+            affix,
             newLeaf,
-            existingTail,
-            existingHead,
-            existingPointer,
-            prefixPath
+            existingPointer
           )
           Applicative[F].pure(dividedElems)
 
@@ -91,32 +81,21 @@ object HistoryInstances {
             Some(Skip(affix, existingPointer)),
             common
             ) => // split existing skip
-          val incomingPath                 = remainingPath.drop(common.size)
-          val affixBytes                   = affix.toSeq.toList
-          val prefixPath                   = commonPrefix(incomingPath, affixBytes)
-          val incomingHead :: incomingTail = incomingPath.drop(prefixPath.size)
-          val existingHead :: existingTail = affixBytes.drop(prefixPath.size)
+          val incomingPath = remainingPath.drop(common.size)
           val (dividedElems, dividedTopPtr) = divideSkip(
-            incomingTail,
-            incomingHead,
+            incomingPath,
+            affix,
             newLeaf,
-            existingTail,
-            existingHead,
-            existingPointer,
-            prefixPath
+            existingPointer
           )
           val updatedPointerBlock = pointerBlock.updated((toInt(common.last), dividedTopPtr) :: Nil)
-          for {
-            result <- rehash(common.init, elems, updatedPointerBlock, dividedElems)
-          } yield result
+          rehash(common.init, elems, updatedPointerBlock, dividedElems)
 
         case TriePath(elems :+ (pastPb: PointerBlock), None, common) => // add to existing node
           val key          = remainingPath.drop(common.size)
           val (ptr, nodes) = skip(key, newLeaf)
           val updatedPb    = pastPb.updated((toInt(common.last), ptr) :: Nil)
-          for {
-            result <- rehash(common.init, elems, updatedPb, nodes.toList)
-          } yield result
+          rehash(common.init, elems, updatedPb, nodes.toList)
 
         case TriePath(elems :+ Skip(affix, LeafPointer(_)), _, path) => // update value
           rehash(path.dropRight(affix.size.toInt), elems, Skip(affix, newLeaf), Nil)
@@ -127,7 +106,7 @@ object HistoryInstances {
         path: KeyPath,
         rest: Vector[Trie],
         lastSeen: Trie,
-        acc: List[Trie]
+        initialElements: List[Trie]
     ): F[List[Trie]] = {
       type Params = (KeyPath, Vector[Trie], Trie, List[Trie])
       def go(params: Params): F[Either[Params, List[Trie]]] =
@@ -163,7 +142,7 @@ object HistoryInstances {
 
             }
         }
-      FlatMap[F].tailRecM((path, rest, lastSeen, acc))(go)
+      FlatMap[F].tailRecM((path, rest, lastSeen, initialElements))(go)
     }
 
     private def rebalanceDelete(fullPath: KeyPath, trieNodesOnPath: Vector[Trie]): F[List[Trie]] = {
