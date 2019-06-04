@@ -135,7 +135,7 @@ class MultiParentCasperBondingSpec extends FlatSpec with Matchers with Inspector
 
           rankedValidatorQuery = ConstructDeploy.sourceDeploy(
             """new rl(`rho:registry:lookup`), SystemInstancesCh, posCh in {
-            |  rl!(`rho:lang:systemInstancesRegistry`, *SystemInstancesCh) |
+            |  rl!(`rho:rchain:systemInstancesRegistry`, *SystemInstancesCh) |
             |  for(@(_, SystemInstancesRegistry) <- SystemInstancesCh) {
             |    @SystemInstancesRegistry!("lookup", "pos", *posCh) |
             |    for(pos <- posCh){

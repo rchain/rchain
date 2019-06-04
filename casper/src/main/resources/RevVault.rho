@@ -23,7 +23,7 @@ new
   _getOrCreate,
   _revVault
 in {
-  rl!(`rho:lang:makeMint`, *MakeMintCh) |
+  rl!(`rho:rchain:makeMint`, *MakeMintCh) |
   rl!(`rho:rchain:authKey`, *AuthKeyCh) |
   rl!(`rho:lang:either`, *EitherCh) |
   for(@(_, MakeMint) <- MakeMintCh; @(_, AuthKey) <- AuthKeyCh; @(_, Either) <- EitherCh) {
