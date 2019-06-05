@@ -145,7 +145,13 @@ object Main {
         .ifM(isValidInetAddress[Task](h), isValidPublicInetAddress[Task](h))
         .ifM(
           Task.unit,
-          log.error(s"Host network address $h is not valid") >> Task.delay(System.exit(1))
+          for {
+            _ <- log.error(
+                  s"Kademlia hostname '$h' is not valid or it does not resolve to a public IP address"
+                )
+            _ <- log.error("Hint: Run me with --allow-private-addresses in private networks")
+            _ <- Task.delay(System.exit(1))
+          } yield ()
         )
     }
   }
