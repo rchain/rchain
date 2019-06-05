@@ -860,8 +860,7 @@ trait StorageActionsTests[F[_]]
       } yield checkpoint1.log shouldBe empty
   }
 
-  val emptyRootHash: Blake2b256Hash =
-    Blake2b256Hash.fromHex("45b0cfc220ceec5b7c1c62c4d4193d38e4eba48e8815729ce75f9c0ab0e4c1c0")
+  val emptyRootHash: Blake2b256Hash = History.emptyRootHash
 
   "consume and produce a match and then createCheckpoint" should "result in an empty TrieStore" in
     fixture { (_, _, space) =>

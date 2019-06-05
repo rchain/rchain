@@ -18,12 +18,11 @@ class HistorySpec extends FlatSpec with Matchers with OptionValues with InMemory
     val data = insert(_zeros) :: Nil
     for {
       newHistory <- emptyHistory.process(data)
-      result     <- newHistory.findPath(_zeros)
+      result     <- newHistory.find(_zeros)
       (_, path)  = result
-      _ = path.nodes match {
-        case skip +: leaf =>
-          leaf shouldBe Vector(Leaf(data.head.hash))
-          skip shouldBe Skip(_zeros, Trie.hash(leaf.head))
+      _ = path match {
+        case skip =>
+          skip shouldBe Vector(Skip(_zeros, LeafPointer(data.head.hash)))
       }
     } yield ()
   }
@@ -32,15 +31,28 @@ class HistorySpec extends FlatSpec with Matchers with OptionValues with InMemory
     val data = List.range(0, 10).map(zerosAnd).map(k => InsertAction(k, randomBlake))
     for {
       newHistory          <- emptyHistory.process(data)
-      results             <- data.traverse(action => newHistory.findPath(action.key))
+      results             <- data.traverse(action => newHistory.find(action.key))
       _                   = results should have size 10
       (_, headPath)       = results.head
-      secondTrieOnPath    = headPath.nodes.tail.head
-      _                   = secondTrieOnPath shouldBe a[Node]
-      allFirstTriesOnPath = results.map(_._2.nodes.head).toSet
+      secondTrieOnPath    = headPath.tail.head
+      _                   = secondTrieOnPath shouldBe a[PointerBlock]
+      allFirstTriesOnPath = results.map(_._2.head).toSet
       _                   = allFirstTriesOnPath should have size 1
       firstSkip           = allFirstTriesOnPath.head
       _                   = skipShouldHaveAffix(firstSkip, _31zeros)
+    } yield ()
+  }
+
+  "deletion of a leaf" should "result in empty store" in withEmptyTrie { emptyHistory =>
+    val insertions = insert(_zeros) :: Nil
+    val deletions  = delete(_zeros) :: Nil
+    for {
+      historyOne  <- emptyHistory.process(insertions)
+      historyTwo  <- historyOne.process(deletions)
+      result      <- historyTwo.find(_zeros)
+      (ptr, path) = result
+      _           = path should have size 0
+      _           = ptr shouldBe a[EmptyPointer.type]
     } yield ()
   }
 
@@ -48,14 +60,14 @@ class HistorySpec extends FlatSpec with Matchers with OptionValues with InMemory
     val inserts   = insert(_zeros) :: insert(_zerosOnes) :: Nil
     val deletions = delete(_zeros) :: Nil
     for {
-      historyOne <- emptyHistory.process(inserts)
-      historyTwo <- historyOne.process(deletions)
-      result     <- historyTwo.findPath(_zerosOnes)
-      (_, path)  = result
-      _          = path.nodes should have size 2
-      _          = path.nodes.head shouldBe a[Skip]
-      _          = path.nodes.last shouldBe a[Leaf]
-      _          = skipShouldHaveAffix(path.nodes.head, _zerosOnes)
+      historyOne  <- emptyHistory.process(inserts)
+      historyTwo  <- historyOne.process(deletions)
+      result      <- historyTwo.find(_zerosOnes)
+      (ptr, path) = result
+      _           = path should have size 1
+      _           = path.head shouldBe a[Skip]
+      _           = skipShouldHaveAffix(path.head, _zerosOnes)
+      _           = ptr shouldBe a[LeafPointer]
     } yield ()
   }
 
@@ -64,10 +76,10 @@ class HistorySpec extends FlatSpec with Matchers with OptionValues with InMemory
     val insertTwo = insert(_zeros) :: Nil
     for {
       historyOne       <- emptyHistory.process(insertOne)
-      resultOnePre     <- historyOne.findPath(_zeros)
+      resultOnePre     <- historyOne.find(_zeros)
       historyTwo       <- historyOne.process(insertTwo)
-      resultOnePost    <- historyOne.findPath(_zeros)
-      resultTwo        <- historyTwo.findPath(_zeros)
+      resultOnePost    <- historyOne.find(_zeros)
+      resultTwo        <- historyTwo.find(_zeros)
       (leafOnePre, _)  = resultOnePre
       (leafOnePost, _) = resultOnePost
       (leafTwo, _)     = resultTwo
@@ -79,7 +91,8 @@ class HistorySpec extends FlatSpec with Matchers with OptionValues with InMemory
 
   protected def withEmptyTrie(f: History[Task] => Task[Unit]): Unit = {
     val emptyHistory =
-      new History[Task](History.emptyRootHash, inMemHistoryStore, inMemPointerBlockStore)
+      HistoryInstances
+        .noMerging[Task](History.emptyRootHash, inMemHistoryStore)
     f(emptyHistory).runSyncUnsafe(20.seconds)
   }
 

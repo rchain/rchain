@@ -27,7 +27,6 @@ final case class LMDBStorageConfig(
 final case class LMDBRSpaceStorageConfig(
     coldStore: StoreConfig,
     historyStore: StoreConfig,
-    pointerBlockStore: StoreConfig,
     rootsStore: StoreConfig
 )
 
@@ -50,11 +49,7 @@ object HistoryRepositoryInstances {
       coldStore        = ColdStoreInstances.coldStore[F](coldLMDBStore)
       historyLMDBStore = StoreInstances.lmdbStore[F](config.historyStore)
       historyStore     = HistoryStoreInstances.historyStore[F](historyLMDBStore)
-      pointerLMDBStore = StoreInstances.lmdbStore[F](config.pointerBlockStore)
-      pointerBlockStore = PointerBlockStoreInstances.pointerBlockStore[F](
-        pointerLMDBStore
-      )
-      history = History(currentRoot, historyStore, pointerBlockStore)
+      history          = HistoryInstances.noMerging(currentRoot, historyStore)
     } yield HistoryRepositoryImpl[F, C, P, A, K](history, rootsRepository, coldStore)
   }
 }

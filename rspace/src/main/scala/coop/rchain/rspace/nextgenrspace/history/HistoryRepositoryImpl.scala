@@ -39,11 +39,11 @@ final case class HistoryRepositoryImpl[F[_]: Sync, C, P, A, K](
   implicit val serializeC: Serialize[C] = Serialize.fromCodec(codecC)
 
   private def fetchData(key: Blake2b256Hash): F[Option[PersistedData]] =
-    history.findPath(key.bytes.toSeq.toList).flatMap {
+    history.find(key.bytes.toSeq.toList).flatMap {
       case (trie, _) =>
         trie match {
-          case Leaf(dataHash) => leafStore.get(dataHash)
-          case EmptyTrie      => Applicative[F].pure(None)
+          case LeafPointer(dataHash) => leafStore.get(dataHash)
+          case EmptyPointer          => Applicative[F].pure(None)
           case _ =>
             Sync[F].raiseError(new RuntimeException(s"unexpected data at key $key, data: $trie"))
 
@@ -204,7 +204,7 @@ final case class HistoryRepositoryImpl[F[_]: Sync, C, P, A, K](
   override def reset(root: Blake2b256Hash): F[HistoryRepository[F, C, P, A, K]] =
     for {
       _    <- rootsRepository.validateRoot(root)
-      next = history.copy(root = root)
+      next = history.reset(root = root)
     } yield this.copy(history = next)
 
   override def close(): F[Unit] =

@@ -32,8 +32,7 @@ class HistoryGenerativeSpec
   "history" should "accept new leafs (insert, update, delete)" in forAll(
     distinctListOf(arbitraryInsertAction)
   ) { actions: List[Data] =>
-    val emptyHistory =
-      new History[Task](emptyRootHash, inMemHistoryStore, inMemPointerBlockStore)
+    val emptyHistory = HistoryInstances.noMerging[Task](emptyRootHash, inMemHistoryStore)
 
     val emptyState = Map.empty[Key, (Data, History[Task])] // accumulate actions performed on the trie
 
@@ -50,8 +49,8 @@ class HistoryGenerativeSpec
         val actions           = DeleteAction(k) :: Nil
         val postDeleteHistory = postModifyHistory.process(actions).runSyncUnsafe(20.seconds)
 
-        fetchData(postModifyHistory, k)._1 shouldBe Leaf(v)
-        fetchData(postDeleteHistory, k)._1 shouldBe EmptyTrie
+        fetchData(postModifyHistory, k)._1 shouldBe LeafPointer(v)
+        fetchData(postDeleteHistory, k)._1 shouldBe EmptyPointer
     }
 
     val deletions    = map.values.map(_._1).map(v => DeleteAction(v._1)).toList
@@ -83,39 +82,28 @@ class HistoryGenerativeSpec
 
     val deletions      = toBeProcessed.map(v => DeleteAction(v._1))
     val deletionResult = insertResult.process(deletions).runSyncUnsafe(20.seconds)
-    fetchData(deletionResult, toBeProcessed.head)._1 shouldBe EmptyTrie
+    fetchData(deletionResult, toBeProcessed.head)._1 shouldBe EmptyPointer
 
     val notDeletedData = pastData.filter(v => v._1 != toBeProcessed.head._1)
     notDeletedData.foreach(action => {
-      fetchData(deletionResult, action)._1 shouldBe Leaf(action._2)
+      fetchData(deletionResult, action)._1 shouldBe LeafPointer(action._2)
     })
 
     val allUniqueData = pastData.toMap ++ toBeProcessed.toMap
     allUniqueData.foreach(action => {
-      fetchData(insertResult, action)._1 shouldBe Leaf(action._2)
+      fetchData(insertResult, action)._1 shouldBe LeafPointer(action._2)
     })
     (insertResult, allUniqueData.toList)
   }
 
-  def fetchData(h: History[Task], data: Data): (Trie, TriePath) =
+  def fetchData(h: History[Task], data: Data): (TriePointer, Vector[Trie]) =
     fetchData(h, data._1)
 
-  def fetchData(h: History[Task], k: Key): (Trie, TriePath) =
-    h.findPath(k).runSyncUnsafe(20.seconds)
+  def fetchData(h: History[Task], k: Key): (TriePointer, Vector[Trie]) =
+    h.find(k).runSyncUnsafe(20.seconds)
 }
 
 trait InMemoryHistoryTestBase {
-  def inMemPointerBlockStore: PointerBlockStore[Task] = new PointerBlockStore[Task] {
-    val data: TrieMap[Blake2b256Hash, PointerBlock] = TrieMap.empty
-
-    override def put(key: Blake2b256Hash, pb: PointerBlock): Task[Unit] =
-      Task.delay { data.put(key, pb) }
-
-    override def get(key: Blake2b256Hash): Task[Option[PointerBlock]] =
-      Task.delay { data.get(key) }
-
-    override def close(): Task[Unit] = Task.now(())
-  }
 
   def inMemHistoryStore: HistoryStore[Task] = new HistoryStore[Task] {
     val data: TrieMap[Blake2b256Hash, Trie] = TrieMap.empty

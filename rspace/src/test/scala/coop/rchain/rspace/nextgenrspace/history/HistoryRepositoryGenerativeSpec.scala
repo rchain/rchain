@@ -33,8 +33,6 @@ import scala.concurrent.duration._
 class LMDBHistoryRepositoryGenerativeSpec
     extends HistoryRepositoryGenerativeDefinition
     with BeforeAndAfterAll {
-  val emptyRoot: Trie               = EmptyTrie
-  val emptyRootHash: Blake2b256Hash = Trie.hash(emptyRoot)
 
   val dbDir: Path = Files.createTempDirectory("rchain-storage-test-")
 
@@ -50,9 +48,6 @@ class LMDBHistoryRepositoryGenerativeSpec
   def lmdbHistoryStore =
     HistoryStoreInstances.historyStore(StoreInstances.lmdbStore[Task](lmdbConfig))
 
-  def lmdbPointerBlockStore =
-    PointerBlockStoreInstances.pointerBlockStore(StoreInstances.lmdbStore[Task](lmdbConfig))
-
   def lmdbColdStore =
     ColdStoreInstances.coldStore(StoreInstances.lmdbStore[Task](lmdbConfig))
 
@@ -63,8 +58,7 @@ class LMDBHistoryRepositoryGenerativeSpec
     new RootRepository[Task](lmdbRootsStore)
 
   override def repo: HistoryRepository[Task, String, Pattern, String, StringsCaptor] = {
-    val emptyHistory =
-      new History[Task](emptyRootHash, lmdbHistoryStore, lmdbPointerBlockStore)
+    val emptyHistory = HistoryInstances.noMerging(History.emptyRootHash, lmdbHistoryStore)
     val repository: HistoryRepository[Task, String, Pattern, String, StringsCaptor] =
       HistoryRepositoryImpl.apply[Task, String, Pattern, String, StringsCaptor](
         emptyHistory,
@@ -84,7 +78,8 @@ class InmemHistoryRepositoryGenerativeSpec
 
   override def repo: HistoryRepository[Task, String, Pattern, String, StringsCaptor] = {
     val emptyHistory =
-      new History[Task](History.emptyRootHash, inMemHistoryStore, inMemPointerBlockStore)
+      HistoryInstances
+        .noMerging[Task](History.emptyRootHash, inMemHistoryStore)
     val repository: HistoryRepository[Task, String, Pattern, String, StringsCaptor] =
       HistoryRepositoryImpl.apply[Task, String, Pattern, String, StringsCaptor](
         emptyHistory,
