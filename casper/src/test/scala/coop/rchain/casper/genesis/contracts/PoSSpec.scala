@@ -9,5 +9,5 @@ class PoSSpec
     extends RhoSpec(
       CompiledRholangSource("PoSTest.rho"),
       Seq.empty,
-      20.seconds
+      60.seconds
     )
