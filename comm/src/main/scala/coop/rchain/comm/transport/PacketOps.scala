@@ -1,63 +1,52 @@
 package coop.rchain.comm.transport
 
-import coop.rchain.shared.GracefulClose._
-import coop.rchain.comm.CommError, CommError._
-import coop.rchain.comm.protocol.routing._
-import java.nio.file._
 import java.io._
-import cats._, cats.data._, cats.implicits._
-import cats.effect.Sync
-import java.util.Date
+import java.nio.file._
 import java.text.SimpleDateFormat
+import java.util.Date
 
 import scala.util.Random
 
+import cats.effect.{Resource, Sync}
+import cats.implicits._
+
+import coop.rchain.comm.CommError
+import CommError._
+import coop.rchain.comm.protocol.routing._
 import coop.rchain.crypto.codec.Base16
 
 object PacketOps {
 
   def restore[F[_]: Sync](file: Path): F[CommErr[Packet]] =
-    for {
-      fin       <- Sync[F].delay(new FileInputStream(file.toFile))
-      packetErr <- Sync[F].delay(Packet.parseFrom(fin)).attempt
-      resErr <- packetErr match {
-                 case Left(th) =>
-                   gracefullyClose(fin) >> Left(unableToRestorePacket(file, th)).pure[F]
-                 case Right(packet) => gracefullyClose(fin) >> Right(packet).pure[F]
-               }
-    } yield resErr
+    Resource
+      .fromAutoCloseable(Sync[F].delay(new FileInputStream(file.toFile)))
+      .use(fin => Sync[F].delay(Packet.parseFrom(fin)))
+      .attempt
+      .map(_.fold(unableToRestorePacket(file, _).asLeft, _.asRight))
 
   implicit class RichPacket(packet: Packet) {
     def store[F[_]: Sync](folder: Path): F[CommErr[Path]] =
-      for {
-        packetFile <- createPacketFile[F](folder, "_packet.bts")
-        file       = packetFile.file
-        fos        = packetFile.fos
-        orErr <- Sync[F].delay {
-                  fos.write(packet.toByteArray)
-                  fos.flush()
-                }.attempt
-        resErr <- orErr match {
-                   case Left(th) =>
-                     gracefullyClose(fos) >> Left(unableToStorePacket(packet, th)).pure[F]
-                   case Right(_) =>
-                     gracefullyClose(fos) map {
-                       case Left(th) => Left(unableToStorePacket(packet, th))
-                       case Right(_) => Right(file)
-                     }
-                 }
-      } yield resErr
+      Resource
+        .make(createPacketFile[F](folder, "_packet.bts")) {
+          case (_, fos) => Sync[F].delay(fos.close())
+        }
+        .use {
+          case (file, fos) =>
+            Sync[F].delay {
+              fos.write(packet.toByteArray)
+              fos.flush()
+              file
+            }
+        }
+        .attempt
+        .map(_.fold(unableToStorePacket(packet, _).asLeft, _.asRight))
   }
 
-  final case class PacketFile(file: Path, fos: FileOutputStream)
-
-  def createPacketFile[F[_]: Sync](folder: Path, postfix: String): F[PacketFile] =
+  def createPacketFile[F[_]: Sync](folder: Path, postfix: String): F[(Path, FileOutputStream)] =
     for {
-      _        <- Sync[F].delay(folder.toFile.mkdirs())
-      fileName <- Sync[F].delay(timestamp + postfix)
-      file     <- Sync[F].delay(folder.resolve(fileName))
-      fos      <- Sync[F].delay(new FileOutputStream(file.toFile))
-    } yield PacketFile(file, fos)
+      _    <- Sync[F].delay(folder.toFile.mkdirs())
+      file <- Sync[F].delay(folder.resolve(timestamp + postfix))
+    } yield (file, new FileOutputStream(file.toFile))
 
   private val TS_FORMAT = "yyyyMMddHHmmss"
 
