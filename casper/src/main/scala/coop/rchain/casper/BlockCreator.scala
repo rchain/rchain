@@ -52,7 +52,6 @@ object BlockCreator {
       maxBlockNumber        = ProtoUtil.maxBlockNumber(parents)
       invalidLatestMessages <- ProtoUtil.invalidLatestMessages[F](dag)
       _ <- invalidLatestMessages.values.toList.traverse { invalidBlockHash =>
-            // TODO: Note this snippet calls the new PoS contract so it will currently do nothing
             val encodedInvalidBlockHash = Base16.encode(invalidBlockHash.toByteArray)
             val deploy = ConstructDeploy.sourceDeploy(
               s"""
