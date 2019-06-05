@@ -79,21 +79,23 @@ object Runtime {
   type Remainder = Option[Var]
   type BodyRef   = Long
 
-  class BlockDataStorage[F[_]](val timestamp: Ref[F, Par]) {
-    def setParams(timestamp: Par)(implicit F: Sync[F]): F[Unit] =
-      for {
-        _ <- this.timestamp.set(timestamp)
-      } yield ()
+  final case class BlockData(timeStamp: Long, blockNumber: Long)
+
+  class BlockDataStorage[F[_]](storage: Ref[F, Option[BlockData]]) {
+    def setParams(data: BlockData): F[Unit] =
+      this.storage.set(Some(data))
+
+    def get: F[Option[BlockData]] = this.storage.get
   }
 
   object BlockDataStorage {
     def apply[F[_]]()(implicit F: Sync[F]): F[BlockDataStorage[F]] =
-      for {
-        timestamp <- Ref[F].of(Par())
-      } yield new BlockDataStorage[F](timestamp)
+      Ref[F]
+        .of[Option[BlockData]](None)
+        .map(new BlockDataStorage[F](_))
 
     def unsafe[F[_]]()(implicit F: Sync[F]): BlockDataStorage[F] =
-      new BlockDataStorage(Ref.unsafe[F, Par](Par()))
+      new BlockDataStorage(Ref.unsafe[F, Option[BlockData]](None))
   }
 
   class InvalidBlocks[F[_]](val invalidBlocks: Ref[F, Par]) {
@@ -188,7 +190,7 @@ object Runtime {
         dispatcher: RhoDispatch[F],
         registry: Registry[F],
         deployParametersRef: Ref[F, DeployParameters],
-        blockTime: BlockDataStorage[F],
+        blockData: BlockDataStorage[F],
         invalidBlocks: InvalidBlocks[F]
     ) {
       val systemProcesses = SystemProcesses[F](dispatcher, space)
@@ -265,7 +267,7 @@ object Runtime {
       FixedChannels.GET_BLOCK_DATA,
       1,
       BodyRefs.GET_BLOCK_DATA, { ctx =>
-        ctx.systemProcesses.getBlockData(ctx.blockTime)
+        ctx.systemProcesses.getBlockData(ctx.blockData)
       }
     ),
     SystemProcess.Definition[F](
@@ -322,7 +324,7 @@ object Runtime {
         dispatcher: RhoDispatch[F],
         registry: Registry[F],
         deployParametersRef: Ref[F, DeployParameters],
-        blockTime: BlockDataStorage[F],
+        blockData: BlockDataStorage[F],
         invalidBlocks: InvalidBlocks[F]
     ): RhoDispatchMap[F] = {
       val systemProcesses = SystemProcesses[F](dispatcher, space)
@@ -348,7 +350,7 @@ object Runtime {
           .map(
             _.toDispatchTable(
               SystemProcess
-                .Context(space, dispatcher, registry, deployParametersRef, blockTime, invalidBlocks)
+                .Context(space, dispatcher, registry, deployParametersRef, blockData, invalidBlocks)
             )
           )
     }
@@ -357,7 +359,7 @@ object Runtime {
       "rho:registry:lookup" -> Bundle(FixedChannels.REG_LOOKUP, writeFlag = true)
     ) ++ (stdSystemProcesses[F] ++ extraSystemProcesses).map(_.toUrnMap)
 
-    val blockTime     = BlockDataStorage.unsafe[F]()
+    val blockData     = BlockDataStorage.unsafe[F]()
     val invalidBlocks = InvalidBlocks.unsafe[F]()
 
     val procDefs: List[(Name, Arity, Remainder, BodyRef)] = {
@@ -383,7 +385,7 @@ object Runtime {
             replayDispatcher,
             replayRegistry,
             deployParametersRef,
-            blockTime,
+            blockData,
             invalidBlocks
           )
 
@@ -393,7 +395,7 @@ object Runtime {
             dispatcher,
             registry,
             deployParametersRef,
-            blockTime,
+            blockData,
             invalidBlocks
           )
 
@@ -421,7 +423,7 @@ object Runtime {
         cost,
         context,
         deployParametersRef,
-        blockTime,
+        blockData,
         invalidBlocks
       )
     }

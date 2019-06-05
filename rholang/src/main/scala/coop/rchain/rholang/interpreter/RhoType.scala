@@ -39,6 +39,8 @@ object RhoType {
       p.singleExpr().collect {
         case Expr(GInt(v)) => v
       }
+
+    def apply(i: Long): Par = Expr(GInt(i))
   }
 
   object Tuple2 {

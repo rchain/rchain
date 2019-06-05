@@ -16,6 +16,7 @@ import coop.rchain.metrics.Metrics
 import coop.rchain.models.Expr.ExprInstance.GString
 import coop.rchain.models._
 import coop.rchain.rholang.Resources._
+import coop.rchain.rholang.interpreter.Runtime.BlockData
 import coop.rchain.rholang.interpreter.accounting
 import coop.rchain.rholang.interpreter.util.RevAddress
 import coop.rchain.shared.Log
@@ -97,18 +98,24 @@ class RevIssuanceTest extends FlatSpec with Matchers {
         .unsafeRunSync
       val (postGenHash, _) =
         runtimeManager
-          .computeState(emptyHash)(genesisDeploys, System.currentTimeMillis())
+          .computeState(emptyHash)(genesisDeploys, BlockData(System.currentTimeMillis(), 0))
           .runSyncUnsafe(20.seconds)
       val (postUnlockHash, _) =
         runtimeManager
-          .computeState(postGenHash)(unlockDeployData :: Nil, System.currentTimeMillis())
+          .computeState(postGenHash)(
+            unlockDeployData :: Nil,
+            BlockData(System.currentTimeMillis(), 0)
+          )
           .runSyncUnsafe(10.seconds)
       val unlockResult = getDataUnsafe(runtimeManager, postUnlockHash, statusOut)
       assert(unlockResult.head.exprs.head.getETupleBody.ps.head.exprs.head.getGBool) //assert unlock success
 
       val (postTransferHash, _) =
         runtimeManager
-          .computeState(postUnlockHash)(transferDeployData :: Nil, System.currentTimeMillis())
+          .computeState(postUnlockHash)(
+            transferDeployData :: Nil,
+            BlockData(System.currentTimeMillis(), 0)
+          )
           .runSyncUnsafe(10.seconds)
       val transferSuccess = getDataUnsafe(runtimeManager, postTransferHash, transferStatusOut)
       val transferResult  = getDataUnsafe(runtimeManager, postTransferHash, destination)

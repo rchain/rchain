@@ -24,6 +24,7 @@ import coop.rchain.metrics
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.models.PCost
 import coop.rchain.p2p.EffectsTestInstances.LogStub
+import coop.rchain.rholang.interpreter.Runtime.BlockData
 import coop.rchain.rholang.interpreter.{accounting, Runtime}
 import coop.rchain.shared.{StoreType, Time}
 import monix.eval.Task
@@ -59,7 +60,7 @@ class InterpreterUtilTest
       deploys,
       dag,
       runtimeManager,
-      System.currentTimeMillis(),
+      BlockData(System.currentTimeMillis(), 0),
       span0
     )
 

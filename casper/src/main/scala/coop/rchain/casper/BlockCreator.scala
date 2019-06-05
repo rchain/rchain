@@ -16,6 +16,7 @@ import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.Validator.Validator
 import coop.rchain.rholang.interpreter.accounting
+import coop.rchain.rholang.interpreter.Runtime.BlockData
 import coop.rchain.shared.{Cell, Log, Time}
 
 object BlockCreator {
@@ -196,7 +197,7 @@ object BlockCreator {
         deploys,
         dag,
         runtimeManager,
-        now,
+        BlockData(now, maxBlockNumber + 1),
         span,
         invalidBlocks
       )

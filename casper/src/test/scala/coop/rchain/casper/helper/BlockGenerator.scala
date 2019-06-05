@@ -3,7 +3,6 @@ package coop.rchain.casper.helper
 import cats._
 import cats.effect._
 import cats.implicits._
-
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage._
 import coop.rchain.casper.protocol._
@@ -16,13 +15,13 @@ import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.Validator.Validator
 import coop.rchain.p2p.EffectsTestInstances.LogicalTime
 import coop.rchain.shared.Time
-
 import monix.eval.Task
+
 import scala.collection.immutable.HashMap
 import scala.language.higherKinds
-
 import coop.rchain.casper.CasperMetricsSource
 import coop.rchain.metrics.{Metrics, Span}
+import coop.rchain.rholang.interpreter.Runtime.BlockData
 
 object BlockGenerator {
   implicit val timeEff = new LogicalTime[Task]
@@ -97,7 +96,7 @@ object BlockGenerator {
                  deploys,
                  dag,
                  runtimeManager,
-                 now,
+                 BlockData(now, b.body.get.state.get.blockNumber),
                  span
                )
     } yield result

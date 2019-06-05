@@ -5,12 +5,11 @@ import cats.data.EitherT
 import cats.effect.concurrent.MVar
 import cats.effect.{Sync, _}
 import cats.implicits._
-
 import com.google.protobuf.ByteString
 import coop.rchain.casper.protocol._
-import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
 import coop.rchain.casper.util.{ConstructDeploy, ProtoUtil}
 import coop.rchain.casper.CasperMetricsSource
+import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
 import coop.rchain.catscontrib.Catscontrib.ToMonadOps
 import coop.rchain.catscontrib.MonadTrans
 import coop.rchain.crypto.hash.Blake2b512Random
@@ -21,7 +20,7 @@ import coop.rchain.models.Validator.Validator
 import coop.rchain.models.Var.VarInstance.FreeVar
 import coop.rchain.models._
 import coop.rchain.models.rholang.implicits._
-import coop.rchain.rholang.interpreter.Runtime.RhoISpace
+import coop.rchain.rholang.interpreter.Runtime.{BlockData, RhoISpace}
 import coop.rchain.rholang.interpreter.accounting._
 import coop.rchain.rholang.interpreter.errors.BugFoundError
 import coop.rchain.rholang.interpreter.storage.implicits.matchListPar
@@ -47,12 +46,12 @@ trait RuntimeManager[F[_]] {
   ): F[Seq[Par]]
   def replayComputeState(startHash: StateHash)(
       terms: Seq[InternalProcessedDeploy],
-      blockTime: Long,
+      blockData: BlockData,
       invalidBlocks: Map[BlockHash, Validator] = Map.empty[BlockHash, Validator]
   ): F[Either[(Option[DeployData], Failed), StateHash]]
   def computeState(hash: StateHash)(
       terms: Seq[DeployData],
-      blockTime: Long,
+      blockData: BlockData,
       invalidBlocks: Map[BlockHash, Validator] = Map.empty[BlockHash, Validator]
   ): F[(StateHash, Seq[InternalProcessedDeploy])]
   def computeGenesis(
@@ -108,13 +107,13 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics] private[rholang] (
 
   def replayComputeState(startHash: StateHash)(
       terms: Seq[InternalProcessedDeploy],
-      blockTime: Long,
+      blockData: BlockData,
       invalidBlocks: Map[BlockHash, Validator] = Map.empty[BlockHash, Validator]
   ): F[Either[ReplayFailure, StateHash]] =
     withRuntimeLock { runtime =>
       for {
         span   <- Metrics[F].span(replayComputeStateLabel)
-        _      <- setBlockTime(blockTime, runtime)
+        _      <- runtime.blockData.setParams(blockData)
         _      <- setInvalidBlocks(invalidBlocks, runtime)
         _      <- span.mark("before-replay-deploys")
         result <- replayDeploys(startHash, terms, replayDeploy(runtime, span))
@@ -124,13 +123,13 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics] private[rholang] (
 
   def computeState(startHash: StateHash)(
       terms: Seq[DeployData],
-      blockTime: Long,
+      blockData: BlockData,
       invalidBlocks: Map[BlockHash, Validator] = Map.empty[BlockHash, Validator]
   ): F[(StateHash, Seq[InternalProcessedDeploy])] =
     withRuntimeLock { runtime =>
       for {
         span   <- Metrics[F].span(computeStateLabel)
-        _      <- setBlockTime(blockTime, runtime)
+        _      <- runtime.blockData.setParams(blockData)
         _      <- setInvalidBlocks(invalidBlocks, runtime)
         _      <- span.mark("before-process-deploys")
         result <- processDeploys(startHash, terms, processDeploy(runtime, span))
@@ -146,20 +145,12 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics] private[rholang] (
     withRuntimeLock { runtime =>
       for {
         span       <- Metrics[F].span(computeGenesisLabel)
-        _          <- setBlockTime(blockTime, runtime)
+        _          <- runtime.blockData.setParams(BlockData(blockTime, 0))
         _          <- span.mark("before-process-deploys")
         evalResult <- processDeploys(startHash, terms, processDeploy(runtime, span))
         _          <- span.close()
       } yield (startHash, evalResult._1, evalResult._2)
     }
-  }
-
-  private def setBlockTime(
-      blockTime: Long,
-      runtime: Runtime[F]
-  ): F[Unit] = {
-    val timestamp: Par = Par(exprs = Seq(Expr(Expr.ExprInstance.GInt(blockTime))))
-    runtime.blockData.setParams(timestamp)
   }
 
   private def setInvalidBlocks(
@@ -456,17 +447,17 @@ object RuntimeManager {
 
       override def replayComputeState(hash: StateHash)(
           terms: Seq[InternalProcessedDeploy],
-          blockTime: Long,
+          blockData: BlockData,
           invalidBlocks: Map[BlockHash, Validator]
       ): T[F, Either[ReplayFailure, StateHash]] =
-        runtimeManager.replayComputeState(hash)(terms, blockTime, invalidBlocks).liftM[T]
+        runtimeManager.replayComputeState(hash)(terms, blockData, invalidBlocks).liftM[T]
 
       override def computeState(hash: StateHash)(
           terms: Seq[DeployData],
-          blockTime: Long,
+          blockData: BlockData,
           invalidBlocks: Map[BlockHash, Validator]
       ): T[F, (StateHash, Seq[InternalProcessedDeploy])] =
-        runtimeManager.computeState(hash)(terms, blockTime, invalidBlocks).liftM[T]
+        runtimeManager.computeState(hash)(terms, blockData, invalidBlocks).liftM[T]
 
       def computeGenesis(
           terms: Seq[DeployData],
