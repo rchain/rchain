@@ -76,6 +76,32 @@ class HistoryGenerativeSpec
     finalSimplisticHistory.runSyncUnsafe(20.seconds).root shouldBe emptyRootHash
   }
 
+  "process" should "accept new leafs in bulk" in forAll(
+    distinctListOf(arbitraryInsertAction)
+  ) { actions: List[Data] =>
+    val emptyMergingHistory = HistoryInstances.merging[Task](emptyRootHash, inMemHistoryStore)
+
+    val emptySimplisticHistory: History[Task] =
+      SimplisticHistory.noMerging[Task](emptyRootHash, inMemHistoryStore)
+
+    val inserts                  = actions.map { case (k, v) => InsertAction(k, v) }
+    val postInsertMergingHistory = emptyMergingHistory.process(inserts).runSyncUnsafe(20.seconds)
+    val postInsertNonMergingHistory =
+      emptySimplisticHistory.process(inserts).runSyncUnsafe(20.seconds)
+
+    postInsertMergingHistory.root shouldBe postInsertNonMergingHistory.root
+
+    val deletions = actions.map { case (k, _) => DeleteAction(k) }
+
+    val postDeletionMergingHistory =
+      postInsertMergingHistory.process(deletions).runSyncUnsafe(20.seconds)
+    val postDeletionNonMergingHistory =
+      postInsertNonMergingHistory.process(deletions).runSyncUnsafe(20.seconds)
+
+    postDeletionMergingHistory.root shouldBe emptyRootHash
+    postDeletionNonMergingHistory.root shouldBe emptyRootHash
+  }
+
   val arbitraryRandomThreeBytes: Arbitrary[Key] =
     Arbitrary(
       Gen
