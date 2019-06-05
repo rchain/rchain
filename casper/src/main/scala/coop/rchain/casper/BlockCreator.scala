@@ -57,7 +57,7 @@ object BlockCreator {
             val deploy = ConstructDeploy.sourceDeploy(
               s"""
                  |new rl(`rho:registry:lookup`), posCh in {
-                 |  rl!(`rho:id:cnec3pa8prp4out3yc8facon6grm3xbsotpd4ckjfx8ghuw77xadzt`, *posCh) |
+                 |  rl!(`rho:rchain:pos`, *posCh) |
                  |  for(@(_, PoS) <- posCh) {
                  |    @PoS!("slash", "$encodedInvalidBlockHash".hexToBytes(), "IGNOREFORNOW")
                  |  }

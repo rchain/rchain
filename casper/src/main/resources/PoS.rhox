@@ -94,7 +94,7 @@ new  PoS,
                     toBeSlashed!(invalidBlocks.getOrElse(blockHash, userPk)) |
                     for (@validator <- toBeSlashed) {
                       // TODO: Transfer to coop wallet instead of just simply setting bonds to 0
-                      bondsCh!(bonds.set(validator, [0, bonds.get(validator).nth(1)])) |
+                      bondsCh!(bonds.set(validator, (0, bonds.get(validator).nth(1)))) |
                       return!(true)
                     }
                   }

@@ -549,8 +549,7 @@ class MultiParentCasperAddBlockSpec extends FlatSpec with Matchers with Inspecto
       }
   }
 
-  // TODO: Enable when we switch to new PoS contract
-  it should "succeed at slashing" ignore effectTest {
+  it should "succeed at slashing" in effectTest {
     HashSetCasperTestNode.networkEff(validatorKeys.take(3), genesis).use { nodes =>
       for {
         deployData            <- ConstructDeploy.basicDeployData[Effect](0)
@@ -568,7 +567,7 @@ class MultiParentCasperAddBlockSpec extends FlatSpec with Matchers with Inspecto
         createBlockResult3    <- nodes(2).casperEff.createBlock
         Created(signedBlock3) = createBlockResult3
         _                     <- nodes(2).casperEff.addBlock(signedBlock3, ignoreDoppelgangerCheck[Effect])
-        // assert no effect as already slashed
+        // TODO: assert no effect as already slashed
       } yield ()
     }
   }
