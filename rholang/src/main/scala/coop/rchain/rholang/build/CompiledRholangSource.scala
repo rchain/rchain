@@ -15,8 +15,14 @@ object CompiledRholangSource {
 
   def apply(classpath: String): CompiledRholangSource = new CompiledRholangSource {
     override val path: String = classpath
-    override val code: String = Source.fromResource(classpath).mkString
-    override val term: Par    = ParBuilder[Coeval].buildNormalizedTerm(code).value()
+    override val code: String = {
+      val fileContent = Source.fromResource(classpath).mkString
+
+      s"""//Loaded from resource file <<$classpath>>
+         #$fileContent
+         #""".stripMargin('#')
+    }
+    override val term: Par = ParBuilder[Coeval].buildNormalizedTerm(code).value()
   }
 
 }
