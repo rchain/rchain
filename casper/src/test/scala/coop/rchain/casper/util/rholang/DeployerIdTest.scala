@@ -9,8 +9,8 @@ import coop.rchain.crypto.PrivateKey
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.signatures.Secp256k1
 import coop.rchain.models.BlockHash.BlockHash
-import coop.rchain.models.Expr.ExprInstance.GBool
 import coop.rchain.models.Validator.Validator
+import coop.rchain.models.Expr.ExprInstance.GBool
 import coop.rchain.models.rholang.implicits._
 import coop.rchain.models.{GDeployerId, Par}
 import coop.rchain.rholang.interpreter.Runtime.BlockData
@@ -70,7 +70,7 @@ class DeployerIdTest extends FlatSpec with Matchers {
     ): Assertion = {
       val contract = ConstructDeploy.sourceDeploy(
         source =
-          s"""new auth(`rho:rchain:deployerId`) in { contract @"checkAuth"(input, ret) = { ret!(*input == *auth) }}""",
+          s"""contract @"checkAuth"(input, ret) = { new auth(`rho:rchain:deployerId`) in { ret!(*input == *auth) }}""",
         timestamp = System.currentTimeMillis(),
         accounting.MAX_VALUE,
         sec = deployer
