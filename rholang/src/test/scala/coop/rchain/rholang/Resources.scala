@@ -12,7 +12,7 @@ import coop.rchain.rholang.interpreter.Runtime
 import coop.rchain.rholang.interpreter.Runtime.{RhoContext, RhoISpace, SystemProcess}
 import coop.rchain.rspace.history.Branch
 import coop.rchain.rspace.{Context, RSpace}
-import coop.rchain.shared.StoreType.LMDB
+import coop.rchain.shared.StoreType.InMem
 import coop.rchain.shared.{Log, StoreType}
 import monix.execution.Scheduler
 
@@ -75,7 +75,7 @@ object Resources {
     def apply[M[_]: Parallel[F, ?[_]]](
         prefix: String,
         storageSize: Long = 1024 * 1024,
-        storeType: StoreType = LMDB,
+        storeType: StoreType = InMem,
         additionalSystemProcesses: Seq[SystemProcess.Definition[F]] = Seq.empty
     )(
         implicit scheduler: Scheduler,

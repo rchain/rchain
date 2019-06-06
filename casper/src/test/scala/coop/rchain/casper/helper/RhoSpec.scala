@@ -63,7 +63,7 @@ object RhoSpec {
       mkRuntime[Task](
         s"rhoSpec-${testObject.path}",
         10 * 1024 * 1024,
-        StoreType.LMDB,
+        StoreType.InMem,
         testFrameworkContracts(testResultCollector)
       ).use { runtime =>
         for {

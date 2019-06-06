@@ -13,7 +13,7 @@ object Resources {
   def mkRuntimeManager(
       prefix: String,
       storageSize: Long = 1024 * 1024L,
-      storeType: StoreType = StoreType.LMDB
+      storeType: StoreType = StoreType.InMem
   )(implicit scheduler: Scheduler): Resource[Task, RuntimeManager[Task]] = {
     implicit val log: Log[Task]            = Log.log[Task]
     implicit val metricsEff: Metrics[Task] = new metrics.Metrics.MetricsNOP[Task]
