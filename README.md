@@ -168,7 +168,7 @@ rnode {
   casper {
     # validator-public-key =
     # validator-private-key-path =
-    sig-algorithm = ed25519
+    sig-algorithm = secp256k1
     # bonds-file =
     # known-validators-file =
     validators = 5
