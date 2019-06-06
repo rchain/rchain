@@ -247,11 +247,6 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Sync: ConnectionsCell: Trans
   def blockDag: F[BlockDagRepresentation[F]] =
     BlockDagStorage[F].getRepresentation
 
-  def storageContents(hash: StateHash): F[String] =
-    runtimeManager
-      .storageRepr(hash)
-      .map(_.getOrElse(s"Tuplespace hash ${Base16.encode(hash.toByteArray)} not found!"))
-
   def normalizedInitialFault(weights: Map[Validator, Long]): F[Float] =
     BlockDagStorage[F].accessEquivocationsTracker { tracker =>
       tracker.equivocationRecords.map { equivocations =>

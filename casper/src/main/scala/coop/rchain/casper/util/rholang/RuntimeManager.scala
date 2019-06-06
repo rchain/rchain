@@ -53,7 +53,6 @@ trait RuntimeManager[F[_]] {
       terms: Seq[DeployData],
       blockTime: Long
   ): F[(StateHash, StateHash, Seq[InternalProcessedDeploy])]
-  def storageRepr(hash: StateHash): F[Option[String]]
   def computeBonds(startHash: StateHash): F[Seq[Bond]]
   def computeDeployPayment(startHash: StateHash)(user: ByteString, amount: Long): F[StateHash]
   def getData(hash: StateHash)(channel: Par): F[Seq[Par]]
@@ -135,13 +134,6 @@ class RuntimeManagerImpl[F[_]: Concurrent] private[rholang] (
     val timestamp: Par = Par(exprs = Seq(Expr(Expr.ExprInstance.GInt(blockTime))))
     runtime.blockTime.setParams(timestamp)
   }
-
-  def storageRepr(hash: StateHash): F[Option[String]] =
-    withResetRuntimeLock(hash)(runtime => StoragePrinter.prettyPrint(runtime.space)).attempt
-      .map {
-        case Right(print) => Some(print)
-        case Left(_)      => None
-      }
 
   def computeBonds(hash: StateHash): F[Seq[Bond]] =
     captureResults(hash, ConstructDeploy.sourceDeployNow(bondsQuerySource()))
@@ -422,9 +414,6 @@ object RuntimeManager {
           blockTime: Long
       ): T[F, (StateHash, StateHash, Seq[InternalProcessedDeploy])] =
         runtimeManager.computeGenesis(terms, blockTime).liftM[T]
-
-      override def storageRepr(hash: StateHash): T[F, Option[String]] =
-        runtimeManager.storageRepr(hash).liftM[T]
 
       override def computeBonds(hash: StateHash): T[F, Seq[Bond]] =
         runtimeManager.computeBonds(hash).liftM[T]

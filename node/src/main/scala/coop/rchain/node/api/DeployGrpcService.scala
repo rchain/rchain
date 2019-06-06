@@ -91,9 +91,9 @@ private[api] object DeployGrpcService {
       override def getBlocks(request: BlocksQuery): Observable[GrpcEither] =
         Observable
           .fromTask(
-            deferList[BlockInfoWithoutTuplespace](
+            deferList[LightBlockInfo](
               Functor[F].map(BlockAPI.getBlocks[F](Some(request.depth)))(
-                _.getOrElse(List.empty[BlockInfoWithoutTuplespace])
+                _.getOrElse(List.empty[LightBlockInfo])
               )
             )
           )

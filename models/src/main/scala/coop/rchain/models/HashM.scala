@@ -127,7 +127,7 @@ object HashM extends HashMDerivation {
   }
 
   implicit val BlockInfoHash                  = gen[BlockInfo]
-  implicit val BlockInfoWithoutTuplespaceHash = gen[BlockInfoWithoutTuplespace]
+  implicit val LightBlockInfoHash             = gen[LightBlockInfo]
   implicit val BlockQueryResponseHash         = gen[BlockQueryResponse]
   implicit val ContinuationsWithBlockInfoHash = gen[ContinuationsWithBlockInfo]
   implicit val DataWithBlockInfoHash          = gen[DataWithBlockInfo]

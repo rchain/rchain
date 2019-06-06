@@ -185,7 +185,7 @@ object BlockAPI {
         ProtoUtil.tuplespace(block).get
       for {
         data      <- runtimeManager.getData(stateHash)(sortedListeningName)
-        blockInfo <- getBlockInfoWithoutTuplespace[F](block)
+        blockInfo <- getLightBlockInfo[F](block)
       } yield Option[DataWithBlockInfo](DataWithBlockInfo(data, Some(blockInfo)))
     } else {
       none[DataWithBlockInfo].pure[F]
@@ -204,7 +204,7 @@ object BlockAPI {
         continuationInfos = continuations.map(
           continuation => WaitingContinuationInfo(continuation._1, Some(continuation._2))
         )
-        blockInfo <- getBlockInfoWithoutTuplespace[F](block)
+        blockInfo <- getLightBlockInfo[F](block)
       } yield Option[ContinuationsWithBlockInfo](
         ContinuationsWithBlockInfo(continuationInfos, Some(blockInfo))
       )
@@ -297,17 +297,17 @@ object BlockAPI {
 
   def getBlocks[F[_]: Monad: MultiParentCasperRef: Log: SafetyOracle: BlockStore](
       depth: Option[Int]
-  ): Effect[F, List[BlockInfoWithoutTuplespace]] =
-    toposortDag[F, List[BlockInfoWithoutTuplespace]](depth) {
+  ): Effect[F, List[LightBlockInfo]] =
+    toposortDag[F, List[LightBlockInfo]](depth) {
       case (casper, topoSort) =>
         implicit val ev: MultiParentCasper[F] = casper
         topoSort
-          .foldM(List.empty[BlockInfoWithoutTuplespace]) {
+          .foldM(List.empty[LightBlockInfo]) {
             case (blockInfosAtHeightAcc, blockHashesAtHeight) =>
               for {
                 blocksAtHeight <- blockHashesAtHeight.traverse(ProtoUtil.unsafeGetBlock[F])
                 blockInfosAtHeight <- blocksAtHeight.traverse(
-                                       getBlockInfoWithoutTuplespace[F]
+                                       getLightBlockInfo[F]
                                      )
               } yield blockInfosAtHeightAcc ++ blockInfosAtHeight
           }
@@ -316,7 +316,7 @@ object BlockAPI {
 
   def showMainChain[F[_]: Monad: MultiParentCasperRef: Log: SafetyOracle: BlockStore](
       depth: Int
-  ): F[List[BlockInfoWithoutTuplespace]] = {
+  ): F[List[LightBlockInfo]] = {
 
     val errorMessage =
       "Could not show main chain, casper instance was not available yet."
@@ -328,12 +328,12 @@ object BlockAPI {
         tipHash    = tipHashes.head
         tip        <- ProtoUtil.unsafeGetBlock[F](tipHash)
         mainChain  <- ProtoUtil.getMainChainUntilDepth[F](tip, IndexedSeq.empty[BlockMessage], depth)
-        blockInfos <- mainChain.toList.traverse(getBlockInfoWithoutTuplespace[F])
+        blockInfos <- mainChain.toList.traverse(getLightBlockInfo[F])
       } yield blockInfos
 
-    MultiParentCasperRef.withCasper[F, List[BlockInfoWithoutTuplespace]](
+    MultiParentCasperRef.withCasper[F, List[LightBlockInfo]](
       casperResponse(_),
-      Log[F].warn(errorMessage).as(List.empty[BlockInfoWithoutTuplespace])
+      Log[F].warn(errorMessage).as(List.empty[LightBlockInfo])
     )
   }
 
@@ -348,7 +348,7 @@ object BlockAPI {
           maybeBlock <- allBlocksTopoSort.flatten.reverse.toStream
                          .traverse(ProtoUtil.unsafeGetBlock[F])
                          .map(_.find(ProtoUtil.containsDeploy(_, ByteString.copyFrom(id))))
-          response <- maybeBlock.traverse(getBlockInfoWithoutTuplespace[F])
+          response <- maybeBlock.traverse(getLightBlockInfo[F])
         } yield response.fold(
           s"Couldn't find block containing deploy with id: ${PrettyPrinter
             .buildStringNoLimit(id)}".asLeft[LightBlockQueryResponse]
@@ -487,10 +487,10 @@ object BlockAPI {
   private def getFullBlockInfo[F[_]: Monad: MultiParentCasper: SafetyOracle: BlockStore](
       block: BlockMessage
   ): F[BlockInfo] = getBlockInfo[BlockInfo, F](block, constructBlockInfo[F])
-  private def getBlockInfoWithoutTuplespace[F[_]: Monad: MultiParentCasper: SafetyOracle: BlockStore](
+  private def getLightBlockInfo[F[_]: Monad: MultiParentCasper: SafetyOracle: BlockStore](
       block: BlockMessage
-  ): F[BlockInfoWithoutTuplespace] =
-    getBlockInfo[BlockInfoWithoutTuplespace, F](block, constructBlockInfoWithoutTuplespace[F])
+  ): F[LightBlockInfo] =
+    getBlockInfo[LightBlockInfo, F](block, constructLightBlockInfo[F])
 
   private def constructBlockInfo[F[_]: Monad: MultiParentCasper: SafetyOracle: BlockStore](
       block: BlockMessage,
@@ -505,16 +505,13 @@ object BlockAPI {
       bondsValidatorList: Seq[Bond],
       processedDeploys: Seq[ProcessedDeploy]
   ): F[BlockInfo] =
-    for {
-      tsDesc <- MultiParentCasper[F].storageContents(tsHash)
-    } yield BlockInfo(
+    BlockInfo(
       blockHash = PrettyPrinter.buildStringNoLimit(block.blockHash),
       blockSize = block.serializedSize.toString,
       blockNumber = ProtoUtil.blockNumber(block),
       version = version,
       deployCount = deployCount,
       tupleSpaceHash = PrettyPrinter.buildStringNoLimit(tsHash),
-      tupleSpaceDump = tsDesc,
       timestamp = timestamp,
       faultTolerance = normalizedFaultTolerance - initialFault, // TODO: Fix
       mainParentHash = PrettyPrinter.buildStringNoLimit(mainParent),
@@ -523,9 +520,9 @@ object BlockAPI {
       shardId = block.shardId,
       bondsValidatorList = bondsValidatorList.map(PrettyPrinter.buildString),
       deployCost = processedDeploys.map(PrettyPrinter.buildString)
-    )
+    ).pure[F]
 
-  private def constructBlockInfoWithoutTuplespace[F[_]: Monad: MultiParentCasper: SafetyOracle: BlockStore](
+  private def constructLightBlockInfo[F[_]: Monad: MultiParentCasper: SafetyOracle: BlockStore](
       block: BlockMessage,
       version: Long,
       deployCount: Int,
@@ -537,8 +534,8 @@ object BlockAPI {
       initialFault: Float,
       bondsValidatorList: Seq[Bond],
       processedDeploys: Seq[ProcessedDeploy]
-  ): F[BlockInfoWithoutTuplespace] =
-    BlockInfoWithoutTuplespace(
+  ): F[LightBlockInfo] =
+    LightBlockInfo(
       blockHash = PrettyPrinter.buildStringNoLimit(block.blockHash),
       blockSize = block.serializedSize.toString,
       blockNumber = ProtoUtil.blockNumber(block),

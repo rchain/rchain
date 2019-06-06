@@ -67,7 +67,6 @@ trait MultiParentCasper[F[_]] extends Casper[F, IndexedSeq[BlockHash]] {
   // this initial fault weight combined with our fault tolerance threshold t.
   def normalizedInitialFault(weights: Map[Validator, Long]): F[Float]
   def lastFinalizedBlock: F[BlockMessage]
-  def storageContents(hash: ByteString): F[String]
   // TODO: Refactor hashSetCasper to take a RuntimeManager[F] just like BlockStore[F]
   def getRuntimeManager: F[Option[RuntimeManager[F]]]
 }

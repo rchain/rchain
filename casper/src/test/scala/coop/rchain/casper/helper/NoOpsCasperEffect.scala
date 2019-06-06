@@ -40,7 +40,6 @@ class NoOpsCasperEffect[F[_]: Sync: BlockStore: BlockDagStorage] private (
   def blockDag: F[BlockDagRepresentation[F]]                          = BlockDagStorage[F].getRepresentation
   def normalizedInitialFault(weights: Map[Validator, Long]): F[Float] = 0f.pure[F]
   def lastFinalizedBlock: F[BlockMessage]                             = BlockMessage().pure[F]
-  def storageContents(hash: BlockHash): F[String]                     = "".pure[F]
   def getRuntimeManager: F[Option[RuntimeManager[F]]]                 = none[RuntimeManager[F]].pure[F]
   def fetchDependencies: F[Unit]                                      = ().pure[F]
 }

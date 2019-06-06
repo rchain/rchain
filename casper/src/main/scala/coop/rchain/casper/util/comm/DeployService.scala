@@ -73,7 +73,7 @@ class GrpcDeployService(host: String, port: Int, maxMessageSize: Int)
   def getBlocks(q: BlocksQuery): Task[Either[Seq[String], String]] =
     stub
       .getBlocks(q)
-      .map(_.toEither[BlockInfoWithoutTuplespace].map { bi =>
+      .map(_.toEither[LightBlockInfo].map { bi =>
         s"""
          |------------- block ${bi.blockNumber} ---------------
          |${bi.toProtoString}
