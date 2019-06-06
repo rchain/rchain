@@ -10,29 +10,21 @@ class Rev[A](
     faucetCode: String => String,
     posParams: ProofOfStake
 ) extends CompiledRholangSource {
-  private val initialTotalBond = posParams.validators.foldLeft(0L) {
-    case (acc, v) => acc + v.stake
-  }
-
-  private val minimumBond = posParams.minimumBond
-  private val maximumBond = posParams.maximumBond
-
   final val path = "<synthetic in Rev.scala>"
 
   final val code = s"""
-    |//requires MakeMint, BasicWallet, WalletCheck, MakePoS
+    |//requires MakeMint, BasicWallet, WalletCheck
     |new
     |  rl(`rho:registry:lookup`), MakeMintCh, WalletCheckCh, BasicWalletCh,
-    |  MakePoSCh, SystemInstancesCh, revMintCh, posPurseCh, rev, posCh
+    |  SystemInstancesCh, revMintCh, posPurseCh, rev, posCh
     |in {
     |  rl!(`rho:rchain:makeMint`, *MakeMintCh) |
     |  rl!(`rho:rchain:walletCheck`, *WalletCheckCh) |
     |  rl!(`rho:rchain:basicWallet`, *BasicWalletCh) |
-    |  rl!(`rho:rchain:makePos`, *MakePoSCh) |
     |  rl!(`rho:rchain:systemInstancesRegistry`, *SystemInstancesCh) |
     |  for(
     |    @(_, MakeMint) <- MakeMintCh; @(_, WalletCheck) <- WalletCheckCh;
-    |    @(_, BasicWallet) <- BasicWalletCh; @(_, MakePoS) <- MakePoSCh;
+    |    @(_, BasicWallet) <- BasicWalletCh;
     |    @(_, SystemInstancesRegistry) <- SystemInstancesCh
     |  ) {
     |    @MakeMint!(*revMintCh) | for(@revMint <- revMintCh) {
@@ -43,19 +35,6 @@ class Rev[A](
     |         @revMint!("makePurse", 0, *return)
     |      } |
     |      @SystemInstancesRegistry!("register", "rev", bundle+{*rev}) |
-    |
-    |      ${faucetCode("revMint")} |
-    |
-    |      //PoS purse and contract creation
-    |      @revMint!("makePurse", $initialTotalBond, *posPurseCh) |
-    |      for(@posPurse <- posPurseCh) {
-    |        @MakePoS!(posPurse, $minimumBond, $maximumBond, ${ProofOfStake.initialBonds(
-                        posParams.validators
-                      )}, *posCh) |
-    |        for(@pos <- posCh) {
-    |          @SystemInstancesRegistry!("register", "pos", bundle+{pos})
-    |        }
-    |      } |
     |
     |      //basic wallets which exist from genesis
     |      $walletCode
