@@ -12,6 +12,7 @@ import coop.rchain.rholang.interpreter.Runtime
 import coop.rchain.rholang.interpreter.Runtime.{RhoContext, RhoISpace, SystemProcess}
 import coop.rchain.rspace.history.Branch
 import coop.rchain.rspace.{Context, RSpace}
+import coop.rchain.shared.StoreType.LMDB
 import coop.rchain.shared.{Log, StoreType}
 import monix.execution.Scheduler
 
@@ -64,12 +65,13 @@ object Resources {
   def mkRuntime[F[_]: ContextShift: Concurrent: Log: Metrics, M[_]: Parallel[F, ?[_]]](
       prefix: String,
       storageSize: Long = 1024 * 1024,
+      storeType: StoreType = LMDB,
       additionalSystemProcesses: Seq[SystemProcess.Definition[F]] = Seq.empty
   )(implicit scheduler: Scheduler): Resource[F, Runtime[F]] =
     mkTempDir[F](prefix).flatMap { tmpDir =>
       Resource.make[F, Runtime[F]](
         Runtime
-          .createWithEmptyCost[F, M](tmpDir, storageSize, StoreType.LMDB, additionalSystemProcesses)
+          .createWithEmptyCost[F, M](tmpDir, storageSize, storeType, additionalSystemProcesses)
       )(_.close())
     }
 }
