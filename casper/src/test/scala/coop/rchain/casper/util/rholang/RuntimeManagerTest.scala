@@ -2,17 +2,13 @@ package coop.rchain.casper.util.rholang
 
 import cats.Id
 import cats.effect.Resource
-import com.google.protobuf.ByteString
-import coop.rchain.casper.genesis.contracts.{ProofOfStake, StandardDeploys, Validator, Vault}
+import coop.rchain.casper.genesis.contracts.StandardDeploys
 import coop.rchain.casper.protocol.DeployData
 import coop.rchain.casper.util.rholang.Resources._
 import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
 import coop.rchain.casper.util.{ConstructDeploy, ProtoUtil}
 import coop.rchain.catscontrib.effect.implicits._
-import coop.rchain.crypto.PublicKey
-import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.hash.Blake2b512Random
-import coop.rchain.crypto.signatures.Secp256k1
 import coop.rchain.metrics
 import coop.rchain.metrics.Metrics
 import coop.rchain.p2p.EffectsTestInstances.LogicalTime
@@ -69,7 +65,7 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
     implicit val metricsEff: Metrics[Task] = new metrics.Metrics.MetricsNOP[Task]
 
     (for {
-      reductionCost <- mkRuntime[Task, Task.Par]("casper-runtime")
+      reductionCost <- mkRuntime[Task]("casper-runtime")
                         .use { runtime =>
                           implicit val rand: Blake2b512Random = Blake2b512Random(
                             DeployData.toByteArray(ProtoUtil.stripDeployData(deploy))

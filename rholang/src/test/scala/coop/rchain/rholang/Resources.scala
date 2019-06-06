@@ -62,16 +62,39 @@ object Resources {
       .flatMap(tmpDir => Resource.make(mkRspace(tmpDir))(_.close()))
   }
 
-  def mkRuntime[F[_]: ContextShift: Concurrent: Log: Metrics, M[_]: Parallel[F, ?[_]]](
-      prefix: String,
-      storageSize: Long = 1024 * 1024,
-      storeType: StoreType = LMDB,
-      additionalSystemProcesses: Seq[SystemProcess.Definition[F]] = Seq.empty
-  )(implicit scheduler: Scheduler): Resource[F, Runtime[F]] =
-    mkTempDir[F](prefix).flatMap { tmpDir =>
-      Resource.make[F, Runtime[F]](
-        Runtime
-          .createWithEmptyCost[F, M](tmpDir, storageSize, storeType, additionalSystemProcesses)
-      )(_.close())
-    }
+  def mkRuntime[F[_]]: MkRuntimePartiallyApplied[F] = new MkRuntimePartiallyApplied[F]
+
+  /**
+    * This is so that we can write {{{mkRuntime[Task]}}} instead of {{{mkRuntime[Task, Task.Par]}}}
+    *
+    * See https://typelevel.org/cats/guidelines.html#a-idpartially-applied-type-params-hrefpartially-applied-type-paramsa-partially-applied-type
+    */
+  private[rholang] final class MkRuntimePartiallyApplied[F[_]](val dummy: Boolean = true)
+      extends AnyVal {
+
+    def apply[M[_]: Parallel[F, ?[_]]](
+        prefix: String,
+        storageSize: Long = 1024 * 1024,
+        storeType: StoreType = LMDB,
+        additionalSystemProcesses: Seq[SystemProcess.Definition[F]] = Seq.empty
+    )(
+        implicit scheduler: Scheduler,
+        cs: ContextShift[F],
+        c: Concurrent[F],
+        l: Log[F],
+        m: Metrics[F]
+    ): Resource[F, Runtime[F]] =
+      mkTempDir[F](prefix).flatMap { tmpDir =>
+        Resource.make[F, Runtime[F]](
+          Runtime
+            .createWithEmptyCost[F, M](
+              tmpDir,
+              storageSize,
+              storeType,
+              additionalSystemProcesses
+            )
+        )(_.close())
+      }
+  }
+
 }

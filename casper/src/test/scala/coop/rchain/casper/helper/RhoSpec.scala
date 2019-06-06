@@ -1,19 +1,13 @@
 package coop.rchain.casper.helper
 
 import cats.effect.Concurrent
-import coop.rchain.casper.MultiParentCasperTestUtil.createBonds
-import coop.rchain.casper.genesis.Genesis
-import coop.rchain.casper.genesis.contracts.{Faucet, PreWallet, ProofOfStake, TestUtil, Validator}
-import coop.rchain.casper.protocol.{BlockMessage, DeployData}
-import coop.rchain.casper.util.rholang.RuntimeManager
-import coop.rchain.crypto.hash.Blake2b512Random
-import coop.rchain.crypto.signatures.Secp256k1
 import coop.rchain.casper.genesis.contracts.TestUtil
 import coop.rchain.casper.protocol.DeployData
+import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.metrics.Metrics
 import coop.rchain.rholang.Resources._
 import coop.rchain.rholang.build.CompiledRholangSource
-import coop.rchain.rholang.interpreter.Runtime
+import coop.rchain.rholang.interpreter.{PrettyPrinter, Runtime}
 import coop.rchain.rholang.interpreter.Runtime.SystemProcess
 import coop.rchain.shared.{Log, StoreType}
 import monix.eval.Task
@@ -21,7 +15,6 @@ import monix.execution.Scheduler.Implicits.global
 import org.scalatest.{AppendedClues, FlatSpec, Matchers}
 
 import scala.concurrent.duration.{Duration, FiniteDuration}
-import coop.rchain.rholang.interpreter.PrettyPrinter
 
 object RhoSpec {
 
@@ -67,7 +60,7 @@ object RhoSpec {
       timeout: FiniteDuration
   ): Task[TestResult] =
     TestResultCollector[Task].flatMap { testResultCollector =>
-      mkRuntime[Task, Task.Par](
+      mkRuntime[Task](
         s"rhoSpec-${testObject.path}",
         10 * 1024 * 1024,
         StoreType.LMDB,

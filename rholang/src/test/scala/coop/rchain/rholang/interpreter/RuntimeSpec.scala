@@ -1,13 +1,11 @@
 package coop.rchain.rholang.interpreter
-import java.io.StringReader
-
 import coop.rchain.metrics
 import coop.rchain.metrics.Metrics
 import coop.rchain.rholang.Resources.mkRuntime
+import coop.rchain.shared.Log
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
 import org.scalatest.{FlatSpec, Matchers}
-import coop.rchain.shared.Log
 
 import scala.concurrent.duration._
 
@@ -51,7 +49,7 @@ class RuntimeSpec extends FlatSpec with Matchers {
     assert(execute(rho).errors.nonEmpty, s"Expected $rho to fail - it didn't.")
 
   private def execute(source: String): EvaluateResult =
-    mkRuntime[Task, Task.Par](tmpPrefix, mapSize)
+    mkRuntime[Task](tmpPrefix, mapSize)
       .use { runtime =>
         implicit val c = runtime.cost
         Interpreter[Task].evaluate(runtime, source)

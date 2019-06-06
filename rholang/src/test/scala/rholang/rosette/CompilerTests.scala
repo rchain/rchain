@@ -1,18 +1,15 @@
 package rholang.rosette
 
-import java.io.FileReader
 import java.nio.file.{Files, Path, Paths}
 
-import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.metrics
 import coop.rchain.metrics.Metrics
-import coop.rchain.rholang.interpreter.{EvaluateResult, Interpreter, Runtime}
-import coop.rchain.shared.Resources
-import monix.execution.Scheduler.Implicits.global
 import coop.rchain.rholang.Resources.mkRuntime
+import coop.rchain.rholang.interpreter.{EvaluateResult, Interpreter}
+import coop.rchain.shared.{Log, Resources}
 import monix.eval.Task
+import monix.execution.Scheduler.Implicits.global
 import org.scalatest.{FunSuite, Matchers}
-import coop.rchain.shared.Log
 
 import scala.collection.JavaConverters._
 import scala.concurrent.duration._
@@ -46,7 +43,7 @@ class CompilerTests extends FunSuite with Matchers {
   }
 
   private def execute(file: Path): EvaluateResult =
-    mkRuntime[Task, Task.Par](tmpPrefix, mapSize)
+    mkRuntime[Task](tmpPrefix, mapSize)
       .use { runtime =>
         Resources.withResource(Source.fromFile(file.toString))(
           fileContents => {
