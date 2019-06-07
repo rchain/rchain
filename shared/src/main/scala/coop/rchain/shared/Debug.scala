@@ -40,7 +40,16 @@ object Debug {
       file: sourcecode.File,
       line: sourcecode.Line
   ): F[Unit] =
-    Sync[F].delay { println(string(values: _*)(enclosing, file, line)) }
+    Sync[F].delay {
+      printUnsafe(values: _*)(enclosing, file, line)
+    }
+
+  def printUnsafe(values: sourcecode.Text[Any]*)(
+      implicit enclosing: sourcecode.Enclosing,
+      file: sourcecode.File,
+      line: sourcecode.Line
+  ): Unit =
+    println(string(values: _*)(enclosing, file, line))
 
   def string(values: sourcecode.Text[Any]*)(
       implicit enclosing: sourcecode.Enclosing,
