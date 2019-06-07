@@ -49,7 +49,7 @@ object HistoryRepositoryInstances {
       coldStore        = ColdStoreInstances.coldStore[F](coldLMDBStore)
       historyLMDBStore = StoreInstances.lmdbStore[F](config.historyStore)
       historyStore     = HistoryStoreInstances.historyStore[F](historyLMDBStore)
-      history          = HistoryInstances.noMerging(currentRoot, historyStore)
+      history          = HistoryInstances.merging(currentRoot, historyStore)
     } yield HistoryRepositoryImpl[F, C, P, A, K](history, rootsRepository, coldStore)
   }
 }

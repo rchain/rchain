@@ -1,8 +1,8 @@
 package coop.rchain.rspace.nextgenrspace.history
 
+import cats.{Applicative, FlatMap}
 import cats.effect.Sync
 import cats.implicits._
-import cats.{Applicative, FlatMap}
 import coop.rchain.rspace.Blake2b256Hash
 import coop.rchain.rspace.nextgenrspace.history.History._
 import scodec.bits.ByteVector
@@ -12,11 +12,10 @@ object HistoryInstances {
 
   val MalformedTrieError = new RuntimeException("malformed trie")
 
-  final case class SimplisticHistory[F[_]: Sync](
+  final case class MergingHistory[F[_]: Sync](
       root: Blake2b256Hash,
       historyStore: HistoryStore[F]
   ) extends History[F] {
-
     def skip(path: History.KeyPath, ptr: ValuePointer): (TriePointer, Option[Trie]) =
       if (path.isEmpty) {
         (ptr, None)
@@ -290,24 +289,7 @@ object HistoryInstances {
     def reset(root: Blake2b256Hash): History[F] = this.copy(root = root)
 
     def close(): F[Unit] = historyStore.close()
-
   }
-
-  final case class MergingHistory[F[_]: Sync](
-      root: Blake2b256Hash,
-      historyStore: HistoryStore[F]
-  ) extends History[F] {
-    override def process(actions: List[HistoryAction]): F[History[F]] = ???
-
-    override def find(key: KeyPath): F[(TriePointer, Vector[Trie])] = ???
-
-    override def close(): F[Unit] = historyStore.close()
-
-    override def reset(root: Blake2b256Hash): History[F] = this.copy(root = root)
-  }
-
-  def noMerging[F[_]: Sync](root: Blake2b256Hash, historyStore: HistoryStore[F]): History[F] =
-    new SimplisticHistory[F](root, historyStore)
 
   def merging[F[_]: Sync](root: Blake2b256Hash, historyStore: HistoryStore[F]): History[F] =
     new MergingHistory[F](root, historyStore)

@@ -32,7 +32,7 @@ class HistoryGenerativeSpec
   "history" should "accept new leafs (insert, update, delete)" in forAll(
     distinctListOf(arbitraryInsertAction)
   ) { actions: List[Data] =>
-    val emptyHistory = HistoryInstances.noMerging[Task](emptyRootHash, inMemHistoryStore)
+    val emptyHistory = HistoryInstances.merging[Task](emptyRootHash, inMemHistoryStore)
 
     val emptyState = Map.empty[Key, (Data, History[Task])] // accumulate actions performed on the trie
 
