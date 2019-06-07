@@ -353,6 +353,7 @@ object HistoryInstances {
           for {
             ts   <- Sync[F].delay { getValue(head) }
             _    <- historyStore.put(ts)
+            _    <- Sync[F].delay { cache.remove(head) }
             refs = ts.flatMap(extractRefs)
           } yield (refs ++ rest).asLeft
         }
