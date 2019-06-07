@@ -69,7 +69,8 @@ class InterpreterUtilTest
         "@1!(1)",
         "@2!(2)",
         "for(@a <- @1){ @123!(5 * a) }"
-      ).map(ConstructDeploy.sourceDeploy(_, System.currentTimeMillis(), accounting.MAX_VALUE))
+      ).map(ConstructDeploy.sourceDeployNow)
+
       val genesisDeploysCost =
         genesisDeploys.map(d => ProcessedDeploy().withDeploy(d).withCost(PCost(1)))
 
@@ -404,23 +405,9 @@ class InterpreterUtilTest
       implicit blockDagStorage =>
         //reference costs
         //deploy each Rholang program separately and record its cost
-        val deploy1 = ConstructDeploy.sourceDeploy(
-          "@1!(Nil)",
-          System.currentTimeMillis(),
-          accounting.MAX_VALUE
-        )
-        val deploy2 =
-          ConstructDeploy.sourceDeploy(
-            "@3!([1,2,3,4])",
-            System.currentTimeMillis(),
-            accounting.MAX_VALUE
-          )
-        val deploy3 =
-          ConstructDeploy.sourceDeploy(
-            "for(@x <- @0) { @4!(x.toByteArray()) }",
-            System.currentTimeMillis(),
-            accounting.MAX_VALUE
-          )
+        val deploy1 = ConstructDeploy.sourceDeployNow("@1!(Nil)")
+        val deploy2 = ConstructDeploy.sourceDeployNow("@3!([1,2,3,4])")
+        val deploy3 = ConstructDeploy.sourceDeployNow("for(@x <- @0) { @4!(x.toByteArray()) }")
         mkRuntimeManager("interpreter-util-test").use { runtimeManager =>
           for {
             dag          <- blockDagStorage.getRepresentation
@@ -438,18 +425,8 @@ class InterpreterUtilTest
     pendingUntilFixed { //reference costs
       withStorage { implicit blockStore => implicit blockDagStorage =>
         //deploy each Rholang program separately and record its cost
-        val deploy1 =
-          ConstructDeploy.sourceDeploy(
-            "@1!(Nil)",
-            System.currentTimeMillis(),
-            accounting.MAX_VALUE
-          )
-        val deploy2 =
-          ConstructDeploy.sourceDeploy(
-            "@2!([1,2,3,4])",
-            System.currentTimeMillis(),
-            accounting.MAX_VALUE
-          )
+        val deploy1 = ConstructDeploy.sourceDeployNow("@1!(Nil)")
+        val deploy2 = ConstructDeploy.sourceDeployNow("@2!([1,2,3,4])")
         mkRuntimeManager("interpreter-util-test").use { runtimeManager =>
           for {
             dag <- blockDagStorage.getRepresentation
@@ -459,11 +436,7 @@ class InterpreterUtilTest
 
             accCostsSep = cost1 ++ cost2
 
-            deployErr = ConstructDeploy.sourceDeploy(
-              "@3!(\"a\" + 3)",
-              System.currentTimeMillis(),
-              accounting.MAX_VALUE
-            )
+            deployErr    = ConstructDeploy.sourceDeployNow("@3!(\"a\" + 3)")
             batchDeploy  = Seq(deploy1, deploy2, deployErr)
             accCostBatch <- computeSingleProcessedDeploy(runtimeManager, dag, batchDeploy: _*)
           } yield accCostBatch should contain theSameElementsAs accCostsSep
@@ -499,7 +472,7 @@ class InterpreterUtilTest
           "@2!(5)",
           "for (@x <- @1) { @2!(x) }",
           "for (@x <- @2) { @3!(x) }"
-        ).map(ConstructDeploy.sourceDeploy(_, System.currentTimeMillis(), accounting.MAX_VALUE))
+        ).map(ConstructDeploy.sourceDeployNow)
       mkRuntimeManager("interpreter-util-test").use { runtimeManager =>
         for {
           dag1 <- blockDagStorage.getRepresentation
@@ -550,14 +523,7 @@ class InterpreterUtilTest
         |} |
         |@"recursionTest"!([1,2])
       """.stripMargin
-      ).map(
-        s =>
-          ConstructDeploy.sourceDeploy(
-            s,
-            System.currentTimeMillis(),
-            accounting.MAX_VALUE
-          )
-      )
+      ).map(ConstructDeploy.sourceDeployNow)
 
       mkRuntimeManager("interpreter-util-test").use { runtimeManager =>
         for {
@@ -612,14 +578,8 @@ class InterpreterUtilTest
               for (_ <- x; @14 <- y) { Nil }
              }
           """)
-          .map(
-            s =>
-              ConstructDeploy.sourceDeploy(
-                s,
-                System.currentTimeMillis(),
-                accounting.MAX_VALUE
-              )
-          )
+          .map(ConstructDeploy.sourceDeployNow)
+
       mkRuntimeManager("interpreter-util-test").use { runtimeManager =>
         for {
           dag1 <- blockDagStorage.getRepresentation
@@ -670,14 +630,8 @@ class InterpreterUtilTest
           |  } |
           |  loop!([Nil, 7, 7 | 8, 9 | Nil, 9 | 10, Nil, 9])
           |}""".stripMargin
-        ).map(
-          s =>
-            ConstructDeploy.sourceDeploy(
-              s,
-              System.currentTimeMillis(),
-              accounting.MAX_VALUE
-            )
-        )
+        ).map(ConstructDeploy.sourceDeployNow)
+
       mkRuntimeManager("interpreter-util-test").use { runtimeManager =>
         for {
           dag1 <- blockDagStorage.getRepresentation
@@ -720,14 +674,7 @@ class InterpreterUtilTest
             |   }
             | } | @"loop"!(["a","b","c","d"])
             |""".stripMargin
-          ).map(
-            s =>
-              ConstructDeploy.sourceDeploy(
-                s,
-                System.currentTimeMillis(),
-                accounting.MAX_VALUE
-              )
-          )
+          ).map(ConstructDeploy.sourceDeployNow)
 
         mkRuntimeManager("interpreter-util-test").use { runtimeManager =>
           for {
@@ -756,10 +703,8 @@ class InterpreterUtilTest
 
   it should "return None for logs containing extra comm events" in withStorage {
     implicit blockStore => implicit blockDagStorage =>
-      val deploys = (0 until 1).map(i => {
-        val code = s"for(_ <- @$i){ Nil } | @$i!($i)"
-        ConstructDeploy.sourceDeployNow(code)
-      })
+      val deploys =
+        (0 until 1).map(i => ConstructDeploy.sourceDeployNow(s"for(_ <- @$i){ Nil } | @$i!($i)"))
 
       mkRuntimeManager("interpreter-util-test").use { runtimeManager =>
         for {
