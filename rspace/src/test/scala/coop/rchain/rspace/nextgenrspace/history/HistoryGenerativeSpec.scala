@@ -29,33 +29,51 @@ class HistoryGenerativeSpec
   type Key  = List[Byte]
   type Data = (Key, Blake2b256Hash)
 
-  "history" should "accept new leafs (insert, update, delete)" in forAll(
+  "process" should "accept new leafs (insert, update, delete)" in forAll(
     distinctListOf(arbitraryInsertAction)
   ) { actions: List[Data] =>
-    val emptyHistory = HistoryInstances.merging[Task](emptyRootHash, inMemHistoryStore)
+    val emptyMergingHistory = HistoryInstances.merging[Task](emptyRootHash, inMemHistoryStore)
 
-    val emptyState = Map.empty[Key, (Data, History[Task])] // accumulate actions performed on the trie
+    val emptySimplisticHistory: History[Task] =
+      SimplisticHistory.noMerging[Task](emptyRootHash, inMemHistoryStore)
 
-    val (result, map) = actions.foldLeft((emptyHistory, emptyState)) {
-      case ((history, prevActions), action) =>
-        val (postHistory, _) =
-          insertAndVerify(history, action :: Nil, prevActions.values.map(_._1).toList)
-        val actions = prevActions + (action._1 -> (action, postHistory))
-        (postHistory, actions)
-    }
+    val emptyState = Map.empty[Key, (Data, History[Task], History[Task])] // accumulate actions performed on the trie
+
+    val (resultMergingHistory, resultSimplisticHistory, map) =
+      actions.foldLeft((emptyMergingHistory, emptySimplisticHistory, emptyState)) {
+        case ((mergingHistory, simplisticHistory, prevActions), action) =>
+          val (postMergingHistory, _) =
+            insertAndVerify(mergingHistory, action :: Nil, prevActions.values.map(_._1).toList)
+          val (postSimplisticHistory, _) =
+            insertAndVerify(simplisticHistory, action :: Nil, prevActions.values.map(_._1).toList)
+
+          postSimplisticHistory.root shouldBe postMergingHistory.root
+          val actions = prevActions + (action._1 -> (action, postMergingHistory, postSimplisticHistory))
+          (postMergingHistory, postSimplisticHistory, actions)
+      }
 
     map.values.foreach {
-      case ((k, v), postModifyHistory) =>
-        val actions           = DeleteAction(k) :: Nil
-        val postDeleteHistory = postModifyHistory.process(actions).runSyncUnsafe(20.seconds)
+      case ((k, v), postModifyMergingHistory, postModifySimplisticHistory) =>
+        val actions = DeleteAction(k) :: Nil
+        val postDeleteMergingHistory =
+          postModifyMergingHistory.process(actions).runSyncUnsafe(20.seconds)
+        val postDeleteSimplisticHistory =
+          postModifySimplisticHistory.process(actions).runSyncUnsafe(20.seconds)
 
-        fetchData(postModifyHistory, k)._1 shouldBe LeafPointer(v)
-        fetchData(postDeleteHistory, k)._1 shouldBe EmptyPointer
+        fetchData(postModifyMergingHistory, k)._1 shouldBe LeafPointer(v)
+        fetchData(postDeleteMergingHistory, k)._1 shouldBe EmptyPointer
+
+        fetchData(postModifySimplisticHistory, k)._1 shouldBe LeafPointer(v)
+        fetchData(postDeleteSimplisticHistory, k)._1 shouldBe EmptyPointer
+        postDeleteSimplisticHistory.root shouldBe postDeleteMergingHistory.root
     }
 
-    val deletions    = map.values.map(_._1).map(v => DeleteAction(v._1)).toList
-    val finalHistory = result.process(deletions)
-    finalHistory.runSyncUnsafe(20.seconds).root shouldBe emptyHistory.root
+    val deletions           = map.values.map(_._1).map(v => DeleteAction(v._1)).toList
+    val finalMergingHistory = resultMergingHistory.process(deletions)
+    finalMergingHistory.runSyncUnsafe(20.seconds).root shouldBe emptyRootHash
+
+    val finalSimplisticHistory = resultSimplisticHistory.process(deletions)
+    finalSimplisticHistory.runSyncUnsafe(20.seconds).root shouldBe emptyRootHash
   }
 
   val arbitraryRandomThreeBytes: Arbitrary[Key] =
