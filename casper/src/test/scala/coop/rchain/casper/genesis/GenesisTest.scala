@@ -286,7 +286,7 @@ object GenesisTest {
       runtime <- Runtime.createWithEmptyCost[Task, Task.Par](
                   storePath,
                   storageSize,
-                  StoreType.LMDB
+                  StoreType.InMem
                 )
       result <- body(runtime, genesisPath, log, time)
       _      <- runtime.close()

@@ -1,21 +1,17 @@
 package coop.rchain.rholang
 
-import java.io.StringReader
-
-import coop.rchain.catscontrib.mtl.implicits._
 import coop.rchain.metrics
 import coop.rchain.metrics.Metrics
+import coop.rchain.rholang.Resources.mkRuntime
+import coop.rchain.rholang.interpreter.accounting._
 import coop.rchain.rholang.interpreter.storage.StoragePrinter
 import coop.rchain.rholang.interpreter.{EvaluateResult, Interpreter, Runtime}
-import coop.rchain.rholang.interpreter.accounting._
-import monix.execution.Scheduler.Implicits.global
-import coop.rchain.rholang.Resources.mkRuntime
-import monix.eval.Task
-import org.scalatest.{FlatSpec, Matchers}
 import coop.rchain.shared.Log
+import monix.eval.Task
+import monix.execution.Scheduler.Implicits.global
+import org.scalatest.{FlatSpec, Matchers}
 
 import scala.concurrent.duration._
-import scala.util.Try
 
 class InterpreterSpec extends FlatSpec with Matchers {
   private val mapSize     = 10L * 1024L * 1024L
@@ -28,12 +24,11 @@ class InterpreterSpec extends FlatSpec with Matchers {
   behavior of "Interpreter"
 
   it should "restore RSpace to its prior state after evaluation error" in {
-    import coop.rchain.catscontrib.effect.implicits.bracketTry
 
     val sendRho = "@{0}!(0)"
 
     val (initStorage, beforeError, afterError, afterSend, finalContent) =
-      mkRuntime[Task, Task.Par](tmpPrefix, mapSize)
+      mkRuntime[Task](tmpPrefix, mapSize)
         .use { runtime =>
           for {
             initStorage  <- storageContents(runtime)
@@ -56,8 +51,7 @@ class InterpreterSpec extends FlatSpec with Matchers {
   }
 
   it should "yield correct results for the PrimeCheck contract" in {
-    import coop.rchain.catscontrib.effect.implicits.bracketTry
-    val contents = mkRuntime[Task, Task.Par](tmpPrefix, mapSize)
+    val contents = mkRuntime[Task](tmpPrefix, mapSize)
       .use { runtime =>
         for {
           _ <- success(
@@ -113,7 +107,7 @@ class InterpreterSpec extends FlatSpec with Matchers {
   it should "signal syntax errors to the caller" in {
     val badRholang = "new f, x in { f(x) }"
     val EvaluateResult(_, errors) =
-      mkRuntime[Task, Task.Par](tmpPrefix, mapSize)
+      mkRuntime[Task](tmpPrefix, mapSize)
         .use { runtime =>
           for {
             res <- execute(runtime, badRholang)
@@ -128,7 +122,7 @@ class InterpreterSpec extends FlatSpec with Matchers {
   it should "capture rholang parsing errors and charge for parsing" in {
     val badRholang = """ for(@x <- @"x"; @y <- @"y"){ @"xy"!(x + y) | @"x"!(1) | @"y"!("hi") """
     val EvaluateResult(cost, errors) =
-      mkRuntime[Task, Task.Par](tmpPrefix, mapSize)
+      mkRuntime[Task](tmpPrefix, mapSize)
         .use { runtime =>
           for {
             res <- execute(runtime, badRholang)
@@ -143,7 +137,7 @@ class InterpreterSpec extends FlatSpec with Matchers {
   it should "charge for parsing even when there's not enough phlo to complete it" in {
     val sendRho = "@{0}!(0)"
     val EvaluateResult(cost, errors) =
-      mkRuntime[Task, Task.Par](tmpPrefix, mapSize)
+      mkRuntime[Task](tmpPrefix, mapSize)
         .use { runtime =>
           implicit val c = runtime.cost
           for {

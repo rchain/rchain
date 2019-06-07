@@ -96,7 +96,7 @@ object MultiParentCasperTestUtil {
                         .createWithEmptyCost[Task, Task.Par](
                           storageDirectory,
                           storageSize,
-                          StoreType.LMDB
+                          StoreType.InMem
                         )
       runtimeManager <- RuntimeManager.fromRuntime[Task](activeRuntime)
       genesis <- Genesis.createGenesisBlock(

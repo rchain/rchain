@@ -1,29 +1,21 @@
 package coop.rchain.rholang.interpreter.accounting
 
-import java.nio.file.Files
-
 import cats._
 import cats.effect._
 import cats.implicits._
-import coop.rchain.catscontrib.mtl.implicits._
-import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.metrics
 import coop.rchain.metrics.Metrics
 import coop.rchain.models._
 import coop.rchain.rholang.Resources._
-import coop.rchain.rholang.interpreter.Runtime.{RhoContext, RhoISpace}
 import coop.rchain.rholang.interpreter.{PrettyPrinter => PP, _}
-import coop.rchain.rholang.interpreter.errors.OutOfPhlogistonsError
 import coop.rchain.rholang.syntax.rholang_mercury.Absyn.{PPar, Proc}
 import coop.rchain.rholang.syntax.rholang_mercury.PrettyPrinter
 import coop.rchain.rholang.{GenTools, ProcGen}
-import coop.rchain.rspace.history.Branch
-import coop.rchain.rspace.{Context, RSpace}
 import coop.rchain.shared.Log
 import monix.eval.{Coeval, Task}
 import monix.execution.Scheduler.Implicits.global
-import org.scalacheck.{Arbitrary, Gen}
 import org.scalacheck.Test.Parameters
+import org.scalacheck.{Arbitrary, Gen}
 import org.scalatest.prop.PropertyChecks
 import org.scalatest.{FlatSpec, Matchers}
 
@@ -109,7 +101,7 @@ object CostAccountingPropertyTest {
     implicit val noopMetrics: Metrics[Task] = new metrics.Metrics.MetricsNOP[Task]
 
     val prefix = "cost-accounting-property-test"
-    mkRuntime[Task, Task.Par](prefix, 1024 * 1024).use { runtime =>
+    mkRuntime[Task](prefix, 1024 * 1024).use { runtime =>
       for {
         _    <- runtime.reducer.setPhlo(Cost.UNSAFE_MAX)
         _    <- Runtime.injectEmptyRegistryRoot[Task](runtime.space, runtime.replaySpace)

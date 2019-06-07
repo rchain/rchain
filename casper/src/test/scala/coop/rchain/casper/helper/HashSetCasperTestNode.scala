@@ -129,7 +129,7 @@ object HashSetCasperTestNode {
     implicit val metricsEff: Metrics[Task] = new metrics.Metrics.MetricsNOP[Task]
     val activeRuntime =
       Runtime
-        .createWithEmptyCost[Task, Task.Par](storageDirectory, storageSize, StoreType.LMDB)
+        .createWithEmptyCost[Task, Task.Par](storageDirectory, storageSize, StoreType.InMem)
         .unsafeRunSync
     val runtimeManager = RuntimeManager.fromRuntime(activeRuntime).unsafeRunSync
     Resource.make[Effect, RuntimeManager[Effect]](
