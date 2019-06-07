@@ -37,7 +37,7 @@ class Runtime[F[_]: Sync] private (
     val cost: _cost[F],
     val context: RhoContext[F],
     val deployParametersRef: Ref[F, DeployParameters],
-    val blockTime: Runtime.BlockTime[F],
+    val blockData: Runtime.BlockDataStorage[F],
     val invalidBlocks: Runtime.InvalidBlocks[F]
 ) {
   def readAndClearErrorVector(): F[Vector[Throwable]] = errorLog.readAndClearErrorVector()
@@ -79,21 +79,21 @@ object Runtime {
   type Remainder = Option[Var]
   type BodyRef   = Long
 
-  class BlockTime[F[_]](val timestamp: Ref[F, Par]) {
+  class BlockDataStorage[F[_]](val timestamp: Ref[F, Par]) {
     def setParams(timestamp: Par)(implicit F: Sync[F]): F[Unit] =
       for {
         _ <- this.timestamp.set(timestamp)
       } yield ()
   }
 
-  object BlockTime {
-    def apply[F[_]]()(implicit F: Sync[F]): F[BlockTime[F]] =
+  object BlockDataStorage {
+    def apply[F[_]]()(implicit F: Sync[F]): F[BlockDataStorage[F]] =
       for {
         timestamp <- Ref[F].of(Par())
-      } yield new BlockTime[F](timestamp)
+      } yield new BlockDataStorage[F](timestamp)
 
-    def unsafe[F[_]]()(implicit F: Sync[F]): BlockTime[F] =
-      new BlockTime(Ref.unsafe[F, Par](Par()))
+    def unsafe[F[_]]()(implicit F: Sync[F]): BlockDataStorage[F] =
+      new BlockDataStorage(Ref.unsafe[F, Par](Par()))
   }
 
   class InvalidBlocks[F[_]](val invalidBlocks: Ref[F, Par]) {
@@ -188,7 +188,7 @@ object Runtime {
         dispatcher: RhoDispatch[F],
         registry: Registry[F],
         deployParametersRef: Ref[F, DeployParameters],
-        blockTime: BlockTime[F],
+        blockTime: BlockDataStorage[F],
         invalidBlocks: InvalidBlocks[F]
     ) {
       val systemProcesses = SystemProcesses[F](dispatcher, space)
@@ -322,7 +322,7 @@ object Runtime {
         dispatcher: RhoDispatch[F],
         registry: Registry[F],
         deployParametersRef: Ref[F, DeployParameters],
-        blockTime: BlockTime[F],
+        blockTime: BlockDataStorage[F],
         invalidBlocks: InvalidBlocks[F]
     ): RhoDispatchMap[F] = {
       val systemProcesses = SystemProcesses[F](dispatcher, space)
@@ -357,7 +357,7 @@ object Runtime {
       "rho:registry:lookup" -> Bundle(FixedChannels.REG_LOOKUP, writeFlag = true)
     ) ++ (stdSystemProcesses[F] ++ extraSystemProcesses).map(_.toUrnMap)
 
-    val blockTime     = BlockTime.unsafe[F]()
+    val blockTime     = BlockDataStorage.unsafe[F]()
     val invalidBlocks = InvalidBlocks.unsafe[F]()
 
     val procDefs: List[(Name, Arity, Remainder, BodyRef)] = {

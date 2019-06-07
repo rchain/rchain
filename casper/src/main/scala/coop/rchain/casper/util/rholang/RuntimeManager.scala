@@ -159,7 +159,7 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics] private[rholang] (
       runtime: Runtime[F]
   ): F[Unit] = {
     val timestamp: Par = Par(exprs = Seq(Expr(Expr.ExprInstance.GInt(blockTime))))
-    runtime.blockTime.setParams(timestamp)
+    runtime.blockData.setParams(timestamp)
   }
 
   private def setInvalidBlocks(
