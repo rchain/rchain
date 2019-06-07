@@ -5,7 +5,12 @@ import java.nio.file.Files
 import cats.effect.Sync
 import cats.implicits._
 import com.google.protobuf.ByteString
-import coop.rchain.blockstorage.{BlockDagRepresentation, BlockStore}
+import coop.rchain.blockstorage.{
+  BlockDagRepresentation,
+  BlockDagStorage,
+  BlockStore,
+  IndexedBlockDagStorage
+}
 import coop.rchain.casper.helper.BlockGenerator._
 import coop.rchain.casper.helper._
 import coop.rchain.casper.protocol._
@@ -20,7 +25,7 @@ import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.models.PCost
 import coop.rchain.p2p.EffectsTestInstances.LogStub
 import coop.rchain.rholang.interpreter.{accounting, Runtime}
-import coop.rchain.shared.StoreType
+import coop.rchain.shared.{StoreType, Time}
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
 import org.scalatest._
@@ -292,25 +297,6 @@ class InterpreterUtilTest
 
       mkRuntimeManager("interpreter-util-test")
         .use { runtimeManager =>
-          def step(index: Int, genesis: BlockMessage) =
-            for {
-              b1  <- blockDagStorage.lookupByIdUnsafe(index)
-              dag <- blockDagStorage.getRepresentation
-              computeBlockCheckpointResult <- computeBlockCheckpoint(
-                                               b1,
-                                               genesis,
-                                               dag,
-                                               runtimeManager
-                                             )
-              (postB1StateHash, postB1ProcessedDeploys) = computeBlockCheckpointResult
-              result <- injectPostStateHash[Task](
-                         index,
-                         b1,
-                         genesis,
-                         postB1StateHash,
-                         postB1ProcessedDeploys
-                       )
-            } yield result
           for {
             genesis <- createGenesis[Task](deploys = genesisDeploysWithCost)
             b1      <- createBlock[Task](Seq(genesis.blockHash), genesis, deploys = b1DeploysWithCost)
@@ -320,9 +306,9 @@ class InterpreterUtilTest
                    genesis,
                    deploys = b3DeploysWithCost
                  )
-            _         <- step(0, genesis)
-            _         <- step(1, genesis)
-            _         <- step(2, genesis)
+            _         <- step(runtimeManager)(0, genesis)
+            _         <- step(runtimeManager)(1, genesis)
+            _         <- step(runtimeManager)(2, genesis)
             dag       <- blockDagStorage.getRepresentation
             postState <- validateBlockCheckpoint[Task](b3, dag, runtimeManager, span)
             result    = postState shouldBe Right(None)
@@ -365,25 +351,6 @@ class InterpreterUtilTest
 
       mkRuntimeManager("interpreter-util-test")
         .use { runtimeManager =>
-          def step(index: Int, genesis: BlockMessage) =
-            for {
-              b1  <- blockDagStorage.lookupByIdUnsafe(index)
-              dag <- blockDagStorage.getRepresentation
-              computeBlockCheckpointResult <- computeBlockCheckpoint(
-                                               b1,
-                                               genesis,
-                                               dag,
-                                               runtimeManager
-                                             )
-              (postB1StateHash, postB1ProcessedDeploys) = computeBlockCheckpointResult
-              result <- injectPostStateHash[Task](
-                         index,
-                         b1,
-                         genesis,
-                         postB1StateHash,
-                         postB1ProcessedDeploys
-                       )
-            } yield result
           for {
             genesis <- createGenesis[Task](deploys = genesisDeploysWithCost)
             b1      <- createBlock[Task](Seq(genesis.blockHash), genesis, deploys = b1DeploysWithCost)
@@ -410,10 +377,10 @@ class InterpreterUtilTest
                   postGenStateHash,
                   postGenProcessedDeploys
                 )
-            _ <- step(1, genesis)
-            _ <- step(2, genesis)
-            _ <- step(3, genesis)
-            _ <- step(4, genesis)
+            _ <- step(runtimeManager)(1, genesis)
+            _ <- step(runtimeManager)(2, genesis)
+            _ <- step(runtimeManager)(3, genesis)
+            _ <- step(runtimeManager)(4, genesis)
 
             dag2      <- blockDagStorage.getRepresentation
             postState <- validateBlockCheckpoint[Task](b5, dag2, runtimeManager, span)
@@ -888,25 +855,6 @@ class InterpreterUtilTest
 
       mkRuntimeManager("interpreter-util-test")
         .use { runtimeManager =>
-          def step(index: Int, genesis: BlockMessage) =
-            for {
-              b1  <- blockDagStorage.lookupByIdUnsafe(index)
-              dag <- blockDagStorage.getRepresentation
-              computeBlockCheckpointResult <- computeBlockCheckpoint(
-                                               b1,
-                                               genesis,
-                                               dag,
-                                               runtimeManager
-                                             )
-              (postB1StateHash, postB1ProcessedDeploys) = computeBlockCheckpointResult
-              result <- injectPostStateHash[Task](
-                         index,
-                         b1,
-                         genesis,
-                         postB1StateHash,
-                         postB1ProcessedDeploys
-                       )
-            } yield result
           for {
             genesis <- createGenesis[Task](deploys = genesisDeploysWithCost)
             b1      <- createBlock[Task](Seq(genesis.blockHash), genesis, deploys = b1DeploysWithCost)
@@ -916,9 +864,9 @@ class InterpreterUtilTest
                    genesis,
                    deploys = b3DeploysWithCost
                  )
-            _   <- step(0, genesis)
-            _   <- step(1, genesis)
-            _   <- step(2, genesis)
+            _   <- step(runtimeManager)(0, genesis)
+            _   <- step(runtimeManager)(1, genesis)
+            _   <- step(runtimeManager)(2, genesis)
             dag <- blockDagStorage.getRepresentation
             blockHashes <- InterpreterUtil.findMultiParentsBlockHashesForReplay(
                             Seq(b1, b2),
@@ -929,5 +877,22 @@ class InterpreterUtilTest
           } yield ()
         }
   }
+
+  def step[F[_]: IndexedBlockDagStorage: BlockStore: Time: Metrics: Sync](
+      runtimeManager: RuntimeManager[F]
+  )(index: Int, genesis: BlockMessage): F[Unit] =
+    for {
+      b1                                        <- IndexedBlockDagStorage[F].lookupByIdUnsafe(index)
+      dag                                       <- BlockDagStorage[F].getRepresentation
+      computeBlockCheckpointResult              <- computeBlockCheckpoint(b1, genesis, dag, runtimeManager)
+      (postB1StateHash, postB1ProcessedDeploys) = computeBlockCheckpointResult
+      result <- injectPostStateHash[F](
+                 index,
+                 b1,
+                 genesis,
+                 postB1StateHash,
+                 postB1ProcessedDeploys
+               )
+    } yield result
 
 }
