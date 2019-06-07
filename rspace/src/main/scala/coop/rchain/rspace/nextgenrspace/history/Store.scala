@@ -18,6 +18,7 @@ trait Store[F[_]] {
   def put(key: Blake2b256Hash, value: BitVector): F[Unit]
   def get(key: ByteBuffer): F[Option[ByteBuffer]]
   def put(key: ByteBuffer, value: ByteBuffer): F[Unit]
+  def put(data: Seq[(Blake2b256Hash, BitVector)]): F[Unit]
   def close(): F[Unit]
 }
 
@@ -98,9 +99,30 @@ final case class LMDBStore[F[_]: Sync] private[history] (
       }
     }
 
+  @SuppressWarnings(Array("org.wartremover.warts.Throw"))
+  private[this] def putIfAbsent(txn: Txn[ByteBuffer], key: ByteBuffer, value: ByteBuffer): Unit =
+    Option(dbi.get(txn, key)) match {
+      case None =>
+        if (dbi.put(txn, key, value)) {
+          ()
+        } else {
+          throw new RuntimeException("was not able to put data")
+        }
+      case _: Some[ByteBuffer] => ()
+    }
+
   def close(): F[Unit] =
     Sync[F].delay {
       env.close()
     }
 
+  override def put(data: Seq[(Blake2b256Hash, BitVector)]): F[Unit] = {
+    val byteBuffers = data.map {
+      case (key, bytes) =>
+        (key.bytes.toDirectByteBuffer, bytes.toByteVector.toDirectByteBuffer)
+    }
+    withWriteTxnF { txn =>
+      byteBuffers.foreach { case (key, value) => putIfAbsent(txn, key, value) }
+    }
+  }
 }

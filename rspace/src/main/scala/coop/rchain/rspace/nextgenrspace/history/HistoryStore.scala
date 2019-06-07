@@ -16,14 +16,15 @@ trait HistoryStore[F[_]] {
 object HistoryStoreInstances {
   def historyStore[F[_]: Sync](store: Store[F]): HistoryStore[F] = new HistoryStore[F] {
     // TODO put list
-    override def put(tries: List[Trie]): F[Unit] =
-      tries
-        .traverse { t =>
+    override def put(tries: List[Trie]): F[Unit] = {
+      val data = tries
+        .map { t =>
           val key   = Trie.hash(t)
           val bytes = Trie.codecTrie.encode(t).get
-          store.put(key, bytes)
+          (key, bytes)
         }
-        .as(())
+      store.put(data)
+    }
 
     override def get(key: Blake2b256Hash): F[Trie] =
       for {
