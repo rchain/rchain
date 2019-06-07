@@ -149,14 +149,13 @@ class RuntimeManagerImpl[F[_]: Concurrent] private[rholang] (
 
   private def bondsQuerySource(name: String = "__SCALA__"): String =
     s"""
-       | new rl(`rho:registry:lookup`), SystemInstancesCh, posCh in {
-       |   rl!(`rho:rchain:systemInstancesRegistry`, *SystemInstancesCh) |
-       |   for(@(_, SystemInstancesRegistry) <- SystemInstancesCh) {
-       |     @SystemInstancesRegistry!("lookup", "pos", *posCh) |
-       |     for(pos <- posCh){ pos!("getBonds", "$name") }
-       |   }
-       | }
-     """.stripMargin
+       # new rl(`rho:registry:lookup`), poSCh in {
+       #   rl!(`rho:rchain:pos`, *poSCh) |
+       #   for(@(_, PoS) <- poSCh) {
+       #     @PoS!("getBonds", "$name")
+       #   }
+       # }
+       """.stripMargin('#')
 
   def computeDeployPayment(start: StateHash)(user: ByteString, amount: Long): F[StateHash] =
     withResetRuntimeLock(start)(
@@ -194,13 +193,13 @@ class RuntimeManagerImpl[F[_]: Concurrent] private[rholang] (
 
   private def deployPaymentSource(amount: Long, name: String = "__SCALA__"): String =
     s"""
-       | new rl(`rho:registry:lookup`), poSCh in {
-       |   rl!(`rho:rchain:pos`, *poSCh) |
-       |   for(@(_, PoS) <- poSCh) {
-       |     @PoS!("pay", $amount, "$name")
-       |   }
-       | }
-       """.stripMargin
+       # new rl(`rho:registry:lookup`), poSCh in {
+       #   rl!(`rho:rchain:pos`, *poSCh) |
+       #   for(@(_, PoS) <- poSCh) {
+       #     @PoS!("pay", $amount, "$name")
+       #   }
+       # }
+       """.stripMargin('#')
 
   private def withRuntimeLock[A](f: Runtime[F] => F[A]): F[A] =
     Sync[F].bracket(runtimeContainer.take)(f)(runtimeContainer.put)

@@ -870,7 +870,6 @@ class RegistryImpl[F[_]](
       "basicWalletFaucet"       -> "mjp8ac3zk41pyk64a64r64po7azcc4gca4x5sq37in34irsxqdjd6q",
       "lockbox"                 -> "w5zfefaasr5euzu1x551wwbgnt8o1c4345r3cgcwa1guyfre36fihu",
       "makeMint"                -> "asysrwfgzf8bf7sxkiowp4b3tcsy4f8ombi3w96ysox4u3qdmn1wbc",
-      "makePos"                 -> "ko5q4wr5qu4a54cynf44hbk7hbzawpa4qxigzo7rc157rjqhwuo4mt",
       "pos"                     -> "m3xk7h8r54dtqtwsrnxqzhe81baswey66nzw6m533nyd45ptyoybqr",
       "revVault"                -> "6zcfqnwnaqcwpeyuysx1rm48ndr6sgsbbgjuwf45i5nor3io7dr76j",
       "systemInstancesRegistry" -> "i41dt8gymg1d3ar7ditjwxmtnqtuw6chznhxci3696tffyrd3ppeaf",

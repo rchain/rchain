@@ -1,6 +1,7 @@
 from random import Random
 
 from docker.client import DockerClient
+import pytest
 
 from . import conftest
 from .common import (
@@ -23,7 +24,7 @@ BONDED_VALIDATOR_KEYPAIR = KeyPair(private_key='120d42175739387af0264921bb117e4c
 JOINING_VALIDATOR_KEYPAIR = KeyPair(private_key='1f52d0bce0a92f5c79f2a88aae6d391ddf853e2eb8e688c5aa68002205f92dad', public_key='04f42348554ab10387739d6f709ddba0eb9b80792f57ed68a1c9341635c0777590e9dbdd316c57cff51587f2f320e30605e6641e042f030b83aaaa3a3268a00fb0')
 READONLY_PEER_KEYPAIR = KeyPair(private_key='2bdedd2e4dd2e7b5f176b7a5bc155f10fafd3fbd9c03fb7556f2ffd22c786f8b', public_key='0409becddaedb5f6063e815073bf958450352ea8d88435769b78792ad759d3587b81500898eb9e8c683a43b030bccbde3293b6478eab44ba8a48c4201ff4866ed8')
 
-
+@pytest.mark.skip(reason="Skipped because we don't support bonding/unbonding in the new PoS yet")
 def test_heterogenous_validators(command_line_options: CommandLineOptions, random_generator: Random, docker_client: DockerClient) -> None:
     BONDED_VALIDATOR_BLOCKS = JOINING_VALIDATOR_BLOCKS = 10
     with conftest.testing_context(command_line_options, random_generator, docker_client, bootstrap_keypair=BOOTSTRAP_NODE_KEYPAIR, peers_keypairs=[BONDED_VALIDATOR_KEYPAIR]) as context:

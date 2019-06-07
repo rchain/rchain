@@ -52,13 +52,13 @@ class GenesisTest extends FlatSpec with Matchers with EitherValues with BlockDag
 
   def printWallets(walletsFile: String): Unit = {
     val pw = new PrintWriter(walletsFile)
-    pw.println(
+    val walletsContent =
       walletAddresses.zipWithIndex
         .map {
           case (v, i) => s"$v,$i,0"
         }
         .mkString("\n")
-    )
+    pw.println(walletsContent)
     pw.close()
   }
 
