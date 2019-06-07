@@ -1,7 +1,6 @@
 package coop.rchain.casper
 
 import cats.implicits._
-
 import coop.rchain.casper.EstimatorHelper.conflicts
 import coop.rchain.casper.helper.BlockGenerator.{
   computeBlockCheckpoint,
@@ -15,8 +14,7 @@ import coop.rchain.casper.util.rholang.Resources.mkRuntimeManager
 import coop.rchain.metrics
 import coop.rchain.metrics.Metrics
 import coop.rchain.p2p.EffectsTestInstances.LogicalTime
-import coop.rchain.shared.Log
-
+import coop.rchain.shared.{Log, Time}
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
 import org.scalatest.{FlatSpec, Matchers}
@@ -26,6 +24,10 @@ class EstimatorHelperTest
     with Matchers
     with BlockGenerator
     with BlockDagStorageFixture {
+
+  implicit val log: Log[Task]            = new Log.NOPLog[Task]
+  implicit val timeEff: Time[Task]       = new LogicalTime[Task]
+  implicit val metricsEff: Metrics[Task] = new metrics.Metrics.MetricsNOP[Task]
 
   /*
    * DAG Looks like this:
@@ -43,9 +45,6 @@ class EstimatorHelperTest
    *         genesis
    */
   "Blocks" should "conflict if they use the same deploys in different histories" in withStorage {
-    implicit val log: Log[Task]            = new Log.NOPLog[Task]
-    implicit val timeEff                   = new LogicalTime[Task]
-    implicit val metricsEff: Metrics[Task] = new metrics.Metrics.MetricsNOP[Task]
     implicit blockStore => implicit blockDagStorage =>
       for {
         deploys <- (0 until 6).toList.traverse(i => basicProcessedDeploy[Task](i))
