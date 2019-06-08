@@ -154,7 +154,10 @@ class RuntimeManagerImpl[F[_]: Concurrent] private[rholang] (
             Expr.ExprInstance.EMapBody(
               ParMap(SortedParMap(invalidBlocks.map {
                 case (validator, blockHash) =>
-                  (byteStringToPar(validator), byteStringToPar(blockHash))
+                  (
+                    RhoType.ByteArray(validator.toByteArray),
+                    RhoType.ByteArray(blockHash.toByteArray)
+                  )
               }))
             )
           )
@@ -162,9 +165,6 @@ class RuntimeManagerImpl[F[_]: Concurrent] private[rholang] (
       )
     runtime.invalidBlocks.setParams(invalidBlocksPar)
   }
-
-  private def byteStringToPar(b: ByteString): Par =
-    Par(exprs = Seq(Expr(Expr.ExprInstance.GByteArray(b))))
 
   def computeBonds(hash: StateHash): F[Seq[Bond]] =
     captureResults(hash, ConstructDeploy.sourceDeployNow(bondsQuerySource()))
