@@ -55,13 +55,14 @@ object BlockCreator {
             val encodedInvalidBlockHash = Base16.encode(invalidBlockHash.toByteArray)
             val deploy = ConstructDeploy.sourceDeploy(
               s"""
-                 |new rl(`rho:registry:lookup`), posCh in {
-                 |  rl!(`rho:rchain:pos`, *posCh) |
-                 |  for(@(_, PoS) <- posCh) {
-                 |    @PoS!("slash", "$encodedInvalidBlockHash".hexToBytes(), "IGNOREFORNOW")
-                 |  }
-                 |}
-            """.stripMargin,
+                 #new rl(`rho:registry:lookup`), posCh in {
+                 #  rl!(`rho:rchain:pos`, *posCh) |
+                 #  for(@(_, PoS) <- posCh) {
+                 #    @PoS!("slash", "$encodedInvalidBlockHash".hexToBytes(), "IGNOREFORNOW")
+                 #  }
+                 #}
+                 #
+              """.stripMargin('#'),
               System.currentTimeMillis(),
               accounting.MAX_VALUE,
               sec = privateKey
