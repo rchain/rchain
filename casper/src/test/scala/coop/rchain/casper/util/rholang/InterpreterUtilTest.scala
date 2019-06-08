@@ -5,7 +5,12 @@ import java.nio.file.Files
 import cats.effect.Sync
 import cats.implicits._
 import com.google.protobuf.ByteString
-import coop.rchain.blockstorage.{BlockDagRepresentation, BlockStore}
+import coop.rchain.blockstorage.{
+  BlockDagRepresentation,
+  BlockDagStorage,
+  BlockStore,
+  IndexedBlockDagStorage
+}
 import coop.rchain.casper.helper.BlockGenerator._
 import coop.rchain.casper.helper._
 import coop.rchain.casper.protocol._
@@ -20,7 +25,7 @@ import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.models.PCost
 import coop.rchain.p2p.EffectsTestInstances.LogStub
 import coop.rchain.rholang.interpreter.{accounting, Runtime}
-import coop.rchain.shared.StoreType
+import coop.rchain.shared.{StoreType, Time}
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
 import org.scalatest._
@@ -64,7 +69,8 @@ class InterpreterUtilTest
         "@1!(1)",
         "@2!(2)",
         "for(@a <- @1){ @123!(5 * a) }"
-      ).map(ConstructDeploy.sourceDeploy(_, System.currentTimeMillis(), accounting.MAX_VALUE))
+      ).map(ConstructDeploy.sourceDeployNow)
+
       val genesisDeploysCost =
         genesisDeploys.map(d => ProcessedDeploy().withDeploy(d).withCost(PCost(1)))
 
@@ -292,25 +298,6 @@ class InterpreterUtilTest
 
       mkRuntimeManager("interpreter-util-test")
         .use { runtimeManager =>
-          def step(index: Int, genesis: BlockMessage) =
-            for {
-              b1  <- blockDagStorage.lookupByIdUnsafe(index)
-              dag <- blockDagStorage.getRepresentation
-              computeBlockCheckpointResult <- computeBlockCheckpoint(
-                                               b1,
-                                               genesis,
-                                               dag,
-                                               runtimeManager
-                                             )
-              (postB1StateHash, postB1ProcessedDeploys) = computeBlockCheckpointResult
-              result <- injectPostStateHash[Task](
-                         index,
-                         b1,
-                         genesis,
-                         postB1StateHash,
-                         postB1ProcessedDeploys
-                       )
-            } yield result
           for {
             genesis <- createGenesis[Task](deploys = genesisDeploysWithCost)
             b1      <- createBlock[Task](Seq(genesis.blockHash), genesis, deploys = b1DeploysWithCost)
@@ -320,9 +307,9 @@ class InterpreterUtilTest
                    genesis,
                    deploys = b3DeploysWithCost
                  )
-            _         <- step(0, genesis)
-            _         <- step(1, genesis)
-            _         <- step(2, genesis)
+            _         <- step(runtimeManager)(0, genesis)
+            _         <- step(runtimeManager)(1, genesis)
+            _         <- step(runtimeManager)(2, genesis)
             dag       <- blockDagStorage.getRepresentation
             postState <- validateBlockCheckpoint[Task](b3, dag, runtimeManager, span)
             result    = postState shouldBe Right(None)
@@ -365,25 +352,6 @@ class InterpreterUtilTest
 
       mkRuntimeManager("interpreter-util-test")
         .use { runtimeManager =>
-          def step(index: Int, genesis: BlockMessage) =
-            for {
-              b1  <- blockDagStorage.lookupByIdUnsafe(index)
-              dag <- blockDagStorage.getRepresentation
-              computeBlockCheckpointResult <- computeBlockCheckpoint(
-                                               b1,
-                                               genesis,
-                                               dag,
-                                               runtimeManager
-                                             )
-              (postB1StateHash, postB1ProcessedDeploys) = computeBlockCheckpointResult
-              result <- injectPostStateHash[Task](
-                         index,
-                         b1,
-                         genesis,
-                         postB1StateHash,
-                         postB1ProcessedDeploys
-                       )
-            } yield result
           for {
             genesis <- createGenesis[Task](deploys = genesisDeploysWithCost)
             b1      <- createBlock[Task](Seq(genesis.blockHash), genesis, deploys = b1DeploysWithCost)
@@ -410,10 +378,10 @@ class InterpreterUtilTest
                   postGenStateHash,
                   postGenProcessedDeploys
                 )
-            _ <- step(1, genesis)
-            _ <- step(2, genesis)
-            _ <- step(3, genesis)
-            _ <- step(4, genesis)
+            _ <- step(runtimeManager)(1, genesis)
+            _ <- step(runtimeManager)(2, genesis)
+            _ <- step(runtimeManager)(3, genesis)
+            _ <- step(runtimeManager)(4, genesis)
 
             dag2      <- blockDagStorage.getRepresentation
             postState <- validateBlockCheckpoint[Task](b5, dag2, runtimeManager, span)
@@ -437,23 +405,9 @@ class InterpreterUtilTest
       implicit blockDagStorage =>
         //reference costs
         //deploy each Rholang program separately and record its cost
-        val deploy1 = ConstructDeploy.sourceDeploy(
-          "@1!(Nil)",
-          System.currentTimeMillis(),
-          accounting.MAX_VALUE
-        )
-        val deploy2 =
-          ConstructDeploy.sourceDeploy(
-            "@3!([1,2,3,4])",
-            System.currentTimeMillis(),
-            accounting.MAX_VALUE
-          )
-        val deploy3 =
-          ConstructDeploy.sourceDeploy(
-            "for(@x <- @0) { @4!(x.toByteArray()) }",
-            System.currentTimeMillis(),
-            accounting.MAX_VALUE
-          )
+        val deploy1 = ConstructDeploy.sourceDeployNow("@1!(Nil)")
+        val deploy2 = ConstructDeploy.sourceDeployNow("@3!([1,2,3,4])")
+        val deploy3 = ConstructDeploy.sourceDeployNow("for(@x <- @0) { @4!(x.toByteArray()) }")
         mkRuntimeManager("interpreter-util-test").use { runtimeManager =>
           for {
             dag          <- blockDagStorage.getRepresentation
@@ -471,18 +425,8 @@ class InterpreterUtilTest
     pendingUntilFixed { //reference costs
       withStorage { implicit blockStore => implicit blockDagStorage =>
         //deploy each Rholang program separately and record its cost
-        val deploy1 =
-          ConstructDeploy.sourceDeploy(
-            "@1!(Nil)",
-            System.currentTimeMillis(),
-            accounting.MAX_VALUE
-          )
-        val deploy2 =
-          ConstructDeploy.sourceDeploy(
-            "@2!([1,2,3,4])",
-            System.currentTimeMillis(),
-            accounting.MAX_VALUE
-          )
+        val deploy1 = ConstructDeploy.sourceDeployNow("@1!(Nil)")
+        val deploy2 = ConstructDeploy.sourceDeployNow("@2!([1,2,3,4])")
         mkRuntimeManager("interpreter-util-test").use { runtimeManager =>
           for {
             dag <- blockDagStorage.getRepresentation
@@ -492,11 +436,7 @@ class InterpreterUtilTest
 
             accCostsSep = cost1 ++ cost2
 
-            deployErr = ConstructDeploy.sourceDeploy(
-              "@3!(\"a\" + 3)",
-              System.currentTimeMillis(),
-              accounting.MAX_VALUE
-            )
+            deployErr    = ConstructDeploy.sourceDeployNow("@3!(\"a\" + 3)")
             batchDeploy  = Seq(deploy1, deploy2, deployErr)
             accCostBatch <- computeSingleProcessedDeploy(runtimeManager, dag, batchDeploy: _*)
           } yield accCostBatch should contain theSameElementsAs accCostsSep
@@ -532,7 +472,7 @@ class InterpreterUtilTest
           "@2!(5)",
           "for (@x <- @1) { @2!(x) }",
           "for (@x <- @2) { @3!(x) }"
-        ).map(ConstructDeploy.sourceDeploy(_, System.currentTimeMillis(), accounting.MAX_VALUE))
+        ).map(ConstructDeploy.sourceDeployNow)
       mkRuntimeManager("interpreter-util-test").use { runtimeManager =>
         for {
           dag1 <- blockDagStorage.getRepresentation
@@ -583,14 +523,7 @@ class InterpreterUtilTest
         |} |
         |@"recursionTest"!([1,2])
       """.stripMargin
-      ).map(
-        s =>
-          ConstructDeploy.sourceDeploy(
-            s,
-            System.currentTimeMillis(),
-            accounting.MAX_VALUE
-          )
-      )
+      ).map(ConstructDeploy.sourceDeployNow)
 
       mkRuntimeManager("interpreter-util-test").use { runtimeManager =>
         for {
@@ -645,14 +578,8 @@ class InterpreterUtilTest
               for (_ <- x; @14 <- y) { Nil }
              }
           """)
-          .map(
-            s =>
-              ConstructDeploy.sourceDeploy(
-                s,
-                System.currentTimeMillis(),
-                accounting.MAX_VALUE
-              )
-          )
+          .map(ConstructDeploy.sourceDeployNow)
+
       mkRuntimeManager("interpreter-util-test").use { runtimeManager =>
         for {
           dag1 <- blockDagStorage.getRepresentation
@@ -703,14 +630,8 @@ class InterpreterUtilTest
           |  } |
           |  loop!([Nil, 7, 7 | 8, 9 | Nil, 9 | 10, Nil, 9])
           |}""".stripMargin
-        ).map(
-          s =>
-            ConstructDeploy.sourceDeploy(
-              s,
-              System.currentTimeMillis(),
-              accounting.MAX_VALUE
-            )
-        )
+        ).map(ConstructDeploy.sourceDeployNow)
+
       mkRuntimeManager("interpreter-util-test").use { runtimeManager =>
         for {
           dag1 <- blockDagStorage.getRepresentation
@@ -753,14 +674,7 @@ class InterpreterUtilTest
             |   }
             | } | @"loop"!(["a","b","c","d"])
             |""".stripMargin
-          ).map(
-            s =>
-              ConstructDeploy.sourceDeploy(
-                s,
-                System.currentTimeMillis(),
-                accounting.MAX_VALUE
-              )
-          )
+          ).map(ConstructDeploy.sourceDeployNow)
 
         mkRuntimeManager("interpreter-util-test").use { runtimeManager =>
           for {
@@ -789,10 +703,8 @@ class InterpreterUtilTest
 
   it should "return None for logs containing extra comm events" in withStorage {
     implicit blockStore => implicit blockDagStorage =>
-      val deploys = (0 until 1).map(i => {
-        val code = s"for(_ <- @$i){ Nil } | @$i!($i)"
-        ConstructDeploy.sourceDeployNow(code)
-      })
+      val deploys =
+        (0 until 1).map(i => ConstructDeploy.sourceDeployNow(s"for(_ <- @$i){ Nil } | @$i!($i)"))
 
       mkRuntimeManager("interpreter-util-test").use { runtimeManager =>
         for {
@@ -888,25 +800,6 @@ class InterpreterUtilTest
 
       mkRuntimeManager("interpreter-util-test")
         .use { runtimeManager =>
-          def step(index: Int, genesis: BlockMessage) =
-            for {
-              b1  <- blockDagStorage.lookupByIdUnsafe(index)
-              dag <- blockDagStorage.getRepresentation
-              computeBlockCheckpointResult <- computeBlockCheckpoint(
-                                               b1,
-                                               genesis,
-                                               dag,
-                                               runtimeManager
-                                             )
-              (postB1StateHash, postB1ProcessedDeploys) = computeBlockCheckpointResult
-              result <- injectPostStateHash[Task](
-                         index,
-                         b1,
-                         genesis,
-                         postB1StateHash,
-                         postB1ProcessedDeploys
-                       )
-            } yield result
           for {
             genesis <- createGenesis[Task](deploys = genesisDeploysWithCost)
             b1      <- createBlock[Task](Seq(genesis.blockHash), genesis, deploys = b1DeploysWithCost)
@@ -916,9 +809,9 @@ class InterpreterUtilTest
                    genesis,
                    deploys = b3DeploysWithCost
                  )
-            _   <- step(0, genesis)
-            _   <- step(1, genesis)
-            _   <- step(2, genesis)
+            _   <- step(runtimeManager)(0, genesis)
+            _   <- step(runtimeManager)(1, genesis)
+            _   <- step(runtimeManager)(2, genesis)
             dag <- blockDagStorage.getRepresentation
             blockHashes <- InterpreterUtil.findMultiParentsBlockHashesForReplay(
                             Seq(b1, b2),
@@ -929,5 +822,22 @@ class InterpreterUtilTest
           } yield ()
         }
   }
+
+  def step[F[_]: IndexedBlockDagStorage: BlockStore: Time: Metrics: Sync](
+      runtimeManager: RuntimeManager[F]
+  )(index: Int, genesis: BlockMessage): F[Unit] =
+    for {
+      b1                                        <- IndexedBlockDagStorage[F].lookupByIdUnsafe(index)
+      dag                                       <- BlockDagStorage[F].getRepresentation
+      computeBlockCheckpointResult              <- computeBlockCheckpoint(b1, genesis, dag, runtimeManager)
+      (postB1StateHash, postB1ProcessedDeploys) = computeBlockCheckpointResult
+      result <- injectPostStateHash[F](
+                 index,
+                 b1,
+                 genesis,
+                 postB1StateHash,
+                 postB1ProcessedDeploys
+               )
+    } yield result
 
 }

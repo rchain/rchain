@@ -467,57 +467,57 @@ class ValidateTest
                   )
         } yield block
 
-      for {
-        b0 <- createGenesis[Task](bonds = bonds)
-        b1 <- createValidatorBlock[Task](Seq(b0), b0, Seq.empty, 0)
-        b2 <- createValidatorBlock[Task](Seq(b0), b0, Seq.empty, 1)
-        b3 <- createValidatorBlock[Task](Seq(b0), b0, Seq.empty, 2)
-        b4 <- createValidatorBlock[Task](Seq(b1), b0, Seq(b1), 0)
-        b5 <- createValidatorBlock[Task](Seq(b3, b2, b1), b0, Seq(b1, b2, b3), 1)
-        b6 <- createValidatorBlock[Task](Seq(b5, b4), b0, Seq(b1, b4, b5), 0)
-        b7 <- createValidatorBlock[Task](Seq(b4), b0, Seq(b1, b4, b5), 1) //not highest score parent
-        b8 <- createValidatorBlock[Task](Seq(b1, b2, b3), b0, Seq(b1, b2, b3), 2) //parents wrong order
-        b9 <- createValidatorBlock[Task](Seq(b6), b0, Seq.empty, 0) //empty justification
-        result <- mkRuntimeManager("casper-util-test")
-                   .use { runtimeManager =>
-                     for {
-                       _   <- updateChainWithBlockStateUpdate[Task](0, b0, runtimeManager)
-                       _   <- updateChainWithBlockStateUpdate[Task](1, b0, runtimeManager)
-                       _   <- updateChainWithBlockStateUpdate[Task](2, b0, runtimeManager)
-                       _   <- updateChainWithBlockStateUpdate[Task](3, b0, runtimeManager)
-                       _   <- updateChainWithBlockStateUpdate[Task](4, b0, runtimeManager)
-                       _   <- updateChainWithBlockStateUpdate[Task](5, b0, runtimeManager)
-                       _   <- updateChainWithBlockStateUpdate[Task](6, b0, runtimeManager)
-                       _   <- updateChainWithBlockStateUpdate[Task](7, b0, runtimeManager)
-                       _   <- updateChainWithBlockStateUpdate[Task](8, b0, runtimeManager)
-                       _   <- updateChainWithBlockStateUpdate[Task](9, b0, runtimeManager)
-                       dag <- blockDagStorage.getRepresentation
+      mkRuntimeManager("casper-util-test")
+        .use { runtimeManager =>
+          for {
 
-                       // Valid
-                       _ <- Validate.parents[Task](b0, b0, dag)
-                       _ <- Validate.parents[Task](b1, b0, dag)
-                       _ <- Validate.parents[Task](b2, b0, dag)
-                       _ <- Validate.parents[Task](b3, b0, dag)
-                       _ <- Validate.parents[Task](b4, b0, dag)
-                       _ <- Validate.parents[Task](b5, b0, dag)
-                       _ <- Validate.parents[Task](b6, b0, dag)
+            b0 <- createGenesis[Task](bonds = bonds)
+            b1 <- createValidatorBlock[Task](Seq(b0), b0, Seq.empty, 0)
+            b2 <- createValidatorBlock[Task](Seq(b0), b0, Seq.empty, 1)
+            b3 <- createValidatorBlock[Task](Seq(b0), b0, Seq.empty, 2)
+            b4 <- createValidatorBlock[Task](Seq(b1), b0, Seq(b1), 0)
+            b5 <- createValidatorBlock[Task](Seq(b3, b2, b1), b0, Seq(b1, b2, b3), 1)
+            b6 <- createValidatorBlock[Task](Seq(b5, b4), b0, Seq(b1, b4, b5), 0)
+            b7 <- createValidatorBlock[Task](Seq(b4), b0, Seq(b1, b4, b5), 1) //not highest score parent
+            b8 <- createValidatorBlock[Task](Seq(b1, b2, b3), b0, Seq(b1, b2, b3), 2) //parents wrong order
+            b9 <- createValidatorBlock[Task](Seq(b6), b0, Seq.empty, 0) //empty justification
 
-                       // Not valid
-                       _ <- Validate.parents[Task](b7, b0, dag)
-                       _ <- Validate.parents[Task](b8, b0, dag)
-                       _ <- Validate.parents[Task](b9, b0, dag)
+            _   <- updateChainWithBlockStateUpdate[Task](0, b0, runtimeManager)
+            _   <- updateChainWithBlockStateUpdate[Task](1, b0, runtimeManager)
+            _   <- updateChainWithBlockStateUpdate[Task](2, b0, runtimeManager)
+            _   <- updateChainWithBlockStateUpdate[Task](3, b0, runtimeManager)
+            _   <- updateChainWithBlockStateUpdate[Task](4, b0, runtimeManager)
+            _   <- updateChainWithBlockStateUpdate[Task](5, b0, runtimeManager)
+            _   <- updateChainWithBlockStateUpdate[Task](6, b0, runtimeManager)
+            _   <- updateChainWithBlockStateUpdate[Task](7, b0, runtimeManager)
+            _   <- updateChainWithBlockStateUpdate[Task](8, b0, runtimeManager)
+            _   <- updateChainWithBlockStateUpdate[Task](9, b0, runtimeManager)
+            dag <- blockDagStorage.getRepresentation
 
-                       _ = log.warns.size should be(3)
-                       result = log.warns.forall(
-                         _.matches(
-                           ".* block parents .* did not match estimate .* based on justification .*"
-                         )
-                       ) should be(
-                         true
-                       )
-                     } yield result
-                   }
-      } yield result
+            // Valid
+            _ <- Validate.parents[Task](b0, b0, dag)
+            _ <- Validate.parents[Task](b1, b0, dag)
+            _ <- Validate.parents[Task](b2, b0, dag)
+            _ <- Validate.parents[Task](b3, b0, dag)
+            _ <- Validate.parents[Task](b4, b0, dag)
+            _ <- Validate.parents[Task](b5, b0, dag)
+            _ <- Validate.parents[Task](b6, b0, dag)
+
+            // Not valid
+            _ <- Validate.parents[Task](b7, b0, dag)
+            _ <- Validate.parents[Task](b8, b0, dag)
+            _ <- Validate.parents[Task](b9, b0, dag)
+
+            _ = log.warns.size should be(3)
+            result = log.warns.forall(
+              _.matches(
+                ".* block parents .* did not match estimate .* based on justification .*"
+              )
+            ) should be(
+              true
+            )
+          } yield result
+        }
   }
 
   // Creates a block with an invalid block number and sequence number

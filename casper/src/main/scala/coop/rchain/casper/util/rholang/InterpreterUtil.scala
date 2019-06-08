@@ -153,14 +153,11 @@ object InterpreterUtil {
   ): F[Either[Throwable, (StateHash, StateHash, Seq[InternalProcessedDeploy])]] =
     for {
       possiblePreStateHash <- computeParentsPostState[F](parents, dag, runtimeManager, span)
-      result <- possiblePreStateHash match {
-                 case Right(preStateHash) =>
-                   runtimeManager.computeState(preStateHash)(deploys, blockTime).map {
-                     case (postStateHash, processedDeploys) =>
-                       (preStateHash, postStateHash, processedDeploys).asRight[Throwable]
-                   }
-                 case Left(err) =>
-                   err.asLeft[(StateHash, StateHash, Seq[InternalProcessedDeploy])].pure[F]
+      result <- possiblePreStateHash.flatTraverse { preStateHash =>
+                 runtimeManager.computeState(preStateHash)(deploys, blockTime).map {
+                   case (postStateHash, processedDeploys) =>
+                     (preStateHash, postStateHash, processedDeploys).asRight[Throwable]
+                 }
                }
     } yield result
 
