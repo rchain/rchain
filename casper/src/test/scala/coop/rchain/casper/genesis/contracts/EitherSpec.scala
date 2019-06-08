@@ -8,5 +8,5 @@ class EitherSpec
     extends RhoSpec(
       CompiledRholangSource("EitherTest.rho"),
       Seq.empty,
-      60.seconds
+      GENESIS_TEST_TIMEOUT
     )

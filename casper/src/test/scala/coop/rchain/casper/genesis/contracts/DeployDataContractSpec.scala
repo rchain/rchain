@@ -4,4 +4,8 @@ import coop.rchain.rholang.build.CompiledRholangSource
 import scala.concurrent.duration._
 
 class DeployDataContractSpec
-    extends RhoSpec(CompiledRholangSource("DeployDataContractTest.rho"), Seq.empty, 30.seconds)
+    extends RhoSpec(
+      CompiledRholangSource("DeployDataContractTest.rho"),
+      Seq.empty,
+      GENESIS_TEST_TIMEOUT
+    )
