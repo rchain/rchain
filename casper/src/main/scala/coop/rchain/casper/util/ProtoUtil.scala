@@ -434,28 +434,41 @@ object ProtoUtil {
     for {
       latestMessages        <- dag.latestMessages
       latestMessagesOfBlock <- ProtoUtil.toLatestMessage(block.justifications, dag)
-      result <- latestMessages.toList
-                 .traverse {
-                   case (validator, latestMessage) =>
-                     latestMessagesOfBlock.get(validator) match {
-                       case Some(latestMessageOfBlockByValidator) =>
-                         DagOperations
-                           .bfTraverseF(List(latestMessage))(
-                             block =>
-                               getCreatorJustificationUnlessGoal(
-                                 dag,
-                                 block,
-                                 latestMessageOfBlockByValidator
-                               )
-                           )
-                           .map(_.blockHash)
-                           .toSet
-                       case None =>
-                         Set.empty[BlockHash].pure[F]
-                     }
-                 }
-                 .map(_.flatten.toSet)
-    } yield result -- latestMessagesOfBlock.values.map(_.blockHash) - block.blockHash
+      unseenBlockHashesAndLatestMessages <- latestMessages.toStream
+                                             .traverse {
+                                               case (validator, latestMessage) =>
+                                                 getJustificationChainFromLatestMessageToBlock(
+                                                   dag,
+                                                   latestMessagesOfBlock,
+                                                   validator,
+                                                   latestMessage
+                                                 )
+                                             }
+                                             .map(_.flatten.toSet)
+    } yield unseenBlockHashesAndLatestMessages -- latestMessagesOfBlock.values.map(_.blockHash) - block.blockHash
+
+  private def getJustificationChainFromLatestMessageToBlock[F[_]: Sync: BlockStore](
+      dag: BlockDagRepresentation[F],
+      latestMessagesOfBlock: Map[Validator, BlockMetadata],
+      validator: Validator,
+      latestMessage: BlockMetadata
+  ): F[Set[BlockHash]] =
+    latestMessagesOfBlock.get(validator) match {
+      case Some(latestMessageOfBlockByValidator) =>
+        DagOperations
+          .bfTraverseF(List(latestMessage))(
+            block =>
+              getCreatorJustificationUnlessGoal(
+                dag,
+                block,
+                latestMessageOfBlockByValidator
+              )
+          )
+          .map(_.blockHash)
+          .toSet
+      case None =>
+        Set.empty[BlockHash].pure[F]
+    }
 
   private def getCreatorJustificationUnlessGoal[F[_]: Sync: BlockStore](
       dag: BlockDagRepresentation[F],
