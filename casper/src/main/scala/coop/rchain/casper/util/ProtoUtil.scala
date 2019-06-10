@@ -21,6 +21,7 @@ import coop.rchain.models._
 import coop.rchain.rholang.interpreter.DeployParameters
 
 import scala.collection.immutable
+import scala.collection.immutable.Map
 
 object ProtoUtil {
 
@@ -96,6 +97,9 @@ object ProtoUtil {
         case Justification(validator: Validator, _) =>
           validator == block.sender
       }
+
+  def creatorJustification(block: BlockMetadata): Option[Justification] =
+    block.justifications.find(justification => justification.validator == block.sender)
 
   /**
     * Since the creator justification is unique
@@ -422,4 +426,90 @@ object ProtoUtil {
     (missingParents union missingJustifications).toList
   }
 
+  // Return hashes of all blocks that are yet to be seen by the passed in block
+  def unseenBlockHashes[F[_]: Sync: BlockStore](
+      dag: BlockDagRepresentation[F],
+      block: BlockMessage
+  ): F[Set[BlockHash]] =
+    for {
+      latestMessages        <- dag.latestMessages
+      latestMessagesOfBlock <- ProtoUtil.toLatestMessage(block.justifications, dag)
+      unseenBlockHashesAndLatestMessages <- latestMessages.toStream
+                                             .traverse {
+                                               case (validator, latestMessage) =>
+                                                 getJustificationChainFromLatestMessageToBlock(
+                                                   dag,
+                                                   latestMessagesOfBlock,
+                                                   validator,
+                                                   latestMessage
+                                                 )
+                                             }
+                                             .map(_.flatten.toSet)
+    } yield unseenBlockHashesAndLatestMessages -- latestMessagesOfBlock.values.map(_.blockHash) - block.blockHash
+
+  private def getJustificationChainFromLatestMessageToBlock[F[_]: Sync: BlockStore](
+      dag: BlockDagRepresentation[F],
+      latestMessagesOfBlock: Map[Validator, BlockMetadata],
+      validator: Validator,
+      latestMessage: BlockMetadata
+  ): F[Set[BlockHash]] =
+    latestMessagesOfBlock.get(validator) match {
+      case Some(latestMessageOfBlockByValidator) =>
+        DagOperations
+          .bfTraverseF(List(latestMessage))(
+            block =>
+              getCreatorJustificationUnlessGoal(
+                dag,
+                block,
+                latestMessageOfBlockByValidator
+              )
+          )
+          .map(_.blockHash)
+          .toSet
+      case None =>
+        Set.empty[BlockHash].pure[F]
+    }
+
+  private def getCreatorJustificationUnlessGoal[F[_]: Sync: BlockStore](
+      dag: BlockDagRepresentation[F],
+      block: BlockMetadata,
+      goal: BlockMetadata
+  ): F[List[BlockMetadata]] =
+    ProtoUtil.creatorJustification(block) match {
+      case Some(Justification(_, hash)) =>
+        dag.lookup(hash).flatMap {
+          case Some(creatorJustification) =>
+            if (creatorJustification == goal) {
+              List.empty[BlockMetadata].pure[F]
+            } else {
+              List(creatorJustification).pure[F]
+            }
+          case None =>
+            Sync[F].raiseError[List[BlockMetadata]](
+              new RuntimeException(s"Missing block hash $hash in block dag.")
+            )
+        }
+      case None =>
+        List.empty[BlockMetadata].pure[F]
+    }
+
+  def invalidLatestMessages[F[_]: Monad](
+      dag: BlockDagRepresentation[F]
+  ): F[Map[Validator, BlockHash]] =
+    dag.latestMessages.flatMap(
+      latestMessages =>
+        invalidLatestMessages(dag, latestMessages.map {
+          case (validator, block) => (validator, block.blockHash)
+        })
+    )
+
+  def invalidLatestMessages[F[_]: Monad](
+      dag: BlockDagRepresentation[F],
+      latestMessagesHashes: Map[Validator, BlockHash]
+  ): F[Map[Validator, BlockHash]] =
+    dag.invalidBlocks.map { invalidBlocks =>
+      latestMessagesHashes.filter {
+        case (_, blockHash) => invalidBlocks.map(_.blockHash).contains(blockHash)
+      }
+    }
 }

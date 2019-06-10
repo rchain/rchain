@@ -14,6 +14,8 @@ import coop.rchain.casper.util.{ConstructDeploy, ProtoUtil, RSpaceUtil}
 import coop.rchain.catscontrib.TaskContrib.TaskOps
 import coop.rchain.comm.rp.ProtocolHelper.packet
 import coop.rchain.comm.transport
+import coop.rchain.crypto.PrivateKey
+import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.hash.Blake2b256
 import coop.rchain.crypto.signatures.Secp256k1
 import coop.rchain.p2p.EffectsTestInstances.LogicalTime
@@ -545,6 +547,29 @@ class MultiParentCasperAddBlockSpec extends FlatSpec with Matchers with Inspecto
           _    = v3.logEff.warns shouldBe empty
         } yield ()
       }
+  }
+
+  it should "succeed at slashing" in effectTest {
+    HashSetCasperTestNode.networkEff(validatorKeys.take(3), genesis).use { nodes =>
+      for {
+        deployData            <- ConstructDeploy.basicDeployData[Effect](0)
+        createBlockResult     <- nodes(0).casperEff.deploy(deployData) >> nodes(0).casperEff.createBlock
+        Created(signedBlock)  = createBlockResult
+        invalidBlock          = signedBlock.withSeqNum(47)
+        _                     <- nodes(1).casperEff.addBlock(invalidBlock, ignoreDoppelgangerCheck[Effect])
+        _                     <- nodes(2).casperEff.addBlock(invalidBlock, ignoreDoppelgangerCheck[Effect])
+        createBlockResult2    <- nodes(1).casperEff.createBlock
+        Created(signedBlock2) = createBlockResult2
+        _                     <- nodes(1).casperEff.addBlock(signedBlock2, ignoreDoppelgangerCheck[Effect])
+        bonds                 <- nodes(1).runtimeManager.computeBonds(ProtoUtil.postStateHash(signedBlock2))
+        _                     = bonds.map(_.stake).min should be(0) // Slashed validator has 0 stake
+        _                     <- nodes(2).receive()
+        createBlockResult3    <- nodes(2).casperEff.createBlock
+        Created(signedBlock3) = createBlockResult3
+        _                     <- nodes(2).casperEff.addBlock(signedBlock3, ignoreDoppelgangerCheck[Effect])
+        // TODO: assert no effect as already slashed
+      } yield ()
+    }
   }
 
   private def buildBlockWithInvalidJustification(

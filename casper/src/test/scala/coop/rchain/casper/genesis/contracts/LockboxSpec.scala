@@ -7,5 +7,5 @@ class LockboxSpec
     extends RhoSpec(
       CompiledRholangSource("LockboxTest.rho"),
       Seq.empty,
-      20.seconds
+      GENESIS_TEST_TIMEOUT
     )

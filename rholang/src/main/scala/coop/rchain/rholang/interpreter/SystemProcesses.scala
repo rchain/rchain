@@ -8,7 +8,7 @@ import coop.rchain.crypto.hash.{Blake2b256, Keccak256, Sha256}
 import coop.rchain.crypto.signatures.{Ed25519, Secp256k1}
 import coop.rchain.models._
 import coop.rchain.models.rholang.implicits._
-import coop.rchain.rholang.interpreter.Runtime.{BlockTime, RhoISpace}
+import coop.rchain.rholang.interpreter.Runtime.{BlockTime, InvalidBlocks, RhoISpace}
 import coop.rchain.rholang.interpreter.util.RevAddress
 import coop.rchain.rspace.{ContResult, Result}
 
@@ -31,6 +31,7 @@ trait SystemProcesses[F[_]] {
   def blake2b256Hash: Contract[F]
   def getDeployParams(runtimeParametersRef: Ref[F, DeployParameters]): Contract[F]
   def blockTime(timestamp: BlockTime[F]): Contract[F]
+  def invalidBlocks(invalidBlocks: InvalidBlocks[F]): Contract[F]
   def validateRevAddress: Contract[F]
 }
 
@@ -183,6 +184,16 @@ object SystemProcesses {
           } yield ()
         case _ =>
           illegalArgumentException("blockTime expects only a return channel")
+      }
+
+      def invalidBlocks(invalidBlocks: Runtime.InvalidBlocks[F]): Contract[F] = {
+        case isContractCall(produce, Seq(ack)) =>
+          for {
+            invalidBlocks <- invalidBlocks.invalidBlocks.get
+            _             <- produce(Seq(invalidBlocks), ack)
+          } yield ()
+        case _ =>
+          illegalArgumentException("invalidBlocks expects only a return channel")
       }
     }
 }

@@ -25,7 +25,7 @@ object RhoSpec {
       testResultCollector: TestResultCollector[F]
   ): Seq[SystemProcess.Definition[F]] = {
     val testResultCollectorService =
-      Seq((5, "assertAck", 25), (1, "testSuiteCompleted", 26))
+      Seq((5, "assertAck", 101), (1, "testSuiteCompleted", 102))
         .map {
           case (arity, name, n) =>
             SystemProcess.Definition[F](
@@ -38,16 +38,16 @@ object RhoSpec {
         } ++ Seq(
         SystemProcess.Definition[F](
           "rho:io:stdlog",
-          Runtime.byteName(27),
+          Runtime.byteName(103),
           2,
-          27L,
+          103L,
           ctx => RhoLoggerContract.handleMessage(ctx)(_, _)
         ),
         SystemProcess.Definition[F](
           "rho:test:deploy:set",
-          Runtime.byteName(28),
+          Runtime.byteName(104),
           3,
-          28L,
+          104L,
           ctx => DeployDataContract.set(ctx)(_, _)
         )
       )
