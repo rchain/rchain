@@ -9,6 +9,7 @@ import coop.rchain.shared.StringOps.ColoredString
 
 trait ConsoleIO[F[_]] {
   def readLine: F[String]
+  def readPassword(prompt: String): F[String]
   def println(str: String): F[Unit]
   def println(str: ColoredString): F[Unit]
   def updateCompletion(history: Set[String]): F[Unit]
@@ -27,6 +28,7 @@ trait ConsoleIO0 {
 
 class NOPConsoleIO[F[_]: Applicative] extends ConsoleIO[F] {
   def readLine: F[String]                             = "".pure[F]
+  def readPassword(prompt: String): F[String]         = "".pure[F]
   def println(str: String): F[Unit]                   = ().pure[F]
   def updateCompletion(history: Set[String]): F[Unit] = ().pure[F]
   def close: F[Unit]                                  = ().pure[F]
@@ -36,7 +38,9 @@ class NOPConsoleIO[F[_]: Applicative] extends ConsoleIO[F] {
 object ForTrans {
   def forTrans[F[_]: Monad, T[_[_], _]: MonadTrans](implicit C: ConsoleIO[F]): ConsoleIO[T[F, ?]] =
     new ConsoleIO[T[F, ?]] {
-      def readLine: T[F, String]                  = MonadTrans[T].liftM(ConsoleIO[F].readLine)
+      def readLine: T[F, String] = MonadTrans[T].liftM(ConsoleIO[F].readLine)
+      def readPassword(prompt: String): T[F, String] =
+        MonadTrans[T].liftM(ConsoleIO[F].readPassword(prompt))
       def println(str: String): T[F, Unit]        = MonadTrans[T].liftM(ConsoleIO[F].println(str))
       def println(str: ColoredString): T[F, Unit] = MonadTrans[T].liftM(ConsoleIO[F].println(str))
       def updateCompletion(history: Set[String]): T[F, Unit] =

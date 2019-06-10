@@ -194,6 +194,7 @@ object Configuration {
           phloPrice(),
           validAfterBlockNumber.getOrElse(-1L),
           privateKey.toOption,
+          privateKeyPath.toOption,
           location()
         )
       case Some(options.findDeploy) => FindDeploy(options.findDeploy.deployId())
@@ -207,10 +208,11 @@ object Configuration {
         VisualizeDag(depth.getOrElse(-1), showJustificationLines.getOrElse(false))
       case Some(options.machineVerifiableDag) => MachineVerifiableDag
       case Some(options.run)                  => Run
-      case Some(options.keygen)               => Keygen(options.keygen.algorithm())
-      case Some(options.lastFinalizedBlock)   => LastFinalizedBlock
-      case Some(options.dataAtName)           => DataAtName(options.dataAtName.name())
-      case Some(options.contAtName)           => ContAtName(options.contAtName.name())
+      case Some(options.keygen) =>
+        Keygen(options.keygen.algorithm(), options.keygen.privateKeyPath())
+      case Some(options.lastFinalizedBlock) => LastFinalizedBlock
+      case Some(options.dataAtName)         => DataAtName(options.dataAtName.name())
+      case Some(options.contAtName)         => ContAtName(options.contAtName.name())
       case Some(options.bondingDeployGen) =>
         import options.bondingDeployGen._
         BondingDeployGen(bondKey(), ethAddr(), amount(), privateKey(), publicKey())

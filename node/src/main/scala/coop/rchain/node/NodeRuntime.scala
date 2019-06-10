@@ -462,6 +462,7 @@ class NodeRuntime private[node] (
     }
     runtimeManager <- RuntimeManager.fromRuntime[Task](casperRuntime)
     engineCell     <- EngineCell.init[Task]
+    envVars        = EnvVars.envVars[Task]
     raiseIOError   = IOError.raiseIOErrorThroughSync[Task]
     casperInit = new CasperInit[Task](
       conf.casper,
@@ -485,6 +486,7 @@ class NodeRuntime private[node] (
           multiParentCasperRef,
           blockDagStorage,
           engineCell,
+          envVars,
           raiseIOError,
           scheduler
         )

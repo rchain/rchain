@@ -316,7 +316,8 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
 
     val validatorPrivateKey = opt[String](
       descr = "Base16 encoding of the private key to use for signing a proposed blocks. " +
-        "It is not recommended to use in production since private key could be revealed through the process table"
+        "It is not recommended to use in production since private key could be revealed through the process table",
+      hidden = true
     )
 
     val validatorPrivateKeyPath = opt[Path](
@@ -345,6 +346,11 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
     val algorithm = opt[String](
       descr = "Algorithm to be used for key generation. Must be one of ed25519 or secp256k1.",
       validate = (s: String) => { s == "ed25519" || s == "secp256k1" },
+      required = true
+    )
+
+    val privateKeyPath = opt[Path](
+      descr = "Path to the file where the encoded private key will be written to.",
       required = true
     )
   }
@@ -408,11 +414,17 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
 
     val privateKey = opt[PrivateKey](
       descr = "The deployer's ed25519 private key encoded as Base16.",
-      required = false
+      required = false,
+      hidden = true
     )(
       Base16Converter
         .flatMap(validateLength(Ed25519.keyLength))
         .map(PrivateKey)
+    )
+
+    val privateKeyPath = opt[Path](
+      descr = "The deployer's file with encrypted private key.",
+      required = false
     )
 
     val location = trailArg[String](required = true)

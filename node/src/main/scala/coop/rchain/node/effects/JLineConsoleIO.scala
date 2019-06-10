@@ -22,6 +22,9 @@ class JLineConsoleIO(console: ConsoleReader) extends ConsoleIO[Task] {
   def readLine: Task[String] = Task.delay {
     console.readLine
   }
+  def readPassword(prompt: String): Task[String] = Task.delay {
+    console.readLine(prompt, '*')
+  }
   def println(str: String): Task[Unit] = Task.delay {
     console.println(str)
     console.flush()
