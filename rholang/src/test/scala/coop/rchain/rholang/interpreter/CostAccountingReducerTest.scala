@@ -152,15 +152,6 @@ class CostAccountingReducerTest extends FlatSpec with Matchers with TripleEquals
       } yield (result, mappedSpace)
     }
 
-    val (result, map) =
-      mkRhoISpace[Task]("cost-accounting-reducer-test-")
-        .use(testImplementation(_))
-        .runSyncUnsafe(5.seconds)
-
-    val errors = errLog
-      .readAndClearErrorVector()
-      .runSyncUnsafe(1.second)
-
     def data(p: Par, rand: Blake2b512Random) = Row(
       List(
         Datum.create(
@@ -179,8 +170,15 @@ class CostAccountingReducerTest extends FlatSpec with Matchers with TripleEquals
     ): Boolean =
       map.get(List(channel)) === Some(data(p, rand))
 
-    assert(errors === Vector.empty)
-    assert(result === Left(OutOfPhlogistonsError))
-    assert(stored(map, a, rand.splitByte(0)) || stored(map, b, rand.splitByte(1)))
+    (for {
+      res           <- mkRhoISpace[Task]("cost-accounting-reducer-test-").use(testImplementation(_))
+      (result, map) = res
+      errors <- errLog
+                 .readAndClearErrorVector()
+      _ = assert(errors === Vector.empty)
+      _ = assert(result === Left(OutOfPhlogistonsError))
+      _ = assert(stored(map, a, rand.splitByte(0)) || stored(map, b, rand.splitByte(1)))
+    } yield ()).runSyncUnsafe(5.seconds)
+
   }
 }
