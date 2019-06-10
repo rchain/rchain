@@ -90,7 +90,6 @@ object ConfigMapper {
         add(keys.WalletsFile, run.walletsFile)
         add(keys.BondMinimum, run.minimumBond)
         add(keys.BondMaximum, run.maximumBond)
-        add(keys.HasFaucet, run.hasFaucet)
         add(keys.RequiredSignatures, run.requiredSigs)
         add(keys.Shard, run.shardId)
         add(keys.GenesisValidator, run.genesisValidator)

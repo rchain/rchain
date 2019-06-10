@@ -67,7 +67,6 @@ object HashSetCasperActions {
             maximumBond = Long.MaxValue,
             validators = bonds.toSeq.map(Validator.tupled)
           ),
-          faucet = true,
           genesisPk = Secp256k1.newKeyPair._2,
           timestamp = 0L,
           vaults = bonds.toList.map {

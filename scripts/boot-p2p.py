@@ -24,7 +24,6 @@ Options:
                       ISSUE: not used???
  --sigs=N             set the required signatures , this equals the number of nodes bonded at genesis
                       [default: 0]
- --has-faucet         set if the chain support has-faucet
  --debug              verbose logging
  -h --help            Show this help.
 
@@ -32,7 +31,7 @@ Return code of 0 is success on test and 1 is fail.
 
 Example below shows how to boot network with 3 nodes, including bootstrap, and run specific test
 
-sudo ./boot-p2p.py -m 34360m -c 1 -p 3  --genesis --sigs 2 --bonds <bond_file_path> --wallet <wallet_file_path> --has-faucet  -i rchain-integration-tests:latest --remove
+sudo ./boot-p2p.py -m 34360m -c 1 -p 3  --genesis --sigs 2 --bonds <bond_file_path> --wallet <wallet_file_path> -i rchain-integration-tests:latest --remove
 
 """
 # This requires Python 3.6 to be installed for f-string. Install dependencies via pip
@@ -76,7 +75,7 @@ def main(argv, cwd,
     peer_keys = [KeyPair.encode(create_keypair())
                  for _ in range(args.peers_amount - args.sigs)]
     network = P2PNetwork(args.network, time, sleep)
-    network.boot(image, temp, args.has_faucet, bond_keys, peer_keys,
+    network.boot(image, temp, bond_keys, peer_keys,
                  wallets=cwd / args.wallet if args.wallet else None,
                  other_bonds=cwd / args.bonds if args.bonds else None)
 
@@ -127,9 +126,9 @@ class P2PNetwork(object):
         self.__time = time
         self.__sleep = sleep
 
-    def boot(self, image, temp, has_faucet, bond_keys, peer_keys,
+    def boot(self, image, temp, bond_keys, peer_keys,
              wallets, other_bonds=None):
-        bootstrap = BootstrapNode(self.network, other_bonds, wallets, has_faucet,
+        bootstrap = BootstrapNode(self.network, other_bonds, wallets,
                                   timestamp=int(self.__time() * 1000))
         bootstrap.run(image, temp)
 
@@ -222,14 +221,11 @@ class BootstrapNode(RNode):
         "-----END CERTIFICATE-----\n"
     )
 
-    def __init__(self, network, bonds, wallets, has_faucet, timestamp):
+    def __init__(self, network, bonds, wallets, timestamp):
         self.network = network
         self.name = name = f"bootstrap.{self.network}"
 
         command, volumes = self.genesis(bonds, wallets)
-
-        if has_faucet:
-            command = command + ["--has-faucet"]
 
         self.command = [
             'run', "--standalone",

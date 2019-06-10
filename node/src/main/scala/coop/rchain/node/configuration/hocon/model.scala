@@ -192,7 +192,6 @@ object Casper {
     val WalletsFile             = "wallets-file"
     val BondMinimum             = "bond-minimum"
     val BondMaximum             = "bond-maximum"
-    val HasFaucet               = "has-faucet"
     val RequiredSignatures      = "required-signatures"
     val Shard                   = "shard"
     val GenesisValidator        = "genesis-validator"
@@ -219,7 +218,6 @@ object Casper {
       walletsFile = casper.getStringOpt(keys.WalletsFile),
       minimumBond = casper.getLong(keys.BondMinimum),
       maximumBond = casper.getLong(keys.BondMaximum),
-      hasFaucet = casper.getBoolean(keys.HasFaucet),
       requiredSigs = casper.getInt(keys.RequiredSignatures),
       shardId = casper.getString(keys.Shard),
       approveGenesis = casper.getBoolean(keys.GenesisValidator),

@@ -28,7 +28,7 @@ READONLY_PEER_KEYPAIR = KeyPair(private_key='2bdedd2e4dd2e7b5f176b7a5bc155f10faf
 def test_heterogenous_validators(command_line_options: CommandLineOptions, random_generator: Random, docker_client: DockerClient) -> None:
     BONDED_VALIDATOR_BLOCKS = JOINING_VALIDATOR_BLOCKS = 10
     with conftest.testing_context(command_line_options, random_generator, docker_client, bootstrap_keypair=BOOTSTRAP_NODE_KEYPAIR, peers_keypairs=[BONDED_VALIDATOR_KEYPAIR]) as context:
-        with docker_network_with_started_bootstrap(context=context, cli_flags=set(['--has-faucet'])) as bootstrap_node:
+        with docker_network_with_started_bootstrap(context=context, cli_flags=set()) as bootstrap_node:
             with bootstrap_connected_peer(context=context, bootstrap=bootstrap_node, name='bonded-validator', keypair=BONDED_VALIDATOR_KEYPAIR) as bonded_validator:
                 wait_for_peers_count_at_least(context, bonded_validator, 1)
                 contract_path = '/opt/docker/examples/hello_world_again.rho'
