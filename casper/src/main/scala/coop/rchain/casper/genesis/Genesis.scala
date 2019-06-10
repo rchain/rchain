@@ -70,7 +70,6 @@ object Genesis {
       maybeWalletsPath: Option[String],
       minimumBond: Long,
       maximumBond: Long,
-      faucet: Boolean,
       runtimeManager: RuntimeManager[F],
       shardId: String,
       deployTimestamp: Option[Long]
