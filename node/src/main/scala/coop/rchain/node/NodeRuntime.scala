@@ -460,10 +460,13 @@ class NodeRuntime private[node] (
         )
 
     }
-    runtimeManager <- RuntimeManager.fromRuntime[Task](casperRuntime)
-    engineCell     <- EngineCell.init[Task]
-    envVars        = EnvVars.envVars[Task]
-    raiseIOError   = IOError.raiseIOErrorThroughSync[Task]
+    runtimeManager <- {
+      implicit val m: Metrics[Task] = metrics
+      RuntimeManager.fromRuntime[Task](casperRuntime)
+    }
+    engineCell   <- EngineCell.init[Task]
+    envVars      = EnvVars.envVars[Task]
+    raiseIOError = IOError.raiseIOErrorThroughSync[Task]
     casperInit = new CasperInit[Task](
       conf.casper,
       runtimeManager

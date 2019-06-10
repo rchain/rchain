@@ -208,7 +208,7 @@ object BondingUtil {
           )
     )
 
-  def makeRuntimeManagerResource[F[_]: Sync: Concurrent](
+  def makeRuntimeManagerResource[F[_]: Sync: Concurrent: Metrics](
       runtimeResource: Resource[F, Runtime[F]]
   ): Resource[F, RuntimeManager[F]] =
     runtimeResource.flatMap(
