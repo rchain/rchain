@@ -55,9 +55,6 @@ private[api] object DeployGrpcService {
       override def doDeploy(d: DeployData): Task[GrpcEither] =
         defer(BlockAPI.deploy[F](d))
 
-      override def createBlock(e: Empty): Task[GrpcEither] =
-        defer(BlockAPI.createBlock[F](blockApiLock))
-
       override def getBlock(q: BlockQuery): Task[GrpcEither] =
         defer(BlockAPI.getBlock[F](q))
 
