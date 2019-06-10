@@ -430,7 +430,9 @@ class NodeRuntime private[node] (
         log,
         metrics
       )
-    lastFinalizedBlockCalculator = LastFinalizedBlockCalculator[Task](0f)(
+    lastFinalizedBlockCalculator = LastFinalizedBlockCalculator[Task](
+      conf.server.faultToleranceThreshold
+    )(
       Sync[Task],
       log,
       Concurrent[Task],
