@@ -41,7 +41,7 @@ class ReplayWideBench {
 @State(Scope.Benchmark)
 class ReplayFineBenchState extends ReplayWideBenchState {
   override def createRuntime(): Runtime[Task] =
-    Runtime.createWithEmptyCost[Task, Task.Par](dbDir, mapSize, StoreType.LMDB).unsafeRunSync
+    Runtime.createWithEmptyCost[Task, Task.Par](dbDir, mapSize, StoreType.RSpace2).unsafeRunSync
 }
 
 abstract class ReplayWideBenchState extends WideBenchBaseState {

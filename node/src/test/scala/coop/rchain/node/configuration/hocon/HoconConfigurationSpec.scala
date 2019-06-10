@@ -30,7 +30,7 @@ class HoconConfigurationSpec extends FunSuite with Matchers {
       |    standalone = true
       |    bootstrap = "rnode://de6eed5d00cf080fc587eeb412cb31a75fd10358@52.119.8.109?protocol=40400&discovery=40404"
       |    data-dir = /root/.rnode
-      |    store-type = lmdb
+      |    store-type = v2
       |    store-size = 1G
       |    dag-storage-size = 512M
       |    map-size = 1G
@@ -64,7 +64,7 @@ class HoconConfigurationSpec extends FunSuite with Matchers {
         standalone = true,
         dataDir = Paths.get("/root/.rnode"),
         mapSize = 1024 * 1024 * 1024,
-        storeType = StoreType.LMDB,
+        storeType = StoreType.RSpace2,
         storeSize = 1024 * 1024 * 1024,
         dagStorageSize = 512 * 1024 * 1024,
         maxNumOfConnections = 500,

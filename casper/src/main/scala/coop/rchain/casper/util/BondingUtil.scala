@@ -202,7 +202,7 @@ object BondingUtil {
         Resource
           .make {
             Runtime
-              .createWithEmptyCost[F, M](runtimeDir, 1024L * 1024 * 1024, StoreType.LMDB)
+              .createWithEmptyCost[F, M](runtimeDir, 1024L * 1024 * 1024, StoreType.RSpace2)
           }(
             runtime => runtime.close()
           )

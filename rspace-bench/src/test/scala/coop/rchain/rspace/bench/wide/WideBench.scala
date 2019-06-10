@@ -46,14 +46,14 @@ class WideBench {
 @State(Scope.Benchmark)
 class FineBenchState extends WideBenchState {
   override def createRuntime() =
-    Runtime.createWithEmptyCost[Task, Task.Par](dbDir, mapSize, StoreType.LMDB).unsafeRunSync
+    Runtime.createWithEmptyCost[Task, Task.Par](dbDir, mapSize, StoreType.RSpace2).unsafeRunSync
 }
 
 @State(Scope.Benchmark)
 class InMemBenchState extends WideBenchState {
   override def createRuntime() =
     Runtime
-      .createWithEmptyCost[Task, Task.Par](dbDir, mapSize, StoreType.Mixed)
+      .createWithEmptyCost[Task, Task.Par](dbDir, mapSize, StoreType.RSpace2)
       .unsafeRunSync
 }
 

@@ -11,7 +11,7 @@ import coop.rchain.shared.PathOps.RichPath
 import java.nio.file.{Files, Path, Paths}
 import coop.rchain.rholang.interpreter.{PrettyPrinter, Runtime}
 import coop.rchain.rspace.Checkpoint
-import coop.rchain.shared.StoreType.InMem
+import coop.rchain.shared.StoreType.RSpace2
 import coop.rchain.shared.{Log, StoreType}
 import coop.rchain.metrics.Metrics
 import coop.rchain.models._
@@ -102,7 +102,7 @@ object Interactive {
         .createWithEmptyCost[Task, Task.Par](
           Files.createTempDirectory("interactive"),
           1024 * 1024,
-          StoreType.LMDB
+          StoreType.RSpace2
         )
         .runSyncUnsafe(5.seconds)
     )

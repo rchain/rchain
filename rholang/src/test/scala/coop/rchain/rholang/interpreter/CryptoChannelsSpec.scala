@@ -220,7 +220,7 @@ class CryptoChannelsSpec
     implicit val noopMetrics: Metrics[Task] = new metrics.Metrics.MetricsNOP[Task]
 
     val runtime = (for {
-      runtime <- Runtime.createWithEmptyCost[Task, Task.Par](dbDir, size, StoreType.InMem)
+      runtime <- Runtime.createWithEmptyCost[Task, Task.Par](dbDir, size, StoreType.RSpace2)
       _       <- runtime.reducer.setPhlo(Cost.UNSAFE_MAX)
     } yield (runtime)).unsafeRunSync
 
