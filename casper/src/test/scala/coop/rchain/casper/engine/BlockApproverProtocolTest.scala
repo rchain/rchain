@@ -131,7 +131,6 @@ object BlockApproverProtocolTest {
         wallets,
         1L,
         Long.MaxValue,
-        false,
         requiredSigs
       ) -> node).pure[Effect]
     }

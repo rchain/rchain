@@ -34,7 +34,6 @@ class BlockApproverProtocol(
     wallets: Seq[PreWallet],
     minimumBond: Long,
     maximumBond: Long,
-    faucet: Boolean,
     requiredSigs: Int
 ) {
   implicit private val logSource: LogSource = LogSource(this.getClass)
@@ -58,8 +57,7 @@ class BlockApproverProtocol(
           wallets,
           _bonds,
           minimumBond,
-          maximumBond,
-          faucet
+          maximumBond
         )
         .flatMap {
           case Right(_) =>
@@ -104,8 +102,7 @@ object BlockApproverProtocol {
       wallets: Seq[PreWallet],
       bonds: Map[ByteString, Long],
       minimumBond: Long,
-      maximumBond: Long,
-      faucet: Boolean
+      maximumBond: Long
   ): F[Either[String, Unit]] = {
 
     def validate: Either[String, (Seq[InternalProcessedDeploy], RChainState)] =

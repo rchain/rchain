@@ -84,7 +84,6 @@ object Setup {
       Seq.empty,
       1L,
       Long.MaxValue,
-      false,
       requiredSigs
     )
     val local: PeerNode = peerNode("src", 40400)
