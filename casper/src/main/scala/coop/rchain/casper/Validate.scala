@@ -488,6 +488,7 @@ object Validate {
       } yield Left(InvalidShardId)
     }
 
+  // TODO: Double check this validation isn't shadowed by the blockSignature validation
   def blockHash[F[_]: Applicative: Log](b: BlockMessage): F[Either[InvalidBlock, ValidBlock]] = {
     val blockHashComputed = ProtoUtil.hashSignedBlock(
       b.header.get,

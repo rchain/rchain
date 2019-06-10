@@ -37,7 +37,8 @@ class Runtime[F[_]: Sync] private (
     val cost: _cost[F],
     val context: RhoContext[F],
     val deployParametersRef: Ref[F, DeployParameters],
-    val blockTime: Runtime.BlockTime[F]
+    val blockTime: Runtime.BlockTime[F],
+    val invalidBlocks: Runtime.InvalidBlocks[F]
 ) {
   def readAndClearErrorVector(): F[Vector[Throwable]] = errorLog.readAndClearErrorVector()
   def close(): F[Unit] =
@@ -95,6 +96,21 @@ object Runtime {
       new BlockTime(Ref.unsafe[F, Par](Par()))
   }
 
+  class InvalidBlocks[F[_]](val invalidBlocks: Ref[F, Par]) {
+    def setParams(invalidBlocks: Par): F[Unit] =
+      this.invalidBlocks.set(invalidBlocks)
+  }
+
+  object InvalidBlocks {
+    def apply[F[_]]()(implicit F: Sync[F]): F[InvalidBlocks[F]] =
+      for {
+        invalidBlocks <- Ref[F].of(Par())
+      } yield new InvalidBlocks[F](invalidBlocks)
+
+    def unsafe[F[_]]()(implicit F: Sync[F]): InvalidBlocks[F] =
+      new InvalidBlocks(Ref.unsafe[F, Par](Par()))
+  }
+
   object BodyRefs {
     val STDOUT: Long                       = 0L
     val STDOUT_ACK: Long                   = 1L
@@ -119,27 +135,29 @@ object Runtime {
     val REG_NONCE_INSERT_CALLBACK: Long    = 21L
     val GET_DEPLOY_PARAMS: Long            = 22L
     val GET_TIMESTAMP: Long                = 23L
-    val REV_ADDRESS: Long                  = 24L
+    val GET_INVALID_BLOCKS: Long           = 24L
+    val REV_ADDRESS: Long                  = 25L
   }
 
   def byteName(b: Byte): Par = GPrivate(ByteString.copyFrom(Array[Byte](b)))
 
   object FixedChannels {
-    val STDOUT: Par            = byteName(0)
-    val STDOUT_ACK: Par        = byteName(1)
-    val STDERR: Par            = byteName(2)
-    val STDERR_ACK: Par        = byteName(3)
-    val ED25519_VERIFY: Par    = GString("ed25519Verify")
-    val SHA256_HASH: Par       = GString("sha256Hash")
-    val KECCAK256_HASH: Par    = GString("keccak256Hash")
-    val BLAKE2B256_HASH: Par   = GString("blake2b256Hash")
-    val SECP256K1_VERIFY: Par  = GString("secp256k1Verify")
-    val REG_LOOKUP: Par        = byteName(9)
-    val REG_INSERT_RANDOM: Par = byteName(10)
-    val REG_INSERT_SIGNED: Par = byteName(11)
-    val GET_DEPLOY_PARAMS: Par = byteName(12)
-    val GET_TIMESTAMP: Par     = byteName(13)
-    val REV_ADDRESS: Par       = byteName(14)
+    val STDOUT: Par             = byteName(0)
+    val STDOUT_ACK: Par         = byteName(1)
+    val STDERR: Par             = byteName(2)
+    val STDERR_ACK: Par         = byteName(3)
+    val ED25519_VERIFY: Par     = GString("ed25519Verify")
+    val SHA256_HASH: Par        = GString("sha256Hash")
+    val KECCAK256_HASH: Par     = GString("keccak256Hash")
+    val BLAKE2B256_HASH: Par    = GString("blake2b256Hash")
+    val SECP256K1_VERIFY: Par   = GString("secp256k1Verify")
+    val REG_LOOKUP: Par         = byteName(9)
+    val REG_INSERT_RANDOM: Par  = byteName(10)
+    val REG_INSERT_SIGNED: Par  = byteName(11)
+    val GET_DEPLOY_PARAMS: Par  = byteName(12)
+    val GET_TIMESTAMP: Par      = byteName(13)
+    val GET_INVALID_BLOCKS: Par = byteName(14)
+    val REV_ADDRESS: Par        = byteName(15)
   }
 
   private def introduceSystemProcesses[F[_]: Sync: _cost](
@@ -170,7 +188,8 @@ object Runtime {
         dispatcher: RhoDispatch[F],
         registry: Registry[F],
         deployParametersRef: Ref[F, DeployParameters],
-        blockTime: BlockTime[F]
+        blockTime: BlockTime[F],
+        invalidBlocks: InvalidBlocks[F]
     ) {
       val systemProcesses = SystemProcesses[F](dispatcher, space)
     }
@@ -250,6 +269,14 @@ object Runtime {
       }
     ),
     SystemProcess.Definition[F](
+      "rho:casper:invalidBlocks",
+      FixedChannels.GET_INVALID_BLOCKS,
+      1,
+      BodyRefs.GET_INVALID_BLOCKS, { ctx =>
+        ctx.systemProcesses.invalidBlocks(ctx.invalidBlocks)
+      }
+    ),
+    SystemProcess.Definition[F](
       "rho:rev:address",
       FixedChannels.REV_ADDRESS,
       3,
@@ -295,7 +322,8 @@ object Runtime {
         dispatcher: RhoDispatch[F],
         registry: Registry[F],
         deployParametersRef: Ref[F, DeployParameters],
-        blockTime: BlockTime[F]
+        blockTime: BlockTime[F],
+        invalidBlocks: InvalidBlocks[F]
     ): RhoDispatchMap[F] = {
       val systemProcesses = SystemProcesses[F](dispatcher, space)
       import BodyRefs._
@@ -319,7 +347,8 @@ object Runtime {
         (stdSystemProcesses[F] ++ extraSystemProcesses)
           .map(
             _.toDispatchTable(
-              SystemProcess.Context(space, dispatcher, registry, deployParametersRef, blockTime)
+              SystemProcess
+                .Context(space, dispatcher, registry, deployParametersRef, blockTime, invalidBlocks)
             )
           )
     }
@@ -328,7 +357,8 @@ object Runtime {
       "rho:registry:lookup" -> Bundle(FixedChannels.REG_LOOKUP, writeFlag = true)
     ) ++ (stdSystemProcesses[F] ++ extraSystemProcesses).map(_.toUrnMap)
 
-    val blockTime = BlockTime.unsafe[F]()
+    val blockTime     = BlockTime.unsafe[F]()
+    val invalidBlocks = InvalidBlocks.unsafe[F]()
 
     val procDefs: List[(Name, Arity, Remainder, BodyRef)] = {
       import BodyRefs._
@@ -353,11 +383,19 @@ object Runtime {
             replayDispatcher,
             replayRegistry,
             deployParametersRef,
-            blockTime
+            blockTime,
+            invalidBlocks
           )
 
         lazy val dispatchTable: RhoDispatchMap[F] =
-          dispatchTableCreator(space, dispatcher, registry, deployParametersRef, blockTime)
+          dispatchTableCreator(
+            space,
+            dispatcher,
+            registry,
+            deployParametersRef,
+            blockTime,
+            invalidBlocks
+          )
 
         lazy val (dispatcher, reducer, registry) =
           RholangAndScalaDispatcher.create(space, dispatchTable, urnMap, deployParametersRef)
@@ -383,7 +421,8 @@ object Runtime {
         cost,
         context,
         deployParametersRef,
-        blockTime
+        blockTime,
+        invalidBlocks
       )
     }
   }

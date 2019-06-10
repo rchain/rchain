@@ -15,7 +15,9 @@ import coop.rchain.catscontrib.Catscontrib.ToMonadOps
 import coop.rchain.catscontrib.MonadTrans
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.metrics.{Metrics, Span}
+import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.Expr.ExprInstance.GString
+import coop.rchain.models.Validator.Validator
 import coop.rchain.models.Var.VarInstance.FreeVar
 import coop.rchain.models._
 import coop.rchain.models.rholang.implicits._
@@ -45,11 +47,13 @@ trait RuntimeManager[F[_]] {
   ): F[Seq[Par]]
   def replayComputeState(startHash: StateHash)(
       terms: Seq[InternalProcessedDeploy],
-      blockTime: Long
-  ): F[Either[ReplayFailure, StateHash]]
-  def computeState(startHash: StateHash)(
+      blockTime: Long,
+      invalidBlocks: Map[BlockHash, Validator] = Map.empty[BlockHash, Validator]
+  ): F[Either[(Option[DeployData], Failed), StateHash]]
+  def computeState(hash: StateHash)(
       terms: Seq[DeployData],
-      blockTime: Long
+      blockTime: Long,
+      invalidBlocks: Map[BlockHash, Validator] = Map.empty[BlockHash, Validator]
   ): F[(StateHash, Seq[InternalProcessedDeploy])]
   def computeGenesis(
       terms: Seq[DeployData],
@@ -104,12 +108,14 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics] private[rholang] (
 
   def replayComputeState(startHash: StateHash)(
       terms: Seq[InternalProcessedDeploy],
-      blockTime: Long
+      blockTime: Long,
+      invalidBlocks: Map[BlockHash, Validator] = Map.empty[BlockHash, Validator]
   ): F[Either[ReplayFailure, StateHash]] =
     withRuntimeLock { runtime =>
       for {
         span   <- Metrics[F].span(replayComputeStateLabel)
         _      <- setBlockTime(blockTime, runtime)
+        _      <- setInvalidBlocks(invalidBlocks, runtime)
         _      <- span.mark("before-replay-deploys")
         result <- replayDeploys(startHash, terms, replayDeploy(runtime, span))
         _      <- span.close()
@@ -118,12 +124,14 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics] private[rholang] (
 
   def computeState(startHash: StateHash)(
       terms: Seq[DeployData],
-      blockTime: Long
+      blockTime: Long,
+      invalidBlocks: Map[BlockHash, Validator] = Map.empty[BlockHash, Validator]
   ): F[(StateHash, Seq[InternalProcessedDeploy])] =
     withRuntimeLock { runtime =>
       for {
         span   <- Metrics[F].span(computeStateLabel)
         _      <- setBlockTime(blockTime, runtime)
+        _      <- setInvalidBlocks(invalidBlocks, runtime)
         _      <- span.mark("before-process-deploys")
         result <- processDeploys(startHash, terms, processDeploy(runtime, span))
         _      <- span.close()
@@ -152,6 +160,29 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics] private[rholang] (
   ): F[Unit] = {
     val timestamp: Par = Par(exprs = Seq(Expr(Expr.ExprInstance.GInt(blockTime))))
     runtime.blockTime.setParams(timestamp)
+  }
+
+  private def setInvalidBlocks(
+      invalidBlocks: Map[BlockHash, Validator],
+      runtime: Runtime[F]
+  ): F[Unit] = {
+    val invalidBlocksPar: Par =
+      Par(
+        exprs = Seq(
+          Expr(
+            Expr.ExprInstance.EMapBody(
+              ParMap(SortedParMap(invalidBlocks.map {
+                case (validator, blockHash) =>
+                  (
+                    RhoType.ByteArray(validator.toByteArray),
+                    RhoType.ByteArray(blockHash.toByteArray)
+                  )
+              }))
+            )
+          )
+        )
+      )
+    runtime.invalidBlocks.setParams(invalidBlocksPar)
   }
 
   def computeBonds(hash: StateHash): F[Seq[Bond]] =
@@ -425,15 +456,17 @@ object RuntimeManager {
 
       override def replayComputeState(hash: StateHash)(
           terms: Seq[InternalProcessedDeploy],
-          blockTime: Long
+          blockTime: Long,
+          invalidBlocks: Map[BlockHash, Validator]
       ): T[F, Either[ReplayFailure, StateHash]] =
-        runtimeManager.replayComputeState(hash)(terms, blockTime).liftM[T]
+        runtimeManager.replayComputeState(hash)(terms, blockTime, invalidBlocks).liftM[T]
 
       override def computeState(hash: StateHash)(
           terms: Seq[DeployData],
-          blockTime: Long
+          blockTime: Long,
+          invalidBlocks: Map[BlockHash, Validator]
       ): T[F, (StateHash, Seq[InternalProcessedDeploy])] =
-        runtimeManager.computeState(hash)(terms, blockTime).liftM[T]
+        runtimeManager.computeState(hash)(terms, blockTime, invalidBlocks).liftM[T]
 
       def computeGenesis(
           terms: Seq[DeployData],
