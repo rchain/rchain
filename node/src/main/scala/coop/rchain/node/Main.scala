@@ -62,6 +62,12 @@ object Main {
         conf.grpcServer.portExternal,
         conf.grpcServer.maxMessageSize
       )
+    implicit val proposeService: GrpcProposeService =
+      new GrpcProposeService(
+        conf.grpcServer.host,
+        conf.grpcServer.portInternal,
+        conf.grpcServer.maxMessageSize
+      )
 
     implicit val time: Time[Task] = effects.time
 
@@ -102,6 +108,7 @@ object Main {
     program.doOnFinish(
       _ =>
         Task.delay {
+          proposeService.close()
           replService.close()
           deployService.close()
         }

@@ -31,9 +31,6 @@ service DeployService {
   // Queue deployment of Rholang code (or fail to parse).
   // Returns on success DeployServiceResponse
   rpc DoDeploy(DeployData) returns (Either) {}
-  // Add a block including all pending deploys.
-  // Returns on success DeployServiceResponse
-  rpc createBlock(google.protobuf.Empty) returns (Either) {}
   // Get details about a particular block.
   // Returns on success BlockQueryResponse
   rpc getBlock(BlockQuery) returns (Either) {}
