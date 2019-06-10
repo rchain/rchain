@@ -28,6 +28,8 @@ import monix.execution.Scheduler.Implicits.global
 class GenesisTest extends FlatSpec with Matchers with EitherValues with BlockDagStorageFixture {
   import GenesisTest._
 
+  implicit val metricsEff: Metrics[Task] = new metrics.Metrics.MetricsNOP[Task]
+
   val validators = Seq(
     "299670c52849f1aa82e8dfe5be872c16b600bf09cc8983e04b903411358f2de6",
     "6bf1b2753501d02d386789506a6d93681d2299c6edfd4455f596b97bc5725968"
@@ -297,7 +299,7 @@ object GenesisTest {
 
   def withGenResources(
       body: (RuntimeManager[Task], Path, LogStub[Task], LogicalTime[Task]) => Task[Unit]
-  ): Task[Unit] =
+  )(implicit metrics: Metrics[Task]): Task[Unit] =
     withRawGenResources {
       (runtime: Runtime[Task], genesisPath: Path, log: LogStub[Task], time: LogicalTime[Task]) =>
         RuntimeManager.fromRuntime(runtime).flatMap(body(_, genesisPath, log, time))

@@ -34,7 +34,7 @@ object TestUtil {
       phloLimit = accounting.MAX_VALUE
     )
 
-  def setupRuntime[F[_]: Concurrent: ContextShift, G[_]: Parallel[F, ?[_]]](
+  def setupRuntime[F[_]: Concurrent: ContextShift: Metrics, G[_]: Parallel[F, ?[_]]](
       runtime: Runtime[F],
       genesisSetup: RuntimeManager[F] => F[BlockMessage],
       otherLibs: Seq[DeployData]
