@@ -1,7 +1,6 @@
 package coop.rchain.casper
 
 import cats.implicits._
-import coop.rchain.casper.MultiParentCasper.ignoreDoppelgangerCheck
 import coop.rchain.casper.helper.HashSetCasperTestNode
 import coop.rchain.casper.helper.HashSetCasperTestNode._
 import coop.rchain.casper.protocol._
@@ -9,7 +8,6 @@ import coop.rchain.casper.scalatestcontrib._
 import coop.rchain.casper.util.ConstructDeploy
 import coop.rchain.crypto.signatures.Secp256k1
 import coop.rchain.p2p.EffectsTestInstances.LogicalTime
-import coop.rchain.rholang.interpreter.accounting
 import monix.execution.Scheduler.Implicits.global
 import org.scalatest.{Assertion, FlatSpec, Inspectors, Matchers}
 
@@ -28,21 +26,15 @@ class MultiParentCasperCommunicationSpec extends FlatSpec with Matchers with Ins
   //test since we cannot reset it
   "MultiParentCasper" should "ask peers for blocks it is missing" in effectTest {
     HashSetCasperTestNode.networkEff(validatorKeys.take(3), genesis).use { nodes =>
-      val deployDatas = Vector(
-        "for(_ <- @1){ Nil } | @1!(1)",
-        "@2!(2)"
-      ).zipWithIndex
-        .map(
-          d =>
-            ConstructDeploy
-              .sourceDeploy(d._1, System.currentTimeMillis() + d._2, accounting.MAX_VALUE)
-        )
       for {
-        signedBlock1 <- nodes(0).addBlock(deployDatas(0))
+        deploy1 <- ConstructDeploy.sourceDeployNowF("for(_ <- @1){ Nil } | @1!(1)")
+
+        signedBlock1 <- nodes(0).addBlock(deploy1)
         _            <- nodes(1).receive()
         _            <- nodes(2).transportLayerEff.clear(nodes(2).local) //nodes(2) misses this block
 
-        signedBlock2 <- nodes(0).addBlock(deployDatas(1))
+        deploy2 <- ConstructDeploy.sourceDeployNowF("@2!(2)")
+        signedBlock2 <- nodes(0).addBlock(deploy2)
         _            <- nodes(1).receive() //receives block2
         _            <- nodes(2).receive() //receives block2; asks for block1
         _            <- nodes(1).receive() //receives request for block1; sends block1
@@ -93,23 +85,17 @@ class MultiParentCasperCommunicationSpec extends FlatSpec with Matchers with Ins
    *
    */
   it should "ask peers for blocks it is missing and add them" in effectTest {
-    val deployDatasFs = Vector(
-      "@2!(2)",
-      "@1!(1)"
-    ).zipWithIndex
-      .map(
-        d =>
-          () =>
-            ConstructDeploy
-              .sourceDeploy(d._1, System.currentTimeMillis() + d._2, accounting.MAX_VALUE)
-      )
+    def deployDatasFs(i: Int): Effect[DeployData] =
+      ConstructDeploy.sourceDeployNowF(Vector("@2!(2)", "@1!(1)")(i))
+
+    //FIXME make it deployNow(Node, String/Int)
     def deploy(node: HashSetCasperTestNode[Effect], dd: DeployData): Effect[BlockMessage] =
       node.addBlock(dd)
 
     def stepSplit(nodes: Seq[HashSetCasperTestNode[Effect]]) =
       for {
-        _ <- deploy(nodes(0), deployDatasFs(0).apply())
-        _ <- deploy(nodes(1), deployDatasFs(1).apply())
+        _ <- deployDatasFs(0) >>= (deploy(nodes(0), _))
+        _ <- deployDatasFs(1) >>= (deploy(nodes(1), _))
 
         _ <- nodes(0).receive()
         _ <- nodes(1).receive()
@@ -118,7 +104,7 @@ class MultiParentCasperCommunicationSpec extends FlatSpec with Matchers with Ins
 
     def stepSingle(nodes: Seq[HashSetCasperTestNode[Effect]]) =
       for {
-        _ <- deploy(nodes(0), deployDatasFs(0).apply())
+        _ <- deployDatasFs(0) >>= (deploy(nodes(0), _))
 
         _ <- nodes(0).receive()
         _ <- nodes(1).receive()
@@ -145,13 +131,13 @@ class MultiParentCasperCommunicationSpec extends FlatSpec with Matchers with Ins
         _ <- stepSplit(nodes) // blocks g1 g2
 
         // this block will be propagated to all nodes and force nodes(2) to ask for missing blocks.
-        br <- deploy(nodes(0), deployDatasFs(0).apply()) // block h1
+        br <- deployDatasFs(0) >>= (deploy(nodes(0), _)) // block h1
 
         _ <- List.fill(22)(propagate(nodes)).sequence // force the network to communicate
 
         _ <- nodes(2).casperEff.contains(br) shouldBeF true
 
-        nr <- deploy(nodes(2), deployDatasFs(0).apply())
+        nr <- deployDatasFs(0) >>= (deploy(nodes(2), _))
         _  = nr.header.get.parentsHashList shouldBe Seq(br.blockHash)
       } yield ()
     }
