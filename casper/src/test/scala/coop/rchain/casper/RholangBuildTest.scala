@@ -8,6 +8,7 @@ import coop.rchain.casper.util.ConstructDeploy
 import coop.rchain.crypto.signatures.Secp256k1
 import coop.rchain.casper.scalatestcontrib._
 import coop.rchain.rholang.interpreter.accounting
+import coop.rchain.shared.Time
 import monix.execution.Scheduler.Implicits.global
 import org.scalatest.{FlatSpec, Matchers}
 import util.RSpaceUtil._
@@ -35,10 +36,17 @@ class RholangBuildTest extends FlatSpec with Matchers {
           |  getBlockData!(*timeRtn) |
           |  for (@_, @timestamp <- timeRtn) {
           |    timestampRet!("The timestamp is ${timestamp}" %% {"timestamp" : timestamp})
-          |  }
+          |  } |
+          |  stdout!(("timestampRet: ", *timestampRet)) |
+          |  stdout!(("doubleRet: ", *doubleRet))
           |}""".stripMargin
-        val deploy = ConstructDeploy.sourceDeploy(code, 1L, accounting.MAX_VALUE)
+
+
         for {
+          //FIXME why having a 'real' time here resulted in initial charge not returning a result?
+          //FIXME why does the resulting chnnel change depending on previous executions? Is rand shared and mutated?
+          t <- Time[Effect].currentMillis
+          deploy <- ConstructDeploy.sourceDeploy(code, t, accounting.MAX_VALUE).pure[Effect]
           createBlockResult <- MultiParentCasper[Effect]
                                 .deploy(deploy) *> MultiParentCasper[Effect].createBlock
           Created(signedBlock) = createBlockResult
@@ -46,12 +54,12 @@ class RholangBuildTest extends FlatSpec with Matchers {
           _                    = logEff.warns should be(Nil)
           _ <- getDataAtPrivateChannel[Effect](
                 signedBlock,
-                "cc7214cc9a111bfa8af931f001ce129ec5d7c7d641b4cb6b5c3166444a47c5ec"
+                "801779f051312cb1cb58bd44c9123f914bbac866b8196be064b5fb5f59b1294"
               ).map(_ shouldBe Seq("[4, 6, 10, 14]"))
           _ <- getDataAtPrivateChannel[Effect](
                 signedBlock,
-                "870decec96bb14dd556d56320de0338be14d5eb82c44be43cb225f870cdd239c"
-              ).map(_ shouldBe Seq("\"The timestamp is 1\""))
+                "d497b0a6770f453beee96823f71127ea7d5d8597decd8e9129776a0a6ac74a17"
+              ).map(_ shouldBe Seq("\"The timestamp is 2\""))
         } yield ()
       }
   }
