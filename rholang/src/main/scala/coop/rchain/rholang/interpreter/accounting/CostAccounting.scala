@@ -5,15 +5,9 @@ import cats.effect.Concurrent
 import cats.effect.concurrent._
 import cats.implicits._
 import cats.mtl._
-import cats.{FlatMap, Monad}
-import coop.rchain.rholang.interpreter.errors.OutOfPhlogistonsError
+import coop.rchain.rholang.interpreter.{defaultMonadState, of}
 
 object CostAccounting {
-
-  private[this] def of[F[_]: Concurrent](init: Cost): F[MonadState[F, Cost]] =
-    Ref[F]
-      .of(init)
-      .map(defaultMonadState)
 
   private[this] def empty[F[_]: Concurrent]: F[MonadState[F, Cost]] =
     Ref[F]
@@ -34,13 +28,4 @@ object CostAccounting {
       c <- of(init)
     } yield (loggingCost(c, L, s))
 
-  private[this] def defaultMonadState[F[_]: Monad: Concurrent] =
-    (state: Ref[F, Cost]) =>
-      new DefaultMonadState[F, Cost] {
-        val monad: cats.Monad[F]  = implicitly[Monad[F]]
-        def get: F[Cost]          = state.get
-        def set(s: Cost): F[Unit] = state.set(s)
-
-        override def modify(f: Cost => Cost): F[Unit] = state.modify(f.map((_, ())))
-      }
 }

@@ -5,6 +5,9 @@ import cats.effect.{Bracket, Concurrent}
 import cats.implicits._
 
 /**
+  * Based on Haskell readers-writer lock:
+  * http://hackage.haskell.org/package/concurrent-extra-0.7.0.12/docs/Control-Concurrent-ReadWriteLock.html
+  *
   * [[Free]]: Read or write lock can be acquired without blocking.
   *
   * [[Write]]: Read and write locks block until lock is released.
