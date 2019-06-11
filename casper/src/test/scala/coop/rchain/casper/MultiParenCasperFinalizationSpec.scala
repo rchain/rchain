@@ -29,72 +29,56 @@ class MultiParentCasperFinalizationSpec extends FlatSpec with Matchers with Insp
       for {
         deployDatas <- (0 to 7).toList.traverse(i => ConstructDeploy.basicDeployData[Effect](i))
 
-        createBlock1Result <- nodes(0).casperEff
-                               .deploy(deployDatas(0)) *> nodes(0).casperEff.createBlock
-        Created(block1) = createBlock1Result
-        _               <- nodes(0).casperEff.addBlock(block1, ignoreDoppelgangerCheck[Effect])
-        _               <- nodes(1).receive()
-        _               <- nodes(2).receive()
+        block1 <- nodes(0).createBlock(deployDatas(0))
+        _      <- nodes(0).casperEff.addBlock(block1, ignoreDoppelgangerCheck[Effect])
+        _      <- nodes(1).receive()
+        _      <- nodes(2).receive()
 
-        createBlock2Result <- nodes(1).casperEff
-                               .deploy(deployDatas(1)) *> nodes(1).casperEff.createBlock
-        Created(block2) = createBlock2Result
-        _               <- nodes(1).casperEff.addBlock(block2, ignoreDoppelgangerCheck[Effect])
-        _               <- nodes(0).receive()
-        _               <- nodes(2).receive()
+        block2 <- nodes(1).createBlock(deployDatas(1))
+        _      <- nodes(1).casperEff.addBlock(block2, ignoreDoppelgangerCheck[Effect])
+        _      <- nodes(0).receive()
+        _      <- nodes(2).receive()
 
-        createBlock3Result <- nodes(2).casperEff
-                               .deploy(deployDatas(2)) *> nodes(2).casperEff.createBlock
-        Created(block3) = createBlock3Result
-        _               <- nodes(2).casperEff.addBlock(block3, ignoreDoppelgangerCheck[Effect])
-        _               <- nodes(0).receive()
-        _               <- nodes(1).receive()
+        block3 <- nodes(2).createBlock(deployDatas(2))
+        _      <- nodes(2).casperEff.addBlock(block3, ignoreDoppelgangerCheck[Effect])
+        _      <- nodes(0).receive()
+        _      <- nodes(1).receive()
 
-        createBlock4Result <- nodes(0).casperEff
-                               .deploy(deployDatas(3)) *> nodes(0).casperEff.createBlock
-        Created(block4) = createBlock4Result
-        _               <- nodes(0).casperEff.addBlock(block4, ignoreDoppelgangerCheck[Effect])
-        _               <- nodes(1).receive()
-        _               <- nodes(2).receive()
+        block4 <- nodes(0).createBlock(deployDatas(3))
+        _      <- nodes(0).casperEff.addBlock(block4, ignoreDoppelgangerCheck[Effect])
+        _      <- nodes(1).receive()
+        _      <- nodes(2).receive()
 
-        createBlock5Result <- nodes(1).casperEff
-                               .deploy(deployDatas(4)) *> nodes(1).casperEff.createBlock
-        Created(block5) = createBlock5Result
-        _               <- nodes(1).casperEff.addBlock(block5, ignoreDoppelgangerCheck[Effect])
-        _               <- nodes(0).receive()
-        _               <- nodes(2).receive()
+        block5 <- nodes(1).createBlock(deployDatas(4))
+        _      <- nodes(1).casperEff.addBlock(block5, ignoreDoppelgangerCheck[Effect])
+        _      <- nodes(0).receive()
+        _      <- nodes(2).receive()
 
         _     <- nodes(0).casperEff.lastFinalizedBlock shouldBeF block1
         state <- nodes(0).casperState.read
         _     = state.deployHistory.size should be(1)
 
-        createBlock6Result <- nodes(2).casperEff
-                               .deploy(deployDatas(5)) *> nodes(2).casperEff.createBlock
-        Created(block6) = createBlock6Result
-        _               <- nodes(2).casperEff.addBlock(block6, ignoreDoppelgangerCheck[Effect])
-        _               <- nodes(0).receive()
-        _               <- nodes(1).receive()
+        block6 <- nodes(2).createBlock(deployDatas(5))
+        _      <- nodes(2).casperEff.addBlock(block6, ignoreDoppelgangerCheck[Effect])
+        _      <- nodes(0).receive()
+        _      <- nodes(1).receive()
 
         _     <- nodes(0).casperEff.lastFinalizedBlock shouldBeF block2
         state <- nodes(0).casperState.read
         _     = state.deployHistory.size should be(1)
 
-        createBlock7Result <- nodes(0).casperEff
-                               .deploy(deployDatas(6)) *> nodes(0).casperEff.createBlock
-        Created(block7) = createBlock7Result
-        _               <- nodes(0).casperEff.addBlock(block7, ignoreDoppelgangerCheck[Effect])
-        _               <- nodes(1).receive()
-        _               <- nodes(2).receive()
+        block7 <- nodes(0).createBlock(deployDatas(6))
+        _      <- nodes(0).casperEff.addBlock(block7, ignoreDoppelgangerCheck[Effect])
+        _      <- nodes(1).receive()
+        _      <- nodes(2).receive()
 
         _ <- nodes(0).casperEff.lastFinalizedBlock shouldBeF block3
         _ = state.deployHistory.size should be(1)
 
-        createBlock8Result <- nodes(1).casperEff
-                               .deploy(deployDatas(7)) *> nodes(1).casperEff.createBlock
-        Created(block8) = createBlock8Result
-        _               <- nodes(1).casperEff.addBlock(block8, ignoreDoppelgangerCheck[Effect])
-        _               <- nodes(0).receive()
-        _               <- nodes(2).receive()
+        block8 <- nodes(1).createBlock(deployDatas(7))
+        _      <- nodes(1).casperEff.addBlock(block8, ignoreDoppelgangerCheck[Effect])
+        _      <- nodes(0).receive()
+        _      <- nodes(2).receive()
 
         _     <- nodes(0).casperEff.lastFinalizedBlock shouldBeF block4
         state <- nodes(0).casperState.read
