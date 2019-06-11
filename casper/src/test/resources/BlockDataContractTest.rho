@@ -19,12 +19,12 @@ in {
 
   contract test_get_block_data(rhoSpec, _, ackCh) = {
     new retCh in {
-      getBlockData!( *retCh) |
-      for (@timestamp,@blockNumber <- retCh) {
+      getBlockData!(*retCh) |
+      for (@timestamp, @blockNumber <- retCh) {
         rhoSpec!("assertMany",
           [
             ((0, "==", timestamp), "timestamp is zero"),
-            ((1, "==", blockNumber), "the blocknumber is genesis + 1"),
+            ((1, "==", blockNumber), "the blocknumber is genesis + 1")
           ], *ackCh)
       }
     }

@@ -1,3 +1,8 @@
+// Rholang macro parameters:
+// minimumBond - the minimum bond allowed by the PoS
+// maximumBond - the maximum bond allowed by PoS
+// initialBonds - the initial bonds map
+
 /*
  The table below describes the required computations and their dependencies
 
@@ -100,6 +105,18 @@ new  PoS,
                   }
                 }
               }
+            } |
+
+            contract PoS(@"closeBlock", ackCh) = {
+              new blockDataCh, getBlockData(`rho:block:data`), stdout(`rho:io:stdout`) in {
+                getBlockData!(*blockDataCh) |
+                for (_, @blockNumber <- blockDataCh) {
+                  if (blockNumber % 1000 == 0) {
+                    stdout!("TODO: a validator change should happen")
+                  } |
+                  ackCh!(Nil)
+                }
+              }
             }
           }
         } |
@@ -173,5 +190,3 @@ new  PoS,
     *uriOut)
   }
 }
-  
-  
