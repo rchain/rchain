@@ -180,7 +180,7 @@ class MultiParentCasperAddBlockSpec extends FlatSpec with Matchers with Inspecto
 
       for {
         basicDeployData <- ConstructDeploy.basicDeployData[Effect](0)
-        signedBlock     <- node.addBlock(basicDeployData)
+        _               <- node.addBlockStatus(InvalidUnslashableBlock)(basicDeployData)
         _               = node.logEff.warns.head.contains("Ignoring block") should be(true)
       } yield ()
     }
