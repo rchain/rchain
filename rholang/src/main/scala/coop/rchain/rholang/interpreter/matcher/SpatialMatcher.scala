@@ -45,14 +45,14 @@ object SpatialMatcher extends SpatialMatcherInstances {
   //Also, the following workaround is needed b/c of precisely this reason:
   type Alternative[F[_]] = Alternative_[F]
 
-  def spatialMatchAndCharge[M[_]: Sync: _error](target: Par, pattern: Par)(
+  def spatialMatchAndCharge[M[_]: Sync: _bracket](target: Par, pattern: Par)(
       implicit
       cost: _cost[M]
   ): M[Option[(FreeMap, Unit)]] = {
     type R[A] = MatcherMonadT[M, A]
 
-    implicit val _                            = matcherMonadCostLog[M]
-    implicit val matcherMonadError: _error[R] = implicitly[Sync[R]]
+    implicit val _                              = matcherMonadCostLog[M]
+    implicit val matcherMonadError: _bracket[R] = implicitly[Sync[R]]
 
     val doMatch: R[Unit] = SpatialMatcher.spatialMatch[R, Par, Par](target, pattern)
 
@@ -62,7 +62,7 @@ object SpatialMatcher extends SpatialMatcherInstances {
     matchAndCharge
   }
 
-  def spatialMatch[F[_]: Splittable: Alternative: Monad: _error: _cost: _freeMap: _short, T, P](
+  def spatialMatch[F[_]: Splittable: Alternative: Monad: _bracket: _cost: _freeMap: _short, T, P](
       target: T,
       pattern: P
   )(
@@ -73,7 +73,7 @@ object SpatialMatcher extends SpatialMatcherInstances {
   def apply[F[_], T, P](implicit sm: SpatialMatcher[F, T, P]) = sm
 
   // This helper function is useful in several productions
-  def foldMatch[F[_]: Splittable: Alternative: Monad: _error: _cost: _freeMap: _short, T, P](
+  def foldMatch[F[_]: Splittable: Alternative: Monad: _bracket: _cost: _freeMap: _short, T, P](
       tlist: Seq[T],
       plist: Seq[P],
       remainder: Option[Var] = None
@@ -108,7 +108,7 @@ object SpatialMatcher extends SpatialMatcherInstances {
         spatialMatch(t, p).flatMap(_ => foldMatch(trem, prem, remainder))
     }
 
-  def listMatchSingle[F[_]: Splittable: Alternative: Monad: _error: _cost: _freeMap: _short, T](
+  def listMatchSingle[F[_]: Splittable: Alternative: Monad: _bracket: _cost: _freeMap: _short, T](
       tlist: Seq[T],
       plist: Seq[T]
   )(implicit lf: HasLocallyFree[T], sm: SpatialMatcher[F, T, T]): F[Unit] =
@@ -130,7 +130,7 @@ object SpatialMatcher extends SpatialMatcherInstances {
     * @tparam T
     * @return
     */
-  def listMatchSingle_[F[_]: Splittable: Alternative: Monad: _error: _cost: _freeMap: _short, T](
+  def listMatchSingle_[F[_]: Splittable: Alternative: Monad: _bracket: _cost: _freeMap: _short, T](
       tlist: Seq[T],
       plist: Seq[T],
       merger: (Par, Seq[T]) => Par,
@@ -161,7 +161,7 @@ object SpatialMatcher extends SpatialMatcherInstances {
     result
   }
 
-  def listMatch[F[_]: Splittable: Alternative: Monad: _error: _cost: _freeMap: _short, T](
+  def listMatch[F[_]: Splittable: Alternative: Monad: _bracket: _cost: _freeMap: _short, T](
       targets: Seq[T],
       patterns: Seq[T],
       merger: (Par, Seq[T]) => Par,
@@ -239,14 +239,14 @@ object SpatialMatcher extends SpatialMatcherInstances {
     (a, b) => memo.getOrElseUpdate((a, b), f(a, b))
   }
 
-  private def aggregateUpdates[F[_]: Splittable: Alternative: Monad: _error: _cost: _freeMap](
+  private def aggregateUpdates[F[_]: Splittable: Alternative: Monad: _bracket: _cost: _freeMap](
       freeMaps: Seq[FreeMap]
   ): F[FreeMap] =
     for {
       currentFreeMap <- _freeMap[F].get
       currentVars    = currentFreeMap.keys.toSet
       addedVars      = freeMaps.flatMap(_.keys.filterNot(currentVars.contains))
-      _ <- _error[F].ensure(addedVars.pure[F])(
+      _ <- _bracket[F].ensure(addedVars.pure[F])(
             BugFoundError(s"Aggregated updates conflicted with each other: $freeMaps")
           ) {
             //The correctness of isolating MBM from changing FreeMap relies
@@ -288,7 +288,7 @@ trait SpatialMatcherInstances {
     (target: (A, B), pattern: (C, D)) =>
       matcherAC.spatialMatch(target._1, pattern._1) >> matcherBD.spatialMatch(target._2, pattern._2)
 
-  implicit def connectiveMatcher[F[_]: Splittable: Alternative: Monad: _error: _cost: _freeMap: _short]
+  implicit def connectiveMatcher[F[_]: Splittable: Alternative: Monad: _bracket: _cost: _freeMap: _short]
       : SpatialMatcher[F, Par, Connective] =
     (target, pattern) => {
       pattern.connectiveInstance match {
@@ -354,7 +354,7 @@ trait SpatialMatcherInstances {
       }
     }
 
-  implicit def parSpatialMatcherInstance[F[_]: Splittable: Alternative: Monad: _error: _cost: _freeMap: _short]
+  implicit def parSpatialMatcherInstance[F[_]: Splittable: Alternative: Monad: _bracket: _cost: _freeMap: _short]
       : SpatialMatcher[F, Par, Par] = (target, pattern) => {
     if (!pattern.connectiveUsed) {
       val cost = equalityCheckCost(pattern, target)
@@ -454,7 +454,7 @@ trait SpatialMatcherInstances {
     }
   }
 
-  implicit def bundleSpatialMatcherInstance[F[_]: Splittable: Alternative: Monad: _error: _cost]
+  implicit def bundleSpatialMatcherInstance[F[_]: Splittable: Alternative: Monad: _bracket: _cost]
       : SpatialMatcher[F, Bundle, Bundle] =
     (target, pattern) => {
       val cost = equalityCheckCost(target, pattern)
@@ -465,7 +465,7 @@ trait SpatialMatcherInstances {
       }
     }
 
-  implicit def sendSpatialMatcherInstance[F[_]: Splittable: Alternative: Monad: _error: _cost: _freeMap: _short]
+  implicit def sendSpatialMatcherInstance[F[_]: Splittable: Alternative: Monad: _bracket: _cost: _freeMap: _short]
       : SpatialMatcher[F, Send, Send] =
     (target, pattern) =>
       if (target.persistent != pattern.persistent)
@@ -476,7 +476,7 @@ trait SpatialMatcherInstances {
           _ <- foldMatch(target.data, pattern.data)
         } yield ()
 
-  implicit def receiveSpatialMatcherInstance[F[_]: Splittable: Alternative: Monad: _error: _cost: _freeMap: _short]
+  implicit def receiveSpatialMatcherInstance[F[_]: Splittable: Alternative: Monad: _bracket: _cost: _freeMap: _short]
       : SpatialMatcher[F, Receive, Receive] =
     (target, pattern) =>
       if (target.persistent != pattern.persistent)
@@ -487,7 +487,7 @@ trait SpatialMatcherInstances {
           _ <- spatialMatch(target.body, pattern.body)
         } yield ()
 
-  implicit def newSpatialMatcherInstance[F[_]: Splittable: Alternative: Monad: _error: _cost: _freeMap: _short]
+  implicit def newSpatialMatcherInstance[F[_]: Splittable: Alternative: Monad: _bracket: _cost: _freeMap: _short]
       : SpatialMatcher[F, New, New] =
     (target, pattern) =>
       if (target.bindCount == pattern.bindCount)
@@ -495,7 +495,7 @@ trait SpatialMatcherInstances {
       else
         charge[F](COMPARISON_COST) *> MonoidK[F].empty[Unit]
 
-  implicit def exprSpatialMatcherInstance[F[_]: Splittable: Alternative: Monad: _error: _cost: _freeMap: _short]
+  implicit def exprSpatialMatcherInstance[F[_]: Splittable: Alternative: Monad: _bracket: _cost: _freeMap: _short]
       : SpatialMatcher[F, Expr, Expr] = (target, pattern) => {
     (target.exprInstance, pattern.exprInstance) match {
       case (EListBody(EList(tlist, _, _, _)), EListBody(EList(plist, _, _, rem))) => {
@@ -568,7 +568,7 @@ trait SpatialMatcherInstances {
     }
   }
 
-  implicit def matchSpatialMatcherInstance[F[_]: Splittable: Alternative: Monad: _error: _cost: _freeMap: _short]
+  implicit def matchSpatialMatcherInstance[F[_]: Splittable: Alternative: Monad: _bracket: _cost: _freeMap: _short]
       : SpatialMatcher[F, Match, Match] =
     (target, pattern) =>
       for {
@@ -576,7 +576,7 @@ trait SpatialMatcherInstances {
         _ <- foldMatch(target.cases, pattern.cases)
       } yield ()
 
-  implicit def unfSpatialMatcherInstance[F[_]: Splittable: Alternative: Monad: _error: _cost: _freeMap: _short]
+  implicit def unfSpatialMatcherInstance[F[_]: Splittable: Alternative: Monad: _bracket: _cost: _freeMap: _short]
       : SpatialMatcher[F, GUnforgeable, GUnforgeable] =
     (target, pattern) =>
       (target.unfInstance, pattern.unfInstance) match {
@@ -592,21 +592,21 @@ trait SpatialMatcherInstances {
     * because patterns start with an empty environment.
     * We're going to write the obvious definition anyway.
     */
-  implicit def gprivateSpatialMatcherInstance[F[_]: Splittable: Alternative: Monad: _error: _cost: _freeMap]
+  implicit def gprivateSpatialMatcherInstance[F[_]: Splittable: Alternative: Monad: _bracket: _cost: _freeMap]
       : SpatialMatcher[F, GPrivate, GPrivate] =
     (target, pattern) => {
       val cost = equalityCheckCost(target, pattern)
       charge[F](cost) *> ().pure[F]
     }
 
-  implicit def gdeployerAuthSpatialMatcherInstance[F[_]: Splittable: Alternative: Monad: _error: _cost: _freeMap]
+  implicit def gdeployerAuthSpatialMatcherInstance[F[_]: Splittable: Alternative: Monad: _bracket: _cost: _freeMap]
       : SpatialMatcher[F, GDeployerAuth, GDeployerAuth] =
     (target, pattern) => {
       val cost = equalityCheckCost(target, pattern)
       charge[F](cost) *> ().pure[F]
     }
 
-  implicit def receiveBindSpatialMatcherInstance[F[_]: Splittable: Alternative: Monad: _error: _cost: _freeMap: _short]
+  implicit def receiveBindSpatialMatcherInstance[F[_]: Splittable: Alternative: Monad: _bracket: _cost: _freeMap: _short]
       : SpatialMatcher[F, ReceiveBind, ReceiveBind] =
     (target, pattern) =>
       if (target.patterns != pattern.patterns) {
@@ -619,7 +619,7 @@ trait SpatialMatcherInstances {
       } else
         spatialMatch(target.source, pattern.source)
 
-  implicit def matchCaseSpatialMatcherInstance[F[_]: Splittable: Alternative: Monad: _error: _cost: _freeMap: _short]
+  implicit def matchCaseSpatialMatcherInstance[F[_]: Splittable: Alternative: Monad: _bracket: _cost: _freeMap: _short]
       : SpatialMatcher[F, MatchCase, MatchCase] =
     (target, pattern) =>
       if (target.pattern != pattern.pattern) {

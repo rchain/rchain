@@ -116,7 +116,7 @@ class MatcherMonadSpec extends FlatSpec with Matchers {
 
   it should "fail all branches when using `_error[F].raise`" in {
     val a: F[Int] = 1.pure[F]
-    val b: F[Int] = 2.pure[F] >> _error[F].raiseError[Int](OutOfPhlogistonsError)
+    val b: F[Int] = 2.pure[F] >> _bracket[F].raiseError[Int](OutOfPhlogistonsError)
     val c: F[Int] = 3.pure[F]
 
     val combined = combineK(List(a, b, c))
