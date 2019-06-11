@@ -129,4 +129,11 @@ trait ISpace[F[_], C, P, A, R, K] {
 
 object ISpace {
   type IdISpace[C, P, A, R, K] = ISpace[Id, C, P, A, R, K]
+
+  sealed trait Channel[C] {
+    def channel: C
+  }
+  final case class Consumed[C](channel: C) extends Channel[C]
+  final case class Peaked[C](channel: C)   extends Channel[C]
+
 }
