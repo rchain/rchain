@@ -13,7 +13,9 @@ import coop.rchain.casper.helper.BlockDagStorageTestFixture.mapSize
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.casper.util.comm.CasperPacketHandler
-import coop.rchain.casper.engine._, EngineCell._, CasperState.CasperStateCell
+import coop.rchain.casper.engine._
+import EngineCell._
+import CasperState.CasperStateCell
 import coop.rchain.casper.util.comm.TestNetwork.TestNetwork
 import coop.rchain.casper.util.comm._
 import coop.rchain.casper.util.rholang.{InterpreterUtil, RuntimeManager}
@@ -21,7 +23,6 @@ import coop.rchain.catscontrib.Catscontrib._
 import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.catscontrib.effect.implicits._
 import coop.rchain.catscontrib.ski._
-
 import coop.rchain.comm._
 import coop.rchain.comm.protocol.routing._
 import coop.rchain.comm.rp.Connect
@@ -112,6 +113,13 @@ class HashSetCasperTestNode[F[_]](
           )
           .void
       }
+
+  def createBlock(deployDatums: DeployData*): F[BlockMessage] =
+    for {
+      _                 <- deployDatums.toList.traverse(casperEff.deploy)
+      createBlockResult <- casperEff.createBlock
+      Created(block)    = createBlockResult
+    } yield block
 
   def receive(): F[Unit] = tls.receive(p => handle[F](p), kp(().pure[F])).void
 }
