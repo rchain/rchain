@@ -8,6 +8,7 @@ import com.typesafe.scalalogging.Logger
 import coop.rchain.catscontrib._
 import coop.rchain.metrics.Metrics
 import coop.rchain.metrics.Metrics.Source
+import coop.rchain.rspace.ISpace.Consumed
 import coop.rchain.rspace.history.Branch
 import coop.rchain.rspace.internal._
 import coop.rchain.rspace.trace._
@@ -123,7 +124,7 @@ class RSpace[F[_], C, P, A, R, K] private[rspace] (
         ContResult(
           continuation,
           persist,
-          channels,
+          channels.map(Consumed(_)),
           patterns,
           contSequenceNumber
         ),
@@ -363,7 +364,7 @@ class RSpace[F[_], C, P, A, R, K] private[rspace] (
               ContResult[C, P, K](
                 continuation,
                 persistK,
-                channels,
+                channels.map(Consumed(_)),
                 patterns,
                 contSequenceNumber
               ),

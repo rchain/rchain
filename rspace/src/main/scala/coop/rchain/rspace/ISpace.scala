@@ -1,13 +1,14 @@
 package coop.rchain.rspace
 
 import cats.Id
+import coop.rchain.rspace.ISpace.Channel
 import coop.rchain.rspace.internal._
 
 final case class Result[R](value: R, persistent: Boolean)
 final case class ContResult[C, P, R](
     value: R,
     persistent: Boolean,
-    channels: Seq[C],
+    channels: Seq[Channel[C]],
     patterns: Seq[P],
     sequenceNumber: Int
 )
@@ -134,6 +135,6 @@ object ISpace {
     def channel: C
   }
   final case class Consumed[C](channel: C) extends Channel[C]
-  final case class Peaked[C](channel: C)   extends Channel[C]
+  final case class Peeked[C](channel: C)   extends Channel[C]
 
 }

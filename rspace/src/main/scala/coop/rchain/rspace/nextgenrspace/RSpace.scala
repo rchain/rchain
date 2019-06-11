@@ -8,6 +8,7 @@ import com.typesafe.scalalogging.Logger
 import coop.rchain.catscontrib._
 import coop.rchain.metrics.Metrics
 import coop.rchain.metrics.Metrics.Source
+import coop.rchain.rspace.ISpace.Consumed
 import coop.rchain.rspace._
 import coop.rchain.rspace.history.Branch
 import coop.rchain.rspace.internal._
@@ -120,7 +121,7 @@ class RSpace[F[_], C, P, A, R, K] private[rspace] (
         ContResult(
           continuation,
           persist,
-          channels,
+          channels.map(Consumed(_)),
           patterns,
           contSequenceNumber
         ),
@@ -272,7 +273,7 @@ class RSpace[F[_], C, P, A, R, K] private[rspace] (
                                                  if (c == batChannel)
                                                    (data, -1) +: as
                                                  else as
-                                             }
+                                               }
                                            )
                                        }
             firstMatch <- extractFirstMatch(
@@ -280,11 +281,10 @@ class RSpace[F[_], C, P, A, R, K] private[rspace] (
                            matchCandidates,
                            channelToIndexedDataList.toMap
                          )
-          } yield
-            firstMatch match {
-              case None             => remaining.asLeft[MaybeProduceCandidate]
-              case produceCandidate => produceCandidate.asRight[Seq[CandidateChannels]]
-            }
+          } yield firstMatch match {
+            case None             => remaining.asLeft[MaybeProduceCandidate]
+            case produceCandidate => produceCandidate.asRight[Seq[CandidateChannels]]
+          }
       }
     groupedChannels.tailRecM(go)
   }
@@ -345,7 +345,7 @@ class RSpace[F[_], C, P, A, R, K] private[rspace] (
               ContResult[C, P, K](
                 continuation,
                 persistK,
-                channels,
+                channels.map(Consumed(_)),
                 patterns,
                 contSequenceNumber
               ),

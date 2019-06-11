@@ -83,11 +83,11 @@ object ChargingRSpace {
             val refundForConsume =
               if (cont.persistent) Cost(0)
               else
-                storageCostConsume(cont.channels, cont.patterns, cont.value)
+                storageCostConsume(cont.channels.map(_.channel), cont.patterns, cont.value)
 
             val refundForProduces = refundForRemovingProduces(
               dataList,
-              cont.channels
+              cont.channels.map(_.channel)
             )
 
             val refundValue = refundForConsume + refundForProduces

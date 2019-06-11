@@ -10,6 +10,7 @@ import com.typesafe.scalalogging.Logger
 import coop.rchain.catscontrib.Catscontrib._
 import coop.rchain.catscontrib._
 import coop.rchain.metrics.{Metrics, Span}
+import coop.rchain.rspace.ISpace.Consumed
 import coop.rchain.rspace._
 import coop.rchain.rspace.history.Branch
 import coop.rchain.rspace.internal._
@@ -145,7 +146,13 @@ class ReplayRSpace[F[_]: Sync, C, P, A, R, K](
                 val contSequenceNumber = commRef.nextSequenceNumber
                 Some(
                   (
-                    ContResult(continuation, persist, channels, patterns, contSequenceNumber),
+                    ContResult(
+                      continuation,
+                      persist,
+                      channels.map(Consumed(_)),
+                      patterns,
+                      contSequenceNumber
+                    ),
                     mats.map(dc => Result(dc.datum.a, dc.datum.persist))
                   )
                 )
@@ -342,7 +349,13 @@ class ReplayRSpace[F[_]: Sync, C, P, A, R, K](
                   val contSequenceNumber = commRef.nextSequenceNumber
                   Some(
                     (
-                      ContResult(continuation, persistK, channels, patterns, contSequenceNumber),
+                      ContResult(
+                        continuation,
+                        persistK,
+                        channels.map(Consumed(_)),
+                        patterns,
+                        contSequenceNumber
+                      ),
                       dataCandidates.map(dc => Result(dc.datum.a, dc.datum.persist))
                     )
                   )

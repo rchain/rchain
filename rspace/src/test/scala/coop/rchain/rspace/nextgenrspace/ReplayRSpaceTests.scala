@@ -9,6 +9,7 @@ import cats.effect._
 import cats.implicits._
 import com.typesafe.scalalogging.Logger
 import coop.rchain.metrics.Metrics
+import coop.rchain.rspace.ISpace.Consumed
 import coop.rchain.rspace._
 import coop.rchain.rspace.examples.StringExamples._
 import coop.rchain.rspace.examples.StringExamples.implicits._
@@ -36,7 +37,6 @@ import org.scalatest.prop._
 import scala.util.{Random, Right}
 import scala.util.Random.shuffle
 import scodec.Codec
-
 import org.lmdbjava.EnvFlags
 
 object SchedulerPools {
@@ -126,7 +126,10 @@ trait ReplayRSpaceTests extends ReplayRSpaceTestsBase[String, Pattern, String, S
 
         _ = resultConsume shouldBe None
         _ = resultProduce shouldBe Some(
-          (ContResult(continuation, false, channels, patterns, 1), List(Result(datum, false)))
+          (
+            ContResult(continuation, false, channels.map(Consumed(_)), patterns, 1),
+            List(Result(datum, false))
+          )
         )
 
         _ <- replaySpace.resetAndRig(emptyPoint.root, rigPoint.log)
