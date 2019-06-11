@@ -29,17 +29,8 @@ class ListeningNameAPITest extends FlatSpec with Matchers with Inside {
     HashSetCasperTestNode.standaloneEff(genesis, validatorKeys.head).use { node =>
       import node._
 
-      def basicDeployData: DeployData = {
-        val timestamp = System.currentTimeMillis()
-        ConstructDeploy.sourceDeploy(
-          source = "@{ 3 | 2 | 1 }!(0)",
-          timestamp = timestamp,
-          phlos = accounting.MAX_VALUE
-        )
-      }
-
       for {
-        block <- node.addBlock(basicDeployData)
+        block <- ConstructDeploy.sourceDeployNowF("@{ 3 | 2 | 1 }!(0)") >>= (node.addBlock(_))
 
         listeningName = Par().copy(exprs = Seq(Expr(GInt(2)), Expr(GInt(1)), Expr(GInt(3))))
         resultData    = Par().copy(exprs = Seq(Expr(GInt(0))))
