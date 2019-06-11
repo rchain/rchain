@@ -256,7 +256,7 @@ private class InMemHotStore[F[_]: Sync, C, P, A, K](
   def toMap: F[Map[Seq[C], Row[P, A, K]]] =
     for {
       cache         <- S.read
-      data          = cache.data.readOnlySnapshot().map { case (k, v) => (Seq(k), v) }.toMap
+      data          = cache.data.readOnlySnapshot().map(_.leftMap(Seq(_))).toMap
       continuations = (cache.continuations ++ cache.installedContinuations.mapValues(Seq(_))).toMap
       zipped        = zip(data, continuations, Seq.empty[Datum[A]], Seq.empty[WaitingContinuation[P, K]])
       mapped        = zipped.mapValues { case (d, k) => Row(d, k) }
