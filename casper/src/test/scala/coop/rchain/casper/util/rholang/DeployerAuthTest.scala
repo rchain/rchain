@@ -11,6 +11,7 @@ import coop.rchain.crypto.signatures.Secp256k1
 import coop.rchain.models.Expr.ExprInstance.GBool
 import coop.rchain.models.rholang.implicits._
 import coop.rchain.models.{GDeployerAuth, Par}
+import coop.rchain.rholang.interpreter.Runtime.BlockData
 import coop.rchain.rholang.interpreter.accounting
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
@@ -82,7 +83,7 @@ class DeployerAuthTest extends FlatSpec with Matchers {
         runtimeManager
           .use { mgr =>
             mgr
-              .computeState(mgr.emptyStateHash)(Seq(contract), 0L)
+              .computeState(mgr.emptyStateHash)(Seq(contract), BlockData(0L, 0L))
               .flatMap { result =>
                 val hash = result._1
                 mgr

@@ -26,14 +26,14 @@ class RholangBuildTest extends FlatSpec with Matchers {
         implicit val rm = node.runtimeManager
 
         val code =
-          """new double, rl(`rho:registry:lookup`), ListOpsCh, time(`rho:block:timestamp`), timeRtn, stdout(`rho:io:stdout`), doubleRet ,timestampRet in {
+          """new double, rl(`rho:registry:lookup`), ListOpsCh, getBlockData(`rho:block:data`), timeRtn, stdout(`rho:io:stdout`), doubleRet ,timestampRet in {
           |  contract double(@x, ret) = { ret!(2 * x) } |
           |  rl!(`rho:lang:listOps`, *ListOpsCh) |
           |  for(@(_, ListOps) <- ListOpsCh) {
           |    @ListOps!("map", [2, 3, 5, 7], *double, *doubleRet)
           |  } |
-          |  time!(*timeRtn) |
-          |  for (@timestamp <- timeRtn) {
+          |  getBlockData!(*timeRtn) |
+          |  for (@_, @timestamp <- timeRtn) {
           |    timestampRet!("The timestamp is ${timestamp}" %% {"timestamp" : timestamp})
           |  }
           |}""".stripMargin

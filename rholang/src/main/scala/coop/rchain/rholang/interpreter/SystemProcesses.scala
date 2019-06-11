@@ -8,7 +8,7 @@ import coop.rchain.crypto.hash.{Blake2b256, Keccak256, Sha256}
 import coop.rchain.crypto.signatures.{Ed25519, Secp256k1}
 import coop.rchain.models._
 import coop.rchain.models.rholang.implicits._
-import coop.rchain.rholang.interpreter.Runtime.{BlockTime, InvalidBlocks, RhoISpace}
+import coop.rchain.rholang.interpreter.Runtime.{BlockDataStorage, InvalidBlocks, RhoISpace}
 import coop.rchain.rholang.interpreter.util.RevAddress
 import coop.rchain.rspace.{ContResult, Result}
 
@@ -30,7 +30,7 @@ trait SystemProcesses[F[_]] {
   def keccak256Hash: Contract[F]
   def blake2b256Hash: Contract[F]
   def getDeployParams(runtimeParametersRef: Ref[F, DeployParameters]): Contract[F]
-  def blockTime(timestamp: BlockTime[F]): Contract[F]
+  def getBlockData(timestamp: BlockDataStorage[F]): Contract[F]
   def invalidBlocks(invalidBlocks: InvalidBlocks[F]): Contract[F]
   def validateRevAddress: Contract[F]
 }
@@ -174,13 +174,16 @@ object SystemProcesses {
           illegalArgumentException("deployParameters expects only a return channel")
       }
 
-      def blockTime(
-          blocktime: Runtime.BlockTime[F]
+      def getBlockData(
+          blockData: Runtime.BlockDataStorage[F]
       ): Contract[F] = {
         case isContractCall(produce, Seq(ack)) =>
           for {
-            time <- blocktime.timestamp.get
-            _    <- produce(Seq(time), ack)
+            maybeData <- blockData.get
+            (number, time) = maybeData
+              .map(data => (RhoType.Number(data.blockNumber), RhoType.Number(data.timeStamp)))
+              .getOrElse((Par(), Par()))
+            _ <- produce(Seq(number, time), ack)
           } yield ()
         case _ =>
           illegalArgumentException("blockTime expects only a return channel")

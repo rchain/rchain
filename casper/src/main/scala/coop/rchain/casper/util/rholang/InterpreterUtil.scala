@@ -15,6 +15,7 @@ import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.Validator.Validator
 import coop.rchain.models.{BlockMetadata, Par}
 import coop.rchain.rholang.interpreter.ParBuilder
+import coop.rchain.rholang.interpreter.Runtime.BlockData
 import coop.rchain.rspace.ReplayException
 import coop.rchain.shared.{Log, LogSource}
 import monix.eval.Coeval
@@ -39,6 +40,7 @@ object InterpreterUtil {
     val deploys         = ProtoUtil.deploys(b)
     val internalDeploys = deploys.flatMap(InternalProcessedDeploy.fromProcessedDeploy)
     val timestamp       = b.header.get.timestamp // TODO: Ensure header exists through type
+    val blockNumber     = b.body.get.state.get.blockNumber
     for {
       _                    <- span.mark("before-unsafe-get-parents")
       parents              <- ProtoUtil.unsafeGetParents[F](b)
@@ -58,7 +60,7 @@ object InterpreterUtil {
                  tsHash,
                  internalDeploys,
                  possiblePreStateHash,
-                 timestamp,
+                 BlockData(timestamp, blockNumber),
                  invalidBlocks
                )
     } yield result
@@ -70,7 +72,7 @@ object InterpreterUtil {
       tsHash: Option[StateHash],
       internalDeploys: Seq[InternalProcessedDeploy],
       possiblePreStateHash: Either[Throwable, StateHash],
-      blockTime: Long,
+      blockData: BlockData,
       invalidBlocks: Map[BlockHash, Validator]
   ): F[Either[BlockException, Option[StateHash]]] =
     possiblePreStateHash match {
@@ -84,7 +86,7 @@ object InterpreterUtil {
             tsHash,
             internalDeploys,
             possiblePreStateHash,
-            blockTime,
+            blockData,
             invalidBlocks
           )
         } else {
@@ -102,11 +104,11 @@ object InterpreterUtil {
       tsHash: Option[StateHash],
       internalDeploys: Seq[InternalProcessedDeploy],
       possiblePreStateHash: Either[Throwable, StateHash],
-      blockTime: Long,
+      blockData: BlockData,
       invalidBlocks: Map[BlockHash, Validator]
   ): F[Either[BlockException, Option[StateHash]]] =
     runtimeManager
-      .replayComputeState(preStateHash)(internalDeploys, blockTime, invalidBlocks)
+      .replayComputeState(preStateHash)(internalDeploys, blockData, invalidBlocks)
       .flatMap {
         case Left((Some(deploy), status)) =>
           status match {
@@ -160,14 +162,14 @@ object InterpreterUtil {
       deploys: Seq[DeployData],
       dag: BlockDagRepresentation[F],
       runtimeManager: RuntimeManager[F],
-      blockTime: Long,
+      blockData: BlockData,
       span: Span[F],
       invalidBlocks: Map[BlockHash, Validator] = Map.empty[BlockHash, Validator]
   ): F[Either[Throwable, (StateHash, StateHash, Seq[InternalProcessedDeploy])]] =
     for {
       possiblePreStateHash <- computeParentsPostState[F](parents, dag, runtimeManager, span)
       result <- possiblePreStateHash.flatTraverse { preStateHash =>
-                 runtimeManager.computeState(preStateHash)(deploys, blockTime).map {
+                 runtimeManager.computeState(preStateHash)(deploys, blockData).map {
                    case (postStateHash, processedDeploys) =>
                      (preStateHash, postStateHash, processedDeploys).asRight[Throwable]
                  }
@@ -217,6 +219,10 @@ object InterpreterUtil {
                              val deploys =
                                block.getBody.deploys
                                  .flatMap(InternalProcessedDeploy.fromProcessedDeploy)
+
+                             val timestamp   = block.header.get.timestamp // TODO: Ensure header exists through type
+                             val blockNumber = block.body.get.state.get.blockNumber
+
                              for {
                                invalidBlocksSet <- dag.invalidBlocks
                                unseenBlocksSet  <- ProtoUtil.unseenBlockHashes(dag, block)
@@ -228,7 +234,7 @@ object InterpreterUtil {
                                  .toMap
                                replayResult <- runtimeManager.replayComputeState(stateHash)(
                                                 deploys,
-                                                block.header.get.timestamp,
+                                                BlockData(timestamp, blockNumber),
                                                 invalidBlocks
                                               )
                              } yield replayResult match {

@@ -13,6 +13,7 @@ import coop.rchain.metrics
 import coop.rchain.metrics.Metrics
 import coop.rchain.p2p.EffectsTestInstances.LogicalTime
 import coop.rchain.rholang.Resources.mkRuntime
+import coop.rchain.rholang.interpreter.Runtime.BlockData
 import coop.rchain.rholang.interpreter.accounting.Cost
 import coop.rchain.rholang.interpreter.{accounting, ParBuilder}
 import coop.rchain.shared.Log
@@ -32,7 +33,7 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
       startHash: StateHash,
       terms: List[Id[DeployData]]
   ): F[(StateHash, Seq[InternalProcessedDeploy])] =
-    runtimeManager.computeState(startHash)(terms, System.currentTimeMillis())
+    runtimeManager.computeState(startHash)(terms, BlockData(System.currentTimeMillis(), 0))
 
   "computeState" should "capture rholang errors" in {
     val badRholang = """ for(@x <- @"x"; @y <- @"y"){ @"xy"!(x + y) } | @"x"!(1) | @"y"!("hi") """
@@ -117,7 +118,7 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
           mgr
             .computeState(mgr.emptyStateHash)(
               Seq(StandardDeploys.nonNegativeNumber, deployData),
-              System.currentTimeMillis()
+              BlockData(System.currentTimeMillis(), 0)
             )
             .flatMap { result =>
               val hash = result._1
