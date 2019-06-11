@@ -252,7 +252,6 @@ object GenesisTest {
       maybeWalletsPath: Option[String] = None,
       minimumBond: Long = 1L,
       maximumBond: Long = Long.MaxValue,
-      faucet: Boolean = false,
       shardId: String = rchainShardId,
       deployTimestamp: Option[Long] = Some(System.currentTimeMillis())
   )(
@@ -269,7 +268,6 @@ object GenesisTest {
         maybeWalletsPath,
         minimumBond,
         maximumBond,
-        faucet,
         runtimeManager,
         shardId,
         deployTimestamp

@@ -35,7 +35,6 @@ class BlockApproverProtocol(
     wallets: Seq[PreWallet],
     minimumBond: Long,
     maximumBond: Long,
-    faucet: Boolean,
     requiredSigs: Int
 ) {
   implicit private val logSource: LogSource = LogSource(this.getClass)
@@ -59,8 +58,7 @@ class BlockApproverProtocol(
           wallets,
           _bonds,
           minimumBond,
-          maximumBond,
-          faucet
+          maximumBond
         )
         .flatMap {
           case Right(_) =>
@@ -105,8 +103,7 @@ object BlockApproverProtocol {
       wallets: Seq[PreWallet],
       bonds: Map[ByteString, Long],
       minimumBond: Long,
-      maximumBond: Long,
-      faucet: Boolean
+      maximumBond: Long
   ): F[Either[String, Unit]] = {
 
     def validate: Either[String, (Seq[InternalProcessedDeploy], RChainState)] =
@@ -126,7 +123,6 @@ object BlockApproverProtocol {
             Validator(PublicKey(pk.toByteArray), stake)
         }
         posParams      = ProofOfStake(minimumBond, maximumBond, validators)
-        faucetCode     = if (faucet) Faucet.basicWalletFaucet(_) else Faucet.noopFaucet
         (_, genesisPk) = Secp256k1.newKeyPair
         vaults = Traverse[List]
           .traverse(posParams.validators.map(_.pk).toList)(RevAddress.fromPublicKey)
@@ -137,7 +133,6 @@ object BlockApproverProtocol {
             timestamp,
             posParams,
             wallets,
-            faucetCode,
             genesisPk,
             vaults,
             Long.MaxValue

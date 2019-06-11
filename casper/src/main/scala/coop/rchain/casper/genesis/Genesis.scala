@@ -29,7 +29,6 @@ final case class Genesis(
     timestamp: Long,
     wallets: Seq[PreWallet],
     proofOfStake: ProofOfStake,
-    faucet: Boolean,
     genesisPk: PublicKey,
     vaults: Seq[Vault],
     supply: Long
@@ -43,7 +42,6 @@ object Genesis {
       timestamp: Long,
       posParams: ProofOfStake,
       wallets: Seq[PreWallet],
-      faucetCode: String => String,
       genesisPk: PublicKey,
       vaults: Seq[Vault],
       supply: Long
@@ -54,12 +52,11 @@ object Genesis {
       StandardDeploys.nonNegativeNumber,
       StandardDeploys.makeMint,
       StandardDeploys.basicWallet,
-      StandardDeploys.basicWalletFaucet,
       StandardDeploys.walletCheck,
       StandardDeploys.systemInstances,
       StandardDeploys.lockbox,
       StandardDeploys.authKey,
-      StandardDeploys.rev(wallets, faucetCode, posParams),
+      StandardDeploys.rev(wallets, posParams),
       StandardDeploys.revVault,
       StandardDeploys.revGenerator(genesisPk, vaults, supply),
       StandardDeploys.poSGenerator(posParams)
@@ -73,7 +70,6 @@ object Genesis {
       maybeWalletsPath: Option[String],
       minimumBond: Long,
       maximumBond: Long,
-      faucet: Boolean,
       runtimeManager: RuntimeManager[F],
       shardId: String,
       deployTimestamp: Option[Long]
@@ -109,7 +105,6 @@ object Genesis {
                            maximumBond = maximumBond,
                            validators = validators
                          ),
-                         faucet = faucet,
                          genesisPk = Secp256k1.newKeyPair._2,
                          vaults = vaults,
                          supply = Long.MaxValue
@@ -123,13 +118,10 @@ object Genesis {
   ): F[BlockMessage] = {
     import genesis._
 
-    val faucetCode = if (faucet) Faucet.basicWalletFaucet _ else Faucet.noopFaucet
-
     val blessedTerms = defaultBlessedTerms(
       timestamp,
       proofOfStake,
       wallets,
-      faucetCode,
       genesisPk,
       vaults,
       supply = Long.MaxValue

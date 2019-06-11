@@ -114,7 +114,6 @@ object BlockApproverProtocolTest {
             maximumBond = Long.MaxValue,
             validators = bonds.map(Validator.tupled).toSeq
           ),
-          faucet = false,
           genesisPk = Secp256k1.newKeyPair._2,
           vaults = bonds.toList.map {
             case (pk, stake) =>
@@ -132,7 +131,6 @@ object BlockApproverProtocolTest {
         wallets,
         1L,
         Long.MaxValue,
-        false,
         requiredSigs
       ) -> node).pure[Effect]
     }

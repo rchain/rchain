@@ -68,7 +68,6 @@ object Setup {
             maximumBond = Long.MaxValue,
             validators = bonds.map(Validator.tupled).toSeq
           ),
-          faucet = false,
           genesisPk = genesisPk,
           vaults = bonds.toList.map {
             case (pk, stake) =>
@@ -85,7 +84,6 @@ object Setup {
       Seq.empty,
       1L,
       Long.MaxValue,
-      false,
       requiredSigs
     )
     val local: PeerNode = peerNode("src", 40400)

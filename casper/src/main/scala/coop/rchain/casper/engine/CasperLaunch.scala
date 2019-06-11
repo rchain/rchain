@@ -90,7 +90,6 @@ object CasperLaunch {
         wallets,
         init.conf.minimumBond,
         init.conf.maximumBond,
-        init.conf.hasFaucet,
         init.conf.requiredSigs
       )
       _ <- EngineCell[F].set(
@@ -110,7 +109,6 @@ object CasperLaunch {
                   init.conf.walletsFile,
                   init.conf.minimumBond,
                   init.conf.maximumBond,
-                  init.conf.hasFaucet,
                   init.runtimeManager,
                   init.conf.shardId,
                   init.conf.deployTimestamp

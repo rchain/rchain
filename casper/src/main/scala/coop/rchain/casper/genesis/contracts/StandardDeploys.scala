@@ -53,12 +53,6 @@ object StandardDeploys {
       "043b9a8358561912d2dd0fc94b5c6c01dce2b97c91b34f698aa3dabbefd5c6fd5c4ac2d5db0232545d44de1ee66e1f4828bbb0933e2227c3a6240429f0ef47c233",
       1559156113243L
     )
-  def basicWalletFaucet: DeployData =
-    toDeploy(
-      CompiledRholangSource("BasicWalletFaucet.rho"),
-      "04137e903dff809e6f307009eeb2fe13b8490e8d6f612b3f293aa5d7960156f807b2a86face1f184d2fc4b7eb659fdb8e69f8bc801d9265a34c3e1ce74fd5be937",
-      1559156052144L
-    )
   def walletCheck: DeployData =
     toDeploy(
       CompiledRholangSource("WalletCheck.rho"),
@@ -88,9 +82,8 @@ object StandardDeploys {
 
   def rev(
       wallets: Seq[PreWallet],
-      faucetCode: String => String,
       posParams: ProofOfStake
-  ): DeployData = toDeploy(new PreWalletRev(wallets, faucetCode, posParams), "", 0L)
+  ): DeployData = toDeploy(new PreWalletRev(wallets, posParams), "", 0L)
 
   def revVault: DeployData =
     toDeploy(

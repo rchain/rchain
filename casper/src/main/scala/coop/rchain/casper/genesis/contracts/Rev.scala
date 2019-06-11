@@ -7,7 +7,6 @@ import coop.rchain.rholang.build.CompiledRholangSource
 class Rev[A](
     rhoCode: A => String,
     wallets: Seq[A],
-    faucetCode: String => String,
     posParams: ProofOfStake
 ) extends CompiledRholangSource {
   final val path = "<synthetic in Rev.scala>"
@@ -55,6 +54,5 @@ class Rev[A](
 
 class PreWalletRev(
     wallets: Seq[PreWallet],
-    faucetCode: String => String,
     posParams: ProofOfStake
-) extends Rev[PreWallet](PreWallet.rhoCode, wallets, faucetCode, posParams)
+) extends Rev[PreWallet](PreWallet.rhoCode, wallets, posParams)
