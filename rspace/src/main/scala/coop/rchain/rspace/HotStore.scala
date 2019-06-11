@@ -258,8 +258,8 @@ private class InMemHotStore[F[_]: Sync, C, P, A, K](
       cache         <- S.read
       data          = cache.data.readOnlySnapshot().map { case (k, v) => (Seq(k), v) }.toMap
       continuations = (cache.continuations ++ cache.installedContinuations.mapValues(Seq(_))).toMap
-      merged        = merge(data, continuations, Seq.empty[Datum[A]], Seq.empty[WaitingContinuation[P, K]])
-      mapped        = merged.mapValues { case (d, k) => Row(d, k) }
+      zipped        = zip(data, continuations, Seq.empty[Datum[A]], Seq.empty[WaitingContinuation[P, K]])
+      mapped        = zipped.mapValues { case (d, k) => Row(d, k) }
     } yield mapped.filter { case (_, v) => !(v.data.isEmpty && v.wks.isEmpty) }
 }
 

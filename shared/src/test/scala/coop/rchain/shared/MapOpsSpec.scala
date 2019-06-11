@@ -7,12 +7,12 @@ class MapOpsSpec extends FlatSpec with Matchers with GeneratorDrivenPropertyChec
 
   import MapOps._
 
-  "merge" should "retain all keys" in forAll { (m1: Map[String, Int], m2: Map[String, Int]) =>
-    merge(m1, m2, 0, 0).keys should contain theSameElementsAs (m1.keys ++ m2.keys)
+  "zip" should "retain all keys" in forAll { (m1: Map[String, Int], m2: Map[String, Int]) =>
+    zip(m1, m2, 0, 0).keys should contain theSameElementsAs (m1.keys ++ m2.keys)
   }
 
   it should "retain all values" in forAll { (m1: Map[String, Int], m2: Map[String, Int]) =>
-    val result = merge(m1, m2, 0, 0)
+    val result = zip(m1, m2, 0, 0)
 
     for {
       key <- result.keys
