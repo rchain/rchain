@@ -77,6 +77,8 @@ object Main {
 
     implicit val envVars: EnvVars[Task] = EnvVars.envVars
 
+    implicit val console: ConsoleIO[Task] = consoleIO
+
     val program = conf.command match {
       case Eval(files) => new ReplRuntime().evalProgram[Task](files)
       case Repl        => new ReplRuntime().replProgram[Task].as(())
@@ -142,7 +144,7 @@ object Main {
           proposeService.close()
           replService.close()
           deployService.close()
-        }
+        } >> console.close
     )
   }
 
@@ -150,7 +152,7 @@ object Main {
       conf: Configuration,
       algorithm: String,
       privateKeyPath: Path
-  ): Task[Unit] =
+  )(implicit console: ConsoleIO[Task]): Task[Unit] =
     for {
       password       <- ConsoleIO[Task].readPassword("Password for generated private key file: ")
       passwordRepeat <- ConsoleIO[Task].readPassword("Repeat password: ")
@@ -253,7 +255,7 @@ object Main {
       .void
 
   @SuppressWarnings(Array("org.wartremover.warts.NonUnitStatements"))
-  implicit private def consoleIO: ConsoleIO[Task] = {
+  private def consoleIO: ConsoleIO[Task] = {
     val console = new ConsoleReader()
     console.setHistoryEnabled(true)
     if (TerminalMode.readMode)
