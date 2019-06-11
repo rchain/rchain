@@ -34,8 +34,7 @@ object RholangOnlyDispatcher {
     implicit lazy val reducer: Reduce[M] =
       new DebruijnInterpreter[M, F](
         tuplespaceAlg,
-        urnMap,
-        Ref.unsafe[M, DeployParameters](DeployParameters.empty)
+        urnMap
       )
 
     val chargingReducer: ChargingReducer[M] = ChargingReducer[M]

@@ -400,14 +400,13 @@ object Runtime {
           )
 
         lazy val (dispatcher, reducer, registry) =
-          RholangAndScalaDispatcher.create(space, dispatchTable, urnMap, deployParametersRef)
+          RholangAndScalaDispatcher.create(space, dispatchTable, urnMap)
 
         lazy val (replayDispatcher, replayReducer, replayRegistry) =
           RholangAndScalaDispatcher.create(
             replaySpace,
             replayDispatchTable,
-            urnMap,
-            deployParametersRef
+            urnMap
           )
         (reducer, replayReducer)
       }

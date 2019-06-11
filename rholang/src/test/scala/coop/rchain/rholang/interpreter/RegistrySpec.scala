@@ -66,8 +66,7 @@ trait RegistryTester extends PersistentStoreTester {
             .create(
               space,
               dispatchTable,
-              Registry.testingUrnMap,
-              Ref.unsafe[Task, DeployParameters](DeployParameters.empty)
+              Registry.testingUrnMap
             )
         reducer.setPhlo(Cost.UNSAFE_MAX).runSyncUnsafe(1.second)
         registry.testInstall().runSyncUnsafe(1.second)

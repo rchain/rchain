@@ -53,8 +53,7 @@ trait Reduce[M[_]] {
 
 class DebruijnInterpreter[M[_], F[_]](
     tuplespaceAlg: Tuplespace[M],
-    urnMap: Map[String, Par],
-    deployParametersRef: Ref[M, DeployParameters]
+    urnMap: Map[String, Par]
 )(
     implicit parallel: cats.Parallel[M, F],
     s: Sync[M],
