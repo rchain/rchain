@@ -2,9 +2,7 @@ package coop.rchain.rholang.interpreter
 
 import cats._
 import cats.data._
-import cats.effect.Sync
-import cats.effect.ExitCase
-import cats.effect.ExitCase._
+import cats.effect.{Bracket, Sync}
 import cats.effect.concurrent.Semaphore
 import cats.implicits._
 import cats.mtl._
@@ -41,28 +39,19 @@ package object accounting extends Costs {
 
   }
 
-  def charge[F[_]: Monad](
+  def charge[F[_]](
       amount: Cost
-  )(implicit cost: _cost[F], error: _error[F]): F[Unit] =
-    for {
-      _ <- error.bracket(cost.acquire)(
-            _ =>
-              for {
-                c <- cost.get
-                _ <- Monad[F].ifM[Unit]((c.value < 0).pure[F])(
-                      ifTrue = error.raiseError[Unit](OutOfPhlogistonsError),
-                      ifFalse = for {
-                        _        <- cost.tell(Chain.one(amount))
-                        newValue = c - amount
-                        _        <- cost.set(newValue)
-                      } yield (())
-                    )
-              } yield ()
-          ) { _ =>
-            cost.release
-          }
-      _ <- error.ensure(cost.inspect(identity))(OutOfPhlogistonsError)(_.value >= 0)
-    } yield ()
+  )(implicit cost: _cost[F], bracketF: Bracket[F, Throwable]): F[Unit] =
+    bracketF.bracket(cost.acquire) { _ =>
+      for {
+        phlo0 <- cost.get
+        phlo1 = phlo0 - amount
+        _ <- if (phlo0.value < 0) bracketF.raiseError[Unit](OutOfPhlogistonsError)
+            else cost.tell(Chain.one(amount)) >> cost.set(phlo1)
+        _ <- if (phlo1.value < 0) bracketF.raiseError[Unit](OutOfPhlogistonsError)
+            else ().pure[F]
+      } yield ()
+    }(_ => cost.release)
 
   implicit def noOpCostLog[M[_]: Applicative]: FunctorTell[M, Chain[Cost]] =
     new DefaultFunctorTell[M, Chain[Cost]] {
