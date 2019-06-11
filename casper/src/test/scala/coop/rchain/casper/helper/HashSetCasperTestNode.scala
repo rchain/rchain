@@ -3,28 +3,27 @@ package coop.rchain.casper.helper
 import java.nio.file.{Files, Path}
 
 import cats.data.EitherT
-import cats.effect.concurrent.{Ref, Semaphore}
+import cats.effect.concurrent.Semaphore
 import cats.effect.{Concurrent, Resource, Sync}
 import cats.implicits._
 import cats.{Applicative, ApplicativeError, Id, Monad}
 import coop.rchain.blockstorage._
+import coop.rchain.casper.CasperState.CasperStateCell
+import coop.rchain.casper.MultiParentCasper.ignoreDoppelgangerCheck
 import coop.rchain.casper._
+import coop.rchain.casper.engine.EngineCell._
+import coop.rchain.casper.engine._
 import coop.rchain.casper.helper.BlockDagStorageTestFixture.mapSize
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.ProtoUtil
-import coop.rchain.casper.util.comm.CasperPacketHandler
-import coop.rchain.casper.engine._
-import EngineCell._
-import CasperState.CasperStateCell
 import coop.rchain.casper.util.comm.TestNetwork.TestNetwork
-import coop.rchain.casper.util.comm._
+import coop.rchain.casper.util.comm.{CasperPacketHandler, _}
 import coop.rchain.casper.util.rholang.{InterpreterUtil, RuntimeManager}
 import coop.rchain.catscontrib.Catscontrib._
 import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.catscontrib.effect.implicits._
 import coop.rchain.catscontrib.ski._
 import coop.rchain.comm._
-import coop.rchain.comm.protocol.routing._
 import coop.rchain.comm.rp.Connect
 import coop.rchain.comm.rp.Connect._
 import coop.rchain.comm.rp.HandleMessages.handle
@@ -33,7 +32,6 @@ import coop.rchain.crypto.signatures.Secp256k1
 import coop.rchain.metrics
 import coop.rchain.metrics.{Metrics, NoopSpan}
 import coop.rchain.p2p.EffectsTestInstances._
-import coop.rchain.p2p.effects.PacketHandler
 import coop.rchain.rholang.interpreter.Runtime
 import coop.rchain.rspace.Context
 import coop.rchain.shared.PathOps.RichPath
@@ -41,7 +39,6 @@ import coop.rchain.shared._
 import monix.eval.Task
 import monix.execution.Scheduler
 
-import scala.collection.mutable
 import scala.concurrent.duration.{FiniteDuration, MILLISECONDS}
 import scala.util.Random
 
@@ -113,6 +110,12 @@ class HashSetCasperTestNode[F[_]](
           )
           .void
       }
+
+  def addBlock(deployDatums: DeployData*): F[BlockMessage] =
+    for {
+      block <- createBlock(deployDatums: _*)
+      _     <- casperEff.addBlock(block, ignoreDoppelgangerCheck[F])
+    } yield block
 
   def createBlock(deployDatums: DeployData*): F[BlockMessage] =
     for {

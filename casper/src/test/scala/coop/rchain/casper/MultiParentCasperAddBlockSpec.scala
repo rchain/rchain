@@ -82,8 +82,7 @@ class MultiParentCasperAddBlockSpec extends FlatSpec with Matchers with Inspecto
 
       for {
         deploy      <- ConstructDeploy.basicDeployData[Effect](0)
-        signedBlock <- node.createBlock(deploy)
-        _           <- node.casperEff.addBlock(signedBlock, ignoreDoppelgangerCheck[Effect])
+        signedBlock <- node.addBlock(deploy)
         _           = logEff.warns.isEmpty should be(true)
         dag         <- node.casperEff.blockDag
         estimate    <- node.casperEff.estimator(dag)
@@ -106,11 +105,8 @@ class MultiParentCasperAddBlockSpec extends FlatSpec with Matchers with Inspecto
 
       for {
 
-        signedBlock1 <- node.createBlock(deployDatas.head)
-        _            <- node.casperEff.addBlock(signedBlock1, ignoreDoppelgangerCheck[Effect])
-        signedBlock2 <- node.createBlock(deployDatas(1))
-        _            <- node.casperEff.addBlock(signedBlock2, ignoreDoppelgangerCheck[Effect])
-        _            = node.logEff.warns should be(Nil)
+        signedBlock1 <- node.addBlock(deployDatas.head)
+        signedBlock2 <- node.addBlock(deployDatas(1))
         _            = ProtoUtil.parentHashes(signedBlock2) should be(Seq(signedBlock1.blockHash))
         dag          <- node.casperEff.blockDag
         estimate     <- node.casperEff.estimator(dag)
@@ -132,8 +128,7 @@ class MultiParentCasperAddBlockSpec extends FlatSpec with Matchers with Inspecto
       val deploys = (source :: source :: Nil).zipWithIndex
         .map(s => ConstructDeploy.sourceDeploy(s._1, startTime + s._2, accounting.MAX_VALUE))
       for {
-        block  <- node.createBlock(deploys: _*)
-        _      <- node.casperEff.addBlock(block, ignoreDoppelgangerCheck[Effect])
+        block  <- node.addBlock(deploys: _*)
         result <- node.casperEff.contains(block) shouldBeF true
       } yield result
     }
@@ -170,10 +165,8 @@ class MultiParentCasperAddBlockSpec extends FlatSpec with Matchers with Inspecto
         _ <- node0.casperEff.addBlock(unsignedBlock, ignoreDoppelgangerCheck[Effect])
         _ <- node1.transportLayerEff.clear(node1.local) //node1 misses this block
 
-        signedBlock <- node0.createBlock(data1)
-
-        _ <- node0.casperEff.addBlock(signedBlock, ignoreDoppelgangerCheck[Effect])
-        _ <- node1.receive() //receives block1; should not ask for block0
+        signedBlock <- node0.addBlock(data1)
+        _           <- node1.receive() //receives block1; should not ask for block0
 
         _ <- node0.casperEff.contains(unsignedBlock) shouldBeF false
         _ <- node1.casperEff.contains(unsignedBlock) shouldBeF false
@@ -187,8 +180,7 @@ class MultiParentCasperAddBlockSpec extends FlatSpec with Matchers with Inspecto
 
       for {
         basicDeployData <- ConstructDeploy.basicDeployData[Effect](0)
-        signedBlock     <- node.createBlock(basicDeployData)
-        _               <- node.casperEff.addBlock(signedBlock, ignoreDoppelgangerCheck[Effect])
+        signedBlock     <- node.addBlock(basicDeployData)
         _               = node.logEff.warns.head.contains("Ignoring block") should be(true)
       } yield ()
     }
@@ -198,8 +190,7 @@ class MultiParentCasperAddBlockSpec extends FlatSpec with Matchers with Inspecto
     HashSetCasperTestNode.networkEff(validatorKeys.take(2), genesis).use { nodes =>
       for {
         deployData  <- ConstructDeploy.basicDeployData[Effect](0)
-        signedBlock <- nodes(0).createBlock(deployData)
-        _           <- nodes(0).casperEff.addBlock(signedBlock, ignoreDoppelgangerCheck[Effect])
+        signedBlock <- nodes(0).addBlock(deployData)
         _           <- nodes(1).receive()
         result      <- nodes(1).casperEff.contains(signedBlock) shouldBeF true
         _ <- nodes.toList.traverse_[Effect, Assertion] { node =>
@@ -215,8 +206,7 @@ class MultiParentCasperAddBlockSpec extends FlatSpec with Matchers with Inspecto
     HashSetCasperTestNode.networkEff(validatorKeys.take(2), genesis).use { nodes =>
       for {
         deployData        <- ConstructDeploy.basicDeployData[Effect](1)
-        signedBlock1Prime <- nodes(0).createBlock(deployData)
-        _                 <- nodes(0).casperEff.addBlock(signedBlock1Prime, ignoreDoppelgangerCheck[Effect])
+        signedBlock1Prime <- nodes(0).addBlock(deployData)
         _                 <- nodes(1).receive()
         _                 = nodes(1).logEff.infos.count(_ startsWith "Added") should be(1)
         result            = nodes(1).logEff.warns.count(_ startsWith "Recording invalid block") should be(0)
@@ -241,24 +231,19 @@ class MultiParentCasperAddBlockSpec extends FlatSpec with Matchers with Inspecto
             .withTimestamp(deployDatas(0).timestamp)
             .withDeployer(deployDatas(0).deployer)
         ) // deployPrim0 has the same (user, millisecond timestamp) with deployDatas(0)
-        signedBlock1 <- nodes(0).createBlock(deployDatas(0))
-        _            <- nodes(0).casperEff.addBlock(signedBlock1, ignoreDoppelgangerCheck[Effect])
+        signedBlock1 <- nodes(0).addBlock(deployDatas(0))
         _            <- nodes(1).receive() // receive block1
 
-        signedBlock2 <- nodes(0).createBlock(deployDatas(1))
-        _            <- nodes(0).casperEff.addBlock(signedBlock2, ignoreDoppelgangerCheck[Effect])
+        signedBlock2 <- nodes(0).addBlock(deployDatas(1))
         _            <- nodes(1).receive() // receive block2
 
-        signedBlock3 <- nodes(0).createBlock(deployDatas(2))
-        _            <- nodes(0).casperEff.addBlock(signedBlock3, ignoreDoppelgangerCheck[Effect])
+        signedBlock3 <- nodes(0).addBlock(deployDatas(2))
         _            <- nodes(1).receive() // receive block3
 
         _ <- nodes(1).casperEff.contains(signedBlock3) shouldBeF true
 
-        signedBlock4 <- nodes(1).createBlock(deployPrim0)
-        _ <- nodes(1).casperEff
-              .addBlock(signedBlock4, ignoreDoppelgangerCheck[Effect]) // should succeed
-        _ <- nodes(0).receive() // still receive signedBlock4
+        signedBlock4 <- nodes(1).addBlock(deployPrim0) // should succeed
+        _            <- nodes(0).receive()             // still receive signedBlock4
 
         result <- nodes(1).casperEff
                    .contains(signedBlock4) shouldBeF true // Invalid blocks are still added
@@ -336,21 +321,17 @@ class MultiParentCasperAddBlockSpec extends FlatSpec with Matchers with Inspecto
         _ <- nodes(1).casperEff.contains(signedBlock1Prime) shouldBeF false
         _ <- nodes(2).casperEff.contains(signedBlock1Prime) shouldBeF true
 
-        signedBlock2 <- nodes(1).createBlock(deployDatas(2))
-        signedBlock3 <- nodes(2).createBlock(deployDatas(3))
-
-        _ <- nodes(2).casperEff.addBlock(signedBlock3, ignoreDoppelgangerCheck[Effect])
-        _ <- nodes(1).casperEff.addBlock(signedBlock2, ignoreDoppelgangerCheck[Effect])
-        _ <- nodes(2).transportLayerEff.clear(nodes(2).local) //nodes(2) ignores block2
-        _ <- nodes(1).receive() // receives block3; asks for block1'
-        _ <- nodes(2).receive() // receives request for block1'; sends block1'
-        _ <- nodes(1).receive() // receives block1'; adds both block3 and block1'
+        signedBlock2 <- nodes(1).addBlock(deployDatas(2))
+        signedBlock3 <- nodes(2).addBlock(deployDatas(3))
+        _            <- nodes(2).transportLayerEff.clear(nodes(2).local) //nodes(2) ignores block2
+        _            <- nodes(1).receive() // receives block3; asks for block1'
+        _            <- nodes(2).receive() // receives request for block1'; sends block1'
+        _            <- nodes(1).receive() // receives block1'; adds both block3 and block1'
 
         _ <- nodes(1).casperEff.contains(signedBlock3) shouldBeF true
         _ <- nodes(1).casperEff.contains(signedBlock1Prime) shouldBeF true
 
-        signedBlock4 <- nodes(1).createBlock(deployDatas(4))
-        _            <- nodes(1).casperEff.addBlock(signedBlock4, ignoreDoppelgangerCheck[Effect])
+        signedBlock4 <- nodes(1).addBlock(deployDatas(4))
 
         // Node 1 should contain both blocks constituting the equivocation
         _ <- nodes(1).casperEff.contains(signedBlock1) shouldBeF true

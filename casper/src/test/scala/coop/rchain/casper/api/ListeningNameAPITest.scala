@@ -39,8 +39,7 @@ class ListeningNameAPITest extends FlatSpec with Matchers with Inside {
       }
 
       for {
-        block <- node.createBlock(basicDeployData)
-        _     <- node.casperEff.addBlock(block, ignoreDoppelgangerCheck[Effect])
+        block <- node.addBlock(basicDeployData)
 
         listeningName = Par().copy(exprs = Seq(Expr(GInt(2)), Expr(GInt(1)), Expr(GInt(3))))
         resultData    = Par().copy(exprs = Seq(Expr(GInt(0))))
@@ -75,8 +74,7 @@ class ListeningNameAPITest extends FlatSpec with Matchers with Inside {
                           _ => ConstructDeploy.basicDeployData[Effect](0)
                         )
 
-        block1 <- nodes(0).createBlock(deployDatas(0))
-        _      <- nodes(0).casperEff.addBlock(block1, ignoreDoppelgangerCheck[Effect])
+        block1 <- nodes(0).addBlock(deployDatas(0))
         _      <- nodes(1).receive()
         _      <- nodes(2).receive()
 
@@ -94,18 +92,15 @@ class ListeningNameAPITest extends FlatSpec with Matchers with Inside {
             blocks1.length should be(1)
             l should be(1)
         }
-        block2 <- nodes(1).createBlock(deployDatas(1))
-        _      <- nodes(1).casperEff.addBlock(block2, ignoreDoppelgangerCheck[Effect])
+        block2 <- nodes(1).addBlock(deployDatas(1))
         _      <- nodes(0).receive()
         _      <- nodes(2).receive()
 
-        block3 <- nodes(2).createBlock(deployDatas(2))
-        _      <- nodes(2).casperEff.addBlock(block3, ignoreDoppelgangerCheck[Effect])
+        block3 <- nodes(2).addBlock(deployDatas(2))
         _      <- nodes(0).receive()
         _      <- nodes(1).receive()
 
-        block4 <- nodes(0).createBlock(deployDatas(3))
-        _      <- nodes(0).casperEff.addBlock(block4, ignoreDoppelgangerCheck[Effect])
+        block4 <- nodes(0).addBlock(deployDatas(3))
         _      <- nodes(1).receive()
         _      <- nodes(2).receive()
 
@@ -128,18 +123,15 @@ class ListeningNameAPITest extends FlatSpec with Matchers with Inside {
             blocks2.length should be(4)
             l should be(4)
         }
-        block5 <- nodes(1).createBlock(deployDatas(4))
-        _      <- nodes(1).casperEff.addBlock(block5, ignoreDoppelgangerCheck[Effect])
+        block5 <- nodes(1).addBlock(deployDatas(4))
         _      <- nodes(0).receive()
         _      <- nodes(2).receive()
 
-        block6 <- nodes(2).createBlock(deployDatas(5))
-        _      <- nodes(2).casperEff.addBlock(block6, ignoreDoppelgangerCheck[Effect])
+        block6 <- nodes(2).addBlock(deployDatas(5))
         _      <- nodes(0).receive()
         _      <- nodes(1).receive()
 
-        block7 <- nodes(0).createBlock(deployDatas(6))
-        _      <- nodes(0).casperEff.addBlock(block7, ignoreDoppelgangerCheck[Effect])
+        block7 <- nodes(0).addBlock(deployDatas(6))
         _      <- nodes(1).receive()
         _      <- nodes(2).receive()
 
@@ -203,8 +195,7 @@ class ListeningNameAPITest extends FlatSpec with Matchers with Inside {
       }
 
       for {
-        block <- node.createBlock(basicDeployData)
-        _     <- node.casperEff.addBlock(block, ignoreDoppelgangerCheck[Effect])
+        block <- node.addBlock(basicDeployData)
 
         listeningNamesShuffled1 = List(
           Par().copy(exprs = Seq(Expr(GInt(1)), Expr(GInt(2)))),

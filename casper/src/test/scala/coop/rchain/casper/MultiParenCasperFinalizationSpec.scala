@@ -1,7 +1,6 @@
 package coop.rchain.casper
 
 import cats.implicits._
-import coop.rchain.casper.MultiParentCasper.ignoreDoppelgangerCheck
 import coop.rchain.casper.helper.HashSetCasperTestNode
 import coop.rchain.casper.helper.HashSetCasperTestNode._
 import coop.rchain.casper.scalatestcontrib._
@@ -29,28 +28,23 @@ class MultiParentCasperFinalizationSpec extends FlatSpec with Matchers with Insp
       for {
         deployDatas <- (0 to 7).toList.traverse(i => ConstructDeploy.basicDeployData[Effect](i))
 
-        block1 <- nodes(0).createBlock(deployDatas(0))
-        _      <- nodes(0).casperEff.addBlock(block1, ignoreDoppelgangerCheck[Effect])
+        block1 <- nodes(0).addBlock(deployDatas(0))
         _      <- nodes(1).receive()
         _      <- nodes(2).receive()
 
-        block2 <- nodes(1).createBlock(deployDatas(1))
-        _      <- nodes(1).casperEff.addBlock(block2, ignoreDoppelgangerCheck[Effect])
+        block2 <- nodes(1).addBlock(deployDatas(1))
         _      <- nodes(0).receive()
         _      <- nodes(2).receive()
 
-        block3 <- nodes(2).createBlock(deployDatas(2))
-        _      <- nodes(2).casperEff.addBlock(block3, ignoreDoppelgangerCheck[Effect])
+        block3 <- nodes(2).addBlock(deployDatas(2))
         _      <- nodes(0).receive()
         _      <- nodes(1).receive()
 
-        block4 <- nodes(0).createBlock(deployDatas(3))
-        _      <- nodes(0).casperEff.addBlock(block4, ignoreDoppelgangerCheck[Effect])
+        block4 <- nodes(0).addBlock(deployDatas(3))
         _      <- nodes(1).receive()
         _      <- nodes(2).receive()
 
-        block5 <- nodes(1).createBlock(deployDatas(4))
-        _      <- nodes(1).casperEff.addBlock(block5, ignoreDoppelgangerCheck[Effect])
+        block5 <- nodes(1).addBlock(deployDatas(4))
         _      <- nodes(0).receive()
         _      <- nodes(2).receive()
 
@@ -58,8 +52,7 @@ class MultiParentCasperFinalizationSpec extends FlatSpec with Matchers with Insp
         state <- nodes(0).casperState.read
         _     = state.deployHistory.size should be(1)
 
-        block6 <- nodes(2).createBlock(deployDatas(5))
-        _      <- nodes(2).casperEff.addBlock(block6, ignoreDoppelgangerCheck[Effect])
+        block6 <- nodes(2).addBlock(deployDatas(5))
         _      <- nodes(0).receive()
         _      <- nodes(1).receive()
 
@@ -67,16 +60,14 @@ class MultiParentCasperFinalizationSpec extends FlatSpec with Matchers with Insp
         state <- nodes(0).casperState.read
         _     = state.deployHistory.size should be(1)
 
-        block7 <- nodes(0).createBlock(deployDatas(6))
-        _      <- nodes(0).casperEff.addBlock(block7, ignoreDoppelgangerCheck[Effect])
+        block7 <- nodes(0).addBlock(deployDatas(6))
         _      <- nodes(1).receive()
         _      <- nodes(2).receive()
 
         _ <- nodes(0).casperEff.lastFinalizedBlock shouldBeF block3
         _ = state.deployHistory.size should be(1)
 
-        block8 <- nodes(1).createBlock(deployDatas(7))
-        _      <- nodes(1).casperEff.addBlock(block8, ignoreDoppelgangerCheck[Effect])
+        block8 <- nodes(1).addBlock(deployDatas(7))
         _      <- nodes(0).receive()
         _      <- nodes(2).receive()
 

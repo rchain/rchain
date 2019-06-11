@@ -39,18 +39,15 @@ class MultiParentCasperMergeSpec extends FlatSpec with Matchers with Inspectors 
           ),
           deployData2
         )
-        block0 <- nodes(0).createBlock(deploys(0))
-        block1 <- nodes(1).createBlock(deploys(1))
-        _      <- nodes(0).casperEff.addBlock(block0, ignoreDoppelgangerCheck[Effect])
-        _      <- nodes(1).casperEff.addBlock(block1, ignoreDoppelgangerCheck[Effect])
+        block0 <- nodes(0).addBlock(deploys(0))
+        block1 <- nodes(1).addBlock(deploys(1))
         _      <- nodes(0).receive()
         _      <- nodes(1).receive()
         _      <- nodes(0).receive()
         _      <- nodes(1).receive()
 
         //multiparent block joining block0 and block1 since they do not conflict
-        multiparentBlock <- nodes(0).createBlock(deploys(2))
-        _                <- nodes(0).casperEff.addBlock(multiparentBlock, ignoreDoppelgangerCheck[Effect])
+        multiparentBlock <- nodes(0).addBlock(deploys(2))
         _                <- nodes(1).receive()
 
         _ = nodes(0).logEff.warns.isEmpty shouldBe true
@@ -74,18 +71,15 @@ class MultiParentCasperMergeSpec extends FlatSpec with Matchers with Inspectors 
         ConstructDeploy.sourceDeploy(echoContract(2), time + 2, accounting.MAX_VALUE)
       )
       for {
-        block0 <- nodes(0).createBlock(deploys(0))
-        block1 <- nodes(1).createBlock(deploys(1))
-        _      <- nodes(0).casperEff.addBlock(block0, ignoreDoppelgangerCheck[Effect])
-        _      <- nodes(1).casperEff.addBlock(block1, ignoreDoppelgangerCheck[Effect])
+        block0 <- nodes(0).addBlock(deploys(0))
+        block1 <- nodes(1).addBlock(deploys(1))
         _      <- nodes(0).receive()
         _      <- nodes(1).receive()
         _      <- nodes(0).receive()
         _      <- nodes(1).receive()
 
         //multiparent block joining block0 and block1 since they do not conflict
-        multiparentBlock <- nodes(0).createBlock(deploys(1))
-        _                <- nodes(0).casperEff.addBlock(multiparentBlock, ignoreDoppelgangerCheck[Effect])
+        multiparentBlock <- nodes(0).addBlock(deploys(1))
         _                <- nodes(1).receive()
 
         _ = nodes(0).logEff.warns.isEmpty shouldBe true
@@ -118,17 +112,14 @@ class MultiParentCasperMergeSpec extends FlatSpec with Matchers with Inspectors 
           deploy1,
           deploy2
         )
-        block0 <- nodes(0).createBlock(deploys(0))
-        block1 <- nodes(1).createBlock(deploys(1))
-        _      <- nodes(0).casperEff.addBlock(block0, ignoreDoppelgangerCheck[Effect])
-        _      <- nodes(1).casperEff.addBlock(block1, ignoreDoppelgangerCheck[Effect])
+        block0 <- nodes(0).addBlock(deploys(0))
+        block1 <- nodes(1).addBlock(deploys(1))
         _      <- nodes(0).receive()
         _      <- nodes(1).receive()
         _      <- nodes(0).receive()
         _      <- nodes(1).receive()
 
-        singleParentBlock <- nodes(0).createBlock(deploys(2))
-        _                 <- nodes(0).casperEff.addBlock(singleParentBlock, ignoreDoppelgangerCheck[Effect])
+        singleParentBlock <- nodes(0).addBlock(deploys(2))
         _                 <- nodes(1).receive()
 
         _      = nodes(0).logEff.warns.isEmpty shouldBe true
@@ -231,17 +222,10 @@ class MultiParentCasperMergeSpec extends FlatSpec with Matchers with Inspectors 
       val tuples = defineDeploy(tuplesRho, 2L)
       val reg    = defineDeploy(registryRho, 4L)
       for {
-        b1n3 <- n3.createBlock(short)
-        _    <- n3.casperEff.addBlock(b1n3, ignoreDoppelgangerCheck[Effect])
-
-        b1n2 <- n2.createBlock(time)
-        _    <- n2.casperEff.addBlock(b1n2, ignoreDoppelgangerCheck[Effect])
-
-        b1n1 <- n1.createBlock(tuples)
-        _    <- n1.casperEff.addBlock(b1n1, ignoreDoppelgangerCheck[Effect])
-
-        _ <- n2.receive()
-
+        b1n3 <- n3.addBlock(short)
+        b1n2 <- n2.addBlock(time)
+        b1n1 <- n1.addBlock(tuples)
+        _    <- n2.receive()
         b2n2 <- n2.createBlock(reg)
       } yield ()
     }
@@ -269,17 +253,14 @@ class MultiParentCasperMergeSpec extends FlatSpec with Matchers with Inspectors 
           deploy2
         )
 
-        block0 <- nodes(0).createBlock(deploys(0))
-        block1 <- nodes(1).createBlock(deploys(1))
-        _      <- nodes(0).casperEff.addBlock(block0, ignoreDoppelgangerCheck[Effect])
-        _      <- nodes(1).casperEff.addBlock(block1, ignoreDoppelgangerCheck[Effect])
+        block0 <- nodes(0).addBlock(deploys(0))
+        block1 <- nodes(1).addBlock(deploys(1))
         _      <- nodes(0).receive()
         _      <- nodes(1).receive()
         _      <- nodes(0).receive()
         _      <- nodes(1).receive()
 
-        singleParentBlock <- nodes(0).createBlock(deploys(2))
-        _                 <- nodes(0).casperEff.addBlock(singleParentBlock, ignoreDoppelgangerCheck[Effect])
+        singleParentBlock <- nodes(0).addBlock(deploys(2))
         _                 <- nodes(1).receive()
 
         _      = nodes(0).logEff.warns.isEmpty shouldBe true
