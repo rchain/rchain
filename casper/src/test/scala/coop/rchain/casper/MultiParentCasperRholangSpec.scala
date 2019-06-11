@@ -53,8 +53,7 @@ class MultiParentCasperRholangSpec extends FlatSpec with Matchers with Inspector
   }
 
   it should "be able to use the registry" in effectTest {
-    HashSetCasperTestNode.standaloneEff(genesis, validatorKeys.head).use { implicit node =>
-      import node.casperEff
+    HashSetCasperTestNode.standaloneEff(genesis, validatorKeys.head).use { node =>
       implicit val rm = node.runtimeManager
 
       val registerDeploy = ConstructDeploy.sourceDeploy(
@@ -68,11 +67,8 @@ class MultiParentCasperRholangSpec extends FlatSpec with Matchers with Inspector
       )
 
       for {
-        _                 <- casperEff.deploy(registerDeploy)
-        createBlockResult <- casperEff.createBlock
-        Created(block)    = createBlockResult
-        blockStatus       <- casperEff.addBlock(block, ignoreDoppelgangerCheck[Effect])
-        id                = "rho:id:dwg79f7rkqqsz9458tnh4i6nw3yrnurufihg3zicn9nsrp18o9imwk"
+        block <- node.addBlock(registerDeploy)
+        id    = "rho:id:dwg79f7rkqqsz9458tnh4i6nw3yrnurufihg3zicn9nsrp18o9imwk"
         callDeploy = ConstructDeploy.sourceDeploy(
           s"""new rl(`rho:registry:lookup`), helloCh, out in {
              |  rl!(`$id`, *helloCh) |
@@ -81,12 +77,7 @@ class MultiParentCasperRholangSpec extends FlatSpec with Matchers with Inspector
           1539788365119L,
           accounting.MAX_VALUE
         )
-        _                  <- casperEff.deploy(callDeploy)
-        createBlockResult2 <- casperEff.createBlock
-        Created(block2)    = createBlockResult2
-        block2Status       <- casperEff.addBlock(block2, ignoreDoppelgangerCheck[Effect])
-        _                  = blockStatus shouldBe Valid
-        _                  = block2Status shouldBe Valid
+        block2 <- node.addBlock(callDeploy)
         data <- getDataAtPrivateChannel[Effect](
                  block2,
                  "2da67f1ca63808777eba9144a5cac519783afc6070dd08642ac6aa5ed51b98d8"
