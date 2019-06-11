@@ -95,18 +95,13 @@ class MultiParentCasperAddBlockSpec extends FlatSpec with Matchers with Inspecto
     HashSetCasperTestNode.standaloneEff(genesis, validatorKeys.head).use { node =>
       implicit val rm = node.runtimeManager
 
-      val start = 0L
-
-      val deployDatas = Vector(
-        "contract @\"add\"(@x, @y, ret) = { ret!(x + y) }",
-        "new unforgable in { @\"add\"!(5, 7, *unforgable) }"
-      ).zipWithIndex
-        .map(s => ConstructDeploy.sourceDeploy(s._1, start + s._2, accounting.MAX_VALUE))
-
       for {
-
-        signedBlock1 <- node.addBlock(deployDatas.head)
-        signedBlock2 <- node.addBlock(deployDatas(1))
+        deploy1 <- ConstructDeploy
+                    .sourceDeployNowF("contract @\"add\"(@x, @y, ret) = { ret!(x + y) }")
+        signedBlock1 <- node.addBlock(deploy1)
+        deploy2 <- ConstructDeploy
+                    .sourceDeployNowF("new unforgable in { @\"add\"!(5, 7, *unforgable) }")
+        signedBlock2 <- node.addBlock(deploy2)
         _            = ProtoUtil.parentHashes(signedBlock2) should be(Seq(signedBlock1.blockHash))
         dag          <- node.casperEff.blockDag
         estimate     <- node.casperEff.estimator(dag)
@@ -114,7 +109,7 @@ class MultiParentCasperAddBlockSpec extends FlatSpec with Matchers with Inspecto
         // channel is deterministic because of the fixed timestamp
         data <- getDataAtPrivateChannel[Effect](
                  signedBlock2,
-                 "ad0dd958a6acf8e58c2ecfdbf5f23b3c5beb74a7091c21a10c79cbb0b591872d"
+                 "87800a24b053dc467c5c10dcd050fe34d3ea2118b3874cf6f03a992541c50e06"
                )
         _ = data shouldBe Seq("12")
       } yield ()
@@ -123,13 +118,11 @@ class MultiParentCasperAddBlockSpec extends FlatSpec with Matchers with Inspecto
 
   it should "allow multiple deploys in a single block" in effectTest {
     HashSetCasperTestNode.standaloneEff(genesis, validatorKeys.head).use { node =>
-      val startTime = System.currentTimeMillis()
-      val source    = " for(@x <- @0){ @0!(x) } | @0!(0) "
-      val deploys = (source :: source :: Nil).zipWithIndex
-        .map(s => ConstructDeploy.sourceDeploy(s._1, startTime + s._2, accounting.MAX_VALUE))
+      val source = " for(@x <- @0){ @0!(x) } | @0!(0) "
       for {
-        block  <- node.addBlock(deploys: _*)
-        result <- node.casperEff.contains(block) shouldBeF true
+        deploys <- List(source, source).traverse(ConstructDeploy.sourceDeployNowF[Effect])
+        block   <- node.addBlock(deploys: _*)
+        result  <- node.casperEff.contains(block) shouldBeF true
       } yield result
     }
   }
