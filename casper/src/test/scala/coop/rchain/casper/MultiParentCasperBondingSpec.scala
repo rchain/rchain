@@ -185,5 +185,4 @@ class MultiParentCasperBondingSpec extends FlatSpec with Matchers with Inspector
       }
   }
 
-
 }
