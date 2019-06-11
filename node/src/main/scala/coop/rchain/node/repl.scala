@@ -41,7 +41,7 @@ class ReplRuntime() {
 
     def repl: F[Boolean] = rep >>= {
       case true  => repl
-      case false => ConsoleIO[F].close.as(false)
+      case false => false.pure[F]
     }
     if (TerminalMode.readMode) {
       for {
@@ -74,7 +74,6 @@ class ReplRuntime() {
       _   <- ConsoleIO[F].println(s"Evaluating from ${fileNames.mkString(", ")}")
       res <- ReplClient[F].eval(fileNames)
       _   <- printResults(fileNames.zip(res))
-      _   <- ConsoleIO[F].close
     } yield ()
   }
 }
