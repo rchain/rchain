@@ -1,6 +1,6 @@
 package coop.rchain.casper.util
 
-import cats.Monad
+import cats.{Functor, Monad}
 import cats.implicits._
 import com.google.protobuf.ByteString
 import coop.rchain.casper.SignDeployment
@@ -43,6 +43,9 @@ object ConstructDeploy {
       System.currentTimeMillis(),
       accounting.MAX_VALUE
     )
+
+  def sourceDeployNowF[F[_]: Time: Functor](source: String): F[DeployData] =
+    Time[F].currentMillis.map(sourceDeploy(source, _, accounting.MAX_VALUE))
 
   def basicDeployData[F[_]: Monad: Time](
       id: Int,
