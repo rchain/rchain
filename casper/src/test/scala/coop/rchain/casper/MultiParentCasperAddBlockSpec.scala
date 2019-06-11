@@ -180,7 +180,7 @@ class MultiParentCasperAddBlockSpec extends FlatSpec with Matchers with Inspecto
 
       for {
         basicDeployData <- ConstructDeploy.basicDeployData[Effect](0)
-        signedBlock     <- node.addBlock(basicDeployData)
+        _               <- node.addBlockStatus(InvalidUnslashableBlock)(basicDeployData)
         _               = node.logEff.warns.head.contains("Ignoring block") should be(true)
       } yield ()
     }
@@ -331,7 +331,7 @@ class MultiParentCasperAddBlockSpec extends FlatSpec with Matchers with Inspecto
         _ <- nodes(1).casperEff.contains(signedBlock3) shouldBeF true
         _ <- nodes(1).casperEff.contains(signedBlock1Prime) shouldBeF true
 
-        signedBlock4 <- nodes(1).addBlock(deployDatas(4))
+        signedBlock4 <- nodes(1).addBlockStatus(NeglectedEquivocation)(deployDatas(4))
 
         // Node 1 should contain both blocks constituting the equivocation
         _ <- nodes(1).casperEff.contains(signedBlock1) shouldBeF true

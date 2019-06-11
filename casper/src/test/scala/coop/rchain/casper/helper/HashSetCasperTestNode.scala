@@ -38,6 +38,7 @@ import coop.rchain.shared.PathOps.RichPath
 import coop.rchain.shared._
 import monix.eval.Task
 import monix.execution.Scheduler
+import org.scalatest.Assertions
 
 import scala.concurrent.duration.{FiniteDuration, MILLISECONDS}
 import scala.util.Random
@@ -70,6 +71,11 @@ class HashSetCasperTestNode[F[_]](
   implicit val cliqueOracleEffect           = SafetyOracle.cliqueOracle[F]
   implicit val lastFinalizedBlockCalculator = LastFinalizedBlockCalculator[F](0f)
   implicit val rpConfAsk                    = createRPConfAsk[F](local)
+
+  // Scalatest `assert` macro needs some member of the Assertions trait.
+  // An (inferior) alternative would be to inherit the trait...
+  private val scalatestAssertions = new Assertions {}
+  import scalatestAssertions._
 
   val defaultTimeout: FiniteDuration = FiniteDuration(1000, MILLISECONDS)
 
@@ -112,9 +118,13 @@ class HashSetCasperTestNode[F[_]](
       }
 
   def addBlock(deployDatums: DeployData*): F[BlockMessage] =
+    addBlockStatus(Valid)(deployDatums: _*)
+
+  def addBlockStatus(expectedStatus: BlockStatus)(deployDatums: DeployData*): F[BlockMessage] =
     for {
-      block <- createBlock(deployDatums: _*)
-      _     <- casperEff.addBlock(block, ignoreDoppelgangerCheck[F])
+      block  <- createBlock(deployDatums: _*)
+      status <- casperEff.addBlock(block, ignoreDoppelgangerCheck[F])
+      _      = assert(status == expectedStatus)
     } yield block
 
   def createBlock(deployDatums: DeployData*): F[BlockMessage] =

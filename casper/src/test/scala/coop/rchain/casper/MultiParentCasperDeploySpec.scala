@@ -131,29 +131,22 @@ class MultiParentCasperDeploySpec extends FlatSpec with Matchers with Inspectors
 
   it should "fail when deploying with insufficient phlos" in effectTest {
     HashSetCasperTestNode.standaloneEff(genesis, validatorKeys.head).use { node =>
-      import node._
       implicit val timeEff = new LogicalTime[Effect]
 
       for {
-        deployData        <- ConstructDeploy.basicDeployData[Effect](0, phlos = 1)
-        _                 <- node.casperEff.deploy(deployData)
-        createBlockResult <- MultiParentCasper[Effect].createBlock
-        Created(block)    = createBlockResult
+        deployData <- ConstructDeploy.basicDeployData[Effect](0, phlos = 1)
+        block      <- node.createBlock(deployData)
       } yield assert(block.body.get.deploys.head.errored)
     }
   }
 
   it should "succeed if given enough phlos for deploy" in effectTest {
     HashSetCasperTestNode.standaloneEff(genesis, validatorKeys.head).use { node =>
-      import node._
       implicit val timeEff = new LogicalTime[Effect]
 
       for {
         deployData <- ConstructDeploy.basicDeployData[Effect](0, phlos = 100)
-        _          <- node.casperEff.deploy(deployData)
-
-        createBlockResult <- MultiParentCasper[Effect].createBlock
-        Created(block)    = createBlockResult
+        block      <- node.createBlock(deployData)
       } yield assert(!block.body.get.deploys.head.errored)
     }
   }
