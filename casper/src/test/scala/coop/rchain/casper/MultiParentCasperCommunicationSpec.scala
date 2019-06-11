@@ -38,23 +38,15 @@ class MultiParentCasperCommunicationSpec extends FlatSpec with Matchers with Ins
               .sourceDeploy(d._1, System.currentTimeMillis() + d._2, accounting.MAX_VALUE)
         )
       for {
-        createBlockResult1 <- nodes(0).casperEff
-                               .deploy(deployDatas(0)) *> nodes(0).casperEff.createBlock
-        Created(signedBlock1) = createBlockResult1
+        signedBlock1 <- nodes(0).addBlock(deployDatas(0))
+        _            <- nodes(1).receive()
+        _            <- nodes(2).transportLayerEff.clear(nodes(2).local) //nodes(2) misses this block
 
-        _ <- nodes(0).casperEff.addBlock(signedBlock1, ignoreDoppelgangerCheck[Effect])
-        _ <- nodes(1).receive()
-        _ <- nodes(2).transportLayerEff.clear(nodes(2).local) //nodes(2) misses this block
-
-        createBlockResult2 <- nodes(0).casperEff
-                               .deploy(deployDatas(1)) *> nodes(0).casperEff.createBlock
-        Created(signedBlock2) = createBlockResult2
-
-        _ <- nodes(0).casperEff.addBlock(signedBlock2, ignoreDoppelgangerCheck[Effect])
-        _ <- nodes(1).receive() //receives block2
-        _ <- nodes(2).receive() //receives block2; asks for block1
-        _ <- nodes(1).receive() //receives request for block1; sends block1
-        _ <- nodes(2).receive() //receives block1; adds both block1 and block2
+        signedBlock2 <- nodes(0).addBlock(deployDatas(1))
+        _            <- nodes(1).receive() //receives block2
+        _            <- nodes(2).receive() //receives block2; asks for block1
+        _            <- nodes(1).receive() //receives request for block1; sends block1
+        _            <- nodes(2).receive() //receives block1; adds both block1 and block2
 
         _ <- nodes(2).casperEff.contains(signedBlock1) shouldBeF true
         _ <- nodes(2).casperEff.contains(signedBlock2) shouldBeF true
@@ -112,12 +104,7 @@ class MultiParentCasperCommunicationSpec extends FlatSpec with Matchers with Ins
               .sourceDeploy(d._1, System.currentTimeMillis() + d._2, accounting.MAX_VALUE)
       )
     def deploy(node: HashSetCasperTestNode[Effect], dd: DeployData): Effect[BlockMessage] =
-      for {
-        createBlockResult1    <- node.casperEff.deploy(dd) *> node.casperEff.createBlock
-        Created(signedBlock1) = createBlockResult1
-
-        _ <- node.casperEff.addBlock(signedBlock1, ignoreDoppelgangerCheck[Effect])
-      } yield signedBlock1
+      node.addBlock(dd)
 
     def stepSplit(nodes: Seq[HashSetCasperTestNode[Effect]]) =
       for {
@@ -182,20 +169,12 @@ class MultiParentCasperCommunicationSpec extends FlatSpec with Matchers with Ins
           _ <- (0 to 9).toList.traverse_[Effect, Unit] { i =>
                 for {
                   deploy <- ConstructDeploy.basicDeployData[Effect](i)
-                  createBlockResult <- nodes(0).casperEff
-                                        .deploy(deploy) *> nodes(0).casperEff.createBlock
-                  Created(block) = createBlockResult
-
-                  _ <- nodes(0).casperEff.addBlock(block, ignoreDoppelgangerCheck[Effect])
-                  _ <- nodes(1).transportLayerEff.clear(nodes(1).local) //nodes(1) misses this block
+                  block  <- nodes(0).addBlock(deploy)
+                  _      <- nodes(1).transportLayerEff.clear(nodes(1).local) //nodes(1) misses this block
                 } yield ()
               }
           deployData10 <- ConstructDeploy.basicDeployData[Effect](10)
-          createBlock11Result <- nodes(0).casperEff.deploy(deployData10) *> nodes(
-                                  0
-                                ).casperEff.createBlock
-          Created(block11) = createBlock11Result
-          _                <- nodes(0).casperEff.addBlock(block11, ignoreDoppelgangerCheck[Effect])
+          block11      <- nodes(0).addBlock(deployData10)
 
           // Cycle of requesting and passing blocks until block #3 from nodes(0) to nodes(1)
           _ <- (0 to 8).toList.traverse_[Effect, Unit] { i =>
