@@ -186,14 +186,10 @@ trait InMemoryHistoryRepositoryTestBase extends InMemoryHistoryTestBase {
           maybeCurrentRoot
         }
 
-      override def validateRoot(key: Blake2b256Hash): Task[Option[Blake2b256Hash]] =
+      override def validateRoot(key: Blake2b256Hash): Task[Unit] =
         Task.delay {
-          if (roots.contains(key)) {
-            maybeCurrentRoot = Some(key)
-            maybeCurrentRoot
-          } else {
-            None
-          }
+          if (roots.find(_ == key).isEmpty)
+            Task.raiseError[Unit](RootsStoreInstances.unknownRoot)
         }
 
       override def recordRoot(key: Blake2b256Hash): Task[Unit] =
