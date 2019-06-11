@@ -5,7 +5,6 @@ import org.scalatest.{FlatSpec, Matchers, OptionValues}
 import scala.collection.concurrent.TrieMap
 import History._
 import org.scalacheck.{Arbitrary, Gen, Shrink}
-import coop.rchain.rspace.test.ArbitraryInstances._
 import coop.rchain.shared.GeneratorUtils.distinctListOf
 import monix.eval.Task
 import org.scalatest.prop._
@@ -30,8 +29,9 @@ class HistoryGenerativeSpec
   type Data = (Key, Blake2b256Hash)
 
   "process" should "accept new leafs (insert, update, delete)" in forAll(
-    distinctListOf(arbitraryInsertAction)
-  ) { actions: List[Data] =>
+    distinctListOf(arbitraryRandomThreeBytes)
+  ) { keys: List[Key] =>
+    val actions             = keys.map(k => (k, TestData.randomBlake))
     val emptyMergingHistory = HistoryInstances.merging[Task](emptyRootHash, inMemHistoryStore)
 
     val emptySimplisticHistory: History[Task] =
@@ -76,30 +76,30 @@ class HistoryGenerativeSpec
     finalSimplisticHistory.runSyncUnsafe(20.seconds).root shouldBe emptyRootHash
   }
 
-  "process" should "accept new leafs in bulk" in forAll(
-    distinctListOf(arbitraryInsertAction)
-  ) { actions: List[Data] =>
-    val emptyMergingHistory = HistoryInstances.merging[Task](emptyRootHash, inMemHistoryStore)
+  "process" should "accept new leafs in bulk" in forAll(distinctListOf(arbitraryRandomThreeBytes)) {
+    keys: List[Key] =>
+      val actions             = keys.map(k => (k, TestData.randomBlake))
+      val emptyMergingHistory = HistoryInstances.merging[Task](emptyRootHash, inMemHistoryStore)
 
-    val emptySimplisticHistory: History[Task] =
-      SimplisticHistory.noMerging[Task](emptyRootHash, inMemHistoryStore)
+      val emptySimplisticHistory: History[Task] =
+        SimplisticHistory.noMerging[Task](emptyRootHash, inMemHistoryStore)
 
-    val inserts                  = actions.map { case (k, v) => InsertAction(k, v) }
-    val postInsertMergingHistory = emptyMergingHistory.process(inserts).runSyncUnsafe(20.seconds)
-    val postInsertNonMergingHistory =
-      emptySimplisticHistory.process(inserts).runSyncUnsafe(20.seconds)
+      val inserts                  = actions.map { case (k, v) => InsertAction(k, v) }
+      val postInsertMergingHistory = emptyMergingHistory.process(inserts).runSyncUnsafe(20.seconds)
+      val postInsertNonMergingHistory =
+        emptySimplisticHistory.process(inserts).runSyncUnsafe(20.seconds)
 
-    postInsertMergingHistory.root shouldBe postInsertNonMergingHistory.root
+      postInsertMergingHistory.root shouldBe postInsertNonMergingHistory.root
 
-    val deletions = actions.map { case (k, _) => DeleteAction(k) }
+      val deletions = actions.map { case (k, _) => DeleteAction(k) }
 
-    val postDeletionMergingHistory =
-      postInsertMergingHistory.process(deletions).runSyncUnsafe(20.seconds)
-    val postDeletionNonMergingHistory =
-      postInsertNonMergingHistory.process(deletions).runSyncUnsafe(20.seconds)
+      val postDeletionMergingHistory =
+        postInsertMergingHistory.process(deletions).runSyncUnsafe(20.seconds)
+      val postDeletionNonMergingHistory =
+        postInsertNonMergingHistory.process(deletions).runSyncUnsafe(20.seconds)
 
-    postDeletionMergingHistory.root shouldBe emptyRootHash
-    postDeletionNonMergingHistory.root shouldBe emptyRootHash
+      postDeletionMergingHistory.root shouldBe emptyRootHash
+      postDeletionNonMergingHistory.root shouldBe emptyRootHash
   }
 
   val arbitraryRandomThreeBytes: Arbitrary[Key] =
@@ -108,12 +108,6 @@ class HistoryGenerativeSpec
         .listOfN(3, Arbitrary.arbitrary[Int])
         .map(ints => (List.fill(29)(0) ++ ints).map(_.toByte))
     )
-
-  implicit val arbitraryInsertAction: Arbitrary[Data] =
-    Arbitrary(for {
-      key  <- arbitraryRandomThreeBytes.arbitrary
-      hash <- arbitraryBlake2b256Hash.arbitrary
-    } yield (key, hash))
 
   def insertAndVerify(
       history: History[Task],

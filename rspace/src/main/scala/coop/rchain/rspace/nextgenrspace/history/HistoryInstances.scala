@@ -332,6 +332,12 @@ object HistoryInstances {
         )
 
       for {
+        _ <- Sync[F].ifM((actions.map(_.key).toSet.size == actions.size).pure[F])(
+              ifTrue = Applicative[F].unit,
+              ifFalse = Sync[F].raiseError(
+                new RuntimeException("Cannot process duplicate actions on one key")
+              )
+            )
         result <- sorted.foldLeftM(start) {
                    case (
                        (currentRoot, previousModificationOpt),

@@ -7,7 +7,6 @@ import scodec.codecs.{discriminated, provide, uint, uint2, vectorOfN}
 import coop.rchain.rspace.internal.codecByteVector
 import coop.rchain.shared.AttemptOps._
 import History._
-import coop.rchain.rspace.nextgenrspace.history.Trie.codecSkip
 
 trait History[F[_]] {
   def process(actions: List[HistoryAction]): F[History[F]]
