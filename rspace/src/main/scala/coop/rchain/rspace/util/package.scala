@@ -38,7 +38,7 @@ package object util {
 
   implicit def unpackTuple[C, P, K, R](v: (ContResult[C, P, K], Seq[Result[R]])): (K, Seq[R], Int) =
     v match {
-      case (ContResult(continuation, _, _, _, sequenceNumber), data) =>
+      case (ContResult(continuation, _, _, _, sequenceNumber, _), data) =>
         (continuation, data.map(_.value), sequenceNumber)
     }
 
