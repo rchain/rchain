@@ -37,12 +37,15 @@ import scala.util.Try
     **/
 class Running[F[_]: RPConfAsk: BlockStore: Monad: ConnectionsCell: TransportLayer: Log: Time](
     private val casper: MultiParentCasper[F],
-    approvedBlock: ApprovedBlock
+    approvedBlock: ApprovedBlock,
+    theInit: F[Unit]
 ) extends Engine[F] {
   import Engine._
 
   implicit val _casper            = casper
   def applicative: Applicative[F] = Applicative[F]
+
+  override def init: F[Unit] = theInit
 
   private def handleDoppelganger(
       peer: PeerNode,

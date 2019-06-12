@@ -64,7 +64,8 @@ object CasperLaunch {
       genesis     = approvedBlock.candidate.flatMap(_.block).get
       casper <- MultiParentCasper
                  .hashSetCasper[F](init.runtimeManager, validatorId, genesis, init.conf.shardId)
-      _ <- Engine.transitionToRunning[F](casper, approvedBlock)
+      _ <- Engine
+            .transitionToRunning[F](casper, approvedBlock, CommUtil.sendForkChoiceTipRequest[F])
     } yield ()
 
   def connectAsGenesisValidator[F[_]: Monad: Sync: Metrics: LastApprovedBlock: Time: Concurrent: MultiParentCasperRef: Log: EventLog: RPConfAsk: BlockStore: ConnectionsCell: TransportLayer: SafetyOracle: LastFinalizedBlockCalculator: BlockDagStorage: EngineCell: EnvVars: RaiseIOError](
