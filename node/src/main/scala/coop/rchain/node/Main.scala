@@ -128,11 +128,7 @@ object Main {
       case Keygen(algorithm, privateKeyPath) => generateKey(conf, algorithm, privateKeyPath)
       case LastFinalizedBlock                => DeployRuntime.lastFinalizedBlock[Task]
       case Run                               => nodeProgram(conf)
-      case BondingDeployGen(bondKey, ethAddress, amount, secKey, pubKey) =>
-        implicit val noopMetrics: Metrics[Task] = new metrics.Metrics.MetricsNOP[Task]
-        BondingUtil
-          .writeIssuanceBasedRhoFiles[Task, Task.Par](bondKey, ethAddress, amount, secKey, pubKey)
-      case _ => conf.printHelp()
+      case _                                 => conf.printHelp()
     }
 
     program.doOnFinish(

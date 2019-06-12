@@ -80,10 +80,3 @@ final case object LastFinalizedBlock                                       exten
 final case object Help                                                     extends Command
 final case class DataAtName(name: Name)                                    extends Command
 final case class ContAtName(names: List[Name])                             extends Command
-final case class BondingDeployGen(
-    bondKey: String,
-    ethAddress: String,
-    amount: Long,
-    secKey: String,
-    pubKey: String
-) extends Command
