@@ -1,6 +1,4 @@
 package coop.rchain.rholang.interpreter
-import java.io.StringReader
-
 import coop.rchain.models.Par
 import coop.rchain.rholang.interpreter.errors.LexerError
 import monix.eval.Coeval
@@ -24,7 +22,7 @@ class LexerTest extends FlatSpec with Matchers {
 
   it should "return LexerError for illegal character" in {
     val attempt =
-      attemptMkTerm("""("x is ${value}" % {"value" : x})""")
+      attemptMkTerm("""("x is ${value}" ^ {"value" : x})""")
     attempt.left.value shouldBe a[LexerError]
   }
 }

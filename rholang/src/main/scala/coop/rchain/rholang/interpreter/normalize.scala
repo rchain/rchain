@@ -596,6 +596,7 @@ object ProcNormalizeMatcher {
 
       case p: PMult           => binaryExp(p.proc_1, p.proc_2, input, EMult.apply)
       case p: PDiv            => binaryExp(p.proc_1, p.proc_2, input, EDiv.apply)
+      case p: PMod            => binaryExp(p.proc_1, p.proc_2, input, EMod.apply)
       case p: PPercentPercent => binaryExp(p.proc_1, p.proc_2, input, EPercentPercent.apply)
       case p: PAdd            => binaryExp(p.proc_1, p.proc_2, input, EPlus.apply)
       case p: PMinus          => binaryExp(p.proc_1, p.proc_2, input, EMinus.apply)

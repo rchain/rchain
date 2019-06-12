@@ -532,6 +532,13 @@ class DebruijnInterpreter[M[_], F[_]](
           _  <- charge[M](DIVISION_COST)
         } yield GInt(v1 / v2)
 
+      case EModBody(EMod(p1, p2)) =>
+        for {
+          v1 <- evalToLong(p1)
+          v2 <- evalToLong(p2)
+          _  <- charge[M](MODULO_COST)
+        } yield GInt(v1 % v2)
+
       case EPlusBody(EPlus(p1, p2)) =>
         for {
           v1 <- evalSingleExpr(p1)

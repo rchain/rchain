@@ -165,6 +165,7 @@ trait ScoreTree {
     final val EPERCENT    = 119
     final val EPLUSPLUS   = 120
     final val EMINUSMINUS = 121
+    final val EMOD        = 122
 
     // Other
     final val QUOTE    = 203
