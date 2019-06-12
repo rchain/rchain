@@ -9,5 +9,5 @@ object UncaughtExceptionLogger extends UncaughtExceptionReporter {
   private val log: Log[Id]                  = Log.logId
 
   def reportFailure(ex: scala.Throwable): Unit =
-    log.error(s"Uncaught Exception : ${ex.getMessage}", ex)
+    log.error("Uncaught Exception", ex)
 }
