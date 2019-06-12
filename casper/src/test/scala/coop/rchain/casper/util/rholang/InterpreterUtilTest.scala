@@ -57,15 +57,17 @@ class InterpreterUtilTest
       runtimeManager: RuntimeManager[F],
       span0: Span[F]
   ): F[Either[Throwable, (StateHash, StateHash, Seq[InternalProcessedDeploy])]] =
-    Time[F].currentMillis >>= (time => InterpreterUtil.computeDeploysCheckpoint[F](
-      parents,
-      deploys,
-      dag,
-      runtimeManager,
-      BlockData(time, 0),
-      span0,
-      Map.empty[BlockHash, Validator]
-    ))
+    Time[F].currentMillis >>= (
+        time =>
+          InterpreterUtil.computeDeploysCheckpoint[F](
+            parents,
+            deploys,
+            dag,
+            runtimeManager,
+            BlockData(time, 0),
+            span0,
+          Map.empty[BlockHash, Validator])
+      )
 
   "computeBlockCheckpoint" should "compute the final post-state of a chain properly" in withStorage {
     implicit blockStore => implicit blockDagStorage =>
@@ -410,8 +412,6 @@ class InterpreterUtilTest
       implicit blockDagStorage =>
         //reference costs
         //deploy each Rholang program separately and record its cost
-
-
 
         mkRuntimeManager("interpreter-util-test").use { runtimeManager =>
           for {

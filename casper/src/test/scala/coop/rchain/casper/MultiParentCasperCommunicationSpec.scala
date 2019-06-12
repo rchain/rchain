@@ -33,7 +33,7 @@ class MultiParentCasperCommunicationSpec extends FlatSpec with Matchers with Ins
         _            <- nodes(1).receive()
         _            <- nodes(2).transportLayerEff.clear(nodes(2).local) //nodes(2) misses this block
 
-        deploy2 <- ConstructDeploy.sourceDeployNowF("@2!(2)")
+        deploy2      <- ConstructDeploy.sourceDeployNowF("@2!(2)")
         signedBlock2 <- nodes(0).addBlock(deploy2)
         _            <- nodes(1).receive() //receives block2
         _            <- nodes(2).receive() //receives block2; asks for block1

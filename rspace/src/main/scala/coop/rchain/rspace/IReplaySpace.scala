@@ -20,32 +20,34 @@ trait IReplaySpace[F[_], C, P, A, R, K] extends ISpace[F, C, P, A, R, K] {
     */
   def resetAndRig(startRoot: Blake2b256Hash, log: trace.Log)(implicit syncF: Sync[F]): F[Unit] =
     Debug.print(startRoot, log.size) >>
-    syncF
-      .delay {
-        val (ioEvents, commEvents) = log.partition {
-          case _: Produce => true
-          case _: Consume => true
-          case _: COMM    => false
-        }
+      syncF
+        .delay {
+          val (ioEvents, commEvents) = log.partition {
+            case _: Produce => true
+            case _: Consume => true
+            case _: COMM    => false
+          }
 
-        // create a set of the "new" IOEvents
-        val newStuff = ioEvents.toSet
+          // create a set of the "new" IOEvents
+          val newStuff = ioEvents.toSet
 
-        // create and prepare the ReplayData table
-        replayData.clear()
-        commEvents.foreach {
-          case comm @ COMM(consume, produces) =>
-            (consume +: produces).foreach { ioEvent =>
-              if (newStuff(ioEvent)) {
-                replayData.addBinding(ioEvent, comm)
+          // create and prepare the ReplayData table
+          replayData.clear()
+          commEvents.foreach {
+            case comm @ COMM(consume, produces) =>
+              (consume +: produces).foreach { ioEvent =>
+                if (newStuff(ioEvent)) {
+                  replayData.addBinding(ioEvent, comm)
+                }
               }
-            }
-          case _ =>
-            syncF.raiseError(new RuntimeException("BUG FOUND: only COMM events are expected here"))
+            case _ =>
+              syncF.raiseError(
+                new RuntimeException("BUG FOUND: only COMM events are expected here")
+              )
+          }
         }
-      }
-      .flatMap { _ =>
-        // reset to the starting checkpoint
-        reset(startRoot)
-      }
+        .flatMap { _ =>
+          // reset to the starting checkpoint
+          reset(startRoot)
+        }
 }

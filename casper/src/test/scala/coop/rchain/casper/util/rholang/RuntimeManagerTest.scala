@@ -116,7 +116,7 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
       _           = result.status.isFailed should be(false)
       parsingCost = accounting.parsingCost(correctRholang)
     } yield (result.cost.cost shouldEqual ((parsingCost + reductionCost).value)))
-      .runSyncUnsafe(10.seconds)
+      .runSyncUnsafe(50.seconds)
   }
 
   "captureResult" should "return the value at the specified channel after a rholang computation" in {

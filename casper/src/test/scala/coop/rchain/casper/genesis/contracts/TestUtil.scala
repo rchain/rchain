@@ -17,7 +17,7 @@ import coop.rchain.models.Par
 import coop.rchain.rholang.build.CompiledRholangSource
 import coop.rchain.rholang.interpreter.accounting.Cost
 import coop.rchain.rholang.interpreter.util.RevAddress
-import coop.rchain.rholang.interpreter.{ParBuilder, ParBuilderUtil, Runtime, accounting}
+import coop.rchain.rholang.interpreter.{accounting, ParBuilderUtil, Runtime}
 
 object TestUtil {
 

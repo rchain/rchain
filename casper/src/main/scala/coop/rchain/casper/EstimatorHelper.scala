@@ -83,10 +83,9 @@ object EstimatorHelper {
       maybeAncestors <- blockAncestorsMeta.traverse(
                          blockAncestorMeta => BlockStore[F].get(blockAncestorMeta.blockHash)
                        )
-      ancestors      = maybeAncestors.flatten
-      ancestorEvents =
-        ancestors.flatMap(_.getBody.deploys.flatMap(_.deployLog)) ++
-          ancestors.flatMap(_.getBody.deploys.flatMap(_.paymentLog))
+      ancestors = maybeAncestors.flatten
+      ancestorEvents = ancestors.flatMap(_.getBody.deploys.flatMap(_.deployLog)) ++
+        ancestors.flatMap(_.getBody.deploys.flatMap(_.paymentLog))
       ancestorChannels = ancestorEvents.flatMap {
         case Event(Produce(produce: ProduceEvent)) =>
           Set(produce.channelsHash)

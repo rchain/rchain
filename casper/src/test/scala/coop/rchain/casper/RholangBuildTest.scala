@@ -41,11 +41,10 @@ class RholangBuildTest extends FlatSpec with Matchers {
           |  stdout!(("doubleRet: ", *doubleRet))
           |}""".stripMargin
 
-
         for {
           //FIXME why having a 'real' time here resulted in initial charge not returning a result?
           //FIXME why does the resulting chnnel change depending on previous executions? Is rand shared and mutated?
-          t <- Time[Effect].currentMillis
+          t      <- Time[Effect].currentMillis
           deploy <- ConstructDeploy.sourceDeploy(code, t, accounting.MAX_VALUE).pure[Effect]
           createBlockResult <- MultiParentCasper[Effect]
                                 .deploy(deploy) *> MultiParentCasper[Effect].createBlock
