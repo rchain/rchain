@@ -25,7 +25,8 @@ import monix.eval.Task
 import monix.execution.atomic.AtomicAny
 
 trait StorageExamplesTests[F[_]]
-    extends StorageTestsBase[F, Channel, Pattern, Entry, EntriesCaptor] {
+    extends StorageTestsBase[F, Channel, Pattern, Entry, EntriesCaptor]
+    with TestImplicitHelpers {
 
   "CORE-365: A joined consume on duplicate channels followed by two produces on that channel" should
     "return a continuation and the produced data" in fixture { (store, _, space) =>

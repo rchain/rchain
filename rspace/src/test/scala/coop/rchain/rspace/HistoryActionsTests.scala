@@ -6,6 +6,8 @@ import cats._
 import cats.implicits._
 import cats.effect._
 import cats.effect.implicits._
+import coop.rchain.rspace.ISpace.Channel
+import coop.rchain.rspace.ISpace.Channel.consumed
 import coop.rchain.rspace.examples.StringExamples.implicits._
 import coop.rchain.rspace.examples.StringExamples.{Pattern, StringMatch, StringsCaptor, Wildcard}
 import coop.rchain.rspace.history._

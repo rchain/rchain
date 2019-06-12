@@ -18,7 +18,8 @@ import monix.eval.Task
 trait StorageActionsTests[F[_]]
     extends StorageTestsBase[F, String, Pattern, String, StringsCaptor]
     with GeneratorDrivenPropertyChecks
-    with Checkers {
+    with Checkers
+    with TestImplicitHelpers {
 
   implicit override val generatorDrivenConfig =
     PropertyCheckConfiguration(minSuccessful = 5, sizeRange = 30)

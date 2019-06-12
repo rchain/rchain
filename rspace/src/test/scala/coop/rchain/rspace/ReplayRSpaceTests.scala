@@ -1201,7 +1201,8 @@ class InMemoryReplayRSpaceTests
     with ReplayRSpaceTests {}
 
 class FaultyReplayRSpaceTests
-    extends FaultyStoreReplayRSpaceTestsBase[String, Pattern, String, String] {
+    extends FaultyStoreReplayRSpaceTestsBase[String, Pattern, String, String]
+    with TestImplicitHelpers {
   import SchedulerPools.global
 
   "an exception thrown inside a consume" should "not make replay rspace unresponsive" in

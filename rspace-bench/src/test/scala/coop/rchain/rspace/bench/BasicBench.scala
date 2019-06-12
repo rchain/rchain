@@ -13,6 +13,7 @@ import coop.rchain.models.TaggedContinuation.TaggedCont.ParBody
 import coop.rchain.models._
 import coop.rchain.rholang.interpreter.accounting._
 import coop.rchain.rholang.interpreter.errors.InterpreterError
+import coop.rchain.rspace.ISpace.Channel.consumed
 import coop.rchain.rspace._
 import coop.rchain.rspace.history.Branch
 import coop.rchain.shared.Log
@@ -43,7 +44,7 @@ class BasicBench {
     for (i <- 0 to 100) {
       val c1 = space
         .consume(
-          state.channels(i) :: Nil,
+          consumed(state.channels(i)) :: Nil,
           state.patterns(i) :: Nil,
           state.tc.head,
           false
@@ -80,7 +81,7 @@ class BasicBench {
 
       val c1 = space
         .consume(
-          state.channels(i) :: Nil,
+          consumed(state.channels(i)) :: Nil,
           state.patterns(i) :: Nil,
           state.tc.head,
           false

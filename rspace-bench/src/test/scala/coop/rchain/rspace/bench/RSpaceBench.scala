@@ -8,6 +8,7 @@ import cats.effect._
 import coop.rchain.metrics
 import coop.rchain.metrics.Metrics
 import coop.rchain.rspace._
+import coop.rchain.rspace.ISpace.Channel.consumed
 import coop.rchain.rspace.examples.AddressBookExample._
 import coop.rchain.rspace.examples.AddressBookExample.implicits._
 import coop.rchain.rspace.history.Branch
@@ -38,7 +39,7 @@ trait RSpaceBench {
   @OutputTimeUnit(TimeUnit.MILLISECONDS)
   def measureAvgConsumeTime(bh: Blackhole) = {
     val r = space.consume(
-      channels,
+      channels.map(consumed),
       matches,
       captor,
       persist = true
@@ -72,7 +73,7 @@ trait RSpaceBench {
   def simulateDupe(bh: Blackhole) = {
 
     space.consume(
-      channels,
+      channels.map(consumed),
       matches,
       captor,
       persist = true

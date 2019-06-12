@@ -8,7 +8,8 @@ import com.typesafe.scalalogging.Logger
 import coop.rchain.catscontrib._
 import coop.rchain.metrics.Metrics
 import coop.rchain.metrics.Metrics.Source
-import coop.rchain.rspace.ISpace.Consumed
+import coop.rchain.rspace.ISpace.Channel
+import coop.rchain.rspace.ISpace.Channel.consumed
 import coop.rchain.rspace._
 import coop.rchain.rspace.history.Branch
 import coop.rchain.rspace.internal._
@@ -121,7 +122,7 @@ class RSpace[F[_], C, P, A, R, K] private[rspace] (
         ContResult(
           continuation,
           persist,
-          channels.map(Consumed(_)),
+          channels.map(consumed),
           patterns,
           contSequenceNumber
         ),
@@ -132,7 +133,7 @@ class RSpace[F[_], C, P, A, R, K] private[rspace] (
   }
 
   override def consume(
-      channels: Seq[C],
+      markedChannels: Seq[Channel[C]],
       patterns: Seq[P],
       continuation: K,
       persist: Boolean,
@@ -140,6 +141,7 @@ class RSpace[F[_], C, P, A, R, K] private[rspace] (
   )(
       implicit m: Match[F, P, A, R]
   ): F[MaybeActionResult] = {
+    val channels = markedChannels.map(_.channel)
 
     def storeWC(consumeRef: Consume): F[MaybeActionResult] =
       storeWaitingContinuation(channels, patterns, continuation, persist, consumeRef)
@@ -345,7 +347,7 @@ class RSpace[F[_], C, P, A, R, K] private[rspace] (
               ContResult[C, P, K](
                 continuation,
                 persistK,
-                channels.map(Consumed(_)),
+                channels.map(consumed),
                 patterns,
                 contSequenceNumber
               ),

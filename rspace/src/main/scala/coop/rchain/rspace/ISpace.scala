@@ -47,7 +47,7 @@ trait ISpace[F[_], C, P, A, R, K] {
     * @param persist Whether or not to attempt to persist the data
     */
   def consume(
-      channels: Seq[C],
+      channels: Seq[Channel[C]],
       patterns: Seq[P],
       continuation: K,
       persist: Boolean,
@@ -136,5 +136,10 @@ object ISpace {
   }
   final case class Consumed[C](channel: C) extends Channel[C]
   final case class Peeked[C](channel: C)   extends Channel[C]
+
+  object Channel {
+    def consumed[C](channel: C): Channel[C] = Consumed(channel)
+    def peeked[C](channel: C): Channel[C]   = Peeked(channel)
+  }
 
 }

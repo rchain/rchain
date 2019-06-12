@@ -1,5 +1,7 @@
 package coop.rchain.rspace
 import cats.Id
+import coop.rchain.rspace.ISpace.Channel
+import coop.rchain.rspace.ISpace.Channel.consumed
 import org.scalatest.enablers.Definition
 
 //noinspection ConvertExpressionToSAM
@@ -11,4 +13,10 @@ trait TestImplicitHelpers {
       override def isDefined(thing: Id[Either[E, Option[A]]]): Boolean =
         thing.right.get.isDefined
     }
+
+  implicit def channelToConsumedChannel[C](channel: C): Channel[C] =
+    consumed(channel)
+
+  implicit def channelsToConsumedChannel[C](channels: Seq[C]): Seq[Channel[C]] =
+    channels.map(consumed)
 }

@@ -10,7 +10,8 @@ import com.typesafe.scalalogging.Logger
 import coop.rchain.catscontrib.Catscontrib._
 import coop.rchain.catscontrib._
 import coop.rchain.metrics.{Metrics, Span}
-import coop.rchain.rspace.ISpace.Consumed
+import coop.rchain.rspace.ISpace.Channel
+import coop.rchain.rspace.ISpace.Channel.consumed
 import coop.rchain.rspace._
 import coop.rchain.rspace.history.Branch
 import coop.rchain.rspace.internal._
@@ -54,7 +55,7 @@ class ReplayRSpace[F[_]: Sync, C, P, A, R, K](
   private[this] val produceSpanLabel = Metrics.Source(MetricsSource, "produce")
 
   def consume(
-      channels: Seq[C],
+      markedChannels: Seq[Channel[C]],
       patterns: Seq[P],
       continuation: K,
       persist: Boolean,
@@ -63,6 +64,7 @@ class ReplayRSpace[F[_]: Sync, C, P, A, R, K](
       implicit m: Match[F, P, A, R]
   ): F[MaybeActionResult] =
     contextShift.evalOn(scheduler) {
+      val channels = markedChannels.map(_.channel)
       if (channels.length =!= patterns.length) {
         val msg = "channels.length must equal patterns.length"
         logF.error(msg) *> syncF.raiseError(new IllegalArgumentException(msg))
@@ -149,7 +151,7 @@ class ReplayRSpace[F[_]: Sync, C, P, A, R, K](
                     ContResult(
                       continuation,
                       persist,
-                      channels.map(Consumed(_)),
+                      channels.map(consumed),
                       patterns,
                       contSequenceNumber
                     ),
@@ -352,7 +354,7 @@ class ReplayRSpace[F[_]: Sync, C, P, A, R, K](
                       ContResult(
                         continuation,
                         persistK,
-                        channels.map(Consumed(_)),
+                        channels.map(consumed),
                         patterns,
                         contSequenceNumber
                       ),

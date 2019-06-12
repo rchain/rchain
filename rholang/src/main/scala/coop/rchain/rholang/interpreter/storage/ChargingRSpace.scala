@@ -8,6 +8,7 @@ import coop.rchain.rholang.interpreter.Runtime.{RhoISpace, RhoPureSpace}
 import coop.rchain.rholang.interpreter.accounting._
 import coop.rchain.rholang.interpreter._error
 import coop.rchain.rholang.interpreter.storage.implicits.matchListPar
+import coop.rchain.rspace.ISpace.Channel
 import coop.rchain.rspace.util._
 import coop.rchain.rspace.{Blake2b256Hash, Checkpoint, ContResult, Result, Match => StorageMatch}
 
@@ -44,9 +45,16 @@ object ChargingRSpace {
         Option[(ContResult[Par, BindPattern, TaggedContinuation], Seq[Result[ListParWithRandom]])]
       ] =
         for {
-          _       <- charge[F](storageCostConsume(channels, patterns, continuation))
-          consRes <- space.consume(channels, patterns, continuation, persist, sequenceNumber)
-          _       <- handleResult(consRes)
+          _                <- charge[F](storageCostConsume(channels, patterns, continuation))
+          consumedChannels = channels.map(Channel.consumed) // TODO missing Par -> Consumed/Peeked channel transformation
+          consRes <- space.consume(
+                      consumedChannels,
+                      patterns,
+                      continuation,
+                      persist,
+                      sequenceNumber
+                    )
+          _ <- handleResult(consRes)
         } yield consRes
 
       override def install(

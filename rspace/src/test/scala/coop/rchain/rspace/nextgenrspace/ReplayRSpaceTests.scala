@@ -9,12 +9,13 @@ import cats.effect._
 import cats.implicits._
 import com.typesafe.scalalogging.Logger
 import coop.rchain.metrics.Metrics
-import coop.rchain.rspace.ISpace.Consumed
 import coop.rchain.rspace._
 import coop.rchain.rspace.examples.StringExamples._
 import coop.rchain.rspace.examples.StringExamples.implicits._
 import coop.rchain.rspace.history._
 import coop.rchain.rspace.internal._
+import coop.rchain.rspace.ISpace.Channel.consumed
+import coop.rchain.rspace.ISpace.Channel
 import coop.rchain.rspace.nextgenrspace.history.{
   HistoryRepository,
   HistoryRepositoryInstances,
@@ -45,7 +46,9 @@ object SchedulerPools {
 }
 
 //noinspection ZeroIndexToHead,NameBooleanParameters
-trait ReplayRSpaceTests extends ReplayRSpaceTestsBase[String, Pattern, String, String] {
+trait ReplayRSpaceTests
+    extends ReplayRSpaceTestsBase[String, Pattern, String, String]
+    with TestImplicitHelpers {
 
   import SchedulerPools.global
 
@@ -127,7 +130,7 @@ trait ReplayRSpaceTests extends ReplayRSpaceTestsBase[String, Pattern, String, S
         _ = resultConsume shouldBe None
         _ = resultProduce shouldBe Some(
           (
-            ContResult(continuation, false, channels.map(Consumed(_)), patterns, 1),
+            ContResult(continuation, false, channels, patterns, 1),
             List(Result(datum, false))
           )
         )

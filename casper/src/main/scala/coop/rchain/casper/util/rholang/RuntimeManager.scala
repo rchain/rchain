@@ -35,6 +35,7 @@ import coop.rchain.rholang.interpreter.{
   PrettyPrinter => RholangPrinter
 }
 import coop.rchain.rspace.{trace, Blake2b256Hash, Checkpoint, ReplayException}
+import coop.rchain.rspace.ISpace.Channel.consumed
 
 trait RuntimeManager[F[_]] {
 
@@ -286,7 +287,7 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics] private[rholang] (
     val cont                    = TaggedContinuation().withParBody(ParWithRandom(Par()))
     implicit val cost: _cost[F] = runtime.cost
 
-    space.consume(Seq(channel), Seq(pattern), cont, persist = false)(matchListPar).map {
+    space.consume(Seq(consumed(channel)), Seq(pattern), cont, persist = false)(matchListPar).map {
       case Some((_, dataList)) => dataList.flatMap(_.value.pars)
       case None                => Seq.empty[Par]
     }

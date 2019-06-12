@@ -7,6 +7,7 @@ import cats.{Applicative, Id}
 import cats.effect.{Concurrent, ContextShift}
 import coop.rchain.metrics.Metrics
 import coop.rchain.rspace.ISpace.IdISpace
+import coop.rchain.rspace.ISpace.Channel._
 import coop.rchain.rspace._
 import coop.rchain.rspace.history.Branch
 import coop.rchain.shared.Language.ignore
@@ -216,7 +217,7 @@ object AddressBookExample {
     val cres =
       space
         .consume(
-          Seq(Channel("friends")),
+          Seq(consumed(Channel("friends"))),
           Seq(CityMatch(city = "Crystal Lake")),
           new Printer,
           persist = true
@@ -264,7 +265,7 @@ object AddressBookExample {
     val consumer = () =>
       space
         .consume(
-          Seq(Channel("friends")),
+          Seq(consumed(Channel("friends"))),
           Seq(NameMatch(last = "Lahblah")),
           new Printer,
           persist = false
@@ -291,7 +292,7 @@ object AddressBookExample {
     val cres =
       space
         .consume(
-          Seq(Channel("friends")),
+          Seq(consumed(Channel("friends"))),
           Seq(CityMatch(city = "Crystal Lake")),
           new Printer,
           persist = false

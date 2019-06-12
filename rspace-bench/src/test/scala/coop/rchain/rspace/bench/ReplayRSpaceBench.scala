@@ -8,6 +8,7 @@ import coop.rchain.metrics
 import coop.rchain.metrics.Metrics
 import coop.rchain.rspace.{State => _, _}
 import coop.rchain.rspace.ISpace.IdISpace
+import coop.rchain.rspace.ISpace.Channel.consumed
 import coop.rchain.rspace.examples.AddressBookExample._
 import coop.rchain.rspace.examples.AddressBookExample.implicits._
 import coop.rchain.rspace.history.Branch
@@ -39,7 +40,7 @@ class ReplayRSpaceBench {
   @Measurement(iterations = 1)
   def singleConsume(bh: Blackhole, state: ConsumeInMemBenchState) = {
     val res = state.replaySpace.consume(
-      List(state.consumeChannel),
+      List(state.consumeChannel).map(consumed),
       state.matches,
       state.captor,
       persist = true
@@ -104,7 +105,7 @@ object ReplayRSpaceBench {
       }
       (1 to 2).foreach { i =>
         space.consume(
-          List(consumeChannel),
+          List(consumeChannel).map(consumed),
           matches,
           captor,
           persist = true
@@ -125,7 +126,7 @@ object ReplayRSpaceBench {
     def prepareProduce() = {
       (1 to 1000).foreach { _ =>
         space.consume(
-          List(produceChannel),
+          List(produceChannel).map(consumed),
           matches,
           captor,
           persist = true

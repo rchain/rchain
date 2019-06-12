@@ -1,8 +1,7 @@
 package coop.rchain.rspace.pure
 
-import cats.Id
 import cats.effect.Sync
-import coop.rchain.rspace.ISpace.IdISpace
+import coop.rchain.rspace.ISpace.Channel.consumed
 import coop.rchain.rspace._
 
 trait PureRSpace[F[_], C, P, A, R, K] {
@@ -45,7 +44,7 @@ object PureRSpace {
             persist: Boolean,
             sequenceNumber: Int
         ): F[Option[(ContResult[C, P, K], Seq[Result[R]])]] =
-          space.consume(channels, patterns, continuation, persist, sequenceNumber)
+          space.consume(channels.map(consumed), patterns, continuation, persist, sequenceNumber)
 
         def install(channels: Seq[C], patterns: Seq[P], continuation: K): F[Option[(K, Seq[R])]] =
           space.install(channels, patterns, continuation)
