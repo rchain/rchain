@@ -39,7 +39,7 @@ object Setup {
     val runtimeDir            = BlockDagStorageTestFixture.blockStorageDir
     val activeRuntime =
       Runtime
-        .createWithEmptyCost[Task, Task.Par](runtimeDir, 3024L * 1024, StoreType.InMem)(
+        .createWithEmptyCost[Task, Task.Par](runtimeDir, 3024L * 1024, StoreType.RSpace2)(
           ContextShift[Task],
           Concurrent[Task],
           log,

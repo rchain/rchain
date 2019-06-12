@@ -238,7 +238,7 @@ class GenesisTest extends FlatSpec with Matchers with EitherValues with BlockDag
 }
 
 object GenesisTest {
-  val storageSize     = 3024L * 1024
+  val storageSize     = 3024L * 1024 * 10
   def storageLocation = Files.createTempDirectory(s"casper-genesis-test-runtime")
   def genesisPath     = Files.createTempDirectory(s"casper-genesis-test")
   val numValidators   = 5
@@ -286,7 +286,7 @@ object GenesisTest {
       runtime <- Runtime.createWithEmptyCost[Task, Task.Par](
                   storePath,
                   storageSize,
-                  StoreType.InMem
+                  StoreType.RSpace2
                 )
       result <- body(runtime, genesisPath, log, time)
       _      <- runtime.close()

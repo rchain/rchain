@@ -45,7 +45,7 @@ abstract class WideBenchBaseState {
       cost <- CostAccounting.emptyCost[Task]
       runtime <- {
         implicit val c: _cost[Task] = cost
-        Runtime.create[Task, Task.Par](dbDir, mapSize, StoreType.LMDB)
+        Runtime.create[Task, Task.Par](dbDir, mapSize, StoreType.RSpace2)
       }
     } yield (runtime)).unsafeRunSync
 

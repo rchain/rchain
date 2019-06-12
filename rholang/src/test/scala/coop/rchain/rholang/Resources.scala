@@ -10,9 +10,10 @@ import coop.rchain.metrics.Metrics
 import coop.rchain.models._
 import coop.rchain.rholang.interpreter.Runtime
 import coop.rchain.rholang.interpreter.Runtime.{RhoContext, RhoISpace, SystemProcess}
+import coop.rchain.rspace.{RSpace => _, ReplayRSpace => _, _}
+import coop.rchain.rspace.nextgenrspace.{RSpace, ReplayRSpace}
 import coop.rchain.rspace.history.Branch
-import coop.rchain.rspace.{Context, RSpace}
-import coop.rchain.shared.StoreType.InMem
+import coop.rchain.shared.StoreType.RSpace2
 import coop.rchain.shared.{Log, StoreType}
 import monix.execution.Scheduler
 
@@ -45,9 +46,7 @@ object Resources {
 
     import scala.concurrent.ExecutionContext.Implicits.global
 
-    def mkRspace(dbDir: Path): F[RhoISpace[F]] = {
-      val context: RhoContext[F] = Context.create(dbDir, mapSize)
-
+    def mkRspace(dbDir: Path): F[RhoISpace[F]] =
       RSpace.create[
         F,
         Par,
@@ -55,8 +54,7 @@ object Resources {
         ListParWithRandom,
         ListParWithRandom,
         TaggedContinuation
-      ](context, Branch(branch))
-    }
+      ](dbDir, mapSize, Branch(branch))
 
     mkTempDir(prefix)(implicitly[Concurrent[F]])
       .flatMap(tmpDir => Resource.make(mkRspace(tmpDir))(_.close()))
@@ -75,7 +73,7 @@ object Resources {
     def apply[M[_]: Parallel[F, ?[_]]](
         prefix: String,
         storageSize: Long = 1024 * 1024,
-        storeType: StoreType = InMem,
+        storeType: StoreType = RSpace2,
         additionalSystemProcesses: Seq[SystemProcess.Definition[F]] = Seq.empty
     )(
         implicit scheduler: Scheduler,

@@ -711,7 +711,7 @@ class ValidateTest
         activeRuntime <- Runtime.createWithEmptyCost[Task, Task.Par](
                           storageDirectory,
                           storageSize,
-                          StoreType.LMDB
+                          StoreType.RSpace2
                         )
 
         runtimeManager <- RuntimeManager.fromRuntime[Task](activeRuntime)

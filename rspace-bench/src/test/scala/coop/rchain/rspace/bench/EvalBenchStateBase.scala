@@ -25,7 +25,7 @@ trait EvalBenchStateBase {
 
   val rhoScriptSource: String
   lazy val runtime: Runtime[Task] =
-    Runtime.createWithEmptyCost[Task, Task.Par](dbDir, mapSize, StoreType.LMDB).unsafeRunSync
+    Runtime.createWithEmptyCost[Task, Task.Par](dbDir, mapSize, StoreType.RSpace2).unsafeRunSync
   val rand: Blake2b512Random = Blake2b512Random(128)
   var term: Option[Par]      = None
 

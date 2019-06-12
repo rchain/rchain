@@ -68,7 +68,7 @@ object RholangCLI {
       runtime <- Runtime.createWithEmptyCost[Task, Task.Par](
                   conf.dataDir(),
                   conf.mapSize(),
-                  StoreType.LMDB
+                  StoreType.RSpace2
                 )
       _ <- Runtime.injectEmptyRegistryRoot[Task](runtime.space, runtime.replaySpace)
     } yield (runtime)).unsafeRunSync

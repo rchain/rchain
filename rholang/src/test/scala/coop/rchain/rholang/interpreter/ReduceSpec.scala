@@ -20,7 +20,8 @@ import coop.rchain.rholang.interpreter.accounting._
 import coop.rchain.rholang.interpreter.accounting.utils._
 import coop.rchain.rholang.interpreter.errors._
 import coop.rchain.rholang.interpreter.storage.implicits._
-import coop.rchain.rspace._
+import coop.rchain.rspace.{RSpace => _, ReplayRSpace => _, _}
+import coop.rchain.rspace.nextgenrspace.{RSpace, ReplayRSpace}
 import coop.rchain.rspace.history.Branch
 import coop.rchain.rspace.internal.{Datum, Row, WaitingContinuation}
 import coop.rchain.shared.Log
@@ -43,7 +44,6 @@ trait PersistentStoreTester {
       errorLog: ErrorLog[Task]
   )(f: TestFixture => R): R = {
     val dbDir                              = Files.createTempDirectory("rholang-interpreter-test-")
-    val context: RhoContext[Task]          = Context.create(dbDir, mapSize = 1024L * 1024L * 1024L)
     implicit val logF: Log[Task]           = new Log.NOPLog[Task]
     implicit val metricsEff: Metrics[Task] = new metrics.Metrics.MetricsNOP[Task]
 
@@ -57,7 +57,7 @@ trait PersistentStoreTester {
         ListParWithRandom,
         ListParWithRandom,
         TaggedContinuation
-      ](context, Branch("test")))
+      ](dbDir, 1024L * 1024L * 1024L, Branch("test")))
       .unsafeRunSync
     implicit val errLog = errorLog
     val reducer         = RholangOnlyDispatcher.create[Task, Task.Par](space)._2
@@ -66,7 +66,6 @@ trait PersistentStoreTester {
       f(TestFixture(space, reducer))
     } finally {
       space.close()
-      context.close()
       dbDir.recursivelyDelete()
     }
   }

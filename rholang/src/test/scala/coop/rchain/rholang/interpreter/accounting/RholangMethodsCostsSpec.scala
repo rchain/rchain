@@ -13,7 +13,8 @@ import coop.rchain.rholang.interpreter._
 import coop.rchain.rholang.interpreter.accounting.Chargeable._
 import coop.rchain.rholang.interpreter.errors.InterpreterError
 import coop.rchain.rspace.history.Branch
-import coop.rchain.rspace.{Context, RSpace}
+import coop.rchain.rspace.{RSpace => _, ReplayRSpace => _, _}
+import coop.rchain.rspace.nextgenrspace.{RSpace, ReplayRSpace}
 import coop.rchain.shared.Log
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
@@ -797,9 +798,8 @@ class RholangMethodsCostsSpec
     test.runSyncUnsafe(5.seconds)
   }
 
-  private var dbDir: Path               = null
-  private var context: RhoContext[Task] = null
-  private var space: RhoISpace[Task]    = null
+  private var dbDir: Path            = null
+  private var space: RhoISpace[Task] = null
 
   implicit val logF: Log[Task]            = new Log.NOPLog[Task]
   implicit val noopMetrics: Metrics[Task] = new metrics.Metrics.MetricsNOP[Task]
@@ -808,7 +808,6 @@ class RholangMethodsCostsSpec
     import coop.rchain.catscontrib.TaskContrib._
     import coop.rchain.rholang.interpreter.storage.implicits._
     dbDir = Files.createTempDirectory("rholang-interpreter-test-")
-    context = Context.createInMemory()
     space = RSpace
       .create[
         Task,
@@ -818,7 +817,8 @@ class RholangMethodsCostsSpec
         ListParWithRandom,
         TaggedContinuation
       ](
-        context,
+        dbDir,
+        mapSize = 1024 * 1024,
         Branch("rholang-methods-cost-test")
       )
       .unsafeRunSync
@@ -827,7 +827,6 @@ class RholangMethodsCostsSpec
   protected override def afterAll(): Unit = {
     import coop.rchain.shared.PathOps._
     space.close()
-    context.close()
     dbDir.recursivelyDelete()
   }
 
