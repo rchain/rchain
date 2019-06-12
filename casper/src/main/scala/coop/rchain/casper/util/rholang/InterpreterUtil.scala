@@ -169,7 +169,7 @@ object InterpreterUtil {
     for {
       possiblePreStateHash <- computeParentsPostState[F](parents, dag, runtimeManager, span)
       result <- possiblePreStateHash.flatTraverse { preStateHash =>
-                 runtimeManager.computeState(preStateHash)(deploys, blockData).map {
+                 runtimeManager.computeState(preStateHash)(deploys, blockData, invalidBlocks).map {
                    case (postStateHash, processedDeploys) =>
                      (preStateHash, postStateHash, processedDeploys).asRight[Throwable]
                  }
