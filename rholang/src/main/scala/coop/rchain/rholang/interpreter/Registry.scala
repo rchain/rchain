@@ -871,7 +871,6 @@ class RegistryImpl[F[_]](
       "makeMint"                -> "asysrwfgzf8bf7sxkiowp4b3tcsy4f8ombi3w96ysox4u3qdmn1wbc",
       "pos"                     -> "m3xk7h8r54dtqtwsrnxqzhe81baswey66nzw6m533nyd45ptyoybqr",
       "revVault"                -> "6zcfqnwnaqcwpeyuysx1rm48ndr6sgsbbgjuwf45i5nor3io7dr76j",
-      "systemInstancesRegistry" -> "i41dt8gymg1d3ar7ditjwxmtnqtuw6chznhxci3696tffyrd3ppeaf",
       "walletCheck"             -> "5ssrgy91wskd46gjjo6qamxhg88t1fymb5ekgzfksgyeubgq3nucc9"
     )
   )

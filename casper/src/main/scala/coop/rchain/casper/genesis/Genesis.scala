@@ -52,7 +52,6 @@ object Genesis {
       StandardDeploys.makeMint,
       StandardDeploys.basicWallet,
       StandardDeploys.walletCheck,
-      StandardDeploys.systemInstances,
       StandardDeploys.lockbox,
       StandardDeploys.authKey,
       StandardDeploys.revVault,
