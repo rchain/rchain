@@ -241,13 +241,18 @@ class NodeRuntime private[node] (
         } yield ()
       else Task.unit
 
-    val loop: Task[Unit] =
+    val nodeDiscoveryLoop: Task[Unit] =
       for {
-        _ <- dynamicIpCheck
         _ <- NodeDiscovery[Task].discover
-        _ <- Connect.clearConnections[Task]
         _ <- Connect.findAndConnect[Task](Connect.connect[Task])
         _ <- time.sleep(20.seconds)
+      } yield ()
+
+    val clearConnectionsLoop: Task[Unit] =
+      for {
+        _ <- dynamicIpCheck
+        _ <- Connect.clearConnections[Task]
+        _ <- time.sleep(10.minutes)
       } yield ()
 
     def waitForFirstConnetion: Task[Unit] =
@@ -289,7 +294,8 @@ class NodeRuntime private[node] (
       address = local.toAddress
       _       <- Log[Task].info(s"Listening for traffic on $address.")
       _       <- EventLog[Task].publish(Event.NodeStarted(address))
-      _       <- Task.defer(loop.forever).executeOn(loopScheduler).start
+      _       <- Task.defer(nodeDiscoveryLoop.forever).executeOn(loopScheduler).start
+      _       <- Task.defer(clearConnectionsLoop.forever).executeOn(loopScheduler).start
       _ <- if (conf.server.standalone) ().pure[Task]
           else Log[Task].info(s"Waiting for first connection.") >> waitForFirstConnetion
       _ <- Concurrent[Task].start(EngineCell[Task].read >>= (_.init))
