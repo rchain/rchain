@@ -16,22 +16,16 @@
  */
 new 
   SystemInstancesRegistry, rs(`rho:registry:insertSigned:secp256k1`), uriOut,
-  faucetStore, posStore, revStore
+  posStore, revStore
 in {
   contract SystemInstancesRegistry(@"lookup", @systemContract, return) = {
     match systemContract {
-      "faucet"     => { for(@value <- faucetStore)    { return!(value) | faucetStore!(value) } }
       "pos"        => { for(@value <- posStore)       { return!(value) | posStore!(value) } }
       "rev"        => { for(@value <- revStore)       { return!(value) | revStore!(value) } }
       _            => { return!(Nil) }
     }
   } |
 
-  //one time use only call for registering a faucet instance
-  for(@"register", @"faucet", @value <- SystemInstancesRegistry) {
-    faucetStore!(value)
-  } |
-  
   //one time use only call for registering a proof-of-stake instance
   for(@"register", @"pos", @value <- SystemInstancesRegistry) {
     posStore!(value)

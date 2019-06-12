@@ -337,14 +337,6 @@ class Node:
         )
         return output
 
-    def generate_faucet_bonding_deploys(self, bond_amount: int, private_key: str, public_key: str) -> str:
-        return self.rnode_command('generateFaucetBondingDeploys',
-            '--amount={}'.format(bond_amount),
-            '--private-key={}'.format(private_key),
-            '--public-key={}'.format(public_key),
-            '--sig-algorithm=secp256k1',
-        )
-
     def cat_forward_file(self, public_key: str) -> str:
         return self.shell_out('cat', '/opt/docker/forward_{}.rho'.format(public_key))
 

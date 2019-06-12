@@ -151,35 +151,6 @@ object BondingUtil {
                |  }
                |}""".stripMargin
 
-  def faucetBondDeploy[F[_]: Concurrent](
-      amount: Long,
-      sigAlgorithm: String,
-      pubKey: String,
-      secKey: PrivateKey
-  )(implicit runtimeManager: RuntimeManager[F]): F[String] =
-    for {
-      sigFunc <- Sync[F].fromOption(
-                  SignaturesAlg(sigAlgorithm).map(s => (d: Array[Byte]) => s.sign(d, secKey)),
-                  new IllegalArgumentException(
-                    "sigAlgorithm must be one of ed25519 or secp256k1"
-                  )
-                )
-      nonce           = 0 //first and only time we will use this fresh wallet
-      destination     = bondingForwarderAddress(pubKey)
-      statusOut       = transferStatusOut(pubKey)
-      transferSigData <- walletTransferSigData(nonce, amount, destination)
-      transferSig     = sigFunc(transferSigData)
-    } yield s"""new rl(`rho:registry:lookup`), SystemInstancesCh, walletCh, faucetCh in {
-               |  rl!(`rho:rchain:systemInstancesRegistry`, *SystemInstancesCh) |
-               |  for(@(_, SystemInstancesRegistry) <- SystemInstancesCh) {
-               |    @SystemInstancesRegistry!("lookup", "faucet", *faucetCh) |
-               |    for(faucet <- faucetCh){ faucet!($amount, "secp256k1", "$pubKey", *walletCh) } |
-               |    for(@[wallet] <- walletCh) {
-               |      @wallet!("transfer", $amount, $nonce, "${Base16.encode(transferSig)}", "$destination", "$statusOut")
-               |    }
-               |  }
-               |}""".stripMargin
-
   def writeFile[F[_]: Sync](name: String, content: String): F[Unit] = {
     val file =
       Resource.make[F, PrintWriter](Sync[F].delay { new PrintWriter(name) })(
@@ -235,31 +206,6 @@ object BondingUtil {
           _           <- writeFile[F](s"unlock_${ethAddress}.rho", unlockCode)
           _           <- writeFile[F](s"forward_${ethAddress}_${bondKey}.rho", forwardCode)
           _           <- writeFile[F](s"bond_${ethAddress}.rho", bondCode)
-        } yield ()
-    )
-  }
-
-  def writeFaucetBasedRhoFiles[F[_]: Concurrent: ContextShift: Log: Metrics, M[_]](
-      amount: Long,
-      sigAlgorithm: String,
-      secKey: String,
-      pubKey: String
-  )(implicit P: Parallel[F, M], scheduler: ExecutionContext): F[Unit] = {
-    val runtimeDirResource     = makeRuntimeDir[F]
-    val runtimeResource        = makeRuntimeResource[F, M](runtimeDirResource)
-    val runtimeManagerResource = makeRuntimeManagerResource[F](runtimeResource)
-    runtimeManagerResource.use(
-      implicit runtimeManager =>
-        for {
-          bondCode <- faucetBondDeploy[F](
-                       amount,
-                       sigAlgorithm,
-                       pubKey,
-                       PrivateKey(Base16.unsafeDecode(secKey))
-                     )
-          forwardCode = bondingForwarderDeploy(pubKey, pubKey)
-          _           <- writeFile[F](s"forward_${pubKey}.rho", forwardCode)
-          _           <- writeFile[F](s"bond_${pubKey}.rho", bondCode)
         } yield ()
     )
   }
