@@ -50,22 +50,22 @@ class InterpreterUtilTest
 
   val runtimeManager = RuntimeManager.fromRuntime(activeRuntime).unsafeRunSync
 
-  def computeDeploysCheckpoint[F[_]: Sync: BlockStore](
+  def computeDeploysCheckpoint[F[_]: Sync: BlockStore: Time](
       parents: Seq[BlockMessage],
       deploys: Seq[DeployData],
       dag: BlockDagRepresentation[F],
       runtimeManager: RuntimeManager[F],
       span0: Span[F]
   ): F[Either[Throwable, (StateHash, StateHash, Seq[InternalProcessedDeploy])]] =
-    InterpreterUtil.computeDeploysCheckpoint(
+    Time[F].currentMillis >>= (time => InterpreterUtil.computeDeploysCheckpoint[F](
       parents,
       deploys,
       dag,
       runtimeManager,
-      BlockData(System.currentTimeMillis(), 0),
+      BlockData(time, 0),
       span0,
       Map.empty[BlockHash, Validator]
-    )
+    ))
 
   "computeBlockCheckpoint" should "compute the final post-state of a chain properly" in withStorage {
     implicit blockStore => implicit blockDagStorage =>
@@ -400,6 +400,7 @@ class InterpreterUtilTest
       deploy: DeployData*
   )(implicit blockStore: BlockStore[Task]): Task[Seq[InternalProcessedDeploy]] =
     for {
+      ///FIXME hmm this is going to be treated as if it were genesis?
       computeResult         <- computeDeploysCheckpoint[Task](Seq.empty, deploy, dag, runtimeManager, span)
       Right((_, _, result)) = computeResult
     } yield result
@@ -409,11 +410,15 @@ class InterpreterUtilTest
       implicit blockDagStorage =>
         //reference costs
         //deploy each Rholang program separately and record its cost
-        val deploy1 = ConstructDeploy.sourceDeployNow("@1!(Nil)")
-        val deploy2 = ConstructDeploy.sourceDeployNow("@3!([1,2,3,4])")
-        val deploy3 = ConstructDeploy.sourceDeployNow("for(@x <- @0) { @4!(x.toByteArray()) }")
+
+
+
         mkRuntimeManager("interpreter-util-test").use { runtimeManager =>
           for {
+            deploy1 <- ConstructDeploy.sourceDeployNowF("@1!(Nil)")
+            deploy2 <- ConstructDeploy.sourceDeployNowF("@3!([1,2,3,4])")
+            deploy3 <- ConstructDeploy.sourceDeployNowF("for(@x <- @0) { @4!(x.toByteArray()) }")
+
             dag          <- blockDagStorage.getRepresentation
             cost1        <- computeSingleProcessedDeploy(runtimeManager, dag, deploy1)
             cost2        <- computeSingleProcessedDeploy(runtimeManager, dag, deploy2)

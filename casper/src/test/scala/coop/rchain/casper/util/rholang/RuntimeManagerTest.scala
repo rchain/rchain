@@ -2,7 +2,7 @@ package coop.rchain.casper.util.rholang
 
 import cats.Id
 import cats.effect.Resource
-import coop.rchain.casper.genesis.contracts.StandardDeploys
+import coop.rchain.casper.genesis.contracts.{StandardDeploys, TestUtil}
 import coop.rchain.casper.protocol.DeployData
 import coop.rchain.casper.util.rholang.Resources._
 import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
@@ -41,13 +41,20 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
       Map.empty[BlockHash, Validator]
     )
 
+  import cats.implicits._
+
   "computeState" should "capture rholang errors" in {
     val badRholang = """ for(@x <- @"x"; @y <- @"y"){ @"xy"!(x + y) } | @"x"!(1) | @"y"!("hi") """
     val deploy     = ConstructDeploy.sourceDeployNow(badRholang)
     val (_, Seq(result)) =
       runtimeManager
-        .use(mgr => computeState(mgr, mgr.emptyStateHash, deploy :: Nil))
-        .runSyncUnsafe(10.seconds)
+        .use(
+          mgr =>
+            TestUtil.defaultGenesisSetup(mgr) >>= (
+                x => computeState(mgr, x.body.get.state.get.postStateHash, deploy :: Nil)
+            )
+        )
+        .runSyncUnsafe(50.seconds)
 
     result.status.isFailed should be(true)
   }
@@ -57,8 +64,13 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
     val deploy     = ConstructDeploy.sourceDeployNow(badRholang)
     val (_, Seq(result)) =
       runtimeManager
-        .use(mgr => computeState(mgr, mgr.emptyStateHash, deploy :: Nil))
-        .runSyncUnsafe(10.seconds)
+        .use(
+          mgr =>
+            TestUtil.defaultGenesisSetup(mgr) >>= (
+                x => computeState(mgr, x.body.get.state.get.postStateHash, deploy :: Nil)
+            )
+        )
+        .runSyncUnsafe(50.seconds)
 
     result.status.isFailed should be(true)
     result.cost.cost shouldEqual (accounting.parsingCost(badRholang).value)
@@ -90,13 +102,16 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
                  .use {
                    case runtimeManager =>
                      for {
-                       state <- computeState(
-                                 runtimeManager,
-                                 runtimeManager.emptyStateHash,
-                                 deploy :: Nil
-                               )
+                       state <- TestUtil.defaultGenesisSetup(runtimeManager) >>= (
+                                   x =>
+                                     computeState(
+                                       runtimeManager,
+                                       x.body.get.state.get.postStateHash,
+                                       deploy :: Nil
+                                     )
+                                 )
                        result = state._2.head
-                     } yield (result)
+                     } yield result
                  }
       _           = result.status.isFailed should be(false)
       parsingCost = accounting.parsingCost(correctRholang)
