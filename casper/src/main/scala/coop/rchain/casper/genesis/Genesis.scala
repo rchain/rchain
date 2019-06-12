@@ -18,7 +18,6 @@ import coop.rchain.casper.util.rholang.{InternalProcessedDeploy, RuntimeManager}
 import coop.rchain.crypto.PublicKey
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.signatures.Secp256k1
-import coop.rchain.rholang.interpreter.accounting
 import coop.rchain.rholang.interpreter.util.RevAddress
 import coop.rchain.shared.{Log, LogSource, Time}
 
@@ -56,7 +55,6 @@ object Genesis {
       StandardDeploys.systemInstances,
       StandardDeploys.lockbox,
       StandardDeploys.authKey,
-      StandardDeploys.rev(wallets, posParams),
       StandardDeploys.revVault,
       StandardDeploys.revGenerator(genesisPk, vaults, supply),
       StandardDeploys.poSGenerator(posParams)

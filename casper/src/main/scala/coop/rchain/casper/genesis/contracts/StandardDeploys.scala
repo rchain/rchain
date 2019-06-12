@@ -80,11 +80,6 @@ object StandardDeploys {
       1559156146649L
     )
 
-  def rev(
-      wallets: Seq[PreWallet],
-      posParams: ProofOfStake
-  ): DeployData = toDeploy(new PreWalletRev(wallets, posParams), "", 0L)
-
   def revVault: DeployData =
     toDeploy(
       CompiledRholangSource("RevVault.rho"),
