@@ -53,12 +53,6 @@ object StandardDeploys {
       "043b9a8358561912d2dd0fc94b5c6c01dce2b97c91b34f698aa3dabbefd5c6fd5c4ac2d5db0232545d44de1ee66e1f4828bbb0933e2227c3a6240429f0ef47c233",
       1559156113243L
     )
-  def walletCheck: DeployData =
-    toDeploy(
-      CompiledRholangSource("WalletCheck.rho"),
-      "04a3070d2f090e8015d2a34adcb4c82b8e21aa56f15a8dff2690d0c316e07bec8e393d1a218b581bc2025d435ff2c7151f7b04ee1e162a608f458d3bf8fb16908f",
-      1559156388100L
-    )
 
   def authKey: DeployData =
     toDeploy(
