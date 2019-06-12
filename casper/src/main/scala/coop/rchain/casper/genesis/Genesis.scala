@@ -48,7 +48,6 @@ object Genesis {
       StandardDeploys.either,
       StandardDeploys.nonNegativeNumber,
       StandardDeploys.makeMint,
-      StandardDeploys.basicWallet,
       StandardDeploys.lockbox,
       StandardDeploys.authKey,
       StandardDeploys.revVault,

@@ -47,12 +47,6 @@ object StandardDeploys {
       "0470256c078e105d2958b9cf66f2161d83368f483c0219790277fb726a459be7f56a9a48bbecf72bcaed6a3515bd0a144faf6a6a8de8f6c9b3b7dff297eb371f28",
       1559156452968L
     )
-  def basicWallet: DeployData =
-    toDeploy(
-      CompiledRholangSource("BasicWallet.rho"),
-      "043b9a8358561912d2dd0fc94b5c6c01dce2b97c91b34f698aa3dabbefd5c6fd5c4ac2d5db0232545d44de1ee66e1f4828bbb0933e2227c3a6240429f0ef47c233",
-      1559156113243L
-    )
 
   def authKey: DeployData =
     toDeploy(
