@@ -138,7 +138,8 @@ class RSpace[F[_], C, P, A, R, K] private[rspace] (
       patterns: Seq[P],
       continuation: K,
       persist: Boolean,
-      sequenceNumber: Int
+      sequenceNumber: Int,
+      peeks: Set[Int] = Set.empty
   )(
       implicit m: Match[F, P, A, R]
   ): F[MaybeActionResult] = {

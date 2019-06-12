@@ -57,7 +57,8 @@ class ReplayRSpace[F[_]: Sync, C, P, A, R, K](
       patterns: Seq[P],
       continuation: K,
       persist: Boolean,
-      sequenceNumber: Int
+      sequenceNumber: Int,
+      peeks: Set[Int] = Set.empty
   )(
       implicit m: Match[F, P, A, R]
   ): F[MaybeActionResult] =

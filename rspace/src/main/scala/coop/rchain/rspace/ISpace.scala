@@ -50,7 +50,8 @@ trait ISpace[F[_], C, P, A, R, K] {
       patterns: Seq[P],
       continuation: K,
       persist: Boolean,
-      sequenceNumber: Int = 0
+      sequenceNumber: Int = 0,
+      peeks: Set[Int] = Set.empty
   )(
       implicit m: Match[F, P, A, R]
   ): F[Option[(ContResult[C, P, K], Seq[Result[R]])]]
