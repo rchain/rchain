@@ -60,9 +60,6 @@ object TestUtil {
       Genesis(
         shardId = "RhoSpec-shard",
         timestamp = 1L,
-        wallets = Seq(
-          PreWallet(ethAddress = "0x041e1eec23d118f0c4ffc814d4f415ac3ef3dcff", initRevBalance = 37)
-        ),
         proofOfStake = ProofOfStake(
           minimumBond = 0L,
           maximumBond = Long.MaxValue,

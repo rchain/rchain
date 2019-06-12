@@ -26,7 +26,6 @@ import scala.util.{Failure, Success, Try}
 final case class Genesis(
     shardId: String,
     timestamp: Long,
-    wallets: Seq[PreWallet],
     proofOfStake: ProofOfStake,
     genesisPk: PublicKey,
     vaults: Seq[Vault],
@@ -40,7 +39,6 @@ object Genesis {
   def defaultBlessedTerms(
       timestamp: Long,
       posParams: ProofOfStake,
-      wallets: Seq[PreWallet],
       genesisPk: PublicKey,
       vaults: Seq[Vault],
       supply: Long
@@ -96,7 +94,6 @@ object Genesis {
                        Genesis(
                          shardId = shardId,
                          timestamp = timestamp,
-                         wallets = wallets,
                          proofOfStake = ProofOfStake(
                            minimumBond = minimumBond,
                            maximumBond = maximumBond,
@@ -118,7 +115,6 @@ object Genesis {
     val blessedTerms = defaultBlessedTerms(
       timestamp,
       proofOfStake,
-      wallets,
       genesisPk,
       vaults,
       supply = Long.MaxValue

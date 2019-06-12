@@ -108,7 +108,6 @@ object BlockApproverProtocolTest {
         Genesis(
           shardId = "BlockApproverProtocolTest",
           timestamp = deployTimestamp,
-          wallets = wallets,
           proofOfStake = ProofOfStake(
             minimumBond = 0L,
             maximumBond = Long.MaxValue,
@@ -128,7 +127,6 @@ object BlockApproverProtocolTest {
         node.validatorId,
         deployTimestamp,
         bonds,
-        wallets,
         1L,
         Long.MaxValue,
         requiredSigs

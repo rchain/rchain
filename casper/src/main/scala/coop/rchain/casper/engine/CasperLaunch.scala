@@ -87,7 +87,6 @@ object CasperLaunch {
         validatorId.get,
         timestamp,
         bonds,
-        wallets,
         init.conf.minimumBond,
         init.conf.maximumBond,
         init.conf.requiredSigs

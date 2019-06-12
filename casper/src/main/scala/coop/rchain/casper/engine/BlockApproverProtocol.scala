@@ -32,7 +32,6 @@ class BlockApproverProtocol(
     validatorId: ValidatorIdentity,
     deployTimestamp: Long,
     bonds: Map[PublicKey, Long],
-    wallets: Seq[PreWallet],
     minimumBond: Long,
     maximumBond: Long,
     requiredSigs: Int
@@ -55,7 +54,6 @@ class BlockApproverProtocol(
           candidate,
           requiredSigs,
           deployTimestamp,
-          wallets,
           _bonds,
           minimumBond,
           maximumBond
@@ -100,7 +98,6 @@ object BlockApproverProtocol {
       candidate: ApprovedBlockCandidate,
       requiredSigs: Int,
       timestamp: Long,
-      wallets: Seq[PreWallet],
       bonds: Map[ByteString, Long],
       minimumBond: Long,
       maximumBond: Long
@@ -132,7 +129,6 @@ object BlockApproverProtocol {
           .defaultBlessedTerms(
             timestamp,
             posParams,
-            wallets,
             genesisPk,
             vaults,
             Long.MaxValue
