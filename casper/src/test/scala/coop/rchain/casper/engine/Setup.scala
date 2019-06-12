@@ -62,7 +62,6 @@ object Setup {
         Genesis(
           shardId = shardId,
           timestamp = deployTimestamp,
-          wallets = Seq.empty[PreWallet],
           proofOfStake = ProofOfStake(
             minimumBond = 0L,
             maximumBond = Long.MaxValue,
@@ -81,7 +80,6 @@ object Setup {
       validatorId,
       deployTimestamp,
       bonds,
-      Seq.empty,
       1L,
       Long.MaxValue,
       requiredSigs

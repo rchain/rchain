@@ -62,14 +62,10 @@ object MultiParentCasperTestUtil {
       )
     )
 
-  def buildGenesisParameters(users: Int, bonds: Map[PublicKey, Long]): Genesis = {
-    val (_, ethPubKeys) = (1 to users).map(_ => Secp256k1.newKeyPair).unzip
-    val ethAddresses =
-      ethPubKeys.map(pk => "0x" + Base16.encode(Keccak256.hash(pk.bytes.drop(1)).takeRight(20)))
+  def buildGenesisParameters(users: Int, bonds: Map[PublicKey, Long]): Genesis =
     Genesis(
       shardId = "MultiParentCasperSpec",
       timestamp = 0L,
-      wallets = ethAddresses.map(PreWallet(_, BigInt(10001))),
       proofOfStake = ProofOfStake(
         minimumBond = 0L,
         maximumBond = Long.MaxValue,
@@ -82,7 +78,6 @@ object MultiParentCasperTestUtil {
       }.flattenOption,
       supply = Long.MaxValue
     )
-  }
 
   def buildGenesis(genesisParameters: Genesis): BlockMessage = {
     val storageDirectory                   = Files.createTempDirectory(s"hash-set-casper-test-genesis")

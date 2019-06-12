@@ -4,23 +4,16 @@ import cats.implicits._
 import coop.rchain.casper.MultiParentCasperTestUtil
 import coop.rchain.casper.genesis.Genesis
 import coop.rchain.casper.genesis.contracts._
+import coop.rchain.casper.helper.HashSetCasperTestNode
 import coop.rchain.casper.helper.HashSetCasperTestNode._
-import coop.rchain.casper.helper.{BlockDagStorageTestFixture, HashSetCasperTestNode}
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.scalatestcontrib._
-import coop.rchain.casper.util.rholang.RuntimeManager
 import coop.rchain.casper.util.comm.TestNetwork
-import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.comm.protocol.routing.Packet
 import coop.rchain.comm.transport
 import coop.rchain.crypto.signatures.Secp256k1
 import coop.rchain.crypto.{PrivateKey, PublicKey}
-import coop.rchain.metrics
-import coop.rchain.metrics.Metrics
-import coop.rchain.rholang.interpreter.Runtime
 import coop.rchain.rholang.interpreter.util.RevAddress
-import coop.rchain.shared.{Log, StoreType}
-import monix.eval.Task
 import monix.execution.Scheduler
 import org.scalatest.{FlatSpec, Matchers}
 
@@ -33,7 +26,7 @@ class BlockApproverProtocolTest extends FlatSpec with Matchers {
     val n                          = 8
     val (validatorSk, validatorPk) = Secp256k1.newKeyPair
     val bonds                      = Map(validatorPk -> 10L)
-    createProtocol(n, Seq.empty, validatorSk, bonds).flatMap {
+    createProtocol(n, validatorSk, bonds).flatMap {
       case (approver, node) =>
         val unapproved = createUnapproved(n, node.genesis)
         import node._
@@ -57,7 +50,7 @@ class BlockApproverProtocolTest extends FlatSpec with Matchers {
     val n                          = 8
     val (validatorSk, validatorPk) = Secp256k1.newKeyPair
     val bonds                      = Map(validatorPk -> 10L)
-    createProtocol(n, Seq.empty, validatorSk, bonds).flatMap {
+    createProtocol(n, validatorSk, bonds).flatMap {
       case (approver, node) =>
         val differentUnapproved1 = createUnapproved(n / 2, node.genesis)             //wrong number of signatures
         val differentUnapproved2 = createUnapproved(n, BlockMessage.defaultInstance) //wrong block
@@ -95,7 +88,6 @@ object BlockApproverProtocolTest {
 
   def createProtocol(
       requiredSigs: Int,
-      wallets: Seq[PreWallet],
       sk: PrivateKey,
       bonds: Map[PublicKey, Long]
   ): Effect[(BlockApproverProtocol, HashSetCasperTestNode[Effect])] = {
@@ -108,7 +100,6 @@ object BlockApproverProtocolTest {
         Genesis(
           shardId = "BlockApproverProtocolTest",
           timestamp = deployTimestamp,
-          wallets = wallets,
           proofOfStake = ProofOfStake(
             minimumBond = 0L,
             maximumBond = Long.MaxValue,
@@ -128,7 +119,6 @@ object BlockApproverProtocolTest {
         node.validatorId,
         deployTimestamp,
         bonds,
-        wallets,
         1L,
         Long.MaxValue,
         requiredSigs

@@ -2,14 +2,8 @@ package coop.rchain.node
 
 import java.nio.file.Path
 
-import scala.collection.JavaConverters._
-import scala.tools.jline.console._
-import completer.StringsCompleter
-
 import cats.implicits._
-
 import coop.rchain.casper.util.comm._
-import coop.rchain.casper.util.BondingUtil
 import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.crypto.PrivateKey
 import coop.rchain.crypto.signatures.{Secp256k1, SignaturesAlg}
@@ -18,13 +12,16 @@ import coop.rchain.metrics
 import coop.rchain.metrics.Metrics
 import coop.rchain.node.configuration._
 import coop.rchain.node.effects._
-import coop.rchain.shared._
 import coop.rchain.shared.StringOps._
-
+import coop.rchain.shared._
 import monix.eval.Task
 import monix.execution.Scheduler
 import org.slf4j.LoggerFactory
 import org.slf4j.bridge.SLF4JBridgeHandler
+
+import scala.collection.JavaConverters._
+import scala.tools.jline.console._
+import scala.tools.jline.console.completer.StringsCompleter
 
 object Main {
   private val RNodeDeployerPasswordEnvVar = "RNODE_DEPLOYER_PASSWORD"
@@ -128,11 +125,7 @@ object Main {
       case Keygen(algorithm, privateKeyPath) => generateKey(conf, algorithm, privateKeyPath)
       case LastFinalizedBlock                => DeployRuntime.lastFinalizedBlock[Task]
       case Run                               => nodeProgram(conf)
-      case BondingDeployGen(bondKey, ethAddress, amount, secKey, pubKey) =>
-        implicit val noopMetrics: Metrics[Task] = new metrics.Metrics.MetricsNOP[Task]
-        BondingUtil
-          .writeIssuanceBasedRhoFiles[Task, Task.Par](bondKey, ethAddress, amount, secKey, pubKey)
-      case _ => conf.printHelp()
+      case _                                 => conf.printHelp()
     }
 
     program.doOnFinish(

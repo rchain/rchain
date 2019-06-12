@@ -52,16 +52,11 @@ object HashSetCasperActions {
       bondsGen: Seq[PublicKey] => Map[PublicKey, Long]
   ): (BlockMessage, immutable.IndexedSeq[PrivateKey]) = {
     val (validatorKeys, validators) = (1 to amount).map(_ => Secp256k1.newKeyPair).unzip
-    val (_, ethPubKeys)             = (1 to amount).map(_ => Secp256k1.newKeyPair).unzip
-    val ethAddresses =
-      ethPubKeys.map(pk => "0x" + Base16.encode(Keccak256.hash(pk.bytes.drop(1)).takeRight(20)))
-    val wallets = ethAddresses.map(addr => PreWallet(addr, BigInt(10001)))
-    val bonds   = bondsGen(validators)
+    val bonds                       = bondsGen(validators)
     val genesis =
       buildGenesis(
         Genesis(
           shardId = "HashSetCasperSpecification",
-          wallets = wallets,
           proofOfStake = ProofOfStake(
             minimumBond = 0L,
             maximumBond = Long.MaxValue,

@@ -47,24 +47,6 @@ object StandardDeploys {
       "0470256c078e105d2958b9cf66f2161d83368f483c0219790277fb726a459be7f56a9a48bbecf72bcaed6a3515bd0a144faf6a6a8de8f6c9b3b7dff297eb371f28",
       1559156452968L
     )
-  def basicWallet: DeployData =
-    toDeploy(
-      CompiledRholangSource("BasicWallet.rho"),
-      "043b9a8358561912d2dd0fc94b5c6c01dce2b97c91b34f698aa3dabbefd5c6fd5c4ac2d5db0232545d44de1ee66e1f4828bbb0933e2227c3a6240429f0ef47c233",
-      1559156113243L
-    )
-  def walletCheck: DeployData =
-    toDeploy(
-      CompiledRholangSource("WalletCheck.rho"),
-      "04a3070d2f090e8015d2a34adcb4c82b8e21aa56f15a8dff2690d0c316e07bec8e393d1a218b581bc2025d435ff2c7151f7b04ee1e162a608f458d3bf8fb16908f",
-      1559156388100L
-    )
-  def systemInstances: DeployData =
-    toDeploy(
-      CompiledRholangSource("SystemInstancesRegistry.rho"),
-      "0481acb8311189b166adf15aa021caacfd4bc224234d39311e8bf533e73d71f408b8c5ade7304b7556c5a6317593cb8089268294cdd3b5b8feb6819986c74aa0af",
-      1559156320965L
-    )
 
   def authKey: DeployData =
     toDeploy(
@@ -79,11 +61,6 @@ object StandardDeploys {
       "04c1a88afc0810d0b7e4dea817f458c9d0a1913ec3459fb91bb9acdf0d867873d5144366275c5a63b0225a5167c6a838bb02285072d7177dc9f6407aaba87bca93",
       1559156146649L
     )
-
-  def rev(
-      wallets: Seq[PreWallet],
-      posParams: ProofOfStake
-  ): DeployData = toDeploy(new PreWalletRev(wallets, posParams), "", 0L)
 
   def revVault: DeployData =
     toDeploy(

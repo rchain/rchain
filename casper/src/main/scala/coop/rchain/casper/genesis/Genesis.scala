@@ -18,7 +18,6 @@ import coop.rchain.casper.util.rholang.{InternalProcessedDeploy, RuntimeManager}
 import coop.rchain.crypto.PublicKey
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.signatures.Secp256k1
-import coop.rchain.rholang.interpreter.accounting
 import coop.rchain.rholang.interpreter.util.RevAddress
 import coop.rchain.shared.{Log, LogSource, Time}
 
@@ -27,7 +26,6 @@ import scala.util.{Failure, Success, Try}
 final case class Genesis(
     shardId: String,
     timestamp: Long,
-    wallets: Seq[PreWallet],
     proofOfStake: ProofOfStake,
     genesisPk: PublicKey,
     vaults: Seq[Vault],
@@ -41,7 +39,6 @@ object Genesis {
   def defaultBlessedTerms(
       timestamp: Long,
       posParams: ProofOfStake,
-      wallets: Seq[PreWallet],
       genesisPk: PublicKey,
       vaults: Seq[Vault],
       supply: Long
@@ -51,12 +48,8 @@ object Genesis {
       StandardDeploys.either,
       StandardDeploys.nonNegativeNumber,
       StandardDeploys.makeMint,
-      StandardDeploys.basicWallet,
-      StandardDeploys.walletCheck,
-      StandardDeploys.systemInstances,
       StandardDeploys.lockbox,
       StandardDeploys.authKey,
-      StandardDeploys.rev(wallets, posParams),
       StandardDeploys.revVault,
       StandardDeploys.revGenerator(genesisPk, vaults, supply),
       StandardDeploys.poSGenerator(posParams)
@@ -76,7 +69,6 @@ object Genesis {
   ): F[BlockMessage] =
     for {
       timestamp <- deployTimestamp.fold(Time[F].currentMillis)(_.pure[F])
-      wallets   <- getWallets[F](maybeWalletsPath, genesisPath.resolve("wallets.txt"))
       bonds <- getBonds[F](
                 maybeBondsPath,
                 genesisPath.resolve("bonds.txt"),
@@ -99,7 +91,6 @@ object Genesis {
                        Genesis(
                          shardId = shardId,
                          timestamp = timestamp,
-                         wallets = wallets,
                          proofOfStake = ProofOfStake(
                            minimumBond = minimumBond,
                            maximumBond = maximumBond,
@@ -121,7 +112,6 @@ object Genesis {
     val blessedTerms = defaultBlessedTerms(
       timestamp,
       proofOfStake,
-      wallets,
       genesisPk,
       vaults,
       supply = Long.MaxValue
@@ -175,54 +165,6 @@ object Genesis {
       case (pk, stake) =>
         val validator = ByteString.copyFrom(pk.bytes)
         Bond(validator, stake)
-    }
-  }
-
-  def getWallets[F[_]: Sync: Log: RaiseIOError](
-      maybeWalletsPath: Option[String],
-      defaultWalletPath: Path
-  ): F[Seq[PreWallet]] = {
-    def walletFromFile(walletsPath: Path): F[Seq[PreWallet]] =
-      for {
-        maybeLines <- SourceIO.open(walletsPath).use(_.getLines).attempt
-        wallets <- maybeLines match {
-                    case Right(lines) =>
-                      lines
-                        .traverse(PreWallet.fromLine(_) match {
-                          case Right(wallet) => wallet.some.pure[F]
-                          case Left(errMsg) =>
-                            Log[F]
-                              .warn(s"Error in parsing wallets file: $errMsg")
-                              .map(_ => none[PreWallet])
-                        })
-                        .map(_.flatten)
-                    case Left(ex) =>
-                      Log[F]
-                        .warn(
-                          s"Failed to read ${walletsPath.toAbsolutePath} for reason: ${ex.getMessage}"
-                        )
-                        .map(_ => Seq.empty[PreWallet])
-                  }
-      } yield wallets
-
-    maybeWalletsPath match {
-      case Some(walletsPathStr) =>
-        val walletsPath = Paths.get(walletsPathStr)
-        Monad[F].ifM(exists(walletsPath))(
-          walletFromFile(walletsPath),
-          Sync[F].raiseError(new Exception(s"Specified wallets file $walletsPath does not exist"))
-        )
-      case None =>
-        Monad[F].ifM(exists(defaultWalletPath))(
-          Log[F].info(s"Using default file $defaultWalletPath") >> walletFromFile(
-            defaultWalletPath
-          ),
-          Log[F]
-            .warn(
-              "No wallets file specified and no default file found. No wallets will exist at genesis."
-            )
-            .map(_ => Seq.empty[PreWallet])
-        )
     }
   }
 

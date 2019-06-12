@@ -206,34 +206,7 @@ class GenesisTest extends FlatSpec with Matchers with EitherValues with BlockDag
       } yield result.forall(bonds.contains(_)) should be(true)
   })
 
-  it should "parse the wallets file and include it in the genesis state" in taskTest(
-    withRawGenResources {
-      (runtime: Runtime[Task], genesisPath: Path, log: LogStub[Task], time: LogicalTime[Task]) =>
-        val walletsFile = genesisPath.resolve("wallets.txt").toString
-        printWallets(walletsFile)
-
-        import RSpaceUtil._
-        for {
-          runtimeManager <- RuntimeManager.fromRuntime(runtime)
-          blockMessage <- fromInputFiles(deployTimestamp = Some(0L))(
-                           runtimeManager,
-                           genesisPath,
-                           log,
-                           time
-                         )
-          data <- {
-            implicit val rm = runtimeManager
-            getDataAtPrivateChannel[Task](
-              blockMessage,
-              "253fd2155493024567f66cf787e208feae9d3d24ae2f479c79ab3e8b98c3e6c6"
-            ).map(_.head)
-          }
-          _ = walletAddresses.map { wallet =>
-            data should include(wallet)
-          }
-        } yield ()
-    }
-  )
+  it should "parse the wallets file and create corresponding RevVault-s" ignore {}
 
 }
 
