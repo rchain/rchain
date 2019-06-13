@@ -68,6 +68,8 @@ final case class PrettyPrinter(
         (buildStringM(p1) |+| pure(" * ") |+| buildStringM(p2)).map(_.wrapWithBraces)
       case EDivBody(EDiv(p1, p2)) =>
         (buildStringM(p1) |+| pure(" / ") |+| buildStringM(p2)).map(_.wrapWithBraces)
+      case EModBody(EMod(p1, p2)) =>
+        (buildStringM(p1) |+| pure(" % ") |+| buildStringM(p2)).map(_.wrapWithBraces)
       case EPercentPercentBody(EPercentPercent(p1, p2)) =>
         (buildStringM(p1) |+| pure(" %% ") |+| buildStringM(p2)).map(_.wrapWithBraces)
       case EPlusBody(EPlus(p1, p2)) =>

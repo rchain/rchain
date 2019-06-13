@@ -161,6 +161,15 @@ class ProcPrinterSpec extends FlatSpec with Matchers {
     result shouldBe target
   }
 
+  "PMod" should "Print" in {
+    val source: Par = Par(
+      exprs = Seq(EModBody(EMod(GInt(11), GInt(10))))
+    )
+    val result = PrettyPrinter().buildString(source)
+    val target = """(11 % 10)"""
+    result shouldBe target
+  }
+
   "PPercentPercent" should "Print" in {
     val source: Par = Par(
       exprs = Seq(
