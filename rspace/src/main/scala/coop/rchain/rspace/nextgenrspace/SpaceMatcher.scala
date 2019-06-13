@@ -7,8 +7,6 @@ import coop.rchain.catscontrib._
 import coop.rchain.rspace._
 import coop.rchain.rspace.history.Branch
 import coop.rchain.rspace.internal._
-import coop.rchain.rspace.trace.Log
-import coop.rchain.shared.SyncVarOps
 
 import scala.annotation.tailrec
 import scala.concurrent.SyncVar
@@ -22,9 +20,6 @@ import scala.concurrent.SyncVar
   * @tparam K a type representing a continuation
   */
 private[rspace] trait SpaceMatcher[F[_], C, P, A, R, K] extends ISpace[F, C, P, A, R, K] {
-
-  protected[this] val eventLog: SyncVar[Log] =
-    SyncVarOps.create[Log](Seq.empty)
 
   implicit val syncF: Sync[F]
 
