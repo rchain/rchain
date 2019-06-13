@@ -6,10 +6,10 @@ import cats.effect.concurrent.MVar
 import cats.effect.{Sync, _}
 import cats.implicits._
 import com.google.protobuf.ByteString
-import coop.rchain.casper.protocol._
-import coop.rchain.casper.util.{ConstructDeploy, ProtoUtil}
 import coop.rchain.casper.CasperMetricsSource
+import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
+import coop.rchain.casper.util.{ConstructDeploy, ProtoUtil}
 import coop.rchain.catscontrib.Catscontrib.ToMonadOps
 import coop.rchain.catscontrib.MonadTrans
 import coop.rchain.crypto.PublicKey
@@ -32,6 +32,7 @@ import coop.rchain.rholang.interpreter.{
   Interpreter,
   RhoType,
   Runtime,
+  accounting,
   PrettyPrinter => RholangPrinter
 }
 import coop.rchain.rspace.{trace, Blake2b256Hash, Checkpoint, ReplayException}
@@ -115,7 +116,7 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics] private[rholang] (
     withRuntimeLock { runtime =>
       for {
         span <- Metrics[F].span(replayComputeStateLabel)
-        _      <- runtime.blockData.setParams(blockData)
+        _    <- runtime.blockData.setParams(blockData)
         _    <- setInvalidBlocks(invalidBlocks, runtime)
         _    <- span.mark("before-replay-deploys")
         replayFunction = if (isGenesis) replayDeploy(runtime, span) _
@@ -206,12 +207,16 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics] private[rholang] (
       runtime: Runtime[F],
       reducer: ChargingReducer[F],
       space: RhoISpace[F]
-  )(user: ByteString, time: Long, amount: Long): F[Either[String, Checkpoint]] =
+  )(deploy: DeployData): F[Either[String, Checkpoint]] =
     for {
       _ <- computeEffect(runtime, reducer)(
             ConstructDeploy
-              .sourceDeploy(deployPaymentSource(amount), time, Int.MaxValue)
-              .withDeployer(user)
+              .sourceDeploy(
+                deployPaymentSource(deploy.phloLimit * deploy.phloPrice),
+                timestamp = deploy.timestamp,
+                accounting.MAX_VALUE
+              )
+              .withDeployer(deploy.deployer)
           ).ensureOr(r => BugFoundError("Deploy payment failed unexpectedly" + r.errors))(
             _.errors.isEmpty
           )
@@ -224,8 +229,9 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics] private[rholang] (
                      .asLeft[Checkpoint]
                      .pure[F]
                  case Seq() =>
-                   BugFoundError("Expected response message was not received")
-                     .raiseError[F, Either[String, Checkpoint]]
+                   space.createCheckpoint() >>
+                     BugFoundError("Expected response message was not received")
+                       .raiseError[F, Either[String, Checkpoint]]
                  case other =>
                    val contentAsStr = other.map(RholangPrinter().buildString(_)).mkString(",")
                    BugFoundError(
@@ -341,12 +347,8 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics] private[rholang] (
       deploy: DeployData
   ): F[(Blake2b256Hash, InternalProcessedDeploy)] =
     for {
-      _ <- runtime.space.reset(startHash)
-      payResult <- computeDeployPayment(runtime, runtime.reducer, runtime.space)(
-                    deploy.deployer,
-                    deploy.phloLimit * deploy.phloPrice,
-                    deploy.timestamp
-                  )
+      _         <- runtime.space.reset(startHash)
+      payResult <- computeDeployPayment(runtime, runtime.reducer, runtime.space)(deploy)
       result <- payResult.fold(
                  error => (startHash, InternalProcessedDeploy.failedPayment(deploy, error)).pure[F],
                  postPaymentCheckpoint =>
@@ -380,11 +382,7 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics] private[rholang] (
     for {
       deploy <- processedDeploy.deploy.pure[F]
       _      <- runtime.replaySpace.resetAndRig(startHash, processedDeploy.paymentLog)
-      payResult <- computeDeployPayment(runtime, runtime.replayReducer, runtime.replaySpace)(
-                    deploy.deployer,
-                    deploy.phloLimit * deploy.phloPrice,
-                    deploy.timestamp
-                  )
+      payResult <- computeDeployPayment(runtime, runtime.replayReducer, runtime.replaySpace)(deploy)
       result <- payResult.fold(
                  error =>
                    ((deploy.some, UnknownFailure: Failed /* FIXME */ ))

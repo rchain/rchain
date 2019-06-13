@@ -133,7 +133,7 @@ in {
                 revAddressValid, revAddressValidEither, amountNonNegative,
                 authKeyValidCh, authKeyValidEitherCh,
                 parametersOkCh, parametersAndAuthOkCh,
-                split, eitherPurseCh, doDeposit
+                split, eitherPurseCh, doDeposit, stdout(`rho:io:stdout`)
               in {
                 RevAddress!("validate", revAddress, *revAddressValid) |
                 @Either!("fromNillableError <-", *revAddressValid, *revAddressValidEither) |
@@ -148,9 +148,14 @@ in {
 
                 @Either!("flatMap <-", *parametersAndAuthOkCh, *split, *eitherPurseCh) |
                 for (_, retCh <- split) {
-                  new amountPurseCh in {
-                    purse!("split", amount, *amountPurseCh) |
-                    @Either!("fromSingletonList <-", *amountPurseCh, "Insufficient funds", *retCh)
+                  new amountPurseCh, balanceCh in {
+
+                    purse!("getBalance", *balanceCh) |
+                    for (@b <- balanceCh) {
+                      stdout!(("Amount requested", amount, " got ", b)) |
+                      purse!("split", amount, *amountPurseCh) |
+                      @Either!("fromSingletonList <-", *amountPurseCh, "Insufficient funds", *retCh)
+                    }
                   }
                 } |
 

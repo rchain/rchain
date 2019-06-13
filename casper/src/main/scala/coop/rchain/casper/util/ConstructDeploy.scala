@@ -24,7 +24,7 @@ object ConstructDeploy {
       source: String,
       timestamp: Long,
       phlos: Long,
-      phloPrice: Long = 0L,
+      phloPrice: Long = 1L,
       sec: PrivateKey = defaultSec
   ): DeployData = {
     val data = DeployData(
@@ -41,7 +41,7 @@ object ConstructDeploy {
     sourceDeploy(
       source,
       System.currentTimeMillis(),
-      accounting.MAX_VALUE
+      90000
     )
 
   def sourceDeployNowF[F[_]: Time: Functor](source: String): F[DeployData] =
