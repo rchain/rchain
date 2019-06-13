@@ -3,6 +3,7 @@ package coop.rchain.rholang.interpreter
 import cats.effect.Concurrent
 import cats.effect.concurrent.Ref
 import cats.implicits._
+import com.typesafe.scalalogging.Logger
 import coop.rchain.crypto.PublicKey
 import coop.rchain.crypto.hash.{Blake2b256, Keccak256, Sha256}
 import coop.rchain.crypto.signatures.{Ed25519, Secp256k1}
@@ -11,7 +12,6 @@ import coop.rchain.models.rholang.implicits._
 import coop.rchain.rholang.interpreter.Runtime.{BlockDataStorage, InvalidBlocks, RhoISpace}
 import coop.rchain.rholang.interpreter.util.RevAddress
 import coop.rchain.rspace.{ContResult, Result}
-
 import scala.util.Try
 
 //TODO: Make each of the system processes into a case class,
@@ -52,6 +52,9 @@ object SystemProcesses {
 
       private val isContractCall = new ContractCall[F](space, dispatcher)
 
+      private val stdOutLogger = Logger("coop.rchain.rholang.stdout")
+      private val stdErrLogger = Logger("coop.rchain.rholang.stderr")
+
       private def illegalArgumentException(msg: String): F[Unit] =
         F.raiseError(new IllegalArgumentException(msg))
 
@@ -90,28 +93,40 @@ object SystemProcesses {
           )
       }
 
+      private def printStdOut(s: String): F[Unit] =
+        for {
+          _ <- F.delay(Console.println(s))
+          _ <- F.delay(stdOutLogger.debug(s))
+        } yield ()
+
+      private def printStdErr(s: String): F[Unit] =
+        for {
+          _ <- F.delay(Console.err.println(s))
+          _ <- F.delay(stdErrLogger.debug(s))
+        } yield ()
+
       def stdOut: Contract[F] = {
         case isContractCall(_, Seq(arg)) =>
-          F.delay(Console.println(prettyPrinter.buildString(arg)))
+          printStdOut(prettyPrinter.buildString(arg))
       }
 
       def stdOutAck: Contract[F] = {
         case isContractCall(produce, Seq(arg, ack)) =>
           for {
-            _ <- F.delay(Console.println(prettyPrinter.buildString(arg)))
+            _ <- printStdOut(prettyPrinter.buildString(arg))
             _ <- produce(Seq(Par.defaultInstance), ack)
           } yield ()
       }
 
       def stdErr: Contract[F] = {
         case isContractCall(_, Seq(arg)) =>
-          F.delay(Console.err.println(prettyPrinter.buildString(arg)))
+          printStdErr(prettyPrinter.buildString(arg))
       }
 
       def stdErrAck: Contract[F] = {
         case isContractCall(produce, Seq(arg, ack)) =>
           for {
-            _ <- F.delay(Console.err.println(prettyPrinter.buildString(arg)))
+            _ <- printStdErr(prettyPrinter.buildString(arg))
             _ <- produce(Seq(Par.defaultInstance), ack)
           } yield ()
       }
