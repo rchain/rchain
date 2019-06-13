@@ -119,7 +119,7 @@ class ReplayRSpace[F[_]: Sync, C, P, A, R, K](
       for {
         _ <- store.putContinuation(
               channels,
-              WaitingContinuation(patterns, continuation, persist, peeks, consumeRef)
+              WaitingContinuation(patterns, continuation, persist, peeks.toSeq.sorted, consumeRef)
             )
         _ <- channels.traverse(channel => store.putJoin(channel, channels))
         _ <- logF.debug(s"""|consume: no data found,
@@ -130,17 +130,21 @@ class ReplayRSpace[F[_]: Sync, C, P, A, R, K](
     def handleMatches(
         mats: Seq[DataCandidate[C, R]],
         consumeRef: Consume,
-        comms: Multiset[COMM]
-    ): F[MaybeActionResult] =
+        comms: Multiset[COMM],
+        peeks: Seq[Int],
+        channelsToIndex: Map[C, Int]
+    ): F[MaybeActionResult] = {
+      def shouldRemove(persist: Boolean, channel: C): Boolean =
+        !persist && !peeks.contains(channelsToIndex(channel))
       for {
         _       <- metricsF.incrementCounter(consumeCommLabel)
-        commRef <- syncF.delay { COMM(consumeRef, mats.map(_.datum.source)) }
+        commRef <- syncF.delay { COMM(consumeRef, mats.map(_.datum.source), peeks.toSeq.sorted) }
         _       <- assertF(comms.contains(commRef), "COMM Event was not contained in the trace")
         r <- mats.toList
               .sortBy(_.datumIndex)(Ordering[Int].reverse)
               .traverse {
                 case DataCandidate(candidateChannel, Datum(_, persistData, _), dataIndex) =>
-                  if (!persistData) {
+                  if (shouldRemove(persistData, candidateChannel)) {
                     store.removeDatum(candidateChannel, dataIndex)
                   } else ().pure[F]
               }
@@ -156,12 +160,20 @@ class ReplayRSpace[F[_]: Sync, C, P, A, R, K](
                 val contSequenceNumber = commRef.nextSequenceNumber
                 Some(
                   (
-                    ContResult(continuation, persist, channels, patterns, contSequenceNumber),
+                    ContResult(
+                      continuation,
+                      persist,
+                      channels,
+                      patterns,
+                      contSequenceNumber,
+                      peeks.nonEmpty
+                    ),
                     mats.map(dc => Result(dc.datum.a, dc.datum.persist))
                   )
                 )
               }
       } yield r
+    }
 
     def getCommOrDataCandidates(comms: Seq[COMM]): F[Either[COMM, Seq[DataCandidate[C, R]]]] = {
       type COMMOrData = Either[COMM, Seq[DataCandidate[C, R]]]
@@ -203,7 +215,14 @@ class ReplayRSpace[F[_]: Sync, C, P, A, R, K](
                 case Left(commRef) =>
                   storeWaitingContinuation(consumeRef, Some(commRef), peeks.toSeq.sorted)
                 case Right(dataCandidates) =>
-                  handleMatches(dataCandidates, consumeRef, comms)
+                  val channelsToIndex = channels.zipWithIndex.toMap
+                  handleMatches(
+                    dataCandidates,
+                    consumeRef,
+                    comms,
+                    peeks.toSeq.sorted,
+                    channelsToIndex
+                  )
               }
               x
           }
@@ -320,19 +339,22 @@ class ReplayRSpace[F[_]: Sync, C, P, A, R, K](
     def handleMatch(
         mat: ProduceCandidate[C, P, R, K],
         produceRef: Produce,
-        comms: Multiset[COMM]
+        comms: Multiset[COMM],
+        channelsToIndex: Map[C, Int]
     ): F[MaybeActionResult] =
       mat match {
         case ProduceCandidate(
             channels,
-            WaitingContinuation(patterns, continuation, persistK, _, consumeRef),
+            WaitingContinuation(patterns, continuation, persistK, peeks, consumeRef),
             continuationIndex,
             dataCandidates
             ) =>
           for {
-            _       <- metricsF.incrementCounter(produceCommLabel)
-            commRef <- syncF.delay { COMM(consumeRef, dataCandidates.map(_.datum.source)) }
-            _       <- assertF(comms.contains(commRef), "COMM Event was not contained in the trace")
+            _ <- metricsF.incrementCounter(produceCommLabel)
+            commRef <- syncF.delay {
+                        COMM(consumeRef, dataCandidates.map(_.datum.source), peeks.toSeq.sorted)
+                      }
+            _ <- assertF(comms.contains(commRef), "COMM Event was not contained in the trace")
             _ <- if (!persistK) {
                   store.removeContinuation(channels, continuationIndex)
                 } else {
@@ -342,7 +364,11 @@ class ReplayRSpace[F[_]: Sync, C, P, A, R, K](
                   .sortBy(_.datumIndex)(Ordering[Int].reverse)
                   .traverse {
                     case DataCandidate(candidateChannel, Datum(_, persistData, _), dataIndex) =>
-                      (if (!persistData && dataIndex >= 0) {
+                      def shouldRemove: Boolean = {
+                        val idx = channelsToIndex(candidateChannel)
+                        dataIndex >= 0 && (!persistData && !peeks.contains(idx))
+                      }
+                      (if (shouldRemove) {
                          store.removeDatum(candidateChannel, dataIndex)
                        } else Applicative[F].unit) *>
                         store.removeJoin(candidateChannel, channels)
@@ -353,7 +379,14 @@ class ReplayRSpace[F[_]: Sync, C, P, A, R, K](
                   val contSequenceNumber = commRef.nextSequenceNumber
                   Some(
                     (
-                      ContResult(continuation, persistK, channels, patterns, contSequenceNumber),
+                      ContResult(
+                        continuation,
+                        persistK,
+                        channels,
+                        patterns,
+                        contSequenceNumber,
+                        peeks.nonEmpty
+                      ),
                       dataCandidates.map(dc => Result(dc.datum.a, dc.datum.persist))
                     )
                   )
@@ -385,7 +418,16 @@ class ReplayRSpace[F[_]: Sync, C, P, A, R, K](
                      case Left(comm) =>
                        storeDatum(produceRef, Some(comm))
                      case Right(produceCandidate) =>
-                       handleMatch(produceCandidate, produceRef, comms)
+                       val indexedChannels = produceCandidate.channels.zipWithIndex.toMap
+                       for {
+                         a <- handleMatch(produceCandidate, produceRef, comms, indexedChannels)
+                         _ <- if (produceCandidate.continuation.peeks.contains(
+                                    indexedChannels(channel)
+                                  )) {
+                               storeDatum(produceRef, None)
+                             } else
+                               ().pure[F]
+                       } yield a
                    }
                    r
                }

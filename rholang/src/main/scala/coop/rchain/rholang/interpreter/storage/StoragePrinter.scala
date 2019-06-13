@@ -69,6 +69,7 @@ object StoragePrinter {
           patterns: Seq[BindPattern],
           continuation: TaggedContinuation,
           persist: Boolean,
+          _: Seq[Int],
           _: Consume
           ) =>
         val receiveBinds: Seq[ReceiveBind] = (channels zip patterns).map {

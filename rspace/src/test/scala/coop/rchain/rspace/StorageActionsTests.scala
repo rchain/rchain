@@ -1267,7 +1267,8 @@ trait StorageActionsTests[F[_]]
     } yield (log match {
       case COMM(
             chkCommConsume1: Consume,
-            (chkCommProduce1: Produce) :: (chkCommProduce2: Produce) :: Nil
+            (chkCommProduce1: Produce) :: (chkCommProduce2: Produce) :: Nil,
+            _
           )
             :: (chkProduce2: Produce) :: (chkProduce1: Produce) :: (chkConsume: Consume) :: Nil =>
         chkCommConsume1.channelsHashes shouldBe expectedConsume.channelsHashes
