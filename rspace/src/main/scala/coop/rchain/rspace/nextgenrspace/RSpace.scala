@@ -71,6 +71,7 @@ class RSpace[F[_], C, P, A, R, K] private[rspace] (
       patterns: Seq[P],
       continuation: K,
       persist: Boolean,
+      peeks: Seq[Int],
       consumeRef: Consume
   ): F[MaybeActionResult] =
     for {
@@ -80,6 +81,7 @@ class RSpace[F[_], C, P, A, R, K] private[rspace] (
               patterns,
               continuation,
               persist,
+              peeks,
               consumeRef
             )
           )
@@ -145,7 +147,14 @@ class RSpace[F[_], C, P, A, R, K] private[rspace] (
   ): F[MaybeActionResult] = {
 
     def storeWC(consumeRef: Consume): F[MaybeActionResult] =
-      storeWaitingContinuation(channels, patterns, continuation, persist, consumeRef)
+      storeWaitingContinuation(
+        channels,
+        patterns,
+        continuation,
+        persist,
+        peeks.toSeq.sorted,
+        consumeRef
+      )
 
     def wrapResult(
         consumeRef: Consume,
@@ -304,6 +313,7 @@ class RSpace[F[_], C, P, A, R, K] private[rspace] (
             patterns,
             continuation,
             persistK,
+            _,
             consumeRef
           ),
           continuationIndex,

@@ -133,6 +133,7 @@ abstract class RSpaceOps[F[_]: Concurrent, C, P, A, R, K](
                                  patterns,
                                  continuation,
                                  persist = true,
+                                 Seq.empty,
                                  consumeRef
                                )
                              )

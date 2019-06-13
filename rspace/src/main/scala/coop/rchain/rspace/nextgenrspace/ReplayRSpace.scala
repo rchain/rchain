@@ -71,7 +71,15 @@ class ReplayRSpace[F[_]: Sync, C, P, A, R, K](
           span <- metricsF.span(consumeSpanLabel)
           _    <- span.mark("before-consume-lock")
           result <- consumeLockF(channels) {
-                     lockedConsume(channels, patterns, continuation, persist, sequenceNumber, span)
+                     lockedConsume(
+                       channels,
+                       patterns,
+                       continuation,
+                       persist,
+                       sequenceNumber,
+                       peeks,
+                       span
+                     )
                    }
           _ <- span.mark("post-consume-lock")
         } yield result
@@ -83,6 +91,7 @@ class ReplayRSpace[F[_]: Sync, C, P, A, R, K](
       continuation: K,
       persist: Boolean,
       sequenceNumber: Int,
+      peeks: Set[Int],
       span: Span[F]
   )(
       implicit m: Match[F, P, A, R]
@@ -104,12 +113,13 @@ class ReplayRSpace[F[_]: Sync, C, P, A, R, K](
 
     def storeWaitingContinuation(
         consumeRef: Consume,
-        maybeCommRef: Option[COMM]
+        maybeCommRef: Option[COMM],
+        peeks: Seq[Int]
     ): F[MaybeActionResult] =
       for {
         _ <- store.putContinuation(
               channels,
-              WaitingContinuation(patterns, continuation, persist, consumeRef)
+              WaitingContinuation(patterns, continuation, persist, peeks, consumeRef)
             )
         _ <- channels.traverse(channel => store.putJoin(channel, channels))
         _ <- logF.debug(s"""|consume: no data found,
@@ -184,14 +194,14 @@ class ReplayRSpace[F[_]: Sync, C, P, A, R, K](
       _ <- span.mark("after-compute-consumeref")
       r <- replayData.get(consumeRef) match {
             case None =>
-              storeWaitingContinuation(consumeRef, None)
+              storeWaitingContinuation(consumeRef, None, peeks.toSeq.sorted)
             case Some(comms) =>
               val commOrDataCandidates: F[Either[COMM, Seq[DataCandidate[C, R]]]] =
                 getCommOrDataCandidates(comms.iterator().asScala.toList)
 
               val x: F[MaybeActionResult] = commOrDataCandidates.flatMap {
                 case Left(commRef) =>
-                  storeWaitingContinuation(consumeRef, Some(commRef))
+                  storeWaitingContinuation(consumeRef, Some(commRef), peeks.toSeq.sorted)
                 case Right(dataCandidates) =>
                   handleMatches(dataCandidates, consumeRef, comms)
               }
@@ -240,7 +250,7 @@ class ReplayRSpace[F[_]: Sync, C, P, A, R, K](
             for {
               continuations <- store.getContinuations(channels)
               matchCandidates = continuations.zipWithIndex.filter {
-                case (WaitingContinuation(_, _, _, source), _) =>
+                case (WaitingContinuation(_, _, _, _, source), _) =>
                   comm.consume == source
               }
               channelToIndexedDataList <- channels.traverse { c: C =>
@@ -315,7 +325,7 @@ class ReplayRSpace[F[_]: Sync, C, P, A, R, K](
       mat match {
         case ProduceCandidate(
             channels,
-            WaitingContinuation(patterns, continuation, persistK, consumeRef),
+            WaitingContinuation(patterns, continuation, persistK, _, consumeRef),
             continuationIndex,
             dataCandidates
             ) =>

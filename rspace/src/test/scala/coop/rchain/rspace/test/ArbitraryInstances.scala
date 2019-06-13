@@ -144,7 +144,7 @@ object ArbitraryInstances {
         chans   <- Gen.nonEmptyListOf[String](Arbitrary.arbitrary[String])
         pats    <- Gen.containerOfN[List, Pattern](chans.length, Arbitrary.arbitrary[Pattern])
         boolean <- Arbitrary.arbitrary[Boolean]
-      } yield WaitingContinuation.create(chans, pats, new StringsCaptor, boolean)
+      } yield WaitingContinuation.create(chans, pats, new StringsCaptor, boolean, Seq.empty)
     )
 
   def arbitraryWaitingContinuation(chans: List[String])(
@@ -157,7 +157,7 @@ object ArbitraryInstances {
       for {
         pats    <- Gen.containerOfN[List, Pattern](chans.length, Arbitrary.arbitrary[Pattern])
         boolean <- Arbitrary.arbitrary[Boolean]
-      } yield WaitingContinuation.create(chans, pats, new StringsCaptor, boolean)
+      } yield WaitingContinuation.create(chans, pats, new StringsCaptor, boolean, Seq.empty)
     )
 
   implicit def arbitraryGnat(

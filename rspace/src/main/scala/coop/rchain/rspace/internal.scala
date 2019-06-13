@@ -5,7 +5,7 @@ import coop.rchain.rspace.trace.{Consume, Produce}
 import coop.rchain.scodec.codecs.seqOfN
 import scodec.Codec
 import scodec.bits.ByteVector
-import scodec.codecs.{bool, bytes, int32, int64, variableSizeBytesLong}
+import scodec.codecs.{bool, bytes, int32, int64, uint8, variableSizeBytesLong}
 
 @SuppressWarnings(Array("org.wartremover.warts.NonUnitStatements"))
 object internal {
@@ -27,6 +27,7 @@ object internal {
       patterns: Seq[P],
       continuation: K,
       persist: Boolean,
+      peeks: Seq[Int],
       source: Consume
   )
 
@@ -36,6 +37,7 @@ object internal {
         patterns: Seq[P],
         continuation: K,
         persist: Boolean,
+        peek: Seq[Int],
         sequenceNumber: Int = 0
     )(
         implicit
@@ -47,6 +49,7 @@ object internal {
         patterns,
         continuation,
         persist,
+        peek,
         Consume.create(channels, patterns, continuation, persist, sequenceNumber)
       )
   }
@@ -93,7 +96,8 @@ object internal {
       codecP: Codec[P],
       codecK: Codec[K]
   ): Codec[WaitingContinuation[P, K]] =
-    (codecSeq(codecP) :: codecK :: bool :: Codec[Consume]).as[WaitingContinuation[P, K]]
+    (codecSeq(codecP) :: codecK :: bool :: codecSeq(uint8) :: Codec[Consume])
+      .as[WaitingContinuation[P, K]]
 
   implicit def codecGNAT[C, P, A, K](
       implicit

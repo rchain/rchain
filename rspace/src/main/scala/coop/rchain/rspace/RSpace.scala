@@ -77,6 +77,7 @@ class RSpace[F[_], C, P, A, R, K] private[rspace] (
                 patterns,
                 continuation,
                 persist,
+                Seq.empty,
                 consumeRef
               )
             )
@@ -312,6 +313,7 @@ class RSpace[F[_], C, P, A, R, K] private[rspace] (
             patterns,
             continuation,
             persistK,
+            _,
             consumeRef
           ),
           continuationIndex,

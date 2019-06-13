@@ -101,7 +101,7 @@ class ReplayRSpace[F[_], C, P, A, R, K](store: IStore[F, C, P, A, K], branch: Br
                 store.putWaitingContinuation(
                   txn,
                   channels,
-                  WaitingContinuation(patterns, continuation, persist, consumeRef)
+                  WaitingContinuation(patterns, continuation, persist, Seq.empty, consumeRef)
                 )
                 for (channel <- channels) store.addJoin(txn, channel, channels)
               }
@@ -237,7 +237,7 @@ class ReplayRSpace[F[_], C, P, A, R, K](store: IStore[F, C, P, A, K], branch: Br
             for {
               matchCandidates <- store.withReadTxnF { txn =>
                                   store.getWaitingContinuation(txn, channels).zipWithIndex.filter {
-                                    case (WaitingContinuation(_, _, _, source), _) =>
+                                    case (WaitingContinuation(_, _, _, _, source), _) =>
                                       comm.consume == source
                                   }
                                 }
@@ -318,7 +318,7 @@ class ReplayRSpace[F[_], C, P, A, R, K](store: IStore[F, C, P, A, K], branch: Br
       mat match {
         case ProduceCandidate(
             channels,
-            WaitingContinuation(patterns, continuation, persistK, consumeRef),
+            WaitingContinuation(patterns, continuation, persistK, _, consumeRef),
             continuationIndex,
             dataCandidates
             ) =>

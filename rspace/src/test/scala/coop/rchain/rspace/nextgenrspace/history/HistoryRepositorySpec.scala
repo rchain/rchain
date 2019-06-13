@@ -148,6 +148,7 @@ class HistoryRepositorySpec
       "pattern-" + s :: Nil,
       "cont-" + s,
       true,
+      Seq.empty,
       Consume(randomBlake :: Nil, randomBlake, 0)
     )
 

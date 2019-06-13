@@ -163,7 +163,7 @@ abstract class ModelSerializerBenchState {
         pats         <- Gen.containerOfN[List, P](chans.length, arbP.arbitrary)
         continuation <- arbK.arbitrary
         boolean      <- Arbitrary.arbitrary[Boolean]
-      } yield WaitingContinuation.create(chans, pats, continuation, boolean)
+      } yield WaitingContinuation.create(chans, pats, continuation, boolean, Seq.empty)
     )
 
   implicit def arbitraryGnat()(

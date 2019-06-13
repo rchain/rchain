@@ -115,7 +115,8 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
                 channels,
                 bindPatterns,
                 TaggedContinuation(ParBody(body)),
-                false
+                false,
+                Seq.empty
               )
             )
           )

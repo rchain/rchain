@@ -1051,7 +1051,8 @@ trait StorageActionsTests[F[_]]
         channels,
         List.empty[Datum[String]],
         List(
-          WaitingContinuation.create(channels, List[Pattern](Wildcard), new StringsCaptor, false)
+          WaitingContinuation
+            .create(channels, List[Pattern](Wildcard), new StringsCaptor, false, Seq.empty)
         )
       )
 
@@ -1095,7 +1096,7 @@ trait StorageActionsTests[F[_]]
           List.empty[Datum[String]],
           List(
             WaitingContinuation
-              .create(channels, List[Pattern](Wildcard), new StringsCaptor, false)
+              .create(channels, List[Pattern](Wildcard), new StringsCaptor, false, Seq.empty)
           )
         )
       }
@@ -1117,7 +1118,7 @@ trait StorageActionsTests[F[_]]
             List.empty[Datum[String]],
             List(
               WaitingContinuation
-                .create(channels, List[Pattern](Wildcard), new StringsCaptor, false)
+                .create(channels, List[Pattern](Wildcard), new StringsCaptor, false, Seq.empty)
             )
           )
         }
