@@ -18,6 +18,13 @@ trait IReplaySpace[F[_], C, P, A, R, K] extends ISpace[F, C, P, A, R, K] {
     *  @param log A [Log] with permitted operations
     */
   def resetAndRig(startRoot: Blake2b256Hash, log: trace.Log)(implicit syncF: Sync[F]): F[Unit] =
+    rig(log)
+      .flatMap { _ =>
+        // reset to the starting checkpoint
+        reset(startRoot)
+      }
+
+  def rig(log: trace.Log)(implicit syncF: Sync[F]): F[Unit] =
     syncF
       .delay {
         val (ioEvents, commEvents) = log.partition {
@@ -41,9 +48,5 @@ trait IReplaySpace[F[_], C, P, A, R, K] extends ISpace[F, C, P, A, R, K] {
           case _ =>
             syncF.raiseError(new RuntimeException("BUG FOUND: only COMM events are expected here"))
         }
-      }
-      .flatMap { _ =>
-        // reset to the starting checkpoint
-        reset(startRoot)
       }
 }
