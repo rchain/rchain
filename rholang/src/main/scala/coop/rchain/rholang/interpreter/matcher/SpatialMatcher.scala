@@ -541,6 +541,11 @@ trait SpatialMatcherInstances {
           _ <- spatialMatch(t1, p1)
           _ <- spatialMatch(t2, p2)
         } yield ()
+      case (EModBody(EMod(t1, t2)), EModBody(EMod(p1, p2))) =>
+        for {
+          _ <- spatialMatch(t1, p1)
+          _ <- spatialMatch(t2, p2)
+        } yield ()
       case (
           EPercentPercentBody(EPercentPercent(t1, t2)),
           EPercentPercentBody(EPercentPercent(p1, p2))

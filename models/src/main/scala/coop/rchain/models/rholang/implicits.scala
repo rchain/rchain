@@ -66,6 +66,10 @@ object implicits {
     new Expr(exprInstance = EDivBody(e))
   implicit def fromEDiv(e: EDiv): Expr = apply(e)
 
+  def apply(e: EMod): Expr =
+    new Expr(exprInstance = EModBody(e))
+  implicit def fromEMod(e: EMod): Expr = apply(e)
+
   def apply(e: EPlus): Expr =
     new Expr(exprInstance = EPlusBody(e))
   implicit def fromEPlus(e: EPlus): Expr = apply(e)
@@ -347,6 +351,7 @@ object implicits {
         case ENegBody(ENeg(p))                            => p.connectiveUsed
         case EMultBody(EMult(p1, p2))                     => p1.connectiveUsed || p2.connectiveUsed
         case EDivBody(EDiv(p1, p2))                       => p1.connectiveUsed || p2.connectiveUsed
+        case EModBody(EMod(p1, p2))                       => p1.connectiveUsed || p2.connectiveUsed
         case EPlusBody(EPlus(p1, p2))                     => p1.connectiveUsed || p2.connectiveUsed
         case EMinusBody(EMinus(p1, p2))                   => p1.connectiveUsed || p2.connectiveUsed
         case ELtBody(ELt(p1, p2))                         => p1.connectiveUsed || p2.connectiveUsed
@@ -381,6 +386,7 @@ object implicits {
         case ENegBody(ENeg(p))                            => p.locallyFree
         case EMultBody(EMult(p1, p2))                     => p1.locallyFree | p2.locallyFree
         case EDivBody(EDiv(p1, p2))                       => p1.locallyFree | p2.locallyFree
+        case EModBody(EMod(p1, p2))                       => p1.locallyFree | p2.locallyFree
         case EPlusBody(EPlus(p1, p2))                     => p1.locallyFree | p2.locallyFree
         case EMinusBody(EMinus(p1, p2))                   => p1.locallyFree | p2.locallyFree
         case ELtBody(ELt(p1, p2))                         => p1.locallyFree | p2.locallyFree

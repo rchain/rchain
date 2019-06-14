@@ -1,0 +1,32 @@
+new
+  rl(`rho:registry:lookup`), RhoSpecCh,
+  getBlockData(`rho:block:data`),
+  stdlog(`rho:io:stdlog`),
+  setup,
+  test_get_block_data
+in {
+  rl!(`rho:id:zphjgsfy13h1k85isc8rtwtgt3t9zzt5pjd5ihykfmyapfc4wt3x5h`, *RhoSpecCh) |
+  for(@(_, RhoSpec) <- RhoSpecCh) {
+    @RhoSpec!("testSuite", *setup,
+      [
+        ("rho:block:data returns", *test_get_block_data)
+      ])
+  } |
+
+  contract setup(returnCh) = {
+    returnCh!([])
+  } |
+
+  contract test_get_block_data(rhoSpec, _, ackCh) = {
+    new retCh in {
+      getBlockData!(*retCh) |
+      for (@timestamp, @blockNumber <- retCh) {
+        rhoSpec!("assertMany",
+          [
+            ((0, "==", timestamp), "timestamp is zero"),
+            ((1, "==", blockNumber), "the blocknumber is genesis + 1")
+          ], *ackCh)
+      }
+    }
+  }
+}

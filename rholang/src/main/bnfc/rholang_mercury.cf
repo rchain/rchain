@@ -44,6 +44,7 @@ PNot.            Proc10 ::= "not" Proc10 ;
 PNeg.            Proc10 ::= "-" Proc10 ;
 PMult.           Proc9  ::= Proc9 "*" Proc10 ;
 PDiv.            Proc9  ::= Proc9 "/" Proc10 ;
+PMod.            Proc9  ::= Proc9 "%" Proc10 ;
 PPercentPercent. Proc9  ::= Proc9 "%%" Proc10 ;
 PAdd.            Proc8  ::= Proc8 "+" Proc9 ;
 PMinus.          Proc8  ::= Proc8 "-" Proc9 ;

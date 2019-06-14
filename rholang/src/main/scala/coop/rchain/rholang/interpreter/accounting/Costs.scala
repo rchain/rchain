@@ -44,6 +44,7 @@ trait Costs {
   final val COMPARISON_COST: Cost     = Cost(3, "comparison")
   final val MULTIPLICATION_COST: Cost = Cost(9, "multiplication")
   final val DIVISION_COST: Cost       = Cost(9, "division")
+  final val MODULO_COST: Cost         = Cost(9, "modulo")
 
   // operations on collections
   // source: https://docs.scala-lang.org/overviews/collections/performance-characteristics.html

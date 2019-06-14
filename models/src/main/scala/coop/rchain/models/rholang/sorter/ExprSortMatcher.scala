@@ -48,6 +48,14 @@ private[sorter] object ExprSortMatcher extends Sortable[Expr] {
           EDivBody(EDiv(sortedPar1.term, sortedPar2.term)),
           Node(Score.EDIV, sortedPar1.score, sortedPar2.score)
         )
+      case EModBody(ed) =>
+        for {
+          sortedPar1 <- Sortable.sortMatch(ed.p1)
+          sortedPar2 <- Sortable.sortMatch(ed.p2)
+        } yield constructExpr(
+          EModBody(EMod(sortedPar1.term, sortedPar2.term)),
+          Node(Score.EMOD, sortedPar1.score, sortedPar2.score)
+        )
       case EPlusBody(ep) =>
         for {
           sortedPar1 <- Sortable.sortMatch(ep.p1)
