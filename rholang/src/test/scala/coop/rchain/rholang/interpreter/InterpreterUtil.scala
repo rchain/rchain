@@ -8,7 +8,7 @@ object InterpreterUtil {
       runtime: Runtime[F],
       term: String,
       initialPhlo: Cost
-  ): F[EvaluateResult] = Interpreter[F].evaluate(runtime, term, initialPhlo)
+  ): F[EvaluateResult] = Interpreter[F].evaluate(runtime, term, initialPhlo, None)
   def evaluate[F[_]: Sync: _cost](runtime: Runtime[F], term: String): F[EvaluateResult] =
-    Interpreter[F].evaluate(runtime, term)
+    Interpreter[F].evaluate(runtime, term, None)
 }

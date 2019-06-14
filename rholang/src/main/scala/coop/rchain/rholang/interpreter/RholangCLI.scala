@@ -166,7 +166,7 @@ object RholangCLI {
     val source = reader(fileName)
 
     ParBuilder[Coeval]
-      .buildNormalizedTerm(source)
+      .buildNormalizedTerm(source, None)
       .runAttempt
       .fold(Failure(_), processTerm)
 
@@ -174,7 +174,7 @@ object RholangCLI {
 
   def evaluate(runtime: Runtime[Task], source: String): Task[Unit] = {
     implicit val c = runtime.cost
-    Interpreter[Task].evaluate(runtime, source).map {
+    Interpreter[Task].evaluate(runtime, source, None).map {
       case EvaluateResult(_, Vector()) =>
       case EvaluateResult(_, errors) =>
         errors.foreach {
@@ -237,7 +237,7 @@ object RholangCLI {
             })
         result <- {
           implicit val c = runtime.cost
-          Interpreter[Task].evaluate(runtime, source)
+          Interpreter[Task].evaluate(runtime, source, None)
         }
       } yield result
 

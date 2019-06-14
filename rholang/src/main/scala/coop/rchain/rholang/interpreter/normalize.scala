@@ -15,6 +15,7 @@ import coop.rchain.rholang.syntax.rholang_mercury.Absyn.{
   _
 }
 import cats.implicits._
+import coop.rchain.crypto.PublicKey
 import coop.rchain.rholang.interpreter.ProcNormalizeMatcher.normalizeMatch
 import coop.rchain.rholang.interpreter.errors._
 import coop.rchain.models.rholang.implicits._
@@ -101,7 +102,8 @@ object RemainderNormalizeMatcher {
 
 object CollectionNormalizeMatcher {
   def normalizeMatch[M[_]](c: Collection, input: CollectVisitInputs)(
-      implicit sync: Sync[M]
+      implicit sync: Sync[M],
+      deployerPk: Option[PublicKey]
   ): M[CollectVisitOutputs] = {
     def foldMatch[T](
         knownFree: DebruijnLevelMap[VarSort],
@@ -232,7 +234,8 @@ object CollectionNormalizeMatcher {
 
 object NameNormalizeMatcher {
   def normalizeMatch[M[_]](n: Name, input: NameVisitInputs)(
-      implicit err: Sync[M]
+      implicit err: Sync[M],
+      deployerPk: Option[PublicKey]
   ): M[NameVisitOutputs] =
     n match {
       case wc: NameWildcard =>
@@ -272,8 +275,11 @@ object NameNormalizeMatcher {
 }
 
 object ProcNormalizeMatcher {
+  // FIXME before adding any more implicits, or fields to the `*VisitInputs` classes, make the normalizer use
+  // ApplicativeAsk / MonadState instead
   def normalizeMatch[M[_]](p: Proc, input: ProcVisitInputs)(
-      implicit sync: Sync[M]
+      implicit sync: Sync[M],
+      deployerPk: Option[PublicKey]
   ): M[ProcVisitOutputs] = Sync[M].defer {
     def unaryExp[T](subProc: Proc, input: ProcVisitInputs, constructor: Par => T)(
         implicit toExprInstance: T => Expr

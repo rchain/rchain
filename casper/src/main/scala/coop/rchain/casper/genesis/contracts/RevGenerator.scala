@@ -37,7 +37,7 @@ final case class RevGenerator(genesisAddress: RevAddress, userVaults: Seq[Vault]
        # }
      """.stripMargin('#')
 
-  val term: Par = ParBuilder[Coeval].buildNormalizedTerm(code).value()
+  val term: Par = ParBuilder[Coeval].buildNormalizedTerm(code, None).value()
 
   private def findOrCreate(userVault: Vault): String =
     s""" 

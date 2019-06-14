@@ -22,7 +22,7 @@ object CompiledRholangSource {
          #$fileContent
          #""".stripMargin('#')
     }
-    override val term: Par = ParBuilder[Coeval].buildNormalizedTerm(code).value()
+    override val term: Par = ParBuilder[Coeval].buildNormalizedTerm(code, None).value()
   }
 
 }
@@ -49,5 +49,5 @@ abstract class CompiledRholangTemplate(classpath: String, env: (String, Any)*)
         #$finalContent
         #""".stripMargin('#')
 
-  override val term: Par = ParBuilder[Coeval].buildNormalizedTerm(code).value()
+  override val term: Par = ParBuilder[Coeval].buildNormalizedTerm(code, None).value()
 }

@@ -9,6 +9,7 @@ import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
 import coop.rchain.casper.util.{DagOperations, ProtoUtil}
 import coop.rchain.casper.{BlockException, PrettyPrinter}
+import coop.rchain.crypto.PublicKey
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.metrics.Span
 import coop.rchain.models.BlockHash.BlockHash
@@ -24,8 +25,8 @@ object InterpreterUtil {
 
   implicit private val logSource: LogSource = LogSource(this.getClass)
 
-  def mkTerm(rho: String): Either[Throwable, Par] =
-    ParBuilder[Coeval].buildNormalizedTerm(rho).runAttempt
+  def mkTerm(rho: String, deployerPk: Option[PublicKey]): Either[Throwable, Par] =
+    ParBuilder[Coeval].buildNormalizedTerm(rho, deployerPk).runAttempt
 
   //Returns (None, checkpoints) if the block's tuplespace hash
   //does not match the computed hash based on the deploys

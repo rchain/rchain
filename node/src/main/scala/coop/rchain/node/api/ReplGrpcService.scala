@@ -42,7 +42,7 @@ private[api] class ReplGrpcService(runtime: Runtime[Task], worker: Scheduler)
 
   def exec(source: String): Task[ReplResponse] =
     ParBuilder[Task]
-      .buildNormalizedTerm(source)
+      .buildNormalizedTerm(source, None)
       .attempt
       .flatMap {
         case Left(er) =>
@@ -55,7 +55,7 @@ private[api] class ReplGrpcService(runtime: Runtime[Task], worker: Scheduler)
             _ <- Task.now(printNormalizedTerm(term))
             res <- {
               implicit val c = runtime.cost
-              Interpreter[Task].evaluate(runtime, source)
+              Interpreter[Task].evaluate(runtime, source, None)
             }
             EvaluateResult(cost, errors) = res
           } yield {

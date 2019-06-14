@@ -4,6 +4,7 @@ import java.io.{Reader, StringReader}
 
 import cats.effect.Sync
 import cats.implicits._
+import coop.rchain.crypto.PublicKey
 import coop.rchain.models.Connective.ConnectiveInstance
 import coop.rchain.models.Par
 import coop.rchain.models.rholang.implicits.VectorPar
@@ -13,11 +14,11 @@ import coop.rchain.rholang.syntax.rholang_mercury.{parser, Yylex}
 import coop.rchain.rholang.syntax.rholang_mercury.Absyn.Proc
 
 trait ParBuilder[F[_]] {
-  def buildNormalizedTerm(source: String): F[Par]
+  def buildNormalizedTerm(source: String, deployerPk: Option[PublicKey]): F[Par]
 
-  def buildNormalizedTerm(reader: Reader): F[Par]
+  def buildNormalizedTerm(reader: Reader, deployerPk: Option[PublicKey]): F[Par]
 
-  def buildPar(proc: Proc): F[Par]
+  def buildPar(proc: Proc, deployerPk: Option[PublicKey]): F[Par]
 }
 
 object ParBuilder {
@@ -25,18 +26,18 @@ object ParBuilder {
   def apply[F[_]](implicit parBuilder: ParBuilder[F]): ParBuilder[F] = parBuilder
 
   implicit def parBuilder[F[_]](implicit F: Sync[F]): ParBuilder[F] = new ParBuilder[F] {
-    def buildNormalizedTerm(source: String): F[Par] =
-      buildNormalizedTerm(new StringReader(source))
+    def buildNormalizedTerm(source: String, deployerPk: Option[PublicKey]): F[Par] =
+      buildNormalizedTerm(new StringReader(source), deployerPk)
 
-    def buildNormalizedTerm(reader: Reader): F[Par] =
+    def buildNormalizedTerm(reader: Reader, deployerPk: Option[PublicKey]): F[Par] =
       for {
         proc <- buildAST(reader)
-        par  <- buildPar(proc)
+        par  <- buildPar(proc, deployerPk)
       } yield par
 
-    def buildPar(proc: Proc): F[Par] =
+    def buildPar(proc: Proc, deployerPk: Option[PublicKey]): F[Par] =
       for {
-        par       <- normalizeTerm(proc)
+        par       <- normalizeTerm(proc)(deployerPk)
         sortedPar <- Sortable[Par].sortMatch(par)
       } yield sortedPar.term
 
@@ -60,7 +61,7 @@ object ParBuilder {
                }
       } yield proc
 
-    private def normalizeTerm(term: Proc): F[Par] =
+    private def normalizeTerm(term: Proc)(implicit deployerPk: Option[PublicKey]): F[Par] =
       ProcNormalizeMatcher
         .normalizeMatch[F](
           term,
