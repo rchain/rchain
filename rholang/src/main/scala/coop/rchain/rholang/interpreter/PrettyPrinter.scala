@@ -11,7 +11,7 @@ import coop.rchain.models._
 import scalapb.GeneratedMessage
 import coop.rchain.shared.StringOps._
 import cats.implicits._
-import coop.rchain.models.GUnforgeable.UnfInstance.{GDeployerAuthBody, GPrivateBody}
+import coop.rchain.models.GUnforgeable.UnfInstance.{GDeployerIdBody, GPrivateBody}
 import coop.rchain.shared.Printer
 import monix.eval.Coeval
 
@@ -52,8 +52,8 @@ final case class PrettyPrinter(
   private def buildStringM(u: GUnforgeable): Coeval[String] = Coeval.defer {
     u.unfInstance match {
       case GPrivateBody(p) => pure("Unforgeable(0x" + Base16.encode(p.id.toByteArray) + ")")
-      case GDeployerAuthBody(da) =>
-        pure("DeployerAuth(0x" + Base16.encode(da.publicKey.toByteArray) + ")")
+      case GDeployerIdBody(id) =>
+        pure("DeployerId(0x" + Base16.encode(id.publicKey.toByteArray) + ")")
       case _ => throw new Error(s"Attempted to print unknown GUnforgeable type: $u")
     }
   }

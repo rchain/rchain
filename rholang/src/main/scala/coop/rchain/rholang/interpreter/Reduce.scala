@@ -419,7 +419,7 @@ class DebruijnInterpreter[M[_], F[_]](
       def addUrn(newEnv: Env[Par], urn: String): Either[InterpreterError, Env[Par]] =
         if (urn == "rho:rchain:deployerId")
           neu.deployerId
-            .map { case DeployerId(pk) => newEnv.put(GDeployerAuth(pk)).asRight[InterpreterError] }
+            .map { case DeployerId(pk) => newEnv.put(GDeployerId(pk)).asRight[InterpreterError] }
             .getOrElse(
               BugFoundError(
                 s"No DeployId set despite `rho:rchain:deployerId` being used in a term. This is a bug in the normalizer or on the path from it."

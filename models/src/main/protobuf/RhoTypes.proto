@@ -391,13 +391,13 @@ message DeployerId {
 message GUnforgeable {
     oneof unf_instance {
         GPrivate g_private_body = 1;
-        GDeployerAuth g_deployer_auth_body = 2;
+        GDeployerId g_deployer_id_body = 2;
     }
 }
 message GPrivate {
     bytes id = 1;
 }
 
-message GDeployerAuth {
+message GDeployerId {
     bytes publicKey = 1;
 }

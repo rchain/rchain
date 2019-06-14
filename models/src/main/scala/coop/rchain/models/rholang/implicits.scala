@@ -9,7 +9,7 @@ import coop.rchain.models.Var.VarInstance.{BoundVar, FreeVar, Wildcard}
 import coop.rchain.models._
 import com.google.protobuf.ByteString
 import coop.rchain.models.GUnforgeable.UnfInstance
-import coop.rchain.models.GUnforgeable.UnfInstance.{GDeployerAuthBody, GPrivateBody}
+import coop.rchain.models.GUnforgeable.UnfInstance.{GDeployerIdBody, GPrivateBody}
 
 import scala.collection.immutable.{BitSet, Vector}
 
@@ -137,8 +137,8 @@ object implicits {
   def apply(g: GPrivate): GUnforgeable                 = new GUnforgeable(unfInstance = GPrivateBody(g))
   implicit def fromGPrivate(g: GPrivate): GUnforgeable = apply(g)
 
-  def apply(g: GDeployerAuth): GUnforgeable                      = new GUnforgeable(unfInstance = GDeployerAuthBody(g))
-  implicit def fromGDeployerAuth(g: GDeployerAuth): GUnforgeable = apply(g)
+  def apply(g: GDeployerId): GUnforgeable                      = new GUnforgeable(unfInstance = GDeployerIdBody(g))
+  implicit def fromGDeployerAuth(g: GDeployerId): GUnforgeable = apply(g)
 
   // Par Related
   def apply(): Par = new Par()

@@ -12,7 +12,7 @@ import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.Expr.ExprInstance.GBool
 import coop.rchain.models.Validator.Validator
 import coop.rchain.models.rholang.implicits._
-import coop.rchain.models.{GDeployerAuth, Par}
+import coop.rchain.models.{GDeployerId, Par}
 import coop.rchain.rholang.interpreter.Runtime.BlockData
 import coop.rchain.rholang.interpreter.accounting
 import monix.eval.Task
@@ -21,10 +21,10 @@ import org.scalatest.{Assertion, FlatSpec, Matchers}
 
 import scala.concurrent.duration._
 
-class DeployerAuthTest extends FlatSpec with Matchers {
+class DeployerIdTest extends FlatSpec with Matchers {
 
   private val runtimeManager: Resource[Task, RuntimeManager[Task]] =
-    mkRuntimeManager("deployer-auth-runtime-manager-test")
+    mkRuntimeManager("deployer-id-runtime-manager-test")
 
   private def deploy(
       deployer: PrivateKey,
@@ -37,7 +37,7 @@ class DeployerAuthTest extends FlatSpec with Matchers {
     sec = deployer
   )
 
-  "Deployer authentication" should "be forwarded to the reducer" in {
+  "Deployer id" should "be equal to the deployer's public key" in {
     val sk = PrivateKey(
       Base16.unsafeDecode("b18e1d0045995ec3d010c387ccfeb984d783af8fbb0f40fa7db126d889f6dadd")
     )
@@ -59,7 +59,7 @@ class DeployerAuthTest extends FlatSpec with Matchers {
         .runSyncUnsafe(10.seconds)
 
     result.size should be(1)
-    result.head should be(GDeployerAuth(pk): Par)
+    result.head should be(GDeployerId(pk): Par)
   }
 
   it should "make drain vault attacks impossible" in {
