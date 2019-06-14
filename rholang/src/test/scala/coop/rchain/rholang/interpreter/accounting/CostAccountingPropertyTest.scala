@@ -32,7 +32,7 @@ class CostAccountingPropertyTest extends FlatSpec with PropertyChecks with Match
 
   implicit val taskExecutionDuration: FiniteDuration = 5.seconds
 
-  def cost(proc: Proc): Cost = Cost(ParBuilder[Coeval].buildPar(proc).apply)
+  def cost(proc: Proc): Cost = Cost(ParBuilderUtil.buildPar[Coeval](proc).apply)
 
   behavior of "Cost accounting in Reducer"
 
@@ -82,7 +82,7 @@ object CostAccountingPropertyTest {
 
   def execute[F[_]: Sync: _cost](runtime: Runtime[F], p: Proc): F[Long] =
     for {
-      program <- ParBuilder[F].buildPar(p)
+      program <- ParBuilderUtil.buildPar(p)
       res     <- evaluatePar(runtime, program)
       cost    = res.cost
     } yield cost.value
@@ -93,7 +93,7 @@ object CostAccountingPropertyTest {
   ): F[EvaluateResult] = {
     val term = PP().buildString(par)
 
-    Interpreter[F].evaluate(runtime, term)
+    InterpreterUtil.evaluate(runtime, term)
   }
 
   def costOfExecution(procs: Proc*): Task[Long] = {

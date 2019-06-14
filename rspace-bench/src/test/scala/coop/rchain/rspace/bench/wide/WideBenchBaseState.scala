@@ -1,7 +1,7 @@
 package coop.rchain.rspace.bench.wide
 
 import coop.rchain.rspace.bench._
-import coop.rchain.rholang.interpreter.ChargingReducer
+import coop.rchain.rholang.interpreter.{ChargingReducer, ParBuilderUtil, Runtime}
 import java.io.{FileNotFoundException, InputStreamReader}
 import java.nio.file.{Files, Path}
 import java.util.concurrent.TimeUnit
@@ -12,7 +12,6 @@ import coop.rchain.metrics
 import coop.rchain.metrics.Metrics
 import coop.rchain.models.Par
 import coop.rchain.rholang.interpreter.accounting._
-import coop.rchain.rholang.interpreter.{ParBuilder, Runtime}
 import coop.rchain.shared.{Log, StoreType}
 import monix.eval.{Coeval, Task}
 import monix.execution.Scheduler
@@ -52,15 +51,15 @@ abstract class WideBenchBaseState {
   @Setup(value = Level.Iteration)
   def doSetup(): Unit = {
     deleteOldStorage(dbDir)
-    setupTerm = ParBuilder[Coeval]
-      .buildNormalizedTerm(resourceFileReader(rhoSetupScriptPath))
+    setupTerm = ParBuilderUtil
+      .buildNormalizedTerm[Coeval](resourceFileReader(rhoSetupScriptPath))
       .runAttempt match {
       case Right(par) => Some(par)
       case Left(err)  => throw err
     }
 
-    term = ParBuilder[Coeval]
-      .buildNormalizedTerm(resourceFileReader(rhoScriptSource))
+    term = ParBuilderUtil
+      .buildNormalizedTerm[Coeval](resourceFileReader(rhoScriptSource))
       .runAttempt match {
       case Right(par) => Some(par)
       case Left(err)  => throw err

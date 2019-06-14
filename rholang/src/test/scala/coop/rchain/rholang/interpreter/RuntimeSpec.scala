@@ -1,4 +1,5 @@
 package coop.rchain.rholang.interpreter
+
 import coop.rchain.metrics
 import coop.rchain.metrics.Metrics
 import coop.rchain.rholang.Resources.mkRuntime
@@ -52,7 +53,7 @@ class RuntimeSpec extends FlatSpec with Matchers {
     mkRuntime[Task](tmpPrefix, mapSize)
       .use { runtime =>
         implicit val c = runtime.cost
-        Interpreter[Task].evaluate(runtime, source)
+        InterpreterUtil.evaluate(runtime, source)
       }
       .runSyncUnsafe(maxDuration)
 }

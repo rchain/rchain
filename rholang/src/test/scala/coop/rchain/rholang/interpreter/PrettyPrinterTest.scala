@@ -875,7 +875,7 @@ class ProcPrinterSpec extends FlatSpec with Matchers {
     assert(parseAndPrint(prettySource) == prettySource)
 
   private def parseAndPrint(source: String): String = PrettyPrinter().buildString(
-    ParBuilder[Coeval].buildNormalizedTerm(new StringReader(source)).runAttempt().right.get
+    ParBuilderUtil.buildNormalizedTerm[Coeval](new StringReader(source)).runAttempt().right.get
   )
 }
 

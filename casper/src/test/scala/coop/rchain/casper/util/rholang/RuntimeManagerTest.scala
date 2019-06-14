@@ -17,7 +17,7 @@ import coop.rchain.p2p.EffectsTestInstances.LogicalTime
 import coop.rchain.rholang.Resources.mkRuntime
 import coop.rchain.rholang.interpreter.Runtime.BlockData
 import coop.rchain.rholang.interpreter.accounting.Cost
-import coop.rchain.rholang.interpreter.{accounting, ParBuilder}
+import coop.rchain.rholang.interpreter.{accounting, ParBuilderUtil}
 import coop.rchain.shared.Log
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
@@ -80,7 +80,7 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
                           val initialPhlo = Cost.UNSAFE_MAX
                           for {
                             _             <- runtime.reducer.setPhlo(initialPhlo)
-                            term          <- ParBuilder[Task].buildNormalizedTerm(deploy.term)
+                            term          <- ParBuilderUtil.buildNormalizedTerm[Task](deploy.term)
                             _             <- runtime.reducer.inj(term)
                             phlosLeft     <- runtime.reducer.phlo
                             reductionCost = initialPhlo - phlosLeft
@@ -144,7 +144,7 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
         .runSyncUnsafe(10.seconds)
 
     result.size should be(1)
-    result.head should be(InterpreterUtil.mkTerm(purseValue).right.get)
+    result.head should be(ParBuilderUtil.mkTerm(purseValue).right.get)
   }
 
   it should "handle multiple results and no results appropriately" in {
@@ -163,7 +163,7 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
     noResults.isEmpty should be(true)
 
     manyResults.size should be(n)
-    (1 to n).forall(i => manyResults.contains(InterpreterUtil.mkTerm(i.toString).right.get)) should be(
+    (1 to n).forall(i => manyResults.contains(ParBuilderUtil.mkTerm(i.toString).right.get)) should be(
       true
     )
   }

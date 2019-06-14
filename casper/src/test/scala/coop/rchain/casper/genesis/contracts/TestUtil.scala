@@ -17,7 +17,7 @@ import coop.rchain.rholang.build.CompiledRholangSource
 import coop.rchain.rholang.interpreter.Runtime.SystemProcess
 import coop.rchain.rholang.interpreter.accounting.Cost
 import coop.rchain.rholang.interpreter.util.RevAddress
-import coop.rchain.rholang.interpreter.{accounting, ParBuilder, Runtime}
+import coop.rchain.rholang.interpreter.{accounting, ParBuilder, ParBuilderUtil, Runtime}
 import coop.rchain.shared.Log
 
 import scala.concurrent.ExecutionContext
@@ -89,7 +89,7 @@ object TestUtil {
       code: String,
       runtime: Runtime[F]
   )(implicit rand: Blake2b512Random): F[Unit] =
-    ParBuilder[F].buildNormalizedTerm(code) >>= (evalTerm(_, runtime))
+    ParBuilderUtil.buildNormalizedTerm(code) >>= (evalTerm(_, runtime))
 
   private def evalTerm[F[_]: FlatMap](
       term: Par,
