@@ -1,7 +1,8 @@
 package coop.rchain.rholang.interpreter.util
 
 import coop.rchain.crypto.PublicKey
-import coop.rchain.crypto.hash.Blake2b256
+import coop.rchain.crypto.codec.Base16
+import coop.rchain.crypto.hash.{Blake2b256, Keccak256}
 import coop.rchain.rholang.interpreter.util.codec.Base58
 
 final case class Address(prefix: Array[Byte], keyHash: Array[Byte], checksum: Array[Byte]) {
@@ -25,11 +26,15 @@ class AddressTools(prefix: Array[Byte], keyLength: Int, checksumLength: Int) {
     */
   def fromPublicKey(pk: PublicKey): Option[Address] =
     if (keyLength == pk.bytes.length) {
-      val keyHash = Blake2b256.hash(pk.bytes)
-      val payload = prefix ++ keyHash
-
-      Some(Address(prefix, keyHash, computeChecksum(payload)))
+      val ethAddress = Base16.encode(Keccak256.hash(pk.bytes.drop(1))).takeRight(40)
+      Some(fromEthAddress(ethAddress))
     } else None
+
+  def fromEthAddress(ethAddress: String): Address = {
+    val keyHash = Keccak256.hash(Base16.unsafeDecode(ethAddress))
+    val payload = prefix ++ keyHash
+    Address(prefix, keyHash, computeChecksum(payload))
+  }
 
   def isValid(address: String): Boolean = parse(address).isRight
 
