@@ -117,7 +117,7 @@ final case class HistoryRepositoryImpl[F[_]: Sync, C, P, A, K](
     Logger("coop.rchain.rspace.datametrics")
 
   private def measure(actions: List[HotStoreAction]): F[Unit] =
-    Applicative[F].pure(
+    Sync[F].delay(
       dataLogger.whenDebugEnabled {
         computeMeasure(actions).foreach(p => dataLogger.debug(p))
       }
