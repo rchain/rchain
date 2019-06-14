@@ -7,12 +7,10 @@ import java.util.concurrent.atomic.AtomicReference
 import scala.io.Source
 import scala.util.{Left, Right}
 
-import cats.data.EitherT
 import cats.implicits._
 
 import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.comm.protocol.routing.Protocol
-import coop.rchain.comm.CommError
 import coop.rchain.comm.rp.Connect.RPConfAsk
 import coop.rchain.shared._
 
@@ -45,8 +43,15 @@ class GrpcTransportServer(
   private def certInputStream = new ByteArrayInputStream(cert.getBytes())
   private def keyInputStream  = new ByteArrayInputStream(key.getBytes())
 
-  private val queueScheduler =
-    Scheduler.fixedPool("tl-dispatcher-server", parallelism, reporter = UncaughtExceptionLogger)
+  private val queueSendScheduler =
+    Scheduler.fixedPool(
+      "tl-dispatcher-server-send",
+      parallelism,
+      reporter = UncaughtExceptionLogger
+    )
+
+  private val queueBlobScheduler =
+    Scheduler.singleThread("tl-dispatcher-server-blob", reporter = UncaughtExceptionLogger)
 
   private val serverSslContextTask: Task[SslContext] =
     Task
@@ -68,34 +73,41 @@ class GrpcTransportServer(
       handleStreamed: Blob => Task[Unit]
   ): Task[Cancelable] = {
 
-    val dispatchInternal: ServerMessage => Task[Unit] = {
-      // TODO: consider logging on failure (Left)
-      case Send(protocol) => dispatch(protocol).attemptAndLog.void
-      case msg: StreamMessage =>
+    val dispatchSend: Send => Task[Unit] =
+      s => dispatch(s.msg).attemptAndLog.void
+
+    val dispatchBlob: StreamMessage => Task[Unit] =
+      msg =>
         StreamHandler.restore(msg) >>= {
           case Left(ex) =>
             Log[Task].error("Could not restore data from file while handling stream", ex)
           case Right(blob) => handleStreamed(blob)
         }
-      case _ => Task.unit // sender timeout
-    }
 
     for {
       serverSslContext <- serverSslContextTask
-      result <- Task.delay {
-                 new TcpServerObservable(
+      tellBuffer       <- Task.delay(buffer.LimitedBufferObservable.dropNew[Send](4096))
+      blobBuffer       <- Task.delay(buffer.LimitedBufferObservable.dropNew[StreamMessage](1024))
+      receiver <- GrpcTransportReceiver.create(
                    networkId: String,
                    port,
                    serverSslContext,
                    maxMessageSize,
                    maxStreamMessageSize,
+                   tellBuffer,
+                   blobBuffer,
                    tempFolder = tempFolder
-                 ).mapParallelUnordered(parallelism)(dispatchInternal)
-                   .subscribe()(queueScheduler)
-               }
-    } yield result
+                 )
+      tellConsumer <- Task.delay(
+                       tellBuffer
+                         .mapParallelUnordered(parallelism)(dispatchSend)
+                         .subscribe()(queueSendScheduler)
+                     )
+      blobConsumer <- Task.delay(
+                       blobBuffer.mapEval(dispatchBlob).subscribe()(queueBlobScheduler)
+                     )
+    } yield Cancelable.collection(receiver, tellConsumer, blobConsumer)
   }
-
 }
 
 object GrpcTransportServer {
@@ -149,8 +161,6 @@ class TransportServer(server: GrpcTransportServer) {
               .fold(())(c => c.cancel())
           }
     }
-
-  import CommunicationResponse._
 
   def stop(): Task[Unit] =
     ref
