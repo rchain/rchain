@@ -49,7 +49,10 @@ class DeployerAuthTest extends FlatSpec with Matchers {
           mgr =>
             mgr.captureResults(
               mgr.emptyStateHash,
-              deploy(sk, s"""new auth(`rho:deployer:auth`) in { @"$captureChannel"!(*auth) }"""),
+              deploy(
+                sk,
+                s"""new auth(`rho:rchain:deployerId`) in { @"$captureChannel"!(*auth) }"""
+              ),
               captureChannel
             )
         )
@@ -67,14 +70,14 @@ class DeployerAuthTest extends FlatSpec with Matchers {
     ): Assertion = {
       val contract = ConstructDeploy.sourceDeploy(
         source =
-          s"""new auth(`rho:deployer:auth`) in { contract @"checkAuth"(input, ret) = { ret!(*input == *auth) }}""",
+          s"""new auth(`rho:rchain:deployerId`) in { contract @"checkAuth"(input, ret) = { ret!(*input == *auth) }}""",
         timestamp = System.currentTimeMillis(),
         accounting.MAX_VALUE,
         sec = deployer
       )
       val captureChannel = "__RETURN_VALUE__"
       val checkAuth =
-        s"""new auth(`rho:deployer:auth`), ret in {
+        s"""new auth(`rho:rchain:deployerId`), ret in {
            |@"checkAuth"!(*auth, *ret) |
            |  for(isAuthenticated <- ret) {
            |    @"$captureChannel"!(*isAuthenticated)

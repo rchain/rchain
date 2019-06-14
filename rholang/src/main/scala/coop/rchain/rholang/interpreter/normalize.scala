@@ -1,12 +1,15 @@
 package coop.rchain.rholang.interpreter
 
+import cats.Applicative
 import cats.effect.Sync
-import cats.{Applicative, Functor, Monad}
+import cats.implicits._
+import coop.rchain.crypto.PublicKey
 import coop.rchain.models.Connective.ConnectiveInstance._
 import coop.rchain.models.Expr.ExprInstance._
 import coop.rchain.models.Var.VarInstance._
 import coop.rchain.models._
 import coop.rchain.models.rholang.implicits._
+import coop.rchain.rholang.interpreter.errors._
 import coop.rchain.rholang.syntax.rholang_mercury.Absyn.{
   Bundle => AbsynBundle,
   Ground => AbsynGround,
@@ -14,16 +17,11 @@ import coop.rchain.rholang.syntax.rholang_mercury.Absyn.{
   Send => AbsynSend,
   _
 }
-import cats.implicits._
-import coop.rchain.crypto.PublicKey
-import coop.rchain.rholang.interpreter.ProcNormalizeMatcher.normalizeMatch
-import coop.rchain.rholang.interpreter.errors._
-import coop.rchain.models.rholang.implicits._
-
-import scala.collection.immutable.{BitSet, Vector}
-import scala.collection.convert.ImplicitConversionsToScala._
+import coop.rchain.shared.ByteStringOps.RichByteArray
 import monix.eval.Coeval
-import coop.rchain.models.rholang.sorter.ordering._
+
+import scala.collection.convert.ImplicitConversionsToScala._
+import scala.collection.immutable.{BitSet, Vector}
 
 sealed trait VarSort
 case object ProcSort extends VarSort
@@ -920,7 +918,7 @@ object ProcNormalizeMatcher {
           } yield chainedRes
         }
 
-      case p: PNew => {
+      case p: PNew =>
         // TODO: bindings within a single new shouldn't have overlapping names.
         val newTaggedBindings = p.listnamedecl_.toVector.map {
           case n: NameDeclSimpl => (None, n.var_, NameSort, n.line_num, n.col_num)
@@ -935,25 +933,32 @@ object ProcNormalizeMatcher {
         }
         // This sorts the None's first, and the uris by lexicographical order.
         // We do this here because the sorting affects the numbering of variables inside the body.
-        val sortBindings = newTaggedBindings.sortBy(row => row._1)
-        val newBindings = sortBindings.map { row =>
-          (row._2, row._3, row._4, row._5)
-        }
-        val uris     = sortBindings.flatMap(row => row._1)
-        val newEnv   = input.env.newBindings(newBindings.toList)
-        val newCount = newEnv.count - input.env.count
-        normalizeMatch[M](p.proc_, ProcVisitInputs(VectorPar(), newEnv, input.knownFree))
-          .map { bodyResult =>
-            val resultNew =
-              New(
-                newCount,
-                bodyResult.par,
-                uris,
-                bodyResult.par.locallyFree.from(newCount).map(x => x - newCount)
+        val sortBindings       = newTaggedBindings.sortBy(row => row._1)
+        val newBindings        = sortBindings.map(row => (row._2, row._3, row._4, row._5))
+        val uris               = sortBindings.flatMap(row => row._1)
+        val newEnv             = input.env.newBindings(newBindings.toList)
+        val newCount           = newEnv.count - input.env.count
+        val requiresDeployerId = uris.contains("rho:rchain:deployerId")
+        if (requiresDeployerId && deployerPk.isEmpty)
+          NormalizerError(
+            "`rho:rchain:deployerId` was used in rholang usage context where DeployerId is not available."
+          ).raiseError[M, ProcVisitOutputs]
+        else {
+          val maybeDeployerId =
+            if (requiresDeployerId) deployerPk.map(pk => DeployerId(pk.bytes.toByteString))
+            else none[DeployerId]
+          normalizeMatch[M](p.proc_, ProcVisitInputs(VectorPar(), newEnv, input.knownFree)).map {
+            bodyResult =>
+              val resultNew = New(
+                bindCount = newCount,
+                p = bodyResult.par,
+                uri = uris,
+                deployerId = maybeDeployerId,
+                locallyFree = bodyResult.par.locallyFree.from(newCount).map(x => x - newCount)
               )
-            ProcVisitOutputs(input.par.prepend(resultNew), bodyResult.knownFree)
+              ProcVisitOutputs(input.par.prepend(resultNew), bodyResult.knownFree)
           }
-      }
+        }
 
       case b: PBundle =>
         def error(targetResult: ProcVisitOutputs): M[ProcVisitOutputs] = {

@@ -894,12 +894,13 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
     result.par should be(
       inputs.par.prepend(
         New(
-          3,
-          Send(EVar(BoundVar(2)), List[Par](GInt(7)), false, BitSet(2))
+          bindCount = 3,
+          p = Send(EVar(BoundVar(2)), List[Par](GInt(7)), false, BitSet(2))
             .prepend(Send(EVar(BoundVar(1)), List[Par](GInt(8)), false, BitSet(1)))
             .prepend(Send(EVar(BoundVar(0)), List[Par](GInt(9)), false, BitSet(0))),
-          Vector.empty,
-          BitSet()
+          uri = Vector.empty,
+          deployerId = None,
+          locallyFree = BitSet()
         )
       )
     )
@@ -945,14 +946,15 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
     result.par should be(
       inputs.par.prepend(
         New(
-          5,
-          Send(EVar(BoundVar(4)), List[Par](GInt(7)), false, BitSet(4))
+          bindCount = 5,
+          p = Send(EVar(BoundVar(4)), List[Par](GInt(7)), false, BitSet(4))
             .prepend(Send(EVar(BoundVar(3)), List[Par](GInt(8)), false, BitSet(3)))
             .prepend(Send(EVar(BoundVar(1)), List[Par](GInt(9)), false, BitSet(1)))
             .prepend(Send(EVar(BoundVar(0)), List[Par](GInt(10)), false, BitSet(0)))
             .prepend(Send(EVar(BoundVar(2)), List[Par](GInt(11)), false, BitSet(2))),
-          Vector("rho:registry", "rho:stdout"),
-          BitSet()
+          uri = Vector("rho:registry", "rho:stdout"),
+          deployerId = None,
+          locallyFree = BitSet()
         )
       )
     )
@@ -1118,19 +1120,21 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
             MatchCase(
               GBool(true),
               New(
-                1,
-                Send(EVar(BoundVar(0)), List[Par](GInt(47)), false, BitSet(0)),
-                Vector.empty,
-                BitSet()
+                bindCount = 1,
+                p = Send(EVar(BoundVar(0)), List[Par](GInt(47)), false, BitSet(0)),
+                uri = Vector.empty,
+                deployerId = None,
+                locallyFree = BitSet()
               )
             ),
             MatchCase(
               GBool(false),
               New(
-                1,
-                Send(EVar(BoundVar(0)), List[Par](GInt(47)), false, BitSet(0)),
-                Vector.empty,
-                BitSet()
+                bindCount = 1,
+                p = Send(EVar(BoundVar(0)), List[Par](GInt(47)), false, BitSet(0)),
+                uri = Vector.empty,
+                deployerId = None,
+                locallyFree = BitSet()
               )
             )
             // TODO: Fill in type error case
