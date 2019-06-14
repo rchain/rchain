@@ -164,7 +164,7 @@ object InterpreterUtil {
       runtimeManager: RuntimeManager[F],
       blockData: BlockData,
       span: Span[F],
-      invalidBlocks: Map[BlockHash, Validator] = Map.empty[BlockHash, Validator]
+      invalidBlocks: Map[BlockHash, Validator]
   ): F[Either[Throwable, (StateHash, StateHash, Seq[InternalProcessedDeploy])]] =
     for {
       possiblePreStateHash <- computeParentsPostState[F](parents, dag, runtimeManager, span)

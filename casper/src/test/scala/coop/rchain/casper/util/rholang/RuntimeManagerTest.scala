@@ -11,6 +11,8 @@ import coop.rchain.catscontrib.effect.implicits._
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.metrics
 import coop.rchain.metrics.Metrics
+import coop.rchain.models.BlockHash.BlockHash
+import coop.rchain.models.Validator.Validator
 import coop.rchain.p2p.EffectsTestInstances.LogicalTime
 import coop.rchain.rholang.Resources.mkRuntime
 import coop.rchain.rholang.interpreter.Runtime.BlockData
@@ -33,7 +35,11 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
       startHash: StateHash,
       terms: List[Id[DeployData]]
   ): F[(StateHash, Seq[InternalProcessedDeploy])] =
-    runtimeManager.computeState(startHash)(terms, BlockData(System.currentTimeMillis(), 0))
+    runtimeManager.computeState(startHash)(
+      terms,
+      BlockData(System.currentTimeMillis(), 0),
+      Map.empty[BlockHash, Validator]
+    )
 
   "computeState" should "capture rholang errors" in {
     val badRholang = """ for(@x <- @"x"; @y <- @"y"){ @"xy"!(x + y) } | @"x"!(1) | @"y"!("hi") """
@@ -118,7 +124,8 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
           mgr
             .computeState(mgr.emptyStateHash)(
               Seq(StandardDeploys.nonNegativeNumber, deployData),
-              BlockData(System.currentTimeMillis(), 0)
+              BlockData(System.currentTimeMillis(), 0),
+              Map.empty[BlockHash, Validator]
             )
             .flatMap { result =>
               val hash = result._1

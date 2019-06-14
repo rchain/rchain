@@ -8,7 +8,9 @@ import coop.rchain.casper.util.rholang.Resources._
 import coop.rchain.crypto.PrivateKey
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.signatures.Secp256k1
+import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.Expr.ExprInstance.GBool
+import coop.rchain.models.Validator.Validator
 import coop.rchain.models.rholang.implicits._
 import coop.rchain.models.{GDeployerAuth, Par}
 import coop.rchain.rholang.interpreter.Runtime.BlockData
@@ -83,7 +85,11 @@ class DeployerAuthTest extends FlatSpec with Matchers {
         runtimeManager
           .use { mgr =>
             mgr
-              .computeState(mgr.emptyStateHash)(Seq(contract), BlockData(0L, 0L))
+              .computeState(mgr.emptyStateHash)(
+                Seq(contract),
+                BlockData(0L, 0L),
+                Map.empty[BlockHash, Validator]
+              )
               .flatMap { result =>
                 val hash = result._1
                 mgr
