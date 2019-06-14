@@ -42,9 +42,14 @@ new  PoS,
           @RevVault!("findOrCreate", posRevAddress, *posVaultCh) |
           for (@(true, _) <- posVaultCh) {
 
-            stateCh!($$initialBonds$$) |
+            stateCh!(({}, $$initialBonds$$)) |
             contract PoS (@"getBonds", returnCh) = {
-              getMVar!(*stateCh, *returnCh)
+              new tmpCh in {
+                getMVar!(*stateCh, *tmpCh) |
+                for (@(_, bonds) <- tmpCh) {
+                  returnCh!(bonds)
+                }
+              }
             } |
 
             contract PoS (@"bond", @amount, returnCh) = {
@@ -52,26 +57,26 @@ new  PoS,
                 runMVar!(*stateCh, *processCh, *returnCh) |
 
                 getUser!(*userCh) |
-                for(@bonds, resultCh <- processCh;
+                for(@(rewards, bonds), resultCh <- processCh;
                     @userPk <- userCh) {
                   if (bonds.contains(userPk)) {
-                    resultCh!(bonds, (false, "Public key is already bonded."))
+                    resultCh!((rewards, bonds), (false, "Public key is already bonded."))
                   } else if (amount < $$minimumBond$$) {
-                    resultCh!(bonds, (false, "Bond is less than minimum!"))
+                    resultCh!((rewards, bonds), (false, "Bond is less than minimum!"))
                   } else if (amount > $$maximumBond$$) {
-                    resultCh!(bonds, (false, "Bond is greater than maximum!"))
+                    resultCh!((rewards, bonds), (false, "Bond is greater than maximum!"))
                   } else {
                     deposit!(userPk, amount, *depositCh) |
                     for(@depositResult <- depositCh) {
                       match depositResult {
                         (true, _) => {
                           resultCh!(
-                            bonds.set(userPk,(amount, bonds.size() + 1)),
+                            (rewards, bonds.set(userPk,(amount, bonds.size() + 1))),
                             depositResult)
                         }
 
                         (false, errorMsg) => {
-                          resultCh!(bonds, (false, "Bond deposit failed: " ++ errorMsg))
+                          resultCh!((rewards, bonds), (false, "Bond deposit failed: " ++ errorMsg))
                         }
                       }
                     }
@@ -94,12 +99,12 @@ new  PoS,
               new userCh, invalidBlocksCh, getInvalidBlocks(`rho:casper:invalidBlocks`) in {
                 getInvalidBlocks!(*invalidBlocksCh) |
                 getUser!(*userCh) |
-                for (@invalidBlocks <- invalidBlocksCh; @bonds <- stateCh; @userPk <- userCh) {
+                for (@invalidBlocks <- invalidBlocksCh; @(rewards, bonds) <- stateCh; @userPk <- userCh) {
                   new toBeSlashed in {
                     toBeSlashed!(invalidBlocks.getOrElse(blockHash, userPk)) |
                     for (@validator <- toBeSlashed) {
                       // TODO: Transfer to coop wallet instead of just simply setting bonds to 0
-                      stateCh!(bonds.set(validator, (0, bonds.get(validator).nth(1)))) |
+                      stateCh!((rewards, bonds.set(validator, (0, bonds.get(validator).nth(1))))) |
                       return!(true)
                     }
                   }
