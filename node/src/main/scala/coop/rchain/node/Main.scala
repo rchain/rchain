@@ -47,8 +47,15 @@ object Main {
       reporter = UncaughtExceptionLogger
     )
 
-    Task.defer(mainProgram(configuration)).unsafeRunSync
+    Task
+      .defer(logUnknownConfigurationKeys(configuration) >> mainProgram(configuration))
+      .unsafeRunSync
   }
+
+  private def logUnknownConfigurationKeys(conf: Configuration): Task[Unit] =
+    conf.unknownConfigKeys.toList
+      .traverse(k => log.warn(s"Unknown configuration key $k"))
+      .void
 
   private def mainProgram(conf: Configuration)(implicit scheduler: Scheduler): Task[Unit] = {
     implicit val replService: GrpcReplClient =

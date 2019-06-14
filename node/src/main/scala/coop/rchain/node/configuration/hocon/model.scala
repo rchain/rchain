@@ -32,7 +32,8 @@ object Configuration {
 }
 
 object Server {
-  val Key = s"${Configuration.Key}.server"
+  val Key                = s"${Configuration.Key}.server"
+  val Keys: List[String] = keys.all.map(k => s"$Key.$k")
 
   object keys {
     val NetworkId               = "network-id"
@@ -57,6 +58,32 @@ object Server {
     val PacketChunkSize         = "packet-chunk-size"
     val MessageConsumers        = "message-consumers"
     val FaultToleranceThreshold = "fault-tolerance-threshold"
+
+    val all =
+      List(
+        NetworkId,
+        Bootstrap,
+        StoreType,
+        Host,
+        HostDynamic,
+        Upnp,
+        Port,
+        PortHttp,
+        PortKademlia,
+        SendTimeout,
+        Standalone,
+        DataDir,
+        StoreSize,
+        DagStorageSize,
+        MapSize,
+        MaxConnections,
+        AllowPrivateAddresses,
+        MaxMessageSize,
+        MaxStreamMessageSize,
+        PacketChunkSize,
+        MessageConsumers,
+        FaultToleranceThreshold
+      )
   }
 
   @SuppressWarnings(Array("org.wartremover.warts.Throw"))
@@ -109,12 +136,20 @@ object Server {
 }
 
 object Tls {
-  val Key = s"${Server.Key}.tls"
+  val Key                = s"${Server.Key}.tls"
+  val Keys: List[String] = keys.all.map(k => s"$Key.$k")
 
   object keys {
     val Certificate             = "certificate"
     val Key                     = "key"
     val SecureRandomNonBlocking = "secure-random-non-blocking"
+
+    val all =
+      List(
+        Certificate,
+        Key,
+        SecureRandomNonBlocking
+      )
   }
 
   def fromConfig(config: Config): configuration.Tls = {
@@ -133,7 +168,8 @@ object Tls {
 }
 
 object Kamon {
-  val Key = s"${Server.Key}.metrics"
+  val Key                = s"${Server.Key}.metrics"
+  val Keys: List[String] = keys.all.map(k => s"$Key.$k")
 
   object keys {
     val Prometheus  = "prometheus"
@@ -141,6 +177,15 @@ object Kamon {
     val InfluxdbUdp = "influxdb-udp"
     val Zipkin      = "zipkin"
     val Sigar       = "sigar"
+
+    val all =
+      List(
+        Prometheus,
+        Influxdb,
+        InfluxdbUdp,
+        Zipkin,
+        Sigar
+      )
   }
 
   def fromConfig(config: Config): configuration.Kamon = {
@@ -157,13 +202,22 @@ object Kamon {
 }
 
 object GrpcServer {
-  val Key = s"${Configuration.Key}.grpc"
+  val Key                = s"${Configuration.Key}.grpc"
+  val Keys: List[String] = keys.all.map(k => s"$Key.$k")
 
   object keys {
     val Host           = "host"
     val PortExternal   = "port-external"
     val PortInternal   = "port-internal"
     val MaxMessageSize = "max-message-size"
+
+    val all =
+      List(
+        Host,
+        PortExternal,
+        PortInternal,
+        MaxMessageSize
+      )
   }
 
   def fromConfig(config: Config): configuration.GrpcServer = {
@@ -179,7 +233,8 @@ object GrpcServer {
 }
 
 object Casper {
-  val Key = s"${Configuration.Key}.casper"
+  val Key                = s"${Configuration.Key}.casper"
+  val Keys: List[String] = keys.all.map(k => s"$Key.$k")
 
   object keys {
     val ValidatorPrivateKey     = "validator-private-key"
@@ -199,6 +254,27 @@ object Casper {
     val GenesisApproveDuration  = "genesis-approve-duration"
     val DeployTimestamp         = "deploy-timestamp"
     val GenesisPath             = "genesis-path"
+
+    val all =
+      List(
+        ValidatorPrivateKey,
+        ValidatorPrivateKeyPath,
+        ValidatorPublicKey,
+        SigAlgorithm,
+        BondsFile,
+        KnownValidatorsFile,
+        Validators,
+        WalletsFile,
+        BondMinimum,
+        BondMaximum,
+        RequiredSignatures,
+        Shard,
+        GenesisValidator,
+        GenesisApproveInterval,
+        GenesisApproveDuration,
+        DeployTimestamp,
+        GenesisPath
+      )
   }
 
   def fromConfig(config: Config): CasperConf = {

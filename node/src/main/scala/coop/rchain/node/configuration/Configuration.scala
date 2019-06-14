@@ -4,14 +4,13 @@ import java.nio.file.{Path, Paths}
 
 import collection.JavaConverters._
 import scala.util.Try
+
 import coop.rchain.blockstorage.{BlockDagFileStorage, FileLMDBIndexBlockStore}
 import coop.rchain.casper.CasperConf
 import coop.rchain.node.configuration.commandline.ConfigMapper
+
 import com.typesafe.config._
-import coop.rchain.crypto.PublicKey
-import coop.rchain.rholang.interpreter.util.codec.Base58
 import monix.eval.Task
-import org.rogach.scallop.ScallopOption
 
 object Configuration {
 
@@ -167,8 +166,24 @@ object Configuration {
         )
       )
 
+    val allKeys = config
+      .getConfig(hocon.Configuration.Key)
+      .entrySet()
+      .asScala
+      .filterNot(_.getKey.startsWith("influxdb"))
+      .map(k => s"${hocon.Configuration.Key}.${k.getKey}")
+      .toSet
+    val knownKeys = List(
+      hocon.Casper.Keys,
+      hocon.GrpcServer.Keys,
+      hocon.Kamon.Keys,
+      hocon.Server.Keys,
+      hocon.Tls.Keys
+    ).flatten
+
     new Configuration(
       config,
+      allKeys -- knownKeys,
       command,
       profile,
       configFile,
@@ -219,6 +234,7 @@ object Configuration {
 
 final case class Configuration(
     underlying: Config,
+    unknownConfigKeys: Set[String],
     command: Command,
     profile: String,
     configurationFile: Path,
