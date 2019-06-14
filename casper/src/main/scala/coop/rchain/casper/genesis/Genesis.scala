@@ -69,22 +69,13 @@ object Genesis {
   ): F[BlockMessage] =
     for {
       timestamp <- deployTimestamp.fold(Time[F].currentMillis)(_.pure[F])
+      vaults    <- getWallets[F](maybeWalletsPath, genesisPath.resolve("wallets.txt"))
       bonds <- getBonds[F](
                 maybeBondsPath,
                 genesisPath.resolve("bonds.txt"),
                 numValidators,
                 genesisPath
               )
-      vaults <- bonds.toList.foldMapM {
-                 case (pk, stake) =>
-                   RevAddress.fromPublicKey(pk) match {
-                     case Some(ra) => List(Vault(ra, stake)).pure[F]
-                     case None =>
-                       Log[F].warn(
-                         s"Validator public key $pk is invalid. Proceeding without entry."
-                       ) *> List.empty[Vault].pure[F]
-                   }
-               }
       validators = bonds.toSeq.map(Validator.tupled)
       genesisBlock <- createGenesisBlock(
                        runtimeManager,
@@ -102,6 +93,66 @@ object Genesis {
                        )
                      )
     } yield genesisBlock
+
+  def getWallets[F[_]: Sync: Log: RaiseIOError](
+      maybeWalletsPath: Option[String],
+      defaultWalletPath: Path
+  ): F[Seq[Vault]] = {
+    def walletFromFile(walletsPath: Path): F[Seq[Vault]] =
+      for {
+        maybeLines <- SourceIO.open(walletsPath).use(_.getLines).attempt
+        wallets <- maybeLines match {
+                    case Right(lines) =>
+                      lines
+                        .traverse(fromLine(_) match {
+                          case Right(wallet) => wallet.some.pure[F]
+                          case Left(errMsg) =>
+                            Log[F]
+                              .warn(s"Error in parsing wallets file: $errMsg")
+                              .map(_ => none[Vault])
+                        })
+                        .map(_.flatten)
+                    case Left(ex) =>
+                      Log[F]
+                        .warn(
+                          s"Failed to read ${walletsPath.toAbsolutePath} for reason: ${ex.getMessage}"
+                        )
+                        .map(_ => Seq.empty[Vault])
+                  }
+      } yield wallets
+
+    maybeWalletsPath match {
+      case Some(walletsPathStr) =>
+        val walletsPath = Paths.get(walletsPathStr)
+        Monad[F].ifM(exists(walletsPath))(
+          walletFromFile(walletsPath),
+          Sync[F].raiseError(new Exception(s"Specified wallets file $walletsPath does not exist"))
+        )
+      case None =>
+        Monad[F].ifM(exists(defaultWalletPath))(
+          Log[F].info(s"Using default file $defaultWalletPath") >> walletFromFile(
+            defaultWalletPath
+          ),
+          Log[F]
+            .warn(
+              "No wallets file specified and no default file found. No wallets will exist at genesis."
+            )
+            .map(_ => Seq.empty[Vault])
+        )
+    }
+  }
+
+  def fromLine(line: String): Either[String, Vault] = line.split(",").filter(_.nonEmpty) match {
+    case Array(ethAddress, initRevBalanceStr, _) =>
+      Try(BigInt(initRevBalanceStr)) match {
+        case Success(initRevBalance) =>
+          Right(Vault(RevAddress.fromEthAddress(ethAddress), initRevBalance.toLong)) // TODO: Remove BigInt conversion
+        case Failure(_) =>
+          Left(s"Failed to parse given initial balance $initRevBalanceStr as int.")
+      }
+
+    case _ => Left(s"Invalid pre-wallet specification:\n$line")
+  }
 
   def createGenesisBlock[F[_]: Concurrent](
       runtimeManager: RuntimeManager[F],
