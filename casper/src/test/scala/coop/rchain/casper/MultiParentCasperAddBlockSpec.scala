@@ -483,17 +483,21 @@ class MultiParentCasperAddBlockSpec extends FlatSpec with Matchers with Inspecto
         createBlockResult     <- nodes(0).casperEff.deploy(deployData) >> nodes(0).casperEff.createBlock
         Created(signedBlock)  = createBlockResult
         invalidBlock          = signedBlock.withSeqNum(47)
-        _                     <- nodes(1).casperEff.addBlock(invalidBlock, ignoreDoppelgangerCheck[Effect])
-        _                     <- nodes(2).casperEff.addBlock(invalidBlock, ignoreDoppelgangerCheck[Effect])
+        status1               <- nodes(1).casperEff.addBlock(invalidBlock, ignoreDoppelgangerCheck[Effect])
+        status2               <- nodes(2).casperEff.addBlock(invalidBlock, ignoreDoppelgangerCheck[Effect])
         createBlockResult2    <- nodes(1).casperEff.createBlock
         Created(signedBlock2) = createBlockResult2
-        _                     <- nodes(1).casperEff.addBlock(signedBlock2, ignoreDoppelgangerCheck[Effect])
+        status3               <- nodes(1).casperEff.addBlock(signedBlock2, ignoreDoppelgangerCheck[Effect])
         bonds                 <- nodes(1).runtimeManager.computeBonds(ProtoUtil.postStateHash(signedBlock2))
         _                     = bonds.map(_.stake).min should be(0) // Slashed validator has 0 stake
         _                     <- nodes(2).receive()
         createBlockResult3    <- nodes(2).casperEff.createBlock
         Created(signedBlock3) = createBlockResult3
-        _                     <- nodes(2).casperEff.addBlock(signedBlock3, ignoreDoppelgangerCheck[Effect])
+        status4               <- nodes(2).casperEff.addBlock(signedBlock3, ignoreDoppelgangerCheck[Effect])
+        _                     = status1 should be(InvalidBlockHash)
+        _                     = status2 should be(InvalidBlockHash)
+        _                     = status3 should be(Valid)
+        _                     = status4 should be(Valid)
         // TODO: assert no effect as already slashed
       } yield ()
     }

@@ -18,6 +18,8 @@ import coop.rchain.comm.{transport, PeerNode}
 import coop.rchain.crypto.PublicKey
 import coop.rchain.crypto.hash.Blake2b256
 import coop.rchain.crypto.signatures.Secp256k1
+import coop.rchain.models.BlockHash.BlockHash
+import coop.rchain.models.Validator.Validator
 import coop.rchain.rholang.interpreter.Runtime.BlockData
 import coop.rchain.rholang.interpreter.util.RevAddress
 import coop.rchain.shared._
@@ -150,7 +152,8 @@ object BlockApproverProtocol {
                     runtimeManager
                       .replayComputeState(runtimeManager.emptyStateHash)(
                         blockDeploys,
-                        BlockData(time, blockNumber)
+                        BlockData(time, blockNumber),
+                        Map.empty[BlockHash, Validator]
                       )
                   ).leftMap { case (_, status) => s"Failed status during replay: $status." }
       _ <- EitherT(

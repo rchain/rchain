@@ -47,12 +47,12 @@ trait RuntimeManager[F[_]] {
   def replayComputeState(startHash: StateHash)(
       terms: Seq[InternalProcessedDeploy],
       blockData: BlockData,
-      invalidBlocks: Map[BlockHash, Validator] = Map.empty[BlockHash, Validator]
+      invalidBlocks: Map[BlockHash, Validator]
   ): F[Either[(Option[DeployData], Failed), StateHash]]
   def computeState(hash: StateHash)(
       terms: Seq[DeployData],
       blockData: BlockData,
-      invalidBlocks: Map[BlockHash, Validator] = Map.empty[BlockHash, Validator]
+      invalidBlocks: Map[BlockHash, Validator]
   ): F[(StateHash, Seq[InternalProcessedDeploy])]
   def computeGenesis(
       terms: Seq[DeployData],

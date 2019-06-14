@@ -97,7 +97,8 @@ object BlockGenerator {
                  dag,
                  runtimeManager,
                  BlockData(now, b.body.get.state.get.blockNumber),
-                 span
+                 span,
+                 Map.empty[BlockHash, Validator]
                )
     } yield result
 }

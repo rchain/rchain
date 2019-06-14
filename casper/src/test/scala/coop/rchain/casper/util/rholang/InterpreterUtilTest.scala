@@ -22,7 +22,9 @@ import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
 import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.metrics
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
+import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.PCost
+import coop.rchain.models.Validator.Validator
 import coop.rchain.p2p.EffectsTestInstances.LogStub
 import coop.rchain.rholang.interpreter.Runtime.BlockData
 import coop.rchain.rholang.interpreter.{accounting, Runtime}
@@ -61,7 +63,8 @@ class InterpreterUtilTest
       dag,
       runtimeManager,
       BlockData(System.currentTimeMillis(), 0),
-      span0
+      span0,
+      Map.empty[BlockHash, Validator]
     )
 
   "computeBlockCheckpoint" should "compute the final post-state of a chain properly" in withStorage {
