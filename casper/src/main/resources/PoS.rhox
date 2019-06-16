@@ -86,11 +86,18 @@ new  PoS,
             } |
 
             contract PoS (@"pay", @amount, returnCh) = {
-              new vaultCh, transferCh, userCh in {
+              new vaultCh, transferCh, userCh, processCh, depositCh in {
                 getUser!(*userCh) |
 
-                for(@userPk <- userCh) {
-                  deposit!(userPk, amount, *returnCh)
+                runMVar!(*stateCh, *processCh, *returnCh) |
+
+                for(@(rewards, bonds), resultCh <- processCh;
+                    @userPk <- userCh) {
+                  deposit!(userPk, amount, *depositCh) |
+
+                  for (@depositResult <- depositCh) {
+                    resultCh!((rewards, bonds), depositResult)
+                  }
                 }
               }
             } |
