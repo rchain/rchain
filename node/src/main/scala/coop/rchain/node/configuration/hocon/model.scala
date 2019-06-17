@@ -45,6 +45,7 @@ object Server {
     val Port                    = "port"
     val PortHttp                = "port-http"
     val PortKademlia            = "port-kademlia"
+    val UseRandomPorts          = "use-random-ports"
     val SendTimeout             = "send-timeout"
     val Standalone              = "standalone"
     val DataDir                 = "data-dir"
@@ -70,6 +71,7 @@ object Server {
         Port,
         PortHttp,
         PortKademlia,
+        UseRandomPorts,
         SendTimeout,
         Standalone,
         DataDir,
@@ -116,6 +118,7 @@ object Server {
       port = server.getInt(keys.Port),
       httpPort = server.getInt(keys.PortHttp),
       kademliaPort = server.getInt(keys.PortKademlia),
+      useRandomPorts = server.getBoolean(keys.UseRandomPorts),
       defaultTimeout = server.getFiniteDuration(keys.SendTimeout),
       standalone = server.getBoolean(keys.Standalone),
       bootstrap = bootstrap,

@@ -3,6 +3,7 @@ package coop.rchain.node
 import java.nio.file.Path
 
 import cats.implicits._
+import cats.effect.Resource
 import coop.rchain.casper.util.comm._
 import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.crypto.PrivateKey
@@ -188,12 +189,12 @@ object Main {
     SLF4JBridgeHandler.removeHandlersForRootLogger()
     SLF4JBridgeHandler.install()
     for {
-      _       <- checkHost(conf)
-      _       <- checkPorts(conf)
-      _       <- log.info(VersionInfo.get)
-      _       <- logConfiguration(conf)
-      runtime <- NodeRuntime(conf)
-      _       <- runtime.main
+      _             <- checkHost(conf)
+      confWithPorts <- checkPorts(conf)
+      _             <- log.info(VersionInfo.get)
+      _             <- logConfiguration(confWithPorts)
+      runtime       <- NodeRuntime(confWithPorts)
+      _             <- runtime.main
     } yield ()
   }
 
@@ -216,7 +217,19 @@ object Main {
     }
   }
 
-  private def checkPorts(conf: Configuration): Task[Unit] = {
+  private def checkPorts(conf: Configuration): Task[Configuration] = {
+    def getFreePort: Task[Int] =
+      Resource
+        .fromAutoCloseable(
+          Task.delay(new java.net.ServerSocket(0))
+        )
+        .use { socket =>
+          Task.delay {
+            socket.setReuseAddress(true)
+            socket.getLocalPort
+          }
+        }
+
     def isLocalPortAvailable(port: Int): Task[Boolean] =
       Task
         .delay(new java.net.ServerSocket(port).close())
@@ -227,15 +240,41 @@ object Main {
           log.error(s"Port $port is already in use!").as(false)
         )
 
-    List(
-      conf.server.port,
-      conf.server.kademliaPort,
-      conf.server.httpPort,
-      conf.grpcServer.portExternal,
-      conf.grpcServer.portInternal
-    ).traverse(isLocalPortAvailable)
-      .map(_.forall(identity))
-      .ifM(Task.unit, Task.delay(System.exit(1)))
+    def checkRChainProtocolPort(configuration: Configuration): Task[Configuration] =
+      isLocalPortAvailable(configuration.server.port).ifM(
+        configuration.pure[Task],
+        if (configuration.server.useRandomPorts)
+          for {
+            port <- getFreePort
+            _    <- log.info(s"Using random port $port as RChain Protocol port")
+          } yield configuration.copy(server = configuration.server.copy(port = port))
+        else
+          Task.delay(System.exit(1)).as(configuration)
+      )
+
+    def checkKademliaPort(configuration: Configuration): Task[Configuration] =
+      isLocalPortAvailable(configuration.server.kademliaPort).ifM(
+        configuration.pure[Task],
+        if (configuration.server.useRandomPorts)
+          for {
+            port <- getFreePort
+            _    <- log.info(s"Using random port $port as Kademlia port")
+          } yield configuration.copy(server = configuration.server.copy(kademliaPort = port))
+        else
+          Task.delay(System.exit(1)).as(configuration)
+      )
+
+    for {
+      _ <- List(
+            conf.server.httpPort,
+            conf.grpcServer.portExternal,
+            conf.grpcServer.portInternal
+          ).traverse(isLocalPortAvailable)
+            .map(_.forall(identity))
+            .ifM(Task.unit, Task.delay(System.exit(1)))
+      rpPortConf       <- checkRChainProtocolPort(conf)
+      kademliaPortConf <- checkKademliaPort(rpPortConf)
+    } yield kademliaPortConf
   }
 
   private def logConfiguration(conf: Configuration): Task[Unit] =

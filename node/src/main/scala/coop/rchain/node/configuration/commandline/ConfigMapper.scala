@@ -42,6 +42,7 @@ object ConfigMapper {
         add(keys.Port, run.port)
         add(keys.PortHttp, run.httpPort)
         add(keys.PortKademlia, run.kademliaPort)
+        add(keys.UseRandomPorts, run.useRandomPorts)
         add(keys.SendTimeout, run.defaultTimeout.map(_.millis))
         add(keys.Standalone, run.standalone)
         add(keys.Bootstrap, run.bootstrap)
