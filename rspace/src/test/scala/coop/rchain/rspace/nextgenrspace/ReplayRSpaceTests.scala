@@ -36,7 +36,6 @@ import org.scalatest.prop._
 import scala.util.{Random, Right}
 import scala.util.Random.shuffle
 import scodec.Codec
-
 import org.lmdbjava.EnvFlags
 
 object SchedulerPools {
@@ -62,6 +61,7 @@ trait ReplayRSpaceTests extends ReplayRSpaceTestsBase[String, Pattern, String, S
       channelsCreator: Int => List[C],
       patterns: List[P],
       continuationCreator: Int => K,
+      peeks: Set[Int] = Set.empty,
       persist: Boolean
   )(
       implicit matcher: Match[Task, P, A, R]
@@ -69,7 +69,7 @@ trait ReplayRSpaceTests extends ReplayRSpaceTestsBase[String, Pattern, String, S
     shuffle(range).toList.parTraverse { i: Int =>
       logger.debug("Started consume {}", i)
       space
-        .consume(channelsCreator(i), patterns, continuationCreator(i), persist)
+        .consume(channelsCreator(i), patterns, continuationCreator(i), persist, peeks = peeks)
         .map { r =>
           logger.debug("Finished consume {}", i)
           r
@@ -800,6 +800,81 @@ trait ReplayRSpaceTests extends ReplayRSpaceTestsBase[String, Pattern, String, S
         } yield ()
       }
   }
+
+  "Peeking data stored at two channels in 100 continuations" should "replay correctly" in
+    fixture { (store, replayStore, space, replaySpace) =>
+      for {
+        emptyPoint <- space.createCheckpoint()
+
+        range1 = 0 until 100
+        range2 = 0 until 3
+        range3 = 0 until 5
+        _ <- produceMany(
+              space,
+              range2,
+              channelCreator = kp("ch1"),
+              datumCreator = i => s"datum$i",
+              persist = false
+            )
+        _ <- produceMany(
+              space,
+              range3,
+              channelCreator = kp("ch2"),
+              datumCreator = i => s"datum$i",
+              persist = false
+            )
+        results <- consumeMany(
+                    space,
+                    range1,
+                    channelsCreator = kp(List("ch1", "ch2")),
+                    patterns = List(Wildcard, Wildcard),
+                    continuationCreator = i => s"continuation$i",
+                    persist = false,
+                    peeks = Set(0, 1)
+                  )
+        rigPoint <- space.createCheckpoint()
+
+        _ <- replaySpace.resetAndRig(emptyPoint.root, rigPoint.log)
+        _ <- produceMany(
+              replaySpace,
+              range2,
+              channelCreator = kp("ch1"),
+              datumCreator = i => s"datum$i",
+              persist = false
+            )
+        _ <- produceMany(
+              replaySpace,
+              range3,
+              channelCreator = kp("ch2"),
+              datumCreator = i => s"datum$i",
+              persist = false
+            )
+        replayResults <- consumeMany(
+                          replaySpace,
+                          range1,
+                          channelsCreator = kp(List("ch1", "ch2")),
+                          patterns = List(Wildcard, Wildcard),
+                          continuationCreator = i => s"continuation$i",
+                          persist = false,
+                          peeks = Set(0, 1)
+                        )
+        finalPoint <- replaySpace.createCheckpoint()
+
+        extractedPlayResults = results.flatten
+        _ = extractedPlayResults.foreach { cr =>
+          cr._1.peek shouldBe true
+        }
+        extractedResults = replayResults.flatten
+        _ = extractedResults.foreach { cr =>
+          cr._1.peek shouldBe true
+        }
+        _ = extractedResults should have size 100
+        _ = extractedResults.map(_._2).flatten.map(_.value).toSet should have size 5
+        _ = replayResults should contain theSameElementsAs results
+        _ = finalPoint.root shouldBe rigPoint.root
+        _ = replaySpace.replayData shouldBe empty
+      } yield ()
+    }
 
   "Replay rspace" should "correctly remove things from replay data" in fixture {
     (store, replayStore, space, replaySpace) =>
