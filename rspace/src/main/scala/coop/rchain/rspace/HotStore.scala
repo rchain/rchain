@@ -288,4 +288,12 @@ object HotStore {
   ): HotStore[F, C, P, A, K] =
     new InMemHotStore[F, C, P, A, K]
 
+  def from[F[_], C, P, A, K](
+      cache: Cache[C, P, A, K],
+      historyReader: HistoryReader[F, C, P, A, K]
+  )(implicit ck: Codec[K], sync: Sync[F]) =
+    for {
+      cache <- Cell.refCell[F, Cache[C, P, A, K]](cache)
+      store = HotStore.inMem(Sync[F], cache, historyReader, ck)
+    } yield store
 }

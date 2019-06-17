@@ -211,4 +211,13 @@ abstract class RSpaceOps[F[_]: Concurrent, C, P, A, R, K](
       _     = eventLog.put(Seq.empty)
     } yield SoftCheckpoint[C, P, A, K](cache, log)
 
+  override def revertToSoftCheckpoint(checkpoint: SoftCheckpoint[C, P, A, K]): F[Unit] = {
+    implicit val ck: Codec[K] = serializeK.toCodec
+    for {
+      hotStore <- HotStore.from(checkpoint.cacheSnapshot.cache, historyRepository)
+      _        = storeAtom.set(hotStore)
+      _        = eventLog.take()
+      _        = eventLog.put(checkpoint.log)
+    } yield ()
+  }
 }
