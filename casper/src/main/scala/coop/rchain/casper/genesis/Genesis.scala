@@ -94,7 +94,7 @@ object Genesis {
                      )
     } yield genesisBlock
 
-  def getWallets[F[_]: Sync: Log: RaiseIOError](
+  private def getWallets[F[_]: Sync: Log: RaiseIOError](
       maybeWalletsPath: Option[String],
       defaultWalletPath: Path
   ): F[Seq[Vault]] = {
@@ -105,19 +105,20 @@ object Genesis {
                     case Right(lines) =>
                       lines
                         .traverse(fromLine(_) match {
-                          case Right(wallet) => wallet.some.pure[F]
+                          case Right(wallet) =>
+                            wallet.some.pure[F]
                           case Left(errMsg) =>
-                            Log[F]
-                              .warn(s"Error in parsing wallets file: $errMsg")
-                              .map(_ => none[Vault])
+                            Sync[F].raiseError[Option[Vault]](
+                              new RuntimeException(s"Error in parsing wallets file: $errMsg")
+                            )
                         })
                         .map(_.flatten)
                     case Left(ex) =>
-                      Log[F]
-                        .warn(
+                      Sync[F].raiseError(
+                        new RuntimeException(
                           s"Failed to read ${walletsPath.toAbsolutePath} for reason: ${ex.getMessage}"
                         )
-                        .map(_ => Seq.empty[Vault])
+                      )
                   }
       } yield wallets
 
@@ -142,7 +143,7 @@ object Genesis {
     }
   }
 
-  def fromLine(line: String): Either[String, Vault] = line.split(",").filter(_.nonEmpty) match {
+  private def fromLine(line: String): Either[String, Vault] = line.split(",") match {
     case Array(ethAddress, initRevBalanceStr, _) =>
       Try(BigInt(initRevBalanceStr)) match {
         case Success(initRevBalance) =>
