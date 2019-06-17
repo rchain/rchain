@@ -2,7 +2,6 @@ package coop.rchain.rspace.trace
 
 import coop.rchain.rspace.StableHashProvider._
 import coop.rchain.rspace.internal._
-import coop.rchain.rspace.util._
 import cats.implicits._
 import coop.rchain.rspace.{Blake2b256Hash, Serialize}
 import coop.rchain.rspace.internal.codecSeq
@@ -22,7 +21,7 @@ object Event {
 
   implicit def codecEvent: Codec[Event] =
     discriminated[Event]
-      .by(uint8)
+      .by(uint2)
       .subcaseP(0) {
         case (comm: COMM) => comm
       }(Codec[COMM])
