@@ -5,7 +5,7 @@ import coop.rchain.metrics.Metrics
 import coop.rchain.rholang.Resources.mkRuntime
 import coop.rchain.rholang.interpreter.accounting._
 import coop.rchain.rholang.interpreter.storage.StoragePrinter
-import coop.rchain.rholang.interpreter.{EvaluateResult, Interpreter, Runtime}
+import coop.rchain.rholang.interpreter.{EvaluateResult, InterpreterUtil, Runtime}
 import coop.rchain.shared.Log
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
@@ -140,8 +140,7 @@ class InterpreterSpec extends FlatSpec with Matchers {
         .use { runtime =>
           implicit val c = runtime.cost
           for {
-            res <- Interpreter[Task]
-                    .evaluate(runtime, sendRho, parsingCost(sendRho) - Cost(1))
+            res <- InterpreterUtil.evaluate(runtime, sendRho, parsingCost(sendRho) - Cost(1))
           } yield (res)
         }
         .runSyncUnsafe(maxDuration)
@@ -174,7 +173,7 @@ class InterpreterSpec extends FlatSpec with Matchers {
       source: String
   ): Task[EvaluateResult] = {
     implicit val c = runtime.cost
-    Interpreter[Task].evaluate(runtime, source)
+    InterpreterUtil.evaluate[Task](runtime, source)
   }
 
 }

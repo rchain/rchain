@@ -242,10 +242,18 @@ object Substitute {
   implicit def substituteNew[M[_]: Sync]: Substitute[M, New] =
     new Substitute[M, New] {
       override def substituteNoSort(term: New)(implicit depth: Int, env: Env[Par]): M[New] =
-        for {
-          newSub <- substitutePar[M].substituteNoSort(term.p)(depth, env.shift(term.bindCount))
-          neu    = New(term.bindCount, newSub, term.uri, term.locallyFree.until(env.shift))
-        } yield neu
+        substitutePar[M]
+          .substituteNoSort(term.p)(depth, env.shift(term.bindCount))
+          .map(
+            newSub =>
+              New(
+                term.bindCount,
+                newSub,
+                term.uri,
+                term.deployerId,
+                term.locallyFree.until(env.shift)
+              )
+          )
       override def substitute(term: New)(implicit depth: Int, env: Env[Par]): M[New] =
         substituteNoSort(term).flatMap(newSub => Sortable.sortMatch(newSub)).map(_.term)
     }

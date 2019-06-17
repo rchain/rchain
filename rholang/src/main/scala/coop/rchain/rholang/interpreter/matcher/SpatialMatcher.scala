@@ -12,7 +12,7 @@ import coop.rchain.catscontrib.mtl.implicits._
 import coop.rchain.models.Connective.ConnectiveInstance
 import coop.rchain.models.Connective.ConnectiveInstance._
 import coop.rchain.models.Expr.ExprInstance._
-import coop.rchain.models.GUnforgeable.UnfInstance.{GDeployerAuthBody, GPrivateBody}
+import coop.rchain.models.GUnforgeable.UnfInstance.{GDeployerIdBody, GPrivateBody}
 import coop.rchain.models.Var.VarInstance.{FreeVar, Wildcard}
 import coop.rchain.models._
 import coop.rchain.models.rholang.implicits.{VectorPar, _}
@@ -587,8 +587,8 @@ trait SpatialMatcherInstances {
       (target.unfInstance, pattern.unfInstance) match {
         case (GPrivateBody(tgprivate), GPrivateBody(pgprivate)) =>
           spatialMatch(tgprivate, pgprivate)
-        case (GDeployerAuthBody(tda), GDeployerAuthBody(pda)) =>
-          spatialMatch(tda, pda)
+        case (GDeployerIdBody(tid), GDeployerIdBody(pid)) =>
+          spatialMatch(tid, pid)
         case _ => MonoidK[F].empty[Unit]
       }
 
@@ -604,8 +604,8 @@ trait SpatialMatcherInstances {
       charge[F](cost) *> ().pure[F]
     }
 
-  implicit def gdeployerAuthSpatialMatcherInstance[F[_]: Splittable: Alternative: Monad: _error: _cost: _freeMap]
-      : SpatialMatcher[F, GDeployerAuth, GDeployerAuth] =
+  implicit def gdeployerIdSpatialMatcherInstance[F[_]: Splittable: Alternative: Monad: _error: _cost: _freeMap]
+      : SpatialMatcher[F, GDeployerId, GDeployerId] =
     (target, pattern) => {
       val cost = equalityCheckCost(target, pattern)
       charge[F](cost) *> ().pure[F]

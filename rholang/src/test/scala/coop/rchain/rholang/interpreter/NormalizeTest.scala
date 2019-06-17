@@ -2,6 +2,7 @@ package coop.rchain.rholang.interpreter
 
 import java.io.StringReader
 
+import coop.rchain.crypto.PublicKey
 import coop.rchain.rholang.syntax.rholang_mercury.Absyn.{
   Bundle => AbsynBundle,
   Ground => AbsynGround,
@@ -59,7 +60,8 @@ class CollectMatcherSpec extends FlatSpec with Matchers {
     IndexMapChain[VarSort]().newBindings(List(("P", ProcSort, 0, 0), ("x", NameSort, 0, 0))),
     DebruijnLevelMap[VarSort]()
   )
-  def getNormalizedPar(rho: String): Par = ParBuilder[Coeval].buildNormalizedTerm(rho).value()
+  implicit val deployerPk: Option[PublicKey] = None
+  def getNormalizedPar(rho: String): Par     = ParBuilderUtil.buildNormalizedTerm[Coeval](rho).value()
   def assertEqualNormalized(rho1: String, rho2: String): Assertion =
     assert(getNormalizedPar(rho1) == getNormalizedPar(rho2))
 
@@ -219,7 +221,8 @@ class CollectMatcherSpec extends FlatSpec with Matchers {
 }
 
 class ProcMatcherSpec extends FlatSpec with Matchers {
-  val inputs = ProcVisitInputs(Par(), IndexMapChain[VarSort](), DebruijnLevelMap[VarSort]())
+  val inputs                                 = ProcVisitInputs(Par(), IndexMapChain[VarSort](), DebruijnLevelMap[VarSort]())
+  implicit val deployerPk: Option[PublicKey] = None
 
   "PNil" should "Compile as no modification to the par object" in {
     val nil = new PNil()
@@ -426,45 +429,45 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
 
   "PSend" should "Not compile if data contains negation" in {
     an[TopLevelLogicalConnectivesNotAllowedError] should be thrownBy {
-      ParBuilder[Coeval].buildNormalizedTerm("""new x in { x!(~1) }""").value()
+      ParBuilderUtil.buildNormalizedTerm[Coeval]("""new x in { x!(~1) }""").value()
     }
   }
 
   "PSend" should "Not compile if data contains conjunction" in {
     an[TopLevelLogicalConnectivesNotAllowedError] should be thrownBy {
-      ParBuilder[Coeval].buildNormalizedTerm("""new x in { x!(1 /\ 2) }""").value()
+      ParBuilderUtil.buildNormalizedTerm[Coeval]("""new x in { x!(1 /\ 2) }""").value()
     }
   }
 
   "PSend" should "Not compile if data contains disjunction" in {
     an[TopLevelLogicalConnectivesNotAllowedError] should be thrownBy {
-      ParBuilder[Coeval].buildNormalizedTerm("""new x in { x!(1 \/ 2) }""").value()
+      ParBuilderUtil.buildNormalizedTerm[Coeval]("""new x in { x!(1 \/ 2) }""").value()
     }
   }
 
   "PSend" should "Not compile if data contains wildcard" in {
     an[TopLevelWildcardsNotAllowedError] should be thrownBy {
-      ParBuilder[Coeval].buildNormalizedTerm("""@"x"!(_)""").value()
+      ParBuilderUtil.buildNormalizedTerm[Coeval]("""@"x"!(_)""").value()
     }
   }
 
   "PSend" should "Not compile if data contains free variable" in {
     an[TopLevelFreeVariablesNotAllowedError] should be thrownBy {
-      ParBuilder[Coeval].buildNormalizedTerm("""@"x"!(y)""").value()
+      ParBuilderUtil.buildNormalizedTerm[Coeval]("""@"x"!(y)""").value()
     }
   }
 
   "PSend" should "not compile if name contains connectives" in {
     an[TopLevelLogicalConnectivesNotAllowedError] should be thrownBy {
-      ParBuilder[Coeval].buildNormalizedTerm("""@{Nil /\ Nil}!(1)""").value()
+      ParBuilderUtil.buildNormalizedTerm[Coeval]("""@{Nil /\ Nil}!(1)""").value()
     }
 
     an[TopLevelLogicalConnectivesNotAllowedError] should be thrownBy {
-      ParBuilder[Coeval].buildNormalizedTerm("""@{Nil \/ Nil}!(1)""").value()
+      ParBuilderUtil.buildNormalizedTerm[Coeval]("""@{Nil \/ Nil}!(1)""").value()
     }
 
     an[TopLevelLogicalConnectivesNotAllowedError] should be thrownBy {
-      ParBuilder[Coeval].buildNormalizedTerm("""@{~Nil}!(1)""").value()
+      ParBuilderUtil.buildNormalizedTerm[Coeval]("""@{~Nil}!(1)""").value()
     }
   }
 
@@ -784,70 +787,70 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
 
   "PInput" should "not compile when connectives are used in the channel" in {
     an[TopLevelLogicalConnectivesNotAllowedError] should be thrownBy {
-      ParBuilder[Coeval]
-        .buildNormalizedTerm("""for(x <- @{Nil \/ Nil}){ Nil }""")
+      ParBuilderUtil
+        .buildNormalizedTerm[Coeval]("""for(x <- @{Nil \/ Nil}){ Nil }""")
         .value()
     }
 
     an[TopLevelLogicalConnectivesNotAllowedError] should be thrownBy {
-      ParBuilder[Coeval]
-        .buildNormalizedTerm("""for(x <- @{Nil /\ Nil}){ Nil }""")
+      ParBuilderUtil
+        .buildNormalizedTerm[Coeval]("""for(x <- @{Nil /\ Nil}){ Nil }""")
         .value()
     }
 
     an[TopLevelLogicalConnectivesNotAllowedError] should be thrownBy {
-      ParBuilder[Coeval].buildNormalizedTerm("""for(x <- @{~Nil}){ Nil }""").value()
+      ParBuilderUtil.buildNormalizedTerm[Coeval]("""for(x <- @{~Nil}){ Nil }""").value()
     }
   }
 
   "PInput" should "not compile when connectives are the top level expression in the body" in {
     an[TopLevelLogicalConnectivesNotAllowedError] should be thrownBy {
-      ParBuilder[Coeval].buildNormalizedTerm("""for(x <- @Nil){ 1 /\ 2 }""").value()
+      ParBuilderUtil.buildNormalizedTerm[Coeval]("""for(x <- @Nil){ 1 /\ 2 }""").value()
     }
 
     an[TopLevelLogicalConnectivesNotAllowedError] should be thrownBy {
-      ParBuilder[Coeval].buildNormalizedTerm("""for(x <- @Nil){ 1 \/ 2 }""").value()
+      ParBuilderUtil.buildNormalizedTerm[Coeval]("""for(x <- @Nil){ 1 \/ 2 }""").value()
     }
 
     an[TopLevelLogicalConnectivesNotAllowedError] should be thrownBy {
-      ParBuilder[Coeval].buildNormalizedTerm("""for(x <- @Nil){ ~1 }""").value()
+      ParBuilderUtil.buildNormalizedTerm[Coeval]("""for(x <- @Nil){ ~1 }""").value()
     }
   }
 
   "PInput" should "not compile when logical OR or NOT is used in the pattern of the receive" in {
     an[PatternReceiveError] should be thrownBy {
-      ParBuilder[Coeval]
-        .buildNormalizedTerm("""new x in { for(@{Nil \/ Nil} <- x) { Nil } }""")
+      ParBuilderUtil
+        .buildNormalizedTerm[Coeval]("""new x in { for(@{Nil \/ Nil} <- x) { Nil } }""")
         .value()
     }
 
     an[PatternReceiveError] should be thrownBy {
-      ParBuilder[Coeval]
-        .buildNormalizedTerm("""new x in { for(@{~Nil} <- x) { Nil } }""")
+      ParBuilderUtil
+        .buildNormalizedTerm[Coeval]("""new x in { for(@{~Nil} <- x) { Nil } }""")
         .value()
     }
   }
 
   "PInput" should "compile when logical AND is used in the pattern of the receive" in {
     noException should be thrownBy {
-      ParBuilder[Coeval]
-        .buildNormalizedTerm("""new x in { for(@{Nil /\ Nil} <- x) { Nil } }""")
+      ParBuilderUtil
+        .buildNormalizedTerm[Coeval]("""new x in { for(@{Nil /\ Nil} <- x) { Nil } }""")
         .value()
     }
   }
 
   "PContr" should "not compile when logical OR or NOT is used in the pattern of the receive" in {
     an[PatternReceiveError] should be thrownBy {
-      ParBuilder[Coeval]
-        .buildNormalizedTerm(
+      ParBuilderUtil
+        .buildNormalizedTerm[Coeval](
           new StringReader("""new x in { contract x(@{ y /\ {Nil \/ Nil}}) = { Nil } }""")
         )
         .value()
     }
 
     an[PatternReceiveError] should be thrownBy {
-      ParBuilder[Coeval]
-        .buildNormalizedTerm(
+      ParBuilderUtil
+        .buildNormalizedTerm[Coeval](
           new StringReader("""new x in { contract x(@{ y /\ ~Nil}) = { Nil } }""")
         )
         .value()
@@ -856,8 +859,8 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
 
   "PContr" should "compile when logical AND is used in the pattern of the receive" in {
     noException should be thrownBy {
-      ParBuilder[Coeval]
-        .buildNormalizedTerm(
+      ParBuilderUtil
+        .buildNormalizedTerm[Coeval](
           new StringReader("""new x in { contract x(@{ y /\ {Nil /\ Nil}}) = { Nil } }""")
         )
         .value()
@@ -891,12 +894,13 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
     result.par should be(
       inputs.par.prepend(
         New(
-          3,
-          Send(EVar(BoundVar(2)), List[Par](GInt(7)), false, BitSet(2))
+          bindCount = 3,
+          p = Send(EVar(BoundVar(2)), List[Par](GInt(7)), false, BitSet(2))
             .prepend(Send(EVar(BoundVar(1)), List[Par](GInt(8)), false, BitSet(1)))
             .prepend(Send(EVar(BoundVar(0)), List[Par](GInt(9)), false, BitSet(0))),
-          Vector.empty,
-          BitSet()
+          uri = Vector.empty,
+          deployerId = None,
+          locallyFree = BitSet()
         )
       )
     )
@@ -942,14 +946,15 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
     result.par should be(
       inputs.par.prepend(
         New(
-          5,
-          Send(EVar(BoundVar(4)), List[Par](GInt(7)), false, BitSet(4))
+          bindCount = 5,
+          p = Send(EVar(BoundVar(4)), List[Par](GInt(7)), false, BitSet(4))
             .prepend(Send(EVar(BoundVar(3)), List[Par](GInt(8)), false, BitSet(3)))
             .prepend(Send(EVar(BoundVar(1)), List[Par](GInt(9)), false, BitSet(1)))
             .prepend(Send(EVar(BoundVar(0)), List[Par](GInt(10)), false, BitSet(0)))
             .prepend(Send(EVar(BoundVar(2)), List[Par](GInt(11)), false, BitSet(2))),
-          Vector("rho:registry", "rho:stdout"),
-          BitSet()
+          uri = Vector("rho:registry", "rho:stdout"),
+          deployerId = None,
+          locallyFree = BitSet()
         )
       )
     )
@@ -1115,19 +1120,21 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
             MatchCase(
               GBool(true),
               New(
-                1,
-                Send(EVar(BoundVar(0)), List[Par](GInt(47)), false, BitSet(0)),
-                Vector.empty,
-                BitSet()
+                bindCount = 1,
+                p = Send(EVar(BoundVar(0)), List[Par](GInt(47)), false, BitSet(0)),
+                uri = Vector.empty,
+                deployerId = None,
+                locallyFree = BitSet()
               )
             ),
             MatchCase(
               GBool(false),
               New(
-                1,
-                Send(EVar(BoundVar(0)), List[Par](GInt(47)), false, BitSet(0)),
-                Vector.empty,
-                BitSet()
+                bindCount = 1,
+                p = Send(EVar(BoundVar(0)), List[Par](GInt(47)), false, BitSet(0)),
+                uri = Vector.empty,
+                deployerId = None,
+                locallyFree = BitSet()
               )
             )
             // TODO: Fill in type error case
@@ -1518,7 +1525,7 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
            }
          }
        """
-        ParBuilder[Coeval].buildNormalizedTerm(rho).value()
+        ParBuilderUtil.buildNormalizedTerm[Coeval](rho).value()
         assert(true)
       } catch {
         case e: Throwable =>
@@ -1547,7 +1554,8 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
 }
 
 class NameMatcherSpec extends FlatSpec with Matchers {
-  val inputs = NameVisitInputs(IndexMapChain[VarSort](), DebruijnLevelMap[VarSort]())
+  val inputs                                 = NameVisitInputs(IndexMapChain[VarSort](), DebruijnLevelMap[VarSort]())
+  implicit val deployerPk: Option[PublicKey] = None
 
   "NameWildcard" should "add a wildcard count to knownFree" in {
     val nw                  = new NameWildcard()

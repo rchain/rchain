@@ -53,8 +53,7 @@ trait Reduce[M[_]] {
 
 class DebruijnInterpreter[M[_], F[_]](
     tuplespaceAlg: Tuplespace[M],
-    urnMap: Map[String, Par],
-    deployParametersRef: Ref[M, DeployParameters]
+    urnMap: Map[String, Par]
 )(
     implicit parallel: cats.Parallel[M, F],
     s: Sync[M],
@@ -416,28 +415,25 @@ class DebruijnInterpreter[M[_], F[_]](
         _env.put(addr)
       }
 
-      def addUrn(
-          deployParameters: DeployParameters
-      )(newEnv: Env[Par], urn: String): Either[ReduceError, Env[Par]] =
-        if (urn == "rho:deployer:auth") {
-          deployParameters.userId.exprs.headOption match {
-            case Some(Expr(GByteArray(bs))) =>
-              newEnv.put(Par(unforgeables = Vector(GDeployerAuth(bs)))).asRight[ReduceError]
-            case _ => ReduceError("No deploy parameters set").asLeft[Env[Par]]
-          }
-        } else
+      def addUrn(newEnv: Env[Par], urn: String): Either[InterpreterError, Env[Par]] =
+        if (urn == "rho:rchain:deployerId")
+          neu.deployerId
+            .map { case DeployerId(pk) => newEnv.put(GDeployerId(pk)).asRight[InterpreterError] }
+            .getOrElse(
+              BugFoundError(
+                s"No DeployId set despite `rho:rchain:deployerId` being used in a term. This is a bug in the normalizer or on the path from it."
+              ).asLeft[Env[Par]]
+            )
+        else
           urnMap.get(urn) match {
-            case Some(p) => newEnv.put(p).asRight[ReduceError]
+            case Some(p) => newEnv.put(p).asRight[InterpreterError]
             case None    => ReduceError(s"Unknown urn for new: $urn").asLeft[Env[Par]]
           }
 
-      deployParametersRef.get.flatMap(
-        params =>
-          urns.toList.foldM(simpleNews)(addUrn(params)) match {
-            case Right(env) => env.pure[M]
-            case Left(e)    => e.raiseError[M, Env[Par]]
-          }
-      )
+      urns.toList.foldM(simpleNews)(addUrn) match {
+        case Right(tmpEnv) => tmpEnv.pure[M]
+        case Left(e)       => e.raiseError[M, Env[Par]]
+      }
     }
 
     charge[M](newBindingsCost(neu.bindCount)) >>

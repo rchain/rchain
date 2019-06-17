@@ -128,18 +128,24 @@ class SendSubSpec extends FlatSpec with Matchers {
   }
 
   "Send" should "substitute all bound vars for values in environment" in {
-    val chan0        = EVar(BoundVar(0))
-    val source: Par  = New(1, Send(chan0, List(Par()), false, BitSet(0)), Vector.empty, BitSet())
+    val chan0 = EVar(BoundVar(0))
+    val source: Par = New(
+      bindCount = 1,
+      p = Send(chan0, List(Par()), false, BitSet(0)),
+      uri = Vector.empty,
+      deployerId = None,
+      locallyFree = BitSet()
+    )
     implicit val env = Env.makeEnv(source)
     val target =
       Send(chan0, List(Send(chan0, List(Par()), false, BitSet(0))), false, BitSet(0))
     val result = substituteSend[Coeval].substitute(target).value
     result should be(
       Send(
-        New(1, Send(chan0, List(Par()), false, BitSet(0)), Vector.empty, BitSet()),
+        New(1, Send(chan0, List(Par()), false, BitSet(0)), Vector.empty, None, BitSet()),
         List(
           Send(
-            New(1, Send(chan0, List(Par()), false, BitSet(0)), Vector.empty, BitSet()),
+            New(1, Send(chan0, List(Par()), false, BitSet(0)), Vector.empty, None, BitSet()),
             List(Par()),
             false,
             BitSet()
@@ -158,10 +164,10 @@ class NewSubSpec extends FlatSpec with Matchers {
     val source: Par  = GPrivateBuilder()
     implicit val env = Env.makeEnv(source)
     val target =
-      New(1, Send(EVar(BoundVar(1)), List(Par()), false, BitSet(1)), Vector.empty, BitSet(0))
+      New(1, Send(EVar(BoundVar(1)), List(Par()), false, BitSet(1)), Vector.empty, None, BitSet(0))
     val result = substituteNew[Coeval].substitute(target).value
     result should be(
-      New(1, Send(source, List(Par()), false, BitSet()), Vector.empty, BitSet())
+      New(1, Send(source, List(Par()), false, BitSet()), Vector.empty, None, BitSet())
     )
   }
 
@@ -170,29 +176,31 @@ class NewSubSpec extends FlatSpec with Matchers {
     val source1: Par           = GPrivateBuilder()
     implicit val env: Env[Par] = Env.makeEnv(source0, source1)
     val target = New(
-      2,
-      Send(
+      bindCount = 2,
+      p = Send(
         EVar(BoundVar(3)),
         List(Send(EVar(BoundVar(2)), List(Par()), false, BitSet(2))),
         false,
         BitSet(2, 3)
       ),
-      Vector.empty,
-      BitSet(0, 1)
+      uri = Vector.empty,
+      deployerId = None,
+      locallyFree = BitSet(0, 1)
     )
 
     val result = substituteNew[Coeval].substitute(target).value
     result should be(
       New(
-        2,
-        Send(
+        bindCount = 2,
+        p = Send(
           source0,
           List(Send(source1, List(Par()), false, BitSet())),
           false,
           BitSet()
         ),
-        Vector.empty,
-        BitSet()
+        uri = Vector.empty,
+        deployerId = None,
+        locallyFree = BitSet()
       )
     )
   }

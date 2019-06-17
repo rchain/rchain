@@ -39,7 +39,7 @@ class HashMSpec extends FlatSpec with PropertyChecks with Matchers {
   sameResultAsReference[EVar]
   sameResultAsReference[GUnforgeable]
   sameResultAsReference[GPrivate]
-  sameResultAsReference[GDeployerAuth]
+  sameResultAsReference[GDeployerId]
   sameResultAsReference[KeyValuePair]
   sameResultAsReference[ListBindPatterns]
   sameResultAsReference[Match]

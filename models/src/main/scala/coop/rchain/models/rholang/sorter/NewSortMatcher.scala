@@ -8,10 +8,21 @@ private[sorter] object NewSortMatcher extends Sortable[New] {
   def sortMatch[F[_]: Sync](n: New): F[ScoredTerm[New]] =
     for {
       sortedPar <- Sortable.sortMatch(n.p)
+      sortedDeployerId <- n.deployerId match {
+                           case Some(id) => Leaf(id.publicKey).pure[F]
+                           case None     => Leaf(Score.ABSENT).pure[F]
+                         }
     } yield ScoredTerm(
-      New(bindCount = n.bindCount, p = sortedPar.term, uri = n.uri, locallyFree = n.locallyFree),
+      New(
+        bindCount = n.bindCount,
+        p = sortedPar.term,
+        uri = n.uri,
+        deployerId = n.deployerId,
+        locallyFree = n.locallyFree
+      ),
       new Node(
-        Leaf(Score.NEW) +: (Leaf(n.bindCount.toLong) +: n.uri.map(Leaf.apply) :+ sortedPar.score)
+        Leaf(Score.NEW) +: (Leaf(n.bindCount.toLong) +: n.uri
+          .map(Leaf.apply) :+ sortedDeployerId :+ sortedPar.score)
       )
     )
 }

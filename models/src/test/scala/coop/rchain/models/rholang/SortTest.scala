@@ -1,5 +1,6 @@
 package coop.rchain.models.rholang
 
+import com.google.protobuf.ByteString
 import coop.rchain.models.Connective.ConnectiveInstance._
 import coop.rchain.models.Expr.ExprInstance._
 import coop.rchain.models.Var.VarInstance.{BoundVar, FreeVar, Wildcard}
@@ -499,25 +500,37 @@ class ParSortMatcherSpec extends FlatSpec with Matchers {
     result.term should be(sortedParMatch)
   }
 
-  it should "sort News based on bindCount, uri's and then body" in {
+  it should "sort News based on bindCount, uri's, deployerId and then body" in {
     val parNew =
       Par(
         news = List(
-          New(bindCount = 2, uri = Vector("rho:io:stdout"), p = GInt(7)),
-          New(bindCount = 1, p = Par()),
-          New(bindCount = 2, p = Par()),
-          New(bindCount = 2, uri = Vector("rho:io:stdout"), p = Par()),
-          New(bindCount = 2, uri = Vector("rho:io:stderr"), p = Par())
+          New(
+            bindCount = 2,
+            uri = Vector("rho:io:stderr"),
+            deployerId = Some(DeployerId(ByteString.EMPTY)),
+            p = Par()
+          ),
+          New(bindCount = 1, deployerId = None, p = Par()),
+          New(bindCount = 2, uri = Vector("rho:io:stdout"), deployerId = None, p = Par()),
+          New(bindCount = 2, uri = Vector("rho:io:stdout"), deployerId = None, p = GInt(7)),
+          New(bindCount = 2, deployerId = None, p = Par()),
+          New(bindCount = 2, uri = Vector("rho:io:stderr"), deployerId = None, p = Par())
         )
       )
     val sortedParNew =
       Par(
         news = List(
-          New(bindCount = 1, p = Par()),
-          New(bindCount = 2, uri = Vector("rho:io:stderr"), p = Par()),
-          New(bindCount = 2, uri = Vector("rho:io:stdout"), p = Par()),
-          New(bindCount = 2, uri = Vector("rho:io:stdout"), p = GInt(7)),
-          New(bindCount = 2, p = Par())
+          New(bindCount = 1, deployerId = None, p = Par()),
+          New(bindCount = 2, deployerId = None, p = Par()),
+          New(bindCount = 2, uri = Vector("rho:io:stderr"), deployerId = None, p = Par()),
+          New(
+            bindCount = 2,
+            uri = Vector("rho:io:stderr"),
+            deployerId = Some(DeployerId(ByteString.EMPTY)),
+            p = Par()
+          ),
+          New(bindCount = 2, uri = Vector("rho:io:stdout"), deployerId = None, p = Par()),
+          New(bindCount = 2, uri = Vector("rho:io:stdout"), deployerId = None, p = GInt(7))
         )
       )
     val result = sort(parNew)

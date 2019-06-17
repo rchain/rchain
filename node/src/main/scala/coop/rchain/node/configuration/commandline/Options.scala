@@ -420,7 +420,7 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
     )(
       Base16Converter
         .flatMap(validateLength(Ed25519.keyLength))
-        .map(PrivateKey)
+        .map(PrivateKey.apply)
     )
 
     val privateKeyPath = opt[Path](

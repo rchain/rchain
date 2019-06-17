@@ -22,7 +22,7 @@ import coop.rchain.catscontrib.BooleanF._
 import coop.rchain.catscontrib.ski._
 import coop.rchain.comm.rp.Connect.{ConnectionsCell, RPConfAsk}
 import coop.rchain.comm.transport.TransportLayer
-import coop.rchain.crypto.PrivateKey
+import coop.rchain.crypto.{PrivateKey, PublicKey}
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.models.BlockHash.BlockHash
@@ -200,7 +200,7 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Sync: ConnectionsCell: Trans
       _.asLeft[DeployId].pure[F],
       kp(
         InterpreterUtil
-          .mkTerm(d.term)
+          .mkTerm(d.term, PublicKey(d.deployer.toByteArray).some)
           .bitraverse(
             err => DeployError.parsingError(s"Error in parsing term: \n$err").pure[F],
             _ => addDeploy(d)

@@ -56,8 +56,7 @@ object RholangAndScalaDispatcher {
   def create[M[_], F[_]](
       tuplespace: RhoISpace[M],
       dispatchTable: => Map[Long, (Seq[ListParWithRandom], Int) => M[Unit]],
-      urnMap: Map[String, Par],
-      deployParametersRef: Ref[M, DeployParameters]
+      urnMap: Map[String, Par]
   )(
       implicit
       cost: _cost[M],
@@ -70,7 +69,7 @@ object RholangAndScalaDispatcher {
       new RholangAndScalaDispatcher(dispatchTable)
 
     implicit lazy val reducer: Reduce[M] =
-      new DebruijnInterpreter[M, F](tuplespaceAlg, urnMap, deployParametersRef)
+      new DebruijnInterpreter[M, F](tuplespaceAlg, urnMap)
 
     lazy val tuplespaceAlg = Tuplespace.rspaceTuplespace(chargingRSpace, dispatcher)
 

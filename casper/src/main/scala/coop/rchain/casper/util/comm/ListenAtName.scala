@@ -47,7 +47,7 @@ object ListenAtName {
 
     val par: Either[Throwable, Par] = name match {
       case PubName(content) =>
-        InterpreterUtil.mkTerm(content)
+        InterpreterUtil.mkTerm(content, None)
       case PrivName(content) =>
         val par: Par = GPrivate(ByteString.copyFrom(content.getBytes))
         Right(par)
