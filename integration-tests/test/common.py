@@ -17,7 +17,6 @@ if TYPE_CHECKING:
     from .wait import PredicateProtocol
 
 
-
 @dataclasses.dataclass(eq=True, frozen=True)
 class KeyPair:
     private_key: str
@@ -80,7 +79,7 @@ def random_string(context: TestingContext, length: int) -> str:
 
 
 def make_tempfile(prefix: str, content: str) -> str:
-    fd, path = tempfile.mkstemp(dir="/tmp", prefix=prefix)
+    fd, path = tempfile.mkstemp(prefix=prefix)
 
     with os.fdopen(fd, 'w') as tmp:
         tmp.write(content)
@@ -89,4 +88,4 @@ def make_tempfile(prefix: str, content: str) -> str:
 
 
 def make_tempdir(prefix: str) -> str:
-    return tempfile.mkdtemp(dir="/tmp", prefix=prefix)
+    return tempfile.mkdtemp(prefix=prefix)

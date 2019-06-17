@@ -27,6 +27,7 @@ from .rnode import (
 from .pregenerated_keypairs import PREGENERATED_KEYPAIRS
 
 
+
 # Silence unwanted noise in logs produced at the DEBUG level
 logging.getLogger('urllib3.connectionpool').setLevel(logging.WARNING)
 logging.getLogger('connectionpool.py').setLevel(logging.WARNING)
@@ -68,7 +69,7 @@ def command_line_options(request: Any) -> Generator[CommandLineOptions, None, No
 
 @contextlib.contextmanager
 def temporary_bonds_file(random_generator: Random, validator_keys: List[KeyPair]) -> Generator[str, None, None]:
-    (fd, file) = tempfile.mkstemp(prefix="rchain-bonds-file-", suffix=".txt", dir="/tmp")
+    (fd, file) = tempfile.mkstemp(prefix="rchain-bonds-file-", suffix=".txt")
     try:
         with os.fdopen(fd, "w") as f:
             for pair in validator_keys:
@@ -91,7 +92,7 @@ def make_wallets_file_lines(random_generator: Random, validator_keys: List[KeyPa
 @contextlib.contextmanager
 def temporary_wallets_file(random_generator: Random, validator_keys: List[KeyPair]) -> Generator[str, None, None]:
     lines = make_wallets_file_lines(random_generator, validator_keys)
-    (fd, file) = tempfile.mkstemp(prefix="rchain-wallets-file-", suffix=".txt", dir="/tmp")
+    (fd, file) = tempfile.mkstemp(prefix="rchain-wallets-file-", suffix=".txt")
     try:
         with os.fdopen(fd, "w") as f:
             f.writelines('{}\n'.format(l) for l in lines)
