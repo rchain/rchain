@@ -31,11 +31,10 @@ object ProofOfStake {
   def initialBonds(validators: Seq[Validator]): String = {
     import coop.rchain.crypto.util.Sorting.publicKeyOrdering
     val sortedValidators = validators.sortBy(_.pk)
-    val mapEntries = sortedValidators.iterator.zipWithIndex
-      .map {
-        case (Validator(pk, stake), index) =>
-          val pkString = Base16.encode(pk.bytes)
-          s""" "$pkString".hexToBytes() : ($stake, ${index + 1})"""
+    val mapEntries = sortedValidators.iterator
+      .map { validator =>
+        val pkString = Base16.encode(validator.pk.bytes)
+        s""" "$pkString".hexToBytes() : ${validator.stake}"""
       }
       .mkString(", ")
     s"{$mapEntries}"

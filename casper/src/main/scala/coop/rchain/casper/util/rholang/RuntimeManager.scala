@@ -259,7 +259,7 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics] private[rholang] (
         assert(validator.exprs.length == 1, "Validator in bonds map wasn't a single string.")
         assert(bond.exprs.length == 1, "Stake in bonds map wasn't a single integer.")
         val validatorName = validator.exprs.head.getGByteArray
-        val stakeAmount   = bond.exprs.head.getETupleBody.ps.head.exprs.head.getGInt
+        val stakeAmount   = bond.exprs.head.getGInt
         Bond(validatorName, stakeAmount)
     }.toList
 

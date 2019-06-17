@@ -90,8 +90,9 @@ new  PoS,
                       match depositResult {
                         (true, _) => {
                           resultCh!(
-                            (rewards.set(userPk, 0), bonds.set(userPk,(amount, bonds.size() + 1))),
-                            depositResult)
+                            (rewards.set(userPk, 0), bonds.set(userPk,amount)),
+                            depositResult
+                          )
                         }
 
                         (false, errorMsg) => {
@@ -137,7 +138,7 @@ new  PoS,
                     toBeSlashed!(invalidBlocks.getOrElse(blockHash, userPk)) |
                     for (@validator <- toBeSlashed) {
                       // TODO: Transfer to coop wallet instead of just simply setting bonds to 0
-                      stateCh!((rewards.set(validator, 0), bonds.set(validator, (0, bonds.get(validator).nth(1))))) |
+                      stateCh!((rewards.set(validator, 0), bonds.set(validator, 0))) |
                       return!(true)
                     }
                   }
@@ -183,13 +184,13 @@ new  PoS,
               computeDelta, rewardsDeltaCh,
               computeMergeMap in {
             @ListOps!("fold", bonds.toList(), 0, *computeSum, *totalStakeCh) |
-            contract computeSum(@(pk, (stake, _)), @acc, resultCh) = {
+            contract computeSum(@(pk, stake), @acc, resultCh) = {
               resultCh!(acc + stake)
             } |
 
             for(@totalStake <- totalStakeCh) {
               @ListOps!("fold", bonds.toList(), {}, *computeDelta, *rewardsDeltaCh) |
-              contract computeDelta(@(pk, (currentValidatorStake, _)), @acc, resultCh) = {
+              contract computeDelta(@(pk, currentValidatorStake), @acc, resultCh) = {
                 resultCh!(acc.set(pk, (amount * currentValidatorStake) / totalStake))
               }
             } |
