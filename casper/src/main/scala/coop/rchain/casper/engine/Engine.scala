@@ -84,8 +84,8 @@ object Engine {
                 .getOrElse("")
             )
           )
-      abh = new Running[F](casper, approvedBlock, init)
-      _   <- EngineCell[F].set(abh)
+      running = new Running[F](casper, approvedBlock, init)
+      _       <- EngineCell[F].set(running)
 
     } yield ()
 
