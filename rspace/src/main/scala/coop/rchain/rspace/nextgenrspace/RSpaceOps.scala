@@ -204,4 +204,11 @@ abstract class RSpaceOps[F[_]: Concurrent, C, P, A, R, K](
       _            = storeAtom.set(nextHotStore)
     } yield ()
 
+  override def createSoftCheckpoint(): F[SoftCheckpoint[C, P, A, K]] =
+    for {
+      cache <- storeAtom.get().snapshot()
+      log   = eventLog.take()
+      _     = eventLog.put(Seq.empty)
+    } yield SoftCheckpoint[C, P, A, K](cache, log)
+
 }

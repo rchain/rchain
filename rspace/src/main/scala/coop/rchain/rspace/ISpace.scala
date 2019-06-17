@@ -125,6 +125,12 @@ trait ISpace[F[_], C, P, A, R, K] {
   // TODO: this should not be exposed
   def toMap: F[Map[Seq[C], Row[P, A, K]]]
 
+  /**
+    Allows to create a "soft" checkpoint which doesn't persist the checkpointed data into history.
+    This operation is significantly faster than {@link #createCheckpoint()} because the computationally
+    expensive operation of creating the history trie is avoided.
+    */
+  def createSoftCheckpoint(): F[SoftCheckpoint[C, P, A, K]]                   = ???
 }
 
 object ISpace {
