@@ -2,7 +2,6 @@ package coop.rchain.rholang.interpreter
 
 import java.io.StringReader
 
-import coop.rchain.crypto.PublicKey
 import coop.rchain.models.Expr.ExprInstance._
 import coop.rchain.models.rholang.implicits.{GPrivateBuilder, _}
 import coop.rchain.models.{Send, _}
@@ -53,7 +52,7 @@ class CollectPrinterSpec extends FlatSpec with Matchers {
     IndexMapChain[VarSort]().newBindings(List(("P", ProcSort, 0, 0), ("x", NameSort, 0, 0))),
     DebruijnLevelMap[VarSort]()
   )
-  implicit val deployerPk: Option[PublicKey] = None
+  implicit val normalizerEnv: NormalizerEnv = NormalizerEnv.Empty
 
   "List" should "Print" in {
     val listData = new ListProc()
@@ -135,8 +134,8 @@ class CollectPrinterSpec extends FlatSpec with Matchers {
 }
 
 class ProcPrinterSpec extends FlatSpec with Matchers {
-  val inputs                                 = ProcVisitInputs(Par(), IndexMapChain[VarSort](), DebruijnLevelMap[VarSort]())
-  implicit val deployerPk: Option[PublicKey] = None
+  val inputs                                = ProcVisitInputs(Par(), IndexMapChain[VarSort](), DebruijnLevelMap[VarSort]())
+  implicit val normalizerEnv: NormalizerEnv = NormalizerEnv.Empty
 
   "New" should "use 0-based indexing" in {
     val source = Par(news = Seq(New(3, Par())))
@@ -913,8 +912,8 @@ class IncrementTester extends FlatSpec with Matchers {
 
 class NamePrinterSpec extends FlatSpec with Matchers {
 
-  val inputs                                 = NameVisitInputs(IndexMapChain[VarSort](), DebruijnLevelMap[VarSort]())
-  implicit val deployerPk: Option[PublicKey] = None
+  val inputs                                = NameVisitInputs(IndexMapChain[VarSort](), DebruijnLevelMap[VarSort]())
+  implicit val normalizerEnv: NormalizerEnv = NormalizerEnv.Empty
 
   "NameWildcard" should "Print" in {
     val nw = new NameWildcard()

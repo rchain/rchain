@@ -2,7 +2,6 @@ package coop.rchain.rholang.interpreter
 
 import java.io.StringReader
 
-import coop.rchain.crypto.PublicKey
 import coop.rchain.rholang.syntax.rholang_mercury.Absyn.{
   Bundle => AbsynBundle,
   Ground => AbsynGround,
@@ -60,8 +59,8 @@ class CollectMatcherSpec extends FlatSpec with Matchers {
     IndexMapChain[VarSort]().newBindings(List(("P", ProcSort, 0, 0), ("x", NameSort, 0, 0))),
     DebruijnLevelMap[VarSort]()
   )
-  implicit val deployerPk: Option[PublicKey] = None
-  def getNormalizedPar(rho: String): Par     = ParBuilderUtil.buildNormalizedTerm[Coeval](rho).value()
+  implicit val normalizerEnv: NormalizerEnv = NormalizerEnv.Empty
+  def getNormalizedPar(rho: String): Par    = ParBuilderUtil.buildNormalizedTerm[Coeval](rho).value()
   def assertEqualNormalized(rho1: String, rho2: String): Assertion =
     assert(getNormalizedPar(rho1) == getNormalizedPar(rho2))
 
@@ -221,8 +220,8 @@ class CollectMatcherSpec extends FlatSpec with Matchers {
 }
 
 class ProcMatcherSpec extends FlatSpec with Matchers {
-  val inputs                                 = ProcVisitInputs(Par(), IndexMapChain[VarSort](), DebruijnLevelMap[VarSort]())
-  implicit val deployerPk: Option[PublicKey] = None
+  val inputs                                = ProcVisitInputs(Par(), IndexMapChain[VarSort](), DebruijnLevelMap[VarSort]())
+  implicit val normalizerEnv: NormalizerEnv = NormalizerEnv.Empty
 
   "PNil" should "Compile as no modification to the par object" in {
     val nil = new PNil()
@@ -1554,8 +1553,8 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
 }
 
 class NameMatcherSpec extends FlatSpec with Matchers {
-  val inputs                                 = NameVisitInputs(IndexMapChain[VarSort](), DebruijnLevelMap[VarSort]())
-  implicit val deployerPk: Option[PublicKey] = None
+  val inputs                                = NameVisitInputs(IndexMapChain[VarSort](), DebruijnLevelMap[VarSort]())
+  implicit val normalizerEnv: NormalizerEnv = NormalizerEnv.Empty
 
   "NameWildcard" should "add a wildcard count to knownFree" in {
     val nw                  = new NameWildcard()

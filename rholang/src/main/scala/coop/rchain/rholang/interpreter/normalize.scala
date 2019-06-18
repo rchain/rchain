@@ -3,7 +3,6 @@ package coop.rchain.rholang.interpreter
 import cats.Applicative
 import cats.effect.Sync
 import cats.implicits._
-import coop.rchain.crypto.PublicKey
 import coop.rchain.models.Connective.ConnectiveInstance._
 import coop.rchain.models.Expr.ExprInstance._
 import coop.rchain.models.Var.VarInstance._
@@ -101,7 +100,7 @@ object RemainderNormalizeMatcher {
 object CollectionNormalizeMatcher {
   def normalizeMatch[M[_]](c: Collection, input: CollectVisitInputs)(
       implicit sync: Sync[M],
-      deployerPk: Option[PublicKey]
+      env: NormalizerEnv
   ): M[CollectVisitOutputs] = {
     def foldMatch[T](
         knownFree: DebruijnLevelMap[VarSort],
@@ -233,7 +232,7 @@ object CollectionNormalizeMatcher {
 object NameNormalizeMatcher {
   def normalizeMatch[M[_]](n: Name, input: NameVisitInputs)(
       implicit err: Sync[M],
-      deployerPk: Option[PublicKey]
+      env: NormalizerEnv
   ): M[NameVisitOutputs] =
     n match {
       case wc: NameWildcard =>
@@ -277,7 +276,7 @@ object ProcNormalizeMatcher {
   // ApplicativeAsk / MonadState instead
   def normalizeMatch[M[_]](p: Proc, input: ProcVisitInputs)(
       implicit sync: Sync[M],
-      deployerPk: Option[PublicKey]
+      env: NormalizerEnv
   ): M[ProcVisitOutputs] = Sync[M].defer {
     def unaryExp[T](subProc: Proc, input: ProcVisitInputs, constructor: Par => T)(
         implicit toExprInstance: T => Expr
@@ -939,13 +938,14 @@ object ProcNormalizeMatcher {
         val newEnv             = input.env.newBindings(newBindings.toList)
         val newCount           = newEnv.count - input.env.count
         val requiresDeployerId = uris.contains("rho:rchain:deployerId")
-        if (requiresDeployerId && deployerPk.isEmpty)
+        if (requiresDeployerId && env.deployerPk.isEmpty)
           NormalizerError(
             "`rho:rchain:deployerId` was used in rholang usage context where DeployerId is not available."
           ).raiseError[M, ProcVisitOutputs]
         else {
           val maybeDeployerId =
-            if (requiresDeployerId) deployerPk.map(pk => DeployerId(pk.bytes.toByteString))
+            if (requiresDeployerId)
+              env.deployerPk.map(pk => DeployerId(pk.bytes.toByteString))
             else none[DeployerId]
           normalizeMatch[M](p.proc_, ProcVisitInputs(VectorPar(), newEnv, input.knownFree)).map {
             bodyResult =>

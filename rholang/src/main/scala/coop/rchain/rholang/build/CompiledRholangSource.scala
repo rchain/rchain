@@ -1,6 +1,6 @@
 package coop.rchain.rholang.build
 import coop.rchain.models.Par
-import coop.rchain.rholang.interpreter.ParBuilder
+import coop.rchain.rholang.interpreter.{NormalizerEnv, ParBuilder}
 import monix.eval.Coeval
 
 import scala.io.Source
@@ -22,7 +22,8 @@ object CompiledRholangSource {
          #$fileContent
          #""".stripMargin('#')
     }
-    override val term: Par = ParBuilder[Coeval].buildNormalizedTerm(code, None).value()
+    override val term: Par =
+      ParBuilder[Coeval].buildNormalizedTerm(code, NormalizerEnv.Empty).value()
   }
 
 }
@@ -49,5 +50,5 @@ abstract class CompiledRholangTemplate(classpath: String, env: (String, Any)*)
         #$finalContent
         #""".stripMargin('#')
 
-  override val term: Par = ParBuilder[Coeval].buildNormalizedTerm(code, None).value()
+  override val term: Par = ParBuilder[Coeval].buildNormalizedTerm(code, NormalizerEnv.Empty).value()
 }
