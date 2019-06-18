@@ -937,12 +937,21 @@ object ProcNormalizeMatcher {
         val uris               = sortBindings.flatMap(row => row._1)
         val newEnv             = input.env.newBindings(newBindings.toList)
         val newCount           = newEnv.count - input.env.count
+        val requiresDeployId   = uris.contains("rho:rchain:deployId")
         val requiresDeployerId = uris.contains("rho:rchain:deployerId")
         if (requiresDeployerId && env.deployerPk.isEmpty)
           NormalizerError(
             "`rho:rchain:deployerId` was used in rholang usage context where DeployerId is not available."
           ).raiseError[M, ProcVisitOutputs]
+        else if (requiresDeployId && env.deployId.isEmpty)
+          NormalizerError(
+            "`rho:rchain:deployId` was used in rholang usage context where DeployId is not available."
+          ).raiseError[M, ProcVisitOutputs]
         else {
+          val maybeDeployId =
+            if (requiresDeployId)
+              env.deployId.map(sig => DeployId(sig.toByteString))
+            else none[DeployId]
           val maybeDeployerId =
             if (requiresDeployerId)
               env.deployerPk.map(pk => DeployerId(pk.bytes.toByteString))
@@ -953,6 +962,7 @@ object ProcNormalizeMatcher {
                 bindCount = newCount,
                 p = bodyResult.par,
                 uri = uris,
+                deployId = maybeDeployId,
                 deployerId = maybeDeployerId,
                 locallyFree = bodyResult.par.locallyFree.from(newCount).map(x => x - newCount)
               )

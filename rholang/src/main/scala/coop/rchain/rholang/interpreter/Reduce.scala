@@ -421,7 +421,15 @@ class DebruijnInterpreter[M[_], F[_]](
             .map { case DeployerId(pk) => newEnv.put(GDeployerId(pk)).asRight[InterpreterError] }
             .getOrElse(
               BugFoundError(
-                s"No DeployId set despite `rho:rchain:deployerId` being used in a term. This is a bug in the normalizer or on the path from it."
+                s"No DeployerId set despite `rho:rchain:deployerId` being used in a term. This is a bug in the normalizer or on the path from it."
+              ).asLeft[Env[Par]]
+            )
+        else if (urn == "rho:rchain:deployId")
+          neu.deployId
+            .map { case DeployId(sig) => newEnv.put(GDeployId(sig)).asRight[InterpreterError] }
+            .getOrElse(
+              BugFoundError(
+                s"No DeployId set despite `rho:rchain:deployId` being used in a term. This is a bug in the normalizer or on the path from it."
               ).asLeft[Env[Par]]
             )
         else
