@@ -135,6 +135,7 @@ trait ScoreTree {
     final val ESET          = 8
     final val EMAP          = 9
     final val DEPLOYER_AUTH = 10
+    final val DEPLOY_ID     = 11
 
     // Vars
     final val BOUND_VAR = 50

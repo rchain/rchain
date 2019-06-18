@@ -247,11 +247,12 @@ object Substitute {
           .map(
             newSub =>
               New(
-                term.bindCount,
-                newSub,
-                term.uri,
-                term.deployerId,
-                term.locallyFree.until(env.shift)
+                bindCount = term.bindCount,
+                p = newSub,
+                uri = term.uri,
+                deployerId = term.deployerId,
+                deployId = term.deployId,
+                locallyFree = term.locallyFree.until(env.shift)
               )
           )
       override def substitute(term: New)(implicit depth: Int, env: Env[Par]): M[New] =
