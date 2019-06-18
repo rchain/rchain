@@ -113,16 +113,15 @@ final case class HistoryRepositoryImpl[F[_]: Sync, C, P, A, K](
 
   type Result = (Blake2b256Hash, Option[PersistedData], HistoryAction)
 
-  protected[this] val dataLogger: F[Logger] =
-    Sync[F].delay(Logger("coop.rchain.rspace.datametrics"))
+  protected[this] val dataLogger: Logger =
+    Logger("coop.rchain.rspace.datametrics")
 
   private def measure(actions: List[HotStoreAction]): F[Unit] =
-    for {
-      d <- dataLogger
-      _ = d.whenDebugEnabled {
-        computeMeasure(actions).foreach(p => d.debug(p))
+    Sync[F].delay(
+      dataLogger.whenDebugEnabled {
+        computeMeasure(actions).foreach(p => dataLogger.debug(p))
       }
-    } yield ()
+    )
 
   private def computeMeasure(actions: List[HotStoreAction]): List[String] =
     actions.map {
@@ -198,7 +197,7 @@ final case class HistoryRepositoryImpl[F[_]: Sync, C, P, A, K](
       historyActions <- storeLeaves(trieActions)
       next           <- history.process(historyActions)
       _              <- rootsRepository.commit(next.root)
-      _              = measure(actions)
+      _              <- measure(actions)
     } yield this.copy(history = next)
 
   override def reset(root: Blake2b256Hash): F[HistoryRepository[F, C, P, A, K]] =
