@@ -7,6 +7,7 @@ import coop.rchain.rspace.examples.StringExamples._
 import coop.rchain.rspace.examples.StringExamples.implicits._
 import coop.rchain.rspace.history.{Leaf, LeafPointer, Node, NodePointer, PointerBlock, Skip, Trie}
 import coop.rchain.rspace.test._
+import coop.rchain.rspace.trace.Consume
 import coop.rchain.rspace.util._
 import coop.rchain.rspace.internal._
 import coop.rchain.rspace.nextgenrspace.history.History
@@ -926,6 +927,58 @@ trait StorageActionsTests[F[_]]
       _             = err.getMessage shouldBe "channels.length must equal patterns.length"
       insertActions <- store.changes().map(collectActions[InsertAction])
     } yield (insertActions shouldBe empty)
+  }
+
+  "createSoftCheckpoint" should "capture the current state of the store" in fixture {
+    (_, _, space) =>
+      val channel      = "ch1"
+      val channels     = List(channel)
+      val patterns     = List(Wildcard)
+      val continuation = new StringsCaptor
+
+      val expectedContinuation = Seq(
+        WaitingContinuation
+          .create[String, Pattern, StringsCaptor](channels, patterns, continuation, false, 0)
+      )
+
+      for {
+        // do an operation
+        _ <- space.consume(channels, patterns, continuation, persist = false)
+        // create a soft checkpoint
+        s <- space.createSoftCheckpoint()
+        // assert that the snapshot contains the continuation
+        _ = s.cacheSnapshot.cache.continuations.values should contain only expectedContinuation
+        // produce again
+        _ <- space.consume(channels, patterns, continuation, persist = false)
+        // assert that the snapshot contains only the first continuation
+        _ = s.cacheSnapshot.cache.continuations.values should contain only expectedContinuation
+      } yield ()
+  }
+
+  it should "clear the event log" in fixture { (_, _, space) =>
+    val channel      = "ch1"
+    val channels     = List(channel)
+    val patterns     = List(Wildcard)
+    val continuation = new StringsCaptor
+
+    for {
+      // do an operation
+      _ <- space.consume(channels, patterns, continuation, persist = false)
+      // create a soft checkpoint
+      s1 <- space.createSoftCheckpoint()
+      // the log contains the above operation
+      _ = s1.log should contain only
+        Consume.create[String, Pattern, StringsCaptor](
+          channels,
+          patterns,
+          continuation,
+          false,
+          0
+        )
+      s2 <- space.createSoftCheckpoint()
+      // assert that the event log has been cleared
+      _ = s2.log shouldBe empty
+    } yield ()
   }
 }
 
