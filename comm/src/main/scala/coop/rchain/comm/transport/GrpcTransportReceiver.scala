@@ -54,7 +54,9 @@ object GrpcTransportReceiver {
           import StreamHandler._
           import StreamError.StreamErrorToMessage
 
-          val circuitBreaker: StreamHandler.CircuitBreaker = _ > maxStreamMessageSize
+          val circuitBreaker: StreamHandler.CircuitBreaker = {
+            case streamed => streamed.readSoFar > maxStreamMessageSize
+          }
 
           (handleStream(networkId, tempFolder, observable, circuitBreaker) >>= {
             case Left(error @ StreamError.Unexpected(t)) => logger.error(error.message, t)

@@ -18,9 +18,21 @@ import coop.rchain.comm.transport.PacketOps._
 import monix.eval.Task
 import monix.reactive.Observable
 
+final case class Streamed(
+    sender: Option[PeerNode] = None,
+    typeId: Option[String] = None,
+    contentLength: Option[Int] = None,
+    compressed: Boolean = false,
+    readSoFar: Long = 0,
+    circuitBroken: Boolean = false,
+    wrongNetwork: Boolean = false,
+    path: Path,
+    fos: FileOutputStream
+)
+
 object StreamHandler {
 
-  type CircuitBreaker = Long => Boolean
+  type CircuitBreaker = Streamed => Boolean
 
   sealed trait StreamError
   object StreamError {
@@ -49,18 +61,6 @@ object StreamHandler {
       val message: String = StreamError.errorMessage(error)
     }
   }
-
-  private final case class Streamed(
-      sender: Option[PeerNode] = None,
-      typeId: Option[String] = None,
-      contentLength: Option[Int] = None,
-      compressed: Boolean = false,
-      readSoFar: Long = 0,
-      circuitBroken: Boolean = false,
-      wrongNetwork: Boolean = false,
-      path: Path,
-      fos: FileOutputStream
-  )
 
   def handleStream(
       networkId: String,
@@ -120,10 +120,10 @@ object StreamHandler {
           stmd.fos.write(array)
           stmd.fos.flush()
           val readSoFar = stmd.readSoFar + array.length
-          if (circuitBreaker(readSoFar))
-            Right(stmd.copy(circuitBroken = true))
-          else
-            Left(stmd.copy(readSoFar = readSoFar))
+          val newStmd   = stmd.copy(readSoFar = readSoFar)
+          if (circuitBreaker(newStmd))
+            Right(newStmd.copy(circuitBroken = true))
+          else Left(newStmd)
       }
 
     EitherT(collectStream.attempt.map {

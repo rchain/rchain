@@ -83,7 +83,7 @@ class StreamHandlerSpec extends FunSpec with Matchers with Inside with BeforeAnd
     it("should stop receiving a stream if will not fit in memory") {
       // given
       val messageSize                     = 10 * 1024
-      val breakOnSndChunk: CircuitBreaker = read => read > messageSize
+      val breakOnSndChunk: CircuitBreaker = streamed => streamed.readSoFar > messageSize
       val stream                          = createStream(messageSize = messageSize)
       // when
       val err: StreamHandler.StreamError = handleStreamErr(stream, circuitBreaker = breakOnSndChunk)
