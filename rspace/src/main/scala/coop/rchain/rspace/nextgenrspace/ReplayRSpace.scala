@@ -20,6 +20,7 @@ import scodec.Codec
 import monix.execution.atomic.AtomicAny
 
 import scala.collection.JavaConverters._
+import scala.collection.SortedSet
 import scala.concurrent.ExecutionContext
 
 class ReplayRSpace[F[_]: Sync, C, P, A, R, K](
@@ -58,7 +59,7 @@ class ReplayRSpace[F[_]: Sync, C, P, A, R, K](
       continuation: K,
       persist: Boolean,
       sequenceNumber: Int,
-      peeks: Set[Int] = Set.empty
+      peeks: SortedSet[Int] = SortedSet.empty
   )(
       implicit m: Match[F, P, A, R]
   ): F[MaybeActionResult] =
@@ -91,7 +92,7 @@ class ReplayRSpace[F[_]: Sync, C, P, A, R, K](
       continuation: K,
       persist: Boolean,
       sequenceNumber: Int,
-      peeks: Set[Int],
+      peeks: SortedSet[Int],
       span: Span[F]
   )(
       implicit m: Match[F, P, A, R]
@@ -114,12 +115,12 @@ class ReplayRSpace[F[_]: Sync, C, P, A, R, K](
     def storeWaitingContinuation(
         consumeRef: Consume,
         maybeCommRef: Option[COMM],
-        peeks: Seq[Int]
+        peeks: SortedSet[Int]
     ): F[MaybeActionResult] =
       for {
         _ <- store.putContinuation(
               channels,
-              WaitingContinuation(patterns, continuation, persist, peeks.toSeq.sorted, consumeRef)
+              WaitingContinuation(patterns, continuation, persist, peeks, consumeRef)
             )
         _ <- channels.traverse(channel => store.putJoin(channel, channels))
         _ <- logF.debug(s"""|consume: no data found,
@@ -131,14 +132,14 @@ class ReplayRSpace[F[_]: Sync, C, P, A, R, K](
         mats: Seq[DataCandidate[C, R]],
         consumeRef: Consume,
         comms: Multiset[COMM],
-        peeks: Seq[Int],
+        peeks: SortedSet[Int],
         channelsToIndex: Map[C, Int]
     ): F[MaybeActionResult] = {
       def shouldRemove(persist: Boolean, channel: C): Boolean =
         !persist && !peeks.contains(channelsToIndex(channel))
       for {
         _       <- metricsF.incrementCounter(consumeCommLabel)
-        commRef <- syncF.delay { COMM(consumeRef, mats.map(_.datum.source), peeks.toSeq.sorted) }
+        commRef <- syncF.delay { COMM(consumeRef, mats.map(_.datum.source), peeks) }
         _       <- assertF(comms.contains(commRef), "COMM Event was not contained in the trace")
         r <- mats.toList
               .sortBy(_.datumIndex)(Ordering[Int].reverse)
@@ -206,21 +207,21 @@ class ReplayRSpace[F[_]: Sync, C, P, A, R, K](
       _ <- span.mark("after-compute-consumeref")
       r <- replayData.get(consumeRef) match {
             case None =>
-              storeWaitingContinuation(consumeRef, None, peeks.toSeq.sorted)
+              storeWaitingContinuation(consumeRef, None, peeks)
             case Some(comms) =>
               val commOrDataCandidates: F[Either[COMM, Seq[DataCandidate[C, R]]]] =
                 getCommOrDataCandidates(comms.iterator().asScala.toList)
 
               val x: F[MaybeActionResult] = commOrDataCandidates.flatMap {
                 case Left(commRef) =>
-                  storeWaitingContinuation(consumeRef, Some(commRef), peeks.toSeq.sorted)
+                  storeWaitingContinuation(consumeRef, Some(commRef), peeks)
                 case Right(dataCandidates) =>
                   val channelsToIndex = channels.zipWithIndex.toMap
                   handleMatches(
                     dataCandidates,
                     consumeRef,
                     comms,
-                    peeks.toSeq.sorted,
+                    peeks,
                     channelsToIndex
                   )
               }
@@ -352,7 +353,7 @@ class ReplayRSpace[F[_]: Sync, C, P, A, R, K](
           for {
             _ <- metricsF.incrementCounter(produceCommLabel)
             commRef <- syncF.delay {
-                        COMM(consumeRef, dataCandidates.map(_.datum.source), peeks.toSeq.sorted)
+                        COMM(consumeRef, dataCandidates.map(_.datum.source), peeks)
                       }
             _ <- assertF(comms.contains(commRef), "COMM Event was not contained in the trace")
             _ <- if (!persistK) {

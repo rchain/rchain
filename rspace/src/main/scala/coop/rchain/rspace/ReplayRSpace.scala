@@ -14,6 +14,7 @@ import coop.rchain.shared.Log
 import scodec.Codec
 
 import scala.collection.JavaConverters._
+import scala.collection.SortedSet
 import scala.concurrent.ExecutionContext
 
 class ReplayRSpace[F[_], C, P, A, R, K](store: IStore[F, C, P, A, K], branch: Branch)(
@@ -46,7 +47,7 @@ class ReplayRSpace[F[_], C, P, A, R, K](store: IStore[F, C, P, A, K], branch: Br
       continuation: K,
       persist: Boolean,
       sequenceNumber: Int,
-      peeks: Set[Int] = Set.empty
+      peeks: SortedSet[Int] = SortedSet.empty
   )(
       implicit m: Match[F, P, A, R]
   ): F[MaybeActionResult] =
@@ -101,7 +102,7 @@ class ReplayRSpace[F[_], C, P, A, R, K](store: IStore[F, C, P, A, K], branch: Br
                 store.putWaitingContinuation(
                   txn,
                   channels,
-                  WaitingContinuation(patterns, continuation, persist, Seq.empty, consumeRef)
+                  WaitingContinuation(patterns, continuation, persist, SortedSet.empty, consumeRef)
                 )
                 for (channel <- channels) store.addJoin(txn, channel, channels)
               }

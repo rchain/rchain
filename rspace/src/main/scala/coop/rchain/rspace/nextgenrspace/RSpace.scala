@@ -18,6 +18,7 @@ import coop.rchain.shared.SyncVarOps._
 import monix.execution.atomic.AtomicAny
 import scodec.Codec
 
+import scala.collection.SortedSet
 import scala.concurrent.ExecutionContext
 import scala.util.Random
 
@@ -71,7 +72,7 @@ class RSpace[F[_], C, P, A, R, K] private[rspace] (
       patterns: Seq[P],
       continuation: K,
       persist: Boolean,
-      peeks: Seq[Int],
+      peeks: SortedSet[Int],
       consumeRef: Consume
   ): F[MaybeActionResult] =
     for {
@@ -81,7 +82,7 @@ class RSpace[F[_], C, P, A, R, K] private[rspace] (
               patterns,
               continuation,
               persist,
-              peeks.toSeq.sorted,
+              peeks,
               consumeRef
             )
           )
@@ -95,7 +96,7 @@ class RSpace[F[_], C, P, A, R, K] private[rspace] (
 
   private[this] def storePersistentData(
       dataCandidates: Seq[DataCandidate[C, R]],
-      peeks: Set[Int],
+      peeks: SortedSet[Int],
       channelsToIndex: Map[C, Int]
   ): F[List[Unit]] = {
     def shouldRemove(persist: Boolean, channel: C): Boolean =
@@ -120,7 +121,7 @@ class RSpace[F[_], C, P, A, R, K] private[rspace] (
       continuation: K,
       persist: Boolean,
       sequenceNumber: Int,
-      peeks: Set[Int] = Set.empty
+      peeks: SortedSet[Int] = SortedSet.empty
   )(
       implicit m: Match[F, P, A, R]
   ): F[MaybeActionResult] = {
@@ -131,7 +132,7 @@ class RSpace[F[_], C, P, A, R, K] private[rspace] (
         patterns,
         continuation,
         persist,
-        peeks.toSeq.sorted,
+        peeks,
         consumeRef
       )
 
@@ -201,7 +202,7 @@ class RSpace[F[_], C, P, A, R, K] private[rspace] (
                                               COMM(
                                                 consumeRef,
                                                 dataCandidates.map(_.datum.source),
-                                                peeks.toSeq.sorted
+                                                peeks
                                               ) +: _
                                             )
                                           }
@@ -320,7 +321,7 @@ class RSpace[F[_], C, P, A, R, K] private[rspace] (
           syncF.delay {
             eventLog
               .update(
-                COMM(consumeRef, dataCandidates.map(_.datum.source), peeks.toSeq.sorted) +: _
+                COMM(consumeRef, dataCandidates.map(_.datum.source), peeks) +: _
               )
           }
 

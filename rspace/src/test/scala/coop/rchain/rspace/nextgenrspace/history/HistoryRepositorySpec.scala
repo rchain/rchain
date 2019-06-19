@@ -25,6 +25,8 @@ import scala.util.Random
 import cats.implicits._
 import scodec.Codec
 
+import scala.collection.SortedSet
+
 class HistoryRepositorySpec
     extends FlatSpec
     with Matchers
@@ -148,7 +150,7 @@ class HistoryRepositorySpec
       "pattern-" + s :: Nil,
       "cont-" + s,
       true,
-      Seq.empty,
+      SortedSet.empty,
       Consume(randomBlake :: Nil, randomBlake, 0)
     )
 

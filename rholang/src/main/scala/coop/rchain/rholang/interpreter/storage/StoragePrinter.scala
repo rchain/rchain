@@ -9,6 +9,7 @@ import coop.rchain.rholang.interpreter.PrettyPrinter
 import coop.rchain.rholang.interpreter.Runtime.RhoISpace
 import coop.rchain.rspace.internal.{Datum, Row, WaitingContinuation}
 import coop.rchain.rspace.trace.{Consume, Produce}
+import scala.collection.SortedSet
 
 object StoragePrinter {
 
@@ -69,7 +70,7 @@ object StoragePrinter {
           patterns: Seq[BindPattern],
           continuation: TaggedContinuation,
           persist: Boolean,
-          _: Seq[Int],
+          _: SortedSet[Int],
           _: Consume
           ) =>
         val receiveBinds: Seq[ReceiveBind] = (channels zip patterns).map {

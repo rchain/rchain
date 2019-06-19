@@ -38,6 +38,8 @@ import scala.util.Random.shuffle
 import scodec.Codec
 import org.lmdbjava.EnvFlags
 
+import scala.collection.SortedSet
+
 object SchedulerPools {
   implicit val global = Scheduler.fixedPool("GlobalPool", 20)
   val rspacePool      = Scheduler.fixedPool("RSpacePool", 5)
@@ -61,8 +63,8 @@ trait ReplayRSpaceTests extends ReplayRSpaceTestsBase[String, Pattern, String, S
       channelsCreator: Int => List[C],
       patterns: List[P],
       continuationCreator: Int => K,
-      peeks: Set[Int] = Set.empty,
-      persist: Boolean
+      persist: Boolean,
+      peeks: SortedSet[Int] = SortedSet.empty
   )(
       implicit matcher: Match[Task, P, A, R]
   ): Task[List[Option[(ContResult[C, P, K], Seq[Result[R]])]]] =
@@ -152,7 +154,13 @@ trait ReplayRSpaceTests extends ReplayRSpaceTestsBase[String, Pattern, String, S
       for {
         emptyPoint <- space.createCheckpoint()
 
-        resultConsume <- space.consume(channels, patterns, continuation, false, peeks = Set(0))
+        resultConsume <- space.consume(
+                          channels,
+                          patterns,
+                          continuation,
+                          false,
+                          peeks = SortedSet(0)
+                        )
         resultProduce <- space.produce(channels(0), datum, false)
         rigPoint      <- space.createCheckpoint()
 
@@ -161,14 +169,14 @@ trait ReplayRSpaceTests extends ReplayRSpaceTestsBase[String, Pattern, String, S
           (ContResult(continuation, false, channels, patterns, 1, true), List(Result(datum, false)))
         )
 
-        _ <- replaySpace.resetAndRig(emptyPoint.root, rigPoint.log)
+        _ <- replaySpace.rigAndReset(emptyPoint.root, rigPoint.log)
 
         replayResultConsume <- replaySpace.consume(
                                 channels,
                                 patterns,
                                 continuation,
                                 false,
-                                peeks = Set(0)
+                                peeks = SortedSet(0)
                               )
         replayResultProduce <- replaySpace.produce(channels(0), datum, false)
         finalPoint          <- replaySpace.createCheckpoint()
@@ -191,13 +199,19 @@ trait ReplayRSpaceTests extends ReplayRSpaceTestsBase[String, Pattern, String, S
         emptyPoint <- space.createCheckpoint()
 
         resultProduce <- space.produce(channels(0), datum, false)
-        resultConsume <- space.consume(channels, patterns, continuation, false, peeks = Set(0))
-        rigPoint      <- space.createCheckpoint()
+        resultConsume <- space.consume(
+                          channels,
+                          patterns,
+                          continuation,
+                          false,
+                          peeks = SortedSet(0)
+                        )
+        rigPoint <- space.createCheckpoint()
 
         _ = resultProduce shouldBe None
         _ = resultConsume shouldBe defined
 
-        _ <- replaySpace.resetAndRig(emptyPoint.root, rigPoint.log)
+        _ <- replaySpace.rigAndReset(emptyPoint.root, rigPoint.log)
 
         replayResultProduce <- replaySpace.produce(channels(0), datum, false)
         replayResultConsume <- replaySpace.consume(
@@ -205,7 +219,7 @@ trait ReplayRSpaceTests extends ReplayRSpaceTestsBase[String, Pattern, String, S
                                 patterns,
                                 continuation,
                                 false,
-                                peeks = Set(0)
+                                peeks = SortedSet(0)
                               )
         finalPoint <- replaySpace.createCheckpoint()
 
@@ -231,7 +245,7 @@ trait ReplayRSpaceTests extends ReplayRSpaceTestsBase[String, Pattern, String, S
                            patterns,
                            continuation,
                            false,
-                           peeks = Set(0)
+                           peeks = SortedSet(0)
                          )
         resultProduce1 <- space.produce(channels(1), datum, false)
         resultProduce2 <- space.produce(channels(0), datum, false)
@@ -240,7 +254,7 @@ trait ReplayRSpaceTests extends ReplayRSpaceTestsBase[String, Pattern, String, S
                            patterns,
                            continuation,
                            false,
-                           peeks = Set(1)
+                           peeks = SortedSet(1)
                          )
         resultProduce3 <- space.produce(channels(1), datum, false)
         resultConsume3 <- space.consume(channels, patterns, continuation, false)
@@ -256,14 +270,14 @@ trait ReplayRSpaceTests extends ReplayRSpaceTestsBase[String, Pattern, String, S
         _ = resultConsume3 shouldBe None
         _ = resultProduce4 shouldBe defined
 
-        _ <- replaySpace.resetAndRig(emptyPoint.root, rigPoint.log)
+        _ <- replaySpace.rigAndReset(emptyPoint.root, rigPoint.log)
 
         replayConsume1 <- replaySpace.consume(
                            channels,
                            patterns,
                            continuation,
                            false,
-                           peeks = Set(0)
+                           peeks = SortedSet(0)
                          )
         replayProduce1 <- replaySpace.produce(channels(1), datum, false)
         replayProduce2 <- replaySpace.produce(channels(0), datum, false)
@@ -272,7 +286,7 @@ trait ReplayRSpaceTests extends ReplayRSpaceTestsBase[String, Pattern, String, S
                            patterns,
                            continuation,
                            false,
-                           peeks = Set(1)
+                           peeks = SortedSet(1)
                          )
         replayProduce3 <- replaySpace.produce(channels(1), datum, false)
         replayConsume3 <- replaySpace.consume(channels, patterns, continuation, false)
@@ -295,13 +309,43 @@ trait ReplayRSpaceTests extends ReplayRSpaceTestsBase[String, Pattern, String, S
       for {
         emptyPoint <- space.createCheckpoint()
 
-        resultConsume1 <- space.consume(channels, patterns, continuation, false, peeks = Set(0))
-        resultProduce  <- space.produce(channels(0), datum, false)
-        resultConsume2 <- space.consume(channels, patterns, continuation, false, peeks = Set(0))
-        resultConsume3 <- space.consume(channels, patterns, continuation, false, peeks = Set(0))
-        resultConsume4 <- space.consume(channels, patterns, continuation, false, peeks = Set(0))
-        resultConsume5 <- space.consume(channels, patterns, continuation, false, peeks = Set(0))
-        rigPoint       <- space.createCheckpoint()
+        resultConsume1 <- space.consume(
+                           channels,
+                           patterns,
+                           continuation,
+                           false,
+                           peeks = SortedSet(0)
+                         )
+        resultProduce <- space.produce(channels(0), datum, false)
+        resultConsume2 <- space.consume(
+                           channels,
+                           patterns,
+                           continuation,
+                           false,
+                           peeks = SortedSet(0)
+                         )
+        resultConsume3 <- space.consume(
+                           channels,
+                           patterns,
+                           continuation,
+                           false,
+                           peeks = SortedSet(0)
+                         )
+        resultConsume4 <- space.consume(
+                           channels,
+                           patterns,
+                           continuation,
+                           false,
+                           peeks = SortedSet(0)
+                         )
+        resultConsume5 <- space.consume(
+                           channels,
+                           patterns,
+                           continuation,
+                           false,
+                           peeks = SortedSet(0)
+                         )
+        rigPoint <- space.createCheckpoint()
 
         _ = resultConsume1 shouldBe None
         _ = resultConsume2 shouldBe defined
@@ -311,14 +355,14 @@ trait ReplayRSpaceTests extends ReplayRSpaceTestsBase[String, Pattern, String, S
         _ = resultProduce shouldBe Some(
           (ContResult(continuation, false, channels, patterns, 1, true), List(Result(datum, false)))
         )
-        _ <- replaySpace.resetAndRig(emptyPoint.root, rigPoint.log)
+        _ <- replaySpace.rigAndReset(emptyPoint.root, rigPoint.log)
 
         replayResultConsume1 <- replaySpace.consume(
                                  channels,
                                  patterns,
                                  continuation,
                                  false,
-                                 peeks = Set(0)
+                                 peeks = SortedSet(0)
                                )
         replayResultProduce <- replaySpace.produce(channels(0), datum, false)
         replayResultConsume2 <- replaySpace.consume(
@@ -326,28 +370,28 @@ trait ReplayRSpaceTests extends ReplayRSpaceTestsBase[String, Pattern, String, S
                                  patterns,
                                  continuation,
                                  false,
-                                 peeks = Set(0)
+                                 peeks = SortedSet(0)
                                )
         replayResultConsume3 <- replaySpace.consume(
                                  channels,
                                  patterns,
                                  continuation,
                                  false,
-                                 peeks = Set(0)
+                                 peeks = SortedSet(0)
                                )
         replayResultConsume4 <- replaySpace.consume(
                                  channels,
                                  patterns,
                                  continuation,
                                  false,
-                                 peeks = Set(0)
+                                 peeks = SortedSet(0)
                                )
         replayResultConsume5 <- replaySpace.consume(
                                  channels,
                                  patterns,
                                  continuation,
                                  false,
-                                 peeks = Set(0)
+                                 peeks = SortedSet(0)
                                )
         finalPoint <- replaySpace.createCheckpoint()
 
@@ -409,6 +453,53 @@ trait ReplayRSpaceTests extends ReplayRSpaceTestsBase[String, Pattern, String, S
           _ = replayResults should contain theSameElementsAs results
           _ = finalPoint.root shouldBe rigPoint.root
           _ = replaySpace.replayData shouldBe empty
+        } yield ()
+      }
+  }
+
+  "A matched continuation defined for multiple channels, some peeked" should "replay correctly" in forAll(
+    for {
+      amountOfChannles       <- Gen.chooseNum[Int](10, 100)
+      amountOfPeekedChannels <- Gen.chooseNum[Int](5, amountOfChannles)
+    } yield (amountOfChannles, amountOfPeekedChannels),
+    minSuccessful(100)
+  ) {
+    case (amountOfChannles: Int, amountOfPeekedChannels: Int) =>
+      fixture { (store, replayStore, space, replaySpace) =>
+        val channelsRange = List.range(0, amountOfChannles)
+        val channels      = channelsRange.map(i => s"channel$i")
+        val patterns      = channels.map(kp(Wildcard))
+        val continuation  = "continuation"
+        val peeks: SortedSet[Int] =
+          SortedSet.apply(Random.shuffle(channelsRange).take(amountOfPeekedChannels): _*)
+        val produces = Random.shuffle(channels)
+        def consumeAndProduce(s: ISpace[Task, String, Pattern, String, String, String]) =
+          for {
+            r  <- s.consume(channels, patterns, continuation, false, peeks = peeks)
+            rs <- produces.traverse(ch => s.produce(ch, s"datum-$ch", false))
+          } yield rs
+
+        for {
+          emptyPoint <- space.createCheckpoint()
+          rs         <- consumeAndProduce(space)
+          _          = rs.flatten should have size 1
+          hs         = store.get()
+          _ <- channelsRange.traverse { i =>
+                val ch = s"channel$i"
+                hs.getData(ch).map { data =>
+                  if (peeks.contains(i))
+                    data should have size 1
+                  else
+                    data should have size 0
+                }
+              }
+          rigPoint   <- space.createCheckpoint()
+          _          <- replaySpace.rigAndReset(emptyPoint.root, rigPoint.log)
+          rrs        <- consumeAndProduce(replaySpace)
+          finalPoint <- replaySpace.createCheckpoint()
+          _          = rs should contain theSameElementsAs rrs
+          _          = finalPoint.root shouldBe rigPoint.root
+          _          = replaySpace.replayData shouldBe empty
         } yield ()
       }
   }
@@ -830,11 +921,11 @@ trait ReplayRSpaceTests extends ReplayRSpaceTestsBase[String, Pattern, String, S
                     patterns = List(Wildcard, Wildcard),
                     continuationCreator = i => s"continuation$i",
                     persist = false,
-                    peeks = Set(0, 1)
+                    peeks = SortedSet(0, 1)
                   )
         rigPoint <- space.createCheckpoint()
 
-        _ <- replaySpace.resetAndRig(emptyPoint.root, rigPoint.log)
+        _ <- replaySpace.rigAndReset(emptyPoint.root, rigPoint.log)
         _ <- produceMany(
               replaySpace,
               range2,
@@ -856,7 +947,7 @@ trait ReplayRSpaceTests extends ReplayRSpaceTestsBase[String, Pattern, String, S
                           patterns = List(Wildcard, Wildcard),
                           continuationCreator = i => s"continuation$i",
                           persist = false,
-                          peeks = Set(0, 1)
+                          peeks = SortedSet(0, 1)
                         )
         finalPoint <- replaySpace.createCheckpoint()
 

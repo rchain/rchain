@@ -14,6 +14,8 @@ import org.scalactic.anyvals.PosInt
 import org.scalatest.AppendedClues
 import org.scalatest.prop.GeneratorDrivenPropertyChecks
 
+import scala.collection.SortedSet
+
 trait IStoreTests
     extends StorageTestsBase[Coeval, String, Pattern, String, StringsCaptor]
     with GeneratorDrivenPropertyChecks
@@ -108,7 +110,7 @@ trait IStoreTests
         val patterns     = List(StringMatch(pattern))
         val continuation = new StringsCaptor
         val wc: WaitingContinuation[Pattern, StringsCaptor] =
-          WaitingContinuation.create(key, patterns, continuation, false, Seq.empty)
+          WaitingContinuation.create(key, patterns, continuation, false, SortedSet.empty)
 
         store.withWriteTxnF { txn =>
           store.putWaitingContinuation(txn, key, wc)
@@ -125,7 +127,7 @@ trait IStoreTests
         val patterns     = List(StringMatch(pattern))
         val continuation = new StringsCaptor
         val wc1: WaitingContinuation[Pattern, StringsCaptor] =
-          WaitingContinuation.create(key, patterns, continuation, false, Seq.empty)
+          WaitingContinuation.create(key, patterns, continuation, false, SortedSet.empty)
 
         val wc2: WaitingContinuation[Pattern, StringsCaptor] =
           WaitingContinuation.create(
@@ -133,7 +135,7 @@ trait IStoreTests
             List(StringMatch(pattern + 2)),
             continuation,
             false,
-            Seq.empty
+            SortedSet.empty
           )
 
         store.withWriteTxnF { txn =>
@@ -152,14 +154,14 @@ trait IStoreTests
         val patterns     = List(StringMatch(pattern))
         val continuation = new StringsCaptor
         val wc1: WaitingContinuation[Pattern, StringsCaptor] =
-          WaitingContinuation.create(key, patterns, continuation, false, Seq.empty)
+          WaitingContinuation.create(key, patterns, continuation, false, SortedSet.empty)
         val wc2: WaitingContinuation[Pattern, StringsCaptor] =
           WaitingContinuation.create(
             key,
             List(StringMatch(pattern + 2)),
             continuation,
             false,
-            Seq.empty
+            SortedSet.empty
           )
 
         store.withWriteTxnF { txn =>

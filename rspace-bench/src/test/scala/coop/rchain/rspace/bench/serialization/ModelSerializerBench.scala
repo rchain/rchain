@@ -11,6 +11,7 @@ import coop.rchain.rspace.bench.serialization._
 import coop.rchain.rspace.internal._
 import org.openjdk.jmh.annotations.{State => BenchState, _}
 import org.openjdk.jmh.infra.Blackhole
+import scala.collection.SortedSet
 
 @OutputTimeUnit(TimeUnit.MILLISECONDS)
 @Fork(value = 1)
@@ -163,7 +164,7 @@ abstract class ModelSerializerBenchState {
         pats         <- Gen.containerOfN[List, P](chans.length, arbP.arbitrary)
         continuation <- arbK.arbitrary
         boolean      <- Arbitrary.arbitrary[Boolean]
-      } yield WaitingContinuation.create(chans, pats, continuation, boolean, Seq.empty)
+      } yield WaitingContinuation.create(chans, pats, continuation, boolean, SortedSet.empty)
     )
 
   implicit def arbitraryGnat()(

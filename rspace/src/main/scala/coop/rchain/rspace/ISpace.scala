@@ -3,6 +3,8 @@ package coop.rchain.rspace
 import cats.Id
 import coop.rchain.rspace.internal._
 
+import scala.collection.SortedSet
+
 final case class Result[R](value: R, persistent: Boolean)
 final case class ContResult[C, P, R](
     value: R,
@@ -52,7 +54,7 @@ trait ISpace[F[_], C, P, A, R, K] {
       continuation: K,
       persist: Boolean,
       sequenceNumber: Int = 0,
-      peeks: Set[Int] = Set.empty
+      peeks: SortedSet[Int] = SortedSet.empty
   )(
       implicit m: Match[F, P, A, R]
   ): F[Option[(ContResult[C, P, K], Seq[Result[R]])]]

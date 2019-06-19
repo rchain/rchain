@@ -17,9 +17,10 @@ import coop.rchain.rspace.trace.{COMM, Consume, Produce}
 import org.scalatest._
 import org.scalatest.prop.{Checkers, GeneratorDrivenPropertyChecks}
 import scodec.Codec
-
 import coop.rchain.rspace.test.ArbitraryInstances._
 import monix.eval.Coeval
+
+import scala.collection.SortedSet
 
 trait StorageActionsTests[F[_]]
     extends StorageTestsBase[F, String, Pattern, String, StringsCaptor]
@@ -1052,7 +1053,7 @@ trait StorageActionsTests[F[_]]
         List.empty[Datum[String]],
         List(
           WaitingContinuation
-            .create(channels, List[Pattern](Wildcard), new StringsCaptor, false, Seq.empty)
+            .create(channels, List[Pattern](Wildcard), new StringsCaptor, false, SortedSet.empty)
         )
       )
 
@@ -1096,7 +1097,7 @@ trait StorageActionsTests[F[_]]
           List.empty[Datum[String]],
           List(
             WaitingContinuation
-              .create(channels, List[Pattern](Wildcard), new StringsCaptor, false, Seq.empty)
+              .create(channels, List[Pattern](Wildcard), new StringsCaptor, false, SortedSet.empty)
           )
         )
       }
@@ -1118,7 +1119,13 @@ trait StorageActionsTests[F[_]]
             List.empty[Datum[String]],
             List(
               WaitingContinuation
-                .create(channels, List[Pattern](Wildcard), new StringsCaptor, false, Seq.empty)
+                .create(
+                  channels,
+                  List[Pattern](Wildcard),
+                  new StringsCaptor,
+                  false,
+                  SortedSet.empty
+                )
             )
           )
         }

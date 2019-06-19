@@ -17,6 +17,8 @@ import org.scalacheck.Prop
 import org.scalatest.prop.{Checkers, GeneratorDrivenPropertyChecks}
 import scodec.Codec
 
+import scala.collection.SortedSet
+
 //noinspection ZeroIndexToHead
 trait HistoryActionsTests[F[_]]
     extends StorageTestsBase[F, String, Pattern, String, StringsCaptor]
@@ -67,7 +69,7 @@ trait HistoryActionsTests[F[_]]
         List.empty[Datum[String]],
         List(
           WaitingContinuation
-            .create(channels, List[Pattern](Wildcard), new StringsCaptor, false, Seq.empty)
+            .create(channels, List[Pattern](Wildcard), new StringsCaptor, false, SortedSet.empty)
         )
       )
 
@@ -115,7 +117,7 @@ trait HistoryActionsTests[F[_]]
           List.empty[Datum[String]],
           List(
             WaitingContinuation
-              .create(channels, List[Pattern](Wildcard), new StringsCaptor, false, Seq.empty)
+              .create(channels, List[Pattern](Wildcard), new StringsCaptor, false, SortedSet.empty)
           )
         )
       }
@@ -127,7 +129,7 @@ trait HistoryActionsTests[F[_]]
           List.empty[Datum[String]],
           List(
             WaitingContinuation
-              .create(channels, List[Pattern](Wildcard), new StringsCaptor, false, Seq.empty)
+              .create(channels, List[Pattern](Wildcard), new StringsCaptor, false, SortedSet.empty)
           )
         )
       }
@@ -266,7 +268,13 @@ trait HistoryActionsTests[F[_]]
             List.empty[Datum[String]],
             List(
               WaitingContinuation
-                .create(channels, List[Pattern](Wildcard), new StringsCaptor, false, Seq.empty)
+                .create(
+                  channels,
+                  List[Pattern](Wildcard),
+                  new StringsCaptor,
+                  false,
+                  SortedSet.empty
+                )
             )
           )
         }
@@ -300,7 +308,7 @@ trait HistoryActionsTests[F[_]]
                   List[Pattern](Wildcard, Wildcard),
                   new StringsCaptor,
                   false,
-                  Seq.empty
+                  SortedSet.empty
                 )
             )
           )

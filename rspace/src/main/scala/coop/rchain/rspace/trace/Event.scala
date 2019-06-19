@@ -9,6 +9,8 @@ import scodec.Codec
 import scodec.bits.ByteVector
 import scodec.codecs._
 
+import scala.collection.SortedSet
+
 /**
   * Broadly speaking, there are two kinds of events in RSpace,
   *
@@ -35,8 +37,11 @@ object Event {
   implicit def codecLog: Codec[Seq[Event]] = codecSeq[Event](codecEvent)
 }
 
-final case class COMM(consume: Consume, produces: Seq[Produce], peeks: Seq[Int] = Seq.empty)
-    extends Event {
+final case class COMM(
+    consume: Consume,
+    produces: Seq[Produce],
+    peeks: SortedSet[Int] = SortedSet.empty
+) extends Event {
   def nextSequenceNumber: Int =
     Math.max(
       consume.sequenceNumber,
@@ -46,7 +51,7 @@ final case class COMM(consume: Consume, produces: Seq[Produce], peeks: Seq[Int] 
 
 object COMM {
   implicit val codecCOMM: Codec[COMM] =
-    (Codec[Consume] :: Codec[Seq[Produce]] :: codecSeq(uint8)).as[COMM]
+    (Codec[Consume] :: Codec[Seq[Produce]] :: sortedSet(uint8)).as[COMM]
 }
 
 sealed trait IOEvent extends Event

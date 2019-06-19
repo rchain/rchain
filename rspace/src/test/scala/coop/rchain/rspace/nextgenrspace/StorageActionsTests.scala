@@ -13,8 +13,9 @@ import coop.rchain.rspace.internal._
 import coop.rchain.rspace.nextgenrspace.history.History
 import org.scalatest.prop.{Checkers, GeneratorDrivenPropertyChecks}
 import scodec.Codec
-
 import monix.eval.Task
+
+import scala.collection.SortedSet
 
 trait StorageActionsTests[F[_]]
     extends StorageTestsBase[F, String, Pattern, String, StringsCaptor]
@@ -165,7 +166,13 @@ trait StorageActionsTests[F[_]]
         _  = c1 shouldBe Nil
         _  = r1 shouldBe None
 
-        r2            <- space.consume(key, List(Wildcard), new StringsCaptor, persist = false, peeks = Set(0))
+        r2 <- space.consume(
+               key,
+               List(Wildcard),
+               new StringsCaptor,
+               persist = false,
+               peeks = SortedSet(0)
+             )
         d2            <- store.getData(channel)
         _             = d2 shouldBe List(Datum.create(channel, "datum", false))
         c2            <- store.getContinuations(key)
@@ -185,7 +192,13 @@ trait StorageActionsTests[F[_]]
       val key     = List(channel)
 
       for {
-        r1 <- space.consume(key, List(Wildcard), new StringsCaptor, persist = false, peeks = Set(0))
+        r1 <- space.consume(
+               key,
+               List(Wildcard),
+               new StringsCaptor,
+               persist = false,
+               peeks = SortedSet(0)
+             )
         _  = r1 shouldBe None
         c1 <- store.getContinuations(key)
         _  = c1 should have size 1
@@ -990,7 +1003,14 @@ trait StorageActionsTests[F[_]]
 
       val expectedContinuation = Seq(
         WaitingContinuation
-          .create[String, Pattern, StringsCaptor](channels, patterns, continuation, false, 0)
+          .create[String, Pattern, StringsCaptor](
+            channels,
+            patterns,
+            continuation,
+            false,
+            SortedSet.empty,
+            0
+          )
       )
 
       for {
@@ -1015,7 +1035,14 @@ trait StorageActionsTests[F[_]]
     val continuation = new StringsCaptor
 
     val expectedContinuation = WaitingContinuation
-      .create[String, Pattern, StringsCaptor](channels, patterns, continuation, false, 0)
+      .create[String, Pattern, StringsCaptor](
+        channels,
+        patterns,
+        continuation,
+        false,
+        SortedSet.empty,
+        0
+      )
 
     for {
       // do an operation

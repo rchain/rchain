@@ -1,7 +1,6 @@
 package coop.rchain.rspace.test
 
 import scala.collection.mutable.ListBuffer
-
 import coop.rchain.rspace._
 import coop.rchain.rspace.examples.StringExamples.{Pattern, StringMatch, StringsCaptor, Wildcard}
 import coop.rchain.rspace.history._
@@ -10,6 +9,8 @@ import coop.rchain.shared.GeneratorUtils._
 import org.scalacheck._
 import org.scalacheck.Arbitrary._
 import scodec.bits.ByteVector
+
+import scala.collection.SortedSet
 
 object ArbitraryInstances {
 
@@ -144,7 +145,7 @@ object ArbitraryInstances {
         chans   <- Gen.nonEmptyListOf[String](Arbitrary.arbitrary[String])
         pats    <- Gen.containerOfN[List, Pattern](chans.length, Arbitrary.arbitrary[Pattern])
         boolean <- Arbitrary.arbitrary[Boolean]
-      } yield WaitingContinuation.create(chans, pats, new StringsCaptor, boolean, Seq.empty)
+      } yield WaitingContinuation.create(chans, pats, new StringsCaptor, boolean, SortedSet.empty)
     )
 
   def arbitraryWaitingContinuation(chans: List[String])(
@@ -157,7 +158,7 @@ object ArbitraryInstances {
       for {
         pats    <- Gen.containerOfN[List, Pattern](chans.length, Arbitrary.arbitrary[Pattern])
         boolean <- Arbitrary.arbitrary[Boolean]
-      } yield WaitingContinuation.create(chans, pats, new StringsCaptor, boolean, Seq.empty)
+      } yield WaitingContinuation.create(chans, pats, new StringsCaptor, boolean, SortedSet.empty)
     )
 
   implicit def arbitraryGnat(

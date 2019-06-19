@@ -13,6 +13,7 @@ import coop.rchain.rspace.trace.Consume
 import coop.rchain.shared.Log
 import coop.rchain.shared.SyncVarOps._
 
+import scala.collection.SortedSet
 import scala.concurrent.SyncVar
 import scala.util.Random
 
@@ -133,7 +134,7 @@ abstract class RSpaceOps[F[_]: Concurrent, C, P, A, R, K](
                                  patterns,
                                  continuation,
                                  persist = true,
-                                 Seq.empty,
+                                 SortedSet.empty,
                                  consumeRef
                                )
                              )

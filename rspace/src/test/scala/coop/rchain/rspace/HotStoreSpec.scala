@@ -24,6 +24,8 @@ import scala.util.Random
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
 
+import scala.collection.SortedSet
+
 trait HotStoreSpec[F[_], M[_]] extends FlatSpec with Matchers with GeneratorDrivenPropertyChecks {
 
   implicit override val generatorDrivenConfig =
@@ -999,7 +1001,7 @@ trait HotStoreSpec[F[_], M[_]] extends FlatSpec with Matchers with GeneratorDriv
         val patterns     = List(StringMatch(pattern))
         val continuation = new StringsCaptor
         val wc: WaitingContinuation[Pattern, StringsCaptor] =
-          WaitingContinuation.create(key, patterns, continuation, false, Seq.empty)
+          WaitingContinuation.create(key, patterns, continuation, false, SortedSet.empty)
 
         for {
           _   <- store.putContinuation(key, wc)
@@ -1016,7 +1018,7 @@ trait HotStoreSpec[F[_], M[_]] extends FlatSpec with Matchers with GeneratorDriv
         val patterns     = List(StringMatch(pattern))
         val continuation = new StringsCaptor
         val wc1: WaitingContinuation[Pattern, StringsCaptor] =
-          WaitingContinuation.create(key, patterns, continuation, false, Seq.empty)
+          WaitingContinuation.create(key, patterns, continuation, false, SortedSet.empty)
 
         val wc2: WaitingContinuation[Pattern, StringsCaptor] =
           WaitingContinuation.create(
@@ -1024,7 +1026,7 @@ trait HotStoreSpec[F[_], M[_]] extends FlatSpec with Matchers with GeneratorDriv
             List(StringMatch(pattern + 2)),
             continuation,
             false,
-            Seq.empty
+            SortedSet.empty
           )
 
         for {
@@ -1043,14 +1045,14 @@ trait HotStoreSpec[F[_], M[_]] extends FlatSpec with Matchers with GeneratorDriv
         val patterns     = List(StringMatch(pattern))
         val continuation = new StringsCaptor
         val wc1: WaitingContinuation[Pattern, StringsCaptor] =
-          WaitingContinuation.create(key, patterns, continuation, false, Seq.empty)
+          WaitingContinuation.create(key, patterns, continuation, false, SortedSet.empty)
         val wc2: WaitingContinuation[Pattern, StringsCaptor] =
           WaitingContinuation.create(
             key,
             List(StringMatch(pattern + 2)),
             continuation,
             false,
-            Seq.empty
+            SortedSet.empty
           )
 
         for {
