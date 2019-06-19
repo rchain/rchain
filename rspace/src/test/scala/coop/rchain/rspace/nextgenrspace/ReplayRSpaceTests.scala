@@ -800,6 +800,29 @@ trait ReplayRSpaceTests extends ReplayRSpaceTestsBase[String, Pattern, String, S
         _ = replaySpace.replayData.isEmpty shouldBe true
       } yield ()
   }
+
+  "checkReplayData" should "proceed if replayData is empty" in fixture { (_, _, _, replaySpace) =>
+    replaySpace.checkReplayData()
+  }
+
+  it should "raise an error if replayData contains elements" in fixture {
+    (_, _, space, replaySpace) =>
+      val channel      = "ch1"
+      val channels     = List(channel)
+      val patterns     = List(Wildcard)
+      val datum        = "datum"
+      val continuation = "continuation"
+
+      for {
+        _        <- space.consume(channels, patterns, continuation, false)
+        _        <- space.produce(channel, datum, false)
+        c        <- space.createCheckpoint()
+        _        <- replaySpace.resetAndRig(c.root, c.log)
+        res      <- replaySpace.checkReplayData().attempt
+        Left(ex) = res
+      } yield ex shouldBe a[ReplayException]
+  }
+
 }
 
 trait ReplayRSpaceTestsBase[C, P, A, K]

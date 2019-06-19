@@ -49,4 +49,6 @@ trait IReplaySpace[F[_], C, P, A, R, K] extends ISpace[F, C, P, A, R, K] {
             syncF.raiseError(new RuntimeException("BUG FOUND: only COMM events are expected here"))
         }
       }
+
+  def checkReplayData(): F[Unit] = ???
 }

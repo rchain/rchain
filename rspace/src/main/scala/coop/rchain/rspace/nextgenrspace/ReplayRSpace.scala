@@ -398,6 +398,19 @@ class ReplayRSpace[F[_]: Sync, C, P, A, R, K](
     }
   }
 
+  override def checkReplayData(): F[Unit] =
+    syncF
+      .delay(replayData.isEmpty)
+      .ifM(
+        ifTrue = Applicative[F].unit,
+        ifFalse = {
+          val msg = s"unused comm event: replayData multimap has ${replayData.size} elements left"
+          logF.error(msg) *> syncF.raiseError[Unit](
+            new ReplayException(msg)
+          )
+        }
+      )
+
   override def createCheckpoint(): F[Checkpoint] =
     for {
       isEmpty <- syncF.delay(replayData.isEmpty)
