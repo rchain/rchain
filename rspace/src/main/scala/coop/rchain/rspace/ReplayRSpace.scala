@@ -23,7 +23,7 @@ class ReplayRSpace[F[_], C, P, A, R, K](store: IStore[F, C, P, A, K], branch: Br
     serializeA: Serialize[A],
     serializeK: Serialize[K],
     val concurrent: Concurrent[F],
-    logF: Log[F],
+    protected val logF: Log[F],
     contextShift: ContextShift[F],
     scheduler: ExecutionContext,
     metricsF: Metrics[F]

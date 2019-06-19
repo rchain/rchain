@@ -135,7 +135,7 @@ trait ISpace[F[_], C, P, A, R, K] {
   /**
     Reverts the ISpace to the state checkpointed using {@link #createSoftCheckpoint()}
     */
-  def revertToSoftCheckpoint(checkpoint: SoftCheckpoint[C, P, A, K]): F[Unit] = ???
+  def revertToSoftCheckpoint(checkpoint: SoftCheckpoint[C, P, A, K]): F[Unit]
 }
 
 object ISpace {

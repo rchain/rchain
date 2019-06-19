@@ -33,7 +33,7 @@ class ReplayRSpace[F[_]: Sync, C, P, A, R, K](
     serializeA: Serialize[A],
     serializeK: Serialize[K],
     val concurrent: Concurrent[F],
-    logF: Log[F],
+    protected val logF: Log[F],
     contextShift: ContextShift[F],
     scheduler: ExecutionContext,
     metricsF: Metrics[F]
@@ -397,19 +397,6 @@ class ReplayRSpace[F[_]: Sync, C, P, A, R, K](
         updatedReplays.removeBinding(produceRef, commRef)
     }
   }
-
-  override def checkReplayData(): F[Unit] =
-    syncF
-      .delay(replayData.isEmpty)
-      .ifM(
-        ifTrue = Applicative[F].unit,
-        ifFalse = {
-          val msg = s"unused comm event: replayData multimap has ${replayData.size} elements left"
-          logF.error(msg) *> syncF.raiseError[Unit](
-            new ReplayException(msg)
-          )
-        }
-      )
 
   override def createCheckpoint(): F[Checkpoint] = checkReplayData >> syncF.defer {
     for {

@@ -2,10 +2,13 @@ package coop.rchain.rspace
 
 import cats.effect.Sync
 import cats.implicits._
+import coop.rchain.shared.Log
 import coop.rchain.rspace.trace._
 import coop.rchain.rspace.internal._
 
 trait IReplaySpace[F[_], C, P, A, R, K] extends ISpace[F, C, P, A, R, K] {
+
+  protected def logF: Log[F]
 
   private[rspace] val replayData: ReplayData = ReplayData.empty
 
@@ -50,5 +53,17 @@ trait IReplaySpace[F[_], C, P, A, R, K] extends ISpace[F, C, P, A, R, K] {
         }
       }
 
-  def checkReplayData(): F[Unit] = ???
+  def checkReplayData()(implicit syncF: Sync[F]): F[Unit] =
+    syncF
+      .delay(replayData.isEmpty)
+      .ifM(
+        ifTrue = syncF.unit,
+        ifFalse = {
+          val msg = s"unused comm event: replayData multimap has ${replayData.size} elements left"
+          logF.error(msg) *> syncF.raiseError[Unit](
+            new ReplayException(msg)
+          )
+        }
+      )
+
 }
