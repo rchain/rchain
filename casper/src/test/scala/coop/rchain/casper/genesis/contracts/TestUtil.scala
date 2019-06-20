@@ -6,10 +6,8 @@ import cats.{FlatMap, Parallel}
 import coop.rchain.casper.MultiParentCasperTestUtil.createBonds
 import coop.rchain.casper.genesis.Genesis
 import coop.rchain.casper.protocol.{BlockMessage, DeployData}
-import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.casper.util.rholang.RuntimeManager
-import coop.rchain.crypto.PublicKey
-import coop.rchain.crypto.codec.Base16
+import coop.rchain.casper.util.{ConstructDeploy, ProtoUtil}
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.crypto.signatures.Secp256k1
 import coop.rchain.metrics.Metrics
@@ -17,7 +15,7 @@ import coop.rchain.models.Par
 import coop.rchain.rholang.build.CompiledRholangSource
 import coop.rchain.rholang.interpreter.accounting.Cost
 import coop.rchain.rholang.interpreter.util.RevAddress
-import coop.rchain.rholang.interpreter.{accounting, ParBuilderUtil, Runtime}
+import coop.rchain.rholang.interpreter.{ParBuilderUtil, Runtime, accounting}
 
 object TestUtil {
 
@@ -64,16 +62,7 @@ object TestUtil {
         ),
         genesisPk = Secp256k1.newKeyPair._2,
         vaults = Vault(
-          RevAddress
-            .fromPublicKey(
-              PublicKey(
-                Base16
-                  .unsafeDecode(
-                    "04f700a417754b775d95421973bdbdadb2d23c8a5af46f1829b1431f5c136e549e8a0d61aa0c793f1a614f8e437711c7758473c6ceb0859ac7e9e07911ca66b5c4"
-                  )
-              )
-            )
-            .get,
+          RevAddress.fromPublicKey(Secp256k1.toPublic(ConstructDeploy.defaultSec)).get,
           900000
         ) :: bonds.toList.map {
           case (pk, stake) =>

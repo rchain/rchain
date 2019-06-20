@@ -1,19 +1,18 @@
 package coop.rchain.casper.util
 
-import cats.{Functor, Monad}
 import cats.implicits._
+import cats.{Functor, Monad}
 import com.google.protobuf.ByteString
 import coop.rchain.casper.SignDeployment
 import coop.rchain.casper.protocol.{DeployData, ProcessedDeploy}
 import coop.rchain.crypto.PrivateKey
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.signatures.Secp256k1
-import coop.rchain.rholang.interpreter.accounting
 import coop.rchain.shared.Time
 
 object ConstructDeploy {
 
-  private val defaultSec = PrivateKey(
+  val defaultSec = PrivateKey(
     Base16.unsafeDecode("a68a6e6cca30f81bd24a719f3145d20e8424bd7b396309b0708a16c7d8000b76")
   )
 
