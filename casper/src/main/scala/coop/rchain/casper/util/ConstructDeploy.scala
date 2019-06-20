@@ -22,7 +22,7 @@ object ConstructDeploy {
   def sourceDeploy(
       source: String,
       timestamp: Long,
-      phlos: Long,
+      phloLimit: Long = 9000,
       phloPrice: Long = 1L,
       sec: PrivateKey = defaultSec
   ): DeployData = {
@@ -30,21 +30,27 @@ object ConstructDeploy {
       deployer = ByteString.copyFrom(Secp256k1.toPublic(sec).bytes),
       timestamp = timestamp,
       term = source,
-      phloLimit = phlos,
+      phloLimit = phloLimit,
       phloPrice = phloPrice
     )
     sign(data, sec)
   }
 
-  def sourceDeployNow(source: String): DeployData =
-    sourceDeploy(
-      source,
-      System.currentTimeMillis(),
-      90000
-    )
+  def sourceDeployNow(
+      source: String,
+      phloLimit: Long = 90000,
+      phloPrice: Long = 1L,
+      sec: PrivateKey = defaultSec
+  ): DeployData =
+    sourceDeploy(source, System.currentTimeMillis(), phloLimit, phloPrice, sec)
 
-  def sourceDeployNowF[F[_]: Time: Functor](source: String): F[DeployData] =
-    Time[F].currentMillis.map(sourceDeploy(source, _, 90000))
+  def sourceDeployNowF[F[_]: Time: Functor](
+      source: String,
+      phloLimit: Long = 90000,
+      phloPrice: Long = 1L,
+      sec: PrivateKey = defaultSec
+  ): F[DeployData] =
+    Time[F].currentMillis.map(sourceDeploy(source, _, phloLimit, phloPrice, sec))
 
   def basicDeployData[F[_]: Monad: Time](
       id: Int,
@@ -55,7 +61,7 @@ object ConstructDeploy {
       val data = DeployData()
         .withDeployer(ByteString.copyFrom(Secp256k1.toPublic(sec).bytes))
         .withTimestamp(now)
-        .withTerm(s"@${id}!($id)")
+        .withTerm(s"@$id!($id)")
         .withPhloLimit(phlos)
         .withPhloPrice(1)
       sign(data, sec)

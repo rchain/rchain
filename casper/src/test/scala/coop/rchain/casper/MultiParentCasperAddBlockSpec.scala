@@ -120,7 +120,7 @@ class MultiParentCasperAddBlockSpec extends FlatSpec with Matchers with Inspecto
     HashSetCasperTestNode.standaloneEff(genesis, validatorKeys.head).use { node =>
       val source = " for(@x <- @0){ @0!(x) } | @0!(0) "
       for {
-        deploys <- List(source, source).traverse(ConstructDeploy.sourceDeployNowF[Effect])
+        deploys <- List(source, source).traverse(ConstructDeploy.sourceDeployNowF[Effect](_))
         block   <- node.addBlock(deploys: _*)
         result  <- node.casperEff.contains(block) shouldBeF true
       } yield result

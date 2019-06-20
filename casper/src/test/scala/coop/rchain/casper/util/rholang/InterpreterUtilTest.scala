@@ -5,12 +5,7 @@ import java.nio.file.Files
 import cats.effect.Sync
 import cats.implicits._
 import com.google.protobuf.ByteString
-import coop.rchain.blockstorage.{
-  BlockDagRepresentation,
-  BlockDagStorage,
-  BlockStore,
-  IndexedBlockDagStorage
-}
+import coop.rchain.blockstorage.{BlockDagRepresentation, BlockDagStorage, BlockStore, IndexedBlockDagStorage}
 import coop.rchain.casper.helper.BlockGenerator._
 import coop.rchain.casper.helper._
 import coop.rchain.casper.protocol._
@@ -26,8 +21,8 @@ import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.PCost
 import coop.rchain.models.Validator.Validator
 import coop.rchain.p2p.EffectsTestInstances.LogStub
+import coop.rchain.rholang.interpreter.Runtime
 import coop.rchain.rholang.interpreter.Runtime.BlockData
-import coop.rchain.rholang.interpreter.{accounting, Runtime}
 import coop.rchain.shared.{StoreType, Time}
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
@@ -75,7 +70,7 @@ class InterpreterUtilTest
         "@1!(1)",
         "@2!(2)",
         "for(@a <- @1){ @123!(5 * a) }"
-      ).map(ConstructDeploy.sourceDeployNow)
+      ).map(ConstructDeploy.sourceDeployNow(_))
 
       val genesisDeploysCost =
         genesisDeploys.map(d => ProcessedDeploy().withDeploy(d).withCost(PCost(1)))
@@ -83,17 +78,17 @@ class InterpreterUtilTest
       val b1Deploys = Vector(
         "@1!(1)",
         "for(@a <- @2){ @456!(5 * a) }"
-      ).map(ConstructDeploy.sourceDeployNow)
+      ).map(ConstructDeploy.sourceDeployNow(_))
       val b1DeploysCost = b1Deploys.map(d => ProcessedDeploy().withDeploy(d).withCost(PCost(1L)))
 
       val b2Deploys = Vector(
         "for(@a <- @123; @b <- @456){ @1!(a + b) }"
-      ).map(ConstructDeploy.sourceDeployNow)
+      ).map(ConstructDeploy.sourceDeployNow(_))
       val b2DeploysCost = b2Deploys.map(d => ProcessedDeploy().withDeploy(d).withCost(PCost(1L)))
 
       val b3Deploys = Vector(
         "@7!(7)"
-      ).map(ConstructDeploy.sourceDeployNow)
+      ).map(ConstructDeploy.sourceDeployNow(_))
       val b3DeploysCost = b3Deploys.map(d => ProcessedDeploy().withDeploy(d).withCost(PCost(1L)))
 
       /*
@@ -164,26 +159,26 @@ class InterpreterUtilTest
         "@1!(1)",
         "@2!(2)",
         "for(@a <- @1){ @123!(5 * a) }"
-      ).map(ConstructDeploy.sourceDeployNow)
+      ).map(ConstructDeploy.sourceDeployNow(_))
       val genesisDeploysWithCost =
         genesisDeploys.map(d => ProcessedDeploy().withDeploy(d).withCost(PCost(1)))
 
       val b1Deploys = Vector(
         "@5!(5)",
         "for(@a <- @2){ @456!(5 * a) }"
-      ).map(ConstructDeploy.sourceDeployNow)
+      ).map(ConstructDeploy.sourceDeployNow(_))
       val b1DeploysWithCost =
         b1Deploys.map(d => ProcessedDeploy().withDeploy(d).withCost(PCost(2L)))
 
       val b2Deploys = Vector(
         "@6!(6)"
-      ).map(ConstructDeploy.sourceDeployNow)
+      ).map(ConstructDeploy.sourceDeployNow(_))
       val b2DeploysWithCost =
         b2Deploys.map(d => ProcessedDeploy().withDeploy(d).withCost(PCost(1L)))
 
       val b3Deploys = Vector(
         "for(@a <- @123; @b <- @456){ @1!(a + b) }"
-      ).map(ConstructDeploy.sourceDeployNow)
+      ).map(ConstructDeploy.sourceDeployNow(_))
       val b3DeploysWithCost =
         b3Deploys.map(d => ProcessedDeploy().withDeploy(d).withCost(PCost(5L)))
 
@@ -279,7 +274,7 @@ class InterpreterUtilTest
   """.stripMargin
 
   def prepareDeploys(v: Vector[String], c: PCost) = {
-    val genesisDeploys = v.map(ConstructDeploy.sourceDeployNow)
+    val genesisDeploys = v.map(ConstructDeploy.sourceDeployNow(_))
     genesisDeploys.map(d => ProcessedDeploy().withDeploy(d).withCost(c))
   }
 
@@ -455,7 +450,7 @@ class InterpreterUtilTest
 
   "validateBlockCheckpoint" should "not return a checkpoint for an invalid block" in withStorage {
     implicit blockStore => implicit blockDagStorage =>
-      val deploys = Vector("@1!(1)").map(ConstructDeploy.sourceDeployNow)
+      val deploys = Vector("@1!(1)").map(ConstructDeploy.sourceDeployNow(_))
       val processedDeploys =
         deploys.map(d => ProcessedDeploy().withDeploy(d).withCost(PCost(1L)))
       val invalidHash = ByteString.EMPTY
@@ -481,7 +476,7 @@ class InterpreterUtilTest
           "@2!(5)",
           "for (@x <- @1) { @2!(x) }",
           "for (@x <- @2) { @3!(x) }"
-        ).map(ConstructDeploy.sourceDeployNow)
+        ).map(ConstructDeploy.sourceDeployNow(_))
       mkRuntimeManager("interpreter-util-test").use { runtimeManager =>
         for {
           dag1 <- blockDagStorage.getRepresentation
@@ -532,7 +527,7 @@ class InterpreterUtilTest
         |} |
         |@"recursionTest"!([1,2])
       """.stripMargin
-      ).map(ConstructDeploy.sourceDeployNow)
+      ).map(ConstructDeploy.sourceDeployNow(_))
 
       mkRuntimeManager("interpreter-util-test").use { runtimeManager =>
         for {
@@ -587,7 +582,7 @@ class InterpreterUtilTest
               for (_ <- x; @14 <- y) { Nil }
              }
           """)
-          .map(ConstructDeploy.sourceDeployNow)
+          .map(ConstructDeploy.sourceDeployNow(_))
 
       mkRuntimeManager("interpreter-util-test").use { runtimeManager =>
         for {
@@ -639,7 +634,7 @@ class InterpreterUtilTest
           |  } |
           |  loop!([Nil, 7, 7 | 8, 9 | Nil, 9 | 10, Nil, 9])
           |}""".stripMargin
-        ).map(ConstructDeploy.sourceDeployNow)
+        ).map(ConstructDeploy.sourceDeployNow(_))
 
       mkRuntimeManager("interpreter-util-test").use { runtimeManager =>
         for {
@@ -683,7 +678,7 @@ class InterpreterUtilTest
             |   }
             | } | @"loop"!(["a","b","c","d"])
             |""".stripMargin
-          ).map(ConstructDeploy.sourceDeployNow)
+          ).map(ConstructDeploy.sourceDeployNow(_))
 
         mkRuntimeManager("interpreter-util-test").use { runtimeManager =>
           for {
