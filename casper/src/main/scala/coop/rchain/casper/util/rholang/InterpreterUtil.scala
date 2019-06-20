@@ -171,15 +171,20 @@ object InterpreterUtil {
       span: Span[F],
       invalidBlocks: Map[BlockHash, Validator]
   ): F[Either[Throwable, (StateHash, StateHash, Seq[InternalProcessedDeploy])]] =
-    for {
-      possiblePreStateHash <- computeParentsPostState[F](parents, dag, runtimeManager, span)
-      result <- possiblePreStateHash.flatTraverse { preStateHash =>
-                 runtimeManager.computeState(preStateHash)(deploys, blockData, invalidBlocks).map {
-                   case (postStateHash, processedDeploys) =>
-                     (preStateHash, postStateHash, processedDeploys).asRight[Throwable]
+    if (parents.isEmpty)
+      runtimeManager.computeGenesis(deploys, blockData.timeStamp).map(_.asRight[Throwable])
+    else
+      for {
+        possiblePreStateHash <- computeParentsPostState[F](parents, dag, runtimeManager, span)
+        result <- possiblePreStateHash.flatTraverse { preStateHash =>
+                   runtimeManager
+                     .computeState(preStateHash)(deploys, blockData, invalidBlocks)
+                     .map {
+                       case (postStateHash, processedDeploys) =>
+                         (preStateHash, postStateHash, processedDeploys).asRight[Throwable]
+                     }
                  }
-               }
-    } yield result
+      } yield result
 
   private def computeParentsPostState[F[_]: Sync: BlockStore](
       parents: Seq[BlockMessage],

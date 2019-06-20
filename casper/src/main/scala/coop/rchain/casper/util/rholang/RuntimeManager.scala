@@ -380,8 +380,8 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics] private[rholang] (
       processedDeploy: InternalProcessedDeploy
   ): F[Either[ReplayFailure, Blake2b256Hash]] =
     for {
-      deploy <- processedDeploy.deploy.pure[F]
-      _      <- runtime.replaySpace.resetAndRig(startHash, processedDeploy.paymentLog)
+      deploy    <- processedDeploy.deploy.pure[F]
+      _         <- runtime.replaySpace.resetAndRig(startHash, processedDeploy.paymentLog)
       payResult <- computeDeployPayment(runtime, runtime.replayReducer, runtime.replaySpace)(deploy)
       result <- payResult.fold(
                  error =>
