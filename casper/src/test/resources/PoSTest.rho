@@ -88,7 +88,8 @@ match (
 
           contract test_bonding_succeeds(rhoSpec, _, ackCh) = {
             new setupCh, retCh, initialPosBalanceCh, finalPosBalanceCh,
-                initialUserBalanceCh, finalUserBalanceCh in {
+                initialUserBalanceCh, finalUserBalanceCh,
+                bondsCh, rewardsCh in {
               prepareUser!("1111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111", 10000, *setupCh) |
               for (@user1PubKey, _, @user1Vault <- setupCh) {
                 @posVault!("balance", *initialPosBalanceCh) |
@@ -97,13 +98,14 @@ match (
                     @initialUserBalance <- initialUserBalanceCh) {
                   @PoS!("bond", 100, *retCh) |
                   for ( @(true, _) <- retCh) {
-                    @PoS!("getBonds", *retCh) |
+                    @PoS!("getBonds", *bondsCh) |
                     @posVault!("balance", *finalPosBalanceCh) |
                     @user1Vault!("balance", *finalUserBalanceCh) |
+                    @PoS!("getRewards", *rewardsCh) |
                     for(@finalPosBalance <- finalPosBalanceCh;
                         @finalUserBalance <- finalUserBalanceCh;
-                        @bonds <- retCh) {
-                      stdlog!("info", {"finalPosBalance": finalPosBalance, "finalUserBalance":finalUserBalance, "bonds":bonds}) |
+                        @bonds <- bondsCh;
+                        @rewards <- rewardsCh) {
                       match bonds.get(user1PubKey) {
                         (bondAmount, _) => {
                           rhoSpec!("assertMany",
@@ -111,6 +113,7 @@ match (
                               ((100, "==", bondAmount), "the new bond is expected in the final map"),
                               ((initialUserBalance - finalUserBalance, "==", 100), "the user account decreases"),
                               ((finalPosBalance - initialPosBalance, "==", 100), "the pos account increases"),
+                              ((rewards.get(user1PubKey), "==", 0), "new validator reward should be zero")
                             ],
                             *ackCh
                           )
@@ -140,7 +143,6 @@ match (
                     for(@user2PubKey, _, @user2Vault <- setupCh) {
                       @user2Vault!("balance", *initialUser2BalanceCh) |
                       for (@initialUser2Balance <- initialUser2BalanceCh) {
-                        stdlog!("info", {"initialPosBalance" :initialPosBalance, "initialUser1Balance":initialUser1Balance, "initialUser2Balance":initialUser2Balance}) |
                         @PoS!("bond", 200, *retCh) |
                         for ( @(true, _) <- retCh) {
 
