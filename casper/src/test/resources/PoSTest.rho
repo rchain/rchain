@@ -11,7 +11,7 @@ match (
       stdlog(`rho:io:stdlog`),
       revAddressOps(`rho:rev:address`),
       posRevAddressCh, posVaultCh,
-      RhoSpecCh, PoSCh, RevVaultCh,
+      RhoSpecCh, PoSCh, RevVaultCh, ListOpsCh,
       setup, prepareUser,
       test_make_pos_succeeds, test_bonding_succeeds,
       test_multiple_bonding_succeeds,
@@ -24,11 +24,13 @@ match (
       revAddressOps!("fromPublicKey", posPubKey, *posRevAddressCh) |
       rl!(`rho:rchain:revVault`, *RevVaultCh) |
       rl!(`rho:rchain:pos`, *PoSCh) |
+      rl!(`rho:lang:listOps`, *ListOpsCh) |
       rl!(`rho:id:zphjgsfy13h1k85isc8rtwtgt3t9zzt5pjd5ihykfmyapfc4wt3x5h`, *RhoSpecCh) |
       for(@(_, RhoSpec) <- RhoSpecCh;
           @(_, PoS) <- PoSCh;
           @(_, RevVault) <- RevVaultCh;
-          @posRevAddress <- posRevAddressCh) {
+          @posRevAddress <- posRevAddressCh;
+          @(_, ListOps) <- ListOpsCh) {
         stdlog!("info", {"posRevAddress":posRevAddress}) |
 
         @RevVault!("findOrCreateGenesisVault", posRevAddress, 10000, *posVaultCh) |
@@ -62,12 +64,22 @@ match (
           } |
 
           contract test_make_pos_succeeds(rhoSpec, _, ackCh) = {
-            new retCh in {
-              @PoS!("getBonds", *retCh) |
-              for ( @bonds <- retCh) {
-                rhoSpec!("assert",
-                  bonds.size() >= 0,
-                  "some bonds map should be received",
+            new bondsCh, rewardsCh, rewardsZeroCh, rewardsZeroPred in {
+              @PoS!("getBonds", *bondsCh) |
+              @PoS!("getRewards", *rewardsCh) |
+              for ( @bonds <- bondsCh; @rewards <- rewardsCh) {
+                @ListOps!("forall", rewards.toList(), *rewardsZeroPred, *rewardsZeroCh) |
+                contract rewardsZeroPred(@(_, reward), resultCh) = {
+                  stdlog!("info", {"reward": reward}) |
+                  resultCh!(reward == 0)
+                } |
+
+                rhoSpec!("assertMany",
+                  [
+                    (bonds.size() >= 0, "some bonds map should be received"),
+                    ((bonds.size(), "==", rewards.size()), "each validator should have a bond and a reward"),
+                    ((true, "== <-", *rewardsZeroCh), "no rewards yet")
+                  ],
                   *ackCh
                 )
               }
