@@ -13,17 +13,13 @@ import coop.rchain.models.Var.VarInstance.FreeVar
 import coop.rchain.models._
 import coop.rchain.models.rholang.implicits._
 import coop.rchain.rholang.interpreter.Runtime.BodyRefs
-import coop.rchain.rholang.interpreter.storage.implicits._
 import coop.rchain.rspace.util._
 import coop.rchain.shared.Matcher.WithPrefix
 import org.lightningj.util.ZBase32
 
 import scala.annotation.tailrec
-import scala.collection.immutable.HashMap
 import scala.collection.{Seq => RootSeq}
-import scala.concurrent.Await
-import scala.concurrent.duration._
-import scala.util.{Failure, Success, Try}
+import scala.util.Try
 
 /**
   * Registry implements a radix tree for public lookup of one-sided bundles.
@@ -891,6 +887,9 @@ class RegistryImpl[F[_]](
       case _ => F.unit
     }
 
+  // TODO: Somehow this isn't safe. It's the rho:rchain:pos lookup in the registry (and possibly others) that isn't consistent. See runtimeManager.
+  // On a side note, I wish I was more engaged with the reformulation of system process lookups. We should just have a System "process" like Java's System.(...) that
+  // allows us to just lookup the desired names by method. Then we can stop using the registry for them.
   private def handleRhoIdLookup(
       id: String,
       sequenceNumber: Int,

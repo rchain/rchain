@@ -160,8 +160,6 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
   "emptyStateHash" should "not remember previous hot store state" in {
     implicit val timeEff: LogicalTime[Id] = new LogicalTime[Id]
 
-    import cats.implicits._
-
     val terms = ConstructDeploy.basicDeployData[Id](0) :: Nil
 
     def run: Task[StateHash] =
@@ -172,7 +170,7 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
             .map(_ => hash)
         }
 
-    val hash1, hash2 = run.product(run).runSyncUnsafe(30.seconds)
+    val hash1, hash2 = run.product(run).runSyncUnsafe(60.seconds)
 
     hash1 should be(hash2)
   }

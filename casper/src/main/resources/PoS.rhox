@@ -30,7 +30,8 @@ new  PoS,
     runMVar,
     deposit,
     rs(`rho:registry:insertSigned:secp256k1`),
-    uriOut in {
+    uriOut,
+    stdout(`rho:io:stdout`) in {
   registryLookup!(`rho:rchain:revVault`, *revVaultCh) |
 
   for(@(_, RevVault) <- revVaultCh) {
@@ -81,7 +82,7 @@ new  PoS,
             } |
 
             contract PoS (@"pay", @amount, returnCh) = {
-              new vaultCh, transferCh, userCh in {
+              stdout!("started-PoS.pay") | new vaultCh, transferCh, userCh in {
                 getUser!(*userCh) |
 
                 for(@userPk <- userCh) {

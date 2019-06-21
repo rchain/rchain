@@ -25,17 +25,9 @@ import coop.rchain.rholang.interpreter.Runtime.{BlockData, RhoISpace}
 import coop.rchain.rholang.interpreter.accounting._
 import coop.rchain.rholang.interpreter.errors.BugFoundError
 import coop.rchain.rholang.interpreter.storage.implicits.matchListPar
-import coop.rchain.rholang.interpreter.{
-  ChargingReducer,
-  ErrorLog,
-  EvaluateResult,
-  Interpreter,
-  RhoType,
-  Runtime,
-  accounting,
-  PrettyPrinter => RholangPrinter
-}
-import coop.rchain.rspace.{trace, Blake2b256Hash, Checkpoint, ReplayException}
+import coop.rchain.rholang.interpreter.{ChargingReducer, ErrorLog, EvaluateResult, Interpreter, RhoType, Runtime, accounting, PrettyPrinter => RholangPrinter}
+import coop.rchain.rspace.{Blake2b256Hash, Checkpoint, ReplayException, trace}
+import coop.rchain.shared.Debug
 
 trait RuntimeManager[F[_]] {
 
@@ -103,6 +95,7 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics] private[rholang] (
       deploy: DeployData
   ): F[EvaluateResult] =
     for {
+      _ <- Debug.print(deploy.term)
       _      <- runtime.deployParametersRef.set(ProtoUtil.getRholangDeployParams(deploy))
       result <- doInj(deploy, reducer, runtime.errorLog)(runtime.cost)
     } yield result
@@ -149,6 +142,7 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics] private[rholang] (
     val startHash = emptyStateHash
     withRuntimeLock { runtime =>
       for {
+        _ <- Debug.print(blockTime)
         span       <- Metrics[F].span(computeGenesisLabel)
         _          <- runtime.blockData.setParams(BlockData(blockTime, 0))
         _          <- span.mark("before-process-deploys")
@@ -209,6 +203,7 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics] private[rholang] (
       space: RhoISpace[F]
   )(deploy: DeployData): F[Either[String, Checkpoint]] =
     for {
+      _ <- Debug.print(deploy.term)
       _ <- computeEffect(runtime, reducer)(
             ConstructDeploy
               .sourceDeploy(
@@ -223,29 +218,36 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics] private[rholang] (
       consumeResult <- getResult(runtime, space)()
       result <- consumeResult match {
                  case Seq(RhoType.Tuple2(RhoType.Boolean(true), Par.defaultInstance)) =>
-                   space.createCheckpoint().map(_.asRight[String])
+                   Debug.print((true, "Nil")) >> space.createCheckpoint().map(_.asRight[String])
                  case Seq(RhoType.Tuple2(RhoType.Boolean(false), RhoType.String(error))) =>
-                   error
+                   Debug.print((false, error)) >> error
                      .asLeft[Checkpoint]
                      .pure[F]
                  case Seq() =>
-                   space.createCheckpoint() >>
+                   // TODO: Something should be found at this channel
+                   // TODO: This is the checkpoint that results in "replayData multimap has 156 elements left" in 'EstimatorHelperTest'
+                   Debug.print("Nothing found at channel") >> space.createCheckpoint() >>
                      BugFoundError("Expected response message was not received")
                        .raiseError[F, Either[String, Checkpoint]]
                  case other =>
                    val contentAsStr = other.map(RholangPrinter().buildString(_)).mkString(",")
-                   BugFoundError(
+                   Debug.print("Unexpected result") >> BugFoundError(
                      s"Deploy payment returned unexpected result: [$contentAsStr ]"
                    ).raiseError[F, Either[String, Checkpoint]]
                }
     } yield result
 
+  /*
+    TODO: Related to the above todo's, the reason that there 156 elements left is because no payment is being performed
+          upon replay because the registry lookup below never returns.
+   */
   private def deployPaymentSource(amount: Long, name: String = "__SCALA__"): String =
     s"""
-       # new rl(`rho:registry:lookup`), poSCh in {
+       # new rl(`rho:registry:lookup`), poSCh, stdout(`rho:io:stdout`) in {
+       #   stdout!("started-registryLookup(PoS)") |
        #   rl!(`rho:rchain:pos`, *poSCh) |
        #   for(@(_, PoS) <- poSCh) {
-       #     @PoS!("pay", $amount, "$name")
+       #     @PoS!("pay", $amount, "$name") | stdout!("finished-registryLookup(PoS)")
        #   }
        # }
        """.stripMargin('#')
@@ -285,9 +287,9 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics] private[rholang] (
     val cont                    = TaggedContinuation().withParBody(ParWithRandom(Par()))
     implicit val cost: _cost[F] = runtime.cost
 
-    space.consume(Seq(channel), Seq(pattern), cont, persist = false)(matchListPar).map {
-      case Some((_, dataList)) => dataList.flatMap(_.value.pars)
-      case None                => Seq.empty[Par]
+    Debug.print("before-getResultConsume") >> space.consume(Seq(channel), Seq(pattern), cont, persist = false)(matchListPar) >>= {
+      case Some((_, dataList)) => Debug.print("after-getResultConsume") >> dataList.flatMap(_.value.pars).pure[F]
+      case None                => Debug.print("after-getResultConsume") >> Seq.empty[Par].pure[F]
     }
   }
 
@@ -347,6 +349,7 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics] private[rholang] (
       deploy: DeployData
   ): F[(Blake2b256Hash, InternalProcessedDeploy)] =
     for {
+      _ <- Debug.print(deploy.term)
       _         <- runtime.space.reset(startHash)
       payResult <- computeDeployPayment(runtime, runtime.reducer, runtime.space)(deploy)
       result <- payResult.fold(
@@ -375,14 +378,18 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics] private[rholang] (
     result.nested.map(_.toByteString).value
   }
 
+  // TODO: Somehow the processedDeploy.paymentLog is getting 157 extra elements for @1!1
+  // TODO: More things are happening in the original deploy for @1!1 than we know
   private def replayDeployWithPayment(runtime: Runtime[F], span: Span[F])(
       startHash: Blake2b256Hash,
       processedDeploy: InternalProcessedDeploy
   ): F[Either[ReplayFailure, Blake2b256Hash]] =
     for {
+      _ <- Debug.print(processedDeploy.deploy.term)
       deploy    <- processedDeploy.deploy.pure[F]
       _         <- runtime.replaySpace.resetAndRig(startHash, processedDeploy.paymentLog)
       payResult <- computeDeployPayment(runtime, runtime.replayReducer, runtime.replaySpace)(deploy)
+      _ <- Debug.print("after-replay.ComputeDeployPayment")
       result <- payResult.fold(
                  error =>
                    ((deploy.some, UnknownFailure: Failed /* FIXME */ ))

@@ -4,11 +4,7 @@ import cats.implicits._
 import coop.rchain.blockstorage.BlockStore
 import coop.rchain.casper.EstimatorHelper.conflicts
 import coop.rchain.casper.genesis.contracts.TestUtil
-import coop.rchain.casper.helper.BlockGenerator.{
-  computeBlockCheckpoint,
-  injectPostStateHash,
-  updateChainWithBlockStateUpdate
-}
+import coop.rchain.casper.helper.BlockGenerator.{computeBlockCheckpoint, injectPostStateHash, updateChainWithBlockStateUpdate}
 import coop.rchain.casper.helper.{BlockDagStorageFixture, BlockGenerator}
 import coop.rchain.casper.scalatestcontrib._
 import coop.rchain.casper.util.ConstructDeploy.basicProcessedDeploy
@@ -44,15 +40,19 @@ class EstimatorHelperTest
    *       | /     \ |
    *       b2       b3
    *        \       /
+   *         \     /
+   *          \   /
+   *           b1
+   *           |
    *         genesis
+   *
    */
   "Blocks" should "conflict if they use the same deploys in different histories" in withStorage {
     implicit blockStore => implicit blockDagStorage =>
       mkRuntimeManager("casper-util-test").use { runtimeManager =>
         for {
-
-          deploys <- (0 until 6).toList.traverse(i => basicProcessedDeploy[Task](i))
           genesis <- TestUtil.defaultGenesisSetup[Task](runtimeManager)
+          deploys <- (0 until 6).toList.traverse(i => basicProcessedDeploy[Task](i))
 
           _ <- BlockStore[Task].put(genesis.blockHash, genesis)
 
