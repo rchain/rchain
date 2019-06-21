@@ -37,7 +37,7 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
       runtimeManager: RuntimeManager[F],
       terms: Seq[DeployData]
   ): F[(StateHash, Seq[InternalProcessedDeploy])] =
-    TestUtil.defaultGenesisSetup(runtimeManager) >>= { genesis =>
+    TestUtil.genesisSetup(runtimeManager) >>= { genesis =>
       Time[F].currentMillis >>= { time =>
         runtimeManager.computeState(genesis.body.get.state.get.postStateHash)(
           terms,
@@ -187,7 +187,7 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
 
     val test = runtimeManager.use { mgr =>
       for {
-        genesis       <- TestUtil.defaultGenesisSetup(mgr)
+        genesis       <- TestUtil.genesisSetup(mgr)
         genPostState  = genesis.body.get.state.get.postStateHash
         time          <- timeF.currentMillis
         blockData     = BlockData(time, 0L)

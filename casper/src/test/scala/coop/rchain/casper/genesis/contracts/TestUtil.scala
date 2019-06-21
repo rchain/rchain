@@ -45,7 +45,7 @@ object TestUtil {
     } yield (runtime)
 
   // TODO: Have this function take an additional "Genesis" argument.
-  def defaultGenesisSetup[F[_]: Concurrent](runtimeManager: RuntimeManager[F]): F[BlockMessage] = {
+  def genesisSetup[F[_]: Concurrent](runtimeManager: RuntimeManager[F]): F[BlockMessage] = {
 
     val (_, validatorPks) = (1 to 4).map(_ => Secp256k1.newKeyPair).unzip
     val bonds             = createBonds(validatorPks)

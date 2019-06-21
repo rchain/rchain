@@ -95,7 +95,7 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics] private[rholang] (
       deploy: DeployData
   ): F[EvaluateResult] =
     for {
-      _ <- Debug.print(deploy.term)
+      _      <- Debug.print(deploy.term)
       _      <- runtime.deployParametersRef.set(ProtoUtil.getRholangDeployParams(deploy))
       result <- doInj(deploy, reducer, runtime.errorLog)(runtime.cost)
     } yield result
@@ -142,7 +142,7 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics] private[rholang] (
     val startHash = emptyStateHash
     withRuntimeLock { runtime =>
       for {
-        _ <- Debug.print(blockTime)
+        _          <- Debug.print(blockTime)
         span       <- Metrics[F].span(computeGenesisLabel)
         _          <- runtime.blockData.setParams(BlockData(blockTime, 0))
         _          <- span.mark("before-process-deploys")
@@ -287,9 +287,15 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics] private[rholang] (
     val cont                    = TaggedContinuation().withParBody(ParWithRandom(Par()))
     implicit val cost: _cost[F] = runtime.cost
 
-    Debug.print("before-getResultConsume") >> space.consume(Seq(channel), Seq(pattern), cont, persist = false)(matchListPar) >>= {
-      case Some((_, dataList)) => Debug.print("after-getResultConsume") >> dataList.flatMap(_.value.pars).pure[F]
-      case None                => Debug.print("after-getResultConsume") >> Seq.empty[Par].pure[F]
+    Debug.print("before-getResultConsume") >> space.consume(
+      Seq(channel),
+      Seq(pattern),
+      cont,
+      persist = false
+    )(matchListPar) >>= {
+      case Some((_, dataList)) =>
+        Debug.print("after-getResultConsume") >> dataList.flatMap(_.value.pars).pure[F]
+      case None => Debug.print("after-getResultConsume") >> Seq.empty[Par].pure[F]
     }
   }
 
@@ -349,7 +355,7 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics] private[rholang] (
       deploy: DeployData
   ): F[(Blake2b256Hash, InternalProcessedDeploy)] =
     for {
-      _ <- Debug.print(deploy.term)
+      _         <- Debug.print(deploy.term)
       _         <- runtime.space.reset(startHash)
       payResult <- computeDeployPayment(runtime, runtime.reducer, runtime.space)(deploy)
       result <- payResult.fold(
@@ -385,11 +391,11 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics] private[rholang] (
       processedDeploy: InternalProcessedDeploy
   ): F[Either[ReplayFailure, Blake2b256Hash]] =
     for {
-      _ <- Debug.print(processedDeploy.deploy.term)
+      _         <- Debug.print(processedDeploy.deploy.term)
       deploy    <- processedDeploy.deploy.pure[F]
       _         <- runtime.replaySpace.resetAndRig(startHash, processedDeploy.paymentLog)
       payResult <- computeDeployPayment(runtime, runtime.replayReducer, runtime.replaySpace)(deploy)
-      _ <- Debug.print("after-replay.ComputeDeployPayment")
+      _         <- Debug.print("after-replay.ComputeDeployPayment")
       result <- payResult.fold(
                  error =>
                    ((deploy.some, UnknownFailure: Failed /* FIXME */ ))

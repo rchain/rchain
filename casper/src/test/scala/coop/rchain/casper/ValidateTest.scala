@@ -3,7 +3,6 @@ package coop.rchain.casper
 import java.nio.file.Files
 
 import cats.Monad
-import cats.effect.Sync
 import cats.implicits._
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.{BlockStore, IndexedBlockDagStorage}
@@ -469,7 +468,7 @@ class ValidateTest
       mkRuntimeManager("casper-util-test", storageSize = 10 * 1024 * 1024)
         .use { runtimeManager =>
           for {
-            b0 <- TestUtil.defaultGenesisSetup[Task](runtimeManager)
+            b0 <- TestUtil.genesisSetup[Task](runtimeManager)
             b1 <- createValidatorBlock[Task](Seq(b0), b0, Seq.empty, 0)
             b2 <- createValidatorBlock[Task](Seq(b0), b0, Seq.empty, 1)
             b3 <- createValidatorBlock[Task](Seq(b0), b0, Seq.empty, 2)

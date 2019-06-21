@@ -79,7 +79,7 @@ class DeployerIdTest extends FlatSpec with Matchers {
       val result = runtimeManager
         .use { mgr =>
           for {
-            genesis     <- TestUtil.defaultGenesisSetup(mgr)
+            genesis     <- TestUtil.genesisSetup(mgr)
             authDeploy  <- ConstructDeploy.sourceDeployNowF(authSource)
             time        <- timeF.currentMillis
             postGenHash = genesis.body.get.state.get.postStateHash

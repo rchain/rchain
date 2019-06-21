@@ -51,7 +51,7 @@ class EstimatorHelperTest
     implicit blockStore => implicit blockDagStorage =>
       mkRuntimeManager("casper-util-test").use { runtimeManager =>
         for {
-          genesis <- TestUtil.defaultGenesisSetup[Task](runtimeManager)
+          genesis <- TestUtil.genesisSetup[Task](runtimeManager)
           deploys <- (0 until 6).toList.traverse(i => basicProcessedDeploy[Task](i))
 
           _ <- BlockStore[Task].put(genesis.blockHash, genesis)

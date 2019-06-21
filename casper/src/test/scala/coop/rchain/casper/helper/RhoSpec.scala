@@ -7,8 +7,8 @@ import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.metrics.Metrics
 import coop.rchain.rholang.Resources._
 import coop.rchain.rholang.build.CompiledRholangSource
-import coop.rchain.rholang.interpreter.{PrettyPrinter, Runtime}
 import coop.rchain.rholang.interpreter.Runtime.SystemProcess
+import coop.rchain.rholang.interpreter.{PrettyPrinter, Runtime}
 import coop.rchain.shared.{Log, StoreType}
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
@@ -72,7 +72,7 @@ object RhoSpec {
           _ <- Runtime.injectEmptyRegistryRoot[Task](runtime.space, runtime.replaySpace)
           _ <- TestUtil.setupRuntime[Task, Task.Par](
                 runtime,
-                TestUtil.defaultGenesisSetup,
+                TestUtil.genesisSetup,
                 otherLibs
               )
           rand = Blake2b512Random(128)
