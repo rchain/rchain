@@ -97,41 +97,17 @@ object Genesis {
   private def getWallets[F[_]: Sync: Log: RaiseIOError](
       maybeWalletsPath: Option[String],
       defaultWalletPath: Path
-  ): F[Seq[Vault]] = {
-    def walletFromFile(walletsPath: Path): F[Seq[Vault]] =
-      for {
-        maybeLines <- SourceIO.open(walletsPath).use(_.getLines).attempt
-        wallets <- maybeLines match {
-                    case Right(lines) =>
-                      lines
-                        .traverse(fromLine(_) match {
-                          case Right(wallet) =>
-                            wallet.some.pure[F]
-                          case Left(errMsg) =>
-                            Sync[F].raiseError[Option[Vault]](
-                              new RuntimeException(s"Error in parsing wallets file: $errMsg")
-                            )
-                        })
-                        .map(_.flatten)
-                    case Left(ex) =>
-                      Sync[F].raiseError(
-                        new RuntimeException(
-                          s"Failed to read ${walletsPath.toAbsolutePath} for reason: ${ex.getMessage}"
-                        )
-                      )
-                  }
-      } yield wallets
-
+  ): F[Seq[Vault]] =
     maybeWalletsPath match {
       case Some(walletsPathStr) =>
         val walletsPath = Paths.get(walletsPathStr)
         Monad[F].ifM(exists(walletsPath))(
-          walletFromFile(walletsPath),
+          walletFromFile[F](walletsPath),
           Sync[F].raiseError(new Exception(s"Specified wallets file $walletsPath does not exist"))
         )
       case None =>
         Monad[F].ifM(exists(defaultWalletPath))(
-          Log[F].info(s"Using default file $defaultWalletPath") >> walletFromFile(
+          Log[F].info(s"Using default file $defaultWalletPath") >> walletFromFile[F](
             defaultWalletPath
           ),
           Log[F]
@@ -141,7 +117,26 @@ object Genesis {
             .map(_ => Seq.empty[Vault])
         )
     }
-  }
+
+  private def walletFromFile[F[_]: Sync: Log: RaiseIOError](walletsPath: Path): F[Seq[Vault]] =
+    for {
+      lines <- SourceIO
+                .open(walletsPath)
+                .use(_.getLines)
+                .adaptError {
+                  case ex: Throwable =>
+                    new RuntimeException(
+                      s"Failed to read ${walletsPath.toAbsolutePath} for reason: ${ex.getMessage}"
+                    )
+                }
+      vaults <- lines.traverse(parseLine[F])
+    } yield vaults
+
+  private def parseLine[F[_]: Sync: Log: RaiseIOError](line: String): F[Vault] =
+    Sync[F].fromEither(
+      fromLine(line)
+        .leftMap(errMsg => new RuntimeException(s"Error in parsing wallets file: $errMsg"))
+    )
 
   private def fromLine(line: String): Either[String, Vault] = line.split(",") match {
     case Array(ethAddress, initRevBalanceStr, _) =>
