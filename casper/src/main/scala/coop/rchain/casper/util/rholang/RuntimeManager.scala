@@ -342,14 +342,14 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics] private[rholang] (
       terms: Seq[InternalProcessedDeploy],
       replayDeploy: (
           InternalProcessedDeploy
-      ) => F[Either[ReplayFailure, Unit]]
+      ) => F[Option[ReplayFailure]]
   ): F[Either[ReplayFailure, StateHash]] =
     for {
       _ <- runtime.replaySpace.reset(Blake2b256Hash.fromByteString(startHash))
       result <- terms.toList.foldM(().asRight[ReplayFailure]) {
-                 case (unit, deploy) =>
-                   unit.flatTraverse { Unit =>
-                     replayDeploy(deploy)
+                 case (previousResult, deploy) =>
+                   previousResult.flatTraverse { _ =>
+                     replayDeploy(deploy).map(_.toLeft(()))
                    }
                }
       res <- EitherT
@@ -364,7 +364,7 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics] private[rholang] (
 
   private def replayDeploy(runtime: Runtime[F], span: Span[F])(
       processedDeploy: InternalProcessedDeploy
-  ): F[Either[ReplayFailure, Unit]] = {
+  ): F[Option[ReplayFailure]] = {
     import processedDeploy._
     for {
       _                    <- span.mark("before-replay-deploy-reset-rig")
@@ -377,29 +377,25 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics] private[rholang] (
       _                         <- span.mark("before-replay-deploy-status")
       cont <- DeployStatus.fromErrors(errors) match {
                case int: InternalErrors =>
-                 (deploy.some, int: Failed).asLeft[Unit].pure[F]
+                 (deploy.some, int: Failed).some.pure[F]
                case replayStatus =>
                  if (status.isFailed != replayStatus.isFailed)
-                   (deploy.some, ReplayStatusMismatch(replayStatus, status): Failed)
-                     .asLeft[Unit]
+                   (deploy.some, ReplayStatusMismatch(replayStatus, status): Failed).some
                      .pure[F]
                  else if (errors.nonEmpty)
-                   runtime.replaySpace.revertToSoftCheckpoint(softCheckpoint) >> ()
-                     .asRight[ReplayFailure]
+                   runtime.replaySpace.revertToSoftCheckpoint(softCheckpoint) >> none[ReplayFailure]
                      .pure[F]
                  else {
                    span.mark("before-replay-deploy-create-checkpoint") >> runtime.replaySpace
                      .checkReplayData()
                      .attempt
                      .flatMap {
-                       case Right(unit) => unit.asRight[ReplayFailure].pure[F]
+                       case Right(_) => none[ReplayFailure].pure[F]
                        case Left(ex: ReplayException) =>
-                         (none[DeployData], UnusedCommEvent(ex): Failed)
-                           .asLeft[Unit]
+                         (none[DeployData], UnusedCommEvent(ex): Failed).some
                            .pure[F]
                        case Left(ex) =>
-                         (none[DeployData], UserErrors(Vector(ex)): Failed)
-                           .asLeft[Unit]
+                         (none[DeployData], UserErrors(Vector(ex)): Failed).some
                            .pure[F]
                      }
                  }
