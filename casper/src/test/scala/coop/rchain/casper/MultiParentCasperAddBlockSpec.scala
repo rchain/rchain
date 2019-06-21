@@ -62,10 +62,10 @@ class MultiParentCasperAddBlockSpec extends FlatSpec with Matchers with Inspecto
                        )
                        .flatMap {
                          case Left((statusA, running)) =>
-                           running.join.map((statusA, _).tupled)
+                           running.join.map(e => (statusA, e).tupled)
 
                          case Right((running, statusB)) =>
-                           running.join.map((_, statusB).tupled)
+                           running.join.map(e => (e, statusB).tupled)
                        }
                    )
         } yield result
