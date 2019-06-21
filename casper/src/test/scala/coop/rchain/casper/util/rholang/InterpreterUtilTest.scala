@@ -787,7 +787,6 @@ class InterpreterUtilTest
 
   "findMultiParentsBlockHashesForReplay" should "filter out duplicate ancestors of main parent block" in withStorage {
     implicit blockStore => implicit blockDagStorage =>
-      val genesisDeploysWithCost = prepareDeploys(Vector.empty, PCost(1))
       val b1DeploysWithCost      = prepareDeploys(Vector("@1!(1)"), PCost(1))
       val b2DeploysWithCost      = prepareDeploys(Vector("@2!(2)"), PCost(1))
       val b3DeploysWithCost      = prepareDeploys(Vector("@3!(3)"), PCost(1))
@@ -805,14 +804,20 @@ class InterpreterUtilTest
       mkRuntimeManager("interpreter-util-test")
         .use { runtimeManager =>
           for {
-            genesis <- createGenesis[Task](deploys = genesisDeploysWithCost)
-            b1      <- createBlock[Task](Seq(genesis.blockHash), genesis, deploys = b1DeploysWithCost)
-            b2      <- createBlock[Task](Seq(genesis.blockHash), genesis, deploys = b2DeploysWithCost)
-            b3 <- createBlock[Task](
-                   Seq(b1.blockHash, b2.blockHash),
-                   genesis,
-                   deploys = b3DeploysWithCost
-                 )
+            genesis <- TestUtil.genesisSetup(runtimeManager)
+            modifiedBlock <- IndexedBlockDagStorage[Task].insertIndexed(
+                              genesis,
+                              genesis,
+                              invalid = false
+                            )
+            _ <- BlockStore[Task].put(genesis.blockHash, modifiedBlock)
+            b1 <- createBlock[Task](Seq(genesis.blockHash), genesis, deploys = b1DeploysWithCost)
+            b2 <- createBlock[Task](Seq(genesis.blockHash), genesis, deploys = b2DeploysWithCost)
+            _ <- createBlock[Task](
+                  Seq(b1.blockHash, b2.blockHash),
+                  genesis,
+                  deploys = b3DeploysWithCost
+                )
             _   <- step(runtimeManager)(0, genesis)
             _   <- step(runtimeManager)(1, genesis)
             _   <- step(runtimeManager)(2, genesis)
