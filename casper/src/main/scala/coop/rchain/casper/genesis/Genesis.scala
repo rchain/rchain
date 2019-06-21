@@ -140,11 +140,11 @@ object Genesis {
 
   private def fromLine(line: String): Either[String, Vault] = line.split(",") match {
     case Array(ethAddress, initRevBalanceStr, _) =>
-      Try(BigInt(initRevBalanceStr)) match {
+      Try(initRevBalanceStr.toLong) match {
         case Success(initRevBalance) =>
-          Right(Vault(RevAddress.fromEthAddress(ethAddress), initRevBalance.toLong)) // TODO: Remove BigInt conversion
+          Right(Vault(RevAddress.fromEthAddress(ethAddress), initRevBalance))
         case Failure(_) =>
-          Left(s"Failed to parse given initial balance $initRevBalanceStr as int.")
+          Left(s"Failed to parse given initial balance $initRevBalanceStr as long.")
       }
 
     case _ => Left(s"Invalid vault specification:\n$line")
