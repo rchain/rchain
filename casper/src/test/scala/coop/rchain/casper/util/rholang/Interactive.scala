@@ -6,18 +6,19 @@ import monix.execution.Scheduler
 import monix.eval.Task
 import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.crypto.hash.Blake2b512Random
-import coop.rchain.rholang.interpreter.accounting.{CostAccounting}
+import coop.rchain.rholang.interpreter.accounting.CostAccounting
 import coop.rchain.shared.PathOps.RichPath
 import java.nio.file.{Files, Path, Paths}
-import coop.rchain.rholang.interpreter.{PrettyPrinter, Runtime}
+
+import coop.rchain.rholang.interpreter.{NormalizerEnv, PrettyPrinter, Runtime}
 import coop.rchain.rspace.Checkpoint
 import coop.rchain.shared.Log
 import coop.rchain.metrics.Metrics
 import coop.rchain.models._
 import coop.rchain.models.Expr.ExprInstance.{GInt, GString}
 import coop.rchain.catscontrib.TaskContrib._
-import scala.collection.mutable
 
+import scala.collection.mutable
 import scala.concurrent.duration._
 
 /**
@@ -53,7 +54,7 @@ class Interactive private (runtime: Runtime[Task])(implicit scheduler: Scheduler
   def checkpointNames: List[String] = checkpoints.keys.toList
 
   def eval(code: String): Unit = {
-    TestUtil.eval(code, runtime).runSyncUnsafe(Duration.Inf)
+    TestUtil.eval(code, runtime, NormalizerEnv.Empty).runSyncUnsafe(Duration.Inf)
     val errors = runtime.errorLog.readAndClearErrorVector().unsafeRunSync
     if (errors.nonEmpty) {
       println("Errors during execution:")

@@ -8,6 +8,7 @@ import coop.rchain.casper.genesis.Genesis
 import coop.rchain.casper.protocol.{BlockMessage, DeployData}
 import coop.rchain.casper.util.rholang.RuntimeManager
 import coop.rchain.casper.util.{ConstructDeploy, ProtoUtil}
+import coop.rchain.crypto.PublicKey
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.crypto.signatures.Secp256k1
 import coop.rchain.metrics.Metrics
@@ -15,7 +16,7 @@ import coop.rchain.models.Par
 import coop.rchain.rholang.build.CompiledRholangSource
 import coop.rchain.rholang.interpreter.accounting.Cost
 import coop.rchain.rholang.interpreter.util.RevAddress
-import coop.rchain.rholang.interpreter.{accounting, ParBuilderUtil, Runtime}
+import coop.rchain.rholang.interpreter.{accounting, NormalizerEnv, ParBuilder, Runtime}
 
 object TestUtil {
 
@@ -25,20 +26,21 @@ object TestUtil {
         "0401f5d998c9be9b1a753771920c6e968def63fe95b20c71a163a7f7311b6131ac65a49f796b5947fa9d94b0542895e7b7ebe8b91eefcbc5c7604aaf281922ccac"
       ),
       timestamp = 1559158671800L,
-      term = CompiledRholangSource("RhoSpecContract.rho").code,
+      term = CompiledRholangSource("RhoSpecContract.rho", NormalizerEnv.Empty).code,
       phloLimit = accounting.MAX_VALUE
     )
 
   def setupRuntime[F[_]: Concurrent: ContextShift: Metrics, G[_]: Parallel[F, ?[_]]](
       runtime: Runtime[F],
       genesisSetup: RuntimeManager[F] => F[BlockMessage],
-      otherLibs: Seq[DeployData]
+      otherLibs: Seq[DeployData],
+      normalizerEnv: NormalizerEnv
   ): F[Runtime[F]] =
     for {
       runtimeManager <- RuntimeManager.fromRuntime(runtime)
       _              <- genesisSetup(runtimeManager)
-      _              <- evalDeploy(rhoSpecDeploy, runtime)
-      _              <- otherLibs.toList.traverse(evalDeploy(_, runtime))
+      _              <- evalDeploy(rhoSpecDeploy, runtime, normalizerEnv)
+      _              <- otherLibs.toList.traverse(evalDeploy(_, runtime, normalizerEnv))
       // reset the deployParams.userId before executing the test
       // otherwise it'd execute as the deployer of last deployed contract
       _ <- runtime.deployParametersRef.update(_.copy(userId = Par()))
@@ -78,19 +80,21 @@ object TestUtil {
 
   private def evalDeploy[F[_]: Sync](
       deploy: DeployData,
-      runtime: Runtime[F]
+      runtime: Runtime[F],
+      normalizerEnv: NormalizerEnv
   ): F[Unit] = {
     val rand: Blake2b512Random = Blake2b512Random(
       DeployData.toByteArray(ProtoUtil.stripDeployData(deploy))
     )
-    eval(deploy.term, runtime)(implicitly, rand)
+    eval(deploy.term, runtime, normalizerEnv)(implicitly, rand)
   }
 
   def eval[F[_]: Sync](
       code: String,
-      runtime: Runtime[F]
+      runtime: Runtime[F],
+      normalizerEnv: NormalizerEnv
   )(implicit rand: Blake2b512Random): F[Unit] =
-    ParBuilderUtil.buildNormalizedTerm(code) >>= (evalTerm(_, runtime))
+    ParBuilder[F].buildNormalizedTerm(code, normalizerEnv) >>= (evalTerm(_, runtime))
 
   private def evalTerm[F[_]: FlatMap](
       term: Par,

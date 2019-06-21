@@ -3,11 +3,12 @@ package coop.rchain.casper.helper
 import cats.effect.Concurrent
 import coop.rchain.casper.genesis.contracts.TestUtil
 import coop.rchain.casper.protocol.DeployData
+import coop.rchain.crypto.PublicKey
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.metrics.Metrics
 import coop.rchain.rholang.Resources._
 import coop.rchain.rholang.build.CompiledRholangSource
-import coop.rchain.rholang.interpreter.{PrettyPrinter, Runtime}
+import coop.rchain.rholang.interpreter.{NormalizerEnv, PrettyPrinter, Runtime}
 import coop.rchain.rholang.interpreter.Runtime.SystemProcess
 import coop.rchain.shared.Log
 import monix.eval.Task
@@ -57,6 +58,7 @@ object RhoSpec {
   def getResults(
       testObject: CompiledRholangSource,
       otherLibs: Seq[DeployData],
+      normalizerEnv: NormalizerEnv,
       timeout: FiniteDuration
   ): Task[TestResult] =
     TestResultCollector[Task].flatMap { testResultCollector =>
@@ -72,11 +74,12 @@ object RhoSpec {
           _ <- TestUtil.setupRuntime[Task, Task.Par](
                 runtime,
                 TestUtil.defaultGenesisSetup(1),
-                otherLibs
+                otherLibs,
+                normalizerEnv
               )
           rand = Blake2b512Random(128)
           _ <- TestUtil
-                .eval(testObject.code, runtime)(implicitly, rand.splitShort(1))
+                .eval(testObject.code, runtime, normalizerEnv)(implicitly, rand.splitShort(1))
                 .timeout(timeout)
 
           result <- testResultCollector.getResult
@@ -88,6 +91,7 @@ object RhoSpec {
 class RhoSpec(
     testObject: CompiledRholangSource,
     extraNonGenesisDeploys: Seq[DeployData],
+    normalizerEnv: NormalizerEnv,
     executionTimeout: FiniteDuration
 ) extends FlatSpec
     with AppendedClues
@@ -127,7 +131,7 @@ class RhoSpec(
   def hasFailures(assertions: List[RhoTestAssertion]) = assertions.find(_.isSuccess).isDefined
 
   private val result = RhoSpec
-    .getResults(testObject, extraNonGenesisDeploys, executionTimeout)
+    .getResults(testObject, extraNonGenesisDeploys, normalizerEnv, executionTimeout)
     .runSyncUnsafe(Duration.Inf)
 
   it should "finish execution within timeout" in {

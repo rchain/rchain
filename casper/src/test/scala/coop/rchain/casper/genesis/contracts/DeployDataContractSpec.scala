@@ -1,11 +1,12 @@
 package coop.rchain.casper.genesis.contracts
 import coop.rchain.casper.helper.RhoSpec
 import coop.rchain.rholang.build.CompiledRholangSource
-import scala.concurrent.duration._
+import coop.rchain.rholang.interpreter.NormalizerEnv
 
 class DeployDataContractSpec
     extends RhoSpec(
-      CompiledRholangSource("DeployDataContractTest.rho"),
+      CompiledRholangSource("DeployDataContractTest.rho", NormalizerEnv.Empty),
       Seq.empty,
+      NormalizerEnv.Empty,
       GENESIS_TEST_TIMEOUT
     )
