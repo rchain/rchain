@@ -70,7 +70,6 @@ match (
               for ( @bonds <- bondsCh; @rewards <- rewardsCh) {
                 @ListOps!("forall", rewards.toList(), *rewardsZeroPred, *rewardsZeroCh) |
                 contract rewardsZeroPred(@(_, reward), resultCh) = {
-                  stdlog!("info", {"reward": reward}) |
                   resultCh!(reward == 0)
                 } |
 
@@ -242,22 +241,27 @@ match (
           } |
 
           contract test_bonding_fails_if_already_bonded(rhoSpec, _, ackCh) = {
-            new setupCh, initialBondsCh, bond1Ch, bond2Ch, bondsCh in {
+            new setupCh, initialBondsCh, bond1Ch, bond2Ch, bondsCh,
+                finalRewardsCh, initialRewardsCh in {
               prepareUser!("7777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777", 10000, *setupCh) |
               for (@user1PubKey, _, _ <- setupCh) {
                 @PoS!("bond", 150, *bond1Ch) |
                 for ( @(result1, _) <- bond1Ch) {
                   @PoS!("getBonds", *initialBondsCh) |
-                  for ( @initialBonds <- initialBondsCh) {
+                  @PoS!("getRewards", *initialRewardsCh) |
+                  for ( @initialBonds <- initialBondsCh;
+                        @initialRewards <- initialRewardsCh) {
                     @PoS!("bond", 150, *bond2Ch) |
                     for ( @(result2, msg2) <- bond2Ch) {
                       @PoS!("getBonds", *bondsCh) |
+                      @PoS!("getRewards", *finalRewardsCh) |
                       rhoSpec!("assertMany",
                         [
                           ((result1, "==", true), "the first bond should succeed"),
                           ((result2, "==", false), "the second bond should fail"),
                           ((msg2, "==", "Public key is already bonded."), "the message should be as expected"),
-                          ((initialBonds, "== <-", *bondsCh), "the bonds map remains unchanged")
+                          ((initialBonds, "== <-", *bondsCh), "the bonds map remains unchanged"),
+                          ((initialRewards, "== <-", *finalRewardsCh), "the rewards map should not change")
                         ],
                         *ackCh
                       )
@@ -270,20 +274,25 @@ match (
 
 
           contract test_bonding_failure(rhoSpec, @pk, @vaultAmount, @transferAmount, @expectedMsg, ackCh) = {
-            new setupCh, retCh, bondsCh in {
+            new setupCh, retCh, bondsCh,
+                finalRewardsCh, initialRewardsCh in {
               prepareUser!(pk, vaultAmount, *setupCh) |
               for (_, _, _ <- setupCh) {
                 @PoS!("getBonds", *bondsCh) |
-                for (@initialBonds <- bondsCh) {
+                @PoS!("getRewards", *initialRewardsCh) |
+                for ( @initialBonds <- bondsCh;
+                      @initialRewards <- initialRewardsCh) {
                   @PoS!("bond", transferAmount, *retCh) |
 
                   for ( @(result, msg) <- retCh) {
                     @PoS!("getBonds", *bondsCh) |
+                    @PoS!("getRewards", *finalRewardsCh) |
                     rhoSpec!("assertMany",
                       [
                         ((msg, "==", expectedMsg), "the message should be as epected"),
                         ((result, "==", false), "the bond should fail"),
-                        ((initialBonds, "== <-", *bondsCh), "the bonds map remains unchanged")
+                        ((initialBonds, "== <-", *bondsCh), "the bonds map remains unchanged"),
+                        ((initialRewards, "== <-", *finalRewardsCh), "the rewards map should not change")
                       ],
                       *ackCh
                     )
