@@ -94,7 +94,7 @@ class DeployerIdTest extends FlatSpec with Matchers {
             result          <- mgr.captureResults(postAuthHash, checkAuthDeploy, captureChannel)
           } yield result
         }
-        .runSyncUnsafe(20.seconds)
+        .runSyncUnsafe(30.seconds)
 
       result.size should be(1)
       result.head should be(GBool(isAccessGranted): Par)
