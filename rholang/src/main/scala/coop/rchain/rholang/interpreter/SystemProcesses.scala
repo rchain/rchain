@@ -157,6 +157,18 @@ object SystemProcesses {
               .getOrElse(Par())
 
           produce(Seq(response), ack)
+
+        case isContractCall(
+            produce,
+            Seq(RhoType.String("fromDeployerId"), RhoType.GDeployerId(publicKey), ack)
+            ) =>
+          val response =
+            RevAddress
+              .fromPublicKey(PublicKey(publicKey))
+              .map(ra => RhoType.String(ra.toBase58))
+              .getOrElse(Par())
+
+          produce(Seq(response), ack)
       }
 
       def secp256k1Verify: Contract[F] =

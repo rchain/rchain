@@ -1,7 +1,8 @@
 package coop.rchain.rholang.interpreter
 import com.google.protobuf.ByteString
 import coop.rchain.models.Expr.ExprInstance._
-import coop.rchain.models.{ETuple, Expr, Par}
+import coop.rchain.models.GUnforgeable.UnfInstance.GDeployerIdBody
+import coop.rchain.models.{ETuple, Expr, GUnforgeable, Par}
 
 object RhoType {
   import coop.rchain.models.rholang.implicits._
@@ -59,5 +60,14 @@ object RhoType {
       }
 
     def apply(s: String): Par = GUri(s)
+  }
+
+  object GDeployerId {
+    def unapply(p: Par): Option[Array[Byte]] =
+      p.singleUnforgeable().collect {
+        case GUnforgeable(GDeployerIdBody(id)) => id.publicKey.toByteArray
+      }
+
+    def apply(bytes: Array[Byte]): Par = GDeployerId(bytes)
   }
 }

@@ -33,6 +33,17 @@ in {
       @MakeMint!(*mintCh) |
       for (mint <- mintCh) {
 
+        contract RevVault(@"deployerAuthKey", deployerId, ret) = {
+
+          new RevAddress(`rho:rev:address`), revAddrCh in {
+            RevAddress!("fromDeployerId", *deployerId, *revAddrCh)|
+            for (@deployerRevAddress <- revAddrCh) {
+
+              @AuthKey!("make", (*_revVault, deployerRevAddress), *ret)
+            }
+          }
+        } |
+
         contract RevVault(@"deployerAuthKey", ret) = {
 
           new deployerPubKeyBytesCh in {
