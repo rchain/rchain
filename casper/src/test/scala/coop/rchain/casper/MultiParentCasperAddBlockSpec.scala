@@ -10,11 +10,12 @@ import coop.rchain.casper.helper.{BlockUtil, HashSetCasperTestNode}
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.scalatestcontrib._
 import coop.rchain.casper.util.comm.TestNetwork
+import coop.rchain.casper.util.rholang.RegistrySigGen
 import coop.rchain.casper.util.{ConstructDeploy, ProtoUtil, RSpaceUtil}
 import coop.rchain.catscontrib.TaskContrib.TaskOps
 import coop.rchain.comm.rp.ProtocolHelper.packet
 import coop.rchain.comm.transport
-import coop.rchain.crypto.PrivateKey
+import coop.rchain.crypto.PublicKey
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.hash.Blake2b256
 import coop.rchain.crypto.signatures.Secp256k1
@@ -109,7 +110,12 @@ class MultiParentCasperAddBlockSpec extends FlatSpec with Matchers with Inspecto
         // channel is deterministic because of the fixed timestamp
         data <- getDataAtPrivateChannel[Effect](
                  signedBlock2,
-                 "87800a24b053dc467c5c10dcd050fe34d3ea2118b3874cf6f03a992541c50e06"
+                 Base16.encode(
+                   RegistrySigGen.generateUnforgeableNameId(
+                     PublicKey(deploy2.deployer.toByteArray),
+                     deploy2.timestamp
+                   )
+                 )
                )
         _ = data shouldBe Seq("12")
       } yield ()
