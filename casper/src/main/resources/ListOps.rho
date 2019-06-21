@@ -211,6 +211,13 @@ new  ListOps, rs(`rho:registry:insertSigned:secp256k1`), uriOut in {
     }
   } |
 
+  contract ListOps(@"sum", @list, returnCh) = {
+    new sum in {
+      ListOps!("fold", list, 0, *sum, *returnCh) |
+      contract sum(@n, @acc, resultCh) = { resultCh!(n + acc) }
+    }
+  } |
+
   rs!(
     "040126690519dc9b0f52876cb13458e15697794dd87d7c6477707c7efa4cce8a36b634eab5056bd4e3ba385ab14a638e4ac7d3b3e4968da3d66933fc04bc7038b5".hexToBytes(),
     (9223372036854775807, bundle+{*ListOps}),
