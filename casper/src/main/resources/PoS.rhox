@@ -62,6 +62,15 @@ new  PoS,
               }
             } |
 
+            contract PoS (@"getRewards", returnCh) = {
+              new tmpCh in {
+                getMVar!(*stateCh, *tmpCh) |
+                for (@(rewards, _) <- tmpCh) {
+                  returnCh!(rewards)
+                }
+              }
+            } |
+
             contract PoS (@"bond", @amount, returnCh) = {
               new userCh, depositCh, processCh in {
                 runMVar!(*stateCh, *processCh, *returnCh) |
