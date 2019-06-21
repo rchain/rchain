@@ -180,27 +180,52 @@ match (
 
           contract test_pay_succeeds(rhoSpec, _, ackCh) = {
             new setupCh, retCh, initialPosBalanceCh, finalPosBalanceCh,
-                initialUser1BalanceCh, finalUser1BalanceCh in {
+                initialUser1BalanceCh, finalUser1BalanceCh,
+                initialRewardsCh, finalRewardsCh,
+                computeDelta, deltaRewardsCh, deltaSumCh, sumDelta,
+                isPositive, allRewardsPositiveCh in {
               prepareUser!("4444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444", 10000, *setupCh) |
               for (@user1PubKey, _, @user1Vault <- setupCh) {
                 @posVault!("balance", *initialPosBalanceCh) |
                 @user1Vault!("balance", *initialUser1BalanceCh) |
+                @PoS!("getRewards", *initialRewardsCh) |
                 for(@initialPosBalance <- initialPosBalanceCh;
-                    @initialUser1Balance <- initialUser1BalanceCh) {
+                    @initialUser1Balance <- initialUser1BalanceCh;
+                    @initialRewards <- initialRewardsCh) {
                   @PoS!("pay", 100, *retCh) |
                   for ( @(true, _) <- retCh) {
 
                     @posVault!("balance", *finalPosBalanceCh) |
                     @user1Vault!("balance", *finalUser1BalanceCh) |
+                    @PoS!("getRewards", *finalRewardsCh) |
                     for(@finalPosBalance <- finalPosBalanceCh;
-                        @finalUser1Balance <- finalUser1BalanceCh) {
-                      rhoSpec!("assertMany",
-                        [
-                          ((initialUser1Balance - finalUser1Balance, "==", 100), "the user account decreases"),
-                          ((finalPosBalance - initialPosBalance, "==", 100), "the pos account increases"),
-                        ],
-                        *ackCh
-                      )
+                        @finalUser1Balance <- finalUser1BalanceCh;
+                        @finalRewards <- finalRewardsCh) {
+                      @ListOps!("fold", finalRewards.toList(), {}, *computeDelta, *deltaRewardsCh) |
+                      contract computeDelta(@(pk, finalReward), @acc, resultCh) = {
+                        resultCh!(acc.set(pk, finalReward - initialRewards.get(pk)))
+                      } |
+                      for (@deltaRewards <- deltaRewardsCh) {
+                        @ListOps!("forall", deltaRewards, *isPositive, *allRewardsPositiveCh) |
+                        contract isPositive(@n, resultCh) = { resultCh!(n > 0)} |
+
+                        @ListOps!("fold", deltaRewards.toList(), 0, *sumDelta, *deltaSumCh) |
+                        contract sumDelta(@(_, delta), @acc, resultCh) = {
+                          resultCh!(acc + delta)
+                        } |
+
+                        rhoSpec!("assertMany",
+                          [
+                            ((initialUser1Balance - finalUser1Balance, "==", 100), "the user account decreases"),
+                            ((finalPosBalance - initialPosBalance, "==", 100), "the pos account increases"),
+                            ((finalRewards.size(), "==", initialRewards.size()), "rewards map size doesn't change"),
+                            //TODO use arbitrary precision numbers instead of long ints
+                            ((98, "== <-", *deltaSumCh), "the sum difference should equal the payment"),
+                            ((true, "== <-", *allRewardsPositiveCh), "the rewards can only grow")
+                          ],
+                          *ackCh
+                        )
+                      }
                     }
                   }
                 }
