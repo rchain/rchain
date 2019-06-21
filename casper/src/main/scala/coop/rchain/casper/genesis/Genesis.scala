@@ -105,7 +105,8 @@ object Genesis {
 
   def createGenesisBlock[F[_]: Concurrent](
       runtimeManager: RuntimeManager[F],
-      genesis: Genesis
+      genesis: Genesis,
+      additionalDeploys: Seq[DeployData] = Seq.empty[DeployData]
   ): F[BlockMessage] = {
     import genesis._
 
@@ -115,7 +116,7 @@ object Genesis {
       genesisPk,
       vaults,
       supply = Long.MaxValue
-    )
+    ) ++ additionalDeploys
 
     runtimeManager
       .computeGenesis(blessedTerms, timestamp)
