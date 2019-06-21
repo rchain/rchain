@@ -28,7 +28,7 @@ class MultiParentCasperRholangSpec extends FlatSpec with Matchers with Inspector
   "MultiParentCasper" should "create blocks based on deploys" in effectTest {
     HashSetCasperTestNode.standaloneEff(genesis, validatorKeys.head).use { implicit node =>
       implicit val casper: MultiParentCasperImpl[Effect] = node.casperEff
-      implicit val rm: RuntimeManager[Effect] = node.runtimeManager
+      implicit val rm: RuntimeManager[Effect]            = node.runtimeManager
 
       for {
         deploy <- ConstructDeploy.basicDeployData[Effect](0)
