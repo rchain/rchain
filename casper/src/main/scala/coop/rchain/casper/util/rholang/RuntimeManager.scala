@@ -117,7 +117,7 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics] private[rholang] (
         _      <- runtime.blockData.setParams(blockData)
         _      <- setInvalidBlocks(invalidBlocks, runtime)
         _      <- span.mark("before-replay-deploys")
-        result <- replayDeploys(runtime, span, startHash, terms, replayDeploy(runtime, span))
+        result <- replayDeploys(runtime, span, startHash, terms)
         _      <- span.close()
       } yield result
     }
@@ -340,17 +340,14 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics] private[rholang] (
       runtime: Runtime[F],
       span: Span[F],
       startHash: StateHash,
-      terms: Seq[InternalProcessedDeploy],
-      replayDeploy: (
-          InternalProcessedDeploy
-      ) => F[Option[ReplayFailure]]
+      terms: Seq[InternalProcessedDeploy]
   ): F[Either[ReplayFailure, StateHash]] =
     for {
       _ <- runtime.replaySpace.reset(Blake2b256Hash.fromByteString(startHash))
       result <- terms.toList.foldM(().asRight[ReplayFailure]) {
                  case (previousResult, deploy) =>
                    previousResult.flatTraverse { _ =>
-                     replayDeploy(deploy).map(_.toLeft(()))
+                     replayDeploy(runtime, span, deploy).map(_.toLeft(()))
                    }
                }
       res <- EitherT
@@ -363,7 +360,9 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics] private[rholang] (
               .value
     } yield res
 
-  private def replayDeploy(runtime: Runtime[F], span: Span[F])(
+  private def replayDeploy(
+      runtime: Runtime[F],
+      span: Span[F],
       processedDeploy: InternalProcessedDeploy
   ): F[Option[ReplayFailure]] = {
     import processedDeploy._
