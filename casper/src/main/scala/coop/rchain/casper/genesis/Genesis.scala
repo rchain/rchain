@@ -60,7 +60,7 @@ object Genesis {
       maybeBondsPath: Option[String],
       numValidators: Int,
       genesisPath: Path,
-      maybeWalletsPath: Option[String],
+      maybeVaultsPath: Option[String],
       minimumBond: Long,
       maximumBond: Long,
       runtimeManager: RuntimeManager[F],
@@ -69,7 +69,7 @@ object Genesis {
   ): F[BlockMessage] =
     for {
       timestamp <- deployTimestamp.fold(Time[F].currentMillis)(_.pure[F])
-      vaults    <- getWallets[F](maybeWalletsPath, genesisPath.resolve("wallets.txt"))
+      vaults    <- getVaults[F](maybeVaultsPath, genesisPath.resolve("wallets.txt"))
       bonds <- getBonds[F](
                 maybeBondsPath,
                 genesisPath.resolve("bonds.txt"),
@@ -94,39 +94,39 @@ object Genesis {
                      )
     } yield genesisBlock
 
-  private def getWallets[F[_]: Sync: Log: RaiseIOError](
-      maybeWalletsPath: Option[String],
-      defaultWalletPath: Path
+  private def getVaults[F[_]: Sync: Log: RaiseIOError](
+      maybeVaultPath: Option[String],
+      defaultVaultPath: Path
   ): F[Seq[Vault]] =
-    maybeWalletsPath match {
-      case Some(walletsPathStr) =>
-        val walletsPath = Paths.get(walletsPathStr)
-        Monad[F].ifM(exists(walletsPath))(
-          walletFromFile[F](walletsPath),
-          Sync[F].raiseError(new Exception(s"Specified wallets file $walletsPath does not exist"))
+    maybeVaultPath match {
+      case Some(vaultsPathStr) =>
+        val vaultsPath = Paths.get(vaultsPathStr)
+        Monad[F].ifM(exists(vaultsPath))(
+          vaultFromFile[F](vaultsPath),
+          Sync[F].raiseError(new Exception(s"Specified vaults file $vaultsPath does not exist"))
         )
       case None =>
-        Monad[F].ifM(exists(defaultWalletPath))(
-          Log[F].info(s"Using default file $defaultWalletPath") >> walletFromFile[F](
-            defaultWalletPath
+        Monad[F].ifM(exists(defaultVaultPath))(
+          Log[F].info(s"Using default file $defaultVaultPath") >> vaultFromFile[F](
+            defaultVaultPath
           ),
           Log[F]
             .warn(
-              "No wallets file specified and no default file found. No wallets will exist at genesis."
+              "No vaults file specified and no default file found. No vaults will exist at genesis."
             )
             .map(_ => Seq.empty[Vault])
         )
     }
 
-  private def walletFromFile[F[_]: Sync: Log: RaiseIOError](walletsPath: Path): F[Seq[Vault]] =
+  private def vaultFromFile[F[_]: Sync: Log: RaiseIOError](vaultsPath: Path): F[Seq[Vault]] =
     for {
       lines <- SourceIO
-                .open(walletsPath)
+                .open(vaultsPath)
                 .use(_.getLines)
                 .adaptError {
                   case ex: Throwable =>
                     new RuntimeException(
-                      s"Failed to read ${walletsPath.toAbsolutePath} for reason: ${ex.getMessage}"
+                      s"Failed to read ${vaultsPath.toAbsolutePath} for reason: ${ex.getMessage}"
                     )
                 }
       vaults <- lines.traverse(parseLine[F])
@@ -135,7 +135,7 @@ object Genesis {
   private def parseLine[F[_]: Sync: Log: RaiseIOError](line: String): F[Vault] =
     Sync[F].fromEither(
       fromLine(line)
-        .leftMap(errMsg => new RuntimeException(s"Error in parsing wallets file: $errMsg"))
+        .leftMap(errMsg => new RuntimeException(s"Error in parsing vaults file: $errMsg"))
     )
 
   private def fromLine(line: String): Either[String, Vault] = line.split(",") match {
@@ -147,7 +147,7 @@ object Genesis {
           Left(s"Failed to parse given initial balance $initRevBalanceStr as int.")
       }
 
-    case _ => Left(s"Invalid pre-wallet specification:\n$line")
+    case _ => Left(s"Invalid vault specification:\n$line")
   }
 
   def createGenesisBlock[F[_]: Concurrent](
