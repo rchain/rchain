@@ -129,7 +129,7 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
             }
           }
         }
-        .runSyncUnsafe(20.seconds)
+        .runSyncUnsafe(30.seconds)
 
     result.size should be(1)
     result.head should be(ParBuilderUtil.mkTerm(purseValue).right.get)
