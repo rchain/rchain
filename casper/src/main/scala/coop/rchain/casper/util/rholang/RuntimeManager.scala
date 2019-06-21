@@ -133,7 +133,7 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics] private[rholang] (
         _      <- runtime.blockData.setParams(blockData)
         _      <- setInvalidBlocks(invalidBlocks, runtime)
         _      <- span.mark("before-process-deploys")
-        result <- processDeploys(runtime, startHash, terms, processDeploy(runtime, span))
+        result <- processDeploys(runtime, span, startHash, terms, processDeploy(runtime, span))
         _      <- span.close()
       } yield result
     }
@@ -148,7 +148,7 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics] private[rholang] (
         span       <- Metrics[F].span(computeGenesisLabel)
         _          <- runtime.blockData.setParams(BlockData(blockTime, 0))
         _          <- span.mark("before-process-deploys")
-        evalResult <- processDeploys(runtime, startHash, terms, processDeploy(runtime, span))
+        evalResult <- processDeploys(runtime, span, startHash, terms, processDeploy(runtime, span))
         _          <- span.close()
       } yield (startHash, evalResult._1, evalResult._2)
     }
@@ -298,6 +298,7 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics] private[rholang] (
 
   private def processDeploys(
       runtime: Runtime[F],
+      span: Span[F],
       startHash: StateHash,
       terms: Seq[DeployData],
       processDeploy: DeployData => F[InternalProcessedDeploy]
@@ -310,6 +311,7 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics] private[rholang] (
                   processDeploy(deploy).map(results :+ _)
                 }
               }
+      _               <- span.mark("before-process-deploys-create-checkpoint")
       finalCheckpoint <- runtime.space.createCheckpoint()
       finalStateHash  = finalCheckpoint.root
     } yield (finalStateHash.toByteString, res)
