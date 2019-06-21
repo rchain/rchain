@@ -77,14 +77,14 @@ new  ListOps, rs(`rho:registry:insertSigned:secp256k1`), uriOut in {
             ListOps!("append", accumulatedValue, x, *return)
           }
         }
-      } | 
+      } |
       ListOps!("fold", list, [], *combinator, *return)
     }
   } |
   contract ListOps(@"parMap", @list, function, return) = {
     new namesListCh, startProcess, getOutput in {
       contract startProcess(@x, ret) = { new outCh in { function!(x, *outCh) | ret!(*outCh) } } |
-      contract getOutput(name, ret)  = { for(@result <- name){ ret!(result) } } |    
+      contract getOutput(name, ret)  = { for(@result <- name){ ret!(result) } } |
 
       //map each element to a name listening for the result of the function
       ListOps!("map", list, *startProcess, *namesListCh) |
@@ -130,7 +130,7 @@ new  ListOps, rs(`rho:registry:insertSigned:secp256k1`), uriOut in {
       contract combinator(@head, @accumulatedValue, return) = {
         //Need return flag from `proc` in order to guarantee execution order
         new isDone in { proc!(head, *isDone) | for(_ <- isDone){ return!(Nil) } }
-      } | 
+      } |
       ListOps!("fold", list, Nil, *combinator, *nilReturn) | for(_ <- nilReturn){ isDone!(true) }
     }
   } |
@@ -175,6 +175,24 @@ new  ListOps, rs(`rho:registry:insertSigned:secp256k1`), uriOut in {
     }
   } |
 
+  contract ListOps(@"forall", @list, predicate, returnCh) = {
+    new combine, resultCh in {
+      ListOps!("partialFold", list, true, *combine, *resultCh) |
+      contract combine(@item, @acc, accResultCh) = {
+        new predResultCh in {
+          predicate!(item, *predResultCh) |
+          for (@isSatisfied <- predResultCh) {
+            accResultCh!(not isSatisfied, isSatisfied)
+          }
+        }
+      } |
+
+      for (_, @result <- resultCh) {
+        returnCh!(result)
+      }
+    }
+  } |
+
   rs!(
     "040126690519dc9b0f52876cb13458e15697794dd87d7c6477707c7efa4cce8a36b634eab5056bd4e3ba385ab14a638e4ac7d3b3e4968da3d66933fc04bc7038b5".hexToBytes(),
     (9223372036854775807, bundle+{*ListOps}),
@@ -182,5 +200,3 @@ new  ListOps, rs(`rho:registry:insertSigned:secp256k1`), uriOut in {
     *uriOut
   )
 }
-  
-  
