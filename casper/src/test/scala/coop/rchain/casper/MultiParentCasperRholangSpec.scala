@@ -1,16 +1,13 @@
 package coop.rchain.casper
 
-import cats.implicits._
-import coop.rchain.casper.MultiParentCasper.ignoreDoppelgangerCheck
 import coop.rchain.casper.helper.HashSetCasperTestNode
-import coop.rchain.casper.helper.HashSetCasperTestNode._
+import coop.rchain.casper.helper.HashSetCasperTestNode.{Effect, _}
 import coop.rchain.casper.scalatestcontrib._
+import coop.rchain.casper.util.rholang.{RegistrySigGen, RuntimeManager}
 import coop.rchain.casper.util.{ConstructDeploy, ProtoUtil, RSpaceUtil}
-import coop.rchain.crypto.PrivateKey
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.signatures.Secp256k1
 import coop.rchain.p2p.EffectsTestInstances.LogicalTime
-import coop.rchain.rholang.interpreter.accounting
 import monix.execution.Scheduler.Implicits.global
 import org.scalatest.{FlatSpec, Inspectors, Matchers}
 
@@ -19,7 +16,7 @@ class MultiParentCasperRholangSpec extends FlatSpec with Matchers with Inspector
   import MultiParentCasperTestUtil._
   import RSpaceUtil._
 
-  implicit val timeEff = new LogicalTime[Effect]
+  implicit val timeEff: LogicalTime[Effect] = new LogicalTime[Effect]
 
   private val (validatorKeys, validatorPks) = (1 to 4).map(_ => Secp256k1.newKeyPair).unzip
   private val genesis = buildGenesis(
@@ -30,8 +27,8 @@ class MultiParentCasperRholangSpec extends FlatSpec with Matchers with Inspector
   //test since we cannot reset it
   "MultiParentCasper" should "create blocks based on deploys" in effectTest {
     HashSetCasperTestNode.standaloneEff(genesis, validatorKeys.head).use { implicit node =>
-      implicit val casper = node.casperEff
-      implicit val rm     = node.runtimeManager
+      implicit val casper: MultiParentCasperImpl[Effect] = node.casperEff
+      implicit val rm: RuntimeManager[Effect] = node.runtimeManager
 
       for {
         deploy <- ConstructDeploy.basicDeployData[Effect](0)
@@ -53,36 +50,49 @@ class MultiParentCasperRholangSpec extends FlatSpec with Matchers with Inspector
   }
 
   it should "be able to use the registry" in effectTest {
-    //FIXME fix this, genesis should be OK, name needs to be regenerated - why doesn't it reach that part!?
 
     HashSetCasperTestNode.standaloneEff(genesis, validatorKeys.head).use { node =>
-      implicit val rm = node.runtimeManager
 
-      val registerDeploy = ConstructDeploy.sourceDeploy(
-        """new uriCh, rr(`rho:registry:insertArbitrary`), hello in {
-          |  contract hello(@name, return) = { return!("Hello, ${name}!" %% {"name" : name}) } |
+      implicit val rm: RuntimeManager[Effect] = node.runtimeManager
+
+      val registerSource =
+        """
+          |new uriCh, rr(`rho:registry:insertArbitrary`), hello in {
+          |  contract hello(@name, return) = { 
+          |    return!("Hello, ${name}!" %% {"name" : name}) 
+          |  } |
           |  rr!(bundle+{*hello}, *uriCh)
           |}
-        """.stripMargin,
-        1539788365118L, //fix the timestamp so that `uriCh` is known
-        accounting.MAX_VALUE
-      )
+        """.stripMargin
+
+      def callSource(registryId: String) =
+        s"""
+           |new out, rl(`rho:registry:lookup`), helloCh in {
+           |  rl!($registryId, *helloCh) |
+           |  for(hello <- helloCh){
+           |    hello!("World", *out)
+           |  }
+           |}
+         """.stripMargin
+
+      def calculateUnforgeableName(timeStamp: Long): String =
+        Base16.encode(
+          RegistrySigGen
+            .generateUnforgeableNameId(Secp256k1.toPublic(ConstructDeploy.defaultSec), timeStamp)
+        )
 
       for {
-        block <- node.addBlock(registerDeploy)
-        id    = "rho:id:dwg79f7rkqqsz9458tnh4i6nw3yrnurufihg3zicn9nsrp18o9imwk"
-        callDeploy = ConstructDeploy.sourceDeploy(
-          s"""new rl(`rho:registry:lookup`), helloCh, out in {
-             |  rl!(`$id`, *helloCh) |
-             |  for(hello <- helloCh){ hello!("World", *out) }
-             |}""".stripMargin,
-          1539788365119L,
-          accounting.MAX_VALUE
-        )
-        block2 <- node.addBlock(callDeploy)
+        registerDeploy <- ConstructDeploy.sourceDeployNowF(registerSource)
+        block0         <- node.addBlock(registerDeploy)
+        registryId <- getDataAtPrivateChannel[Effect](
+                       block0,
+                       calculateUnforgeableName(registerDeploy.timestamp)
+                     )
+        callDeploy <- ConstructDeploy.sourceDeployNowF(callSource(registryId.head))
+        block1     <- node.addBlock(callDeploy)
         data <- getDataAtPrivateChannel[Effect](
-                 block2,
-                 "2da67f1ca63808777eba9144a5cac519783afc6070dd08642ac6aa5ed51b98d8"
+                 block1,
+                 calculateUnforgeableName(callDeploy.timestamp)
                )
         _ = data shouldBe Seq("\"Hello, World!\"")
       } yield ()
