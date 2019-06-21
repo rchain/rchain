@@ -50,6 +50,13 @@ object RhoSpec {
           3,
           104L,
           ctx => DeployDataContract.set(ctx)(_, _)
+        ),
+        SystemProcess.Definition[F](
+          "rho:test:deployerId:get",
+          Runtime.byteName(105),
+          3,
+          105L,
+          ctx => DeployerIdContract.get(ctx)(_, _)
         )
       )
     testResultCollectorService

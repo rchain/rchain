@@ -22,6 +22,7 @@ match (
       ListOpsCh,
       stdout(`rho:io:stdout`),
       setDeployData(`rho:test:deploy:set`),
+      getDeployerId(`rho:test:deployerId:get`),
       setup,
       testFindOrCreateGenesisVault,
       testCreateVaultFail,
@@ -85,10 +86,10 @@ match (
       } |
 
       contract testCreateVault(rhoSpec, RevVault, ackCh) = {
-        new aliceVaultCh, genesisAuthKeyCh, balanceCh, transferCh in {
+        new aliceVaultCh, deployerId(`rho:rchain:deployerId`), genesisAuthKeyCh, balanceCh, transferCh in {
           RevVault!("findOrCreate", aliceRevAddress, *aliceVaultCh) |
           //as per `setup`, the deployer is `genesis` and shouldn't be able to access the vault
-          RevVault!("deployerAuthKey", *genesisAuthKeyCh) |
+          RevVault!("deployerAuthKey", *deployerId, *genesisAuthKeyCh) |
           for (@(true, aliceVault) <- aliceVaultCh; genesisAuthKey <- genesisAuthKeyCh) {
             @aliceVault!("balance", *balanceCh) |
             @aliceVault!("transfer", genesisRevAddress, 0, *genesisAuthKey, *transferCh) |
@@ -179,13 +180,14 @@ match (
         for (@(_, RevVault) <- RevVaultCh) {
 
           contract withVaultAndIdentityOf(@pubKey, ret) = {
-            new RevAddress(`rho:rev:address`), revAddrCh, vaultCh, identityChanged, authKeyCh in {
+            new RevAddress(`rho:rev:address`), revAddrCh, vaultCh, identityChanged, deployerIdCh, authKeyCh in {
               setDeployData!("userId", pubKey, *identityChanged) |
+              getDeployerId!("deployerId", pubKey, *deployerIdCh) |
               RevAddress!("fromPublicKey", pubKey, *revAddrCh) |
               for (@revAddr <- revAddrCh) {
                 @RevVault!("findOrCreate", revAddr, *vaultCh) |
-                for (@(true, vault) <- vaultCh; _ <- identityChanged) {
-                  @RevVault!("deployerAuthKey", *authKeyCh) |
+                for (@(true, vault) <- vaultCh; _ <- identityChanged; deployerId <- deployerIdCh) {
+                  @RevVault!("deployerAuthKey", *deployerId, *authKeyCh) |
                   for (@authKey <- authKeyCh) {
                     ret!(vault, authKey)
                   }
