@@ -117,7 +117,7 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics] private[rholang] (
         _      <- runtime.blockData.setParams(blockData)
         _      <- setInvalidBlocks(invalidBlocks, runtime)
         _      <- span.mark("before-replay-deploys")
-        result <- replayDeploys(runtime, startHash, terms, replayDeploy(runtime, span))
+        result <- replayDeploys(runtime, span, startHash, terms, replayDeploy(runtime, span))
         _      <- span.close()
       } yield result
     }
@@ -338,6 +338,7 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics] private[rholang] (
 
   private def replayDeploys(
       runtime: Runtime[F],
+      span: Span[F],
       startHash: StateHash,
       terms: Seq[InternalProcessedDeploy],
       replayDeploy: (
@@ -355,7 +356,7 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics] private[rholang] (
       res <- EitherT
               .fromEither[F](result)
               .flatMapF { _ =>
-                runtime.replaySpace
+                span.mark("before-replay-deploys-create-checkpoint") >> runtime.replaySpace
                   .createCheckpoint()
                   .map(finalCheckpoint => finalCheckpoint.root.toByteString.asRight[ReplayFailure])
               }
@@ -386,7 +387,7 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics] private[rholang] (
                    runtime.replaySpace.revertToSoftCheckpoint(softCheckpoint) >> none[ReplayFailure]
                      .pure[F]
                  else {
-                   span.mark("before-replay-deploy-create-checkpoint") >> runtime.replaySpace
+                   runtime.replaySpace
                      .checkReplayData()
                      .attempt
                      .flatMap {
