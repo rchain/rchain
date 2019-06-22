@@ -16,9 +16,9 @@ in {
     ) {
       (from, to, amount) => {
 
-        new vaultCh, revVaultkeyCh in {
+        new vaultCh, revVaultkeyCh, deployerId(`rho:rchain:deployerId`) in {
           @RevVault!("findOrCreate", from, *vaultCh) |
-          @RevVault!("deployerAuthKey", *revVaultkeyCh) |
+          @RevVault!("deployerAuthKey", *deployerId, *revVaultkeyCh) |
           for (@(true, vault) <- vaultCh; key <- revVaultkeyCh) {
 
             log!(("Beginning transfer of ", amount, "REV from", from, "to", to)) |
