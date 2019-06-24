@@ -21,11 +21,7 @@ trait IReplaySpace[F[_], C, P, A, R, K] extends ISpace[F, C, P, A, R, K] {
     *  @param log A [Log] with permitted operations
     */
   def resetAndRig(startRoot: Blake2b256Hash, log: trace.Log)(implicit syncF: Sync[F]): F[Unit] =
-    rig(log)
-      .flatMap { _ =>
-        // reset to the starting checkpoint
-        reset(startRoot)
-      }
+    rig(log) >> reset(startRoot)
 
   def rig(log: trace.Log)(implicit syncF: Sync[F]): F[Unit] =
     syncF
