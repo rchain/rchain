@@ -104,7 +104,7 @@ final case class Consume private (
   override def hashCode(): Int = hash.hashCode() * 47 + sequenceNumber.hashCode()
 
   override def toString: String =
-    s"Consume(channels: ${channelsHashes.toString}, hash: ${hash.toString})"
+    s"Consume(channels: ${channelsHashes.toString}, hash: ${hash.toString}, seqNo: ${sequenceNumber})"
 }
 
 object Consume {
