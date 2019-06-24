@@ -1095,6 +1095,95 @@ trait HotStoreSpec[F[_], M[_]] extends FlatSpec with Matchers with GeneratorDriv
         } yield (snapshot.cache shouldBe cache)
       }
   }
+
+  it should "create a deep copy of the continuations in the cache" in forAll {
+    (
+        channels: Vector[Channel],
+        continuation1: Continuation,
+        continuation2: Continuation
+    ) =>
+      whenever(continuation1 != continuation2) {
+        fixture { (_, _, store) =>
+          for {
+            _        <- store.putContinuation(channels, continuation1)
+            snapshot <- store.snapshot()
+            _        <- store.putContinuation(channels, continuation2)
+            _        = snapshot.cache.continuations(channels) should contain(continuation1)
+          } yield (snapshot.cache.continuations(channels) should not contain (continuation2))
+        }
+      }
+  }
+
+  it should "create a deep copy of the installed continuations in the cache" in forAll {
+    (
+        channels: Vector[Channel],
+        continuation1: Continuation,
+        continuation2: Continuation
+    ) =>
+      whenever(continuation1 != continuation2) {
+        fixture { (_, _, store) =>
+          for {
+            _        <- store.installContinuation(channels, continuation1)
+            snapshot <- store.snapshot()
+            _        <- store.installContinuation(channels, continuation2)
+          } yield (snapshot.cache.installedContinuations(channels) shouldBe (continuation1))
+        }
+      }
+  }
+
+  it should "create a deep copy of the data in the cache" in forAll {
+    (
+        channel: Channel,
+        data1: Data,
+        data2: Data
+    ) =>
+      whenever(data1 != data2) {
+        fixture { (_, _, store) =>
+          for {
+            _        <- store.putDatum(channel, data1)
+            snapshot <- store.snapshot()
+            _        <- store.putDatum(channel, data2)
+            _        = snapshot.cache.data(channel) should contain(data1)
+          } yield (snapshot.cache.data(channel) should not contain (data2))
+        }
+      }
+  }
+
+  it should "create a deep copy of the joins in the cache" in forAll {
+    (
+        channel: Channel,
+        join1: Join,
+        join2: Join
+    ) =>
+      whenever(join1 != join2) {
+        fixture { (_, _, store) =>
+          for {
+            _        <- store.putJoin(channel, join1)
+            snapshot <- store.snapshot()
+            _        <- store.putJoin(channel, join2)
+            _        = snapshot.cache.joins(channel) should contain(join1)
+          } yield (snapshot.cache.joins(channel) should not contain (join2))
+        }
+      }
+  }
+
+  it should "create a deep copy of the installed joins in the cache" in forAll {
+    (
+        channel: Channel,
+        join1: Join,
+        join2: Join
+    ) =>
+      whenever(join1 != join2) {
+        fixture { (_, _, store) =>
+          for {
+            _        <- store.installJoin(channel, join1)
+            snapshot <- store.snapshot()
+            _        <- store.installJoin(channel, join2)
+            _        = snapshot.cache.installedJoins(channel) should contain(join1)
+          } yield (snapshot.cache.installedJoins(channel) should not contain (join2))
+        }
+      }
+  }
 }
 
 class History[F[_]: Sync, C, P, A, K](implicit R: Cell[F, Cache[C, P, A, K]])
