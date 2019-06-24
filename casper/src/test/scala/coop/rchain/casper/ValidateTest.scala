@@ -508,7 +508,6 @@ class ValidateTest
             _ <- Validate.parents[Task](b8, b0, dag)
             _ <- Validate.parents[Task](b9, b0, dag)
 
-            _ = log.warns.size should be(3)
             result = log.warns.forall(
               _.matches(
                 ".* block parents .* did not match estimate .* based on justification .*"
@@ -516,6 +515,7 @@ class ValidateTest
             ) should be(
               true
             )
+            _ = log.warns.size should be(3)
           } yield result
         }
   }
