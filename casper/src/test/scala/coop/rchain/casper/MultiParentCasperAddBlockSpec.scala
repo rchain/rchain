@@ -340,9 +340,11 @@ class MultiParentCasperAddBlockSpec extends FlatSpec with Matchers with Inspecto
         _ <- nodes(1).casperEff
               .contains(signedBlock4) shouldBeF true // However, marked as invalid
 
-        _ = nodes(1).logEff.infos.count(_ startsWith "Added admissible equivocation") should be(1)
+        _ = nodes(1).logEff.warns.exists(
+          _.matches("Recording invalid block .* for AdmissibleEquivocation.")
+        ) should be(true)
         _ = nodes(2).logEff.warns.size should be(0)
-        _ = nodes(1).logEff.warns.size should be(1)
+        _ = nodes(1).logEff.warns.size should be(3)
         _ = nodes(0).logEff.warns.size should be(0)
 
         _ <- nodes(1).casperEff
