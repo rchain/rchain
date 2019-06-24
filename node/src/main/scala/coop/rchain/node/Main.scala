@@ -136,14 +136,14 @@ object Main {
       case _                                 => conf.printHelp()
     }
 
-    program.doOnFinish(
-      _ =>
-        Task.delay {
-          proposeService.close()
-          replService.close()
-          deployService.close()
-        } >> console.close
-    )
+    Task.delay(
+      sys.addShutdownHook {
+        proposeService.close()
+        replService.close()
+        deployService.close()
+        console.close.unsafeRunSync(scheduler)
+      }
+    ) >> program
   }
 
   private def generateKey(
