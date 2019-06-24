@@ -129,7 +129,7 @@ trait ReplayRSpaceTests extends ReplayRSpaceTestsBase[String, Pattern, String, S
           (ContResult(continuation, false, channels, patterns, 1), List(Result(datum, false)))
         )
 
-        _ <- replaySpace.resetAndRig(emptyPoint.root, rigPoint.log)
+        _ <- replaySpace.rigAndReset(emptyPoint.root, rigPoint.log)
 
         replayResultConsume <- replaySpace.consume(channels, patterns, continuation, false)
         replayResultProduce <- replaySpace.produce(channels(0), datum, false)
@@ -167,7 +167,7 @@ trait ReplayRSpaceTests extends ReplayRSpaceTestsBase[String, Pattern, String, S
                     )
           rigPoint <- space.createCheckpoint()
 
-          _ <- replaySpace.resetAndRig(emptyPoint.root, rigPoint.log)
+          _ <- replaySpace.rigAndReset(emptyPoint.root, rigPoint.log)
 
           _ <- produceMany(
                 replaySpace,
@@ -220,7 +220,7 @@ trait ReplayRSpaceTests extends ReplayRSpaceTestsBase[String, Pattern, String, S
                     )
           rigPoint <- space.createCheckpoint()
 
-          _ <- replaySpace.resetAndRig(emptyPoint.root, rigPoint.log)
+          _ <- replaySpace.rigAndReset(emptyPoint.root, rigPoint.log)
 
           _ <- produceMany(
                 replaySpace,
@@ -273,7 +273,7 @@ trait ReplayRSpaceTests extends ReplayRSpaceTestsBase[String, Pattern, String, S
                     )
           rigPoint <- space.createCheckpoint()
 
-          _ <- replaySpace.resetAndRig(emptyPoint.root, rigPoint.log)
+          _ <- replaySpace.rigAndReset(emptyPoint.root, rigPoint.log)
 
           _ <- consumeMany(
                 replaySpace,
@@ -326,7 +326,7 @@ trait ReplayRSpaceTests extends ReplayRSpaceTestsBase[String, Pattern, String, S
                     )
           rigPoint <- space.createCheckpoint()
 
-          _ <- replaySpace.resetAndRig(emptyPoint.root, rigPoint.log)
+          _ <- replaySpace.rigAndReset(emptyPoint.root, rigPoint.log)
 
           _ <- consumeMany(
                 replaySpace,
@@ -386,7 +386,7 @@ trait ReplayRSpaceTests extends ReplayRSpaceTestsBase[String, Pattern, String, S
                     )
           rigPoint <- space.createCheckpoint()
 
-          _ <- replaySpace.resetAndRig(emptyPoint.root, rigPoint.log)
+          _ <- replaySpace.rigAndReset(emptyPoint.root, rigPoint.log)
 
           _ <- consumeMany(
                 replaySpace,
@@ -459,7 +459,7 @@ trait ReplayRSpaceTests extends ReplayRSpaceTestsBase[String, Pattern, String, S
                     )
           rigPoint <- space.createCheckpoint()
 
-          _ <- replaySpace.resetAndRig(emptyPoint.root, rigPoint.log)
+          _ <- replaySpace.rigAndReset(emptyPoint.root, rigPoint.log)
 
           _ <- produceMany(
                 replaySpace,
@@ -540,7 +540,7 @@ trait ReplayRSpaceTests extends ReplayRSpaceTestsBase[String, Pattern, String, S
                     )
           rigPoint <- space.createCheckpoint()
 
-          _ <- replaySpace.resetAndRig(emptyPoint.root, rigPoint.log)
+          _ <- replaySpace.rigAndReset(emptyPoint.root, rigPoint.log)
 
           _ <- consumeMany(
                 replaySpace,
@@ -609,7 +609,7 @@ trait ReplayRSpaceTests extends ReplayRSpaceTestsBase[String, Pattern, String, S
             )
         rigPoint <- space.createCheckpoint()
 
-        _ <- replaySpace.resetAndRig(emptyPoint.root, rigPoint.log)
+        _ <- replaySpace.rigAndReset(emptyPoint.root, rigPoint.log)
 
         _ = replaySpace.replayData.get(cr).map(_.size).value shouldBe 2
 
@@ -657,7 +657,7 @@ trait ReplayRSpaceTests extends ReplayRSpaceTestsBase[String, Pattern, String, S
         _            = produce1 shouldBe defined
         afterProduce <- space.createCheckpoint()
 
-        _ <- replaySpace.resetAndRig(afterProduce.root, afterProduce.log)
+        _ <- replaySpace.rigAndReset(afterProduce.root, afterProduce.log)
 
         produce2 <- replaySpace.produce(channel, datum, persist = false)
         _        = produce2 shouldBe defined
@@ -681,7 +681,7 @@ trait ReplayRSpaceTests extends ReplayRSpaceTestsBase[String, Pattern, String, S
 
         rigPoint <- space.createCheckpoint()
 
-        _ <- replaySpace.resetAndRig(emptyPoint.root, rigPoint.log)
+        _ <- replaySpace.rigAndReset(emptyPoint.root, rigPoint.log)
 
         consume2 <- replaySpace.consume(channels, patterns, continuation, false)
         _        = consume2 shouldBe None
@@ -720,7 +720,7 @@ trait ReplayRSpaceTests extends ReplayRSpaceTestsBase[String, Pattern, String, S
 
         rigPoint <- space.createCheckpoint()
 
-        _ <- replaySpace.resetAndRig(emptyPoint.root, rigPoint.log)
+        _ <- replaySpace.rigAndReset(emptyPoint.root, rigPoint.log)
 
         consume2 <- replaySpace.consume(channels, patterns, continuation, false)
         _        = consume2 shouldBe None
@@ -782,7 +782,7 @@ trait ReplayRSpaceTests extends ReplayRSpaceTestsBase[String, Pattern, String, S
         afterPlay <- space.createCheckpoint()
 
         //rig
-        _ <- replaySpace.resetAndRig(emptyCh.root, afterPlay.log)
+        _ <- replaySpace.rigAndReset(emptyCh.root, afterPlay.log)
 
         _ <- replaySpace.produce(channel1, data3, false, 0) shouldBeF noMatch
         _ <- replaySpace.produce(channel1, data3, false, 0) shouldBeF noMatch
@@ -800,6 +800,29 @@ trait ReplayRSpaceTests extends ReplayRSpaceTestsBase[String, Pattern, String, S
         _ = replaySpace.replayData.isEmpty shouldBe true
       } yield ()
   }
+
+  "checkReplayData" should "proceed if replayData is empty" in fixture { (_, _, _, replaySpace) =>
+    replaySpace.checkReplayData()
+  }
+
+  it should "raise an error if replayData contains elements" in fixture {
+    (_, _, space, replaySpace) =>
+      val channel      = "ch1"
+      val channels     = List(channel)
+      val patterns     = List(Wildcard)
+      val datum        = "datum"
+      val continuation = "continuation"
+
+      for {
+        _        <- space.consume(channels, patterns, continuation, false)
+        _        <- space.produce(channel, datum, false)
+        c        <- space.createCheckpoint()
+        _        <- replaySpace.rigAndReset(c.root, c.log)
+        res      <- replaySpace.checkReplayData().attempt
+        Left(ex) = res
+      } yield ex shouldBe a[ReplayException]
+  }
+
 }
 
 trait ReplayRSpaceTestsBase[C, P, A, K]

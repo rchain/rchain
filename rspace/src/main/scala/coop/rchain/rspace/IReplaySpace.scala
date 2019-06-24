@@ -2,10 +2,13 @@ package coop.rchain.rspace
 
 import cats.effect.Sync
 import cats.implicits._
+import coop.rchain.shared.Log
 import coop.rchain.rspace.trace._
 import coop.rchain.rspace.internal._
 
 trait IReplaySpace[F[_], C, P, A, R, K] extends ISpace[F, C, P, A, R, K] {
+
+  protected def logF: Log[F]
 
   private[rspace] val replayData: ReplayData = ReplayData.empty
 
@@ -17,7 +20,10 @@ trait IReplaySpace[F[_], C, P, A, R, K] extends ISpace[F, C, P, A, R, K] {
     *  @param startRoot A [Blake2b256Hash] representing the intial state
     *  @param log A [Log] with permitted operations
     */
-  def resetAndRig(startRoot: Blake2b256Hash, log: trace.Log)(implicit syncF: Sync[F]): F[Unit] =
+  def rigAndReset(startRoot: Blake2b256Hash, log: trace.Log)(implicit syncF: Sync[F]): F[Unit] =
+    rig(log) >> reset(startRoot)
+
+  def rig(log: trace.Log)(implicit syncF: Sync[F]): F[Unit] =
     syncF
       .delay {
         val (ioEvents, commEvents) = log.partition {
@@ -42,8 +48,18 @@ trait IReplaySpace[F[_], C, P, A, R, K] extends ISpace[F, C, P, A, R, K] {
             syncF.raiseError(new RuntimeException("BUG FOUND: only COMM events are expected here"))
         }
       }
-      .flatMap { _ =>
-        // reset to the starting checkpoint
-        reset(startRoot)
-      }
+
+  def checkReplayData()(implicit syncF: Sync[F]): F[Unit] =
+    syncF
+      .delay(replayData.isEmpty)
+      .ifM(
+        ifTrue = syncF.unit,
+        ifFalse = {
+          val msg = s"unused comm event: replayData multimap has ${replayData.size} elements left"
+          logF.error(msg) *> syncF.raiseError[Unit](
+            new ReplayException(msg)
+          )
+        }
+      )
+
 }

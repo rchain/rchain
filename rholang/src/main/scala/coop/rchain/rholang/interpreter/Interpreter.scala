@@ -52,9 +52,9 @@ object Interpreter {
       ): F[EvaluateResult] = {
         implicit val rand: Blake2b512Random = Blake2b512Random(128)
         for {
-          checkpoint <- runtime.space.createCheckpoint()
+          checkpoint <- runtime.space.createSoftCheckpoint()
           res        <- injAttempt(runtime.reducer, runtime.errorLog, term, initialPhlo, deployerPk)
-          _          <- if (res.errors.nonEmpty) runtime.space.reset(checkpoint.root) else S.unit
+          _          <- if (res.errors.nonEmpty) runtime.space.revertToSoftCheckpoint(checkpoint) else S.unit
         } yield res
       }
 

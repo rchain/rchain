@@ -27,7 +27,7 @@ import monix.execution.Scheduler.Implicits.global
 trait HotStoreSpec[F[_], M[_]] extends FlatSpec with Matchers with GeneratorDrivenPropertyChecks {
 
   implicit override val generatorDrivenConfig =
-    PropertyCheckConfiguration(minSize = 0, minSuccessful = 20)
+    PropertyCheckConfiguration(minSize = 0, sizeRange = 10, minSuccessful = 20)
 
   implicit def S: Sync[F]
   implicit def P: Parallel[F, M]
@@ -40,10 +40,36 @@ trait HotStoreSpec[F[_], M[_]] extends FlatSpec with Matchers with GeneratorDriv
 
   implicit val arbitraryJoins = distinctListOf[Join].map(_.toVector)
 
+  implicit def arbitraryCache: Arbitrary[Cache[String, Pattern, String, StringsCaptor]] = Arbitrary(
+    for {
+      continuations <- Arbitrary.arbitrary[TrieMap[Seq[String], Seq[
+                        WaitingContinuation[Pattern, StringsCaptor]
+                      ]]]
+      installedContinuations <- Arbitrary.arbitrary[
+                                 TrieMap[Seq[String], WaitingContinuation[Pattern, StringsCaptor]]
+                               ]
+      data           <- Arbitrary.arbitrary[TrieMap[String, Seq[Datum[String]]]]
+      joins          <- Arbitrary.arbitrary[TrieMap[String, Seq[Seq[String]]]]
+      installedJoins <- Arbitrary.arbitrary[TrieMap[String, Seq[Seq[String]]]]
+    } yield Cache(
+      continuations,
+      installedContinuations,
+      data,
+      joins,
+      installedJoins
+    )
+  )
+
   def fixture(
       f: (
           Cell[F, Cache[String, Pattern, String, StringsCaptor]],
           History[F, String, Pattern, String, StringsCaptor],
+          HotStore[F, String, Pattern, String, StringsCaptor]
+      ) => F[Unit]
+  ): Unit
+
+  def fixture(cache: Cache[String, Pattern, String, StringsCaptor])(
+      f: (
           HotStore[F, String, Pattern, String, StringsCaptor]
       ) => F[Unit]
   ): Unit
@@ -1060,6 +1086,104 @@ trait HotStoreSpec[F[_], M[_]] extends FlatSpec with Matchers with GeneratorDriv
         } yield ()
       }
     }
+
+  "snapshot" should "create a copy of the cache" in forAll {
+    (cache: Cache[String, Pattern, String, StringsCaptor]) =>
+      fixture(cache) { store =>
+        for {
+          snapshot <- store.snapshot()
+        } yield (snapshot.cache shouldBe cache)
+      }
+  }
+
+  it should "create a deep copy of the continuations in the cache" in forAll {
+    (
+        channels: Vector[Channel],
+        continuation1: Continuation,
+        continuation2: Continuation
+    ) =>
+      whenever(continuation1 != continuation2) {
+        fixture { (_, _, store) =>
+          for {
+            _        <- store.putContinuation(channels, continuation1)
+            snapshot <- store.snapshot()
+            _        <- store.putContinuation(channels, continuation2)
+            _        = snapshot.cache.continuations(channels) should contain(continuation1)
+          } yield (snapshot.cache.continuations(channels) should not contain (continuation2))
+        }
+      }
+  }
+
+  it should "create a deep copy of the installed continuations in the cache" in forAll {
+    (
+        channels: Vector[Channel],
+        continuation1: Continuation,
+        continuation2: Continuation
+    ) =>
+      whenever(continuation1 != continuation2) {
+        fixture { (_, _, store) =>
+          for {
+            _        <- store.installContinuation(channels, continuation1)
+            snapshot <- store.snapshot()
+            _        <- store.installContinuation(channels, continuation2)
+          } yield (snapshot.cache.installedContinuations(channels) shouldBe (continuation1))
+        }
+      }
+  }
+
+  it should "create a deep copy of the data in the cache" in forAll {
+    (
+        channel: Channel,
+        data1: Data,
+        data2: Data
+    ) =>
+      whenever(data1 != data2) {
+        fixture { (_, _, store) =>
+          for {
+            _        <- store.putDatum(channel, data1)
+            snapshot <- store.snapshot()
+            _        <- store.putDatum(channel, data2)
+            _        = snapshot.cache.data(channel) should contain(data1)
+          } yield (snapshot.cache.data(channel) should not contain (data2))
+        }
+      }
+  }
+
+  it should "create a deep copy of the joins in the cache" in forAll {
+    (
+        channel: Channel,
+        join1: Join,
+        join2: Join
+    ) =>
+      whenever(join1 != join2) {
+        fixture { (_, _, store) =>
+          for {
+            _        <- store.putJoin(channel, join1)
+            snapshot <- store.snapshot()
+            _        <- store.putJoin(channel, join2)
+            _        = snapshot.cache.joins(channel) should contain(join1)
+          } yield (snapshot.cache.joins(channel) should not contain (join2))
+        }
+      }
+  }
+
+  it should "create a deep copy of the installed joins in the cache" in forAll {
+    (
+        channel: Channel,
+        join1: Join,
+        join2: Join
+    ) =>
+      whenever(join1 != join2) {
+        fixture { (_, _, store) =>
+          for {
+            _        <- store.installJoin(channel, join1)
+            snapshot <- store.snapshot()
+            _        <- store.installJoin(channel, join2)
+            _        = snapshot.cache.installedJoins(channel) should contain(join1)
+          } yield (snapshot.cache.installedJoins(channel) should not contain (join2))
+        }
+      }
+  }
 }
 
 class History[F[_]: Sync, C, P, A, K](implicit R: Cell[F, Cache[C, P, A, K]])
@@ -1094,7 +1218,9 @@ trait InMemHotStoreSpec extends HotStoreSpec[Task, Task.Par] {
   protected type F[A] = Task[A]
   implicit override val S: Sync[F]                  = implicitly[Concurrent[Task]]
   implicit override val P: Parallel[Task, Task.Par] = Task.catsParallel
-  def C: F[Cell[F, Cache[String, Pattern, String, StringsCaptor]]]
+  def C(
+      c: Cache[String, Pattern, String, StringsCaptor] = Cache()
+  ): F[Cell[F, Cache[String, Pattern, String, StringsCaptor]]]
 
   override def fixture(
       f: (
@@ -1111,7 +1237,7 @@ trait InMemHotStoreSpec extends HotStoreSpec[Task, Task.Par] {
         implicit val hs = historyState
         new History[F, String, Pattern, String, StringsCaptor]
       }
-      cache <- C
+      cache <- C()
       hotStore = {
         implicit val hr = history
         implicit val c  = cache
@@ -1121,15 +1247,42 @@ trait InMemHotStoreSpec extends HotStoreSpec[Task, Task.Par] {
       res <- f(cache, history, hotStore)
     } yield res).runSyncUnsafe(1.second)
 
+  override def fixture(cache: Cache[String, Pattern, String, StringsCaptor])(
+      f: (
+          HotStore[F, String, Pattern, String, StringsCaptor]
+      ) => F[Unit]
+  ) =
+    (for {
+      historyState <- Cell.refCell[F, Cache[String, Pattern, String, StringsCaptor]](
+                       Cache[String, Pattern, String, StringsCaptor]()
+                     )
+      history = {
+        implicit val hs = historyState
+        new History[F, String, Pattern, String, StringsCaptor]
+      }
+      cache <- C(cache)
+      hotStore = {
+        implicit val hr = history
+        implicit val c  = cache
+        implicit val ck = stringClosureSerialize.toCodec
+        HotStore.inMem[Task, String, Pattern, String, StringsCaptor]
+      }
+      res <- f(hotStore)
+    } yield res).runSyncUnsafe(1.second)
+
 }
 
 class MVarCachedInMemHotStoreSpec extends InMemHotStoreSpec {
-  implicit override def C: F[Cell[F, Cache[String, Pattern, String, StringsCaptor]]] =
-    Cell.mvarCell[F, Cache[String, Pattern, String, StringsCaptor]](Cache())
+  implicit override def C(
+      cache: Cache[String, Pattern, String, StringsCaptor]
+  ): F[Cell[F, Cache[String, Pattern, String, StringsCaptor]]] =
+    Cell.mvarCell[F, Cache[String, Pattern, String, StringsCaptor]](cache)
 }
 
 class RefCachedInMemHotStoreSpec extends InMemHotStoreSpec {
-  implicit override def C: F[Cell[F, Cache[String, Pattern, String, StringsCaptor]]] =
-    Cell.refCell[F, Cache[String, Pattern, String, StringsCaptor]](Cache())
+  implicit override def C(
+      cache: Cache[String, Pattern, String, StringsCaptor]
+  ): F[Cell[F, Cache[String, Pattern, String, StringsCaptor]]] =
+    Cell.refCell[F, Cache[String, Pattern, String, StringsCaptor]](cache)
 
 }

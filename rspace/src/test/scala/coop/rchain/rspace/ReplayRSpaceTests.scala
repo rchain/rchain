@@ -147,7 +147,7 @@ trait ReplayRSpaceTests
         _ = resultConsume shouldBe None
         _ = resultProduce shouldBe defined
 
-        _ <- replaySpace.resetAndRig(emptyPoint.root, rigPont.log)
+        _ <- replaySpace.rigAndReset(emptyPoint.root, rigPont.log)
 
         replayResultConsume <- replaySpace.consume(channels, patterns, continuation, false)
         replayResultProduce <- replaySpace.produce(channels(0), datum, false)
@@ -181,7 +181,7 @@ trait ReplayRSpaceTests
                    persist = false
                  )
         rigPoint <- space.createCheckpoint()
-        _        <- replaySpace.resetAndRig(emptyPoint.root, rigPoint.log)
+        _        <- replaySpace.rigAndReset(emptyPoint.root, rigPoint.log)
         _ <- produceMany(
               replaySpace,
               range,
@@ -229,7 +229,7 @@ trait ReplayRSpaceTests
                   )
         rigPoint <- space.createCheckpoint()
 
-        _ <- replaySpace.resetAndRig(emptyPoint.root, rigPoint.log)
+        _ <- replaySpace.rigAndReset(emptyPoint.root, rigPoint.log)
 
         _ <- produceMany(
               replaySpace,
@@ -282,7 +282,7 @@ trait ReplayRSpaceTests
                   )
         rigPoint <- space.createCheckpoint()
 
-        _ <- replaySpace.resetAndRig(emptyPoint.root, rigPoint.log)
+        _ <- replaySpace.rigAndReset(emptyPoint.root, rigPoint.log)
 
         _ <- produceMany(
               replaySpace,
@@ -329,7 +329,7 @@ trait ReplayRSpaceTests
                    persist = false
                  )
         rigPoint <- space.createCheckpoint()
-        _        <- replaySpace.resetAndRig(emptyPoint.root, rigPoint.log)
+        _        <- replaySpace.rigAndReset(emptyPoint.root, rigPoint.log)
         _ <- consumeMany(
               replaySpace,
               range,
@@ -378,7 +378,7 @@ trait ReplayRSpaceTests
                   )
         rigPoint <- space.createCheckpoint()
 
-        _ <- replaySpace.resetAndRig(emptyPoint.root, rigPoint.log)
+        _ <- replaySpace.rigAndReset(emptyPoint.root, rigPoint.log)
 
         _ <- consumeMany(
               replaySpace,
@@ -431,7 +431,7 @@ trait ReplayRSpaceTests
                   )
         rigPoint <- space.createCheckpoint()
 
-        _ <- replaySpace.resetAndRig(emptyPoint.root, rigPoint.log)
+        _ <- replaySpace.rigAndReset(emptyPoint.root, rigPoint.log)
 
         _ <- consumeMany(
               replaySpace,
@@ -492,7 +492,7 @@ trait ReplayRSpaceTests
                   )
         rigPoint <- space.createCheckpoint()
 
-        _ <- replaySpace.resetAndRig(emptyPoint.root, rigPoint.log)
+        _ <- replaySpace.rigAndReset(emptyPoint.root, rigPoint.log)
 
         _ <- consumeMany(
               replaySpace,
@@ -568,7 +568,7 @@ trait ReplayRSpaceTests
                   )
         rigPoint <- space.createCheckpoint()
 
-        _ <- replaySpace.resetAndRig(emptyPoint.root, rigPoint.log)
+        _ <- replaySpace.rigAndReset(emptyPoint.root, rigPoint.log)
 
         _ <- produceMany(
               replaySpace,
@@ -653,7 +653,7 @@ trait ReplayRSpaceTests
                   )
         rigPoint <- space.createCheckpoint()
 
-        _ <- replaySpace.resetAndRig(emptyPoint.root, rigPoint.log)
+        _ <- replaySpace.rigAndReset(emptyPoint.root, rigPoint.log)
 
         _ <- consumeMany(
               replaySpace,
@@ -727,7 +727,7 @@ trait ReplayRSpaceTests
             )
         rigPoint <- space.createCheckpoint()
 
-        _ <- replaySpace.resetAndRig(emptyPoint.root, rigPoint.log)
+        _ <- replaySpace.rigAndReset(emptyPoint.root, rigPoint.log)
 
         _ = replaySpace.replayData.get(cr).map(_.size).value shouldBe 2
 
@@ -774,7 +774,7 @@ trait ReplayRSpaceTests
         _            = produce1 shouldBe defined
         afterProduce <- space.createCheckpoint()
 
-        _ <- replaySpace.resetAndRig(afterProduce.root, afterProduce.log)
+        _ <- replaySpace.rigAndReset(afterProduce.root, afterProduce.log)
 
         produce2 <- replaySpace.produce(channel, datum, persist = false)
         _        = produce2 shouldBe defined
@@ -798,7 +798,7 @@ trait ReplayRSpaceTests
 
         rigPoint <- space.createCheckpoint()
 
-        _ <- replaySpace.resetAndRig(emptyPoint.root, rigPoint.log)
+        _ <- replaySpace.rigAndReset(emptyPoint.root, rigPoint.log)
 
         consume2 <- replaySpace.consume(channels, patterns, continuation, false)
         _        = consume2 shouldBe None
@@ -836,7 +836,7 @@ trait ReplayRSpaceTests
 
         rigPoint <- space.createCheckpoint()
 
-        _ <- replaySpace.resetAndRig(emptyPoint.root, rigPoint.log)
+        _ <- replaySpace.rigAndReset(emptyPoint.root, rigPoint.log)
 
         consume2 <- replaySpace.consume(channels, patterns, continuation, false)
         _        = consume2 shouldBe None
@@ -923,7 +923,7 @@ trait ReplayRSpaceTests
         afterPlay <- space.createCheckpoint()
 
         //rig
-        _ <- replaySpace.resetAndRig(emptyCh.root, afterPlay.log)
+        _ <- replaySpace.rigAndReset(emptyCh.root, afterPlay.log)
 
         //some maliciously 'random' replay order
         _ <- replaySpace.produce(channel1, data3, false, 0) shouldBeF noMatch

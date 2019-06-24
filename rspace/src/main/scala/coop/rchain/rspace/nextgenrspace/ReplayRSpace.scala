@@ -33,7 +33,7 @@ class ReplayRSpace[F[_]: Sync, C, P, A, R, K](
     serializeA: Serialize[A],
     serializeK: Serialize[K],
     val concurrent: Concurrent[F],
-    logF: Log[F],
+    protected val logF: Log[F],
     contextShift: ContextShift[F],
     scheduler: ExecutionContext,
     metricsF: Metrics[F]
@@ -398,25 +398,15 @@ class ReplayRSpace[F[_]: Sync, C, P, A, R, K](
     }
   }
 
-  override def createCheckpoint(): F[Checkpoint] =
+  override def createCheckpoint(): F[Checkpoint] = checkReplayData >> syncF.defer {
     for {
-      isEmpty <- syncF.delay(replayData.isEmpty)
-      checkpoint <- isEmpty.fold(
-                     syncF.defer {
-                       for {
-                         changes     <- storeAtom.get().changes()
-                         nextHistory <- historyRepositoryAtom.get().checkpoint(changes.toList)
-                         _           = historyRepositoryAtom.set(nextHistory)
-                         _           <- createNewHotStore(nextHistory)(serializeK.toCodec)
-                         _           <- restoreInstalls()
-                       } yield (Checkpoint(nextHistory.history.root, Seq.empty))
-                     }, {
-                       val msg =
-                         s"unused comm event: replayData multimap has ${replayData.size} elements left"
-                       logF.error(msg) *> syncF.raiseError[Checkpoint](new ReplayException(msg))
-                     }
-                   )
-    } yield checkpoint
+      changes     <- storeAtom.get().changes()
+      nextHistory <- historyRepositoryAtom.get().checkpoint(changes.toList)
+      _           = historyRepositoryAtom.set(nextHistory)
+      _           <- createNewHotStore(nextHistory)(serializeK.toCodec)
+      _           <- restoreInstalls()
+    } yield (Checkpoint(nextHistory.history.root, Seq.empty))
+  }
 
   override def clear(): F[Unit] = syncF.delay { replayData.clear() } >> super.clear()
 

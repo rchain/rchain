@@ -7,6 +7,7 @@ import coop.rchain.rspace.examples.StringExamples._
 import coop.rchain.rspace.examples.StringExamples.implicits._
 import coop.rchain.rspace.history.{Leaf, LeafPointer, Node, NodePointer, PointerBlock, Skip, Trie}
 import coop.rchain.rspace.test._
+import coop.rchain.rspace.trace.Consume
 import coop.rchain.rspace.util._
 import coop.rchain.rspace.internal._
 import coop.rchain.rspace.nextgenrspace.history.History
@@ -926,6 +927,137 @@ trait StorageActionsTests[F[_]]
       _             = err.getMessage shouldBe "channels.length must equal patterns.length"
       insertActions <- store.changes().map(collectActions[InsertAction])
     } yield (insertActions shouldBe empty)
+  }
+
+  "createSoftCheckpoint" should "capture the current state of the store" in fixture {
+    (_, _, space) =>
+      val channel      = "ch1"
+      val channels     = List(channel)
+      val patterns     = List(Wildcard)
+      val continuation = new StringsCaptor
+
+      val expectedContinuation = Seq(
+        WaitingContinuation
+          .create[String, Pattern, StringsCaptor](channels, patterns, continuation, false, 0)
+      )
+
+      for {
+        // do an operation
+        _ <- space.consume(channels, patterns, continuation, persist = false)
+        // create a soft checkpoint
+        s <- space.createSoftCheckpoint()
+        // assert that the snapshot contains the continuation
+        _ = s.cacheSnapshot.cache.continuations.values should contain only expectedContinuation
+        // consume again
+        _ <- space.consume(channels, patterns, continuation, persist = false)
+        // assert that the snapshot contains only the first continuation
+        _ = s.cacheSnapshot.cache.continuations.values should contain only expectedContinuation
+      } yield ()
+  }
+
+  it should "create checkpoints which have separate state" in fixture { (_, _, space) =>
+    val channel      = "ch1"
+    val channels     = List(channel)
+    val datum        = "datum1"
+    val patterns     = List(Wildcard)
+    val continuation = new StringsCaptor
+
+    val expectedContinuation = WaitingContinuation
+      .create[String, Pattern, StringsCaptor](channels, patterns, continuation, false, 0)
+
+    for {
+      // do an operation
+      _ <- space.consume(channels, patterns, continuation, persist = false)
+      // create a soft checkpoint
+      s1 <- space.createSoftCheckpoint()
+      // assert that the snapshot contains the continuation
+      _ = s1.cacheSnapshot.cache.continuations.values should contain only Seq(expectedContinuation)
+      // produce thus removing the continuation
+      _  <- space.produce(channel, datum, persist = false)
+      s2 <- space.createSoftCheckpoint()
+      // assert that the first snapshot still contains the first continuation
+      _ = s1.cacheSnapshot.cache.continuations.values should contain only Seq(expectedContinuation)
+      _ = s2.cacheSnapshot.cache.continuations(channels) shouldBe empty
+    } yield ()
+  }
+
+  it should "clear the event log" in fixture { (_, _, space) =>
+    val channel      = "ch1"
+    val channels     = List(channel)
+    val patterns     = List(Wildcard)
+    val continuation = new StringsCaptor
+
+    for {
+      // do an operation
+      _ <- space.consume(channels, patterns, continuation, persist = false)
+      // create a soft checkpoint
+      s1 <- space.createSoftCheckpoint()
+      // the log contains the above operation
+      _ = s1.log should contain only
+        Consume.create[String, Pattern, StringsCaptor](
+          channels,
+          patterns,
+          continuation,
+          false,
+          0
+        )
+      s2 <- space.createSoftCheckpoint()
+      // assert that the event log has been cleared
+      _ = s2.log shouldBe empty
+    } yield ()
+  }
+
+  "revertToSoftCheckpoint" should "revert the state of the store to the given checkpoint" in fixture {
+    (_, storeAtom, space) =>
+      val channel      = "ch1"
+      val channels     = List(channel)
+      val patterns     = List(Wildcard)
+      val continuation = new StringsCaptor
+
+      for {
+        // create an initial soft checkpoint
+        s1 <- space.createSoftCheckpoint()
+        // do an operation
+        _ <- space.consume(channels, patterns, continuation, persist = false)
+        changes <- storeAtom
+                    .get()
+                    .changes()
+                    .map(
+                      collectActions[InsertContinuations[String, Pattern, StringsCaptor]]
+                    )
+        // the operation should be on the list of changes
+        _ = changes should not be empty
+        _ <- space.revertToSoftCheckpoint(s1)
+        changes <- storeAtom
+                    .get()
+                    .changes()
+                    .map(
+                      collectActions[InsertContinuations[String, Pattern, StringsCaptor]]
+                    )
+        // after reverting to the initial soft checkpoint the operation is no longer present in the hot store
+        _ = changes shouldBe empty
+      } yield ()
+  }
+
+  it should "inject the event log" in fixture { (_, storeAtom, space) =>
+    val channel      = "ch1"
+    val channels     = List(channel)
+    val patterns     = List(Wildcard)
+    val continuation = new StringsCaptor
+
+    for {
+      // do an operation
+      _ <- space.consume(channels, patterns, continuation, persist = false)
+      // create a soft checkpoint
+      s1 <- space.createSoftCheckpoint()
+      // do some other operation
+      _  <- space.consume(channels, patterns, continuation, persist = true)
+      s2 <- space.createSoftCheckpoint()
+      _  = s2.log should not be s1.log
+      _  <- space.revertToSoftCheckpoint(s1)
+      s3 <- space.createSoftCheckpoint()
+      _  = s3.log shouldBe s1.log
+    } yield ()
   }
 }
 

@@ -14,6 +14,8 @@ import scodec.Codec
 
 import scala.collection.concurrent.TrieMap
 
+final case class Snapshot[C, P, A, K](private[rspace] val cache: Cache[C, P, A, K])
+
 trait HotStore[F[_], C, P, A, K] {
   def getContinuations(channels: Seq[C]): F[Seq[WaitingContinuation[P, K]]]
   def putContinuation(channels: Seq[C], wc: WaitingContinuation[P, K]): F[Unit]
@@ -31,6 +33,7 @@ trait HotStore[F[_], C, P, A, K] {
 
   def changes(): F[Seq[HotStoreAction]]
   def toMap: F[Map[Seq[C], Row[P, A, K]]]
+  def snapshot(): F[Snapshot[C, P, A, K]]
 }
 
 final case class Cache[C, P, A, K](
@@ -41,7 +44,18 @@ final case class Cache[C, P, A, K](
     data: TrieMap[C, Seq[Datum[A]]] = TrieMap.empty[C, Seq[Datum[A]]],
     joins: TrieMap[C, Seq[Seq[C]]] = TrieMap.empty[C, Seq[Seq[C]]],
     installedJoins: TrieMap[C, Seq[Seq[C]]] = TrieMap.empty[C, Seq[Seq[C]]]
-)
+) {
+  def snapshot(): Snapshot[C, P, A, K] =
+    Snapshot(
+      this.copy(
+        continuations = this.continuations.snapshot(),
+        installedContinuations = this.installedContinuations.snapshot(),
+        data = this.data.snapshot(),
+        joins = this.joins.snapshot(),
+        installedJoins = this.installedJoins.snapshot()
+      )
+    )
+}
 
 private class InMemHotStore[F[_]: Sync, C, P, A, K](
     implicit S: Cell[F, Cache[C, P, A, K]],
@@ -50,6 +64,8 @@ private class InMemHotStore[F[_]: Sync, C, P, A, K](
 ) extends HotStore[F, C, P, A, K] {
 
   implicit val codec = fromCodec(ck)
+
+  def snapshot(): F[Snapshot[C, P, A, K]] = S.read.map(_.snapshot())
 
   def getContinuations(channels: Seq[C]): F[Seq[WaitingContinuation[P, K]]] =
     for {
@@ -272,4 +288,12 @@ object HotStore {
   ): HotStore[F, C, P, A, K] =
     new InMemHotStore[F, C, P, A, K]
 
+  def from[F[_], C, P, A, K](
+      cache: Cache[C, P, A, K],
+      historyReader: HistoryReader[F, C, P, A, K]
+  )(implicit ck: Codec[K], sync: Sync[F]) =
+    for {
+      cache <- Cell.refCell[F, Cache[C, P, A, K]](cache)
+      store = HotStore.inMem(Sync[F], cache, historyReader, ck)
+    } yield store
 }

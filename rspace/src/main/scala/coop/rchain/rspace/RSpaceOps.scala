@@ -200,4 +200,10 @@ abstract class RSpaceOps[F[_]: Concurrent, C, P, A, R, K](
       .flatMap(root => reset(root))
 
   override def toMap: F[Map[Seq[C], Row[P, A, K]]] = Sync[F].delay(store.toMap)
+
+  override def createSoftCheckpoint(): F[SoftCheckpoint[C, P, A, K]] =
+    createCheckpoint().map(c => SoftCheckpoint(Snapshot(Cache()), c.log, Some(c.root)))
+
+  override def revertToSoftCheckpoint(checkpoint: SoftCheckpoint[C, P, A, K]): F[Unit] =
+    reset(checkpoint.maybeRoot.get)
 }

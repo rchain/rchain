@@ -151,7 +151,8 @@ object InterpreterUtil {
             // state hash in block does not match computed hash -- invalid!
             // return no state hash, do not update the state hash set
             Log[F].warn(
-              s"Tuplespace hash ${tsHash.getOrElse(ByteString.EMPTY)} does not match computed hash $computedStateHash."
+              s"Tuplespace hash ${PrettyPrinter.buildString(tsHash.getOrElse(ByteString.EMPTY))} does not match computed hash ${PrettyPrinter
+                .buildString(computedStateHash)}."
             ) >>
               none[StateHash].asRight[BlockException].pure[F]
 
