@@ -948,11 +948,37 @@ trait StorageActionsTests[F[_]]
         s <- space.createSoftCheckpoint()
         // assert that the snapshot contains the continuation
         _ = s.cacheSnapshot.cache.continuations.values should contain only expectedContinuation
-        // produce again
+        // consume again
         _ <- space.consume(channels, patterns, continuation, persist = false)
         // assert that the snapshot contains only the first continuation
         _ = s.cacheSnapshot.cache.continuations.values should contain only expectedContinuation
       } yield ()
+  }
+
+  it should "create checkpoints which have separate state" in fixture { (_, _, space) =>
+    val channel      = "ch1"
+    val channels     = List(channel)
+    val datum        = "datum1"
+    val patterns     = List(Wildcard)
+    val continuation = new StringsCaptor
+
+    val expectedContinuation = WaitingContinuation
+      .create[String, Pattern, StringsCaptor](channels, patterns, continuation, false, 0)
+
+    for {
+      // do an operation
+      _ <- space.consume(channels, patterns, continuation, persist = false)
+      // create a soft checkpoint
+      s1 <- space.createSoftCheckpoint()
+      // assert that the snapshot contains the continuation
+      _ = s1.cacheSnapshot.cache.continuations.values should contain only Seq(expectedContinuation)
+      // produce thus removing the continuation
+      _  <- space.produce(channel, datum, persist = false)
+      s2 <- space.createSoftCheckpoint()
+      // assert that the first snapshot still contains the first continuation
+      _ = s1.cacheSnapshot.cache.continuations.values should contain only Seq(expectedContinuation)
+      _ = s2.cacheSnapshot.cache.continuations(channels) shouldBe empty
+    } yield ()
   }
 
   it should "clear the event log" in fixture { (_, _, space) =>
