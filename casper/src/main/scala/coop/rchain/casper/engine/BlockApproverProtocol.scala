@@ -126,7 +126,7 @@ object BlockApproverProtocol {
         vaults = Traverse[List]
           .traverse(posParams.validators.map(_.pk).toList)(RevAddress.fromPublicKey)
           .get
-          .map(Vault(_, 1000L))
+          .map(Vault(_, 0L)) //FIXME the initial supplies should be read from the wallets file
         genesisBlessedContracts = Genesis
           .defaultBlessedTerms(
             timestamp,
