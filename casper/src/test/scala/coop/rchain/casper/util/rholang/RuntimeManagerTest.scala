@@ -1,8 +1,9 @@
 package coop.rchain.casper.util.rholang
 
-import cats.Id
-import cats.effect.Resource
-import coop.rchain.casper.genesis.contracts.StandardDeploys
+import cats.effect.{Concurrent, Resource}
+import cats.implicits._
+import cats.{Id, Monad}
+import coop.rchain.casper.genesis.contracts.TestUtil
 import coop.rchain.casper.protocol.DeployData
 import coop.rchain.casper.util.rholang.Resources._
 import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
@@ -17,8 +18,8 @@ import coop.rchain.p2p.EffectsTestInstances.LogicalTime
 import coop.rchain.rholang.Resources.mkRuntime
 import coop.rchain.rholang.interpreter.Runtime.BlockData
 import coop.rchain.rholang.interpreter.accounting.Cost
-import coop.rchain.rholang.interpreter.{accounting, ParBuilderUtil}
-import coop.rchain.shared.Log
+import coop.rchain.rholang.interpreter.{ParBuilderUtil, accounting}
+import coop.rchain.shared.{Log, Time}
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
 import org.scalatest.{FlatSpec, Matchers}
@@ -27,27 +28,30 @@ import scala.concurrent.duration._
 
 class RuntimeManagerTest extends FlatSpec with Matchers {
 
+  implicit val timeF: Time[Task] = new LogicalTime[Task]
+
   private val runtimeManager: Resource[Task, RuntimeManager[Task]] =
     mkRuntimeManager("casper-runtime-manager-test")
 
-  private def computeState[F[_]](
+  private def computeState[F[_]: Monad: Concurrent: Time](
       runtimeManager: RuntimeManager[F],
-      startHash: StateHash,
-      terms: List[Id[DeployData]]
+      terms: Seq[DeployData]
   ): F[(StateHash, Seq[InternalProcessedDeploy])] =
-    runtimeManager.computeState(startHash)(
-      terms,
-      BlockData(System.currentTimeMillis(), 0),
-      Map.empty[BlockHash, Validator]
-    )
+    TestUtil.defaultGenesisSetup(runtimeManager) >>= { genesis =>
+      Time[F].currentMillis >>= { time =>
+        runtimeManager.computeState(genesis.body.get.state.get.postStateHash)(
+          terms,
+          BlockData(time, 0),
+          Map.empty[BlockHash, Validator]
+        )
+      }
+    }
 
   "computeState" should "capture rholang errors" in {
     val badRholang = """ for(@x <- @"x"; @y <- @"y"){ @"xy"!(x + y) } | @"x"!(1) | @"y"!("hi") """
     val deploy     = ConstructDeploy.sourceDeployNow(badRholang)
     val (_, Seq(result)) =
-      runtimeManager
-        .use(mgr => computeState(mgr, mgr.emptyStateHash, deploy :: Nil))
-        .runSyncUnsafe(10.seconds)
+      runtimeManager.use(computeState(_, deploy :: Nil)).runSyncUnsafe(50.seconds)
 
     result.status.isFailed should be(true)
   }
@@ -56,12 +60,10 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
     val badRholang = """ for(@x <- @"x"; @y <- @"y"){ @"xy"!(x + y) | @"x"!(1) | @"y"!("hi") """
     val deploy     = ConstructDeploy.sourceDeployNow(badRholang)
     val (_, Seq(result)) =
-      runtimeManager
-        .use(mgr => computeState(mgr, mgr.emptyStateHash, deploy :: Nil))
-        .runSyncUnsafe(10.seconds)
+      runtimeManager.use(computeState(_, deploy :: Nil)).runSyncUnsafe(50.seconds)
 
     result.status.isFailed should be(true)
-    result.cost.cost shouldEqual (accounting.parsingCost(badRholang).value)
+    result.cost.cost shouldEqual accounting.parsingCost(badRholang).value
   }
 
   it should "charge for parsing and execution" in {
@@ -84,64 +86,50 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
                             _             <- runtime.reducer.inj(term)
                             phlosLeft     <- runtime.reducer.phlo
                             reductionCost = initialPhlo - phlosLeft
-                          } yield (reductionCost)
+                          } yield reductionCost
                         }
       result <- mkRuntimeManager("casper-runtime-manager")
-                 .use {
-                   case runtimeManager =>
-                     for {
-                       state <- computeState(
-                                 runtimeManager,
-                                 runtimeManager.emptyStateHash,
-                                 deploy :: Nil
-                               )
-                       result = state._2.head
-                     } yield (result)
+                 .use { runtimeManager =>
+                   for {
+                     state  <- computeState(runtimeManager, deploy :: Nil)
+                     result = state._2.head
+                   } yield result
                  }
       _           = result.status.isFailed should be(false)
       parsingCost = accounting.parsingCost(correctRholang)
-    } yield (result.cost.cost shouldEqual ((parsingCost + reductionCost).value)))
-      .runSyncUnsafe(10.seconds)
+    } yield result.cost.cost shouldEqual ((parsingCost + reductionCost).value))
+      .runSyncUnsafe(50.seconds)
   }
 
   "captureResult" should "return the value at the specified channel after a rholang computation" in {
     val purseValue     = "37"
     val captureChannel = "__PURSEVALUE__"
-    val deployData = ConstructDeploy.sourceDeploy(
+    val deployData0 = ConstructDeploy.sourceDeployNow(
       s"""new rl(`rho:registry:lookup`), NonNegativeNumberCh in {
          |  rl!(`rho:lang:nonNegativeNumber`, *NonNegativeNumberCh) |
          |  for(@(_, NonNegativeNumber) <- NonNegativeNumberCh) {
          |    @NonNegativeNumber!($purseValue, "nn")
          |  }
-         |}""".stripMargin,
-      System.currentTimeMillis(),
-      accounting.MAX_VALUE
+         |}""".stripMargin
     )
 
     val result =
       runtimeManager
         .use { mgr =>
-          mgr
-            .computeState(mgr.emptyStateHash)(
-              Seq(StandardDeploys.nonNegativeNumber, deployData),
-              BlockData(System.currentTimeMillis(), 0),
-              Map.empty[BlockHash, Validator]
-            )
-            .flatMap { result =>
-              val hash = result._1
-              mgr
-                .captureResults(
-                  hash,
-                  ConstructDeploy.sourceDeploy(
-                    s""" for(nn <- @"nn"){ nn!("value", "$captureChannel") } """,
-                    0L,
-                    accounting.MAX_VALUE
-                  ),
-                  captureChannel
-                )
+          computeState(mgr, deployData0 :: Nil) >>= { result =>
+            val hash = result._1
+            ConstructDeploy.sourceDeployNowF(
+              s""" for(nn <- @"nn"){ nn!("value", "$captureChannel") } """
+            ) >>= { deployData1 =>
+              mgr.captureResults(
+                hash,
+                deployData1,
+                captureChannel
+              )
             }
+          }
         }
-        .runSyncUnsafe(10.seconds)
+        .runSyncUnsafe(30.seconds)
 
     result.size should be(1)
     result.head should be(ParBuilderUtil.mkTerm(purseValue).right.get)
@@ -155,6 +143,7 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
       runtimeManager
         .use(mgr => mgr.captureResults(mgr.emptyStateHash, term))
         .runSyncUnsafe(10.seconds)
+
     val noResults =
       runtimeManager
         .use(mgr => mgr.captureResults(mgr.emptyStateHash, term, "differentName"))
@@ -171,71 +160,73 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
   "emptyStateHash" should "not remember previous hot store state" in {
     implicit val timeEff: LogicalTime[Id] = new LogicalTime[Id]
 
-    import cats.implicits._
-
     val terms = ConstructDeploy.basicDeployData[Id](0) :: Nil
 
-    def run =
+    def run: Task[StateHash] =
       runtimeManager
         .use { m =>
           val hash = m.emptyStateHash
-          computeState(m, hash, terms)
+          computeState(m, terms)
             .map(_ => hash)
         }
 
-    val hash1, hash2 = run.product(run).runSyncUnsafe(10.seconds)
+    val hash1, hash2 = run.product(run).runSyncUnsafe(60.seconds)
 
     hash1 should be(hash2)
   }
 
   "computeState" should "charge deploys separately" in {
-    val terms = List(
-      """for(@x <- @"w") { @"z"!("Got x") }""",
-      """for(@x <- @"x"; @y <- @"y"){ @"xy"!(x + y) | @"x"!(1) | @"y"!(10) }"""
+
+    val deploy0 = ConstructDeploy.sourceDeployNow(""" for(@x <- @"w") { @"z"!("Got x") } """)
+
+    val deploy1 = ConstructDeploy.sourceDeployNow(
+      """ for(@x <- @"x"; @y <- @"y"){ @"xy"!(x + y) | @"x"!(1) | @"y"!(10) } """
     )
 
     def deployCost(p: Seq[InternalProcessedDeploy]): Long = p.map(_.cost.cost).sum
-    val deploy = terms.map(
-      t =>
-        ConstructDeploy.sourceDeploy(
-          t,
-          System.currentTimeMillis(),
-          accounting.MAX_VALUE
+
+    val test = runtimeManager.use { mgr =>
+      for {
+        genesis       <- TestUtil.defaultGenesisSetup(mgr)
+        genPostState  = genesis.body.get.state.get.postStateHash
+        time          <- timeF.currentMillis
+        blockData     = BlockData(time, 0L)
+        invalidBlocks = Map.empty[BlockHash, Validator]
+        firstDeploy <- mgr
+                        .computeState(genPostState)(deploy0 :: Nil, blockData, invalidBlocks)
+                        .map(_._2)
+        secondDeploy <- mgr
+                         .computeState(genPostState)(deploy1 :: Nil, blockData, invalidBlocks)
+                         .map(_._2)
+        compoundDeploy <- mgr
+                           .computeState(genPostState)(
+                             deploy0 :: deploy1 :: Nil,
+                             blockData,
+                             invalidBlocks
+                           )
+                           .map(_._2)
+        _                  = assert(firstDeploy.size == 1)
+        _                  = assert(secondDeploy.size == 1)
+        _                  = assert(compoundDeploy.size == 2)
+        firstDeployCost    = deployCost(firstDeploy)
+        secondDeployCost   = deployCost(secondDeploy)
+        compoundDeployCost = deployCost(compoundDeploy)
+        _                  = assert(firstDeployCost < compoundDeployCost)
+        _                  = assert(secondDeployCost < compoundDeployCost)
+        _ = assert(
+          firstDeployCost == deployCost(
+            compoundDeploy.find(_.deploy == firstDeploy.head.deploy).toVector
+          )
         )
-    )
-    val (_, firstDeploy) =
-      runtimeManager
-        .use(mgr => computeState(mgr, mgr.emptyStateHash, deploy.head :: Nil))
-        .runSyncUnsafe(10.seconds)
+        _ = assert(
+          secondDeployCost == deployCost(
+            compoundDeploy.find(_.deploy == secondDeploy.head.deploy).toVector
+          )
+        )
+        _ = assert((firstDeployCost + secondDeployCost) == compoundDeployCost)
+      } yield ()
+    }
 
-    val (_, secondDeploy) =
-      runtimeManager
-        .use(mgr => computeState(mgr, mgr.emptyStateHash, deploy.drop(1).head :: Nil))
-        .runSyncUnsafe(10.seconds)
-
-    val (_, compoundDeploy) =
-      runtimeManager
-        .use(mgr => computeState(mgr, mgr.emptyStateHash, deploy))
-        .runSyncUnsafe(10.seconds)
-
-    assert(firstDeploy.size == 1)
-    val firstDeployCost = deployCost(firstDeploy)
-    assert(secondDeploy.size == 1)
-    val secondDeployCost = deployCost(secondDeploy)
-    assert(compoundDeploy.size == 2)
-    val compoundDeployCost = deployCost(compoundDeploy)
-    assert(firstDeployCost < compoundDeployCost)
-    assert(secondDeployCost < compoundDeployCost)
-    assert(
-      firstDeployCost == deployCost(
-        compoundDeploy.find(_.deploy == firstDeploy.head.deploy).toVector
-      )
-    )
-    assert(
-      secondDeployCost == deployCost(
-        compoundDeploy.find(_.deploy == secondDeploy.head.deploy).toVector
-      )
-    )
-    assert((firstDeployCost + secondDeployCost) == compoundDeployCost)
+    test.runSyncUnsafe(20.seconds)
   }
 }
