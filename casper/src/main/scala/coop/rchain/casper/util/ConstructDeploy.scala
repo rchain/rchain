@@ -14,7 +14,7 @@ import coop.rchain.shared.Time
 object ConstructDeploy {
 
   val defaultSec = PrivateKey(
-    Base16.unsafeDecode("b18e1d0045995ec3d010c387ccfeb984d783af8fbb0f40fa7db126d889f6dadd")
+    Base16.unsafeDecode("a68a6e6cca30f81bd24a719f3145d20e8424bd7b396309b0708a16c7d8000b76")
   )
 
   def sign(deploy: DeployData, sec: PrivateKey = defaultSec): DeployData =
@@ -23,26 +23,40 @@ object ConstructDeploy {
   def sourceDeploy(
       source: String,
       timestamp: Long,
-      phlos: Long,
-      phloPrice: Long = 0L,
+      phloLimit: Long = 9000,
+      phloPrice: Long = 1L,
       sec: PrivateKey = defaultSec
   ): DeployData = {
     val data = DeployData(
       deployer = ByteString.copyFrom(Secp256k1.toPublic(sec).bytes),
       timestamp = timestamp,
       term = source,
-      phloLimit = phlos,
+      phloLimit = phloLimit,
       phloPrice = phloPrice
     )
     sign(data, sec)
   }
 
-  def sourceDeployNow(source: String): DeployData =
-    sourceDeploy(
-      source,
-      System.currentTimeMillis(),
-      accounting.MAX_VALUE
-    )
+  def sourceDeployNow(
+      source: String
+  ): DeployData =
+    sourceDeploy(source, System.currentTimeMillis())
+
+  def sourceDeployNow(
+      source: String,
+      phloLimit: Long = 90000,
+      phloPrice: Long = 1L,
+      sec: PrivateKey = defaultSec
+  ): DeployData =
+    sourceDeploy(source, System.currentTimeMillis(), phloLimit, phloPrice, sec)
+
+  def sourceDeployNowF[F[_]: Time: Functor](
+      source: String,
+      phloLimit: Long = 90000,
+      phloPrice: Long = 1L,
+      sec: PrivateKey = defaultSec
+  ): F[DeployData] =
+    Time[F].currentMillis.map(sourceDeploy(source, _, phloLimit, phloPrice, sec))
 
   def sourceDeployNowF[F[_]: Time: Functor](source: String): F[DeployData] =
     Time[F].currentMillis.map(sourceDeploy(source, _, accounting.MAX_VALUE))
@@ -50,14 +64,15 @@ object ConstructDeploy {
   def basicDeployData[F[_]: Monad: Time](
       id: Int,
       sec: PrivateKey = defaultSec,
-      phlos: Long = accounting.MAX_VALUE
+      phlos: Long = 100
   ): F[DeployData] =
     Time[F].currentMillis.map { now =>
       val data = DeployData()
         .withDeployer(ByteString.copyFrom(Secp256k1.toPublic(sec).bytes))
         .withTimestamp(now)
-        .withTerm(s"@${id}!($id)")
+        .withTerm(s"@$id!($id)")
         .withPhloLimit(phlos)
+        .withPhloPrice(1)
       sign(data, sec)
     }
 
