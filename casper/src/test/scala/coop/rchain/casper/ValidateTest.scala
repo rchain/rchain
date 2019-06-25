@@ -23,7 +23,7 @@ import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.Validator.Validator
 import coop.rchain.p2p.EffectsTestInstances.LogStub
 import coop.rchain.rholang.interpreter.Runtime
-import coop.rchain.shared.{StoreType, Time}
+import coop.rchain.shared.Time
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
 import org.scalatest.{BeforeAndAfterEach, FlatSpec, Matchers}
@@ -707,15 +707,11 @@ class ValidateTest
       val storageDirectory  = Files.createTempDirectory(s"hash-set-casper-test-genesis")
       val storageSize: Long = 3024L * 1024
       for {
-
         activeRuntime <- Runtime.createWithEmptyCost[Task, Task.Par](
                           storageDirectory,
-                          storageSize,
-                          StoreType.RSpace2
+                          storageSize
                         )
-
-        runtimeManager <- RuntimeManager.fromRuntime[Task](activeRuntime)
-
+        runtimeManager    <- RuntimeManager.fromRuntime[Task](activeRuntime)
         dag               <- blockDagStorage.getRepresentation
         _                 <- InterpreterUtil.validateBlockCheckpoint[Task](genesis, dag, runtimeManager, span)
         _                 <- Validate.bondsCache[Task](genesis, runtimeManager) shouldBeF Right(Valid)

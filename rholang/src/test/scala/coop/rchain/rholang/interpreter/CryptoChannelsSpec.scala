@@ -20,7 +20,7 @@ import coop.rchain.rholang.interpreter.Runtime.RhoISpace
 import coop.rchain.rholang.interpreter.accounting.Cost
 import coop.rchain.rspace.Serialize
 import coop.rchain.shared.PathOps._
-import coop.rchain.shared.{Log, StoreType}
+import coop.rchain.shared.Log
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
 import org.scalactic.TripleEqualsSupport
@@ -220,7 +220,7 @@ class CryptoChannelsSpec
     implicit val noopMetrics: Metrics[Task] = new metrics.Metrics.MetricsNOP[Task]
 
     val runtime = (for {
-      runtime <- Runtime.createWithEmptyCost[Task, Task.Par](dbDir, size, StoreType.RSpace2)
+      runtime <- Runtime.createWithEmptyCost[Task, Task.Par](dbDir, size)
       _       <- runtime.reducer.setPhlo(Cost.UNSAFE_MAX)
     } yield (runtime)).unsafeRunSync
 

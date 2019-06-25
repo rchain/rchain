@@ -7,7 +7,6 @@ import coop.rchain.comm.PeerNode
 import coop.rchain.crypto.signatures.Ed25519
 import coop.rchain.crypto.PrivateKey
 import coop.rchain.node.BuildInfo
-import coop.rchain.shared.StoreType
 import org.rogach.scallop._
 
 import scala.concurrent.duration.{Duration, FiniteDuration}
@@ -82,20 +81,6 @@ object Converter {
 
       override val argType: ArgType.V = ArgType.SINGLE
     }
-
-  implicit val storeTypeConverter: ValueConverter[StoreType] = new ValueConverter[StoreType] {
-    def parse(s: List[(String, List[String])]): Either[String, Option[StoreType]] =
-      s match {
-        case (_, storeType :: Nil) :: Nil =>
-          StoreType
-            .from(storeType)
-            .map(u => Right(Some(u)))
-            .getOrElse(Left("can't parse the store type"))
-        case Nil => Right(None)
-        case _   => Left("provide the store type")
-      }
-    val argType: ArgType.V = ArgType.SINGLE
-  }
 }
 
 object Options {
@@ -274,8 +259,6 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
       opt[Path](required = false, descr = "Path to data directory. Defaults to $HOME/.rnode")
 
     val mapSize = opt[Long](required = false, descr = "Map size (in bytes)")
-
-    val storeType = opt[StoreType](required = false, descr = "Type of RSpace backing store")
 
     val maxNumOfConnections =
       opt[Int](descr = "Number of connected peers picked randomly for broadcasting and streaming")

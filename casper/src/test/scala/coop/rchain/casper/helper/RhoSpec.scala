@@ -9,7 +9,7 @@ import coop.rchain.rholang.Resources._
 import coop.rchain.rholang.build.CompiledRholangSource
 import coop.rchain.rholang.interpreter.{PrettyPrinter, Runtime}
 import coop.rchain.rholang.interpreter.Runtime.SystemProcess
-import coop.rchain.shared.{Log, StoreType}
+import coop.rchain.shared.Log
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
 import org.scalatest.{AppendedClues, FlatSpec, Matchers}
@@ -63,7 +63,6 @@ object RhoSpec {
       mkRuntime[Task](
         s"rhoSpec-${testObject.path}",
         10 * 1024 * 1024,
-        StoreType.RSpace2,
         testFrameworkContracts(testResultCollector)
       ).use { runtime =>
         for {

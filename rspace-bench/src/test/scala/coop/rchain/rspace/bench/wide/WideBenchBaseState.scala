@@ -12,7 +12,7 @@ import coop.rchain.metrics
 import coop.rchain.metrics.Metrics
 import coop.rchain.models.Par
 import coop.rchain.rholang.interpreter.accounting._
-import coop.rchain.shared.{Log, StoreType}
+import coop.rchain.shared.Log
 import monix.eval.{Coeval, Task}
 import monix.execution.Scheduler
 import org.openjdk.jmh.annotations._
@@ -44,7 +44,7 @@ abstract class WideBenchBaseState {
       cost <- CostAccounting.emptyCost[Task]
       runtime <- {
         implicit val c: _cost[Task] = cost
-        Runtime.create[Task, Task.Par](dbDir, mapSize, StoreType.RSpace2)
+        Runtime.create[Task, Task.Par](dbDir, mapSize)
       }
     } yield (runtime)).unsafeRunSync
 

@@ -13,8 +13,7 @@ import coop.rchain.rholang.interpreter.Runtime.{RhoContext, RhoISpace, SystemPro
 import coop.rchain.rspace.{RSpace => _, ReplayRSpace => _, _}
 import coop.rchain.rspace.nextgenrspace.{RSpace, ReplayRSpace}
 import coop.rchain.rspace.history.Branch
-import coop.rchain.shared.StoreType.RSpace2
-import coop.rchain.shared.{Log, StoreType}
+import coop.rchain.shared.Log
 import monix.execution.Scheduler
 
 import scala.reflect.io.Directory
@@ -73,7 +72,6 @@ object Resources {
     def apply[M[_]: Parallel[F, ?[_]]](
         prefix: String,
         storageSize: Long = 1024 * 1024,
-        storeType: StoreType = RSpace2,
         additionalSystemProcesses: Seq[SystemProcess.Definition[F]] = Seq.empty
     )(
         implicit scheduler: Scheduler,
@@ -88,7 +86,6 @@ object Resources {
             .createWithEmptyCost[F, M](
               tmpDir,
               storageSize,
-              storeType,
               additionalSystemProcesses
             )
         )(_.close())
