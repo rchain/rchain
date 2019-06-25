@@ -3,7 +3,6 @@ package coop.rchain.rholang.interpreter
 import cats.Applicative
 import cats.effect.Sync
 import cats.implicits._
-import coop.rchain.crypto.PublicKey
 import coop.rchain.models.Connective.ConnectiveInstance._
 import coop.rchain.models.Expr.ExprInstance._
 import coop.rchain.models.Var.VarInstance._
@@ -101,7 +100,7 @@ object RemainderNormalizeMatcher {
 object CollectionNormalizeMatcher {
   def normalizeMatch[M[_]](c: Collection, input: CollectVisitInputs)(
       implicit sync: Sync[M],
-      deployerPk: Option[PublicKey]
+      env: NormalizerEnv
   ): M[CollectVisitOutputs] = {
     def foldMatch[T](
         knownFree: DebruijnLevelMap[VarSort],
@@ -233,7 +232,7 @@ object CollectionNormalizeMatcher {
 object NameNormalizeMatcher {
   def normalizeMatch[M[_]](n: Name, input: NameVisitInputs)(
       implicit err: Sync[M],
-      deployerPk: Option[PublicKey]
+      env: NormalizerEnv
   ): M[NameVisitOutputs] =
     n match {
       case wc: NameWildcard =>
@@ -277,7 +276,7 @@ object ProcNormalizeMatcher {
   // ApplicativeAsk / MonadState instead
   def normalizeMatch[M[_]](p: Proc, input: ProcVisitInputs)(
       implicit sync: Sync[M],
-      deployerPk: Option[PublicKey]
+      env: NormalizerEnv
   ): M[ProcVisitOutputs] = Sync[M].defer {
     def unaryExp[T](subProc: Proc, input: ProcVisitInputs, constructor: Par => T)(
         implicit toExprInstance: T => Expr
@@ -919,6 +918,8 @@ object ProcNormalizeMatcher {
         }
 
       case p: PNew =>
+        val deployIdUri   = "rho:rchain:deployId"
+        val deployerIdUri = "rho:rchain:deployerId"
         // TODO: bindings within a single new shouldn't have overlapping names.
         val newTaggedBindings = p.listnamedecl_.toVector.map {
           case n: NameDeclSimpl => (None, n.var_, NameSort, n.line_num, n.col_num)
@@ -938,14 +939,22 @@ object ProcNormalizeMatcher {
         val uris               = sortBindings.flatMap(row => row._1)
         val newEnv             = input.env.newBindings(newBindings.toList)
         val newCount           = newEnv.count - input.env.count
-        val requiresDeployerId = uris.contains("rho:rchain:deployerId")
-        if (requiresDeployerId && deployerPk.isEmpty)
-          NormalizerError(
-            "`rho:rchain:deployerId` was used in rholang usage context where DeployerId is not available."
-          ).raiseError[M, ProcVisitOutputs]
+        val requiresDeployId   = uris.contains(deployIdUri)
+        val requiresDeployerId = uris.contains(deployerIdUri)
+        def missingEnvElement(name: String, uri: String) =
+          NormalizerError(s"`$uri` was used in rholang usage context where $name is not available.")
+        if (requiresDeployId && env.deployId.isEmpty)
+          missingEnvElement("DeployId", deployIdUri).raiseError[M, ProcVisitOutputs]
+        else if (requiresDeployerId && env.deployerPk.isEmpty)
+          missingEnvElement("DeployerId", deployerIdUri).raiseError[M, ProcVisitOutputs]
         else {
+          val maybeDeployId =
+            if (requiresDeployId)
+              env.deployId.map(sig => DeployId(sig.toByteString))
+            else none[DeployId]
           val maybeDeployerId =
-            if (requiresDeployerId) deployerPk.map(pk => DeployerId(pk.bytes.toByteString))
+            if (requiresDeployerId)
+              env.deployerPk.map(pk => DeployerId(pk.bytes.toByteString))
             else none[DeployerId]
           normalizeMatch[M](p.proc_, ProcVisitInputs(VectorPar(), newEnv, input.knownFree)).map {
             bodyResult =>
@@ -953,6 +962,7 @@ object ProcNormalizeMatcher {
                 bindCount = newCount,
                 p = bodyResult.par,
                 uri = uris,
+                deployId = maybeDeployId,
                 deployerId = maybeDeployerId,
                 locallyFree = bodyResult.par.locallyFree.from(newCount).map(x => x - newCount)
               )

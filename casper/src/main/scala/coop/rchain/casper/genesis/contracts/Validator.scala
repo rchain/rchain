@@ -3,7 +3,7 @@ package coop.rchain.casper.genesis.contracts
 import coop.rchain.crypto.PublicKey
 import coop.rchain.models.Par
 import coop.rchain.rholang.build.CompiledRholangSource
-import coop.rchain.rholang.interpreter.ParBuilder
+import coop.rchain.rholang.interpreter.{NormalizerEnv, ParBuilder}
 import monix.eval.Coeval
 
 // TODO: Eliminate public key argument if unnecessary
@@ -21,6 +21,6 @@ final case class Validator(pk: PublicKey, stake: Long) extends CompiledRholangSo
        | }
      """.stripMargin
 
-  lazy val term: Par = ParBuilder[Coeval].buildNormalizedTerm(code, None).value()
+  lazy val term: Par = ParBuilder[Coeval].buildNormalizedTerm(code, NormalizerEnv.Empty).value()
 
 }

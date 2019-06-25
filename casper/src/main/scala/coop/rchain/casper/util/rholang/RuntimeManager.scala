@@ -12,7 +12,6 @@ import coop.rchain.casper.CasperMetricsSource
 import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
 import coop.rchain.catscontrib.Catscontrib.ToMonadOps
 import coop.rchain.catscontrib.MonadTrans
-import coop.rchain.crypto.PublicKey
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.models.BlockHash.BlockHash
@@ -30,6 +29,7 @@ import coop.rchain.rholang.interpreter.{
   ErrorLog,
   EvaluateResult,
   Interpreter,
+  NormalizerEnv,
   RhoType,
   Runtime,
   PrettyPrinter => RholangPrinter
@@ -420,7 +420,7 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics] private[rholang] (
       errorLog,
       deploy.term,
       Cost(deploy.phloLimit),
-      PublicKey(deploy.deployer.toByteArray).some
+      NormalizerEnv(deploy)
     )
   }
 }

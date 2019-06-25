@@ -2,7 +2,6 @@ package coop.rchain.casper.util.comm
 
 import scala.language.higherKinds
 import scala.util.{Either, Right}
-
 import cats.{Id, MonadError}
 import cats.effect.Sync
 import cats.instances.list._
@@ -10,12 +9,11 @@ import cats.syntax.applicative._
 import cats.syntax.flatMap._
 import cats.syntax.functor._
 import cats.syntax.traverse._
-
 import coop.rchain.casper.util.rholang.InterpreterUtil
 import coop.rchain.models.{GPrivate, Par}
 import coop.rchain.shared.Time
-
 import com.google.protobuf.ByteString
+import coop.rchain.rholang.interpreter.NormalizerEnv
 
 object ListenAtName {
   sealed trait Name
@@ -47,7 +45,7 @@ object ListenAtName {
 
     val par: Either[Throwable, Par] = name match {
       case PubName(content) =>
-        InterpreterUtil.mkTerm(content, None)
+        InterpreterUtil.mkTerm(content, NormalizerEnv.Empty)
       case PrivName(content) =>
         val par: Par = GPrivate(ByteString.copyFrom(content.getBytes))
         Right(par)

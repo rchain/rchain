@@ -2,7 +2,7 @@ package coop.rchain.casper.genesis.contracts
 
 import coop.rchain.models.Par
 import coop.rchain.rholang.build.CompiledRholangSource
-import coop.rchain.rholang.interpreter.ParBuilder
+import coop.rchain.rholang.interpreter.{NormalizerEnv, ParBuilder}
 import coop.rchain.rholang.interpreter.util.RevAddress
 import coop.rchain.rholang.interpreter.util.codec.Base58
 import monix.eval.Coeval
@@ -37,7 +37,7 @@ final case class RevGenerator(genesisAddress: RevAddress, userVaults: Seq[Vault]
        # }
      """.stripMargin('#')
 
-  val term: Par = ParBuilder[Coeval].buildNormalizedTerm(code, None).value()
+  val term: Par = ParBuilder[Coeval].buildNormalizedTerm(code, NormalizerEnv.Empty).value()
 
   private def findOrCreate(userVault: Vault): String =
     s""" 

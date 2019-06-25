@@ -142,10 +142,10 @@ class SendSubSpec extends FlatSpec with Matchers {
     val result = substituteSend[Coeval].substitute(target).value
     result should be(
       Send(
-        New(1, Send(chan0, List(Par()), false, BitSet(0)), Vector.empty, None, BitSet()),
+        New(1, Send(chan0, List(Par()), false, BitSet(0)), Vector.empty, None, None, BitSet()),
         List(
           Send(
-            New(1, Send(chan0, List(Par()), false, BitSet(0)), Vector.empty, None, BitSet()),
+            New(1, Send(chan0, List(Par()), false, BitSet(0)), Vector.empty, None, None, BitSet()),
             List(Par()),
             false,
             BitSet()
@@ -164,10 +164,24 @@ class NewSubSpec extends FlatSpec with Matchers {
     val source: Par  = GPrivateBuilder()
     implicit val env = Env.makeEnv(source)
     val target =
-      New(1, Send(EVar(BoundVar(1)), List(Par()), false, BitSet(1)), Vector.empty, None, BitSet(0))
+      New(
+        bindCount = 1,
+        p = Send(EVar(BoundVar(1)), List(Par()), false, BitSet(1)),
+        uri = Vector.empty,
+        deployerId = None,
+        deployId = None,
+        locallyFree = BitSet(0)
+      )
     val result = substituteNew[Coeval].substitute(target).value
     result should be(
-      New(1, Send(source, List(Par()), false, BitSet()), Vector.empty, None, BitSet())
+      New(
+        bindCount = 1,
+        p = Send(source, List(Par()), false, BitSet()),
+        uri = Vector.empty,
+        deployerId = None,
+        deployId = None,
+        locallyFree = BitSet()
+      )
     )
   }
 

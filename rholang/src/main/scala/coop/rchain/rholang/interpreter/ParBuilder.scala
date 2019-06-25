@@ -14,11 +14,11 @@ import coop.rchain.rholang.syntax.rholang_mercury.{parser, Yylex}
 import coop.rchain.rholang.syntax.rholang_mercury.Absyn.Proc
 
 trait ParBuilder[F[_]] {
-  def buildNormalizedTerm(source: String, deployerPk: Option[PublicKey]): F[Par]
+  def buildNormalizedTerm(source: String, normalizerEnv: NormalizerEnv): F[Par]
 
-  def buildNormalizedTerm(reader: Reader, deployerPk: Option[PublicKey]): F[Par]
+  def buildNormalizedTerm(reader: Reader, normalizerEnv: NormalizerEnv): F[Par]
 
-  def buildPar(proc: Proc, deployerPk: Option[PublicKey]): F[Par]
+  def buildPar(proc: Proc, normalizerEnv: NormalizerEnv): F[Par]
 }
 
 object ParBuilder {
@@ -26,18 +26,18 @@ object ParBuilder {
   def apply[F[_]](implicit parBuilder: ParBuilder[F]): ParBuilder[F] = parBuilder
 
   implicit def parBuilder[F[_]](implicit F: Sync[F]): ParBuilder[F] = new ParBuilder[F] {
-    def buildNormalizedTerm(source: String, deployerPk: Option[PublicKey]): F[Par] =
-      buildNormalizedTerm(new StringReader(source), deployerPk)
+    def buildNormalizedTerm(source: String, normalizerEnv: NormalizerEnv): F[Par] =
+      buildNormalizedTerm(new StringReader(source), normalizerEnv)
 
-    def buildNormalizedTerm(reader: Reader, deployerPk: Option[PublicKey]): F[Par] =
+    def buildNormalizedTerm(reader: Reader, normalizerEnv: NormalizerEnv): F[Par] =
       for {
         proc <- buildAST(reader)
-        par  <- buildPar(proc, deployerPk)
+        par  <- buildPar(proc, normalizerEnv)
       } yield par
 
-    def buildPar(proc: Proc, deployerPk: Option[PublicKey]): F[Par] =
+    def buildPar(proc: Proc, normalizerEnv: NormalizerEnv): F[Par] =
       for {
-        par       <- normalizeTerm(proc)(deployerPk)
+        par       <- normalizeTerm(proc)(normalizerEnv)
         sortedPar <- Sortable[Par].sortMatch(par)
       } yield sortedPar.term
 
@@ -61,7 +61,7 @@ object ParBuilder {
                }
       } yield proc
 
-    private def normalizeTerm(term: Proc)(implicit deployerPk: Option[PublicKey]): F[Par] =
+    private def normalizeTerm(term: Proc)(implicit normalizerEnv: NormalizerEnv): F[Par] =
       ProcNormalizeMatcher
         .normalizeMatch[F](
           term,
