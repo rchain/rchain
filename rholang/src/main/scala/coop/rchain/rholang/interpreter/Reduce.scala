@@ -409,29 +409,28 @@ class DebruijnInterpreter[M[_], F[_]](
   )(implicit env: Env[Par], rand: Blake2b512Random, sequenceNumber: Int): M[Unit] = {
 
     def alloc(count: Int, urns: Seq[String]): M[Env[Par]] = {
+      val deployIdUrn   = "rho:rchain:deployId"
+      val deployerIdUrn = "rho:rchain:deployerId"
 
       val simpleNews = (0 until (count - urns.size)).toList.foldLeft(env) { (_env, _) =>
         val addr: Par = GPrivate(ByteString.copyFrom(rand.next()))
         _env.put(addr)
       }
 
+      def normalizerBugFound(name: String, urn: String) =
+        BugFoundError(
+          s"No $name set despite `$urn` being used in a term. This is a bug in the normalizer or on the path from it."
+        )
+
       def addUrn(newEnv: Env[Par], urn: String): Either[InterpreterError, Env[Par]] =
-        if (urn == "rho:rchain:deployerId")
-          neu.deployerId
-            .map { case DeployerId(pk) => newEnv.put(GDeployerId(pk)).asRight[InterpreterError] }
-            .getOrElse(
-              BugFoundError(
-                s"No DeployerId set despite `rho:rchain:deployerId` being used in a term. This is a bug in the normalizer or on the path from it."
-              ).asLeft[Env[Par]]
-            )
-        else if (urn == "rho:rchain:deployId")
+        if (urn == deployIdUrn)
           neu.deployId
             .map { case DeployId(sig) => newEnv.put(GDeployId(sig)).asRight[InterpreterError] }
-            .getOrElse(
-              BugFoundError(
-                s"No DeployId set despite `rho:rchain:deployId` being used in a term. This is a bug in the normalizer or on the path from it."
-              ).asLeft[Env[Par]]
-            )
+            .getOrElse(normalizerBugFound("DeployId", deployIdUrn).asLeft[Env[Par]])
+        else if (urn == deployerIdUrn)
+          neu.deployerId
+            .map { case DeployerId(pk) => newEnv.put(GDeployerId(pk)).asRight[InterpreterError] }
+            .getOrElse(normalizerBugFound("DeployerId", deployerIdUrn).asLeft[Env[Par]])
         else
           urnMap.get(urn) match {
             case Some(p) => newEnv.put(p).asRight[InterpreterError]

@@ -918,6 +918,8 @@ object ProcNormalizeMatcher {
         }
 
       case p: PNew =>
+        val deployIdUri   = "rho:rchain:deployId"
+        val deployerIdUri = "rho:rchain:deployerId"
         // TODO: bindings within a single new shouldn't have overlapping names.
         val newTaggedBindings = p.listnamedecl_.toVector.map {
           case n: NameDeclSimpl => (None, n.var_, NameSort, n.line_num, n.col_num)
@@ -937,16 +939,14 @@ object ProcNormalizeMatcher {
         val uris               = sortBindings.flatMap(row => row._1)
         val newEnv             = input.env.newBindings(newBindings.toList)
         val newCount           = newEnv.count - input.env.count
-        val requiresDeployId   = uris.contains("rho:rchain:deployId")
-        val requiresDeployerId = uris.contains("rho:rchain:deployerId")
-        if (requiresDeployerId && env.deployerPk.isEmpty)
-          NormalizerError(
-            "`rho:rchain:deployerId` was used in rholang usage context where DeployerId is not available."
-          ).raiseError[M, ProcVisitOutputs]
-        else if (requiresDeployId && env.deployId.isEmpty)
-          NormalizerError(
-            "`rho:rchain:deployId` was used in rholang usage context where DeployId is not available."
-          ).raiseError[M, ProcVisitOutputs]
+        val requiresDeployId   = uris.contains(deployIdUri)
+        val requiresDeployerId = uris.contains(deployerIdUri)
+        def missingEnvElement(name: String, uri: String) =
+          NormalizerError(s"`$uri` was used in rholang usage context where $name is not available.")
+        if (requiresDeployId && env.deployId.isEmpty)
+          missingEnvElement("DeployId", deployIdUri).raiseError[M, ProcVisitOutputs]
+        else if (requiresDeployerId && env.deployerPk.isEmpty)
+          missingEnvElement("DeployerId", deployerIdUri).raiseError[M, ProcVisitOutputs]
         else {
           val maybeDeployId =
             if (requiresDeployId)
