@@ -24,11 +24,14 @@ final case class UserErrors(errors: Seq[Throwable])                             
 final case class InternalErrors(errors: Seq[Throwable])                         extends Failed
 //TODO add fatal error related to rspace closed after https://github.com/rchain/rchain/pull/1339 is merged
 
+class DeployPaymentFailed(message: String) extends RuntimeException(message)
+
 object DeployStatus {
   def fromErrors(errors: Seq[Throwable]): DeployStatus = {
     val (userErrors, internalErrors) = errors.partition {
-      case _: InterpreterError => true
-      case _                   => false
+      case _: DeployPaymentFailed => true
+      case _: InterpreterError    => true
+      case _                      => false
     }
 
     internalErrors
