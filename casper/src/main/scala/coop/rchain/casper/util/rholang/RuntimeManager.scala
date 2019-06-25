@@ -61,7 +61,6 @@ trait RuntimeManager[F[_]] {
       blockTime: Long
   ): F[(StateHash, StateHash, Seq[InternalProcessedDeploy])]
   def computeBonds(startHash: StateHash): F[Seq[Bond]]
-  def computeDeployPayment(startHash: StateHash)(user: ByteString, amount: Long): F[StateHash]
   def getData(hash: StateHash)(channel: Par): F[Seq[Par]]
   def getContinuation(hash: StateHash)(
       channels: Seq[Par]
@@ -201,50 +200,6 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span] private[rholang] (
        # }
        """.stripMargin('#')
 
-  def computeDeployPayment(start: StateHash)(user: ByteString, amount: Long): F[StateHash] =
-    withResetRuntimeLock(start)(
-      runtime =>
-        computeDeployPayment(runtime, runtime.reducer, runtime.space)(user, amount)
-          .map(_.root.toByteString)
-    )
-
-  private def computeDeployPayment(
-      runtime: Runtime[F],
-      reducer: ChargingReducer[F],
-      space: RhoISpace[F]
-  )(user: ByteString, amount: Long): F[Checkpoint] =
-    for {
-      _ <- computeEffect(runtime, reducer)(
-            ConstructDeploy.sourceDeployNow(deployPaymentSource(amount)).withDeployer(user)
-          ).ensure(BugFoundError("Deploy payment failed unexpectedly"))(_.errors.isEmpty)
-      consumeResult <- getResult(runtime, space)()
-      result <- consumeResult match {
-                 case Seq(RhoType.Tuple2(RhoType.Boolean(true), Par.defaultInstance)) =>
-                   space.createCheckpoint()
-                 case Seq(RhoType.Tuple2(RhoType.Boolean(false), RhoType.String(error))) =>
-                   BugFoundError(s"Deploy payment failed unexpectedly: $error")
-                     .raiseError[F, Checkpoint]
-                 case Seq() =>
-                   BugFoundError("Expected response message was not received")
-                     .raiseError[F, Checkpoint]
-                 case other =>
-                   val contentAsStr = other.map(RholangPrinter().buildString(_)).mkString(",")
-                   BugFoundError(
-                     s"Deploy payment returned unexpected result: [$contentAsStr ]"
-                   ).raiseError[F, Checkpoint]
-               }
-    } yield result
-
-  private def deployPaymentSource(amount: Long, name: String = "__SCALA__"): String =
-    s"""
-       # new rl(`rho:registry:lookup`), poSCh in {
-       #   rl!(`rho:rchain:pos`, *poSCh) |
-       #   for(@(_, PoS) <- poSCh) {
-       #     @PoS!("pay", $amount, "$name")
-       #   }
-       # }
-       """.stripMargin('#')
-
   private def withRuntimeLock[A](f: Runtime[F] => F[A]): F[A] =
     Sync[F].bracket(runtimeContainer.take)(f)(runtimeContainer.put)
 
@@ -270,21 +225,6 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span] private[rholang] (
       runtime: Runtime[F]
   )(channel: Par): F[Seq[Par]] =
     runtime.space.getData(channel).map(_.flatMap(_.a.pars))
-
-  private def getResult(runtime: Runtime[F], space: RhoISpace[F])(
-      name: String = "__SCALA__"
-  ): F[Seq[Par]] = {
-
-    val channel                 = Par().withExprs(Seq(Expr(GString(name))))
-    val pattern                 = BindPattern(Seq(EVar(FreeVar(0))), freeCount = 1)
-    val cont                    = TaggedContinuation().withParBody(ParWithRandom(Par()))
-    implicit val cost: _cost[F] = runtime.cost
-
-    space.consume(Seq(channel), Seq(pattern), cont, persist = false)(matchListPar).map {
-      case Some((_, dataList)) => dataList.flatMap(_.value.pars)
-      case None                => Seq.empty[Par]
-    }
-  }
 
   def getContinuation(
       hash: StateHash
@@ -476,11 +416,6 @@ object RuntimeManager {
 
       override def computeBonds(hash: StateHash): T[F, Seq[Bond]] =
         runtimeManager.computeBonds(hash).liftM[T]
-
-      override def computeDeployPayment(
-          start: StateHash
-      )(user: ByteString, amount: Long): T[F, StateHash] =
-        runtimeManager.computeDeployPayment(start)(user, amount).liftM[T]
 
       override def getData(hash: StateHash)(channel: Par): T[F, Seq[Par]] =
         runtimeManager.getData(hash)(channel).liftM[T]
