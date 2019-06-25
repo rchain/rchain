@@ -16,6 +16,7 @@ import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.Expr.ExprInstance.GString
+import coop.rchain.models.GUnforgeable.UnfInstance.GDeployIdBody
 import coop.rchain.models.Validator.Validator
 import coop.rchain.models.Var.VarInstance.FreeVar
 import coop.rchain.models._
@@ -24,18 +25,8 @@ import coop.rchain.rholang.interpreter.Runtime.{BlockData, RhoISpace}
 import coop.rchain.rholang.interpreter.accounting._
 import coop.rchain.rholang.interpreter.errors.BugFoundError
 import coop.rchain.rholang.interpreter.storage.implicits.matchListPar
-import coop.rchain.rholang.interpreter.{
-  ChargingReducer,
-  ErrorLog,
-  EvaluateResult,
-  Interpreter,
-  NormalizerEnv,
-  RhoType,
-  Runtime,
-  accounting,
-  PrettyPrinter => RholangPrinter
-}
-import coop.rchain.rspace.{trace, Blake2b256Hash, Checkpoint, ReplayException}
+import coop.rchain.rholang.interpreter.{ChargingReducer, ErrorLog, EvaluateResult, Interpreter, NormalizerEnv, RhoType, Runtime, accounting, PrettyPrinter => RholangPrinter}
+import coop.rchain.rspace.{Blake2b256Hash, Checkpoint, ReplayException, trace}
 
 trait RuntimeManager[F[_]] {
 
@@ -226,7 +217,21 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics] private[rholang] (
           ).ensureOr(r => BugFoundError("Deploy payment failed unexpectedly" + r.errors))(
             _.errors.isEmpty
           )
-      result <- ().asRight[String].pure[F]
+      consumeResult <- getResult(runtime, space)(deploy)
+      result <- consumeResult match {
+                 case Seq(RhoType.Tuple2(RhoType.Boolean(true), Par.defaultInstance)) =>
+                   ().asRight[String].pure[F]
+                 case Seq(RhoType.Tuple2(RhoType.Boolean(false), RhoType.String(error))) =>
+                   error.asLeft[Unit].pure[F]
+                 case Seq() =>
+                   BugFoundError("Expected response message was not received")
+                     .raiseError[F, Either[String, Unit]]
+                 case other =>
+                   val contentAsStr = other.map(RholangPrinter().buildString(_)).mkString(",")
+                   BugFoundError(
+                     s"Deploy payment returned unexpected result: [$contentAsStr ]"
+                   ).raiseError[F, Either[String, Unit]]
+               }
     } yield result
 
   private def deployPaymentSource(amount: Long, name: String = "__SCALA__"): String =
@@ -261,6 +266,21 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics] private[rholang] (
       runtime: Runtime[F]
   )(channel: Par): F[Seq[Par]] =
     runtime.space.getData(channel).map(_.flatMap(_.a.pars))
+
+  private def getResult(runtime: Runtime[F], space: RhoISpace[F])(
+      deploy: DeployData
+  ): F[Seq[Par]] = {
+
+    val channel                 = Par().withUnforgeables(Seq(GUnforgeable(GDeployIdBody(GDeployId(deploy.sig)))))
+    val pattern                 = BindPattern(Seq(EVar(FreeVar(0))), freeCount = 1)
+    val cont                    = TaggedContinuation().withParBody(ParWithRandom(Par()))
+    implicit val cost: _cost[F] = runtime.cost
+
+    space.consume(Seq(channel), Seq(pattern), cont, persist = false)(matchListPar).map {
+      case Some((_, dataList)) => dataList.flatMap(_.value.pars)
+      case None                => Seq.empty[Par]
+    }
+  }
 
   def getContinuation(
       hash: StateHash
