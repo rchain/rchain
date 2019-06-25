@@ -56,7 +56,7 @@ object GrpcTransportReceiver {
 
           val circuitBreaker: StreamHandler.CircuitBreaker = {
             case streamed =>
-              streamed.networkId.map(_ != networkId).getOrElse(false) ||
+              streamed.header.map(_.networkId != networkId).getOrElse(false) ||
                 streamed.readSoFar > maxStreamMessageSize
           }
 

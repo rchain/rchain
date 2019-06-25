@@ -18,15 +18,19 @@ import coop.rchain.comm.transport.PacketOps._
 import monix.eval.Task
 import monix.reactive.Observable
 
+final case class Header(
+    sender: PeerNode,
+    typeId: String,
+    contentLength: Int,
+    networkId: String,
+    compressed: Boolean
+)
+
 final case class Streamed(
-    sender: Option[PeerNode] = None,
-    typeId: Option[String] = None,
-    contentLength: Option[Int] = None,
-    networkId: Option[String] = None,
-    compressed: Boolean = false,
+    header: Option[Header] = None,
     readSoFar: Long = 0,
-    circuitBroken: Boolean = false,
-    wrongNetwork: Boolean = false,
+    circuitBroken: Boolean = false, // TODO change to ADT
+    wrongNetwork: Boolean = false,  // TODO remove
     path: Path,
     fos: FileOutputStream
 )
@@ -101,14 +105,13 @@ object StreamHandler {
       stream.foldWhileLeftL(init) {
         case (
             stmd,
-            Chunk(Chunk.Content.Header(ChunkHeader(sender, typeId, compressed, cl, nid)))
+            Chunk(
+              Chunk.Content
+                .Header(ChunkHeader(Some(sender), typeId, compressed, cl, nid))
+            )
             ) =>
           val newStmd = stmd.copy(
-            sender = sender.map(ProtocolHelper.toPeerNode),
-            typeId = Some(typeId),
-            contentLength = Some(cl),
-            networkId = Some(nid),
-            compressed = compressed
+            header = Some(Header(ProtocolHelper.toPeerNode(sender), typeId, cl, nid, compressed))
           )
           if (circuitBreaker(newStmd)) Right(newStmd.copy(circuitBroken = true))
           else Left(newStmd)
@@ -122,6 +125,7 @@ object StreamHandler {
           if (circuitBreaker(newStmd))
             Right(newStmd.copy(circuitBroken = true))
           else Left(newStmd)
+        case (stmd, _) => Right(stmd.copy(circuitBroken = true))
       }
 
     EitherT(collectStream.attempt.map {
@@ -143,11 +147,7 @@ object StreamHandler {
     EitherT(Task.delay {
       stmd match {
         case Streamed(
-            Some(sender),
-            Some(packetType),
-            Some(contentLength),
-            _,
-            compressed,
+            Some(Header(sender, packetType, contentLength, _, compressed)),
             readSoFar,
             _,
             _,
