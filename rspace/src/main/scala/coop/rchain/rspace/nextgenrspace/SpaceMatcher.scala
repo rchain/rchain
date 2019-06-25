@@ -101,7 +101,7 @@ private[rspace] trait SpaceMatcher[F[_], C, P, A, R, K] extends ISpace[F, C, P, 
       channelToIndexedData: Map[C, Seq[(Datum[A], Int)]]
   )(implicit m: Match[F, P, A, R]): F[Option[ProduceCandidate[C, P, R, K]]] =
     matchCandidates match {
-      case (p @ WaitingContinuation(patterns, _, _, _), index) +: remaining =>
+      case (p @ WaitingContinuation(patterns, _, _, _, _), index) +: remaining =>
         for {
           maybeDataCandidates <- extractDataCandidates(
                                   channels.zip(patterns),

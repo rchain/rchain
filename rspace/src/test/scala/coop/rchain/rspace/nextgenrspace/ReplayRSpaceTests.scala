@@ -36,8 +36,9 @@ import org.scalatest.prop._
 import scala.util.{Random, Right}
 import scala.util.Random.shuffle
 import scodec.Codec
-
 import org.lmdbjava.EnvFlags
+
+import scala.collection.SortedSet
 
 object SchedulerPools {
   implicit val global = Scheduler.fixedPool("GlobalPool", 20)
@@ -62,14 +63,15 @@ trait ReplayRSpaceTests extends ReplayRSpaceTestsBase[String, Pattern, String, S
       channelsCreator: Int => List[C],
       patterns: List[P],
       continuationCreator: Int => K,
-      persist: Boolean
+      persist: Boolean,
+      peeks: SortedSet[Int] = SortedSet.empty
   )(
       implicit matcher: Match[Task, P, A, R]
   ): Task[List[Option[(ContResult[C, P, K], Seq[Result[R]])]]] =
     shuffle(range).toList.parTraverse { i: Int =>
       logger.debug("Started consume {}", i)
       space
-        .consume(channelsCreator(i), patterns, continuationCreator(i), persist)
+        .consume(channelsCreator(i), patterns, continuationCreator(i), persist, peeks = peeks)
         .map { r =>
           logger.debug("Finished consume {}", i)
           r
@@ -133,9 +135,271 @@ trait ReplayRSpaceTests extends ReplayRSpaceTestsBase[String, Pattern, String, S
 
         replayResultConsume <- replaySpace.consume(channels, patterns, continuation, false)
         replayResultProduce <- replaySpace.produce(channels(0), datum, false)
-        finalPoint          <- space.createCheckpoint()
+        finalPoint          <- replaySpace.createCheckpoint()
 
         _ = replayResultConsume shouldBe None
+        _ = replayResultProduce shouldBe resultProduce
+        _ = finalPoint.root shouldBe rigPoint.root
+        _ = replaySpace.replayData shouldBe empty
+      } yield ()
+    }
+
+  "Creating a COMM Event with peek consume first" should "replay correctly" in
+    fixture { (store, replayStore, space, replaySpace) =>
+      val channels     = List("ch1")
+      val patterns     = List(Wildcard)
+      val continuation = "continuation"
+      val datum        = "datum1"
+
+      for {
+        emptyPoint <- space.createCheckpoint()
+
+        resultConsume <- space.consume(
+                          channels,
+                          patterns,
+                          continuation,
+                          false,
+                          peeks = SortedSet(0)
+                        )
+        resultProduce <- space.produce(channels(0), datum, false)
+        rigPoint      <- space.createCheckpoint()
+
+        _ = resultConsume shouldBe None
+        _ = resultProduce shouldBe Some(
+          (ContResult(continuation, false, channels, patterns, 1, true), List(Result(datum, false)))
+        )
+
+        _ <- replaySpace.rigAndReset(emptyPoint.root, rigPoint.log)
+
+        replayResultConsume <- replaySpace.consume(
+                                channels,
+                                patterns,
+                                continuation,
+                                false,
+                                peeks = SortedSet(0)
+                              )
+        replayResultProduce <- replaySpace.produce(channels(0), datum, false)
+        finalPoint          <- replaySpace.createCheckpoint()
+
+        _ = replayResultConsume shouldBe None
+        _ = replayResultProduce shouldBe resultProduce
+        _ = finalPoint.root shouldBe rigPoint.root
+        _ = replaySpace.replayData shouldBe empty
+      } yield ()
+    }
+
+  "Creating a COMM Event with peek produce first" should "replay correctly" in
+    fixture { (store, replayStore, space, replaySpace) =>
+      val channels     = List("ch1")
+      val patterns     = List(Wildcard)
+      val continuation = "continuation"
+      val datum        = "datum1"
+
+      for {
+        emptyPoint <- space.createCheckpoint()
+
+        resultProduce <- space.produce(channels(0), datum, false)
+        resultConsume <- space.consume(
+                          channels,
+                          patterns,
+                          continuation,
+                          false,
+                          peeks = SortedSet(0)
+                        )
+        rigPoint <- space.createCheckpoint()
+
+        _ = resultProduce shouldBe None
+        _ = resultConsume shouldBe defined
+
+        _ <- replaySpace.rigAndReset(emptyPoint.root, rigPoint.log)
+
+        replayResultProduce <- replaySpace.produce(channels(0), datum, false)
+        replayResultConsume <- replaySpace.consume(
+                                channels,
+                                patterns,
+                                continuation,
+                                false,
+                                peeks = SortedSet(0)
+                              )
+        finalPoint <- replaySpace.createCheckpoint()
+
+        _ = replayResultProduce shouldBe None
+        _ = replayResultConsume shouldBe resultConsume
+        _ = finalPoint.root shouldBe rigPoint.root
+        _ = replaySpace.replayData shouldBe empty
+      } yield ()
+    }
+
+  "Creating COMM Events on many channels with peek" should "replay correctly" in
+    fixture { (store, replayStore, space, replaySpace) =>
+      val channels     = List("ch1", "ch2")
+      val patterns     = List(Wildcard, Wildcard)
+      val continuation = "continuation"
+      val datum        = "datum1"
+
+      for {
+        emptyPoint <- space.createCheckpoint()
+
+        resultConsume1 <- space.consume(
+                           channels,
+                           patterns,
+                           continuation,
+                           false,
+                           peeks = SortedSet(0)
+                         )
+        resultProduce1 <- space.produce(channels(1), datum, false)
+        resultProduce2 <- space.produce(channels(0), datum, false)
+        resultConsume2 <- space.consume(
+                           channels,
+                           patterns,
+                           continuation,
+                           false,
+                           peeks = SortedSet(1)
+                         )
+        resultProduce3 <- space.produce(channels(1), datum, false)
+        resultConsume3 <- space.consume(channels, patterns, continuation, false)
+        resultProduce4 <- space.produce(channels(0), datum, false)
+
+        rigPoint <- space.createCheckpoint()
+
+        _ = resultConsume1 shouldBe None
+        _ = resultProduce1 shouldBe None
+        _ = resultProduce2 shouldBe defined
+        _ = resultConsume2 shouldBe None
+        _ = resultProduce3 shouldBe defined
+        _ = resultConsume3 shouldBe None
+        _ = resultProduce4 shouldBe defined
+
+        _ <- replaySpace.rigAndReset(emptyPoint.root, rigPoint.log)
+
+        replayConsume1 <- replaySpace.consume(
+                           channels,
+                           patterns,
+                           continuation,
+                           false,
+                           peeks = SortedSet(0)
+                         )
+        replayProduce1 <- replaySpace.produce(channels(1), datum, false)
+        replayProduce2 <- replaySpace.produce(channels(0), datum, false)
+        replayConsume2 <- replaySpace.consume(
+                           channels,
+                           patterns,
+                           continuation,
+                           false,
+                           peeks = SortedSet(1)
+                         )
+        replayProduce3 <- replaySpace.produce(channels(1), datum, false)
+        replayConsume3 <- replaySpace.consume(channels, patterns, continuation, false)
+        replayProduce4 <- replaySpace.produce(channels(0), datum, false)
+
+        finalPoint <- replaySpace.createCheckpoint()
+
+        _ = finalPoint.root shouldBe rigPoint.root
+        _ = replaySpace.replayData shouldBe empty
+      } yield ()
+    }
+
+  "Creating multiple COMM Event with peeking a produce" should "replay correctly" in
+    fixture { (store, replayStore, space, replaySpace) =>
+      val channels     = List("ch1")
+      val patterns     = List(Wildcard)
+      val continuation = "continuation"
+      val datum        = "datum1"
+
+      for {
+        emptyPoint <- space.createCheckpoint()
+
+        resultConsume1 <- space.consume(
+                           channels,
+                           patterns,
+                           continuation,
+                           false,
+                           peeks = SortedSet(0)
+                         )
+        resultProduce <- space.produce(channels(0), datum, false)
+        resultConsume2 <- space.consume(
+                           channels,
+                           patterns,
+                           continuation,
+                           false,
+                           peeks = SortedSet(0)
+                         )
+        resultConsume3 <- space.consume(
+                           channels,
+                           patterns,
+                           continuation,
+                           false,
+                           peeks = SortedSet(0)
+                         )
+        resultConsume4 <- space.consume(
+                           channels,
+                           patterns,
+                           continuation,
+                           false,
+                           peeks = SortedSet(0)
+                         )
+        resultConsume5 <- space.consume(
+                           channels,
+                           patterns,
+                           continuation,
+                           false,
+                           peeks = SortedSet(0)
+                         )
+        rigPoint <- space.createCheckpoint()
+
+        _ = resultConsume1 shouldBe None
+        _ = resultConsume2 shouldBe defined
+        _ = resultConsume3 shouldBe defined
+        _ = resultConsume4 shouldBe defined
+        _ = resultConsume5 shouldBe defined
+        _ = resultProduce shouldBe Some(
+          (ContResult(continuation, false, channels, patterns, 1, true), List(Result(datum, false)))
+        )
+        _ <- replaySpace.rigAndReset(emptyPoint.root, rigPoint.log)
+
+        replayResultConsume1 <- replaySpace.consume(
+                                 channels,
+                                 patterns,
+                                 continuation,
+                                 false,
+                                 peeks = SortedSet(0)
+                               )
+        replayResultProduce <- replaySpace.produce(channels(0), datum, false)
+        replayResultConsume2 <- replaySpace.consume(
+                                 channels,
+                                 patterns,
+                                 continuation,
+                                 false,
+                                 peeks = SortedSet(0)
+                               )
+        replayResultConsume3 <- replaySpace.consume(
+                                 channels,
+                                 patterns,
+                                 continuation,
+                                 false,
+                                 peeks = SortedSet(0)
+                               )
+        replayResultConsume4 <- replaySpace.consume(
+                                 channels,
+                                 patterns,
+                                 continuation,
+                                 false,
+                                 peeks = SortedSet(0)
+                               )
+        replayResultConsume5 <- replaySpace.consume(
+                                 channels,
+                                 patterns,
+                                 continuation,
+                                 false,
+                                 peeks = SortedSet(0)
+                               )
+        finalPoint <- replaySpace.createCheckpoint()
+
+        _ = replayResultConsume1 shouldBe None
+        _ = replayResultConsume2 shouldBe defined
+        _ = replayResultConsume3 shouldBe defined
+        _ = replayResultConsume4 shouldBe defined
+        _ = replayResultConsume5 shouldBe defined
         _ = replayResultProduce shouldBe resultProduce
         _ = finalPoint.root shouldBe rigPoint.root
         _ = replaySpace.replayData shouldBe empty
@@ -189,6 +453,53 @@ trait ReplayRSpaceTests extends ReplayRSpaceTestsBase[String, Pattern, String, S
           _ = replayResults should contain theSameElementsAs results
           _ = finalPoint.root shouldBe rigPoint.root
           _ = replaySpace.replayData shouldBe empty
+        } yield ()
+      }
+  }
+
+  "A matched continuation defined for multiple channels, some peeked" should "replay correctly" in forAll(
+    for {
+      amountOfChannles       <- Gen.chooseNum[Int](10, 100)
+      amountOfPeekedChannels <- Gen.chooseNum[Int](5, amountOfChannles)
+    } yield (amountOfChannles, amountOfPeekedChannels),
+    minSuccessful(100)
+  ) {
+    case (amountOfChannles: Int, amountOfPeekedChannels: Int) =>
+      fixture { (store, replayStore, space, replaySpace) =>
+        val channelsRange = List.range(0, amountOfChannles)
+        val channels      = channelsRange.map(i => s"channel$i")
+        val patterns      = channels.map(kp(Wildcard))
+        val continuation  = "continuation"
+        val peeks: SortedSet[Int] =
+          SortedSet.apply(Random.shuffle(channelsRange).take(amountOfPeekedChannels): _*)
+        val produces = Random.shuffle(channels)
+        def consumeAndProduce(s: ISpace[Task, String, Pattern, String, String, String]) =
+          for {
+            r  <- s.consume(channels, patterns, continuation, false, peeks = peeks)
+            rs <- produces.traverse(ch => s.produce(ch, s"datum-$ch", false))
+          } yield rs
+
+        for {
+          emptyPoint <- space.createCheckpoint()
+          rs         <- consumeAndProduce(space)
+          _          = rs.flatten should have size 1
+          hs         = store.get()
+          _ <- channelsRange.traverse { i =>
+                val ch = s"channel$i"
+                hs.getData(ch).map { data =>
+                  if (peeks.contains(i))
+                    data should have size 1
+                  else
+                    data should have size 0
+                }
+              }
+          rigPoint   <- space.createCheckpoint()
+          _          <- replaySpace.rigAndReset(emptyPoint.root, rigPoint.log)
+          rrs        <- consumeAndProduce(replaySpace)
+          finalPoint <- replaySpace.createCheckpoint()
+          _          = rs should contain theSameElementsAs rrs
+          _          = finalPoint.root shouldBe rigPoint.root
+          _          = replaySpace.replayData shouldBe empty
         } yield ()
       }
   }
@@ -580,6 +891,81 @@ trait ReplayRSpaceTests extends ReplayRSpaceTestsBase[String, Pattern, String, S
         } yield ()
       }
   }
+
+  "Peeking data stored at two channels in 100 continuations" should "replay correctly" in
+    fixture { (store, replayStore, space, replaySpace) =>
+      for {
+        emptyPoint <- space.createCheckpoint()
+
+        range1 = 0 until 100
+        range2 = 0 until 3
+        range3 = 0 until 5
+        _ <- produceMany(
+              space,
+              range2,
+              channelCreator = kp("ch1"),
+              datumCreator = i => s"datum$i",
+              persist = false
+            )
+        _ <- produceMany(
+              space,
+              range3,
+              channelCreator = kp("ch2"),
+              datumCreator = i => s"datum$i",
+              persist = false
+            )
+        results <- consumeMany(
+                    space,
+                    range1,
+                    channelsCreator = kp(List("ch1", "ch2")),
+                    patterns = List(Wildcard, Wildcard),
+                    continuationCreator = i => s"continuation$i",
+                    persist = false,
+                    peeks = SortedSet(0, 1)
+                  )
+        rigPoint <- space.createCheckpoint()
+
+        _ <- replaySpace.rigAndReset(emptyPoint.root, rigPoint.log)
+        _ <- produceMany(
+              replaySpace,
+              range2,
+              channelCreator = kp("ch1"),
+              datumCreator = i => s"datum$i",
+              persist = false
+            )
+        _ <- produceMany(
+              replaySpace,
+              range3,
+              channelCreator = kp("ch2"),
+              datumCreator = i => s"datum$i",
+              persist = false
+            )
+        replayResults <- consumeMany(
+                          replaySpace,
+                          range1,
+                          channelsCreator = kp(List("ch1", "ch2")),
+                          patterns = List(Wildcard, Wildcard),
+                          continuationCreator = i => s"continuation$i",
+                          persist = false,
+                          peeks = SortedSet(0, 1)
+                        )
+        finalPoint <- replaySpace.createCheckpoint()
+
+        extractedPlayResults = results.flatten
+        _ = extractedPlayResults.foreach { cr =>
+          cr._1.peek shouldBe true
+        }
+        extractedResults = replayResults.flatten
+        _ = extractedResults.foreach { cr =>
+          cr._1.peek shouldBe true
+        }
+        _ = extractedResults should have size 100
+        _ = extractedResults.map(_._2).flatten.map(_.value).toSet should have size 5
+        _ = replayResults should contain theSameElementsAs results
+        _ = finalPoint.root shouldBe rigPoint.root
+        _ = replaySpace.replayData shouldBe empty
+      } yield ()
+    }
 
   "Replay rspace" should "correctly remove things from replay data" in fixture {
     (store, replayStore, space, replaySpace) =>

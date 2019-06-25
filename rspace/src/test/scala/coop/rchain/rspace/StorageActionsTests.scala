@@ -17,9 +17,10 @@ import coop.rchain.rspace.trace.{COMM, Consume, Produce}
 import org.scalatest._
 import org.scalatest.prop.{Checkers, GeneratorDrivenPropertyChecks}
 import scodec.Codec
-
 import coop.rchain.rspace.test.ArbitraryInstances._
 import monix.eval.Coeval
+
+import scala.collection.SortedSet
 
 trait StorageActionsTests[F[_]]
     extends StorageTestsBase[F, String, Pattern, String, StringsCaptor]
@@ -1051,7 +1052,8 @@ trait StorageActionsTests[F[_]]
         channels,
         List.empty[Datum[String]],
         List(
-          WaitingContinuation.create(channels, List[Pattern](Wildcard), new StringsCaptor, false)
+          WaitingContinuation
+            .create(channels, List[Pattern](Wildcard), new StringsCaptor, false, SortedSet.empty)
         )
       )
 
@@ -1095,7 +1097,7 @@ trait StorageActionsTests[F[_]]
           List.empty[Datum[String]],
           List(
             WaitingContinuation
-              .create(channels, List[Pattern](Wildcard), new StringsCaptor, false)
+              .create(channels, List[Pattern](Wildcard), new StringsCaptor, false, SortedSet.empty)
           )
         )
       }
@@ -1117,7 +1119,13 @@ trait StorageActionsTests[F[_]]
             List.empty[Datum[String]],
             List(
               WaitingContinuation
-                .create(channels, List[Pattern](Wildcard), new StringsCaptor, false)
+                .create(
+                  channels,
+                  List[Pattern](Wildcard),
+                  new StringsCaptor,
+                  false,
+                  SortedSet.empty
+                )
             )
           )
         }
@@ -1266,7 +1274,8 @@ trait StorageActionsTests[F[_]]
     } yield (log match {
       case COMM(
             chkCommConsume1: Consume,
-            (chkCommProduce1: Produce) :: (chkCommProduce2: Produce) :: Nil
+            (chkCommProduce1: Produce) :: (chkCommProduce2: Produce) :: Nil,
+            _
           )
             :: (chkProduce2: Produce) :: (chkProduce1: Produce) :: (chkConsume: Consume) :: Nil =>
         chkCommConsume1.channelsHashes shouldBe expectedConsume.channelsHashes

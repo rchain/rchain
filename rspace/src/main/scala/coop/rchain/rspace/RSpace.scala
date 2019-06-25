@@ -16,6 +16,7 @@ import coop.rchain.shared.SyncVarOps._
 import org.lmdbjava.Txn
 import scodec.Codec
 
+import scala.collection.SortedSet
 import scala.concurrent.ExecutionContext
 import scala.util.Random
 
@@ -77,6 +78,7 @@ class RSpace[F[_], C, P, A, R, K] private[rspace] (
                 patterns,
                 continuation,
                 persist,
+                SortedSet.empty,
                 consumeRef
               )
             )
@@ -138,7 +140,8 @@ class RSpace[F[_], C, P, A, R, K] private[rspace] (
       patterns: Seq[P],
       continuation: K,
       persist: Boolean,
-      sequenceNumber: Int
+      sequenceNumber: Int,
+      peeks: SortedSet[Int] = SortedSet.empty
   )(
       implicit m: Match[F, P, A, R]
   ): F[MaybeActionResult] = {
@@ -311,6 +314,7 @@ class RSpace[F[_], C, P, A, R, K] private[rspace] (
             patterns,
             continuation,
             persistK,
+            _,
             consumeRef
           ),
           continuationIndex,

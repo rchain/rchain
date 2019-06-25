@@ -11,6 +11,7 @@ import coop.rchain.rspace.bench.serialization._
 
 import org.openjdk.jmh.annotations.{State => BenchState, _}
 import org.openjdk.jmh.infra.Blackhole
+import scala.collection.SortedSet
 
 class ExamplesSerializerBench {
 
@@ -82,11 +83,12 @@ abstract class ExamplesSerializerBenchState {
     phone = "555-6969"
   )
 
-  val channel      = Channel("colleagues")
-  val channels     = List(channel, Channel("friends"))
-  val datum        = Datum.create(channel, data, false)
-  val patterns     = Seq[Pattern](CityMatch(city = "Crystal Lake"))
-  val continuation = WaitingContinuation.create(channels, patterns, new EntriesCaptor(), false)
+  val channel  = Channel("colleagues")
+  val channels = List(channel, Channel("friends"))
+  val datum    = Datum.create(channel, data, false)
+  val patterns = Seq[Pattern](CityMatch(city = "Crystal Lake"))
+  val continuation =
+    WaitingContinuation.create(channels, patterns, new EntriesCaptor(), false, SortedSet.empty)
 
   def gnat() = GNAT[Channel, Pattern, Entry, EntriesCaptor](
     channels,
@@ -103,7 +105,9 @@ abstract class ExamplesSerializerBenchState {
       channels,
       range.map(i => Datum.create(channels(i - 1), data, false)),
       range.map(
-        i => WaitingContinuation.create(channels.take(i), patterns, new EntriesCaptor(), false)
+        i =>
+          WaitingContinuation
+            .create(channels.take(i), patterns, new EntriesCaptor(), false, SortedSet.empty)
       )
     )
   }

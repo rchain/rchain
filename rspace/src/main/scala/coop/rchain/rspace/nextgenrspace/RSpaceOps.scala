@@ -19,6 +19,8 @@ import scala.concurrent.SyncVar
 import scala.util.Random
 import scodec.Codec
 
+import scala.collection.SortedSet
+
 abstract class RSpaceOps[F[_]: Concurrent, C, P, A, R, K](
     historyRepository: HistoryRepository[F, C, P, A, K],
     val storeAtom: AtomicAny[HotStore[F, C, P, A, K]],
@@ -147,6 +149,7 @@ abstract class RSpaceOps[F[_]: Concurrent, C, P, A, R, K](
                                patterns,
                                continuation,
                                persist = true,
+                               SortedSet.empty,
                                consumeRef
                              )
                            )

@@ -35,6 +35,7 @@ import scala.collection.mutable
 import scala.collection.mutable.HashMap
 import scala.concurrent.Await
 import scala.concurrent.duration._
+import scala.collection.SortedSet
 
 final case class TestFixture(space: RhoISpace[Task], reducer: ChargingReducer[Task])
 
@@ -115,7 +116,8 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
                 channels,
                 bindPatterns,
                 TaggedContinuation(ParBody(body)),
-                false
+                false,
+                SortedSet.empty
               )
             )
           )

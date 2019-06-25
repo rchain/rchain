@@ -5,7 +5,9 @@ import coop.rchain.rspace.trace.{Consume, Produce}
 import coop.rchain.scodec.codecs.seqOfN
 import scodec.Codec
 import scodec.bits.ByteVector
-import scodec.codecs.{bool, bytes, int32, int64, variableSizeBytesLong}
+import scodec.codecs.{bool, bytes, int32, int64, uint8, variableSizeBytesLong}
+
+import scala.collection.SortedSet
 
 @SuppressWarnings(Array("org.wartremover.warts.NonUnitStatements"))
 object internal {
@@ -27,6 +29,7 @@ object internal {
       patterns: Seq[P],
       continuation: K,
       persist: Boolean,
+      peeks: SortedSet[Int],
       source: Consume
   )
 
@@ -36,6 +39,7 @@ object internal {
         patterns: Seq[P],
         continuation: K,
         persist: Boolean,
+        peek: SortedSet[Int],
         sequenceNumber: Int = 0
     )(
         implicit
@@ -47,6 +51,7 @@ object internal {
         patterns,
         continuation,
         persist,
+        peek,
         Consume.create(channels, patterns, continuation, persist, sequenceNumber)
       )
   }
@@ -88,12 +93,16 @@ object internal {
   implicit def codecDatum[A](implicit codecA: Codec[A]): Codec[Datum[A]] =
     (codecA :: bool :: Codec[Produce]).as[Datum[A]]
 
+  def sortedSet[A](codecA: Codec[A])(implicit O: Ordering[A]): Codec[SortedSet[A]] =
+    codecSeq[A](codecA).xmap[SortedSet[A]](s => SortedSet(s: _*), _.toSeq)
+
   implicit def codecWaitingContinuation[P, K](
       implicit
       codecP: Codec[P],
       codecK: Codec[K]
   ): Codec[WaitingContinuation[P, K]] =
-    (codecSeq(codecP) :: codecK :: bool :: Codec[Consume]).as[WaitingContinuation[P, K]]
+    (codecSeq(codecP) :: codecK :: bool :: sortedSet[Int](uint8) :: Codec[Consume])
+      .as[WaitingContinuation[P, K]]
 
   implicit def codecGNAT[C, P, A, K](
       implicit

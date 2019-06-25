@@ -14,6 +14,7 @@ import coop.rchain.shared.Log
 import scodec.Codec
 
 import scala.collection.JavaConverters._
+import scala.collection.SortedSet
 import scala.concurrent.ExecutionContext
 
 class ReplayRSpace[F[_], C, P, A, R, K](store: IStore[F, C, P, A, K], branch: Branch)(
@@ -45,7 +46,8 @@ class ReplayRSpace[F[_], C, P, A, R, K](store: IStore[F, C, P, A, K], branch: Br
       patterns: Seq[P],
       continuation: K,
       persist: Boolean,
-      sequenceNumber: Int
+      sequenceNumber: Int,
+      peeks: SortedSet[Int] = SortedSet.empty
   )(
       implicit m: Match[F, P, A, R]
   ): F[MaybeActionResult] =
@@ -100,7 +102,7 @@ class ReplayRSpace[F[_], C, P, A, R, K](store: IStore[F, C, P, A, K], branch: Br
                 store.putWaitingContinuation(
                   txn,
                   channels,
-                  WaitingContinuation(patterns, continuation, persist, consumeRef)
+                  WaitingContinuation(patterns, continuation, persist, SortedSet.empty, consumeRef)
                 )
                 for (channel <- channels) store.addJoin(txn, channel, channels)
               }
@@ -236,7 +238,7 @@ class ReplayRSpace[F[_], C, P, A, R, K](store: IStore[F, C, P, A, K], branch: Br
             for {
               matchCandidates <- store.withReadTxnF { txn =>
                                   store.getWaitingContinuation(txn, channels).zipWithIndex.filter {
-                                    case (WaitingContinuation(_, _, _, source), _) =>
+                                    case (WaitingContinuation(_, _, _, _, source), _) =>
                                       comm.consume == source
                                   }
                                 }
@@ -317,7 +319,7 @@ class ReplayRSpace[F[_], C, P, A, R, K](store: IStore[F, C, P, A, K], branch: Br
       mat match {
         case ProduceCandidate(
             channels,
-            WaitingContinuation(patterns, continuation, persistK, consumeRef),
+            WaitingContinuation(patterns, continuation, persistK, _, consumeRef),
             continuationIndex,
             dataCandidates
             ) =>
