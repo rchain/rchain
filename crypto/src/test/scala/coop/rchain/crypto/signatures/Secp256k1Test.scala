@@ -43,6 +43,13 @@ class Secp256k1Test extends FunSpec with Matchers with BeforeAndAfterEach with A
         .encode(Secp256k1.toPublic(sec))
         .toUpperCase() shouldBe "04C591A8FF19AC9C4E4E5793673B83123437E975285E7B442F4EE2654DFFCA5E2D2103ED494718C697AC9AEBCFD19612E224DB46661011863ED2FC54E71861E2A6"
     }
+    it("computes public key from secret key too") {
+      val sec =
+        Base16.unsafeDecode("a68a6e6cca30f81bd24a719f3145d20e8424bd7b396309b0708a16c7d8000b76")
+      val str = Base16
+        .encode(Secp256k1.toPublic(sec))
+      str shouldBe "04f700a417754b775d95421973bdbdadb2d23c8a5af46f1829b1431f5c136e549e8a0d61aa0c793f1a614f8e437711c7758473c6ceb0859ac7e9e07911ca66b5c4"
+    }
   }
 
 }
