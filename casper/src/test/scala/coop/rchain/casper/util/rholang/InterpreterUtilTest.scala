@@ -5,12 +5,8 @@ import java.nio.file.Files
 import cats.effect.Sync
 import cats.implicits._
 import com.google.protobuf.ByteString
-import coop.rchain.blockstorage.{
-  BlockDagRepresentation,
-  BlockDagStorage,
-  BlockStore,
-  IndexedBlockDagStorage
-}
+import coop.rchain.blockstorage.{BlockDagRepresentation, BlockDagStorage, BlockStore, IndexedBlockDagStorage}
+import coop.rchain.casper.genesis.contracts.TestUtil
 import coop.rchain.casper.helper.BlockGenerator._
 import coop.rchain.casper.helper._
 import coop.rchain.casper.protocol._
@@ -26,8 +22,8 @@ import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.PCost
 import coop.rchain.models.Validator.Validator
 import coop.rchain.p2p.EffectsTestInstances.LogStub
+import coop.rchain.rholang.interpreter.Runtime
 import coop.rchain.rholang.interpreter.Runtime.BlockData
-import coop.rchain.rholang.interpreter.{accounting, Runtime}
 import coop.rchain.shared.Time
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
@@ -50,22 +46,25 @@ class InterpreterUtilTest
 
   val runtimeManager = RuntimeManager.fromRuntime(activeRuntime).unsafeRunSync
 
-  def computeDeploysCheckpoint[F[_]: Sync: BlockStore](
+  def computeDeploysCheckpoint[F[_]: Sync: BlockStore: Time](
       parents: Seq[BlockMessage],
       deploys: Seq[DeployData],
       dag: BlockDagRepresentation[F],
       runtimeManager: RuntimeManager[F],
       span0: Span[F]
   ): F[Either[Throwable, (StateHash, StateHash, Seq[InternalProcessedDeploy])]] =
-    InterpreterUtil.computeDeploysCheckpoint(
-      parents,
-      deploys,
-      dag,
-      runtimeManager,
-      BlockData(System.currentTimeMillis(), 0),
-      span0,
-      Map.empty[BlockHash, Validator]
-    )
+    Time[F].currentMillis >>= (
+        time =>
+          InterpreterUtil.computeDeploysCheckpoint[F](
+            parents,
+            deploys,
+            dag,
+            runtimeManager,
+            BlockData(time, 0),
+            span0,
+            Map.empty[BlockHash, Validator]
+          )
+      )
 
   "computeBlockCheckpoint" should "compute the final post-state of a chain properly" in withStorage {
     implicit blockStore => implicit blockDagStorage =>
@@ -400,6 +399,7 @@ class InterpreterUtilTest
       deploy: DeployData*
   )(implicit blockStore: BlockStore[Task]): Task[Seq[InternalProcessedDeploy]] =
     for {
+      ///FIXME hmm this is going to be treated as if it were genesis?
       computeResult         <- computeDeploysCheckpoint[Task](Seq.empty, deploy, dag, runtimeManager, span)
       Right((_, _, result)) = computeResult
     } yield result
@@ -409,11 +409,13 @@ class InterpreterUtilTest
       implicit blockDagStorage =>
         //reference costs
         //deploy each Rholang program separately and record its cost
-        val deploy1 = ConstructDeploy.sourceDeployNow("@1!(Nil)")
-        val deploy2 = ConstructDeploy.sourceDeployNow("@3!([1,2,3,4])")
-        val deploy3 = ConstructDeploy.sourceDeployNow("for(@x <- @0) { @4!(x.toByteArray()) }")
+
         mkRuntimeManager("interpreter-util-test").use { runtimeManager =>
           for {
+            deploy1 <- ConstructDeploy.sourceDeployNowF("@1!(Nil)")
+            deploy2 <- ConstructDeploy.sourceDeployNowF("@3!([1,2,3,4])")
+            deploy3 <- ConstructDeploy.sourceDeployNowF("for(@x <- @0) { @4!(x.toByteArray()) }")
+
             dag          <- blockDagStorage.getRepresentation
             cost1        <- computeSingleProcessedDeploy(runtimeManager, dag, deploy1)
             cost2        <- computeSingleProcessedDeploy(runtimeManager, dag, deploy2)
@@ -425,7 +427,7 @@ class InterpreterUtilTest
       }
   }
 
-  it should "return cost of deploying even if one of the programs withing the deployment throws an error" in
+  it should "return cost of deploying even if one of the programs within the deployment throws an error" in
     pendingUntilFixed { //reference costs
       withStorage { implicit blockStore => implicit blockDagStorage =>
         //deploy each Rholang program separately and record its cost
@@ -787,10 +789,9 @@ class InterpreterUtilTest
 
   "findMultiParentsBlockHashesForReplay" should "filter out duplicate ancestors of main parent block" in withStorage {
     implicit blockStore => implicit blockDagStorage =>
-      val genesisDeploysWithCost = prepareDeploys(Vector.empty, PCost(1))
-      val b1DeploysWithCost      = prepareDeploys(Vector("@1!(1)"), PCost(1))
-      val b2DeploysWithCost      = prepareDeploys(Vector("@2!(2)"), PCost(1))
-      val b3DeploysWithCost      = prepareDeploys(Vector("@3!(3)"), PCost(1))
+      val b1DeploysWithCost = prepareDeploys(Vector("@1!(1)"), PCost(1))
+      val b2DeploysWithCost = prepareDeploys(Vector("@2!(2)"), PCost(1))
+      val b3DeploysWithCost = prepareDeploys(Vector("@3!(3)"), PCost(1))
 
       /*
        * DAG Looks like this:
@@ -805,14 +806,20 @@ class InterpreterUtilTest
       mkRuntimeManager("interpreter-util-test")
         .use { runtimeManager =>
           for {
-            genesis <- createGenesis[Task](deploys = genesisDeploysWithCost)
-            b1      <- createBlock[Task](Seq(genesis.blockHash), genesis, deploys = b1DeploysWithCost)
-            b2      <- createBlock[Task](Seq(genesis.blockHash), genesis, deploys = b2DeploysWithCost)
-            b3 <- createBlock[Task](
-                   Seq(b1.blockHash, b2.blockHash),
-                   genesis,
-                   deploys = b3DeploysWithCost
-                 )
+            genesis <- TestUtil.defaultGenesisSetup(runtimeManager)
+            modifiedBlock <- IndexedBlockDagStorage[Task].insertIndexed(
+                              genesis,
+                              genesis,
+                              invalid = false
+                            )
+            _  <- BlockStore[Task].put(genesis.blockHash, modifiedBlock)
+            b1 <- createBlock[Task](Seq(genesis.blockHash), genesis, deploys = b1DeploysWithCost)
+            b2 <- createBlock[Task](Seq(genesis.blockHash), genesis, deploys = b2DeploysWithCost)
+            _ <- createBlock[Task](
+                  Seq(b1.blockHash, b2.blockHash),
+                  genesis,
+                  deploys = b3DeploysWithCost
+                )
             _   <- step(runtimeManager)(0, genesis)
             _   <- step(runtimeManager)(1, genesis)
             _   <- step(runtimeManager)(2, genesis)
