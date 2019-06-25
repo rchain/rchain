@@ -5,6 +5,7 @@ import cats.implicits._
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.{BlockDagStorage, BlockStore, IndexedBlockDagStorage}
 import coop.rchain.casper.EstimatorHelper.conflicts
+import coop.rchain.casper.genesis.contracts.TestUtil
 import coop.rchain.casper.helper.BlockGenerator.{
   computeBlockCheckpoint,
   injectPostStateHash,
@@ -47,19 +48,39 @@ class EstimatorHelperTest
    *       | /     \ |
    *       b2       b3
    *        \       /
+   *         \     /
+   *          \   /
+   *           b1
+   *           |
    *         genesis
+   *
    */
   "Blocks" should "conflict if they use the same deploys in different histories" in withStorage {
     implicit blockStore => implicit blockDagStorage =>
       mkRuntimeManager("casper-util-test").use { runtimeManager =>
         for {
-
+          genesis <- TestUtil.defaultGenesisSetup[Task](runtimeManager)
           deploys <- (0 until 6).toList.traverse(i => basicProcessedDeploy[Task](i))
-          genesis <- createGenesis[Task]()
-          b2      <- createBlock[Task](Seq(genesis.blockHash), genesis, deploys = Seq(deploys(0)))
-          b3      <- createBlock[Task](Seq(genesis.blockHash), genesis, deploys = Seq(deploys(1)))
-          b4      <- createBlock[Task](Seq(b2.blockHash), genesis, deploys = Seq(deploys(2)))
-          b5      <- createBlock[Task](Seq(b3.blockHash), genesis, deploys = Seq(deploys(2)))
+
+          _ <- BlockStore[Task].put(genesis.blockHash, genesis)
+
+          b1 <- createBlock[Task](
+                 Seq(genesis.blockHash),
+                 genesis,
+                 deploys = Seq.empty
+               )
+          b2 <- createBlock[Task](
+                 Seq(b1.blockHash),
+                 genesis,
+                 deploys = Seq(deploys(0))
+               )
+          b3 <- createBlock[Task](
+                 Seq(b1.blockHash),
+                 genesis,
+                 deploys = Seq(deploys(1))
+               )
+          b4 <- createBlock[Task](Seq(b2.blockHash), genesis, deploys = Seq(deploys(2)))
+          b5 <- createBlock[Task](Seq(b3.blockHash), genesis, deploys = Seq(deploys(2)))
           b6 <- createBlock[Task](
                  Seq(b2.blockHash, b3.blockHash),
                  genesis,
@@ -71,18 +92,17 @@ class EstimatorHelperTest
           b10 <- createBlock[Task](Seq(b8.blockHash), genesis, deploys = Seq(deploys(4)))
 
           dag <- blockDagStorage.getRepresentation
-
           computeBlockCheckpointResult <- computeBlockCheckpoint(
-                                           genesis,
-                                           genesis,
+                                           b1,
+                                           b1,
                                            dag,
                                            runtimeManager
                                          )
           (postGenStateHash, postGenProcessedDeploys) = computeBlockCheckpointResult
           _ <- injectPostStateHash[Task](
                 0,
-                genesis,
-                genesis,
+                b1,
+                b1,
                 postGenStateHash,
                 postGenProcessedDeploys
               )
