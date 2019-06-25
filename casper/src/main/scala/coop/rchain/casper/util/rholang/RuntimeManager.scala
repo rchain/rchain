@@ -135,7 +135,7 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics] private[rholang] (
         _      <- runtime.blockData.setParams(blockData)
         _      <- setInvalidBlocks(invalidBlocks, runtime)
         _      <- span.mark("before-process-deploys")
-        result <- processDeploys(runtime, span, startHash, terms)
+        result <- processDeploys(runtime, span, startHash, terms, processDeploy(runtime, span))
         _      <- span.close()
       } yield result
     }
@@ -150,7 +150,7 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics] private[rholang] (
         span       <- Metrics[F].span(computeGenesisLabel)
         _          <- runtime.blockData.setParams(BlockData(blockTime, 0))
         _          <- span.mark("before-process-deploys")
-        evalResult <- processDeploys(runtime, span, startHash, terms)
+        evalResult <- processDeploys(runtime, span, startHash, terms, processDeploy(runtime, span))
         _          <- span.close()
       } yield (startHash, evalResult._1, evalResult._2)
     }
@@ -302,14 +302,15 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics] private[rholang] (
       runtime: Runtime[F],
       span: Span[F],
       startHash: StateHash,
-      terms: Seq[DeployData]
+      terms: Seq[DeployData],
+      processDeploy: DeployData => F[InternalProcessedDeploy]
   ): F[(StateHash, Seq[InternalProcessedDeploy])] =
     for {
       _ <- runtime.space.reset(Blake2b256Hash.fromByteString(startHash))
       res <- terms.toList
               .foldM(Seq.empty[InternalProcessedDeploy]) {
                 case (results, deploy) => {
-                  processDeploy(runtime, span, deploy).map(results :+ _)
+                  processDeploy(deploy).map(results :+ _)
                 }
               }
       _               <- span.mark("before-process-deploys-create-checkpoint")
@@ -317,9 +318,7 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics] private[rholang] (
       finalStateHash  = finalCheckpoint.root
     } yield (finalStateHash.toByteString, res)
 
-  private def processDeploy(
-      runtime: Runtime[F],
-      span: Span[F],
+  private def processDeploy(runtime: Runtime[F], span: Span[F])(
       deploy: DeployData
   ): F[InternalProcessedDeploy] =
     for {
