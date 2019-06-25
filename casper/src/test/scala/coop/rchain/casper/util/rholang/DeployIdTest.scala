@@ -67,13 +67,7 @@ class DeployIdTest extends FlatSpec with Matchers {
     )
     val contractCall = deploy(
       sk,
-      s"""new deployId(`rho:rchain:deployId`), ret in {
-         |  @"check"!(*deployId, *ret) |
-         |  for(isEqual <- ret) {
-         |    @"$captureChannel"!(*isEqual)
-         |  }
-         |}
-       """.stripMargin
+      s"""new deployId(`rho:rchain:deployId`), ret in { @"check"!(*deployId, "$captureChannel") }"""
     )
     val result =
       runtimeManager
