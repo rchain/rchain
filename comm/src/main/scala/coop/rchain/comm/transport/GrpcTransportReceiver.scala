@@ -56,8 +56,11 @@ object GrpcTransportReceiver {
 
           val circuitBreaker: StreamHandler.CircuitBreaker = {
             case streamed =>
-              streamed.header.map(_.networkId != networkId).getOrElse(false) ||
-                streamed.readSoFar > maxStreamMessageSize
+              if (streamed.header.map(_.networkId != networkId).getOrElse(false))
+                Broken(StreamHandler.StreamError.wrongNetworkId)
+              else if (streamed.readSoFar > maxStreamMessageSize)
+                Broken(StreamHandler.StreamError.circuitBroken)
+              else Closed
           }
 
           (handleStream(tempFolder, observable, circuitBreaker) >>= {

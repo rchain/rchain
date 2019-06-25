@@ -26,25 +26,34 @@ final case class Header(
     compressed: Boolean
 )
 
+sealed trait Circuit {
+  val broken: Boolean
+}
+final case class Broken(error: StreamHandler.StreamError) extends Circuit {
+  val broken: Boolean = true
+}
+final case object Closed extends Circuit {
+  val broken: Boolean = false
+}
+
 final case class Streamed(
     header: Option[Header] = None,
     readSoFar: Long = 0,
-    circuitBroken: Boolean = false, // TODO change to ADT
-    wrongNetwork: Boolean = false,  // TODO remove
+    circuit: Circuit = Closed,
     path: Path,
     fos: FileOutputStream
 )
 
 object StreamHandler {
 
-  type CircuitBreaker = Streamed => Boolean
+  type CircuitBreaker = Streamed => Circuit
 
   sealed trait StreamError
   object StreamError {
     type StreamErr[A] = Either[StreamError, A]
 
     case object WrongNetworkId                        extends StreamError
-    case object CircuitBroken                         extends StreamError
+    case object CircuitBroken                         extends StreamError // TODO rename to MaxSizeReached
     final case class NotFullMessage(streamed: String) extends StreamError
     final case class Unexpected(error: Throwable)     extends StreamError
 
@@ -113,7 +122,8 @@ object StreamHandler {
           val newStmd = stmd.copy(
             header = Some(Header(ProtocolHelper.toPeerNode(sender), typeId, cl, nid, compressed))
           )
-          if (circuitBreaker(newStmd)) Right(newStmd.copy(circuitBroken = true))
+          val circuit = circuitBreaker(newStmd)
+          if (circuit.broken) Right(newStmd.copy(circuit = circuit))
           else Left(newStmd)
 
         case (stmd, Chunk(Chunk.Content.Data(ChunkData(newData)))) =>
@@ -122,19 +132,22 @@ object StreamHandler {
           stmd.fos.flush()
           val readSoFar = stmd.readSoFar + array.length
           val newStmd   = stmd.copy(readSoFar = readSoFar)
-          if (circuitBreaker(newStmd))
-            Right(newStmd.copy(circuitBroken = true))
+          val circuit   = circuitBreaker(newStmd)
+          if (circuit.broken)
+            Right(newStmd.copy(circuit = circuit))
           else Left(newStmd)
-        case (stmd, _) => Right(stmd.copy(circuitBroken = true))
+        case (stmd, _) =>
+          Right(
+            stmd.copy(
+              circuit = Broken(StreamHandler.StreamError.notFullMessage("Not all data received"))
+            )
+          )
       }
 
     EitherT(collectStream.attempt.map {
-      case Right(stmd) if stmd.wrongNetwork =>
-        StreamError.wrongNetworkId.asLeft
-      case Right(stmd) if stmd.circuitBroken =>
-        StreamError.circuitBroken.asLeft
-      case Right(stmd) => stmd.asRight
-      case Left(t)     => StreamError.unexpected(t).asLeft
+      case Right(Streamed(_, _, Broken(error), _, _)) => error.asLeft
+      case Right(stmd)                                => stmd.asRight
+      case Left(t)                                    => StreamError.unexpected(t).asLeft
     })
 
   }
@@ -149,7 +162,6 @@ object StreamHandler {
         case Streamed(
             Some(Header(sender, packetType, contentLength, _, compressed)),
             readSoFar,
-            _,
             _,
             path,
             _
