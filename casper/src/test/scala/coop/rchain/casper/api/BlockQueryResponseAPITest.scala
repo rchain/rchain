@@ -28,7 +28,7 @@ class BlockQueryResponseAPITest
     with BlockDagStorageFixture {
   implicit val timeEff = new LogicalTime[Task]
   implicit val spanEff = NoopSpan[Task]()
-  private val (sk, pk) = Secp256k1.newKeyPair
+  private val (sk, pk) = ConstructDeploy.defaultKeyPair
   val secondBlockQuery = "1234"
   val badTestHashQuery = "No such a hash"
 
@@ -63,7 +63,7 @@ class BlockQueryResponseAPITest
   val deployCount = 10
   val randomDeploys =
     (0 until deployCount).toList
-      .traverse(i => ConstructDeploy.basicProcessedDeploy[Task](i, sk))
+      .traverse(i => ConstructDeploy.basicProcessedDeploy[Task](i))
       .unsafeRunSync(scheduler)
   val body: Body                       = Body().withState(ps).withDeploys(randomDeploys)
   val parentsString                    = List(genesisHashString, "0000000001")

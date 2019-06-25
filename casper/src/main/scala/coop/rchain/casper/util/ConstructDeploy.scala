@@ -8,13 +8,12 @@ import coop.rchain.casper.protocol.{DeployData, ProcessedDeploy}
 import coop.rchain.crypto.PrivateKey
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.signatures.Secp256k1
-import coop.rchain.rholang.interpreter.accounting
 import coop.rchain.shared.Time
 
 object ConstructDeploy {
 
   val defaultSec = PrivateKey(
-    Base16.unsafeDecode("b18e1d0045995ec3d010c387ccfeb984d783af8fbb0f40fa7db126d889f6dadd")
+    Base16.unsafeDecode("a68a6e6cca30f81bd24a719f3145d20e8424bd7b396309b0708a16c7d8000b76")
   )
 
   val defaultPub = Secp256k1.toPublic(defaultSec)
@@ -27,47 +26,41 @@ object ConstructDeploy {
   def sourceDeploy(
       source: String,
       timestamp: Long,
-      phlos: Long,
-      phloPrice: Long = 0L,
+      phloLimit: Long = 90000,
+      phloPrice: Long = 1L,
       sec: PrivateKey = defaultSec
   ): DeployData = {
     val data = DeployData(
       deployer = ByteString.copyFrom(Secp256k1.toPublic(sec).bytes),
       timestamp = timestamp,
       term = source,
-      phloLimit = phlos,
+      phloLimit = phloLimit,
       phloPrice = phloPrice
     )
     sign(data, sec)
   }
 
-  def sourceDeployNow(source: String): DeployData =
-    sourceDeploy(
-      source,
-      System.currentTimeMillis(),
-      accounting.MAX_VALUE
-    )
+  def sourceDeployNow(
+      source: String
+  ): DeployData =
+    sourceDeploy(source = source, timestamp = System.currentTimeMillis())
 
-  def sourceDeployNowF[F[_]: Time: Functor](source: String): F[DeployData] =
-    Time[F].currentMillis.map(sourceDeploy(source, _, accounting.MAX_VALUE))
+  def sourceDeployNowF[F[_]: Time: Functor](
+      source: String,
+      phloLimit: Long = 90000,
+      phloPrice: Long = 1L,
+      sec: PrivateKey = defaultSec
+  ): F[DeployData] =
+    Time[F].currentMillis
+      .map(sourceDeploy(source, _, phloLimit = phloLimit, phloPrice = phloPrice, sec = sec))
 
   def basicDeployData[F[_]: Monad: Time](
-      id: Int,
-      sec: PrivateKey = defaultSec,
-      phlos: Long = accounting.MAX_VALUE
+      id: Int
   ): F[DeployData] =
-    Time[F].currentMillis.map { now =>
-      val data = DeployData()
-        .withDeployer(ByteString.copyFrom(Secp256k1.toPublic(sec).bytes))
-        .withTimestamp(now)
-        .withTerm(s"@${id}!($id)")
-        .withPhloLimit(phlos)
-      sign(data, sec)
-    }
+    sourceDeployNowF(source = s"@$id!($id)")
 
   def basicProcessedDeploy[F[_]: Monad: Time](
-      id: Int,
-      sec: PrivateKey = defaultSec
+      id: Int
   ): F[ProcessedDeploy] =
-    basicDeployData[F](id, sec).map(deploy => ProcessedDeploy(deploy = Some(deploy)))
+    basicDeployData[F](id).map(deploy => ProcessedDeploy(deploy = Some(deploy)))
 }
