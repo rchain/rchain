@@ -2,7 +2,6 @@ package coop.rchain.casper
 
 import java.nio.file.Files
 
-import cats.effect.Sync
 import cats.implicits._
 import coop.rchain.blockstorage.BlockStore
 import coop.rchain.casper.MultiParentCasper.ignoreDoppelgangerCheck
@@ -11,19 +10,16 @@ import coop.rchain.casper.genesis.contracts._
 import coop.rchain.casper.helper.HashSetCasperTestNode.Effect
 import coop.rchain.casper.helper.{BlockDagStorageTestFixture, HashSetCasperTestNode}
 import coop.rchain.casper.protocol._
-import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.casper.util.rholang.RuntimeManager
+import coop.rchain.casper.util.{ConstructDeploy, ProtoUtil}
 import coop.rchain.catscontrib.TaskContrib.TaskOps
 import coop.rchain.crypto.PublicKey
-import coop.rchain.crypto.codec.Base16
-import coop.rchain.crypto.hash.Keccak256
 import coop.rchain.crypto.signatures.Secp256k1
 import coop.rchain.metrics
 import coop.rchain.metrics.Metrics
 import coop.rchain.models.Par
 import coop.rchain.rholang.interpreter.Runtime
 import coop.rchain.rholang.interpreter.util.RevAddress
-import coop.rchain.shared.PathOps.RichPath
 import coop.rchain.shared.{Log, StoreType}
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
@@ -72,7 +68,10 @@ object MultiParentCasperTestUtil {
         validators = bonds.map(Validator.tupled).toSeq
       ),
       genesisPk = Secp256k1.newKeyPair._2,
-      vaults = bonds.toList.map {
+      vaults = Vault(
+        RevAddress.fromPublicKey(Secp256k1.toPublic(ConstructDeploy.defaultSec)).get,
+        900000
+      ) :: bonds.toList.map {
         case (pk, stake) =>
           RevAddress.fromPublicKey(pk).map(Vault(_, stake))
       }.flattenOption,

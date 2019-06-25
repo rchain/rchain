@@ -1,6 +1,9 @@
 package coop.rchain.casper
 
+import cats.Monad
 import cats.implicits._
+import com.google.protobuf.ByteString
+import coop.rchain.blockstorage.{BlockDagStorage, BlockStore, IndexedBlockDagStorage}
 import coop.rchain.casper.EstimatorHelper.conflicts
 import coop.rchain.casper.helper.BlockGenerator.{
   computeBlockCheckpoint,
@@ -8,6 +11,8 @@ import coop.rchain.casper.helper.BlockGenerator.{
   updateChainWithBlockStateUpdate
 }
 import coop.rchain.casper.helper.{BlockDagStorageFixture, BlockGenerator}
+import coop.rchain.casper.protocol.Event.EventInstance.Produce
+import coop.rchain.casper.protocol.{Event, ProcessedDeploy, ProduceEvent}
 import coop.rchain.casper.scalatestcontrib._
 import coop.rchain.casper.util.ConstructDeploy.basicProcessedDeploy
 import coop.rchain.casper.util.rholang.Resources.mkRuntimeManager
@@ -101,4 +106,41 @@ class EstimatorHelperTest
         } yield result
       }
   }
+
+  it should "conflict if their deploys contain same channel in deployLog" in withStorage {
+    implicit blockStore => implicit blockDagStorage =>
+      testConflict[Task] { deploy =>
+        deploy.copy(deployLog = Seq(produce(ByteString.copyFromUtf8("A"))))
+      }
+  }
+
+  it should "conflict if their deploys contain same channel in paymentLog" in withStorage {
+    implicit blockStore => implicit blockDagStorage =>
+      testConflict[Task] { deploy =>
+        deploy.copy(paymentLog = Seq(produce(ByteString.copyFromUtf8("A"))))
+      }
+  }
+
+  private def testConflict[F[_]: BlockStore: IndexedBlockDagStorage: Time: Log: Monad](
+      deployMod: ProcessedDeploy => ProcessedDeploy
+  ): F[Unit] =
+    for {
+      genesis <- createGenesis[F]()
+      deployA <- basicProcessedDeploy[F](1).map(deployMod)
+      a       <- createBlock[F](Seq(genesis.blockHash), genesis, deploys = Seq(deployA))
+      deployB <- basicProcessedDeploy[F](2).map(deployMod)
+      b       <- createBlock[F](Seq(genesis.blockHash), genesis, deploys = Seq(deployB))
+      dag     <- BlockDagStorage[F].getRepresentation
+
+      _              <- conflicts[F](a, b, dag) shouldBeF true
+      nonconflicting <- EstimatorHelper.chooseNonConflicting(Seq(a, b).map(_.blockHash), dag)
+      result         = assert(nonconflicting == Seq(a))
+    } yield ()
+
+  private def produce(channelsHash: ByteString) =
+    Event(
+      Produce(
+        ProduceEvent(channelsHash)
+      )
+    )
 }

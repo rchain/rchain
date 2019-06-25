@@ -10,11 +10,12 @@ import coop.rchain.casper.helper.{BlockUtil, HashSetCasperTestNode}
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.scalatestcontrib._
 import coop.rchain.casper.util.comm.TestNetwork
+import coop.rchain.casper.util.rholang.RegistrySigGen
 import coop.rchain.casper.util.{ConstructDeploy, ProtoUtil, RSpaceUtil}
 import coop.rchain.catscontrib.TaskContrib.TaskOps
 import coop.rchain.comm.rp.ProtocolHelper.packet
 import coop.rchain.comm.transport
-import coop.rchain.crypto.PrivateKey
+import coop.rchain.crypto.PublicKey
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.hash.Blake2b256
 import coop.rchain.crypto.signatures.Secp256k1
@@ -95,26 +96,25 @@ class MultiParentCasperAddBlockSpec extends FlatSpec with Matchers with Inspecto
     HashSetCasperTestNode.standaloneEff(genesis, validatorKeys.head).use { node =>
       implicit val rm = node.runtimeManager
 
-      val start = 0L
-
-      val deployDatas = Vector(
-        "contract @\"add\"(@x, @y, ret) = { ret!(x + y) }",
-        "new unforgable in { @\"add\"!(5, 7, *unforgable) }"
-      ).zipWithIndex
-        .map(s => ConstructDeploy.sourceDeploy(s._1, start + s._2, accounting.MAX_VALUE))
-
       for {
-
-        signedBlock1 <- node.addBlock(deployDatas.head)
-        signedBlock2 <- node.addBlock(deployDatas(1))
+        deploy1 <- ConstructDeploy
+                    .sourceDeployNowF("contract @\"add\"(@x, @y, ret) = { ret!(x + y) }")
+        signedBlock1 <- node.addBlock(deploy1)
+        deploy2 <- ConstructDeploy
+                    .sourceDeployNowF("new unforgable in { @\"add\"!(5, 7, *unforgable) }")
+        signedBlock2 <- node.addBlock(deploy2)
         _            = ProtoUtil.parentHashes(signedBlock2) should be(Seq(signedBlock1.blockHash))
         dag          <- node.casperEff.blockDag
         estimate     <- node.casperEff.estimator(dag)
         _            = estimate shouldBe IndexedSeq(signedBlock2.blockHash)
-        // channel is deterministic because of the fixed timestamp
         data <- getDataAtPrivateChannel[Effect](
                  signedBlock2,
-                 "ad0dd958a6acf8e58c2ecfdbf5f23b3c5beb74a7091c21a10c79cbb0b591872d"
+                 Base16.encode(
+                   RegistrySigGen.generateUnforgeableNameId(
+                     PublicKey(deploy2.deployer.toByteArray),
+                     deploy2.timestamp
+                   )
+                 )
                )
         _ = data shouldBe Seq("12")
       } yield ()
@@ -123,13 +123,11 @@ class MultiParentCasperAddBlockSpec extends FlatSpec with Matchers with Inspecto
 
   it should "allow multiple deploys in a single block" in effectTest {
     HashSetCasperTestNode.standaloneEff(genesis, validatorKeys.head).use { node =>
-      val startTime = System.currentTimeMillis()
-      val source    = " for(@x <- @0){ @0!(x) } | @0!(0) "
-      val deploys = (source :: source :: Nil).zipWithIndex
-        .map(s => ConstructDeploy.sourceDeploy(s._1, startTime + s._2, accounting.MAX_VALUE))
+      val source = " for(@x <- @0){ @0!(x) } | @0!(0) "
       for {
-        block  <- node.addBlock(deploys: _*)
-        result <- node.casperEff.contains(block) shouldBeF true
+        deploys <- List(source, source).traverse(ConstructDeploy.sourceDeployNowF[Effect](_))
+        block   <- node.addBlock(deploys: _*)
+        result  <- node.casperEff.contains(block) shouldBeF true
       } yield result
     }
   }
@@ -180,7 +178,7 @@ class MultiParentCasperAddBlockSpec extends FlatSpec with Matchers with Inspecto
 
       for {
         basicDeployData <- ConstructDeploy.basicDeployData[Effect](0)
-        signedBlock     <- node.addBlock(basicDeployData)
+        _               <- node.addBlockStatus(InvalidUnslashableBlock)(basicDeployData)
         _               = node.logEff.warns.head.contains("Ignoring block") should be(true)
       } yield ()
     }

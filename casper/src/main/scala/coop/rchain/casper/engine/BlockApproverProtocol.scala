@@ -153,7 +153,8 @@ object BlockApproverProtocol {
                       .replayComputeState(runtimeManager.emptyStateHash)(
                         blockDeploys,
                         BlockData(time, blockNumber),
-                        Map.empty[BlockHash, Validator]
+                        Map.empty[BlockHash, Validator],
+                        isGenesis = true
                       )
                   ).leftMap { case (_, status) => s"Failed status during replay: $status." }
       _ <- EitherT(

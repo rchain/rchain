@@ -61,7 +61,8 @@ object InterpreterUtil {
                  internalDeploys,
                  possiblePreStateHash,
                  BlockData(timestamp, blockNumber),
-                 invalidBlocks
+                 invalidBlocks,
+                 isGenesis = b.header.get.parentsHashList.isEmpty
                )
     } yield result
   }
@@ -73,7 +74,8 @@ object InterpreterUtil {
       internalDeploys: Seq[InternalProcessedDeploy],
       possiblePreStateHash: Either[Throwable, StateHash],
       blockData: BlockData,
-      invalidBlocks: Map[BlockHash, Validator]
+      invalidBlocks: Map[BlockHash, Validator],
+      isGenesis: Boolean
   ): F[Either[BlockException, Option[StateHash]]] =
     possiblePreStateHash match {
       case Left(ex) =>
@@ -87,7 +89,8 @@ object InterpreterUtil {
             internalDeploys,
             possiblePreStateHash,
             blockData,
-            invalidBlocks
+            invalidBlocks,
+            isGenesis
           )
         } else {
           Log[F].warn(
@@ -105,10 +108,11 @@ object InterpreterUtil {
       internalDeploys: Seq[InternalProcessedDeploy],
       possiblePreStateHash: Either[Throwable, StateHash],
       blockData: BlockData,
-      invalidBlocks: Map[BlockHash, Validator]
+      invalidBlocks: Map[BlockHash, Validator],
+      isGenesis: Boolean
   ): F[Either[BlockException, Option[StateHash]]] =
     runtimeManager
-      .replayComputeState(preStateHash)(internalDeploys, blockData, invalidBlocks)
+      .replayComputeState(preStateHash)(internalDeploys, blockData, invalidBlocks, isGenesis)
       .flatMap {
         case Left((Some(deploy), status)) =>
           status match {
@@ -167,15 +171,23 @@ object InterpreterUtil {
       span: Span[F],
       invalidBlocks: Map[BlockHash, Validator]
   ): F[Either[Throwable, (StateHash, StateHash, Seq[InternalProcessedDeploy])]] =
-    for {
-      possiblePreStateHash <- computeParentsPostState[F](parents, dag, runtimeManager, span)
-      result <- possiblePreStateHash.flatTraverse { preStateHash =>
-                 runtimeManager.computeState(preStateHash)(deploys, blockData, invalidBlocks).map {
-                   case (postStateHash, processedDeploys) =>
-                     (preStateHash, postStateHash, processedDeploys).asRight[Throwable]
+    //FIXME the `if` is only needed because of usages in test code. The only production usage currently is non-genesis.
+    //  Usages of this and similar methods in test code should be elliminated, as they call into the internals of the
+    //  tested subsystems.
+    if (parents.isEmpty)
+      runtimeManager.computeGenesis(deploys, blockData.timeStamp).map(_.asRight[Throwable])
+    else
+      for {
+        possiblePreStateHash <- computeParentsPostState[F](parents, dag, runtimeManager, span)
+        result <- possiblePreStateHash.flatTraverse { preStateHash =>
+                   runtimeManager
+                     .computeState(preStateHash)(deploys, blockData, invalidBlocks)
+                     .map {
+                       case (postStateHash, processedDeploys) =>
+                         (preStateHash, postStateHash, processedDeploys).asRight[Throwable]
+                     }
                  }
-               }
-    } yield result
+      } yield result
 
   private def computeParentsPostState[F[_]: Sync: BlockStore](
       parents: Seq[BlockMessage],
@@ -236,7 +248,8 @@ object InterpreterUtil {
                                replayResult <- runtimeManager.replayComputeState(stateHash)(
                                                 deploys,
                                                 BlockData(timestamp, blockNumber),
-                                                invalidBlocks
+                                                invalidBlocks,
+                                                isGenesis = parents.isEmpty //should always be false
                                               )
                              } yield replayResult match {
                                case result @ Right(_) => result.leftCast[Throwable]

@@ -1,7 +1,7 @@
 package coop.rchain.casper.util
 
-import cats.Monad
 import cats.implicits._
+import cats.{Functor, Monad}
 import com.google.protobuf.ByteString
 import coop.rchain.casper.SignDeployment
 import coop.rchain.casper.protocol.{DeployData, ProcessedDeploy}
@@ -13,7 +13,7 @@ import coop.rchain.shared.Time
 
 object ConstructDeploy {
 
-  private val defaultSec = PrivateKey(
+  val defaultSec = PrivateKey(
     Base16.unsafeDecode("b18e1d0045995ec3d010c387ccfeb984d783af8fbb0f40fa7db126d889f6dadd")
   )
 
@@ -43,6 +43,9 @@ object ConstructDeploy {
       System.currentTimeMillis(),
       accounting.MAX_VALUE
     )
+
+  def sourceDeployNowF[F[_]: Time: Functor](source: String): F[DeployData] =
+    Time[F].currentMillis.map(sourceDeploy(source, _, accounting.MAX_VALUE))
 
   def basicDeployData[F[_]: Monad: Time](
       id: Int,

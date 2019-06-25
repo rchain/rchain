@@ -4,13 +4,15 @@ import cats.implicits._
 import coop.rchain.casper.MultiParentCasper.ignoreDoppelgangerCheck
 import coop.rchain.casper.helper.HashSetCasperTestNode
 import coop.rchain.casper.helper.HashSetCasperTestNode._
-import coop.rchain.casper.util.ConstructDeploy
-import coop.rchain.crypto.signatures.Secp256k1
 import coop.rchain.casper.scalatestcontrib._
-import coop.rchain.rholang.interpreter.accounting
+import coop.rchain.casper.util.ConstructDeploy
+import coop.rchain.casper.util.RSpaceUtil._
+import coop.rchain.casper.util.rholang.RegistrySigGen
+import coop.rchain.crypto.PublicKey
+import coop.rchain.crypto.codec.Base16
+import coop.rchain.crypto.signatures.Secp256k1
 import monix.execution.Scheduler.Implicits.global
 import org.scalatest.{FlatSpec, Matchers}
-import util.RSpaceUtil._
 
 class RholangBuildTest extends FlatSpec with Matchers {
 
@@ -26,32 +28,37 @@ class RholangBuildTest extends FlatSpec with Matchers {
         implicit val rm = node.runtimeManager
 
         val code =
-          """new double, rl(`rho:registry:lookup`), ListOpsCh, getBlockData(`rho:block:data`), timeRtn, stdout(`rho:io:stdout`), doubleRet ,timestampRet in {
+          """
+          |new testRet, double, rl(`rho:registry:lookup`), ListOpsCh, getBlockData(`rho:block:data`),
+          |    timeRtn, stdout(`rho:io:stdout`), doubleRet
+          |in {
           |  contract double(@x, ret) = { ret!(2 * x) } |
           |  rl!(`rho:lang:listOps`, *ListOpsCh) |
           |  for(@(_, ListOps) <- ListOpsCh) {
           |    @ListOps!("map", [2, 3, 5, 7], *double, *doubleRet)
           |  } |
           |  getBlockData!(*timeRtn) |
-          |  for (@_, @timestamp <- timeRtn) {
-          |    timestampRet!("The timestamp is ${timestamp}" %% {"timestamp" : timestamp})
+          |  for (@_, @timestamp <- timeRtn; @doubles <- doubleRet) {
+          |    testRet!((doubles, "The timestamp is ${timestamp}" %% {"timestamp" : timestamp}))
           |  }
-          |}""".stripMargin
-        val deploy = ConstructDeploy.sourceDeploy(code, 1L, accounting.MAX_VALUE)
+          |}
+          |""".stripMargin
         for {
+          deploy <- ConstructDeploy.sourceDeployNowF(code)
           createBlockResult <- MultiParentCasper[Effect]
-                                .deploy(deploy) *> MultiParentCasper[Effect].createBlock
+                                .deploy(deploy) >> MultiParentCasper[Effect].createBlock
           Created(signedBlock) = createBlockResult
           _                    <- MultiParentCasper[Effect].addBlock(signedBlock, ignoreDoppelgangerCheck[Effect])
           _                    = logEff.warns should be(Nil)
           _ <- getDataAtPrivateChannel[Effect](
                 signedBlock,
-                "cc7214cc9a111bfa8af931f001ce129ec5d7c7d641b4cb6b5c3166444a47c5ec"
-              ).map(_ shouldBe Seq("[4, 6, 10, 14]"))
-          _ <- getDataAtPrivateChannel[Effect](
-                signedBlock,
-                "870decec96bb14dd556d56320de0338be14d5eb82c44be43cb225f870cdd239c"
-              ).map(_ shouldBe Seq("\"The timestamp is 1\""))
+                Base16.encode(
+                  RegistrySigGen.generateUnforgeableNameId(
+                    PublicKey(deploy.deployer.toByteArray),
+                    deploy.timestamp
+                  )
+                )
+              ).map(_ shouldBe Seq("""([4, 6, 10, 14], "The timestamp is 2")"""))
         } yield ()
       }
   }
