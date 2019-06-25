@@ -6,10 +6,10 @@ import cats.effect.concurrent.MVar
 import cats.effect.{Sync, _}
 import cats.implicits._
 import com.google.protobuf.ByteString
-import coop.rchain.casper.protocol._
-import coop.rchain.casper.util.{ConstructDeploy, ProtoUtil}
 import coop.rchain.casper.CasperMetricsSource
+import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
+import coop.rchain.casper.util.{ConstructDeploy, ProtoUtil}
 import coop.rchain.catscontrib.Catscontrib.ToMonadOps
 import coop.rchain.catscontrib.MonadTrans
 import coop.rchain.crypto.hash.Blake2b512Random
@@ -32,6 +32,7 @@ import coop.rchain.rholang.interpreter.{
   NormalizerEnv,
   RhoType,
   Runtime,
+  accounting,
   PrettyPrinter => RholangPrinter
 }
 import coop.rchain.rspace.{trace, Blake2b256Hash, Checkpoint, ReplayException}
@@ -114,11 +115,13 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics] private[rholang] (
   ): F[Either[ReplayFailure, StateHash]] =
     withRuntimeLock { runtime =>
       for {
-        span   <- Metrics[F].span(replayComputeStateLabel)
-        _      <- runtime.blockData.setParams(blockData)
-        _      <- setInvalidBlocks(invalidBlocks, runtime)
-        _      <- span.mark("before-replay-deploys")
-        result <- replayDeploys(runtime, span, startHash, terms, replayDeploy(runtime, span))
+        span <- Metrics[F].span(replayComputeStateLabel)
+        _    <- runtime.blockData.setParams(blockData)
+        _    <- setInvalidBlocks(invalidBlocks, runtime)
+        _    <- span.mark("before-replay-deploys")
+        replayFunction = if (isGenesis) replayDeploy(runtime, span) _
+        else replayDeployWithPayment(runtime, span) _
+        result <- replayDeploys(runtime, span, startHash, terms, replayFunction)
         _      <- span.close()
       } yield result
     }
@@ -130,12 +133,18 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics] private[rholang] (
   ): F[(StateHash, Seq[InternalProcessedDeploy])] =
     withRuntimeLock { runtime =>
       for {
-        span   <- Metrics[F].span(computeStateLabel)
-        _      <- runtime.blockData.setParams(blockData)
-        _      <- setInvalidBlocks(invalidBlocks, runtime)
-        _      <- span.mark("before-process-deploys")
-        result <- processDeploys(runtime, span, startHash, terms, processDeploy(runtime, span))
-        _      <- span.close()
+        span <- Metrics[F].span(computeStateLabel)
+        _    <- runtime.blockData.setParams(blockData)
+        _    <- setInvalidBlocks(invalidBlocks, runtime)
+        _    <- span.mark("before-process-deploys")
+        result <- processDeploys(
+                   runtime,
+                   span,
+                   startHash,
+                   terms,
+                   processDeployWithPayment(runtime, span)
+                 )
+        _ <- span.close()
       } yield result
     }
 
@@ -197,6 +206,33 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics] private[rholang] (
        #   for(@(_, PoS) <- poSCh) {
        #     @PoS!("getBonds", "$name")
        #   }
+       # }
+       """.stripMargin('#')
+
+  private def computeDeployPayment(
+      runtime: Runtime[F],
+      reducer: ChargingReducer[F],
+      space: RhoISpace[F]
+  )(deploy: DeployData): F[Either[String, Unit]] =
+    for {
+      _ <- computeEffect(runtime, reducer)(
+            ConstructDeploy
+              .sourceDeploy(
+                deployPaymentSource(deploy.phloLimit * deploy.phloPrice),
+                timestamp = deploy.timestamp - 10000,
+                accounting.MAX_VALUE
+              )
+              .withDeployer(deploy.deployer)
+          ).ensureOr(r => BugFoundError("Deploy payment failed unexpectedly" + r.errors))(
+            _.errors.isEmpty
+          )
+      result <- ().asRight[String].pure[F]
+    } yield result
+
+  private def deployPaymentSource(amount: Long, name: String = "__SCALA__"): String =
+    s"""
+       # new deployId(`rho:rchain:deployId`) in {
+       #   deployId!("pay", $amount, "$name")
        # }
        """.stripMargin('#')
 
@@ -280,14 +316,33 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics] private[rholang] (
       _ <- span.mark("process-deploy-finished")
     } yield deployResult
 
+  private def processDeployWithPayment(runtime: Runtime[F], span: Span[F])(
+      deploy: DeployData
+  ): F[InternalProcessedDeploy] =
+    for {
+      fallback  <- runtime.space.createSoftCheckpoint()
+      payResult <- computeDeployPayment(runtime, runtime.reducer, runtime.space)(deploy)
+      result <- payResult.fold(
+                 error =>
+                   runtime.space
+                     .revertToSoftCheckpoint(fallback)
+                     .as(InternalProcessedDeploy.failedPayment(deploy, error)),
+                 _ =>
+                   runtime.space.createSoftCheckpoint() >>= (
+                       payPoint =>
+                         processDeploy(runtime, span)(deploy)
+                           .map(_.copy(paymentLog = payPoint.log))
+                     )
+               )
+      //FIXME add refund of remaining phlo
+    } yield result
+
   private def replayDeploys(
       runtime: Runtime[F],
       span: Span[F],
       startHash: StateHash,
       terms: Seq[InternalProcessedDeploy],
-      replayDeploy: (
-          InternalProcessedDeploy
-      ) => F[Option[ReplayFailure]]
+      replayDeploy: InternalProcessedDeploy => F[Option[ReplayFailure]]
   ): F[Either[ReplayFailure, StateHash]] =
     for {
       _ <- runtime.replaySpace.reset(Blake2b256Hash.fromByteString(startHash))
@@ -306,6 +361,25 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics] private[rholang] (
               }
               .value
     } yield res
+
+  private def replayDeployWithPayment(runtime: Runtime[F], span: Span[F])(
+      processedDeploy: InternalProcessedDeploy
+  ): F[Option[ReplayFailure]] =
+    for {
+      deploy <- processedDeploy.deploy.pure[F]
+
+      _              <- runtime.replaySpace.rig(processedDeploy.paymentLog)
+      softCheckpoint <- runtime.replaySpace.createSoftCheckpoint()
+      payResult      <- computeDeployPayment(runtime, runtime.replayReducer, runtime.replaySpace)(deploy)
+      result <- payResult.fold(
+                 error =>
+                   runtime.replaySpace
+                     .revertToSoftCheckpoint(softCheckpoint)
+                     .as((deploy.some, UnknownFailure: Failed /* FIXME */ ).some),
+                 postPaymentCheckpoint => replayDeploy(runtime, span)(processedDeploy)
+               )
+      //FIXME add refund of remaining phlo
+    } yield result
 
   private def replayDeploy(runtime: Runtime[F], span: Span[F])(
       processedDeploy: InternalProcessedDeploy
