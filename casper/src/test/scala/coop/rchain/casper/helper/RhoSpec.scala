@@ -3,7 +3,6 @@ package coop.rchain.casper.helper
 import cats.effect.Concurrent
 import coop.rchain.casper.genesis.contracts.TestUtil
 import coop.rchain.casper.protocol.DeployData
-import coop.rchain.crypto.PublicKey
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.metrics.Metrics
 import coop.rchain.rholang.Resources._
@@ -98,7 +97,6 @@ object RhoSpec {
 class RhoSpec(
     testObject: CompiledRholangSource,
     extraNonGenesisDeploys: Seq[DeployData],
-    normalizerEnv: NormalizerEnv,
     executionTimeout: FiniteDuration
 ) extends FlatSpec
     with AppendedClues
@@ -138,7 +136,7 @@ class RhoSpec(
   def hasFailures(assertions: List[RhoTestAssertion]) = assertions.find(_.isSuccess).isDefined
 
   private val result = RhoSpec
-    .getResults(testObject, extraNonGenesisDeploys, normalizerEnv, executionTimeout)
+    .getResults(testObject, extraNonGenesisDeploys, testObject.normalizerEnv, executionTimeout)
     .runSyncUnsafe(Duration.Inf)
 
   it should "finish execution within timeout" in {

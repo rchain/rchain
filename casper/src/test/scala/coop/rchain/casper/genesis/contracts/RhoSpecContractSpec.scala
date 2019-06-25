@@ -7,6 +7,5 @@ class RhoSpecContractSpec
     extends RhoSpec(
       CompiledRholangSource("RhoSpecContractTest.rho", NormalizerEnv.Empty),
       Seq.empty,
-      NormalizerEnv.Empty,
       GENESIS_TEST_TIMEOUT
     )

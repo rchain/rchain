@@ -9,6 +9,5 @@ class BlockDataContractSpec
     extends RhoSpec(
       CompiledRholangSource("BlockDataContractTest.rho", NormalizerEnv.Empty),
       Seq.empty,
-      NormalizerEnv.Empty,
       30.seconds
     )

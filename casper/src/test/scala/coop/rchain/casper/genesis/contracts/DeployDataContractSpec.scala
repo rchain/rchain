@@ -7,6 +7,5 @@ class DeployDataContractSpec
     extends RhoSpec(
       CompiledRholangSource("DeployDataContractTest.rho", NormalizerEnv.Empty),
       Seq.empty,
-      NormalizerEnv.Empty,
       GENESIS_TEST_TIMEOUT
     )

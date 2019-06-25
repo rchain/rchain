@@ -7,6 +7,5 @@ class NonNegativeNumberSpec
     extends RhoSpec(
       CompiledRholangSource("NonNegativeNumberTest.rho", NormalizerEnv.Empty),
       Seq.empty,
-      NormalizerEnv.Empty,
       GENESIS_TEST_TIMEOUT
     )

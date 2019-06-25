@@ -8,6 +8,5 @@ class PoSSpec
     extends RhoSpec(
       CompiledRholangSource("PoSTest.rho", NormalizerEnv.Empty),
       Seq.empty,
-      NormalizerEnv.Empty,
       GENESIS_TEST_TIMEOUT
     )

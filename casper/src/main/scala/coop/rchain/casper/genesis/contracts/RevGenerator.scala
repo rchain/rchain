@@ -42,7 +42,11 @@ final case class RevGenerator(
        # }
      """.stripMargin('#')
 
-  val term: Par = ParBuilder[Coeval].buildNormalizedTerm(code, NormalizerEnv(deployId = None, deployerPk = genesisPk.some)).value()
+  val normalizerEnv: NormalizerEnv = NormalizerEnv(deployId = none, deployerPk = genesisPk.some)
+
+  val term: Par = ParBuilder[Coeval]
+    .buildNormalizedTerm(code, normalizerEnv)
+    .value()
 
   private def findOrCreate(userVault: Vault): String =
     s""" 

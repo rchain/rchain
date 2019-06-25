@@ -8,7 +8,6 @@ import coop.rchain.casper.genesis.Genesis
 import coop.rchain.casper.protocol.{BlockMessage, DeployData}
 import coop.rchain.casper.util.rholang.RuntimeManager
 import coop.rchain.casper.util.{ConstructDeploy, ProtoUtil}
-import coop.rchain.crypto.PublicKey
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.crypto.signatures.Secp256k1
 import coop.rchain.metrics.Metrics

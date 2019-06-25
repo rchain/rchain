@@ -9,6 +9,5 @@ class ListOpsSpec
     extends RhoSpec(
       CompiledRholangSource("ListOpsTest.rho", NormalizerEnv.Empty),
       Seq.empty,
-      NormalizerEnv.Empty,
       GENESIS_TEST_TIMEOUT
     )

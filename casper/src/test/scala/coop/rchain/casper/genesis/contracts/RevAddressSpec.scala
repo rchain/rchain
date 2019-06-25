@@ -7,6 +7,5 @@ class RevAddressSpec
     extends RhoSpec(
       CompiledRholangSource("RevAddressTest.rho", NormalizerEnv.Empty),
       Seq.empty,
-      NormalizerEnv.Empty,
       GENESIS_TEST_TIMEOUT
     )

@@ -8,6 +8,5 @@ class MakeMintSpec
     extends RhoSpec(
       CompiledRholangSource("MakeMintTest.rho", NormalizerEnv.Empty),
       Seq.empty,
-      NormalizerEnv.Empty,
       GENESIS_TEST_TIMEOUT
     )

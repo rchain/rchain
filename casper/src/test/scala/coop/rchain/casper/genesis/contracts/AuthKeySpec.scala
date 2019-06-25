@@ -8,6 +8,5 @@ class AuthKeySpec
     extends RhoSpec(
       CompiledRholangSource("AuthKeyTest.rho", NormalizerEnv.Empty),
       Seq.empty,
-      NormalizerEnv.Empty,
       GENESIS_TEST_TIMEOUT
     )

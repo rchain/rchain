@@ -11,7 +11,6 @@ class RevVaultSpec
     extends RhoSpec(
       CompiledRholangSource("RevVaultTest.rho", RevVaultSpec.normalizerEnv),
       Seq.empty,
-      RevVaultSpec.normalizerEnv,
       GENESIS_TEST_TIMEOUT
     )
 

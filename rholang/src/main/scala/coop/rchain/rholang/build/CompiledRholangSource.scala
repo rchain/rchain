@@ -1,5 +1,4 @@
 package coop.rchain.rholang.build
-import coop.rchain.crypto.PublicKey
 import coop.rchain.models.Par
 import coop.rchain.rholang.interpreter.{NormalizerEnv, ParBuilder}
 import monix.eval.Coeval
@@ -10,11 +9,12 @@ trait CompiledRholangSource {
   val path: String
   val term: Par
   val code: String
+  val normalizerEnv: NormalizerEnv
 }
 
 object CompiledRholangSource {
 
-  def apply(classpath: String, normalizerEnv: NormalizerEnv): CompiledRholangSource =
+  def apply(classpath: String, env: NormalizerEnv): CompiledRholangSource =
     new CompiledRholangSource {
       override val path: String = classpath
       override val code: String = {
@@ -25,7 +25,8 @@ object CompiledRholangSource {
          #""".stripMargin('#')
       }
       override val term: Par =
-        ParBuilder[Coeval].buildNormalizedTerm(code, normalizerEnv).value()
+        ParBuilder[Coeval].buildNormalizedTerm(code, env).value()
+      override val normalizerEnv: NormalizerEnv = env
     }
 }
 
@@ -38,7 +39,7 @@ object CompiledRholangSource {
   */
 abstract class CompiledRholangTemplate(
     classpath: String,
-    normalizerEnv: NormalizerEnv,
+    normalizerEnv0: NormalizerEnv,
     env: (String, Any)*
 ) extends CompiledRholangSource {
 
@@ -54,5 +55,6 @@ abstract class CompiledRholangTemplate(
         #$finalContent
         #""".stripMargin('#')
 
-  override val term: Par = ParBuilder[Coeval].buildNormalizedTerm(code, normalizerEnv).value()
+  override val term: Par                    = ParBuilder[Coeval].buildNormalizedTerm(code, normalizerEnv0).value()
+  override val normalizerEnv: NormalizerEnv = normalizerEnv0
 }
