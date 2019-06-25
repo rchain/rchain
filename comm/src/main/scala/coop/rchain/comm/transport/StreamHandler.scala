@@ -53,19 +53,19 @@ object StreamHandler {
     type StreamErr[A] = Either[StreamError, A]
 
     case object WrongNetworkId                        extends StreamError
-    case object CircuitBroken                         extends StreamError // TODO rename to MaxSizeReached
+    case object MaxSizeReached                        extends StreamError
     final case class NotFullMessage(streamed: String) extends StreamError
     final case class Unexpected(error: Throwable)     extends StreamError
 
     val wrongNetworkId: StreamError                   = WrongNetworkId
-    val circuitBroken: StreamError                    = CircuitBroken
+    val circuitBroken: StreamError                    = MaxSizeReached
     def notFullMessage(streamed: String): StreamError = NotFullMessage(streamed)
     def unexpected(error: Throwable): StreamError     = Unexpected(error)
 
     def errorMessage(error: StreamError): String =
       error match {
         case WrongNetworkId => "Could not receive stream! Wrong network id."
-        case CircuitBroken  => "Could not receive stream! Circuit was broken."
+        case MaxSizeReached => "Max message size was reached."
         case NotFullMessage(streamed) =>
           s"Received not full stream message, will not process. $streamed"
         case Unexpected(t) => s"Could not receive stream! ${t.getMessage}"

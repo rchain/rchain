@@ -89,7 +89,7 @@ class StreamHandlerSpec extends FunSpec with Matchers with Inside with BeforeAnd
       val err: StreamHandler.StreamError = handleStreamErr(stream, circuitBreaker = breakOnSndChunk)
       // then
       inside(err) {
-        case StreamHandler.StreamError.CircuitBroken => ()
+        case StreamHandler.StreamError.MaxSizeReached => ()
       }
       tempFolder.toFile.list() should be(empty)
     }
