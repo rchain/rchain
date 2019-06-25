@@ -34,4 +34,13 @@ object InternalProcessedDeploy {
       p = pd.paymentLog.map(EventConverter.toRspaceEvent)
       s = if (pd.errored) UnknownFailure else Succeeded
     } yield InternalProcessedDeploy(d, c, l, p, s)
+
+  def failedPayment(deploy: DeployData, error: String): InternalProcessedDeploy =
+    InternalProcessedDeploy(
+      deploy,
+      PCost(0L),
+      Nil,
+      Nil,
+      UserErrors(Seq(new DeployPaymentFailed(s"Deploy payment failed: $error")))
+    )
 }
