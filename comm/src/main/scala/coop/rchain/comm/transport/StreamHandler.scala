@@ -22,6 +22,7 @@ final case class Streamed(
     sender: Option[PeerNode] = None,
     typeId: Option[String] = None,
     contentLength: Option[Int] = None,
+    networkId: Option[String] = None,
     compressed: Boolean = false,
     readSoFar: Long = 0,
     circuitBroken: Boolean = false,
@@ -63,14 +64,13 @@ object StreamHandler {
   }
 
   def handleStream(
-      networkId: String,
       folder: Path,
       stream: Observable[Chunk],
       circuitBreaker: CircuitBreaker
   )(implicit log: Log[Task]): Task[Either[StreamError, StreamMessage]] =
     init(folder)
       .bracketE { initStmd =>
-        (collect(networkId, initStmd, stream, circuitBreaker) >>= toResult).value
+        (collect(initStmd, stream, circuitBreaker) >>= toResult).value
       }({
         // failed while collecting stream
         case (stmd, Right(Left(_))) =>
@@ -92,7 +92,6 @@ object StreamHandler {
       .map { case (file, fos) => Streamed(fos = fos, path = file) }
 
   private def collect(
-      networkId: String,
       init: Streamed,
       stream: Observable[Chunk],
       circuitBreaker: CircuitBreaker
@@ -104,17 +103,16 @@ object StreamHandler {
             stmd,
             Chunk(Chunk.Content.Header(ChunkHeader(sender, typeId, compressed, cl, nid)))
             ) =>
-          if (nid == networkId) {
-            Left(
-              stmd.copy(
-                sender = sender.map(ProtocolHelper.toPeerNode),
-                typeId = Some(typeId),
-                compressed = compressed,
-                contentLength = Some(cl)
-              )
-            )
-          } else
-            Right(stmd.copy(wrongNetwork = true))
+          val newStmd = stmd.copy(
+            sender = sender.map(ProtocolHelper.toPeerNode),
+            typeId = Some(typeId),
+            contentLength = Some(cl),
+            networkId = Some(nid),
+            compressed = compressed
+          )
+          if (circuitBreaker(newStmd)) Right(newStmd.copy(circuitBroken = true))
+          else Left(newStmd)
+
         case (stmd, Chunk(Chunk.Content.Data(ChunkData(newData)))) =>
           val array = newData.toByteArray
           stmd.fos.write(array)
@@ -148,6 +146,7 @@ object StreamHandler {
             Some(sender),
             Some(packetType),
             Some(contentLength),
+            _,
             compressed,
             readSoFar,
             _,

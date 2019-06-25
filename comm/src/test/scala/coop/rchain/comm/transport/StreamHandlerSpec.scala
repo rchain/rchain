@@ -150,7 +150,7 @@ class StreamHandlerSpec extends FunSpec with Matchers with Inside with BeforeAnd
 
   private def handleStream(stream: Observable[Chunk], folder: Path = tempFolder): StreamMessage =
     StreamHandler
-      .handleStream(networkId, folder, stream, circuitBreaker = neverBreak)
+      .handleStream(folder, stream, circuitBreaker = neverBreak)
       .unsafeRunSync
       .right
       .get
@@ -161,7 +161,7 @@ class StreamHandlerSpec extends FunSpec with Matchers with Inside with BeforeAnd
       circuitBreaker: StreamHandler.CircuitBreaker = neverBreak
   ): StreamHandler.StreamError =
     StreamHandler
-      .handleStream(networkId, folder, stream, circuitBreaker = circuitBreaker)
+      .handleStream(folder, stream, circuitBreaker = circuitBreaker)
       .unsafeRunSync
       .left
       .get

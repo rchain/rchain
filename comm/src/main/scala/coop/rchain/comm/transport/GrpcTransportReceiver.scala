@@ -55,10 +55,12 @@ object GrpcTransportReceiver {
           import StreamError.StreamErrorToMessage
 
           val circuitBreaker: StreamHandler.CircuitBreaker = {
-            case streamed => streamed.readSoFar > maxStreamMessageSize
+            case streamed =>
+              streamed.networkId.map(_ != networkId).getOrElse(false) ||
+                streamed.readSoFar > maxStreamMessageSize
           }
 
-          (handleStream(networkId, tempFolder, observable, circuitBreaker) >>= {
+          (handleStream(tempFolder, observable, circuitBreaker) >>= {
             case Left(error @ StreamError.Unexpected(t)) => logger.error(error.message, t)
             case Left(error)                             => logger.warn(error.message)
             case Right(msg)                              => Task.delay(blobBuffer.pushNext(msg)).as(())
