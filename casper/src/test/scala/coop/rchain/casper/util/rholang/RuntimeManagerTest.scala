@@ -151,7 +151,7 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
   it should "handle multiple results and no results appropriately" in {
     val n    = 8
     val code = (1 to n).map(i => s""" @"__SCALA__"!($i) """).mkString("|")
-    val term = ConstructDeploy.sourceDeploy(code, 0L, accounting.MAX_VALUE)
+    val term = ConstructDeploy.sourceDeploy(code, timestamp = 0)
     val manyResults =
       runtimeManager
         .use(mgr => mgr.captureResults(mgr.emptyStateHash, term))

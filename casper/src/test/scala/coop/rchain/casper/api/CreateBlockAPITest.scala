@@ -47,7 +47,7 @@ class CreateBlockAPITest extends FlatSpec with Matchers {
       val deploys = List(
         "@0!(0) | for(_ <- @0){ @1!(1) }",
         "for(_ <- @1){ @2!(2) }"
-      ).map(ConstructDeploy.sourceDeploy(_, System.currentTimeMillis(), accounting.MAX_VALUE))
+      ).map(ConstructDeploy.sourceDeploy(_, timestamp = System.currentTimeMillis()))
 
       def createBlock(deploy: DeployData, blockApiLock: Semaphore[Effect])(
           implicit casperRef: MultiParentCasperRef[Effect]

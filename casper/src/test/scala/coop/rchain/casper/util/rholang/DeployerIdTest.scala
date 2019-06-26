@@ -33,7 +33,6 @@ class DeployerIdTest extends FlatSpec with Matchers {
   ): DeployData = ConstructDeploy.sourceDeploy(
     source = rho,
     timestamp = System.currentTimeMillis(),
-    accounting.MAX_VALUE,
     sec = deployer
   )
 
@@ -72,7 +71,6 @@ class DeployerIdTest extends FlatSpec with Matchers {
         source =
           s"""contract @"checkAuth"(input, ret) = { new auth(`rho:rchain:deployerId`) in { ret!(*input == *auth) }}""",
         timestamp = System.currentTimeMillis(),
-        accounting.MAX_VALUE,
         sec = deployer
       )
       val captureChannel = "__RETURN_VALUE__"
