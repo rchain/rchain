@@ -1,5 +1,6 @@
 package coop.rchain.rspace.bench
 
+import java.nio.file.{Files, Path}
 import java.util.concurrent.TimeUnit
 
 import cats.Id
@@ -7,11 +8,13 @@ import cats.effect._
 import coop.rchain.metrics
 import coop.rchain.metrics.Metrics
 import coop.rchain.rspace.{State => _, _}
+import coop.rchain.rspace.nextgenrspace.{RSpace, ReplayRSpace}
 import coop.rchain.rspace.ISpace.IdISpace
 import coop.rchain.rspace.examples.AddressBookExample._
 import coop.rchain.rspace.examples.AddressBookExample.implicits._
 import coop.rchain.rspace.history.Branch
 import coop.rchain.shared.Log
+import coop.rchain.shared.PathOps.RichPath
 import org.openjdk.jmh.annotations._
 import org.openjdk.jmh.infra.Blackhole
 
@@ -69,27 +72,25 @@ object ReplayRSpaceBench {
       replaySpace.rigAndReset(rigPoint.root, rigPoint.log)
     }
 
+    private var dbDir: Path = null
+
     @Setup
     def setup() = {
-      val context = Context.createInMemory[Id, Channel, Pattern, Entry, EntriesCaptor]()
-      assert(context.trieStore.toMap.isEmpty)
-      val testStore: IStore[Id, Channel, Pattern, Entry, EntriesCaptor] =
-        InMemoryStore.create(context.trieStore, Branch.MASTER)
-      assert(testStore.toMap.isEmpty)
-      space = RSpace.create[Id, Channel, Pattern, Entry, Entry, EntriesCaptor](
-        testStore,
-        Branch.MASTER
-      )
-      replaySpace = ReplayRSpace.create[Id, Channel, Pattern, Entry, Entry, EntriesCaptor](
-        context,
-        Branch.REPLAY
-      )
+      dbDir = Files.createTempDirectory("replay-rspace-bench-")
+      val (space, replaySpace) =
+        RSpace.createWithReplay[Id, Channel, Pattern, Entry, Entry, EntriesCaptor](
+          dbDir,
+          1024L * 1024L * 1024L
+        )
+      this.space = space
+      this.replaySpace = replaySpace
     }
 
     @TearDown
     def tearDown() = {
       space.close()
       replaySpace.close()
+      dbDir.recursivelyDelete()
       ()
     }
   }

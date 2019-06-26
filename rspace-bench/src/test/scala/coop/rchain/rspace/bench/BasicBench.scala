@@ -13,7 +13,8 @@ import coop.rchain.models.TaggedContinuation.TaggedCont.ParBody
 import coop.rchain.models._
 import coop.rchain.rholang.interpreter.accounting._
 import coop.rchain.rholang.interpreter.errors.InterpreterError
-import coop.rchain.rspace._
+import coop.rchain.rspace.{RSpace => _, ReplayRSpace => _, _}
+import coop.rchain.rspace.nextgenrspace.{RSpace, ReplayRSpace}
 import coop.rchain.rspace.history.Branch
 import coop.rchain.shared.Log
 import coop.rchain.shared.PathOps.RichPath
@@ -114,15 +115,6 @@ object BasicBench {
 
     private val dbDir: Path = Files.createTempDirectory("rchain-storage-test-")
 
-    val context: LMDBContext[Task, Par, BindPattern, ListParWithRandom, TaggedContinuation] =
-      Context.create(dbDir, 1024L * 1024L * 1024L)
-
-    val testStore: IStore[Task, Par, BindPattern, ListParWithRandom, TaggedContinuation] =
-      LMDBStore.create[Task, Par, BindPattern, ListParWithRandom, TaggedContinuation](
-        context,
-        Branch("bench")
-      )
-
     val testSpace: ISpace[
       Task,
       Par,
@@ -140,7 +132,8 @@ object BasicBench {
           ListParWithRandom,
           TaggedContinuation
         ](
-          testStore,
+          dbDir,
+          1024L * 1024L * 1024L,
           Branch("bench")
         )
         .unsafeRunSync
@@ -270,7 +263,6 @@ object BasicBench {
     @TearDown
     def tearDown(): Unit = {
       testSpace.close()
-      context.close()
       dbDir.recursivelyDelete()
     }
   }
