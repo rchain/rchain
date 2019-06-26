@@ -217,21 +217,23 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics] private[rholang] (
   )(deploy: DeployData): F[Either[String, Unit]] =
     for {
       amount <- (deploy.phloLimit * deploy.phloPrice).pure[F]
-      _ <- computeEffect(runtime, reducer)(
-            ConstructDeploy
-              .sourceDeploy(
-                s"""
-                   # new deployId(`rho:rchain:deployId`) in {
-                   #   deployId!("pay", $amount)
-                   # }
-                   """.stripMargin('#'),
-                timestamp = deploy.timestamp - 10000,
-                accounting.MAX_VALUE
-              )
-              .withDeployer(deploy.deployer)
-          ).ensureOr(r => BugFoundError("Deploy payment failed unexpectedly" + r.errors))(
-            _.errors.isEmpty
-          )
+
+      paymentDeploy = ConstructDeploy
+        .sourceDeploy(
+          s"""
+             # new deployId(`rho:rchain:deployId`) in {
+             #   deployId!("pay", $amount)
+             # }
+             """.stripMargin('#'),
+          timestamp = deploy.timestamp - 10000,
+          accounting.MAX_VALUE
+        )
+        .withDeployer(deploy.deployer)
+
+      _ <- computeEffect(runtime, reducer)(paymentDeploy)
+            .ensureOr(r => BugFoundError("Deploy payment failed unexpectedly" + r.errors))(
+              _.errors.isEmpty
+            )
 
       channel       = Par().withUnforgeables(Seq(GUnforgeable(GDeployIdBody(GDeployId(deploy.sig)))))
       chk           <- space.createCheckpoint()
