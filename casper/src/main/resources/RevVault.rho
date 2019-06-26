@@ -44,6 +44,8 @@ in {
           }
         } |
 
+        // Deprecated version of `deployerAuthKey`
+        // Please use the version above where a deployer id has to be passed
         contract RevVault(@"deployerAuthKey", ret) = {
 
           new deployerPubKeyBytesCh in {
