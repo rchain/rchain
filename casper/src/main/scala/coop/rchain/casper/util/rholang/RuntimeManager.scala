@@ -25,8 +25,18 @@ import coop.rchain.rholang.interpreter.Runtime.{BlockData, RhoISpace}
 import coop.rchain.rholang.interpreter.accounting._
 import coop.rchain.rholang.interpreter.errors.BugFoundError
 import coop.rchain.rholang.interpreter.storage.implicits.matchListPar
-import coop.rchain.rholang.interpreter.{ChargingReducer, ErrorLog, EvaluateResult, Interpreter, NormalizerEnv, RhoType, Runtime, accounting, PrettyPrinter => RholangPrinter}
-import coop.rchain.rspace.{Blake2b256Hash, Checkpoint, ReplayException, trace}
+import coop.rchain.rholang.interpreter.{
+  ChargingReducer,
+  ErrorLog,
+  EvaluateResult,
+  Interpreter,
+  NormalizerEnv,
+  RhoType,
+  Runtime,
+  accounting,
+  PrettyPrinter => RholangPrinter
+}
+import coop.rchain.rspace.{trace, Blake2b256Hash, Checkpoint, ReplayException}
 
 trait RuntimeManager[F[_]] {
 
@@ -270,16 +280,9 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics] private[rholang] (
   private def getResult(runtime: Runtime[F], space: RhoISpace[F])(
       deploy: DeployData
   ): F[Seq[Par]] = {
-
-    val channel                 = Par().withUnforgeables(Seq(GUnforgeable(GDeployIdBody(GDeployId(deploy.sig)))))
-    val pattern                 = BindPattern(Seq(EVar(FreeVar(0))), freeCount = 1)
-    val cont                    = TaggedContinuation().withParBody(ParWithRandom(Par()))
-    implicit val cost: _cost[F] = runtime.cost
-
-    space.consume(Seq(channel), Seq(pattern), cont, persist = false)(matchListPar).map {
-      case Some((_, dataList)) => dataList.flatMap(_.value.pars)
-      case None                => Seq.empty[Par]
-    }
+    println(runtime) //shut up, linter
+    val channel = Par().withUnforgeables(Seq(GUnforgeable(GDeployIdBody(GDeployId(deploy.sig)))))
+    space.getData(channel).map(_.flatMap(_.a.pars))
   }
 
   def getContinuation(
