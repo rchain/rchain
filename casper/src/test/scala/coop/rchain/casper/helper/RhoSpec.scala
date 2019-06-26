@@ -64,7 +64,6 @@ object RhoSpec {
   def getResults(
       testObject: CompiledRholangSource,
       otherLibs: Seq[DeployData],
-      normalizerEnv: NormalizerEnv,
       timeout: FiniteDuration
   ): Task[TestResult] =
     TestResultCollector[Task].flatMap { testResultCollector =>
@@ -81,11 +80,14 @@ object RhoSpec {
                 runtime,
                 TestUtil.defaultGenesisSetup(1),
                 otherLibs,
-                normalizerEnv
+                testObject.normalizerEnv
               )
           rand = Blake2b512Random(128)
           _ <- TestUtil
-                .eval(testObject.code, runtime, normalizerEnv)(implicitly, rand.splitShort(1))
+                .eval(testObject.code, runtime, testObject.normalizerEnv)(
+                  implicitly,
+                  rand.splitShort(1)
+                )
                 .timeout(timeout)
 
           result <- testResultCollector.getResult
@@ -136,7 +138,7 @@ class RhoSpec(
   def hasFailures(assertions: List[RhoTestAssertion]) = assertions.find(_.isSuccess).isDefined
 
   private val result = RhoSpec
-    .getResults(testObject, extraNonGenesisDeploys, testObject.normalizerEnv, executionTimeout)
+    .getResults(testObject, extraNonGenesisDeploys, executionTimeout)
     .runSyncUnsafe(Duration.Inf)
 
   it should "finish execution within timeout" in {

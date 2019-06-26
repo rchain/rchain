@@ -38,8 +38,8 @@ object TestUtil {
     for {
       runtimeManager <- RuntimeManager.fromRuntime(runtime)
       _              <- genesisSetup(runtimeManager)
-      _              <- evalDeploy(rhoSpecDeploy, runtime, normalizerEnv)
-      _              <- otherLibs.toList.traverse(d => evalDeploy(d, runtime, NormalizerEnv(d)))
+      _              <- evalDeploy(rhoSpecDeploy, runtime)
+      _              <- otherLibs.toList.traverse(d => evalDeploy(d, runtime))
       // reset the deployParams.userId before executing the test
       // otherwise it'd execute as the deployer of last deployed contract
       _ <- runtime.deployParametersRef.update(_.copy(userId = Par()))
@@ -79,13 +79,12 @@ object TestUtil {
 
   private def evalDeploy[F[_]: Sync](
       deploy: DeployData,
-      runtime: Runtime[F],
-      normalizerEnv: NormalizerEnv
+      runtime: Runtime[F]
   ): F[Unit] = {
     val rand: Blake2b512Random = Blake2b512Random(
       DeployData.toByteArray(ProtoUtil.stripDeployData(deploy))
     )
-    eval(deploy.term, runtime, normalizerEnv)(implicitly, rand)
+    eval(deploy.term, runtime, NormalizerEnv(deploy))(implicitly, rand)
   }
 
   def eval[F[_]: Sync](

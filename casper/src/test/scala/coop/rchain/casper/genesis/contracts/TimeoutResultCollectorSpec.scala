@@ -13,7 +13,6 @@ class TimeoutResultCollectorSpec extends FlatSpec with AppendedClues with Matche
       .getResults(
         CompiledRholangSource("TimeoutResultCollectorTest.rho", NormalizerEnv.Empty),
         Seq.empty,
-        NormalizerEnv.Empty,
         10.seconds
       )
       .runSyncUnsafe(Duration.Inf)

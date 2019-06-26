@@ -30,7 +30,6 @@ class FailingResultCollectorSpec extends FlatSpec with AppendedClues with Matche
       .getResults(
         CompiledRholangSource("FailingResultCollectorTest.rho", NormalizerEnv.Empty),
         Seq.empty,
-        NormalizerEnv.Empty,
         10.seconds
       )
       .runSyncUnsafe(Duration.Inf)
