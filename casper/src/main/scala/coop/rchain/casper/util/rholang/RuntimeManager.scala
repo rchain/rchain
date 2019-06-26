@@ -226,7 +226,7 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics] private[rholang] (
              #   deployId!($amount) |
              #   for (@x <- deployId) {
              #      stdout!(("Received! ", x)) |
-             #      deployId!(x)
+             #      deployId!((true, Nil))
              #   }
              # }
              """.stripMargin('#'),
@@ -235,13 +235,13 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics] private[rholang] (
         )
         .withDeployer(deploy.deployer)
 
-      _ <- runtime.deployParametersRef.set(ProtoUtil.getRholangDeployParams(deploy))
-      _ <- doInj(deploy, reducer, runtime.errorLog)(runtime.cost)
+      _ <- runtime.deployParametersRef.set(ProtoUtil.getRholangDeployParams(paymentDeploy))
+      _ <- doInj(paymentDeploy, reducer, runtime.errorLog)(runtime.cost)
             .ensureOr(r => BugFoundError("Deploy payment failed unexpectedly" + r.errors))(
               _.errors.isEmpty
             )
 
-      channel       = Par().withUnforgeables(Seq(GUnforgeable(GDeployIdBody(GDeployId(deploy.sig)))))
+      channel       = Par().withUnforgeables(Seq(GUnforgeable(GDeployIdBody(GDeployId(paymentDeploy.sig)))))
       chk           <- space.createCheckpoint()
       _             <- space.reset(chk.root)
       consumeResult <- space.getData(channel).map(_.flatMap(_.a.pars))
