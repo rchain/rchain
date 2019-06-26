@@ -6,6 +6,9 @@ import coop.rchain.rholang.interpreter.Runtime.SystemProcess
 import coop.rchain.rholang.interpreter.{ContractCall, RhoType}
 import coop.rchain.shared.ByteStringOps._
 
+/**
+  * Warning: This should under no circumstances be available in production
+  */
 object DeployerIdContract {
   import cats.implicits._
 
