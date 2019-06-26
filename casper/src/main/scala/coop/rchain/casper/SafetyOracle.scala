@@ -71,9 +71,8 @@ sealed abstract class SafetyOracleInstances {
       def normalizedFaultTolerance(
           blockDag: BlockDagRepresentation[F],
           candidateBlockHash: BlockHash
-      ): F[Float] =
+      ): F[Float] = Metrics[F].withSpan(SafetyOracleMetricsSource) { span =>
         for {
-          span        <- Metrics[F].span(SafetyOracleMetricsSource)
           totalWeight <- computeTotalWeight(blockDag, candidateBlockHash)
           _           <- span.mark("total-weight")
           agreeingValidatorToWeight <- computeAgreeingValidatorToWeight(
@@ -92,8 +91,8 @@ sealed abstract class SafetyOracleInstances {
                             }
           _              <- span.mark("max-clique-weight")
           faultTolerance = 2 * maxCliqueWeight - totalWeight
-          _              <- span.close()
         } yield faultTolerance.toFloat / totalWeight
+      }
 
       private def computeTotalWeight(
           blockDag: BlockDagRepresentation[F],

@@ -52,12 +52,13 @@ object BlockGenerator {
       genesis: BlockMessage,
       dag: BlockDagRepresentation[F],
       runtimeManager: RuntimeManager[F]
-  ): F[(StateHash, Seq[ProcessedDeploy])] =
-    for {
-      span                                                   <- Metrics[F].span(GenerateBlockMetricsSource)
-      result                                                 <- computeBlockCheckpointFromDeploys[F](b, genesis, dag, runtimeManager, span)
-      Right((preStateHash, postStateHash, processedDeploys)) = result
-    } yield (postStateHash, processedDeploys.map(_.toProcessedDeploy))
+  ): F[(StateHash, Seq[ProcessedDeploy])] = Metrics[F].withSpan(GenerateBlockMetricsSource) {
+    span =>
+      for {
+        result                                                 <- computeBlockCheckpointFromDeploys[F](b, genesis, dag, runtimeManager, span)
+        Right((preStateHash, postStateHash, processedDeploys)) = result
+      } yield (postStateHash, processedDeploys.map(_.toProcessedDeploy))
+  }
 
   def injectPostStateHash[F[_]: Monad: BlockStore: IndexedBlockDagStorage](
       id: Int,

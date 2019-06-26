@@ -121,8 +121,9 @@ sealed abstract class MetricsInstances {
         EitherT.liftF(fSpan)
       }
 
-      override def withSpan[A](source: Source)(
-          block: Span[EitherT[F, E, ?]] => EitherT[F, E, A]): EitherT[F, E, A] =
+      override def withSpan[A](
+          source: Source
+      )(block: Span[EitherT[F, E, ?]] => EitherT[F, E, A]): EitherT[F, E, A] =
         for {
           s <- span(source)
           r <- block(s)

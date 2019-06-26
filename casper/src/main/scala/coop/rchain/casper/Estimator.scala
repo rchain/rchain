@@ -25,14 +25,13 @@ object Estimator {
   def tips[F[_]: Monad: Metrics](
       dag: BlockDagRepresentation[F],
       genesis: BlockMessage
-  ): F[IndexedSeq[BlockHash]] =
+  ): F[IndexedSeq[BlockHash]] = Metrics[F].withSpan(Tips0MetricsSource) { span =>
     for {
-      span                <- Metrics[F].span(Tips0MetricsSource)
       latestMessageHashes <- dag.latestMessageHashes
       _                   <- span.mark("latest-message-hashes")
       result              <- Estimator.tips[F](dag, genesis, latestMessageHashes)
-      _                   <- span.close()
     } yield result
+  }
 
   /**
     * When the BlockDag has an empty latestMessages, tips will return IndexedSeq(genesis.blockHash)
@@ -41,9 +40,8 @@ object Estimator {
       dag: BlockDagRepresentation[F],
       genesis: BlockMessage,
       latestMessagesHashes: Map[Validator, BlockHash]
-  ): F[IndexedSeq[BlockHash]] =
+  ): F[IndexedSeq[BlockHash]] = Metrics[F].withSpan(Tips1MetricsSource) { span =>
     for {
-      span                         <- Metrics[F].span(Tips1MetricsSource)
       invalidLatestMessages        <- ProtoUtil.invalidLatestMessages[F](dag, latestMessagesHashes)
       filteredLatestMessagesHashes = latestMessagesHashes -- invalidLatestMessages.keys
       lca <- calculateLCA(
@@ -56,8 +54,8 @@ object Estimator {
       _                          <- span.mark("score-map")
       rankedLatestMessagesHashes <- rankForkchoices(List(lca), dag, scoresMap)
       _                          <- span.mark("ranked-latest-messages-hashes")
-      _                          <- span.close()
     } yield rankedLatestMessagesHashes
+  }
 
   private def calculateLCA[F[_]: Monad](
       blockDag: BlockDagRepresentation[F],

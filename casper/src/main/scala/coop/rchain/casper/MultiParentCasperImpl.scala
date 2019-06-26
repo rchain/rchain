@@ -82,10 +82,9 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Sync: ConnectionsCell: Trans
         )
         .as(BlockStatus.processing)
 
-    def doppelgangerAndAdd =
+    def doppelgangerAndAdd = metricsF.withSpan(AddBlockMetricsSource) { span =>
       for {
-        span <- metricsF.span(AddBlockMetricsSource)
-        dag  <- blockDag
+        dag <- blockDag
         _ <- validatorId match {
               case Some(ValidatorIdentity(publicKey, _, _)) =>
                 val sender = ByteString.copyFrom(publicKey.bytes)
@@ -96,8 +95,8 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Sync: ConnectionsCell: Trans
         _      <- span.mark("block-store-put")
         status <- internalAddBlock(b, dag, span)
         _      <- span.mark("block-added-status")
-        _      <- span.close()
       } yield status
+    }
 
     for {
       status <- blockProcessingLock.withPermit {
