@@ -71,7 +71,7 @@ object ConstructDeploy {
       id: Int,
       sec: PrivateKey = defaultSec
   ): F[DeployData] =
-    sourceDeployNowF(source = s"$id!($id)", sec = sec)
+    sourceDeployNowF(source = s"@$id!($id)", sec = sec)
 
   def basicProcessedDeploy[F[_]: Monad: Time](
       id: Int,
