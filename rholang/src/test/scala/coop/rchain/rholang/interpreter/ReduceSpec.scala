@@ -15,15 +15,14 @@ import coop.rchain.models.TaggedContinuation.TaggedCont.ParBody
 import coop.rchain.models.Var.VarInstance._
 import coop.rchain.models._
 import coop.rchain.models.rholang.implicits._
-import coop.rchain.rholang.interpreter.Runtime.{RhoContext, RhoISpace}
+import coop.rchain.rholang.interpreter.Runtime.RhoISpace
 import coop.rchain.rholang.interpreter.accounting._
-import coop.rchain.rholang.interpreter.accounting.utils._
 import coop.rchain.rholang.interpreter.errors._
 import coop.rchain.rholang.interpreter.storage.implicits._
-import coop.rchain.rspace.{RSpace => _, ReplayRSpace => _, _}
-import coop.rchain.rspace.nextgenrspace.{RSpace, ReplayRSpace}
 import coop.rchain.rspace.history.Branch
 import coop.rchain.rspace.internal.{Datum, Row, WaitingContinuation}
+import coop.rchain.rspace.nextgenrspace.RSpace
+import coop.rchain.rspace.{RSpace => _, ReplayRSpace => _, _}
 import coop.rchain.shared.Log
 import coop.rchain.shared.PathOps._
 import monix.eval.Task
@@ -31,11 +30,10 @@ import monix.execution.Scheduler.Implicits.global
 import org.scalatest.{Assertion, FlatSpec, Matchers}
 
 import scala.collection.immutable.BitSet
-import scala.collection.mutable
+import scala.collection.{SortedSet, mutable}
 import scala.collection.mutable.HashMap
 import scala.concurrent.Await
 import scala.concurrent.duration._
-import scala.collection.SortedSet
 
 final case class TestFixture(space: RhoISpace[Task], reducer: ChargingReducer[Task])
 
@@ -1472,6 +1470,26 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
         Await.result(inspectTask.runToFuture, 3.seconds)
     }
     result.exprs should be(Seq(Expr(GString("1 ${b} 2 ${a}"))))
+    errorLog.readAndClearErrorVector.unsafeRunSync should be(Vector.empty[InterpreterError])
+  }
+
+  "'${key}' % {'key': '012345'.hexToBytes()}" should "return 012345" in {
+    implicit val errorLog = new ErrorLog[Task]()
+
+    val result = withTestSpace(errorLog) {
+      case TestFixture(_, reducer) =>
+        implicit val env = Env.makeEnv[Par]()
+        val inspectTask = reducer.evalExpr(
+          interpolate(
+            "${key}",
+            List[(Par, Par)](
+              (GString("key"), GByteArray(ByteString.copyFrom(Base16.unsafeDecode("012345"))))
+            )
+          )
+        )
+        Await.result(inspectTask.runToFuture, 3.seconds)
+    }
+    result.exprs should be(Seq(Expr(GString("012345"))))
     errorLog.readAndClearErrorVector.unsafeRunSync should be(Vector.empty[InterpreterError])
   }
 

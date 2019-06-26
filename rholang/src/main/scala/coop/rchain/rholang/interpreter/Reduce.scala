@@ -20,7 +20,6 @@ import coop.rchain.rholang.interpreter.matcher.SpatialMatcher.spatialMatchAndCha
 import coop.rchain.rholang.interpreter.storage.Tuplespace
 import coop.rchain.rspace.Serialize
 import monix.eval.Coeval
-import cats.effect.concurrent.Ref
 
 import scala.collection.immutable.BitSet
 import scala.util.Try
@@ -651,8 +650,8 @@ class DebruijnInterpreter[M[_], F[_]](
               (keyString -> valueBool.toString).pure[M]
             case (GString(keyString), GUri(uri)) =>
               (keyString -> uri).pure[M]
-            // TODO: Add cases for other ground terms as well? Maybe it would be better
-            // to implement cats.Show for all ground terms.
+            case (GString(keyString), GByteArray(byteString)) =>
+              (keyString -> Base16.encode(byteString.toByteArray)).pure[M]
             case (_: GString, value) =>
               ReduceError(s"Error: interpolation doesn't support ${value.typ}")
                 .raiseError[M, (String, String)]
