@@ -125,16 +125,6 @@ class MultiParentCasperMergeSpec extends FlatSpec with Matchers with Inspectors 
     }
   }
 
-  it should "pass a simpler version of the test below (to remove when below test is fixed)" in effectTest {
-    HashSetCasperTestNode.standaloneEff(genesis, validatorKeys.head).use { node =>
-      node.addBlock(ConstructDeploy.sourceDeploy(
-        "new x in { x!(0) }",
-        1L,
-        accounting.MAX_VALUE
-      ))
-    }
-  }
-
   it should "not produce UnusedCommEvent while merging non conflicting blocks in the presence of conflicting ones" in effectTest {
     def defineDeploy(source: String, t: Long) =
       ConstructDeploy.sourceDeploy(
