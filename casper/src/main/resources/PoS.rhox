@@ -22,56 +22,80 @@
 new  PoS,
     registryLookup(`rho:registry:lookup`),
     revAddressOps(`rho:rev:address`),
-    revVaultCh,
+    revVaultCh, listOpsCh,
     getUser,
     getCurrentUserAddress,
     getCurrentUserVault,
+    initialRewardsCh, computeInitialRewards,
     getMVar,
     runMVar,
-    deposit,
+    deposit, distributeRewards,
     rs(`rho:registry:insertSigned:secp256k1`),
     uriOut in {
   registryLookup!(`rho:rchain:revVault`, *revVaultCh) |
+  registryLookup!(`rho:lang:listOps`, *listOpsCh) |
 
-  for(@(_, RevVault) <- revVaultCh) {
+  for(@(_, RevVault) <- revVaultCh;
+      @(_, ListOps) <- listOpsCh) {
     new posRevAddressCh in {
 
       getCurrentUserAddress!(*posRevAddressCh) |
       for(@posRevAddress <- posRevAddressCh) {
-        new bondsCh, posVaultCh in {
-          @RevVault!("findOrCreate", posRevAddress, *posVaultCh) |
-          for (@(true, _) <- posVaultCh) {
+        new stateCh, posVaultCh in {
 
-            bondsCh!($$initialBonds$$) |
+          @ListOps!("fold", $$initialBonds$$.toList(), {}, *computeInitialRewards, *initialRewardsCh) |
+          contract computeInitialRewards(@(pk, _), @acc, resultCh) = {
+            resultCh!(acc.set(pk, 0))
+          } |
+
+          @RevVault!("findOrCreate", posRevAddress, *posVaultCh) |
+          for (@(true, _) <- posVaultCh;
+               @initialRewards <- initialRewardsCh ) {
+
+            stateCh!((initialRewards, $$initialBonds$$)) |
             contract PoS (@"getBonds", returnCh) = {
-              getMVar!(*bondsCh, *returnCh)
+              new tmpCh in {
+                getMVar!(*stateCh, *tmpCh) |
+                for (@(_, bonds) <- tmpCh) {
+                  returnCh!(bonds)
+                }
+              }
+            } |
+
+            contract PoS (@"getRewards", returnCh) = {
+              new tmpCh in {
+                getMVar!(*stateCh, *tmpCh) |
+                for (@(rewards, _) <- tmpCh) {
+                  returnCh!(rewards)
+                }
+              }
             } |
 
             contract PoS (@"bond", @amount, returnCh) = {
               new userCh, depositCh, processCh in {
-                runMVar!(*bondsCh, *processCh, *returnCh) |
+                runMVar!(*stateCh, *processCh, *returnCh) |
 
                 getUser!(*userCh) |
-                for(@bonds, resultCh <- processCh;
+                for(@(rewards, bonds), resultCh <- processCh;
                     @userPk <- userCh) {
                   if (bonds.contains(userPk)) {
-                    resultCh!(bonds, (false, "Public key is already bonded."))
+                    resultCh!((rewards, bonds), (false, "Public key is already bonded."))
                   } else if (amount < $$minimumBond$$) {
-                    resultCh!(bonds, (false, "Bond is less than minimum!"))
+                    resultCh!((rewards, bonds), (false, "Bond is less than minimum!"))
                   } else if (amount > $$maximumBond$$) {
-                    resultCh!(bonds, (false, "Bond is greater than maximum!"))
+                    resultCh!((rewards, bonds), (false, "Bond is greater than maximum!"))
                   } else {
                     deposit!(userPk, amount, *depositCh) |
                     for(@depositResult <- depositCh) {
                       match depositResult {
                         (true, _) => {
                           resultCh!(
-                            bonds.set(userPk,(amount, bonds.size() + 1)),
+                            (rewards.set(userPk, 0), bonds.set(userPk,(amount, bonds.size() + 1))),
                             depositResult)
                         }
 
                         (false, errorMsg) => {
-                          resultCh!(bonds, (false, "Bond deposit failed: " ++ errorMsg))
+                          resultCh!((rewards, bonds), (false, "Bond deposit failed: " ++ errorMsg))
                         }
                       }
                     }
@@ -81,25 +105,39 @@ new  PoS,
             } |
 
             contract PoS (@"pay", @amount, returnCh) = {
-              new vaultCh, transferCh, userCh in {
+              new vaultCh, transferCh, userCh, processPayCh,
+                  depositCh,
+                  computeSum, totalStakeCh,
+                  computeDelta, rewardsDeltaCh,
+                  computeMergeMap, newRewardsCh in {
                 getUser!(*userCh) |
 
-                for(@userPk <- userCh) {
-                  deposit!(userPk, amount, *returnCh)
+                runMVar!(*stateCh, *processPayCh, *returnCh) |
+                for(@(rewards, bonds), payResultCh <- processPayCh;
+                    @userPk <- userCh) {
+                  deposit!(userPk, amount, *depositCh) |
+
+                  distributeRewards!(amount, bonds, rewards, *newRewardsCh) |
+
+                  for(@depositResult <- depositCh;
+                      @newRewards <- newRewardsCh) {
+                    payResultCh!((newRewards, bonds), depositResult)
+                  }
                 }
               }
             } |
 
             contract PoS(@"slash", @blockHash, return) = {
-              new userCh, invalidBlocksCh, getInvalidBlocks(`rho:casper:invalidBlocks`) in {
+              new userCh, invalidBlocksCh,
+                  getInvalidBlocks(`rho:casper:invalidBlocks`) in {
                 getInvalidBlocks!(*invalidBlocksCh) |
                 getUser!(*userCh) |
-                for (@invalidBlocks <- invalidBlocksCh; @bonds <- bondsCh; @userPk <- userCh) {
+                for (@invalidBlocks <- invalidBlocksCh; @(rewards, bonds) <- stateCh; @userPk <- userCh) {
                   new toBeSlashed in {
                     toBeSlashed!(invalidBlocks.getOrElse(blockHash, userPk)) |
                     for (@validator <- toBeSlashed) {
                       // TODO: Transfer to coop wallet instead of just simply setting bonds to 0
-                      bondsCh!(bonds.set(validator, (0, bonds.get(validator).nth(1)))) |
+                      stateCh!((rewards.set(validator, 0), bonds.set(validator, (0, bonds.get(validator).nth(1))))) |
                       return!(true)
                     }
                   }
@@ -108,7 +146,9 @@ new  PoS,
             } |
 
             contract PoS(@"closeBlock", ackCh) = {
-              new blockDataCh, getBlockData(`rho:block:data`), stdout(`rho:io:stdout`) in {
+              new blockDataCh,
+                  getBlockData(`rho:block:data`),
+                  stdout(`rho:io:stdout`) in {
                 getBlockData!(*blockDataCh) |
                 for (_, @blockNumber <- blockDataCh) {
                   if (blockNumber % 1000 == 0) {
@@ -133,6 +173,31 @@ new  PoS,
                 for (@(true, fromVault) <- vaultCh) {
                   @fromVault!("transfer", posRevAddress, amount, authKey, *returnCh)
                 }
+              }
+            }
+          }
+        } |
+
+        contract distributeRewards(@amount, @bonds, @originalRewards, returnCh) = {
+          new computeSum, totalStakeCh,
+              computeDelta, rewardsDeltaCh,
+              computeMergeMap in {
+            @ListOps!("fold", bonds.toList(), 0, *computeSum, *totalStakeCh) |
+            contract computeSum(@(pk, (stake, _)), @acc, resultCh) = {
+              resultCh!(acc + stake)
+            } |
+
+            for(@totalStake <- totalStakeCh) {
+              @ListOps!("fold", bonds.toList(), {}, *computeDelta, *rewardsDeltaCh) |
+              contract computeDelta(@(pk, (currentValidatorStake, _)), @acc, resultCh) = {
+                resultCh!(acc.set(pk, (amount * currentValidatorStake) / totalStake))
+              }
+            } |
+
+            for (@rewardsDelta <- rewardsDeltaCh) {
+              @ListOps!("fold", rewardsDelta.toList(), originalRewards, *computeMergeMap, *returnCh) |
+              contract computeMergeMap(@(pk, rewardDelta), @newRewards, resultCh) = {
+                resultCh!(newRewards.set(pk, newRewards.get(pk) + rewardDelta))
               }
             }
           }
