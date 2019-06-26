@@ -8,7 +8,7 @@ import cats.effect.{Concurrent, ContextShift}
 import coop.rchain.metrics.Metrics
 import coop.rchain.rspace.ISpace.IdISpace
 import coop.rchain.rspace.history.Branch
-import coop.rchain.rspace.{RSpace => _, ReplayRSpace => _, _}
+import coop.rchain.rspace._
 import coop.rchain.rspace.nextgenrspace.{RSpace, ReplayRSpace}
 import coop.rchain.shared.Language.ignore
 import coop.rchain.shared.Log
