@@ -52,11 +52,16 @@ new  PoS,
           for (@(true, _) <- posVaultCh;
                @initialRewards <- initialRewardsCh ) {
 
-            stateCh!((initialRewards, $$initialBonds$$)) |
+            // State structure:
+            // pendingRewards : Map[PublickKey, Int] - are accummulated by calling "pay"
+            // committedRewards : Map[PublickKey, Int] - are moved from pendingRewards at each closeBlock
+            // bonds : Map[PublickKey, Int] - each validator stake
+            stateCh!(({}, initialRewards, $$initialBonds$$)) |
+
             contract PoS (@"getBonds", returnCh) = {
               new tmpCh in {
                 getMVar!(*stateCh, *tmpCh) |
-                for (@(_, bonds) <- tmpCh) {
+                for (@(_, _, bonds) <- tmpCh) {
                   returnCh!(bonds)
                 }
               }
@@ -65,7 +70,7 @@ new  PoS,
             contract PoS (@"getRewards", returnCh) = {
               new tmpCh in {
                 getMVar!(*stateCh, *tmpCh) |
-                for (@(rewards, _) <- tmpCh) {
+                for (@(_, rewards, _) <- tmpCh) {
                   returnCh!(rewards)
                 }
               }
@@ -76,27 +81,27 @@ new  PoS,
                 runMVar!(*stateCh, *processCh, *returnCh) |
 
                 getUser!(*userCh) |
-                for(@(rewards, bonds), resultCh <- processCh;
+                for(@(pending, rewards, bonds), resultCh <- processCh;
                     @userPk <- userCh) {
                   if (bonds.contains(userPk)) {
-                    resultCh!((rewards, bonds), (false, "Public key is already bonded."))
+                    resultCh!((pending, rewards, bonds), (false, "Public key is already bonded."))
                   } else if (amount < $$minimumBond$$) {
-                    resultCh!((rewards, bonds), (false, "Bond is less than minimum!"))
+                    resultCh!((pending, rewards, bonds), (false, "Bond is less than minimum!"))
                   } else if (amount > $$maximumBond$$) {
-                    resultCh!((rewards, bonds), (false, "Bond is greater than maximum!"))
+                    resultCh!((pending, rewards, bonds), (false, "Bond is greater than maximum!"))
                   } else {
                     deposit!(userPk, amount, *depositCh) |
                     for(@depositResult <- depositCh) {
                       match depositResult {
                         (true, _) => {
                           resultCh!(
-                            (rewards.set(userPk, 0), bonds.set(userPk,amount)),
+                            (pending, rewards.set(userPk, 0), bonds.set(userPk,amount)),
                             depositResult
                           )
                         }
 
                         (false, errorMsg) => {
-                          resultCh!((rewards, bonds), (false, "Bond deposit failed: " ++ errorMsg))
+                          resultCh!((pending, rewards, bonds), (false, "Bond deposit failed: " ++ errorMsg))
                         }
                       }
                     }
@@ -114,7 +119,7 @@ new  PoS,
                 getUser!(*userCh) |
 
                 runMVar!(*stateCh, *processPayCh, *returnCh) |
-                for(@(rewards, bonds), payResultCh <- processPayCh;
+                for(@(pending, rewards, bonds), payResultCh <- processPayCh;
                     @userPk <- userCh) {
                   deposit!(userPk, amount, *depositCh) |
 
@@ -122,7 +127,7 @@ new  PoS,
 
                   for(@depositResult <- depositCh;
                       @newRewards <- newRewardsCh) {
-                    payResultCh!((newRewards, bonds), depositResult)
+                    payResultCh!((pending, newRewards, bonds), depositResult)
                   }
                 }
               }
@@ -133,12 +138,14 @@ new  PoS,
                   getInvalidBlocks(`rho:casper:invalidBlocks`) in {
                 getInvalidBlocks!(*invalidBlocksCh) |
                 getUser!(*userCh) |
-                for (@invalidBlocks <- invalidBlocksCh; @(rewards, bonds) <- stateCh; @userPk <- userCh) {
+                for (@invalidBlocks <- invalidBlocksCh; @(pending, rewards, bonds) <- stateCh; @userPk <- userCh) {
                   new toBeSlashed in {
                     toBeSlashed!(invalidBlocks.getOrElse(blockHash, userPk)) |
                     for (@validator <- toBeSlashed) {
                       // TODO: Transfer to coop wallet instead of just simply setting bonds to 0
-                      stateCh!((rewards.set(validator, 0), bonds.set(validator, 0))) |
+                      stateCh!((pending.set(validator, 0),
+                                rewards.set(validator, 0),
+                                bonds.set(validator, 0))) |
                       return!(true)
                     }
                   }
