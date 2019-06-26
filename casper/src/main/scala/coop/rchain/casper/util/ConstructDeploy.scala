@@ -8,7 +8,6 @@ import coop.rchain.casper.protocol.{DeployData, ProcessedDeploy}
 import coop.rchain.crypto.PrivateKey
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.signatures.Secp256k1
-import coop.rchain.rholang.interpreter.accounting
 import coop.rchain.shared.Time
 
 object ConstructDeploy {
@@ -40,7 +39,7 @@ object ConstructDeploy {
   def sourceDeployNow(
       source: String
   ): DeployData =
-    sourceDeploy(source, System.currentTimeMillis())
+    sourceDeploy(source = source, timestamp = System.currentTimeMillis())
 
   def sourceDeployNow(
       source: String,
@@ -48,7 +47,13 @@ object ConstructDeploy {
       phloPrice: Long = 1L,
       sec: PrivateKey = defaultSec
   ): DeployData =
-    sourceDeploy(source, System.currentTimeMillis(), phloLimit, phloPrice, sec)
+    sourceDeploy(
+      source = source,
+      timestamp = System.currentTimeMillis(),
+      phloLimit = phloLimit,
+      phloPrice = phloPrice,
+      sec = sec
+    )
 
   def sourceDeployNowF[F[_]: Time: Functor](
       source: String,
@@ -56,29 +61,21 @@ object ConstructDeploy {
       phloPrice: Long = 1L,
       sec: PrivateKey = defaultSec
   ): F[DeployData] =
-    Time[F].currentMillis.map(sourceDeploy(source, _, phloLimit, phloPrice, sec))
+    Time[F].currentMillis
+      .map(sourceDeploy(source, _, phloLimit = phloLimit, phloPrice = phloPrice, sec = sec))
 
   def sourceDeployNowF[F[_]: Time: Functor](source: String): F[DeployData] =
     Time[F].currentMillis.map(sourceDeploy(source, _))
 
   def basicDeployData[F[_]: Monad: Time](
       id: Int,
-      sec: PrivateKey = defaultSec,
-      phlos: Long = 100
+      sec: PrivateKey = defaultSec
   ): F[DeployData] =
-    Time[F].currentMillis.map { now =>
-      val data = DeployData()
-        .withDeployer(ByteString.copyFrom(Secp256k1.toPublic(sec).bytes))
-        .withTimestamp(now)
-        .withTerm(s"@$id!($id)")
-        .withPhloLimit(phlos)
-        .withPhloPrice(1)
-      sign(data, sec)
-    }
+    sourceDeployNowF(source = s"$id!($id)", sec = sec)
 
   def basicProcessedDeploy[F[_]: Monad: Time](
       id: Int,
       sec: PrivateKey = defaultSec
   ): F[ProcessedDeploy] =
-    basicDeployData[F](id, sec).map(deploy => ProcessedDeploy(deploy = Some(deploy)))
+    basicDeployData[F](id = id, sec = sec).map(deploy => ProcessedDeploy(deploy = Some(deploy)))
 }
