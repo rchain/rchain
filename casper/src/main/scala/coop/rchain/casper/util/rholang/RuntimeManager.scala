@@ -230,7 +230,8 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics] private[rholang] (
         )
         .withDeployer(deploy.deployer)
 
-      _ <- computeEffect(runtime, reducer)(paymentDeploy)
+      _ <- runtime.deployParametersRef.set(ProtoUtil.getRholangDeployParams(deploy))
+      _ <- doInj(deploy, reducer, runtime.errorLog)(runtime.cost)
             .ensureOr(r => BugFoundError("Deploy payment failed unexpectedly" + r.errors))(
               _.errors.isEmpty
             )
