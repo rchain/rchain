@@ -59,7 +59,7 @@ object Substitute {
 
   def apply[M[_], A](implicit ev: Substitute[M, A]): Substitute[M, A] = ev
 
-  def maybeSubstitute[M[+ _]: Sync](
+  def maybeSubstitute[M[+_]: Sync](
       term: Var
   )(implicit depth: Int, env: Env[Par]): M[Either[Var, Par]] =
     if (depth != 0)
