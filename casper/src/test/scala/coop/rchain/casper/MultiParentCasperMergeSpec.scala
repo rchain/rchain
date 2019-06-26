@@ -97,14 +97,12 @@ class MultiParentCasperMergeSpec extends FlatSpec with Matchers with Inspectors 
         current0 <- timeEff.currentMillis
         deploy0 = ConstructDeploy.sourceDeploy(
           "@1!(47)",
-          current0,
-          accounting.MAX_VALUE
+          current0
         )
         current1 <- timeEff.currentMillis
         deploy1 = ConstructDeploy.sourceDeploy(
           "for(@x <- @1){ @1!(x) }",
-          current1,
-          accounting.MAX_VALUE
+          current1
         )
         deploy2 <- ConstructDeploy.basicDeployData[Effect](2)
         deploys = Vector(
