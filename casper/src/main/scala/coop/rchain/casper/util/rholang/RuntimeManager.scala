@@ -222,7 +222,7 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics] private[rholang] (
         .sourceDeploy(
           s"""
              # new deployId(`rho:rchain:deployId`) in {
-             #   deployId!("pay", $amount)
+             #   deployId!($amount)
              # }
              """.stripMargin('#'),
           timestamp = deploy.timestamp - 10000,
