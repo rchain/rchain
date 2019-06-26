@@ -69,8 +69,7 @@ pipeline:
     <<: *sbttestenv
     commands:
       - cp -r . ../step.lint && cd ../step.lint
-      # Disable parallelism during scalafmtCheckAll. See https://github.com/scalameta/scalafmt/issues/1399.
-      - sbt "set Global / concurrentRestrictions := Seq(Tags.limitAll(1))" scalafmtCheckAll
+      - sbt scalafmtCheckAll
 
   pr-run-unit-tests:
     <<: *pr_build_conditions
