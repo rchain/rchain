@@ -39,7 +39,7 @@ object TestUtil {
       runtimeManager <- RuntimeManager.fromRuntime(runtime)
       _              <- genesisSetup(runtimeManager)
       _              <- evalDeploy(rhoSpecDeploy, runtime, normalizerEnv)
-      _              <- otherLibs.toList.traverse(evalDeploy(_, runtime, normalizerEnv))
+      _              <- otherLibs.toList.traverse(d => evalDeploy(d, runtime, NormalizerEnv(d)))
       // reset the deployParams.userId before executing the test
       // otherwise it'd execute as the deployer of last deployed contract
       _ <- runtime.deployParametersRef.update(_.copy(userId = Par()))
