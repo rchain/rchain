@@ -1,6 +1,6 @@
 package coop.rchain.node.diagnostics
 
-import cats.effect.Sync
+import cats.effect.{Resource, Sync}
 import cats.implicits._
 import coop.rchain.metrics.{CloseableSpan, Metrics, Span}
 import coop.rchain.metrics.Metrics.Source
@@ -86,10 +86,6 @@ package object effects {
       }
 
       def withSpan[A](source: Source)(block: Span[F] => F[A]): F[A] =
-        for {
-          s <- span(source)
-          r <- block(s)
-          _ <- s.close()
-        } yield r
+        Resource.make(span(source))(s => s.close()).use(block)
     }
 }
