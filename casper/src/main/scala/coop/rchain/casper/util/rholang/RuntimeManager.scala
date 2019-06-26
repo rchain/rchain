@@ -216,10 +216,15 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics] private[rholang] (
       space: RhoISpace[F]
   )(deploy: DeployData): F[Either[String, Unit]] =
     for {
+      amount <- (deploy.phloLimit * deploy.phloPrice).pure[F]
       _ <- computeEffect(runtime, reducer)(
             ConstructDeploy
               .sourceDeploy(
-                deployPaymentSource(deploy.phloLimit * deploy.phloPrice),
+                s"""
+                   # new deployId(`rho:rchain:deployId`) in {
+                   #   deployId!("pay", $amount)
+                   # }
+                   """.stripMargin('#'),
                 timestamp = deploy.timestamp - 10000,
                 accounting.MAX_VALUE
               )
@@ -228,10 +233,11 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics] private[rholang] (
             _.errors.isEmpty
           )
 
-      channel = Par().withUnforgeables(Seq(GUnforgeable(GDeployIdBody(GDeployId(deploy.sig)))))
-      chk <- space.createCheckpoint()
-      _ <- space.reset(chk.root)
+      channel       = Par().withUnforgeables(Seq(GUnforgeable(GDeployIdBody(GDeployId(deploy.sig)))))
+      chk           <- space.createCheckpoint()
+      _             <- space.reset(chk.root)
       consumeResult <- space.getData(channel).map(_.flatMap(_.a.pars))
+
       result <- consumeResult match {
                  case Seq(RhoType.Tuple2(RhoType.Boolean(true), Par.defaultInstance)) =>
                    ().asRight[String].pure[F]
@@ -247,13 +253,6 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics] private[rholang] (
                    ).raiseError[F, Either[String, Unit]]
                }
     } yield result
-
-  private def deployPaymentSource(amount: Long, name: String = "__SCALA__"): String =
-    s"""
-       # new deployId(`rho:rchain:deployId`) in {
-       #   deployId!("pay", $amount, "$name")
-       # }
-       """.stripMargin('#')
 
   private def withRuntimeLock[A](f: Runtime[F] => F[A]): F[A] =
     Sync[F].bracket(runtimeContainer.take)(f)(runtimeContainer.put)
