@@ -35,11 +35,15 @@ in {
 
         contract RevVault(@"deployerAuthKey", deployerId, ret) = {
 
-          new RevAddress(`rho:rev:address`), revAddrCh in {
-            RevAddress!("fromDeployerId", *deployerId, *revAddrCh)|
-            for (@deployerRevAddress <- revAddrCh) {
+          new RevAddress(`rho:rev:address`), DeployerIdOps(`rho:rchain:deployerId:ops`), revAddrCh, deployerPubKeyBytesCh in {
+            DeployerIdOps!("pubKeyBytes", *deployerId, *deployerPubKeyBytesCh) |
+            for (@deployerPubKeyBytes <- deployerPubKeyBytesCh) {
 
-              @AuthKey!("make", (*_revVault, deployerRevAddress), *ret)
+              RevAddress!("fromPublicKey", deployerPubKeyBytes, *revAddrCh)|
+              for (@deployerRevAddress <- revAddrCh) {
+
+                @AuthKey!("make", (*_revVault, deployerRevAddress), *ret)
+              }
             }
           }
         } |

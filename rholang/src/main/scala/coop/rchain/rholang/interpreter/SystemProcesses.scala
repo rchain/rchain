@@ -33,6 +33,7 @@ trait SystemProcesses[F[_]] {
   def getBlockData(blockData: Ref[F, BlockData]): Contract[F]
   def invalidBlocks(invalidBlocks: InvalidBlocks[F]): Contract[F]
   def validateRevAddress: Contract[F]
+  def deployerIdOps: Contract[F]
 }
 
 object SystemProcesses {
@@ -169,6 +170,14 @@ object SystemProcesses {
               .getOrElse(Par())
 
           produce(Seq(response), ack)
+      }
+
+      def deployerIdOps: Contract[F] = {
+        case isContractCall(
+            produce,
+            Seq(RhoType.String("pubKeyBytes"), RhoType.GDeployerId(publicKey), ack)
+            ) =>
+          produce(Seq(RhoType.ByteArray(publicKey)), ack)
       }
 
       def secp256k1Verify: Contract[F] =
