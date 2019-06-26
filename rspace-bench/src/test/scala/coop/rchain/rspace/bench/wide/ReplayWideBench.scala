@@ -12,7 +12,6 @@ import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.models.Par
 import coop.rchain.rholang.interpreter.accounting.Cost
 import coop.rchain.rholang.interpreter.{Interpreter, Runtime}
-import coop.rchain.shared.StoreType
 import monix.eval.Task
 import monix.execution.Scheduler
 import org.openjdk.jmh.annotations._
@@ -41,7 +40,7 @@ class ReplayWideBench {
 @State(Scope.Benchmark)
 class ReplayFineBenchState extends ReplayWideBenchState {
   override def createRuntime(): Runtime[Task] =
-    Runtime.createWithEmptyCost[Task, Task.Par](dbDir, mapSize, StoreType.RSpace2).unsafeRunSync
+    Runtime.createWithEmptyCost[Task, Task.Par](dbDir, mapSize).unsafeRunSync
 }
 
 abstract class ReplayWideBenchState extends WideBenchBaseState {

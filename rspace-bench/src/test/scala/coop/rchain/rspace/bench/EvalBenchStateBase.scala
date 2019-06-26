@@ -12,7 +12,6 @@ import coop.rchain.models.Par
 import coop.rchain.rholang.interpreter.accounting.{Cost, CostAccounting}
 import coop.rchain.rholang.interpreter.{ParBuilderUtil, Runtime}
 import coop.rchain.shared.PathOps.RichPath
-import coop.rchain.shared.StoreType
 import coop.rchain.shared.Log
 import monix.eval.{Coeval, Task}
 import monix.execution.Scheduler.Implicits.global
@@ -25,7 +24,7 @@ trait EvalBenchStateBase {
 
   val rhoScriptSource: String
   lazy val runtime: Runtime[Task] =
-    Runtime.createWithEmptyCost[Task, Task.Par](dbDir, mapSize, StoreType.RSpace2).unsafeRunSync
+    Runtime.createWithEmptyCost[Task, Task.Par](dbDir, mapSize).unsafeRunSync
   val rand: Blake2b512Random = Blake2b512Random(128)
   var term: Option[Par]      = None
 

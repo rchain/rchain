@@ -7,7 +7,6 @@ import scala.concurrent.duration.{Duration, FiniteDuration}
 import coop.rchain.casper.CasperConf
 import coop.rchain.comm.PeerNode
 import coop.rchain.node.configuration
-import coop.rchain.shared.StoreType
 
 import com.typesafe.config.{Config, ConfigException}
 
@@ -38,7 +37,6 @@ object Server {
   object keys {
     val NetworkId               = "network-id"
     val Bootstrap               = "bootstrap"
-    val StoreType               = "store-type"
     val Host                    = "host"
     val HostDynamic             = "host-dynamic"
     val Upnp                    = "upnp"
@@ -64,7 +62,6 @@ object Server {
       List(
         NetworkId,
         Bootstrap,
-        StoreType,
         Host,
         HostDynamic,
         Upnp,
@@ -99,15 +96,6 @@ object Server {
         case Left(error) =>
           throw new ConfigException.BadValue(s"$Key.${keys.Bootstrap}", error.message)
       }
-    val storeTypeStr = server.getString(keys.StoreType)
-    val storeType = StoreType.from(storeTypeStr) match {
-      case Some(st) => st
-      case _ =>
-        throw new ConfigException.BadValue(
-          s"$Key.${keys.StoreType}",
-          s"$storeTypeStr is not a supported store type"
-        )
-    }
     val messageConsumers = Math.max(Runtime.getRuntime.availableProcessors(), 2)
 
     configuration.Server(
@@ -123,7 +111,6 @@ object Server {
       standalone = server.getBoolean(keys.Standalone),
       bootstrap = bootstrap,
       dataDir = server.getPath(keys.DataDir),
-      storeType = storeType,
       storeSize = server.getBytes(keys.StoreSize),
       dagStorageSize = server.getBytes(keys.DagStorageSize),
       mapSize = server.getBytes(keys.MapSize),

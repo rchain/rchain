@@ -5,7 +5,6 @@ import java.util.concurrent.TimeUnit
 import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.rholang.interpreter.Runtime
-import coop.rchain.shared.StoreType
 import org.openjdk.jmh.annotations._
 import org.openjdk.jmh.infra.Blackhole
 
@@ -46,14 +45,14 @@ class WideBench {
 @State(Scope.Benchmark)
 class FineBenchState extends WideBenchState {
   override def createRuntime() =
-    Runtime.createWithEmptyCost[Task, Task.Par](dbDir, mapSize, StoreType.RSpace2).unsafeRunSync
+    Runtime.createWithEmptyCost[Task, Task.Par](dbDir, mapSize).unsafeRunSync
 }
 
 @State(Scope.Benchmark)
 class InMemBenchState extends WideBenchState {
   override def createRuntime() =
     Runtime
-      .createWithEmptyCost[Task, Task.Par](dbDir, mapSize, StoreType.RSpace2)
+      .createWithEmptyCost[Task, Task.Par](dbDir, mapSize)
       .unsafeRunSync
 }
 

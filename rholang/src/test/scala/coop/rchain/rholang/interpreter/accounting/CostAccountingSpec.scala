@@ -9,7 +9,6 @@ import coop.rchain.rholang.interpreter.errors.OutOfPhlogistonsError
 import coop.rchain.rholang.interpreter.accounting.utils._
 import coop.rchain.metrics
 import coop.rchain.metrics.Metrics
-import coop.rchain.shared.StoreType
 import coop.rchain.shared.Log
 import coop.rchain.shared.PathOps._
 import monix.eval.Task
@@ -45,7 +44,7 @@ class CostAccountingSpec extends FlatSpec with Matchers with PropertyChecks with
           implicit val c = cost
           for {
             runtime <- Runtime
-                        .create[Task, Task.Par](dbDir, size, StoreType.RSpace2)
+                        .create[Task, Task.Par](dbDir, size)
             res <- InterpreterUtil
                     .evaluate(runtime, contract, Cost(initialPhlo.toLong))
             _ <- Task.delay(runtime.close())

@@ -23,8 +23,7 @@ import coop.rchain.rspace._
 import coop.rchain.rspace.history.Branch
 import coop.rchain.rspace.nextgenrspace.{RSpace => NextRSpace}
 import coop.rchain.rspace.pure.PureRSpace
-import coop.rchain.shared.StoreType._
-import coop.rchain.shared.{Log, StoreType}
+import coop.rchain.shared.Log
 
 import scala.concurrent.ExecutionContext
 
@@ -291,7 +290,6 @@ object Runtime {
   def createWithEmptyCost[F[_]: ContextShift: Concurrent: Log: Metrics, M[_]](
       dataDir: Path,
       mapSize: Long,
-      storeType: StoreType,
       extraSystemProcesses: Seq[SystemProcess.Definition[F]] = Seq.empty
   )(
       implicit
@@ -302,14 +300,13 @@ object Runtime {
       cost <- CostAccounting.emptyCost[F]
       runtime <- {
         implicit val c = cost
-        create(dataDir, mapSize, storeType, extraSystemProcesses)
+        create(dataDir, mapSize, extraSystemProcesses)
       }
     } yield (runtime))
 
   def create[F[_]: ContextShift: Concurrent: Log: Metrics, M[_]](
       dataDir: Path,
       mapSize: Long,
-      storeType: StoreType,
       extraSystemProcesses: Seq[SystemProcess.Definition[F]] = Seq.empty
   )(
       implicit P: Parallel[F, M],
@@ -375,7 +372,7 @@ object Runtime {
     }
 
     for {
-      setup                         <- setupRSpace[F](dataDir, mapSize, storeType)
+      setup                         <- setupRSpace[F](dataDir, mapSize)
       deployParametersRef           <- Ref.of(DeployParameters.empty)
       (context, space, replaySpace) = setup
       (reducer, replayReducer) = {
@@ -468,31 +465,8 @@ object Runtime {
 
   def setupRSpace[F[_]: Concurrent: ContextShift: Log: Metrics](
       dataDir: Path,
-      mapSize: Long,
-      storeType: StoreType
+      mapSize: Long
   )(implicit scheduler: ExecutionContext): F[(RhoContext[F], RhoISpace[F], RhoReplayISpace[F])] = {
-    def createSpace(
-        context: RhoContext[F]
-    ): F[(RhoContext[F], RhoISpace[F], RhoReplayISpace[F])] =
-      for {
-        space <- RSpace.create[
-                  F,
-                  Par,
-                  BindPattern,
-                  ListParWithRandom,
-                  ListParWithRandom,
-                  TaggedContinuation
-                ](context, Branch.MASTER)
-        replaySpace <- ReplayRSpace.create[
-                        F,
-                        Par,
-                        BindPattern,
-                        ListParWithRandom,
-                        ListParWithRandom,
-                        TaggedContinuation
-                      ](context, Branch.REPLAY)
-      } yield ((context, space, replaySpace))
-
     def createNextSpace(
         dataDir: Path,
         mapSize: Long
@@ -516,15 +490,6 @@ object Runtime {
             else ().pure[F]
       } yield ()
 
-    storeType match {
-      case InMem =>
-        createSpace(Context.createInMemory())
-      case LMDB =>
-        checkCreateDataDir >> createSpace(Context.create(dataDir, mapSize, true))
-      case Mixed =>
-        checkCreateDataDir >> createSpace(Context.createMixed(dataDir, mapSize))
-      case RSpace2 =>
-        checkCreateDataDir >> createNextSpace(dataDir, mapSize)
-    }
+    checkCreateDataDir >> createNextSpace(dataDir, mapSize)
   }
 }

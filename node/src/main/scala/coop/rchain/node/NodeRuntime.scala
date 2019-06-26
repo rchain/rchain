@@ -78,7 +78,6 @@ class NodeRuntime private[node] (
   private val storagePath       = conf.server.dataDir.resolve("rspace")
   private val casperStoragePath = storagePath.resolve("casper")
   private val storageSize       = conf.server.mapSize
-  private val storeType         = conf.server.storeType
   private val defaultTimeout    = conf.server.defaultTimeout // TODO remove
 
   case class Servers(
@@ -448,8 +447,7 @@ class NodeRuntime private[node] (
       implicit val s                = rspaceScheduler
       implicit val m: Metrics[Task] = metrics
       Runtime
-        .createWithEmptyCost[Task, Task.Par](storagePath, storageSize, storeType, Seq.empty)
-
+        .createWithEmptyCost[Task, Task.Par](storagePath, storageSize, Seq.empty)
     }
     _ <- Runtime
           .injectEmptyRegistryRoot[Task](runtime.space, runtime.replaySpace)
@@ -461,7 +459,6 @@ class NodeRuntime private[node] (
         .createWithEmptyCost[Task, Task.Par](
           casperStoragePath,
           storageSize,
-          storeType,
           Seq.empty
         )
 

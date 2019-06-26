@@ -20,7 +20,8 @@ import coop.rchain.metrics.Metrics
 import coop.rchain.models.Par
 import coop.rchain.rholang.interpreter.Runtime
 import coop.rchain.rholang.interpreter.util.RevAddress
-import coop.rchain.shared.{Log, StoreType}
+import coop.rchain.shared.PathOps.RichPath
+import coop.rchain.shared.Log
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
 
@@ -87,8 +88,7 @@ object MultiParentCasperTestUtil {
       activeRuntime <- Runtime
                         .createWithEmptyCost[Task, Task.Par](
                           storageDirectory,
-                          storageSize,
-                          StoreType.RSpace2
+                          storageSize
                         )
       runtimeManager <- RuntimeManager.fromRuntime[Task](activeRuntime)
       genesis <- Genesis.createGenesisBlock(

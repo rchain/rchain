@@ -7,7 +7,6 @@ import java.util.concurrent.TimeoutException
 import cats._
 import cats.effect.Sync
 import cats.implicits._
-import coop.rchain.shared.StoreType
 import coop.rchain.catscontrib.mtl.implicits._
 import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.metrics.Metrics
@@ -67,8 +66,7 @@ object RholangCLI {
     val runtime = (for {
       runtime <- Runtime.createWithEmptyCost[Task, Task.Par](
                   conf.dataDir(),
-                  conf.mapSize(),
-                  StoreType.RSpace2
+                  conf.mapSize()
                 )
       _ <- Runtime.injectEmptyRegistryRoot[Task](runtime.space, runtime.replaySpace)
     } yield (runtime)).unsafeRunSync

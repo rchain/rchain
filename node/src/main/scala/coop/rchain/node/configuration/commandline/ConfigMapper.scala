@@ -9,7 +9,6 @@ import scala.concurrent.duration.{FiniteDuration, _}
 import coop.rchain.catscontrib.ski._
 import coop.rchain.comm.PeerNode
 import coop.rchain.node.configuration.hocon._
-import coop.rchain.shared.StoreType
 
 import com.typesafe.config._
 import org.rogach.scallop.ScallopOption
@@ -47,7 +46,6 @@ object ConfigMapper {
         add(keys.Standalone, run.standalone)
         add(keys.Bootstrap, run.bootstrap)
         add(keys.DataDir, run.dataDir)
-        add(keys.StoreType, run.storeType)
         add(keys.StoreSize, run.casperBlockStoreSize)
         add(keys.DagStorageSize, run.casperBlockDagStorageSize)
         add(keys.MapSize, run.mapSize)
@@ -118,8 +116,6 @@ object ConfigMapper {
     implicit val floatConverter: OptionConverter[Float]       = (f: Float) => f
     implicit val pathConverter: OptionConverter[Path]         = (p: Path) => p.toString
     implicit val peerNodeConverter: OptionConverter[PeerNode] = (p: PeerNode) => p.toAddress
-    implicit val storeTypeConverter: OptionConverter[StoreType] =
-      (s: StoreType) => StoreType.toConfig(s)
     implicit val durationConverter: OptionConverter[FiniteDuration] =
       (d: FiniteDuration) => java.time.Duration.ofNanos(d.toNanos)
   }

@@ -24,7 +24,7 @@ import coop.rchain.metrics.Metrics.MetricsNOP
 import coop.rchain.p2p.EffectsTestInstances._
 import coop.rchain.rholang.interpreter.Runtime
 import coop.rchain.rholang.interpreter.util.RevAddress
-import coop.rchain.shared.{Cell, StoreType}
+import coop.rchain.shared.Cell
 
 import monix.eval.Task
 import monix.execution.Scheduler
@@ -39,7 +39,7 @@ object Setup {
     val runtimeDir            = BlockDagStorageTestFixture.blockStorageDir
     val activeRuntime =
       Runtime
-        .createWithEmptyCost[Task, Task.Par](runtimeDir, 3024L * 1024, StoreType.RSpace2)(
+        .createWithEmptyCost[Task, Task.Par](runtimeDir, 3024L * 1024)(
           ContextShift[Task],
           Concurrent[Task],
           log,

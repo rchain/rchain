@@ -15,7 +15,6 @@ import coop.rchain.p2p.EffectsTestInstances.{LogStub, LogicalTime}
 import coop.rchain.rholang.interpreter.Runtime
 import coop.rchain.rholang.interpreter.storage.StoragePrinter
 import coop.rchain.shared.PathOps.RichPath
-import coop.rchain.shared.StoreType
 import org.scalatest.{BeforeAndAfterEach, EitherValues, FlatSpec, Matchers}
 import java.nio.file.Path
 
@@ -258,8 +257,7 @@ object GenesisTest {
     for {
       runtime <- Runtime.createWithEmptyCost[Task, Task.Par](
                   storePath,
-                  storageSize,
-                  StoreType.RSpace2
+                  storageSize
                 )
       result <- body(runtime, genesisPath, log, time)
       _      <- runtime.close()

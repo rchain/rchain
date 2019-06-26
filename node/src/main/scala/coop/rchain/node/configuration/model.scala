@@ -7,7 +7,6 @@ import scala.concurrent.duration.FiniteDuration
 import coop.rchain.casper.util.comm.ListenAtName.Name
 import coop.rchain.comm.PeerNode
 import coop.rchain.crypto.PrivateKey
-import coop.rchain.shared.StoreType
 
 final case class Server(
     networkId: String,
@@ -23,7 +22,6 @@ final case class Server(
     standalone: Boolean,
     dataDir: Path,
     mapSize: Long,
-    storeType: StoreType,
     storeSize: Long,
     dagStorageSize: Long,
     maxNumOfConnections: Int,
