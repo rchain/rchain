@@ -221,9 +221,11 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics] private[rholang] (
       paymentDeploy = ConstructDeploy
         .sourceDeploy(
           s"""
-             #  new rl(`rho:registry:lookup`), poSCh, deployId(`rho:rchain:deployId`) in {
+             #  new rl(`rho:registry:lookup`), poSCh, deployId(`rho:rchain:deployId`), stdout(`rho:io:stdout`) in {
+             #   stdout!(("About to do some payments in ", *deployId)) |
              #   rl!(`rho:rchain:pos`, *poSCh) |
              #   for(@(_, PoS) <- poSCh) {
+             #     stdout!(("Got my PoS contract: ", PoS)) |
              #     @PoS!("pay", $amount, *deployId)
              #   }
              # }
