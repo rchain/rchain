@@ -140,6 +140,10 @@ in {
                 revVault!("balance", *balCh) |
 
               for (@b <- balCh) {
+                if (b < amount) {
+                  stdout!(("Insufficient funds at ", ownRevAddress, "need", amount, "got", b))
+                } |
+
                 stdout!(("Balance of ", ownRevAddress, "is", b)) |
 
                 RevAddress!("validate", revAddress, *revAddressValid) |
