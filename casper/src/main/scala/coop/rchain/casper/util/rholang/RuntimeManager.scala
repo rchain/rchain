@@ -227,7 +227,11 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics] private[rholang] (
           ).ensureOr(r => BugFoundError("Deploy payment failed unexpectedly" + r.errors))(
             _.errors.isEmpty
           )
-      consumeResult <- getResult(runtime, space)(deploy)
+
+      channel = Par().withUnforgeables(Seq(GUnforgeable(GDeployIdBody(GDeployId(deploy.sig)))))
+      chk <- space.createCheckpoint()
+      _ <- space.reset(chk.root)
+      consumeResult <- space.getData(channel).map(_.flatMap(_.a.pars))
       result <- consumeResult match {
                  case Seq(RhoType.Tuple2(RhoType.Boolean(true), Par.defaultInstance)) =>
                    ().asRight[String].pure[F]
@@ -276,14 +280,6 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics] private[rholang] (
       runtime: Runtime[F]
   )(channel: Par): F[Seq[Par]] =
     runtime.space.getData(channel).map(_.flatMap(_.a.pars))
-
-  private def getResult(runtime: Runtime[F], space: RhoISpace[F])(
-      deploy: DeployData
-  ): F[Seq[Par]] = {
-    println(runtime) //shut up, linter
-    val channel = Par().withUnforgeables(Seq(GUnforgeable(GDeployIdBody(GDeployId(deploy.sig)))))
-    space.getData(channel).map(_.flatMap(_.a.pars))
-  }
 
   def getContinuation(
       hash: StateHash
