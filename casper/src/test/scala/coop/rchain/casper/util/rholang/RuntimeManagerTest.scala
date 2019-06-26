@@ -227,6 +227,6 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
       } yield ()
     }
 
-    test.runSyncUnsafe(20.seconds)
+    test.runSyncUnsafe(60.seconds)
   }
 }
