@@ -3,7 +3,7 @@ addSbtPlugin("com.thesamet" % "sbt-protoc" % "0.99.19")
 libraryDependencies += "com.thesamet.scalapb" %% "compilerplugin" % "0.7.4"
 addSbtPlugin("com.typesafe.sbt"       % "sbt-license-report"   % "1.2.0")
 addSbtPlugin("org.wartremover"        % "sbt-wartremover"      % "2.4.1")
-addSbtPlugin("org.scalameta"          % "sbt-scalafmt"         % "2.0.0")
+addSbtPlugin("org.scalameta"          % "sbt-scalafmt"         % "2.0.1")
 addSbtPlugin("com.eed3si9n"           % "sbt-assembly"         % "0.14.9")
 addSbtPlugin("org.scoverage"          % "sbt-scoverage"        % "1.5.1")
 addSbtPlugin("com.github.tkawachi"    % "sbt-repeat"           % "0.1.0")
