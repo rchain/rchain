@@ -7,10 +7,13 @@ import coop.rchain.metrics.Metrics.Source
 
 trait Span[F[_]] {
   def mark(name: String): F[Unit]
+}
+
+trait CloseableSpan[F[_]] extends Span[F] {
   def close(): F[Unit]
 }
 
-final case class NoopSpan[F[_]: Applicative]() extends Span[F] {
+final case class NoopSpan[F[_]: Applicative]() extends CloseableSpan[F] {
   def mark(name: String): F[Unit] = ().pure[F]
   def close(): F[Unit]            = ().pure[F]
 }
@@ -35,7 +38,7 @@ trait Metrics[F[_]] {
 
   def timer[A](name: String, block: F[A])(implicit ev: Metrics.Source): F[A]
 
-  def span(source: Metrics.Source): F[Span[F]]
+  def span(source: Metrics.Source): F[CloseableSpan[F]]
 
   def withSpan[A](source: Metrics.Source)(block: Span[F] => F[A]): F[A]
 }
@@ -55,8 +58,10 @@ object Metrics extends MetricsInstances {
     def record(name: String, value: Long, count: Long = 1)(implicit ev: Metrics.Source): F[Unit] =
       ().pure[F]
     def timer[A](name: String, block: F[A])(implicit ev: Metrics.Source): F[A] = block
-    def span(source: Metrics.Source): F[Span[F]]                               = Applicative[F].pure(NoopSpan[F]())
     def withSpan[A](source: Metrics.Source)(block: Span[F] => F[A]): F[A]      = block(NoopSpan[F]())
+
+    def span(source: Metrics.Source): F[CloseableSpan[F]] =
+      Applicative[F].pure(NoopSpan[F]())
   }
 
   import shapeless.tag.@@
@@ -109,9 +114,9 @@ sealed abstract class MetricsInstances {
         EitherT(evF.timer(name, block.value))
 
       //todo make this sleeker
-      def span(source: Metrics.Source): EitherT[F, E, Span[EitherT[F, E, ?]]] = {
+      def span(source: Metrics.Source): EitherT[F, E, CloseableSpan[EitherT[F, E, ?]]] = {
         val fSpan = evF.span(source).map { s =>
-          new Span[EitherT[F, E, ?]] {
+          new CloseableSpan[EitherT[F, E, ?]] {
             def mark(name: String): EitherT[F, E, Unit] =
               EitherT.liftF(s.mark(name))
             def close(): EitherT[F, E, Unit] = EitherT.liftF(s.close())

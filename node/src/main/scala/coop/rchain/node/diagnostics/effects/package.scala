@@ -7,7 +7,7 @@ import cats.effect.Sync
 import cats.implicits._
 import coop.rchain.comm.discovery._
 import coop.rchain.comm.rp.Connect.ConnectionsCell
-import coop.rchain.metrics.{Metrics, Span}
+import coop.rchain.metrics.{CloseableSpan, Metrics, Span}
 import com.google.protobuf.ByteString
 import com.google.protobuf.empty.Empty
 import coop.rchain.metrics.Metrics.Source
@@ -21,7 +21,7 @@ package object effects {
       import kamon._
       import kamon.trace.{Span => KSpan}
 
-      case class KamonSpan(span: KSpan) extends Span[F] {
+      case class KamonSpan(span: KSpan) extends CloseableSpan[F] {
         @SuppressWarnings(Array("org.wartremover.warts.NonUnitStatements"))
         override def mark(name: String): F[Unit] = Sync[F].delay { span.mark(name) }
         override def close(): F[Unit]            = Sync[F].delay { span.finish() }
@@ -90,11 +90,11 @@ package object effects {
             } yield r
         }
 
-      def span(source: Source): F[Span[F]] = Sync[F].delay {
+      def span(source: Source): F[CloseableSpan[F]] = Sync[F].delay {
         KamonSpan(Kamon.buildSpan(source).start())
       }
 
-      override def withSpan[A](source: Source)(block: Span[F] => F[A]): F[A] =
+      def withSpan[A](source: Source)(block: Span[F] => F[A]): F[A] =
         for {
           s <- span(source)
           r <- block(s)
