@@ -149,13 +149,11 @@ class MultiParentCasperAddBlockSpec extends FlatSpec with Matchers with Inspecto
   }
 
   it should "not request invalid blocks from peers" in effectTest {
-    val List(data0, data1) =
-      (0 to 1)
-        .map(i => ConstructDeploy.sourceDeploy(s"@$i!($i)", i.toLong, accounting.MAX_VALUE))
-        .toList
     HashSetCasperTestNode.networkEff(validatorKeys.take(2), genesis).use { nodes =>
       val List(node0, node1) = nodes.toList
       for {
+        data0 <- ConstructDeploy.sourceDeployNowF("@0!(0)")
+        data1 <- ConstructDeploy.sourceDeployNowF("@1!(1)")
         unsignedBlock <- node0
                           .createBlock(data0)
                           .map(_.copy(sigAlgorithm = "invalid", sig = ByteString.EMPTY))
