@@ -241,10 +241,18 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics] private[rholang] (
               _.errors.isEmpty
             )
 
-      channel       = Par().withUnforgeables(Seq(GUnforgeable(GDeployIdBody(GDeployId(paymentDeploy.sig)))))
-      chk           <- space.createCheckpoint()
-      _             <- space.reset(chk.root)
-      consumeResult <- space.getData(channel).map(_.flatMap(_.a.pars))
+      channel = Par().withUnforgeables(
+        Seq(GUnforgeable(GDeployIdBody(GDeployId(paymentDeploy.sig))))
+      )
+      pattern = BindPattern(Seq(EVar(FreeVar(0))), freeCount = 1)
+      cont    = TaggedContinuation().withParBody(ParWithRandom(Par()))
+      matcher = matchListPar[F](implicitly, runtime.cost)
+      consumeResult <- space
+                        .consume(Seq(channel), Seq(pattern), cont, persist = false)(matcher)
+                        .map {
+                          case Some((_, dataList)) => dataList.flatMap(_.value.pars)
+                          case None                => Seq.empty[Par]
+                        }
 
       result <- consumeResult match {
                  case Seq(RhoType.Tuple2(RhoType.Boolean(true), Par.defaultInstance)) =>
