@@ -59,7 +59,7 @@ object ConstructDeploy {
     Time[F].currentMillis.map(sourceDeploy(source, _, phloLimit, phloPrice, sec))
 
   def sourceDeployNowF[F[_]: Time: Functor](source: String): F[DeployData] =
-    Time[F].currentMillis.map(sourceDeploy(source, _, accounting.MAX_VALUE))
+    Time[F].currentMillis.map(sourceDeploy(source, _))
 
   def basicDeployData[F[_]: Monad: Time](
       id: Int,
