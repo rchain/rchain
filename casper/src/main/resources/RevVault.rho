@@ -133,8 +133,15 @@ in {
                 revAddressValid, revAddressValidEither, amountNonNegative,
                 authKeyValidCh, authKeyValidEitherCh,
                 parametersOkCh, parametersAndAuthOkCh,
-                split, eitherPurseCh, doDeposit
+                split, eitherPurseCh, doDeposit,
+                stdout(`rho:io:stdout`), balCh
               in {
+                stdout!(("Starting transfer of", amount, "rev from ", ownRevAddress, "to", revAddress)) |
+                revVault!("balance", *balCh) |
+
+              for (@b <- balCh) {
+                stdout!(("Balance of ", ownRevAddress, "is", b)) |
+
                 RevAddress!("validate", revAddress, *revAddressValid) |
                 @Either!("fromNillableError <-", *revAddressValid, *revAddressValidEither) |
 
@@ -158,6 +165,9 @@ in {
                 for (@p, retCh <- doDeposit) {
                   @{revAddress | bundle0{*_revVault}}!("_deposit", p, *retCh)
                 }
+
+              }
+
               }
 
             } |
