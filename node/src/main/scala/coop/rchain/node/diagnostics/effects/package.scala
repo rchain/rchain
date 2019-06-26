@@ -93,5 +93,12 @@ package object effects {
       def span(source: Source): F[Span[F]] = Sync[F].delay {
         KamonSpan(Kamon.buildSpan(source).start())
       }
+
+      override def withSpan[A](source: Source)(block: Span[F] => F[A]): F[A] =
+        for {
+          s <- span(source)
+          r <- block(s)
+          _ <- s.close()
+        } yield r
     }
 }

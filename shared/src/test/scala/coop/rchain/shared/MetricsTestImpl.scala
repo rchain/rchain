@@ -49,4 +49,6 @@ class MetricsTestImpl[F[_]: Sync] extends Metrics[F] {
     }
   override def timer[A](name: String, block: F[A])(implicit ev: Metrics.Source): F[A] = block
   override def span(source: Source): F[Span[F]]                                       = Sync[F].pure(NoopSpan())
+  override def withSpan[A](source: Metrics.Source)(block: Span[F] => F[A]): F[A] =
+    block(NoopSpan[F]())
 }
