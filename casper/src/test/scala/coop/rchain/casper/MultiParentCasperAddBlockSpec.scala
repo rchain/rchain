@@ -411,8 +411,8 @@ class MultiParentCasperAddBlockSpec extends FlatSpec with Matchers with Inspecto
     val validatorKeyPairs = (1 to 5).map(_ => Secp256k1.newKeyPair)
     val (_, validatorPks) = validatorKeyPairs.unzip
 
-    def deployment(i: Int, ts: Long): DeployData =
-      ConstructDeploy.sourceDeploy(s"new x in { x!(0) }", ts, accounting.MAX_VALUE)
+    def deployment(ts: Long) =
+      ConstructDeploy.sourceDeploy(s"new x in { x!(0) }", timestamp = ts)
 
     def deploy(
         node: HashSetCasperTestNode[Effect],
@@ -454,17 +454,17 @@ class MultiParentCasperAddBlockSpec extends FlatSpec with Matchers with Inspecto
         val v2 = nodes(1)
         val v3 = nodes(2)
         for {
-          _    <- deploy(v1, deployment(0, 1)) >> create(v1) >>= (v1c1 => add(v1, v1c1)) //V1#1
-          v2c1 <- deploy(v2, deployment(0, 2)) >> create(v2) //V2#1
+          _    <- deploy(v1, deployment(1)) >> create(v1) >>= (v1c1 => add(v1, v1c1)) //V1#1
+          v2c1 <- deploy(v2, deployment(2)) >> create(v2) //V2#1
           _    <- v2.receive()
           _    <- v3.receive()
-          _    <- deploy(v1, deployment(0, 4)) >> create(v1) >>= (v1c2 => add(v1, v1c2)) //V1#2
-          v3c2 <- deploy(v3, deployment(0, 5)) >> create(v3) //V3#2
+          _    <- deploy(v1, deployment(4)) >> create(v1) >>= (v1c2 => add(v1, v1c2)) //V1#2
+          v3c2 <- deploy(v3, deployment(5)) >> create(v3) //V3#2
           _    <- v3.receive()
           _    <- add(v3, v3c2) //V3#2
           _    <- add(v2, v2c1) //V2#1
           _    <- v3.receive()
-          r    <- deploy(v3, deployment(0, 6)) >> create(v3) >>= (b => add(v3, b))
+          r    <- deploy(v3, deployment(6)) >> create(v3) >>= (b => add(v3, b))
           _    = r shouldBe Right(Valid)
           _    = v3.logEff.warns shouldBe empty
         } yield ()
