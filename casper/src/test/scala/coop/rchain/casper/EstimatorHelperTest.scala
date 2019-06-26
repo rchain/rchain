@@ -4,7 +4,11 @@ import cats.implicits._
 import coop.rchain.blockstorage.BlockStore
 import coop.rchain.casper.EstimatorHelper.conflicts
 import coop.rchain.casper.genesis.contracts.TestUtil
-import coop.rchain.casper.helper.BlockGenerator.{computeBlockCheckpoint, injectPostStateHash, updateChainWithBlockStateUpdate}
+import coop.rchain.casper.helper.BlockGenerator.{
+  computeBlockCheckpoint,
+  injectPostStateHash,
+  updateChainWithBlockStateUpdate
+}
 import coop.rchain.casper.helper.{BlockDagStorageFixture, BlockGenerator}
 import coop.rchain.casper.scalatestcontrib._
 import coop.rchain.casper.util.ConstructDeploy.basicProcessedDeploy

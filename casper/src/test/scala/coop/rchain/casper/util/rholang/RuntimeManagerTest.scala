@@ -18,7 +18,7 @@ import coop.rchain.p2p.EffectsTestInstances.LogicalTime
 import coop.rchain.rholang.Resources.mkRuntime
 import coop.rchain.rholang.interpreter.Runtime.BlockData
 import coop.rchain.rholang.interpreter.accounting.Cost
-import coop.rchain.rholang.interpreter.{ParBuilderUtil, accounting}
+import coop.rchain.rholang.interpreter.{accounting, ParBuilderUtil}
 import coop.rchain.shared.{Log, Time}
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global

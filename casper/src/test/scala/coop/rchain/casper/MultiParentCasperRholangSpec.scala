@@ -52,7 +52,6 @@ class MultiParentCasperRholangSpec extends FlatSpec with Matchers with Inspector
   it should "be able to use the registry" in effectTest {
 
     HashSetCasperTestNode.standaloneEff(genesis, validatorKeys.head).use { node =>
-
       implicit val rm: RuntimeManager[Effect] = node.runtimeManager
 
       val registerSource =

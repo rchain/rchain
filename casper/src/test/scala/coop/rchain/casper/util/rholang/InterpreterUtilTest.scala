@@ -5,7 +5,12 @@ import java.nio.file.Files
 import cats.effect.Sync
 import cats.implicits._
 import com.google.protobuf.ByteString
-import coop.rchain.blockstorage.{BlockDagRepresentation, BlockDagStorage, BlockStore, IndexedBlockDagStorage}
+import coop.rchain.blockstorage.{
+  BlockDagRepresentation,
+  BlockDagStorage,
+  BlockStore,
+  IndexedBlockDagStorage
+}
 import coop.rchain.casper.genesis.contracts.TestUtil
 import coop.rchain.casper.helper.BlockGenerator._
 import coop.rchain.casper.helper._

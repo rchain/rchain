@@ -25,8 +25,17 @@ import coop.rchain.rholang.interpreter.Runtime.{BlockData, RhoISpace}
 import coop.rchain.rholang.interpreter.accounting._
 import coop.rchain.rholang.interpreter.errors.BugFoundError
 import coop.rchain.rholang.interpreter.storage.implicits.matchListPar
-import coop.rchain.rholang.interpreter.{ChargingReducer, ErrorLog, EvaluateResult, Interpreter, RhoType, Runtime, accounting, PrettyPrinter => RholangPrinter}
-import coop.rchain.rspace.{Blake2b256Hash, Checkpoint, ReplayException, trace}
+import coop.rchain.rholang.interpreter.{
+  ChargingReducer,
+  ErrorLog,
+  EvaluateResult,
+  Interpreter,
+  RhoType,
+  Runtime,
+  accounting,
+  PrettyPrinter => RholangPrinter
+}
+import coop.rchain.rspace.{trace, Blake2b256Hash, Checkpoint, ReplayException}
 import coop.rchain.shared.Debug
 
 trait RuntimeManager[F[_]] {
