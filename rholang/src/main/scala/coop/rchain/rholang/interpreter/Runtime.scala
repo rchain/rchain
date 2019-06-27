@@ -462,22 +462,6 @@ object Runtime {
       dataDir: Path,
       mapSize: Long
   )(implicit scheduler: ExecutionContext): F[(RhoISpace[F], RhoReplayISpace[F])] = {
-    def createNextSpace(
-        dataDir: Path,
-        mapSize: Long
-    ): F[(RhoISpace[F], RhoReplayISpace[F])] =
-      for {
-        withReplay <- RSpace.createWithReplay[
-                       F,
-                       Par,
-                       BindPattern,
-                       ListParWithRandom,
-                       ListParWithRandom,
-                       TaggedContinuation
-                     ](dataDir, mapSize)
-        (space, replay) = withReplay
-      } yield (space, replay)
-
     def checkCreateDataDir: F[Unit] =
       for {
         notexists <- Sync[F].delay(Files.notExists(dataDir))
@@ -485,6 +469,13 @@ object Runtime {
             else ().pure[F]
       } yield ()
 
-    checkCreateDataDir >> createNextSpace(dataDir, mapSize)
+    checkCreateDataDir >> RSpace.createWithReplay[
+      F,
+      Par,
+      BindPattern,
+      ListParWithRandom,
+      ListParWithRandom,
+      TaggedContinuation
+    ](dataDir, mapSize)
   }
 }
