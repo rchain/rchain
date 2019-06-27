@@ -221,11 +221,9 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics] private[rholang] (
       paymentDeploy = ConstructDeploy
         .sourceDeploy(
           s"""
-             # new deployId(`rho:rchain:deployId`), stdout(`rho:io:stdout`) in {
-             #   stdout!(("Sending to deployId: ", *deployId)) |
+             # new deployId(`rho:rchain:deployId`) in {
              #   deployId!($amount) |
              #   for (@x <- deployId) {
-             #      stdout!(("Received! ", x)) |
              #      deployId!((true, Nil))
              #   }
              # }
