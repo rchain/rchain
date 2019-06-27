@@ -35,7 +35,6 @@ class DeployIdTest extends FlatSpec with Matchers {
   ): DeployData = ConstructDeploy.sourceDeploy(
     source = rho,
     timestamp = System.currentTimeMillis(),
-    accounting.MAX_VALUE,
     sec = deployer
   )
 

@@ -25,8 +25,7 @@ object TestUtil {
         "0401f5d998c9be9b1a753771920c6e968def63fe95b20c71a163a7f7311b6131ac65a49f796b5947fa9d94b0542895e7b7ebe8b91eefcbc5c7604aaf281922ccac"
       ),
       timestamp = 1559158671800L,
-      term = CompiledRholangSource("RhoSpecContract.rho").code,
-      phloLimit = accounting.MAX_VALUE
+      term = CompiledRholangSource("RhoSpecContract.rho").code
     )
 
   def setupRuntime[F[_]: Concurrent: ContextShift: Metrics, G[_]: Parallel[F, ?[_]]](
