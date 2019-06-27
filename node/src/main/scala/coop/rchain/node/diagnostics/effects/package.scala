@@ -16,6 +16,15 @@ package object effects {
         @SuppressWarnings(Array("org.wartremover.warts.NonUnitStatements"))
         override def mark(name: String): F[Unit] = Sync[F].delay { span.mark(name) }
         override def close(): F[Unit]            = Sync[F].delay { span.finish() }
+
+        override def trace[A](source: Source)(block: Span[F] => F[A]): F[A] =
+          Resource
+            .make {
+              Sync[F].delay {
+                KamonSpan(Kamon.buildSpan(source).asChildOf(span).start())
+              }
+            }(s => s.close())
+            .use(block)
       }
 
       private val m = scala.collection.concurrent.TrieMap[String, metric.Metric[_]]()

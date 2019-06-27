@@ -101,7 +101,7 @@ class HashSetCasperTestNode[F[_]](
   implicit val engineCell: EngineCell[F] = Cell.unsafe[F, Engine[F]](engine)
   implicit val packetHandlerEff          = CasperPacketHandler[F]
 
-  val span = new NoopSpan[F]
+  implicit val span = new NoopSpan[F]
 
   def initialize(): F[Unit] =
     // pre-population removed from internals of Casper
@@ -111,8 +111,7 @@ class HashSetCasperTestNode[F[_]](
           .validateBlockCheckpoint[F](
             genesis,
             dag,
-            runtimeManager,
-            span
+            runtimeManager
           )
           .void
       }

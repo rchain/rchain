@@ -8,7 +8,7 @@ import coop.rchain.casper.protocol.BlockMessage
 import coop.rchain.casper.util.{DagOperations, ProtoUtil}
 import coop.rchain.casper.util.ProtoUtil.weightFromValidatorByDag
 import coop.rchain.catscontrib.ListContrib
-import coop.rchain.metrics.Metrics
+import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.models.BlockMetadata
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.Validator.Validator
@@ -25,7 +25,7 @@ object Estimator {
   def tips[F[_]: Monad: Metrics](
       dag: BlockDagRepresentation[F],
       genesis: BlockMessage
-  ): F[IndexedSeq[BlockHash]] = Metrics[F].withSpan(Tips0MetricsSource) { span =>
+  ): F[IndexedSeq[BlockHash]] = Metrics[F].withSpan(Tips0MetricsSource) { implicit span =>
     for {
       latestMessageHashes <- dag.latestMessageHashes
       _                   <- span.mark("latest-message-hashes")
@@ -40,7 +40,7 @@ object Estimator {
       dag: BlockDagRepresentation[F],
       genesis: BlockMessage,
       latestMessagesHashes: Map[Validator, BlockHash]
-  ): F[IndexedSeq[BlockHash]] = Metrics[F].withSpan(Tips1MetricsSource) { span =>
+  )(implicit parent: Span[F]): F[IndexedSeq[BlockHash]] = parent.trace(Tips1MetricsSource) { span =>
     for {
       invalidLatestMessages        <- ProtoUtil.invalidLatestMessages[F](dag, latestMessagesHashes)
       filteredLatestMessagesHashes = latestMessagesHashes -- invalidLatestMessages.keys

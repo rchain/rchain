@@ -95,15 +95,14 @@ sealed abstract class MultiParentCasperInstances {
       validatorId: Option[ValidatorIdentity],
       genesis: BlockMessage,
       shardId: String
-  ): F[MultiParentCasper[F]] = Metrics[F].withSpan(genesisLabel) { genesisSpan =>
+  ): F[MultiParentCasper[F]] = Metrics[F].withSpan(genesisLabel) { implicit genesisSpan =>
     for {
       dag <- BlockDagStorage[F].getRepresentation
       maybePostGenesisStateHash <- InterpreterUtil
                                     .validateBlockCheckpoint[F](
                                       genesis,
                                       dag,
-                                      runtimeManager,
-                                      genesisSpan
+                                      runtimeManager
                                     )
       postGenesisStateHash <- maybePostGenesisStateHash match {
                                case Left(BlockException(ex)) => Sync[F].raiseError[StateHash](ex)

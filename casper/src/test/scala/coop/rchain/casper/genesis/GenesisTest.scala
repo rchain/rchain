@@ -168,17 +168,17 @@ class GenesisTest extends FlatSpec with Matchers with EitherValues with BlockDag
             time: LogicalTime[Task]
         ) =>
           implicit val logEff = log
+          implicit val span   = new NoopSpan[Task]
           for {
             genesis <- fromInputFiles()(runtimeManager, genesisPath, log, time)
             _       <- BlockStore[Task].put(genesis.blockHash, genesis)
             dag     <- blockDagStorage.getRepresentation
-            span    = new NoopSpan[Task]
+
             maybePostGenesisStateHash <- InterpreterUtil
                                           .validateBlockCheckpoint[Task](
                                             genesis,
                                             dag,
-                                            runtimeManager,
-                                            span
+                                            runtimeManager
                                           )
           } yield maybePostGenesisStateHash should matchPattern { case Right(Some(_)) => }
       }

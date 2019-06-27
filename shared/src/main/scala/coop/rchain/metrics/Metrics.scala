@@ -2,9 +2,11 @@ package coop.rchain.metrics
 
 import cats._
 import cats.implicits._
+import coop.rchain.metrics.Metrics.Source
 
 trait Span[F[_]] {
   def mark(name: String): F[Unit]
+  def trace[A](source: Metrics.Source)(block: Span[F] => F[A]): F[A]
 }
 
 trait CloseableSpan[F[_]] extends Span[F] {
@@ -12,8 +14,9 @@ trait CloseableSpan[F[_]] extends Span[F] {
 }
 
 final case class NoopSpan[F[_]: Applicative]() extends CloseableSpan[F] {
-  def mark(name: String): F[Unit] = ().pure[F]
-  def close(): F[Unit]            = ().pure[F]
+  def mark(name: String): F[Unit]                            = ().pure[F]
+  def close(): F[Unit]                                       = ().pure[F]
+  def trace[A](source: Source)(block: Span[F] => F[A]): F[A] = block(this)
 }
 
 trait Metrics[F[_]] {

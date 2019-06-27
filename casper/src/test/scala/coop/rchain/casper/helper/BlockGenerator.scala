@@ -53,9 +53,9 @@ object BlockGenerator {
       dag: BlockDagRepresentation[F],
       runtimeManager: RuntimeManager[F]
   ): F[(StateHash, Seq[ProcessedDeploy])] = Metrics[F].withSpan(GenerateBlockMetricsSource) {
-    span =>
+    implicit span =>
       for {
-        result                                                 <- computeBlockCheckpointFromDeploys[F](b, genesis, dag, runtimeManager, span)
+        result                                                 <- computeBlockCheckpointFromDeploys[F](b, genesis, dag, runtimeManager)
         Right((preStateHash, postStateHash, processedDeploys)) = result
       } yield (postStateHash, processedDeploys.map(_.toProcessedDeploy))
   }
@@ -79,8 +79,9 @@ object BlockGenerator {
       b: BlockMessage,
       genesis: BlockMessage,
       dag: BlockDagRepresentation[F],
-      runtimeManager: RuntimeManager[F],
-      span: Span[F]
+      runtimeManager: RuntimeManager[F]
+  )(
+      implicit span: Span[F]
   ): F[Either[Throwable, (StateHash, StateHash, Seq[InternalProcessedDeploy])]] =
     for {
       parents <- ProtoUtil.unsafeGetParents[F](b)
@@ -98,7 +99,6 @@ object BlockGenerator {
                  dag,
                  runtimeManager,
                  BlockData(now, b.body.get.state.get.blockNumber),
-                 span,
                  Map.empty[BlockHash, Validator]
                )
     } yield result

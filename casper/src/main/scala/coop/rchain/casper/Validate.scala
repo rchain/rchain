@@ -5,6 +5,7 @@ import cats.implicits._
 import cats.{Applicative, Monad}
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.{BlockDagRepresentation, BlockStore}
+import coop.rchain.casper.Estimator.EstimatorMetricsSource
 import coop.rchain.casper.protocol.Event.EventInstance
 import coop.rchain.casper.protocol.{ApprovedBlock, BlockMessage, Justification}
 import coop.rchain.casper.util.ProtoUtil.bonds
@@ -32,6 +33,8 @@ object Validate {
     Map(
       "secp256k1" -> Secp256k1.verify
     )
+  private val ValidateMetricsSource: Metrics.Source =
+    Metrics.Source(CasperMetricsSource, "validate")
 
   def signature(d: Data, sig: protocol.Signature): Boolean =
     signatureVerifiers.get(sig.algorithm).fold(false) { verify =>
@@ -188,9 +191,8 @@ object Validate {
       genesis: BlockMessage,
       dag: BlockDagRepresentation[F],
       shardId: String,
-      expirationThreshold: Int,
-      span: Span[F]
-  ): F[Either[BlockStatus, ValidBlock]] =
+      expirationThreshold: Int
+  )(implicit span: Span[F]): F[Either[BlockStatus, ValidBlock]] =
     for {
       _                 <- span.mark("before-block-hash-validation")
       blockHashStatus   <- Validate.blockHash[F](block)
@@ -206,7 +208,7 @@ object Validate {
                         )
       _ <- span.mark("before-repeat-deploy-validation")
       repeatedDeployStatus <- timestampStatus.joinRight.traverse(
-                               _ => Validate.repeatDeploy[F](block, dag, expirationThreshold, span)
+                               _ => Validate.repeatDeploy[F](block, dag, expirationThreshold)
                              )
       _ <- span.mark("before-block-number-validation")
       blockNumberStatus <- repeatedDeployStatus.joinRight.traverse(
@@ -275,9 +277,8 @@ object Validate {
   def repeatDeploy[F[_]: Monad: Log: BlockStore](
       block: BlockMessage,
       dag: BlockDagRepresentation[F],
-      expirationThreshold: Int,
-      span: Span[F]
-  ): F[Either[InvalidBlock, ValidBlock]] = {
+      expirationThreshold: Int
+  )(implicit span: Span[F]): F[Either[InvalidBlock, ValidBlock]] = {
     val deployKeySet = (for {
       bd <- block.body.toList
       r  <- bd.deploys.flatMap(_.deploy)
@@ -541,30 +542,33 @@ object Validate {
       case hashes                   => hashes
     }
 
-    for {
-      latestMessagesHashes <- ProtoUtil.toLatestMessageHashes(b.justifications).pure[F]
-      tipHashes            <- Estimator.tips[F](dag, genesis, latestMessagesHashes)
-      computedParents      <- EstimatorHelper.chooseNonConflicting[F](tipHashes, dag)
-      computedParentHashes = computedParents.map(_.blockHash)
-      status <- if (parentHashes == computedParentHashes) {
-                 Applicative[F].pure(Right(Valid))
-               } else {
-                 val parentsString =
-                   parentHashes.map(hash => PrettyPrinter.buildString(hash)).mkString(",")
-                 val estimateString =
-                   computedParentHashes.map(hash => PrettyPrinter.buildString(hash)).mkString(",")
-                 val justificationString = latestMessagesHashes.values
-                   .map(hash => PrettyPrinter.buildString(hash))
-                   .mkString(",")
-                 val message =
-                   s"block parents ${parentsString} did not match estimate ${estimateString} based on justification ${justificationString}."
-                 for {
-                   _ <- Log[F].warn(
-                         ignore(b, message)
-                       )
-                 } yield Left(InvalidParents)
-               }
-    } yield status
+    Metrics[F].withSpan(ValidateMetricsSource) { implicit span =>
+      for {
+        latestMessagesHashes <- ProtoUtil.toLatestMessageHashes(b.justifications).pure[F]
+        tipHashes <- Estimator
+                      .tips[F](dag, genesis, latestMessagesHashes)
+        computedParents      <- EstimatorHelper.chooseNonConflicting[F](tipHashes, dag)
+        computedParentHashes = computedParents.map(_.blockHash)
+        status <- if (parentHashes == computedParentHashes) {
+                   Applicative[F].pure(Right(Valid))
+                 } else {
+                   val parentsString =
+                     parentHashes.map(hash => PrettyPrinter.buildString(hash)).mkString(",")
+                   val estimateString =
+                     computedParentHashes.map(hash => PrettyPrinter.buildString(hash)).mkString(",")
+                   val justificationString = latestMessagesHashes.values
+                     .map(hash => PrettyPrinter.buildString(hash))
+                     .mkString(",")
+                   val message =
+                     s"block parents ${parentsString} did not match estimate ${estimateString} based on justification ${justificationString}."
+                   for {
+                     _ <- Log[F].warn(
+                           ignore(b, message)
+                         )
+                   } yield Left(InvalidParents)
+                 }
+      } yield status
+    }
   }
 
   /*
@@ -704,16 +708,14 @@ object Validate {
       block: BlockMessage,
       dag: BlockDagRepresentation[F],
       emptyStateHash: StateHash,
-      runtimeManager: RuntimeManager[F],
-      span: Span[F]
-  ): F[Either[BlockStatus, ValidBlock]] =
+      runtimeManager: RuntimeManager[F]
+  )(implicit span: Span[F]): F[Either[BlockStatus, ValidBlock]] =
     for {
       maybeStateHash <- InterpreterUtil
                          .validateBlockCheckpoint[F](
                            block,
                            dag,
-                           runtimeManager,
-                           span
+                           runtimeManager
                          )
     } yield maybeStateHash match {
       case Left(ex)       => Left(ex)

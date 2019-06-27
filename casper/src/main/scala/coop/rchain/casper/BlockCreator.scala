@@ -45,7 +45,7 @@ object BlockCreator {
       expirationThreshold: Int,
       runtimeManager: RuntimeManager[F]
   )(implicit state: CasperStateCell[F], metricsF: Metrics[F]): F[CreateBlockStatus] =
-    metricsF.withSpan(CreateBlockMetricsSource) { span =>
+    metricsF.withSpan(CreateBlockMetricsSource) { implicit span =>
       for {
         tipHashes             <- Estimator.tips[F](dag, genesis)
         _                     <- span.mark("after-estimator")
@@ -89,8 +89,7 @@ object BlockCreator {
                             shardId,
                             version,
                             now,
-                            invalidBlocks,
-                            span
+                            invalidBlocks
                           )
                         } else {
                           CreateBlockStatus.noNewDeploys.pure[F]
@@ -188,9 +187,8 @@ object BlockCreator {
       shardId: String,
       version: Long,
       now: Long,
-      invalidBlocks: Map[BlockHash, Validator],
-      span: Span[F]
-  ): F[CreateBlockStatus] =
+      invalidBlocks: Map[BlockHash, Validator]
+  )(implicit span: Span[F]): F[CreateBlockStatus] =
     InterpreterUtil
       .computeDeploysCheckpoint[F](
         parents,
@@ -198,7 +196,6 @@ object BlockCreator {
         dag,
         runtimeManager,
         BlockData(now, maxBlockNumber + 1),
-        span,
         invalidBlocks
       )
       .flatMap {

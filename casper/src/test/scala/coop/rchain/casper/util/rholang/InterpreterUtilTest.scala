@@ -40,7 +40,7 @@ class InterpreterUtilTest
     with BlockDagStorageFixture {
   implicit val logEff                    = new LogStub[Task]
   implicit val metricsEff: Metrics[Task] = new metrics.Metrics.MetricsNOP[Task]
-  val span                               = new NoopSpan[Task]
+  implicit val span                      = new NoopSpan[Task]
   val storageSize                        = 1024L * 1024
   val storageDirectory                   = Files.createTempDirectory("casper-interp-util-test")
   val activeRuntime =
@@ -54,8 +54,9 @@ class InterpreterUtilTest
       parents: Seq[BlockMessage],
       deploys: Seq[DeployData],
       dag: BlockDagRepresentation[F],
-      runtimeManager: RuntimeManager[F],
-      span0: Span[F]
+      runtimeManager: RuntimeManager[F]
+  )(
+      implicit span: Span[F]
   ): F[Either[Throwable, (StateHash, StateHash, Seq[InternalProcessedDeploy])]] =
     InterpreterUtil.computeDeploysCheckpoint(
       parents,
@@ -63,7 +64,6 @@ class InterpreterUtilTest
       dag,
       runtimeManager,
       BlockData(System.currentTimeMillis(), 0),
-      span0,
       Map.empty[BlockHash, Validator]
     )
 
@@ -315,7 +315,7 @@ class InterpreterUtilTest
             _         <- step(runtimeManager)(1, genesis)
             _         <- step(runtimeManager)(2, genesis)
             dag       <- blockDagStorage.getRepresentation
-            postState <- validateBlockCheckpoint[Task](b3, dag, runtimeManager, span)
+            postState <- validateBlockCheckpoint[Task](b3, dag, runtimeManager)
             result    = postState shouldBe Right(None)
           } yield result
         }
@@ -388,7 +388,7 @@ class InterpreterUtilTest
             _ <- step(runtimeManager)(4, genesis)
 
             dag2      <- blockDagStorage.getRepresentation
-            postState <- validateBlockCheckpoint[Task](b5, dag2, runtimeManager, span)
+            postState <- validateBlockCheckpoint[Task](b5, dag2, runtimeManager)
             result    = postState shouldBe Right(None)
           } yield result
         }
@@ -400,7 +400,7 @@ class InterpreterUtilTest
       deploy: DeployData*
   )(implicit blockStore: BlockStore[Task]): Task[Seq[InternalProcessedDeploy]] =
     for {
-      computeResult         <- computeDeploysCheckpoint[Task](Seq.empty, deploy, dag, runtimeManager, span)
+      computeResult         <- computeDeploysCheckpoint[Task](Seq.empty, deploy, dag, runtimeManager)
       Right((_, _, result)) = computeResult
     } yield result
 
@@ -458,7 +458,7 @@ class InterpreterUtilTest
         for {
           block            <- createGenesis[Task](deploys = processedDeploys, tsHash = invalidHash)
           dag              <- blockDagStorage.getRepresentation
-          validateResult   <- validateBlockCheckpoint[Task](block, dag, runtimeManager, span)
+          validateResult   <- validateBlockCheckpoint[Task](block, dag, runtimeManager)
           Right(stateHash) = validateResult
         } yield stateHash should be(None)
       }
@@ -484,8 +484,7 @@ class InterpreterUtilTest
                                 Seq.empty,
                                 deploys,
                                 dag1,
-                                runtimeManager,
-                                span
+                                runtimeManager
                               )
           Right((preStateHash, computedTsHash, processedDeploys)) = deploysCheckpoint
           block <- createGenesis[Task](
@@ -495,7 +494,7 @@ class InterpreterUtilTest
                   )
           dag2 <- blockDagStorage.getRepresentation
 
-          validateResult <- validateBlockCheckpoint[Task](block, dag2, runtimeManager, span)
+          validateResult <- validateBlockCheckpoint[Task](block, dag2, runtimeManager)
           Right(tsHash)  = validateResult
         } yield tsHash should be(Some(computedTsHash))
       }
@@ -536,8 +535,7 @@ class InterpreterUtilTest
                                 Seq.empty,
                                 deploys,
                                 dag1,
-                                runtimeManager,
-                                span
+                                runtimeManager
                               )
           Right((preStateHash, computedTsHash, processedDeploys)) = deploysCheckpoint
           block <- createGenesis[Task](
@@ -546,7 +544,7 @@ class InterpreterUtilTest
                     preStateHash = preStateHash
                   )
           dag2           <- blockDagStorage.getRepresentation
-          validateResult <- validateBlockCheckpoint[Task](block, dag2, runtimeManager, span)
+          validateResult <- validateBlockCheckpoint[Task](block, dag2, runtimeManager)
           Right(tsHash)  = validateResult
         } yield tsHash should be(Some(computedTsHash))
       }
@@ -591,8 +589,7 @@ class InterpreterUtilTest
                                 Seq.empty,
                                 deploys,
                                 dag1,
-                                runtimeManager,
-                                span
+                                runtimeManager
                               )
           Right((preStateHash, computedTsHash, processedDeploys)) = deploysCheckpoint
           block <- createGenesis[Task](
@@ -601,7 +598,7 @@ class InterpreterUtilTest
                     preStateHash = preStateHash
                   )
           dag2           <- blockDagStorage.getRepresentation
-          validateResult <- validateBlockCheckpoint[Task](block, dag2, runtimeManager, span)
+          validateResult <- validateBlockCheckpoint[Task](block, dag2, runtimeManager)
           Right(tsHash)  = validateResult
         } yield tsHash should be(Some(computedTsHash))
       }
@@ -643,8 +640,7 @@ class InterpreterUtilTest
                                 Seq.empty,
                                 deploys,
                                 dag1,
-                                runtimeManager,
-                                span
+                                runtimeManager
                               )
           Right((preStateHash, computedTsHash, processedDeploys)) = deploysCheckpoint
           block <- createGenesis[Task](
@@ -653,7 +649,7 @@ class InterpreterUtilTest
                     preStateHash = preStateHash
                   )
           dag2           <- blockDagStorage.getRepresentation
-          validateResult <- validateBlockCheckpoint[Task](block, dag2, runtimeManager, span)
+          validateResult <- validateBlockCheckpoint[Task](block, dag2, runtimeManager)
           Right(tsHash)  = validateResult
         } yield tsHash should be(Some(computedTsHash))
       }
@@ -687,8 +683,7 @@ class InterpreterUtilTest
                                   Seq.empty,
                                   deploys,
                                   dag1,
-                                  runtimeManager,
-                                  span
+                                  runtimeManager
                                 )
             Right((preStateHash, computedTsHash, processedDeploys)) = deploysCheckpoint
             block <- createGenesis[Task](
@@ -698,7 +693,7 @@ class InterpreterUtilTest
                     )
             dag2 <- blockDagStorage.getRepresentation
 
-            validateResult <- validateBlockCheckpoint[Task](block, dag2, runtimeManager, span)
+            validateResult <- validateBlockCheckpoint[Task](block, dag2, runtimeManager)
             Right(tsHash)  = validateResult
           } yield tsHash should be(Some(computedTsHash))
         }
@@ -717,8 +712,7 @@ class InterpreterUtilTest
                                 Seq.empty,
                                 deploys,
                                 dag1,
-                                runtimeManager,
-                                span
+                                runtimeManager
                               )
           Right((preStateHash, computedTsHash, processedDeploys)) = deploysCheckpoint
           intProcessedDeploys                                     = processedDeploys.map(_.toProcessedDeploy)
@@ -732,7 +726,7 @@ class InterpreterUtilTest
                     preStateHash = preStateHash
                   )
           dag2           <- blockDagStorage.getRepresentation
-          validateResult <- validateBlockCheckpoint[Task](block, dag2, runtimeManager, span)
+          validateResult <- validateBlockCheckpoint[Task](block, dag2, runtimeManager)
           Right(tsHash)  = validateResult
         } yield tsHash should be(None)
       }
@@ -768,8 +762,7 @@ class InterpreterUtilTest
                                   Seq.empty,
                                   deploys,
                                   dag1,
-                                  runtimeManager,
-                                  span
+                                  runtimeManager
                                 )
             Right((preStateHash, computedTsHash, processedDeploys)) = deploysCheckpoint
             block <- createGenesis[Task](
@@ -778,7 +771,7 @@ class InterpreterUtilTest
                       preStateHash = preStateHash
                     )
             dag2           <- blockDagStorage.getRepresentation
-            validateResult <- validateBlockCheckpoint[Task](block, dag2, runtimeManager, span)
+            validateResult <- validateBlockCheckpoint[Task](block, dag2, runtimeManager)
             Right(tsHash)  = validateResult
           } yield tsHash should be(Some(computedTsHash))
         }
