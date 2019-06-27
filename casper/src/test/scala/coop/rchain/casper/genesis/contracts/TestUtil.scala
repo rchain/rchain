@@ -66,7 +66,7 @@ object TestUtil {
         genesisPk = Secp256k1.newKeyPair._2,
         vaults = Vault(
           RevAddress.fromPublicKey(Secp256k1.toPublic(ConstructDeploy.defaultSec)).get,
-          900000
+          9000000
         ) :: bonds.toList.map {
           case (pk, stake) =>
             RevAddress.fromPublicKey(pk).map(Vault(_, stake))
