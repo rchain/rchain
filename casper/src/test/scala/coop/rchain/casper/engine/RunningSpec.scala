@@ -41,7 +41,7 @@ class RunningSpec extends WordSpec {
 
     implicit val casper = NoOpsCasperEffect[Task]().unsafeRunSync
 
-    val engine = new Running[Task](casper, approvedBlock)
+    val engine = new Running[Task](casper, approvedBlock, Task.unit)
 
     transportLayer.setResponses(_ => p => Right(p))
 

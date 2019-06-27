@@ -71,7 +71,8 @@ object Engine {
 
   def transitionToRunning[F[_]: Monad: MultiParentCasperRef: EngineCell: Log: EventLog: RPConfAsk: BlockStore: ConnectionsCell: TransportLayer: Time](
       casper: MultiParentCasper[F],
-      approvedBlock: ApprovedBlock
+      approvedBlock: ApprovedBlock,
+      init: F[Unit]
   ): F[Unit] =
     for {
       _ <- MultiParentCasperRef[F].set(casper)
@@ -83,8 +84,8 @@ object Engine {
                 .getOrElse("")
             )
           )
-      abh = new Running[F](casper, approvedBlock)
-      _   <- EngineCell[F].set(abh)
+      running = new Running[F](casper, approvedBlock, init)
+      _       <- EngineCell[F].set(running)
 
     } yield ()
 
