@@ -22,7 +22,7 @@ object ConstructDeploy {
   def sourceDeploy(
       source: String,
       timestamp: Long,
-      phloLimit: Long = 9000,
+      phloLimit: Long = 90000,
       phloPrice: Long = 1L,
       sec: PrivateKey = defaultSec
   ): DeployData = {
@@ -43,7 +43,7 @@ object ConstructDeploy {
 
   def sourceDeployNow(
       source: String,
-      phloLimit: Long = 9000,
+      phloLimit: Long = 90000,
       phloPrice: Long = 1L,
       sec: PrivateKey = defaultSec
   ): DeployData =
@@ -57,7 +57,7 @@ object ConstructDeploy {
 
   def sourceDeployNowF[F[_]: Time: Functor](
       source: String,
-      phloLimit: Long = 9000,
+      phloLimit: Long = 90000,
       phloPrice: Long = 1L,
       sec: PrivateKey = defaultSec
   ): F[DeployData] =
