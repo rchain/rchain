@@ -54,7 +54,7 @@ object BlockCreator {
       invalidLatestMessages <- ProtoUtil.invalidLatestMessages[F](dag)
       _ <- invalidLatestMessages.values.toList.traverse { invalidBlockHash =>
             val encodedInvalidBlockHash = Base16.encode(invalidBlockHash.toByteArray)
-            val slashingDeploy = ConstructDeploy.sourceDeploy(
+            ConstructDeploy.sourceDeployNowF(
               s"""
                  #new rl(`rho:registry:lookup`), posCh in {
                  #  rl!(`rho:rchain:pos`, *posCh) |
@@ -64,13 +64,14 @@ object BlockCreator {
                  #}
                  #
               """.stripMargin('#'),
-              timestamp = System.currentTimeMillis(),
               phloLimit = 0,
               sec = privateKey
-            )
-            Cell[F, CasperState].modify { s =>
-              s.copy(deployHistory = s.deployHistory + slashingDeploy)
-            }
+            ) >>= (
+                slashingDeploy =>
+                  Cell[F, CasperState].modify { s =>
+                    s.copy(deployHistory = s.deployHistory + slashingDeploy)
+                  }
+              )
           }
       _                <- updateDeployHistory[F](state, maxBlockNumber)
       deploys          <- extractDeploys[F](dag, parents, maxBlockNumber, expirationThreshold)
