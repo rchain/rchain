@@ -5,7 +5,6 @@ import cats.implicits._
 import coop.rchain.rspace._
 import coop.rchain.rspace.examples.StringExamples._
 import coop.rchain.rspace.examples.StringExamples.implicits._
-import coop.rchain.rspace.history.{Leaf, LeafPointer, Node, NodePointer, PointerBlock, Skip, Trie}
 import coop.rchain.rspace.test._
 import coop.rchain.rspace.trace.Consume
 import coop.rchain.rspace.util._

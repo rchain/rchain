@@ -7,7 +7,6 @@ import java.nio.file.{FileVisitResult, Files, Path, SimpleFileVisitor}
 import cats._
 import cats.implicits._
 import cats.effect.{Concurrent, ContextShift, ExitCase, Fiber}
-import coop.rchain.rspace.history.{Branch, ITrieStore, Leaf, Node, Skip, Trie}
 import coop.rchain.shared.Language.ignore
 import monix.eval.Coeval
 
@@ -68,32 +67,6 @@ package object test {
     codec.encode(t).flatMap((vector: BitVector) => codec.decode(vector))
 
   def offset(d: Int) = ("   " * d)
-
-  def printTree[T, K, V](store: ITrieStore[T, K, V], branch: Branch = Branch.MASTER): Unit =
-    store.withTxn(store.createTxnRead()) { txn =>
-      def printBranch(d: Int, t: Trie[K, V]): Unit =
-        t match {
-          case Leaf(key, value) => println(offset(d), "Leaf", key, value)
-          case Node(pointerBlock) =>
-            println(offset(d), "node")
-            pointerBlock.childrenWithIndex.foreach {
-              case (p, i) =>
-                val n = store.get(txn, p.hash).get
-                println(offset(d), i, "#", p.hash)
-                printBranch(d + 1, n)
-            }
-          case Skip(affix, p) =>
-            val n = store.get(txn, p.hash).get
-            println(offset(d), "skip", affix, "#", p.hash)
-            printBranch(d + 1, n)
-        }
-      val root = store.getRoot(txn, branch)
-      println("---------------------")
-      println("root#", root)
-      val rootNode = store.get(txn, root.get).get
-      printBranch(0, rootNode)
-      println("---------------------")
-    }
 
   import scala.reflect.ClassTag
   def collectActions[HA <: HotStoreAction: ClassTag](changes: Seq[HotStoreAction]): Seq[HA] = {

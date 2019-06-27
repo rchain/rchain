@@ -9,7 +9,7 @@ import com.typesafe.scalalogging.Logger
 import coop.rchain.metrics.Metrics
 import coop.rchain.models._
 import coop.rchain.rholang.interpreter.Runtime
-import coop.rchain.rholang.interpreter.Runtime.{RhoContext, RhoISpace, SystemProcess}
+import coop.rchain.rholang.interpreter.Runtime.{RhoISpace, SystemProcess}
 import coop.rchain.rspace._
 import coop.rchain.rspace.nextgenrspace.{RSpace, ReplayRSpace}
 import coop.rchain.rspace.history.Branch
