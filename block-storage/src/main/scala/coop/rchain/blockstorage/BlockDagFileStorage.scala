@@ -1204,7 +1204,7 @@ object BlockDagFileStorage {
       _                      <- writeToFile[F](config.latestMessagesLogPath, latestMessagesData)
       _                      <- writeToFile[F](config.latestMessagesCrcPath, latestMessagesCrcBytes)
       blockMetadataCrc       = Crc32.empty[F]()
-      genesisByteString      = genesis.toByteString
+      genesisByteString      = BlockMetadata.fromBlock(genesis, invalid = false).toByteString
       genesisData            = genesisByteString.size.toByteString.concat(genesisByteString).toByteArray
       _                      <- blockMetadataCrc.update(genesisData)
       blockMetadataCrcBytes  <- blockMetadataCrc.bytes
