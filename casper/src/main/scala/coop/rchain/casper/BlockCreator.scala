@@ -64,7 +64,7 @@ object BlockCreator {
                  #}
                  #
               """.stripMargin('#'),
-              phloLimit = 0,
+              phloPrice = 0,
               sec = privateKey
             ) >>= (
                 slashingDeploy =>
