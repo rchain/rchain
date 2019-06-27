@@ -1,4 +1,4 @@
-package coop.rchain.rspace.nextgenrspace.history
+package coop.rchain.rspace.history
 
 import coop.rchain.rspace.Blake2b256Hash
 import scodec.{Attempt, Codec}

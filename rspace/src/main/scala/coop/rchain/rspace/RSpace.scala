@@ -1,4 +1,4 @@
-package coop.rchain.rspace.nextgenrspace
+package coop.rchain.rspace
 
 import java.nio.file.{Files, Path}
 
@@ -11,7 +11,7 @@ import coop.rchain.metrics.Metrics.Source
 import coop.rchain.rspace._
 import coop.rchain.rspace.history.Branch
 import coop.rchain.rspace.internal._
-import coop.rchain.rspace.nextgenrspace.history.{HistoryRepository, HistoryRepositoryInstances}
+import coop.rchain.rspace.history.{HistoryRepository, HistoryRepositoryInstances}
 import coop.rchain.rspace.trace._
 import coop.rchain.shared.{Cell, Log}
 import coop.rchain.shared.SyncVarOps._
@@ -542,7 +542,7 @@ object RSpace {
       concurrent: Concurrent[F]
   ): F[(HistoryRepository[F, C, P, A, K], HotStore[F, C, P, A, K])] = {
 
-    import coop.rchain.rspace.nextgenrspace.history._
+    import coop.rchain.rspace.history._
     implicit val cc = sc.toCodec
     implicit val cp = sp.toCodec
     implicit val ca = sa.toCodec

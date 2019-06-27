@@ -1,4 +1,4 @@
-package coop.rchain.rspace.nextgenrspace
+package coop.rchain.rspace
 
 import cats.effect.{Concurrent, Sync}
 import cats.implicits._
@@ -10,7 +10,7 @@ import coop.rchain.rspace.history.Branch
 import coop.rchain.rspace.internal._
 import coop.rchain.rspace.trace.Consume
 import coop.rchain.rspace.trace.{Log => EventLog}
-import coop.rchain.rspace.nextgenrspace.history.{History, HistoryRepository}
+import coop.rchain.rspace.history.{History, HistoryRepository}
 import coop.rchain.shared.{Cell, Log}
 import coop.rchain.shared.SyncVarOps._
 import monix.execution.atomic.AtomicAny

@@ -1,4 +1,4 @@
-package coop.rchain.rspace.nextgenrspace
+package coop.rchain.rspace
 
 import cats.effect._
 import cats.implicits._
@@ -9,7 +9,7 @@ import coop.rchain.rspace.test._
 import coop.rchain.rspace.trace.Consume
 import coop.rchain.rspace.util._
 import coop.rchain.rspace.internal._
-import coop.rchain.rspace.nextgenrspace.history.History
+import coop.rchain.rspace.history.History._
 import org.scalatest.prop.{Checkers, GeneratorDrivenPropertyChecks}
 import scodec.Codec
 import monix.eval.Task
@@ -881,7 +881,7 @@ trait StorageActionsTests[F[_]]
 
   "createCheckpoint on an empty store" should "return the expected hash" in fixture {
     (_, _, space) =>
-      space.createCheckpoint().map(_.root shouldBe History.emptyRootHash)
+      space.createCheckpoint().map(_.root shouldBe emptyRootHash)
   }
 
   "createCheckpoint" should "clear the store contents" in fixture { (_, storeAtom, space) =>
@@ -924,8 +924,6 @@ trait StorageActionsTests[F[_]]
         checkpoint1 <- space.createCheckpoint()
       } yield checkpoint1.log shouldBe empty
   }
-
-  val emptyRootHash: Blake2b256Hash = History.emptyRootHash
 
   "consume and produce a match and then createCheckpoint" should "result in an empty TrieStore" in
     fixture { (_, _, space) =>

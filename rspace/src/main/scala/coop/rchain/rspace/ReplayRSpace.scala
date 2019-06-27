@@ -1,4 +1,4 @@
-package coop.rchain.rspace.nextgenrspace
+package coop.rchain.rspace
 
 import java.nio.file.Path
 
@@ -13,7 +13,7 @@ import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.rspace._
 import coop.rchain.rspace.history.Branch
 import coop.rchain.rspace.internal._
-import coop.rchain.rspace.nextgenrspace.history.HistoryRepository
+import coop.rchain.rspace.history.HistoryRepository
 import coop.rchain.rspace.trace.{Produce, _}
 import coop.rchain.shared.{Cell, Log}
 import scodec.Codec

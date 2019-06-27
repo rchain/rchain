@@ -8,7 +8,7 @@ import cats.effect._
 import coop.rchain.metrics
 import coop.rchain.metrics.Metrics
 import coop.rchain.rspace._
-import coop.rchain.rspace.nextgenrspace.{RSpace, ReplayRSpace}
+import coop.rchain.rspace.{RSpace, ReplayRSpace}
 import coop.rchain.rspace.examples.AddressBookExample._
 import coop.rchain.rspace.examples.AddressBookExample.implicits._
 import coop.rchain.rspace.history.Branch

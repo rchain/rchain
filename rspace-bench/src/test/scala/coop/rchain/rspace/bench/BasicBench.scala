@@ -14,7 +14,7 @@ import coop.rchain.models._
 import coop.rchain.rholang.interpreter.accounting._
 import coop.rchain.rholang.interpreter.errors.InterpreterError
 import coop.rchain.rspace._
-import coop.rchain.rspace.nextgenrspace.{RSpace, ReplayRSpace}
+import coop.rchain.rspace.{RSpace, ReplayRSpace}
 import coop.rchain.rspace.history.Branch
 import coop.rchain.shared.Log
 import coop.rchain.shared.PathOps.RichPath

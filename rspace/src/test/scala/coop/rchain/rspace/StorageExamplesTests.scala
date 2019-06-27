@@ -1,4 +1,4 @@
-package coop.rchain.rspace.nextgenrspace
+package coop.rchain.rspace
 
 import coop.rchain.rspace.examples.StringExamples.StringsCaptor
 import java.nio.file.{Files, Path}

@@ -1,4 +1,4 @@
-package coop.rchain.rspace.nextgenrspace
+package coop.rchain.rspace
 
 import java.nio.file.{Files, Path, Paths}
 
@@ -12,7 +12,7 @@ import coop.rchain.rspace.examples.StringExamples
 import coop.rchain.rspace.examples.StringExamples._
 import coop.rchain.rspace.examples.StringExamples.implicits._
 import coop.rchain.rspace.history._
-import coop.rchain.rspace.nextgenrspace.history.{
+import coop.rchain.rspace.history.{
   HistoryRepository,
   HistoryRepositoryInstances,
   LMDBRSpaceStorageConfig,

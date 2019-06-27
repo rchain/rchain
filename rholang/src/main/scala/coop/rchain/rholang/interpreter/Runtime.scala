@@ -21,7 +21,7 @@ import coop.rchain.rholang.interpreter.errors.SetupError
 import coop.rchain.rholang.interpreter.storage.implicits._
 import coop.rchain.rspace._
 import coop.rchain.rspace.history.Branch
-import coop.rchain.rspace.nextgenrspace.{RSpace => NextRSpace}
+import coop.rchain.rspace.{RSpace => NextRSpace}
 import coop.rchain.rspace.pure.PureRSpace
 import coop.rchain.shared.Log
 

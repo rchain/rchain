@@ -1,4 +1,4 @@
-package coop.rchain.rspace.nextgenrspace.history
+package coop.rchain.rspace.history
 
 import cats.implicits._
 import cats.effect.Sync

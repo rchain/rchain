@@ -1,11 +1,11 @@
-package coop.rchain.rspace.nextgenrspace.history
+package coop.rchain.rspace.history
 
 import cats.{Applicative, FlatMap}
 import cats.effect.Sync
 import cats.implicits._
 import coop.rchain.rspace.Blake2b256Hash
-import coop.rchain.rspace.nextgenrspace.history.History.{commonPrefix, toByte, toInt, KeyPath}
-import coop.rchain.rspace.nextgenrspace.history.HistoryInstances.MalformedTrieError
+import coop.rchain.rspace.history.History.{commonPrefix, toByte, toInt, KeyPath}
+import coop.rchain.rspace.history.HistoryInstances.MalformedTrieError
 import scodec.bits.ByteVector
 import Ordering.Implicits.seqDerivedOrdering
 
