@@ -1,9 +1,7 @@
 package coop.rchain.metrics
 
 import cats._
-import cats.data._
 import cats.implicits._
-import coop.rchain.metrics.Metrics.Source
 
 trait Span[F[_]] {
   def mark(name: String): F[Unit]
@@ -73,66 +71,4 @@ object Metrics extends MetricsInstances {
   val BaseSource: Source                           = Source("rchain")
 }
 
-sealed abstract class MetricsInstances {
-
-  implicit def eitherT[E, F[_]: Monad](implicit evF: Metrics[F]): Metrics[EitherT[F, E, ?]] =
-    new Metrics[EitherT[F, E, ?]] {
-      def incrementCounter(name: String, delta: Long = 1)(
-          implicit ev: Metrics.Source
-      ): EitherT[F, E, Unit] =
-        EitherT.liftF(evF.incrementCounter(name, delta))
-
-      def incrementSampler(name: String, delta: Long = 1)(
-          implicit ev: Metrics.Source
-      ): EitherT[F, E, Unit] =
-        EitherT.liftF(evF.incrementSampler(name, delta))
-
-      def sample(name: String)(implicit ev: Metrics.Source): EitherT[F, E, Unit] =
-        EitherT.liftF(evF.sample(name))
-
-      def setGauge(name: String, value: Long)(implicit ev: Metrics.Source): EitherT[F, E, Unit] =
-        EitherT.liftF(evF.setGauge(name, value))
-
-      def incrementGauge(name: String, delta: Long = 1)(
-          implicit ev: Metrics.Source
-      ): EitherT[F, E, Unit] =
-        EitherT.liftF(evF.incrementGauge(name, delta))
-
-      def decrementGauge(name: String, delta: Long = 1)(
-          implicit ev: Metrics.Source
-      ): EitherT[F, E, Unit] =
-        EitherT.liftF(evF.decrementGauge(name, delta))
-
-      def record(name: String, value: Long, count: Long = 1)(
-          implicit ev: Metrics.Source
-      ): EitherT[F, E, Unit] =
-        EitherT.liftF(evF.record(name, count))
-
-      def timer[A](name: String, block: EitherT[F, E, A])(
-          implicit ev: Metrics.Source
-      ): EitherT[F, E, A] =
-        EitherT(evF.timer(name, block.value))
-
-      //todo make this sleeker
-      def span(source: Metrics.Source): EitherT[F, E, CloseableSpan[EitherT[F, E, ?]]] = {
-        val fSpan = evF.span(source).map { s =>
-          new CloseableSpan[EitherT[F, E, ?]] {
-            def mark(name: String): EitherT[F, E, Unit] =
-              EitherT.liftF(s.mark(name))
-            def close(): EitherT[F, E, Unit] = EitherT.liftF(s.close())
-          }
-        }
-
-        EitherT.liftF(fSpan)
-      }
-
-      override def withSpan[A](
-          source: Source
-      )(block: Span[EitherT[F, E, ?]] => EitherT[F, E, A]): EitherT[F, E, A] =
-        for {
-          s <- span(source)
-          r <- block(s)
-          _ <- s.close()
-        } yield r
-    }
-}
+sealed abstract class MetricsInstances {}
