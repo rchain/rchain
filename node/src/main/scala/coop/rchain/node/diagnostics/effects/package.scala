@@ -1,18 +1,9 @@
 package coop.rchain.node.diagnostics
 
-import java.lang.management.{ManagementFactory, MemoryType}
-
-import scala.collection.JavaConverters._
 import cats.effect.Sync
 import cats.implicits._
-import coop.rchain.comm.discovery._
-import coop.rchain.comm.rp.Connect.ConnectionsCell
 import coop.rchain.metrics.{CloseableSpan, Metrics, Span}
-import com.google.protobuf.ByteString
-import com.google.protobuf.empty.Empty
 import coop.rchain.metrics.Metrics.Source
-import javax.management.ObjectName
-import monix.eval.Task
 
 package object effects {
 
