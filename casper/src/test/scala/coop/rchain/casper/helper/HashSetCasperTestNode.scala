@@ -180,8 +180,10 @@ object HashSetCasperTestNode {
       sk: PrivateKey,
       blockDagDir: Path,
       blockStoreDir: Path,
+      storageDir: Path,
       storageSize: Long,
-      createRuntime: (Path, Long) => Resource[F, RuntimeManager[F]]
+      createRuntime: (Path, Long) => Resource[F, RuntimeManager[F]],
+      createEmptyDagStorage: Boolean = true
   )(
       implicit concurrentF: Concurrent[F],
       testNetworkF: TestNetwork[F]
@@ -198,32 +200,35 @@ object HashSetCasperTestNode {
       blockStore <- Resource.make[F, BlockStore[F]](
                      FileLMDBIndexBlockStore.create[F](env, blockStoreDir).map(_.right.get)
                    )(_.close())
+      config = BlockDagFileStorage.Config(
+        blockDagDir.resolve("latest-messages-data"),
+        blockDagDir.resolve("latest-messages-crc"),
+        blockDagDir.resolve("block-metadata-data"),
+        blockDagDir.resolve("block-metadata-crc"),
+        blockDagDir.resolve("equivocations-tracker-data"),
+        blockDagDir.resolve("equivocations-tracker-crc"),
+        blockDagDir.resolve("invalid-blocks-data"),
+        blockDagDir.resolve("invalid-blocks-crc"),
+        blockDagDir.resolve("checkpoints"),
+        blockDagDir.resolve("block-number-index"),
+        mapSize
+      )
       blockDagStorage <- Resource.make[F, BlockDagStorage[F]](
-                          BlockDagFileStorage
-                            .createEmptyFromGenesis[F](
-                              BlockDagFileStorage.Config(
-                                blockDagDir.resolve("latest-messages-data"),
-                                blockDagDir.resolve("latest-messages-crc"),
-                                blockDagDir.resolve("block-metadata-data"),
-                                blockDagDir.resolve("block-metadata-crc"),
-                                blockDagDir.resolve("equivocations-tracker-data"),
-                                blockDagDir.resolve("equivocations-tracker-crc"),
-                                blockDagDir.resolve("invalid-blocks-data"),
-                                blockDagDir.resolve("invalid-blocks-crc"),
-                                blockDagDir.resolve("checkpoints"),
-                                blockDagDir.resolve("block-number-index"),
-                                mapSize
-                              ),
-                              genesis
-                            )(Concurrent[F], Sync[F], Log[F])
+                          (if (createEmptyDagStorage)
+                             BlockDagFileStorage
+                               .createEmptyFromGenesis[F](
+                                 config,
+                                 genesis
+                               )(Concurrent[F], Sync[F], Log[F])
+                           else
+                             BlockDagFileStorage
+                               .create[F](
+                                 config
+                               ))
                             .widen[BlockDagStorage[F]]
                         )(_.close())
-      storageDirectory <- Resource.make[F, Path](
-                           Sync[F].delay {
-                             Files.createTempDirectory(s"hash-set-casper-test-$name")
-                           }
-                         )(dir => Sync[F].delay { dir.recursivelyDelete() })
-      runtimeManager <- createRuntime(storageDirectory, storageSize)
+
+      runtimeManager <- createRuntime(storageDir, storageSize)
       node <- Resource.make[F, HashSetCasperTestNode[F]] {
                for {
                  _                   <- TestNetwork.addPeer(identity)
@@ -254,6 +259,33 @@ object HashSetCasperTestNode {
              }(_ => ().pure[F])
     } yield node
   }
+
+  def standaloneEffFromDirs(
+      genesis: BlockMessage,
+      blockStoreDir: Path,
+      blockDagDir: Path,
+      storageDir: Path,
+      sk: PrivateKey,
+      createEmptyDagStorage: Boolean,
+      storageSize: Long = 1024L * 1024 * 10,
+      testNetwork: TestNetwork[Effect] = TestNetwork.empty
+  )(
+      implicit scheduler: Scheduler
+  ): Resource[Effect, HashSetCasperTestNode[Effect]] =
+    standaloneF[Effect](
+      genesis,
+      sk,
+      blockDagDir,
+      blockStoreDir,
+      storageDir,
+      storageSize,
+      createRuntime,
+      createEmptyDagStorage
+    )(
+      Concurrent[Effect],
+      testNetwork
+    )
+
   def standaloneEff(
       genesis: BlockMessage,
       sk: PrivateKey,
@@ -264,17 +296,25 @@ object HashSetCasperTestNode {
   ): Resource[Effect, HashSetCasperTestNode[Effect]] =
     BlockDagStorageTestFixture.createDirectories[Effect].flatMap {
       case (blockStoreDir, blockDagDir) =>
-        standaloneF[Effect](
-          genesis,
-          sk,
-          blockDagDir,
-          blockStoreDir,
-          storageSize,
-          createRuntime
-        )(
-          Concurrent[Effect],
-          testNetwork
-        )
+        for {
+          storageDir <- Resource.make[Effect, Path](
+                         Sync[Effect].delay {
+                           Files.createTempDirectory(s"hash-set-casper-test-")
+                         }
+                       )(dir => Sync[Effect].delay { dir.recursivelyDelete() })
+          res <- standaloneF[Effect](
+                  genesis,
+                  sk,
+                  blockDagDir,
+                  blockStoreDir,
+                  storageDir,
+                  storageSize,
+                  createRuntime
+                )(
+                  Concurrent[Effect],
+                  testNetwork
+                )
+        } yield res
     }
 
   def networkF[F[_]](
@@ -392,6 +432,7 @@ object HashSetCasperTestNode {
       )
     }
   }
+
   def networkEff(
       sks: IndexedSeq[PrivateKey],
       genesis: BlockMessage,
