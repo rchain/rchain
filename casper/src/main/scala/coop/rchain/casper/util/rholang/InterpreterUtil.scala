@@ -87,7 +87,6 @@ object InterpreterUtil {
             preStateHash,
             tsHash,
             internalDeploys,
-            possiblePreStateHash,
             blockData,
             invalidBlocks,
             isGenesis
@@ -106,7 +105,6 @@ object InterpreterUtil {
       preStateHash: StateHash,
       tsHash: Option[StateHash],
       internalDeploys: Seq[InternalProcessedDeploy],
-      possiblePreStateHash: Either[Throwable, StateHash],
       blockData: BlockData,
       invalidBlocks: Map[BlockHash, Validator],
       isGenesis: Boolean
