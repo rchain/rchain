@@ -1,6 +1,6 @@
 package coop.rchain.casper.genesis
 
-import java.io.PrintWriter
+import java.io.{FileNotFoundException, PrintWriter}
 import java.nio.file.{Path, Paths}
 
 import cats.effect.{Concurrent, Sync}
@@ -103,7 +103,11 @@ object Genesis {
         val vaultsPath = Paths.get(vaultsPathStr)
         Monad[F].ifM(exists(vaultsPath))(
           vaultFromFile[F](vaultsPath),
-          Sync[F].raiseError(new Exception(s"Specified vaults file $vaultsPath does not exist"))
+          RaiseIOError[F].raise(
+            FileNotFound(
+              new FileNotFoundException(s"Specified vaults file $vaultsPath does not exist")
+            )
+          )
         )
       case None =>
         Monad[F].ifM(exists(defaultVaultPath))(
