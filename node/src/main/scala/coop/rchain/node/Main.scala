@@ -211,7 +211,7 @@ object Main {
                   s"Kademlia hostname '$h' is not valid or it does not resolve to a public IP address"
                 )
             _ <- log.error("Hint: Run me with --allow-private-addresses in private networks")
-            _ <- Task.delay(System.exit(1))
+            _ <- Task.raiseError[Unit](new Exception("Invalid Kademlia hostname"))
           } yield ()
         )
     }
@@ -249,7 +249,9 @@ object Main {
             _    <- log.info(s"Using random port $port as RChain Protocol port")
           } yield configuration.copy(server = configuration.server.copy(port = port))
         else
-          Task.delay(System.exit(1)).as(configuration)
+          log.error(
+            "Hint: Run me with --use-random-ports to use a random port for RChain Protocol port"
+          ) >> Task.raiseError(new Exception("Invalid RChain Protocol port"))
       )
 
     def checkKademliaPort(configuration: Configuration): Task[Configuration] =
@@ -261,7 +263,9 @@ object Main {
             _    <- log.info(s"Using random port $port as Kademlia port")
           } yield configuration.copy(server = configuration.server.copy(kademliaPort = port))
         else
-          Task.delay(System.exit(1)).as(configuration)
+          log.error(
+            "Hint: Run me with --use-random-ports to use a random port for Kademlia port"
+          ) >> Task.raiseError(new Exception("Invalid Kademlia port"))
       )
 
     for {
@@ -271,7 +275,7 @@ object Main {
             conf.grpcServer.portInternal
           ).traverse(isLocalPortAvailable)
             .map(_.forall(identity))
-            .ifM(Task.unit, Task.delay(System.exit(1)))
+            .ifM(Task.unit, Task.raiseError(new Exception("Port is in use")))
       rpPortConf       <- checkRChainProtocolPort(conf)
       kademliaPortConf <- checkKademliaPort(rpPortConf)
     } yield kademliaPortConf
