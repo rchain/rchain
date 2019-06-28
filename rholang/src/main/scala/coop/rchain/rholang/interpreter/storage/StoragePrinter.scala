@@ -38,10 +38,34 @@ object StoragePrinter {
               toSends(data)(channels) ++ toReceive(wks)(channels)
           }
         }
-      }.toList
+      }
     } yield {
       if (pars.isEmpty) {
         "The space is empty. Note that top level terms that are not sends or receives are discarded."
+      } else {
+        val par = pars.reduce { (p1: Par, p2: Par) =>
+          p1 ++ p2
+        }
+        PrettyPrinter().buildString(par)
+      }
+    }
+
+  def prettyPrintUnmatchedSends[F[_]: FlatMap](space: RhoISpace[F]): F[String] =
+    for {
+      mapped <- space.toMap
+      pars = mapped.map {
+        case (
+            channels: Seq[Par],
+            row: Row[BindPattern, ListParWithRandom, TaggedContinuation]
+            ) =>
+          row match {
+            case Row(data: Seq[Datum[ListParWithRandom]], _) =>
+              toSends(data)(channels)
+          }
+      }.toList
+    } yield {
+      if (pars.isEmpty) {
+        "No unmatched sends."
       } else {
         val par = pars.reduce { (p1: Par, p2: Par) =>
           p1 ++ p2
