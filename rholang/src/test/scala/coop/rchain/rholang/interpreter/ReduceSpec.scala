@@ -15,13 +15,13 @@ import coop.rchain.models.TaggedContinuation.TaggedCont.ParBody
 import coop.rchain.models.Var.VarInstance._
 import coop.rchain.models._
 import coop.rchain.models.rholang.implicits._
-import coop.rchain.rholang.interpreter.Runtime.{RhoContext, RhoISpace}
+import coop.rchain.rholang.interpreter.Runtime.RhoISpace
 import coop.rchain.rholang.interpreter.accounting._
 import coop.rchain.rholang.interpreter.accounting.utils._
 import coop.rchain.rholang.interpreter.errors._
 import coop.rchain.rholang.interpreter.storage.implicits._
-import coop.rchain.rspace.{RSpace => _, ReplayRSpace => _, _}
-import coop.rchain.rspace.nextgenrspace.{RSpace, ReplayRSpace}
+import coop.rchain.rspace._
+import coop.rchain.rspace.{RSpace, ReplayRSpace}
 import coop.rchain.rspace.history.Branch
 import coop.rchain.rspace.internal.{Datum, Row, WaitingContinuation}
 import coop.rchain.shared.Log

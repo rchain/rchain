@@ -1,19 +1,21 @@
 package coop.rchain.rspace
 
-import java.nio.ByteBuffer
+import java.nio.file.{Files, Path}
 
-import cats.effect.{Concurrent, ContextShift}
+import cats.effect.{Concurrent, ContextShift, Sync}
 import cats.implicits._
 import com.typesafe.scalalogging.Logger
 import coop.rchain.catscontrib._
 import coop.rchain.metrics.Metrics
 import coop.rchain.metrics.Metrics.Source
+import coop.rchain.rspace._
 import coop.rchain.rspace.history.Branch
 import coop.rchain.rspace.internal._
+import coop.rchain.rspace.history.{HistoryRepository, HistoryRepositoryInstances}
 import coop.rchain.rspace.trace._
-import coop.rchain.shared.Log
+import coop.rchain.shared.{Cell, Log}
 import coop.rchain.shared.SyncVarOps._
-import org.lmdbjava.Txn
+import monix.execution.atomic.AtomicAny
 import scodec.Codec
 
 import scala.collection.SortedSet
@@ -21,7 +23,8 @@ import scala.concurrent.ExecutionContext
 import scala.util.Random
 
 class RSpace[F[_], C, P, A, R, K] private[rspace] (
-    store: IStore[F, C, P, A, K],
+    historyRepository: HistoryRepository[F, C, P, A, K],
+    storeAtom: AtomicAny[HotStore[F, C, P, A, K]],
     branch: Branch
 )(
     implicit
@@ -34,8 +37,10 @@ class RSpace[F[_], C, P, A, R, K] private[rspace] (
     contextShift: ContextShift[F],
     scheduler: ExecutionContext,
     metricsF: Metrics[F]
-) extends RSpaceOps[F, C, P, A, R, K](store, branch)
+) extends RSpaceOps[F, C, P, A, R, K](historyRepository, storeAtom, branch)
     with ISpace[F, C, P, A, R, K] {
+
+  def store: HotStore[F, C, P, A, K] = storeAtom.get()
 
   protected[this] override val logger: Logger = Logger[this.type]
 
@@ -54,43 +59,48 @@ class RSpace[F[_], C, P, A, R, K] private[rspace] (
    * affecting the actual store contents.
    */
   private[this] def fetchChannelToIndexData(channels: Seq[C]): F[Map[C, Seq[(Datum[A], Int)]]] =
-    store.withReadTxnF { txn =>
-      channels.map { c: C =>
-        c -> Random.shuffle(
-          store.getData(txn, Seq(c)).zipWithIndex
-        )
-      }.toMap
-    }
+    channels
+      .traverse { c: C =>
+        for {
+          data <- store.getData(c)
+        } yield c -> Random.shuffle(data.zipWithIndex)
+      }
+      .map(_.toMap)
 
   private[this] def storeWaitingContinuation(
       channels: Seq[C],
       patterns: Seq[P],
       continuation: K,
       persist: Boolean,
+      peeks: SortedSet[Int],
       consumeRef: Consume
   ): F[MaybeActionResult] =
     for {
-      _ <- store.withWriteTxnF { txn =>
-            store.putWaitingContinuation(
-              txn,
-              channels,
-              WaitingContinuation(
-                patterns,
-                continuation,
-                persist,
-                SortedSet.empty,
-                consumeRef
-              )
+      _ <- store.putContinuation(
+            channels,
+            WaitingContinuation(
+              patterns,
+              continuation,
+              persist,
+              peeks,
+              consumeRef
             )
-            for (channel <- channels)
-              store.addJoin(txn, channel, channels)
+          )
+      _ <- channels.traverse { channel =>
+            store.putJoin(channel, channels)
           }
       _ <- logF.debug(s"""|consume: no data found,
                           |storing <(patterns, continuation): ($patterns, $continuation)>
                           |at <channels: $channels>""".stripMargin.replace('\n', ' '))
     } yield None
 
-  private[this] def storePersistentData(dataCandidates: Seq[DataCandidate[C, R]]): F[List[Unit]] =
+  private[this] def storePersistentData(
+      dataCandidates: Seq[DataCandidate[C, R]],
+      peeks: SortedSet[Int],
+      channelsToIndex: Map[C, Int]
+  ): F[List[Unit]] = {
+    def shouldRemove(persist: Boolean, channel: C): Boolean =
+      !persist && !peeks.contains(channelsToIndex(channel))
     dataCandidates.toList
       .sortBy(_.datumIndex)(Ordering[Int].reverse)
       .traverse {
@@ -98,41 +108,11 @@ class RSpace[F[_], C, P, A, R, K] private[rspace] (
             candidateChannel,
             Datum(_, persistData, _),
             dataIndex
-            ) if !persistData =>
-          store.withWriteTxnF { txn =>
-            store.removeDatum(
-              txn,
-              Seq(candidateChannel),
-              dataIndex
-            )
-          }
+            ) if shouldRemove(persistData, candidateChannel) =>
+          store.removeDatum(candidateChannel, dataIndex)
         case _ =>
           ().pure[F]
       }
-
-  private[this] def createContinuationResult(
-      channels: Seq[C],
-      patterns: Seq[P],
-      continuation: K,
-      persist: Boolean,
-      consumeRef: Consume,
-      dataCandidates: Seq[DataCandidate[C, R]]
-  ): MaybeActionResult = {
-    val contSequenceNumber: Int =
-      nextSequenceNumber(consumeRef, dataCandidates)
-    Some(
-      (
-        ContResult(
-          continuation,
-          persist,
-          channels,
-          patterns,
-          contSequenceNumber
-        ),
-        dataCandidates
-          .map(dc => Result(dc.datum.a, dc.datum.persist))
-      )
-    )
   }
 
   override def consume(
@@ -147,20 +127,36 @@ class RSpace[F[_], C, P, A, R, K] private[rspace] (
   ): F[MaybeActionResult] = {
 
     def storeWC(consumeRef: Consume): F[MaybeActionResult] =
-      storeWaitingContinuation(channels, patterns, continuation, persist, consumeRef)
-
-    def wrapResult(
-        consumeRef: Consume,
-        dataCandidates: Seq[DataCandidate[C, R]]
-    ): MaybeActionResult =
-      createContinuationResult(
+      storeWaitingContinuation(
         channels,
         patterns,
         continuation,
         persist,
-        consumeRef,
-        dataCandidates
+        peeks,
+        consumeRef
       )
+
+    def wrapResult(
+        consumeRef: Consume,
+        dataCandidates: Seq[DataCandidate[C, R]]
+    ): MaybeActionResult = {
+      val contSequenceNumber: Int =
+        nextSequenceNumber(consumeRef, dataCandidates)
+      Some(
+        (
+          ContResult(
+            continuation,
+            persist,
+            channels,
+            patterns,
+            contSequenceNumber,
+            peeks.nonEmpty
+          ),
+          dataCandidates
+            .map(dc => Result(dc.datum.a, dc.datum.persist))
+        )
+      )
+    }
 
     contextShift.evalOn(scheduler) {
       if (channels.isEmpty) {
@@ -203,10 +199,19 @@ class RSpace[F[_], C, P, A, R, K] private[rspace] (
                                       _ <- metricsF.incrementCounter(consumeCommLabel)
                                       _ <- syncF.delay {
                                             eventLog.update(
-                                              COMM(consumeRef, dataCandidates.map(_.datum.source)) +: _
+                                              COMM(
+                                                consumeRef,
+                                                dataCandidates.map(_.datum.source),
+                                                peeks
+                                              ) +: _
                                             )
                                           }
-                                      _ <- storePersistentData(dataCandidates)
+                                      channelsToIndex = channels.zipWithIndex.toMap
+                                      _ <- storePersistentData(
+                                            dataCandidates,
+                                            peeks,
+                                            channelsToIndex
+                                          )
                                       _ <- logF.debug(
                                             s"consume: data found for <patterns: $patterns> at <channels: $channels>"
                                           )
@@ -256,13 +261,10 @@ class RSpace[F[_], C, P, A, R, K] private[rspace] (
           none[ProduceCandidate[C, P, R, K]].asRight[Seq[CandidateChannels]].pure[F]
         case channels :: remaining =>
           for {
-            matchCandidates <- store.withReadTxnF { txn =>
-                                Random.shuffle(
-                                  store
-                                    .getWaitingContinuation(txn, channels)
-                                    .zipWithIndex
-                                )
-                              }
+            matchCandidates <- for {
+                                data <- store.getContinuations(channels)
+                              } yield (Random.shuffle(data.zipWithIndex))
+
             /*
              * Here, we create a cache of the data at each channel as `channelToIndexedData`
              * which is used for finding matches.  When a speculative match is found, we can
@@ -274,14 +276,9 @@ class RSpace[F[_], C, P, A, R, K] private[rspace] (
              * In this version, we also add the produced data directly to this cache.
              */
             channelToIndexedDataList <- channels.traverse { c: C =>
-                                         store
-                                           .withReadTxnF { txn =>
-                                             Random.shuffle(
-                                               store
-                                                 .getData(txn, Seq(c))
-                                                 .zipWithIndex
-                                             )
-                                           }
+                                         (for {
+                                           data <- store.getData(c)
+                                         } yield (Random.shuffle(data.zipWithIndex)))
                                            .map(
                                              as =>
                                                c -> {
@@ -314,7 +311,7 @@ class RSpace[F[_], C, P, A, R, K] private[rspace] (
             patterns,
             continuation,
             persistK,
-            _,
+            peeks,
             consumeRef
           ),
           continuationIndex,
@@ -324,22 +321,19 @@ class RSpace[F[_], C, P, A, R, K] private[rspace] (
           syncF.delay {
             eventLog
               .update(
-                COMM(consumeRef, dataCandidates.map(_.datum.source)) +: _
+                COMM(consumeRef, dataCandidates.map(_.datum.source), peeks) +: _
               )
           }
 
         def maybePersistWaitingContinuation: F[Unit] =
           if (!persistK) {
-            store.withWriteTxnF { txn =>
-              store.removeWaitingContinuation(
-                txn,
-                channels,
-                continuationIndex
-              )
-            }
+            store.removeContinuation(
+              channels,
+              continuationIndex
+            )
           } else ().pure[F]
 
-        def removeMatchedDatumAndJoin: F[Seq[Unit]] =
+        def removeMatchedDatumAndJoin(channelsToIndex: Map[C, Int]): F[Seq[Unit]] =
           dataCandidates
             .sortBy(_.datumIndex)(Ordering[Int].reverse)
             .traverse {
@@ -347,17 +341,15 @@ class RSpace[F[_], C, P, A, R, K] private[rspace] (
                   candidateChannel,
                   Datum(_, persistData, _),
                   dataIndex
-                  ) =>
-                store.withWriteTxnF { txn =>
-                  if (!persistData && dataIndex >= 0) {
-                    store.removeDatum(
-                      txn,
-                      Seq(candidateChannel),
-                      dataIndex
-                    )
-                  }
-                  store.removeJoin(txn, candidateChannel, channels)
+                  ) => {
+                def shouldRemove: Boolean = {
+                  val idx = channelsToIndex(candidateChannel)
+                  dataIndex >= 0 && (!persistData && !peeks.contains(idx))
                 }
+                (if (shouldRemove) {
+                   store.removeDatum(candidateChannel, dataIndex)
+                 } else ().pure[F]) *> store.removeJoin(candidateChannel, channels)
+              }
             }
 
         def constructResult: MaybeActionResult = {
@@ -369,7 +361,8 @@ class RSpace[F[_], C, P, A, R, K] private[rspace] (
                 persistK,
                 channels,
                 patterns,
-                contSequenceNumber
+                contSequenceNumber,
+                peeks.nonEmpty
               ),
               dataCandidates.map(dc => Result(dc.datum.a, dc.datum.persist))
             )
@@ -377,10 +370,11 @@ class RSpace[F[_], C, P, A, R, K] private[rspace] (
         }
 
         for {
-          _ <- metricsF.incrementCounter(produceCommLabel)
-          _ <- registerCOMM
-          _ <- maybePersistWaitingContinuation
-          _ <- removeMatchedDatumAndJoin
+          _               <- metricsF.incrementCounter(produceCommLabel)
+          _               <- registerCOMM
+          _               <- maybePersistWaitingContinuation
+          indexedChannels = channels.zipWithIndex.toMap
+          _               <- removeMatchedDatumAndJoin(indexedChannels)
           _ <- logF.debug(
                 s"produce: matching continuation found at <channels: $channels>"
               )
@@ -395,10 +389,7 @@ class RSpace[F[_], C, P, A, R, K] private[rspace] (
   ): F[MaybeActionResult] =
     for {
       _ <- logF.debug(s"produce: no matching continuation found")
-      _ <- store
-            .withWriteTxnF { txn =>
-              store.putDatum(txn, Seq(channel), Datum(data, persist, produceRef))
-            }
+      _ <- store.putDatum(channel, Datum(data, persist, produceRef))
       _ <- logF.debug(s"produce: persisted <data: $data> at <channel: $channel>")
     } yield None
 
@@ -415,10 +406,8 @@ class RSpace[F[_], C, P, A, R, K] private[rspace] (
                    for {
                      _ <- span.mark("produce-lock-acquired")
                      //TODO fix double join fetch
-                     groupedChannels <- store.withReadTxnF {
-                                         store.getJoin(_, channel)
-                                       }
-                     _ <- span.mark("grouped-channels")
+                     groupedChannels <- store.getJoins(channel)
+                     _               <- span.mark("grouped-channels")
                      _ <- logF.debug(
                            s"""|produce: searching for matching continuations
                                |at <groupedChannels: $groupedChannels>""".stripMargin
@@ -433,7 +422,16 @@ class RSpace[F[_], C, P, A, R, K] private[rspace] (
                                  )
                      _ <- span.mark("extract-produce-candidate")
                      r <- extracted match {
-                           case Some(pc) => processMatchFound(pc)
+                           case Some(pc) =>
+                             for {
+                               a               <- processMatchFound(pc)
+                               indexedChannels = pc.channels.zipWithIndex.toMap
+                               _ <- if (pc.continuation.peeks.contains(indexedChannels(channel))) {
+                                     storeData(channel, data, persist, produceRef)
+                                   } else
+                                     ().pure[F]
+                             } yield a
+
                            case None =>
                              storeData(channel, data, persist, produceRef)
                          }
@@ -446,55 +444,26 @@ class RSpace[F[_], C, P, A, R, K] private[rspace] (
     }
 
   override def createCheckpoint(): F[Checkpoint] =
-    syncF.delay {
-      val root   = store.createCheckpoint()
-      val events = eventLog.take()
-      eventLog.put(Seq.empty)
-      Checkpoint(root, events)
-    }
+    for {
+      changes     <- storeAtom.get().changes()
+      nextHistory <- historyRepositoryAtom.get().checkpoint(changes.toList)
+      _           = historyRepositoryAtom.set(nextHistory)
+      _           <- createNewHotStore(nextHistory)(serializeK.toCodec)
+      log         = eventLog.take()
+      _           = eventLog.put(Seq.empty)
+      _           <- restoreInstalls()
+    } yield Checkpoint(nextHistory.history.root, log)
 
-  protected[rspace] override def isDirty(root: Blake2b256Hash): F[Boolean] = store.withWriteTxnF {
-    txn =>
-      store
-        .withTrieTxn(txn) { trieTxn =>
-          (store.trieStore.getRoot(trieTxn, store.trieBranch).get != root) || eventLog.get.nonEmpty
-        }
-  }
+  protected[rspace] override def isDirty(root: Blake2b256Hash): F[Boolean] = true.pure[F]
 }
 
 object RSpace {
 
-  def create[F[_], C, P, A, R, K](context: Context[F, C, P, A, K], branch: Branch)(
-      implicit
-      sc: Serialize[C],
-      sp: Serialize[P],
-      sa: Serialize[A],
-      sk: Serialize[K],
-      concurrent: Concurrent[F],
-      log: Log[F],
-      contextShift: ContextShift[F],
-      scheduler: ExecutionContext,
-      metricsF: Metrics[F]
-  ): F[ISpace[F, C, P, A, R, K]] = {
-    type InMemTXN    = InMemTransaction[history.State[Blake2b256Hash, GNAT[C, P, A, K]]]
-    type ByteBuffTXN = Txn[ByteBuffer]
-
-    context match {
-      case ctx: LMDBContext[F, C, P, A, K] =>
-        create(LMDBStore.create[F, C, P, A, K](ctx, branch), branch)
-
-      case ctx: InMemoryContext[F, C, P, A, K] =>
-        create(InMemoryStore.create[F, InMemTXN, C, P, A, K](ctx.trieStore, branch), branch)
-
-      case ctx: MixedContext[F, C, P, A, K] =>
-        create(
-          LockFreeInMemoryStore.create[F, ByteBuffTXN, C, P, A, K](ctx.trieStore, branch),
-          branch
-        )
-    }
-  }
-
-  def create[F[_], C, P, A, R, K](store: IStore[F, C, P, A, K], branch: Branch)(
+  def create[F[_], C, P, A, R, K](
+      historyRepository: HistoryRepository[F, C, P, A, K],
+      store: HotStore[F, C, P, A, K],
+      branch: Branch
+  )(
       implicit
       sc: Serialize[C],
       sp: Serialize[P],
@@ -506,25 +475,106 @@ object RSpace {
       scheduler: ExecutionContext,
       metricsF: Metrics[F]
   ): F[ISpace[F, C, P, A, R, K]] = {
-
-    implicit val codecC: Codec[C] = sc.toCodec
-    implicit val codecP: Codec[P] = sp.toCodec
-    implicit val codecA: Codec[A] = sa.toCodec
-    implicit val codecK: Codec[K] = sk.toCodec
-
     val space: ISpace[F, C, P, A, R, K] =
-      new RSpace[F, C, P, A, R, K](store, branch)
+      new RSpace[F, C, P, A, R, K](historyRepository, AtomicAny(store), branch)
 
-    /*
-     * history.initialize returns true if the history trie contains no root (i.e. is empty).
-     *
-     * In this case, we create a checkpoint for the empty store so that we can reset
-     * to the empty store state with the clear method.
-     */
-    if (history.initialize(store.trieStore, branch)) {
-      space.createCheckpoint().map(_ => space)
-    } else {
-      space.pure[F]
-    }
+    space.pure[F]
+
   }
+
+  def createWithReplay[F[_], C, P, A, R, K](dataDir: Path, mapSize: Long)(
+      implicit
+      sc: Serialize[C],
+      sp: Serialize[P],
+      sa: Serialize[A],
+      sk: Serialize[K],
+      concurrent: Concurrent[F],
+      logF: Log[F],
+      contextShift: ContextShift[F],
+      scheduler: ExecutionContext,
+      metricsF: Metrics[F]
+  ): F[(ISpace[F, C, P, A, R, K], IReplaySpace[F, C, P, A, R, K])] = {
+    val v2Dir = dataDir.resolve("v2")
+    for {
+      setup                  <- setUp[F, C, P, A, R, K](v2Dir, mapSize, Branch.MASTER)
+      (historyReader, store) = setup
+      space                  = new RSpace[F, C, P, A, R, K](historyReader, AtomicAny(store), Branch.MASTER)
+      replayStore            <- inMemoryStore(historyReader)(sk.toCodec, concurrent)
+      replay = new ReplayRSpace[F, C, P, A, R, K](
+        historyReader,
+        AtomicAny(replayStore),
+        Branch.REPLAY
+      )
+    } yield (space, replay)
+  }
+
+  def create[F[_], C, P, A, R, K](
+      dataDir: Path,
+      mapSize: Long,
+      branch: Branch
+  )(
+      implicit
+      sc: Serialize[C],
+      sp: Serialize[P],
+      sa: Serialize[A],
+      sk: Serialize[K],
+      concurrent: Concurrent[F],
+      logF: Log[F],
+      contextShift: ContextShift[F],
+      scheduler: ExecutionContext,
+      metricsF: Metrics[F]
+  ): F[ISpace[F, C, P, A, R, K]] =
+    setUp[F, C, P, A, R, K](dataDir, mapSize, branch).map {
+      case (historyReader, store) =>
+        new RSpace[F, C, P, A, R, K](historyReader, AtomicAny(store), branch)
+    }
+
+  def setUp[F[_], C, P, A, R, K](
+      dataDir: Path,
+      mapSize: Long,
+      branch: Branch
+  )(
+      implicit
+      sc: Serialize[C],
+      sp: Serialize[P],
+      sa: Serialize[A],
+      sk: Serialize[K],
+      concurrent: Concurrent[F]
+  ): F[(HistoryRepository[F, C, P, A, K], HotStore[F, C, P, A, K])] = {
+
+    import coop.rchain.rspace.history._
+    implicit val cc = sc.toCodec
+    implicit val cp = sp.toCodec
+    implicit val ca = sa.toCodec
+    implicit val ck = sk.toCodec
+
+    val coldStore    = StoreConfig(dataDir.resolve("cold"), mapSize)
+    val historyStore = StoreConfig(dataDir.resolve("history"), mapSize)
+    val rootsStore   = StoreConfig(dataDir.resolve("roots"), mapSize)
+    val config       = LMDBRSpaceStorageConfig(coldStore, historyStore, rootsStore)
+
+    def checkCreateDir(dir: Path): F[Unit] =
+      for {
+        notexists <- Sync[F].delay(Files.notExists(dir))
+        _         <- if (notexists) Sync[F].delay(Files.createDirectories(dir)) else ().pure[F]
+      } yield ()
+
+    for {
+      _ <- checkCreateDir(coldStore.path)
+      _ <- checkCreateDir(historyStore.path)
+      _ <- checkCreateDir(rootsStore.path)
+      historyReader <- HistoryRepositoryInstances
+                        .lmdbRepository[F, C, P, A, K](config)
+      store <- inMemoryStore(historyReader)
+    } yield (historyReader, store)
+
+  }
+
+  private def inMemoryStore[F[_], C, P, A, K](
+      historyReader: HistoryReader[F, C, P, A, K]
+  )(implicit ck: Codec[K], sync: Sync[F]) =
+    for {
+      cache <- Cell.refCell[F, Cache[C, P, A, K]](Cache())
+      store = HotStore.inMem(Sync[F], cache, historyReader, ck)
+    } yield store
 }

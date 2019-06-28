@@ -1,10 +1,10 @@
-package coop.rchain.rspace.nextgenrspace.history
+package coop.rchain.rspace.history
 
 import cats.Applicative
 import cats.implicits._
 import cats.effect.Sync
 import coop.rchain.rspace.Blake2b256Hash
-import coop.rchain.rspace.nextgenrspace.history.History.emptyRootHash
+import coop.rchain.rspace.history.History.emptyRootHash
 
 import scala.Function._
 

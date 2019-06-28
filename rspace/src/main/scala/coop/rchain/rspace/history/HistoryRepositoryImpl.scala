@@ -1,4 +1,4 @@
-package coop.rchain.rspace.nextgenrspace.history
+package coop.rchain.rspace.history
 
 import java.nio.charset.StandardCharsets
 

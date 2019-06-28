@@ -1,7 +1,7 @@
-package coop.rchain.rspace.nextgenrspace.history
+package coop.rchain.rspace.history
 
 import coop.rchain.rspace.Blake2b256Hash
-import coop.rchain.rspace.nextgenrspace.history.History.KeyPath
+import coop.rchain.rspace.history.History.KeyPath
 
 sealed trait HistoryAction {
   def key: KeyPath
