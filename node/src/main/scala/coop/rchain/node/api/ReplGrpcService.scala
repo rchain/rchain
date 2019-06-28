@@ -57,6 +57,7 @@ private[api] class ReplGrpcService(runtime: Runtime[Task], worker: Scheduler)
               implicit val c = runtime.cost
               Interpreter[Task].evaluate(runtime, source, NormalizerEnv.Empty)
             }
+            prettyStorage                <- StoragePrinter.prettyPrint(runtime.space)
             EvaluateResult(cost, errors) = res
           } yield {
             val errorStr =
@@ -67,7 +68,7 @@ private[api] class ReplGrpcService(runtime: Runtime[Task], worker: Scheduler)
                   .map(_.toString())
                   .mkString("Errors received during evaluation:\n", "\n", "\n")
             s"Deployment cost: $cost\n" +
-              s"${errorStr}Storage Contents:\n ${StoragePrinter.prettyPrint(runtime.space)}"
+              s"${errorStr}Storage Contents:\n$prettyStorage"
 
           }
 
