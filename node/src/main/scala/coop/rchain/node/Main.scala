@@ -36,7 +36,6 @@ object Main {
     // Catch-all for unhandled exceptions. Use only JDK and SLF4J.
     Thread.setDefaultUncaughtExceptionHandler((thread, ex) => {
       LoggerFactory.getLogger(getClass).error("Unhandled exception in thread " + thread.getName, ex)
-      ex.printStackTrace()
     })
 
     val configuration = Configuration.build(args)
