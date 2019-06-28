@@ -84,8 +84,9 @@ object Main {
     implicit val console: ConsoleIO[Task] = consoleIO
 
     val program = conf.command match {
-      case Eval(files) => new ReplRuntime().evalProgram[Task](files)
-      case Repl        => new ReplRuntime().replProgram[Task].as(())
+      case Eval(files, printUnmatchedSendsOnly) =>
+        new ReplRuntime().evalProgram[Task](files, printUnmatchedSendsOnly)
+      case Repl => new ReplRuntime().replProgram[Task].as(())
       case Deploy(
           phlo,
           phloPrice,

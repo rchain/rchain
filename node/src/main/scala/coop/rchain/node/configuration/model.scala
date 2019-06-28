@@ -57,8 +57,8 @@ final case class Kamon(
 )
 
 sealed trait Command
-final case class Eval(files: List[String]) extends Command
-final case object Repl                     extends Command
+final case class Eval(files: List[String], printUnmatchedSendsOnly: Boolean) extends Command
+final case object Repl                                                       extends Command
 final case class Deploy(
     phloLimit: Long,
     phloPrice: Long,

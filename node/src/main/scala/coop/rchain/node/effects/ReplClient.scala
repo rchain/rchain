@@ -16,7 +16,10 @@ import monix.eval.Task
 
 trait ReplClient[F[_]] {
   def run(line: String): F[Either[Throwable, String]]
-  def eval(fileNames: List[String]): F[List[Either[Throwable, String]]]
+  def eval(
+      fileNames: List[String],
+      printUnmatchedSendsOnly: Boolean
+  ): F[List[Either[Throwable, String]]]
 }
 
 object ReplClient {
@@ -43,15 +46,18 @@ class GrpcReplClient(host: String, port: Int, maxMessageSize: Int)
       .attempt
       .map(_.leftMap(processError))
 
-  def eval(fileNames: List[String]): Task[List[Either[Throwable, String]]] =
+  def eval(
+      fileNames: List[String],
+      unmatchedSends: Boolean
+  ): Task[List[Either[Throwable, String]]] =
     fileNames
-      .traverse(eval)
+      .traverse(eval(_, unmatchedSends))
 
-  def eval(fileName: String): Task[Either[Throwable, String]] = {
+  def eval(fileName: String, printUnmatchedSendsOnly: Boolean): Task[Either[Throwable, String]] = {
     val filePath = Paths.get(fileName)
     if (Files.exists(filePath))
       stub
-        .eval(EvalRequest(readContent(filePath)))
+        .eval(EvalRequest(readContent(filePath), printUnmatchedSendsOnly))
         .map(_.output)
         .attempt
         .map(_.leftMap(processError))

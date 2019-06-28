@@ -357,7 +357,8 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
       "Starts a thin client that will evaluate rholang in file on a existing running node. See grpcHost and grpcPort."
     )
 
-    val fileNames = trailArg[List[String]](required = true)(stringListConverter)
+    val fileNames               = trailArg[List[String]](required = true)(stringListConverter)
+    val printUnmatchedSendsOnly = opt[Boolean](required = false)
   }
   addSubcommand(eval)
 
