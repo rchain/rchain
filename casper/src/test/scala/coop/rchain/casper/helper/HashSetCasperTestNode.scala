@@ -143,21 +143,6 @@ object HashSetCasperTestNode {
 
   import coop.rchain.catscontrib._
 
-  def createRuntime(storageDirectory: Path, storageSize: Long)(
-      implicit scheduler: Scheduler
-  ): Resource[Effect, RuntimeManager[Effect]] = {
-    implicit val log                       = Log.log[Task]
-    implicit val metricsEff: Metrics[Task] = new metrics.Metrics.MetricsNOP[Task]
-    val activeRuntime =
-      Runtime
-        .createWithEmptyCost[Task, Task.Par](storageDirectory, storageSize)
-        .unsafeRunSync
-    val runtimeManager = RuntimeManager.fromRuntime(activeRuntime).unsafeRunSync
-    Resource.make[Effect, RuntimeManager[Effect]](
-      RuntimeManager.eitherTRuntimeManager[CommError, Task](runtimeManager).pure[Effect]
-    )(_ => activeRuntime.close().liftM[CommErrT])
-  }
-
   def standaloneEff(
       genesis: BlockMessage,
       sk: PrivateKey,
@@ -187,6 +172,21 @@ object HashSetCasperTestNode {
       Concurrent[Effect],
       TestNetwork.empty[Effect]
     )
+
+  private def createRuntime(storageDirectory: Path, storageSize: Long)(
+      implicit scheduler: Scheduler
+  ): Resource[Effect, RuntimeManager[Effect]] = {
+    implicit val log                       = Log.log[Task]
+    implicit val metricsEff: Metrics[Task] = new metrics.Metrics.MetricsNOP[Task]
+    val activeRuntime =
+      Runtime
+        .createWithEmptyCost[Task, Task.Par](storageDirectory, storageSize)
+        .unsafeRunSync
+    val runtimeManager = RuntimeManager.fromRuntime(activeRuntime).unsafeRunSync
+    Resource.make[Effect, RuntimeManager[Effect]](
+      RuntimeManager.eitherTRuntimeManager[CommError, Task](runtimeManager).pure[Effect]
+    )(_ => activeRuntime.close().liftM[CommErrT])
+  }
 
   private def networkF[F[_]](
       sks: IndexedSeq[PrivateKey],
