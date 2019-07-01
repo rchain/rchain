@@ -64,7 +64,10 @@ object GrpcTransportReceiver {
           (handleStream(tempFolder, observable, circuitBreaker) >>= {
             case Left(error @ StreamError.Unexpected(t)) => logger.error(error.message, t)
             case Left(error)                             => logger.warn(error.message)
-            case Right(msg)                              => Task.delay(blobBuffer.pushNext(msg)).as(())
+            case Right(msg) =>
+              Task.delay(blobBuffer.pushNext(msg)) >> logger.debug(
+                s"Enqueued for handling packet ${msg.path}"
+              )
           }).as(ChunkResponse())
         }
 
