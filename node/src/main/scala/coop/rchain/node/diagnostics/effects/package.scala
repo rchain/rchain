@@ -1,22 +1,43 @@
 package coop.rchain.node.diagnostics
 
-import java.lang.management.{ManagementFactory, MemoryType}
-
-import scala.collection.JavaConverters._
 import cats.effect.Sync
 import cats.implicits._
-import cats.mtl.{ApplicativeAsk, ApplicativeLocal}
-import coop.rchain.comm.discovery._
-import coop.rchain.comm.rp.Connect.ConnectionsCell
+import cats.mtl.{ApplicativeLocal}
 import coop.rchain.metrics.{Metrics, Span}
-import com.google.protobuf.ByteString
-import com.google.protobuf.empty.Empty
 import coop.rchain.metrics.Metrics.Source
-import javax.management.ObjectName
 import kamon.Kamon
-import monix.eval.Task
+import kamon.trace.{Span => KSpan}
+
+sealed trait Trace
+final case object NoSpan              extends Trace
+final case class KamonSpan(ks: KSpan) extends Trace
 
 package object effects {
+
+  def span[F[_]: Sync](implicit spanLocal: ApplicativeLocal[F, Trace]): Span[F] =
+    new Span[F] {
+      override def mark(name: String): F[Unit] =
+        spanLocal.ask
+          .map {
+            case NoSpan        => ???
+            case KamonSpan(ks) => ks.mark(name)
+          }
+          .as(())
+
+      override def child[A](source: Source)(block: Span[F] => F[A]): F[A] =
+        spanLocal.local {
+          case NoSpan =>
+            KamonSpan(Kamon.buildSpan(source).start())
+          case KamonSpan(ks) =>
+            KamonSpan(Kamon.buildSpan(source).asChildOf(ks).start())
+        }(
+          spanLocal.ask
+            .flatMap {
+              case NoSpan       => Sync[F].raiseError[A](new RuntimeException("missing trace"))
+              case KamonSpan(_) => block(this)
+            }
+        )
+    }
 
   def metrics[F[_]: Sync]: Metrics[F] =
     new Metrics[F] {
