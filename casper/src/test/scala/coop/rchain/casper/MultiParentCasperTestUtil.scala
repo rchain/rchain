@@ -43,16 +43,17 @@ object MultiParentCasperTestUtil {
 
   val defaultValidatorKeyPairs                   = (1 to 4).map(_ => Secp256k1.newKeyPair)
   val (defaultValidatorSks, defaultValidatorPks) = defaultValidatorKeyPairs.unzip
+  val defaultGenesisPk                           = Secp256k1.newKeyPair._2
 
   def buildGenesisParameters(
       bondsFunction: Iterable[PublicKey] => Map[PublicKey, Long] = createBonds
-  ): (Iterable[(PrivateKey, PublicKey)], Genesis) =
+  ): GenesisParameters =
     buildGenesisParameters(defaultValidatorKeyPairs, bondsFunction(defaultValidatorPks))
 
   def buildGenesisParameters(
       validatorKeyPairs: Iterable[(PrivateKey, PublicKey)],
       bonds: Map[PublicKey, Long]
-  ): (Iterable[(PrivateKey, PublicKey)], Genesis) =
+  ): GenesisParameters =
     (
       validatorKeyPairs,
       Genesis(
@@ -63,7 +64,7 @@ object MultiParentCasperTestUtil {
           maximumBond = Long.MaxValue,
           validators = bonds.map(Validator.tupled).toSeq
         ),
-        genesisPk = Secp256k1.newKeyPair._2,
+        genesisPk = defaultGenesisPk,
         vaults = Vault(
           RevAddress.fromPublicKey(Secp256k1.toPublic(ConstructDeploy.defaultSec)).get,
           900000
@@ -75,7 +76,30 @@ object MultiParentCasperTestUtil {
       )
     )
 
-  def buildGenesis(parameters: (Iterable[(PrivateKey, PublicKey)], Genesis)): GenesisContext = {
+  type GenesisParameters = (Iterable[(PrivateKey, PublicKey)], Genesis)
+
+  private val genesisCache: mutable.HashMap[GenesisParameters, GenesisContext] =
+    mutable.HashMap.empty
+
+  private var cacheAccesses = 0
+  private var cacheMisses   = 0
+
+  def buildGenesis(parameters: GenesisParameters): GenesisContext =
+    genesisCache.synchronized {
+      cacheAccesses += 1
+      genesisCache.getOrElseUpdate(parameters, doBuildGenesis(parameters))
+    }
+
+  private def doBuildGenesis(
+      parameters: GenesisParameters
+  ): GenesisContext = {
+    cacheMisses += 1
+    println(
+      f"""Genesis block cache miss, building a new genesis.
+         |Cache misses: $cacheMisses / $cacheAccesses (${cacheMisses.toDouble / cacheAccesses}%1.2f) cache accesses.
+       """.stripMargin
+    )
+
     val (validavalidatorKeyPairs, genesisParameters) = parameters
     val storageDirectory                             = Files.createTempDirectory(s"hash-set-casper-test-genesis")
     val storageSize: Long                            = 3024L * 1024 * 10
@@ -84,11 +108,8 @@ object MultiParentCasperTestUtil {
     (for {
       activeRuntime  <- Runtime.createWithEmptyCost[Task, Task.Par](storageDirectory, storageSize)
       runtimeManager <- RuntimeManager.fromRuntime[Task](activeRuntime)
-      genesis <- Genesis.createGenesisBlock(
-                  runtimeManager,
-                  genesisParameters
-                )
-      _ <- activeRuntime.close()
+      genesis        <- Genesis.createGenesisBlock(runtimeManager, genesisParameters)
+      _              <- activeRuntime.close()
     } yield GenesisContext(genesis, validavalidatorKeyPairs)).unsafeRunSync
   }
 
