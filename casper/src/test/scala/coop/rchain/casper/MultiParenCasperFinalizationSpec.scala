@@ -18,7 +18,7 @@ class MultiParentCasperFinalizationSpec extends FlatSpec with Matchers with Insp
 
   private val (validatorKeys, validatorPks) = (1 to 4).map(_ => Secp256k1.newKeyPair).unzip
   private val genesis = buildGenesis(
-    buildGenesisParameters(4, validatorPks.map(pk => pk -> 10L).toMap)
+    buildGenesisParameters(validatorPks.map(pk => pk -> 10L).toMap)
   )
 
   //put a new casper instance at the start of each

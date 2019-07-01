@@ -23,7 +23,7 @@ class MultiParentCasperDeploySpec extends FlatSpec with Matchers with Inspectors
 
   private val (validatorKeys, validatorPks) = (1 to 4).map(_ => Secp256k1.newKeyPair).unzip
   private val genesis = buildGenesis(
-    buildGenesisParameters(4, createBonds(validatorPks))
+    buildGenesisParameters(createBonds(validatorPks))
   )
 
   "MultiParentCasper" should "accept a deploy and return it's id" in effectTest {

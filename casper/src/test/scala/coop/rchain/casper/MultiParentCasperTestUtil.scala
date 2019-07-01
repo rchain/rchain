@@ -54,12 +54,12 @@ object MultiParentCasperTestUtil {
 
   def createGenesis(bonds: Map[PublicKey, Long]): BlockMessage =
     buildGenesis(
-      buildGenesisParameters(users = 0, bonds).copy(
+      buildGenesisParameters(bonds).copy(
         shardId = "HashSetCasperTest"
       )
     )
 
-  def buildGenesisParameters(users: Int, bonds: Map[PublicKey, Long]): Genesis =
+  def buildGenesisParameters(bonds: Map[PublicKey, Long]) =
     Genesis(
       shardId = "MultiParentCasperSpec",
       timestamp = 0L,

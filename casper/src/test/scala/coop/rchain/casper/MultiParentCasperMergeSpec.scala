@@ -21,7 +21,7 @@ class MultiParentCasperMergeSpec extends FlatSpec with Matchers with Inspectors 
 
   private val (validatorKeys, validatorPks) = (1 to 4).map(_ => Secp256k1.newKeyPair).unzip
   private val genesis = buildGenesis(
-    buildGenesisParameters(4, createBonds(validatorPks))
+    buildGenesisParameters(createBonds(validatorPks))
   )
 
   "HashSetCasper" should "handle multi-parent blocks correctly" in effectTest {
