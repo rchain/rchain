@@ -187,13 +187,14 @@ object HashSetCasperTestNode {
       testNetworkF: TestNetwork[F]
   ): Resource[F, HashSetCasperTestNode[F]] = {
     val name                        = "standalone"
-    val identity                    = peerNode(name, 40400)
-    val tle                         = new TransportLayerTestImpl[F]()
-    val tls                         = new TransportLayerServerTestImpl[F](identity)
+    val currentPeerNode             = peerNode(name, 40400)
     val logicalTime: LogicalTime[F] = new LogicalTime[F]
-    implicit val log                = Log.log[F]
-    implicit val metricEff          = new Metrics.MetricsNOP[F]
-    val env                         = Context.env(blockStoreDir, mapSize)
+
+    val tle                = new TransportLayerTestImpl[F]()
+    val tls                = new TransportLayerServerTestImpl[F](currentPeerNode)
+    implicit val log       = Log.log[F]
+    implicit val metricEff = new Metrics.MetricsNOP[F]
+    val env                = Context.env(blockStoreDir, mapSize)
     for {
       blockStore <- Resource.make[F, BlockStore[F]](
                      FileLMDBIndexBlockStore.create[F](env, blockStoreDir).map(_.right.get)
@@ -216,7 +217,7 @@ object HashSetCasperTestNode {
                               ),
                               genesis
                             )(Concurrent[F], Sync[F], Log[F])
-                            .widen[BlockDagStorage[F]]
+                            .widen
                         )(_.close())
       storageDirectory <- Resource.make[F, Path](
                            Sync[F].delay {
@@ -226,12 +227,12 @@ object HashSetCasperTestNode {
       runtimeManager <- createRuntime(storageDirectory, storageSize)
       node <- Resource.make[F, HashSetCasperTestNode[F]] {
                for {
-                 _                   <- TestNetwork.addPeer(identity)
+                 _                   <- TestNetwork.addPeer(currentPeerNode)
                  blockProcessingLock <- Semaphore[F](1)
                  casperState         <- Cell.mvarCell[F, CasperState](CasperState())
                  node = new HashSetCasperTestNode[F](
                    name,
-                   identity,
+                   currentPeerNode,
                    tle,
                    tls,
                    genesis,
@@ -254,6 +255,7 @@ object HashSetCasperTestNode {
              }(_ => ().pure[F])
     } yield node
   }
+
   def standaloneEff(
       genesis: BlockMessage,
       sk: PrivateKey,
@@ -286,9 +288,10 @@ object HashSetCasperTestNode {
       implicit concurrentF: Concurrent[F],
       testNetworkF: TestNetwork[F]
   ): Resource[F, IndexedSeq[HashSetCasperTestNode[F]]] = {
-    val n                           = sks.length
-    val names                       = (1 to n).map(i => s"node-$i")
-    val peers                       = names.map(peerNode(_, 40400))
+    val n     = sks.length
+    val names = (1 to n).map(i => s"node-$i")
+    val peers = names.map(peerNode(_, 40400))
+
     val logicalTime: LogicalTime[F] = new LogicalTime[F]
 
     val nodesF =
@@ -297,9 +300,9 @@ object HashSetCasperTestNode {
         .zip(sks)
         .toList
         .traverse {
-          case ((n, p), sk) =>
+          case ((name, currentPeerNode), sk) =>
             val tle                = new TransportLayerTestImpl[F]()
-            val tls                = new TransportLayerServerTestImpl[F](p)
+            val tls                = new TransportLayerServerTestImpl[F](currentPeerNode)
             implicit val log       = Log.log[F]
             implicit val metricEff = new Metrics.MetricsNOP[F]
             for {
@@ -331,20 +334,20 @@ object HashSetCasperTestNode {
                                 )(_.close())
               storageDirectory <- Resource.make[F, Path](
                                    Sync[F].delay {
-                                     Files.createTempDirectory(s"hash-set-casper-test-$n")
+                                     Files.createTempDirectory(s"hash-set-casper-test-$name")
                                    }
                                  )(dir => Sync[F].delay { dir.recursivelyDelete() })
               runtimeManager <- createRuntime(storageDirectory, storageSize)
-              node <- Resource.make[F, HashSetCasperTestNode[F]](
+              node <- Resource.make[F, HashSetCasperTestNode[F]] {
                        for {
-                         _         <- TestNetwork.addPeer(p)
-                         semaphore <- Semaphore[F](1)
+                         _                   <- TestNetwork.addPeer(currentPeerNode)
+                         blockProcessingLock <- Semaphore[F](1)
                          casperState <- Cell.mvarCell[F, CasperState](
                                          CasperState()
                                        )
                          node = new HashSetCasperTestNode[F](
-                           n,
-                           p,
+                           name,
+                           currentPeerNode,
                            tle,
                            tls,
                            genesis,
@@ -352,7 +355,7 @@ object HashSetCasperTestNode {
                            logicalTime,
                            blockDagDir,
                            blockStoreDir,
-                           semaphore,
+                           blockProcessingLock,
                            "rchain",
                            runtimeManager
                          )(
@@ -362,8 +365,9 @@ object HashSetCasperTestNode {
                            metricEff,
                            casperState
                          )
-                       } yield node
-                     )(_ => ().pure[F])
+                         result <- node.initialize().map(_ => node)
+                       } yield result
+                     }(_ => ().pure[F])
             } yield node
         }
         .map(_.toVector)
@@ -373,7 +377,7 @@ object HashSetCasperTestNode {
       //make sure all nodes know about each other
       Resource.liftF(
         for {
-          _ <- nodes.traverse_[F, Unit](_.initialize())
+          _ <- ().pure[F]
           pairs = for {
             n <- nodes
             m <- nodes
