@@ -29,8 +29,7 @@ object BlockGenerator {
   private[this] val GenerateBlockMetricsSource =
     Metrics.Source(CasperMetricsSource, "generate-block")
 
-  def updateChainWithBlockStateUpdate[
-      F[_]: Sync: BlockStore: IndexedBlockDagStorage: Time: Metrics: Span](
+  def updateChainWithBlockStateUpdate[F[_]: Sync: BlockStore: IndexedBlockDagStorage: Time: Metrics: Span](
       id: Int,
       genesis: BlockMessage,
       runtimeManager: RuntimeManager[F]
@@ -133,16 +132,15 @@ trait BlockGenerator {
           Justification(cr, latestBlockHash)
       }
       serializedBlockHash = ByteString.copyFrom(blockHash)
-    } yield
-      BlockMessage(
-        serializedBlockHash,
-        Some(header),
-        Some(body),
-        serializedJustifications,
-        creator,
-        shardId = shardId,
-        seqNum = seqNum
-      )
+    } yield BlockMessage(
+      serializedBlockHash,
+      Some(header),
+      Some(body),
+      serializedJustifications,
+      creator,
+      shardId = shardId,
+      seqNum = seqNum
+    )
 
   def createGenesis[F[_]: Monad: Time: BlockStore: IndexedBlockDagStorage](
       creator: Validator = ByteString.EMPTY,

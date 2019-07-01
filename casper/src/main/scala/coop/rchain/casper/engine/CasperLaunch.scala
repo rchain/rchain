@@ -3,7 +3,6 @@ package coop.rchain.casper.engine
 import cats.effect.{Concurrent, Sync}
 import cats.implicits._
 import cats.Monad
-
 import coop.rchain.blockstorage.{BlockDagStorage, BlockStore}
 import coop.rchain.casper._
 import coop.rchain.casper.LastApprovedBlock.LastApprovedBlock
@@ -14,12 +13,12 @@ import coop.rchain.blockstorage.util.io.IOError.RaiseIOError
 import coop.rchain.casper.genesis.Genesis
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.rholang.RuntimeManager
+import coop.rchain.catscontrib.TaskContrib
 import coop.rchain.comm.discovery.NodeDiscovery
 import coop.rchain.comm.rp.Connect.{ConnectionsCell, RPConfAsk}
 import coop.rchain.comm.transport.TransportLayer
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.shared._
-
 import monix.eval.Task
 import monix.execution.Scheduler
 
@@ -27,7 +26,8 @@ object CasperLaunch {
 
   class CasperInit[F[_]](
       val conf: CasperConf,
-      val runtimeManager: RuntimeManager[F]
+      val runtimeManager: RuntimeManager[F],
+      val tracing: Boolean
   )
   def apply[F[_]: LastApprovedBlock: Metrics: Span: BlockStore: ConnectionsCell: NodeDiscovery: TransportLayer: RPConfAsk: SafetyOracle: LastFinalizedBlockCalculator: Sync: Concurrent: Time: Log: EventLog: MultiParentCasperRef: BlockDagStorage: EngineCell: EnvVars: RaiseIOError](
       init: CasperInit[F],
@@ -45,7 +45,7 @@ object CasperLaunch {
       case None if (init.conf.createGenesis) =>
         val msg =
           "ApprovedBlock not found in storage, taking part in ceremony as ceremony master"
-        val action = initBootstrap[F](init, toTask)
+        val action = initBootstrap[F](init, toTask, init.tracing)
         (msg, action)
       case None =>
         val msg    = "ApprovedBlock not found in storage, connecting to existing network"
@@ -95,7 +95,8 @@ object CasperLaunch {
 
   def initBootstrap[F[_]: Monad: Sync: LastApprovedBlock: Time: MultiParentCasperRef: Log: EventLog: RPConfAsk: BlockStore: ConnectionsCell: TransportLayer: Concurrent: Metrics: Span: SafetyOracle: LastFinalizedBlockCalculator: BlockDagStorage: EngineCell: EnvVars: RaiseIOError](
       init: CasperInit[F],
-      toTask: F[_] => Task[_]
+      toTask: F[_] => Task[_],
+      tracing: Boolean
   )(implicit scheduler: Scheduler): F[Unit] =
     for {
       genesis <- Genesis.fromInputFiles[F](
@@ -127,7 +128,7 @@ object CasperLaunch {
                   init.runtimeManager,
                   validatorId
                 )
-            ).forkAndForget.runToFuture
+            ).executeWithOptions(TaskContrib.enableTracing(tracing)).forkAndForget.runToFuture
             ().pure[F]
           }
       _ <- EngineCell[F].set(new GenesisCeremonyMaster[F](abp))

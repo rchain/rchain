@@ -275,17 +275,16 @@ class ReplayRSpace[F[_]: Sync, C, P, A, R, K](
               channelToIndexedDataList <- channels.traverse { c: C =>
                                            (for {
                                              data <- store.getData(c)
-                                           } yield
-                                             (data.zipWithIndex.filter {
-                                               case (Datum(_, _, source), _) =>
-                                                 comm.produces.contains(source)
-                                             })).map(
+                                           } yield (data.zipWithIndex.filter {
+                                             case (Datum(_, _, source), _) =>
+                                               comm.produces.contains(source)
+                                           })).map(
                                              as =>
                                                c -> {
                                                  if (c == channel)
                                                    Seq((Datum(data, persist, produceRef), -1))
                                                  else as
-                                             }
+                                               }
                                            )
                                          }
               firstMatch <- extractFirstMatch(
@@ -293,11 +292,10 @@ class ReplayRSpace[F[_]: Sync, C, P, A, R, K](
                              matchCandidates,
                              channelToIndexedDataList.toMap
                            )
-            } yield
-              firstMatch match {
-                case None             => remaining.asLeft[MaybeProduceCandidate]
-                case produceCandidate => produceCandidate.asRight[Seq[Seq[C]]]
-              }
+            } yield firstMatch match {
+              case None             => remaining.asLeft[MaybeProduceCandidate]
+              case produceCandidate => produceCandidate.asRight[Seq[Seq[C]]]
+            }
         }
       groupedChannels.tailRecM(go)
     }

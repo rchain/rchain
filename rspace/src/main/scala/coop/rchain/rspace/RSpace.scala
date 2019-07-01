@@ -288,7 +288,7 @@ class RSpace[F[_], C, P, A, R, K] private[rspace] (
                                                  if (c == batChannel)
                                                    (data, -1) +: as
                                                  else as
-                                             }
+                                               }
                                            )
                                        }
             firstMatch <- extractFirstMatch(
@@ -296,11 +296,10 @@ class RSpace[F[_], C, P, A, R, K] private[rspace] (
                            matchCandidates,
                            channelToIndexedDataList.toMap
                          )
-          } yield
-            firstMatch match {
-              case None             => remaining.asLeft[MaybeProduceCandidate]
-              case produceCandidate => produceCandidate.asRight[Seq[CandidateChannels]]
-            }
+          } yield firstMatch match {
+            case None             => remaining.asLeft[MaybeProduceCandidate]
+            case produceCandidate => produceCandidate.asRight[Seq[CandidateChannels]]
+          }
       }
     groupedChannels.tailRecM(go)
   }
