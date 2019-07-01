@@ -80,7 +80,7 @@ object HashSetCasperActions {
   ): Effect[Either[DeployError, DeployId]] =
     node.casperEff.deploy(deployData)
 
-  def create(node: HashSetCasperTestNode[Effect]): EitherT[Task, CommError, BlockMessage] =
+  def create(node: HashSetCasperTestNode[Effect]): Task[BlockMessage] =
     for {
       createBlockResult1    <- node.casperEff.createBlock
       Created(signedBlock1) = createBlockResult1
@@ -98,7 +98,7 @@ object HashSetCasperActions {
     ConstructDeploy.sourceDeploy(s"new x in { x!(0) }", ts, accounting.MAX_VALUE)
 
   implicit class EffectOps[A](f: Effect[A]) {
-    def result: A = f.value.unsafeRunSync.right.get
+    def result: A = f.unsafeRunSync
   }
 }
 

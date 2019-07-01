@@ -66,35 +66,33 @@ class CreateBlockAPITest extends FlatSpec with Matchers {
           implicit casperRef: MultiParentCasperRef[Effect]
       ): Effect[
         (
-            ApiErr[DeployServiceResponse],
-            ApiErr[DeployServiceResponse],
-            ApiErr[DeployServiceResponse]
+            Either[Throwable, ApiErr[DeployServiceResponse]],
+            Either[Throwable, ApiErr[DeployServiceResponse]],
+            Either[Throwable, ApiErr[DeployServiceResponse]]
         )
       ] =
-        EitherT.liftF(
-          for {
-            t1 <- createBlock(deploys.head, blockApiLock).value.start
-            _  <- Time[Task].sleep(2.second)
-            t2 <- createBlock(deploys.last, blockApiLock).value.start //should fail because other not done
-            t3 <- createBlock(deploys.last, blockApiLock).value.start //should fail because other not done
-            r1 <- t1.join
-            r2 <- t2.join
-            r3 <- t3.join
-          } yield (r1.right.get, r2.right.get, r3.right.get)
-        )
+        for {
+          t1 <- createBlock(deploys.head, blockApiLock).start
+          _  <- Time[Task].sleep(2.second)
+          t2 <- createBlock(deploys.last, blockApiLock).start //should fail because other not done
+          t3 <- createBlock(deploys.last, blockApiLock).start //should fail because other not done
+          r1 <- t1.join.attempt
+          r2 <- t2.join.attempt
+          r3 <- t3.join.attempt
+        } yield (r1, r2, r3)
 
       val (response1, response2, response3) = (for {
         casperRef    <- MultiParentCasperRef.of[Effect]
         _            <- casperRef.set(casper)
         blockApiLock <- Semaphore[Effect](1)
         result       <- testProgram(blockApiLock)(casperRef)
-      } yield result).value.unsafeRunSync.right.get
+      } yield result).unsafeRunSync
 
       response1 shouldBe a[Right[_, DeployServiceResponse]]
       response2 shouldBe a[Left[_, DeployServiceResponse]]
       response3 shouldBe a[Left[_, DeployServiceResponse]]
-      response2.left.get shouldBe "Error: There is another propose in progress."
-      response3.left.get shouldBe "Error: There is another propose in progress."
+      response2.left.map(_.getMessage) shouldBe "Error: There is another propose in progress."
+      response3.left.map(_.getMessage) shouldBe "Error: There is another propose in progress."
 
       ().pure[Effect]
     }

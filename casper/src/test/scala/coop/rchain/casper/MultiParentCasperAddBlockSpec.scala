@@ -54,24 +54,22 @@ class MultiParentCasperAddBlockSpec extends FlatSpec with Matchers with Inspecto
                     case Created(block) => block
                     case _              => throw new RuntimeException()
                   }
-          result <- EitherT(
-                     Task
-                       .racePair(
-                         casper.addBlock(block, ignoreDoppelgangerCheck[Effect]).value,
-                         casper.addBlock(block, ignoreDoppelgangerCheck[Effect]).value
-                       )
-                       .flatMap {
-                         case Left((statusA, running)) =>
-                           running.join.map((statusA, _).tupled)
+          result <- Task
+                     .racePair(
+                       casper.addBlock(block, ignoreDoppelgangerCheck[Effect]),
+                       casper.addBlock(block, ignoreDoppelgangerCheck[Effect])
+                     )
+                     .flatMap {
+                       case Left((statusA, running)) =>
+                         running.join.map((statusA, _))
 
-                         case Right((running, statusB)) =>
-                           running.join.map((_, statusB).tupled)
-                       }
-                   )
+                       case Right((running, statusB)) =>
+                         running.join.map((_, statusB))
+                     }
         } yield result
       }
     val threadStatuses: (BlockStatus, BlockStatus) =
-      testProgram.value.unsafeRunSync(scheduler).right.get
+      testProgram.unsafeRunSync(scheduler)
 
     threadStatuses should matchPattern { case (Processing, Valid) | (Valid, Processing) => }
   }

@@ -138,8 +138,7 @@ class HashSetCasperTestNode[F[_]](
 }
 
 object HashSetCasperTestNode {
-  type CommErrT[F[_], A] = EitherT[F, CommError, A]
-  type Effect[A]         = CommErrT[Task, A]
+  type Effect[A] = Task[A]
 
   import coop.rchain.catscontrib._
 
@@ -184,8 +183,8 @@ object HashSetCasperTestNode {
         .unsafeRunSync
     val runtimeManager = RuntimeManager.fromRuntime(activeRuntime).unsafeRunSync
     Resource.make[Effect, RuntimeManager[Effect]](
-      RuntimeManager.eitherTRuntimeManager[CommError, Task](runtimeManager).pure[Effect]
-    )(_ => activeRuntime.close().liftM[CommErrT])
+      runtimeManager.pure[Effect]
+    )(_ => activeRuntime.close())
   }
 
   private def networkF[F[_]](
