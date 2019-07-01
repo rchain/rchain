@@ -16,8 +16,7 @@ class MultiParentCasperDeploySpec extends FlatSpec with Matchers with Inspectors
 
   implicit val timeEff = new LogicalTime[Effect]
 
-  val validatorKeys = defaultValidatorSks
-  val genesis       = buildGenesis(buildGenesisParameters())
+  val genesis = buildGenesis(buildGenesisParameters())
 
   "MultiParentCasper" should "accept a deploy and return it's id" in effectTest {
     HashSetCasperTestNode.standaloneEff(genesis).use { node =>
@@ -104,7 +103,7 @@ class MultiParentCasperDeploySpec extends FlatSpec with Matchers with Inspectors
 
   it should "not create a block with a repeated deploy" in effectTest {
     implicit val timeEff = new LogicalTime[Effect]
-    HashSetCasperTestNode.networkEff(validatorKeys.take(2), genesis).use { nodes =>
+    HashSetCasperTestNode.networkEff(genesis, networkSize = 2).use { nodes =>
       val List(node0, node1) = nodes.toList
       val casper0            = node0.casperEff
       for {

@@ -51,10 +51,12 @@ object HashSetCasperActions {
       amount: Int,
       bondsGen: Seq[PublicKey] => Map[PublicKey, Long]
   ): GenesisContext = {
-    val (validatorKeys, validators) = (1 to amount).map(_ => Secp256k1.newKeyPair).unzip
-    val bonds                       = bondsGen(validators)
+    val keyPairs        = (1 to amount).map(_ => Secp256k1.newKeyPair)
+    val (_, validators) = keyPairs.unzip
+    val bonds           = bondsGen(validators)
     val genesis =
       buildGenesis(
+        keyPairs,
         Genesis(
           shardId = "HashSetCasperSpecification",
           proofOfStake = ProofOfStake(
@@ -123,13 +125,13 @@ object HashSetCasperSpecification extends Commands {
   override def initialPreCondition(state: State): Boolean = true
 
   override def newSut(state: State): Sut = {
-    val (genesis, validatorKeys) = context(state.size, validators => {
+    val genesisContext = context(state.size, validators => {
       val weights = Random.shuffle((1L to validators.size.toLong).toList)
       validators.zip(weights).toMap
     })
 
     val nodesResource = HashSetCasperTestNode
-      .networkEff(validatorKeys.take(state.size), genesis)
+      .networkEff(genesisContext, networkSize = state.size)
       .map(_.toList)
 
     print(":")

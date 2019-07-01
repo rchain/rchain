@@ -84,8 +84,7 @@ object BlockApproverProtocolTest {
 
     val params @ (_, genesisParams) = MultiParentCasperTestUtil.buildGenesisParameters()
     val context                     = MultiParentCasperTestUtil.buildGenesis(params)
-    val (validatorSk, validatorPk)  = context.validatorKeyPairs.head
-    HashSetCasperTestNode.networkEff(Vector(validatorSk), context).use { nodes =>
+    HashSetCasperTestNode.networkEff(context, networkSize = 1).use { nodes =>
       val node = nodes.head
       (new BlockApproverProtocol(
         node.validatorId,

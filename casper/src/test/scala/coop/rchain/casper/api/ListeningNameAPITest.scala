@@ -19,8 +19,7 @@ class ListeningNameAPITest extends FlatSpec with Matchers with Inside {
 
   import coop.rchain.casper.MultiParentCasperTestUtil._
 
-  val validatorKeys = MultiParentCasperTestUtil.defaultValidatorSks
-  val genesis       = buildGenesis(buildGenesisParameters())
+  val genesis = buildGenesis(buildGenesisParameters())
 
   "getListeningNameDataResponse" should "work with unsorted channels" in effectTest {
     HashSetCasperTestNode.standaloneEff(genesis).use { node =>
@@ -49,7 +48,7 @@ class ListeningNameAPITest extends FlatSpec with Matchers with Inside {
   }
 
   it should "work across a chain" in effectTest {
-    HashSetCasperTestNode.networkEff(validatorKeys.take(3), genesis).use { nodes =>
+    HashSetCasperTestNode.networkEff(genesis, networkSize = 3).use { nodes =>
       implicit val nodeZeroCasperRef          = nodes(0).multiparentCasperRef
       implicit val nodeZeroSafetyOracleEffect = nodes(0).cliqueOracleEffect
       implicit val nodeZeroLogEffect          = nodes(0).logEff

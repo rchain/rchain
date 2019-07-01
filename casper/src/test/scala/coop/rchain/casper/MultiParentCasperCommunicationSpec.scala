@@ -16,13 +16,12 @@ class MultiParentCasperCommunicationSpec extends FlatSpec with Matchers with Ins
 
   implicit val timeEff = new LogicalTime[Effect]
 
-  val validatorKeys = defaultValidatorSks
   val genesis = buildGenesis(buildGenesisParameters())
 
   //put a new casper instance at the start of each
   //test since we cannot reset it
   "MultiParentCasper" should "ask peers for blocks it is missing" in effectTest {
-    HashSetCasperTestNode.networkEff(validatorKeys.take(3), genesis).use { nodes =>
+    HashSetCasperTestNode.networkEff(genesis, networkSize = 3).use { nodes =>
       for {
         deploy1 <- ConstructDeploy.sourceDeployNowF("for(_ <- @1){ Nil } | @1!(1)")
 
@@ -111,7 +110,7 @@ class MultiParentCasperCommunicationSpec extends FlatSpec with Matchers with Ins
         _ <- nodes(2).receive()
       } yield ()
 
-    HashSetCasperTestNode.networkEff(validatorKeys.take(3), genesis).use { nodes =>
+    HashSetCasperTestNode.networkEff(genesis, networkSize = 3).use { nodes =>
       for {
         _ <- stepSplit(nodes) // blocks a1 a2
         _ <- stepSplit(nodes) // blocks b1 b2
@@ -138,11 +137,7 @@ class MultiParentCasperCommunicationSpec extends FlatSpec with Matchers with Ins
 
   it should "handle a long chain of block requests appropriately" in effectTest {
     HashSetCasperTestNode
-      .networkEff(
-        validatorKeys.take(2),
-        genesis,
-        storageSize = 1024L * 1024 * 10
-      )
+      .networkEff(genesis, networkSize = 2)
       .use { nodes =>
         for {
           _ <- (0 to 9).toList.traverse_[Effect, Unit] { i =>

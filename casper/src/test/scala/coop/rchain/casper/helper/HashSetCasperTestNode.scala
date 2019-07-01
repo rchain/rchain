@@ -148,20 +148,16 @@ object HashSetCasperTestNode {
       implicit scheduler: Scheduler
   ): Resource[Effect, HashSetCasperTestNode[Effect]] =
     networkEff(
-      defaultValidatorSks.take(1),
       genesis,
-      storageSize
+      networkSize = 1,
+      storageSize = storageSize
     ).map(_.head)
 
-  def networkEff(
-      sks: IndexedSeq[PrivateKey],
-      genesis: GenesisContext,
-      storageSize: Long = 1024L * 1024 * 10
-  )(
+  def networkEff(genesis: GenesisContext, networkSize: Int, storageSize: Long = 1024L * 1024 * 10)(
       implicit scheduler: Scheduler
   ): Resource[Effect, IndexedSeq[HashSetCasperTestNode[Effect]]] =
     networkF[Effect](
-      sks,
+      genesis.validatorSks.take(networkSize).toVector,
       genesis.genesisBlock,
       storageSize,
       createRuntime

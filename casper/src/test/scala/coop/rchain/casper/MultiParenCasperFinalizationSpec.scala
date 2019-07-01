@@ -15,7 +15,6 @@ class MultiParentCasperFinalizationSpec extends FlatSpec with Matchers with Insp
 
   implicit val timeEff = new LogicalTime[Effect]
 
-  val validatorKeys = defaultValidatorSks
   val genesis = buildGenesis(
     buildGenesisParameters(bondsFunction = _.map(pk => pk -> 10L).toMap)
   )
@@ -23,7 +22,7 @@ class MultiParentCasperFinalizationSpec extends FlatSpec with Matchers with Insp
   //put a new casper instance at the start of each
   //test since we cannot reset it
   "MultiParentCasper" should "increment last finalized block as appropriate in round robin" in effectTest {
-    HashSetCasperTestNode.networkEff(validatorKeys.take(3), genesis).use { nodes =>
+    HashSetCasperTestNode.networkEff(genesis, networkSize = 3).use { nodes =>
       for {
         deployDatas <- (0 to 7).toList.traverse(i => ConstructDeploy.basicDeployData[Effect](i))
 
