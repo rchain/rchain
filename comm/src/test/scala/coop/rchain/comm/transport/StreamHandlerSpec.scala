@@ -80,16 +80,16 @@ class StreamHandlerSpec extends FunSpec with Matchers with Inside with BeforeAnd
       msg.path.getParent shouldBe nonExistingWithPersmission
     }
 
-    it("should stop receiving a stream if will not fit in memory") {
+    it("should stop receiving a stream if circuit broken") {
       // given
-      val messageSize                     = 10 * 1024
-      val breakOnSndChunk: CircuitBreaker = read => read > messageSize
-      val stream                          = createStream(messageSize = messageSize)
+      val breakOnSndChunk: CircuitBreaker =
+        streamed => Opened(StreamHandler.StreamError.circuitOpened)
+      val stream = createStream()
       // when
       val err: StreamHandler.StreamError = handleStreamErr(stream, circuitBreaker = breakOnSndChunk)
       // then
       inside(err) {
-        case StreamHandler.StreamError.CircuitBroken => ()
+        case StreamHandler.StreamError.MaxSizeReached => ()
       }
       tempFolder.toFile.list() should be(empty)
     }
@@ -105,7 +105,6 @@ class StreamHandlerSpec extends FunSpec with Matchers with Inside with BeforeAnd
             (incompleteHeader :: data).toIterator
           case Nil => throw new RuntimeException("")
         })
-      // when
       // when
       val err: StreamHandler.StreamError = handleStreamErr(streamWithIncompleteHeader)
       // then
@@ -150,7 +149,7 @@ class StreamHandlerSpec extends FunSpec with Matchers with Inside with BeforeAnd
 
   private def handleStream(stream: Observable[Chunk], folder: Path = tempFolder): StreamMessage =
     StreamHandler
-      .handleStream(networkId, folder, stream, circuitBreaker = neverBreak)
+      .handleStream(folder, stream, circuitBreaker = neverBreak)
       .unsafeRunSync
       .right
       .get
@@ -161,7 +160,7 @@ class StreamHandlerSpec extends FunSpec with Matchers with Inside with BeforeAnd
       circuitBreaker: StreamHandler.CircuitBreaker = neverBreak
   ): StreamHandler.StreamError =
     StreamHandler
-      .handleStream(networkId, folder, stream, circuitBreaker = circuitBreaker)
+      .handleStream(folder, stream, circuitBreaker = circuitBreaker)
       .unsafeRunSync
       .left
       .get
@@ -191,5 +190,5 @@ class StreamHandlerSpec extends FunSpec with Matchers with Inside with BeforeAnd
   private def peerNode(name: String): PeerNode =
     PeerNode(NodeIdentifier(name.getBytes), Endpoint("", 80, 80))
 
-  private val neverBreak: CircuitBreaker = kp(false)
+  private val neverBreak: CircuitBreaker = kp(Closed)
 }

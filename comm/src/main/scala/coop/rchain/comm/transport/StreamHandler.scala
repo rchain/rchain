@@ -18,28 +18,54 @@ import coop.rchain.comm.transport.PacketOps._
 import monix.eval.Task
 import monix.reactive.Observable
 
+final case class Header(
+    sender: PeerNode,
+    typeId: String,
+    contentLength: Int,
+    networkId: String,
+    compressed: Boolean
+)
+
+sealed trait Circuit {
+  val broken: Boolean
+}
+final case class Opened(error: StreamHandler.StreamError) extends Circuit {
+  val broken: Boolean = true
+}
+final case object Closed extends Circuit {
+  val broken: Boolean = false
+}
+
+final case class Streamed(
+    header: Option[Header] = None,
+    readSoFar: Long = 0,
+    circuit: Circuit = Closed,
+    path: Path,
+    fos: FileOutputStream
+)
+
 object StreamHandler {
 
-  type CircuitBreaker = Long => Boolean
+  type CircuitBreaker = Streamed => Circuit
 
   sealed trait StreamError
   object StreamError {
     type StreamErr[A] = Either[StreamError, A]
 
     case object WrongNetworkId                        extends StreamError
-    case object CircuitBroken                         extends StreamError
+    case object MaxSizeReached                        extends StreamError
     final case class NotFullMessage(streamed: String) extends StreamError
     final case class Unexpected(error: Throwable)     extends StreamError
 
     val wrongNetworkId: StreamError                   = WrongNetworkId
-    val circuitBroken: StreamError                    = CircuitBroken
+    val circuitOpened: StreamError                    = MaxSizeReached
     def notFullMessage(streamed: String): StreamError = NotFullMessage(streamed)
     def unexpected(error: Throwable): StreamError     = Unexpected(error)
 
     def errorMessage(error: StreamError): String =
       error match {
         case WrongNetworkId => "Could not receive stream! Wrong network id."
-        case CircuitBroken  => "Could not receive stream! Circuit was broken."
+        case MaxSizeReached => "Max message size was reached."
         case NotFullMessage(streamed) =>
           s"Received not full stream message, will not process. $streamed"
         case Unexpected(t) => s"Could not receive stream! ${t.getMessage}"
@@ -50,27 +76,14 @@ object StreamHandler {
     }
   }
 
-  private final case class Streamed(
-      sender: Option[PeerNode] = None,
-      typeId: Option[String] = None,
-      contentLength: Option[Int] = None,
-      compressed: Boolean = false,
-      readSoFar: Long = 0,
-      circuitBroken: Boolean = false,
-      wrongNetwork: Boolean = false,
-      path: Path,
-      fos: FileOutputStream
-  )
-
   def handleStream(
-      networkId: String,
       folder: Path,
       stream: Observable[Chunk],
       circuitBreaker: CircuitBreaker
   )(implicit log: Log[Task]): Task[Either[StreamError, StreamMessage]] =
     init(folder)
       .bracketE { initStmd =>
-        (collect(networkId, initStmd, stream, circuitBreaker) >>= toResult).value
+        (collect(initStmd, stream, circuitBreaker) >>= toResult).value
       }({
         // failed while collecting stream
         case (stmd, Right(Left(_))) =>
@@ -92,7 +105,6 @@ object StreamHandler {
       .map { case (file, fos) => Streamed(fos = fos, path = file) }
 
   private def collect(
-      networkId: String,
       init: Streamed,
       stream: Observable[Chunk],
       circuitBreaker: CircuitBreaker
@@ -102,37 +114,40 @@ object StreamHandler {
       stream.foldWhileLeftL(init) {
         case (
             stmd,
-            Chunk(Chunk.Content.Header(ChunkHeader(sender, typeId, compressed, cl, nid)))
-            ) =>
-          if (nid == networkId) {
-            Left(
-              stmd.copy(
-                sender = sender.map(ProtocolHelper.toPeerNode),
-                typeId = Some(typeId),
-                compressed = compressed,
-                contentLength = Some(cl)
-              )
+            Chunk(
+              Chunk.Content
+                .Header(ChunkHeader(Some(sender), typeId, compressed, cl, nid))
             )
-          } else
-            Right(stmd.copy(wrongNetwork = true))
+            ) =>
+          val newStmd = stmd.copy(
+            header = Some(Header(ProtocolHelper.toPeerNode(sender), typeId, cl, nid, compressed))
+          )
+          val circuit = circuitBreaker(newStmd)
+          if (circuit.broken) Right(newStmd.copy(circuit = circuit))
+          else Left(newStmd)
+
         case (stmd, Chunk(Chunk.Content.Data(ChunkData(newData)))) =>
           val array = newData.toByteArray
           stmd.fos.write(array)
           stmd.fos.flush()
           val readSoFar = stmd.readSoFar + array.length
-          if (circuitBreaker(readSoFar))
-            Right(stmd.copy(circuitBroken = true))
-          else
-            Left(stmd.copy(readSoFar = readSoFar))
+          val newStmd   = stmd.copy(readSoFar = readSoFar)
+          val circuit   = circuitBreaker(newStmd)
+          if (circuit.broken)
+            Right(newStmd.copy(circuit = circuit))
+          else Left(newStmd)
+        case (stmd, _) =>
+          Right(
+            stmd.copy(
+              circuit = Opened(StreamHandler.StreamError.notFullMessage("Not all data received"))
+            )
+          )
       }
 
     EitherT(collectStream.attempt.map {
-      case Right(stmd) if stmd.wrongNetwork =>
-        StreamError.wrongNetworkId.asLeft
-      case Right(stmd) if stmd.circuitBroken =>
-        StreamError.circuitBroken.asLeft
-      case Right(stmd) => stmd.asRight
-      case Left(t)     => StreamError.unexpected(t).asLeft
+      case Right(Streamed(_, _, Opened(error), _, _)) => error.asLeft
+      case Right(stmd)                                => stmd.asRight
+      case Left(t)                                    => StreamError.unexpected(t).asLeft
     })
 
   }
@@ -145,12 +160,8 @@ object StreamHandler {
     EitherT(Task.delay {
       stmd match {
         case Streamed(
-            Some(sender),
-            Some(packetType),
-            Some(contentLength),
-            compressed,
+            Some(Header(sender, packetType, contentLength, _, compressed)),
             readSoFar,
-            _,
             _,
             path,
             _
