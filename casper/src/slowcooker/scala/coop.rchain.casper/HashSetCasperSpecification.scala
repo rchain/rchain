@@ -50,7 +50,7 @@ object HashSetCasperActions {
   def context(
       amount: Int,
       bondsGen: Seq[PublicKey] => Map[PublicKey, Long]
-  ): (BlockMessage, immutable.IndexedSeq[PrivateKey]) = {
+  ): GenesisContext = {
     val (validatorKeys, validators) = (1 to amount).map(_ => Secp256k1.newKeyPair).unzip
     val bonds                       = bondsGen(validators)
     val genesis =
@@ -71,7 +71,7 @@ object HashSetCasperActions {
           supply = Long.MaxValue
         )
       )
-    (genesis, validatorKeys)
+    genesis
   }
 
   def deploy(

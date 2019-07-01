@@ -1,28 +1,27 @@
 package coop.rchain.casper.engine
 
-import scala.concurrent.duration._
-import scala.util.Success
-
 import cats.effect.concurrent.Ref
-
-import coop.rchain.casper.{LastApprovedBlock, MultiParentCasperTestUtil}
-import coop.rchain.casper.protocol._
+import com.google.protobuf.ByteString
+import coop.rchain.casper.LastApprovedBlock
 import coop.rchain.casper.LastApprovedBlock.LastApprovedBlock
+import coop.rchain.casper.MultiParentCasperTestUtil._
 import coop.rchain.casper.engine.ApproveBlockProtocolTest.TestFixture
+import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.TestTime
 import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.comm._
 import coop.rchain.comm.rp.Connect.Connections
-import coop.rchain.crypto.{PrivateKey, PublicKey}
 import coop.rchain.crypto.hash.Blake2b256
 import coop.rchain.crypto.signatures.Secp256k1
+import coop.rchain.crypto.{PrivateKey, PublicKey}
 import coop.rchain.p2p.EffectsTestInstances._
 import coop.rchain.shared.{Cell, _}
-
-import com.google.protobuf.ByteString
 import monix.eval.Task
 import monix.execution.schedulers.TestScheduler
 import org.scalatest._
+
+import scala.concurrent.duration._
+import scala.util.Success
 
 class ApproveBlockProtocolTest extends FlatSpec with Matchers {
   private val METRICS_APPROVAL_COUNTER_NAME = "rchain.casper.approve-block.genesis"
@@ -33,9 +32,9 @@ class ApproveBlockProtocolTest extends FlatSpec with Matchers {
     implicit val eventLogStub = new EventLogStub[Task]()
     implicit val metricsTest  = new MetricsTestImpl[Task]()
 
-    val (validatorSk, validatorPk) = Secp256k1.newKeyPair
+    val keyPair @ (validatorSk, validatorPk) = Secp256k1.newKeyPair
     val TestFixture(_, abp, candidate, _, sigsF) =
-      ApproveBlockProtocolTest.createProtocol(10, 100.milliseconds, 1.millisecond, Set(validatorPk))
+      ApproveBlockProtocolTest.createProtocol(10, 100.milliseconds, 1.millisecond, Set(keyPair))
     val a = ApproveBlockProtocolTest.approval(candidate, validatorSk, validatorPk)
 
     val cancelToken = abp.run().start.runToFuture
@@ -54,9 +53,9 @@ class ApproveBlockProtocolTest extends FlatSpec with Matchers {
     implicit val eventLogStub = new EventLogStub[Task]()
     implicit val metricsTest  = new MetricsTestImpl[Task]()
 
-    val (validatorSk, validatorPk) = Secp256k1.newKeyPair
+    val keyPair @ (validatorSk, validatorPk) = Secp256k1.newKeyPair
     val TestFixture(_, abp, candidate, _, sigsF) =
-      ApproveBlockProtocolTest.createProtocol(10, 100.milliseconds, 1.millisecond, Set(validatorPk))
+      ApproveBlockProtocolTest.createProtocol(10, 100.milliseconds, 1.millisecond, Set(keyPair))
     val a = ApproveBlockProtocolTest.approval(candidate, validatorSk, validatorPk)
 
     val cancelToken = abp.run().start.runToFuture
@@ -79,9 +78,9 @@ class ApproveBlockProtocolTest extends FlatSpec with Matchers {
     implicit val eventLogStub = new EventLogStub[Task]()
     implicit val metricsTest  = new MetricsTestImpl[Task]()
 
-    val (_, validatorPk) = Secp256k1.newKeyPair
+    val keyPair = Secp256k1.newKeyPair
     val TestFixture(_, abp, candidate, _, sigs) =
-      ApproveBlockProtocolTest.createProtocol(10, 100.milliseconds, 1.millisecond, Set(validatorPk))
+      ApproveBlockProtocolTest.createProtocol(10, 100.milliseconds, 1.millisecond, Set(keyPair))
     val a = ApproveBlockProtocolTest.invalidApproval(candidate)
 
     val cancelToken = abp.run().start.runToFuture
@@ -109,7 +108,7 @@ class ApproveBlockProtocolTest extends FlatSpec with Matchers {
         n,
         duration = d,
         interval = 1.millisecond,
-        sigs.map(_._2).toSet
+        sigs
       )
     ctx.tick(startTime.milliseconds) //align clocks
     val cancelToken = abp.run().start.runToFuture
@@ -144,7 +143,7 @@ class ApproveBlockProtocolTest extends FlatSpec with Matchers {
         n,
         duration = d,
         interval = 1.millisecond,
-        sigs.map(_._2).toSet
+        sigs
       )
     ctx.tick(startTime.milliseconds) // align clocks
 
@@ -182,7 +181,7 @@ class ApproveBlockProtocolTest extends FlatSpec with Matchers {
 
   it should "skip the duration and create and approved block immediately if the required signatures is zero" in {
     val d: FiniteDuration     = 30.milliseconds
-    val (_, validatorPk)      = Secp256k1.newKeyPair
+    val keyPair               = Secp256k1.newKeyPair
     implicit val ctx          = TestScheduler()
     implicit val logStub      = new LogStub[Task]()
     implicit val eventLogStub = new EventLogStub[Task]()
@@ -193,7 +192,7 @@ class ApproveBlockProtocolTest extends FlatSpec with Matchers {
         0,
         duration = d,
         interval = 1.millisecond,
-        Set(validatorPk)
+        Set(keyPair)
       )
 
     ctx.tick(startTime.milliseconds) // align clocks
@@ -214,10 +213,10 @@ class ApproveBlockProtocolTest extends FlatSpec with Matchers {
     implicit val eventLogStub = new EventLogStub[Task]()
     implicit val metricsTest  = new MetricsTestImpl[Task]()
 
-    val (_, validatorPk)       = Secp256k1.newKeyPair
+    val keyPair                = Secp256k1.newKeyPair
     val (invalidSk, invalidPk) = Secp256k1.newKeyPair
     val TestFixture(_, abp, candidate, _, sigsF) =
-      ApproveBlockProtocolTest.createProtocol(10, 100.milliseconds, 1.millisecond, Set(validatorPk))
+      ApproveBlockProtocolTest.createProtocol(10, 100.milliseconds, 1.millisecond, Set(keyPair))
     val a = ApproveBlockProtocolTest.approval(candidate, invalidSk, invalidPk)
 
     val cancelToken = abp.run().start.runToFuture
@@ -236,13 +235,13 @@ class ApproveBlockProtocolTest extends FlatSpec with Matchers {
     logStub.infos.filter(_.startsWith(start)).size should be(size)
 
   it should "send UnapprovedBlock message to peers at every interval" in {
-    implicit val ctx               = TestScheduler()
-    implicit val logStub           = new LogStub[Task]()
-    implicit val eventLogStub      = new EventLogStub[Task]()
-    implicit val metricsTest       = new MetricsTestImpl[Task]()
-    val (validatorSk, validatorPk) = Secp256k1.newKeyPair
+    implicit val ctx                         = TestScheduler()
+    implicit val logStub                     = new LogStub[Task]()
+    implicit val eventLogStub                = new EventLogStub[Task]()
+    implicit val metricsTest                 = new MetricsTestImpl[Task]()
+    val keyPair @ (validatorSk, validatorPk) = Secp256k1.newKeyPair
     val TestFixture(_, abp, candidate, _, sigsF) =
-      ApproveBlockProtocolTest.createProtocol(10, 100.milliseconds, 5.millisecond, Set(validatorPk))
+      ApproveBlockProtocolTest.createProtocol(10, 100.milliseconds, 5.millisecond, Set(keyPair))
 
     val cancelToken = abp.run().start.runToFuture
 
@@ -265,13 +264,13 @@ class ApproveBlockProtocolTest extends FlatSpec with Matchers {
   }
 
   it should "send ApprovedBlock message to peers once an approved block is created" in {
-    implicit val ctx               = TestScheduler()
-    implicit val logStub           = new LogStub[Task]()
-    implicit val eventLogStub      = new EventLogStub[Task]()
-    implicit val metricsTest       = new MetricsTestImpl[Task]()
-    val (validatorSk, validatorPk) = Secp256k1.newKeyPair
+    implicit val ctx                         = TestScheduler()
+    implicit val logStub                     = new LogStub[Task]()
+    implicit val eventLogStub                = new EventLogStub[Task]()
+    implicit val metricsTest                 = new MetricsTestImpl[Task]()
+    val keyPair @ (validatorSk, validatorPk) = Secp256k1.newKeyPair
     val TestFixture(_, abp, candidate, startTime, sigsF) =
-      ApproveBlockProtocolTest.createProtocol(1, 2.milliseconds, 1.millisecond, Set(validatorPk))
+      ApproveBlockProtocolTest.createProtocol(1, 2.milliseconds, 1.millisecond, Set(keyPair))
 
     ctx.tick(startTime.milliseconds) // align clocks
 
@@ -335,7 +334,7 @@ object ApproveBlockProtocolTest {
       requiredSigs: Int,
       duration: FiniteDuration,
       interval: FiniteDuration,
-      validatorsPk: Set[PublicKey]
+      validatorKeyPairs: Iterable[(PrivateKey, PublicKey)]
   )(
       implicit logStub: LogStub[Task],
       eventLogStub: EventLogStub[Task],
@@ -349,8 +348,12 @@ object ApproveBlockProtocolTest {
     implicit val connectionsCell = Cell.mvarCell[Task, Connections](List(src)).unsafeRunSync
     implicit val lab             = LastApprovedBlock.unsafe[Task](None)
 
-    val bonds     = MultiParentCasperTestUtil.createBonds(validatorsPk)
-    val genesis   = MultiParentCasperTestUtil.createGenesis(bonds)
+    val genesis = buildGenesis(
+      buildGenesisParameters(
+        validatorKeyPairs,
+        createBonds(validatorKeyPairs.map(_._2))
+      )
+    ).genesisBlock
     val candidate = ApprovedBlockCandidate(Some(genesis), requiredSigs)
     val sigs      = Ref.unsafe[Task, Set[Signature]](Set.empty)
     val startTime = System.currentTimeMillis()

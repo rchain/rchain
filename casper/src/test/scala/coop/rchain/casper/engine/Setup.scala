@@ -1,15 +1,11 @@
 package coop.rchain.casper.engine
 
 import cats._
-import cats.effect.{Concurrent, ContextShift}
 import cats.effect.concurrent.Ref
-import cats.implicits._
-
+import cats.effect.{Concurrent, ContextShift}
 import coop.rchain.blockstorage._
 import coop.rchain.casper._
-import coop.rchain.casper.MultiParentCasperTestUtil.createBonds
-import coop.rchain.casper.genesis.Genesis
-import coop.rchain.casper.genesis.contracts._
+import coop.rchain.casper.genesis.contracts.Validator
 import coop.rchain.casper.helper.BlockDagStorageTestFixture
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.TestTime
@@ -18,14 +14,11 @@ import coop.rchain.catscontrib.ApplicativeError_
 import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.comm._
 import coop.rchain.comm.rp.Connect.{Connections, ConnectionsCell}
-import coop.rchain.crypto.signatures.Secp256k1
-import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.metrics.Metrics.MetricsNOP
+import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.p2p.EffectsTestInstances._
 import coop.rchain.rholang.interpreter.Runtime
-import coop.rchain.rholang.interpreter.util.RevAddress
 import coop.rchain.shared.Cell
-
 import monix.eval.Task
 import monix.execution.Scheduler
 
@@ -51,37 +44,24 @@ object Setup {
 
     val runtimeManager = RuntimeManager.fromRuntime(activeRuntime).unsafeRunSync(scheduler)
 
-    val (genesisSk, genesisPk)     = Secp256k1.newKeyPair
-    val (validatorSk, validatorPk) = Secp256k1.newKeyPair
-    val bonds                      = createBonds(Seq(validatorPk))
+    val params @ (_, genesisParams) = MultiParentCasperTestUtil.buildGenesisParameters()
+    val context                     = MultiParentCasperTestUtil.buildGenesis(params)
+
+    val (validatorSk, validatorPk) = context.validatorKeyPairs.head
+    val bonds                      = genesisParams.proofOfStake.validators.flatMap(Validator.unapply).toMap
     val requiredSigs               = 1
-    val shardId                    = "test-shardId"
-    val deployTimestamp            = 1L
-    val genesis: BlockMessage =
-      MultiParentCasperTestUtil.buildGenesis(
-        Genesis(
-          shardId = shardId,
-          timestamp = deployTimestamp,
-          proofOfStake = ProofOfStake(
-            minimumBond = 0L,
-            maximumBond = Long.MaxValue,
-            validators = bonds.map(Validator.tupled).toSeq
-          ),
-          genesisPk = genesisPk,
-          vaults = bonds.toList.map {
-            case (pk, stake) =>
-              RevAddress.fromPublicKey(pk).map(Vault(_, stake))
-          }.flattenOption,
-          supply = Long.MaxValue
-        )
-      )
+    val shardId                    = genesisParams.shardId
+    val deployTimestamp            = genesisParams.timestamp
+
+    val genesis: BlockMessage = context.genesisBlock
+
     val validatorId = ValidatorIdentity(validatorPk, validatorSk, "secp256k1")
     val bap = new BlockApproverProtocol(
       validatorId,
       deployTimestamp,
       bonds,
-      1L,
-      Long.MaxValue,
+      genesisParams.proofOfStake.minimumBond,
+      genesisParams.proofOfStake.maximumBond,
       requiredSigs
     )
     val local: PeerNode = peerNode("src", 40400)

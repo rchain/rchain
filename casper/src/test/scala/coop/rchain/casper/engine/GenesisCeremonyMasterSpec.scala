@@ -1,18 +1,15 @@
 package coop.rchain.casper.engine
 
-import scala.concurrent.duration._
-
 import cats.effect.concurrent.Ref
 import cats.implicits._
-
 import coop.rchain.casper._
 import coop.rchain.casper.protocol._
 import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.shared.Cell
-
-import com.google.protobuf.ByteString
 import monix.eval.Task
 import org.scalatest.WordSpec
+
+import scala.concurrent.duration._
 
 class GenesisCeremonyMasterSpec extends WordSpec {
   "GenesisCeremonyMaster" should {

@@ -1,16 +1,14 @@
 package coop.rchain.casper.engine
 
 import cats.implicits._
-
-import EngineCell._
+import com.google.protobuf.ByteString
+import coop.rchain.casper.engine.EngineCell._
 import coop.rchain.casper.protocol.{NoApprovedBlockAvailable, _}
 import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.comm.rp.ProtocolHelper
 import coop.rchain.comm.rp.ProtocolHelper._
 import coop.rchain.comm.transport
 import coop.rchain.shared.Cell
-
-import com.google.protobuf.ByteString
 import monix.eval.Task
 import monix.execution.Scheduler
 import org.scalatest.WordSpec

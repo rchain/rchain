@@ -2,14 +2,14 @@ package coop.rchain.casper.helper
 
 import java.nio.file.{Files, Path}
 
-import cats.data.EitherT
 import cats.effect.concurrent.Semaphore
 import cats.effect.{Concurrent, Resource, Sync}
 import cats.implicits._
-import cats.{Applicative, ApplicativeError, Id, Monad}
+import cats.{Applicative, ApplicativeError, Id}
 import coop.rchain.blockstorage._
 import coop.rchain.casper.CasperState.CasperStateCell
 import coop.rchain.casper.MultiParentCasper.ignoreDoppelgangerCheck
+import coop.rchain.casper.MultiParentCasperTestUtil.GenesisContext
 import coop.rchain.casper._
 import coop.rchain.casper.engine.EngineCell._
 import coop.rchain.casper.engine._
@@ -19,7 +19,6 @@ import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.casper.util.comm.TestNetwork.TestNetwork
 import coop.rchain.casper.util.comm.{CasperPacketHandler, _}
 import coop.rchain.casper.util.rholang.{InterpreterUtil, RuntimeManager}
-import coop.rchain.catscontrib.Catscontrib._
 import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.catscontrib.effect.implicits._
 import coop.rchain.catscontrib.ski._
@@ -143,7 +142,7 @@ object HashSetCasperTestNode {
   import coop.rchain.catscontrib._
 
   def standaloneEff(
-      genesis: BlockMessage,
+      genesis: GenesisContext,
       sk: PrivateKey,
       storageSize: Long = 1024L * 1024 * 10
   )(
@@ -157,14 +156,14 @@ object HashSetCasperTestNode {
 
   def networkEff(
       sks: IndexedSeq[PrivateKey],
-      genesis: BlockMessage,
+      genesis: GenesisContext,
       storageSize: Long = 1024L * 1024 * 10
   )(
       implicit scheduler: Scheduler
   ): Resource[Effect, IndexedSeq[HashSetCasperTestNode[Effect]]] =
     networkF[Effect](
       sks,
-      genesis,
+      genesis.genesisBlock,
       storageSize,
       createRuntime
     )(

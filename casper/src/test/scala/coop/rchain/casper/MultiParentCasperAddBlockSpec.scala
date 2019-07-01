@@ -34,8 +34,8 @@ class MultiParentCasperAddBlockSpec extends FlatSpec with Matchers with Inspecto
   implicit val timeEff = new LogicalTime[Effect]
 
   val validatorKeys = defaultValidatorSks
-  val validatorPks = defaultValidatorPks
-  val genesis = buildGenesis(buildGenesisParameters())
+  val validatorPks  = defaultValidatorPks
+  val genesis       = buildGenesis(buildGenesisParameters())
 
   //put a new casper instance at the start of each
   //test since we cannot reset it
@@ -341,7 +341,7 @@ class MultiParentCasperAddBlockSpec extends FlatSpec with Matchers with Inspecto
         _ = nodes(0).logEff.warns.size should be(0)
 
         _ <- nodes(1).casperEff
-              .normalizedInitialFault(ProtoUtil.weightMap(genesis)) shouldBeF 1f / (1f + 3f + 5f + 7f)
+              .normalizedInitialFault(ProtoUtil.weightMap(genesis.genesisBlock)) shouldBeF 1f / (1f + 3f + 5f + 7f)
         _ <- validateBlockStore(nodes(0)) { blockStore =>
               for {
                 _ <- blockStore.get(signedBlock1.blockHash) shouldBeF None
@@ -407,7 +407,8 @@ class MultiParentCasperAddBlockSpec extends FlatSpec with Matchers with Inspecto
 
   it should "estimate parent properly" in effectTest {
 
-    val (validatorKeys, validatorPks) = (1 to 5).map(_ => Secp256k1.newKeyPair).unzip
+    val validatorKeyPairs             = (1 to 5).map(_ => Secp256k1.newKeyPair)
+    val (validatorKeys, validatorPks) = validatorKeyPairs.unzip
 
     def deployment(i: Int, ts: Long): DeployData =
       ConstructDeploy.sourceDeploy(s"new x in { x!(0) }", ts, accounting.MAX_VALUE)
@@ -434,13 +435,16 @@ class MultiParentCasperAddBlockSpec extends FlatSpec with Matchers with Inspecto
       .networkEff(
         validatorKeys.take(3),
         buildGenesis(
-          buildGenesisParameters(Map(
+          buildGenesisParameters(
+            validatorKeyPairs,
+            Map(
               validatorPks(0) -> 3L,
               validatorPks(1) -> 1L,
               validatorPks(2) -> 5L,
               validatorPks(3) -> 2L,
               validatorPks(4) -> 4L
-            ))
+            )
+          )
         )
       )
       .map(_.toList)
@@ -498,7 +502,8 @@ class MultiParentCasperAddBlockSpec extends FlatSpec with Matchers with Inspecto
       deploys: immutable.IndexedSeq[ProcessedDeploy],
       signedInvalidBlock: BlockMessage
   ): Effect[BlockMessage] = {
-    val postState     = RChainState().withBonds(ProtoUtil.bonds(genesis)).withBlockNumber(1)
+    val postState =
+      RChainState().withBonds(ProtoUtil.bonds(genesis.genesisBlock)).withBlockNumber(1)
     val postStateHash = Blake2b256.hash(postState.toByteArray)
     val header = Header()
       .withPostStateHash(ByteString.copyFrom(postStateHash))

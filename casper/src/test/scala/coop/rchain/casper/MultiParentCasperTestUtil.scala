@@ -13,8 +13,8 @@ import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.rholang.RuntimeManager
 import coop.rchain.casper.util.{ConstructDeploy, ProtoUtil}
 import coop.rchain.catscontrib.TaskContrib.TaskOps
-import coop.rchain.crypto.PublicKey
 import coop.rchain.crypto.signatures.Secp256k1
+import coop.rchain.crypto.{PrivateKey, PublicKey}
 import coop.rchain.metrics
 import coop.rchain.metrics.Metrics
 import coop.rchain.models.Par
@@ -23,6 +23,8 @@ import coop.rchain.rholang.interpreter.util.RevAddress
 import coop.rchain.shared.Log
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
+
+import scala.collection.mutable
 
 object MultiParentCasperTestUtil {
 
@@ -51,45 +53,49 @@ object MultiParentCasperTestUtil {
   def createBonds(validators: Iterable[PublicKey]): Map[PublicKey, Long] =
     validators.zipWithIndex.map { case (v, i) => v -> (2L * i.toLong + 1L) }.toMap
 
-  def createGenesis(bonds: Map[PublicKey, Long]): BlockMessage =
-    buildGenesis(
-      buildGenesisParameters(bonds).copy(
-        shardId = "HashSetCasperTest"
-      )
-    )
+  def createGenesis(): BlockMessage =
+    buildGenesis(buildGenesisParameters()).genesisBlock
 
-  val (defaultValidatorSks, defaultValidatorPks) = (1 to 4).map(_ => Secp256k1.newKeyPair).unzip
+  val defaultValidatorKeyPairs                   = (1 to 4).map(_ => Secp256k1.newKeyPair)
+  val (defaultValidatorSks, defaultValidatorPks) = defaultValidatorKeyPairs.unzip
 
   def buildGenesisParameters(
       bondsFunction: Iterable[PublicKey] => Map[PublicKey, Long] = createBonds
-  ): Genesis =
-    buildGenesisParameters(bondsFunction(defaultValidatorPks))
+  ): (Iterable[(PrivateKey, PublicKey)], Genesis) =
+    buildGenesisParameters(defaultValidatorKeyPairs, bondsFunction(defaultValidatorPks))
 
-  def buildGenesisParameters(bonds: Map[PublicKey, Long]) =
-    Genesis(
-      shardId = "MultiParentCasperSpec",
-      timestamp = 0L,
-      proofOfStake = ProofOfStake(
-        minimumBond = 0L,
-        maximumBond = Long.MaxValue,
-        validators = bonds.map(Validator.tupled).toSeq
-      ),
-      genesisPk = Secp256k1.newKeyPair._2,
-      vaults = Vault(
-        RevAddress.fromPublicKey(Secp256k1.toPublic(ConstructDeploy.defaultSec)).get,
-        900000
-      ) :: bonds.toList.map {
-        case (pk, stake) =>
-          RevAddress.fromPublicKey(pk).map(Vault(_, stake))
-      }.flattenOption,
-      supply = Long.MaxValue
+  def buildGenesisParameters(
+      validatorKeyPairs: Iterable[(PrivateKey, PublicKey)],
+      bonds: Map[PublicKey, Long]
+  ): (Iterable[(PrivateKey, PublicKey)], Genesis) =
+    (
+      validatorKeyPairs,
+      Genesis(
+        shardId = "MultiParentCasperSpec",
+        timestamp = 0L,
+        proofOfStake = ProofOfStake(
+          minimumBond = 0L,
+          maximumBond = Long.MaxValue,
+          validators = bonds.map(Validator.tupled).toSeq
+        ),
+        genesisPk = Secp256k1.newKeyPair._2,
+        vaults = Vault(
+          RevAddress.fromPublicKey(Secp256k1.toPublic(ConstructDeploy.defaultSec)).get,
+          900000
+        ) :: bonds.toList.map {
+          case (pk, stake) =>
+            RevAddress.fromPublicKey(pk).map(Vault(_, stake))
+        }.flattenOption,
+        supply = Long.MaxValue
+      )
     )
 
-  def buildGenesis(genesisParameters: Genesis): BlockMessage = {
-    val storageDirectory                   = Files.createTempDirectory(s"hash-set-casper-test-genesis")
-    val storageSize: Long                  = 3024L * 1024 * 10
-    implicit val log: Log.NOPLog[Task]     = new Log.NOPLog[Task]
-    implicit val metricsEff: Metrics[Task] = new metrics.Metrics.MetricsNOP[Task]
+  def buildGenesis(parameters: (Iterable[(PrivateKey, PublicKey)], Genesis)): GenesisContext = {
+    val (validavalidatorKeyPairs, genesisParameters) = parameters
+    val storageDirectory                             = Files.createTempDirectory(s"hash-set-casper-test-genesis")
+    val storageSize: Long                            = 3024L * 1024 * 10
+    implicit val log: Log.NOPLog[Task]               = new Log.NOPLog[Task]
+    implicit val metricsEff: Metrics[Task]           = new metrics.Metrics.MetricsNOP[Task]
     (for {
       activeRuntime <- Runtime
                         .createWithEmptyCost[Task, Task.Par](
@@ -102,6 +108,14 @@ object MultiParentCasperTestUtil {
                   genesisParameters
                 )
       _ <- activeRuntime.close()
-    } yield genesis).unsafeRunSync
+    } yield GenesisContext(genesis, validavalidatorKeyPairs)).unsafeRunSync
+  }
+
+  case class GenesisContext(
+      genesisBlock: BlockMessage,
+      validatorKeyPairs: Iterable[(PrivateKey, PublicKey)]
+  ) {
+    def validatorSks: Iterable[PrivateKey] = validatorKeyPairs.map(_._1)
+    def validatorPks: Iterable[PublicKey]  = validatorKeyPairs.map(_._2)
   }
 }

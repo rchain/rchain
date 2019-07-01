@@ -1,42 +1,35 @@
 package coop.rchain.casper.api
 
-import scala.concurrent.duration._
-
 import cats.Monad
-import cats.data.EitherT
 import cats.effect.concurrent.Semaphore
 import cats.implicits._
-
 import coop.rchain.blockstorage.BlockDagRepresentation
+import coop.rchain.casper.MultiParentCasper.ignoreDoppelgangerCheck
+import coop.rchain.casper.MultiParentCasperRef.MultiParentCasperRef
 import coop.rchain.casper._
+import coop.rchain.casper.api.BlockAPI.ApiErr
 import coop.rchain.casper.helper.HashSetCasperTestNode
-import coop.rchain.casper.helper.HashSetCasperTestNode._
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util._
 import coop.rchain.casper.util.rholang._
-import coop.rchain.casper.MultiParentCasper.ignoreDoppelgangerCheck
-import coop.rchain.casper.MultiParentCasperRef.MultiParentCasperRef
-import coop.rchain.casper.api.BlockAPI.ApiErr
 import coop.rchain.catscontrib.TaskContrib._
-import coop.rchain.crypto.signatures.Secp256k1
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.Validator.Validator
 import coop.rchain.p2p.EffectsTestInstances._
 import coop.rchain.rholang.interpreter.accounting
 import coop.rchain.shared.Time
-
-import com.google.protobuf.ByteString
 import monix.eval.Task
 import monix.execution.Scheduler
 import org.scalatest.{FlatSpec, Matchers}
 
-class CreateBlockAPITest extends FlatSpec with Matchers {
-  import MultiParentCasperTestUtil._
-  import HashSetCasperTestNode.Effect
+import scala.concurrent.duration._
 
-  private val (validatorKeys, validators) = (1 to 4).map(_ => Secp256k1.newKeyPair).unzip
-  private val bonds                       = createBonds(validators)
-  private val genesis                     = createGenesis(bonds)
+class CreateBlockAPITest extends FlatSpec with Matchers {
+  import HashSetCasperTestNode.Effect
+  import MultiParentCasperTestUtil._
+
+  val validatorKeys = MultiParentCasperTestUtil.defaultValidatorSks
+  val genesis       = buildGenesis(buildGenesisParameters())
 
   "createBlock" should "not allow simultaneous calls" in {
     implicit val logEff    = new LogStub[Effect]

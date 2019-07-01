@@ -1,5 +1,6 @@
 package coop.rchain.casper.engine
 
+import com.google.protobuf.ByteString
 import coop.rchain.casper._
 import coop.rchain.casper.helper.NoOpsCasperEffect
 import coop.rchain.casper.protocol._
@@ -10,8 +11,6 @@ import coop.rchain.comm.transport
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.hash.Blake2b256
 import coop.rchain.crypto.signatures.Secp256k1
-
-import com.google.protobuf.ByteString
 import monix.eval.Task
 import org.scalatest.WordSpec
 
@@ -22,9 +21,7 @@ class RunningSpec extends WordSpec {
     val fixture = Setup()
     import fixture._
 
-    val (_, validators)        = (1 to 4).map(_ => Secp256k1.newKeyPair).unzip
-    val bonds                  = MultiParentCasperTestUtil.createBonds(validators)
-    val genesis                = MultiParentCasperTestUtil.createGenesis(bonds)
+    val genesis                = MultiParentCasperTestUtil.createGenesis()
     val approvedBlockCandidate = ApprovedBlockCandidate(block = Some(genesis))
     val approvedBlock: ApprovedBlock = ApprovedBlock(
       candidate = Some(approvedBlockCandidate),

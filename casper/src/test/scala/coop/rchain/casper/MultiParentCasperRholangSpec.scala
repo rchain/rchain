@@ -19,7 +19,7 @@ class MultiParentCasperRholangSpec extends FlatSpec with Matchers with Inspector
   implicit val timeEff: LogicalTime[Effect] = new LogicalTime[Effect]
 
   val validatorKeys = defaultValidatorSks
-  val genesis = buildGenesis(buildGenesisParameters())
+  val genesis       = buildGenesis(buildGenesisParameters())
 
   //put a new casper instance at the start of each
   //test since we cannot reset it
@@ -38,7 +38,7 @@ class MultiParentCasperRholangSpec extends FlatSpec with Matchers with Inspector
         parents           = ProtoUtil.parentHashes(block)
 
         _      = parents.size should be(1)
-        _      = parents.head should be(genesis.blockHash)
+        _      = parents.head should be(genesis.genesisBlock.blockHash)
         _      = deploys.size should be(1)
         _      = deploys.head should be(deploy)
         data   <- getDataAtPublicChannel[Effect](block, 0)

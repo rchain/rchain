@@ -1,19 +1,14 @@
 package coop.rchain.casper.engine
 
 import cats.implicits._
-import coop.rchain.casper.MultiParentCasperTestUtil
-import coop.rchain.casper.genesis.Genesis
-import coop.rchain.casper.genesis.contracts._
 import coop.rchain.casper.helper.HashSetCasperTestNode
 import coop.rchain.casper.helper.HashSetCasperTestNode._
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.scalatestcontrib._
 import coop.rchain.casper.util.comm.TestNetwork
+import coop.rchain.casper.{MultiParentCasperTestUtil, ValidatorIdentity}
 import coop.rchain.comm.protocol.routing.Packet
 import coop.rchain.comm.transport
-import coop.rchain.crypto.signatures.Secp256k1
-import coop.rchain.crypto.{PrivateKey, PublicKey}
-import coop.rchain.rholang.interpreter.util.RevAddress
 import monix.execution.Scheduler
 import org.scalatest.{FlatSpec, Matchers}
 
@@ -23,10 +18,8 @@ class BlockApproverProtocolTest extends FlatSpec with Matchers {
   implicit private val scheduler: Scheduler = Scheduler.fixedPool("block-approval-protocol-test", 4)
 
   "BlockApproverProtocol" should "respond to valid ApprovedBlockCandidates" in {
-    val n                          = 8
-    val (validatorSk, validatorPk) = Secp256k1.newKeyPair
-    val bonds                      = Map(validatorPk -> 10L)
-    createProtocol(n, validatorSk, bonds).flatMap {
+    val n = 8
+    createProtocol(n).flatMap {
       case (approver, node) =>
         val unapproved = createUnapproved(n, node.genesis)
         import node._
@@ -47,10 +40,8 @@ class BlockApproverProtocolTest extends FlatSpec with Matchers {
   }
 
   it should "log a warning for invalid ApprovedBlockCandidates" in effectTest {
-    val n                          = 8
-    val (validatorSk, validatorPk) = Secp256k1.newKeyPair
-    val bonds                      = Map(validatorPk -> 10L)
-    createProtocol(n, validatorSk, bonds).flatMap {
+    val n = 8
+    createProtocol(n).flatMap {
       case (approver, node) =>
         val differentUnapproved1 = createUnapproved(n / 2, node.genesis)             //wrong number of signatures
         val differentUnapproved2 = createUnapproved(n, BlockMessage.defaultInstance) //wrong block
@@ -87,40 +78,21 @@ object BlockApproverProtocolTest {
     Packet(transport.UnapprovedBlock.id, u.toByteString)
 
   def createProtocol(
-      requiredSigs: Int,
-      sk: PrivateKey,
-      bonds: Map[PublicKey, Long]
+      requiredSigs: Int
   ): Effect[(BlockApproverProtocol, HashSetCasperTestNode[Effect])] = {
     import monix.execution.Scheduler.Implicits.global
 
-    val deployTimestamp = 1L
-
-    val genesis =
-      MultiParentCasperTestUtil.buildGenesis(
-        Genesis(
-          shardId = "BlockApproverProtocolTest",
-          timestamp = deployTimestamp,
-          proofOfStake = ProofOfStake(
-            minimumBond = 0L,
-            maximumBond = Long.MaxValue,
-            validators = bonds.map(Validator.tupled).toSeq
-          ),
-          genesisPk = Secp256k1.newKeyPair._2,
-          vaults = bonds.toList.map {
-            case (pk, stake) =>
-              RevAddress.fromPublicKey(pk).map(Vault(_, stake))
-          }.flattenOption,
-          supply = Long.MaxValue
-        )
-      )
-    HashSetCasperTestNode.networkEff(Vector(sk), genesis).use { nodes =>
+    val params @ (_, genesisParams) = MultiParentCasperTestUtil.buildGenesisParameters()
+    val context                     = MultiParentCasperTestUtil.buildGenesis(params)
+    val (validatorSk, validatorPk)  = context.validatorKeyPairs.head
+    HashSetCasperTestNode.networkEff(Vector(validatorSk), context).use { nodes =>
       val node = nodes.head
       (new BlockApproverProtocol(
         node.validatorId,
-        deployTimestamp,
-        bonds,
-        1L,
-        Long.MaxValue,
+        genesisParams.timestamp,
+        genesisParams.proofOfStake.validators.map(v => v.pk -> v.stake).toMap,
+        genesisParams.proofOfStake.minimumBond,
+        genesisParams.proofOfStake.maximumBond,
         requiredSigs
       ) -> node).pure[Effect]
     }

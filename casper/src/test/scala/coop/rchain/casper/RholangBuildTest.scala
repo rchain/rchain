@@ -2,6 +2,7 @@ package coop.rchain.casper
 
 import cats.implicits._
 import coop.rchain.casper.MultiParentCasper.ignoreDoppelgangerCheck
+import coop.rchain.casper.MultiParentCasperTestUtil.{buildGenesis, buildGenesisParameters}
 import coop.rchain.casper.helper.HashSetCasperTestNode
 import coop.rchain.casper.helper.HashSetCasperTestNode._
 import coop.rchain.casper.scalatestcontrib._
@@ -10,15 +11,13 @@ import coop.rchain.casper.util.RSpaceUtil._
 import coop.rchain.casper.util.rholang.RegistrySigGen
 import coop.rchain.crypto.PublicKey
 import coop.rchain.crypto.codec.Base16
-import coop.rchain.crypto.signatures.Secp256k1
 import monix.execution.Scheduler.Implicits.global
 import org.scalatest.{FlatSpec, Matchers}
 
 class RholangBuildTest extends FlatSpec with Matchers {
 
-  val (validatorKeys, validators) = (1 to 4).map(_ => Secp256k1.newKeyPair).unzip
-  val bonds                       = MultiParentCasperTestUtil.createBonds(validators)
-  val genesis                     = MultiParentCasperTestUtil.createGenesis(bonds)
+  val genesis       = buildGenesis(buildGenesisParameters())
+  val validatorKeys = genesis.validatorSks
 
   "Our build system" should "allow import of rholang sources into scala code" in effectTest {
     HashSetCasperTestNode
