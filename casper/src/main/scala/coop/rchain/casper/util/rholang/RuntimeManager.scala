@@ -116,7 +116,7 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics] private[rholang] (
     withRuntimeLock { runtime =>
       for {
         span   <- Metrics[F].span(replayComputeStateLabel)
-        _      <- runtime.blockData.setParams(blockData)
+        _      <- runtime.blockData.set(blockData)
         _      <- setInvalidBlocks(invalidBlocks, runtime)
         _      <- span.mark("before-replay-deploys")
         result <- replayDeploys(runtime, span, startHash, terms, replayDeploy(runtime, span))
@@ -132,7 +132,7 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics] private[rholang] (
     withRuntimeLock { runtime =>
       for {
         span   <- Metrics[F].span(computeStateLabel)
-        _      <- runtime.blockData.setParams(blockData)
+        _      <- runtime.blockData.set(blockData)
         _      <- setInvalidBlocks(invalidBlocks, runtime)
         _      <- span.mark("before-process-deploys")
         result <- processDeploys(runtime, span, startHash, terms, processDeploy(runtime, span))
@@ -148,7 +148,7 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics] private[rholang] (
     withRuntimeLock { runtime =>
       for {
         span       <- Metrics[F].span(computeGenesisLabel)
-        _          <- runtime.blockData.setParams(BlockData(blockTime, 0))
+        _          <- runtime.blockData.set(BlockData(blockTime, 0))
         _          <- span.mark("before-process-deploys")
         evalResult <- processDeploys(runtime, span, startHash, terms, processDeploy(runtime, span))
         _          <- span.close()
@@ -259,7 +259,7 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics] private[rholang] (
         assert(validator.exprs.length == 1, "Validator in bonds map wasn't a single string.")
         assert(bond.exprs.length == 1, "Stake in bonds map wasn't a single integer.")
         val validatorName = validator.exprs.head.getGByteArray
-        val stakeAmount   = bond.exprs.head.getETupleBody.ps.head.exprs.head.getGInt
+        val stakeAmount   = bond.exprs.head.getGInt
         Bond(validatorName, stakeAmount)
     }.toList
 

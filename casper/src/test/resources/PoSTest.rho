@@ -106,7 +106,7 @@ match (
                         @bonds <- bondsCh;
                         @rewards <- rewardsCh) {
                       match bonds.get(user1PubKey) {
-                        (bondAmount, _) => {
+                        bondAmount => {
                           rhoSpec!("assertMany",
                             [
                               ((100, "==", bondAmount), "the new bond is expected in the final map"),
@@ -154,7 +154,7 @@ match (
                               @finalUser2Balance <- finalUser2BalanceCh;
                               @bonds <- retCh) {
                             match (bonds.get(user1PubKey), bonds.get(user2PubKey)) {
-                              ((bondAmount1, _), (bondAmount2, _)) => {
+                              (bondAmount1, bondAmount2) => {
                                 rhoSpec!("assertMany",
                                   [
                                     ((100, "==", bondAmount1), "the user1 bond is expected in the final map"),
