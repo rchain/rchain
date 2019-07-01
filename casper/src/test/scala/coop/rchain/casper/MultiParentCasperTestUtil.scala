@@ -4,20 +4,18 @@ import java.nio.file.Files
 
 import cats.implicits._
 import coop.rchain.blockstorage.BlockStore
-import coop.rchain.casper.MultiParentCasper.ignoreDoppelgangerCheck
 import coop.rchain.casper.genesis.Genesis
 import coop.rchain.casper.genesis.contracts._
 import coop.rchain.casper.helper.HashSetCasperTestNode.Effect
 import coop.rchain.casper.helper.{BlockDagStorageTestFixture, HashSetCasperTestNode}
 import coop.rchain.casper.protocol._
+import coop.rchain.casper.util.ConstructDeploy
 import coop.rchain.casper.util.rholang.RuntimeManager
-import coop.rchain.casper.util.{ConstructDeploy, ProtoUtil}
 import coop.rchain.catscontrib.TaskContrib.TaskOps
 import coop.rchain.crypto.signatures.Secp256k1
 import coop.rchain.crypto.{PrivateKey, PublicKey}
 import coop.rchain.metrics
 import coop.rchain.metrics.Metrics
-import coop.rchain.models.Par
 import coop.rchain.rholang.interpreter.Runtime
 import coop.rchain.rholang.interpreter.util.RevAddress
 import coop.rchain.shared.Log
@@ -36,19 +34,6 @@ object MultiParentCasperTestUtil {
       result <- f(bs)
       _      <- bs.close()
     } yield result
-
-  def deployAndQuery(
-      node: HashSetCasperTestNode[Effect],
-      dd: DeployData,
-      query: DeployData
-  ): Effect[(BlockStatus, Seq[Par])] =
-    for {
-      createBlockResult <- node.casperEff.deploy(dd) >> node.casperEff.createBlock
-      Created(block)    = createBlockResult
-      blockStatus       <- node.casperEff.addBlock(block, ignoreDoppelgangerCheck[Effect])
-      queryResult <- node.runtimeManager
-                      .captureResults(ProtoUtil.postStateHash(block), query)
-    } yield (blockStatus, queryResult)
 
   def createBonds(validators: Iterable[PublicKey]): Map[PublicKey, Long] =
     validators.zipWithIndex.map { case (v, i) => v -> (2L * i.toLong + 1L) }.toMap
