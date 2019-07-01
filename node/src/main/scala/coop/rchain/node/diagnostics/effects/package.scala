@@ -5,6 +5,7 @@ import java.lang.management.{ManagementFactory, MemoryType}
 import scala.collection.JavaConverters._
 import cats.effect.Sync
 import cats.implicits._
+import cats.mtl.{ApplicativeAsk, ApplicativeLocal}
 import coop.rchain.comm.discovery._
 import coop.rchain.comm.rp.Connect.ConnectionsCell
 import coop.rchain.metrics.{Metrics, Span}
@@ -12,6 +13,7 @@ import com.google.protobuf.ByteString
 import com.google.protobuf.empty.Empty
 import coop.rchain.metrics.Metrics.Source
 import javax.management.ObjectName
+import kamon.Kamon
 import monix.eval.Task
 
 package object effects {
@@ -19,13 +21,6 @@ package object effects {
   def metrics[F[_]: Sync]: Metrics[F] =
     new Metrics[F] {
       import kamon._
-      import kamon.trace.{Span => KSpan}
-
-      case class KamonSpan(span: KSpan) extends Span[F] {
-        @SuppressWarnings(Array("org.wartremover.warts.NonUnitStatements"))
-        override def mark(name: String): F[Unit] = Sync[F].delay { span.mark(name) }
-        override def close(): F[Unit]            = Sync[F].delay { span.finish() }
-      }
 
       private val m = scala.collection.concurrent.TrieMap[String, metric.Metric[_]]()
 
@@ -89,9 +84,5 @@ package object effects {
               _ = t.stop()
             } yield r
         }
-
-      def span(source: Source): F[Span[F]] = Sync[F].delay {
-        KamonSpan(Kamon.buildSpan(source).start())
-      }
     }
 }

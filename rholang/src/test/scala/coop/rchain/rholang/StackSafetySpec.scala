@@ -1,7 +1,7 @@
 package coop.rchain.rholang
 
 import coop.rchain.metrics
-import coop.rchain.metrics.Metrics
+import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.models.Connective.ConnectiveInstance.ConnNotBody
 import coop.rchain.models.Expr.ExprInstance.GInt
 import coop.rchain.models._
@@ -26,6 +26,7 @@ object StackSafetySpec extends Assertions {
   val maxDuration                         = 20.seconds
   implicit val logF: Log[Task]            = new Log.NOPLog[Task]
   implicit val noopMetrics: Metrics[Task] = new metrics.Metrics.MetricsNOP[Task]
+  implicit val noopSpan: Span[Task]       = NoopSpan[Task]()
 
   def findMaxRecursionDepth(): Int = {
     def count(i: Int): Int =

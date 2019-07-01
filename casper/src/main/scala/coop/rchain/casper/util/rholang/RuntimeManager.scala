@@ -69,7 +69,7 @@ trait RuntimeManager[F[_]] {
   def emptyStateHash: StateHash
 }
 
-class RuntimeManagerImpl[F[_]: Concurrent: Metrics] private[rholang] (
+class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span] private[rholang] (
     val emptyStateHash: StateHash,
     runtimeContainer: MVar[F, Runtime[F]]
 ) extends RuntimeManager[F] {
@@ -114,14 +114,14 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics] private[rholang] (
       isGenesis: Boolean //FIXME have a better way of knowing this. Pass the replayDeploy function maybe?
   ): F[Either[ReplayFailure, StateHash]] =
     withRuntimeLock { runtime =>
-      for {
-        span   <- Metrics[F].span(replayComputeStateLabel)
-        _      <- runtime.blockData.setParams(blockData)
-        _      <- setInvalidBlocks(invalidBlocks, runtime)
-        _      <- span.mark("before-replay-deploys")
-        result <- replayDeploys(runtime, span, startHash, terms, replayDeploy(runtime, span))
-        _      <- span.close()
-      } yield result
+      Span[F].child(replayComputeStateLabel) { span =>
+        for {
+          _      <- runtime.blockData.setParams(blockData)
+          _      <- setInvalidBlocks(invalidBlocks, runtime)
+          _      <- span.mark("before-replay-deploys")
+          result <- replayDeploys(runtime, span, startHash, terms, replayDeploy(runtime, span))
+        } yield result
+      }
     }
 
   def computeState(startHash: StateHash)(
@@ -130,14 +130,14 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics] private[rholang] (
       invalidBlocks: Map[BlockHash, Validator] = Map.empty[BlockHash, Validator]
   ): F[(StateHash, Seq[InternalProcessedDeploy])] =
     withRuntimeLock { runtime =>
-      for {
-        span   <- Metrics[F].span(computeStateLabel)
-        _      <- runtime.blockData.setParams(blockData)
-        _      <- setInvalidBlocks(invalidBlocks, runtime)
-        _      <- span.mark("before-process-deploys")
-        result <- processDeploys(runtime, span, startHash, terms, processDeploy(runtime, span))
-        _      <- span.close()
-      } yield result
+      Span[F].child(computeStateLabel) { span =>
+        for {
+          _      <- runtime.blockData.setParams(blockData)
+          _      <- setInvalidBlocks(invalidBlocks, runtime)
+          _      <- span.mark("before-process-deploys")
+          result <- processDeploys(runtime, span, startHash, terms, processDeploy(runtime, span))
+        } yield result
+      }
     }
 
   def computeGenesis(
@@ -146,13 +146,19 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics] private[rholang] (
   ): F[(StateHash, StateHash, Seq[InternalProcessedDeploy])] = {
     val startHash = emptyStateHash
     withRuntimeLock { runtime =>
-      for {
-        span       <- Metrics[F].span(computeGenesisLabel)
-        _          <- runtime.blockData.setParams(BlockData(blockTime, 0))
-        _          <- span.mark("before-process-deploys")
-        evalResult <- processDeploys(runtime, span, startHash, terms, processDeploy(runtime, span))
-        _          <- span.close()
-      } yield (startHash, evalResult._1, evalResult._2)
+      Span[F].child(computeGenesisLabel) { span =>
+        for {
+          _ <- runtime.blockData.setParams(BlockData(blockTime, 0))
+          _ <- span.mark("before-process-deploys")
+          evalResult <- processDeploys(
+                         runtime,
+                         span,
+                         startHash,
+                         terms,
+                         processDeploy(runtime, span)
+                       )
+        } yield (startHash, evalResult._1, evalResult._2)
+      }
     }
   }
 
@@ -431,7 +437,7 @@ object RuntimeManager {
 
   type StateHash = ByteString
 
-  def fromRuntime[F[_]: Concurrent: Sync: Metrics](
+  def fromRuntime[F[_]: Concurrent: Sync: Metrics: Span](
       active: Runtime[F]
   ): F[RuntimeManager[F]] =
     for {

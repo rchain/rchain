@@ -10,7 +10,7 @@ import coop.rchain.casper.util.rholang.RuntimeManager
 import coop.rchain.casper.util.{ConstructDeploy, ProtoUtil}
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.crypto.signatures.Secp256k1
-import coop.rchain.metrics.Metrics
+import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.models.Par
 import coop.rchain.rholang.build.CompiledRholangSource
 import coop.rchain.rholang.interpreter.accounting.Cost
@@ -29,7 +29,7 @@ object TestUtil {
       phloLimit = accounting.MAX_VALUE
     )
 
-  def setupRuntime[F[_]: Concurrent: ContextShift: Metrics, G[_]: Parallel[F, ?[_]]](
+  def setupRuntime[F[_]: Concurrent: ContextShift: Metrics: Span, G[_]: Parallel[F, ?[_]]](
       runtime: Runtime[F],
       genesisSetup: RuntimeManager[F] => F[BlockMessage],
       otherLibs: Seq[DeployData]

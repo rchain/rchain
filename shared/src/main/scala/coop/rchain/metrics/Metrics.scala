@@ -2,15 +2,20 @@ package coop.rchain.metrics
 
 import cats._
 import cats.implicits._
+import coop.rchain.metrics.Metrics.Source
 
 trait Span[F[_]] {
   def mark(name: String): F[Unit]
-  def close(): F[Unit]
+  def child[A](source: Metrics.Source)(block: Span[F] => F[A]): F[A]
+}
+
+object Span {
+  def apply[F[_]](implicit S: Span[F]) = S
 }
 
 final case class NoopSpan[F[_]: Applicative]() extends Span[F] {
-  def mark(name: String): F[Unit] = ().pure[F]
-  def close(): F[Unit]            = ().pure[F]
+  override def mark(name: String): F[Unit]                            = ().pure[F]
+  override def child[A](source: Source)(block: Span[F] => F[A]): F[A] = block(this)
 }
 
 trait Metrics[F[_]] {
@@ -32,8 +37,6 @@ trait Metrics[F[_]] {
   def record(name: String, value: Long, count: Long = 1)(implicit ev: Metrics.Source): F[Unit]
 
   def timer[A](name: String, block: F[A])(implicit ev: Metrics.Source): F[A]
-
-  def span(source: Metrics.Source): F[Span[F]]
 }
 
 object Metrics extends MetricsInstances {

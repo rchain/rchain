@@ -22,6 +22,7 @@ import scala.language.higherKinds
 import coop.rchain.casper.CasperMetricsSource
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.rholang.interpreter.Runtime.BlockData
+import scala.concurrent.duration.`package`.span
 
 object BlockGenerator {
   implicit val timeEff = new LogicalTime[Task]
@@ -29,7 +30,7 @@ object BlockGenerator {
   private[this] val GenerateBlockMetricsSource =
     Metrics.Source(CasperMetricsSource, "generate-block")
 
-  def updateChainWithBlockStateUpdate[F[_]: Sync: BlockStore: IndexedBlockDagStorage: Time: Metrics](
+  def updateChainWithBlockStateUpdate[F[_]: Sync: BlockStore: IndexedBlockDagStorage: Time: Metrics: Span](
       id: Int,
       genesis: BlockMessage,
       runtimeManager: RuntimeManager[F]
@@ -47,17 +48,17 @@ object BlockGenerator {
       _                                 <- injectPostStateHash[F](id, b, genesis, postStateHash, processedDeploys)
     } yield b
 
-  def computeBlockCheckpoint[F[_]: Sync: BlockStore: Time: Metrics](
+  def computeBlockCheckpoint[F[_]: Sync: BlockStore: Time: Metrics: Span](
       b: BlockMessage,
       genesis: BlockMessage,
       dag: BlockDagRepresentation[F],
       runtimeManager: RuntimeManager[F]
-  ): F[(StateHash, Seq[ProcessedDeploy])] =
+  ): F[(StateHash, Seq[ProcessedDeploy])] = Span[F].child(GenerateBlockMetricsSource) { span =>
     for {
-      span                                                   <- Metrics[F].span(GenerateBlockMetricsSource)
       result                                                 <- computeBlockCheckpointFromDeploys[F](b, genesis, dag, runtimeManager, span)
       Right((preStateHash, postStateHash, processedDeploys)) = result
     } yield (postStateHash, processedDeploys.map(_.toProcessedDeploy))
+  }
 
   def injectPostStateHash[F[_]: Monad: BlockStore: IndexedBlockDagStorage](
       id: Int,

@@ -40,7 +40,7 @@ class InterpreterUtilTest
     with BlockDagStorageFixture {
   implicit val logEff                    = new LogStub[Task]
   implicit val metricsEff: Metrics[Task] = new metrics.Metrics.MetricsNOP[Task]
-  val span                               = new NoopSpan[Task]
+  implicit val span: Span[Task]          = new NoopSpan[Task]
   val storageSize                        = 1024L * 1024
   val storageDirectory                   = Files.createTempDirectory("casper-interp-util-test")
   val activeRuntime =
@@ -827,7 +827,7 @@ class InterpreterUtilTest
         }
   }
 
-  def step[F[_]: IndexedBlockDagStorage: BlockStore: Time: Metrics: Sync](
+  def step[F[_]: IndexedBlockDagStorage: BlockStore: Time: Metrics: Span: Sync](
       runtimeManager: RuntimeManager[F]
   )(index: Int, genesis: BlockMessage): F[Unit] =
     for {

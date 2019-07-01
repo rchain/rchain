@@ -30,7 +30,7 @@ import coop.rchain.comm.rp.HandleMessages.handle
 import coop.rchain.crypto.PrivateKey
 import coop.rchain.crypto.signatures.Secp256k1
 import coop.rchain.metrics
-import coop.rchain.metrics.{Metrics, NoopSpan}
+import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.p2p.EffectsTestInstances._
 import coop.rchain.rholang.interpreter.Runtime
 import coop.rchain.rspace.Context
@@ -61,6 +61,7 @@ class HashSetCasperTestNode[F[_]](
     val blockStore: BlockStore[F],
     val blockDagStorage: BlockDagStorage[F],
     val metricEff: Metrics[F],
+    val noopSpan: Span[F],
     val casperState: CasperStateCell[F]
 ) {
 
@@ -148,6 +149,7 @@ object HashSetCasperTestNode {
   ): Resource[Effect, RuntimeManager[Effect]] = {
     implicit val log                       = Log.log[Task]
     implicit val metricsEff: Metrics[Task] = new metrics.Metrics.MetricsNOP[Task]
+    implicit val noopSpan: Span[Task]      = NoopSpan[Task]()
     val activeRuntime =
       Runtime
         .createWithEmptyCost[Task, Task.Par](storageDirectory, storageSize)
@@ -193,6 +195,7 @@ object HashSetCasperTestNode {
     val logicalTime: LogicalTime[F] = new LogicalTime[F]
     implicit val log                = Log.log[F]
     implicit val metricEff          = new Metrics.MetricsNOP[F]
+    implicit val spanEff: Span[F]   = NoopSpan[F]()
     val env                         = Context.env(blockStoreDir, mapSize)
     for {
       blockStore <- Resource.make[F, BlockStore[F]](
@@ -247,6 +250,7 @@ object HashSetCasperTestNode {
                    blockStore,
                    blockDagStorage,
                    metricEff,
+                   spanEff,
                    casperState
                  )
                  result <- node.initialize().map(_ => node)
@@ -298,10 +302,11 @@ object HashSetCasperTestNode {
         .toList
         .traverse {
           case ((n, p), sk) =>
-            val tle                = new TransportLayerTestImpl[F]()
-            val tls                = new TransportLayerServerTestImpl[F](p)
-            implicit val log       = Log.log[F]
-            implicit val metricEff = new Metrics.MetricsNOP[F]
+            val tle                       = new TransportLayerTestImpl[F]()
+            val tls                       = new TransportLayerServerTestImpl[F](p)
+            implicit val log              = Log.log[F]
+            implicit val metricEff        = new Metrics.MetricsNOP[F]
+            implicit val spanEff: Span[F] = NoopSpan[F]()
             for {
               storageDirectories           <- BlockDagStorageTestFixture.createDirectories[F]
               (blockStoreDir, blockDagDir) = storageDirectories
@@ -360,6 +365,7 @@ object HashSetCasperTestNode {
                            blockStore,
                            blockDagStorage,
                            metricEff,
+                           spanEff,
                            casperState
                          )
                        } yield node

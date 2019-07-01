@@ -7,7 +7,7 @@ import org.openjdk.jmh.annotations.{Setup, TearDown}
 import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.metrics
-import coop.rchain.metrics.Metrics
+import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.models.Par
 import coop.rchain.rholang.interpreter.accounting.{Cost, CostAccounting}
 import coop.rchain.rholang.interpreter.{ParBuilderUtil, Runtime}
@@ -21,6 +21,7 @@ trait EvalBenchStateBase {
   private val mapSize: Long               = 1024L * 1024L * 1024L
   implicit val logF: Log[Task]            = new Log.NOPLog[Task]
   implicit val noopMetrics: Metrics[Task] = new metrics.Metrics.MetricsNOP[Task]
+  implicit val noopSpan: Span[Task]       = NoopSpan[Task]()
 
   val rhoScriptSource: String
   lazy val runtime: Runtime[Task] =

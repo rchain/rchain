@@ -19,6 +19,7 @@ import monix.eval.Task
 import org.scalatest._
 
 import scala.collection.immutable.HashMap
+import coop.rchain.metrics.NoopSpan
 
 class BlockQueryResponseAPITest
     extends FlatSpec
@@ -260,9 +261,10 @@ class BlockQueryResponseAPITest
                      )(Sync[Task], blockStore, blockDagStorage)
       logEff             = new LogStub[Task]()
       metricsEff         = new Metrics.MetricsNOP[Task]
+      spanEff            = NoopSpan[Task]()
       casperRef          <- MultiParentCasperRef.of[Task]
       _                  <- casperRef.set(casperEffect)
-      cliqueOracleEffect = SafetyOracle.cliqueOracle[Task](Sync[Task], logEff, metricsEff)
+      cliqueOracleEffect = SafetyOracle.cliqueOracle[Task](Sync[Task], logEff, metricsEff, spanEff)
     } yield (logEff, casperRef, cliqueOracleEffect)
 
   private def emptyEffects(
@@ -278,8 +280,9 @@ class BlockQueryResponseAPITest
                      )(Sync[Task], blockStore, blockDagStorage)
       logEff             = new LogStub[Task]()
       metricsEff         = new Metrics.MetricsNOP[Task]
+      spanEff            = NoopSpan[Task]()
       casperRef          <- MultiParentCasperRef.of[Task]
       _                  <- casperRef.set(casperEffect)
-      cliqueOracleEffect = SafetyOracle.cliqueOracle[Task](Sync[Task], logEff, metricsEff)
+      cliqueOracleEffect = SafetyOracle.cliqueOracle[Task](Sync[Task], logEff, metricsEff, spanEff)
     } yield (logEff, casperRef, cliqueOracleEffect)
 }

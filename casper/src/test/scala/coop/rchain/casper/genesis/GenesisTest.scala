@@ -20,7 +20,7 @@ import java.nio.file.Path
 
 import coop.rchain.blockstorage.util.io.IOError
 import coop.rchain.metrics
-import coop.rchain.metrics.{Metrics, NoopSpan}
+import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
 
@@ -28,6 +28,7 @@ class GenesisTest extends FlatSpec with Matchers with EitherValues with BlockDag
   import GenesisTest._
 
   implicit val metricsEff: Metrics[Task] = new metrics.Metrics.MetricsNOP[Task]
+  implicit val noopSpan: Span[Task]      = NoopSpan[Task]()
 
   val validators = Seq(
     "299670c52849f1aa82e8dfe5be872c16b600bf09cc8983e04b903411358f2de6",
@@ -252,6 +253,7 @@ object GenesisTest {
     val gp                                  = genesisPath
     implicit val log                        = new LogStub[Task]
     implicit val noopMetrics: Metrics[Task] = new metrics.Metrics.MetricsNOP[Task]
+    implicit val noopSpan: Span[Task]       = NoopSpan[Task]()
     val time                                = new LogicalTime[Task]
 
     for {
@@ -268,7 +270,7 @@ object GenesisTest {
 
   def withGenResources(
       body: (RuntimeManager[Task], Path, LogStub[Task], LogicalTime[Task]) => Task[Unit]
-  )(implicit metrics: Metrics[Task]): Task[Unit] =
+  )(implicit metrics: Metrics[Task], span: Span[Task]): Task[Unit] =
     withRawGenResources {
       (runtime: Runtime[Task], genesisPath: Path, log: LogStub[Task], time: LogicalTime[Task]) =>
         RuntimeManager.fromRuntime(runtime).flatMap(body(_, genesisPath, log, time))

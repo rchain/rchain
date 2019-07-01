@@ -6,7 +6,7 @@ import cats.effect.ExitCase.Error
 import cats.effect.{Concurrent, ContextShift, Resource}
 import cats.{Applicative, Parallel}
 import com.typesafe.scalalogging.Logger
-import coop.rchain.metrics.Metrics
+import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.models._
 import coop.rchain.rholang.interpreter.Runtime
 import coop.rchain.rholang.interpreter.Runtime.{RhoISpace, SystemProcess}
@@ -35,7 +35,7 @@ object Resources {
         })
     )
 
-  def mkRhoISpace[F[_]: Concurrent: ContextShift: Log: Metrics](
+  def mkRhoISpace[F[_]: Concurrent: ContextShift: Log: Metrics: Span](
       prefix: String = "",
       branch: String = "test",
       mapSize: Long = 1024L * 1024L * 4
@@ -78,7 +78,8 @@ object Resources {
         cs: ContextShift[F],
         c: Concurrent[F],
         l: Log[F],
-        m: Metrics[F]
+        m: Metrics[F],
+        s: Span[F]
     ): Resource[F, Runtime[F]] =
       mkTempDir[F](prefix).flatMap { tmpDir =>
         Resource.make[F, Runtime[F]](
