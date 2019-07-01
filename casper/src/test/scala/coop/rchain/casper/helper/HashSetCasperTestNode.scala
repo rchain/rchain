@@ -9,7 +9,7 @@ import cats.{Applicative, ApplicativeError, Id}
 import coop.rchain.blockstorage._
 import coop.rchain.casper.CasperState.CasperStateCell
 import coop.rchain.casper.MultiParentCasper.ignoreDoppelgangerCheck
-import coop.rchain.casper.MultiParentCasperTestUtil.GenesisContext
+import coop.rchain.casper.MultiParentCasperTestUtil.{defaultValidatorSks, GenesisContext}
 import coop.rchain.casper._
 import coop.rchain.casper.engine.EngineCell._
 import coop.rchain.casper.engine._
@@ -143,13 +143,12 @@ object HashSetCasperTestNode {
 
   def standaloneEff(
       genesis: GenesisContext,
-      sk: PrivateKey,
       storageSize: Long = 1024L * 1024 * 10
   )(
       implicit scheduler: Scheduler
   ): Resource[Effect, HashSetCasperTestNode[Effect]] =
     networkEff(
-      Vector(sk),
+      defaultValidatorSks.take(1),
       genesis,
       storageSize
     ).map(_.head)

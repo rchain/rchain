@@ -42,7 +42,7 @@ class MultiParentCasperAddBlockSpec extends FlatSpec with Matchers with Inspecto
   "MultiParentCasper" should "not allow multiple threads to process the same block" in {
     val scheduler = Scheduler.fixedPool("three-threads", 3)
     val testProgram =
-      HashSetCasperTestNode.standaloneEff(genesis, validatorKeys.head)(scheduler).use { node =>
+      HashSetCasperTestNode.standaloneEff(genesis)(scheduler).use { node =>
         val casper = node.casperEff
         for {
           deploy <- ConstructDeploy.basicDeployData[Effect](0)
@@ -72,7 +72,7 @@ class MultiParentCasperAddBlockSpec extends FlatSpec with Matchers with Inspecto
   }
 
   it should "accept signed blocks" in effectTest {
-    HashSetCasperTestNode.standaloneEff(genesis, validatorKeys.head).use { node =>
+    HashSetCasperTestNode.standaloneEff(genesis).use { node =>
       import node._
       implicit val timeEff = new LogicalTime[Effect]
 
@@ -88,7 +88,7 @@ class MultiParentCasperAddBlockSpec extends FlatSpec with Matchers with Inspecto
   }
 
   it should "be able to create a chain of blocks from different deploys" in effectTest {
-    HashSetCasperTestNode.standaloneEff(genesis, validatorKeys.head).use { node =>
+    HashSetCasperTestNode.standaloneEff(genesis).use { node =>
       implicit val rm = node.runtimeManager
 
       for {
@@ -117,7 +117,7 @@ class MultiParentCasperAddBlockSpec extends FlatSpec with Matchers with Inspecto
   }
 
   it should "allow multiple deploys in a single block" in effectTest {
-    HashSetCasperTestNode.standaloneEff(genesis, validatorKeys.head).use { node =>
+    HashSetCasperTestNode.standaloneEff(genesis).use { node =>
       val source = " for(@x <- @0){ @0!(x) } | @0!(0) "
       for {
         deploys <- List(source, source).traverse(ConstructDeploy.sourceDeployNowF[Effect](_))
@@ -128,7 +128,7 @@ class MultiParentCasperAddBlockSpec extends FlatSpec with Matchers with Inspecto
   }
 
   it should "reject unsigned blocks" in effectTest {
-    HashSetCasperTestNode.standaloneEff(genesis, validatorKeys.head).use { node =>
+    HashSetCasperTestNode.standaloneEff(genesis).use { node =>
       implicit val timeEff = new LogicalTime[Effect]
 
       for {
@@ -168,13 +168,18 @@ class MultiParentCasperAddBlockSpec extends FlatSpec with Matchers with Inspecto
   }
 
   it should "reject blocks not from bonded validators" in effectTest {
-    HashSetCasperTestNode.standaloneEff(genesis, Secp256k1.newKeyPair._1).use { node =>
+    HashSetCasperTestNode.standaloneEff(genesis).use { node =>
       implicit val timeEff = new LogicalTime[Effect]
 
       for {
-        basicDeployData <- ConstructDeploy.basicDeployData[Effect](0)
-        _               <- node.addBlockStatus(InvalidUnslashableBlock)(basicDeployData)
-        _               = node.logEff.warns.head.contains("Ignoring block") should be(true)
+        basicDeployData         <- ConstructDeploy.basicDeployData[Effect](0)
+        block                   <- node.createBlock(basicDeployData)
+        dag                     <- node.blockDagStorage.getRepresentation
+        (sk, pk)                = Secp256k1.newKeyPair
+        illSignedBlock          <- ProtoUtil.signBlock(block, dag, pk, sk, Secp256k1.name, block.shardId)
+        status                  <- node.casperEff.addBlock(illSignedBlock, ignoreDoppelgangerCheck[Effect])
+        InvalidUnslashableBlock = status
+        _                       = node.logEff.warns.head.contains("Ignoring block") should be(true)
       } yield ()
     }
   }

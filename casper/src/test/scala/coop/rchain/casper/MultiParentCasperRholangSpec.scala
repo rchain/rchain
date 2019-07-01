@@ -18,13 +18,12 @@ class MultiParentCasperRholangSpec extends FlatSpec with Matchers with Inspector
 
   implicit val timeEff: LogicalTime[Effect] = new LogicalTime[Effect]
 
-  val validatorKeys = defaultValidatorSks
-  val genesis       = buildGenesis(buildGenesisParameters())
+  val genesis = buildGenesis(buildGenesisParameters())
 
   //put a new casper instance at the start of each
   //test since we cannot reset it
   "MultiParentCasper" should "create blocks based on deploys" in effectTest {
-    HashSetCasperTestNode.standaloneEff(genesis, validatorKeys.head).use { implicit node =>
+    HashSetCasperTestNode.standaloneEff(genesis).use { implicit node =>
       implicit val casper: MultiParentCasperImpl[Effect] = node.casperEff
       implicit val rm: RuntimeManager[Effect]            = node.runtimeManager
 
@@ -48,7 +47,7 @@ class MultiParentCasperRholangSpec extends FlatSpec with Matchers with Inspector
   }
 
   it should "be able to use the registry" in effectTest {
-    HashSetCasperTestNode.standaloneEff(genesis, validatorKeys.head).use { node =>
+    HashSetCasperTestNode.standaloneEff(genesis).use { node =>
       implicit val rm: RuntimeManager[Effect] = node.runtimeManager
 
       val registerSource =
