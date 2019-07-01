@@ -178,8 +178,6 @@ object HashSetCasperTestNode {
   def standaloneF[F[_]](
       genesis: BlockMessage,
       sk: PrivateKey,
-      blockDagDir: Path,
-      blockStoreDir: Path,
       storageSize: Long,
       createRuntime: (Path, Long) => Resource[F, RuntimeManager[F]]
   )(
@@ -194,8 +192,10 @@ object HashSetCasperTestNode {
     val tls                = new TransportLayerServerTestImpl[F](currentPeerNode)
     implicit val log       = Log.log[F]
     implicit val metricEff = new Metrics.MetricsNOP[F]
-    val env                = Context.env(blockStoreDir, mapSize)
     for {
+      storageDirectories           <- BlockDagStorageTestFixture.createDirectories[F]
+      (blockStoreDir, blockDagDir) = storageDirectories
+      env                          = Context.env(blockStoreDir, mapSize)
       blockStore <- Resource.make[F, BlockStore[F]](
                      FileLMDBIndexBlockStore.create[F](env, blockStoreDir).map(_.right.get)
                    )(_.close())
@@ -264,20 +264,15 @@ object HashSetCasperTestNode {
   )(
       implicit scheduler: Scheduler
   ): Resource[Effect, HashSetCasperTestNode[Effect]] =
-    BlockDagStorageTestFixture.createDirectories[Effect].flatMap {
-      case (blockStoreDir, blockDagDir) =>
-        standaloneF[Effect](
-          genesis,
-          sk,
-          blockDagDir,
-          blockStoreDir,
-          storageSize,
-          createRuntime
-        )(
-          Concurrent[Effect],
-          testNetwork
-        )
-    }
+    standaloneF[Effect](
+      genesis,
+      sk,
+      storageSize,
+      createRuntime
+    )(
+      Concurrent[Effect],
+      testNetwork
+    )
 
   def networkF[F[_]](
       sks: IndexedSeq[PrivateKey],
