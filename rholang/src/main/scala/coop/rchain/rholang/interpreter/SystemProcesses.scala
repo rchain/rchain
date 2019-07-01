@@ -161,7 +161,7 @@ object SystemProcesses {
 
         case isContractCall(
             produce,
-            Seq(RhoType.String("fromDeployerId"), RhoType.GDeployerId(publicKey), ack)
+            Seq(RhoType.String("fromDeployerId"), RhoType.DeployerId(publicKey), ack)
             ) =>
           val response =
             RevAddress
@@ -175,7 +175,7 @@ object SystemProcesses {
       def deployerIdOps: Contract[F] = {
         case isContractCall(
             produce,
-            Seq(RhoType.String("pubKeyBytes"), RhoType.GDeployerId(publicKey), ack)
+            Seq(RhoType.String("pubKeyBytes"), RhoType.DeployerId(publicKey), ack)
             ) =>
           produce(Seq(RhoType.ByteArray(publicKey)), ack)
       }
