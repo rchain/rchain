@@ -1,7 +1,7 @@
 package coop.rchain.casper
 
 import coop.rchain.casper.helper.HashSetCasperTestNode
-import coop.rchain.casper.helper.HashSetCasperTestNode.{Effect, _}
+import coop.rchain.casper.helper.HashSetCasperTestNode.Effect
 import coop.rchain.casper.scalatestcontrib._
 import coop.rchain.casper.util.rholang.{RegistrySigGen, RuntimeManager}
 import coop.rchain.casper.util.{ConstructDeploy, ProtoUtil, RSpaceUtil}
@@ -18,10 +18,8 @@ class MultiParentCasperRholangSpec extends FlatSpec with Matchers with Inspector
 
   implicit val timeEff: LogicalTime[Effect] = new LogicalTime[Effect]
 
-  private val (validatorKeys, validatorPks) = (1 to 4).map(_ => Secp256k1.newKeyPair).unzip
-  private val genesis = buildGenesis(
-    buildGenesisParameters(createBonds(validatorPks))
-  )
+  val validatorKeys = defaultValidatorSks
+  val genesis = buildGenesis(buildGenesisParameters())
 
   //put a new casper instance at the start of each
   //test since we cannot reset it

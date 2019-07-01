@@ -1,6 +1,5 @@
 package coop.rchain.casper
 
-import cats.data.EitherT
 import cats.effect.Sync
 import cats.implicits._
 import com.google.protobuf.ByteString
@@ -9,7 +8,6 @@ import coop.rchain.casper.helper.HashSetCasperTestNode._
 import coop.rchain.casper.helper.{BlockUtil, HashSetCasperTestNode}
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.scalatestcontrib._
-import coop.rchain.casper.util.comm.TestNetwork
 import coop.rchain.casper.util.rholang.RegistrySigGen
 import coop.rchain.casper.util.{ConstructDeploy, ProtoUtil, RSpaceUtil}
 import coop.rchain.catscontrib.TaskContrib.TaskOps
@@ -35,10 +33,9 @@ class MultiParentCasperAddBlockSpec extends FlatSpec with Matchers with Inspecto
 
   implicit val timeEff = new LogicalTime[Effect]
 
-  private val (validatorKeys, validatorPks) = (1 to 4).map(_ => Secp256k1.newKeyPair).unzip
-  private val genesis = buildGenesis(
-    buildGenesisParameters(createBonds(validatorPks))
-  )
+  val validatorKeys = defaultValidatorSks
+  val validatorPks = defaultValidatorPks
+  val genesis = buildGenesis(buildGenesisParameters())
 
   //put a new casper instance at the start of each
   //test since we cannot reset it

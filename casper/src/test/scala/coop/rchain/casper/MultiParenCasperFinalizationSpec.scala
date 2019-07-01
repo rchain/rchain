@@ -5,7 +5,6 @@ import coop.rchain.casper.helper.HashSetCasperTestNode
 import coop.rchain.casper.helper.HashSetCasperTestNode._
 import coop.rchain.casper.scalatestcontrib._
 import coop.rchain.casper.util.ConstructDeploy
-import coop.rchain.crypto.signatures.Secp256k1
 import coop.rchain.p2p.EffectsTestInstances.LogicalTime
 import monix.execution.Scheduler.Implicits.global
 import org.scalatest.{FlatSpec, Inspectors, Matchers}
@@ -16,9 +15,9 @@ class MultiParentCasperFinalizationSpec extends FlatSpec with Matchers with Insp
 
   implicit val timeEff = new LogicalTime[Effect]
 
-  private val (validatorKeys, validatorPks) = (1 to 4).map(_ => Secp256k1.newKeyPair).unzip
-  private val genesis = buildGenesis(
-    buildGenesisParameters(validatorPks.map(pk => pk -> 10L).toMap)
+  val validatorKeys = defaultValidatorSks
+  val genesis = buildGenesis(
+    buildGenesisParameters(bondsFunction = _.map(pk => pk -> 10L).toMap)
   )
 
   //put a new casper instance at the start of each

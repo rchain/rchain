@@ -1,17 +1,12 @@
 package coop.rchain.casper
 
 import com.google.protobuf.ByteString
-import cats.implicits._
 import coop.rchain.casper.MultiParentCasper.ignoreDoppelgangerCheck
 import coop.rchain.casper.helper.HashSetCasperTestNode
 import coop.rchain.casper.helper.HashSetCasperTestNode._
 import coop.rchain.casper.scalatestcontrib._
-import coop.rchain.casper.util.{ConstructDeploy, ProtoUtil}
-import coop.rchain.crypto.codec.Base16
-import coop.rchain.crypto.signatures.Secp256k1
-import coop.rchain.models.{Expr, Par}
+import coop.rchain.casper.util.ConstructDeploy
 import coop.rchain.p2p.EffectsTestInstances.LogicalTime
-import coop.rchain.rholang.interpreter.{accounting, DeployParameters}
 import monix.execution.Scheduler.Implicits.global
 import org.scalatest.{FlatSpec, Inspectors, Matchers}
 
@@ -21,10 +16,8 @@ class MultiParentCasperDeploySpec extends FlatSpec with Matchers with Inspectors
 
   implicit val timeEff = new LogicalTime[Effect]
 
-  private val (validatorKeys, validatorPks) = (1 to 4).map(_ => Secp256k1.newKeyPair).unzip
-  private val genesis = buildGenesis(
-    buildGenesisParameters(createBonds(validatorPks))
-  )
+  val validatorKeys = defaultValidatorSks
+  val genesis = buildGenesis(buildGenesisParameters())
 
   "MultiParentCasper" should "accept a deploy and return it's id" in effectTest {
     HashSetCasperTestNode.standaloneEff(genesis, validatorKeys.head).use { node =>

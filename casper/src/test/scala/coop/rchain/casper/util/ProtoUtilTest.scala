@@ -5,14 +5,13 @@ import coop.rchain.casper.MultiParentCasper.ignoreDoppelgangerCheck
 import coop.rchain.casper._
 import coop.rchain.casper.helper.HashSetCasperTestNode
 import coop.rchain.casper.helper.HashSetCasperTestNode._
-import coop.rchain.models.blockImplicits._
-import org.scalatest._
-import org.scalatest.prop.GeneratorDrivenPropertyChecks
 import coop.rchain.casper.scalatestcontrib._
-import coop.rchain.crypto.signatures.Secp256k1
 import coop.rchain.models.BlockHash.BlockHash
+import coop.rchain.models.blockImplicits._
 import coop.rchain.p2p.EffectsTestInstances.LogicalTime
 import monix.execution.Scheduler.Implicits.global
+import org.scalatest._
+import org.scalatest.prop.GeneratorDrivenPropertyChecks
 
 class ProtoUtilTest extends FlatSpec with Matchers with GeneratorDrivenPropertyChecks {
 
@@ -33,10 +32,8 @@ class ProtoUtilTest extends FlatSpec with Matchers with GeneratorDrivenPropertyC
 
   implicit val timeEff = new LogicalTime[Effect]
 
-  private val (validatorKeys, validatorPks) = (1 to 4).map(_ => Secp256k1.newKeyPair).unzip
-  private val genesis = buildGenesis(
-    buildGenesisParameters(createBonds(validatorPks))
-  )
+  val validatorKeys = defaultValidatorSks
+  val genesis = buildGenesis(buildGenesisParameters())
 
   "unseenBlockHashes" should "return empty for a single block dag" in effectTest {
     HashSetCasperTestNode.standaloneEff(genesis, validatorKeys.head).use { node =>

@@ -20,7 +20,6 @@ import coop.rchain.metrics.Metrics
 import coop.rchain.models.Par
 import coop.rchain.rholang.interpreter.Runtime
 import coop.rchain.rholang.interpreter.util.RevAddress
-import coop.rchain.shared.PathOps.RichPath
 import coop.rchain.shared.Log
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
@@ -58,6 +57,13 @@ object MultiParentCasperTestUtil {
         shardId = "HashSetCasperTest"
       )
     )
+
+  val (defaultValidatorSks, defaultValidatorPks) = (1 to 4).map(_ => Secp256k1.newKeyPair).unzip
+
+  def buildGenesisParameters(
+      bondsFunction: Iterable[PublicKey] => Map[PublicKey, Long] = createBonds
+  ): Genesis =
+    buildGenesisParameters(bondsFunction(defaultValidatorPks))
 
   def buildGenesisParameters(bonds: Map[PublicKey, Long]) =
     Genesis(
