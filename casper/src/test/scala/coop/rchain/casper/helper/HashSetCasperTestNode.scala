@@ -188,6 +188,103 @@ object HashSetCasperTestNode {
     val currentPeerNode             = peerNode(name, 40400)
     val logicalTime: LogicalTime[F] = new LogicalTime[F]
 
+    createNode(name, currentPeerNode, genesis, sk, storageSize, logicalTime, createRuntime)
+  }
+
+  def standaloneEff(
+      genesis: BlockMessage,
+      sk: PrivateKey,
+      storageSize: Long = 1024L * 1024 * 10,
+      testNetwork: TestNetwork[Effect] = TestNetwork.empty
+  )(
+      implicit scheduler: Scheduler
+  ): Resource[Effect, HashSetCasperTestNode[Effect]] =
+    standaloneF[Effect](
+      genesis,
+      sk,
+      storageSize,
+      createRuntime
+    )(
+      Concurrent[Effect],
+      testNetwork
+    )
+
+  def networkF[F[_]](
+      sks: IndexedSeq[PrivateKey],
+      genesis: BlockMessage,
+      storageSize: Long,
+      createRuntime: (Path, Long) => Resource[F, RuntimeManager[F]]
+  )(
+      implicit concurrentF: Concurrent[F],
+      testNetworkF: TestNetwork[F]
+  ): Resource[F, IndexedSeq[HashSetCasperTestNode[F]]] = {
+    val n     = sks.length
+    val names = (1 to n).map(i => s"node-$i")
+    val peers = names.map(peerNode(_, 40400))
+
+    val logicalTime: LogicalTime[F] = new LogicalTime[F]
+
+    val nodesF =
+      names
+        .zip(peers)
+        .zip(sks)
+        .toList
+        .traverse {
+          case ((name, currentPeerNode), sk) =>
+            createNode(name, currentPeerNode, genesis, sk, storageSize, logicalTime, createRuntime)
+        }
+        .map(_.toVector)
+
+    nodesF.flatMap { nodes =>
+      import Connections._
+      //make sure all nodes know about each other
+      Resource.liftF(
+        for {
+          _ <- ().pure[F]
+          pairs = for {
+            n <- nodes
+            m <- nodes
+            if n.local != m.local
+          } yield (n, m)
+          _ <- pairs.foldLeft(().pure[F]) {
+                case (f, (n, m)) =>
+                  f.flatMap(
+                    _ =>
+                      n.connectionsCell.flatModify(
+                        _.addConn[F](m.local)
+                      )
+                  )
+              }
+        } yield nodes
+      )
+    }
+  }
+
+  def networkEff(
+      sks: IndexedSeq[PrivateKey],
+      genesis: BlockMessage,
+      storageSize: Long = 1024L * 1024 * 10,
+      testNetwork: TestNetwork[Effect] = TestNetwork.empty
+  )(implicit scheduler: Scheduler): Resource[Effect, IndexedSeq[HashSetCasperTestNode[Effect]]] =
+    networkF[Effect](
+      sks,
+      genesis,
+      storageSize,
+      createRuntime
+    )(
+      Concurrent[Effect],
+      testNetwork
+    )
+
+  private def createNode[F[_]: Concurrent: TestNetwork](
+      name: String,
+      currentPeerNode: PeerNode,
+      genesis: BlockMessage,
+      sk: PrivateKey,
+      storageSize: Long,
+      logicalTime: LogicalTime[F],
+      createRuntime: (Path, Long) => Resource[F, RuntimeManager[F]]
+  ): Resource[F, HashSetCasperTestNode[F]] = {
     val tle                = new TransportLayerTestImpl[F]()
     val tls                = new TransportLayerServerTestImpl[F](currentPeerNode)
     implicit val log       = Log.log[F]
@@ -244,7 +341,7 @@ object HashSetCasperTestNode {
                    "rchain",
                    runtimeManager
                  )(
-                   concurrentF,
+                   Concurrent[F],
                    blockStore,
                    blockDagStorage,
                    metricEff,
@@ -255,157 +352,6 @@ object HashSetCasperTestNode {
              }(_ => ().pure[F])
     } yield node
   }
-
-  def standaloneEff(
-      genesis: BlockMessage,
-      sk: PrivateKey,
-      storageSize: Long = 1024L * 1024 * 10,
-      testNetwork: TestNetwork[Effect] = TestNetwork.empty
-  )(
-      implicit scheduler: Scheduler
-  ): Resource[Effect, HashSetCasperTestNode[Effect]] =
-    standaloneF[Effect](
-      genesis,
-      sk,
-      storageSize,
-      createRuntime
-    )(
-      Concurrent[Effect],
-      testNetwork
-    )
-
-  def networkF[F[_]](
-      sks: IndexedSeq[PrivateKey],
-      genesis: BlockMessage,
-      storageSize: Long,
-      createRuntime: (Path, Long) => Resource[F, RuntimeManager[F]]
-  )(
-      implicit concurrentF: Concurrent[F],
-      testNetworkF: TestNetwork[F]
-  ): Resource[F, IndexedSeq[HashSetCasperTestNode[F]]] = {
-    val n     = sks.length
-    val names = (1 to n).map(i => s"node-$i")
-    val peers = names.map(peerNode(_, 40400))
-
-    val logicalTime: LogicalTime[F] = new LogicalTime[F]
-
-    val nodesF =
-      names
-        .zip(peers)
-        .zip(sks)
-        .toList
-        .traverse {
-          case ((name, currentPeerNode), sk) =>
-            val tle                = new TransportLayerTestImpl[F]()
-            val tls                = new TransportLayerServerTestImpl[F](currentPeerNode)
-            implicit val log       = Log.log[F]
-            implicit val metricEff = new Metrics.MetricsNOP[F]
-            for {
-              storageDirectories           <- BlockDagStorageTestFixture.createDirectories[F]
-              (blockStoreDir, blockDagDir) = storageDirectories
-              env                          = Context.env(blockStoreDir, mapSize)
-              blockStore <- Resource.make[F, BlockStore[F]](
-                             FileLMDBIndexBlockStore.create[F](env, blockStoreDir).map(_.right.get)
-                           )(_.close())
-              blockDagStorage <- Resource.make[F, BlockDagStorage[F]](
-                                  BlockDagFileStorage
-                                    .createEmptyFromGenesis[F](
-                                      BlockDagFileStorage.Config(
-                                        blockDagDir.resolve("latest-messages-data"),
-                                        blockDagDir.resolve("latest-messages-crc"),
-                                        blockDagDir.resolve("block-metadata-data"),
-                                        blockDagDir.resolve("block-metadata-crc"),
-                                        blockDagDir.resolve("equivocations-tracker-data"),
-                                        blockDagDir.resolve("equivocations-tracker-crc"),
-                                        blockDagDir.resolve("invalid-blocks-data"),
-                                        blockDagDir.resolve("invalid-blocks-crc"),
-                                        blockDagDir.resolve("checkpoints"),
-                                        blockDagDir.resolve("block-number-index"),
-                                        mapSize
-                                      ),
-                                      genesis
-                                    )(Concurrent[F], Sync[F], Log[F])
-                                    .widen
-                                )(_.close())
-              storageDirectory <- Resource.make[F, Path](
-                                   Sync[F].delay {
-                                     Files.createTempDirectory(s"hash-set-casper-test-$name")
-                                   }
-                                 )(dir => Sync[F].delay { dir.recursivelyDelete() })
-              runtimeManager <- createRuntime(storageDirectory, storageSize)
-              node <- Resource.make[F, HashSetCasperTestNode[F]] {
-                       for {
-                         _                   <- TestNetwork.addPeer(currentPeerNode)
-                         blockProcessingLock <- Semaphore[F](1)
-                         casperState <- Cell.mvarCell[F, CasperState](
-                                         CasperState()
-                                       )
-                         node = new HashSetCasperTestNode[F](
-                           name,
-                           currentPeerNode,
-                           tle,
-                           tls,
-                           genesis,
-                           sk,
-                           logicalTime,
-                           blockDagDir,
-                           blockStoreDir,
-                           blockProcessingLock,
-                           "rchain",
-                           runtimeManager
-                         )(
-                           concurrentF,
-                           blockStore,
-                           blockDagStorage,
-                           metricEff,
-                           casperState
-                         )
-                         result <- node.initialize().map(_ => node)
-                       } yield result
-                     }(_ => ().pure[F])
-            } yield node
-        }
-        .map(_.toVector)
-
-    nodesF.flatMap { nodes =>
-      import Connections._
-      //make sure all nodes know about each other
-      Resource.liftF(
-        for {
-          _ <- ().pure[F]
-          pairs = for {
-            n <- nodes
-            m <- nodes
-            if n.local != m.local
-          } yield (n, m)
-          _ <- pairs.foldLeft(().pure[F]) {
-                case (f, (n, m)) =>
-                  f.flatMap(
-                    _ =>
-                      n.connectionsCell.flatModify(
-                        _.addConn[F](m.local)
-                      )
-                  )
-              }
-        } yield nodes
-      )
-    }
-  }
-  def networkEff(
-      sks: IndexedSeq[PrivateKey],
-      genesis: BlockMessage,
-      storageSize: Long = 1024L * 1024 * 10,
-      testNetwork: TestNetwork[Effect] = TestNetwork.empty
-  )(implicit scheduler: Scheduler): Resource[Effect, IndexedSeq[HashSetCasperTestNode[Effect]]] =
-    networkF[Effect](
-      sks,
-      genesis,
-      storageSize,
-      createRuntime
-    )(
-      Concurrent[Effect],
-      testNetwork
-    )
 
   val appErrId = new ApplicativeError[Id, CommError] {
     def ap[A, B](ff: Id[A => B])(fa: Id[A]): Id[B] = Applicative[Id].ap[A, B](ff)(fa)
