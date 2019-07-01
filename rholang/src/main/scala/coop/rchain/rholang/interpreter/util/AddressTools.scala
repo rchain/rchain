@@ -1,5 +1,7 @@
 package coop.rchain.rholang.interpreter.util
 
+import java.util.Arrays
+
 import coop.rchain.crypto.PublicKey
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.hash.{Blake2b256, Keccak256}
@@ -12,6 +14,23 @@ final case class Address(prefix: Array[Byte], keyHash: Array[Byte], checksum: Ar
     val address = payload ++ checksum
     Base58.encode(address)
   }
+
+  override def equals(o: Any): Boolean = o match {
+    case other @ Address(_, _, _) =>
+      prefix.sameElements(other.prefix) &&
+        keyHash.sameElements(other.keyHash) &&
+        checksum.sameElements(other.checksum)
+    case _ => false
+  }
+
+  override def hashCode(): Int =
+    Arrays.hashCode(
+      Array(
+        Arrays.hashCode(prefix),
+        Arrays.hashCode(keyHash),
+        Arrays.hashCode(checksum)
+      )
+    )
 }
 
 class AddressTools(prefix: Array[Byte], keyLength: Int, checksumLength: Int) {

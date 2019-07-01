@@ -82,11 +82,7 @@ object MultiParentCasperTestUtil {
     implicit val log: Log.NOPLog[Task]               = new Log.NOPLog[Task]
     implicit val metricsEff: Metrics[Task]           = new metrics.Metrics.MetricsNOP[Task]
     (for {
-      activeRuntime <- Runtime
-                        .createWithEmptyCost[Task, Task.Par](
-                          storageDirectory,
-                          storageSize
-                        )
+      activeRuntime  <- Runtime.createWithEmptyCost[Task, Task.Par](storageDirectory, storageSize)
       runtimeManager <- RuntimeManager.fromRuntime[Task](activeRuntime)
       genesis <- Genesis.createGenesisBlock(
                   runtimeManager,
