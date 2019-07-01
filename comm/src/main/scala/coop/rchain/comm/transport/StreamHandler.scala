@@ -174,13 +174,7 @@ object StreamHandler {
           case Right(decompressedContent) =>
             Right(ProtocolHelper.blob(msg.sender, msg.typeId, decompressedContent)).pure[Task]
         }
-    }) >>= (
-        res =>
-          deleteFile(msg.path).flatMap {
-            case Left(ex) => logger.error(s"Was unable to delete file ${msg.sender}", ex).as(res)
-            case Right(_) => res.pure[Task]
-          }
-      )
+    }) >>= (res => msg.path.deleteSingleFile[Task].as(res))
 
   private def fetchContent(path: Path): Task[Array[Byte]] = Task.delay(Files.readAllBytes(path))
   private def decompressContent(
@@ -195,7 +189,4 @@ object StreamHandler {
           _.pure[Task]
         )
     } else raw.pure[Task]
-
-  private def deleteFile(path: Path): Task[Either[Throwable, Unit]] =
-    Task.delay(path.toFile.delete).as(()).attempt
 }
