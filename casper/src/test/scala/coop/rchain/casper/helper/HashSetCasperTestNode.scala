@@ -175,32 +175,29 @@ object HashSetCasperTestNode {
     } yield nodes ++ (n :: Nil)
   }
 
-  def standaloneF[F[_]](
-      genesis: BlockMessage,
-      sk: PrivateKey,
-      storageSize: Long,
-      createRuntime: (Path, Long) => Resource[F, RuntimeManager[F]]
-  )(
-      implicit concurrentF: Concurrent[F],
-      testNetworkF: TestNetwork[F]
-  ): Resource[F, HashSetCasperTestNode[F]] = {
-    val name                        = "standalone"
-    val currentPeerNode             = peerNode(name, 40400)
-    val logicalTime: LogicalTime[F] = new LogicalTime[F]
-
-    createNode(name, currentPeerNode, genesis, sk, storageSize, logicalTime, createRuntime)
-  }
-
   def standaloneEff(
       genesis: BlockMessage,
       sk: PrivateKey,
-      storageSize: Long = 1024L * 1024 * 10,
+      storageSize: Long = 1024L * 1024 * 10
   )(
       implicit scheduler: Scheduler
   ): Resource[Effect, HashSetCasperTestNode[Effect]] =
-    standaloneF[Effect](
+    networkEff(
+      Vector(sk),
       genesis,
-      sk,
+      storageSize
+    ).map(_.head)
+
+  def networkEff(
+      sks: IndexedSeq[PrivateKey],
+      genesis: BlockMessage,
+      storageSize: Long = 1024L * 1024 * 10
+  )(
+      implicit scheduler: Scheduler
+  ): Resource[Effect, IndexedSeq[HashSetCasperTestNode[Effect]]] =
+    networkF[Effect](
+      sks,
+      genesis,
       storageSize,
       createRuntime
     )(
@@ -208,7 +205,7 @@ object HashSetCasperTestNode {
       TestNetwork.empty[Effect]
     )
 
-  def networkF[F[_]](
+  private def networkF[F[_]](
       sks: IndexedSeq[PrivateKey],
       genesis: BlockMessage,
       storageSize: Long,
@@ -258,21 +255,6 @@ object HashSetCasperTestNode {
       )
     }
   }
-
-  def networkEff(
-      sks: IndexedSeq[PrivateKey],
-      genesis: BlockMessage,
-      storageSize: Long = 1024L * 1024 * 10
-  )(implicit scheduler: Scheduler): Resource[Effect, IndexedSeq[HashSetCasperTestNode[Effect]]] =
-    networkF[Effect](
-      sks,
-      genesis,
-      storageSize,
-      createRuntime
-    )(
-      Concurrent[Effect],
-      TestNetwork.empty[Effect]
-    )
 
   private def createNode[F[_]: Concurrent: TestNetwork](
       name: String,
