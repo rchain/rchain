@@ -435,7 +435,6 @@ class MultiParentCasperAddBlockSpec extends FlatSpec with Matchers with Inspecto
         node.casperEff.addBlock(signed, ignoreDoppelgangerCheck[Effect])
       )
 
-    val network = TestNetwork.empty[Effect]
     HashSetCasperTestNode
       .networkEff(
         validatorKeys.take(3),
@@ -450,8 +449,7 @@ class MultiParentCasperAddBlockSpec extends FlatSpec with Matchers with Inspecto
               validatorPks(4) -> 4L
             )
           )
-        ),
-        testNetwork = network
+        )
       )
       .map(_.toList)
       .use { nodes =>

@@ -128,10 +128,8 @@ object HashSetCasperSpecification extends Commands {
       validators.zip(weights).toMap
     })
 
-    val network = TestNetwork.empty[Effect]
-
     val nodesResource = HashSetCasperTestNode
-      .networkEff(validatorKeys.take(state.size), genesis, testNetwork = network)
+      .networkEff(validatorKeys.take(state.size), genesis)
       .map(_.toList)
 
     print(":")

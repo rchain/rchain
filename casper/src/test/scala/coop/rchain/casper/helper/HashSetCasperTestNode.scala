@@ -195,7 +195,6 @@ object HashSetCasperTestNode {
       genesis: BlockMessage,
       sk: PrivateKey,
       storageSize: Long = 1024L * 1024 * 10,
-      testNetwork: TestNetwork[Effect] = TestNetwork.empty
   )(
       implicit scheduler: Scheduler
   ): Resource[Effect, HashSetCasperTestNode[Effect]] =
@@ -206,7 +205,7 @@ object HashSetCasperTestNode {
       createRuntime
     )(
       Concurrent[Effect],
-      testNetwork
+      TestNetwork.empty[Effect]
     )
 
   def networkF[F[_]](
@@ -263,8 +262,7 @@ object HashSetCasperTestNode {
   def networkEff(
       sks: IndexedSeq[PrivateKey],
       genesis: BlockMessage,
-      storageSize: Long = 1024L * 1024 * 10,
-      testNetwork: TestNetwork[Effect] = TestNetwork.empty
+      storageSize: Long = 1024L * 1024 * 10
   )(implicit scheduler: Scheduler): Resource[Effect, IndexedSeq[HashSetCasperTestNode[Effect]]] =
     networkF[Effect](
       sks,
@@ -273,7 +271,7 @@ object HashSetCasperTestNode {
       createRuntime
     )(
       Concurrent[Effect],
-      testNetwork
+      TestNetwork.empty[Effect]
     )
 
   private def createNode[F[_]: Concurrent: TestNetwork](
