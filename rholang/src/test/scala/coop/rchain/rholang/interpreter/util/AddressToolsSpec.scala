@@ -1,9 +1,10 @@
 package coop.rchain.rholang.interpreter.util
-import coop.rchain.crypto.hash.Blake2b256
+import coop.rchain.crypto.hash.{Blake2b256, Keccak256}
 import org.scalacheck._
 import org.scalatest.prop.GeneratorDrivenPropertyChecks
 import org.scalatest.{Matchers, PropSpec}
 import coop.rchain.crypto.PublicKey
+import coop.rchain.crypto.codec.Base16
 import coop.rchain.rholang.interpreter.util.codec.Base58
 
 class AddressToolsSpec extends PropSpec with GeneratorDrivenPropertyChecks with Matchers {
@@ -31,8 +32,11 @@ class AddressToolsSpec extends PropSpec with GeneratorDrivenPropertyChecks with 
 
         val parsedAddress = tools.parse(address).right.get
 
+        val ethAddress = Base16.encode(Keccak256.hash(pk.bytes.drop(1))).takeRight(40)
+        val keyHash    = Keccak256.hash(Base16.unsafeDecode(ethAddress))
+
         parsedAddress.prefix should be(prefix.deep)
-        parsedAddress.keyHash should be(Blake2b256.hash(pk.bytes))
+        parsedAddress.keyHash should be(keyHash)
     }
   }
 
