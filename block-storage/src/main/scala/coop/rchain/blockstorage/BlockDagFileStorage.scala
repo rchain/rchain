@@ -437,16 +437,18 @@ final class BlockDagFileStorage[F[_]: Concurrent: Sync: Log: RaiseIOError] priva
     } yield ()
 
   private def updateInvalidBlocksFile(newBlockMetadata: BlockMetadata): F[Unit] =
-    for {
-      invalidBlocksCrc             <- getInvalidBlocksCrc
-      invalidBlocksLogOutputStream <- getInvalidBlocksLogOutputStream
-      blockBytes                   = newBlockMetadata.toByteString
-      toAppend                     = blockBytes.size.toByteString.concat(blockBytes).toByteArray
-      _                            <- invalidBlocksLogOutputStream.write(toAppend)
-      _                            <- invalidBlocksLogOutputStream.flush
-      _                            <- invalidBlocksCrc.update(toAppend)
-      _                            <- updateCrcFile(invalidBlocksCrc, invalidBlocksCrcPath)
-    } yield ()
+    if (newBlockMetadata.invalid)
+      for {
+        invalidBlocksCrc             <- getInvalidBlocksCrc
+        invalidBlocksLogOutputStream <- getInvalidBlocksLogOutputStream
+        blockBytes                   = newBlockMetadata.toByteString
+        toAppend                     = blockBytes.size.toByteString.concat(blockBytes).toByteArray
+        _                            <- invalidBlocksLogOutputStream.write(toAppend)
+        _                            <- invalidBlocksLogOutputStream.flush
+        _                            <- invalidBlocksCrc.update(toAppend)
+        _                            <- updateCrcFile(invalidBlocksCrc, invalidBlocksCrcPath)
+      } yield ()
+    else ().pure[F]
 
   private def representation: F[BlockDagRepresentation[F]] =
     for {
@@ -1204,7 +1206,7 @@ object BlockDagFileStorage {
       _                      <- writeToFile[F](config.latestMessagesLogPath, latestMessagesData)
       _                      <- writeToFile[F](config.latestMessagesCrcPath, latestMessagesCrcBytes)
       blockMetadataCrc       = Crc32.empty[F]()
-      genesisByteString      = genesis.toByteString
+      genesisByteString      = BlockMetadata.fromBlock(genesis, invalid = false).toByteString
       genesisData            = genesisByteString.size.toByteString.concat(genesisByteString).toByteArray
       _                      <- blockMetadataCrc.update(genesisData)
       blockMetadataCrcBytes  <- blockMetadataCrc.bytes
