@@ -21,7 +21,7 @@ import coop.rchain.rholang.interpreter.errors.SetupError
 import coop.rchain.rholang.interpreter.storage.implicits._
 import coop.rchain.rspace._
 import coop.rchain.rspace.history.Branch
-import coop.rchain.rspace.nextgenrspace.{RSpace => NextRSpace}
+import coop.rchain.rspace.RSpace
 import coop.rchain.rspace.pure.PureRSpace
 import coop.rchain.shared.Log
 
@@ -34,7 +34,6 @@ class Runtime[F[_]: Sync] private (
     val replaySpace: RhoReplayISpace[F],
     val errorLog: ErrorLog[F],
     val cost: _cost[F],
-    val context: RhoContext[F],
     val deployParametersRef: Ref[F, DeployParameters],
     val blockData: Ref[F, BlockData],
     val invalidBlocks: Runtime.InvalidBlocks[F]
@@ -44,7 +43,7 @@ class Runtime[F[_]: Sync] private (
     for {
       _ <- space.close()
       _ <- replaySpace.close()
-    } yield (context.close())
+    } yield ()
 }
 
 object Runtime {
@@ -52,9 +51,6 @@ object Runtime {
   type RhoISpace[F[_]]       = TCPARK[F, ISpace]
   type RhoPureSpace[F[_]]    = TCPARK[F, PureRSpace]
   type RhoReplayISpace[F[_]] = TCPARK[F, IReplaySpace]
-
-  type RhoIStore[F[_]]  = CPAK[F, IStore]
-  type RhoContext[F[_]] = CPAK[F, Context]
 
   type RhoDispatch[F[_]]    = Dispatch[F, ListParWithRandom, TaggedContinuation]
   type RhoSysFunction[F[_]] = (Seq[ListParWithRandom], Int) => F[Unit]
@@ -357,10 +353,10 @@ object Runtime {
     }
 
     for {
-      setup                         <- setupRSpace[F](dataDir, mapSize)
-      deployParametersRef           <- Ref.of(DeployParameters.empty)
-      blockDataRef                  <- Ref.of(BlockData.empty)
-      (context, space, replaySpace) = setup
+      setup                <- setupRSpace[F](dataDir, mapSize)
+      deployParametersRef  <- Ref.of(DeployParameters.empty)
+      blockDataRef         <- Ref.of(BlockData.empty)
+      (space, replaySpace) = setup
       (reducer, replayReducer) = {
         lazy val replayDispatchTable: RhoDispatchMap[F] =
           dispatchTableCreator(
@@ -403,7 +399,6 @@ object Runtime {
         replaySpace,
         errorLog,
         cost,
-        context,
         deployParametersRef,
         blockDataRef,
         invalidBlocks
@@ -452,23 +447,7 @@ object Runtime {
   def setupRSpace[F[_]: Concurrent: ContextShift: Log: Metrics](
       dataDir: Path,
       mapSize: Long
-  )(implicit scheduler: ExecutionContext): F[(RhoContext[F], RhoISpace[F], RhoReplayISpace[F])] = {
-    def createNextSpace(
-        dataDir: Path,
-        mapSize: Long
-    ): F[(RhoContext[F], RhoISpace[F], RhoReplayISpace[F])] =
-      for {
-        withReplay <- NextRSpace.createWithReplay[
-                       F,
-                       Par,
-                       BindPattern,
-                       ListParWithRandom,
-                       ListParWithRandom,
-                       TaggedContinuation
-                     ](dataDir, mapSize)
-        (space, replay) = withReplay
-      } yield (new NoopContext(), space, replay)
-
+  )(implicit scheduler: ExecutionContext): F[(RhoISpace[F], RhoReplayISpace[F])] = {
     def checkCreateDataDir: F[Unit] =
       for {
         notexists <- Sync[F].delay(Files.notExists(dataDir))
@@ -476,6 +455,13 @@ object Runtime {
             else ().pure[F]
       } yield ()
 
-    checkCreateDataDir >> createNextSpace(dataDir, mapSize)
+    checkCreateDataDir >> RSpace.createWithReplay[
+      F,
+      Par,
+      BindPattern,
+      ListParWithRandom,
+      ListParWithRandom,
+      TaggedContinuation
+    ](dataDir, mapSize)
   }
 }

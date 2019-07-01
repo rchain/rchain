@@ -1,19 +1,24 @@
 package coop.rchain.rspace
 
-import java.nio.file.{Files, Path}
+import java.nio.file.{Files, Path, Paths}
 
 import cats._
 import cats.implicits._
 import cats.effect._
 import com.typesafe.scalalogging.Logger
-import com.google.common.collect.HashMultiset
 import coop.rchain.metrics.Metrics
-
-import scala.collection.JavaConverters._
+import coop.rchain.rspace._
+import coop.rchain.rspace.examples.StringExamples
 import coop.rchain.rspace.examples.StringExamples._
 import coop.rchain.rspace.examples.StringExamples.implicits._
 import coop.rchain.rspace.history._
-import coop.rchain.rspace.internal._
+import coop.rchain.rspace.history.{
+  HistoryRepository,
+  HistoryRepositoryInstances,
+  LMDBRSpaceStorageConfig,
+  StoreConfig
+}
+import coop.rchain.shared.Cell
 import coop.rchain.shared.PathOps._
 import coop.rchain.shared.Log
 import org.scalatest._
@@ -22,22 +27,21 @@ import scala.concurrent.ExecutionContext
 import scodec.Codec
 
 import scala.concurrent.ExecutionContext.Implicits.global
+import monix.eval.Task
+import monix.execution.atomic.AtomicAny
+import org.lmdbjava.EnvFlags
 
 trait StorageTestsBase[F[_], C, P, A, K] extends FlatSpec with Matchers with OptionValues {
-  type T  = ISpace[F, C, P, A, A, K]
-  type ST = IStore[F, C, P, A, K]
+  type T    = ISpace[F, C, P, A, A, K]
+  type ST   = HotStore[F, C, P, A, K]
+  type HR   = HistoryRepository[F, C, P, A, K]
+  type AtST = AtomicAny[ST]
 
   implicit def concurrentF: Concurrent[F]
   implicit def logF: Log[F]
   implicit def metricsF: Metrics[F]
   implicit def monadF: Monad[F]
   implicit def contextShiftF: ContextShift[F]
-
-  case class State(
-      checkpoint: Blake2b256Hash,
-      contents: Map[Seq[C], Row[P, A, K]],
-      joins: Map[Blake2b256Hash, Seq[Seq[C]]]
-  )
 
   val logger: Logger = Logger(this.getClass.getName.stripSuffix("$"))
 
@@ -48,227 +52,100 @@ trait StorageTestsBase[F[_], C, P, A, K] extends FlatSpec with Matchers with Opt
 
   /** A fixture for creating and running a test with a fresh instance of the test store.
     */
-  def withTestSpace[R](f: (ST, T) => F[R]): R
-  def withTestSpaceNonF[R](f: (ST, T) => R): R =
-    withTestSpace((st: ST, t: T) => concurrentF.delay(f(st, t)))
+  def fixture[R](f: (ST, AtST, T) => F[R]): R
+
+  def fixtureNonF[R](f: (ST, AtST, T) => R): R =
+    fixture((st: ST, ast: AtST, t: T) => concurrentF.delay(f(st, ast, t)))
+
   def run[S](f: F[S]): S
 
-  def validateIndexedStates(
-      store: ST,
-      space: T,
-      indexedStates: Seq[(State, Int)],
-      reportName: String,
-      differenceReport: Boolean = false
-  ): F[Boolean] = {
-    final case class SetRow(data: Set[Datum[A]], wks: Set[WaitingContinuation[P, K]])
+  protected def setupTestingSpace[S, STORE](
+      createISpace: (HR, ST, Branch) => F[(ST, AtST, T)],
+      f: (ST, AtST, T) => F[S]
+  )(implicit codecC: Codec[C], codecP: Codec[P], codecA: Codec[A], codecK: Codec[K]): S = {
+    val branch = Branch("inmem")
 
-    def convertMap(m: Map[Seq[C], Row[P, A, K]]): Map[Seq[C], SetRow] =
-      m.map { case (channels, row) => channels -> SetRow(row.data.toSet, row.wks.toSet) }
+    val dbDir: Path   = Files.createTempDirectory("rchain-storage-test-")
+    val mapSize: Long = 1024L * 1024L * 1024L
 
-    val tests: F[List[Boolean]] = indexedStates.toList
-      .traverse {
-        case (State(checkpoint, rawExpectedContents, expectedJoins), chunkNo) =>
-          for {
-            _        <- space.reset(checkpoint)
-            spaceMap <- space.toMap
-          } yield {
-            val num = "%02d".format(chunkNo)
+    def storeConfig(name: String): StoreConfig =
+      StoreConfig(
+        Files.createDirectories(dbDir.resolve(name)),
+        mapSize,
+        2,
+        2048,
+        List(EnvFlags.MDB_NOTLS)
+      )
 
-            val expectedContents = convertMap(rawExpectedContents)
-            val actualContents   = convertMap(spaceMap)
+    val config = LMDBRSpaceStorageConfig(
+      storeConfig("cold"),
+      storeConfig("history"),
+      storeConfig("roots")
+    )
 
-            val contentsTest = expectedContents == actualContents
-
-            val actualJoins = store.joinMap
-
-            val joinsTest =
-              expectedJoins.forall {
-                case (hash: Blake2b256Hash, expecteds: Seq[Seq[C]]) =>
-                  val expected = HashMultiset.create[Seq[C]](expecteds.asJava)
-                  val actual   = HashMultiset.create[Seq[C]](actualJoins(hash).asJava)
-                  expected.equals(actual)
-              }
-
-            val result = contentsTest && joinsTest
-            if (!result) {
-              if (!contentsTest) {
-                logger.error(s"$num: store had unexpected contents ($reportName)")
-              }
-
-              if (!joinsTest) {
-                logger.error(s"$num: store had unexpected joins ($reportName)")
-              }
-
-              if (differenceReport) {
-                logger.error(s"difference report ($reportName)")
-                for ((expectedChannels, expectedRow) <- expectedContents) {
-                  val actualRow = actualContents.get(expectedChannels)
-
-                  actualRow match {
-                    case Some(row) =>
-                      if (row != expectedRow) {
-                        logger.error(
-                          s"key [$expectedChannels] invalid actual value: $row !== $expectedRow"
-                        )
-                      }
-                    case None =>
-                      logger.error(s"key [$expectedChannels] not found in actual records")
-                  }
-                }
-
-                for ((actualChannels, actualRow) <- actualContents) {
-                  val expectedRow = expectedContents.get(actualChannels)
-
-                  expectedRow match {
-                    case Some(row) =>
-                      if (row != actualRow) {
-                        logger.error(
-                          s"key[$actualChannels] invalid actual value: $actualRow !== $row"
-                        )
-                      }
-                    case None =>
-                      logger.error(s"key [$actualChannels] not found in expected records")
-                  }
-                }
-              }
-            }
-            result
-          }
-      }
-    tests.map(!_.contains(false))
+    run(for {
+      historyRepository    <- HistoryRepositoryInstances.lmdbRepository[F, C, P, A, K](config)
+      cache                <- Cell.refCell[F, Cache[C, P, A, K]](Cache[C, P, A, K]())
+      testStore            = HotStore.inMem[F, C, P, A, K](Sync[F], cache, historyRepository, codecK)
+      spaceAndStore        <- createISpace(historyRepository, testStore, branch)
+      (store, atom, space) = spaceAndStore
+      res                  <- f(store, atom, space)
+      _                    <- Sync[F].delay(dbDir.recursivelyDelete())
+    } yield {
+      res
+    })
   }
 }
 
-abstract class InMemoryStoreTestsBase[F[_]]
+import cats._
+import cats.effect._
+import coop.rchain.metrics.Metrics
+import coop.rchain.shared.Log
+
+trait TaskTests[C, P, A, R, K] extends StorageTestsBase[Task, C, P, R, K] {
+  import coop.rchain.catscontrib.TaskContrib._
+  import scala.concurrent.ExecutionContext
+
+  implicit override val concurrentF: Concurrent[Task] =
+    new monix.eval.instances.CatsConcurrentEffectForTask()(
+      monix.execution.Scheduler.Implicits.global,
+      Task.defaultOptions
+    )
+  implicit val logF: Log[Task]         = Log.log[Task]
+  implicit val metricsF: Metrics[Task] = new Metrics.MetricsNOP[Task]()
+
+  implicit override val monadF: Monad[Task] = concurrentF
+  implicit override val contextShiftF: ContextShift[Task] = new ContextShift[Task] {
+    override def shift: Task[Unit] =
+      Task.shift
+    override def evalOn[B](ec: ExecutionContext)(fa: Task[B]): Task[B] =
+      Task.shift(ec).bracket(_ => fa)(_ => Task.shift)
+  }
+
+  override def run[RES](f: Task[RES]): RES =
+    f.unsafeRunSync(monix.execution.Scheduler.Implicits.global)
+}
+
+abstract class InMemoryHotStoreTestsBase[F[_]]
     extends StorageTestsBase[F, String, Pattern, String, StringsCaptor]
     with BeforeAndAfterAll {
 
-  override def withTestSpace[S](f: (ST, T) => F[S]): S = {
-    implicit val codecString: Codec[String]   = implicitly[Serialize[String]].toCodec
-    implicit val codecP: Codec[Pattern]       = implicitly[Serialize[Pattern]].toCodec
-    implicit val codecK: Codec[StringsCaptor] = implicitly[Serialize[StringsCaptor]].toCodec
-    val branch                                = Branch("inmem")
+  implicit val patternCodec: Codec[Pattern] = StringExamples.implicits.patternSerialize.toCodec
+  implicit val stringCodec: Codec[String]   = StringExamples.implicits.stringSerialize.toCodec
+  implicit val stringCaptorCodec: Codec[StringsCaptor] =
+    StringExamples.implicits.stringClosureSerialize.toCodec
 
-    val trieStore =
-      InMemoryTrieStore.create[Blake2b256Hash, GNAT[String, Pattern, String, StringsCaptor]]()
-    val testStore = InMemoryStore.create(trieStore, branch)
-
-    run(for {
-      testSpace <- RSpace.create[F, String, Pattern, String, String, StringsCaptor](
-                    testStore,
-                    branch
-                  )
-      _   <- history.initialize(trieStore, branch).pure[F]
-      _   <- testSpace.createCheckpoint()
-      res <- f(testStore, testSpace)
-    } yield {
-      try {
-        res
-      } finally {
-        trieStore.close()
-        testStore.close()
+  override def fixture[S](f: (ST, AtST, T) => F[S]): S = {
+    val creator: (HR, ST, Branch) => F[(ST, AtST, T)] =
+      (hr, ts, b) => {
+        val atomicStore = AtomicAny(ts)
+        val space =
+          new RSpace[F, String, Pattern, String, String, StringsCaptor](hr, atomicStore, b)
+        Applicative[F].pure((ts, atomicStore, space))
       }
-    })
+    setupTestingSpace(creator, f)
   }
 
   override def afterAll(): Unit =
     super.afterAll()
-}
-
-abstract class LMDBStoreTestsBase[F[_]]
-    extends StorageTestsBase[F, String, Pattern, String, StringsCaptor]
-    with BeforeAndAfterAll {
-
-  val dbDir: Path   = Files.createTempDirectory("rchain-storage-test-")
-  val mapSize: Long = 1024L * 1024L * 4096L
-
-  override def withTestSpace[S](f: (ST, T) => F[S]): S = {
-    implicit val codecString: Codec[String]   = implicitly[Serialize[String]].toCodec
-    implicit val codecP: Codec[Pattern]       = implicitly[Serialize[Pattern]].toCodec
-    implicit val codecK: Codec[StringsCaptor] = implicitly[Serialize[StringsCaptor]].toCodec
-
-    val testBranch = Branch("test")
-    val env        = Context.env(dbDir, mapSize)
-    val trieStore = LMDBTrieStore
-      .create[F, Blake2b256Hash, GNAT[String, Pattern, String, StringsCaptor]](env, dbDir)
-
-    val testStore = LMDBStore.create[F, String, Pattern, String, StringsCaptor](
-      Context.create(dbDir, mapSize),
-      testBranch
-    )
-
-    run(for {
-      testSpace <- RSpace.create[F, String, Pattern, String, String, StringsCaptor](
-                    testStore,
-                    testBranch
-                  )
-      _ <- testStore.withWriteTxnF { txn =>
-            testStore.clear(txn)
-          }
-      _ <- Sync[F].delay(trieStore.withTxn(trieStore.createTxnWrite) { trieTxn =>
-            trieStore.clear(trieTxn)
-          })
-      _   <- history.initialize(trieStore, testBranch).pure[F]
-      _   <- testSpace.createCheckpoint()
-      res <- f(testStore, testSpace)
-    } yield {
-      try {
-        res
-      } finally {
-        trieStore.close()
-        testStore.close()
-        env.close()
-      }
-    })
-  }
-
-  override def afterAll(): Unit =
-    dbDir.recursivelyDelete
-}
-
-abstract class MixedStoreTestsBase[F[_]]
-    extends StorageTestsBase[F, String, Pattern, String, StringsCaptor]
-    with BeforeAndAfterAll {
-
-  val dbDir: Path   = Files.createTempDirectory("rchain-mixed-storage-test-")
-  val mapSize: Long = 1024L * 1024L * 4096L
-
-  override def withTestSpace[S](f: (ST, T) => F[S]): S = {
-    implicit val codecString: Codec[String]   = implicitly[Serialize[String]].toCodec
-    implicit val codecP: Codec[Pattern]       = implicitly[Serialize[Pattern]].toCodec
-    implicit val codecK: Codec[StringsCaptor] = implicitly[Serialize[StringsCaptor]].toCodec
-
-    val testBranch = Branch("test")
-    val env        = Context.env(dbDir, mapSize)
-    val trieStore = LMDBTrieStore
-      .create[F, Blake2b256Hash, GNAT[String, Pattern, String, StringsCaptor]](env, dbDir)
-    val testStore = LockFreeInMemoryStore.create(trieStore, testBranch)
-
-    run(for {
-      testSpace <- RSpace.create[F, String, Pattern, String, String, StringsCaptor](
-                    testStore,
-                    testBranch
-                  )
-      _ <- testStore.withWriteTxnF { txn =>
-            testStore.clear(txn)
-          }
-      _ <- Sync[F].delay(trieStore.withTxn(trieStore.createTxnWrite) { trieTxn =>
-            trieStore.clear(trieTxn)
-          })
-      _   <- history.initialize(trieStore, testBranch).pure[F]
-      _   <- testSpace.createCheckpoint()
-      res <- f(testStore, testSpace)
-    } yield {
-      try {
-        res
-      } finally {
-        trieStore.close()
-        testStore.close()
-        env.close()
-      }
-    })
-  }
-
-  override def afterAll(): Unit =
-    dbDir.recursivelyDelete
 }

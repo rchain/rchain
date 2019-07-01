@@ -6,24 +6,28 @@ import java.nio.file.{Files, Path}
 import cats._
 import cats.implicits._
 import cats.effect.Sync
+import coop.rchain.rspace._
+import coop.rchain.rspace.examples.AddressBookExample
 import coop.rchain.rspace.examples.AddressBookExample._
 import coop.rchain.rspace.examples.AddressBookExample.implicits._
-import coop.rchain.rspace.history.{initialize, Branch, ITrieStore, InMemoryTrieStore, LMDBTrieStore}
+import coop.rchain.rspace.history.Branch
 import coop.rchain.rspace.internal.{codecGNAT, GNAT}
 import coop.rchain.rspace.util._
+import coop.rchain.rspace.test._
+import coop.rchain.shared.Cell
 import coop.rchain.shared.PathOps._
-import monix.eval.Coeval
 import org.scalatest.BeforeAndAfterAll
 import scodec.Codec
 
 import scala.concurrent.ExecutionContext.Implicits.global
+import monix.eval.Task
+import monix.execution.atomic.AtomicAny
 
 trait StorageExamplesTests[F[_]]
-    extends StorageTestsBase[F, Channel, Pattern, Entry, EntriesCaptor]
-    with TestImplicitHelpers {
+    extends StorageTestsBase[F, Channel, Pattern, Entry, EntriesCaptor] {
 
   "CORE-365: A joined consume on duplicate channels followed by two produces on that channel" should
-    "return a continuation and the produced data" in withTestSpace { (store, space) =>
+    "return a continuation and the produced data" in fixture { (store, _, space) =>
     for {
       r1 <- space
              .consume(
@@ -32,18 +36,20 @@ trait StorageExamplesTests[F[_]]
                new EntriesCaptor,
                persist = false
              )
-      _  = r1 shouldBe None
-      r2 <- space.produce(Channel("friends"), bob, persist = false)
-      _  = r2 shouldBe None
-      r3 <- space.produce(Channel("friends"), bob, persist = false)
-      _  = r3 shouldBe defined
-      _  = runK(r3)
-      _  = getK(r3).results shouldBe List(List(bob, bob))
-    } yield (store.isEmpty shouldBe true)
+      _             = r1 shouldBe None
+      r2            <- space.produce(Channel("friends"), bob, persist = false)
+      _             = r2 shouldBe None
+      r3            <- space.produce(Channel("friends"), bob, persist = false)
+      _             = r3 shouldBe defined
+      _             = runK(r3)
+      _             = getK(r3).results shouldBe List(List(bob, bob))
+      insertActions <- store.changes().map(collectActions[InsertAction])
+      _             = insertActions shouldBe empty
+    } yield ()
   }
 
   "CORE-365: Two produces on the same channel followed by a joined consume on duplicates of that channel" should
-    "return a continuation and the produced data" in withTestSpace { (store, space) =>
+    "return a continuation and the produced data" in fixture { (store, _, space) =>
     for {
       r1 <- space.produce(Channel("friends"), bob, persist = false)
       _  = r1 shouldBe None
@@ -59,11 +65,11 @@ trait StorageExamplesTests[F[_]]
       _ = r3 shouldBe defined
       _ = runK(r3)
       _ = getK(r3).results shouldBe List(List(bob, bob))
-    } yield (store.isEmpty shouldBe true)
+    } yield (store.changes().map(_.isEmpty shouldBe true))
   }
 
   "CORE-365: A joined consume on duplicate channels given twice followed by three produces" should
-    "return a continuation and the produced data" in withTestSpace { (store, space) =>
+    "return a continuation and the produced data" in fixture { (store, _, space) =>
     for {
       r1 <- space
              .consume(
@@ -85,12 +91,12 @@ trait StorageExamplesTests[F[_]]
       _  = r4 shouldBe defined
       _  = runK(r4)
       _  = getK(r4).results shouldBe List(List(alice, bob, bob))
-    } yield (store.isEmpty shouldBe true)
+    } yield (store.changes().map(_.isEmpty shouldBe true))
 
   }
 
   "CORE-365: A joined consume on multiple duplicate channels followed by the requisite produces" should
-    "return a continuation and the produced data" in withTestSpace { (store, space) =>
+    "return a continuation and the produced data" in fixture { (store, _, space) =>
     for {
       r1 <- space
              .consume(
@@ -145,11 +151,11 @@ trait StorageExamplesTests[F[_]]
         List(carol, carol, carol, carol, alice, alice, alice, bob, bob)
       )
 
-    } yield (store.isEmpty shouldBe true)
+    } yield (store.changes().map(_.isEmpty shouldBe true))
   }
 
   "CORE-365: Multiple produces on multiple duplicate channels followed by the requisite consume" should
-    "return a continuation and the produced data" in withTestSpace { (store, space) =>
+    "return a continuation and the produced data" in fixture { (store, _, space) =>
     for {
       r1 <- space.produce(Channel("friends"), bob, persist = false)
       r2 <- space.produce(Channel("family"), carol, persist = false)
@@ -204,11 +210,11 @@ trait StorageExamplesTests[F[_]]
       _ = getK(r10).results shouldBe List(
         List(carol, carol, carol, carol, alice, alice, alice, bob, bob)
       )
-    } yield (store.isEmpty shouldBe true)
+    } yield (store.changes().map(_.isEmpty shouldBe true))
   }
 
   "CORE-365: A joined consume on multiple mixed up duplicate channels followed by the requisite produces" should
-    "return a continuation and the produced data" in withTestSpace { (store, space) =>
+    "return a continuation and the produced data" in fixture { (store, _, space) =>
     for {
       r1 <- space
              .consume(
@@ -264,144 +270,32 @@ trait StorageExamplesTests[F[_]]
       _ = getK(r10).results shouldBe List(
         List(carol, alice, carol, bob, bob, carol, alice, alice, carol)
       )
-    } yield (store.isEmpty shouldBe true)
+    } yield (store.changes().map(_.isEmpty shouldBe true))
   }
 }
 
-abstract class MixedInMemoryStoreStorageExamplesTestsBase[F[_]]
-    extends StorageTestsBase[F, Channel, Pattern, Entry, EntriesCaptor]
-    with BeforeAndAfterAll {
-
-  val dbDir: Path   = Files.createTempDirectory("rchain-storage-test-")
-  val mapSize: Long = 1024L * 1024L * 1024L
-
-  override def withTestSpace[R](f: (ST, T) => F[R]): R = {
-
-    implicit val cg: Codec[GNAT[Channel, Pattern, Entry, EntriesCaptor]] = codecGNAT(
-      serializeChannel.toCodec,
-      serializePattern.toCodec,
-      serializeInfo.toCodec,
-      serializeEntriesCaptor.toCodec
-    )
-
-    val branch = Branch("inmem")
-
-    val env = Context.env(dbDir, mapSize)
-
-    val trieStore = LMDBTrieStore
-      .create[F, Blake2b256Hash, GNAT[Channel, Pattern, Entry, EntriesCaptor]](env, dbDir)
-    val testStore = LockFreeInMemoryStore.create(trieStore, branch)
-
-    run(for {
-      testSpace <- RSpace.create[F, Channel, Pattern, Entry, Entry, EntriesCaptor](
-                    testStore,
-                    branch
-                  )
-      //_         <- testStore.withWriteTxnF(testStore.clear)
-      //_         = trieStore.withTxn(trieStore.createTxnWrite())(trieStore.clear)
-      _   = initialize(trieStore, branch)
-      res <- f(testStore, testSpace)
-    } yield {
-      try {
-        res
-      } finally {
-        trieStore.close()
-        testStore.close()
-        env.close()
-      }
-    })
-  }
-
-  override def afterAll(): Unit = {
-    dbDir.recursivelyDelete
-    super.afterAll()
-  }
-}
-
-abstract class InMemoryStoreStorageExamplesTestsBase[F[_]]
+abstract class InMemoryHotStoreStorageExamplesTestsBase[F[_]]
     extends StorageTestsBase[F, Channel, Pattern, Entry, EntriesCaptor] {
 
-  override def withTestSpace[R](f: (ST, T) => F[R]): R = {
+  implicit val channelCodec: Codec[Channel] = AddressBookExample.implicits.serializeChannel.toCodec
+  implicit val patternCodec: Codec[Pattern] = AddressBookExample.implicits.serializePattern.toCodec
+  implicit val entryCodec: Codec[Entry]     = AddressBookExample.implicits.serializeInfo.toCodec
+  implicit val entryCaptorCodec: Codec[EntriesCaptor] =
+    AddressBookExample.implicits.serializeEntriesCaptor.toCodec
 
-    implicit val cg: Codec[GNAT[Channel, Pattern, Entry, EntriesCaptor]] = codecGNAT(
-      serializeChannel.toCodec,
-      serializePattern.toCodec,
-      serializeInfo.toCodec,
-      serializeEntriesCaptor.toCodec
-    )
-
-    val branch = Branch("inmem")
-
-    val trieStore =
-      InMemoryTrieStore.create[Blake2b256Hash, GNAT[Channel, Pattern, Entry, EntriesCaptor]]()
-    val testStore = InMemoryStore.create(trieStore, branch)
-
-    run(for {
-      testSpace <- RSpace.create[F, Channel, Pattern, Entry, Entry, EntriesCaptor](
-                    testStore,
-                    branch
-                  )
-      //_         <- testStore.withWriteTxnF(testStore.clear)
-      //_         <- trieStore.withTxn(trieStore.createTxnWrite())(trieStore.clear).pure[F]
-      _   = initialize(trieStore, branch)
-      res <- f(testStore, testSpace)
-    } yield {
-      try {
-        res
-      } finally {
-        trieStore.close()
-        testStore.close()
+  override def fixture[R](f: (ST, AtST, T) => F[R]): R = {
+    val creator: (HR, ST, Branch) => F[(ST, AtST, T)] =
+      (hr, ts, b) => {
+        val atomicStore = AtomicAny(ts)
+        val space =
+          new RSpace[F, Channel, Pattern, Entry, Entry, EntriesCaptor](hr, atomicStore, b)
+        Applicative[F].pure((ts, atomicStore, space))
       }
-    })
+    setupTestingSpace(creator, f)
   }
 }
 
-abstract class LMDBStoreStorageExamplesTestBase[F[_]]
-    extends StorageTestsBase[F, Channel, Pattern, Entry, EntriesCaptor]
-    with BeforeAndAfterAll {
-
-  val dbDir: Path    = Files.createTempDirectory("rchain-storage-test-")
-  val mapSize: Long  = 1024L * 1024L * 1024L
-  val noTls: Boolean = false
-
-  override def withTestSpace[R](f: (ST, T) => F[R]): R = {
-    val context   = Context.create[F, Channel, Pattern, Entry, EntriesCaptor](dbDir, mapSize, noTls)
-    val testStore = LMDBStore.create[F, Channel, Pattern, Entry, EntriesCaptor](context)
-    run(for {
-      testSpace <- RSpace.create[F, Channel, Pattern, Entry, Entry, EntriesCaptor](
-                    testStore,
-                    Branch.MASTER
-                  )
-      _   <- testStore.withWriteTxnF(testStore.clear)
-      res <- f(testStore, testSpace)
-    } yield {
-      try {
-        res
-      } finally {
-        testStore.close()
-        testSpace.close()
-        context.close()
-      }
-    })
-  }
-
-  override def afterAll(): Unit = {
-    dbDir.recursivelyDelete
-    super.afterAll()
-  }
-}
-
-class InMemoryStoreStorageExamplesTests
-    extends InMemoryStoreStorageExamplesTestsBase[Coeval]
-    with CoevalTests[Channel, Pattern, Entry, EntriesCaptor]
-    with StorageExamplesTests[Coeval]
-
-class MixedInMemoryStoreStorageExamplesTests
-    extends MixedInMemoryStoreStorageExamplesTestsBase[Coeval]
-    with CoevalTests[Channel, Pattern, Entry, EntriesCaptor]
-    with StorageExamplesTests[Coeval]
-
-class LMDBStoreStorageExamplesTest
-    extends LMDBStoreStorageExamplesTestBase[Coeval]
-    with CoevalTests[Channel, Pattern, Entry, EntriesCaptor]
-    with StorageExamplesTests[Coeval]
+class InMemoryHotStoreStorageExamplesTests
+    extends InMemoryHotStoreStorageExamplesTestsBase[Task]
+    with TaskTests[Channel, Pattern, Entry, Entry, EntriesCaptor]
+    with StorageExamplesTests[Task]

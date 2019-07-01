@@ -4,10 +4,9 @@ import cats.effect.Sync
 import cats.implicits._
 import cats.syntax._
 import coop.rchain.catscontrib._
+import coop.rchain.rspace._
 import coop.rchain.rspace.history.Branch
 import coop.rchain.rspace.internal._
-import coop.rchain.rspace.trace.Log
-import coop.rchain.shared.SyncVarOps
 
 import scala.annotation.tailrec
 import scala.concurrent.SyncVar
@@ -21,16 +20,6 @@ import scala.concurrent.SyncVar
   * @tparam K a type representing a continuation
   */
 private[rspace] trait SpaceMatcher[F[_], C, P, A, R, K] extends ISpace[F, C, P, A, R, K] {
-
-  /**
-    * A store which satisfies the [[IStore]] interface.
-    */
-  val store: IStore[F, C, P, A, K]
-
-  val branch: Branch
-
-  protected[this] val eventLog: SyncVar[Log] =
-    SyncVarOps.create[Log](Seq.empty)
 
   implicit val syncF: Sync[F]
 
@@ -66,16 +55,6 @@ private[rspace] trait SpaceMatcher[F[_], C, P, A, R, K] extends ISpace[F, C, P, 
             ).some.pure[F]
         }
       case _ => none[MatchingDataCandidate].pure[F]
-    }
-
-  def getData(channel: C): F[Seq[Datum[A]]] =
-    store.withReadTxnF { txn =>
-      store.getData(txn, Seq(channel))
-    }
-
-  def getWaitingContinuations(channels: Seq[C]): F[Seq[WaitingContinuation[P, K]]] =
-    store.withReadTxnF { txn =>
-      store.getWaitingContinuation(txn, channels)
     }
 
   /** Iterates through (channel, pattern) pairs looking for matching data.
@@ -139,5 +118,5 @@ private[rspace] trait SpaceMatcher[F[_], C, P, A, R, K] extends ISpace[F, C, P, 
       case _ => none[ProduceCandidate[C, P, R, K]].pure[F]
     }
 
-  override def close(): F[Unit] = syncF.delay { store.close() }
+  override def close(): F[Unit] = ().pure[F]
 }

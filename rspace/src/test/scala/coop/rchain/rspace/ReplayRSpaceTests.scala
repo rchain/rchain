@@ -1,6 +1,6 @@
 package coop.rchain.rspace
 
-import java.nio.file.Files
+import java.nio.file.{Files, Path, Paths}
 
 import cats.Functor
 import coop.rchain.catscontrib.TaskContrib._
@@ -9,19 +9,36 @@ import cats.effect._
 import cats.implicits._
 import com.typesafe.scalalogging.Logger
 import coop.rchain.metrics.Metrics
+import coop.rchain.rspace._
 import coop.rchain.rspace.examples.StringExamples._
 import coop.rchain.rspace.examples.StringExamples.implicits._
 import coop.rchain.rspace.history._
 import coop.rchain.rspace.internal._
+import coop.rchain.rspace.history.{
+  HistoryRepository,
+  HistoryRepositoryInstances,
+  LMDBRSpaceStorageConfig,
+  StoreConfig
+}
 import coop.rchain.rspace.trace.Consume
+import coop.rchain.rspace.test._
+import coop.rchain.shared.Cell
 import coop.rchain.shared.PathOps._
 import coop.rchain.shared.Log
 import monix.eval.Task
 import monix.execution.Scheduler
+import monix.execution.atomic.AtomicAny
+import org.scalacheck._
+import org.scalacheck.Arbitrary._
 import org.scalatest._
+import org.scalatest.prop._
 
 import scala.util.{Random, Right}
+import scala.util.Random.shuffle
 import scodec.Codec
+import org.lmdbjava.EnvFlags
+
+import scala.collection.SortedSet
 
 object SchedulerPools {
   implicit val global = Scheduler.fixedPool("GlobalPool", 20)
@@ -29,29 +46,32 @@ object SchedulerPools {
 }
 
 //noinspection ZeroIndexToHead,NameBooleanParameters
-trait ReplayRSpaceTests
-    extends ReplayRSpaceTestsBase[String, Pattern, String, String]
-    with TestImplicitHelpers {
+trait ReplayRSpaceTests extends ReplayRSpaceTestsBase[String, Pattern, String, String] {
 
   import SchedulerPools.global
 
-  implicit val log: Log[Task] = new Log.NOPLog[Task]
+  implicit val log: Log[Task]      = new Log.NOPLog[Task]
+  val arbitraryRangeSize: Gen[Int] = Gen.chooseNum[Int](1, 10)
+  val arbitraryRangesSize: Gen[(Int, Int)] = for {
+    m <- Gen.chooseNum[Int](1, 10)
+    n <- Gen.chooseNum[Int](1, m)
+  } yield (n, m)
 
   def consumeMany[C, P, A, R, K](
       space: ISpace[Task, C, P, A, R, K],
-      range: Range,
-      shuffle: Boolean,
+      range: Seq[Int],
       channelsCreator: Int => List[C],
       patterns: List[P],
       continuationCreator: Int => K,
-      persist: Boolean
+      persist: Boolean,
+      peeks: SortedSet[Int] = SortedSet.empty
   )(
       implicit matcher: Match[Task, P, A, R]
   ): Task[List[Option[(ContResult[C, P, K], Seq[Result[R]])]]] =
-    (if (shuffle) Random.shuffle(range.toList) else range.toList).parTraverse { i: Int =>
+    shuffle(range).toList.parTraverse { i: Int =>
       logger.debug("Started consume {}", i)
       space
-        .consume(channelsCreator(i), patterns, continuationCreator(i), persist)
+        .consume(channelsCreator(i), patterns, continuationCreator(i), persist, peeks = peeks)
         .map { r =>
           logger.debug("Finished consume {}", i)
           r
@@ -60,15 +80,14 @@ trait ReplayRSpaceTests
 
   def produceMany[C, P, A, R, K](
       space: ISpace[Task, C, P, A, R, K],
-      range: Range,
-      shuffle: Boolean,
+      range: Seq[Int],
       channelCreator: Int => C,
       datumCreator: Int => A,
       persist: Boolean
   )(
       implicit matcher: Match[Task, P, A, R]
   ): Task[List[Option[(ContResult[C, P, K], Seq[Result[R]])]]] =
-    (if (shuffle) Random.shuffle(range.toList) else range.toList).parTraverse { i: Int =>
+    shuffle(range).toList.parTraverse { i: Int =>
       logger.debug("Started produce {}", i)
       space.produce(channelCreator(i), datumCreator(i), persist).map { r =>
         logger.debug("Finished produce {}", i)
@@ -76,62 +95,25 @@ trait ReplayRSpaceTests
       }
     }
 
-  /**
-    * RSpace and RepayRSpace both have a reset functionality
-    * It has been shown that it's not obvious when it can be safely skipped
-    * (iow the store is already at desired root)
-    * This test shows that an internal mechanism 'isDirty' properly identifies such cases
-    */
-  "reset to the same checkpoint" should "work" in withTestSpaces {
-    (store, replayStore, space, replaySpace) =>
-      for {
-        root0 <- space.createCheckpoint().map(_.root)
-
-        _ = store.isEmpty shouldBe true
-        _ = replayStore.isEmpty shouldBe true
-
-        //pollute the store
-        _ <- space.produce("ch1", "datum1", false)
-        _ = store.isEmpty shouldBe false
-
-        // space after an action is dirty
-        dirty1 <- space.isDirty(root0)
-        _      = dirty1 shouldBe true
-
-        _ <- space.reset(root0)
-        _ = store.isEmpty shouldBe true
-
-        // space after reset is clean
-        dirty2 <- space.isDirty(root0)
-        _      = dirty2 shouldBe false
-
-        _ <- space.reset(root0)
-        _ = store.isEmpty shouldBe true
-
-        _ <- replaySpace.reset(root0)
-        _ = replayStore.isEmpty shouldBe true
-      } yield ()
-  }
-
-  "reset to a checkpoint from a different branch" should "work" in withTestSpaces {
+  "reset to a checkpoint from a different branch" should "work" in fixture {
     (store, replayStore, space, replaySpace) =>
       for {
         root0 <- replaySpace.createCheckpoint().map(_.root)
-        _     = replayStore.isEmpty shouldBe true
+        _     = replayStore.get().isEmpty.map(_ shouldBe true)
 
         _     <- space.produce("ch1", "datum1", false)
         root1 <- space.createCheckpoint().map(_.root)
 
         _ <- replaySpace.reset(root1)
-        _ = replayStore.isEmpty shouldBe false
+        _ <- replayStore.get().isEmpty.map(_ shouldBe true)
 
         _ <- space.reset(root0)
-        _ = store.isEmpty shouldBe true
+        _ <- store.get().isEmpty.map(_ shouldBe true)
       } yield ()
   }
 
   "Creating a COMM Event" should "replay correctly" in
-    withTestSpaces { (store, replayStore, space, replaySpace) =>
+    fixture { (store, replayStore, space, replaySpace) =>
       val channels     = List("ch1")
       val patterns     = List(Wildcard)
       val continuation = "continuation"
@@ -142,562 +124,850 @@ trait ReplayRSpaceTests
 
         resultConsume <- space.consume(channels, patterns, continuation, false)
         resultProduce <- space.produce(channels(0), datum, false)
-        rigPont       <- space.createCheckpoint()
+        rigPoint      <- space.createCheckpoint()
 
         _ = resultConsume shouldBe None
-        _ = resultProduce shouldBe defined
+        _ = resultProduce shouldBe Some(
+          (ContResult(continuation, false, channels, patterns, 1), List(Result(datum, false)))
+        )
 
-        _ <- replaySpace.rigAndReset(emptyPoint.root, rigPont.log)
+        _ <- replaySpace.rigAndReset(emptyPoint.root, rigPoint.log)
 
         replayResultConsume <- replaySpace.consume(channels, patterns, continuation, false)
         replayResultProduce <- replaySpace.produce(channels(0), datum, false)
-        finalPoint          <- space.createCheckpoint()
+        finalPoint          <- replaySpace.createCheckpoint()
 
         _ = replayResultConsume shouldBe None
         _ = replayResultProduce shouldBe resultProduce
-        _ = finalPoint.root shouldBe rigPont.root
+        _ = finalPoint.root shouldBe rigPoint.root
         _ = replaySpace.replayData shouldBe empty
       } yield ()
     }
 
-  "Picking a datum from 100 waiting datums" should "replay correctly" in
-    withTestSpaces { (store, replayStore, space, replaySpace) =>
+  "Creating a COMM Event with peek consume first" should "replay correctly" in
+    fixture { (store, replayStore, space, replaySpace) =>
+      val channels     = List("ch1")
+      val patterns     = List(Wildcard)
+      val continuation = "continuation"
+      val datum        = "datum1"
+
       for {
         emptyPoint <- space.createCheckpoint()
 
-        range = 0 until 100
-        _ <- produceMany(
-              space,
-              range,
-              shuffle = false,
-              channelCreator = kp("ch1"),
-              datumCreator = i => s"datum$i",
-              persist = false
-            )
-        result <- space.consume(
-                   channels = List("ch1"),
-                   patterns = List(Wildcard),
-                   continuation = "continuation1",
-                   persist = false
-                 )
-        rigPoint <- space.createCheckpoint()
-        _        <- replaySpace.rigAndReset(emptyPoint.root, rigPoint.log)
-        _ <- produceMany(
-              replaySpace,
-              range,
-              shuffle = true,
-              channelCreator = kp("ch1"),
-              datumCreator = i => s"datum$i",
-              persist = false
-            )
-        replayResult <- replaySpace.consume(
-                         channels = List("ch1"),
-                         patterns = List(Wildcard),
-                         continuation = "continuation1",
-                         persist = false
-                       )
-        finalPoint <- replaySpace.createCheckpoint()
-        _          = replayResult shouldBe result
-        _          = finalPoint.root shouldBe rigPoint.root
-        _          = replaySpace.replayData shouldBe empty
+        resultConsume <- space.consume(
+                          channels,
+                          patterns,
+                          continuation,
+                          false,
+                          peeks = SortedSet(0)
+                        )
+        resultProduce <- space.produce(channels(0), datum, false)
+        rigPoint      <- space.createCheckpoint()
+
+        _ = resultConsume shouldBe None
+        _ = resultProduce shouldBe Some(
+          (ContResult(continuation, false, channels, patterns, 1, true), List(Result(datum, false)))
+        )
+
+        _ <- replaySpace.rigAndReset(emptyPoint.root, rigPoint.log)
+
+        replayResultConsume <- replaySpace.consume(
+                                channels,
+                                patterns,
+                                continuation,
+                                false,
+                                peeks = SortedSet(0)
+                              )
+        replayResultProduce <- replaySpace.produce(channels(0), datum, false)
+        finalPoint          <- replaySpace.createCheckpoint()
+
+        _ = replayResultConsume shouldBe None
+        _ = replayResultProduce shouldBe resultProduce
+        _ = finalPoint.root shouldBe rigPoint.root
+        _ = replaySpace.replayData shouldBe empty
       } yield ()
     }
 
-  "Picking 100 datums from 100 waiting datums" should "replay correctly" in
-    withTestSpaces { (store, replayStore, space, replaySpace) =>
+  "Creating a COMM Event with peek produce first" should "replay correctly" in
+    fixture { (store, replayStore, space, replaySpace) =>
+      val channels     = List("ch1")
+      val patterns     = List(Wildcard)
+      val continuation = "continuation"
+      val datum        = "datum1"
+
       for {
         emptyPoint <- space.createCheckpoint()
 
-        range = 0 until 100
+        resultProduce <- space.produce(channels(0), datum, false)
+        resultConsume <- space.consume(
+                          channels,
+                          patterns,
+                          continuation,
+                          false,
+                          peeks = SortedSet(0)
+                        )
+        rigPoint <- space.createCheckpoint()
 
+        _ = resultProduce shouldBe None
+        _ = resultConsume shouldBe defined
+
+        _ <- replaySpace.rigAndReset(emptyPoint.root, rigPoint.log)
+
+        replayResultProduce <- replaySpace.produce(channels(0), datum, false)
+        replayResultConsume <- replaySpace.consume(
+                                channels,
+                                patterns,
+                                continuation,
+                                false,
+                                peeks = SortedSet(0)
+                              )
+        finalPoint <- replaySpace.createCheckpoint()
+
+        _ = replayResultProduce shouldBe None
+        _ = replayResultConsume shouldBe resultConsume
+        _ = finalPoint.root shouldBe rigPoint.root
+        _ = replaySpace.replayData shouldBe empty
+      } yield ()
+    }
+
+  "Creating COMM Events on many channels with peek" should "replay correctly" in
+    fixture { (store, replayStore, space, replaySpace) =>
+      val channels     = List("ch1", "ch2")
+      val patterns     = List(Wildcard, Wildcard)
+      val continuation = "continuation"
+      val datum        = "datum1"
+
+      for {
+        emptyPoint <- space.createCheckpoint()
+
+        resultConsume1 <- space.consume(
+                           channels,
+                           patterns,
+                           continuation,
+                           false,
+                           peeks = SortedSet(0)
+                         )
+        resultProduce1 <- space.produce(channels(1), datum, false)
+        resultProduce2 <- space.produce(channels(0), datum, false)
+        resultConsume2 <- space.consume(
+                           channels,
+                           patterns,
+                           continuation,
+                           false,
+                           peeks = SortedSet(1)
+                         )
+        resultProduce3 <- space.produce(channels(1), datum, false)
+        resultConsume3 <- space.consume(channels, patterns, continuation, false)
+        resultProduce4 <- space.produce(channels(0), datum, false)
+
+        rigPoint <- space.createCheckpoint()
+
+        _ = resultConsume1 shouldBe None
+        _ = resultProduce1 shouldBe None
+        _ = resultProduce2 shouldBe defined
+        _ = resultConsume2 shouldBe None
+        _ = resultProduce3 shouldBe defined
+        _ = resultConsume3 shouldBe None
+        _ = resultProduce4 shouldBe defined
+
+        _ <- replaySpace.rigAndReset(emptyPoint.root, rigPoint.log)
+
+        replayConsume1 <- replaySpace.consume(
+                           channels,
+                           patterns,
+                           continuation,
+                           false,
+                           peeks = SortedSet(0)
+                         )
+        replayProduce1 <- replaySpace.produce(channels(1), datum, false)
+        replayProduce2 <- replaySpace.produce(channels(0), datum, false)
+        replayConsume2 <- replaySpace.consume(
+                           channels,
+                           patterns,
+                           continuation,
+                           false,
+                           peeks = SortedSet(1)
+                         )
+        replayProduce3 <- replaySpace.produce(channels(1), datum, false)
+        replayConsume3 <- replaySpace.consume(channels, patterns, continuation, false)
+        replayProduce4 <- replaySpace.produce(channels(0), datum, false)
+
+        finalPoint <- replaySpace.createCheckpoint()
+
+        _ = finalPoint.root shouldBe rigPoint.root
+        _ = replaySpace.replayData shouldBe empty
+      } yield ()
+    }
+
+  "Creating multiple COMM Event with peeking a produce" should "replay correctly" in
+    fixture { (store, replayStore, space, replaySpace) =>
+      val channels     = List("ch1")
+      val patterns     = List(Wildcard)
+      val continuation = "continuation"
+      val datum        = "datum1"
+
+      for {
+        emptyPoint <- space.createCheckpoint()
+
+        resultConsume1 <- space.consume(
+                           channels,
+                           patterns,
+                           continuation,
+                           false,
+                           peeks = SortedSet(0)
+                         )
+        resultProduce <- space.produce(channels(0), datum, false)
+        resultConsume2 <- space.consume(
+                           channels,
+                           patterns,
+                           continuation,
+                           false,
+                           peeks = SortedSet(0)
+                         )
+        resultConsume3 <- space.consume(
+                           channels,
+                           patterns,
+                           continuation,
+                           false,
+                           peeks = SortedSet(0)
+                         )
+        resultConsume4 <- space.consume(
+                           channels,
+                           patterns,
+                           continuation,
+                           false,
+                           peeks = SortedSet(0)
+                         )
+        resultConsume5 <- space.consume(
+                           channels,
+                           patterns,
+                           continuation,
+                           false,
+                           peeks = SortedSet(0)
+                         )
+        rigPoint <- space.createCheckpoint()
+
+        _ = resultConsume1 shouldBe None
+        _ = resultConsume2 shouldBe defined
+        _ = resultConsume3 shouldBe defined
+        _ = resultConsume4 shouldBe defined
+        _ = resultConsume5 shouldBe defined
+        _ = resultProduce shouldBe Some(
+          (ContResult(continuation, false, channels, patterns, 1, true), List(Result(datum, false)))
+        )
+        _ <- replaySpace.rigAndReset(emptyPoint.root, rigPoint.log)
+
+        replayResultConsume1 <- replaySpace.consume(
+                                 channels,
+                                 patterns,
+                                 continuation,
+                                 false,
+                                 peeks = SortedSet(0)
+                               )
+        replayResultProduce <- replaySpace.produce(channels(0), datum, false)
+        replayResultConsume2 <- replaySpace.consume(
+                                 channels,
+                                 patterns,
+                                 continuation,
+                                 false,
+                                 peeks = SortedSet(0)
+                               )
+        replayResultConsume3 <- replaySpace.consume(
+                                 channels,
+                                 patterns,
+                                 continuation,
+                                 false,
+                                 peeks = SortedSet(0)
+                               )
+        replayResultConsume4 <- replaySpace.consume(
+                                 channels,
+                                 patterns,
+                                 continuation,
+                                 false,
+                                 peeks = SortedSet(0)
+                               )
+        replayResultConsume5 <- replaySpace.consume(
+                                 channels,
+                                 patterns,
+                                 continuation,
+                                 false,
+                                 peeks = SortedSet(0)
+                               )
+        finalPoint <- replaySpace.createCheckpoint()
+
+        _ = replayResultConsume1 shouldBe None
+        _ = replayResultConsume2 shouldBe defined
+        _ = replayResultConsume3 shouldBe defined
+        _ = replayResultConsume4 shouldBe defined
+        _ = replayResultConsume5 shouldBe defined
+        _ = replayResultProduce shouldBe resultProduce
+        _ = finalPoint.root shouldBe rigPoint.root
+        _ = replaySpace.replayData shouldBe empty
+      } yield ()
+    }
+
+  "Picking n datums from m waiting datums" should "replay correctly" in forAll(arbitraryRangesSize) {
+    case (n: Int, m: Int) =>
+      fixture { (store, replayStore, space, replaySpace) =>
+        for {
+          emptyPoint <- space.createCheckpoint()
+
+          range = (n until m).toList
+
+          _ <- produceMany(
+                space,
+                range,
+                channelCreator = kp("ch1"),
+                datumCreator = i => s"datum$i",
+                persist = false
+              )
+          results <- consumeMany(
+                      space,
+                      range,
+                      channelsCreator = kp(List("ch1")),
+                      patterns = List(Wildcard),
+                      continuationCreator = i => s"continuation$i",
+                      persist = false
+                    )
+          rigPoint <- space.createCheckpoint()
+
+          _ <- replaySpace.rigAndReset(emptyPoint.root, rigPoint.log)
+
+          _ <- produceMany(
+                replaySpace,
+                range,
+                channelCreator = kp("ch1"),
+                datumCreator = i => s"datum$i",
+                persist = false
+              )
+          replayResults <- consumeMany(
+                            replaySpace,
+                            range,
+                            channelsCreator = kp(List("ch1")),
+                            patterns = List(Wildcard),
+                            continuationCreator = i => s"continuation$i",
+                            persist = false
+                          )
+          finalPoint <- replaySpace.createCheckpoint()
+
+          _ = replayResults should contain theSameElementsAs results
+          _ = finalPoint.root shouldBe rigPoint.root
+          _ = replaySpace.replayData shouldBe empty
+        } yield ()
+      }
+  }
+
+  "A matched continuation defined for multiple channels, some peeked" should "replay correctly" in forAll(
+    for {
+      amountOfChannles       <- Gen.chooseNum[Int](10, 100)
+      amountOfPeekedChannels <- Gen.chooseNum[Int](5, amountOfChannles)
+    } yield (amountOfChannles, amountOfPeekedChannels),
+    minSuccessful(100)
+  ) {
+    case (amountOfChannles: Int, amountOfPeekedChannels: Int) =>
+      fixture { (store, replayStore, space, replaySpace) =>
+        val channelsRange = List.range(0, amountOfChannles)
+        val channels      = channelsRange.map(i => s"channel$i")
+        val patterns      = channels.map(kp(Wildcard))
+        val continuation  = "continuation"
+        val peeks: SortedSet[Int] =
+          SortedSet.apply(Random.shuffle(channelsRange).take(amountOfPeekedChannels): _*)
+        val produces = Random.shuffle(channels)
+        def consumeAndProduce(s: ISpace[Task, String, Pattern, String, String, String]) =
+          for {
+            r  <- s.consume(channels, patterns, continuation, false, peeks = peeks)
+            rs <- produces.traverse(ch => s.produce(ch, s"datum-$ch", false))
+          } yield rs
+
+        for {
+          emptyPoint <- space.createCheckpoint()
+          rs         <- consumeAndProduce(space)
+          _          = rs.flatten should have size 1
+          hs         = store.get()
+          _ <- channelsRange.traverse { i =>
+                val ch = s"channel$i"
+                hs.getData(ch).map { data =>
+                  if (peeks.contains(i))
+                    data should have size 1
+                  else
+                    data should have size 0
+                }
+              }
+          rigPoint   <- space.createCheckpoint()
+          _          <- replaySpace.rigAndReset(emptyPoint.root, rigPoint.log)
+          rrs        <- consumeAndProduce(replaySpace)
+          finalPoint <- replaySpace.createCheckpoint()
+          _          = rs should contain theSameElementsAs rrs
+          _          = finalPoint.root shouldBe rigPoint.root
+          _          = replaySpace.replayData shouldBe empty
+        } yield ()
+      }
+  }
+
+  "Picking n datums from m persistent waiting datums" should "replay correctly" in forAll(
+    arbitraryRangesSize
+  ) {
+    case (n: Int, m: Int) =>
+      fixture { (store, replayStore, space, replaySpace) =>
+        for {
+          emptyPoint <- space.createCheckpoint()
+
+          range = (n until m).toList
+
+          _ <- produceMany(
+                space,
+                range,
+                channelCreator = kp("ch1"),
+                datumCreator = i => s"datum$i",
+                persist = true
+              )
+          results <- consumeMany(
+                      space,
+                      range,
+                      channelsCreator = kp(List("ch1")),
+                      patterns = List(Wildcard),
+                      continuationCreator = i => s"continuation$i",
+                      persist = false
+                    )
+          rigPoint <- space.createCheckpoint()
+
+          _ <- replaySpace.rigAndReset(emptyPoint.root, rigPoint.log)
+
+          _ <- produceMany(
+                replaySpace,
+                range,
+                channelCreator = kp("ch1"),
+                datumCreator = i => s"datum$i",
+                persist = true
+              )
+          replayResults <- consumeMany(
+                            replaySpace,
+                            range,
+                            channelsCreator = kp(List("ch1")),
+                            patterns = List(Wildcard),
+                            continuationCreator = i => s"continuation$i",
+                            persist = false
+                          )
+          finalPoint <- replaySpace.createCheckpoint()
+
+          _ = replayResults should contain theSameElementsAs results
+          _ = finalPoint.root shouldBe rigPoint.root
+          _ = replaySpace.replayData shouldBe empty
+        } yield ()
+      }
+  }
+
+  "Picking n continuations from m waiting continuations" should "replay correctly" in forAll(
+    arbitraryRangesSize
+  ) {
+    case (n: Int, m: Int) =>
+      fixture { (store, replayStore, space, replaySpace) =>
+        for {
+          emptyPoint <- space.createCheckpoint()
+
+          range = (n until m).toList
+
+          _ <- consumeMany(
+                space,
+                range,
+                channelsCreator = kp(List("ch1")),
+                patterns = List(Wildcard),
+                continuationCreator = i => s"continuation$i",
+                persist = false
+              )
+          results <- produceMany(
+                      space,
+                      range,
+                      channelCreator = kp("ch1"),
+                      datumCreator = i => s"datum$i",
+                      persist = false
+                    )
+          rigPoint <- space.createCheckpoint()
+
+          _ <- replaySpace.rigAndReset(emptyPoint.root, rigPoint.log)
+
+          _ <- consumeMany(
+                replaySpace,
+                range,
+                channelsCreator = kp(List("ch1")),
+                patterns = List(Wildcard),
+                continuationCreator = i => s"continuation$i",
+                persist = false
+              )
+          replayResults <- produceMany(
+                            replaySpace,
+                            range,
+                            channelCreator = kp("ch1"),
+                            datumCreator = i => s"datum$i",
+                            persist = false
+                          )
+          finalPoint <- replaySpace.createCheckpoint()
+
+          _ = replayResults should contain theSameElementsAs results
+          _ = finalPoint.root shouldBe rigPoint.root
+          _ = replaySpace.replayData shouldBe empty
+        } yield ()
+      }
+  }
+
+  "Picking n continuations from m persistent waiting continuations" should "replay correctly" in forAll(
+    arbitraryRangesSize
+  ) {
+    case (n: Int, m: Int) =>
+      fixture { (store, replayStore, space, replaySpace) =>
+        for {
+          emptyPoint <- space.createCheckpoint()
+
+          range = (n until m).toList
+
+          _ <- consumeMany(
+                space,
+                range,
+                channelsCreator = kp(List("ch1")),
+                patterns = List(Wildcard),
+                continuationCreator = i => s"continuation$i",
+                persist = true
+              )
+          results <- produceMany(
+                      space,
+                      range,
+                      channelCreator = kp("ch1"),
+                      datumCreator = i => s"datum$i",
+                      persist = false
+                    )
+          rigPoint <- space.createCheckpoint()
+
+          _ <- replaySpace.rigAndReset(emptyPoint.root, rigPoint.log)
+
+          _ <- consumeMany(
+                replaySpace,
+                range,
+                channelsCreator = kp(List("ch1")),
+                patterns = List(Wildcard),
+                continuationCreator = i => s"continuation$i",
+                persist = true
+              )
+          replayResults <- produceMany(
+                            replaySpace,
+                            range,
+                            channelCreator = kp("ch1"),
+                            datumCreator = i => s"datum$i",
+                            persist = false
+                          )
+          finalPoint <- replaySpace.createCheckpoint()
+
+          _ = replayResults should contain theSameElementsAs results
+          _ = finalPoint.root shouldBe rigPoint.root
+          _ = replaySpace.replayData shouldBe empty
+        } yield ()
+      }
+  }
+
+  "Pick n continuations from m waiting continuations stored at two channels" should "replay correctly" in forAll(
+    arbitraryRangesSize
+  ) {
+    case (n: Int, m: Int) =>
+      fixture { (store, replayStore, space, replaySpace) =>
+        for {
+          emptyPoint <- space.createCheckpoint()
+
+          range = (n until m).toList
+
+          _ <- consumeMany(
+                space,
+                range,
+                channelsCreator = kp(List("ch1", "ch2")),
+                patterns = List(Wildcard, Wildcard),
+                continuationCreator = i => s"continuation$i",
+                persist = false
+              )
+          _ <- produceMany(
+                space,
+                range,
+                channelCreator = kp("ch1"),
+                datumCreator = kp("datum1"),
+                persist = false
+              )
+          results <- produceMany(
+                      space,
+                      range,
+                      channelCreator = kp("ch2"),
+                      datumCreator = kp("datum2"),
+                      persist = false
+                    )
+          rigPoint <- space.createCheckpoint()
+
+          _ <- replaySpace.rigAndReset(emptyPoint.root, rigPoint.log)
+
+          _ <- consumeMany(
+                replaySpace,
+                range,
+                channelsCreator = kp(List("ch1", "ch2")),
+                patterns = List(Wildcard, Wildcard),
+                continuationCreator = i => s"continuation$i",
+                persist = false
+              )
+          _ <- produceMany(
+                replaySpace,
+                range,
+                channelCreator = kp("ch1"),
+                datumCreator = kp("datum1"),
+                persist = false
+              )
+          replayResults <- produceMany(
+                            replaySpace,
+                            range,
+                            channelCreator = kp("ch2"),
+                            datumCreator = kp("datum2"),
+                            persist = false
+                          )
+          finalPoint <- replaySpace.createCheckpoint()
+
+          _ = replayResults should contain theSameElementsAs results
+          _ = finalPoint.root shouldBe rigPoint.root
+          _ = replaySpace.replayData shouldBe empty
+        } yield ()
+      }
+  }
+
+  "Picking n datums from m waiting datums while doing a bunch of other junk" should "replay correctly" in forAll(
+    arbitraryRangesSize
+  ) {
+    case (n: Int, m: Int) =>
+      fixture { (store, replayStore, space, replaySpace) =>
+        for {
+          emptyPoint <- space.createCheckpoint()
+
+          _ <- produceMany(
+                space,
+                range = n until m toList,
+                channelCreator = kp("ch1"),
+                datumCreator = i => s"datum$i",
+                persist = false
+              )
+          _ <- consumeMany(
+                space,
+                range = (m + 1 until m + 10).toList,
+                channelsCreator = i => List(s"ch$i"),
+                patterns = List(Wildcard),
+                continuationCreator = i => s"continuation$i",
+                persist = false
+              )
+          _ <- produceMany(
+                space,
+                range = m + 11 until m + 20 toList,
+                channelCreator = i => s"ch$i",
+                datumCreator = i => s"datum$i",
+                persist = false
+              )
+          results <- consumeMany(
+                      space,
+                      range = (n until m).toList,
+                      channelsCreator = kp(List("ch1")),
+                      patterns = List(Wildcard),
+                      continuationCreator = i => s"continuation$i",
+                      persist = false
+                    )
+          rigPoint <- space.createCheckpoint()
+
+          _ <- replaySpace.rigAndReset(emptyPoint.root, rigPoint.log)
+
+          _ <- produceMany(
+                replaySpace,
+                range = n until m toList,
+                channelCreator = kp("ch1"),
+                datumCreator = i => s"datum$i",
+                persist = false
+              )
+          _ <- consumeMany(
+                replaySpace,
+                range = m + 1 until m + 10 toList,
+                channelsCreator = i => List(s"ch$i"),
+                patterns = List(Wildcard),
+                continuationCreator = i => s"continuation$i",
+                persist = false
+              )
+          _ <- produceMany(
+                replaySpace,
+                range = m + 11 until m + 20 toList,
+                channelCreator = i => s"ch$i",
+                datumCreator = i => s"datum$i",
+                persist = false
+              )
+          replayResults <- consumeMany(
+                            replaySpace,
+                            range = n until m toList,
+                            channelsCreator = kp(List("ch1")),
+                            patterns = List(Wildcard),
+                            continuationCreator = i => s"continuation$i",
+                            persist = false
+                          )
+          finalPoint <- replaySpace.createCheckpoint()
+
+          _ = replayResults should contain theSameElementsAs results
+          _ = finalPoint.root shouldBe rigPoint.root
+          _ = replaySpace.replayData shouldBe empty
+        } yield ()
+      }
+  }
+
+  "Picking n continuations from m persistent waiting continuations while doing a bunch of other junk" should "replay correctly" in forAll(
+    arbitraryRangesSize
+  ) {
+    case (n: Int, m: Int) =>
+      fixture { (store, replayStore, space, replaySpace) =>
+        for {
+          emptyPoint <- space.createCheckpoint()
+
+          _ <- consumeMany(
+                space,
+                range = n until m toList,
+                channelsCreator = i => List(s"ch$i"),
+                patterns = List(Wildcard),
+                continuationCreator = i => s"continuation$i",
+                persist = false
+              )
+          _ <- produceMany(
+                space,
+                range = m + 1 until m + 10 toList,
+                channelCreator = kp("ch1"),
+                datumCreator = i => s"datum$i",
+                persist = false
+              )
+          _ <- consumeMany(
+                space,
+                range = m + 11 until m + 20 toList,
+                channelsCreator = kp(List("ch1")),
+                patterns = List(Wildcard),
+                continuationCreator = i => s"continuation$i",
+                persist = false
+              )
+          results <- produceMany(
+                      space,
+                      range = n until m,
+                      channelCreator = i => s"ch$i",
+                      datumCreator = i => s"datum$i",
+                      persist = false
+                    )
+          rigPoint <- space.createCheckpoint()
+
+          _ <- replaySpace.rigAndReset(emptyPoint.root, rigPoint.log)
+
+          _ <- consumeMany(
+                replaySpace,
+                range = n until m toList,
+                channelsCreator = i => List(s"ch$i"),
+                patterns = List(Wildcard),
+                continuationCreator = i => s"continuation$i",
+                persist = false
+              )
+          _ <- produceMany(
+                replaySpace,
+                range = m + 1 until m + 10 toList,
+                channelCreator = kp("ch1"),
+                datumCreator = i => s"datum$i",
+                persist = false
+              )
+          _ <- consumeMany(
+                replaySpace,
+                range = m + 11 until m + 20 toList,
+                channelsCreator = kp(List("ch1")),
+                patterns = List(Wildcard),
+                continuationCreator = i => s"continuation$i",
+                persist = false
+              )
+          replayResults <- produceMany(
+                            replaySpace,
+                            range = n until m toList,
+                            channelCreator = i => s"ch$i",
+                            datumCreator = i => s"datum$i",
+                            persist = false
+                          )
+          finalPoint <- replaySpace.createCheckpoint()
+
+          _ = replayResults should contain theSameElementsAs results
+          _ = finalPoint.root shouldBe rigPoint.root
+          _ = replaySpace.replayData shouldBe empty
+        } yield ()
+      }
+  }
+
+  "Peeking data stored at two channels in 100 continuations" should "replay correctly" in
+    fixture { (store, replayStore, space, replaySpace) =>
+      for {
+        emptyPoint <- space.createCheckpoint()
+
+        range1 = 0 until 100
+        range2 = 0 until 3
+        range3 = 0 until 5
         _ <- produceMany(
               space,
-              range,
-              shuffle = false,
+              range2,
               channelCreator = kp("ch1"),
+              datumCreator = i => s"datum$i",
+              persist = false
+            )
+        _ <- produceMany(
+              space,
+              range3,
+              channelCreator = kp("ch2"),
               datumCreator = i => s"datum$i",
               persist = false
             )
         results <- consumeMany(
                     space,
-                    range,
-                    shuffle = false,
-                    channelsCreator = kp(List("ch1")),
-                    patterns = List(Wildcard),
+                    range1,
+                    channelsCreator = kp(List("ch1", "ch2")),
+                    patterns = List(Wildcard, Wildcard),
                     continuationCreator = i => s"continuation$i",
-                    persist = false
+                    persist = false,
+                    peeks = SortedSet(0, 1)
                   )
         rigPoint <- space.createCheckpoint()
 
         _ <- replaySpace.rigAndReset(emptyPoint.root, rigPoint.log)
-
         _ <- produceMany(
               replaySpace,
-              range,
-              shuffle = true,
+              range2,
               channelCreator = kp("ch1"),
+              datumCreator = i => s"datum$i",
+              persist = false
+            )
+        _ <- produceMany(
+              replaySpace,
+              range3,
+              channelCreator = kp("ch2"),
               datumCreator = i => s"datum$i",
               persist = false
             )
         replayResults <- consumeMany(
                           replaySpace,
-                          range,
-                          shuffle = true,
-                          channelsCreator = kp(List("ch1")),
-                          patterns = List(Wildcard),
+                          range1,
+                          channelsCreator = kp(List("ch1", "ch2")),
+                          patterns = List(Wildcard, Wildcard),
                           continuationCreator = i => s"continuation$i",
-                          persist = false
+                          persist = false,
+                          peeks = SortedSet(0, 1)
                         )
         finalPoint <- replaySpace.createCheckpoint()
 
+        extractedPlayResults = results.flatten
+        _ = extractedPlayResults.foreach { cr =>
+          cr._1.peek shouldBe true
+        }
+        extractedResults = replayResults.flatten
+        _ = extractedResults.foreach { cr =>
+          cr._1.peek shouldBe true
+        }
+        _ = extractedResults should have size 100
+        _ = extractedResults.map(_._2).flatten.map(_.value).toSet should have size 5
         _ = replayResults should contain theSameElementsAs results
         _ = finalPoint.root shouldBe rigPoint.root
         _ = replaySpace.replayData shouldBe empty
       } yield ()
     }
 
-  "Picking 100 datums from 100 persistent waiting datums" should "replay correctly" in
-    withTestSpaces { (store, replayStore, space, replaySpace) =>
-      for {
-        emptyPoint <- space.createCheckpoint()
-
-        range = 0 until 100
-
-        _ <- produceMany(
-              space,
-              range,
-              shuffle = false,
-              channelCreator = kp("ch1"),
-              datumCreator = i => s"datum$i",
-              persist = true
-            )
-        results <- consumeMany(
-                    space,
-                    range,
-                    shuffle = false,
-                    channelsCreator = kp(List("ch1")),
-                    patterns = List(Wildcard),
-                    continuationCreator = i => s"continuation$i",
-                    persist = false
-                  )
-        rigPoint <- space.createCheckpoint()
-
-        _ <- replaySpace.rigAndReset(emptyPoint.root, rigPoint.log)
-
-        _ <- produceMany(
-              replaySpace,
-              range,
-              shuffle = true,
-              channelCreator = kp("ch1"),
-              datumCreator = i => s"datum$i",
-              persist = true
-            )
-        replayResults <- consumeMany(
-                          replaySpace,
-                          range,
-                          shuffle = true,
-                          channelsCreator = kp(List("ch1")),
-                          patterns = List(Wildcard),
-                          continuationCreator = i => s"continuation$i",
-                          persist = false
-                        )
-        finalPoint <- replaySpace.createCheckpoint()
-
-        _ = replayResults should contain theSameElementsAs results
-        _ = finalPoint.root shouldBe rigPoint.root
-        _ = replaySpace.replayData shouldBe empty
-      } yield ()
-    }
-
-  "Picking a continuation from 100 waiting continuations" should "replay correctly" in
-    withTestSpaces { (store, replayStore, space, replaySpace) =>
-      for {
-        emptyPoint <- space.createCheckpoint()
-        range      = 0 until 100
-        _ <- consumeMany(
-              space,
-              range,
-              shuffle = false,
-              channelsCreator = kp(List("ch1")),
-              patterns = List(Wildcard),
-              continuationCreator = i => s"continuation$i",
-              persist = false
-            )
-        result <- space.produce(
-                   channel = "ch1",
-                   data = "datum1",
-                   persist = false
-                 )
-        rigPoint <- space.createCheckpoint()
-        _        <- replaySpace.rigAndReset(emptyPoint.root, rigPoint.log)
-        _ <- consumeMany(
-              replaySpace,
-              range,
-              shuffle = true,
-              channelsCreator = kp(List("ch1")),
-              patterns = List(Wildcard),
-              continuationCreator = i => s"continuation$i",
-              persist = false
-            )
-        replayResult <- replaySpace.produce(
-                         channel = "ch1",
-                         data = "datum1",
-                         persist = false
-                       )
-        finalPoint <- replaySpace.createCheckpoint()
-
-        _ = replayResult shouldBe result
-        _ = finalPoint.root shouldBe rigPoint.root
-        _ = replaySpace.replayData shouldBe empty
-      } yield ()
-    }
-
-  "Picking 100 continuations from 100 waiting continuations" should "replay correctly" in
-    withTestSpaces { (store, replayStore, space, replaySpace) =>
-      for {
-        emptyPoint <- space.createCheckpoint()
-
-        range = 0 until 100
-
-        _ <- consumeMany(
-              space,
-              range,
-              shuffle = false,
-              channelsCreator = kp(List("ch1")),
-              patterns = List(Wildcard),
-              continuationCreator = i => s"continuation$i",
-              persist = false
-            )
-        results <- produceMany(
-                    space,
-                    range,
-                    shuffle = false,
-                    channelCreator = kp("ch1"),
-                    datumCreator = i => s"datum$i",
-                    persist = false
-                  )
-        rigPoint <- space.createCheckpoint()
-
-        _ <- replaySpace.rigAndReset(emptyPoint.root, rigPoint.log)
-
-        _ <- consumeMany(
-              replaySpace,
-              range,
-              shuffle = true,
-              channelsCreator = kp(List("ch1")),
-              patterns = List(Wildcard),
-              continuationCreator = i => s"continuation$i",
-              persist = false
-            )
-        replayResults <- produceMany(
-                          replaySpace,
-                          range,
-                          shuffle = true,
-                          channelCreator = kp("ch1"),
-                          datumCreator = i => s"datum$i",
-                          persist = false
-                        )
-        finalPoint <- replaySpace.createCheckpoint()
-
-        _ = replayResults should contain theSameElementsAs results
-        _ = finalPoint.root shouldBe rigPoint.root
-        _ = replaySpace.replayData shouldBe empty
-      } yield ()
-    }
-
-  "Picking 100 continuations from 100 persistent waiting continuations" should "replay correctly" in
-    withTestSpaces { (store, replayStore, space, replaySpace) =>
-      for {
-        emptyPoint <- space.createCheckpoint()
-
-        range = 0 until 100
-
-        _ <- consumeMany(
-              space,
-              range,
-              shuffle = false,
-              channelsCreator = kp(List("ch1")),
-              patterns = List(Wildcard),
-              continuationCreator = i => s"continuation$i",
-              persist = true
-            )
-        results <- produceMany(
-                    space,
-                    range,
-                    shuffle = false,
-                    channelCreator = kp("ch1"),
-                    datumCreator = i => s"datum$i",
-                    persist = false
-                  )
-        rigPoint <- space.createCheckpoint()
-
-        _ <- replaySpace.rigAndReset(emptyPoint.root, rigPoint.log)
-
-        _ <- consumeMany(
-              replaySpace,
-              range,
-              shuffle = true,
-              channelsCreator = kp(List("ch1")),
-              patterns = List(Wildcard),
-              continuationCreator = i => s"continuation$i",
-              persist = true
-            )
-        replayResults <- produceMany(
-                          replaySpace,
-                          range,
-                          shuffle = true,
-                          channelCreator = kp("ch1"),
-                          datumCreator = i => s"datum$i",
-                          persist = false
-                        )
-        finalPoint <- replaySpace.createCheckpoint()
-
-        _ = replayResults should contain theSameElementsAs results
-        _ = finalPoint.root shouldBe rigPoint.root
-        _ = replaySpace.replayData shouldBe empty
-      } yield ()
-    }
-
-  "Pick 100 continuations from 100 waiting continuations stored at two channels" should "replay correctly" in
-    withTestSpaces { (store, replayStore, space, replaySpace) =>
-      for {
-        emptyPoint <- space.createCheckpoint()
-
-        range = 0 until 100
-
-        _ <- consumeMany(
-              space,
-              range,
-              shuffle = false,
-              channelsCreator = kp(List("ch1", "ch2")),
-              patterns = List(Wildcard, Wildcard),
-              continuationCreator = i => s"continuation$i",
-              persist = false
-            )
-        _ <- produceMany(
-              space,
-              range,
-              shuffle = false,
-              channelCreator = kp("ch1"),
-              datumCreator = kp("datum1"),
-              persist = false
-            )
-        results <- produceMany(
-                    space,
-                    range,
-                    shuffle = false,
-                    channelCreator = kp("ch2"),
-                    datumCreator = kp("datum2"),
-                    persist = false
-                  )
-        rigPoint <- space.createCheckpoint()
-
-        _ <- replaySpace.rigAndReset(emptyPoint.root, rigPoint.log)
-
-        _ <- consumeMany(
-              replaySpace,
-              range,
-              shuffle = true,
-              channelsCreator = kp(List("ch1", "ch2")),
-              patterns = List(Wildcard, Wildcard),
-              continuationCreator = i => s"continuation$i",
-              persist = false
-            )
-        _ <- produceMany(
-              replaySpace,
-              range,
-              shuffle = true,
-              channelCreator = kp("ch1"),
-              datumCreator = kp("datum1"),
-              persist = false
-            )
-        replayResults <- produceMany(
-                          replaySpace,
-                          range,
-                          shuffle = true,
-                          channelCreator = kp("ch2"),
-                          datumCreator = kp("datum2"),
-                          persist = false
-                        )
-        finalPoint <- replaySpace.createCheckpoint()
-
-        _ = replayResults should contain theSameElementsAs results
-        _ = finalPoint.root shouldBe rigPoint.root
-        _ = replaySpace.replayData shouldBe empty
-      } yield ()
-    }
-
-  "Picking 100 datums from 100 waiting datums while doing a bunch of other junk" should "replay correctly" in
-    withTestSpaces { (store, replayStore, space, replaySpace) =>
-      for {
-        emptyPoint <- space.createCheckpoint()
-
-        _ <- produceMany(
-              space,
-              range = 0 until 100,
-              shuffle = false,
-              channelCreator = kp("ch1"),
-              datumCreator = i => s"datum$i",
-              persist = false
-            )
-        _ <- consumeMany(
-              space,
-              range = 100 until 200,
-              shuffle = false,
-              channelsCreator = i => List(s"ch$i"),
-              patterns = List(Wildcard),
-              continuationCreator = i => s"continuation$i",
-              persist = false
-            )
-        _ <- produceMany(
-              space,
-              range = 200 until 300,
-              shuffle = false,
-              channelCreator = i => s"ch$i",
-              datumCreator = i => s"datum$i",
-              persist = false
-            )
-        results <- consumeMany(
-                    space,
-                    range = 0 until 100,
-                    shuffle = false,
-                    channelsCreator = kp(List("ch1")),
-                    patterns = List(Wildcard),
-                    continuationCreator = i => s"continuation$i",
-                    persist = false
-                  )
-        rigPoint <- space.createCheckpoint()
-
-        _ <- replaySpace.rigAndReset(emptyPoint.root, rigPoint.log)
-
-        _ <- produceMany(
-              replaySpace,
-              range = 0 until 100,
-              shuffle = true,
-              channelCreator = kp("ch1"),
-              datumCreator = i => s"datum$i",
-              persist = false
-            )
-        _ <- consumeMany(
-              replaySpace,
-              range = 100 until 200,
-              shuffle = true,
-              channelsCreator = i => List(s"ch$i"),
-              patterns = List(Wildcard),
-              continuationCreator = i => s"continuation$i",
-              persist = false
-            )
-        _ <- produceMany(
-              replaySpace,
-              range = 200 until 300,
-              shuffle = true,
-              channelCreator = i => s"ch$i",
-              datumCreator = i => s"datum$i",
-              persist = false
-            )
-        replayResults <- consumeMany(
-                          replaySpace,
-                          range = 0 until 100,
-                          shuffle = true,
-                          channelsCreator = kp(List("ch1")),
-                          patterns = List(Wildcard),
-                          continuationCreator = i => s"continuation$i",
-                          persist = false
-                        )
-        finalPoint <- replaySpace.createCheckpoint()
-
-        _ = replayResults should contain theSameElementsAs results
-        _ = finalPoint.root shouldBe rigPoint.root
-        _ = replaySpace.replayData shouldBe empty
-      } yield ()
-    }
-
-  "Picking 100 continuations from 100 persistent waiting continuations while doing a bunch of other junk" should "replay correctly" in
-    withTestSpaces { (store, replayStore, space, replaySpace) =>
-      for {
-        emptyPoint <- space.createCheckpoint()
-
-        _ <- consumeMany(
-              space,
-              range = 0 until 100,
-              shuffle = false,
-              channelsCreator = i => List(s"ch$i"),
-              patterns = List(Wildcard),
-              continuationCreator = i => s"continuation$i",
-              persist = false
-            )
-        _ <- produceMany(
-              space,
-              range = 100 until 200,
-              shuffle = false,
-              channelCreator = kp("ch1"),
-              datumCreator = i => s"datum$i",
-              persist = false
-            )
-        _ <- consumeMany(
-              space,
-              range = 200 until 300,
-              shuffle = false,
-              channelsCreator = kp(List("ch1")),
-              patterns = List(Wildcard),
-              continuationCreator = i => s"continuation$i",
-              persist = false
-            )
-        results <- produceMany(
-                    space,
-                    range = 0 until 100,
-                    shuffle = false,
-                    channelCreator = i => s"ch$i",
-                    datumCreator = i => s"datum$i",
-                    persist = false
-                  )
-        rigPoint <- space.createCheckpoint()
-
-        _ <- replaySpace.rigAndReset(emptyPoint.root, rigPoint.log)
-
-        _ <- consumeMany(
-              replaySpace,
-              range = 0 until 100,
-              shuffle = true,
-              channelsCreator = i => List(s"ch$i"),
-              patterns = List(Wildcard),
-              continuationCreator = i => s"continuation$i",
-              persist = false
-            )
-        _ <- produceMany(
-              replaySpace,
-              range = 100 until 200,
-              shuffle = true,
-              channelCreator = kp("ch1"),
-              datumCreator = i => s"datum$i",
-              persist = false
-            )
-        _ <- consumeMany(
-              replaySpace,
-              range = 200 until 300,
-              shuffle = true,
-              channelsCreator = kp(List("ch1")),
-              patterns = List(Wildcard),
-              continuationCreator = i => s"continuation$i",
-              persist = false
-            )
-        replayResults <- produceMany(
-                          replaySpace,
-                          range = 0 until 100,
-                          shuffle = true,
-                          channelCreator = i => s"ch$i",
-                          datumCreator = i => s"datum$i",
-                          persist = false
-                        )
-        finalPoint <- replaySpace.createCheckpoint()
-
-        _ = replayResults should contain theSameElementsAs results
-        _ = finalPoint.root shouldBe rigPoint.root
-        _ = replaySpace.replayData shouldBe empty
-      } yield ()
-    }
-
-  "Replay rspace" should "correctly remove things from replay data" in withTestSpaces {
+  "Replay rspace" should "correctly remove things from replay data" in fixture {
     (store, replayStore, space, replaySpace) =>
       val channels = List("ch1")
       val patterns = List[Pattern](Wildcard)
@@ -710,8 +980,7 @@ trait ReplayRSpaceTests
 
         _ <- consumeMany(
               space,
-              range = 0 to 1,
-              shuffle = false,
+              range = 0 to 1 toList,
               channelsCreator = kp(channels),
               patterns = patterns,
               continuationCreator = kp(k),
@@ -719,8 +988,7 @@ trait ReplayRSpaceTests
             )
         _ <- produceMany(
               space,
-              range = 0 to 1,
-              shuffle = false,
+              range = 0 to 1 toList,
               channelCreator = kp(channels(0)),
               datumCreator = kp(datum),
               persist = false
@@ -742,23 +1010,24 @@ trait ReplayRSpaceTests
       } yield ()
   }
 
-  "producing" should "return same, stable checkpoint root hashes" in {
-    def process(indices: Seq[Int]): Checkpoint = withTestSpaces {
-      (store, replayStore, space, replaySpace) =>
-        Task.delay {
-          for (i <- indices) {
-            replaySpace.produce("ch1", s"datum$i", false).unsafeRunSync
+  "producing" should "return same, stable checkpoint root hashes" in forAll(arbitraryRangeSize) {
+    n: Int =>
+      def process(indices: Seq[Int]): Checkpoint = fixture {
+        (store, replayStore, space, replaySpace) =>
+          Task.delay {
+            for (i <- indices) {
+              replaySpace.produce("ch1", s"datum$i", false).unsafeRunSync
+            }
+            space.createCheckpoint().unsafeRunSync
           }
-          space.createCheckpoint().unsafeRunSync
-        }
-    }
+      }
 
-    val cp1 = process(0 to 10)
-    val cp2 = process(10 to 0 by -1)
-    cp1.root shouldBe cp2.root
+      val cp1 = process(0 to n)
+      val cp2 = process(n to 0 by -1)
+      cp1.root shouldBe cp2.root
   }
 
-  "an install" should "be available after resetting to a checkpoint" in withTestSpaces {
+  "an install" should "be available after resetting to a checkpoint" in fixture {
     (store, replayStore, space, replaySpace) =>
       val channel      = "ch1"
       val datum        = "datum1"
@@ -785,7 +1054,7 @@ trait ReplayRSpaceTests
     """|empty the replay store,
        |reset the replay trie updates log,
        |and reset the replay data""".stripMargin in
-    withTestSpaces { (store, replayStore, space, replaySpace) =>
+    fixture { (_, replayStore, space, replaySpace) =>
       val channels     = List("ch1")
       val patterns     = List(Wildcard)
       val continuation = "continuation"
@@ -803,14 +1072,15 @@ trait ReplayRSpaceTests
         consume2 <- replaySpace.consume(channels, patterns, continuation, false)
         _        = consume2 shouldBe None
 
-        _ = replayStore.isEmpty shouldBe false
-        _ = replayStore.getTrieUpdates.length shouldBe 1
-        _ = replayStore.getTrieUpdateCount shouldBe 1
+        _ <- replayStore.get().isEmpty.map(_ shouldBe false)
+        _ <- replayStore
+              .get()
+              .changes()
+              .map(collectActions[InsertContinuations[String, Pattern, String]])
+              .map(_.length shouldBe 1)
 
         _ <- replaySpace.reset(emptyPoint.root)
-        _ = replayStore.isEmpty shouldBe true
-        _ = replayStore.getTrieUpdates.length shouldBe 0
-        _ = replayStore.getTrieUpdateCount shouldBe 0
+        _ <- replayStore.get().isEmpty.map(_ shouldBe true)
         _ = replaySpace.replayData shouldBe empty
 
         checkpoint1 <- replaySpace.createCheckpoint()
@@ -823,7 +1093,7 @@ trait ReplayRSpaceTests
        |reset the replay event log,
        |reset the replay trie updates log,
        |and reset the replay data""".stripMargin in
-    withTestSpaces { (store, replayStore, space, replaySpace) =>
+    fixture { (store, replayStore, space, replaySpace) =>
       val channels     = List("ch1")
       val patterns     = List(Wildcard)
       val continuation = "continuation"
@@ -841,17 +1111,18 @@ trait ReplayRSpaceTests
         consume2 <- replaySpace.consume(channels, patterns, continuation, false)
         _        = consume2 shouldBe None
 
-        _ = replayStore.isEmpty shouldBe false
-        _ = replayStore.getTrieUpdates.length shouldBe 1
-        _ = replayStore.getTrieUpdateCount shouldBe 1
+        _ <- replayStore.get().isEmpty.map(_ shouldBe false)
+        _ <- replayStore
+              .get()
+              .changes()
+              .map(collectActions[InsertContinuations[String, Pattern, String]])
+              .map(_.length shouldBe 1)
 
         checkpoint0 <- replaySpace.createCheckpoint()
         _           = checkpoint0.log shouldBe empty // we don't record trace logs in ReplayRspace
 
         _ <- replaySpace.clear()
-        _ = replayStore.isEmpty shouldBe true
-        _ = replayStore.getTrieUpdates.length shouldBe 0
-        _ = replayStore.getTrieUpdateCount shouldBe 0
+        _ = replayStore.get().isEmpty.map(_ shouldBe true)
         _ = replaySpace.replayData shouldBe empty
 
         checkpoint1 <- replaySpace.createCheckpoint()
@@ -859,32 +1130,7 @@ trait ReplayRSpaceTests
       } yield ()
     }
 
-  "after close rspace" should "throw RSpaceClosedException on all store operations" in
-    withTestSpaces { (store, replayStore, space, replaySpace) =>
-      val channel      = "ch1"
-      val key          = List(channel)
-      val patterns     = List(Wildcard)
-      val continuation = "continuation"
-      val data         = "datum1"
-
-      Task.delay {
-        replaySpace.close().unsafeRunSync
-
-        an[RSpaceClosedException] shouldBe thrownBy(
-          replaySpace.install(key, patterns, continuation).unsafeRunSync
-        )
-
-        an[RSpaceClosedException] shouldBe thrownBy(
-          replaySpace.consume(key, patterns, continuation, false).unsafeRunSync
-        )
-
-        an[RSpaceClosedException] shouldBe thrownBy(
-          replaySpace.produce(channel, data, false).unsafeRunSync
-        )
-      }
-    }
-
-  "replay" should "not allow for ambiguous executions" in withTestSpaces {
+  "replay" should "not allow for ambiguous executions" in fixture {
     (store, replayStore, space, replaySpace) =>
       val noMatch                 = None
       val channel1                = "ch1"
@@ -907,10 +1153,9 @@ trait ReplayRSpaceTests
 
       for {
         emptyCh <- space.createCheckpoint()
-        //some maliciously 'random' play order
-        _ <- space.produce(channel1, data3, false, 0) shouldBeF noMatch
-        _ <- space.produce(channel1, data3, false, 0) shouldBeF noMatch
-        _ <- space.produce(channel2, data1, false, 0) shouldBeF noMatch
+        _       <- space.produce(channel1, data3, false, 0) shouldBeF noMatch
+        _       <- space.produce(channel1, data3, false, 0) shouldBeF noMatch
+        _       <- space.produce(channel2, data1, false, 0) shouldBeF noMatch
 
         _ <- space
               .consume(key1, patterns, continuation1, false, 0) shouldNotBeF Option.empty
@@ -925,7 +1170,6 @@ trait ReplayRSpaceTests
         //rig
         _ <- replaySpace.rigAndReset(emptyCh.root, afterPlay.log)
 
-        //some maliciously 'random' replay order
         _ <- replaySpace.produce(channel1, data3, false, 0) shouldBeF noMatch
         _ <- replaySpace.produce(channel1, data3, false, 0) shouldBeF noMatch
         _ <- replaySpace.produce(channel2, data1, false, 0) shouldBeF noMatch
@@ -942,20 +1186,50 @@ trait ReplayRSpaceTests
         _ = replaySpace.replayData.isEmpty shouldBe true
       } yield ()
   }
+
+  "checkReplayData" should "proceed if replayData is empty" in fixture { (_, _, _, replaySpace) =>
+    replaySpace.checkReplayData()
+  }
+
+  it should "raise an error if replayData contains elements" in fixture {
+    (_, _, space, replaySpace) =>
+      val channel      = "ch1"
+      val channels     = List(channel)
+      val patterns     = List(Wildcard)
+      val datum        = "datum"
+      val continuation = "continuation"
+
+      for {
+        _        <- space.consume(channels, patterns, continuation, false)
+        _        <- space.produce(channel, datum, false)
+        c        <- space.createCheckpoint()
+        _        <- replaySpace.rigAndReset(c.root, c.log)
+        res      <- replaySpace.checkReplayData().attempt
+        Left(ex) = res
+      } yield ex shouldBe a[ReplayException]
+  }
+
 }
 
-trait ReplayRSpaceTestsBase[C, P, A, K] extends FlatSpec with Matchers with OptionValues {
+trait ReplayRSpaceTestsBase[C, P, A, K]
+    extends FlatSpec
+    with Matchers
+    with OptionValues
+    with PropertyChecks {
   val logger = Logger(this.getClass.getName.stripSuffix("$"))
+
+  implicit override val generatorDrivenConfig =
+    PropertyCheckConfiguration(minSize = 10, minSuccessful = 5)
 
   override def withFixture(test: NoArgTest): Outcome = {
     logger.debug(s"Test: ${test.name}")
     super.withFixture(test)
   }
 
-  def withTestSpaces[S](
+  def fixture[S](
       f: (
-          IStore[Task, C, P, A, K],
-          IStore[Task, C, P, A, K],
+          AtomicAny[HotStore[Task, C, P, A, K]],
+          AtomicAny[HotStore[Task, C, P, A, K]],
           ISpace[Task, C, P, A, A, K],
           IReplaySpace[Task, C, P, A, A, K]
       ) => Task[S]
@@ -964,145 +1238,16 @@ trait ReplayRSpaceTestsBase[C, P, A, K] extends FlatSpec with Matchers with Opti
       sc: Serialize[C],
       sp: Serialize[P],
       sa: Serialize[A],
-      sk: Serialize[K],
-      oC: Ordering[C]
+      sk: Serialize[K]
   ): S
-}
-
-trait LMDBReplayRSpaceTestsBase[C, P, A, K] extends ReplayRSpaceTestsBase[C, P, A, K] {
-  import SchedulerPools.global
-  override def withTestSpaces[S](
-      f: (
-          IStore[Task, C, P, A, K],
-          IStore[Task, C, P, A, K],
-          ISpace[Task, C, P, A, A, K],
-          IReplaySpace[Task, C, P, A, A, K]
-      ) => Task[S]
-  )(
-      implicit
-      sc: Serialize[C],
-      sp: Serialize[P],
-      sa: Serialize[A],
-      sk: Serialize[K],
-      oC: Ordering[C]
-  ): S = {
-    implicit val log: Log[Task]          = Log.log[Task]
-    implicit val metricsF: Metrics[Task] = new Metrics.MetricsNOP[Task]()
-    val dedicated                        = SchedulerPools.rspacePool
-
-    /*
-    implicit val codecC: Codec[C] = sc.toCodec
-    implicit val codecP: Codec[P] = sp.toCodec
-    implicit val codecA: Codec[A] = sa.toCodec
-    implicit val codecK: Codec[K] = sk.toCodec
-     */
-
-    val dbDir   = Files.createTempDirectory("rchain-storage-test-")
-    val mapSize = 1024L * 1024L * 4096L
-    val env     = Context.env(dbDir, mapSize)
-    //val trieStore = LMDBTrieStore.create[Task, Blake2b256Hash, GNAT[C, P, A, K]](env, dbDir)
-
-    val store = LMDBStore.create[Task, C, P, A, K](
-      Context.create(dbDir, mapSize),
-      Branch.MASTER
-    )
-    val replayStore = LMDBStore.create[Task, C, P, A, K](
-      Context.create(dbDir, mapSize),
-      Branch.REPLAY
-    )
-    val space = RSpace
-      .create[Task, C, P, A, A, K](store, Branch.MASTER)(
-        sc,
-        sp,
-        sa,
-        sk,
-        Concurrent[Task],
-        log,
-        ContextShift[Task],
-        dedicated,
-        metricsF
-      )
-      .unsafeRunSync
-    val replaySpace =
-      ReplayRSpace
-        .create[Task, C, P, A, A, K](replayStore, Branch.REPLAY)(
-          sc,
-          sp,
-          sa,
-          sk,
-          Concurrent[Task],
-          log,
-          ContextShift[Task],
-          dedicated,
-          metricsF
-        )
-        .unsafeRunSync
-
-    try {
-      f(store, replayStore, space, replaySpace).unsafeRunSync
-    } finally {
-      space.close()
-      replaySpace.close()
-      env.close()
-      dbDir.recursivelyDelete()
-    }
-  }
-}
-
-trait MixedReplayRSpaceTestsBase[C, P, A, K] extends ReplayRSpaceTestsBase[C, P, A, K] {
-  import SchedulerPools.global
-  override def withTestSpaces[S](
-      f: (
-          IStore[Task, C, P, A, K],
-          IStore[Task, C, P, A, K],
-          ISpace[Task, C, P, A, A, K],
-          IReplaySpace[Task, C, P, A, A, K]
-      ) => Task[S]
-  )(
-      implicit
-      sc: Serialize[C],
-      sp: Serialize[P],
-      sa: Serialize[A],
-      sk: Serialize[K],
-      oC: Ordering[C]
-  ): S = {
-    implicit lazy val s: Sync[Task]      = implicitly[Sync[Task]]
-    implicit val log: Log[Task]          = Log.log[Task]
-    implicit val metricsF: Metrics[Task] = new Metrics.MetricsNOP[Task]()
-
-    implicit val codecC: Codec[C] = sc.toCodec
-    implicit val codecP: Codec[P] = sp.toCodec
-    implicit val codecA: Codec[A] = sa.toCodec
-    implicit val codecK: Codec[K] = sk.toCodec
-
-    val dbDir = Files.createTempDirectory("rchain-storage-test-")
-    val env   = Context.env(dbDir, 1024L * 1024L * 4096L)
-
-    val trieStore   = LMDBTrieStore.create[Task, Blake2b256Hash, GNAT[C, P, A, K]](env, dbDir)
-    val store       = LockFreeInMemoryStore.create(trieStore, Branch.MASTER)
-    val replayStore = LockFreeInMemoryStore.create(trieStore, Branch.REPLAY)
-
-    val space = RSpace.create[Task, C, P, A, A, K](store, Branch.MASTER).unsafeRunSync
-    val replaySpace =
-      ReplayRSpace.create[Task, C, P, A, A, K](replayStore, Branch.REPLAY).unsafeRunSync
-
-    try {
-      f(store, replayStore, space, replaySpace).unsafeRunSync
-    } finally {
-      space.close()
-      replaySpace.close()
-      env.close()
-      dbDir.recursivelyDelete()
-    }
-  }
 }
 
 trait InMemoryReplayRSpaceTestsBase[C, P, A, K] extends ReplayRSpaceTestsBase[C, P, A, K] {
   import SchedulerPools.global
-  override def withTestSpaces[S](
+  override def fixture[S](
       f: (
-          IStore[Task, C, P, A, K],
-          IStore[Task, C, P, A, K],
+          AtomicAny[HotStore[Task, C, P, A, K]],
+          AtomicAny[HotStore[Task, C, P, A, K]],
           ISpace[Task, C, P, A, A, K],
           IReplaySpace[Task, C, P, A, A, K]
       ) => Task[S]
@@ -1111,131 +1256,70 @@ trait InMemoryReplayRSpaceTestsBase[C, P, A, K] extends ReplayRSpaceTestsBase[C,
       sc: Serialize[C],
       sp: Serialize[P],
       sa: Serialize[A],
-      sk: Serialize[K],
-      oC: Ordering[C]
+      sk: Serialize[K]
   ): S = {
     implicit val log: Log[Task]          = Log.log[Task]
     implicit val metricsF: Metrics[Task] = new Metrics.MetricsNOP[Task]()
 
-    val trieStore = InMemoryTrieStore.create[Blake2b256Hash, GNAT[C, P, A, K]]()
-    val store = InMemoryStore
-      .create[Task, InMemTransaction[history.State[Blake2b256Hash, GNAT[C, P, A, K]]], C, P, A, K](
-        trieStore,
-        Branch.REPLAY
+    val branch = Branch("inmem")
+
+    val dbDir: Path   = Files.createTempDirectory("replayrspace-test-")
+    val mapSize: Long = 1024L * 1024L * 1024L
+
+    def storeConfig(name: String): StoreConfig =
+      StoreConfig(
+        Files.createDirectories(dbDir.resolve(name)),
+        mapSize,
+        2,
+        2048,
+        List(EnvFlags.MDB_NOTLS)
       )
-    val space = RSpace.create[Task, C, P, A, A, K](store, Branch.REPLAY).unsafeRunSync
 
-    val replayStore =
-      new InMemoryStore[Task, InMemTransaction[history.State[Blake2b256Hash, GNAT[C, P, A, K]]], C, P, A, K](
-        trieStore,
-        Branch.REPLAY
-      )
+    val config = LMDBRSpaceStorageConfig(
+      storeConfig("cold"),
+      storeConfig("history"),
+      storeConfig("roots")
+    )
 
-    val replaySpace =
-      ReplayRSpace.create[Task, C, P, A, A, K](replayStore, Branch.REPLAY).unsafeRunSync
+    implicit val cc = sc.toCodec
+    implicit val cp = sp.toCodec
+    implicit val ca = sa.toCodec
+    implicit val ck = sk.toCodec
 
-    try {
-      f(store, replayStore, space, replaySpace).unsafeRunSync
-    } finally {
-      space.close()
-      replaySpace.close()
-    }
-  }
-}
-
-trait FaultyStoreReplayRSpaceTestsBase[C, P, A, K] extends ReplayRSpaceTestsBase[C, P, A, K] {
-  import SchedulerPools.global
-  override def withTestSpaces[S](
-      f: (
-          IStore[Task, C, P, A, K],
-          IStore[Task, C, P, A, K],
-          ISpace[Task, C, P, A, A, K],
-          IReplaySpace[Task, C, P, A, A, K]
-      ) => Task[S]
-  )(
-      implicit
-      sc: Serialize[C],
-      sp: Serialize[P],
-      sa: Serialize[A],
-      sk: Serialize[K],
-      oC: Ordering[C]
-  ): S = {
-    implicit val log: Log[Task]          = Log.log[Task]
-    implicit val metricsF: Metrics[Task] = new Metrics.MetricsNOP[Task]()
-
-    val trieStore = InMemoryTrieStore.create[Blake2b256Hash, GNAT[C, P, A, K]]()
-    val store = InMemoryStore
-      .create[Task, InMemTransaction[history.State[Blake2b256Hash, GNAT[C, P, A, K]]], C, P, A, K](
-        trieStore,
-        Branch.REPLAY
-      )
-    val space = RSpace.create[Task, C, P, A, A, K](store, Branch.REPLAY).unsafeRunSync
-    val replayStore =
-      new InMemoryStore[Task, InMemTransaction[history.State[Blake2b256Hash, GNAT[C, P, A, K]]], C, P, A, K](
-        trieStore,
-        Branch.REPLAY
-      ) {
-        private[rspace] override def createTxnWrite()
-            : InMemTransaction[coop.rchain.rspace.State[C, P, A, K]] =
-          throw new RuntimeException("Couldn't write to underlying store")
+    (for {
+      historyRepository <- HistoryRepositoryInstances.lmdbRepository[Task, C, P, A, K](config)
+      cache <- Cell.refCell[Task, Cache[C, P, A, K]](
+                Cache[C, P, A, K]()
+              )
+      store = {
+        implicit val hr = historyRepository
+        implicit val c  = cache
+        AtomicAny(HotStore.inMem[Task, C, P, A, K])
       }
-
-    val replaySpace = new ReplayRSpace[Task, C, P, A, A, K](replayStore, Branch.REPLAY)
-
-    try {
-      f(store, replayStore, space, replaySpace).unsafeRunSync
-    } finally {
-      space.close()
-      replaySpace.close()
-    }
+      space = new RSpace[Task, C, P, A, A, K](
+        historyRepository,
+        store,
+        branch
+      )
+      historyCache <- Cell.refCell[Task, Cache[C, P, A, K]](
+                       Cache[C, P, A, K]()
+                     )
+      replayStore = {
+        implicit val hr = historyRepository
+        implicit val c  = historyCache
+        AtomicAny(HotStore.inMem[Task, C, P, A, K])
+      }
+      replaySpace = new ReplayRSpace[Task, C, P, A, A, K](
+        historyRepository,
+        replayStore,
+        branch
+      )
+      res <- f(store, replayStore, space, replaySpace)
+      _   <- Sync[Task].delay(dbDir.recursivelyDelete())
+    } yield { res }).unsafeRunSync
   }
-
 }
-
-class LMDBReplayRSpaceTests
-    extends LMDBReplayRSpaceTestsBase[String, Pattern, String, String]
-    with ReplayRSpaceTests {}
 
 class InMemoryReplayRSpaceTests
     extends InMemoryReplayRSpaceTestsBase[String, Pattern, String, String]
-    with ReplayRSpaceTests {}
-
-class FaultyReplayRSpaceTests
-    extends FaultyStoreReplayRSpaceTestsBase[String, Pattern, String, String] {
-  import SchedulerPools.global
-
-  "an exception thrown inside a consume" should "not make replay rspace unresponsive" in
-    withTestSpaces { (_, _, space, replaySpace) =>
-      val channel      = "ch1"
-      val key          = List(channel)
-      val patterns     = List(Wildcard)
-      val continuation = "continuation"
-
-      Task.delay {
-        the[RuntimeException] thrownBy replaySpace
-          .consume(
-            key,
-            patterns,
-            continuation,
-            false
-          )
-          .unsafeRunSync should have message "Couldn't write to underlying store"
-      }
-    }
-
-  "an exception thrown inside a produce" should "not make replay rspace unresponsive" in
-    withTestSpaces { (_, _, space, replaySpace) =>
-      val channel = "ch1"
-      val data    = "datum1"
-
-      Task.delay {
-        the[RuntimeException] thrownBy replaySpace
-          .produce(
-            channel,
-            data,
-            false
-          )
-          .unsafeRunSync should have message "Couldn't write to underlying store"
-      }
-    }
-}
+    with ReplayRSpaceTests

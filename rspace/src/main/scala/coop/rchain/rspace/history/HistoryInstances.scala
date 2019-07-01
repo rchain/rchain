@@ -1,10 +1,10 @@
-package coop.rchain.rspace.nextgenrspace.history
+package coop.rchain.rspace.history
 
 import cats.{Applicative, FlatMap}
 import cats.effect.Sync
 import cats.implicits._
 import coop.rchain.rspace.Blake2b256Hash
-import coop.rchain.rspace.nextgenrspace.history.History._
+import coop.rchain.rspace.history.History._
 import scodec.bits.ByteVector
 import Ordering.Implicits.seqDerivedOrdering
 

@@ -1,4 +1,4 @@
-package coop.rchain.rspace.nextgenrspace.history
+package coop.rchain.rspace.history
 
 import cats.effect.Sync
 import java.nio.file.{Files, Path}

@@ -19,6 +19,9 @@ object RevAddress {
   def fromPublicKey(pk: PublicKey): Option[RevAddress] =
     tools.fromPublicKey(pk).map(RevAddress(_))
 
+  def fromEthAddress(ethAddress: String): RevAddress =
+    RevAddress(tools.fromEthAddress(ethAddress))
+
   def parse(address: String): Either[String, RevAddress] =
     tools.parse(address).map(RevAddress(_))
 

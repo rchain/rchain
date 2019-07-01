@@ -1,4 +1,4 @@
-package coop.rchain.rspace.nextgenrspace.history
+package coop.rchain.rspace.history
 
 import monix.eval.Task
 import org.scalatest.{Assertion, FlatSpec, Matchers, OptionValues}

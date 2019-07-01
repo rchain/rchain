@@ -48,37 +48,8 @@ object ArbitraryInstances {
   implicit val arbitraryBlake2b256Hash: Arbitrary[Blake2b256Hash] =
     Arbitrary(Arbitrary.arbitrary[Array[Byte]].map(bytes => Blake2b256Hash.create(bytes)))
 
-  implicit val arbitraryPointer: Arbitrary[Pointer] =
-    Arbitrary(Arbitrary.arbitrary[Blake2b256Hash].map(LeafPointer))
-
   implicit val arbitraryByteVector: Arbitrary[ByteVector] =
     Arbitrary(Arbitrary.arbitrary[Array[Byte]].map(bytes => ByteVector(bytes)))
-
-  implicit val arbitraryPointerBlock: Arbitrary[PointerBlock] =
-    Arbitrary(Gen.sized { _ =>
-      Gen
-        .listOfN(256, Arbitrary.arbitrary[Pointer])
-        .map(maybeHashes => PointerBlock.fromVector(maybeHashes.toVector))
-    })
-
-  implicit def arbitaryTrie[K, V](
-      implicit
-      arbK: Arbitrary[K],
-      arbV: Arbitrary[V]
-  ): Arbitrary[Trie[K, V]] = {
-    val genNode: Gen[Trie[K, V]] = Arbitrary.arbitrary[PointerBlock].map(pb => Node(pb))
-
-    val genLeaf: Gen[Trie[K, V]] =
-      for {
-        k <- arbK.arbitrary
-        v <- arbV.arbitrary
-      } yield Leaf(k, v)
-
-    val genTrie: Gen[Trie[K, V]] =
-      Gen.oneOf(genLeaf, genNode)
-
-    Arbitrary(genTrie)
-  }
 
   implicit val arbitraryTestKey: Arbitrary[TestKey4] =
     Arbitrary(Gen.sized { _ =>

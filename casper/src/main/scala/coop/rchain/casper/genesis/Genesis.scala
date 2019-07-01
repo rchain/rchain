@@ -1,6 +1,6 @@
 package coop.rchain.casper.genesis
 
-import java.io.PrintWriter
+import java.io.{FileNotFoundException, PrintWriter}
 import java.nio.file.{Path, Paths}
 
 import cats.effect.{Concurrent, Sync}
@@ -60,7 +60,7 @@ object Genesis {
       maybeBondsPath: Option[String],
       numValidators: Int,
       genesisPath: Path,
-      maybeWalletsPath: Option[String],
+      maybeVaultsPath: Option[String],
       minimumBond: Long,
       maximumBond: Long,
       runtimeManager: RuntimeManager[F],
@@ -69,22 +69,13 @@ object Genesis {
   ): F[BlockMessage] =
     for {
       timestamp <- deployTimestamp.fold(Time[F].currentMillis)(_.pure[F])
+      vaults    <- getVaults[F](maybeVaultsPath, genesisPath.resolve("wallets.txt"))
       bonds <- getBonds[F](
                 maybeBondsPath,
                 genesisPath.resolve("bonds.txt"),
                 numValidators,
                 genesisPath
               )
-      vaults <- bonds.toList.foldMapM {
-                 case (pk, stake) =>
-                   RevAddress.fromPublicKey(pk) match {
-                     case Some(ra) => List(Vault(ra, stake)).pure[F]
-                     case None =>
-                       Log[F].warn(
-                         s"Validator public key $pk is invalid. Proceeding without entry."
-                       ) *> List.empty[Vault].pure[F]
-                   }
-               }
       validators = bonds.toSeq.map(Validator.tupled)
       genesisBlock <- createGenesisBlock(
                        runtimeManager,
@@ -102,6 +93,66 @@ object Genesis {
                        )
                      )
     } yield genesisBlock
+
+  private def getVaults[F[_]: Sync: Log: RaiseIOError](
+      maybeVaultPath: Option[String],
+      defaultVaultPath: Path
+  ): F[Seq[Vault]] =
+    maybeVaultPath match {
+      case Some(vaultsPathStr) =>
+        val vaultsPath = Paths.get(vaultsPathStr)
+        Monad[F].ifM(exists(vaultsPath))(
+          vaultFromFile[F](vaultsPath),
+          RaiseIOError[F].raise(
+            FileNotFound(
+              new FileNotFoundException(s"Specified vaults file $vaultsPath does not exist")
+            )
+          )
+        )
+      case None =>
+        Monad[F].ifM(exists(defaultVaultPath))(
+          Log[F].info(s"Using default file $defaultVaultPath") >> vaultFromFile[F](
+            defaultVaultPath
+          ),
+          Log[F]
+            .warn(
+              "No vaults file specified and no default file found. No vaults will exist at genesis."
+            )
+            .map(_ => Seq.empty[Vault])
+        )
+    }
+
+  private def vaultFromFile[F[_]: Sync: Log: RaiseIOError](vaultsPath: Path): F[Seq[Vault]] =
+    for {
+      lines <- SourceIO
+                .open(vaultsPath)
+                .use(_.getLines)
+                .adaptError {
+                  case ex: Throwable =>
+                    new RuntimeException(
+                      s"Failed to read ${vaultsPath.toAbsolutePath} for reason: ${ex.getMessage}"
+                    )
+                }
+      vaults <- lines.traverse(parseLine[F])
+    } yield vaults
+
+  private def parseLine[F[_]: Sync: Log: RaiseIOError](line: String): F[Vault] =
+    Sync[F].fromEither(
+      fromLine(line)
+        .leftMap(errMsg => new RuntimeException(s"Error in parsing vaults file: $errMsg"))
+    )
+
+  private def fromLine(line: String): Either[String, Vault] = line.split(",") match {
+    case Array(ethAddress, initRevBalanceStr, _) =>
+      Try(initRevBalanceStr.toLong) match {
+        case Success(initRevBalance) =>
+          Right(Vault(RevAddress.fromEthAddress(ethAddress), initRevBalance))
+        case Failure(_) =>
+          Left(s"Failed to parse given initial balance $initRevBalanceStr as long.")
+      }
+
+    case _ => Left(s"Invalid vault specification:\n$line")
+  }
 
   def createGenesisBlock[F[_]: Concurrent](
       runtimeManager: RuntimeManager[F],

@@ -1,4 +1,4 @@
-package coop.rchain.rspace.nextgenrspace.history
+package coop.rchain.rspace.history
 
 import coop.rchain.rspace.{
   util,
@@ -17,7 +17,7 @@ import org.scalatest.{FlatSpec, Matchers, OptionValues}
 import scala.concurrent.duration._
 import monix.execution.Scheduler.Implicits.global
 import coop.rchain.rspace.internal.{Datum, WaitingContinuation}
-import coop.rchain.rspace.nextgenrspace.history.TestData.{randomBlake, zerosBlake}
+import coop.rchain.rspace.history.TestData.{randomBlake, zerosBlake}
 import coop.rchain.rspace.trace.{Consume, Produce}
 
 import scala.collection.concurrent.TrieMap

@@ -8,6 +8,7 @@ import cats.effect._
 import coop.rchain.metrics
 import coop.rchain.metrics.Metrics
 import coop.rchain.rspace._
+import coop.rchain.rspace.{RSpace, ReplayRSpace}
 import coop.rchain.rspace.examples.AddressBookExample._
 import coop.rchain.rspace.examples.AddressBookExample.implicits._
 import coop.rchain.rspace.history.Branch
@@ -24,7 +25,7 @@ import scala.concurrent.{Await, Future}
 import scala.concurrent.ExecutionContext.Implicits.global
 
 @org.openjdk.jmh.annotations.State(Scope.Thread)
-trait RSpaceBench {
+trait RSpaceBenchBase {
 
   var space: ISpace[Id, Channel, Pattern, Entry, Entry, EntriesCaptor] = null
 
@@ -89,7 +90,7 @@ trait RSpaceBench {
 @Warmup(iterations = 1)
 @Fork(value = 2)
 @Measurement(iterations = 10)
-class LMDBBench extends RSpaceBench {
+class RSpaceBench extends RSpaceBenchBase {
 
   val mapSize: Long  = 1024L * 1024L * 1024L
   val noTls: Boolean = false
@@ -100,75 +101,10 @@ class LMDBBench extends RSpaceBench {
 
   @Setup
   def setup() = {
-    dbDir = Files.createTempDirectory("rchain-rspace-lmdb-bench-")
-    val context   = Context.create[Id, Channel, Pattern, Entry, EntriesCaptor](dbDir, mapSize, noTls)
-    val testStore = LMDBStore.create[Id, Channel, Pattern, Entry, EntriesCaptor](context)
-    assert(testStore.toMap.isEmpty)
+    dbDir = Files.createTempDirectory("rchain-rspace-bench-")
     space = RSpace.create[Id, Channel, Pattern, Entry, Entry, EntriesCaptor](
-      testStore,
-      Branch.MASTER
-    )
-  }
-
-  @TearDown
-  def tearDown() = {
-    space.close()
-    dbDir.recursivelyDelete()
-    ()
-  }
-}
-
-@org.openjdk.jmh.annotations.State(Scope.Thread)
-@Warmup(iterations = 1)
-@Fork(value = 2)
-@Measurement(iterations = 10)
-class InMemBench extends RSpaceBench {
-
-  implicit val logF: Log[Id]            = new Log.NOPLog[Id]
-  implicit val noopMetrics: Metrics[Id] = new metrics.Metrics.MetricsNOP[Id]
-
-  @Setup
-  def setup() = {
-    val context = Context.createInMemory[Id, Channel, Pattern, Entry, EntriesCaptor]()
-    assert(context.trieStore.toMap.isEmpty)
-    val testStore: IStore[Id, Channel, Pattern, Entry, EntriesCaptor] =
-      InMemoryStore.create(context.trieStore, Branch.MASTER)
-    assert(testStore.toMap.isEmpty)
-    space = RSpace.create[Id, Channel, Pattern, Entry, Entry, EntriesCaptor](
-      testStore,
-      Branch.MASTER
-    )
-  }
-
-  @TearDown
-  def tearDown() = {
-    space.close()
-    ()
-  }
-}
-
-@org.openjdk.jmh.annotations.State(Scope.Thread)
-@Warmup(iterations = 1)
-@Fork(value = 2)
-@Measurement(iterations = 10)
-class MixedBench extends RSpaceBench {
-
-  val mapSize: Long                     = 1024L * 1024L * 1024L
-  val noTls: Boolean                    = false
-  implicit val logF: Log[Id]            = Log.log[Id]
-  implicit val noopMetrics: Metrics[Id] = new metrics.Metrics.MetricsNOP[Id]
-  var dbDir: Path                       = null
-
-  @Setup
-  def setup() = {
-    dbDir = Files.createTempDirectory("rchain-rspace-mixed-bench-")
-    val context = Context.createMixed[Id, Channel, Pattern, Entry, EntriesCaptor](dbDir, mapSize)
-    assert(context.trieStore.toMap.isEmpty)
-    val testStore: IStore[Id, Channel, Pattern, Entry, EntriesCaptor] =
-      InMemoryStore.create(context.trieStore, Branch.MASTER)
-    assert(testStore.toMap.isEmpty)
-    space = RSpace.create[Id, Channel, Pattern, Entry, Entry, EntriesCaptor](
-      testStore,
+      dbDir,
+      mapSize,
       Branch.MASTER
     )
   }

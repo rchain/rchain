@@ -55,9 +55,9 @@ in {
         *r3
       ) |
       rhoSpec!("assertMany", [
-        (("11112c4Z48VufA19YCWdUoXrXKKVza16dix2xUa5q3TpnRLcZAQg7d", "== <-", *r1), "correct RevAddress"),
-        (("1111vQiDiLGjHgjV1D7j6EbXHyStToU3iQ3eWA394p3rzYFocXGtv", "== <-", *r2), "correct RevAddress"),
-        (("11112nT39uWFt9J3CT7hi87JRmnWsQuMh1oDjfhkyfcGnjV54Umn1n", "== <-", *r3), "correct RevAddress"),
+        (("1111WPpi6SB8FpNMtC9drZg3R8T1fH2BVyT52xPUXBbdKDfmskG1r", "== <-", *r1), "correct RevAddress"),
+        (("1111pdZDG4MZ3eBfaipaD22VXmbFY6PW9ZdGDWdEcXZz4gGxTxgn9", "== <-", *r2), "correct RevAddress"),
+        (("11112CXAkc8pV2AMHUSgHGbFkqovgyY9SRja4ZLSpRC9q7qYZx5SVc", "== <-", *r3), "correct RevAddress"),
      ], *ackCh)
     }
   } |
