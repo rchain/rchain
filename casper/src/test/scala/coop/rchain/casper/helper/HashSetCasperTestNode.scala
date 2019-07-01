@@ -158,23 +158,6 @@ object HashSetCasperTestNode {
     )(_ => activeRuntime.close().liftM[CommErrT])
   }
 
-  def rigConnectionsF[F[_]: Monad](
-      n: HashSetCasperTestNode[F],
-      nodes: List[HashSetCasperTestNode[F]]
-  ): F[List[HashSetCasperTestNode[F]]] = {
-    import Connections._
-    for {
-      _ <- nodes.traverse(
-            m =>
-              n.connectionsCell
-                .flatModify(_.addConn[F](m.local))
-          )
-      _ <- nodes.traverse(
-            m => m.connectionsCell.flatModify(_.addConn[F](n.local))
-          )
-    } yield nodes ++ (n :: Nil)
-  }
-
   def standaloneEff(
       genesis: BlockMessage,
       sk: PrivateKey,
