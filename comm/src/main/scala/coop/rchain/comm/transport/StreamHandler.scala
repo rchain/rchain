@@ -29,7 +29,7 @@ final case class Header(
 sealed trait Circuit {
   val broken: Boolean
 }
-final case class Broken(error: StreamHandler.StreamError) extends Circuit {
+final case class Opened(error: StreamHandler.StreamError) extends Circuit {
   val broken: Boolean = true
 }
 final case object Closed extends Circuit {
@@ -58,7 +58,7 @@ object StreamHandler {
     final case class Unexpected(error: Throwable)     extends StreamError
 
     val wrongNetworkId: StreamError                   = WrongNetworkId
-    val circuitBroken: StreamError                    = MaxSizeReached
+    val circuitOpened: StreamError                    = MaxSizeReached
     def notFullMessage(streamed: String): StreamError = NotFullMessage(streamed)
     def unexpected(error: Throwable): StreamError     = Unexpected(error)
 
@@ -139,13 +139,13 @@ object StreamHandler {
         case (stmd, _) =>
           Right(
             stmd.copy(
-              circuit = Broken(StreamHandler.StreamError.notFullMessage("Not all data received"))
+              circuit = Opened(StreamHandler.StreamError.notFullMessage("Not all data received"))
             )
           )
       }
 
     EitherT(collectStream.attempt.map {
-      case Right(Streamed(_, _, Broken(error), _, _)) => error.asLeft
+      case Right(Streamed(_, _, Opened(error), _, _)) => error.asLeft
       case Right(stmd)                                => stmd.asRight
       case Left(t)                                    => StreamError.unexpected(t).asLeft
     })

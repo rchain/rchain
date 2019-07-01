@@ -83,7 +83,7 @@ class StreamHandlerSpec extends FunSpec with Matchers with Inside with BeforeAnd
     it("should stop receiving a stream if circuit broken") {
       // given
       val breakOnSndChunk: CircuitBreaker =
-        streamed => Broken(StreamHandler.StreamError.circuitBroken)
+        streamed => Opened(StreamHandler.StreamError.circuitOpened)
       val stream = createStream()
       // when
       val err: StreamHandler.StreamError = handleStreamErr(stream, circuitBreaker = breakOnSndChunk)

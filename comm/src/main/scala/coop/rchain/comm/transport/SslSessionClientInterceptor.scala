@@ -1,6 +1,6 @@
 package coop.rchain.comm.transport
 
-import coop.rchain.comm.protocol.routing._
+import coop.rchain.comm.protocol.routing.{Header => RHeader, _}
 import coop.rchain.comm.protocol.routing.TLResponse.Payload
 import coop.rchain.crypto.util.CertificateHelper
 import coop.rchain.shared.{Log, LogSource}
@@ -53,7 +53,7 @@ class SslSessionClientCallInterceptor[ReqT, RespT](next: ClientCall[ReqT, RespT]
 
     override def onMessage(message: RespT): Unit =
       message match {
-        case TLResponse(Payload.NoResponse(NoResponse(Some(Header(Some(sender), nid))))) =>
+        case TLResponse(Payload.NoResponse(NoResponse(Some(RHeader(Some(sender), nid))))) =>
           if (nid == networkID) {
             val sslSession: Option[SSLSession] = Option(
               self.getAttributes.get(Grpc.TRANSPORT_ATTR_SSL_SESSION)
