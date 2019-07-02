@@ -67,6 +67,10 @@ new  PoS,
               }
             } |
 
+            /**
+             * Returns a Map[PublidKey, Int] containing the rewards accumulated for each validator.
+             * The returned map contains only the committed rewards after the last closeBlock
+             */
             contract PoS (@"getRewards", returnCh) = {
               new tmpCh in {
                 getMVar!(*stateCh, *tmpCh) |
@@ -113,21 +117,18 @@ new  PoS,
             contract PoS (@"pay", @amount, returnCh) = {
               new vaultCh, transferCh, userCh, processPayCh,
                   depositCh,
-                  computeSum, totalStakeCh,
-                  computeDelta, rewardsDeltaCh,
-                  computeMergeMap, newRewardsCh in {
+                  newPendingCh in {
                 getUser!(*userCh) |
-
                 runMVar!(*stateCh, *processPayCh, *returnCh) |
                 for(@(pending, rewards, bonds), payResultCh <- processPayCh;
                     @userPk <- userCh) {
                   deposit!(userPk, amount, *depositCh) |
 
-                  distributeRewards!(amount, bonds, rewards, *newRewardsCh) |
+                  distributeRewards!(amount, bonds, pending, *newPendingCh) |
 
                   for(@depositResult <- depositCh;
-                      @newRewards <- newRewardsCh) {
-                    payResultCh!((pending, newRewards, bonds), depositResult)
+                      @newPending <- newPendingCh) {
+                    payResultCh!((newPending, rewards, bonds), depositResult)
                   }
                 }
               }
@@ -154,15 +155,30 @@ new  PoS,
             } |
 
             contract PoS(@"closeBlock", ackCh) = {
-              new blockDataCh,
+              new blockDataCh, mvarProcessCh,
                   getBlockData(`rho:block:data`),
-                  stdout(`rho:io:stdout`) in {
+                  commitReward, rewardsCh in {
                 getBlockData!(*blockDataCh) |
-                for (_, @blockNumber <- blockDataCh) {
+
+                runMVar!(*stateCh, *mvarProcessCh, *ackCh) |
+                for(_, @blockNumber <- blockDataCh;
+                    @(pendingRewards, rewards, bonds), mvarResultCh <- mvarProcessCh) {
+
                   if (blockNumber % 1000 == 0) {
-                    stdout!("TODO: a validator change should happen")
+                    new stdout(`rho:io:stdout`) in {
+                      stdout!("TODO: a validator change should happen")
+                    }
                   } |
-                  ackCh!(Nil)
+
+
+                  @ListOps!("fold", pendingRewards.toList(), rewards, *commitReward, *rewardsCh) |
+                  contract commitReward(@(pk, pending), @acc, resultCh) = {
+                    resultCh!(acc.set(pk, acc.getOrElse(pk, 0) + pending))
+                  } |
+
+                  for (@rewards <- rewardsCh) {
+                    mvarResultCh!(({}, rewards, bonds), Nil)
+                  }
                 }
               }
             }
@@ -203,9 +219,10 @@ new  PoS,
             } |
 
             for (@rewardsDelta <- rewardsDeltaCh) {
+
               @ListOps!("fold", rewardsDelta.toList(), originalRewards, *computeMergeMap, *returnCh) |
-              contract computeMergeMap(@(pk, rewardDelta), @newRewards, resultCh) = {
-                resultCh!(newRewards.set(pk, newRewards.get(pk) + rewardDelta))
+              contract computeMergeMap(@(pk, rewardDelta), @acc, resultCh) = {
+                resultCh!(acc.set(pk, acc.getOrElse(pk, 0) + rewardDelta))
               }
             }
           }

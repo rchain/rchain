@@ -182,48 +182,58 @@ match (
                 initialUser1BalanceCh, finalUser1BalanceCh,
                 initialRewardsCh, finalRewardsCh,
                 computeDelta, deltaRewardsCh, deltaSumCh, sumDelta,
-                isPositive, allRewardsPositiveCh in {
+                isPositive, allRewardsPositiveCh
+            in {
               prepareUser!("4444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444", 10000, *setupCh) |
-              for (@user1PubKey, _, @user1Vault <- setupCh) {
-                @posVault!("balance", *initialPosBalanceCh) |
-                @user1Vault!("balance", *initialUser1BalanceCh) |
-                @PoS!("getRewards", *initialRewardsCh) |
-                for(@initialPosBalance <- initialPosBalanceCh;
-                    @initialUser1Balance <- initialUser1BalanceCh;
-                    @initialRewards <- initialRewardsCh) {
-                  @PoS!("pay", 100, *retCh) |
-                  for ( @(true, _) <- retCh) {
+              for (@validatorPubKey, _, _ <- setupCh) {
+                @PoS!("bond", 100, *setupCh) |
+                for (@(true, _) <- setupCh) {
+                  prepareUser!("5555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555", 10000, *setupCh) |
+                  for (@user1PubKey, _, @user1Vault <- setupCh) {
+                    @posVault!("balance", *initialPosBalanceCh) |
+                    @user1Vault!("balance", *initialUser1BalanceCh) |
+                    @PoS!("getRewards", *initialRewardsCh) |
+                    for(@initialPosBalance <- initialPosBalanceCh;
+                        @initialUser1Balance <- initialUser1BalanceCh;
+                        @initialRewards <- initialRewardsCh) {
+                      @PoS!("pay", 100, *retCh) |
+                      for ( @(true, _) <- retCh) {
+                        @PoS!("closeBlock", *ackCh) |
+                        for (_ <- ackCh) {
+                          @posVault!("balance", *finalPosBalanceCh) |
+                          @user1Vault!("balance", *finalUser1BalanceCh) |
+                          @PoS!("getRewards", *finalRewardsCh) |
+                          for(@finalPosBalance <- finalPosBalanceCh;
+                              @finalUser1Balance <- finalUser1BalanceCh;
+                              @finalRewards <- finalRewardsCh) {
+                            @ListOps!("fold", finalRewards.toList(), {}, *computeDelta, *deltaRewardsCh) |
+                            contract computeDelta(@(pk, finalReward), @acc, resultCh) = {
+                              resultCh!(acc.set(pk, finalReward - initialRewards.get(pk)))
+                            } |
+                            for (@deltaRewards <- deltaRewardsCh) {
+                              @ListOps!("forall", deltaRewards, *isPositive, *allRewardsPositiveCh) |
+                              contract isPositive(@n, resultCh) = { resultCh!(n > 0)} |
 
-                    @posVault!("balance", *finalPosBalanceCh) |
-                    @user1Vault!("balance", *finalUser1BalanceCh) |
-                    @PoS!("getRewards", *finalRewardsCh) |
-                    for(@finalPosBalance <- finalPosBalanceCh;
-                        @finalUser1Balance <- finalUser1BalanceCh;
-                        @finalRewards <- finalRewardsCh) {
-                      @ListOps!("fold", finalRewards.toList(), {}, *computeDelta, *deltaRewardsCh) |
-                      contract computeDelta(@(pk, finalReward), @acc, resultCh) = {
-                        resultCh!(acc.set(pk, finalReward - initialRewards.get(pk)))
-                      } |
-                      for (@deltaRewards <- deltaRewardsCh) {
-                        @ListOps!("forall", deltaRewards, *isPositive, *allRewardsPositiveCh) |
-                        contract isPositive(@n, resultCh) = { resultCh!(n > 0)} |
+                              @ListOps!("fold", deltaRewards.toList(), 0, *sumDelta, *deltaSumCh) |
+                              contract sumDelta(@(_, delta), @acc, resultCh) = {
+                                resultCh!(acc + delta)
+                              } |
 
-                        @ListOps!("fold", deltaRewards.toList(), 0, *sumDelta, *deltaSumCh) |
-                        contract sumDelta(@(_, delta), @acc, resultCh) = {
-                          resultCh!(acc + delta)
-                        } |
-
-                        rhoSpec!("assertMany",
-                          [
-                            ((initialUser1Balance - finalUser1Balance, "==", 100), "the user account decreases"),
-                            ((finalPosBalance - initialPosBalance, "==", 100), "the pos account increases"),
-                            ((finalRewards.size(), "==", initialRewards.size()), "rewards map size doesn't change"),
-                            //TODO use arbitrary precision numbers instead of long ints
-                            ((98, "== <-", *deltaSumCh), "the sum difference should equal the payment"),
-                            ((true, "== <-", *allRewardsPositiveCh), "the rewards can only grow")
-                          ],
-                          *ackCh
-                        )
+                              rhoSpec!("assertMany",
+                                [
+                                  ((initialUser1Balance - finalUser1Balance, "==", 100), "the user account decreases"),
+                                  ((finalPosBalance - initialPosBalance, "==", 100), "the pos account increases"),
+                                  ((finalRewards.get(validatorPubKey), "==", 19), "the validator's finalRewards is as expected"),
+                                  ((finalRewards.size(), "==", initialRewards.size()), "rewards map size doesn't change"),
+                                  //TODO use arbitrary precision numbers instead of long ints
+                                  ((96, "== <-", *deltaSumCh), "the sum difference should equal the payment"),
+                                  ((true, "== <-", *allRewardsPositiveCh), "the rewards can only grow")
+                                ],
+                                *ackCh
+                              )
+                            }
+                          }
+                        }
                       }
                     }
                   }
@@ -233,17 +243,17 @@ match (
           } |
 
           contract test_bonding_fails_if_deposit_fails(rhoSpec, _, ackCh) = {
-            test_bonding_failure!(*rhoSpec, "5555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555", 10000, 20000, "Bond deposit failed: Insufficient funds", *ackCh)
+            test_bonding_failure!(*rhoSpec, "6666666666666666666666666666666666666666666666666666666666666666666666666666666666666666666666666666666666666666666666666666666666", 10000, 20000, "Bond deposit failed: Insufficient funds", *ackCh)
           } |
 
           contract test_bonding_fails_if_bond_too_small(rhoSpec, _, ackCh) = {
-            test_bonding_failure!(*rhoSpec, "6666666666666666666666666666666666666666666666666666666666666666666666666666666666666666666666666666666666666666666666666666666666", 10000, -1, "Bond is less than minimum!", *ackCh)
+            test_bonding_failure!(*rhoSpec, "7777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777", 10000, -1, "Bond is less than minimum!", *ackCh)
           } |
 
           contract test_bonding_fails_if_already_bonded(rhoSpec, _, ackCh) = {
             new setupCh, initialBondsCh, bond1Ch, bond2Ch, bondsCh,
                 finalRewardsCh, initialRewardsCh in {
-              prepareUser!("7777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777", 10000, *setupCh) |
+              prepareUser!("8888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888", 10000, *setupCh) |
               for (@user1PubKey, _, _ <- setupCh) {
                 @PoS!("bond", 150, *bond1Ch) |
                 for ( @(result1, _) <- bond1Ch) {
