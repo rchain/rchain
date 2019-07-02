@@ -1,12 +1,12 @@
 package coop.rchain.casper
 
-import java.nio.file.Files
+import java.nio.file.{Files, Path}
 
 import cats.implicits._
-import coop.rchain.blockstorage.BlockStore
+import coop.rchain.blockstorage.{BlockDagFileStorage, BlockStore}
 import coop.rchain.casper.genesis.Genesis
 import coop.rchain.casper.genesis.contracts._
-import coop.rchain.casper.helper.HashSetCasperTestNode.Effect
+import coop.rchain.casper.helper.HashSetCasperTestNode.{makeBlockDagFileStorageConfig, Effect}
 import coop.rchain.casper.helper.{BlockDagStorageTestFixture, HashSetCasperTestNode}
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.ConstructDeploy
@@ -105,17 +105,30 @@ object MultiParentCasperTestUtil {
     val storageSize: Long                            = 3024L * 1024 * 10
     implicit val log: Log.NOPLog[Task]               = new Log.NOPLog[Task]
     implicit val metricsEff: Metrics[Task]           = new metrics.Metrics.MetricsNOP[Task]
+
     (for {
-      activeRuntime  <- Runtime.createWithEmptyCost[Task, Task.Par](storageDirectory, storageSize)
+      rspaceDir      <- Task.delay(Files.createDirectory(storageDirectory.resolve("rspace")))
+      activeRuntime  <- Runtime.createWithEmptyCost[Task, Task.Par](rspaceDir, storageSize)
       runtimeManager <- RuntimeManager.fromRuntime[Task](activeRuntime)
       genesis        <- Genesis.createGenesisBlock(runtimeManager, genesisParameters)
       _              <- activeRuntime.close()
-    } yield GenesisContext(genesis, validavalidatorKeyPairs)).unsafeRunSync
+
+      blockStoreDir <- Task.delay(Files.createDirectory(storageDirectory.resolve("block-store")))
+      blockStore    <- BlockDagStorageTestFixture.createBlockStorage[Task](blockStoreDir)
+      _             <- blockStore.put(genesis.blockHash, genesis)
+
+      blockDagDir <- Task.delay(Files.createDirectory(storageDirectory.resolve("block-dag-store")))
+      blockDagStorage <- BlockDagFileStorage.create[Task](
+                          makeBlockDagFileStorageConfig(blockDagDir)
+                        )
+      _ <- blockDagStorage.insert(genesis, genesis, invalid = false)
+    } yield GenesisContext(genesis, validavalidatorKeyPairs, storageDirectory)).unsafeRunSync
   }
 
   case class GenesisContext(
       genesisBlock: BlockMessage,
-      validatorKeyPairs: Iterable[(PrivateKey, PublicKey)]
+      validatorKeyPairs: Iterable[(PrivateKey, PublicKey)],
+      storageDirectory: Path
   ) {
     def validatorSks: Iterable[PrivateKey] = validatorKeyPairs.map(_._1)
     def validatorPks: Iterable[PublicKey]  = validatorKeyPairs.map(_._2)

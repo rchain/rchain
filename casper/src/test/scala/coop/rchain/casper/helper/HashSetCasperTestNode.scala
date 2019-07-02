@@ -1,5 +1,6 @@
 package coop.rchain.casper.helper
 
+import java.nio.file.StandardCopyOption.REPLACE_EXISTING
 import java.nio.file.{Files, Path}
 
 import cats.effect.concurrent.Semaphore
@@ -9,7 +10,7 @@ import cats.{Applicative, ApplicativeError, Id}
 import coop.rchain.blockstorage._
 import coop.rchain.casper.CasperState.CasperStateCell
 import coop.rchain.casper.MultiParentCasper.ignoreDoppelgangerCheck
-import coop.rchain.casper.MultiParentCasperTestUtil.{defaultValidatorSks, GenesisContext}
+import coop.rchain.casper.MultiParentCasperTestUtil.GenesisContext
 import coop.rchain.casper._
 import coop.rchain.casper.engine.EngineCell._
 import coop.rchain.casper.engine._
@@ -18,7 +19,7 @@ import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.casper.util.comm.TestNetwork.TestNetwork
 import coop.rchain.casper.util.comm.{CasperPacketHandler, _}
-import coop.rchain.casper.util.rholang.{InterpreterUtil, RuntimeManager}
+import coop.rchain.casper.util.rholang.RuntimeManager
 import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.catscontrib.effect.implicits._
 import coop.rchain.catscontrib.ski._
@@ -32,7 +33,6 @@ import coop.rchain.metrics
 import coop.rchain.metrics.{Metrics, NoopSpan}
 import coop.rchain.p2p.EffectsTestInstances._
 import coop.rchain.rholang.interpreter.Runtime
-import coop.rchain.rspace.Context
 import coop.rchain.shared.PathOps.RichPath
 import coop.rchain.shared._
 import monix.eval.Task
@@ -102,20 +102,6 @@ class HashSetCasperTestNode[F[_]](
 
   val span = new NoopSpan[F]
 
-  def initialize(): F[Unit] =
-    // pre-population removed from internals of Casper
-    blockStore.put(genesis.blockHash, genesis) *>
-      blockDagStorage.getRepresentation.flatMap { dag =>
-        InterpreterUtil
-          .validateBlockCheckpoint[F](
-            genesis,
-            dag,
-            runtimeManager,
-            span
-          )
-          .void
-      }
-
   def addBlock(deployDatums: DeployData*): F[BlockMessage] =
     addBlockStatus(Valid)(deployDatums: _*)
 
@@ -159,6 +145,7 @@ object HashSetCasperTestNode {
     networkF[Effect](
       genesis.validatorSks.take(networkSize).toVector,
       genesis.genesisBlock,
+      genesis.storageDirectory,
       storageSize,
       createRuntime
     )(
@@ -184,6 +171,7 @@ object HashSetCasperTestNode {
   private def networkF[F[_]](
       sks: IndexedSeq[PrivateKey],
       genesis: BlockMessage,
+      storageMatrixPath: Path,
       storageSize: Long,
       createRuntime: (Path, Long) => Resource[F, RuntimeManager[F]]
   )(
@@ -203,7 +191,16 @@ object HashSetCasperTestNode {
         .toList
         .traverse {
           case ((name, currentPeerNode), sk) =>
-            createNode(name, currentPeerNode, genesis, sk, storageSize, logicalTime, createRuntime)
+            createNode(
+              name,
+              currentPeerNode,
+              genesis,
+              sk,
+              storageMatrixPath,
+              storageSize,
+              logicalTime,
+              createRuntime
+            )
         }
         .map(_.toVector)
 
@@ -237,6 +234,7 @@ object HashSetCasperTestNode {
       currentPeerNode: PeerNode,
       genesis: BlockMessage,
       sk: PrivateKey,
+      storageMatrixPath: Path,
       storageSize: Long,
       logicalTime: LogicalTime[F],
       createRuntime: (Path, Long) => Resource[F, RuntimeManager[F]]
@@ -246,38 +244,28 @@ object HashSetCasperTestNode {
     implicit val log       = Log.log[F]
     implicit val metricEff = new Metrics.MetricsNOP[F]
     for {
-      storageDirectories           <- BlockDagStorageTestFixture.createDirectories[F]
-      (blockStoreDir, blockDagDir) = storageDirectories
-      env                          = Context.env(blockStoreDir, mapSize)
-      blockStore <- Resource.make[F, BlockStore[F]](
-                     FileLMDBIndexBlockStore.create[F](env, blockStoreDir).map(_.right.get)
-                   )(_.close())
-      blockDagStorage <- Resource.make[F, BlockDagStorage[F]](
-                          BlockDagFileStorage
-                            .createEmptyFromGenesis[F](
-                              BlockDagFileStorage.Config(
-                                blockDagDir.resolve("latest-messages-data"),
-                                blockDagDir.resolve("latest-messages-crc"),
-                                blockDagDir.resolve("block-metadata-data"),
-                                blockDagDir.resolve("block-metadata-crc"),
-                                blockDagDir.resolve("equivocations-tracker-data"),
-                                blockDagDir.resolve("equivocations-tracker-crc"),
-                                blockDagDir.resolve("invalid-blocks-data"),
-                                blockDagDir.resolve("invalid-blocks-crc"),
-                                blockDagDir.resolve("checkpoints"),
-                                blockDagDir.resolve("block-number-index"),
-                                mapSize
-                              ),
-                              genesis
-                            )(Concurrent[F], Sync[F], Log[F])
-                            .widen
-                        )(_.close())
       storageDirectory <- Resource.make[F, Path](
                            Sync[F].delay {
-                             Files.createTempDirectory(s"hash-set-casper-test-$name")
+                             val dir = Files.createTempDirectory(s"hash-set-casper-test-$name")
+                             copyDir(storageMatrixPath, dir)
                            }
                          )(dir => Sync[F].delay { dir.recursivelyDelete() })
-      runtimeManager <- createRuntime(storageDirectory, storageSize)
+
+      blockStoreDir = storageDirectory.resolve("block-store")
+      blockStore <- Resource.make[F, BlockStore[F]](
+                     BlockDagStorageTestFixture.createBlockStorage(blockStoreDir)
+                   )(_.close())
+
+      blockDagDir = storageDirectory.resolve("block-dag-store")
+      blockDagStorage <- Resource.make[F, BlockDagStorage[F]](
+                          BlockDagFileStorage
+                            .create[F](makeBlockDagFileStorageConfig(blockDagDir))
+                            .widen
+                        )(_.close())
+
+      rspaceDir      = storageDirectory.resolve("rspace")
+      runtimeManager <- createRuntime(rspaceDir, storageSize)
+
       node <- Resource.make[F, HashSetCasperTestNode[F]] {
                for {
                  _                   <- TestNetwork.addPeer(currentPeerNode)
@@ -303,11 +291,32 @@ object HashSetCasperTestNode {
                    metricEff,
                    casperState
                  )
-                 result <- node.initialize().map(_ => node)
-               } yield result
+               } yield node
              }(_ => ().pure[F])
     } yield node
   }
+
+  private def copyDir(src: Path, dest: Path): Path = {
+    Files
+      .walk(src)
+      .forEach(source => Files.copy(source, dest.resolve(src.relativize(source)), REPLACE_EXISTING))
+    dest
+  }
+
+  def makeBlockDagFileStorageConfig(blockDagDir: Path) =
+    BlockDagFileStorage.Config(
+      blockDagDir.resolve("latest-messages-data"),
+      blockDagDir.resolve("latest-messages-crc"),
+      blockDagDir.resolve("block-metadata-data"),
+      blockDagDir.resolve("block-metadata-crc"),
+      blockDagDir.resolve("equivocations-tracker-data"),
+      blockDagDir.resolve("equivocations-tracker-crc"),
+      blockDagDir.resolve("invalid-blocks-data"),
+      blockDagDir.resolve("invalid-blocks-crc"),
+      blockDagDir.resolve("checkpoints"),
+      blockDagDir.resolve("block-number-index"),
+      mapSize
+    )
 
   val appErrId = new ApplicativeError[Id, CommError] {
     def ap[A, B](ff: Id[A => B])(fa: Id[A]): Id[B] = Applicative[Id].ap[A, B](ff)(fa)
