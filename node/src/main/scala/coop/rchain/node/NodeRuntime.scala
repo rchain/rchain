@@ -121,7 +121,7 @@ class NodeRuntime private[node] (
                               conf.server.maxStreamMessageSize,
                               conf.server.dataDir.resolve("tmp").resolve("comm"),
                               conf.server.messageConsumers
-                            )(grpcScheduler, rPConfAsk, log)
+                            )(grpcScheduler, rPConfAsk, log, metrics)
                           )
 
       externalApiServer <- api
