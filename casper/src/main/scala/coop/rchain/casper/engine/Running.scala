@@ -68,23 +68,16 @@ class Running[F[_]: RPConfAsk: BlockStore: Monad: ConnectionsCell: TransportLaye
   }
 
   private def handleBlockMessage(peer: PeerNode, b: BlockMessage): F[Unit] =
-    for {
-      isOldBlock <- MultiParentCasper[F].contains(b)
-      _ <- if (isOldBlock)
-            Log[F].info(s"Received block ${PrettyPrinter.buildString(b.blockHash)} again.")
-          else
-            handleNewBlock(peer, b)
+    MultiParentCasper[F]
+      .contains(b)
+      .ifM(
+        Log[F].info(s"Received block ${PrettyPrinter.buildString(b.blockHash)} again."),
+        for {
+          _ <- Log[F].info(s"Received ${PrettyPrinter.buildString(b)}.")
+          _ <- MultiParentCasper[F].addBlock(b, handleDoppelganger(peer, _, _))
+        } yield ()
+      )
 
-    } yield ()
-
-  private def handleNewBlock(
-      peer: PeerNode,
-      b: BlockMessage
-  ): F[Unit] =
-    for {
-      _ <- Log[F].info(s"Received ${PrettyPrinter.buildString(b)}.")
-      _ <- MultiParentCasper[F].addBlock(b, handleDoppelganger(peer, _, _))
-    } yield ()
 
   private def handleBlockRequest(peer: PeerNode, br: BlockRequest): F[Unit] =
     for {
