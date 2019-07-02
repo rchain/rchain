@@ -55,8 +55,7 @@ class RunningSpec extends WordSpec {
     }
 
     "respond to BlockRequest messages" in {
-      val blockRequest =
-        BlockRequest(Base16.encode(genesis.blockHash.toByteArray), genesis.blockHash)
+      val blockRequest = BlockRequest(genesis.blockHash)
       val test = for {
         _     <- blockStore.put(genesis.blockHash, genesis)
         _     <- engine.handle(local, blockRequest)

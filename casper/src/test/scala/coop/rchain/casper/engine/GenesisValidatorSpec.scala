@@ -68,7 +68,7 @@ class GenesisValidatorSpec extends WordSpec {
         )
         _            = assert(head.peer == local && head.msg == response)
         _            = transportLayer.reset()
-        blockRequest = BlockRequest("base16Hash", ByteString.copyFromUtf8("base16Hash"))
+        blockRequest = BlockRequest(ByteString.copyFromUtf8("base16Hash"))
         _            <- engineCell.read >>= (_.handle(local, blockRequest))
         _            = assert(transportLayer.requests.isEmpty)
       } yield ()
