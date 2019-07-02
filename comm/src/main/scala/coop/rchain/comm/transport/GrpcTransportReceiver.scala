@@ -13,6 +13,7 @@ import coop.rchain.comm.rp.ProtocolHelper
 import coop.rchain.comm.transport.buffer.LimitedBuffer
 import coop.rchain.metrics.Metrics
 import coop.rchain.shared._
+import coop.rchain.shared.PathOps.PathDelete
 
 import io.grpc.netty.NettyServerBuilder
 import io.netty.handler.ssl.SslContext
@@ -85,7 +86,8 @@ object GrpcTransportReceiver {
                     ).sequence,
                     List(
                       logger.debug(s"Dropped packet ${msg.path}"),
-                      metrics.incrementCounter("dropped.packets")
+                      metrics.incrementCounter("dropped.packets"),
+                      msg.path.deleteSingleFile[Task]
                     ).sequence
                   )
           }).as(ChunkResponse())
