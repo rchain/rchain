@@ -50,16 +50,16 @@ object GrpcTransportReceiver {
                 )
             }
 
+        private val circuitBreaker: StreamHandler.CircuitBreaker = streamed =>
+          if (streamed.header.exists(_.networkId != networkId))
+            Opened(StreamHandler.StreamError.wrongNetworkId)
+          else if (streamed.readSoFar > maxStreamMessageSize)
+            Opened(StreamHandler.StreamError.circuitOpened)
+          else Closed
+
         def stream(observable: Observable[Chunk]): Task[ChunkResponse] = {
           import StreamHandler._
           import StreamError.StreamErrorToMessage
-
-          val circuitBreaker: StreamHandler.CircuitBreaker = streamed =>
-            if (streamed.header.map(_.networkId != networkId).getOrElse(false))
-              Opened(StreamHandler.StreamError.wrongNetworkId)
-            else if (streamed.readSoFar > maxStreamMessageSize)
-              Opened(StreamHandler.StreamError.circuitOpened)
-            else Closed
 
           (handleStream(tempFolder, observable, circuitBreaker) >>= {
             case Left(error @ StreamError.Unexpected(t)) => logger.error(error.message, t)
