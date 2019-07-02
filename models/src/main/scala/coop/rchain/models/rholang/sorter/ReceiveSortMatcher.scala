@@ -29,8 +29,9 @@ object ReceiveSortMatcher extends Sortable[Receive] {
   // This function will then sort the insides of the preordered binds.
   def sortMatch[F[_]: Sync](r: Receive): F[ScoredTerm[Receive]] =
     for {
-      sortedBinds         <- r.binds.toList.traverse(sortBind[F])
-      persistentScore     = if (r.persistent) 1L else 0L
+      sortedBinds     <- r.binds.toList.traverse(sortBind[F])
+      persistentScore = if (r.persistent) 1L else 0L
+      // TODO: score peek
       connectiveUsedScore = if (r.connectiveUsed) 1L else 0L
       sortedBody          <- Sortable.sortMatch(r.body)
     } yield ScoredTerm(
@@ -38,6 +39,7 @@ object ReceiveSortMatcher extends Sortable[Receive] {
         sortedBinds.map(_.term),
         sortedBody.term,
         r.persistent,
+        r.peek,
         r.bindCount,
         r.locallyFree,
         r.connectiveUsed

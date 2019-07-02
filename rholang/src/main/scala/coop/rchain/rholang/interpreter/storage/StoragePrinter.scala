@@ -70,7 +70,7 @@ object StoragePrinter {
           patterns: Seq[BindPattern],
           continuation: TaggedContinuation,
           persist: Boolean,
-          _: SortedSet[Int],
+          peeks: SortedSet[Int],
           _: Consume
           ) =>
         val receiveBinds: Seq[ReceiveBind] = (channels zip patterns).map {
@@ -88,6 +88,7 @@ object StoragePrinter {
               receiveBinds,
               p.body,
               persist,
+              peeks.nonEmpty,
               patterns.map(_.freeCount).sum
             )
           case _ => Receive(receiveBinds, Par.defaultInstance, persist)

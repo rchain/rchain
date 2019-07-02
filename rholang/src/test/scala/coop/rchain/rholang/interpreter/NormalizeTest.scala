@@ -555,6 +555,7 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
             BitSet(0, 1, 2)
           ),
           true, // persistent
+          peek = false,
           bindCount,
           BitSet(0)
         )
@@ -598,6 +599,7 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
           ),
           Send(EVar(BoundVar(0)), List(Par().copy(exprs = List(GInt(5)))), false, BitSet(0)),
           true, // persistent
+          peek = false,
           bindCount,
           BitSet(0)
         )
@@ -638,6 +640,7 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
             BitSet(0, 1)
           ),
           persistent = false,
+          peek = false,
           bindCount,
           BitSet(),
           connectiveUsed = false
@@ -646,6 +649,49 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
     )
     result.knownFree should be(inputs.knownFree)
   }
+
+  it should "handle peek" in {
+    // for ( x, y <<- @Nil ) { x!(*y) }
+    val listBindings = new ListName()
+    listBindings.add(new NameVar("x"))
+    listBindings.add(new NameVar("y"))
+    val listLinearBinds = new ListPeekBind()
+    listLinearBinds.add(
+      new PeekBindImpl(listBindings, new NameRemainderEmpty(), new NameQuote(new PNil()))
+    )
+    val linearSimple = new PeekSimple(listLinearBinds)
+    val receipt      = new ReceiptPeek(linearSimple)
+
+    val listSend = new ListProc()
+    listSend.add(new PEval(new NameVar("y")))
+    val body       = new PSend(new NameVar("x"), new SendSingle(), listSend)
+    val basicInput = new PInput(receipt, body)
+    val bindCount  = 2
+
+    val result = ProcNormalizeMatcher.normalizeMatch[Coeval](basicInput, inputs).value
+    result.par should be(
+      inputs.par.prepend(
+        Receive(
+          List(
+            ReceiveBind(List(EVar(FreeVar(0)), EVar(FreeVar(1))), Par(), freeCount = 2)
+          ),
+          Send(
+            EVar(BoundVar(1)),
+            List[Par](EVar(BoundVar(0))),
+            false,
+            BitSet(0, 1)
+          ),
+          persistent = false,
+          peek = true,
+          bindCount,
+          BitSet(),
+          connectiveUsed = false
+        )
+      )
+    )
+    result.knownFree should be(inputs.knownFree)
+  }
+
   "PInput" should "Handle a more complicated receive" in {
     // for ( (x1, @y1) <- @Nil ; (x2, @y2) <- @1) { x1!(y2) | x2!(y1) }
     val listBindings1 = new ListName()
@@ -703,6 +749,7 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
             locallyFree = BitSet(0, 1, 2, 3)
           ),
           persistent = false,
+          peek = false,
           bindCount,
           BitSet(),
           connectiveUsed = false
@@ -745,6 +792,7 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
         ),
         Par(),
         persistent = false,
+        peek = false,
         bindCount,
         BitSet(),
         connectiveUsed = false
@@ -1002,6 +1050,7 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
               BitSet(0)
             ),
             persistent = false,
+            peek = false,
             bindCount,
             BitSet(),
             connectiveUsed = false
@@ -1194,6 +1243,7 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
           ),
           Par(),
           persistent = false,
+          peek = false,
           bindCount,
           connectiveUsed = false
         )

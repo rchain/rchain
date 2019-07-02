@@ -319,6 +319,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
             ),
             Par(),
             false,
+            false,
             3,
             BitSet()
           )
@@ -394,6 +395,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
       ),
       Send(GString("result"), List(GString("Success")), false, BitSet()),
       false,
+      false,
       3,
       BitSet()
     )
@@ -444,6 +446,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
           GString("channel"),
           freeCount = 1)),
       Send(GString("result"), List(GString("Success")), false, BitSet()),
+      false,
       false,
       1,
       BitSet()
@@ -498,6 +501,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
       ),
       Send(GString("result"), List(GString("Success")), false, BitSet()),
       false,
+      false,
       3,
       BitSet()
     )
@@ -543,6 +547,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
       Seq(ReceiveBind(Seq(GInt(2L)), GInt(2L))),
       Par(),
       false,
+      false,
       0,
       BitSet()
     )
@@ -551,6 +556,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
     val receive = Receive(
       Seq(ReceiveBind(Seq(EVar(FreeVar(0))), GInt(1L), freeCount = 1)),
       EVar(BoundVar(0)),
+      false,
       false,
       1,
       BitSet()
@@ -680,6 +686,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
         )
       ),
       Send(GString("result"), List(GString("Success")), false, BitSet()),
+      false,
       false,
       3,
       BitSet()
@@ -960,6 +967,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
     val proc = Receive(
       Seq(ReceiveBind(Seq(EVar(FreeVar(0))), GString("channel"))),
       Par(),
+      false,
       false,
       1,
       BitSet()

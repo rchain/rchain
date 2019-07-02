@@ -839,7 +839,7 @@ object ProcNormalizeMatcher {
                     case lbi: LinearBindImpl =>
                       (lbi.listname_.toList, lbi.name_, lbi.nameremainder_).pure[M]
                   }
-                  .map(x => (x, false))
+                  .map(x => (x, false, false))
             }
           case rl: ReceiptRepeated =>
             rl.receiptrepeatedimpl_ match {
@@ -849,13 +849,23 @@ object ProcNormalizeMatcher {
                     case lbi: RepeatedBindImpl =>
                       (lbi.listname_.toList, lbi.name_, lbi.nameremainder_).pure[M]
                   }
-                  .map(x => (x, true))
+                  .map(x => (x, true, false))
+            }
+          case rl: ReceiptPeek =>
+            rl.receiptpeekimpl_ match {
+              case ls: PeekSimple =>
+                ls.listpeekbind_.toList
+                  .traverse {
+                    case lbi: PeekBindImpl =>
+                      (lbi.listname_.toList, lbi.name_, lbi.nameremainder_).pure[M]
+                  }
+                  .map(x => (x, false, true))
             }
         }
 
         for {
           res                                                              <- resM
-          (bindingsRaw, persistent)                                        = res
+          (bindingsRaw, persistent, peek)                                  = res
           sourcesP                                                         <- processSources(bindingsRaw)
           (sources, thisLevelFree, sourcesLocallyFree, sourcesConnectives) = sourcesP
           bindingsProcessed                                                <- processBindings(sources)
@@ -896,6 +906,7 @@ object ProcNormalizeMatcher {
               binds,
               bodyResult.par,
               persistent,
+              peek,
               bindCount,
               sourcesLocallyFree | bindingsFree | (bodyResult.par.locallyFree
                 .from(bindCount)
