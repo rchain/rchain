@@ -63,7 +63,7 @@ class DebruijnInterpreter[M[_], F[_]](
     cost: _cost[M]
 ) extends Reduce[M] {
 
-  type Application = Option[(TaggedContinuation, Seq[ListParWithRandom], Int)]
+  type Application = Option[(TaggedContinuation, Seq[ListParWithRandom], Int, Boolean)]
 
   /**
     * Materialize a send in the store, optionally returning the matched continuation.
@@ -81,8 +81,8 @@ class DebruijnInterpreter[M[_], F[_]](
   ): M[Unit] = {
     def go(res: Application): M[Unit] =
       res match {
-        case Some((continuation, dataList, updatedSequenceNumber)) =>
-          if (persistent)
+        case Some((continuation, dataList, updatedSequenceNumber, peek)) =>
+          if (persistent && !peek)
             List(
               dispatcher.dispatch(continuation, dataList, updatedSequenceNumber),
               produce(chan, data, persistent, sequenceNumber)
@@ -106,16 +106,17 @@ class DebruijnInterpreter[M[_], F[_]](
       binds: Seq[(BindPattern, Par)],
       body: ParWithRandom,
       persistent: Boolean,
+      peek: Boolean,
       sequenceNumber: Int
   ): M[Unit] = {
     val (patterns: Seq[BindPattern], sources: Seq[Par]) = binds.unzip
     def go(res: Application): M[Unit] =
       res match {
-        case Some((continuation, dataList, updatedSequenceNumber)) =>
+        case Some((continuation, dataList, updatedSequenceNumber, _)) =>
           if (persistent)
             List(
               dispatcher.dispatch(continuation, dataList, updatedSequenceNumber),
-              consume(binds, body, persistent, sequenceNumber)
+              consume(binds, body, persistent, peek, sequenceNumber)
             ).parSequence_
           else dispatcher.dispatch(continuation, dataList, updatedSequenceNumber)
         case None => s.unit
@@ -125,7 +126,8 @@ class DebruijnInterpreter[M[_], F[_]](
       patterns.toList,
       TaggedContinuation(ParBody(body)),
       persist = persistent,
-      sequenceNumber
+      sequenceNumber,
+      peek
     ) >>= (go(_))
   }
 
@@ -323,7 +325,13 @@ class DebruijnInterpreter[M[_], F[_]](
                     0,
                     env.shift(receive.bindCount)
                   )
-      _ <- consume(binds, ParWithRandom(substBody, rand), receive.persistent, sequenceNumber)
+      _ <- consume(
+            binds,
+            ParWithRandom(substBody, rand),
+            receive.persistent,
+            receive.peek,
+            sequenceNumber
+          )
       _ <- charge[M](RECEIVE_EVAL_COST)
     } yield ()
 

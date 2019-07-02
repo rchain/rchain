@@ -76,12 +76,18 @@ trait PersistentStoreTester {
 class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
   implicit val rand: Blake2b512Random = Blake2b512Random(Array.empty[Byte])
 
+  /**
+    Do not use this method, see explanation below.
+    Use mapData and assert at call site
+    */
   def checkData(
       result: Map[
         Seq[Par],
         Row[BindPattern, ListParWithRandom, TaggedContinuation]
       ]
   )(channel: Par, data: Seq[Par], rand: Blake2b512Random): Assertion =
+    // The 'should' assertion will fail on this line making it harder to find
+    // the exact spot where the error manifested itself
     result should be(
       HashMap(
         List(channel) ->
@@ -100,6 +106,30 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
           )
       )
     )
+
+  def mapData(elements: Map[Par, (Seq[Par], Blake2b512Random)]): Iterable[
+    (
+        Seq[Par],
+        Row[BindPattern, ListParWithRandom, TaggedContinuation]
+    )
+  ] =
+    elements.map {
+      case (channel, (data, rand)) =>
+        Seq(channel) ->
+          Row[BindPattern, ListParWithRandom, TaggedContinuation](
+            List(
+              Datum.create(
+                channel,
+                ListParWithRandom(
+                  data,
+                  rand
+                ),
+                false
+              )
+            ),
+            List.empty
+          )
+    }.toIterable
 
   def checkContinuation(
       result: Map[
@@ -427,6 +457,72 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
     }
 
     checkData(receiveFirstResult)(channel, Seq(GString("Success")), mergeRand)
+    errorLog.readAndClearErrorVector.unsafeRunSync should be(Vector.empty[InterpreterError])
+  }
+
+  "eval of Send | Receive with peek" should "meet in the tuplespace and proceed." in {
+    implicit val errorLog = new ErrorLog[Task]()
+
+    val channel: Par       = GString("channel")
+    val resultChannel: Par = GString("result")
+
+    val splitRand0 = rand.splitByte(0)
+    val splitRand1 = rand.splitByte(1)
+    val mergeRand  = Blake2b512Random.merge(Seq(splitRand1, splitRand0))
+    val send =
+      Send(channel, List(GInt(7L), GInt(8L), GInt(9L)), false, BitSet())
+    val receive = Receive(
+      Seq(
+        ReceiveBind(
+          Seq(EVar(FreeVar(0)), EVar(FreeVar(1)), EVar(FreeVar(2))),
+          channel,
+          freeCount = 3
+        )
+      ),
+      Send(resultChannel, List(GString("Success")), false, BitSet()),
+      false,
+      true,
+      3,
+      BitSet()
+    )
+    val sendFirstResult = withTestSpace(errorLog) {
+      case TestFixture(space, reducer) =>
+        implicit val env = Env[Par]()
+        val inspectTaskSendFirst = for {
+          _   <- reducer.eval(send)(env, splitRand0)
+          _   <- reducer.eval(receive)(env, splitRand1)
+          res <- space.toMap
+        } yield res
+        Await.result(inspectTaskSendFirst.runToFuture, 3.seconds)
+    }
+
+    sendFirstResult.toIterable should contain theSameElementsAs mapData(
+      Map(
+        channel       -> ((Seq(GInt(7L), GInt(8L), GInt(9L)), splitRand0)),
+        resultChannel -> ((Seq(GString("Success")), mergeRand))
+      )
+    )
+
+    errorLog.readAndClearErrorVector.unsafeRunSync should be(Vector.empty[InterpreterError])
+
+    val receiveFirstResult = withTestSpace(errorLog) {
+      case TestFixture(space, reducer) =>
+        implicit val env = Env[Par]()
+        val inspectTaskReceiveFirst = for {
+          _   <- reducer.eval(receive)(env, splitRand1)
+          _   <- reducer.eval(send)(env, splitRand0)
+          res <- space.toMap
+        } yield res
+        Await.result(inspectTaskReceiveFirst.runToFuture, 3.seconds)
+    }
+
+    receiveFirstResult.toIterable should contain theSameElementsAs mapData(
+      Map(
+        channel       -> ((Seq(GInt(7L), GInt(8L), GInt(9L)), splitRand0)),
+        resultChannel -> ((Seq(GString("Success")), mergeRand))
+      )
+    )
+
     errorLog.readAndClearErrorVector.unsafeRunSync should be(Vector.empty[InterpreterError])
   }
 

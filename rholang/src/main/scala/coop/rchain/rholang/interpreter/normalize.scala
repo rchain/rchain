@@ -747,6 +747,7 @@ object ProcNormalizeMatcher {
               ),
               body = bodyResult.par,
               persistent = true,
+              peek = false,
               bindCount = boundCount,
               locallyFree = ParLocallyFree
                 .locallyFree(nameMatchResult.chan, input.env.depth) | formalsResults._3

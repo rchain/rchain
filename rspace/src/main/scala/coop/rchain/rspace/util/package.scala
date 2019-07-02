@@ -42,6 +42,19 @@ package object util {
         (continuation, data.map(_.value), sequenceNumber)
     }
 
+  implicit def unpackOptionWithPeek[C, P, K, R](
+      v: Option[(ContResult[C, P, K], Seq[Result[R]])]
+  ): Option[(K, Seq[R], Int, Boolean)] =
+    v.map(unpackTupleWithPeek)
+
+  implicit def unpackTupleWithPeek[C, P, K, R](
+      v: (ContResult[C, P, K], Seq[Result[R]])
+  ): (K, Seq[R], Int, Boolean) =
+    v match {
+      case (ContResult(continuation, _, _, _, sequenceNumber, peek), data) =>
+        (continuation, data.map(_.value), sequenceNumber, peek)
+    }
+
   implicit def unpack[T](v: Result[T]): T                     = v.value
   implicit def unpackCont[C, P, T](v: ContResult[C, P, T]): T = v.value
 

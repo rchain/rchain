@@ -5,13 +5,16 @@ import cats.effect.Sync
 import coop.rchain.rspace.ISpace.IdISpace
 import coop.rchain.rspace._
 
+import scala.collection.SortedSet
+
 trait PureRSpace[F[_], C, P, A, R, K] {
   def consume(
       channels: Seq[C],
       patterns: Seq[P],
       continuation: K,
       persist: Boolean,
-      sequenceNumber: Int = 0
+      sequenceNumber: Int = 0,
+      peek: Boolean = false
   ): F[Option[(ContResult[C, P, K], Seq[Result[R]])]]
 
   def install(channels: Seq[C], patterns: Seq[P], continuation: K): F[Option[(K, Seq[R])]]
@@ -43,9 +46,12 @@ object PureRSpace {
             patterns: Seq[P],
             continuation: K,
             persist: Boolean,
-            sequenceNumber: Int
+            sequenceNumber: Int,
+            peek: Boolean = false
         ): F[Option[(ContResult[C, P, K], Seq[Result[R]])]] =
-          space.consume(channels, patterns, continuation, persist, sequenceNumber)
+          space.consume(channels, patterns, continuation, persist, sequenceNumber, if (peek) {
+            SortedSet((0 to channels.size - 1): _*)
+          } else SortedSet.empty)
 
         def install(channels: Seq[C], patterns: Seq[P], continuation: K): F[Option[(K, Seq[R])]] =
           space.install(channels, patterns, continuation)
