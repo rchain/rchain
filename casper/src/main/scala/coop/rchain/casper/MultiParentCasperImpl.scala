@@ -457,7 +457,7 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: ConnectionsCell: TransportLa
     )
 
   private def requestMissingDependency(hash: BlockHash) =
-    CommUtil.sendBlockRequest[F](BlockRequest(Base16.encode(hash.toByteArray), hash))
+    CommUtil.sendBlockRequest[F](hash)
 
   // TODO: Slash block for status except InvalidUnslashableBlock
   private def handleInvalidBlockEffect(
@@ -551,8 +551,6 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: ConnectionsCell: TransportLa
   def fetchDependencies: F[Unit] =
     for {
       s <- Cell[F, CasperState].read
-      _ <- s.dependencyDag.dependencyFree.toList.traverse { hash =>
-            CommUtil.sendBlockRequest[F](BlockRequest(Base16.encode(hash.toByteArray), hash))
-          }
+      _ <- s.dependencyDag.dependencyFree.toList.traverse(CommUtil.sendBlockRequest[F])
     } yield ()
 }

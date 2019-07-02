@@ -9,6 +9,7 @@ import cats.effect._
 import com.google.protobuf.ByteString
 import coop.rchain.casper.LastApprovedBlock.LastApprovedBlock
 import coop.rchain.casper._
+import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.casper.engine._, EngineCell._
 import coop.rchain.casper.MultiParentCasperRef.MultiParentCasperRef
 import coop.rchain.casper.protocol._
@@ -23,7 +24,7 @@ import coop.rchain.comm.rp.ProtocolHelper
 import coop.rchain.metrics.Metrics
 import coop.rchain.p2p.effects._
 import coop.rchain.shared._
-
+import coop.rchain.crypto.codec.Base16
 import scala.concurrent.duration._
 
 object CommUtil {
@@ -41,16 +42,15 @@ object CommUtil {
   }
 
   def sendBlockRequest[F[_]: Monad: ConnectionsCell: TransportLayer: Log: Time: RPConfAsk](
-      r: BlockRequest
+      hash: BlockHash
   ): F[Unit] = {
-    val serialized = r.toByteString
-    val hashString = PrettyPrinter.buildString(r.hash)
+    val hashString = PrettyPrinter.buildString(hash)
+    val request    = BlockRequest(Base16.encode(hash.toByteArray), hash)
     for {
-      _ <- sendToPeers[F](transport.BlockRequest, serialized)
+      _ <- sendToPeers[F](transport.BlockRequest, request.toByteString)
       _ <- Log[F].info(s"Requested missing block $hashString from peers")
     } yield ()
   }
-
   def sendForkChoiceTipRequest[F[_]: Monad: ConnectionsCell: TransportLayer: Log: Time: RPConfAsk]
       : F[Unit] = {
     val serialized = ForkChoiceTipRequest().toByteString
