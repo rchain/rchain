@@ -114,13 +114,6 @@ trait ISpace[F[_], C, P, A, R, K] {
     */
   def close(): F[Unit]
 
-  /**
-    * checks it the internal state is consistent with the passed root hash
-    *
-    * @param root to verify the state against
-    */
-  protected[rspace] def isDirty(root: Blake2b256Hash): F[Boolean]
-
   // TODO: this should not be exposed
   def toMap: F[Map[Seq[C], Row[P, A, K]]]
 
