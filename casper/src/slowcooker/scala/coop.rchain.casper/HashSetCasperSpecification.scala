@@ -50,11 +50,13 @@ object HashSetCasperActions {
   def context(
       amount: Int,
       bondsGen: Seq[PublicKey] => Map[PublicKey, Long]
-  ): (BlockMessage, immutable.IndexedSeq[PrivateKey]) = {
-    val (validatorKeys, validators) = (1 to amount).map(_ => Secp256k1.newKeyPair).unzip
-    val bonds                       = bondsGen(validators)
+  ): GenesisContext = {
+    val keyPairs        = (1 to amount).map(_ => Secp256k1.newKeyPair)
+    val (_, validators) = keyPairs.unzip
+    val bonds           = bondsGen(validators)
     val genesis =
       buildGenesis(
+        keyPairs,
         Genesis(
           shardId = "HashSetCasperSpecification",
           proofOfStake = ProofOfStake(
@@ -71,7 +73,7 @@ object HashSetCasperActions {
           supply = Long.MaxValue
         )
       )
-    (genesis, validatorKeys)
+    genesis
   }
 
   def deploy(
@@ -80,7 +82,7 @@ object HashSetCasperActions {
   ): Effect[Either[DeployError, DeployId]] =
     node.casperEff.deploy(deployData)
 
-  def create(node: HashSetCasperTestNode[Effect]): EitherT[Task, CommError, BlockMessage] =
+  def create(node: HashSetCasperTestNode[Effect]): Task[BlockMessage] =
     for {
       createBlockResult1    <- node.casperEff.createBlock
       Created(signedBlock1) = createBlockResult1
@@ -98,7 +100,7 @@ object HashSetCasperActions {
     ConstructDeploy.sourceDeploy(s"new x in { x!(0) }", ts, accounting.MAX_VALUE)
 
   implicit class EffectOps[A](f: Effect[A]) {
-    def result: A = f.value.unsafeRunSync.right.get
+    def result: A = f.unsafeRunSync
   }
 }
 
@@ -123,15 +125,13 @@ object HashSetCasperSpecification extends Commands {
   override def initialPreCondition(state: State): Boolean = true
 
   override def newSut(state: State): Sut = {
-    val (genesis, validatorKeys) = context(state.size, validators => {
+    val genesisContext = context(state.size, validators => {
       val weights = Random.shuffle((1L to validators.size.toLong).toList)
       validators.zip(weights).toMap
     })
 
-    val network = TestNetwork.empty[Effect]
-
     val nodesResource = HashSetCasperTestNode
-      .networkEff(validatorKeys.take(state.size), genesis, testNetwork = network)
+      .networkEff(genesisContext, networkSize = state.size)
       .map(_.toList)
 
     print(":")

@@ -1,42 +1,34 @@
 package coop.rchain.casper.api
 
-import scala.concurrent.duration._
-
 import cats.Monad
-import cats.data.EitherT
 import cats.effect.concurrent.Semaphore
 import cats.implicits._
-
 import coop.rchain.blockstorage.BlockDagRepresentation
+import coop.rchain.casper.MultiParentCasper.ignoreDoppelgangerCheck
+import coop.rchain.casper.MultiParentCasperRef.MultiParentCasperRef
 import coop.rchain.casper._
+import coop.rchain.casper.api.BlockAPI.ApiErr
 import coop.rchain.casper.helper.HashSetCasperTestNode
-import coop.rchain.casper.helper.HashSetCasperTestNode._
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util._
 import coop.rchain.casper.util.rholang._
-import coop.rchain.casper.MultiParentCasper.ignoreDoppelgangerCheck
-import coop.rchain.casper.MultiParentCasperRef.MultiParentCasperRef
-import coop.rchain.casper.api.BlockAPI.ApiErr
 import coop.rchain.catscontrib.TaskContrib._
-import coop.rchain.crypto.signatures.Secp256k1
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.Validator.Validator
 import coop.rchain.p2p.EffectsTestInstances._
 import coop.rchain.rholang.interpreter.accounting
 import coop.rchain.shared.Time
-
-import com.google.protobuf.ByteString
 import monix.eval.Task
 import monix.execution.Scheduler
 import org.scalatest.{FlatSpec, Matchers}
 
-class CreateBlockAPITest extends FlatSpec with Matchers {
-  import MultiParentCasperTestUtil._
-  import HashSetCasperTestNode.Effect
+import scala.concurrent.duration._
 
-  private val (validatorKeys, validators) = (1 to 4).map(_ => Secp256k1.newKeyPair).unzip
-  private val bonds                       = createBonds(validators)
-  private val genesis                     = createGenesis(bonds)
+class CreateBlockAPITest extends FlatSpec with Matchers {
+  import HashSetCasperTestNode.Effect
+  import MultiParentCasperTestUtil._
+
+  val genesis = buildGenesis(buildGenesisParameters())
 
   "createBlock" should "not allow simultaneous calls" in {
     implicit val logEff    = new LogStub[Effect]
@@ -47,7 +39,7 @@ class CreateBlockAPITest extends FlatSpec with Matchers {
       def nanoTime: Task[Long]                        = timer.clock.monotonic(NANOSECONDS)
       def sleep(duration: FiniteDuration): Task[Unit] = timer.sleep(duration)
     }
-    HashSetCasperTestNode.standaloneEff(genesis, validatorKeys.head).use { node =>
+    HashSetCasperTestNode.standaloneEff(genesis).use { node =>
       val casper = new SleepingMultiParentCasperImpl[Effect](node.casperEff)
       val deploys = List(
         "@0!(0) | for(_ <- @0){ @1!(1) }",
@@ -66,35 +58,33 @@ class CreateBlockAPITest extends FlatSpec with Matchers {
           implicit casperRef: MultiParentCasperRef[Effect]
       ): Effect[
         (
-            ApiErr[DeployServiceResponse],
-            ApiErr[DeployServiceResponse],
-            ApiErr[DeployServiceResponse]
+            Either[Throwable, ApiErr[DeployServiceResponse]],
+            Either[Throwable, ApiErr[DeployServiceResponse]],
+            Either[Throwable, ApiErr[DeployServiceResponse]]
         )
       ] =
-        EitherT.liftF(
-          for {
-            t1 <- createBlock(deploys.head, blockApiLock).value.start
-            _  <- Time[Task].sleep(2.second)
-            t2 <- createBlock(deploys.last, blockApiLock).value.start //should fail because other not done
-            t3 <- createBlock(deploys.last, blockApiLock).value.start //should fail because other not done
-            r1 <- t1.join
-            r2 <- t2.join
-            r3 <- t3.join
-          } yield (r1.right.get, r2.right.get, r3.right.get)
-        )
+        for {
+          t1 <- createBlock(deploys.head, blockApiLock).start
+          _  <- Time[Task].sleep(2.second)
+          t2 <- createBlock(deploys.last, blockApiLock).start //should fail because other not done
+          t3 <- createBlock(deploys.last, blockApiLock).start //should fail because other not done
+          r1 <- t1.join.attempt
+          r2 <- t2.join.attempt
+          r3 <- t3.join.attempt
+        } yield (r1, r2, r3)
 
       val (response1, response2, response3) = (for {
         casperRef    <- MultiParentCasperRef.of[Effect]
         _            <- casperRef.set(casper)
         blockApiLock <- Semaphore[Effect](1)
         result       <- testProgram(blockApiLock)(casperRef)
-      } yield result).value.unsafeRunSync.right.get
+      } yield result).unsafeRunSync
 
       response1 shouldBe a[Right[_, DeployServiceResponse]]
       response2 shouldBe a[Left[_, DeployServiceResponse]]
       response3 shouldBe a[Left[_, DeployServiceResponse]]
-      response2.left.get shouldBe "Error: There is another propose in progress."
-      response3.left.get shouldBe "Error: There is another propose in progress."
+      response2.left.map(_.getMessage) shouldBe "Error: There is another propose in progress."
+      response3.left.map(_.getMessage) shouldBe "Error: There is another propose in progress."
 
       ().pure[Effect]
     }

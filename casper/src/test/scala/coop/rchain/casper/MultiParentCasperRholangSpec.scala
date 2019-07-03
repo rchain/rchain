@@ -1,7 +1,7 @@
 package coop.rchain.casper
 
 import coop.rchain.casper.helper.HashSetCasperTestNode
-import coop.rchain.casper.helper.HashSetCasperTestNode.{Effect, _}
+import coop.rchain.casper.helper.HashSetCasperTestNode.Effect
 import coop.rchain.casper.scalatestcontrib._
 import coop.rchain.casper.util.rholang.{RegistrySigGen, RuntimeManager}
 import coop.rchain.casper.util.{ConstructDeploy, ProtoUtil, RSpaceUtil}
@@ -18,15 +18,12 @@ class MultiParentCasperRholangSpec extends FlatSpec with Matchers with Inspector
 
   implicit val timeEff: LogicalTime[Effect] = new LogicalTime[Effect]
 
-  private val (validatorKeys, validatorPks) = (1 to 4).map(_ => Secp256k1.newKeyPair).unzip
-  private val genesis = buildGenesis(
-    buildGenesisParameters(4, createBonds(validatorPks))
-  )
+  val genesis = buildGenesis(buildGenesisParameters())
 
   //put a new casper instance at the start of each
   //test since we cannot reset it
   "MultiParentCasper" should "create blocks based on deploys" in effectTest {
-    HashSetCasperTestNode.standaloneEff(genesis, validatorKeys.head).use { implicit node =>
+    HashSetCasperTestNode.standaloneEff(genesis).use { implicit node =>
       implicit val casper: MultiParentCasperImpl[Effect] = node.casperEff
       implicit val rm: RuntimeManager[Effect]            = node.runtimeManager
 
@@ -40,7 +37,7 @@ class MultiParentCasperRholangSpec extends FlatSpec with Matchers with Inspector
         parents           = ProtoUtil.parentHashes(block)
 
         _      = parents.size should be(1)
-        _      = parents.head should be(genesis.blockHash)
+        _      = parents.head should be(genesis.genesisBlock.blockHash)
         _      = deploys.size should be(1)
         _      = deploys.head should be(deploy)
         data   <- getDataAtPublicChannel[Effect](block, 0)
@@ -50,7 +47,7 @@ class MultiParentCasperRholangSpec extends FlatSpec with Matchers with Inspector
   }
 
   it should "be able to use the registry" in effectTest {
-    HashSetCasperTestNode.standaloneEff(genesis, validatorKeys.head).use { node =>
+    HashSetCasperTestNode.standaloneEff(genesis).use { node =>
       implicit val rm: RuntimeManager[Effect] = node.runtimeManager
 
       val registerSource =

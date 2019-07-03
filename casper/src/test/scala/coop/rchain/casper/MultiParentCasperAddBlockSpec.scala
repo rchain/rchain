@@ -1,6 +1,5 @@
 package coop.rchain.casper
 
-import cats.data.EitherT
 import cats.effect.Sync
 import cats.implicits._
 import com.google.protobuf.ByteString
@@ -9,7 +8,6 @@ import coop.rchain.casper.helper.HashSetCasperTestNode._
 import coop.rchain.casper.helper.{BlockUtil, HashSetCasperTestNode}
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.scalatestcontrib._
-import coop.rchain.casper.util.comm.TestNetwork
 import coop.rchain.casper.util.rholang.RegistrySigGen
 import coop.rchain.casper.util.{ConstructDeploy, ProtoUtil, RSpaceUtil}
 import coop.rchain.catscontrib.TaskContrib.TaskOps
@@ -35,17 +33,14 @@ class MultiParentCasperAddBlockSpec extends FlatSpec with Matchers with Inspecto
 
   implicit val timeEff = new LogicalTime[Effect]
 
-  private val (validatorKeys, validatorPks) = (1 to 4).map(_ => Secp256k1.newKeyPair).unzip
-  private val genesis = buildGenesis(
-    buildGenesisParameters(4, createBonds(validatorPks))
-  )
+  val genesis = buildGenesis(buildGenesisParameters())
 
   //put a new casper instance at the start of each
   //test since we cannot reset it
   "MultiParentCasper" should "not allow multiple threads to process the same block" in {
     val scheduler = Scheduler.fixedPool("three-threads", 3)
     val testProgram =
-      HashSetCasperTestNode.standaloneEff(genesis, validatorKeys.head)(scheduler).use { node =>
+      HashSetCasperTestNode.standaloneEff(genesis)(scheduler).use { node =>
         val casper = node.casperEff
         for {
           deploy <- ConstructDeploy.basicDeployData[Effect](0)
@@ -54,30 +49,28 @@ class MultiParentCasperAddBlockSpec extends FlatSpec with Matchers with Inspecto
                     case Created(block) => block
                     case _              => throw new RuntimeException()
                   }
-          result <- EitherT(
-                     Task
-                       .racePair(
-                         casper.addBlock(block, ignoreDoppelgangerCheck[Effect]).value,
-                         casper.addBlock(block, ignoreDoppelgangerCheck[Effect]).value
-                       )
-                       .flatMap {
-                         case Left((statusA, running)) =>
-                           running.join.map((statusA, _).tupled)
+          result <- Task
+                     .racePair(
+                       casper.addBlock(block, ignoreDoppelgangerCheck[Effect]),
+                       casper.addBlock(block, ignoreDoppelgangerCheck[Effect])
+                     )
+                     .flatMap {
+                       case Left((statusA, running)) =>
+                         running.join.map((statusA, _))
 
-                         case Right((running, statusB)) =>
-                           running.join.map((_, statusB).tupled)
-                       }
-                   )
+                       case Right((running, statusB)) =>
+                         running.join.map((_, statusB))
+                     }
         } yield result
       }
     val threadStatuses: (BlockStatus, BlockStatus) =
-      testProgram.value.unsafeRunSync(scheduler).right.get
+      testProgram.unsafeRunSync(scheduler)
 
     threadStatuses should matchPattern { case (Processing, Valid) | (Valid, Processing) => }
   }
 
   it should "accept signed blocks" in effectTest {
-    HashSetCasperTestNode.standaloneEff(genesis, validatorKeys.head).use { node =>
+    HashSetCasperTestNode.standaloneEff(genesis).use { node =>
       import node._
       implicit val timeEff = new LogicalTime[Effect]
 
@@ -93,7 +86,7 @@ class MultiParentCasperAddBlockSpec extends FlatSpec with Matchers with Inspecto
   }
 
   it should "be able to create a chain of blocks from different deploys" in effectTest {
-    HashSetCasperTestNode.standaloneEff(genesis, validatorKeys.head).use { node =>
+    HashSetCasperTestNode.standaloneEff(genesis).use { node =>
       implicit val rm = node.runtimeManager
 
       for {
@@ -122,7 +115,7 @@ class MultiParentCasperAddBlockSpec extends FlatSpec with Matchers with Inspecto
   }
 
   it should "allow multiple deploys in a single block" in effectTest {
-    HashSetCasperTestNode.standaloneEff(genesis, validatorKeys.head).use { node =>
+    HashSetCasperTestNode.standaloneEff(genesis).use { node =>
       val source = " for(@x <- @0){ @0!(x) } | @0!(0) "
       for {
         deploys <- List(source, source).traverse(ConstructDeploy.sourceDeployNowF[Effect](_))
@@ -133,7 +126,7 @@ class MultiParentCasperAddBlockSpec extends FlatSpec with Matchers with Inspecto
   }
 
   it should "reject unsigned blocks" in effectTest {
-    HashSetCasperTestNode.standaloneEff(genesis, validatorKeys.head).use { node =>
+    HashSetCasperTestNode.standaloneEff(genesis).use { node =>
       implicit val timeEff = new LogicalTime[Effect]
 
       for {
@@ -153,7 +146,7 @@ class MultiParentCasperAddBlockSpec extends FlatSpec with Matchers with Inspecto
       (0 to 1)
         .map(i => ConstructDeploy.sourceDeploy(s"@$i!($i)", i.toLong, accounting.MAX_VALUE))
         .toList
-    HashSetCasperTestNode.networkEff(validatorKeys.take(2), genesis).use { nodes =>
+    HashSetCasperTestNode.networkEff(genesis, networkSize = 2).use { nodes =>
       val List(node0, node1) = nodes.toList
       for {
         unsignedBlock <- node0
@@ -173,19 +166,24 @@ class MultiParentCasperAddBlockSpec extends FlatSpec with Matchers with Inspecto
   }
 
   it should "reject blocks not from bonded validators" in effectTest {
-    HashSetCasperTestNode.standaloneEff(genesis, Secp256k1.newKeyPair._1).use { node =>
+    HashSetCasperTestNode.standaloneEff(genesis).use { node =>
       implicit val timeEff = new LogicalTime[Effect]
 
       for {
-        basicDeployData <- ConstructDeploy.basicDeployData[Effect](0)
-        _               <- node.addBlockStatus(InvalidUnslashableBlock)(basicDeployData)
-        _               = node.logEff.warns.head.contains("Ignoring block") should be(true)
+        basicDeployData         <- ConstructDeploy.basicDeployData[Effect](0)
+        block                   <- node.createBlock(basicDeployData)
+        dag                     <- node.blockDagStorage.getRepresentation
+        (sk, pk)                = Secp256k1.newKeyPair
+        illSignedBlock          <- ProtoUtil.signBlock(block, dag, pk, sk, Secp256k1.name, block.shardId)
+        status                  <- node.casperEff.addBlock(illSignedBlock, ignoreDoppelgangerCheck[Effect])
+        InvalidUnslashableBlock = status
+        _                       = node.logEff.warns.head.contains("Ignoring block") should be(true)
       } yield ()
     }
   }
 
   it should "propose blocks it adds to peers" in effectTest {
-    HashSetCasperTestNode.networkEff(validatorKeys.take(2), genesis).use { nodes =>
+    HashSetCasperTestNode.networkEff(genesis, networkSize = 2).use { nodes =>
       for {
         deployData  <- ConstructDeploy.basicDeployData[Effect](0)
         signedBlock <- nodes(0).addBlock(deployData)
@@ -201,7 +199,7 @@ class MultiParentCasperAddBlockSpec extends FlatSpec with Matchers with Inspecto
   }
 
   it should "add a valid block from peer" in effectTest {
-    HashSetCasperTestNode.networkEff(validatorKeys.take(2), genesis).use { nodes =>
+    HashSetCasperTestNode.networkEff(genesis, networkSize = 2).use { nodes =>
       for {
         deployData        <- ConstructDeploy.basicDeployData[Effect](1)
         signedBlock1Prime <- nodes(0).addBlock(deployData)
@@ -218,7 +216,7 @@ class MultiParentCasperAddBlockSpec extends FlatSpec with Matchers with Inspecto
   }
 
   it should "reject addBlock when there exist deploy by the same (user, millisecond timestamp) in the chain" in effectTest {
-    HashSetCasperTestNode.networkEff(validatorKeys.take(2), genesis).use { nodes =>
+    HashSetCasperTestNode.networkEff(genesis, networkSize = 2).use { nodes =>
       for {
         deployDatas <- (0 to 2).toList
                         .traverse[Effect, DeployData](
@@ -266,7 +264,7 @@ class MultiParentCasperAddBlockSpec extends FlatSpec with Matchers with Inspecto
   }
 
   it should "ignore adding equivocation blocks" in effectTest {
-    HashSetCasperTestNode.networkEff(validatorKeys.take(2), genesis).use { nodes =>
+    HashSetCasperTestNode.networkEff(genesis, networkSize = 2).use { nodes =>
       for {
         // Creates a pair that constitutes equivocation blocks
         basicDeployData0  <- ConstructDeploy.basicDeployData[Effect](0)
@@ -294,7 +292,7 @@ class MultiParentCasperAddBlockSpec extends FlatSpec with Matchers with Inspecto
 
   // See [[/docs/casper/images/minimal_equivocation_neglect.png]] but cross out genesis block
   it should "not ignore equivocation blocks that are required for parents of proper nodes" in effectTest {
-    HashSetCasperTestNode.networkEff(validatorKeys.take(3), genesis).use { nodes =>
+    HashSetCasperTestNode.networkEff(genesis, networkSize = 3).use { nodes =>
       for {
         deployDatas <- (0 to 5).toList
                         .traverse[Effect, DeployData](
@@ -346,7 +344,7 @@ class MultiParentCasperAddBlockSpec extends FlatSpec with Matchers with Inspecto
         _ = nodes(0).logEff.warns.size should be(0)
 
         _ <- nodes(1).casperEff
-              .normalizedInitialFault(ProtoUtil.weightMap(genesis)) shouldBeF 1f / (1f + 3f + 5f + 7f)
+              .normalizedInitialFault(ProtoUtil.weightMap(genesis.genesisBlock)) shouldBeF 1f / (1f + 3f + 5f + 7f)
         _ <- validateBlockStore(nodes(0)) { blockStore =>
               for {
                 _ <- blockStore.get(signedBlock1.blockHash) shouldBeF None
@@ -374,7 +372,7 @@ class MultiParentCasperAddBlockSpec extends FlatSpec with Matchers with Inspecto
   }
 
   it should "prepare to slash an block that includes a invalid block pointer" in effectTest {
-    HashSetCasperTestNode.networkEff(validatorKeys.take(3), genesis).use { nodes =>
+    HashSetCasperTestNode.networkEff(genesis, networkSize = 3).use { nodes =>
       for {
         deploys         <- (0 to 5).toList.traverse(i => ConstructDeploy.basicDeployData[Effect](i))
         deploysWithCost = deploys.map(d => ProcessedDeploy(deploy = Some(d))).toIndexedSeq
@@ -412,7 +410,8 @@ class MultiParentCasperAddBlockSpec extends FlatSpec with Matchers with Inspecto
 
   it should "estimate parent properly" in effectTest {
 
-    val (validatorKeys, validatorPks) = (1 to 5).map(_ => Secp256k1.newKeyPair).unzip
+    val validatorKeyPairs = (1 to 5).map(_ => Secp256k1.newKeyPair)
+    val (_, validatorPks) = validatorKeyPairs.unzip
 
     def deployment(i: Int, ts: Long): DeployData =
       ConstructDeploy.sourceDeploy(s"new x in { x!(0) }", ts, accounting.MAX_VALUE)
@@ -435,13 +434,11 @@ class MultiParentCasperAddBlockSpec extends FlatSpec with Matchers with Inspecto
         node.casperEff.addBlock(signed, ignoreDoppelgangerCheck[Effect])
       )
 
-    val network = TestNetwork.empty[Effect]
     HashSetCasperTestNode
       .networkEff(
-        validatorKeys.take(3),
         buildGenesis(
           buildGenesisParameters(
-            5,
+            validatorKeyPairs,
             Map(
               validatorPks(0) -> 3L,
               validatorPks(1) -> 1L,
@@ -451,7 +448,7 @@ class MultiParentCasperAddBlockSpec extends FlatSpec with Matchers with Inspecto
             )
           )
         ),
-        testNetwork = network
+        networkSize = 3
       )
       .map(_.toList)
       .use { nodes =>
@@ -477,7 +474,7 @@ class MultiParentCasperAddBlockSpec extends FlatSpec with Matchers with Inspecto
   }
 
   it should "succeed at slashing" in effectTest {
-    HashSetCasperTestNode.networkEff(validatorKeys.take(3), genesis).use { nodes =>
+    HashSetCasperTestNode.networkEff(genesis, networkSize = 3).use { nodes =>
       for {
         deployData            <- ConstructDeploy.basicDeployData[Effect](0)
         createBlockResult     <- nodes(0).casperEff.deploy(deployData) >> nodes(0).casperEff.createBlock
@@ -508,7 +505,8 @@ class MultiParentCasperAddBlockSpec extends FlatSpec with Matchers with Inspecto
       deploys: immutable.IndexedSeq[ProcessedDeploy],
       signedInvalidBlock: BlockMessage
   ): Effect[BlockMessage] = {
-    val postState     = RChainState().withBonds(ProtoUtil.bonds(genesis)).withBlockNumber(1)
+    val postState =
+      RChainState().withBonds(ProtoUtil.bonds(genesis.genesisBlock)).withBlockNumber(1)
     val postStateHash = Blake2b256.hash(postState.toByteArray)
     val header = Header()
       .withPostStateHash(ByteString.copyFrom(postStateHash))
@@ -525,8 +523,8 @@ class MultiParentCasperAddBlockSpec extends FlatSpec with Matchers with Inspecto
       ProtoUtil.signBlock[Effect](
         blockThatPointsToInvalidBlock,
         dag,
-        validatorPks(1),
-        validatorKeys(1),
+        defaultValidatorPks(1),
+        defaultValidatorSks(1),
         "secp256k1",
         "rchain"
       )

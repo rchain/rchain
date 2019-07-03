@@ -27,7 +27,7 @@ class DeployParamsSpec extends fixture.FlatSpec with Matchers {
 
   protected override def withFixture(test: OneArgTest): Outcome = {
     val randomInt = scala.util.Random.nextInt
-    val dbDir     = Files.createTempDirectory(s"rchain-storage-test-$randomInt")
+    val dbDir     = Files.createTempDirectory(s"rchain-storage-test-$randomInt-")
     val size      = 1024L * 1024 * 10
     (for {
       runtime <- Runtime.createWithEmptyCost[Task, Task.Par](dbDir, size)

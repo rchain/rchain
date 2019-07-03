@@ -14,5 +14,5 @@ object scalatestcontrib extends Matchers {
   }
 
   def effectTest[T](f: Effect[T])(implicit scheduler: Scheduler): T =
-    f.value.unsafeRunSync(scheduler).right.get
+    f.unsafeRunSync(scheduler)
 }

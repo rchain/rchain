@@ -2,14 +2,12 @@ package coop.rchain.casper.api
 
 import cats.implicits._
 import com.google.protobuf.ByteString
-import coop.rchain.casper.Created
-import coop.rchain.casper.MultiParentCasper.ignoreDoppelgangerCheck
+import coop.rchain.casper.MultiParentCasperTestUtil
 import coop.rchain.casper.helper.HashSetCasperTestNode
 import coop.rchain.casper.helper.HashSetCasperTestNode._
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.scalatestcontrib._
 import coop.rchain.casper.util.ConstructDeploy
-import coop.rchain.crypto.signatures.Secp256k1
 import coop.rchain.models.Expr.ExprInstance.GInt
 import coop.rchain.models._
 import coop.rchain.p2p.EffectsTestInstances.LogicalTime
@@ -21,12 +19,10 @@ class ListeningNameAPITest extends FlatSpec with Matchers with Inside {
 
   import coop.rchain.casper.MultiParentCasperTestUtil._
 
-  private val (validatorKeys, validators) = (1 to 4).map(_ => Secp256k1.newKeyPair).unzip
-  private val bonds                       = createBonds(validators)
-  private val genesis                     = createGenesis(bonds)
+  val genesis = buildGenesis(buildGenesisParameters())
 
   "getListeningNameDataResponse" should "work with unsorted channels" in effectTest {
-    HashSetCasperTestNode.standaloneEff(genesis, validatorKeys.head).use { node =>
+    HashSetCasperTestNode.standaloneEff(genesis).use { node =>
       import node._
 
       for {
@@ -52,7 +48,7 @@ class ListeningNameAPITest extends FlatSpec with Matchers with Inside {
   }
 
   it should "work across a chain" in effectTest {
-    HashSetCasperTestNode.networkEff(validatorKeys.take(3), genesis).use { nodes =>
+    HashSetCasperTestNode.networkEff(genesis, networkSize = 3).use { nodes =>
       implicit val nodeZeroCasperRef          = nodes(0).multiparentCasperRef
       implicit val nodeZeroSafetyOracleEffect = nodes(0).cliqueOracleEffect
       implicit val nodeZeroLogEffect          = nodes(0).logEff
@@ -173,7 +169,7 @@ class ListeningNameAPITest extends FlatSpec with Matchers with Inside {
   }
 
   "getListeningNameContinuationResponse" should "work with unsorted channels" in {
-    HashSetCasperTestNode.standaloneEff(genesis, validatorKeys.head).use { node =>
+    HashSetCasperTestNode.standaloneEff(genesis).use { node =>
       import node._
 
       def basicDeployData: DeployData = {

@@ -1,12 +1,9 @@
 package coop.rchain.casper
 
-import cats.implicits._
-import coop.rchain.casper.MultiParentCasper.ignoreDoppelgangerCheck
 import coop.rchain.casper.helper.HashSetCasperTestNode
 import coop.rchain.casper.helper.HashSetCasperTestNode._
 import coop.rchain.casper.scalatestcontrib._
-import coop.rchain.casper.util.{ConstructDeploy, ProtoUtil, RSpaceUtil}
-import coop.rchain.crypto.signatures.Secp256k1
+import coop.rchain.casper.util.{ConstructDeploy, RSpaceUtil}
 import coop.rchain.p2p.EffectsTestInstances.LogicalTime
 import coop.rchain.rholang.interpreter.accounting
 import monix.execution.Scheduler.Implicits.global
@@ -19,13 +16,10 @@ class MultiParentCasperMergeSpec extends FlatSpec with Matchers with Inspectors 
 
   implicit val timeEff = new LogicalTime[Effect]
 
-  private val (validatorKeys, validatorPks) = (1 to 4).map(_ => Secp256k1.newKeyPair).unzip
-  private val genesis = buildGenesis(
-    buildGenesisParameters(4, createBonds(validatorPks))
-  )
+  val genesis = buildGenesis(buildGenesisParameters())
 
   "HashSetCasper" should "handle multi-parent blocks correctly" in effectTest {
-    HashSetCasperTestNode.networkEff(validatorKeys.take(2), genesis).use { nodes =>
+    HashSetCasperTestNode.networkEff(genesis, networkSize = 2).use { nodes =>
       implicit val rm = nodes(1).runtimeManager
       for {
         deployData0 <- ConstructDeploy.basicDeployData[Effect](0)
@@ -65,7 +59,7 @@ class MultiParentCasperMergeSpec extends FlatSpec with Matchers with Inspectors 
   it should "handle multi-parent blocks correctly when they operate on stdout" ignore effectTest {
     def echoContract(no: Int) = s"""new stdout(`rho:io:stdout`) in { stdout!("Contract $no") }"""
     val time                  = System.currentTimeMillis()
-    HashSetCasperTestNode.networkEff(validatorKeys.take(2), genesis).use { nodes =>
+    HashSetCasperTestNode.networkEff(genesis, networkSize = 2).use { nodes =>
       val deploys = Vector(
         ConstructDeploy.sourceDeploy(echoContract(1), time + 1, accounting.MAX_VALUE),
         ConstructDeploy.sourceDeploy(echoContract(2), time + 2, accounting.MAX_VALUE)
@@ -92,7 +86,7 @@ class MultiParentCasperMergeSpec extends FlatSpec with Matchers with Inspectors 
   }
 
   it should "not merge blocks that touch the same channel" in effectTest {
-    HashSetCasperTestNode.networkEff(validatorKeys.take(2), genesis).use { nodes =>
+    HashSetCasperTestNode.networkEff(genesis, networkSize = 2).use { nodes =>
       for {
         current0 <- timeEff.currentMillis
         deploy0 = ConstructDeploy.sourceDeploy(
@@ -213,7 +207,7 @@ class MultiParentCasperMergeSpec extends FlatSpec with Matchers with Inspectors 
         |  }
         |}
       """.stripMargin
-    HashSetCasperTestNode.networkEff(validatorKeys.take(3), genesis).use { nodes =>
+    HashSetCasperTestNode.networkEff(genesis, networkSize = 3).use { nodes =>
       val n1     = nodes(0)
       val n2     = nodes(1)
       val n3     = nodes(2)
@@ -232,7 +226,7 @@ class MultiParentCasperMergeSpec extends FlatSpec with Matchers with Inspectors 
   }
 
   it should "not merge blocks that touch the same channel involving joins" in effectTest {
-    HashSetCasperTestNode.networkEff(validatorKeys.take(2), genesis).use { nodes =>
+    HashSetCasperTestNode.networkEff(genesis, networkSize = 2).use { nodes =>
       for {
         current0 <- timeEff.currentMillis
         deploy0 = ConstructDeploy.sourceDeploy(

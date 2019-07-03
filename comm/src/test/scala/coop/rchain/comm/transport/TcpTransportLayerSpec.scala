@@ -28,7 +28,7 @@ class TcpTransportLayerSpec
   var tempFolder: Path = null
 
   override def beforeEach(): Unit =
-    tempFolder = Files.createTempDirectory("rchain")
+    tempFolder = Files.createTempDirectory("rchain-")
 
   override def afterEach(): Unit =
     tempFolder.toFile.delete()

@@ -1,7 +1,7 @@
 package coop.rchain.casper.engine
 
 import cats.implicits._
-
+import com.google.protobuf.ByteString
 import coop.rchain.casper._
 import coop.rchain.casper.protocol._
 import coop.rchain.catscontrib.TaskContrib._
@@ -10,8 +10,6 @@ import coop.rchain.comm.transport
 import coop.rchain.crypto.hash.Blake2b256
 import coop.rchain.crypto.signatures.Secp256k1
 import coop.rchain.shared.Cell
-
-import com.google.protobuf.ByteString
 import monix.eval.Task
 import org.scalatest.WordSpec
 

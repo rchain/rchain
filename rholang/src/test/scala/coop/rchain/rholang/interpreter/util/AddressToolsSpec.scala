@@ -6,6 +6,7 @@ import org.scalatest.{Matchers, PropSpec}
 import coop.rchain.crypto.PublicKey
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.rholang.interpreter.util.codec.Base58
+import coop.rchain.shared.EqualitySpecUtils
 
 class AddressToolsSpec extends PropSpec with GeneratorDrivenPropertyChecks with Matchers {
   implicit val propertyCheckConfiguration =
@@ -21,6 +22,16 @@ class AddressToolsSpec extends PropSpec with GeneratorDrivenPropertyChecks with 
       prefix         <- genByteArrayOf(prefixLength)
       publicKey      <- genByteArrayOf(keyLength)
     } yield (prefix, keyLength, checksumLength, PublicKey(publicKey))
+
+  property("defines value-based equality") {
+    EqualitySpecUtils.checkValueBasedEquality(
+      Address(Array(), Array(), Array()) ::
+        Address(Array(1), Array(), Array()) ::
+        Address(Array(), Array(2), Array()) ::
+        Address(Array(), Array(), Array(3)) ::
+        Nil
+    )
+  }
 
   property("parse after fromPublicKey works correctly") {
 
