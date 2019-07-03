@@ -703,7 +703,7 @@ class ValidateTest
     implicit blockStore => implicit blockDagStorage =>
       val genesis = MultiParentCasperTestUtil.createGenesis()
 
-      val storageDirectory  = Files.createTempDirectory(s"hash-set-casper-test-genesis")
+      val storageDirectory  = Files.createTempDirectory(s"hash-set-casper-test-genesis-")
       val storageSize: Long = 3024L * 1024
       for {
         activeRuntime <- Runtime.createWithEmptyCost[Task, Task.Par](

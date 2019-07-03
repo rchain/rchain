@@ -99,7 +99,7 @@ object Interactive {
     new Interactive(
       Runtime
         .createWithEmptyCost[Task, Task.Par](
-          Files.createTempDirectory("interactive"),
+          Files.createTempDirectory("interactive-"),
           1024 * 1024
         )
         .runSyncUnsafe(5.seconds)

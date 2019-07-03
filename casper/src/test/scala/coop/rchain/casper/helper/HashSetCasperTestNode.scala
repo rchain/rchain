@@ -246,7 +246,7 @@ object HashSetCasperTestNode {
     for {
       storageDirectory <- Resource.make[F, Path](
                            Sync[F].delay {
-                             val dir = Files.createTempDirectory(s"hash-set-casper-test-$name")
+                             val dir = Files.createTempDirectory(s"hash-set-casper-test-$name-")
                              copyDir(storageMatrixPath, dir)
                            }
                          )(dir => Sync[F].delay { dir.recursivelyDelete() })

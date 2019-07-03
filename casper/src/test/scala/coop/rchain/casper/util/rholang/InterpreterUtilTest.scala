@@ -42,7 +42,7 @@ class InterpreterUtilTest
   implicit val metricsEff: Metrics[Task] = new metrics.Metrics.MetricsNOP[Task]
   val span                               = new NoopSpan[Task]
   val storageSize                        = 1024L * 1024
-  val storageDirectory                   = Files.createTempDirectory("casper-interp-util-test")
+  val storageDirectory                   = Files.createTempDirectory("casper-interp-util-test-")
   val activeRuntime =
     Runtime
       .createWithEmptyCost[Task, Task.Par](storageDirectory, storageSize)

@@ -27,7 +27,7 @@ class StreamHandlerSpec extends FunSpec with Matchers with Inside with BeforeAnd
   var tempFolder: Path = _
 
   override def beforeEach(): Unit =
-    tempFolder = Files.createTempDirectory("rchain")
+    tempFolder = Files.createTempDirectory("rchain-")
 
   override def afterEach(): Unit =
     tempFolder.toFile.delete()
