@@ -15,10 +15,14 @@ object ConstructDeploy {
   val defaultSec = PrivateKey(
     Base16.unsafeDecode("a68a6e6cca30f81bd24a719f3145d20e8424bd7b396309b0708a16c7d8000b76")
   )
-
-  val defaultPub = Secp256k1.toPublic(defaultSec)
-
+  val defaultPub     = Secp256k1.toPublic(defaultSec)
   val defaultKeyPair = (defaultSec, defaultPub)
+
+  val defaultSec2 = PrivateKey(
+    Base16.unsafeDecode("1111111111111111111111111111111111111111111111111111111111111111")
+  )
+  val defaultPub2     = Secp256k1.toPublic(defaultSec2)
+  val defaultKeyPair2 = (defaultSec2, defaultPub2)
 
   def sign(deploy: DeployData, sec: PrivateKey = defaultSec): DeployData =
     SignDeployment.sign(sec, deploy, Secp256k1)
