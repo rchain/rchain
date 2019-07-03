@@ -26,7 +26,6 @@ new  PoS,
     getUser,
     getCurrentUserAddress,
     getCurrentUserVault,
-    initialRewardsCh, computeInitialRewards,
     getMVar,
     runMVar,
     deposit, distributeRewards,
@@ -43,20 +42,14 @@ new  PoS,
       for(@posRevAddress <- posRevAddressCh) {
         new stateCh, posVaultCh in {
 
-          @ListOps!("fold", $$initialBonds$$.toList(), {}, *computeInitialRewards, *initialRewardsCh) |
-          contract computeInitialRewards(@(pk, _), @acc, resultCh) = {
-            resultCh!(acc.set(pk, 0))
-          } |
-
           @RevVault!("findOrCreate", posRevAddress, *posVaultCh) |
-          for (@(true, _) <- posVaultCh;
-               @initialRewards <- initialRewardsCh ) {
+          for (@(true, _) <- posVaultCh ) {
 
             // State structure:
             // pendingRewards : Map[PublickKey, Int] - are accummulated by calling "pay"
             // committedRewards : Map[PublickKey, Int] - are moved from pendingRewards at each closeBlock
             // bonds : Map[PublickKey, Int] - each validator stake
-            stateCh!(({}, initialRewards, $$initialBonds$$)) |
+            stateCh!(({}, {}, $$initialBonds$$)) |
 
             contract PoS (@"getBonds", returnCh) = {
               new tmpCh in {
@@ -99,7 +92,7 @@ new  PoS,
                       match depositResult {
                         (true, _) => {
                           resultCh!(
-                            (pending, rewards.set(userPk, 0), bonds.set(userPk,amount)),
+                            (pending, rewards, bonds.set(userPk,amount)),
                             depositResult
                           )
                         }

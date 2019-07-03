@@ -76,7 +76,7 @@ match (
                 rhoSpec!("assertMany",
                   [
                     (bonds.size() >= 0, "some bonds map should be received"),
-                    ((bonds.size(), "==", rewards.size()), "each validator should have a bond and a reward"),
+                    ((0, "==", rewards.size()), "the rewards map is initially empty"),
                     ((true, "== <-", *rewardsZeroCh), "no rewards yet")
                   ],
                   *ackCh
@@ -112,7 +112,7 @@ match (
                               ((100, "==", bondAmount), "the new bond is expected in the final map"),
                               ((initialUserBalance - finalUserBalance, "==", 100), "the user account decreases"),
                               ((finalPosBalance - initialPosBalance, "==", 100), "the pos account increases"),
-                              ((rewards.get(user1PubKey), "==", 0), "new validator reward should be zero")
+                              ((Nil, "==", rewards.get(user1PubKey)), "new validator reward should be zero")
                             ],
                             *ackCh
                           )
@@ -208,7 +208,7 @@ match (
                               @finalRewards <- finalRewardsCh) {
                             @ListOps!("fold", finalRewards.toList(), {}, *computeDelta, *deltaRewardsCh) |
                             contract computeDelta(@(pk, finalReward), @acc, resultCh) = {
-                              resultCh!(acc.set(pk, finalReward - initialRewards.get(pk)))
+                              resultCh!(acc.set(pk, finalReward - initialRewards.getOrElse(pk, 0)))
                             } |
                             for (@deltaRewards <- deltaRewardsCh) {
                               @ListOps!("forall", deltaRewards, *isPositive, *allRewardsPositiveCh) |
@@ -224,7 +224,6 @@ match (
                                   ((initialUser1Balance - finalUser1Balance, "==", 100), "the user account decreases"),
                                   ((finalPosBalance - initialPosBalance, "==", 100), "the pos account increases"),
                                   ((finalRewards.get(validatorPubKey), "==", 19), "the validator's finalRewards is as expected"),
-                                  ((finalRewards.size(), "==", initialRewards.size()), "rewards map size doesn't change"),
                                   //TODO use arbitrary precision numbers instead of long ints
                                   ((96, "== <-", *deltaSumCh), "the sum difference should equal the payment"),
                                   ((true, "== <-", *allRewardsPositiveCh), "the rewards can only grow")
