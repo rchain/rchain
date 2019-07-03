@@ -20,6 +20,7 @@ import coop.rchain.rholang.interpreter.accounting._
 import coop.rchain.rholang.interpreter.accounting.utils._
 import coop.rchain.rholang.interpreter.errors._
 import coop.rchain.rholang.interpreter.storage.implicits._
+import coop.rchain.rholang.Resources._
 import coop.rchain.rspace._
 import coop.rchain.rspace.{RSpace, ReplayRSpace}
 import coop.rchain.rspace.history.Branch
@@ -70,6 +71,27 @@ trait PersistentStoreTester {
       space.close()
       dbDir.recursivelyDelete()
     }
+  }
+
+  def fixture[R](f: (RhoISpace[Task], ChargingReducer[Task]) => Task[R])(
+      implicit errorLog: ErrorLog[Task]
+  ): R = {
+    implicit val logF: Log[Task]           = new Log.NOPLog[Task]
+    implicit val metricsEff: Metrics[Task] = new metrics.Metrics.MetricsNOP[Task]
+    implicit val noopSpan: Span[Task]      = NoopSpan[Task]()
+    mkRhoISpace[Task]("rholang-interpreter-test-")
+      .use { rspace =>
+        for {
+          cost <- CostAccounting.emptyCost[Task]
+          reducer = {
+            implicit val c = cost
+            RholangOnlyDispatcher.create[Task, Task.Par](rspace)._2
+          }
+          _   <- reducer.setPhlo(Cost.UNSAFE_MAX)
+          res <- f(rspace, reducer)
+        } yield res
+      }
+      .runSyncUnsafe(3.seconds)
   }
 }
 
@@ -485,44 +507,38 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
       3,
       BitSet()
     )
-    val sendFirstResult = withTestSpace(errorLog) {
-      case TestFixture(space, reducer) =>
-        implicit val env = Env[Par]()
-        val inspectTaskSendFirst = for {
-          _   <- reducer.eval(send)(env, splitRand0)
-          _   <- reducer.eval(receive)(env, splitRand1)
-          res <- space.toMap
-        } yield res
-        Await.result(inspectTaskSendFirst.runToFuture, 3.seconds)
-    }
 
-    sendFirstResult.toIterable should contain theSameElementsAs mapData(
+    val expectedResult = mapData(
       Map(
         channel       -> ((Seq(GInt(7L), GInt(8L), GInt(9L)), splitRand0)),
         resultChannel -> ((Seq(GString("Success")), mergeRand))
       )
     )
 
+    val sendFirstResult = fixture {
+      case (space, reducer) =>
+        implicit val env = Env[Par]()
+        for {
+          _   <- reducer.eval(send)(env, splitRand0)
+          _   <- reducer.eval(receive)(env, splitRand1)
+          res <- space.toMap
+        } yield res
+    }
+
+    sendFirstResult.toIterable should contain theSameElementsAs expectedResult
     errorLog.readAndClearErrorVector.unsafeRunSync should be(Vector.empty[InterpreterError])
 
-    val receiveFirstResult = withTestSpace(errorLog) {
-      case TestFixture(space, reducer) =>
+    val receiveFirstResult = fixture {
+      case (space, reducer) =>
         implicit val env = Env[Par]()
-        val inspectTaskReceiveFirst = for {
+        for {
           _   <- reducer.eval(receive)(env, splitRand1)
           _   <- reducer.eval(send)(env, splitRand0)
           res <- space.toMap
         } yield res
-        Await.result(inspectTaskReceiveFirst.runToFuture, 3.seconds)
     }
 
-    receiveFirstResult.toIterable should contain theSameElementsAs mapData(
-      Map(
-        channel       -> ((Seq(GInt(7L), GInt(8L), GInt(9L)), splitRand0)),
-        resultChannel -> ((Seq(GString("Success")), mergeRand))
-      )
-    )
-
+    receiveFirstResult.toIterable should contain theSameElementsAs expectedResult
     errorLog.readAndClearErrorVector.unsafeRunSync should be(Vector.empty[InterpreterError])
   }
 
