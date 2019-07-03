@@ -127,20 +127,25 @@ new  PoS,
               }
             } |
 
-            contract PoS(@"slash", @blockHash, return) = {
-              new userCh, invalidBlocksCh,
+            contract PoS(@"slash", @blockHash, returnCh) = {
+              new userCh, invalidBlocksCh, doSlashCh,
                   getInvalidBlocks(`rho:casper:invalidBlocks`) in {
                 getInvalidBlocks!(*invalidBlocksCh) |
                 getUser!(*userCh) |
-                for (@invalidBlocks <- invalidBlocksCh; @(pending, rewards, allBonds) <- stateCh; @userPk <- userCh) {
+
+                runMVar!(*stateCh, *doSlashCh, *returnCh) |
+                for (@invalidBlocks <- invalidBlocksCh;
+                     @userPk <- userCh;
+                     @(pending, rewards, allBonds), slashResultCh <- doSlashCh) {
                   new toBeSlashed in {
                     toBeSlashed!(invalidBlocks.getOrElse(blockHash, userPk)) |
                     for (@validator <- toBeSlashed) {
                       // TODO: Transfer to coop wallet instead of just simply setting bonds to 0
-                      stateCh!((pending.set(validator, 0),
-                                rewards.set(validator, 0),
-                                allBonds.set(validator, 0))) |
-                      return!(true)
+                      slashResultCh!(
+                        (pending.set(validator, 0),
+                         rewards.set(validator, 0),
+                         allBonds.set(validator, 0)),
+                        true)
                     }
                   }
                 }
