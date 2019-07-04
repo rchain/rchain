@@ -6,12 +6,14 @@ import scala.concurrent.duration._
 
 import cats.implicits._
 
-import coop.rchain.comm.PeerNode
+import coop.rchain.comm.{CommMetricsSource, PeerNode}
 import coop.rchain.comm.protocol.routing._
 import coop.rchain.comm.rp.Connect.RPConfAsk
 import coop.rchain.comm.rp.ProtocolHelper
 import coop.rchain.comm.transport.buffer.LimitedBuffer
+import coop.rchain.metrics.Metrics
 import coop.rchain.shared._
+import coop.rchain.shared.PathOps.PathDelete
 
 import io.grpc.netty.NettyServerBuilder
 import io.netty.handler.ssl.SslContext
@@ -20,6 +22,10 @@ import monix.execution.{Cancelable, Scheduler}
 import monix.reactive.Observable
 
 object GrpcTransportReceiver {
+
+  implicit val metricsSource: Metrics.Source =
+    Metrics.Source(CommMetricsSource, "rp.transport")
+
   def create(
       networkId: String,
       port: Int,
@@ -33,7 +39,8 @@ object GrpcTransportReceiver {
   )(
       implicit scheduler: Scheduler,
       rPConfAsk: RPConfAsk[Task],
-      logger: Log[Task]
+      logger: Log[Task],
+      metrics: Metrics[Task]
   ): Task[Cancelable] =
     Task.delay {
       val service = new RoutingGrpcMonix.TransportLayer {
@@ -43,31 +50,46 @@ object GrpcTransportReceiver {
             .fold(internalServerError("protocol not available in request").pure[Task]) { protocol =>
               rPConfAsk.reader(_.local) >>= (
                   src =>
-                    Task.delay(tellBuffer.pushNext(Send(protocol))).map {
-                      case false => internalServerError("message dropped")
-                      case true  => noResponse(src)
-                    }
+                    Task
+                      .delay(tellBuffer.pushNext(Send(protocol)))
+                      .ifM(
+                        metrics.incrementCounter("enqueued.messages") >> Task
+                          .delay(noResponse(src)),
+                        metrics.incrementCounter("dropped.messages") >> Task
+                          .delay(internalServerError("message dropped"))
+                      )
                 )
             }
+
+        private val circuitBreaker: StreamHandler.CircuitBreaker = streamed =>
+          if (streamed.header.exists(_.networkId != networkId))
+            Opened(StreamHandler.StreamError.wrongNetworkId)
+          else if (streamed.readSoFar > maxStreamMessageSize)
+            Opened(StreamHandler.StreamError.circuitOpened)
+          else Closed
 
         def stream(observable: Observable[Chunk]): Task[ChunkResponse] = {
           import StreamHandler._
           import StreamError.StreamErrorToMessage
 
-          val circuitBreaker: StreamHandler.CircuitBreaker = streamed =>
-            if (streamed.header.map(_.networkId != networkId).getOrElse(false))
-              Opened(StreamHandler.StreamError.wrongNetworkId)
-            else if (streamed.readSoFar > maxStreamMessageSize)
-              Opened(StreamHandler.StreamError.circuitOpened)
-            else Closed
-
           (handleStream(tempFolder, observable, circuitBreaker) >>= {
             case Left(error @ StreamError.Unexpected(t)) => logger.error(error.message, t)
             case Left(error)                             => logger.warn(error.message)
             case Right(msg) =>
-              Task.delay(blobBuffer.pushNext(msg)) >> logger.debug(
-                s"Enqueued for handling packet ${msg.path}"
-              )
+              metrics.incrementCounter("received.packets") >>
+                Task
+                  .delay(blobBuffer.pushNext(msg))
+                  .ifM(
+                    List(
+                      logger.debug(s"Enqueued for handling packet ${msg.path}"),
+                      metrics.incrementCounter("enqueued.packets")
+                    ).sequence,
+                    List(
+                      logger.debug(s"Dropped packet ${msg.path}"),
+                      metrics.incrementCounter("dropped.packets"),
+                      msg.path.deleteSingleFile[Task]
+                    ).sequence
+                  )
           }).as(ChunkResponse())
         }
 

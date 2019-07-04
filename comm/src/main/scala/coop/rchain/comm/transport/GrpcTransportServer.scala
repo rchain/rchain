@@ -12,6 +12,8 @@ import cats.implicits._
 import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.comm.protocol.routing.Protocol
 import coop.rchain.comm.rp.Connect.RPConfAsk
+import coop.rchain.comm.CommMetricsSource
+import coop.rchain.metrics.Metrics
 import coop.rchain.shared._
 
 import io.grpc.netty.GrpcSslContexts
@@ -38,10 +40,14 @@ class GrpcTransportServer(
 )(
     implicit scheduler: Scheduler,
     rPConfAsk: RPConfAsk[Task],
-    log: Log[Task]
+    log: Log[Task],
+    metrics: Metrics[Task]
 ) extends TransportLayerServer[Task] {
   private def certInputStream = new ByteArrayInputStream(cert.getBytes())
   private def keyInputStream  = new ByteArrayInputStream(key.getBytes())
+
+  implicit val metricsSource: Metrics.Source =
+    Metrics.Source(CommMetricsSource, "rp.transport")
 
   private val queueSendScheduler =
     Scheduler.fixedPool(
@@ -74,15 +80,15 @@ class GrpcTransportServer(
   ): Task[Cancelable] = {
 
     val dispatchSend: Send => Task[Unit] =
-      s => dispatch(s.msg).attemptAndLog.void
+      s => dispatch(s.msg).attemptAndLog >> metrics.incrementCounter("dispatched.messages")
 
     val dispatchBlob: StreamMessage => Task[Unit] =
       msg =>
-        StreamHandler.restore(msg) >>= {
+        (StreamHandler.restore(msg) >>= {
           case Left(ex) =>
             Log[Task].error("Could not restore data from file while handling stream", ex)
           case Right(blob) => handleStreamed(blob)
-        }
+        }) >> metrics.incrementCounter("dispatched.packets")
 
     for {
       serverSslContext <- serverSslContextTask
@@ -123,7 +129,8 @@ object GrpcTransportServer {
   )(
       implicit scheduler: Scheduler,
       rPConfAsk: RPConfAsk[Task],
-      log: Log[Task]
+      log: Log[Task],
+      metrics: Metrics[Task]
   ): TransportServer = {
     val cert = Resources.withResource(Source.fromFile(certPath.toFile))(_.mkString)
     val key  = Resources.withResource(Source.fromFile(keyPath.toFile))(_.mkString)
