@@ -64,29 +64,6 @@ package object util {
   def runKs[T](t: Seq[Option[((T) => Unit, T, Int)]]): Unit =
     t.foreach { case Some((k, data, _)) => k(data); case None => () }
 
-  /**
-    * Compare to `memcmp` in C/C++
-    *
-    * Based on:
-    * [[https://github.com/OpenTSDB/asynchbase/blob/f6a8ccb7e55ed9bc0aad265345da4c679e750055/src/Bytes.java#L549-L572]]
-    */
-  @SuppressWarnings(Array("org.wartremover.warts.Return"))
-  def memcmp(a: Array[Byte], b: Array[Byte]): Int = {
-    val c = a.length - b.length
-    if (c != 0) {
-      c
-    } else {
-      for (i <- 0 until a.length) {
-        val ai = a(i)
-        val bi = b(i)
-        if (ai != bi) {
-          return (ai & 0xFF) - (bi & 0xFF)
-        }
-      }
-      0
-    }
-  }
-
   def canonicalize[C, P, A, K](gnat: GNAT[C, P, A, K]): GNAT[C, P, A, K] =
     gnat.copy(
       wks = gnat.wks.sortBy(_.source.hash.bytes)(ordByteVector),
@@ -111,8 +88,6 @@ package object util {
       0
     }
   }
-
-  val ordArrayByte: Ordering[Array[Byte]] = (x: Array[Byte], y: Array[Byte]) => memcmp(x, y)
 
   val ordByteVector: Ordering[ByteVector] = (a: ByteVector, b: ByteVector) => veccmp(a, b)
 
