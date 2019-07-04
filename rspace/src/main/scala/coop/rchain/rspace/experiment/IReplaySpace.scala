@@ -1,0 +1,66 @@
+package coop.rchain.rspace
+package experiment
+
+import cats.effect.Sync
+import cats.implicits._
+import trace.{COMM, Consume, Produce, ReplayData}
+import internal._
+import coop.rchain.shared.Log
+
+trait IReplaySpace[F[_], C, P, A, R, K] extends ISpace[F, C, P, A, R, K] {
+
+  protected def logF: Log[F]
+
+  private[rspace] val replayData: ReplayData = ReplayData.empty
+
+  /** Rigs this ReplaySpace with the initial state and a log of permitted operations.
+    * During replay, whenever a COMM event that is not available in the log occurs, an error is going to be raised.
+    *
+    * This method is not thread safe.
+    *
+    *  @param startRoot A [Blake2b256Hash] representing the intial state
+    *  @param log A [Log] with permitted operations
+    */
+  def rigAndReset(startRoot: Blake2b256Hash, log: trace.Log)(implicit syncF: Sync[F]): F[Unit] =
+    rig(log) >> reset(startRoot)
+
+  def rig(log: trace.Log)(implicit syncF: Sync[F]): F[Unit] =
+    syncF
+      .delay {
+        val (ioEvents, commEvents) = log.partition {
+          case _: Produce => true
+          case _: Consume => true
+          case _: COMM    => false
+        }
+
+        // create a set of the "new" IOEvents
+        val newStuff = ioEvents.toSet
+
+        // create and prepare the ReplayData table
+        replayData.clear()
+        commEvents.foreach {
+          case comm @ COMM(consume, produces, _) =>
+            (consume +: produces).foreach { ioEvent =>
+              if (newStuff(ioEvent)) {
+                replayData.addBinding(ioEvent, comm)
+              }
+            }
+          case _ =>
+            syncF.raiseError(new RuntimeException("BUG FOUND: only COMM events are expected here"))
+        }
+      }
+
+  def checkReplayData()(implicit syncF: Sync[F]): F[Unit] =
+    syncF
+      .delay(replayData.isEmpty)
+      .ifM(
+        ifTrue = syncF.unit,
+        ifFalse = {
+          val msg = s"unused comm event: replayData multimap has ${replayData.size} elements left"
+          logF.error(msg) *> syncF.raiseError[Unit](
+            new ReplayException(msg)
+          )
+        }
+      )
+
+}
