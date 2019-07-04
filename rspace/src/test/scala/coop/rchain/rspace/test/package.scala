@@ -1,16 +1,8 @@
 package coop.rchain.rspace
 
-import java.nio.ByteBuffer
-import java.nio.file.attribute.BasicFileAttributes
-import java.nio.file.{FileVisitResult, Files, Path, SimpleFileVisitor}
-
 import cats._
 import cats.implicits._
-import cats.effect.{Concurrent, ContextShift, ExitCase, Fiber}
-import coop.rchain.shared.Language.ignore
-import monix.eval.Coeval
 
-import scala.concurrent.ExecutionContext
 import scodec.bits.BitVector
 import scodec.{Attempt, Codec, DecodeResult}
 
