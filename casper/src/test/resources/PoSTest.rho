@@ -110,8 +110,8 @@ match (
                           rhoSpec!("assertMany",
                             [
                               ((100, "==", bondAmount), "the new bond is expected in the final map"),
-                              ((initialUserBalance - finalUserBalance, "==", 100), "the user account decreases"),
-                              ((finalPosBalance - initialPosBalance, "==", 100), "the pos account increases"),
+                              ((100, "==", initialUserBalance - finalUserBalance), "the user account decreases"),
+                              ((100, "==", finalPosBalance - initialPosBalance), "the pos account increases"),
                               ((Nil, "==", rewards.get(user1PubKey)), "new validator reward should be zero")
                             ],
                             *ackCh
@@ -159,9 +159,9 @@ match (
                                   [
                                     ((100, "==", bondAmount1), "the user1 bond is expected in the final map"),
                                     ((200, "==", bondAmount2), "the user2 bond is expected in the final map"),
-                                    ((initialUser1Balance - finalUser1Balance, "==", 100), "the user1 account decreases"),
-                                    ((initialUser2Balance - finalUser2Balance, "==", 200), "the user2 account decreases"),
-                                    ((finalPosBalance - initialPosBalance, "==", 300), "the pos account increases"),
+                                    ((100, "==", initialUser1Balance - finalUser1Balance), "the user1 account decreases"),
+                                    ((200, "==", initialUser2Balance - finalUser2Balance), "the user2 account decreases"),
+                                    ((300, "==", finalPosBalance - initialPosBalance), "the pos account increases"),
                                   ],
                                   *ackCh
                                 )
@@ -223,9 +223,9 @@ match (
 
                               rhoSpec!("assertMany",
                                 [
-                                  ((initialUser1Balance - finalUser1Balance, "==", 100), "the user account decreases"),
-                                  ((finalPosBalance - initialPosBalance, "==", 100), "the pos account increases"),
-                                  ((finalRewards.get(validatorPubKey), "==", 19), "the validator's finalRewards is as expected"),
+                                  ((100, "==", initialUser1Balance - finalUser1Balance), "the user account decreases"),
+                                  ((100, "==", finalPosBalance - initialPosBalance), "the pos account increases"),
+                                  ((19, "==", finalRewards.get(validatorPubKey)), "the validator's finalRewards is as expected"),
                                   //TODO use arbitrary precision numbers instead of long ints
                                   ((96, "== <-", *deltaSumCh), "the sum difference should equal the payment"),
                                   ((true, "== <-", *allRewardsPositiveCh), "the rewards can only grow")
@@ -268,9 +268,9 @@ match (
                       @PoS!("getRewards", *finalRewardsCh) |
                       rhoSpec!("assertMany",
                         [
-                          ((result1, "==", true), "the first bond should succeed"),
-                          ((result2, "==", false), "the second bond should fail"),
-                          ((msg2, "==", "Public key is already bonded."), "the message should be as expected"),
+                          ((true, "==", result1), "the first bond should succeed"),
+                          ((false, "==", result2), "the second bond should fail"),
+                          (("Public key is already bonded.", "==", msg2), "the message should be as expected"),
                           ((initialBonds, "== <-", *bondsCh), "the bonds map remains unchanged"),
                           ((initialRewards, "== <-", *finalRewardsCh), "the rewards map should not change")
                         ],
@@ -300,8 +300,8 @@ match (
                     @PoS!("getRewards", *finalRewardsCh) |
                     rhoSpec!("assertMany",
                       [
-                        ((msg, "==", expectedMsg), "the message should be as epected"),
-                        ((result, "==", false), "the bond should fail"),
+                        ((expectedMsg, "==", msg), "the message should be as epected"),
+                        ((false, "==", result), "the bond should fail"),
                         ((initialBonds, "== <-", *bondsCh), "the bonds map remains unchanged"),
                         ((initialRewards, "== <-", *finalRewardsCh), "the rewards map should not change")
                       ],
