@@ -19,6 +19,7 @@ trait ParBuilder[F[_]] {
   def buildNormalizedTerm(reader: Reader, normalizerEnv: NormalizerEnv): F[Par]
 
   def buildPar(proc: Proc, normalizerEnv: NormalizerEnv): F[Par]
+  private[interpreter] def buildAST(reader: Reader): F[Proc]
 }
 
 object ParBuilder {
@@ -41,7 +42,7 @@ object ParBuilder {
         sortedPar <- Sortable[Par].sortMatch(par)
       } yield sortedPar.term
 
-    private def buildAST(reader: Reader): F[Proc] =
+    private[interpreter] def buildAST(reader: Reader): F[Proc] =
       for {
         lexer  <- lexer(reader)
         parser <- parser(lexer)

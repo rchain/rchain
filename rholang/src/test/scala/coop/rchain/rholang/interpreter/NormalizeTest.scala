@@ -651,45 +651,14 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
   }
 
   it should "handle peek" in {
-    // for ( x, y <<- @Nil ) { x!(*y) }
-    val listBindings = new ListName()
-    listBindings.add(new NameVar("x"))
-    listBindings.add(new NameVar("y"))
-    val listLinearBinds = new ListPeekBind()
-    listLinearBinds.add(
-      new PeekBindImpl(listBindings, new NameRemainderEmpty(), new NameQuote(new PNil()))
-    )
-    val linearSimple = new PeekSimple(listLinearBinds)
-    val receipt      = new ReceiptPeek(linearSimple)
-
-    val listSend = new ListProc()
-    listSend.add(new PEval(new NameVar("y")))
-    val body       = new PSend(new NameVar("x"), new SendSingle(), listSend)
-    val basicInput = new PInput(receipt, body)
-    val bindCount  = 2
+    val basicInput = ParBuilder[Coeval]
+      .buildAST(
+        new StringReader("""for ( x, y <<- @Nil ) { x!(*y) }""")
+      )
+      .value()
 
     val result = ProcNormalizeMatcher.normalizeMatch[Coeval](basicInput, inputs).value
-    result.par should be(
-      inputs.par.prepend(
-        Receive(
-          List(
-            ReceiveBind(List(EVar(FreeVar(0)), EVar(FreeVar(1))), Par(), freeCount = 2)
-          ),
-          Send(
-            EVar(BoundVar(1)),
-            List[Par](EVar(BoundVar(0))),
-            false,
-            BitSet(0, 1)
-          ),
-          persistent = false,
-          peek = true,
-          bindCount,
-          BitSet(),
-          connectiveUsed = false
-        )
-      )
-    )
-    result.knownFree should be(inputs.knownFree)
+    result.par.receives.head.peek shouldBe true
   }
 
   "PInput" should "Handle a more complicated receive" in {
