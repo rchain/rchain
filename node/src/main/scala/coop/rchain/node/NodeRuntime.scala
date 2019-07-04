@@ -359,7 +359,7 @@ class NodeRuntime private[node] (
     rpConfAsk            = effects.rpConfAsk(rpConfState)
     peerNodeAsk          = effects.peerNodeAsk(rpConfState)
     rpConnections        <- effects.rpConnections
-    metrics              = diagnostics.effects.metrics[Task]
+    metrics              = diagnostics.effects.metrics[Task](conf.server.networkId, local.endpoint.host)
     time                 = effects.time
     timerTask            = Task.timer
     multiParentCasperRef <- MultiParentCasperRef.of[Task]

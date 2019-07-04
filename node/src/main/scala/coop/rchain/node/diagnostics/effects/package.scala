@@ -16,7 +16,7 @@ import monix.eval.Task
 
 package object effects {
 
-  def metrics[F[_]: Sync]: Metrics[F] =
+  def metrics[F[_]: Sync](networkId: String, host: String): Metrics[F] =
     new Metrics[F] {
       import kamon._
       import kamon.trace.{Span => KSpan}
@@ -91,7 +91,13 @@ package object effects {
         }
 
       def span(source: Source): F[Span[F]] = Sync[F].delay {
-        KamonSpan(Kamon.buildSpan(source).start())
+        KamonSpan(
+          Kamon
+            .buildSpan(source)
+            .withTag("network-id", networkId)
+            .withTag("host", host)
+            .start()
+        )
       }
     }
 }
