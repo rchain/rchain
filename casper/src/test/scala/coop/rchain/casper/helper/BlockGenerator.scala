@@ -74,6 +74,20 @@ object BlockGenerator {
       IndexedBlockDagStorage[F].inject(id, updatedBlock, genesis, invalid = false)
   }
 
+  def injectPostStateHash[F[_]: Monad: BlockStore: BlockDagStorage](
+      b: BlockMessage,
+      genesis: BlockMessage,
+      postGenStateHash: StateHash,
+      processedDeploys: Seq[ProcessedDeploy]
+  ): F[Unit] = {
+    val updatedBlockPostState = b.getBody.getState.withPostStateHash(postGenStateHash)
+    val updatedBlockBody =
+      b.getBody.withState(updatedBlockPostState).withDeploys(processedDeploys)
+    val updatedBlock = b.withBody(updatedBlockBody)
+    BlockStore[F].put(b.blockHash, updatedBlock) *>
+      BlockDagStorage[F].insert(updatedBlock, genesis, invalid = false).void
+  }
+
   private def computeBlockCheckpointFromDeploys[F[_]: Sync: BlockStore: Time: Span](
       b: BlockMessage,
       genesis: BlockMessage,
@@ -102,16 +116,16 @@ object BlockGenerator {
 }
 
 trait BlockGenerator {
-  private def buildBlock[F[_]: Monad: Time](
+  def buildBlock[F[_]: Monad: Time](
       parentsHashList: Seq[BlockHash],
-      creator: Validator,
-      bonds: Seq[Bond],
-      justifications: collection.Map[Validator, BlockHash],
-      deploys: Seq[ProcessedDeploy],
-      tsHash: ByteString,
-      shardId: String,
-      preStateHash: ByteString,
-      seqNum: Int
+      creator: Validator = ByteString.EMPTY,
+      bonds: Seq[Bond] = Seq.empty[Bond],
+      justifications: collection.Map[Validator, BlockHash] = HashMap.empty[Validator, BlockHash],
+      deploys: Seq[ProcessedDeploy] = Seq.empty[ProcessedDeploy],
+      tsHash: ByteString = ByteString.EMPTY,
+      shardId: String = "rchain",
+      preStateHash: ByteString = ByteString.EMPTY,
+      seqNum: Int = 0
   ): F[BlockMessage] =
     for {
       now <- Time[F].currentMillis
