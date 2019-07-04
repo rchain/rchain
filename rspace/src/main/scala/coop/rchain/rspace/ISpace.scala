@@ -110,7 +110,7 @@ trait ISpace[F[_], C, P, A, R, K] {
     */
   def clear(): F[Unit]
 
-  /** Closes
+  /** Closes the ISpace freeing all underlying resources.
     */
   def close(): F[Unit]
 
