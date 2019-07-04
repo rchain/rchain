@@ -54,7 +54,7 @@ class Blake2b512Random private (
     result
   }
 
-  def hash(): Unit = {
+  private def hash(): Unit = {
     digest.peekFinalRoot(lastBlock.array(), 0, hashArray, 0)
     val low = countView.get(0)
     if (low == -1) {
@@ -90,8 +90,6 @@ class Blake2b512Random private (
     split.addByte(packed(1))
     split
   }
-
-  def peek: ByteBuffer = lastBlock.asReadOnlyBuffer()
 
   override def equals(other: Any): Boolean =
     other match {
@@ -145,7 +143,7 @@ object Blake2b512Random {
   def apply(init: Array[Byte]): Blake2b512Random =
     apply(init, 0, init.length)
 
-  def merge(children: Seq[Blake2b512Random]) = {
+  def merge(children: Seq[Blake2b512Random]): Blake2b512Random = {
     import coop.rchain.crypto.codec.Base16
     @tailrec
     def internalMerge(children: Vector[Blake2b512Random]): Blake2b512Random = {
