@@ -212,6 +212,14 @@ class ProcPrinterSpec extends FlatSpec with Matchers {
     result shouldBe target
   }
 
+  "Receive" should "print peek" in {
+    checkRoundTrip(
+      """for( @{x0}, @{x1} <<- @{Nil} ) {
+        |  @{x0}!(x1)
+        |}""".stripMargin
+    )
+  }
+
   "Receive" should "Print variable names consistently" in {
     // new x in { for( z <- x ) { *z } }
 

@@ -194,7 +194,7 @@ final case class PrettyPrinter(
                 )
                 .buildPattern(bind.patterns)
             (bind.freeCount + previousFree, string |+| bindString |+| pure {
-              if (r.persistent) " <= " else " <- "
+              if (r.persistent) " <= " else if (r.peek) " <<- " else " <- "
             } |+| buildChannelStringM(bind.source, indent) |+| pure {
               if (i != r.binds.length - 1) " ; "
               else ""
