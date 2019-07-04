@@ -18,6 +18,7 @@ import coop.rchain.catscontrib.Catscontrib._
 import coop.rchain.catscontrib.MonadTrans
 import coop.rchain.comm.discovery.NodeDiscovery
 import coop.rchain.comm.protocol.routing.Packet
+import coop.rchain.comm.rp.ProtocolHelper.packet
 import coop.rchain.comm.rp.Connect.{ConnectionsCell, RPConfAsk}
 import coop.rchain.comm.transport.{Blob, TransportLayer}
 import coop.rchain.comm.{transport, PeerNode}
@@ -61,6 +62,8 @@ class Running[F[_]: RPConfAsk: BlockStore: Monad: ConnectionsCell: TransportLaye
   override def handle(peer: PeerNode, msg: CasperMessage): F[Unit] = msg match {
     case b: BlockMessage              => handleBlockMessage(peer, b)
     case br: BlockRequest             => handleBlockRequest(peer, br)
+    case hbr: HasBlockRequest         => handleHasBlockRequest(peer, hbr)
+    case hb: HasBlock                 => handleHasBlock(peer, hb)
     case fctr: ForkChoiceTipRequest   => handleForkChoiceTipRequest(peer, fctr)
     case abr: ApprovedBlockRequest    => handleApprovedBlockRequest(peer, abr)
     case na: NoApprovedBlockAvailable => logNoApprovedBlockAvailable[F](na.nodeIdentifer)
@@ -77,6 +80,49 @@ class Running[F[_]: RPConfAsk: BlockStore: Monad: ConnectionsCell: TransportLaye
           _ <- MultiParentCasper[F].addBlock(b, handleDoppelganger(peer, _, _))
         } yield ()
       )
+
+  private def handleHasBlockRequest(peer: PeerNode, hbr: HasBlockRequest): F[Unit] =
+    BlockStore[F].get(hbr.hash) >>= {
+      case Some(_) =>
+        for {
+          conf <- RPConfAsk[F].ask
+          msg = packet(
+            conf.local,
+            conf.networkId,
+            transport.HasBlock,
+            HasBlock(hbr.hash).toByteString
+          )
+          _ <- TransportLayer[F].send(peer, msg)
+        } yield ()
+      case None => noop
+    }
+
+  /** TODO
+    * - check casper if block exists, request only if does not exit
+    * - check if was requested already
+    *    - if requested for same peer, ignore
+         - if requested for different peer, store this peer on waiting list (remove duplicates or use set)
+         - if it was not requested, request and store time of the action
+    * - periodically check the lists of requests and checks if we waited to long
+    *    - if waited to long and there is at least onee peer on waiting list:
+    *        - request the block from that peer from waiting list
+    *        - move the peer from the waiting list to the requested list
+    *    - if the waiting list is empty, log a warning (this means most likely things are not going the way they should)
+    * - upon handling the BlockMessage
+    *    - if the block was added to casper - remove its entry in the requests list
+    *    - if the block was not added, keep the list
+    */
+  private def handleHasBlock(peer: PeerNode, hb: HasBlock): F[Unit] =
+    for {
+      conf <- RPConfAsk[F].ask
+      msg = packet(
+        conf.local,
+        conf.networkId,
+        transport.BlockRequest,
+        BlockRequest(hb.hash).toByteString
+      )
+      _ <- TransportLayer[F].send(peer, msg)
+    } yield ()
 
   private def handleBlockRequest(peer: PeerNode, br: BlockRequest): F[Unit] =
     for {

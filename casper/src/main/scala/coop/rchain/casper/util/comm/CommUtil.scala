@@ -45,9 +45,10 @@ object CommUtil {
       hash: BlockHash
   ): F[Unit] =
     for {
-      _ <- sendToPeers[F](transport.BlockRequest, BlockRequest(hash).toByteString)
+      _ <- sendToPeers[F](transport.HasBlockRequest, HasBlockRequest(hash).toByteString)
       _ <- Log[F].info(s"Requested missing block ${PrettyPrinter.buildString(hash)} from peers")
     } yield ()
+
   def sendForkChoiceTipRequest[F[_]: Monad: ConnectionsCell: TransportLayer: Log: Time: RPConfAsk]
       : F[Unit] = {
     val serialized = ForkChoiceTipRequest().toByteString

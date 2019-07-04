@@ -22,6 +22,15 @@ option (scalapb.options) = {
   preamble: "sealed trait CasperMessage"
 };
 
+message HasBlockRequest {
+  option (scalapb.message).extends = "CasperMessage";
+  bytes  hash       = 1;
+}
+
+message HasBlock {
+  option (scalapb.message).extends = "CasperMessage";
+  bytes  hash       = 1;
+}
 
 message BlockRequest {
   option (scalapb.message).extends = "CasperMessage";

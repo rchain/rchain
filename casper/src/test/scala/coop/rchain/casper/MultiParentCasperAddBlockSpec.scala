@@ -307,8 +307,10 @@ class MultiParentCasperAddBlockSpec extends FlatSpec with Matchers with Inspecto
         signedBlock2 <- nodes(1).addBlock(deployDatas(2))
         signedBlock3 <- nodes(2).addBlock(deployDatas(3))
         _            <- nodes(2).transportLayerEff.clear(nodes(2).local) //nodes(2) ignores block2
-        _            <- nodes(1).receive() // receives block3; asks for block1'
-        _            <- nodes(2).receive() // receives request for block1'; sends block1'
+        _            <- nodes(1).receive() // receives block3; asks if has block1'
+        _            <- nodes(2).receive() // receives request has block1'; sends i have block1'
+        _            <- nodes(1).receive() // receives has block1 ack; asks for block1'
+        _            <- nodes(2).receive() // receives request block1'; sends block1'
         _            <- nodes(1).receive() // receives block1'; adds both block3 and block1'
 
         _ <- nodes(1).casperEff.contains(signedBlock3.blockHash) shouldBeF true
