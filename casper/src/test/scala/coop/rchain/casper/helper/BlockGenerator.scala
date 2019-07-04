@@ -29,7 +29,7 @@ object BlockGenerator {
   private[this] val GenerateBlockMetricsSource =
     Metrics.Source(CasperMetricsSource, "generate-block")
 
-  def updateChainWithBlockStateUpdate[F[_]: Sync: BlockStore: IndexedBlockDagStorage: Time: Metrics](
+  def updateChainWithBlockStateUpdate[F[_]: Sync: BlockStore: IndexedBlockDagStorage: Time: Metrics: Span](
       id: Int,
       genesis: BlockMessage,
       runtimeManager: RuntimeManager[F]
@@ -47,17 +47,17 @@ object BlockGenerator {
       _                                 <- injectPostStateHash[F](id, b, genesis, postStateHash, processedDeploys)
     } yield b
 
-  def computeBlockCheckpoint[F[_]: Sync: BlockStore: Time: Metrics](
+  def computeBlockCheckpoint[F[_]: Sync: BlockStore: Time: Metrics: Span](
       b: BlockMessage,
       genesis: BlockMessage,
       dag: BlockDagRepresentation[F],
       runtimeManager: RuntimeManager[F]
-  ): F[(StateHash, Seq[ProcessedDeploy])] =
+  ): F[(StateHash, Seq[ProcessedDeploy])] = Span[F].child(GenerateBlockMetricsSource) {
     for {
-      span                                                   <- Metrics[F].span(GenerateBlockMetricsSource)
-      result                                                 <- computeBlockCheckpointFromDeploys[F](b, genesis, dag, runtimeManager, span)
+      result                                                 <- computeBlockCheckpointFromDeploys[F](b, genesis, dag, runtimeManager)
       Right((preStateHash, postStateHash, processedDeploys)) = result
     } yield (postStateHash, processedDeploys.map(_.toProcessedDeploy))
+  }
 
   def injectPostStateHash[F[_]: Monad: BlockStore: IndexedBlockDagStorage](
       id: Int,
@@ -74,12 +74,11 @@ object BlockGenerator {
       IndexedBlockDagStorage[F].inject(id, updatedBlock, genesis, invalid = false)
   }
 
-  private def computeBlockCheckpointFromDeploys[F[_]: Sync: BlockStore: Time](
+  private def computeBlockCheckpointFromDeploys[F[_]: Sync: BlockStore: Time: Span](
       b: BlockMessage,
       genesis: BlockMessage,
       dag: BlockDagRepresentation[F],
-      runtimeManager: RuntimeManager[F],
-      span: Span[F]
+      runtimeManager: RuntimeManager[F]
   ): F[Either[Throwable, (StateHash, StateHash, Seq[InternalProcessedDeploy])]] =
     for {
       parents <- ProtoUtil.unsafeGetParents[F](b)
@@ -97,7 +96,6 @@ object BlockGenerator {
                  dag,
                  runtimeManager,
                  BlockData(now, b.body.get.state.get.blockNumber),
-                 span,
                  Map.empty[BlockHash, Validator]
                )
     } yield result

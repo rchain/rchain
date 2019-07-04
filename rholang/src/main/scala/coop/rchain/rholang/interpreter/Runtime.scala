@@ -9,7 +9,7 @@ import cats.implicits._
 import cats.mtl.FunctorTell
 import com.google.protobuf.ByteString
 import coop.rchain.crypto.hash.Blake2b512Random
-import coop.rchain.metrics.Metrics
+import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.models.Expr.ExprInstance.GString
 import coop.rchain.models.TaggedContinuation.TaggedCont.ScalaBodyRef
 import coop.rchain.models.Var.VarInstance.FreeVar
@@ -279,7 +279,7 @@ object Runtime {
     )
   )
 
-  def createWithEmptyCost[F[_]: ContextShift: Concurrent: Log: Metrics, M[_]](
+  def createWithEmptyCost[F[_]: ContextShift: Concurrent: Log: Metrics: Span, M[_]](
       dataDir: Path,
       mapSize: Long,
       extraSystemProcesses: Seq[SystemProcess.Definition[F]] = Seq.empty
@@ -296,7 +296,7 @@ object Runtime {
       }
     } yield (runtime))
 
-  def create[F[_]: ContextShift: Concurrent: Log: Metrics, M[_]](
+  def create[F[_]: ContextShift: Concurrent: Log: Metrics: Span, M[_]](
       dataDir: Path,
       mapSize: Long,
       extraSystemProcesses: Seq[SystemProcess.Definition[F]] = Seq.empty
@@ -454,7 +454,7 @@ object Runtime {
     } yield ()
   }
 
-  def setupRSpace[F[_]: Concurrent: ContextShift: Log: Metrics](
+  def setupRSpace[F[_]: Concurrent: ContextShift: Log: Metrics: Span](
       dataDir: Path,
       mapSize: Long
   )(implicit scheduler: ExecutionContext): F[(RhoISpace[F], RhoReplayISpace[F])] = {

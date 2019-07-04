@@ -8,7 +8,7 @@ import coop.rchain.rholang.interpreter._
 import coop.rchain.rholang.interpreter.errors.OutOfPhlogistonsError
 import coop.rchain.rholang.interpreter.accounting.utils._
 import coop.rchain.metrics
-import coop.rchain.metrics.Metrics
+import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.shared.Log
 import coop.rchain.shared.PathOps._
 import monix.eval.Task
@@ -35,6 +35,7 @@ class CostAccountingSpec extends FlatSpec with Matchers with PropertyChecks with
     implicit val errorLog                  = new ErrorLog[Task]()
     implicit val logF: Log[Task]           = new Log.NOPLog[Task]
     implicit val metricsEff: Metrics[Task] = new metrics.Metrics.MetricsNOP[Task]
+    implicit val noopSpan: Span[Task]      = NoopSpan[Task]()
 
     (for {
       costL <- costLog[Task]

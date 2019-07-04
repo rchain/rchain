@@ -15,7 +15,7 @@ import coop.rchain.comm.{transport, PeerNode}
 import coop.rchain.comm.protocol.routing.Packet
 import coop.rchain.comm.rp.Connect.{ConnectionsCell, RPConfAsk}
 import coop.rchain.comm.transport.{Blob, TransportLayer}
-import coop.rchain.metrics.Metrics
+import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.shared
 import coop.rchain.shared._
 
@@ -89,7 +89,7 @@ object Engine {
 
     } yield ()
 
-  def tranistionToInitializing[F[_]: Concurrent: Metrics: Monad: MultiParentCasperRef: EngineCell: Log: EventLog: RPConfAsk: BlockStore: ConnectionsCell: TransportLayer: Time: SafetyOracle: LastFinalizedBlockCalculator: LastApprovedBlock: BlockDagStorage](
+  def tranistionToInitializing[F[_]: Concurrent: Metrics: Span: Monad: MultiParentCasperRef: EngineCell: Log: EventLog: RPConfAsk: BlockStore: ConnectionsCell: TransportLayer: Time: SafetyOracle: LastFinalizedBlockCalculator: LastApprovedBlock: BlockDagStorage](
       rm: RuntimeManager[F],
       shardId: String,
       validatorId: Option[ValidatorIdentity],

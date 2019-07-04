@@ -28,7 +28,7 @@ import coop.rchain.comm.rp._
 import coop.rchain.comm.rp.Connect.{ConnectionsCell, RPConfAsk, RPConfState}
 import coop.rchain.comm.transport._
 import coop.rchain.grpc.Server
-import coop.rchain.metrics.Metrics
+import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.node.configuration.Configuration
 import coop.rchain.node.diagnostics._
 import coop.rchain.p2p.effects._
@@ -158,13 +158,14 @@ class NodeRuntime private[node] (
             if (conf.kamon.zipkin) Kamon.addReporter(new ZipkinReporter())
             if (conf.kamon.sigar) SystemMetrics.startCollecting()
           }
-    } yield Servers(
-      kademliaRPCServer,
-      transportServer,
-      externalApiServer,
-      internalApiServer,
-      httpServerFiber
-    )
+    } yield
+      Servers(
+        kademliaRPCServer,
+        transportServer,
+        externalApiServer,
+        internalApiServer,
+        httpServerFiber
+      )
   }
 
   def clearResources(servers: Servers, runtime: Runtime[Task], casperRuntime: Runtime[Task])(
@@ -360,6 +361,7 @@ class NodeRuntime private[node] (
     peerNodeAsk          = effects.peerNodeAsk(rpConfState)
     rpConnections        <- effects.rpConnections
     metrics              = diagnostics.effects.metrics[Task](conf.server.networkId, local.endpoint.host)
+    span                 = NoopSpan[Task]
     time                 = effects.time
     timerTask            = Task.timer
     multiParentCasperRef <- MultiParentCasperRef.of[Task]
@@ -433,7 +435,8 @@ class NodeRuntime private[node] (
       .cliqueOracle[Task](
         Monad[Task],
         log,
-        metrics
+        metrics,
+        span
       )
     lastFinalizedBlockCalculator = LastFinalizedBlockCalculator[Task](
       conf.server.faultToleranceThreshold
@@ -448,6 +451,7 @@ class NodeRuntime private[node] (
     runtime <- {
       implicit val s                = rspaceScheduler
       implicit val m: Metrics[Task] = metrics
+      implicit val sp: Span[Task]   = span
       Runtime
         .createWithEmptyCost[Task, Task.Par](storagePath, storageSize, Seq.empty)
     }
@@ -457,6 +461,7 @@ class NodeRuntime private[node] (
     casperRuntime <- {
       implicit val s                = rspaceScheduler
       implicit val m: Metrics[Task] = metrics
+      implicit val sp: Span[Task]   = span
       Runtime
         .createWithEmptyCost[Task, Task.Par](
           casperStoragePath,
@@ -467,6 +472,7 @@ class NodeRuntime private[node] (
     }
     runtimeManager <- {
       implicit val m: Metrics[Task] = metrics
+      implicit val sp: Span[Task]   = span
       RuntimeManager.fromRuntime[Task](casperRuntime)
     }
     engineCell   <- EngineCell.init[Task]
@@ -479,6 +485,7 @@ class NodeRuntime private[node] (
     _ <- CasperLaunch[Task](casperInit, identity)(
           lab,
           metrics,
+          span,
           blockStore,
           rpConnections,
           nodeDiscovery,

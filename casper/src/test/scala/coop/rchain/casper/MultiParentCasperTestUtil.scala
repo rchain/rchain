@@ -15,7 +15,7 @@ import coop.rchain.catscontrib.TaskContrib.TaskOps
 import coop.rchain.crypto.signatures.Secp256k1
 import coop.rchain.crypto.{PrivateKey, PublicKey}
 import coop.rchain.metrics
-import coop.rchain.metrics.Metrics
+import coop.rchain.metrics.{Metrics, NoopSpan}
 import coop.rchain.rholang.interpreter.Runtime
 import coop.rchain.rholang.interpreter.util.RevAddress
 import coop.rchain.shared.Log
@@ -105,6 +105,7 @@ object MultiParentCasperTestUtil {
     val storageSize: Long                            = 3024L * 1024 * 10
     implicit val log: Log.NOPLog[Task]               = new Log.NOPLog[Task]
     implicit val metricsEff: Metrics[Task]           = new metrics.Metrics.MetricsNOP[Task]
+    implicit val spanEff                             = NoopSpan[Task]()
 
     (for {
       rspaceDir      <- Task.delay(Files.createDirectory(storageDirectory.resolve("rspace")))

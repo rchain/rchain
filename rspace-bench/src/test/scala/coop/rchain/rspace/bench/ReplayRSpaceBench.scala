@@ -6,7 +6,7 @@ import java.util.concurrent.TimeUnit
 import cats.Id
 import cats.effect._
 import coop.rchain.metrics
-import coop.rchain.metrics.Metrics
+import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.rspace._
 import coop.rchain.rspace.{RSpace, ReplayRSpace}
 import coop.rchain.rspace.ISpace.IdISpace
@@ -62,6 +62,7 @@ object ReplayRSpaceBench {
       null
     implicit val logF: Log[Id]            = new Log.NOPLog[Id]
     implicit val noopMetrics: Metrics[Id] = new metrics.Metrics.MetricsNOP[Id]
+    implicit val noopSpan: Span[Id]       = NoopSpan[Id]()
     val consumeChannel                    = Channel("consume")
     val produceChannel                    = Channel("produce")
     val matches                           = List(CityMatch(city = "Crystal Lake"))

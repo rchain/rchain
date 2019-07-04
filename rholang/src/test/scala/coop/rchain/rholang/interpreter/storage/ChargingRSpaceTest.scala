@@ -8,7 +8,7 @@ import com.google.protobuf.ByteString
 import coop.rchain.catscontrib.mtl.implicits._
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.metrics
-import coop.rchain.metrics.Metrics
+import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.models.Expr.ExprInstance.GInt
 import coop.rchain.models.TaggedContinuation.TaggedCont.ParBody
 import coop.rchain.models.Var.VarInstance.FreeVar
@@ -403,4 +403,5 @@ object ChargingRSpaceTest {
 
   implicit val logF: Log[Task]            = new Log.NOPLog[Task]
   implicit val noopMetrics: Metrics[Task] = new metrics.Metrics.MetricsNOP[Task]
+  implicit val noopSpan: Span[Task]       = NoopSpan[Task]()
 }

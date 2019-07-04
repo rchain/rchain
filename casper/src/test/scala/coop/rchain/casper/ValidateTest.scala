@@ -19,7 +19,7 @@ import coop.rchain.casper.util.{ConstructDeploy, ProtoUtil}
 import coop.rchain.crypto.PrivateKey
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.signatures.Secp256k1
-import coop.rchain.metrics.{Metrics, NoopSpan}
+import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.Validator.Validator
 import coop.rchain.p2p.EffectsTestInstances.LogStub
@@ -39,7 +39,7 @@ class ValidateTest
     with BlockDagStorageFixture {
   implicit val log                        = new LogStub[Task]
   implicit val noopMetrics: Metrics[Task] = new Metrics.MetricsNOP[Task]
-  val span                                = new NoopSpan[Task]
+  implicit val span: Span[Task]           = new NoopSpan[Task]
 
   override def beforeEach(): Unit = {
     log.reset()
@@ -399,8 +399,8 @@ class ValidateTest
         block  <- blockDagStorage.lookupByIdUnsafe(0)
         block2 <- blockDagStorage.lookupByIdUnsafe(1)
         dag    <- blockDagStorage.getRepresentation
-        _      <- Validate.repeatDeploy[Task](block, dag, 50, span) shouldBeF Right(Valid)
-        _      <- Validate.repeatDeploy[Task](block2, dag, 50, span) shouldBeF Right(Valid)
+        _      <- Validate.repeatDeploy[Task](block, dag, 50) shouldBeF Right(Valid)
+        _      <- Validate.repeatDeploy[Task](block2, dag, 50) shouldBeF Right(Valid)
       } yield ()
   }
 
@@ -415,7 +415,7 @@ class ValidateTest
                    deploys = Seq(deploy)
                  )
         dag <- blockDagStorage.getRepresentation
-        _   <- Validate.repeatDeploy[Task](block1, dag, 50, span) shouldBeF Left(InvalidRepeatDeploy)
+        _   <- Validate.repeatDeploy[Task](block1, dag, 50) shouldBeF Left(InvalidRepeatDeploy)
       } yield ()
   }
 
@@ -542,8 +542,7 @@ class ValidateTest
               BlockMessage.defaultInstance,
               dag,
               "rchain",
-              Int.MaxValue,
-              span
+              Int.MaxValue
             ) shouldBeF Left(InvalidBlockNumber)
         result = log.warns.size should be(1)
       } yield result
@@ -712,7 +711,7 @@ class ValidateTest
                         )
         runtimeManager    <- RuntimeManager.fromRuntime[Task](activeRuntime)
         dag               <- blockDagStorage.getRepresentation
-        _                 <- InterpreterUtil.validateBlockCheckpoint[Task](genesis, dag, runtimeManager, span)
+        _                 <- InterpreterUtil.validateBlockCheckpoint[Task](genesis, dag, runtimeManager)
         _                 <- Validate.bondsCache[Task](genesis, runtimeManager) shouldBeF Right(Valid)
         modifiedBonds     = Seq.empty[Bond]
         modifiedPostState = genesis.getBody.getState.withBonds(modifiedBonds)

@@ -17,7 +17,7 @@ import coop.rchain.casper.scalatestcontrib._
 import coop.rchain.casper.util.ConstructDeploy.basicProcessedDeploy
 import coop.rchain.casper.util.rholang.Resources.mkRuntimeManager
 import coop.rchain.metrics
-import coop.rchain.metrics.Metrics
+import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.p2p.EffectsTestInstances.LogicalTime
 import coop.rchain.shared.{Log, Time}
 import monix.eval.Task
@@ -33,6 +33,7 @@ class EstimatorHelperTest
   implicit val log: Log[Task]            = new Log.NOPLog[Task]
   implicit val timeEff: Time[Task]       = new LogicalTime[Task]
   implicit val metricsEff: Metrics[Task] = new metrics.Metrics.MetricsNOP[Task]
+  implicit val noopSpan: Span[Task]      = NoopSpan[Task]()
 
   /*
    * DAG Looks like this:

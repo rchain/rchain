@@ -8,7 +8,7 @@ import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.metrics
-import coop.rchain.metrics.Metrics
+import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.models.Connective.ConnectiveInstance._
 import coop.rchain.models.Expr.ExprInstance._
 import coop.rchain.models.TaggedContinuation.TaggedCont.ParBody
@@ -47,6 +47,7 @@ trait PersistentStoreTester {
     val dbDir                              = Files.createTempDirectory("rholang-interpreter-test-")
     implicit val logF: Log[Task]           = new Log.NOPLog[Task]
     implicit val metricsEff: Metrics[Task] = new metrics.Metrics.MetricsNOP[Task]
+    implicit val noopSpan: Span[Task]      = NoopSpan[Task]()
 
     implicit val cost = CostAccounting.emptyCost[Task].unsafeRunSync
 

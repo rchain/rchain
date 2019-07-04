@@ -10,7 +10,7 @@ import coop.rchain.casper.util.{ConstructDeploy, ProtoUtil}
 import coop.rchain.catscontrib.effect.implicits._
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.metrics
-import coop.rchain.metrics.Metrics
+import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.Validator.Validator
 import coop.rchain.p2p.EffectsTestInstances.LogicalTime
@@ -70,6 +70,7 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
 
     implicit val log: Log[Task]            = Log.log[Task]
     implicit val metricsEff: Metrics[Task] = new metrics.Metrics.MetricsNOP[Task]
+    implicit val noopSpan: Span[Task]      = NoopSpan[Task]()
 
     (for {
       reductionCost <- mkRuntime[Task]("casper-runtime")

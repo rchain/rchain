@@ -4,7 +4,7 @@ import scala.collection.immutable.HashMap
 import scala.collection.mutable
 
 import coop.rchain.blockstorage.{BlockStore, IndexedBlockDagStorage}
-import coop.rchain.metrics.Metrics
+import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.casper.helper.BlockGenerator._
 import coop.rchain.casper.helper.BlockUtil.generateValidator
 import coop.rchain.casper.helper.{BlockDagStorageFixture, BlockGenerator}
@@ -23,8 +23,9 @@ class CliqueOracleTest
 
   behavior of "Clique Oracle"
 
-  implicit val logEff     = new LogStub[Task]
-  implicit val metricsEff = new Metrics.MetricsNOP[Task]
+  implicit val logEff               = new LogStub[Task]
+  implicit val metricsEff           = new Metrics.MetricsNOP[Task]
+  implicit val noopSpan: Span[Task] = NoopSpan[Task]()
 
   implicit def toImmutableMap(
       m: mutable.Map[Validator, BlockMessage]

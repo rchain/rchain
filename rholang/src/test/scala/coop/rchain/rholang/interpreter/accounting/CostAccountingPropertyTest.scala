@@ -4,7 +4,7 @@ import cats._
 import cats.effect._
 import cats.implicits._
 import coop.rchain.metrics
-import coop.rchain.metrics.Metrics
+import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.models._
 import coop.rchain.rholang.Resources._
 import coop.rchain.rholang.interpreter.{PrettyPrinter => PP, _}
@@ -99,6 +99,7 @@ object CostAccountingPropertyTest {
   def costOfExecution(procs: Proc*): Task[Long] = {
     implicit val logF: Log[Task]            = new Log.NOPLog[Task]
     implicit val noopMetrics: Metrics[Task] = new metrics.Metrics.MetricsNOP[Task]
+    implicit val noopSpan: Span[Task]       = NoopSpan[Task]()
 
     val prefix = "cost-accounting-property-test"
     mkRuntime[Task](prefix, 1024 * 1024).use { runtime =>

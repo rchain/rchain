@@ -3,7 +3,7 @@ package coop.rchain.casper
 import scala.collection.immutable.HashMap
 
 import coop.rchain.casper.protocol.Bond
-import coop.rchain.metrics.Metrics
+import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.casper.helper.BlockGenerator._
 import coop.rchain.casper.helper.BlockUtil.generateValidator
 import coop.rchain.casper.helper.{BlockDagStorageFixture, BlockGenerator}
@@ -15,7 +15,8 @@ import monix.eval.Task
 import org.scalatest.{FlatSpec, Matchers}
 
 class EstimatorTest extends FlatSpec with Matchers with BlockGenerator with BlockDagStorageFixture {
-  implicit val metricsEff = new Metrics.MetricsNOP[Task]
+  implicit val metricsEff           = new Metrics.MetricsNOP[Task]
+  implicit val noopSpan: Span[Task] = NoopSpan[Task]()
 
   "Estimator on empty latestMessages" should "return the genesis regardless of DAG" in withStorage {
     implicit blockStore => implicit blockDagStorage =>

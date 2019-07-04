@@ -8,7 +8,7 @@ import coop.rchain.catscontrib.ski._
 import cats.effect._
 import cats.implicits._
 import com.typesafe.scalalogging.Logger
-import coop.rchain.metrics.Metrics
+import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.rspace._
 import coop.rchain.rspace.examples.StringExamples._
 import coop.rchain.rspace.examples.StringExamples.implicits._
@@ -1260,6 +1260,7 @@ trait InMemoryReplayRSpaceTestsBase[C, P, A, K] extends ReplayRSpaceTestsBase[C,
   ): S = {
     implicit val log: Log[Task]          = Log.log[Task]
     implicit val metricsF: Metrics[Task] = new Metrics.MetricsNOP[Task]()
+    implicit val spanF: Span[Task]       = NoopSpan[Task]()
 
     val branch = Branch("inmem")
 

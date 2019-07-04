@@ -47,14 +47,14 @@ object CasperState {
   type CasperStateCell[F[_]] = Cell[F, CasperState]
 }
 
-class MultiParentCasperImpl[F[_]: Sync: Concurrent: Sync: ConnectionsCell: TransportLayer: Log: Time: SafetyOracle: LastFinalizedBlockCalculator: BlockStore: RPConfAsk: BlockDagStorage](
+class MultiParentCasperImpl[F[_]: Sync: Concurrent: ConnectionsCell: TransportLayer: Log: Time: SafetyOracle: LastFinalizedBlockCalculator: BlockStore: RPConfAsk: BlockDagStorage](
     runtimeManager: RuntimeManager[F],
     validatorId: Option[ValidatorIdentity],
     genesis: BlockMessage,
     postGenesisStateHash: StateHash,
     shardId: String,
     blockProcessingLock: Semaphore[F]
-)(implicit state: CasperStateCell[F], metricsF: Metrics[F])
+)(implicit state: CasperStateCell[F], metricsF: Metrics[F], spanF: Span[F])
     extends MultiParentCasper[F] {
 
   implicit private val logSource: LogSource = LogSource(this.getClass)
@@ -82,10 +82,9 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Sync: ConnectionsCell: Trans
         )
         .as(BlockStatus.processing)
 
-    def doppelgangerAndAdd =
+    def doppelgangerAndAdd = spanF.child(AddBlockMetricsSource) {
       for {
-        span <- metricsF.span(AddBlockMetricsSource)
-        dag  <- blockDag
+        dag <- blockDag
         _ <- validatorId match {
               case Some(ValidatorIdentity(publicKey, _, _)) =>
                 val sender = ByteString.copyFrom(publicKey.bytes)
@@ -93,11 +92,11 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Sync: ConnectionsCell: Trans
               case None => ().pure[F]
             }
         _      <- BlockStore[F].put(b)
-        _      <- span.mark("block-store-put")
-        status <- internalAddBlock(b, dag, span)
-        _      <- span.mark("block-added-status")
-        _      <- span.close()
+        _      <- spanF.mark("block-store-put")
+        status <- internalAddBlock(b, dag)
+        _      <- spanF.mark("block-added-status")
       } yield status
+    }
 
     for {
       status <- blockProcessingLock.withPermit {
@@ -120,11 +119,10 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Sync: ConnectionsCell: Trans
 
   private def internalAddBlock(
       b: BlockMessage,
-      dag: BlockDagRepresentation[F],
-      span: Span[F]
+      dag: BlockDagRepresentation[F]
   ): F[BlockStatus] =
     for {
-      _            <- span.mark("internal-add-block")
+      _            <- Span[F].mark("internal-add-block")
       validFormat  <- Validate.formatOfFields[F](b)
       validSig     <- Validate.blockSignature[F](b)
       validSender  <- Validate.blockSender[F](b, genesis, dag)
@@ -133,7 +131,7 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Sync: ConnectionsCell: Trans
                       else if (!validSig) (InvalidUnslashableBlock, dag).pure[F]
                       else if (!validSender) (InvalidUnslashableBlock, dag).pure[F]
                       else if (!validVersion) (InvalidUnslashableBlock, dag).pure[F]
-                      else attemptAdd(b, dag, span)
+                      else attemptAdd(b, dag)
       (attempt, updatedDag) = attemptResult
       _ <- attempt match {
             case MissingBlocks => ().pure[F]
@@ -145,17 +143,17 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Sync: ConnectionsCell: Trans
                 )
               }
           }
-      _ <- span.mark("attempt-result")
+      _ <- Span[F].mark("attempt-result")
       _ <- attempt match {
             case MissingBlocks           => ().pure[F]
             case IgnorableEquivocation   => ().pure[F]
             case InvalidUnslashableBlock => ().pure[F]
             case _ =>
-              reAttemptBuffer(updatedDag, span) // reAttempt for any status that resulted in the adding of the block into the view
+              reAttemptBuffer(updatedDag) // reAttempt for any status that resulted in the adding of the block into the view
           }
-      _         <- span.mark("reattempted-buffer")
+      _         <- Span[F].mark("reattempted-buffer")
       tipHashes <- estimator(updatedDag)
-      _         <- span.mark("after-estimator")
+      _         <- Span[F].mark("after-estimator")
       tipHash   = tipHashes.head
       _         <- Log[F].info(s"New fork-choice tip is block ${PrettyPrinter.buildString(tipHash)}.")
     } yield attempt
@@ -276,30 +274,28 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Sync: ConnectionsCell: Trans
    */
   private def attemptAdd(
       b: BlockMessage,
-      dag: BlockDagRepresentation[F],
-      span: Span[F]
+      dag: BlockDagRepresentation[F]
   ): F[(BlockStatus, BlockDagRepresentation[F])] =
     for {
-      _ <- span.mark("attempt-add")
+      _ <- Span[F].mark("attempt-add")
       _ <- Log[F].info(s"Attempting to add Block ${PrettyPrinter.buildString(b.blockHash)} to DAG.")
       postValidationStatus <- Validate
-                               .blockSummary[F](b, genesis, dag, shardId, expirationThreshold, span)
-      _ <- span.mark("post-validation-block-summary")
+                               .blockSummary[F](b, genesis, dag, shardId, expirationThreshold)
+      _ <- Span[F].mark("post-validation-block-summary")
       postTransactionsCheckStatus <- postValidationStatus.traverse(
                                       _ =>
                                         Validate.transactions[F](
                                           b,
                                           dag,
                                           emptyStateHash,
-                                          runtimeManager,
-                                          span
+                                          runtimeManager
                                         )
                                     )
-      _ <- span.mark("transactions-validated")
+      _ <- Span[F].mark("transactions-validated")
       postBondsCacheStatus <- postTransactionsCheckStatus.joinRight.traverse(
                                _ => Validate.bondsCache[F](b, runtimeManager)
                              )
-      _ <- span.mark("bonds-cache-validated")
+      _ <- Span[F].mark("bonds-cache-validated")
       s <- Cell[F, CasperState].read
       postNeglectedInvalidBlockStatus <- postBondsCacheStatus.joinRight.traverse(
                                           _ =>
@@ -309,7 +305,7 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Sync: ConnectionsCell: Trans
                                                 dag
                                               )
                                         )
-      _ <- span.mark("neglected-invalid-block-validated")
+      _ <- Span[F].mark("neglected-invalid-block-validated")
       postNeglectedEquivocationCheckStatus <- postNeglectedInvalidBlockStatus.joinRight
                                                .traverse(
                                                  _ =>
@@ -320,16 +316,16 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Sync: ConnectionsCell: Trans
                                                        genesis
                                                      )
                                                )
-      _ <- span.mark("neglected-equivocation-validated")
+      _ <- Span[F].mark("neglected-equivocation-validated")
       postEquivocationCheckStatus <- postNeglectedEquivocationCheckStatus.joinRight.traverse(
                                       _ =>
                                         EquivocationDetector
                                           .checkEquivocations[F](s.dependencyDag, b, dag)
                                     )
       status     = postEquivocationCheckStatus.joinRight.merge
-      _          <- span.mark("equivocation-validated")
+      _          <- Span[F].mark("equivocation-validated")
       updatedDag <- addEffects(status, b, dag)
-      _          <- span.mark("effects-added")
+      _          <- Span[F].mark("effects-added")
     } yield (status, updatedDag)
 
   // TODO: Handle slashing
@@ -473,11 +469,10 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Sync: ConnectionsCell: Trans
     ) >> BlockDagStorage[F].insert(block, genesis, invalid = true)
 
   private def reAttemptBuffer(
-      dag: BlockDagRepresentation[F],
-      span: Span[F]
+      dag: BlockDagRepresentation[F]
   ): F[Unit] =
     for {
-      _              <- span.mark("reattempt-buffer")
+      _              <- Span[F].mark("reattempt-buffer")
       state          <- Cell[F, CasperState].read
       dependencyFree = state.dependencyDag.dependencyFree
       dependencyFreeBlocks = state.blockBuffer
@@ -501,7 +496,7 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Sync: ConnectionsCell: Trans
                                         )
                                       )
                                     )
-                              status <- attemptAdd(b, updatedDag, span)
+                              status <- attemptAdd(b, updatedDag)
                             } yield ((b, status) :: attempts, status._2)
                         }
       (attempts, updatedDag) = attemptsWithDag
@@ -510,8 +505,8 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Sync: ConnectionsCell: Trans
           } else {
             for {
               _ <- removeAdded(state.dependencyDag, attempts)
-              _ <- span.mark("added-removed")
-              _ <- reAttemptBuffer(updatedDag, span)
+              _ <- Span[F].mark("added-removed")
+              _ <- reAttemptBuffer(updatedDag)
             } yield ()
           }
     } yield ()

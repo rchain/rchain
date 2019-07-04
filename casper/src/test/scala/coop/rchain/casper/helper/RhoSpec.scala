@@ -4,7 +4,7 @@ import cats.effect.Concurrent
 import coop.rchain.casper.genesis.contracts.TestUtil
 import coop.rchain.casper.protocol.DeployData
 import coop.rchain.crypto.hash.Blake2b512Random
-import coop.rchain.metrics.Metrics
+import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.rholang.Resources._
 import coop.rchain.rholang.build.CompiledRholangSource
 import coop.rchain.rholang.interpreter.{NormalizerEnv, PrettyPrinter, Runtime}
@@ -20,6 +20,7 @@ object RhoSpec {
 
   implicit val logger: Log[Task]         = Log.log[Task]
   implicit val metricsEff: Metrics[Task] = new Metrics.MetricsNOP[Task]
+  implicit val noopSpan: Span[Task]      = NoopSpan[Task]()
 
   private def testFrameworkContracts[F[_]: Log: Concurrent](
       testResultCollector: TestResultCollector[F]
