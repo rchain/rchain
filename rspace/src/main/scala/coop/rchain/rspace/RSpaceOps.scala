@@ -216,4 +216,7 @@ abstract class RSpaceOps[F[_]: Concurrent, C, P, A, R, K](
       _        = eventLog.put(checkpoint.log)
     } yield ()
   }
+
+  override def close(): F[Unit] = historyRepository.close()
+
 }

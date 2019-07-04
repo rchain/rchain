@@ -117,6 +117,4 @@ private[rspace] trait SpaceMatcher[F[_], C, P, A, R, K] extends ISpace[F, C, P, 
         } yield produceCandidates
       case _ => none[ProduceCandidate[C, P, R, K]].pure[F]
     }
-
-  override def close(): F[Unit] = ().pure[F]
 }
