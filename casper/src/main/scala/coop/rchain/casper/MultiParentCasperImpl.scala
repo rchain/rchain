@@ -159,13 +159,13 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: ConnectionsCell: TransportLa
     } yield attempt
 
   def contains(
-      b: BlockMessage
+      hash: BlockHash
   ): F[Boolean] =
     for {
       dag            <- blockDag
-      dagContains    <- dag.contains(b.blockHash)
+      dagContains    <- dag.contains(hash)
       state          <- Cell[F, CasperState].read
-      bufferContains = state.blockBuffer.contains(b.blockHash)
+      bufferContains = state.blockBuffer.contains(hash)
     } yield (dagContains || bufferContains)
 
   /**

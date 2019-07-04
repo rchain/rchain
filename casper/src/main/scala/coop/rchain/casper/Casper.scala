@@ -53,7 +53,7 @@ trait Casper[F[_], A] {
       b: BlockMessage,
       handleDoppelganger: (BlockMessage, Validator) => F[Unit]
   ): F[BlockStatus]
-  def contains(b: BlockMessage): F[Boolean]
+  def contains(hash: BlockHash): F[Boolean]
   def deploy(d: DeployData): F[Either[DeployError, DeployId]]
   def estimator(dag: BlockDagRepresentation[F]): F[A]
   def createBlock: F[CreateBlockStatus]
