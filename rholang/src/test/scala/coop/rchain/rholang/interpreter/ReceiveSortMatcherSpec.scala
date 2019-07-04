@@ -9,7 +9,6 @@ import coop.rchain.models.rholang.implicits._
 
 class ReceiveSortMatcherSpec extends FlatSpec with Matchers {
   val emptyMap = DebruijnLevelMap[VarSort]()
-  val p        = Par()
   "Binds" should "Presort based on their channel and then pattern" in {
     val binds: List[Tuple4[List[Par], Par, Option[Var], DebruijnLevelMap[VarSort]]] =
       List(
