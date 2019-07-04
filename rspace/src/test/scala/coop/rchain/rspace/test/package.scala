@@ -16,22 +16,8 @@ import scodec.{Attempt, Codec, DecodeResult}
 
 package object test {
 
-  /**
-    * Converts specified byteBuffer to '-' separated string,
-    * convenient during debugging
-    */
-  private[rspace] def toStr(byteBuffer: ByteBuffer): String = {
-    byteBuffer.mark()
-    val fetched = new Array[Byte](byteBuffer.remaining())
-    ignore { byteBuffer.get(fetched) }
-    byteBuffer.reset()
-    fetched.toSeq.map(x => x.toString).mkString("-")
-  }
-
   def roundTripCodec[T](t: T)(implicit codec: Codec[T]): Attempt[DecodeResult[T]] =
     codec.encode(t).flatMap((vector: BitVector) => codec.decode(vector))
-
-  def offset(d: Int) = ("   " * d)
 
   import scala.reflect.ClassTag
   def collectActions[HA <: HotStoreAction: ClassTag](changes: Seq[HotStoreAction]): Seq[HA] = {
