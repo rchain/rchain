@@ -16,18 +16,6 @@ import scodec.{Attempt, Codec, DecodeResult}
 
 package object test {
 
-  implicit val contextShiftId: ContextShift[Id] =
-    new ContextShift[Id] {
-      def shift: Id[Unit]                                   = ???
-      def evalOn[A](ec: ExecutionContext)(fa: Id[A]): Id[A] = fa
-    }
-
-  implicit val contextShiftCoeval: ContextShift[Coeval] =
-    new ContextShift[Coeval] {
-      def shift: Coeval[Unit]                                       = ???
-      def evalOn[A](ec: ExecutionContext)(fa: Coeval[A]): Coeval[A] = fa
-    }
-
   /**
     * Converts specified byteBuffer to '-' separated string,
     * convenient during debugging
