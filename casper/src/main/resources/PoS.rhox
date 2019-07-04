@@ -208,18 +208,18 @@ new  PoS,
         } |
 
         contract distributeRewards(@amount, @activeValidators, @bonds, @originalRewards, returnCh) = {
-          new computeSum, totalStakeCh,
+          new computeSum, totalActiveStakeCh,
               computeDelta, rewardsDeltaCh,
               computeMergeMap in {
-            @ListOps!("fold", bonds.toList(), 0, *computeSum, *totalStakeCh) |
-            contract computeSum(@(pk, stake), @acc, resultCh) = {
-              resultCh!(acc + stake)
+            @ListOps!("fold", activeValidators, 0, *computeSum, *totalActiveStakeCh) |
+            contract computeSum(@pk, @acc, resultCh) = {
+              resultCh!(acc + bonds.get(pk))
             } |
 
-            for(@totalStake <- totalStakeCh) {
-              @ListOps!("fold", bonds.toList(), {}, *computeDelta, *rewardsDeltaCh) |
-              contract computeDelta(@(pk, currentValidatorStake), @acc, resultCh) = {
-                resultCh!(acc.set(pk, (amount * currentValidatorStake) / totalStake))
+            for(@totalActiveStake <- totalActiveStakeCh) {
+              @ListOps!("fold", activeValidators, {}, *computeDelta, *rewardsDeltaCh) |
+              contract computeDelta(@pk, @acc, resultCh) = {
+                resultCh!(acc.set(pk, (amount * bonds.get(pk)) / totalActiveStake))
               }
             } |
 
