@@ -19,6 +19,7 @@ match (
       test_bonding_fails_if_already_bonded,
       test_bonding_fails_if_bond_too_small,
       test_pay_succeeds,
+      test_dont_pay_inactive_validators,
       test_bonding_failure
     in {
       revAddressOps!("fromPublicKey", posPubKey, *posRevAddressCh) |
@@ -43,7 +44,8 @@ match (
               ("multiple bondings work", *test_multiple_bonding_succeeds),
               ("payment works", *test_pay_succeeds),
               ("bonding fails if already bonded", *test_bonding_fails_if_already_bonded),
-              ("bonding fails is bond is too small", *test_bonding_fails_if_bond_too_small)
+              ("bonding fails is bond is too small", *test_bonding_fails_if_bond_too_small),
+              ("payment is not distributed to inactive validators", *test_dont_pay_inactive_validators)
             ]) |
 
           contract setup(retCh) = {
@@ -51,6 +53,7 @@ match (
           } |
 
           contract prepareUser(@pk, @vaultAmount, retCh) = {
+            stdlog!("info", ("preparing user ", pk)) |
             new setDeployData(`rho:test:deploy:set`), identitySet, revAddrCh, vaultCh in {
               setDeployData!("userId", pk.hexToBytes(), *identitySet) |
               revAddressOps!("fromPublicKey", pk.hexToBytes(), *revAddrCh) |
@@ -307,6 +310,37 @@ match (
                       ],
                       *ackCh
                     )
+                  }
+                }
+              }
+            }
+          } |
+
+          contract test_dont_pay_inactive_validators(rhoSpec, _, ackCh) = {
+            new setupCh, closeBlockCh, retCh,
+                finalRewardsCh
+            in {
+              prepareUser!("9999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999", 10000, *setupCh) |
+              for (@validatorPubKey, _, _ <- setupCh) {
+                @PoS!("bond", 100, *setupCh) |
+                for (@(true, _) <- setupCh) {
+                  prepareUser!("0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000", 10000, *setupCh) |
+                  for (@user1PubKey, _, @user1Vault <- setupCh) {
+                    @PoS!("pay", 100, *retCh) |
+                    for ( @(true, _) <- retCh) {
+                      @PoS!("closeBlock", *closeBlockCh) |
+                      for (_ <- closeBlockCh) {
+                        @PoS!("getRewards", *finalRewardsCh) |
+                        for(@finalRewards <- finalRewardsCh) {
+                          rhoSpec!("assertMany",
+                            [
+                              ((Nil, "==", finalRewards.get(validatorPubKey)), "the new validator should have no reward")
+                            ],
+                            *ackCh
+                          )
+                        }
+                      }
+                    }
                   }
                 }
               }
