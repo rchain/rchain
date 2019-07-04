@@ -2,6 +2,7 @@
 // minimumBond - the minimum bond allowed by the PoS
 // maximumBond - the maximum bond allowed by PoS
 // initialBonds - the initial bonds map
+// epochLength - the length of the validation epoch in blocks
 
 /*
  The table below describes the required computations and their dependencies
@@ -168,7 +169,7 @@ new  PoS,
                 for(_, @blockNumber <- blockDataCh;
                     @(pendingRewards, rewards, activeValidators, allBonds), mvarResultCh <- mvarProcessCh) {
 
-                  if (blockNumber % 1000 == 0) {
+                  if (blockNumber % $$epochLength$$ == 0) {
                     pickActiveValidators!(allBonds, *newValidatorsCh)
                   } else {
                     newValidatorsCh!(activeValidators)

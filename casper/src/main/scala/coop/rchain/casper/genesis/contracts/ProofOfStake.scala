@@ -9,12 +9,18 @@ import monix.eval.Coeval
 import scala.io.Source
 
 // TODO: Eliminate validators argument if unnecessary.
-final case class ProofOfStake(minimumBond: Long, maximumBond: Long, validators: Seq[Validator])
-    extends CompiledRholangTemplate(
+// TODO: eliminate the default for epochLength. Now it is used in order to minimise the impact of adding this parameter
+final case class ProofOfStake(
+    minimumBond: Long,
+    maximumBond: Long,
+    validators: Seq[Validator],
+    epochLength: Int = 10000
+) extends CompiledRholangTemplate(
       "PoS.rhox",
       "minimumBond"  -> minimumBond,
       "maximumBond"  -> maximumBond,
-      "initialBonds" -> ProofOfStake.initialBonds(validators)
+      "initialBonds" -> ProofOfStake.initialBonds(validators),
+      "epochLength"  -> epochLength
     ) {
 
   require(minimumBond <= maximumBond)

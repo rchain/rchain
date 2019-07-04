@@ -45,7 +45,9 @@ object TestUtil {
     } yield (runtime)
 
   // TODO: Have this function take an additional "Genesis" argument.
-  def defaultGenesisSetup[F[_]: Concurrent](runtimeManager: RuntimeManager[F]): F[BlockMessage] = {
+  def defaultGenesisSetup[F[_]: Concurrent](
+      epochLength: Int
+  )(runtimeManager: RuntimeManager[F]): F[BlockMessage] = {
 
     val (_, validatorPks) = (1 to 4).map(_ => Secp256k1.newKeyPair).unzip
     val bonds             = createBonds(validatorPks)
@@ -58,6 +60,7 @@ object TestUtil {
         proofOfStake = ProofOfStake(
           minimumBond = 0L,
           maximumBond = Long.MaxValue,
+          epochLength = epochLength,
           validators = bonds.map(Validator.tupled).toSeq
         ),
         genesisPk = Secp256k1.newKeyPair._2,

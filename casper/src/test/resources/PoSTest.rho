@@ -178,7 +178,7 @@ match (
           } |
 
           contract test_pay_succeeds(rhoSpec, _, ackCh) = {
-            new setupCh, retCh, initialPosBalanceCh, finalPosBalanceCh,
+            new setupCh, closeBlockCh, retCh, initialPosBalanceCh, finalPosBalanceCh,
                 initialUser1BalanceCh, finalUser1BalanceCh,
                 initialRewardsCh, finalRewardsCh,
                 computeDelta, deltaRewardsCh, deltaSumCh, sumDelta,
@@ -188,8 +188,10 @@ match (
               for (@validatorPubKey, _, _ <- setupCh) {
                 @PoS!("bond", 100, *setupCh) |
                 for (@(true, _) <- setupCh) {
+                  @PoS!("closeBlock", *closeBlockCh) |
                   prepareUser!("5555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555", 10000, *setupCh) |
-                  for (@user1PubKey, _, @user1Vault <- setupCh) {
+                  for (@user1PubKey, _, @user1Vault <- setupCh;
+                       _ <- closeBlockCh) {
                     @posVault!("balance", *initialPosBalanceCh) |
                     @user1Vault!("balance", *initialUser1BalanceCh) |
                     @PoS!("getRewards", *initialRewardsCh) |
@@ -198,8 +200,8 @@ match (
                         @initialRewards <- initialRewardsCh) {
                       @PoS!("pay", 100, *retCh) |
                       for ( @(true, _) <- retCh) {
-                        @PoS!("closeBlock", *ackCh) |
-                        for (_ <- ackCh) {
+                        @PoS!("closeBlock", *closeBlockCh) |
+                        for (_ <- closeBlockCh) {
                           @posVault!("balance", *finalPosBalanceCh) |
                           @user1Vault!("balance", *finalUser1BalanceCh) |
                           @PoS!("getRewards", *finalRewardsCh) |
