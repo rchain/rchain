@@ -174,13 +174,6 @@ abstract class RSpaceOps[F[_]: Concurrent, C, P, A, R, K](
       lockedInstall(channels, patterns, continuation)
     }
 
-  override def retrieve(
-      root: Blake2b256Hash,
-      channelsHash: Blake2b256Hash
-  ): F[Option[GNAT[C, P, A, K]]] = ???
-
-  protected[rspace] def isDirty(root: Blake2b256Hash): F[Boolean]
-
   def toMap: F[Map[Seq[C], Row[P, A, K]]] = storeAtom.get().toMap
 
   override def reset(root: Blake2b256Hash): F[Unit] =
@@ -223,4 +216,7 @@ abstract class RSpaceOps[F[_]: Concurrent, C, P, A, R, K](
       _        = eventLog.put(checkpoint.log)
     } yield ()
   }
+
+  override def close(): F[Unit] = historyRepository.close()
+
 }

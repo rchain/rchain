@@ -453,8 +453,6 @@ class RSpace[F[_], C, P, A, R, K] private[rspace] (
       _           = eventLog.put(Seq.empty)
       _           <- restoreInstalls()
     } yield Checkpoint(nextHistory.history.root, log)
-
-  protected[rspace] override def isDirty(root: Blake2b256Hash): F[Boolean] = true.pure[F]
 }
 
 object RSpace {

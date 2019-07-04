@@ -102,11 +102,6 @@ trait ISpace[F[_], C, P, A, R, K] {
     */
   def reset(root: Blake2b256Hash): F[Unit]
 
-  /**
-    * Retrieves a GNAT from the history trie at a particular checkpoint and channels hash.
-    */
-  def retrieve(root: Blake2b256Hash, channelsHash: Blake2b256Hash): F[Option[GNAT[C, P, A, K]]]
-
   def getData(channel: C): F[Seq[Datum[A]]]
 
   def getWaitingContinuations(channels: Seq[C]): F[Seq[WaitingContinuation[P, K]]]
@@ -115,16 +110,9 @@ trait ISpace[F[_], C, P, A, R, K] {
     */
   def clear(): F[Unit]
 
-  /** Closes
+  /** Closes the ISpace freeing all underlying resources.
     */
   def close(): F[Unit]
-
-  /**
-    * checks it the internal state is consistent with the passed root hash
-    *
-    * @param root to verify the state against
-    */
-  protected[rspace] def isDirty(root: Blake2b256Hash): F[Boolean]
 
   // TODO: this should not be exposed
   def toMap: F[Map[Seq[C], Row[P, A, K]]]
