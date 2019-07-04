@@ -2,7 +2,6 @@ package coop.rchain.rspace
 package experiment
 
 import com.google.common.collect.{HashMultiset, Multiset}
-import trace.{Consume, Produce}
 import coop.rchain.scodec.codecs.seqOfN
 import scodec.Codec
 import scodec.bits.ByteVector
@@ -36,8 +35,7 @@ object internal {
         patterns: Seq[P],
         continuation: K,
         persist: Boolean,
-        peek: SortedSet[Int],
-        sequenceNumber: Int = 0
+        peek: SortedSet[Int]
     )(
         ): WaitingContinuation[P, K] =
       WaitingContinuation(patterns, continuation, persist, peek)

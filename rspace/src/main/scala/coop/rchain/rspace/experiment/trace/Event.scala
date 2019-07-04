@@ -53,16 +53,15 @@ sealed trait IOEvent extends Event
 
 final case class Produce private (
     channelsHash: Blake2b256Hash,
-    hash: Blake2b256Hash,
-    sequenceNumber: Int
+    hash: Blake2b256Hash
 ) extends IOEvent {
 
   override def equals(obj: scala.Any): Boolean = obj match {
-    case produce: Produce => produce.hash == hash && produce.sequenceNumber == sequenceNumber
+    case produce: Produce => produce.hash == hash
     case _                => false
   }
 
-  override def hashCode(): Int = hash.hashCode() * 47 + sequenceNumber.hashCode()
+  override def hashCode(): Int = hash.hashCode() * 47
 
   override def toString: String =
     s"Produce(channels: ${channelsHash.toString}, hash: ${hash.toString})"
@@ -71,25 +70,24 @@ final case class Produce private (
 
 object Produce {
 
-  def unapply(arg: Produce): Option[(Blake2b256Hash, Blake2b256Hash, Int)] =
-    Some((arg.channelsHash, arg.hash, arg.sequenceNumber))
+  def unapply(arg: Produce): Option[(Blake2b256Hash, Blake2b256Hash)] =
+    Some((arg.channelsHash, arg.hash))
 
-  def create[C, A](channel: C, datum: A, persist: Boolean, sequenceNumber: Int = 0)(
+  def create[C, A](channel: C, datum: A, persist: Boolean)(
       implicit
       serializeC: Serialize[C],
       serializeA: Serialize[A]
   ): Produce =
     new Produce(
       hash(channel)(serializeC),
-      hash(channel, datum, persist),
-      sequenceNumber
+      hash(channel, datum, persist)
     )
 
   def fromHash(channelsHash: Blake2b256Hash, hash: Blake2b256Hash, sequenceNumber: Int): Produce =
-    new Produce(channelsHash, hash, sequenceNumber)
+    new Produce(channelsHash, hash)
 
   implicit val codecProduce: Codec[Produce] =
-    (Codec[Blake2b256Hash] :: Codec[Blake2b256Hash] :: int32).as[Produce]
+    (Codec[Blake2b256Hash] :: Codec[Blake2b256Hash]).as[Produce]
 }
 
 final case class Consume private (
