@@ -44,7 +44,7 @@ new  PoS,
       getCurrentUserAddress!(*posRevAddressCh) |
       for(@posRevAddress <- posRevAddressCh) {
         new stateCh, posVaultCh, initialActiveCh in {
-          pickActiveValidators!($$initialBonds$$, *initialActiveCh) |
+          pickActiveValidators!($$initialBonds$$, {}, *initialActiveCh) |
 
           @RevVault!("findOrCreate", posRevAddress, *posVaultCh) |
           for (@(true, _) <- posVaultCh;
@@ -193,7 +193,7 @@ new  PoS,
                     @(pendingRewards, rewards, activeValidators, withdrawers, allBonds), mvarResultCh <- mvarProcessCh) {
 
                   if (blockNumber % $$epochLength$$ == 0) {
-                    pickActiveValidators!(allBonds, *newValidatorsCh)
+                    pickActiveValidators!(allBonds, withdrawers, *newValidatorsCh)
                   } else {
                     newValidatorsCh!(activeValidators)
                   } |
@@ -298,9 +298,16 @@ new  PoS,
         }
       } |
 
-      contract pickActiveValidators(@allBonds, returnCh) = {
-        //TODO choose only a limited number of validators
-        @ListOps!("map", allBonds.toList(), *fst, *returnCh)
+      contract pickActiveValidators(@allBonds, @withdrawers, returnCh) = {
+        new availableValidatorsCh, isAvailable in {
+          @ListOps!("filter", allBonds.toList(), *isAvailable, *availableValidatorsCh) |
+          contract isAvailable(@(pk, _), resultCh) = { resultCh!(not withdrawers.contains(pk))} |
+
+          for (@availableValidators <- availableValidatorsCh) {
+            //TODO choose only a limited number of validators
+            @ListOps!("map", availableValidators, *fst, *returnCh)
+          }
+        }
       } |
 
       contract getCurrentUserVault(returnCh) = {
