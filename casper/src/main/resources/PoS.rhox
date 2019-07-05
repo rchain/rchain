@@ -2,6 +2,7 @@
 // minimumBond - the minimum bond allowed by the PoS
 // maximumBond - the maximum bond allowed by PoS
 // initialBonds - the initial bonds map
+// epochLength - the length of the validation epoch in blocks
 
 /*
  The table below describes the required computations and their dependencies
@@ -26,8 +27,10 @@ new  PoS,
     getUser,
     getCurrentUserAddress,
     getCurrentUserVault,
+    pickActiveValidators,
     getMVar,
     runMVar,
+    fst,
     deposit, distributeRewards,
     rs(`rho:registry:insertSigned:secp256k1`),
     uriOut in {
@@ -40,22 +43,25 @@ new  PoS,
 
       getCurrentUserAddress!(*posRevAddressCh) |
       for(@posRevAddress <- posRevAddressCh) {
-        new stateCh, posVaultCh in {
+        new stateCh, posVaultCh, initialActiveCh in {
+          pickActiveValidators!($$initialBonds$$, *initialActiveCh) |
 
           @RevVault!("findOrCreate", posRevAddress, *posVaultCh) |
-          for (@(true, _) <- posVaultCh ) {
+          for (@(true, _) <- posVaultCh;
+               @initialActive <- initialActiveCh) {
 
             // State structure:
             // pendingRewards : Map[PublickKey, Int] - are accummulated by calling "pay"
             // committedRewards : Map[PublickKey, Int] - are moved from pendingRewards at each closeBlock
-            // bonds : Map[PublickKey, Int] - each validator stake
-            stateCh!(({}, {}, $$initialBonds$$)) |
+            // activeBonds : List[PublickKey] - the active validators
+            // allbonds : Map[PublickKey, Int] - each validator stake
+            stateCh!(({}, {}, initialActive, $$initialBonds$$)) |
 
             contract PoS (@"getBonds", returnCh) = {
               new tmpCh in {
                 getMVar!(*stateCh, *tmpCh) |
-                for (@(_, _, bonds) <- tmpCh) {
-                  returnCh!(bonds)
+                for (@(_, _, _, allBonds) <- tmpCh) {
+                  returnCh!(allBonds)
                 }
               }
             } |
@@ -67,7 +73,7 @@ new  PoS,
             contract PoS (@"getRewards", returnCh) = {
               new tmpCh in {
                 getMVar!(*stateCh, *tmpCh) |
-                for (@(_, rewards, _) <- tmpCh) {
+                for (@(_, rewards, _, _) <- tmpCh) {
                   returnCh!(rewards)
                 }
               }
@@ -78,27 +84,27 @@ new  PoS,
                 runMVar!(*stateCh, *processCh, *returnCh) |
 
                 getUser!(*userCh) |
-                for(@(pending, rewards, bonds), resultCh <- processCh;
+                for(@(pending, rewards, activeValidators, allBonds), resultCh <- processCh;
                     @userPk <- userCh) {
-                  if (bonds.contains(userPk)) {
-                    resultCh!((pending, rewards, bonds), (false, "Public key is already bonded."))
+                  if (allBonds.contains(userPk)) {
+                    resultCh!((pending, rewards, activeValidators, allBonds), (false, "Public key is already bonded."))
                   } else if (amount < $$minimumBond$$) {
-                    resultCh!((pending, rewards, bonds), (false, "Bond is less than minimum!"))
+                    resultCh!((pending, rewards, activeValidators, allBonds), (false, "Bond is less than minimum!"))
                   } else if (amount > $$maximumBond$$) {
-                    resultCh!((pending, rewards, bonds), (false, "Bond is greater than maximum!"))
+                    resultCh!((pending, rewards, activeValidators, allBonds), (false, "Bond is greater than maximum!"))
                   } else {
                     deposit!(userPk, amount, *depositCh) |
                     for(@depositResult <- depositCh) {
                       match depositResult {
                         (true, _) => {
                           resultCh!(
-                            (pending, rewards, bonds.set(userPk,amount)),
+                            (pending, rewards, activeValidators, allBonds.set(userPk,amount)),
                             depositResult
                           )
                         }
 
                         (false, errorMsg) => {
-                          resultCh!((pending, rewards, bonds), (false, "Bond deposit failed: " ++ errorMsg))
+                          resultCh!((pending, rewards, activeValidators, allBonds), (false, "Bond deposit failed: " ++ errorMsg))
                         }
                       }
                     }
@@ -113,34 +119,40 @@ new  PoS,
                   newPendingCh in {
                 getUser!(*userCh) |
                 runMVar!(*stateCh, *processPayCh, *returnCh) |
-                for(@(pending, rewards, bonds), payResultCh <- processPayCh;
+                for(@(pending, rewards, activeValidators, allBonds), payResultCh <- processPayCh;
                     @userPk <- userCh) {
                   deposit!(userPk, amount, *depositCh) |
 
-                  distributeRewards!(amount, bonds, pending, *newPendingCh) |
+                  distributeRewards!(amount, activeValidators, allBonds, pending, *newPendingCh) |
 
                   for(@depositResult <- depositCh;
                       @newPending <- newPendingCh) {
-                    payResultCh!((newPending, rewards, bonds), depositResult)
+                    payResultCh!((newPending, rewards, activeValidators, allBonds), depositResult)
                   }
                 }
               }
             } |
 
-            contract PoS(@"slash", @blockHash, return) = {
-              new userCh, invalidBlocksCh,
+            contract PoS(@"slash", @blockHash, returnCh) = {
+              new userCh, invalidBlocksCh, doSlashCh,
                   getInvalidBlocks(`rho:casper:invalidBlocks`) in {
                 getInvalidBlocks!(*invalidBlocksCh) |
                 getUser!(*userCh) |
-                for (@invalidBlocks <- invalidBlocksCh; @(pending, rewards, bonds) <- stateCh; @userPk <- userCh) {
+
+                runMVar!(*stateCh, *doSlashCh, *returnCh) |
+                for (@invalidBlocks <- invalidBlocksCh;
+                     @userPk <- userCh;
+                     @(pending, rewards, activeValidators, allBonds), slashResultCh <- doSlashCh) {
                   new toBeSlashed in {
                     toBeSlashed!(invalidBlocks.getOrElse(blockHash, userPk)) |
                     for (@validator <- toBeSlashed) {
                       // TODO: Transfer to coop wallet instead of just simply setting bonds to 0
-                      stateCh!((pending.set(validator, 0),
-                                rewards.set(validator, 0),
-                                bonds.set(validator, 0))) |
-                      return!(true)
+                      slashResultCh!(
+                        (pending.set(validator, 0),
+                         rewards.set(validator, 0),
+                         activeValidators,
+                         allBonds.set(validator, 0)),
+                        true)
                     }
                   }
                 }
@@ -150,17 +162,17 @@ new  PoS,
             contract PoS(@"closeBlock", ackCh) = {
               new blockDataCh, mvarProcessCh,
                   getBlockData(`rho:block:data`),
-                  commitReward, rewardsCh in {
+                  commitReward, rewardsCh, newValidatorsCh in {
                 getBlockData!(*blockDataCh) |
 
                 runMVar!(*stateCh, *mvarProcessCh, *ackCh) |
                 for(_, @blockNumber <- blockDataCh;
-                    @(pendingRewards, rewards, bonds), mvarResultCh <- mvarProcessCh) {
+                    @(pendingRewards, rewards, activeValidators, allBonds), mvarResultCh <- mvarProcessCh) {
 
-                  if (blockNumber % 1000 == 0) {
-                    new stdout(`rho:io:stdout`) in {
-                      stdout!("TODO: a validator change should happen")
-                    }
+                  if (blockNumber % $$epochLength$$ == 0) {
+                    pickActiveValidators!(allBonds, *newValidatorsCh)
+                  } else {
+                    newValidatorsCh!(activeValidators)
                   } |
 
 
@@ -169,8 +181,9 @@ new  PoS,
                     resultCh!(acc.set(pk, acc.getOrElse(pk, 0) + pending))
                   } |
 
-                  for (@rewards <- rewardsCh) {
-                    mvarResultCh!(({}, rewards, bonds), Nil)
+                  for (@rewards <- rewardsCh;
+                       @newValidators <- newValidatorsCh) {
+                    mvarResultCh!(({}, rewards, newValidators, allBonds), Nil)
                   }
                 }
               }
@@ -195,19 +208,19 @@ new  PoS,
           }
         } |
 
-        contract distributeRewards(@amount, @bonds, @originalRewards, returnCh) = {
-          new computeSum, totalStakeCh,
+        contract distributeRewards(@amount, @activeValidators, @bonds, @originalRewards, returnCh) = {
+          new computeSum, totalActiveStakeCh,
               computeDelta, rewardsDeltaCh,
               computeMergeMap in {
-            @ListOps!("fold", bonds.toList(), 0, *computeSum, *totalStakeCh) |
-            contract computeSum(@(pk, stake), @acc, resultCh) = {
-              resultCh!(acc + stake)
+            @ListOps!("fold", activeValidators, 0, *computeSum, *totalActiveStakeCh) |
+            contract computeSum(@pk, @acc, resultCh) = {
+              resultCh!(acc + bonds.get(pk))
             } |
 
-            for(@totalStake <- totalStakeCh) {
-              @ListOps!("fold", bonds.toList(), {}, *computeDelta, *rewardsDeltaCh) |
-              contract computeDelta(@(pk, currentValidatorStake), @acc, resultCh) = {
-                resultCh!(acc.set(pk, (amount * currentValidatorStake) / totalStake))
+            for(@totalActiveStake <- totalActiveStakeCh) {
+              @ListOps!("fold", activeValidators, {}, *computeDelta, *rewardsDeltaCh) |
+              contract computeDelta(@pk, @acc, resultCh) = {
+                resultCh!(acc.set(pk, (amount * bonds.get(pk)) / totalActiveStake))
               }
             } |
 
@@ -240,6 +253,10 @@ new  PoS,
         }
       } |
 
+      contract fst(@(first, _), resultCh) = {
+        resultCh!(first)
+      } |
+
       contract getUser (returnCh) = {
         new parametersCh, getParameters(`rho:deploy:params`) in {
           getParameters!(*parametersCh) |
@@ -256,6 +273,11 @@ new  PoS,
             revAddressOps!("fromPublicKey", userPk, *returnCh)
           }
         }
+      } |
+
+      contract pickActiveValidators(@allBonds, returnCh) = {
+        //TODO choose only a limited number of validators
+        @ListOps!("map", allBonds.toList(), *fst, *returnCh)
       } |
 
       contract getCurrentUserVault(returnCh) = {

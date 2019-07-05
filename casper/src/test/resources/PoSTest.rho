@@ -19,6 +19,7 @@ match (
       test_bonding_fails_if_already_bonded,
       test_bonding_fails_if_bond_too_small,
       test_pay_succeeds,
+      test_dont_pay_inactive_validators,
       test_bonding_failure
     in {
       revAddressOps!("fromPublicKey", posPubKey, *posRevAddressCh) |
@@ -43,7 +44,8 @@ match (
               ("multiple bondings work", *test_multiple_bonding_succeeds),
               ("payment works", *test_pay_succeeds),
               ("bonding fails if already bonded", *test_bonding_fails_if_already_bonded),
-              ("bonding fails is bond is too small", *test_bonding_fails_if_bond_too_small)
+              ("bonding fails is bond is too small", *test_bonding_fails_if_bond_too_small),
+              ("payment is not distributed to inactive validators", *test_dont_pay_inactive_validators)
             ]) |
 
           contract setup(retCh) = {
@@ -51,6 +53,7 @@ match (
           } |
 
           contract prepareUser(@pk, @vaultAmount, retCh) = {
+            stdlog!("info", ("preparing user ", pk)) |
             new setDeployData(`rho:test:deploy:set`), identitySet, revAddrCh, vaultCh in {
               setDeployData!("userId", pk.hexToBytes(), *identitySet) |
               revAddressOps!("fromPublicKey", pk.hexToBytes(), *revAddrCh) |
@@ -110,8 +113,8 @@ match (
                           rhoSpec!("assertMany",
                             [
                               ((100, "==", bondAmount), "the new bond is expected in the final map"),
-                              ((initialUserBalance - finalUserBalance, "==", 100), "the user account decreases"),
-                              ((finalPosBalance - initialPosBalance, "==", 100), "the pos account increases"),
+                              ((100, "==", initialUserBalance - finalUserBalance), "the user account decreases"),
+                              ((100, "==", finalPosBalance - initialPosBalance), "the pos account increases"),
                               ((Nil, "==", rewards.get(user1PubKey)), "new validator reward should be zero")
                             ],
                             *ackCh
@@ -159,9 +162,9 @@ match (
                                   [
                                     ((100, "==", bondAmount1), "the user1 bond is expected in the final map"),
                                     ((200, "==", bondAmount2), "the user2 bond is expected in the final map"),
-                                    ((initialUser1Balance - finalUser1Balance, "==", 100), "the user1 account decreases"),
-                                    ((initialUser2Balance - finalUser2Balance, "==", 200), "the user2 account decreases"),
-                                    ((finalPosBalance - initialPosBalance, "==", 300), "the pos account increases"),
+                                    ((100, "==", initialUser1Balance - finalUser1Balance), "the user1 account decreases"),
+                                    ((200, "==", initialUser2Balance - finalUser2Balance), "the user2 account decreases"),
+                                    ((300, "==", finalPosBalance - initialPosBalance), "the pos account increases"),
                                   ],
                                   *ackCh
                                 )
@@ -178,7 +181,7 @@ match (
           } |
 
           contract test_pay_succeeds(rhoSpec, _, ackCh) = {
-            new setupCh, retCh, initialPosBalanceCh, finalPosBalanceCh,
+            new setupCh, closeBlockCh, retCh, initialPosBalanceCh, finalPosBalanceCh,
                 initialUser1BalanceCh, finalUser1BalanceCh,
                 initialRewardsCh, finalRewardsCh,
                 computeDelta, deltaRewardsCh, deltaSumCh, sumDelta,
@@ -188,8 +191,10 @@ match (
               for (@validatorPubKey, _, _ <- setupCh) {
                 @PoS!("bond", 100, *setupCh) |
                 for (@(true, _) <- setupCh) {
+                  @PoS!("closeBlock", *closeBlockCh) |
                   prepareUser!("5555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555", 10000, *setupCh) |
-                  for (@user1PubKey, _, @user1Vault <- setupCh) {
+                  for (@user1PubKey, _, @user1Vault <- setupCh;
+                       _ <- closeBlockCh) {
                     @posVault!("balance", *initialPosBalanceCh) |
                     @user1Vault!("balance", *initialUser1BalanceCh) |
                     @PoS!("getRewards", *initialRewardsCh) |
@@ -198,8 +203,8 @@ match (
                         @initialRewards <- initialRewardsCh) {
                       @PoS!("pay", 100, *retCh) |
                       for ( @(true, _) <- retCh) {
-                        @PoS!("closeBlock", *ackCh) |
-                        for (_ <- ackCh) {
+                        @PoS!("closeBlock", *closeBlockCh) |
+                        for (_ <- closeBlockCh) {
                           @posVault!("balance", *finalPosBalanceCh) |
                           @user1Vault!("balance", *finalUser1BalanceCh) |
                           @PoS!("getRewards", *finalRewardsCh) |
@@ -221,9 +226,9 @@ match (
 
                               rhoSpec!("assertMany",
                                 [
-                                  ((initialUser1Balance - finalUser1Balance, "==", 100), "the user account decreases"),
-                                  ((finalPosBalance - initialPosBalance, "==", 100), "the pos account increases"),
-                                  ((finalRewards.get(validatorPubKey), "==", 19), "the validator's finalRewards is as expected"),
+                                  ((100, "==", initialUser1Balance - finalUser1Balance), "the user account decreases"),
+                                  ((100, "==", finalPosBalance - initialPosBalance), "the pos account increases"),
+                                  ((19, "==", finalRewards.get(validatorPubKey)), "the validator's finalRewards is as expected"),
                                   //TODO use arbitrary precision numbers instead of long ints
                                   ((96, "== <-", *deltaSumCh), "the sum difference should equal the payment"),
                                   ((true, "== <-", *allRewardsPositiveCh), "the rewards can only grow")
@@ -266,9 +271,9 @@ match (
                       @PoS!("getRewards", *finalRewardsCh) |
                       rhoSpec!("assertMany",
                         [
-                          ((result1, "==", true), "the first bond should succeed"),
-                          ((result2, "==", false), "the second bond should fail"),
-                          ((msg2, "==", "Public key is already bonded."), "the message should be as expected"),
+                          ((true, "==", result1), "the first bond should succeed"),
+                          ((false, "==", result2), "the second bond should fail"),
+                          (("Public key is already bonded.", "==", msg2), "the message should be as expected"),
                           ((initialBonds, "== <-", *bondsCh), "the bonds map remains unchanged"),
                           ((initialRewards, "== <-", *finalRewardsCh), "the rewards map should not change")
                         ],
@@ -298,13 +303,44 @@ match (
                     @PoS!("getRewards", *finalRewardsCh) |
                     rhoSpec!("assertMany",
                       [
-                        ((msg, "==", expectedMsg), "the message should be as epected"),
-                        ((result, "==", false), "the bond should fail"),
+                        ((expectedMsg, "==", msg), "the message should be as epected"),
+                        ((false, "==", result), "the bond should fail"),
                         ((initialBonds, "== <-", *bondsCh), "the bonds map remains unchanged"),
                         ((initialRewards, "== <-", *finalRewardsCh), "the rewards map should not change")
                       ],
                       *ackCh
                     )
+                  }
+                }
+              }
+            }
+          } |
+
+          contract test_dont_pay_inactive_validators(rhoSpec, _, ackCh) = {
+            new setupCh, closeBlockCh, retCh,
+                finalRewardsCh
+            in {
+              prepareUser!("9999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999", 10000, *setupCh) |
+              for (@validatorPubKey, _, _ <- setupCh) {
+                @PoS!("bond", 100, *setupCh) |
+                for (@(true, _) <- setupCh) {
+                  prepareUser!("0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000", 10000, *setupCh) |
+                  for (@user1PubKey, _, @user1Vault <- setupCh) {
+                    @PoS!("pay", 100, *retCh) |
+                    for ( @(true, _) <- retCh) {
+                      @PoS!("closeBlock", *closeBlockCh) |
+                      for (_ <- closeBlockCh) {
+                        @PoS!("getRewards", *finalRewardsCh) |
+                        for(@finalRewards <- finalRewardsCh) {
+                          rhoSpec!("assertMany",
+                            [
+                              ((Nil, "==", finalRewards.get(validatorPubKey)), "the new validator should have no reward")
+                            ],
+                            *ackCh
+                          )
+                        }
+                      }
+                    }
                   }
                 }
               }

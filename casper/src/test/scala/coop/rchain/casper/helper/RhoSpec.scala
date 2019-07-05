@@ -71,7 +71,7 @@ object RhoSpec {
           _ <- Runtime.injectEmptyRegistryRoot[Task](runtime.space, runtime.replaySpace)
           _ <- TestUtil.setupRuntime[Task, Task.Par](
                 runtime,
-                TestUtil.defaultGenesisSetup,
+                TestUtil.defaultGenesisSetup(1),
                 otherLibs
               )
           rand = Blake2b512Random(128)
