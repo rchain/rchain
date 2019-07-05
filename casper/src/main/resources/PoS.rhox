@@ -184,41 +184,47 @@ new  PoS,
             } |
 
             contract PoS(@"closeBlock", ackCh) = {
-              new blockDataCh, mvarProcessCh,
-                  getBlockData(`rho:block:data`),
-                  commitReward, newRewardsCh, newValidatorsCh,
-                  newWithdrawersCh, newBondsCh,
-                  changeEpoch, removeQuarantinedWithdrawers, commitRewards
+              new commitRewards,
+                  changeEpoch,
+                  removeQuarantinedWithdrawers
               in {
-                getBlockData!(*blockDataCh) |
+                new blockDataCh, mvarProcessCh,
+                    getBlockData(`rho:block:data`),
+                    newRewardsCh, newValidatorsCh,
+                    newWithdrawersCh, newBondsCh
+                in {
+                  getBlockData!(*blockDataCh) |
 
-                runMVar!(*stateCh, *mvarProcessCh, *ackCh) |
-                for(_, @blockNumber <- blockDataCh;
-                    @(pendingRewards, rewards, activeValidators, withdrawers, allBonds), mvarResultCh <- mvarProcessCh) {
+                  runMVar!(*stateCh, *mvarProcessCh, *ackCh) |
+                  for(_, @blockNumber <- blockDataCh;
+                      @(pendingRewards, rewards, activeValidators, withdrawers, allBonds), mvarResultCh <- mvarProcessCh) {
 
-                  changeEpoch!(blockNumber, allBonds, activeValidators, withdrawers, *newValidatorsCh)|
+                    changeEpoch!(blockNumber, allBonds, activeValidators, withdrawers, *newValidatorsCh)|
 
-                  removeQuarantinedWithdrawers!(blockNumber, allBonds, withdrawers, *newWithdrawersCh, *newBondsCh) |
+                    removeQuarantinedWithdrawers!(blockNumber, allBonds, withdrawers, *newWithdrawersCh, *newBondsCh) |
 
-                  commitRewards!(pendingRewards, rewards, *newRewardsCh) |
+                    commitRewards!(pendingRewards, rewards, *newRewardsCh) |
 
-                  for (@newRewards <- newRewardsCh;
-                       @newValidators <- newValidatorsCh;
-                       @newWithdrawers <- newWithdrawersCh ;
-                       @newBonds <- newBondsCh) {
-                    mvarResultCh!(({}, newRewards, newValidators, newWithdrawers, newBonds), Nil)
+                    for (@newRewards <- newRewardsCh;
+                         @newValidators <- newValidatorsCh;
+                         @newWithdrawers <- newWithdrawersCh ;
+                         @newBonds <- newBondsCh) {
+                      mvarResultCh!(({}, newRewards, newValidators, newWithdrawers, newBonds), Nil)
+                    }
                   }
                 } |
 
                 contract commitRewards(@pendingRewards, @rewards, newRewardsCh) = {
-                  @ListOps!("fold", pendingRewards.toList(), rewards, *commitReward, *newRewardsCh) |
-                  contract commitReward(@(pk, pending), @acc, resultCh) = {
-                    resultCh!(acc.set(pk, acc.getOrElse(pk, 0) + pending))
+                  new commitReward in {
+                    @ListOps!("fold", pendingRewards.toList(), rewards, *commitReward, *newRewardsCh) |
+                    contract commitReward(@(pk, pending), @acc, resultCh) = {
+                      resultCh!(acc.set(pk, acc.getOrElse(pk, 0) + pending))
+                    }
                   }
                 }|
 
-                contract changeEpoch(@blockNumber, @allBonds, @activeValidators, @withdrawers, resultCh) = {
-                  if (blockNumber % $$epochLength$$ == 0) {
+                contract changeEpoch(@currentBlockNumber, @allBonds, @activeValidators, @withdrawers, resultCh) = {
+                  if (currentBlockNumber % $$epochLength$$ == 0) {
                     pickActiveValidators!(allBonds, withdrawers, *resultCh)
                   } else {
                     resultCh!(activeValidators)
