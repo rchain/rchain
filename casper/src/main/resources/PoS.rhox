@@ -3,6 +3,7 @@
 // maximumBond - the maximum bond allowed by PoS
 // initialBonds - the initial bonds map
 // epochLength - the length of the validation epoch in blocks
+// quarantineLength - the length of the quarantine time in blocks
 
 /*
  The table below describes the required computations and their dependencies
@@ -185,7 +186,8 @@ new  PoS,
             contract PoS(@"closeBlock", ackCh) = {
               new blockDataCh, mvarProcessCh,
                   getBlockData(`rho:block:data`),
-                  commitReward, rewardsCh, newValidatorsCh in {
+                  commitReward, rewardsCh, newValidatorsCh,
+                  newWithdrawersCh, newBondsCh in {
                 getBlockData!(*blockDataCh) |
 
                 runMVar!(*stateCh, *mvarProcessCh, *ackCh) |
@@ -198,6 +200,53 @@ new  PoS,
                     newValidatorsCh!(activeValidators)
                   } |
 
+                  new quarantinedValidatorsCh,
+                      validatorsToWithdrawListCh,
+                      validatorsToWithdrawSetCh,
+                      isQuarantineFinished,
+                      isWithdrawn,
+                      accumulateToSet,
+                      accumulateToMap,
+                      newBondsListCh,
+                      newWithdrawersListCh,
+                      test1ch, test2ch
+                  in {
+                    @ListOps!("filter", withdrawers.toList(), *isQuarantineFinished, *quarantinedValidatorsCh) |
+                    for (@quarantinedValidators <- quarantinedValidatorsCh) {
+
+                      @ListOps!("map", quarantinedValidators, *fst, *validatorsToWithdrawListCh) |
+                      for (@validatorsToWithdrawList <- validatorsToWithdrawListCh) {
+                        @ListOps!("fold", validatorsToWithdrawList, Set(), *accumulateToSet, *validatorsToWithdrawSetCh) |
+
+                        for (@validatorsToWithdrawSet <- validatorsToWithdrawSetCh) {
+                          @ListOps!("filter", allBonds.toList(), *isWithdrawn, *newBondsListCh) |
+
+                          for (@newBondsList <- newBondsListCh) {
+                            @ListOps!("fold", newBondsList, {}, *accumulateToMap, *newBondsCh)
+                          } |
+
+                          @ListOps!("filter", withdrawers.toList(), *isWithdrawn, *newWithdrawersListCh) |
+                          contract isWithdrawn(@(pk, _), resultCh) = {
+                            resultCh!(not validatorsToWithdrawSet.contains(pk))
+                          } |
+
+                          for (@newWithdrawersList <- newWithdrawersListCh) {
+                            @ListOps!("fold", newWithdrawersList, {}, *accumulateToMap, *newWithdrawersCh)
+                          } |
+
+                          contract isWithdrawn(@(pk, _), resultCh) = { resultCh!(not validatorsToWithdrawSet.contains(pk))}
+                        }
+                      }
+                    } |
+
+                    contract isQuarantineFinished(@(_, blockTime), resultCh) = {
+                      resultCh!(blockTime >= $$quarantineLength$$)
+                    } |
+
+                    contract accumulateToSet(@x, @acc, resultCh) = {resultCh! (acc.union(Set(x)))} |
+
+                    contract accumulateToMap(@(k, v), @acc, resultCh) = {resultCh!(acc.set(k, v))}
+                  } |
 
                   @ListOps!("fold", pendingRewards.toList(), rewards, *commitReward, *rewardsCh) |
                   contract commitReward(@(pk, pending), @acc, resultCh) = {
@@ -205,8 +254,10 @@ new  PoS,
                   } |
 
                   for (@rewards <- rewardsCh;
-                       @newValidators <- newValidatorsCh) {
-                    mvarResultCh!(({}, rewards, newValidators, withdrawers, allBonds), Nil)
+                       @newValidators <- newValidatorsCh;
+                       @newWithdrawers <- newWithdrawersCh ;
+                       @newBonds <- newBondsCh) {
+                    mvarResultCh!(({}, rewards, newValidators, newWithdrawers, newBonds), Nil)
                   }
                 }
               }

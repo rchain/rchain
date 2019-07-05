@@ -13,7 +13,9 @@ match (
       posRevAddressCh, posVaultCh,
       RhoSpecCh, PoSCh, RevVaultCh, ListOpsCh,
       setup, prepareUser,
-      test_make_pos_succeeds, test_bonding_succeeds,
+      test_make_pos_succeeds,
+      test_close_block_finishes,
+      test_bonding_succeeds,
       test_multiple_bonding_succeeds,
       test_bonding_fails_if_deposit_fails,
       test_bonding_fails_if_already_bonded,
@@ -39,6 +41,7 @@ match (
           @RhoSpec!("testSuite", *setup,
             [
               ("PoS is created with empty bonds", *test_make_pos_succeeds),
+              ("closeBlock finishes successfully", *test_close_block_finishes),
               ("bonding success", *test_bonding_succeeds),
               ("bonding fails if deposit fails", *test_bonding_fails_if_deposit_fails),
               ("multiple bondings work", *test_multiple_bonding_succeeds),
@@ -88,6 +91,20 @@ match (
             }
           } |
 
+
+          contract test_close_block_finishes(rhoSpec, _, ackCh) = {
+            new resultCh in {
+              @PoS!("closeBlock", *resultCh) |
+              for ( _ <- resultCh) {
+                rhoSpec!("assertMany",
+                  [
+                    (true, "all good here")
+                  ],
+                  *ackCh
+                )
+              }
+            }
+          } |
           contract test_bonding_succeeds(rhoSpec, _, ackCh) = {
             new setupCh, retCh, initialPosBalanceCh, finalPosBalanceCh,
                 initialUserBalanceCh, finalUserBalanceCh,
