@@ -27,7 +27,7 @@ object GrpcTransport {
       peer: PeerNode
   )(
       request: RoutingGrpcMonix.TransportLayer => Task[TLResponse]
-  ): Request[Option[Protocol]] =
+  ): Request[Unit] =
     ReaderT(stub => request(stub).attempt.map(processResponse(peer, _)))
 
   private object PeerUnavailable {
@@ -71,12 +71,12 @@ object GrpcTransport {
   private def processResponse(
       peer: PeerNode,
       response: Either[Throwable, TLResponse]
-  ): CommErr[Option[Protocol]] =
+  ): CommErr[Unit] =
     processError(peer, response)
       .flatMap(
         tlr =>
           tlr.payload match {
-            case p if p.isNoResponse => Right(None)
+            case p if p.isNoResponse => Right(())
             case TLResponse.Payload.InternalServerError(ise) =>
               Left(internalCommunicationError("Got response: " + ise.error.toStringUtf8))
           }
@@ -97,15 +97,8 @@ object GrpcTransport {
 
   def send(peer: PeerNode, msg: Protocol)(implicit metrics: Metrics[Task]): Request[Unit] =
     for {
-      _ <- ReaderT.liftF(metrics.incrementCounter("send"))
-      result <- transport(peer)(
-                 _.send(TLRequest(msg.some))
-                   .timer("send-time")
-               ).map(_.flatMap {
-                 case Some(p) =>
-                   Left(internalCommunicationError(s"Was expecting no message. Response: $p"))
-                 case _ => Right(())
-               })
+      _      <- ReaderT.liftF(metrics.incrementCounter("send"))
+      result <- transport(peer)(_.send(TLRequest(msg.some)).timer("send-time"))
     } yield result
 
   def stream(networkId: String, peer: PeerNode, blob: Blob, packetChunkSize: Int): Request[Unit] =
