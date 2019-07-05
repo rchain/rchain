@@ -861,7 +861,10 @@ object ProcNormalizeMatcher {
                       (lbi.listname_.toList, lbi.name_, lbi.nameremainder_).pure[M]
                   }
                   .map(x => (x, false, true))
+              case default =>
+                sync.raiseError(NormalizerError(s"Unknown receipt impl type $default"))
             }
+          case default => sync.raiseError(NormalizerError(s"Unknown receipt type $default"))
         }
 
         for {
