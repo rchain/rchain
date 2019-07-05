@@ -43,8 +43,6 @@ import scala.util.{Failure, Success, Try}
   */
 trait Registry[F[_]] {
 
-  def testInstall(): F[Unit]
-
   def lookup(args: RootSeq[ListParWithRandom], sequenceNumber: Int): F[Unit]
 
   def lookupCallback(args: RootSeq[ListParWithRandom], sequenceNumber: Int): F[Unit]
@@ -101,66 +99,6 @@ class RegistryImpl[F[_]](
     (head, tail)
   }
 
-  private val lookupPatterns = List(
-    BindPattern(
-      Seq(
-        EVar(FreeVar(0)),
-        EVar(FreeVar(1))
-      ),
-      freeCount = 2
-    )
-  )
-  // Testing only
-  private val lookupChannels = List[Par](GPrivate(ByteString.copyFrom(Array[Byte](10))))
-  private val insertPatterns = List(
-    BindPattern(
-      Seq(
-        EVar(FreeVar(0)),
-        EVar(FreeVar(1)),
-        EVar(FreeVar(2))
-      ),
-      freeCount = 3
-    )
-  )
-  // Testing only
-  private val insertChannels = List[Par](GPrivate(ByteString.copyFrom(Array[Byte](12))))
-  private val deletePatterns = List(
-    BindPattern(
-      Seq(
-        EVar(FreeVar(0)),
-        EVar(FreeVar(1))
-      ),
-      freeCount = 2
-    )
-  )
-  // Testing only
-  private val deleteChannels = List[Par](GPrivate(ByteString.copyFrom(Array[Byte](14))))
-
-  private val publicLookupChannels = List[Par](GPrivate(ByteString.copyFrom(Array[Byte](17))))
-  private val publicLookupPatterns = List(
-    BindPattern(
-      Seq(
-        EVar(FreeVar(0)),
-        EVar(FreeVar(1))
-      ),
-      freeCount = 2
-    )
-  )
-
-  private val publicRegisterRandomChannels =
-    List[Par](GPrivate(ByteString.copyFrom(Array[Byte](18))))
-  private val publicRegisterRandomPatterns = List(
-    BindPattern(
-      Seq(
-        // Value to be registered
-        EVar(FreeVar(0)),
-        // Return channel to receive URI
-        EVar(FreeVar(1))
-      ),
-      freeCount = 2
-    )
-  )
-
   private val registerInsertCallbackPatterns = List(
     BindPattern(
       Seq(
@@ -175,60 +113,6 @@ class RegistryImpl[F[_]](
       freeCount = 1
     )
   )
-
-  private val publicRegisterSignedPatterns = List(
-    BindPattern(
-      Seq(
-        // Public Key
-        EVar(FreeVar(0)),
-        // Nonce, Value tuple
-        EVar(FreeVar(1)),
-        // Signature
-        EVar(FreeVar(2)),
-        // Return channel
-        EVar(FreeVar(3))
-      ),
-      freeCount = 4
-    )
-  )
-  // Testing only
-  private val publicRegisterSignedChannels = List[Par](
-    GPrivate(ByteString.copyFrom(Array[Byte](19)))
-  )
-
-  def testInstall(): F[Unit] =
-    for {
-      _ <- space.install(
-            lookupChannels,
-            lookupPatterns,
-            TaggedContinuation(ScalaBodyRef(BodyRefs.REG_LOOKUP))
-          )
-      _ <- space.install(
-            insertChannels,
-            insertPatterns,
-            TaggedContinuation(ScalaBodyRef(BodyRefs.REG_INSERT))
-          )
-      _ <- space.install(
-            deleteChannels,
-            deletePatterns,
-            TaggedContinuation(ScalaBodyRef(BodyRefs.REG_DELETE))
-          )
-      _ <- space.install(
-            publicLookupChannels,
-            publicLookupPatterns,
-            TaggedContinuation(ScalaBodyRef(BodyRefs.REG_PUBLIC_LOOKUP))
-          )
-      _ <- space.install(
-            publicRegisterRandomChannels,
-            publicRegisterRandomPatterns,
-            TaggedContinuation(ScalaBodyRef(BodyRefs.REG_PUBLIC_REGISTER_RANDOM))
-          )
-      _ <- space.install(
-            publicRegisterSignedChannels,
-            publicRegisterSignedPatterns,
-            TaggedContinuation(ScalaBodyRef(BodyRefs.REG_PUBLIC_REGISTER_SIGNED))
-          )
-    } yield ()
 
   private val prefixRetReplacePattern = BindPattern(
     Seq(

@@ -7,12 +7,14 @@ import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.hash.{Blake2b256, Blake2b512Random}
 import coop.rchain.models.Expr.ExprInstance._
 import coop.rchain.models._
+import coop.rchain.models.TaggedContinuation.TaggedCont.ScalaBodyRef
+import coop.rchain.models.Var.VarInstance.FreeVar
 import coop.rchain.models.rholang.implicits._
-import coop.rchain.rholang.interpreter.Runtime.RhoDispatchMap
+import coop.rchain.rholang.interpreter.Runtime.{BodyRefs, RhoDispatchMap}
 import coop.rchain.rholang.interpreter.accounting._
 import coop.rchain.rholang.interpreter.errors.InterpreterError
 import coop.rchain.rholang.interpreter.storage.implicits._
-import coop.rchain.rspace.ISpace
+import coop.rchain.rspace.{ISpace, Match}
 import coop.rchain.rspace.internal.{Datum, Row}
 import monix.eval.{Coeval, Task}
 import monix.execution.Scheduler.Implicits.global
@@ -69,9 +71,127 @@ trait RegistryTester extends PersistentStoreTester {
               Registry.testingUrnMap
             )
         reducer.setPhlo(Cost.UNSAFE_MAX).runSyncUnsafe(1.second)
-        registry.testInstall().runSyncUnsafe(1.second)
+        testInstall(space).runSyncUnsafe(1.second)
         f(reducer, space)
     }
+
+  private val lookupPatterns = List(
+    BindPattern(
+      Seq(
+        EVar(FreeVar(0)),
+        EVar(FreeVar(1))
+      ),
+      freeCount = 2
+    )
+  )
+
+  private val publicRegisterRandomChannels =
+    List[Par](GPrivate(ByteString.copyFrom(Array[Byte](18))))
+  private val publicRegisterRandomPatterns = List(
+    BindPattern(
+      Seq(
+        // Value to be registered
+        EVar(FreeVar(0)),
+        // Return channel to receive URI
+        EVar(FreeVar(1))
+      ),
+      freeCount = 2
+    )
+  )
+
+  private val lookupChannels = List[Par](GPrivate(ByteString.copyFrom(Array[Byte](10))))
+  private val insertPatterns = List(
+    BindPattern(
+      Seq(
+        EVar(FreeVar(0)),
+        EVar(FreeVar(1)),
+        EVar(FreeVar(2))
+      ),
+      freeCount = 3
+    )
+  )
+
+  private val insertChannels = List[Par](GPrivate(ByteString.copyFrom(Array[Byte](12))))
+  private val deletePatterns = List(
+    BindPattern(
+      Seq(
+        EVar(FreeVar(0)),
+        EVar(FreeVar(1))
+      ),
+      freeCount = 2
+    )
+  )
+
+  private val deleteChannels = List[Par](GPrivate(ByteString.copyFrom(Array[Byte](14))))
+
+  private val publicLookupChannels = List[Par](GPrivate(ByteString.copyFrom(Array[Byte](17))))
+  private val publicLookupPatterns = List(
+    BindPattern(
+      Seq(
+        EVar(FreeVar(0)),
+        EVar(FreeVar(1))
+      ),
+      freeCount = 2
+    )
+  )
+
+  private val publicRegisterSignedPatterns = List(
+    BindPattern(
+      Seq(
+        // Public Key
+        EVar(FreeVar(0)),
+        // Nonce, Value tuple
+        EVar(FreeVar(1)),
+        // Signature
+        EVar(FreeVar(2)),
+        // Return channel
+        EVar(FreeVar(3))
+      ),
+      freeCount = 4
+    )
+  )
+  private val publicRegisterSignedChannels = List[Par](
+    GPrivate(ByteString.copyFrom(Array[Byte](19)))
+  )
+
+  def testInstall(space: Runtime.RhoISpace[Task])(implicit cost: _cost[Task]): Task[Unit] = {
+    implicit val m: Match[Task, BindPattern, ListParWithRandom, ListParWithRandom] =
+      matchListPar[Task]
+
+    for {
+      _ <- space.install(
+            lookupChannels,
+            lookupPatterns,
+            TaggedContinuation(ScalaBodyRef(BodyRefs.REG_LOOKUP))
+          )
+      _ <- space.install(
+            insertChannels,
+            insertPatterns,
+            TaggedContinuation(ScalaBodyRef(BodyRefs.REG_INSERT))
+          )
+      _ <- space.install(
+            deleteChannels,
+            deletePatterns,
+            TaggedContinuation(ScalaBodyRef(BodyRefs.REG_DELETE))
+          )
+      _ <- space.install(
+            publicLookupChannels,
+            publicLookupPatterns,
+            TaggedContinuation(ScalaBodyRef(BodyRefs.REG_PUBLIC_LOOKUP))
+          )
+      _ <- space.install(
+            publicRegisterRandomChannels,
+            publicRegisterRandomPatterns,
+            TaggedContinuation(ScalaBodyRef(BodyRefs.REG_PUBLIC_REGISTER_RANDOM))
+          )
+      _ <- space.install(
+            publicRegisterSignedChannels,
+            publicRegisterSignedPatterns,
+            TaggedContinuation(ScalaBodyRef(BodyRefs.REG_PUBLIC_REGISTER_SIGNED))
+          )
+    } yield ()
+  }
+
 }
 
 class RegistrySpec extends FlatSpec with Matchers with RegistryTester {
