@@ -26,7 +26,10 @@ class StreamObservable(bufferSize: Int, folder: Path)(implicit log: Log[Task], s
 
   private val subject = buffer.LimitedBufferObservable.dropNew[StreamToPeers](bufferSize)
 
-  def stream(peers: List[PeerNode], blob: Blob): Task[Unit] = {
+  def stream(peers: Seq[PeerNode], blob: Blob): Task[Unit] = {
+
+    val logStreamInformation =
+      log.info(s"Streaming packet (type = ${blob.packet.typeId}) to peers ${peers.mkString(", ")}")
 
     val storeBlob: Task[Option[Path]] =
       blob.packet.store[Task](folder) >>= {
@@ -53,7 +56,7 @@ class StreamObservable(bufferSize: Int, folder: Path)(implicit log: Log[Task], s
         log.warn(s"Client stream message queue is full. Retrying push. Retry $retryCount")
       else Task.unit
 
-    storeBlob >>= (_.fold(Task.unit)(propose(_, 1)))
+    logStreamInformation >> storeBlob >>= (_.fold(Task.unit)(propose(_, 1)))
   }
 
   def unsafeSubscribeFn(subscriber: Subscriber[StreamToPeers]): Cancelable = {
