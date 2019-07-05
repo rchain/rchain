@@ -6,7 +6,8 @@ new
   setup,
   test_sum,
   test_forall, test_forall_shortcircuit,
-  test_exists, test_exists_shortcircuit
+  test_exists, test_exists_shortcircuit,
+  test_filter
 in {
   rl!(`rho:id:zphjgsfy13h1k85isc8rtwtgt3t9zzt5pjd5ihykfmyapfc4wt3x5h`, *RhoSpecCh) |
   for(@(_, RhoSpec) <- RhoSpecCh) {
@@ -16,7 +17,8 @@ in {
         ("ListOps.forall works", *test_forall),
         ("ListOps.forall shortcircuit", *test_forall_shortcircuit),
         ("ListOps.exists works", *test_exists),
-        ("ListOps.exists shortcircuit", *test_exists_shortcircuit)
+        ("ListOps.exists shortcircuit", *test_exists_shortcircuit),
+        ("ListOps.filter works", *test_filter),
       ])
   } |
   rl!(`rho:lang:listOps`, *ListOpsCh) |
@@ -120,6 +122,21 @@ in {
               ((1, "== <-", *callCountCh), "after the first success no more calls should happen"),
             ], *ackCh)
         }
+      }
+    } |
+
+    contract test_filter(rhoSpec, _, ackCh) = {
+      new ch0, ch1, ch2 in {
+        @ListOps!("filter", [], *greaterThan1, *ch0) |
+        @ListOps!("filter", [2, 3], *greaterThan1, *ch1) |
+        @ListOps!("filter", [1, 2], *greaterThan1, *ch2) |
+
+        rhoSpec!("assertMany",
+          [
+            (([], "== <-", *ch0), "filter works on empty lists"),
+            (([2,3], "== <-", *ch1), "all items satisfy the predicate"),
+            (([2], "== <-", *ch2), "part of the items satisfy the predicate"),
+          ], *ackCh)
       }
     } |
 
