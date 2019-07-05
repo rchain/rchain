@@ -56,10 +56,10 @@ class GrpcTransportSpec extends WordSpecLike with Matchers with Inside {
       sendMessages += request
       response
     }
-    def stream(input: Observable[Chunk]): Task[ChunkResponse] =
+    def stream(input: Observable[Chunk]): Task[TLResponse] =
       input.toListL.map { l =>
         streamMessages += l
-        ChunkResponse()
+        noResponse
       }
 
     val sendMessages: mutable.MutableList[TLRequest]     = mutable.MutableList.empty[TLRequest]

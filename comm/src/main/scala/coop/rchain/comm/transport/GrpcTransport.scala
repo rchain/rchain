@@ -104,6 +104,6 @@ object GrpcTransport {
   def stream(networkId: String, peer: PeerNode, blob: Blob, packetChunkSize: Int): Request[Unit] =
     ReaderT(
       _.stream(Observable.fromIterator(Chunker.chunkIt(networkId, blob, packetChunkSize))).attempt
-        .map(r => processError(peer, r.map(kp(()))))
+        .map(r => processResponse(peer, r))
     )
 }
