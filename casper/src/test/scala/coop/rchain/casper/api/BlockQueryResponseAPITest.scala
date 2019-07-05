@@ -90,6 +90,7 @@ class BlockQueryResponseAPITest
     implicit blockStore => implicit blockDagStorage =>
       for {
         effects                                 <- effectsForSimpleCasperSetup(blockStore, blockDagStorage)
+        spanEff                                 = NoopSpan[Task]()
         (logEff, casperRef, cliqueOracleEffect) = effects
         q                                       = BlockQuery(hash = secondBlockQuery)
         blockQueryResponse <- BlockAPI.getBlock[Task](q)(
@@ -97,7 +98,8 @@ class BlockQueryResponseAPITest
                                casperRef,
                                logEff,
                                cliqueOracleEffect,
-                               blockStore
+                               blockStore,
+                               spanEff
                              )
         _ = inside(blockQueryResponse) {
           case Right(BlockQueryResponse(Some(blockInfo))) =>
@@ -121,6 +123,7 @@ class BlockQueryResponseAPITest
     implicit blockStore => implicit blockDagStorage =>
       for {
         effects                                 <- emptyEffects(blockStore, blockDagStorage)
+        spanEff                                 = NoopSpan[Task]()
         (logEff, casperRef, cliqueOracleEffect) = effects
         q                                       = BlockQuery(hash = badTestHashQuery)
         blockQueryResponse <- BlockAPI.getBlock[Task](q)(
@@ -128,7 +131,8 @@ class BlockQueryResponseAPITest
                                casperRef,
                                logEff,
                                cliqueOracleEffect,
-                               blockStore
+                               blockStore,
+                               spanEff
                              )
         _ = inside(blockQueryResponse) {
           case Left(msg) =>

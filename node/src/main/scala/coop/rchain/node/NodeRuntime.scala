@@ -93,7 +93,8 @@ class NodeRuntime private[node] (
       connectionsCell: ConnectionsCell[Task],
       concurrent: Concurrent[Task],
       metrics: Metrics[Task],
-      rPConfAsk: RPConfAsk[Task]
+      rPConfAsk: RPConfAsk[Task],
+      span: Span[Task]
   ): Task[Servers] = {
     implicit val s: Scheduler = scheduler
     for {
@@ -209,6 +210,7 @@ class NodeRuntime private[node] (
       rpConfAsk: RPConfAsk[Task],
       peerNodeAsk: PeerNodeAsk[Task],
       metrics: Metrics[Task],
+      span: Span[Task],
       transport: TransportLayer[Task],
       kademliaStore: KademliaStore[Task],
       nodeDiscovery: NodeDiscovery[Task],
@@ -535,6 +537,7 @@ class NodeRuntime private[node] (
       rpConfAsk,
       peerNodeAsk,
       metrics,
+      span,
       transport,
       kademliaStore,
       nodeDiscovery,

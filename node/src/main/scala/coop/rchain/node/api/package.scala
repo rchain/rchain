@@ -2,19 +2,16 @@ package coop.rchain.node
 
 import cats.effect.Concurrent
 import cats.effect.concurrent.Semaphore
-
 import coop.rchain.blockstorage.BlockStore
 import coop.rchain.casper.MultiParentCasperRef.MultiParentCasperRef
 import coop.rchain.casper.SafetyOracle
 import coop.rchain.casper.protocol.{DeployServiceGrpcMonix, ProposeServiceGrpcMonix}
 import coop.rchain.catscontrib._
-import coop.rchain.comm.discovery._
-import coop.rchain.comm.rp.Connect.ConnectionsCell
 import coop.rchain.grpc.{GrpcServer, Server}
+import coop.rchain.metrics.Span
 import coop.rchain.node.model.repl._
 import coop.rchain.rholang.interpreter.Runtime
 import coop.rchain.shared._
-
 import io.grpc.netty.NettyServerBuilder
 import monix.eval.Task
 import monix.execution.Scheduler
@@ -36,7 +33,8 @@ package object api {
       multiParentCasperRef: MultiParentCasperRef[Task],
       safetyOracle: SafetyOracle[Task],
       blocStore: BlockStore[Task],
-      log: Log[Task]
+      log: Log[Task],
+      span: Span[Task]
   ): Task[Server[Task]] =
     GrpcServer[Task](
       NettyServerBuilder
@@ -53,7 +51,7 @@ package object api {
         .build
     )
 
-  def acquireExternalServer[F[_]: Concurrent: MultiParentCasperRef: Log: SafetyOracle: BlockStore: Taskable](
+  def acquireExternalServer[F[_]: Concurrent: MultiParentCasperRef: Log: SafetyOracle: BlockStore: Taskable: Span](
       port: Int,
       grpcExecutor: Scheduler,
       blockApiLock: Semaphore[F],

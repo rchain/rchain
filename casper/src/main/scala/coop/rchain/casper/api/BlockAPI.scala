@@ -16,6 +16,7 @@ import coop.rchain.casper.util.{EventConverter, ProtoUtil}
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.graphz._
+import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.Par
 import coop.rchain.models.rholang.sorter.Sortable._
@@ -32,9 +33,14 @@ object BlockAPI {
   type ApiErr[A]       = Either[Error, A]
   type Effect[F[_], A] = F[ApiErr[A]]
 
-  def deploy[F[_]: Monad: MultiParentCasperRef: Log](
+  val BlockAPIMetricsSource: Metrics.Source = Metrics.Source(Metrics.BaseSource, "block-api")
+  val CreateBlockSource: Metrics.Source     = Metrics.Source(BlockAPIMetricsSource, "create-block")
+  val DeploySource: Metrics.Source          = Metrics.Source(BlockAPIMetricsSource, "deploy")
+  val GetBlockSource: Metrics.Source        = Metrics.Source(BlockAPIMetricsSource, "get-block")
+
+  def deploy[F[_]: Monad: MultiParentCasperRef: Log: Span](
       d: DeployData
-  ): Effect[F, DeployServiceResponse] = {
+  ): Effect[F, DeployServiceResponse] = Span[F].trace(DeploySource) {
 
     def casperDeploy(casper: MultiParentCasper[F]): Effect[F, DeployServiceResponse] =
       casper
@@ -58,9 +64,9 @@ object BlockAPI {
       )
   }
 
-  def createBlock[F[_]: Sync: Concurrent: MultiParentCasperRef: Log](
+  def createBlock[F[_]: Sync: Concurrent: MultiParentCasperRef: Log: Span](
       blockApiLock: Semaphore[F]
-  ): Effect[F, DeployServiceResponse] = {
+  ): Effect[F, DeployServiceResponse] = Span[F].trace(CreateBlockSource) {
     val errorMessage = "Could not create block, casper instance was not available yet."
     MultiParentCasperRef.withCasper[F, ApiErr[DeployServiceResponse]](
       casper => {
@@ -407,9 +413,9 @@ object BlockAPI {
       .traverse(ProtoUtil.unsafeGetBlock[F])
       .map(blocks => blocks.find(ProtoUtil.containsDeploy(_, user, timestamp)))
 
-  def getBlock[F[_]: Monad: MultiParentCasperRef: Log: SafetyOracle: BlockStore](
+  def getBlock[F[_]: Monad: MultiParentCasperRef: Log: SafetyOracle: BlockStore: Span](
       q: BlockQuery
-  ): Effect[F, BlockQueryResponse] = {
+  ): Effect[F, BlockQueryResponse] = Span[F].trace(GetBlockSource) {
 
     val errorMessage =
       "Could not get block, casper instance was not available yet."

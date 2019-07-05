@@ -16,11 +16,12 @@ import coop.rchain.models.StacksafeMessage
 import coop.rchain.models.either.implicits._
 import coop.rchain.shared._
 import com.google.protobuf.empty.Empty
+import coop.rchain.metrics.Span
 import monix.eval.Task
 import monix.execution.Scheduler
 
 private[api] object ProposeGrpcService {
-  def instance[F[_]: Concurrent: MultiParentCasperRef: Log: SafetyOracle: BlockStore: Taskable](
+  def instance[F[_]: Concurrent: MultiParentCasperRef: Log: SafetyOracle: BlockStore: Taskable: Span](
       blockApiLock: Semaphore[F],
       tracing: Boolean
   )(

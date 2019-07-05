@@ -13,6 +13,7 @@ import coop.rchain.casper.protocol._
 import coop.rchain.casper.util._
 import coop.rchain.casper.util.rholang._
 import coop.rchain.catscontrib.TaskContrib._
+import coop.rchain.metrics.NoopSpan
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.Validator.Validator
 import coop.rchain.p2p.EffectsTestInstances._
@@ -34,6 +35,7 @@ class CreateBlockAPITest extends FlatSpec with Matchers {
   "createBlock" should "not allow simultaneous calls" in {
     implicit val logEff    = new LogStub[Effect]
     implicit val scheduler = Scheduler.fixedPool("three-threads", 3)
+    implicit val spanEff   = NoopSpan[Effect]
     implicit val time = new Time[Task] {
       private val timer                               = Task.timer
       def currentMillis: Task[Long]                   = timer.clock.realTime(MILLISECONDS)
