@@ -1,10 +1,14 @@
 package coop.rchain.casper
 
+import cats.Monad
+import coop.rchain.blockstorage.{BlockStore, IndexedBlockDagStorage}
 import coop.rchain.casper.helper.HashSetCasperTestNode
 import coop.rchain.casper.helper.HashSetCasperTestNode._
 import coop.rchain.casper.scalatestcontrib._
 import coop.rchain.casper.util.{ConstructDeploy, RSpaceUtil}
 import coop.rchain.p2p.EffectsTestInstances.LogicalTime
+import coop.rchain.rholang.interpreter.accounting
+import coop.rchain.shared.{Log, Time}
 import monix.execution.Scheduler.Implicits.global
 import org.scalatest.{FlatSpec, Inspectors, Matchers}
 
@@ -54,11 +58,19 @@ class MultiParentCasperMergeSpec extends FlatSpec with Matchers with Inspectors 
 
   it should "handle multi-parent blocks correctly when they operate on stdout" ignore effectTest {
     def echoContract(no: Int) = s"""new stdout(`rho:io:stdout`) in { stdout!("Contract $no") }"""
-    val time                  = System.currentTimeMillis()
+    testConflictOnSimpleDiamondDag(echoContract)
+  }
+
+  it should "handle multi-parent blocks correctly when they operate on volatile produce/consume pairs" in effectTest {
+    testConflictOnSimpleDiamondDag((no: Int) => s"""@"hi"!($no) | for (_ <- @"hi") { Nil }""")
+  }
+
+  private def testConflictOnSimpleDiamondDag(contract: Int => String): Effect[Unit] = {
+    val time = System.currentTimeMillis()
     HashSetCasperTestNode.networkEff(genesis, networkSize = 2).use { nodes =>
       val deploys = Vector(
-        ConstructDeploy.sourceDeploy(echoContract(1), timestamp = time + 1),
-        ConstructDeploy.sourceDeploy(echoContract(2), timestamp = time + 2)
+        ConstructDeploy.sourceDeploy(contract(1), time + 1, accounting.MAX_VALUE),
+        ConstructDeploy.sourceDeploy(contract(2), time + 2, accounting.MAX_VALUE)
       )
       for {
         block0 <- nodes(0).addBlock(deploys(0))
