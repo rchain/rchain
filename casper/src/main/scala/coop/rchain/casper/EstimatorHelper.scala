@@ -86,13 +86,47 @@ object EstimatorHelper {
       ancestors = maybeAncestors.flatten
       ancestorEvents = ancestors.flatMap(_.getBody.deploys.flatMap(_.deployLog)) ++
         ancestors.flatMap(_.getBody.deploys.flatMap(_.paymentLog))
+      commEvents = ancestorEvents.filter {
+        case Event(Comm(CommEvent(Some(_: ConsumeEvent), _))) =>
+          true
+        case _ => false
+      }
+      producesInCommEvents = commEvents.flatMap {
+        case Event(Comm(CommEvent(Some(_: ConsumeEvent), produces))) =>
+          produces
+        case _ =>
+          throw new RuntimeException("Unexpected comm event")
+      }
+      consumeInCommEvents = commEvents.map {
+        case Event(Comm(CommEvent(Some(consume: ConsumeEvent), _))) =>
+          consume
+        case _ =>
+          throw new RuntimeException("Unexpected comm event")
+      }
       ancestorChannels = ancestorEvents.flatMap {
         case Event(Produce(produce: ProduceEvent)) =>
-          Set(produce.channelsHash)
+          if (producesInCommEvents.contains(produce)) {
+            Set.empty[ByteString] // Volatile produce
+          } else {
+            Set(produce.channelsHash)
+          }
         case Event(Consume(consume: ConsumeEvent)) =>
-          consume.channelsHashes.toSet
+          if (consumeInCommEvents.contains(consume)) {
+            Set.empty[ByteString] // Volatile consume
+          } else {
+            consume.channelsHashes.toSet
+          }
         case Event(Comm(CommEvent(Some(consume: ConsumeEvent), produces))) =>
-          consume.channelsHashes.toSet ++ produces.map(_.channelsHash).toSet
+          val consumeChannelHashes = if (consumeInCommEvents.contains(consume)) {
+            Set.empty[ByteString] // Volatile consume
+          } else {
+            consume.channelsHashes.toSet
+          }
+          val produceChannelHashes = produces
+            .filterNot(produce => producesInCommEvents.contains(produce))
+            .map(_.channelsHash)
+            .toSet
+          consumeChannelHashes ++ produceChannelHashes
         case _ => throw new RuntimeException("incorrect ancestor events")
       }.toSet
     } yield ancestorChannels
