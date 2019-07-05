@@ -47,7 +47,8 @@ object CasperState {
   type CasperStateCell[F[_]] = Cell[F, CasperState]
 }
 
-class MultiParentCasperImpl[F[_]: Sync: Concurrent: ConnectionsCell: TransportLayer: Log: Time: SafetyOracle: LastFinalizedBlockCalculator: BlockStore: RPConfAsk: BlockDagStorage](
+class MultiParentCasperImpl[
+    F[_]: Sync: Concurrent: ConnectionsCell: TransportLayer: Log: Time: SafetyOracle: LastFinalizedBlockCalculator: BlockStore: RPConfAsk: BlockDagStorage](
     runtimeManager: RuntimeManager[F],
     validatorId: Option[ValidatorIdentity],
     genesis: BlockMessage,
@@ -82,7 +83,7 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: ConnectionsCell: TransportLa
         )
         .as(BlockStatus.processing)
 
-    def doppelgangerAndAdd = spanF.child(AddBlockMetricsSource) {
+    def doppelgangerAndAdd = spanF.trace(AddBlockMetricsSource) {
       for {
         dag <- blockDag
         _ <- validatorId match {
@@ -289,7 +290,7 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: ConnectionsCell: TransportLa
                                           dag,
                                           emptyStateHash,
                                           runtimeManager
-                                        )
+                                      )
                                     )
       _ <- Span[F].mark("transactions-validated")
       postBondsCacheStatus <- postTransactionsCheckStatus.joinRight.traverse(
@@ -303,7 +304,7 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: ConnectionsCell: TransportLa
                                               .neglectedInvalidBlock[F](
                                                 b,
                                                 dag
-                                              )
+                                            )
                                         )
       _ <- Span[F].mark("neglected-invalid-block-validated")
       postNeglectedEquivocationCheckStatus <- postNeglectedInvalidBlockStatus.joinRight
@@ -314,7 +315,7 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: ConnectionsCell: TransportLa
                                                        b,
                                                        dag,
                                                        genesis
-                                                     )
+                                                   )
                                                )
       _ <- Span[F].mark("neglected-equivocation-validated")
       postEquivocationCheckStatus <- postNeglectedEquivocationCheckStatus.joinRight.traverse(
@@ -453,7 +454,7 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: ConnectionsCell: TransportLa
         s.copy(
           dependencyDag = DoublyLinkedDagOperations
             .add[BlockHash](s.dependencyDag, hash, childBlock.blockHash)
-        )
+      )
     )
 
   private def requestMissingDependency(hash: BlockHash) =

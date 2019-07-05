@@ -69,7 +69,7 @@ class ReplayRSpace[F[_]: Sync, C, P, A, R, K](
         val msg = "channels.length must equal patterns.length"
         logF.error(msg) *> syncF.raiseError(new IllegalArgumentException(msg))
       } else
-        spanF.child(consumeSpanLabel) {
+        spanF.trace(consumeSpanLabel) {
           for {
             _ <- spanF.mark("before-consume-lock")
             result <- consumeLockF(channels) {
@@ -234,7 +234,7 @@ class ReplayRSpace[F[_]: Sync, C, P, A, R, K](
       implicit m: Match[F, P, A, R]
   ): F[MaybeActionResult] =
     contextShift.evalOn(scheduler) {
-      spanF.child(produceSpanLabel) {
+      spanF.trace(produceSpanLabel) {
         for {
           _ <- spanF.mark("before-produce-lock")
           result <- produceLockF(channel) {
@@ -275,16 +275,17 @@ class ReplayRSpace[F[_]: Sync, C, P, A, R, K](
               channelToIndexedDataList <- channels.traverse { c: C =>
                                            (for {
                                              data <- store.getData(c)
-                                           } yield (data.zipWithIndex.filter {
-                                             case (Datum(_, _, source), _) =>
-                                               comm.produces.contains(source)
-                                           })).map(
+                                           } yield
+                                             (data.zipWithIndex.filter {
+                                               case (Datum(_, _, source), _) =>
+                                                 comm.produces.contains(source)
+                                             })).map(
                                              as =>
                                                c -> {
                                                  if (c == channel)
                                                    Seq((Datum(data, persist, produceRef), -1))
                                                  else as
-                                               }
+                                             }
                                            )
                                          }
               firstMatch <- extractFirstMatch(
@@ -292,10 +293,11 @@ class ReplayRSpace[F[_]: Sync, C, P, A, R, K](
                              matchCandidates,
                              channelToIndexedDataList.toMap
                            )
-            } yield firstMatch match {
-              case None             => remaining.asLeft[MaybeProduceCandidate]
-              case produceCandidate => produceCandidate.asRight[Seq[Seq[C]]]
-            }
+            } yield
+              firstMatch match {
+                case None             => remaining.asLeft[MaybeProduceCandidate]
+                case produceCandidate => produceCandidate.asRight[Seq[Seq[C]]]
+              }
         }
       groupedChannels.tailRecM(go)
     }

@@ -167,7 +167,7 @@ class RSpace[F[_], C, P, A, R, K] private[rspace] (
         val msg = "channels.length must equal patterns.length"
         logF.error(msg) *> syncF.raiseError(new IllegalArgumentException(msg))
       } else
-        spanF.child(consumeSpanLabel) {
+        spanF.trace(consumeSpanLabel) {
           for {
             _ <- spanF.mark("before-consume-ref-compute")
             consumeRef <- syncF.delay {
@@ -288,7 +288,7 @@ class RSpace[F[_], C, P, A, R, K] private[rspace] (
                                                  if (c == batChannel)
                                                    (data, -1) +: as
                                                  else as
-                                               }
+                                             }
                                            )
                                        }
             firstMatch <- extractFirstMatch(
@@ -296,10 +296,11 @@ class RSpace[F[_], C, P, A, R, K] private[rspace] (
                            matchCandidates,
                            channelToIndexedDataList.toMap
                          )
-          } yield firstMatch match {
-            case None             => remaining.asLeft[MaybeProduceCandidate]
-            case produceCandidate => produceCandidate.asRight[Seq[CandidateChannels]]
-          }
+          } yield
+            firstMatch match {
+              case None             => remaining.asLeft[MaybeProduceCandidate]
+              case produceCandidate => produceCandidate.asRight[Seq[CandidateChannels]]
+            }
       }
     groupedChannels.tailRecM(go)
   }
@@ -400,7 +401,7 @@ class RSpace[F[_], C, P, A, R, K] private[rspace] (
       implicit m: Match[F, P, A, R]
   ): F[MaybeActionResult] =
     contextShift.evalOn(scheduler) {
-      spanF.child(produceSpanLabel) {
+      spanF.trace(produceSpanLabel) {
         for {
           _ <- spanF.mark("before-produce-ref-computed")
           produceRef <- syncF.delay {

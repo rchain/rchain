@@ -71,7 +71,7 @@ sealed abstract class SafetyOracleInstances {
       def normalizedFaultTolerance(
           blockDag: BlockDagRepresentation[F],
           candidateBlockHash: BlockHash
-      ): F[Float] = Span[F].child(SafetyOracleMetricsSource) {
+      ): F[Float] = Span[F].trace(SafetyOracleMetricsSource) {
         for {
           totalWeight <- computeTotalWeight(blockDag, candidateBlockHash)
           _           <- Span[F].mark("total-weight")

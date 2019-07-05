@@ -90,12 +90,13 @@ sealed abstract class MultiParentCasperInstances {
     Metrics.Source(CasperMetricsSource, "casper")
   private[this] val genesisLabel = Metrics.Source(MetricsSource, "genesis")
 
-  def hashSetCasper[F[_]: Sync: Metrics: Concurrent: ConnectionsCell: TransportLayer: Log: Time: SafetyOracle: LastFinalizedBlockCalculator: BlockStore: RPConfAsk: BlockDagStorage: Span](
+  def hashSetCasper[
+      F[_]: Sync: Metrics: Concurrent: ConnectionsCell: TransportLayer: Log: Time: SafetyOracle: LastFinalizedBlockCalculator: BlockStore: RPConfAsk: BlockDagStorage: Span](
       runtimeManager: RuntimeManager[F],
       validatorId: Option[ValidatorIdentity],
       genesis: BlockMessage,
       shardId: String
-  ): F[MultiParentCasper[F]] = Span[F].child(genesisLabel) {
+  ): F[MultiParentCasper[F]] = Span[F].trace(genesisLabel) {
     for {
       dag <- BlockDagStorage[F].getRepresentation
       maybePostGenesisStateHash <- InterpreterUtil

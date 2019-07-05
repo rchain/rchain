@@ -114,7 +114,7 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span] private[rholang] (
       isGenesis: Boolean //FIXME have a better way of knowing this. Pass the replayDeploy function maybe?
   ): F[Either[ReplayFailure, StateHash]] =
     withRuntimeLock { runtime =>
-      Span[F].child(replayComputeStateLabel) {
+      Span[F].trace(replayComputeStateLabel) {
         for {
           _      <- runtime.blockData.set(blockData)
           _      <- setInvalidBlocks(invalidBlocks, runtime)
@@ -130,7 +130,7 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span] private[rholang] (
       invalidBlocks: Map[BlockHash, Validator] = Map.empty[BlockHash, Validator]
   ): F[(StateHash, Seq[InternalProcessedDeploy])] =
     withRuntimeLock { runtime =>
-      Span[F].child(computeStateLabel) {
+      Span[F].trace(computeStateLabel) {
         for {
           _      <- runtime.blockData.set(blockData)
           _      <- setInvalidBlocks(invalidBlocks, runtime)
@@ -146,7 +146,7 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span] private[rholang] (
   ): F[(StateHash, StateHash, Seq[InternalProcessedDeploy])] = {
     val startHash = emptyStateHash
     withRuntimeLock { runtime =>
-      Span[F].child(computeGenesisLabel) {
+      Span[F].trace(computeGenesisLabel) {
         for {
           _          <- runtime.blockData.set(BlockData(blockTime, 0))
           _          <- Span[F].mark("before-process-deploys")
@@ -185,7 +185,7 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span] private[rholang] (
         bondsPar =>
           new IllegalArgumentException(
             s"Incorrect number of results from query of current bonds: ${bondsPar.size}"
-          )
+        )
       )(bondsPar => bondsPar.size == 1)
       .map { bondsPar =>
         toBondSeq(bondsPar.head)

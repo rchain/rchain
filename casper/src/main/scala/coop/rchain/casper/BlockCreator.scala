@@ -49,7 +49,7 @@ object BlockCreator {
       metricsF: Metrics[F],
       spanF: Span[F]
   ): F[CreateBlockStatus] =
-    spanF.child(CreateBlockMetricsSource) {
+    spanF.trace(CreateBlockMetricsSource) {
       for {
         tipHashes             <- Estimator.tips[F](dag, genesis)
         _                     <- spanF.mark("after-estimator")

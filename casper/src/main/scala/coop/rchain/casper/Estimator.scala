@@ -26,7 +26,7 @@ object Estimator {
       dag: BlockDagRepresentation[F],
       genesis: BlockMessage
   ): F[IndexedSeq[BlockHash]] =
-    Span[F].child(Tips0MetricsSource) {
+    Span[F].trace(Tips0MetricsSource) {
       for {
         latestMessageHashes <- dag.latestMessageHashes
         _                   <- Span[F].mark("latest-message-hashes")
@@ -41,7 +41,7 @@ object Estimator {
       dag: BlockDagRepresentation[F],
       genesis: BlockMessage,
       latestMessagesHashes: Map[Validator, BlockHash]
-  ): F[IndexedSeq[BlockHash]] = Span[F].child(Tips1MetricsSource) {
+  ): F[IndexedSeq[BlockHash]] = Span[F].trace(Tips1MetricsSource) {
     for {
       invalidLatestMessages        <- ProtoUtil.invalidLatestMessages[F](dag, latestMessagesHashes)
       filteredLatestMessagesHashes = latestMessagesHashes -- invalidLatestMessages.keys
