@@ -188,7 +188,7 @@ new  PoS,
                   getBlockData(`rho:block:data`),
                   commitReward, rewardsCh, newValidatorsCh,
                   newWithdrawersCh, newBondsCh,
-                  changeEpoch
+                  changeEpoch, removeQuarantinedWithdrawers
               in {
                 getBlockData!(*blockDataCh) |
 
@@ -198,6 +198,30 @@ new  PoS,
 
                   changeEpoch!(blockNumber, allBonds, activeValidators, withdrawers, *newValidatorsCh)|
 
+                  removeQuarantinedWithdrawers!(blockNumber, allBonds, withdrawers, *newWithdrawersCh, *newBondsCh) |
+
+                  @ListOps!("fold", pendingRewards.toList(), rewards, *commitReward, *rewardsCh) |
+                  contract commitReward(@(pk, pending), @acc, resultCh) = {
+                    resultCh!(acc.set(pk, acc.getOrElse(pk, 0) + pending))
+                  } |
+
+                  for (@rewards <- rewardsCh;
+                       @newValidators <- newValidatorsCh;
+                       @newWithdrawers <- newWithdrawersCh ;
+                       @newBonds <- newBondsCh) {
+                    mvarResultCh!(({}, rewards, newValidators, newWithdrawers, newBonds), Nil)
+                  }
+                } |
+
+                contract changeEpoch(@blockNumber, @allBonds, @activeValidators, @withdrawers, resultCh) = {
+                  if (blockNumber % $$epochLength$$ == 0) {
+                    pickActiveValidators!(allBonds, withdrawers, *resultCh)
+                  } else {
+                    resultCh!(activeValidators)
+                  }
+                } |
+
+                contract removeQuarantinedWithdrawers(@currentBlockNumber, @allBonds, @withdrawers, newWithdrawersCh, newBondsCh) = {
                   new quarantinedValidatorsCh,
                       validatorsToWithdrawListCh,
                       validatorsToWithdrawSetCh,
@@ -206,8 +230,7 @@ new  PoS,
                       accumulateToSet,
                       accumulateToMap,
                       newBondsListCh,
-                      newWithdrawersListCh,
-                      test1ch, test2ch
+                      newWithdrawersListCh
                   in {
                     @ListOps!("filter", withdrawers.toList(), *isQuarantineFinished, *quarantinedValidatorsCh) |
                     for (@quarantinedValidators <- quarantinedValidatorsCh) {
@@ -237,33 +260,13 @@ new  PoS,
                       }
                     } |
 
-                    contract isQuarantineFinished(@(_, blockTime), resultCh) = {
-                      resultCh!(blockTime >= $$quarantineLength$$)
+                    contract isQuarantineFinished(@(_, blockNumber), resultCh) = {
+                      resultCh!(blockNumber + $$quarantineLength$$ >= currentBlockNumber)
                     } |
 
                     contract accumulateToSet(@x, @acc, resultCh) = {resultCh! (acc.union(Set(x)))} |
 
                     contract accumulateToMap(@(k, v), @acc, resultCh) = {resultCh!(acc.set(k, v))}
-                  } |
-
-                  @ListOps!("fold", pendingRewards.toList(), rewards, *commitReward, *rewardsCh) |
-                  contract commitReward(@(pk, pending), @acc, resultCh) = {
-                    resultCh!(acc.set(pk, acc.getOrElse(pk, 0) + pending))
-                  } |
-
-                  for (@rewards <- rewardsCh;
-                       @newValidators <- newValidatorsCh;
-                       @newWithdrawers <- newWithdrawersCh ;
-                       @newBonds <- newBondsCh) {
-                    mvarResultCh!(({}, rewards, newValidators, newWithdrawers, newBonds), Nil)
-                  }
-                } |
-
-                contract changeEpoch(@blockNumber, @allBonds, @activeValidators, @withdrawers, resultCh) = {
-                  if (blockNumber % $$epochLength$$ == 0) {
-                    pickActiveValidators!(allBonds, withdrawers, *resultCh)
-                  } else {
-                    resultCh!(activeValidators)
                   }
                 }
               }
