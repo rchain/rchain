@@ -10,6 +10,7 @@ import coop.rchain.rholang.interpreter.errors.OutOfPhlogistonsError
 import coop.rchain.rholang.interpreter.storage.implicits.matchListPar
 import coop.rchain.rspace.util.unpackCont
 import cats.implicits._
+import coop.rchain.metrics.Span
 import coop.rchain.rholang.interpreter.accounting.{Cost, CostAccounting}
 
 /**
@@ -30,7 +31,7 @@ import coop.rchain.rholang.interpreter.accounting.{Cost, CostAccounting}
   * @param space the rspace instance
   * @param dispatcher the dispatcher
   */
-class ContractCall[F[_]: Concurrent](
+class ContractCall[F[_]: Concurrent: Span](
     space: RhoISpace[F],
     dispatcher: Dispatch[F, ListParWithRandom, TaggedContinuation]
 ) {
@@ -48,7 +49,7 @@ class ContractCall[F[_]: Concurrent](
                         ListParWithRandom(values, rand),
                         persist = false,
                         sequenceNumber
-                      )(matchListPar(Sync[F], cost))
+                      )(matchListPar(Sync[F], Span[F], cost))
       _ <- produceResult.fold(Sync[F].unit) {
             case (cont, channels) =>
               dispatcher.dispatch(unpackCont(cont), channels.map(_.value), cont.sequenceNumber)

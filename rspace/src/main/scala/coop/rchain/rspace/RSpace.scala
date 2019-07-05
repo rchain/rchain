@@ -37,7 +37,7 @@ class RSpace[F[_], C, P, A, R, K] private[rspace] (
     contextShift: ContextShift[F],
     scheduler: ExecutionContext,
     metricsF: Metrics[F],
-    spanF: Span[F]
+    val spanF: Span[F]
 ) extends RSpaceOps[F, C, P, A, R, K](historyRepository, storeAtom, branch)
     with ISpace[F, C, P, A, R, K] {
 
@@ -45,11 +45,11 @@ class RSpace[F[_], C, P, A, R, K] private[rspace] (
 
   protected[this] override val logger: Logger = Logger[this.type]
 
-  implicit private[this] val MetricsSource: Source = RSpaceMetricsSource
-  private[this] val consumeCommLabel               = "comm.consume"
-  private[this] val produceCommLabel               = "comm.produce"
-  private[this] val consumeSpanLabel               = Metrics.Source(MetricsSource, "consume")
-  private[this] val produceSpanLabel               = Metrics.Source(MetricsSource, "produce")
+  implicit protected[this] lazy val MetricsSource: Source = RSpaceMetricsSource
+  private[this] val consumeCommLabel                      = "comm.consume"
+  private[this] val produceCommLabel                      = "comm.produce"
+  private[this] val consumeSpanLabel                      = Metrics.Source(MetricsSource, "consume")
+  private[this] val produceSpanLabel                      = Metrics.Source(MetricsSource, "produce")
 
   /*
    * Here, we create a cache of the data at each channel as `channelToIndexedData`

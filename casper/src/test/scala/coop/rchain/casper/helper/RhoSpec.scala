@@ -22,7 +22,7 @@ object RhoSpec {
   implicit val metricsEff: Metrics[Task] = new Metrics.MetricsNOP[Task]
   implicit val noopSpan: Span[Task]      = NoopSpan[Task]()
 
-  private def testFrameworkContracts[F[_]: Log: Concurrent](
+  private def testFrameworkContracts[F[_]: Log: Concurrent: Span](
       testResultCollector: TestResultCollector[F]
   ): Seq[SystemProcess.Definition[F]] = {
     val testResultCollectorService =

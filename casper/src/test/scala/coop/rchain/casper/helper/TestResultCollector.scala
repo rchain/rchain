@@ -3,6 +3,7 @@ import cats.effect.Concurrent
 import cats.effect.concurrent.Ref
 import cats.implicits._
 import coop.rchain.crypto.hash.Blake2b512Random
+import coop.rchain.metrics.Span
 import coop.rchain.models.Expr.ExprInstance.{ETupleBody, GBool}
 import coop.rchain.models.rholang.implicits._
 import coop.rchain.models.{ETuple, Expr, ListParWithRandom, Par}
@@ -79,13 +80,13 @@ case class TestResult(
 case class AckedActionCtx(ackChannel: Par, rand: Blake2b512Random, sequenceNumber: Long)
 
 object TestResultCollector {
-  def apply[F[_]: Concurrent]: F[TestResultCollector[F]] =
+  def apply[F[_]: Concurrent: Span]: F[TestResultCollector[F]] =
     Ref
       .of(TestResult(Map.empty, hasFinished = false))
       .map(new TestResultCollector(_))
 }
 
-class TestResultCollector[F[_]: Concurrent](result: Ref[F, TestResult]) {
+class TestResultCollector[F[_]: Concurrent: Span](result: Ref[F, TestResult]) {
 
   def getResult: F[TestResult] = result.get
 

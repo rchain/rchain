@@ -38,13 +38,13 @@ class ReplayRSpace[F[_]: Sync, C, P, A, R, K](
     contextShift: ContextShift[F],
     scheduler: ExecutionContext,
     metricsF: Metrics[F],
-    spanF: Span[F]
+    val spanF: Span[F]
 ) extends RSpaceOps[F, C, P, A, R, K](historyRepository, storeAtom, branch)
     with IReplaySpace[F, C, P, A, R, K] {
 
   protected[this] override val logger: Logger = Logger[this.type]
 
-  implicit private[this] val MetricsSource: Metrics.Source =
+  implicit protected[this] lazy val MetricsSource: Metrics.Source =
     Metrics.Source(RSpaceMetricsSource, "replay")
 
   def store: HotStore[F, C, P, A, K] = storeAtom.get()

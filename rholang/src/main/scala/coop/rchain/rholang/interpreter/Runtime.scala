@@ -145,7 +145,7 @@ object Runtime {
     val DEPLOYER_ID_OPS: Par    = byteName(16)
   }
 
-  private def introduceSystemProcesses[F[_]: Sync: _cost](
+  private def introduceSystemProcesses[F[_]: Sync: _cost: Span](
       space: RhoISpace[F],
       replaySpace: RhoISpace[F],
       processes: List[(Name, Arity, Remainder, BodyRef)]
@@ -168,7 +168,7 @@ object Runtime {
     }.sequence
 
   object SystemProcess {
-    final case class Context[F[_]: Concurrent](
+    final case class Context[F[_]: Concurrent: Span](
         space: RhoISpace[F],
         dispatcher: RhoDispatch[F],
         registry: Registry[F],
@@ -417,7 +417,8 @@ object Runtime {
   }
 
   def injectEmptyRegistryRoot[F[_]](space: RhoISpace[F], replaySpace: RhoReplayISpace[F])(
-      implicit F: Concurrent[F]
+      implicit F: Concurrent[F],
+      spanF: Span[F]
   ): F[Unit] = {
     // This random value stays dead in the tuplespace, so we can have some fun.
     // This is from Jeremy Bentham's "Defence of Usury"
@@ -434,13 +435,13 @@ object Runtime {
                       ListParWithRandom(Seq(Registry.emptyMap), rand),
                       false,
                       0
-                    )(matchListPar(F, cost))
+                    )(matchListPar(F, spanF, cost))
       replayResult <- replaySpace.produce(
                        Registry.registryRoot,
                        ListParWithRandom(Seq(Registry.emptyMap), rand),
                        false,
                        0
-                     )(matchListPar(F, cost))
+                     )(matchListPar(F, spanF, cost))
       _ <- spaceResult match {
             case None =>
               replayResult match {

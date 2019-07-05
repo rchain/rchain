@@ -837,6 +837,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
 
   "eval of New" should "use deterministic names and provide urn-based resources" in {
     implicit val errorLog = new ErrorLog[Task]()
+    implicit val span     = NoopSpan[Task]
 
     val splitRand   = rand.splitByte(42)
     val resultRand  = rand.splitByte(42)

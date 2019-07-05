@@ -474,8 +474,11 @@ class NodeRuntime private[node] (
       Runtime
         .createWithEmptyCost[Task, Task.Par](storagePath, storageSize, Seq.empty)
     }
-    _ <- Runtime
-          .injectEmptyRegistryRoot[Task](runtime.space, runtime.replaySpace)
+    _ <- {
+      implicit val sp: Span[Task] = span
+      Runtime
+        .injectEmptyRegistryRoot[Task](runtime.space, runtime.replaySpace)
+    }
 
     casperRuntime <- {
       implicit val s                = rspaceScheduler
