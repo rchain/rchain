@@ -187,18 +187,16 @@ new  PoS,
               new blockDataCh, mvarProcessCh,
                   getBlockData(`rho:block:data`),
                   commitReward, rewardsCh, newValidatorsCh,
-                  newWithdrawersCh, newBondsCh in {
+                  newWithdrawersCh, newBondsCh,
+                  changeEpoch
+              in {
                 getBlockData!(*blockDataCh) |
 
                 runMVar!(*stateCh, *mvarProcessCh, *ackCh) |
                 for(_, @blockNumber <- blockDataCh;
                     @(pendingRewards, rewards, activeValidators, withdrawers, allBonds), mvarResultCh <- mvarProcessCh) {
 
-                  if (blockNumber % $$epochLength$$ == 0) {
-                    pickActiveValidators!(allBonds, withdrawers, *newValidatorsCh)
-                  } else {
-                    newValidatorsCh!(activeValidators)
-                  } |
+                  changeEpoch!(blockNumber, allBonds, activeValidators, withdrawers, *newValidatorsCh)|
 
                   new quarantinedValidatorsCh,
                       validatorsToWithdrawListCh,
@@ -258,6 +256,14 @@ new  PoS,
                        @newWithdrawers <- newWithdrawersCh ;
                        @newBonds <- newBondsCh) {
                     mvarResultCh!(({}, rewards, newValidators, newWithdrawers, newBonds), Nil)
+                  }
+                } |
+
+                contract changeEpoch(@blockNumber, @allBonds, @activeValidators, @withdrawers, resultCh) = {
+                  if (blockNumber % $$epochLength$$ == 0) {
+                    pickActiveValidators!(allBonds, withdrawers, *resultCh)
+                  } else {
+                    resultCh!(activeValidators)
                   }
                 }
               }
