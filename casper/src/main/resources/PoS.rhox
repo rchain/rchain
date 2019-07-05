@@ -186,9 +186,9 @@ new  PoS,
             contract PoS(@"closeBlock", ackCh) = {
               new blockDataCh, mvarProcessCh,
                   getBlockData(`rho:block:data`),
-                  commitReward, rewardsCh, newValidatorsCh,
+                  commitReward, newRewardsCh, newValidatorsCh,
                   newWithdrawersCh, newBondsCh,
-                  changeEpoch, removeQuarantinedWithdrawers
+                  changeEpoch, removeQuarantinedWithdrawers, commitRewards
               in {
                 getBlockData!(*blockDataCh) |
 
@@ -200,18 +200,22 @@ new  PoS,
 
                   removeQuarantinedWithdrawers!(blockNumber, allBonds, withdrawers, *newWithdrawersCh, *newBondsCh) |
 
-                  @ListOps!("fold", pendingRewards.toList(), rewards, *commitReward, *rewardsCh) |
-                  contract commitReward(@(pk, pending), @acc, resultCh) = {
-                    resultCh!(acc.set(pk, acc.getOrElse(pk, 0) + pending))
-                  } |
+                  commitRewards!(pendingRewards, rewards, *newRewardsCh) |
 
-                  for (@rewards <- rewardsCh;
+                  for (@newRewards <- newRewardsCh;
                        @newValidators <- newValidatorsCh;
                        @newWithdrawers <- newWithdrawersCh ;
                        @newBonds <- newBondsCh) {
-                    mvarResultCh!(({}, rewards, newValidators, newWithdrawers, newBonds), Nil)
+                    mvarResultCh!(({}, newRewards, newValidators, newWithdrawers, newBonds), Nil)
                   }
                 } |
+
+                contract commitRewards(@pendingRewards, @rewards, newRewardsCh) = {
+                  @ListOps!("fold", pendingRewards.toList(), rewards, *commitReward, *newRewardsCh) |
+                  contract commitReward(@(pk, pending), @acc, resultCh) = {
+                    resultCh!(acc.set(pk, acc.getOrElse(pk, 0) + pending))
+                  }
+                }|
 
                 contract changeEpoch(@blockNumber, @allBonds, @activeValidators, @withdrawers, resultCh) = {
                   if (blockNumber % $$epochLength$$ == 0) {
