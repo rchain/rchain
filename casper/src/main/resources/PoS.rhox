@@ -113,6 +113,22 @@ new  PoS,
               }
             } |
 
+            contract PoS (@"withdraw", returnCh) = {
+              new userCh, depositCh, processCh in {
+                runMVar!(*stateCh, *processCh, *returnCh) |
+
+                getUser!(*userCh) |
+                for(@(pending, rewards, activeValidators, allBonds), resultCh <- processCh;
+                    @userPk <- userCh) {
+                  if (allBonds.contains(userPk)) {
+                    resultCh!((pending, rewards, activeValidators, allBonds), (true, Nil))
+                  } else {
+                    resultCh!((pending, rewards, activeValidators, allBonds), (false, "User is not bonded"))
+                  }
+                }
+              }
+            } |
+
             contract PoS (@"pay", @amount, returnCh) = {
               new vaultCh, transferCh, userCh, processPayCh,
                   depositCh,
