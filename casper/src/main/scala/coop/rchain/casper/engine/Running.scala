@@ -8,9 +8,9 @@ import cats.{Applicative, Monad}
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.{BlockDagStorage, BlockStore}
 import coop.rchain.casper.LastApprovedBlock.LastApprovedBlock
-import coop.rchain.casper.MultiParentCasperRef.MultiParentCasperRef
 import coop.rchain.casper._
 import coop.rchain.casper.util.comm.CommUtil
+import coop.rchain.casper.util._
 import coop.rchain.casper.genesis.Genesis
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.rholang.RuntimeManager
@@ -37,13 +37,12 @@ import scala.util.Try
   * In the future it will be possible to create checkpoint with new [[ApprovedBlock]].
     **/
 class Running[F[_]: RPConfAsk: BlockStore: Monad: ConnectionsCell: TransportLayer: Log: Time](
-    private val casper: MultiParentCasper[F],
+    casper: MultiParentCasper[F],
     approvedBlock: ApprovedBlock,
     theInit: F[Unit]
 ) extends Engine[F] {
   import Engine._
 
-  implicit val _casper            = casper
   def applicative: Applicative[F] = Applicative[F]
 
   override def init: F[Unit] = theInit
@@ -71,13 +70,13 @@ class Running[F[_]: RPConfAsk: BlockStore: Monad: ConnectionsCell: TransportLaye
   }
 
   private def handleBlockMessage(peer: PeerNode, b: BlockMessage): F[Unit] =
-    MultiParentCasper[F]
+    casper
       .contains(b.blockHash)
       .ifM(
         Log[F].info(s"Received block ${PrettyPrinter.buildString(b.blockHash)} again."),
         for {
           _ <- Log[F].info(s"Received ${PrettyPrinter.buildString(b)}.")
-          _ <- MultiParentCasper[F].addBlock(b, handleDoppelganger(peer, _, _))
+          _ <- casper.addBlock(b, handleDoppelganger(peer, _, _))
         } yield ()
       )
 
