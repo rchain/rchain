@@ -27,7 +27,7 @@ import coop.rchain.models.Validator.Validator
 import coop.rchain.shared.{Log, LogSource, Time}
 import monix.eval.Task
 import monix.execution.Scheduler
-
+import coop.rchain.models.BlockHash.BlockHash
 import scala.concurrent.duration.FiniteDuration
 import scala.util.Try
 
@@ -35,7 +35,39 @@ import scala.util.Try
   * of [[MultiParentCasper]].
   *
   * In the future it will be possible to create checkpoint with new [[ApprovedBlock]].
-    **/
+  **/
+object Running {
+
+  /** TODO
+    * - check casper if block exists, request only if does not exit
+    * - check if was requested already
+    *    - if requested for same peer, ignore
+         - if requested for different peer, store this peer on waiting list (remove duplicates or use set)
+         - if it was not requested, request and store time of the action
+    * - periodically check the lists of requests and checks if we waited to long
+    *    - if waited to long and there is at least onee peer on waiting list:
+    *        - request the block from that peer from waiting list
+    *        - move the peer from the waiting list to the requested list
+    *    - if the waiting list is empty, log a warning (this means most likely things are not going the way they should)
+    * - upon handling the BlockMessage
+    *    - if the block was added to casper - remove its entry in the requests list
+    *    - if the block was not added, keep the list
+    */
+  def handleHasBlock[F[_]: Monad: RPConfAsk: TransportLayer](peer: PeerNode, hb: HasBlock)(
+      casperContains: BlockHash => F[Boolean]
+  ): F[Unit] =
+    for {
+      conf <- RPConfAsk[F].ask
+      msg = packet(
+        conf.local,
+        conf.networkId,
+        transport.BlockRequest,
+        BlockRequest(hb.hash).toByteString
+      )
+      _ <- TransportLayer[F].send(peer, msg)
+    } yield ()
+}
+
 class Running[F[_]: RPConfAsk: BlockStore: Monad: ConnectionsCell: TransportLayer: Log: Time](
     casper: MultiParentCasper[F],
     approvedBlock: ApprovedBlock,
@@ -62,7 +94,7 @@ class Running[F[_]: RPConfAsk: BlockStore: Monad: ConnectionsCell: TransportLaye
     case b: BlockMessage              => handleBlockMessage(peer, b)
     case br: BlockRequest             => handleBlockRequest(peer, br)
     case hbr: HasBlockRequest         => handleHasBlockRequest(peer, hbr)
-    case hb: HasBlock                 => handleHasBlock(peer, hb)
+    case hb: HasBlock                 => Running.handleHasBlock[F](peer, hb)(casper.contains)
     case fctr: ForkChoiceTipRequest   => handleForkChoiceTipRequest(peer, fctr)
     case abr: ApprovedBlockRequest    => handleApprovedBlockRequest(peer, abr)
     case na: NoApprovedBlockAvailable => logNoApprovedBlockAvailable[F](na.nodeIdentifer)
@@ -95,33 +127,6 @@ class Running[F[_]: RPConfAsk: BlockStore: Monad: ConnectionsCell: TransportLaye
         } yield ()
       case None => noop
     }
-
-  /** TODO
-    * - check casper if block exists, request only if does not exit
-    * - check if was requested already
-    *    - if requested for same peer, ignore
-         - if requested for different peer, store this peer on waiting list (remove duplicates or use set)
-         - if it was not requested, request and store time of the action
-    * - periodically check the lists of requests and checks if we waited to long
-    *    - if waited to long and there is at least onee peer on waiting list:
-    *        - request the block from that peer from waiting list
-    *        - move the peer from the waiting list to the requested list
-    *    - if the waiting list is empty, log a warning (this means most likely things are not going the way they should)
-    * - upon handling the BlockMessage
-    *    - if the block was added to casper - remove its entry in the requests list
-    *    - if the block was not added, keep the list
-    */
-  private def handleHasBlock(peer: PeerNode, hb: HasBlock): F[Unit] =
-    for {
-      conf <- RPConfAsk[F].ask
-      msg = packet(
-        conf.local,
-        conf.networkId,
-        transport.BlockRequest,
-        BlockRequest(hb.hash).toByteString
-      )
-      _ <- TransportLayer[F].send(peer, msg)
-    } yield ()
 
   private def handleBlockRequest(peer: PeerNode, br: BlockRequest): F[Unit] =
     for {
