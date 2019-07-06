@@ -88,7 +88,7 @@ class RunningSpec extends WordSpec {
     "respond to ForkChoiceTipRequest messages" in {
       val request = ForkChoiceTipRequest()
       val test: Task[Unit] = for {
-        tip  <- MultiParentCasper.forkChoiceTip[Task]
+        tip  <- MultiParentCasper.forkChoiceTip[Task](casper)
         _    <- engine.handle(local, request)
         head = transportLayer.requests.head
         _    = assert(head.peer == local)

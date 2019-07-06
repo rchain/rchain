@@ -76,10 +76,10 @@ object MultiParentCasper extends MultiParentCasperInstances {
   def ignoreDoppelgangerCheck[F[_]: Applicative]: (BlockMessage, Validator) => F[Unit] =
     kp2(().pure[F])
 
-  def forkChoiceTip[F[_]: MultiParentCasper: Monad: BlockStore]: F[BlockMessage] =
+  def forkChoiceTip[F[_]: Monad: BlockStore](casper: MultiParentCasper[F]): F[BlockMessage] =
     for {
-      dag       <- MultiParentCasper[F].blockDag
-      tipHashes <- MultiParentCasper[F].estimator(dag)
+      dag       <- casper.blockDag
+      tipHashes <- casper.estimator(dag)
       tipHash   = tipHashes.head
       tip       <- ProtoUtil.unsafeGetBlock[F](tipHash)
     } yield tip

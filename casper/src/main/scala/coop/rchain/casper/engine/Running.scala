@@ -147,7 +147,7 @@ class Running[F[_]: RPConfAsk: BlockStore: Monad: ConnectionsCell: TransportLaye
   ): F[Unit] =
     for {
       _     <- Log[F].info(s"Received ForkChoiceTipRequest from $peer")
-      tip   <- MultiParentCasper.forkChoiceTip
+      tip   <- MultiParentCasper.forkChoiceTip(casper)
       local <- RPConfAsk[F].reader(_.local)
       msg   = Blob(local, Packet(transport.BlockMessage.id, tip.toByteString))
       _     <- TransportLayer[F].stream(peer, msg)
