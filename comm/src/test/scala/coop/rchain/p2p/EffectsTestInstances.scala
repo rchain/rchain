@@ -60,10 +60,9 @@ object EffectsTestInstances {
 
   class TransportLayerStub[F[_]: Sync: Applicative] extends TransportLayer[F] {
     case class Request(peer: PeerNode, msg: Protocol)
-    type Responses = PeerNode => Protocol => CommErr[Protocol]
-    var reqresp: Option[Responses]  = None
-    var requests: List[Request]     = List.empty[Request]
-    var disconnects: List[PeerNode] = List.empty[PeerNode]
+    type Responses = PeerNode => Protocol => CommErr[Unit]
+    var reqresp: Option[Responses] = None
+    var requests: List[Request]    = List.empty[Request]
 
     def setResponses(responses: Responses): Unit =
       reqresp = Some(responses)
@@ -71,40 +70,25 @@ object EffectsTestInstances {
     def reset(): Unit = {
       reqresp = None
       requests = List.empty[Request]
-      disconnects = List.empty[PeerNode]
     }
 
-    def roundTrip(peer: PeerNode, msg: Protocol, timeout: FiniteDuration): F[CommErr[Protocol]] =
+    override def send(peer: PeerNode, msg: Protocol): F[CommErr[Unit]] =
       Sync[F].delay {
         requests = requests :+ Request(peer, msg)
         reqresp.get.apply(peer).apply(msg)
       }
 
-    def send(peer: PeerNode, msg: Protocol): F[CommErr[Unit]] =
+    override def broadcast(peers: Seq[PeerNode], msg: Protocol): F[Seq[CommErr[Unit]]] =
       Sync[F].delay {
-        requests = requests :+ Request(peer, msg)
-        reqresp.get.apply(peer).apply(msg).void
+        requests = requests ++ peers.map(peer => Request(peer, msg))
+        peers.map(_ => Right(()))
       }
 
-    def broadcast(peers: Seq[PeerNode], msg: Protocol): F[Seq[CommErr[Unit]]] = Sync[F].delay {
-      requests = requests ++ peers.map(peer => Request(peer, msg))
-      peers.map(_ => Right(()))
-    }
-
-    def stream(peer: PeerNode, blob: Blob): F[Unit] =
+    override def stream(peer: PeerNode, blob: Blob): F[Unit] =
       stream(Seq(peer), blob)
 
-    def stream(peers: Seq[PeerNode], blob: Blob): F[Unit] =
+    override def stream(peers: Seq[PeerNode], blob: Blob): F[Unit] =
       broadcast(peers, ProtocolHelper.protocol(blob.sender, networkId).withPacket(blob.packet)).void
-
-    def disconnect(peer: PeerNode): F[Unit] =
-      Sync[F].delay {
-        disconnects = disconnects :+ peer
-      }
-
-    def shutdown(msg: Protocol): F[Unit] = ???
-
-    def start(): F[Unit] = ???
   }
 
   class LogStub[F[_]: Applicative](delegate: Log[F]) extends Log[F] {

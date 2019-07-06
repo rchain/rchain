@@ -41,7 +41,7 @@ class RunningSpec extends WordSpec {
 
     val engine = new Running[Task](casper, approvedBlock, Task.unit)
 
-    transportLayer.setResponses(_ => p => Right(p))
+    transportLayer.setResponses(_ => p => Right(()))
 
     "respond to BlockMessage messages " in {
       val blockMessage = BlockMessage(ByteString.copyFrom("Test BlockMessage", "UTF-8"))
