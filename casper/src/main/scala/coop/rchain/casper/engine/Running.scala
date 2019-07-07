@@ -38,6 +38,8 @@ import scala.util.Try
   **/
 object Running {
 
+  def noop[F[_]: Applicative]: F[Unit] = ().pure[F]
+
   /** TODO
     * - check casper if block exists, request only if does not exit
     * - check if was requested already
@@ -56,16 +58,19 @@ object Running {
   def handleHasBlock[F[_]: Monad: RPConfAsk: TransportLayer](peer: PeerNode, hb: HasBlock)(
       casperContains: BlockHash => F[Boolean]
   ): F[Unit] =
-    for {
-      conf <- RPConfAsk[F].ask
-      msg = packet(
-        conf.local,
-        conf.networkId,
-        transport.BlockRequest,
-        BlockRequest(hb.hash).toByteString
-      )
-      _ <- TransportLayer[F].send(peer, msg)
-    } yield ()
+    casperContains(hb.hash).ifM(
+      noop[F],
+      for {
+        conf <- RPConfAsk[F].ask
+        msg = packet(
+          conf.local,
+          conf.networkId,
+          transport.BlockRequest,
+          BlockRequest(hb.hash).toByteString
+        )
+        _ <- TransportLayer[F].send(peer, msg)
+      } yield ()
+    )
 }
 
 class Running[F[_]: RPConfAsk: BlockStore: Monad: ConnectionsCell: TransportLayer: Log: Time](
