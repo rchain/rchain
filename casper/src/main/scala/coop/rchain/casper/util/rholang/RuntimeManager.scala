@@ -60,6 +60,7 @@ trait RuntimeManager[F[_]] {
       channels: Seq[Par]
   ): F[Seq[(Seq[BindPattern], Par)]]
   def emptyStateHash: StateHash
+  def withRuntimeLock[A](f: Runtime[F] => F[A]): F[A]
 }
 
 class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span] private[rholang] (
@@ -194,7 +195,7 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span] private[rholang] (
        # }
        """.stripMargin('#')
 
-  private def withRuntimeLock[A](f: Runtime[F] => F[A]): F[A] =
+  def withRuntimeLock[A](f: Runtime[F] => F[A]): F[A] =
     Sync[F].bracket(runtimeContainer.take)(f)(runtimeContainer.put)
 
   private def withResetRuntimeLock[R](hash: StateHash)(block: Runtime[F] => F[R]): F[R] =
