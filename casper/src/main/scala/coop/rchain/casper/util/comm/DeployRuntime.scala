@@ -30,8 +30,10 @@ import coop.rchain.shared.ThrowableOps._
 
 object DeployRuntime {
 
-  def propose[F[_]: Monad: Sync: ProposeService](): F[Unit] =
-    gracefulExit(ProposeService[F].propose().map(r => r.map(rs => s"Response: $rs")))
+  def propose[F[_]: Monad: Sync: ProposeService](printUnmatchedSends: Boolean): F[Unit] =
+    gracefulExit(
+      ProposeService[F].propose(printUnmatchedSends).map(r => r.map(rs => s"Response: $rs"))
+    )
 
   def getBlock[F[_]: Monad: Sync: DeployService](hash: String): F[Unit] =
     gracefulExit(DeployService[F].getBlock(BlockQuery(hash)))

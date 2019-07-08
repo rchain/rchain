@@ -512,6 +512,8 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
     descr(
       "Force Casper (on an existing running node) to propose a block based on its accumulated deploys."
     )
+
+    val printUnmatchedSends = opt[Boolean](required = false)
   }
   addSubcommand(propose)
 

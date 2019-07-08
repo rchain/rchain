@@ -214,7 +214,7 @@ object Configuration {
           location()
         )
       case Some(options.findDeploy) => FindDeploy(options.findDeploy.deployId())
-      case Some(options.propose)    => Propose
+      case Some(options.propose)    => Propose(options.propose.printUnmatchedSends())
       case Some(options.showBlock)  => ShowBlock(options.showBlock.hash())
       case Some(options.showBlocks) =>
         import options.showBlocks._

@@ -121,10 +121,10 @@ object Main {
                 location
               )
         } yield ()
-      case FindDeploy(deployId) => DeployRuntime.findDeploy[Task](deployId)
-      case Propose              => DeployRuntime.propose[Task]()
-      case ShowBlock(hash)      => DeployRuntime.getBlock[Task](hash)
-      case ShowBlocks(depth)    => DeployRuntime.getBlocks[Task](depth)
+      case FindDeploy(deployId)         => DeployRuntime.findDeploy[Task](deployId)
+      case Propose(printUnmatchedSends) => DeployRuntime.propose[Task](printUnmatchedSends)
+      case ShowBlock(hash)              => DeployRuntime.getBlock[Task](hash)
+      case ShowBlocks(depth)            => DeployRuntime.getBlocks[Task](depth)
       case VisualizeDag(depth, showJustificationLines) =>
         DeployRuntime.visualizeDag[Task](depth, showJustificationLines)
       case MachineVerifiableDag              => DeployRuntime.machineVerifiableDag[Task]

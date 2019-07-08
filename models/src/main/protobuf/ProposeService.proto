@@ -13,5 +13,9 @@ option (scalapb.options) = {
 };
 
 service ProposeService {
-  rpc propose(google.protobuf.Empty) returns (Either) {}
+  rpc propose(PrintUnmatchedSendsQuery) returns (Either) {}
+}
+
+message PrintUnmatchedSendsQuery {
+  bool printUnmatchedSends = 1;
 }
