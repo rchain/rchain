@@ -58,8 +58,9 @@ object EffectsTestInstances {
       RPConf(local, networkId, Some(local), defaultTimeout, 20, clearConnections)
     )
 
+  case class Request(peer: PeerNode, msg: Protocol)
+
   class TransportLayerStub[F[_]: Sync: Applicative] extends TransportLayer[F] {
-    case class Request(peer: PeerNode, msg: Protocol)
     type Responses = PeerNode => Protocol => CommErr[Unit]
     var reqresp: Option[Responses] = None
     var requests: List[Request]    = List.empty[Request]

@@ -28,7 +28,7 @@ package object protocol {
       transport.ApprovedBlockRequest,
       ApprovedBlockRequest.parseFrom
     )
-  private def packetToBlockRequest(msg: Packet): Option[BlockRequest] =
+  def packetToBlockRequest(msg: Packet): Option[BlockRequest] =
     convert[BlockRequest](msg, transport.BlockRequest, BlockRequest.parseFrom)
   private def packetToHasBlockRequest(msg: Packet): Option[HasBlockRequest] =
     convert[HasBlockRequest](msg, transport.HasBlockRequest, HasBlockRequest.parseFrom)
