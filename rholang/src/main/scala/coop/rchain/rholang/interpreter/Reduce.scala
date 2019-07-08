@@ -200,7 +200,7 @@ class DebruijnInterpreter[M[_], F[_]](
       EvalJob[Match](par.matches, evalExplicit),
       EvalJob[Bundle](par.bundles, evalExplicit),
       EvalJob(filteredExprs)
-    )
+    ).filter(_.size > 0)
 
     val starts = jobs.map(_.size).scanLeft(0)(_ + _).toVector
 
