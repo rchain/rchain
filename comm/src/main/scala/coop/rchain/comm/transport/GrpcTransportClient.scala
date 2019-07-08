@@ -116,7 +116,7 @@ class GrpcTransportClient(
     stream(Seq(peer), blob)
 
   def stream(peers: Seq[PeerNode], blob: Blob): Task[Unit] =
-    streamObservable.stream(peers.toList, blob) >> log.info(s"stream to $peers blob")
+    streamObservable.stream(peers, blob)
 
   private def streamBlobFile(
       path: Path,
