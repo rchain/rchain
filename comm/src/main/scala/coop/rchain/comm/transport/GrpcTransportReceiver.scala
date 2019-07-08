@@ -54,7 +54,7 @@ object GrpcTransportReceiver {
                       .delay(tellBuffer.pushNext(Send(protocol)))
                       .ifM(
                         metrics.incrementCounter("enqueued.messages") >> Task
-                          .delay(noResponse(src)),
+                          .delay(ack(src)),
                         metrics.incrementCounter("dropped.messages") >> Task
                           .delay(internalServerError("message dropped"))
                       )
@@ -91,7 +91,7 @@ object GrpcTransportReceiver {
                       metrics.incrementCounter("dropped.packets"),
                       msg.path.deleteSingleFile[Task]
                     ).sequence
-                  ) >> rPConfAsk.reader(c => noResponse(c.local))
+                  ) >> rPConfAsk.reader(c => ack(c.local))
           }
         }
 
@@ -102,9 +102,9 @@ object GrpcTransportReceiver {
               .InternalServerError(InternalServerError(ProtocolHelper.toProtocolBytes(msg)))
           )
 
-        private def noResponse(src: PeerNode): TLResponse =
+        private def ack(src: PeerNode): TLResponse =
           TLResponse(
-            TLResponse.Payload.NoResponse(NoResponse(Some(ProtocolHelper.header(src, networkId))))
+            TLResponse.Payload.Ack(Ack(Some(ProtocolHelper.header(src, networkId))))
           )
       }
 
