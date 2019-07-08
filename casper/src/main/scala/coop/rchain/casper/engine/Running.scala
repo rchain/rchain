@@ -24,7 +24,7 @@ import coop.rchain.comm.transport.{Blob, TransportLayer}
 import coop.rchain.comm.{transport, PeerNode}
 import coop.rchain.metrics.Metrics
 import coop.rchain.models.Validator.Validator
-import coop.rchain.shared.{Log, LogSource, Time}
+import coop.rchain.shared.{Cell, Log, LogSource, Time}
 import monix.eval.Task
 import monix.execution.Scheduler
 import coop.rchain.models.BlockHash.BlockHash
@@ -38,14 +38,18 @@ import scala.util.Try
   **/
 object Running {
 
+  final case class Requested()
+  type RequestedBlocks[F[_]] = Cell[F, Map[BlockHash, Requested]]
+  object RequestedBlocks {
+    def apply[F[_]: RequestedBlocks]: RequestedBlocks[F] = implicitly[RequestedBlocks[F]]
+  }
+
   def noop[F[_]: Applicative]: F[Unit] = ().pure[F]
 
   /** TODO
-    * - check casper if block exists, request only if does not exit
     * - check if was requested already
     *    - if requested for same peer, ignore
          - if requested for different peer, store this peer on waiting list (remove duplicates or use set)
-         - if it was not requested, request and store time of the action
     * - periodically check the lists of requests and checks if we waited to long
     *    - if waited to long and there is at least onee peer on waiting list:
     *        - request the block from that peer from waiting list
@@ -55,7 +59,10 @@ object Running {
     *    - if the block was added to casper - remove its entry in the requests list
     *    - if the block was not added, keep the list
     */
-  def handleHasBlock[F[_]: Monad: RPConfAsk: TransportLayer](peer: PeerNode, hb: HasBlock)(
+  def handleHasBlock[F[_]: Monad: RPConfAsk: RequestedBlocks: TransportLayer](
+      peer: PeerNode,
+      hb: HasBlock
+  )(
       casperContains: BlockHash => F[Boolean]
   ): F[Unit] =
     casperContains(hb.hash).ifM(
@@ -69,11 +76,12 @@ object Running {
           BlockRequest(hb.hash).toByteString
         )
         _ <- TransportLayer[F].send(peer, msg)
+        _ <- RequestedBlocks[F].modify(_ + (hb.hash -> Requested()))
       } yield ()
     )
 }
 
-class Running[F[_]: RPConfAsk: BlockStore: Monad: ConnectionsCell: TransportLayer: Log: Time](
+class Running[F[_]: RPConfAsk: BlockStore: Monad: ConnectionsCell: TransportLayer: Log: Time: Running.RequestedBlocks](
     casper: MultiParentCasper[F],
     approvedBlock: ApprovedBlock,
     theInit: F[Unit]

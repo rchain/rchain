@@ -25,7 +25,7 @@ import com.google.protobuf.ByteString
   * and will wait for the [[ApprovedBlock]] message to arrive. Until then  it will respond with
   * `F[None]` to all other message types.
     **/
-class Initializing[F[_]: Sync: Metrics: Span: Concurrent: ConnectionsCell: BlockStore: TransportLayer: Log: EventLog: Time: SafetyOracle: LastFinalizedBlockCalculator: RPConfAsk: LastApprovedBlock: BlockDagStorage: MultiParentCasperRef: EngineCell](
+class Initializing[F[_]: Sync: Metrics: Span: Concurrent: ConnectionsCell: BlockStore: TransportLayer: Log: EventLog: Time: SafetyOracle: LastFinalizedBlockCalculator: RPConfAsk: LastApprovedBlock: BlockDagStorage: MultiParentCasperRef: EngineCell: Running.RequestedBlocks](
     runtimeManager: RuntimeManager[F],
     shardId: String,
     validatorId: Option[ValidatorIdentity],

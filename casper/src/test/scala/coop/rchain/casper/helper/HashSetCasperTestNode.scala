@@ -11,6 +11,7 @@ import coop.rchain.casper.MultiParentCasper.ignoreDoppelgangerCheck
 import coop.rchain.casper._
 import coop.rchain.casper.engine.EngineCell._
 import coop.rchain.casper.engine._
+import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.casper.helper.BlockDagStorageTestFixture.mapSize
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.GenesisBuilder.GenesisContext
@@ -88,7 +89,8 @@ class HashSetCasperTestNode[F[_]](
   )
 
   implicit val multiparentCasperRef = MultiParentCasperRef.unsafe[F](Some(casperEff))
-
+  implicit val currentRequests: Running.RequestedBlocks[F] =
+    Cell.unsafe[F, Map[BlockHash, Running.Requested]](Map.empty[BlockHash, Running.Requested])
   val engine                             = new Running(casperEff, approvedBlock, ().pure[F])
   implicit val engineCell: EngineCell[F] = Cell.unsafe[F, Engine[F]](engine)
   implicit val packetHandlerEff          = CasperPacketHandler[F]

@@ -27,6 +27,7 @@ import coop.rchain.comm.rp.Connect.{ConnectionsCell, RPConfAsk, RPConfState}
 import coop.rchain.comm.transport._
 import coop.rchain.grpc.Server
 import coop.rchain.metrics.{Metrics, Span}
+import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.node.configuration.Configuration
 import coop.rchain.node.diagnostics._
 import coop.rchain.p2p.effects._
@@ -497,9 +498,10 @@ class NodeRuntime private[node] (
       implicit val sp: Span[Task]   = span
       RuntimeManager.fromRuntime[Task](casperRuntime)
     }
-    engineCell   <- EngineCell.init[Task]
-    envVars      = EnvVars.envVars[Task]
-    raiseIOError = IOError.raiseIOErrorThroughSync[Task]
+    engineCell      <- EngineCell.init[Task]
+    envVars         = EnvVars.envVars[Task]
+    raiseIOError    = IOError.raiseIOErrorThroughSync[Task]
+    requestedBlocks <- Cell.mvarCell[Task, Map[BlockHash, Running.Requested]](Map.empty)
     casperInit = new CasperInit[Task](
       conf.casper,
       runtimeManager,
@@ -526,6 +528,7 @@ class NodeRuntime private[node] (
           engineCell,
           envVars,
           raiseIOError,
+          requestedBlocks,
           scheduler
         )
     packetHandler = {

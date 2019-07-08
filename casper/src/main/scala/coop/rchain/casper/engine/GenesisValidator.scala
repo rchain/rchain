@@ -19,7 +19,7 @@ import coop.rchain.shared._
 
 import com.google.protobuf.ByteString
 
-class GenesisValidator[F[_]: Sync: Metrics: Span: Concurrent: ConnectionsCell: TransportLayer: Log: EventLog: Time: SafetyOracle: LastFinalizedBlockCalculator: RPConfAsk: BlockStore: LastApprovedBlock: BlockDagStorage: EngineCell: MultiParentCasperRef](
+class GenesisValidator[F[_]: Sync: Metrics: Span: Concurrent: ConnectionsCell: TransportLayer: Log: EventLog: Time: SafetyOracle: LastFinalizedBlockCalculator: RPConfAsk: BlockStore: LastApprovedBlock: BlockDagStorage: EngineCell: MultiParentCasperRef: Running.RequestedBlocks](
     rm: RuntimeManager[F],
     validatorId: ValidatorIdentity,
     shardId: String,
