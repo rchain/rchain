@@ -57,13 +57,19 @@ new  PoS,
             // activeValidators : List[PublicKey] - the active validators
             // withdrawers : Map[PublicKey, Int] - the validators willing to withdraw and the blocknumber for their withdrawal
             // allBonds : Map[PublickKey, Int] - each validator stake
-            stateCh!(({}, {}, initialActive, {}, $$initialBonds$$)) |
+            stateCh!({
+              "pendingRewards":{},
+              "committedRewards":{},
+              "activeValidators":initialActive,
+              "withdrawers":{},
+              "allBonds":$$initialBonds$$
+            }) |
 
             contract PoS (@"getBonds", returnCh) = {
               new tmpCh in {
                 getMVar!(*stateCh, *tmpCh) |
-                for (@(_, _, _, _, allBonds) <- tmpCh) {
-                  returnCh!(allBonds)
+                for (@state <- tmpCh) {
+                  returnCh!(state.get("allBonds"))
                 }
               }
             } |
@@ -75,8 +81,8 @@ new  PoS,
             contract PoS (@"getRewards", returnCh) = {
               new tmpCh in {
                 getMVar!(*stateCh, *tmpCh) |
-                for (@(_, rewards, _, _, _) <- tmpCh) {
-                  returnCh!(rewards)
+                for (@state <- tmpCh) {
+                  returnCh!(state.get("committedRewards"))
                 }
               }
             } |
@@ -86,27 +92,29 @@ new  PoS,
                 runMVar!(*stateCh, *processCh, *returnCh) |
 
                 getUser!(*userCh) |
-                for(@(pending, rewards, activeValidators, withdrawers, allBonds), resultCh <- processCh;
+                for(@state, resultCh <- processCh;
                     @userPk <- userCh) {
-                  if (allBonds.contains(userPk)) {
-                    resultCh!((pending, rewards, activeValidators, withdrawers, allBonds), (false, "Public key is already bonded."))
+                  if (state.get("allBonds").contains(userPk)) {
+                    resultCh!(state, (false, "Public key is already bonded."))
                   } else if (amount < $$minimumBond$$) {
-                    resultCh!((pending, rewards, activeValidators, withdrawers, allBonds), (false, "Bond is less than minimum!"))
+                    resultCh!(state, (false, "Bond is less than minimum!"))
                   } else if (amount > $$maximumBond$$) {
-                    resultCh!((pending, rewards, activeValidators, withdrawers, allBonds), (false, "Bond is greater than maximum!"))
+                    resultCh!(state, (false, "Bond is greater than maximum!"))
                   } else {
                     deposit!(userPk, amount, *depositCh) |
                     for(@depositResult <- depositCh) {
                       match depositResult {
                         (true, _) => {
                           resultCh!(
-                            (pending, rewards, activeValidators, withdrawers, allBonds.set(userPk,amount)),
+                            state.set(
+                              "allBonds",
+                              state.get("allBonds").set(userPk,amount)),
                             depositResult
                           )
                         }
 
                         (false, errorMsg) => {
-                          resultCh!((pending, rewards, activeValidators, withdrawers, allBonds), (false, "Bond deposit failed: " ++ errorMsg))
+                          resultCh!(state, (false, "Bond deposit failed: " ++ errorMsg))
                         }
                       }
                     }
@@ -124,13 +132,16 @@ new  PoS,
 
                 getBlockData!(*blockDataCh) |
                 getUser!(*userCh) |
-                for(@(pending, rewards, activeValidators, withdrawers, allBonds), resultCh <- processCh;
+                for(@state, resultCh <- processCh;
                     @userPk <- userCh;
                     _, @blockNumber <- blockDataCh) {
-                  if (allBonds.contains(userPk)) {
-                    resultCh!((pending, rewards, activeValidators, withdrawers.set(userPk, blockNumber), allBonds), (true, Nil))
+                  if (state.get("allBonds").contains(userPk)) {
+                    resultCh!(
+                      state.set("withdrawers",
+                                state.get("withdrawers").set(userPk, blockNumber)),
+                      (true, Nil))
                   } else {
-                    resultCh!((pending, rewards, activeValidators, withdrawers, allBonds), (false, "User is not bonded"))
+                    resultCh!(state, (false, "User is not bonded"))
                   }
                 }
               }
@@ -142,15 +153,20 @@ new  PoS,
                   newPendingCh in {
                 getUser!(*userCh) |
                 runMVar!(*stateCh, *processPayCh, *returnCh) |
-                for(@(pending, rewards, activeValidators, withdrawers, allBonds), payResultCh <- processPayCh;
+                for(@state, payResultCh <- processPayCh;
                     @userPk <- userCh) {
                   deposit!(userPk, amount, *depositCh) |
 
-                  distributeRewards!(amount, activeValidators, allBonds, pending, *newPendingCh) |
+                  distributeRewards!(
+                    amount,
+                    state.get("activeValidators"),
+                    state.get("allBonds"),
+                    state.get("pendingRewards"),
+                    *newPendingCh) |
 
                   for(@depositResult <- depositCh;
                       @newPending <- newPendingCh) {
-                    payResultCh!((newPending, rewards, activeValidators, withdrawers, allBonds), depositResult)
+                    payResultCh!(state.set("pendingRewards", newPending), depositResult)
                   }
                 }
               }
@@ -165,17 +181,18 @@ new  PoS,
                 runMVar!(*stateCh, *doSlashCh, *returnCh) |
                 for (@invalidBlocks <- invalidBlocksCh;
                      @userPk <- userCh;
-                     @(pending, rewards, activeValidators, withdrawers, allBonds), slashResultCh <- doSlashCh) {
+                     @state, slashResultCh <- doSlashCh) {
                   new toBeSlashed in {
                     toBeSlashed!(invalidBlocks.getOrElse(blockHash, userPk)) |
                     for (@validator <- toBeSlashed) {
                       // TODO: Transfer to coop wallet instead of just simply setting bonds to 0
                       slashResultCh!(
-                        (pending.set(validator, 0),
-                         rewards.set(validator, 0),
-                         activeValidators,
-                         withdrawers,
-                         allBonds.set(validator, 0)),
+                        state.set("pendingRewards",
+                                  state.get("pendingRewards").set(validator, 0))
+                             .set("committedRewards",
+                                  state.get("committedRewards").set(validator, 0))
+                             .set("allBonds",
+                                  state.get("allBonds").set(validator, 0)),
                         true)
                     }
                   }
@@ -197,19 +214,39 @@ new  PoS,
 
                   runMVar!(*stateCh, *mvarProcessCh, *ackCh) |
                   for(_, @blockNumber <- blockDataCh;
-                      @(pendingRewards, rewards, activeValidators, withdrawers, allBonds), mvarResultCh <- mvarProcessCh) {
+                      @state, mvarResultCh <- mvarProcessCh) {
+                    changeEpoch!(
+                      blockNumber,
+                      state.get("allBonds"),
+                      state.get("activeValidators"),
+                      state.get("withdrawers"),
+                      *newValidatorsCh)|
 
-                    changeEpoch!(blockNumber, allBonds, activeValidators, withdrawers, *newValidatorsCh)|
+                    removeQuarantinedWithdrawers!(
+                      blockNumber,
+                      state.get("allBonds"),
+                      state.get("withdrawers"),
+                      *newWithdrawersCh,
+                      *newBondsCh) |
 
-                    removeQuarantinedWithdrawers!(blockNumber, allBonds, withdrawers, *newWithdrawersCh, *newBondsCh) |
-
-                    commitRewards!(pendingRewards, rewards, *newRewardsCh) |
+                    commitRewards!(
+                      state.get("pendingRewards"),
+                      state.get("committedRewards"),
+                      *newRewardsCh) |
 
                     for (@newRewards <- newRewardsCh;
                          @newValidators <- newValidatorsCh;
                          @newWithdrawers <- newWithdrawersCh ;
                          @newBonds <- newBondsCh) {
-                      mvarResultCh!(({}, newRewards, newValidators, newWithdrawers, newBonds), Nil)
+                      mvarResultCh!(
+                        {
+                          "pendingRewards":{},
+                          "committedRewards":newRewards,
+                          "activeValidators":newValidators,
+                          "withdrawers":newWithdrawers,
+                          "allBonds":newBonds
+                        },
+                        Nil)
                     }
                   }
                 } |
