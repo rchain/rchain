@@ -25,6 +25,7 @@ import coop.rchain.comm.{transport, PeerNode}
 import coop.rchain.metrics.Metrics
 import coop.rchain.models.Validator.Validator
 import coop.rchain.shared.{Cell, Log, LogSource, Time}
+import coop.rchain.catscontrib.Catscontrib, Catscontrib._
 import monix.eval.Task
 import monix.execution.Scheduler
 import coop.rchain.models.BlockHash.BlockHash
@@ -38,7 +39,7 @@ import scala.util.Try
   **/
 object Running {
 
-  final case class Requested()
+  final case class Requested(peers: Set[PeerNode])
   type RequestedBlocks[F[_]] = Cell[F, Map[BlockHash, Requested]]
   object RequestedBlocks {
     def apply[F[_]: RequestedBlocks]: RequestedBlocks[F] = implicitly[RequestedBlocks[F]]
@@ -48,7 +49,6 @@ object Running {
 
   /** TODO
     * - check if was requested already
-    *    - if requested for same peer, ignore
          - if requested for different peer, store this peer on waiting list (remove duplicates or use set)
     * - periodically check the lists of requests and checks if we waited to long
     *    - if waited to long and there is at least onee peer on waiting list:
@@ -65,20 +65,22 @@ object Running {
   )(
       casperContains: BlockHash => F[Boolean]
   ): F[Unit] =
-    casperContains(hb.hash).ifM(
-      noop[F],
-      for {
-        conf <- RPConfAsk[F].ask
-        msg = packet(
-          conf.local,
-          conf.networkId,
-          transport.BlockRequest,
-          BlockRequest(hb.hash).toByteString
-        )
-        _ <- TransportLayer[F].send(peer, msg)
-        _ <- RequestedBlocks[F].modify(_ + (hb.hash -> Requested()))
-      } yield ()
-    )
+    casperContains(hb.hash)
+      .||^(RequestedBlocks[F].read.map(_.contains(hb.hash)))
+      .ifM(
+        noop[F],
+        for {
+          conf <- RPConfAsk[F].ask
+          msg = packet(
+            conf.local,
+            conf.networkId,
+            transport.BlockRequest,
+            BlockRequest(hb.hash).toByteString
+          )
+          _ <- TransportLayer[F].send(peer, msg)
+          _ <- RequestedBlocks[F].modify(_ + (hb.hash -> Requested(peers = Set(peer))))
+        } yield ()
+      )
 }
 
 class Running[F[_]: RPConfAsk: BlockStore: Monad: ConnectionsCell: TransportLayer: Log: Time: Running.RequestedBlocks](
