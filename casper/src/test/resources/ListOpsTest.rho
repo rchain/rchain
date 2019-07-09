@@ -3,7 +3,6 @@
 new
   rl(`rho:registry:lookup`), ListOpsCh, RhoSpecCh,
   greaterThan1,
-  setup,
   test_sum,
   test_forall, test_forall_shortcircuit,
   test_exists, test_exists_shortcircuit,
@@ -11,7 +10,7 @@ new
 in {
   rl!(`rho:id:zphjgsfy13h1k85isc8rtwtgt3t9zzt5pjd5ihykfmyapfc4wt3x5h`, *RhoSpecCh) |
   for(@(_, RhoSpec) <- RhoSpecCh) {
-    @RhoSpec!("testSuite", *setup,
+    @RhoSpec!("testSuite",
       [
         ("ListOps.sum works", *test_sum),
         ("ListOps.forall works", *test_forall),
@@ -23,10 +22,6 @@ in {
   } |
   rl!(`rho:lang:listOps`, *ListOpsCh) |
   for(@(_, ListOps) <- ListOpsCh) {
-
-    contract setup(_, returnCh) = {
-      returnCh!([])
-    } |
 
     contract test_sum(rhoSpec, _, ackCh) = {
       new ch0, ch1 in {
