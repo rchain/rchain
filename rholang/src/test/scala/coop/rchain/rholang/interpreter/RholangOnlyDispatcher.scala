@@ -10,7 +10,7 @@ import coop.rchain.models.TaggedContinuation.TaggedCont.{Empty, ParBody, ScalaBo
 import coop.rchain.models._
 import coop.rchain.rholang.interpreter.Runtime.RhoISpace
 import coop.rchain.rholang.interpreter.accounting._
-import coop.rchain.rholang.interpreter.storage.Tuplespace
+import coop.rchain.rholang.interpreter.storage.TuplespaceImpl
 import coop.rchain.rholang.interpreter.storage.implicits._
 import coop.rchain.rspace.pure.PureRSpace
 
@@ -30,7 +30,7 @@ object RholangOnlyDispatcher {
     lazy val dispatcher: Dispatch[M, ListParWithRandom, TaggedContinuation] =
       new RholangOnlyDispatcher
 
-    lazy val tuplespaceAlg = Tuplespace.rspaceTuplespace(pureSpace, dispatcher)
+    lazy val tuplespaceAlg = new TuplespaceImpl(pureSpace, dispatcher)
 
     implicit lazy val reducer: Reduce[M] =
       new DebruijnInterpreter[M, F](
