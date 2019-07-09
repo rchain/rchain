@@ -58,30 +58,39 @@ class MultiParentCasperMergeSpec extends FlatSpec with Matchers with Inspectors 
 
   it should "handle multi-parent blocks correctly when they operate on stdout" ignore effectTest {
     def echoContract(no: Int) = s"""new stdout(`rho:io:stdout`) in { stdout!("Contract $no") }"""
-    testConflictOnSimpleDiamondDag(echoContract)
+    checkNoConflicts("Nil", echoContract(1), echoContract(2))
   }
 
   it should "handle multi-parent blocks correctly when they operate on volatile produce/consume pairs" in effectTest {
-    testConflictOnSimpleDiamondDag((no: Int) => s"""@"hi"!($no) | for (_ <- @"hi") { Nil }""")
+    checkNoConflicts(
+      "Nil",
+      """@"hi"!(1) | for (_ <- @"hi") { Nil }""",
+      """@"hi"!(2) | for (_ <- @"hi") { Nil }"""
+    )
   }
 
-  private def testConflictOnSimpleDiamondDag(contract: Int => String): Effect[Unit] = {
+  private def checkNoConflicts(base: String, b1: String, b2: String): Effect[Unit] = {
     val time = System.currentTimeMillis()
     HashSetCasperTestNode.networkEff(genesis, networkSize = 2).use { nodes =>
       val deploys = Vector(
-        ConstructDeploy.sourceDeploy(contract(1), time + 1, accounting.MAX_VALUE),
-        ConstructDeploy.sourceDeploy(contract(2), time + 2, accounting.MAX_VALUE)
+        ConstructDeploy.sourceDeploy(base, time + 1, accounting.MAX_VALUE),
+        ConstructDeploy.sourceDeploy(b1, time + 2, accounting.MAX_VALUE),
+        ConstructDeploy.sourceDeploy(b2, time + 3, accounting.MAX_VALUE),
+        ConstructDeploy.sourceDeploy("Nil", time + 4, accounting.MAX_VALUE)
       )
       for {
-        block0 <- nodes(0).addBlock(deploys(0))
-        block1 <- nodes(1).addBlock(deploys(1))
-        _      <- nodes(0).receive()
-        _      <- nodes(1).receive()
-        _      <- nodes(0).receive()
-        _      <- nodes(1).receive()
+        _ <- nodes(0).addBlock(deploys(0))
+        _ <- nodes(0).receive()
+        _ <- nodes(1).receive()
+        _ <- nodes(0).addBlock(deploys(1))
+        _ <- nodes(1).addBlock(deploys(2))
+        _ <- nodes(0).receive()
+        _ <- nodes(1).receive()
+        _ <- nodes(0).receive()
+        _ <- nodes(1).receive()
 
         //multiparent block joining block0 and block1 since they do not conflict
-        multiparentBlock <- nodes(0).addBlock(deploys(1))
+        multiparentBlock <- nodes(0).addBlock(deploys(3))
         _                <- nodes(1).receive()
 
         _ = nodes(0).logEff.warns.isEmpty shouldBe true
