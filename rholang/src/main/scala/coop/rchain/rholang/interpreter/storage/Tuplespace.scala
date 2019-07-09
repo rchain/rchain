@@ -44,16 +44,12 @@ object Tuplespace {
       ): F[Unit] =
         res match {
           case Some((continuation, dataList, updatedSequenceNumber)) =>
-            if (persistent) {
-              Parallel
-                .parProduct(
-                  dispatcher.dispatch(continuation, dataList, updatedSequenceNumber),
-                  produce(channel, data, persistent, sequenceNumber)
-                )
-                .as(())
-            } else {
-              dispatcher.dispatch(continuation, dataList, updatedSequenceNumber)
-            }
+            if (persistent)
+              List(
+                dispatcher.dispatch(continuation, dataList, updatedSequenceNumber),
+                produce(channel, data, persistent, sequenceNumber)
+              ).parSequence_
+            else dispatcher.dispatch(continuation, dataList, updatedSequenceNumber)
           case None => F.unit
         }
 
@@ -78,16 +74,12 @@ object Tuplespace {
           ): F[Unit] =
             res match {
               case Some((continuation, dataList, updatedSequenceNumber)) =>
-                if (persistent) {
-                  Parallel
-                    .parProduct(
-                      dispatcher.dispatch(continuation, dataList, updatedSequenceNumber),
-                      consume(binds, body, persistent, sequenceNumber)
-                    )
-                    .as(())
-                } else {
-                  dispatcher.dispatch(continuation, dataList, updatedSequenceNumber)
-                }
+                if (persistent)
+                  List(
+                    dispatcher.dispatch(continuation, dataList, updatedSequenceNumber),
+                    consume(binds, body, persistent, sequenceNumber)
+                  ).parSequence_
+                else dispatcher.dispatch(continuation, dataList, updatedSequenceNumber)
               case None => F.unit
             }
 

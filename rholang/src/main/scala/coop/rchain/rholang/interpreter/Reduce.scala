@@ -115,7 +115,7 @@ class DebruijnInterpreter[M[_], F[_]](
             env: Env[Par],
             sequenceNumber: Int
         ): M[List[Unit]] =
-          Parallel.parTraverse(input.zipWithIndex.toList) {
+          input.zipWithIndex.toList.parTraverse {
             case (term, idx) =>
               handler(term)(env, mkRand(idx), sequenceNumber)
           }
@@ -204,16 +204,13 @@ class DebruijnInterpreter[M[_], F[_]](
 
     val starts = jobs.map(_.size).scanLeft(0)(_ + _).toVector
 
-    jobs.zipWithIndex
-      .map {
-        case (job, jobIdx) => {
-          def mkRand(termIdx: Int): Blake2b512Random =
-            split(starts.last, starts(jobIdx), rand)(termIdx)
-          job.run(mkRand)(env, sequenceNumber)
-        }
+    jobs.zipWithIndex.parTraverse_ {
+      case (job, jobIdx) => {
+        def mkRand(termIdx: Int): Blake2b512Random =
+          split(starts.last, starts(jobIdx), rand)(termIdx)
+        job.run(mkRand)(env, sequenceNumber)
       }
-      .parSequence
-      .as(())
+    }
   }
 
   override def inj(
