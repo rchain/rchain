@@ -39,19 +39,16 @@ class TuplespaceImpl[F[_], M[_]](
       sequenceNumber: Int
   ): F[Unit] = {
     // TODO: Handle the environment in the store
-    def go(
-        res: Option[(TaggedContinuation, Seq[ListParWithRandom], Int)]
-    ): F[Unit] =
-      res match {
-        case Some((continuation, dataList, updatedSequenceNumber)) =>
-          if (persistent)
-            List(
-              dispatcher.dispatch(continuation, dataList, updatedSequenceNumber),
-              produce(channel, data, persistent, sequenceNumber)
-            ).parSequence_
-          else dispatcher.dispatch(continuation, dataList, updatedSequenceNumber)
-        case None => F.unit
-      }
+    def go: Option[(TaggedContinuation, Seq[ListParWithRandom], Int)] => F[Unit] = {
+      case Some((continuation, dataList, updatedSequenceNumber)) =>
+        if (persistent)
+          List(
+            dispatcher.dispatch(continuation, dataList, updatedSequenceNumber),
+            produce(channel, data, persistent, sequenceNumber)
+          ).parSequence_
+        else dispatcher.dispatch(continuation, dataList, updatedSequenceNumber)
+      case None => F.unit
+    }
     pureRSpace.produce(channel, data, persist = persistent, sequenceNumber) >>= (go(_))
   }
 
@@ -63,19 +60,16 @@ class TuplespaceImpl[F[_], M[_]](
   ): F[Unit] = {
     val (patterns: Seq[BindPattern], sources: Seq[Par]) = binds.unzip
 
-    def go(
-        res: Option[(TaggedContinuation, Seq[ListParWithRandom], Int)]
-    ): F[Unit] =
-      res match {
-        case Some((continuation, dataList, updatedSequenceNumber)) =>
-          if (persistent)
-            List(
-              dispatcher.dispatch(continuation, dataList, updatedSequenceNumber),
-              consume(binds, body, persistent, sequenceNumber)
-            ).parSequence_
-          else dispatcher.dispatch(continuation, dataList, updatedSequenceNumber)
-        case None => F.unit
-      }
+    def go: Option[(TaggedContinuation, Seq[ListParWithRandom], Int)] => F[Unit] = {
+      case Some((continuation, dataList, updatedSequenceNumber)) =>
+        if (persistent)
+          List(
+            dispatcher.dispatch(continuation, dataList, updatedSequenceNumber),
+            consume(binds, body, persistent, sequenceNumber)
+          ).parSequence_
+        else dispatcher.dispatch(continuation, dataList, updatedSequenceNumber)
+      case None => F.unit
+    }
 
     pureRSpace.consume(
       sources.toList,
