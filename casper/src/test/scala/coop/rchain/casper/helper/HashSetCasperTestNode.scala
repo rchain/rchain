@@ -32,7 +32,6 @@ import coop.rchain.metrics
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.p2p.EffectsTestInstances._
 import coop.rchain.rholang.interpreter.Runtime
-import coop.rchain.shared.PathOps.RichPath
 import coop.rchain.shared._
 import monix.eval.Task
 import monix.execution.Scheduler
@@ -244,27 +243,19 @@ object HashSetCasperTestNode {
     implicit val metricEff = new Metrics.MetricsNOP[F]
     implicit val spanEff   = NoopSpan[F]()
     for {
-      storageDirectory <- Resource.make[F, Path](
-                           Sync[F].delay {
-                             val dir = Files.createTempDirectory(s"hash-set-casper-test-$name-")
-                             copyDir(storageMatrixPath, dir)
-                           }
-                         )(dir => Sync[F].delay { dir.recursivelyDelete() })
+      paths <- MultiParentCasperTestUtil.copyStorage[F](storageMatrixPath)
 
-      blockStoreDir = storageDirectory.resolve("block-store")
       blockStore <- Resource.make[F, BlockStore[F]](
-                     BlockDagStorageTestFixture.createBlockStorage(blockStoreDir)
+                     BlockDagStorageTestFixture.createBlockStorage(paths.blockStoreDir)
                    )(_.close())
 
-      blockDagDir = storageDirectory.resolve("block-dag-store")
       blockDagStorage <- Resource.make[F, BlockDagStorage[F]](
                           BlockDagFileStorage
-                            .create[F](makeBlockDagFileStorageConfig(blockDagDir))
+                            .create[F](makeBlockDagFileStorageConfig(paths.blockDagDir))
                             .widen
                         )(_.close())
 
-      rspaceDir      = storageDirectory.resolve("rspace")
-      runtimeManager <- createRuntime(rspaceDir, storageSize)
+      runtimeManager <- createRuntime(paths.rspaceDir, storageSize)
 
       node <- Resource.make[F, HashSetCasperTestNode[F]] {
                for {
@@ -279,8 +270,8 @@ object HashSetCasperTestNode {
                    genesis,
                    sk,
                    logicalTime,
-                   blockDagDir,
-                   blockStoreDir,
+                   paths.blockDagDir,
+                   paths.blockStoreDir,
                    blockProcessingLock,
                    "rchain",
                    runtimeManager
@@ -295,13 +286,6 @@ object HashSetCasperTestNode {
                } yield node
              }(_ => ().pure[F])
     } yield node
-  }
-
-  private def copyDir(src: Path, dest: Path): Path = {
-    Files
-      .walk(src)
-      .forEach(source => Files.copy(source, dest.resolve(src.relativize(source)), REPLACE_EXISTING))
-    dest
   }
 
   def makeBlockDagFileStorageConfig(blockDagDir: Path) =
