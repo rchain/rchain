@@ -1,8 +1,6 @@
 package coop.rchain.casper.genesis.contracts
 
-import cats.implicits._
 import coop.rchain.crypto.codec.Base16
-import coop.rchain.crypto.signatures.Secp256k1
 import coop.rchain.rholang.build.CompiledRholangTemplate
 import coop.rchain.rholang.interpreter.NormalizerEnv
 
@@ -15,7 +13,7 @@ final case class ProofOfStake(
     epochLength: Int = 10000
 ) extends CompiledRholangTemplate(
       "PoS.rhox",
-      NormalizerEnv(none, ProofOfStake.pk.some),
+      NormalizerEnv.Empty,
       "minimumBond"  -> minimumBond,
       "maximumBond"  -> maximumBond,
       "initialBonds" -> ProofOfStake.initialBonds(validators),
@@ -29,8 +27,6 @@ final case class ProofOfStake(
 }
 
 object ProofOfStake {
-  val (_, pk) = Secp256k1.newKeyPair
-
   // TODO: Determine how the "intial bonds" map can simulate transferring stake into the PoS contract
   //       when this must be done during genesis, under the authority of the genesisPk, which calls the
   //       linear receive in PoS.rho
