@@ -21,6 +21,8 @@ final case class Validator(pk: PublicKey, stake: Long) extends CompiledRholangSo
        | }
      """.stripMargin
 
-  lazy val term: Par = ParBuilder[Coeval].buildNormalizedTerm(code, NormalizerEnv.Empty).value()
+  val normalizerEnv: NormalizerEnv = NormalizerEnv.Empty
+
+  lazy val term: Par = ParBuilder[Coeval].buildNormalizedTerm(code, normalizerEnv).value()
 
 }

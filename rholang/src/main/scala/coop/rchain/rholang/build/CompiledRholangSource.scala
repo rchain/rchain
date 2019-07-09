@@ -9,23 +9,25 @@ trait CompiledRholangSource {
   val path: String
   val term: Par
   val code: String
+  val normalizerEnv: NormalizerEnv
 }
 
 object CompiledRholangSource {
 
-  def apply(classpath: String): CompiledRholangSource = new CompiledRholangSource {
-    override val path: String = classpath
-    override val code: String = {
-      val fileContent = Source.fromResource(classpath).mkString
+  def apply(classpath: String, env: NormalizerEnv): CompiledRholangSource =
+    new CompiledRholangSource {
+      override val path: String = classpath
+      override val code: String = {
+        val fileContent = Source.fromResource(classpath).mkString
 
-      s"""//Loaded from resource file <<$classpath>>
+        s"""//Loaded from resource file <<$classpath>>
          #$fileContent
          #""".stripMargin('#')
+      }
+      override val term: Par =
+        ParBuilder[Coeval].buildNormalizedTerm(code, env).value()
+      override val normalizerEnv: NormalizerEnv = env
     }
-    override val term: Par =
-      ParBuilder[Coeval].buildNormalizedTerm(code, NormalizerEnv.Empty).value()
-  }
-
 }
 
 /**
@@ -35,8 +37,11 @@ object CompiledRholangSource {
   * @param env a sequence of pairs macro -> value
   * @return
   */
-abstract class CompiledRholangTemplate(classpath: String, env: (String, Any)*)
-    extends CompiledRholangSource {
+abstract class CompiledRholangTemplate(
+    classpath: String,
+    normalizerEnv0: NormalizerEnv,
+    env: (String, Any)*
+) extends CompiledRholangSource {
 
   val originalContent = Source.fromResource(classpath).mkString
 
@@ -50,5 +55,6 @@ abstract class CompiledRholangTemplate(classpath: String, env: (String, Any)*)
         #$finalContent
         #""".stripMargin('#')
 
-  override val term: Par = ParBuilder[Coeval].buildNormalizedTerm(code, NormalizerEnv.Empty).value()
+  override val term: Par                    = ParBuilder[Coeval].buildNormalizedTerm(code, normalizerEnv0).value()
+  override val normalizerEnv: NormalizerEnv = normalizerEnv0
 }

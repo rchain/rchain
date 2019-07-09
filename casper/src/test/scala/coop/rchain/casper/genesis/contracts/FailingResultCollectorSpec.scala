@@ -1,5 +1,6 @@
 import coop.rchain.casper.helper.{RhoAssertEquals, RhoAssertTrue, RhoSpec, RhoTestAssertion}
 import coop.rchain.rholang.build.CompiledRholangSource
+import coop.rchain.rholang.interpreter.NormalizerEnv
 import org.scalatest.{AppendedClues, FlatSpec, Matchers}
 
 import scala.concurrent.duration._
@@ -26,7 +27,11 @@ class FailingResultCollectorSpec extends FlatSpec with AppendedClues with Matche
 
   val result =
     RhoSpec
-      .getResults(CompiledRholangSource("FailingResultCollectorTest.rho"), Seq.empty, 10.seconds)
+      .getResults(
+        CompiledRholangSource("FailingResultCollectorTest.rho", NormalizerEnv.Empty),
+        Seq.empty,
+        10.seconds
+      )
       .runSyncUnsafe(Duration.Inf)
 
   result.assertions

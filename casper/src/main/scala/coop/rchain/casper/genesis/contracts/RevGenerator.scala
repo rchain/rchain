@@ -1,14 +1,19 @@
 package coop.rchain.casper.genesis.contracts
 
+import cats.implicits._
+import coop.rchain.crypto.PublicKey
 import coop.rchain.models.Par
 import coop.rchain.rholang.build.CompiledRholangSource
 import coop.rchain.rholang.interpreter.{NormalizerEnv, ParBuilder}
 import coop.rchain.rholang.interpreter.util.RevAddress
-import coop.rchain.rholang.interpreter.util.codec.Base58
 import monix.eval.Coeval
 
-final case class RevGenerator(genesisAddress: RevAddress, userVaults: Seq[Vault], supply: Long)
-    extends CompiledRholangSource {
+final case class RevGenerator(
+    genesisPk: PublicKey,
+    genesisAddress: RevAddress,
+    userVaults: Seq[Vault],
+    supply: Long
+) extends CompiledRholangSource {
 
   val path: String = "<synthetic in Rev.scala>"
 
@@ -24,8 +29,8 @@ final case class RevGenerator(genesisAddress: RevAddress, userVaults: Seq[Vault]
        #         *genesisVaultCh
        #       )
        #       | for (@(true, genesisVault) <- genesisVaultCh) {
-       #         new genesisAuthKeyCh in {
-       #           @RevVault!("deployerAuthKey", *genesisAuthKeyCh)
+       #         new genesisAuthKeyCh, deployerId(`rho:rchain:deployerId`) in {
+       #           @RevVault!("deployerAuthKey", *deployerId, *genesisAuthKeyCh)
        #           | for (genesisVaultAuthKey <- genesisAuthKeyCh) {
        #             ${concatenate(findOrCreate)} |
        #             ${concatenate(transfer)}
@@ -37,7 +42,11 @@ final case class RevGenerator(genesisAddress: RevAddress, userVaults: Seq[Vault]
        # }
      """.stripMargin('#')
 
-  val term: Par = ParBuilder[Coeval].buildNormalizedTerm(code, NormalizerEnv.Empty).value()
+  val normalizerEnv: NormalizerEnv = NormalizerEnv(deployId = none, deployerPk = genesisPk.some)
+
+  val term: Par = ParBuilder[Coeval]
+    .buildNormalizedTerm(code, normalizerEnv)
+    .value()
 
   private def findOrCreate(userVault: Vault): String =
     s""" 

@@ -7,7 +7,7 @@ import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.metrics.Metrics
 import coop.rchain.rholang.Resources._
 import coop.rchain.rholang.build.CompiledRholangSource
-import coop.rchain.rholang.interpreter.{PrettyPrinter, Runtime}
+import coop.rchain.rholang.interpreter.{NormalizerEnv, PrettyPrinter, Runtime}
 import coop.rchain.rholang.interpreter.Runtime.SystemProcess
 import coop.rchain.shared.Log
 import monix.eval.Task
@@ -49,6 +49,13 @@ object RhoSpec {
           3,
           104L,
           ctx => DeployDataContract.set(ctx)(_, _)
+        ),
+        SystemProcess.Definition[F](
+          "rho:test:deployerId:get",
+          Runtime.byteName(105),
+          3,
+          105L,
+          ctx => DeployerIdContract.get(ctx)(_, _)
         )
       )
     testResultCollectorService
@@ -72,11 +79,15 @@ object RhoSpec {
           _ <- TestUtil.setupRuntime[Task, Task.Par](
                 runtime,
                 TestUtil.defaultGenesisSetup(1),
-                otherLibs
+                otherLibs,
+                testObject.normalizerEnv
               )
           rand = Blake2b512Random(128)
           _ <- TestUtil
-                .eval(testObject.code, runtime)(implicitly, rand.splitShort(1))
+                .eval(testObject.code, runtime, testObject.normalizerEnv)(
+                  implicitly,
+                  rand.splitShort(1)
+                )
                 .timeout(timeout)
 
           result <- testResultCollector.getResult

@@ -120,6 +120,7 @@ object Runtime {
     val GET_BLOCK_DATA: Long               = 23L
     val GET_INVALID_BLOCKS: Long           = 24L
     val REV_ADDRESS: Long                  = 25L
+    val DEPLOYER_ID_OPS: Long              = 26L
   }
 
   def byteName(b: Byte): Par = GPrivate(ByteString.copyFrom(Array[Byte](b)))
@@ -141,6 +142,7 @@ object Runtime {
     val GET_BLOCK_DATA: Par     = byteName(13)
     val GET_INVALID_BLOCKS: Par = byteName(14)
     val REV_ADDRESS: Par        = byteName(15)
+    val DEPLOYER_ID_OPS: Par    = byteName(16)
   }
 
   private def introduceSystemProcesses[F[_]: Sync: _cost](
@@ -265,6 +267,14 @@ object Runtime {
       3,
       BodyRefs.REV_ADDRESS, { ctx =>
         ctx.systemProcesses.validateRevAddress
+      }
+    ),
+    SystemProcess.Definition[F](
+      "rho:rchain:deployerId:ops",
+      FixedChannels.DEPLOYER_ID_OPS,
+      3,
+      BodyRefs.DEPLOYER_ID_OPS, { ctx =>
+        ctx.systemProcesses.deployerIdOps
       }
     )
   )

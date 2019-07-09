@@ -33,6 +33,23 @@ in {
       @MakeMint!(*mintCh) |
       for (mint <- mintCh) {
 
+        contract RevVault(@"deployerAuthKey", deployerId, ret) = {
+
+          new RevAddress(`rho:rev:address`), DeployerIdOps(`rho:rchain:deployerId:ops`), revAddrCh, deployerPubKeyBytesCh in {
+            DeployerIdOps!("pubKeyBytes", *deployerId, *deployerPubKeyBytesCh) |
+            for (@deployerPubKeyBytes <- deployerPubKeyBytesCh) {
+
+              RevAddress!("fromPublicKey", deployerPubKeyBytes, *revAddrCh)|
+              for (@deployerRevAddress <- revAddrCh) {
+
+                @AuthKey!("make", (*_revVault, deployerRevAddress), *ret)
+              }
+            }
+          }
+        } |
+
+        // Deprecated version of `deployerAuthKey`
+        // Please use the version above where a deployer id has to be passed
         contract RevVault(@"deployerAuthKey", ret) = {
 
           new deployerPubKeyBytesCh in {

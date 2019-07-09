@@ -1,12 +1,8 @@
 package coop.rchain.casper.genesis.contracts
 
 import coop.rchain.crypto.codec.Base16
-import coop.rchain.models.Par
-import coop.rchain.rholang.build.{CompiledRholangSource, CompiledRholangTemplate}
-import coop.rchain.rholang.interpreter.ParBuilder
-import monix.eval.Coeval
-
-import scala.io.Source
+import coop.rchain.rholang.build.CompiledRholangTemplate
+import coop.rchain.rholang.interpreter.NormalizerEnv
 
 // TODO: Eliminate validators argument if unnecessary.
 // TODO: eliminate the default for epochLength. Now it is used in order to minimise the impact of adding this parameter
@@ -17,6 +13,7 @@ final case class ProofOfStake(
     epochLength: Int = 10000
 ) extends CompiledRholangTemplate(
       "PoS.rhox",
+      NormalizerEnv.Empty,
       "minimumBond"  -> minimumBond,
       "maximumBond"  -> maximumBond,
       "initialBonds" -> ProofOfStake.initialBonds(validators),
@@ -30,7 +27,6 @@ final case class ProofOfStake(
 }
 
 object ProofOfStake {
-
   // TODO: Determine how the "intial bonds" map can simulate transferring stake into the PoS contract
   //       when this must be done during genesis, under the authority of the genesisPk, which calls the
   //       linear receive in PoS.rho
