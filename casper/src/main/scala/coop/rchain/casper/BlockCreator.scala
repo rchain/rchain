@@ -69,7 +69,7 @@ object BlockCreator {
                                #}
                                #
                             """.stripMargin('#'),
-                              accounting.MAX_VALUE,
+                              phloPrice = 0,
                               sec = privateKey
                             )
                           }
