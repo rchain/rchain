@@ -9,7 +9,7 @@ import coop.rchain.models.TaggedContinuation.TaggedCont.{Empty, ParBody, ScalaBo
 import coop.rchain.models._
 import coop.rchain.rholang.interpreter.Runtime.{RhoISpace, RhoPureSpace}
 import coop.rchain.rholang.interpreter.accounting._
-import coop.rchain.rholang.interpreter.storage.{ChargingRSpace, TuplespaceImpl}
+import coop.rchain.rholang.interpreter.storage.ChargingRSpace
 
 trait Dispatch[M[_], A, K] {
   def dispatch(continuation: K, dataList: Seq[A], sequenceNumber: Int): M[Unit]
@@ -70,9 +70,7 @@ object RholangAndScalaDispatcher {
       new RholangAndScalaDispatcher(dispatchTable)
 
     implicit lazy val reducer: Reduce[M] =
-      new DebruijnInterpreter[M, F](tuplespaceAlg, urnMap)
-
-    lazy val tuplespaceAlg = new TuplespaceImpl(chargingRSpace, dispatcher)
+      new DebruijnInterpreter[M, F](chargingRSpace, dispatcher, urnMap)
 
     lazy val chargingRSpace: RhoPureSpace[M] =
       ChargingRSpace.pureRSpace(tuplespace)
