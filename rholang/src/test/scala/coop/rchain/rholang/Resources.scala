@@ -2,9 +2,8 @@ package coop.rchain.rholang
 import java.io.File
 import java.nio.file.{Files, Path}
 
-import cats.Applicative
 import cats.effect.ExitCase.Error
-import cats.effect.{Concurrent, ContextShift, Resource}
+import cats.effect.{Concurrent, ContextShift, Resource, Sync}
 import cats.temp.par
 import com.typesafe.scalalogging.Logger
 import coop.rchain.metrics.{Metrics, Span}
@@ -21,10 +20,10 @@ import scala.reflect.io.Directory
 object Resources {
   val logger: Logger = Logger(this.getClass.getName.stripSuffix("$"))
 
-  def mkTempDir[F[_]: Applicative](prefix: String): Resource[F, Path] =
-    Resource.makeCase(Applicative[F].pure(Files.createTempDirectory(prefix)))(
+  def mkTempDir[F[_]: Sync](prefix: String): Resource[F, Path] =
+    Resource.makeCase(Sync[F].delay(Files.createTempDirectory(prefix)))(
       (path, exitCase) =>
-        Applicative[F].pure(exitCase match {
+        Sync[F].delay(exitCase match {
           case Error(ex) =>
             logger
               .error(
