@@ -38,7 +38,6 @@ class TuplespaceImpl[F[_], M[_]](
       persistent: Boolean,
       sequenceNumber: Int
   ): F[Unit] = {
-    // TODO: Handle the environment in the store
     def go: Option[(TaggedContinuation, Seq[ListParWithRandom], Int)] => F[Unit] = {
       case Some((continuation, dataList, updatedSequenceNumber)) =>
         if (persistent)
