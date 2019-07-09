@@ -61,33 +61,30 @@ object Tuplespace {
         body: ParWithRandom,
         persistent: Boolean,
         sequenceNumber: Int
-    ): F[Unit] =
-      binds match {
-        case Nil => F.raiseError(ReduceError("Error: empty binds"))
-        case _ =>
-          val (patterns: Seq[BindPattern], sources: Seq[Par]) = binds.unzip
+    ): F[Unit] = {
+      val (patterns: Seq[BindPattern], sources: Seq[Par]) = binds.unzip
 
-          def go(
-              res: Option[(TaggedContinuation, Seq[ListParWithRandom], Int)]
-          ): F[Unit] =
-            res match {
-              case Some((continuation, dataList, updatedSequenceNumber)) =>
-                if (persistent)
-                  List(
-                    dispatcher.dispatch(continuation, dataList, updatedSequenceNumber),
-                    consume(binds, body, persistent, sequenceNumber)
-                  ).parSequence_
-                else dispatcher.dispatch(continuation, dataList, updatedSequenceNumber)
-              case None => F.unit
-            }
+      def go(
+          res: Option[(TaggedContinuation, Seq[ListParWithRandom], Int)]
+      ): F[Unit] =
+        res match {
+          case Some((continuation, dataList, updatedSequenceNumber)) =>
+            if (persistent)
+              List(
+                dispatcher.dispatch(continuation, dataList, updatedSequenceNumber),
+                consume(binds, body, persistent, sequenceNumber)
+              ).parSequence_
+            else dispatcher.dispatch(continuation, dataList, updatedSequenceNumber)
+          case None => F.unit
+        }
 
-          pureRSpace.consume(
-            sources.toList,
-            patterns.toList,
-            TaggedContinuation(ParBody(body)),
-            persist = persistent,
-            sequenceNumber
-          ) >>= (go(_))
-      }
+      pureRSpace.consume(
+        sources.toList,
+        patterns.toList,
+        TaggedContinuation(ParBody(body)),
+        persist = persistent,
+        sequenceNumber
+      ) >>= (go(_))
+    }
   }
 }
