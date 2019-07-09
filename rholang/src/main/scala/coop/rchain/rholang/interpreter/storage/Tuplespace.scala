@@ -53,10 +53,7 @@ object Tuplespace {
           case None => F.unit
         }
 
-      for {
-        res <- pureRSpace.produce(channel, data, persist = persistent, sequenceNumber)
-        _   <- go(res)
-      } yield ()
+      pureRSpace.produce(channel, data, persist = persistent, sequenceNumber) >>= (go(_))
     }
 
     override def consume(
@@ -69,6 +66,7 @@ object Tuplespace {
         case Nil => F.raiseError(ReduceError("Error: empty binds"))
         case _ =>
           val (patterns: Seq[BindPattern], sources: Seq[Par]) = binds.unzip
+
           def go(
               res: Option[(TaggedContinuation, Seq[ListParWithRandom], Int)]
           ): F[Unit] =
@@ -83,16 +81,13 @@ object Tuplespace {
               case None => F.unit
             }
 
-          for {
-            res <- pureRSpace.consume(
-                    sources.toList,
-                    patterns.toList,
-                    TaggedContinuation(ParBody(body)),
-                    persist = persistent,
-                    sequenceNumber
-                  )
-            _ <- go(res)
-          } yield ()
+          pureRSpace.consume(
+            sources.toList,
+            patterns.toList,
+            TaggedContinuation(ParBody(body)),
+            persist = persistent,
+            sequenceNumber
+          ) >>= (go(_))
       }
   }
 }
