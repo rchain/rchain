@@ -1,11 +1,11 @@
 package coop.rchain.casper.helper
 
-import java.nio.file.StandardCopyOption.REPLACE_EXISTING
-import java.nio.file.{Files, Path}
+import java.nio.file.Path
 
 import cats.effect.concurrent.Semaphore
-import cats.effect.{Concurrent, Resource, Sync}
+import cats.effect.{Concurrent, ContextShift, Resource}
 import cats.implicits._
+import cats.temp.par
 import cats.{Applicative, ApplicativeError, Id}
 import coop.rchain.blockstorage._
 import coop.rchain.casper.CasperState.CasperStateCell
@@ -150,17 +150,20 @@ object HashSetCasperTestNode {
       TestNetwork.empty[Effect]
     )
 
-  private def createRuntime(storageDirectory: Path, storageSize: Long)(
+  private def createRuntime[F[_]: Concurrent: par.Par: ContextShift](
+      storageDirectory: Path,
+      storageSize: Long
+  )(
       implicit scheduler: Scheduler
-  ): Resource[Effect, RuntimeManager[Effect]] = {
-    implicit val log                       = Log.log[Task]
-    implicit val metricsEff: Metrics[Task] = new metrics.Metrics.MetricsNOP[Task]
-    implicit val span: Span[Task]          = NoopSpan[Task]()
+  ): Resource[F, RuntimeManager[F]] = {
+    implicit val log        = Log.log[F]
+    implicit val metricsEff = new metrics.Metrics.MetricsNOP[F]
+    implicit val span       = NoopSpan[F]()
 
     for {
       activeRuntime <- Resource.make(
                         Runtime
-                          .createWithEmptyCost[Task](storageDirectory, storageSize)
+                          .createWithEmptyCost(storageDirectory, storageSize)
                       )(_.close())
       runtimeManager <- Resource.liftF(RuntimeManager.fromRuntime(activeRuntime))
     } yield runtimeManager
