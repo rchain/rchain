@@ -6,7 +6,7 @@ new
   revAddress(`rho:rev:address`),
   stdlog(`rho:io:stdlog`),
   setup,
-  test_valid_address, test_invalid_address, test_fromPublicKey, test_fromPublicKey_invalid, test_fromDeployerId, test_fromDeployerId_invalid
+  test_valid_address, test_invalid_address, test_fromPublicKey, test_fromPublicKey_invalid
 in {
   rl!(`rho:id:zphjgsfy13h1k85isc8rtwtgt3t9zzt5pjd5ihykfmyapfc4wt3x5h`, *RhoSpecCh) |
   for(@(_, RhoSpec) <- RhoSpecCh) {
@@ -16,8 +16,6 @@ in {
         ("Validating a invalid address returns a non-Nil value", *test_invalid_address),
         ("Convert a public key into a RevAddress", *test_fromPublicKey),
         ("Reject an invalid public key", *test_fromPublicKey_invalid),
-        ("Convert a deployer id into a RevAddress", *test_fromDeployerId),
-        ("Reject an invalid deployer id", *test_fromDeployerId_invalid),
       ])
   } |
 
@@ -68,58 +66,6 @@ in {
     new retCh in {
       revAddress!("fromPublicKey", "F0F0".hexToBytes(), *retCh) |
       rhoSpec!("assert", (Nil, "== <-", *retCh), "correct RevAddress", *ackCh)
-    }
-  } |
-
-  contract test_fromDeployerId(rhoSpec, _, ackCh) = {
-    new r1, r2, r3, getDeployerId(`rho:test:deployerId:get`), deployerIdCh1, deployerIdCh2, deployerIdCh3 in {
-      getDeployerId!(
-        "deployerId",
-        "0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000".hexToBytes(),
-        *deployerIdCh1
-      ) |
-      getDeployerId!(
-        "deployerId",
-        "1111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111".hexToBytes(),
-        *deployerIdCh2
-      ) |
-      getDeployerId!(
-        "deployerId",
-        "2222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222".hexToBytes(),
-        *deployerIdCh3
-      ) |
-      for(@deployerId1 <- deployerIdCh1; @deployerId2 <- deployerIdCh2; @deployerId3 <- deployerIdCh3) {
-        revAddress!(
-          "fromDeployerId",
-          deployerId1,
-          *r1
-        ) |
-        revAddress!(
-          "fromDeployerId",
-          deployerId2,
-          *r2
-        ) |
-        revAddress!(
-          "fromDeployerId",
-          deployerId3,
-          *r3
-        ) |
-        rhoSpec!("assertMany", [
-          (("11112c4Z48VufA19YCWdUoXrXKKVza16dix2xUa5q3TpnRLcZAQg7d", "== <-", *r1), "correct RevAddress"),
-          (("1111vQiDiLGjHgjV1D7j6EbXHyStToU3iQ3eWA394p3rzYFocXGtv", "== <-", *r2), "correct RevAddress"),
-          (("11112nT39uWFt9J3CT7hi87JRmnWsQuMh1oDjfhkyfcGnjV54Umn1n", "== <-", *r3), "correct RevAddress"),
-        ], *ackCh)
-      }
-    }
-  } |
-
-  contract test_fromDeployerId_invalid(rhoSpec, _, ackCh) = {
-    new retCh, getDeployerId(`rho:test:deployerId:get`), deployerIdCh in {
-      getDeployerId!("deployerId", "F0F0".hexToBytes(), *deployerIdCh) |
-      for(@deployerId <- deployerIdCh) {
-        revAddress!("fromDeployerId", deployerId, *retCh) |
-        rhoSpec!("assert", (Nil, "== <-", *retCh), "correct RevAddress", *ackCh)
-      }
     }
   }
 }

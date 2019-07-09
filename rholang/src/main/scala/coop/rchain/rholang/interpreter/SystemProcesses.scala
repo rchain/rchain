@@ -158,18 +158,6 @@ object SystemProcesses {
               .getOrElse(Par())
 
           produce(Seq(response), ack)
-
-        case isContractCall(
-            produce,
-            Seq(RhoType.String("fromDeployerId"), RhoType.DeployerId(publicKey), ack)
-            ) =>
-          val response =
-            RevAddress
-              .fromPublicKey(PublicKey(publicKey))
-              .map(ra => RhoType.String(ra.toBase58))
-              .getOrElse(Par())
-
-          produce(Seq(response), ack)
       }
 
       def deployerIdOps: Contract[F] = {
