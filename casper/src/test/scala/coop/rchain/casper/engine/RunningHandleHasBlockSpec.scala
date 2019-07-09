@@ -50,6 +50,24 @@ class RunningHandleHasBlockSpec extends WordSpec with BeforeAndAfterEach with Ma
       transport.requests shouldBe empty
     }
 
+    "store on a waiting list and don't request if requested by different peer" in {
+      // given
+      val sender                   = peerNode("somePeer", 40400)
+      val otherPeer                = peerNode("otherPeer", 40400)
+      val requestedBefore          = Map(hash -> Requested(peers = Set(otherPeer)))
+      implicit val requestedBlocks = initRequestedBlocks(init = requestedBefore)
+      val casperContains           = alwaysFalse
+      // when
+      Running.handleHasBlock[Coeval](sender, hb)(casperContains).apply()
+      // then
+      transport.requests shouldBe empty
+
+      val requested: Requested = requestedBlocks.read.apply().get(hash).get
+      requested.peers should be(Set(otherPeer))
+      requested.waitingList should be(List(sender))
+
+    }
+
     "request block and store information about requested block" in {
       // given
       val sender                   = peerNode("somePeer", 40400)

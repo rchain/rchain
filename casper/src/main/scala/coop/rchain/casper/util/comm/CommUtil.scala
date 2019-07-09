@@ -41,6 +41,10 @@ object CommUtil {
     } yield ()
   }
 
+  /** TODO
+    *  - only request blocks if not requested before
+    *  - only log if really requesting
+    */
   def sendBlockRequest[F[_]: Monad: ConnectionsCell: TransportLayer: Log: Time: RPConfAsk](
       hash: BlockHash
   ): F[Unit] =

@@ -39,7 +39,10 @@ import scala.util.Try
   **/
 object Running {
 
-  final case class Requested(peers: Set[PeerNode])
+  final case class Requested(
+      peers: Set[PeerNode] = Set.empty,
+      waitingList: List[PeerNode] = List.empty
+  )
   type RequestedBlocks[F[_]] = Cell[F, Map[BlockHash, Requested]]
   object RequestedBlocks {
     def apply[F[_]: RequestedBlocks]: RequestedBlocks[F] = implicitly[RequestedBlocks[F]]
@@ -48,13 +51,12 @@ object Running {
   def noop[F[_]: Applicative]: F[Unit] = ().pure[F]
 
   /** TODO
-    * - check if was requested already
-         - if requested for different peer, store this peer on waiting list (remove duplicates or use set)
     * - periodically check the lists of requests and checks if we waited to long
     *    - if waited to long and there is at least onee peer on waiting list:
     *        - request the block from that peer from waiting list
     *        - move the peer from the waiting list to the requested list
-    *    - if the waiting list is empty, log a warning (this means most likely things are not going the way they should)
+    *    - if the waiting list is empty, log a warning (this means most likely things are not going the way they should), and 
+           remove the entry from the list (casper will have to rerequest it)
     * - upon handling the BlockMessage
     *    - if the block was added to casper - remove its entry in the requests list
     *    - if the block was not added, keep the list
@@ -64,23 +66,31 @@ object Running {
       hb: HasBlock
   )(
       casperContains: BlockHash => F[Boolean]
-  ): F[Unit] =
-    casperContains(hb.hash)
-      .||^(RequestedBlocks[F].read.map(_.contains(hb.hash)))
-      .ifM(
-        noop[F],
-        for {
-          conf <- RPConfAsk[F].ask
-          msg = packet(
-            conf.local,
-            conf.networkId,
-            transport.BlockRequest,
-            BlockRequest(hb.hash).toByteString
-          )
-          _ <- TransportLayer[F].send(peer, msg)
-          _ <- RequestedBlocks[F].modify(_ + (hb.hash -> Requested(peers = Set(peer))))
-        } yield ()
-      )
+  ): F[Unit] = {
+
+    def requestForBlock: F[Unit] =
+      for {
+        conf <- RPConfAsk[F].ask
+        msg = packet(
+          conf.local,
+          conf.networkId,
+          transport.BlockRequest,
+          BlockRequest(hb.hash).toByteString
+        )
+        _ <- TransportLayer[F].send(peer, msg)
+        _ <- RequestedBlocks[F].modify(_ + (hb.hash -> Requested(peers = Set(peer))))
+      } yield ()
+
+    def addToWaitingList(requested: Requested): F[Unit] =
+      RequestedBlocks[F].modify { requestedBlocks =>
+        requestedBlocks + (hb.hash -> requested.copy(waitingList = peer :: requested.waitingList))
+      }
+
+    casperContains(hb.hash).ifM(
+      noop[F],
+      RequestedBlocks[F].read >>= (_.get(hb.hash).fold(requestForBlock)(addToWaitingList))
+    )
+  }
 }
 
 class Running[F[_]: RPConfAsk: BlockStore: Monad: ConnectionsCell: TransportLayer: Log: Time: Running.RequestedBlocks](
