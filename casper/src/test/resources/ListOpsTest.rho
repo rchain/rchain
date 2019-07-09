@@ -24,7 +24,7 @@ in {
   rl!(`rho:lang:listOps`, *ListOpsCh) |
   for(@(_, ListOps) <- ListOpsCh) {
 
-    contract setup(returnCh) = {
+    contract setup(_, returnCh) = {
       returnCh!([])
     } |
 

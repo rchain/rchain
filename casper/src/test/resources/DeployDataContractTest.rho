@@ -14,7 +14,7 @@ in {
       ])
   } |
 
-  contract setup(returnCh) = {
+  contract setup(_, returnCh) = {
     returnCh!([])
   } |
 

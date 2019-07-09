@@ -31,7 +31,7 @@ in {
 
     stdlog!("info", "Either & RhoSpec ready") |
 
-    contract setup(returnCh) = {
+    contract setup(_, returnCh) = {
       returnCh!([])
     } |
 

@@ -24,7 +24,7 @@ in {
 
   rl!(`rho:lang:nonNegativeNumber`, *NonNegativeNumberCh) |
   for(@(_, NonNegativeNumber) <- NonNegativeNumberCh) {
-    contract setup(returnCh) = {
+    contract setup(_, returnCh) = {
       returnCh!([])
     } |
 

@@ -20,7 +20,7 @@ in {
         ("fail the check for a non-matching key", *testFailure),
       ]) |
 
-    contract setup(returnCh) = {
+    contract setup(_, returnCh) = {
       returnCh!(Nil)
     } |
 
