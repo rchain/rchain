@@ -27,6 +27,17 @@ in {
   stdlog!("debug", "Loading RhoSpec") |
   rl!(`rho:lang:listOps`, *ListOpsCh) |
   for(@(_, ListOps) <- ListOpsCh) {
+
+    contract RhoSpec(@"testSuite", @tests) = {
+      new dummySetup in {
+        contract dummySetup(_, returnCh) = {
+          returnCh!(Nil)
+        } |
+
+        RhoSpec!("testSuite", *dummySetup, tests)
+      }
+    } |
+
     contract RhoSpec(@"testSuite", setup, @tests) = {
       new dummyTeardown in {
         contract dummyTeardown(_, _, ackCh) = {
