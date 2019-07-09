@@ -100,7 +100,7 @@ class DebruijnInterpreter[M[_], F[_]](
     def run(mkRand: Int => Blake2b512Random)(
         env: Env[Par],
         sequenceNumber: Int
-    ): M[List[Unit]]
+    ): M[Unit]
     def size: Int
   }
 
@@ -114,8 +114,8 @@ class DebruijnInterpreter[M[_], F[_]](
         override def run(mkRand: Int => Blake2b512Random)(
             env: Env[Par],
             sequenceNumber: Int
-        ): M[List[Unit]] =
-          input.zipWithIndex.toList.parTraverse {
+        ): M[Unit] =
+          input.zipWithIndex.toList.parTraverse_ {
             case (term, idx) =>
               handler(term)(env, mkRand(idx), sequenceNumber)
           }
