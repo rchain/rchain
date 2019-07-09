@@ -3,18 +3,16 @@ package coop.rchain.rspace.bench
 import java.io.{FileNotFoundException, InputStreamReader}
 import java.nio.file.{Files, Path}
 
-import org.openjdk.jmh.annotations.{Setup, TearDown}
 import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.metrics
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.models.Par
-import coop.rchain.rholang.interpreter.accounting.{Cost, CostAccounting}
 import coop.rchain.rholang.interpreter.{ParBuilderUtil, Runtime}
-import coop.rchain.shared.PathOps.RichPath
 import coop.rchain.shared.Log
 import monix.eval.{Coeval, Task}
 import monix.execution.Scheduler.Implicits.global
+import org.openjdk.jmh.annotations.{Setup, TearDown}
 
 trait EvalBenchStateBase {
   private lazy val dbDir: Path            = Files.createTempDirectory("rchain-storage-test-")
@@ -25,7 +23,7 @@ trait EvalBenchStateBase {
 
   val rhoScriptSource: String
   lazy val runtime: Runtime[Task] =
-    Runtime.createWithEmptyCost[Task, Task.Par](dbDir, mapSize).unsafeRunSync
+    Runtime.createWithEmptyCost[Task](dbDir, mapSize).unsafeRunSync
   val rand: Blake2b512Random = Blake2b512Random(128)
   var term: Option[Par]      = None
 

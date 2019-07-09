@@ -100,7 +100,7 @@ object Interactive {
     implicit val noopSpan: Span[Task]      = NoopSpan[Task]()
     new Interactive(
       Runtime
-        .createWithEmptyCost[Task, Task.Par](
+        .createWithEmptyCost[Task](
           Files.createTempDirectory("interactive-"),
           1024 * 1024
         )

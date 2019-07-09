@@ -160,7 +160,7 @@ object HashSetCasperTestNode {
     for {
       activeRuntime <- Resource.make(
                         Runtime
-                          .createWithEmptyCost[Task, Task.Par](storageDirectory, storageSize)
+                          .createWithEmptyCost[Task](storageDirectory, storageSize)
                       )(_.close())
       runtimeManager <- Resource.liftF(RuntimeManager.fromRuntime(activeRuntime))
     } yield runtimeManager

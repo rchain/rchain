@@ -7,6 +7,7 @@ import cats.effect.concurrent.Ref
 import cats.effect.{Concurrent, ContextShift, Sync}
 import cats.implicits._
 import cats.mtl.FunctorTell
+import cats.temp.par
 import com.google.protobuf.ByteString
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.metrics.{Metrics, Span}
@@ -19,9 +20,7 @@ import coop.rchain.rholang.interpreter.Runtime._
 import coop.rchain.rholang.interpreter.accounting.{noOpCostLog, _}
 import coop.rchain.rholang.interpreter.errors.SetupError
 import coop.rchain.rholang.interpreter.storage.implicits._
-import coop.rchain.rspace._
-import coop.rchain.rspace.history.Branch
-import coop.rchain.rspace.RSpace
+import coop.rchain.rspace.{RSpace, _}
 import coop.rchain.rspace.pure.PureRSpace
 import coop.rchain.shared.Log
 
@@ -279,22 +278,34 @@ object Runtime {
     )
   )
 
-  def createWithEmptyCost[F[_]: ContextShift: Concurrent: Log: Metrics: Span, M[_]](
+  def createWithEmptyCost[F[_]: ContextShift: Concurrent: Log: Metrics: Span: par.Par](
       dataDir: Path,
       mapSize: Long,
       extraSystemProcesses: Seq[SystemProcess.Definition[F]] = Seq.empty
   )(
       implicit
+      executionContext: ExecutionContext
+  ): F[Runtime[F]] = {
+    implicit val P = par.Par[F].parallel
+    createWithEmptyCost_(dataDir, mapSize, extraSystemProcesses)
+  }
+
+  private def createWithEmptyCost_[F[_]: ContextShift: Concurrent: Log: Metrics: Span, M[_]](
+      dataDir: Path,
+      mapSize: Long,
+      extraSystemProcesses: Seq[SystemProcess.Definition[F]]
+  )(
+      implicit
       P: Parallel[F, M],
       executionContext: ExecutionContext
   ): F[Runtime[F]] =
-    (for {
+    for {
       cost <- CostAccounting.emptyCost[F]
       runtime <- {
         implicit val c = cost
         create(dataDir, mapSize, extraSystemProcesses)
       }
-    } yield (runtime))
+    } yield runtime
 
   def create[F[_]: ContextShift: Concurrent: Log: Metrics: Span, M[_]](
       dataDir: Path,

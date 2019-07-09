@@ -3,6 +3,7 @@ package coop.rchain.casper.engine
 import cats._
 import cats.effect.concurrent.Ref
 import cats.effect.{Concurrent, ContextShift}
+import cats.temp.par
 import coop.rchain.blockstorage._
 import coop.rchain.casper._
 import coop.rchain.casper.genesis.contracts.Validator
@@ -33,13 +34,13 @@ object Setup {
     val runtimeDir                = BlockDagStorageTestFixture.blockStorageDir
     val activeRuntime =
       Runtime
-        .createWithEmptyCost[Task, Task.Par](runtimeDir, 3024L * 1024)(
+        .createWithEmptyCost[Task](runtimeDir, 3024L * 1024)(
           ContextShift[Task],
           Concurrent[Task],
           log,
           metrics,
           span,
-          Parallel[Task, Task.Par],
+          par.Par[Task],
           scheduler
         )
         .unsafeRunSync(scheduler)

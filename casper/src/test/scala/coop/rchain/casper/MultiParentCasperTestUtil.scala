@@ -112,7 +112,7 @@ object MultiParentCasperTestUtil {
 
     (for {
       rspaceDir      <- Task.delay(Files.createDirectory(storageDirectory.resolve("rspace")))
-      activeRuntime  <- Runtime.createWithEmptyCost[Task, Task.Par](rspaceDir, storageSize)
+      activeRuntime  <- Runtime.createWithEmptyCost[Task](rspaceDir, storageSize)
       runtimeManager <- RuntimeManager.fromRuntime[Task](activeRuntime)
       genesis        <- Genesis.createGenesisBlock(runtimeManager, genesisParameters)
       _              <- activeRuntime.close()
