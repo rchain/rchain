@@ -5,22 +5,17 @@ new
   rl(`rho:registry:lookup`), RhoSpecCh,
   revAddress(`rho:rev:address`),
   stdlog(`rho:io:stdlog`),
-  setup,
   test_valid_address, test_invalid_address, test_fromPublicKey, test_fromPublicKey_invalid
 in {
   rl!(`rho:id:zphjgsfy13h1k85isc8rtwtgt3t9zzt5pjd5ihykfmyapfc4wt3x5h`, *RhoSpecCh) |
   for(@(_, RhoSpec) <- RhoSpecCh) {
-    @RhoSpec!("testSuite", *setup,
+    @RhoSpec!("testSuite",
       [
         ("Validating a valid address returns Nil", *test_valid_address),
         ("Validating a invalid address returns a non-Nil value", *test_invalid_address),
         ("Convert a public key into a RevAddress", *test_fromPublicKey),
         ("Reject an invalid public key", *test_fromPublicKey_invalid),
       ])
-  } |
-
-  contract setup(_, returnCh) = {
-    returnCh!([])
   } |
 
   contract test_invalid_address(rhoSpec, _, ackCh) = {
