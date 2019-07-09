@@ -10,4 +10,4 @@ export DEFAULT_IMAGE=rchain-integration-tests:$tag
 
 sed "s/rnode:latest/rnode:$tag/" Dockerfile | docker build --quiet --tag "$DEFAULT_IMAGE" --file - .
 
-pipenv run py.test -v "$@"
+env PYENV_VERSION=3.7.3 ~/.pyenv/shims/python -m pipenv run py.test -v "$@"

@@ -2,7 +2,7 @@
 
 main () {
     pushd "$(dirname $0)" >/dev/null
-    pipenv run mypy "$@" test
+    env PYENV_VERSION=3.7.3 ~/.pyenv/shims/python -m pipenv run mypy "$@" test
 }
 
 main "$@"

@@ -1,41 +1,39 @@
 # Installing the prerequisites
 ## Step 1. Install Docker
 
-Follow the instructions on [this page](https://docs.docker.com/install/) for platform specific instalation steps
+If you don't know better, refer to the platform-specific installation
+instructions at [Docker website](https://docs.docker.com/install/).
 
-## Step 2. Python v3.6+
+## Step 2. Install pyenv
 
-The integration tests run on **Python v3**, which is incompatible with Python v2.
+`pyenv` allows for installing a standalone, isolated, specific CPython
+version, making integration tests work irrespective of what CPython version
+you have installed in your operating system.
 
-You can test the version of your default python installed on your machine:
-
-```bash
-$ python3 --version
-```
-
-If your version is lower than 3.6 you will need to install Python 3.
-
+### [Linux](https://github.com/pyenv/pyenv-installer#prerequisites)
 ### macOS
 
-macOS is shipped with Python 2.x, so we install Python 3.x from Homebrew:
-
 ```bash
-$ brew update && brew install python
-$ python3 --version
-Python 3.7.0
+$ brew update && brew install pyenv
 ```
 
-### [Debian Linux](https://docs.python-guide.org/starting/install3/linux/)
-### [Windows](https://docs.python-guide.org/starting/install3/win/#install3-windows)
-
-## Step 3: [Install pipenv](https://github.com/pypa/pipenv#installation)
-## Step 4: Dependencies
-
-Once Python is installed you can run within `integration-tests` subdirectory
-the following command:
+## Step 3. Install CPython under pyenv
 
 ```bash
-$ pipenv sync
+$ pyenv install 3.7.3
+```
+
+## Step 4: Install pipenv under pyenv
+
+```bash
+$ env PYENV_VERSION=3.7.3 ~/.pyenv/shims/python -m pip install pipenv
+```
+
+## Step 4: Dependencies
+
+```bash
+$ cd integration-tests/
+$ env PYENV_VERSION=3.7.3 ~/.pyenv/shims/python -m pipenv sync
 ```
 
 ## Step 4: Create the rnode docker image
