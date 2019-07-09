@@ -3,19 +3,14 @@ new
   getDeployData(`rho:deploy:params`),
   setDeployData(`rho:test:deploy:set`),
   stdlog(`rho:io:stdlog`),
-  setup,
   test_get_after_set
 in {
   rl!(`rho:id:zphjgsfy13h1k85isc8rtwtgt3t9zzt5pjd5ihykfmyapfc4wt3x5h`, *RhoSpecCh) |
   for(@(_, RhoSpec) <- RhoSpecCh) {
-    @RhoSpec!("testSuite", *setup,
+    @RhoSpec!("testSuite",
       [
         ("Get after set returns the new value", *test_get_after_set)
       ])
-  } |
-
-  contract setup(_, returnCh) = {
-    returnCh!([])
   } |
 
   contract test_get_after_set(rhoSpec, _, ackCh) = {
