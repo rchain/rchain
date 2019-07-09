@@ -15,8 +15,8 @@ import coop.rchain.crypto.{PrivateKey, PublicKey}
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.Validator.Validator
-import coop.rchain.rholang.interpreter.accounting
 import coop.rchain.rholang.interpreter.Runtime.BlockData
+import coop.rchain.rholang.interpreter.accounting
 import coop.rchain.shared.{Cell, Log, Time}
 
 object BlockCreator {
@@ -56,25 +56,25 @@ object BlockCreator {
         parents               <- EstimatorHelper.chooseNonConflicting[F](tipHashes, dag)
         maxBlockNumber        = ProtoUtil.maxBlockNumber(parents)
         invalidLatestMessages <- ProtoUtil.invalidLatestMessages[F](dag)
-        _ <- invalidLatestMessages.values.toList.traverse { invalidBlockHash =>
-              val encodedInvalidBlockHash = Base16.encode(invalidBlockHash.toByteArray)
-              val deploy = ConstructDeploy.sourceDeploy(
-                s"""
-                 #new rl(`rho:registry:lookup`), posCh in {
-                 #  rl!(`rho:rchain:pos`, *posCh) |
-                 #  for(@(_, PoS) <- posCh) {
-                 #    @PoS!("slash", "$encodedInvalidBlockHash".hexToBytes(), "IGNOREFORNOW")
-                 #  }
-                 #}
-                 #
-              """.stripMargin('#'),
-                System.currentTimeMillis(),
-                accounting.MAX_VALUE,
-                sec = privateKey
-              )
-              Cell[F, CasperState].modify { s =>
-                s.copy(deployHistory = s.deployHistory + deploy)
-              }
+        slashingDeploys <- invalidLatestMessages.values.toList.traverse { invalidBlockHash =>
+                            val encodedInvalidBlockHash =
+                              Base16.encode(invalidBlockHash.toByteArray)
+                            ConstructDeploy.sourceDeployNowF(
+                              s"""
+                               #new rl(`rho:registry:lookup`), posCh in {
+                               #  rl!(`rho:rchain:pos`, *posCh) |
+                               #  for(@(_, PoS) <- posCh) {
+                               #    @PoS!("slash", "$encodedInvalidBlockHash".hexToBytes(), "IGNOREFORNOW")
+                               #  }
+                               #}
+                               #
+                            """.stripMargin('#'),
+                              accounting.MAX_VALUE,
+                              sec = privateKey
+                            )
+                          }
+        _ <- Cell[F, CasperState].modify { s =>
+              s.copy(deployHistory = s.deployHistory ++ slashingDeploys)
             }
         _                <- updateDeployHistory[F](state, maxBlockNumber)
         deploys          <- extractDeploys[F](dag, parents, maxBlockNumber, expirationThreshold)
