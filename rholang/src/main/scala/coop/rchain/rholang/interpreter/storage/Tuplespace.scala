@@ -5,8 +5,7 @@ import cats.effect.Sync
 import cats.implicits._
 import coop.rchain.models.TaggedContinuation.TaggedCont.ParBody
 import coop.rchain.models._
-import coop.rchain.rholang.interpreter.Dispatch
-import coop.rchain.rspace.pure.PureRSpace
+import coop.rchain.rholang.interpreter.Runtime.{RhoDispatch, RhoPureSpace}
 import coop.rchain.rspace.util._
 
 trait Tuplespace[F[_]] {
@@ -19,18 +18,10 @@ trait Tuplespace[F[_]] {
   ): F[Unit]
 }
 
-class TuplespaceImpl[F[_], M[_]](
-    pureRSpace: PureRSpace[
-      F,
-      Par,
-      BindPattern,
-      ListParWithRandom,
-      ListParWithRandom,
-      TaggedContinuation
-    ],
-    dispatcher: => Dispatch[F, ListParWithRandom, TaggedContinuation]
-)(implicit F: Sync[F], P: Parallel[F, M])
-    extends Tuplespace[F] {
+class TuplespaceImpl[F[_], M[_]](pureRSpace: RhoPureSpace[F], dispatcher: => RhoDispatch[F])(
+    implicit F: Sync[F],
+    P: Parallel[F, M]
+) extends Tuplespace[F] {
 
   override def produce(
       channel: Par,
