@@ -10,6 +10,9 @@ delete_resources_dir () {
 
 
 main () {
+    apt-get update
+    env DEBIAN_FRONTEND=noninteractive apt-get -yq install make build-essential libssl-dev zlib1g-dev libbz2-dev libreadline-dev libsqlite3-dev wget curl llvm libncurses5-dev libncursesw5-dev xz-utils tk-dev libffi-dev liblzma-dev python-openssl git
+
     curl https://pyenv.run | bash
     ~/.pyenv/bin/pyenv install 3.7.3
     env PYENV_VERSION=3.7.3 ~/.pyenv/shims/python -m pip install pipenv
