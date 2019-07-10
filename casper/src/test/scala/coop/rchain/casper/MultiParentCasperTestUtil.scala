@@ -3,13 +3,14 @@ package coop.rchain.casper
 import java.nio.file.StandardCopyOption.REPLACE_EXISTING
 import java.nio.file.{Files, Path}
 
-import cats.effect.{Resource, Sync}
+import cats.effect.{Concurrent, ContextShift, Resource, Sync}
 import cats.implicits._
-import coop.rchain.blockstorage.{BlockDagFileStorage, BlockStore}
+import cats.temp.par
+import coop.rchain.blockstorage.BlockDagFileStorage
 import coop.rchain.casper.genesis.Genesis
 import coop.rchain.casper.genesis.contracts._
-import coop.rchain.casper.helper.HashSetCasperTestNode.{makeBlockDagFileStorageConfig, Effect}
-import coop.rchain.casper.helper.{BlockDagStorageTestFixture, HashSetCasperTestNode}
+import coop.rchain.casper.helper.BlockDagStorageTestFixture
+import coop.rchain.casper.helper.HashSetCasperTestNode.makeBlockDagFileStorageConfig
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.ConstructDeploy
 import coop.rchain.casper.util.rholang.RuntimeManager
@@ -23,7 +24,7 @@ import coop.rchain.rholang.interpreter.util.RevAddress
 import coop.rchain.shared.Log
 import coop.rchain.shared.PathOps.RichPath
 import monix.eval.Task
-import monix.execution.Scheduler.Implicits.global
+import monix.execution.Scheduler
 
 import scala.collection.mutable
 
@@ -101,6 +102,8 @@ object MultiParentCasperTestUtil {
     implicit val metricsEff: Metrics[Task]           = new metrics.Metrics.MetricsNOP[Task]
     implicit val spanEff                             = NoopSpan[Task]()
 
+    implicit val scheduler = monix.execution.Scheduler.Implicits.global
+
     (for {
       rspaceDir      <- Task.delay(Files.createDirectory(storageDirectory.resolve("rspace")))
       activeRuntime  <- Runtime.createWithEmptyCost[Task](rspaceDir, storageSize)
@@ -160,4 +163,24 @@ object MultiParentCasperTestUtil {
       .forEach(source => Files.copy(source, dest.resolve(src.relativize(source)), REPLACE_EXISTING))
     dest
   }
+
+  def createRuntime[F[_]: Concurrent: par.Par: ContextShift](
+      storageDirectory: Path,
+      storageSize: Long = 10 * 1024 * 1024L
+  )(
+      implicit scheduler: Scheduler
+  ): Resource[F, RuntimeManager[F]] = {
+    implicit val log        = Log.log[F]
+    implicit val metricsEff = new metrics.Metrics.MetricsNOP[F]
+    implicit val span       = NoopSpan[F]()
+
+    for {
+      activeRuntime <- Resource.make(
+                        Runtime
+                          .createWithEmptyCost(storageDirectory, storageSize)
+                      )(_.close())
+      runtimeManager <- Resource.liftF(RuntimeManager.fromRuntime(activeRuntime))
+    } yield runtimeManager
+  }
+
 }

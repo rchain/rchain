@@ -3,9 +3,8 @@ package coop.rchain.casper.helper
 import java.nio.file.Path
 
 import cats.effect.concurrent.Semaphore
-import cats.effect.{Concurrent, ContextShift, Resource}
+import cats.effect.{Concurrent, Resource}
 import cats.implicits._
-import cats.temp.par
 import cats.{Applicative, ApplicativeError, Id}
 import coop.rchain.blockstorage._
 import coop.rchain.casper.CasperState.CasperStateCell
@@ -28,10 +27,8 @@ import coop.rchain.comm.rp.Connect._
 import coop.rchain.comm.rp.HandleMessages.handle
 import coop.rchain.crypto.PrivateKey
 import coop.rchain.crypto.signatures.Secp256k1
-import coop.rchain.metrics
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.p2p.EffectsTestInstances._
-import coop.rchain.rholang.interpreter.Runtime
 import coop.rchain.shared._
 import monix.eval.Task
 import monix.execution.Scheduler
@@ -143,41 +140,17 @@ object HashSetCasperTestNode {
       genesis.validatorSks.take(networkSize).toVector,
       genesis.genesisBlock,
       genesis.storageDirectory,
-      storageSize,
-      createRuntime
+      MultiParentCasperTestUtil.createRuntime[Effect](_, storageSize)
     )(
       Concurrent[Effect],
       TestNetwork.empty[Effect]
     )
 
-  private def createRuntime[F[_]: Concurrent: par.Par: ContextShift](
-      storageDirectory: Path,
-      storageSize: Long
-  )(
-      implicit scheduler: Scheduler
-  ): Resource[F, RuntimeManager[F]] = {
-    implicit val log        = Log.log[F]
-    implicit val metricsEff = new metrics.Metrics.MetricsNOP[F]
-    implicit val span       = NoopSpan[F]()
-
-    for {
-      activeRuntime <- Resource.make(
-                        Runtime
-                          .createWithEmptyCost(storageDirectory, storageSize)
-                      )(_.close())
-      runtimeManager <- Resource.liftF(RuntimeManager.fromRuntime(activeRuntime))
-    } yield runtimeManager
-  }
-
-  private def networkF[F[_]](
+  private def networkF[F[_]: Concurrent: TestNetwork](
       sks: IndexedSeq[PrivateKey],
       genesis: BlockMessage,
       storageMatrixPath: Path,
-      storageSize: Long,
-      createRuntime: (Path, Long) => Resource[F, RuntimeManager[F]]
-  )(
-      implicit concurrentF: Concurrent[F],
-      testNetworkF: TestNetwork[F]
+      createRuntime: Path => Resource[F, RuntimeManager[F]]
   ): Resource[F, IndexedSeq[HashSetCasperTestNode[F]]] = {
     val n     = sks.length
     val names = (1 to n).map(i => s"node-$i")
@@ -198,7 +171,6 @@ object HashSetCasperTestNode {
               genesis,
               sk,
               storageMatrixPath,
-              storageSize,
               logicalTime,
               createRuntime
             )
@@ -236,9 +208,8 @@ object HashSetCasperTestNode {
       genesis: BlockMessage,
       sk: PrivateKey,
       storageMatrixPath: Path,
-      storageSize: Long,
       logicalTime: LogicalTime[F],
-      createRuntime: (Path, Long) => Resource[F, RuntimeManager[F]]
+      createRuntime: Path => Resource[F, RuntimeManager[F]]
   ): Resource[F, HashSetCasperTestNode[F]] = {
     val tle                = new TransportLayerTestImpl[F]()
     val tls                = new TransportLayerServerTestImpl[F](currentPeerNode)
@@ -258,7 +229,7 @@ object HashSetCasperTestNode {
                             .widen
                         )(_.close())
 
-      runtimeManager <- createRuntime(paths.rspaceDir, storageSize)
+      runtimeManager <- createRuntime(paths.rspaceDir)
 
       node <- Resource.make[F, HashSetCasperTestNode[F]] {
                for {
