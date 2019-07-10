@@ -35,10 +35,11 @@ object Resources {
     )
 
   def mkRhoISpace[F[_]: Concurrent: ContextShift: Log: Metrics: Span](
-      prefix: String = "",
-      branch: String = "test",
-      mapSize: Long = 1024L * 1024L * 4
+      prefix: String = ""
   ): Resource[F, RhoISpace[F]] = {
+
+    val branch: String = "test"
+    val mapSize: Long  = 1024L * 1024L * 4
 
     import coop.rchain.rholang.interpreter.storage.implicits._
 
