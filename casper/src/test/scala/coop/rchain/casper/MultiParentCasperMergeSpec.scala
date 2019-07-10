@@ -1,6 +1,7 @@
 package coop.rchain.casper
 
 import cats.Monad
+import cats.implicits._
 import coop.rchain.blockstorage.{BlockStore, IndexedBlockDagStorage}
 import coop.rchain.casper.helper.HashSetCasperTestNode
 import coop.rchain.casper.helper.HashSetCasperTestNode._
@@ -66,7 +67,47 @@ class MultiParentCasperMergeSpec extends FlatSpec with Matchers with Inspectors 
       "Nil",
       """@"hi"!(1) | for (_ <- @"hi") { Nil }""",
       """@"hi"!(2) | for (_ <- @"hi") { Nil }"""
-    )
+    ) >>
+      checkConflicts("@0!(0)", "for (_ <- @0) { 0 }", "for (_ <- @0) { 0 }") >>
+      checkNoConflicts("0", "for (_ <- @0) { 0 } | @0!(1)", "for (_ <- @0) { 0 } | @0!(2)") >>
+      checkConflicts("for (_ <- @0) { 0 }", "@0!(1)", "@0!(2)") >>
+      checkNoConflicts("for (@1 <- @0) { 0 }", "@0!(1)", "for (@2 <- @0) { 0 } | @0!(2)") >>
+      // Cases that are conflicting now but should not once we have more merge support:
+      checkConflicts("0", "@0!(0)", "@0!(0)") >>
+      checkConflicts("0", "for (_ <- @0) { 0 }", "for (_ <- @0) { 0 }")
+  }
+
+  def checkConflicts(base: String, b1: String, b2: String): Effect[Unit] = {
+    val time = System.currentTimeMillis()
+    HashSetCasperTestNode.networkEff(genesis, networkSize = 2).use { nodes =>
+      val deploys = Vector(
+        ConstructDeploy.sourceDeploy(base, time + 1, accounting.MAX_VALUE),
+        ConstructDeploy.sourceDeploy(b1, time + 2, accounting.MAX_VALUE),
+        ConstructDeploy.sourceDeploy(b2, time + 3, accounting.MAX_VALUE),
+        ConstructDeploy.sourceDeploy("Nil", time + 4, accounting.MAX_VALUE)
+      )
+      for {
+        _ <- nodes(0).addBlock(deploys(0))
+        _ <- nodes(0).receive()
+        _ <- nodes(1).receive()
+        _ <- nodes(0).addBlock(deploys(1))
+        _ <- nodes(1).addBlock(deploys(2))
+        _ <- nodes(0).receive()
+        _ <- nodes(1).receive()
+        _ <- nodes(0).receive()
+        _ <- nodes(1).receive()
+
+        //multiparent block joining block0 and block1 since they do not conflict
+        multiparentBlock <- nodes(0).addBlock(deploys(3))
+        _                <- nodes(1).receive()
+
+        _ = nodes(0).logEff.warns.isEmpty shouldBe true
+        _ = nodes(1).logEff.warns.isEmpty shouldBe true
+        _ = multiparentBlock.header.get.parentsHashList.size shouldBe 1
+        _ = nodes(0).casperEff.contains(multiparentBlock) shouldBeF true
+        _ = nodes(1).casperEff.contains(multiparentBlock) shouldBeF true
+      } yield ()
+    }
   }
 
   private def checkNoConflicts(base: String, b1: String, b2: String): Effect[Unit] = {

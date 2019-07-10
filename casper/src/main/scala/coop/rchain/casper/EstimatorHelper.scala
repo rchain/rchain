@@ -86,19 +86,29 @@ object EstimatorHelper {
       ancestors = maybeAncestors.flatten
       ancestorEvents = ancestors.flatMap(_.getBody.deploys.flatMap(_.deployLog)) ++
         ancestors.flatMap(_.getBody.deploys.flatMap(_.paymentLog))
-      commEvents = ancestorEvents.filter {
-        case Event(Comm(CommEvent(Some(_: ConsumeEvent), _))) =>
-          true
-        case _ => false
+      (produceEvents, consumeEvents, commEvents) = ancestorEvents.foldLeft(
+        (List.empty[ProduceEvent], List.empty[ConsumeEvent], List.empty[CommEvent])
+      ) {
+        case ((produces, consumes, commEvents), ancestorEvent) =>
+          ancestorEvent match {
+            case Event(Produce(produce: ProduceEvent)) =>
+              (produces :+ produce, consumes, commEvents)
+            case Event(Consume(consume: ConsumeEvent)) =>
+              (produces, consumes :+ consume, commEvents)
+            case Event(Comm(commEvent: CommEvent)) =>
+              (produces, consumes, commEvents :+ commEvent)
+            case _ =>
+              throw new RuntimeException("Unexpected ancestor event")
+          }
       }
       producesInCommEvents = commEvents.flatMap {
-        case Event(Comm(CommEvent(Some(_: ConsumeEvent), produces))) =>
+        case CommEvent(Some(_: ConsumeEvent), produces) =>
           produces
         case _ =>
           throw new RuntimeException("Unexpected comm event")
       }
       consumeInCommEvents = commEvents.map {
-        case Event(Comm(CommEvent(Some(consume: ConsumeEvent), _))) =>
+        case CommEvent(Some(consume: ConsumeEvent), _) =>
           consume
         case _ =>
           throw new RuntimeException("Unexpected comm event")
@@ -117,16 +127,13 @@ object EstimatorHelper {
             consume.channelsHashes.toSet
           }
         case Event(Comm(CommEvent(Some(consume: ConsumeEvent), produces))) =>
-          val consumeChannelHashes = if (consumeInCommEvents.contains(consume)) {
-            Set.empty[ByteString] // Volatile consume
+          if (consumeEvents.contains(consume) && produces.forall(
+                produce => produceEvents.contains(produce)
+              )) {
+            Set.empty[ByteString] // Volatile consume & produces
           } else {
-            consume.channelsHashes.toSet
+            consume.channelsHashes.toSet ++ produces.map(_.channelsHash).toSet
           }
-          val produceChannelHashes = produces
-            .filterNot(produce => producesInCommEvents.contains(produce))
-            .map(_.channelsHash)
-            .toSet
-          consumeChannelHashes ++ produceChannelHashes
         case _ => throw new RuntimeException("incorrect ancestor events")
       }.toSet
     } yield ancestorChannels
