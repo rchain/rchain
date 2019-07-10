@@ -1,14 +1,12 @@
 package coop.rchain.shared
 
 import cats._
-import cats.data._
-import cats.effect.{Concurrent, Sync}
 import cats.effect.concurrent.{MVar, Ref}
+import cats.effect.{Concurrent, Sync}
 import cats.syntax.applicative._
 import cats.syntax.applicativeError._
 import cats.syntax.flatMap._
 import cats.syntax.functor._
-import cats.syntax.either._
 import coop.rchain.catscontrib.ski._
 
 trait Cell[F[_], S] {
@@ -18,7 +16,7 @@ trait Cell[F[_], S] {
   def read: F[S]
 }
 
-object Cell extends CellInstances0 {
+object Cell {
   def apply[F[_], S](implicit ev: Cell[F, S]): Cell[F, S] = ev
 
   def mvarCell[F[_]: Concurrent, S](initalState: S): F[Cell[F, S]] =
@@ -83,34 +81,4 @@ object Cell extends CellInstances0 {
       s = f(s)
     def read: S = s
   }
-}
-
-trait CellInstances0 {
-  implicit def eitherTCell[E, F[_]: Monad, S](
-      implicit
-      fCell: Cell[F, S]
-  ): Cell[EitherT[F, E, ?], S] =
-    new Cell[EitherT[F, E, ?], S] {
-      def modify(f: S => S): EitherT[F, E, Unit] =
-        EitherT(
-          fCell
-            .modify(f)
-            .map(_.asRight[E])
-        )
-      def flatModify(f: S => EitherT[F, E, S]): EitherT[F, E, Unit] =
-        EitherT(
-          fCell
-            .flatModify(
-              s =>
-                f(s).value >>= {
-                  case Right(ns) => ns.pure[F]
-                  case Left(_)   => s.pure[F]
-                }
-            )
-            .map(Right(_).leftCast[E])
-        )
-
-      def read: EitherT[F, E, S] = EitherT(fCell.read.map(Right(_).leftCast[E]))
-    }
-
 }

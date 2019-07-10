@@ -6,24 +6,19 @@ import cats.effect.concurrent.MVar
 import cats.effect.{Sync, _}
 import cats.implicits._
 import com.google.protobuf.ByteString
-import coop.rchain.casper.protocol._
-import coop.rchain.casper.util.{ConstructDeploy, ProtoUtil}
 import coop.rchain.casper.CasperMetricsSource
+import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
-import coop.rchain.catscontrib.Catscontrib.ToMonadOps
-import coop.rchain.catscontrib.MonadTrans
+import coop.rchain.casper.util.{ConstructDeploy, ProtoUtil}
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.Expr.ExprInstance.GString
 import coop.rchain.models.Validator.Validator
-import coop.rchain.models.Var.VarInstance.FreeVar
 import coop.rchain.models._
-import coop.rchain.models.rholang.implicits._
-import coop.rchain.rholang.interpreter.Runtime.{BlockData, RhoISpace}
+import coop.rchain.rholang.interpreter.Runtime.BlockData
 import coop.rchain.rholang.interpreter.accounting._
 import coop.rchain.rholang.interpreter.errors.BugFoundError
-import coop.rchain.rholang.interpreter.storage.implicits.matchListPar
 import coop.rchain.rholang.interpreter.{
   ChargingReducer,
   ErrorLog,
@@ -31,10 +26,9 @@ import coop.rchain.rholang.interpreter.{
   Interpreter,
   NormalizerEnv,
   RhoType,
-  Runtime,
-  PrettyPrinter => RholangPrinter
+  Runtime
 }
-import coop.rchain.rspace.{trace, Blake2b256Hash, Checkpoint, ReplayException}
+import coop.rchain.rspace.{trace, Blake2b256Hash, ReplayException}
 
 trait RuntimeManager[F[_]] {
 
@@ -382,54 +376,4 @@ object RuntimeManager {
       runtime          <- MVar[F].of(active)
     } yield new RuntimeManagerImpl(hash, runtime)
 
-  def forTrans[F[_]: Monad, T[_[_], _]: MonadTrans](
-      runtimeManager: RuntimeManager[F]
-  ): RuntimeManager[T[F, ?]] =
-    new RuntimeManager[T[F, ?]] {
-
-      override def captureResults(
-          start: StateHash,
-          deploy: DeployData,
-          name: String
-      ): T[F, Seq[Par]] = runtimeManager.captureResults(start, deploy, name).liftM[T]
-
-      override def replayComputeState(hash: StateHash)(
-          terms: Seq[InternalProcessedDeploy],
-          blockData: BlockData,
-          invalidBlocks: Map[BlockHash, Validator],
-          isGenesis: Boolean
-      ): T[F, Either[ReplayFailure, StateHash]] =
-        runtimeManager.replayComputeState(hash)(terms, blockData, invalidBlocks, isGenesis).liftM[T]
-
-      override def computeState(hash: StateHash)(
-          terms: Seq[DeployData],
-          blockData: BlockData,
-          invalidBlocks: Map[BlockHash, Validator]
-      ): T[F, (StateHash, Seq[InternalProcessedDeploy])] =
-        runtimeManager.computeState(hash)(terms, blockData, invalidBlocks).liftM[T]
-
-      def computeGenesis(
-          terms: Seq[DeployData],
-          blockTime: Long
-      ): T[F, (StateHash, StateHash, Seq[InternalProcessedDeploy])] =
-        runtimeManager.computeGenesis(terms, blockTime).liftM[T]
-
-      override def computeBonds(hash: StateHash): T[F, Seq[Bond]] =
-        runtimeManager.computeBonds(hash).liftM[T]
-
-      override def getData(hash: StateHash)(channel: Par): T[F, Seq[Par]] =
-        runtimeManager.getData(hash)(channel).liftM[T]
-
-      override def getContinuation(
-          hash: StateHash
-      )(channels: Seq[Par]): T[F, Seq[(Seq[BindPattern], Par)]] =
-        runtimeManager.getContinuation(hash)(channels).liftM[T]
-
-      override val emptyStateHash: StateHash = runtimeManager.emptyStateHash
-    }
-
-  def eitherTRuntimeManager[E, F[_]: Monad](
-      rm: RuntimeManager[F]
-  ): RuntimeManager[EitherT[F, E, ?]] =
-    RuntimeManager.forTrans[F, EitherT[?[_], E, ?]](rm)
 }
