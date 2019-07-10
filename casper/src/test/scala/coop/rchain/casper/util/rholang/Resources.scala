@@ -2,7 +2,7 @@ package coop.rchain.casper.util.rholang
 
 import cats.effect.Resource
 import coop.rchain.metrics
-import coop.rchain.metrics.Metrics
+import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.rholang.Resources.mkRuntime
 import coop.rchain.shared.Log
 import monix.eval.Task
@@ -16,6 +16,7 @@ object Resources {
   )(implicit scheduler: Scheduler): Resource[Task, RuntimeManager[Task]] = {
     implicit val log: Log[Task]            = Log.log[Task]
     implicit val metricsEff: Metrics[Task] = new metrics.Metrics.MetricsNOP[Task]
+    implicit val noopSpan: Span[Task]      = NoopSpan[Task]()
 
     mkRuntime[Task](prefix, storageSize.toLong)
       .flatMap { runtime =>

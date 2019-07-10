@@ -29,11 +29,10 @@ object InterpreterUtil {
 
   //Returns (None, checkpoints) if the block's tuplespace hash
   //does not match the computed hash based on the deploys
-  def validateBlockCheckpoint[F[_]: Sync: Log: BlockStore](
+  def validateBlockCheckpoint[F[_]: Sync: Log: BlockStore: Span](
       b: BlockMessage,
       dag: BlockDagRepresentation[F],
-      runtimeManager: RuntimeManager[F],
-      span: Span[F]
+      runtimeManager: RuntimeManager[F]
   ): F[Either[BlockException, Option[StateHash]]] = {
     val preStateHash    = ProtoUtil.preStateHash(b)
     val tsHash          = ProtoUtil.tuplespace(b)
@@ -42,10 +41,10 @@ object InterpreterUtil {
     val timestamp       = b.header.get.timestamp // TODO: Ensure header exists through type
     val blockNumber     = b.body.get.state.get.blockNumber
     for {
-      _                    <- span.mark("before-unsafe-get-parents")
+      _                    <- Span[F].mark("before-unsafe-get-parents")
       parents              <- ProtoUtil.unsafeGetParents[F](b)
-      _                    <- span.mark("before-compute-parents-post-state")
-      possiblePreStateHash <- computeParentsPostState[F](parents, dag, runtimeManager, span)
+      _                    <- Span[F].mark("before-compute-parents-post-state")
+      possiblePreStateHash <- computeParentsPostState[F](parents, dag, runtimeManager)
       _                    <- Log[F].info(s"Computed parents post state for ${PrettyPrinter.buildString(b)}.")
       invalidBlocksSet     <- dag.invalidBlocks
       unseenBlocksSet      <- ProtoUtil.unseenBlockHashes(dag, b)
@@ -53,7 +52,7 @@ object InterpreterUtil {
         block => unseenBlocksSet.contains(block.blockHash)
       ) // TODO: Write test in which switching this to .filter makes it fail
       invalidBlocks = seenInvalidBlocksSet.map(block => (block.blockHash, block.sender)).toMap
-      _             <- span.mark("before-process-pre-state-hash")
+      _             <- Span[F].mark("before-process-pre-state-hash")
       result <- processPossiblePreStateHash[F](
                  runtimeManager,
                  preStateHash,
@@ -162,13 +161,12 @@ object InterpreterUtil {
           }
       }
 
-  def computeDeploysCheckpoint[F[_]: Sync: BlockStore](
+  def computeDeploysCheckpoint[F[_]: Sync: BlockStore: Span](
       parents: Seq[BlockMessage],
       deploys: Seq[DeployData],
       dag: BlockDagRepresentation[F],
       runtimeManager: RuntimeManager[F],
       blockData: BlockData,
-      span: Span[F],
       invalidBlocks: Map[BlockHash, Validator]
   ): F[Either[Throwable, (StateHash, StateHash, Seq[InternalProcessedDeploy])]] =
     //FIXME the `if` is only needed because of usages in test code. The only production usage currently is non-genesis.
@@ -178,7 +176,7 @@ object InterpreterUtil {
       runtimeManager.computeGenesis(deploys, blockData.timeStamp).map(_.asRight[Throwable])
     else
       for {
-        possiblePreStateHash <- computeParentsPostState[F](parents, dag, runtimeManager, span)
+        possiblePreStateHash <- computeParentsPostState[F](parents, dag, runtimeManager)
         result <- possiblePreStateHash.flatTraverse { preStateHash =>
                    runtimeManager
                      .computeState(preStateHash)(deploys, blockData, invalidBlocks)
@@ -189,11 +187,10 @@ object InterpreterUtil {
                  }
       } yield result
 
-  private def computeParentsPostState[F[_]: Sync: BlockStore](
+  private def computeParentsPostState[F[_]: Sync: BlockStore: Span](
       parents: Seq[BlockMessage],
       dag: BlockDagRepresentation[F],
-      runtimeManager: RuntimeManager[F],
-      span: Span[F]
+      runtimeManager: RuntimeManager[F]
   ): F[Either[Throwable, StateHash]] = {
     val parentTuplespaces = parents.flatMap(p => ProtoUtil.tuplespace(p).map(p -> _))
 
@@ -206,25 +203,24 @@ object InterpreterUtil {
         parentStateHash.asRight[Throwable].pure[F]
 
       case (_, initStateHash) +: _ =>
-        computeMultiParentsPostState[F](parents, dag, runtimeManager, initStateHash, span)
+        computeMultiParentsPostState[F](parents, dag, runtimeManager, initStateHash)
     }
   }
   // In the case of multiple parents we need to apply all of the deploys that have been
   // made in all of the branches of the DAG being merged. This is done by computing uncommon ancestors
   // and applying the deploys in those blocks on top of the initial parent.
-  private def computeMultiParentsPostState[F[_]: Sync: BlockStore](
+  private def computeMultiParentsPostState[F[_]: Sync: BlockStore: Span](
       parents: Seq[BlockMessage],
       dag: BlockDagRepresentation[F],
       runtimeManager: RuntimeManager[F],
-      initStateHash: StateHash,
-      span: Span[F]
+      initStateHash: StateHash
   ): F[Either[Throwable, StateHash]] =
     for {
-      _                  <- span.mark("before-compute-parents-post-state-find-multi-parents")
+      _                  <- Span[F].mark("before-compute-parents-post-state-find-multi-parents")
       blockHashesToApply <- findMultiParentsBlockHashesForReplay(parents, dag)
-      _                  <- span.mark("before-compute-parents-post-state-get-blocks")
+      _                  <- Span[F].mark("before-compute-parents-post-state-get-blocks")
       blocksToApply      <- blockHashesToApply.traverse(b => ProtoUtil.unsafeGetBlock[F](b.blockHash))
-      _                  <- span.mark("before-compute-parents-post-state-replay")
+      _                  <- Span[F].mark("before-compute-parents-post-state-replay")
       replayResult <- blocksToApply.toList.foldM(Right(initStateHash).leftCast[Throwable]) {
                        (acc, block) =>
                          acc match {

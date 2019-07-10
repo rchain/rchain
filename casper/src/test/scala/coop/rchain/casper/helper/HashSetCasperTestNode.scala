@@ -30,7 +30,7 @@ import coop.rchain.comm.rp.HandleMessages.handle
 import coop.rchain.crypto.PrivateKey
 import coop.rchain.crypto.signatures.Secp256k1
 import coop.rchain.metrics
-import coop.rchain.metrics.{Metrics, NoopSpan}
+import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.p2p.EffectsTestInstances._
 import coop.rchain.rholang.interpreter.Runtime
 import coop.rchain.shared.PathOps.RichPath
@@ -60,6 +60,7 @@ class HashSetCasperTestNode[F[_]](
     val blockStore: BlockStore[F],
     val blockDagStorage: BlockDagStorage[F],
     val metricEff: Metrics[F],
+    val span: Span[F],
     val casperState: CasperStateCell[F]
 ) {
 
@@ -99,8 +100,6 @@ class HashSetCasperTestNode[F[_]](
   val engine                             = new Running(casperEff, approvedBlock, ().pure[F])
   implicit val engineCell: EngineCell[F] = Cell.unsafe[F, Engine[F]](engine)
   implicit val packetHandlerEff          = CasperPacketHandler[F]
-
-  val span = new NoopSpan[F]
 
   def addBlock(deployDatums: DeployData*): F[BlockMessage] =
     addBlockStatus(Valid)(deployDatums: _*)
@@ -158,6 +157,7 @@ object HashSetCasperTestNode {
   ): Resource[Effect, RuntimeManager[Effect]] = {
     implicit val log                       = Log.log[Task]
     implicit val metricsEff: Metrics[Task] = new metrics.Metrics.MetricsNOP[Task]
+    implicit val span: Span[Task]          = NoopSpan[Task]()
     val activeRuntime =
       Runtime
         .createWithEmptyCost[Task, Task.Par](storageDirectory, storageSize)
@@ -243,6 +243,7 @@ object HashSetCasperTestNode {
     val tls                = new TransportLayerServerTestImpl[F](currentPeerNode)
     implicit val log       = Log.log[F]
     implicit val metricEff = new Metrics.MetricsNOP[F]
+    implicit val spanEff   = NoopSpan[F]()
     for {
       storageDirectory <- Resource.make[F, Path](
                            Sync[F].delay {
@@ -289,6 +290,7 @@ object HashSetCasperTestNode {
                    blockStore,
                    blockDagStorage,
                    metricEff,
+                   spanEff,
                    casperState
                  )
                } yield node

@@ -2,10 +2,10 @@ package coop.rchain.rholang.interpreter
 
 import cats.Parallel
 import cats.effect.Sync
-import cats.effect.concurrent.Ref
 import cats.implicits._
 import cats.mtl.FunctorTell
 import coop.rchain.crypto.hash.Blake2b512Random
+import coop.rchain.metrics.Span
 import coop.rchain.models.TaggedContinuation.TaggedCont.{Empty, ParBody, ScalaBodyRef}
 import coop.rchain.models._
 import coop.rchain.rholang.interpreter.Runtime.RhoISpace
@@ -21,7 +21,8 @@ object RholangOnlyDispatcher {
       cost: _cost[M],
       parallel: Parallel[M, F],
       s: Sync[M],
-      ft: FunctorTell[M, Throwable]
+      ft: FunctorTell[M, Throwable],
+      spanM: Span[M]
   ): (Dispatch[M, ListParWithRandom, TaggedContinuation], ChargingReducer[M]) = {
 
     val pureSpace = PureRSpace[M].of(tuplespace)(matchListPar)

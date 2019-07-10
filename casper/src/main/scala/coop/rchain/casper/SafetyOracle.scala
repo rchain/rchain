@@ -12,7 +12,7 @@ import coop.rchain.casper.protocol.Justification
 import coop.rchain.casper.util.ProtoUtil._
 import coop.rchain.casper.util.{Clique, DagOperations, ProtoUtil}
 import coop.rchain.models.BlockMetadata
-import coop.rchain.metrics.Metrics
+import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.Validator.Validator
 import coop.rchain.shared.{Log, StreamT}
@@ -57,7 +57,7 @@ object SafetyOracle extends SafetyOracleInstances {
 }
 
 sealed abstract class SafetyOracleInstances {
-  def cliqueOracle[F[_]: Monad: Log: Metrics]: SafetyOracle[F] =
+  def cliqueOracle[F[_]: Monad: Log: Metrics: Span]: SafetyOracle[F] =
     new SafetyOracle[F] {
       private val SafetyOracleMetricsSource: Metrics.Source =
         Metrics.Source(CasperMetricsSource, "safety-oracle")
@@ -71,16 +71,15 @@ sealed abstract class SafetyOracleInstances {
       def normalizedFaultTolerance(
           blockDag: BlockDagRepresentation[F],
           candidateBlockHash: BlockHash
-      ): F[Float] =
+      ): F[Float] = Span[F].trace(SafetyOracleMetricsSource) {
         for {
-          span        <- Metrics[F].span(SafetyOracleMetricsSource)
           totalWeight <- computeTotalWeight(blockDag, candidateBlockHash)
-          _           <- span.mark("total-weight")
+          _           <- Span[F].mark("total-weight")
           agreeingValidatorToWeight <- computeAgreeingValidatorToWeight(
                                         blockDag,
                                         candidateBlockHash
                                       )
-          _ <- span.mark("agreeing-validator-to-weight")
+          _ <- Span[F].mark("agreeing-validator-to-weight")
           maxCliqueWeight <- if (2L * agreeingValidatorToWeight.values.sum < totalWeight) {
                               0L.pure[F]
                             } else {
@@ -90,10 +89,11 @@ sealed abstract class SafetyOracleInstances {
                                 agreeingValidatorToWeight
                               )
                             }
-          _              <- span.mark("max-clique-weight")
+          _ <- Span[F].mark("max-clique-weight")
+
           faultTolerance = 2 * maxCliqueWeight - totalWeight
-          _              <- span.close()
         } yield faultTolerance.toFloat / totalWeight
+      }
 
       private def computeTotalWeight(
           blockDag: BlockDagRepresentation[F],

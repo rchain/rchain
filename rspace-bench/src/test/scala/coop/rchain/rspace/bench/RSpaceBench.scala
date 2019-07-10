@@ -6,7 +6,7 @@ import java.util.concurrent.TimeUnit
 import cats.Id
 import cats.effect._
 import coop.rchain.metrics
-import coop.rchain.metrics.Metrics
+import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.rspace._
 import coop.rchain.rspace.{RSpace, ReplayRSpace}
 import coop.rchain.rspace.examples.AddressBookExample._
@@ -98,6 +98,7 @@ class RSpaceBench extends RSpaceBenchBase {
   var dbDir: Path                       = null
   implicit val logF: Log[Id]            = new Log.NOPLog[Id]
   implicit val noopMetrics: Metrics[Id] = new metrics.Metrics.MetricsNOP[Id]
+  implicit val noopSpan: Span[Id]       = NoopSpan[Id]()
 
   @Setup
   def setup() = {

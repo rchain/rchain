@@ -1,31 +1,93 @@
 package coop.rchain.node.diagnostics
 
-import java.lang.management.{ManagementFactory, MemoryType}
-
-import scala.collection.JavaConverters._
 import cats.effect.Sync
 import cats.implicits._
-import coop.rchain.comm.discovery._
-import coop.rchain.comm.rp.Connect.ConnectionsCell
+import cats.mtl.ApplicativeLocal
 import coop.rchain.metrics.{Metrics, Span}
-import com.google.protobuf.ByteString
-import com.google.protobuf.empty.Empty
 import coop.rchain.metrics.Metrics.Source
-import javax.management.ObjectName
-import monix.eval.Task
+import kamon.Kamon
+import kamon.trace.{Span => KSpan}
+
+private object KamonTracer {
+  def start[F[_]: Sync](source: Source, networkId: String, host: String): F[KSpan] = Sync[F].delay {
+    Kamon
+      .buildSpan(source)
+      .withTag("network-id", networkId)
+      .withTag("host", host)
+      .start()
+  }
+  def start[F[_]: Sync](source: Source, parent: KSpan, networkId: String, host: String): F[KSpan] =
+    Sync[F].delay {
+      Kamon
+        .buildSpan(source)
+        .withTag("network-id", networkId)
+        .withTag("host", host)
+        .asChildOf(parent)
+        .start()
+    }
+
+  def end[F[_]: Sync](span: KSpan): F[Unit] =
+    Sync[F].delay { span.finish() }
+  def mark[F[_]: Sync](span: KSpan, mark: String): F[Unit] =
+    Sync[F].delay { span.mark(mark) }.as(())
+}
+
+trait Trace
+
+object Trace {
+  private[diagnostics] final case class DefaultTrace(s: Source) extends Trace
+  private[diagnostics] final case class KamonTrace(s: KSpan)    extends Trace
+
+  def source(s: Source): Trace = DefaultTrace(s)
+  def kamon(s: KSpan): Trace   = KamonTrace(s)
+}
 
 package object effects {
 
-  def metrics[F[_]: Sync](networkId: String, host: String): Metrics[F] =
+  type AskTrace[F[_]] = ApplicativeLocal[F, Trace]
+  object AskTrace {
+    def apply[F[_]](implicit ev: AskTrace[F]): AskTrace[F] = ev
+  }
+
+  /**
+    * kamon based implementation of tracing that uses the effect stack to track the current span
+    *
+    * if a trace is already available it will be used in `mark`
+    * otherwise a `DefaultTrace` will be transformed into a KamonTrace and will be treated as current
+    */
+  def span[F[_]: Sync: AskTrace](networkId: String, host: String): Span[F] =
+    new Span[F] {
+      private[this] val A = AskTrace[F]
+      import A._
+      import Trace._
+
+      override def mark(name: String): F[Unit] = {
+        ask.map {
+          case DefaultTrace(source) =>
+            trace(source) {
+              mark(name)
+            }
+          case KamonTrace(ks) => ks.mark(name)
+        }
+      }.as(())
+
+      override def trace[A](source: Source)(block: F[A]): F[A] =
+        for {
+          span <- ask
+          r <- Sync[F].bracket((span match {
+                case DefaultTrace(_) => KamonTracer.start[F](source, networkId, host)
+                case KamonTrace(ks)  => KamonTracer.start[F](source, ks, networkId, host)
+              }).map(kamon)) {
+                scope(_)(block)
+              } {
+                case KamonTrace(ks) => KamonTracer.end(ks)
+              }
+        } yield r
+    }
+
+  def metrics[F[_]: Sync]: Metrics[F] =
     new Metrics[F] {
       import kamon._
-      import kamon.trace.{Span => KSpan}
-
-      case class KamonSpan(span: KSpan) extends Span[F] {
-        @SuppressWarnings(Array("org.wartremover.warts.NonUnitStatements"))
-        override def mark(name: String): F[Unit] = Sync[F].delay { span.mark(name) }
-        override def close(): F[Unit]            = Sync[F].delay { span.finish() }
-      }
 
       private val m = scala.collection.concurrent.TrieMap[String, metric.Metric[_]]()
 
@@ -89,15 +151,5 @@ package object effects {
               _ = t.stop()
             } yield r
         }
-
-      def span(source: Source): F[Span[F]] = Sync[F].delay {
-        KamonSpan(
-          Kamon
-            .buildSpan(source)
-            .withTag("network-id", networkId)
-            .withTag("host", host)
-            .start()
-        )
-      }
     }
 }

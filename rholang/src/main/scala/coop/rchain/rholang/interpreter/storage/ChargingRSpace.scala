@@ -2,6 +2,7 @@ package coop.rchain.rholang.interpreter.storage
 
 import cats.effect.Sync
 import cats.implicits._
+import coop.rchain.metrics.Span
 import coop.rchain.models.TaggedContinuation.TaggedCont.ParBody
 import coop.rchain.models._
 import coop.rchain.rholang.interpreter.Runtime.{RhoISpace, RhoPureSpace}
@@ -26,7 +27,7 @@ object ChargingRSpace {
   def storageCostProduce(channel: Par, data: ListParWithRandom): Cost =
     channel.storageCost + data.pars.storageCost
 
-  def pureRSpace[F[_]: Sync](
+  def pureRSpace[F[_]: Sync: Span](
       space: RhoISpace[F]
   )(implicit cost: _cost[F]) =
     new RhoPureSpace[F] {

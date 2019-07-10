@@ -19,6 +19,7 @@ import monix.eval.Task
 import org.scalatest._
 
 import scala.collection.immutable.HashMap
+import coop.rchain.metrics.NoopSpan
 
 class BlockQueryResponseAPITest
     extends FlatSpec
@@ -26,6 +27,7 @@ class BlockQueryResponseAPITest
     with Inside
     with BlockDagStorageFixture {
   implicit val timeEff = new LogicalTime[Task]
+  implicit val spanEff = NoopSpan[Task]()
   private val (sk, pk) = Secp256k1.newKeyPair
   val secondBlockQuery = "1234"
   val badTestHashQuery = "No such a hash"
@@ -88,6 +90,7 @@ class BlockQueryResponseAPITest
     implicit blockStore => implicit blockDagStorage =>
       for {
         effects                                 <- effectsForSimpleCasperSetup(blockStore, blockDagStorage)
+        spanEff                                 = NoopSpan[Task]()
         (logEff, casperRef, cliqueOracleEffect) = effects
         q                                       = BlockQuery(hash = secondBlockQuery)
         blockQueryResponse <- BlockAPI.getBlock[Task](q)(
@@ -95,7 +98,8 @@ class BlockQueryResponseAPITest
                                casperRef,
                                logEff,
                                cliqueOracleEffect,
-                               blockStore
+                               blockStore,
+                               spanEff
                              )
         _ = inside(blockQueryResponse) {
           case Right(BlockQueryResponse(Some(blockInfo))) =>
@@ -119,6 +123,7 @@ class BlockQueryResponseAPITest
     implicit blockStore => implicit blockDagStorage =>
       for {
         effects                                 <- emptyEffects(blockStore, blockDagStorage)
+        spanEff                                 = NoopSpan[Task]()
         (logEff, casperRef, cliqueOracleEffect) = effects
         q                                       = BlockQuery(hash = badTestHashQuery)
         blockQueryResponse <- BlockAPI.getBlock[Task](q)(
@@ -126,7 +131,8 @@ class BlockQueryResponseAPITest
                                casperRef,
                                logEff,
                                cliqueOracleEffect,
-                               blockStore
+                               blockStore,
+                               spanEff
                              )
         _ = inside(blockQueryResponse) {
           case Left(msg) =>
@@ -262,7 +268,7 @@ class BlockQueryResponseAPITest
       metricsEff         = new Metrics.MetricsNOP[Task]
       casperRef          <- MultiParentCasperRef.of[Task]
       _                  <- casperRef.set(casperEffect)
-      cliqueOracleEffect = SafetyOracle.cliqueOracle[Task](Sync[Task], logEff, metricsEff)
+      cliqueOracleEffect = SafetyOracle.cliqueOracle[Task](Sync[Task], logEff, metricsEff, spanEff)
     } yield (logEff, casperRef, cliqueOracleEffect)
 
   private def emptyEffects(
@@ -280,6 +286,6 @@ class BlockQueryResponseAPITest
       metricsEff         = new Metrics.MetricsNOP[Task]
       casperRef          <- MultiParentCasperRef.of[Task]
       _                  <- casperRef.set(casperEffect)
-      cliqueOracleEffect = SafetyOracle.cliqueOracle[Task](Sync[Task], logEff, metricsEff)
+      cliqueOracleEffect = SafetyOracle.cliqueOracle[Task](Sync[Task], logEff, metricsEff, spanEff)
     } yield (logEff, casperRef, cliqueOracleEffect)
 }

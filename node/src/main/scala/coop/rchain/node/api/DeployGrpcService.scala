@@ -6,29 +6,28 @@ import cats.implicits._
 import cats.effect.concurrent.Semaphore
 import cats.effect.Concurrent
 import cats.mtl.implicits._
-
 import coop.rchain.blockstorage.BlockStore
 import coop.rchain.casper.MultiParentCasperRef.MultiParentCasperRef
 import coop.rchain.casper.SafetyOracle
 import coop.rchain.casper.api._
 import coop.rchain.casper.protocol.{DeployData, _}
 import coop.rchain.catscontrib.Catscontrib._
-import coop.rchain.catscontrib.Taskable
+import coop.rchain.catscontrib.{TaskContrib, Taskable}
 import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.either.{Either => GrpcEither}
 import coop.rchain.graphz._
 import coop.rchain.models.StacksafeMessage
 import coop.rchain.models.either.implicits._
 import coop.rchain.shared._
-
-import com.google.protobuf.empty.Empty
+import coop.rchain.metrics.Span
 import monix.eval.Task
 import monix.execution.Scheduler
 import monix.reactive.Observable
 
 private[api] object DeployGrpcService {
-  def instance[F[_]: Concurrent: MultiParentCasperRef: Log: SafetyOracle: BlockStore: Taskable](
-      blockApiLock: Semaphore[F]
+  def instance[F[_]: Concurrent: MultiParentCasperRef: Log: SafetyOracle: BlockStore: Taskable: Span](
+      blockApiLock: Semaphore[F],
+      tracing: Boolean
   )(
       implicit worker: Scheduler
   ): DeployServiceGrpcMonix.DeployService =
@@ -40,6 +39,7 @@ private[api] object DeployGrpcService {
         Task
           .defer(task.toTask)
           .executeOn(worker)
+          .executeWithOptions(TaskContrib.enableTracing(tracing))
           .attemptAndLog
           .attempt
           .map(_.fold(_.asLeft[A].toGrpcEither, _.toGrpcEither))

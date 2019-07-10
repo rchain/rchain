@@ -9,7 +9,7 @@ import cats.effect.Sync
 import cats.implicits._
 import coop.rchain.catscontrib.mtl.implicits._
 import coop.rchain.catscontrib.TaskContrib._
-import coop.rchain.metrics.Metrics
+import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.models._
 import coop.rchain.rholang.interpreter.Runtime.RhoISpace
 import coop.rchain.rholang.interpreter.accounting._
@@ -62,6 +62,7 @@ object RholangCLI {
 
     implicit val log: Log[Task]          = Log.log[Task]
     implicit val metricsF: Metrics[Task] = new Metrics.MetricsNOP[Task]()
+    implicit val spanF: Span[Task]       = NoopSpan[Task]()
 
     val runtime = (for {
       runtime <- Runtime.createWithEmptyCost[Task, Task.Par](

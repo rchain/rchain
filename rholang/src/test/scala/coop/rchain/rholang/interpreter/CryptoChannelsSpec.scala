@@ -9,7 +9,7 @@ import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.hash.{Blake2b256, Blake2b512Random, Keccak256, Sha256}
 import coop.rchain.crypto.signatures.{Ed25519, Secp256k1}
 import coop.rchain.metrics
-import coop.rchain.metrics.Metrics
+import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.models.Expr.ExprInstance.{GBool, GByteArray, GString}
 import coop.rchain.models.Var.VarInstance.Wildcard
 import coop.rchain.models.Var.WildcardMsg
@@ -218,6 +218,7 @@ class CryptoChannelsSpec
     val size                                = 1024L * 1024 * 10
     implicit val logF: Log[Task]            = new Log.NOPLog[Task]
     implicit val noopMetrics: Metrics[Task] = new metrics.Metrics.MetricsNOP[Task]
+    implicit val noopSpan: Span[Task]       = NoopSpan[Task]()
 
     val runtime = (for {
       runtime <- Runtime.createWithEmptyCost[Task, Task.Par](dbDir, size)

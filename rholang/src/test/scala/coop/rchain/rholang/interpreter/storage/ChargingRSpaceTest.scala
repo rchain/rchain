@@ -1,14 +1,10 @@
 package coop.rchain.rholang.interpreter.storage
 
-import cats.Foldable
 import cats.effect.{Resource, Sync}
-import cats.mtl.FunctorRaise
-import cats.implicits.catsStdInstancesForList
 import com.google.protobuf.ByteString
-import coop.rchain.catscontrib.mtl.implicits._
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.metrics
-import coop.rchain.metrics.Metrics
+import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.models.Expr.ExprInstance.GInt
 import coop.rchain.models.TaggedContinuation.TaggedCont.ParBody
 import coop.rchain.models.Var.VarInstance.FreeVar
@@ -17,19 +13,16 @@ import coop.rchain.models.rholang.implicits._
 import coop.rchain.rholang.Resources.mkRhoISpace
 import coop.rchain.rholang.interpreter.Runtime.{RhoISpace, RhoPureSpace}
 import coop.rchain.rholang.interpreter.accounting.{CostAccounting, _}
-import coop.rchain.rholang.interpreter.errors
-import coop.rchain.rholang.interpreter.errors.{InterpreterError, OutOfPhlogistonsError}
+import coop.rchain.rholang.interpreter.errors.OutOfPhlogistonsError
 import coop.rchain.rholang.interpreter.storage.ChargingRSpace._
 import coop.rchain.rholang.interpreter.storage.ChargingRSpaceTest.{ChargingRSpace, _}
 import coop.rchain.rholang.interpreter.storage.implicits.matchListPar
-import coop.rchain.rspace.{Match, _}
 import coop.rchain.shared.Log
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
 import org.scalactic.TripleEqualsSupport
 import org.scalatest.{fixture, Matchers, Outcome}
 
-import scala.collection.immutable
 import scala.concurrent.duration._
 
 class ChargingRSpaceTest extends fixture.FlatSpec with TripleEqualsSupport with Matchers {
@@ -343,9 +336,10 @@ class ChargingRSpaceTest extends fixture.FlatSpec with TripleEqualsSupport with 
 
   protected override def withFixture(test: OneArgTest): Outcome = {
     val cost: _cost[Task] = CostAccounting.emptyCost[Task].runSyncUnsafe(1.second)
+    implicit val span     = NoopSpan[Task]
     def mkChargingRspace(rhoISpace: RhoISpace[Task]): Task[ChargingRSpace] = {
       val s = implicitly[Sync[Task]]
-      Task.delay(ChargingRSpace.pureRSpace(rhoISpace)(s, cost))
+      Task.delay(ChargingRSpace.pureRSpace(rhoISpace)(s, span, cost))
     }
 
     val chargingRSpaceResource =
@@ -367,7 +361,8 @@ class ChargingRSpaceTest extends fixture.FlatSpec with TripleEqualsSupport with 
       initPhlos <- cost.inspect(identity)
       _ <- patterns.zip(data).toList.traverse {
             case (pattern, pars) => {
-              implicit val c = cost
+              implicit val c    = cost
+              implicit val span = NoopSpan[Task]
               matchListPar[Task].get(pattern, pars)
             }
           }

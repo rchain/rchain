@@ -1,19 +1,15 @@
 package coop.rchain.casper.api
 
 import scala.collection.immutable.HashMap
-
 import cats.effect.Sync
-
 import coop.rchain.casper._
 import coop.rchain.casper.helper._
 import coop.rchain.casper.helper.BlockGenerator._
 import coop.rchain.casper.helper.BlockUtil.generateValidator
 import coop.rchain.casper.protocol._
-import coop.rchain.metrics.Metrics
+import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.p2p.EffectsTestInstances.LogStub
-
-import com.google.protobuf.ByteString
 import monix.eval.Task
 import org.scalatest.{FlatSpec, Matchers}
 
@@ -24,13 +20,14 @@ class BlocksResponseAPITest
     with BlockGenerator
     with BlockDagStorageFixture {
 
-  val v1     = generateValidator("Validator One")
-  val v2     = generateValidator("Validator Two")
-  val v3     = generateValidator("Validator Three")
-  val v1Bond = Bond(v1, 25)
-  val v2Bond = Bond(v2, 20)
-  val v3Bond = Bond(v3, 15)
-  val bonds  = Seq(v1Bond, v2Bond, v3Bond)
+  val v1                           = generateValidator("Validator One")
+  val v2                           = generateValidator("Validator Two")
+  val v3                           = generateValidator("Validator Three")
+  val v1Bond                       = Bond(v1, 25)
+  val v2Bond                       = Bond(v2, 20)
+  val v3Bond                       = Bond(v3, 15)
+  val bonds                        = Seq(v1Bond, v2Bond, v3Bond)
+  implicit val spanEff: Span[Task] = Span.noop
 
   "showMainChain" should "return only blocks in the main chain" in withStorage {
     implicit blockStore => implicit blockDagStorage =>
@@ -87,15 +84,16 @@ class BlocksResponseAPITest
              )
         dag        <- blockDagStorage.getRepresentation
         metricsEff = new Metrics.MetricsNOP[Task]
-        tips       <- Estimator.tips[Task](dag, genesis)(Sync[Task], metricsEff)
+        tips       <- Estimator.tips[Task](dag, genesis)(Sync[Task], metricsEff, spanEff)
         casperEffect <- NoOpsCasperEffect[Task](
                          HashMap.empty[BlockHash, BlockMessage],
                          tips
                        )
-        logEff             = new LogStub[Task]
-        casperRef          <- MultiParentCasperRef.of[Task]
-        _                  <- casperRef.set(casperEffect)
-        cliqueOracleEffect = SafetyOracle.cliqueOracle[Task](Sync[Task], logEff, metricsEff)
+        logEff    = new LogStub[Task]
+        casperRef <- MultiParentCasperRef.of[Task]
+        _         <- casperRef.set(casperEffect)
+        cliqueOracleEffect = SafetyOracle
+          .cliqueOracle[Task](Sync[Task], logEff, metricsEff, spanEff)
         blocksResponse <- BlockAPI.showMainChain[Task](Int.MaxValue)(
                            Sync[Task],
                            casperRef,
@@ -161,15 +159,16 @@ class BlocksResponseAPITest
              )
         dag        <- blockDagStorage.getRepresentation
         metricsEff = new Metrics.MetricsNOP[Task]
-        tips       <- Estimator.tips[Task](dag, genesis)(Sync[Task], metricsEff)
+        tips       <- Estimator.tips[Task](dag, genesis)(Sync[Task], metricsEff, spanEff)
         casperEffect <- NoOpsCasperEffect[Task](
                          HashMap.empty[BlockHash, BlockMessage],
                          tips
                        )
-        logEff             = new LogStub[Task]
-        casperRef          <- MultiParentCasperRef.of[Task]
-        _                  <- casperRef.set(casperEffect)
-        cliqueOracleEffect = SafetyOracle.cliqueOracle[Task](Sync[Task], logEff, metricsEff)
+        logEff    = new LogStub[Task]
+        casperRef <- MultiParentCasperRef.of[Task]
+        _         <- casperRef.set(casperEffect)
+        cliqueOracleEffect = SafetyOracle
+          .cliqueOracle[Task](Sync[Task], logEff, metricsEff, spanEff)
         blocksResponse <- BlockAPI.getBlocks[Task](Some(Int.MaxValue))(
                            Sync[Task],
                            casperRef,
@@ -234,7 +233,7 @@ class BlocksResponseAPITest
            )
       dag        <- blockDagStorage.getRepresentation
       metricsEff = new Metrics.MetricsNOP[Task]
-      tips       <- Estimator.tips[Task](dag, genesis)(Sync[Task], metricsEff)
+      tips       <- Estimator.tips[Task](dag, genesis)(Sync[Task], metricsEff, spanEff)
       casperEffect <- NoOpsCasperEffect[Task](
                        HashMap.empty[BlockHash, BlockMessage],
                        tips
@@ -242,7 +241,7 @@ class BlocksResponseAPITest
       logEff             = new LogStub[Task]
       casperRef          <- MultiParentCasperRef.of[Task]
       _                  <- casperRef.set(casperEffect)
-      cliqueOracleEffect = SafetyOracle.cliqueOracle[Task](Sync[Task], logEff, metricsEff)
+      cliqueOracleEffect = SafetyOracle.cliqueOracle[Task](Sync[Task], logEff, metricsEff, spanEff)
       blocksResponse <- BlockAPI.getBlocks[Task](Some(2))(
                          Sync[Task],
                          casperRef,

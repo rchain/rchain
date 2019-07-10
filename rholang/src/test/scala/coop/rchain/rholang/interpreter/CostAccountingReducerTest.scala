@@ -1,9 +1,8 @@
 package coop.rchain.rholang.interpreter
 
-import cats.effect.concurrent.Ref
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.metrics
-import coop.rchain.metrics.Metrics
+import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.models.Expr.ExprInstance.{EVarBody, GString}
 import coop.rchain.models.Var.VarInstance.FreeVar
 import coop.rchain.models._
@@ -24,6 +23,8 @@ import org.scalatest.{FlatSpec, Matchers}
 import scala.concurrent.duration._
 
 class CostAccountingReducerTest extends FlatSpec with Matchers with TripleEqualsSupport {
+
+  implicit val noopSpan: Span[Task] = Span.noop
 
   behavior of "Cost accounting in Reducer"
 

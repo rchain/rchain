@@ -9,7 +9,7 @@ import java.util.concurrent.TimeUnit
 import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.metrics
-import coop.rchain.metrics.Metrics
+import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.models.Par
 import coop.rchain.rholang.interpreter.accounting._
 import coop.rchain.shared.Log
@@ -38,6 +38,7 @@ abstract class WideBenchBaseState {
   implicit def readErrors                 = () => runtime.readAndClearErrorVector().unsafeRunSync
   implicit val logF: Log[Task]            = Log.log[Task]
   implicit val noopMetrics: Metrics[Task] = new metrics.Metrics.MetricsNOP[Task]
+  implicit val noopSpan: Span[Task]       = NoopSpan[Task]()
 
   def createRuntime(): Runtime[Task] =
     (for {

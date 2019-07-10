@@ -14,7 +14,7 @@ import coop.rchain.catscontrib.ApplicativeError_
 import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.comm._
 import coop.rchain.comm.rp.Connect.{Connections, ConnectionsCell}
-import coop.rchain.metrics.Metrics.MetricsNOP
+import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.p2p.EffectsTestInstances._
 import coop.rchain.rholang.interpreter.Runtime
@@ -24,12 +24,13 @@ import monix.execution.Scheduler
 
 object Setup {
   def apply() = new {
-    implicit val log          = new LogStub[Task]
-    implicit val eventLogStub = new EventLogStub[Task]
-    implicit val metrics      = new MetricsNOP[Task]
-    val networkId             = "test"
-    val scheduler             = Scheduler.io("test")
-    val runtimeDir            = BlockDagStorageTestFixture.blockStorageDir
+    implicit val log              = new LogStub[Task]
+    implicit val eventLogStub     = new EventLogStub[Task]
+    implicit val metrics          = new Metrics.MetricsNOP[Task]
+    implicit val span: Span[Task] = NoopSpan[Task]()
+    val networkId                 = "test"
+    val scheduler                 = Scheduler.io("test")
+    val runtimeDir                = BlockDagStorageTestFixture.blockStorageDir
     val activeRuntime =
       Runtime
         .createWithEmptyCost[Task, Task.Par](runtimeDir, 3024L * 1024)(
@@ -37,6 +38,7 @@ object Setup {
           Concurrent[Task],
           log,
           metrics,
+          span,
           Parallel[Task, Task.Par],
           scheduler
         )

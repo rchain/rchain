@@ -6,7 +6,7 @@ import cats._
 import cats.implicits._
 import cats.effect._
 import com.typesafe.scalalogging.Logger
-import coop.rchain.metrics.Metrics
+import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.rspace._
 import coop.rchain.rspace.examples.StringExamples
 import coop.rchain.rspace.examples.StringExamples._
@@ -30,6 +30,7 @@ import scala.concurrent.ExecutionContext.Implicits.global
 import monix.eval.Task
 import monix.execution.atomic.AtomicAny
 import org.lmdbjava.EnvFlags
+import coop.rchain.metrics.NoopSpan
 
 trait StorageTestsBase[F[_], C, P, A, K] extends FlatSpec with Matchers with OptionValues {
   type T    = ISpace[F, C, P, A, A, K]
@@ -40,6 +41,7 @@ trait StorageTestsBase[F[_], C, P, A, K] extends FlatSpec with Matchers with Opt
   implicit def concurrentF: Concurrent[F]
   implicit def logF: Log[F]
   implicit def metricsF: Metrics[F]
+  implicit def spanF: Span[F]
   implicit def monadF: Monad[F]
   implicit def contextShiftF: ContextShift[F]
 
@@ -113,6 +115,7 @@ trait TaskTests[C, P, A, R, K] extends StorageTestsBase[Task, C, P, R, K] {
     )
   implicit val logF: Log[Task]         = Log.log[Task]
   implicit val metricsF: Metrics[Task] = new Metrics.MetricsNOP[Task]()
+  implicit val spanF: Span[Task]       = NoopSpan[Task]()
 
   implicit override val monadF: Monad[Task] = concurrentF
   implicit override val contextShiftF: ContextShift[Task] = new ContextShift[Task] {

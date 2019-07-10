@@ -8,7 +8,7 @@ import coop.rchain.casper.api.BlockAPI
 import coop.rchain.casper.helper.BlockGenerator._
 import coop.rchain.casper.helper._
 import coop.rchain.casper.protocol.{BlockMessage, Bond}
-import coop.rchain.metrics.Metrics.MetricsNOP
+import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.Validator
 import coop.rchain.p2p.EffectsTestInstances.LogStub
@@ -27,10 +27,11 @@ class ManyValidatorsTest
     with BlockGenerator
     with BlockDagStorageFixture {
   "Get blocks" should "be processed quickly for a node with 300 validators" in {
-    val blockDagStorageDir = BlockDagStorageTestFixture.blockDagStorageDir
-    val blockStoreDir      = BlockDagStorageTestFixture.blockStorageDir
-    implicit val metrics   = new MetricsNOP[Task]()
-    implicit val log       = new Log.NOPLog[Task]()
+    val blockDagStorageDir            = BlockDagStorageTestFixture.blockDagStorageDir
+    val blockStoreDir                 = BlockDagStorageTestFixture.blockStorageDir
+    implicit val metrics              = new Metrics.MetricsNOP[Task]()
+    implicit val noopSpan: Span[Task] = NoopSpan[Task]()
+    implicit val log                  = new Log.NOPLog[Task]()
     val bonds = Seq
       .fill(300) {
         val array = Array.ofDim[Byte](Validator.Length)

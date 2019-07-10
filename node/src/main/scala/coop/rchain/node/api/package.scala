@@ -2,19 +2,16 @@ package coop.rchain.node
 
 import cats.effect.Concurrent
 import cats.effect.concurrent.Semaphore
-
 import coop.rchain.blockstorage.BlockStore
 import coop.rchain.casper.MultiParentCasperRef.MultiParentCasperRef
 import coop.rchain.casper.SafetyOracle
 import coop.rchain.casper.protocol.{DeployServiceGrpcMonix, ProposeServiceGrpcMonix}
 import coop.rchain.catscontrib._
-import coop.rchain.comm.discovery._
-import coop.rchain.comm.rp.Connect.ConnectionsCell
 import coop.rchain.grpc.{GrpcServer, Server}
+import coop.rchain.metrics.Span
 import coop.rchain.node.model.repl._
 import coop.rchain.rholang.interpreter.Runtime
 import coop.rchain.shared._
-
 import io.grpc.netty.NettyServerBuilder
 import monix.eval.Task
 import monix.execution.Scheduler
@@ -29,13 +26,15 @@ package object api {
       port: Int,
       runtime: Runtime[Task],
       grpcExecutor: Scheduler,
-      blockApiLock: Semaphore[Task]
+      blockApiLock: Semaphore[Task],
+      tracing: Boolean
   )(
       implicit worker: Scheduler,
       multiParentCasperRef: MultiParentCasperRef[Task],
       safetyOracle: SafetyOracle[Task],
       blocStore: BlockStore[Task],
-      log: Log[Task]
+      log: Log[Task],
+      span: Span[Task]
   ): Task[Server[Task]] =
     GrpcServer[Task](
       NettyServerBuilder
@@ -47,15 +46,16 @@ package object api {
         )
         .addService(
           ProposeServiceGrpcMonix
-            .bindService(ProposeGrpcService.instance(blockApiLock), grpcExecutor)
+            .bindService(ProposeGrpcService.instance(blockApiLock, tracing), grpcExecutor)
         )
         .build
     )
 
-  def acquireExternalServer[F[_]: Concurrent: MultiParentCasperRef: Log: SafetyOracle: BlockStore: Taskable](
+  def acquireExternalServer[F[_]: Concurrent: MultiParentCasperRef: Log: SafetyOracle: BlockStore: Taskable: Span](
       port: Int,
       grpcExecutor: Scheduler,
-      blockApiLock: Semaphore[F]
+      blockApiLock: Semaphore[F],
+      tracing: Boolean
   )(implicit worker: Scheduler): F[Server[F]] =
     GrpcServer[F](
       NettyServerBuilder
@@ -64,11 +64,11 @@ package object api {
         .maxMessageSize(maxMessageSize)
         .addService(
           DeployServiceGrpcMonix
-            .bindService(DeployGrpcService.instance(blockApiLock), grpcExecutor)
+            .bindService(DeployGrpcService.instance(blockApiLock, tracing), grpcExecutor)
         )
         .addService(
           ProposeServiceGrpcMonix
-            .bindService(ProposeGrpcService.instance(blockApiLock), grpcExecutor)
+            .bindService(ProposeGrpcService.instance(blockApiLock, tracing), grpcExecutor)
         )
         .build
     )
