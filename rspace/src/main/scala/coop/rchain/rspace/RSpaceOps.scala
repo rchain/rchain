@@ -4,6 +4,7 @@ import cats.effect.{Concurrent, Sync}
 import cats.implicits._
 import com.typesafe.scalalogging.Logger
 import coop.rchain.catscontrib._
+import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.rspace._
 import coop.rchain.rspace.concurrent.{ConcurrentTwoStepLockF, TwoStepLock}
 import coop.rchain.rspace.history.Branch
@@ -30,10 +31,19 @@ abstract class RSpaceOps[F[_]: Concurrent, C, P, A, R, K](
     serializeC: Serialize[C],
     serializeP: Serialize[P],
     serializeK: Serialize[K],
-    logF: Log[F]
+    logF: Log[F],
+    spanF: Span[F]
 ) extends SpaceMatcher[F, C, P, A, R, K] {
 
   protected[this] val eventLog: SyncVar[EventLog] = create[EventLog](Seq.empty)
+
+  private[this] val installSpanLabel         = Metrics.Source(MetricsSource, "install")
+  private[this] val restoreInstallsSpanLabel = Metrics.Source(MetricsSource, "restore-installs")
+  private[this] val createSoftCheckpointSpanLabel =
+    Metrics.Source(MetricsSource, "create-soft-checkpoint")
+  private[this] val revertSoftCheckpointSpanLabel =
+    Metrics.Source(MetricsSource, "revert-soft-checkpoint")
+  private[this] val resetSpanLabel = Metrics.Source(MetricsSource, "reset")
 
   //TODO close in some F state abstraction
   protected val historyRepositoryAtom: AtomicAny[HistoryRepository[F, C, P, A, K]] = AtomicAny(
@@ -94,13 +104,14 @@ abstract class RSpaceOps[F[_]: Concurrent, C, P, A, R, K](
     installs
   }
 
-  protected[this] def restoreInstalls(): F[Unit] =
+  protected[this] def restoreInstalls(): F[Unit] = spanF.trace(restoreInstallsSpanLabel) {
     installs.get.toList
       .traverse {
         case (channels, Install(patterns, continuation, _match)) =>
           install(channels, patterns, continuation)(_match)
       }
       .as(())
+  }
 
   @SuppressWarnings(Array("org.wartremover.warts.Throw"))
   // TODO stop throwing exceptions
@@ -169,14 +180,15 @@ abstract class RSpaceOps[F[_]: Concurrent, C, P, A, R, K](
 
   override def install(channels: Seq[C], patterns: Seq[P], continuation: K)(
       implicit m: Match[F, P, A, R]
-  ): F[Option[(K, Seq[R])]] =
+  ): F[Option[(K, Seq[R])]] = spanF.trace(installSpanLabel) {
     installLockF(channels) {
       lockedInstall(channels, patterns, continuation)
     }
+  }
 
   def toMap: F[Map[Seq[C], Row[P, A, K]]] = storeAtom.get().toMap
 
-  override def reset(root: Blake2b256Hash): F[Unit] =
+  override def reset(root: Blake2b256Hash): F[Unit] = spanF.trace(resetSpanLabel) {
     for {
       nextHistory <- historyRepositoryAtom.get().reset(root)
       _           = historyRepositoryAtom.set(nextHistory)
@@ -185,6 +197,7 @@ abstract class RSpaceOps[F[_]: Concurrent, C, P, A, R, K](
       _           <- createNewHotStore(nextHistory)(serializeK.toCodec)
       _           <- restoreInstalls()
     } yield ()
+  }
 
   override def clear(): F[Unit] = reset(History.emptyRootHash)
 
@@ -201,21 +214,24 @@ abstract class RSpaceOps[F[_]: Concurrent, C, P, A, R, K](
     } yield ()
 
   override def createSoftCheckpoint(): F[SoftCheckpoint[C, P, A, K]] =
-    for {
-      cache <- storeAtom.get().snapshot()
-      log   = eventLog.take()
-      _     = eventLog.put(Seq.empty)
-    } yield SoftCheckpoint[C, P, A, K](cache, log)
+    spanF.trace(createSoftCheckpointSpanLabel) {
+      for {
+        cache <- storeAtom.get().snapshot()
+        log   = eventLog.take()
+        _     = eventLog.put(Seq.empty)
+      } yield SoftCheckpoint[C, P, A, K](cache, log)
+    }
 
-  override def revertToSoftCheckpoint(checkpoint: SoftCheckpoint[C, P, A, K]): F[Unit] = {
-    implicit val ck: Codec[K] = serializeK.toCodec
-    for {
-      hotStore <- HotStore.from(checkpoint.cacheSnapshot.cache, historyRepository)
-      _        = storeAtom.set(hotStore)
-      _        = eventLog.take()
-      _        = eventLog.put(checkpoint.log)
-    } yield ()
-  }
+  override def revertToSoftCheckpoint(checkpoint: SoftCheckpoint[C, P, A, K]): F[Unit] =
+    spanF.trace(revertSoftCheckpointSpanLabel) {
+      implicit val ck: Codec[K] = serializeK.toCodec
+      for {
+        hotStore <- HotStore.from(checkpoint.cacheSnapshot.cache, historyRepository)
+        _        = storeAtom.set(hotStore)
+        _        = eventLog.take()
+        _        = eventLog.put(checkpoint.log)
+      } yield ()
+    }
 
   override def close(): F[Unit] = historyRepository.close()
 
