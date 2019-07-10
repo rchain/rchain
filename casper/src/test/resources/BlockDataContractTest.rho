@@ -24,7 +24,7 @@ in {
         rhoSpec!("assertMany",
           [
             ((0, "==", timestamp), "timestamp is zero"),
-            ((1, "==", blockNumber), "the blocknumber is genesis + 1")
+            ((0, "==", blockNumber), "the blocknumber is zero")
           ], *ackCh)
       }
     }

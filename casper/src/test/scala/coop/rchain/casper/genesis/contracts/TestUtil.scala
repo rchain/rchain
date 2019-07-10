@@ -3,19 +3,14 @@ package coop.rchain.casper.genesis.contracts
 import cats.effect.{Concurrent, ContextShift, Sync}
 import cats.implicits._
 import cats.{FlatMap, Parallel}
-import coop.rchain.casper.MultiParentCasperTestUtil.createBonds
-import coop.rchain.casper.genesis.Genesis
-import coop.rchain.casper.protocol.{BlockMessage, DeployData}
-import coop.rchain.casper.util.rholang.RuntimeManager
-import coop.rchain.casper.util.{ConstructDeploy, ProtoUtil}
+import coop.rchain.casper.protocol.DeployData
+import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.crypto.hash.Blake2b512Random
-import coop.rchain.crypto.signatures.Secp256k1
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.models.Par
 import coop.rchain.rholang.build.CompiledRholangSource
 import coop.rchain.rholang.interpreter.accounting.Cost
-import coop.rchain.rholang.interpreter.util.RevAddress
-import coop.rchain.rholang.interpreter.{accounting, NormalizerEnv, ParBuilder, Runtime}
+import coop.rchain.rholang.interpreter.{NormalizerEnv, ParBuilder, Runtime}
 
 object TestUtil {
 
@@ -30,51 +25,16 @@ object TestUtil {
 
   def setupRuntime[F[_]: Concurrent: ContextShift: Metrics: Span, G[_]: Parallel[F, ?[_]]](
       runtime: Runtime[F],
-      genesisSetup: RuntimeManager[F] => F[BlockMessage],
       otherLibs: Seq[DeployData],
       normalizerEnv: NormalizerEnv
   ): F[Runtime[F]] =
     for {
-      runtimeManager <- RuntimeManager.fromRuntime(runtime)
-      _              <- genesisSetup(runtimeManager)
-      _              <- evalDeploy(rhoSpecDeploy, runtime)
-      _              <- otherLibs.toList.traverse(d => evalDeploy(d, runtime))
+      _ <- evalDeploy(rhoSpecDeploy, runtime)
+      _ <- otherLibs.toList.traverse(d => evalDeploy(d, runtime))
       // reset the deployParams.userId before executing the test
       // otherwise it'd execute as the deployer of last deployed contract
       _ <- runtime.deployParametersRef.update(_.copy(userId = Par()))
-    } yield (runtime)
-
-  // TODO: Have this function take an additional "Genesis" argument.
-  def defaultGenesisSetup[F[_]: Concurrent](
-      epochLength: Int
-  )(runtimeManager: RuntimeManager[F]): F[BlockMessage] = {
-
-    val (_, validatorPks) = (1 to 4).map(_ => Secp256k1.newKeyPair).unzip
-    val bonds             = createBonds(validatorPks)
-
-    Genesis.createGenesisBlock(
-      runtimeManager,
-      Genesis(
-        shardId = "RhoSpec-shard",
-        timestamp = 1L,
-        proofOfStake = ProofOfStake(
-          minimumBond = 0L,
-          maximumBond = Long.MaxValue,
-          epochLength = epochLength,
-          validators = bonds.map(Validator.tupled).toSeq
-        ),
-        genesisPk = Secp256k1.newKeyPair._2,
-        vaults = Vault(
-          RevAddress.fromPublicKey(Secp256k1.toPublic(ConstructDeploy.defaultSec)).get,
-          9000000
-        ) :: bonds.toList.map {
-          case (pk, stake) =>
-            RevAddress.fromPublicKey(pk).map(Vault(_, stake))
-        }.flattenOption,
-        supply = Long.MaxValue
-      )
-    )
-  }
+    } yield runtime
 
   private def evalDeploy[F[_]: Sync](
       deploy: DeployData,

@@ -1,14 +1,17 @@
 package coop.rchain.casper.helper
 
 import cats.effect.Concurrent
+import coop.rchain.casper.MultiParentCasperTestUtil
+import coop.rchain.casper.MultiParentCasperTestUtil.copyStorage
 import coop.rchain.casper.genesis.contracts.TestUtil
 import coop.rchain.casper.protocol.DeployData
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
-import coop.rchain.rholang.Resources._
+import coop.rchain.rholang.Resources.mkRuntimeAt
 import coop.rchain.rholang.build.CompiledRholangSource
 import coop.rchain.rholang.interpreter.{NormalizerEnv, PrettyPrinter, Runtime}
 import coop.rchain.rholang.interpreter.Runtime.SystemProcess
+import coop.rchain.rholang.interpreter.{PrettyPrinter, Runtime}
 import coop.rchain.shared.Log
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
@@ -62,24 +65,27 @@ object RhoSpec {
     testResultCollectorService
   }
 
+  private val genesisContext = MultiParentCasperTestUtil.buildGenesis()
+
   def getResults(
       testObject: CompiledRholangSource,
       otherLibs: Seq[DeployData],
       timeout: FiniteDuration
   ): Task[TestResult] =
     TestResultCollector[Task].flatMap { testResultCollector =>
-      mkRuntime[Task](
-        s"rhoSpec-${testObject.path}",
-        10 * 1024 * 1024,
-        testFrameworkContracts(testResultCollector)
-      ).use { runtime =>
-        for {
+      val runtimeResource = for {
+        storageDirs <- copyStorage[Task](genesisContext.storageDirectory)
+        runtime <- mkRuntimeAt[Task](storageDirs.rspaceDir)(
+                    storageSize = 10 * 1024 * 1024,
+                    additionalSystemProcesses = testFrameworkContracts(testResultCollector)
+                  )
+      } yield runtime
 
+      runtimeResource.use { runtime =>
+        for {
           _ <- logger.info("Starting tests from " + testObject.path)
-          _ <- Runtime.injectEmptyRegistryRoot[Task](runtime.space, runtime.replaySpace)
           _ <- TestUtil.setupRuntime[Task, Task.Par](
                 runtime,
-                TestUtil.defaultGenesisSetup(1),
                 otherLibs,
                 testObject.normalizerEnv
               )

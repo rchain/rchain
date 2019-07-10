@@ -57,6 +57,7 @@ object MultiParentCasperTestUtil {
         proofOfStake = ProofOfStake(
           minimumBond = 0L,
           maximumBond = Long.MaxValue,
+          epochLength = 1,
           validators = bonds.map(Validator.tupled).toSeq
         ),
         genesisPk = defaultGenesisPk,
