@@ -141,7 +141,7 @@ object RholangCLI {
 
   @tailrec
   @SuppressWarnings(Array("org.wartremover.warts.Return"))
-  def repl(runtime: Runtime[Task])(implicit scheduler: Scheduler): Unit = {
+  def repl(runtime: Runtime[Task])(implicit scheduler: Scheduler, span: Span[Task]): Unit = {
     printPrompt()
     Option(scala.io.StdIn.readLine()) match {
       case Some(line) =>
@@ -154,7 +154,8 @@ object RholangCLI {
   }
 
   def processFile(conf: Conf, runtime: Runtime[Task], fileName: String, quiet: Boolean)(
-      implicit scheduler: Scheduler
+      implicit scheduler: Scheduler,
+      span: Span[Task]
   ): Try[Unit] = {
     val processTerm: Par => Try[Unit] =
       if (conf.binary()) writeBinary(fileName)
@@ -171,7 +172,7 @@ object RholangCLI {
 
   }
 
-  def evaluate(runtime: Runtime[Task], source: String): Task[Unit] = {
+  def evaluate(runtime: Runtime[Task], source: String)(implicit span: Span[Task]): Task[Unit] = {
     implicit val c = runtime.cost
     Interpreter[Task].evaluate(runtime, source, NormalizerEnv.Empty).map {
       case EvaluateResult(_, Vector()) =>
@@ -228,7 +229,7 @@ object RholangCLI {
 
   def evaluatePar(runtime: Runtime[Task], source: String, quiet: Boolean = false)(
       par: Par
-  )(implicit scheduler: Scheduler): Try[Unit] = {
+  )(implicit scheduler: Scheduler, span: Span[Task]): Try[Unit] = {
     val evaluatorTask =
       for {
         _ <- Task.delay(if (!quiet) {

@@ -35,10 +35,12 @@ import coop.rchain.shared._
 import coop.rchain.models.Par
 import coop.rchain.rholang.interpreter._
 import Interpreter._
+import coop.rchain.metrics.Span
 import storage.StoragePrinter
 
-private[api] class ReplGrpcService(runtime: Runtime[Task], worker: Scheduler)
-    extends ReplGrpcMonix.Repl {
+private[api] class ReplGrpcService(runtime: Runtime[Task], worker: Scheduler)(
+    implicit val span: Span[Task]
+) extends ReplGrpcMonix.Repl {
 
   def exec(source: String): Task[ReplResponse] =
     ParBuilder[Task]
