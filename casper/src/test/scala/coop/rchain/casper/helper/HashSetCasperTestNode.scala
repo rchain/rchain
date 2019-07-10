@@ -5,7 +5,6 @@ import java.nio.file.Path
 import cats.effect.concurrent.Semaphore
 import cats.effect.{Concurrent, Resource}
 import cats.implicits._
-import cats.{Applicative, ApplicativeError, Id}
 import coop.rchain.blockstorage._
 import coop.rchain.casper.CasperState.CasperStateCell
 import coop.rchain.casper.MultiParentCasper.ignoreDoppelgangerCheck
@@ -19,7 +18,6 @@ import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.casper.util.comm.TestNetwork.TestNetwork
 import coop.rchain.casper.util.comm.{CasperPacketHandler, _}
 import coop.rchain.casper.util.rholang.{Resources, RuntimeManager}
-import coop.rchain.catscontrib.effect.implicits._
 import coop.rchain.catscontrib.ski._
 import coop.rchain.comm._
 import coop.rchain.comm.rp.Connect
@@ -35,7 +33,6 @@ import monix.execution.Scheduler
 import org.scalatest.Assertions
 
 import scala.concurrent.duration.{FiniteDuration, MILLISECONDS}
-import scala.util.Random
 
 class HashSetCasperTestNode[F[_]](
     name: String,
@@ -118,8 +115,6 @@ class HashSetCasperTestNode[F[_]](
 
 object HashSetCasperTestNode {
   type Effect[A] = Task[A]
-
-  import coop.rchain.catscontrib._
 
   def standaloneEff(
       genesis: GenesisContext,
@@ -231,7 +226,7 @@ object HashSetCasperTestNode {
 
       runtimeManager <- createRuntime(paths.rspaceDir)
 
-      node <- Resource.make[F, HashSetCasperTestNode[F]] {
+      node <- Resource.liftF(
                for {
                  _                   <- TestNetwork.addPeer(currentPeerNode)
                  blockProcessingLock <- Semaphore[F](1)
@@ -258,7 +253,7 @@ object HashSetCasperTestNode {
                    casperState
                  )
                } yield node
-             }(_ => ().pure[F])
+             )
     } yield node
   }
 
@@ -277,46 +272,9 @@ object HashSetCasperTestNode {
       mapSize
     )
 
-  val appErrId = new ApplicativeError[Id, CommError] {
-    def ap[A, B](ff: Id[A => B])(fa: Id[A]): Id[B] = Applicative[Id].ap[A, B](ff)(fa)
-    def pure[A](x: A): Id[A]                       = Applicative[Id].pure[A](x)
-    def raiseError[A](e: CommError): Id[A] = {
-      val errString = e match {
-        case UnknownCommError(msg)                => s"UnknownCommError($msg)"
-        case DatagramSizeError(size)              => s"DatagramSizeError($size)"
-        case DatagramFramingError(ex)             => s"DatagramFramingError($ex)"
-        case DatagramException(ex)                => s"DatagramException($ex)"
-        case HeaderNotAvailable                   => "HeaderNotAvailable"
-        case ProtocolException(th)                => s"ProtocolException($th)"
-        case UnknownProtocolError(msg)            => s"UnknownProtocolError($msg)"
-        case PublicKeyNotAvailable(node)          => s"PublicKeyNotAvailable($node)"
-        case ParseError(msg)                      => s"ParseError($msg)"
-        case EncryptionHandshakeIncorrectlySigned => "EncryptionHandshakeIncorrectlySigned"
-        case BootstrapNotProvided                 => "BootstrapNotProvided"
-        case PeerNodeNotFound(peer)               => s"PeerNodeNotFound($peer)"
-        case PeerUnavailable(peer)                => s"PeerUnavailable($peer)"
-        case MalformedMessage(pm)                 => s"MalformedMessage($pm)"
-        case CouldNotConnectToBootstrap           => "CouldNotConnectToBootstrap"
-        case InternalCommunicationError(msg)      => s"InternalCommunicationError($msg)"
-        case TimeOut                              => "TimeOut"
-        case _                                    => e.toString
-      }
-
-      throw new Exception(errString)
-    }
-
-    def handleErrorWith[A](fa: Id[A])(f: (CommError) => Id[A]): Id[A] = fa
-  }
-
-  implicit val syncEffectInstance = cats.effect.Sync.catsEitherTSync[Task, CommError]
-
-  val errorHandler = ApplicativeError_.applicativeError[Id, CommError](appErrId)
-
-  def randomBytes(length: Int): Array[Byte] = Array.fill(length)(Random.nextInt(256).toByte)
-
-  def endpoint(port: Int): Endpoint = Endpoint("host", port, port)
-
-  def peerNode(name: String, port: Int): PeerNode =
+  private def peerNode(name: String, port: Int): PeerNode =
     PeerNode(NodeIdentifier(name.getBytes), endpoint(port))
+
+  private def endpoint(port: Int): Endpoint = Endpoint("host", port, port)
 
 }
