@@ -1,11 +1,8 @@
 package coop.rchain.casper
 
-import java.nio.file.StandardCopyOption.REPLACE_EXISTING
 import java.nio.file.{Files, Path}
 
-import cats.effect.{Concurrent, ContextShift, Resource, Sync}
 import cats.implicits._
-import cats.temp.par
 import coop.rchain.blockstorage.BlockDagFileStorage
 import coop.rchain.casper.genesis.Genesis
 import coop.rchain.casper.genesis.contracts._
@@ -22,9 +19,7 @@ import coop.rchain.metrics.{Metrics, NoopSpan}
 import coop.rchain.rholang.interpreter.Runtime
 import coop.rchain.rholang.interpreter.util.RevAddress
 import coop.rchain.shared.Log
-import coop.rchain.shared.PathOps.RichPath
 import monix.eval.Task
-import monix.execution.Scheduler
 
 import scala.collection.mutable
 
@@ -131,37 +126,5 @@ object MultiParentCasperTestUtil {
   ) {
     def validatorSks: Iterable[PrivateKey] = validatorKeyPairs.map(_._1)
     def validatorPks: Iterable[PublicKey]  = validatorKeyPairs.map(_._2)
-  }
-
-  case class StoragePaths(
-      blockStoreDir: Path,
-      blockDagDir: Path,
-      rspaceDir: Path
-  )
-
-  def copyStorage[F[_]: Sync](
-      storageTemplatePath: Path
-  ): Resource[F, StoragePaths] =
-    for {
-      storageDirectory <- Resource.make[F, Path](
-                           Sync[F].delay {
-                             val dir = Files.createTempDirectory(s"casper-test-")
-                             copyDir(storageTemplatePath, dir)
-                           }
-                         )(dir => Sync[F].delay { dir.recursivelyDelete() })
-      blockStoreDir = storageDirectory.resolve("block-store")
-      blockDagDir   = storageDirectory.resolve("block-dag-store")
-      rspaceDir     = storageDirectory.resolve("rspace")
-    } yield StoragePaths(
-      blockStoreDir = blockStoreDir,
-      blockDagDir = blockDagDir,
-      rspaceDir = rspaceDir
-    )
-
-  private def copyDir(src: Path, dest: Path): Path = {
-    Files
-      .walk(src)
-      .forEach(source => Files.copy(source, dest.resolve(src.relativize(source)), REPLACE_EXISTING))
-    dest
   }
 }

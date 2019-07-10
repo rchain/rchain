@@ -217,7 +217,7 @@ object HashSetCasperTestNode {
     implicit val metricEff = new Metrics.MetricsNOP[F]
     implicit val spanEff   = NoopSpan[F]()
     for {
-      paths <- MultiParentCasperTestUtil.copyStorage[F](storageMatrixPath)
+      paths <- Resources.copyStorage[F](storageMatrixPath)
 
       blockStore <- Resource.make[F, BlockStore[F]](
                      BlockDagStorageTestFixture.createBlockStorage(paths.blockStoreDir)
