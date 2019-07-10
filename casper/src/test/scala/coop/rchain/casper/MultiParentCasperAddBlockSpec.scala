@@ -188,9 +188,7 @@ class MultiParentCasperAddBlockSpec extends FlatSpec with Matchers with Inspecto
         _           <- nodes(1).receive()
         result      <- nodes(1).casperEff.contains(signedBlock) shouldBeF true
         _ <- nodes.toList.traverse_[Effect, Assertion] { node =>
-              validateBlockStore(node) { blockStore =>
-                blockStore.get(signedBlock.blockHash) shouldBeF Some(signedBlock)
-              }(nodes(0).metricEff, nodes(0).logEff)
+              node.blockStore.get(signedBlock.blockHash) shouldBeF Some(signedBlock)
             }
       } yield result
     }
@@ -205,9 +203,7 @@ class MultiParentCasperAddBlockSpec extends FlatSpec with Matchers with Inspecto
         _                 = nodes(1).logEff.infos.count(_ startsWith "Added") should be(1)
         result            = nodes(1).logEff.warns.count(_ startsWith "Recording invalid block") should be(0)
         _ <- nodes.toList.traverse_[Effect, Assertion] { node =>
-              validateBlockStore(node) { blockStore =>
-                blockStore.get(signedBlock1Prime.blockHash) shouldBeF Some(signedBlock1Prime)
-              }(nodes(0).metricEff, nodes(0).logEff)
+              node.blockStore.get(signedBlock1Prime.blockHash) shouldBeF Some(signedBlock1Prime)
             }
       } yield result
     }
@@ -249,13 +245,11 @@ class MultiParentCasperAddBlockSpec extends FlatSpec with Matchers with Inspecto
         //   1
         // )
         _ = nodes.toList.traverse_[Effect, Assertion] { node =>
-          validateBlockStore(node) { blockStore =>
-            for {
-              _      <- blockStore.get(signedBlock1.blockHash) shouldBeF Some(signedBlock1)
-              _      <- blockStore.get(signedBlock2.blockHash) shouldBeF Some(signedBlock2)
-              result <- blockStore.get(signedBlock3.blockHash) shouldBeF Some(signedBlock3)
-            } yield result
-          }(nodes(0).metricEff, nodes(0).logEff)
+          for {
+            _      <- node.blockStore.get(signedBlock1.blockHash) shouldBeF Some(signedBlock1)
+            _      <- node.blockStore.get(signedBlock2.blockHash) shouldBeF Some(signedBlock2)
+            result <- node.blockStore.get(signedBlock3.blockHash) shouldBeF Some(signedBlock3)
+          } yield result
         }
       } yield result
     }
@@ -278,12 +272,8 @@ class MultiParentCasperAddBlockSpec extends FlatSpec with Matchers with Inspecto
         _ <- nodes(1).casperEff.contains(signedBlock1) shouldBeF true
         result <- nodes(1).casperEff
                    .contains(signedBlock1Prime) shouldBeF false // we still add the equivocation pair
-        _ <- validateBlockStore(nodes(1)) { blockStore =>
-              for {
-                _      <- blockStore.get(signedBlock1.blockHash) shouldBeF Some(signedBlock1)
-                result <- blockStore.get(signedBlock1Prime.blockHash) shouldBeF None
-              } yield result
-            }(nodes(0).metricEff, nodes(0).logEff)
+        _ <- nodes(1).blockStore.get(signedBlock1.blockHash) shouldBeF Some(signedBlock1)
+        _ <- nodes(1).blockStore.get(signedBlock1Prime.blockHash) shouldBeF None
       } yield result
     }
   }
@@ -343,29 +333,17 @@ class MultiParentCasperAddBlockSpec extends FlatSpec with Matchers with Inspecto
 
         _ <- nodes(1).casperEff
               .normalizedInitialFault(ProtoUtil.weightMap(genesis.genesisBlock)) shouldBeF 1f / (1f + 3f + 5f + 7f)
-        _ <- validateBlockStore(nodes(0)) { blockStore =>
-              for {
-                _ <- blockStore.get(signedBlock1.blockHash) shouldBeF None
-                result <- blockStore.get(signedBlock1Prime.blockHash) shouldBeF Some(
-                           signedBlock1Prime
-                         )
-              } yield result
-            }(nodes(0).metricEff, nodes(0).logEff)
-        _ <- validateBlockStore(nodes(1)) { blockStore =>
-              for {
-                _      <- blockStore.get(signedBlock2.blockHash) shouldBeF Some(signedBlock2)
-                result <- blockStore.get(signedBlock4.blockHash) shouldBeF Some(signedBlock4)
-              } yield result
-            }(nodes(1).metricEff, nodes(1).logEff)
-        result <- validateBlockStore(nodes(2)) { blockStore =>
-                   for {
-                     _ <- blockStore.get(signedBlock3.blockHash) shouldBeF Some(signedBlock3)
-                     result <- blockStore.get(signedBlock1Prime.blockHash) shouldBeF Some(
-                                signedBlock1Prime
-                              )
-                   } yield result
-                 }(nodes(2).metricEff, nodes(2).logEff)
-      } yield result
+        _ <- nodes(0).blockStore.get(signedBlock1.blockHash) shouldBeF None
+        _ <- nodes(0).blockStore.get(signedBlock1Prime.blockHash) shouldBeF Some(
+              signedBlock1Prime
+            )
+        _ <- nodes(1).blockStore.get(signedBlock2.blockHash) shouldBeF Some(signedBlock2)
+        _ <- nodes(1).blockStore.get(signedBlock4.blockHash) shouldBeF Some(signedBlock4)
+        _ <- nodes(2).blockStore.get(signedBlock3.blockHash) shouldBeF Some(signedBlock3)
+        _ <- nodes(2).blockStore.get(signedBlock1Prime.blockHash) shouldBeF Some(
+              signedBlock1Prime
+            )
+      } yield ()
     }
   }
 

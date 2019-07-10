@@ -29,15 +29,6 @@ import scala.collection.mutable
 
 object MultiParentCasperTestUtil {
 
-  def validateBlockStore[R](
-      node: HashSetCasperTestNode[Effect]
-  )(f: BlockStore[Effect] => Effect[R])(implicit metrics: Metrics[Effect], log: Log[Effect]) =
-    for {
-      bs     <- BlockDagStorageTestFixture.createBlockStorage[Effect](node.blockStoreDir)
-      result <- f(bs)
-      _      <- bs.close()
-    } yield result
-
   def createBonds(validators: Iterable[PublicKey]): Map[PublicKey, Long] =
     validators.zipWithIndex.map { case (v, i) => v -> (2L * i.toLong + 1L) }.toMap
 

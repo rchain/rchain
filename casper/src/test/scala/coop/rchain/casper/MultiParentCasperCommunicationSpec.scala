@@ -45,12 +45,10 @@ class MultiParentCasperCommunicationSpec extends FlatSpec with Matchers with Ins
           s => (s startsWith "Received request for block") && (s endsWith "Response sent.")
         ) should be(1)
         _ <- nodes.toList.traverse_[Effect, Assertion] { node =>
-              validateBlockStore(node) { blockStore =>
-                for {
-                  _      <- blockStore.get(signedBlock1.blockHash) shouldBeF Some(signedBlock1)
-                  result <- blockStore.get(signedBlock2.blockHash) shouldBeF Some(signedBlock2)
-                } yield result
-              }(nodes(0).metricEff, nodes(0).logEff)
+              for {
+                _      <- node.blockStore.get(signedBlock1.blockHash) shouldBeF Some(signedBlock1)
+                result <- node.blockStore.get(signedBlock2.blockHash) shouldBeF Some(signedBlock2)
+              } yield result
             }
       } yield result
     }
