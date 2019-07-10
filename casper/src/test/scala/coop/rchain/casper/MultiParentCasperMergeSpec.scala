@@ -1,6 +1,6 @@
 package coop.rchain.casper
 
-import cats.Monad
+import cats.{Applicative, Functor, Monad}
 import cats.implicits._
 import coop.rchain.blockstorage.{BlockStore, IndexedBlockDagStorage}
 import coop.rchain.casper.helper.HashSetCasperTestNode
@@ -63,71 +63,81 @@ class MultiParentCasperMergeSpec extends FlatSpec with Matchers with Inspectors 
 
   it should "handle multi-parent blocks correctly when they operate on stdout" ignore effectTest {
     def echoContract(no: Int) = s"""new stdout(`rho:io:stdout`) in { stdout!("Contract $no") }"""
-    checkNoConflicts("Nil", echoContract(1), echoContract(2))
+    checkMerge("Nil", echoContract(1), echoContract(2))
   }
 
   it should "handle multi-parent blocks correctly when they operate on volatile produce/consume pairs" in effectTest {
-    checkNoConflicts(
+    //
+    checkMerge(
       "Nil",
       """@"hi"!(1) | for (_ <- @"hi") { Nil }""",
       """@"hi"!(2) | for (_ <- @"hi") { Nil }"""
     ) >>
+      // ?
       checkConflicts("@0!(0)", "for (_ <- @0) { 0 }", "for (_ <- @0) { 0 }") >>
-      checkNoConflicts("0", "for (_ <- @0) { 0 } | @0!(1)", "for (_ <- @0) { 0 } | @0!(2)") >>
+      // ?
+      checkMerge("0", "for (_ <- @0) { 0 } | @0!(1)", "for (_ <- @0) { 0 } | @0!(2)") >>
+      // !4 !4
       checkConflicts("for (_ <- @0) { 0 }", "@0!(1)", "@0!(2)") >>
-      checkNoConflicts("for (@1 <- @0) { 0 }", "@0!(1)", "for (@2 <- @0) { 0 } | @0!(2)") >>
-      // Cases that are conflicting now but should not once we have more merge support:
+      // !4 !4
+      checkMerge("for (@1 <- @0) { 0 }", "@0!(1)", "for (@2 <- @0) { 0 } | @0!(2)") >>
+      // Cases that are conflicting now but should not once we have more merge support
+      // !X !X
       checkConflicts("0", "@0!(0)", "@0!(0)") >>
+      // 4X 4X
       checkConflicts("0", "for (_ <- @0) { 0 }", "for (_ <- @0) { 0 }")
   }
 
-  private def checkConflicts(base: String, b1: String, b2: String): Effect[Unit] = {
-    val time = System.currentTimeMillis()
-    val deploys = Vector(
-      ConstructDeploy.sourceDeploy(base, time + 1, accounting.MAX_VALUE),
-      ConstructDeploy.sourceDeploy(b1, time + 2, accounting.MAX_VALUE),
-      ConstructDeploy.sourceDeploy(b2, time + 3, accounting.MAX_VALUE),
-      ConstructDeploy.sourceDeploy("Nil", time + 4, accounting.MAX_VALUE)
+  private def checkConflicts(base: String, b1: String, b2: String): Effect[Unit] =
+    diamondConflictCheck(base, b1, b2, numberOfParentsForDiamondTip = 1) >> diamondConflictCheck(
+      base,
+      b2,
+      b1,
+      numberOfParentsForDiamondTip = 1
     )
-    diamondConflictCheck(deploys, numberOfParentsForDiamondTip = 1)
-  }
 
-  private def checkNoConflicts(base: String, b1: String, b2: String): Effect[Unit] = {
-    val time = System.currentTimeMillis()
-    val deploys = Vector(
-      ConstructDeploy.sourceDeploy(base, time + 1, accounting.MAX_VALUE),
-      ConstructDeploy.sourceDeploy(b1, time + 2, accounting.MAX_VALUE),
-      ConstructDeploy.sourceDeploy(b2, time + 3, accounting.MAX_VALUE),
-      ConstructDeploy.sourceDeploy("Nil", time + 4, accounting.MAX_VALUE)
+  private def checkMerge(base: String, b1: String, b2: String): Effect[Unit] =
+    diamondConflictCheck(base, b1, b2, numberOfParentsForDiamondTip = 2) >> diamondConflictCheck(
+      base,
+      b2,
+      b1,
+      numberOfParentsForDiamondTip = 2
     )
-    diamondConflictCheck(deploys, numberOfParentsForDiamondTip = 2)
-  }
 
   private def diamondConflictCheck(
-      deploys: Vector[DeployData],
+      base: String,
+      b1: String,
+      b2: String,
       numberOfParentsForDiamondTip: Int
   ): Effect[Unit] =
-    HashSetCasperTestNode.networkEff(genesis, networkSize = 2).use { nodes =>
-      for {
-        _ <- nodes(0).addBlock(deploys(0))
-        _ <- nodes(0).receive()
-        _ <- nodes(1).receive()
-        _ <- nodes(0).addBlock(deploys(1))
-        _ <- nodes(1).addBlock(deploys(2))
-        _ <- nodes(0).receive()
-        _ <- nodes(1).receive()
-        _ <- nodes(0).receive()
-        _ <- nodes(1).receive()
+    Vector(
+      ConstructDeploy.sourceDeployNowF[Effect](base),
+      ConstructDeploy.sourceDeployNowF[Effect](b1),
+      ConstructDeploy.sourceDeployNowF[Effect](b2),
+      ConstructDeploy.sourceDeployNowF[Effect]("Nil")
+    ).sequence[Effect, DeployData].flatMap { deploys =>
+      HashSetCasperTestNode.networkEff(genesis, networkSize = 2).use { nodes =>
+        for {
+          _ <- nodes(0).addBlock(deploys(0))
+          _ <- nodes(0).receive()
+          _ <- nodes(1).receive()
+          _ <- nodes(0).addBlock(deploys(1))
+          _ <- nodes(1).addBlock(deploys(2))
+          _ <- nodes(0).receive()
+          _ <- nodes(1).receive()
+          _ <- nodes(0).receive()
+          _ <- nodes(1).receive()
 
-        multiParentBlock <- nodes(0).addBlock(deploys(3))
-        _                <- nodes(1).receive()
+          multiParentBlock <- nodes(0).addBlock(deploys(3))
+          _                <- nodes(1).receive()
 
-        _ = nodes(0).logEff.warns.isEmpty shouldBe true
-        _ = nodes(1).logEff.warns.isEmpty shouldBe true
-        _ = multiParentBlock.header.get.parentsHashList.size shouldBe numberOfParentsForDiamondTip
-        _ = nodes(0).casperEff.contains(multiParentBlock) shouldBeF true
-        _ = nodes(1).casperEff.contains(multiParentBlock) shouldBeF true
-      } yield ()
+          _ = nodes(0).logEff.warns.isEmpty shouldBe true
+          _ = nodes(1).logEff.warns.isEmpty shouldBe true
+          _ = multiParentBlock.header.get.parentsHashList.size shouldBe numberOfParentsForDiamondTip
+          _ = nodes(0).casperEff.contains(multiParentBlock) shouldBeF true
+          _ = nodes(1).casperEff.contains(multiParentBlock) shouldBeF true
+        } yield ()
+      }
     }
 
   it should "not merge blocks that touch the same channel" in effectTest {
