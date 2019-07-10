@@ -56,7 +56,7 @@ object GenesisBuilder {
         ),
         genesisPk = defaultGenesisPk,
         vaults = Vault(
-          RevAddress.fromPublicKey(Secp256k1.toPublic(ConstructDeploy.defaultSec)).get,
+          RevAddress.fromPublicKey(ConstructDeploy.defaultPub).get,
           9000000
         ) :: bonds.toList.map {
           case (pk, stake) =>
