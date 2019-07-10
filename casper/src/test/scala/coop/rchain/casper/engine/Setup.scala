@@ -9,8 +9,8 @@ import coop.rchain.casper._
 import coop.rchain.casper.genesis.contracts.Validator
 import coop.rchain.casper.helper.BlockDagStorageTestFixture
 import coop.rchain.casper.protocol._
-import coop.rchain.casper.util.TestTime
 import coop.rchain.casper.util.rholang.RuntimeManager
+import coop.rchain.casper.util.{GenesisBuilder, TestTime}
 import coop.rchain.catscontrib.ApplicativeError_
 import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.comm._
@@ -47,8 +47,8 @@ object Setup {
 
     val runtimeManager = RuntimeManager.fromRuntime(activeRuntime).unsafeRunSync(scheduler)
 
-    val params @ (_, genesisParams) = MultiParentCasperTestUtil.buildGenesisParameters()
-    val context                     = MultiParentCasperTestUtil.buildGenesis(params)
+    val params @ (_, genesisParams) = GenesisBuilder.buildGenesisParameters()
+    val context                     = GenesisBuilder.buildGenesis(params)
 
     val (validatorSk, validatorPk) = context.validatorKeyPairs.head
     val bonds                      = genesisParams.proofOfStake.validators.flatMap(Validator.unapply).toMap

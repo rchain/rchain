@@ -1,4 +1,4 @@
-package coop.rchain.casper
+package coop.rchain.casper.util
 
 import java.nio.file.{Files, Path}
 
@@ -9,7 +9,6 @@ import coop.rchain.casper.genesis.contracts._
 import coop.rchain.casper.helper.BlockDagStorageTestFixture
 import coop.rchain.casper.helper.HashSetCasperTestNode.makeBlockDagFileStorageConfig
 import coop.rchain.casper.protocol._
-import coop.rchain.casper.util.ConstructDeploy
 import coop.rchain.casper.util.rholang.RuntimeManager
 import coop.rchain.catscontrib.TaskContrib.TaskOps
 import coop.rchain.crypto.signatures.Secp256k1
@@ -23,7 +22,7 @@ import monix.eval.Task
 
 import scala.collection.mutable
 
-object MultiParentCasperTestUtil {
+object GenesisBuilder {
 
   def createBonds(validators: Iterable[PublicKey]): Map[PublicKey, Long] =
     validators.zipWithIndex.map { case (v, i) => v -> (2L * i.toLong + 1L) }.toMap

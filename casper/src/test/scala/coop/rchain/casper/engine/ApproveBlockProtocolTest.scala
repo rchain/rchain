@@ -4,9 +4,9 @@ import cats.effect.concurrent.Ref
 import com.google.protobuf.ByteString
 import coop.rchain.casper.LastApprovedBlock
 import coop.rchain.casper.LastApprovedBlock.LastApprovedBlock
-import coop.rchain.casper.MultiParentCasperTestUtil._
 import coop.rchain.casper.engine.ApproveBlockProtocolTest.TestFixture
 import coop.rchain.casper.protocol._
+import coop.rchain.casper.util.GenesisBuilder._
 import coop.rchain.casper.util.TestTime
 import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.comm._

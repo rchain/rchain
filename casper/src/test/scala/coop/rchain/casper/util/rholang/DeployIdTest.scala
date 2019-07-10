@@ -1,10 +1,10 @@
 package coop.rchain.casper.util.rholang
 
 import cats.effect.Resource
-import coop.rchain.casper.MultiParentCasperTestUtil.{buildGenesis, buildGenesisParameters}
 import coop.rchain.casper.helper.HashSetCasperTestNode
 import coop.rchain.casper.protocol.DeployData
 import coop.rchain.casper.scalatestcontrib._
+import coop.rchain.casper.util.GenesisBuilder.{buildGenesis, buildGenesisParameters}
 import coop.rchain.casper.util.rholang.Resources._
 import coop.rchain.casper.util.{ConstructDeploy, ProtoUtil}
 import coop.rchain.crypto.PrivateKey

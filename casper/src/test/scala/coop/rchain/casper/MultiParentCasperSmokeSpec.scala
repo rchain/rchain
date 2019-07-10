@@ -11,7 +11,7 @@ import org.scalatest.{FlatSpec, Inspectors, Matchers}
 
 class MultiParentCasperSmokeSpec extends FlatSpec with Matchers with Inspectors {
 
-  import MultiParentCasperTestUtil._
+  import coop.rchain.casper.util.GenesisBuilder._
 
   implicit val timeEff = new LogicalTime[Effect]
 

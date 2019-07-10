@@ -2,12 +2,11 @@ package coop.rchain.casper.helper
 
 import cats.effect.{Concurrent, Sync}
 import cats.implicits._
-import coop.rchain.casper.MultiParentCasperTestUtil
-import coop.rchain.casper.util.rholang.Resources.copyStorage
 import coop.rchain.casper.genesis.contracts.TestUtil
 import coop.rchain.casper.genesis.contracts.TestUtil.eval
 import coop.rchain.casper.protocol.DeployData
-import coop.rchain.casper.util.ProtoUtil
+import coop.rchain.casper.util.rholang.Resources.copyStorage
+import coop.rchain.casper.util.{GenesisBuilder, ProtoUtil}
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.models.Par
@@ -68,7 +67,7 @@ object RhoSpec {
     testResultCollectorService
   }
 
-  private val genesisContext = MultiParentCasperTestUtil.buildGenesis()
+  private val genesisContext = GenesisBuilder.buildGenesis()
 
   def getResults(
       testObject: CompiledRholangSource,

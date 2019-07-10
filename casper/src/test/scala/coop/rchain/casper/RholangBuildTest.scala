@@ -2,11 +2,11 @@ package coop.rchain.casper
 
 import cats.implicits._
 import coop.rchain.casper.MultiParentCasper.ignoreDoppelgangerCheck
-import coop.rchain.casper.MultiParentCasperTestUtil.{buildGenesis, buildGenesisParameters}
 import coop.rchain.casper.helper.HashSetCasperTestNode
 import coop.rchain.casper.helper.HashSetCasperTestNode._
 import coop.rchain.casper.scalatestcontrib._
 import coop.rchain.casper.util.ConstructDeploy
+import coop.rchain.casper.util.GenesisBuilder.{buildGenesis, buildGenesisParameters}
 import coop.rchain.casper.util.RSpaceUtil._
 import coop.rchain.casper.util.rholang.RegistrySigGen
 import coop.rchain.crypto.PublicKey

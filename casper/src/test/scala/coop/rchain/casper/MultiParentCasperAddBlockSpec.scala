@@ -18,7 +18,6 @@ import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.hash.Blake2b256
 import coop.rchain.crypto.signatures.Secp256k1
 import coop.rchain.p2p.EffectsTestInstances.LogicalTime
-import coop.rchain.rholang.interpreter.accounting
 import monix.eval.Task
 import monix.execution.Scheduler
 import monix.execution.Scheduler.Implicits.global
@@ -28,8 +27,8 @@ import scala.collection.immutable
 
 class MultiParentCasperAddBlockSpec extends FlatSpec with Matchers with Inspectors {
 
-  import MultiParentCasperTestUtil._
   import RSpaceUtil._
+  import coop.rchain.casper.util.GenesisBuilder._
 
   implicit val timeEff = new LogicalTime[Effect]
 

@@ -5,14 +5,13 @@ import coop.rchain.casper.helper.HashSetCasperTestNode._
 import coop.rchain.casper.scalatestcontrib._
 import coop.rchain.casper.util.{ConstructDeploy, RSpaceUtil}
 import coop.rchain.p2p.EffectsTestInstances.LogicalTime
-import coop.rchain.rholang.interpreter.accounting
 import monix.execution.Scheduler.Implicits.global
 import org.scalatest.{FlatSpec, Inspectors, Matchers}
 
 class MultiParentCasperMergeSpec extends FlatSpec with Matchers with Inspectors {
 
-  import MultiParentCasperTestUtil._
   import RSpaceUtil._
+  import coop.rchain.casper.util.GenesisBuilder._
 
   implicit val timeEff = new LogicalTime[Effect]
 

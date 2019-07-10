@@ -4,6 +4,7 @@ import com.google.protobuf.ByteString
 import coop.rchain.casper._
 import coop.rchain.casper.helper.NoOpsCasperEffect
 import coop.rchain.casper.protocol._
+import coop.rchain.casper.util.GenesisBuilder
 import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.comm.protocol.routing.Packet
 import coop.rchain.comm.rp.ProtocolHelper._
@@ -21,7 +22,7 @@ class RunningSpec extends WordSpec {
     val fixture = Setup()
     import fixture._
 
-    val genesis                = MultiParentCasperTestUtil.createGenesis()
+    val genesis                = GenesisBuilder.createGenesis()
     val approvedBlockCandidate = ApprovedBlockCandidate(block = Some(genesis))
     val approvedBlock: ApprovedBlock = ApprovedBlock(
       candidate = Some(approvedBlockCandidate),

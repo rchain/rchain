@@ -12,7 +12,7 @@ import org.scalatest.{Assertion, FlatSpec, Inspectors, Matchers}
 
 class MultiParentCasperCommunicationSpec extends FlatSpec with Matchers with Inspectors {
 
-  import MultiParentCasperTestUtil._
+  import coop.rchain.casper.util.GenesisBuilder._
 
   implicit val timeEff = new LogicalTime[Effect]
 
