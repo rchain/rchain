@@ -163,24 +163,4 @@ object MultiParentCasperTestUtil {
       .forEach(source => Files.copy(source, dest.resolve(src.relativize(source)), REPLACE_EXISTING))
     dest
   }
-
-  def createRuntime[F[_]: Concurrent: par.Par: ContextShift](
-      storageDirectory: Path,
-      storageSize: Long = 10 * 1024 * 1024L
-  )(
-      implicit scheduler: Scheduler
-  ): Resource[F, RuntimeManager[F]] = {
-    implicit val log        = Log.log[F]
-    implicit val metricsEff = new metrics.Metrics.MetricsNOP[F]
-    implicit val span       = NoopSpan[F]()
-
-    for {
-      activeRuntime <- Resource.make(
-                        Runtime
-                          .createWithEmptyCost(storageDirectory, storageSize)
-                      )(_.close())
-      runtimeManager <- Resource.liftF(RuntimeManager.fromRuntime(activeRuntime))
-    } yield runtimeManager
-  }
-
 }

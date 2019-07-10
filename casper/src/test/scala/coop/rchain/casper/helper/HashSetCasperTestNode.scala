@@ -18,7 +18,7 @@ import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.casper.util.comm.TestNetwork.TestNetwork
 import coop.rchain.casper.util.comm.{CasperPacketHandler, _}
-import coop.rchain.casper.util.rholang.RuntimeManager
+import coop.rchain.casper.util.rholang.{Resources, RuntimeManager}
 import coop.rchain.catscontrib.effect.implicits._
 import coop.rchain.catscontrib.ski._
 import coop.rchain.comm._
@@ -140,7 +140,7 @@ object HashSetCasperTestNode {
       genesis.validatorSks.take(networkSize).toVector,
       genesis.genesisBlock,
       genesis.storageDirectory,
-      MultiParentCasperTestUtil.createRuntime[Effect](_, storageSize)
+      Resources.mkRuntimeManagerAt[Effect](_)(storageSize)
     )(
       Concurrent[Effect],
       TestNetwork.empty[Effect]

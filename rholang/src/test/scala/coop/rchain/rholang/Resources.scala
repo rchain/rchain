@@ -4,6 +4,7 @@ import java.nio.file.{Files, Path}
 
 import cats.effect.ExitCase.Error
 import cats.effect.{Concurrent, ContextShift, Resource, Sync}
+import cats.implicits._
 import cats.temp.par
 import com.typesafe.scalalogging.Logger
 import coop.rchain.metrics.{Metrics, Span}
@@ -64,15 +65,19 @@ object Resources {
       storageSize: Long = 1024 * 1024,
       additionalSystemProcesses: Seq[SystemProcess.Definition[F]] = Seq.empty
   )(implicit scheduler: Scheduler): Resource[F, Runtime[F]] =
-    mkTempDir[F](prefix).flatMap { tmpDir =>
-      Resource.make[F, Runtime[F]](
-        Runtime
-          .createWithEmptyCost[F](
-            tmpDir,
-            storageSize,
-            additionalSystemProcesses
-          )
-      )(_.close())
-    }
+    mkTempDir[F](prefix) >>= (mkRuntimeAt(_)(storageSize, additionalSystemProcesses))
+
+  def mkRuntimeAt[F[_]: Log: Metrics: Span: Concurrent: par.Par: ContextShift](path: Path)(
+      storageSize: Long = 1024 * 1024,
+      additionalSystemProcesses: Seq[SystemProcess.Definition[F]] = Seq.empty
+  )(implicit scheduler: Scheduler): Resource[F, Runtime[F]] =
+    Resource.make[F, Runtime[F]](
+      Runtime
+        .createWithEmptyCost[F](
+          path,
+          storageSize,
+          additionalSystemProcesses
+        )
+    )(_.close())
 
 }
