@@ -63,6 +63,8 @@ class DebruijnInterpreter[M[_], F[_]](
     cost: _cost[M]
 ) extends Reduce[M] {
 
+  type Application = Option[(TaggedContinuation, Seq[ListParWithRandom], Int)]
+
   /**
     * Materialize a send in the store, optionally returning the matched continuation.
     *
@@ -77,7 +79,7 @@ class DebruijnInterpreter[M[_], F[_]](
       persistent: Boolean,
       sequenceNumber: Int
   ): M[Unit] = {
-    def go(res: Option[(TaggedContinuation, Seq[ListParWithRandom], Int)]): M[Unit] =
+    def go(res: Application): M[Unit] =
       res match {
         case Some((continuation, dataList, updatedSequenceNumber)) =>
           if (persistent)
@@ -107,7 +109,7 @@ class DebruijnInterpreter[M[_], F[_]](
       sequenceNumber: Int
   ): M[Unit] = {
     val (patterns: Seq[BindPattern], sources: Seq[Par]) = binds.unzip
-    def go(res: Option[(TaggedContinuation, Seq[ListParWithRandom], Int)]): M[Unit] =
+    def go(res: Application): M[Unit] =
       res match {
         case Some((continuation, dataList, updatedSequenceNumber)) =>
           if (persistent)
