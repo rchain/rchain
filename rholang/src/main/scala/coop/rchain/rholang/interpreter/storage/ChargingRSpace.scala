@@ -2,7 +2,8 @@ package coop.rchain.rholang.interpreter.storage
 
 import cats.effect.Sync
 import cats.implicits._
-import coop.rchain.metrics.Span
+import coop.rchain.metrics.Metrics.Source
+import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.models.TaggedContinuation.TaggedCont.ParBody
 import coop.rchain.models._
 import coop.rchain.rholang.interpreter.Runtime.{RhoISpace, RhoPureSpace}
@@ -34,6 +35,15 @@ object ChargingRSpace {
   )(implicit cost: _cost[F]) =
     new RhoPureSpace[F] {
 
+      implicit private[this] val MetricsSource: Source =
+        Metrics.Source(Metrics.BaseSource, "charging-rspace")
+      private[this] val resetSpanLabel   = Metrics.Source(MetricsSource, "reset")
+      private[this] val consumeSpanLabel = Metrics.Source(MetricsSource, "consume")
+      private[this] val produceSpanLabel = Metrics.Source(MetricsSource, "produce")
+      private[this] val installSpanLabel = Metrics.Source(MetricsSource, "install")
+      private[this] val createCheckpointSpanLabel =
+        Metrics.Source(MetricsSource, "create-checkpoint")
+
       implicit val m: StorageMatch[F, BindPattern, ListParWithRandom, ListParWithRandom] =
         matchListPar[F]
 
@@ -46,7 +56,7 @@ object ChargingRSpace {
           peek: Boolean
       ): F[
         Option[(ContResult[Par, BindPattern, TaggedContinuation], Seq[Result[ListParWithRandom]])]
-      ] =
+      ] = Span[F].trace(consumeSpanLabel) {
         for {
           _ <- charge[F](storageCostConsume(channels, patterns, continuation))
           peekChannels = if (peek) {
@@ -62,13 +72,14 @@ object ChargingRSpace {
                     )
           _ <- handleResult(consRes)
         } yield consRes
+      }
 
       override def install(
           channels: Seq[Par],
           patterns: Seq[BindPattern],
           continuation: TaggedContinuation
       ): F[Option[(TaggedContinuation, Seq[ListParWithRandom])]] =
-        space.install(channels, patterns, continuation)
+        Span[F].trace(installSpanLabel) { space.install(channels, patterns, continuation) }
 
       override def produce(
           channel: Par,
@@ -77,12 +88,13 @@ object ChargingRSpace {
           sequenceNumber: Int
       ): F[
         Option[(ContResult[Par, BindPattern, TaggedContinuation], Seq[Result[ListParWithRandom]])]
-      ] =
+      ] = Span[F].trace(produceSpanLabel) {
         for {
           _       <- charge[F](storageCostProduce(channel, data))
           prodRes <- space.produce(channel, data, persist, sequenceNumber)
           _       <- handleResult(prodRes)
         } yield prodRes
+      }
 
       private def handleResult(
           result: Option[
@@ -126,8 +138,12 @@ object ChargingRSpace {
           }
           .foldLeft(Cost(0))(_ + _)
 
-      override def createCheckpoint(): F[Checkpoint]    = space.createCheckpoint()
-      override def reset(hash: Blake2b256Hash): F[Unit] = space.reset(hash)
-      override def close(): F[Unit]                     = space.close()
+      override def createCheckpoint(): F[Checkpoint] = Span[F].trace(createCheckpointSpanLabel) {
+        space.createCheckpoint()
+      }
+      override def reset(hash: Blake2b256Hash): F[Unit] = Span[F].trace(resetSpanLabel) {
+        space.reset(hash)
+      }
+      override def close(): F[Unit] = space.close()
     }
 }
