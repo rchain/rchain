@@ -43,7 +43,10 @@ abstract class RSpaceOps[F[_]: Concurrent, C, P, A, R, K](
     Metrics.Source(MetricsSource, "create-soft-checkpoint")
   private[this] val revertSoftCheckpointSpanLabel =
     Metrics.Source(MetricsSource, "revert-soft-checkpoint")
-  private[this] val resetSpanLabel = Metrics.Source(MetricsSource, "reset")
+  protected[this] val resetSpanLabel            = Metrics.Source(MetricsSource, "reset")
+  protected[this] val consumeSpanLabel          = Metrics.Source(MetricsSource, "consume")
+  protected[this] val produceSpanLabel          = Metrics.Source(MetricsSource, "produce")
+  protected[this] val createCheckpointSpanLabel = Metrics.Source(MetricsSource, "create-checkpoint")
 
   //TODO close in some F state abstraction
   protected val historyRepositoryAtom: AtomicAny[HistoryRepository[F, C, P, A, K]] = AtomicAny(

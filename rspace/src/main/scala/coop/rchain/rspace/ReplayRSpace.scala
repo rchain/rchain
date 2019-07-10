@@ -51,8 +51,6 @@ class ReplayRSpace[F[_]: Sync, C, P, A, R, K](
 
   private[this] val consumeCommLabel = "comm.consume"
   private[this] val produceCommLabel = "comm.produce"
-  private[this] val consumeSpanLabel = Metrics.Source(MetricsSource, "consume")
-  private[this] val produceSpanLabel = Metrics.Source(MetricsSource, "produce")
 
   def consume(
       channels: Seq[C],
@@ -137,10 +135,13 @@ class ReplayRSpace[F[_]: Sync, C, P, A, R, K](
     ): F[MaybeActionResult] = {
       def shouldRemove(persist: Boolean, channel: C): Boolean =
         !persist && !peeks.contains(channelsToIndex(channel))
+
       for {
-        _       <- metricsF.incrementCounter(consumeCommLabel)
-        commRef <- syncF.delay { COMM(consumeRef, mats.map(_.datum.source), peeks) }
-        _       <- assertF(comms.contains(commRef), "COMM Event was not contained in the trace")
+        _ <- metricsF.incrementCounter(consumeCommLabel)
+        commRef <- syncF.delay {
+                    COMM(consumeRef, mats.map(_.datum.source), peeks)
+                  }
+        _ <- assertF(comms.contains(commRef), "COMM Event was not contained in the trace")
         r <- mats.toList
               .sortBy(_.datumIndex)(Ordering[Int].reverse)
               .traverse {
@@ -178,6 +179,7 @@ class ReplayRSpace[F[_]: Sync, C, P, A, R, K](
 
     def getCommOrDataCandidates(comms: Seq[COMM]): F[Either[COMM, Seq[DataCandidate[C, R]]]] = {
       type COMMOrData = Either[COMM, Seq[DataCandidate[C, R]]]
+
       def go(comms: Seq[COMM]): F[Either[Seq[COMM], Either[COMM, Seq[DataCandidate[C, R]]]]] =
         comms match {
           case Nil =>
@@ -195,6 +197,7 @@ class ReplayRSpace[F[_]: Sync, C, P, A, R, K](
               case None    => rem.asLeft[COMMOrData]
             }
         }
+
       comms.tailRecM(go)
     }
 
@@ -297,6 +300,7 @@ class ReplayRSpace[F[_]: Sync, C, P, A, R, K](
               case produceCandidate => produceCandidate.asRight[Seq[Seq[C]]]
             }
         }
+
       groupedChannels.tailRecM(go)
     }
 
@@ -306,6 +310,7 @@ class ReplayRSpace[F[_]: Sync, C, P, A, R, K](
         groupedChannels: Seq[Seq[C]]
     ): F[Either[COMM, ProduceCandidate[C, P, R, K]]] = {
       type COMMOrProduce = Either[COMM, ProduceCandidate[C, P, R, K]]
+
       def go(comms: Seq[COMM]): F[Either[Seq[COMM], COMMOrProduce]] =
         comms match {
           case Nil =>
@@ -323,6 +328,7 @@ class ReplayRSpace[F[_]: Sync, C, P, A, R, K](
               case None    => rem.asLeft[COMMOrProduce]
             }
         }
+
       comms.tailRecM(go)
     }
 
@@ -368,6 +374,7 @@ class ReplayRSpace[F[_]: Sync, C, P, A, R, K](
                         val idx = channelsToIndex(candidateChannel)
                         dataIndex >= 0 && (!persistData && !peeks.contains(idx))
                       }
+
                       (if (shouldRemove) {
                          store.removeDatum(candidateChannel, dataIndex)
                        } else Applicative[F].unit) *>
@@ -402,8 +409,10 @@ class ReplayRSpace[F[_]: Sync, C, P, A, R, K](
                 |at <groupedChannels: $groupedChannels>""".stripMargin
               .replace('\n', ' ')
           )
-      produceRef <- syncF.delay { Produce.create(channel, data, persist, sequenceNumber) }
-      _          <- spanF.mark("after-compute-produceref")
+      produceRef <- syncF.delay {
+                     Produce.create(channel, data, persist, sequenceNumber)
+                   }
+      _ <- spanF.mark("after-compute-produceref")
       result <- replayData.get(produceRef) match {
                  case None =>
                    storeDatum(produceRef, None)
@@ -451,14 +460,16 @@ class ReplayRSpace[F[_]: Sync, C, P, A, R, K](
     }
   }
 
-  override def createCheckpoint(): F[Checkpoint] = checkReplayData >> syncF.defer {
-    for {
-      changes     <- storeAtom.get().changes()
-      nextHistory <- historyRepositoryAtom.get().checkpoint(changes.toList)
-      _           = historyRepositoryAtom.set(nextHistory)
-      _           <- createNewHotStore(nextHistory)(serializeK.toCodec)
-      _           <- restoreInstalls()
-    } yield (Checkpoint(nextHistory.history.root, Seq.empty))
+  override def createCheckpoint(): F[Checkpoint] = spanF.trace(createCheckpointSpanLabel) {
+    checkReplayData >> syncF.defer {
+      for {
+        changes     <- storeAtom.get().changes()
+        nextHistory <- historyRepositoryAtom.get().checkpoint(changes.toList)
+        _           = historyRepositoryAtom.set(nextHistory)
+        _           <- createNewHotStore(nextHistory)(serializeK.toCodec)
+        _           <- restoreInstalls()
+      } yield (Checkpoint(nextHistory.history.root, Seq.empty))
+    }
   }
 
   override def clear(): F[Unit] = syncF.delay { replayData.clear() } >> super.clear()

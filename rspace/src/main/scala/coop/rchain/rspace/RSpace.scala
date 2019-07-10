@@ -48,8 +48,6 @@ class RSpace[F[_], C, P, A, R, K] private[rspace] (
   implicit protected[this] lazy val MetricsSource: Source = RSpaceMetricsSource
   private[this] val consumeCommLabel                      = "comm.consume"
   private[this] val produceCommLabel                      = "comm.produce"
-  private[this] val consumeSpanLabel                      = Metrics.Source(MetricsSource, "consume")
-  private[this] val produceSpanLabel                      = Metrics.Source(MetricsSource, "produce")
 
   /*
    * Here, we create a cache of the data at each channel as `channelToIndexedData`
@@ -179,7 +177,7 @@ class RSpace[F[_], C, P, A, R, K] private[rspace] (
                          _ <- logF
                                .debug(
                                  s"""|consume: searching for data matching <patterns: $patterns>
-                      |at <channels: $channels>""".stripMargin.replace('\n', ' ')
+                                     |at <channels: $channels>""".stripMargin.replace('\n', ' ')
                                )
                          _ <- syncF.delay {
                                eventLog.update(consumeRef +: _)
@@ -415,7 +413,7 @@ class RSpace[F[_], C, P, A, R, K] private[rspace] (
                        _               <- spanF.mark("grouped-channels")
                        _ <- logF.debug(
                              s"""|produce: searching for matching continuations
-                    |at <groupedChannels: $groupedChannels>""".stripMargin
+                                 |at <groupedChannels: $groupedChannels>""".stripMargin
                                .replace('\n', ' ')
                            )
                        _ <- syncF.delay {
@@ -450,16 +448,22 @@ class RSpace[F[_], C, P, A, R, K] private[rspace] (
       }
     }
 
-  override def createCheckpoint(): F[Checkpoint] =
+  override def createCheckpoint(): F[Checkpoint] = spanF.trace(createCheckpointSpanLabel) {
     for {
       changes     <- storeAtom.get().changes()
+      _           <- spanF.mark("got-changes")
       nextHistory <- historyRepositoryAtom.get().checkpoint(changes.toList)
+      _           <- spanF.mark("calculated-checkpoint")
       _           = historyRepositoryAtom.set(nextHistory)
       _           <- createNewHotStore(nextHistory)(serializeK.toCodec)
+      _           <- spanF.mark("added-clean-hot-store")
       log         = eventLog.take()
       _           = eventLog.put(Seq.empty)
+      _           <- spanF.mark("cleared-event-log")
       _           <- restoreInstalls()
+      _           <- spanF.mark("installs-restored")
     } yield Checkpoint(nextHistory.history.root, log)
+  }
 }
 
 object RSpace {
