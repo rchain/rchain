@@ -10,7 +10,6 @@ import coop.rchain.metrics
 import coop.rchain.metrics.{NoopSpan, Span}
 import coop.rchain.rholang.Resources.{mkRuntimeAt, mkTempDir}
 import coop.rchain.shared.Log
-import coop.rchain.shared.PathOps.RichPath
 import monix.eval.Task
 import monix.execution.Scheduler
 
@@ -47,25 +46,20 @@ object Resources {
       storageTemplatePath: Path
   ): Resource[F, StoragePaths] =
     for {
-      storageDirectory <- Resource.make[F, Path](
-                           Sync[F].delay {
-                             val dir = Files.createTempDirectory(s"casper-test-")
-                             copyDir(storageTemplatePath, dir)
-                           }
-                         )(dir => Sync[F].delay { dir.recursivelyDelete() })
-      blockStoreDir = storageDirectory.resolve("block-store")
-      blockDagDir   = storageDirectory.resolve("block-dag-store")
-      rspaceDir     = storageDirectory.resolve("rspace")
+      storageDirectory <- mkTempDir(s"casper-test-")
+      _                <- Resource.liftF(copyDir(storageTemplatePath, storageDirectory))
+      blockStoreDir    = storageDirectory.resolve("block-store")
+      blockDagDir      = storageDirectory.resolve("block-dag-store")
+      rspaceDir        = storageDirectory.resolve("rspace")
     } yield StoragePaths(
       blockStoreDir = blockStoreDir,
       blockDagDir = blockDagDir,
       rspaceDir = rspaceDir
     )
 
-  private def copyDir(src: Path, dest: Path): Path = {
+  private def copyDir[F[_]: Sync](src: Path, dest: Path): F[Unit] = Sync[F].delay {
     Files
       .walk(src)
       .forEach(source => Files.copy(source, dest.resolve(src.relativize(source)), REPLACE_EXISTING))
-    dest
   }
 }
