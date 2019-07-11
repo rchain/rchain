@@ -6,7 +6,7 @@ import coop.rchain.casper.helper.HashSetCasperTestNode
 import coop.rchain.casper.helper.HashSetCasperTestNode._
 import coop.rchain.casper.scalatestcontrib._
 import coop.rchain.casper.util.ConstructDeploy
-import coop.rchain.casper.util.GenesisBuilder.{buildGenesis, buildGenesisParameters}
+import coop.rchain.casper.util.GenesisBuilder.buildGenesis
 import coop.rchain.casper.util.RSpaceUtil._
 import coop.rchain.casper.util.rholang.RegistrySigGen
 import coop.rchain.crypto.PublicKey
@@ -16,7 +16,7 @@ import org.scalatest.{FlatSpec, Matchers}
 
 class RholangBuildTest extends FlatSpec with Matchers {
 
-  val genesis = buildGenesis(buildGenesisParameters())
+  val genesis = buildGenesis()
 
   "Our build system" should "allow import of rholang sources into scala code" in effectTest {
     HashSetCasperTestNode

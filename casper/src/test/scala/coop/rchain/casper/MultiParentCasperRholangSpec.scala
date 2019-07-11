@@ -18,7 +18,7 @@ class MultiParentCasperRholangSpec extends FlatSpec with Matchers with Inspector
 
   implicit val timeEff: LogicalTime[Effect] = new LogicalTime[Effect]
 
-  val genesis = buildGenesis(buildGenesisParameters())
+  val genesis = buildGenesis()
 
   //put a new casper instance at the start of each
   //test since we cannot reset it

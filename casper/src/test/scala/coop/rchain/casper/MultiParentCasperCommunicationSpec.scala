@@ -16,7 +16,7 @@ class MultiParentCasperCommunicationSpec extends FlatSpec with Matchers with Ins
 
   implicit val timeEff = new LogicalTime[Effect]
 
-  val genesis = buildGenesis(buildGenesisParameters())
+  val genesis = buildGenesis()
 
   //put a new casper instance at the start of each
   //test since we cannot reset it

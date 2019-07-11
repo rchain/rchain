@@ -16,7 +16,7 @@ class MultiParentCasperDeploySpec extends FlatSpec with Matchers with Inspectors
 
   implicit val timeEff = new LogicalTime[Effect]
 
-  val genesis = buildGenesis(buildGenesisParameters())
+  val genesis = buildGenesis()
 
   "MultiParentCasper" should "accept a deploy and return it's id" in effectTest {
     HashSetCasperTestNode.standaloneEff(genesis).use { node =>

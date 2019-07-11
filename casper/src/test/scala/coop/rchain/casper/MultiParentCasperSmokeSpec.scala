@@ -15,7 +15,7 @@ class MultiParentCasperSmokeSpec extends FlatSpec with Matchers with Inspectors 
 
   implicit val timeEff = new LogicalTime[Effect]
 
-  private val genesis = buildGenesis(buildGenesisParameters())
+  private val genesis = buildGenesis()
 
   it should "perform the most basic deploy successfully" in effectTest {
     HashSetCasperTestNode.standaloneEff(genesis).use { node =>

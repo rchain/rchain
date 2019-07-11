@@ -28,7 +28,7 @@ class CreateBlockAPITest extends FlatSpec with Matchers {
   import GenesisBuilder._
   import HashSetCasperTestNode.Effect
 
-  val genesis                            = buildGenesis(buildGenesisParameters())
+  val genesis                            = buildGenesis()
   implicit val spanEff: NoopSpan[Effect] = NoopSpan[Effect]
 
   "createBlock" should "not allow simultaneous calls" in {

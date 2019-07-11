@@ -28,7 +28,7 @@ object GenesisBuilder {
     validators.zipWithIndex.map { case (v, i) => v -> (2L * i.toLong + 1L) }.toMap
 
   def createGenesis(): BlockMessage =
-    buildGenesis(buildGenesisParameters()).genesisBlock
+    buildGenesis().genesisBlock
 
   val defaultValidatorKeyPairs                   = (1 to 4).map(_ => Secp256k1.newKeyPair)
   val (defaultValidatorSks, defaultValidatorPks) = defaultValidatorKeyPairs.unzip

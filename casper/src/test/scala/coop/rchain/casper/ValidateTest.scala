@@ -12,7 +12,7 @@ import coop.rchain.casper.helper.{BlockDagStorageFixture, BlockGenerator}
 import coop.rchain.casper.protocol.Event.EventInstance
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.scalatestcontrib._
-import coop.rchain.casper.util.GenesisBuilder.{buildGenesis, buildGenesisParameters}
+import coop.rchain.casper.util.GenesisBuilder.buildGenesis
 import coop.rchain.casper.util.rholang.Resources.mkRuntimeManager
 import coop.rchain.casper.util.rholang.{InterpreterUtil, RuntimeManager}
 import coop.rchain.casper.util.{ConstructDeploy, GenesisBuilder, ProtoUtil}
@@ -726,7 +726,7 @@ class ValidateTest
 
   "Field format validation" should "succeed on a valid block and fail on empty fields" in withStorage {
     _ => implicit blockDagStorage =>
-      val context  = buildGenesis(buildGenesisParameters())
+      val context  = buildGenesis()
       val (sk, pk) = context.validatorKeyPairs.head
       for {
         dag <- blockDagStorage.getRepresentation
@@ -760,7 +760,7 @@ class ValidateTest
 
   "Block hash format validation" should "fail on invalid hash" in withStorage {
     _ => implicit blockDagStorage =>
-      val context  = buildGenesis(buildGenesisParameters())
+      val context  = buildGenesis()
       val (sk, pk) = context.validatorKeyPairs.head
       for {
         dag <- blockDagStorage.getRepresentation
@@ -775,7 +775,7 @@ class ValidateTest
 
   "Block deploy count validation" should "fail on invalid number of deploys" in withStorage {
     _ => implicit blockDagStorage =>
-      val context  = buildGenesis(buildGenesisParameters())
+      val context  = buildGenesis()
       val (sk, pk) = context.validatorKeyPairs.head
       for {
         dag <- blockDagStorage.getRepresentation
@@ -789,7 +789,7 @@ class ValidateTest
   }
 
   "Block version validation" should "work" in withStorage { _ => implicit blockDagStorage =>
-    val context  = buildGenesis(buildGenesisParameters())
+    val context  = buildGenesis()
     val (sk, pk) = context.validatorKeyPairs.head
     for {
       dag     <- blockDagStorage.getRepresentation

@@ -15,7 +15,7 @@ class MultiParentCasperMergeSpec extends FlatSpec with Matchers with Inspectors 
 
   implicit val timeEff = new LogicalTime[Effect]
 
-  val genesis = buildGenesis(buildGenesisParameters())
+  val genesis = buildGenesis()
 
   "HashSetCasper" should "handle multi-parent blocks correctly" in effectTest {
     HashSetCasperTestNode.networkEff(genesis, networkSize = 2).use { nodes =>

@@ -16,7 +16,7 @@ class ListeningNameAPITest extends FlatSpec with Matchers with Inside {
 
   import GenesisBuilder._
 
-  val genesis = buildGenesis(buildGenesisParameters())
+  val genesis = buildGenesis()
 
   "getListeningNameDataResponse" should "work with unsorted channels" in effectTest {
     HashSetCasperTestNode.standaloneEff(genesis).use { node =>
