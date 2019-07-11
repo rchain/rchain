@@ -6,4 +6,3 @@ package object catscontrib
     with WriterTInstances
     with ApplicativeError_Instances
     with SeqInstances
-    with FuturableInstances

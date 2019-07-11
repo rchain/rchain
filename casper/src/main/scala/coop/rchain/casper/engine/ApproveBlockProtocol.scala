@@ -1,19 +1,13 @@
 package coop.rchain.casper.engine
 
-import scala.concurrent.duration._
-
-import cats.{FlatMap, Monad}
-import cats.data.EitherT
-import cats.effect.concurrent.Ref
+import cats.FlatMap
 import cats.effect.Sync
+import cats.effect.concurrent.Ref
 import cats.implicits._
-
-import coop.rchain.casper.{LastApprovedBlock, PrettyPrinter, Validate, _}
 import coop.rchain.casper.LastApprovedBlock.LastApprovedBlock
 import coop.rchain.casper.protocol._
-import coop.rchain.catscontrib.MonadTrans
-import coop.rchain.catscontrib.Catscontrib._
 import coop.rchain.casper.util.comm.CommUtil
+import coop.rchain.casper.{LastApprovedBlock, PrettyPrinter, Validate, _}
 import coop.rchain.comm.rp.Connect.{ConnectionsCell, RPConfAsk}
 import coop.rchain.comm.transport
 import coop.rchain.comm.transport.TransportLayer
@@ -23,7 +17,7 @@ import coop.rchain.metrics.Metrics
 import coop.rchain.shared
 import coop.rchain.shared._
 
-import com.google.protobuf.ByteString
+import scala.concurrent.duration._
 
 /**
   * Bootstrap side of the protocol defined in
@@ -34,20 +28,7 @@ trait ApproveBlockProtocol[F[_]] {
   def run(): F[Unit]
 }
 
-abstract class ApproveBlockProtocolInstances {
-  implicit def eitherTApproveBlockProtocol[E, F[_]: Monad: ApproveBlockProtocol[?[_]]]
-      : ApproveBlockProtocol[EitherT[F, E, ?]] =
-    ApproveBlockProtocol.forTrans[F, EitherT[?[_], E, ?]]
-}
-
 object ApproveBlockProtocol {
-  def forTrans[F[_]: Monad, T[_[_], _]: MonadTrans](
-      implicit C: ApproveBlockProtocol[F]
-  ): ApproveBlockProtocol[T[F, ?]] =
-    new ApproveBlockProtocol[T[F, ?]] {
-      override def addApproval(a: BlockApproval): T[F, Unit] = C.addApproval(a).liftM[T]
-      override def run(): T[F, Unit]                         = C.run().liftM[T]
-    }
 
   def apply[F[_]](implicit instance: ApproveBlockProtocol[F]): ApproveBlockProtocol[F] = instance
 

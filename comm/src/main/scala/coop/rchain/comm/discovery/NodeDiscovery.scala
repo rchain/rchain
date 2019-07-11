@@ -1,8 +1,6 @@
 package coop.rchain.comm.discovery
 
 import cats.Monad
-import cats.data.EitherT
-
 import coop.rchain.comm.{NodeIdentifier, PeerNode}
 
 trait NodeDiscovery[F[_]] {
@@ -15,17 +13,6 @@ object NodeDiscovery extends NodeDiscoveryInstances {
 }
 
 sealed abstract class NodeDiscoveryInstances {
-
-  implicit def eitherTNodeDiscovery[E, F[_]: Monad: NodeDiscovery]
-      : NodeDiscovery[EitherT[F, E, ?]] =
-    new NodeDiscovery[EitherT[F, E, ?]] {
-
-      def discover: EitherT[F, E, Unit] =
-        EitherT.liftF(NodeDiscovery[F].discover)
-
-      def peers: EitherT[F, E, Seq[PeerNode]] =
-        EitherT.liftF(NodeDiscovery[F].peers)
-    }
 
   def kademlia[F[_]: Monad: KademliaStore: KademliaRPC](id: NodeIdentifier): NodeDiscovery[F] =
     new NodeDiscovery[F] {
