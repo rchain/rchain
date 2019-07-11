@@ -126,7 +126,7 @@ class MultiParentCasperDeploySpec extends FlatSpec with Matchers with Inspectors
       implicit val timeEff = new LogicalTime[Effect]
 
       for {
-        deployData <- ConstructDeploy.basicDeployData[Effect](0, phlos = 1)
+        deployData <- ConstructDeploy.sourceDeployNowF[Effect]("Nil", phloLimit = 1)
         block      <- node.createBlock(deployData)
       } yield assert(block.body.get.deploys.head.errored)
     }
@@ -137,7 +137,7 @@ class MultiParentCasperDeploySpec extends FlatSpec with Matchers with Inspectors
       implicit val timeEff = new LogicalTime[Effect]
 
       for {
-        deployData <- ConstructDeploy.basicDeployData[Effect](0, phlos = 100)
+        deployData <- ConstructDeploy.sourceDeployNowF[Effect]("Nil", phloLimit = 100)
         block      <- node.createBlock(deployData)
       } yield assert(!block.body.get.deploys.head.errored)
     }

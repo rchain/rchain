@@ -20,7 +20,6 @@ import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.casper.util.comm.TestNetwork.TestNetwork
 import coop.rchain.casper.util.comm.{CasperPacketHandler, _}
 import coop.rchain.casper.util.rholang.RuntimeManager
-import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.catscontrib.effect.implicits._
 import coop.rchain.catscontrib.ski._
 import coop.rchain.comm._
@@ -158,14 +157,14 @@ object HashSetCasperTestNode {
     implicit val log                       = Log.log[Task]
     implicit val metricsEff: Metrics[Task] = new metrics.Metrics.MetricsNOP[Task]
     implicit val span: Span[Task]          = NoopSpan[Task]()
-    val activeRuntime =
-      Runtime
-        .createWithEmptyCost[Task, Task.Par](storageDirectory, storageSize)
-        .unsafeRunSync
-    val runtimeManager = RuntimeManager.fromRuntime(activeRuntime).unsafeRunSync
-    Resource.make[Effect, RuntimeManager[Effect]](
-      runtimeManager.pure[Effect]
-    )(_ => activeRuntime.close())
+
+    for {
+      activeRuntime <- Resource.make(
+                        Runtime
+                          .createWithEmptyCost[Task, Task.Par](storageDirectory, storageSize)
+                      )(_.close())
+      runtimeManager <- Resource.liftF(RuntimeManager.fromRuntime(activeRuntime))
+    } yield runtimeManager
   }
 
   private def networkF[F[_]](

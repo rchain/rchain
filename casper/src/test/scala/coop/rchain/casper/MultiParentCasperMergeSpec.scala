@@ -23,14 +23,11 @@ class MultiParentCasperMergeSpec extends FlatSpec with Matchers with Inspectors 
       implicit val rm = nodes(1).runtimeManager
       for {
         deployData0 <- ConstructDeploy.basicDeployData[Effect](0)
+        deployData1 <- ConstructDeploy.sourceDeployNowF("@1!(1) | for(@x <- @1){ @1!(x) }")
         deployData2 <- ConstructDeploy.basicDeployData[Effect](2)
         deploys = Vector(
           deployData0,
-          ConstructDeploy.sourceDeploy(
-            "@1!(1) | for(@x <- @1){ @1!(x) }",
-            System.currentTimeMillis(),
-            accounting.MAX_VALUE
-          ),
+          deployData1,
           deployData2
         )
         block0 <- nodes(0).addBlock(deploys(0))
@@ -61,8 +58,8 @@ class MultiParentCasperMergeSpec extends FlatSpec with Matchers with Inspectors 
     val time                  = System.currentTimeMillis()
     HashSetCasperTestNode.networkEff(genesis, networkSize = 2).use { nodes =>
       val deploys = Vector(
-        ConstructDeploy.sourceDeploy(echoContract(1), time + 1, accounting.MAX_VALUE),
-        ConstructDeploy.sourceDeploy(echoContract(2), time + 2, accounting.MAX_VALUE)
+        ConstructDeploy.sourceDeploy(echoContract(1), timestamp = time + 1),
+        ConstructDeploy.sourceDeploy(echoContract(2), timestamp = time + 2)
       )
       for {
         block0 <- nodes(0).addBlock(deploys(0))
@@ -91,14 +88,12 @@ class MultiParentCasperMergeSpec extends FlatSpec with Matchers with Inspectors 
         current0 <- timeEff.currentMillis
         deploy0 = ConstructDeploy.sourceDeploy(
           "@1!(47)",
-          current0,
-          accounting.MAX_VALUE
+          current0
         )
         current1 <- timeEff.currentMillis
         deploy1 = ConstructDeploy.sourceDeploy(
           "for(@x <- @1){ @1!(x) }",
-          current1,
-          accounting.MAX_VALUE
+          current1
         )
         deploy2 <- ConstructDeploy.basicDeployData[Effect](2)
         deploys = Vector(
@@ -126,12 +121,6 @@ class MultiParentCasperMergeSpec extends FlatSpec with Matchers with Inspectors 
   }
 
   it should "not produce UnusedCommEvent while merging non conflicting blocks in the presence of conflicting ones" in effectTest {
-    def defineDeploy(source: String, t: Long) =
-      ConstructDeploy.sourceDeploy(
-        source,
-        t,
-        accounting.MAX_VALUE
-      )
 
     val registryRho =
       """
@@ -207,14 +196,15 @@ class MultiParentCasperMergeSpec extends FlatSpec with Matchers with Inspectors 
         |  }
         |}
       """.stripMargin
+
     HashSetCasperTestNode.networkEff(genesis, networkSize = 3).use { nodes =>
       val n1     = nodes(0)
       val n2     = nodes(1)
       val n3     = nodes(2)
-      val short  = defineDeploy("new x in { x!(0) }", 1L)
-      val time   = defineDeploy(timeRho, 3L)
-      val tuples = defineDeploy(tuplesRho, 2L)
-      val reg    = defineDeploy(registryRho, 4L)
+      val short  = ConstructDeploy.sourceDeploy("new x in { x!(0) }", 1L)
+      val time   = ConstructDeploy.sourceDeploy(timeRho, 3L)
+      val tuples = ConstructDeploy.sourceDeploy(tuplesRho, 2L)
+      val reg    = ConstructDeploy.sourceDeploy(registryRho, 4L)
       for {
         b1n3 <- n3.addBlock(short)
         b1n2 <- n2.addBlock(time)
@@ -231,14 +221,12 @@ class MultiParentCasperMergeSpec extends FlatSpec with Matchers with Inspectors 
         current0 <- timeEff.currentMillis
         deploy0 = ConstructDeploy.sourceDeploy(
           "@1!(47)",
-          current0,
-          accounting.MAX_VALUE
+          current0
         )
         current1 <- timeEff.currentMillis
         deploy1 = ConstructDeploy.sourceDeploy(
           "for(@x <- @1; @y <- @2){ @1!(x) }",
-          current1,
-          accounting.MAX_VALUE
+          current1
         )
         deploy2 <- ConstructDeploy.basicDeployData[Effect](2)
         deploys = Vector(

@@ -97,7 +97,7 @@ object HashSetCasperActions {
     )
 
   def deployment(i: Int, ts: Long = System.currentTimeMillis()): DeployData =
-    ConstructDeploy.sourceDeploy(s"new x in { x!(0) }", ts, accounting.MAX_VALUE)
+    ConstructDeploy.sourceDeploy(s"new x in { x!(0) }", ts)
 
   implicit class EffectOps[A](f: Effect[A]) {
     def result: A = f.unsafeRunSync
