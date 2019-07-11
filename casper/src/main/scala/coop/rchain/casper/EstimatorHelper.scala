@@ -107,7 +107,7 @@ object EstimatorHelper {
       commEvents    = ancestorEvents.map(extractComm).flatten
 
       producesInCommEvents = commEvents.flatMap(_.produces)
-      consumeInCommEvents = commEvents.flatMap(_.consume)
+      consumeInCommEvents  = commEvents.flatMap(_.consume)
 
       ancestorProduceChannels = ancestorEvents
         .map(extractProduce)
