@@ -58,9 +58,8 @@ object EffectsTestInstances {
       RPConf(local, networkId, Some(local), defaultTimeout, 20, clearConnections)
     )
 
-  case class Request(peer: PeerNode, msg: Protocol)
-
   class TransportLayerStub[F[_]: Sync: Applicative] extends TransportLayer[F] {
+    case class Request(peer: PeerNode, msg: Protocol)
     type Responses = PeerNode => Protocol => CommErr[Unit]
     var reqresp: Option[Responses] = None
     var requests: List[Request]    = List.empty[Request]
@@ -72,6 +71,8 @@ object EffectsTestInstances {
       reqresp = None
       requests = List.empty[Request]
     }
+
+    def getRequest(i: Int): (PeerNode, Protocol) = (requests(i).peer, requests(i).msg)
 
     override def send(peer: PeerNode, msg: Protocol): F[CommErr[Unit]] =
       Sync[F].delay {

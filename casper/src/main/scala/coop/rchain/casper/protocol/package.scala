@@ -30,9 +30,9 @@ package object protocol {
     )
   def packetToBlockRequest(msg: Packet): Option[BlockRequest] =
     convert[BlockRequest](msg, transport.BlockRequest, BlockRequest.parseFrom)
-  private def packetToHasBlockRequest(msg: Packet): Option[HasBlockRequest] =
+  def packetToHasBlockRequest(msg: Packet): Option[HasBlockRequest] =
     convert[HasBlockRequest](msg, transport.HasBlockRequest, HasBlockRequest.parseFrom)
-  private def packetToHasBlock(msg: Packet): Option[HasBlock] =
+  def packetToHasBlock(msg: Packet): Option[HasBlock] =
     convert[HasBlock](msg, transport.HasBlock, HasBlock.parseFrom)
 
   private def packetToForkChoiceTipRequest(msg: Packet): Option[ForkChoiceTipRequest] =

@@ -8,7 +8,7 @@ import coop.rchain.comm.protocol.routing.Protocol
 import coop.rchain.comm.transport.TransportLayer
 import coop.rchain.comm.rp.{ProtocolHelper, RPConf}, ProtocolHelper.toPacket
 import coop.rchain.shared._
-import coop.rchain.p2p.EffectsTestInstances.{Request, TransportLayerStub}
+import coop.rchain.p2p.EffectsTestInstances.TransportLayerStub
 import coop.rchain.models.BlockHash.BlockHash
 import com.google.protobuf.ByteString
 import monix.eval.Coeval
@@ -65,7 +65,6 @@ class RunningHandleHasBlockSpec extends WordSpec with BeforeAndAfterEach with Ma
       val requested: Requested = requestedBlocks.read.apply().get(hash).get
       requested.peers should be(Set(otherPeer))
       requested.waitingList should be(List(sender))
-
     }
 
     "request block and store information about requested block" in {
@@ -76,7 +75,7 @@ class RunningHandleHasBlockSpec extends WordSpec with BeforeAndAfterEach with Ma
       // when
       Running.handleHasBlock[Coeval](sender, hb)(casperContains).apply()
       // then
-      val Request(recipient, msg) = transport.requests(0)
+      val (recipient, msg) = transport.getRequest(0)
       // assert requested
       val br: BlockRequest = packetToBlockRequest(toPacket(msg).right.get).get
       br.hash shouldBe hash
