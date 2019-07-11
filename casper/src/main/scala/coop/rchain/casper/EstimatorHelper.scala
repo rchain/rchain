@@ -75,6 +75,21 @@ object EstimatorHelper {
         } yield conflicts
     }
 
+  val extractProduce: Event => Option[ProduceEvent] = {
+    case Event(Produce(produce: ProduceEvent)) => Some(produce)
+    case _                                     => None
+  }
+
+  val extractConsume: Event => Option[ConsumeEvent] = {
+    case Event(Consume(consume: ConsumeEvent)) => Some(consume)
+    case _                                     => None
+  }
+
+  val extractComm: Event => Option[CommEvent] = {
+    case Event(Comm(commEvent: CommEvent)) => Some(commEvent)
+    case _                                 => None
+  }
+
   @SuppressWarnings(Array("org.wartremover.warts.Throw"))
   private def buildBlockAncestorChannels[F[_]: Monad: BlockStore](
       blockAncestorsMeta: List[BlockMetadata]
@@ -86,55 +101,46 @@ object EstimatorHelper {
       ancestors = maybeAncestors.flatten
       ancestorEvents = ancestors.flatMap(_.getBody.deploys.flatMap(_.deployLog)) ++
         ancestors.flatMap(_.getBody.deploys.flatMap(_.paymentLog))
-      (produceEvents, consumeEvents, commEvents) = ancestorEvents.foldLeft(
-        (List.empty[ProduceEvent], List.empty[ConsumeEvent], List.empty[CommEvent])
-      ) {
-        case ((produces, consumes, commEvents), ancestorEvent) =>
-          ancestorEvent match {
-            case Event(Produce(produce: ProduceEvent)) =>
-              (produces :+ produce, consumes, commEvents)
-            case Event(Consume(consume: ConsumeEvent)) =>
-              (produces, consumes :+ consume, commEvents)
-            case Event(Comm(commEvent: CommEvent)) =>
-              (produces, consumes, commEvents :+ commEvent)
-            case _ =>
-              throw new RuntimeException("Unexpected ancestor event")
-          }
-      }
-      producesInCommEvents = commEvents.flatMap {
-        case CommEvent(Some(_: ConsumeEvent), produces) =>
-          produces
-        case _ =>
-          throw new RuntimeException("Unexpected comm event")
-      }
-      consumeInCommEvents = commEvents.map {
-        case CommEvent(Some(consume: ConsumeEvent), _) =>
-          consume
-        case _ =>
-          throw new RuntimeException("Unexpected comm event")
-      }
-      ancestorChannels = ancestorEvents.flatMap {
-        case Event(Produce(produce: ProduceEvent)) =>
-          if (producesInCommEvents.contains(produce)) {
-            Set.empty[ByteString] // Volatile produce
-          } else {
-            Set(produce.channelsHash)
-          }
-        case Event(Consume(consume: ConsumeEvent)) =>
-          if (consumeInCommEvents.contains(consume)) {
-            Set.empty[ByteString] // Volatile consume
-          } else {
-            consume.channelsHashes.toSet
-          }
-        case Event(Comm(CommEvent(Some(consume: ConsumeEvent), produces))) =>
-          if (consumeEvents.contains(consume) && produces.forall(
-                produce => produceEvents.contains(produce)
-              )) {
-            Set.empty[ByteString] // Volatile consume & produces
-          } else {
-            consume.channelsHashes.toSet ++ produces.map(_.channelsHash).toSet
-          }
-        case _ => throw new RuntimeException("incorrect ancestor events")
-      }.toSet
+
+      produceEvents = ancestorEvents.map(extractProduce).flatten
+      consumeEvents = ancestorEvents.map(extractConsume).flatten
+      commEvents    = ancestorEvents.map(extractComm).flatten
+
+      producesInCommEvents = commEvents.flatMap(_.produces)
+      consumeInCommEvents = commEvents.flatMap(_.consume)
+
+      ancestorProduceChannels = ancestorEvents
+        .map(extractProduce)
+        .flatten
+        .filterNot(producesInCommEvents.contains(_))
+        .map(p => p.channelsHash)
+        .toSet
+
+      ancestorConsumeChannels = ancestorEvents
+        .map(extractConsume)
+        .flatten
+        .filterNot(consumeInCommEvents.contains(_))
+        .flatMap(c => c.channelsHashes)
+        .toSet
+
+      ancestorCommChannels = ancestorEvents
+        .map(extractComm)
+        .flatten
+        .filterNot {
+          case CommEvent(Some(consume: ConsumeEvent), produces) =>
+            consumeEvents.contains(consume) && produces.forall(
+              produce => produceEvents.contains(produce)
+            )
+          case _ => false
+        }
+        .flatMap {
+          case CommEvent(Some(consume: ConsumeEvent), produces) =>
+            consume.channelsHashes ++ produces.map(_.channelsHash)
+          case e @ CommEvent(None, _) =>
+            throw new RuntimeException(s"Unexpected comm event $e")
+        }
+        .toSet
+
+      ancestorChannels = ancestorProduceChannels ++ ancestorConsumeChannels ++ ancestorCommChannels
     } yield ancestorChannels
 }
