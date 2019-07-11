@@ -64,15 +64,9 @@ class MultiParentCasperMergeSpec extends FlatSpec with Matchers with Inspectors 
   }
 
   it should "handle multi-parent blocks correctly when they operate on volatile produce/consume pairs" in effectTest {
-    //
-    checkMerge(
-      "Nil",
-      """@"hi"!(1) | for (_ <- @"hi") { Nil }""",
-      """@"hi"!(2) | for (_ <- @"hi") { Nil }"""
-    ) >>
-      // ?
-      checkConflicts("@0!(0)", "for (_ <- @0) { 0 }", "for (_ <- @0) { 0 }") >>
-      // ?
+    // 4! 4!
+    checkConflicts("@0!(0)", "for (_ <- @0) { 0 }", "for (_ <- @0) { 0 }") >>
+      // (!4) (!4)
       checkMerge("0", "for (_ <- @0) { 0 } | @0!(1)", "for (_ <- @0) { 0 } | @0!(2)") >>
       // !4 !4
       checkConflicts("for (_ <- @0) { 0 }", "@0!(1)", "@0!(2)") >>
