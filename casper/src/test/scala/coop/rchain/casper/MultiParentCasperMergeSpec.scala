@@ -63,6 +63,8 @@ class MultiParentCasperMergeSpec extends FlatSpec with Matchers with Inspectors 
     checkMerge("Nil", echoContract(1), echoContract(2))
   }
 
+  // TODO: Peek rows/column
+  // Note this skips pairs that lead to infinite loops
   it should "handle multi-parent blocks correctly when they operate on volatile produce/consume pairs" in effectTest {
     // 4! 4!
     checkConflicts("@0!(0)", "for (_ <- @0) { 0 }", "for (_ <- @0) { 0 }") >>
@@ -98,7 +100,18 @@ class MultiParentCasperMergeSpec extends FlatSpec with Matchers with Inspectors 
       // !4 !C
       checkMerge("for (@1 <- @0) { 0 } | contract @1(id) = { 0 }", "@0!(1)", "@1!(1)") >>
       // !4 4X
-      checkMerge("for (_ <- @0) { 0 }", "@0!(1)", "for (_ <- @1) { 0 }")
+      checkMerge("for (_ <- @0) { 0 }", "@0!(1)", "for (_ <- @1) { 0 }") >>
+      // Skip !4 4! as handled above
+      // !4 4!!
+      checkMerge("for (_ <- @0) { 0 } | @1!!(0)", "@0!(1)", "for (_ <- @1) { 0 }") >>
+      // !4 !!X
+      checkMerge("for (_ <- @0) { 0 }", "@0!(1)", "@1!!(0)") >>
+      // !4 !!4
+      checkConflicts("for (_ <- @0) { 0 } | for (_ <- @0) { 0 }", "@0!(1)", "@0!!(0)") >>
+      // !4 CX (TODO: Check if this could conflict)
+      checkMerge("for (_ <- @0) { 0 }", "@0!(1)", "contract @1(id) = { 0 }") >>
+      // !4 C!
+      checkMerge("for (_ <- @0) { 0 } | for (_ <- @1) { 0 }", "@0!(1)", "contract @1(id) = { 0 }")
   }
 
   private def checkConflicts(base: String, b1: String, b2: String): Effect[Unit] =
