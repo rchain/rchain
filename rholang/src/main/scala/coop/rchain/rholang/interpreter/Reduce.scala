@@ -1402,6 +1402,37 @@ class DebruijnInterpreter[M[_], F[_]](
         result   <- toSet(baseExpr)
       } yield result
   }
+
+  private[this] val toMap: Method = new Method() {
+    def toMap(baseExpr: Expr): M[Par] =
+      baseExpr.exprInstance match {
+        case EListBody(EList(basePs, locallyFree, connectiveUsed, remainder)) =>
+          val keyPairs = basePs.map(RhoType.Tuple2.unapply)
+          if (keyPairs.exists(_.isEmpty))
+            MethodNotDefined("toMap", "types except List[(K,V)]").raiseError[M, Par]
+          else
+            (EMapBody(
+              ParMap(
+                keyPairs.flatMap(_.toList),
+                connectiveUsed,
+                locallyFree.get.pure[Coeval],
+                remainder
+              )
+            ): Par).pure[M]
+        case other =>
+          MethodNotDefined("toMap", other.typ).raiseError[M, Par]
+      }
+
+    override def apply(p: Par, args: Seq[Par])(implicit env: Env[Par]): M[Par] =
+      for {
+        _ <- if (args.nonEmpty)
+              MethodArgumentNumberMismatch("toMap", 0, args.length).raiseError[M, Unit]
+            else ().pure[M]
+        baseExpr <- evalSingleExpr(p)
+        result   <- toMap(baseExpr)
+      } yield result
+  }
+
   private val methodTable: Map[String, Method] =
     Map(
       "nth"         -> nth,
@@ -1420,7 +1451,9 @@ class DebruijnInterpreter[M[_], F[_]](
       "size"        -> size,
       "length"      -> length,
       "slice"       -> slice,
-      "toList"      -> toList
+      "toList"      -> toList,
+      "toSet"       -> toSet,
+      "toMap"       -> toMap
     )
 
   private def evalSingleExpr(p: Par)(implicit env: Env[Par]): M[Expr] =

@@ -2413,4 +2413,188 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
       Vector(MethodNotDefined("toSet", "Int"))
     )
   }
+
+
+  "toMap" should """transform [("a",1), ("b",2), ("c",3)] into {"a":1, "b":2, "c":3)""" in {
+
+    implicit val errorLog: ErrorLog[Task] = new ErrorLog[Task]()
+    val toMapCall: EMethod =
+      EMethod(
+        "toMap",
+        EListBody(
+          EList(
+            List[Par](
+              ETupleBody(ETuple(Seq(GString("a"), GInt(1L)))),
+              ETupleBody(ETuple(Seq(GString("b"), GInt(2L)))),
+              ETupleBody(ETuple(Seq(GString("c"), GInt(3L))))
+            )
+          )
+        ),
+        List[Par]()
+      )
+
+    val result: Par = withTestSpace(errorLog) {
+      case TestFixture(_, reducer) =>
+        implicit val env: Env[Par] = Env[Par]()
+        val task             = reducer.evalExpr(toMapCall)
+        Await.result(task.runToFuture, 3.seconds)
+    }
+    val resultList =
+      EMapBody(
+        ParMap(
+          List[(Par,Par)](
+            (GString("a"), GInt(1L)),
+            (GString("b"), GInt(2L)),
+            (GString("c"), GInt(3L))
+          )
+        )
+      )
+    result.exprs should be(Seq(Expr(resultList)))
+    errorLog.readAndClearErrorVector().unsafeRunSync should be(Vector.empty[InterpreterError])
+  }
+
+  "toMap" should """transform [("a",1), ("a",2)] into {"a":2)""" in {
+
+    implicit val errorLog: ErrorLog[Task] = new ErrorLog[Task]()
+    val toSetCall: EMethod =
+      EMethod(
+        "toMap",
+        EListBody(
+          EList(
+            List[Par](
+              ETupleBody(ETuple(Seq(GString("a"), GInt(1L)))),
+              ETupleBody(ETuple(Seq(GString("a"), GInt(2L))))
+            )
+          )
+        ),
+        List[Par]()
+      )
+
+    val result: Par = withTestSpace(errorLog) {
+      case TestFixture(_, reducer) =>
+        implicit val env: Env[Par] = Env[Par]()
+        val toSetTask             = reducer.evalExpr(toSetCall)
+        Await.result(toSetTask.runToFuture, 3.seconds)
+    }
+    val resultList =
+      EMapBody(
+        ParMap(
+          List[(Par,Par)](
+            (GString("a"), GInt(2L))
+          )
+        )
+      )
+    result.exprs should be(Seq(Expr(resultList)))
+    errorLog.readAndClearErrorVector().unsafeRunSync should be(Vector.empty[InterpreterError])
+  }
+
+  "toMap" should """return an error when applied to ["a", ("b",2)]""" in {
+
+    implicit val errorLog: ErrorLog[Task] = new ErrorLog[Task]()
+    val toMapCall: EMethod =
+      EMethod(
+        "toMap",
+        EListBody(
+          EList(
+            List[Par](
+              GString("a"),
+              ETupleBody(ETuple(Seq(GString("b"), GInt(2L))))
+            )
+          )
+        ),
+        List[Par]()
+      )
+
+    val result = withTestSpace(errorLog) {
+      case TestFixture(space, reducer) =>
+        implicit val env = Env[Par]()
+        val inspectTask  = reducer.eval(toMapCall) >> space.toMap
+        Await.result(inspectTask.runToFuture, 3.seconds)
+    }
+
+    result should be(mutable.HashMap.empty)
+    errorLog.readAndClearErrorVector().unsafeRunSync should be(
+      Vector(MethodNotDefined("toMap", "types except List[(K,V)]"))
+    )
+  }
+
+
+  it should "transform [] into {}" in {
+    implicit val errorLog: ErrorLog[Task] = new ErrorLog[Task]()
+    val toMapCall: EMethod =
+      EMethod(
+        "toMap",
+        EListBody(
+          EList(
+            List[Par](
+            )
+          )
+        ),
+        List()
+      )
+
+    val result: Par = withTestSpace(errorLog) {
+      case TestFixture(_, reducer) =>
+        implicit val env: Env[Par] = Env[Par]()
+        val task = reducer.evalExpr(toMapCall)
+        Await.result(task.runToFuture, 3.seconds)
+    }
+    val resultList =
+      EMapBody(
+        ParMap(
+          List(
+          )
+        )
+      )
+    result.exprs should be(Seq(Expr(resultList)))
+    errorLog.readAndClearErrorVector().unsafeRunSync should be(Vector.empty[InterpreterError])
+  }
+
+  it should "return an error when `toMap` is called with arguments" in {
+    implicit val errorLog: ErrorLog[Task] = new ErrorLog[Task]()
+    val toMapCall: EMethod =
+      EMethod(
+        "toMap",
+        EMapBody(
+          ParMap(
+            List[(Par,Par)](
+              (GString("a"), GInt(1L))
+            )
+          )
+        ),
+        List(GInt(1))
+      )
+
+    val result = withTestSpace(errorLog) {
+      case TestFixture(space, reducer) =>
+        implicit val env = Env[Par]()
+        val inspectTask  = reducer.eval(toMapCall) >> space.toMap
+        Await.result(inspectTask.runToFuture, 3.seconds)
+    }
+    result should be(mutable.HashMap.empty)
+    errorLog.readAndClearErrorVector().unsafeRunSync should be(
+      Vector(MethodArgumentNumberMismatch("toMap", 0, 1))
+    )
+  }
+
+  it should "return an error when `toMap` is called on GInt" in {
+    implicit val errorLog: ErrorLog[Task] = new ErrorLog[Task]()
+    val toMapCall: EMethod =
+      EMethod(
+        "toMap",
+        GInt(1L),
+        List()
+      )
+
+    val result = withTestSpace(errorLog) {
+      case TestFixture(space, reducer) =>
+        implicit val env = Env[Par]()
+        val inspectTask  = reducer.eval(toMapCall) >> space.toMap
+        Await.result(inspectTask.runToFuture, 3.seconds)
+    }
+    result should be(mutable.HashMap.empty)
+    errorLog.readAndClearErrorVector().unsafeRunSync should be(
+      Vector(MethodNotDefined("toMap", "Int"))
+    )
+  }
 }
