@@ -54,7 +54,7 @@ object GrpcTransportReceiver {
                       .delay(tellBuffer.pushNext(Send(protocol)))
                       .ifM(
                         metrics.incrementCounter("enqueued.messages") >> Task
-                          .delay(noResponse(src)),
+                          .delay(ack(src)),
                         metrics.incrementCounter("dropped.messages") >> Task
                           .delay(internalServerError("message dropped"))
                       )
@@ -68,13 +68,15 @@ object GrpcTransportReceiver {
             Opened(StreamHandler.StreamError.circuitOpened)
           else Closed
 
-        def stream(observable: Observable[Chunk]): Task[ChunkResponse] = {
+        def stream(observable: Observable[Chunk]): Task[TLResponse] = {
           import StreamHandler._
           import StreamError.StreamErrorToMessage
 
-          (handleStream(tempFolder, observable, circuitBreaker) >>= {
-            case Left(error @ StreamError.Unexpected(t)) => logger.error(error.message, t)
-            case Left(error)                             => logger.warn(error.message)
+          handleStream(tempFolder, observable, circuitBreaker) >>= {
+            case Left(error @ StreamError.Unexpected(t)) =>
+              logger.error(error.message, t).as(internalServerError(error.message))
+            case Left(error) =>
+              logger.warn(error.message).as(internalServerError(error.message))
             case Right(msg) =>
               metrics.incrementCounter("received.packets") >>
                 Task
@@ -89,8 +91,8 @@ object GrpcTransportReceiver {
                       metrics.incrementCounter("dropped.packets"),
                       msg.path.deleteSingleFile[Task]
                     ).sequence
-                  )
-          }).as(ChunkResponse())
+                  ) >> rPConfAsk.reader(c => ack(c.local))
+          }
         }
 
         // TODO InternalServerError should take msg in constructor
@@ -100,9 +102,9 @@ object GrpcTransportReceiver {
               .InternalServerError(InternalServerError(ProtocolHelper.toProtocolBytes(msg)))
           )
 
-        private def noResponse(src: PeerNode): TLResponse =
+        private def ack(src: PeerNode): TLResponse =
           TLResponse(
-            TLResponse.Payload.NoResponse(NoResponse(Some(ProtocolHelper.header(src, networkId))))
+            TLResponse.Payload.Ack(Ack(Some(ProtocolHelper.header(src, networkId))))
           )
       }
 
