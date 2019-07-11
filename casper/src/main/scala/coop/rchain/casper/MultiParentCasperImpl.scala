@@ -12,6 +12,7 @@ import coop.rchain.blockstorage.{BlockDagRepresentation, BlockDagStorage, BlockS
 import coop.rchain.casper.CasperState.CasperStateCell
 import coop.rchain.casper.DeployError._
 import coop.rchain.casper.protocol._
+import coop.rchain.casper.engine.Running
 import coop.rchain.casper.util.ConstructDeploy.{defaultSec, sourceDeploy}
 import coop.rchain.casper.util.ProtoUtil._
 import coop.rchain.casper.util._
@@ -47,7 +48,7 @@ object CasperState {
   type CasperStateCell[F[_]] = Cell[F, CasperState]
 }
 
-class MultiParentCasperImpl[F[_]: Sync: Concurrent: ConnectionsCell: TransportLayer: Log: Time: SafetyOracle: LastFinalizedBlockCalculator: BlockStore: RPConfAsk: BlockDagStorage](
+class MultiParentCasperImpl[F[_]: Sync: Concurrent: ConnectionsCell: TransportLayer: Log: Time: SafetyOracle: LastFinalizedBlockCalculator: BlockStore: RPConfAsk: BlockDagStorage: Running.RequestedBlocks](
     runtimeManager: RuntimeManager[F],
     validatorId: Option[ValidatorIdentity],
     genesis: BlockMessage,

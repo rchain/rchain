@@ -38,15 +38,16 @@ class CommUtilSpec extends FunSpec with BeforeAndAfterEach with Matchers {
             peerNode("peer1", 40400),
             peerNode("peer2", 40400)
           )
-          // implicit val requestedBlocks = initRequestedBlocks()
+          implicit val requestedBlocks = initRequestedBlocks()
           implicit val connectionsCell = initConnectionsCell(connections = peers)
           // when
           CommUtil.sendBlockRequest[Coeval](hash).apply()
           // then
-          transport.getRequest(0)._1 shouldBe peers(0)
-          toHasBlockRequest(transport.getRequest(0)._2).hash should be(hash)
-          transport.getRequest(1)._1 shouldBe peers(1)
-          toHasBlockRequest(transport.getRequest(1)._2).hash should be(hash)
+          val requested = transport.requests.map(_.msg).map(toHasBlockRequest).map(_.hash).toSet
+          requested should be(Set(hash))
+          val requestedPeers = transport.requests.map(_.peer)
+          requestedPeers should contain(peers(0))
+          requestedPeers should contain(peers(1))
           transport.requests.size shouldBe 2
         }
         it("should log to INFO that request was made") {
@@ -54,7 +55,7 @@ class CommUtilSpec extends FunSpec with BeforeAndAfterEach with Matchers {
             peerNode("peer1", 40400),
             peerNode("peer2", 40400)
           )
-          // implicit val requestedBlocks = initRequestedBlocks()
+          implicit val requestedBlocks = initRequestedBlocks()
           implicit val connectionsCell = initConnectionsCell(connections = peers)
           // when
           CommUtil.sendBlockRequest[Coeval](hash).apply()
@@ -63,7 +64,20 @@ class CommUtilSpec extends FunSpec with BeforeAndAfterEach with Matchers {
         }
       }
       describe("if given block was already requested") {
-        it("should do nothing")(pending)
+        it("should do nothing") {
+          val peers = List(
+            peerNode("peer1", 40400),
+            peerNode("peer2", 40400)
+          )
+          val requestedBefore          = Map(hash -> Requested(peers = Set(peerNode("peer2", 40400))))
+          implicit val requestedBlocks = initRequestedBlocks(init = requestedBefore)
+          implicit val connectionsCell = initConnectionsCell(connections = peers)
+          // when
+          CommUtil.sendBlockRequest[Coeval](hash).apply()
+          // then
+          transport.requests.size shouldBe 0
+          log.infos.size shouldBe 0
+        }
       }
     }
   }
@@ -78,10 +92,10 @@ class CommUtilSpec extends FunSpec with BeforeAndAfterEach with Matchers {
   implicit private val log       = new LogStub[Coeval]
   implicit private val time      = new LogicalTime[Coeval]
 
-  // private def initRequestedBlocks(
-  // init: Map[BlockHash, Requested] = Map.empty
-  // ): RequestedBlocks[Coeval] =
-  // Cell.unsafe[Coeval, Map[BlockHash, Running.Requested]](init)
+  private def initRequestedBlocks(
+      init: Map[BlockHash, Requested] = Map.empty
+  ): RequestedBlocks[Coeval] =
+    Cell.unsafe[Coeval, Map[BlockHash, Running.Requested]](init)
   private def initConnectionsCell(connections: Connections) =
     Cell.unsafe[Coeval, Connections](connections)
   private def endpoint(port: Int): Endpoint = Endpoint("host", port, port)

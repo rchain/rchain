@@ -41,13 +41,16 @@ object CommUtil {
     } yield ()
   }
 
-  def sendBlockRequest[F[_]: Monad: ConnectionsCell: TransportLayer: Log: Time: RPConfAsk](
+  def sendBlockRequest[F[_]: Monad: ConnectionsCell: TransportLayer: Log: Time: RPConfAsk: Running.RequestedBlocks](
       hash: BlockHash
   ): F[Unit] =
-    for {
-      _ <- sendToPeers[F](transport.HasBlockRequest, HasBlockRequest(hash).toByteString)
-      _ <- Log[F].info(s"Requested missing block ${PrettyPrinter.buildString(hash)} from peers")
-    } yield ()
+    (Running.RequestedBlocks[F].read map (_.contains(hash))).ifM(
+      ().pure[F],
+      for {
+        _ <- sendToPeers[F](transport.HasBlockRequest, HasBlockRequest(hash).toByteString)
+        _ <- Log[F].info(s"Requested missing block ${PrettyPrinter.buildString(hash)} from peers")
+      } yield ()
+    )
 
   def sendForkChoiceTipRequest[F[_]: Monad: ConnectionsCell: TransportLayer: Log: Time: RPConfAsk]
       : F[Unit] = {

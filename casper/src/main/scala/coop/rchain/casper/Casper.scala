@@ -6,6 +6,7 @@ import cats.data._
 import cats.implicits._
 import cats.effect.{Concurrent, Sync}
 import com.google.protobuf.ByteString
+import coop.rchain.casper.engine.Running
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.rholang._
 import coop.rchain.catscontrib._
@@ -90,7 +91,7 @@ sealed abstract class MultiParentCasperInstances {
     Metrics.Source(CasperMetricsSource, "casper")
   private[this] val genesisLabel = Metrics.Source(MetricsSource, "genesis")
 
-  def hashSetCasper[F[_]: Sync: Metrics: Concurrent: ConnectionsCell: TransportLayer: Log: Time: SafetyOracle: LastFinalizedBlockCalculator: BlockStore: RPConfAsk: BlockDagStorage: Span](
+  def hashSetCasper[F[_]: Sync: Metrics: Concurrent: ConnectionsCell: TransportLayer: Log: Time: SafetyOracle: LastFinalizedBlockCalculator: BlockStore: RPConfAsk: BlockDagStorage: Span: Running.RequestedBlocks](
       runtimeManager: RuntimeManager[F],
       validatorId: Option[ValidatorIdentity],
       genesis: BlockMessage,
