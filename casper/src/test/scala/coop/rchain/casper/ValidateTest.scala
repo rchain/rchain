@@ -3,9 +3,10 @@ package coop.rchain.casper
 import java.nio.file.Files
 
 import cats.Monad
+import cats.effect.Sync
 import cats.implicits._
 import com.google.protobuf.ByteString
-import coop.rchain.blockstorage.{BlockStore, IndexedBlockDagStorage}
+import coop.rchain.blockstorage.{BlockDagStorage, BlockStore, IndexedBlockDagStorage}
 import coop.rchain.casper.helper.BlockGenerator._
 import coop.rchain.casper.helper.BlockUtil.generateValidator
 import coop.rchain.casper.helper.{BlockDagStorageFixture, BlockGenerator}
@@ -13,12 +14,11 @@ import coop.rchain.casper.protocol.Event.EventInstance
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.scalatestcontrib._
 import coop.rchain.casper.util.GenesisBuilder.buildGenesis
-import coop.rchain.casper.util.rholang.Resources.mkRuntimeManager
 import coop.rchain.casper.util.rholang.{InterpreterUtil, RuntimeManager}
 import coop.rchain.casper.util.{ConstructDeploy, GenesisBuilder, ProtoUtil}
-import coop.rchain.crypto.PrivateKey
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.signatures.Secp256k1
+import coop.rchain.crypto.{PrivateKey, PublicKey}
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.Validator.Validator
@@ -435,91 +435,103 @@ class ValidateTest
       } yield result
   }
 
-  "Parent validation" should "return true for proper justifications and false otherwise" in withStorage {
-    implicit blockStore => implicit blockDagStorage =>
-      val validators = Vector(
-        generateValidator("Validator 1"),
-        generateValidator("Validator 2"),
-        generateValidator("Validator 3")
+  val genesisContext = GenesisBuilder.buildGenesis()
+  val genesis        = genesisContext.genesisBlock
+
+  "Parent validation" should "return true for proper justifications and false otherwise" in withGenesis(
+    genesisContext
+  ) { implicit blockStore => implicit blockDagStorage => runtimeManager =>
+    val validotors          = GenesisBuilder.defaultValidatorPks
+    val v0 +: v1 +: v2 +: _ = validotors
+    val bonds               = GenesisBuilder.createBonds(validotors)
+
+    def createValidatorBlock[F[_]: Monad: Time: BlockStore: IndexedBlockDagStorage](
+        parents: Seq[BlockMessage],
+        genesis: BlockMessage,
+        justifications: Seq[BlockMessage],
+        validator: PublicKey
+    ): F[BlockMessage] =
+      for {
+        current <- Time[F].currentMillis
+        deploy  <- ConstructDeploy.basicProcessedDeploy[F](current.toInt)
+        block <- createBlock[F](
+                  parents.map(_.blockHash),
+                  genesis,
+                  creator = ByteString.copyFrom(validator.bytes),
+                  bonds = bonds.map { case (k, v) => Bond(ByteString.copyFrom(k.bytes), v) }.toSeq,
+                  deploys = Seq(deploy),
+                  justifications = latestMessages(justifications)
+                )
+      } yield block
+
+    def latestMessages(messages: Seq[BlockMessage]): Map[Validator, BlockHash] =
+      messages.map(b => b.sender -> b.blockHash).toMap
+
+    val b0 = genesis
+
+    for {
+      _  <- IndexedBlockDagStorage[Task].insertIndexed(genesis, genesis, invalid = false)
+      b1 <- createValidatorBlock[Task](Seq(b0), b0, Seq.empty, v0)
+      b2 <- createValidatorBlock[Task](Seq(b0), b0, Seq.empty, v1)
+      b3 <- createValidatorBlock[Task](Seq(b0), b0, Seq.empty, v2)
+      b4 <- createValidatorBlock[Task](Seq(b1), b0, Seq(b1), v0)
+      b5 <- createValidatorBlock[Task](Seq(b3, b2, b1), b0, Seq(b1, b2, b3), v1)
+      b6 <- createValidatorBlock[Task](Seq(b5, b4), b0, Seq(b1, b4, b5), v0)
+      b7 <- createValidatorBlock[Task](Seq(b4), b0, Seq(b1, b4, b5), v1) //not highest score parent
+      b8 <- createValidatorBlock[Task](Seq(b1, b2, b3), b0, Seq(b1, b2, b3), v2) //parents wrong order
+      b9 <- createValidatorBlock[Task](Seq(b6), b0, Seq.empty, v0) //empty justification
+
+      _   <- step[Task](runtimeManager)(b1, b0)
+      _   <- step[Task](runtimeManager)(b2, b0)
+      _   <- step[Task](runtimeManager)(b3, b0)
+      _   <- step[Task](runtimeManager)(b4, b0)
+      _   <- step[Task](runtimeManager)(b5, b0)
+      _   <- step[Task](runtimeManager)(b6, b0)
+      _   <- step[Task](runtimeManager)(b7, b0)
+      _   <- step[Task](runtimeManager)(b8, b0)
+      _   <- step[Task](runtimeManager)(b9, b0)
+      dag <- blockDagStorage.getRepresentation
+
+      // Valid
+      _ <- Validate.parents[Task](b0, b0, dag)
+      _ <- Validate.parents[Task](b1, b0, dag)
+      _ <- Validate.parents[Task](b2, b0, dag)
+      _ <- Validate.parents[Task](b3, b0, dag)
+      _ <- Validate.parents[Task](b4, b0, dag)
+      _ <- Validate.parents[Task](b5, b0, dag)
+      _ <- Validate.parents[Task](b6, b0, dag)
+      _ = log.warns shouldBe empty
+
+      // Not valid
+      _ <- Validate.parents[Task](b7, b0, dag)
+      _ <- Validate.parents[Task](b8, b0, dag)
+      _ <- Validate.parents[Task](b9, b0, dag)
+
+      result = log.warns.forall(
+        _.matches(
+          ".* block parents .* did not match estimate .* based on justification .*"
+        )
+      ) should be(
+        true
       )
-      val bonds = validators.zipWithIndex.map {
-        case (v, i) => Bond(v, 2L * i.toLong + 1L)
-      }
-
-      def latestMessages(messages: Seq[BlockMessage]): Map[Validator, BlockHash] =
-        messages.map(b => b.sender -> b.blockHash).toMap
-
-      def createValidatorBlock[F[_]: Monad: Time: BlockStore: IndexedBlockDagStorage](
-          parents: Seq[BlockMessage],
-          genesis: BlockMessage,
-          justifications: Seq[BlockMessage],
-          validator: Int
-      ): F[BlockMessage] =
-        for {
-          current <- Time[F].currentMillis
-          deploy  <- ConstructDeploy.basicProcessedDeploy[F](current.toInt)
-          block <- createBlock[F](
-                    parents.map(_.blockHash),
-                    genesis,
-                    creator = validators(validator),
-                    bonds = bonds,
-                    deploys = Seq(deploy),
-                    justifications = latestMessages(justifications)
-                  )
-        } yield block
-
-      mkRuntimeManager("casper-util-test")
-        .use { runtimeManager =>
-          for {
-
-            b0 <- createGenesis[Task](bonds = bonds)
-            b1 <- createValidatorBlock[Task](Seq(b0), b0, Seq.empty, 0)
-            b2 <- createValidatorBlock[Task](Seq(b0), b0, Seq.empty, 1)
-            b3 <- createValidatorBlock[Task](Seq(b0), b0, Seq.empty, 2)
-            b4 <- createValidatorBlock[Task](Seq(b1), b0, Seq(b1), 0)
-            b5 <- createValidatorBlock[Task](Seq(b3, b2, b1), b0, Seq(b1, b2, b3), 1)
-            b6 <- createValidatorBlock[Task](Seq(b5, b4), b0, Seq(b1, b4, b5), 0)
-            b7 <- createValidatorBlock[Task](Seq(b4), b0, Seq(b1, b4, b5), 1) //not highest score parent
-            b8 <- createValidatorBlock[Task](Seq(b1, b2, b3), b0, Seq(b1, b2, b3), 2) //parents wrong order
-            b9 <- createValidatorBlock[Task](Seq(b6), b0, Seq.empty, 0) //empty justification
-
-            _   <- updateChainWithBlockStateUpdate[Task](0, b0, runtimeManager)
-            _   <- updateChainWithBlockStateUpdate[Task](1, b0, runtimeManager)
-            _   <- updateChainWithBlockStateUpdate[Task](2, b0, runtimeManager)
-            _   <- updateChainWithBlockStateUpdate[Task](3, b0, runtimeManager)
-            _   <- updateChainWithBlockStateUpdate[Task](4, b0, runtimeManager)
-            _   <- updateChainWithBlockStateUpdate[Task](5, b0, runtimeManager)
-            _   <- updateChainWithBlockStateUpdate[Task](6, b0, runtimeManager)
-            _   <- updateChainWithBlockStateUpdate[Task](7, b0, runtimeManager)
-            _   <- updateChainWithBlockStateUpdate[Task](8, b0, runtimeManager)
-            _   <- updateChainWithBlockStateUpdate[Task](9, b0, runtimeManager)
-            dag <- blockDagStorage.getRepresentation
-
-            // Valid
-            _ <- Validate.parents[Task](b0, b0, dag)
-            _ <- Validate.parents[Task](b1, b0, dag)
-            _ <- Validate.parents[Task](b2, b0, dag)
-            _ <- Validate.parents[Task](b3, b0, dag)
-            _ <- Validate.parents[Task](b4, b0, dag)
-            _ <- Validate.parents[Task](b5, b0, dag)
-            _ <- Validate.parents[Task](b6, b0, dag)
-
-            // Not valid
-            _ <- Validate.parents[Task](b7, b0, dag)
-            _ <- Validate.parents[Task](b8, b0, dag)
-            _ <- Validate.parents[Task](b9, b0, dag)
-
-            result = log.warns.forall(
-              _.matches(
-                ".* block parents .* did not match estimate .* based on justification .*"
-              )
-            ) should be(
-              true
-            )
-            _ = log.warns.size should be(3)
-          } yield result
-        }
+      _ = log.warns.size should be(3)
+    } yield result
   }
+
+  def step[F[_]: BlockDagStorage: BlockStore: Time: Metrics: Span: Sync](
+      runtimeManager: RuntimeManager[F]
+  )(b1: BlockMessage, genesis: BlockMessage): F[Unit] =
+    for {
+      dag                                       <- BlockDagStorage[F].getRepresentation
+      computeBlockCheckpointResult              <- computeBlockCheckpoint(b1, genesis, dag, runtimeManager)
+      (postB1StateHash, postB1ProcessedDeploys) = computeBlockCheckpointResult
+      result <- injectPostStateHash[F](
+                 b1,
+                 genesis,
+                 postB1StateHash,
+                 postB1ProcessedDeploys
+               )
+    } yield result
 
   // Creates a block with an invalid block number and sequence number
   "Block summary validation" should "short circuit after first invalidity" in withStorage {

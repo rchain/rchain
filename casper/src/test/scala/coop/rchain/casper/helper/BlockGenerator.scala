@@ -29,24 +29,6 @@ object BlockGenerator {
   private[this] val GenerateBlockMetricsSource =
     Metrics.Source(CasperMetricsSource, "generate-block")
 
-  def updateChainWithBlockStateUpdate[F[_]: Sync: BlockStore: IndexedBlockDagStorage: Time: Metrics: Span](
-      id: Int,
-      genesis: BlockMessage,
-      runtimeManager: RuntimeManager[F]
-  ): F[BlockMessage] =
-    for {
-      b   <- IndexedBlockDagStorage[F].lookupByIdUnsafe(id)
-      dag <- IndexedBlockDagStorage[F].getRepresentation
-      computeBlockCheckpointResult <- computeBlockCheckpoint[F](
-                                       b,
-                                       genesis,
-                                       dag,
-                                       runtimeManager
-                                     )
-      (postStateHash, processedDeploys) = computeBlockCheckpointResult
-      _                                 <- injectPostStateHash[F](id, b, genesis, postStateHash, processedDeploys)
-    } yield b
-
   def computeBlockCheckpoint[F[_]: Sync: BlockStore: Time: Metrics: Span](
       b: BlockMessage,
       genesis: BlockMessage,
