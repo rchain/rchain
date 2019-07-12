@@ -1375,6 +1375,33 @@ class DebruijnInterpreter[M[_], F[_]](
       } yield result
   }
 
+  private[this] val toSet: Method = new Method() {
+    def toSet(baseExpr: Expr): M[Par] =
+      baseExpr.exprInstance match {
+        case e: ESetBody =>
+          (e: Par).pure[M]
+        case EListBody(EList(basePs, locallyFree, connectiveUsed, remainder)) =>
+          (ESetBody(
+            ParSet(
+              basePs,
+              connectiveUsed,
+              locallyFree.get.pure[Coeval],
+              remainder
+            )
+          ): Par).pure[M]
+        case other =>
+          MethodNotDefined("toSet", other.typ).raiseError[M, Par]
+      }
+
+    override def apply(p: Par, args: Seq[Par])(implicit env: Env[Par]): M[Par] =
+      for {
+        _ <- if (args.nonEmpty)
+              MethodArgumentNumberMismatch("toSet", 0, args.length).raiseError[M, Unit]
+            else ().pure[M]
+        baseExpr <- evalSingleExpr(p)
+        result   <- toSet(baseExpr)
+      } yield result
+  }
   private val methodTable: Map[String, Method] =
     Map(
       "nth"         -> nth,

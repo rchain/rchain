@@ -17,7 +17,6 @@ import coop.rchain.models._
 import coop.rchain.models.rholang.implicits._
 import coop.rchain.rholang.interpreter.Runtime.RhoISpace
 import coop.rchain.rholang.interpreter.accounting._
-import coop.rchain.rholang.interpreter.accounting.utils._
 import coop.rchain.rholang.interpreter.errors._
 import coop.rchain.rholang.interpreter.storage.implicits._
 import coop.rchain.rholang.Resources._
@@ -32,11 +31,10 @@ import monix.execution.Scheduler.Implicits.global
 import org.scalatest.{Assertion, FlatSpec, Matchers}
 
 import scala.collection.immutable.BitSet
-import scala.collection.mutable
+import scala.collection.{SortedSet, mutable}
 import scala.collection.mutable.HashMap
 import scala.concurrent.Await
 import scala.concurrent.duration._
-import scala.collection.SortedSet
 
 final case class TestFixture(space: RhoISpace[Task], reducer: ChargingReducer[Task])
 
@@ -2222,5 +2220,197 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
       )
     result.exprs should be(Seq(Expr(resultList)))
     errorLog.readAndClearErrorVector().unsafeRunSync should be(Vector.empty[InterpreterError])
+  }
+  "toSet" should "transform [1, 2, 3] into Set(1, 2, 3)" in {
+
+    implicit val errorLog: ErrorLog[Task] = new ErrorLog[Task]()
+    val toSetCall: EMethod =
+      EMethod(
+        "toSet",
+        EListBody(
+          EList(
+            List[Par](
+              GInt(1L),
+              GInt(2L),
+              GInt(3L)
+            )
+          )
+        ),
+        List[Par]()
+      )
+
+    val result: Par = withTestSpace(errorLog) {
+      case TestFixture(_, reducer) =>
+        implicit val env: Env[Par] = Env[Par]()
+        val toSetTask             = reducer.evalExpr(toSetCall)
+        Await.result(toSetTask.runToFuture, 3.seconds)
+    }
+    val resultList =
+      ESetBody(
+        ParSet(
+          List(
+            GInt(1L),
+            GInt(2L),
+            GInt(3L)
+          )
+        )
+      )
+    result.exprs should be(Seq(Expr(resultList)))
+    errorLog.readAndClearErrorVector().unsafeRunSync should be(Vector.empty[InterpreterError])
+  }
+
+
+  "toSet" should "transform [1, 1] into Set(1)" in {
+
+    implicit val errorLog: ErrorLog[Task] = new ErrorLog[Task]()
+    val toSetCall: EMethod =
+      EMethod(
+        "toSet",
+        EListBody(
+          EList(
+            List[Par](
+              GInt(1L),
+              GInt(1L)
+            )
+          )
+        ),
+        List[Par]()
+      )
+
+    val result: Par = withTestSpace(errorLog) {
+      case TestFixture(_, reducer) =>
+        implicit val env: Env[Par] = Env[Par]()
+        val toSetTask             = reducer.evalExpr(toSetCall)
+        Await.result(toSetTask.runToFuture, 3.seconds)
+    }
+    val resultList =
+      ESetBody(
+        ParSet(
+          List(
+            GInt(1L)
+          )
+        )
+      )
+    result.exprs should be(Seq(Expr(resultList)))
+    errorLog.readAndClearErrorVector().unsafeRunSync should be(Vector.empty[InterpreterError])
+  }
+
+  it should "transform [] into Set()" in {
+    implicit val errorLog: ErrorLog[Task] = new ErrorLog[Task]()
+    val toSetCall: EMethod =
+      EMethod(
+        "toSet",
+        EListBody(
+          EList(
+            List[Par](
+            )
+          )
+        ),
+        List()
+      )
+
+    val result: Par = withTestSpace(errorLog) {
+      case TestFixture(_, reducer) =>
+        implicit val env: Env[Par] = Env[Par]()
+        val toSetTask             = reducer.evalExpr(toSetCall)
+        Await.result(toSetTask.runToFuture, 3.seconds)
+    }
+    val resultList =
+      ESetBody(
+        ParSet(
+          List(
+          )
+        )
+      )
+    result.exprs should be(Seq(Expr(resultList)))
+    errorLog.readAndClearErrorVector().unsafeRunSync should be(Vector.empty[InterpreterError])
+  }
+
+  it should "keep Set(1, 2, 3) unchanged" in {
+    implicit val errorLog: ErrorLog[Task] = new ErrorLog[Task]()
+    val toSetCall: EMethod =
+      EMethod(
+        "toSet",
+        ESetBody(
+          ParSet(
+            List(
+              GInt(1L),
+              GInt(2L),
+              GInt(3L)
+            )
+          )
+        ),
+        List()
+      )
+
+    val result: Par = withTestSpace(errorLog) {
+      case TestFixture(_, reducer) =>
+        implicit val env: Env[Par] = Env[Par]()
+        val toSetTask             = reducer.evalExpr(toSetCall)
+        Await.result(toSetTask.runToFuture, 3.seconds)
+    }
+    val resultList =
+      ESetBody(
+        ParSet(
+          List(
+            GInt(1L),
+            GInt(2L),
+            GInt(3L)
+          )
+        )
+      )
+    result.exprs should be(Seq(Expr(resultList)))
+    errorLog.readAndClearErrorVector().unsafeRunSync should be(Vector.empty[InterpreterError])
+  }
+
+
+  it should "return an error when `toSet` is called with arguments" in {
+    implicit val errorLog: ErrorLog[Task] = new ErrorLog[Task]()
+    val toSetCall: EMethod =
+      EMethod(
+        "toSet",
+        ESetBody(
+          ParSet(
+            List(
+              GInt(1L),
+              GInt(2L),
+              GInt(3L)
+            )
+          )
+        ),
+        List(GInt(1))
+      )
+
+    val result = withTestSpace(errorLog) {
+      case TestFixture(space, reducer) =>
+        implicit val env = Env[Par]()
+        val inspectTask  = reducer.eval(toSetCall) >> space.toMap
+        Await.result(inspectTask.runToFuture, 3.seconds)
+    }
+    result should be(mutable.HashMap.empty)
+    errorLog.readAndClearErrorVector().unsafeRunSync should be(
+      Vector(MethodArgumentNumberMismatch("toSet", 0, 1))
+    )
+  }
+
+  it should "return an error when `toSet` is called on GInt" in {
+    implicit val errorLog: ErrorLog[Task] = new ErrorLog[Task]()
+    val toSetCall: EMethod =
+      EMethod(
+        "toSet",
+        GInt(1L),
+        List()
+      )
+
+    val result = withTestSpace(errorLog) {
+      case TestFixture(space, reducer) =>
+        implicit val env = Env[Par]()
+        val inspectTask  = reducer.eval(toSetCall) >> space.toMap
+        Await.result(inspectTask.runToFuture, 3.seconds)
+    }
+    result should be(mutable.HashMap.empty)
+    errorLog.readAndClearErrorVector().unsafeRunSync should be(
+      Vector(MethodNotDefined("toSet", "Int"))
+    )
   }
 }
