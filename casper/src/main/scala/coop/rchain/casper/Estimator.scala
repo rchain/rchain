@@ -15,7 +15,11 @@ import coop.rchain.models.Validator.Validator
 import com.google.protobuf.ByteString
 
 object Estimator {
-  implicit val decreasingOrder = Ordering[Long].reverse
+
+  implicit val decreasingOrder = Ordering.Tuple2(
+    Ordering[Long].reverse,
+    Ordering.by((b: ByteString) => b.toByteArray.toIterable)
+  )
 
   private val EstimatorMetricsSource: Metrics.Source =
     Metrics.Source(CasperMetricsSource, "estimator")
