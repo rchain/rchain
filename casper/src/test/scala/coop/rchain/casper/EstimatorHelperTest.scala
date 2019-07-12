@@ -1,21 +1,18 @@
 package coop.rchain.casper
 
 import cats.Monad
+import cats.effect.Resource
 import cats.implicits._
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.{BlockDagStorage, BlockStore, IndexedBlockDagStorage}
 import coop.rchain.casper.EstimatorHelper.conflicts
-import coop.rchain.casper.helper.BlockGenerator.{
-  computeBlockCheckpoint,
-  injectPostStateHash,
-  updateChainWithBlockStateUpdate
-}
-import coop.rchain.casper.helper.{BlockDagStorageFixture, BlockGenerator}
+import coop.rchain.casper.helper.{BlockDagStorageFixture, BlockGenerator, HashSetCasperTestNode}
 import coop.rchain.casper.protocol.Event.EventInstance.Produce
 import coop.rchain.casper.protocol.{Event, ProcessedDeploy, ProduceEvent}
 import coop.rchain.casper.scalatestcontrib._
-import coop.rchain.casper.util.ConstructDeploy.basicProcessedDeploy
-import coop.rchain.casper.util.rholang.Resources.mkRuntimeManager
+import coop.rchain.casper.util.ConstructDeploy.{basicDeployData, basicProcessedDeploy}
+import coop.rchain.casper.util.GenesisBuilder
+import coop.rchain.casper.util.rholang.{Resources, RuntimeManager}
 import coop.rchain.metrics
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.p2p.EffectsTestInstances.LogicalTime
@@ -35,6 +32,9 @@ class EstimatorHelperTest
   implicit val metricsEff: Metrics[Task] = new metrics.Metrics.MetricsNOP[Task]
   implicit val noopSpan: Span[Task]      = NoopSpan[Task]()
 
+  val genesisContext = GenesisBuilder.buildGenesis()
+  val genesis        = genesisContext.genesisBlock
+
   /*
    * DAG Looks like this:
    *
@@ -50,62 +50,42 @@ class EstimatorHelperTest
    *        \       /
    *         genesis
    */
-  "Blocks" should "conflict if they use the same deploys in different histories" in withStorage {
-    implicit blockStore => implicit blockDagStorage =>
-      mkRuntimeManager("casper-util-test").use { runtimeManager =>
+
+  "Blocks" should "conflict if they use the same deploys in different histories" in effectTest {
+
+    HashSetCasperTestNode.networkEff(genesisContext, networkSize = 4).use {
+      case n1 +: n2 +: n3 +: n4 +: _ =>
+        implicit val blockStore = n4.blockStore
+
         for {
+          deploys <- (0 until 6).toList.traverse(i => basicDeployData[Task](i))
 
-          deploys <- (0 until 6).toList.traverse(i => basicProcessedDeploy[Task](i))
-          genesis <- createGenesis[Task]()
-          b2      <- createBlock[Task](Seq(genesis.blockHash), genesis, deploys = Seq(deploys(0)))
-          b3      <- createBlock[Task](Seq(genesis.blockHash), genesis, deploys = Seq(deploys(1)))
-          b4      <- createBlock[Task](Seq(b2.blockHash), genesis, deploys = Seq(deploys(2)))
-          b5      <- createBlock[Task](Seq(b3.blockHash), genesis, deploys = Seq(deploys(2)))
-          b6 <- createBlock[Task](
-                 Seq(b2.blockHash, b3.blockHash),
-                 genesis,
-                 deploys = Seq(deploys(2))
-               )
-          b7  <- createBlock[Task](Seq(b6.blockHash), genesis, deploys = Seq(deploys(3)))
-          b8  <- createBlock[Task](Seq(b6.blockHash), genesis, deploys = Seq(deploys(5)))
-          b9  <- createBlock[Task](Seq(b7.blockHash), genesis, deploys = Seq(deploys(5)))
-          b10 <- createBlock[Task](Seq(b8.blockHash), genesis, deploys = Seq(deploys(4)))
+          b2 <- n1.addBlock(deploys(0))
+          b3 <- n2.addBlock(deploys(1))
+          _  <- n3.receive()
 
-          dag <- blockDagStorage.getRepresentation
+          b4 <- n1.addBlock(deploys(2))
+          b5 <- n2.addBlock(deploys(2))
+          b6 <- n3.addBlock(deploys(2))
+          _  <- n4.receive()
 
-          computeBlockCheckpointResult <- computeBlockCheckpoint(
-                                           genesis,
-                                           genesis,
-                                           dag,
-                                           runtimeManager
-                                         )
-          (postGenStateHash, postGenProcessedDeploys) = computeBlockCheckpointResult
-          _ <- injectPostStateHash[Task](
-                0,
-                genesis,
-                genesis,
-                postGenStateHash,
-                postGenProcessedDeploys
-              )
-          _ <- updateChainWithBlockStateUpdate[Task](1, genesis, runtimeManager)
-          _ <- updateChainWithBlockStateUpdate[Task](2, genesis, runtimeManager)
-          _ <- updateChainWithBlockStateUpdate[Task](3, genesis, runtimeManager)
-          _ <- updateChainWithBlockStateUpdate[Task](4, genesis, runtimeManager)
-          _ <- updateChainWithBlockStateUpdate[Task](5, genesis, runtimeManager)
-          _ <- updateChainWithBlockStateUpdate[Task](6, genesis, runtimeManager)
-          _ <- updateChainWithBlockStateUpdate[Task](7, genesis, runtimeManager)
-          _ <- updateChainWithBlockStateUpdate[Task](8, genesis, runtimeManager)
-          _ <- updateChainWithBlockStateUpdate[Task](9, genesis, runtimeManager)
+          b7  <- n3.addBlock(deploys(3))
+          b8  <- n4.addBlock(deploys(5))
+          b9  <- n3.addBlock(deploys(5))
+          b10 <- n4.addBlock(deploys(4))
 
-          _      <- conflicts[Task](b2, b3, dag) shouldBeF false
-          _      <- conflicts[Task](b4, b5, dag) shouldBeF true
-          _      <- conflicts[Task](b6, b6, dag) shouldBeF false
-          _      <- conflicts[Task](b6, b9, dag) shouldBeF false
-          _      <- conflicts[Task](b7, b8, dag) shouldBeF false
-          _      <- conflicts[Task](b7, b10, dag) shouldBeF false
-          result <- conflicts[Task](b9, b10, dag) shouldBeF true
-        } yield result
-      }
+          _   <- n4.receive()
+          dag <- n4.blockDagStorage.getRepresentation
+
+          _ <- conflicts[Task](b2, b3, dag) shouldBeF false
+          _ <- conflicts[Task](b4, b5, dag) shouldBeF true
+          _ <- conflicts[Task](b6, b6, dag) shouldBeF false
+          _ <- conflicts[Task](b6, b9, dag) shouldBeF false
+          _ <- conflicts[Task](b7, b8, dag) shouldBeF false
+          _ <- conflicts[Task](b7, b10, dag) shouldBeF false
+          _ <- conflicts[Task](b9, b10, dag) shouldBeF true
+        } yield ()
+    }
   }
 
   it should "conflict if their deploys contain same channel in deployLog" in withStorage {
