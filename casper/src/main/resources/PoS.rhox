@@ -271,49 +271,42 @@ new  PoS,
                 contract removeQuarantinedWithdrawers(@currentBlockNumber, @allBonds, @withdrawers, newWithdrawersCh, newBondsCh) = {
                   new quarantinedValidatorsCh,
                       validatorsToWithdrawListCh,
-                      validatorsToWithdrawSetCh,
                       isQuarantineFinished,
                       isWithdrawn,
-                      accumulateToSet,
-                      accumulateToMap,
                       newBondsListCh,
                       newWithdrawersListCh
                   in {
                     @ListOps!("filter", withdrawers.toList(), *isQuarantineFinished, *quarantinedValidatorsCh) |
                     for (@quarantinedValidators <- quarantinedValidatorsCh) {
-
                       @ListOps!("map", quarantinedValidators, *fst, *validatorsToWithdrawListCh) |
                       for (@validatorsToWithdrawList <- validatorsToWithdrawListCh) {
-                        @ListOps!("fold", validatorsToWithdrawList, Set(), *accumulateToSet, *validatorsToWithdrawSetCh) |
 
-                        for (@validatorsToWithdrawSet <- validatorsToWithdrawSetCh) {
-                          @ListOps!("filter", allBonds.toList(), *isWithdrawn, *newBondsListCh) |
+                        match validatorsToWithdrawList.toSet() {
+                          validatorsToWithdrawSet => {
+                            @ListOps!("filter", allBonds.toList(), *isWithdrawn, *newBondsListCh) |
 
-                          for (@newBondsList <- newBondsListCh) {
-                            @ListOps!("fold", newBondsList, {}, *accumulateToMap, *newBondsCh)
-                          } |
+                            for (@newBondsList <- newBondsListCh) {
+                              newBondsCh!(newBondsList.toMap())
+                            } |
 
-                          @ListOps!("filter", withdrawers.toList(), *isWithdrawn, *newWithdrawersListCh) |
-                          contract isWithdrawn(@(pk, _), resultCh) = {
-                            resultCh!(not validatorsToWithdrawSet.contains(pk))
-                          } |
+                            @ListOps!("filter", withdrawers.toList(), *isWithdrawn, *newWithdrawersListCh) |
+                            contract isWithdrawn(@(pk, _), resultCh) = {
+                              resultCh!(not validatorsToWithdrawSet.contains(pk))
+                            } |
 
-                          for (@newWithdrawersList <- newWithdrawersListCh) {
-                            @ListOps!("fold", newWithdrawersList, {}, *accumulateToMap, *newWithdrawersCh)
-                          } |
+                            for (@newWithdrawersList <- newWithdrawersListCh) {
+                              newWithdrawersCh!(newWithdrawersList.toMap())
+                            } |
 
-                          contract isWithdrawn(@(pk, _), resultCh) = { resultCh!(not validatorsToWithdrawSet.contains(pk))}
+                            contract isWithdrawn(@(pk, _), resultCh) = { resultCh!(not validatorsToWithdrawSet.contains(pk))}
+                          }
                         }
                       }
                     } |
 
                     contract isQuarantineFinished(@(_, blockNumber), resultCh) = {
                       resultCh!(blockNumber + $$quarantineLength$$ >= currentBlockNumber)
-                    } |
-
-                    contract accumulateToSet(@x, @acc, resultCh) = {resultCh! (acc.union(Set(x)))} |
-
-                    contract accumulateToMap(@(k, v), @acc, resultCh) = {resultCh!(acc.set(k, v))}
+                    }
                   }
                 }
               }
