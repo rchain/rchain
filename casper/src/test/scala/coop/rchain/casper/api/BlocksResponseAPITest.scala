@@ -10,6 +10,7 @@ import coop.rchain.casper.protocol._
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.p2p.EffectsTestInstances.LogStub
+import coop.rchain.shared.Log
 import monix.eval.Task
 import org.scalatest.{FlatSpec, Matchers}
 
@@ -28,6 +29,7 @@ class BlocksResponseAPITest
   val v3Bond                       = Bond(v3, 15)
   val bonds                        = Seq(v1Bond, v2Bond, v3Bond)
   implicit val spanEff: Span[Task] = Span.noop
+  implicit val log                 = new Log.NOPLog[Task]()
 
   "showMainChain" should "return only blocks in the main chain" in withStorage {
     implicit blockStore => implicit blockDagStorage =>
@@ -84,7 +86,7 @@ class BlocksResponseAPITest
              )
         dag        <- blockDagStorage.getRepresentation
         metricsEff = new Metrics.MetricsNOP[Task]
-        tips       <- Estimator.tips[Task](dag, genesis)(Sync[Task], metricsEff, spanEff)
+        tips       <- Estimator.tips[Task](dag, genesis)(Sync[Task], log, metricsEff, spanEff)
         casperEffect <- NoOpsCasperEffect[Task](
                          HashMap.empty[BlockHash, BlockMessage],
                          tips
@@ -159,7 +161,7 @@ class BlocksResponseAPITest
              )
         dag        <- blockDagStorage.getRepresentation
         metricsEff = new Metrics.MetricsNOP[Task]
-        tips       <- Estimator.tips[Task](dag, genesis)(Sync[Task], metricsEff, spanEff)
+        tips       <- Estimator.tips[Task](dag, genesis)(Sync[Task], log, metricsEff, spanEff)
         casperEffect <- NoOpsCasperEffect[Task](
                          HashMap.empty[BlockHash, BlockMessage],
                          tips
@@ -233,7 +235,7 @@ class BlocksResponseAPITest
            )
       dag        <- blockDagStorage.getRepresentation
       metricsEff = new Metrics.MetricsNOP[Task]
-      tips       <- Estimator.tips[Task](dag, genesis)(Sync[Task], metricsEff, spanEff)
+      tips       <- Estimator.tips[Task](dag, genesis)(Sync[Task], log, metricsEff, spanEff)
       casperEffect <- NoOpsCasperEffect[Task](
                        HashMap.empty[BlockHash, BlockMessage],
                        tips
