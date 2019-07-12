@@ -48,7 +48,7 @@ match (
               ("payment is not distributed to inactive validators", *test_dont_pay_inactive_validators)
             ]) |
 
-          contract setup(retCh) = {
+          contract setup(_, retCh) = {
             retCh!({})
           } |
 

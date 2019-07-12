@@ -2,17 +2,20 @@
 
 new rl(`rho:registry:lookup`),
     RhoSpecCh,
-    setup,
+    setupHistoryCh,
+    setup, teardown,
     stdlog(`rho:io:stdlog`),
     testSetup, testAssertEquals, testAssertNotEquals, testAssertTrue, testAssertMany,
     testAssertEqualsFromChannel, testAssertManyEqualsFromChannel,
     testAssertEqualsForVariables,  testMultipleAttempts,
-    testAssertNotEqualsFromChannel
+    testAssertNotEqualsFromChannel,
+    testSetupTeardown
 in {
-  stdlog!("info", "starting SuccessfulResultCollector...") |
+  setupHistoryCh!({"setups":[], "teardowns":[]}) |
+
   rl!(`rho:id:zphjgsfy13h1k85isc8rtwtgt3t9zzt5pjd5ihykfmyapfc4wt3x5h`, *RhoSpecCh) |
   for(@(_, RhoSpec) <- RhoSpecCh) {
-  @RhoSpec!("testSuite", *setup,
+  @RhoSpec!("testSuite", *setup, *teardown,
     [
       ("setup runs correctly", *testSetup),
       ("assert equality", *testAssertEquals),
@@ -22,16 +25,30 @@ in {
       ("assert '== <-'", *testAssertEqualsFromChannel),
       ("assert '!= <-'", *testAssertNotEqualsFromChannel),
       ("assertMany '== <-'", *testAssertManyEqualsFromChannel),
-      ("run the test function multiple times", *testMultipleAttempts, 10)
+      ("run the test function multiple times", *testMultipleAttempts, 10),
+      ("setup and teardown are called for each test", *testSetupTeardown),
     ])
   } |
 
-  contract setup(returnCh) = {
-    returnCh!("self value")
+  contract setup(@testName, returnCh) = {
+    for (@setupHistory <- setupHistoryCh) {
+      returnCh!("self value") |
+      setupHistoryCh!(setupHistory.set("setups", setupHistory.get("setups") ++ [testName]))
+    }
+  } |
+
+  contract teardown(@testName, self, ackCh) = {
+    for (@setupHistory <- setupHistoryCh) {
+      ackCh!(Nil) |
+      setupHistoryCh!(setupHistory.set("teardowns", setupHistory.get("teardowns") ++ [testName]))
+    }
   } |
 
   contract testSetup(rhoSpec, self, ackCh) = {
-    rhoSpec ! ("assert", ("self value", "==", *self), "self should equal the value returned by testsuiteSetup", *ackCh)
+    rhoSpec ! ("assert",
+      ("self value", "==", *self),
+      "self should equal the value returned by testsuite setup",
+      *ackCh)
   } |
 
   contract testAssertEquals(rhoSpec, self, ackCh) = {
@@ -112,7 +129,20 @@ in {
   } |
 
   contract testMultipleAttempts(rhoSpec, self, ackCh) = {
-    stdlog ! ("info", "Running testMultipleAttempts") |
     rhoSpec!("assert", true, "should always be successful", *ackCh)
+  } |
+
+  contract testSetupTeardown(rhoSpec, self, ackCh) = {
+    for(@setupHistory <- setupHistoryCh) {
+      setupHistoryCh!(setupHistory) |
+      rhoSpec!("assertMany",
+        [
+          ((19, "==", setupHistory.get("setups").length()),
+            "setups history should also include this test and also the one repeated 10 times (testMultipleAttempts)"),
+          ((18, "==", setupHistory.get("teardowns").length()),
+            "teardowns history should not include this test but includes the repeated ones")
+        ],
+        *ackCh)
+    }
   }
 }

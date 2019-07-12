@@ -27,8 +27,29 @@ in {
   stdlog!("debug", "Loading RhoSpec") |
   rl!(`rho:lang:listOps`, *ListOpsCh) |
   for(@(_, ListOps) <- ListOpsCh) {
+
+    contract RhoSpec(@"testSuite", @tests) = {
+      new dummySetup in {
+        contract dummySetup(_, returnCh) = {
+          returnCh!(Nil)
+        } |
+
+        RhoSpec!("testSuite", *dummySetup, tests)
+      }
+    } |
+
     contract RhoSpec(@"testSuite", setup, @tests) = {
-      stdlog!("debug", "Defining the testSuite") |
+      new dummyTeardown in {
+        contract dummyTeardown(_, _, ackCh) = {
+          ackCh!(Nil)
+        } |
+
+        RhoSpec!("testSuite", *setup, *dummyTeardown, tests)
+      }
+    } |
+
+    contract RhoSpec(@"testSuite", setup, teardown, @tests) = {
+      stdlog!("info", ("Defining the testSuite:", tests)) |
       new runTest, runTestOnce, retCh in {
         contract runTestOnce(@(testName, testBody), @attempt, testAckCh) = {
           stdlog!("debug", "Running test: " ++ testName ++ " attempt " + attempt) |
@@ -80,10 +101,19 @@ in {
               }
             } |
 
-            new setupCh in {
-              setup!(bundle+{*setupCh}) |
-              for (setupResult <- setupCh) {
-                @testBody ! (*rhoSpecImpl, *setupResult, *testAckCh)
+            new setupCh, testBodyAckCh, testTearDownAckCh in {
+              setup!(testName, bundle+{*setupCh}) |
+              for (@setupResult <- setupCh) {
+                stdlog!("debug", ("Setup successful for ", testName, " result: ", setupResult)) |
+                @testBody ! (*rhoSpecImpl, setupResult, *testBodyAckCh) |
+                for (@testBodyResult <- testBodyAckCh) {
+                  stdlog!("info", ("Test ", testName, " finished with result: ", testBodyResult)) |
+                  teardown!(testName, setupResult, *testTearDownAckCh) |
+                  for (_ <- testTearDownAckCh) {
+                    stdlog!("debug", ("Teardown finished for ", testName)) |
+                    testAckCh!(testBodyResult)
+                  }
+                }
               }
             }
           }

@@ -22,8 +22,8 @@ in {
         ])
     }
   } |
-  
-  contract setup(retCh) = {
+
+  contract setup(_, retCh) = {
     new MakeMintCh, mintACh, mintBCh in {
       rl!(`rho:rchain:makeMint`, *MakeMintCh) |
       for(@(_, MakeMint) <- MakeMintCh) {

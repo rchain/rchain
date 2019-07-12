@@ -3,7 +3,6 @@ new
   AuthKeyCh,
   setDeployData(`rho:test:deploy:set`),
   stdlog(`rho:io:stdlog`),
-  setup,
   testSuccess,
   testFailure,
   ackCh,
@@ -14,15 +13,11 @@ in {
   rl!(`rho:rchain:authKey`, *AuthKeyCh) |
   for(@(_, RhoSpec) <- RhoSpecCh; @(_, AuthKey) <- AuthKeyCh) {
     stdlog!("info", "RhoSpec and AuthKey found") |
-    @RhoSpec!("testSuite", *setup,
+    @RhoSpec!("testSuite",
       [
         ("pass the check for a matching key", *testSuccess),
         ("fail the check for a non-matching key", *testFailure),
       ]) |
-
-    contract setup(returnCh) = {
-      returnCh!(Nil)
-    } |
 
     contract testSuccess(rhoSpec, _, ackCh) = {
       new keyShape, ret, checkOk in {
