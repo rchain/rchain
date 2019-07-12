@@ -1,10 +1,11 @@
 package coop.rchain.casper.helper
 
+import java.net.URLEncoder
 import java.nio.file.Path
 
 import cats.data.State
 import cats.effect.concurrent.Semaphore
-import cats.effect.{Concurrent, Resource}
+import cats.effect.{Concurrent, Resource, Sync}
 import cats.implicits._
 import coop.rchain.blockstorage._
 import coop.rchain.casper.CasperState.CasperStateCell
@@ -141,6 +142,20 @@ class HashSetCasperTestNode[F[_]](
     )
     result.map(_.right.get)
   }
+
+  /**
+    * Prints a uri on stdout that, when clicked, visualizes the current dag state using ttps://dreampuf.github.io.
+    * The dag's shape is passed as Graphviz's dot source code, encoded in the URI's hash.
+    */
+  def printVisualizeDagUrl(): F[Unit] =
+    for {
+      dot <- visualizeDag()
+      // Java's URLEncode encodes ' ' as '+' instead of '%20', see https://stackoverflow.com/a/5330239/52142
+      urlEncoded = URLEncoder.encode(dot, "UTF-8").replaceAll("\\+", "%20")
+      _ <- Sync[F].delay {
+            println(s"DAG @ $name: https://dreampuf.github.io/GraphvizOnline/#" + urlEncoded)
+          }
+    } yield ()
 }
 
 object HashSetCasperTestNode {
