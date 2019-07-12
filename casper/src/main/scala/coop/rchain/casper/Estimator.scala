@@ -13,6 +13,7 @@ import coop.rchain.models.BlockMetadata
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.Validator.Validator
 import com.google.protobuf.ByteString
+import coop.rchain.shared.{Log, LogSource}
 
 object Estimator {
 
@@ -26,7 +27,9 @@ object Estimator {
   private val Tips0MetricsSource: Metrics.Source = Metrics.Source(EstimatorMetricsSource, "tips0")
   private val Tips1MetricsSource: Metrics.Source = Metrics.Source(EstimatorMetricsSource, "tips1")
 
-  def tips[F[_]: Monad: Metrics: Span](
+  implicit private val logSource: LogSource = LogSource(this.getClass)
+
+  def tips[F[_]: Monad: Log: Metrics: Span](
       dag: BlockDagRepresentation[F],
       genesis: BlockMessage
   ): F[IndexedSeq[BlockHash]] =
@@ -41,7 +44,7 @@ object Estimator {
   /**
     * When the BlockDag has an empty latestMessages, tips will return IndexedSeq(genesis.blockHash)
     */
-  def tips[F[_]: Monad: Metrics: Span](
+  def tips[F[_]: Monad: Log: Metrics: Span](
       dag: BlockDagRepresentation[F],
       genesis: BlockMessage,
       latestMessagesHashes: Map[Validator, BlockHash]
@@ -54,9 +57,15 @@ object Estimator {
               BlockMetadata.fromBlock(genesis, false),
               filteredLatestMessagesHashes
             )
-      _                          <- Span[F].mark("lca")
-      scoresMap                  <- buildScoresMap(dag, filteredLatestMessagesHashes, lca)
-      _                          <- Span[F].mark("score-map")
+      _         <- Span[F].mark("lca")
+      scoresMap <- buildScoresMap(dag, filteredLatestMessagesHashes, lca)
+      _         <- Span[F].mark("score-map")
+      scoresMapString = scoresMap
+        .map {
+          case (blockHash, score) => s"${PrettyPrinter.buildString(blockHash)}: $score"
+        }
+        .mkString(", ")
+      _                          <- Log[F].info(s"The scores map is $scoresMapString")
       rankedLatestMessagesHashes <- rankForkchoices(List(lca), dag, scoresMap)
       _                          <- Span[F].mark("ranked-latest-messages-hashes")
     } yield rankedLatestMessagesHashes
