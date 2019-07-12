@@ -46,8 +46,8 @@ rnode_directory = "/var/lib/rnode"
 rnode_deploy_dir = "{}/deploy".format(rnode_directory)
 rnode_bonds_file = '{}/genesis/bonds.txt'.format(rnode_directory)
 rnode_wallets_file = '{}/genesis/wallets.txt'.format(rnode_directory)
-rnode_certificate = '{}/node.certificate.pem'.format(rnode_directory)
-rnode_key = '{}/node.key.pem'.format(rnode_directory)
+rnode_certificate_path = '{}/node.certificate.pem'.format(rnode_directory)
+rnode_key_path = '{}/node.key.pem'.format(rnode_directory)
 
 
 class RNodeAddressNotFoundError(Exception):
@@ -204,6 +204,12 @@ class Node:
 
     def __repr__(self) -> str:
         return '<Node(name={})>'.format(repr(self.name))
+
+    def get_node_pem_cert(self) -> bytes:
+        return self.shell_out("cat", rnode_certificate_path).encode('utf8')
+
+    def get_node_pem_key(self) -> bytes:
+        return self.shell_out("cat", rnode_key_path).encode('utf8')
 
     def logs(self) -> str:
         return self.container.logs().decode('utf-8')
@@ -530,8 +536,8 @@ def make_bootstrap_node(
         container_command_options.update(cli_options)
 
     volumes = [
-        "{}:{}".format(cert_file, rnode_certificate),
-        "{}:{}".format(key_file, rnode_key)
+        "{}:{}".format(cert_file, rnode_certificate_path),
+        "{}:{}".format(key_file, rnode_key_path)
     ]
 
     container = make_node(
