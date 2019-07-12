@@ -17,7 +17,6 @@ import coop.rchain.metrics.NoopSpan
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.Validator.Validator
 import coop.rchain.p2p.EffectsTestInstances._
-import coop.rchain.rholang.interpreter.accounting
 import coop.rchain.shared.Time
 import monix.eval.Task
 import monix.execution.Scheduler
@@ -26,10 +25,10 @@ import org.scalatest.{FlatSpec, Matchers}
 import scala.concurrent.duration._
 
 class CreateBlockAPITest extends FlatSpec with Matchers {
+  import GenesisBuilder._
   import HashSetCasperTestNode.Effect
-  import MultiParentCasperTestUtil._
 
-  val genesis                            = buildGenesis(buildGenesisParameters())
+  val genesis                            = buildGenesis()
   implicit val spanEff: NoopSpan[Effect] = NoopSpan[Effect]
 
   "createBlock" should "not allow simultaneous calls" in {

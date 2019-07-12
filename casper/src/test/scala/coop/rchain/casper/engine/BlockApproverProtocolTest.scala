@@ -5,8 +5,8 @@ import coop.rchain.casper.helper.HashSetCasperTestNode
 import coop.rchain.casper.helper.HashSetCasperTestNode._
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.scalatestcontrib._
+import coop.rchain.casper.util.GenesisBuilder
 import coop.rchain.casper.util.comm.TestNetwork
-import coop.rchain.casper.{MultiParentCasperTestUtil, ValidatorIdentity}
 import coop.rchain.comm.protocol.routing.Packet
 import coop.rchain.comm.transport
 import monix.execution.Scheduler
@@ -82,8 +82,8 @@ object BlockApproverProtocolTest {
   ): Effect[(BlockApproverProtocol, HashSetCasperTestNode[Effect])] = {
     import monix.execution.Scheduler.Implicits.global
 
-    val params @ (_, genesisParams) = MultiParentCasperTestUtil.buildGenesisParameters()
-    val context                     = MultiParentCasperTestUtil.buildGenesis(params)
+    val params @ (_, genesisParams) = GenesisBuilder.buildGenesisParameters()
+    val context                     = GenesisBuilder.buildGenesis(params)
     HashSetCasperTestNode.networkEff(context, networkSize = 1).use { nodes =>
       val node = nodes.head
       (new BlockApproverProtocol(

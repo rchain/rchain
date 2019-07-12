@@ -472,7 +472,7 @@ class NodeRuntime private[node] (
       implicit val m: Metrics[Task] = metrics
       implicit val sp: Span[Task]   = span
       Runtime
-        .createWithEmptyCost[Task, Task.Par](storagePath, storageSize, Seq.empty)
+        .createWithEmptyCost[Task](storagePath, storageSize, Seq.empty)
     }
     _ <- {
       implicit val sp: Span[Task] = span
@@ -485,7 +485,7 @@ class NodeRuntime private[node] (
       implicit val m: Metrics[Task] = metrics
       implicit val sp: Span[Task]   = span
       Runtime
-        .createWithEmptyCost[Task, Task.Par](
+        .createWithEmptyCost[Task](
           casperStoragePath,
           storageSize,
           Seq.empty

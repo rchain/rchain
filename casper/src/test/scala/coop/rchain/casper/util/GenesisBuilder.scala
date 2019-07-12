@@ -1,15 +1,14 @@
-package coop.rchain.casper
+package coop.rchain.casper.util
 
 import java.nio.file.{Files, Path}
 
 import cats.implicits._
-import coop.rchain.blockstorage.{BlockDagFileStorage, BlockStore}
+import coop.rchain.blockstorage.BlockDagFileStorage
 import coop.rchain.casper.genesis.Genesis
 import coop.rchain.casper.genesis.contracts._
-import coop.rchain.casper.helper.HashSetCasperTestNode.{makeBlockDagFileStorageConfig, Effect}
-import coop.rchain.casper.helper.{BlockDagStorageTestFixture, HashSetCasperTestNode}
+import coop.rchain.casper.helper.BlockDagStorageTestFixture
+import coop.rchain.casper.helper.HashSetCasperTestNode.makeBlockDagFileStorageConfig
 import coop.rchain.casper.protocol._
-import coop.rchain.casper.util.ConstructDeploy
 import coop.rchain.casper.util.rholang.RuntimeManager
 import coop.rchain.catscontrib.TaskContrib.TaskOps
 import coop.rchain.crypto.signatures.Secp256k1
@@ -20,26 +19,16 @@ import coop.rchain.rholang.interpreter.Runtime
 import coop.rchain.rholang.interpreter.util.RevAddress
 import coop.rchain.shared.Log
 import monix.eval.Task
-import monix.execution.Scheduler.Implicits.global
 
 import scala.collection.mutable
 
-object MultiParentCasperTestUtil {
-
-  def validateBlockStore[R](
-      node: HashSetCasperTestNode[Effect]
-  )(f: BlockStore[Effect] => Effect[R])(implicit metrics: Metrics[Effect], log: Log[Effect]) =
-    for {
-      bs     <- BlockDagStorageTestFixture.createBlockStorage[Effect](node.blockStoreDir)
-      result <- f(bs)
-      _      <- bs.close()
-    } yield result
+object GenesisBuilder {
 
   def createBonds(validators: Iterable[PublicKey]): Map[PublicKey, Long] =
     validators.zipWithIndex.map { case (v, i) => v -> (2L * i.toLong + 1L) }.toMap
 
   def createGenesis(): BlockMessage =
-    buildGenesis(buildGenesisParameters()).genesisBlock
+    buildGenesis().genesisBlock
 
   val defaultValidatorKeyPairs                   = (1 to 4).map(_ => Secp256k1.newKeyPair)
   val (defaultValidatorSks, defaultValidatorPks) = defaultValidatorKeyPairs.unzip
@@ -62,11 +51,12 @@ object MultiParentCasperTestUtil {
         proofOfStake = ProofOfStake(
           minimumBond = 0L,
           maximumBond = Long.MaxValue,
+          epochLength = 1,
           validators = bonds.map(Validator.tupled).toSeq
         ),
         genesisPk = defaultGenesisPk,
         vaults = Vault(
-          RevAddress.fromPublicKey(Secp256k1.toPublic(ConstructDeploy.defaultSec)).get,
+          RevAddress.fromPublicKey(ConstructDeploy.defaultPub).get,
           9000000
         ) :: bonds.toList.map {
           case (pk, stake) =>
@@ -84,7 +74,7 @@ object MultiParentCasperTestUtil {
   private var cacheAccesses = 0
   private var cacheMisses   = 0
 
-  def buildGenesis(parameters: GenesisParameters): GenesisContext =
+  def buildGenesis(parameters: GenesisParameters = buildGenesisParameters()): GenesisContext =
     genesisCache.synchronized {
       cacheAccesses += 1
       genesisCache.getOrElseUpdate(parameters, doBuildGenesis(parameters))
@@ -107,9 +97,11 @@ object MultiParentCasperTestUtil {
     implicit val metricsEff: Metrics[Task]           = new metrics.Metrics.MetricsNOP[Task]
     implicit val spanEff                             = NoopSpan[Task]()
 
+    implicit val scheduler = monix.execution.Scheduler.Implicits.global
+
     (for {
       rspaceDir      <- Task.delay(Files.createDirectory(storageDirectory.resolve("rspace")))
-      activeRuntime  <- Runtime.createWithEmptyCost[Task, Task.Par](rspaceDir, storageSize)
+      activeRuntime  <- Runtime.createWithEmptyCost[Task](rspaceDir, storageSize)
       runtimeManager <- RuntimeManager.fromRuntime[Task](activeRuntime)
       genesis        <- Genesis.createGenesisBlock(runtimeManager, genesisParameters)
       _              <- activeRuntime.close()

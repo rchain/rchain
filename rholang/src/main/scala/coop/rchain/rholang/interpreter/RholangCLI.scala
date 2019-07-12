@@ -65,7 +65,7 @@ object RholangCLI {
     implicit val spanF: Span[Task]       = NoopSpan[Task]()
 
     val runtime = (for {
-      runtime <- Runtime.createWithEmptyCost[Task, Task.Par](
+      runtime <- Runtime.createWithEmptyCost[Task](
                   conf.dataDir(),
                   conf.mapSize()
                 )

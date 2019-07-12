@@ -3,13 +3,14 @@ package coop.rchain.casper.engine
 import cats._
 import cats.effect.concurrent.Ref
 import cats.effect.{Concurrent, ContextShift}
+import cats.temp.par
 import coop.rchain.blockstorage._
 import coop.rchain.casper._
 import coop.rchain.casper.genesis.contracts.Validator
 import coop.rchain.casper.helper.BlockDagStorageTestFixture
 import coop.rchain.casper.protocol._
-import coop.rchain.casper.util.TestTime
 import coop.rchain.casper.util.rholang.RuntimeManager
+import coop.rchain.casper.util.{GenesisBuilder, TestTime}
 import coop.rchain.catscontrib.ApplicativeError_
 import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.comm._
@@ -33,21 +34,21 @@ object Setup {
     val runtimeDir                = BlockDagStorageTestFixture.blockStorageDir
     val activeRuntime =
       Runtime
-        .createWithEmptyCost[Task, Task.Par](runtimeDir, 3024L * 1024)(
+        .createWithEmptyCost[Task](runtimeDir, 3024L * 1024)(
           ContextShift[Task],
           Concurrent[Task],
           log,
           metrics,
           span,
-          Parallel[Task, Task.Par],
+          par.Par[Task],
           scheduler
         )
         .unsafeRunSync(scheduler)
 
     val runtimeManager = RuntimeManager.fromRuntime(activeRuntime).unsafeRunSync(scheduler)
 
-    val params @ (_, genesisParams) = MultiParentCasperTestUtil.buildGenesisParameters()
-    val context                     = MultiParentCasperTestUtil.buildGenesis(params)
+    val params @ (_, genesisParams) = GenesisBuilder.buildGenesisParameters()
+    val context                     = GenesisBuilder.buildGenesis(params)
 
     val (validatorSk, validatorPk) = context.validatorKeyPairs.head
     val bonds                      = genesisParams.proofOfStake.validators.flatMap(Validator.unapply).toMap

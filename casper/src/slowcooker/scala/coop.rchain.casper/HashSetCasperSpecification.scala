@@ -9,7 +9,7 @@ import coop.rchain.casper.genesis.contracts._
 import coop.rchain.casper.helper.HashSetCasperTestNode
 import coop.rchain.casper.helper.HashSetCasperTestNode._
 import coop.rchain.casper.protocol.{BlockMessage, DeployData}
-import coop.rchain.casper.util.{ConstructDeploy, ProtoUtil}
+import coop.rchain.casper.util.{ConstructDeploy, GenesisBuilder, ProtoUtil}
 import coop.rchain.casper.util.comm.TestNetwork
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.hash.Keccak256
@@ -45,7 +45,7 @@ class NodeBox(val node: HashSetCasperTestNode[Effect], var lastBlock: Option[Blo
 }
 
 object HashSetCasperActions {
-  import MultiParentCasperTestUtil._
+  import GenesisBuilder._
 
   def context(
       amount: Int,

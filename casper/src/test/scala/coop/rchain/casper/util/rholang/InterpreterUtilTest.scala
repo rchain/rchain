@@ -26,8 +26,8 @@ import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.PCost
 import coop.rchain.models.Validator.Validator
 import coop.rchain.p2p.EffectsTestInstances.LogStub
+import coop.rchain.rholang.interpreter.Runtime
 import coop.rchain.rholang.interpreter.Runtime.BlockData
-import coop.rchain.rholang.interpreter.{accounting, Runtime}
 import coop.rchain.shared.Time
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
@@ -45,7 +45,7 @@ class InterpreterUtilTest
   val storageDirectory                   = Files.createTempDirectory("casper-interp-util-test-")
   val activeRuntime =
     Runtime
-      .createWithEmptyCost[Task, Task.Par](storageDirectory, storageSize)
+      .createWithEmptyCost[Task](storageDirectory, storageSize)
       .unsafeRunSync
 
   val runtimeManager = RuntimeManager.fromRuntime(activeRuntime).unsafeRunSync

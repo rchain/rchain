@@ -1,25 +1,22 @@
 package coop.rchain.casper.api
 
 import cats.implicits._
-import com.google.protobuf.ByteString
-import coop.rchain.casper.MultiParentCasperTestUtil
 import coop.rchain.casper.helper.HashSetCasperTestNode
 import coop.rchain.casper.helper.HashSetCasperTestNode._
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.scalatestcontrib._
-import coop.rchain.casper.util.ConstructDeploy
+import coop.rchain.casper.util.{ConstructDeploy, GenesisBuilder}
 import coop.rchain.models.Expr.ExprInstance.GInt
 import coop.rchain.models._
 import coop.rchain.p2p.EffectsTestInstances.LogicalTime
-import coop.rchain.rholang.interpreter.accounting
 import monix.execution.Scheduler.Implicits.global
 import org.scalatest._
 
 class ListeningNameAPITest extends FlatSpec with Matchers with Inside {
 
-  import coop.rchain.casper.MultiParentCasperTestUtil._
+  import GenesisBuilder._
 
-  val genesis = buildGenesis(buildGenesisParameters())
+  val genesis = buildGenesis()
 
   "getListeningNameDataResponse" should "work with unsorted channels" in effectTest {
     HashSetCasperTestNode.standaloneEff(genesis).use { node =>

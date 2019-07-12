@@ -13,12 +13,12 @@ import org.scalatest.{FlatSpec, Inspectors, Matchers}
 
 class MultiParentCasperRholangSpec extends FlatSpec with Matchers with Inspectors {
 
-  import MultiParentCasperTestUtil._
   import RSpaceUtil._
+  import coop.rchain.casper.util.GenesisBuilder._
 
   implicit val timeEff: LogicalTime[Effect] = new LogicalTime[Effect]
 
-  val genesis = buildGenesis(buildGenesisParameters())
+  val genesis = buildGenesis()
 
   //put a new casper instance at the start of each
   //test since we cannot reset it

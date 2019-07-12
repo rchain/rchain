@@ -254,7 +254,7 @@ object GenesisTest {
     val time                                = new LogicalTime[Task]
 
     for {
-      runtime <- Runtime.createWithEmptyCost[Task, Task.Par](
+      runtime <- Runtime.createWithEmptyCost[Task](
                   storePath,
                   storageSize
                 )

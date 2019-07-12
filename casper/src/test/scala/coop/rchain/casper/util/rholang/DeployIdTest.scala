@@ -1,10 +1,10 @@
 package coop.rchain.casper.util.rholang
 
 import cats.effect.Resource
-import coop.rchain.casper.MultiParentCasperTestUtil.{buildGenesis, buildGenesisParameters}
 import coop.rchain.casper.helper.HashSetCasperTestNode
 import coop.rchain.casper.protocol.DeployData
 import coop.rchain.casper.scalatestcontrib._
+import coop.rchain.casper.util.GenesisBuilder.buildGenesis
 import coop.rchain.casper.util.rholang.Resources._
 import coop.rchain.casper.util.{ConstructDeploy, ProtoUtil}
 import coop.rchain.crypto.PrivateKey
@@ -54,7 +54,7 @@ class DeployIdTest extends FlatSpec with Matchers {
     result.head should be(GDeployId(d.sig): Par)
   }
 
-  val genesisContext = buildGenesis(buildGenesisParameters())
+  val genesisContext = buildGenesis()
 
   it should "be resolved during normalization" in effectTest {
     val captureChannel = "__RETURN_VALUE__"

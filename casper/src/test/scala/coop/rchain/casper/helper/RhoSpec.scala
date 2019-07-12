@@ -1,14 +1,19 @@
 package coop.rchain.casper.helper
 
-import cats.effect.Concurrent
+import cats.effect.{Concurrent, Sync}
+import cats.implicits._
 import coop.rchain.casper.genesis.contracts.TestUtil
+import coop.rchain.casper.genesis.contracts.TestUtil.eval
 import coop.rchain.casper.protocol.DeployData
+import coop.rchain.casper.util.rholang.Resources.copyStorage
+import coop.rchain.casper.util.{GenesisBuilder, ProtoUtil}
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
-import coop.rchain.rholang.Resources._
+import coop.rchain.models.Par
+import coop.rchain.rholang.Resources.mkRuntimeAt
 import coop.rchain.rholang.build.CompiledRholangSource
-import coop.rchain.rholang.interpreter.{NormalizerEnv, PrettyPrinter, Runtime}
 import coop.rchain.rholang.interpreter.Runtime.SystemProcess
+import coop.rchain.rholang.interpreter.{NormalizerEnv, PrettyPrinter, Runtime}
 import coop.rchain.shared.Log
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
@@ -62,26 +67,28 @@ object RhoSpec {
     testResultCollectorService
   }
 
+  private val genesisContext = GenesisBuilder.buildGenesis()
+
   def getResults(
       testObject: CompiledRholangSource,
       otherLibs: Seq[DeployData],
       timeout: FiniteDuration
   ): Task[TestResult] =
     TestResultCollector[Task].flatMap { testResultCollector =>
-      mkRuntime[Task](
-        s"rhoSpec-${testObject.path}",
-        10 * 1024 * 1024,
-        testFrameworkContracts(testResultCollector)
-      ).use { runtime =>
-        for {
+      val runtimeResource = for {
+        storageDirs <- copyStorage[Task](genesisContext.storageDirectory)
+        runtime <- mkRuntimeAt[Task](storageDirs.rspaceDir)(
+                    storageSize = 10 * 1024 * 1024,
+                    additionalSystemProcesses = testFrameworkContracts(testResultCollector)
+                  )
+      } yield runtime
 
+      runtimeResource.use { runtime =>
+        for {
           _ <- logger.info("Starting tests from " + testObject.path)
-          _ <- Runtime.injectEmptyRegistryRoot[Task](runtime.space, runtime.replaySpace)
-          _ <- TestUtil.setupRuntime[Task, Task.Par](
+          _ <- setupRuntime[Task](
                 runtime,
-                TestUtil.defaultGenesisSetup(1),
-                otherLibs,
-                testObject.normalizerEnv
+                otherLibs
               )
           rand = Blake2b512Random(128)
           _ <- TestUtil
@@ -95,6 +102,37 @@ object RhoSpec {
         } yield result
       }
     }
+
+  private def setupRuntime[F[_]: Sync](
+      runtime: Runtime[F],
+      otherLibs: Seq[DeployData]
+  ): F[Runtime[F]] =
+    for {
+      _ <- evalDeploy(rhoSpecDeploy, runtime)
+      _ <- otherLibs.toList.traverse(evalDeploy(_, runtime))
+      // reset the deployParams.userId before executing the test
+      // otherwise it'd execute as the deployer of last deployed contract
+      _ <- runtime.deployParametersRef.update(_.copy(userId = Par()))
+    } yield runtime
+
+  private def evalDeploy[F[_]: Sync](
+      deploy: DeployData,
+      runtime: Runtime[F]
+  ): F[Unit] = {
+    val rand: Blake2b512Random = Blake2b512Random(
+      DeployData.toByteArray(ProtoUtil.stripDeployData(deploy))
+    )
+    eval(deploy.term, runtime, NormalizerEnv(deploy))(implicitly, rand)
+  }
+
+  private val rhoSpecDeploy: DeployData =
+    DeployData(
+      deployer = ProtoUtil.stringToByteString(
+        "0401f5d998c9be9b1a753771920c6e968def63fe95b20c71a163a7f7311b6131ac65a49f796b5947fa9d94b0542895e7b7ebe8b91eefcbc5c7604aaf281922ccac"
+      ),
+      timestamp = 1559158671800L,
+      term = CompiledRholangSource("RhoSpecContract.rho", NormalizerEnv.Empty).code
+    )
 }
 
 class RhoSpec(
