@@ -2,6 +2,7 @@ package coop.rchain.casper.helper
 
 import java.nio.file.Path
 
+import cats.data.State
 import cats.effect.concurrent.Semaphore
 import cats.effect.{Concurrent, Resource}
 import cats.implicits._
@@ -9,6 +10,8 @@ import coop.rchain.blockstorage._
 import coop.rchain.casper.CasperState.CasperStateCell
 import coop.rchain.casper.MultiParentCasper.ignoreDoppelgangerCheck
 import coop.rchain.casper._
+import coop.rchain.casper.api.BlockAPI
+import coop.rchain.casper.api.{GraphConfig, GraphzGenerator}
 import coop.rchain.casper.engine.EngineCell._
 import coop.rchain.casper.engine._
 import coop.rchain.models.BlockHash.BlockHash
@@ -26,6 +29,7 @@ import coop.rchain.comm.rp.Connect._
 import coop.rchain.comm.rp.HandleMessages.handle
 import coop.rchain.crypto.PrivateKey
 import coop.rchain.crypto.signatures.Secp256k1
+import coop.rchain.graphz.{Graphz, StringSerializer}
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.p2p.EffectsTestInstances._
 import coop.rchain.shared._
@@ -115,6 +119,28 @@ class HashSetCasperTestNode[F[_]](
     } yield block
 
   def receive(): F[Unit] = tls.receive(p => handle[F](p), kp(().pure[F])).void
+
+  def visualizeDag(): F[String] = {
+
+    type G[A] = State[StringBuffer, A]
+    import cats.mtl.implicits._
+
+    implicit val serializer = new StringSerializer[G]
+    val serialize: G[Graphz[G]] => String =
+      _.runS(new StringBuffer("")).value.toString
+
+    val result: F[Either[String, String]] = BlockAPI.visualizeDag[F, G, String](
+      depth = None,
+      (ts, lfb) =>
+        GraphzGenerator.dagAsCluster[F, G](
+          ts,
+          lfb,
+          GraphConfig(showJustificationLines = true)
+        ),
+      serialize
+    )
+    result.map(_.right.get)
+  }
 }
 
 object HashSetCasperTestNode {
