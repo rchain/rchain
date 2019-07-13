@@ -20,7 +20,7 @@ import scala.collection.mutable.{Map => MutableMap}
 class RunningHandleHasBlockRequestSpec extends FunSpec with BeforeAndAfterEach with Matchers {
 
   val hash = ByteString.copyFrom("hash", "UTF-8")
-  val hb   = HasBlock(hash)
+  val hbr  = HasBlockRequest(hash)
 
   override def beforeEach(): Unit = {
     transport.reset()
@@ -29,11 +29,30 @@ class RunningHandleHasBlockRequestSpec extends FunSpec with BeforeAndAfterEach w
 
   describe("Running") {
     describe("handleHasBlockRequest") {
-      describe("if given block is stored in BlockStore") {
-        it("should send back HasBlock message to the sender")(pending)
+      describe("if given block is stored") {
+        it("should send back HasBlock message to the sender") {
+          // given
+          val sender                                    = peerNode("peer", 40400)
+          val blockLookup: BlockHash => Coeval[Boolean] = kp(Coeval(true))
+          // then
+          Running.handleHasBlockRequest[Coeval](sender, hbr)(blockLookup).apply()
+          // then
+          val (peer, msg) = transport.getRequest(0)
+          peer should be(sender)
+          toHasBlock(msg).hash should be(hash)
+          transport.requests.size should be(1)
+        }
       }
       describe("if given block is not stored in BlockStore") {
-        it("should do nothing")(pending)
+        it("should do nothing") {
+          // given
+          val sender                                    = peerNode("peer", 40400)
+          val blockLookup: BlockHash => Coeval[Boolean] = kp(Coeval(false))
+          // then
+          Running.handleHasBlockRequest[Coeval](sender, hbr)(blockLookup).apply()
+          // then
+          transport.requests.size should be(0)
+        }
       }
     }
   }
@@ -41,12 +60,15 @@ class RunningHandleHasBlockRequestSpec extends FunSpec with BeforeAndAfterEach w
   val networkId       = "nid"
   val conf            = RPConf(local, networkId, null, null, 0, null)
 
-  // implicit private val askConf   = new ConstApplicativeAsk[Coeval, RPConf](conf)
+  implicit private val askConf   = new ConstApplicativeAsk[Coeval, RPConf](conf)
   implicit private val transport = new TransportLayerStub[Coeval]
 
   private def endpoint(port: Int): Endpoint = Endpoint("host", port, port)
   private def peerNode(name: String, port: Int): PeerNode =
     PeerNode(NodeIdentifier(name.getBytes), endpoint(port))
+
+  def toHasBlock(protocol: Protocol): HasBlock =
+    packetToHasBlock(toPacket(protocol).right.get).get
 
   private def alwaysSuccess: PeerNode => Protocol => CommErr[Unit] = kp(kp(Right(())))
 }

@@ -91,24 +91,23 @@ object Running {
     )
   }
 
-  def handleHasBlockRequest[F[_]: Monad: RPConfAsk: BlockStore: TransportLayer](
+  def handleHasBlockRequest[F[_]: Monad: RPConfAsk: TransportLayer](
       peer: PeerNode,
       hbr: HasBlockRequest
-  ): F[Unit] =
-    BlockStore[F].get(hbr.hash) >>= {
-      case Some(_) =>
-        for {
-          conf <- RPConfAsk[F].ask
-          msg = packet(
-            conf.local,
-            conf.networkId,
-            transport.HasBlock,
-            HasBlock(hbr.hash).toByteString
-          )
-          _ <- TransportLayer[F].send(peer, msg)
-        } yield ()
-      case None => noop[F]
-    }
+  )(blockLookup: BlockHash => F[Boolean]): F[Unit] =
+    blockLookup(hbr.hash).ifM(
+      for {
+        conf <- RPConfAsk[F].ask
+        msg = packet(
+          conf.local,
+          conf.networkId,
+          transport.HasBlock,
+          HasBlock(hbr.hash).toByteString
+        )
+        _ <- TransportLayer[F].send(peer, msg)
+      } yield (),
+      noop[F]
+    )
 
   def handleBlockMessage[F[_]: Monad: Log](peer: PeerNode, b: BlockMessage)(
       casper: MultiParentCasper[F]
@@ -141,16 +140,20 @@ class Running[F[_]: RPConfAsk: BlockStore: Monad: ConnectionsCell: TransportLaye
     theInit: F[Unit]
 ) extends Engine[F] {
   import Engine._
+  import Running._
+
+  private val blockLookup: BlockHash => F[Boolean] =
+    hash => BlockStore[F].get(hash).map(_.isDefined)
 
   def applicative: Applicative[F] = Applicative[F]
 
   override def init: F[Unit] = theInit
 
   override def handle(peer: PeerNode, msg: CasperMessage): F[Unit] = msg match {
-    case b: BlockMessage              => Running.handleBlockMessage[F](peer, b)(casper)
+    case b: BlockMessage              => handleBlockMessage[F](peer, b)(casper)
     case br: BlockRequest             => handleBlockRequest(peer, br)
-    case hbr: HasBlockRequest         => Running.handleHasBlockRequest[F](peer, hbr)
-    case hb: HasBlock                 => Running.handleHasBlock[F](peer, hb)(casper.contains)
+    case hbr: HasBlockRequest         => handleHasBlockRequest[F](peer, hbr)(blockLookup)
+    case hb: HasBlock                 => handleHasBlock[F](peer, hb)(casper.contains)
     case fctr: ForkChoiceTipRequest   => handleForkChoiceTipRequest(peer, fctr)
     case abr: ApprovedBlockRequest    => handleApprovedBlockRequest(peer, abr)
     case na: NoApprovedBlockAvailable => logNoApprovedBlockAvailable[F](na.nodeIdentifer)
