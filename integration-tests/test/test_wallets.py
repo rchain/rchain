@@ -32,6 +32,7 @@ CHARLIE_KEY = conftest.KeyPair(private_key='567ea426deaeb8233f134c3a266149fb196d
 ALICE_GENESIS_VAULT_AMOUNT = 5000
 CHARLIE_GENESIS_VAULT_AMOUNT = 5000
 
+
 def create_genesis_vault(context: TestingContext, node: Node, rev_addr: str, init_vault_value: int, private_key: str) -> None:
     log_marker = random_string(context, 10)
     create_vault_success_pattern = re.compile("{} Genesis vault created!".format(log_marker))
@@ -41,6 +42,7 @@ def create_genesis_vault(context: TestingContext, node: Node, rev_addr: str, ini
         private_key=private_key
     )
     wait_for_log_match(context, node, create_vault_success_pattern)
+
 
 def transfer_funds(context: TestingContext, node: Node, from_rev_addr: str, to_rev_addr: str, amount: int, private_key: str) -> None:
     """
@@ -60,6 +62,7 @@ def transfer_funds(context: TestingContext, node: Node, from_rev_addr: str, to_r
     if reason != "Nil":
         raise TransderFundsError(reason)
 
+
 def get_vault_balance(context: TestingContext, node: Node, rev_addr: str, private_key: str) -> int:
     log_marker = random_string(context, 10)
     check_balance_pattern = re.compile('"{} Vault (?P<rev_addr>[a-zA-Z0-9]*) balance is (?P<balance>[0-9]*)"'.format(log_marker))
@@ -70,6 +73,7 @@ def get_vault_balance(context: TestingContext, node: Node, rev_addr: str, privat
     )
     check_balance_match = wait_for_log_match_result(context, node, check_balance_pattern)
     return int(check_balance_match.group("balance"))
+
 
 def get_rev_address_by_public_key(context: TestingContext, node: Node, public_key: str, private_key: str) -> str:
     log_marker = random_string(context, 10)
@@ -123,4 +127,3 @@ def test_transfer_failed_with_invalid_key(started_standalone_bootstrap_node: Nod
 
         with pytest.raises(TransderFundsError):
             transfer_funds(context, started_standalone_bootstrap_node, charlie_rev_address, alice_rev_address, 100, ALICE_KEY.private_key)
-

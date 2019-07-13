@@ -28,17 +28,16 @@ def test_data_is_stored_and_served_by_node(command_line_options: CommandLineOpti
 
             wait_for_log_match(context, bootstrap_node, store_pattern)
 
-            id_match = store_pattern.search(bootstrap_node.logs()) # here always have a match otherwise the test would fail in the above line
+            id_match = store_pattern.search(bootstrap_node.logs())  # here always have a match otherwise the test would fail in the above line
 
-            id_address = id_match.group('id_address') # type: ignore
+            id_address = id_match.group('id_address')  # type: ignore
 
             bootstrap_node.deploy_contract_with_substitution({'@id_address@': id_address}, read_data_contract, '3596e2e5fd14b24a6d84af04b7f0a8f13e3e68ee2ca91dc4b19550f12e61502c')
 
             wait_for_log_match(context, bootstrap_node, read_pattern)
 
-            data_match = read_pattern.search(bootstrap_node.logs()) # here always have a match otherwise the test would fail in the above line
+            data_match = read_pattern.search(bootstrap_node.logs())  # here always have a match otherwise the test would fail in the above line
 
-            read_data = data_match.group('data') # type: ignore
+            read_data = data_match.group('data')  # type: ignore
 
             assert read_data == random_data
-

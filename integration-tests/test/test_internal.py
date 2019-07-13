@@ -92,6 +92,7 @@ count: 1
     assert block['mainParentHash'] == ''
     assert block['sender'] == ''
 
+
 def test_parse_show_block_output() -> None:
     input = r'''status: "Success"
 blockInfo {
@@ -142,6 +143,7 @@ def test_extract_validator_stake_from_bonds_validator_str() -> None:
     assert validator_stake['1cd8bf79a2c1bd0afa160f6cdfeb8597257e48135c9bf5e4823f2875a1492c97'] == 2
     assert validator_stake['23bb89653c1d43578ed421e655e7a0ed9f3ed2e7eab820ad7739277e380cafa3'] == 81
 
+
 def test_extract_block_hash_from_propose_output() -> None:
     response = "Response: Success! Block a91208047c... created and added.\n"
     assert extract_block_hash_from_propose_output(response) == "a91208047c"
@@ -152,7 +154,6 @@ def test_extract_validator_stake_from_deploy_cost_str() -> None:
     deploy_cost = extract_validator_stake_from_deploy_cost_str(input)
     assert deploy_cost['23bb89653c1d43578ed421e655e7a0ed9f3ed2e7eab820ad7739277e380cafa3'] == 132
     assert deploy_cost['1cd8bf79a2c1bd0afa160f6cdfeb8597257e48135c9bf5e4823f2875a1492c97'] == 132
-
 
 
 def test_make_wallets_file_lines() -> None:
@@ -194,6 +195,7 @@ b0880ca496258ebd0c8c36446ac7596681600e3ab90a9db44b464dd4767f5adf 9547694c620c3e7
         "b52e9a808053703353a16ea85a4cda5820a2af115bad87b6cebfef03111f5541": set(['b29aaeb2ae774bfa573c4e5e37bc84bbaa1616263fd83c820b0dd9a795a57907']),
         "b0880ca496258ebd0c8c36446ac7596681600e3ab90a9db44b464dd4767f5adf": set(['9547694c620c3e78b39da3db3a2090aa863a0c1174686a4de105350f7d4e77f4']),
     }
+
 
 def test_parse_deploy_str() -> None:
     input = """Response: Success!

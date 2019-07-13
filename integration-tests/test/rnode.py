@@ -74,6 +74,7 @@ class UnexpectedProposeOutputFormatError(Exception):
         super().__init__()
         self.output = output
 
+
 class UnexpectedDeployOutputFormatError(Exception):
     def __init__(self, output: str) -> None:
         super().__init__()
@@ -338,7 +339,7 @@ class Node:
         output = self.shell_out(
             'sh',
             '-c',
-            'echo {quoted_rholang_code} | {rnode_binary} repl'.format(quoted_rholang_code=quoted_rholang_code,rnode_binary=rnode_binary),
+            'echo {quoted_rholang_code} | {rnode_binary} repl'.format(quoted_rholang_code=quoted_rholang_code, rnode_binary=rnode_binary),
             stderr=stderr,
         )
         return output
@@ -477,7 +478,7 @@ def make_node(
     return node
 
 
-def get_absolute_path_for_mounting(relative_path: str, mount_dir: Optional[str]=None)-> str:
+def get_absolute_path_for_mounting(relative_path: str, mount_dir: Optional[str] = None) -> str:
     """Drone runs each job in a new Docker container FOO. That Docker
     container has a new filesystem. Anything in that container can read
     anything in that filesystem. To read files from HOST, it has to be shared
@@ -523,10 +524,10 @@ def make_bootstrap_node(
     ])
 
     container_command_options = {
-        "--port":                   40400,
-        "--validator-private-key":  keypair.private_key,
-        "--validator-public-key":   keypair.public_key,
-        "--host":                   container_name,
+        "--port": 40400,
+        "--validator-private-key": keypair.private_key,
+        "--validator-public-key": keypair.public_key,
+        "--host": container_name,
     }
 
     if cli_flags is not None:
@@ -604,10 +605,10 @@ def make_peer(
         container_command_flags.update(cli_flags)
 
     container_command_options = {
-        "--bootstrap":              bootstrap_address,
-        "--validator-private-key":  keypair.private_key,
-        "--validator-public-key":   keypair.public_key,
-        "--host":                   name,
+        "--bootstrap": bootstrap_address,
+        "--validator-private-key": keypair.private_key,
+        "--validator-public-key": keypair.public_key,
+        "--host": name,
     }
 
     if cli_options is not None:
@@ -790,6 +791,7 @@ def parse_mvdag_str(mvdag_output: str) -> Dict[str, Set[str]]:
         parent_hash, child_hash = line.split(' ')
         dag_dict[parent_hash].add(child_hash)
     return dag_dict
+
 
 def extract_deploy_id_from_deploy_output(deploy_output: str) -> str:
     match = re.match(r'Response: Success!\nDeployId is: ([0-9a-f]+)', deploy_output.strip())

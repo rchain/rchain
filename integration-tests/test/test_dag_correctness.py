@@ -52,7 +52,6 @@ def test_catch_up_next_round(command_line_options: CommandLineOptions, random_ge
                         deploy3 = DeployThread("validator3", validator3, contract_path, 10, BONDED_VALIDATOR_KEY_3.private_key)
                         deploy3.start()
 
-
                         deploy1.join()
                         deploy2.join()
                         deploy3.join()

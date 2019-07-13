@@ -27,13 +27,11 @@ from .rnode import (
 from .pregenerated_keypairs import PREGENERATED_KEYPAIRS
 
 
-
 # Silence unwanted noise in logs produced at the DEBUG level
 logging.getLogger('urllib3.connectionpool').setLevel(logging.WARNING)
 logging.getLogger('connectionpool.py').setLevel(logging.WARNING)
 logging.getLogger('docker.utils.config').setLevel(logging.WARNING)
 logging.getLogger('docker.auth').setLevel(logging.WARNING)
-
 
 
 def pytest_addoption(parser: Parser) -> None:
@@ -64,7 +62,6 @@ def command_line_options(request: Any) -> Generator[CommandLineOptions, None, No
     )
 
     yield command_line_options
-
 
 
 @contextlib.contextmanager
@@ -144,7 +141,7 @@ def testing_context(command_line_options: CommandLineOptions, random_generator: 
         yield context
 
 
-testing_context.__test__ = False # type: ignore
+testing_context.__test__ = False  # type: ignore
 
 
 @pytest.yield_fixture(scope='module')

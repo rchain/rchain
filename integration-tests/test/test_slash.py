@@ -37,35 +37,35 @@ def hex_block_hash(block_hash: bytes) -> bytes:
 def test_simple_slash(command_line_options: CommandLineOptions, random_generator: Random, docker_client: DockerClient) -> None:
     peers_keypairs = [BONDED_VALIDATOR_KEY_1, BONDED_VALIDATOR_KEY_2]
     with conftest.testing_context(command_line_options, random_generator, docker_client, bootstrap_keypair=BOOTSTRAP_NODE_KEYS, peers_keypairs=peers_keypairs) as context, \
-        docker_network_with_started_bootstrap(context=context) as bootstrap_node, \
-        bootstrap_connected_peer(context=context, bootstrap=bootstrap_node, name='bonded-validator-1', keypair=BONDED_VALIDATOR_KEY_1) as validator1, \
-        bootstrap_connected_peer(context=context, bootstrap=bootstrap_node, name='bonded-validator-2', keypair=BONDED_VALIDATOR_KEY_2) as validator2, \
-        node_protocol_client(bootstrap_node.network, docker_client) as client:
-            contract = '/opt/docker/examples/tut-hello.rho'
+            docker_network_with_started_bootstrap(context=context) as bootstrap_node, \
+            bootstrap_connected_peer(context=context, bootstrap=bootstrap_node, name='bonded-validator-1', keypair=BONDED_VALIDATOR_KEY_1) as validator1, \
+            bootstrap_connected_peer(context=context, bootstrap=bootstrap_node, name='bonded-validator-2', keypair=BONDED_VALIDATOR_KEY_2) as validator2, \
+            node_protocol_client(bootstrap_node.network, docker_client) as client:
+        contract = '/opt/docker/examples/tut-hello.rho'
 
-            validator1.deploy(contract, BONDED_VALIDATOR_KEY_1.private_key)
-            blockhash = validator1.propose()
+        validator1.deploy(contract, BONDED_VALIDATOR_KEY_1.private_key)
+        blockhash = validator1.propose()
 
-            wait_for_node_sees_block(context, validator2, blockhash)
+        wait_for_node_sees_block(context, validator2, blockhash)
 
-            block_info = validator1.show_block_parsed(blockhash)
+        block_info = validator1.show_block_parsed(blockhash)
 
-            block_msg = client.block_request(block_info['blockHash'], validator1)
-            evil_block_hash = generate_block_hash()
+        block_msg = client.block_request(block_info['blockHash'], validator1)
+        evil_block_hash = generate_block_hash()
 
-            block_msg.blockHash = evil_block_hash
-            block_msg.sig = BONDED_VALIDATOR_KEY_1.sign_block_hash(evil_block_hash)
+        block_msg.blockHash = evil_block_hash
+        block_msg.sig = BONDED_VALIDATOR_KEY_1.sign_block_hash(evil_block_hash)
 
-            client.send_block(block_msg, validator2)
+        client.send_block(block_msg, validator2)
 
-            record_invalid = re.compile("Recording invalid block {}... for InvalidBlockHash".format(hex_block_hash(evil_block_hash)[:10].decode('utf8')))
-            wait_for_log_match(context, validator2, record_invalid)
+        record_invalid = re.compile("Recording invalid block {}... for InvalidBlockHash".format(hex_block_hash(evil_block_hash)[:10].decode('utf8')))
+        wait_for_log_match(context, validator2, record_invalid)
 
-            validator2.deploy(contract, BONDED_VALIDATOR_KEY_2.private_key)
+        validator2.deploy(contract, BONDED_VALIDATOR_KEY_2.private_key)
 
-            slashed_block_hash = validator2.propose()
+        slashed_block_hash = validator2.propose()
 
-            block_info = validator2.show_block_parsed(slashed_block_hash)
-            bonds_validators = extract_validator_stake_from_bonds_validator_str(block_info['bondsValidatorList'])
+        block_info = validator2.show_block_parsed(slashed_block_hash)
+        bonds_validators = extract_validator_stake_from_bonds_validator_str(block_info['bondsValidatorList'])
 
-            assert bonds_validators[BONDED_VALIDATOR_KEY_1.public_key] == 0
+        assert bonds_validators[BONDED_VALIDATOR_KEY_1.public_key] == 0

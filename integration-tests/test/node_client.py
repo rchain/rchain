@@ -60,6 +60,7 @@ def get_free_tcp_port() -> int:
         tcp.close()
     return port
 
+
 @contextmanager
 def get_node_ip_of_network(docker_client: DockerClient, network_name: str) -> Generator[str, None, None]:
     """
@@ -81,7 +82,7 @@ def get_node_ip_of_network(docker_client: DockerClient, network_name: str) -> Ge
         try:
             network.connect(current_container)
             network.reload()
-            container_network_config =network.attrs['Containers'][current_container.id]
+            container_network_config = network.attrs['Containers'][current_container.id]
             ip, _ = container_network_config['IPv4Address'].split('/')
             yield ip
         finally:
@@ -140,7 +141,7 @@ class NodeClient:
         self.udp_port = get_free_tcp_port()
         self.network_name = network_name  # docker network name
 
-        self.return_queue = Queue() # type: ignore
+        self.return_queue = Queue()  # type: ignore
 
         self.server = self._start_transport_server()
 

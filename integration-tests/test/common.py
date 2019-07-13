@@ -24,10 +24,10 @@ class KeyPair:
     private_key: str
     public_key: str
 
-
     def sign_block_hash(self, block_hash: bytes) -> bytes:
         sign_key = ecdsa.SigningKey.from_string(bytes.fromhex(self.private_key), ecdsa.SECP256k1)
         return sign_key.sign_digest(block_hash, sigencode=sigencode_der_canonize)
+
 
 @dataclasses.dataclass
 class CommandLineOptions:
@@ -73,6 +73,7 @@ class WaitTimeoutError(Exception):
         super().__init__()
         self.predicate = predicate
         self.timeout = timeout
+
 
 class TransderFundsError(Exception):
     def __init__(self, reason: str) -> None:

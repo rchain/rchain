@@ -26,6 +26,7 @@ main () {
 
     ./mypy.sh
     ./pylint.sh
+    ./flake8.sh
     ./run_tests.sh --log-cli-level=ERROR --mount-dir="$TEMP_RESOURCES_DIR"
 }
 

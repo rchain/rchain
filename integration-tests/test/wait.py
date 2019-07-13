@@ -86,6 +86,7 @@ class LogsReMatch:
         match = self.pattern.search(self.node.logs())
         return bool(match)
 
+
 class LogsReMatchWithResult(LogsReMatch):
     def __init__(self, node: 'Node', pattern: Pattern) -> None:
         super(LogsReMatchWithResult, self).__init__(node, pattern)
@@ -96,6 +97,7 @@ class LogsReMatchWithResult(LogsReMatch):
         if match is not None:
             self.result = match
         return bool(match)
+
 
 class HasAtLeastPeers:
     def __init__(self, node: 'Node', minimum_peers_number: int) -> None:
@@ -191,7 +193,7 @@ def wait_using_wall_clock_time(predicate: PredicateProtocol, timeout: int) -> No
     raise WaitTimeoutError(predicate, timeout)
 
 
-def wait_using_wall_clock_time_or_fail(predicate: PredicateProtocol, timeout: int) ->None:
+def wait_using_wall_clock_time_or_fail(predicate: PredicateProtocol, timeout: int) -> None:
     try:
         wait_using_wall_clock_time(predicate, timeout)
     except WaitTimeoutError:

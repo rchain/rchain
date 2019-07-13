@@ -22,7 +22,6 @@ from .wait import (
 )
 
 
-
 CEREMONY_MASTER_KEYPAIR = KeyPair(private_key='80366db5fbb8dad7946f27037422715e4176dda41d582224db87b6c3b783d709', public_key='04126107bc353c73e044fb21a5085aeafeecd69895fc05ec5033764a586bf044ddb19da5140a00912d892bfe8e10aa34eb7f9a68308646c3ac8804096ba605c2d2')
 VALIDATOR_A_KEYPAIR = KeyPair(private_key='120d42175739387af0264921bb117e4c4c05fbe2ce5410031e8b158c6e414bb5', public_key='0412ce31a3c3cbf9c69c098e593568c476a6bf7efdf9f7579c80e5328af05db7693b077d04fabbed28bb4e2d28aaba4ee50af6eddfab957c9c3c16d629c9d6aac3')
 VALIDATOR_B_KEYPAIR = KeyPair(private_key='1f52d0bce0a92f5c79f2a88aae6d391ddf853e2eb8e688c5aa68002205f92dad', public_key='04f42348554ab10387739d6f709ddba0eb9b80792f57ed68a1c9341635c0777590e9dbdd316c57cff51587f2f320e30605e6641e042f030b83aaaa3a3268a00fb0')
@@ -35,15 +34,15 @@ def test_successful_genesis_ceremony(command_line_options: CommandLineOptions, r
     https://docs.google.com/document/d/1Z5Of7OVVeMGl2Fw054xrwpRmDmKCC-nAoIxtIIHD-Tc/
     """
     bootstrap_cli_options = {
-        '--deploy-timestamp':   '1',
-        '--required-sigs':      '2',
-        '--duration':           '5min',
-        '--interval':           '10sec',
+        '--deploy-timestamp': '1',
+        '--required-sigs': '2',
+        '--duration': '5min',
+        '--interval': '10sec',
     }
     peers_cli_flags = set(['--genesis-validator'])
     peers_cli_options = {
-        '--deploy-timestamp':   '1',
-        '--required-sigs':      '2',
+        '--deploy-timestamp': '1',
+        '--required-sigs': '2',
     }
     peers_keypairs = [
         VALIDATOR_A_KEYPAIR,
@@ -88,15 +87,15 @@ def test_successful_genesis_ceremony(command_line_options: CommandLineOptions, r
 
 def test_validator_catching_up(command_line_options: CommandLineOptions, random_generator: Random, docker_client: DockerClient) -> None:
     bootstrap_cli_options = {
-        '--deploy-timestamp':   '1',
-        '--required-sigs':      '2',
-        '--duration':           '5min',
-        '--interval':           '10sec',
+        '--deploy-timestamp': '1',
+        '--required-sigs': '2',
+        '--duration': '5min',
+        '--interval': '10sec',
     }
     peers_cli_flags = set(['--genesis-validator'])
     peers_cli_options = {
-        '--deploy-timestamp':   '1',
-        '--required-sigs':      '2',
+        '--deploy-timestamp': '1',
+        '--required-sigs': '2',
     }
     peers_keypairs = [
         VALIDATOR_A_KEYPAIR,

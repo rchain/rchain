@@ -17,6 +17,7 @@ cryptography = "*"
 eth-hash = "*"
 pycryptodome = "*"
 pyrchain = "*"
+flake8 = "*"
 
 [dev-packages]
 python-language-server = "*"

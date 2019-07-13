@@ -18,6 +18,7 @@ def test_propose(started_standalone_bootstrap_node: Node, random_generator: Rand
     started_standalone_bootstrap_node.deploy(full_path, DEPLOY_KEY.private_key)
     started_standalone_bootstrap_node.propose()
 
+
 FIX_COST_RHO_CONTRACTS = {
     "contract_1.rho": 33,
     "contract_2.rho": 69,
@@ -25,6 +26,7 @@ FIX_COST_RHO_CONTRACTS = {
     "contract_4.rho": 83,
     # "contract_5.rho": 1970,  # it is non-deterministic now
 }
+
 
 def test_propose_cost(started_standalone_bootstrap_node: Node, random_generator: Random) -> None:
     rho_contract, contract_cost = random_generator.choice(list(FIX_COST_RHO_CONTRACTS.items()))
