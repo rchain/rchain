@@ -531,7 +531,7 @@ class DebruijnInterpreter[M[_], F[_]](
       case _ => evalExprToExpr(expr).map(fromExpr(_)(identity))
     }
 
-  private def evalExprToExpr(expr: Expr)(implicit env: Env[Par]): M[Expr] = Sync[M].defer {
+  private def evalExprToExpr(expr: Expr)(implicit env: Env[Par]): M[Expr] = syncM.defer {
     def relop(
         p1: Par,
         p2: Par,
