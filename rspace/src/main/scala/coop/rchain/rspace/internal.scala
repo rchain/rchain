@@ -122,7 +122,8 @@ object internal {
     def empty[K, V]: MultisetMultiMap[K, V] = new TrieMap[K, Multiset[V]]()
   }
 
-  implicit class RichMultisetMultiMap[K, V](val value: MultisetMultiMap[K, V]) extends AnyVal {
+  implicit class RichMultisetMultiMap[K, V](private val value: MultisetMultiMap[K, V])
+      extends AnyVal {
 
     def addBinding(k: K, v: V): MultisetMultiMap[K, V] =
       value.get(k) match {

@@ -41,7 +41,7 @@ object Serialize {
       case Right(value) => value.pure[F]
     }
 
-  implicit class RichSerialize[A](val instance: Serialize[A]) extends AnyVal {
+  implicit class RichSerialize[A](private val instance: Serialize[A]) extends AnyVal {
 
     def toCodec: Codec[A] = new Codec[A] {
 
