@@ -1456,14 +1456,13 @@ class DebruijnInterpreter[M[_], F[_]](
     * Evaluate any top level expressions in @param Par .
     */
   def evalExpr(par: Par)(implicit env: Env[Par]): M[Par] =
-    for {
-      evaledExprs <- par.exprs.toList.traverse(evalExprToPar)
-      // Note: the locallyFree cache in par could now be invalid, but given
-      // that locallyFree is for use in the matcher, and the matcher uses
-      // substitution, it will resolve in that case. AlwaysEqual makes sure
-      // that this isn't an issue in the rest of cases.
-      result = evaledExprs.foldLeft(par.copy(exprs = Vector())) { (acc, newPar) =>
-        acc ++ newPar
-      }
+
+      for {
+        evaledExprs <- par.exprs.toList.traverse(evalExprToPar)
+        // Note: the locallyFree cache in par could now be invalid, but given
+        // that locallyFree is for use in the matcher, and the matcher uses
+        // substitution, it will resolve in that case. AlwaysEqual makes sure
+        // that this isn't an issue in the rest of cases.
+        result = evaledExprs.foldLeft(par.copy(exprs = Vector()))(_ ++ _)
     } yield result
 }
