@@ -2364,7 +2364,8 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
 
   val errorExamples = Table(
     ("clue", "input", "output"),
-    ( """["a", ("b",2)].toMap() => MethodNotDefined""",
+    (
+      """["a", ("b",2)].toMap() => MethodNotDefined""",
       EMethod(
         "toMap",
         EListBody(
@@ -2379,7 +2380,8 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
       ),
       MethodNotDefined("toMap", "types except List[(K,V)]")
     ),
-    ("""[("a", 1)].toMap(1) => MethodArgumentNumberMismatch""",
+    (
+      """[("a", 1)].toMap(1) => MethodArgumentNumberMismatch""",
       EMethod(
         "toMap",
         EListBody(
@@ -2392,8 +2394,9 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
         List(GInt(1))
       ),
       MethodArgumentNumberMismatch("toMap", 0, 1)
-    )  ,
-    ("1.toMap() => MethodNotDefined",
+    ),
+    (
+      "1.toMap() => MethodNotDefined",
       EMethod(
         "toMap",
         GInt(1L),
@@ -2401,20 +2404,22 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
       ),
       MethodNotDefined("toMap", "Int")
     ),
-    ("[].toSet(1) => MethodArgumentNumberMismatch",
+    (
+      "[].toSet(1) => MethodArgumentNumberMismatch",
       EMethod(
         "toSet",
         ESetBody(
           ParSet(
             List(
-            )
+              )
           )
         ),
         List(GInt(1))
       ),
       MethodArgumentNumberMismatch("toSet", 0, 1)
     ),
-    ("1.toSet() => MethodNotDefined",
+    (
+      "1.toSet() => MethodNotDefined",
       EMethod(
         "toSet",
         GInt(1L),
