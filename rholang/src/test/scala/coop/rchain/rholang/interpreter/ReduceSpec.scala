@@ -23,16 +23,17 @@ import coop.rchain.rspace._
 import coop.rchain.rspace.internal.{Datum, Row, WaitingContinuation}
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
-import org.scalatest.{Assertion, FlatSpec, Matchers}
+import org.scalatest.{AppendedClues, Assertion, FlatSpec, Matchers}
 
 import scala.collection.immutable.BitSet
 import scala.collection.mutable.HashMap
-import scala.collection.{SortedSet, mutable}
+import scala.collection.{mutable, SortedSet}
 import scala.concurrent.Await
 import scala.concurrent.duration._
+import org.scalatest.prop.TableDrivenPropertyChecks._
 
 
-class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
+class ReduceSpec extends FlatSpec with Matchers with AppendedClues with PersistentStoreTester {
   implicit val rand: Blake2b512Random = Blake2b512Random(Array.empty[Byte])
 
   private[this] def mapData(elements: Map[Par, (Seq[Par], Blake2b512Random)]): Iterable[
@@ -533,7 +534,12 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
     val splitRand1 = rand.splitByte(1)
     val mergeRand  = Blake2b512Random.merge(Seq(splitRand1, splitRand0))
     val send =
-      Send(EPlus(GInt(7L), GInt(8L)), List(GInt(7L), GInt(8L), GInt(9L)), persistent = false, BitSet())
+      Send(
+        EPlus(GInt(7L), GInt(8L)),
+        List(GInt(7L), GInt(8L), GInt(9L)),
+        persistent = false,
+        BitSet()
+      )
     val receive = Receive(
       Seq(
         ReceiveBind(
@@ -672,10 +678,16 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
     val splitRand = rand.splitByte(0)
     val result = withTestSpace(errorLog) {
       case TestFixture(space, reducer) =>
-        val pattern = Send(EVar(FreeVar(0)), List(GInt(7L), EVar(FreeVar(1))), persistent = false, BitSet())
-          .withConnectiveUsed(true)
+        val pattern =
+          Send(EVar(FreeVar(0)), List(GInt(7L), EVar(FreeVar(1))), persistent = false, BitSet())
+            .withConnectiveUsed(true)
         val sendTarget =
-          Send(EVar(BoundVar(1)), List(GInt(7L), EVar(BoundVar(0))), persistent = false, BitSet(0, 1))
+          Send(
+            EVar(BoundVar(1)),
+            List(GInt(7L), EVar(BoundVar(0))),
+            persistent = false,
+            BitSet(0, 1)
+          )
         val matchTerm = Match(
           sendTarget,
           List(
@@ -1045,8 +1057,9 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
     )
     val serializedProcess =
       com.google.protobuf.ByteString.copyFrom(Serialize[Par].encode(proc).toArray)
-    val toByteArrayCall           = EMethod("toByteArray", proc, List[Par]())
-    def wrapWithSend(p: Par): Par = Send(GString("result"), List[Par](p), persistent = false, BitSet())
+    val toByteArrayCall = EMethod("toByteArray", proc, List[Par]())
+    def wrapWithSend(p: Par): Par =
+      Send(GString("result"), List[Par](p), persistent = false, BitSet())
     val result = withTestSpace(errorLog) {
       case TestFixture(space, reducer) =>
         val env         = Env[Par]()
@@ -1101,7 +1114,10 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
     val toByteArrayWithArgumentsCall: EMethod =
       EMethod(
         "toByteArray",
-        Par(sends = Seq(Send(GString("result"), List(GString("Success")), persistent = false, BitSet()))),
+        Par(
+          sends =
+            Seq(Send(GString("result"), List(GString("Success")), persistent = false, BitSet()))
+        ),
         List[Par](GInt(1L))
       )
 
@@ -1121,12 +1137,13 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
   "eval of hexToBytes" should "transform encoded string to byte array (not the rholang term)" in {
     implicit val errorLog = new ErrorLog[Task]()
 
-    val splitRand                 = rand.splitByte(0)
-    val testString                = "testing testing"
-    val base16Repr                = Base16.encode(testString.getBytes)
-    val proc: Par                 = GString(base16Repr)
-    val toByteArrayCall           = EMethod("hexToBytes", proc, List[Par]())
-    def wrapWithSend(p: Par): Par = Send(GString("result"), List[Par](p), persistent = false, BitSet())
+    val splitRand       = rand.splitByte(0)
+    val testString      = "testing testing"
+    val base16Repr      = Base16.encode(testString.getBytes)
+    val proc: Par       = GString(base16Repr)
+    val toByteArrayCall = EMethod("hexToBytes", proc, List[Par]())
+    def wrapWithSend(p: Par): Par =
+      Send(GString("result"), List[Par](p), persistent = false, BitSet())
     val result = withTestSpace(errorLog) {
       case TestFixture(space, reducer) =>
         val env         = Env[Par]()
@@ -1146,12 +1163,13 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
   }
 
   "eval of `toUtf8Bytes`" should "transform string to UTF-8 byte array (not the rholang term)" in {
-    implicit val errorLog         = new ErrorLog[Task]()
-    val splitRand                 = rand.splitByte(0)
-    val testString                = "testing testing"
-    val proc: Par                 = GString(testString)
-    val toUtf8BytesCall           = EMethod("toUtf8Bytes", proc, List[Par]())
-    def wrapWithSend(p: Par): Par = Send(GString("result"), List[Par](p), persistent = false, BitSet())
+    implicit val errorLog = new ErrorLog[Task]()
+    val splitRand         = rand.splitByte(0)
+    val testString        = "testing testing"
+    val proc: Par         = GString(testString)
+    val toUtf8BytesCall   = EMethod("toUtf8Bytes", proc, List[Par]())
+    def wrapWithSend(p: Par): Par =
+      Send(GString("result"), List[Par](p), persistent = false, BitSet())
     val result = withTestSpace(errorLog) {
       case TestFixture(space, reducer) =>
         val env         = Env[Par]()
@@ -1175,7 +1193,10 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
     val toUtfBytesWithArgumentsCall: EMethod =
       EMethod(
         "toUtf8Bytes",
-        Par(sends = Seq(Send(GString("result"), List(GString("Success")), persistent = false, BitSet()))),
+        Par(
+          sends =
+            Seq(Send(GString("result"), List(GString("Success")), persistent = false, BitSet()))
+        ),
         List[Par](GInt(1L))
       )
 
@@ -2161,10 +2182,11 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
     result.exprs should be(Seq(Expr(resultList)))
     errorLog.readAndClearErrorVector().unsafeRunSync should be(Vector.empty[InterpreterError])
   }
-  "toSet" should "transform [1, 2, 3] into Set(1, 2, 3)" in {
 
-    implicit val errorLog: ErrorLog[Task] = new ErrorLog[Task]()
-    val toSetCall: EMethod =
+  val successfulExamples = Table(
+    ("clue", "input", "output"),
+    (
+      "[1, 2, 3].toSet() => Set(1, 2, 3)",
       EMethod(
         "toSet",
         EListBody(
@@ -2177,15 +2199,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
           )
         ),
         List[Par]()
-      )
-
-    val result: Par = withTestSpace(errorLog) {
-      case TestFixture(_, reducer) =>
-        implicit val env: Env[Par] = Env[Par]()
-        val toSetTask             = reducer.evalExpr(toSetCall)
-        Await.result(toSetTask.runToFuture, 3.seconds)
-    }
-    val resultList =
+      ),
       ESetBody(
         ParSet(
           List(
@@ -2195,15 +2209,9 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
           )
         )
       )
-    result.exprs should be(Seq(Expr(resultList)))
-    errorLog.readAndClearErrorVector().unsafeRunSync should be(Vector.empty[InterpreterError])
-  }
-
-
-  "toSet" should "transform [1, 1] into Set(1)" in {
-
-    implicit val errorLog: ErrorLog[Task] = new ErrorLog[Task]()
-    val toSetCall: EMethod =
+    ),
+    (
+      "[1, 1].toSet() => Set(1)",
       EMethod(
         "toSet",
         EListBody(
@@ -2215,15 +2223,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
           )
         ),
         List[Par]()
-      )
-
-    val result: Par = withTestSpace(errorLog) {
-      case TestFixture(_, reducer) =>
-        implicit val env: Env[Par] = Env[Par]()
-        val toSetTask             = reducer.evalExpr(toSetCall)
-        Await.result(toSetTask.runToFuture, 3.seconds)
-    }
-    val resultList =
+      ),
       ESetBody(
         ParSet(
           List(
@@ -2231,44 +2231,28 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
           )
         )
       )
-    result.exprs should be(Seq(Expr(resultList)))
-    errorLog.readAndClearErrorVector().unsafeRunSync should be(Vector.empty[InterpreterError])
-  }
-
-  it should "transform [] into Set()" in {
-    implicit val errorLog: ErrorLog[Task] = new ErrorLog[Task]()
-    val toSetCall: EMethod =
+    ),
+    (
+      "[].toSet() => Set()",
       EMethod(
         "toSet",
         EListBody(
           EList(
             List[Par](
-            )
+              )
           )
         ),
         List()
-      )
-
-    val result: Par = withTestSpace(errorLog) {
-      case TestFixture(_, reducer) =>
-        implicit val env: Env[Par] = Env[Par]()
-        val toSetTask             = reducer.evalExpr(toSetCall)
-        Await.result(toSetTask.runToFuture, 3.seconds)
-    }
-    val resultList =
+      ),
       ESetBody(
         ParSet(
           List(
-          )
+            )
         )
       )
-    result.exprs should be(Seq(Expr(resultList)))
-    errorLog.readAndClearErrorVector().unsafeRunSync should be(Vector.empty[InterpreterError])
-  }
-
-  it should "keep Set(1, 2, 3) unchanged" in {
-    implicit val errorLog: ErrorLog[Task] = new ErrorLog[Task]()
-    val toSetCall: EMethod =
+    ),
+    (
+      "Set(1, 2, 3).toSet() => Set(1, 2, 3)",
       EMethod(
         "toSet",
         ESetBody(
@@ -2281,15 +2265,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
           )
         ),
         List()
-      )
-
-    val result: Par = withTestSpace(errorLog) {
-      case TestFixture(_, reducer) =>
-        implicit val env: Env[Par] = Env[Par]()
-        val toSetTask             = reducer.evalExpr(toSetCall)
-        Await.result(toSetTask.runToFuture, 3.seconds)
-    }
-    val resultList =
+      ),
       ESetBody(
         ParSet(
           List(
@@ -2299,66 +2275,9 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
           )
         )
       )
-    result.exprs should be(Seq(Expr(resultList)))
-    errorLog.readAndClearErrorVector().unsafeRunSync should be(Vector.empty[InterpreterError])
-  }
-
-
-  it should "return an error when `toSet` is called with arguments" in {
-    implicit val errorLog: ErrorLog[Task] = new ErrorLog[Task]()
-    val toSetCall: EMethod =
-      EMethod(
-        "toSet",
-        ESetBody(
-          ParSet(
-            List(
-              GInt(1L),
-              GInt(2L),
-              GInt(3L)
-            )
-          )
-        ),
-        List(GInt(1))
-      )
-
-    val result = withTestSpace(errorLog) {
-      case TestFixture(space, reducer) =>
-        implicit val env = Env[Par]()
-        val inspectTask  = reducer.eval(toSetCall) >> space.toMap
-        Await.result(inspectTask.runToFuture, 3.seconds)
-    }
-    result should be(mutable.HashMap.empty)
-    errorLog.readAndClearErrorVector().unsafeRunSync should be(
-      Vector(MethodArgumentNumberMismatch("toSet", 0, 1))
-    )
-  }
-
-  it should "return an error when `toSet` is called on GInt" in {
-    implicit val errorLog: ErrorLog[Task] = new ErrorLog[Task]()
-    val toSetCall: EMethod =
-      EMethod(
-        "toSet",
-        GInt(1L),
-        List()
-      )
-
-    val result = withTestSpace(errorLog) {
-      case TestFixture(space, reducer) =>
-        implicit val env = Env[Par]()
-        val inspectTask  = reducer.eval(toSetCall) >> space.toMap
-        Await.result(inspectTask.runToFuture, 3.seconds)
-    }
-    result should be(mutable.HashMap.empty)
-    errorLog.readAndClearErrorVector().unsafeRunSync should be(
-      Vector(MethodNotDefined("toSet", "Int"))
-    )
-  }
-
-
-  "toMap" should """transform [("a",1), ("b",2), ("c",3)] into {"a":1, "b":2, "c":3)""" in {
-
-    implicit val errorLog: ErrorLog[Task] = new ErrorLog[Task]()
-    val toMapCall: EMethod =
+    ),
+    (
+      """[("a",1), ("b",2), ("c",3)].toMap() => {"a":1, "b":2, "c":3)""",
       EMethod(
         "toMap",
         EListBody(
@@ -2371,32 +2290,19 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
           )
         ),
         List[Par]()
-      )
-
-    val result: Par = withTestSpace(errorLog) {
-      case TestFixture(_, reducer) =>
-        implicit val env: Env[Par] = Env[Par]()
-        val task             = reducer.evalExpr(toMapCall)
-        Await.result(task.runToFuture, 3.seconds)
-    }
-    val resultList =
+      ),
       EMapBody(
         ParMap(
-          List[(Par,Par)](
+          List[(Par, Par)](
             (GString("a"), GInt(1L)),
             (GString("b"), GInt(2L)),
             (GString("c"), GInt(3L))
           )
         )
       )
-    result.exprs should be(Seq(Expr(resultList)))
-    errorLog.readAndClearErrorVector().unsafeRunSync should be(Vector.empty[InterpreterError])
-  }
-
-  "toMap" should """transform [("a",1), ("a",2)] into {"a":2)""" in {
-
-    implicit val errorLog: ErrorLog[Task] = new ErrorLog[Task]()
-    val toSetCall: EMethod =
+    ),
+    (
+      """[("a",1), ("a",2)].toMap() => {"a":2)""",
       EMethod(
         "toMap",
         EListBody(
@@ -2408,30 +2314,57 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
           )
         ),
         List[Par]()
-      )
-
-    val result: Par = withTestSpace(errorLog) {
-      case TestFixture(_, reducer) =>
-        implicit val env: Env[Par] = Env[Par]()
-        val toSetTask             = reducer.evalExpr(toSetCall)
-        Await.result(toSetTask.runToFuture, 3.seconds)
-    }
-    val resultList =
+      ),
       EMapBody(
         ParMap(
-          List[(Par,Par)](
+          List[(Par, Par)](
             (GString("a"), GInt(2L))
           )
         )
       )
-    result.exprs should be(Seq(Expr(resultList)))
-    errorLog.readAndClearErrorVector().unsafeRunSync should be(Vector.empty[InterpreterError])
+    ),
+    (
+      """[].toMap() => {}""",
+      EMethod(
+        "toMap",
+        EListBody(
+          EList(
+            List[Par](
+              )
+          )
+        ),
+        List()
+      ),
+      EMapBody(
+        ParMap(
+          List(
+            )
+        )
+      )
+    )
+  )
+
+  "Reducer" should "work correctly in succesful cases" in {
+    forAll(successfulExamples) { (clue, input, output) =>
+      implicit val errorLog: ErrorLog[Task] = new ErrorLog[Task]()
+
+      val result: Par = withTestSpace(errorLog) {
+        case TestFixture(_, reducer) =>
+          implicit val env: Env[Par] = Env[Par]()
+          val toSetTask              = reducer.evalExpr(input)
+          Await.result(toSetTask.runToFuture, 3.seconds)
+      }
+
+      result.exprs should be(Seq(Expr(output))) withClue (clue)
+      errorLog
+        .readAndClearErrorVector()
+        .unsafeRunSync should be(Vector.empty[InterpreterError]) withClue ("no errors are expected")
+    }
   }
 
-  "toMap" should """return an error when applied to ["a", ("b",2)]""" in {
-
-    implicit val errorLog: ErrorLog[Task] = new ErrorLog[Task]()
-    val toMapCall: EMethod =
+  val errorExamples = Table(
+    ("clue", "input", "output"),
+    ( """["a", ("b",2)].toMap() => MethodNotDefined""",
       EMethod(
         "toMap",
         EListBody(
@@ -2443,98 +2376,68 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
           )
         ),
         List[Par]()
-      )
-
-    val result = withTestSpace(errorLog) {
-      case TestFixture(space, reducer) =>
-        implicit val env = Env[Par]()
-        val inspectTask  = reducer.eval(toMapCall) >> space.toMap
-        Await.result(inspectTask.runToFuture, 3.seconds)
-    }
-
-    result should be(mutable.HashMap.empty)
-    errorLog.readAndClearErrorVector().unsafeRunSync should be(
-      Vector(MethodNotDefined("toMap", "types except List[(K,V)]"))
-    )
-  }
-
-
-  it should "transform [] into {}" in {
-    implicit val errorLog: ErrorLog[Task] = new ErrorLog[Task]()
-    val toMapCall: EMethod =
+      ),
+      MethodNotDefined("toMap", "types except List[(K,V)]")
+    ),
+    ("""[("a", 1)].toMap(1) => MethodArgumentNumberMismatch""",
       EMethod(
         "toMap",
         EListBody(
           EList(
             List[Par](
-            )
-          )
-        ),
-        List()
-      )
-
-    val result: Par = withTestSpace(errorLog) {
-      case TestFixture(_, reducer) =>
-        implicit val env: Env[Par] = Env[Par]()
-        val task = reducer.evalExpr(toMapCall)
-        Await.result(task.runToFuture, 3.seconds)
-    }
-    val resultList =
-      EMapBody(
-        ParMap(
-          List(
-          )
-        )
-      )
-    result.exprs should be(Seq(Expr(resultList)))
-    errorLog.readAndClearErrorVector().unsafeRunSync should be(Vector.empty[InterpreterError])
-  }
-
-  it should "return an error when `toMap` is called with arguments" in {
-    implicit val errorLog: ErrorLog[Task] = new ErrorLog[Task]()
-    val toMapCall: EMethod =
-      EMethod(
-        "toMap",
-        EMapBody(
-          ParMap(
-            List[(Par,Par)](
-              (GString("a"), GInt(1L))
+              ETupleBody(ETuple(Seq(GString("a"), GInt(1L))))
             )
           )
         ),
         List(GInt(1))
-      )
-
-    val result = withTestSpace(errorLog) {
-      case TestFixture(space, reducer) =>
-        implicit val env = Env[Par]()
-        val inspectTask  = reducer.eval(toMapCall) >> space.toMap
-        Await.result(inspectTask.runToFuture, 3.seconds)
-    }
-    result should be(mutable.HashMap.empty)
-    errorLog.readAndClearErrorVector().unsafeRunSync should be(
-      Vector(MethodArgumentNumberMismatch("toMap", 0, 1))
-    )
-  }
-
-  it should "return an error when `toMap` is called on GInt" in {
-    implicit val errorLog: ErrorLog[Task] = new ErrorLog[Task]()
-    val toMapCall: EMethod =
+      ),
+      MethodArgumentNumberMismatch("toMap", 0, 1)
+    )  ,
+    ("1.toMap() => MethodNotDefined",
       EMethod(
         "toMap",
         GInt(1L),
         List()
-      )
-
-    val result = withTestSpace(errorLog) {
-      case TestFixture(space, reducer) =>
-        implicit val env = Env[Par]()
-        val inspectTask  = reducer.eval(toMapCall) >> space.toMap
-        Await.result(inspectTask.runToFuture, 3.seconds)
-    }
-    result should be(mutable.HashMap.empty)
-    errorLog.readAndClearErrorVector().unsafeRunSync should be(
-      Vector(MethodNotDefined("toMap", "Int"))
+      ),
+      MethodNotDefined("toMap", "Int")
+    ),
+    ("[].toSet(1) => MethodArgumentNumberMismatch",
+      EMethod(
+        "toSet",
+        ESetBody(
+          ParSet(
+            List(
+            )
+          )
+        ),
+        List(GInt(1))
+      ),
+      MethodArgumentNumberMismatch("toSet", 0, 1)
+    ),
+    ("1.toSet() => MethodNotDefined",
+      EMethod(
+        "toSet",
+        GInt(1L),
+        List()
+      ),
+      MethodNotDefined("toSet", "Int")
     )
+  )
+
+  "Reducer" should """return report errors in failure cases""" in {
+
+    forAll(errorExamples) { (clue, input, error) =>
+      implicit val errorLog: ErrorLog[Task] = new ErrorLog[Task]()
+
+      val result = withTestSpace(errorLog) {
+        case TestFixture(space, reducer) =>
+          implicit val env = Env[Par]()
+          val inspectTask  = reducer.eval(input) >> space.toMap
+          Await.result(inspectTask.runToFuture, 3.seconds)
+      }
+
+      result should be(mutable.HashMap.empty)
+      errorLog.readAndClearErrorVector().unsafeRunSync should be(Vector(error))
+    }
   }
 }
