@@ -66,13 +66,8 @@ class MultiParentCasperMergeSpec extends FlatSpec with Matchers with Inspectors 
   // TODO: Peek rows/column
   // Note this skips pairs that lead to infinite loops
   it should "handle multi-parent blocks correctly when they operate on volatile produce/consume pairs" in effectTest {
-    // 4! 4!
-    checkConflicts("@0!(0)", "for (_ <- @0) { 0 }", "for (_ <- @0) { 0 }") >>
-      // 4X 4X (TODO: Eventually should merge)
-      checkConflicts("0", "for (_ <- @0) { 0 }", "for (_ <- @0) { 0 }") >>
-      //
-      // !X !X (TODO: Eventually should merge)
-      checkConflicts("0", "@0!(0)", "@0!(0)") >>
+    // !X !X (TODO: Eventually should merge)
+    checkConflicts("0", "@0!(0)", "@0!(0)") >>
       // !X !4
       checkMerge("for (_ <- @0) { 0 }", "@1!(0)", "@0!(0)") >>
       // !X !C
@@ -111,7 +106,47 @@ class MultiParentCasperMergeSpec extends FlatSpec with Matchers with Inspectors 
       // !4 CX (TODO: Check if this could conflict)
       checkMerge("for (_ <- @0) { 0 }", "@0!(1)", "contract @1(id) = { 0 }") >>
       // !4 C!
-      checkMerge("for (_ <- @0) { 0 } | for (_ <- @1) { 0 }", "@0!(0)", "contract @1(id) = { 0 }")
+      checkMerge("for (_ <- @0) { 0 } | for (_ <- @1) { 0 }", "@0!(0)", "contract @1(id) = { 0 }") >>
+      // !C !C
+      checkMerge("for (_ <- @0) { 0 } | for (_ <- @1) { 0 }", "@0!(0)", "@1!(0)") >>
+      // !C 4X merges
+      checkMerge("for (_ <- @0) { 0 }", "@0!(0)", "for (_ <- @1) { 0 }") >>
+      // !C 4! merges
+      checkMerge("for (_ <- @0) { 0 } | @1!(0)", "@0!(0)", "for (_ <- @1) { 0 }") >>
+      // !C 4!! merges
+      checkMerge("for (_ <- @0) { 0 } | @1!!(0)", "@0!(0)", "for (_ <- @1) { 0 }") >>
+      // !C !!X merges
+      checkMerge("for (_ <- @0) { 0 }", "@0!(0)", "@1!!(0)") >>
+      // !C !!4 merges
+      checkMerge("for (_ <- @0) { 0 } | for (_ <- @1) { 0 }", "@0!(0)", "@1!!(0)") >>
+      // !C CX merges
+      checkMerge("for (_ <- @0) { 0 }", "@0!(0)", "contract @1(id) = { 0 }") >>
+      // !C C! merges
+      checkMerge("for (_ <- @0) { 0 } | @1!(0)", "@0!(0)", "contract @1(id) = { 0 }") >>
+      // 4X 4X (TODO: Eventually should merge)
+      checkConflicts("0", "for (_ <- @0) { 0 }", "for (_ <- @0) { 0 }") >>
+      // 4X 4! merges
+      checkMerge("@1!(0)", "for (_ <- @0) { 0 }", "for (_ <- @1) { 0 }") >>
+      // Skipping 4X 4!! merges, 4X !!X may merge or not, 4X !!4 may merge or not
+      // 4X CX merges
+      checkMerge("0", "for (_ <- @0) { 0 }", "contract @1(id) = { 0 }") >>
+      // 4X C! merges
+      checkMerge("@1!(0)", "for (_ <- @0) { 0 }", "contract @1(id) = { 0 }") >>
+      // 4! 4! may merge or not
+      checkMerge("@0!(0) | @1!(0)", "for (_ <- @0) { 0 }", "for (_ <- @1) { 0 }") >>
+      checkConflicts("@0!(0) | @0!(0)", "for (_ <- @0) { 0 }", "for (_ <- @0) { 0 }") >>
+      // Skipping 4! 4!! merges, 4! !!X merges, 4! !!4 merges
+      // 4! CX merges
+      checkMerge("@0!(0)", "for (_ <- @0) { 0 }", "contract @1(id) = { 0 }") >>
+      // 4! C! may merge or not
+      checkMerge("@0!(0) | @1!(0)", "for (_ <- @0) { 0 }", "contract @1(id) = { 0 }") >>
+      checkConflicts("@0!(0) | @0!(0)", "for (_ <- @0) { 0 }", "contract @0(id) = { 0 }") >>
+      // CX CX merges
+      checkMerge("0", "contract @0(id) = { 0 }", "contract @1(id) = { 0 }")
+    // C! C! conflicts (TODO: Double check mergeability spreadsheet)
+    // checkConflicts("@0!(0) | @1!(0)", "contract @0(id) = { 0 }", "contract @1(id) = { 0 }")
+    // 4!! / !!4 row is similar to !4 / 4! and thus skipped
+    // C!! / !!C row is similar to !C / C! and thus skipped
   }
 
   private def checkConflicts(base: String, b1: String, b2: String): Effect[Unit] =
