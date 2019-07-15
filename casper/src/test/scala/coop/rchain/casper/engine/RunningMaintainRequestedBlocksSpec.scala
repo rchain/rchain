@@ -9,7 +9,7 @@ import coop.rchain.comm.protocol.routing.Protocol
 import coop.rchain.comm.transport.TransportLayer
 import coop.rchain.comm.rp.{ProtocolHelper, RPConf}, ProtocolHelper.toPacket
 import coop.rchain.shared._
-import coop.rchain.p2p.EffectsTestInstances.{LogStub, TransportLayerStub}
+import coop.rchain.p2p.EffectsTestInstances.{LogStub, LogicalTime, TransportLayerStub}
 import coop.rchain.models.BlockHash.BlockHash
 import com.google.protobuf.ByteString
 import monix.eval.Coeval
@@ -27,6 +27,7 @@ class RunningMaintainRequestedBlocksSpec extends FunSpec with BeforeAndAfterEach
     transport.reset()
     transport.setResponses(alwaysSuccess)
     log.reset()
+    time.reset()
   }
 
   describe("Running") {
@@ -69,7 +70,20 @@ class RunningMaintainRequestedBlocksSpec extends FunSpec with BeforeAndAfterEach
             requestedAfter.waitingList shouldBe List(peerNode("waiting2"))
             requestedAfter.peers shouldBe Set(peerNode("peer"), peerNode("waiting1"))
           }
-          it("timestamp is reset")(pending)
+          it("timestamp is reset") {
+            val waitingList = List(peerNode("waiting1"), peerNode("waiting2"))
+            val requested = Requested(
+              timestamp = timedOut,
+              peers = Set(peerNode("peer")),
+              waitingList = waitingList
+            )
+            implicit val requestedBlocks = initRequestedBlocks(init = Map(hash -> requested))
+            // when
+            Running.maintainRequestedBlocks[Coeval].apply()
+            // then
+            val Some(requestedAfter) = requestedBlocks.read.apply.get(hash)
+            requestedAfter.timestamp shouldBe time.clock
+          }
         }
         describe("if waiting list IS empty") {
           it("should log a warning to the user") {
@@ -130,6 +144,7 @@ class RunningMaintainRequestedBlocksSpec extends FunSpec with BeforeAndAfterEach
   implicit private val askConf   = new ConstApplicativeAsk[Coeval, RPConf](conf)
   implicit private val transport = new TransportLayerStub[Coeval]
   implicit private val log       = new LogStub[Coeval]
+  implicit private val time      = new LogicalTime[Coeval]
 
   private def initRequestedBlocks(
       init: Map[BlockHash, Requested]
@@ -145,6 +160,6 @@ class RunningMaintainRequestedBlocksSpec extends FunSpec with BeforeAndAfterEach
 
   private def alwaysSuccess: PeerNode => Protocol => CommErr[Unit] = kp(kp(Right(())))
 
-  private def timedOut: Long = System.currentTimeMillis - (2 * Running.timeout.toMillis)
+  private def timedOut: Long = time.clock - (2 * Running.timeout.toMillis)
 
 }

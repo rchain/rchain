@@ -74,7 +74,7 @@ object Running {
     * and keep the requested blocks list clean.
     * See spec RunningMaintainRequestedBlocksSpec for more details
     */
-  def maintainRequestedBlocks[F[_]: Monad: RPConfAsk: RequestedBlocks: TransportLayer: Log]
+  def maintainRequestedBlocks[F[_]: Monad: RPConfAsk: RequestedBlocks: TransportLayer: Log: Time]
       : F[Unit] = {
 
     def toMap(list: List[(BlockHash, Option[Requested])]): Map[BlockHash, Requested] = {
@@ -91,11 +91,15 @@ object Running {
           val requested = requests(hash)
           if (requested.waitingList.nonEmpty) {
             val nextPeer = requested.waitingList(0)
-            val modifiedRequested = requested.copy(
+            def modifiedRequested(ts: Long) = requested.copy(
+              timestamp = ts,
               waitingList = requested.waitingList.tail,
               peers = requested.peers + nextPeer
             )
-            requestForBlock[F](nextPeer, hash).as((hash -> Option(modifiedRequested)))
+            for {
+              _  <- requestForBlock[F](nextPeer, hash)
+              ts <- Time[F].currentMillis
+            } yield ((hash -> Option(modifiedRequested(ts))))
           } else {
             val warnMessage = s"Could not retrieve requested block ${PrettyPrinter.buildString(hash)}. " +
               "Removing the request from the requested blocks list. Casper will have to re-request the block."
