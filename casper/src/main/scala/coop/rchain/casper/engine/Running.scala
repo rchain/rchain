@@ -29,7 +29,7 @@ import coop.rchain.catscontrib.Catscontrib, Catscontrib._
 import monix.eval.Task
 import monix.execution.Scheduler
 import coop.rchain.models.BlockHash.BlockHash
-import scala.concurrent.duration.FiniteDuration
+import scala.concurrent.duration._
 import scala.util.Try
 
 /** Node in this state has already received at least one [[ApprovedBlock]] and it has created an instance
@@ -39,10 +39,14 @@ import scala.util.Try
   **/
 object Running {
 
+  val timeout: FiniteDuration = 30 seconds
+
   final case class Requested(
+      timestamp: Long,
       peers: Set[PeerNode] = Set.empty,
       waitingList: List[PeerNode] = List.empty
   )
+
   type RequestedBlocks[F[_]] = Cell[F, Map[BlockHash, Requested]]
   object RequestedBlocks {
     def apply[F[_]: RequestedBlocks]: RequestedBlocks[F] = implicitly[RequestedBlocks[F]]
@@ -50,35 +54,49 @@ object Running {
 
   def noop[F[_]: Applicative]: F[Unit] = ().pure[F]
 
-  /** TODO
-    * - periodically check the lists of requests and checks if we waited to long
-    *    - if waited to long and there is at least onee peer on waiting list:
-    *        - request the block from that peer from waiting list
-    *        - move the peer from the waiting list to the requested list
-    *    - if the waiting list is empty, log a warning (this means most likely things are not going the way they should), and
-           remove the entry from the list (casper will have to rerequest it)
-    */
-  def maintainRequestedBlocks[F[_]: Applicative]: F[Unit] = noop[F]
+  private def requestForBlock[F[_]: Monad: RPConfAsk: TransportLayer: RequestedBlocks](
+      peer: PeerNode,
+      hash: BlockHash
+  ): F[Unit] =
+    for {
+      conf <- RPConfAsk[F].ask
+      msg = packet(
+        conf.local,
+        conf.networkId,
+        transport.BlockRequest,
+        BlockRequest(hash).toByteString
+      )
+      _ <- TransportLayer[F].send(peer, msg)
+    } yield ()
 
-  def handleHasBlock[F[_]: Monad: RPConfAsk: RequestedBlocks: TransportLayer](
+  /**
+    * This method should be called periodically to maintain liveness of the protocol
+    * and keep the requested blocks list clean.
+    * See spec RunningMaintainRequestedBlocksSpec for more details
+    */
+  def maintainRequestedBlocks[F[_]: Monad: RPConfAsk: RequestedBlocks: TransportLayer]: F[Unit] =
+    RequestedBlocks[F].flatModify(requests => {
+      requests.keys.toList
+        .traverse(hash => {
+          val requested = requests(hash)
+          requestForBlock[F](requested.waitingList(0), hash).as((hash -> requested))
+        })
+        .map(list => Map(list: _*))
+    })
+
+  def handleHasBlock[F[_]: Monad: RPConfAsk: RequestedBlocks: TransportLayer: Time](
       peer: PeerNode,
       hb: HasBlock
   )(
       casperContains: BlockHash => F[Boolean]
   ): F[Unit] = {
 
-    def requestForBlock: F[Unit] =
-      for {
-        conf <- RPConfAsk[F].ask
-        msg = packet(
-          conf.local,
-          conf.networkId,
-          transport.BlockRequest,
-          BlockRequest(hb.hash).toByteString
+    def addNewEntry =
+      Time[F].currentMillis >>= (ts => {
+        RequestedBlocks[F].modify(
+          _ + (hb.hash -> Requested(timestamp = ts, peers = Set(peer)))
         )
-        _ <- TransportLayer[F].send(peer, msg)
-        _ <- RequestedBlocks[F].modify(_ + (hb.hash -> Requested(peers = Set(peer))))
-      } yield ()
+      })
 
     def addToWaitingList(requested: Requested): F[Unit] =
       RequestedBlocks[F].modify { requestedBlocks =>
@@ -87,7 +105,8 @@ object Running {
 
     casperContains(hb.hash).ifM(
       noop[F],
-      RequestedBlocks[F].read >>= (_.get(hb.hash).fold(requestForBlock)(addToWaitingList))
+      RequestedBlocks[F].read >>= (_.get(hb.hash)
+        .fold(requestForBlock[F](peer, hb.hash) >> addNewEntry)(addToWaitingList))
     )
   }
 

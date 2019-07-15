@@ -69,7 +69,12 @@ class CommUtilSpec extends FunSpec with BeforeAndAfterEach with Matchers {
             peerNode("peer1", 40400),
             peerNode("peer2", 40400)
           )
-          val requestedBefore          = Map(hash -> Requested(peers = Set(peerNode("peer2", 40400))))
+          val requestedBefore = Map(
+            hash -> Requested(
+              timestamp = System.currentTimeMillis,
+              peers = Set(peerNode("peer2", 40400))
+            )
+          )
           implicit val requestedBlocks = initRequestedBlocks(init = requestedBefore)
           implicit val connectionsCell = initConnectionsCell(connections = peers)
           // when

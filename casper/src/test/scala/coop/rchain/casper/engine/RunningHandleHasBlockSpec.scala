@@ -8,7 +8,7 @@ import coop.rchain.comm.protocol.routing.Protocol
 import coop.rchain.comm.transport.TransportLayer
 import coop.rchain.comm.rp.{ProtocolHelper, RPConf}, ProtocolHelper.toPacket
 import coop.rchain.shared._
-import coop.rchain.p2p.EffectsTestInstances.TransportLayerStub
+import coop.rchain.p2p.EffectsTestInstances.{LogicalTime, TransportLayerStub}
 import coop.rchain.models.BlockHash.BlockHash
 import com.google.protobuf.ByteString
 import monix.eval.Coeval
@@ -25,6 +25,7 @@ class RunningHandleHasBlockSpec extends WordSpec with BeforeAndAfterEach with Ma
   override def beforeEach(): Unit = {
     transport.reset()
     transport.setResponses(alwaysSuccess)
+    time.reset()
   }
 
   "Running.handleHasBlock" should {
@@ -40,8 +41,9 @@ class RunningHandleHasBlockSpec extends WordSpec with BeforeAndAfterEach with Ma
 
     "ignore if requested before for the same peer" in {
       // given
-      val sender                   = peerNode("somePeer", 40400)
-      val requestedBefore          = Map(hash -> Requested(peers = Set(sender)))
+      val sender = peerNode("somePeer", 40400)
+      val requestedBefore =
+        Map(hash -> Requested(timestamp = System.currentTimeMillis, peers = Set(sender)))
       implicit val requestedBlocks = initRequestedBlocks(init = requestedBefore)
       val casperContains           = alwaysFalse
       // when
@@ -52,9 +54,10 @@ class RunningHandleHasBlockSpec extends WordSpec with BeforeAndAfterEach with Ma
 
     "store on a waiting list and don't request if requested by different peer" in {
       // given
-      val sender                   = peerNode("somePeer", 40400)
-      val otherPeer                = peerNode("otherPeer", 40400)
-      val requestedBefore          = Map(hash -> Requested(peers = Set(otherPeer)))
+      val sender    = peerNode("somePeer", 40400)
+      val otherPeer = peerNode("otherPeer", 40400)
+      val requestedBefore =
+        Map(hash -> Requested(timestamp = System.currentTimeMillis, peers = Set(otherPeer)))
       implicit val requestedBlocks = initRequestedBlocks(init = requestedBefore)
       val casperContains           = alwaysFalse
       // when
@@ -93,6 +96,7 @@ class RunningHandleHasBlockSpec extends WordSpec with BeforeAndAfterEach with Ma
 
   implicit private val askConf   = new ConstApplicativeAsk[Coeval, RPConf](conf)
   implicit private val transport = new TransportLayerStub[Coeval]
+  implicit private val time      = new LogicalTime[Coeval]
 
   private def initRequestedBlocks(
       init: Map[BlockHash, Requested] = Map.empty
