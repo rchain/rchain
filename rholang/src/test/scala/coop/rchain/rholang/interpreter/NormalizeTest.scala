@@ -651,14 +651,10 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
   }
 
   it should "handle peek" in {
-    val basicInput = ParBuilder[Coeval]
-      .buildAST(
-        new StringReader("""for ( x, y <<- @Nil ) { x!(*y) }""")
-      )
-      .value()
-
-    val result = ProcNormalizeMatcher.normalizeMatch[Coeval](basicInput, inputs).value
-    result.par.receives.head.peek shouldBe true
+    (for {
+      basicInput <- ParBuilderUtil.buildAST[Coeval]("""for ( x, y <<- @Nil ) { x!(*y) }""")
+      result     <- ProcNormalizeMatcher.normalizeMatch[Coeval](basicInput, inputs)
+    } yield result.par.receives.head.peek shouldBe true).value()
   }
 
   "PInput" should "Handle a more complicated receive" in {

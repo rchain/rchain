@@ -1,6 +1,6 @@
 package coop.rchain.rholang.interpreter
 
-import java.io.Reader
+import java.io.{Reader, StringReader}
 
 import cats.effect.Sync
 import coop.rchain.models.Par
@@ -18,4 +18,8 @@ object ParBuilderUtil {
     ParBuilder[F].buildNormalizedTerm(reader, NormalizerEnv.Empty)
 
   def buildPar[F[_]: Sync](proc: Proc): F[Par] = ParBuilder[F].buildPar(proc, NormalizerEnv.Empty)
+
+  def buildAST[F[_]: Sync](rho: String): F[Proc] =
+    ParBuilder[F].buildAST(new StringReader(rho))
+
 }
