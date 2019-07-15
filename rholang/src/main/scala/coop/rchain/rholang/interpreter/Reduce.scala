@@ -58,7 +58,7 @@ class DebruijnInterpreter[M[_], F[_]](
     urnMap: Map[String, Par]
 )(
     implicit parallel: cats.Parallel[M, F],
-    s: Sync[M],
+    syncM: Sync[M],
     fTell: FunctorTell[M, Throwable],
     cost: _cost[M]
 ) extends Reduce[M] {
@@ -88,7 +88,7 @@ class DebruijnInterpreter[M[_], F[_]](
               produce(chan, data, persistent, sequenceNumber)
             ).parSequence_
           else dispatcher.dispatch(continuation, dataList, updatedSequenceNumber)
-        case None => s.unit
+        case None => syncM.unit
       }
     pureRSpace.produce(chan, data, persist = persistent, sequenceNumber) >>= (go(_))
   }
@@ -119,7 +119,7 @@ class DebruijnInterpreter[M[_], F[_]](
               consume(binds, body, persistent, peek, sequenceNumber)
             ).parSequence_
           else dispatcher.dispatch(continuation, dataList, updatedSequenceNumber)
-        case None => s.unit
+        case None => syncM.unit
       }
     pureRSpace.consume(
       sources.toList,
@@ -883,11 +883,11 @@ class DebruijnInterpreter[M[_], F[_]](
           v      <- evalSingleExpr(p)
           result <- v.exprInstance match {
                      case EListBody(EList(ps, _, _, _)) =>
-                       s.fromEither(localNth(ps, nth))
+                       syncM.fromEither(localNth(ps, nth))
                      case ETupleBody(ETuple(ps, _, _)) =>
-                       s.fromEither(localNth(ps, nth))
+                       syncM.fromEither(localNth(ps, nth))
                      case GByteArray(bs) =>
-                       s.fromEither(if (0 <= nth && nth < bs.size) {
+                       syncM.fromEither(if (0 <= nth && nth < bs.size) {
                          val b      = bs.byteAt(nth) & 0xff // convert to unsigned
                          val p: Par = Expr(GInt(b.toLong))
                          p.asRight[ReduceError]
@@ -916,7 +916,7 @@ class DebruijnInterpreter[M[_], F[_]](
           exprEvaled <- evalExpr(p)
           exprSubst  <- substituteAndCharge[Par, M](exprEvaled, 0, env)
           _          <- charge[M](toByteArrayCost(exprSubst))
-          ba         <- s.fromEither(serialize(exprSubst))
+          ba         <- syncM.fromEither(serialize(exprSubst))
         } yield Expr(GByteArray(ByteString.copyFrom(ba)))
       }
   }
@@ -1284,11 +1284,11 @@ class DebruijnInterpreter[M[_], F[_]](
     def slice(baseExpr: Expr, from: Int, until: Int): M[Par] =
       baseExpr.exprInstance match {
         case GString(string) =>
-          s.delay(GString(string.slice(from, until)))
+          syncM.delay(GString(string.slice(from, until)))
         case EListBody(EList(ps, locallyFree, connectiveUsed, remainder)) =>
-          s.delay(EList(ps.slice(from, until), locallyFree, connectiveUsed, remainder))
+          syncM.delay(EList(ps.slice(from, until), locallyFree, connectiveUsed, remainder))
         case GByteArray(bytes) =>
-          s.delay(GByteArray(bytes.substring(from, until)))
+          syncM.delay(GByteArray(bytes.substring(from, until)))
         case other =>
           MethodNotDefined("slice", other.typ).raiseError[M, Par]
       }
@@ -1432,7 +1432,7 @@ class DebruijnInterpreter[M[_], F[_]](
       }
 
   private def restrictToInt(long: Long): M[Int] =
-    s.catchNonFatal(Math.toIntExact(long)).adaptError {
+    syncM.catchNonFatal(Math.toIntExact(long)).adaptError {
       case _: ArithmeticException => ReduceError(s"Integer overflow for value $long")
     }
 
