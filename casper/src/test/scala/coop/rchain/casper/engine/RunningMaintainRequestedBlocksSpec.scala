@@ -53,7 +53,22 @@ class RunningMaintainRequestedBlocksSpec extends FunSpec with BeforeAndAfterEach
             recipient shouldBe waitingList(0)
             transport.requests.size shouldBe 1
           }
-          it("should move that peer from the waiting list to the requested set")(pending)
+          it("should move that peer from the waiting list to the requested set") {
+            // given
+            val waitingList = List(peerNode("waiting1"), peerNode("waiting2"))
+            val requested = Requested(
+              timestamp = timedOut,
+              peers = Set(peerNode("peer")),
+              waitingList = waitingList
+            )
+            implicit val requestedBlocks = initRequestedBlocks(init = Map(hash -> requested))
+            // when
+            Running.maintainRequestedBlocks[Coeval].apply()
+            // then
+            val Some(requestedAfter) = requestedBlocks.read.apply.get(hash)
+            requestedAfter.waitingList shouldBe List(peerNode("waiting2"))
+            requestedAfter.peers shouldBe Set(peerNode("peer"), peerNode("waiting1"))
+          }
           it("timestamp is reset")(pending)
         }
         describe("if waiting list IS empty") {

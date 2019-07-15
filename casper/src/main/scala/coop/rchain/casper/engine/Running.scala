@@ -90,7 +90,12 @@ object Running {
         .traverse(hash => {
           val requested = requests(hash)
           if (requested.waitingList.nonEmpty) {
-            requestForBlock[F](requested.waitingList(0), hash).as((hash -> Option(requested)))
+            val nextPeer = requested.waitingList(0)
+            val modifiedRequested = requested.copy(
+              waitingList = requested.waitingList.tail,
+              peers = requested.peers + nextPeer
+            )
+            requestForBlock[F](nextPeer, hash).as((hash -> Option(modifiedRequested)))
           } else {
             val warnMessage = s"Could not retrieve requested block ${PrettyPrinter.buildString(hash)}. " +
               "Removing the request from the requested blocks list. Casper will have to re-request the block."
