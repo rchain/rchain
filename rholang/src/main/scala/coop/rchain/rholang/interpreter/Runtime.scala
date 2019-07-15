@@ -7,9 +7,10 @@ import cats.effect.concurrent.Ref
 import cats.effect.{Concurrent, ContextShift, Sync}
 import cats.implicits._
 import cats.mtl.FunctorTell
+import cats.temp.par
 import com.google.protobuf.ByteString
 import coop.rchain.crypto.hash.Blake2b512Random
-import coop.rchain.metrics.Metrics
+import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.models.Expr.ExprInstance.GString
 import coop.rchain.models.TaggedContinuation.TaggedCont.ScalaBodyRef
 import coop.rchain.models.Var.VarInstance.FreeVar
@@ -19,9 +20,7 @@ import coop.rchain.rholang.interpreter.Runtime._
 import coop.rchain.rholang.interpreter.accounting.{noOpCostLog, _}
 import coop.rchain.rholang.interpreter.errors.SetupError
 import coop.rchain.rholang.interpreter.storage.implicits._
-import coop.rchain.rspace._
-import coop.rchain.rspace.history.Branch
-import coop.rchain.rspace.RSpace
+import coop.rchain.rspace.{RSpace, _}
 import coop.rchain.rspace.pure.PureRSpace
 import coop.rchain.shared.Log
 
@@ -145,7 +144,7 @@ object Runtime {
     val DEPLOYER_ID_OPS: Par    = byteName(16)
   }
 
-  private def introduceSystemProcesses[F[_]: Sync: _cost](
+  private def introduceSystemProcesses[F[_]: Sync: _cost: Span](
       space: RhoISpace[F],
       replaySpace: RhoISpace[F],
       processes: List[(Name, Arity, Remainder, BodyRef)]
@@ -168,7 +167,7 @@ object Runtime {
     }.sequence
 
   object SystemProcess {
-    final case class Context[F[_]: Concurrent](
+    final case class Context[F[_]: Concurrent: Span](
         space: RhoISpace[F],
         dispatcher: RhoDispatch[F],
         registry: Registry[F],
@@ -279,24 +278,36 @@ object Runtime {
     )
   )
 
-  def createWithEmptyCost[F[_]: ContextShift: Concurrent: Log: Metrics, M[_]](
+  def createWithEmptyCost[F[_]: ContextShift: Concurrent: Log: Metrics: Span: par.Par](
       dataDir: Path,
       mapSize: Long,
       extraSystemProcesses: Seq[SystemProcess.Definition[F]] = Seq.empty
   )(
       implicit
+      executionContext: ExecutionContext
+  ): F[Runtime[F]] = {
+    implicit val P = par.Par[F].parallel
+    createWithEmptyCost_(dataDir, mapSize, extraSystemProcesses)
+  }
+
+  private def createWithEmptyCost_[F[_]: ContextShift: Concurrent: Log: Metrics: Span, M[_]](
+      dataDir: Path,
+      mapSize: Long,
+      extraSystemProcesses: Seq[SystemProcess.Definition[F]]
+  )(
+      implicit
       P: Parallel[F, M],
       executionContext: ExecutionContext
   ): F[Runtime[F]] =
-    (for {
+    for {
       cost <- CostAccounting.emptyCost[F]
       runtime <- {
         implicit val c = cost
         create(dataDir, mapSize, extraSystemProcesses)
       }
-    } yield (runtime))
+    } yield runtime
 
-  def create[F[_]: ContextShift: Concurrent: Log: Metrics, M[_]](
+  def create[F[_]: ContextShift: Concurrent: Log: Metrics: Span, M[_]](
       dataDir: Path,
       mapSize: Long,
       extraSystemProcesses: Seq[SystemProcess.Definition[F]] = Seq.empty
@@ -417,7 +428,8 @@ object Runtime {
   }
 
   def injectEmptyRegistryRoot[F[_]](space: RhoISpace[F], replaySpace: RhoReplayISpace[F])(
-      implicit F: Concurrent[F]
+      implicit F: Concurrent[F],
+      spanF: Span[F]
   ): F[Unit] = {
     // This random value stays dead in the tuplespace, so we can have some fun.
     // This is from Jeremy Bentham's "Defence of Usury"
@@ -434,13 +446,13 @@ object Runtime {
                       ListParWithRandom(Seq(Registry.emptyMap), rand),
                       false,
                       0
-                    )(matchListPar(F, cost))
+                    )(matchListPar(F, spanF, cost))
       replayResult <- replaySpace.produce(
                        Registry.registryRoot,
                        ListParWithRandom(Seq(Registry.emptyMap), rand),
                        false,
                        0
-                     )(matchListPar(F, cost))
+                     )(matchListPar(F, spanF, cost))
       _ <- spaceResult match {
             case None =>
               replayResult match {
@@ -454,7 +466,7 @@ object Runtime {
     } yield ()
   }
 
-  def setupRSpace[F[_]: Concurrent: ContextShift: Log: Metrics](
+  def setupRSpace[F[_]: Concurrent: ContextShift: Log: Metrics: Span](
       dataDir: Path,
       mapSize: Long
   )(implicit scheduler: ExecutionContext): F[(RhoISpace[F], RhoReplayISpace[F])] = {

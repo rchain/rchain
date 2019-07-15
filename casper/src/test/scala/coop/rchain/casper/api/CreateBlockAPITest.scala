@@ -13,10 +13,10 @@ import coop.rchain.casper.protocol._
 import coop.rchain.casper.util._
 import coop.rchain.casper.util.rholang._
 import coop.rchain.catscontrib.TaskContrib._
+import coop.rchain.metrics.NoopSpan
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.Validator.Validator
 import coop.rchain.p2p.EffectsTestInstances._
-import coop.rchain.rholang.interpreter.accounting
 import coop.rchain.shared.Time
 import monix.eval.Task
 import monix.execution.Scheduler
@@ -25,14 +25,16 @@ import org.scalatest.{FlatSpec, Matchers}
 import scala.concurrent.duration._
 
 class CreateBlockAPITest extends FlatSpec with Matchers {
+  import GenesisBuilder._
   import HashSetCasperTestNode.Effect
-  import MultiParentCasperTestUtil._
 
-  val genesis = buildGenesis(buildGenesisParameters())
+  val genesis                            = buildGenesis()
+  implicit val spanEff: NoopSpan[Effect] = NoopSpan[Effect]
 
   "createBlock" should "not allow simultaneous calls" in {
     implicit val logEff    = new LogStub[Effect]
     implicit val scheduler = Scheduler.fixedPool("three-threads", 3)
+    implicit val spanEff   = NoopSpan[Effect]
     implicit val time = new Time[Task] {
       private val timer                               = Task.timer
       def currentMillis: Task[Long]                   = timer.clock.realTime(MILLISECONDS)
@@ -44,7 +46,7 @@ class CreateBlockAPITest extends FlatSpec with Matchers {
       val deploys = List(
         "@0!(0) | for(_ <- @0){ @1!(1) }",
         "for(_ <- @1){ @2!(2) }"
-      ).map(ConstructDeploy.sourceDeploy(_, System.currentTimeMillis(), accounting.MAX_VALUE))
+      ).map(ConstructDeploy.sourceDeploy(_, timestamp = System.currentTimeMillis()))
 
       def createBlock(deploy: DeployData, blockApiLock: Semaphore[Effect])(
           implicit casperRef: MultiParentCasperRef[Effect]

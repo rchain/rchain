@@ -2,15 +2,21 @@ package coop.rchain.metrics
 
 import cats._
 import cats.implicits._
+import coop.rchain.metrics.Metrics.Source
 
 trait Span[F[_]] {
   def mark(name: String): F[Unit]
-  def close(): F[Unit]
+  def trace[A](source: Metrics.Source)(block: F[A]): F[A]
+}
+
+object Span {
+  def apply[F[_]](implicit S: Span[F]) = S
+  def noop[F[_]: Applicative]: Span[F] = NoopSpan[F]
 }
 
 final case class NoopSpan[F[_]: Applicative]() extends Span[F] {
-  def mark(name: String): F[Unit] = ().pure[F]
-  def close(): F[Unit]            = ().pure[F]
+  override def mark(name: String): F[Unit]                 = ().pure[F]
+  override def trace[A](source: Source)(block: F[A]): F[A] = block
 }
 
 trait Metrics[F[_]] {
@@ -32,8 +38,6 @@ trait Metrics[F[_]] {
   def record(name: String, value: Long, count: Long = 1)(implicit ev: Metrics.Source): F[Unit]
 
   def timer[A](name: String, block: F[A])(implicit ev: Metrics.Source): F[A]
-
-  def span(source: Metrics.Source): F[Span[F]]
 }
 
 object Metrics extends MetricsInstances {
@@ -51,7 +55,6 @@ object Metrics extends MetricsInstances {
     def record(name: String, value: Long, count: Long = 1)(implicit ev: Metrics.Source): F[Unit] =
       ().pure[F]
     def timer[A](name: String, block: F[A])(implicit ev: Metrics.Source): F[A] = block
-    def span(source: Metrics.Source): F[Span[F]]                               = Applicative[F].pure(NoopSpan[F]())
   }
 
   import shapeless.tag.@@

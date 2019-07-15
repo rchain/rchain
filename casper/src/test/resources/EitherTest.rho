@@ -4,13 +4,13 @@ new
   rl(`rho:registry:lookup`), EitherCh, RhoSpecCh,
   stdlog(`rho:io:stdlog`),
   double, divide, divide10By, divide8By,
-  setup, test_map, test_flatmap, test_compose
+  test_map, test_flatmap, test_compose
 in {
 
   stdlog!("info", "Starting EitherTest") |
   rl!(`rho:id:zphjgsfy13h1k85isc8rtwtgt3t9zzt5pjd5ihykfmyapfc4wt3x5h`, *RhoSpecCh) |
   for(@(_, RhoSpec) <- RhoSpecCh) {
-    @RhoSpec!("testSuite", *setup,
+    @RhoSpec!("testSuite",
       [
         ("map should transform Right and preserve Left", *test_map),
         ("flatMap should transform Right and preserve Left", *test_flatmap),
@@ -28,13 +28,6 @@ in {
 
   rl!(`rho:lang:either`, *EitherCh) |
   for(@(_, Either) <- EitherCh) {
-
-    stdlog!("info", "Either & RhoSpec ready") |
-
-    contract setup(returnCh) = {
-      returnCh!([])
-    } |
-
     contract test_map(rhoSpec, _, ackCh) = {
       new ch1, ch2 in {
         @Either!("map", (false, "message"), *double, *ch1) |

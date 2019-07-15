@@ -32,7 +32,7 @@ match (
             ("If the deployer is different then the lockbox returns Nil", *test_different_deployer)
           ]) |
 
-        contract setup(returnCh) = {
+        contract setup(_, returnCh) = {
           new privateCh in {
             setDeployData ! ("userId", alicePubKey, *privateCh) |
             for (_ <- privateCh) {

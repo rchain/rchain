@@ -32,8 +32,8 @@ class GrpcTransportSpec extends WordSpecLike with Matchers with Inside {
     PeerNode.from(id, "host", 0, 0)
   }
 
-  private val noResponse: TLResponse =
-    TLResponse(TLResponse.Payload.NoResponse(NoResponse()))
+  private val ack: TLResponse =
+    TLResponse(TLResponse.Payload.Ack(Ack()))
 
   private def internalServerError(msg: String): TLResponse =
     TLResponse(
@@ -56,10 +56,10 @@ class GrpcTransportSpec extends WordSpecLike with Matchers with Inside {
       sendMessages += request
       response
     }
-    def stream(input: Observable[Chunk]): Task[ChunkResponse] =
+    def stream(input: Observable[Chunk]): Task[TLResponse] =
       input.toListL.map { l =>
         streamMessages += l
-        ChunkResponse()
+        ack
       }
 
     val sendMessages: mutable.MutableList[TLRequest]     = mutable.MutableList.empty[TLRequest]
@@ -69,7 +69,7 @@ class GrpcTransportSpec extends WordSpecLike with Matchers with Inside {
   "sending a message to a remote peer" when {
     "everything is fine" should {
       "send and receive Unit" in {
-        val response   = noResponse
+        val response   = ack
         val stub       = new TestTransportLayer(Task.now(response))
         val result     = GrpcTransport.send(peerRemote, msg).run(stub).attempt.runSyncUnsafe()
         val unit: Unit = ()

@@ -3,32 +3,30 @@ package coop.rchain.node
 import java.nio.file.{Files, Path}
 
 import scala.concurrent.duration._
-
 import cats._
-import cats.data._
 import cats.effect._
 import cats.effect.concurrent.Semaphore
 import cats.implicits._
-
 import coop.rchain.blockstorage._
 import coop.rchain.casper._
-import coop.rchain.casper.engine._, EngineCell._, CasperLaunch.CasperInit
+import coop.rchain.casper.engine._
+import EngineCell._
+import CasperLaunch.CasperInit
+import cats.mtl.{ApplicativeLocal, DefaultApplicativeLocal}
 import coop.rchain.blockstorage.util.io.IOError
 import coop.rchain.casper.MultiParentCasperRef.MultiParentCasperRef
 import coop.rchain.casper.util.comm.CasperPacketHandler
 import coop.rchain.casper.util.rholang.RuntimeManager
-import coop.rchain.catscontrib._
 import coop.rchain.catscontrib.Catscontrib._
 import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.catscontrib.ski._
 import coop.rchain.comm._
-
 import coop.rchain.comm.discovery._
 import coop.rchain.comm.rp._
 import coop.rchain.comm.rp.Connect.{ConnectionsCell, RPConfAsk, RPConfState}
 import coop.rchain.comm.transport._
 import coop.rchain.grpc.Server
-import coop.rchain.metrics.Metrics
+import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.node.configuration.Configuration
 import coop.rchain.node.diagnostics._
 import coop.rchain.p2p.effects._
@@ -36,11 +34,10 @@ import coop.rchain.rholang.interpreter.Runtime
 import coop.rchain.rspace.Context
 import coop.rchain.shared._
 import coop.rchain.shared.PathOps._
-
 import kamon._
 import kamon.system.SystemMetrics
 import kamon.zipkin.ZipkinReporter
-import monix.eval.Task
+import monix.eval.{Task, TaskLocal}
 import monix.execution.Scheduler
 import org.http4s.server.blaze._
 
@@ -70,8 +67,6 @@ class NodeRuntime private[node] (
 
   implicit private val logSource: LogSource = LogSource(this.getClass)
 
-  import ApplicativeError_._
-
   /** Configuration */
   private val blockstorePath    = conf.server.dataDir.resolve("blockstore")
   private val dagStoragePath    = conf.server.dataDir.resolve("dagstorage")
@@ -98,7 +93,8 @@ class NodeRuntime private[node] (
       connectionsCell: ConnectionsCell[Task],
       concurrent: Concurrent[Task],
       metrics: Metrics[Task],
-      rPConfAsk: RPConfAsk[Task]
+      rPConfAsk: RPConfAsk[Task],
+      span: Span[Task]
   ): Task[Servers] = {
     implicit val s: Scheduler = scheduler
     for {
@@ -128,14 +124,16 @@ class NodeRuntime private[node] (
                             .acquireExternalServer[Task](
                               conf.grpcServer.portExternal,
                               grpcScheduler,
-                              blockApiLock
+                              blockApiLock,
+                              conf.kamon.zipkin
                             )
       internalApiServer <- api
                             .acquireInternalServer(
                               conf.grpcServer.portInternal,
                               runtime,
                               grpcScheduler,
-                              blockApiLock
+                              blockApiLock,
+                              conf.kamon.zipkin
                             )
 
       prometheusReporter = new NewPrometheusReporter()
@@ -192,7 +190,7 @@ class NodeRuntime private[node] (
       _ <- log.info("Bringing BlockStore down ...")
       _ <- blockStore.close()
       _ <- log.info("Goodbye.")
-    } yield ()).unsafeRunSync(scheduler)
+    } yield ()).unsafeRunSyncTracing(conf.kamon.zipkin)(scheduler)
 
   def addShutdownHook(servers: Servers, runtime: Runtime[Task], casperRuntime: Runtime[Task])(
       implicit blockStore: BlockStore[Task],
@@ -212,6 +210,7 @@ class NodeRuntime private[node] (
       rpConfAsk: RPConfAsk[Task],
       peerNodeAsk: PeerNodeAsk[Task],
       metrics: Metrics[Task],
+      span: Span[Task],
       transport: TransportLayer[Task],
       kademliaStore: KademliaStore[Task],
       nodeDiscovery: NodeDiscovery[Task],
@@ -314,6 +313,27 @@ class NodeRuntime private[node] (
         }
       } *> exit0.as(Right(()))
 
+  private def localScope(source: Metrics.Source): Task[ApplicativeLocal[Task, Trace]] =
+    TaskLocal[Trace](Trace.source(source))
+      .map { ls =>
+        new DefaultApplicativeLocal[Task, Trace] {
+          val tl: TaskLocal[Trace] = ls
+
+          override def local[A](f: Trace => Trace)(fa: Task[A]): Task[A] =
+            tl.read.flatMap(t => tl.bind(f(t))(fa))
+
+          override val applicative: Applicative[Task] = Applicative[Task]
+
+          override def ask: Task[Trace] = tl.read
+        }
+      }
+
+  private def setupSpan(enabled: Boolean, networkId: String, host: String): Task[Span[Task]] =
+    if (!enabled) Task.now(Span.noop[Task])
+    else
+      localScope(Metrics.BaseSource)
+        .map(implicit ls => diagnostics.effects.span[Task](networkId, host))
+
   private val rpClearConnConf = ClearConnectionsConf(
     numOfConnectionsPinged = 10
   ) // TODO read from conf
@@ -359,7 +379,8 @@ class NodeRuntime private[node] (
     rpConfAsk            = effects.rpConfAsk(rpConfState)
     peerNodeAsk          = effects.peerNodeAsk(rpConfState)
     rpConnections        <- effects.rpConnections
-    metrics              = diagnostics.effects.metrics[Task](conf.server.networkId, local.endpoint.host)
+    metrics              = diagnostics.effects.metrics[Task]
+    span                 <- setupSpan(conf.kamon.zipkin, conf.server.networkId, local.endpoint.host)
     time                 = effects.time
     timerTask            = Task.timer
     multiParentCasperRef <- MultiParentCasperRef.of[Task]
@@ -433,7 +454,8 @@ class NodeRuntime private[node] (
       .cliqueOracle[Task](
         Monad[Task],
         log,
-        metrics
+        metrics,
+        span
       )
     lastFinalizedBlockCalculator = LastFinalizedBlockCalculator[Task](
       conf.server.faultToleranceThreshold
@@ -448,17 +470,22 @@ class NodeRuntime private[node] (
     runtime <- {
       implicit val s                = rspaceScheduler
       implicit val m: Metrics[Task] = metrics
+      implicit val sp: Span[Task]   = span
       Runtime
-        .createWithEmptyCost[Task, Task.Par](storagePath, storageSize, Seq.empty)
+        .createWithEmptyCost[Task](storagePath, storageSize, Seq.empty)
     }
-    _ <- Runtime
-          .injectEmptyRegistryRoot[Task](runtime.space, runtime.replaySpace)
+    _ <- {
+      implicit val sp: Span[Task] = span
+      Runtime
+        .injectEmptyRegistryRoot[Task](runtime.space, runtime.replaySpace)
+    }
 
     casperRuntime <- {
       implicit val s                = rspaceScheduler
       implicit val m: Metrics[Task] = metrics
+      implicit val sp: Span[Task]   = span
       Runtime
-        .createWithEmptyCost[Task, Task.Par](
+        .createWithEmptyCost[Task](
           casperStoragePath,
           storageSize,
           Seq.empty
@@ -467,6 +494,7 @@ class NodeRuntime private[node] (
     }
     runtimeManager <- {
       implicit val m: Metrics[Task] = metrics
+      implicit val sp: Span[Task]   = span
       RuntimeManager.fromRuntime[Task](casperRuntime)
     }
     engineCell   <- EngineCell.init[Task]
@@ -474,11 +502,13 @@ class NodeRuntime private[node] (
     raiseIOError = IOError.raiseIOErrorThroughSync[Task]
     casperInit = new CasperInit[Task](
       conf.casper,
-      runtimeManager
+      runtimeManager,
+      conf.kamon.zipkin
     )
     _ <- CasperLaunch[Task](casperInit, identity)(
           lab,
           metrics,
+          span,
           blockStore,
           rpConnections,
           nodeDiscovery,
@@ -510,6 +540,7 @@ class NodeRuntime private[node] (
       rpConfAsk,
       peerNodeAsk,
       metrics,
+      span,
       transport,
       kademliaStore,
       nodeDiscovery,

@@ -5,9 +5,9 @@ import scala.math.Ordering
 
 object ListContrib {
   def sortBy[A, K: Monoid](list: List[A], map: collection.Map[A, K])(
-      implicit ord: Ordering[K]
+      implicit ord: Ordering[(K, A)]
   ): List[A] =
-    list.sortBy(map.getOrElse(_, Monoid[K].empty))(ord)
+    list.sortBy(e => (map.getOrElse(e, Monoid[K].empty), e))(ord)
 
   // From https://hygt.github.io/2018/08/05/Cats-findM-collectFirstM.html
   def findM[G[_], A](list: List[A], p: A => G[Boolean])(implicit G: Monad[G]): G[Option[A]] =

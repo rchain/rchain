@@ -18,7 +18,6 @@ import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.hash.Blake2b256
 import coop.rchain.crypto.signatures.Secp256k1
 import coop.rchain.p2p.EffectsTestInstances.LogicalTime
-import coop.rchain.rholang.interpreter.accounting
 import monix.eval.Task
 import monix.execution.Scheduler
 import monix.execution.Scheduler.Implicits.global
@@ -28,12 +27,12 @@ import scala.collection.immutable
 
 class MultiParentCasperAddBlockSpec extends FlatSpec with Matchers with Inspectors {
 
-  import MultiParentCasperTestUtil._
   import RSpaceUtil._
+  import coop.rchain.casper.util.GenesisBuilder._
 
   implicit val timeEff = new LogicalTime[Effect]
 
-  val genesis = buildGenesis(buildGenesisParameters())
+  val genesis = buildGenesis()
 
   //put a new casper instance at the start of each
   //test since we cannot reset it
@@ -142,13 +141,11 @@ class MultiParentCasperAddBlockSpec extends FlatSpec with Matchers with Inspecto
   }
 
   it should "not request invalid blocks from peers" in effectTest {
-    val List(data0, data1) =
-      (0 to 1)
-        .map(i => ConstructDeploy.sourceDeploy(s"@$i!($i)", i.toLong, accounting.MAX_VALUE))
-        .toList
     HashSetCasperTestNode.networkEff(genesis, networkSize = 2).use { nodes =>
       val List(node0, node1) = nodes.toList
       for {
+        data0 <- ConstructDeploy.sourceDeployNowF("@0!(0)")
+        data1 <- ConstructDeploy.sourceDeployNowF("@1!(1)")
         unsignedBlock <- node0
                           .createBlock(data0)
                           .map(_.copy(sigAlgorithm = "invalid", sig = ByteString.EMPTY))
@@ -190,9 +187,7 @@ class MultiParentCasperAddBlockSpec extends FlatSpec with Matchers with Inspecto
         _           <- nodes(1).receive()
         result      <- nodes(1).casperEff.contains(signedBlock) shouldBeF true
         _ <- nodes.toList.traverse_[Effect, Assertion] { node =>
-              validateBlockStore(node) { blockStore =>
-                blockStore.get(signedBlock.blockHash) shouldBeF Some(signedBlock)
-              }(nodes(0).metricEff, nodes(0).logEff)
+              node.blockStore.get(signedBlock.blockHash) shouldBeF Some(signedBlock)
             }
       } yield result
     }
@@ -207,9 +202,7 @@ class MultiParentCasperAddBlockSpec extends FlatSpec with Matchers with Inspecto
         _                 = nodes(1).logEff.infos.count(_ startsWith "Added") should be(1)
         result            = nodes(1).logEff.warns.count(_ startsWith "Recording invalid block") should be(0)
         _ <- nodes.toList.traverse_[Effect, Assertion] { node =>
-              validateBlockStore(node) { blockStore =>
-                blockStore.get(signedBlock1Prime.blockHash) shouldBeF Some(signedBlock1Prime)
-              }(nodes(0).metricEff, nodes(0).logEff)
+              node.blockStore.get(signedBlock1Prime.blockHash) shouldBeF Some(signedBlock1Prime)
             }
       } yield result
     }
@@ -251,13 +244,11 @@ class MultiParentCasperAddBlockSpec extends FlatSpec with Matchers with Inspecto
         //   1
         // )
         _ = nodes.toList.traverse_[Effect, Assertion] { node =>
-          validateBlockStore(node) { blockStore =>
-            for {
-              _      <- blockStore.get(signedBlock1.blockHash) shouldBeF Some(signedBlock1)
-              _      <- blockStore.get(signedBlock2.blockHash) shouldBeF Some(signedBlock2)
-              result <- blockStore.get(signedBlock3.blockHash) shouldBeF Some(signedBlock3)
-            } yield result
-          }(nodes(0).metricEff, nodes(0).logEff)
+          for {
+            _      <- node.blockStore.get(signedBlock1.blockHash) shouldBeF Some(signedBlock1)
+            _      <- node.blockStore.get(signedBlock2.blockHash) shouldBeF Some(signedBlock2)
+            result <- node.blockStore.get(signedBlock3.blockHash) shouldBeF Some(signedBlock3)
+          } yield result
         }
       } yield result
     }
@@ -280,12 +271,8 @@ class MultiParentCasperAddBlockSpec extends FlatSpec with Matchers with Inspecto
         _ <- nodes(1).casperEff.contains(signedBlock1) shouldBeF true
         result <- nodes(1).casperEff
                    .contains(signedBlock1Prime) shouldBeF false // we still add the equivocation pair
-        _ <- validateBlockStore(nodes(1)) { blockStore =>
-              for {
-                _      <- blockStore.get(signedBlock1.blockHash) shouldBeF Some(signedBlock1)
-                result <- blockStore.get(signedBlock1Prime.blockHash) shouldBeF None
-              } yield result
-            }(nodes(0).metricEff, nodes(0).logEff)
+        _ <- nodes(1).blockStore.get(signedBlock1.blockHash) shouldBeF Some(signedBlock1)
+        _ <- nodes(1).blockStore.get(signedBlock1Prime.blockHash) shouldBeF None
       } yield result
     }
   }
@@ -345,29 +332,17 @@ class MultiParentCasperAddBlockSpec extends FlatSpec with Matchers with Inspecto
 
         _ <- nodes(1).casperEff
               .normalizedInitialFault(ProtoUtil.weightMap(genesis.genesisBlock)) shouldBeF 1f / (1f + 3f + 5f + 7f)
-        _ <- validateBlockStore(nodes(0)) { blockStore =>
-              for {
-                _ <- blockStore.get(signedBlock1.blockHash) shouldBeF None
-                result <- blockStore.get(signedBlock1Prime.blockHash) shouldBeF Some(
-                           signedBlock1Prime
-                         )
-              } yield result
-            }(nodes(0).metricEff, nodes(0).logEff)
-        _ <- validateBlockStore(nodes(1)) { blockStore =>
-              for {
-                _      <- blockStore.get(signedBlock2.blockHash) shouldBeF Some(signedBlock2)
-                result <- blockStore.get(signedBlock4.blockHash) shouldBeF Some(signedBlock4)
-              } yield result
-            }(nodes(1).metricEff, nodes(1).logEff)
-        result <- validateBlockStore(nodes(2)) { blockStore =>
-                   for {
-                     _ <- blockStore.get(signedBlock3.blockHash) shouldBeF Some(signedBlock3)
-                     result <- blockStore.get(signedBlock1Prime.blockHash) shouldBeF Some(
-                                signedBlock1Prime
-                              )
-                   } yield result
-                 }(nodes(2).metricEff, nodes(2).logEff)
-      } yield result
+        _ <- nodes(0).blockStore.get(signedBlock1.blockHash) shouldBeF None
+        _ <- nodes(0).blockStore.get(signedBlock1Prime.blockHash) shouldBeF Some(
+              signedBlock1Prime
+            )
+        _ <- nodes(1).blockStore.get(signedBlock2.blockHash) shouldBeF Some(signedBlock2)
+        _ <- nodes(1).blockStore.get(signedBlock4.blockHash) shouldBeF Some(signedBlock4)
+        _ <- nodes(2).blockStore.get(signedBlock3.blockHash) shouldBeF Some(signedBlock3)
+        _ <- nodes(2).blockStore.get(signedBlock1Prime.blockHash) shouldBeF Some(
+              signedBlock1Prime
+            )
+      } yield ()
     }
   }
 
@@ -413,8 +388,8 @@ class MultiParentCasperAddBlockSpec extends FlatSpec with Matchers with Inspecto
     val validatorKeyPairs = (1 to 5).map(_ => Secp256k1.newKeyPair)
     val (_, validatorPks) = validatorKeyPairs.unzip
 
-    def deployment(i: Int, ts: Long): DeployData =
-      ConstructDeploy.sourceDeploy(s"new x in { x!(0) }", ts, accounting.MAX_VALUE)
+    def deployment(ts: Long) =
+      ConstructDeploy.sourceDeploy(s"new x in { x!(0) }", timestamp = ts)
 
     def deploy(
         node: HashSetCasperTestNode[Effect],
@@ -456,17 +431,17 @@ class MultiParentCasperAddBlockSpec extends FlatSpec with Matchers with Inspecto
         val v2 = nodes(1)
         val v3 = nodes(2)
         for {
-          _    <- deploy(v1, deployment(0, 1)) >> create(v1) >>= (v1c1 => add(v1, v1c1)) //V1#1
-          v2c1 <- deploy(v2, deployment(0, 2)) >> create(v2) //V2#1
+          _    <- deploy(v1, deployment(1)) >> create(v1) >>= (v1c1 => add(v1, v1c1)) //V1#1
+          v2c1 <- deploy(v2, deployment(2)) >> create(v2) //V2#1
           _    <- v2.receive()
           _    <- v3.receive()
-          _    <- deploy(v1, deployment(0, 4)) >> create(v1) >>= (v1c2 => add(v1, v1c2)) //V1#2
-          v3c2 <- deploy(v3, deployment(0, 5)) >> create(v3) //V3#2
+          _    <- deploy(v1, deployment(4)) >> create(v1) >>= (v1c2 => add(v1, v1c2)) //V1#2
+          v3c2 <- deploy(v3, deployment(5)) >> create(v3) //V3#2
           _    <- v3.receive()
           _    <- add(v3, v3c2) //V3#2
           _    <- add(v2, v2c1) //V2#1
           _    <- v3.receive()
-          r    <- deploy(v3, deployment(0, 6)) >> create(v3) >>= (b => add(v3, b))
+          r    <- deploy(v3, deployment(6)) >> create(v3) >>= (b => add(v3, b))
           _    = r shouldBe Right(Valid)
           _    = v3.logEff.warns shouldBe empty
         } yield ()

@@ -4,6 +4,7 @@ import cats.effect.Sync
 import cats.implicits._
 import cats.mtl.implicits._
 import coop.rchain.catscontrib.mtl.implicits._
+import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.models.Var.VarInstance.FreeVar
 import coop.rchain.models._
 import coop.rchain.models.rholang.implicits._
@@ -26,7 +27,7 @@ object implicits {
       }
     }
 
-  def matchListPar[F[_]: Sync](
+  def matchListPar[F[_]: Sync: Span](
       implicit
       cost: _cost[F]
   ): StorageMatch[F, BindPattern, ListParWithRandom, ListParWithRandom] =
@@ -36,9 +37,10 @@ object implicits {
           data: ListParWithRandom
       ): F[Option[ListParWithRandom]] = {
         type R[A] = MatcherMonadT[F, A]
-        implicit val _                 = matcherMonadCostLog[F]()
+        implicit val c                 = matcherMonadCostLog[F]()
         implicit val matcherMonadError = implicitly[Sync[R]]
         for {
+          _ <- Span[F].mark("storage-match-get")
           matchResult <- runFirst[F, Seq[Par]](
                           SpatialMatcher
                             .foldMatch[R, Par, Par](
@@ -47,6 +49,7 @@ object implicits {
                               pattern.remainder
                             )
                         )
+          _ <- Span[F].mark("post-storage-match-get")
         } yield {
           matchResult.map {
             case (freeMap, caughtRem) =>

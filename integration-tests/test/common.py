@@ -9,6 +9,8 @@ from typing import (
     TYPE_CHECKING,
 )
 import dataclasses
+import ecdsa
+from ecdsa.util import sigencode_der_canonize
 
 from docker.client import DockerClient
 
@@ -22,6 +24,10 @@ class KeyPair:
     private_key: str
     public_key: str
 
+
+    def sign_block_hash(self, block_hash: bytes) -> bytes:
+        sign_key = ecdsa.SigningKey.from_string(bytes.fromhex(self.private_key), ecdsa.SECP256k1)
+        return sign_key.sign_digest(block_hash, sigencode=sigencode_der_canonize)
 
 @dataclasses.dataclass
 class CommandLineOptions:

@@ -9,18 +9,17 @@ import cats.syntax.functor._
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage._
 import coop.rchain.casper.protocol.BlockMessage
-
 import coop.rchain.catscontrib.TaskContrib.TaskOps
 import coop.rchain.metrics.Metrics
 import coop.rchain.metrics.Metrics.MetricsNOP
 import coop.rchain.models.Validator.Validator
 import coop.rchain.rspace.Context
 import coop.rchain.shared.Log
-import org.scalatest.{BeforeAndAfter, Suite}
 import coop.rchain.shared.PathOps.RichPath
 import monix.eval.Task
 import monix.execution.Scheduler
 import org.lmdbjava.{Env, EnvFlags}
+import org.scalatest.{BeforeAndAfter, Suite}
 
 trait BlockDagStorageFixture extends BeforeAndAfter { self: Suite =>
   val scheduler = Scheduler.fixedPool("block-dag-storage-fixture-scheduler", 4)

@@ -2,14 +2,14 @@ package coop.rchain.rholang.interpreter
 
 import cats.Parallel
 import cats.effect.Sync
-import cats.effect.concurrent.Ref
 import cats.mtl.FunctorTell
 import coop.rchain.crypto.hash.Blake2b512Random
+import coop.rchain.metrics.Span
 import coop.rchain.models.TaggedContinuation.TaggedCont.{Empty, ParBody, ScalaBodyRef}
 import coop.rchain.models._
 import coop.rchain.rholang.interpreter.Runtime.{RhoISpace, RhoPureSpace}
 import coop.rchain.rholang.interpreter.accounting._
-import coop.rchain.rholang.interpreter.storage.{ChargingRSpace, Tuplespace}
+import coop.rchain.rholang.interpreter.storage.ChargingRSpace
 
 trait Dispatch[M[_], A, K] {
   def dispatch(continuation: K, dataList: Seq[A], sequenceNumber: Int): M[Unit]
@@ -62,16 +62,15 @@ object RholangAndScalaDispatcher {
       cost: _cost[M],
       parallel: Parallel[M, F],
       s: Sync[M],
-      ft: FunctorTell[M, Throwable]
+      ft: FunctorTell[M, Throwable],
+      spanM: Span[M]
   ): (Dispatch[M, ListParWithRandom, TaggedContinuation], ChargingReducer[M], Registry[M]) = {
 
     implicit lazy val dispatcher: Dispatch[M, ListParWithRandom, TaggedContinuation] =
       new RholangAndScalaDispatcher(dispatchTable)
 
     implicit lazy val reducer: Reduce[M] =
-      new DebruijnInterpreter[M, F](tuplespaceAlg, urnMap)
-
-    lazy val tuplespaceAlg = Tuplespace.rspaceTuplespace(chargingRSpace, dispatcher)
+      new DebruijnInterpreter[M, F](chargingRSpace, dispatcher, urnMap)
 
     lazy val chargingRSpace: RhoPureSpace[M] =
       ChargingRSpace.pureRSpace(tuplespace)

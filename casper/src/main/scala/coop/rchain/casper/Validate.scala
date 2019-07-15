@@ -183,63 +183,62 @@ object Validate {
   /*
    * TODO: Double check ordering of validity checks
    */
-  def blockSummary[F[_]: Sync: Log: Time: BlockStore: Metrics](
+  def blockSummary[F[_]: Sync: Log: Time: BlockStore: Metrics: Span](
       block: BlockMessage,
       genesis: BlockMessage,
       dag: BlockDagRepresentation[F],
       shardId: String,
-      expirationThreshold: Int,
-      span: Span[F]
+      expirationThreshold: Int
   ): F[Either[BlockStatus, ValidBlock]] =
     for {
-      _                 <- span.mark("before-block-hash-validation")
+      _                 <- Span[F].mark("before-block-hash-validation")
       blockHashStatus   <- Validate.blockHash[F](block)
-      _                 <- span.mark("before-deploy-count-validation")
+      _                 <- Span[F].mark("before-deploy-count-validation")
       deployCountStatus <- blockHashStatus.traverse(_ => Validate.deployCount[F](block))
-      _                 <- span.mark("before-missing-blocks-validation")
+      _                 <- Span[F].mark("before-missing-blocks-validation")
       missingBlockStatus <- deployCountStatus.joinRight.traverse(
                              _ => Validate.missingBlocks[F](block, dag)
                            )
-      _ <- span.mark("before-timestamp-validation")
+      _ <- Span[F].mark("before-timestamp-validation")
       timestampStatus <- missingBlockStatus.joinRight.traverse(
                           _ => Validate.timestamp[F](block, dag)
                         )
-      _ <- span.mark("before-repeat-deploy-validation")
+      _ <- Span[F].mark("before-repeat-deploy-validation")
       repeatedDeployStatus <- timestampStatus.joinRight.traverse(
-                               _ => Validate.repeatDeploy[F](block, dag, expirationThreshold, span)
+                               _ => Validate.repeatDeploy[F](block, dag, expirationThreshold)
                              )
-      _ <- span.mark("before-block-number-validation")
+      _ <- Span[F].mark("before-block-number-validation")
       blockNumberStatus <- repeatedDeployStatus.joinRight.traverse(
                             _ => Validate.blockNumber[F](block, dag)
                           )
-      _ <- span.mark("before-future-transaction-validation")
+      _ <- Span[F].mark("before-future-transaction-validation")
       futureTransactionStatus <- blockNumberStatus.joinRight.traverse(
                                   _ => Validate.futureTransaction[F](block)
                                 )
-      _ <- span.mark("before-transaction-expired-validation")
+      _ <- Span[F].mark("before-transaction-expired-validation")
       transactionExpirationStatus <- futureTransactionStatus.joinRight.traverse(
                                       _ =>
                                         Validate
                                           .transactionExpiration[F](block, expirationThreshold)
                                     )
-      _ <- span.mark("before-justification-follows-validation")
+      _ <- Span[F].mark("before-justification-follows-validation")
       followsStatus <- transactionExpirationStatus.joinRight.traverse(
                         _ => Validate.justificationFollows[F](block, genesis, dag)
                       )
-      _ <- span.mark("before-parents-validation")
+      _ <- Span[F].mark("before-parents-validation")
       parentsStatus <- followsStatus.joinRight.traverse(
                         _ => Validate.parents[F](block, genesis, dag)
                       )
-      _ <- span.mark("before-sequence-number-validation")
+      _ <- Span[F].mark("before-sequence-number-validation")
       sequenceNumberStatus <- parentsStatus.joinRight.traverse(
                                _ => Validate.sequenceNumber[F](block, dag)
                              )
-      _ <- span.mark("before-justification-regression-validation")
+      _ <- Span[F].mark("before-justification-regression-validation")
       justificationRegressionsStatus <- sequenceNumberStatus.joinRight.traverse(
                                          _ =>
                                            Validate.justificationRegressions[F](block, genesis, dag)
                                        )
-      _ <- span.mark("before-shrad-identifier-validation")
+      _ <- Span[F].mark("before-shrad-identifier-validation")
       shardIdentifierStatus <- justificationRegressionsStatus.joinRight.traverse(
                                 _ => Validate.shardIdentifier[F](block, shardId)
                               )
@@ -272,11 +271,10 @@ object Validate {
     *
     * Agnostic of non-parent justifications
     */
-  def repeatDeploy[F[_]: Monad: Log: BlockStore](
+  def repeatDeploy[F[_]: Monad: Log: BlockStore: Span](
       block: BlockMessage,
       dag: BlockDagRepresentation[F],
-      expirationThreshold: Int,
-      span: Span[F]
+      expirationThreshold: Int
   ): F[Either[InvalidBlock, ValidBlock]] = {
     val deployKeySet = (for {
       bd <- block.body.toList
@@ -284,11 +282,11 @@ object Validate {
     } yield r.sig).toSet
 
     for {
-      _                   <- span.mark("before-repeat-deploy-get-parents")
+      _                   <- Span[F].mark("before-repeat-deploy-get-parents")
       initParents         <- ProtoUtil.unsafeGetParents[F](block)
       maxBlockNumber      = ProtoUtil.maxBlockNumber(initParents)
       earliestBlockNumber = maxBlockNumber + 1 - expirationThreshold
-      _                   <- span.mark("before-repeat-deploy-duplicate-block")
+      _                   <- Span[F].mark("before-repeat-deploy-duplicate-block")
       maybeDuplicatedBlock <- DagOperations
                                .bfTraverseF[F, BlockMessage](initParents)(
                                  b =>
@@ -301,7 +299,7 @@ object Validate {
                                    .flatMap(_.deploy)
                                    .exists(d => deployKeySet.contains(d.sig))
                                }
-      _ <- span.mark("before-repeat-deploy-duplicate-block-log")
+      _ <- Span[F].mark("before-repeat-deploy-duplicate-block-log")
       maybeError <- maybeDuplicatedBlock
                      .traverse(
                        duplicatedBlock => {
@@ -530,7 +528,7 @@ object Validate {
   /**
     * Works only with fully explicit justifications.
     */
-  def parents[F[_]: Monad: Log: BlockStore: Metrics](
+  def parents[F[_]: Monad: Log: BlockStore: Metrics: Span](
       b: BlockMessage,
       genesis: BlockMessage,
       dag: BlockDagRepresentation[F]
@@ -700,20 +698,18 @@ object Validate {
         false
       }
 
-  def transactions[F[_]: Sync: Log: BlockStore](
+  def transactions[F[_]: Sync: Log: BlockStore: Span](
       block: BlockMessage,
       dag: BlockDagRepresentation[F],
       emptyStateHash: StateHash,
-      runtimeManager: RuntimeManager[F],
-      span: Span[F]
+      runtimeManager: RuntimeManager[F]
   ): F[Either[BlockStatus, ValidBlock]] =
     for {
       maybeStateHash <- InterpreterUtil
                          .validateBlockCheckpoint[F](
                            block,
                            dag,
-                           runtimeManager,
-                           span
+                           runtimeManager
                          )
     } yield maybeStateHash match {
       case Left(ex)       => Left(ex)

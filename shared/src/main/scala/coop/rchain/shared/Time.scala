@@ -25,7 +25,4 @@ object Time extends TimeInstances {
 sealed abstract class TimeInstances {
   implicit def eitherTTime[E, F[_]: Monad: Time[?[_]]]: Time[EitherT[F, E, ?]] =
     Time.forTrans[F, EitherT[?[_], E, ?]]
-
-  implicit def stateTTime[S, F[_]: Monad: Time[?[_]]]: Time[StateT[F, S, ?]] =
-    Time.forTrans[F, StateT[?[_], S, ?]]
 }

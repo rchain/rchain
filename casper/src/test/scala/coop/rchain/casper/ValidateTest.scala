@@ -6,20 +6,20 @@ import cats.Monad
 import cats.implicits._
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.{BlockStore, IndexedBlockDagStorage}
-import coop.rchain.casper.MultiParentCasperTestUtil.{buildGenesis, buildGenesisParameters}
 import coop.rchain.casper.helper.BlockGenerator._
 import coop.rchain.casper.helper.BlockUtil.generateValidator
 import coop.rchain.casper.helper.{BlockDagStorageFixture, BlockGenerator}
 import coop.rchain.casper.protocol.Event.EventInstance
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.scalatestcontrib._
+import coop.rchain.casper.util.GenesisBuilder.buildGenesis
 import coop.rchain.casper.util.rholang.Resources.mkRuntimeManager
 import coop.rchain.casper.util.rholang.{InterpreterUtil, RuntimeManager}
-import coop.rchain.casper.util.{ConstructDeploy, ProtoUtil}
+import coop.rchain.casper.util.{ConstructDeploy, GenesisBuilder, ProtoUtil}
 import coop.rchain.crypto.PrivateKey
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.signatures.Secp256k1
-import coop.rchain.metrics.{Metrics, NoopSpan}
+import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.Validator.Validator
 import coop.rchain.p2p.EffectsTestInstances.LogStub
@@ -39,7 +39,7 @@ class ValidateTest
     with BlockDagStorageFixture {
   implicit val log                        = new LogStub[Task]
   implicit val noopMetrics: Metrics[Task] = new Metrics.MetricsNOP[Task]
-  val span                                = new NoopSpan[Task]
+  implicit val span: Span[Task]           = new NoopSpan[Task]
 
   override def beforeEach(): Unit = {
     log.reset()
@@ -399,8 +399,8 @@ class ValidateTest
         block  <- blockDagStorage.lookupByIdUnsafe(0)
         block2 <- blockDagStorage.lookupByIdUnsafe(1)
         dag    <- blockDagStorage.getRepresentation
-        _      <- Validate.repeatDeploy[Task](block, dag, 50, span) shouldBeF Right(Valid)
-        _      <- Validate.repeatDeploy[Task](block2, dag, 50, span) shouldBeF Right(Valid)
+        _      <- Validate.repeatDeploy[Task](block, dag, 50) shouldBeF Right(Valid)
+        _      <- Validate.repeatDeploy[Task](block2, dag, 50) shouldBeF Right(Valid)
       } yield ()
   }
 
@@ -415,7 +415,7 @@ class ValidateTest
                    deploys = Seq(deploy)
                  )
         dag <- blockDagStorage.getRepresentation
-        _   <- Validate.repeatDeploy[Task](block1, dag, 50, span) shouldBeF Left(InvalidRepeatDeploy)
+        _   <- Validate.repeatDeploy[Task](block1, dag, 50) shouldBeF Left(InvalidRepeatDeploy)
       } yield ()
   }
 
@@ -542,8 +542,7 @@ class ValidateTest
               BlockMessage.defaultInstance,
               dag,
               "rchain",
-              Int.MaxValue,
-              span
+              Int.MaxValue
             ) shouldBeF Left(InvalidBlockNumber)
         result = log.warns.size should be(1)
       } yield result
@@ -701,18 +700,18 @@ class ValidateTest
 
   "Bonds cache validation" should "succeed on a valid block and fail on modified bonds" in withStorage {
     implicit blockStore => implicit blockDagStorage =>
-      val genesis = MultiParentCasperTestUtil.createGenesis()
+      val genesis = GenesisBuilder.createGenesis()
 
       val storageDirectory  = Files.createTempDirectory(s"hash-set-casper-test-genesis-")
       val storageSize: Long = 3024L * 1024
       for {
-        activeRuntime <- Runtime.createWithEmptyCost[Task, Task.Par](
+        activeRuntime <- Runtime.createWithEmptyCost[Task](
                           storageDirectory,
                           storageSize
                         )
         runtimeManager    <- RuntimeManager.fromRuntime[Task](activeRuntime)
         dag               <- blockDagStorage.getRepresentation
-        _                 <- InterpreterUtil.validateBlockCheckpoint[Task](genesis, dag, runtimeManager, span)
+        _                 <- InterpreterUtil.validateBlockCheckpoint[Task](genesis, dag, runtimeManager)
         _                 <- Validate.bondsCache[Task](genesis, runtimeManager) shouldBeF Right(Valid)
         modifiedBonds     = Seq.empty[Bond]
         modifiedPostState = genesis.getBody.getState.withBonds(modifiedBonds)
@@ -727,7 +726,7 @@ class ValidateTest
 
   "Field format validation" should "succeed on a valid block and fail on empty fields" in withStorage {
     _ => implicit blockDagStorage =>
-      val context  = buildGenesis(buildGenesisParameters())
+      val context  = buildGenesis()
       val (sk, pk) = context.validatorKeyPairs.head
       for {
         dag <- blockDagStorage.getRepresentation
@@ -761,7 +760,7 @@ class ValidateTest
 
   "Block hash format validation" should "fail on invalid hash" in withStorage {
     _ => implicit blockDagStorage =>
-      val context  = buildGenesis(buildGenesisParameters())
+      val context  = buildGenesis()
       val (sk, pk) = context.validatorKeyPairs.head
       for {
         dag <- blockDagStorage.getRepresentation
@@ -776,7 +775,7 @@ class ValidateTest
 
   "Block deploy count validation" should "fail on invalid number of deploys" in withStorage {
     _ => implicit blockDagStorage =>
-      val context  = buildGenesis(buildGenesisParameters())
+      val context  = buildGenesis()
       val (sk, pk) = context.validatorKeyPairs.head
       for {
         dag <- blockDagStorage.getRepresentation
@@ -790,7 +789,7 @@ class ValidateTest
   }
 
   "Block version validation" should "work" in withStorage { _ => implicit blockDagStorage =>
-    val context  = buildGenesis(buildGenesisParameters())
+    val context  = buildGenesis()
     val (sk, pk) = context.validatorKeyPairs.head
     for {
       dag     <- blockDagStorage.getRepresentation

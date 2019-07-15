@@ -8,42 +8,48 @@ import coop.rchain.casper.protocol.BlockMessage
 import coop.rchain.casper.util.{DagOperations, ProtoUtil}
 import coop.rchain.casper.util.ProtoUtil.weightFromValidatorByDag
 import coop.rchain.catscontrib.ListContrib
-import coop.rchain.metrics.Metrics
+import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.models.BlockMetadata
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.Validator.Validator
 import com.google.protobuf.ByteString
+import coop.rchain.shared.{Log, LogSource}
 
 object Estimator {
-  implicit val decreasingOrder = Ordering[Long].reverse
+
+  implicit val decreasingOrder = Ordering.Tuple2(
+    Ordering[Long].reverse,
+    Ordering.by((b: ByteString) => b.toByteArray.toIterable)
+  )
 
   private val EstimatorMetricsSource: Metrics.Source =
     Metrics.Source(CasperMetricsSource, "estimator")
   private val Tips0MetricsSource: Metrics.Source = Metrics.Source(EstimatorMetricsSource, "tips0")
   private val Tips1MetricsSource: Metrics.Source = Metrics.Source(EstimatorMetricsSource, "tips1")
 
-  def tips[F[_]: Monad: Metrics](
+  implicit private val logSource: LogSource = LogSource(this.getClass)
+
+  def tips[F[_]: Monad: Log: Metrics: Span](
       dag: BlockDagRepresentation[F],
       genesis: BlockMessage
   ): F[IndexedSeq[BlockHash]] =
-    for {
-      span                <- Metrics[F].span(Tips0MetricsSource)
-      latestMessageHashes <- dag.latestMessageHashes
-      _                   <- span.mark("latest-message-hashes")
-      result              <- Estimator.tips[F](dag, genesis, latestMessageHashes)
-      _                   <- span.close()
-    } yield result
+    Span[F].trace(Tips0MetricsSource) {
+      for {
+        latestMessageHashes <- dag.latestMessageHashes
+        _                   <- Span[F].mark("latest-message-hashes")
+        result              <- Estimator.tips[F](dag, genesis, latestMessageHashes)
+      } yield result
+    }
 
   /**
     * When the BlockDag has an empty latestMessages, tips will return IndexedSeq(genesis.blockHash)
     */
-  def tips[F[_]: Monad: Metrics](
+  def tips[F[_]: Monad: Log: Metrics: Span](
       dag: BlockDagRepresentation[F],
       genesis: BlockMessage,
       latestMessagesHashes: Map[Validator, BlockHash]
-  ): F[IndexedSeq[BlockHash]] =
+  ): F[IndexedSeq[BlockHash]] = Span[F].trace(Tips1MetricsSource) {
     for {
-      span                         <- Metrics[F].span(Tips1MetricsSource)
       invalidLatestMessages        <- ProtoUtil.invalidLatestMessages[F](dag, latestMessagesHashes)
       filteredLatestMessagesHashes = latestMessagesHashes -- invalidLatestMessages.keys
       lca <- calculateLCA(
@@ -51,13 +57,19 @@ object Estimator {
               BlockMetadata.fromBlock(genesis, false),
               filteredLatestMessagesHashes
             )
-      _                          <- span.mark("lca")
-      scoresMap                  <- buildScoresMap(dag, filteredLatestMessagesHashes, lca)
-      _                          <- span.mark("score-map")
+      _         <- Span[F].mark("lca")
+      scoresMap <- buildScoresMap(dag, filteredLatestMessagesHashes, lca)
+      _         <- Span[F].mark("score-map")
+      scoresMapString = scoresMap
+        .map {
+          case (blockHash, score) => s"${PrettyPrinter.buildString(blockHash)}: $score"
+        }
+        .mkString(", ")
+      _                          <- Log[F].info(s"The scores map is $scoresMapString")
       rankedLatestMessagesHashes <- rankForkchoices(List(lca), dag, scoresMap)
-      _                          <- span.mark("ranked-latest-messages-hashes")
-      _                          <- span.close()
+      _                          <- Span[F].mark("ranked-latest-messages-hashes")
     } yield rankedLatestMessagesHashes
+  }
 
   private def calculateLCA[F[_]: Monad](
       blockDag: BlockDagRepresentation[F],

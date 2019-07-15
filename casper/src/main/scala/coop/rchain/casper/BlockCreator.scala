@@ -15,8 +15,8 @@ import coop.rchain.crypto.{PrivateKey, PublicKey}
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.Validator.Validator
-import coop.rchain.rholang.interpreter.accounting
 import coop.rchain.rholang.interpreter.Runtime.BlockData
+import coop.rchain.rholang.interpreter.accounting
 import coop.rchain.shared.{Cell, Log, Time}
 
 object BlockCreator {
@@ -44,63 +44,66 @@ object BlockCreator {
       version: Long,
       expirationThreshold: Int,
       runtimeManager: RuntimeManager[F]
-  )(implicit state: CasperStateCell[F], metricsF: Metrics[F]): F[CreateBlockStatus] =
-    for {
-      span                  <- metricsF.span(CreateBlockMetricsSource)
-      tipHashes             <- Estimator.tips[F](dag, genesis)
-      _                     <- span.mark("after-estimator")
-      parents               <- EstimatorHelper.chooseNonConflicting[F](tipHashes, dag)
-      maxBlockNumber        = ProtoUtil.maxBlockNumber(parents)
-      invalidLatestMessages <- ProtoUtil.invalidLatestMessages[F](dag)
-      _ <- invalidLatestMessages.values.toList.traverse { invalidBlockHash =>
-            val encodedInvalidBlockHash = Base16.encode(invalidBlockHash.toByteArray)
-            val deploy = ConstructDeploy.sourceDeploy(
-              s"""
-                 #new rl(`rho:registry:lookup`), posCh in {
-                 #  rl!(`rho:rchain:pos`, *posCh) |
-                 #  for(@(_, PoS) <- posCh) {
-                 #    @PoS!("slash", "$encodedInvalidBlockHash".hexToBytes(), "IGNOREFORNOW")
-                 #  }
-                 #}
-                 #
-              """.stripMargin('#'),
-              System.currentTimeMillis(),
-              accounting.MAX_VALUE,
-              sec = privateKey
-            )
-            Cell[F, CasperState].modify { s =>
-              s.copy(deployHistory = s.deployHistory + deploy)
+  )(
+      implicit state: CasperStateCell[F],
+      metricsF: Metrics[F],
+      spanF: Span[F]
+  ): F[CreateBlockStatus] =
+    spanF.trace(CreateBlockMetricsSource) {
+      for {
+        tipHashes             <- Estimator.tips[F](dag, genesis)
+        _                     <- spanF.mark("after-estimator")
+        parents               <- EstimatorHelper.chooseNonConflicting[F](tipHashes, dag)
+        maxBlockNumber        = ProtoUtil.maxBlockNumber(parents)
+        invalidLatestMessages <- ProtoUtil.invalidLatestMessages[F](dag)
+        slashingDeploys <- invalidLatestMessages.values.toList.traverse { invalidBlockHash =>
+                            val encodedInvalidBlockHash =
+                              Base16.encode(invalidBlockHash.toByteArray)
+                            ConstructDeploy.sourceDeployNowF(
+                              s"""
+                               #new rl(`rho:registry:lookup`), posCh in {
+                               #  rl!(`rho:rchain:pos`, *posCh) |
+                               #  for(@(_, PoS) <- posCh) {
+                               #    @PoS!("slash", "$encodedInvalidBlockHash".hexToBytes(), "IGNOREFORNOW")
+                               #  }
+                               #}
+                               #
+                            """.stripMargin('#'),
+                              phloPrice = 0,
+                              sec = privateKey
+                            )
+                          }
+        _ <- Cell[F, CasperState].modify { s =>
+              s.copy(deployHistory = s.deployHistory ++ slashingDeploys)
             }
-          }
-      _                <- updateDeployHistory[F](state, maxBlockNumber)
-      deploys          <- extractDeploys[F](dag, parents, maxBlockNumber, expirationThreshold)
-      justifications   <- computeJustifications[F](dag, parents)
-      now              <- Time[F].currentMillis
-      invalidBlocksSet <- dag.invalidBlocks
-      invalidBlocks    = invalidBlocksSet.map(block => (block.blockHash, block.sender)).toMap
-      unsignedBlock <- if (deploys.nonEmpty || parents.length > 1) {
-                        processDeploysAndCreateBlock[F](
-                          dag,
-                          runtimeManager,
-                          parents,
-                          deploys,
-                          justifications,
-                          maxBlockNumber,
-                          shardId,
-                          version,
-                          now,
-                          invalidBlocks,
-                          span
-                        )
-                      } else {
-                        CreateBlockStatus.noNewDeploys.pure[F]
-                      }
-      signedBlock <- unsignedBlock.mapF(
-                      signBlock(_, dag, publicKey, privateKey, sigAlgorithm, shardId)
-                    )
-      _ <- span.mark("block-signed")
-      _ <- span.close()
-    } yield signedBlock
+        _                <- updateDeployHistory[F](state, maxBlockNumber)
+        deploys          <- extractDeploys[F](dag, parents, maxBlockNumber, expirationThreshold)
+        justifications   <- computeJustifications[F](dag, parents)
+        now              <- Time[F].currentMillis
+        invalidBlocksSet <- dag.invalidBlocks
+        invalidBlocks    = invalidBlocksSet.map(block => (block.blockHash, block.sender)).toMap
+        unsignedBlock <- if (deploys.nonEmpty || parents.length > 1) {
+                          processDeploysAndCreateBlock[F](
+                            dag,
+                            runtimeManager,
+                            parents,
+                            deploys,
+                            justifications,
+                            maxBlockNumber,
+                            shardId,
+                            version,
+                            now,
+                            invalidBlocks
+                          )
+                        } else {
+                          CreateBlockStatus.noNewDeploys.pure[F]
+                        }
+        signedBlock <- unsignedBlock.mapF(
+                        signBlock(_, dag, publicKey, privateKey, sigAlgorithm, shardId)
+                      )
+        _ <- spanF.mark("block-signed")
+      } yield signedBlock
+    }
 
   /*
    * This mechanism is a first effort to make life of a deploying party easier.
@@ -178,7 +181,7 @@ object BlockCreator {
     }
   }
 
-  private def processDeploysAndCreateBlock[F[_]: Sync: Log: BlockStore](
+  private def processDeploysAndCreateBlock[F[_]: Sync: Log: BlockStore: Span](
       dag: BlockDagRepresentation[F],
       runtimeManager: RuntimeManager[F],
       parents: Seq[BlockMessage],
@@ -188,8 +191,7 @@ object BlockCreator {
       shardId: String,
       version: Long,
       now: Long,
-      invalidBlocks: Map[BlockHash, Validator],
-      span: Span[F]
+      invalidBlocks: Map[BlockHash, Validator]
   ): F[CreateBlockStatus] =
     InterpreterUtil
       .computeDeploysCheckpoint[F](
@@ -198,7 +200,6 @@ object BlockCreator {
         dag,
         runtimeManager,
         BlockData(now, maxBlockNumber + 1),
-        span,
         invalidBlocks
       )
       .flatMap {

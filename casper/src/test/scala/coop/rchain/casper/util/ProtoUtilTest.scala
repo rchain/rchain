@@ -28,11 +28,11 @@ class ProtoUtilTest extends FlatSpec with Matchers with GeneratorDrivenPropertyC
     }
   }
 
-  import MultiParentCasperTestUtil._
+  import GenesisBuilder._
 
   implicit val timeEff = new LogicalTime[Effect]
 
-  val genesis = buildGenesis(buildGenesisParameters())
+  val genesis = buildGenesis()
 
   "unseenBlockHashes" should "return empty for a single block dag" in effectTest {
     HashSetCasperTestNode.standaloneEff(genesis).use { node =>

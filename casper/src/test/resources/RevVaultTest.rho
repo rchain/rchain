@@ -53,7 +53,7 @@ match (
           ])
       } |
 
-      contract setup(ret) = {
+      contract setup(_, ret) = {
         new RevVaultCh, identitySet in {
           rl!(`rho:rchain:revVault`, *RevVaultCh) |
           setDeployData!("userId", genesisPubKey, *identitySet) |

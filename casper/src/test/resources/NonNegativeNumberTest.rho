@@ -3,14 +3,13 @@
 //requires NonNegativeNumber, TestSet
 new
   rl(`rho:registry:lookup`), RhoSpecCh, NonNegativeNumberCh,
-  setup,
   test_initialize_with_negative_value, test_initialize_with_nonnegative_value,
   test_operations_with_negative_numbers, test_subtract_too_much, test_add_successful,
   test_subtract_successful, test_fail_on_overflow
 in {
   rl!(`rho:id:zphjgsfy13h1k85isc8rtwtgt3t9zzt5pjd5ihykfmyapfc4wt3x5h`, *RhoSpecCh) |
   for(@(_, RhoSpec) <- RhoSpecCh) {
-    @RhoSpec!("testSuite", *setup,
+    @RhoSpec!("testSuite",
       [
         ("Initially negative balances are be converted to 0.", *test_initialize_with_negative_value),
         ("Positive initial balances are preserved.", *test_initialize_with_nonnegative_value),
@@ -24,10 +23,6 @@ in {
 
   rl!(`rho:lang:nonNegativeNumber`, *NonNegativeNumberCh) |
   for(@(_, NonNegativeNumber) <- NonNegativeNumberCh) {
-    contract setup(returnCh) = {
-      returnCh!([])
-    } |
-
     contract test_initialize_with_negative_value(rhoSpec, _, ackCh) = {
       new ch1 in {
         @NonNegativeNumber!(-1, *ch1) |

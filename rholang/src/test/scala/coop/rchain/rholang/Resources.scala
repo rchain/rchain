@@ -3,15 +3,15 @@ import java.io.File
 import java.nio.file.{Files, Path}
 
 import cats.effect.ExitCase.Error
-import cats.effect.{Concurrent, ContextShift, Resource}
-import cats.{Applicative, Parallel}
+import cats.effect.{Concurrent, ContextShift, Resource, Sync}
+import cats.implicits._
+import cats.temp.par
 import com.typesafe.scalalogging.Logger
-import coop.rchain.metrics.Metrics
+import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.models._
 import coop.rchain.rholang.interpreter.Runtime
 import coop.rchain.rholang.interpreter.Runtime.{RhoISpace, SystemProcess}
-import coop.rchain.rspace._
-import coop.rchain.rspace.{RSpace, ReplayRSpace}
+import coop.rchain.rspace.RSpace
 import coop.rchain.rspace.history.Branch
 import coop.rchain.shared.Log
 import monix.execution.Scheduler
@@ -21,10 +21,10 @@ import scala.reflect.io.Directory
 object Resources {
   val logger: Logger = Logger(this.getClass.getName.stripSuffix("$"))
 
-  def mkTempDir[F[_]: Applicative](prefix: String): Resource[F, Path] =
-    Resource.makeCase(Applicative[F].pure(Files.createTempDirectory(prefix)))(
+  def mkTempDir[F[_]: Sync](prefix: String): Resource[F, Path] =
+    Resource.makeCase(Sync[F].delay(Files.createTempDirectory(prefix)))(
       (path, exitCase) =>
-        Applicative[F].pure(exitCase match {
+        Sync[F].delay(exitCase match {
           case Error(ex) =>
             logger
               .error(
@@ -35,11 +35,12 @@ object Resources {
         })
     )
 
-  def mkRhoISpace[F[_]: Concurrent: ContextShift: Log: Metrics](
-      prefix: String = "",
-      branch: String = "test",
-      mapSize: Long = 1024L * 1024L * 4
+  def mkRhoISpace[F[_]: Concurrent: ContextShift: Log: Metrics: Span](
+      prefix: String = ""
   ): Resource[F, RhoISpace[F]] = {
+
+    val branch: String = "test"
+    val mapSize: Long  = 1024L * 1024L * 4
 
     import coop.rchain.rholang.interpreter.storage.implicits._
 
@@ -59,37 +60,24 @@ object Resources {
       .flatMap(tmpDir => Resource.make(mkRspace(tmpDir))(_.close()))
   }
 
-  def mkRuntime[F[_]]: MkRuntimePartiallyApplied[F] = new MkRuntimePartiallyApplied[F]
+  def mkRuntime[F[_]: Log: Metrics: Span: Concurrent: par.Par: ContextShift](
+      prefix: String,
+      storageSize: Long = 1024 * 1024,
+      additionalSystemProcesses: Seq[SystemProcess.Definition[F]] = Seq.empty
+  )(implicit scheduler: Scheduler): Resource[F, Runtime[F]] =
+    mkTempDir[F](prefix) >>= (mkRuntimeAt(_)(storageSize, additionalSystemProcesses))
 
-  /**
-    * This is so that we can write {{{mkRuntime[Task]}}} instead of {{{mkRuntime[Task, Task.Par]}}}
-    *
-    * See https://typelevel.org/cats/guidelines.html#a-idpartially-applied-type-params-hrefpartially-applied-type-paramsa-partially-applied-type
-    */
-  private[rholang] final class MkRuntimePartiallyApplied[F[_]](val dummy: Boolean = true)
-      extends AnyVal {
-
-    def apply[M[_]: Parallel[F, ?[_]]](
-        prefix: String,
-        storageSize: Long = 1024 * 1024,
-        additionalSystemProcesses: Seq[SystemProcess.Definition[F]] = Seq.empty
-    )(
-        implicit scheduler: Scheduler,
-        cs: ContextShift[F],
-        c: Concurrent[F],
-        l: Log[F],
-        m: Metrics[F]
-    ): Resource[F, Runtime[F]] =
-      mkTempDir[F](prefix).flatMap { tmpDir =>
-        Resource.make[F, Runtime[F]](
-          Runtime
-            .createWithEmptyCost[F, M](
-              tmpDir,
-              storageSize,
-              additionalSystemProcesses
-            )
-        )(_.close())
-      }
-  }
+  def mkRuntimeAt[F[_]: Log: Metrics: Span: Concurrent: par.Par: ContextShift](path: Path)(
+      storageSize: Long = 1024 * 1024,
+      additionalSystemProcesses: Seq[SystemProcess.Definition[F]] = Seq.empty
+  )(implicit scheduler: Scheduler): Resource[F, Runtime[F]] =
+    Resource.make[F, Runtime[F]](
+      Runtime
+        .createWithEmptyCost[F](
+          path,
+          storageSize,
+          additionalSystemProcesses
+        )
+    )(_.close())
 
 }

@@ -16,7 +16,7 @@ import coop.rchain.blockstorage.{BlockDagRepresentation, BlockDagStorage, BlockS
 import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
 import coop.rchain.catscontrib.ski.kp2
-import coop.rchain.metrics.Metrics
+import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.Validator.Validator
 
@@ -90,23 +90,20 @@ sealed abstract class MultiParentCasperInstances {
     Metrics.Source(CasperMetricsSource, "casper")
   private[this] val genesisLabel = Metrics.Source(MetricsSource, "genesis")
 
-  def hashSetCasper[F[_]: Sync: Metrics: Concurrent: ConnectionsCell: TransportLayer: Log: Time: SafetyOracle: LastFinalizedBlockCalculator: BlockStore: RPConfAsk: BlockDagStorage](
+  def hashSetCasper[F[_]: Sync: Metrics: Concurrent: ConnectionsCell: TransportLayer: Log: Time: SafetyOracle: LastFinalizedBlockCalculator: BlockStore: RPConfAsk: BlockDagStorage: Span](
       runtimeManager: RuntimeManager[F],
       validatorId: Option[ValidatorIdentity],
       genesis: BlockMessage,
       shardId: String
-  ): F[MultiParentCasper[F]] =
+  ): F[MultiParentCasper[F]] = Span[F].trace(genesisLabel) {
     for {
-      genesisSpan <- Metrics[F].span(genesisLabel)
-      dag         <- BlockDagStorage[F].getRepresentation
+      dag <- BlockDagStorage[F].getRepresentation
       maybePostGenesisStateHash <- InterpreterUtil
                                     .validateBlockCheckpoint[F](
                                       genesis,
                                       dag,
-                                      runtimeManager,
-                                      genesisSpan
+                                      runtimeManager
                                     )
-      _ <- genesisSpan.close()
       postGenesisStateHash <- maybePostGenesisStateHash match {
                                case Left(BlockException(ex)) => Sync[F].raiseError[StateHash](ex)
                                case Right(None) =>
@@ -119,7 +116,6 @@ sealed abstract class MultiParentCasperInstances {
       casperState <- Cell.mvarCell[F, CasperState](
                       CasperState()
                     )
-
     } yield {
       implicit val state = casperState
       new MultiParentCasperImpl[F](
@@ -131,4 +127,5 @@ sealed abstract class MultiParentCasperInstances {
         blockProcessingLock
       )
     }
+  }
 }

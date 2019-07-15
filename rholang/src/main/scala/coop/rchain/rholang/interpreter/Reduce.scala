@@ -3,24 +3,25 @@ package coop.rchain.rholang.interpreter
 import cats.effect.Sync
 import cats.implicits._
 import cats.mtl.FunctorTell
-import cats.{Parallel, Eval => _}
+import cats.{Eval => _}
 import com.google.protobuf.ByteString
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.models.Expr.ExprInstance._
+import coop.rchain.models.TaggedContinuation.TaggedCont.ParBody
 import coop.rchain.models.Var.VarInstance
 import coop.rchain.models.Var.VarInstance.{BoundVar, FreeVar, Wildcard}
 import coop.rchain.models.rholang.implicits._
 import coop.rchain.models.serialization.implicits._
 import coop.rchain.models.{Match, MatchCase, _}
+import coop.rchain.rholang.interpreter.Runtime.{RhoDispatch, RhoPureSpace}
 import coop.rchain.rholang.interpreter.Substitute.{charge => _, _}
 import coop.rchain.rholang.interpreter.accounting._
 import coop.rchain.rholang.interpreter.errors._
 import coop.rchain.rholang.interpreter.matcher.SpatialMatcher.spatialMatchAndCharge
-import coop.rchain.rholang.interpreter.storage.Tuplespace
 import coop.rchain.rspace.Serialize
+import coop.rchain.rspace.util._
 import monix.eval.Coeval
-import cats.effect.concurrent.Ref
 
 import scala.collection.immutable.BitSet
 import scala.util.Try
@@ -52,7 +53,8 @@ trait Reduce[M[_]] {
 }
 
 class DebruijnInterpreter[M[_], F[_]](
-    tuplespaceAlg: Tuplespace[M],
+    pureRSpace: RhoPureSpace[M],
+    dispatcher: => RhoDispatch[M],
     urnMap: Map[String, Par]
 )(
     implicit parallel: cats.Parallel[M, F],
@@ -60,6 +62,8 @@ class DebruijnInterpreter[M[_], F[_]](
     fTell: FunctorTell[M, Throwable],
     cost: _cost[M]
 ) extends Reduce[M] {
+
+  type Application = Option[(TaggedContinuation, Seq[ListParWithRandom], Int)]
 
   /**
     * Materialize a send in the store, optionally returning the matched continuation.
@@ -71,12 +75,23 @@ class DebruijnInterpreter[M[_], F[_]](
     */
   private def produce(
       chan: Par,
-      data: Seq[Par],
+      data: ListParWithRandom,
       persistent: Boolean,
-      rand: Blake2b512Random,
       sequenceNumber: Int
-  ): M[Unit] =
-    tuplespaceAlg.produce(chan, ListParWithRandom(data, rand), persistent, sequenceNumber)
+  ): M[Unit] = {
+    def go(res: Application): M[Unit] =
+      res match {
+        case Some((continuation, dataList, updatedSequenceNumber)) =>
+          if (persistent)
+            List(
+              dispatcher.dispatch(continuation, dataList, updatedSequenceNumber),
+              produce(chan, data, persistent, sequenceNumber)
+            ).parSequence_
+          else dispatcher.dispatch(continuation, dataList, updatedSequenceNumber)
+        case None => s.unit
+      }
+    pureRSpace.produce(chan, data, persist = persistent, sequenceNumber) >>= (go(_))
+  }
 
   /**
     * Materialize a send in the store, optionally returning the matched continuation.
@@ -89,18 +104,36 @@ class DebruijnInterpreter[M[_], F[_]](
     */
   private def consume(
       binds: Seq[(BindPattern, Par)],
-      body: Par,
+      body: ParWithRandom,
       persistent: Boolean,
-      rand: Blake2b512Random,
       sequenceNumber: Int
-  ): M[Unit] =
-    tuplespaceAlg.consume(binds, ParWithRandom(body, rand), persistent, sequenceNumber)
+  ): M[Unit] = {
+    val (patterns: Seq[BindPattern], sources: Seq[Par]) = binds.unzip
+    def go(res: Application): M[Unit] =
+      res match {
+        case Some((continuation, dataList, updatedSequenceNumber)) =>
+          if (persistent)
+            List(
+              dispatcher.dispatch(continuation, dataList, updatedSequenceNumber),
+              consume(binds, body, persistent, sequenceNumber)
+            ).parSequence_
+          else dispatcher.dispatch(continuation, dataList, updatedSequenceNumber)
+        case None => s.unit
+      }
+    pureRSpace.consume(
+      sources.toList,
+      patterns.toList,
+      TaggedContinuation(ParBody(body)),
+      persist = persistent,
+      sequenceNumber
+    ) >>= (go(_))
+  }
 
   private trait EvalJob {
     def run(mkRand: Int => Blake2b512Random)(
         env: Env[Par],
         sequenceNumber: Int
-    ): M[List[Unit]]
+    ): M[Unit]
     def size: Int
   }
 
@@ -114,8 +147,8 @@ class DebruijnInterpreter[M[_], F[_]](
         override def run(mkRand: Int => Blake2b512Random)(
             env: Env[Par],
             sequenceNumber: Int
-        ): M[List[Unit]] =
-          Parallel.parTraverse(input.zipWithIndex.toList) {
+        ): M[Unit] =
+          input.zipWithIndex.toList.parTraverse_ {
             case (term, idx) =>
               handler(term)(env, mkRand(idx), sequenceNumber)
           }
@@ -200,20 +233,17 @@ class DebruijnInterpreter[M[_], F[_]](
       EvalJob[Match](par.matches, evalExplicit),
       EvalJob[Bundle](par.bundles, evalExplicit),
       EvalJob(filteredExprs)
-    )
+    ).filter(_.size > 0)
 
     val starts = jobs.map(_.size).scanLeft(0)(_ + _).toVector
 
-    jobs.zipWithIndex
-      .map {
-        case (job, jobIdx) => {
-          def mkRand(termIdx: Int): Blake2b512Random =
-            split(starts.last, starts(jobIdx), rand)(termIdx)
-          job.run(mkRand)(env, sequenceNumber)
-        }
+    jobs.zipWithIndex.parTraverse_ {
+      case (job, jobIdx) => {
+        def mkRand(termIdx: Int): Blake2b512Random =
+          split(starts.last, starts(jobIdx), rand)(termIdx)
+        job.run(mkRand)(env, sequenceNumber)
       }
-      .parSequence
-      .as(())
+    }
   }
 
   override def inj(
@@ -260,7 +290,7 @@ class DebruijnInterpreter[M[_], F[_]](
                   }
       data      <- send.data.toList.traverse(evalExpr)
       substData <- data.traverse(substituteAndCharge[Par, M](_, 0, env))
-      _         <- produce(unbundled, substData, send.persistent, rand, sequenceNumber)
+      _         <- produce(unbundled, ListParWithRandom(substData, rand), send.persistent, sequenceNumber)
       _         <- charge[M](SEND_EVAL_COST)
     } yield ()
 
@@ -293,7 +323,7 @@ class DebruijnInterpreter[M[_], F[_]](
                     0,
                     env.shift(receive.bindCount)
                   )
-      _ <- consume(binds, substBody, receive.persistent, rand, sequenceNumber)
+      _ <- consume(binds, ParWithRandom(substBody, rand), receive.persistent, sequenceNumber)
       _ <- charge[M](RECEIVE_EVAL_COST)
     } yield ()
 

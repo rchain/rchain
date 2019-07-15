@@ -9,7 +9,7 @@ import coop.rchain.casper.genesis.contracts._
 import coop.rchain.casper.helper.HashSetCasperTestNode
 import coop.rchain.casper.helper.HashSetCasperTestNode._
 import coop.rchain.casper.protocol.{BlockMessage, DeployData}
-import coop.rchain.casper.util.{ConstructDeploy, ProtoUtil}
+import coop.rchain.casper.util.{ConstructDeploy, GenesisBuilder, ProtoUtil}
 import coop.rchain.casper.util.comm.TestNetwork
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.hash.Keccak256
@@ -45,7 +45,7 @@ class NodeBox(val node: HashSetCasperTestNode[Effect], var lastBlock: Option[Blo
 }
 
 object HashSetCasperActions {
-  import MultiParentCasperTestUtil._
+  import GenesisBuilder._
 
   def context(
       amount: Int,
@@ -97,7 +97,7 @@ object HashSetCasperActions {
     )
 
   def deployment(i: Int, ts: Long = System.currentTimeMillis()): DeployData =
-    ConstructDeploy.sourceDeploy(s"new x in { x!(0) }", ts, accounting.MAX_VALUE)
+    ConstructDeploy.sourceDeploy(s"new x in { x!(0) }", ts)
 
   implicit class EffectOps[A](f: Effect[A]) {
     def result: A = f.unsafeRunSync

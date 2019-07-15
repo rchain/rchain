@@ -1,9 +1,7 @@
 package coop.rchain.rholang.interpreter
 
-import cats.effect.concurrent.Ref
 import coop.rchain.crypto.hash.Blake2b512Random
-import coop.rchain.metrics
-import coop.rchain.metrics.Metrics
+import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.models.Expr.ExprInstance.{EVarBody, GString}
 import coop.rchain.models.Var.VarInstance.FreeVar
 import coop.rchain.models._
@@ -12,18 +10,24 @@ import coop.rchain.rholang.Resources.mkRhoISpace
 import coop.rchain.rholang.interpreter.Runtime.RhoISpace
 import coop.rchain.rholang.interpreter.accounting._
 import coop.rchain.rholang.interpreter.errors.OutOfPhlogistonsError
+import coop.rchain.rholang.interpreter.storage.{ChargingRSpace, ISpaceStub}
 import coop.rchain.rholang.interpreter.storage.implicits._
-import coop.rchain.rholang.interpreter.storage.{ChargingRSpace, Tuplespace}
 import coop.rchain.rspace.internal.{Datum, Row}
+import coop.rchain.rspace._
+import coop.rchain.rspace.Match
 import coop.rchain.shared.Log
+import coop.rchain.{metrics, rspace}
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
 import org.scalactic.TripleEqualsSupport
 import org.scalatest.{FlatSpec, Matchers}
 
+import scala.collection.SortedSet
 import scala.concurrent.duration._
 
 class CostAccountingReducerTest extends FlatSpec with Matchers with TripleEqualsSupport {
+
+  implicit val noopSpan: Span[Task] = Span.noop
 
   behavior of "Cost accounting in Reducer"
 
@@ -65,28 +69,35 @@ class CostAccountingReducerTest extends FlatSpec with Matchers with TripleEquals
   }
 
   it should "stop if OutOfPhloError is returned from RSpace" in {
-    val tuplespaceAlg = new Tuplespace[Task] {
-      override def produce(
-          chan: Par,
-          data: ListParWithRandom,
-          persistent: Boolean,
-          sequenceNumber: Int
-      ): Task[Unit] =
-        Task.raiseError(OutOfPhlogistonsError)
-      override def consume(
-          binds: Seq[(BindPattern, Par)],
-          body: ParWithRandom,
-          persistent: Boolean,
-          sequenceNumber: Int
-      ): Task[Unit] = Task.raiseError(OutOfPhlogistonsError)
-    }
 
-    implicit val errorLog = new ErrorLog[Task]()
-    implicit val rand     = Blake2b512Random(128)
-    implicit val cost     = CostAccounting.initialCost[Task](Cost(1000)).runSyncUnsafe(1.second)
-    val reducer           = new DebruijnInterpreter[Task, Task.Par](tuplespaceAlg, Map.empty)
-    val send              = Send(Par(exprs = Seq(GString("x"))), Seq(Par()))
-    val test              = reducer.inj(send).attempt.runSyncUnsafe(1.second)
+    val iSpace = new ISpaceStub[
+      Task,
+      Par,
+      BindPattern,
+      ListParWithRandom,
+      ListParWithRandom,
+      TaggedContinuation
+    ] {
+      override def produce(
+          channel: Par,
+          data: ListParWithRandom,
+          persist: Boolean,
+          sequenceNumber: Int
+      )(
+          implicit m: Match[Task, BindPattern, ListParWithRandom, ListParWithRandom]
+      ): Task[
+        Option[(ContResult[Par, BindPattern, TaggedContinuation], Seq[Result[ListParWithRandom]])]
+      ] =
+        Task.raiseError[Option[
+          (ContResult[Par, BindPattern, TaggedContinuation], Seq[Result[ListParWithRandom]])
+        ]](OutOfPhlogistonsError)
+    }
+    implicit val errorLog       = new ErrorLog[Task]()
+    implicit val rand           = Blake2b512Random(128)
+    implicit val cost           = CostAccounting.initialCost[Task](Cost(1000)).runSyncUnsafe(1.second)
+    val (_, chargingReducer, _) = RholangAndScalaDispatcher.create(iSpace, Map.empty, Map.empty)
+    val send                    = Send(Par(exprs = Seq(GString("x"))), Seq(Par()))
+    val test                    = chargingReducer.inj(send).attempt.runSyncUnsafe(1.second)
     assert(test === Left(OutOfPhlogistonsError))
   }
 

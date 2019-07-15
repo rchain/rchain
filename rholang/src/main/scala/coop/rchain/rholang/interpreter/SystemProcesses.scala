@@ -7,11 +7,13 @@ import com.typesafe.scalalogging.Logger
 import coop.rchain.crypto.PublicKey
 import coop.rchain.crypto.hash.{Blake2b256, Keccak256, Sha256}
 import coop.rchain.crypto.signatures.{Ed25519, Secp256k1}
+import coop.rchain.metrics.Span
 import coop.rchain.models._
 import coop.rchain.models.rholang.implicits._
 import coop.rchain.rholang.interpreter.Runtime.{BlockData, InvalidBlocks, RhoISpace}
 import coop.rchain.rholang.interpreter.util.RevAddress
 import coop.rchain.rspace.{ContResult, Result}
+
 import scala.util.Try
 
 //TODO: Make each of the system processes into a case class,
@@ -42,7 +44,7 @@ object SystemProcesses {
   def apply[F[_]](
       dispatcher: Dispatch[F, ListParWithRandom, TaggedContinuation],
       space: RhoISpace[F]
-  )(implicit F: Concurrent[F]): SystemProcesses[F] =
+  )(implicit F: Concurrent[F], spanF: Span[F]): SystemProcesses[F] =
     new SystemProcesses[F] {
 
       type ContWithMetaData = ContResult[Par, BindPattern, TaggedContinuation]

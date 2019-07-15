@@ -37,13 +37,14 @@ class ReplayRSpace[F[_]: Sync, C, P, A, R, K](
     protected val logF: Log[F],
     contextShift: ContextShift[F],
     scheduler: ExecutionContext,
-    metricsF: Metrics[F]
+    metricsF: Metrics[F],
+    val spanF: Span[F]
 ) extends RSpaceOps[F, C, P, A, R, K](historyRepository, storeAtom, branch)
     with IReplaySpace[F, C, P, A, R, K] {
 
   protected[this] override val logger: Logger = Logger[this.type]
 
-  implicit private[this] val MetricsSource: Metrics.Source =
+  implicit protected[this] lazy val MetricsSource: Metrics.Source =
     Metrics.Source(RSpaceMetricsSource, "replay")
 
   def store: HotStore[F, C, P, A, K] = storeAtom.get()
@@ -68,22 +69,22 @@ class ReplayRSpace[F[_]: Sync, C, P, A, R, K](
         val msg = "channels.length must equal patterns.length"
         logF.error(msg) *> syncF.raiseError(new IllegalArgumentException(msg))
       } else
-        for {
-          span <- metricsF.span(consumeSpanLabel)
-          _    <- span.mark("before-consume-lock")
-          result <- consumeLockF(channels) {
-                     lockedConsume(
-                       channels,
-                       patterns,
-                       continuation,
-                       persist,
-                       sequenceNumber,
-                       peeks,
-                       span
-                     )
-                   }
-          _ <- span.mark("post-consume-lock")
-        } yield result
+        spanF.trace(consumeSpanLabel) {
+          for {
+            _ <- spanF.mark("before-consume-lock")
+            result <- consumeLockF(channels) {
+                       lockedConsume(
+                         channels,
+                         patterns,
+                         continuation,
+                         persist,
+                         sequenceNumber,
+                         peeks
+                       )
+                     }
+            _ <- spanF.mark("post-consume-lock")
+          } yield result
+        }
     }
 
   private[this] def lockedConsume(
@@ -92,8 +93,7 @@ class ReplayRSpace[F[_]: Sync, C, P, A, R, K](
       continuation: K,
       persist: Boolean,
       sequenceNumber: Int,
-      peeks: SortedSet[Int],
-      span: Span[F]
+      peeks: SortedSet[Int]
   )(
       implicit m: Match[F, P, A, R]
   ): F[MaybeActionResult] = {
@@ -204,7 +204,7 @@ class ReplayRSpace[F[_]: Sync, C, P, A, R, K](
       consumeRef <- syncF.delay {
                      Consume.create(channels, patterns, continuation, persist, sequenceNumber)
                    }
-      _ <- span.mark("after-compute-consumeref")
+      _ <- spanF.mark("after-compute-consumeref")
       r <- replayData.get(consumeRef) match {
             case None =>
               storeWaitingContinuation(consumeRef, None, peeks)
@@ -234,23 +234,22 @@ class ReplayRSpace[F[_]: Sync, C, P, A, R, K](
       implicit m: Match[F, P, A, R]
   ): F[MaybeActionResult] =
     contextShift.evalOn(scheduler) {
-      for {
-        span <- metricsF.span(produceSpanLabel)
-        _    <- span.mark("before-produce-lock")
-        result <- produceLockF(channel) {
-                   lockedProduce(channel, data, persist, sequenceNumber, span)
-                 }
-        _ <- span.mark("post-produce-lock")
-        _ <- span.close()
-      } yield result
+      spanF.trace(produceSpanLabel) {
+        for {
+          _ <- spanF.mark("before-produce-lock")
+          result <- produceLockF(channel) {
+                     lockedProduce(channel, data, persist, sequenceNumber)
+                   }
+          _ <- spanF.mark("post-produce-lock")
+        } yield result
+      }
     }
 
   private[this] def lockedProduce(
       channel: C,
       data: A,
       persist: Boolean,
-      sequenceNumber: Int,
-      span: Span[F]
+      sequenceNumber: Int
   )(
       implicit m: Match[F, P, A, R]
   ): F[MaybeActionResult] = {
@@ -397,14 +396,14 @@ class ReplayRSpace[F[_]: Sync, C, P, A, R, K](
 
     for {
       groupedChannels <- store.getJoins(channel)
-      _               <- span.mark("after-fetch-joins")
+      _               <- spanF.mark("after-fetch-joins")
       _ <- logF.debug(
             s"""|produce: searching for matching continuations
                 |at <groupedChannels: $groupedChannels>""".stripMargin
               .replace('\n', ' ')
           )
       produceRef <- syncF.delay { Produce.create(channel, data, persist, sequenceNumber) }
-      _          <- span.mark("after-compute-produceref")
+      _          <- spanF.mark("after-compute-produceref")
       result <- replayData.get(produceRef) match {
                  case None =>
                    storeDatum(produceRef, None)
@@ -483,7 +482,8 @@ object ReplayRSpace {
       logF: Log[F],
       contextShift: ContextShift[F],
       scheduler: ExecutionContext,
-      metricsF: Metrics[F]
+      metricsF: Metrics[F],
+      spanF: Span[F]
   ): F[ReplayRSpace[F, C, P, A, R, K]] = {
 
     val space: ReplayRSpace[F, C, P, A, R, K] =
@@ -506,7 +506,8 @@ object ReplayRSpace {
       logF: Log[F],
       contextShift: ContextShift[F],
       scheduler: ExecutionContext,
-      metricsF: Metrics[F]
+      metricsF: Metrics[F],
+      spanF: Span[F]
   ): F[IReplaySpace[F, C, P, A, R, K]] =
     RSpace.setUp[F, C, P, A, R, K](dataDir, mapSize, branch).map {
       case (historyReader, store) =>

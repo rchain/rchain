@@ -6,24 +6,19 @@ import cats.effect.concurrent.MVar
 import cats.effect.{Sync, _}
 import cats.implicits._
 import com.google.protobuf.ByteString
-import coop.rchain.casper.protocol._
-import coop.rchain.casper.util.{ConstructDeploy, ProtoUtil}
 import coop.rchain.casper.CasperMetricsSource
+import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
-import coop.rchain.catscontrib.Catscontrib.ToMonadOps
-import coop.rchain.catscontrib.MonadTrans
+import coop.rchain.casper.util.{ConstructDeploy, ProtoUtil}
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.Expr.ExprInstance.GString
 import coop.rchain.models.Validator.Validator
-import coop.rchain.models.Var.VarInstance.FreeVar
 import coop.rchain.models._
-import coop.rchain.models.rholang.implicits._
-import coop.rchain.rholang.interpreter.Runtime.{BlockData, RhoISpace}
+import coop.rchain.rholang.interpreter.Runtime.BlockData
 import coop.rchain.rholang.interpreter.accounting._
 import coop.rchain.rholang.interpreter.errors.BugFoundError
-import coop.rchain.rholang.interpreter.storage.implicits.matchListPar
 import coop.rchain.rholang.interpreter.{
   ChargingReducer,
   ErrorLog,
@@ -31,10 +26,9 @@ import coop.rchain.rholang.interpreter.{
   Interpreter,
   NormalizerEnv,
   RhoType,
-  Runtime,
-  PrettyPrinter => RholangPrinter
+  Runtime
 }
-import coop.rchain.rspace.{trace, Blake2b256Hash, Checkpoint, ReplayException}
+import coop.rchain.rspace.{trace, Blake2b256Hash, ReplayException}
 
 trait RuntimeManager[F[_]] {
 
@@ -61,7 +55,6 @@ trait RuntimeManager[F[_]] {
       blockTime: Long
   ): F[(StateHash, StateHash, Seq[InternalProcessedDeploy])]
   def computeBonds(startHash: StateHash): F[Seq[Bond]]
-  def computeDeployPayment(startHash: StateHash)(user: ByteString, amount: Long): F[StateHash]
   def getData(hash: StateHash)(channel: Par): F[Seq[Par]]
   def getContinuation(hash: StateHash)(
       channels: Seq[Par]
@@ -69,7 +62,7 @@ trait RuntimeManager[F[_]] {
   def emptyStateHash: StateHash
 }
 
-class RuntimeManagerImpl[F[_]: Concurrent: Metrics] private[rholang] (
+class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span] private[rholang] (
     val emptyStateHash: StateHash,
     runtimeContainer: MVar[F, Runtime[F]]
 ) extends RuntimeManager[F] {
@@ -114,14 +107,14 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics] private[rholang] (
       isGenesis: Boolean //FIXME have a better way of knowing this. Pass the replayDeploy function maybe?
   ): F[Either[ReplayFailure, StateHash]] =
     withRuntimeLock { runtime =>
-      for {
-        span   <- Metrics[F].span(replayComputeStateLabel)
-        _      <- runtime.blockData.set(blockData)
-        _      <- setInvalidBlocks(invalidBlocks, runtime)
-        _      <- span.mark("before-replay-deploys")
-        result <- replayDeploys(runtime, span, startHash, terms, replayDeploy(runtime, span))
-        _      <- span.close()
-      } yield result
+      Span[F].trace(replayComputeStateLabel) {
+        for {
+          _      <- runtime.blockData.set(blockData)
+          _      <- setInvalidBlocks(invalidBlocks, runtime)
+          _      <- Span[F].mark("before-replay-deploys")
+          result <- replayDeploys(runtime, startHash, terms, replayDeploy(runtime))
+        } yield result
+      }
     }
 
   def computeState(startHash: StateHash)(
@@ -130,14 +123,14 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics] private[rholang] (
       invalidBlocks: Map[BlockHash, Validator] = Map.empty[BlockHash, Validator]
   ): F[(StateHash, Seq[InternalProcessedDeploy])] =
     withRuntimeLock { runtime =>
-      for {
-        span   <- Metrics[F].span(computeStateLabel)
-        _      <- runtime.blockData.set(blockData)
-        _      <- setInvalidBlocks(invalidBlocks, runtime)
-        _      <- span.mark("before-process-deploys")
-        result <- processDeploys(runtime, span, startHash, terms, processDeploy(runtime, span))
-        _      <- span.close()
-      } yield result
+      Span[F].trace(computeStateLabel) {
+        for {
+          _      <- runtime.blockData.set(blockData)
+          _      <- setInvalidBlocks(invalidBlocks, runtime)
+          _      <- Span[F].mark("before-process-deploys")
+          result <- processDeploys(runtime, startHash, terms, processDeploy(runtime))
+        } yield result
+      }
     }
 
   def computeGenesis(
@@ -146,13 +139,13 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics] private[rholang] (
   ): F[(StateHash, StateHash, Seq[InternalProcessedDeploy])] = {
     val startHash = emptyStateHash
     withRuntimeLock { runtime =>
-      for {
-        span       <- Metrics[F].span(computeGenesisLabel)
-        _          <- runtime.blockData.set(BlockData(blockTime, 0))
-        _          <- span.mark("before-process-deploys")
-        evalResult <- processDeploys(runtime, span, startHash, terms, processDeploy(runtime, span))
-        _          <- span.close()
-      } yield (startHash, evalResult._1, evalResult._2)
+      Span[F].trace(computeGenesisLabel) {
+        for {
+          _          <- runtime.blockData.set(BlockData(blockTime, 0))
+          _          <- Span[F].mark("before-process-deploys")
+          evalResult <- processDeploys(runtime, startHash, terms, processDeploy(runtime))
+        } yield (startHash, evalResult._1, evalResult._2)
+      }
     }
   }
 
@@ -201,50 +194,6 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics] private[rholang] (
        # }
        """.stripMargin('#')
 
-  def computeDeployPayment(start: StateHash)(user: ByteString, amount: Long): F[StateHash] =
-    withResetRuntimeLock(start)(
-      runtime =>
-        computeDeployPayment(runtime, runtime.reducer, runtime.space)(user, amount)
-          .map(_.root.toByteString)
-    )
-
-  private def computeDeployPayment(
-      runtime: Runtime[F],
-      reducer: ChargingReducer[F],
-      space: RhoISpace[F]
-  )(user: ByteString, amount: Long): F[Checkpoint] =
-    for {
-      _ <- computeEffect(runtime, reducer)(
-            ConstructDeploy.sourceDeployNow(deployPaymentSource(amount)).withDeployer(user)
-          ).ensure(BugFoundError("Deploy payment failed unexpectedly"))(_.errors.isEmpty)
-      consumeResult <- getResult(runtime, space)()
-      result <- consumeResult match {
-                 case Seq(RhoType.Tuple2(RhoType.Boolean(true), Par.defaultInstance)) =>
-                   space.createCheckpoint()
-                 case Seq(RhoType.Tuple2(RhoType.Boolean(false), RhoType.String(error))) =>
-                   BugFoundError(s"Deploy payment failed unexpectedly: $error")
-                     .raiseError[F, Checkpoint]
-                 case Seq() =>
-                   BugFoundError("Expected response message was not received")
-                     .raiseError[F, Checkpoint]
-                 case other =>
-                   val contentAsStr = other.map(RholangPrinter().buildString(_)).mkString(",")
-                   BugFoundError(
-                     s"Deploy payment returned unexpected result: [$contentAsStr ]"
-                   ).raiseError[F, Checkpoint]
-               }
-    } yield result
-
-  private def deployPaymentSource(amount: Long, name: String = "__SCALA__"): String =
-    s"""
-       # new rl(`rho:registry:lookup`), poSCh in {
-       #   rl!(`rho:rchain:pos`, *poSCh) |
-       #   for(@(_, PoS) <- poSCh) {
-       #     @PoS!("pay", $amount, "$name")
-       #   }
-       # }
-       """.stripMargin('#')
-
   private def withRuntimeLock[A](f: Runtime[F] => F[A]): F[A] =
     Sync[F].bracket(runtimeContainer.take)(f)(runtimeContainer.put)
 
@@ -271,21 +220,6 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics] private[rholang] (
   )(channel: Par): F[Seq[Par]] =
     runtime.space.getData(channel).map(_.flatMap(_.a.pars))
 
-  private def getResult(runtime: Runtime[F], space: RhoISpace[F])(
-      name: String = "__SCALA__"
-  ): F[Seq[Par]] = {
-
-    val channel                 = Par().withExprs(Seq(Expr(GString(name))))
-    val pattern                 = BindPattern(Seq(EVar(FreeVar(0))), freeCount = 1)
-    val cont                    = TaggedContinuation().withParBody(ParWithRandom(Par()))
-    implicit val cost: _cost[F] = runtime.cost
-
-    space.consume(Seq(channel), Seq(pattern), cont, persist = false)(matchListPar).map {
-      case Some((_, dataList)) => dataList.flatMap(_.value.pars)
-      case None                => Seq.empty[Par]
-    }
-  }
-
   def getContinuation(
       hash: StateHash
   )(channels: Seq[Par]): F[Seq[(Seq[BindPattern], Par)]] =
@@ -300,7 +234,6 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics] private[rholang] (
 
   private def processDeploys(
       runtime: Runtime[F],
-      span: Span[F],
       startHash: StateHash,
       terms: Seq[DeployData],
       processDeploy: DeployData => F[InternalProcessedDeploy]
@@ -313,20 +246,20 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics] private[rholang] (
                   processDeploy(deploy).map(results :+ _)
                 }
               }
-      _               <- span.mark("before-process-deploys-create-checkpoint")
+      _               <- Span[F].mark("before-process-deploys-create-checkpoint")
       finalCheckpoint <- runtime.space.createCheckpoint()
       finalStateHash  = finalCheckpoint.root
     } yield (finalStateHash.toByteString, res)
 
-  private def processDeploy(runtime: Runtime[F], span: Span[F])(
+  private def processDeploy(runtime: Runtime[F])(
       deploy: DeployData
   ): F[InternalProcessedDeploy] =
     for {
-      _                            <- span.mark("before-process-deploy-compute-effect")
+      _                            <- Span[F].mark("before-process-deploy-compute-effect")
       fallback                     <- runtime.space.createSoftCheckpoint()
       evaluateResult               <- computeEffect(runtime, runtime.reducer)(deploy)
       EvaluateResult(cost, errors) = evaluateResult
-      _                            <- span.mark("before-process-deploy-create-soft-checkpoint")
+      _                            <- Span[F].mark("before-process-deploy-create-soft-checkpoint")
       checkpoint                   <- runtime.space.createSoftCheckpoint()
       deployResult = InternalProcessedDeploy(
         deploy,
@@ -337,17 +270,14 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics] private[rholang] (
       )
       _ <- if (errors.nonEmpty) runtime.space.revertToSoftCheckpoint(fallback)
           else Applicative[F].unit
-      _ <- span.mark("process-deploy-finished")
+      _ <- Span[F].mark("process-deploy-finished")
     } yield deployResult
 
   private def replayDeploys(
       runtime: Runtime[F],
-      span: Span[F],
       startHash: StateHash,
       terms: Seq[InternalProcessedDeploy],
-      replayDeploy: (
-          InternalProcessedDeploy
-      ) => F[Option[ReplayFailure]]
+      replayDeploy: InternalProcessedDeploy => F[Option[ReplayFailure]]
   ): F[Either[ReplayFailure, StateHash]] =
     for {
       _ <- runtime.replaySpace.reset(Blake2b256Hash.fromByteString(startHash))
@@ -360,26 +290,26 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics] private[rholang] (
       res <- EitherT
               .fromEither[F](result)
               .flatMapF { _ =>
-                span.mark("before-replay-deploys-create-checkpoint") >> runtime.replaySpace
+                Span[F].mark("before-replay-deploys-create-checkpoint") >> runtime.replaySpace
                   .createCheckpoint()
                   .map(finalCheckpoint => finalCheckpoint.root.toByteString.asRight[ReplayFailure])
               }
               .value
     } yield res
 
-  private def replayDeploy(runtime: Runtime[F], span: Span[F])(
+  private def replayDeploy(runtime: Runtime[F])(
       processedDeploy: InternalProcessedDeploy
   ): F[Option[ReplayFailure]] = {
     import processedDeploy._
     for {
-      _                    <- span.mark("before-replay-deploy-reset-rig")
+      _                    <- Span[F].mark("before-replay-deploy-reset-rig")
       _                    <- runtime.replaySpace.rig(processedDeploy.deployLog)
       softCheckpoint       <- runtime.replaySpace.createSoftCheckpoint()
-      _                    <- span.mark("before-replay-deploy-compute-effect")
+      _                    <- Span[F].mark("before-replay-deploy-compute-effect")
       replayEvaluateResult <- computeEffect(runtime, runtime.replayReducer)(processedDeploy.deploy)
       //TODO: compare replay deploy cost to given deploy cost
       EvaluateResult(_, errors) = replayEvaluateResult
-      _                         <- span.mark("before-replay-deploy-status")
+      _                         <- Span[F].mark("before-replay-deploy-status")
       cont <- DeployStatus.fromErrors(errors) match {
                case int: InternalErrors =>
                  (deploy.some, int: Failed).some.pure[F]
@@ -405,7 +335,7 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics] private[rholang] (
                      }
                  }
              }
-      _ <- span.mark("replay-deploy-finished")
+      _ <- Span[F].mark("replay-deploy-finished")
     } yield cont
   }
 
@@ -431,7 +361,7 @@ object RuntimeManager {
 
   type StateHash = ByteString
 
-  def fromRuntime[F[_]: Concurrent: Sync: Metrics](
+  def fromRuntime[F[_]: Concurrent: Sync: Metrics: Span](
       active: Runtime[F]
   ): F[RuntimeManager[F]] =
     for {
@@ -446,59 +376,4 @@ object RuntimeManager {
       runtime          <- MVar[F].of(active)
     } yield new RuntimeManagerImpl(hash, runtime)
 
-  def forTrans[F[_]: Monad, T[_[_], _]: MonadTrans](
-      runtimeManager: RuntimeManager[F]
-  ): RuntimeManager[T[F, ?]] =
-    new RuntimeManager[T[F, ?]] {
-
-      override def captureResults(
-          start: StateHash,
-          deploy: DeployData,
-          name: String
-      ): T[F, Seq[Par]] = runtimeManager.captureResults(start, deploy, name).liftM[T]
-
-      override def replayComputeState(hash: StateHash)(
-          terms: Seq[InternalProcessedDeploy],
-          blockData: BlockData,
-          invalidBlocks: Map[BlockHash, Validator],
-          isGenesis: Boolean
-      ): T[F, Either[ReplayFailure, StateHash]] =
-        runtimeManager.replayComputeState(hash)(terms, blockData, invalidBlocks, isGenesis).liftM[T]
-
-      override def computeState(hash: StateHash)(
-          terms: Seq[DeployData],
-          blockData: BlockData,
-          invalidBlocks: Map[BlockHash, Validator]
-      ): T[F, (StateHash, Seq[InternalProcessedDeploy])] =
-        runtimeManager.computeState(hash)(terms, blockData, invalidBlocks).liftM[T]
-
-      def computeGenesis(
-          terms: Seq[DeployData],
-          blockTime: Long
-      ): T[F, (StateHash, StateHash, Seq[InternalProcessedDeploy])] =
-        runtimeManager.computeGenesis(terms, blockTime).liftM[T]
-
-      override def computeBonds(hash: StateHash): T[F, Seq[Bond]] =
-        runtimeManager.computeBonds(hash).liftM[T]
-
-      override def computeDeployPayment(
-          start: StateHash
-      )(user: ByteString, amount: Long): T[F, StateHash] =
-        runtimeManager.computeDeployPayment(start)(user, amount).liftM[T]
-
-      override def getData(hash: StateHash)(channel: Par): T[F, Seq[Par]] =
-        runtimeManager.getData(hash)(channel).liftM[T]
-
-      override def getContinuation(
-          hash: StateHash
-      )(channels: Seq[Par]): T[F, Seq[(Seq[BindPattern], Par)]] =
-        runtimeManager.getContinuation(hash)(channels).liftM[T]
-
-      override val emptyStateHash: StateHash = runtimeManager.emptyStateHash
-    }
-
-  def eitherTRuntimeManager[E, F[_]: Monad](
-      rm: RuntimeManager[F]
-  ): RuntimeManager[EitherT[F, E, ?]] =
-    RuntimeManager.forTrans[F, EitherT[?[_], E, ?]](rm)
 }

@@ -6,7 +6,7 @@ import com.google.protobuf.ByteString
 import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.metrics
-import coop.rchain.metrics.Metrics
+import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.models.Expr.ExprInstance._
 import coop.rchain.models._
 import coop.rchain.models.rholang.implicits._
@@ -24,13 +24,14 @@ import scala.concurrent.duration._
 class DeployParamsSpec extends fixture.FlatSpec with Matchers {
   implicit val logF: Log[Task]            = new Log.NOPLog[Task]
   implicit val noopMetrics: Metrics[Task] = new metrics.Metrics.MetricsNOP[Task]
+  implicit val noopSpan: Span[Task]       = NoopSpan[Task]()
 
   protected override def withFixture(test: OneArgTest): Outcome = {
     val randomInt = scala.util.Random.nextInt
     val dbDir     = Files.createTempDirectory(s"rchain-storage-test-$randomInt-")
     val size      = 1024L * 1024 * 10
     (for {
-      runtime <- Runtime.createWithEmptyCost[Task, Task.Par](dbDir, size)
+      runtime <- Runtime.createWithEmptyCost[Task](dbDir, size)
       _       <- runtime.reducer.setPhlo(Cost.UNSAFE_MAX)
       outcome = try {
         test(runtime)

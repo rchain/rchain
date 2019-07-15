@@ -1,5 +1,6 @@
 package coop.rchain.casper.helper
 import cats.effect.Concurrent
+import coop.rchain.metrics.Span
 import coop.rchain.models.ListParWithRandom
 import coop.rchain.rholang.interpreter.Runtime.SystemProcess
 import coop.rchain.rholang.interpreter.{ContractCall, RhoType}
@@ -10,7 +11,7 @@ import coop.rchain.rholang.interpreter.{ContractCall, RhoType}
 object DeployerIdContract {
   import cats.implicits._
 
-  def get[F[_]: Concurrent](
+  def get[F[_]: Concurrent: Span](
       ctx: SystemProcess.Context[F]
   )(message: (Seq[ListParWithRandom], Int)): F[Unit] = {
 

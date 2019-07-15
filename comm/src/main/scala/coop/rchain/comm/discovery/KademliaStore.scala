@@ -1,10 +1,7 @@
 package coop.rchain.comm.discovery
 
-import cats.data.EitherT
-import cats.Functor
 import cats.effect.Sync
 import cats.implicits._
-
 import coop.rchain.comm._
 import coop.rchain.metrics.Metrics
 
@@ -22,28 +19,6 @@ object KademliaStore extends KademliaStoreInstances {
 }
 
 sealed abstract class KademliaStoreInstances {
-  implicit def eitherTKademliaStore[E, F[_]: Functor: KademliaStore]
-      : KademliaStore[EitherT[F, E, ?]] =
-    new KademliaStore[EitherT[F, E, ?]] {
-
-      def peers: EitherT[F, E, Seq[PeerNode]] =
-        EitherT.liftF(KademliaStore[F].peers)
-
-      def sparseness: EitherT[F, E, Seq[Int]] =
-        EitherT.liftF(KademliaStore[F].sparseness)
-
-      def updateLastSeen(peerNode: PeerNode): EitherT[F, E, Unit] =
-        EitherT.liftF(KademliaStore[F].updateLastSeen(peerNode))
-
-      def lookup(key: Seq[Byte]): EitherT[F, E, Seq[PeerNode]] =
-        EitherT.liftF(KademliaStore[F].lookup(key))
-
-      def find(key: Seq[Byte]): EitherT[F, E, Option[PeerNode]] =
-        EitherT.liftF(KademliaStore[F].find(key))
-
-      def remove(key: Seq[Byte]): EitherT[F, E, Unit] =
-        EitherT.liftF(KademliaStore[F].remove(key))
-    }
 
   def table[F[_]: Sync: KademliaRPC: Metrics](id: NodeIdentifier): KademliaStore[F] =
     new KademliaStore[F] {
