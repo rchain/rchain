@@ -3,12 +3,13 @@ package coop.rchain.casper.engine
 import Running.{Requested, RequestedBlocks}
 import coop.rchain.catscontrib.ski._
 import coop.rchain.casper.protocol._
+import coop.rchain.casper.PrettyPrinter
 import coop.rchain.comm.{CommError, Endpoint, NodeIdentifier, PeerNode}, CommError._
 import coop.rchain.comm.protocol.routing.Protocol
 import coop.rchain.comm.transport.TransportLayer
 import coop.rchain.comm.rp.{ProtocolHelper, RPConf}, ProtocolHelper.toPacket
 import coop.rchain.shared._
-import coop.rchain.p2p.EffectsTestInstances.TransportLayerStub
+import coop.rchain.p2p.EffectsTestInstances.{LogStub, TransportLayerStub}
 import coop.rchain.models.BlockHash.BlockHash
 import com.google.protobuf.ByteString
 import monix.eval.Coeval
@@ -25,38 +26,82 @@ class RunningMaintainRequestedBlocksSpec extends FunSpec with BeforeAndAfterEach
   override def beforeEach(): Unit = {
     transport.reset()
     transport.setResponses(alwaysSuccess)
+    log.reset()
   }
 
   describe("Running") {
     describe("maintainRequestedBlocks, for every block that was requested") {
       describe("if block request is still within a timeout") {
         it("should keep the request not touch")(pending)
-        describe("if block was not delivered within given timeout") {
-          describe("if waiting list is not empty") {
-            it("should request block from first peer on a waiting list") {
-              // given
-              val requestedTs = System.currentTimeMillis - (2 * Running.timeout.toMillis)
-              val waitingList = List(peerNode("waiting1"), peerNode("waiting2"))
-              val requested = Requested(
-                timestamp = requestedTs,
-                peers = Set(peerNode("peer")),
-                waitingList = waitingList
-              )
-              implicit val requestedBlocks = initRequestedBlocks(init = Map(hash -> requested))
-              // when
-              Running.maintainRequestedBlocks[Coeval].apply()
-              // then
-              val (recipient, msg) = transport.getRequest(0)
-              toBlockRequest(msg).hash should be(hash)
-              recipient shouldBe waitingList(0)
-              transport.requests.size shouldBe 1
-            }
-            it("should move that peer from the waiting list to the requested set")(pending)
-            it("timestamp is reset")(pending)
+      }
+      describe("if block was not delivered within given timeout") {
+        describe("if waiting list is not empty") {
+          it("should request block from first peer on a waiting list") {
+            // given
+            val waitingList = List(peerNode("waiting1"), peerNode("waiting2"))
+            val requested = Requested(
+              timestamp = timedOut,
+              peers = Set(peerNode("peer")),
+              waitingList = waitingList
+            )
+            implicit val requestedBlocks = initRequestedBlocks(init = Map(hash -> requested))
+            // when
+            Running.maintainRequestedBlocks[Coeval].apply()
+            // then
+            val (recipient, msg) = transport.getRequest(0)
+            toBlockRequest(msg).hash should be(hash)
+            recipient shouldBe waitingList(0)
+            transport.requests.size shouldBe 1
           }
-          describe("if waiting list IS empty") {
-            it("log a warning to the user")(pending)
-            it("remove the entry from the requested block lists")(pending)
+          it("should move that peer from the waiting list to the requested set")(pending)
+          it("timestamp is reset")(pending)
+        }
+        describe("if waiting list IS empty") {
+          it("should log a warning to the user") {
+            // given
+            val waitingList = List.empty[PeerNode]
+            val requested = Requested(
+              timestamp = timedOut,
+              peers = Set(peerNode("peer")),
+              waitingList = waitingList
+            )
+            implicit val requestedBlocks = initRequestedBlocks(init = Map(hash -> requested))
+            // when
+            Running.maintainRequestedBlocks[Coeval].apply()
+            // then
+            log.warns should contain(
+              s"Could not retrieve requested block ${PrettyPrinter.buildString(hash)}. Removing the request from the requested blocks list. Casper will have to re-request the block."
+            )
+            log.warns.size shouldBe 1
+          }
+          it("should NOT send requests to other peers") {
+            // given
+            val waitingList = List.empty[PeerNode]
+            val requested = Requested(
+              timestamp = timedOut,
+              peers = Set(peerNode("peer")),
+              waitingList = waitingList
+            )
+            implicit val requestedBlocks = initRequestedBlocks(init = Map(hash -> requested))
+            // when
+            Running.maintainRequestedBlocks[Coeval].apply()
+            // then
+            transport.requests.size should be(0)
+          }
+          it("should remove the entry from the requested block lists") {
+            // given
+            val waitingList = List.empty[PeerNode]
+            val requested = Requested(
+              timestamp = timedOut,
+              peers = Set(peerNode("peer")),
+              waitingList = waitingList
+            )
+            implicit val requestedBlocks = initRequestedBlocks(init = Map(hash -> requested))
+            // when
+            Running.maintainRequestedBlocks[Coeval].apply()
+            // then
+            val requestedBlocksMapAfter = requestedBlocks.read.apply
+            requestedBlocksMapAfter.size should be(0)
           }
         }
       }
@@ -69,6 +114,7 @@ class RunningMaintainRequestedBlocksSpec extends FunSpec with BeforeAndAfterEach
 
   implicit private val askConf   = new ConstApplicativeAsk[Coeval, RPConf](conf)
   implicit private val transport = new TransportLayerStub[Coeval]
+  implicit private val log       = new LogStub[Coeval]
 
   private def initRequestedBlocks(
       init: Map[BlockHash, Requested]
@@ -83,5 +129,7 @@ class RunningMaintainRequestedBlocksSpec extends FunSpec with BeforeAndAfterEach
     PeerNode(NodeIdentifier(name.getBytes), endpoint(port))
 
   private def alwaysSuccess: PeerNode => Protocol => CommErr[Unit] = kp(kp(Right(())))
+
+  private def timedOut: Long = System.currentTimeMillis - (2 * Running.timeout.toMillis)
 
 }

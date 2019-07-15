@@ -74,15 +74,32 @@ object Running {
     * and keep the requested blocks list clean.
     * See spec RunningMaintainRequestedBlocksSpec for more details
     */
-  def maintainRequestedBlocks[F[_]: Monad: RPConfAsk: RequestedBlocks: TransportLayer]: F[Unit] =
+  def maintainRequestedBlocks[F[_]: Monad: RPConfAsk: RequestedBlocks: TransportLayer: Log]
+      : F[Unit] = {
+
+    def toMap(list: List[(BlockHash, Option[Requested])]): Map[BlockHash, Requested] = {
+      val filtered = list.flatMap {
+        case (hash, Some(r)) => List((hash -> r))
+        case (_, None)       => List.empty
+      }
+      Map(filtered: _*)
+    }
+
     RequestedBlocks[F].flatModify(requests => {
       requests.keys.toList
         .traverse(hash => {
           val requested = requests(hash)
-          requestForBlock[F](requested.waitingList(0), hash).as((hash -> requested))
+          if (requested.waitingList.nonEmpty) {
+            requestForBlock[F](requested.waitingList(0), hash).as((hash -> Option(requested)))
+          } else {
+            val warnMessage = s"Could not retrieve requested block ${PrettyPrinter.buildString(hash)}. " +
+              "Removing the request from the requested blocks list. Casper will have to re-request the block."
+            Log[F].warn(warnMessage).as((hash -> none[Requested]))
+          }
         })
-        .map(list => Map(list: _*))
+        .map(list => toMap(list))
     })
+  }
 
   def handleHasBlock[F[_]: Monad: RPConfAsk: RequestedBlocks: TransportLayer: Time](
       peer: PeerNode,
