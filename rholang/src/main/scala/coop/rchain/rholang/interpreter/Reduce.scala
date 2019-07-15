@@ -1363,7 +1363,7 @@ class DebruijnInterpreter[M[_], F[_]](
       "toList"      -> toList
     )
 
-  def evalSingleExpr(p: Par)(implicit env: Env[Par]): M[Expr] =
+  private def evalSingleExpr(p: Par)(implicit env: Env[Par]): M[Expr] =
     if (p.sends.nonEmpty || p.receives.nonEmpty || p.news.nonEmpty || p.matches.nonEmpty || p.unforgeables.nonEmpty || p.bundles.nonEmpty)
       ReduceError("Error: parallel or non expression found where expression expected.")
         .raiseError[M, Expr]
@@ -1373,7 +1373,7 @@ class DebruijnInterpreter[M[_], F[_]](
         case _                => ReduceError("Error: Multiple expressions given.").raiseError[M, Expr]
       }
 
-  def evalToLong(
+  private def evalToLong(
       p: Par
   )(implicit env: Env[Par]): M[Long] =
     if (p.sends.nonEmpty || p.receives.nonEmpty || p.news.nonEmpty || p.matches.nonEmpty || p.unforgeables.nonEmpty || p.bundles.nonEmpty)
@@ -1403,7 +1403,7 @@ class DebruijnInterpreter[M[_], F[_]](
           ReduceError("Error: Integer expected, or unimplemented expression.").raiseError[M, Long]
       }
 
-  def evalToBool(
+  private def evalToBool(
       p: Par
   )(implicit env: Env[Par]): M[Boolean] =
     if (p.sends.nonEmpty || p.receives.nonEmpty || p.news.nonEmpty || p.matches.nonEmpty || p.unforgeables.nonEmpty || p.bundles.nonEmpty)
