@@ -151,11 +151,17 @@ class MultiParentCasperMergeSpec extends FlatSpec with Matchers with Inspectors 
     ).parSequence_
   }
 
-  private def checkConflicts(b1: String, b2: String, base: String)(implicit file: sourcecode.File, line: sourcecode.Line) =
+  private def checkConflicts(b1: String, b2: String, base: String)(
+      implicit file: sourcecode.File,
+      line: sourcecode.Line
+  ) =
     diamondConflictCheck(base, b1, b2, numberOfParentsForDiamondTip = 1) >>
       diamondConflictCheck(base, b2, b1, numberOfParentsForDiamondTip = 1)
 
-  private def checkMerge(b1: String, b2: String, base: String)(implicit file: sourcecode.File, line: sourcecode.Line) =
+  private def checkMerge(b1: String, b2: String, base: String)(
+      implicit file: sourcecode.File,
+      line: sourcecode.Line
+  ) =
     diamondConflictCheck(base, b1, b2, numberOfParentsForDiamondTip = 2) >>
       diamondConflictCheck(base, b2, b1, numberOfParentsForDiamondTip = 2)
 
@@ -171,33 +177,27 @@ class MultiParentCasperMergeSpec extends FlatSpec with Matchers with Inspectors 
         ConstructDeploy.sourceDeployNowF[Effect](b1),
         ConstructDeploy.sourceDeployNowF[Effect](b2),
         ConstructDeploy.sourceDeployNowF[Effect]("Nil")
-      ).sequence[Effect, DeployData].flatMap { deploys =>
-        HashSetCasperTestNode.networkEff(genesis, networkSize = 2).use { nodes =>
-          for {
-            _ <- nodes(0).addBlock(deploys(0))
-            _ <- nodes(0).receive()
-            _ <- nodes(1).receive()
-            _ <- nodes(0).addBlock(deploys(1))
-            _ <- nodes(1).addBlock(deploys(2))
-            _ <- nodes(0).receive()
-            _ <- nodes(1).receive()
-            _ <- nodes(0).receive()
-            _ <- nodes(1).receive()
+      ).sequence[Effect, DeployData]
+        .flatMap { deploys =>
+          HashSetCasperTestNode.networkEff(genesis, networkSize = 2).use { nodes =>
+            for {
+              _ <- nodes(0).addBlock(deploys(0))
+              _ <- nodes(1).receive()
+              _ <- nodes(0).addBlock(deploys(1))
+              _ <- nodes(1).addBlock(deploys(2))
+              _ <- nodes(0).receive()
 
-          multiParentBlock <- nodes(0).addBlock(deploys(3))
-          _                <- nodes(1).receive()
+              multiParentBlock <- nodes(0).addBlock(deploys(3))
 
-          _ = nodes(0).logEff.warns.isEmpty shouldBe true
-          _ = nodes(1).logEff.warns.isEmpty shouldBe true
-          _ = multiParentBlock.header.get.parentsHashList.size shouldBe numberOfParentsForDiamondTip
-          _ = nodes(0).casperEff.contains(multiParentBlock.blockHash) shouldBeF true
-          _ = nodes(1).casperEff.contains(multiParentBlock.blockHash) shouldBeF true
-        } yield ()
-      }
-      }.adaptError {
-        case _: TestFailedException =>
-          new TestFailedException(
-            s"""Expected
+              _ = nodes(0).logEff.warns.isEmpty shouldBe true
+              _ = multiParentBlock.header.get.parentsHashList.size shouldBe numberOfParentsForDiamondTip
+              _ = nodes(0).casperEff.contains(multiParentBlock.blockHash) shouldBeF true
+            } yield ()
+          }
+        }
+        .adaptError {
+          case _: TestFailedException =>
+            new TestFailedException(s"""Expected
                | base = $base
                | b1   = $b1
                | b2   = $b2
@@ -206,7 +206,7 @@ class MultiParentCasperMergeSpec extends FlatSpec with Matchers with Inspectors 
                |
                | go see it at ${file.value}:${line.value}
                | """.stripMargin, 5).severedAtStackDepth
-    }
+        }
 
   it should "not merge blocks that touch the same channel" in effectTest {
     HashSetCasperTestNode.networkEff(genesis, networkSize = 2).use { nodes =>
