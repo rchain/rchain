@@ -30,6 +30,13 @@ class SortSpec extends FlatSpec with Matchers {
     )
   }
 
+  "ReceiveSortMatcher" should "discern Receives with and without peek" in {
+    assertOrder[Receive](
+      Receive(peek = false),
+      Receive(peek = true)
+    )
+  }
+
   private def assertOrder[T: Sortable](smaller: T, bigger: T): Any = {
     val left: ScoredTerm[T]  = checkSortingAndScore(smaller)
     val right: ScoredTerm[T] = checkSortingAndScore(bigger)

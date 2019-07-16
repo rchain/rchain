@@ -12,6 +12,8 @@ import coop.rchain.rholang.interpreter.storage.implicits.matchListPar
 import coop.rchain.rspace.util._
 import coop.rchain.rspace.{Blake2b256Hash, Checkpoint, ContResult, Result, Match => StorageMatch}
 
+import scala.collection.SortedSet
+
 object ChargingRSpace {
   def storageCostConsume(
       channels: Seq[Par],
@@ -40,14 +42,25 @@ object ChargingRSpace {
           patterns: Seq[BindPattern],
           continuation: TaggedContinuation,
           persist: Boolean,
-          sequenceNumber: Int
+          sequenceNumber: Int,
+          peek: Boolean
       ): F[
         Option[(ContResult[Par, BindPattern, TaggedContinuation], Seq[Result[ListParWithRandom]])]
       ] =
         for {
-          _       <- charge[F](storageCostConsume(channels, patterns, continuation))
-          consRes <- space.consume(channels, patterns, continuation, persist, sequenceNumber)
-          _       <- handleResult(consRes)
+          _ <- charge[F](storageCostConsume(channels, patterns, continuation))
+          peekChannels = if (peek) {
+            SortedSet((0 to channels.size - 1): _*)
+          } else SortedSet.empty[Int]
+          consRes <- space.consume(
+                      channels,
+                      patterns,
+                      continuation,
+                      persist,
+                      sequenceNumber,
+                      peekChannels
+                    )
+          _ <- handleResult(consRes)
         } yield consRes
 
       override def install(

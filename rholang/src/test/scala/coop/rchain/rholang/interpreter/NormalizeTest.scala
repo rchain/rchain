@@ -555,6 +555,7 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
             BitSet(0, 1, 2)
           ),
           true, // persistent
+          peek = false,
           bindCount,
           BitSet(0)
         )
@@ -598,6 +599,7 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
           ),
           Send(EVar(BoundVar(0)), List(Par().copy(exprs = List(GInt(5)))), false, BitSet(0)),
           true, // persistent
+          peek = false,
           bindCount,
           BitSet(0)
         )
@@ -638,6 +640,7 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
             BitSet(0, 1)
           ),
           persistent = false,
+          peek = false,
           bindCount,
           BitSet(),
           connectiveUsed = false
@@ -646,6 +649,14 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
     )
     result.knownFree should be(inputs.knownFree)
   }
+
+  it should "handle peek" in {
+    (for {
+      basicInput <- ParBuilderUtil.buildAST[Coeval]("""for ( x, y <<- @Nil ) { x!(*y) }""")
+      result     <- ProcNormalizeMatcher.normalizeMatch[Coeval](basicInput, inputs)
+    } yield result.par.receives.head.peek shouldBe true).value()
+  }
+
   "PInput" should "Handle a more complicated receive" in {
     // for ( (x1, @y1) <- @Nil ; (x2, @y2) <- @1) { x1!(y2) | x2!(y1) }
     val listBindings1 = new ListName()
@@ -703,6 +714,7 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
             locallyFree = BitSet(0, 1, 2, 3)
           ),
           persistent = false,
+          peek = false,
           bindCount,
           BitSet(),
           connectiveUsed = false
@@ -745,6 +757,7 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
         ),
         Par(),
         persistent = false,
+        peek = false,
         bindCount,
         BitSet(),
         connectiveUsed = false
@@ -1002,6 +1015,7 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
               BitSet(0)
             ),
             persistent = false,
+            peek = false,
             bindCount,
             BitSet(),
             connectiveUsed = false
@@ -1194,6 +1208,7 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
           ),
           Par(),
           persistent = false,
+          peek = false,
           bindCount,
           connectiveUsed = false
         )

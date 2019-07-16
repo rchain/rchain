@@ -229,6 +229,7 @@ object Substitute {
             binds = bindsSub,
             body = bodySub,
             persistent = term.persistent,
+            peek = term.peek,
             bindCount = term.bindCount,
             locallyFree = term.locallyFree.until(env.shift),
             connectiveUsed = term.connectiveUsed

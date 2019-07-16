@@ -92,6 +92,7 @@ BundleReadWrite. Bundle ::= "bundle"  ;
 -- Receipt
 ReceiptLinear.    Receipt ::= ReceiptLinearImpl ;
 ReceiptRepeated.  Receipt ::= ReceiptRepeatedImpl ;
+ReceiptPeek.      Receipt ::= ReceiptPeekImpl ;
 
 -- Linear Receipts
 LinearSimple. ReceiptLinearImpl ::= [LinearBind] ;
@@ -108,6 +109,12 @@ RepeatedSimple. ReceiptRepeatedImpl ::= [RepeatedBind] ;
 -- Single Repeated Bind
 RepeatedBindImpl. RepeatedBind ::= [Name] NameRemainder "<=" Name ;
 separator nonempty RepeatedBind ";" ;
+
+-- Peek Receipts
+PeekSimple. ReceiptPeekImpl ::= [PeekBind] ;
+-- Single Peek
+PeekBindImpl. PeekBind ::= [Name] NameRemainder "<<-" Name ;
+separator nonempty PeekBind ";" ;
 
 -- Types of Send:
 SendSingle.   Send ::= "!" ;

@@ -134,7 +134,8 @@ message Receive {
     repeated ReceiveBind binds = 1;
     Par body = 2 [(scalapb.field).no_box = true];
     bool persistent = 3;
-    int32 bindCount = 4;
+    bool peek = 4;
+    int32 bindCount = 5;
     bytes locallyFree = 6 [(scalapb.field).type = "coop.rchain.models.AlwaysEqual[scala.collection.immutable.BitSet]"];
     bool connective_used = 7;
 }

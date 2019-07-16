@@ -331,6 +331,7 @@ class VarMatcherSpec extends FlatSpec with Matchers with TimeLimits with TripleE
       ),
       Send(GPrivateBuilder("unforgeable"), List(GInt(9), GInt(10)), false, BitSet()),
       false,
+      false,
       4
     )
     val pattern: Receive = Receive(
@@ -339,6 +340,7 @@ class VarMatcherSpec extends FlatSpec with Matchers with TimeLimits with TripleE
         ReceiveBind(List(EVar(FreeVar(0)), EVar(FreeVar(1))), EVar(FreeVar(0)))
       ),
       EVar(FreeVar(1)),
+      false,
       false,
       4,
       connectiveUsed = true

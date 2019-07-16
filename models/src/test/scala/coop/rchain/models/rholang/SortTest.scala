@@ -384,13 +384,14 @@ class ParSortMatcherSpec extends FlatSpec with Matchers {
     result.term should be(sortedParExpr)
   }
 
-  it should "sort Receives based on persistence, channels, patterns and then body" in {
+  it should "sort Receives based on persistence, peek, channels, patterns and then body" in {
     val parExpr =
       Par(
         receives = List(
           Receive(
             List(ReceiveBind(List(GInt(1)), GInt(3))),
             Par(),
+            false,
             false,
             0,
             BitSet()
@@ -399,12 +400,14 @@ class ParSortMatcherSpec extends FlatSpec with Matchers {
             List(ReceiveBind(List(GInt(0)), GInt(3))),
             EVar(BoundVar(0)),
             false,
+            false,
             0,
             BitSet()
           ),
           Receive(
             List(ReceiveBind(List(GInt(0)), GInt(3))),
             Par(),
+            false,
             false,
             0,
             BitSet()
@@ -413,12 +416,22 @@ class ParSortMatcherSpec extends FlatSpec with Matchers {
             List(ReceiveBind(List(GInt(0)), GInt(3))),
             Par(),
             true,
+            false,
+            0,
+            BitSet()
+          ),
+          Receive(
+            List(ReceiveBind(List(GInt(0)), GInt(3))),
+            Par(),
+            true,
+            true,
             0,
             BitSet()
           ),
           Receive(
             List(ReceiveBind(List(GInt(100)), GInt(2))),
             Par(),
+            false,
             false,
             0,
             BitSet()
@@ -432,12 +445,14 @@ class ParSortMatcherSpec extends FlatSpec with Matchers {
             List(ReceiveBind(List(GInt(100)), GInt(2))),
             Par(),
             false,
+            false,
             0,
             BitSet()
           ),
           Receive(
             List(ReceiveBind(List(GInt(0)), GInt(3))),
             Par(),
+            false,
             false,
             0,
             BitSet()
@@ -446,6 +461,7 @@ class ParSortMatcherSpec extends FlatSpec with Matchers {
             List(ReceiveBind(List(GInt(0)), GInt(3))),
             EVar(BoundVar(0)),
             false,
+            false,
             0,
             BitSet()
           ),
@@ -453,10 +469,19 @@ class ParSortMatcherSpec extends FlatSpec with Matchers {
             List(ReceiveBind(List(GInt(1)), GInt(3))),
             Par(),
             false,
+            false,
             0,
             BitSet()
           ),
-          Receive(List(ReceiveBind(List(GInt(0)), GInt(3))), Par(), true, 0, BitSet())
+          Receive(List(ReceiveBind(List(GInt(0)), GInt(3))), Par(), true, false, 0, BitSet()),
+          Receive(
+            List(ReceiveBind(List(GInt(0)), GInt(3))),
+            Par(),
+            true,
+            true,
+            0,
+            BitSet()
+          )
         )
       )
     val result = sort(parExpr)
