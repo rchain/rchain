@@ -2458,7 +2458,7 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
     )
   )
 
-  "Reducer" should """return report errors in failure cases""" in {
+  "Reducer" should "return report errors in failure cases" in {
     forAll(errorExamples) { (clue, input, error) =>
       runReducer(input) should be(Left(error)) withClue (clue)
     }
