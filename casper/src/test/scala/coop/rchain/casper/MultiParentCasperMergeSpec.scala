@@ -164,8 +164,7 @@ class MultiParentCasperMergeSpec extends FlatSpec with Matchers with Inspectors 
       checkConflicts("for (_ <- @0) { 0 }", "contract @0(id) = { 0 }", "@0!(0)"),
       // 4! C! may merge or not
       // different ! (TODO: Eventually should merge)
-      checkConflicts("for (_ <- @0) { 0 }", "contract @0(@1) = { 0 }", "@0!(0) | @0!(1)"),
-      checkConflicts("for (@0 <- @0) { 0 }", "contract @0(id) = { 0 }", "@0!(0) | @0!(1)"),
+      checkConflicts("for (@0 <- @0) { 0 }", "contract @0(@1) = { 0 }", "@0!(0) | @0!(1)"),
       // same !
       checkConflicts("for (_ <- @0) { 0 }", "contract @0(id) = { 0 }", "@0!(0)"),
       // CX CX (TODO: Eventually should merge)
