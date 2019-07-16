@@ -14,9 +14,9 @@ import pytest
 from _pytest.config.argparsing import Parser
 import docker as docker_py
 from docker.client import DockerClient
+from rchain.crypto import PrivateKey
 
 from .common import (
-    KeyPair,
     CommandLineOptions,
     TestingContext,
 )
@@ -68,29 +68,29 @@ def command_line_options(request: Any) -> Generator[CommandLineOptions, None, No
 
 
 @contextlib.contextmanager
-def temporary_bonds_file(random_generator: Random, validator_keys: List[KeyPair]) -> Generator[str, None, None]:
+def temporary_bonds_file(random_generator: Random, validator_keys: List[PrivateKey]) -> Generator[str, None, None]:
     (fd, file) = tempfile.mkstemp(prefix="rchain-bonds-file-", suffix=".txt")
     try:
         with os.fdopen(fd, "w") as f:
             for pair in validator_keys:
                 bond = random_generator.randint(1, 100)
-                f.write("{} {}\n".format(pair.public_key, bond))
+                f.write("{} {}\n".format(pair.get_public_key().to_hex(), bond))
         yield file
     finally:
         os.unlink(file)
 
 
-def make_wallets_file_lines(random_generator: Random, validator_keys: List[KeyPair]) -> List[str]:
+def make_wallets_file_lines(random_generator: Random, validator_keys: List[PrivateKey]) -> List[str]:
     result = []
     for keypair in validator_keys:
         token_amount = random_generator.randint(1, 100)
-        line = '0x{},{},0'.format(keypair.public_key, token_amount)
+        line = '0x{},{},0'.format(keypair.get_public_key().to_hex(), token_amount)
         result.append(line)
     return result
 
 
 @contextlib.contextmanager
-def temporary_wallets_file(random_generator: Random, validator_keys: List[KeyPair]) -> Generator[str, None, None]:
+def temporary_wallets_file(random_generator: Random, validator_keys: List[PrivateKey]) -> Generator[str, None, None]:
     lines = make_wallets_file_lines(random_generator, validator_keys)
     (fd, file) = tempfile.mkstemp(prefix="rchain-wallets-file-", suffix=".txt")
     try:
@@ -120,18 +120,18 @@ def random_generator(command_line_options: CommandLineOptions) -> Generator[Rand
 
 
 @contextlib.contextmanager
-def testing_context(command_line_options: CommandLineOptions, random_generator: Random, docker_client: DockerClient, bootstrap_keypair: KeyPair = None, peers_keypairs: List[KeyPair] = None, network_peers: int = 2) -> Generator[TestingContext, None, None]:
-    if bootstrap_keypair is None:
-        bootstrap_keypair = PREGENERATED_KEYPAIRS[0]
-    if peers_keypairs is None:
-        peers_keypairs = PREGENERATED_KEYPAIRS[1:][:network_peers]
+def testing_context(command_line_options: CommandLineOptions, random_generator: Random, docker_client: DockerClient, bootstrap_key: PrivateKey = None, peers_keys: List[PrivateKey] = None, network_peers: int = 2) -> Generator[TestingContext, None, None]:
+    if bootstrap_key is None:
+        bootstrap_key = PREGENERATED_KEYPAIRS[0]
+    if peers_keys is None:
+        peers_keys = PREGENERATED_KEYPAIRS[1:][:network_peers]
 
-    bonds_file_keypairs = [bootstrap_keypair] + peers_keypairs
+    bonds_file_keypairs = [bootstrap_key] + peers_keys
     with temporary_bonds_file(random_generator, bonds_file_keypairs) as bonds_file:
         context = TestingContext(
             bonds_file=bonds_file,
-            bootstrap_keypair=bootstrap_keypair,
-            peers_keypairs=peers_keypairs,
+            bootstrap_key=bootstrap_key,
+            peers_keys=peers_keys,
             docker=docker_client,
             node_startup_timeout=command_line_options.node_startup_timeout,
             network_converge_timeout=command_line_options.network_converge_timeout,

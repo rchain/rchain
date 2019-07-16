@@ -1,10 +1,8 @@
 """Tests for the testing code itself."""
 
 import random
+from rchain.crypto import PrivateKey
 
-from .common import (
-    KeyPair,
-)
 from .rnode import (
     extract_block_hash_from_propose_output,
     extract_block_count_from_show_blocks,
@@ -158,17 +156,17 @@ def test_extract_validator_stake_from_deploy_cost_str() -> None:
 def test_make_wallets_file_lines() -> None:
     random_generator = random.Random(1547120283)
     validator_keys = [
-        KeyPair(private_key='80366db5fbb8dad7946f27037422715e4176dda41d582224db87b6c3b783d709', public_key='1cd8bf79a2c1bd0afa160f6cdfeb8597257e48135c9bf5e4823f2875a1492c97'),
-        KeyPair(private_key='120d42175739387af0264921bb117e4c4c05fbe2ce5410031e8b158c6e414bb5', public_key='02ab69930f74b931209df3ce54e3993674ab3e7c98f715608a5e74048b332821'),
-        KeyPair(private_key='1f52d0bce0a92f5c79f2a88aae6d391ddf853e2eb8e688c5aa68002205f92dad', public_key='043c56051a613623cd024976427c073fe9c198ac2b98315a4baff9d333fbb42e'),
+        PrivateKey.from_hex("80366db5fbb8dad7946f27037422715e4176dda41d582224db87b6c3b783d709"),
+        PrivateKey.from_hex("120d42175739387af0264921bb117e4c4c05fbe2ce5410031e8b158c6e414bb5"),
+        PrivateKey.from_hex("1f52d0bce0a92f5c79f2a88aae6d391ddf853e2eb8e688c5aa68002205f92dad")
     ]
 
     output = make_wallets_file_lines(random_generator, validator_keys)
 
     assert output == [
-        '0x1cd8bf79a2c1bd0afa160f6cdfeb8597257e48135c9bf5e4823f2875a1492c97,40,0',
-        '0x02ab69930f74b931209df3ce54e3993674ab3e7c98f715608a5e74048b332821,45,0',
-        '0x043c56051a613623cd024976427c073fe9c198ac2b98315a4baff9d333fbb42e,26,0',
+        '0x04126107bc353c73e044fb21a5085aeafeecd69895fc05ec5033764a586bf044ddb19da5140a00912d892bfe8e10aa34eb7f9a68308646c3ac8804096ba605c2d2,40,0',
+        '0x0412ce31a3c3cbf9c69c098e593568c476a6bf7efdf9f7579c80e5328af05db7693b077d04fabbed28bb4e2d28aaba4ee50af6eddfab957c9c3c16d629c9d6aac3,45,0',
+        '0x04f42348554ab10387739d6f709ddba0eb9b80792f57ed68a1c9341635c0777590e9dbdd316c57cff51587f2f320e30605e6641e042f030b83aaaa3a3268a00fb0,26,0',
     ]
 
 
