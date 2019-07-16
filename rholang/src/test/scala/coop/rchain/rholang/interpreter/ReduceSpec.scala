@@ -2346,10 +2346,9 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
 
   "Reducer" should "work correctly in succesful cases" in {
     forAll(successfulExamples) { (clue, input, output) =>
-      val (result, errorLog) = runReducer(input)
+      val result = runReducer(input).map(_.exprs)
 
-      result.exprs should be(Seq(Expr(output))) withClue (clue)
-      errorLog should be(Vector.empty[InterpreterError]) withClue ("no errors are expected")
+      result should be(Right(Seq(Expr(output)))) withClue (clue)
     }
   }
 
@@ -2379,8 +2378,6 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
   )
   "Idempotent methods" should "return the input" in {
     forAll(idempotenceExamples) { (method, input) =>
-      implicit val errorLog: ErrorLog[Task] = new ErrorLog[Task]()
-
       val methodCall =
         EMethod(
           method,
@@ -2388,17 +2385,9 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
           List()
         )
 
-      val result: Par = withTestSpace(errorLog) {
-        case TestFixture(_, reducer) =>
-          implicit val env: Env[Par] = Env[Par]()
-          val toSetTask              = reducer.evalExpr(methodCall)
-          Await.result(toSetTask.runToFuture, 3.seconds)
-      }
+      val result = runReducer(methodCall).map(_.exprs)
 
-      result.exprs should be(Seq(Expr(input))) withClue (s"$method should not change the object it is applied on")
-      errorLog
-        .readAndClearErrorVector()
-        .unsafeRunSync should be(Vector.empty[InterpreterError]) withClue (s"no errors are expected for $method() call")
+      result should be(Right(Seq(Expr(input)))) withClue (s"$method should not change the object it is applied on")
     }
   }
 
@@ -2470,32 +2459,23 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
   )
 
   "Reducer" should """return report errors in failure cases""" in {
-
     forAll(errorExamples) { (clue, input, error) =>
-      implicit val errorLog: ErrorLog[Task] = new ErrorLog[Task]()
-
-      val result = withTestSpace(errorLog) {
-        case TestFixture(space, reducer) =>
-          implicit val env = Env[Par]()
-          val inspectTask  = reducer.eval(input) >> space.toMap
-          Await.result(inspectTask.runToFuture, 3.seconds)
-      }
-
-      result should be(mutable.HashMap.empty)
-      errorLog.readAndClearErrorVector().unsafeRunSync should be(Vector(error))
+      runReducer(input) should be(Left(error)) withClue (clue)
     }
   }
 
-  def runReducer(input : Par) : (Par, Vector[Throwable]) = {
-    implicit val errorLog: ErrorLog[Task] = new ErrorLog[Task]()
+  type RSpaceMap = Map[Seq[Par], Row[BindPattern, ListParWithRandom, TaggedContinuation]]
 
-    val result: Par = withTestSpace(errorLog) {
-      case TestFixture(_, reducer) =>
-        implicit val env: Env[Par] = Env[Par]()
-        val toSetTask              = reducer.evalExpr(input)
-        Await.result(toSetTask.runToFuture, 3.seconds)
-    }
+  def runReducer(input : Par, timeout : Duration = 3.seconds) : Either[Throwable, Par] = {
+    val errorLog: ErrorLog[Task] = new ErrorLog[Task]()
 
-    (result, errorLog.readAndClearErrorVector().unsafeRunSync)
+    val task =
+      withTestSpace(errorLog) {
+        case TestFixture(_, reducer) =>
+          implicit val env: Env[Par] = Env[Par]()
+          reducer.evalExpr(input).attempt
+      }
+
+    task.runSyncUnsafe(timeout)
   }
 }
