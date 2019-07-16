@@ -1,5 +1,7 @@
 package coop.rchain.casper
 
+import scala.util.Random._
+
 import cats.{Applicative, Functor, Monad}
 import cats.implicits._
 import coop.rchain.blockstorage.{BlockStore, IndexedBlockDagStorage}
@@ -155,15 +157,23 @@ class MultiParentCasperMergeSpec extends FlatSpec with Matchers with Inspectors 
       implicit file: sourcecode.File,
       line: sourcecode.Line
   ) =
-    diamondConflictCheck(base, b1, b2, numberOfParentsForDiamondTip = 1) >>
-      diamondConflictCheck(base, b2, b1, numberOfParentsForDiamondTip = 1)
+    randomDiamondConflictCheck(base, b1, b2, numberOfParentsForDiamondTip = 1)
 
   private def checkMerge(b1: String, b2: String, base: String)(
       implicit file: sourcecode.File,
       line: sourcecode.Line
   ) =
-    diamondConflictCheck(base, b1, b2, numberOfParentsForDiamondTip = 2) >>
-      diamondConflictCheck(base, b2, b1, numberOfParentsForDiamondTip = 2)
+    randomDiamondConflictCheck(base, b1, b2, numberOfParentsForDiamondTip = 2)
+
+  def randomDiamondConflictCheck(
+      base: Rho,
+      b1: Rho,
+      b2: Rho,
+      numberOfParentsForDiamondTip: Int
+  )(implicit file: sourcecode.File, line: sourcecode.Line): Effect[Unit] = {
+    val shuffledBlocks = shuffle(Seq(b1, b2))
+    diamondConflictCheck(base, shuffledBlocks(0), shuffledBlocks(1), numberOfParentsForDiamondTip)
+  }
 
   private def diamondConflictCheck(
       base: String,
