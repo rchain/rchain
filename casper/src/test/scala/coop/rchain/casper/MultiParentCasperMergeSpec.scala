@@ -175,23 +175,16 @@ class MultiParentCasperMergeSpec extends FlatSpec with Matchers with Inspectors 
         HashSetCasperTestNode.networkEff(genesis, networkSize = 2).use { nodes =>
           for {
             _ <- nodes(0).addBlock(deploys(0))
-            _ <- nodes(0).receive()
             _ <- nodes(1).receive()
             _ <- nodes(0).addBlock(deploys(1))
             _ <- nodes(1).addBlock(deploys(2))
             _ <- nodes(0).receive()
-            _ <- nodes(1).receive()
-            _ <- nodes(0).receive()
-            _ <- nodes(1).receive()
 
           multiParentBlock <- nodes(0).addBlock(deploys(3))
-          _                <- nodes(1).receive()
 
           _ = nodes(0).logEff.warns.isEmpty shouldBe true
-          _ = nodes(1).logEff.warns.isEmpty shouldBe true
           _ = multiParentBlock.header.get.parentsHashList.size shouldBe numberOfParentsForDiamondTip
           _ = nodes(0).casperEff.contains(multiParentBlock) shouldBeF true
-          _ = nodes(1).casperEff.contains(multiParentBlock) shouldBeF true
         } yield ()
       }
       }.adaptError {
