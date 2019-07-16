@@ -160,29 +160,19 @@ object Running {
       noop[F]
     )
 
-  def handleBlockMessage[F[_]: Monad: Log](peer: PeerNode, b: BlockMessage)(
-      casper: MultiParentCasper[F]
-  ): F[Unit] = {
-    def handleDoppelganger(
-        bm: BlockMessage,
-        self: Validator
-    ): F[Unit] =
-      if (bm.sender == self) {
-        val warnMessage =
-          s"There is another node $peer proposing using the same private key as you. Or did you restart your node?"
-        Log[F].warn(warnMessage)
-      } else ().pure[F]
-
-    casper
-      .contains(b.blockHash)
+  def handleBlockMessage[F[_]: Monad: Log: RequestedBlocks](peer: PeerNode, b: BlockMessage)(
+      casperContains: BlockHash => F[Boolean],
+      casperAdd: BlockMessage => F[BlockStatus]
+  ): F[Unit] =
+    casperContains(b.blockHash)
       .ifM(
         Log[F].info(s"Received block ${PrettyPrinter.buildString(b.blockHash)} again."),
         for {
           _ <- Log[F].info(s"Received ${PrettyPrinter.buildString(b)}.")
-          _ <- casper.addBlock(b, handleDoppelganger(_, _))
+          _ <- casperAdd(b)
+          _ <- RequestedBlocks[F].modify(_ - b.blockHash)
         } yield ()
       )
-  }
 }
 
 class Running[F[_]: RPConfAsk: BlockStore: Monad: ConnectionsCell: TransportLayer: Log: Time: Running.RequestedBlocks](
@@ -196,12 +186,24 @@ class Running[F[_]: RPConfAsk: BlockStore: Monad: ConnectionsCell: TransportLaye
   private val blockLookup: BlockHash => F[Boolean] =
     hash => BlockStore[F].get(hash).map(_.isDefined)
 
+  private def handleDoppelganger(peer: PeerNode): (BlockMessage, Validator) => F[Unit] =
+    (bm: BlockMessage, self: Validator) =>
+      if (bm.sender == self) {
+        val warnMessage =
+          s"There is another node $peer proposing using the same private key as you. Or did you restart your node?"
+        Log[F].warn(warnMessage)
+      } else ().pure[F]
+
   def applicative: Applicative[F] = Applicative[F]
 
   override def init: F[Unit] = theInit
 
   override def handle(peer: PeerNode, msg: CasperMessage): F[Unit] = msg match {
-    case b: BlockMessage              => handleBlockMessage[F](peer, b)(casper)
+    case b: BlockMessage =>
+      handleBlockMessage[F](peer, b)(
+        casper.contains,
+        b => casper.addBlock(b, handleDoppelganger(peer))
+      )
     case br: BlockRequest             => handleBlockRequest(peer, br)
     case hbr: HasBlockRequest         => handleHasBlockRequest[F](peer, hbr)(blockLookup)
     case hb: HasBlock                 => handleHasBlock[F](peer, hb)(casper.contains)
