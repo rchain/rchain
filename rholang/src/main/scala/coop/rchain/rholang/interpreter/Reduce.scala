@@ -1404,23 +1404,28 @@ class DebruijnInterpreter[M[_], F[_]](
   }
 
   private[this] val toMap: Method = new Method() {
+    def makeMap(ps: Seq[Par], connectiveUsed : Boolean, locallyFree : Coeval[BitSet], remainder:Option[Var]) = {
+      val keyPairs = ps.map(RhoType.Tuple2.unapply)
+      if (keyPairs.exists(_.isEmpty))
+        MethodNotDefined("toMap", "types except List[(K,V)]").raiseError[M, Par]
+      else
+        (EMapBody(
+          ParMap(
+            keyPairs.flatMap(_.toList),
+            connectiveUsed,
+            locallyFree,
+            remainder
+          )
+        ): Par).pure[M]
+    }
     def toMap(baseExpr: Expr): M[Par] =
       baseExpr.exprInstance match {
         case e: EMapBody =>
           (e: Par).pure[M]
+        case ESetBody(ParSet(basePs, connectiveUsed, locallyFree, remainder)) =>
+          makeMap(basePs.toSeq, connectiveUsed, locallyFree, remainder)
         case EListBody(EList(basePs, locallyFree, connectiveUsed, remainder)) =>
-          val keyPairs = basePs.map(RhoType.Tuple2.unapply)
-          if (keyPairs.exists(_.isEmpty))
-            MethodNotDefined("toMap", "types except List[(K,V)]").raiseError[M, Par]
-          else
-            (EMapBody(
-              ParMap(
-                keyPairs.flatMap(_.toList),
-                connectiveUsed,
-                locallyFree.get.pure[Coeval],
-                remainder
-              )
-            ): Par).pure[M]
+          makeMap(basePs, connectiveUsed, locallyFree.get.pure[Coeval], remainder)
         case other =>
           MethodNotDefined("toMap", other.typ).raiseError[M, Par]
       }

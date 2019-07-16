@@ -2252,11 +2252,36 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
       )
     ),
     (
-      """[("a",1), ("b",2), ("c",3)].toMap() => {"a":1, "b":2, "c":3)""",
+      """[("a",1), ("b",2), ("c",3)].toMap() => {"a":1, "b":2, "c":3}""",
       EMethod(
         "toMap",
         EListBody(
           EList(
+            List[Par](
+              ETupleBody(ETuple(Seq(GString("a"), GInt(1L)))),
+              ETupleBody(ETuple(Seq(GString("b"), GInt(2L)))),
+              ETupleBody(ETuple(Seq(GString("c"), GInt(3L))))
+            )
+          )
+        ),
+        List[Par]()
+      ),
+      EMapBody(
+        ParMap(
+          List[(Par, Par)](
+            (GString("a"), GInt(1L)),
+            (GString("b"), GInt(2L)),
+            (GString("c"), GInt(3L))
+          )
+        )
+      )
+    ),
+    (
+      """Set(("a",1), ("b",2), ("c",3)).toMap() => {"a":1, "b":2, "c":3}""",
+      EMethod(
+        "toMap",
+        ESetBody(
+          ParSet(
             List[Par](
               ETupleBody(ETuple(Seq(GString("a"), GInt(1L)))),
               ETupleBody(ETuple(Seq(GString("b"), GInt(2L)))),
