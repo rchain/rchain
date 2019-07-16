@@ -85,26 +85,32 @@ object Running {
       Map(filtered: _*)
     }
 
+    def tryRerequest(hash: BlockHash, requested: Requested): F[(BlockHash, Option[Requested])] =
+      if (requested.waitingList.nonEmpty) {
+        val nextPeer = requested.waitingList(0)
+        def modifiedRequested(ts: Long) = requested.copy(
+          timestamp = ts,
+          waitingList = requested.waitingList.tail,
+          peers = requested.peers + nextPeer
+        )
+        for {
+          _  <- requestForBlock[F](nextPeer, hash)
+          ts <- Time[F].currentMillis
+        } yield ((hash -> Option(modifiedRequested(ts))))
+      } else {
+        val warnMessage = s"Could not retrieve requested block ${PrettyPrinter.buildString(hash)}. " +
+          "Removing the request from the requested blocks list. Casper will have to re-request the block."
+        Log[F].warn(warnMessage).as((hash -> none[Requested]))
+      }
+
     RequestedBlocks[F].flatModify(requests => {
       requests.keys.toList
         .traverse(hash => {
           val requested = requests(hash)
-          if (requested.waitingList.nonEmpty) {
-            val nextPeer = requested.waitingList(0)
-            def modifiedRequested(ts: Long) = requested.copy(
-              timestamp = ts,
-              waitingList = requested.waitingList.tail,
-              peers = requested.peers + nextPeer
-            )
-            for {
-              _  <- requestForBlock[F](nextPeer, hash)
-              ts <- Time[F].currentMillis
-            } yield ((hash -> Option(modifiedRequested(ts))))
-          } else {
-            val warnMessage = s"Could not retrieve requested block ${PrettyPrinter.buildString(hash)}. " +
-              "Removing the request from the requested blocks list. Casper will have to re-request the block."
-            Log[F].warn(warnMessage).as((hash -> none[Requested]))
-          }
+          Time[F].currentMillis
+            .map(_ - requested.timestamp > timeout.toMillis)
+            .ifM(tryRerequest(hash, requested), (hash -> Option(requested)).pure[F])
+
         })
         .map(list => toMap(list))
     })

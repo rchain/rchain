@@ -33,7 +33,7 @@ class CommUtilSpec extends FunSpec with BeforeAndAfterEach with Matchers {
   describe("CommUtil") {
     describe("sendBlockRequest") {
       describe("if given block was not yet requested") {
-        it("broadcast HasBlock to random peers") {
+        it("broadcast HasBlockRequest to random peers") {
           val peers = List(
             peerNode("peer1", 40400),
             peerNode("peer2", 40400)

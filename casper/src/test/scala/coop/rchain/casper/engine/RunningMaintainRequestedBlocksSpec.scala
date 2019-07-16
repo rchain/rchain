@@ -33,7 +33,15 @@ class RunningMaintainRequestedBlocksSpec extends FunSpec with BeforeAndAfterEach
   describe("Running") {
     describe("maintainRequestedBlocks, for every block that was requested") {
       describe("if block request is still within a timeout") {
-        it("should keep the request not touch")(pending)
+        it("should keep the request not touch") {
+          val requested                = Requested(timestamp = notTimedOut)
+          implicit val requestedBlocks = initRequestedBlocks(init = Map(hash -> requested))
+          // when
+          Running.maintainRequestedBlocks[Coeval].apply()
+          // then
+          val requestedBlocksMapAfter = requestedBlocks.read.apply
+          requestedBlocksMapAfter.size should be(1)
+        }
       }
       describe("if block was not delivered within given timeout") {
         describe("if waiting list is not empty") {
@@ -160,6 +168,7 @@ class RunningMaintainRequestedBlocksSpec extends FunSpec with BeforeAndAfterEach
 
   private def alwaysSuccess: PeerNode => Protocol => CommErr[Unit] = kp(kp(Right(())))
 
-  private def timedOut: Long = time.clock - (2 * Running.timeout.toMillis)
+  private def timedOut: Long    = time.clock - (2 * Running.timeout.toMillis)
+  private def notTimedOut: Long = time.clock - 1
 
 }
