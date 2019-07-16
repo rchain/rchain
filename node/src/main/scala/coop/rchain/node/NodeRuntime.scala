@@ -221,7 +221,8 @@ class NodeRuntime private[node] (
       oracle: SafetyOracle[Task],
       packetHandler: PacketHandler[Task],
       casperConstructor: MultiParentCasperRef[Task],
-      engineCell: EngineCell[Task]
+      engineCell: EngineCell[Task],
+      requestedBlocks: Running.RequestedBlocks[Task]
   ): Task[Unit] = {
 
     val info: Task[Unit] =
@@ -264,6 +265,7 @@ class NodeRuntime private[node] (
       for {
         casper <- casperConstructor.get
         _      <- casper.fold(().pure[Task])(_.fetchDependencies)
+        _      <- Running.maintainRequestedBlocks[Task]
         _      <- time.sleep(30.seconds)
       } yield ()
 
@@ -553,7 +555,8 @@ class NodeRuntime private[node] (
       oracle,
       packetHandler,
       multiParentCasperRef,
-      engineCell
+      engineCell,
+      requestedBlocks
     )
     _ <- handleUnrecoverableErrors(program)
   } yield ()
