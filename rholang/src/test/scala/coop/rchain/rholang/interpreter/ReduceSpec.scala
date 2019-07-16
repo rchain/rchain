@@ -2346,19 +2346,10 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
 
   "Reducer" should "work correctly in succesful cases" in {
     forAll(successfulExamples) { (clue, input, output) =>
-      implicit val errorLog: ErrorLog[Task] = new ErrorLog[Task]()
-
-      val result: Par = withTestSpace(errorLog) {
-        case TestFixture(_, reducer) =>
-          implicit val env: Env[Par] = Env[Par]()
-          val toSetTask              = reducer.evalExpr(input)
-          Await.result(toSetTask.runToFuture, 3.seconds)
-      }
+      val (result, errorLog) = runReducer(input)
 
       result.exprs should be(Seq(Expr(output))) withClue (clue)
-      errorLog
-        .readAndClearErrorVector()
-        .unsafeRunSync should be(Vector.empty[InterpreterError]) withClue ("no errors are expected")
+      errorLog should be(Vector.empty[InterpreterError]) withClue ("no errors are expected")
     }
   }
 
@@ -2493,5 +2484,18 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
       result should be(mutable.HashMap.empty)
       errorLog.readAndClearErrorVector().unsafeRunSync should be(Vector(error))
     }
+  }
+
+  def runReducer(input : Par) : (Par, Vector[Throwable]) = {
+    implicit val errorLog: ErrorLog[Task] = new ErrorLog[Task]()
+
+    val result: Par = withTestSpace(errorLog) {
+      case TestFixture(_, reducer) =>
+        implicit val env: Env[Par] = Env[Par]()
+        val toSetTask              = reducer.evalExpr(input)
+        Await.result(toSetTask.runToFuture, 3.seconds)
+    }
+
+    (result, errorLog.readAndClearErrorVector().unsafeRunSync)
   }
 }
