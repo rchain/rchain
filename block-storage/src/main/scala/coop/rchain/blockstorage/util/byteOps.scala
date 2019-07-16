@@ -10,7 +10,7 @@ import coop.rchain.models.Validator
 import coop.rchain.shared.Language.ignore
 
 object byteOps {
-  implicit class ByteBufferRich(val byteBuffer: ByteBuffer) extends AnyVal {
+  implicit class ByteBufferRich(private val byteBuffer: ByteBuffer) extends AnyVal {
     def getBlockHash(): BlockHash = {
       val blockHashBytes = Array.ofDim[Byte](BlockHash.Length)
       ignore { byteBuffer.get(blockHashBytes) }
@@ -24,7 +24,7 @@ object byteOps {
     }
   }
 
-  implicit class IntRich(val value: Int) extends AnyVal {
+  implicit class IntRich(private val value: Int) extends AnyVal {
     def toByteString: ByteString = {
       val byteBuffer = ByteBuffer.allocate(4)
       ignore { byteBuffer.putInt(value) }
@@ -32,7 +32,7 @@ object byteOps {
     }
   }
 
-  implicit class LongRich(val value: Long) extends AnyVal {
+  implicit class LongRich(private val value: Long) extends AnyVal {
     def toByteString: ByteString = {
       val byteBuffer = ByteBuffer.allocate(8)
       ignore { byteBuffer.putLong(value) }
@@ -40,7 +40,8 @@ object byteOps {
     }
   }
 
-  implicit class EquivocationRecordRich(val equivocationRecord: EquivocationRecord) extends AnyVal {
+  implicit class EquivocationRecordRich(private val equivocationRecord: EquivocationRecord)
+      extends AnyVal {
     def toByteString: ByteString = {
       val blockHashes =
         equivocationRecord.equivocationDetectedBlockHashes.fold(ByteString.EMPTY)(_.concat(_))

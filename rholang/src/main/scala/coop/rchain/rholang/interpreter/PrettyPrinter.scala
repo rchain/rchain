@@ -21,7 +21,7 @@ object PrettyPrinter {
   def apply(freeShift: Int, boundShift: Int): PrettyPrinter =
     PrettyPrinter(freeShift, boundShift, Vector.empty[Int], "free", "a", 23, 128)
 
-  implicit class CappedOps(val str: String) extends AnyVal {
+  implicit class CappedOps(private val str: String) extends AnyVal {
     def cap() = Printer.OUTPUT_CAPPED.map(n => s"${str.take(n)}...").getOrElse(str)
   }
 }
