@@ -10,8 +10,8 @@ import coop.rchain.casper.scalatestcontrib._
 import coop.rchain.casper.util.{ConstructDeploy, RSpaceUtil}
 import coop.rchain.p2p.EffectsTestInstances.LogicalTime
 import coop.rchain.shared.Debug
-import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
+import org.scalatest.exceptions.TestFailedException
 import org.scalatest.{FlatSpec, Inspectors, Matchers}
 
 class MultiParentCasperMergeSpec extends FlatSpec with Matchers with Inspectors {
@@ -155,20 +155,20 @@ class MultiParentCasperMergeSpec extends FlatSpec with Matchers with Inspectors 
     ).parSequence_
   }
 
-  private def checkConflicts(base: String, b1: String, b2: String): Effect[Unit] =
-    diamondConflictCheck(base, b1, b2, numberOfParentsForDiamondTip = 1) /*>>
-      diamondConflictCheck(base, b2, b1, numberOfParentsForDiamondTip = 1)*/
+  private def checkConflicts(base: String, b1: String, b2: String)(implicit file: sourcecode.File, line: sourcecode.Line): Effect[Unit] =
+    diamondConflictCheck(base, b1, b2, numberOfParentsForDiamondTip = 1) >>
+      diamondConflictCheck(base, b2, b1, numberOfParentsForDiamondTip = 1)
 
-  private def checkMerge(base: String, b1: String, b2: String): Effect[Unit] =
-    diamondConflictCheck(base, b1, b2, numberOfParentsForDiamondTip = 2) /*>>
-      diamondConflictCheck(base, b2, b1, numberOfParentsForDiamondTip = 2)*/
+  private def checkMerge(base: String, b1: String, b2: String)(implicit file: sourcecode.File, line: sourcecode.Line): Effect[Unit] =
+    diamondConflictCheck(base, b1, b2, numberOfParentsForDiamondTip = 2) >>
+      diamondConflictCheck(base, b2, b1, numberOfParentsForDiamondTip = 2)
 
   private def diamondConflictCheck(
       base: String,
       b1: String,
       b2: String,
       numberOfParentsForDiamondTip: Int
-  ): Effect[Unit] =
+  )(implicit file: sourcecode.File, line: sourcecode.Line): Effect[Unit] =
     Debug.print[Effect](base, b1, b2, numberOfParentsForDiamondTip) >>
       Vector(
         ConstructDeploy.sourceDeployNowF[Effect](base),
@@ -198,6 +198,18 @@ class MultiParentCasperMergeSpec extends FlatSpec with Matchers with Inspectors 
           _ = nodes(1).casperEff.contains(multiParentBlock.blockHash) shouldBeF true
         } yield ()
       }
+      }.adaptError {
+        case _: TestFailedException =>
+          new TestFailedException(
+            s"""Expected
+               | base = $base
+               | b1   = $b1
+               | b2   = $b2
+               |
+               | to produce a merge block with $numberOfParentsForDiamondTip parents, but it didn't
+               |
+               | go see it at ${file.value}:${line.value}
+               | """.stripMargin, 5).severedAtStackDepth
     }
 
   it should "not merge blocks that touch the same channel" in effectTest {
