@@ -1406,6 +1406,8 @@ class DebruijnInterpreter[M[_], F[_]](
   private[this] val toMap: Method = new Method() {
     def toMap(baseExpr: Expr): M[Par] =
       baseExpr.exprInstance match {
+        case e: EMapBody =>
+          (e: Par).pure[M]
         case EListBody(EList(basePs, locallyFree, connectiveUsed, remainder)) =>
           val keyPairs = basePs.map(RhoType.Tuple2.unapply)
           if (keyPairs.exists(_.isEmpty))

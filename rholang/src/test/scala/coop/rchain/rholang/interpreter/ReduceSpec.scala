@@ -2252,31 +2252,6 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
       )
     ),
     (
-      "Set(1, 2, 3).toSet() => Set(1, 2, 3)",
-      EMethod(
-        "toSet",
-        ESetBody(
-          ParSet(
-            List(
-              GInt(1L),
-              GInt(2L),
-              GInt(3L)
-            )
-          )
-        ),
-        List()
-      ),
-      ESetBody(
-        ParSet(
-          List(
-            GInt(1L),
-            GInt(2L),
-            GInt(3L)
-          )
-        )
-      )
-    ),
-    (
       """[("a",1), ("b",2), ("c",3)].toMap() => {"a":1, "b":2, "c":3)""",
       EMethod(
         "toMap",
@@ -2359,6 +2334,55 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
       errorLog
         .readAndClearErrorVector()
         .unsafeRunSync should be(Vector.empty[InterpreterError]) withClue ("no errors are expected")
+    }
+  }
+
+  val idempotenceExamples = Table(
+    ("method", "input"),
+    ("toSet",
+      ESetBody(
+        ParSet(
+          List(
+            GInt(1L),
+            GInt(2L),
+            GInt(3L)
+          )
+        )
+      )
+    ),
+    ( "toMap",
+      EMapBody(
+        ParMap(
+          List[(Par, Par)](
+            (GString("a"), GInt(1L)),
+            (GString("b"), GInt(2L)),
+            (GString("c"), GInt(3L))
+          )
+        )
+      ))
+  )
+  "Idempotent methods" should "return the input" in {
+    forAll(idempotenceExamples) { (method, input) =>
+      implicit val errorLog: ErrorLog[Task] = new ErrorLog[Task]()
+
+      val methodCall =
+        EMethod(
+          method,
+          input,
+          List()
+        )
+
+      val result: Par = withTestSpace(errorLog) {
+        case TestFixture(_, reducer) =>
+          implicit val env: Env[Par] = Env[Par]()
+          val toSetTask              = reducer.evalExpr(methodCall)
+          Await.result(toSetTask.runToFuture, 3.seconds)
+      }
+
+      result.exprs should be(Seq(Expr(input))) withClue (s"$method should not change the object it is applied on")
+      errorLog
+        .readAndClearErrorVector()
+        .unsafeRunSync should be(Vector.empty[InterpreterError]) withClue (s"no errors are expected for $method() call")
     }
   }
 
