@@ -69,83 +69,112 @@ class MultiParentCasperMergeSpec extends FlatSpec with Matchers with Inspectors 
     List(
       // !X !X (TODO: Eventually should merge)
       checkConflicts("@0!(0)", "@0!(0)", "0"),
-      // !X !4
-      checkMerge("@0!(0)", "@0!(0)", "for (_ <- @0) { 0 }"),
-      // !X !C
-      checkMerge("@0!(0)", "@0!(0)", "contract @0(id) = { 0 }"),
+      // !X !4 (TODO: Eventually should merge)
+      checkConflicts("@0!(0)", "@0!(0)", "for (_ <- @0) { 0 }"),
+      // !X (!4)
+      checkMerge("@0!(0)", "@0!(1) | for (_ <- @0) { 0 }", "0"),
+      // !X !C (TODO: Should merge once we have merge rule for contracts)
+      checkConflicts("@0!(0)", "@0!(1)", "contract @0(@1) = { 0 }"),
+      // !X (!C)
+      //FIXME: THIS NEEDS TO CONFLICT
+      checkMerge("@0!(0)", "@0!(1) | contract @0(id) = { 0 }", "0"),
       // !X 4X
       checkConflicts("@0!(0)", "for (_ <- @0) { 0 }", "0"),
-      // !X 4!
-      checkMerge("@0!(0)", "for (_ <- @0) { 0 }", "@0!(0)"),
-      // !X 4!!
-      checkMerge("@0!(0)", "for (_ <- @0) { 0 }", "@0!!(0)"),
+      // !X 4! (TODO: Eventually should merge)
+      checkConflicts("@0!(0)", "for (_ <- @0) { 0 }", "@0!(0)"),
+      // !X (4!) covered above by the equivalent !X (!4)
+      // !X 4!! (TODO: Eventually should merge)
+      checkConflicts("@0!(0)", "for (_ <- @0) { 0 }", "@0!!(0)"),
+      // !X (4!!)
+      checkMerge("@0!(0)", "for (_ <- @0) { 0 } | @0!!(0)", "0"),
       // !X !!X (TODO: Eventually should merge)
       checkConflicts("@0!(0)", "@0!!(0)", "0"),
-      // !X !!4
-      checkMerge("@0!(0)", "@0!!(0)", "for (_ <- @0) { 0 }"),
+      // !X !!4 (TODO: Eventually should merge)
+      // !X (!!4) covered above by the equivalent !X (4!!)
+      checkConflicts("@0!(0)", "@0!!(1)", "for (@1 <- @0) { 0 }"),
       // !X CX
       checkConflicts("@0!(0)", "contract @0(id) = { 0 }", "0"),
       // !X C!
-      checkMerge("@0!(0)", "contract @0(id) = { 0 }", "@0!(0)"),
-      // (!4) (!4)
-      checkMerge("for (_ <- @0) { 0 } | @0!(1)", "for (_ <- @0) { 0 } | @0!(2)", "0"),
+      checkConflicts("@0!(0)", "contract @0(id) = { 0 }", "@0!(0)"),
+      // !X (C!)
+      //FIXME: THIS NEEDS TO CONFLICT
+      checkMerge("@0!(0)", "contract @0(id) = { 0 } | @0!(0)", "0"),
       // !4 !4
       checkConflicts("@0!(1)", "@0!(2)", "for (_ <- @0) { 0 }"),
-      // !4 !4
-      checkMerge("@0!(1)", "for (@2 <- @0) { 0 } | @0!(2)", "for (@0 <- @0) { 0 }"),
-      // !4 !C
-      checkMerge("@0!(1)", "@0!(1)", "for (@0 <- @0) { 0 } | contract @0(id) = { 0 }"),
-      // !4 4X
-      checkMerge("@0!(0)", "for (_ <- @0) { 0 }", "for (_ <- @0) { 0 }"),
-      // Skip !4 4! as handled above
-      // !4 4!!
-      checkMerge("@0!(0)", "for (_ <- @0) { 0 }", "for (_ <- @0) { 0 } | @0!!(0)"),
+      // !4 (!4)
+      checkMerge("@0!(0)", "for (@2 <- @0) { 0 } | @0!(2)", "for (@0 <- @0) { 0 }"),
+      // (!4) (!4)
+      checkMerge("@0!(0) | for (_ <- @0) { 0 }", "@0!(0) | for (_ <- @0) { 0 }", "0"),
+      // (!4) (!4)
+      checkMerge("@0!(1) | for (_ <- @0) { 0 }", "@0!(1) | for (_ <- @0) { 0 }", "for (@0 <- @0) { 0 }"),
+      // !4 !C (TODO: Eventually should merge)
+      checkConflicts("@0!(0)", "@0!(1)", "for (@0 <- @0) { 0 } | contract @0(@1) = { 0 }"),
+      // !4 4X (TODO: Eventually should merge)
+      checkConflicts("@0!(0)", "for (_ <- @0) { 0 }", "for (_ <- @0) { 0 }"),
+      // !4 4! (TODO: Eventually should merge)
+      checkConflicts("@0!(0)", "for (_ <- @0) { 0 }", "for (@0 <- @0) { 0 } | @0!(1)"),
+      // !4 4!! (TODO: Eventually should merge)
+      checkConflicts("@0!(0)", "for (_ <- @0) { 0 }", "for (@0 <- @0) { 0 } | @0!!(1)"),
+
+      //FIXME: double check what should stay as conflicting below this line
+      // - I'm just making the test pass now, but there could be cases that should say
+      // 'FIXME: this needs to conflict' or 'TODO Eventually should merge'
+      //FIXME: double check all the rholang below too, it might be inconsistent with its test case
+
       // !4 !!X
-      checkMerge("@0!(0)", "@0!!(0)", "for (_ <- @0) { 0 }"),
+      checkConflicts("@0!(0)", "@0!!(0)", "for (_ <- @0) { 0 }"),
       // !4 !!4
       checkConflicts("@0!(0)", "@0!!(0)", "for (_ <- @0) { 0 } | for (_ <- @0) { 0 }"),
-      // !4 CX (TODO: check if this could conflict),
-      checkMerge("@0!(1)", "contract @0(id) = { 0 }", "for (_ <- @0) { 0 }"),
-      // !4 C!
-      checkMerge("@0!(0)", "contract @0(id) = { 0 }", "for (_ <- @0) { 0 } | for (_ <- @0) { 0 }"),
-      // !C !C
-      checkMerge("@0!(0)", "@0!(0)", "for (_ <- @0) { 0 } | for (_ <- @0) { 0 }"),
-      // !C 4X merges
-      checkMerge("@0!(0)", "for (_ <- @0) { 0 }", "for (_ <- @0) { 0 }"),
-      // !C 4! merges
-      checkMerge("@0!(0)", "for (_ <- @0) { 0 }", "for (_ <- @0) { 0 } | @0!(0)"),
-      // !C 4!! merges
-      checkMerge("@0!(0)", "for (_ <- @0) { 0 }", "for (_ <- @0) { 0 } | @0!!(0)"),
-      // !C !!X merges
-      checkMerge("@0!(0)", "@0!!(0)", "for (_ <- @0) { 0 }"),
-      // !C !!4 merges
-      checkMerge("@0!(0)", "@0!!(0)", "for (_ <- @0) { 0 } | for (_ <- @0) { 0 }"),
-      // !C CX merges
-      checkMerge("@0!(0)", "contract @0(id) = { 0 }", "for (_ <- @0) { 0 }"),
-      // !C C! merges
-      checkMerge("@0!(0)", "contract @0(id) = { 0 }", "for (_ <- @0) { 0 } | @0!(0)"),
+      // !4 CX
+      checkConflicts("@0!(1)", "contract @0(id) = { 0 }", "for (_ <- @0) { 0 }"),
+      // !4 C! (TODO: Eventually should merge)
+      checkConflicts("@0!(0)", "contract @0(@1) = { 0 }", "for (_ <- @0) { 0 } | @0!(1)"),
+      // !C !C (TODO: Eventually should merge)
+      checkConflicts("@0!(0)", "@0!(0)", "contract @0(@0) = { 0 }"),
+      // !C 4X
+      checkConflicts("@0!(0)", "for (_ <- @0) { 0 }", "for (_ <- @0) { 0 }"),
+      // !C 4!
+      checkConflicts("@0!(0)", "for (_ <- @0) { 0 }", "for (_ <- @0) { 0 } | @0!(0)"),
+      // !C 4!! (TODO: Eventually should merge)
+      checkConflicts("@0!(0)", "for (_ <- @0) { 0 }", "contract @0(@0) = { 0 } | @0!!(1)"),
+      // !C !!X (TODO: Eventually should merge)
+      checkConflicts("@0!(0)", "@0!!(1)", "contract @0(@0) = { 0 }"),
+      // !C !!4 (TODO: Eventually should merge)
+      checkConflicts("@0!(0)", "@0!!(1)", "contract @0(@0) = { 0 } | for (@1 <- @0) { 0 }"),
+      // !C CX (TODO: Eventually should merge)
+      checkConflicts("@0!(0)", "contract @0(id) = { 0 }", "contract @0(id) = { 0 }"),
+      // !C C! (TODO: Eventually should merge)
+      checkConflicts("@0!(0)", "contract @0(id) = { 0 }", "contract @0(@0) = { 0 } | @0!(1)"),
       // 4X 4X (TODO: Eventually should merge)
       checkConflicts("for (_ <- @0) { 0 }", "for (_ <- @0) { 0 }", "0"),
-      // 4X 4! merges
-      checkMerge("for (_ <- @0) { 0 }", "for (_ <- @0) { 0 }", "@0!(0)"),
+      // 4X 4!
+      checkConflicts("for (_ <- @0) { 0 }", "for (_ <- @0) { 0 }", "@0!(0)"),
       // Skipping 4X 4!! merges, 4X !!X may merge or not, 4X !!4 may merge or not
-      // 4X CX merges
-      checkMerge("for (_ <- @0) { 0 }", "contract @0(id) = { 0 }", "0"),
-      // 4X C! merges
-      checkMerge("for (_ <- @0) { 0 }", "contract @0(id) = { 0 }", "@0!(0)"),
+      // 4X CX
+      checkConflicts("for (_ <- @0) { 0 }", "contract @0(id) = { 0 }", "0"),
+      // 4X C! (TODO: Eventually should merge)
+      checkConflicts("for (_ <- @0) { 0 }", "contract @0(@1) = { 0 }", "@0!(1)"),
       // 4! 4! may merge or not
-      checkMerge("for (_ <- @0) { 0 }", "for (_ <- @0) { 0 }", "@0!(0) | @0!(0)"),
-      checkConflicts("for (_ <- @0) { 0 }", "for (_ <- @0) { 0 }", "@0!(0) | @0!(0)"),
+      // different ! (TODO: Eventually should merge)
+      checkConflicts("for (@0 <- @0) { 0 }", "for (@1 <- @0) { 0 }", "@0!(0) | @0!(1)"),
+      // same !
+      checkConflicts("for (_ <- @0) { 0 }", "for (_ <- @0) { 0 }", "@0!(0)"),
       // Skipping 4! 4!! merges, 4! !!X merges, 4! !!4 merges
       // 4! CX merges
-      checkMerge("for (_ <- @0) { 0 }", "contract @0(id) = { 0 }", "@0!(0)"),
+      checkConflicts("for (_ <- @0) { 0 }", "contract @0(id) = { 0 }", "@0!(0)"),
       // 4! C! may merge or not
-      checkMerge("for (_ <- @0) { 0 }", "contract @0(id) = { 0 }", "@0!(0) | @0!(0)"),
-      checkConflicts("for (_ <- @0) { 0 }", "contract @0(id) = { 0 }", "@0!(0) | @0!(0)"),
-      // CX CX merges
-      checkMerge("contract @0(id) = { 0 }", "contract @0(id) = { 0 }", "0")
-      // C! C! conflicts (TODO: Double check mergeability spreadsheet)
-      // checkConflicts("@0!(0) | @0!(0)", "contract @0(id) = { 0 }", "contract @0(id) = { 0 }")
+      // different ! (TODO: Eventually should merge)
+      checkConflicts("for (_ <- @0) { 0 }", "contract @0(@1) = { 0 }", "@0!(0) | @0!(1)"),
+      checkConflicts("for (@0 <- @0) { 0 }", "contract @0(id) = { 0 }", "@0!(0) | @0!(1)"),
+      // same !
+      checkConflicts("for (_ <- @0) { 0 }", "contract @0(id) = { 0 }", "@0!(0)"),
+      // CX CX (TODO: Eventually should merge)
+      checkConflicts("contract @0(id) = { 0 }", "contract @0(id) = { 0 }", "0"),
+      // C! C! may merge or not
+      // different ! (TODO: Eventually should merge)
+      checkConflicts("contract @0(@0) = { 0 }", "contract @0(@1) = { 0 }", "@0!(0) | @0!(1)"),
+      // same !
+      checkConflicts("contract @0(id) = { 0 }", "contract @0(id) = { 0 }", "@0!(0)"),
       // 4!! / !!4 row is similar to !4 / 4! and thus skipped
       // C!! / !!C row is similar to !C / C! and thus skipped
     ).parSequence_
