@@ -38,7 +38,7 @@ class GenesisCeremonyMasterSpec extends WordSpec {
       val test = for {
         sigs <- Ref.of[Task, Set[Signature]](Set.empty)
         abp = ApproveBlockProtocol.unsafe[Task](
-          genesis,
+          genesisBlock,
           requiredSigns,
           duration,
           interval,
@@ -56,7 +56,7 @@ class GenesisCeremonyMasterSpec extends WordSpec {
           .forkAndForget
           .runToFuture
         blockApproval = ApproveBlockProtocolTest.approval(
-          ApprovedBlockCandidate(Some(genesis), requiredSigns),
+          ApprovedBlockCandidate(Some(genesisBlock), requiredSigns),
           validatorSk,
           validatorPk
         )
@@ -64,9 +64,9 @@ class GenesisCeremonyMasterSpec extends WordSpec {
         //wait until casper is defined, with 1 minute timeout (indicating failure)
         possiblyCasper  <- Task.racePair(Task.sleep(1.minute), waitUtilCasperIsDefined)
         _               = assert(possiblyCasper.isRight)
-        blockO          <- blockStore.get(genesis.blockHash)
+        blockO          <- blockStore.get(genesisBlock.blockHash)
         _               = assert(blockO.isDefined)
-        _               = assert(blockO.contains(genesis))
+        _               = assert(blockO.contains(genesisBlock))
         handlerInternal <- EngineCell[Task].read
         _               = assert(handlerInternal.isInstanceOf[Running[Task]])
         // assert that we really serve last approved block

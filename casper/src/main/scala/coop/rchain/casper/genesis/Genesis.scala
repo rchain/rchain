@@ -51,9 +51,10 @@ object Genesis {
       StandardDeploys.lockbox,
       StandardDeploys.authKey,
       StandardDeploys.revVault,
-      StandardDeploys.revGenerator(genesisPk, vaults, supply),
-      StandardDeploys.poSGenerator(posParams)
-    )
+      StandardDeploys.revGenerator(genesisPk, supply)
+    ) ++
+      vaults.grouped(2).toSeq.map(StandardDeploys.vaultGenerator(genesisPk, _)) ++
+      Seq(StandardDeploys.poSGenerator(posParams))
 
   //TODO: Decide on version number and shard identifier
   def fromInputFiles[F[_]: Concurrent: Sync: Log: Time: RaiseIOError](

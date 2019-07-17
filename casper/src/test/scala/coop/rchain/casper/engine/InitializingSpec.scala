@@ -35,7 +35,7 @@ class InitializingSpec extends WordSpec {
           theInit
         )
 
-      val approvedBlockCandidate = ApprovedBlockCandidate(block = Some(genesis))
+      val approvedBlockCandidate = ApprovedBlockCandidate(block = Some(genesisBlock))
 
       val approvedBlock: ApprovedBlock = ApprovedBlock(
         candidate = Some(approvedBlockCandidate),
@@ -55,9 +55,9 @@ class InitializingSpec extends WordSpec {
         _               <- bootstrapCasper.handle(local, approvedBlock)
         casperO         <- MultiParentCasperRef[Task].get
         _               = assert(casperO.isDefined)
-        blockO          <- blockStore.get(genesis.blockHash)
+        blockO          <- blockStore.get(genesisBlock.blockHash)
         _               = assert(blockO.isDefined)
-        _               = assert(blockO.contains(genesis))
+        _               = assert(blockO.contains(genesisBlock))
         handlerInternal <- EngineCell[Task].read
         _               = assert(handlerInternal.isInstanceOf[Running[Task]])
         _ = assert(

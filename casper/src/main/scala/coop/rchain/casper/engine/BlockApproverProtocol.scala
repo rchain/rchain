@@ -133,8 +133,7 @@ object BlockApproverProtocol {
             Long.MaxValue
           )
           .toSet
-        blockDeploys          = body.deploys.flatMap(InternalProcessedDeploy.fromProcessedDeploy)
-        genesisBlessedDeploys = genesisBlessedContracts
+        blockDeploys = body.deploys.flatMap(InternalProcessedDeploy.fromProcessedDeploy)
         _ <- (blockDeploys.size == genesisBlessedContracts.size)
               .either(())
               .or("Mismatch between number of candidate deploys and expected number of deploys.")

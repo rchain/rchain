@@ -10,8 +10,6 @@ import monix.eval.Coeval
 
 final case class RevGenerator(
     genesisPk: PublicKey,
-    genesisAddress: RevAddress,
-    userVaults: Seq[Vault],
     supply: Long
 ) extends CompiledRholangSource {
 
@@ -24,19 +22,10 @@ final case class RevGenerator(
        #     new genesisVaultCh in {
        #       @RevVault!(
        #         "findOrCreateGenesisVault",
-       #         "${genesisAddress.toBase58}",
+       #         "${RevAddress.fromPublicKey(genesisPk).get.toBase58}",
        #         $supply,
        #         *genesisVaultCh
        #       )
-       #       | for (@(true, genesisVault) <- genesisVaultCh) {
-       #         new genesisAuthKeyCh, deployerId(`rho:rchain:deployerId`) in {
-       #           @RevVault!("deployerAuthKey", *deployerId, *genesisAuthKeyCh)
-       #           | for (genesisVaultAuthKey <- genesisAuthKeyCh) {
-       #             ${concatenate(findOrCreate)} |
-       #             ${concatenate(transfer)}
-       #           }
-       #         }
-       #       }
        #     }
        #   }
        # }
@@ -48,12 +37,47 @@ final case class RevGenerator(
     .buildNormalizedTerm(code, normalizerEnv)
     .value()
 
+}
+
+final case class VaultGenerator(genesisPk: PublicKey, userVaults: Seq[Vault])
+    extends CompiledRholangSource {
+
+  val path: String = "<synthetic in Rev.scala>"
+
+  val code: String =
+    s""" new rl(`rho:registry:lookup`),
+       #     deployerId(`rho:rchain:deployerId`),
+       #     revVaultCh,
+       #     genesisVaultCh,
+       #     genesisVaultAuthKeyCh,
+       #     ack in {
+       #     rl!(`rho:rchain:revVault`, *revVaultCh)
+       #     | for (@(_, RevVault) <- revVaultCh) {
+       #       @RevVault!("findOrCreate", "${RevAddress
+         .fromPublicKey(genesisPk)
+         .get
+         .toBase58}", *genesisVaultCh)
+       #       | @RevVault!("deployerAuthKey", *deployerId, *genesisVaultAuthKeyCh)
+       #       | for (@(true, genesisVault) <- genesisVaultCh; genesisVaultAuthKey <- genesisVaultAuthKeyCh){
+       #         ${concatenate(findOrCreate)} |
+       #         ${concatenate(transfer)}
+       #       }
+       #     }
+       # }
+     """.stripMargin('#')
+
+  val normalizerEnv: NormalizerEnv = NormalizerEnv(deployId = none, deployerPk = genesisPk.some)
+
+  val term: Par = ParBuilder[Coeval]
+    .buildNormalizedTerm(code, normalizerEnv)
+    .value()
+
   private def findOrCreate(userVault: Vault): String =
-    s""" 
+    s"""
        # @RevVault!(
        #   "findOrCreate",
        #   "${userVault.revAddress.toBase58}",
-       #   Nil
+       #   *ack
        # )
      """.stripMargin('#')
 
@@ -64,7 +88,7 @@ final case class RevGenerator(
        #   "${userVault.revAddress.toBase58}",
        #   ${userVault.initialBalance},
        #   *genesisVaultAuthKey,
-       #   Nil
+       #   *ack
        # )
      """.stripMargin('#')
 

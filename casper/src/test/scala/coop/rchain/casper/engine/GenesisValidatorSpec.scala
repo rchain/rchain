@@ -23,8 +23,8 @@ class GenesisValidatorSpec extends WordSpec {
 
       implicit val engineCell: EngineCell[Task] =
         Cell.unsafe[Task, Engine[Task]](Engine.noop)
-      val expectedCandidate = ApprovedBlockCandidate(Some(genesis), requiredSigs)
-      val unapprovedBlock   = BlockApproverProtocolTest.createUnapproved(requiredSigs, genesis)
+      val expectedCandidate = ApprovedBlockCandidate(Some(genesisBlock), requiredSigs)
+      val unapprovedBlock   = BlockApproverProtocolTest.createUnapproved(requiredSigs, genesisBlock)
       val test = for {
         _ <- engineCell.set(
               new GenesisValidator(validatorId, shardId, bap)
