@@ -102,7 +102,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
     Do not use this method, see explanation below.
     Use mapData and assert at call site
     */
-  def checkData(
+  private[this] def checkData(
       result: Map[
         Seq[Par],
         Row[BindPattern, ListParWithRandom, TaggedContinuation]
