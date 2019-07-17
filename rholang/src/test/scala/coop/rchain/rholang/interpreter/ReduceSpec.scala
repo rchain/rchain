@@ -98,7 +98,7 @@ trait PersistentStoreTester {
 class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
   implicit val rand: Blake2b512Random = Blake2b512Random(Array.empty[Byte])
 
-  def mapData(elements: Map[Par, (Seq[Par], Blake2b512Random)]): Iterable[
+  private[this] def mapData(elements: Map[Par, (Seq[Par], Blake2b512Random)]): Iterable[
     (
         Seq[Par],
         Row[BindPattern, ListParWithRandom, TaggedContinuation]
