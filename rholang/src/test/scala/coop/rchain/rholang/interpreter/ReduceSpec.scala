@@ -153,7 +153,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
           )
     }.toIterable
 
-  def checkContinuation(
+  private[this] def checkContinuation(
       result: Map[
         Seq[Par],
         Row[BindPattern, ListParWithRandom, TaggedContinuation]
