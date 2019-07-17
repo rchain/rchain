@@ -39,7 +39,7 @@ import scala.util.Try
   **/
 object Running {
 
-  val timeout: FiniteDuration = 30 seconds
+  val timeout: FiniteDuration = 240 seconds
 
   final case class Requested(
       timestamp: Long,
