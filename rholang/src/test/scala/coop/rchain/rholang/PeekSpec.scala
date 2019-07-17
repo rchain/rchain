@@ -29,9 +29,9 @@ class PeekSpec extends FlatSpec with Matchers {
       .use { runtime =>
         implicit val c = runtime.cost
         for {
-          res1 <- evaluate[Task](runtime, """@1!("v1") | for(_ <<- @1) { Nil }""")
+          res1 <- evaluateResult[Task](runtime, """@1!("v1") | for(_ <<- @1) { Nil }""")
           _    = res1.errors shouldBe empty
-          res2 <- evaluate[Task](runtime, """for(_ <- @1) { @2!("v2") }""")
+          res2 <- evaluateResult[Task](runtime, """for(_ <- @1) { @2!("v2") }""")
           _    = res2.errors shouldBe empty
           data <- runtime.space.getData(GInt(2L))
           _ = withClue(
@@ -47,11 +47,11 @@ class PeekSpec extends FlatSpec with Matchers {
       .use { runtime =>
         implicit val c = runtime.cost
         for {
-          res1       <- evaluate[Task](runtime, """@1!!("v1")""")
+          res1       <- evaluateResult[Task](runtime, """@1!!("v1")""")
           _          = res1.errors shouldBe empty
-          res1a      <- evaluate[Task](runtime, """for(_ <<- @1) { Nil }""")
+          res1a      <- evaluateResult[Task](runtime, """for(_ <<- @1) { Nil }""")
           _          = res1a.errors shouldBe empty
-          res2       <- evaluate[Task](runtime, """for(_ <- @1) { @2!("v2") }""")
+          res2       <- evaluateResult[Task](runtime, """for(_ <- @1) { @2!("v2") }""")
           _          = res2.errors shouldBe empty
           v1Data     <- runtime.space.getData(GInt(1L))
           _          = v1Data should have size 1
@@ -69,11 +69,11 @@ class PeekSpec extends FlatSpec with Matchers {
       .use { runtime =>
         implicit val c = runtime.cost
         for {
-          res1       <- evaluate[Task](runtime, """for(_ <<- @1) { Nil }""")
+          res1       <- evaluateResult[Task](runtime, """for(_ <<- @1) { Nil }""")
           _          = res1.errors shouldBe empty
-          res1a      <- evaluate[Task](runtime, """@1!!("v1")""")
+          res1a      <- evaluateResult[Task](runtime, """@1!!("v1")""")
           _          = res1a.errors shouldBe empty
-          res2       <- evaluate[Task](runtime, """for(_ <- @1) { @2!("v2") }""")
+          res2       <- evaluateResult[Task](runtime, """for(_ <- @1) { @2!("v2") }""")
           _          = res2.errors shouldBe empty
           v1Data     <- runtime.space.getData(GInt(1L))
           _          = v1Data should have size 1

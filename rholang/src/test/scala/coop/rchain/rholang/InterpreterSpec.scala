@@ -143,7 +143,7 @@ class InterpreterSpec extends FlatSpec with Matchers {
         .use { runtime =>
           implicit val c = runtime.cost
           for {
-            res <- InterpreterUtil.evaluate(runtime, sendRho, parsingCost(sendRho) - Cost(1))
+            res <- InterpreterUtil.evaluateResult(runtime, sendRho, parsingCost(sendRho) - Cost(1))
           } yield (res)
         }
         .runSyncUnsafe(maxDuration)
@@ -176,7 +176,7 @@ class InterpreterSpec extends FlatSpec with Matchers {
       source: String
   ): Task[EvaluateResult] = {
     implicit val c = runtime.cost
-    InterpreterUtil.evaluate[Task](runtime, source)
+    InterpreterUtil.evaluateResult[Task](runtime, source)
   }
 
 }
