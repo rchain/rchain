@@ -15,14 +15,11 @@ import coop.rchain.models.rholang.implicits._
 import coop.rchain.rholang.interpreter.accounting._
 import coop.rchain.rholang.interpreter.errors._
 import coop.rchain.rholang.interpreter.storage.implicits._
-import coop.rchain.rholang.Resources._
-import coop.rchain.rspace._
-import coop.rchain.rspace.{RSpace, ReplayRSpace}
-import coop.rchain.rspace.history.Branch
 import coop.rchain.rspace._
 import coop.rchain.rspace.internal.{Datum, Row, WaitingContinuation}
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
+import org.scalatest.prop.TableDrivenPropertyChecks._
 import org.scalatest.{AppendedClues, Assertion, FlatSpec, Matchers}
 
 import scala.collection.immutable.BitSet
@@ -30,7 +27,6 @@ import scala.collection.mutable.HashMap
 import scala.collection.{mutable, SortedSet}
 import scala.concurrent.Await
 import scala.concurrent.duration._
-import org.scalatest.prop.TableDrivenPropertyChecks._
 
 class ReduceSpec extends FlatSpec with Matchers with AppendedClues with PersistentStoreTester {
   implicit val rand: Blake2b512Random = Blake2b512Random(Array.empty[Byte])
