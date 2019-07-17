@@ -16,6 +16,7 @@ match (
       test_make_pos_succeeds,
       test_close_block_finishes,
       test_bonding_succeeds,
+      test_withdraw_succeeds,
       test_multiple_bonding_succeeds,
       test_bonding_fails_if_deposit_fails,
       test_bonding_fails_if_already_bonded,
@@ -43,6 +44,7 @@ match (
               ("PoS is created with empty bonds", *test_make_pos_succeeds),
               ("closeBlock finishes successfully", *test_close_block_finishes),
               ("bonding success", *test_bonding_succeeds),
+              ("withdraw succeeds", *test_withdraw_succeeds),
               ("bonding fails if deposit fails", *test_bonding_fails_if_deposit_fails),
               ("multiple bondings work", *test_multiple_bonding_succeeds),
               ("payment works", *test_pay_succeeds),
@@ -133,6 +135,54 @@ match (
                               ((100, "==", initialUserBalance - finalUserBalance), "the user account decreases"),
                               ((100, "==", finalPosBalance - initialPosBalance), "the pos account increases"),
                               ((Nil, "==", rewards.get(user1PubKey)), "new validator reward should be zero")
+                            ],
+                            *ackCh
+                          )
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          } |
+          contract test_withdraw_succeeds(rhoSpec, _, ackCh) = {
+            new setupCh, retCh,
+                initialPosBalanceCh, finalPosBalanceCh,
+                initialUserBalanceCh, finalUserBalanceCh,
+                initialRewardsCh, finalRewardsCh,
+                initialBondsCh, finalBondsCh,
+                withdrawCh, closeBlockCh in {
+              prepareUser!("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", 10000, *setupCh) |
+              for (@user1PubKey, _, @user1Vault <- setupCh) {
+                @posVault!("balance", *initialPosBalanceCh) |
+                @user1Vault!("balance", *initialUserBalanceCh) |
+                @PoS!("getBonds", *initialBondsCh) |
+                @PoS!("getRewards", *initialRewardsCh) |
+                for(@initialPosBalance <- initialPosBalanceCh;
+                    @initialUserBalance <- initialUserBalanceCh;
+                    @initialBonds <- initialBondsCh;
+                    @initialRewards <- initialRewardsCh) {
+                  @PoS!("bond", 100, *retCh) |
+                  for ( @(true, _) <- retCh) {
+                    @PoS!("withdraw", *withdrawCh) |
+                    for (_ <- withdrawCh) {
+                      @PoS!("closeBlock", *closeBlockCh) |
+                      for (_ <- closeBlockCh) {
+                        @PoS!("getBonds", *finalBondsCh) |
+                        @posVault!("balance", *finalPosBalanceCh) |
+                        @user1Vault!("balance", *finalUserBalanceCh) |
+                        @PoS!("getRewards", *finalRewardsCh) |
+                        for(@finalPosBalance <- finalPosBalanceCh;
+                            @finalUserBalance <- finalUserBalanceCh;
+                            @finalBonds <- finalBondsCh;
+                            @finalRewards <- finalRewardsCh) {
+                          rhoSpec!("assertMany",
+                            [
+                              ((finalBonds, "==", initialBonds), "bonds don't change"),
+                              ((finalRewards, "==", initialRewards), "rewards don't change"),
+                              ((finalUserBalance, "==", initialUserBalance), "user balancs doesn't change"),
+                              ((finalPosBalance, "==", initialPosBalance), "pos balance doesn't change")
                             ],
                             *ackCh
                           )
