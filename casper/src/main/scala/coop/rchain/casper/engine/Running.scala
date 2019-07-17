@@ -116,26 +116,32 @@ object Running {
     })
   }
 
-  def handleHasBlock[F[_]: Monad: RPConfAsk: RequestedBlocks: TransportLayer: Time](
+  def handleHasBlock[F[_]: Monad: RPConfAsk: RequestedBlocks: TransportLayer: Time: Log](
       peer: PeerNode,
       hb: HasBlock
   )(
       casperContains: BlockHash => F[Boolean]
   ): F[Unit] = {
 
+    val hashStr = PrettyPrinter.buildString(hb.hash)
+
     def addNewEntry =
-      Time[F].currentMillis >>= (ts => {
-        RequestedBlocks[F].modify(
-          _ + (hb.hash -> Requested(timestamp = ts, peers = Set(peer)))
-        )
-      })
+      Log[F].info(s"Creating new entry for the $hashStr request") >> Time[F].currentMillis >>= (
+          ts => {
+            RequestedBlocks[F].modify(
+              _ + (hb.hash -> Requested(timestamp = ts, peers = Set(peer)))
+            )
+          }
+      )
 
     def addToWaitingList(requested: Requested): F[Unit] =
-      RequestedBlocks[F].modify { requestedBlocks =>
-        requestedBlocks + (hb.hash -> requested.copy(waitingList = peer :: requested.waitingList))
-      }
+      Log[F].info(s"Adding $peer to waiting list of $hashStr request") >> RequestedBlocks[F]
+        .modify { requestedBlocks =>
+          requestedBlocks + (hb.hash -> requested.copy(waitingList = peer :: requested.waitingList))
+        }
 
-    casperContains(hb.hash).ifM(
+    val logIntro = s"Received confirmation from $peer that it has block $hashStr."
+    Log[F].info(logIntro) >> casperContains(hb.hash).ifM(
       noop[F],
       RequestedBlocks[F].read >>= (_.get(hb.hash)
         .fold(requestForBlock[F](peer, hb.hash) >> addNewEntry)(addToWaitingList))

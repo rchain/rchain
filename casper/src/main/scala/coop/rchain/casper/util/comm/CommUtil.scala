@@ -32,7 +32,7 @@ object CommUtil {
   implicit private val logSource: LogSource = LogSource(this.getClass)
 
   def sendBlock[F[_]: Monad: ConnectionsCell: TransportLayer: Log: Time: RPConfAsk](
-    b: BlockMessage
+      b: BlockMessage
   ): F[Unit] = {
     val serializedBlock = b.toByteString
     for {
