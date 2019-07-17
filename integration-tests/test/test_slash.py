@@ -1,7 +1,7 @@
 import base64
 import hashlib
 import re
-import sys
+# import sys
 from random import Random
 
 import pytest
@@ -33,7 +33,8 @@ def hex_block_hash(block_hash: bytes) -> bytes:
     return base64.b16encode(block_hash).lower()
 
 
-@pytest.mark.skipif(sys.platform in ('win32', 'cygwin', 'darwin'), reason="Only Linux docker support connection between host and container which node client needs")
+# @pytest.mark.skipif(sys.platform in ('win32', 'cygwin', 'darwin'), reason="Only Linux docker support connection between host and container which node client needs")
+@pytest.mark.xfail
 def test_simple_slash(command_line_options: CommandLineOptions, random_generator: Random, docker_client: DockerClient) -> None:
     peers_keypairs = [BONDED_VALIDATOR_KEY_1, BONDED_VALIDATOR_KEY_2]
     with conftest.testing_context(command_line_options, random_generator, docker_client, bootstrap_keypair=BOOTSTRAP_NODE_KEYS, peers_keypairs=peers_keypairs) as context, \
