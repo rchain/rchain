@@ -40,17 +40,19 @@ new  PoS,
 
   for(@(_, RevVault) <- revVaultCh;
       @(_, ListOps) <- listOpsCh) {
-    new posRevAddressCh in {
+    new posRevAddressCh, posAuthKeyCh, posVaultCh, initialActiveCh in {
 
+      @RevVault!("deployerAuthKey", *posAuthKeyCh) |
       getCurrentUserAddress!(*posRevAddressCh) |
-      for(@posRevAddress <- posRevAddressCh) {
-        new stateCh, posVaultCh, initialActiveCh in {
-          pickActiveValidators!($$initialBonds$$, {}, *initialActiveCh) |
 
-          @RevVault!("findOrCreate", posRevAddress, *posVaultCh) |
-          for (@(true, _) <- posVaultCh;
-               @initialActive <- initialActiveCh) {
+      for(@posRevAddress <- posRevAddressCh;
+          @posAuthKey <- posAuthKeyCh) {
+        @RevVault!("findOrCreate", posRevAddress, *posVaultCh) |
+        pickActiveValidators!($$initialBonds$$, {}, *initialActiveCh) |
 
+        for (@(true, posVault) <- posVaultCh;
+             @initialActive <- initialActiveCh) {
+          new stateCh in {
             // State structure:
             // pendingRewards : Map[PublickKey, Int] - are accummulated by calling "pay"
             // committedRewards : Map[PublickKey, Int] - are moved from pendingRewards at each closeBlock
@@ -124,7 +126,7 @@ new  PoS,
             } |
 
             contract PoS (@"withdraw", returnCh) = {
-              new userCh, depositCh, processCh,
+              new userCh, processCh,
                   getBlockData(`rho:block:data`),
                   blockDataCh
               in {
@@ -203,50 +205,72 @@ new  PoS,
             contract PoS(@"closeBlock", ackCh) = {
               new commitRewards,
                   changeEpoch,
-                  removeQuarantinedWithdrawers
+                  removeQuarantinedWithdrawers,
+                  payValidators
               in {
                 new blockDataCh, mvarProcessCh,
                     getBlockData(`rho:block:data`),
-                    newRewardsCh, newValidatorsCh,
-                    newWithdrawersCh, newBondsCh
+                    commitRewardsCh,
+                    newValidatorsCh, removeQuarantinedCh, paymentDoneCh
                 in {
                   getBlockData!(*blockDataCh) |
 
                   runMVar!(*stateCh, *mvarProcessCh, *ackCh) |
                   for(_, @blockNumber <- blockDataCh;
                       @state, mvarResultCh <- mvarProcessCh) {
-                    changeEpoch!(
-                      blockNumber,
-                      state.get("allBonds"),
-                      state.get("activeValidators"),
-                      state.get("withdrawers"),
-                      *newValidatorsCh)|
-
-                    removeQuarantinedWithdrawers!(
-                      blockNumber,
-                      state.get("allBonds"),
-                      state.get("withdrawers"),
-                      *newWithdrawersCh,
-                      *newBondsCh) |
 
                     commitRewards!(
                       state.get("pendingRewards"),
                       state.get("committedRewards"),
-                      *newRewardsCh) |
+                      *commitRewardsCh) |
 
-                    for (@newRewards <- newRewardsCh;
-                         @newValidators <- newValidatorsCh;
-                         @newWithdrawers <- newWithdrawersCh ;
-                         @newBonds <- newBondsCh) {
-                      mvarResultCh!(
-                        {
-                          "pendingRewards":{},
-                          "committedRewards":newRewards,
-                          "activeValidators":newValidators,
-                          "withdrawers":newWithdrawers,
-                          "allBonds":newBonds
-                        },
-                        Nil)
+                    for (@committedRewards <- commitRewardsCh) {
+                      changeEpoch!(
+                        blockNumber,
+                        state.get("allBonds"),
+                        state.get("activeValidators"),
+                        state.get("withdrawers"),
+                        *newValidatorsCh)|
+
+                      removeQuarantinedWithdrawers!(
+                        blockNumber,
+                        state.get("allBonds"),
+                        state.get("withdrawers"),
+                        committedRewards,
+                        *removeQuarantinedCh) |
+
+                      for(@newValidators <- newValidatorsCh;
+                          @(payments, newBonds, newWithdrawers, newRewards) <- removeQuarantinedCh) {
+                        payValidators!(payments, *paymentDoneCh) |
+
+                        for (_ <- paymentDoneCh) {
+                          mvarResultCh!(
+                            {
+                              "pendingRewards":{},
+                              "committedRewards":newRewards,
+                              "activeValidators":newValidators,
+                              "withdrawers":newWithdrawers,
+                              "allBonds":newBonds
+                            },
+                            Nil)
+                        }
+                      }
+                    }
+                  }
+                } |
+
+                contract payValidators(@payments, ackCh) = {
+                  new payValidator in {
+                    @ListOps!("foreach", payments, *payValidator, *ackCh) |
+
+                    contract payValidator (@(pk, amount), returnCh) = {
+                      new vaultCh,
+                          revAddressCh in {
+                        revAddressOps!("fromPublicKey", pk, *revAddressCh) |
+                        for (@toRevAddress <- revAddressCh) {
+                          @posVault!("transfer", toRevAddress, amount, posAuthKey, *returnCh)
+                        }
+                      }
                     }
                   }
                 } |
@@ -268,37 +292,39 @@ new  PoS,
                   }
                 } |
 
-                contract removeQuarantinedWithdrawers(@currentBlockNumber, @allBonds, @withdrawers, newWithdrawersCh, newBondsCh) = {
+                contract removeQuarantinedWithdrawers(@currentBlockNumber, @allBonds, @withdrawers, @rewards, returnCh) = {
                   new quarantinedValidatorsCh,
                       validatorsToWithdrawListCh,
                       isQuarantineFinished,
-                      isWithdrawn,
+                      notWithdrawn,
                       newBondsListCh,
-                      newWithdrawersListCh
+                      newWithdrawersListCh,
+                      newRewardsListCh,
+                      paymentsCh, computePay
                   in {
                     @ListOps!("filter", withdrawers.toList(), *isQuarantineFinished, *quarantinedValidatorsCh) |
                     for (@quarantinedValidators <- quarantinedValidatorsCh) {
                       @ListOps!("map", quarantinedValidators, *fst, *validatorsToWithdrawListCh) |
                       for (@validatorsToWithdrawList <- validatorsToWithdrawListCh) {
+                        @ListOps!("map", validatorsToWithdrawList, *computePay, *paymentsCh) |
+                        contract computePay(@pk, resultCh) = {
+                          resultCh!((pk, allBonds.get(pk) + rewards.getOrElse(pk, 0)))
+                        } |
 
                         match validatorsToWithdrawList.toSet() {
                           validatorsToWithdrawSet => {
-                            @ListOps!("filter", allBonds.toList(), *isWithdrawn, *newBondsListCh) |
+                            @ListOps!("filter", allBonds.toList(), *notWithdrawn, *newBondsListCh) |
+                            @ListOps!("filter", withdrawers.toList(), *notWithdrawn, *newWithdrawersListCh) |
+                            @ListOps!("filter", rewards.toList(), *notWithdrawn, *newRewardsListCh) |
 
-                            for (@newBondsList <- newBondsListCh) {
-                              newBondsCh!(newBondsList.toMap())
+                            for (@newWithdrawersList <- newWithdrawersListCh;
+                                 @newBondsList <- newBondsListCh;
+                                 @newRewardsList <- newRewardsListCh;
+                                 @payments <- paymentsCh) {
+                              returnCh!((payments, newBondsList.toMap(), newWithdrawersList.toMap(), newRewardsList.toMap()))
                             } |
 
-                            @ListOps!("filter", withdrawers.toList(), *isWithdrawn, *newWithdrawersListCh) |
-                            contract isWithdrawn(@(pk, _), resultCh) = {
-                              resultCh!(not validatorsToWithdrawSet.contains(pk))
-                            } |
-
-                            for (@newWithdrawersList <- newWithdrawersListCh) {
-                              newWithdrawersCh!(newWithdrawersList.toMap())
-                            } |
-
-                            contract isWithdrawn(@(pk, _), resultCh) = { resultCh!(not validatorsToWithdrawSet.contains(pk))}
+                            contract notWithdrawn(@(pk, _), resultCh) = { resultCh!(not validatorsToWithdrawSet.contains(pk))}
                           }
                         }
                       }
