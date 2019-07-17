@@ -32,7 +32,6 @@ import scala.concurrent.Await
 import scala.concurrent.duration._
 import org.scalatest.prop.TableDrivenPropertyChecks._
 
-
 class ReduceSpec extends FlatSpec with Matchers with AppendedClues with PersistentStoreTester {
   implicit val rand: Blake2b512Random = Blake2b512Random(Array.empty[Byte])
 
@@ -550,7 +549,7 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
       ),
       Send(GString("result"), List(GString("Success")), persistent = false, BitSet()),
       persistent = false,
-      peek=false,
+      peek = false,
       3,
       BitSet()
     )
@@ -600,7 +599,7 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
       Seq(ReceiveBind(Seq(GInt(2L)), GInt(2L))),
       Par(),
       persistent = false,
-      peek=false,
+      peek = false,
       0,
       BitSet()
     )
@@ -610,7 +609,7 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
       Seq(ReceiveBind(Seq(EVar(FreeVar(0))), GInt(1L), freeCount = 1)),
       EVar(BoundVar(0)),
       persistent = false,
-      peek=false,
+      peek = false,
       1,
       BitSet()
     )
@@ -1051,7 +1050,7 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
       Seq(ReceiveBind(Seq(EVar(FreeVar(0))), GString("channel"))),
       Par(),
       persistent = false,
-      peek=false,
+      peek = false,
       1,
       BitSet()
     )
@@ -2354,7 +2353,8 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
 
   val idempotenceExamples = Table(
     ("method", "input"),
-    ("toSet",
+    (
+      "toSet",
       ESetBody(
         ParSet(
           List(
@@ -2365,7 +2365,8 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
         )
       )
     ),
-    ( "toMap",
+    (
+      "toMap",
       EMapBody(
         ParMap(
           List[(Par, Par)](
@@ -2374,7 +2375,8 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
             (GString("c"), GInt(3L))
           )
         )
-      ))
+      )
+    )
   )
   "Idempotent methods" should "return the input" in {
     forAll(idempotenceExamples) { (method, input) =>
@@ -2466,7 +2468,7 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
 
   type RSpaceMap = Map[Seq[Par], Row[BindPattern, ListParWithRandom, TaggedContinuation]]
 
-  def runReducer(input : Par, timeout : Duration = 3.seconds) : Either[Throwable, Par] = {
+  def runReducer(input: Par, timeout: Duration = 3.seconds): Either[Throwable, Par] = {
     val errorLog: ErrorLog[Task] = new ErrorLog[Task]()
 
     val task =

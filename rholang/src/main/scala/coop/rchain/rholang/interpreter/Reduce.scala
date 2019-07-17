@@ -1404,7 +1404,12 @@ class DebruijnInterpreter[M[_], F[_]](
   }
 
   private[this] val toMap: Method = new Method() {
-    def makeMap(ps: Seq[Par], connectiveUsed : Boolean, locallyFree : Coeval[BitSet], remainder:Option[Var]) = {
+    def makeMap(
+        ps: Seq[Par],
+        connectiveUsed: Boolean,
+        locallyFree: Coeval[BitSet],
+        remainder: Option[Var]
+    ) = {
       val keyPairs = ps.map(RhoType.Tuple2.unapply)
       if (keyPairs.exists(_.isEmpty))
         MethodNotDefined("toMap", "types except List[(K,V)]").raiseError[M, Par]
