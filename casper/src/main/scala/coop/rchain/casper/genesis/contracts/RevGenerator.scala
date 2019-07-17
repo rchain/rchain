@@ -32,8 +32,27 @@ final case class RevGenerator(
        #         new genesisAuthKeyCh, deployerId(`rho:rchain:deployerId`) in {
        #           @RevVault!("deployerAuthKey", *deployerId, *genesisAuthKeyCh)
        #           | for (genesisVaultAuthKey <- genesisAuthKeyCh) {
-       #             ${concatenate(findOrCreate)} |
-       #             ${concatenate(transfer)}
+       #             new loop, ack in {
+       #               contract loop(@vaultList) = {
+       #                 match vaultList {
+       #                   [(revAddress, initialBalance) ...tail] => {
+       #                     @RevVault!("findOrCreate", revAddress, *ack)
+       #                     | for(_ <- ack){
+       #                       @genesisVault!("transfer", revAddress, initialBalance, *genesisVaultAuthKey, *ack)
+       #                       | for(_ <- ack){
+       #                         loop!(tail)
+       #                       }
+       #                     }
+       #                   }
+       #                   _ => Nil
+       #                 }
+       #               } | loop!(
+       #               ${concatenate {
+         case Vault(revAddress, initialBalance) =>
+           s"""("${revAddress.toBase58}", $initialBalance)"""
+       }}
+       #               )
+       #             }
        #           }
        #         }
        #       }
@@ -48,28 +67,7 @@ final case class RevGenerator(
     .buildNormalizedTerm(code, normalizerEnv)
     .value()
 
-  private def findOrCreate(userVault: Vault): String =
-    s""" 
-       # @RevVault!(
-       #   "findOrCreate",
-       #   "${userVault.revAddress.toBase58}",
-       #   Nil
-       # )
-     """.stripMargin('#')
-
-  private def transfer(userVault: Vault): String =
-    s"""
-       # @genesisVault!(
-       #   "transfer",
-       #   "${userVault.revAddress.toBase58}",
-       #   ${userVault.initialBalance},
-       #   *genesisVaultAuthKey,
-       #   Nil
-       # )
-     """.stripMargin('#')
-
   private def concatenate(f: Vault => String): String =
-    if (userVaults.nonEmpty) userVaults.map(f).mkString(" |\n\n")
-    else "Nil"
+    userVaults.map(f).mkString("[", ", ", "]")
 
 }
