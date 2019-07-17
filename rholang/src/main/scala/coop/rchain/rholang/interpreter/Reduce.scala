@@ -1380,6 +1380,15 @@ class DebruijnInterpreter[M[_], F[_]](
       baseExpr.exprInstance match {
         case e: ESetBody =>
           (e: Par).pure[M]
+        case EMapBody(ParMap(basePs, connectiveUsed, locallyFree, remainder)) =>
+          (ESetBody(
+            ParSet(
+              basePs.toSeq.map(t => ETupleBody(ETuple(Seq(t._1, t._2))): Par),
+              connectiveUsed,
+              locallyFree,
+              remainder
+            )
+          ): Par).pure[M]
         case EListBody(EList(basePs, locallyFree, connectiveUsed, remainder)) =>
           (ESetBody(
             ParSet(
