@@ -86,19 +86,19 @@ class MultiParentCasperMergeSpec extends FlatSpec with Matchers with Inspectors 
     //FIXME add missing cases for in-deploy COMM-s wherever there's a pair without X (a COMM)
     //FIXME all `conflictsForNow` should eventually be replaced with `merges`
     Map(
-      "!X !X"   -> conflictsForNow(S0, S0, Z),
-      "!X !4"   -> conflictsForNow(S0, S0, F_),
-      "!X (!4)" -> merges(S0, S1 | F_, Z),
-      "!X !C"   -> conflictsForNow(S0, S1, C1),
-      "!X (!C)" -> merges(S0, S1 | C_, Z), //FIXME: THIS NEEDS TO CONFLICT
-      "!X 4X"   -> conflicts(S0, F_, Z),
-      "!X 4!"   -> conflictsForNow(S0, F_, S0),
-      // !X (4!) covered above by the equivalent !X (!4)
-      "!X 4!!"   -> conflictsForNow(S0, F_, R0),
-      "!X (4!!)" -> merges(S0, F_ | R0, Z),
-      "!X !!X"   -> conflictsForNow(S0, R0, Z),
-      "!X !!4"   -> conflictsForNow(S0, R1, F1),
-      // !X (!!4) covered above by the equivalent !X (4!!)
+      "!X !X"        -> conflictsForNow(S0, S0, Z),
+      "!X !4"        -> conflictsForNow(S0, S0, F_),
+      "!X (!4)"      -> merges(S0, S1 | F_, Z),
+      "!X !C"        -> conflictsForNow(S0, S1, C1),
+      "!X (!C)"      -> merges(S0, S1 | C_, Z), //FIXME: THIS NEEDS TO CONFLICT
+      "!X 4X"        -> conflicts(S0, F_, Z),
+      "!X 4!"        -> conflictsForNow(S0, F_, S0),
+      "!X (4!)"      -> coveredBy("!X (!4)"),
+      "!X 4!!"       -> conflictsForNow(S0, F_, R0),
+      "!X (4!!)"     -> merges(S0, F_ | R0, Z),
+      "!X !!X"       -> conflictsForNow(S0, R0, Z),
+      "!X !!4"       -> conflictsForNow(S0, R1, F1),
+      "!X (!!4)"     -> coveredBy("!X (4!!)"),
       "!X CX"        -> conflicts(S0, C_, Z),
       "!X C!"        -> conflicts(S0, C_, S0),
       "!X (C!)"      -> merges(S0, C_ | S0, Z), //FIXME: THIS NEEDS TO CONFLICT
@@ -160,6 +160,8 @@ class MultiParentCasperMergeSpec extends FlatSpec with Matchers with Inspectors 
   ) =
     diamondConflictCheck(base, b1, b2, numberOfParentsForDiamondTip = 2) /*>>
       diamondConflictCheck(base, b2, b1, numberOfParentsForDiamondTip = 2)*/
+
+  private def coveredBy(equivalent: String) = ().pure[Effect]
 
   private def diamondConflictCheck(
       base: Rho,
