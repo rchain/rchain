@@ -66,103 +66,74 @@ class MultiParentCasperMergeSpec extends FlatSpec with Matchers with Inspectors 
   // TODO: Peek rows/column
   // Note this skips pairs that lead to infinite loops
   it should "handle multi-parent blocks correctly when they operate on volatile produce/consume pairs" in effectTest {
+    val S0 = "@0!(0)"
+    val S1 = "@0!(1)"
+    val R0 = "@0!!(0)"
+    val R1 = "@0!!(1)"
+    val F_ = "for (_ <- @0) { 0 }"
+    val F0 = "for (@0 <- @0) { 0 }"
+    val F1 = "for (@1 <- @0) { 0 }"
+    val C_ = "contract @0(id) = { 0 }"
+    val C0 = "contract @0(@0) = { 0 }"
+    val C1 = "contract @0(@1) = { 0 }"
+    val Z  = "0"
     Map(
-      "!X !X"   -> conflictsForNow("@0!(0)", "@0!(0)", "0"),
-      "!X !4"   -> conflictsForNow("@0!(0)", "@0!(0)", "for (_ <- @0) { 0 }"),
-      "!X (!4)" -> merges("@0!(0)", "@0!(1) | for (_ <- @0) { 0 }", "0"),
-      "!X !C"   -> conflictsForNow("@0!(0)", "@0!(1)", "contract @0(@1) = { 0 }"),
+      "!X !X"   -> conflictsForNow(S0, S0, Z),
+      "!X !4"   -> conflictsForNow(S0, S0, F_),
+      "!X (!4)" -> merges(S0, S1 + " | " + F_, Z),
+      "!X !C"   -> conflictsForNow(S0, S1, C1),
       //FIXME: THIS NEEDS TO CONFLICT
-      "!X (!C)" -> merges("@0!(0)", "@0!(1) | contract @0(id) = { 0 }", "0"),
-      "!X 4X"   -> conflicts("@0!(0)", "for (_ <- @0) { 0 }", "0"),
-      "!X 4!"   -> conflictsForNow("@0!(0)", "for (_ <- @0) { 0 }", "@0!(0)"),
+      "!X (!C)" -> merges(S0, S1 + " | " + C_, Z),
+      "!X 4X"   -> conflicts(S0, F_, Z),
+      "!X 4!"   -> conflictsForNow(S0, F_, S0),
       // !X (4!) covered above by the equivalent !X (!4)
-      "!X 4!!"   -> conflictsForNow("@0!(0)", "for (_ <- @0) { 0 }", "@0!!(0)"),
-      "!X (4!!)" -> merges("@0!(0)", "for (_ <- @0) { 0 } | @0!!(0)", "0"),
-      "!X !!X"   -> conflictsForNow("@0!(0)", "@0!!(0)", "0"),
-      "!X !!4"   -> conflictsForNow("@0!(0)", "@0!!(1)", "for (@1 <- @0) { 0 }"),
+      "!X 4!!"   -> conflictsForNow(S0, F_, R0),
+      "!X (4!!)" -> merges(S0, F_ + " | " + R0, Z),
+      "!X !!X"   -> conflictsForNow(S0, R0, Z),
+      "!X !!4"   -> conflictsForNow(S0, R1, F1),
       // !X (!!4) covered above by the equivalent !X (4!!)
-      "!X CX" -> conflicts("@0!(0)", "contract @0(id) = { 0 }", "0"),
-      "!X C!" -> conflicts("@0!(0)", "contract @0(id) = { 0 }", "@0!(0)"),
+      "!X CX" -> conflicts(S0, C_, Z),
+      "!X C!" -> conflicts(S0, C_, S0),
       //FIXME: THIS NEEDS TO CONFLICT
-      "!X (C!)"   -> merges("@0!(0)", "contract @0(id) = { 0 } | @0!(0)", "0"),
-      "!4 !4"     -> conflicts("@0!(1)", "@0!(2)", "for (_ <- @0) { 0 }"),
-      "!4 (!4)"   -> merges("@0!(0)", "for (@2 <- @0) { 0 } | @0!(2)", "for (@0 <- @0) { 0 }"),
-      "(!4) (!4)" -> merges("@0!(0) | for (_ <- @0) { 0 }", "@0!(0) | for (_ <- @0) { 0 }", "0"),
-      "(!4) (!4)" -> merges(
-        "@0!(1) | for (_ <- @0) { 0 }",
-        "@0!(1) | for (_ <- @0) { 0 }",
-        "for (@0 <- @0) { 0 }"
-      ),
-      "!4 !C" -> conflictsForNow(
-        "@0!(0)",
-        "@0!(1)",
-        "for (@0 <- @0) { 0 } | contract @0(@1) = { 0 }"
-      ),
-      "!4 4X" -> conflictsForNow("@0!(0)", "for (_ <- @0) { 0 }", "for (_ <- @0) { 0 }"),
-      "!4 4!" -> conflictsForNow("@0!(0)", "for (_ <- @0) { 0 }", "for (@0 <- @0) { 0 } | @0!(1)"),
-      "!4 4!!" -> conflictsForNow(
-        "@0!(0)",
-        "for (_ <- @0) { 0 }",
-        "for (@0 <- @0) { 0 } | @0!!(1)"
-      ),
+      "!X (C!)"   -> merges(S0, C_ + " | " + S0, Z),
+      "!4 !4"     -> conflicts(S0, S1, F_),
+      "!4 (!4)"   -> merges(S0, S1 + " | " + F1, F0),
+      "(!4) (!4)" -> merges(S0 + " | " + F_, s"$S0 | ${F_}", Z),
+      "(!4) (!4)" -> merges(S1 + " | " + F_, S1 + " | " + F_, F0),
+      "!4 !C"     -> conflictsForNow(S0, S1, F0 + " | " + C1),
+      "!4 4X"     -> conflictsForNow(S0, F_, F_),
+      "!4 4!"     -> conflictsForNow(S0, F_, F0 + " | " + S1),
+      "!4 4!!"    -> conflictsForNow(S0, F_, F0 + " | " + R1),
       //FIXME: double check what should stay as conflicting below this line
       // - I'm just making the test pass now, but there could be cases that should say
       // 'FIXME: this needs to conflict' or 'TODO Eventually should merge'
       //FIXME: double check all the rholang below too, it might be inconsistent with its test case
-      "!4 !!X" -> conflicts("@0!(0)", "@0!!(0)", "for (_ <- @0) { 0 }"),
-      "!4 !!4" -> conflicts("@0!(0)", "@0!!(0)", "for (_ <- @0) { 0 } | for (_ <- @0) { 0 }"),
-      "!4 CX"  -> conflicts("@0!(1)", "contract @0(id) = { 0 }", "for (_ <- @0) { 0 }"),
-      "!4 C!" -> conflictsForNow(
-        "@0!(0)",
-        "contract @0(@1) = { 0 }",
-        "for (_ <- @0) { 0 } | @0!(1)"
-      ),
-      "!C !C" -> conflictsForNow("@0!(0)", "@0!(0)", "contract @0(@0) = { 0 }"),
-      "!C 4X" -> conflicts("@0!(0)", "for (_ <- @0) { 0 }", "for (_ <- @0) { 0 }"),
-      "!C 4!" -> conflicts("@0!(0)", "for (_ <- @0) { 0 }", "for (_ <- @0) { 0 } | @0!(0)"),
-      "!C 4!!" -> conflictsForNow(
-        "@0!(0)",
-        "for (_ <- @0) { 0 }",
-        "contract @0(@0) = { 0 } | @0!!(1)"
-      ),
-      "!C !!X" -> conflictsForNow("@0!(0)", "@0!!(1)", "contract @0(@0) = { 0 }"),
-      "!C !!4" -> conflictsForNow(
-        "@0!(0)",
-        "@0!!(1)",
-        "contract @0(@0) = { 0 } | for (@1 <- @0) { 0 }"
-      ),
-      "!C CX" -> conflictsForNow("@0!(0)", "contract @0(id) = { 0 }", "contract @0(id) = { 0 }"),
-      "!C C!" -> conflictsForNow(
-        "@0!(0)",
-        "contract @0(id) = { 0 }",
-        "contract @0(@0) = { 0 } | @0!(1)"
-      ),
-      "4X 4X" -> conflictsForNow("for (_ <- @0) { 0 }", "for (_ <- @0) { 0 }", "0"),
-      "4X 4!" -> conflicts("for (_ <- @0) { 0 }", "for (_ <- @0) { 0 }", "@0!(0)"),
+      "!4 !!X" -> conflicts(S0, R0, F_),
+      "!4 !!4" -> conflicts(S0, R0, F_ + " | " + F_),
+      "!4 CX"  -> conflicts(S1, C_, F_),
+      "!4 C!"  -> conflictsForNow(S0, C1, F_ + " | " + S1),
+      "!C !C"  -> conflictsForNow(S0, S0, C0),
+      "!C 4X"  -> conflicts(S0, F_, F_),
+      "!C 4!"  -> conflicts(S0, F_, F_ + " | " + S0),
+      "!C 4!!" -> conflictsForNow(S0, F_, C0 + " | " + R1),
+      "!C !!X" -> conflictsForNow(S0, R1, C0),
+      "!C !!4" -> conflictsForNow(S0, R1, C0 + " | " + F1),
+      "!C CX"  -> conflictsForNow(S0, C_, C_),
+      "!C C!"  -> conflictsForNow(S0, C_, C0 + " | " + S1),
+      "4X 4X"  -> conflictsForNow(F_, F_, Z),
+      "4X 4!"  -> conflicts(F_, F_, S0),
       // Skipping 4X 4!! merges, 4X !!X may merge or not, 4X !!4 may merge or not
-      "4X CX" -> conflicts("for (_ <- @0) { 0 }", "contract @0(id) = { 0 }", "0"),
-      "4X C!" -> conflictsForNow("for (_ <- @0) { 0 }", "contract @0(@1) = { 0 }", "@0!(1)"),
-      "4! 4! different !" -> conflictsForNow(
-        "for (@0 <- @0) { 0 }",
-        "for (@1 <- @0) { 0 }",
-        "@0!(0) | @0!(1)"
-      ),
-      "4! 4! same !" -> conflicts("for (_ <- @0) { 0 }", "for (_ <- @0) { 0 }", "@0!(0)"),
+      "4X CX"             -> conflicts(F_, C_, Z),
+      "4X C!"             -> conflictsForNow(F_, C1, S1),
+      "4! 4! different !" -> conflictsForNow(F0, F1, S0 + " | " + S1),
+      "4! 4! same !"      -> conflicts(F_, F_, S0),
       // Skipping 4! 4!! merges, 4! !!X merges, 4! !!4 merges
-      "4! CX" -> conflicts("for (_ <- @0) { 0 }", "contract @0(id) = { 0 }", "@0!(0)"),
-      "4! C! different !" -> conflictsForNow(
-        "for (@0 <- @0) { 0 }",
-        "contract @0(@1) = { 0 }",
-        "@0!(0) | @0!(1)"
-      ),
-      "4! C! same !" -> conflicts("for (_ <- @0) { 0 }", "contract @0(id) = { 0 }", "@0!(0)"),
-      "CX CX"        -> conflictsForNow("contract @0(id) = { 0 }", "contract @0(id) = { 0 }", "0"),
-      "C! C! different !" -> conflictsForNow(
-        "contract @0(@0) = { 0 }",
-        "contract @0(@1) = { 0 }",
-        "@0!(0) | @0!(1)"
-      ),
-      "C! C! same !" -> conflicts("contract @0(id) = { 0 }", "contract @0(id) = { 0 }", "@0!(0)")
+      "4! CX"             -> conflicts(F_, C_, S0),
+      "4! C! different !" -> conflictsForNow(F0, C1, S0 + " | " + S1),
+      "4! C! same !"      -> conflicts(F_, C_, S0),
+      "CX CX"             -> conflictsForNow(C_, C_, Z),
+      "C! C! different !" -> conflictsForNow(C0, C1, S0 + " | " + S1),
+      "C! C! same !"      -> conflicts(C_, C_, S0)
       // 4!! / !!4 row is similar to !4 / 4! and thus skipped
       // C!! / !!C row is similar to !C / C! and thus skipped
     ).values.toList.parSequence_
