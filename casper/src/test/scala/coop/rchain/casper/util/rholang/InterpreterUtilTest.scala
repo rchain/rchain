@@ -677,19 +677,4 @@ class InterpreterUtilTest
     } yield ()
   }
 
-  def step[F[_]: BlockDagStorage: BlockStore: Time: Metrics: Span: Sync](
-      runtimeManager: RuntimeManager[F]
-  )(b1: BlockMessage, genesis: BlockMessage): F[Unit] =
-    for {
-      dag                                       <- BlockDagStorage[F].getRepresentation
-      computeBlockCheckpointResult              <- computeBlockCheckpoint(b1, genesis, dag, runtimeManager)
-      (postB1StateHash, postB1ProcessedDeploys) = computeBlockCheckpointResult
-      result <- injectPostStateHash[F](
-                 b1,
-                 genesis,
-                 postB1StateHash,
-                 postB1ProcessedDeploys
-               )
-    } yield result
-
 }
