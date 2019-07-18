@@ -26,10 +26,9 @@ object CasperLaunch {
 
   class CasperInit[F[_]](
       val conf: CasperConf,
-      val runtimeManager: RuntimeManager[F],
       val tracing: Boolean
   )
-  def apply[F[_]: LastApprovedBlock: Metrics: Span: BlockStore: ConnectionsCell: NodeDiscovery: TransportLayer: RPConfAsk: SafetyOracle: LastFinalizedBlockCalculator: Sync: Concurrent: Time: Log: EventLog: MultiParentCasperRef: BlockDagStorage: EngineCell: EnvVars: RaiseIOError: Running.RequestedBlocks](
+  def apply[F[_]: LastApprovedBlock: Metrics: Span: BlockStore: ConnectionsCell: NodeDiscovery: TransportLayer: RPConfAsk: SafetyOracle: LastFinalizedBlockCalculator: Sync: Concurrent: Time: Log: EventLog: MultiParentCasperRef: BlockDagStorage: EngineCell: EnvVars: RaiseIOError: RuntimeManager: Running.RequestedBlocks](
       init: CasperInit[F],
       toTask: F[_] => Task[_]
   )(implicit scheduler: Scheduler): F[Unit] =
@@ -55,7 +54,7 @@ object CasperLaunch {
       case (msg, action) => Log[F].info(msg) >> action
     }
 
-  def connectToExistingNetwork[F[_]: LastApprovedBlock: Metrics: Span: BlockStore: ConnectionsCell: NodeDiscovery: TransportLayer: RPConfAsk: SafetyOracle: LastFinalizedBlockCalculator: Concurrent: Time: Log: EventLog: MultiParentCasperRef: BlockDagStorage: EngineCell: EnvVars: Running.RequestedBlocks](
+  def connectToExistingNetwork[F[_]: LastApprovedBlock: Metrics: Span: BlockStore: ConnectionsCell: NodeDiscovery: TransportLayer: RPConfAsk: SafetyOracle: LastFinalizedBlockCalculator: Concurrent: Time: Log: EventLog: MultiParentCasperRef: BlockDagStorage: EngineCell: EnvVars: RuntimeManager: Running.RequestedBlocks](
       approvedBlock: ApprovedBlock,
       init: CasperInit[F]
   ): F[Unit] =
@@ -63,12 +62,12 @@ object CasperLaunch {
       validatorId <- ValidatorIdentity.fromConfig[F](init.conf)
       genesis     = approvedBlock.candidate.flatMap(_.block).get
       casper <- MultiParentCasper
-                 .hashSetCasper[F](init.runtimeManager, validatorId, genesis, init.conf.shardId)
+                 .hashSetCasper[F](validatorId, genesis, init.conf.shardId)
       _ <- Engine
             .transitionToRunning[F](casper, approvedBlock, CommUtil.sendForkChoiceTipRequest[F])
     } yield ()
 
-  def connectAsGenesisValidator[F[_]: Monad: Sync: Metrics: Span: LastApprovedBlock: Time: Concurrent: MultiParentCasperRef: Log: EventLog: RPConfAsk: BlockStore: ConnectionsCell: TransportLayer: SafetyOracle: LastFinalizedBlockCalculator: BlockDagStorage: EngineCell: EnvVars: RaiseIOError: Running.RequestedBlocks](
+  def connectAsGenesisValidator[F[_]: Monad: Sync: Metrics: Span: LastApprovedBlock: Time: Concurrent: MultiParentCasperRef: Log: EventLog: RPConfAsk: BlockStore: ConnectionsCell: TransportLayer: SafetyOracle: LastFinalizedBlockCalculator: BlockDagStorage: EngineCell: EnvVars: RaiseIOError: RuntimeManager: Running.RequestedBlocks](
       init: CasperInit[F]
   ): F[Unit] =
     for {
@@ -89,11 +88,11 @@ object CasperLaunch {
         init.conf.requiredSigs
       )
       _ <- EngineCell[F].set(
-            new GenesisValidator(init.runtimeManager, validatorId.get, init.conf.shardId, bap)
+            new GenesisValidator(validatorId.get, init.conf.shardId, bap)
           )
     } yield ()
 
-  def initBootstrap[F[_]: Monad: Sync: LastApprovedBlock: Time: MultiParentCasperRef: Log: EventLog: RPConfAsk: BlockStore: ConnectionsCell: TransportLayer: Concurrent: Metrics: Span: SafetyOracle: LastFinalizedBlockCalculator: BlockDagStorage: EngineCell: EnvVars: RaiseIOError: Running.RequestedBlocks](
+  def initBootstrap[F[_]: Monad: Sync: LastApprovedBlock: Time: MultiParentCasperRef: Log: EventLog: RPConfAsk: BlockStore: ConnectionsCell: TransportLayer: Concurrent: Metrics: Span: SafetyOracle: LastFinalizedBlockCalculator: BlockDagStorage: EngineCell: EnvVars: RaiseIOError: RuntimeManager: Running.RequestedBlocks](
       init: CasperInit[F],
       toTask: F[_] => Task[_],
       tracing: Boolean
@@ -106,7 +105,6 @@ object CasperLaunch {
                   init.conf.walletsFile,
                   init.conf.minimumBond,
                   init.conf.maximumBond,
-                  init.runtimeManager,
                   init.conf.shardId,
                   init.conf.deployTimestamp
                 )
@@ -122,10 +120,9 @@ object CasperLaunch {
       _ <- Sync[F].delay {
             val _ = toTask(
               GenesisCeremonyMaster
-                .approveBlockInterval(
+                .approveBlockInterval[F](
                   init.conf.approveGenesisInterval,
                   init.conf.shardId,
-                  init.runtimeManager,
                   validatorId
                 )
             ).executeWithOptions(TaskContrib.enableTracing(tracing)).forkAndForget.runToFuture
@@ -134,14 +131,13 @@ object CasperLaunch {
       _ <- EngineCell[F].set(new GenesisCeremonyMaster[F](abp))
     } yield ()
 
-  def connectAndQueryApprovedBlock[F[_]: Monad: Sync: LastApprovedBlock: Time: MultiParentCasperRef: Log: EventLog: RPConfAsk: BlockStore: ConnectionsCell: TransportLayer: Metrics: Span: Concurrent: SafetyOracle: LastFinalizedBlockCalculator: BlockDagStorage: EnvVars: EngineCell: Running.RequestedBlocks](
+  def connectAndQueryApprovedBlock[F[_]: Monad: Sync: LastApprovedBlock: Time: MultiParentCasperRef: Log: EventLog: RPConfAsk: BlockStore: ConnectionsCell: TransportLayer: Metrics: Span: Concurrent: SafetyOracle: LastFinalizedBlockCalculator: BlockDagStorage: EnvVars: EngineCell: RuntimeManager: Running.RequestedBlocks](
       init: CasperInit[F]
   ): F[Unit] =
     for {
       validators  <- CasperConf.parseValidatorsFile[F](init.conf.knownValidatorsFile)
       validatorId <- ValidatorIdentity.fromConfig[F](init.conf)
       _ <- Engine.tranistionToInitializing(
-            init.runtimeManager,
             init.conf.shardId,
             validatorId,
             validators,

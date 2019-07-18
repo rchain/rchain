@@ -68,8 +68,7 @@ trait MultiParentCasper[F[_]] extends Casper[F, IndexedSeq[BlockHash]] {
   // this initial fault weight combined with our fault tolerance threshold t.
   def normalizedInitialFault(weights: Map[Validator, Long]): F[Float]
   def lastFinalizedBlock: F[BlockMessage]
-  // TODO: Refactor hashSetCasper to take a RuntimeManager[F] just like BlockStore[F]
-  def getRuntimeManager: F[Option[RuntimeManager[F]]]
+  def getRuntimeManager: F[RuntimeManager[F]]
 }
 
 object MultiParentCasper extends MultiParentCasperInstances {
@@ -92,41 +91,40 @@ sealed abstract class MultiParentCasperInstances {
   private[this] val genesisLabel = Metrics.Source(MetricsSource, "genesis")
 
   def hashSetCasper[F[_]: Sync: Metrics: Concurrent: ConnectionsCell: TransportLayer: Log: Time: SafetyOracle: LastFinalizedBlockCalculator: BlockStore: RPConfAsk: BlockDagStorage: Span: Running.RequestedBlocks](
-      runtimeManager: RuntimeManager[F],
       validatorId: Option[ValidatorIdentity],
       genesis: BlockMessage,
       shardId: String
-  ): F[MultiParentCasper[F]] = Span[F].trace(genesisLabel) {
-    for {
-      dag <- BlockDagStorage[F].getRepresentation
-      maybePostGenesisStateHash <- InterpreterUtil
-                                    .validateBlockCheckpoint[F](
-                                      genesis,
-                                      dag,
-                                      runtimeManager
-                                    )
-      postGenesisStateHash <- maybePostGenesisStateHash match {
-                               case Left(BlockException(ex)) => Sync[F].raiseError[StateHash](ex)
-                               case Right(None) =>
-                                 Sync[F].raiseError[StateHash](
-                                   new Exception("Genesis tuplespace validation failed!")
-                                 )
-                               case Right(Some(hash)) => hash.pure[F]
-                             }
-      blockProcessingLock <- Semaphore[F](1)
-      casperState <- Cell.mvarCell[F, CasperState](
-                      CasperState()
-                    )
-    } yield {
-      implicit val state = casperState
-      new MultiParentCasperImpl[F](
-        runtimeManager,
-        validatorId,
-        genesis,
-        postGenesisStateHash,
-        shardId,
-        blockProcessingLock
-      )
+  )(implicit runtimeManager: RuntimeManager[F]): F[MultiParentCasper[F]] =
+    Span[F].trace(genesisLabel) {
+      for {
+        dag <- BlockDagStorage[F].getRepresentation
+        maybePostGenesisStateHash <- InterpreterUtil
+                                      .validateBlockCheckpoint[F](
+                                        genesis,
+                                        dag,
+                                        runtimeManager
+                                      )
+        postGenesisStateHash <- maybePostGenesisStateHash match {
+                                 case Left(BlockException(ex)) => Sync[F].raiseError[StateHash](ex)
+                                 case Right(None) =>
+                                   Sync[F].raiseError[StateHash](
+                                     new Exception("Genesis tuplespace validation failed!")
+                                   )
+                                 case Right(Some(hash)) => hash.pure[F]
+                               }
+        blockProcessingLock <- Semaphore[F](1)
+        casperState <- Cell.mvarCell[F, CasperState](
+                        CasperState()
+                      )
+      } yield {
+        implicit val state = casperState
+        new MultiParentCasperImpl[F](
+          validatorId,
+          genesis,
+          postGenesisStateHash,
+          shardId,
+          blockProcessingLock
+        )
+      }
     }
-  }
 }

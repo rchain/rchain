@@ -29,7 +29,6 @@ class InitializingSpec extends WordSpec {
       // interval and duration don't really matter since we don't require and signs from validators
       val bootstrapCasper =
         new Initializing[Task](
-          runtimeManager,
           shardId,
           Some(validatorId),
           validators,

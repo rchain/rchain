@@ -41,10 +41,9 @@ class BlockApproverProtocol(
   implicit private val logSource: LogSource = LogSource(this.getClass)
   private val _bonds                        = bonds.map(e => ByteString.copyFrom(e._1.bytes) -> e._2)
 
-  def unapprovedBlockPacketHandler[F[_]: Concurrent: TransportLayer: Log: Time: RPConfAsk](
+  def unapprovedBlockPacketHandler[F[_]: Concurrent: TransportLayer: Log: Time: RPConfAsk: RuntimeManager](
       peer: PeerNode,
-      u: UnapprovedBlock,
-      runtimeManager: RuntimeManager[F]
+      u: UnapprovedBlock
   ): F[Unit] =
     if (u.candidate.isEmpty) {
       Log[F].warn("Candidate is not defined.")
@@ -52,7 +51,6 @@ class BlockApproverProtocol(
       val candidate = u.candidate.get
       BlockApproverProtocol
         .validateCandidate(
-          runtimeManager,
           candidate,
           requiredSigs,
           deployTimestamp,
@@ -96,14 +94,13 @@ object BlockApproverProtocol {
     getBlockApproval(candidate, validatorId)
 
   def validateCandidate[F[_]: Concurrent](
-      runtimeManager: RuntimeManager[F],
       candidate: ApprovedBlockCandidate,
       requiredSigs: Int,
       timestamp: Long,
       bonds: Map[ByteString, Long],
       minimumBond: Long,
       maximumBond: Long
-  ): F[Either[String, Unit]] = {
+  )(implicit runtimeManager: RuntimeManager[F]): F[Either[String, Unit]] = {
 
     def validate: Either[String, (Seq[InternalProcessedDeploy], RChainState)] =
       for {

@@ -19,8 +19,7 @@ import coop.rchain.shared._
 
 import com.google.protobuf.ByteString
 
-class GenesisValidator[F[_]: Sync: Metrics: Span: Concurrent: ConnectionsCell: TransportLayer: Log: EventLog: Time: SafetyOracle: LastFinalizedBlockCalculator: RPConfAsk: BlockStore: LastApprovedBlock: BlockDagStorage: EngineCell: MultiParentCasperRef: Running.RequestedBlocks](
-    rm: RuntimeManager[F],
+class GenesisValidator[F[_]: Sync: Metrics: Span: Concurrent: ConnectionsCell: TransportLayer: Log: EventLog: Time: SafetyOracle: LastFinalizedBlockCalculator: RPConfAsk: BlockStore: LastApprovedBlock: BlockDagStorage: EngineCell: MultiParentCasperRef: RuntimeManager: Running.RequestedBlocks](
     validatorId: ValidatorIdentity,
     shardId: String,
     blockApprover: BlockApproverProtocol
@@ -31,9 +30,9 @@ class GenesisValidator[F[_]: Sync: Metrics: Span: Concurrent: ConnectionsCell: T
   override def handle(peer: PeerNode, msg: CasperMessage): F[Unit] = msg match {
     case br: ApprovedBlockRequest => sendNoApprovedBlockAvailable(peer, br.identifier)
     case ub: UnapprovedBlock =>
-      blockApprover.unapprovedBlockPacketHandler(peer, ub, rm) >> {
+      blockApprover.unapprovedBlockPacketHandler(peer, ub) >> {
         val validators = Set(ByteString.copyFrom(validatorId.publicKey.bytes))
-        Engine.tranistionToInitializing(rm, shardId, Some(validatorId), validators, init = noop)
+        Engine.tranistionToInitializing(shardId, Some(validatorId), validators, init = noop)
       }
     case na: NoApprovedBlockAvailable => logNoApprovedBlockAvailable[F](na.nodeIdentifer)
     case _                            => noop

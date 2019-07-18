@@ -63,10 +63,9 @@ object Genesis {
       maybeVaultsPath: Option[String],
       minimumBond: Long,
       maximumBond: Long,
-      runtimeManager: RuntimeManager[F],
       shardId: String,
       deployTimestamp: Option[Long]
-  ): F[BlockMessage] =
+  )(implicit runtimeManager: RuntimeManager[F]): F[BlockMessage] =
     for {
       timestamp <- deployTimestamp.fold(Time[F].currentMillis)(_.pure[F])
       vaults    <- getVaults[F](maybeVaultsPath, genesisPath.resolve("wallets.txt"))

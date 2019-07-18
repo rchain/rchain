@@ -1,6 +1,6 @@
 package coop.rchain.casper.api
 
-import cats.effect.Sync
+import cats.effect.{Resource, Sync}
 import cats.implicits._
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.{BlockDagStorage, BlockStore}
@@ -8,6 +8,8 @@ import coop.rchain.casper.MultiParentCasperRef.MultiParentCasperRef
 import coop.rchain.casper._
 import coop.rchain.casper.helper.{BlockDagStorageFixture, NoOpsCasperEffect}
 import coop.rchain.casper.protocol._
+import coop.rchain.casper.util.rholang.Resources.mkRuntimeManager
+import coop.rchain.casper.util.rholang.RuntimeManager
 import coop.rchain.casper.util.{ConstructDeploy, ProtoUtil}
 import coop.rchain.metrics.Metrics
 import coop.rchain.models.BlockHash.BlockHash
@@ -17,6 +19,7 @@ import coop.rchain.crypto.PrivateKey
 import coop.rchain.p2p.EffectsTestInstances.{LogStub, LogicalTime}
 import monix.eval.Task
 import org.scalatest._
+import monix.execution.Scheduler.Implicits.global
 
 import scala.collection.immutable.HashMap
 import coop.rchain.metrics.NoopSpan
@@ -28,6 +31,9 @@ class BlockQueryResponseAPITest
     with BlockDagStorageFixture {
   implicit val timeEff = new LogicalTime[Task]
   implicit val spanEff = NoopSpan[Task]()
+  private val runtimeManagerResource: Resource[Task, RuntimeManager[Task]] =
+    mkRuntimeManager("block-query-response-api-test")
+
   private val (sk, pk) = ConstructDeploy.defaultKeyPair
   val secondBlockQuery = "1234"
   val badTestHashQuery = "No such a hash"
@@ -255,37 +261,43 @@ class BlockQueryResponseAPITest
       blockStore: BlockStore[Task],
       blockDagStorage: BlockDagStorage[Task]
   ): Task[(LogStub[Task], MultiParentCasperRef[Task], SafetyOracle[Task])] =
-    for {
-      _ <- blockDagStorage.insert(genesisBlock, genesisBlock, false)
-      _ <- blockDagStorage.insert(secondBlock, genesisBlock, false)
-      casperEffect <- NoOpsCasperEffect[Task](
-                       HashMap[BlockHash, BlockMessage](
-                         (ProtoUtil.stringToByteString(genesisHashString), genesisBlock),
-                         (ProtoUtil.stringToByteString(secondHashString), secondBlock)
-                       )
-                     )(Sync[Task], blockStore, blockDagStorage)
-      logEff             = new LogStub[Task]()
-      metricsEff         = new Metrics.MetricsNOP[Task]
-      casperRef          <- MultiParentCasperRef.of[Task]
-      _                  <- casperRef.set(casperEffect)
-      cliqueOracleEffect = SafetyOracle.cliqueOracle[Task](Sync[Task], logEff, metricsEff, spanEff)
-    } yield (logEff, casperRef, cliqueOracleEffect)
+    runtimeManagerResource.use { implicit runtimeManager =>
+      for {
+        _ <- blockDagStorage.insert(genesisBlock, genesisBlock, false)
+        _ <- blockDagStorage.insert(secondBlock, genesisBlock, false)
+        casperEffect <- NoOpsCasperEffect[Task](
+                         HashMap[BlockHash, BlockMessage](
+                           (ProtoUtil.stringToByteString(genesisHashString), genesisBlock),
+                           (ProtoUtil.stringToByteString(secondHashString), secondBlock)
+                         )
+                       )(Sync[Task], blockStore, blockDagStorage, runtimeManager)
+        logEff     = new LogStub[Task]()
+        metricsEff = new Metrics.MetricsNOP[Task]
+        casperRef  <- MultiParentCasperRef.of[Task]
+        _          <- casperRef.set(casperEffect)
+        cliqueOracleEffect = SafetyOracle
+          .cliqueOracle[Task](Sync[Task], logEff, metricsEff, spanEff)
+      } yield (logEff, casperRef, cliqueOracleEffect)
+    }
 
   private def emptyEffects(
       blockStore: BlockStore[Task],
       blockDagStorage: BlockDagStorage[Task]
   ): Task[(LogStub[Task], MultiParentCasperRef[Task], SafetyOracle[Task])] =
-    for {
-      casperEffect <- NoOpsCasperEffect(
-                       HashMap[BlockHash, BlockMessage](
-                         (ProtoUtil.stringToByteString(genesisHashString), genesisBlock),
-                         (ProtoUtil.stringToByteString(secondHashString), secondBlock)
-                       )
-                     )(Sync[Task], blockStore, blockDagStorage)
-      logEff             = new LogStub[Task]()
-      metricsEff         = new Metrics.MetricsNOP[Task]
-      casperRef          <- MultiParentCasperRef.of[Task]
-      _                  <- casperRef.set(casperEffect)
-      cliqueOracleEffect = SafetyOracle.cliqueOracle[Task](Sync[Task], logEff, metricsEff, spanEff)
-    } yield (logEff, casperRef, cliqueOracleEffect)
+    runtimeManagerResource.use { implicit runtimeManager =>
+      for {
+        casperEffect <- NoOpsCasperEffect(
+                         HashMap[BlockHash, BlockMessage](
+                           (ProtoUtil.stringToByteString(genesisHashString), genesisBlock),
+                           (ProtoUtil.stringToByteString(secondHashString), secondBlock)
+                         )
+                       )(Sync[Task], blockStore, blockDagStorage, runtimeManager)
+        logEff     = new LogStub[Task]()
+        metricsEff = new Metrics.MetricsNOP[Task]
+        casperRef  <- MultiParentCasperRef.of[Task]
+        _          <- casperRef.set(casperEffect)
+        cliqueOracleEffect = SafetyOracle
+          .cliqueOracle[Task](Sync[Task], logEff, metricsEff, spanEff)
+      } yield (logEff, casperRef, cliqueOracleEffect)
+    }
 }

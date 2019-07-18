@@ -506,7 +506,6 @@ class NodeRuntime private[node] (
     requestedBlocks <- Cell.mvarCell[Task, Map[BlockHash, Running.Requested]](Map.empty)
     casperInit = new CasperInit[Task](
       conf.casper,
-      runtimeManager,
       conf.kamon.zipkin
     )
     _ <- CasperLaunch[Task](casperInit, identity)(
@@ -530,6 +529,7 @@ class NodeRuntime private[node] (
           engineCell,
           envVars,
           raiseIOError,
+          runtimeManager,
           requestedBlocks,
           scheduler
         )
