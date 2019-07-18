@@ -6,6 +6,7 @@ import cats.data._
 import cats.implicits._
 import cats.effect.{Concurrent, Sync}
 import com.google.protobuf.ByteString
+import coop.rchain.casper.engine.Running
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.rholang._
 import coop.rchain.catscontrib._
@@ -53,7 +54,7 @@ trait Casper[F[_], A] {
       b: BlockMessage,
       handleDoppelganger: (BlockMessage, Validator) => F[Unit]
   ): F[BlockStatus]
-  def contains(b: BlockMessage): F[Boolean]
+  def contains(hash: BlockHash): F[Boolean]
   def deploy(d: DeployData): F[Either[DeployError, DeployId]]
   def estimator(dag: BlockDagRepresentation[F]): F[A]
   def createBlock: F[CreateBlockStatus]
@@ -76,10 +77,10 @@ object MultiParentCasper extends MultiParentCasperInstances {
   def ignoreDoppelgangerCheck[F[_]: Applicative]: (BlockMessage, Validator) => F[Unit] =
     kp2(().pure[F])
 
-  def forkChoiceTip[F[_]: MultiParentCasper: Monad: BlockStore]: F[BlockMessage] =
+  def forkChoiceTip[F[_]: Monad: BlockStore](casper: MultiParentCasper[F]): F[BlockMessage] =
     for {
-      dag       <- MultiParentCasper[F].blockDag
-      tipHashes <- MultiParentCasper[F].estimator(dag)
+      dag       <- casper.blockDag
+      tipHashes <- casper.estimator(dag)
       tipHash   = tipHashes.head
       tip       <- ProtoUtil.unsafeGetBlock[F](tipHash)
     } yield tip
@@ -90,7 +91,7 @@ sealed abstract class MultiParentCasperInstances {
     Metrics.Source(CasperMetricsSource, "casper")
   private[this] val genesisLabel = Metrics.Source(MetricsSource, "genesis")
 
-  def hashSetCasper[F[_]: Sync: Metrics: Concurrent: ConnectionsCell: TransportLayer: Log: Time: SafetyOracle: LastFinalizedBlockCalculator: BlockStore: RPConfAsk: BlockDagStorage: Span](
+  def hashSetCasper[F[_]: Sync: Metrics: Concurrent: ConnectionsCell: TransportLayer: Log: Time: SafetyOracle: LastFinalizedBlockCalculator: BlockStore: RPConfAsk: BlockDagStorage: Span: Running.RequestedBlocks](
       runtimeManager: RuntimeManager[F],
       validatorId: Option[ValidatorIdentity],
       genesis: BlockMessage,

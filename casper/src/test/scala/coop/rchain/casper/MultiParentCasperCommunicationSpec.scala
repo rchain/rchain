@@ -32,12 +32,15 @@ class MultiParentCasperCommunicationSpec extends FlatSpec with Matchers with Ins
         deploy2      <- ConstructDeploy.sourceDeployNowF("@2!(2)")
         signedBlock2 <- nodes(0).addBlock(deploy2)
         _            <- nodes(1).receive() //receives block2
+        _            <- nodes(2).receive() //receives block2; asks if who has block1
+        _            <- nodes(1).receive() //receives request for has block1; sends i have block1
+        _            <- nodes(2).receive() //receives I have block1; asks for block1
+        _            <- nodes(1).receive() //receives request block1; sends block1
         _            <- nodes(2).receive() //receives block2; asks for block1
-        _            <- nodes(1).receive() //receives request for block1; sends block1
         _            <- nodes(2).receive() //receives block1; adds both block1 and block2
 
-        _ <- nodes(2).casperEff.contains(signedBlock1) shouldBeF true
-        _ <- nodes(2).casperEff.contains(signedBlock2) shouldBeF true
+        _ <- nodes(2).casperEff.contains(signedBlock1.blockHash) shouldBeF true
+        _ <- nodes(2).casperEff.contains(signedBlock2.blockHash) shouldBeF true
 
         _ = nodes(2).logEff.infos
           .count(_ startsWith "Requested missing block") should be(1)
@@ -125,7 +128,7 @@ class MultiParentCasperCommunicationSpec extends FlatSpec with Matchers with Ins
 
         _ <- List.fill(22)(propagate(nodes)).sequence // force the network to communicate
 
-        _ <- nodes(2).casperEff.contains(br) shouldBeF true
+        _ <- nodes(2).casperEff.contains(br.blockHash) shouldBeF true
 
         nr <- makeDeploy(0) >>= (nodes(2).addBlock(_))
         _  = nr.header.get.parentsHashList shouldBe Seq(br.blockHash)
@@ -150,13 +153,15 @@ class MultiParentCasperCommunicationSpec extends FlatSpec with Matchers with Ins
 
           // Cycle of requesting and passing blocks until block #3 from nodes(0) to nodes(1)
           _ <- (0 to 8).toList.traverse_[Effect, Unit] { i =>
-                nodes(1).receive() *> nodes(0).receive()
+                nodes(1).receive() >> nodes(0).receive() >> nodes(1).receive() >> nodes(0)
+                  .receive() >> nodes(1).receive() >> nodes(0).receive()
               }
 
           // We simulate a network failure here by not allowing block #2 to get passed to nodes(1)
 
           // And then we assume fetchDependencies eventually gets called
           _ <- nodes(1).casperEff.fetchDependencies
+          _ <- nodes(0).receive()
           _ <- nodes(0).receive()
 
           _ = nodes(1).logEff.infos.count(_ startsWith "Requested missing block") should be(10)

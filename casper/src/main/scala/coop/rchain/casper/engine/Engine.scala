@@ -69,7 +69,7 @@ object Engine {
       _   <- TransportLayer[F].stream(peer, msg)
     } yield ()
 
-  def transitionToRunning[F[_]: Monad: MultiParentCasperRef: EngineCell: Log: EventLog: RPConfAsk: BlockStore: ConnectionsCell: TransportLayer: Time](
+  def transitionToRunning[F[_]: Monad: MultiParentCasperRef: EngineCell: Log: EventLog: RPConfAsk: BlockStore: ConnectionsCell: TransportLayer: Time: Running.RequestedBlocks](
       casper: MultiParentCasper[F],
       approvedBlock: ApprovedBlock,
       init: F[Unit]
@@ -89,7 +89,7 @@ object Engine {
 
     } yield ()
 
-  def tranistionToInitializing[F[_]: Concurrent: Metrics: Span: Monad: MultiParentCasperRef: EngineCell: Log: EventLog: RPConfAsk: BlockStore: ConnectionsCell: TransportLayer: Time: SafetyOracle: LastFinalizedBlockCalculator: LastApprovedBlock: BlockDagStorage](
+  def tranistionToInitializing[F[_]: Concurrent: Metrics: Span: Monad: MultiParentCasperRef: EngineCell: Log: EventLog: RPConfAsk: BlockStore: ConnectionsCell: TransportLayer: Time: SafetyOracle: LastFinalizedBlockCalculator: LastApprovedBlock: BlockDagStorage: Running.RequestedBlocks](
       rm: RuntimeManager[F],
       shardId: String,
       validatorId: Option[ValidatorIdentity],

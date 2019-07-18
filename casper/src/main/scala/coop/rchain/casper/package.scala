@@ -9,4 +9,5 @@ package object casper {
   type TopoSort = Vector[Vector[BlockHash]]
 
   val CasperMetricsSource: Metrics.Source = Metrics.Source(Metrics.BaseSource, "casper")
+
 }

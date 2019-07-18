@@ -43,8 +43,8 @@ class MultiParentCasperMergeSpec extends FlatSpec with Matchers with Inspectors 
         _ = nodes(0).logEff.warns.isEmpty shouldBe true
         _ = nodes(1).logEff.warns.isEmpty shouldBe true
         _ = multiparentBlock.header.get.parentsHashList.size shouldBe 2
-        _ = nodes(0).casperEff.contains(multiparentBlock) shouldBeF true
-        _ = nodes(1).casperEff.contains(multiparentBlock) shouldBeF true
+        _ = nodes(0).casperEff.contains(multiparentBlock.blockHash) shouldBeF true
+        _ = nodes(1).casperEff.contains(multiparentBlock.blockHash) shouldBeF true
         _ <- getDataAtPublicChannel[Effect](multiparentBlock, 0).map(_ shouldBe Seq("0"))
         _ <- getDataAtPublicChannel[Effect](multiparentBlock, 1).map(_ shouldBe Seq("1"))
         _ <- getDataAtPublicChannel[Effect](multiparentBlock, 2).map(_ shouldBe Seq("2"))
@@ -75,8 +75,8 @@ class MultiParentCasperMergeSpec extends FlatSpec with Matchers with Inspectors 
         _ = nodes(0).logEff.warns.isEmpty shouldBe true
         _ = nodes(1).logEff.warns.isEmpty shouldBe true
         _ = multiparentBlock.header.get.parentsHashList.size shouldBe 2
-        _ = nodes(0).casperEff.contains(multiparentBlock) shouldBeF true
-        _ = nodes(1).casperEff.contains(multiparentBlock) shouldBeF true
+        _ = nodes(0).casperEff.contains(multiparentBlock.blockHash) shouldBeF true
+        _ = nodes(1).casperEff.contains(multiparentBlock.blockHash) shouldBeF true
       } yield ()
     }
   }
@@ -113,8 +113,8 @@ class MultiParentCasperMergeSpec extends FlatSpec with Matchers with Inspectors 
         _      = nodes(0).logEff.warns.isEmpty shouldBe true
         _      = nodes(1).logEff.warns.isEmpty shouldBe true
         _      = singleParentBlock.header.get.parentsHashList.size shouldBe 1
-        _      <- nodes(0).casperEff.contains(singleParentBlock) shouldBeF true
-        result <- nodes(1).casperEff.contains(singleParentBlock) shouldBeF true
+        _      <- nodes(0).casperEff.contains(singleParentBlock.blockHash) shouldBeF true
+        result <- nodes(1).casperEff.contains(singleParentBlock.blockHash) shouldBeF true
       } yield result
     }
   }
@@ -247,8 +247,8 @@ class MultiParentCasperMergeSpec extends FlatSpec with Matchers with Inspectors 
         _      = nodes(0).logEff.warns.isEmpty shouldBe true
         _      = nodes(1).logEff.warns.isEmpty shouldBe true
         _      = singleParentBlock.header.get.parentsHashList.size shouldBe 1
-        _      <- nodes(0).casperEff.contains(singleParentBlock) shouldBeF true
-        result <- nodes(1).casperEff.contains(singleParentBlock) shouldBeF true
+        _      <- nodes(0).casperEff.contains(singleParentBlock.blockHash) shouldBeF true
+        result <- nodes(1).casperEff.contains(singleParentBlock.blockHash) shouldBeF true
       } yield result
     }
   }

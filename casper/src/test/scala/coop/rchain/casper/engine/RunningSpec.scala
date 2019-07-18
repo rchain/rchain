@@ -41,7 +41,7 @@ class RunningSpec extends WordSpec {
 
     val engine = new Running[Task](casper, approvedBlock, Task.unit)
 
-    transportLayer.setResponses(_ => p => Right(p))
+    transportLayer.setResponses(_ => p => Right(()))
 
     "respond to BlockMessage messages " in {
       val blockMessage = BlockMessage(ByteString.copyFrom("Test BlockMessage", "UTF-8"))
@@ -55,8 +55,7 @@ class RunningSpec extends WordSpec {
     }
 
     "respond to BlockRequest messages" in {
-      val blockRequest =
-        BlockRequest(Base16.encode(genesis.blockHash.toByteArray), genesis.blockHash)
+      val blockRequest = BlockRequest(genesis.blockHash)
       val test = for {
         _     <- blockStore.put(genesis.blockHash, genesis)
         _     <- engine.handle(local, blockRequest)
@@ -89,7 +88,7 @@ class RunningSpec extends WordSpec {
     "respond to ForkChoiceTipRequest messages" in {
       val request = ForkChoiceTipRequest()
       val test: Task[Unit] = for {
-        tip  <- MultiParentCasper.forkChoiceTip[Task]
+        tip  <- MultiParentCasper.forkChoiceTip[Task](casper)
         _    <- engine.handle(local, request)
         head = transportLayer.requests.head
         _    = assert(head.peer == local)

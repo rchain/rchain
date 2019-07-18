@@ -12,6 +12,7 @@ import coop.rchain.blockstorage.{BlockDagRepresentation, BlockDagStorage, BlockS
 import coop.rchain.casper.CasperState.CasperStateCell
 import coop.rchain.casper.DeployError._
 import coop.rchain.casper.protocol._
+import coop.rchain.casper.engine.Running
 import coop.rchain.casper.util.ConstructDeploy.{defaultSec, sourceDeploy}
 import coop.rchain.casper.util.ProtoUtil._
 import coop.rchain.casper.util._
@@ -47,7 +48,7 @@ object CasperState {
   type CasperStateCell[F[_]] = Cell[F, CasperState]
 }
 
-class MultiParentCasperImpl[F[_]: Sync: Concurrent: ConnectionsCell: TransportLayer: Log: Time: SafetyOracle: LastFinalizedBlockCalculator: BlockStore: RPConfAsk: BlockDagStorage](
+class MultiParentCasperImpl[F[_]: Sync: Concurrent: ConnectionsCell: TransportLayer: Log: Time: SafetyOracle: LastFinalizedBlockCalculator: BlockStore: RPConfAsk: BlockDagStorage: Running.RequestedBlocks](
     runtimeManager: RuntimeManager[F],
     validatorId: Option[ValidatorIdentity],
     genesis: BlockMessage,
@@ -159,13 +160,13 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: ConnectionsCell: TransportLa
     } yield attempt
 
   def contains(
-      b: BlockMessage
+      hash: BlockHash
   ): F[Boolean] =
     for {
       dag            <- blockDag
-      dagContains    <- dag.contains(b.blockHash)
+      dagContains    <- dag.contains(hash)
       state          <- Cell[F, CasperState].read
-      bufferContains = state.blockBuffer.contains(b.blockHash)
+      bufferContains = state.blockBuffer.contains(hash)
     } yield (dagContains || bufferContains)
 
   /**
@@ -457,7 +458,7 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: ConnectionsCell: TransportLa
     )
 
   private def requestMissingDependency(hash: BlockHash) =
-    CommUtil.sendBlockRequest[F](BlockRequest(Base16.encode(hash.toByteArray), hash))
+    CommUtil.sendBlockRequest[F](hash)
 
   // TODO: Slash block for status except InvalidUnslashableBlock
   private def handleInvalidBlockEffect(
@@ -551,8 +552,6 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: ConnectionsCell: TransportLa
   def fetchDependencies: F[Unit] =
     for {
       s <- Cell[F, CasperState].read
-      _ <- s.dependencyDag.dependencyFree.toList.traverse { hash =>
-            CommUtil.sendBlockRequest[F](BlockRequest(Base16.encode(hash.toByteArray), hash))
-          }
+      _ <- s.dependencyDag.dependencyFree.toList.traverse(CommUtil.sendBlockRequest[F])
     } yield ()
 }

@@ -14,14 +14,19 @@ trait Cell[F[_], S] {
   def modify(f: S => S): F[Unit]
   def flatModify(f: S => F[S]): F[Unit]
   def read: F[S]
+  def reads[A](f: S => A): F[A]
 }
 
 object Cell {
   def apply[F[_], S](implicit ev: Cell[F, S]): Cell[F, S] = ev
 
+  abstract class DefaultCell[F[_]: Functor, S] extends Cell[F, S] {
+    override def reads[A](f: S => A) = read map f
+  }
+
   def mvarCell[F[_]: Concurrent, S](initalState: S): F[Cell[F, S]] =
     MVar[F].of(initalState) map { mvar =>
-      new Cell[F, S] {
+      new DefaultCell[F, S] {
         def modify(f: S => S): F[Unit] =
           for {
             s <- mvar.take
@@ -43,7 +48,7 @@ object Cell {
 
   def refCell[F[_]: Sync, S](initalState: S): F[Cell[F, S]] =
     Ref[F].of(initalState) map { ref =>
-      new Cell[F, S] {
+      new DefaultCell[F, S] {
         def modify(f: S => S): F[Unit] = ref.modify { in =>
           (f(in), ())
         }
@@ -63,7 +68,7 @@ object Cell {
 
   @SuppressWarnings(Array("org.wartremover.warts.Var"))
   def unsafe[F[_]: Applicative, S](const: S): Cell[F, S] =
-    new Cell[F, S] {
+    new DefaultCell[F, S] {
       private var s: S               = const
       def modify(f: S => S): F[Unit] = { s = f(s) }.pure[F]
       def flatModify(f: S => F[S]): F[Unit] = f(s).map { newS =>
@@ -74,7 +79,7 @@ object Cell {
     }
 
   @SuppressWarnings(Array("org.wartremover.warts.Var"))
-  def id[S](init: S): Cell[Id, S] = new Cell[Id, S] {
+  def id[S](init: S): Cell[Id, S] = new DefaultCell[Id, S] {
     var s: S                    = init
     def modify(f: S => S): Unit = flatModify(f)
     def flatModify(f: S => S): Unit =

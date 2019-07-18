@@ -29,7 +29,7 @@ object CasperLaunch {
       val runtimeManager: RuntimeManager[F],
       val tracing: Boolean
   )
-  def apply[F[_]: LastApprovedBlock: Metrics: Span: BlockStore: ConnectionsCell: NodeDiscovery: TransportLayer: RPConfAsk: SafetyOracle: LastFinalizedBlockCalculator: Sync: Concurrent: Time: Log: EventLog: MultiParentCasperRef: BlockDagStorage: EngineCell: EnvVars: RaiseIOError](
+  def apply[F[_]: LastApprovedBlock: Metrics: Span: BlockStore: ConnectionsCell: NodeDiscovery: TransportLayer: RPConfAsk: SafetyOracle: LastFinalizedBlockCalculator: Sync: Concurrent: Time: Log: EventLog: MultiParentCasperRef: BlockDagStorage: EngineCell: EnvVars: RaiseIOError: Running.RequestedBlocks](
       init: CasperInit[F],
       toTask: F[_] => Task[_]
   )(implicit scheduler: Scheduler): F[Unit] =
@@ -55,7 +55,7 @@ object CasperLaunch {
       case (msg, action) => Log[F].info(msg) >> action
     }
 
-  def connectToExistingNetwork[F[_]: LastApprovedBlock: Metrics: Span: BlockStore: ConnectionsCell: NodeDiscovery: TransportLayer: RPConfAsk: SafetyOracle: LastFinalizedBlockCalculator: Concurrent: Time: Log: EventLog: MultiParentCasperRef: BlockDagStorage: EngineCell: EnvVars](
+  def connectToExistingNetwork[F[_]: LastApprovedBlock: Metrics: Span: BlockStore: ConnectionsCell: NodeDiscovery: TransportLayer: RPConfAsk: SafetyOracle: LastFinalizedBlockCalculator: Concurrent: Time: Log: EventLog: MultiParentCasperRef: BlockDagStorage: EngineCell: EnvVars: Running.RequestedBlocks](
       approvedBlock: ApprovedBlock,
       init: CasperInit[F]
   ): F[Unit] =
@@ -68,7 +68,7 @@ object CasperLaunch {
             .transitionToRunning[F](casper, approvedBlock, CommUtil.sendForkChoiceTipRequest[F])
     } yield ()
 
-  def connectAsGenesisValidator[F[_]: Monad: Sync: Metrics: Span: LastApprovedBlock: Time: Concurrent: MultiParentCasperRef: Log: EventLog: RPConfAsk: BlockStore: ConnectionsCell: TransportLayer: SafetyOracle: LastFinalizedBlockCalculator: BlockDagStorage: EngineCell: EnvVars: RaiseIOError](
+  def connectAsGenesisValidator[F[_]: Monad: Sync: Metrics: Span: LastApprovedBlock: Time: Concurrent: MultiParentCasperRef: Log: EventLog: RPConfAsk: BlockStore: ConnectionsCell: TransportLayer: SafetyOracle: LastFinalizedBlockCalculator: BlockDagStorage: EngineCell: EnvVars: RaiseIOError: Running.RequestedBlocks](
       init: CasperInit[F]
   ): F[Unit] =
     for {
@@ -93,7 +93,7 @@ object CasperLaunch {
           )
     } yield ()
 
-  def initBootstrap[F[_]: Monad: Sync: LastApprovedBlock: Time: MultiParentCasperRef: Log: EventLog: RPConfAsk: BlockStore: ConnectionsCell: TransportLayer: Concurrent: Metrics: Span: SafetyOracle: LastFinalizedBlockCalculator: BlockDagStorage: EngineCell: EnvVars: RaiseIOError](
+  def initBootstrap[F[_]: Monad: Sync: LastApprovedBlock: Time: MultiParentCasperRef: Log: EventLog: RPConfAsk: BlockStore: ConnectionsCell: TransportLayer: Concurrent: Metrics: Span: SafetyOracle: LastFinalizedBlockCalculator: BlockDagStorage: EngineCell: EnvVars: RaiseIOError: Running.RequestedBlocks](
       init: CasperInit[F],
       toTask: F[_] => Task[_],
       tracing: Boolean
@@ -134,7 +134,7 @@ object CasperLaunch {
       _ <- EngineCell[F].set(new GenesisCeremonyMaster[F](abp))
     } yield ()
 
-  def connectAndQueryApprovedBlock[F[_]: Monad: Sync: LastApprovedBlock: Time: MultiParentCasperRef: Log: EventLog: RPConfAsk: BlockStore: ConnectionsCell: TransportLayer: Metrics: Span: Concurrent: SafetyOracle: LastFinalizedBlockCalculator: BlockDagStorage: EnvVars: EngineCell](
+  def connectAndQueryApprovedBlock[F[_]: Monad: Sync: LastApprovedBlock: Time: MultiParentCasperRef: Log: EventLog: RPConfAsk: BlockStore: ConnectionsCell: TransportLayer: Metrics: Span: Concurrent: SafetyOracle: LastFinalizedBlockCalculator: BlockDagStorage: EnvVars: EngineCell: Running.RequestedBlocks](
       init: CasperInit[F]
   ): F[Unit] =
     for {

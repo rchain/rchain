@@ -8,6 +8,14 @@ case object BlockMessage extends PacketType {
   val id = "BlockMessage"
 }
 
+case object HasBlockRequest extends PacketType {
+  val id = "HasBlockRequest"
+}
+
+case object HasBlock extends PacketType {
+  val id = "HasBlock"
+}
+
 case object BlockRequest extends PacketType {
   val id = "BlockRequest"
 }

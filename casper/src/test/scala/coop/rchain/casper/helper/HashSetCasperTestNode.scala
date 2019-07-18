@@ -11,6 +11,7 @@ import coop.rchain.casper.MultiParentCasper.ignoreDoppelgangerCheck
 import coop.rchain.casper._
 import coop.rchain.casper.engine.EngineCell._
 import coop.rchain.casper.engine._
+import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.casper.helper.BlockDagStorageTestFixture.mapSize
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.GenesisBuilder.GenesisContext
@@ -77,6 +78,9 @@ class HashSetCasperTestNode[F[_]](
 
   implicit val labF        = LastApprovedBlock.unsafe[F](Some(approvedBlock))
   val postGenesisStateHash = ProtoUtil.postStateHash(genesis)
+
+  implicit val requestedBlocks: Running.RequestedBlocks[F] =
+    Cell.unsafe[F, Map[BlockHash, Running.Requested]](Map.empty[BlockHash, Running.Requested])
 
   implicit val casperEff = new MultiParentCasperImpl[F](
     runtimeManager,
