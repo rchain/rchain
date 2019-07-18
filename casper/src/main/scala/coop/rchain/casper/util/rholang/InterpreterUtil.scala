@@ -167,23 +167,22 @@ object InterpreterUtil {
       blockData: BlockData,
       invalidBlocks: Map[BlockHash, Validator]
   ): F[Either[Throwable, (StateHash, StateHash, Seq[InternalProcessedDeploy])]] =
-    //FIXME the `if` is only needed because of usages in test code. The only production usage currently is non-genesis.
-    //  Usages of this and similar methods in test code should be elliminated, as they call into the internals of the
-    //  tested subsystems.
-    if (parents.isEmpty)
-      runtimeManager.computeGenesis(deploys, blockData.timeStamp).map(_.asRight[Throwable])
-    else
-      for {
-        possiblePreStateHash <- computeParentsPostState[F](parents, dag, runtimeManager)
-        result <- possiblePreStateHash.flatTraverse { preStateHash =>
-                   runtimeManager
-                     .computeState(preStateHash)(deploys, blockData, invalidBlocks)
-                     .map {
-                       case (postStateHash, processedDeploys) =>
-                         (preStateHash, postStateHash, processedDeploys).asRight[Throwable]
-                     }
-                 }
-      } yield result
+    for {
+      nonEmptyParents <- parents
+                          .pure[F]
+                          .ensure(new IllegalArgumentException("Parents must not be empty"))(
+                            _.nonEmpty
+                          )
+      possiblePreStateHash <- computeParentsPostState[F](nonEmptyParents, dag, runtimeManager)
+      result <- possiblePreStateHash.flatTraverse { preStateHash =>
+                 runtimeManager
+                   .computeState(preStateHash)(deploys, blockData, invalidBlocks)
+                   .map {
+                     case (postStateHash, processedDeploys) =>
+                       (preStateHash, postStateHash, processedDeploys).asRight[Throwable]
+                   }
+               }
+    } yield result
 
   private def computeParentsPostState[F[_]: Sync: BlockStore: Span](
       parents: Seq[BlockMessage],

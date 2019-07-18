@@ -79,13 +79,7 @@ object BlockGenerator {
     for {
       parents <- ProtoUtil.unsafeGetParents[F](b)
       deploys = ProtoUtil.deploys(b).flatMap(_.deploy)
-
-      _ = assert(
-        parents.nonEmpty || (parents.isEmpty && b == genesis),
-        "Received a different genesis block."
-      )
-
-      now <- Time[F].currentMillis
+      now     <- Time[F].currentMillis
       result <- computeDeploysCheckpoint[F](
                  parents,
                  deploys,
