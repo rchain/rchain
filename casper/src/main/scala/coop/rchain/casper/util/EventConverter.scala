@@ -25,7 +25,16 @@ object EventConverter {
     case produce: RspaceProduce =>
       Event(Produce(ProduceEvent(produce.channelsHash, produce.hash, produce.sequenceNumber)))
     case consume: RspaceConsume =>
-      Event(Consume(ConsumeEvent(consume.channelsHashes, consume.hash, consume.sequenceNumber)))
+      Event(
+        Consume(
+          ConsumeEvent(
+            consume.channelsHashes,
+            consume.hash,
+            consume.persistent,
+            consume.sequenceNumber
+          )
+        )
+      )
     case RspaceComm(rspaceConsume, rspaceProduces, _) => // TODO address peek
       Event(
         Comm(
@@ -34,6 +43,7 @@ object EventConverter {
               ConsumeEvent(
                 rspaceConsume.channelsHashes,
                 rspaceConsume.hash,
+                rspaceConsume.persistent,
                 rspaceConsume.sequenceNumber
               )
             ),
@@ -59,7 +69,7 @@ object EventConverter {
       RspaceConsume.fromHash(
         collection.immutable.Seq(consume.channelsHashes.map(byteStringToBlake2b256Hash): _*),
         consume.hash,
-        false,
+        consume.persistent,
         consume.sequenceNumber
       )
     case Event(Comm(CommEvent(Some(consume: ConsumeEvent), produces))) =>
@@ -72,7 +82,7 @@ object EventConverter {
         RspaceConsume.fromHash(
           collection.immutable.Seq(consume.channelsHashes.map(byteStringToBlake2b256Hash): _*),
           consume.hash,
-          false,
+          consume.persistent,
           consume.sequenceNumber
         ),
         rspaceProduces
