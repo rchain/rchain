@@ -47,7 +47,7 @@ class CostAccountingSpec extends FlatSpec with Matchers with PropertyChecks with
             runtime <- Runtime
                         .create[Task, Task.Par](dbDir, size)
             res <- InterpreterUtil
-                    .evaluate(runtime, contract, Cost(initialPhlo.toLong))
+                    .evaluateResult(runtime, contract, Cost(initialPhlo.toLong))
             _ <- Task.delay(runtime.close())
             _ <- Task.now(dbDir.recursivelyDelete())
           } yield (res)

@@ -54,7 +54,7 @@ class RuntimeSpec extends FlatSpec with Matchers {
     mkRuntime[Task](tmpPrefix, mapSize)
       .use { runtime =>
         implicit val c = runtime.cost
-        InterpreterUtil.evaluate(runtime, source)
+        InterpreterUtil.evaluateResult(runtime, source)
       }
       .runSyncUnsafe(maxDuration)
 }
