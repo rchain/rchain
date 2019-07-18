@@ -1,101 +1,34 @@
 package coop.rchain.rholang.interpreter
 
-import java.nio.file.Files
-
 import cats.implicits._
 import com.google.protobuf.ByteString
 import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.hash.Blake2b512Random
-import coop.rchain.metrics
-import coop.rchain.metrics.{Metrics, NoopSpan, Span}
+import coop.rchain.metrics.NoopSpan
 import coop.rchain.models.Connective.ConnectiveInstance._
 import coop.rchain.models.Expr.ExprInstance._
 import coop.rchain.models.TaggedContinuation.TaggedCont.ParBody
 import coop.rchain.models.Var.VarInstance._
 import coop.rchain.models._
 import coop.rchain.models.rholang.implicits._
-import coop.rchain.rholang.interpreter.Runtime.RhoISpace
 import coop.rchain.rholang.interpreter.accounting._
-import coop.rchain.rholang.interpreter.accounting.utils._
 import coop.rchain.rholang.interpreter.errors._
 import coop.rchain.rholang.interpreter.storage.implicits._
-import coop.rchain.rholang.Resources._
 import coop.rchain.rspace._
-import coop.rchain.rspace.{RSpace, ReplayRSpace}
-import coop.rchain.rspace.history.Branch
 import coop.rchain.rspace.internal.{Datum, Row, WaitingContinuation}
-import coop.rchain.shared.Log
-import coop.rchain.shared.PathOps._
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
-import org.scalatest.{Assertion, FlatSpec, Matchers}
+import org.scalatest.prop.TableDrivenPropertyChecks._
+import org.scalatest.{AppendedClues, Assertion, FlatSpec, Matchers}
 
 import scala.collection.immutable.BitSet
-import scala.collection.mutable
 import scala.collection.mutable.HashMap
+import scala.collection.{mutable, SortedSet}
 import scala.concurrent.Await
 import scala.concurrent.duration._
-import scala.collection.SortedSet
 
-final case class TestFixture(space: RhoISpace[Task], reducer: ChargingReducer[Task])
-
-trait PersistentStoreTester {
-
-  def withTestSpace[R](
-      errorLog: ErrorLog[Task]
-  )(f: TestFixture => R): R = {
-    val dbDir                              = Files.createTempDirectory("rholang-interpreter-test-")
-    implicit val logF: Log[Task]           = new Log.NOPLog[Task]
-    implicit val metricsEff: Metrics[Task] = new metrics.Metrics.MetricsNOP[Task]
-    implicit val noopSpan: Span[Task]      = NoopSpan[Task]()
-
-    implicit val cost = CostAccounting.emptyCost[Task].unsafeRunSync
-
-    val space = (RSpace
-      .create[
-        Task,
-        Par,
-        BindPattern,
-        ListParWithRandom,
-        ListParWithRandom,
-        TaggedContinuation
-      ](dbDir, 1024L * 1024L * 1024L, Branch("test")))
-      .unsafeRunSync
-    implicit val errLog = errorLog
-    val reducer         = RholangOnlyDispatcher.create[Task, Task.Par](space)._2
-    reducer.setPhlo(Cost.UNSAFE_MAX).runSyncUnsafe(1.second)
-    try {
-      f(TestFixture(space, reducer))
-    } finally {
-      space.close()
-      dbDir.recursivelyDelete()
-    }
-  }
-
-  def fixture[R](f: (RhoISpace[Task], ChargingReducer[Task]) => Task[R])(
-      implicit errorLog: ErrorLog[Task]
-  ): R = {
-    implicit val logF: Log[Task]           = new Log.NOPLog[Task]
-    implicit val metricsEff: Metrics[Task] = new metrics.Metrics.MetricsNOP[Task]
-    implicit val noopSpan: Span[Task]      = NoopSpan[Task]()
-    mkRhoISpace[Task]("rholang-interpreter-test-")
-      .use { rspace =>
-        for {
-          cost <- CostAccounting.emptyCost[Task]
-          reducer = {
-            implicit val c = cost
-            RholangOnlyDispatcher.create[Task, Task.Par](rspace)._2
-          }
-          _   <- reducer.setPhlo(Cost.UNSAFE_MAX)
-          res <- f(rspace, reducer)
-        } yield res
-      }
-      .runSyncUnsafe(3.seconds)
-  }
-}
-
-class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
+class ReduceSpec extends FlatSpec with Matchers with AppendedClues with PersistentStoreTester {
   implicit val rand: Blake2b512Random = Blake2b512Random(Array.empty[Byte])
 
   private[this] def mapData(elements: Map[Par, (Seq[Par], Blake2b512Random)]): Iterable[
@@ -138,7 +71,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
                 channels,
                 bindPatterns,
                 TaggedContinuation(ParBody(body)),
-                false,
+                persist = false,
                 SortedSet.empty
               )
             )
@@ -226,7 +159,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
     val result = withTestSpace(errorLog) {
       case TestFixture(space, reducer) =>
         val bundleSend =
-          Bundle(Send(channel, List(GInt(7L), GInt(8L), GInt(9L)), false, BitSet()))
+          Bundle(Send(channel, List(GInt(7L), GInt(8L), GInt(9L)), persistent = false, BitSet()))
         implicit val env = Env[Par]()
         val resultTask   = reducer.eval(bundleSend)(env, splitRand)
         val inspectTask = for {
@@ -252,7 +185,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
      */
     val y = GString("y")
     val receive = Receive(
-      Seq(ReceiveBind(Seq(Par()), Bundle(y, readFlag = false, writeFlag = true))),
+      Seq(ReceiveBind(Seq(Par()), Bundle(y, writeFlag = true))),
       Par()
     )
 
@@ -320,7 +253,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
      */
     val channel: Par = GString("channel")
     val send =
-      Send(Bundle(channel, writeFlag = true, readFlag = false), Seq(Expr(GInt(7L))))
+      Send(Bundle(channel, writeFlag = true), Seq(Expr(GInt(7L))))
 
     val result = withTestSpace(errorLog) {
       case TestFixture(space, reducer) =>
@@ -391,7 +324,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
       binds = Seq(
         ReceiveBind(
           patterns = Seq(Par()),
-          source = Bundle(y, readFlag = true, writeFlag = false)
+          source = Bundle(y, readFlag = true)
         )
       ),
       body = Par()
@@ -420,7 +353,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
     val splitRand1 = rand.splitByte(1)
     val mergeRand  = Blake2b512Random.merge(Seq(splitRand1, splitRand0))
     val send =
-      Send(GString("channel"), List(GInt(7L), GInt(8L), GInt(9L)), false, BitSet())
+      Send(GString("channel"), List(GInt(7L), GInt(8L), GInt(9L)), persistent = false, BitSet())
     val receive = Receive(
       Seq(
         ReceiveBind(
@@ -429,9 +362,9 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
           freeCount = 3
         )
       ),
-      Send(GString("result"), List(GString("Success")), false, BitSet()),
-      false,
-      false,
+      Send(GString("result"), List(GString("Success")), persistent = false, BitSet()),
+      persistent = false,
+      peek = false,
       3,
       BitSet()
     )
@@ -541,15 +474,15 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
     val mergeRand  = Blake2b512Random.merge(Seq(splitRand1, splitRand0))
     // format: off
     val send =
-      Send(GString("channel"), List(Par(exprs = Seq(Expr(EListBody(EList(Seq(GInt(7L), GInt(8L), GInt(9L)))))))), false, BitSet())
+      Send(GString("channel"), List(Par(exprs = Seq(Expr(EListBody(EList(Seq(GInt(7L), GInt(8L), GInt(9L)))))))), persistent = false, BitSet())
     val receive = Receive(
       Seq(
         ReceiveBind(Seq(Par(exprs = Seq(EListBody(EList(connectiveUsed = true, remainder = Some(FreeVar(0))))))),
           GString("channel"),
           freeCount = 1)),
-      Send(GString("result"), List(GString("Success")), false, BitSet()),
-      false,
-      false,
+      Send(GString("result"), List(GString("Success")), persistent = false, BitSet()),
+      persistent = false,
+      peek=false,
       1,
       BitSet()
     )
@@ -596,7 +529,12 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
     val splitRand1 = rand.splitByte(1)
     val mergeRand  = Blake2b512Random.merge(Seq(splitRand1, splitRand0))
     val send =
-      Send(EPlus(GInt(7L), GInt(8L)), List(GInt(7L), GInt(8L), GInt(9L)), false, BitSet())
+      Send(
+        EPlus(GInt(7L), GInt(8L)),
+        List(GInt(7L), GInt(8L), GInt(9L)),
+        persistent = false,
+        BitSet()
+      )
     val receive = Receive(
       Seq(
         ReceiveBind(
@@ -605,9 +543,9 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
           freeCount = 3
         )
       ),
-      Send(GString("result"), List(GString("Success")), false, BitSet()),
-      false,
-      false,
+      Send(GString("result"), List(GString("Success")), persistent = false, BitSet()),
+      persistent = false,
+      peek = false,
       3,
       BitSet()
     )
@@ -656,18 +594,18 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
     val simpleReceive = Receive(
       Seq(ReceiveBind(Seq(GInt(2L)), GInt(2L))),
       Par(),
-      false,
-      false,
+      persistent = false,
+      peek = false,
       0,
       BitSet()
     )
     val send =
-      Send(GInt(1L), Seq[Par](simpleReceive), false, BitSet())
+      Send(GInt(1L), Seq[Par](simpleReceive), persistent = false, BitSet())
     val receive = Receive(
       Seq(ReceiveBind(Seq(EVar(FreeVar(0))), GInt(1L), freeCount = 1)),
       EVar(BoundVar(0)),
-      false,
-      false,
+      persistent = false,
+      peek = false,
       1,
       BitSet()
     )
@@ -735,10 +673,16 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
     val splitRand = rand.splitByte(0)
     val result = withTestSpace(errorLog) {
       case TestFixture(space, reducer) =>
-        val pattern = Send(EVar(FreeVar(0)), List(GInt(7L), EVar(FreeVar(1))), false, BitSet())
-          .withConnectiveUsed(true)
+        val pattern =
+          Send(EVar(FreeVar(0)), List(GInt(7L), EVar(FreeVar(1))), persistent = false, BitSet())
+            .withConnectiveUsed(true)
         val sendTarget =
-          Send(EVar(BoundVar(1)), List(GInt(7L), EVar(BoundVar(0))), false, BitSet(0, 1))
+          Send(
+            EVar(BoundVar(1)),
+            List(GInt(7L), EVar(BoundVar(0))),
+            persistent = false,
+            BitSet(0, 1)
+          )
         val matchTerm = Match(
           sendTarget,
           List(
@@ -864,7 +808,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
     val splitRand1 = rand.splitByte(1)
     val mergeRand  = Blake2b512Random.merge(Seq(splitRand1, splitRand0))
     val send =
-      Send(GString("channel"), List(GInt(7L), GInt(8L), GInt(9L)), false, BitSet())
+      Send(GString("channel"), List(GInt(7L), GInt(8L), GInt(9L)), persistent = false, BitSet())
     val receive =
       Receive(
         Seq(ReceiveBind(Seq(), GString("channel"), Some(FreeVar(0)), freeCount = 1)),
@@ -912,7 +856,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
         EList(
           List(
             GInt(7L),
-            Send(GString("result"), List(GString("Success")), false, BitSet()),
+            Send(GString("result"), List(GString("Success")), persistent = false, BitSet()),
             GInt(9L),
             GInt(10L)
           )
@@ -1018,7 +962,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
               Datum.create(
                 channel0,
                 ListParWithRandom(Seq(GPrivate(ByteString.copyFrom(Array[Byte](42)))), result0Rand),
-                false)),
+                persist = false)),
             List()),
         List(channel1) ->
           Row(
@@ -1026,7 +970,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
               Datum.create(
                 channel1,
                 ListParWithRandom(Seq(GPrivate(ByteString.copyFrom(chosenName))), result1Rand),
-                false)),
+                persist = false)),
             List())
       )
     )
@@ -1042,7 +986,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
         EList(
           List(
             GInt(7L),
-            Send(GString("result"), List(GString("Success")), false, BitSet()),
+            Send(GString("result"), List(GString("Success")), persistent = false, BitSet()),
             GInt(9L),
             GInt(10L)
           )
@@ -1050,7 +994,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
         List[Par](GInt(1L))
       )
     val send: Par =
-      Send(GString("result"), List[Par](nthCallEvalToSend), false, BitSet())
+      Send(GString("result"), List[Par](nthCallEvalToSend), persistent = false, BitSet())
     val result = withTestSpace(errorLog) {
       case TestFixture(space, reducer) =>
         implicit val env = Env[Par]()
@@ -1063,11 +1007,12 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
     }
 
     val channel: Par = GString("result")
+
     val expectedResult = mapData(
       Map(
         channel -> (
           (
-            Seq(Send(GString("result"), List(GString("Success")), false, BitSet())),
+            Seq(Send(GString("result"), List(GString("Success")), persistent = false, BitSet())),
             splitRand
           )
         )
@@ -1100,15 +1045,16 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
     val proc = Receive(
       Seq(ReceiveBind(Seq(EVar(FreeVar(0))), GString("channel"))),
       Par(),
-      false,
-      false,
+      persistent = false,
+      peek = false,
       1,
       BitSet()
     )
     val serializedProcess =
       com.google.protobuf.ByteString.copyFrom(Serialize[Par].encode(proc).toArray)
-    val toByteArrayCall           = EMethod("toByteArray", proc, List[Par]())
-    def wrapWithSend(p: Par): Par = Send(GString("result"), List[Par](p), false, BitSet())
+    val toByteArrayCall = EMethod("toByteArray", proc, List[Par]())
+    def wrapWithSend(p: Par): Par =
+      Send(GString("result"), List[Par](p), persistent = false, BitSet())
     val result = withTestSpace(errorLog) {
       case TestFixture(space, reducer) =>
         val env         = Env[Par]()
@@ -1138,7 +1084,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
     val serializedProcess         = subProc.toByteString
     val toByteArrayCall: Par      = EMethod("toByteArray", unsubProc, List[Par](), BitSet(0))
     val channel: Par              = GString("result")
-    def wrapWithSend(p: Par): Par = Send(channel, List[Par](p), false, p.locallyFree)
+    def wrapWithSend(p: Par): Par = Send(channel, List[Par](p), persistent = false, p.locallyFree)
 
     val result = withTestSpace(errorLog) {
       case TestFixture(space, reducer) =>
@@ -1163,7 +1109,10 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
     val toByteArrayWithArgumentsCall: EMethod =
       EMethod(
         "toByteArray",
-        Par(sends = Seq(Send(GString("result"), List(GString("Success")), false, BitSet()))),
+        Par(
+          sends =
+            Seq(Send(GString("result"), List(GString("Success")), persistent = false, BitSet()))
+        ),
         List[Par](GInt(1L))
       )
 
@@ -1183,12 +1132,13 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
   "eval of hexToBytes" should "transform encoded string to byte array (not the rholang term)" in {
     implicit val errorLog = new ErrorLog[Task]()
 
-    val splitRand                 = rand.splitByte(0)
-    val testString                = "testing testing"
-    val base16Repr                = Base16.encode(testString.getBytes)
-    val proc: Par                 = GString(base16Repr)
-    val toByteArrayCall           = EMethod("hexToBytes", proc, List[Par]())
-    def wrapWithSend(p: Par): Par = Send(GString("result"), List[Par](p), false, BitSet())
+    val splitRand       = rand.splitByte(0)
+    val testString      = "testing testing"
+    val base16Repr      = Base16.encode(testString.getBytes)
+    val proc: Par       = GString(base16Repr)
+    val toByteArrayCall = EMethod("hexToBytes", proc, List[Par]())
+    def wrapWithSend(p: Par): Par =
+      Send(GString("result"), List[Par](p), persistent = false, BitSet())
     val result = withTestSpace(errorLog) {
       case TestFixture(space, reducer) =>
         val env         = Env[Par]()
@@ -1208,12 +1158,13 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
   }
 
   "eval of `toUtf8Bytes`" should "transform string to UTF-8 byte array (not the rholang term)" in {
-    implicit val errorLog         = new ErrorLog[Task]()
-    val splitRand                 = rand.splitByte(0)
-    val testString                = "testing testing"
-    val proc: Par                 = GString(testString)
-    val toUtf8BytesCall           = EMethod("toUtf8Bytes", proc, List[Par]())
-    def wrapWithSend(p: Par): Par = Send(GString("result"), List[Par](p), false, BitSet())
+    implicit val errorLog = new ErrorLog[Task]()
+    val splitRand         = rand.splitByte(0)
+    val testString        = "testing testing"
+    val proc: Par         = GString(testString)
+    val toUtf8BytesCall   = EMethod("toUtf8Bytes", proc, List[Par]())
+    def wrapWithSend(p: Par): Par =
+      Send(GString("result"), List[Par](p), persistent = false, BitSet())
     val result = withTestSpace(errorLog) {
       case TestFixture(space, reducer) =>
         val env         = Env[Par]()
@@ -1237,7 +1188,10 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
     val toUtfBytesWithArgumentsCall: EMethod =
       EMethod(
         "toUtf8Bytes",
-        Par(sends = Seq(Send(GString("result"), List(GString("Success")), false, BitSet()))),
+        Par(
+          sends =
+            Seq(Send(GString("result"), List(GString("Success")), persistent = false, BitSet()))
+        ),
         List[Par](GInt(1L))
       )
 
@@ -2222,5 +2176,329 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
       )
     result.exprs should be(Seq(Expr(resultList)))
     errorLog.readAndClearErrorVector().unsafeRunSync should be(Vector.empty[InterpreterError])
+  }
+
+  val successfulExamples = Table(
+    ("clue", "input", "output"),
+    (
+      "[1, 2, 3].toSet() => Set(1, 2, 3)",
+      EMethod(
+        "toSet",
+        EListBody(
+          EList(
+            List[Par](
+              GInt(1L),
+              GInt(2L),
+              GInt(3L)
+            )
+          )
+        ),
+        List[Par]()
+      ),
+      ESetBody(
+        ParSet(
+          List(
+            GInt(1L),
+            GInt(2L),
+            GInt(3L)
+          )
+        )
+      )
+    ),
+    (
+      "[1, 1].toSet() => Set(1)",
+      EMethod(
+        "toSet",
+        EListBody(
+          EList(
+            List[Par](
+              GInt(1L),
+              GInt(1L)
+            )
+          )
+        ),
+        List[Par]()
+      ),
+      ESetBody(
+        ParSet(
+          List(
+            GInt(1L)
+          )
+        )
+      )
+    ),
+    (
+      "[].toSet() => Set()",
+      EMethod(
+        "toSet",
+        EListBody(
+          EList(
+            List[Par](
+              )
+          )
+        ),
+        List()
+      ),
+      ESetBody(
+        ParSet(
+          List(
+            )
+        )
+      )
+    ),
+    (
+      """[("a",1), ("b",2), ("c",3)].toMap() => {"a":1, "b":2, "c":3}""",
+      EMethod(
+        "toMap",
+        EListBody(
+          EList(
+            List[Par](
+              ETupleBody(ETuple(Seq(GString("a"), GInt(1L)))),
+              ETupleBody(ETuple(Seq(GString("b"), GInt(2L)))),
+              ETupleBody(ETuple(Seq(GString("c"), GInt(3L))))
+            )
+          )
+        ),
+        List[Par]()
+      ),
+      EMapBody(
+        ParMap(
+          List[(Par, Par)](
+            (GString("a"), GInt(1L)),
+            (GString("b"), GInt(2L)),
+            (GString("c"), GInt(3L))
+          )
+        )
+      )
+    ),
+    (
+      """Set(("a",1), ("b",2), ("c",3)).toMap() => {"a":1, "b":2, "c":3}""",
+      EMethod(
+        "toMap",
+        ESetBody(
+          ParSet(
+            List[Par](
+              ETupleBody(ETuple(Seq(GString("a"), GInt(1L)))),
+              ETupleBody(ETuple(Seq(GString("b"), GInt(2L)))),
+              ETupleBody(ETuple(Seq(GString("c"), GInt(3L))))
+            )
+          )
+        ),
+        List[Par]()
+      ),
+      EMapBody(
+        ParMap(
+          List[(Par, Par)](
+            (GString("a"), GInt(1L)),
+            (GString("b"), GInt(2L)),
+            (GString("c"), GInt(3L))
+          )
+        )
+      )
+    ),
+    (
+      """{"a":1, "b":2, "c":3}.toSet() => Set(("a",1), ("b",2), ("c",3))""",
+      EMethod(
+        "toSet",
+        EMapBody(
+          ParMap(
+            List[(Par, Par)](
+              (GString("a"), GInt(1L)),
+              (GString("b"), GInt(2L)),
+              (GString("c"), GInt(3L))
+            )
+          )
+        ),
+        List[Par]()
+      ),
+      ESetBody(
+        ParSet(
+          List[Par](
+            ETupleBody(ETuple(Seq(GString("a"), GInt(1L)))),
+            ETupleBody(ETuple(Seq(GString("b"), GInt(2L)))),
+            ETupleBody(ETuple(Seq(GString("c"), GInt(3L))))
+          )
+        )
+      )
+    ),
+    (
+      """[("a",1), ("a",2)].toMap() => {"a":2)""",
+      EMethod(
+        "toMap",
+        EListBody(
+          EList(
+            List[Par](
+              ETupleBody(ETuple(Seq(GString("a"), GInt(1L)))),
+              ETupleBody(ETuple(Seq(GString("a"), GInt(2L))))
+            )
+          )
+        ),
+        List[Par]()
+      ),
+      EMapBody(
+        ParMap(
+          List[(Par, Par)](
+            (GString("a"), GInt(2L))
+          )
+        )
+      )
+    ),
+    (
+      """[].toMap() => {}""",
+      EMethod(
+        "toMap",
+        EListBody(
+          EList(
+            List[Par](
+              )
+          )
+        ),
+        List()
+      ),
+      EMapBody(
+        ParMap(
+          List(
+            )
+        )
+      )
+    )
+  )
+
+  "Reducer" should "work correctly in succesful cases" in {
+    forAll(successfulExamples) { (clue, input, output) =>
+      val result = runReducer(input).map(_.exprs)
+
+      result should be(Right(Seq(Expr(output)))) withClue (clue)
+    }
+  }
+
+  val idempotenceExamples = Table(
+    ("method", "input"),
+    (
+      "toSet",
+      ESetBody(
+        ParSet(
+          List(
+            GInt(1L),
+            GInt(2L),
+            GInt(3L)
+          )
+        )
+      )
+    ),
+    (
+      "toMap",
+      EMapBody(
+        ParMap(
+          List[(Par, Par)](
+            (GString("a"), GInt(1L)),
+            (GString("b"), GInt(2L)),
+            (GString("c"), GInt(3L))
+          )
+        )
+      )
+    )
+  )
+  "Idempotent methods" should "return the input" in {
+    forAll(idempotenceExamples) { (method, input) =>
+      val methodCall =
+        EMethod(
+          method,
+          input,
+          List()
+        )
+
+      val result = runReducer(methodCall).map(_.exprs)
+
+      result should be(Right(Seq(Expr(input)))) withClue (s"$method should not change the object it is applied on")
+    }
+  }
+
+  val errorExamples = Table(
+    ("clue", "input", "output"),
+    (
+      """["a", ("b",2)].toMap() => MethodNotDefined""",
+      EMethod(
+        "toMap",
+        EListBody(
+          EList(
+            List[Par](
+              GString("a"),
+              ETupleBody(ETuple(Seq(GString("b"), GInt(2L))))
+            )
+          )
+        ),
+        List[Par]()
+      ),
+      MethodNotDefined("toMap", "types except List[(K,V)]")
+    ),
+    (
+      """[("a", 1)].toMap(1) => MethodArgumentNumberMismatch""",
+      EMethod(
+        "toMap",
+        EListBody(
+          EList(
+            List[Par](
+              ETupleBody(ETuple(Seq(GString("a"), GInt(1L))))
+            )
+          )
+        ),
+        List(GInt(1))
+      ),
+      MethodArgumentNumberMismatch("toMap", 0, 1)
+    ),
+    (
+      "1.toMap() => MethodNotDefined",
+      EMethod(
+        "toMap",
+        GInt(1L),
+        List()
+      ),
+      MethodNotDefined("toMap", "Int")
+    ),
+    (
+      "[].toSet(1) => MethodArgumentNumberMismatch",
+      EMethod(
+        "toSet",
+        ESetBody(
+          ParSet(
+            List(
+              )
+          )
+        ),
+        List(GInt(1))
+      ),
+      MethodArgumentNumberMismatch("toSet", 0, 1)
+    ),
+    (
+      "1.toSet() => MethodNotDefined",
+      EMethod(
+        "toSet",
+        GInt(1L),
+        List()
+      ),
+      MethodNotDefined("toSet", "Int")
+    )
+  )
+
+  "Reducer" should "return report errors in failure cases" in {
+    forAll(errorExamples) { (clue, input, error) =>
+      runReducer(input) should be(Left(error)) withClue (clue)
+    }
+  }
+
+  type RSpaceMap = Map[Seq[Par], Row[BindPattern, ListParWithRandom, TaggedContinuation]]
+
+  def runReducer(input: Par, timeout: Duration = 3.seconds): Either[Throwable, Par] = {
+    val errorLog: ErrorLog[Task] = new ErrorLog[Task]()
+
+    val task =
+      withTestSpace(errorLog) {
+        case TestFixture(_, reducer) =>
+          implicit val env: Env[Par] = Env[Par]()
+          reducer.evalExpr(input).attempt
+      }
+
+    task.runSyncUnsafe(timeout)
   }
 }
