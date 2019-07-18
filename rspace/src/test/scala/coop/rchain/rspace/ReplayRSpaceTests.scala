@@ -976,7 +976,7 @@ trait ReplayRSpaceTests extends ReplayRSpaceTestsBase[String, Pattern, String, S
       for {
         emptyPoint <- space.createCheckpoint()
 
-        cr = Consume.create(channels, patterns, k, persist = false)
+        cr = Consume.create(channels, patterns, k, persistent = false)
 
         _ <- consumeMany(
               space,

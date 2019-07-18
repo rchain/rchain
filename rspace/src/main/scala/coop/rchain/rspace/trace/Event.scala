@@ -123,7 +123,7 @@ object Consume {
       channels: Seq[C],
       patterns: Seq[P],
       continuation: K,
-      persist: Boolean,
+      persistent: Boolean,
       sequenceNumber: Int = 0
   )(
       implicit
@@ -134,7 +134,7 @@ object Consume {
     val channelsByteVectors: Seq[ByteVector] = toOrderedByteVectors(channels)
     new Consume(
       channelsByteVectors.map(Blake2b256Hash.create),
-      hash(channelsByteVectors, patterns, continuation, persist),
+      hash(channelsByteVectors, patterns, continuation, persistent),
       sequenceNumber
     )
   }
