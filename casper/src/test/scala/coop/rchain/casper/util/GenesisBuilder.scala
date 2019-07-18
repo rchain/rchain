@@ -55,10 +55,7 @@ object GenesisBuilder {
           validators = bonds.map(Validator.tupled).toSeq
         ),
         genesisPk = defaultGenesisPk,
-        vaults = Vault(
-          RevAddress.fromPublicKey(ConstructDeploy.defaultPub).get,
-          9000000
-        ) :: bonds.toList.map {
+        vaults = bonds.toList.map {
           case (pk, stake) =>
             RevAddress.fromPublicKey(pk).map(Vault(_, stake))
         }.flattenOption,

@@ -6,9 +6,11 @@ import cats.effect.{Concurrent, ContextShift}
 import cats.temp.par
 import coop.rchain.blockstorage._
 import coop.rchain.casper._
+import coop.rchain.casper.genesis.Genesis
 import coop.rchain.casper.genesis.contracts.Validator
 import coop.rchain.casper.helper.BlockDagStorageTestFixture
 import coop.rchain.casper.protocol._
+import coop.rchain.casper.util.GenesisBuilder.GenesisContext
 import coop.rchain.casper.util.rholang.RuntimeManager
 import coop.rchain.casper.util.{GenesisBuilder, TestTime}
 import coop.rchain.catscontrib.ApplicativeError_
@@ -47,24 +49,22 @@ object Setup {
 
     val runtimeManager = RuntimeManager.fromRuntime(activeRuntime).unsafeRunSync(scheduler)
 
-    val params @ (_, genesisParams) = GenesisBuilder.buildGenesisParameters()
-    val context                     = GenesisBuilder.buildGenesis(params)
+    val params @ (_, Genesis(shardId, timestamp, proofOfStake, genesisPk, vaults, supply)) =
+      GenesisBuilder.buildGenesisParameters()
 
-    val (validatorSk, validatorPk) = context.validatorKeyPairs.head
-    val bonds                      = genesisParams.proofOfStake.validators.flatMap(Validator.unapply).toMap
+    val GenesisContext(genesisBlock, validatorKeyPairs, _) = GenesisBuilder.buildGenesis(params)
+
+    val (validatorSk, validatorPk) = validatorKeyPairs.head
+    val bonds                      = proofOfStake.validators.flatMap(Validator.unapply).toMap
     val requiredSigs               = 1
-    val shardId                    = genesisParams.shardId
-    val deployTimestamp            = genesisParams.timestamp
-
-    val genesis: BlockMessage = context.genesisBlock
 
     val validatorId = ValidatorIdentity(validatorPk, validatorSk, "secp256k1")
     val bap = new BlockApproverProtocol(
       validatorId,
-      deployTimestamp,
+      timestamp,
       bonds,
-      genesisParams.proofOfStake.minimumBond,
-      genesisParams.proofOfStake.maximumBond,
+      proofOfStake.minimumBond,
+      proofOfStake.maximumBond,
       requiredSigs
     )
     val local: PeerNode = peerNode("src", 40400)
