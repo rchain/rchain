@@ -47,7 +47,7 @@ class MultiParentCasperCommunicationSpec extends FlatSpec with Matchers with Ins
         result = nodes(1).logEff.infos.count(
           s => (s startsWith "Received request for block") && (s endsWith "Response sent.")
         ) should be(1)
-        _ <- nodes.toList.traverse_[Effect, Assertion] { node =>
+        _ <- nodes.toList.traverse_ { node =>
               for {
                 _      <- node.blockStore.get(signedBlock1.blockHash) shouldBeF Some(signedBlock1)
                 result <- node.blockStore.get(signedBlock2.blockHash) shouldBeF Some(signedBlock2)

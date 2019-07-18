@@ -186,7 +186,7 @@ class MultiParentCasperAddBlockSpec extends FlatSpec with Matchers with Inspecto
         signedBlock <- nodes(0).addBlock(deployData)
         _           <- nodes(1).receive()
         result      <- nodes(1).casperEff.contains(signedBlock.blockHash) shouldBeF true
-        _ <- nodes.toList.traverse_[Effect, Assertion] { node =>
+        _ <- nodes.toList.traverse_ { node =>
               node.blockStore.get(signedBlock.blockHash) shouldBeF Some(signedBlock)
             }
       } yield result
@@ -201,7 +201,7 @@ class MultiParentCasperAddBlockSpec extends FlatSpec with Matchers with Inspecto
         _                 <- nodes(1).receive()
         _                 = nodes(1).logEff.infos.count(_ startsWith "Added") should be(1)
         result            = nodes(1).logEff.warns.count(_ startsWith "Recording invalid block") should be(0)
-        _ <- nodes.toList.traverse_[Effect, Assertion] { node =>
+        _ <- nodes.toList.traverse_ { node =>
               node.blockStore.get(signedBlock1Prime.blockHash) shouldBeF Some(signedBlock1Prime)
             }
       } yield result
@@ -243,7 +243,7 @@ class MultiParentCasperAddBlockSpec extends FlatSpec with Matchers with Inspecto
         //   .count(_ contains "found deploy by the same (user, millisecond timestamp) produced") should be(
         //   1
         // )
-        _ = nodes.toList.traverse_[Effect, Assertion] { node =>
+        _ = nodes.toList.traverse_ { node =>
           for {
             _      <- node.blockStore.get(signedBlock1.blockHash) shouldBeF Some(signedBlock1)
             _      <- node.blockStore.get(signedBlock2.blockHash) shouldBeF Some(signedBlock2)
