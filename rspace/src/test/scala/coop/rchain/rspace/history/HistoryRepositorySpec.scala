@@ -151,7 +151,7 @@ class HistoryRepositorySpec
       "cont-" + s,
       true,
       SortedSet.empty,
-      Consume(randomBlake :: Nil, randomBlake, 0)
+      Consume(randomBlake :: Nil, randomBlake, true, 0)
     )
 
   def datum(s: Any): Datum[String] =

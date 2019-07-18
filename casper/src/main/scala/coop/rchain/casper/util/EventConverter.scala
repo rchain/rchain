@@ -59,6 +59,7 @@ object EventConverter {
       RspaceConsume.fromHash(
         collection.immutable.Seq(consume.channelsHashes.map(byteStringToBlake2b256Hash): _*),
         consume.hash,
+        false,
         consume.sequenceNumber
       )
     case Event(Comm(CommEvent(Some(consume: ConsumeEvent), produces))) =>
@@ -71,6 +72,7 @@ object EventConverter {
         RspaceConsume.fromHash(
           collection.immutable.Seq(consume.channelsHashes.map(byteStringToBlake2b256Hash): _*),
           consume.hash,
+          false,
           consume.sequenceNumber
         ),
         rspaceProduces

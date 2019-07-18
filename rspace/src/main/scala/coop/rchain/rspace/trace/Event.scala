@@ -100,6 +100,7 @@ object Produce {
 final case class Consume private (
     channelsHashes: Seq[Blake2b256Hash],
     hash: Blake2b256Hash,
+    persistent: Boolean,
     sequenceNumber: Int
 ) extends IOEvent {
 
@@ -111,7 +112,7 @@ final case class Consume private (
   override def hashCode(): Int = hash.hashCode() * 47 + sequenceNumber.hashCode()
 
   override def toString: String =
-    s"Consume(channels: ${channelsHashes.toString}, hash: ${hash.toString}, seqNo: ${sequenceNumber})"
+    s"Consume(channels: ${channelsHashes.toString}, hash: ${hash.toString}, persistent: $persistent, seqNo: ${sequenceNumber})"
 }
 
 object Consume {
@@ -135,6 +136,7 @@ object Consume {
     new Consume(
       channelsByteVectors.map(Blake2b256Hash.create),
       hash(channelsByteVectors, patterns, continuation, persistent),
+      persistent,
       sequenceNumber
     )
   }
@@ -142,10 +144,11 @@ object Consume {
   def fromHash(
       channelsHashes: Seq[Blake2b256Hash],
       hash: Blake2b256Hash,
+      persistent: Boolean,
       sequenceNumber: Int
   ): Consume =
-    new Consume(channelsHashes, hash, sequenceNumber)
+    new Consume(channelsHashes, hash, persistent, sequenceNumber)
 
   implicit val codecConsume: Codec[Consume] =
-    (Codec[Seq[Blake2b256Hash]] :: Codec[Blake2b256Hash] :: int32).as[Consume]
+    (Codec[Seq[Blake2b256Hash]] :: Codec[Blake2b256Hash] :: bool :: int32).as[Consume]
 }
