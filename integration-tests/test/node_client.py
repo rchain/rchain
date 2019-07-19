@@ -125,7 +125,7 @@ class TransportServer(TransportLayerServicer):
         stream_message = message_cls()
         stream_message.ParseFromString(data)
         self.return_queue.put(stream_message)
-        return TLResponse(noResponse=Ack(header=self.header))
+        return TLResponse(ack=Ack(header=self.header))
 
 
 class NodeClient:

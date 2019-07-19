@@ -23,9 +23,9 @@ from typing import (
 from docker.client import DockerClient
 from docker.models.containers import Container
 from docker.models.containers import ExecResult
+from rchain.crypto import PrivateKey
 
 from .common import (
-    KeyPair,
     make_tempdir,
     make_tempfile,
     TestingContext,
@@ -304,8 +304,8 @@ class Node:
     def eval(self, rho_file_path: str) -> str:
         return self.rnode_command('eval', rho_file_path)
 
-    def deploy(self, rho_file_path: str, private_key: str) -> str:
-        return extract_deploy_id_from_deploy_output(self.rnode_command('deploy', '--private-key={}'.format(private_key), '--phlo-limit=1000000', '--phlo-price=1', rho_file_path, stderr=False))
+    def deploy(self, rho_file_path: str, private_key: PrivateKey) -> str:
+        return extract_deploy_id_from_deploy_output(self.rnode_command('deploy', '--private-key={}'.format(private_key.to_hex()), '--phlo-limit=1000000', '--phlo-price=1', rho_file_path, stderr=False))
 
     def get_vdag(self) -> str:
         return self.rnode_command('vdag')
@@ -356,7 +356,7 @@ class Node:
         log_content = self.logs()
         return Node.__log_message_rx.split(log_content)
 
-    def deploy_contract_with_substitution(self, substitute_dict: Dict[str, str], rho_file_path: str, private_key: str) -> str:
+    def deploy_contract_with_substitution(self, substitute_dict: Dict[str, str], rho_file_path: str, private_key: PrivateKey) -> str:
         """
         Supposed that you have a contract with content like below.
 
@@ -501,7 +501,7 @@ def make_bootstrap_node(
     docker_client: DockerClient,
     network: str,
     bonds_file: str,
-    keypair: KeyPair,
+    private_key: PrivateKey,
     command_timeout: int,
     allowed_peers: Optional[List[str]] = None,
     mem_limit: Optional[str] = None,
@@ -524,8 +524,8 @@ def make_bootstrap_node(
 
     container_command_options = {
         "--port":                   40400,
-        "--validator-private-key":  keypair.private_key,
-        "--validator-public-key":   keypair.public_key,
+        "--validator-private-key":  private_key.to_hex(),
+        "--validator-public-key":   private_key.get_public_key().to_hex(),
         "--host":                   container_name,
     }
 
@@ -581,7 +581,7 @@ def make_peer(
     bonds_file: str,
     command_timeout: int,
     bootstrap: Node,
-    keypair: KeyPair,
+    private_key: PrivateKey,
     allowed_peers: Optional[List[str]] = None,
     mem_limit: Optional[str] = None,
     wallets_file: Optional[str] = None,
@@ -605,8 +605,8 @@ def make_peer(
 
     container_command_options = {
         "--bootstrap":              bootstrap_address,
-        "--validator-private-key":  keypair.private_key,
-        "--validator-public-key":   keypair.public_key,
+        "--validator-private-key":  private_key.to_hex(),
+        "--validator-public-key":   private_key.get_public_key().to_hex(),
         "--host":                   name,
     }
 
@@ -637,7 +637,7 @@ def started_peer(
     network: str,
     name: str,
     bootstrap: Node,
-    keypair: KeyPair,
+    private_key: PrivateKey,
     wallets_file: Optional[str] = None,
     cli_flags: Optional[AbstractSet] = None,
     cli_options: Optional[Dict] = None,
@@ -648,7 +648,7 @@ def started_peer(
         name=name,
         bonds_file=context.bonds_file,
         bootstrap=bootstrap,
-        keypair=keypair,
+        private_key=private_key,
         command_timeout=context.command_timeout,
         wallets_file=wallets_file,
         cli_flags=cli_flags,
@@ -667,14 +667,14 @@ def bootstrap_connected_peer(
     context: TestingContext,
     bootstrap: Node,
     name: str,
-    keypair: KeyPair,
+    private_key: PrivateKey,
 ) -> Generator[Node, None, None]:
     with started_peer(
         context=context,
         network=bootstrap.network,
         name=name,
         bootstrap=bootstrap,
-        keypair=keypair,
+        private_key=private_key,
     ) as peer:
         wait_for_approved_block_received_handler_state(context, peer)
         yield peer
@@ -686,19 +686,19 @@ def create_peer_nodes(
     bootstrap: Node,
     network: str,
     bonds_file: str,
-    key_pairs: List[KeyPair],
+    private_keys: List[PrivateKey],
     command_timeout: int,
     allowed_peers: Optional[List[str]] = None,
     mem_limit: Optional[str] = None,
 ) -> List[Node]:
-    assert len(set(key_pairs)) == len(key_pairs), "There shouldn't be any duplicates in the key pairs"
+    assert len(set(private_keys)) == len(private_keys), "There shouldn't be any duplicates in the key pairs"
 
     if allowed_peers is None:
-        allowed_peers = [bootstrap.name] + [make_peer_name(network, str(i)) for i in range(0, len(key_pairs))]
+        allowed_peers = [bootstrap.name] + [make_peer_name(network, str(i)) for i in range(0, len(private_keys))]
 
     result = []
     try:
-        for i, keypair in enumerate(key_pairs):
+        for i, private_key in enumerate(private_keys):
             peer_node = make_peer(
                 docker_client=docker_client,
                 network=network,
@@ -706,7 +706,7 @@ def create_peer_nodes(
                 bonds_file=bonds_file,
                 command_timeout=command_timeout,
                 bootstrap=bootstrap,
-                keypair=keypair,
+                private_key=private_key,
                 allowed_peers=allowed_peers,
                 mem_limit=mem_limit if mem_limit is not None else '4G',
             )
@@ -748,7 +748,7 @@ def started_bootstrap(
         docker_client=context.docker,
         network=network,
         bonds_file=context.bonds_file,
-        keypair=context.bootstrap_keypair,
+        private_key=context.bootstrap_key,
         command_timeout=context.command_timeout,
         mount_dir=mount_dir,
         cli_flags=cli_flags,

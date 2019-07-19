@@ -16,7 +16,7 @@ ecdsa = "*"
 cryptography = "*"
 eth-hash = "*"
 pycryptodome = "*"
-pyrchain = "*"
+pyrchain = {git = "https://github.com/rchain/pyrchain.git"}
 
 [dev-packages]
 python-language-server = "*"
