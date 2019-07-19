@@ -259,17 +259,9 @@ object HashSetCasperTestNode {
     for {
       paths <- Resources.copyStorage[F](storageMatrixPath)
 
-      blockStore <- Resource.make[F, BlockStore[F]](
-                     BlockDagStorageTestFixture.createBlockStorage(paths.blockStoreDir)
-                   )(_.close())
-
-      blockDagStorage <- Resource.make[F, BlockDagStorage[F]](
-                          BlockDagFileStorage
-                            .create[F](makeBlockDagFileStorageConfig(paths.blockDagDir))
-                            .widen
-                        )(_.close())
-
-      runtimeManager <- createRuntime(paths.rspaceDir)
+      blockStore      <- Resources.mkBlockStoreAt[F](paths.blockStoreDir)
+      blockDagStorage <- Resources.mkBlockDagStorageAt[F](paths.blockDagDir)
+      runtimeManager  <- createRuntime(paths.rspaceDir)
 
       node <- Resource.liftF(
                for {
