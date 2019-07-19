@@ -231,27 +231,24 @@ class Running[F[_]: RPConfAsk: BlockStore: Monad: ConnectionsCell: TransportLaye
   import Engine._
   import Running._
 
-  private val blockLookup: BlockHash => F[Boolean] =
-    hash => BlockStore[F].get(hash).map(_.isDefined)
+  private def casperAdd(peer: PeerNode): BlockMessage => F[BlockStatus] = {
+    def handleDoppelganger: (BlockMessage, Validator) => F[Unit] =
+      (bm: BlockMessage, self: Validator) =>
+        if (bm.sender == self) {
+          val warnMessage =
+            s"There is another node $peer proposing using the same private key as you. Or did you restart your node?"
+          Log[F].warn(warnMessage)
+        } else ().pure[F]
 
-  private def handleDoppelganger(peer: PeerNode): (BlockMessage, Validator) => F[Unit] =
-    (bm: BlockMessage, self: Validator) =>
-      if (bm.sender == self) {
-        val warnMessage =
-          s"There is another node $peer proposing using the same private key as you. Or did you restart your node?"
-        Log[F].warn(warnMessage)
-      } else ().pure[F]
+    (b: BlockMessage) => casper.addBlock(b, handleDoppelganger)
+  }
 
   def applicative: Applicative[F] = Applicative[F]
 
   override def init: F[Unit] = theInit
 
   override def handle(peer: PeerNode, msg: CasperMessage): F[Unit] = msg match {
-    case b: BlockMessage =>
-      handleBlockMessage[F](peer, b)(
-        casper.contains,
-        b => casper.addBlock(b, handleDoppelganger(peer))
-      )
+    case b: BlockMessage              => handleBlockMessage[F](peer, b)(casper.contains, casperAdd(peer))
     case br: BlockRequest             => handleBlockRequest[F](peer, br)
     case hbr: HasBlockRequest         => handleHasBlockRequest[F](peer, hbr)(casper.contains)
     case hb: HasBlock                 => handleHasBlock[F](peer, hb)(casper.contains)
