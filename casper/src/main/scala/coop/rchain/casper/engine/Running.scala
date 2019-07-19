@@ -32,11 +32,6 @@ import coop.rchain.models.BlockHash.BlockHash
 import scala.concurrent.duration._
 import scala.util.Try
 
-/** Node in this state has already received at least one [[ApprovedBlock]] and it has created an instance
-  * of [[MultiParentCasper]].
-  *
-  * In the future it will be possible to create checkpoint with new [[ApprovedBlock]].
-  **/
 object Running {
 
   val timeout: FiniteDuration = 240 seconds
