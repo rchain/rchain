@@ -123,7 +123,7 @@ object EstimatorHelper {
         .filterNot {
           case CommEvent(Some(consume: ConsumeEvent), produces) =>
             !consume.persistent && consumeEvents.contains(consume) && produces.forall(
-              produce => produceEvents.contains(produce)
+              produce => !produce.persistent && produceEvents.contains(produce)
             )
           case _ => false
         }
