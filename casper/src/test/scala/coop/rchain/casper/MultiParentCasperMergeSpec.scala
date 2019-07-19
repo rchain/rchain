@@ -127,6 +127,7 @@ class MultiParentCasperMergeSpec extends FlatSpec with Matchers with Inspectors 
       // Skipping 4X 4!! merges, 4X !!X may merge or not, 4X !!4 may merge or not
       "4X CX"        -> conflicts(F_, C_, Nil),
       "4X C!"        -> conflictsForNow(F0, C1, S1),
+      "4X (!!4)"     -> merges(F_, R0 | F_, Nil), // FIXME: should conflict
       "4! 4! same !" -> conflicts(F_, F_, S0),
       "4! 4! diff !" -> conflictsForNow(F0, F1, S0 | S1),
       // Skipping 4! 4!! merges, 4! !!X merges, 4! !!4 merges
