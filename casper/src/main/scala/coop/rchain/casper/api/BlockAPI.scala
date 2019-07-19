@@ -170,22 +170,22 @@ object BlockAPI {
     )
   }
 
-  private def getMainChainFromTip[F[_]: Monad: MultiParentCasper: Log: SafetyOracle: BlockStore](
-      depth: Int
+  private def getMainChainFromTip[F[_]: Monad: Log: SafetyOracle: BlockStore](depth: Int)(
+      implicit casper: MultiParentCasper[F]
   ): F[IndexedSeq[BlockMessage]] =
     for {
-      dag       <- MultiParentCasper[F].blockDag
-      tipHashes <- MultiParentCasper[F].estimator(dag)
+      dag       <- casper.blockDag
+      tipHashes <- casper.estimator(dag)
       tipHash   = tipHashes.head
       tip       <- ProtoUtil.unsafeGetBlock[F](tipHash)
       mainChain <- ProtoUtil.getMainChainUntilDepth[F](tip, IndexedSeq.empty[BlockMessage], depth)
     } yield mainChain
 
-  private def getDataWithBlockInfo[F[_]: MultiParentCasper: Log: SafetyOracle: BlockStore: Concurrent](
+  private def getDataWithBlockInfo[F[_]: Log: SafetyOracle: BlockStore: Concurrent](
       runtimeManager: RuntimeManager[F],
       sortedListeningName: Par,
       block: BlockMessage
-  ): F[Option[DataWithBlockInfo]] =
+  )(implicit casper: MultiParentCasper[F]): F[Option[DataWithBlockInfo]] =
     if (isListeningNameReduced(block, immutable.Seq(sortedListeningName))) {
       val stateHash =
         ProtoUtil.tuplespace(block).get
@@ -197,11 +197,11 @@ object BlockAPI {
       none[DataWithBlockInfo].pure[F]
     }
 
-  private def getContinuationsWithBlockInfo[F[_]: MultiParentCasper: Log: SafetyOracle: BlockStore: Concurrent](
+  private def getContinuationsWithBlockInfo[F[_]: Log: SafetyOracle: BlockStore: Concurrent](
       runtimeManager: RuntimeManager[F],
       sortedListeningNames: immutable.Seq[Par],
       block: BlockMessage
-  ): F[Option[ContinuationsWithBlockInfo]] =
+  )(implicit casper: MultiParentCasper[F]): F[Option[ContinuationsWithBlockInfo]] =
     if (isListeningNameReduced(block, sortedListeningNames)) {
       val stateHash =
         ProtoUtil.tuplespace(block).get
@@ -442,7 +442,7 @@ object BlockAPI {
     )
   }
 
-  private def getBlockInfo[A, F[_]: Monad: MultiParentCasper: SafetyOracle: BlockStore](
+  private def getBlockInfo[A, F[_]: Monad: SafetyOracle: BlockStore](
       block: BlockMessage,
       constructor: (
           BlockMessage,
@@ -457,9 +457,9 @@ object BlockAPI {
           Seq[Bond],
           Seq[ProcessedDeploy]
       ) => F[A]
-  ): F[A] =
+  )(implicit casper: MultiParentCasper[F]): F[A] =
     for {
-      dag         <- MultiParentCasper[F].blockDag
+      dag         <- casper.blockDag
       header      = block.header.getOrElse(Header.defaultInstance)
       version     = header.version
       deployCount = header.deployCount
@@ -472,7 +472,7 @@ object BlockAPI {
       parentsHashList = header.parentsHashList
       normalizedFaultTolerance <- SafetyOracle[F]
                                    .normalizedFaultTolerance(dag, block.blockHash) // TODO: Warn about parent block finalization
-      initialFault       <- MultiParentCasper[F].normalizedInitialFault(ProtoUtil.weightMap(block))
+      initialFault       <- casper.normalizedInitialFault(ProtoUtil.weightMap(block))
       bondsValidatorList = ProtoUtil.bonds(block)
       processedDeploy    = ProtoUtil.deploys(block)
       blockInfo <- constructor(
@@ -490,15 +490,16 @@ object BlockAPI {
                   )
     } yield blockInfo
 
-  private def getFullBlockInfo[F[_]: Monad: MultiParentCasper: SafetyOracle: BlockStore](
+  private def getFullBlockInfo[F[_]: Monad: SafetyOracle: BlockStore](
       block: BlockMessage
-  ): F[BlockInfo] = getBlockInfo[BlockInfo, F](block, constructBlockInfo[F])
-  private def getLightBlockInfo[F[_]: Monad: MultiParentCasper: SafetyOracle: BlockStore](
+  )(implicit casper: MultiParentCasper[F]): F[BlockInfo] =
+    getBlockInfo[BlockInfo, F](block, constructBlockInfo[F])
+  private def getLightBlockInfo[F[_]: Monad: SafetyOracle: BlockStore](
       block: BlockMessage
-  ): F[LightBlockInfo] =
+  )(implicit casper: MultiParentCasper[F]): F[LightBlockInfo] =
     getBlockInfo[LightBlockInfo, F](block, constructLightBlockInfo[F])
 
-  private def constructBlockInfo[F[_]: Monad: MultiParentCasper: SafetyOracle: BlockStore](
+  private def constructBlockInfo[F[_]: Monad: SafetyOracle: BlockStore](
       block: BlockMessage,
       version: Long,
       deployCount: Int,
@@ -528,7 +529,7 @@ object BlockAPI {
       deployCost = processedDeploys.map(PrettyPrinter.buildString)
     ).pure[F]
 
-  private def constructLightBlockInfo[F[_]: Monad: MultiParentCasper: SafetyOracle: BlockStore](
+  private def constructLightBlockInfo[F[_]: Monad: SafetyOracle: BlockStore](
       block: BlockMessage,
       version: Long,
       deployCount: Int,
@@ -555,7 +556,7 @@ object BlockAPI {
       sender = PrettyPrinter.buildStringNoLimit(block.sender)
     ).pure[F]
 
-  private def getBlock[F[_]: Monad: MultiParentCasper: BlockStore](
+  private def getBlock[F[_]: Monad: BlockStore](
       q: BlockQuery,
       dag: BlockDagRepresentation[F]
   ): F[Option[BlockMessage]] =
