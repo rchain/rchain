@@ -253,7 +253,7 @@ class Running[F[_]: RPConfAsk: BlockStore: Monad: ConnectionsCell: TransportLaye
         b => casper.addBlock(b, handleDoppelganger(peer))
       )
     case br: BlockRequest             => handleBlockRequest[F](peer, br)
-    case hbr: HasBlockRequest         => handleHasBlockRequest[F](peer, hbr)(blockLookup)
+    case hbr: HasBlockRequest         => handleHasBlockRequest[F](peer, hbr)(casper.contains)
     case hb: HasBlock                 => handleHasBlock[F](peer, hb)(casper.contains)
     case fctr: ForkChoiceTipRequest   => handleForkChoiceTipRequest[F](peer, fctr)(casper)
     case abr: ApprovedBlockRequest    => handleApprovedBlockRequest[F](peer, abr, approvedBlock)
