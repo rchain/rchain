@@ -83,31 +83,29 @@ class MultiParentCasperMergeSpec extends FlatSpec with Matchers with Inspectors 
     val C_ = Rho("contract @0(id) = { 0 }")
     val C0 = Rho("contract @0(@0) = { 0 }")
     val C1 = Rho("contract @0(@1) = { 0 }")
-    // Ground term
-    val Z = Rho("0")
     //FIXME add missing cases for in-deploy COMM-s wherever there's a pair without X (a COMM)
     //FIXME all `conflictsForNow` should eventually be replaced with `merges`
     Map(
-      "!X !X"        -> conflictsForNow(S0, S0, Z),
+      "!X !X"        -> conflictsForNow(S0, S0, Nil),
       "!X !4"        -> conflictsForNow(S0, S0, F_),
-      "!X (!4)"      -> merges(S0, S1 | F_, Z),
+      "!X (!4)"      -> merges(S0, S1 | F_, Nil),
       "!X !C"        -> conflictsForNow(S0, S1, C1),
-      "!X (!C)"      -> conflicts(S0, S1 | C_, Z),
-      "!X 4X"        -> conflicts(S0, F_, Z),
+      "!X (!C)"      -> conflicts(S0, S1 | C_, Nil),
+      "!X 4X"        -> conflicts(S0, F_, Nil),
       "!X 4!"        -> conflictsForNow(S0, F_, S0),
       "!X (4!)"      -> coveredBy("!X (!4)"),
       "!X 4!!"       -> conflictsForNow(S0, F_, R0),
-      "!X (4!!)"     -> merges(S0, F_ | R0, Z),
-      "!X !!X"       -> conflictsForNow(S0, R0, Z),
+      "!X (4!!)"     -> merges(S0, F_ | R0, Nil),
+      "!X !!X"       -> conflictsForNow(S0, R0, Nil),
       "!X !!4"       -> conflictsForNow(S0, R1, F1),
       "!X (!!4)"     -> coveredBy("!X (4!!)"),
-      "!X CX"        -> conflicts(S0, C_, Z),
+      "!X CX"        -> conflicts(S0, C_, Nil),
       "!X C!"        -> conflicts(S0, C_, S0),
-      "!X (C!)"      -> conflicts(S0, C_ | S0, Z),
+      "!X (C!)"      -> conflicts(S0, C_ | S0, Nil),
       "!4 !4 same 4" -> conflicts(S0, S1, F_),
       "!4 !4 diff 4" -> conflicts(S0, S1, F0 | F1),
       "!4 (!4)"      -> merges(S0, S1 | F1, F0),
-      "(!4) (!4)"    -> merges(S0 | F_, S0 | F_, Z),
+      "(!4) (!4)"    -> merges(S0 | F_, S0 | F_, Nil),
       "!4 !C"        -> conflictsForNow(S0, S1, F0 | C1),
       "!4 4X"        -> conflictsForNow(S0, F_, F_),
       "!4 4!"        -> conflictsForNow(S0, F_, F0 | S1),
@@ -124,10 +122,10 @@ class MultiParentCasperMergeSpec extends FlatSpec with Matchers with Inspectors 
       "!C !!4"       -> conflictsForNow(S0, R1, C0 | F1),
       "!C CX"        -> conflictsForNow(S0, C_, C_),
       "!C C!"        -> conflictsForNow(S0, C_, C0 | S1),
-      "4X 4X"        -> conflictsForNow(F_, F_, Z),
+      "4X 4X"        -> conflictsForNow(F_, F_, Nil),
       "4X 4!"        -> conflicts(F_, F_, S0),
       // Skipping 4X 4!! merges, 4X !!X may merge or not, 4X !!4 may merge or not
-      "4X CX"        -> conflicts(F_, C_, Z),
+      "4X CX"        -> conflicts(F_, C_, Nil),
       "4X C!"        -> conflictsForNow(F0, C1, S1),
       "4! 4! same !" -> conflicts(F_, F_, S0),
       "4! 4! diff !" -> conflictsForNow(F0, F1, S0 | S1),
@@ -135,7 +133,7 @@ class MultiParentCasperMergeSpec extends FlatSpec with Matchers with Inspectors 
       "4! CX"        -> conflictsForNow(F_, C1, S0),
       "4! C! same !" -> conflictsForNow(F_, C_, S0),
       "4! C! diff !" -> conflictsForNow(F0, C1, S0 | S1),
-      "CX CX"        -> conflictsForNow(C_, C_, Z),
+      "CX CX"        -> conflictsForNow(C_, C_, Nil),
       "C! C! same !" -> conflicts(C_, C_, S0),
       "C! C! diff !" -> conflictsForNow(C0, C1, S0 | S1)
       // 4!! / !!4 row is similar to !4 / 4! and thus skipped
@@ -146,6 +144,7 @@ class MultiParentCasperMergeSpec extends FlatSpec with Matchers with Inspectors 
   case class Rho(value: String) {
     def |(other: Rho): Rho = Rho(s"$value | ${other.value}")
   }
+  object Nil extends Rho("Nil")
 
   def conflictsForNow(b1: Rho, b2: Rho, base: Rho) = conflicts(b1, b2, base)
 
