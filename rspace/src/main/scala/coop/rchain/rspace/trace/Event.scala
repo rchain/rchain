@@ -59,6 +59,7 @@ sealed trait IOEvent extends Event
 final case class Produce private (
     channelsHash: Blake2b256Hash,
     hash: Blake2b256Hash,
+    persistent: Boolean,
     sequenceNumber: Int
 ) extends IOEvent {
 
@@ -87,14 +88,20 @@ object Produce {
     new Produce(
       hash(channel)(serializeC),
       hash(channel, datum, persist),
+      persist,
       sequenceNumber
     )
 
-  def fromHash(channelsHash: Blake2b256Hash, hash: Blake2b256Hash, sequenceNumber: Int): Produce =
-    new Produce(channelsHash, hash, sequenceNumber)
+  def fromHash(
+      channelsHash: Blake2b256Hash,
+      hash: Blake2b256Hash,
+      persistent: Boolean,
+      sequenceNumber: Int
+  ): Produce =
+    new Produce(channelsHash, hash, persistent, sequenceNumber)
 
   implicit val codecProduce: Codec[Produce] =
-    (Codec[Blake2b256Hash] :: Codec[Blake2b256Hash] :: int32).as[Produce]
+    (Codec[Blake2b256Hash] :: Codec[Blake2b256Hash] :: bool :: int32).as[Produce]
 }
 
 final case class Consume private (

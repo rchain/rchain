@@ -155,7 +155,7 @@ class HistoryRepositorySpec
     )
 
   def datum(s: Any): Datum[String] =
-    Datum[String]("data-" + s, false, Produce(randomBlake, randomBlake, 0))
+    Datum[String]("data-" + s, false, Produce(randomBlake, randomBlake, false, 0))
 
   protected def withEmptyRepository(f: TestHistoryRepository => Task[Unit]): Unit = {
     implicit val codecString: Codec[String] = util.stringCodec

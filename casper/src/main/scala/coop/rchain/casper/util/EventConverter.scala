@@ -64,7 +64,7 @@ object EventConverter {
   @SuppressWarnings(Array("org.wartremover.warts.Throw"))
   def toRspaceEvent(event: Event): RspaceEvent = event match {
     case Event(Produce(produce: ProduceEvent)) =>
-      RspaceProduce.fromHash(produce.channelsHash, produce.hash, produce.sequenceNumber)
+      RspaceProduce.fromHash(produce.channelsHash, produce.hash, false, produce.sequenceNumber)
     case Event(Consume(consume: ConsumeEvent)) =>
       RspaceConsume.fromHash(
         collection.immutable.Seq(consume.channelsHashes.map(byteStringToBlake2b256Hash): _*),
@@ -75,7 +75,7 @@ object EventConverter {
     case Event(Comm(CommEvent(Some(consume: ConsumeEvent), produces))) =>
       val rspaceProduces: Seq[RspaceProduce] = produces.map { produce =>
         val rspaceProduce: RspaceProduce =
-          RspaceProduce.fromHash(produce.channelsHash, produce.hash, produce.sequenceNumber)
+          RspaceProduce.fromHash(produce.channelsHash, produce.hash, false, produce.sequenceNumber)
         rspaceProduce
       }.toList
       RspaceComm(
