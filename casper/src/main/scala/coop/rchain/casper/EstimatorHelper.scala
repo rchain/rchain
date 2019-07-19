@@ -122,7 +122,7 @@ object EstimatorHelper {
       ancestorCommChannels = commEvents
         .filterNot {
           case CommEvent(Some(consume: ConsumeEvent), produces) =>
-            consumeEvents.contains(consume) && produces.forall(
+            !consume.persistent && consumeEvents.contains(consume) && produces.forall(
               produce => produceEvents.contains(produce)
             )
           case _ => false

@@ -92,7 +92,7 @@ class MultiParentCasperMergeSpec extends FlatSpec with Matchers with Inspectors 
       "!X !4"        -> conflictsForNow(S0, S0, F_),
       "!X (!4)"      -> merges(S0, S1 | F_, Z),
       "!X !C"        -> conflictsForNow(S0, S1, C1),
-      "!X (!C)"      -> merges(S0, S1 | C_, Z), //FIXME: THIS NEEDS TO CONFLICT
+      "!X (!C)"      -> conflicts(S0, S1 | C_, Z),
       "!X 4X"        -> conflicts(S0, F_, Z),
       "!X 4!"        -> conflictsForNow(S0, F_, S0),
       "!X (4!)"      -> coveredBy("!X (!4)"),
@@ -103,7 +103,7 @@ class MultiParentCasperMergeSpec extends FlatSpec with Matchers with Inspectors 
       "!X (!!4)"     -> coveredBy("!X (4!!)"),
       "!X CX"        -> conflicts(S0, C_, Z),
       "!X C!"        -> conflicts(S0, C_, S0),
-      "!X (C!)"      -> merges(S0, C_ | S0, Z), //FIXME: THIS NEEDS TO CONFLICT
+      "!X (C!)"      -> conflicts(S0, C_ | S0, Z),
       "!4 !4 same 4" -> conflicts(S0, S1, F_),
       "!4 !4 diff 4" -> conflicts(S0, S1, F0 | F1),
       "!4 (!4)"      -> merges(S0, S1 | F1, F0),
