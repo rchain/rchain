@@ -174,6 +174,53 @@ object Running {
           _ <- RequestedBlocks[F].modify(_ - b.blockHash)
         } yield ()
       )
+
+  def handleBlockRequest[F[_]: Monad: RPConfAsk: BlockStore: Log: TransportLayer](
+      peer: PeerNode,
+      br: BlockRequest
+  ): F[Unit] =
+    for {
+      local      <- RPConfAsk[F].reader(_.local)
+      block      <- BlockStore[F].get(br.hash) // TODO: Refactor
+      serialized = block.map(_.toByteString)
+      maybeMsg = serialized.map(
+        serializedMessage => Blob(local, Packet(transport.BlockMessage.id, serializedMessage))
+      )
+      _        <- maybeMsg.traverse(msg => TransportLayer[F].stream(peer, msg))
+      hash     = PrettyPrinter.buildString(br.hash)
+      logIntro = s"Received request for block $hash from $peer."
+      _ <- block match {
+            case None    => Log[F].info(logIntro + "No response given since block not found.")
+            case Some(_) => Log[F].info(logIntro + "Response sent.")
+          }
+    } yield ()
+
+  def handleForkChoiceTipRequest[F[_]: Monad: RPConfAsk: Log: TransportLayer: BlockStore](
+      peer: PeerNode,
+      fctr: ForkChoiceTipRequest
+  )(casper: MultiParentCasper[F]): F[Unit] =
+    for {
+      _     <- Log[F].info(s"Received ForkChoiceTipRequest from $peer")
+      tip   <- MultiParentCasper.forkChoiceTip(casper)
+      local <- RPConfAsk[F].reader(_.local)
+      msg   = Blob(local, Packet(transport.BlockMessage.id, tip.toByteString))
+      _     <- TransportLayer[F].stream(peer, msg)
+      _     <- Log[F].info(s"Sending Block ${tip.blockHash} to $peer")
+    } yield ()
+
+  def handleApprovedBlockRequest[F[_]: Monad: RPConfAsk: Log: TransportLayer](
+      peer: PeerNode,
+      br: ApprovedBlockRequest,
+      approvedBlock: ApprovedBlock
+  ): F[Unit] =
+    for {
+      local <- RPConfAsk[F].reader(_.local)
+      _     <- Log[F].info(s"Received ApprovedBlockRequest from $peer")
+      msg   = Blob(local, Packet(transport.ApprovedBlock.id, approvedBlock.toByteString))
+      _     <- TransportLayer[F].stream(peer, msg)
+      _     <- Log[F].info(s"Sending ApprovedBlock to $peer")
+    } yield ()
+
 }
 
 class Running[F[_]: RPConfAsk: BlockStore: Monad: ConnectionsCell: TransportLayer: Log: Time: Running.RequestedBlocks](
@@ -205,55 +252,12 @@ class Running[F[_]: RPConfAsk: BlockStore: Monad: ConnectionsCell: TransportLaye
         casper.contains,
         b => casper.addBlock(b, handleDoppelganger(peer))
       )
-    case br: BlockRequest             => handleBlockRequest(peer, br)
+    case br: BlockRequest             => handleBlockRequest[F](peer, br)
     case hbr: HasBlockRequest         => handleHasBlockRequest[F](peer, hbr)(blockLookup)
     case hb: HasBlock                 => handleHasBlock[F](peer, hb)(casper.contains)
-    case fctr: ForkChoiceTipRequest   => handleForkChoiceTipRequest(peer, fctr)
-    case abr: ApprovedBlockRequest    => handleApprovedBlockRequest(peer, abr)
+    case fctr: ForkChoiceTipRequest   => handleForkChoiceTipRequest[F](peer, fctr)(casper)
+    case abr: ApprovedBlockRequest    => handleApprovedBlockRequest[F](peer, abr, approvedBlock)
     case na: NoApprovedBlockAvailable => logNoApprovedBlockAvailable[F](na.nodeIdentifer)
     case _                            => noop
   }
-
-  private def handleBlockRequest(peer: PeerNode, br: BlockRequest): F[Unit] =
-    for {
-      local      <- RPConfAsk[F].reader(_.local)
-      block      <- BlockStore[F].get(br.hash) // TODO: Refactor
-      serialized = block.map(_.toByteString)
-      maybeMsg = serialized.map(
-        serializedMessage => Blob(local, Packet(transport.BlockMessage.id, serializedMessage))
-      )
-      _        <- maybeMsg.traverse(msg => TransportLayer[F].stream(peer, msg))
-      hash     = PrettyPrinter.buildString(br.hash)
-      logIntro = s"Received request for block $hash from $peer."
-      _ <- block match {
-            case None    => Log[F].info(logIntro + "No response given since block not found.")
-            case Some(_) => Log[F].info(logIntro + "Response sent.")
-          }
-    } yield ()
-
-  private def handleForkChoiceTipRequest(
-      peer: PeerNode,
-      fctr: ForkChoiceTipRequest
-  ): F[Unit] =
-    for {
-      _     <- Log[F].info(s"Received ForkChoiceTipRequest from $peer")
-      tip   <- MultiParentCasper.forkChoiceTip(casper)
-      local <- RPConfAsk[F].reader(_.local)
-      msg   = Blob(local, Packet(transport.BlockMessage.id, tip.toByteString))
-      _     <- TransportLayer[F].stream(peer, msg)
-      _     <- Log[F].info(s"Sending Block ${tip.blockHash} to $peer")
-    } yield ()
-
-  private def handleApprovedBlockRequest(
-      peer: PeerNode,
-      br: ApprovedBlockRequest
-  ): F[Unit] =
-    for {
-      local <- RPConfAsk[F].reader(_.local)
-      _     <- Log[F].info(s"Received ApprovedBlockRequest from $peer")
-      msg   = Blob(local, Packet(transport.ApprovedBlock.id, approvedBlock.toByteString))
-      _     <- TransportLayer[F].stream(peer, msg)
-      _     <- Log[F].info(s"Sending ApprovedBlock to $peer")
-    } yield ()
-
 }
