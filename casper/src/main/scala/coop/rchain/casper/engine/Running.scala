@@ -132,7 +132,9 @@ object Running {
     def addToWaitingList(requested: Requested): F[Unit] =
       Log[F].info(s"Adding $peer to waiting list of $hashStr request") >> RequestedBlocks[F]
         .modify { requestedBlocks =>
-          requestedBlocks + (hb.hash -> requested.copy(waitingList = peer :: requested.waitingList))
+          requestedBlocks + (hb.hash -> requested.copy(
+            waitingList = requested.waitingList ++ List(peer)
+          ))
         }
 
     val logIntro = s"Received confirmation from $peer that it has block $hashStr."
