@@ -56,22 +56,7 @@ object BlockGenerator {
     } yield (postStateHash, processedDeploys.map(_.toProcessedDeploy))
   }
 
-  def injectPostStateHash[F[_]: Monad: BlockStore: IndexedBlockDagStorage](
-      id: Int,
-      b: BlockMessage,
-      genesis: BlockMessage,
-      postGenStateHash: StateHash,
-      processedDeploys: Seq[ProcessedDeploy]
-  ): F[Unit] = {
-    val updatedBlockPostState = b.getBody.getState.withPostStateHash(postGenStateHash)
-    val updatedBlockBody =
-      b.getBody.withState(updatedBlockPostState).withDeploys(processedDeploys)
-    val updatedBlock = b.withBody(updatedBlockBody)
-    BlockStore[F].put(b.blockHash, updatedBlock) *>
-      IndexedBlockDagStorage[F].inject(id, updatedBlock, genesis, invalid = false)
-  }
-
-  def injectPostStateHash[F[_]: Monad: BlockStore: BlockDagStorage](
+  private def injectPostStateHash[F[_]: Monad: BlockStore: BlockDagStorage](
       b: BlockMessage,
       genesis: BlockMessage,
       postGenStateHash: StateHash,
