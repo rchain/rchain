@@ -135,7 +135,7 @@ object tuple {
       checkTuple(0, value).flatMap(
         t => // Ensure arg0 is a Tuple
           checkFixnum(1, value).flatMap(
-            n => // Ensure arg1 is a Fixnum
+            n =>                                   // Ensure arg1 is a Fixnum
               checkFixnum(2, value).flatMap { m => // Ensure arg2 is a Fixnum
 
                 val f = wrapper(_: Int => Option[Ob], _: Int, t.value.length)
