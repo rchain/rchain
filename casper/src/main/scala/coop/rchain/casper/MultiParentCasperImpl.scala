@@ -49,14 +49,17 @@ object CasperState {
 }
 
 class MultiParentCasperImpl[F[_]: Sync: Concurrent: ConnectionsCell: TransportLayer: Log: Time: SafetyOracle: LastFinalizedBlockCalculator: BlockStore: RPConfAsk: BlockDagStorage: Running.RequestedBlocks](
-    runtimeManager: RuntimeManager[F],
     validatorId: Option[ValidatorIdentity],
     genesis: BlockMessage,
     postGenesisStateHash: StateHash,
     shardId: String,
     blockProcessingLock: Semaphore[F]
-)(implicit state: CasperStateCell[F], metricsF: Metrics[F], spanF: Span[F])
-    extends MultiParentCasper[F] {
+)(
+    implicit state: CasperStateCell[F],
+    metricsF: Metrics[F],
+    spanF: Span[F],
+    runtimeManager: RuntimeManager[F]
+) extends MultiParentCasper[F] {
 
   implicit private val logSource: LogSource = LogSource(this.getClass)
 
@@ -546,8 +549,8 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: ConnectionsCell: TransportLa
       })
     }
 
-  def getRuntimeManager: F[Option[RuntimeManager[F]]] =
-    Applicative[F].pure(Some(runtimeManager))
+  def getRuntimeManager: F[RuntimeManager[F]] =
+    Applicative[F].pure(runtimeManager)
 
   def fetchDependencies: F[Unit] =
     for {

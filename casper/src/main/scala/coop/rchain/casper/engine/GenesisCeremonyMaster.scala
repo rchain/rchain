@@ -38,10 +38,9 @@ class GenesisCeremonyMaster[F[_]: Sync: ConnectionsCell: BlockStore: TransportLa
 
 object GenesisCeremonyMaster {
   import Engine._
-  def approveBlockInterval[F[_]: Sync: Metrics: Span: Concurrent: ConnectionsCell: BlockStore: TransportLayer: Log: EventLog: Time: SafetyOracle: LastFinalizedBlockCalculator: RPConfAsk: LastApprovedBlock: MultiParentCasperRef: BlockDagStorage: EngineCell: Running.RequestedBlocks](
+  def approveBlockInterval[F[_]: Sync: Metrics: Span: Concurrent: ConnectionsCell: BlockStore: TransportLayer: Log: EventLog: Time: SafetyOracle: LastFinalizedBlockCalculator: RPConfAsk: LastApprovedBlock: MultiParentCasperRef: BlockDagStorage: EngineCell: RuntimeManager: Running.RequestedBlocks](
       interval: FiniteDuration,
       shardId: String,
-      runtimeManager: RuntimeManager[F],
       validatorId: Option[ValidatorIdentity]
   ): F[Unit] =
     for {
@@ -49,13 +48,13 @@ object GenesisCeremonyMaster {
       lastApprovedBlockO <- LastApprovedBlock[F].get
       cont <- lastApprovedBlockO match {
                case None =>
-                 approveBlockInterval[F](interval, shardId, runtimeManager, validatorId)
+                 approveBlockInterval[F](interval, shardId, validatorId)
                case Some(approvedBlock) =>
                  val genesis = approvedBlock.candidate.flatMap(_.block).get
                  for {
                    _ <- insertIntoBlockAndDagStore[F](genesis, approvedBlock)
                    casper <- MultiParentCasper
-                              .hashSetCasper[F](runtimeManager, validatorId, genesis, shardId)
+                              .hashSetCasper[F](validatorId, genesis, shardId)
                    _ <- Engine
                          .transitionToRunning[F](casper, approvedBlock, ().pure[F])
                    _ <- CommUtil.sendForkChoiceTipRequest[F]

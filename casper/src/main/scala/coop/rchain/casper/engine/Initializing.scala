@@ -25,8 +25,7 @@ import com.google.protobuf.ByteString
   * and will wait for the [[ApprovedBlock]] message to arrive. Until then  it will respond with
   * `F[None]` to all other message types.
     **/
-class Initializing[F[_]: Sync: Metrics: Span: Concurrent: ConnectionsCell: BlockStore: TransportLayer: Log: EventLog: Time: SafetyOracle: LastFinalizedBlockCalculator: RPConfAsk: LastApprovedBlock: BlockDagStorage: MultiParentCasperRef: EngineCell: Running.RequestedBlocks](
-    runtimeManager: RuntimeManager[F],
+class Initializing[F[_]: Sync: Metrics: Span: Concurrent: ConnectionsCell: BlockStore: TransportLayer: Log: EventLog: Time: SafetyOracle: LastFinalizedBlockCalculator: RPConfAsk: LastApprovedBlock: BlockDagStorage: MultiParentCasperRef: EngineCell: RuntimeManager: Running.RequestedBlocks](
     shardId: String,
     validatorId: Option[ValidatorIdentity],
     validators: Set[ByteString],
@@ -42,7 +41,6 @@ class Initializing[F[_]: Sync: Metrics: Span: Concurrent: ConnectionsCell: Block
       onApprovedBlockTransition(
         ab,
         validators,
-        runtimeManager,
         validatorId,
         shardId
       )
@@ -54,7 +52,6 @@ class Initializing[F[_]: Sync: Metrics: Span: Concurrent: ConnectionsCell: Block
   private def onApprovedBlockTransition(
       approvedBlock: ApprovedBlock,
       validators: Set[ByteString],
-      runtimeManager: RuntimeManager[F],
       validatorId: Option[ValidatorIdentity],
       shardId: String
   ): F[Unit] =
@@ -77,7 +74,7 @@ class Initializing[F[_]: Sync: Metrics: Span: Concurrent: ConnectionsCell: Block
                         _       <- insertIntoBlockAndDagStore[F](genesis, approvedBlock)
                         _       <- LastApprovedBlock[F].set(approvedBlock)
                         casper <- MultiParentCasper
-                                   .hashSetCasper[F](runtimeManager, validatorId, genesis, shardId)
+                                   .hashSetCasper[F](validatorId, genesis, shardId)
                         _ <- Engine
                               .transitionToRunning[F](casper, approvedBlock, ().pure[F])
                         _ <- CommUtil.sendForkChoiceTipRequest[F]

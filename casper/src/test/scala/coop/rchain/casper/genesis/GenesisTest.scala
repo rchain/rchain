@@ -238,7 +238,6 @@ object GenesisTest {
         maybeWalletsPath,
         minimumBond,
         maximumBond,
-        runtimeManager,
         shardId,
         deployTimestamp
       )

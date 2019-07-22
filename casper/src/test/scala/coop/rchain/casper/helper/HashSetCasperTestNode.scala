@@ -51,15 +51,15 @@ class HashSetCasperTestNode[F[_]](
     val blockDagDir: Path,
     val blockStoreDir: Path,
     blockProcessingLock: Semaphore[F],
-    shardId: String = "rchain",
-    val runtimeManager: RuntimeManager[F]
+    shardId: String = "rchain"
 )(
     implicit concurrentF: Concurrent[F],
     val blockStore: BlockStore[F],
     val blockDagStorage: BlockDagStorage[F],
     val metricEff: Metrics[F],
     val span: Span[F],
-    val casperState: CasperStateCell[F]
+    val casperState: CasperStateCell[F],
+    val runtimeManager: RuntimeManager[F]
 ) {
 
   implicit val logEff                       = new LogStub[F](Log.log[F])
@@ -88,7 +88,6 @@ class HashSetCasperTestNode[F[_]](
     Cell.unsafe[F, Map[BlockHash, Running.Requested]](Map.empty[BlockHash, Running.Requested])
 
   implicit val casperEff = new MultiParentCasperImpl[F](
-    runtimeManager,
     Some(validatorId),
     genesis,
     postGenesisStateHash,
@@ -279,15 +278,15 @@ object HashSetCasperTestNode {
                    paths.blockDagDir,
                    paths.blockStoreDir,
                    blockProcessingLock,
-                   "rchain",
-                   runtimeManager
+                   "rchain"
                  )(
                    Concurrent[F],
                    blockStore,
                    blockDagStorage,
                    metricEff,
                    spanEff,
-                   casperState
+                   casperState,
+                   runtimeManager
                  )
                } yield node
              )

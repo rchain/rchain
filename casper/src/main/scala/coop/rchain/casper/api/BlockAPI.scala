@@ -110,8 +110,7 @@ object BlockAPI {
     ): Effect[F, ListeningNameDataResponse] =
       for {
         mainChain           <- getMainChainFromTip[F](depth)
-        maybeRuntimeManager <- casper.getRuntimeManager
-        runtimeManager      = maybeRuntimeManager.get // This is safe. Please reluctantly accept until runtimeManager is no longer exposed.
+        runtimeManager      <- casper.getRuntimeManager
         sortedListeningName <- parSortable.sortMatch[F](listeningName).map(_.term)
         maybeBlocksWithActiveName <- mainChain.toList.traverse { block =>
                                       getDataWithBlockInfo[F](
@@ -144,9 +143,8 @@ object BlockAPI {
         implicit casper: MultiParentCasper[F]
     ): Effect[F, ListeningNameContinuationResponse] =
       for {
-        mainChain           <- getMainChainFromTip[F](depth)
-        maybeRuntimeManager <- casper.getRuntimeManager
-        runtimeManager      = maybeRuntimeManager.get // This is safe. Please reluctantly accept until runtimeManager is no longer exposed.
+        mainChain      <- getMainChainFromTip[F](depth)
+        runtimeManager <- casper.getRuntimeManager
         sortedListeningNames <- listeningNames.toList
                                  .traverse(parSortable.sortMatch[F](_).map(_.term))
         maybeBlocksWithActiveName <- mainChain.toList.traverse { block =>

@@ -48,10 +48,9 @@ class GenesisCeremonyMasterSpec extends WordSpec {
         _  <- EngineCell[Task].set(new GenesisCeremonyMaster[Task](abp))
         c1 = abp.run().forkAndForget.runToFuture
         c2 = GenesisCeremonyMaster
-          .approveBlockInterval(
+          .approveBlockInterval[Task](
             interval,
             shardId,
-            runtimeManager,
             Some(validatorId)
           )
           .forkAndForget

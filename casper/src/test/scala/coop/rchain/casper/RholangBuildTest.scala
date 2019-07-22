@@ -23,7 +23,6 @@ class RholangBuildTest extends FlatSpec with Matchers {
       .standaloneEff(genesis)
       .use { node =>
         import node._
-        implicit val rm = node.runtimeManager
 
         val code =
           """

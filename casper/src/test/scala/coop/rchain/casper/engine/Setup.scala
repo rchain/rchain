@@ -45,7 +45,7 @@ object Setup {
         )
         .unsafeRunSync(scheduler)
 
-    val runtimeManager = RuntimeManager.fromRuntime(activeRuntime).unsafeRunSync(scheduler)
+    implicit val runtimeManager = RuntimeManager.fromRuntime(activeRuntime).unsafeRunSync(scheduler)
 
     val params @ (_, genesisParams) = GenesisBuilder.buildGenesisParameters()
     val context                     = GenesisBuilder.buildGenesis(params)

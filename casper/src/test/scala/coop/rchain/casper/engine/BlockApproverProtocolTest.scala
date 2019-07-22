@@ -25,7 +25,7 @@ class BlockApproverProtocolTest extends FlatSpec with Matchers {
         import node._
 
         for {
-          _ <- approver.unapprovedBlockPacketHandler[Effect](node.local, unapproved, runtimeManager)
+          _ <- approver.unapprovedBlockPacketHandler[Effect](node.local, unapproved)
 
           _ = node.logEff.infos.exists(_.contains("Approval sent in response")) should be(true)
           _ = node.logEff.warns.isEmpty should be(true)
@@ -50,13 +50,11 @@ class BlockApproverProtocolTest extends FlatSpec with Matchers {
         for {
           _ <- approver.unapprovedBlockPacketHandler[Effect](
                 node.local,
-                differentUnapproved1,
-                runtimeManager
+                differentUnapproved1
               )
           _ <- approver.unapprovedBlockPacketHandler[Effect](
                 node.local,
-                differentUnapproved2,
-                runtimeManager
+                differentUnapproved2
               )
 
           _ = node.logEff.warns.count(_.contains("Received unexpected candidate")) should be(2)
