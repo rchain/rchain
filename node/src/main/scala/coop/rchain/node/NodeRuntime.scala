@@ -117,7 +117,8 @@ class NodeRuntime private[node] (
                               conf.server.maxMessageSize,
                               conf.server.maxStreamMessageSize,
                               conf.server.dataDir.resolve("tmp").resolve("comm"),
-                              conf.server.messageConsumers
+                              conf.server.messageConsumers,
+                              conf.kamon.zipkin
                             )(grpcScheduler, rPConfAsk, log, metrics)
                           )
 
