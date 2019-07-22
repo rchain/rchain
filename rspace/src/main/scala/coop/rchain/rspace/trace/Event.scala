@@ -80,15 +80,15 @@ object Produce {
   def unapply(arg: Produce): Option[(Blake2b256Hash, Blake2b256Hash, Int)] =
     Some((arg.channelsHash, arg.hash, arg.sequenceNumber))
 
-  def create[C, A](channel: C, datum: A, persist: Boolean, sequenceNumber: Int = 0)(
+  def create[C, A](channel: C, datum: A, persistent: Boolean, sequenceNumber: Int = 0)(
       implicit
       serializeC: Serialize[C],
       serializeA: Serialize[A]
   ): Produce =
     new Produce(
       hash(channel)(serializeC),
-      hash(channel, datum, persist),
-      persist,
+      hash(channel, datum, persistent),
+      persistent,
       sequenceNumber
     )
 
