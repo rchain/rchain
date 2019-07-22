@@ -18,7 +18,6 @@ import scala.util.{Failure, Success, Try}
 final case class CasperConf(
     publicKeyBase16: Option[String],
     privateKey: Option[Either[String, Path]],
-    sigAlgorithm: String,
     bondsFile: Option[String],
     knownValidatorsFile: Option[String],
     numValidators: Int,

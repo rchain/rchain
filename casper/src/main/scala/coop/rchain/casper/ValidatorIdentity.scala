@@ -47,9 +47,9 @@ object ValidatorIdentity {
     val maybePublicKey = conf.publicKeyBase16.map(pk => PublicKey(Base16.unsafeDecode(pk)))
 
     val publicKey =
-      CasperConf.publicKey(maybePublicKey, conf.sigAlgorithm, privateKey)
+      CasperConf.publicKey(maybePublicKey, Secp256k1.name, privateKey)
 
-    ValidatorIdentity(publicKey, privateKey, conf.sigAlgorithm).some.pure[F]
+    ValidatorIdentity(publicKey, privateKey, Secp256k1.name).some.pure[F]
   }
 
   def fromConfig[F[_]: Sync: EnvVars: Log](conf: CasperConf): F[Option[ValidatorIdentity]] =

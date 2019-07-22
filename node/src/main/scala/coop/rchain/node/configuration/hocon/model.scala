@@ -230,7 +230,6 @@ object Casper {
     val ValidatorPrivateKey     = "validator-private-key"
     val ValidatorPrivateKeyPath = "validator-private-key-path"
     val ValidatorPublicKey      = "validator-public-key"
-    val SigAlgorithm            = "sig-algorithm"
     val BondsFile               = "bonds-file"
     val KnownValidatorsFile     = "known-validators-file"
     val Validators              = "validators"
@@ -250,7 +249,6 @@ object Casper {
         ValidatorPrivateKey,
         ValidatorPrivateKeyPath,
         ValidatorPublicKey,
-        SigAlgorithm,
         BondsFile,
         KnownValidatorsFile,
         Validators,
@@ -277,7 +275,6 @@ object Casper {
     CasperConf(
       publicKeyBase16 = casper.getStringOpt(keys.ValidatorPublicKey),
       privateKey = pkPath.orElse(pk),
-      sigAlgorithm = casper.getString(keys.SigAlgorithm),
       bondsFile = casper.getStringOpt(keys.BondsFile),
       knownValidatorsFile = casper.getStringOpt(keys.KnownValidatorsFile),
       numValidators = casper.getInt(keys.Validators),

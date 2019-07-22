@@ -82,7 +82,6 @@ object ConfigMapper {
         add(keys.ValidatorPublicKey, run.validatorPublicKey)
         add(keys.ValidatorPrivateKey, run.validatorPrivateKey)
         add(keys.ValidatorPrivateKeyPath, run.validatorPrivateKeyPath)
-        add(keys.SigAlgorithm, run.validatorSigAlgorithm)
         add(keys.BondsFile, run.bondsFile)
         add(keys.KnownValidatorsFile, run.knownValidators)
         add(keys.Validators, run.numValidators)
