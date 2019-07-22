@@ -47,6 +47,7 @@ object CommUtil {
     (Running.RequestedBlocks[F].read map (_.contains(hash))).ifM(
       ().pure[F],
       for {
+        _ <- Running.addNewEntry[F](hash)
         _ <- sendToPeers[F](transport.HasBlockRequest, HasBlockRequest(hash).toByteString)
         _ <- Log[F].info(s"Requested missing block ${PrettyPrinter.buildString(hash)} from peers")
       } yield ()
