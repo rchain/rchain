@@ -9,6 +9,8 @@ import cats.syntax.functor._
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage._
 import coop.rchain.casper.protocol.BlockMessage
+import coop.rchain.casper.util.GenesisBuilder.GenesisContext
+import coop.rchain.casper.util.rholang.{Resources, RuntimeManager}
 import coop.rchain.catscontrib.TaskContrib.TaskOps
 import coop.rchain.metrics.Metrics
 import coop.rchain.metrics.Metrics.MetricsNOP
@@ -23,6 +25,24 @@ import org.scalatest.{BeforeAndAfter, Suite}
 
 trait BlockDagStorageFixture extends BeforeAndAfter { self: Suite =>
   val scheduler = Scheduler.fixedPool("block-dag-storage-fixture-scheduler", 4)
+
+  def withGenesis[R](
+      context: GenesisContext
+  )(f: BlockStore[Task] => IndexedBlockDagStorage[Task] => RuntimeManager[Task] => Task[R]): R = {
+    implicit val s       = scheduler
+    implicit val metrics = new MetricsNOP[Task]()
+    implicit val log     = Log.log[Task]
+
+    val resource = for {
+      paths                  <- Resources.copyStorage[Task](context.storageDirectory)
+      blockStore             <- Resources.mkBlockStoreAt[Task](paths.blockStoreDir)
+      blockDagStorage        <- Resources.mkBlockDagStorageAt[Task](paths.blockDagDir)
+      indexedBlockDagStorage <- Resource.liftF(IndexedBlockDagStorage.create[Task](blockDagStorage))
+      runtime                <- Resources.mkRuntimeManagerAt[Task](paths.rspaceDir)()
+    } yield (blockStore, indexedBlockDagStorage, runtime)
+
+    resource.use[R] { case (b, d, r) => f(b)(d)(r) }.unsafeRunSync
+  }
 
   def withStorage[R](f: BlockStore[Task] => IndexedBlockDagStorage[Task] => Task[R]): R = {
     val testProgram = Sync[Task].bracket {

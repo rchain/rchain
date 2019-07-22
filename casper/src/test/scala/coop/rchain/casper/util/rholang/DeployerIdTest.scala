@@ -1,117 +1,93 @@
 package coop.rchain.casper.util.rholang
 
 import cats.effect.Resource
+import cats.implicits._
 import com.google.protobuf.ByteString
-import coop.rchain.casper.protocol.DeployData
-import coop.rchain.casper.util.ConstructDeploy
+import coop.rchain.casper.helper.HashSetCasperTestNode
+import coop.rchain.casper.scalatestcontrib.effectTest
+import coop.rchain.casper.util.GenesisBuilder.{buildGenesis, buildGenesisParameters}
 import coop.rchain.casper.util.rholang.Resources._
+import coop.rchain.casper.util.{ConstructDeploy, ProtoUtil}
 import coop.rchain.crypto.PrivateKey
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.signatures.Secp256k1
-import coop.rchain.models.BlockHash.BlockHash
-import coop.rchain.models.Validator.Validator
 import coop.rchain.models.Expr.ExprInstance.GBool
 import coop.rchain.models.rholang.implicits._
 import coop.rchain.models.{GDeployerId, Par}
-import coop.rchain.rholang.interpreter.Runtime.BlockData
-import coop.rchain.rholang.interpreter.accounting
+import coop.rchain.p2p.EffectsTestInstances.LogicalTime
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
-import org.scalatest.{Assertion, FlatSpec, Matchers}
-
-import scala.concurrent.duration._
+import org.scalatest.{FlatSpec, Matchers}
 
 class DeployerIdTest extends FlatSpec with Matchers {
 
-  private val runtimeManager: Resource[Task, RuntimeManager[Task]] =
+  implicit val time = new LogicalTime[Task]
+
+  val runtimeManager: Resource[Task, RuntimeManager[Task]] =
     mkRuntimeManager("deployer-id-runtime-manager-test")
 
-  private def deploy(
-      deployer: PrivateKey,
-      rho: String,
-      timestamp: Long = System.currentTimeMillis()
-  ): DeployData = ConstructDeploy.sourceDeploy(
-    source = rho,
-    timestamp = System.currentTimeMillis(),
-    sec = deployer
-  )
-
-  "Deployer id" should "be equal to the deployer's public key" in {
+  "Deployer id" should "be equal to the deployer's public key" in effectTest {
     val sk = PrivateKey(
       Base16.unsafeDecode("b18e1d0045995ec3d010c387ccfeb984d783af8fbb0f40fa7db126d889f6dadd")
     )
     val pk             = ByteString.copyFrom(Secp256k1.toPublic(sk).bytes)
     val captureChannel = "__DEPLOYER_AUTH_VALUE__"
-    val result =
-      runtimeManager
-        .use(
-          mgr =>
-            mgr.captureResults(
-              mgr.emptyStateHash,
-              deploy(
-                sk,
-                s"""new auth(`rho:rchain:deployerId`) in { @"$captureChannel"!(*auth) }"""
-              ),
-              captureChannel
-            )
-        )
-        .runSyncUnsafe(10.seconds)
-
-    result.size should be(1)
-    result.head should be(GDeployerId(pk): Par)
-  }
-
-  it should "make drain vault attacks impossible" in {
-    def checkAccessGranted(
-        deployer: PrivateKey,
-        contractUser: PrivateKey,
-        isAccessGranted: Boolean
-    ): Assertion = {
-      val contract = ConstructDeploy.sourceDeploy(
-        source =
-          s"""contract @"checkAuth"(input, ret) = { new auth(`rho:rchain:deployerId`) in { ret!(*input == *auth) }}""",
-        timestamp = System.currentTimeMillis(),
-        sec = deployer
-      )
-      val captureChannel = "__RETURN_VALUE__"
-      val checkAuth =
-        s"""new auth(`rho:rchain:deployerId`), ret in {
-           |@"checkAuth"!(*auth, *ret) |
-           |  for(isAuthenticated <- ret) {
-           |    @"$captureChannel"!(*isAuthenticated)
-           |  }
-           |} """.stripMargin
-      val checkAuthDeploy = deploy(contractUser, checkAuth)
-      val result =
-        runtimeManager
-          .use { mgr =>
-            mgr
-              .computeState(mgr.emptyStateHash)(
-                Seq(contract),
-                BlockData(0L, 0L),
-                Map.empty[BlockHash, Validator]
-              )
-              .flatMap { result =>
-                val hash = result._1
-                mgr
-                  .captureResults(
-                    hash,
-                    checkAuthDeploy,
-                    captureChannel
-                  )
-              }
-          }
-          .runSyncUnsafe(10.seconds)
-      result.size should be(1)
-      result.head should be(GBool(isAccessGranted): Par)
+    runtimeManager.use { mgr =>
+      for {
+        deploy <- ConstructDeploy.sourceDeployNowF(
+                   s"""new auth(`rho:rchain:deployerId`) in { @"$captureChannel"!(*auth) }""",
+                   sec = sk
+                 )
+        result <- mgr.captureResults(mgr.emptyStateHash, deploy, captureChannel)
+        _      = result.size should be(1)
+        _      = result.head should be(GDeployerId(pk): Par)
+      } yield ()
     }
-    val deployer = PrivateKey(
-      Base16.unsafeDecode("0000000000000000000000000000000000000000000000000000000000000000")
-    )
-    val attacker = PrivateKey(
-      Base16.unsafeDecode("1111111111111111111111111111111111111111111111111111111111111111")
-    )
-    checkAccessGranted(deployer, deployer, isAccessGranted = true)
-    checkAccessGranted(deployer, attacker, isAccessGranted = false)
   }
+
+  val genesisContext = buildGenesis(buildGenesisParameters())
+
+  it should "make drain vault attacks impossible" in effectTest {
+    val deployer = ConstructDeploy.defaultSec
+    val attacker = ConstructDeploy.defaultSec2
+
+    checkAccessGranted(deployer, deployer, isAccessGranted = true) >>
+      checkAccessGranted(deployer, attacker, isAccessGranted = false)
+  }
+
+  def checkAccessGranted(
+      deployer: PrivateKey,
+      contractUser: PrivateKey,
+      isAccessGranted: Boolean
+  ): Task[Unit] = {
+    val captureChannel = "__RETURN_VALUE__"
+    val checkDeployerDefinition =
+      s"""
+         |contract @"checkAuth"(input, ret) = {
+         |  new auth(`rho:rchain:deployerId`) in {
+         |    ret!(*input == *auth) 
+         |  }
+         |}""".stripMargin
+    val checkDeployerCall =
+      s"""
+         |new auth(`rho:rchain:deployerId`), ret in {
+         |  @"checkAuth"!(*auth, *ret) |
+         |  for(isAuthenticated <- ret) {
+         |    @"$captureChannel"!(*isAuthenticated)
+         |  }
+         |} """.stripMargin
+
+    HashSetCasperTestNode.standaloneEff(genesisContext).use { node =>
+      for {
+        contract        <- ConstructDeploy.sourceDeployNowF(checkDeployerDefinition, sec = deployer)
+        block           <- node.addBlock(contract)
+        stateHash       = ProtoUtil.tuplespace(block).get
+        checkAuthDeploy <- ConstructDeploy.sourceDeployNowF(checkDeployerCall, sec = contractUser)
+        result          <- node.runtimeManager.captureResults(stateHash, checkAuthDeploy, captureChannel)
+        _               = assert(result.size == 1)
+        _               = assert(result.head == (GBool(isAccessGranted): Par))
+      } yield ()
+    }
+  }
+
 }

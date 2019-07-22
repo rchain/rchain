@@ -5,23 +5,23 @@ import cats.effect._
 import cats.implicits._
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage._
+import coop.rchain.casper.CasperMetricsSource
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.casper.util.rholang.InterpreterUtil.computeDeploysCheckpoint
+import coop.rchain.casper.util.rholang.RuntimeManager
 import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
-import coop.rchain.casper.util.rholang.{InternalProcessedDeploy, RuntimeManager}
 import coop.rchain.crypto.hash.Blake2b256
+import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.Validator.Validator
 import coop.rchain.p2p.EffectsTestInstances.LogicalTime
+import coop.rchain.rholang.interpreter.Runtime.BlockData
 import coop.rchain.shared.Time
 import monix.eval.Task
 
 import scala.collection.immutable.HashMap
 import scala.language.higherKinds
-import coop.rchain.casper.CasperMetricsSource
-import coop.rchain.metrics.{Metrics, Span}
-import coop.rchain.rholang.interpreter.Runtime.BlockData
 
 object BlockGenerator {
   implicit val timeEff = new LogicalTime[Task]
@@ -29,38 +29,44 @@ object BlockGenerator {
   private[this] val GenerateBlockMetricsSource =
     Metrics.Source(CasperMetricsSource, "generate-block")
 
-  def updateChainWithBlockStateUpdate[F[_]: Sync: BlockStore: IndexedBlockDagStorage: Time: Metrics: Span](
-      id: Int,
-      genesis: BlockMessage,
+  def step[F[_]: BlockDagStorage: BlockStore: Time: Metrics: Span: Sync](
       runtimeManager: RuntimeManager[F]
-  ): F[BlockMessage] =
+  )(block: BlockMessage, genesis: BlockMessage): F[Unit] =
     for {
-      b   <- IndexedBlockDagStorage[F].lookupByIdUnsafe(id)
-      dag <- IndexedBlockDagStorage[F].getRepresentation
-      computeBlockCheckpointResult <- computeBlockCheckpoint[F](
-                                       b,
-                                       genesis,
-                                       dag,
-                                       runtimeManager
-                                     )
-      (postStateHash, processedDeploys) = computeBlockCheckpointResult
-      _                                 <- injectPostStateHash[F](id, b, genesis, postStateHash, processedDeploys)
-    } yield b
+      dag                                       <- BlockDagStorage[F].getRepresentation
+      computeBlockCheckpointResult              <- computeBlockCheckpoint(block, genesis, dag, runtimeManager)
+      (postB1StateHash, postB1ProcessedDeploys) = computeBlockCheckpointResult
+      result <- injectPostStateHash[F](
+                 block,
+                 genesis,
+                 postB1StateHash,
+                 postB1ProcessedDeploys
+               )
+    } yield result
 
-  def computeBlockCheckpoint[F[_]: Sync: BlockStore: Time: Metrics: Span](
+  private def computeBlockCheckpoint[F[_]: Sync: BlockStore: Time: Metrics: Span](
       b: BlockMessage,
       genesis: BlockMessage,
       dag: BlockDagRepresentation[F],
       runtimeManager: RuntimeManager[F]
   ): F[(StateHash, Seq[ProcessedDeploy])] = Span[F].trace(GenerateBlockMetricsSource) {
     for {
-      result                                                 <- computeBlockCheckpointFromDeploys[F](b, genesis, dag, runtimeManager)
+      parents <- ProtoUtil.unsafeGetParents[F](b)
+      deploys = ProtoUtil.deploys(b).flatMap(_.deploy)
+      now     <- Time[F].currentMillis
+      result <- computeDeploysCheckpoint[F](
+                 parents,
+                 deploys,
+                 dag,
+                 runtimeManager,
+                 BlockData(now, b.body.get.state.get.blockNumber),
+                 Map.empty[BlockHash, Validator]
+               )
       Right((preStateHash, postStateHash, processedDeploys)) = result
     } yield (postStateHash, processedDeploys.map(_.toProcessedDeploy))
   }
 
-  def injectPostStateHash[F[_]: Monad: BlockStore: IndexedBlockDagStorage](
-      id: Int,
+  private def injectPostStateHash[F[_]: Monad: BlockStore: BlockDagStorage](
       b: BlockMessage,
       genesis: BlockMessage,
       postGenStateHash: StateHash,
@@ -71,47 +77,21 @@ object BlockGenerator {
       b.getBody.withState(updatedBlockPostState).withDeploys(processedDeploys)
     val updatedBlock = b.withBody(updatedBlockBody)
     BlockStore[F].put(b.blockHash, updatedBlock) *>
-      IndexedBlockDagStorage[F].inject(id, updatedBlock, genesis, invalid = false)
+      BlockDagStorage[F].insert(updatedBlock, genesis, invalid = false).void
   }
-
-  private def computeBlockCheckpointFromDeploys[F[_]: Sync: BlockStore: Time: Span](
-      b: BlockMessage,
-      genesis: BlockMessage,
-      dag: BlockDagRepresentation[F],
-      runtimeManager: RuntimeManager[F]
-  ): F[Either[Throwable, (StateHash, StateHash, Seq[InternalProcessedDeploy])]] =
-    for {
-      parents <- ProtoUtil.unsafeGetParents[F](b)
-      deploys = ProtoUtil.deploys(b).flatMap(_.deploy)
-
-      _ = assert(
-        parents.nonEmpty || (parents.isEmpty && b == genesis),
-        "Received a different genesis block."
-      )
-
-      now <- Time[F].currentMillis
-      result <- computeDeploysCheckpoint[F](
-                 parents,
-                 deploys,
-                 dag,
-                 runtimeManager,
-                 BlockData(now, b.body.get.state.get.blockNumber),
-                 Map.empty[BlockHash, Validator]
-               )
-    } yield result
 }
 
 trait BlockGenerator {
-  private def buildBlock[F[_]: Monad: Time](
+  def buildBlock[F[_]: Monad: Time](
       parentsHashList: Seq[BlockHash],
-      creator: Validator,
-      bonds: Seq[Bond],
-      justifications: collection.Map[Validator, BlockHash],
-      deploys: Seq[ProcessedDeploy],
-      tsHash: ByteString,
-      shardId: String,
-      preStateHash: ByteString,
-      seqNum: Int
+      creator: Validator = ByteString.EMPTY,
+      bonds: Seq[Bond] = Seq.empty[Bond],
+      justifications: collection.Map[Validator, BlockHash] = HashMap.empty[Validator, BlockHash],
+      deploys: Seq[ProcessedDeploy] = Seq.empty[ProcessedDeploy],
+      tsHash: ByteString = ByteString.EMPTY,
+      shardId: String = "rchain",
+      preStateHash: ByteString = ByteString.EMPTY,
+      seqNum: Int = 0
   ): F[BlockMessage] =
     for {
       now <- Time[F].currentMillis

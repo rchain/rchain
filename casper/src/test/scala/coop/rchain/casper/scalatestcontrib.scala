@@ -8,9 +8,15 @@ import monix.execution.Scheduler
 import org.scalatest.{Assertion, Matchers}
 
 object scalatestcontrib extends Matchers {
+
   implicit class AnyShouldF[F[_]: Functor, T](leftSideValue: F[T]) {
-    def shouldBeF(value: T): F[Assertion] =
-      leftSideValue.map(_ shouldBe value)
+    def shouldBeF(value: T)(implicit file: sourcecode.File, line: sourcecode.Line): F[Assertion] =
+      leftSideValue.map(
+        x =>
+          withClue(s"Assertion failed at ${file.value}:${line.value}:\n\n") {
+            x shouldBe value
+          }
+      )
   }
 
   def effectTest[T](f: Effect[T])(implicit scheduler: Scheduler): T =
