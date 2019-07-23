@@ -17,7 +17,7 @@ object PacketHandler {
   def apply[F[_]: PacketHandler]: PacketHandler[F] = implicitly[PacketHandler[F]]
 
   def pf[F[_]](pfForPeer: (PeerNode) => PartialFunction[Packet, F[Unit]])(
-      implicit ev1: Applicative[F],
+      implicit ev1: FlatMap[F],
       ev2: Log[F],
       errorHandler: ApplicativeError_[F, CommError]
   ): PacketHandler[F] =
@@ -27,7 +27,7 @@ object PacketHandler {
         val pf       = pfForPeer(peer)
         if (pf.isDefinedAt(packet)) pf(packet)
         else
-          Log[F].error(errorMsg) *> errorHandler
+          Log[F].error(errorMsg) >> errorHandler
             .raiseError(CommError.unknownProtocol(errorMsg))
       }
     }

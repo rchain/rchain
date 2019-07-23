@@ -99,7 +99,7 @@ object ApproveBlockProtocol {
         if (signedByTrustedValidator(a)) {
           true.pure[F]
         } else {
-          Log[F].warn(s"APPROVAL: Received BlockApproval from untrusted validator.") *> false
+          Log[F].warn(s"APPROVAL: Received BlockApproval from untrusted validator.") >> false
             .pure[F]
         }
 

@@ -1,31 +1,28 @@
 package coop.rchain.blockstorage
 
-import java.nio.{BufferUnderflowException, ByteBuffer}
 import java.nio.file.{Path, StandardCopyOption}
+import java.nio.{BufferUnderflowException, ByteBuffer}
 
 import cats.Monad
-import cats.implicits._
-import cats.effect.{Concurrent, Resource, Sync}
 import cats.effect.concurrent.Semaphore
+import cats.effect.{Concurrent, Resource, Sync}
+import cats.implicits._
 import cats.mtl.MonadState
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockDagFileStorage.{Checkpoint, CheckpointedDagInfo}
 import coop.rchain.blockstorage.util.BlockMessageUtil.{blockNumber, bonds, parentHashes}
-import coop.rchain.blockstorage.util.{BlockMessageUtil, Crc32, TopologicalSortUtil}
 import coop.rchain.blockstorage.util.byteOps._
 import coop.rchain.blockstorage.util.io.IOError.RaiseIOError
-import coop.rchain.blockstorage.util.io._
-import coop.rchain.blockstorage.util.io.IOError
+import coop.rchain.blockstorage.util.io.{IOError, _}
+import coop.rchain.blockstorage.util.{Crc32, TopologicalSortUtil}
 import coop.rchain.casper.protocol.BlockMessage
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.models.BlockHash.BlockHash
-import coop.rchain.models.BlockHash
 import coop.rchain.models.Validator.Validator
-import coop.rchain.models.Validator
-import coop.rchain.models.{BlockMetadata, EquivocationRecord}
-import coop.rchain.shared.{AtomicMonadState, Log, LogSource}
+import coop.rchain.models.{BlockHash, BlockMetadata, EquivocationRecord, Validator}
 import coop.rchain.shared.ByteStringOps._
 import coop.rchain.shared.Language.ignore
+import coop.rchain.shared.{AtomicMonadState, Log, LogSource}
 import monix.execution.atomic.AtomicAny
 import org.lmdbjava.DbiFlags.MDB_CREATE
 import org.lmdbjava.{Env, EnvFlags}
@@ -336,7 +333,7 @@ final class BlockDagFileStorage[F[_]: Concurrent: Sync: Log: RaiseIOError] priva
                  case None =>
                    Log[F].warn(
                      s"Requested a block with block number $offset, but there is no checkpoint for it"
-                   ) *> None.pure[F]
+                   ) >> None.pure[F]
                  case Some((checkpoint, i)) =>
                    loadCheckpointDagInfo(checkpoint, i).map(Option(_))
                }
@@ -509,7 +506,7 @@ final class BlockDagFileStorage[F[_]: Concurrent: Sync: Log: RaiseIOError] priva
                                                           // Ignore empty sender for special cases such as genesis block
                                                           Log[F].warn(
                                                             s"Block ${Base16.encode(block.blockHash.toByteArray)} sender is empty"
-                                                          ) *> newValidatorsLatestMessages.pure[F]
+                                                          ) >> newValidatorsLatestMessages.pure[F]
                                                         } else if (block.sender
                                                                      .size() == Validator.Length) {
                                                           (newValidatorsLatestMessages + (
@@ -1004,7 +1001,7 @@ object BlockDagFileStorage {
                         case checkpointPattern(start, end) =>
                           List(Checkpoint(start.toLong, end.toLong, filePath, None)).pure[F]
                         case other =>
-                          Log[F].warn(s"Ignoring file '$other': not a valid checkpoint name") *>
+                          Log[F].warn(s"Ignoring file '$other': not a valid checkpoint name") >>
                             List.empty[Checkpoint].pure[F]
                       }
                     }

@@ -7,16 +7,12 @@ import cats.effect.{Concurrent, ContextShift, Sync}
 import cats.implicits._
 import com.google.common.collect.Multiset
 import com.typesafe.scalalogging.Logger
-import coop.rchain.catscontrib.Catscontrib._
 import coop.rchain.catscontrib._
 import coop.rchain.metrics.{Metrics, Span}
-import coop.rchain.rspace._
-import coop.rchain.rspace.history.Branch
+import coop.rchain.rspace.history.{Branch, HistoryRepository}
 import coop.rchain.rspace.internal._
-import coop.rchain.rspace.history.HistoryRepository
 import coop.rchain.rspace.trace.{Produce, _}
-import coop.rchain.shared.{Cell, Log}
-import scodec.Codec
+import coop.rchain.shared.Log
 import monix.execution.atomic.AtomicAny
 
 import scala.collection.JavaConverters._
@@ -67,7 +63,7 @@ class ReplayRSpace[F[_]: Sync, C, P, A, R, K](
     contextShift.evalOn(scheduler) {
       if (channels.length =!= patterns.length) {
         val msg = "channels.length must equal patterns.length"
-        logF.error(msg) *> syncF.raiseError(new IllegalArgumentException(msg))
+        logF.error(msg) >> syncF.raiseError(new IllegalArgumentException(msg))
       } else
         spanF.trace(consumeSpanLabel) {
           for {
@@ -370,7 +366,7 @@ class ReplayRSpace[F[_]: Sync, C, P, A, R, K](
                       }
                       (if (shouldRemove) {
                          store.removeDatum(candidateChannel, dataIndex)
-                       } else Applicative[F].unit) *>
+                       } else Applicative[F].unit) >>
                         store.removeJoin(candidateChannel, channels)
                   }
             _ <- logF.debug(s"produce: matching continuation found at <channels: $channels>")

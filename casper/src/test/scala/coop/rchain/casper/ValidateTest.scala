@@ -3,10 +3,9 @@ package coop.rchain.casper
 import java.nio.file.Files
 
 import cats.Monad
-import cats.effect.Sync
 import cats.implicits._
 import com.google.protobuf.ByteString
-import coop.rchain.blockstorage.{BlockDagStorage, BlockStore, IndexedBlockDagStorage}
+import coop.rchain.blockstorage.{BlockStore, IndexedBlockDagStorage}
 import coop.rchain.casper.helper.BlockGenerator._
 import coop.rchain.casper.helper.BlockUtil.generateValidator
 import coop.rchain.casper.helper.{BlockDagStorageFixture, BlockGenerator}
@@ -272,7 +271,7 @@ class ValidateTest
         val hash            = ProtoUtil.hashUnsignedBlock(header, Nil)
         val block           = blockWithNumber.withHeader(header).withBlockHash(hash)
 
-        blockStore.put(hash, block) *> blockDagStorage.insert(block, genesis, false) *> block
+        blockStore.put(hash, block) >> blockDagStorage.insert(block, genesis, false) >> block
           .pure[Task]
       }
 

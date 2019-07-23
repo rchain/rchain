@@ -5,9 +5,9 @@ import cats.implicits._
 import coop.rchain.blockstorage.{BlockDagRepresentation, BlockDagStorage, BlockStore}
 import coop.rchain.casper.CasperState.CasperStateCell
 import coop.rchain.casper.util.ProtoUtil
-import coop.rchain.shared.Log
 import coop.rchain.catscontrib.ListContrib
 import coop.rchain.models.BlockHash.BlockHash
+import coop.rchain.shared.Log
 
 final class LastFinalizedBlockCalculator[F[_]: Sync: Log: Concurrent: BlockStore: BlockDagStorage: SafetyOracle](
     faultToleranceThreshold: Float
@@ -25,7 +25,7 @@ final class LastFinalizedBlockCalculator[F[_]: Sync: Log: Concurrent: BlockStore
                             )
       newFinalizedBlock <- maybeFinalizedChild match {
                             case Some(finalizedChild) =>
-                              removeDeploysInFinalizedBlock(finalizedChild) *> run(
+                              removeDeploysInFinalizedBlock(finalizedChild) >> run(
                                 dag,
                                 finalizedChild
                               )
