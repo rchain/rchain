@@ -126,9 +126,8 @@ object EstimatorHelper {
 
       ancestorCommChannels = commEvents
         .filterNot(isVolatile(_, consumeEvents, produceEvents))
-        .flatMap {
-          case COMM(consume: Consume, produces, _) =>
-            consume.channelsHashes ++ produces.map(_.channelsHash)
+        .flatMap { comm =>
+          comm.consume.channelsHashes ++ comm.produces.map(_.channelsHash)
         }
         .toSet
 
