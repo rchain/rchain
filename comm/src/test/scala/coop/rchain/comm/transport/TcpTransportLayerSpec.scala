@@ -79,7 +79,8 @@ class TcpTransportLayerSpec
         maxMessageSize,
         maxStreamMessageSize,
         tempFolder,
-        4
+        4,
+        false
       )
     }
 }

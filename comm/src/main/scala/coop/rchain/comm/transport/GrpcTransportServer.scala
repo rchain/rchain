@@ -6,16 +6,14 @@ import java.util.concurrent.atomic.AtomicReference
 
 import scala.io.Source
 import scala.util.{Left, Right}
-
 import cats.implicits._
-
+import coop.rchain.catscontrib.TaskContrib
 import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.comm.protocol.routing.Protocol
 import coop.rchain.comm.rp.Connect.RPConfAsk
 import coop.rchain.comm.CommMetricsSource
 import coop.rchain.metrics.Metrics
 import coop.rchain.shared._
-
 import io.grpc.netty.GrpcSslContexts
 import io.netty.handler.ssl._
 import monix.eval.Task
@@ -36,7 +34,8 @@ class GrpcTransportServer(
     maxMessageSize: Int,
     maxStreamMessageSize: Long,
     tempFolder: Path,
-    parallelism: Int
+    parallelism: Int,
+    tracing: Boolean
 )(
     implicit scheduler: Scheduler,
     rPConfAsk: RPConfAsk[Task],
@@ -80,14 +79,18 @@ class GrpcTransportServer(
   ): Task[Cancelable] = {
 
     val dispatchSend: Send => Task[Unit] =
-      s => dispatch(s.msg).attemptAndLog >> metrics.incrementCounter("dispatched.messages")
+      s =>
+        dispatch(s.msg)
+          .executeWithOptions(TaskContrib.enableTracing(tracing))
+          .attemptAndLog >> metrics.incrementCounter("dispatched.messages")
 
     val dispatchBlob: StreamMessage => Task[Unit] =
       msg =>
         (StreamHandler.restore(msg) >>= {
           case Left(ex) =>
             Log[Task].error("Could not restore data from file while handling stream", ex)
-          case Right(blob) => handleStreamed(blob)
+          case Right(blob) =>
+            handleStreamed(blob).executeWithOptions(TaskContrib.enableTracing(tracing))
         }) >> metrics.incrementCounter("dispatched.packets")
 
     for {
@@ -125,7 +128,8 @@ object GrpcTransportServer {
       maxMessageSize: Int,
       maxStreamMessageSize: Long,
       folder: Path,
-      parallelism: Int
+      parallelism: Int,
+      tracing: Boolean
   )(
       implicit scheduler: Scheduler,
       rPConfAsk: RPConfAsk[Task],
@@ -143,7 +147,8 @@ object GrpcTransportServer {
         maxMessageSize,
         maxStreamMessageSize,
         folder,
-        parallelism
+        parallelism,
+        tracing
       )
     )
   }
