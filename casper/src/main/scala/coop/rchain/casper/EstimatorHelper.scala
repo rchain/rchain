@@ -75,21 +75,6 @@ object EstimatorHelper {
         } yield conflicts
     }
 
-  val extractProduce: Event => Option[Produce] = {
-    case produce: Produce => Some(produce)
-    case _                => None
-  }
-
-  val extractConsume: Event => Option[Consume] = {
-    case consume: Consume => Some(consume)
-    case _                => None
-  }
-
-  val extractComm: Event => Option[COMM] = {
-    case commEvent: COMM => Some(commEvent)
-    case _               => None
-  }
-
   private def isVolatile(comm: COMM, consumes: Seq[Consume], produces: Seq[Produce]) =
     !comm.consume.persistent && consumes.contains(comm.consume) && comm.produces.forall(
       produce => !produce.persistent && produces.contains(produce)
@@ -107,9 +92,9 @@ object EstimatorHelper {
         ancestors.flatMap(_.getBody.deploys.flatMap(_.paymentLog)))
         .map(EventConverter.toRspaceEvent)
 
-      produceEvents = ancestorEvents.map(extractProduce).flatten
-      consumeEvents = ancestorEvents.map(extractConsume).flatten
-      commEvents    = ancestorEvents.map(extractComm).flatten
+      produceEvents = ancestorEvents.collect { case p: Produce => p }
+      consumeEvents = ancestorEvents.collect { case c: Consume => c }
+      commEvents    = ancestorEvents.collect { case c: COMM    => c }
 
       producesInCommEvents = commEvents.flatMap(_.produces)
       consumeInCommEvents  = commEvents.map(_.consume)
