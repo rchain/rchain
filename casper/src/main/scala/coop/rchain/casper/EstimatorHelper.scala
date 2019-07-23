@@ -116,12 +116,12 @@ object EstimatorHelper {
 
       ancestorProduceChannels = produceEvents
         .filterNot(producesInCommEvents.contains(_))
-        .map(p => p.channelsHash)
+        .map(_.channelsHash)
         .toSet
 
       ancestorConsumeChannels = consumeEvents
         .filterNot(consumeInCommEvents.contains(_))
-        .flatMap(c => c.channelsHashes)
+        .flatMap(_.channelsHashes)
         .toSet
 
       ancestorCommChannels = commEvents
