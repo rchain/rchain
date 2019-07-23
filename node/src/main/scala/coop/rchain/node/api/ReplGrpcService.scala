@@ -40,7 +40,7 @@ import storage.StoragePrinter
 private[api] class ReplGrpcService(runtime: Runtime[Task], worker: Scheduler)
     extends ReplGrpcMonix.Repl {
 
-  def exec(source: String): Task[ReplResponse] =
+  def exec(source: String, printUnmatchedSendsOnly: Boolean = false): Task[ReplResponse] =
     ParBuilder[Task]
       .buildNormalizedTerm(source, NormalizerEnv.Empty)
       .attempt
@@ -57,6 +57,9 @@ private[api] class ReplGrpcService(runtime: Runtime[Task], worker: Scheduler)
               implicit val c = runtime.cost
               Interpreter[Task].evaluate(runtime, source, NormalizerEnv.Empty)
             }
+            prettyStorage <- if (printUnmatchedSendsOnly)
+                              StoragePrinter.prettyPrintUnmatchedSends(runtime.space)
+                            else StoragePrinter.prettyPrint(runtime.space)
             EvaluateResult(cost, errors) = res
           } yield {
             val errorStr =
@@ -67,10 +70,8 @@ private[api] class ReplGrpcService(runtime: Runtime[Task], worker: Scheduler)
                   .map(_.toString())
                   .mkString("Errors received during evaluation:\n", "\n", "\n")
             s"Deployment cost: $cost\n" +
-              s"${errorStr}Storage Contents:\n ${StoragePrinter.prettyPrint(runtime.space)}"
-
+              s"${errorStr}Storage Contents:\n$prettyStorage"
           }
-
       }
       .map(ReplResponse(_))
 
@@ -81,7 +82,7 @@ private[api] class ReplGrpcService(runtime: Runtime[Task], worker: Scheduler)
     defer(exec(request.line))
 
   def eval(request: EvalRequest): Task[ReplResponse] =
-    defer(exec(request.program))
+    defer(exec(request.program, request.printUnmatchedSendsOnly))
 
   private def printNormalizedTerm(normalizedTerm: Par): Unit = {
     Console.println("\nEvaluating:")

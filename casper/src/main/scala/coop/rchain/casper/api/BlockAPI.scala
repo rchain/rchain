@@ -21,6 +21,7 @@ import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.Par
 import coop.rchain.models.rholang.sorter.Sortable._
 import coop.rchain.models.serialization.implicits.mkProtobufInstance
+import coop.rchain.rholang.interpreter.storage.StoragePrinter
 import coop.rchain.rspace.StableHashProvider
 import coop.rchain.rspace.trace._
 import coop.rchain.shared.Log
@@ -65,7 +66,8 @@ object BlockAPI {
   }
 
   def createBlock[F[_]: Sync: Concurrent: MultiParentCasperRef: Log: Span](
-      blockApiLock: Semaphore[F]
+      blockApiLock: Semaphore[F],
+      printUnmatchedSends: Boolean = false
   ): Effect[F, DeployServiceResponse] = Span[F].trace(CreateBlockSource) {
     val errorMessage = "Could not create block, casper instance was not available yet."
     MultiParentCasperRef.withCasper[F, ApiErr[DeployServiceResponse]](
@@ -79,8 +81,12 @@ object BlockAPI {
                            s"Error while creating block: $err".asLeft[DeployServiceResponse].pure[F]
                          case Created(block) =>
                            casper
-                             .addBlock(block, ignoreDoppelgangerCheck[F])
-                             .map(addResponse(_, block))
+                             .addBlock(block, ignoreDoppelgangerCheck[F]) >>= (addResponse(
+                             _,
+                             block,
+                             casper,
+                             printUnmatchedSends
+                           ))
                        }
             } yield result
           case false =>
@@ -565,21 +571,42 @@ object BlockAPI {
       case None             => none[BlockMessage]
     }
 
-  private def addResponse(
+  private def addResponse[F[_]: Concurrent](
       status: BlockStatus,
-      block: BlockMessage
-  ): ApiErr[DeployServiceResponse] =
+      block: BlockMessage,
+      casper: MultiParentCasper[F],
+      printUnmatchedSends: Boolean
+  ): Effect[F, DeployServiceResponse] =
     status match {
       case _: InvalidBlock =>
-        s"Failure! Invalid block: $status".asLeft
+        s"Failure! Invalid block: $status".asLeft[DeployServiceResponse].pure[F]
       case _: ValidBlock =>
-        val hash = PrettyPrinter.buildString(block.blockHash)
-        DeployServiceResponse(s"Success! Block $hash created and added.").asRight
+        val hash    = PrettyPrinter.buildString(block.blockHash)
+        val deploys = block.body.get.deploys.map(_.deploy.get)
+        val maybeUnmatchedSendsOutputF =
+          if (printUnmatchedSends) prettyPrintUnmatchedSends(casper, deploys).map(_.some)
+          else none[String].pure[F]
+        maybeUnmatchedSendsOutputF >>= (
+            maybeOutput =>
+              DeployServiceResponse(
+                s"Success! Block $hash created and added.${maybeOutput.map("\n" + _).getOrElse("")}"
+              ).asRight[Error].pure[F]
+          )
       case BlockException(ex) =>
-        s"Error during block processing: $ex".asLeft
+        s"Error during block processing: $ex".asLeft[DeployServiceResponse].pure[F]
       case Processing =>
-        "No action taken since other thread is already processing the block.".asLeft
+        "No action taken since other thread is already processing the block."
+          .asLeft[DeployServiceResponse]
+          .pure[F]
     }
+
+  private def prettyPrintUnmatchedSends[F[_]: Concurrent](
+      casper: MultiParentCasper[F],
+      deploys: Seq[DeployData]
+  ): F[String] =
+    casper.getRuntimeManager >>= (
+      _.withRuntimeLock(runtime => StoragePrinter.prettyPrintUnmatchedSends(deploys, runtime))
+    )
 
   def previewPrivateNames[F[_]: Monad: Log](
       deployer: ByteString,

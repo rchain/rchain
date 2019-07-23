@@ -8,12 +8,11 @@ import scala.util.Either
 import coop.rchain.casper.protocol._
 import coop.rchain.models.either.implicits._
 
-import com.google.protobuf.empty.Empty
 import io.grpc.{ManagedChannel, ManagedChannelBuilder}
 import monix.eval.Task
 
 trait ProposeService[F[_]] {
-  def propose(): F[Either[Seq[String], String]]
+  def propose(printUnmatchedSends: Boolean): F[Either[Seq[String], String]]
 }
 
 object ProposeService {
@@ -33,8 +32,10 @@ class GrpcProposeService(host: String, port: Int, maxMessageSize: Int)
 
   private val stub = ProposeServiceGrpcMonix.stub(channel)
 
-  def propose(): Task[Either[Seq[String], String]] =
-    stub.propose(Empty()).map(_.toEither[DeployServiceResponse].map(_.message))
+  def propose(printUnmatchedSends: Boolean): Task[Either[Seq[String], String]] =
+    stub
+      .propose(PrintUnmatchedSendsQuery(printUnmatchedSends))
+      .map(_.toEither[DeployServiceResponse].map(_.message))
 
   @SuppressWarnings(Array("org.wartremover.warts.NonUnitStatements"))
   override def close(): Unit = {

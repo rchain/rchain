@@ -53,7 +53,10 @@ class ReplRuntime() {
     }
   }
 
-  def evalProgram[F[_]: Monad: ReplClient: ConsoleIO](fileNames: List[String]): F[Unit] = {
+  def evalProgram[F[_]: Monad: ReplClient: ConsoleIO](
+      fileNames: List[String],
+      printUnmatchedSendsOnly: Boolean
+  ): F[Unit] = {
     def printResult(result: Either[Throwable, String]): F[Unit] =
       result match {
         case Left(ex)   => ConsoleIO[F].println(s"Error: ${ex.getMessage}".red)
@@ -72,7 +75,7 @@ class ReplRuntime() {
 
     for {
       _   <- ConsoleIO[F].println(s"Evaluating from ${fileNames.mkString(", ")}")
-      res <- ReplClient[F].eval(fileNames)
+      res <- ReplClient[F].eval(fileNames, printUnmatchedSendsOnly)
       _   <- printResults(fileNames.zip(res))
     } yield ()
   }

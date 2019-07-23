@@ -413,7 +413,11 @@ lazy val rholang = (project in file("rholang"))
 lazy val rholangCLI = (project in file("rholang-cli"))
   .settings(commonSettings: _*)
   .settings(
-    mainClass in assembly := Some("coop.rchain.rholang.interpreter.RholangCLI")
+    mainClass in assembly := Some("coop.rchain.rholang.interpreter.RholangCLI"),
+    assemblyMergeStrategy in assembly := {
+      case path if path.endsWith("module-info.class") => MergeStrategy.discard
+      case path                                       => MergeStrategy.defaultMergeStrategy(path)
+    }
   )
   .dependsOn(rholang)
 

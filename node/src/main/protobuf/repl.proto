@@ -13,6 +13,7 @@ message CmdRequest {
 
 message EvalRequest {
   string program = 1;
+  bool printUnmatchedSendsOnly = 2;
 }
 
 message ReplResponse {

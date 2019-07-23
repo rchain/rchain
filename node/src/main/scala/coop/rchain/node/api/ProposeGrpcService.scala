@@ -15,7 +15,6 @@ import coop.rchain.either.{Either => GrpcEither}
 import coop.rchain.models.StacksafeMessage
 import coop.rchain.models.either.implicits._
 import coop.rchain.shared._
-import com.google.protobuf.empty.Empty
 import coop.rchain.metrics.Span
 import monix.eval.Task
 import monix.execution.Scheduler
@@ -40,7 +39,7 @@ private[api] object ProposeGrpcService {
           .attempt
           .map(_.fold(_.asLeft[A].toGrpcEither, _.toGrpcEither))
 
-      override def propose(e: Empty): Task[GrpcEither] =
-        defer(BlockAPI.createBlock[F](blockApiLock))
+      override def propose(query: PrintUnmatchedSendsQuery): Task[GrpcEither] =
+        defer(BlockAPI.createBlock[F](blockApiLock, query.printUnmatchedSends))
     }
 }

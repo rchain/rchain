@@ -199,7 +199,8 @@ object Configuration {
 
   private def subcommand(options: commandline.Options): Command =
     options.subcommand match {
-      case Some(options.eval)   => Eval(options.eval.fileNames())
+      case Some(options.eval) =>
+        Eval(options.eval.fileNames(), options.eval.printUnmatchedSendsOnly())
       case Some(options.repl)   => Repl
       case Some(options.deploy) =>
         //TODO: change the defaults before main net
@@ -213,7 +214,7 @@ object Configuration {
           location()
         )
       case Some(options.findDeploy) => FindDeploy(options.findDeploy.deployId())
-      case Some(options.propose)    => Propose
+      case Some(options.propose)    => Propose(options.propose.printUnmatchedSends())
       case Some(options.showBlock)  => ShowBlock(options.showBlock.hash())
       case Some(options.showBlocks) =>
         import options.showBlocks._
