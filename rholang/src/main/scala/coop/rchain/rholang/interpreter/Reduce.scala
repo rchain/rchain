@@ -149,6 +149,12 @@ class DebruijnInterpreter[M[_], F[_]](
     ) >>= (go(_))
   }
 
+  private def reportErrors(process: M[Unit]): M[Unit] =
+    process.handleErrorWith {
+      case e @ OutOfPhlogistonsError => e.raiseError[M, Unit]
+      case e                         => fTell.tell(e)
+    }
+
   private trait EvalJob {
     def run(mkRand: Int => Blake2b512Random)(
         env: Env[Par],
@@ -186,15 +192,19 @@ class DebruijnInterpreter[M[_], F[_]](
       ): M[Unit] =
         expr.exprInstance match {
           case EVarBody(EVar(v)) =>
-            (for {
-              varref <- eval(v)(env)
-              _      <- eval(varref)(env, rand, sequenceNumber)
-            } yield ()).handleErrorWith(fTell.tell)
+            reportErrors {
+              for {
+                varref <- eval(v)(env)
+                _      <- eval(varref)(env, rand, sequenceNumber)
+              } yield ()
+            }
           case e: EMethodBody =>
-            (for {
-              p <- evalExprToPar(Expr(e))(env)
-              _ <- eval(p)(env, rand, sequenceNumber)
-            } yield ()).handleErrorWith(fTell.tell)
+            reportErrors {
+              for {
+                p <- evalExprToPar(Expr(e))(env)
+                _ <- eval(p)(env, rand, sequenceNumber)
+              } yield ()
+            }
           case _ => ().pure[M]
         }
 
@@ -205,20 +215,8 @@ class DebruijnInterpreter[M[_], F[_]](
         terms: Seq[A],
         handlerImpl: A => (Env[Par], Blake2b512Random, Int) => M[Unit]
     ): EvalJob = {
-      def handler(
-          term: A
-      )(
-          env: Env[Par],
-          rand: Blake2b512Random,
-          sequenceNumber: Int
-      ): M[Unit] =
-        handlerImpl(term)(env, rand, sequenceNumber)
-          .handleErrorWith {
-            case e: OutOfPhlogistonsError.type =>
-              e.raiseError[M, Unit]
-            case e =>
-              fTell.tell(e) >> ().pure[M]
-          }
+      def handler(term: A)(env: Env[Par], rand: Blake2b512Random, sequenceNumber: Int): M[Unit] =
+        reportErrors(handlerImpl(term)(env, rand, sequenceNumber))
 
       mkJob(terms, handler)
     }
