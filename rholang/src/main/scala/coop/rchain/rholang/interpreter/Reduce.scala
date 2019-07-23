@@ -149,17 +149,17 @@ class DebruijnInterpreter[M[_], F[_]](
     ) >>= (go(_))
   }
 
-  private def reportErrors(process: M[Unit]): M[Unit] =
-    process.handleErrorWith {
-      case e @ OutOfPhlogistonsError => e.raiseError[M, Unit]
-      case e                         => fTell.tell(e)
-    }
-
   override def eval(par: Par)(
       implicit env: Env[Par],
       rand: Blake2b512Random,
       sequenceNumber: Int
   ): M[Unit] = spanM.trace(parSpanLabel) {
+
+    def reportErrors(process: M[Unit]): M[Unit] =
+      process.handleErrorWith {
+        case e @ OutOfPhlogistonsError => e.raiseError[M, Unit]
+        case e                         => fTell.tell(e)
+      }
 
     val terms = Seq(
       par.sends,
