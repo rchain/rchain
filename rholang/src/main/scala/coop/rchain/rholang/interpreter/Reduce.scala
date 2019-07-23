@@ -161,21 +161,19 @@ class DebruijnInterpreter[M[_], F[_]](
       sequenceNumber: Int
   ): M[Unit] = spanM.trace(parSpanLabel) {
 
-    val filteredExprs = par.exprs.filter { expr =>
-      expr.exprInstance match {
-        case _: EVarBody    => true
-        case _: EMethodBody => true
-        case _              => false
-      }
-    }
-
     val terms = Seq(
       par.sends,
       par.receives,
       par.news,
       par.matches,
       par.bundles,
-      filteredExprs
+      par.exprs.filter { expr =>
+        expr.exprInstance match {
+          case _: EVarBody    => true
+          case _: EMethodBody => true
+          case _              => false
+        }
+      }
     ).filter(_.nonEmpty).flatten
 
     def split(id: Int): Blake2b512Random =
