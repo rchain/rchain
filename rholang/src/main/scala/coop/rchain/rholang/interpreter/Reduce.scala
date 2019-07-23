@@ -155,75 +155,6 @@ class DebruijnInterpreter[M[_], F[_]](
       case e                         => fTell.tell(e)
     }
 
-  private trait EvalJob {
-    def run(mkRand: Int => Blake2b512Random)(
-        env: Env[Par],
-        sequenceNumber: Int
-    ): M[Unit]
-    def size: Int
-  }
-
-  private object EvalJob {
-
-    private def mkJob[A](
-        input: Seq[A],
-        handler: A => (Env[Par], Blake2b512Random, Int) => M[Unit]
-    ): EvalJob =
-      new EvalJob {
-        override def run(mkRand: Int => Blake2b512Random)(
-            env: Env[Par],
-            sequenceNumber: Int
-        ): M[Unit] =
-          input.zipWithIndex.toList.parTraverse_ {
-            case (term, idx) =>
-              handler(term)(env, mkRand(idx), sequenceNumber)
-          }
-
-        override def size: Int = input.size
-      }
-
-    def apply(exprs: Seq[Expr]): EvalJob = {
-      def handler(
-          expr: Expr
-      )(
-          env: Env[Par],
-          rand: Blake2b512Random,
-          sequenceNumber: Int
-      ): M[Unit] =
-        expr.exprInstance match {
-          case EVarBody(EVar(v)) =>
-            reportErrors {
-              for {
-                varref <- eval(v)(env)
-                _      <- eval(varref)(env, rand, sequenceNumber)
-              } yield ()
-            }
-          case e: EMethodBody =>
-            reportErrors {
-              for {
-                p <- evalExprToPar(Expr(e))(env)
-                _ <- eval(p)(env, rand, sequenceNumber)
-              } yield ()
-            }
-          case _ => ().pure[M]
-        }
-
-      mkJob(exprs, handler)
-    }
-
-    def apply[A](
-        terms: Seq[A],
-        handlerImpl: A => (Env[Par], Blake2b512Random, Int) => M[Unit]
-    ): EvalJob = {
-      def handler(term: A)(env: Env[Par], rand: Blake2b512Random, sequenceNumber: Int): M[Unit] =
-        reportErrors(handlerImpl(term)(env, rand, sequenceNumber))
-
-      mkJob(terms, handler)
-    }
-
-  }
-
-  @SuppressWarnings(Array("org.wartremover.warts.NonUnitStatements"))
   override def eval(par: Par)(
       implicit env: Env[Par],
       rand: Blake2b512Random,
@@ -237,15 +168,6 @@ class DebruijnInterpreter[M[_], F[_]](
         case _              => false
       }
     }
-
-    List(
-      EvalJob[Send](par.sends, evalExplicit),
-      EvalJob[Receive](par.receives, evalExplicit),
-      EvalJob[New](par.news, evalExplicit),
-      EvalJob[Match](par.matches, evalExplicit),
-      EvalJob[Bundle](par.bundles, evalExplicit),
-      EvalJob(filteredExprs)
-    ).filter(_.size > 0)
 
     val terms = Seq(
       par.sends,
@@ -286,15 +208,6 @@ class DebruijnInterpreter[M[_], F[_]](
   )(implicit rand: Blake2b512Random): M[Unit] =
     spanM.trace(injectSpanLabel)(eval(par)(Env[Par](), rand, 0))
 
-  private def evalExplicit(
-      send: Send
-  )(
-      env: Env[Par],
-      rand: Blake2b512Random,
-      sequenceNumber: Int
-  ): M[Unit] =
-    eval(send)(env, rand, sequenceNumber)
-
   /** Algorithm as follows:
     *
     * 1. Fully evaluate the channel in given environment.
@@ -330,15 +243,6 @@ class DebruijnInterpreter[M[_], F[_]](
         _         <- charge[M](SEND_EVAL_COST)
       } yield ()
     }
-
-  private def evalExplicit(
-      receive: Receive
-  )(
-      env: Env[Par],
-      rand: Blake2b512Random,
-      sequenceNumber: Int
-  ): M[Unit] =
-    eval(receive)(env, rand, sequenceNumber)
 
   private def eval(receive: Receive)(
       implicit env: Env[Par],
@@ -406,15 +310,6 @@ class DebruijnInterpreter[M[_], F[_]](
       }
     }
 
-  private def evalExplicit(
-      mat: Match
-  )(
-      env: Env[Par],
-      rand: Blake2b512Random,
-      sequenceNumber: Int
-  ): M[Unit] =
-    eval(mat)(env, rand, sequenceNumber)
-
   private def eval(mat: Match)(
       implicit env: Env[Par],
       rand: Blake2b512Random,
@@ -475,11 +370,6 @@ class DebruijnInterpreter[M[_], F[_]](
     * @param neu
     * @return
     */
-  private def evalExplicit(
-      neu: New
-  )(env: Env[Par], rand: Blake2b512Random, sequenceNumber: Int): M[Unit] =
-    eval(neu)(env, rand, sequenceNumber)
-
   // TODO: Eliminate variable shadowing
   private def eval(
       neu: New
@@ -538,11 +428,6 @@ class DebruijnInterpreter[M[_], F[_]](
                  case None => subst.pure[M]
                }
     } yield unbndl
-
-  private def evalExplicit(
-      bundle: Bundle
-  )(env: Env[Par], rand: Blake2b512Random, sequenceNumber: Int): M[Unit] =
-    eval(bundle)(env, rand, sequenceNumber)
 
   private def eval(
       bundle: Bundle
