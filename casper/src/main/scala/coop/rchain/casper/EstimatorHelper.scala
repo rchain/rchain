@@ -4,12 +4,12 @@ import cats.Monad
 import cats.implicits._
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.{BlockDagRepresentation, BlockStore}
-import coop.rchain.casper.protocol.Event.EventInstance.{Comm, Consume, Produce}
-import coop.rchain.casper.protocol._
-import coop.rchain.casper.util.{DagOperations, ProtoUtil}
+import coop.rchain.casper.protocol.{Event => CasperEvent, _}
+import coop.rchain.casper.util.{DagOperations, EventConverter, ProtoUtil}
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.BlockMetadata
 import coop.rchain.shared.Log
+import coop.rchain.rspace.trace._
 
 import scala.collection.BitSet
 
@@ -75,22 +75,21 @@ object EstimatorHelper {
         } yield conflicts
     }
 
-  val extractProduce: Event => Option[ProduceEvent] = {
-    case Event(Produce(produce: ProduceEvent)) => Some(produce)
-    case _                                     => None
+  val extractProduce: Event => Option[Produce] = {
+    case produce: Produce => Some(produce)
+    case _                => None
   }
 
-  val extractConsume: Event => Option[ConsumeEvent] = {
-    case Event(Consume(consume: ConsumeEvent)) => Some(consume)
-    case _                                     => None
+  val extractConsume: Event => Option[Consume] = {
+    case consume: Consume => Some(consume)
+    case _                => None
   }
 
-  val extractComm: Event => Option[CommEvent] = {
-    case Event(Comm(commEvent: CommEvent)) => Some(commEvent)
-    case _                                 => None
+  val extractComm: Event => Option[COMM] = {
+    case commEvent: COMM => Some(commEvent)
+    case _               => None
   }
 
-  @SuppressWarnings(Array("org.wartremover.warts.Throw"))
   private def buildBlockAncestorChannels[F[_]: Monad: BlockStore](
       blockAncestorsMeta: List[BlockMetadata]
   ): F[Set[ByteString]] =
@@ -99,15 +98,16 @@ object EstimatorHelper {
                          blockAncestorMeta => BlockStore[F].get(blockAncestorMeta.blockHash)
                        )
       ancestors = maybeAncestors.flatten
-      ancestorEvents = ancestors.flatMap(_.getBody.deploys.flatMap(_.deployLog)) ++
-        ancestors.flatMap(_.getBody.deploys.flatMap(_.paymentLog))
+      ancestorEvents = (ancestors.flatMap(_.getBody.deploys.flatMap(_.deployLog)) ++
+        ancestors.flatMap(_.getBody.deploys.flatMap(_.paymentLog)))
+        .map(EventConverter.toRspaceEvent)
 
       produceEvents = ancestorEvents.map(extractProduce).flatten
       consumeEvents = ancestorEvents.map(extractConsume).flatten
       commEvents    = ancestorEvents.map(extractComm).flatten
 
       producesInCommEvents = commEvents.flatMap(_.produces)
-      consumeInCommEvents  = commEvents.flatMap(_.consume)
+      consumeInCommEvents  = commEvents.map(_.consume)
 
       ancestorProduceChannels = produceEvents
         .filterNot(producesInCommEvents.contains(_))
@@ -121,20 +121,18 @@ object EstimatorHelper {
 
       ancestorCommChannels = commEvents
         .filterNot {
-          case CommEvent(Some(consume: ConsumeEvent), produces) =>
+          case COMM(consume: Consume, produces, _) =>
             !consume.persistent && consumeEvents.contains(consume) && produces.forall(
               produce => !produce.persistent && produceEvents.contains(produce)
             )
-          case _ => false
         }
         .flatMap {
-          case CommEvent(Some(consume: ConsumeEvent), produces) =>
+          case COMM(consume: Consume, produces, _) =>
             consume.channelsHashes ++ produces.map(_.channelsHash)
-          case e @ CommEvent(None, _) =>
-            throw new RuntimeException(s"Unexpected comm event $e")
         }
         .toSet
 
       ancestorChannels = ancestorProduceChannels ++ ancestorConsumeChannels ++ ancestorCommChannels
-    } yield ancestorChannels
+      res              = ancestorChannels.map(_.toByteString)
+    } yield res
 }

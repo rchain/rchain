@@ -34,6 +34,7 @@ class EstimatorHelperTest
 
   val genesisContext = GenesisBuilder.buildGenesis()
   val genesis        = genesisContext.genesisBlock
+  val channelsHash   = "Abc45678123dsbnxmajq124jdkamsk23"
 
   /*
    * DAG Looks like this:
@@ -91,14 +92,18 @@ class EstimatorHelperTest
   it should "conflict if their deploys contain same channel in deployLog" in withStorage {
     implicit blockStore => implicit blockDagStorage =>
       testConflict[Task] { deploy =>
-        deploy.copy(deployLog = Seq(produce(ByteString.copyFromUtf8("A"))))
+        deploy.copy(
+          deployLog = Seq(
+            produce(ByteString.copyFromUtf8(channelsHash))
+          )
+        )
       }
   }
 
   it should "conflict if their deploys contain same channel in paymentLog" in withStorage {
     implicit blockStore => implicit blockDagStorage =>
       testConflict[Task] { deploy =>
-        deploy.copy(paymentLog = Seq(produce(ByteString.copyFromUtf8("A"))))
+        deploy.copy(paymentLog = Seq(produce(ByteString.copyFromUtf8(channelsHash))))
       }
   }
 
@@ -121,7 +126,10 @@ class EstimatorHelperTest
   private def produce(channelsHash: ByteString) =
     Event(
       Produce(
-        ProduceEvent(channelsHash)
+        ProduceEvent(
+          channelsHash,
+          hash = ByteString.copyFromUtf8("Asdfg753213fdsadfueias9fje35mv43")
+        )
       )
     )
 }
