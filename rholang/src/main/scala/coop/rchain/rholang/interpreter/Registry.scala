@@ -13,17 +13,13 @@ import coop.rchain.models.Var.VarInstance.FreeVar
 import coop.rchain.models._
 import coop.rchain.models.rholang.implicits._
 import coop.rchain.rholang.interpreter.Runtime.BodyRefs
-import coop.rchain.rholang.interpreter.storage.implicits._
 import coop.rchain.rspace.util._
 import coop.rchain.shared.Matcher.WithPrefix
 import org.lightningj.util.ZBase32
 
 import scala.annotation.tailrec
-import scala.collection.immutable.HashMap
 import scala.collection.{Seq => RootSeq}
-import scala.concurrent.Await
-import scala.concurrent.duration._
-import scala.util.{Failure, Success, Try}
+import scala.util.Try
 
 /**
   * Registry implements a radix tree for public lookup of one-sided bundles.
@@ -392,7 +388,7 @@ class RegistryImpl[F[_]](
             ps(0).singleExpr() match {
               case Some(Expr(GInt(0))) =>
                 if (tail == edgeAdditional)
-                  replace(data, replaceChan, dataRand, sequenceNumber) *> succeed(
+                  replace(data, replaceChan, dataRand, sequenceNumber) >> succeed(
                     ps(2),
                     ret,
                     callRand,
@@ -404,7 +400,7 @@ class RegistryImpl[F[_]](
                 if (tail.startsWith(edgeAdditional)) {
                   val newKey = tail.substring(edgeAdditional.size)
 
-                  replace(data, replaceChan, dataRand, sequenceNumber) *> fetchDataLookup(
+                  replace(data, replaceChan, dataRand, sequenceNumber) >> fetchDataLookup(
                     ps(2),
                     parByteArray(newKey),
                     ret,
@@ -529,7 +525,7 @@ class RegistryImpl[F[_]](
                     if (tail.startsWith(edgeAdditional)) {
                       val newKey = tail.substring(edgeAdditional.size)
 
-                      replace(data, replaceChan, dataRand, sequenceNumber) *>
+                      replace(data, replaceChan, dataRand, sequenceNumber) >>
                         recurse(
                           ps(2),
                           parByteArray(newKey),
@@ -587,7 +583,7 @@ class RegistryImpl[F[_]](
               case Some(Expr(GInt(0))) =>
                 if (tail == edgeAdditional) {
                   val updatedMap: Par = ParMap(parMap.ps - parByteArray(head))
-                  replace(updatedMap, replaceChan, dataRand, sequenceNumber) *> succeed(
+                  replace(updatedMap, replaceChan, dataRand, sequenceNumber) >> succeed(
                     ps(2),
                     ret,
                     callRand,
@@ -634,7 +630,7 @@ class RegistryImpl[F[_]](
           ListParWithRandom(Seq(data), dataRand)
           ) =>
         def localFail() =
-          replace(parentData, parentReplace, parentRand, sequenceNumber) *> failAndReplace(
+          replace(parentData, parentReplace, parentRand, sequenceNumber) >> failAndReplace(
             data,
             replaceChan,
             ret,

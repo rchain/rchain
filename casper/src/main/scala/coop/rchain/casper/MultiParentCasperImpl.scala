@@ -1,9 +1,6 @@
 package coop.rchain.casper
 
 import cats._
-import coop.rchain.catscontrib.{BooleanF, Catscontrib}
-import BooleanF._
-import Catscontrib._
 import cats.effect.concurrent.{Ref, Semaphore}
 import cats.effect.{Concurrent, Sync}
 import cats.implicits._
@@ -11,9 +8,8 @@ import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.{BlockDagRepresentation, BlockDagStorage, BlockStore}
 import coop.rchain.casper.CasperState.CasperStateCell
 import coop.rchain.casper.DeployError._
-import coop.rchain.casper.protocol._
 import coop.rchain.casper.engine.Running
-import coop.rchain.casper.util.ConstructDeploy.{defaultSec, sourceDeploy}
+import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.ProtoUtil._
 import coop.rchain.casper.util._
 import coop.rchain.casper.util.comm.CommUtil
@@ -23,12 +19,11 @@ import coop.rchain.catscontrib.BooleanF._
 import coop.rchain.catscontrib.ski._
 import coop.rchain.comm.rp.Connect.{ConnectionsCell, RPConfAsk}
 import coop.rchain.comm.transport.TransportLayer
-import coop.rchain.crypto.codec.Base16
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.EquivocationRecord
 import coop.rchain.models.Validator.Validator
-import coop.rchain.rholang.interpreter.{accounting, NormalizerEnv}
+import coop.rchain.rholang.interpreter.NormalizerEnv
 import coop.rchain.shared._
 
 /**
@@ -348,7 +343,7 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: ConnectionsCell: TransportLa
       case MissingBlocks =>
         Cell[F, CasperState].modify { s =>
           s.copy(blockBuffer = s.blockBuffer + block.blockHash)
-        } *> fetchMissingDependencies(block) *> dag.pure[F]
+        } >> fetchMissingDependencies(block) >> dag.pure[F]
       case AdmissibleEquivocation =>
         val baseEquivocationBlockSeqNum = block.seqNum - 1
         for {
@@ -426,7 +421,7 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: ConnectionsCell: TransportLa
         )
       case BlockException(ex) =>
         Log[F].error(s"Encountered exception in while processing block ${PrettyPrinter
-          .buildString(block.blockHash)}: ${ex.getMessage}") *> dag.pure[F]
+          .buildString(block.blockHash)}: ${ex.getMessage}") >> dag.pure[F]
     }
 
   private def fetchMissingDependencies(

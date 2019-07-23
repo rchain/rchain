@@ -30,7 +30,7 @@ object Substitute {
           substTerm => (Right(substTerm), Cost(substTerm, "substitution"))
         )
       )
-      .flatMap({ case (result, cost) => accounting.charge[M](cost) *> Sync[M].pure(result) })
+      .flatMap({ case (result, cost) => accounting.charge[M](cost) >> Sync[M].pure(result) })
       .rethrow
 
   def substituteAndCharge[A: Chargeable, M[_]: _cost: _error: Substitute[?[_], A]: Sync](

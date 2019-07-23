@@ -46,12 +46,12 @@ class MatcherMonadSpec extends FlatSpec with Matchers {
   it should "charge for each non-deterministic branch" in {
     val possibleResults = Stream((0, 1), (0, 2))
     val computation     = Alternative[F].unite(possibleResults.pure[F])
-    val sum             = computation.map { case (x, y) => x + y } <* charge[F](Cost(1))
+    val sum             = computation.map { case (x, y) => x + y } >>= (charge[F](Cost(1)).as(_))
     val (phloLeft, _)   = runWithCost(runMatcher(sum), possibleResults.size)
     assert(phloLeft.value == 0)
 
     val moreVariants    = sum.flatMap(x => Alternative[F].unite(Stream(x, 0, -x).pure[F]))
-    val moreComputation = moreVariants.map(x => "Do sth with " + x) <* charge[F](Cost(1))
+    val moreComputation = moreVariants.map(x => "Do sth with " + x) >>= (charge[F](Cost(1)).as(_))
     val (phloLeft2, _) =
       runWithCost(runMatcher(moreComputation), possibleResults.size * 3 + possibleResults.size)
     assert(phloLeft2.value == 0)

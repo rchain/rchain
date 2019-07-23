@@ -4,23 +4,21 @@ import java.nio.ByteBuffer
 import java.nio.file._
 
 import cats.Monad
+import cats.effect.concurrent.Semaphore
 import cats.effect.{Concurrent, Sync}
 import cats.implicits._
-import cats.effect.concurrent.Semaphore
 import cats.mtl.MonadState
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.FileLMDBIndexBlockStore.Checkpoint
 import coop.rchain.blockstorage.StorageError.StorageErr
-import coop.rchain.casper.protocol.{ApprovedBlock, BlockMessage}
-import coop.rchain.shared.Resources.withResource
 import coop.rchain.blockstorage.util.byteOps._
 import coop.rchain.blockstorage.util.io.IOError.RaiseIOError
-import coop.rchain.blockstorage.util.io._
-import coop.rchain.blockstorage.util.io.IOError
+import coop.rchain.blockstorage.util.io.{IOError, _}
+import coop.rchain.casper.protocol.{ApprovedBlock, BlockMessage}
 import coop.rchain.models.BlockHash.BlockHash
-import coop.rchain.shared.{AtomicMonadState, Log}
 import coop.rchain.shared.ByteStringOps._
 import coop.rchain.shared.Language.ignore
+import coop.rchain.shared.{AtomicMonadState, Log}
 import monix.execution.atomic.AtomicAny
 import org.lmdbjava.DbiFlags.MDB_CREATE
 import org.lmdbjava._
@@ -253,7 +251,7 @@ object FileLMDBIndexBlockStore {
                           List(Checkpoint(index.toInt, filePath)).pure[F]
                         case other =>
                           Log[F]
-                            .warn(s"Ignoring directory '$other': not a valid checkpoint name") *>
+                            .warn(s"Ignoring directory '$other': not a valid checkpoint name") >>
                             List.empty[Checkpoint].pure[F]
                       }
                     }

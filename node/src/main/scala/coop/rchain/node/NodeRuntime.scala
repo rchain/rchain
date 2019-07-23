@@ -2,19 +2,18 @@ package coop.rchain.node
 
 import java.nio.file.{Files, Path}
 
-import scala.concurrent.duration._
 import cats._
 import cats.effect._
 import cats.effect.concurrent.Semaphore
 import cats.implicits._
-import coop.rchain.blockstorage._
-import coop.rchain.casper._
-import coop.rchain.casper.engine._
-import EngineCell._
-import CasperLaunch.CasperInit
 import cats.mtl.{ApplicativeLocal, DefaultApplicativeLocal}
+import coop.rchain.blockstorage._
 import coop.rchain.blockstorage.util.io.IOError
 import coop.rchain.casper.MultiParentCasperRef.MultiParentCasperRef
+import coop.rchain.casper._
+import coop.rchain.casper.engine.CasperLaunch.CasperInit
+import coop.rchain.casper.engine.EngineCell._
+import coop.rchain.casper.engine._
 import coop.rchain.casper.util.comm.CasperPacketHandler
 import coop.rchain.casper.util.rholang.RuntimeManager
 import coop.rchain.catscontrib.Catscontrib._
@@ -22,8 +21,8 @@ import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.catscontrib.ski._
 import coop.rchain.comm._
 import coop.rchain.comm.discovery._
-import coop.rchain.comm.rp._
 import coop.rchain.comm.rp.Connect.{ConnectionsCell, RPConfAsk, RPConfState}
+import coop.rchain.comm.rp._
 import coop.rchain.comm.transport._
 import coop.rchain.grpc.Server
 import coop.rchain.metrics.{Metrics, Span}
@@ -33,14 +32,16 @@ import coop.rchain.node.diagnostics._
 import coop.rchain.p2p.effects._
 import coop.rchain.rholang.interpreter.Runtime
 import coop.rchain.rspace.Context
-import coop.rchain.shared._
 import coop.rchain.shared.PathOps._
+import coop.rchain.shared._
 import kamon._
 import kamon.system.SystemMetrics
 import kamon.zipkin.ZipkinReporter
 import monix.eval.{Task, TaskLocal}
 import monix.execution.Scheduler
 import org.http4s.server.blaze._
+
+import scala.concurrent.duration._
 
 @SuppressWarnings(Array("org.wartremover.warts.NonUnitStatements"))
 class NodeRuntime private[node] (
@@ -311,10 +312,10 @@ class NodeRuntime private[node] (
   private def handleUnrecoverableErrors(prog: Task[Unit]): Task[Unit] =
     prog
       .onErrorHandleWith { th =>
-        log.error("Caught unhandable error. Exiting. Stacktrace below.") *> Task.delay {
+        log.error("Caught unhandable error. Exiting. Stacktrace below.") >> Task.delay {
           th.printStackTrace()
         }
-      } *> exit0.as(Right(()))
+      } >> exit0.as(Right(()))
 
   private def localScope(source: Metrics.Source): Task[ApplicativeLocal[Task, Trace]] =
     TaskLocal[Trace](Trace.source(source))

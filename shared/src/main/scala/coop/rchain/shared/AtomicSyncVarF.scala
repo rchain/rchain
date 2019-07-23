@@ -1,7 +1,8 @@
 package coop.rchain.shared
 
-import cats.implicits._
 import cats.effect.Sync
+import cats.implicits._
+
 import scala.concurrent.SyncVar
 
 class AtomicSyncVarF[F[_], A] private (private val underlying: SyncVar[A]) {
@@ -17,7 +18,7 @@ class AtomicSyncVarF[F[_], A] private (private val underlying: SyncVar[A]) {
                    sync.delay { underlying.put(newValue) }.map(_ => b)
 
                  case Left(err) =>
-                   sync.delay { underlying.put(value) } *> sync.raiseError(err)
+                   sync.delay { underlying.put(value) } >> sync.raiseError(err)
                }
     } yield result
 

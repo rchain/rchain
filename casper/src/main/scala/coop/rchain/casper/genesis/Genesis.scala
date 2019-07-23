@@ -292,7 +292,7 @@ object Genesis {
       _ <- Foldable[List].foldM[F, (PublicKey, Long), Unit](bonds.toList, ()) {
             case (_, (pub, stake)) =>
               val pk = Base16.encode(pub.bytes)
-              Log[F].info(s"Created validator $pk with bond $stake") *>
+              Log[F].info(s"Created validator $pk with bond $stake") >>
                 Sync[F].delay { printer.println(s"$pk $stake") }
           }
       _ <- Sync[F].delay { printer.close() }

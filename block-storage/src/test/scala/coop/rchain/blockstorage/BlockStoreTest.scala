@@ -1,29 +1,27 @@
 package coop.rchain.blockstorage
 
-import java.nio.file.Paths
-
-import scala.language.higherKinds
 import cats._
-import cats.implicits._
-import com.google.protobuf.ByteString
-import coop.rchain.casper.protocol._
-import coop.rchain.rspace.Context
-import coop.rchain.shared.PathOps._
-import coop.rchain.models.blockImplicits.{blockBatchesGen, blockElementGen, blockElementsGen}
 import cats.effect.Sync
 import cats.effect.concurrent.Ref
+import cats.implicits._
+import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.InMemBlockStore.emptyMapRef
-import coop.rchain.metrics.Metrics
-import coop.rchain.metrics.Metrics.MetricsNOP
+import coop.rchain.casper.protocol._
 import coop.rchain.catscontrib.TaskContrib._
+import coop.rchain.metrics.Metrics.MetricsNOP
 import coop.rchain.models.BlockHash.BlockHash
+import coop.rchain.models.blockImplicits.{blockBatchesGen, blockElementsGen}
+import coop.rchain.rspace.Context
 import coop.rchain.shared.Log
+import coop.rchain.shared.PathOps._
 import monix.eval.Task
 import monix.execution.Scheduler
 import monix.execution.Scheduler.Implicits.global
 import org.scalactic.anyvals.PosInt
 import org.scalatest._
 import org.scalatest.prop.GeneratorDrivenPropertyChecks
+
+import scala.language.higherKinds
 
 trait BlockStoreTest
     extends FlatSpecLike
@@ -243,7 +241,7 @@ class FileLMDBIndexBlockStoreTest extends BlockStoreTest {
           _ <- blockStoreBatches.traverse_[Task, Unit](
                 blockStoreElements =>
                   blockStoreElements
-                    .traverse_[Task, Unit](firstStore.put) *> firstStore.checkpoint()
+                    .traverse_[Task, Unit](firstStore.put) >> firstStore.checkpoint()
               )
           _ <- blocks.traverse[Task, Assertion] { block =>
                 firstStore.get(block.blockHash).map(_ shouldBe Some(block))

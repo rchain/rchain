@@ -1,9 +1,9 @@
 package coop.rchain.blockstorage.util.io
 
-import java.io.{IOException, PrintWriter, StringWriter}
+import java.io.IOException
 
-import cats.implicits._
 import cats.effect.{ExitCase, Sync}
+import cats.implicits._
 import coop.rchain.blockstorage.util.io.IOError.RaiseIOError
 import coop.rchain.shared.Log
 import coop.rchain.shared.Resources.withResource
@@ -25,8 +25,8 @@ final case class LmdbDbi[F[_]: Sync: Log: RaiseIOError, T](
       }
     } {
       case (txn, ExitCase.Error(NonFatal(ex))) =>
-        Log[F].error("Could not process LMDB transaction", ex) *>
-          Sync[F].delay(txn.close()) *>
+        Log[F].error("Could not process LMDB transaction", ex) >>
+          Sync[F].delay(txn.close()) >>
           Sync[F].raiseError(ex)
       case (txn, _) => Sync[F].delay(txn.close())
     }

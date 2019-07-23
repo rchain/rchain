@@ -97,12 +97,12 @@ trait MaximumBipartiteMatch[P, T, R, F[_]] {
       result <- previousMatch match {
                  case None =>
                    //we're first, we claim a match
-                   claimMatch(candidate, pattern, result) *> pure(true)
+                   claimMatch(candidate, pattern, result) >> pure(true)
                  case Some(previousPattern) =>
                    //try to find a different match for the previous pattern
                    FlatMap[MBM].ifM(findMatch(previousPattern))(
                      //if found, we can match current pattern with this candidate despite it being taken
-                     claimMatch(candidate, pattern, result) *> pure(true),
+                     claimMatch(candidate, pattern, result) >> pure(true),
                      //else, current pattern can't be matched with this candidate given the current matches, try others
                      findMatch(pattern)
                    )

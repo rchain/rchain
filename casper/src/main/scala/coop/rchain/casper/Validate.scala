@@ -8,7 +8,6 @@ import coop.rchain.blockstorage.{BlockDagRepresentation, BlockStore}
 import coop.rchain.casper.protocol.Event.EventInstance
 import coop.rchain.casper.protocol.{ApprovedBlock, BlockMessage, Justification}
 import coop.rchain.casper.util.ProtoUtil.bonds
-import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
 import coop.rchain.casper.util.rholang.{InterpreterUtil, RuntimeManager}
 import coop.rchain.casper.util.{DagOperations, ProtoUtil}
 import coop.rchain.crypto.hash.Blake2b256
@@ -166,7 +165,7 @@ object Validate {
       true.pure[F]
     }
 
-  def version[F[_]: Applicative: Log](b: BlockMessage, version: Long): F[Boolean] = {
+  def version[F[_]: Monad: Log](b: BlockMessage, version: Long): F[Boolean] = {
     val blockVersion = b.header.get.version
     if (blockVersion == version) {
       true.pure[F]
@@ -176,7 +175,7 @@ object Validate {
           b,
           s"received block version $blockVersion is the expected version $version."
         )
-      ) *> false.pure[F]
+      ) >> false.pure[F]
     }
   }
 
@@ -656,7 +655,7 @@ object Validate {
               val message =
                 s"block ${PrettyPrinter.buildString(currentBlockJustificationHash)} by ${PrettyPrinter
                   .buildString(validator)} has a lower sequence number than ${PrettyPrinter.buildString(previousBlockJustificationHash)}."
-              Log[F].warn(ignore(b, message)) *> Applicative[F].pure(
+              Log[F].warn(ignore(b, message)) >> Applicative[F].pure(
                 Right(Left(JustificationRegression))
               )
             },

@@ -76,7 +76,7 @@ object BlockGenerator {
     val updatedBlockBody =
       b.getBody.withState(updatedBlockPostState).withDeploys(processedDeploys)
     val updatedBlock = b.withBody(updatedBlockBody)
-    BlockStore[F].put(b.blockHash, updatedBlock) *>
+    BlockStore[F].put(b.blockHash, updatedBlock) >>
       BlockDagStorage[F].insert(updatedBlock, genesis, invalid = false).void
   }
 }

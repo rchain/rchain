@@ -6,15 +6,13 @@ import cats.effect.{Concurrent, ContextShift, Sync}
 import cats.implicits._
 import com.typesafe.scalalogging.Logger
 import coop.rchain.catscontrib._
-import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.metrics.Metrics.Source
-import coop.rchain.rspace._
-import coop.rchain.rspace.history.Branch
+import coop.rchain.metrics.{Metrics, Span}
+import coop.rchain.rspace.history.{Branch, HistoryRepository}
 import coop.rchain.rspace.internal._
-import coop.rchain.rspace.history.{HistoryRepository, HistoryRepositoryInstances}
 import coop.rchain.rspace.trace._
-import coop.rchain.shared.{Cell, Log}
 import coop.rchain.shared.SyncVarOps._
+import coop.rchain.shared.{Cell, Log}
 import monix.execution.atomic.AtomicAny
 import scodec.Codec
 
@@ -162,10 +160,10 @@ class RSpace[F[_], C, P, A, R, K] private[rspace] (
     contextShift.evalOn(scheduler) {
       if (channels.isEmpty) {
         val msg = "channels can't be empty"
-        logF.error(msg) *> syncF.raiseError(new IllegalArgumentException(msg))
+        logF.error(msg) >> syncF.raiseError(new IllegalArgumentException(msg))
       } else if (channels.length =!= patterns.length) {
         val msg = "channels.length must equal patterns.length"
-        logF.error(msg) *> syncF.raiseError(new IllegalArgumentException(msg))
+        logF.error(msg) >> syncF.raiseError(new IllegalArgumentException(msg))
       } else
         spanF.trace(consumeSpanLabel) {
           for {
@@ -351,7 +349,7 @@ class RSpace[F[_], C, P, A, R, K] private[rspace] (
                 }
                 (if (shouldRemove) {
                    store.removeDatum(candidateChannel, dataIndex)
-                 } else ().pure[F]) *> store.removeJoin(candidateChannel, channels)
+                 } else ().pure[F]) >> store.removeJoin(candidateChannel, channels)
               }
             }
 
