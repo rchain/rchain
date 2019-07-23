@@ -67,8 +67,6 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: ConnectionsCell: TransportLa
   private val version             = 1L
   private val expirationThreshold = 50
 
-  private val emptyStateHash = runtimeManager.emptyStateHash
-
   private val lastFinalizedBlockHashContainer = Ref.unsafe[F, BlockHash](genesis.blockHash)
 
   private[this] val AddBlockMetricsSource =
@@ -291,7 +289,6 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: ConnectionsCell: TransportLa
                                         Validate.transactions[F](
                                           b,
                                           dag,
-                                          emptyStateHash,
                                           runtimeManager
                                         )
                                     )

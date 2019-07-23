@@ -701,7 +701,6 @@ object Validate {
   def transactions[F[_]: Sync: Log: BlockStore: Span](
       block: BlockMessage,
       dag: BlockDagRepresentation[F],
-      emptyStateHash: StateHash,
       runtimeManager: RuntimeManager[F]
   ): F[Either[BlockStatus, ValidBlock]] =
     for {
