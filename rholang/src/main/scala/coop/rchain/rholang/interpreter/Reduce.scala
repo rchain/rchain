@@ -228,13 +228,6 @@ class DebruijnInterpreter[M[_], F[_]](
       rand: Blake2b512Random,
       sequenceNumber: Int
   ): M[Unit] = spanM.trace(parSpanLabel) {
-    def split(totalSize: Int, termSize: Int, rand: Blake2b512Random)(idx: Int): Blake2b512Random =
-      if (totalSize == 1)
-        rand
-      else if (totalSize > 256)
-        rand.splitShort((termSize + idx).toShort)
-      else
-        rand.splitByte((termSize + idx).toByte)
 
     val filteredExprs = par.exprs.filter { expr =>
       expr.exprInstance match {
@@ -253,13 +246,18 @@ class DebruijnInterpreter[M[_], F[_]](
       EvalJob(filteredExprs)
     ).filter(_.size > 0)
 
+    val totalSize = jobs.map(_.size).sum
+
+    def split(termSize: Int)(idx: Int): Blake2b512Random =
+      if (totalSize == 1) rand
+      else if (totalSize > 256) rand.splitShort((termSize + idx).toShort)
+      else rand.splitByte((termSize + idx).toByte)
+
     val starts = jobs.map(_.size).scanLeft(0)(_ + _).toVector
 
     jobs.zipWithIndex.parTraverse_ {
       case (job, jobIdx) => {
-        def mkRand(termIdx: Int): Blake2b512Random =
-          split(starts.last, starts(jobIdx), rand)(termIdx)
-        job.run(mkRand)(env, sequenceNumber)
+        job.run(split(starts(jobIdx)))(env, sequenceNumber)
       }
     }
   }
