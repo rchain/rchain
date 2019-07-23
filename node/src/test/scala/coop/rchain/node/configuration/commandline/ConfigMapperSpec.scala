@@ -164,7 +164,6 @@ class ConfigMapperSpec extends FunSuite with Matchers {
         "--validator-public-key 111111111111",
         "--validator-private-key 222222222222",
         "--validator-private-key-path /root/pk.pem",
-        "--validator-sig-algorithm ed25519",
         "--bonds-file /root/bonds.txt",
         "--known-validators /root/validators.txt",
         "--num-validators 5",
@@ -189,7 +188,6 @@ class ConfigMapperSpec extends FunSuite with Matchers {
       CasperConf(
         publicKeyBase16 = Some("111111111111"),
         privateKey = Some(Right(Paths.get("/root/pk.pem"))),
-        sigAlgorithm = "ed25519",
         bondsFile = Some("/root/bonds.txt"),
         knownValidatorsFile = Some("/root/validators.txt"),
         numValidators = 5,

@@ -308,11 +308,6 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
       descr = "Path to the base16 encoded private key to use for signing a proposed blocks."
     )
 
-    val validatorSigAlgorithm = opt[String](
-      descr = "Name of the algorithm to use for signing proposed blocks. " +
-        "Currently supported values: ed25519"
-    )
-
     val shardId = opt[String](
       descr = "Identifier of the shard this node is connected to."
     )
