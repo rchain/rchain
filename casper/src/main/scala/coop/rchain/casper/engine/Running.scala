@@ -145,7 +145,10 @@ object Running {
       noop[F],
       RequestedBlocks[F].read >>= (_.get(hb.hash)
         .fold(requestForBlock[F](peer, hb.hash) >> addNewEntry[F](hb.hash, Some(peer)))(
-          addToWaitingList
+          req =>
+            if (req.peers.isEmpty)
+              requestForBlock[F](peer, hb.hash) >> addNewEntry[F](hb.hash, Some(peer))
+            else addToWaitingList(req)
         ))
     )
   }
