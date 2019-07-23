@@ -136,9 +136,11 @@ class MultiParentCasperMergeSpec extends FlatSpec with Matchers with Inspectors 
       "4! C! diff !" -> conflictsForNow(F0, C1, S0 | S1),
       "CX CX"        -> conflictsForNow(C_, C_, Nil),
       "C! C! same !" -> conflicts(C_, C_, S0),
-      "C! C! diff !" -> conflictsForNow(C0, C1, S0 | S1)
+      "C! C! diff !" -> conflictsForNow(C0, C1, S0 | S1),
       // 4!! / !!4 row is similar to !4 / 4! and thus skipped
       // C!! / !!C row is similar to !C / C! and thus skipped
+      "CX !!X no match" -> conflictsForNow(R0, C1, Nil),
+      "CX !!X match"    -> conflicts(R0, C0, Nil)
     ).values.toList.parSequence_
   }
 
