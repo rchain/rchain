@@ -223,6 +223,7 @@ class DebruijnInterpreter[M[_], F[_]](
 
   }
 
+  @SuppressWarnings(Array("org.wartremover.warts.NonUnitStatements"))
   override def eval(par: Par)(
       implicit env: Env[Par],
       rand: Blake2b512Random,
@@ -237,7 +238,7 @@ class DebruijnInterpreter[M[_], F[_]](
       }
     }
 
-    val jobs = List(
+    List(
       EvalJob[Send](par.sends, evalExplicit),
       EvalJob[Receive](par.receives, evalExplicit),
       EvalJob[New](par.news, evalExplicit),
@@ -246,19 +247,37 @@ class DebruijnInterpreter[M[_], F[_]](
       EvalJob(filteredExprs)
     ).filter(_.size > 0)
 
-    val totalSize = jobs.map(_.size).sum
+    val terms = Seq(
+      par.sends,
+      par.receives,
+      par.news,
+      par.matches,
+      par.bundles,
+      filteredExprs
+    ).filter(_.nonEmpty).flatten
 
-    def split(termSize: Int)(idx: Int): Blake2b512Random =
-      if (totalSize == 1) rand
-      else if (totalSize > 256) rand.splitShort((termSize + idx).toShort)
-      else rand.splitByte((termSize + idx).toByte)
+    def split(id: Int): Blake2b512Random =
+      if (terms.size == 1) rand
+      else if (terms.size > 256) rand.splitShort(id.toShort)
+      else rand.splitByte(id.toByte)
 
-    val starts = jobs.map(_.size).scanLeft(0)(_ + _).toVector
-
-    jobs.zipWithIndex.parTraverse_ {
-      case (job, jobIdx) => {
-        job.run(split(starts(jobIdx)))(env, sequenceNumber)
-      }
+    terms.zipWithIndex.toList.parTraverse_ {
+      case (term, id) =>
+        implicit val rand: Blake2b512Random = split(id)
+        term match {
+          case term: Send    => reportErrors(eval(term))
+          case term: Receive => reportErrors(eval(term))
+          case term: New     => reportErrors(eval(term))
+          case term: Match   => reportErrors(eval(term))
+          case term: Bundle  => reportErrors(eval(term))
+          case term: Expr =>
+            term.exprInstance match {
+              case e: EVarBody    => reportErrors(eval(e.value.v) >>= (eval(_)))
+              case e: EMethodBody => reportErrors(evalExprToPar(e) >>= (eval(_)))
+              case other          => BugFoundError(s"Undefined term: \n $other").raiseError[M, Unit]
+            }
+          case other => BugFoundError(s"Undefined term: \n $other").raiseError[M, Unit]
+        }
     }
   }
 
