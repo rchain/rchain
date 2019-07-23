@@ -90,6 +90,11 @@ object EstimatorHelper {
     case _               => None
   }
 
+  private def isVolatile(comm: COMM, consumes: Seq[Consume], produces: Seq[Produce]) =
+    !comm.consume.persistent && consumes.contains(comm.consume) && comm.produces.forall(
+      produce => !produce.persistent && produces.contains(produce)
+    )
+
   private def buildBlockAncestorChannels[F[_]: Monad: BlockStore](
       blockAncestorsMeta: List[BlockMetadata]
   ): F[Set[ByteString]] =
@@ -120,12 +125,7 @@ object EstimatorHelper {
         .toSet
 
       ancestorCommChannels = commEvents
-        .filterNot {
-          case COMM(consume: Consume, produces, _) =>
-            !consume.persistent && consumeEvents.contains(consume) && produces.forall(
-              produce => !produce.persistent && produceEvents.contains(produce)
-            )
-        }
+        .filterNot(isVolatile(_, consumeEvents, produceEvents))
         .flatMap {
           case COMM(consume: Consume, produces, _) =>
             consume.channelsHashes ++ produces.map(_.channelsHash)
