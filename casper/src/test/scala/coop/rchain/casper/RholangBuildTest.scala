@@ -14,6 +14,8 @@ import coop.rchain.crypto.codec.Base16
 import monix.execution.Scheduler.Implicits.global
 import org.scalatest.{FlatSpec, Matchers}
 
+import scala.io.Source
+
 class RholangBuildTest extends FlatSpec with Matchers {
 
   val genesis = buildGenesis()
@@ -60,4 +62,22 @@ class RholangBuildTest extends FlatSpec with Matchers {
       }
   }
 
+  "Our build system" should "execute the genesis block" in effectTest {
+    HashSetCasperTestNode
+      .standaloneEff(genesis)
+      .use { node =>
+        import node._
+
+        val code = Source.fromResource("wallets.rho").mkString
+
+        for {
+          deploy <- ConstructDeploy.sourceDeployNowF(code)
+          createBlockResult <- MultiParentCasper[Effect]
+                                .deploy(deploy) >> MultiParentCasper[Effect].createBlock
+          Created(signedBlock) = createBlockResult
+          _                    <- MultiParentCasper[Effect].addBlock(signedBlock, ignoreDoppelgangerCheck[Effect])
+          _                    = logEff.warns should be(Nil)
+        } yield ()
+      }
+  }
 }
