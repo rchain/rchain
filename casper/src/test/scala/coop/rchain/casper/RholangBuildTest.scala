@@ -71,7 +71,7 @@ class RholangBuildTest extends FlatSpec with Matchers {
         val code = Source.fromResource("wallets.rho").mkString
 
         for {
-          deploy <- ConstructDeploy.sourceDeployNowF(code)
+          deploy <- ConstructDeploy.sourceDeployNowF(code, phloLimit = 90000000000000L)
           createBlockResult <- MultiParentCasper[Effect]
                                 .deploy(deploy) >> MultiParentCasper[Effect].createBlock
           Created(signedBlock) = createBlockResult
