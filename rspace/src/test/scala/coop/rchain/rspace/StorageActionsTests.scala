@@ -706,7 +706,10 @@ trait StorageActionsTests[F[_]]
 
         _ = r3 shouldBe defined
         _ = runK(r3)
-      } yield (getK(r3).results should contain theSameElementsAs List(List("datum2")))
+      } yield (getK(r3).results should contain theSameElementsAs List(
+        List("datum1"),
+        List("datum2")
+      ))
   }
 
   "consuming and doing a persistient produce" should "work" in fixture { (store, _, space) =>

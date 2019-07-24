@@ -72,15 +72,7 @@ private class InMemHotStore[F[_]: Sync, C, P, A, K](
       cached <- internalGetContinuations(channels)
       state  <- S.read
       result = state.installedContinuations.get(channels) ++: cached
-      res <- result
-              .map(
-                wk =>
-                  roundTrip[F, K](wk.continuation).map { copied =>
-                    wk.copy(continuation = copied)
-                  }
-              )
-              .sequence
-    } yield res
+    } yield result
 
   private[this] def internalGetContinuations(channels: Seq[C]): F[Seq[WaitingContinuation[P, K]]] =
     for {
