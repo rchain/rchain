@@ -17,6 +17,7 @@ import coop.rchain.blockstorage.util.io.{IOError, _}
 import coop.rchain.blockstorage.util.{Crc32, TopologicalSortUtil}
 import coop.rchain.casper.protocol.BlockMessage
 import coop.rchain.crypto.codec.Base16
+import coop.rchain.lmdb.LMDBStore
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.Validator.Validator
 import coop.rchain.models.{BlockHash, BlockMetadata, EquivocationRecord, Validator}
@@ -52,7 +53,7 @@ private final case class BlockDagFileStorageState[F[_]: Sync](
 
 final class BlockDagFileStorage[F[_]: Concurrent: Sync: Log: RaiseIOError] private (
     lock: Semaphore[F],
-    blockNumberIndex: LmdbDbi[F, ByteBuffer],
+    blockNumberIndex: LMDBStore[F],
     latestMessagesDataFilePath: Path,
     latestMessagesCrcFilePath: Path,
     latestMessagesLogMaxSizeFactor: Int,
@@ -154,22 +155,15 @@ final class BlockDagFileStorage[F[_]: Concurrent: Sync: Log: RaiseIOError] priva
     state.modify(s => s.copy(latestMessagesLogSize = f(s.latestMessagesLogSize)))
 
   private[this] def getBlockNumber(blockHash: BlockHash): F[Option[Long]] =
-    blockNumberIndex.withReadTxn { txn =>
-      blockNumberIndex
-        .get(txn, blockHash.toDirectByteBuffer)
-        .map(_.getLong)
-    }
+    for {
+      blockNumberBytesOpt <- blockNumberIndex.get(blockHash.toDirectByteBuffer)
+    } yield blockNumberBytesOpt.map(_.getLong)
 
   private[this] def putBlockNumber(blockHash: BlockHash, blockNumber: Long): F[Unit] =
-    blockNumberIndex.withWriteTxn { txn =>
-      ignore {
-        blockNumberIndex.put(
-          txn,
-          blockHash.toDirectByteBuffer,
-          blockNumber.toByteString.toDirectByteBuffer
-        )
-      }
-    }
+    blockNumberIndex.put(
+      blockHash.toDirectByteBuffer,
+      blockNumber.toByteString.toDirectByteBuffer
+    )
 
   private case class FileDagRepresentation(
       latestMessagesMap: Map[Validator, BlockHash],
@@ -578,9 +572,7 @@ final class BlockDagFileStorage[F[_]: Concurrent: Sync: Log: RaiseIOError] priva
         _ <- setLatestMessagesLogSize(0)
         _ <- setLatestMessagesCrc(newLatestMessagesCrc)
         _ <- setBlockMetadataCrc(newBlockMetadataCrc)
-        _ <- blockNumberIndex.withWriteTxn { txn =>
-              blockNumberIndex.drop(txn)
-            }
+        _ <- blockNumberIndex.drop
       } yield ()
     )
 
@@ -1020,9 +1012,9 @@ object BlockDagFileStorage {
                }
     } yield result
 
-  private def loadBlockNumberIndexLmdbDbi[F[_]: Sync: Log: RaiseIOError](
+  private def loadBlockNumberIndexLmdbStore[F[_]: Sync: Log: RaiseIOError](
       config: Config
-  ): F[LmdbDbi[F, ByteBuffer]] =
+  ): F[LMDBStore[F]] =
     for {
       _ <- notExists[F](config.blockNumberIndexPath).ifM(
             makeDirectory[F](config.blockNumberIndexPath) >> ().pure[F],
@@ -1040,7 +1032,7 @@ object BlockDagFileStorage {
       dbi <- Sync[F].delay {
               env.openDbi(s"block_dag_storage_block_number_index", MDB_CREATE)
             }
-    } yield LmdbDbi[F, ByteBuffer](env, dbi)
+    } yield LMDBStore[F](env, dbi)
 
   def create[F[_]: Concurrent: Sync: Log](
       config: Config
@@ -1048,7 +1040,7 @@ object BlockDagFileStorage {
     implicit val raiseIOError: RaiseIOError[F] = IOError.raiseIOErrorThroughSync[F]
     for {
       lock                  <- Semaphore[F](1)
-      blockNumberIndex      <- loadBlockNumberIndexLmdbDbi(config)
+      blockNumberIndex      <- loadBlockNumberIndexLmdbStore(config)
       readLatestMessagesCrc <- readCrc[F](config.latestMessagesCrcPath)
       latestMessagesFileResource = Resource.make(
         RandomAccessIO.open[F](config.latestMessagesLogPath, RandomAccessIO.ReadWrite)
