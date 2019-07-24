@@ -10,8 +10,10 @@ import coop.rchain.shared.Cell
 import coop.rchain.shared.MapOps._
 import coop.rchain.rspace.internal._
 import coop.rchain.rspace.Serialize._
+import coop.rchain.rspace.trace.Consume
 import scodec.Codec
 
+import scala.collection.SortedSet
 import scala.collection.concurrent.TrieMap
 
 final case class Snapshot[C, P, A, K](private[rspace] val cache: Cache[C, P, A, K])
@@ -72,15 +74,7 @@ private class InMemHotStore[F[_]: Sync, C, P, A, K](
       cached <- internalGetContinuations(channels)
       state  <- S.read
       result = state.installedContinuations.get(channels) ++: cached
-      res <- result
-              .map(
-                wk =>
-                  roundTrip[F, K](wk.continuation).map { copied =>
-                    wk.copy(continuation = copied)
-                  }
-              )
-              .sequence
-    } yield res
+    } yield result
 
   private[this] def internalGetContinuations(channels: Seq[C]): F[Seq[WaitingContinuation[P, K]]] =
     for {
