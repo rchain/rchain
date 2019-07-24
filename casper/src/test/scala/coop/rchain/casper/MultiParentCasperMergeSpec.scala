@@ -85,62 +85,124 @@ class MultiParentCasperMergeSpec extends FlatSpec with Matchers with Inspectors 
     val C1 = Rho("contract @0(@1) = { 0 }")
     //FIXME add missing cases for in-deploy COMM-s wherever there's a pair without X (a COMM)
     //FIXME all `conflictsForNow` should eventually be replaced with `merges`
+    //same polarity, merges
+    val SAME_POLARITY_MERGE =
+      """
+        |Two incoming sends/receives, at most one had a matching dual in TS.
+        |The incoming events won't cause more COMMs together (same polarity).
+        |They couldn't be competing for the same linear receive/send (at most one had a match).
+        |
+        |Notice this includes "two unsatisfied" and "must be looking for different data" cases.
+        |""".stripMargin
+
+    //same polarity, could sometimes merge
+    val COULD_MATCH_SAME =
+      """
+        |Two incoming sends/receives each matched a receive/send that was in TS.
+        |The incoming events won't cause more COMMs together (same polarity).
+        |They could've matched the same linear event.
+        |Mergeable if different events, or at least one matched event is non-linear.
+        |""".stripMargin
+
+    //diff polarity, merges
+    val HAD_ITS_MATCH =
+      """
+        |A send and a receive were incoming, at least one had a match, either:
+        | - both were linear
+        | - one was non-linear, the other had a match
+        |They couldn't match the same linear event (they have different polarity)
+        |They couldn't spawn more work, because either:
+        | - both were linear, one of them had a match in TS
+        | - one was non-linear, but the other chose to go with its match
+        |""".stripMargin
+
+    //diff polarity, could sometimes merge
+    val INCOMING_COULD_MATCH =
+      """
+        |An incoming send and an incoming receive could match each other,
+        |leading to more COMMs needing to happen.
+        |Mergeable if we use spatial matcher to prove they don't match.
+        |""".stripMargin
+
+    //deploy-local, merges
+    val VOLATILE_EVENT =
+      """
+        |There's been a COMM within one of the deploys,
+        |the other deploy saw none of it.
+        |""".stripMargin
+
+    //deploy-local, could sometimes merge
+    val PRESISTENT_COULD_MATCH =
+      """
+        |There's been a COMM within one of the deploys, with one side non-linear.
+        |The other deploy had an event without a match in TS, dual to the non-linear.
+        |These could spawn more work.
+        |Mergeable if we use spatial matcher to prove they don't match.
+        |""".stripMargin
+
+    //deploy-local, merges
+    val PERSISTENT_COULD_NOT_MATCH =
+      """
+        |There's been a COMM within one of the deploys, with one side non-linear.
+        |The other deploy had an event without a match in TS, of same polarity to the non-linear.
+        |These could not spawn more work.
+        |""".stripMargin
+
     Map(
-      "!X !X"        -> conflictsForNow(S0, S0, Nil),
-      "!X !4"        -> conflictsForNow(S0, S0, F_),
-      "!X (!4)"      -> merges(S0, S1 | F_, Nil),
-      "!X !C"        -> conflictsForNow(S0, S1, C1),
-      "!X (!C)"      -> conflicts(S0, S1 | C_, Nil),
-      "!X 4X"        -> conflicts(S0, F_, Nil),
-      "!X 4!"        -> conflictsForNow(S0, F_, S0),
-      "!X (4!)"      -> coveredBy("!X (!4)"),
-      "!X 4!!"       -> conflictsForNow(S0, F_, R0),
-      "!X (4!!)"     -> conflictsForNow(S0, F_ | R0, Nil),
-      "!X !!X"       -> conflictsForNow(S0, R0, Nil),
-      "!X !!4"       -> conflictsForNow(S0, R1, F1),
-      "!X (!!4)"     -> coveredBy("!X (4!!)"),
-      "!X CX"        -> conflicts(S0, C_, Nil),
-      "!X C!"        -> conflicts(S0, C_, S0),
-      "!X (C!)"      -> conflicts(S0, C_ | S0, Nil),
-      "!4 !4 same 4" -> conflicts(S0, S1, F_),
-      "!4 !4 diff 4" -> conflicts(S0, S1, F0 | F1),
-      "!4 (!4)"      -> merges(S0, S1 | F1, F0),
-      "(!4) (!4)"    -> merges(S0 | F_, S0 | F_, Nil),
-      "!4 !C"        -> conflictsForNow(S0, S1, F0 | C1),
-      "!4 4X"        -> conflictsForNow(S0, F_, F_),
-      "!4 4!"        -> conflictsForNow(S0, F_, F0 | S1),
-      "!4 4!!"       -> conflictsForNow(S0, F_, F0 | R1),
-      "!4 !!X"       -> conflictsForNow(S0, R1, F0),
-      "!4 !!4"       -> conflictsForNow(S0, R1, F_ | F1),
-      "!4 CX"        -> conflictsForNow(S0, C_, F_),
-      "!4 C!"        -> conflictsForNow(S0, C_, F0 | S1),
-      "!C !C"        -> conflictsForNow(S0, S0, C_),
-      "!C 4X"        -> conflictsForNow(S0, F_, C_),
-      "!C 4!"        -> conflictsForNow(S0, F_, C0 | S1),
-      "!C 4!!"       -> conflictsForNow(S0, F_, C0 | R1),
-      "!C !!X"       -> conflictsForNow(S0, R1, C0),
-      "!C !!4"       -> conflictsForNow(S0, R1, C0 | F1),
-      "!C CX"        -> conflictsForNow(S0, C_, C_),
-      "!C C!"        -> conflictsForNow(S0, C_, C0 | S1),
-      "4X 4X"        -> conflictsForNow(F_, F_, Nil),
-      "4X 4!"        -> conflicts(F_, F_, S0),
+      "!X !X"        -> SAME_POLARITY_MERGE        -> conflictsForNow(S0, S0, Nil),
+      "!X !4"        -> SAME_POLARITY_MERGE        -> conflictsForNow(S0, S1, F1),
+      "!X (!4)"      -> VOLATILE_EVENT             -> merges(S0, S0 | F_, Nil),
+      "!X !C"        -> SAME_POLARITY_MERGE        -> conflictsForNow(S0, S1, C1),
+      "!X (!C)"      -> PRESISTENT_COULD_MATCH     -> conflicts(S0, S0 | C_, Nil),
+      "!X 4X"        -> INCOMING_COULD_MATCH       -> conflicts(S0, F_, Nil),
+      "!X 4!"        -> HAD_ITS_MATCH              -> conflictsForNow(S0, F_, S0),
+      "!X (4!)"      -> VOLATILE_EVENT             -> coveredBy("!X (!4)"),
+      "!X 4!!"       -> HAD_ITS_MATCH              -> conflictsForNow(S0, F_, R0),
+      "!X (4!!)"     -> PERSISTENT_COULD_NOT_MATCH -> conflictsForNow(S0, F_ | R0, Nil),
+      "!X !!X"       -> SAME_POLARITY_MERGE        -> conflictsForNow(S0, R0, Nil),
+      "!X !!4"       -> SAME_POLARITY_MERGE        -> conflictsForNow(S0, R1, F1),
+      "!X (!!4)"     -> PERSISTENT_COULD_NOT_MATCH -> coveredBy("!X (4!!)"),
+      "!X CX"        -> INCOMING_COULD_MATCH       -> conflicts(S0, C_, Nil),
+      "!X C!"        -> INCOMING_COULD_MATCH       -> conflicts(S0, C_, S0),
+      "!X (C!)"      -> PRESISTENT_COULD_MATCH     -> conflicts(S0, C_ | S0, Nil),
+      "!4 !4 same 4" -> COULD_MATCH_SAME           -> conflicts(S0, S1, F_),
+      "!4 !4 diff 4" -> COULD_MATCH_SAME           -> conflictsForNow(S0, S1, F0 | F1),
+      "!4 (!4)"      -> VOLATILE_EVENT             -> merges(S0, S1 | F_, F0),
+      "(!4) (!4)"    -> VOLATILE_EVENT             -> merges(S0 | F_, S0 | F_, Nil),
+      "!4 !C"        -> COULD_MATCH_SAME           -> conflictsForNow(S0, S1, F0 | C1),
+      "!4 4X"        -> HAD_ITS_MATCH              -> conflictsForNow(S0, F_, F_),
+      "!4 4!"        -> HAD_ITS_MATCH              -> conflictsForNow(S0, F_, F0 | S1),
+      "!4 4!!"       -> HAD_ITS_MATCH              -> conflictsForNow(S0, F_, F0 | R1),
+      "!4 !!X"       -> SAME_POLARITY_MERGE        -> conflictsForNow(S0, R1, F0),
+      "!4 !!4"       -> SAME_POLARITY_MERGE        -> conflictsForNow(S0, R1, F_ | F1),
+      "!4 CX"        -> HAD_ITS_MATCH              -> conflictsForNow(S0, C_, F_),
+      "!4 C!"        -> HAD_ITS_MATCH              -> conflictsForNow(S0, C_, F0 | S1),
+      "!C !C"        -> COULD_MATCH_SAME           -> conflictsForNow(S0, S0, C_),
+      "!C 4X"        -> HAD_ITS_MATCH              -> conflictsForNow(S0, F_, C_),
+      "!C 4!"        -> HAD_ITS_MATCH              -> conflictsForNow(S0, F_, C0 | S1),
+      "!C 4!!"       -> HAD_ITS_MATCH              -> conflictsForNow(S0, F_, C0 | R1),
+      "!C !!X"       -> SAME_POLARITY_MERGE        -> conflictsForNow(S0, R1, C0),
+      "!C !!4"       -> COULD_MATCH_SAME           -> conflictsForNow(S0, R1, C0 | F1),
+      "!C CX"        -> HAD_ITS_MATCH              -> conflictsForNow(S0, C_, C_),
+      "!C C!"        -> HAD_ITS_MATCH              -> conflictsForNow(S0, C_, C0 | S1),
+      "4X 4X"        -> SAME_POLARITY_MERGE        -> conflictsForNow(F_, F_, Nil),
+      "4X 4!"        -> SAME_POLARITY_MERGE        -> conflictsForNow(F0, F_, S1),
       // Skipping 4X 4!! merges, 4X !!X may merge or not, 4X !!4 may merge or not
-      "4X CX"        -> conflicts(F_, C_, Nil),
-      "4X C!"        -> conflictsForNow(F0, C1, S1),
-      "4X (!!4)"     -> conflicts(F_, R0 | F_, Nil),
-      "4! 4! same !" -> conflicts(F_, F_, S0),
-      "4! 4! diff !" -> conflictsForNow(F0, F1, S0 | S1),
+      "4X CX"        -> SAME_POLARITY_MERGE    -> conflicts(F_, C_, Nil),
+      "4X C!"        -> SAME_POLARITY_MERGE    -> conflictsForNow(F0, C1, S1),
+      "4X (!!4)"     -> PRESISTENT_COULD_MATCH -> conflicts(F_, R0 | F_, Nil),
+      "4! 4! same !" -> COULD_MATCH_SAME       -> conflicts(F_, F_, S0),
+      "4! 4! diff !" -> COULD_MATCH_SAME       -> conflictsForNow(F0, F1, S0 | S1),
       // Skipping 4! 4!! merges, 4! !!X merges, 4! !!4 merges
-      "4! CX"        -> conflictsForNow(F_, C1, S0),
-      "4! C! same !" -> conflictsForNow(F_, C_, S0),
-      "4! C! diff !" -> conflictsForNow(F0, C1, S0 | S1),
-      "CX CX"        -> conflictsForNow(C_, C_, Nil),
-      "C! C! same !" -> conflicts(C_, C_, S0),
-      "C! C! diff !" -> conflictsForNow(C0, C1, S0 | S1),
+      "4! CX"        -> SAME_POLARITY_MERGE -> conflictsForNow(F_, C1, S0),
+      "4! C! same !" -> COULD_MATCH_SAME    -> conflicts(F_, C_, S0),
+      "4! C! diff !" -> COULD_MATCH_SAME    -> conflictsForNow(F0, C1, S0 | S1),
+      "CX CX"        -> SAME_POLARITY_MERGE -> conflictsForNow(C_, C_, Nil),
+      "C! C! same !" -> COULD_MATCH_SAME    -> conflicts(C_, C_, S0),
+      "C! C! diff !" -> COULD_MATCH_SAME    -> conflictsForNow(C0, C1, S0 | S1),
       // 4!! / !!4 row is similar to !4 / 4! and thus skipped
       // C!! / !!C row is similar to !C / C! and thus skipped
-      "CX !!X no match" -> conflictsForNow(R0, C1, Nil),
-      "CX !!X match"    -> conflicts(R0, C0, Nil)
+      "CX !!X" -> INCOMING_COULD_MATCH -> conflicts(R0, C_, Nil)
     ).values.toList.parSequence_
   }
 
