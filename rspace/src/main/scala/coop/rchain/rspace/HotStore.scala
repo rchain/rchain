@@ -10,10 +10,8 @@ import coop.rchain.shared.Cell
 import coop.rchain.shared.MapOps._
 import coop.rchain.rspace.internal._
 import coop.rchain.rspace.Serialize._
-import coop.rchain.rspace.trace.Consume
 import scodec.Codec
 
-import scala.collection.SortedSet
 import scala.collection.concurrent.TrieMap
 
 final case class Snapshot[C, P, A, K](private[rspace] val cache: Cache[C, P, A, K])
