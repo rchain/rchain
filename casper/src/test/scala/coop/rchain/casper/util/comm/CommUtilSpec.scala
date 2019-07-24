@@ -62,6 +62,15 @@ class CommUtilSpec extends FunSpec with BeforeAndAfterEach with Matchers {
           // then
           log.infos contains (s"Requested missing block ${PrettyPrinter.buildString(hash)} from peers")
         }
+        it("should create new entry in 'requested blocks'") {
+          // given
+          implicit val requestedBlocks = initRequestedBlocks()
+          implicit val connectionsCell = initConnectionsCell()
+          // when
+          CommUtil.sendBlockRequest[Coeval](hash).apply()
+          // then
+          requestedBlocks.read.apply().contains(hash) should be(true)
+        }
       }
       describe("if given block was already requested") {
         it("should do nothing") {
@@ -92,16 +101,16 @@ class CommUtilSpec extends FunSpec with BeforeAndAfterEach with Matchers {
   val maxNoConnections = 10
   val conf             = RPConf(local, networkId, null, null, maxNoConnections, null)
 
-  implicit private val transport = new TransportLayerStub[Coeval]
-  implicit private val askConf   = new ConstApplicativeAsk[Coeval, RPConf](conf)
-  implicit private val log       = new LogStub[Coeval]
-  implicit private val time      = new LogicalTime[Coeval]
+  implicit val transport = new TransportLayerStub[Coeval]
+  implicit val askConf   = new ConstApplicativeAsk[Coeval, RPConf](conf)
+  implicit val log       = new LogStub[Coeval]
+  implicit val time      = new LogicalTime[Coeval]
 
   private def initRequestedBlocks(
       init: Map[BlockHash, Requested] = Map.empty
   ): RequestedBlocks[Coeval] =
     Cell.unsafe[Coeval, Map[BlockHash, Running.Requested]](init)
-  private def initConnectionsCell(connections: Connections) =
+  private def initConnectionsCell(connections: Connections = List.empty) =
     Cell.unsafe[Coeval, Connections](connections)
   private def endpoint(port: Int): Endpoint = Endpoint("host", port, port)
   private def peerNode(name: String, port: Int): PeerNode =

@@ -17,7 +17,7 @@ import cats._, cats.data._, cats.implicits._
 
 import scala.collection.mutable.{Map => MutableMap}
 
-class RunningHandleHasBlockSpec extends WordSpec with BeforeAndAfterEach with Matchers {
+class RunningHandleHasBlockSpec extends FunSpec with BeforeAndAfterEach with Matchers {
 
   implicit private def log = new LogStub[Coeval]
 
@@ -30,65 +30,102 @@ class RunningHandleHasBlockSpec extends WordSpec with BeforeAndAfterEach with Ma
     time.reset()
   }
 
-  "Running.handleHasBlock" should {
-    "not request block if casper contains block" in {
-      // given
-      implicit val requestedBlocks                     = initRequestedBlocks()
-      val casperContains: BlockHash => Coeval[Boolean] = kp(Coeval(true))
-      // when
-      Running.handleHasBlock[Coeval](null, hb)(casperContains).apply()
-      // then
-      transport.requests shouldBe empty
-    }
+  describe("Running") {
+    describe("handleHasBlock") {
+      describe("if casper contains block with given hash already") {
+        it("should not request block") {
+          // given
+          implicit val requestedBlocks                     = initRequestedBlocks()
+          val casperContains: BlockHash => Coeval[Boolean] = kp(Coeval(true))
+          // when
+          Running.handleHasBlock[Coeval](null, hb)(casperContains).apply()
+          // then
+          transport.requests shouldBe empty
+        }
+      }
+      describe("if casper does NOT contain block with given hash") {
+        describe("if there is already an entry in the requested blocks") {
+          it("should ignore if peer on the requested peers list") {
+            // given
+            val sender = peerNode("somePeer", 40400)
+            val requestedBefore =
+              Map(hash -> Requested(timestamp = System.currentTimeMillis, peers = Set(sender)))
+            implicit val requestedBlocks = initRequestedBlocks(init = requestedBefore)
+            val casperContains           = alwaysFalse
+            // when
+            Running.handleHasBlock[Coeval](sender, hb)(casperContains).apply()
+            // then
+            transport.requests shouldBe empty
+          }
+          it("should store on a waiting list and don't request if requested by different peer") {
+            // given
+            val sender    = peerNode("somePeer", 40400)
+            val otherPeer = peerNode("otherPeer", 40400)
+            val requestedBefore =
+              Map(hash -> Requested(timestamp = System.currentTimeMillis, peers = Set(otherPeer)))
+            implicit val requestedBlocks = initRequestedBlocks(init = requestedBefore)
+            val casperContains           = alwaysFalse
+            // when
+            Running.handleHasBlock[Coeval](sender, hb)(casperContains).apply()
+            // then
+            transport.requests shouldBe empty
 
-    "ignore if requested before for the same peer" in {
-      // given
-      val sender = peerNode("somePeer", 40400)
-      val requestedBefore =
-        Map(hash -> Requested(timestamp = System.currentTimeMillis, peers = Set(sender)))
-      implicit val requestedBlocks = initRequestedBlocks(init = requestedBefore)
-      val casperContains           = alwaysFalse
-      // when
-      Running.handleHasBlock[Coeval](sender, hb)(casperContains).apply()
-      // then
-      transport.requests shouldBe empty
-    }
+            val requested: Requested = requestedBlocks.read.apply().get(hash).get
+            requested.peers should be(Set(otherPeer))
+            requested.waitingList should be(List(sender))
+          }
+          it(
+            "should request block and add peer to peers list if peers list is empty"
+          ) {
+            // given
+            val sender = peerNode("somePeer", 40400)
+            val requestedBefore =
+              Map(
+                hash -> Requested(
+                  timestamp = System.currentTimeMillis,
+                  peers = Set.empty,
+                  waitingList = List.empty
+                )
+              )
+            implicit val requestedBlocks = initRequestedBlocks(init = requestedBefore)
+            val casperContains           = alwaysFalse
+            // when
+            Running.handleHasBlock[Coeval](sender, hb)(casperContains).apply()
+            // then
+            val (recipient, msg) = transport.getRequest(0)
+            // assert requested
+            val br: BlockRequest = packetToBlockRequest(toPacket(msg).right.get).get
+            br.hash shouldBe hash
+            recipient shouldBe sender
+            transport.requests.size shouldBe 1
+            // assert requested informaton stored
+            val requested: Requested = requestedBlocks.read.apply().get(hash).get
+            requested.peers should be(Set(sender))
+          }
+        }
+        describe("if there is no yet an an entry in the requested blocks") {
+          it("should request block and store information about requested block") {
+            // given
+            val sender                   = peerNode("somePeer", 40400)
+            implicit val requestedBlocks = initRequestedBlocks()
+            val casperContains           = alwaysFalse
+            // when
+            Running.handleHasBlock[Coeval](sender, hb)(casperContains).apply()
+            // then
+            val (recipient, msg) = transport.getRequest(0)
+            // assert requested
+            val br: BlockRequest = packetToBlockRequest(toPacket(msg).right.get).get
+            br.hash shouldBe hash
+            recipient shouldBe sender
+            transport.requests.size shouldBe 1
+            // assert requested informaton stored
+            val requested: Requested = requestedBlocks.read.apply().get(hash).get
+            requested.peers should be(Set(sender))
+          }
 
-    "store on a waiting list and don't request if requested by different peer" in {
-      // given
-      val sender    = peerNode("somePeer", 40400)
-      val otherPeer = peerNode("otherPeer", 40400)
-      val requestedBefore =
-        Map(hash -> Requested(timestamp = System.currentTimeMillis, peers = Set(otherPeer)))
-      implicit val requestedBlocks = initRequestedBlocks(init = requestedBefore)
-      val casperContains           = alwaysFalse
-      // when
-      Running.handleHasBlock[Coeval](sender, hb)(casperContains).apply()
-      // then
-      transport.requests shouldBe empty
+        }
+      }
 
-      val requested: Requested = requestedBlocks.read.apply().get(hash).get
-      requested.peers should be(Set(otherPeer))
-      requested.waitingList should be(List(sender))
-    }
-
-    "request block and store information about requested block" in {
-      // given
-      val sender                   = peerNode("somePeer", 40400)
-      implicit val requestedBlocks = initRequestedBlocks()
-      val casperContains           = alwaysFalse
-      // when
-      Running.handleHasBlock[Coeval](sender, hb)(casperContains).apply()
-      // then
-      val (recipient, msg) = transport.getRequest(0)
-      // assert requested
-      val br: BlockRequest = packetToBlockRequest(toPacket(msg).right.get).get
-      br.hash shouldBe hash
-      recipient shouldBe sender
-      transport.requests.size shouldBe 1
-      // assert requested informaton stored
-      val requested: Requested = requestedBlocks.read.apply().get(hash).get
-      requested.peers should be(Set(sender))
     }
   }
 

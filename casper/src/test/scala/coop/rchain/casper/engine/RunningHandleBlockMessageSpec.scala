@@ -2,7 +2,7 @@ package coop.rchain.casper.engine
 
 import Running.{Requested, RequestedBlocks}
 import coop.rchain.catscontrib.ski._
-import coop.rchain.casper.{BlockStatus, Valid}
+import coop.rchain.casper.{BlockStatus, Processing, Valid}
 import coop.rchain.casper.protocol._
 import coop.rchain.comm.{CommError, Endpoint, NodeIdentifier, PeerNode}, CommError._
 import coop.rchain.comm.protocol.routing.Protocol
@@ -30,15 +30,26 @@ class RunningHandleBlockMessageSpec extends FunSpec with BeforeAndAfterEach with
 
   describe("Running") {
     describe("handleBlockMessage") {
-      it("should remove entry from requested blocks once attempted to add to Casper") {
+      it("should remove entry from requested blocks once block ended up in casper DAG") {
         // given
         val sender                   = peerNode("peer", 40400)
         val requestedBefore          = Map(hash -> Requested(timestamp = 0))
         implicit val requestedBlocks = initRequestedBlocks(init = requestedBefore)
         // when
-        Running.handleBlockMessage[Coeval](sender, bm)(alwaysDoesntContain, alwaysAdd).apply()
+        Running.handleBlockMessage[Coeval](sender, bm)(alwaysDoesntContain, blockInDag).apply()
         // then
         requestedBlocks.read.apply().size should be(0)
+      }
+
+      it("should NOT remove entry from requested blocks if block did NOT ended up in casper DAG") {
+        // given
+        val sender                   = peerNode("peer", 40400)
+        val requestedBefore          = Map(hash -> Requested(timestamp = 0))
+        implicit val requestedBlocks = initRequestedBlocks(init = requestedBefore)
+        // when
+        Running.handleBlockMessage[Coeval](sender, bm)(alwaysDoesntContain, blockNotInDag).apply()
+        // then
+        requestedBlocks.read.apply().size should be(1)
       }
     }
   }
@@ -62,5 +73,6 @@ class RunningHandleBlockMessageSpec extends FunSpec with BeforeAndAfterEach with
 
   private def alwaysSuccess: PeerNode => Protocol => CommErr[Unit] = kp(kp(Right(())))
   private def alwaysDoesntContain: BlockHash => Coeval[Boolean]    = kp(false.pure[Coeval])
-  private def alwaysAdd: BlockMessage => Coeval[BlockStatus]       = kp(Valid.pure[Coeval])
+  private def blockInDag: BlockMessage => Coeval[BlockStatus]      = kp(Valid.pure[Coeval])
+  private def blockNotInDag: BlockMessage => Coeval[BlockStatus]   = kp(Processing.pure[Coeval])
 }

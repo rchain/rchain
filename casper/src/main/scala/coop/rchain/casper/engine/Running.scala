@@ -111,6 +111,18 @@ object Running {
     })
   }
 
+  def addNewEntry[F[_]: Monad: Log: Running.RequestedBlocks: Time](
+      hash: BlockHash,
+      peer: Option[PeerNode] = None
+  ): F[Unit] =
+    Log[F].info(s"Creating new entry for the ${PrettyPrinter.buildString(hash)} request") >> Time[F].currentMillis >>= (
+        ts => {
+          RequestedBlocks[F].modify(
+            _ + (hash -> Requested(timestamp = ts, peers = peer.toSet))
+          )
+        }
+    )
+
   def handleHasBlock[F[_]: Monad: RPConfAsk: RequestedBlocks: TransportLayer: Time: Log](
       peer: PeerNode,
       hb: HasBlock
@@ -120,26 +132,24 @@ object Running {
 
     val hashStr = PrettyPrinter.buildString(hb.hash)
 
-    def addNewEntry =
-      Log[F].info(s"Creating new entry for the $hashStr request") >> Time[F].currentMillis >>= (
-          ts => {
-            RequestedBlocks[F].modify(
-              _ + (hb.hash -> Requested(timestamp = ts, peers = Set(peer)))
-            )
-          }
-      )
-
     def addToWaitingList(requested: Requested): F[Unit] =
       Log[F].info(s"Adding $peer to waiting list of $hashStr request") >> RequestedBlocks[F]
         .modify { requestedBlocks =>
-          requestedBlocks + (hb.hash -> requested.copy(waitingList = peer :: requested.waitingList))
+          requestedBlocks + (hb.hash -> requested.copy(
+            waitingList = requested.waitingList ++ List(peer)
+          ))
         }
 
     val logIntro = s"Received confirmation from $peer that it has block $hashStr."
     Log[F].info(logIntro) >> casperContains(hb.hash).ifM(
       noop[F],
       RequestedBlocks[F].read >>= (_.get(hb.hash)
-        .fold(requestForBlock[F](peer, hb.hash) >> addNewEntry)(addToWaitingList))
+        .fold(requestForBlock[F](peer, hb.hash) >> addNewEntry[F](hb.hash, Some(peer)))(
+          req =>
+            if (req.peers.isEmpty)
+              requestForBlock[F](peer, hb.hash) >> addNewEntry[F](hb.hash, Some(peer))
+            else addToWaitingList(req)
+        ))
     )
   }
 
@@ -169,9 +179,9 @@ object Running {
       .ifM(
         Log[F].info(s"Received block ${PrettyPrinter.buildString(b.blockHash)} again."),
         for {
-          _ <- Log[F].info(s"Received ${PrettyPrinter.buildString(b)}.")
-          _ <- casperAdd(b)
-          _ <- RequestedBlocks[F].modify(_ - b.blockHash)
+          _      <- Log[F].info(s"Received ${PrettyPrinter.buildString(b)}.")
+          status <- casperAdd(b)
+          _      <- if (status.inDag) RequestedBlocks[F].modify(_ - b.blockHash) else noop[F]
         } yield ()
       )
 
