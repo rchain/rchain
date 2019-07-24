@@ -89,11 +89,9 @@ new  Either, rs(`rho:registry:insertSigned:secp256k1`), uriOut, rl(`rho:registry
 
     // Combines two eithers, discarding the first value and keeping the second
     contract Either(@"productR", @a, @b, return) = {
-      new snd in {
-        Either!("map2", a, b, *snd, *return) |
-        for (@a, @b, ret <- snd) {
-          ret!(b)
-        }
+      match (a, b) {
+        ((false, _), _) => return!(a)
+        _ => return!(b)
       }
     } |
 
