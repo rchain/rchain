@@ -40,7 +40,7 @@ final case class SortedParMap(ps: TreeMap[Par, Par]) extends Iterable[(Par, Par)
 
   override def head: (Par, Par) = ps.head
 
-  private def sort(par: Par): Par = Sortable[Par].sortMatch[Coeval](par).map(_.term).value()
+  private def sort(par: Par): Par = SortedParMap.scoredTerm(par).term
 }
 
 object SortedParMap {
