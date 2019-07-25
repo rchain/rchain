@@ -6,6 +6,7 @@ import coop.rchain.models.Expr.ExprInstance._
 import coop.rchain.models._
 import coop.rchain.models.rholang.implicits._
 import cats.implicits._
+import coop.rchain.crypto.codec.Base16
 
 private[sorter] object ExprSortMatcher extends Sortable[Expr] {
 
@@ -259,7 +260,7 @@ private[sorter] object ExprSortMatcher extends Sortable[Expr] {
       case gs: GString => ScoredTerm(e, Node(Score.STRING, Leaf(gs.value))).pure[F]
       case gu: GUri    => ScoredTerm(e, Node(Score.URI, Leaf(gu.value))).pure[F]
       case GByteArray(ba) =>
-        ScoredTerm(e, Node(Score.EBYTEARR, Leaf(ba.toStringUtf8))).pure[F]
+        ScoredTerm(e, Node(Score.EBYTEARR, Leaf(Base16.encode(ba.toByteArray)))).pure[F]
       //TODO get rid of Empty nodes in Protobuf unless they represent sth indeed optional
       case Empty =>
         ScoredTerm(e, Node(Score.ABSENT)).pure[F]
