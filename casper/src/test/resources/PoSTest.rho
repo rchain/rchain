@@ -17,6 +17,7 @@ match (
       test_close_block_finishes,
       test_bonding_succeeds,
       test_withdraw_succeeds,
+      test_validator_is_paid_after_withdraw,
       test_multiple_bonding_succeeds,
       test_bonding_fails_if_deposit_fails,
       test_bonding_fails_if_already_bonded,
@@ -45,6 +46,7 @@ match (
               ("closeBlock finishes successfully", *test_close_block_finishes),
               ("bonding success", *test_bonding_succeeds),
               ("withdraw succeeds", *test_withdraw_succeeds),
+              ("validator is paid after withdraw", *test_validator_is_paid_after_withdraw),
               ("bonding fails if deposit fails", *test_bonding_fails_if_deposit_fails),
               ("multiple bondings work", *test_multiple_bonding_succeeds),
               ("payment works", *test_pay_succeeds),
@@ -195,6 +197,58 @@ match (
             }
           } |
 
+          contract test_validator_is_paid_after_withdraw(rhoSpec, _, ackCh) = {
+            new setupCh, retCh,
+                initialValidatorBalanceCh, finalValidatorBalanceCh,
+                initialBondsCh, finalBondsCh,
+                withdrawCh, closeBlockCh,
+                setDeployData(`rho:test:deploy:set`), identitySet in {
+              prepareUser!("bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", 10000, *setupCh) |
+              for (@validatorPubKey, _, @validatorVault <- setupCh) {
+                @validatorVault!("balance", *initialValidatorBalanceCh) |
+                @PoS!("getBonds", *initialBondsCh) |
+                for(@initialValidatorBalance <- initialValidatorBalanceCh;
+                    @initialBonds <- initialBondsCh) {
+                  @PoS!("bond", 100, *retCh) |
+                  for ( @(true, _) <- retCh) {
+                    @PoS!("closeBlock", *closeBlockCh) |
+                    for (_ <- closeBlockCh) {
+                      prepareUser!("cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc", 10000, *setupCh) |
+                      for (@userPubKey, _, @userVault <- setupCh) {
+                        @PoS!("pay", 100, *retCh) |
+                        for ( @(true, _) <- retCh) {
+                          @PoS!("closeBlock", *closeBlockCh) |
+                          for (_ <- closeBlockCh) {
+                            setDeployData!("userId", validatorPubKey, *identitySet) |
+                            for(_ <- identitySet) {
+                              @PoS!("withdraw", *withdrawCh) |
+                              for (_ <- withdrawCh) {
+                                @PoS!("closeBlock", *closeBlockCh) |
+                                for (_ <- closeBlockCh) {
+                                  @validatorVault!("balance", *finalValidatorBalanceCh) |
+                                  @PoS!("getBonds", *finalBondsCh) |
+                                  for(@finalBonds <- finalBondsCh;
+                                      @finalValidatorBalance <- finalValidatorBalanceCh) {
+                                    rhoSpec!("assertMany",
+                                      [
+                                        ((finalBonds, "==", initialBonds), "bonds don't change"),
+                                        ((46, "==", finalValidatorBalance-initialValidatorBalance ), "user balance changes accordingly")
+                                      ],
+                                      *ackCh
+                                    )
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          } |
           contract test_multiple_bonding_succeeds(rhoSpec, _, ackCh) = {
             new setupCh, retCh, initialPosBalanceCh, finalPosBalanceCh,
                 initialUser1BalanceCh, finalUser1BalanceCh,
