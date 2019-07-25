@@ -60,10 +60,10 @@ class MultiParentCasperMergeSpec extends FlatSpec with Matchers with Inspectors 
     }
   }
 
-  it should "handle multi-parent blocks correctly when they operate on stdout" ignore effectTest {
+  it should "handle multi-parent blocks correctly when they operate on stdout" in effectTest {
     def echoContract(no: Int) =
       Rho(s"""new stdout(`rho:io:stdout`) in { stdout!("Contract $no") }""")
-    merges(echoContract(1), echoContract(2), Rho("Nil"))
+    conflictsForNow(echoContract(1), echoContract(2), Rho("Nil"))
   }
 
   // TODO: Peek rows/column
