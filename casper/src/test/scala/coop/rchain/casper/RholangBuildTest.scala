@@ -12,7 +12,7 @@ import coop.rchain.crypto.codec.Base16
 import coop.rchain.metrics
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.p2p.EffectsTestInstances.{LogStub, LogicalTime}
-import coop.rchain.shared.Time
+import coop.rchain.shared.{Debug, Time}
 import monix.eval.Task
 import org.scalatest.{FlatSpec, Matchers}
 
@@ -29,15 +29,17 @@ class RholangBuildTest extends FlatSpec with Matchers {
   val genesisPath: Path =
     Path.of("/Users/josephdenman/IdeaProjects/rchain/casper/src/test/scala/coop/rchain/casper")
   val storagePath: Path = Files.createTempDirectory(s"rholang-build-test-")
-  val storageSize: Long = 3024L * 1024
+  val storageSize: Long = 3024L * 1024 * 1024
 
-  for {
+  val program = for {
     activeRuntime  <- Runtime.createWithEmptyCost[Task](storagePath, storageSize)
     runtimeManager <- RuntimeManager.fromRuntime[Task](activeRuntime)
+    _              <- Debug.print[Task]("started-genesis")
     genesisBlock <- {
       implicit val rm: RuntimeManager[Task] = runtimeManager
-      Genesis.fromInputFiles[Task](None, 1, ???, None, 0L, Long.MaxValue, "rchain", None)
+      Genesis.fromInputFiles[Task](None, 1, genesisPath, None, 0L, Long.MaxValue, "rchain", None)
     }
+    _ <- Debug.print[Task]("finished-genesis")
     _ <- Task.delay(storagePath.recursivelyDelete())
     _ <- Task.delay(genesisPath.resolve("bonds.txt").recursivelyDelete())
     _ <- Task.delay(
@@ -49,5 +51,7 @@ class RholangBuildTest extends FlatSpec with Matchers {
             }
         )
   } yield ()
+
+  program.runSyncUnsafe()
 
 }
