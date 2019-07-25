@@ -219,41 +219,43 @@ new  PoS,
                   for(_, @blockNumber <- blockDataCh;
                       @state, mvarResultCh <- mvarProcessCh) {
 
+                    changeEpoch!(
+                      blockNumber,
+                      state.get("allBonds"),
+                      state.get("activeValidators"),
+                      state.get("withdrawers"),
+                      *newValidatorsCh)|
+
                     commitRewards!(
                       state.get("pendingRewards"),
                       state.get("committedRewards"),
                       *commitRewardsCh) |
 
                     for (@committedRewards <- commitRewardsCh) {
-                      changeEpoch!(
-                        blockNumber,
-                        state.get("allBonds"),
-                        state.get("activeValidators"),
-                        state.get("withdrawers"),
-                        *newValidatorsCh)|
 
                       removeQuarantinedWithdrawers!(
                         blockNumber,
                         state.get("allBonds"),
                         state.get("withdrawers"),
                         committedRewards,
-                        *removeQuarantinedCh) |
+                        *removeQuarantinedCh)
+                    } |
 
-                      for(@newValidators <- newValidatorsCh;
-                          @(payments, newBonds, newWithdrawers, newRewards) <- removeQuarantinedCh) {
-                        payValidators!(payments, *paymentDoneCh) |
+                    for(@newValidators <- newValidatorsCh;
+                        @(payments, newBonds, newWithdrawers, newRewards) <- removeQuarantinedCh) {
 
-                        for (_ <- paymentDoneCh) {
-                          mvarResultCh!(
-                            {
-                              "pendingRewards":{},
-                              "committedRewards":newRewards,
-                              "activeValidators":newValidators,
-                              "withdrawers":newWithdrawers,
-                              "allBonds":newBonds
-                            },
-                            Nil)
-                        }
+                      payValidators!(payments, *paymentDoneCh) |
+
+                      for (_ <- paymentDoneCh) {
+                        mvarResultCh!(
+                          {
+                            "pendingRewards":{},
+                            "committedRewards":newRewards,
+                            "activeValidators":newValidators,
+                            "withdrawers":newWithdrawers,
+                            "allBonds":newBonds
+                          },
+                          Nil)
                       }
                     }
                   }
