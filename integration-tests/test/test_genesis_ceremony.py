@@ -50,40 +50,40 @@ def test_successful_genesis_ceremony(command_line_options: CommandLineOptions, r
         VALIDATOR_B_KEYPAIR,
     ]
 
-    with testing_context(command_line_options, random_generator, docker_client, bootstrap_key=CEREMONY_MASTER_KEYPAIR, peers_keys=peers_keypairs) as context:
-        with temporary_wallets_file(context.random_generator, [context.bootstrap_key] + context.peers_keys) as wallets:
-            with ready_bootstrap(context=context, cli_options=bootstrap_cli_options, wallets_file=wallets) as ceremony_master:
-                with started_peer(context=context, network=ceremony_master.network, bootstrap=ceremony_master, name='validator-a', private_key=VALIDATOR_A_KEYPAIR, wallets_file=wallets, cli_flags=peers_cli_flags, cli_options=peers_cli_options) as validator_a:
-                    with started_peer(context=context, network=ceremony_master.network, bootstrap=ceremony_master, name='validator-b', private_key=VALIDATOR_B_KEYPAIR, wallets_file=wallets, cli_flags=peers_cli_flags, cli_options=peers_cli_options) as validator_b:
-                        with started_peer(context=context, network=ceremony_master.network, bootstrap=ceremony_master, name='readonly-a', private_key=READONLY_A_KEYPAIR) as readonly_a:
-                            wait_for_block_approval(context, ceremony_master)
-                            wait_for_approved_block_received_handler_state(context, ceremony_master)
-                            wait_for_sent_approved_block(context, ceremony_master)
-                            wait_for_approved_block_received_handler_state(context, validator_a)
-                            wait_for_approved_block_received_handler_state(context, validator_b)
+    with testing_context(command_line_options, random_generator, docker_client, bootstrap_key=CEREMONY_MASTER_KEYPAIR, peers_keys=peers_keypairs) as context, \
+        temporary_wallets_file(context.random_generator, [context.bootstrap_key] + context.peers_keys) as wallets, \
+        ready_bootstrap(context=context, cli_options=bootstrap_cli_options, wallets_file=wallets) as ceremony_master, \
+        started_peer(context=context, network=ceremony_master.network, bootstrap=ceremony_master, name='validator-a', private_key=VALIDATOR_A_KEYPAIR, wallets_file=wallets, cli_flags=peers_cli_flags, cli_options=peers_cli_options) as validator_a, \
+        started_peer(context=context, network=ceremony_master.network, bootstrap=ceremony_master, name='validator-b', private_key=VALIDATOR_B_KEYPAIR, wallets_file=wallets, cli_flags=peers_cli_flags, cli_options=peers_cli_options) as validator_b, \
+        started_peer(context=context, network=ceremony_master.network, bootstrap=ceremony_master, name='readonly-a', private_key=READONLY_A_KEYPAIR) as readonly_a:
+            wait_for_block_approval(context, ceremony_master)
+            wait_for_approved_block_received_handler_state(context, ceremony_master)
+            wait_for_sent_approved_block(context, ceremony_master)
+            wait_for_approved_block_received_handler_state(context, validator_a)
+            wait_for_approved_block_received_handler_state(context, validator_b)
 
-                            assert ceremony_master.get_blocks_count(2) == 1
-                            assert validator_a.get_blocks_count(2) == 1
-                            assert validator_b.get_blocks_count(2) == 1
+            assert ceremony_master.get_blocks_count(2) == 1
+            assert validator_a.get_blocks_count(2) == 1
+            assert validator_b.get_blocks_count(2) == 1
 
-                            ceremony_master_blocks = ceremony_master.show_blocks_parsed(2)
-                            assert len(ceremony_master_blocks) == 1
-                            ceremony_master_genesis_block = ceremony_master_blocks[0]
-                            assert ceremony_master_genesis_block['mainParentHash'] == ''
+            ceremony_master_blocks = ceremony_master.show_blocks_parsed(2)
+            assert len(ceremony_master_blocks) == 1
+            ceremony_master_genesis_block = ceremony_master_blocks[0]
+            assert ceremony_master_genesis_block['mainParentHash'] == ''
 
-                            validator_a_blocks = validator_a.show_blocks_parsed(2)
-                            assert len(validator_a_blocks) == 1
-                            validator_a_genesis_block = validator_a_blocks[0]
-                            assert validator_a_genesis_block['blockHash'] == ceremony_master_genesis_block['blockHash']
-                            assert validator_a_genesis_block['mainParentHash'] == ''
+            validator_a_blocks = validator_a.show_blocks_parsed(2)
+            assert len(validator_a_blocks) == 1
+            validator_a_genesis_block = validator_a_blocks[0]
+            assert validator_a_genesis_block['blockHash'] == ceremony_master_genesis_block['blockHash']
+            assert validator_a_genesis_block['mainParentHash'] == ''
 
-                            validator_b_blocks = validator_b.show_blocks_parsed(2)
-                            assert len(validator_b_blocks) == 1
-                            validator_b_genesis_block = validator_b_blocks[0]
-                            assert validator_b_genesis_block['blockHash'] == ceremony_master_genesis_block['blockHash']
-                            assert validator_b_genesis_block['mainParentHash'] == ''
+            validator_b_blocks = validator_b.show_blocks_parsed(2)
+            assert len(validator_b_blocks) == 1
+            validator_b_genesis_block = validator_b_blocks[0]
+            assert validator_b_genesis_block['blockHash'] == ceremony_master_genesis_block['blockHash']
+            assert validator_b_genesis_block['mainParentHash'] == ''
 
-                            wait_for_approved_block_received_handler_state(context, readonly_a)
+            wait_for_approved_block_received_handler_state(context, readonly_a)
 
 
 def test_validator_catching_up(command_line_options: CommandLineOptions, random_generator: Random, docker_client: DockerClient) -> None:
@@ -103,48 +103,48 @@ def test_validator_catching_up(command_line_options: CommandLineOptions, random_
         VALIDATOR_B_KEYPAIR,
         VALIDATOR_C_KEYPAIR
     ]
-    with testing_context(command_line_options, random_generator, docker_client, bootstrap_key=CEREMONY_MASTER_KEYPAIR, peers_keys=peers_keypairs) as context:
-        with temporary_wallets_file(context.random_generator, [context.bootstrap_key] + context.peers_keys) as wallets:
-            with ready_bootstrap(context=context, cli_options=bootstrap_cli_options, wallets_file=wallets) as ceremony_master:
-                with started_peer(context=context, network=ceremony_master.network, bootstrap=ceremony_master, name='validator-a', private_key=VALIDATOR_A_KEYPAIR, wallets_file=wallets, cli_flags=peers_cli_flags, cli_options=peers_cli_options) as validator_a:
-                    with started_peer(context=context, network=ceremony_master.network, bootstrap=ceremony_master, name='validator-b', private_key=VALIDATOR_B_KEYPAIR, wallets_file=wallets, cli_flags=peers_cli_flags, cli_options=peers_cli_options) as validator_b:
-                        wait_for_block_approval(context, ceremony_master)
-                        wait_for_approved_block_received_handler_state(context, ceremony_master)
-                        wait_for_sent_approved_block(context, ceremony_master)
-                        wait_for_approved_block_received_handler_state(context, validator_a)
-                        wait_for_approved_block_received_handler_state(context, validator_b)
+    with testing_context(command_line_options, random_generator, docker_client, bootstrap_key=CEREMONY_MASTER_KEYPAIR, peers_keys=peers_keypairs) as context, \
+        temporary_wallets_file(context.random_generator, [context.bootstrap_key] + context.peers_keys) as wallets, \
+        ready_bootstrap(context=context, cli_options=bootstrap_cli_options, wallets_file=wallets) as ceremony_master, \
+        started_peer(context=context, network=ceremony_master.network, bootstrap=ceremony_master, name='validator-a', private_key=VALIDATOR_A_KEYPAIR, wallets_file=wallets, cli_flags=peers_cli_flags, cli_options=peers_cli_options) as validator_a, \
+        started_peer(context=context, network=ceremony_master.network, bootstrap=ceremony_master, name='validator-b', private_key=VALIDATOR_B_KEYPAIR, wallets_file=wallets, cli_flags=peers_cli_flags, cli_options=peers_cli_options) as validator_b:
+            wait_for_block_approval(context, ceremony_master)
+            wait_for_approved_block_received_handler_state(context, ceremony_master)
+            wait_for_sent_approved_block(context, ceremony_master)
+            wait_for_approved_block_received_handler_state(context, validator_a)
+            wait_for_approved_block_received_handler_state(context, validator_b)
 
-                        assert ceremony_master.get_blocks_count(2) == 1
-                        assert validator_a.get_blocks_count(2) == 1
-                        assert validator_b.get_blocks_count(2) == 1
+            assert ceremony_master.get_blocks_count(2) == 1
+            assert validator_a.get_blocks_count(2) == 1
+            assert validator_b.get_blocks_count(2) == 1
 
-                        ceremony_master_blocks = ceremony_master.show_blocks_parsed(2)
-                        assert len(ceremony_master_blocks) == 1
-                        ceremony_master_genesis_block = ceremony_master_blocks[0]
-                        assert ceremony_master_genesis_block['mainParentHash'] == ''
+            ceremony_master_blocks = ceremony_master.show_blocks_parsed(2)
+            assert len(ceremony_master_blocks) == 1
+            ceremony_master_genesis_block = ceremony_master_blocks[0]
+            assert ceremony_master_genesis_block['mainParentHash'] == ''
 
-                        validator_a_blocks = validator_a.show_blocks_parsed(2)
-                        assert len(validator_a_blocks) == 1
-                        validator_a_genesis_block = validator_a_blocks[0]
-                        assert validator_a_genesis_block['blockHash'] == ceremony_master_genesis_block['blockHash']
-                        assert validator_a_genesis_block['mainParentHash'] == ''
+            validator_a_blocks = validator_a.show_blocks_parsed(2)
+            assert len(validator_a_blocks) == 1
+            validator_a_genesis_block = validator_a_blocks[0]
+            assert validator_a_genesis_block['blockHash'] == ceremony_master_genesis_block['blockHash']
+            assert validator_a_genesis_block['mainParentHash'] == ''
 
-                        validator_b_blocks = validator_b.show_blocks_parsed(2)
-                        assert len(validator_b_blocks) == 1
-                        validator_b_genesis_block = validator_b_blocks[0]
-                        assert validator_b_genesis_block['blockHash'] == ceremony_master_genesis_block['blockHash']
-                        assert validator_b_genesis_block['mainParentHash'] == ''
+            validator_b_blocks = validator_b.show_blocks_parsed(2)
+            assert len(validator_b_blocks) == 1
+            validator_b_genesis_block = validator_b_blocks[0]
+            assert validator_b_genesis_block['blockHash'] == ceremony_master_genesis_block['blockHash']
+            assert validator_b_genesis_block['mainParentHash'] == ''
 
-                        with started_peer(context=context, network=ceremony_master.network, bootstrap=ceremony_master, name='validator-c', private_key=VALIDATOR_C_KEYPAIR) as validator_c:
-                            wait_for_approved_block_received_handler_state(context, validator_c)
-                            assert validator_c.get_blocks_count(2) == 1
-                            validator_c_blocks = validator_c.show_blocks_parsed(2)
-                            assert len(validator_c_blocks) == 1
-                            validator_c_genesis_block = validator_c_blocks[0]
-                            assert validator_c_genesis_block['blockHash'] == ceremony_master_genesis_block['blockHash']
-                            assert validator_c_genesis_block['mainParentHash'] == ''
+            with started_peer(context=context, network=ceremony_master.network, bootstrap=ceremony_master, name='validator-c', private_key=VALIDATOR_C_KEYPAIR) as validator_c:
+                wait_for_approved_block_received_handler_state(context, validator_c)
+                assert validator_c.get_blocks_count(2) == 1
+                validator_c_blocks = validator_c.show_blocks_parsed(2)
+                assert len(validator_c_blocks) == 1
+                validator_c_genesis_block = validator_c_blocks[0]
+                assert validator_c_genesis_block['blockHash'] == ceremony_master_genesis_block['blockHash']
+                assert validator_c_genesis_block['mainParentHash'] == ''
 
-                            validator_c_genesis_block_info = validator_c.show_block_parsed(validator_c_genesis_block['blockHash'].strip('"'))
-                            validator_c_bonds_validator_stake = extract_validator_stake_from_bonds_validator_str(validator_c_genesis_block_info['bondsValidatorList'])
-                            assert VALIDATOR_A_KEYPAIR.get_public_key().to_hex() in validator_c_bonds_validator_stake
-                            assert VALIDATOR_B_KEYPAIR.get_public_key().to_hex()in validator_c_bonds_validator_stake
+                validator_c_genesis_block_info = validator_c.show_block_parsed(validator_c_genesis_block['blockHash'].strip('"'))
+                validator_c_bonds_validator_stake = extract_validator_stake_from_bonds_validator_str(validator_c_genesis_block_info['bondsValidatorList'])
+                assert VALIDATOR_A_KEYPAIR.get_public_key().to_hex() in validator_c_bonds_validator_stake
+                assert VALIDATOR_B_KEYPAIR.get_public_key().to_hex()in validator_c_bonds_validator_stake
