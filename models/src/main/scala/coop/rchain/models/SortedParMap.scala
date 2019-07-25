@@ -44,15 +44,25 @@ final case class SortedParMap(ps: TreeMap[Par, Par]) extends Iterable[(Par, Par)
 }
 
 object SortedParMap {
+  @SuppressWarnings(Array("org.wartremover.warts.Var", "org.wartremover.warts.Null"))
+  var cacheMiss = 0
+  @SuppressWarnings(Array("org.wartremover.warts.Var", "org.wartremover.warts.Null"))
+  var cacheAll = 0
 
   // From https://stackoverflow.com/a/36960228/2750819
   def memoize[I, O](f: I => O): I => O = new mutable.HashMap[I, O]() {
-    override def apply(key: I): O = getOrElseUpdate(key, f(key))
+    override def apply(key: I): O = {
+      cacheAll = cacheAll + 1
+      println(s"Cache miss: $cacheMiss, Cache all: $cacheAll")
+      getOrElseUpdate(key, f(key))
+    }
   }
 
-  lazy val scoredTerm: Par => sorter.ScoredTerm[Par] = memoize(
-    par => Sortable[Par].sortMatch[Coeval](par).value()
-  )
+  lazy val scoredTerm: Par => sorter.ScoredTerm[Par] = memoize { par =>
+    cacheMiss = cacheMiss + 1
+    cacheAll = cacheAll + 1
+    Sortable[Par].sortMatch[Coeval](par).value()
+  }
 
   val parOrdering: Ordering[Par] = new Ordering[Par] {
     override def compare(x: Par, y: Par): Int =
