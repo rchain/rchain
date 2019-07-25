@@ -165,7 +165,7 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span] private[rholang] (
                     RhoType.ByteArray(validator.toByteArray),
                     RhoType.ByteArray(blockHash.toByteArray)
                   )
-              }))
+              }.toSeq))
             )
           )
         )

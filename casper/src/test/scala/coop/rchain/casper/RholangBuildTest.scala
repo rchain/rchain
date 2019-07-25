@@ -1,63 +1,53 @@
 package coop.rchain.casper
 
-import cats.implicits._
-import coop.rchain.casper.MultiParentCasper.ignoreDoppelgangerCheck
-import coop.rchain.casper.helper.HashSetCasperTestNode
-import coop.rchain.casper.helper.HashSetCasperTestNode._
-import coop.rchain.casper.scalatestcontrib._
-import coop.rchain.casper.util.ConstructDeploy
-import coop.rchain.casper.util.GenesisBuilder.buildGenesis
-import coop.rchain.casper.util.RSpaceUtil._
-import coop.rchain.casper.util.rholang.RegistrySigGen
-import coop.rchain.crypto.PublicKey
+import java.nio.file.{Files, Path}
+
+import coop.rchain.blockstorage.util.io.IOError
+import coop.rchain.blockstorage.util.io.IOError.RaiseIOError
+import coop.rchain.shared.PathOps.RichPath
+import coop.rchain.rholang.interpreter.Runtime
+import coop.rchain.casper.genesis.Genesis
+import coop.rchain.casper.util.rholang.RuntimeManager
 import coop.rchain.crypto.codec.Base16
-import monix.execution.Scheduler.Implicits.global
+import coop.rchain.metrics
+import coop.rchain.metrics.{Metrics, NoopSpan, Span}
+import coop.rchain.p2p.EffectsTestInstances.{LogStub, LogicalTime}
+import coop.rchain.shared.Time
+import monix.eval.Task
 import org.scalatest.{FlatSpec, Matchers}
 
 class RholangBuildTest extends FlatSpec with Matchers {
 
-  val genesis = buildGenesis()
+  import monix.execution.Scheduler.Implicits.global
 
-  "Our build system" should "allow import of rholang sources into scala code" in effectTest {
-    HashSetCasperTestNode
-      .standaloneEff(genesis)
-      .use { node =>
-        import node._
+  implicit val timeEff: Time[Task]              = new LogicalTime[Task]
+  implicit val log                              = new LogStub[Task]
+  implicit val metricsEff: Metrics[Task]        = new metrics.Metrics.MetricsNOP[Task]
+  implicit val span: Span[Task]                 = NoopSpan[Task]()
+  implicit val raiseIOError: RaiseIOError[Task] = IOError.raiseIOErrorThroughSync[Task]
 
-        val code =
-          """
-          |new testRet, double, rl(`rho:registry:lookup`), ListOpsCh, getBlockData(`rho:block:data`),
-          |    timeRtn, stdout(`rho:io:stdout`), doubleRet
-          |in {
-          |  contract double(@x, ret) = { ret!(2 * x) } |
-          |  rl!(`rho:lang:listOps`, *ListOpsCh) |
-          |  for(@(_, ListOps) <- ListOpsCh) {
-          |    @ListOps!("map", [2, 3, 5, 7], *double, *doubleRet)
-          |  } |
-          |  getBlockData!(*timeRtn) |
-          |  for (@_, @timestamp <- timeRtn; @doubles <- doubleRet) {
-          |    testRet!((doubles, "The timestamp is ${timestamp}" %% {"timestamp" : timestamp}))
-          |  }
-          |}
-          |""".stripMargin
-        for {
-          deploy <- ConstructDeploy.sourceDeployNowF(code)
-          createBlockResult <- MultiParentCasper[Effect]
-                                .deploy(deploy) >> MultiParentCasper[Effect].createBlock
-          Created(signedBlock) = createBlockResult
-          _                    <- MultiParentCasper[Effect].addBlock(signedBlock, ignoreDoppelgangerCheck[Effect])
-          _                    = logEff.warns should be(Nil)
-          _ <- getDataAtPrivateChannel[Effect](
-                signedBlock,
-                Base16.encode(
-                  RegistrySigGen.generateUnforgeableNameId(
-                    PublicKey(deploy.deployer.toByteArray),
-                    deploy.timestamp
-                  )
-                )
-              ).map(_ shouldBe Seq("""([4, 6, 10, 14], "The timestamp is 2")"""))
-        } yield ()
-      }
-  }
+  val genesisPath: Path =
+    Path.of("/Users/josephdenman/IdeaProjects/rchain/casper/src/test/scala/coop/rchain/casper")
+  val storagePath: Path = Files.createTempDirectory(s"rholang-build-test-")
+  val storageSize: Long = 3024L * 1024
+
+  for {
+    activeRuntime  <- Runtime.createWithEmptyCost[Task](storagePath, storageSize)
+    runtimeManager <- RuntimeManager.fromRuntime[Task](activeRuntime)
+    genesisBlock <- {
+      implicit val rm: RuntimeManager[Task] = runtimeManager
+      Genesis.fromInputFiles[Task](None, 1, ???, None, 0L, Long.MaxValue, "rchain", None)
+    }
+    _ <- Task.delay(storagePath.recursivelyDelete())
+    _ <- Task.delay(genesisPath.resolve("bonds.txt").recursivelyDelete())
+    _ <- Task.delay(
+          genesisBlock.body.get.state.get.bonds
+            .map(_.validator)
+            .map(byteKey => Base16.encode(byteKey.toByteArray))
+            .foreach { pk =>
+              genesisPath.resolve(s"$pk.sk").recursivelyDelete()
+            }
+        )
+  } yield ()
 
 }
