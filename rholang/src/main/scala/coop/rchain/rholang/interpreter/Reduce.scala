@@ -766,7 +766,7 @@ class DebruijnInterpreter[M[_], F[_]](
 
           case EMapBody(map) =>
             for {
-              evaledPs <- map.ps.sortedList.traverse {
+              evaledPs <- map.ps.toStream.traverse {
                            case (key, value) =>
                              for {
                                eKey   <- evalExpr(key).map(updateLocallyFree)

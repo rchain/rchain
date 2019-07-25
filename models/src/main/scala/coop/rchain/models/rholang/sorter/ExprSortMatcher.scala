@@ -177,7 +177,7 @@ private[sorter] object ExprSortMatcher extends Sortable[Expr] {
           } yield ScoredTerm((sortedKey.term, sortedValue.term), sortedKey.score)
 
         for {
-          sortedPars          <- parMap.ps.sortedList.traverse(kv => sortKeyValuePair(kv._1, kv._2))
+          sortedPars          <- parMap.ps.toStream.traverse(kv => sortKeyValuePair(kv._1, kv._2))
           remainderScore      <- remainderScore(parMap.remainder)
           connectiveUsedScore = if (parMap.connectiveUsed) 1L else 0L
         } yield constructExpr(

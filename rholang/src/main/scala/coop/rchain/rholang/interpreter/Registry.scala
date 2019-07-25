@@ -689,9 +689,10 @@ class RegistryImpl[F[_]](
                   } else if (parMap.ps.size != 2) {
                     localFail()
                   } else {
-                    val shrunkMap = (parMap.ps - parByteArray(head))
+                    val shrunkMap: SortedParMap = parMap.ps - parByteArray(head)
+                    val (firstKey, firstValue)  = shrunkMap.head
                     for {
-                      _ <- Function.tupled(mergeWithParent(_, _))(shrunkMap.head)
+                      _ <- mergeWithParent(firstKey, firstValue)
                       _ <- succeed(ps(2), ret, callRand, sequenceNumber)
                     } yield ()
                   }

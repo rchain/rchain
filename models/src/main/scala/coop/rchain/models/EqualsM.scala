@@ -92,7 +92,7 @@ object EqualM extends EqualMDerivation {
   implicit val EMapEqual = gen[EMap]
 
   implicit val SortedParHashSetEqual: EqualM[SortedParHashSet] = by(_.sortedPars)
-  implicit val SortedParMapEqual: EqualM[SortedParMap]         = by(_.sortedList)
+  implicit val SortedParMapEqual: EqualM[SortedParMap]         = by(_.ps.toList)
 
   implicit val ParSetEqual: EqualM[ParSet] = by(x => (x.ps, x.remainder, x.connectiveUsed))
   implicit val ParMapEqual: EqualM[ParMap] = by(x => (x.ps, x.remainder, x.connectiveUsed))

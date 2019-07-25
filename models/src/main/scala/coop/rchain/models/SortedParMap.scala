@@ -1,59 +1,63 @@
 package coop.rchain.models
 
 import coop.rchain.models.rholang.sorter.Sortable
-import coop.rchain.models.rholang.sorter.ordering._
+
 import monix.eval.Coeval
 
 import scala.collection.GenTraversableOnce
-import scala.collection.immutable.HashMap
+import scala.collection.immutable.TreeMap
 
-final class SortedParMap private (ps: Map[Par, Par]) extends Iterable[(Par, Par)] {
+import coop.rchain.models.rholang.sorter.ScoredTerm.{ordering => ScoredTermOrdering}
 
-  // TODO: Merge `sortedList` and `sortedMap` into one VectorMap once available
-  lazy val sortedList: List[(Par, Par)]         = ps.sort
-  private lazy val sortedMap: HashMap[Par, Par] = HashMap(sortedList: _*)
+final case class SortedParMap(ps: TreeMap[Par, Par]) extends Iterable[(Par, Par)] {
 
-  def +(kv: (Par, Par)): SortedParMap = SortedParMap(sortedMap + kv)
+  def +(kv: (Par, Par)): SortedParMap = SortedParMap(ps + (sort(kv._1) -> sort(kv._2)))
 
-  def ++(kvs: GenTraversableOnce[(Par, Par)]): SortedParMap = SortedParMap(sortedMap ++ kvs)
+  def ++(kvs: GenTraversableOnce[(Par, Par)]): SortedParMap =
+    SortedParMap(ps ++ kvs.toStream.map(kv => sort(kv._1) -> sort(kv._2)))
 
-  def -(key: Par): SortedParMap = SortedParMap(sortedMap - sort(key))
+  def -(key: Par): SortedParMap = SortedParMap(ps - sort(key))
 
   def --(keys: GenTraversableOnce[Par]): SortedParMap =
-    SortedParMap(keys.foldLeft(sortedMap) { (map, kv) =>
-      map - sort(kv)
+    SortedParMap(keys.foldLeft(ps) { (map, key) =>
+      map - sort(key)
     })
 
-  def apply(par: Par): Par = sortedMap(sort(par))
+  def apply(par: Par): Par = ps(sort(par))
 
-  def contains(par: Par): Boolean = sortedMap.contains(sort(par))
+  def contains(par: Par): Boolean = ps.contains(sort(par))
 
-  def empty: SortedParMap = SortedParMap(Map.empty[Par, Par])
+  def empty: SortedParMap = SortedParMap.empty
 
-  def get(key: Par): Option[Par] = sortedMap.get(sort(key))
+  def get(key: Par): Option[Par] = ps.get(sort(key))
 
-  def getOrElse(key: Par, default: Par): Par = sortedMap.getOrElse(sort(key), default)
+  def getOrElse(key: Par, default: Par): Par = ps.getOrElse(sort(key), default)
 
-  def iterator: Iterator[(Par, Par)] = sortedList.toIterator
+  def iterator: Iterator[(Par, Par)] = ps.toIterator
 
-  def keys: Iterable[Par] = sortedList.map(_._1)
+  def keys: Iterable[Par] = ps.keys
 
-  def values: Iterable[Par] = sortedList.map(_._2)
+  def values: Iterable[Par] = ps.values
 
-  override def equals(that: Any): Boolean = that match {
-    case spm: SortedParMap => spm.sortedList == this.sortedList
-    case _                 => false
-  }
-
-  override def hashCode(): Int = sortedList.hashCode()
+  override def head: (Par, Par) = ps.head
 
   private def sort(par: Par): Par = Sortable[Par].sortMatch[Coeval](par).map(_.term).value()
 }
 
 object SortedParMap {
-  def apply(map: Map[Par, Par]): SortedParMap = new SortedParMap(map)
+  implicit def ordering: Ordering[Par] = (x: Par, y: Par) => {
+    (for {
+      termX <- Sortable[Par].sortMatch[Coeval](x)
+      termY <- Sortable[Par].sortMatch[Coeval](y)
+    } yield ScoredTermOrdering.compare(termX, termY)).value()
+  }
+
+  def apply(treeMap: TreeMap[Par, Par]): SortedParMap = new SortedParMap(treeMap)
+
+  def apply(map: Map[Par, Par]): SortedParMap =
+    SortedParMap(TreeMap.empty[Par, Par](ordering) ++ map)
 
   def apply(seq: Seq[(Par, Par)]): SortedParMap = SortedParMap(seq.toMap)
 
-  def empty: SortedParMap = SortedParMap(Map.empty[Par, Par])
+  def empty: SortedParMap = SortedParMap(TreeMap.empty[Par, Par](ordering))
 }

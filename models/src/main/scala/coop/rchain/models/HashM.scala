@@ -102,7 +102,7 @@ object HashM extends HashMDerivation {
   implicit val EMapHash = gen[EMap]
 
   implicit val SortedParHashSetHash: HashM[SortedParHashSet] = seqHash[Par].contramap(_.sortedPars)
-  implicit val SortedParMapHash: HashM[SortedParMap]         = seqHash[(Par, Par)].contramap(_.sortedList)
+  implicit val SortedParMapHash: HashM[SortedParMap]         = seqHash[(Par, Par)].contramap(_.ps.toList)
 
   implicit val parSetHash: HashM[ParSet] = new HashM[ParSet] {
 
