@@ -47,8 +47,6 @@ class ReplayRSpace[F[_]: Sync, C, P, A, K](
 
   private[this] val consumeCommLabel = "comm.consume"
   private[this] val produceCommLabel = "comm.produce"
-  private[this] val consumeSpanLabel = Metrics.Source(MetricsSource, "consume")
-  private[this] val produceSpanLabel = Metrics.Source(MetricsSource, "produce")
 
   def consume(
       channels: Seq[C],
@@ -65,22 +63,20 @@ class ReplayRSpace[F[_]: Sync, C, P, A, K](
         val msg = "channels.length must equal patterns.length"
         logF.error(msg) >> syncF.raiseError(new IllegalArgumentException(msg))
       } else
-        spanF.trace(consumeSpanLabel) {
-          for {
-            _ <- spanF.mark("before-consume-lock")
-            result <- consumeLockF(channels) {
-                       lockedConsume(
-                         channels,
-                         patterns,
-                         continuation,
-                         persist,
-                         sequenceNumber,
-                         peeks
-                       )
-                     }
-            _ <- spanF.mark("post-consume-lock")
-          } yield result
-        }
+        for {
+          _ <- spanF.mark("before-consume-lock")
+          result <- consumeLockF(channels) {
+                     lockedConsume(
+                       channels,
+                       patterns,
+                       continuation,
+                       persist,
+                       sequenceNumber,
+                       peeks
+                     )
+                   }
+          _ <- spanF.mark("post-consume-lock")
+        } yield result
     }
 
   private[this] def lockedConsume(
@@ -219,15 +215,13 @@ class ReplayRSpace[F[_]: Sync, C, P, A, K](
       implicit m: Match[F, P, A]
   ): F[MaybeActionResult] =
     contextShift.evalOn(scheduler) {
-      spanF.trace(produceSpanLabel) {
-        for {
-          _ <- spanF.mark("before-produce-lock")
-          result <- produceLockF(channel) {
-                     lockedProduce(channel, data, persist, sequenceNumber)
-                   }
-          _ <- spanF.mark("post-produce-lock")
-        } yield result
-      }
+      for {
+        _ <- spanF.mark("before-produce-lock")
+        result <- produceLockF(channel) {
+                   lockedProduce(channel, data, persist, sequenceNumber)
+                 }
+        _ <- spanF.mark("post-produce-lock")
+      } yield result
     }
 
   private[this] def lockedProduce(
