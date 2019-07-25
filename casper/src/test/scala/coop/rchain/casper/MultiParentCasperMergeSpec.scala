@@ -211,7 +211,10 @@ class MultiParentCasperMergeSpec extends FlatSpec with Matchers with Inspectors 
   }
   object Nil extends Rho("Nil")
 
-  def conflictsForNow(b1: Rho, b2: Rho, base: Rho) = conflicts(b1, b2, base)
+  def conflictsForNow(b1: Rho, b2: Rho, base: Rho)(
+      implicit file: sourcecode.File,
+      line: sourcecode.Line
+  ) = conflicts(b1, b2, base)
 
   private def conflicts(b1: Rho, b2: Rho, base: Rho)(
       implicit file: sourcecode.File,
