@@ -766,7 +766,7 @@ class DebruijnInterpreter[M[_], F[_]](
 
           case EMapBody(map) =>
             for {
-              evaledPs <- map.ps.sortedList.traverse {
+              evaledPs <- map.ps.hashMap.toList.traverse {
                            case (key, value) =>
                              for {
                                eKey   <- evalExpr(key).map(updateLocallyFree)
@@ -962,7 +962,7 @@ class DebruijnInterpreter[M[_], F[_]](
               .pure[M]
         case (EMapBody(ParMap(basePs, _, _, _)), EMapBody(ParMap(otherPs, _, _, _))) =>
           charge[M](diffCost(otherPs.size)) >>
-            Expr(EMapBody(ParMap(basePs -- otherPs.keys))).pure[M]
+            Expr(EMapBody(ParMap(basePs -- (otherPs.keys: _*)))).pure[M]
         case (other, _) =>
           MethodNotDefined("diff", other.typ).raiseError[M, Expr]
       }

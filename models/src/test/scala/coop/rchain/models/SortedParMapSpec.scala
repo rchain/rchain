@@ -21,7 +21,7 @@ class SortedParMapSpec extends FlatSpec with PropertyChecks with Matchers {
   private[this] def toKVpair(pair: (Par, Par)): KeyValuePair = KeyValuePair(pair._1, pair._2)
 
   private[this] def serializeEMap(map: SortedParMap): Array[Byte] =
-    EMap(map.sortedList.map(toKVpair)).toByteArray
+    EMap(map.toSeq.map(toKVpair)).toByteArray
 
   val pars: Seq[(Par, Par)] = Seq[(Par, Par)](
     (GInt(7), GString("Seven")),
@@ -32,7 +32,7 @@ class SortedParMapSpec extends FlatSpec with PropertyChecks with Matchers {
   )
 
   private def roundTripTest(parMap: SortedParMap): Assertion =
-    EMap.parseFrom(serializeEMap(parMap)) should ===(EMap(parMap.sortedList.map(toKVpair)))
+    EMap.parseFrom(serializeEMap(parMap)) should ===(EMap(parMap.toSeq.map(toKVpair)))
 
   def sample = SortedParMap(pars)
 
@@ -83,7 +83,7 @@ class SortedParMapSpec extends FlatSpec with PropertyChecks with Matchers {
         connectiveUsed = true
       )
     )
-    assertEqual(SortedParMap(ps), SortedParMap(ps))
+    assertEqual(SortedParMap(ps.toSeq), SortedParMap(ps.toSeq))
   }
 
   it should "keep keys sorted" in {

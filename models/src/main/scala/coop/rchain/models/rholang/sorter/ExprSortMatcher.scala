@@ -169,32 +169,18 @@ private[sorter] object ExprSortMatcher extends Sortable[Expr] {
           EMinusMinusBody(EMinusMinus(sortedPar1.term, sortedPar2.term)),
           Node(Score.EMINUSMINUS, sortedPar1.score, sortedPar2.score)
         )
-      case EMapBody(parMap) =>
-        def sortKeyValuePair(key: Par, value: Par): F[ScoredTerm[(Par, Par)]] =
-          for {
-            sortedKey   <- Sortable.sortMatch(key)
-            sortedValue <- Sortable.sortMatch(value)
-          } yield ScoredTerm((sortedKey.term, sortedValue.term), sortedKey.score)
-
-        for {
-          sortedPars          <- parMap.ps.sortedList.traverse(kv => sortKeyValuePair(kv._1, kv._2))
-          remainderScore      <- remainderScore(parMap.remainder)
-          connectiveUsedScore = if (parMap.connectiveUsed) 1L else 0L
-        } yield constructExpr(
-          EMapBody(
-            ParMap(
-              sortedPars.map(_.term),
-              parMap.connectiveUsed,
-              parMap.locallyFree,
-              parMap.remainder
-            )
-          ),
-          Node(
-            Seq(Leaf(Score.EMAP), remainderScore) ++ sortedPars.map(_.score) ++ Seq(
-              Leaf(connectiveUsedScore)
+      case eMapBody @ EMapBody(parMap) =>
+        remainderScore(parMap.remainder).map { remainderScore =>
+          val connectiveUsedScore = if (parMap.connectiveUsed) 1L else 0L
+          constructExpr(
+            eMapBody,
+            Node(
+              Seq(Leaf(Score.EMAP), remainderScore) ++ parMap.ps.scoredKeySet.map(_.score) ++ Seq(
+                Leaf(connectiveUsedScore)
+              )
             )
           )
-        )
+        }
       case ESetBody(parSet) =>
         for {
           sortedPars          <- parSet.ps.sortedPars.traverse(Sortable[Par].sortMatch[F])

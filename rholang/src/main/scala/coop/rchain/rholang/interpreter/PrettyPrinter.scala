@@ -108,10 +108,11 @@ final case class PrettyPrinter(
       case ESetBody(ParSet(pars, _, _, remainder)) =>
         pure("Set(") |+| buildSeq(pars.sortedPars) |+| buildRemainderString(remainder) |+| pure(")")
       case EMapBody(ParMap(ps, _, _, remainder)) =>
-        pure("{") |+| (pure("") /: ps.sortedList.zipWithIndex) {
+        val unsortedList = ps.toSeq
+        pure("{") |+| (pure("") /: unsortedList.zipWithIndex) {
           case (string, (kv, i)) =>
             string |+| buildStringM(kv._1) |+| pure(" : ") |+| buildStringM(kv._2) |+| pure {
-              if (i != ps.sortedList.size - 1) ", "
+              if (i != unsortedList.size - 1) ", "
               else ""
             }
         } |+| buildRemainderString(remainder) |+| pure("}")

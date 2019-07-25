@@ -788,7 +788,7 @@ class ParSortMatcherSpec extends FlatSpec with Matchers {
                 exprs = Seq()
               ),
               Par(connectiveUsed = true) -> Par(exprs = Seq())
-            )
+            ).toSeq
           )
         )
       )

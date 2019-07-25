@@ -2106,7 +2106,9 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
     errorLog.readAndClearErrorVector().unsafeRunSync should be(Vector.empty[InterpreterError])
   }
 
-  it should "transform {'a':1, 'b':2, 'c':3} into [('a',1), ('b',2), ('c',3)]" in {
+  /* Maps in Rholang do not have an ordering guarantee, so one should not expect
+     the syntactic ordering of the source map to be preserved in the target list */
+  it should "transform {'a':1, 'b':2, 'c':3} into [('c', 3), ('a', 1), ('b', 2)]" in {
     implicit val errorLog: ErrorLog[Task] = new ErrorLog[Task]()
     val toListCall: EMethod =
       EMethod(
@@ -2132,9 +2134,9 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
       EListBody(
         EList(
           List[Par](
+            ETupleBody(ETuple(Seq(GString("c"), GInt(3L)))),
             ETupleBody(ETuple(Seq(GString("a"), GInt(1L)))),
-            ETupleBody(ETuple(Seq(GString("b"), GInt(2L)))),
-            ETupleBody(ETuple(Seq(GString("c"), GInt(3L))))
+            ETupleBody(ETuple(Seq(GString("b"), GInt(2L))))
           )
         )
       )

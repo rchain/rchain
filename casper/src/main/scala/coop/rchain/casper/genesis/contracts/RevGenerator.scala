@@ -17,8 +17,8 @@ final case class RevGenerator(
 
   val path: String = "<synthetic in Rev.scala>"
 
-  val code: String =
-    s""" new rl(`rho:registry:lookup`), revVaultCh in {
+  val code: String = {
+    val temp = s""" new rl(`rho:registry:lookup`), revVaultCh in {
        #   rl!(`rho:rchain:revVault`, *revVaultCh)
        #   | for (@(_, RevVault) <- revVaultCh) {
        #     new genesisVaultCh in {
@@ -41,6 +41,9 @@ final case class RevGenerator(
        #   }
        # }
      """.stripMargin('#')
+    println(temp)
+    temp
+  }
 
   val normalizerEnv: NormalizerEnv = NormalizerEnv(deployId = none, deployerPk = genesisPk.some)
 
