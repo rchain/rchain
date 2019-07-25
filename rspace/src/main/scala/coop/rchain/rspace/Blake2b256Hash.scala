@@ -15,7 +15,10 @@ import scodec.codecs._
   */
 class Blake2b256Hash private (val bytes: ByteVector) {
 
-  require(bytes.length == Blake2b256Hash.length)
+  require(
+    bytes.length == Blake2b256Hash.length,
+    s"Expected ${Blake2b256Hash.length} but got ${bytes.length}"
+  )
 
   override def toString: String = s"Blake2b256Hash(bytes: ${bytes.toString})"
 

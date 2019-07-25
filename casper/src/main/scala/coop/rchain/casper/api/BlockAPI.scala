@@ -234,9 +234,9 @@ object BlockAPI {
     val log =
       serializedLog.map(EventConverter.toRspaceEvent)
     log.exists {
-      case Produce(channelHash, _, _) =>
+      case Produce(channelHash, _, _, _) =>
         channelHash == StableHashProvider.hash(sortedListeningName)
-      case Consume(channelsHashes, _, _) =>
+      case Consume(channelsHashes, _, _, _) =>
         channelsHashes.toList.sorted == sortedListeningName
           .map(StableHashProvider.hash(_))
           .toList

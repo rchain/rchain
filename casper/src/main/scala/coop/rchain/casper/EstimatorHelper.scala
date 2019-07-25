@@ -4,12 +4,12 @@ import cats.Monad
 import cats.implicits._
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.{BlockDagRepresentation, BlockStore}
-import coop.rchain.casper.protocol.Event.EventInstance.{Comm, Consume, Produce}
-import coop.rchain.casper.protocol._
-import coop.rchain.casper.util.{DagOperations, ProtoUtil}
+import coop.rchain.casper.protocol.{Event => CasperEvent, _}
+import coop.rchain.casper.util.{DagOperations, EventConverter, ProtoUtil}
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.BlockMetadata
 import coop.rchain.shared.Log
+import coop.rchain.rspace.trace._
 
 import scala.collection.BitSet
 
@@ -75,7 +75,11 @@ object EstimatorHelper {
         } yield conflicts
     }
 
-  @SuppressWarnings(Array("org.wartremover.warts.Throw"))
+  private def isVolatile(comm: COMM, consumes: Seq[Consume], produces: Seq[Produce]) =
+    !comm.consume.persistent && consumes.contains(comm.consume) && comm.produces.forall(
+      produce => !produce.persistent && produces.contains(produce)
+    )
+
   private def buildBlockAncestorChannels[F[_]: Monad: BlockStore](
       blockAncestorsMeta: List[BlockMetadata]
   ): F[Set[ByteString]] =
@@ -84,16 +88,35 @@ object EstimatorHelper {
                          blockAncestorMeta => BlockStore[F].get(blockAncestorMeta.blockHash)
                        )
       ancestors = maybeAncestors.flatten
-      ancestorEvents = ancestors.flatMap(_.getBody.deploys.flatMap(_.deployLog)) ++
-        ancestors.flatMap(_.getBody.deploys.flatMap(_.paymentLog))
-      ancestorChannels = ancestorEvents.flatMap {
-        case Event(Produce(produce: ProduceEvent)) =>
-          Set(produce.channelsHash)
-        case Event(Consume(consume: ConsumeEvent)) =>
-          consume.channelsHashes.toSet
-        case Event(Comm(CommEvent(Some(consume: ConsumeEvent), produces))) =>
-          consume.channelsHashes.toSet ++ produces.map(_.channelsHash).toSet
-        case _ => throw new RuntimeException("incorrect ancestor events")
-      }.toSet
-    } yield ancestorChannels
+      ancestorEvents = (ancestors.flatMap(_.getBody.deploys.flatMap(_.deployLog)) ++
+        ancestors.flatMap(_.getBody.deploys.flatMap(_.paymentLog)))
+        .map(EventConverter.toRspaceEvent)
+
+      produceEvents = ancestorEvents.collect { case p: Produce => p }
+      consumeEvents = ancestorEvents.collect { case c: Consume => c }
+      commEvents    = ancestorEvents.collect { case c: COMM    => c }
+
+      producesInCommEvents = commEvents.flatMap(_.produces)
+      consumeInCommEvents  = commEvents.map(_.consume)
+
+      ancestorProduceChannels = produceEvents
+        .filterNot(producesInCommEvents.contains(_))
+        .map(_.channelsHash)
+        .toSet
+
+      ancestorConsumeChannels = consumeEvents
+        .filterNot(consumeInCommEvents.contains(_))
+        .flatMap(_.channelsHashes)
+        .toSet
+
+      ancestorCommChannels = commEvents
+        .filterNot(isVolatile(_, consumeEvents, produceEvents))
+        .flatMap { comm =>
+          comm.consume.channelsHashes ++ comm.produces.map(_.channelsHash)
+        }
+        .toSet
+
+      ancestorChannels = ancestorProduceChannels ++ ancestorConsumeChannels ++ ancestorCommChannels
+      res              = ancestorChannels.map(_.toByteString)
+    } yield res
 }
