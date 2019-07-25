@@ -62,12 +62,12 @@ package object effects {
       import Trace._
 
       override def mark(name: String): F[Unit] = {
-        ask.map {
+        ask.flatMap {
           case DefaultTrace(source) =>
             trace(source) {
               mark(name)
             }
-          case KamonTrace(ks) => ks.mark(name)
+          case KamonTrace(ks) => KamonTracer.mark(ks, name)
         }
       }.as(())
 
