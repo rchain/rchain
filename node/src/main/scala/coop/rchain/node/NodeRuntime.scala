@@ -9,7 +9,6 @@ import cats.implicits._
 import cats.mtl.{ApplicativeLocal, DefaultApplicativeLocal}
 import coop.rchain.blockstorage._
 import coop.rchain.blockstorage.util.io.IOError
-import coop.rchain.casper.MultiParentCasperRef.MultiParentCasperRef
 import coop.rchain.casper._
 import coop.rchain.casper.engine.CasperLaunch.CasperInit
 import coop.rchain.casper.engine.EngineCell._
@@ -91,12 +90,12 @@ class NodeRuntime private[node] (
       nodeDiscovery: NodeDiscovery[Task],
       blockStore: BlockStore[Task],
       oracle: SafetyOracle[Task],
-      multiParentCasperRef: MultiParentCasperRef[Task],
       connectionsCell: ConnectionsCell[Task],
       concurrent: Concurrent[Task],
       metrics: Metrics[Task],
       rPConfAsk: RPConfAsk[Task],
-      span: Span[Task]
+      span: Span[Task],
+      engineCell: EngineCell[Task]
   ): Task[Servers] = {
     implicit val s: Scheduler = scheduler
     for {
@@ -222,7 +221,6 @@ class NodeRuntime private[node] (
       blockStore: BlockStore[Task],
       oracle: SafetyOracle[Task],
       packetHandler: PacketHandler[Task],
-      casperConstructor: MultiParentCasperRef[Task],
       engineCell: EngineCell[Task],
       requestedBlocks: Running.RequestedBlocks[Task]
   ): Task[Unit] = {
@@ -265,8 +263,8 @@ class NodeRuntime private[node] (
 
     val casperLoop: Task[Unit] =
       for {
-        casper <- casperConstructor.get
-        _      <- casper.fold(().pure[Task])(_.fetchDependencies)
+        engine <- engineCell.read
+        _      <- engine.withCasper(_.fetchDependencies, engine.noop)
         _      <- Running.maintainRequestedBlocks[Task]
         _      <- time.sleep(30.seconds)
       } yield ()
@@ -379,18 +377,17 @@ class NodeRuntime private[node] (
     defaultTimeout = conf.server.defaultTimeout
 
     // 3. create instances of typeclasses
-    initPeer             = if (conf.server.standalone) None else Some(conf.server.bootstrap)
-    rpConfState          = effects.rpConfState(rpConf(local, initPeer))
-    rpConfAsk            = effects.rpConfAsk(rpConfState)
-    peerNodeAsk          = effects.peerNodeAsk(rpConfState)
-    rpConnections        <- effects.rpConnections
-    metrics              = diagnostics.effects.metrics[Task]
-    span                 <- setupSpan(conf.kamon.zipkin, conf.server.networkId, local.endpoint.host)
-    time                 = effects.time
-    timerTask            = Task.timer
-    multiParentCasperRef <- MultiParentCasperRef.of[Task]
-    lab                  <- LastApprovedBlock.of[Task]
-    commTmpFolder        = conf.server.dataDir.resolve("tmp").resolve("comm")
+    initPeer      = if (conf.server.standalone) None else Some(conf.server.bootstrap)
+    rpConfState   = effects.rpConfState(rpConf(local, initPeer))
+    rpConfAsk     = effects.rpConfAsk(rpConfState)
+    peerNodeAsk   = effects.peerNodeAsk(rpConfState)
+    rpConnections <- effects.rpConnections
+    metrics       = diagnostics.effects.metrics[Task]
+    span          <- setupSpan(conf.kamon.zipkin, conf.server.networkId, local.endpoint.host)
+    time          = effects.time
+    timerTask     = Task.timer
+    lab           <- LastApprovedBlock.of[Task]
+    commTmpFolder = conf.server.dataDir.resolve("tmp").resolve("comm")
     _ <- commTmpFolder.toFile
           .exists()
           .fold(
@@ -526,7 +523,6 @@ class NodeRuntime private[node] (
           time,
           log,
           eventLog,
-          multiParentCasperRef,
           blockDagStorage,
           engineCell,
           envVars,
@@ -556,7 +552,6 @@ class NodeRuntime private[node] (
       blockStore,
       oracle,
       packetHandler,
-      multiParentCasperRef,
       engineCell,
       requestedBlocks
     )

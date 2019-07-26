@@ -5,7 +5,7 @@ import cats.effect.concurrent.Semaphore
 import cats.implicits._
 import coop.rchain.blockstorage.BlockDagRepresentation
 import coop.rchain.casper.MultiParentCasper.ignoreDoppelgangerCheck
-import coop.rchain.casper.MultiParentCasperRef.MultiParentCasperRef
+import coop.rchain.casper.engine._, EngineCell._
 import coop.rchain.casper._
 import coop.rchain.casper.api.BlockAPI.ApiErr
 import coop.rchain.casper.helper.HashSetCasperTestNode
@@ -17,7 +17,7 @@ import coop.rchain.metrics.NoopSpan
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.Validator.Validator
 import coop.rchain.p2p.EffectsTestInstances._
-import coop.rchain.shared.Time
+import coop.rchain.shared.{Cell, Time}
 import monix.eval.Task
 import monix.execution.Scheduler
 import org.scalatest.{FlatSpec, Matchers}
@@ -49,7 +49,7 @@ class CreateBlockAPITest extends FlatSpec with Matchers {
       ).map(ConstructDeploy.sourceDeploy(_, timestamp = System.currentTimeMillis()))
 
       def createBlock(deploy: DeployData, blockApiLock: Semaphore[Effect])(
-          implicit casperRef: MultiParentCasperRef[Effect]
+          implicit engineCell: EngineCell[Effect]
       ): Effect[ApiErr[DeployServiceResponse]] =
         for {
           _ <- BlockAPI.deploy[Effect](deploy)
@@ -57,7 +57,7 @@ class CreateBlockAPITest extends FlatSpec with Matchers {
         } yield r
 
       def testProgram(blockApiLock: Semaphore[Effect])(
-          implicit casperRef: MultiParentCasperRef[Effect]
+          implicit engineCell: EngineCell[Effect]
       ): Effect[
         (
             Either[Throwable, ApiErr[DeployServiceResponse]],
@@ -76,10 +76,10 @@ class CreateBlockAPITest extends FlatSpec with Matchers {
         } yield (r1, r2, r3)
 
       val (response1, response2, response3) = (for {
-        casperRef    <- MultiParentCasperRef.of[Effect]
-        _            <- casperRef.set(casper)
+        engine       <- new EngineWithCasper[Task](casper).pure[Task]
+        engineCell   <- Cell.mvarCell[Task, Engine[Task]](engine)
         blockApiLock <- Semaphore[Effect](1)
-        result       <- testProgram(blockApiLock)(casperRef)
+        result       <- testProgram(blockApiLock)(engineCell)
       } yield result).unsafeRunSync
 
       response1 shouldBe a[Right[_, DeployServiceResponse]]

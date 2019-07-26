@@ -7,7 +7,7 @@ import cats.effect.concurrent.Semaphore
 import cats.effect.Concurrent
 import cats.mtl.implicits._
 import coop.rchain.blockstorage.BlockStore
-import coop.rchain.casper.MultiParentCasperRef.MultiParentCasperRef
+import coop.rchain.casper.engine._, EngineCell._
 import coop.rchain.casper.SafetyOracle
 import coop.rchain.casper.api._
 import coop.rchain.casper.protocol.{DeployData, _}
@@ -25,7 +25,7 @@ import monix.execution.Scheduler
 import monix.reactive.Observable
 
 private[api] object DeployGrpcService {
-  def instance[F[_]: Concurrent: MultiParentCasperRef: Log: SafetyOracle: BlockStore: Taskable: Span](
+  def instance[F[_]: Concurrent: Log: SafetyOracle: BlockStore: Taskable: Span: EngineCell](
       blockApiLock: Semaphore[F],
       tracing: Boolean
   )(

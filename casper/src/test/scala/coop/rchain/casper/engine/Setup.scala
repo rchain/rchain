@@ -92,7 +92,6 @@ object Setup {
     implicit val blockDagStorage = InMemBlockDagStorage
       .create[Task]
       .unsafeRunSync(monix.execution.Scheduler.Implicits.global)
-    implicit val casperRef = MultiParentCasperRef.unsafe[Task](None)
     implicit val safetyOracle = new SafetyOracle[Task] {
       override def normalizedFaultTolerance(
           blockDag: BlockDagRepresentation[Task],

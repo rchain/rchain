@@ -4,6 +4,7 @@ import cats.Monad
 import cats.effect.{Resource, Sync}
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.IndexedBlockDagStorage
+import coop.rchain.casper.engine._, EngineCell._
 import coop.rchain.casper.api.BlockAPI
 import coop.rchain.casper.helper.BlockGenerator._
 import coop.rchain.casper.helper._
@@ -14,7 +15,7 @@ import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.Validator
 import coop.rchain.p2p.EffectsTestInstances.LogStub
-import coop.rchain.shared.{Log, Time}
+import coop.rchain.shared.{Cell, Log, Time}
 import monix.eval.Task
 import monix.execution.schedulers.CanBlock
 import org.scalatest.{FlatSpec, Matchers}
@@ -79,12 +80,12 @@ class ManyValidatorsTest
                          tips.toIndexedSeq
                        )(Sync[Task], blockStore, newIndexedBlockDagStorage, runtimeManager)
         logEff             = new LogStub[Task]
-        casperRef          <- MultiParentCasperRef.of[Task]
-        _                  <- casperRef.set(casperEffect)
+        engine             = new EngineWithCasper[Task](casperEffect)
+        engineCell         <- Cell.mvarCell[Task, Engine[Task]](engine)
         cliqueOracleEffect = SafetyOracle.cliqueOracle[Task]
         result <- BlockAPI.getBlocks[Task](Some(Int.MaxValue))(
                    Monad[Task],
-                   casperRef,
+                   engineCell,
                    logEff,
                    cliqueOracleEffect,
                    blockStore

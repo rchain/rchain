@@ -7,7 +7,7 @@ import cats.Applicative
 import coop.rchain.blockstorage.{BlockDagStorage, BlockStore}
 import coop.rchain.casper._
 import coop.rchain.casper.LastApprovedBlock.LastApprovedBlock
-import coop.rchain.casper.MultiParentCasperRef.MultiParentCasperRef
+
 import EngineCell._
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.rholang.RuntimeManager
@@ -19,7 +19,7 @@ import coop.rchain.shared._
 
 import com.google.protobuf.ByteString
 
-class GenesisValidator[F[_]: Sync: Metrics: Span: Concurrent: ConnectionsCell: TransportLayer: Log: EventLog: Time: SafetyOracle: LastFinalizedBlockCalculator: RPConfAsk: BlockStore: LastApprovedBlock: BlockDagStorage: EngineCell: MultiParentCasperRef: RuntimeManager: Running.RequestedBlocks](
+class GenesisValidator[F[_]: Sync: Metrics: Span: Concurrent: ConnectionsCell: TransportLayer: Log: EventLog: Time: SafetyOracle: LastFinalizedBlockCalculator: RPConfAsk: BlockStore: LastApprovedBlock: BlockDagStorage: EngineCell: RuntimeManager: Running.RequestedBlocks](
     validatorId: ValidatorIdentity,
     shardId: String,
     blockApprover: BlockApproverProtocol

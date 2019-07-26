@@ -95,8 +95,6 @@ class HashSetCasperTestNode[F[_]](
     blockProcessingLock
   )
 
-  implicit val multiparentCasperRef = MultiParentCasperRef.unsafe[F](Some(casperEff))
-
   val engine                             = new Running(casperEff, approvedBlock, ().pure[F])
   implicit val engineCell: EngineCell[F] = Cell.unsafe[F, Engine[F]](engine)
   implicit val packetHandlerEff          = CasperPacketHandler[F]

@@ -1,7 +1,7 @@
 package coop.rchain.casper.api
 
 import coop.rchain.blockstorage.{BlockDagRepresentation, BlockStore}
-import coop.rchain.casper._, MultiParentCasperRef.MultiParentCasperRef
+import coop.rchain.casper._
 import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.graphz._
 import coop.rchain.shared.Log
@@ -37,7 +37,7 @@ object GraphzGenerator {
   }
 
   def dagAsCluster[
-      F[_]: Monad: Sync: MultiParentCasperRef: Log: SafetyOracle: BlockStore,
+      F[_]: Monad: Sync: Log: SafetyOracle: BlockStore,
       G[_]: Monad: GraphSerializer
   ](
       topoSort: Vector[Vector[BlockHash]],
@@ -99,7 +99,7 @@ object GraphzGenerator {
     }
 
   private def accumulateDagInfo[
-      F[_]: Monad: Sync: MultiParentCasperRef: Log: SafetyOracle: BlockStore,
+      F[_]: Monad: Sync: Log: SafetyOracle: BlockStore,
       G[_]
   ](
       acc: DagInfo[G],
