@@ -423,7 +423,7 @@ class MultiParentCasperMergeSpec extends FlatSpec with Matchers with Inspectors 
     }
   }
 
-  "This spec" should "cover all mergeability cases" ignore {
+  "This spec" should "cover all mergeability cases" in {
     val allMergeabilityCases = {
       val events = List(
         "!X",
