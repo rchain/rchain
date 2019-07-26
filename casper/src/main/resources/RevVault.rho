@@ -48,10 +48,10 @@ in {
           }
         } |
 
-        contract RevVault(@"unfAuthKey", unf, ret) = {
+        contract RevVault(@"unforgeableAuthKey", unf, ret) = {
 
           new RevAddress(`rho:rev:address`), revAddrCh in {
-            RevAddress!("fromUnfName", *unf, *revAddrCh) |
+            RevAddress!("fromUnforgeable", *unf, *revAddrCh) |
             for (@unfRevAddress <- revAddrCh) {
 
               @AuthKey!("make", (*_revVault, unfRevAddress), *ret)
