@@ -56,7 +56,7 @@ class AddressTools(prefix: Array[Byte], keyLength: Int, checksumLength: Int) {
     Address(prefix, keyHash, computeChecksum(payload))
   }
 
-  def fromUnfName(gprivate: GPrivate): Address = {
+  def fromUnforgeable(gprivate: GPrivate): Address = {
     val keyHash = Keccak256.hash(gprivate.toByteArray)
     val payload = prefix ++ keyHash
     Address(prefix, keyHash, computeChecksum(payload))

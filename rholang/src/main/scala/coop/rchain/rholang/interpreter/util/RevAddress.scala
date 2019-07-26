@@ -22,8 +22,8 @@ object RevAddress {
   def fromEthAddress(ethAddress: String): RevAddress =
     RevAddress(tools.fromEthAddress(ethAddress))
 
-  def fromUnfName(gprivate: GPrivate): RevAddress =
-    RevAddress(tools.fromUnfName(gprivate))
+  def fromUnforgeable(gprivate: GPrivate): RevAddress =
+    RevAddress(tools.fromUnforgeable(gprivate))
 
   def parse(address: String): Either[String, RevAddress] =
     tools.parse(address).map(RevAddress(_))
