@@ -84,6 +84,9 @@ class MultiParentCasperMergeSpec extends FlatSpec with Matchers with Inspectors 
         |Mergeable if different events, or at least one matched event is non-linear.
         |""".stripMargin
 
+  val COULD_MATCH_SAME_TRUE  = COULD_MATCH_SAME + "This is the case where both incoming events could have matched what was in the other TS."
+  val COULD_MATCH_SAME_FALSE = COULD_MATCH_SAME + "This is the case where the incoming events match differently."
+
   //diff polarity, merges
   val HAD_ITS_MATCH =
     """
