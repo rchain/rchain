@@ -33,6 +33,7 @@ match (
       testAmountNegative,
       testInsufficeintFunds,
       testInvalidRevAddress,
+      testUnfBoundVault,
       withVaultAndIdentityOf,
       transfer,
       assertBalances
@@ -50,6 +51,7 @@ match (
             ("Fail the tranfer if the amount to transfer is negative", *testAmountNegative),
             ("Fail the transfer if there are insufficient funds", *testInsufficeintFunds),
             ("Fail the transfer if the destination addresss is not a valid RevAddress", *testInvalidRevAddress),
+            ("Transfer from unforgeable name bound vault", *testUnfBoundVault),
           ])
       } |
 
@@ -171,6 +173,21 @@ match (
             aliceVault!("transfer", "pretty surely invalid rev address", 1, aliceVaultKey, *res) |
             rhoSpec!("assert", ((false, "Invalid Base58 encoding"), "== <-", *res), "transfer failed", *resOk) |
             assertBalances!(*resOk, [(*aliceVault, 1000)], *rhoSpec, *ackCh)
+          }
+        }
+      } |
+
+      contract testUnfBoundVault(rhoSpec, RevVault, ackCh) = {
+        new unf, RevAddress(`rho:rev:address`), revAddrCh, unfAuthKeyCh, vaultCh, transferCh in {
+          RevAddress!("fromUnfName", *unf, *revAddrCh) |
+          for (@unfRevAddress <- revAddrCh) {
+
+            RevVault!("findOrCreate", unfRevAddress, *vaultCh) |
+            RevVault!("unfAuthKey", *unf, *unfAuthKeyCh) |
+            for (@(true, vault) <- vaultCh; unfAuthKey <- unfAuthKeyCh) {
+              @vault!("transfer", genesisRevAddress, 0, *unfAuthKey, *transferCh) |
+              rhoSpec!("assert", ((true, Nil), "== <-", *transferCh), "transfer succeeded", *ackCh)
+            }
           }
         }
       } |
