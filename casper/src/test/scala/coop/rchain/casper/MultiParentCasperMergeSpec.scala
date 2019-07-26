@@ -147,7 +147,7 @@ class MultiParentCasperMergeSpec extends FlatSpec with Matchers with Inspectors 
   //FIXME all `conflictsForNow` should eventually be replaced with `merges`
   // TODO: Peek rows/column
   // Note this skips pairs that lead to infinite loops
-  val testedMergeabilityCases = Map(
+  val mergeabilityCases = Map(
     "!X !X"        -> SAME_POLARITY_MERGE        -> conflictsForNow(S0, S0, Nil),
     "!X !4"        -> SAME_POLARITY_MERGE        -> conflictsForNow(S0, S1, F1),
     "!X (!4)"      -> VOLATILE_EVENT             -> merges(S0, S0 | F_, Nil),
@@ -205,7 +205,7 @@ class MultiParentCasperMergeSpec extends FlatSpec with Matchers with Inspectors 
   )
 
   it should "handle multi-parent blocks correctly when they operate on volatile produce/consume pairs" in effectTest {
-    testedMergeabilityCases.values.toList.parSequence_
+    mergeabilityCases.values.toList.parSequence_
   }
 
   case class Rho(value: String) {
@@ -417,4 +417,47 @@ class MultiParentCasperMergeSpec extends FlatSpec with Matchers with Inspectors 
       } yield result
     }
   }
+
+  "This spec" should "cover all mergeability cases" ignore {
+    val allMergeabilityCases = {
+      val events = List(
+        "!X",
+        "!4",
+        "!C",
+        "4X",
+        "4!",
+        "4!!",
+        "PX",
+        "P!",
+        "P!!",
+        "!!X",
+        "!!4",
+        "!!C",
+        "CX",
+        "C!",
+        "C!!"
+      )
+
+      val pairs    = events.combinations(2)
+      val diagonal = events.map(x => List(x, x))
+      val cases    = (pairs ++ diagonal).toList
+
+      // TODO: Do not filter out missing cases
+      cases
+        .map(_.mkString(" "))
+        .filterNot(_.contains("P"))
+        .filterNot(_.contains("!!"))
+        .toSet
+    }
+
+    val testedMergeabilityCases = mergeabilityCases.keys.map(_._1)
+    withClue(s"""Missing cases: ${allMergeabilityCases
+      .diff(testedMergeabilityCases.toSet)
+      .toList
+      .sorted
+      .mkString(", ")}\n""") {
+      testedMergeabilityCases should contain allElementsOf allMergeabilityCases
+    }
+  }
+
 }
