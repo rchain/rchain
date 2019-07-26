@@ -281,44 +281,6 @@ class MultiParentCasperMergeSpec extends FlatSpec with Matchers with Inspectors 
                | """.stripMargin, e, 5).severedAtStackDepth
       }
 
-  it should "not merge blocks that touch the same channel" in effectTest {
-    HashSetCasperTestNode.networkEff(genesis, networkSize = 2).use { nodes =>
-      for {
-        current0 <- timeEff.currentMillis
-        deploy0 = ConstructDeploy.sourceDeploy(
-          "@1!(47)",
-          current0
-        )
-        current1 <- timeEff.currentMillis
-        deploy1 = ConstructDeploy.sourceDeploy(
-          "for(@x <- @1){ @1!(x) }",
-          current1
-        )
-        deploy2 <- ConstructDeploy.basicDeployData[Effect](2)
-        deploys = Vector(
-          deploy0,
-          deploy1,
-          deploy2
-        )
-        block0 <- nodes(0).addBlock(deploys(0))
-        block1 <- nodes(1).addBlock(deploys(1))
-        _      <- nodes(0).receive()
-        _      <- nodes(1).receive()
-        _      <- nodes(0).receive()
-        _      <- nodes(1).receive()
-
-        singleParentBlock <- nodes(0).addBlock(deploys(2))
-        _                 <- nodes(1).receive()
-
-        _      = nodes(0).logEff.warns.isEmpty shouldBe true
-        _      = nodes(1).logEff.warns.isEmpty shouldBe true
-        _      = singleParentBlock.header.get.parentsHashList.size shouldBe 1
-        _      <- nodes(0).casperEff.contains(singleParentBlock.blockHash) shouldBeF true
-        result <- nodes(1).casperEff.contains(singleParentBlock.blockHash) shouldBeF true
-      } yield result
-    }
-  }
-
   it should "not produce UnusedCommEvent while merging non conflicting blocks in the presence of conflicting ones" in effectTest {
 
     val registryRho =
