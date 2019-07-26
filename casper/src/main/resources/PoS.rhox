@@ -263,7 +263,7 @@ new  PoS,
 
                 contract payValidators(@payments, ackCh) = {
                   new payValidator in {
-                    @ListOps!("foreach", payments, *payValidator, *ackCh) |
+                    @ListOps!("unorderedParMap", payments, *payValidator, *ackCh) |
 
                     contract payValidator (@(pk, amount), returnCh) = {
                       new vaultCh,
