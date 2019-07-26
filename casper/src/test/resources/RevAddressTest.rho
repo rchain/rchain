@@ -5,7 +5,7 @@ new
   rl(`rho:registry:lookup`), RhoSpecCh,
   revAddress(`rho:rev:address`),
   stdlog(`rho:io:stdlog`),
-  test_valid_address, test_invalid_address, test_fromPublicKey, test_fromPublicKey_invalid
+  test_valid_address, test_invalid_address, test_fromPublicKey, test_fromPublicKey_invalid, test_fromUnfName
 in {
   rl!(`rho:id:zphjgsfy13h1k85isc8rtwtgt3t9zzt5pjd5ihykfmyapfc4wt3x5h`, *RhoSpecCh) |
   for(@(_, RhoSpec) <- RhoSpecCh) {
@@ -15,7 +15,8 @@ in {
         ("Validating a invalid address returns a non-Nil value", *test_invalid_address),
         ("Convert a public key into a RevAddress", *test_fromPublicKey),
         ("Reject an invalid public key", *test_fromPublicKey_invalid),
-      ])
+        ("RevAddresses derived from different unforgeable names should be different", *test_fromUnfName),
+])
   } |
 
   contract test_invalid_address(rhoSpec, _, ackCh) = {
@@ -61,6 +62,14 @@ in {
     new retCh in {
       revAddress!("fromPublicKey", "F0F0".hexToBytes(), *retCh) |
       rhoSpec!("assert", (Nil, "== <-", *retCh), "correct RevAddress", *ackCh)
+    }
+  } |
+
+  contract test_fromUnfName(rhoSpec, _, ackCh) = {
+    new unf1, unf2, r1, r2 in {
+      revAddress!("fromUnfName", *unf1, *r1) |
+      revAddress!("fromUnfName", *unf2, *r2) |
+      rhoSpec!("assert", (*r1, "!= <-", *r2), "expecting RevAddresses to be unequal", *ackCh)
     }
   }
 }
