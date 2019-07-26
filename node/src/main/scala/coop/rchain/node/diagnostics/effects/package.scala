@@ -1,6 +1,6 @@
 package coop.rchain.node.diagnostics
 
-import cats.effect.Sync
+import cats.effect.{ExitCase, Sync}
 import cats.implicits._
 import cats.mtl.ApplicativeLocal
 import coop.rchain.metrics.{Metrics, Span}
@@ -83,6 +83,15 @@ package object effects {
                 case KamonTrace(ks) => KamonTracer.end(ks)
               }
         } yield r
+
+      override def withMarks[A](label: String)(block: F[A]): F[A] =
+        Sync[F].bracketCase(
+          mark(s"started-$label")
+        )(_ => block) {
+          case (_, ExitCase.Completed) => mark(s"finished-$label")
+          case (_, ExitCase.Error(_))  => mark(s"failed-$label")
+          case (_, ExitCase.Canceled)  => mark(s"cancelled-$label")
+        }
     }
 
   def metrics[F[_]: Sync]: Metrics[F] =
