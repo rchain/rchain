@@ -1,20 +1,32 @@
 package coop.rchain.casper
 
+import java.nio.file.{Path, Paths}
+
+import cats.effect.Sync
 import cats.implicits._
+import coop.rchain.blockstorage.util.io.IOError.RaiseIOError
+import coop.rchain.blockstorage.util.io.SourceIO
 import coop.rchain.casper.MultiParentCasper.ignoreDoppelgangerCheck
+import coop.rchain.casper.genesis.Genesis.{fromLine, getVaults}
+import coop.rchain.casper.genesis.contracts.{RevGenerator, Vault}
+import coop.rchain.casper.genesis.contracts.StandardDeploys.toDeploy
 import coop.rchain.casper.helper.HashSetCasperTestNode
 import coop.rchain.casper.helper.HashSetCasperTestNode._
 import coop.rchain.casper.scalatestcontrib._
 import coop.rchain.casper.util.ConstructDeploy
+import coop.rchain.casper.util.ConstructDeploy.defaultPub
 import coop.rchain.casper.util.GenesisBuilder.buildGenesis
 import coop.rchain.casper.util.RSpaceUtil._
 import coop.rchain.casper.util.rholang.RegistrySigGen
 import coop.rchain.crypto.PublicKey
 import coop.rchain.crypto.codec.Base16
+import coop.rchain.rholang.interpreter.util.RevAddress
+import coop.rchain.shared.Log
 import monix.execution.Scheduler.Implicits.global
 import org.scalatest.{FlatSpec, Matchers}
 
 import scala.io.Source
+import scala.util.{Failure, Success, Try}
 
 class RholangBuildTest extends FlatSpec with Matchers {
 
@@ -66,12 +78,30 @@ class RholangBuildTest extends FlatSpec with Matchers {
     HashSetCasperTestNode
       .standaloneEff(genesis)
       .use { node =>
+        val vaults = Source
+          .fromResource("wallets.txt")
+          .getLines()
+          .map { line =>
+            line.split(",") match {
+              case Array(ethAddress, initRevBalanceStr, _) =>
+                Vault(RevAddress.fromEthAddress(ethAddress), initRevBalanceStr.toLong)
+            }
+          }
+          .toSeq
+        val genesisPk = defaultPub
+
         import node._
 
-        val code = Source.fromResource("wallets.rho").mkString
-
         for {
-          deploy <- ConstructDeploy.sourceDeployNowF(code, phloLimit = 90000000000000L)
+          deploy <- ConstructDeploy.sourceDeployNowF(
+                     RevGenerator(
+                       genesisPk,
+                       RevAddress.fromPublicKey(genesisPk).get,
+                       vaults,
+                       supply = Long.MaxValue
+                     ).code,
+                     phloLimit = Long.MaxValue
+                   )
           createBlockResult <- MultiParentCasper[Effect]
                                 .deploy(deploy) >> MultiParentCasper[Effect].createBlock
           Created(signedBlock) = createBlockResult
