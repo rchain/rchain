@@ -43,46 +43,46 @@ BONDED_VALIDATOR_KEY_3 = PrivateKey.from_hex("2b173084083291ac6850cb734dffb69dfc
 def test_multiple_deploys_at_once(command_line_options: CommandLineOptions, random_generator: Random, docker_client: DockerClient) -> None:
     contract_path = '/opt/docker/examples/shortfast.rho'
     peers_keypairs = [BONDED_VALIDATOR_KEY_1, BONDED_VALIDATOR_KEY_2, BONDED_VALIDATOR_KEY_3]
-    with conftest.testing_context(command_line_options, random_generator, docker_client, bootstrap_key=BOOTSTRAP_NODE_KEYS, peers_keys=peers_keypairs) as context:
-        with docker_network_with_started_bootstrap(context=context) as bootstrap_node:
-            with bootstrap_connected_peer(context=context, bootstrap=bootstrap_node, name='bonded-validator-1', private_key=BONDED_VALIDATOR_KEY_1) as no1:
-                with bootstrap_connected_peer(context=context, bootstrap=bootstrap_node, name='bonded-validator-2', private_key=BONDED_VALIDATOR_KEY_2) as no2:
-                    with bootstrap_connected_peer(context=context, bootstrap=bootstrap_node, name='bonded-validator-3', private_key=BONDED_VALIDATOR_KEY_3) as no3:
-                        wait_for_peers_count_at_least(context, no1, 3)
+    with conftest.testing_context(command_line_options, random_generator, docker_client, bootstrap_key=BOOTSTRAP_NODE_KEYS, peers_keys=peers_keypairs) as context, \
+        docker_network_with_started_bootstrap(context=context) as bootstrap_node, \
+        bootstrap_connected_peer(context=context, bootstrap=bootstrap_node, name='bonded-validator-1', private_key=BONDED_VALIDATOR_KEY_1) as no1, \
+        bootstrap_connected_peer(context=context, bootstrap=bootstrap_node, name='bonded-validator-2', private_key=BONDED_VALIDATOR_KEY_2) as no2, \
+        bootstrap_connected_peer(context=context, bootstrap=bootstrap_node, name='bonded-validator-3', private_key=BONDED_VALIDATOR_KEY_3) as no3:
+            wait_for_peers_count_at_least(context, no1, 3)
 
-                        deploy1 = DeployThread("node1", no1, contract_path, 1, BONDED_VALIDATOR_KEY_1)
-                        deploy1.start()
+            deploy1 = DeployThread("node1", no1, contract_path, 1, BONDED_VALIDATOR_KEY_1)
+            deploy1.start()
 
-                        expected_blocks_count = 1
-                        wait_for_blocks_count_at_least(
-                            context,
-                            no1,
-                            expected_blocks_count,
-                        )
+            expected_blocks_count = 1
+            wait_for_blocks_count_at_least(
+                context,
+                no1,
+                expected_blocks_count,
+            )
 
-                        deploy2 = DeployThread("node2", no2, contract_path, 3, BONDED_VALIDATOR_KEY_2)
-                        deploy2.start()
+            deploy2 = DeployThread("node2", no2, contract_path, 3, BONDED_VALIDATOR_KEY_2)
+            deploy2.start()
 
-                        deploy3 = DeployThread("node3", no3, contract_path, 3, BONDED_VALIDATOR_KEY_3)
-                        deploy3.start()
+            deploy3 = DeployThread("node3", no3, contract_path, 3, BONDED_VALIDATOR_KEY_3)
+            deploy3.start()
 
-                        expected_blocks_count = 7
-                        wait_for_blocks_count_at_least(
-                            context,
-                            no1,
-                            expected_blocks_count,
-                        )
-                        wait_for_blocks_count_at_least(
-                            context,
-                            no2,
-                            expected_blocks_count,
-                        )
-                        wait_for_blocks_count_at_least(
-                            context,
-                            no3,
-                            expected_blocks_count,
-                        )
+            expected_blocks_count = 7
+            wait_for_blocks_count_at_least(
+                context,
+                no1,
+                expected_blocks_count,
+            )
+            wait_for_blocks_count_at_least(
+                context,
+                no2,
+                expected_blocks_count,
+            )
+            wait_for_blocks_count_at_least(
+                context,
+                no3,
+                expected_blocks_count,
+            )
 
-                        deploy1.join()
-                        deploy2.join()
-                        deploy3.join()
+            deploy1.join()
+            deploy2.join()
+            deploy3.join()
