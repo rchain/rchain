@@ -200,6 +200,8 @@ class MultiParentCasperMergeSpec extends FlatSpec with Matchers with Inspectors 
     "4! C!" -> COULD_MATCH_SAME_TRUE  -> conflicts(F_, C_, S0),
     "4! C!" -> COULD_MATCH_SAME_FALSE -> conflictsForNow(F0, C1, S0 | S1),
     "CX CX" -> SAME_POLARITY_MERGE    -> conflictsForNow(C_, C_, Nil),
+    "CX C!" -> COULD_MATCH_SAME_TRUE  -> conflicts(C0, C0, S0),
+    "CX C!" -> COULD_MATCH_SAME_FALSE -> conflictsForNow(C1, C0, S0),
     "C! C!" -> COULD_MATCH_SAME_TRUE  -> conflicts(C_, C_, S0),
     "C! C!" -> COULD_MATCH_SAME_FALSE -> conflictsForNow(C0, C1, S0 | S1),
     // 4!! / !!4 row is similar to !4 / 4! and thus skipped
