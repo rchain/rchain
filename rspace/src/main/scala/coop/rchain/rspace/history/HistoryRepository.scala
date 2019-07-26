@@ -39,17 +39,15 @@ object HistoryRepositoryInstances {
       codecP: Codec[P],
       codecA: Codec[A],
       codecK: Codec[K]
-  ): F[HistoryRepository[F, C, P, A, K]] = {
-    val rootsLMDBStore  = StoreInstances.lmdbStore[F](config.rootsStore)
-    val rootsRepository = new RootRepository[F](RootsStoreInstances.rootsStore[F](rootsLMDBStore))
-
+  ): F[HistoryRepository[F, C, P, A, K]] =
     for {
+      rootsLMDBStore   <- StoreInstances.lmdbStore[F](config.rootsStore)
+      rootsRepository  = new RootRepository[F](RootsStoreInstances.rootsStore[F](rootsLMDBStore))
       currentRoot      <- rootsRepository.currentRoot()
-      coldLMDBStore    = StoreInstances.lmdbStore[F](config.coldStore)
+      coldLMDBStore    <- StoreInstances.lmdbStore[F](config.coldStore)
       coldStore        = ColdStoreInstances.coldStore[F](coldLMDBStore)
-      historyLMDBStore = StoreInstances.lmdbStore[F](config.historyStore)
+      historyLMDBStore <- StoreInstances.lmdbStore[F](config.historyStore)
       historyStore     = HistoryStoreInstances.historyStore[F](historyLMDBStore)
       history          = HistoryInstances.merging(currentRoot, historyStore)
     } yield HistoryRepositoryImpl[F, C, P, A, K](history, rootsRepository, coldStore)
-  }
 }

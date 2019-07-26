@@ -30,16 +30,19 @@ final case class StoreConfig(
 )
 
 object StoreInstances {
-  def lmdbStore[F[_]: Sync](config: StoreConfig): Store[F] = {
-    val env = Env
-      .create()
-      .setMapSize(config.mapSize)
-      .setMaxDbs(config.maxDbs)
-      .setMaxReaders(config.maxReaders)
-      .open(config.path.toFile, config.flags: _*)
-    val dbi   = env.openDbi("db", MDB_CREATE)
-    val store = LMDBStore(env, dbi)
-    new Store[F] {
+  def lmdbStore[F[_]: Sync](config: StoreConfig): F[Store[F]] =
+    for {
+      env <- Sync[F].delay {
+              Env
+                .create()
+                .setMapSize(config.mapSize)
+                .setMaxDbs(config.maxDbs)
+                .setMaxReaders(config.maxReaders)
+                .open(config.path.toFile, config.flags: _*)
+            }
+      dbi   <- Sync[F].delay { env.openDbi("db", MDB_CREATE) }
+      store = LMDBStore(env, dbi)
+    } yield new Store[F] {
       override def get(key: Blake2b256Hash): F[Option[BitVector]] = {
         val directKey = key.bytes.toDirectByteBuffer
         get(directKey).map(v => v.map(BitVector(_)))
@@ -81,5 +84,4 @@ object StoreInstances {
 
       override def close(): F[Unit] = store.close()
     }
-  }
 }
