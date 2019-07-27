@@ -2,26 +2,23 @@ package coop.rchain.rholang.interpreter.accounting
 
 import java.nio.file.Files
 
+import cats.data.Chain
 import cats.effect._
-import coop.rchain.catscontrib.mtl.implicits._
-import coop.rchain.rholang.interpreter._
-import coop.rchain.rholang.interpreter.errors.OutOfPhlogistonsError
-import coop.rchain.rholang.interpreter.accounting.utils._
 import coop.rchain.metrics
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
+import coop.rchain.rholang.interpreter._
+import coop.rchain.rholang.interpreter.accounting.utils._
+import coop.rchain.rholang.interpreter.errors.OutOfPhlogistonsError
 import coop.rchain.shared.Log
 import coop.rchain.shared.PathOps._
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
-import org.scalacheck._
-import org.scalacheck.Arbitrary._
 import org.scalacheck.Prop.forAllNoShrink
-import org.scalactic.TripleEqualsSupport
+import org.scalacheck._
 import org.scalatest._
 import org.scalatest.prop.Checkers.check
 import org.scalatest.prop.PropertyChecks
 
-import scala.concurrent.Await
 import scala.concurrent.duration._
 
 class CostAccountingSpec extends FlatSpec with Matchers with PropertyChecks with AppendedClues {
@@ -29,7 +26,7 @@ class CostAccountingSpec extends FlatSpec with Matchers with PropertyChecks with
   private[this] def evaluateWithCostLog(
       initialPhlo: Long,
       contract: String
-  ) = {
+  ): (EvaluateResult, Chain[Cost]) = {
     val dbDir                              = Files.createTempDirectory("cost-accounting-spec-")
     val size                               = 1024L * 1024 * 1024
     implicit val errorLog                  = new ErrorLog[Task]()
