@@ -85,9 +85,7 @@ class CostAccountingSpec extends FlatSpec with Matchers with PropertyChecks with
   )
 
   "Total cost of evaluation" should "be equal to the sum of all costs in the log" in {
-    forAll(
-      contracts
-    ) { (contract: String, expectedTotalCost: Long) =>
+    forAll(contracts) { (contract: String, expectedTotalCost: Long) =>
       {
         val initialPhlo       = 10000L
         val (result, costLog) = evaluateWithCostLog(initialPhlo, contract)
@@ -129,22 +127,22 @@ class CostAccountingSpec extends FlatSpec with Matchers with PropertyChecks with
     costLog.toList should contain theSameElementsAs expectedCosts
   }
 
-  it should "stop the evaluation of all execution branches when one of them runs out of phlo with a more sophisiticated contract" in forAll(
-    contracts
-  ) { (contract: String, expectedTotalCost: Long) =>
-    check(forAllNoShrink(Gen.choose(1L, expectedTotalCost - 1)) { initialPhlo =>
-      val (EvaluateResult(_, errors), costLog) =
-        evaluateWithCostLog(initialPhlo, contract)
-      errors shouldBe List(OutOfPhlogistonsError)
-      val costs = costLog.map(_.value).toList
-      // The sum of all costs but last needs to be <= initialPhlo, otherwise
-      // the last cost should have not been logged
-      costs.init.sum should be <= initialPhlo withClue s", cost log was: $costLog"
+  it should "stop the evaluation of all execution branches when one of them runs out of phlo with a more sophisiticated contract" in {
+    forAll(contracts) { (contract: String, expectedTotalCost: Long) =>
+      check(forAllNoShrink(Gen.choose(1L, expectedTotalCost - 1)) { initialPhlo =>
+        val (EvaluateResult(_, errors), costLog) =
+          evaluateWithCostLog(initialPhlo, contract)
+        errors shouldBe List(OutOfPhlogistonsError)
+        val costs = costLog.map(_.value).toList
+        // The sum of all costs but last needs to be <= initialPhlo, otherwise
+        // the last cost should have not been logged
+        costs.init.sum should be <= initialPhlo withClue s", cost log was: $costLog"
 
-      // The sum of ALL costs needs to be > initialPhlo, otherwise an error
-      // should not have been reported
-      costs.sum > initialPhlo withClue s", cost log was: $costLog"
-    })
+        // The sum of ALL costs needs to be > initialPhlo, otherwise an error
+        // should not have been reported
+        costs.sum > initialPhlo withClue s", cost log was: $costLog"
+      })
+    }
   }
 
 }
