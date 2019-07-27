@@ -76,22 +76,18 @@ class RholangBuildTest extends FlatSpec with Matchers {
       }
   }
 
-  "Our build system" should "execute the genesis block" ignore effectTest {
+  "Our build system" should "execute the genesis block" in effectTest {
+    val REV_ADDRESS_COUNT = 16000
+
     val validatorKeyPairs = (1 to 4).map(_ => Secp256k1.newKeyPair)
     val bonds = validatorKeyPairs
       .map(_._2)
       .zipWithIndex
       .map { case (v, i) => v -> (2L * i.toLong + 1L) }
       .toMap
-    val vaults = Source
-      .fromResource("wallets.txt")
-      .getLines()
-      .map { line =>
-        line.split(",") match {
-          case Array(ethAddress, initRevBalanceStr, _) =>
-            Vault(RevAddress.fromEthAddress(ethAddress), initRevBalanceStr.toLong)
-        }
-      }
+    val vaults = (1 to REV_ADDRESS_COUNT)
+      .map(i => (Secp256k1.newKeyPair, i))
+      .map { case ((_, publicKey), i) => Vault(RevAddress.fromPublicKey(publicKey).get, i.toLong) }
       .toSeq
     val genesisParams: GenesisParameters = (
       validatorKeyPairs,
