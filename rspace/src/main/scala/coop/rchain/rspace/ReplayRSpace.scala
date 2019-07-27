@@ -110,7 +110,6 @@ class ReplayRSpace[F[_]: Sync, C, P, A, R, K](
 
     def storeWaitingContinuation(
         consumeRef: Consume,
-        maybeCommRef: Option[COMM],
         peeks: SortedSet[Int]
     ): F[MaybeActionResult] =
       for {
@@ -203,14 +202,14 @@ class ReplayRSpace[F[_]: Sync, C, P, A, R, K](
       _ <- spanF.mark("after-compute-consumeref")
       r <- replayData.get(consumeRef) match {
             case None =>
-              storeWaitingContinuation(consumeRef, None, peeks)
+              storeWaitingContinuation(consumeRef, peeks)
             case Some(comms) =>
               val commOrDataCandidates: F[Either[COMM, Seq[DataCandidate[C, R]]]] =
                 getCommOrDataCandidates(comms.iterator().asScala.toList)
 
               val x: F[MaybeActionResult] = commOrDataCandidates.flatMap {
-                case Left(commRef) =>
-                  storeWaitingContinuation(consumeRef, Some(commRef), peeks)
+                case Left(_) =>
+                  storeWaitingContinuation(consumeRef, peeks)
                 case Right(dataCandidates) =>
                   val channelsToIndex = channels.zipWithIndex.toMap
                   handleMatches(
