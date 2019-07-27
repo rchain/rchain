@@ -142,11 +142,11 @@ class CostAccountingSpec extends FlatSpec with Matchers with PropertyChecks with
       val costs = costLog.map(_.value).toList
       // The sum of all costs but last needs to be <= initialPhlo, otherwise
       // the last cost should have not been logged
-      costs.init.sum.toLong should be <= (initialPhlo) withClue (s", cost log was: $costLog")
+      costs.init.sum should be <= (initialPhlo) withClue (s", cost log was: $costLog")
 
       // The sum of ALL costs needs to be > initialPhlo, otherwise an error
       // should not have been reported
-      costs.sum.toLong > (initialPhlo) withClue (s", cost log was: $costLog")
+      costs.sum > (initialPhlo) withClue (s", cost log was: $costLog")
     })
   }
 
