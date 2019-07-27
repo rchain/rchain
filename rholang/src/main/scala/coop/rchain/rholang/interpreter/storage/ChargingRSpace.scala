@@ -29,9 +29,7 @@ object ChargingRSpace {
   def storageCostProduce(channel: Par, data: ListParWithRandom): Cost =
     channel.storageCost + data.pars.storageCost
 
-  def pureRSpace[F[_]: Sync: Span](
-      space: RhoISpace[F]
-  )(implicit cost: _cost[F]) =
+  def pureRSpace[F[_]: Sync: Span](space: RhoISpace[F])(implicit cost: _cost[F]): RhoPureSpace[F] =
     new RhoPureSpace[F] {
 
       implicit val m: StorageMatch[F, BindPattern, ListParWithRandom, ListParWithRandom] =
@@ -48,10 +46,8 @@ object ChargingRSpace {
         Option[(ContResult[Par, BindPattern, TaggedContinuation], Seq[Result[ListParWithRandom]])]
       ] =
         for {
-          _ <- charge[F](storageCostConsume(channels, patterns, continuation))
-          peekChannels = if (peek) {
-            SortedSet((0 to channels.size - 1): _*)
-          } else SortedSet.empty[Int]
+          _            <- charge[F](storageCostConsume(channels, patterns, continuation))
+          peekChannels = if (peek) SortedSet(channels.indices: _*) else SortedSet.empty[Int]
           consRes <- space.consume(
                       channels,
                       patterns,
