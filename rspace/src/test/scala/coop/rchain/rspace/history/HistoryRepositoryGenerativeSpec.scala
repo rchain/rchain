@@ -45,28 +45,23 @@ class LMDBHistoryRepositoryGenerativeSpec
       List(EnvFlags.MDB_NOTLS)
     )
 
-  def lmdbHistoryStore =
-    HistoryStoreInstances.historyStore(StoreInstances.lmdbStore[Task](lmdbConfig))
-
-  def lmdbColdStore =
-    ColdStoreInstances.coldStore(StoreInstances.lmdbStore[Task](lmdbConfig))
-
-  def lmdbRootsStore =
-    RootsStoreInstances.rootsStore(StoreInstances.lmdbStore[Task](lmdbConfig))
-
-  def rootRepository =
-    new RootRepository[Task](lmdbRootsStore)
-
-  override def repo: HistoryRepository[Task, String, Pattern, String, StringsCaptor] = {
-    val emptyHistory = HistoryInstances.merging(History.emptyRootHash, lmdbHistoryStore)
-    val repository: HistoryRepository[Task, String, Pattern, String, StringsCaptor] =
-      HistoryRepositoryImpl.apply[Task, String, Pattern, String, StringsCaptor](
-        emptyHistory,
-        rootRepository,
-        lmdbColdStore
-      )
-    repository
-  }
+  override def repo: Task[HistoryRepository[Task, String, Pattern, String, StringsCaptor]] =
+    for {
+      historyLmdbStore <- StoreInstances.lmdbStore[Task](lmdbConfig)
+      historyStore     = HistoryStoreInstances.historyStore(historyLmdbStore)
+      coldLmdbStore    <- StoreInstances.lmdbStore[Task](lmdbConfig)
+      coldStore        = ColdStoreInstances.coldStore(coldLmdbStore)
+      rootsLmdbStore   <- StoreInstances.lmdbStore[Task](lmdbConfig)
+      rootsStore       = RootsStoreInstances.rootsStore(rootsLmdbStore)
+      rootRepository   = new RootRepository[Task](rootsStore)
+      emptyHistory     = HistoryInstances.merging(History.emptyRootHash, historyStore)
+      repository: HistoryRepository[Task, String, Pattern, String, StringsCaptor] = HistoryRepositoryImpl
+        .apply[Task, String, Pattern, String, StringsCaptor](
+          emptyHistory,
+          rootRepository,
+          coldStore
+        )
+    } yield repository
 
   protected override def afterAll(): Unit =
     dbDir.recursivelyDelete()
@@ -76,7 +71,7 @@ class InmemHistoryRepositoryGenerativeSpec
     extends HistoryRepositoryGenerativeDefinition
     with InMemoryHistoryRepositoryTestBase {
 
-  override def repo: HistoryRepository[Task, String, Pattern, String, StringsCaptor] = {
+  override def repo: Task[HistoryRepository[Task, String, Pattern, String, StringsCaptor]] = {
     val emptyHistory =
       HistoryInstances.merging[Task](History.emptyRootHash, inMemHistoryStore)
     val repository: HistoryRepository[Task, String, Pattern, String, StringsCaptor] =
@@ -85,7 +80,7 @@ class InmemHistoryRepositoryGenerativeSpec
         rootRepository,
         inMemColdStore
       )
-    repository
+    repository.pure[Task]
   }
 }
 
@@ -101,20 +96,22 @@ abstract class HistoryRepositoryGenerativeDefinition
 
   implicit def noShrink[T]: Shrink[T] = Shrink.shrinkAny
 
-  def repo: HistoryRepository[Task, String, Pattern, String, StringsCaptor]
+  def repo: Task[HistoryRepository[Task, String, Pattern, String, StringsCaptor]]
 
   "HistoryRepository" should "accept all HotStoreActions" in forAll(
     minSize(1),
     sizeRange(50),
     minSuccessful(10)
   ) { actions: List[HotStoreAction] =>
-    val repository = repo
-    actions
-      .foldLeftM(repository) { (repo, action) =>
-        for {
-          next <- repo.checkpoint(action :: Nil)
-          _    <- checkActionResult(action, next)
-        } yield next
+    repo
+      .flatMap { repository =>
+        actions
+          .foldLeftM(repository) { (repo, action) =>
+            for {
+              next <- repo.checkpoint(action :: Nil)
+              _    <- checkActionResult(action, next)
+            } yield next
+          }
       }
       .runSyncUnsafe(20.seconds)
   }

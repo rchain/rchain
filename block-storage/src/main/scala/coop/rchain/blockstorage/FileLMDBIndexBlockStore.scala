@@ -15,6 +15,7 @@ import coop.rchain.blockstorage.util.byteOps._
 import coop.rchain.blockstorage.util.io.IOError.RaiseIOError
 import coop.rchain.blockstorage.util.io.{IOError, _}
 import coop.rchain.casper.protocol.{ApprovedBlock, BlockMessage}
+import coop.rchain.lmdb.LMDBStore
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.shared.ByteStringOps._
 import coop.rchain.shared.Language.ignore
@@ -33,7 +34,7 @@ private final case class FileLMDBIndexBlockStoreState[F[_]: Sync](
 
 class FileLMDBIndexBlockStore[F[_]: Monad: Sync: RaiseIOError: Log] private (
     lock: Semaphore[F],
-    index: LmdbDbi[F, ByteBuffer],
+    index: LMDBStore[F],
     storagePath: Path,
     approvedBlockPath: Path,
     checkpointsDir: Path,
@@ -107,26 +108,21 @@ class FileLMDBIndexBlockStore[F[_]: Monad: Sync: RaiseIOError: Log] private (
   override def get(blockHash: BlockHash): F[Option[BlockMessage]] =
     lock.withPermit(
       for {
-        indexEntryOpt <- index.withReadTxn { txn =>
-                          index
-                            .get(txn, blockHash.toDirectByteBuffer)
-                            .map(IndexEntry.load)
-                        }
-        result <- indexEntryOpt.traverse(readBlockMessage)
+        indexEntryBytesOpt <- index.get(blockHash.toDirectByteBuffer)
+        indexEntryOpt      = indexEntryBytesOpt.map(IndexEntry.load)
+        result             <- indexEntryOpt.traverse(readBlockMessage)
       } yield result
     )
 
   override def find(p: BlockHash => Boolean): F[Seq[(BlockHash, BlockMessage)]] =
     lock.withPermit(
       for {
-        filteredIndex <- index.withReadTxn { txn =>
-                          index.iterate(txn) { iterator =>
-                            iterator
-                              .map(kv => (ByteString.copyFrom(kv.key()), kv.`val`()))
-                              .withFilter { case (key, _) => p(key) }
-                              .map { case (key, value) => (key, IndexEntry.load(value)) }
-                              .toList
-                          }
+        filteredIndex <- index.iterate { iterator =>
+                          iterator
+                            .map(kv => (ByteString.copyFrom(kv.key()), kv.`val`()))
+                            .withFilter { case (key, _) => p(key) }
+                            .map { case (key, value) => (key, IndexEntry.load(value)) }
+                            .toList
                         }
         result <- filteredIndex.flatTraverse {
                    case (blockHash, indexEntry) =>
@@ -147,15 +143,10 @@ class FileLMDBIndexBlockStore[F[_]: Monad: Sync: RaiseIOError: Log] private (
         blockMessageByteArray     = blockMessage.toByteArray
         _                         <- randomAccessFile.writeInt(blockMessageByteArray.length)
         _                         <- randomAccessFile.write(blockMessageByteArray)
-        _ <- index.withWriteTxn { txn =>
-              ignore {
-                index.put(
-                  txn,
-                  blockHash.toDirectByteBuffer,
-                  currentIndex.toByteString.concat(endOfFileOffset.toByteString).toDirectByteBuffer
-                )
-              }
-            }
+        _ <- index.put(
+              blockHash.toDirectByteBuffer,
+              currentIndex.toByteString.concat(endOfFileOffset.toByteString).toDirectByteBuffer
+            )
       } yield ()
     )
 
@@ -198,10 +189,8 @@ class FileLMDBIndexBlockStore[F[_]: Monad: Sync: RaiseIOError: Log] private (
     lock.withPermit(
       for {
         blockMessageRandomAccessFile <- getBlockMessageRandomAccessFile
-        _ <- index.withWriteTxn { txn =>
-              index.drop(txn)
-            }
-        result <- blockMessageRandomAccessFile.setLength(0)
+        _                            <- index.drop
+        result                       <- blockMessageRandomAccessFile.setLength(0)
       } yield result
     )
 
@@ -295,7 +284,7 @@ object FileLMDBIndexBlockStore {
       dbi <- Sync[F].delay {
               env.openDbi(s"block_store_index", MDB_CREATE)
             }
-      index                        = LmdbDbi[F, ByteBuffer](env, dbi)
+      index                        = LMDBStore[F](env, dbi)
       _                            <- createNewFile(approvedBlockPath)
       blockMessageRandomAccessFile <- RandomAccessIO.open(storagePath, RandomAccessIO.ReadWrite)
       sortedCheckpointsEither      <- loadCheckpoints(checkpointsDirPath)
