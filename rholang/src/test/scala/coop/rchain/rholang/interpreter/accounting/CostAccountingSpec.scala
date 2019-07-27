@@ -29,7 +29,6 @@ class CostAccountingSpec extends FlatSpec with Matchers with PropertyChecks with
   ): (EvaluateResult, Chain[Cost]) = {
     val dbDir                              = Files.createTempDirectory("cost-accounting-spec-")
     val size                               = 1024L * 1024 * 1024
-    implicit val errorLog                  = new ErrorLog[Task]()
     implicit val logF: Log[Task]           = new Log.NOPLog[Task]
     implicit val metricsEff: Metrics[Task] = new metrics.Metrics.MetricsNOP[Task]
     implicit val noopSpan: Span[Task]      = NoopSpan[Task]()
@@ -51,8 +50,6 @@ class CostAccountingSpec extends FlatSpec with Matchers with PropertyChecks with
         })
       }
       (result, costLog) = costsLoggingProgram
-      res               <- errorLog.readAndClearErrorVector
-      _                 <- Task.now(res should be(Vector.empty))
     } yield (result, costLog)).runSyncUnsafe(25.seconds)
   }
 
