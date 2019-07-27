@@ -76,7 +76,7 @@ class RholangBuildTest extends FlatSpec with Matchers {
       }
   }
 
-  "Our build system" should "execute the genesis block" in effectTest {
+  "Our build system" should "execute the genesis block" ignore effectTest {
     val REV_ADDRESS_COUNT = 16000
 
     val vaults = (1 to REV_ADDRESS_COUNT)
