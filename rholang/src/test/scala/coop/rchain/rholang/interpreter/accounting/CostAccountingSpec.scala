@@ -1,23 +1,21 @@
 package coop.rchain.rholang.interpreter.accounting
 
-import java.nio.file.Files
-
 import cats.data.Chain
 import cats.effect._
 import coop.rchain.metrics
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
+import coop.rchain.rholang.Resources
 import coop.rchain.rholang.interpreter._
 import coop.rchain.rholang.interpreter.accounting.utils._
 import coop.rchain.rholang.interpreter.errors.OutOfPhlogistonsError
 import coop.rchain.shared.Log
-import coop.rchain.shared.PathOps._
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
 import org.scalacheck.Prop.forAllNoShrink
 import org.scalacheck._
-import org.scalatest._
 import org.scalatest.prop.Checkers.check
 import org.scalatest.prop.PropertyChecks
+import org.scalatest.{AppendedClues, FlatSpec, Matchers}
 
 import scala.concurrent.duration._
 
@@ -27,30 +25,29 @@ class CostAccountingSpec extends FlatSpec with Matchers with PropertyChecks with
       initialPhlo: Long,
       contract: String
   ): (EvaluateResult, Chain[Cost]) = {
-    val dbDir                              = Files.createTempDirectory("cost-accounting-spec-")
-    val size                               = 1024L * 1024 * 1024
     implicit val logF: Log[Task]           = new Log.NOPLog[Task]
     implicit val metricsEff: Metrics[Task] = new metrics.Metrics.MetricsNOP[Task]
     implicit val noopSpan: Span[Task]      = NoopSpan[Task]()
 
-    (for {
-      costL <- costLog[Task]
-      cost  <- CostAccounting.emptyCost[Task](Concurrent[Task], costL)
-      costsLoggingProgram <- {
-        costL.listen({
-          implicit val c = cost
-          for {
-            runtime <- Runtime
-                        .create[Task, Task.Par](dbDir, size)
-            res <- InterpreterUtil
-                    .evaluateResult(runtime, contract, Cost(initialPhlo.toLong))
-            _ <- Task.delay(runtime.close())
-            _ <- Task.now(dbDir.recursivelyDelete())
-          } yield res
-        })
+    val resources = for {
+      dir     <- Resources.mkTempDir[Task]("cost-accounting-spec-")
+      costLog <- Resource.liftF(costLog[Task]())
+      cost    <- Resource.liftF(CostAccounting.emptyCost[Task](implicitly, costLog))
+      runtime <- {
+        implicit val c = cost
+        Resource.make(Runtime.create[Task, Task.Par](dir, 10 * 1024 * 1024, Nil))(_.close())
       }
-      (result, costLog) = costsLoggingProgram
-    } yield (result, costLog)).runSyncUnsafe(25.seconds)
+    } yield (runtime, costLog)
+
+    resources
+      .use {
+        case (runtime, costL) =>
+          costL.listen {
+            implicit val cost = runtime.cost
+            InterpreterUtil.evaluateResult(runtime, contract, Cost(initialPhlo.toLong))
+          }
+      }
+      .runSyncUnsafe(25.seconds)
   }
 
   val contracts = Table(
