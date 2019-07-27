@@ -226,6 +226,7 @@ class DebruijnInterpreter[M[_], F[_]](
   ): M[Unit] =
     spanM.trace(sendSpanLabel) {
       for {
+        _        <- charge[M](SEND_EVAL_COST)
         evalChan <- evalExpr(send.chan)
         subChan  <- substituteAndCharge[Par, M](evalChan, 0, env)
         unbundled <- subChan.singleBundle() match {
@@ -238,7 +239,6 @@ class DebruijnInterpreter[M[_], F[_]](
         data      <- send.data.toList.traverse(evalExpr)
         substData <- data.traverse(substituteAndCharge[Par, M](_, 0, env))
         _         <- produce(unbundled, ListParWithRandom(substData, rand), send.persistent, sequenceNumber)
-        _         <- charge[M](SEND_EVAL_COST)
       } yield ()
     }
 
@@ -249,6 +249,7 @@ class DebruijnInterpreter[M[_], F[_]](
   ): M[Unit] =
     spanM.trace(receiveSpanLabel) {
       for {
+        _ <- charge[M](RECEIVE_EVAL_COST)
         binds <- receive.binds.toList.traverse(
                   rb =>
                     for {
@@ -270,7 +271,6 @@ class DebruijnInterpreter[M[_], F[_]](
               receive.peek,
               sequenceNumber
             )
-        _ <- charge[M](RECEIVE_EVAL_COST)
       } yield ()
     }
 
@@ -353,11 +353,11 @@ class DebruijnInterpreter[M[_], F[_]](
     }
 
     for {
+      _            <- charge[M](MATCH_EVAL_COST)
       evaledTarget <- evalExpr(mat.target)
       // TODO(kyle): Make the matcher accept an environment, instead of substituting it.
       substTarget <- substituteAndCharge[Par, M](evaledTarget, 0, env)
       _           <- firstMatch(substTarget, mat.cases)
-      _           <- charge[M](MATCH_EVAL_COST)
     } yield ()
   }
 
@@ -809,6 +809,7 @@ class DebruijnInterpreter[M[_], F[_]](
         errors.MethodArgumentNumberMismatch("nth", 1, args.length).raiseError[M, Par]
       else {
         for {
+          _      <- charge[M](NTH_METHOD_CALL_COST)
           nthRaw <- evalToLong(args.head)
           nth    <- restrictToInt(nthRaw)
           v      <- evalSingleExpr(p)
@@ -827,7 +828,6 @@ class DebruijnInterpreter[M[_], F[_]](
                        ReduceError("Error: nth applied to something that wasn't a list or tuple.")
                          .raiseError[M, Par]
                    }
-          _ <- charge[M](NTH_METHOD_CALL_COST)
         } yield result
       }
   }
@@ -1004,8 +1004,8 @@ class DebruijnInterpreter[M[_], F[_]](
             else ().pure[M]
         baseExpr <- evalSingleExpr(p)
         element  <- evalExpr(args.head)
-        result   <- add(baseExpr, element)
         _        <- charge[M](ADD_COST)
+        result   <- add(baseExpr, element)
       } yield result
   }
 
@@ -1046,8 +1046,8 @@ class DebruijnInterpreter[M[_], F[_]](
             else ().pure[M]
         baseExpr <- evalSingleExpr(p)
         element  <- evalExpr(args.head)
-        result   <- delete(baseExpr, element)
         _        <- charge[M](REMOVE_COST) //TODO(mateusz.gorski): think whether deletion of an element from the collection should dependent on the collection type/size
+        result   <- delete(baseExpr, element)
       } yield result
   }
 
@@ -1069,8 +1069,8 @@ class DebruijnInterpreter[M[_], F[_]](
             else ().pure[M]
         baseExpr <- evalSingleExpr(p)
         element  <- evalExpr(args.head)
-        result   <- contains(baseExpr, element)
         _        <- charge[M](LOOKUP_COST)
+        result   <- contains(baseExpr, element)
       } yield result
   }
 
@@ -1090,8 +1090,8 @@ class DebruijnInterpreter[M[_], F[_]](
             else ().pure[M]
         baseExpr <- evalSingleExpr(p)
         key      <- evalExpr(args.head)
-        result   <- get(baseExpr, key)
         _        <- charge[M](LOOKUP_COST)
+        result   <- get(baseExpr, key)
       } yield result
   }
 
@@ -1112,8 +1112,8 @@ class DebruijnInterpreter[M[_], F[_]](
         baseExpr <- evalSingleExpr(p)
         key      <- evalExpr(args.head)
         default  <- evalExpr(args(1))
-        result   <- getOrElse(baseExpr, key, default)
         _        <- charge[M](LOOKUP_COST)
+        result   <- getOrElse(baseExpr, key, default)
       } yield result
   }
 
@@ -1134,8 +1134,8 @@ class DebruijnInterpreter[M[_], F[_]](
         baseExpr <- evalSingleExpr(p)
         key      <- evalExpr(args.head)
         value    <- evalExpr(args(1))
-        result   <- set(baseExpr, key, value)
         _        <- charge[M](ADD_COST)
+        result   <- set(baseExpr, key, value)
       } yield result
   }
 
@@ -1155,8 +1155,8 @@ class DebruijnInterpreter[M[_], F[_]](
               MethodArgumentNumberMismatch("keys", 0, args.length).raiseError[M, Unit]
             else ().pure[M]
         baseExpr <- evalSingleExpr(p)
-        result   <- keys(baseExpr)
         _        <- charge[M](KEYS_METHOD_COST)
+        result   <- keys(baseExpr)
       } yield result
   }
 
@@ -1205,8 +1205,8 @@ class DebruijnInterpreter[M[_], F[_]](
               MethodArgumentNumberMismatch("length", 0, args.length).raiseError[M, Unit]
             else ().pure[M]
         baseExpr <- evalSingleExpr(p)
-        result   <- length(baseExpr)
         _        <- charge[M](LENGTH_METHOD_COST)
+        result   <- length(baseExpr)
       } yield result
   }
 
@@ -1234,8 +1234,8 @@ class DebruijnInterpreter[M[_], F[_]](
         fromArg    <- restrictToInt(fromArgRaw)
         toArgRaw   <- evalToLong(args(1))
         toArg      <- restrictToInt(toArgRaw)
-        result     <- slice(baseExpr, fromArg, toArg)
         _          <- charge[M](sliceCost(toArg))
+        result     <- slice(baseExpr, fromArg, toArg)
       } yield result
   }
 

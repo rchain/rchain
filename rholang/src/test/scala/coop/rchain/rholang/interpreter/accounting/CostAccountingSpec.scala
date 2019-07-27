@@ -90,25 +90,25 @@ class CostAccountingSpec extends FlatSpec with Matchers with PropertyChecks with
   }
 
   "Running out of phlogistons" should "stop the evaluation upon cost depletion in a single execution branch" in {
-    val parsingCost = 6
+    val parsingCost = 6L
     checkPhloLimitExceeded(
       "@1!(1)",
-      parsingCost + 1L,
-      List(Cost(parsingCost, "parsing"), Cost(4, "substitution"))
+      parsingCost,
+      List(Cost(parsingCost, "parsing"), Cost(11, "send eval"))
     )
   }
 
   it should "not attempt reduction when there wasn't enought phlo for parsing" in {
-    val parsingCost = 6
-    checkPhloLimitExceeded("@1!(1)", parsingCost - 1L, List(Cost(parsingCost, "parsing")))
+    val parsingCost = 6L
+    checkPhloLimitExceeded("@1!(1)", parsingCost - 1, List(Cost(parsingCost, "parsing")))
   }
 
   it should "stop the evaluation of all execution branches when one of them runs out of phlo" in {
-    val parsingCost = 24
+    val parsingCost = 24L
     checkPhloLimitExceeded(
       "@1!(1) | @2!(2) | @3!(3)",
-      5L + parsingCost,
-      List(Cost(parsingCost, "parsing"), Cost(4, "substitution"), Cost(4, "substitution"))
+      11 + parsingCost,
+      List(Cost(parsingCost, "parsing"), Cost(11, "send eval"), Cost(11, "send eval"))
     )
   }
 

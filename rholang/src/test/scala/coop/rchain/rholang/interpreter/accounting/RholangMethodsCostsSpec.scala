@@ -46,7 +46,7 @@ class RholangMethodsCostsSpec
         }
       }
 
-      "not charge when index is out of bound" in {
+      "charge also when index is out of bound" in {
         val table = Table(
           ("list", "index"),
           (listN(0), 1L)
@@ -60,7 +60,7 @@ class RholangMethodsCostsSpec
               err  <- reducer.evalExprToPar(method).attempt
               _    = assert(err.isLeft)
               cost <- methodCallCost(reducer)
-            } yield assert(cost.value === 0)
+            } yield assert(cost.value === 10)
           }
         }
       }
@@ -80,7 +80,7 @@ class RholangMethodsCostsSpec
         }
       }
 
-      "not charge when index is out of bound" in {
+      "charge also when index is out of bound" in {
         val table = Table(
           ("list", "index"),
           (listN(0), 1L)
@@ -94,7 +94,7 @@ class RholangMethodsCostsSpec
               err  <- reducer.evalExprToPar(method).attempt
               _    = assert(err.isLeft)
               cost <- methodCallCost(reducer)
-            } yield assert(cost.value === 0)
+            } yield assert(cost.value === 10)
           }
         }
       }
