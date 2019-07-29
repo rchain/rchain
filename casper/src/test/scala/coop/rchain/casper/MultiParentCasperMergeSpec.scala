@@ -269,7 +269,7 @@ class MultiParentCasperMergeSpec extends FlatSpec with Matchers with Inspectors 
         }
       }
       .adaptError {
-        case _: TestFailedException =>
+        case e: Throwable =>
           new TestFailedException(s"""Expected
                | base = ${base.value}
                | b1   = ${b1.value}
@@ -278,7 +278,7 @@ class MultiParentCasperMergeSpec extends FlatSpec with Matchers with Inspectors 
                | to produce a merge block with $numberOfParentsForDiamondTip parents, but it didn't
                |
                | go see it at ${file.value}:${line.value}
-               | """.stripMargin, 5).severedAtStackDepth
+               | """.stripMargin, e, 5).severedAtStackDepth
       }
 
   it should "not merge blocks that touch the same channel" in effectTest {
