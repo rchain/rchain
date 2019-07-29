@@ -57,7 +57,8 @@ new  PoS,
             // pendingRewards : Map[PublickKey, Int] - are accummulated by calling "pay"
             // committedRewards : Map[PublickKey, Int] - are moved from pendingRewards at each closeBlock
             // activeValidators : List[PublicKey] - the active validators
-            // withdrawers : Map[PublicKey, Int] - the validators willing to withdraw and the blocknumber for their withdrawal
+            // withdrawers : Map[PublicKey, Int] - the validators willing to withdraw and the blocknumber when their quarantine ends
+            //                                     This is the beggining of the next epoch after their withdrawal + quarantineLength
             // allBonds : Map[PublickKey, Int] - each validator stake
             stateCh!({
               "pendingRewards":{},
@@ -138,9 +139,12 @@ new  PoS,
                     @userPk <- userCh;
                     _, @blockNumber <- blockDataCh) {
                   if (state.get("allBonds").contains(userPk)) {
+                    // the withdwal is in effect starting from the next epoch
                     resultCh!(
                       state.set("withdrawers",
-                                state.get("withdrawers").set(userPk, blockNumber)),
+                                state.get("withdrawers")
+                                     .set(userPk,
+                                       $$quarantineLength$$ + $$epochLength$$ * (1 + blockNumber / $$epochLength$$))),
                       (true, Nil))
                   } else {
                     resultCh!(state, (false, "User is not bonded"))
@@ -333,7 +337,7 @@ new  PoS,
                     } |
 
                     contract isQuarantineFinished(@(_, blockNumber), resultCh) = {
-                      resultCh!(blockNumber + $$quarantineLength$$ >= currentBlockNumber)
+                      resultCh!(blockNumber >= currentBlockNumber)
                     }
                   }
                 }
