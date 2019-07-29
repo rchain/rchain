@@ -108,21 +108,6 @@ class ReplayRSpace[F[_]: Sync, C, P, A, R, K](
                    .map(_.sequence)
       } yield result
 
-    def storeWaitingContinuation(
-        consumeRef: Consume,
-        peeks: SortedSet[Int]
-    ): F[MaybeActionResult] =
-      for {
-        _ <- store.putContinuation(
-              channels,
-              WaitingContinuation(patterns, continuation, persist, peeks, consumeRef)
-            )
-        _ <- channels.traverse(channel => store.putJoin(channel, channels))
-        _ <- logF.debug(s"""|consume: no data found,
-                            |storing <(patterns, continuation): ($patterns, $continuation)>
-                            |at <channels: $channels>""".stripMargin.replace('\n', ' '))
-      } yield None
-
     def handleMatches(
         mats: Seq[DataCandidate[C, R]],
         consumeRef: Consume,
@@ -202,14 +187,20 @@ class ReplayRSpace[F[_]: Sync, C, P, A, R, K](
       _ <- spanF.mark("after-compute-consumeref")
       r <- replayData.get(consumeRef) match {
             case None =>
-              storeWaitingContinuation(consumeRef, peeks)
+              storeWaitingContinuation(
+                channels,
+                WaitingContinuation(patterns, continuation, persist, peeks, consumeRef)
+              )
             case Some(comms) =>
               val commOrDataCandidates: F[Either[COMM, Seq[DataCandidate[C, R]]]] =
                 getCommOrDataCandidates(comms.iterator().asScala.toList)
 
               val x: F[MaybeActionResult] = commOrDataCandidates.flatMap {
                 case Left(_) =>
-                  storeWaitingContinuation(consumeRef, peeks)
+                  storeWaitingContinuation(
+                    channels,
+                    WaitingContinuation(patterns, continuation, persist, peeks, consumeRef)
+                  )
                 case Right(dataCandidates) =>
                   val channelsToIndex = channels.zipWithIndex.toMap
                   handleMatches(
@@ -224,7 +215,6 @@ class ReplayRSpace[F[_]: Sync, C, P, A, R, K](
           }
     } yield r
   }
-
   def produce(channel: C, data: A, persist: Boolean, sequenceNumber: Int)(
       implicit m: Match[F, P, A, R]
   ): F[MaybeActionResult] =

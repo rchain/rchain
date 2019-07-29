@@ -116,7 +116,7 @@ class CostAccountingSpec extends FlatSpec with Matchers with PropertyChecks with
   private def checkPhloLimitExceeded(
       contract: String,
       initialPhlo: Long,
-      expectedCosts: List[Cost]
+      expectedCosts: Seq[Cost]
   ): Assertion = {
     val (EvaluateResult(totalCost, errors), costLog) = evaluateWithCostLog(initialPhlo, contract)
     withClue("We must not expect more costs than initialPhlo allows (duh!):\n") {
