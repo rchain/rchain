@@ -94,21 +94,22 @@ class CostAccountingSpec extends FlatSpec with Matchers with PropertyChecks with
     checkPhloLimitExceeded(
       "@1!(1)",
       parsingCost,
-      List(Cost(parsingCost, "parsing"), Cost(11, "send eval"))
+      List(Cost(parsingCost, "parsing"))
     )
   }
 
-  it should "not attempt reduction when there wasn't enought phlo for parsing" in {
+  it should "not attempt reduction when there wasn't enough phlo for parsing" in {
     val parsingCost = 6L
-    checkPhloLimitExceeded("@1!(1)", parsingCost - 1, List(Cost(parsingCost, "parsing")))
+    checkPhloLimitExceeded("@1!(1)", parsingCost - 1, List())
   }
 
   it should "stop the evaluation of all execution branches when one of them runs out of phlo" in {
-    val parsingCost = 24L
+    val parsingCost   = 24L
+    val firstStepCost = 11
     checkPhloLimitExceeded(
       "@1!(1) | @2!(2) | @3!(3)",
-      11 + parsingCost,
-      List(Cost(parsingCost, "parsing"), Cost(11, "send eval"), Cost(11, "send eval"))
+      parsingCost + firstStepCost,
+      List(Cost(parsingCost, "parsing"), Cost(firstStepCost, "send eval"))
     )
   }
 
@@ -118,10 +119,19 @@ class CostAccountingSpec extends FlatSpec with Matchers with PropertyChecks with
       expectedCosts: List[Cost]
   ): Assertion = {
     val (EvaluateResult(totalCost, errors), costLog) = evaluateWithCostLog(initialPhlo, contract)
+    withClue("We must not expect more costs than initialPhlo allows (duh!):\n") {
+      expectedCosts.map(_.value).sum should be <= initialPhlo
+    }
     errors shouldBe List(OutOfPhlogistonsError)
-    costLog.toList should contain theSameElementsAs expectedCosts
-    totalCost.value shouldBe expectedCosts.map(_.value).sum
+    costLog.toList should contain allElementsOf expectedCosts
+    withClue("Exactly one cost should be logged past the expected ones, yet:\n") {
+      elementCounts(costLog.toList) diff elementCounts(expectedCosts) should have size 1
+    }
+    totalCost.value should be > initialPhlo
   }
+
+  private def elementCounts[A](list: Iterable[A]): Set[(A, Int)] =
+    list.groupBy(identity).mapValues(_.size).toSet
 
   it should "stop the evaluation of all execution branches when one of them runs out of phlo with a more sophisiticated contract" in {
     forAll(contracts) { (contract: String, expectedTotalCost: Long) =>
