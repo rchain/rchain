@@ -54,7 +54,6 @@ trait RegistryTester extends PersistentStoreTester {
             Par,
             BindPattern,
             ListParWithRandom,
-            ListParWithRandom,
             TaggedContinuation
           ]
       ) => R
@@ -158,7 +157,7 @@ trait RegistryTester extends PersistentStoreTester {
   )
 
   def testInstall(space: Runtime.RhoISpace[Task])(implicit cost: _cost[Task]): Task[Unit] = {
-    implicit val m: Match[Task, BindPattern, ListParWithRandom, ListParWithRandom] =
+    implicit val m: Match[Task, BindPattern, ListParWithRandom] =
       matchListPar[Task]
 
     for {

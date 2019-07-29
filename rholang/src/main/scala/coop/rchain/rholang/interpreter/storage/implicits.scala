@@ -30,8 +30,8 @@ object implicits {
   def matchListPar[F[_]: Sync: Span](
       implicit
       cost: _cost[F]
-  ): StorageMatch[F, BindPattern, ListParWithRandom, ListParWithRandom] =
-    new StorageMatch[F, BindPattern, ListParWithRandom, ListParWithRandom] {
+  ): StorageMatch[F, BindPattern, ListParWithRandom] =
+    new StorageMatch[F, BindPattern, ListParWithRandom] {
       def get(
           pattern: BindPattern,
           data: ListParWithRandom

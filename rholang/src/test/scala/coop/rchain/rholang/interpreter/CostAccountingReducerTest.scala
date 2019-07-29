@@ -75,7 +75,6 @@ class CostAccountingReducerTest extends FlatSpec with Matchers with TripleEquals
       Par,
       BindPattern,
       ListParWithRandom,
-      ListParWithRandom,
       TaggedContinuation
     ] {
       override def produce(
@@ -84,7 +83,7 @@ class CostAccountingReducerTest extends FlatSpec with Matchers with TripleEquals
           persist: Boolean,
           sequenceNumber: Int
       )(
-          implicit m: Match[Task, BindPattern, ListParWithRandom, ListParWithRandom]
+          implicit m: Match[Task, BindPattern, ListParWithRandom]
       ): Task[
         Option[(ContResult[Par, BindPattern, TaggedContinuation], Seq[Result[ListParWithRandom]])]
       ] =

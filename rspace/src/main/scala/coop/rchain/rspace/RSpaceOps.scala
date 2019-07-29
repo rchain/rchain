@@ -22,7 +22,7 @@ import scodec.Codec
 
 import scala.collection.SortedSet
 
-abstract class RSpaceOps[F[_]: Concurrent, C, P, A, R, K](
+abstract class RSpaceOps[F[_]: Concurrent, C, P, A, K](
     historyRepository: HistoryRepository[F, C, P, A, K],
     val storeAtom: AtomicAny[HotStore[F, C, P, A, K]],
     val branch: Branch
@@ -33,7 +33,7 @@ abstract class RSpaceOps[F[_]: Concurrent, C, P, A, R, K](
     serializeK: Serialize[K],
     logF: Log[F],
     spanF: Span[F]
-) extends SpaceMatcher[F, C, P, A, R, K] {
+) extends SpaceMatcher[F, C, P, A, K] {
 
   protected[this] val eventLog: SyncVar[EventLog] = create[EventLog](Seq.empty)
 
@@ -64,7 +64,7 @@ abstract class RSpaceOps[F[_]: Concurrent, C, P, A, R, K](
 
   private val lockF: TwoStepLock[F, Blake2b256Hash] = new ConcurrentTwoStepLockF()
 
-  type MaybeActionResult = Option[(ContResult[C, P, K], Seq[Result[R]])]
+  type MaybeActionResult = Option[(ContResult[C, P, K], Seq[Result[A]])]
 
   protected[this] def consumeLockF(
       channels: Seq[C]
@@ -78,8 +78,8 @@ abstract class RSpaceOps[F[_]: Concurrent, C, P, A, R, K](
   protected[this] def installLockF(
       channels: Seq[C]
   )(
-      thunk: => F[Option[(K, Seq[R])]]
-  ): F[Option[(K, Seq[R])]] = {
+      thunk: => F[Option[(K, Seq[A])]]
+  ): F[Option[(K, Seq[A])]] = {
     val hashes = channels.map(ch => StableHashProvider.hash(ch))
     lockF.acquire(hashes)(() => hashes.pure[F])(thunk)
   }
@@ -98,8 +98,8 @@ abstract class RSpaceOps[F[_]: Concurrent, C, P, A, R, K](
 
   protected[this] val logger: Logger
 
-  private[this] val installs: SyncVar[Installs[F, C, P, A, R, K]] = {
-    val installs = new SyncVar[Installs[F, C, P, A, R, K]]()
+  private[this] val installs: SyncVar[Installs[F, C, P, A, K]] = {
+    val installs = new SyncVar[Installs[F, C, P, A, K]]()
     installs.put(Map.empty)
     installs
   }
@@ -119,7 +119,7 @@ abstract class RSpaceOps[F[_]: Concurrent, C, P, A, R, K](
       channels: Seq[C],
       patterns: Seq[P],
       continuation: K
-  )(implicit m: Match[F, P, A, R]): F[Option[(K, Seq[R])]] =
+  )(implicit m: Match[F, P, A]): F[Option[(K, Seq[A])]] =
     if (channels.length =!= patterns.length) {
       val msg = "channels.length must equal patterns.length"
       logger.error(msg)
@@ -179,8 +179,8 @@ abstract class RSpaceOps[F[_]: Concurrent, C, P, A, R, K](
     }
 
   override def install(channels: Seq[C], patterns: Seq[P], continuation: K)(
-      implicit m: Match[F, P, A, R]
-  ): F[Option[(K, Seq[R])]] = spanF.trace(installSpanLabel) {
+      implicit m: Match[F, P, A]
+  ): F[Option[(K, Seq[A])]] = spanF.trace(installSpanLabel) {
     installLockF(channels) {
       lockedInstall(channels, patterns, continuation)
     }

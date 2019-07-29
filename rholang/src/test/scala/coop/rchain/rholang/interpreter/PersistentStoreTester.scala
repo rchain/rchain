@@ -39,7 +39,6 @@ trait PersistentStoreTester {
         Par,
         BindPattern,
         ListParWithRandom,
-        ListParWithRandom,
         TaggedContinuation
       ](dbDir, 1024L * 1024L * 1024L, Branch("test")))
       .unsafeRunSync

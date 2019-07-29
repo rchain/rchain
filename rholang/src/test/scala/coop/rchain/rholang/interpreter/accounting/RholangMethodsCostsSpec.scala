@@ -815,7 +815,6 @@ class RholangMethodsCostsSpec
         Par,
         BindPattern,
         ListParWithRandom,
-        ListParWithRandom,
         TaggedContinuation
       ](
         dbDir,

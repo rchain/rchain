@@ -33,7 +33,7 @@ import org.lmdbjava.EnvFlags
 import coop.rchain.metrics.NoopSpan
 
 trait StorageTestsBase[F[_], C, P, A, K] extends FlatSpec with Matchers with OptionValues {
-  type T    = ISpace[F, C, P, A, A, K]
+  type T    = ISpace[F, C, P, A, K]
   type ST   = HotStore[F, C, P, A, K]
   type HR   = HistoryRepository[F, C, P, A, K]
   type AtST = AtomicAny[ST]
@@ -143,7 +143,7 @@ abstract class InMemoryHotStoreTestsBase[F[_]]
       (hr, ts, b) => {
         val atomicStore = AtomicAny(ts)
         val space =
-          new RSpace[F, String, Pattern, String, String, StringsCaptor](hr, atomicStore, b)
+          new RSpace[F, String, Pattern, String, StringsCaptor](hr, atomicStore, b)
         Applicative[F].pure((ts, atomicStore, space))
       }
     setupTestingSpace(creator, f)

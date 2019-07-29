@@ -164,7 +164,7 @@ object AddressBookExample {
       */
     implicit def matchPatternEntry[F[_]](
         implicit apF: Applicative[F]
-    ): Match[F, Pattern, Entry, Entry] =
+    ): Match[F, Pattern, Entry] =
       (p: Pattern, a: Entry) =>
         p match {
           case NameMatch(last) if a.name.last == last        => apF.pure(Some(a))
@@ -209,7 +209,7 @@ object AddressBookExample {
 
     // Let's define our store
     val space =
-      RSpace.create[Id, Channel, Pattern, Entry, Entry, Printer](
+      RSpace.create[Id, Channel, Pattern, Entry, Printer](
         storePath,
         1024L * 1024L,
         Branch.MASTER
@@ -250,7 +250,7 @@ object AddressBookExample {
 
     // Let's define our store
     val space =
-      RSpace.create[Id, Channel, Pattern, Entry, Entry, Printer](
+      RSpace.create[Id, Channel, Pattern, Entry, Printer](
         storePath,
         1024L * 1024L,
         Branch.MASTER
@@ -332,7 +332,7 @@ object AddressBookExample {
   }
 
   private[this] def withSpace(
-      f: IdISpace[Channel, Pattern, Entry, Entry, Printer] => Unit
+      f: IdISpace[Channel, Pattern, Entry, Printer] => Unit
   ) = {
 
     implicit val log: Log[Id]          = Log.log
@@ -343,7 +343,7 @@ object AddressBookExample {
     val storePath = Files.createTempDirectory("rspace-address-book-example-")
     // Let's define our store
     val space =
-      RSpace.create[Id, Channel, Pattern, Entry, Entry, Printer](
+      RSpace.create[Id, Channel, Pattern, Entry, Printer](
         storePath,
         1024L * 1024L,
         Branch.MASTER

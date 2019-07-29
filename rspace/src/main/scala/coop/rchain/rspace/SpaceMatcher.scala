@@ -11,11 +11,11 @@ import coop.rchain.rspace.internal._
   *
   * @tparam C a type representing a channel
   * @tparam P a type representing a pattern
-  * @tparam A a type representing an arbitrary piece of data
-  * @tparam R a type representing a match result
+  * @tparam A a type representing an arbitrary piece of data and match result
+  * @tparam R a type representing a
   * @tparam K a type representing a continuation
   */
-private[rspace] trait SpaceMatcher[F[_], C, P, A, R, K] extends ISpace[F, C, P, A, R, K] {
+private[rspace] trait SpaceMatcher[F[_], C, P, A, K] extends ISpace[F, C, P, A, K] {
 
   protected[this] def MetricsSource: Source
 
@@ -29,7 +29,7 @@ private[rspace] trait SpaceMatcher[F[_], C, P, A, R, K] extends ISpace[F, C, P, 
 
   /* Consume */
 
-  type MatchingDataCandidate = (DataCandidate[C, R], Seq[(Datum[A], Int)])
+  type MatchingDataCandidate = (DataCandidate[C, A], Seq[(Datum[A], Int)])
 
   /** Searches through data, looking for a match with a given pattern.
     *
@@ -43,7 +43,7 @@ private[rspace] trait SpaceMatcher[F[_], C, P, A, R, K] extends ISpace[F, C, P, 
       pattern: P,
       prefix: Seq[(Datum[A], Int)]
   )(
-      implicit m: Match[F, P, A, R]
+      implicit m: Match[F, P, A]
   ): F[Option[MatchingDataCandidate]] = spanF.trace(findSpanLabel) {
     for {
       res <- data match {
@@ -76,8 +76,8 @@ private[rspace] trait SpaceMatcher[F[_], C, P, A, R, K] extends ISpace[F, C, P, 
   private[rspace] final def extractDataCandidates(
       channelPatternPairs: Seq[(C, P)],
       channelToIndexedData: Map[C, Seq[(Datum[A], Int)]],
-      acc: Seq[Option[DataCandidate[C, R]]]
-  )(implicit m: Match[F, P, A, R]): F[Seq[Option[DataCandidate[C, R]]]] =
+      acc: Seq[Option[DataCandidate[C, A]]]
+  )(implicit m: Match[F, P, A]): F[Seq[Option[DataCandidate[C, A]]]] =
     spanF.trace(extractSpanLabel) {
       for {
         res <- channelPatternPairs match {
@@ -87,7 +87,7 @@ private[rspace] trait SpaceMatcher[F[_], C, P, A, R, K] extends ISpace[F, C, P, 
                                    case Some(indexedData) =>
                                      findMatchingDataCandidate(channel, indexedData, pattern, Nil)
                                    case None =>
-                                     none[(DataCandidate[C, R], Seq[(Datum[A], Int)])].pure[F]
+                                     none[(DataCandidate[C, A], Seq[(Datum[A], Int)])].pure[F]
                                  }
                     dataCandidates <- maybeTuple match {
                                        case Some((cand, rem)) =>
@@ -115,7 +115,7 @@ private[rspace] trait SpaceMatcher[F[_], C, P, A, R, K] extends ISpace[F, C, P, 
       channels: Seq[C],
       matchCandidates: Seq[(WaitingContinuation[P, K], Int)],
       channelToIndexedData: Map[C, Seq[(Datum[A], Int)]]
-  )(implicit m: Match[F, P, A, R]): F[Option[ProduceCandidate[C, P, R, K]]] =
+  )(implicit m: Match[F, P, A]): F[Option[ProduceCandidate[C, P, A, K]]] =
     spanF.trace(extractFirstSpanLabel) {
       for {
         res <- matchCandidates match {
@@ -138,7 +138,7 @@ private[rspace] trait SpaceMatcher[F[_], C, P, A, R, K] extends ISpace[F, C, P, 
                                               .pure[F]
                                         }
                   } yield produceCandidates
-                case _ => none[ProduceCandidate[C, P, R, K]].pure[F]
+                case _ => none[ProduceCandidate[C, P, A, K]].pure[F]
               }
       } yield res
     }

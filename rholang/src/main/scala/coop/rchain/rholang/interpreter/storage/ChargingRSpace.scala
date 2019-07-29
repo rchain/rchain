@@ -34,7 +34,7 @@ object ChargingRSpace {
   )(implicit cost: _cost[F]) =
     new RhoPureSpace[F] {
 
-      implicit val m: StorageMatch[F, BindPattern, ListParWithRandom, ListParWithRandom] =
+      implicit val m: StorageMatch[F, BindPattern, ListParWithRandom] =
         matchListPar[F]
 
       override def consume(

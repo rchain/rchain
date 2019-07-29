@@ -5,9 +5,9 @@ import coop.rchain.rspace.internal._
 
 import scala.collection.SortedSet
 
-final case class Result[R](value: R, persistent: Boolean)
-final case class ContResult[C, P, R](
-    value: R,
+final case class Result[A](value: A, persistent: Boolean)
+final case class ContResult[C, P, A](
+    value: A,
     persistent: Boolean,
     channels: Seq[C],
     patterns: Seq[P],
@@ -19,11 +19,10 @@ final case class ContResult[C, P, R](
   *
   * @tparam C a type representing a channel
   * @tparam P a type representing a pattern
-  * @tparam A a type representing an arbitrary piece of data
-  * @tparam R a type representing a match result
+  * @tparam A a type representing an arbitrary piece of data and match result
   * @tparam K a type representing a continuation
   */
-trait ISpace[F[_], C, P, A, R, K] {
+trait ISpace[F[_], C, P, A, K] {
 
   /** Searches the store for data matching all the given patterns at the given channels.
     *
@@ -56,12 +55,12 @@ trait ISpace[F[_], C, P, A, R, K] {
       sequenceNumber: Int = 0,
       peeks: SortedSet[Int] = SortedSet.empty
   )(
-      implicit m: Match[F, P, A, R]
-  ): F[Option[(ContResult[C, P, K], Seq[Result[R]])]]
+      implicit m: Match[F, P, A]
+  ): F[Option[(ContResult[C, P, K], Seq[Result[A]])]]
 
   def install(channels: Seq[C], patterns: Seq[P], continuation: K)(
-      implicit m: Match[F, P, A, R]
-  ): F[Option[(K, Seq[R])]]
+      implicit m: Match[F, P, A]
+  ): F[Option[(K, Seq[A])]]
 
   /** Searches the store for a continuation that has patterns that match the given data at the
     * given channel.
@@ -87,8 +86,8 @@ trait ISpace[F[_], C, P, A, R, K] {
     * @param persist Whether or not to attempt to persist the data
     */
   def produce(channel: C, data: A, persist: Boolean, sequenceNumber: Int = 0)(
-      implicit m: Match[F, P, A, R]
-  ): F[Option[(ContResult[C, P, K], Seq[Result[R]])]]
+      implicit m: Match[F, P, A]
+  ): F[Option[(ContResult[C, P, K], Seq[Result[A]])]]
 
   /** Creates a checkpoint.
     *
@@ -130,6 +129,7 @@ trait ISpace[F[_], C, P, A, R, K] {
   def revertToSoftCheckpoint(checkpoint: SoftCheckpoint[C, P, A, K]): F[Unit]
 }
 
+//TODO lookinto to removing  ISpace object.
 object ISpace {
-  type IdISpace[C, P, A, R, K] = ISpace[Id, C, P, A, R, K]
+  type IdISpace[C, P, A, K] = ISpace[Id, C, P, A, K]
 }

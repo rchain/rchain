@@ -27,7 +27,7 @@ import scala.concurrent.ExecutionContext.Implicits.global
 @org.openjdk.jmh.annotations.State(Scope.Thread)
 trait RSpaceBenchBase {
 
-  var space: ISpace[Id, Channel, Pattern, Entry, Entry, EntriesCaptor] = null
+  var space: ISpace[Id, Channel, Pattern, Entry, EntriesCaptor] = null
 
   val channel  = Channel("friends#" + 1.toString)
   val channels = List(channel)
@@ -103,7 +103,7 @@ class RSpaceBench extends RSpaceBenchBase {
   @Setup
   def setup() = {
     dbDir = Files.createTempDirectory("rchain-rspace-bench-")
-    space = RSpace.create[Id, Channel, Pattern, Entry, Entry, EntriesCaptor](
+    space = RSpace.create[Id, Channel, Pattern, Entry, EntriesCaptor](
       dbDir,
       mapSize,
       Branch.MASTER

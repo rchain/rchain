@@ -93,7 +93,7 @@ trait Serialize[A] {
 
   def encode(a: A): ByteVector
 
-  def decode(bytes: ByteVector): Either[Throwable, A]
+  def decode(bytes: ByteVector): F[Option A]
 }
 ```
 
@@ -207,28 +207,30 @@ Here is the definition of the `Match` type class.
   * Type class for matching patterns with data.
   *
   * @tparam P A type representing patterns
-  * @tparam E A type representing illegal state
-  * @tparam A A type representing data
-  * @tparam R A type representing a match result
+  * @tparam F A type parameter representing a type constructor
+  * @tparam A A type representing data and matched result
   */
-trait Match[P, E, A, R] {
+trait Match[P, E, A] {
 
-  def get(p: P, a: A): Either[E, Option[R]]
+  def get(p: P, a: A): Either[E, Option[A]]
 }
 ```
 
 Let's try defining an instance of `Match` for `Pattern` and `Entry`.
 ```scala
-scala> implicit object matchPatternEntry extends Match[Pattern, Nothing, Entry, Entry] {
-     |   def get(p: Pattern, a: Entry): Either[Nothing, Option[Entry]] =
-     |     p match {
-     |       case NameMatch(last) if a.name.last == last        => Right(Some(a))
-     |       case CityMatch(city) if a.address.city == city     => Right(Some(a))
-     |       case StateMatch(state) if a.address.state == state => Right(Some(a))
-     |       case _                                             => Right(None)
-     |     }
-     | }
-defined object matchPatternEntry
+import implicits._
+import cats.{Applicative, Id}
+    implicit def matchPatternEntry[F[_]](
+        implicit apF: Applicative[F]
+    ): Match[F, Pattern, Entry] =
+      (p: Pattern, a: Entry) =>
+        p match {
+          case NameMatch(last) if a.name.last == last        => apF.pure(Some(a))
+          case CityMatch(city) if a.address.city == city     => apF.pure(Some(a))
+          case StateMatch(state) if a.address.state == state => apF.pure(Some(a))
+          case _                                             => apF.pure(None)
+        }
+  }
 ```
 
 Let's see this instance in action.
@@ -251,7 +253,6 @@ scala> val storePath: Path = Files.createTempDirectory("rspace-address-book-exam
 storePath: java.nio.file.Path = /var/folders/rk/kf3ndvw96bnd18fcrtf1vjfh0000gn/T/rspace-address-book-example-5156619535042951652
 ```
 
-Next we create an instance of `Context` using `storePath`.  We will create our store with a maximum map size of 100MB.
 ```scala
 scala> import cats.Id
 import cats.Id
@@ -262,12 +263,17 @@ import cats.effect.Sync
 scala> implicit val syncF: Sync[Id] = coop.rchain.catscontrib.effect.implicits.syncId
 syncF: cats.effect.Sync[cats.Id] = coop.rchain.catscontrib.effect.implicits.package$$anon$1@3ba63c94
 
-scala> val context: Context[Channel, Pattern, Entry, Printer] = Context.create[Channel, Pattern, Entry, Printer](storePath, 1024L * 1024L * 100L)
-context: coop.rchain.rspace.Context[coop.rchain.rspace.examples.AddressBookExample.Channel,coop.rchain.rspace.examples.AddressBookExample.Pattern,coop.rchain.rspace.examples.AddressBookExample.Entry,coop.rchain.rspace.examples.AddressBookExample.Printer] = coop.rchain.rspace.LMDBContext@7409b43c
 ```
-Now we can create an RSpace using the created context
+
+Next we create an RSpace with a maximum map size of 100MB.
 ```scala
-scala> val space = RSpace.create[Id, Channel, Pattern, Nothing, Entry, Entry, Printer](context, coop.rchain.rspace.history.Branch.MASTER)
+scala> val space = RSpace.create[Id, Channel, Pattern, Entry, Printer](
+        storePath,
+        1024L * 1024L,
+        Branch.MASTER
+      )
+
+
 space: cats.Id[coop.rchain.rspace.ISpace[cats.Id,coop.rchain.rspace.examples.AddressBookExample.Channel,coop.rchain.rspace.examples.AddressBookExample.Pattern,Nothing,coop.rchain.rspace.examples.AddressBookExample.Entry,coop.rchain.rspace.examples.AddressBookExample.Entry,coop.rchain.rspace.examples.AddressBookExample.Printer]] = coop.rchain.rspace.spaces.CoarseGrainedRSpace@7b593ab1
 ```
 
