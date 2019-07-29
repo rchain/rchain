@@ -115,7 +115,7 @@ class MultiParentCasperMergeSpec extends FlatSpec with Matchers with Inspectors 
         |""".stripMargin
 
   //deploy-local, could sometimes merge
-  val PRESISTENT_COULD_MATCH =
+  val PERSISTENT_COULD_MATCH =
     """
         |There's been a COMM within one of the deploys, with one side non-linear.
         |The other deploy had an event without a match in TS, dual to the non-linear.
@@ -155,7 +155,7 @@ class MultiParentCasperMergeSpec extends FlatSpec with Matchers with Inspectors 
     "!X !4"     -> SAME_POLARITY_MERGE        -> conflictsForNow(S0, S1, F1),
     "!X (!4)"   -> VOLATILE_EVENT             -> merges(S0, S0 | F_, Nil),
     "!X !C"     -> SAME_POLARITY_MERGE        -> conflictsForNow(S0, S1, C1),
-    "!X (!C)"   -> PRESISTENT_COULD_MATCH     -> conflicts(S0, S0 | C_, Nil),
+    "!X (!C)"   -> PERSISTENT_COULD_MATCH     -> conflicts(S0, S0 | C_, Nil),
     "!X 4X"     -> INCOMING_COULD_MATCH       -> conflicts(S0, F_, Nil),
     "!X 4!"     -> HAD_ITS_MATCH              -> conflictsForNow(S0, F_, S0),
     "!X (4!)"   -> VOLATILE_EVENT             -> coveredBy("!X (!4)"),
@@ -166,7 +166,7 @@ class MultiParentCasperMergeSpec extends FlatSpec with Matchers with Inspectors 
     "!X (!!4)"  -> PERSISTENT_COULD_NOT_MATCH -> coveredBy("!X (4!!)"),
     "!X CX"     -> INCOMING_COULD_MATCH       -> conflicts(S0, C_, Nil),
     "!X C!"     -> INCOMING_COULD_MATCH       -> conflicts(S0, C_, S0),
-    "!X (C!)"   -> PRESISTENT_COULD_MATCH     -> conflicts(S0, C_ | S0, Nil),
+    "!X (C!)"   -> PERSISTENT_COULD_MATCH     -> conflicts(S0, C_ | S0, Nil),
     "!4 !4"     -> COULD_MATCH_SAME_TRUE      -> conflicts(S0, S1, F_),
     "!4 !4"     -> COULD_MATCH_SAME_FALSE     -> conflictsForNow(S0, S1, F0 | F1),
     "!4 (!4)"   -> VOLATILE_EVENT             -> merges(S0, S1 | F_, F0),
@@ -192,7 +192,7 @@ class MultiParentCasperMergeSpec extends FlatSpec with Matchers with Inspectors 
     // Skipping 4X 4!! merges, 4X !!X may merge or not, 4X !!4 may merge or not
     "4X CX"    -> SAME_POLARITY_MERGE    -> conflicts(F_, C_, Nil),
     "4X C!"    -> SAME_POLARITY_MERGE    -> conflictsForNow(F0, C1, S1),
-    "4X (!!4)" -> PRESISTENT_COULD_MATCH -> conflicts(F_, R0 | F_, Nil),
+    "4X (!!4)" -> PERSISTENT_COULD_MATCH -> conflicts(F_, R0 | F_, Nil),
     "4! 4!"    -> COULD_MATCH_SAME_TRUE  -> conflicts(F_, F_, S0),
     "4! 4!"    -> COULD_MATCH_SAME_FALSE -> conflictsForNow(F0, F1, S0 | S1),
     // Skipping 4! 4!! merges, 4! !!X merges, 4! !!4 merges
