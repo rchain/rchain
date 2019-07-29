@@ -11,7 +11,7 @@ class TimeoutResultCollectorSpec extends FlatSpec with AppendedClues with Matche
   it should "testFinished should be false if execution hasn't finished within timeout" in {
     RhoSpec
       .getResults(
-        CompiledRholangSource("TimeoutResultCollectorTest.rho", NormalizerEnv.Empty),
+        CompiledRholangSource("TimeoutResultCollectorTest.rho", NormalizerEnv.empty),
         Seq.empty,
         10.seconds
       )

@@ -6,7 +6,7 @@ import coop.rchain.rholang.interpreter.NormalizerEnv
 
 class MakeMintSpec
     extends RhoSpec(
-      CompiledRholangSource("MakeMintTest.rho", NormalizerEnv.Empty),
+      CompiledRholangSource("MakeMintTest.rho", NormalizerEnv.empty),
       Seq.empty,
       GENESIS_TEST_TIMEOUT
     )

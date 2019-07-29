@@ -131,7 +131,7 @@ object RhoSpec {
         "0401f5d998c9be9b1a753771920c6e968def63fe95b20c71a163a7f7311b6131ac65a49f796b5947fa9d94b0542895e7b7ebe8b91eefcbc5c7604aaf281922ccac"
       ),
       timestamp = 1559158671800L,
-      term = CompiledRholangSource("RhoSpecContract.rho", NormalizerEnv.Empty).code
+      term = CompiledRholangSource("RhoSpecContract.rho", NormalizerEnv.empty).code
     )
 }
 

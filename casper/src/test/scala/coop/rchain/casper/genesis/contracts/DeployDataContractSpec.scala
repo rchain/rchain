@@ -5,7 +5,7 @@ import coop.rchain.rholang.interpreter.NormalizerEnv
 
 class DeployDataContractSpec
     extends RhoSpec(
-      CompiledRholangSource("DeployDataContractTest.rho", NormalizerEnv.Empty),
+      CompiledRholangSource("DeployDataContractTest.rho", NormalizerEnv.empty),
       Seq.empty,
       GENESIS_TEST_TIMEOUT
     )

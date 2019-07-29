@@ -14,7 +14,7 @@ final case class ProofOfStake(
     quarantineLength: Int = 50000
 ) extends CompiledRholangTemplate(
       "PoS.rhox",
-      NormalizerEnv.Empty,
+      NormalizerEnv.empty,
       "minimumBond"      -> minimumBond,
       "maximumBond"      -> maximumBond,
       "initialBonds"     -> ProofOfStake.initialBonds(validators),

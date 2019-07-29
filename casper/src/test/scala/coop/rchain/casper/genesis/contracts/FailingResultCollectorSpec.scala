@@ -28,7 +28,7 @@ class FailingResultCollectorSpec extends FlatSpec with AppendedClues with Matche
   val result =
     RhoSpec
       .getResults(
-        CompiledRholangSource("FailingResultCollectorTest.rho", NormalizerEnv.Empty),
+        CompiledRholangSource("FailingResultCollectorTest.rho", NormalizerEnv.empty),
         Seq.empty,
         10.seconds
       )

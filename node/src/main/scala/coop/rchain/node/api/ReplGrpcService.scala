@@ -42,7 +42,7 @@ private[api] class ReplGrpcService(runtime: Runtime[Task], worker: Scheduler)
 
   def exec(source: String, printUnmatchedSendsOnly: Boolean = false): Task[ReplResponse] =
     ParBuilder[Task]
-      .buildNormalizedTerm(source, NormalizerEnv.Empty)
+      .buildNormalizedTerm(source, NormalizerEnv.empty)
       .attempt
       .flatMap {
         case Left(er) =>
@@ -55,7 +55,7 @@ private[api] class ReplGrpcService(runtime: Runtime[Task], worker: Scheduler)
             _ <- Task.now(printNormalizedTerm(term))
             res <- {
               implicit val c = runtime.cost
-              Interpreter[Task].evaluate(runtime, source, NormalizerEnv.Empty)
+              Interpreter[Task].evaluate(runtime, source, NormalizerEnv.empty)
             }
             prettyStorage <- if (printUnmatchedSendsOnly)
                               StoragePrinter.prettyPrintUnmatchedSends(runtime.space)

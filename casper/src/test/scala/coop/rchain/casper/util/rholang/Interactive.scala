@@ -54,7 +54,7 @@ class Interactive private (runtime: Runtime[Task])(implicit scheduler: Scheduler
   def checkpointNames: List[String] = checkpoints.keys.toList
 
   def eval(code: String): Unit = {
-    TestUtil.eval(code, runtime, NormalizerEnv.Empty).runSyncUnsafe(Duration.Inf)
+    TestUtil.eval(code, runtime, NormalizerEnv.empty).runSyncUnsafe(Duration.Inf)
     val errors = runtime.errorLog.readAndClearErrorVector().unsafeRunSync
     if (errors.nonEmpty) {
       println("Errors during execution:")

@@ -5,7 +5,7 @@ import coop.rchain.rholang.interpreter.NormalizerEnv
 
 class LockboxSpec
     extends RhoSpec(
-      CompiledRholangSource("LockboxTest.rho", NormalizerEnv.Empty),
+      CompiledRholangSource("LockboxTest.rho", NormalizerEnv.empty),
       Seq.empty,
       GENESIS_TEST_TIMEOUT
     )

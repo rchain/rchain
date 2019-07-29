@@ -59,7 +59,7 @@ class CollectMatcherSpec extends FlatSpec with Matchers {
     IndexMapChain[VarSort]().newBindings(List(("P", ProcSort, 0, 0), ("x", NameSort, 0, 0))),
     DebruijnLevelMap[VarSort]()
   )
-  implicit val normalizerEnv: NormalizerEnv = NormalizerEnv.Empty
+  implicit val normalizerEnv: NormalizerEnv = NormalizerEnv.empty
   def getNormalizedPar(rho: String): Par    = ParBuilderUtil.buildNormalizedTerm[Coeval](rho).value()
   def assertEqualNormalized(rho1: String, rho2: String): Assertion =
     assert(getNormalizedPar(rho1) == getNormalizedPar(rho2))
@@ -221,7 +221,7 @@ class CollectMatcherSpec extends FlatSpec with Matchers {
 
 class ProcMatcherSpec extends FlatSpec with Matchers {
   val inputs                                = ProcVisitInputs(Par(), IndexMapChain[VarSort](), DebruijnLevelMap[VarSort]())
-  implicit val normalizerEnv: NormalizerEnv = NormalizerEnv.Empty
+  implicit val normalizerEnv: NormalizerEnv = NormalizerEnv.empty
 
   "PNil" should "Compile as no modification to the par object" in {
     val nil = new PNil()
@@ -1569,7 +1569,7 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
 
 class NameMatcherSpec extends FlatSpec with Matchers {
   val inputs                                = NameVisitInputs(IndexMapChain[VarSort](), DebruijnLevelMap[VarSort]())
-  implicit val normalizerEnv: NormalizerEnv = NormalizerEnv.Empty
+  implicit val normalizerEnv: NormalizerEnv = NormalizerEnv.empty
 
   "NameWildcard" should "add a wildcard count to knownFree" in {
     val nw                  = new NameWildcard()

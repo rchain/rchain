@@ -9,7 +9,7 @@ final case class NormalizerEnv(
 )
 
 object NormalizerEnv {
-  val Empty = new NormalizerEnv(deployId = None, deployerPk = None)
+  def empty = new NormalizerEnv(deployId = None, deployerPk = None)
 
   def apply(deploy: DeployData): NormalizerEnv =
     new NormalizerEnv(

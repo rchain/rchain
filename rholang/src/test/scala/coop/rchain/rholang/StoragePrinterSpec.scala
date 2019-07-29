@@ -34,7 +34,7 @@ class StoragePrinterSpec extends FlatSpec with Matchers {
             Interpreter[Task].evaluate(
               runtime,
               "@1!(Nil) | @2!(Nil) | for(_ <- @2) { Nil }",
-              NormalizerEnv.Empty
+              NormalizerEnv.empty
             )
           }
           pretty <- StoragePrinter.prettyPrintUnmatchedSends(runtime.space)

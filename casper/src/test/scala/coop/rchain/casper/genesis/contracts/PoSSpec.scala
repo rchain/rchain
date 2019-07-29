@@ -7,7 +7,7 @@ import scala.concurrent.duration._
 
 class PoSSpec
     extends RhoSpec(
-      CompiledRholangSource("PoSTest.rho", NormalizerEnv.Empty),
+      CompiledRholangSource("PoSTest.rho", NormalizerEnv.empty),
       Seq.empty,
       120.seconds
     )

@@ -9,15 +9,15 @@ import monix.eval.Coeval
 
 object ParBuilderUtil {
   def mkTerm(rho: String): Either[Throwable, Par] =
-    ParBuilder[Coeval].buildNormalizedTerm(rho, NormalizerEnv.Empty).runAttempt
+    ParBuilder[Coeval].buildNormalizedTerm(rho, NormalizerEnv.empty).runAttempt
 
   def buildNormalizedTerm[F[_]: Sync](rho: String): F[Par] =
-    ParBuilder[F].buildNormalizedTerm(rho, NormalizerEnv.Empty)
+    ParBuilder[F].buildNormalizedTerm(rho, NormalizerEnv.empty)
 
   def buildNormalizedTerm[F[_]: Sync](reader: Reader): F[Par] =
-    ParBuilder[F].buildNormalizedTerm(reader, NormalizerEnv.Empty)
+    ParBuilder[F].buildNormalizedTerm(reader, NormalizerEnv.empty)
 
-  def buildPar[F[_]: Sync](proc: Proc): F[Par] = ParBuilder[F].buildPar(proc, NormalizerEnv.Empty)
+  def buildPar[F[_]: Sync](proc: Proc): F[Par] = ParBuilder[F].buildPar(proc, NormalizerEnv.empty)
 
   def buildAST[F[_]: Sync](rho: String): F[Proc] =
     ParBuilder[F].buildAST(new StringReader(rho))

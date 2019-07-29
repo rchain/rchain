@@ -5,7 +5,7 @@ import coop.rchain.rholang.interpreter.NormalizerEnv
 
 class RevAddressSpec
     extends RhoSpec(
-      CompiledRholangSource("RevAddressTest.rho", NormalizerEnv.Empty),
+      CompiledRholangSource("RevAddressTest.rho", NormalizerEnv.empty),
       Seq.empty,
       GENESIS_TEST_TIMEOUT
     )
