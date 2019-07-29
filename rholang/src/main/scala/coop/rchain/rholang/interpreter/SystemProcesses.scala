@@ -163,10 +163,13 @@ object SystemProcesses {
 
         case isContractCall(
             produce,
-            Seq(RhoType.String("fromUnforgeable"), RhoType.Name(gprivate), ack)
+            Seq(RhoType.String("fromUnforgeable"), argument, ack)
             ) =>
-          val response =
-            RhoType.String(RevAddress.fromUnforgeable(gprivate).toBase58)
+          val response = argument match {
+            case RhoType.Name(gprivate) =>
+              RhoType.String(RevAddress.fromUnforgeable(gprivate).toBase58)
+            case _ => Par()
+          }
 
           produce(Seq(response), ack)
       }
