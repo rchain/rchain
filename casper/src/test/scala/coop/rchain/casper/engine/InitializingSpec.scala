@@ -2,6 +2,7 @@ package coop.rchain.casper.engine
 
 import cats.implicits._
 import com.google.protobuf.ByteString
+import coop.rchain.catscontrib.ski._
 import coop.rchain.casper._
 import coop.rchain.casper.protocol._
 import coop.rchain.catscontrib.TaskContrib._
@@ -27,7 +28,7 @@ class InitializingSpec extends WordSpec {
       implicit val engineCell = Cell.unsafe[Task, Engine[Task]](Engine.noop)
 
       // interval and duration don't really matter since we don't require and signs from validators
-      val bootstrapCasper =
+      val initializingEngine =
         new Initializing[Task](
           shardId,
           Some(validatorId),
@@ -51,10 +52,11 @@ class InitializingSpec extends WordSpec {
       )
 
       val test = for {
-        _               <- EngineCell[Task].set(bootstrapCasper)
-        _               <- bootstrapCasper.handle(local, approvedBlock)
-        casperO         <- MultiParentCasperRef[Task].get
-        _               = assert(casperO.isDefined)
+        _               <- EngineCell[Task].set(initializingEngine)
+        _               <- initializingEngine.handle(local, approvedBlock)
+        engine          <- EngineCell[Task].read
+        casperDefined   <- engine.withCasper(kp(true.pure[Task]), false.pure[Task])
+        _               = assert(casperDefined)
         blockO          <- blockStore.get(genesis.blockHash)
         _               = assert(blockO.isDefined)
         _               = assert(blockO.contains(genesis))

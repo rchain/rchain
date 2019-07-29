@@ -3,8 +3,9 @@ package coop.rchain.casper.api
 import cats.effect.{Resource, Sync}
 import cats.implicits._
 import com.google.protobuf.ByteString
+import coop.rchain.casper.engine._, EngineCell._
 import coop.rchain.blockstorage.{BlockDagStorage, BlockStore}
-import coop.rchain.casper.MultiParentCasperRef.MultiParentCasperRef
+import coop.rchain.casper.engine._, EngineCell._
 import coop.rchain.casper._
 import coop.rchain.casper.helper.{BlockDagStorageFixture, NoOpsCasperEffect}
 import coop.rchain.casper.protocol._
@@ -13,6 +14,7 @@ import coop.rchain.casper.util.rholang.RuntimeManager
 import coop.rchain.casper.util.{ConstructDeploy, ProtoUtil}
 import coop.rchain.metrics.Metrics
 import coop.rchain.models.BlockHash.BlockHash
+import coop.rchain.shared.Cell
 import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.crypto.signatures.Secp256k1
 import coop.rchain.crypto.PrivateKey
@@ -95,13 +97,13 @@ class BlockQueryResponseAPITest
   "getBlock" should "return successful block info response" in withStorage {
     implicit blockStore => implicit blockDagStorage =>
       for {
-        effects                                 <- effectsForSimpleCasperSetup(blockStore, blockDagStorage)
-        spanEff                                 = NoopSpan[Task]()
-        (logEff, casperRef, cliqueOracleEffect) = effects
-        q                                       = BlockQuery(hash = secondBlockQuery)
+        effects                                  <- effectsForSimpleCasperSetup(blockStore, blockDagStorage)
+        spanEff                                  = NoopSpan[Task]()
+        (logEff, engineCell, cliqueOracleEffect) = effects
+        q                                        = BlockQuery(hash = secondBlockQuery)
         blockQueryResponse <- BlockAPI.getBlock[Task](q)(
                                Sync[Task],
-                               casperRef,
+                               engineCell,
                                logEff,
                                cliqueOracleEffect,
                                blockStore,
@@ -128,13 +130,13 @@ class BlockQueryResponseAPITest
   it should "return error when no block exists" in withStorage {
     implicit blockStore => implicit blockDagStorage =>
       for {
-        effects                                 <- emptyEffects(blockStore, blockDagStorage)
-        spanEff                                 = NoopSpan[Task]()
-        (logEff, casperRef, cliqueOracleEffect) = effects
-        q                                       = BlockQuery(hash = badTestHashQuery)
+        effects                                  <- emptyEffects(blockStore, blockDagStorage)
+        spanEff                                  = NoopSpan[Task]()
+        (logEff, engineCell, cliqueOracleEffect) = effects
+        q                                        = BlockQuery(hash = badTestHashQuery)
         blockQueryResponse <- BlockAPI.getBlock[Task](q)(
                                Sync[Task],
-                               casperRef,
+                               engineCell,
                                logEff,
                                cliqueOracleEffect,
                                blockStore,
@@ -260,7 +262,7 @@ class BlockQueryResponseAPITest
   private def effectsForSimpleCasperSetup(
       blockStore: BlockStore[Task],
       blockDagStorage: BlockDagStorage[Task]
-  ): Task[(LogStub[Task], MultiParentCasperRef[Task], SafetyOracle[Task])] =
+  ): Task[(LogStub[Task], EngineCell[Task], SafetyOracle[Task])] =
     runtimeManagerResource.use { implicit runtimeManager =>
       for {
         _ <- blockDagStorage.insert(genesisBlock, genesisBlock, false)
@@ -273,17 +275,17 @@ class BlockQueryResponseAPITest
                        )(Sync[Task], blockStore, blockDagStorage, runtimeManager)
         logEff     = new LogStub[Task]()
         metricsEff = new Metrics.MetricsNOP[Task]
-        casperRef  <- MultiParentCasperRef.of[Task]
-        _          <- casperRef.set(casperEffect)
+        engine     = new EngineWithCasper[Task](casperEffect)
+        engineCell <- Cell.mvarCell[Task, Engine[Task]](engine)
         cliqueOracleEffect = SafetyOracle
           .cliqueOracle[Task](Sync[Task], logEff, metricsEff, spanEff)
-      } yield (logEff, casperRef, cliqueOracleEffect)
+      } yield (logEff, engineCell, cliqueOracleEffect)
     }
 
   private def emptyEffects(
       blockStore: BlockStore[Task],
       blockDagStorage: BlockDagStorage[Task]
-  ): Task[(LogStub[Task], MultiParentCasperRef[Task], SafetyOracle[Task])] =
+  ): Task[(LogStub[Task], EngineCell[Task], SafetyOracle[Task])] =
     runtimeManagerResource.use { implicit runtimeManager =>
       for {
         casperEffect <- NoOpsCasperEffect(
@@ -294,10 +296,10 @@ class BlockQueryResponseAPITest
                        )(Sync[Task], blockStore, blockDagStorage, runtimeManager)
         logEff     = new LogStub[Task]()
         metricsEff = new Metrics.MetricsNOP[Task]
-        casperRef  <- MultiParentCasperRef.of[Task]
-        _          <- casperRef.set(casperEffect)
+        engine     = new EngineWithCasper[Task](casperEffect)
+        engineCell <- Cell.mvarCell[Task, Engine[Task]](engine)
         cliqueOracleEffect = SafetyOracle
           .cliqueOracle[Task](Sync[Task], logEff, metricsEff, spanEff)
-      } yield (logEff, casperRef, cliqueOracleEffect)
+      } yield (logEff, engineCell, cliqueOracleEffect)
     }
 }

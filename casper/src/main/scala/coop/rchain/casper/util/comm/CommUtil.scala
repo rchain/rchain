@@ -11,7 +11,7 @@ import coop.rchain.casper.LastApprovedBlock.LastApprovedBlock
 import coop.rchain.casper._
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.casper.engine._, EngineCell._
-import coop.rchain.casper.MultiParentCasperRef.MultiParentCasperRef
+
 import coop.rchain.casper.protocol._
 import coop.rchain.comm.discovery._
 import coop.rchain.comm.protocol.routing.{Packet, Protocol}
@@ -84,7 +84,7 @@ object CommUtil {
       _     <- TransportLayer[F].stream(peers, msg)
     } yield ()
 
-  def requestApprovedBlock[F[_]: Monad: Concurrent: EngineCell: LastApprovedBlock: Log: Time: Metrics: TransportLayer: ConnectionsCell: RPConfAsk: EngineCell: MultiParentCasperRef]
+  def requestApprovedBlock[F[_]: Monad: Concurrent: EngineCell: LastApprovedBlock: Log: Time: Metrics: TransportLayer: ConnectionsCell: RPConfAsk]
       : F[Unit] = {
 
     def keepOnRequestingTillRunning(bootstrap: PeerNode, msg: Protocol): F[Unit] =

@@ -8,7 +8,7 @@ import EngineCell._
 import coop.rchain.blockstorage.{BlockDagStorage, BlockStore}
 import coop.rchain.casper._
 import coop.rchain.casper.LastApprovedBlock.LastApprovedBlock
-import coop.rchain.casper.MultiParentCasperRef.MultiParentCasperRef
+
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.rholang.RuntimeManager
 import coop.rchain.comm.{transport, PeerNode}
@@ -28,6 +28,10 @@ trait Engine[F[_]] {
 
   def init: F[Unit]                                       = noop
   def handle(peer: PeerNode, msg: CasperMessage): F[Unit] = noop
+  def withCasper[A](
+      f: MultiParentCasper[F] => F[A],
+      default: F[A]
+  ): F[A] = default
 }
 
 object Engine {
@@ -69,13 +73,12 @@ object Engine {
       _   <- TransportLayer[F].stream(peer, msg)
     } yield ()
 
-  def transitionToRunning[F[_]: Monad: MultiParentCasperRef: EngineCell: Log: EventLog: RPConfAsk: BlockStore: ConnectionsCell: TransportLayer: Time: Running.RequestedBlocks](
+  def transitionToRunning[F[_]: Monad: EngineCell: Log: EventLog: RPConfAsk: BlockStore: ConnectionsCell: TransportLayer: Time: Running.RequestedBlocks](
       casper: MultiParentCasper[F],
       approvedBlock: ApprovedBlock,
       init: F[Unit]
   ): F[Unit] =
     for {
-      _ <- MultiParentCasperRef[F].set(casper)
       _ <- Log[F].info("Making a transition to Running state.")
       _ <- EventLog[F].publish(
             shared.Event.EnteredRunningState(
@@ -89,7 +92,7 @@ object Engine {
 
     } yield ()
 
-  def tranistionToInitializing[F[_]: Concurrent: Metrics: Span: Monad: MultiParentCasperRef: EngineCell: Log: EventLog: RPConfAsk: BlockStore: ConnectionsCell: TransportLayer: Time: SafetyOracle: LastFinalizedBlockCalculator: LastApprovedBlock: BlockDagStorage: RuntimeManager: Running.RequestedBlocks](
+  def tranistionToInitializing[F[_]: Concurrent: Metrics: Span: Monad: EngineCell: Log: EventLog: RPConfAsk: BlockStore: ConnectionsCell: TransportLayer: Time: SafetyOracle: LastFinalizedBlockCalculator: LastApprovedBlock: BlockDagStorage: RuntimeManager: Running.RequestedBlocks](
       shardId: String,
       validatorId: Option[ValidatorIdentity],
       validators: Set[ByteString],

@@ -6,9 +6,9 @@ import cats.effect.{Concurrent, Sync}
 import cats.implicits._
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.{BlockDagRepresentation, BlockStore}
+import coop.rchain.casper.engine._, EngineCell._
 import coop.rchain.casper.DeployError._
 import coop.rchain.casper.MultiParentCasper.ignoreDoppelgangerCheck
-import coop.rchain.casper.MultiParentCasperRef.MultiParentCasperRef
 import coop.rchain.casper._
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.rholang.RuntimeManager
@@ -39,7 +39,7 @@ object BlockAPI {
   val DeploySource: Metrics.Source          = Metrics.Source(BlockAPIMetricsSource, "deploy")
   val GetBlockSource: Metrics.Source        = Metrics.Source(BlockAPIMetricsSource, "get-block")
 
-  def deploy[F[_]: Monad: MultiParentCasperRef: Log: Span](
+  def deploy[F[_]: Monad: EngineCell: Log: Span](
       d: DeployData
   ): Effect[F, DeployServiceResponse] = Span[F].trace(DeploySource) {
 
@@ -58,53 +58,56 @@ object BlockAPI {
 
     val errorMessage = "Could not deploy, casper instance was not available yet."
 
-    MultiParentCasperRef
-      .withCasper[F, ApiErr[DeployServiceResponse]](
-        casperDeploy,
-        Log[F].warn(errorMessage).as(s"Error: $errorMessage".asLeft)
-      )
+    EngineCell[F].read >>= (_.withCasper[ApiErr[DeployServiceResponse]](
+      casperDeploy,
+      Log[F].warn(errorMessage).as(s"Error: $errorMessage".asLeft)
+    ))
   }
 
-  def createBlock[F[_]: Sync: Concurrent: MultiParentCasperRef: Log: Span](
+  def createBlock[F[_]: Sync: Concurrent: EngineCell: Log: Span](
       blockApiLock: Semaphore[F],
       printUnmatchedSends: Boolean = false
   ): Effect[F, DeployServiceResponse] = Span[F].trace(CreateBlockSource) {
     val errorMessage = "Could not create block, casper instance was not available yet."
-    MultiParentCasperRef.withCasper[F, ApiErr[DeployServiceResponse]](
-      casper => {
-        Sync[F].bracket(blockApiLock.tryAcquire) {
-          case true =>
-            for {
-              maybeBlock <- casper.createBlock
-              result <- maybeBlock match {
-                         case err: NoBlock =>
-                           s"Error while creating block: $err".asLeft[DeployServiceResponse].pure[F]
-                         case Created(block) =>
-                           casper
-                             .addBlock(block, ignoreDoppelgangerCheck[F]) >>= (addResponse(
-                             _,
-                             block,
-                             casper,
-                             printUnmatchedSends
-                           ))
-                       }
-            } yield result
-          case false =>
-            "Error: There is another propose in progress.".asLeft[DeployServiceResponse].pure[F]
-        } {
-          case true =>
-            blockApiLock.release
-          case false =>
-            ().pure[F]
-        }
-      },
-      default = Log[F]
-        .warn(errorMessage)
-        .as(s"Error: $errorMessage".asLeft)
+    EngineCell[F].read >>= (
+      _.withCasper[ApiErr[DeployServiceResponse]](
+        casper => {
+          Sync[F].bracket(blockApiLock.tryAcquire) {
+            case true =>
+              for {
+                maybeBlock <- casper.createBlock
+                result <- maybeBlock match {
+                           case err: NoBlock =>
+                             s"Error while creating block: $err"
+                               .asLeft[DeployServiceResponse]
+                               .pure[F]
+                           case Created(block) =>
+                             casper
+                               .addBlock(block, ignoreDoppelgangerCheck[F]) >>= (addResponse(
+                               _,
+                               block,
+                               casper,
+                               printUnmatchedSends
+                             ))
+                         }
+              } yield result
+            case false =>
+              "Error: There is another propose in progress.".asLeft[DeployServiceResponse].pure[F]
+          } {
+            case true =>
+              blockApiLock.release
+            case false =>
+              ().pure[F]
+          }
+        },
+        default = Log[F]
+          .warn(errorMessage)
+          .as(s"Error: $errorMessage".asLeft)
+      )
     )
   }
 
-  def getListeningNameDataResponse[F[_]: Concurrent: MultiParentCasperRef: Log: SafetyOracle: BlockStore](
+  def getListeningNameDataResponse[F[_]: Concurrent: EngineCell: Log: SafetyOracle: BlockStore](
       depth: Int,
       listeningName: Par
   ): Effect[F, ListeningNameDataResponse] = {
@@ -131,15 +134,15 @@ object BlockAPI {
         length = blocksWithActiveName.length
       ).asRight
 
-    MultiParentCasperRef.withCasper[F, ApiErr[ListeningNameDataResponse]](
+    EngineCell[F].read >>= (_.withCasper[ApiErr[ListeningNameDataResponse]](
       casperResponse(_),
       Log[F]
         .warn(errorMessage)
         .as(s"Error: $errorMessage".asLeft)
-    )
+    ))
   }
 
-  def getListeningNameContinuationResponse[F[_]: Concurrent: MultiParentCasperRef: Log: SafetyOracle: BlockStore](
+  def getListeningNameContinuationResponse[F[_]: Concurrent: EngineCell: Log: SafetyOracle: BlockStore](
       depth: Int,
       listeningNames: Seq[Par]
   ): Effect[F, ListeningNameContinuationResponse] = {
@@ -166,12 +169,12 @@ object BlockAPI {
         length = blocksWithActiveName.length
       ).asRight
 
-    MultiParentCasperRef.withCasper[F, ApiErr[ListeningNameContinuationResponse]](
+    EngineCell[F].read >>= (_.withCasper[ApiErr[ListeningNameContinuationResponse]](
       casperResponse(_),
       Log[F]
         .warn(errorMessage)
         .as(s"Error: $errorMessage".asLeft)
-    )
+    ))
   }
 
   private def getMainChainFromTip[F[_]: Monad: Log: SafetyOracle: BlockStore](depth: Int)(
@@ -251,7 +254,7 @@ object BlockAPI {
   }
 
   private def toposortDag[
-      F[_]: Monad: MultiParentCasperRef: Log: SafetyOracle: BlockStore,
+      F[_]: Monad: EngineCell: Log: SafetyOracle: BlockStore,
       A
   ](maybeDepth: Option[Int])(
       doIt: (MultiParentCasper[F], Vector[Vector[BlockHash]]) => F[ApiErr[A]]
@@ -268,14 +271,14 @@ object BlockAPI {
         result   <- doIt(casper, topoSort)
       } yield result
 
-    MultiParentCasperRef.withCasper[F, ApiErr[A]](
+    EngineCell[F].read >>= (_.withCasper[ApiErr[A]](
       casperResponse(_),
       Log[F].warn(errorMessage).as(errorMessage.asLeft)
-    )
+    ))
   }
 
   def visualizeDag[
-      F[_]: Monad: Sync: MultiParentCasperRef: Log: SafetyOracle: BlockStore,
+      F[_]: Monad: Sync: EngineCell: Log: SafetyOracle: BlockStore,
       G[_]: Monad: GraphSerializer,
       R
   ](
@@ -292,7 +295,7 @@ object BlockAPI {
     }
 
   def machineVerifiableDag[
-      F[_]: Monad: Sync: MultiParentCasperRef: Log: SafetyOracle: BlockStore
+      F[_]: Monad: Sync: EngineCell: Log: SafetyOracle: BlockStore
   ]: Effect[F, MachineVerifyResponse] =
     toposortDag[F, MachineVerifyResponse](maybeDepth = None) {
       case (_, topoSort) =>
@@ -305,7 +308,7 @@ object BlockAPI {
           .map(MachineVerifyResponse(_).asRight[Error])
     }
 
-  def getBlocks[F[_]: Monad: MultiParentCasperRef: Log: SafetyOracle: BlockStore](
+  def getBlocks[F[_]: Monad: EngineCell: Log: SafetyOracle: BlockStore](
       depth: Option[Int]
   ): Effect[F, List[LightBlockInfo]] =
     toposortDag[F, List[LightBlockInfo]](depth) {
@@ -324,7 +327,7 @@ object BlockAPI {
           .map(_.reverse.asRight[Error])
     }
 
-  def showMainChain[F[_]: Monad: MultiParentCasperRef: Log: SafetyOracle: BlockStore](
+  def showMainChain[F[_]: Monad: EngineCell: Log: SafetyOracle: BlockStore](
       depth: Int
   ): F[List[LightBlockInfo]] = {
 
@@ -341,40 +344,42 @@ object BlockAPI {
         blockInfos <- mainChain.toList.traverse(getLightBlockInfo[F])
       } yield blockInfos
 
-    MultiParentCasperRef.withCasper[F, List[LightBlockInfo]](
+    EngineCell[F].read >>= (_.withCasper[List[LightBlockInfo]](
       casperResponse(_),
       Log[F].warn(errorMessage).as(List.empty[LightBlockInfo])
-    )
+    ))
   }
 
-  def findDeploy[F[_]: Monad: MultiParentCasperRef: Log: SafetyOracle: BlockStore](
+  def findDeploy[F[_]: Monad: EngineCell: Log: SafetyOracle: BlockStore](
       id: DeployId
   ): Effect[F, LightBlockQueryResponse] =
-    MultiParentCasperRef.withCasper[F, ApiErr[LightBlockQueryResponse]](
-      implicit casper =>
-        for {
-          dag               <- casper.blockDag
-          allBlocksTopoSort <- dag.topoSort(0L)
-          maybeBlock <- allBlocksTopoSort.flatten.reverse.toStream
-                         .traverse(ProtoUtil.unsafeGetBlock[F])
-                         .map(_.find(ProtoUtil.containsDeploy(_, ByteString.copyFrom(id))))
-          response <- maybeBlock.traverse(getLightBlockInfo[F])
-        } yield response.fold(
-          s"Couldn't find block containing deploy with id: ${PrettyPrinter
-            .buildStringNoLimit(id)}".asLeft[LightBlockQueryResponse]
-        )(
-          blockInfo =>
-            LightBlockQueryResponse(
-              blockInfo = Some(blockInfo)
-            ).asRight
-        ),
-      Log[F]
-        .warn("Could not find block with deploy, casper instance was not available yet.")
-        .as(s"Error: errorMessage".asLeft)
+    EngineCell[F].read >>= (
+      _.withCasper[ApiErr[LightBlockQueryResponse]](
+        implicit casper =>
+          for {
+            dag               <- casper.blockDag
+            allBlocksTopoSort <- dag.topoSort(0L)
+            maybeBlock <- allBlocksTopoSort.flatten.reverse.toStream
+                           .traverse(ProtoUtil.unsafeGetBlock[F])
+                           .map(_.find(ProtoUtil.containsDeploy(_, ByteString.copyFrom(id))))
+            response <- maybeBlock.traverse(getLightBlockInfo[F])
+          } yield response.fold(
+            s"Couldn't find block containing deploy with id: ${PrettyPrinter
+              .buildStringNoLimit(id)}".asLeft[LightBlockQueryResponse]
+          )(
+            blockInfo =>
+              LightBlockQueryResponse(
+                blockInfo = Some(blockInfo)
+              ).asRight
+          ),
+        Log[F]
+          .warn("Could not find block with deploy, casper instance was not available yet.")
+          .as(s"Error: errorMessage".asLeft)
+      )
     )
 
   // TODO: Replace with call to BlockStore
-  def findBlockWithDeploy[F[_]: Monad: MultiParentCasperRef: Log: SafetyOracle: BlockStore](
+  def findBlockWithDeploy[F[_]: Monad: EngineCell: Log: SafetyOracle: BlockStore](
       user: ByteString,
       timestamp: Long
   ): Effect[F, BlockQueryResponse] = {
@@ -400,12 +405,12 @@ object BlockAPI {
           ).asRight
       )
 
-    MultiParentCasperRef.withCasper[F, ApiErr[BlockQueryResponse]](
+    EngineCell[F].read >>= (_.withCasper[ApiErr[BlockQueryResponse]](
       casperResponse(_),
       Log[F]
         .warn(errorMessage)
         .as(s"Error: errorMessage".asLeft)
-    )
+    ))
   }
 
   private def findBlockWithDeploy[F[_]: Monad: Log: BlockStore](
@@ -417,7 +422,7 @@ object BlockAPI {
       .traverse(ProtoUtil.unsafeGetBlock[F])
       .map(blocks => blocks.find(ProtoUtil.containsDeploy(_, user, timestamp)))
 
-  def getBlock[F[_]: Monad: MultiParentCasperRef: Log: SafetyOracle: BlockStore: Span](
+  def getBlock[F[_]: Monad: EngineCell: Log: SafetyOracle: BlockStore: Span](
       q: BlockQuery
   ): Effect[F, BlockQueryResponse] = Span[F].trace(GetBlockSource) {
 
@@ -440,10 +445,10 @@ object BlockAPI {
                              }
       } yield blockQueryResponse
 
-    MultiParentCasperRef.withCasper[F, ApiErr[BlockQueryResponse]](
+    EngineCell[F].read >>= (_.withCasper[ApiErr[BlockQueryResponse]](
       casperResponse(_),
       Log[F].warn(errorMessage).as(s"Error: $errorMessage".asLeft)
-    )
+    ))
   }
 
   private def getBlockInfo[A, F[_]: Monad: SafetyOracle: BlockStore](
@@ -620,16 +625,18 @@ object BlockAPI {
     PrivateNamePreviewResponse(ids).asRight[String].pure[F]
   }
 
-  def lastFinalizedBlock[F[_]: Monad: MultiParentCasperRef: SafetyOracle: BlockStore: Log]
+  def lastFinalizedBlock[F[_]: Monad: EngineCell: SafetyOracle: BlockStore: Log]
       : Effect[F, LastFinalizedBlockResponse] = {
     val errorMessage = "Could not get last finalized block, casper instance was not available yet."
-    MultiParentCasperRef.withCasper[F, ApiErr[LastFinalizedBlockResponse]](
-      implicit casper =>
-        for {
-          lastFinalizedBlock <- casper.lastFinalizedBlock
-          blockInfo          <- getFullBlockInfo[F](lastFinalizedBlock)
-        } yield LastFinalizedBlockResponse(blockInfo = Some(blockInfo)).asRight,
-      Log[F].warn(errorMessage).as(s"Error: $errorMessage".asLeft)
+    EngineCell[F].read >>= (
+      _.withCasper[ApiErr[LastFinalizedBlockResponse]](
+        implicit casper =>
+          for {
+            lastFinalizedBlock <- casper.lastFinalizedBlock
+            blockInfo          <- getFullBlockInfo[F](lastFinalizedBlock)
+          } yield LastFinalizedBlockResponse(blockInfo = Some(blockInfo)).asRight,
+        Log[F].warn(errorMessage).as(s"Error: $errorMessage".asLeft)
+      )
     )
   }
 }

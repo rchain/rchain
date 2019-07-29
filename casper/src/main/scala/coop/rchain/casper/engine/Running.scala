@@ -267,4 +267,9 @@ class Running[F[_]: RPConfAsk: BlockStore: Monad: ConnectionsCell: TransportLaye
     case na: NoApprovedBlockAvailable => logNoApprovedBlockAvailable[F](na.nodeIdentifer)
     case _                            => noop
   }
+
+  override def withCasper[A](
+      f: MultiParentCasper[F] => F[A],
+      default: F[A]
+  ): F[A] = f(casper)
 }

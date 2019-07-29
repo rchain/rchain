@@ -10,7 +10,7 @@ import EngineCell._
 import coop.rchain.blockstorage.{BlockDagStorage, BlockStore}
 import coop.rchain.casper._
 import coop.rchain.casper.LastApprovedBlock.LastApprovedBlock
-import coop.rchain.casper.MultiParentCasperRef.MultiParentCasperRef
+
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.comm.CommUtil
 import coop.rchain.casper.util.rholang.RuntimeManager
@@ -38,7 +38,7 @@ class GenesisCeremonyMaster[F[_]: Sync: ConnectionsCell: BlockStore: TransportLa
 
 object GenesisCeremonyMaster {
   import Engine._
-  def approveBlockInterval[F[_]: Sync: Metrics: Span: Concurrent: ConnectionsCell: BlockStore: TransportLayer: Log: EventLog: Time: SafetyOracle: LastFinalizedBlockCalculator: RPConfAsk: LastApprovedBlock: MultiParentCasperRef: BlockDagStorage: EngineCell: RuntimeManager: Running.RequestedBlocks](
+  def approveBlockInterval[F[_]: Sync: Metrics: Span: Concurrent: ConnectionsCell: BlockStore: TransportLayer: Log: EventLog: Time: SafetyOracle: LastFinalizedBlockCalculator: RPConfAsk: LastApprovedBlock: BlockDagStorage: EngineCell: RuntimeManager: Running.RequestedBlocks](
       interval: FiniteDuration,
       shardId: String,
       validatorId: Option[ValidatorIdentity]

@@ -1,7 +1,8 @@
 package coop.rchain.casper.engine
 
+import cats._, cats.data._, cats.implicits._
+import cats.effect._
 import cats.effect.concurrent.Ref
-import cats.implicits._
 import coop.rchain.casper._
 import coop.rchain.casper.protocol._
 import coop.rchain.catscontrib.TaskContrib._
@@ -24,16 +25,13 @@ class GenesisCeremonyMasterSpec extends WordSpec {
       val duration  = 1.second
       val startTime = System.currentTimeMillis()
 
-      def waitUtilCasperIsDefined: Task[MultiParentCasper[Task]] =
-        for {
-          casperO <- MultiParentCasperRef[Task].get
-          casper <- casperO match {
-                     case None         => Task.sleep(3.seconds).flatMap(_ => waitUtilCasperIsDefined)
-                     case Some(casper) => Task.pure(casper)
-                   }
-        } yield casper
-
       implicit val engineCell = Cell.unsafe[Task, Engine[Task]](Engine.noop)
+
+      def waitUtilCasperIsDefined: Task[MultiParentCasper[Task]] =
+        EngineCell[Task].read >>= (_.withCasper(
+          casper => Task.pure(casper),
+          Task.sleep(3.seconds).flatMap(_ => waitUtilCasperIsDefined)
+        ))
 
       val test = for {
         sigs <- Ref.of[Task, Set[Signature]](Set.empty)

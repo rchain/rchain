@@ -3,6 +3,7 @@ package coop.rchain.casper.api
 import scala.collection.immutable.HashMap
 import cats.effect.{Resource, Sync}
 import coop.rchain.casper._
+import coop.rchain.casper.engine._, EngineCell._
 import coop.rchain.casper.helper._
 import coop.rchain.casper.helper.BlockGenerator._
 import coop.rchain.casper.helper.BlockUtil.generateValidator
@@ -12,7 +13,7 @@ import coop.rchain.casper.util.rholang.RuntimeManager
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.p2p.EffectsTestInstances.LogStub
-import coop.rchain.shared.Log
+import coop.rchain.shared.{Cell, Log}
 import monix.eval.Task
 import org.scalatest.{FlatSpec, Matchers}
 import monix.execution.Scheduler.Implicits.global
@@ -97,14 +98,14 @@ class BlocksResponseAPITest
                            HashMap.empty[BlockHash, BlockMessage],
                            tips
                          )
-          logEff    = new LogStub[Task]
-          casperRef <- MultiParentCasperRef.of[Task]
-          _         <- casperRef.set(casperEffect)
+          logEff     = new LogStub[Task]
+          engine     = new EngineWithCasper[Task](casperEffect)
+          engineCell <- Cell.mvarCell[Task, Engine[Task]](engine)
           cliqueOracleEffect = SafetyOracle
             .cliqueOracle[Task](Sync[Task], logEff, metricsEff, spanEff)
           blocksResponse <- BlockAPI.showMainChain[Task](Int.MaxValue)(
                              Sync[Task],
-                             casperRef,
+                             engineCell,
                              logEff,
                              cliqueOracleEffect,
                              blockStore
@@ -174,14 +175,14 @@ class BlocksResponseAPITest
                            HashMap.empty[BlockHash, BlockMessage],
                            tips
                          )
-          logEff    = new LogStub[Task]
-          casperRef <- MultiParentCasperRef.of[Task]
-          _         <- casperRef.set(casperEffect)
+          engine     = new EngineWithCasper[Task](casperEffect)
+          engineCell <- Cell.mvarCell[Task, Engine[Task]](engine)
+          logEff     = new LogStub[Task]
           cliqueOracleEffect = SafetyOracle
             .cliqueOracle[Task](Sync[Task], logEff, metricsEff, spanEff)
           blocksResponse <- BlockAPI.getBlocks[Task](Some(Int.MaxValue))(
                              Sync[Task],
-                             casperRef,
+                             engineCell,
                              logEff,
                              cliqueOracleEffect,
                              blockStore
@@ -250,14 +251,14 @@ class BlocksResponseAPITest
                          HashMap.empty[BlockHash, BlockMessage],
                          tips
                        )
-        logEff    = new LogStub[Task]
-        casperRef <- MultiParentCasperRef.of[Task]
-        _         <- casperRef.set(casperEffect)
+        logEff     = new LogStub[Task]
+        engine     = new EngineWithCasper[Task](casperEffect)
+        engineCell <- Cell.mvarCell[Task, Engine[Task]](engine)
         cliqueOracleEffect = SafetyOracle
           .cliqueOracle[Task](Sync[Task], logEff, metricsEff, spanEff)
         blocksResponse <- BlockAPI.getBlocks[Task](Some(2))(
                            Sync[Task],
-                           casperRef,
+                           engineCell,
                            logEff,
                            cliqueOracleEffect,
                            blockStore
