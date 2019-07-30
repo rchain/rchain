@@ -5,6 +5,7 @@ import java.util.Arrays
 import coop.rchain.crypto.PublicKey
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.hash.{Blake2b256, Keccak256}
+import coop.rchain.models.GPrivate
 import coop.rchain.rholang.interpreter.util.codec.Base58
 
 final case class Address(prefix: Array[Byte], keyHash: Array[Byte], checksum: Array[Byte]) {
@@ -51,6 +52,12 @@ class AddressTools(prefix: Array[Byte], keyLength: Int, checksumLength: Int) {
 
   def fromEthAddress(ethAddress: String): Address = {
     val keyHash = Keccak256.hash(Base16.unsafeDecode(ethAddress))
+    val payload = prefix ++ keyHash
+    Address(prefix, keyHash, computeChecksum(payload))
+  }
+
+  def fromUnforgeable(gprivate: GPrivate): Address = {
+    val keyHash = Keccak256.hash(gprivate.toByteArray)
     val payload = prefix ++ keyHash
     Address(prefix, keyHash, computeChecksum(payload))
   }

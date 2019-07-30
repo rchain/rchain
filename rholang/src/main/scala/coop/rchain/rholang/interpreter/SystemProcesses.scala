@@ -160,6 +160,18 @@ object SystemProcesses {
               .getOrElse(Par())
 
           produce(Seq(response), ack)
+
+        case isContractCall(
+            produce,
+            Seq(RhoType.String("fromUnforgeable"), argument, ack)
+            ) =>
+          val response = argument match {
+            case RhoType.Name(gprivate) =>
+              RhoType.String(RevAddress.fromUnforgeable(gprivate).toBase58)
+            case _ => Par()
+          }
+
+          produce(Seq(response), ack)
       }
 
       def deployerIdOps: Contract[F] = {

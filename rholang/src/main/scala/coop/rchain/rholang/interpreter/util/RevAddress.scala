@@ -1,7 +1,7 @@
 package coop.rchain.rholang.interpreter.util
 import coop.rchain.crypto.PublicKey
 import coop.rchain.crypto.codec.Base16
-import coop.rchain.models.Validator
+import coop.rchain.models.{GPrivate, Validator}
 
 final case class RevAddress(address: Address) {
 
@@ -21,6 +21,9 @@ object RevAddress {
 
   def fromEthAddress(ethAddress: String): RevAddress =
     RevAddress(tools.fromEthAddress(ethAddress))
+
+  def fromUnforgeable(gprivate: GPrivate): RevAddress =
+    RevAddress(tools.fromUnforgeable(gprivate))
 
   def parse(address: String): Either[String, RevAddress] =
     tools.parse(address).map(RevAddress(_))
