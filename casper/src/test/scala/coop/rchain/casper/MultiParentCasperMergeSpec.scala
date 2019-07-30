@@ -11,7 +11,6 @@ import coop.rchain.casper.protocol.DeployData
 import coop.rchain.casper.scalatestcontrib._
 import coop.rchain.casper.util.{ConstructDeploy, RSpaceUtil}
 import coop.rchain.p2p.EffectsTestInstances.LogicalTime
-import coop.rchain.shared.Debug
 import monix.execution.Scheduler.Implicits.global
 import org.scalatest.exceptions.TestFailedException
 import org.scalatest.{FlatSpec, Inspectors, Matchers}
@@ -246,33 +245,32 @@ class MultiParentCasperMergeSpec extends FlatSpec with Matchers with Inspectors 
       b2: Rho,
       numberOfParentsForDiamondTip: Int
   )(implicit file: sourcecode.File, line: sourcecode.Line): Effect[Unit] =
-    Debug.print[Effect](base, b1, b2, numberOfParentsForDiamondTip) >>
-      Vector(
-        ConstructDeploy.sourceDeployNowF[Effect](base.value),
-        ConstructDeploy.sourceDeployNowF[Effect](b1.value),
-        ConstructDeploy.sourceDeployNowF[Effect](b2.value),
-        ConstructDeploy.sourceDeployNowF[Effect]("Nil")
-      ).sequence[Effect, DeployData]
-        .flatMap { deploys =>
-          HashSetCasperTestNode.networkEff(genesis, networkSize = 2).use { nodes =>
-            for {
-              _ <- nodes(0).addBlock(deploys(0))
-              _ <- nodes(1).receive()
-              _ <- nodes(0).addBlock(deploys(1))
-              _ <- nodes(1).addBlock(deploys(2))
-              _ <- nodes(0).receive()
+    Vector(
+      ConstructDeploy.sourceDeployNowF[Effect](base.value),
+      ConstructDeploy.sourceDeployNowF[Effect](b1.value),
+      ConstructDeploy.sourceDeployNowF[Effect](b2.value),
+      ConstructDeploy.sourceDeployNowF[Effect]("Nil")
+    ).sequence[Effect, DeployData]
+      .flatMap { deploys =>
+        HashSetCasperTestNode.networkEff(genesis, networkSize = 2).use { nodes =>
+          for {
+            _ <- nodes(0).addBlock(deploys(0))
+            _ <- nodes(1).receive()
+            _ <- nodes(0).addBlock(deploys(1))
+            _ <- nodes(1).addBlock(deploys(2))
+            _ <- nodes(0).receive()
 
-              multiParentBlock <- nodes(0).addBlock(deploys(3))
+            multiParentBlock <- nodes(0).addBlock(deploys(3))
 
-              _ = nodes(0).logEff.warns.isEmpty shouldBe true
-              _ = multiParentBlock.header.get.parentsHashList.size shouldBe numberOfParentsForDiamondTip
-              _ = nodes(0).casperEff.contains(multiParentBlock.blockHash) shouldBeF true
-            } yield ()
-          }
+            _ = nodes(0).logEff.warns.isEmpty shouldBe true
+            _ = multiParentBlock.header.get.parentsHashList.size shouldBe numberOfParentsForDiamondTip
+            _ = nodes(0).casperEff.contains(multiParentBlock.blockHash) shouldBeF true
+          } yield ()
         }
-        .adaptError {
-          case _: TestFailedException =>
-            new TestFailedException(s"""Expected
+      }
+      .adaptError {
+        case e: Throwable =>
+          new TestFailedException(s"""Expected
                | base = ${base.value}
                | b1   = ${b1.value}
                | b2   = ${b2.value}
@@ -280,8 +278,8 @@ class MultiParentCasperMergeSpec extends FlatSpec with Matchers with Inspectors 
                | to produce a merge block with $numberOfParentsForDiamondTip parents, but it didn't
                |
                | go see it at ${file.value}:${line.value}
-               | """.stripMargin, 5).severedAtStackDepth
-        }
+               | """.stripMargin, e, 5).severedAtStackDepth
+      }
 
   it should "not merge blocks that touch the same channel" in effectTest {
     HashSetCasperTestNode.networkEff(genesis, networkSize = 2).use { nodes =>

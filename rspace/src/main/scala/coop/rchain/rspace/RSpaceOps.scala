@@ -84,6 +84,18 @@ abstract class RSpaceOps[F[_]: Concurrent, C, P, A, K](
     lockF.acquire(hashes)(() => hashes.pure[F])(thunk)
   }
 
+  protected[this] def storeWaitingContinuation(
+      channels: Seq[C],
+      wc: WaitingContinuation[P, K]
+  ): F[MaybeActionResult] =
+    for {
+      _ <- store.putContinuation(channels, wc)
+      _ <- channels.traverse(channel => store.putJoin(channel, channels))
+      _ <- logF.debug(s"""|consume: no data found,
+                          |storing <(patterns, continuation): (${wc.patterns}, ${wc.continuation})>
+                          |at <channels: ${channels}>""".stripMargin.replace('\n', ' '))
+    } yield None
+
   protected[this] def produceLockF(
       channel: C
   )(

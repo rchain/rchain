@@ -66,33 +66,6 @@ class RSpace[F[_], C, P, A, K] private[rspace] (
       }
       .map(_.toMap)
 
-  private[this] def storeWaitingContinuation(
-      channels: Seq[C],
-      patterns: Seq[P],
-      continuation: K,
-      persist: Boolean,
-      peeks: SortedSet[Int],
-      consumeRef: Consume
-  ): F[MaybeActionResult] =
-    for {
-      _ <- store.putContinuation(
-            channels,
-            WaitingContinuation(
-              patterns,
-              continuation,
-              persist,
-              peeks,
-              consumeRef
-            )
-          )
-      _ <- channels.traverse { channel =>
-            store.putJoin(channel, channels)
-          }
-      _ <- logF.debug(s"""|consume: no data found,
-                          |storing <(patterns, continuation): ($patterns, $continuation)>
-                          |at <channels: $channels>""".stripMargin.replace('\n', ' '))
-    } yield None
-
   private[this] def storePersistentData(
       dataCandidates: Seq[DataCandidate[C, A]],
       peeks: SortedSet[Int],
@@ -124,16 +97,6 @@ class RSpace[F[_], C, P, A, K] private[rspace] (
   )(
       implicit m: Match[F, P, A]
   ): F[MaybeActionResult] = {
-
-    def storeWC(consumeRef: Consume): F[MaybeActionResult] =
-      storeWaitingContinuation(
-        channels,
-        patterns,
-        continuation,
-        persist,
-        peeks,
-        consumeRef
-      )
 
     def wrapResult(
         consumeRef: Consume,
@@ -194,7 +157,17 @@ class RSpace[F[_], C, P, A, K] private[rspace] (
                                    ).map(_.sequence)
                          _ <- spanF.mark("extract-consume-candidate")
                          result <- options match {
-                                    case None => storeWC(consumeRef)
+                                    case None =>
+                                      storeWaitingContinuation(
+                                        channels,
+                                        WaitingContinuation(
+                                          patterns,
+                                          continuation,
+                                          persist,
+                                          peeks,
+                                          consumeRef
+                                        )
+                                      )
                                     case Some(dataCandidates) =>
                                       for {
                                         _ <- metricsF.incrementCounter(consumeCommLabel)

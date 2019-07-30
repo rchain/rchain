@@ -108,22 +108,6 @@ class ReplayRSpace[F[_]: Sync, C, P, A, K](
                    .map(_.sequence)
       } yield result
 
-    def storeWaitingContinuation(
-        consumeRef: Consume,
-        maybeCommRef: Option[COMM],
-        peeks: SortedSet[Int]
-    ): F[MaybeActionResult] =
-      for {
-        _ <- store.putContinuation(
-              channels,
-              WaitingContinuation(patterns, continuation, persist, peeks, consumeRef)
-            )
-        _ <- channels.traverse(channel => store.putJoin(channel, channels))
-        _ <- logF.debug(s"""|consume: no data found,
-                            |storing <(patterns, continuation): ($patterns, $continuation)>
-                            |at <channels: $channels>""".stripMargin.replace('\n', ' '))
-      } yield None
-
     def handleMatches(
         mats: Seq[DataCandidate[C, A]],
         consumeRef: Consume,
@@ -203,14 +187,20 @@ class ReplayRSpace[F[_]: Sync, C, P, A, K](
       _ <- spanF.mark("after-compute-consumeref")
       r <- replayData.get(consumeRef) match {
             case None =>
-              storeWaitingContinuation(consumeRef, None, peeks)
+              storeWaitingContinuation(
+                channels,
+                WaitingContinuation(patterns, continuation, persist, peeks, consumeRef)
+              )
             case Some(comms) =>
               val commOrDataCandidates: F[Either[COMM, Seq[DataCandidate[C, A]]]] =
                 getCommOrDataCandidates(comms.iterator().asScala.toList)
 
               val x: F[MaybeActionResult] = commOrDataCandidates.flatMap {
-                case Left(commRef) =>
-                  storeWaitingContinuation(consumeRef, Some(commRef), peeks)
+                case Left(_) =>
+                  storeWaitingContinuation(
+                    channels,
+                    WaitingContinuation(patterns, continuation, persist, peeks, consumeRef)
+                  )
                 case Right(dataCandidates) =>
                   val channelsToIndex = channels.zipWithIndex.toMap
                   handleMatches(
@@ -225,7 +215,6 @@ class ReplayRSpace[F[_]: Sync, C, P, A, K](
           }
     } yield r
   }
-
   def produce(channel: C, data: A, persist: Boolean, sequenceNumber: Int)(
       implicit m: Match[F, P, A]
   ): F[MaybeActionResult] =
