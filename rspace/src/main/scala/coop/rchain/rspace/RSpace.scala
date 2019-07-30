@@ -20,7 +20,7 @@ import scala.collection.SortedSet
 import scala.concurrent.ExecutionContext
 import scala.util.Random
 
-class RSpace[F[_], C, P, A, R, K] private[rspace] (
+class RSpace[F[_], C, P, A, K] private[rspace] (
     historyRepository: HistoryRepository[F, C, P, A, K],
     storeAtom: AtomicAny[HotStore[F, C, P, A, K]],
     branch: Branch
@@ -36,8 +36,8 @@ class RSpace[F[_], C, P, A, R, K] private[rspace] (
     scheduler: ExecutionContext,
     metricsF: Metrics[F],
     val spanF: Span[F]
-) extends RSpaceOps[F, C, P, A, R, K](historyRepository, storeAtom, branch)
-    with ISpace[F, C, P, A, R, K] {
+) extends RSpaceOps[F, C, P, A, K](historyRepository, storeAtom, branch)
+    with ISpace[F, C, P, A, K] {
 
   def store: HotStore[F, C, P, A, K] = storeAtom.get()
 
@@ -94,7 +94,7 @@ class RSpace[F[_], C, P, A, R, K] private[rspace] (
     } yield None
 
   private[this] def storePersistentData(
-      dataCandidates: Seq[DataCandidate[C, R]],
+      dataCandidates: Seq[DataCandidate[C, A]],
       peeks: SortedSet[Int],
       channelsToIndex: Map[C, Int]
   ): F[List[Unit]] = {
@@ -122,7 +122,7 @@ class RSpace[F[_], C, P, A, R, K] private[rspace] (
       sequenceNumber: Int,
       peeks: SortedSet[Int] = SortedSet.empty
   )(
-      implicit m: Match[F, P, A, R]
+      implicit m: Match[F, P, A]
   ): F[MaybeActionResult] = {
 
     def storeWC(consumeRef: Consume): F[MaybeActionResult] =
@@ -137,7 +137,7 @@ class RSpace[F[_], C, P, A, R, K] private[rspace] (
 
     def wrapResult(
         consumeRef: Consume,
-        dataCandidates: Seq[DataCandidate[C, R]]
+        dataCandidates: Seq[DataCandidate[C, A]]
     ): MaybeActionResult = {
       val contSequenceNumber: Int =
         nextSequenceNumber(consumeRef, dataCandidates)
@@ -231,7 +231,7 @@ class RSpace[F[_], C, P, A, R, K] private[rspace] (
 
   private[this] def nextSequenceNumber(
       consumeRef: Consume,
-      dataCandidates: Seq[DataCandidate[C, R]]
+      dataCandidates: Seq[DataCandidate[C, A]]
   ): Int =
     Math.max(
       consumeRef.sequenceNumber,
@@ -244,7 +244,7 @@ class RSpace[F[_], C, P, A, R, K] private[rspace] (
    * Find produce candidate
    */
 
-  type MaybeProduceCandidate = Option[ProduceCandidate[C, P, R, K]]
+  type MaybeProduceCandidate = Option[ProduceCandidate[C, P, A, K]]
 
   type CandidateChannels = Seq[C]
 
@@ -252,14 +252,14 @@ class RSpace[F[_], C, P, A, R, K] private[rspace] (
       groupedChannels: Seq[CandidateChannels],
       batChannel: C,
       data: Datum[A]
-  )(implicit m: Match[F, P, A, R]): F[MaybeProduceCandidate] = {
+  )(implicit m: Match[F, P, A]): F[MaybeProduceCandidate] = {
 
     def go(
         acc: Seq[CandidateChannels]
     ): F[Either[Seq[CandidateChannels], MaybeProduceCandidate]] =
       acc match {
         case Nil =>
-          none[ProduceCandidate[C, P, R, K]].asRight[Seq[CandidateChannels]].pure[F]
+          none[ProduceCandidate[C, P, A, K]].asRight[Seq[CandidateChannels]].pure[F]
         case channels :: remaining =>
           for {
             matchCandidates <- for {
@@ -303,7 +303,7 @@ class RSpace[F[_], C, P, A, R, K] private[rspace] (
   }
 
   private[this] def processMatchFound(
-      pc: ProduceCandidate[C, P, R, K]
+      pc: ProduceCandidate[C, P, A, K]
   ): F[MaybeActionResult] =
     pc match {
       case ProduceCandidate(
@@ -395,7 +395,7 @@ class RSpace[F[_], C, P, A, R, K] private[rspace] (
     } yield None
 
   override def produce(channel: C, data: A, persist: Boolean, sequenceNumber: Int)(
-      implicit m: Match[F, P, A, R]
+      implicit m: Match[F, P, A]
   ): F[MaybeActionResult] =
     contextShift.evalOn(scheduler) {
       spanF.trace(produceSpanLabel) {
@@ -462,7 +462,7 @@ class RSpace[F[_], C, P, A, R, K] private[rspace] (
 
 object RSpace {
 
-  def create[F[_], C, P, A, R, K](
+  def create[F[_], C, P, A, K](
       historyRepository: HistoryRepository[F, C, P, A, K],
       store: HotStore[F, C, P, A, K],
       branch: Branch
@@ -478,15 +478,15 @@ object RSpace {
       scheduler: ExecutionContext,
       metricsF: Metrics[F],
       spanF: Span[F]
-  ): F[ISpace[F, C, P, A, R, K]] = {
-    val space: ISpace[F, C, P, A, R, K] =
-      new RSpace[F, C, P, A, R, K](historyRepository, AtomicAny(store), branch)
+  ): F[ISpace[F, C, P, A, K]] = {
+    val space: ISpace[F, C, P, A, K] =
+      new RSpace[F, C, P, A, K](historyRepository, AtomicAny(store), branch)
 
     space.pure[F]
 
   }
 
-  def createWithReplay[F[_], C, P, A, R, K](dataDir: Path, mapSize: Long)(
+  def createWithReplay[F[_], C, P, A, K](dataDir: Path, mapSize: Long)(
       implicit
       sc: Serialize[C],
       sp: Serialize[P],
@@ -498,14 +498,14 @@ object RSpace {
       scheduler: ExecutionContext,
       metricsF: Metrics[F],
       spanF: Span[F]
-  ): F[(ISpace[F, C, P, A, R, K], IReplaySpace[F, C, P, A, R, K])] = {
+  ): F[(ISpace[F, C, P, A, K], IReplaySpace[F, C, P, A, K])] = {
     val v2Dir = dataDir.resolve("v2")
     for {
-      setup                  <- setUp[F, C, P, A, R, K](v2Dir, mapSize, Branch.MASTER)
+      setup                  <- setUp[F, C, P, A, K](v2Dir, mapSize, Branch.MASTER)
       (historyReader, store) = setup
-      space                  = new RSpace[F, C, P, A, R, K](historyReader, AtomicAny(store), Branch.MASTER)
+      space                  = new RSpace[F, C, P, A, K](historyReader, AtomicAny(store), Branch.MASTER)
       replayStore            <- inMemoryStore(historyReader)(sk.toCodec, concurrent)
-      replay = new ReplayRSpace[F, C, P, A, R, K](
+      replay = new ReplayRSpace[F, C, P, A, K](
         historyReader,
         AtomicAny(replayStore),
         Branch.REPLAY
@@ -513,7 +513,7 @@ object RSpace {
     } yield (space, replay)
   }
 
-  def create[F[_], C, P, A, R, K](
+  def create[F[_], C, P, A, K](
       dataDir: Path,
       mapSize: Long,
       branch: Branch
@@ -529,13 +529,13 @@ object RSpace {
       scheduler: ExecutionContext,
       metricsF: Metrics[F],
       spanF: Span[F]
-  ): F[ISpace[F, C, P, A, R, K]] =
-    setUp[F, C, P, A, R, K](dataDir, mapSize, branch).map {
+  ): F[ISpace[F, C, P, A, K]] =
+    setUp[F, C, P, A, K](dataDir, mapSize, branch).map {
       case (historyReader, store) =>
-        new RSpace[F, C, P, A, R, K](historyReader, AtomicAny(store), branch)
+        new RSpace[F, C, P, A, K](historyReader, AtomicAny(store), branch)
     }
 
-  def setUp[F[_], C, P, A, R, K](
+  def setUp[F[_], C, P, A, K](
       dataDir: Path,
       mapSize: Long,
       branch: Branch

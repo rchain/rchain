@@ -52,7 +52,6 @@ object Resources {
         Par,
         BindPattern,
         ListParWithRandom,
-        ListParWithRandom,
         TaggedContinuation
       ](dbDir, mapSize, Branch(branch))
 

@@ -6,7 +6,7 @@ import coop.rchain.rspace.internal._
 import coop.rchain.rspace.trace._
 import coop.rchain.shared.Log
 
-trait IReplaySpace[F[_], C, P, A, R, K] extends ISpace[F, C, P, A, R, K] {
+trait IReplaySpace[F[_], C, P, A, K] extends ISpace[F, C, P, A, K] {
 
   protected def logF: Log[F]
 

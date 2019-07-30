@@ -57,8 +57,8 @@ trait ReplayRSpaceTests extends ReplayRSpaceTestsBase[String, Pattern, String, S
     n <- Gen.chooseNum[Int](1, m)
   } yield (n, m)
 
-  def consumeMany[C, P, A, R, K](
-      space: ISpace[Task, C, P, A, R, K],
+  def consumeMany[C, P, A, K](
+      space: ISpace[Task, C, P, A, K],
       range: Seq[Int],
       channelsCreator: Int => List[C],
       patterns: List[P],
@@ -66,8 +66,8 @@ trait ReplayRSpaceTests extends ReplayRSpaceTestsBase[String, Pattern, String, S
       persist: Boolean,
       peeks: SortedSet[Int] = SortedSet.empty
   )(
-      implicit matcher: Match[Task, P, A, R]
-  ): Task[List[Option[(ContResult[C, P, K], Seq[Result[R]])]]] =
+      implicit matcher: Match[Task, P, A]
+  ): Task[List[Option[(ContResult[C, P, K], Seq[Result[A]])]]] =
     shuffle(range).toList.parTraverse { i: Int =>
       logger.debug("Started consume {}", i)
       space
@@ -78,15 +78,15 @@ trait ReplayRSpaceTests extends ReplayRSpaceTestsBase[String, Pattern, String, S
         }
     }
 
-  def produceMany[C, P, A, R, K](
-      space: ISpace[Task, C, P, A, R, K],
+  def produceMany[C, P, A, K](
+      space: ISpace[Task, C, P, A, K],
       range: Seq[Int],
       channelCreator: Int => C,
       datumCreator: Int => A,
       persist: Boolean
   )(
-      implicit matcher: Match[Task, P, A, R]
-  ): Task[List[Option[(ContResult[C, P, K], Seq[Result[R]])]]] =
+      implicit matcher: Match[Task, P, A]
+  ): Task[List[Option[(ContResult[C, P, K], Seq[Result[A]])]]] =
     shuffle(range).toList.parTraverse { i: Int =>
       logger.debug("Started produce {}", i)
       space.produce(channelCreator(i), datumCreator(i), persist).map { r =>
@@ -473,7 +473,7 @@ trait ReplayRSpaceTests extends ReplayRSpaceTestsBase[String, Pattern, String, S
         val peeks: SortedSet[Int] =
           SortedSet.apply(Random.shuffle(channelsRange).take(amountOfPeekedChannels): _*)
         val produces = Random.shuffle(channels)
-        def consumeAndProduce(s: ISpace[Task, String, Pattern, String, String, String]) =
+        def consumeAndProduce(s: ISpace[Task, String, Pattern, String, String]) =
           for {
             r  <- s.consume(channels, patterns, continuation, false, peeks = peeks)
             rs <- produces.traverse(ch => s.produce(ch, s"datum-$ch", false))
@@ -1230,8 +1230,8 @@ trait ReplayRSpaceTestsBase[C, P, A, K]
       f: (
           AtomicAny[HotStore[Task, C, P, A, K]],
           AtomicAny[HotStore[Task, C, P, A, K]],
-          ISpace[Task, C, P, A, A, K],
-          IReplaySpace[Task, C, P, A, A, K]
+          ISpace[Task, C, P, A, K],
+          IReplaySpace[Task, C, P, A, K]
       ) => Task[S]
   )(
       implicit
@@ -1248,8 +1248,8 @@ trait InMemoryReplayRSpaceTestsBase[C, P, A, K] extends ReplayRSpaceTestsBase[C,
       f: (
           AtomicAny[HotStore[Task, C, P, A, K]],
           AtomicAny[HotStore[Task, C, P, A, K]],
-          ISpace[Task, C, P, A, A, K],
-          IReplaySpace[Task, C, P, A, A, K]
+          ISpace[Task, C, P, A, K],
+          IReplaySpace[Task, C, P, A, K]
       ) => Task[S]
   )(
       implicit
@@ -1297,7 +1297,7 @@ trait InMemoryReplayRSpaceTestsBase[C, P, A, K] extends ReplayRSpaceTestsBase[C,
         implicit val c  = cache
         AtomicAny(HotStore.inMem[Task, C, P, A, K])
       }
-      space = new RSpace[Task, C, P, A, A, K](
+      space = new RSpace[Task, C, P, A, K](
         historyRepository,
         store,
         branch
@@ -1310,7 +1310,7 @@ trait InMemoryReplayRSpaceTestsBase[C, P, A, K] extends ReplayRSpaceTestsBase[C,
         implicit val c  = historyCache
         AtomicAny(HotStore.inMem[Task, C, P, A, K])
       }
-      replaySpace = new ReplayRSpace[Task, C, P, A, A, K](
+      replaySpace = new ReplayRSpace[Task, C, P, A, K](
         historyRepository,
         replayStore,
         branch

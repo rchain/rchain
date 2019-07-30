@@ -288,7 +288,7 @@ abstract class InMemoryHotStoreStorageExamplesTestsBase[F[_]]
       (hr, ts, b) => {
         val atomicStore = AtomicAny(ts)
         val space =
-          new RSpace[F, Channel, Pattern, Entry, Entry, EntriesCaptor](hr, atomicStore, b)
+          new RSpace[F, Channel, Pattern, Entry, EntriesCaptor](hr, atomicStore, b)
         Applicative[F].pure((ts, atomicStore, space))
       }
     setupTestingSpace(creator, f)

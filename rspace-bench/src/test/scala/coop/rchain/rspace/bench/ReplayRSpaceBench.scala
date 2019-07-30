@@ -57,8 +57,8 @@ object ReplayRSpaceBench {
   import scala.concurrent.ExecutionContext.Implicits.global
 
   abstract class ReplayRSpaceBenchState {
-    var space: IdISpace[Channel, Pattern, Entry, Entry, EntriesCaptor] = null
-    var replaySpace: IReplaySpace[cats.Id, Channel, Pattern, Entry, Entry, EntriesCaptor] =
+    var space: IdISpace[Channel, Pattern, Entry, EntriesCaptor] = null
+    var replaySpace: IReplaySpace[cats.Id, Channel, Pattern, Entry, EntriesCaptor] =
       null
     implicit val logF: Log[Id]            = new Log.NOPLog[Id]
     implicit val noopMetrics: Metrics[Id] = new metrics.Metrics.MetricsNOP[Id]
@@ -79,7 +79,7 @@ object ReplayRSpaceBench {
     def setup() = {
       dbDir = Files.createTempDirectory("replay-rspace-bench-")
       val (space, replaySpace) =
-        RSpace.createWithReplay[Id, Channel, Pattern, Entry, Entry, EntriesCaptor](
+        RSpace.createWithReplay[Id, Channel, Pattern, Entry, EntriesCaptor](
           dbDir,
           1024L * 1024L * 1024L
         )

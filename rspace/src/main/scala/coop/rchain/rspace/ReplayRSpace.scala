@@ -19,7 +19,7 @@ import scala.collection.JavaConverters._
 import scala.collection.SortedSet
 import scala.concurrent.ExecutionContext
 
-class ReplayRSpace[F[_]: Sync, C, P, A, R, K](
+class ReplayRSpace[F[_]: Sync, C, P, A, K](
     historyRepository: HistoryRepository[F, C, P, A, K],
     storeAtom: AtomicAny[HotStore[F, C, P, A, K]],
     branch: Branch
@@ -35,8 +35,8 @@ class ReplayRSpace[F[_]: Sync, C, P, A, R, K](
     scheduler: ExecutionContext,
     metricsF: Metrics[F],
     val spanF: Span[F]
-) extends RSpaceOps[F, C, P, A, R, K](historyRepository, storeAtom, branch)
-    with IReplaySpace[F, C, P, A, R, K] {
+) extends RSpaceOps[F, C, P, A, K](historyRepository, storeAtom, branch)
+    with IReplaySpace[F, C, P, A, K] {
 
   protected[this] override val logger: Logger = Logger[this.type]
 
@@ -58,7 +58,7 @@ class ReplayRSpace[F[_]: Sync, C, P, A, R, K](
       sequenceNumber: Int,
       peeks: SortedSet[Int] = SortedSet.empty
   )(
-      implicit m: Match[F, P, A, R]
+      implicit m: Match[F, P, A]
   ): F[MaybeActionResult] =
     contextShift.evalOn(scheduler) {
       if (channels.length =!= patterns.length) {
@@ -91,9 +91,9 @@ class ReplayRSpace[F[_]: Sync, C, P, A, R, K](
       sequenceNumber: Int,
       peeks: SortedSet[Int]
   )(
-      implicit m: Match[F, P, A, R]
+      implicit m: Match[F, P, A]
   ): F[MaybeActionResult] = {
-    def runMatcher(comm: COMM): F[Option[Seq[DataCandidate[C, R]]]] =
+    def runMatcher(comm: COMM): F[Option[Seq[DataCandidate[C, A]]]] =
       for {
         channelToIndexedDataList <- channels.traverse { c: C =>
                                      store
@@ -125,7 +125,7 @@ class ReplayRSpace[F[_]: Sync, C, P, A, R, K](
       } yield None
 
     def handleMatches(
-        mats: Seq[DataCandidate[C, R]],
+        mats: Seq[DataCandidate[C, A]],
         consumeRef: Consume,
         comms: Multiset[COMM],
         peeks: SortedSet[Int],
@@ -172,9 +172,9 @@ class ReplayRSpace[F[_]: Sync, C, P, A, R, K](
       } yield r
     }
 
-    def getCommOrDataCandidates(comms: Seq[COMM]): F[Either[COMM, Seq[DataCandidate[C, R]]]] = {
-      type COMMOrData = Either[COMM, Seq[DataCandidate[C, R]]]
-      def go(comms: Seq[COMM]): F[Either[Seq[COMM], Either[COMM, Seq[DataCandidate[C, R]]]]] =
+    def getCommOrDataCandidates(comms: Seq[COMM]): F[Either[COMM, Seq[DataCandidate[C, A]]]] = {
+      type COMMOrData = Either[COMM, Seq[DataCandidate[C, A]]]
+      def go(comms: Seq[COMM]): F[Either[Seq[COMM], Either[COMM, Seq[DataCandidate[C, A]]]]] =
         comms match {
           case Nil =>
             val msg = "List comms must not be empty"
@@ -183,7 +183,7 @@ class ReplayRSpace[F[_]: Sync, C, P, A, R, K](
           case commRef :: Nil =>
             runMatcher(commRef).map {
               case Some(x) => x.asRight[COMM].asRight[Seq[COMM]]
-              case None    => commRef.asLeft[Seq[DataCandidate[C, R]]].asRight[Seq[COMM]]
+              case None    => commRef.asLeft[Seq[DataCandidate[C, A]]].asRight[Seq[COMM]]
             }
           case commRef :: rem =>
             runMatcher(commRef).map {
@@ -205,7 +205,7 @@ class ReplayRSpace[F[_]: Sync, C, P, A, R, K](
             case None =>
               storeWaitingContinuation(consumeRef, None, peeks)
             case Some(comms) =>
-              val commOrDataCandidates: F[Either[COMM, Seq[DataCandidate[C, R]]]] =
+              val commOrDataCandidates: F[Either[COMM, Seq[DataCandidate[C, A]]]] =
                 getCommOrDataCandidates(comms.iterator().asScala.toList)
 
               val x: F[MaybeActionResult] = commOrDataCandidates.flatMap {
@@ -227,7 +227,7 @@ class ReplayRSpace[F[_]: Sync, C, P, A, R, K](
   }
 
   def produce(channel: C, data: A, persist: Boolean, sequenceNumber: Int)(
-      implicit m: Match[F, P, A, R]
+      implicit m: Match[F, P, A]
   ): F[MaybeActionResult] =
     contextShift.evalOn(scheduler) {
       spanF.trace(produceSpanLabel) {
@@ -247,10 +247,10 @@ class ReplayRSpace[F[_]: Sync, C, P, A, R, K](
       persist: Boolean,
       sequenceNumber: Int
   )(
-      implicit m: Match[F, P, A, R]
+      implicit m: Match[F, P, A]
   ): F[MaybeActionResult] = {
 
-    type MaybeProduceCandidate = Option[ProduceCandidate[C, P, R, K]]
+    type MaybeProduceCandidate = Option[ProduceCandidate[C, P, A, K]]
 
     def runMatcher(
         comm: COMM,
@@ -260,7 +260,7 @@ class ReplayRSpace[F[_]: Sync, C, P, A, R, K](
 
       def go(groupedChannels: Seq[Seq[C]]): F[Either[Seq[Seq[C]], MaybeProduceCandidate]] =
         groupedChannels match {
-          case Nil => none[ProduceCandidate[C, P, R, K]].asRight[Seq[Seq[C]]].pure[F]
+          case Nil => none[ProduceCandidate[C, P, A, K]].asRight[Seq[Seq[C]]].pure[F]
           case channels :: remaining =>
             for {
               continuations <- store.getContinuations(channels)
@@ -300,8 +300,8 @@ class ReplayRSpace[F[_]: Sync, C, P, A, R, K](
         comms: Seq[COMM],
         produceRef: Produce,
         groupedChannels: Seq[Seq[C]]
-    ): F[Either[COMM, ProduceCandidate[C, P, R, K]]] = {
-      type COMMOrProduce = Either[COMM, ProduceCandidate[C, P, R, K]]
+    ): F[Either[COMM, ProduceCandidate[C, P, A, K]]] = {
+      type COMMOrProduce = Either[COMM, ProduceCandidate[C, P, A, K]]
       def go(comms: Seq[COMM]): F[Either[Seq[COMM], COMMOrProduce]] =
         comms match {
           case Nil =>
@@ -311,7 +311,7 @@ class ReplayRSpace[F[_]: Sync, C, P, A, R, K](
           case commRef :: Nil =>
             runMatcher(commRef, produceRef, groupedChannels) map {
               case Some(x) => x.asRight[COMM].asRight[Seq[COMM]]
-              case None    => commRef.asLeft[ProduceCandidate[C, P, R, K]].asRight[Seq[COMM]]
+              case None    => commRef.asLeft[ProduceCandidate[C, P, A, K]].asRight[Seq[COMM]]
             }
           case commRef :: rem =>
             runMatcher(commRef, produceRef, groupedChannels) map {
@@ -333,7 +333,7 @@ class ReplayRSpace[F[_]: Sync, C, P, A, R, K](
       } yield None
 
     def handleMatch(
-        mat: ProduceCandidate[C, P, R, K],
+        mat: ProduceCandidate[C, P, A, K],
         produceRef: Produce,
         comms: Multiset[COMM],
         channelsToIndex: Map[C, Int]
@@ -404,7 +404,7 @@ class ReplayRSpace[F[_]: Sync, C, P, A, R, K](
                  case None =>
                    storeDatum(produceRef, None)
                  case Some(comms) =>
-                   val commOrProduceCandidate: F[Either[COMM, ProduceCandidate[C, P, R, K]]] =
+                   val commOrProduceCandidate: F[Either[COMM, ProduceCandidate[C, P, A, K]]] =
                      getCommOrProduceCandidate(
                        comms.iterator().asScala.toList,
                        produceRef,
@@ -464,7 +464,7 @@ class ReplayRSpace[F[_]: Sync, C, P, A, R, K](
 
 object ReplayRSpace {
 
-  def create[F[_], C, P, A, R, K](
+  def create[F[_], C, P, A, K](
       historyRepository: HistoryRepository[F, C, P, A, K],
       store: HotStore[F, C, P, A, K],
       branch: Branch
@@ -480,15 +480,15 @@ object ReplayRSpace {
       scheduler: ExecutionContext,
       metricsF: Metrics[F],
       spanF: Span[F]
-  ): F[ReplayRSpace[F, C, P, A, R, K]] = {
+  ): F[ReplayRSpace[F, C, P, A, K]] = {
 
-    val space: ReplayRSpace[F, C, P, A, R, K] =
-      new ReplayRSpace[F, C, P, A, R, K](historyRepository, AtomicAny(store), branch)
+    val space: ReplayRSpace[F, C, P, A, K] =
+      new ReplayRSpace[F, C, P, A, K](historyRepository, AtomicAny(store), branch)
 
     space.pure[F]
   }
 
-  def create[F[_], C, P, A, R, K](
+  def create[F[_], C, P, A, K](
       dataDir: Path,
       mapSize: Long,
       branch: Branch
@@ -504,9 +504,9 @@ object ReplayRSpace {
       scheduler: ExecutionContext,
       metricsF: Metrics[F],
       spanF: Span[F]
-  ): F[IReplaySpace[F, C, P, A, R, K]] =
-    RSpace.setUp[F, C, P, A, R, K](dataDir, mapSize, branch).map {
+  ): F[IReplaySpace[F, C, P, A, K]] =
+    RSpace.setUp[F, C, P, A, K](dataDir, mapSize, branch).map {
       case (historyReader, store) =>
-        new ReplayRSpace[F, C, P, A, R, K](historyReader, AtomicAny(store), branch)
+        new ReplayRSpace[F, C, P, A, K](historyReader, AtomicAny(store), branch)
     }
 }

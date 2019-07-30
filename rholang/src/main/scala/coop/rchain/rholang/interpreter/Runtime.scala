@@ -47,9 +47,9 @@ class Runtime[F[_]: Sync] private (
 
 object Runtime {
 
-  type RhoISpace[F[_]]       = TCPARK[F, ISpace]
-  type RhoPureSpace[F[_]]    = TCPARK[F, PureRSpace]
-  type RhoReplayISpace[F[_]] = TCPARK[F, IReplaySpace]
+  type RhoISpace[F[_]]       = TCPAK[F, ISpace]
+  type RhoPureSpace[F[_]]    = TCPAK[F, PureRSpace]
+  type RhoReplayISpace[F[_]] = TCPAK[F, IReplaySpace]
 
   type RhoDispatch[F[_]]    = Dispatch[F, ListParWithRandom, TaggedContinuation]
   type RhoSysFunction[F[_]] = (Seq[ListParWithRandom], Int) => F[Unit]
@@ -58,12 +58,11 @@ object Runtime {
   type CPAK[M[_], F[_[_], _, _, _, _]] =
     F[M, Par, BindPattern, ListParWithRandom, TaggedContinuation]
 
-  type TCPARK[M[_], F[_[_], _, _, _, _, _]] =
+  type TCPAK[M[_], F[_[_], _, _, _, _]] =
     F[
       M,
       Par,
       BindPattern,
-      ListParWithRandom,
       ListParWithRandom,
       TaggedContinuation
     ]
@@ -481,7 +480,6 @@ object Runtime {
       F,
       Par,
       BindPattern,
-      ListParWithRandom,
       ListParWithRandom,
       TaggedContinuation
     ](dataDir, mapSize)

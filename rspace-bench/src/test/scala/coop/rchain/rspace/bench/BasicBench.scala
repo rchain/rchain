@@ -121,7 +121,6 @@ object BasicBench {
       Par,
       BindPattern,
       ListParWithRandom,
-      ListParWithRandom,
       TaggedContinuation
     ] =
       RSpace
@@ -129,7 +128,6 @@ object BasicBench {
           Task,
           Par,
           BindPattern,
-          ListParWithRandom,
           ListParWithRandom,
           TaggedContinuation
         ](
