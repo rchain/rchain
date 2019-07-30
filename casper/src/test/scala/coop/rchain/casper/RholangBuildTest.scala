@@ -19,7 +19,7 @@ import coop.rchain.casper.util.ConstructDeploy.{defaultPub, defaultPub2}
 import coop.rchain.casper.util.GenesisBuilder._
 import coop.rchain.casper.util.RSpaceUtil._
 import coop.rchain.casper.util.rholang.RegistrySigGen
-import coop.rchain.crypto.PublicKey
+import coop.rchain.crypto.{PrivateKey, PublicKey}
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.signatures.Secp256k1
 import coop.rchain.rholang.interpreter.util.RevAddress
@@ -79,32 +79,12 @@ class RholangBuildTest extends FlatSpec with Matchers {
   "Our build system" should "execute the genesis block" in effectTest {
     val REV_ADDRESS_COUNT = 16000
 
-    val validatorKeyPairs = (1 to 4).map(_ => Secp256k1.newKeyPair)
-    val bonds = validatorKeyPairs
-      .map(_._2)
-      .zipWithIndex
-      .map { case (v, i) => v -> (2L * i.toLong + 1L) }
-      .toMap
     val vaults = (1 to REV_ADDRESS_COUNT)
       .map(i => (Secp256k1.newKeyPair, i))
       .map { case ((_, publicKey), i) => Vault(RevAddress.fromPublicKey(publicKey).get, i.toLong) }
       .toSeq
-    val genesisParams: GenesisParameters = (
-      validatorKeyPairs,
-      Genesis(
-        shardId = "MultiParentCasperSpec",
-        timestamp = 0L,
-        proofOfStake = ProofOfStake(
-          minimumBond = 0L,
-          maximumBond = Long.MaxValue,
-          epochLength = 1,
-          validators = bonds.map(Validator.tupled).toSeq
-        ),
-        genesisPk = defaultPub,
-        vaults = vaults,
-        supply = Long.MaxValue
-      )
-    )
+    val (keyPairs, genesis) = buildGenesisParameters()
+    val genesisParams       = (keyPairs, genesis.copy(vaults = vaults))
     HashSetCasperTestNode
       .standaloneEff(buildGenesis(genesisParams))
       .use { node =>
