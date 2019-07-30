@@ -2,13 +2,11 @@ package coop.rchain.casper.genesis.contracts
 
 import coop.rchain.casper.protocol.DeployData
 import coop.rchain.casper.util.ProtoUtil.stringToByteString
-import coop.rchain.crypto.PublicKey
-import coop.rchain.crypto.codec.Base16
 import coop.rchain.rholang.build.CompiledRholangSource
 import coop.rchain.rholang.interpreter.{accounting, NormalizerEnv}
-import coop.rchain.rholang.interpreter.util.RevAddress
 
 object StandardDeploys {
+
   private def toDeploy(
       compiledSource: CompiledRholangSource,
       user: String,
@@ -23,6 +21,17 @@ object StandardDeploys {
 
     deployData
   }
+
+  private def toDeploy(
+      compiledSource: SourceCode,
+      user: String,
+      timestamp: Long
+  ): DeployData = DeployData(
+    deployer = stringToByteString(user),
+    timestamp = timestamp,
+    term = compiledSource.sourceCode,
+    phloLimit = accounting.MAX_VALUE
+  )
 
   def listOps: DeployData = toDeploy(
     CompiledRholangSource("ListOps.rho", NormalizerEnv.empty),
@@ -62,9 +71,9 @@ object StandardDeploys {
       1559156146649L
     )
 
-  def revVault: DeployData =
+  def vaultGenerator(vaults: Seq[Vault]): DeployData =
     toDeploy(
-      CompiledRholangSource("RevVault.rho", NormalizerEnv.empty),
+      VaultGenerator(vaults),
       "040f035630a5d2199184890b4b6b83440c842da0b6becca539f788f7b35d6e873561f673cd6ebe2e32236398a86f29dad992e8fba32534734300fcc5104bcfea0e",
       1559156183943L
     )
@@ -74,13 +83,6 @@ object StandardDeploys {
       poS,
       "047b43d6548b72813b89ac1b9f9ca67624a8b372feedd71d4e2da036384a3e1236812227e524e6f237cde5f80dbb921cac12e6500791e9a9ed1254a745a816fe1f",
       1559156420651L
-    )
-
-  def revGenerator(genesisPk: PublicKey, vaults: Seq[Vault], supply: Long): DeployData =
-    toDeploy(
-      RevGenerator(genesisPk, RevAddress.fromPublicKey(genesisPk).get, vaults, supply),
-      Base16.encode(genesisPk.bytes),
-      System.currentTimeMillis()
     )
 
 }

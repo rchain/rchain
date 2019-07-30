@@ -50,8 +50,7 @@ object Genesis {
       StandardDeploys.makeMint,
       StandardDeploys.lockbox,
       StandardDeploys.authKey,
-      StandardDeploys.revVault,
-      StandardDeploys.revGenerator(genesisPk, vaults, supply),
+      StandardDeploys.vaultGenerator(vaults),
       StandardDeploys.poSGenerator(posParams)
     )
 
