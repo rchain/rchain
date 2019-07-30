@@ -14,7 +14,8 @@
  9.  | 4,         | registry           | uri = rho:id:6zcfqnwnaqcwpeyuysx1rm48ndr6sgsbbgjuwf45i5nor3io7dr76j
  ----+------------+--------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------
  */
-new 
+
+new
   RevVault, rs(`rho:registry:insertSigned:secp256k1`), uriOut,
   rl(`rho:registry:lookup`), RevAddress(`rho:rev:address`), MakeMintCh, AuthKeyCh, EitherCh,
   _getIdentity,
@@ -29,9 +30,10 @@ in {
   for(@(_, MakeMint) <- MakeMintCh; @(_, AuthKey) <- AuthKeyCh; @(_, Either) <- EitherCh) {
 
     new mintCh, vaultMapStore in {
-      vaultMapStore!({}) |
       @MakeMint!(*mintCh) |
       for (mint <- mintCh) {
+
+        $$vaultConstructorProc$$
 
         contract RevVault(@"deployerAuthKey", deployerId, ret) = {
 
@@ -41,6 +43,7 @@ in {
 
               RevAddress!("fromPublicKey", deployerPubKeyBytes, *revAddrCh) |
               for (@deployerRevAddress <- revAddrCh) {
+
 
                 @AuthKey!("make", (*_revVault, deployerRevAddress), *ret)
               }
