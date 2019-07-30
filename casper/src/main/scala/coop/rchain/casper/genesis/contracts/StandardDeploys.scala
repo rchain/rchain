@@ -11,16 +11,12 @@ object StandardDeploys {
       compiledSource: CompiledRholangSource,
       user: String,
       timestamp: Long
-  ): DeployData = {
-    val deployData = DeployData(
-      deployer = stringToByteString(user),
-      timestamp = timestamp,
-      term = compiledSource.code,
-      phloLimit = accounting.MAX_VALUE
-    )
-
-    deployData
-  }
+  ): DeployData = DeployData(
+    deployer = stringToByteString(user),
+    timestamp = timestamp,
+    term = compiledSource.code,
+    phloLimit = accounting.MAX_VALUE
+  )
 
   private def toDeploy(
       compiledSource: SourceCode,
