@@ -484,8 +484,23 @@ class MultiParentCasperMergeSpec extends FlatSpec with Matchers with Inspectors 
       val diagonal = events.map(x => List(x, x))
       val cases    = (pairs ++ diagonal).toList
 
+      def isComm(s: String) = !s.contains("X")
+
+      def makeVolatile(s: String): List[String] = isComm(s) match {
+        case false => List(s)
+        case true  => List(s, s"($s)")
+      }
+
+      def makeVolatiles(v: List[String]): List[List[String]] =
+        for {
+          a <- makeVolatile(v(0))
+          b <- makeVolatile(v(1))
+        } yield List(a, b)
+
+      val withVolatiles = cases.flatMap(makeVolatiles)
+
       // TODO: Do not filter out missing cases
-      cases
+      withVolatiles
         .map(_.mkString(" "))
         .filterNot(_.contains("P"))
         .filterNot(_.contains("!!"))
