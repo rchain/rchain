@@ -14,6 +14,6 @@ object Chargeable {
 
   implicit def fromProtobuf[T <: StacksafeMessage[_]] =
     new Chargeable[T] {
-      override def cost(a: T): Long = ProtoM.serializedSize(a).value.toLong
+      override def cost(a: T): Long = 100L // TODO: Potentially make more accurate by looking at serializedSize
     }
 }
