@@ -38,7 +38,9 @@ import kamon.system.SystemMetrics
 import kamon.zipkin.ZipkinReporter
 import monix.eval.{Task, TaskLocal}
 import monix.execution.Scheduler
+import org.http4s.implicits._
 import org.http4s.server.blaze._
+import org.http4s.server.Router
 
 import scala.concurrent.duration._
 
@@ -141,11 +143,15 @@ class NodeRuntime private[node] (
       prometheusReporter = new NewPrometheusReporter()
       prometheusService  = NewPrometheusReporter.service[Task](prometheusReporter)
 
-      httpServerFiber <- BlazeBuilder[Task]
+      httpServerFiber <- BlazeServerBuilder[Task]
                           .bindHttp(conf.server.httpPort, "0.0.0.0")
-                          .mountService(prometheusService, "/metrics")
-                          .mountService(VersionInfo.service[Task], "/version")
-                          .mountService(StatusInfo.service[Task], "/status")
+                          .withHttpApp(
+                            Router(
+                              "/metrics" -> prometheusService,
+                              "/version" -> VersionInfo.service[Task],
+                              "/status"  -> StatusInfo.service[Task]
+                            ).orNotFound
+                          )
                           .resource
                           .use(_ => Task.never[Unit])
                           .start
@@ -182,7 +188,7 @@ class NodeRuntime private[node] (
       _ <- servers.transportServer.stop()
       _ <- log.info("Shutting down HTTP server....")
       _ <- Task.delay(Kamon.stopAllReporters())
-      _ <- servers.httpServer.cancel
+      _ <- servers.httpServer.cancel.attempt
       _ <- log.info("Shutting down interpreter runtime ...")
       _ <- runtime.close()
       _ <- log.info("Shutting down Casper runtime ...")
