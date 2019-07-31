@@ -43,13 +43,12 @@ class ContractCall[F[_]: Concurrent: Span](
       sequenceNumber: Int
   )(values: Seq[Par], ch: Par): F[Unit] =
     for {
-      cost <- CostAccounting.initialCost(Cost.UNSAFE_MAX)
       produceResult <- space.produce(
                         ch,
                         ListParWithRandom(values, rand),
                         persist = false,
                         sequenceNumber
-                      )(matchListPar(Sync[F], Span[F], cost))
+                      )(matchListPar(Sync[F], Span[F]))
       _ <- produceResult.fold(Sync[F].unit) {
             case (cont, channels) =>
               dispatcher.dispatch(unpackCont(cont), channels.map(_.value), cont.sequenceNumber)

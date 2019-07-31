@@ -439,19 +439,18 @@ object Runtime {
     )
 
     for {
-      cost <- CostAccounting.initialCost[F](Cost.UNSAFE_MAX)
       spaceResult <- space.produce(
                       Registry.registryRoot,
                       ListParWithRandom(Seq(Registry.emptyMap), rand),
                       false,
                       0
-                    )(matchListPar(F, spanF, cost))
+                    )(matchListPar(F, spanF))
       replayResult <- replaySpace.produce(
                        Registry.registryRoot,
                        ListParWithRandom(Seq(Registry.emptyMap), rand),
                        false,
                        0
-                     )(matchListPar(F, spanF, cost))
+                     )(matchListPar(F, spanF))
       _ <- spaceResult match {
             case None =>
               replayResult match {

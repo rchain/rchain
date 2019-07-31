@@ -361,7 +361,6 @@ class ChargingRSpaceTest extends fixture.FlatSpec with TripleEqualsSupport with 
       initPhlos <- cost.inspect(identity)
       _ <- patterns.zip(data).toList.traverse {
             case (pattern, pars) => {
-              implicit val c    = cost
               implicit val span = NoopSpan[Task]
               matchListPar[Task].get(pattern, pars)
             }
