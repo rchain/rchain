@@ -108,20 +108,21 @@ private[matcher] object ParSpatialMatcherUtils {
         else
           countedMaxSubsets(as, maxSize)
       else
+        //TODO the below is duplicated in countedMaxSubsets. Deduplicate.
         as match {
           case Nil => Stream.empty
-          case hd +: rem =>
+          case head +: rem =>
             val decr = minSize - 1
             for {
               countedTail               <- worker(rem, decr, maxSize)
               (tail, complement, count) = countedTail
               result <- {
                 if (count == maxSize)
-                  Stream((tail, hd +: complement, count))
+                  Stream((tail, head +: complement, count))
                 else if (count == decr)
-                  Stream((hd +: tail, complement, minSize))
+                  Stream((head +: tail, complement, minSize))
                 else
-                  Stream((tail, hd +: complement, count), (hd +: tail, complement, count + 1))
+                  Stream((tail, head +: complement, count), (head +: tail, complement, count + 1))
               }
             } yield result
         }
