@@ -47,16 +47,30 @@ private[rspace] trait SpaceMatcher[F[_], C, P, A, K] extends ISpace[F, C, P, A, 
   ): F[Option[MatchingDataCandidate]] = spanF.trace(findSpanLabel) {
     for {
       res <- data match {
-              case (indexedDatum @ (Datum(matchCandidate, persist, produceRef), dataIndex)) +: remaining =>
+              case (indexedDatum @ (
+                    Datum(matchCandidate, persist, produceRef, sequenceNumber),
+                    dataIndex
+                  )) +: remaining =>
                 m.get(pattern, matchCandidate).flatMap {
                   case None =>
                     findMatchingDataCandidate(channel, remaining, pattern, indexedDatum +: prefix)
                   case Some(mat) if persist =>
-                    (DataCandidate(channel, Datum(mat, persist, produceRef), dataIndex), data).some
+                    (
+                      DataCandidate(
+                        channel,
+                        Datum(mat, persist, produceRef, sequenceNumber),
+                        dataIndex
+                      ),
+                      data
+                    ).some
                       .pure[F]
                   case Some(mat) =>
                     (
-                      DataCandidate(channel, Datum(mat, persist, produceRef), dataIndex),
+                      DataCandidate(
+                        channel,
+                        Datum(mat, persist, produceRef, sequenceNumber),
+                        dataIndex
+                      ),
                       prefix ++ remaining
                     ).some.pure[F]
                 }

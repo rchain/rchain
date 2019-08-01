@@ -12,7 +12,7 @@ import scala.collection.SortedSet
 @SuppressWarnings(Array("org.wartremover.warts.NonUnitStatements"))
 object internal {
 
-  final case class Datum[A](a: A, persist: Boolean, source: Produce)
+  final case class Datum[A](a: A, persist: Boolean, source: Produce, sequenceNumber: Int = 0)
 
   object Datum {
     def create[C, A](channel: C, a: A, persist: Boolean, sequenceNumber: Int = 0)(
@@ -20,7 +20,7 @@ object internal {
         serializeC: Serialize[C],
         serializeA: Serialize[A]
     ): Datum[A] =
-      Datum(a, persist, Produce.create(channel, a, persist, sequenceNumber))
+      Datum(a, persist, Produce.create(channel, a, persist, sequenceNumber), sequenceNumber)
   }
 
   final case class DataCandidate[C, A](channel: C, datum: Datum[A], datumIndex: Int)
@@ -91,7 +91,7 @@ object internal {
     seqOfN(int32, codecA)
 
   implicit def codecDatum[A](implicit codecA: Codec[A]): Codec[Datum[A]] =
-    (codecA :: bool :: Codec[Produce]).as[Datum[A]]
+    (codecA :: bool :: Codec[Produce] :: int32).as[Datum[A]]
 
   def sortedSet[A](codecA: Codec[A])(implicit O: Ordering[A]): Codec[SortedSet[A]] =
     codecSeq[A](codecA).xmap[SortedSet[A]](s => SortedSet(s: _*), _.toSeq)
