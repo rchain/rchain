@@ -99,8 +99,10 @@ class ReplayRSpace[F[_]: Sync, C, P, A, K](
                                      store
                                        .getData(c)
                                        .map(_.zipWithIndex.filter {
-                                         case (Datum(_, _, source), _) =>
-                                           comm.produces.contains(source)
+                                         case (Datum(_data, _persist, _, _), _) =>
+                                           comm.produces.contains(
+                                             Produce.create(c, _data, _persist, sequenceNumber)
+                                           )
                                        })
                                        .map(v => c -> v)
                                    }
@@ -124,7 +126,7 @@ class ReplayRSpace[F[_]: Sync, C, P, A, K](
         r <- mats.toList
               .sortBy(_.datumIndex)(Ordering[Int].reverse)
               .traverse {
-                case DataCandidate(candidateChannel, Datum(_, persistData, _), dataIndex) =>
+                case DataCandidate(candidateChannel, Datum(_, persistData, _, _), dataIndex) =>
                   if (shouldRemove(persistData, candidateChannel)) {
                     store.removeDatum(candidateChannel, dataIndex)
                   } else ().pure[F]
@@ -261,8 +263,10 @@ class ReplayRSpace[F[_]: Sync, C, P, A, K](
                                            (for {
                                              data <- store.getData(c)
                                            } yield (data.zipWithIndex.filter {
-                                             case (Datum(_, _, source), _) =>
-                                               comm.produces.contains(source)
+                                             case (Datum(_data, _persist, _, _), _) =>
+                                               comm.produces.contains(
+                                                 Produce.create(c, _data, _persist, sequenceNumber)
+                                               )
                                            })).map(
                                              as =>
                                                c -> {
@@ -348,7 +352,7 @@ class ReplayRSpace[F[_]: Sync, C, P, A, K](
             _ <- dataCandidates.toList
                   .sortBy(_.datumIndex)(Ordering[Int].reverse)
                   .traverse {
-                    case DataCandidate(candidateChannel, Datum(_, persistData, _), dataIndex) =>
+                    case DataCandidate(candidateChannel, Datum(_, persistData, _, _), dataIndex) =>
                       def shouldRemove: Boolean = {
                         val idx = channelsToIndex(candidateChannel)
                         dataIndex >= 0 && (!persistData && !peeks.contains(idx))

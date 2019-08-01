@@ -78,7 +78,7 @@ class RSpace[F[_], C, P, A, K] private[rspace] (
       .traverse {
         case DataCandidate(
             candidateChannel,
-            Datum(_, persistData, _),
+            Datum(_, persistData, _, _),
             dataIndex
             ) if shouldRemove(persistData, candidateChannel) =>
           store.removeDatum(candidateChannel, dataIndex)
@@ -209,7 +209,7 @@ class RSpace[F[_], C, P, A, K] private[rspace] (
     Math.max(
       consumeRef.sequenceNumber,
       dataCandidates.map {
-        case DataCandidate(_, Datum(_, _, source), _) => source.sequenceNumber
+        case DataCandidate(_, Datum(_, _, source, _), _) => source.sequenceNumber
       }.max
     ) + 1
 
@@ -313,7 +313,7 @@ class RSpace[F[_], C, P, A, K] private[rspace] (
             .traverse {
               case DataCandidate(
                   candidateChannel,
-                  Datum(_, persistData, _),
+                  Datum(_, persistData, _, _),
                   dataIndex
                   ) => {
                 def shouldRemove: Boolean = {
@@ -363,7 +363,7 @@ class RSpace[F[_], C, P, A, K] private[rspace] (
   ): F[MaybeActionResult] =
     for {
       _ <- logF.debug(s"produce: no matching continuation found")
-      _ <- store.putDatum(channel, Datum(data, persist, produceRef))
+      _ <- store.putDatum(channel, Datum(data, persist, produceRef, produceRef.sequenceNumber))
       _ <- logF.debug(s"produce: persisted <data: $data> at <channel: $channel>")
     } yield None
 
@@ -396,7 +396,7 @@ class RSpace[F[_], C, P, A, K] private[rspace] (
                        extracted <- extractProduceCandidate(
                                      groupedChannels,
                                      channel,
-                                     Datum(data, persist, produceRef)
+                                     Datum(data, persist, produceRef, sequenceNumber)
                                    )
                        _ <- spanF.mark("extract-produce-candidate")
                        r <- extracted match {

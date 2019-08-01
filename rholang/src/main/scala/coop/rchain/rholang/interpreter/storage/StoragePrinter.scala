@@ -119,7 +119,7 @@ object StoragePrinter {
 
   private[this] def toSends(data: Seq[Datum[ListParWithRandom]])(channels: Seq[Par]): Par = {
     val sends: Seq[Send] = data.flatMap {
-      case Datum(as: ListParWithRandom, persist: Boolean, _: Produce) =>
+      case Datum(as: ListParWithRandom, persist: Boolean, _: Produce, _) =>
         channels.map { channel =>
           Send(channel, as.pars, persist)
         }
