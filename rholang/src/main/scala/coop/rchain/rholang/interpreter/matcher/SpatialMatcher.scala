@@ -299,10 +299,10 @@ trait SpatialMatcherInstances {
           allMatches.takeFirst()
 
         case ConnNotBody(p) =>
-          attemptOpt[F, Unit](spatialMatch(target, p)).flatMap {
-            case None    => ().pure[F]
-            case Some(_) => MonoidK[F].empty
-          }
+          for {
+            matchOption <- attemptOpt(spatialMatch(target, p))
+            _           <- Alternative_[F].guard(matchOption.isEmpty)
+          } yield ()
 
         case _: VarRefBody =>
           // this should never happen because variable references should be substituted
@@ -351,11 +351,7 @@ trait SpatialMatcherInstances {
   implicit def parSpatialMatcherInstance[F[_]: Splittable: Alternative: Monad: _error: _freeMap: _short]
       : SpatialMatcher[F, Par, Par] = (target, pattern) => {
     if (!pattern.connectiveUsed) {
-      if (pattern == target)
-        ().pure[F]
-      else {
-        MonoidK[F].empty[Unit]
-      }
+      Alternative_[F].guard(pattern == target)
     } else {
 
       val varLevel: Option[Int] = pattern.exprs.collectFirst[Int] {
@@ -450,43 +446,33 @@ trait SpatialMatcherInstances {
 
   implicit def bundleSpatialMatcherInstance[F[_]: Splittable: Alternative: Monad: _error]
       : SpatialMatcher[F, Bundle, Bundle] =
-    (target, pattern) => {
-      if (pattern == target)
-        ().pure[F]
-      else {
-        MonoidK[F].empty[Unit]
-      }
-    }
+    (target, pattern) => Alternative_[F].guard(pattern == target)
 
   implicit def sendSpatialMatcherInstance[F[_]: Splittable: Alternative: Monad: _error: _freeMap: _short]
       : SpatialMatcher[F, Send, Send] =
     (target, pattern) =>
-      if (target.persistent != pattern.persistent)
-        MonoidK[F].empty[Unit]
-      else
-        for {
-          _ <- spatialMatch(target.chan, pattern.chan)
-          _ <- foldMatch(target.data, pattern.data)
-        } yield ()
+      for {
+        _ <- Alternative_[F].guard(target.persistent == pattern.persistent)
+        _ <- spatialMatch(target.chan, pattern.chan)
+        _ <- foldMatch(target.data, pattern.data)
+      } yield ()
 
   implicit def receiveSpatialMatcherInstance[F[_]: Splittable: Alternative: Monad: _error: _freeMap: _short]
       : SpatialMatcher[F, Receive, Receive] =
     (target, pattern) =>
-      if (target.persistent != pattern.persistent)
-        MonoidK[F].empty[Unit]
-      else
-        for {
-          _ <- listMatchSingle(target.binds, pattern.binds)
-          _ <- spatialMatch(target.body, pattern.body)
-        } yield ()
+      for {
+        _ <- Alternative_[F].guard(target.persistent == pattern.persistent)
+        _ <- listMatchSingle(target.binds, pattern.binds)
+        _ <- spatialMatch(target.body, pattern.body)
+      } yield ()
 
   implicit def newSpatialMatcherInstance[F[_]: Splittable: Alternative: Monad: _error: _freeMap: _short]
       : SpatialMatcher[F, New, New] =
     (target, pattern) =>
-      if (target.bindCount == pattern.bindCount)
-        spatialMatch(target.p, pattern.p)
-      else
-        MonoidK[F].empty[Unit]
+      for {
+        _ <- Alternative_[F].guard(target.bindCount == pattern.bindCount)
+        _ <- spatialMatch(target.p, pattern.p)
+      } yield ()
 
   implicit def exprSpatialMatcherInstance[F[_]: Splittable: Alternative: Monad: _error: _freeMap: _short]
       : SpatialMatcher[F, Expr, Expr] = (target, pattern) => {
@@ -516,13 +502,9 @@ trait SpatialMatcherInstances {
         val merger          = (p: Par, r: Seq[(Par, Par)]) => p.withExprs(Seq(ParMap(r)))
         listMatchSingle_(tlist.toSeq, plist.toSeq, merger, remainderVarOpt, isWildcard)
 
-      case (EVarBody(EVar(vp)), EVarBody(EVar(vt))) =>
-        if (vp == vt)
-          ().pure[F]
-        else
-          MonoidK[F].empty[Unit]
-      case (ENotBody(ENot(t)), ENotBody(ENot(p))) => spatialMatch(t, p)
-      case (ENegBody(ENeg(t)), ENegBody(ENeg(p))) => spatialMatch(t, p)
+      case (EVarBody(EVar(vp)), EVarBody(EVar(vt))) => Alternative_[F].guard(vp == vt)
+      case (ENotBody(ENot(t)), ENotBody(ENot(p)))   => spatialMatch(t, p)
+      case (ENegBody(ENeg(t)), ENegBody(ENeg(p)))   => spatialMatch(t, p)
       case (EMultBody(EMult(t1, t2)), EMultBody(EMult(p1, p2))) =>
         for {
           _ <- spatialMatch(t1, p1)
@@ -604,17 +586,17 @@ trait SpatialMatcherInstances {
   implicit def receiveBindSpatialMatcherInstance[F[_]: Splittable: Alternative: Monad: _error: _freeMap: _short]
       : SpatialMatcher[F, ReceiveBind, ReceiveBind] =
     (target, pattern) =>
-      if (target.patterns != pattern.patterns) {
-        MonoidK[F].empty
-      } else
-        spatialMatch(target.source, pattern.source)
+      for {
+        _ <- Alternative_[F].guard(target.patterns == pattern.patterns)
+        _ <- spatialMatch(target.source, pattern.source)
+      } yield ()
 
   implicit def matchCaseSpatialMatcherInstance[F[_]: Splittable: Alternative: Monad: _error: _freeMap: _short]
       : SpatialMatcher[F, MatchCase, MatchCase] =
     (target, pattern) =>
-      if (target.pattern != pattern.pattern) {
-        MonoidK[F].empty
-      } else
-        spatialMatch(target.source, pattern.source)
+      for {
+        _ <- Alternative_[F].guard(target.pattern == pattern.pattern)
+        _ <- spatialMatch(target.source, pattern.source)
+      } yield ()
 
 }
