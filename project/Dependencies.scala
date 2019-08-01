@@ -4,8 +4,8 @@ object Dependencies {
 
   val osClassifier: String = Detector.detect(Seq("fedora")).osClassifier
 
-  val circeVersion      = "0.10.0"
-  val http4sVersion     = "0.19.0"
+  val circeVersion      = "0.12.0-M4"
+  val http4sVersion     = "0.21.0-M2"
   val kamonVersion      = "1.1.5"
   val catsVersion       = "1.5.0"
   val catsEffectVersion = "1.2.0"
@@ -105,10 +105,10 @@ object Dependencies {
   private val logging = Seq(slf4j, julToSlf4j, scalaLogging, logbackClassic, logstashLogback)
 
   private val circeDependencies: Seq[ModuleID] =
-    Seq(circeCore, circeGeneric, circeGenericExtras, circeParser, circeLiteral)
+    Seq(circeGeneric)
 
   private val http4sDependencies: Seq[ModuleID] =
-    Seq(http4sDSL, http4sBlazeServer, http4sBlazeClient, http4sCirce)
+    Seq(http4sDSL, http4sBlazeServer, http4sCirce)
 
   val protobufDependencies: Seq[ModuleID] =
     Seq(scalapbRuntime)
