@@ -28,8 +28,8 @@ import coop.rchain.grpc.Server
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.node.configuration.Configuration
+import coop.rchain.node.diagnostics.Trace.TraceId
 import coop.rchain.node.diagnostics._
-import coop.rchain.node.diagnostics.effects.TraceId
 import coop.rchain.p2p.effects._
 import coop.rchain.rholang.interpreter.Runtime
 import coop.rchain.rspace.Context
@@ -325,7 +325,7 @@ class NodeRuntime private[node] (
       } >> exit0.as(Right(()))
 
   private def localScope(source: Metrics.Source): Task[ApplicativeLocal[Task, TraceId]] =
-    TaskLocal[TraceId](UUID.randomUUID())
+    TaskLocal[TraceId](Trace.next)
       .map { ls =>
         new DefaultApplicativeLocal[Task, TraceId] {
           val tl: TaskLocal[TraceId] = ls
