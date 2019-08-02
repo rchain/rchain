@@ -156,7 +156,7 @@ trait RegistryTester extends PersistentStoreTester {
     GPrivate(ByteString.copyFrom(Array[Byte](19)))
   )
 
-  def testInstall(space: Runtime.RhoISpace[Task])(implicit cost: _cost[Task]): Task[Unit] = {
+  def testInstall(space: Runtime.RhoISpace[Task]): Task[Unit] = {
     implicit val m: Match[Task, BindPattern, ListParWithRandom] =
       matchListPar[Task]
 

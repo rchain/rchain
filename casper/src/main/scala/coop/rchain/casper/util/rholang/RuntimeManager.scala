@@ -254,9 +254,8 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span] private[rholang] (
 
   private def processDeploy(runtime: Runtime[F])(
       deploy: DeployData
-  ): F[InternalProcessedDeploy] =
+  ): F[InternalProcessedDeploy] = Span[F].withMarks("process-deploy") {
     for {
-      _                            <- Span[F].mark("before-process-deploy-compute-effect")
       fallback                     <- runtime.space.createSoftCheckpoint()
       evaluateResult               <- computeEffect(runtime, runtime.reducer)(deploy)
       EvaluateResult(cost, errors) = evaluateResult
@@ -271,8 +270,8 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span] private[rholang] (
       )
       _ <- if (errors.nonEmpty) runtime.space.revertToSoftCheckpoint(fallback)
           else Applicative[F].unit
-      _ <- Span[F].mark("process-deploy-finished")
     } yield deployResult
+  }
 
   private def replayDeploys(
       runtime: Runtime[F],
@@ -300,10 +299,9 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span] private[rholang] (
 
   private def replayDeploy(runtime: Runtime[F])(
       processedDeploy: InternalProcessedDeploy
-  ): F[Option[ReplayFailure]] = {
+  ): F[Option[ReplayFailure]] = Span[F].withMarks("replay-deploy") {
     import processedDeploy._
     for {
-      _                    <- Span[F].mark("before-replay-deploy-reset-rig")
       _                    <- runtime.replaySpace.rig(processedDeploy.deployLog)
       softCheckpoint       <- runtime.replaySpace.createSoftCheckpoint()
       _                    <- Span[F].mark("before-replay-deploy-compute-effect")
@@ -336,7 +334,6 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span] private[rholang] (
                      }
                  }
              }
-      _ <- Span[F].mark("replay-deploy-finished")
     } yield cont
   }
 

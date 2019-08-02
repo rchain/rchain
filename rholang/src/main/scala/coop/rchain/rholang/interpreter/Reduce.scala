@@ -20,7 +20,7 @@ import coop.rchain.rholang.interpreter.Runtime.{RhoDispatch, RhoPureSpace}
 import coop.rchain.rholang.interpreter.Substitute.{charge => _, _}
 import coop.rchain.rholang.interpreter.accounting._
 import coop.rchain.rholang.interpreter.errors._
-import coop.rchain.rholang.interpreter.matcher.SpatialMatcher.spatialMatchAndCharge
+import coop.rchain.rholang.interpreter.matcher.SpatialMatcher.spatialMatchResult
 import coop.rchain.rspace.Serialize
 import coop.rchain.rspace.util._
 import monix.eval.Coeval
@@ -332,7 +332,7 @@ class DebruijnInterpreter[M[_], F[_]](
           case singleCase +: caseRem =>
             for {
               pattern     <- substituteAndCharge[Par, M](singleCase.pattern, 1, env)
-              matchResult <- spatialMatchAndCharge[M](target, pattern)
+              matchResult <- spatialMatchResult[M](target, pattern)
               res <- matchResult match {
                       case None =>
                         (target, caseRem).asLeft[Unit].pure[M]
@@ -600,7 +600,7 @@ class DebruijnInterpreter[M[_], F[_]](
               evaledTarget <- evalExpr(target)
               substTarget  <- substituteAndCharge[Par, M](evaledTarget, 0, env)
               substPattern <- substituteAndCharge[Par, M](pattern, 1, env)
-              matchResult  <- spatialMatchAndCharge[M](substTarget, substPattern)
+              matchResult  <- spatialMatchResult[M](substTarget, substPattern)
             } yield GBool(matchResult.isDefined)
 
           case EPercentPercentBody(EPercentPercent(p1, p2)) =>

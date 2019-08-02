@@ -55,7 +55,7 @@ class CostAccountingSpec extends FlatSpec with Matchers with PropertyChecks with
     ("""@0!(2)""", 33L),
     ("""@0!(2) | @1!(1)""", 69L),
     ("""for(x <- @0){ Nil }""", 64L),
-    ("""for(x <- @0){ Nil } | @0!(2)""", 76L),
+    ("""for(x <- @0){ Nil } | @0!(2)""", 73L),
     /*
     ("""new loop in {
          contract loop(@n) = {
@@ -67,7 +67,7 @@ class CostAccountingSpec extends FlatSpec with Matchers with PropertyChecks with
          loop!(10)
        }""".stripMargin, 1936L),
      */
-    ("""42 | @0!(2) | for (x <- @0) { Nil }""", 83L),
+    ("""42 | @0!(2) | for (x <- @0) { Nil }""", 80L),
     ("""@1!(1) |
         for(x <- @1) { Nil } |
         new x in { x!(10) | for(X <- x) { @2!(Set(X!(7)).add(*X).contains(10)) }} |
@@ -75,7 +75,7 @@ class CostAccountingSpec extends FlatSpec with Matchers with PropertyChecks with
           38 => Nil
           42 => @3!(42)
         }
-     """.stripMargin, 638L)
+     """.stripMargin, 624L)
   )
 
   "Total cost of evaluation" should "be equal to the sum of all costs in the log" in {

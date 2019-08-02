@@ -7,6 +7,7 @@ import coop.rchain.metrics.Metrics.Source
 trait Span[F[_]] {
   def mark(name: String): F[Unit]
   def trace[A](source: Metrics.Source)(block: F[A]): F[A]
+  def withMarks[A](label: String)(block: F[A]): F[A]
 }
 
 object Span {
@@ -15,8 +16,9 @@ object Span {
 }
 
 final case class NoopSpan[F[_]: Applicative]() extends Span[F] {
-  override def mark(name: String): F[Unit]                 = ().pure[F]
-  override def trace[A](source: Source)(block: F[A]): F[A] = block
+  override def mark(name: String): F[Unit]                    = ().pure[F]
+  override def trace[A](source: Source)(block: F[A]): F[A]    = block
+  override def withMarks[A](label: String)(block: F[A]): F[A] = block
 }
 
 trait Metrics[F[_]] {
