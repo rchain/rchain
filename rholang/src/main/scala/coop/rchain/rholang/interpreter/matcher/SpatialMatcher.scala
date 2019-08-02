@@ -444,8 +444,8 @@ trait SpatialMatcherInstances {
     }
   }
 
-  implicit def bundleSpatialMatcherInstance[F[_]: Splittable: Alternative: Monad: _error]
-      : SpatialMatcher[F, Bundle, Bundle] =
+  // Similalrly to `unfSpatialMatcherInstance`, this code is never reached currently. See the comment there.
+  implicit def bundleSpatialMatcherInstance[F[_]: Alternative]: SpatialMatcher[F, Bundle, Bundle] =
     (target, pattern) => Alternative_[F].guard(pattern == target)
 
   implicit def sendSpatialMatcherInstance[F[_]: Splittable: Alternative: Monad: _error: _freeMap: _short]
@@ -555,33 +555,18 @@ trait SpatialMatcherInstances {
         _ <- foldMatch(target.cases, pattern.cases)
       } yield ()
 
-  implicit def unfSpatialMatcherInstance[F[_]: Splittable: Alternative: Monad: _error: _freeMap: _short]
+  // The below instance is not reached currently, as `connectiveUsed` is always false for GUnforgeable,
+  // and hence they're matched structurally (using `==`). This could change though, so we include it for completeness.
+  implicit def unfSpatialMatcherInstance[F[_]: Alternative]
       : SpatialMatcher[F, GUnforgeable, GUnforgeable] =
     (target, pattern) =>
       (target.unfInstance, pattern.unfInstance) match {
-        case (GPrivateBody(tgprivate), GPrivateBody(pgprivate)) =>
-          spatialMatch(tgprivate, pgprivate)
-        case (GDeployerIdBody(tid), GDeployerIdBody(pid)) =>
-          spatialMatch(tid, pid)
+        case (GPrivateBody(t), GPrivateBody(p)) =>
+          Alternative_[F].guard(t == p)
+        case (GDeployerIdBody(t), GDeployerIdBody(p)) =>
+          Alternative_[F].guard(t == p)
         case _ => MonoidK[F].empty[Unit]
       }
-
-  /**
-    * Note that currently there should be no way to put a GPrivate in a pattern
-    * because patterns start with an empty environment.
-    * We're going to write the obvious definition anyway.
-    */
-  implicit def gprivateSpatialMatcherInstance[F[_]: Splittable: Alternative: Monad: _error: _freeMap]
-      : SpatialMatcher[F, GPrivate, GPrivate] =
-    (target, pattern) => {
-      ().pure[F]
-    }
-
-  implicit def gdeployerIdSpatialMatcherInstance[F[_]: Splittable: Alternative: Monad: _error: _freeMap]
-      : SpatialMatcher[F, GDeployerId, GDeployerId] =
-    (target, pattern) => {
-      ().pure[F]
-    }
 
   implicit def receiveBindSpatialMatcherInstance[F[_]: Splittable: Alternative: Monad: _error: _freeMap: _short]
       : SpatialMatcher[F, ReceiveBind, ReceiveBind] =
