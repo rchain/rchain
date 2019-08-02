@@ -19,11 +19,9 @@ import org.scalatest.{FlatSpec, Matchers}
 
 class RholangBuildTest extends FlatSpec with Matchers {
 
-  val genesis = buildGenesis()
-
   "Our build system" should "allow import of rholang sources into scala code" in effectTest {
     HashSetCasperTestNode
-      .standaloneEff(genesis)
+      .standaloneEff(buildGenesis())
       .use { node =>
         import node._
 
