@@ -131,6 +131,8 @@ object BlockDagStorageTestFixture {
         blockDagStorageDir.resolve("equivocations-tracker-crc"),
         blockDagStorageDir.resolve("invalid-blocks-data"),
         blockDagStorageDir.resolve("invalid-blocks-crc"),
+        blockDagStorageDir.resolve("block-hashes-by-deploy-data"),
+        blockDagStorageDir.resolve("block-hashes-by-deploy-crc"),
         blockDagStorageDir.resolve("checkpoints"),
         blockDagStorageDir.resolve("block-number-index"),
         mapSize

@@ -5,7 +5,8 @@ import cats.effect.{Concurrent, Sync}
 import cats.implicits._
 
 import com.google.protobuf.ByteString
-import coop.rchain.blockstorage.util.BlockMessageUtil.{bonds, parentHashes}
+import coop.rchain.blockstorage.BlockDagStorage.DeployId
+import coop.rchain.blockstorage.util.BlockMessageUtil.{bonds, deployData, parentHashes}
 import coop.rchain.blockstorage.util.TopologicalSortUtil
 import coop.rchain.casper.protocol.BlockMessage
 import coop.rchain.crypto.codec.Base16
@@ -24,6 +25,7 @@ final class InMemBlockDagStorage[F[_]: Concurrent: Sync: Log: BlockStore](
     childMapRef: Ref[F, Map[BlockHash, Set[BlockHash]]],
     dataLookupRef: Ref[F, Map[BlockHash, BlockMetadata]],
     topoSortRef: Ref[F, Vector[Vector[BlockHash]]],
+    blockHashesByDeployRef: Ref[F, Map[DeployId, BlockHash]],
     equivocationsTrackerRef: Ref[F, Set[EquivocationRecord]],
     invalidBlocksRef: Ref[F, Set[BlockMetadata]]
 ) extends BlockDagStorage[F] {
@@ -32,6 +34,7 @@ final class InMemBlockDagStorage[F[_]: Concurrent: Sync: Log: BlockStore](
       childMap: Map[BlockHash, Set[BlockHash]],
       dataLookup: Map[BlockHash, BlockMetadata],
       topoSortVector: Vector[Vector[BlockHash]],
+      blockHashesByDeploy: Map[DeployId, BlockHash],
       invalidBlocksSet: Set[BlockMetadata]
   ) extends BlockDagRepresentation[F] {
     def children(blockHash: BlockHash): F[Option[Set[BlockHash]]] =
@@ -40,6 +43,8 @@ final class InMemBlockDagStorage[F[_]: Concurrent: Sync: Log: BlockStore](
       dataLookup.get(blockHash).pure[F]
     def contains(blockHash: BlockHash): F[Boolean] =
       dataLookup.contains(blockHash).pure[F]
+    def lookupByDeployId(deployId: DeployId): F[Option[BlockHash]] =
+      blockHashesByDeploy.get(deployId).pure[F]
     def topoSort(startBlockNumber: Long): F[Vector[Vector[BlockHash]]] =
       topoSortVector.drop(startBlockNumber.toInt).pure[F]
     def topoSortTail(tailLength: Int): F[Vector[Vector[BlockHash]]] =
@@ -88,16 +93,18 @@ final class InMemBlockDagStorage[F[_]: Concurrent: Sync: Log: BlockStore](
 
   private def getRepresentationInternal: F[BlockDagRepresentation[F]] =
     for {
-      latestMessages <- latestMessagesRef.get
-      childMap       <- childMapRef.get
-      dataLookup     <- dataLookupRef.get
-      topoSort       <- topoSortRef.get
-      invalidBlocks  <- invalidBlocksRef.get
+      latestMessages    <- latestMessagesRef.get
+      childMap          <- childMapRef.get
+      dataLookup        <- dataLookupRef.get
+      topoSort          <- topoSortRef.get
+      blockHashByDeploy <- blockHashesByDeployRef.get
+      invalidBlocks     <- invalidBlocksRef.get
     } yield InMemBlockDagRepresentation(
       latestMessages,
       childMap,
       dataLookup,
       topoSort,
+      blockHashByDeploy,
       invalidBlocks
     )
 
@@ -142,12 +149,14 @@ final class InMemBlockDagStorage[F[_]: Concurrent: Sync: Log: BlockStore](
                                                     BlockSenderIsMalformed(block)
                                                   )
                                                 }
+        deployHashes = deployData(block).map(_.sig).toList
         _ <- latestMessagesRef.update { latestMessages =>
               newValidatorsWithSenderLatestMessages.foldLeft(latestMessages) {
                 case (acc, (validator, blockHash)) => acc.updated(validator, blockHash)
               }
             }
         _   <- if (invalid) invalidBlocksRef.update(_ + blockMetadata) else ().pure[F]
+        _   <- blockHashesByDeployRef.update(_ ++ deployHashes.map(_ -> block.blockHash).toMap)
         dag <- getRepresentationInternal
       } yield dag
     )
@@ -183,6 +192,7 @@ object InMemBlockDagStorage {
       childMapRef             <- Ref.of[F, Map[BlockHash, Set[BlockHash]]](Map.empty)
       dataLookupRef           <- Ref.of[F, Map[BlockHash, BlockMetadata]](Map.empty)
       topoSortRef             <- Ref.of[F, Vector[Vector[BlockHash]]](Vector.empty)
+      blockHashesByDeployRef  <- Ref.of[F, Map[DeployId, BlockHash]](Map.empty)
       equivocationsTrackerRef <- Ref.of[F, Set[EquivocationRecord]](Set.empty)
       invalidBlocksRef        <- Ref.of[F, Set[BlockMetadata]](Set.empty)
     } yield new InMemBlockDagStorage[F](
@@ -191,6 +201,7 @@ object InMemBlockDagStorage {
       childMapRef,
       dataLookupRef,
       topoSortRef,
+      blockHashesByDeployRef,
       equivocationsTrackerRef,
       invalidBlocksRef
     )

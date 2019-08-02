@@ -1,5 +1,7 @@
 package coop.rchain.blockstorage
 
+import com.google.protobuf.ByteString
+import coop.rchain.blockstorage.BlockDagStorage.DeployId
 import coop.rchain.casper.protocol.BlockMessage
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.Validator.Validator
@@ -19,6 +21,8 @@ trait BlockDagStorage[F[_]] {
 }
 
 object BlockDagStorage {
+  type DeployId = ByteString
+
   def apply[F[_]](implicit B: BlockDagStorage[F]): BlockDagStorage[F] = B
 }
 
@@ -26,6 +30,7 @@ trait BlockDagRepresentation[F[_]] {
   def children(blockHash: BlockHash): F[Option[Set[BlockHash]]]
   def lookup(blockHash: BlockHash): F[Option[BlockMetadata]]
   def contains(blockHash: BlockHash): F[Boolean]
+  def lookupByDeployId(deployId: DeployId): F[Option[BlockHash]]
   def topoSort(startBlockNumber: Long): F[Vector[Vector[BlockHash]]]
   def topoSortTail(tailLength: Int): F[Vector[Vector[BlockHash]]]
   def deriveOrdering(startBlockNumber: Long): F[Ordering[BlockMetadata]]

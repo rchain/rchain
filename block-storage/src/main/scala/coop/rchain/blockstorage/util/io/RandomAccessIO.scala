@@ -5,6 +5,7 @@ import java.nio.file.Path
 
 import cats.effect.Sync
 import cats.implicits._
+import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.util.io.IOError.RaiseIOError
 
 import scala.language.higherKinds
@@ -32,6 +33,11 @@ final case class RandomAccessIO[F[_]: Sync: RaiseIOError] private (
       case _: EOFException => none[Unit].pure[F]
       case e               => RaiseIOError[F].raise[Option[Unit]](ByteArrayReadFailed(e))
     })
+
+  def readByteString(len: Int): F[Option[ByteString]] = {
+    val bytes = Array.ofDim[Byte](len)
+    readFully(bytes).map(_.map(_ => ByteString.copyFrom(bytes)))
+  }
 
   def length: F[Long] =
     handleIo(file.length(), UnexpectedIOError.apply)

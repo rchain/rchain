@@ -142,6 +142,12 @@ class BlockDagFileStorageTest extends BlockDagStorageTest {
   private def defaultInvalidBlocksCrc(dagDataDir: Path): Path =
     dagDataDir.resolve("invalid-blocks-checksum")
 
+  private def defaultBlockHasesByDeploy(dagDataDir: Path): Path =
+    dagDataDir.resolve("block-hashes-by-deploy")
+
+  private def defaultBlockHasesByDeployCrc(dagDataDir: Path): Path =
+    dagDataDir.resolve("block-hashes-by-deploy-checksum")
+
   private def defaultCheckpointsDir(dagDataDir: Path): Path =
     dagDataDir.resolve("checkpoints")
 
@@ -164,6 +170,8 @@ class BlockDagFileStorageTest extends BlockDagStorageTest {
         defaultEquivocationsTrackerCrc(dagDataDir),
         defaultInvalidBlocksLog(dagDataDir),
         defaultInvalidBlocksCrc(dagDataDir),
+        defaultBlockHasesByDeploy(dagDataDir),
+        defaultBlockHasesByDeployCrc(dagDataDir),
         defaultCheckpointsDir(dagDataDir),
         defaultBlockNumberIndex(dagDataDir),
         100L * 1024L * 1024L * 4096L,

@@ -443,6 +443,8 @@ class NodeRuntime private[node] (
       equivocationsTrackerCrcPath = dagStoragePath.resolve("equivocationsTrackerCrcPath"),
       invalidBlocksLogPath = dagStoragePath.resolve("invalidBlocksLogPath"),
       invalidBlocksCrcPath = dagStoragePath.resolve("invalidBlocksCrcPath"),
+      blockHashesByDeployLogPath = dagStoragePath.resolve("blockHashesByDeployLogPath"),
+      blockHashesByDeployCrcPath = dagStoragePath.resolve("blockHashesByDeployCrcPath"),
       checkpointsDirPath = dagStoragePath.resolve("checkpointsDirPath"),
       blockNumberIndexPath = dagStoragePath.resolve("blockNumberIndexPath"),
       mapSize = 8L * 1024L * 1024L * 1024L,

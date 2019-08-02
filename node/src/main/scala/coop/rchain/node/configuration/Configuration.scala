@@ -137,6 +137,8 @@ object Configuration {
       dataDir.resolve("casper-block-dag-file-storage-equivocation-tracker-crc"),
       dataDir.resolve("casper-block-dag-file-storage-invalid-blocks-log"),
       dataDir.resolve("casper-block-dag-file-storage-invalid-blocks-crc"),
+      dataDir.resolve("casper-block-dag-file-storage-block-hashes-by-deploy-data"),
+      dataDir.resolve("casper-block-dag-file-storage-block-hashes-by-deploy-crc"),
       dataDir.resolve("casper-block-dag-file-storage-checkpoints"),
       dataDir.resolve("casper-block-dag-file-storage-block-number-index"),
       server.dagStorageSize
