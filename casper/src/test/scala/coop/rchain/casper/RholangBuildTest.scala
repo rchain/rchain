@@ -39,7 +39,7 @@ class RholangBuildTest extends FlatSpec with Matchers {
     parallelism = availableProcessors * 2,
     maxThreads = availableProcessors * 2,
     reporter = UncaughtExceptionLogger,
-    executionModel = BatchedExecution(888888881)
+    executionModel = BatchedExecution(1024)
   )
   val genesis = buildGenesis()
 
