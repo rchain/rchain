@@ -491,6 +491,25 @@ class BlockDagFileStorageTest extends BlockDagStorageTest {
     }
   }
 
+  it should "be able to restore deploy index on startup" in {
+    forAll(blockElementsWithParentsGen, minSize(0), sizeRange(10)) { blockElements =>
+      withDagStorageLocation { dagDataDir =>
+        for {
+          firstStorage  <- createAtDefaultLocation(dagDataDir)
+          _             <- blockElements.traverse_(firstStorage.insert(_, genesis, true))
+          _             <- firstStorage.close()
+          secondStorage <- createAtDefaultLocation(dagDataDir)
+          dag           <- secondStorage.getRepresentation
+          (deploys, blockHashes) = blockElements
+            .flatMap(b => b.body.get.deploys.map(_ -> b.blockHash))
+            .unzip
+          deployLookups <- deploys.traverse(d => dag.lookupByDeployId(d.deploy.get.sig))
+          _             <- secondStorage.close()
+        } yield deployLookups shouldBe blockHashes.map(_.some)
+      }
+    }
+  }
+
   it should "be able to load checkpoints" in {
     forAll(blockElementsWithParentsGen, minSize(1), sizeRange(2)) { blockElements =>
       withDagStorageLocation { dagDataDir =>
