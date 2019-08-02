@@ -66,20 +66,17 @@ class DebruijnInterpreter[M[_], F[_]](
     spanM: Span[M]
 ) extends Reduce[M] {
 
-  implicit private[this] val MetricsSource: Source = Metrics.Source(Metrics.BaseSource, "reduce")
-  private[this] val injectSpanLabel                = Metrics.Source(MetricsSource, "inject")
-  private[this] val parSpanLabel                   = Metrics.Source(MetricsSource, "par")
-  private[this] val sendSpanLabel                  = Metrics.Source(MetricsSource, "send")
-  private[this] val receiveSpanLabel               = Metrics.Source(MetricsSource, "receive")
-  private[this] val varSpanLabel                   = Metrics.Source(MetricsSource, "var")
-  private[this] val matchSpanLabel                 = Metrics.Source(MetricsSource, "match")
-  private[this] val newSpanLabel                   = Metrics.Source(MetricsSource, "new")
-  private[this] val bundleSpanLabel                = Metrics.Source(MetricsSource, "bundle")
-  private[this] val expressionToParSpanLabel       = Metrics.Source(MetricsSource, "expression-to-par")
-  private[this] val expressionToExpressionSpanLabel =
-    Metrics.Source(MetricsSource, "expression-to-expression")
-  private[this] val topLevelExpressionSpanLabel =
-    Metrics.Source(MetricsSource, "top-level-expressions")
+  private[this] val injectSpanLabel                 = "inject"
+  private[this] val parSpanLabel                    = "par"
+  private[this] val sendSpanLabel                   = "send"
+  private[this] val receiveSpanLabel                = "receive"
+  private[this] val varSpanLabel                    = "var"
+  private[this] val matchSpanLabel                  = "match"
+  private[this] val newSpanLabel                    = "new"
+  private[this] val bundleSpanLabel                 = "bundle"
+  private[this] val expressionToParSpanLabel        = "expression-to-par"
+  private[this] val expressionToExpressionSpanLabel = "expression-to-expression"
+  private[this] val topLevelExpressionSpanLabel     = "top-level-expressions"
 
   type Application = Option[(TaggedContinuation, Seq[ListParWithRandom], Int, Boolean)]
 
@@ -153,7 +150,7 @@ class DebruijnInterpreter[M[_], F[_]](
       implicit env: Env[Par],
       rand: Blake2b512Random,
       sequenceNumber: Int
-  ): M[Unit] = spanM.trace(parSpanLabel) {
+  ): M[Unit] = spanM.mark(parSpanLabel) >> {
 
     def reportErrors(process: M[Unit]): M[Unit] =
       process.handleErrorWith {
@@ -204,7 +201,7 @@ class DebruijnInterpreter[M[_], F[_]](
   override def inj(
       par: Par
   )(implicit rand: Blake2b512Random): M[Unit] =
-    spanM.trace(injectSpanLabel)(eval(par)(Env[Par](), rand, 0))
+    spanM.mark(injectSpanLabel) >> eval(par)(Env[Par](), rand, 0)
 
   /** Algorithm as follows:
     *
@@ -224,7 +221,7 @@ class DebruijnInterpreter[M[_], F[_]](
       rand: Blake2b512Random,
       sequenceNumber: Int
   ): M[Unit] =
-    spanM.trace(sendSpanLabel) {
+    spanM.mark(sendSpanLabel) >> {
       for {
         _        <- charge[M](SEND_EVAL_COST)
         evalChan <- evalExpr(send.chan)
@@ -247,7 +244,7 @@ class DebruijnInterpreter[M[_], F[_]](
       rand: Blake2b512Random,
       sequenceNumber: Int
   ): M[Unit] =
-    spanM.trace(receiveSpanLabel) {
+    spanM.mark(receiveSpanLabel) >> {
       for {
         _ <- charge[M](RECEIVE_EVAL_COST)
         binds <- receive.binds.toList.traverse(
@@ -288,7 +285,7 @@ class DebruijnInterpreter[M[_], F[_]](
   private def eval(
       valproc: Var
   )(implicit env: Env[Par]): M[Par] =
-    spanM.trace(varSpanLabel) {
+    spanM.mark(varSpanLabel) >> {
       charge[M](VAR_EVAL_COST) >> {
         valproc.varInstance match {
           case BoundVar(level) =>
@@ -312,7 +309,7 @@ class DebruijnInterpreter[M[_], F[_]](
       implicit env: Env[Par],
       rand: Blake2b512Random,
       sequenceNumber: Int
-  ): M[Unit] = spanM.trace(matchSpanLabel) {
+  ): M[Unit] = spanM.mark(matchSpanLabel) >> {
 
     def addToEnv(env: Env[Par], freeMap: Map[Int, Par], freeCount: Int): Env[Par] =
       Range(0, freeCount).foldLeft(env)(
@@ -372,7 +369,7 @@ class DebruijnInterpreter[M[_], F[_]](
   private def eval(
       neu: New
   )(implicit env: Env[Par], rand: Blake2b512Random, sequenceNumber: Int): M[Unit] =
-    spanM.trace(newSpanLabel) {
+    spanM.mark(newSpanLabel) >> {
 
       def alloc(count: Int, urns: Seq[String]): M[Env[Par]] = {
         val deployIdUrn   = "rho:rchain:deployId"
@@ -430,10 +427,10 @@ class DebruijnInterpreter[M[_], F[_]](
   private def eval(
       bundle: Bundle
   )(implicit env: Env[Par], rand: Blake2b512Random, sequenceNumber: Int): M[Unit] =
-    spanM.trace(bundleSpanLabel)(eval(bundle.body))
+    spanM.mark(bundleSpanLabel) >> eval(bundle.body)
 
   def evalExprToPar(expr: Expr)(implicit env: Env[Par]): M[Par] =
-    spanM.trace(expressionToParSpanLabel) {
+    spanM.mark(expressionToParSpanLabel) >> {
       expr.exprInstance match {
         case EVarBody(EVar(v)) =>
           for {
@@ -457,7 +454,7 @@ class DebruijnInterpreter[M[_], F[_]](
     }
 
   private def evalExprToExpr(expr: Expr)(implicit env: Env[Par]): M[Expr] =
-    spanM.trace(expressionToExpressionSpanLabel) {
+    spanM.mark(expressionToExpressionSpanLabel) >> {
       syncM.defer {
         def relop(
             p1: Par,
@@ -1468,7 +1465,7 @@ class DebruijnInterpreter[M[_], F[_]](
     * Evaluate any top level expressions in @param Par .
     */
   def evalExpr(par: Par)(implicit env: Env[Par]): M[Par] =
-    spanM.trace(topLevelExpressionSpanLabel) {
+    spanM.mark(topLevelExpressionSpanLabel) >> {
       for {
         evaledExprs <- par.exprs.toList.traverse(evalExprToPar)
         // Note: the locallyFree cache in par could now be invalid, but given

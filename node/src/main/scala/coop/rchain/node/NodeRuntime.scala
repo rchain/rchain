@@ -1,6 +1,7 @@
 package coop.rchain.node
 
 import java.nio.file.{Files, Path}
+import java.util.UUID
 
 import cats._
 import cats.effect._
@@ -27,6 +28,7 @@ import coop.rchain.grpc.Server
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.node.configuration.Configuration
+import coop.rchain.node.diagnostics.Trace.TraceId
 import coop.rchain.node.diagnostics._
 import coop.rchain.p2p.effects._
 import coop.rchain.rholang.interpreter.Runtime
@@ -322,18 +324,18 @@ class NodeRuntime private[node] (
         }
       } >> exit0.as(Right(()))
 
-  private def localScope(source: Metrics.Source): Task[ApplicativeLocal[Task, Trace]] =
-    TaskLocal[Trace](Trace.source(source))
+  private def localScope(source: Metrics.Source): Task[ApplicativeLocal[Task, TraceId]] =
+    TaskLocal[TraceId](Trace.next)
       .map { ls =>
-        new DefaultApplicativeLocal[Task, Trace] {
-          val tl: TaskLocal[Trace] = ls
+        new DefaultApplicativeLocal[Task, TraceId] {
+          val tl: TaskLocal[TraceId] = ls
 
-          override def local[A](f: Trace => Trace)(fa: Task[A]): Task[A] =
+          override def local[A](f: TraceId => TraceId)(fa: Task[A]): Task[A] =
             tl.read.flatMap(t => tl.bind(f(t))(fa))
 
           override val applicative: Applicative[Task] = Applicative[Task]
 
-          override def ask: Task[Trace] = tl.read
+          override def ask: Task[TraceId] = tl.read
         }
       }
 
