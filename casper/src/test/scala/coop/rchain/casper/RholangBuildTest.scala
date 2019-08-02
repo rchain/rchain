@@ -23,8 +23,9 @@ import coop.rchain.crypto.{PrivateKey, PublicKey}
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.signatures.Secp256k1
 import coop.rchain.rholang.interpreter.util.RevAddress
-import coop.rchain.shared.Log
-import monix.execution.Scheduler.Implicits.global
+import coop.rchain.shared.{Log, UncaughtExceptionLogger}
+import monix.execution.ExecutionModel.BatchedExecution
+import monix.execution.Scheduler
 import org.scalatest.{FlatSpec, Matchers}
 
 import scala.io.Source
@@ -32,6 +33,14 @@ import scala.util.{Failure, Success, Try}
 
 class RholangBuildTest extends FlatSpec with Matchers {
 
+  val availableProcessors = java.lang.Runtime.getRuntime.availableProcessors()
+  implicit val scheduler = Scheduler.forkJoin(
+    name = "rspace",
+    parallelism = availableProcessors * 2,
+    maxThreads = availableProcessors * 2,
+    reporter = UncaughtExceptionLogger,
+    executionModel = BatchedExecution(888888881)
+  )
   val genesis = buildGenesis()
 
   "Our build system" should "allow import of rholang sources into scala code" in effectTest {
