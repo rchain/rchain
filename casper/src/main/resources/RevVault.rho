@@ -142,16 +142,16 @@ in {
             mint!("makePurse", initialAmount, *purseCh) |
             @Either!("fromNillable <-", *purseCh, "Couldn't create purse", *eitherPurseCh) |
             @Either!("map2 <-", *eitherRevAddrCh, *eitherPurseCh, for (@addr, purse, r <- mkVault) {
-              _newVault!(addr, *purse, *r)
+              new revVault in {
+                _newVault!(*revVault, addr, *purse) |
+                r!(bundle+{*revVault})
+              }
             }, *ret)
           }
 
         } |
 
-        contract _newVault(@ownRevAddress, purse, ret) = {
-          new revVault in {
-
-            ret!(bundle+{*revVault}) |
+        contract _newVault(revVault, @ownRevAddress, purse) = {
 
             contract revVault(@"balance", ret) = {
               purse!("getBalance", *ret)
@@ -203,7 +203,7 @@ in {
                 }
               }
             }
-          }
+
         } |
 
         rs!(
