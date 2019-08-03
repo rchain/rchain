@@ -137,11 +137,13 @@ in {
 
         contract _makeVault(@ownerRevAddress, @initialAmount, ret) = {
 
-          new revAddrCh, eitherRevAddrCh, purseCh, eitherPurseCh in {
+          new revAddrCh, eitherRevAddrCh, purseCh, eitherPurseCh, mkVault in {
             @Either!("fromNillable", ownerRevAddress, "Required `revAddress` parameter was Nil", *eitherRevAddrCh) |
             mint!("makePurse", initialAmount, *purseCh) |
             @Either!("fromNillable <-", *purseCh, "Couldn't create purse", *eitherPurseCh) |
-            @Either!("map2 <-", *eitherRevAddrCh, *eitherPurseCh, *_newVault, *ret)
+            @Either!("map2 <-", *eitherRevAddrCh, *eitherPurseCh, for (@addr, purse, r <- mkVault) {
+              _newVault!(addr, *purse, *r)
+            }, *ret)
           }
 
         } |
