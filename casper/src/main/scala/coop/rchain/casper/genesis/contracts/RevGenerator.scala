@@ -19,8 +19,9 @@ final case class RevGenerator(
 
   val code: String =
     s""" new rl(`rho:registry:lookup`), revVaultCh in {
-       #   rl!(`rho:rchain:revVault`, *revVaultCh)
-       #   | for (@(_, RevVault) <- revVaultCh) {
+       #   rl!(`rho:rchain:revVault`, *revVaultCh) |
+       #   for (@(_, RevVault) <- revVaultCh) {
+       #
        #     new genesisVaultCh in {
        #       @RevVault!(
        #         "findOrCreateGenesisVault",
@@ -28,48 +29,53 @@ final case class RevGenerator(
        #         $supply,
        #         *genesisVaultCh
        #       )
-       #       | for (@(true, genesisVault) <- genesisVaultCh) {
-       #         new genesisAuthKeyCh, deployerId(`rho:rchain:deployerId`) in {
-       #           @RevVault!("deployerAuthKey", *deployerId, *genesisAuthKeyCh)
-       #           | for (genesisVaultAuthKey <- genesisAuthKeyCh) {
-       #             ${concatenate(findOrCreate)} |
-       #             ${concatenate(transfer)}
-       #           }
-       #         }
+       #     } |
+       #
+       #     new ret in {
+       #       @RevVault!("init", *ret) |
+       #       for (vaultMapStore, initVault <- ret) {
+       #         ${vaultInitCode()}
        #       }
        #     }
+       #
        #   }
        # }
      """.stripMargin('#')
 
   val normalizerEnv: NormalizerEnv = NormalizerEnv(deployId = none, deployerPk = genesisPk.some)
 
-  val term: Par = ParBuilder[Coeval]
-    .buildNormalizedTerm(code, normalizerEnv)
-    .value()
+  val term: Par =
+    ParBuilder[Coeval]
+      .buildNormalizedTerm(code, normalizerEnv)
+      .value()
 
-  private def findOrCreate(userVault: Vault): String =
-    s""" 
-       # @RevVault!(
-       #   "findOrCreate",
-       #   "${userVault.revAddress.toBase58}",
-       #   Nil
-       # )
-     """.stripMargin('#')
+  private def vaultInitCode() =
+    if (userVaults.isEmpty) {
+      "vaultMapStore!({})"
+    } else {
+      s"""
+        #new ${userVaults.indices.map("x" + _).mkString(", ")} in {
+        #  vaultMapStore!(${vaultsMap()}) |
+        #  ${concatenate(initVault)}
+        #}
+        #""".stripMargin('#')
+    }
 
-  private def transfer(userVault: Vault): String =
+  private def vaultsMap(): String =
     s"""
-       # @genesisVault!(
-       #   "transfer",
-       #   "${userVault.revAddress.toBase58}",
-       #   ${userVault.initialBalance},
-       #   *genesisVaultAuthKey,
-       #   Nil
-       # )
-     """.stripMargin('#')
+       |{
+       |${concatenate(mapEntry, separator = ",\n")}
+       |}
+       |""".stripMargin
 
-  private def concatenate(f: Vault => String): String =
-    if (userVaults.nonEmpty) userVaults.map(f).mkString(" |\n\n")
+  private def mapEntry(userVault: Vault, index: Int): String =
+    s"""  "${userVault.revAddress.toBase58}" : *x$index"""
+
+  private def initVault(userVault: Vault, index: Int): String =
+    s"""initVault!(*x$index, "${userVault.revAddress.toBase58}", ${userVault.initialBalance})"""
+
+  private def concatenate(f: (Vault, Int) => String, separator: String = " |\n\n"): String =
+    if (userVaults.nonEmpty) userVaults.zipWithIndex.map(Function.tupled(f)).mkString(separator)
     else "Nil"
 
 }

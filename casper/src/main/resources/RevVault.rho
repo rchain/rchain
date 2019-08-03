@@ -28,10 +28,22 @@ in {
   rl!(`rho:lang:either`, *EitherCh) |
   for(@(_, MakeMint) <- MakeMintCh; @(_, AuthKey) <- AuthKeyCh; @(_, Either) <- EitherCh) {
 
-    new mintCh, vaultMapStore in {
-      vaultMapStore!({}) |
+    new mintCh, vaultMapStore, initVault in {
       @MakeMint!(*mintCh) |
       for (mint <- mintCh) {
+
+        contract initVault(name, @address, @initialAmount) = {
+          new purseCh in {
+            mint!("makePurse", initialAmount, *purseCh) |
+            for (purse <- purseCh) {
+              _newVault!(*name, address, *purse)
+            }
+          }
+        } |
+
+        for (@"init", ret <- RevVault) {
+          ret!(*vaultMapStore, *initVault)
+        } |
 
         contract RevVault(@"deployerAuthKey", deployerId, ret) = {
 
