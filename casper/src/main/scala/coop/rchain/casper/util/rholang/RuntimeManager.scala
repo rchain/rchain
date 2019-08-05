@@ -76,6 +76,7 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span] private[rholang] (
   private[this] val computeGenesisLabel =
     Metrics.Source(RuntimeManagerMetricsSource, "compute-genesis")
 
+  // TODO: Return result on non-public name.
   def captureResults(
       start: StateHash,
       deploy: DeployData,
@@ -185,6 +186,7 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span] private[rholang] (
         toBondSeq(bondsPar.head)
       }
 
+  // TODO: Return result on non-public name.
   private def bondsQuerySource(name: String = "__SCALA__"): String =
     s"""
        # new rl(`rho:registry:lookup`), poSCh in {
