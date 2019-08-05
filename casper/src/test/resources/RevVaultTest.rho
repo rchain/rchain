@@ -109,7 +109,7 @@ match (
         new genesisVaultCh, aliceVaultCh, ret, retOk  in {
           withVaultAndIdentityOf!(genesisPubKey, *genesisVaultCh) |
           RevVault!("findOrCreate", aliceRevAddress, *aliceVaultCh) |
-          for (genesisVault, @genesisVaultKey <- genesisVaultCh; @aliceVault <- aliceVaultCh) {
+          for (genesisVault, @genesisVaultKey <- genesisVaultCh; @(true, aliceVault) <- aliceVaultCh) {
             genesisVault!("transfer", aliceRevAddress, 1000, genesisVaultKey, *ret) |
             rhoSpec!("assert", ((true, Nil), "== <-", *ret), "transfer successful", *ackCh) |
             assertBalances!(*retOk, [(*genesisVault, 8000), (aliceVault, 1000)], *rhoSpec, *ackCh)
