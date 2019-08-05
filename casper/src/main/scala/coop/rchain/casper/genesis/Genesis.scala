@@ -121,7 +121,7 @@ object Genesis {
         )
     }
 
-  private def vaultFromFile[F[_]: Sync: Log: RaiseIOError](vaultsPath: Path): F[Seq[Vault]] =
+  def vaultFromFile[F[_]: Sync: Log: RaiseIOError](vaultsPath: Path): F[Seq[Vault]] =
     for {
       lines <- SourceIO
                 .open(vaultsPath)

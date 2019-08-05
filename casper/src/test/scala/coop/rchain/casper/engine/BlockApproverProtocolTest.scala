@@ -87,6 +87,7 @@ object BlockApproverProtocolTest {
       (new BlockApproverProtocol(
         node.validatorId,
         genesisParams.timestamp,
+        Seq(),
         genesisParams.proofOfStake.validators.map(v => v.pk -> v.stake).toMap,
         genesisParams.proofOfStake.minimumBond,
         genesisParams.proofOfStake.maximumBond,

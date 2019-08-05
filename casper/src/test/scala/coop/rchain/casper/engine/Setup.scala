@@ -62,6 +62,7 @@ object Setup {
     val bap = new BlockApproverProtocol(
       validatorId,
       deployTimestamp,
+      Seq(),
       bonds,
       genesisParams.proofOfStake.minimumBond,
       genesisParams.proofOfStake.maximumBond,
