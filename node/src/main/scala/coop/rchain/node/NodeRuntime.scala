@@ -1,13 +1,11 @@
 package coop.rchain.node
 
 import java.nio.file.{Files, Path}
-import java.util.UUID
 
 import cats._
 import cats.effect._
 import cats.effect.concurrent.Semaphore
 import cats.implicits._
-import cats.mtl.{ApplicativeLocal, DefaultApplicativeLocal}
 import coop.rchain.blockstorage._
 import coop.rchain.blockstorage.util.io.IOError
 import coop.rchain.casper._
@@ -25,10 +23,10 @@ import coop.rchain.comm.rp.Connect.{ConnectionsCell, RPConfAsk, RPConfState}
 import coop.rchain.comm.rp._
 import coop.rchain.comm.transport._
 import coop.rchain.grpc.Server
+import coop.rchain.metrics.Span.TraceId
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.node.configuration.Configuration
-import coop.rchain.node.diagnostics.Trace.TraceId
 import coop.rchain.node.diagnostics._
 import coop.rchain.p2p.effects._
 import coop.rchain.rholang.interpreter.Runtime
@@ -38,7 +36,7 @@ import coop.rchain.shared._
 import kamon._
 import kamon.system.SystemMetrics
 import kamon.zipkin.ZipkinReporter
-import monix.eval.{Task, TaskLocal}
+import monix.eval.Task
 import monix.execution.Scheduler
 import org.http4s.implicits._
 import org.http4s.server.blaze._
@@ -324,26 +322,10 @@ class NodeRuntime private[node] (
         }
       } >> exit0.as(Right(()))
 
-  private def localScope(source: Metrics.Source): Task[ApplicativeLocal[Task, TraceId]] =
-    TaskLocal[TraceId](Trace.next)
-      .map { ls =>
-        new DefaultApplicativeLocal[Task, TraceId] {
-          val tl: TaskLocal[TraceId] = ls
-
-          override def local[A](f: TraceId => TraceId)(fa: Task[A]): Task[A] =
-            tl.read.flatMap(t => tl.bind(f(t))(fa))
-
-          override val applicative: Applicative[Task] = Applicative[Task]
-
-          override def ask: Task[TraceId] = tl.read
-        }
-      }
-
-  private def setupSpan(enabled: Boolean, networkId: String, host: String): Task[Span[Task]] =
-    if (!enabled) Task.now(Span.noop[Task])
+  private def setupSpan(enabled: Boolean, networkId: String, host: String): Span[Task] =
+    if (!enabled) Span.noop[Task]
     else
-      localScope(Metrics.BaseSource)
-        .map(implicit ls => diagnostics.effects.span[Task](networkId, host))
+      diagnostics.effects.span[Task](networkId, host)
 
   private val rpClearConnConf = ClearConnectionsConf(
     numOfConnectionsPinged = 10
@@ -383,6 +365,7 @@ class NodeRuntime private[node] (
 
     // 2. set up configurations
     defaultTimeout = conf.server.defaultTimeout
+    mainTraceId    = Span.next
 
     // 3. create instances of typeclasses
     initPeer      = if (conf.server.standalone) None else Some(conf.server.bootstrap)
@@ -391,7 +374,7 @@ class NodeRuntime private[node] (
     peerNodeAsk   = effects.peerNodeAsk(rpConfState)
     rpConnections <- effects.rpConnections
     metrics       = diagnostics.effects.metrics[Task]
-    span          <- setupSpan(conf.kamon.zipkin, conf.server.networkId, local.endpoint.host)
+    span          = setupSpan(conf.kamon.zipkin, conf.server.networkId, local.endpoint.host)
     time          = effects.time
     timerTask     = Task.timer
     lab           <- LastApprovedBlock.of[Task]
@@ -481,11 +464,13 @@ class NodeRuntime private[node] (
       implicit val s                = rspaceScheduler
       implicit val m: Metrics[Task] = metrics
       implicit val sp: Span[Task]   = span
+      implicit val traceId: TraceId = mainTraceId
       Runtime
         .createWithEmptyCost[Task](storagePath, storageSize, Seq.empty)
     }
     _ <- {
-      implicit val sp: Span[Task] = span
+      implicit val sp: Span[Task]   = span
+      implicit val traceId: TraceId = mainTraceId
       Runtime
         .injectEmptyRegistryRoot[Task](runtime.space, runtime.replaySpace)
     }
@@ -494,17 +479,18 @@ class NodeRuntime private[node] (
       implicit val s                = rspaceScheduler
       implicit val m: Metrics[Task] = metrics
       implicit val sp: Span[Task]   = span
+      implicit val traceId: TraceId = mainTraceId
       Runtime
         .createWithEmptyCost[Task](
           casperStoragePath,
           storageSize,
           Seq.empty
         )
-
     }
     runtimeManager <- {
       implicit val m: Metrics[Task] = metrics
       implicit val sp: Span[Task]   = span
+      implicit val traceId: TraceId = mainTraceId
       RuntimeManager.fromRuntime[Task](casperRuntime)
     }
     engineCell      <- EngineCell.init[Task]
@@ -537,7 +523,8 @@ class NodeRuntime private[node] (
           raiseIOError,
           runtimeManager,
           requestedBlocks,
-          scheduler
+          scheduler,
+          mainTraceId
         )
     packetHandler = {
       implicit val ev: EngineCell[Task] = engineCell

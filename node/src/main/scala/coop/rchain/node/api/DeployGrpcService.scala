@@ -7,7 +7,8 @@ import cats.effect.concurrent.Semaphore
 import cats.effect.Concurrent
 import cats.mtl.implicits._
 import coop.rchain.blockstorage.BlockStore
-import coop.rchain.casper.engine._, EngineCell._
+import coop.rchain.casper.engine._
+import EngineCell._
 import coop.rchain.casper.SafetyOracle
 import coop.rchain.casper.api._
 import coop.rchain.casper.protocol.{DeployData, _}
@@ -20,6 +21,7 @@ import coop.rchain.models.StacksafeMessage
 import coop.rchain.models.either.implicits._
 import coop.rchain.shared._
 import coop.rchain.metrics.Span
+import coop.rchain.metrics.Span.TraceId
 import monix.eval.Task
 import monix.execution.Scheduler
 import monix.reactive.Observable
@@ -54,10 +56,10 @@ private[api] object DeployGrpcService {
           .map(_.fold(t => List(t.asLeft[A].toGrpcEither), _.map(_.asRight[String].toGrpcEither)))
 
       override def doDeploy(d: DeployData): Task[GrpcEither] =
-        defer(BlockAPI.deploy[F](d))
+        defer(BlockAPI.deploy[F](d, Span.next))
 
       override def getBlock(q: BlockQuery): Task[GrpcEither] =
-        defer(BlockAPI.getBlock[F](q))
+        defer(BlockAPI.getBlock[F](q, Span.next))
 
       override def visualizeDag(q: VisualizeDagQuery): Observable[GrpcEither] = {
         type Effect[A] = StateT[Id, Vector[String], A]
@@ -71,13 +73,14 @@ private[api] object DeployGrpcService {
         Observable
           .fromTask(
             deferList[VisualizeBlocksResponse](
-              Functor[F].map(
+              Functor[F].map {
+                implicit val traceId: TraceId = Span.next
                 BlockAPI.visualizeDag[F, Effect, List[VisualizeBlocksResponse]](
                   depth,
                   (ts, lfb) => GraphzGenerator.dagAsCluster[F, Effect](ts, lfb, config),
                   serialize
                 )
-              )(_.getOrElse(List.empty[VisualizeBlocksResponse]))
+              }(_.getOrElse(List.empty[VisualizeBlocksResponse]))
             )
           )
           .flatMap(Observable.fromIterable)
@@ -89,32 +92,48 @@ private[api] object DeployGrpcService {
       override def getBlocks(request: BlocksQuery): Observable[GrpcEither] =
         Observable
           .fromTask(
-            deferList[LightBlockInfo](
+            deferList[LightBlockInfo] {
+              implicit val traceId: TraceId = Span.next
               Functor[F].map(BlockAPI.getBlocks[F](Some(request.depth)))(
                 _.getOrElse(List.empty[LightBlockInfo])
               )
-            )
+            }
           )
           .flatMap(Observable.fromIterable)
 
       override def listenForDataAtName(request: DataAtNameQuery): Task[GrpcEither] =
-        defer(BlockAPI.getListeningNameDataResponse[F](request.depth, request.name.get))
+        defer {
+          implicit val traceId: Span.TraceId = Span.next
+          BlockAPI.getListeningNameDataResponse[F](request.depth, request.name.get)
+        }
 
       override def listenForContinuationAtName(
           request: ContinuationAtNameQuery
       ): Task[GrpcEither] =
-        defer(BlockAPI.getListeningNameContinuationResponse[F](request.depth, request.names))
+        defer {
+          implicit val traceId: Span.TraceId = Span.next
+          BlockAPI.getListeningNameContinuationResponse[F](request.depth, request.names)
+        }
 
       override def showMainChain(request: BlocksQuery): Observable[GrpcEither] =
         Observable
-          .fromTask(deferList(BlockAPI.showMainChain[F](request.depth)))
+          .fromTask {
+            implicit val traceId: TraceId = Span.next
+            deferList(BlockAPI.showMainChain[F](request.depth))
+          }
           .flatMap(Observable.fromIterable)
 
       override def findBlockWithDeploy(request: FindDeployInBlockQuery): Task[GrpcEither] =
-        defer(BlockAPI.findBlockWithDeploy[F](request.user, request.timestamp))
+        defer {
+          implicit val traceId: TraceId = Span.next
+          BlockAPI.findBlockWithDeploy[F](request.user, request.timestamp)
+        }
 
       override def findDeploy(request: FindDeployQuery): Task[GrpcEither] =
-        defer(BlockAPI.findDeploy[F](request.deployId.toByteArray))
+        defer {
+          implicit val traceId: TraceId = Span.next
+          BlockAPI.findDeploy[F](request.deployId.toByteArray)
+        }
 
       override def previewPrivateNames(
           request: PrivateNamePreviewQuery
@@ -122,6 +141,9 @@ private[api] object DeployGrpcService {
         defer(BlockAPI.previewPrivateNames[F](request.user, request.timestamp, request.nameQty))
 
       override def lastFinalizedBlock(request: LastFinalizedBlockQuery): Task[GrpcEither] =
-        defer(BlockAPI.lastFinalizedBlock[F])
+        defer {
+          implicit val traceId: TraceId = Span.next
+          BlockAPI.lastFinalizedBlock[F]()
+        }
     }
 }

@@ -40,6 +40,6 @@ private[api] object ProposeGrpcService {
           .map(_.fold(_.asLeft[A].toGrpcEither, _.toGrpcEither))
 
       override def propose(query: PrintUnmatchedSendsQuery): Task[GrpcEither] =
-        defer(BlockAPI.createBlock[F](blockApiLock, query.printUnmatchedSends))
+        defer(BlockAPI.createBlock[F](blockApiLock, Span.next, query.printUnmatchedSends))
     }
 }

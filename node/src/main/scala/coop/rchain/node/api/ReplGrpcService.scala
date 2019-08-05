@@ -35,6 +35,8 @@ import coop.rchain.shared._
 import coop.rchain.models.Par
 import coop.rchain.rholang.interpreter._
 import Interpreter._
+import coop.rchain.metrics.Span
+import coop.rchain.metrics.Span.TraceId
 import storage.StoragePrinter
 
 private[api] class ReplGrpcService(runtime: Runtime[Task], worker: Scheduler)
@@ -54,7 +56,8 @@ private[api] class ReplGrpcService(runtime: Runtime[Task], worker: Scheduler)
           for {
             _ <- Task.now(printNormalizedTerm(term))
             res <- {
-              implicit val c = runtime.cost
+              implicit val c                = runtime.cost
+              implicit val traceId: TraceId = Span.next
               Interpreter[Task].evaluate(runtime, source, NormalizerEnv.Empty)
             }
             prettyStorage <- if (printUnmatchedSendsOnly)
