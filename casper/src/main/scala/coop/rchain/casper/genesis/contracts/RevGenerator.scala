@@ -49,7 +49,7 @@ final case class RevGenerator(
       .buildNormalizedTerm(code, normalizerEnv)
       .value()
 
-  private def vaultInitCode() =
+  private def vaultInitCode(): String =
     if (userVaults.isEmpty) {
       "vaultMapStore!({})"
     } else {
@@ -63,10 +63,10 @@ final case class RevGenerator(
 
   private def vaultsMap(): String =
     s"""
-       |{
-       |${concatenate(mapEntry, separator = ",\n")}
-       |}
-       |""".stripMargin
+       #{
+       #${concatenate(mapEntry, separator = ",\n")}
+       #}
+       #""".stripMargin('#')
 
   private def mapEntry(userVault: Vault, index: Int): String =
     s"""  "${userVault.revAddress.toBase58}" : *x$index"""
