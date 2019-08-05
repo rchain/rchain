@@ -5,10 +5,9 @@ import cats.implicits._
 import cats.mtl.ApplicativeLocal
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.metrics.Metrics.Source
-import coop.rchain.node.diagnostics.Trace.TraceId
+import coop.rchain.metrics.Span.TraceId
 import kamon.Kamon
 import kamon.trace.{Span => KSpan}
-import monix.execution.atomic.AtomicLong
 
 import scala.collection.concurrent.TrieMap
 
@@ -24,6 +23,7 @@ trait Trace
 object Trace {
   private[diagnostics] final case class SourceTrace(
       s: Source,
+      id: TraceId,
       networkId: String,
       host: String,
       parent: Option[SourceTrace] = None
@@ -35,6 +35,7 @@ object Trace {
             .buildSpan(s)
             .withTag("network-id", networkId)
             .withTag("host", host)
+            .withTag("trace-id", id.toString)
             .asChildOf(st.ks)
             .start()
         case None =>
@@ -42,6 +43,7 @@ object Trace {
             .buildSpan(s)
             .withTag("network-id", networkId)
             .withTag("host", host)
+            .withTag("trace-id", id.toString)
             .start()
       }
     }
@@ -50,16 +52,11 @@ object Trace {
     def end[F[_]: Sync](): F[Unit]              = KamonTracer.end(ks)
   }
 
-  def source(s: Source, networkId: String, host: String): Trace = SourceTrace(s, networkId, host)
-
-  def next: TraceId   = TraceId(counter.incrementAndGet())
-  private val counter = AtomicLong(0L)
-
-  final case class TraceId(id: Long) extends AnyVal
+  def source(s: Source, networkId: String, host: String): Trace =
+    SourceTrace(s, Span.next, networkId, host)
 }
 
 package object effects {
-
   type AskTrace[F[_]] = ApplicativeLocal[F, TraceId]
   object AskTrace {
     def apply[F[_]](implicit ev: AskTrace[F]): AskTrace[F] = ev
@@ -71,34 +68,37 @@ package object effects {
     * if a trace is already available it will be used in `mark`
     * otherwise a `DefaultTrace` will be transformed into a KamonTrace and will be treated as current
     */
-  def span[F[_]: Sync: AskTrace](networkId: String, host: String): Span[F] =
+  def span[F[_]: Sync](networkId: String, host: String): Span[F] =
     new Span[F] {
-      private[this] val A = AskTrace[F]
-      import A._
       import Trace._
 
       private val spans: TrieMap[TraceId, SourceTrace] = TrieMap.empty
 
-      override def mark(name: String): F[Unit] =
-        ask.flatMap { spans.get(_).map(_.mark(name)).getOrElse(Sync[F].unit) }
+      override def mark(name: String)(implicit traceId: TraceId): F[Unit] =
+        Sync[F].delay(spans.get(traceId)).flatMap(_.map(_.mark(name)).getOrElse(Sync[F].unit))
 
-      override def trace[A](source: Source)(block: F[A]): F[A] =
+      override def trace[A](source: Source, parentId: TraceId)(block: TraceId => F[A]): F[A] =
         for {
-          r <- Sync[F].bracket(ask.map { parentTraceId =>
-                val parent  = spans.get(parentTraceId)
-                val traceId = Trace.next
+          r <- Sync[F].bracket(Sync[F].delay {
+                val maybeParentTrace = spans.get(parentId)
+                val traceId          = Span.next
                 spans
-                  .putIfAbsent(traceId, SourceTrace(source, networkId, host, parent))
-                  .map(_ => traceId)
+                  .putIfAbsent(
+                    traceId,
+                    SourceTrace(source, traceId, networkId, host, maybeParentTrace)
+                  )
+                  .map(_.id)
                   .getOrElse(traceId)
-              })(scope(_)(block)) { traceId =>
+              }) { traceId =>
+                block(traceId)
+              } { traceId =>
                 Sync[F]
                   .delay(spans.remove(traceId))
                   .flatMap(_.map(_.end()).getOrElse(Sync[F].unit))
               }
         } yield r
 
-      override def withMarks[A](label: String)(block: F[A]): F[A] =
+      override def withMarks[A](label: String)(block: F[A])(implicit traceId: TraceId): F[A] =
         Sync[F].bracketCase(
           mark(s"started-$label")
         )(_ => block) {
