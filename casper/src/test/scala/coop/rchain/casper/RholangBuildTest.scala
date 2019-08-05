@@ -29,7 +29,7 @@ class RholangBuildTest extends FlatSpec with Matchers {
         val code =
           """
           |new testRet, double, rl(`rho:registry:lookup`), ListOpsCh, getBlockData(`rho:block:data`),
-          |    timeRtn, stdout(`rho:io:stdout`), doubleRet
+          |    timeRtn, doubleRet
           |in {
           |  contract double(@x, ret) = { ret!(2 * x) } |
           |  rl!(`rho:lang:listOps`, *ListOpsCh) |
