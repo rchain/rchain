@@ -159,7 +159,6 @@ class BlockQueryResponseAPITest
         deployId = SignDeployment
           .sign(PrivateKey(sk.bytes), randomDeploys.head.deploy.get)
           .sig
-          .toByteArray
         blockQueryResponse <- BlockAPI.findDeploy[Task](deployId)(
                                Sync[Task],
                                casperRef,
@@ -187,7 +186,7 @@ class BlockQueryResponseAPITest
       for {
         effects                                 <- emptyEffects(blockStore, blockDagStorage)
         (logEff, casperRef, cliqueOracleEffect) = effects
-        deployId                                = "asdfQwertyUiopxyzcbv".getBytes
+        deployId                                = ByteString.copyFromUtf8("asdfQwertyUiopxyzcbv")
         blockQueryResponse <- BlockAPI.findDeploy[Task](deployId)(
                                Sync[Task],
                                casperRef,

@@ -7,6 +7,7 @@ import cats.implicits._
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.{BlockDagRepresentation, BlockStore}
 import coop.rchain.casper.engine._, EngineCell._
+import coop.rchain.blockstorage.BlockDagStorage.DeployId
 import coop.rchain.casper.DeployError._
 import coop.rchain.casper.MultiParentCasper.ignoreDoppelgangerCheck
 import coop.rchain.casper._
@@ -357,12 +358,10 @@ object BlockAPI {
       _.withCasper[ApiErr[LightBlockQueryResponse]](
         implicit casper =>
           for {
-            dag               <- casper.blockDag
-            allBlocksTopoSort <- dag.topoSort(0L)
-            maybeBlock <- allBlocksTopoSort.flatten.reverse.toStream
-                           .traverse(ProtoUtil.getBlock[F])
-                           .map(_.find(ProtoUtil.containsDeploy(_, ByteString.copyFrom(id))))
-            response <- maybeBlock.traverse(getLightBlockInfo[F])
+            dag            <- casper.blockDag
+            maybeBlockHash <- dag.lookupByDeployId(id)
+            maybeBlock     <- maybeBlockHash.traverse(ProtoUtil.getBlock[F])
+            response       <- maybeBlock.traverse(getLightBlockInfo[F])
           } yield response.fold(
             s"Couldn't find block containing deploy with id: ${PrettyPrinter
               .buildStringNoLimit(id)}".asLeft[LightBlockQueryResponse]
