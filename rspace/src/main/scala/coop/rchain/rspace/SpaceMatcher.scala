@@ -4,6 +4,7 @@ import cats.effect.Sync
 import cats.implicits._
 import coop.rchain.catscontrib._
 import coop.rchain.metrics.Metrics.Source
+import coop.rchain.metrics.Span.TraceId
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.rspace.internal._
 
@@ -41,7 +42,8 @@ private[rspace] trait SpaceMatcher[F[_], C, P, A, K] extends ISpace[F, C, P, A, 
       pattern: P,
       prefix: Seq[(Datum[A], Int)]
   )(
-      implicit m: Match[F, P, A]
+      implicit m: Match[F, P, A],
+      traceId: TraceId
   ): F[Option[MatchingDataCandidate]] =
     for {
       _ <- spanF.mark(findSpanLabel)
@@ -75,7 +77,7 @@ private[rspace] trait SpaceMatcher[F[_], C, P, A, K] extends ISpace[F, C, P, A, 
       channelPatternPairs: Seq[(C, P)],
       channelToIndexedData: Map[C, Seq[(Datum[A], Int)]],
       acc: Seq[Option[DataCandidate[C, A]]]
-  )(implicit m: Match[F, P, A]): F[Seq[Option[DataCandidate[C, A]]]] =
+  )(implicit m: Match[F, P, A], traceId: TraceId): F[Seq[Option[DataCandidate[C, A]]]] =
     for {
       _ <- spanF.mark(extractSpanLabel)
       res <- channelPatternPairs match {
@@ -112,7 +114,7 @@ private[rspace] trait SpaceMatcher[F[_], C, P, A, K] extends ISpace[F, C, P, A, 
       channels: Seq[C],
       matchCandidates: Seq[(WaitingContinuation[P, K], Int)],
       channelToIndexedData: Map[C, Seq[(Datum[A], Int)]]
-  )(implicit m: Match[F, P, A]): F[Option[ProduceCandidate[C, P, A, K]]] =
+  )(implicit m: Match[F, P, A], traceId: TraceId): F[Option[ProduceCandidate[C, P, A, K]]] =
     for {
       _ <- spanF.mark(extractFirstSpanLabel)
       res <- matchCandidates match {

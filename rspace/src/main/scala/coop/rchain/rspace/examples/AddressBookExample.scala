@@ -5,6 +5,7 @@ import java.nio.file.{Files, Path}
 
 import cats.{Applicative, Id}
 import cats.effect.{Concurrent, ContextShift}
+import coop.rchain.metrics.Span.TraceId
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.rspace.ISpace.IdISpace
 import coop.rchain.rspace.history.Branch
@@ -164,14 +165,15 @@ object AddressBookExample {
       */
     implicit def matchPatternEntry[F[_]](
         implicit apF: Applicative[F]
-    ): Match[F, Pattern, Entry] =
-      (p: Pattern, a: Entry) =>
+    ): Match[F, Pattern, Entry] = new Match[F, Pattern, Entry] {
+      override def get(p: Pattern, a: Entry)(implicit traceId: TraceId): F[Option[Entry]] =
         p match {
           case NameMatch(last) if a.name.last == last        => apF.pure(Some(a))
           case CityMatch(city) if a.address.city == city     => apF.pure(Some(a))
           case StateMatch(state) if a.address.state == state => apF.pure(Some(a))
           case _                                             => apF.pure(None)
         }
+    }
   }
 
   import implicits._
@@ -203,6 +205,7 @@ object AddressBookExample {
     implicit val log: Log[Id]          = Log.log
     implicit val metricsF: Metrics[Id] = new Metrics.MetricsNOP[Id]()
     implicit val spanF: Span[Id]       = NoopSpan[Id]()
+    implicit val traceId: TraceId      = Span.empty
 
     // Here we define a temporary place to put the store's files
     val storePath: Path = Files.createTempDirectory("rspace-address-book-example-")
@@ -244,6 +247,7 @@ object AddressBookExample {
     implicit val log: Log[Id]          = Log.log
     implicit val metricsF: Metrics[Id] = new Metrics.MetricsNOP[Id]()
     implicit val spanF: Span[Id]       = NoopSpan[Id]()
+    implicit val traceId: TraceId      = Span.empty
 
     // Here we define a temporary place to put the store's files
     val storePath: Path = Files.createTempDirectory("rspace-address-book-example-")
@@ -290,6 +294,7 @@ object AddressBookExample {
 
   def rollbackExample(): Unit = withSpace { space =>
     println("Rollback example: Let's consume...")
+    implicit val traceId: TraceId = Span.empty
 
     val cres =
       space

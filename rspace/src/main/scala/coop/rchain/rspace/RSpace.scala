@@ -7,6 +7,7 @@ import cats.implicits._
 import com.typesafe.scalalogging.Logger
 import coop.rchain.catscontrib._
 import coop.rchain.metrics.Metrics.Source
+import coop.rchain.metrics.Span.TraceId
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.rspace.history.{Branch, HistoryRepository}
 import coop.rchain.rspace.internal._
@@ -93,7 +94,8 @@ class RSpace[F[_], C, P, A, K] private[rspace] (
       sequenceNumber: Int,
       peeks: SortedSet[Int] = SortedSet.empty
   )(
-      implicit m: Match[F, P, A]
+      implicit m: Match[F, P, A],
+      traceId: TraceId
   ): F[MaybeActionResult] = {
 
     def wrapResult(
@@ -218,7 +220,7 @@ class RSpace[F[_], C, P, A, K] private[rspace] (
       groupedChannels: Seq[CandidateChannels],
       batChannel: C,
       data: Datum[A]
-  )(implicit m: Match[F, P, A]): F[MaybeProduceCandidate] = {
+  )(implicit m: Match[F, P, A], traceId: TraceId): F[MaybeProduceCandidate] = {
 
     def go(
         acc: Seq[CandidateChannels]
@@ -361,7 +363,8 @@ class RSpace[F[_], C, P, A, K] private[rspace] (
     } yield None
 
   override def produce(channel: C, data: A, persist: Boolean, sequenceNumber: Int)(
-      implicit m: Match[F, P, A]
+      implicit m: Match[F, P, A],
+      traceId: TraceId
   ): F[MaybeActionResult] =
     contextShift.evalOn(scheduler) {
       for {
@@ -412,7 +415,7 @@ class RSpace[F[_], C, P, A, K] private[rspace] (
       } yield result
     }
 
-  override def createCheckpoint(): F[Checkpoint] =
+  override def createCheckpoint()(implicit traceId: TraceId): F[Checkpoint] =
     for {
       changes     <- storeAtom.get().changes()
       nextHistory <- historyRepositoryAtom.get().checkpoint(changes.toList)

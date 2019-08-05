@@ -1,8 +1,7 @@
 package coop.rchain.rspace.pure
 
-import cats.Id
 import cats.effect.Sync
-import coop.rchain.rspace.ISpace.IdISpace
+import coop.rchain.metrics.Span.TraceId
 import coop.rchain.rspace._
 
 import scala.collection.SortedSet
@@ -15,20 +14,22 @@ trait PureRSpace[F[_], C, P, A, K] {
       persist: Boolean,
       sequenceNumber: Int = 0,
       peek: Boolean = false
-  ): F[Option[(ContResult[C, P, K], Seq[Result[A]])]]
+  )(implicit traceId: TraceId): F[Option[(ContResult[C, P, K], Seq[Result[A]])]]
 
-  def install(channels: Seq[C], patterns: Seq[P], continuation: K): F[Option[(K, Seq[A])]]
+  def install(channels: Seq[C], patterns: Seq[P], continuation: K)(
+      implicit traceId: TraceId
+  ): F[Option[(K, Seq[A])]]
 
   def produce(
       channel: C,
       data: A,
       persist: Boolean,
       sequenceNumber: Int = 0
-  ): F[Option[(ContResult[C, P, K], Seq[Result[A]])]]
+  )(implicit traceId: TraceId): F[Option[(ContResult[C, P, K], Seq[Result[A]])]]
 
-  def createCheckpoint(): F[Checkpoint]
+  def createCheckpoint()(implicit traceId: TraceId): F[Checkpoint]
 
-  def reset(hash: Blake2b256Hash): F[Unit]
+  def reset(hash: Blake2b256Hash)(implicit traceId: TraceId): F[Unit]
 
   def close(): F[Unit]
 }
@@ -48,12 +49,14 @@ object PureRSpace {
             persist: Boolean,
             sequenceNumber: Int,
             peek: Boolean = false
-        ): F[Option[(ContResult[C, P, K], Seq[Result[A]])]] =
+        )(implicit traceId: TraceId): F[Option[(ContResult[C, P, K], Seq[Result[A]])]] =
           space.consume(channels, patterns, continuation, persist, sequenceNumber, if (peek) {
             SortedSet((0 to channels.size - 1): _*)
           } else SortedSet.empty)
 
-        def install(channels: Seq[C], patterns: Seq[P], continuation: K): F[Option[(K, Seq[A])]] =
+        def install(channels: Seq[C], patterns: Seq[P], continuation: K)(
+            implicit traceId: TraceId
+        ): F[Option[(K, Seq[A])]] =
           space.install(channels, patterns, continuation)
 
         def produce(
@@ -61,12 +64,14 @@ object PureRSpace {
             data: A,
             persist: Boolean,
             sequenceNumber: Int
-        ): F[Option[(ContResult[C, P, K], Seq[Result[A]])]] =
+        )(implicit traceId: TraceId): F[Option[(ContResult[C, P, K], Seq[Result[A]])]] =
           space.produce(channel, data, persist, sequenceNumber)
 
-        def createCheckpoint(): F[Checkpoint] = space.createCheckpoint()
+        def createCheckpoint()(implicit traceId: TraceId): F[Checkpoint] =
+          space.createCheckpoint()
 
-        def reset(hash: Blake2b256Hash): F[Unit] = space.reset(hash)
+        def reset(hash: Blake2b256Hash)(implicit traceId: TraceId): F[Unit] =
+          space.reset(hash)
 
         def close(): F[Unit] = space.close()
       }

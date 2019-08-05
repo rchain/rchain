@@ -1,6 +1,7 @@
 package coop.rchain.rspace
 
 import cats.Id
+import coop.rchain.metrics.Span.TraceId
 import coop.rchain.rspace.internal._
 
 import scala.collection.SortedSet
@@ -55,11 +56,13 @@ trait ISpace[F[_], C, P, A, K] {
       sequenceNumber: Int = 0,
       peeks: SortedSet[Int] = SortedSet.empty
   )(
-      implicit m: Match[F, P, A]
+      implicit m: Match[F, P, A],
+      traceId: TraceId
   ): F[Option[(ContResult[C, P, K], Seq[Result[A]])]]
 
   def install(channels: Seq[C], patterns: Seq[P], continuation: K)(
-      implicit m: Match[F, P, A]
+      implicit m: Match[F, P, A],
+      traceId: TraceId
   ): F[Option[(K, Seq[A])]]
 
   /** Searches the store for a continuation that has patterns that match the given data at the
@@ -86,20 +89,21 @@ trait ISpace[F[_], C, P, A, K] {
     * @param persist Whether or not to attempt to persist the data
     */
   def produce(channel: C, data: A, persist: Boolean, sequenceNumber: Int = 0)(
-      implicit m: Match[F, P, A]
+      implicit m: Match[F, P, A],
+      traceId: TraceId
   ): F[Option[(ContResult[C, P, K], Seq[Result[A]])]]
 
   /** Creates a checkpoint.
     *
     * @return A [[Checkpoint]]
     */
-  def createCheckpoint(): F[Checkpoint]
+  def createCheckpoint()(implicit traceId: TraceId): F[Checkpoint]
 
   /** Resets the store to the given root.
     *
     * @param root A BLAKE2b256 Hash representing the checkpoint
     */
-  def reset(root: Blake2b256Hash): F[Unit]
+  def reset(root: Blake2b256Hash)(implicit traceId: TraceId): F[Unit]
 
   def getData(channel: C): F[Seq[Datum[A]]]
 
@@ -107,7 +111,7 @@ trait ISpace[F[_], C, P, A, K] {
 
   /** Clears the store.  Does not affect the history trie.
     */
-  def clear(): F[Unit]
+  def clear()(implicit traceId: TraceId): F[Unit]
 
   /** Closes the ISpace freeing all underlying resources.
     */
@@ -121,12 +125,14 @@ trait ISpace[F[_], C, P, A, K] {
     This operation is significantly faster than {@link #createCheckpoint()} because the computationally
     expensive operation of creating the history trie is avoided.
     */
-  def createSoftCheckpoint(): F[SoftCheckpoint[C, P, A, K]]
+  def createSoftCheckpoint()(implicit traceId: TraceId): F[SoftCheckpoint[C, P, A, K]]
 
   /**
     Reverts the ISpace to the state checkpointed using {@link #createSoftCheckpoint()}
     */
-  def revertToSoftCheckpoint(checkpoint: SoftCheckpoint[C, P, A, K]): F[Unit]
+  def revertToSoftCheckpoint(checkpoint: SoftCheckpoint[C, P, A, K])(
+      implicit traceId: TraceId
+  ): F[Unit]
 }
 
 //TODO lookinto to removing  ISpace object.

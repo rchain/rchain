@@ -3,6 +3,7 @@ package coop.rchain.rspace.examples
 import java.nio.charset.StandardCharsets
 
 import cats.effect.Sync
+import coop.rchain.metrics.Span.TraceId
 import coop.rchain.shared.Language.ignore
 import coop.rchain.rspace.{Match, Serialize}
 import scodec.bits.ByteVector
@@ -51,7 +52,10 @@ object StringExamples {
   object implicits {
 
     implicit def stringMatch[F[_]: Sync]: Match[F, Pattern, String] =
-      (p: Pattern, a: String) => Sync[F].pure(Some(a).filter(p.isMatch))
+      new Match[F, Pattern, String] {
+        override def get(p: Pattern, a: String)(implicit traceId: TraceId): F[Option[String]] =
+          Sync[F].pure(Some(a).filter(p.isMatch))
+      }
 
     implicit object stringSerialize extends Serialize[String] {
 

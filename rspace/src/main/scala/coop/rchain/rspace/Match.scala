@@ -1,5 +1,7 @@
 package coop.rchain.rspace
 
+import coop.rchain.metrics.Span.TraceId
+
 /**
   * Type class for matching patterns with data.
   *
@@ -8,5 +10,5 @@ package coop.rchain.rspace
   */
 trait Match[F[_], P, A] {
 
-  def get(p: P, a: A): F[Option[A]]
+  def get(p: P, a: A)(implicit traceId: TraceId): F[Option[A]]
 }

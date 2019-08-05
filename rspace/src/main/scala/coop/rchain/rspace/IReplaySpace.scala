@@ -2,6 +2,7 @@ package coop.rchain.rspace
 
 import cats.effect.Sync
 import cats.implicits._
+import coop.rchain.metrics.Span.TraceId
 import coop.rchain.rspace.internal._
 import coop.rchain.rspace.trace._
 import coop.rchain.shared.Log
@@ -20,7 +21,10 @@ trait IReplaySpace[F[_], C, P, A, K] extends ISpace[F, C, P, A, K] {
     *  @param startRoot A [Blake2b256Hash] representing the intial state
     *  @param log A [Log] with permitted operations
     */
-  def rigAndReset(startRoot: Blake2b256Hash, log: trace.Log)(implicit syncF: Sync[F]): F[Unit] =
+  def rigAndReset(
+      startRoot: Blake2b256Hash,
+      log: trace.Log
+  )(implicit syncF: Sync[F], traceId: TraceId): F[Unit] =
     rig(log) >> reset(startRoot)
 
   def rig(log: trace.Log)(implicit syncF: Sync[F]): F[Unit] =
