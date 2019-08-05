@@ -25,6 +25,9 @@ match (
       getDeployerId(`rho:test:deployerId:get`),
       setup,
       testFindOrCreateGenesisVault,
+      testDepositToGenesisCreatedVault,
+      testBalanceInGenesisCreatedVault,
+      testTransferInGenesisCreatedVault,
       testCreateVaultFail,
       testCreateVault,
       testTransfer,
@@ -52,6 +55,9 @@ match (
             ("Fail the transfer if there are insufficient funds", *testInsufficeintFunds),
             ("Fail the transfer if the destination addresss is not a valid RevAddress", *testInvalidRevAddress),
             ("Transfer from unforgeable name bound vault", *testUnfBoundVault),
+            ("Transfer to genesis-created vault", *testDepositToGenesisCreatedVault),
+            ("Check balance of genesis-created vault", *testBalanceInGenesisCreatedVault),
+            ("Transfer from genesis-created vault", *testTransferInGenesisCreatedVault),
           ])
       } |
 
@@ -187,6 +193,54 @@ match (
             for (@(true, vault) <- vaultCh; unfAuthKey <- unfAuthKeyCh) {
               @vault!("transfer", genesisRevAddress, 0, *unfAuthKey, *transferCh) |
               rhoSpec!("assert", ((true, Nil), "== <-", *transferCh), "transfer succeeded", *ackCh)
+            }
+          }
+        }
+      } |
+
+      contract testDepositToGenesisCreatedVault(rhoSpec, RevVault, ackCh) = {
+        new
+          deployerId(`rho:rchain:deployerId`), RevAddress(`rho:rev:address`),
+          balanceCh, aliceVaultCh, addr, ret, resOk
+        in {
+          withVaultAndIdentityOf!(alicePubKey, *aliceVaultCh) |
+          RevAddress!("fromDeployerId", *deployerId, *addr) |
+          for (aliceVault, @aliceVaultKey <- aliceVaultCh; @deployerRevAddress <- addr) {
+            aliceVault!("transfer", deployerRevAddress, 100, aliceVaultKey, *ret) |
+            // The transfer will not succeed unless the vault has been created already
+            rhoSpec!("assert", ((true, Nil), "== <-", *ret), "transfer succeeded", *resOk) |
+            assertBalances!(*resOk, [(*aliceVault, 900)], *rhoSpec, *ackCh)
+          }
+        }
+      } |
+
+      contract testBalanceInGenesisCreatedVault(rhoSpec, RevVault, ackCh) = {
+        new deployerId(`rho:rchain:deployerId`), RevAddress(`rho:rev:address`), vaultCh, addr, now in {
+          RevAddress!("fromDeployerId", *deployerId, *addr) |
+          for (@deployerRevAddress <- addr) {
+            RevVault!("findOrCreate", deployerRevAddress, *vaultCh) |
+            for (@(true, vault) <- vaultCh) {
+              now!(Nil) |
+              assertBalances!(*now, [(vault, 9000100)], *rhoSpec, *ackCh)
+            }
+          }
+        }
+      } |
+
+      contract testTransferInGenesisCreatedVault(rhoSpec, RevVault, ackCh) = {
+        new 
+          deployerId(`rho:rchain:deployerId`), RevAddress(`rho:rev:address`),
+          aliceVaultCh, addr, vaultCh, authKeyCh, ret, transferOk
+        in {
+          withVaultAndIdentityOf!(alicePubKey, *aliceVaultCh) |
+          RevAddress!("fromDeployerId", *deployerId, *addr) |
+          for (aliceVault, @aliceVaultKey <- aliceVaultCh; @deployerRevAddress <- addr) {
+            RevVault!("findOrCreate", deployerRevAddress, *vaultCh) |
+            RevVault!("deployerAuthKey", *deployerId, *authKeyCh) |
+            for (@(true, vault) <- vaultCh; authKey <- authKeyCh) {
+              @vault!("transfer", aliceRevAddress, 100, *authKey, *ret) |
+              rhoSpec!("assert", ((true, Nil), "== <-", *ret), "transfer succeeded", *transferOk) |
+              assertBalances!(*transferOk, [(vault, 9000000), (*aliceVault, 1000)], *rhoSpec, *ackCh)
             }
           }
         }
