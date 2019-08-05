@@ -15,7 +15,8 @@ import coop.rchain.catscontrib.TaskContrib.TaskOps
 import coop.rchain.crypto.signatures.Secp256k1
 import coop.rchain.crypto.{PrivateKey, PublicKey}
 import coop.rchain.metrics
-import coop.rchain.metrics.{Metrics, NoopSpan}
+import coop.rchain.metrics.Span.TraceId
+import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.rholang.interpreter.Runtime
 import coop.rchain.rholang.interpreter.util.RevAddress
 import coop.rchain.shared.Log
@@ -24,6 +25,8 @@ import monix.eval.Task
 import scala.collection.mutable
 
 object GenesisBuilder {
+
+  implicit val traceId: TraceId = Span.next
 
   def createBonds(validators: Iterable[PublicKey]): Map[PublicKey, Long] =
     validators.zipWithIndex.map { case (v, i) => v -> (2L * i.toLong + 1L) }.toMap

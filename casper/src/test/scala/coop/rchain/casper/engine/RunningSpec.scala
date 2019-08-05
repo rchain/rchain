@@ -9,9 +9,10 @@ import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.comm.protocol.routing.Packet
 import coop.rchain.comm.rp.ProtocolHelper._
 import coop.rchain.comm.transport
-import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.hash.Blake2b256
 import coop.rchain.crypto.signatures.Secp256k1
+import coop.rchain.metrics.Span
+import coop.rchain.metrics.Span.TraceId
 import monix.eval.Task
 import org.scalatest.WordSpec
 
@@ -37,7 +38,8 @@ class RunningSpec extends WordSpec {
       )
     )
 
-    implicit val casper = NoOpsCasperEffect[Task]().unsafeRunSync
+    implicit val casper           = NoOpsCasperEffect[Task]().unsafeRunSync
+    implicit val traceId: TraceId = Span.empty
 
     val engine = new Running[Task](casper, approvedBlock, Task.unit)
 
@@ -46,7 +48,7 @@ class RunningSpec extends WordSpec {
     "respond to BlockMessage messages " in {
       val blockMessage = BlockMessage(ByteString.copyFrom("Test BlockMessage", "UTF-8"))
       val test: Task[Unit] = for {
-        _ <- engine.handle(local, blockMessage)
+        _ <- engine.handle(local, blockMessage, traceId)
         _ = assert(casper.store.contains(blockMessage.blockHash))
       } yield ()
 
@@ -58,7 +60,7 @@ class RunningSpec extends WordSpec {
       val blockRequest = BlockRequest(genesis.blockHash)
       val test = for {
         _     <- blockStore.put(genesis.blockHash, genesis)
-        _     <- engine.handle(local, blockRequest)
+        _     <- engine.handle(local, blockRequest, traceId)
         head  = transportLayer.requests.head
         block = packet(local, networkId, transport.BlockMessage, genesis.toByteString)
         _     = assert(head.peer == local && head.msg == block)
@@ -72,7 +74,7 @@ class RunningSpec extends WordSpec {
       val approvedBlockRequest = ApprovedBlockRequest("test")
 
       val test: Task[Unit] = for {
-        _    <- engine.handle(local, approvedBlockRequest)
+        _    <- engine.handle(local, approvedBlockRequest, traceId)
         head = transportLayer.requests.head
         _    = assert(head.peer == local)
         _ = assert(
@@ -89,7 +91,7 @@ class RunningSpec extends WordSpec {
       val request = ForkChoiceTipRequest()
       val test: Task[Unit] = for {
         tip  <- MultiParentCasper.forkChoiceTip[Task](casper)
-        _    <- engine.handle(local, request)
+        _    <- engine.handle(local, request, traceId)
         head = transportLayer.requests.head
         _    = assert(head.peer == local)
         _ = assert(

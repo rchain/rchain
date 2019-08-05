@@ -10,6 +10,7 @@ import coop.rchain.blockstorage.{BlockDagFileStorage, BlockDagStorage, BlockStor
 import coop.rchain.casper.helper.BlockDagStorageTestFixture
 import coop.rchain.casper.helper.HashSetCasperTestNode.makeBlockDagFileStorageConfig
 import coop.rchain.metrics
+import coop.rchain.metrics.Span.TraceId
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.rholang.Resources.{mkRuntimeAt, mkTempDir}
 import coop.rchain.shared.Log
@@ -17,6 +18,8 @@ import monix.eval.Task
 import monix.execution.Scheduler
 
 object Resources {
+
+  implicit val traceId: TraceId = Span.empty
 
   def mkRuntimeManager(
       prefix: String,

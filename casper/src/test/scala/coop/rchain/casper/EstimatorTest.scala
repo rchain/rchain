@@ -9,6 +9,7 @@ import coop.rchain.casper.helper.{BlockDagStorageFixture, BlockGenerator}
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.Validator.Validator
 import com.google.protobuf.ByteString
+import coop.rchain.metrics.Span.TraceId
 import coop.rchain.shared.Log
 import monix.eval.Task
 import org.scalatest.{FlatSpec, Matchers}
@@ -80,7 +81,8 @@ class EstimatorTest extends FlatSpec with Matchers with BlockGenerator with Bloc
         forkchoice <- Estimator.tips[Task](
                        dag,
                        genesis,
-                       Map.empty[Validator, BlockHash]
+                       Map.empty[Validator, BlockHash],
+                       traceId
                      )
       } yield forkchoice.head should be(genesis.blockHash)
   }
@@ -152,7 +154,8 @@ class EstimatorTest extends FlatSpec with Matchers with BlockGenerator with Bloc
         forkchoice <- Estimator.tips[Task](
                        dag,
                        genesis,
-                       latestBlocks
+                       latestBlocks,
+                       traceId
                      )
         _      = forkchoice.head should be(b6.blockHash)
         result = forkchoice(1) should be(b8.blockHash)
@@ -229,7 +232,8 @@ class EstimatorTest extends FlatSpec with Matchers with BlockGenerator with Bloc
         forkchoice <- Estimator.tips[Task](
                        dag,
                        genesis,
-                       latestBlocks
+                       latestBlocks,
+                       traceId
                      )
         _      = forkchoice.head should be(b8.blockHash)
         result = forkchoice(1) should be(b7.blockHash)

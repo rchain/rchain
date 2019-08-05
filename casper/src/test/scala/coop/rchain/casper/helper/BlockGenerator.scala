@@ -12,6 +12,7 @@ import coop.rchain.casper.util.rholang.InterpreterUtil.computeDeploysCheckpoint
 import coop.rchain.casper.util.rholang.RuntimeManager
 import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
 import coop.rchain.crypto.hash.Blake2b256
+import coop.rchain.metrics.Span.TraceId
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.Validator.Validator
@@ -24,7 +25,8 @@ import scala.collection.immutable.HashMap
 import scala.language.higherKinds
 
 object BlockGenerator {
-  implicit val timeEff = new LogicalTime[Task]
+  implicit val timeEff          = new LogicalTime[Task]
+  implicit val traceId: TraceId = Span.next
 
   private[this] val GenerateBlockMetricsSource =
     Metrics.Source(CasperMetricsSource, "generate-block")
@@ -49,21 +51,22 @@ object BlockGenerator {
       genesis: BlockMessage,
       dag: BlockDagRepresentation[F],
       runtimeManager: RuntimeManager[F]
-  ): F[(StateHash, Seq[ProcessedDeploy])] = Span[F].trace(GenerateBlockMetricsSource) {
-    for {
-      parents <- ProtoUtil.unsafeGetParents[F](b)
-      deploys = ProtoUtil.deploys(b).flatMap(_.deploy)
-      now     <- Time[F].currentMillis
-      result <- computeDeploysCheckpoint[F](
-                 parents,
-                 deploys,
-                 dag,
-                 runtimeManager,
-                 BlockData(now, b.body.get.state.get.blockNumber),
-                 Map.empty[BlockHash, Validator]
-               )
-      Right((preStateHash, postStateHash, processedDeploys)) = result
-    } yield (postStateHash, processedDeploys.map(_.toProcessedDeploy))
+  ): F[(StateHash, Seq[ProcessedDeploy])] = Span[F].trace(GenerateBlockMetricsSource, Span.empty) {
+    _ =>
+      for {
+        parents <- ProtoUtil.unsafeGetParents[F](b)
+        deploys = ProtoUtil.deploys(b).flatMap(_.deploy)
+        now     <- Time[F].currentMillis
+        result <- computeDeploysCheckpoint[F](
+                   parents,
+                   deploys,
+                   dag,
+                   runtimeManager,
+                   BlockData(now, b.body.get.state.get.blockNumber),
+                   Map.empty[BlockHash, Validator]
+                 )
+        Right((preStateHash, postStateHash, processedDeploys)) = result
+      } yield (postStateHash, processedDeploys.map(_.toProcessedDeploy))
   }
 
   private def injectPostStateHash[F[_]: Monad: BlockStore: BlockDagStorage](
@@ -82,6 +85,8 @@ object BlockGenerator {
 }
 
 trait BlockGenerator {
+  implicit val traceId: TraceId = Span.empty
+
   def buildBlock[F[_]: Monad: Time](
       parentsHashList: Seq[BlockHash],
       creator: Validator = ByteString.EMPTY,

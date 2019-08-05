@@ -1,11 +1,15 @@
 package coop.rchain.casper.engine
 
-import cats._, cats.data._, cats.implicits._
+import cats._
+import cats.data._
+import cats.implicits._
 import cats.effect._
 import cats.effect.concurrent.Ref
 import coop.rchain.casper._
 import coop.rchain.casper.protocol._
 import coop.rchain.catscontrib.TaskContrib._
+import coop.rchain.metrics.Span
+import coop.rchain.metrics.Span.TraceId
 import coop.rchain.shared.Cell
 import monix.eval.Task
 import org.scalatest.WordSpec
@@ -13,6 +17,8 @@ import org.scalatest.WordSpec
 import scala.concurrent.duration._
 
 class GenesisCeremonyMasterSpec extends WordSpec {
+  implicit val traceId: TraceId = Span.next
+
   "GenesisCeremonyMaster" should {
     "make a transition to Running state after block has been approved" in {
       import monix.execution.Scheduler.Implicits.global
@@ -49,7 +55,8 @@ class GenesisCeremonyMasterSpec extends WordSpec {
           .approveBlockInterval[Task](
             interval,
             shardId,
-            Some(validatorId)
+            Some(validatorId),
+            traceId
           )
           .forkAndForget
           .runToFuture
@@ -58,7 +65,7 @@ class GenesisCeremonyMasterSpec extends WordSpec {
           validatorSk,
           validatorPk
         )
-        _ <- EngineCell[Task].read >>= (_.handle(local, blockApproval))
+        _ <- EngineCell[Task].read >>= (_.handle(local, blockApproval, traceId))
         //wait until casper is defined, with 1 minute timeout (indicating failure)
         possiblyCasper  <- Task.racePair(Task.sleep(1.minute), waitUtilCasperIsDefined)
         _               = assert(possiblyCasper.isRight)
@@ -70,7 +77,7 @@ class GenesisCeremonyMasterSpec extends WordSpec {
         // assert that we really serve last approved block
         lastApprovedBlock <- LastApprovedBlock[Task].get
         _                 = assert(lastApprovedBlock.isDefined)
-        _                 <- EngineCell[Task].read >>= (_.handle(local, blockApproval))
+        _                 <- EngineCell[Task].read >>= (_.handle(local, blockApproval, traceId))
         head              = transportLayer.requests.head
         _ = assert(
           ApprovedBlock

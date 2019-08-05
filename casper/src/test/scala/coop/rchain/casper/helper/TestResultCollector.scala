@@ -4,6 +4,7 @@ import cats.effect.concurrent.Ref
 import cats.implicits._
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.metrics.Span
+import coop.rchain.metrics.Span.TraceId
 import coop.rchain.models.Expr.ExprInstance.{ETupleBody, GBool}
 import coop.rchain.models.rholang.implicits._
 import coop.rchain.models.{ETuple, Expr, ListParWithRandom, Par}
@@ -87,12 +88,11 @@ object TestResultCollector {
 }
 
 class TestResultCollector[F[_]: Concurrent: Span](result: Ref[F, TestResult]) {
-
   def getResult: F[TestResult] = result.get
 
   def handleMessage(
       ctx: SystemProcess.Context[F]
-  )(message: (Seq[ListParWithRandom], Int)): F[Unit] = {
+  )(message: (Seq[ListParWithRandom], Int))(traceId: TraceId): F[Unit] = {
 
     val isContractCall = new ContractCall[F](ctx.space, ctx.dispatcher)
 
@@ -103,18 +103,18 @@ class TestResultCollector[F[_]: Concurrent: Span](result: Ref[F, TestResult]) {
             val assertion = RhoAssertEquals(testName, expected, actual, clue)
             for {
               _ <- result.update(_.addAssertion(attempt, assertion))
-              _ <- produce(Seq(Expr(GBool(assertion.isSuccess))), ackChannel)
+              _ <- produce(Seq(Expr(GBool(assertion.isSuccess))), ackChannel)(traceId)
             } yield ()
           case IsComparison(unexpected, "!=", actual) =>
             val assertion = RhoAssertNotEquals(testName, unexpected, actual, clue)
             for {
               _ <- result.update(_.addAssertion(attempt, assertion))
-              _ <- produce(Seq(Expr(GBool(assertion.isSuccess))), ackChannel)
+              _ <- produce(Seq(Expr(GBool(assertion.isSuccess))), ackChannel)(traceId)
             } yield ()
           case RhoType.Boolean(condition) =>
             for {
               _ <- result.update(_.addAssertion(attempt, RhoAssertTrue(testName, condition, clue)))
-              _ <- produce(Seq(Expr(GBool(condition))), ackChannel)
+              _ <- produce(Seq(Expr(GBool(condition))), ackChannel)(traceId)
             } yield ()
 
           case _ =>
@@ -129,7 +129,7 @@ class TestResultCollector[F[_]: Concurrent: Span](result: Ref[F, TestResult]) {
                       )
                     )
                   )
-              _ <- produce(Seq(Expr(GBool(false))), ackChannel)
+              _ <- produce(Seq(Expr(GBool(false))), ackChannel)(traceId)
             } yield ()
         }
       case isContractCall(_, IsSetFinished(hasFinished)) =>

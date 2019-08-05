@@ -17,6 +17,7 @@ import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.models._
 import coop.rchain.models.Expr.ExprInstance.{GInt, GString}
 import coop.rchain.catscontrib.TaskContrib._
+import coop.rchain.metrics.Span.TraceId
 
 import scala.collection.mutable
 import scala.concurrent.duration._
@@ -44,7 +45,8 @@ import scala.concurrent.duration._
   * }}}
   */
 class Interactive private (runtime: Runtime[Task])(implicit scheduler: Scheduler) {
-  implicit private val rand = Blake2b512Random(128)
+  implicit private val rand     = Blake2b512Random(128)
+  implicit val traceId: TraceId = Span.next
 
   private val prettyPrinter = PrettyPrinter()
 
@@ -98,6 +100,8 @@ object Interactive {
     implicit val logger: Log[Task]         = Log.log[Task]
     implicit val metricsEff: Metrics[Task] = new Metrics.MetricsNOP[Task]
     implicit val noopSpan: Span[Task]      = NoopSpan[Task]()
+    implicit val traceId: TraceId          = Span.next
+
     new Interactive(
       Runtime
         .createWithEmptyCost[Task](

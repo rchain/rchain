@@ -19,6 +19,7 @@ import java.nio.file.Path
 
 import coop.rchain.blockstorage.util.io.IOError
 import coop.rchain.metrics
+import coop.rchain.metrics.Span.TraceId
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
@@ -208,11 +209,12 @@ class GenesisTest extends FlatSpec with Matchers with EitherValues with BlockDag
 }
 
 object GenesisTest {
-  val storageSize     = 3024L * 1024 * 10
-  def storageLocation = Files.createTempDirectory(s"casper-genesis-test-runtime-")
-  def genesisPath     = Files.createTempDirectory(s"casper-genesis-test-")
-  val numValidators   = 5
-  val rchainShardId   = "rchain"
+  val storageSize               = 3024L * 1024 * 10
+  def storageLocation           = Files.createTempDirectory(s"casper-genesis-test-runtime-")
+  def genesisPath               = Files.createTempDirectory(s"casper-genesis-test-")
+  val numValidators             = 5
+  val rchainShardId             = "rchain"
+  implicit val traceId: TraceId = Span.empty
 
   implicit val raiseIOError = IOError.raiseIOErrorThroughSync[Task]
 

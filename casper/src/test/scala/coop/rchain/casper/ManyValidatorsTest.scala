@@ -4,13 +4,15 @@ import cats.Monad
 import cats.effect.{Resource, Sync}
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.IndexedBlockDagStorage
-import coop.rchain.casper.engine._, EngineCell._
+import coop.rchain.casper.engine._
+import EngineCell._
 import coop.rchain.casper.api.BlockAPI
 import coop.rchain.casper.helper.BlockGenerator._
 import coop.rchain.casper.helper._
 import coop.rchain.casper.protocol.{BlockMessage, Bond}
 import coop.rchain.casper.util.rholang.Resources.mkRuntimeManager
 import coop.rchain.casper.util.rholang.RuntimeManager
+import coop.rchain.metrics.Span.TraceId
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.Validator
@@ -36,6 +38,7 @@ class ManyValidatorsTest
     implicit val metrics              = new Metrics.MetricsNOP[Task]()
     implicit val noopSpan: Span[Task] = NoopSpan[Task]()
     implicit val log                  = new Log.NOPLog[Task]()
+    implicit val traceId: TraceId     = Span.next
     val runtimeManagerResource: Resource[Task, RuntimeManager[Task]] =
       mkRuntimeManager("many-validators-test")
 
@@ -74,7 +77,7 @@ class ManyValidatorsTest
         newBlockDagStorage        <- BlockDagStorageTestFixture.createBlockDagStorage(blockDagStorageDir)
         newIndexedBlockDagStorage <- IndexedBlockDagStorage.create(newBlockDagStorage)
         dag                       <- newIndexedBlockDagStorage.getRepresentation
-        tips                      <- Estimator.tips[Task](dag, genesis)
+        tips                      <- Estimator.tips[Task](dag, genesis, traceId)
         casperEffect <- NoOpsCasperEffect[Task](
                          HashMap.empty[BlockHash, BlockMessage],
                          tips.toIndexedSeq
@@ -88,7 +91,8 @@ class ManyValidatorsTest
                    engineCell,
                    logEff,
                    cliqueOracleEffect,
-                   blockStore
+                   blockStore,
+                   traceId
                  )
       } yield result
     }

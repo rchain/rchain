@@ -18,6 +18,7 @@ import coop.rchain.casper.util.{ConstructDeploy, GenesisBuilder, ProtoUtil}
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.signatures.Secp256k1
 import coop.rchain.crypto.{PrivateKey, PublicKey}
+import coop.rchain.metrics.Span.TraceId
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.Validator.Validator

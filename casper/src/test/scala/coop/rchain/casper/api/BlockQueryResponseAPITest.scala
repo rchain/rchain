@@ -3,36 +3,39 @@ package coop.rchain.casper.api
 import cats.effect.{Resource, Sync}
 import cats.implicits._
 import com.google.protobuf.ByteString
-import coop.rchain.casper.engine._, EngineCell._
+import coop.rchain.casper.engine._
+import EngineCell._
 import coop.rchain.blockstorage.{BlockDagStorage, BlockStore}
-import coop.rchain.casper.engine._, EngineCell._
+import coop.rchain.casper.engine._
+import EngineCell._
 import coop.rchain.casper._
 import coop.rchain.casper.helper.{BlockDagStorageFixture, NoOpsCasperEffect}
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.rholang.Resources.mkRuntimeManager
 import coop.rchain.casper.util.rholang.RuntimeManager
 import coop.rchain.casper.util.{ConstructDeploy, ProtoUtil}
-import coop.rchain.metrics.Metrics
+import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.shared.Cell
 import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.crypto.signatures.Secp256k1
 import coop.rchain.crypto.PrivateKey
+import coop.rchain.metrics.Span.TraceId
 import coop.rchain.p2p.EffectsTestInstances.{LogStub, LogicalTime}
 import monix.eval.Task
 import org.scalatest._
 import monix.execution.Scheduler.Implicits.global
 
 import scala.collection.immutable.HashMap
-import coop.rchain.metrics.NoopSpan
 
 class BlockQueryResponseAPITest
     extends FlatSpec
     with Matchers
     with Inside
     with BlockDagStorageFixture {
-  implicit val timeEff = new LogicalTime[Task]
-  implicit val spanEff = NoopSpan[Task]()
+  implicit val timeEff          = new LogicalTime[Task]
+  implicit val spanEff          = NoopSpan[Task]()
+  implicit val traceId: TraceId = Span.next
   private val runtimeManagerResource: Resource[Task, RuntimeManager[Task]] =
     mkRuntimeManager("block-query-response-api-test")
 
@@ -101,7 +104,7 @@ class BlockQueryResponseAPITest
         spanEff                                  = NoopSpan[Task]()
         (logEff, engineCell, cliqueOracleEffect) = effects
         q                                        = BlockQuery(hash = secondBlockQuery)
-        blockQueryResponse <- BlockAPI.getBlock[Task](q)(
+        blockQueryResponse <- BlockAPI.getBlock[Task](q, traceId)(
                                Sync[Task],
                                engineCell,
                                logEff,
@@ -134,7 +137,7 @@ class BlockQueryResponseAPITest
         spanEff                                  = NoopSpan[Task]()
         (logEff, engineCell, cliqueOracleEffect) = effects
         q                                        = BlockQuery(hash = badTestHashQuery)
-        blockQueryResponse <- BlockAPI.getBlock[Task](q)(
+        blockQueryResponse <- BlockAPI.getBlock[Task](q, traceId)(
                                Sync[Task],
                                engineCell,
                                logEff,
@@ -163,7 +166,8 @@ class BlockQueryResponseAPITest
                                casperRef,
                                logEff,
                                cliqueOracleEffect,
-                               blockStore
+                               blockStore,
+                               traceId
                              )
         _ = inside(blockQueryResponse) {
           case Right(BlockQueryResponse(Some(blockInfo))) =>
@@ -195,7 +199,8 @@ class BlockQueryResponseAPITest
                                casperRef,
                                logEff,
                                cliqueOracleEffect,
-                               blockStore
+                               blockStore,
+                               traceId
                              )
         _ = inside(blockQueryResponse) {
           case Left(msg) =>
@@ -220,7 +225,8 @@ class BlockQueryResponseAPITest
                                casperRef,
                                logEff,
                                cliqueOracleEffect,
-                               blockStore
+                               blockStore,
+                               traceId
                              )
         _ = inside(blockQueryResponse) {
           case Right(LightBlockQueryResponse(Some(blockInfo))) =>
@@ -248,7 +254,8 @@ class BlockQueryResponseAPITest
                                casperRef,
                                logEff,
                                cliqueOracleEffect,
-                               blockStore
+                               blockStore,
+                               traceId
                              )
         _ = inside(blockQueryResponse) {
           case Left(msg) =>

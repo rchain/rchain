@@ -1,13 +1,12 @@
 package coop.rchain.casper.util
 
 import com.google.protobuf.ByteString
-
 import cats._
 import cats.implicits._
-
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.rholang.RuntimeManager
 import coop.rchain.crypto.codec.Base16
+import coop.rchain.metrics.Span
 import coop.rchain.models.{Expr, GPrivate, Par}
 import coop.rchain.models.Expr.ExprInstance.GInt
 import coop.rchain.models.rholang.implicits._
@@ -37,7 +36,7 @@ object RSpaceUtil {
       implicit runtimeManager: RuntimeManager[F]
   ) =
     for {
-      data <- runtimeManager.getData(hash)(channel)
+      data <- runtimeManager.getData(hash)(channel)(Span.next)
       res  = data.map(_.exprs.map(RholangPrettyPrinter().buildString)).flatten
     } yield (res)
 

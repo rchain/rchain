@@ -31,6 +31,7 @@ import coop.rchain.comm.rp.HandleMessages.handle
 import coop.rchain.crypto.PrivateKey
 import coop.rchain.crypto.signatures.Secp256k1
 import coop.rchain.graphz.{Graphz, StringSerializer}
+import coop.rchain.metrics.Span.TraceId
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.p2p.EffectsTestInstances._
 import coop.rchain.shared._
@@ -69,6 +70,7 @@ class HashSetCasperTestNode[F[_]](
   implicit val cliqueOracleEffect           = SafetyOracle.cliqueOracle[F]
   implicit val lastFinalizedBlockCalculator = LastFinalizedBlockCalculator[F](0f)
   implicit val rpConfAsk                    = createRPConfAsk[F](local)
+  implicit val traceId: TraceId             = Span.next
 
   // Scalatest `assert` macro needs some member of the Assertions trait.
   // An (inferior) alternative would be to inherit the trait...

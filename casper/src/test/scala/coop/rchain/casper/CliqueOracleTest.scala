@@ -2,7 +2,6 @@ package coop.rchain.casper
 
 import scala.collection.immutable.HashMap
 import scala.collection.mutable
-
 import coop.rchain.blockstorage.{BlockStore, IndexedBlockDagStorage}
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.casper.helper.BlockGenerator._
@@ -12,6 +11,7 @@ import coop.rchain.casper.protocol.{BlockMessage, Bond}
 import coop.rchain.models.Validator.Validator
 import coop.rchain.p2p.EffectsTestInstances.LogStub
 import com.google.protobuf.ByteString
+import coop.rchain.metrics.Span.TraceId
 import monix.eval.Task
 import org.scalatest.{FlatSpec, Matchers}
 

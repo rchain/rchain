@@ -3,13 +3,15 @@ package coop.rchain.casper.api
 import scala.collection.immutable.HashMap
 import cats.effect.{Resource, Sync}
 import coop.rchain.casper._
-import coop.rchain.casper.engine._, EngineCell._
+import coop.rchain.casper.engine._
+import EngineCell._
 import coop.rchain.casper.helper._
 import coop.rchain.casper.helper.BlockGenerator._
 import coop.rchain.casper.helper.BlockUtil.generateValidator
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.rholang.Resources.mkRuntimeManager
 import coop.rchain.casper.util.rholang.RuntimeManager
+import coop.rchain.metrics.Span.TraceId
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.p2p.EffectsTestInstances.LogStub
@@ -93,7 +95,7 @@ class BlocksResponseAPITest
                )
           dag        <- blockDagStorage.getRepresentation
           metricsEff = new Metrics.MetricsNOP[Task]
-          tips       <- Estimator.tips[Task](dag, genesis)(Sync[Task], log, metricsEff, spanEff)
+          tips       <- Estimator.tips[Task](dag, genesis, traceId)(Sync[Task], log, metricsEff, spanEff)
           casperEffect <- NoOpsCasperEffect[Task](
                            HashMap.empty[BlockHash, BlockMessage],
                            tips
@@ -108,7 +110,8 @@ class BlocksResponseAPITest
                              engineCell,
                              logEff,
                              cliqueOracleEffect,
-                             blockStore
+                             blockStore,
+                             traceId
                            )
         } yield blocksResponse.length should be(5)
       }
@@ -170,7 +173,7 @@ class BlocksResponseAPITest
                )
           dag        <- blockDagStorage.getRepresentation
           metricsEff = new Metrics.MetricsNOP[Task]
-          tips       <- Estimator.tips[Task](dag, genesis)(Sync[Task], log, metricsEff, spanEff)
+          tips       <- Estimator.tips[Task](dag, genesis, traceId)(Sync[Task], log, metricsEff, spanEff)
           casperEffect <- NoOpsCasperEffect[Task](
                            HashMap.empty[BlockHash, BlockMessage],
                            tips
@@ -185,7 +188,8 @@ class BlocksResponseAPITest
                              engineCell,
                              logEff,
                              cliqueOracleEffect,
-                             blockStore
+                             blockStore,
+                             traceId
                            )
         } yield blocksResponse.right.get.length should be(8) // TODO: Switch to 4 when we implement block height correctly
       }
@@ -246,7 +250,7 @@ class BlocksResponseAPITest
              )
         dag        <- blockDagStorage.getRepresentation
         metricsEff = new Metrics.MetricsNOP[Task]
-        tips       <- Estimator.tips[Task](dag, genesis)(Sync[Task], log, metricsEff, spanEff)
+        tips       <- Estimator.tips[Task](dag, genesis, traceId)(Sync[Task], log, metricsEff, spanEff)
         casperEffect <- NoOpsCasperEffect[Task](
                          HashMap.empty[BlockHash, BlockMessage],
                          tips
@@ -261,7 +265,8 @@ class BlocksResponseAPITest
                            engineCell,
                            logEff,
                            cliqueOracleEffect,
-                           blockStore
+                           blockStore,
+                           traceId
                          )
       } yield blocksResponse.right.get.length should be(2) // TODO: Switch to 3 when we implement block height correctly
     }

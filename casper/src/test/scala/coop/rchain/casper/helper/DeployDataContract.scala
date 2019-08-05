@@ -1,6 +1,7 @@
 package coop.rchain.casper.helper
 import cats.effect.Concurrent
 import coop.rchain.metrics.Span
+import coop.rchain.metrics.Span.TraceId
 import coop.rchain.models.{ListParWithRandom, Par}
 import coop.rchain.rholang.interpreter.Runtime.SystemProcess
 import coop.rchain.rholang.interpreter.{ContractCall, RhoType}
@@ -10,7 +11,7 @@ object DeployDataContract {
 
   def set[F[_]: Concurrent: Span](
       ctx: SystemProcess.Context[F]
-  )(message: (Seq[ListParWithRandom], Int)): F[Unit] = {
+  )(message: (Seq[ListParWithRandom], Int))(traceId: TraceId): F[Unit] = {
 
     val isContractCall = new ContractCall(ctx.space, ctx.dispatcher)
     message match {
@@ -20,7 +21,7 @@ object DeployDataContract {
           ) =>
         for {
           _ <- ctx.deployParametersRef.update(_.copy(userId = pk))
-          _ <- produce(Seq(Par()), ackCh)
+          _ <- produce(Seq(Par()), ackCh)(traceId)
         } yield ()
     }
   }

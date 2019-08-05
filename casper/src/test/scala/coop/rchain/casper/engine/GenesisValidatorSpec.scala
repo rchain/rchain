@@ -8,12 +8,15 @@ import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.comm.rp.ProtocolHelper
 import coop.rchain.comm.rp.ProtocolHelper._
 import coop.rchain.comm.transport
+import coop.rchain.metrics.Span
+import coop.rchain.metrics.Span.TraceId
 import coop.rchain.shared.Cell
 import monix.eval.Task
 import monix.execution.Scheduler
 import org.scalatest.WordSpec
 
 class GenesisValidatorSpec extends WordSpec {
+  implicit val traceId: TraceId = Span.next
 
   "GenesisCeremonyMaster" should {
     "respond on UnapprovedBlock messages with BlockApproval" in {
@@ -29,7 +32,7 @@ class GenesisValidatorSpec extends WordSpec {
         _ <- engineCell.set(
               new GenesisValidator(validatorId, shardId, bap)
             )
-        _             <- engineCell.read >>= (_.handle(local, unapprovedBlock))
+        _             <- engineCell.read >>= (_.handle(local, unapprovedBlock, traceId))
         blockApproval = BlockApproverProtocol.getBlockApproval(expectedCandidate, validatorId)
         expectedPacket = ProtocolHelper.packet(
           local,
@@ -58,7 +61,7 @@ class GenesisValidatorSpec extends WordSpec {
         _ <- engineCell.set(
               new GenesisValidator(validatorId, shardId, bap)
             )
-        _    <- engineCell.read >>= (_.handle(local, approvedBlockRequest))
+        _    <- engineCell.read >>= (_.handle(local, approvedBlockRequest, traceId))
         head = transportLayer.requests.head
         response = packet(
           local,
@@ -69,7 +72,7 @@ class GenesisValidatorSpec extends WordSpec {
         _            = assert(head.peer == local && head.msg == response)
         _            = transportLayer.reset()
         blockRequest = BlockRequest(ByteString.copyFromUtf8("base16Hash"))
-        _            <- engineCell.read >>= (_.handle(local, blockRequest))
+        _            <- engineCell.read >>= (_.handle(local, blockRequest, traceId))
         _            = assert(transportLayer.requests.isEmpty)
       } yield ()
       test.unsafeRunSync

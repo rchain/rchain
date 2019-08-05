@@ -6,6 +6,8 @@ import coop.rchain.casper.helper.HashSetCasperTestNode._
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.scalatestcontrib._
 import coop.rchain.casper.util.{ConstructDeploy, GenesisBuilder}
+import coop.rchain.metrics.Span
+import coop.rchain.metrics.Span.TraceId
 import coop.rchain.models.Expr.ExprInstance.GInt
 import coop.rchain.models._
 import coop.rchain.p2p.EffectsTestInstances.LogicalTime

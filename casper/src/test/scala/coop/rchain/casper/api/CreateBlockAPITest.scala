@@ -5,7 +5,8 @@ import cats.effect.concurrent.Semaphore
 import cats.implicits._
 import coop.rchain.blockstorage.BlockDagRepresentation
 import coop.rchain.casper.MultiParentCasper.ignoreDoppelgangerCheck
-import coop.rchain.casper.engine._, EngineCell._
+import coop.rchain.casper.engine._
+import EngineCell._
 import coop.rchain.casper._
 import coop.rchain.casper.api.BlockAPI.ApiErr
 import coop.rchain.casper.helper.HashSetCasperTestNode
@@ -13,7 +14,8 @@ import coop.rchain.casper.protocol._
 import coop.rchain.casper.util._
 import coop.rchain.casper.util.rholang._
 import coop.rchain.catscontrib.TaskContrib._
-import coop.rchain.metrics.NoopSpan
+import coop.rchain.metrics.{NoopSpan, Span}
+import coop.rchain.metrics.Span.TraceId
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.Validator.Validator
 import coop.rchain.p2p.EffectsTestInstances._
@@ -52,8 +54,8 @@ class CreateBlockAPITest extends FlatSpec with Matchers {
           implicit engineCell: EngineCell[Effect]
       ): Effect[ApiErr[DeployServiceResponse]] =
         for {
-          _ <- BlockAPI.deploy[Effect](deploy)
-          r <- BlockAPI.createBlock[Effect](blockApiLock)
+          _ <- BlockAPI.deploy[Effect](deploy, traceId)
+          r <- BlockAPI.createBlock[Effect](blockApiLock, traceId)
         } yield r
 
       def testProgram(blockApiLock: Semaphore[Effect])(
@@ -95,25 +97,26 @@ class CreateBlockAPITest extends FlatSpec with Matchers {
 
 private class SleepingMultiParentCasperImpl[F[_]: Monad: Time](underlying: MultiParentCasper[F])
     extends MultiParentCasper[F] {
-
-  def addBlock(
-      b: BlockMessage,
-      handleDoppelganger: (BlockMessage, Validator) => F[Unit]
-  ): F[BlockStatus]                                           = underlying.addBlock(b, ignoreDoppelgangerCheck[F])
+  def addBlock(b: BlockMessage, handleDoppelganger: (BlockMessage, Validator) => F[Unit])(
+      implicit traceId: TraceId
+  ): F[BlockStatus] =
+    underlying.addBlock(b, ignoreDoppelgangerCheck[F])(traceId)
   def contains(blockHash: BlockHash): F[Boolean]              = underlying.contains(blockHash)
   def deploy(d: DeployData): F[Either[DeployError, DeployId]] = underlying.deploy(d)
-  def estimator(dag: BlockDagRepresentation[F]): F[IndexedSeq[BlockHash]] =
+  def estimator(
+      dag: BlockDagRepresentation[F]
+  )(implicit traceId: TraceId): F[IndexedSeq[BlockHash]] =
     underlying.estimator(dag)
   def blockDag: F[BlockDagRepresentation[F]] = underlying.blockDag
   def normalizedInitialFault(weights: Map[Validator, Long]): F[Float] =
     underlying.normalizedInitialFault(weights)
-  def lastFinalizedBlock: F[BlockMessage]     = underlying.lastFinalizedBlock
-  def getRuntimeManager: F[RuntimeManager[F]] = underlying.getRuntimeManager
-  def fetchDependencies: F[Unit]              = underlying.fetchDependencies
+  def lastFinalizedBlock(implicit traceId: TraceId): F[BlockMessage] = underlying.lastFinalizedBlock
+  def getRuntimeManager: F[RuntimeManager[F]]                        = underlying.getRuntimeManager
+  def fetchDependencies: F[Unit]                                     = underlying.fetchDependencies
 
-  override def createBlock: F[CreateBlockStatus] =
+  override def createBlock(implicit traceId: TraceId): F[CreateBlockStatus] =
     for {
-      result <- underlying.createBlock
+      result <- underlying.createBlock(traceId)
       _      <- implicitly[Time[F]].sleep(5.seconds)
     } yield result
 

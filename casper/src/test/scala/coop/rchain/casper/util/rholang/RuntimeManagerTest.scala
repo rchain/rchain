@@ -9,6 +9,7 @@ import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
 import coop.rchain.casper.util.{ConstructDeploy, GenesisBuilder, ProtoUtil}
 import coop.rchain.catscontrib.effect.implicits._
 import coop.rchain.crypto.hash.Blake2b512Random
+import coop.rchain.metrics.Span.TraceId
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.Validator.Validator
@@ -31,6 +32,7 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
   implicit val log: Log[Task]            = Log.log[Task]
   implicit val metricsEff: Metrics[Task] = new metrics.Metrics.MetricsNOP[Task]
   implicit val noopSpan: Span[Task]      = NoopSpan[Task]()
+  implicit val traceId: TraceId          = Span.next
 
   val genesisContext = GenesisBuilder.buildGenesis()
   val genesis        = genesisContext.genesisBlock
@@ -54,7 +56,8 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
       res <- runtimeManager.computeState(ProtoUtil.tuplespace(genesis).get)(
               deploy :: Nil,
               BlockData(deploy.timestamp, 0),
-              Map.empty[BlockHash, Validator]
+              Map.empty[BlockHash, Validator],
+              traceId
             )
       (hash, Seq(result)) = res
     } yield (hash, result)
@@ -189,16 +192,27 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
         blockData     = BlockData(time, 0L)
         invalidBlocks = Map.empty[BlockHash, Validator]
         firstDeploy <- mgr
-                        .computeState(genPostState)(deploy0 :: Nil, blockData, invalidBlocks)
+                        .computeState(genPostState)(
+                          deploy0 :: Nil,
+                          blockData,
+                          invalidBlocks,
+                          traceId
+                        )
                         .map(_._2)
         secondDeploy <- mgr
-                         .computeState(genPostState)(deploy1 :: Nil, blockData, invalidBlocks)
+                         .computeState(genPostState)(
+                           deploy1 :: Nil,
+                           blockData,
+                           invalidBlocks,
+                           traceId
+                         )
                          .map(_._2)
         compoundDeploy <- mgr
                            .computeState(genPostState)(
                              deploy0 :: deploy1 :: Nil,
                              blockData,
-                             invalidBlocks
+                             invalidBlocks,
+                             traceId
                            )
                            .map(_._2)
         _                  = assert(firstDeploy.size == 1)

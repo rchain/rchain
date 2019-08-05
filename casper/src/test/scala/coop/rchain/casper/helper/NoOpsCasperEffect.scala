@@ -11,6 +11,7 @@ import coop.rchain.casper.protocol.{BlockMessage, DeployData}
 import coop.rchain.casper.util.rholang.Resources.mkRuntimeManager
 import coop.rchain.casper.util.rholang.RuntimeManager
 import coop.rchain.casper.{BlockStatus, CreateBlockStatus, MultiParentCasper}
+import coop.rchain.metrics.Span.TraceId
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.Validator.Validator
 import monix.eval.Task
@@ -28,7 +29,7 @@ class NoOpsCasperEffect[F[_]: Sync: BlockStore: BlockDagStorage] private (
   def addBlock(
       b: BlockMessage,
       handleDoppelganger: (BlockMessage, Validator) => F[Unit]
-  ): F[BlockStatus] =
+  )(implicit traceId: TraceId): F[BlockStatus] =
     for {
       _ <- Sync[F].delay(blockStore.update(b.blockHash, b))
       _ <- BlockStore[F].put(b.blockHash, b)
@@ -36,12 +37,15 @@ class NoOpsCasperEffect[F[_]: Sync: BlockStore: BlockDagStorage] private (
   def contains(blockHash: BlockHash): F[Boolean] = false.pure[F]
   def deploy(r: DeployData): F[Either[DeployError, DeployId]] =
     Applicative[F].pure(Right(Array[Byte]()))
-  def estimator(dag: BlockDagRepresentation[F]): F[IndexedSeq[BlockHash]] =
+  def estimator(
+      dag: BlockDagRepresentation[F]
+  )(implicit traceId: TraceId): F[IndexedSeq[BlockHash]] =
     estimatorFunc.pure[F]
-  def createBlock: F[CreateBlockStatus]                               = CreateBlockStatus.noNewDeploys.pure[F]
+  def createBlock(implicit traceId: TraceId): F[CreateBlockStatus] =
+    CreateBlockStatus.noNewDeploys.pure[F]
   def blockDag: F[BlockDagRepresentation[F]]                          = BlockDagStorage[F].getRepresentation
   def normalizedInitialFault(weights: Map[Validator, Long]): F[Float] = 0f.pure[F]
-  def lastFinalizedBlock: F[BlockMessage]                             = BlockMessage().pure[F]
+  def lastFinalizedBlock(implicit traceId: TraceId): F[BlockMessage]  = BlockMessage().pure[F]
   def getRuntimeManager: F[RuntimeManager[F]]                         = runtimeManager.pure[F]
   def fetchDependencies: F[Unit]                                      = ().pure[F]
 }

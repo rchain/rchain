@@ -9,6 +9,8 @@ import coop.rchain.casper.util.GenesisBuilder
 import coop.rchain.casper.util.comm.TestNetwork
 import coop.rchain.comm.protocol.routing.Packet
 import coop.rchain.comm.transport
+import coop.rchain.metrics.Span
+import coop.rchain.metrics.Span.TraceId
 import monix.execution.Scheduler
 import org.scalatest.{FlatSpec, Matchers}
 
