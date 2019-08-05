@@ -5,6 +5,8 @@ import cats.effect.Concurrent
 import cats.implicits._
 import coop.rchain.casper.protocol.DeployData
 import coop.rchain.crypto.codec.Base16
+import coop.rchain.metrics.Span
+import coop.rchain.metrics.Span.TraceId
 import coop.rchain.models.TaggedContinuation.TaggedCont.ParBody
 import coop.rchain.models._
 import coop.rchain.models.rholang.implicits._
@@ -16,7 +18,8 @@ import coop.rchain.rspace.trace.{Consume, Produce}
 import scala.collection.SortedSet
 
 object StoragePrinter {
-  val noUnmatchedSends = "No unmatched sends."
+  val noUnmatchedSends       = "No unmatched sends."
+  implicit val span: TraceId = Span.empty
 
   def prettyPrint[F[_]: FlatMap](space: RhoISpace[F]): F[String] =
     for {

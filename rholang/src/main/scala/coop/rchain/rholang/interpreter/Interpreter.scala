@@ -3,19 +3,23 @@ package coop.rchain.rholang.interpreter
 import cats.effect._
 import cats.implicits._
 import coop.rchain.crypto.hash.Blake2b512Random
+import coop.rchain.metrics.Span.TraceId
 import coop.rchain.rholang.interpreter.accounting._
 
 final case class EvaluateResult(cost: Cost, errors: Vector[Throwable])
 
 trait Interpreter[F[_]] {
 
-  def evaluate(runtime: Runtime[F], term: String, normalizerEnv: NormalizerEnv): F[EvaluateResult]
+  def evaluate(runtime: Runtime[F], term: String, normalizerEnv: NormalizerEnv)(
+      implicit traceId: TraceId
+  ): F[EvaluateResult]
+
   def evaluate(
       runtime: Runtime[F],
       term: String,
       initialPhlo: Cost,
       normalizerEnv: NormalizerEnv
-  ): F[EvaluateResult]
+  )(implicit traceId: TraceId): F[EvaluateResult]
 
   def injAttempt(
       reducer: ChargingReducer[F],
@@ -23,7 +27,7 @@ trait Interpreter[F[_]] {
       term: String,
       initialPhlo: Cost,
       normalizerEnv: NormalizerEnv
-  )(implicit rand: Blake2b512Random): F[EvaluateResult]
+  )(implicit rand: Blake2b512Random, traceId: TraceId): F[EvaluateResult]
 }
 
 object Interpreter {
@@ -40,20 +44,21 @@ object Interpreter {
           runtime: Runtime[F],
           term: String,
           normalizerEnv: NormalizerEnv
-      ): F[EvaluateResult] =
-        evaluate(runtime, term, Cost.UNSAFE_MAX, normalizerEnv)
+      )(implicit traceId: TraceId): F[EvaluateResult] =
+        evaluate(runtime, term, Cost.UNSAFE_MAX, normalizerEnv)(traceId)
 
       def evaluate(
           runtime: Runtime[F],
           term: String,
           initialPhlo: Cost,
           normalizerEnv: NormalizerEnv
-      ): F[EvaluateResult] = {
+      )(implicit traceId: TraceId): F[EvaluateResult] = {
         implicit val rand: Blake2b512Random = Blake2b512Random(128)
         for {
-          checkpoint <- runtime.space.createSoftCheckpoint()
+          checkpoint <- runtime.space.createSoftCheckpoint()(traceId)
           res        <- injAttempt(runtime.reducer, runtime.errorLog, term, initialPhlo, normalizerEnv)
-          _          <- if (res.errors.nonEmpty) runtime.space.revertToSoftCheckpoint(checkpoint) else S.unit
+          _ <- if (res.errors.nonEmpty) runtime.space.revertToSoftCheckpoint(checkpoint)(traceId)
+              else S.unit
         } yield res
       }
 
@@ -63,7 +68,7 @@ object Interpreter {
           term: String,
           initialPhlo: Cost,
           normalizerEnv: NormalizerEnv
-      )(implicit rand: Blake2b512Random): F[EvaluateResult] = {
+      )(implicit rand: Blake2b512Random, traceId: TraceId): F[EvaluateResult] = {
         val parsingCost = accounting.parsingCost(term)
         for {
           _           <- C.set(initialPhlo)

@@ -4,6 +4,7 @@ import cats.effect.Sync
 import cats.implicits._
 import cats.mtl.implicits._
 import coop.rchain.catscontrib.mtl.implicits._
+import coop.rchain.metrics.Span.TraceId
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.models.Var.VarInstance.FreeVar
 import coop.rchain.models._
@@ -32,7 +33,7 @@ object implicits {
       def get(
           pattern: BindPattern,
           data: ListParWithRandom
-      ): F[Option[ListParWithRandom]] = {
+      )(implicit traceId: TraceId): F[Option[ListParWithRandom]] = {
         type R[A] = MatcherMonadT[F, A]
         implicit val matcherMonadError = implicitly[Sync[R]]
         for {

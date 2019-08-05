@@ -8,6 +8,7 @@ import coop.rchain.crypto.PublicKey
 import coop.rchain.crypto.hash.{Blake2b256, Keccak256, Sha256}
 import coop.rchain.crypto.signatures.{Ed25519, Secp256k1}
 import coop.rchain.metrics.Span
+import coop.rchain.metrics.Span.TraceId
 import coop.rchain.models._
 import coop.rchain.models.rholang.implicits._
 import coop.rchain.rholang.interpreter.Runtime.{BlockData, InvalidBlocks, RhoISpace}
@@ -39,7 +40,7 @@ trait SystemProcesses[F[_]] {
 }
 
 object SystemProcesses {
-  type Contract[F[_]] = (Seq[ListParWithRandom], Int) => F[Unit]
+  type Contract[F[_]] = (Seq[ListParWithRandom], Int) => TraceId => F[Unit]
 
   def apply[F[_]](
       dispatcher: Dispatch[F, ListParWithRandom, TaggedContinuation],
@@ -74,26 +75,30 @@ object SystemProcesses {
               ack
             )
             ) =>
-          for {
-            verified <- F.fromTry(Try(algorithm(data, signature, pub)))
-            _        <- produce(Seq(RhoType.Boolean(verified)), ack)
-          } yield ()
+          (tid: TraceId) =>
+            for {
+              verified <- F.fromTry(Try(algorithm(data, signature, pub)))
+              _        <- produce(Seq(RhoType.Boolean(verified)), ack)(tid)
+            } yield ()
         case _ =>
-          illegalArgumentException(
-            s"$name expects data, signature, public key (all as byte arrays), and an acknowledgement channel"
-          )
+          _ =>
+            illegalArgumentException(
+              s"$name expects data, signature, public key (all as byte arrays), and an acknowledgement channel"
+            )
       }
 
       def hashContract(name: String, algorithm: Array[Byte] => Array[Byte]): Contract[F] = {
         case isContractCall(produce, Seq(RhoType.ByteArray(input), ack)) =>
-          for {
-            hash <- F.fromTry(Try(algorithm(input)))
-            _    <- produce(Seq(RhoType.ByteArray(hash)), ack)
-          } yield ()
+          (tid: TraceId) =>
+            for {
+              hash <- F.fromTry(Try(algorithm(input)))
+              _    <- produce(Seq(RhoType.ByteArray(hash)), ack)(tid)
+            } yield ()
         case _ =>
-          illegalArgumentException(
-            s"$name expects a byte array and return channel"
-          )
+          _ =>
+            illegalArgumentException(
+              s"$name expects a byte array and return channel"
+            )
       }
 
       private def printStdOut(s: String): F[Unit] =
@@ -110,28 +115,30 @@ object SystemProcesses {
 
       def stdOut: Contract[F] = {
         case isContractCall(_, Seq(arg)) =>
-          printStdOut(prettyPrinter.buildString(arg))
+          _ => printStdOut(prettyPrinter.buildString(arg))
       }
 
       def stdOutAck: Contract[F] = {
         case isContractCall(produce, Seq(arg, ack)) =>
-          for {
-            _ <- printStdOut(prettyPrinter.buildString(arg))
-            _ <- produce(Seq(Par.defaultInstance), ack)
-          } yield ()
+          tid =>
+            for {
+              _ <- printStdOut(prettyPrinter.buildString(arg))
+              _ <- produce(Seq(Par.defaultInstance), ack)(tid)
+            } yield ()
       }
 
       def stdErr: Contract[F] = {
         case isContractCall(_, Seq(arg)) =>
-          printStdErr(prettyPrinter.buildString(arg))
+          _ => printStdErr(prettyPrinter.buildString(arg))
       }
 
       def stdErrAck: Contract[F] = {
         case isContractCall(produce, Seq(arg, ack)) =>
-          for {
-            _ <- printStdErr(prettyPrinter.buildString(arg))
-            _ <- produce(Seq(Par.defaultInstance), ack)
-          } yield ()
+          tid =>
+            for {
+              _ <- printStdErr(prettyPrinter.buildString(arg))
+              _ <- produce(Seq(Par.defaultInstance), ack)(tid)
+            } yield ()
       }
 
       def validateRevAddress: Contract[F] = {
@@ -147,7 +154,7 @@ object SystemProcesses {
               .map(RhoType.String(_))
               .getOrElse(Par())
 
-          produce(Seq(errorMessage), ack)
+          tid => produce(Seq(errorMessage), ack)(tid)
 
         case isContractCall(
             produce,
@@ -158,8 +165,7 @@ object SystemProcesses {
               .fromPublicKey(PublicKey(publicKey))
               .map(ra => RhoType.String(ra.toBase58))
               .getOrElse(Par())
-
-          produce(Seq(response), ack)
+          tid => produce(Seq(response), ack)(tid)
 
         case isContractCall(
             produce,
@@ -170,8 +176,7 @@ object SystemProcesses {
               RhoType.String(RevAddress.fromUnforgeable(gprivate).toBase58)
             case _ => Par()
           }
-
-          produce(Seq(response), ack)
+          tid => produce(Seq(response), ack)(tid)
       }
 
       def deployerIdOps: Contract[F] = {
@@ -179,7 +184,7 @@ object SystemProcesses {
             produce,
             Seq(RhoType.String("pubKeyBytes"), RhoType.DeployerId(publicKey), ack)
             ) =>
-          produce(Seq(RhoType.ByteArray(publicKey)), ack)
+          tid => produce(Seq(RhoType.ByteArray(publicKey)), ack)(tid)
       }
 
       def secp256k1Verify: Contract[F] =
@@ -198,40 +203,50 @@ object SystemProcesses {
         hashContract("blake2b256Hash", Blake2b256.hash)
 
       // TODO: rename this system process to "deployParameters"?
-      def getDeployParams(runtimeParametersRef: Ref[F, DeployParameters]): Contract[F] = {
+      def getDeployParams(
+          runtimeParametersRef: Ref[F, DeployParameters]
+      ): Contract[F] = {
         case isContractCall(produce, Seq(ack)) =>
-          for {
-            params                                                  <- runtimeParametersRef.get
-            DeployParameters(codeHash, phloRate, userId, timestamp) = params
-            _ <- produce(
-                  Seq(codeHash, phloRate, userId, timestamp),
-                  ack
-                )
-          } yield ()
+          tid =>
+            for {
+              params                                                  <- runtimeParametersRef.get
+              DeployParameters(codeHash, phloRate, userId, timestamp) = params
+              _ <- produce(
+                    Seq(codeHash, phloRate, userId, timestamp),
+                    ack
+                  )(tid)
+            } yield ()
         case _ =>
-          illegalArgumentException("deployParameters expects only a return channel")
+          _ => illegalArgumentException("deployParameters expects only a return channel")
       }
 
       def getBlockData(
           blockData: Ref[F, BlockData]
       ): Contract[F] = {
         case isContractCall(produce, Seq(ack)) =>
-          for {
-            data <- blockData.get
-            _    <- produce(Seq(RhoType.Number(data.blockNumber), RhoType.Number(data.timeStamp)), ack)
-          } yield ()
+          tid =>
+            for {
+              data <- blockData.get
+              _ <- produce(
+                    Seq(RhoType.Number(data.blockNumber), RhoType.Number(data.timeStamp)),
+                    ack
+                  )(tid)
+            } yield ()
         case _ =>
-          illegalArgumentException("blockTime expects only a return channel")
+          _ => illegalArgumentException("blockTime expects only a return channel")
       }
 
-      def invalidBlocks(invalidBlocks: Runtime.InvalidBlocks[F]): Contract[F] = {
+      def invalidBlocks(
+          invalidBlocks: Runtime.InvalidBlocks[F]
+      ): Contract[F] = {
         case isContractCall(produce, Seq(ack)) =>
-          for {
-            invalidBlocks <- invalidBlocks.invalidBlocks.get
-            _             <- produce(Seq(invalidBlocks), ack)
-          } yield ()
+          tid =>
+            for {
+              invalidBlocks <- invalidBlocks.invalidBlocks.get
+              _             <- produce(Seq(invalidBlocks), ack)(tid)
+            } yield ()
         case _ =>
-          illegalArgumentException("invalidBlocks expects only a return channel")
+          _ => illegalArgumentException("invalidBlocks expects only a return channel")
       }
     }
 }

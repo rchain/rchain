@@ -5,6 +5,7 @@ import cats.effect.Sync
 import cats.mtl.FunctorTell
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.metrics.Span
+import coop.rchain.metrics.Span.TraceId
 import coop.rchain.models.TaggedContinuation.TaggedCont.{Empty, ParBody, ScalaBodyRef}
 import coop.rchain.models._
 import coop.rchain.rholang.interpreter.Runtime.{RhoISpace, RhoPureSpace}
@@ -12,7 +13,7 @@ import coop.rchain.rholang.interpreter.accounting._
 import coop.rchain.rholang.interpreter.storage.ChargingRSpace
 
 trait Dispatch[M[_], A, K] {
-  def dispatch(continuation: K, dataList: Seq[A], sequenceNumber: Int): M[Unit]
+  def dispatch(continuation: K, dataList: Seq[A], sequenceNumber: Int)(traceId: TraceId): M[Unit]
 }
 
 object Dispatch {
@@ -23,7 +24,7 @@ object Dispatch {
 }
 
 class RholangAndScalaDispatcher[M[_]] private (
-    _dispatchTable: => Map[Long, (Seq[ListParWithRandom], Int) => M[Unit]]
+    _dispatchTable: => Map[Long, (Seq[ListParWithRandom], Int) => TraceId => M[Unit]]
 )(implicit s: Sync[M], reducer: ChargingReducer[M])
     extends Dispatch[M, ListParWithRandom, TaggedContinuation] {
 
@@ -31,19 +32,24 @@ class RholangAndScalaDispatcher[M[_]] private (
       continuation: TaggedContinuation,
       dataList: Seq[ListParWithRandom],
       sequenceNumber: Int
-  ): M[Unit] =
+  )(traceId: TraceId): M[Unit] =
     continuation.taggedCont match {
       case ParBody(parWithRand) =>
         val env     = Dispatch.buildEnv(dataList)
         val randoms = parWithRand.randomState +: dataList.toVector.map(_.randomState)
-        reducer.eval(parWithRand.body)(env, Blake2b512Random.merge(randoms), sequenceNumber)
+        reducer.eval(parWithRand.body)(
+          env,
+          Blake2b512Random.merge(randoms),
+          sequenceNumber,
+          traceId
+        )
       case ScalaBodyRef(ref) =>
         _dispatchTable.get(ref) match {
           case Some(f) =>
             f(
               dataList.map(dl => ListParWithRandom(dl.pars, dl.randomState)),
               sequenceNumber
-            )
+            )(traceId)
           case None => s.raiseError(new Exception(s"dispatch: no function for $ref"))
         }
       case Empty =>
@@ -55,7 +61,7 @@ object RholangAndScalaDispatcher {
 
   def create[M[_], F[_]](
       tuplespace: RhoISpace[M],
-      dispatchTable: => Map[Long, (Seq[ListParWithRandom], Int) => M[Unit]],
+      dispatchTable: => Map[Long, (Seq[ListParWithRandom], Int) => TraceId => M[Unit]],
       urnMap: Map[String, Par]
   )(
       implicit

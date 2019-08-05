@@ -10,6 +10,7 @@ import cats.mtl.FunctorTell
 import cats.temp.par
 import com.google.protobuf.ByteString
 import coop.rchain.crypto.hash.Blake2b512Random
+import coop.rchain.metrics.Span.TraceId
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.models.Expr.ExprInstance.GString
 import coop.rchain.models.TaggedContinuation.TaggedCont.ScalaBodyRef
@@ -52,7 +53,7 @@ object Runtime {
   type RhoReplayISpace[F[_]] = TCPAK[F, IReplaySpace]
 
   type RhoDispatch[F[_]]    = Dispatch[F, ListParWithRandom, TaggedContinuation]
-  type RhoSysFunction[F[_]] = (Seq[ListParWithRandom], Int) => F[Unit]
+  type RhoSysFunction[F[_]] = (Seq[ListParWithRandom], Int) => TraceId => F[Unit]
   type RhoDispatchMap[F[_]] = Map[Long, RhoSysFunction[F]]
 
   type CPAK[M[_], F[_[_], _, _, _, _]] =
@@ -147,7 +148,7 @@ object Runtime {
       space: RhoISpace[F],
       replaySpace: RhoISpace[F],
       processes: List[(Name, Arity, Remainder, BodyRef)]
-  ): F[List[Option[(TaggedContinuation, Seq[ListParWithRandom])]]] =
+  )(implicit traceId: TraceId): F[List[Option[(TaggedContinuation, Seq[ListParWithRandom])]]] =
     processes.flatMap {
       case (name, arity, remainder, ref) =>
         val channels = List(name)
@@ -160,8 +161,8 @@ object Runtime {
         )
         val continuation = TaggedContinuation(ScalaBodyRef(ref))
         List(
-          space.install(channels, patterns, continuation)(matchListPar),
-          replaySpace.install(channels, patterns, continuation)(matchListPar)
+          space.install(channels, patterns, continuation)(matchListPar, traceId),
+          replaySpace.install(channels, patterns, continuation)(matchListPar, traceId)
         )
     }.sequence
 
@@ -182,12 +183,12 @@ object Runtime {
         fixedChannel: Name,
         arity: Arity,
         bodyRef: BodyRef,
-        handler: Context[F] => (Seq[ListParWithRandom], Int) => F[Unit],
+        handler: Context[F] => (Seq[ListParWithRandom], Int) => TraceId => F[Unit],
         remainder: Remainder = None
     ) {
       def toDispatchTable(
           context: SystemProcess.Context[F]
-      ): (BodyRef, (Seq[ListParWithRandom], Arity) => F[Unit]) =
+      ): (BodyRef, (Seq[ListParWithRandom], Arity) => TraceId => F[Unit]) =
         bodyRef -> handler(context)
 
       def toUrnMap: (String, Par) = {
@@ -283,7 +284,8 @@ object Runtime {
       extraSystemProcesses: Seq[SystemProcess.Definition[F]] = Seq.empty
   )(
       implicit
-      executionContext: ExecutionContext
+      executionContext: ExecutionContext,
+      traceId: TraceId
   ): F[Runtime[F]] = {
     implicit val P = par.Par[F].parallel
     createWithEmptyCost_(dataDir, mapSize, extraSystemProcesses)
@@ -296,7 +298,8 @@ object Runtime {
   )(
       implicit
       P: Parallel[F, M],
-      executionContext: ExecutionContext
+      executionContext: ExecutionContext,
+      traceId: TraceId
   ): F[Runtime[F]] =
     for {
       cost <- CostAccounting.emptyCost[F]
@@ -313,7 +316,8 @@ object Runtime {
   )(
       implicit P: Parallel[F, M],
       executionContext: ExecutionContext,
-      cost: _cost[F]
+      cost: _cost[F],
+      traceId: TraceId
   ): F[Runtime[F]] = {
     val errorLog                               = new ErrorLog[F]()
     implicit val ft: FunctorTell[F, Throwable] = errorLog
@@ -328,22 +332,22 @@ object Runtime {
     ): RhoDispatchMap[F] = {
       val systemProcesses = SystemProcesses[F](dispatcher, space)
       import BodyRefs._
-      Map(
+      Map[Long, RhoSysFunction[F]](
         ED25519_VERIFY               -> systemProcesses.ed25519Verify,
         SHA256_HASH                  -> systemProcesses.sha256Hash,
         KECCAK256_HASH               -> systemProcesses.keccak256Hash,
         BLAKE2B256_HASH              -> systemProcesses.blake2b256Hash,
         SECP256K1_VERIFY             -> systemProcesses.secp256k1Verify,
-        REG_LOOKUP                   -> (registry.lookup(_, _)),
-        REG_LOOKUP_CALLBACK          -> (registry.lookupCallback(_, _)),
-        REG_INSERT                   -> (registry.insert(_, _)),
-        REG_INSERT_CALLBACK          -> (registry.insertCallback(_, _)),
-        REG_REGISTER_INSERT_CALLBACK -> (registry.registerInsertCallback(_, _)),
-        REG_DELETE                   -> (registry.delete(_, _)),
-        REG_DELETE_ROOT_CALLBACK     -> (registry.deleteRootCallback(_, _)),
-        REG_DELETE_CALLBACK          -> (registry.deleteCallback(_, _)),
-        REG_PUBLIC_LOOKUP            -> (registry.publicLookup(_, _)),
-        REG_NONCE_INSERT_CALLBACK    -> (registry.nonceInsertCallback(_, _))
+        REG_LOOKUP                   -> registry.lookup,
+        REG_LOOKUP_CALLBACK          -> registry.lookupCallback,
+        REG_INSERT                   -> registry.insert,
+        REG_INSERT_CALLBACK          -> registry.insertCallback,
+        REG_REGISTER_INSERT_CALLBACK -> registry.registerInsertCallback,
+        REG_DELETE                   -> registry.delete,
+        REG_DELETE_ROOT_CALLBACK     -> registry.deleteRootCallback,
+        REG_DELETE_CALLBACK          -> registry.deleteCallback,
+        REG_PUBLIC_LOOKUP            -> registry.publicLookup,
+        REG_NONCE_INSERT_CALLBACK    -> registry.nonceInsertCallback
       ) ++
         (stdSystemProcesses[F] ++ extraSystemProcesses)
           .map(
@@ -428,7 +432,8 @@ object Runtime {
 
   def injectEmptyRegistryRoot[F[_]](space: RhoISpace[F], replaySpace: RhoReplayISpace[F])(
       implicit F: Concurrent[F],
-      spanF: Span[F]
+      spanF: Span[F],
+      traceId: TraceId
   ): F[Unit] = {
     // This random value stays dead in the tuplespace, so we can have some fun.
     // This is from Jeremy Bentham's "Defence of Usury"
@@ -444,13 +449,13 @@ object Runtime {
                       ListParWithRandom(Seq(Registry.emptyMap), rand),
                       false,
                       0
-                    )(matchListPar(F, spanF))
+                    )(matchListPar(F, spanF), traceId)
       replayResult <- replaySpace.produce(
                        Registry.registryRoot,
                        ListParWithRandom(Seq(Registry.emptyMap), rand),
                        false,
                        0
-                     )(matchListPar(F, spanF))
+                     )(matchListPar(F, spanF), traceId)
       _ <- spaceResult match {
             case None =>
               replayResult match {

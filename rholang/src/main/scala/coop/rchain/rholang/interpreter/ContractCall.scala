@@ -1,16 +1,15 @@
 package coop.rchain.rholang.interpreter
 
 import cats.effect.{Concurrent, Sync}
-import cats.effect.concurrent.Semaphore
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.models.{ListParWithRandom, Par, TaggedContinuation}
 import coop.rchain.rholang.interpreter.Runtime.RhoISpace
-import coop.rchain.rholang.interpreter.accounting.{loggingCost, noOpCostLog}
-import coop.rchain.rholang.interpreter.errors.OutOfPhlogistonsError
+import coop.rchain.rholang.interpreter.accounting.noOpCostLog
 import coop.rchain.rholang.interpreter.storage.implicits.matchListPar
 import coop.rchain.rspace.util.unpackCont
 import cats.implicits._
 import coop.rchain.metrics.Span
+import coop.rchain.metrics.Span.TraceId
 import coop.rchain.rholang.interpreter.accounting.{Cost, CostAccounting}
 
 /**
@@ -35,27 +34,31 @@ class ContractCall[F[_]: Concurrent: Span](
     space: RhoISpace[F],
     dispatcher: Dispatch[F, ListParWithRandom, TaggedContinuation]
 ) {
-  type Producer = (Seq[Par], Par) => F[Unit]
+  type Producer = (Seq[Par], Par) => TraceId => F[Unit]
 
   // TODO: pass _cost[F] as an implicit parameter
   private def produce(
       rand: Blake2b512Random,
       sequenceNumber: Int
-  )(values: Seq[Par], ch: Par): F[Unit] =
+  )(values: Seq[Par], ch: Par)(traceId: TraceId): F[Unit] =
     for {
       produceResult <- space.produce(
                         ch,
                         ListParWithRandom(values, rand),
                         persist = false,
                         sequenceNumber
-                      )(matchListPar(Sync[F], Span[F]))
+                      )(matchListPar(Sync[F], Span[F]), traceId)
       _ <- produceResult.fold(Sync[F].unit) {
             case (cont, channels) =>
-              dispatcher.dispatch(unpackCont(cont), channels.map(_.value), cont.sequenceNumber)
+              dispatcher.dispatch(unpackCont(cont), channels.map(_.value), cont.sequenceNumber)(
+                traceId
+              )
           }
     } yield ()
 
-  def unapply(contractArgs: (Seq[ListParWithRandom], Int)): Option[(Producer, Seq[Par])] =
+  def unapply(
+      contractArgs: (Seq[ListParWithRandom], Int)
+  ): Option[(Producer, Seq[Par])] =
     contractArgs match {
       case (
           Seq(
@@ -66,7 +69,8 @@ class ContractCall[F[_]: Concurrent: Span](
           ),
           sequenceNumber
           ) =>
-        Some((produce(rand, sequenceNumber), args))
+        val w: (Seq[Par], Par) => TraceId => F[Unit] = produce(rand, sequenceNumber)
+        Some((w, args))
       case _ => None
     }
 }
