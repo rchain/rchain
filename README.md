@@ -1,3 +1,5 @@
+this is just a dummy commit
+
 # RChain
 
 [![Build Status](https://drone.rchain-dev.tk/api/badges/rchain/rchain/status.svg)](https://drone.rchain-dev.tk/rchain/rchain)
