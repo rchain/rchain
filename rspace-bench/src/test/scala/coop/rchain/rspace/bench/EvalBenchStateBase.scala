@@ -1,6 +1,8 @@
 package coop.rchain.rspace.bench
 
-import cats._, cats.data._, cats.implicits._
+import cats._
+import cats.data._
+import cats.implicits._
 import cats.effect._
 import java.io.{FileNotFoundException, InputStreamReader}
 import java.nio.file.{Files, Path}
@@ -8,6 +10,7 @@ import java.nio.file.{Files, Path}
 import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.metrics
+import coop.rchain.metrics.Span.TraceId
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.models.Par
 import coop.rchain.rholang.interpreter.{ParBuilderUtil, Runtime}
@@ -22,6 +25,7 @@ trait EvalBenchStateBase {
   implicit val logF: Log[Task]            = new Log.NOPLog[Task]
   implicit val noopMetrics: Metrics[Task] = new metrics.Metrics.MetricsNOP[Task]
   implicit val noopSpan: Span[Task]       = NoopSpan[Task]()
+  implicit val traceId: TraceId           = Span.empty
 
   val rhoScriptSource: String
   lazy val runtime: Runtime[Task] =

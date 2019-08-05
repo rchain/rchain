@@ -1,5 +1,7 @@
 package coop.rchain.rspace.bench
 
+import coop.rchain.metrics.Span
+import coop.rchain.metrics.Span.TraceId
 import monix.eval.Task
 import monix.execution.schedulers.{CanBlock, TrampolineScheduler}
 import monix.execution.{ExecutionModel, Scheduler}
@@ -16,6 +18,7 @@ import scala.concurrent.duration.Duration
 class EvalBench {
 
   import EvalBench._
+  implicit val traceId: TraceId = Span.empty
 
   def processErrors(errors: Vector[Throwable]): Unit = if (errors.nonEmpty) {
     throw new RuntimeException(
@@ -28,7 +31,7 @@ class EvalBench {
   def createTest(state: EvalBenchStateBase): Task[Vector[Throwable]] = {
     val par = state.term.getOrElse(throw new Error("Failed to prepare executable rholang term"))
     state.runtime.reducer
-      .inj(par)(state.rand)
+      .inj(par)(state.rand, traceId)
       .flatMap(_ => state.runtime.readAndClearErrorVector())
   }
 

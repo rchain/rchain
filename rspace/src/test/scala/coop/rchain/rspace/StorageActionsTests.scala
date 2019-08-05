@@ -2,6 +2,8 @@ package coop.rchain.rspace
 
 import cats.effect._
 import cats.implicits._
+import coop.rchain.metrics.Span
+import coop.rchain.metrics.Span.TraceId
 import coop.rchain.rspace._
 import coop.rchain.rspace.examples.StringExamples._
 import coop.rchain.rspace.examples.StringExamples.implicits._
@@ -25,6 +27,7 @@ trait StorageActionsTests[F[_]]
     PropertyCheckConfiguration(minSuccessful = 5, sizeRange = 30)
 
   implicit val serializeString: Serialize[String] = coop.rchain.rspace.util.stringSerialize
+  implicit val span: TraceId                      = Span.empty
 
   implicit val codecString: Codec[String]   = coop.rchain.rspace.util.stringCodec
   implicit val codecP: Codec[Pattern]       = implicitly[Serialize[Pattern]].toCodec

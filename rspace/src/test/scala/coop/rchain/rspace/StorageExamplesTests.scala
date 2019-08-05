@@ -6,6 +6,8 @@ import java.nio.file.{Files, Path}
 import cats._
 import cats.implicits._
 import cats.effect.Sync
+import coop.rchain.metrics.Span
+import coop.rchain.metrics.Span.TraceId
 import coop.rchain.rspace._
 import coop.rchain.rspace.examples.AddressBookExample
 import coop.rchain.rspace.examples.AddressBookExample._
@@ -25,6 +27,7 @@ import monix.execution.atomic.AtomicAny
 
 trait StorageExamplesTests[F[_]]
     extends StorageTestsBase[F, Channel, Pattern, Entry, EntriesCaptor] {
+  implicit val traceId: TraceId = Span.empty
 
   "CORE-365: A joined consume on duplicate channels followed by two produces on that channel" should
     "return a continuation and the produced data" in fixture { (store, _, space) =>

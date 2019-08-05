@@ -8,6 +8,7 @@ import coop.rchain.catscontrib.ski._
 import cats.effect._
 import cats.implicits._
 import com.typesafe.scalalogging.Logger
+import coop.rchain.metrics.Span.TraceId
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.rspace._
 import coop.rchain.rspace.examples.StringExamples._
@@ -51,6 +52,7 @@ trait ReplayRSpaceTests extends ReplayRSpaceTestsBase[String, Pattern, String, S
   import SchedulerPools.global
 
   implicit val log: Log[Task]      = new Log.NOPLog[Task]
+  implicit val span: TraceId       = Span.empty
   val arbitraryRangeSize: Gen[Int] = Gen.chooseNum[Int](1, 10)
   val arbitraryRangesSize: Gen[(Int, Int)] = for {
     m <- Gen.chooseNum[Int](1, 10)

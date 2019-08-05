@@ -6,6 +6,7 @@ import java.util.concurrent.TimeUnit
 import cats.Id
 import cats.effect._
 import coop.rchain.metrics
+import coop.rchain.metrics.Span.TraceId
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.rspace._
 import coop.rchain.rspace.{RSpace, ReplayRSpace}
@@ -21,6 +22,7 @@ import org.openjdk.jmh.infra.Blackhole
 class ReplayRSpaceBench {
 
   import ReplayRSpaceBench._
+  implicit val traceId: TraceId = Span.empty
 
   @Benchmark
   @BenchmarkMode(Array(Mode.SingleShotTime))
@@ -57,6 +59,7 @@ object ReplayRSpaceBench {
   import scala.concurrent.ExecutionContext.Implicits.global
 
   abstract class ReplayRSpaceBenchState {
+    implicit val traceId: TraceId                               = Span.empty
     var space: IdISpace[Channel, Pattern, Entry, EntriesCaptor] = null
     var replaySpace: IReplaySpace[cats.Id, Channel, Pattern, Entry, EntriesCaptor] =
       null

@@ -4,9 +4,14 @@ import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.models.Par
 import coop.rchain.rholang.interpreter.ChargingReducer
 import java.io.{FileNotFoundException, InputStreamReader}
+
+import coop.rchain.metrics.Span
+import coop.rchain.metrics.Span.TraceId
 import monix.eval.Task
 
 package object wide {
+
+  implicit val traceId: TraceId = Span.empty
 
   def processErrors(errors: Vector[Throwable]): Vector[Throwable] = {
 

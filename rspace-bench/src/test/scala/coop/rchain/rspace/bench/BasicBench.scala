@@ -7,6 +7,7 @@ import cats.effect.{ContextShift, Sync}
 import coop.rchain.catscontrib.TaskContrib.TaskOps
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.metrics
+import coop.rchain.metrics.Span.TraceId
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.models.Expr.ExprInstance.{GInt, GString}
 import coop.rchain.models.TaggedContinuation.TaggedCont.ParBody
@@ -36,6 +37,7 @@ import scala.collection.immutable.{BitSet, Seq}
 class BasicBench {
 
   import BasicBench._
+  implicit val traceId: TraceId = Span.empty
 
   @Benchmark
   @BenchmarkMode(Array(Mode.AverageTime))
@@ -48,14 +50,14 @@ class BasicBench {
           state.patterns(i) :: Nil,
           state.tc.head,
           false
-        )(state.matcher)
+        )(state.matcher, traceId)
         .unsafeRunSync
 
       assert(c1.isEmpty)
       bh.consume(c1)
 
       val r2 =
-        space.produce(state.channels(i), state.data(i), false)(state.matcher).unsafeRunSync
+        space.produce(state.channels(i), state.data(i), false)(state.matcher, traceId).unsafeRunSync
 
       assert(r2.nonEmpty)
       bh.consume(r2)
@@ -74,7 +76,7 @@ class BasicBench {
     val space = state.testSpace
     for (i <- 0 to 100) {
       val r2 =
-        space.produce(state.channels(i), state.data(i), false)(state.matcher).unsafeRunSync
+        space.produce(state.channels(i), state.data(i), false)(state.matcher, traceId).unsafeRunSync
 
       assert(r2.isEmpty)
       bh.consume(r2)
@@ -85,7 +87,7 @@ class BasicBench {
           state.patterns(i) :: Nil,
           state.tc.head,
           false
-        )(state.matcher)
+        )(state.matcher, traceId)
         .unsafeRunSync
 
       assert(c1.nonEmpty)

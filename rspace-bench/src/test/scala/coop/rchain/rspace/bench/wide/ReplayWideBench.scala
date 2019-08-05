@@ -9,6 +9,8 @@ import java.util.concurrent.TimeUnit
 
 import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.crypto.hash.Blake2b512Random
+import coop.rchain.metrics.Span
+import coop.rchain.metrics.Span.TraceId
 import coop.rchain.models.Par
 import coop.rchain.rholang.interpreter.accounting.Cost
 import coop.rchain.rholang.interpreter.{Interpreter, Runtime}
@@ -47,6 +49,7 @@ abstract class ReplayWideBenchState extends WideBenchBaseState {
 
   implicit val rand: Blake2b512Random        = Blake2b512Random(128)
   var runReplayTask: Task[Vector[Throwable]] = null
+  implicit val traceId: TraceId              = Span.empty
 
   @Setup(value = Level.Iteration)
   override def doSetup(): Unit = {

@@ -6,6 +6,7 @@ import java.util.concurrent.TimeUnit
 import cats.Id
 import cats.effect._
 import coop.rchain.metrics
+import coop.rchain.metrics.Span.TraceId
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.rspace._
 import coop.rchain.rspace.{RSpace, ReplayRSpace}
@@ -29,10 +30,11 @@ trait RSpaceBenchBase {
 
   var space: ISpace[Id, Channel, Pattern, Entry, EntriesCaptor] = null
 
-  val channel  = Channel("friends#" + 1.toString)
-  val channels = List(channel)
-  val matches  = List(CityMatch(city = "Crystal Lake"))
-  val captor   = new EntriesCaptor()
+  val channel                   = Channel("friends#" + 1.toString)
+  val channels                  = List(channel)
+  val matches                   = List(CityMatch(city = "Crystal Lake"))
+  val captor                    = new EntriesCaptor()
+  implicit val traceId: TraceId = Span.empty
 
   @Benchmark
   @BenchmarkMode(Array(Mode.AverageTime))

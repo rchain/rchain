@@ -4,13 +4,14 @@ import java.util.concurrent.TimeUnit
 
 import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.crypto.hash.Blake2b512Random
+import coop.rchain.metrics.Span
+import coop.rchain.metrics.Span.TraceId
 import coop.rchain.rholang.interpreter.Runtime
 import org.openjdk.jmh.annotations._
 import org.openjdk.jmh.infra.Blackhole
 
 import scala.concurrent.Await
 import scala.concurrent.duration.Duration
-
 import monix.eval.Task
 
 class WideBench {
