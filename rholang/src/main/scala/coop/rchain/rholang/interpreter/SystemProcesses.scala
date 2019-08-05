@@ -163,6 +163,18 @@ object SystemProcesses {
 
         case isContractCall(
             produce,
+            Seq(RhoType.String("fromDeployerId"), RhoType.DeployerId(id), ack)
+            ) =>
+          val response =
+            RevAddress
+              .fromDeployerId(id)
+              .map(ra => RhoType.String(ra.toBase58))
+              .getOrElse(Par())
+
+          produce(Seq(response), ack)
+
+        case isContractCall(
+            produce,
             Seq(RhoType.String("fromUnforgeable"), argument, ack)
             ) =>
           val response = argument match {
