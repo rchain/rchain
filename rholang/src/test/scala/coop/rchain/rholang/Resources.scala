@@ -7,6 +7,7 @@ import cats.effect.{Concurrent, ContextShift, Resource, Sync}
 import cats.implicits._
 import cats.temp.par
 import com.typesafe.scalalogging.Logger
+import coop.rchain.metrics.Span.TraceId
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.models._
 import coop.rchain.rholang.interpreter.Runtime
@@ -19,7 +20,8 @@ import monix.execution.Scheduler
 import scala.reflect.io.Directory
 
 object Resources {
-  val logger: Logger = Logger(this.getClass.getName.stripSuffix("$"))
+  val logger: Logger            = Logger(this.getClass.getName.stripSuffix("$"))
+  implicit val traceId: TraceId = Span.empty
 
   def mkTempDir[F[_]: Sync](prefix: String): Resource[F, Path] =
     Resource.makeCase(Sync[F].delay(Files.createTempDirectory(prefix)))(

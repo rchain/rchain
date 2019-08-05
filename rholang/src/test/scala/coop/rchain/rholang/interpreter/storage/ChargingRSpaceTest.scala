@@ -4,6 +4,7 @@ import cats.effect.{Resource, Sync}
 import com.google.protobuf.ByteString
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.metrics
+import coop.rchain.metrics.Span.TraceId
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.models.Expr.ExprInstance.GInt
 import coop.rchain.models.TaggedContinuation.TaggedCont.ParBody
@@ -26,6 +27,7 @@ import org.scalatest.{fixture, Matchers, Outcome}
 import scala.concurrent.duration._
 
 class ChargingRSpaceTest extends fixture.FlatSpec with TripleEqualsSupport with Matchers {
+  implicit val traceId: TraceId = Span.empty
 
   behavior of "ChargingRSpace"
 

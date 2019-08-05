@@ -1,6 +1,7 @@
 package coop.rchain.rholang.interpreter
 
 import coop.rchain.crypto.hash.Blake2b512Random
+import coop.rchain.metrics.Span.TraceId
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.models.Expr.ExprInstance.{EVarBody, GString}
 import coop.rchain.models.Var.VarInstance.FreeVar
@@ -28,6 +29,7 @@ import scala.concurrent.duration._
 class CostAccountingReducerTest extends FlatSpec with Matchers with TripleEqualsSupport {
 
   implicit val noopSpan: Span[Task] = Span.noop
+  implicit val traceId: TraceId     = Span.empty
 
   behavior of "Cost accounting in Reducer"
 
@@ -83,7 +85,8 @@ class CostAccountingReducerTest extends FlatSpec with Matchers with TripleEquals
           persist: Boolean,
           sequenceNumber: Int
       )(
-          implicit m: Match[Task, BindPattern, ListParWithRandom]
+          implicit m: Match[Task, BindPattern, ListParWithRandom],
+          traceId: TraceId
       ): Task[
         Option[(ContResult[Par, BindPattern, TaggedContinuation], Seq[Result[ListParWithRandom]])]
       ] =

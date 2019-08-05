@@ -4,6 +4,7 @@ import cats._
 import cats.effect._
 import cats.implicits._
 import coop.rchain.metrics
+import coop.rchain.metrics.Span.TraceId
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.models._
 import coop.rchain.rholang.Resources._
@@ -25,6 +26,7 @@ class CostAccountingPropertyTest extends FlatSpec with PropertyChecks with Match
   import CostAccountingPropertyTest._
 
   implicit val params: Parameters = Parameters.defaultVerbose.withMinSuccessfulTests(1000)
+  implicit val traceId: TraceId   = Span.empty
 
   def procGen(maxHeight: Int): Gen[PrettyPrinted[Proc]] =
     ProcGen.topLevelGen(maxHeight).map(PrettyPrinted[Proc](_, PrettyPrinter.print))
@@ -100,6 +102,7 @@ object CostAccountingPropertyTest {
     implicit val logF: Log[Task]            = new Log.NOPLog[Task]
     implicit val noopMetrics: Metrics[Task] = new metrics.Metrics.MetricsNOP[Task]
     implicit val noopSpan: Span[Task]       = NoopSpan[Task]()
+    implicit val traceId: TraceId           = Span.empty
 
     val prefix = "cost-accounting-property-test"
     mkRuntime[Task](prefix, 1024 * 1024).use { runtime =>

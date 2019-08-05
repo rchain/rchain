@@ -14,6 +14,7 @@ import org.scalatest.{FlatSpec, Matchers}
 import scala.concurrent.duration._
 import coop.rchain.metrics.Span
 import coop.rchain.metrics.NoopSpan
+import coop.rchain.metrics.Span.TraceId
 
 class InterpreterSpec extends FlatSpec with Matchers {
   private val mapSize     = 10L * 1024L * 1024L
@@ -21,6 +22,7 @@ class InterpreterSpec extends FlatSpec with Matchers {
   private val maxDuration = 5.seconds
 
   implicit val logF: Log[Task]            = new Log.NOPLog[Task]
+  implicit val span: TraceId              = Span.empty
   implicit val noopMetrics: Metrics[Task] = new metrics.Metrics.MetricsNOP[Task]
   implicit val noopSpan: Span[Task]       = NoopSpan[Task]()
 

@@ -9,6 +9,7 @@ import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.hash.{Blake2b256, Blake2b512Random, Keccak256, Sha256}
 import coop.rchain.crypto.signatures.{Ed25519, Secp256k1}
 import coop.rchain.metrics
+import coop.rchain.metrics.Span.TraceId
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.models.Expr.ExprInstance.{GBool, GByteArray, GString}
 import coop.rchain.models.Var.VarInstance.Wildcard
@@ -39,6 +40,7 @@ class CryptoChannelsSpec
 
   behavior of "Crypto channels"
 
+  implicit val traceId: TraceId             = Span.empty
   implicit val rand: Blake2b512Random       = Blake2b512Random(Array.empty[Byte])
   implicit val serializePar: Serialize[Par] = storage.implicits.serializePar
   implicit val serializePars: Serialize[ListParWithRandom] =

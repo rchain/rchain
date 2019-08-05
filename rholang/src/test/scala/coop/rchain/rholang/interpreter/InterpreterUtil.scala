@@ -1,14 +1,16 @@
 package coop.rchain.rholang.interpreter
 
 import cats.implicits._
-
 import cats.effect.Sync
+import coop.rchain.metrics.Span
+import coop.rchain.metrics.Span.TraceId
 import coop.rchain.rholang.interpreter.accounting.{_cost, Cost}
-
 import org.scalatest._
 import org.scalatest.Matchers._
 
 object InterpreterUtil {
+  implicit val traceId: TraceId = Span.empty
+
   def evaluateResult[F[_]: Sync: _cost](
       runtime: Runtime[F],
       term: String,

@@ -4,6 +4,7 @@ import java.nio.file.{Files, Path}
 
 import com.google.protobuf.ByteString
 import coop.rchain.metrics
+import coop.rchain.metrics.Span.TraceId
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.models.Expr.ExprInstance._
 import coop.rchain.models._
@@ -804,6 +805,7 @@ class RholangMethodsCostsSpec
   implicit val logF: Log[Task]            = new Log.NOPLog[Task]
   implicit val noopMetrics: Metrics[Task] = new metrics.Metrics.MetricsNOP[Task]
   implicit val noopSpan: Span[Task]       = NoopSpan[Task]()
+  implicit val traceId: TraceId           = Span.empty
 
   protected override def beforeAll(): Unit = {
     import coop.rchain.catscontrib.TaskContrib._

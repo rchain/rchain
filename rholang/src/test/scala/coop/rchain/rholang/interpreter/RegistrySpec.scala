@@ -5,6 +5,7 @@ import cats.effect.concurrent.Ref
 import com.google.protobuf.ByteString
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.hash.{Blake2b256, Blake2b512Random}
+import coop.rchain.metrics.Span.TraceId
 import coop.rchain.metrics.{NoopSpan, Span}
 import coop.rchain.models.Expr.ExprInstance._
 import coop.rchain.models._
@@ -27,6 +28,7 @@ import scala.concurrent.duration._
 trait RegistryTester extends PersistentStoreTester {
   implicit val errorLog         = new ErrorLog[Task]()
   implicit val span: Span[Task] = NoopSpan[Task]
+  implicit val traceId: TraceId = Span.empty
 
   private[this] def dispatchTableCreator(registry: Registry[Task]): RhoDispatchMap[Task] = {
     import coop.rchain.rholang.interpreter.Runtime.BodyRefs._

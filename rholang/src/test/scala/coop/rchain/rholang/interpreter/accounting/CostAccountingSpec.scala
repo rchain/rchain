@@ -3,6 +3,7 @@ package coop.rchain.rholang.interpreter.accounting
 import cats.data.Chain
 import cats.effect._
 import coop.rchain.metrics
+import coop.rchain.metrics.Span.TraceId
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.rholang.Resources
 import coop.rchain.rholang.interpreter._
@@ -20,6 +21,8 @@ import org.scalatest.{AppendedClues, Assertion, FlatSpec, Matchers}
 import scala.concurrent.duration._
 
 class CostAccountingSpec extends FlatSpec with Matchers with PropertyChecks with AppendedClues {
+
+  implicit val traceId: TraceId = Span.empty
 
   private[this] def evaluateWithCostLog(
       initialPhlo: Long,

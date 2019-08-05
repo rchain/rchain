@@ -3,6 +3,7 @@ package coop.rchain.rholang
 import com.google.protobuf.ByteString
 import coop.rchain.casper.protocol.DeployData
 import coop.rchain.metrics
+import coop.rchain.metrics.Span.TraceId
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.rholang.Resources.mkRuntime
 import coop.rchain.rholang.interpreter.storage.StoragePrinter
@@ -15,9 +16,10 @@ import org.scalatest.{FlatSpec, Matchers}
 import scala.concurrent.duration._
 
 class StoragePrinterSpec extends FlatSpec with Matchers {
-  private val mapSize     = 10L * 1024L * 1024L
-  private val tmpPrefix   = "rspace-store-"
-  private val maxDuration = 5.seconds
+  implicit val traceId: TraceId = Span.empty
+  private val mapSize           = 10L * 1024L * 1024L
+  private val tmpPrefix         = "rspace-store-"
+  private val maxDuration       = 5.seconds
 
   implicit val logF: Log[Task]            = new Log.NOPLog[Task]
   implicit val noopMetrics: Metrics[Task] = new metrics.Metrics.MetricsNOP[Task]
