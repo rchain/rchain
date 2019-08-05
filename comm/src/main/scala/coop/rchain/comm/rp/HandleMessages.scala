@@ -3,7 +3,6 @@ package coop.rchain.comm.rp
 import cats._
 import cats.effect._
 import cats.implicits._
-
 import coop.rchain.catscontrib.ski._
 import coop.rchain.comm._
 import coop.rchain.comm.CommError._
@@ -12,7 +11,8 @@ import coop.rchain.comm.rp.Connect.{ConnectionsCell, RPConfAsk}
 import coop.rchain.comm.rp.Connect.Connections._
 import coop.rchain.comm.transport._
 import coop.rchain.comm.transport.CommunicationResponse._
-import coop.rchain.metrics.Metrics
+import coop.rchain.metrics.{Metrics, Span}
+import coop.rchain.metrics.Span.TraceId
 import coop.rchain.p2p.effects._
 import coop.rchain.shared._
 
@@ -28,12 +28,13 @@ object HandleMessages {
     ProtocolHelper.sender(protocol) match {
       case None =>
         Log[F].error(s"Sender not present, DROPPING $protocol").as(notHandled(senderNotAvailable))
-      case Some(sender) => handle_[F](protocol, sender)
+      case Some(sender) => handle_[F](protocol, sender, Span.next)
     }
 
   private def handle_[F[_]: Monad: Sync: Log: Time: Metrics: TransportLayer: PacketHandler: ConnectionsCell: RPConfAsk](
       proto: Protocol,
-      sender: PeerNode
+      sender: PeerNode,
+      traceId: TraceId
   ): F[CommunicationResponse] =
     proto.message match {
       case Protocol.Message.Heartbeat(heartbeat) => handleHeartbeat[F](sender, heartbeat)
@@ -42,7 +43,7 @@ object HandleMessages {
       case Protocol.Message.ProtocolHandshakeResponse(_) =>
         handleProtocolHandshakeResponse[F](sender)
       case Protocol.Message.Disconnect(disconnect) => handleDisconnect[F](sender, disconnect)
-      case Protocol.Message.Packet(packet)         => handlePacket[F](sender, packet)
+      case Protocol.Message.Packet(packet)         => handlePacket[F](sender, packet, traceId)
       case msg =>
         Log[F].error(s"Unexpected message type $msg") >> notHandled(unexpectedMessage(msg.toString))
           .pure[F]
@@ -60,7 +61,8 @@ object HandleMessages {
 
   def handlePacket[F[_]: Monad: Time: TransportLayer: Log: PacketHandler: RPConfAsk](
       remote: PeerNode,
-      packet: Packet
+      packet: Packet,
+      traceId: TraceId
   ): F[CommunicationResponse] =
     for {
       conf <- RPConfAsk[F].ask
