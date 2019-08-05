@@ -19,6 +19,7 @@ import coop.rchain.catscontrib.BooleanF._
 import coop.rchain.catscontrib.ski._
 import coop.rchain.comm.rp.Connect.{ConnectionsCell, RPConfAsk}
 import coop.rchain.comm.transport.TransportLayer
+import coop.rchain.metrics.Span.TraceId
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.EquivocationRecord
@@ -70,6 +71,12 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: ConnectionsCell: TransportLa
   def addBlock(
       b: BlockMessage,
       handleDoppelganger: (BlockMessage, Validator) => F[Unit]
+  )(implicit traceId: TraceId): F[BlockStatus] = internalAddBlock(b, handleDoppelganger, traceId)
+
+  private def internalAddBlock(
+      b: BlockMessage,
+      handleDoppelganger: (BlockMessage, Validator) => F[Unit],
+      parentTraceId: TraceId
   ): F[BlockStatus] = {
 
     def logAlreadyProcessed =
@@ -79,7 +86,7 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: ConnectionsCell: TransportLa
         )
         .as(BlockStatus.processing)
 
-    def doppelgangerAndAdd = spanF.trace(AddBlockMetricsSource) {
+    def doppelgangerAndAdd = spanF.trace(AddBlockMetricsSource, parentTraceId) { implicit traceId =>
       for {
         dag <- blockDag
         _ <- validatorId match {
@@ -117,7 +124,7 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: ConnectionsCell: TransportLa
   private def internalAddBlock(
       b: BlockMessage,
       dag: BlockDagRepresentation[F]
-  ): F[BlockStatus] =
+  )(implicit traceId: TraceId): F[BlockStatus] =
     for {
       _            <- Span[F].mark("internal-add-block")
       validFormat  <- Validate.formatOfFields[F](b)
@@ -217,10 +224,12 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: ConnectionsCell: TransportLa
       _ <- Log[F].info(s"Received ${PrettyPrinter.buildString(deploy)}")
     } yield (deploy.sig.toByteArray)
 
-  def estimator(dag: BlockDagRepresentation[F]): F[IndexedSeq[BlockHash]] =
-    Estimator.tips[F](dag, genesis)
+  def estimator(
+      dag: BlockDagRepresentation[F]
+  )(implicit traceId: TraceId): F[IndexedSeq[BlockHash]] =
+    Estimator.tips[F](dag, genesis, traceId)
 
-  def createBlock: F[CreateBlockStatus] = validatorId match {
+  def createBlock(implicit traceId: TraceId): F[CreateBlockStatus] = validatorId match {
     case Some(ValidatorIdentity(publicKey, privateKey, sigAlgorithm)) =>
       BlockDagStorage[F].getRepresentation.flatMap { dag =>
         BlockCreator.createBlock(
@@ -232,18 +241,19 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: ConnectionsCell: TransportLa
           shardId,
           version,
           expirationThreshold,
-          runtimeManager
+          runtimeManager,
+          traceId
         )
       }
     case None => CreateBlockStatus.readOnlyMode.pure[F]
   }
 
-  def lastFinalizedBlock: F[BlockMessage] =
+  def lastFinalizedBlock(implicit traceId: TraceId): F[BlockMessage] =
     for {
       dag                    <- blockDag
       lastFinalizedBlockHash <- lastFinalizedBlockHashContainer.get
       updatedLastFinalizedBlockHash <- LastFinalizedBlockCalculator[F]
-                                        .run(dag, lastFinalizedBlockHash)
+                                        .run(dag, lastFinalizedBlockHash, traceId)
       _            <- lastFinalizedBlockHashContainer.set(updatedLastFinalizedBlockHash)
       blockMessage <- ProtoUtil.unsafeGetBlock[F](updatedLastFinalizedBlockHash)
     } yield blockMessage
@@ -272,7 +282,7 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: ConnectionsCell: TransportLa
   private def attemptAdd(
       b: BlockMessage,
       dag: BlockDagRepresentation[F]
-  ): F[(BlockStatus, BlockDagRepresentation[F])] =
+  )(implicit traceId: TraceId): F[(BlockStatus, BlockDagRepresentation[F])] =
     for {
       _ <- Span[F].mark("attempt-add")
       _ <- Log[F].info(s"Attempting to add Block ${PrettyPrinter.buildString(b.blockHash)} to DAG.")
@@ -464,9 +474,7 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: ConnectionsCell: TransportLa
       s"Recording invalid block ${PrettyPrinter.buildString(block.blockHash)} for ${status.toString}."
     ) >> BlockDagStorage[F].insert(block, genesis, invalid = true)
 
-  private def reAttemptBuffer(
-      dag: BlockDagRepresentation[F]
-  ): F[Unit] =
+  private def reAttemptBuffer(dag: BlockDagRepresentation[F])(implicit traceId: TraceId): F[Unit] =
     for {
       _              <- Span[F].mark("reattempt-buffer")
       state          <- Cell[F, CasperState].read

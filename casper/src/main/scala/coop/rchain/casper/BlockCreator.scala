@@ -12,6 +12,7 @@ import coop.rchain.casper.util.rholang._
 import coop.rchain.casper.util.{ConstructDeploy, DagOperations, ProtoUtil}
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.{PrivateKey, PublicKey}
+import coop.rchain.metrics.Span.TraceId
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.Validator.Validator
@@ -43,15 +44,16 @@ object BlockCreator {
       shardId: String,
       version: Long,
       expirationThreshold: Int,
-      runtimeManager: RuntimeManager[F]
+      runtimeManager: RuntimeManager[F],
+      parentTraceId: TraceId
   )(
       implicit state: CasperStateCell[F],
       metricsF: Metrics[F],
       spanF: Span[F]
   ): F[CreateBlockStatus] =
-    spanF.trace(CreateBlockMetricsSource) {
+    spanF.trace(CreateBlockMetricsSource, parentTraceId) { implicit traceId =>
       for {
-        tipHashes             <- Estimator.tips[F](dag, genesis)
+        tipHashes             <- Estimator.tips[F](dag, genesis, traceId)
         _                     <- spanF.mark("after-estimator")
         parents               <- EstimatorHelper.chooseNonConflicting[F](tipHashes, dag)
         maxBlockNumber        = ProtoUtil.maxBlockNumber(parents)
@@ -192,7 +194,7 @@ object BlockCreator {
       version: Long,
       now: Long,
       invalidBlocks: Map[BlockHash, Validator]
-  ): F[CreateBlockStatus] =
+  )(implicit traceId: TraceId): F[CreateBlockStatus] =
     InterpreterUtil
       .computeDeploysCheckpoint[F](
         parents,

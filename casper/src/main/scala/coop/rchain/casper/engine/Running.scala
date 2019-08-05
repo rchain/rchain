@@ -25,10 +25,13 @@ import coop.rchain.comm.{transport, PeerNode}
 import coop.rchain.metrics.Metrics
 import coop.rchain.models.Validator.Validator
 import coop.rchain.shared.{Cell, Log, LogSource, Time}
-import coop.rchain.catscontrib.Catscontrib, Catscontrib._
+import coop.rchain.catscontrib.Catscontrib
+import Catscontrib._
+import coop.rchain.metrics.Span.TraceId
 import monix.eval.Task
 import monix.execution.Scheduler
 import coop.rchain.models.BlockHash.BlockHash
+
 import scala.concurrent.duration._
 import scala.util.Try
 
@@ -208,7 +211,8 @@ object Running {
   def handleForkChoiceTipRequest[F[_]: Monad: RPConfAsk: Log: TransportLayer: BlockStore](
       peer: PeerNode,
       fctr: ForkChoiceTipRequest
-  )(casper: MultiParentCasper[F]): F[Unit] =
+  )(casper: MultiParentCasper[F], traceId: TraceId): F[Unit] = {
+    implicit val tid: TraceId = traceId
     for {
       _     <- Log[F].info(s"Received ForkChoiceTipRequest from $peer")
       tip   <- MultiParentCasper.forkChoiceTip(casper)
@@ -217,6 +221,7 @@ object Running {
       _     <- TransportLayer[F].stream(peer, msg)
       _     <- Log[F].info(s"Sending Block ${tip.blockHash} to $peer")
     } yield ()
+  }
 
   def handleApprovedBlockRequest[F[_]: Monad: RPConfAsk: Log: TransportLayer](
       peer: PeerNode,
@@ -241,7 +246,7 @@ class Running[F[_]: RPConfAsk: BlockStore: Monad: ConnectionsCell: TransportLaye
   import Engine._
   import Running._
 
-  private def casperAdd(peer: PeerNode): BlockMessage => F[BlockStatus] = {
+  private def casperAdd(peer: PeerNode): TraceId => BlockMessage => F[BlockStatus] = {
     def handleDoppelganger: (BlockMessage, Validator) => F[Unit] =
       (bm: BlockMessage, self: Validator) =>
         if (bm.sender == self) {
@@ -250,19 +255,20 @@ class Running[F[_]: RPConfAsk: BlockStore: Monad: ConnectionsCell: TransportLaye
           Log[F].warn(warnMessage)
         } else ().pure[F]
 
-    (b: BlockMessage) => casper.addBlock(b, handleDoppelganger)
+    (traceId: TraceId) => (b: BlockMessage) => casper.addBlock(b, handleDoppelganger)(traceId)
   }
 
   def applicative: Applicative[F] = Applicative[F]
 
   override def init: F[Unit] = theInit
 
-  override def handle(peer: PeerNode, msg: CasperMessage): F[Unit] = msg match {
-    case b: BlockMessage              => handleBlockMessage[F](peer, b)(casper.contains, casperAdd(peer))
+  override def handle(peer: PeerNode, msg: CasperMessage, traceId: TraceId): F[Unit] = msg match {
+    case b: BlockMessage =>
+      handleBlockMessage[F](peer, b)(casper.contains, casperAdd(peer)(traceId))
     case br: BlockRequest             => handleBlockRequest[F](peer, br)
     case hbr: HasBlockRequest         => handleHasBlockRequest[F](peer, hbr)(casper.contains)
     case hb: HasBlock                 => handleHasBlock[F](peer, hb)(casper.contains)
-    case fctr: ForkChoiceTipRequest   => handleForkChoiceTipRequest[F](peer, fctr)(casper)
+    case fctr: ForkChoiceTipRequest   => handleForkChoiceTipRequest[F](peer, fctr)(casper, traceId)
     case abr: ApprovedBlockRequest    => handleApprovedBlockRequest[F](peer, abr, approvedBlock)
     case na: NoApprovedBlockAvailable => logNoApprovedBlockAvailable[F](na.nodeIdentifer)
     case _                            => noop

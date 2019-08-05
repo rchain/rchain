@@ -11,6 +11,7 @@ import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
 import coop.rchain.casper.util.{ConstructDeploy, ProtoUtil}
 import coop.rchain.crypto.hash.Blake2b512Random
+import coop.rchain.metrics.Span.TraceId
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.Expr.ExprInstance.GString
@@ -38,27 +39,30 @@ trait RuntimeManager[F[_]] {
       startHash: StateHash,
       deploy: DeployData,
       name: String = "__SCALA__"
-  ): F[Seq[Par]]
+  )(implicit traceId: TraceId): F[Seq[Par]]
   def replayComputeState(startHash: StateHash)(
       terms: Seq[InternalProcessedDeploy],
       blockData: BlockData,
       invalidBlocks: Map[BlockHash, Validator],
-      isGenesis: Boolean
+      isGenesis: Boolean,
+      traceId: TraceId
   ): F[Either[(Option[DeployData], Failed), StateHash]]
   def computeState(hash: StateHash)(
       terms: Seq[DeployData],
       blockData: BlockData,
-      invalidBlocks: Map[BlockHash, Validator]
+      invalidBlocks: Map[BlockHash, Validator],
+      traceId: TraceId
   ): F[(StateHash, Seq[InternalProcessedDeploy])]
   def computeGenesis(
       terms: Seq[DeployData],
-      blockTime: Long
+      blockTime: Long,
+      traceId: TraceId
   ): F[(StateHash, StateHash, Seq[InternalProcessedDeploy])]
-  def computeBonds(startHash: StateHash): F[Seq[Bond]]
-  def getData(hash: StateHash)(channel: Par): F[Seq[Par]]
+  def computeBonds(startHash: StateHash)(implicit traceId: TraceId): F[Seq[Bond]]
+  def getData(hash: StateHash)(channel: Par)(implicit traceId: TraceId): F[Seq[Par]]
   def getContinuation(hash: StateHash)(
       channels: Seq[Par]
-  ): F[Seq[(Seq[BindPattern], Par)]]
+  )(implicit traceId: TraceId): F[Seq[(Seq[BindPattern], Par)]]
   def emptyStateHash: StateHash
   def withRuntimeLock[A](f: Runtime[F] => F[A]): F[A]
 }
@@ -80,10 +84,12 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span] private[rholang] (
       start: StateHash,
       deploy: DeployData,
       name: String = "__SCALA__"
-  ): F[Seq[Par]] =
+  )(implicit traceId: TraceId): F[Seq[Par]] =
     captureResults(start, deploy, Par().withExprs(Seq(Expr(GString(name)))))
 
-  def captureResults(start: StateHash, deploy: DeployData, name: Par): F[Seq[Par]] =
+  def captureResults(start: StateHash, deploy: DeployData, name: Par)(
+      implicit traceId: TraceId
+  ): F[Seq[Par]] =
     withResetRuntimeLock(start) { runtime =>
       computeEffect(runtime, runtime.reducer)(deploy)
         .ensure(
@@ -95,20 +101,21 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span] private[rholang] (
 
   private def computeEffect(runtime: Runtime[F], reducer: ChargingReducer[F])(
       deploy: DeployData
-  ): F[EvaluateResult] =
+  )(implicit traceId: TraceId): F[EvaluateResult] =
     for {
       _      <- runtime.deployParametersRef.set(ProtoUtil.getRholangDeployParams(deploy))
-      result <- doInj(deploy, reducer, runtime.errorLog)(runtime.cost)
+      result <- doInj(deploy, reducer, runtime.errorLog)(runtime.cost, traceId)
     } yield result
 
   def replayComputeState(startHash: StateHash)(
       terms: Seq[InternalProcessedDeploy],
       blockData: BlockData,
       invalidBlocks: Map[BlockHash, Validator] = Map.empty[BlockHash, Validator],
-      isGenesis: Boolean //FIXME have a better way of knowing this. Pass the replayDeploy function maybe?
+      isGenesis: Boolean, //FIXME have a better way of knowing this. Pass the replayDeploy function maybe?
+      parentTraceId: TraceId
   ): F[Either[ReplayFailure, StateHash]] =
     withRuntimeLock { runtime =>
-      Span[F].trace(replayComputeStateLabel) {
+      Span[F].trace(replayComputeStateLabel, parentTraceId) { implicit traceId =>
         for {
           _      <- runtime.blockData.set(blockData)
           _      <- setInvalidBlocks(invalidBlocks, runtime)
@@ -121,10 +128,11 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span] private[rholang] (
   def computeState(startHash: StateHash)(
       terms: Seq[DeployData],
       blockData: BlockData,
-      invalidBlocks: Map[BlockHash, Validator] = Map.empty[BlockHash, Validator]
+      invalidBlocks: Map[BlockHash, Validator] = Map.empty[BlockHash, Validator],
+      parentTraceId: TraceId
   ): F[(StateHash, Seq[InternalProcessedDeploy])] =
     withRuntimeLock { runtime =>
-      Span[F].trace(computeStateLabel) {
+      Span[F].trace(computeStateLabel, parentTraceId) { implicit traceId =>
         for {
           _      <- runtime.blockData.set(blockData)
           _      <- setInvalidBlocks(invalidBlocks, runtime)
@@ -136,11 +144,12 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span] private[rholang] (
 
   def computeGenesis(
       terms: Seq[DeployData],
-      blockTime: Long
+      blockTime: Long,
+      parentTraceId: TraceId
   ): F[(StateHash, StateHash, Seq[InternalProcessedDeploy])] = {
     val startHash = emptyStateHash
     withRuntimeLock { runtime =>
-      Span[F].trace(computeGenesisLabel) {
+      Span[F].trace(computeGenesisLabel, parentTraceId) { implicit traceId =>
         for {
           _          <- runtime.blockData.set(BlockData(blockTime, 0))
           _          <- Span[F].mark("before-process-deploys")
@@ -173,8 +182,8 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span] private[rholang] (
     runtime.invalidBlocks.setParams(invalidBlocksPar)
   }
 
-  def computeBonds(hash: StateHash): F[Seq[Bond]] =
-    captureResults(hash, ConstructDeploy.sourceDeployNow(bondsQuerySource()))
+  def computeBonds(hash: StateHash)(implicit traceId: TraceId): F[Seq[Bond]] =
+    captureResults(hash, ConstructDeploy.sourceDeployNow(bondsQuerySource()))(traceId)
       .ensureOr(
         bondsPar =>
           new IllegalArgumentException(
@@ -198,9 +207,11 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span] private[rholang] (
   def withRuntimeLock[A](f: Runtime[F] => F[A]): F[A] =
     Sync[F].bracket(runtimeContainer.take)(f)(runtimeContainer.put)
 
-  private def withResetRuntimeLock[R](hash: StateHash)(block: Runtime[F] => F[R]): F[R] =
+  private def withResetRuntimeLock[R](
+      hash: StateHash
+  )(block: Runtime[F] => F[R])(implicit traceId: TraceId): F[R] =
     withRuntimeLock(
-      runtime => runtime.space.reset(Blake2b256Hash.fromByteString(hash)) >> block(runtime)
+      runtime => runtime.space.reset(Blake2b256Hash.fromByteString(hash))(traceId) >> block(runtime)
     )
 
   private def toBondSeq(bondsMap: Par): Seq[Bond] =
@@ -213,7 +224,7 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span] private[rholang] (
         Bond(validatorName, stakeAmount)
     }.toList
 
-  def getData(hash: StateHash)(channel: Par): F[Seq[Par]] =
+  def getData(hash: StateHash)(channel: Par)(implicit traceId: TraceId): F[Seq[Par]] =
     withResetRuntimeLock(hash)(getData(_)(channel))
 
   private def getData(
@@ -223,7 +234,7 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span] private[rholang] (
 
   def getContinuation(
       hash: StateHash
-  )(channels: Seq[Par]): F[Seq[(Seq[BindPattern], Par)]] =
+  )(channels: Seq[Par])(implicit traceId: TraceId): F[Seq[(Seq[BindPattern], Par)]] =
     withResetRuntimeLock(hash)(
       _.space
         .getWaitingContinuations(channels)
@@ -238,9 +249,9 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span] private[rholang] (
       startHash: StateHash,
       terms: Seq[DeployData],
       processDeploy: DeployData => F[InternalProcessedDeploy]
-  ): F[(StateHash, Seq[InternalProcessedDeploy])] =
+  )(implicit traceId: TraceId): F[(StateHash, Seq[InternalProcessedDeploy])] =
     for {
-      _ <- runtime.space.reset(Blake2b256Hash.fromByteString(startHash))
+      _ <- runtime.space.reset(Blake2b256Hash.fromByteString(startHash))(traceId)
       res <- terms.toList
               .foldM(Seq.empty[InternalProcessedDeploy]) {
                 case (results, deploy) => {
@@ -248,19 +259,20 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span] private[rholang] (
                 }
               }
       _               <- Span[F].mark("before-process-deploys-create-checkpoint")
-      finalCheckpoint <- runtime.space.createCheckpoint()
+      finalCheckpoint <- runtime.space.createCheckpoint()(traceId)
       finalStateHash  = finalCheckpoint.root
     } yield (finalStateHash.toByteString, res)
 
   private def processDeploy(runtime: Runtime[F])(
       deploy: DeployData
-  ): F[InternalProcessedDeploy] = Span[F].withMarks("process-deploy") {
+  )(implicit traceId: TraceId): F[InternalProcessedDeploy] = Span[F].withMarks("process-deploy") {
     for {
+      _                            <- Span[F].mark("before-process-deploy-compute-effect")
       fallback                     <- runtime.space.createSoftCheckpoint()
       evaluateResult               <- computeEffect(runtime, runtime.reducer)(deploy)
       EvaluateResult(cost, errors) = evaluateResult
       _                            <- Span[F].mark("before-process-deploy-create-soft-checkpoint")
-      checkpoint                   <- runtime.space.createSoftCheckpoint()
+      checkpoint                   <- runtime.space.createSoftCheckpoint()(traceId)
       deployResult = InternalProcessedDeploy(
         deploy,
         Cost.toProto(cost),
@@ -268,7 +280,7 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span] private[rholang] (
         Seq.empty[trace.Event],
         DeployStatus.fromErrors(errors)
       )
-      _ <- if (errors.nonEmpty) runtime.space.revertToSoftCheckpoint(fallback)
+      _ <- if (errors.nonEmpty) runtime.space.revertToSoftCheckpoint(fallback)(traceId)
           else Applicative[F].unit
     } yield deployResult
   }
@@ -278,9 +290,9 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span] private[rholang] (
       startHash: StateHash,
       terms: Seq[InternalProcessedDeploy],
       replayDeploy: InternalProcessedDeploy => F[Option[ReplayFailure]]
-  ): F[Either[ReplayFailure, StateHash]] =
+  )(implicit traceId: TraceId): F[Either[ReplayFailure, StateHash]] =
     for {
-      _ <- runtime.replaySpace.reset(Blake2b256Hash.fromByteString(startHash))
+      _ <- runtime.replaySpace.reset(Blake2b256Hash.fromByteString(startHash))(traceId)
       result <- terms.toList.foldM(().asRight[ReplayFailure]) {
                  case (previousResult, deploy) =>
                    previousResult.flatTraverse { _ =>
@@ -291,7 +303,7 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span] private[rholang] (
               .fromEither[F](result)
               .flatMapF { _ =>
                 Span[F].mark("before-replay-deploys-create-checkpoint") >> runtime.replaySpace
-                  .createCheckpoint()
+                  .createCheckpoint()(traceId)
                   .map(finalCheckpoint => finalCheckpoint.root.toByteString.asRight[ReplayFailure])
               }
               .value
@@ -299,11 +311,11 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span] private[rholang] (
 
   private def replayDeploy(runtime: Runtime[F])(
       processedDeploy: InternalProcessedDeploy
-  ): F[Option[ReplayFailure]] = Span[F].withMarks("replay-deploy") {
+  )(implicit traceId: TraceId): F[Option[ReplayFailure]] = Span[F].withMarks("replay-deploy") {
     import processedDeploy._
     for {
       _                    <- runtime.replaySpace.rig(processedDeploy.deployLog)
-      softCheckpoint       <- runtime.replaySpace.createSoftCheckpoint()
+      softCheckpoint       <- runtime.replaySpace.createSoftCheckpoint()(traceId)
       _                    <- Span[F].mark("before-replay-deploy-compute-effect")
       replayEvaluateResult <- computeEffect(runtime, runtime.replayReducer)(processedDeploy.deploy)
       //TODO: compare replay deploy cost to given deploy cost
@@ -317,8 +329,9 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span] private[rholang] (
                    (deploy.some, ReplayStatusMismatch(replayStatus, status): Failed).some
                      .pure[F]
                  else if (errors.nonEmpty)
-                   runtime.replaySpace.revertToSoftCheckpoint(softCheckpoint) >> none[ReplayFailure]
-                     .pure[F]
+                   runtime.replaySpace.revertToSoftCheckpoint(softCheckpoint)(traceId) >> none[
+                     ReplayFailure
+                   ].pure[F]
                  else {
                    runtime.replaySpace
                      .checkReplayData()
@@ -341,7 +354,7 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span] private[rholang] (
       deploy: DeployData,
       reducer: ChargingReducer[F],
       errorLog: ErrorLog[F]
-  )(implicit C: _cost[F]): F[EvaluateResult] = {
+  )(implicit C: _cost[F], traceId: TraceId): F[EvaluateResult] = {
     implicit val rand: Blake2b512Random = Blake2b512Random(
       DeployData.toByteArray(ProtoUtil.stripDeployData(deploy))
     )
@@ -361,13 +374,13 @@ object RuntimeManager {
 
   def fromRuntime[F[_]: Concurrent: Sync: Metrics: Span](
       active: Runtime[F]
-  ): F[RuntimeManager[F]] =
+  )(implicit traceId: TraceId): F[RuntimeManager[F]] =
     for {
-      _                <- active.space.clear()
-      _                <- active.replaySpace.clear()
+      _                <- active.space.clear()(traceId)
+      _                <- active.replaySpace.clear()(traceId)
       _                <- Runtime.injectEmptyRegistryRoot(active.space, active.replaySpace)
-      checkpoint       <- active.space.createCheckpoint()
-      replayCheckpoint <- active.replaySpace.createCheckpoint()
+      checkpoint       <- active.space.createCheckpoint()(traceId)
+      replayCheckpoint <- active.replaySpace.createCheckpoint()(traceId)
       hash             = ByteString.copyFrom(checkpoint.root.bytes.toArray)
       replayHash       = ByteString.copyFrom(replayCheckpoint.root.bytes.toArray)
       _                = assert(hash == replayHash)

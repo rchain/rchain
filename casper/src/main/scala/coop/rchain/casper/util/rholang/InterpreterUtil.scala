@@ -11,6 +11,7 @@ import coop.rchain.casper.util.{DagOperations, ProtoUtil}
 import coop.rchain.casper.{BlockException, PrettyPrinter}
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.metrics.Span
+import coop.rchain.metrics.Span.TraceId
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.Validator.Validator
 import coop.rchain.models.{BlockMetadata, Par}
@@ -33,7 +34,7 @@ object InterpreterUtil {
       b: BlockMessage,
       dag: BlockDagRepresentation[F],
       runtimeManager: RuntimeManager[F]
-  ): F[Either[BlockException, Option[StateHash]]] = {
+  )(implicit traceId: TraceId): F[Either[BlockException, Option[StateHash]]] = {
     val preStateHash    = ProtoUtil.preStateHash(b)
     val tsHash          = ProtoUtil.tuplespace(b)
     val deploys         = ProtoUtil.deploys(b)
@@ -75,7 +76,7 @@ object InterpreterUtil {
       blockData: BlockData,
       invalidBlocks: Map[BlockHash, Validator],
       isGenesis: Boolean
-  ): F[Either[BlockException, Option[StateHash]]] =
+  )(implicit traceId: TraceId): F[Either[BlockException, Option[StateHash]]] =
     possiblePreStateHash match {
       case Left(ex) =>
         BlockException(ex).asLeft[Option[StateHash]].pure[F]
@@ -107,9 +108,15 @@ object InterpreterUtil {
       blockData: BlockData,
       invalidBlocks: Map[BlockHash, Validator],
       isGenesis: Boolean
-  ): F[Either[BlockException, Option[StateHash]]] =
+  )(implicit traceId: TraceId): F[Either[BlockException, Option[StateHash]]] =
     runtimeManager
-      .replayComputeState(preStateHash)(internalDeploys, blockData, invalidBlocks, isGenesis)
+      .replayComputeState(preStateHash)(
+        internalDeploys,
+        blockData,
+        invalidBlocks,
+        isGenesis,
+        traceId
+      )
       .flatMap {
         case Left((Some(deploy), status)) =>
           status match {
@@ -166,6 +173,8 @@ object InterpreterUtil {
       runtimeManager: RuntimeManager[F],
       blockData: BlockData,
       invalidBlocks: Map[BlockHash, Validator]
+  )(
+      implicit traceId: TraceId
   ): F[Either[Throwable, (StateHash, StateHash, Seq[InternalProcessedDeploy])]] =
     for {
       nonEmptyParents <- parents
@@ -176,7 +185,7 @@ object InterpreterUtil {
       possiblePreStateHash <- computeParentsPostState[F](nonEmptyParents, dag, runtimeManager)
       result <- possiblePreStateHash.flatTraverse { preStateHash =>
                  runtimeManager
-                   .computeState(preStateHash)(deploys, blockData, invalidBlocks)
+                   .computeState(preStateHash)(deploys, blockData, invalidBlocks, traceId)
                    .map {
                      case (postStateHash, processedDeploys) =>
                        (preStateHash, postStateHash, processedDeploys).asRight[Throwable]
@@ -188,7 +197,7 @@ object InterpreterUtil {
       parents: Seq[BlockMessage],
       dag: BlockDagRepresentation[F],
       runtimeManager: RuntimeManager[F]
-  ): F[Either[Throwable, StateHash]] = {
+  )(implicit traceId: TraceId): F[Either[Throwable, StateHash]] = {
     val parentTuplespaces = parents.flatMap(p => ProtoUtil.tuplespace(p).map(p -> _))
 
     parentTuplespaces match {
@@ -211,7 +220,7 @@ object InterpreterUtil {
       dag: BlockDagRepresentation[F],
       runtimeManager: RuntimeManager[F],
       initStateHash: StateHash
-  ): F[Either[Throwable, StateHash]] =
+  )(implicit traceId: TraceId): F[Either[Throwable, StateHash]] =
     for {
       _                  <- Span[F].mark("before-compute-parents-post-state-find-multi-parents")
       blockHashesToApply <- findMultiParentsBlockHashesForReplay(parents, dag)
@@ -242,7 +251,8 @@ object InterpreterUtil {
                                                 deploys,
                                                 BlockData(timestamp, blockNumber),
                                                 invalidBlocks,
-                                                isGenesis = parents.isEmpty //should always be false
+                                                isGenesis = parents.isEmpty, //should always be false
+                                                traceId
                                               )
                              } yield replayResult match {
                                case result @ Right(_) => result.leftCast[Throwable]

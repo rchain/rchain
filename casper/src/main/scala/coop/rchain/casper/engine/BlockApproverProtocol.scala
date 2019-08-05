@@ -18,6 +18,7 @@ import coop.rchain.comm.{transport, PeerNode}
 import coop.rchain.crypto.PublicKey
 import coop.rchain.crypto.hash.Blake2b256
 import coop.rchain.crypto.signatures.Secp256k1
+import coop.rchain.metrics.Span.TraceId
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.Validator.Validator
 import coop.rchain.rholang.interpreter.Runtime.BlockData
@@ -44,7 +45,7 @@ class BlockApproverProtocol(
   def unapprovedBlockPacketHandler[F[_]: Concurrent: TransportLayer: Log: Time: RPConfAsk: RuntimeManager](
       peer: PeerNode,
       u: UnapprovedBlock
-  ): F[Unit] =
+  )(implicit traceId: TraceId): F[Unit] =
     if (u.candidate.isEmpty) {
       Log[F].warn("Candidate is not defined.")
     } else {
@@ -100,7 +101,7 @@ object BlockApproverProtocol {
       bonds: Map[ByteString, Long],
       minimumBond: Long,
       maximumBond: Long
-  )(implicit runtimeManager: RuntimeManager[F]): F[Either[String, Unit]] = {
+  )(implicit runtimeManager: RuntimeManager[F], traceId: TraceId): F[Either[String, Unit]] = {
 
     def validate: Either[String, (Seq[InternalProcessedDeploy], RChainState)] =
       for {
@@ -151,7 +152,8 @@ object BlockApproverProtocol {
                         blockDeploys,
                         BlockData(time, blockNumber),
                         Map.empty[BlockHash, Validator],
-                        isGenesis = true
+                        isGenesis = true,
+                        traceId
                       )
                   ).leftMap { case (_, status) => s"Failed status during replay: $status." }
       _ <- EitherT(

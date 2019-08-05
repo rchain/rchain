@@ -16,6 +16,7 @@ import coop.rchain.catscontrib.TaskContrib
 import coop.rchain.comm.discovery.NodeDiscovery
 import coop.rchain.comm.rp.Connect.{ConnectionsCell, RPConfAsk}
 import coop.rchain.comm.transport.TransportLayer
+import coop.rchain.metrics.Span.TraceId
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.shared._
 import monix.eval.Task
@@ -30,11 +31,11 @@ object CasperLaunch {
   def apply[F[_]: LastApprovedBlock: Metrics: Span: BlockStore: ConnectionsCell: NodeDiscovery: TransportLayer: RPConfAsk: SafetyOracle: LastFinalizedBlockCalculator: Sync: Concurrent: Time: Log: EventLog: BlockDagStorage: EngineCell: EnvVars: RaiseIOError: RuntimeManager: Running.RequestedBlocks](
       init: CasperInit[F],
       toTask: F[_] => Task[_]
-  )(implicit scheduler: Scheduler): F[Unit] =
+  )(implicit scheduler: Scheduler, traceId: TraceId): F[Unit] =
     BlockStore[F].getApprovedBlock map {
       case Some(approvedBlock) =>
         val msg    = "Found ApprovedBlock in storage, reconnecting to existing network"
-        val action = connectToExistingNetwork[F](approvedBlock, init)
+        val action = connectToExistingNetwork[F](approvedBlock, init, traceId)
         (msg, action)
       case None if (init.conf.approveGenesis) =>
         val msg    = "ApprovedBlock not found in storage, taking part in ceremony as genesis validator"
@@ -55,13 +56,14 @@ object CasperLaunch {
 
   def connectToExistingNetwork[F[_]: LastApprovedBlock: Metrics: Span: BlockStore: ConnectionsCell: NodeDiscovery: TransportLayer: RPConfAsk: SafetyOracle: LastFinalizedBlockCalculator: Concurrent: Time: Log: EventLog: BlockDagStorage: EngineCell: EnvVars: RuntimeManager: Running.RequestedBlocks](
       approvedBlock: ApprovedBlock,
-      init: CasperInit[F]
+      init: CasperInit[F],
+      traceId: TraceId
   ): F[Unit] =
     for {
       validatorId <- ValidatorIdentity.fromConfig[F](init.conf)
       genesis     = approvedBlock.candidate.flatMap(_.block).get
       casper <- MultiParentCasper
-                 .hashSetCasper[F](validatorId, genesis, init.conf.shardId)
+                 .hashSetCasper[F](validatorId, genesis, init.conf.shardId, traceId)
       _ <- Engine
             .transitionToRunning[F](casper, approvedBlock, CommUtil.sendForkChoiceTipRequest[F])
     } yield ()
@@ -95,7 +97,7 @@ object CasperLaunch {
       init: CasperInit[F],
       toTask: F[_] => Task[_],
       tracing: Boolean
-  )(implicit scheduler: Scheduler): F[Unit] =
+  )(implicit scheduler: Scheduler, traceId: TraceId): F[Unit] =
     for {
       genesis <- Genesis.fromInputFiles[F](
                   init.conf.bondsFile,
@@ -122,7 +124,8 @@ object CasperLaunch {
                 .approveBlockInterval[F](
                   init.conf.approveGenesisInterval,
                   init.conf.shardId,
-                  validatorId
+                  validatorId,
+                  traceId
                 )
             ).executeWithOptions(TaskContrib.enableTracing(tracing)).forkAndForget.runToFuture
             ().pure[F]

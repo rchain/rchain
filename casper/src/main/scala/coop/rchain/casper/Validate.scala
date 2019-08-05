@@ -12,6 +12,7 @@ import coop.rchain.casper.util.rholang.{InterpreterUtil, RuntimeManager}
 import coop.rchain.casper.util.{DagOperations, ProtoUtil}
 import coop.rchain.crypto.hash.Blake2b256
 import coop.rchain.crypto.signatures.Secp256k1
+import coop.rchain.metrics.Span.TraceId
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.BlockMetadata
@@ -188,7 +189,7 @@ object Validate {
       dag: BlockDagRepresentation[F],
       shardId: String,
       expirationThreshold: Int
-  ): F[Either[BlockStatus, ValidBlock]] =
+  )(implicit traceId: TraceId): F[Either[BlockStatus, ValidBlock]] =
     for {
       _                 <- Span[F].mark("before-block-hash-validation")
       blockHashStatus   <- Validate.blockHash[F](block)
@@ -274,7 +275,7 @@ object Validate {
       block: BlockMessage,
       dag: BlockDagRepresentation[F],
       expirationThreshold: Int
-  ): F[Either[InvalidBlock, ValidBlock]] = {
+  )(implicit traceId: TraceId): F[Either[InvalidBlock, ValidBlock]] = {
     val deployKeySet = (for {
       bd <- block.body.toList
       r  <- bd.deploys.flatMap(_.deploy)
@@ -531,7 +532,7 @@ object Validate {
       b: BlockMessage,
       genesis: BlockMessage,
       dag: BlockDagRepresentation[F]
-  ): F[Either[InvalidBlock, ValidBlock]] = {
+  )(implicit traceId: TraceId): F[Either[InvalidBlock, ValidBlock]] = {
     val maybeParentHashes = ProtoUtil.parentHashes(b)
     val parentHashes = maybeParentHashes match {
       case hashes if hashes.isEmpty => Seq(genesis.blockHash)
@@ -540,7 +541,7 @@ object Validate {
 
     for {
       latestMessagesHashes <- ProtoUtil.toLatestMessageHashes(b.justifications).pure[F]
-      tipHashes            <- Estimator.tips[F](dag, genesis, latestMessagesHashes)
+      tipHashes            <- Estimator.tips[F](dag, genesis, latestMessagesHashes, traceId)
       computedParents      <- EstimatorHelper.chooseNonConflicting[F](tipHashes, dag)
       computedParentHashes = computedParents.map(_.blockHash)
       status <- if (parentHashes == computedParentHashes) {
@@ -701,7 +702,7 @@ object Validate {
       block: BlockMessage,
       dag: BlockDagRepresentation[F],
       runtimeManager: RuntimeManager[F]
-  ): F[Either[BlockStatus, ValidBlock]] =
+  )(implicit traceId: TraceId): F[Either[BlockStatus, ValidBlock]] =
     for {
       maybeStateHash <- InterpreterUtil
                          .validateBlockCheckpoint[F](
@@ -746,7 +747,7 @@ object Validate {
   def bondsCache[F[_]: Log: Concurrent](
       b: BlockMessage,
       runtimeManager: RuntimeManager[F]
-  ): F[Either[InvalidBlock, ValidBlock]] = {
+  )(implicit traceId: TraceId): F[Either[InvalidBlock, ValidBlock]] = {
     val bonds = ProtoUtil.bonds(b)
     ProtoUtil.tuplespace(b) match {
       case Some(tuplespaceHash) =>

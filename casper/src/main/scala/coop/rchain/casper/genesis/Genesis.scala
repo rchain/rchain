@@ -18,6 +18,7 @@ import coop.rchain.casper.util.rholang.{InternalProcessedDeploy, RuntimeManager}
 import coop.rchain.crypto.PublicKey
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.signatures.Secp256k1
+import coop.rchain.metrics.Span.TraceId
 import coop.rchain.rholang.interpreter.util.RevAddress
 import coop.rchain.shared.{Log, LogSource, Time}
 
@@ -65,7 +66,7 @@ object Genesis {
       maximumBond: Long,
       shardId: String,
       deployTimestamp: Option[Long]
-  )(implicit runtimeManager: RuntimeManager[F]): F[BlockMessage] =
+  )(implicit runtimeManager: RuntimeManager[F], traceId: TraceId): F[BlockMessage] =
     for {
       timestamp <- deployTimestamp.fold(Time[F].currentMillis)(_.pure[F])
       vaults    <- getVaults[F](maybeVaultsPath, genesisPath.resolve("wallets.txt"))
@@ -156,7 +157,7 @@ object Genesis {
   def createGenesisBlock[F[_]: Concurrent](
       runtimeManager: RuntimeManager[F],
       genesis: Genesis
-  ): F[BlockMessage] = {
+  )(implicit traceId: TraceId): F[BlockMessage] = {
     import genesis._
 
     val blessedTerms = defaultBlessedTerms(
@@ -168,7 +169,7 @@ object Genesis {
     )
 
     runtimeManager
-      .computeGenesis(blessedTerms, timestamp)
+      .computeGenesis(blessedTerms, timestamp, traceId)
       .map {
         case (startHash, stateHash, processedDeploys) =>
           createInternalProcessedDeploy(genesis, startHash, stateHash, processedDeploys)

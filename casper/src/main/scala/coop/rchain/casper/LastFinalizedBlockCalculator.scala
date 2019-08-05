@@ -6,13 +6,14 @@ import coop.rchain.blockstorage.{BlockDagRepresentation, BlockDagStorage, BlockS
 import coop.rchain.casper.CasperState.CasperStateCell
 import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.catscontrib.ListContrib
+import coop.rchain.metrics.Span.TraceId
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.shared.Log
 
 final class LastFinalizedBlockCalculator[F[_]: Sync: Log: Concurrent: BlockStore: BlockDagStorage: SafetyOracle](
     faultToleranceThreshold: Float
 ) {
-  def run(dag: BlockDagRepresentation[F], lastFinalizedBlockHash: BlockHash)(
+  def run(dag: BlockDagRepresentation[F], lastFinalizedBlockHash: BlockHash, traceId: TraceId)(
       implicit state: CasperStateCell[F]
   ): F[BlockHash] =
     for {
@@ -21,13 +22,14 @@ final class LastFinalizedBlockCalculator[F[_]: Sync: Log: Concurrent: BlockStore
       maybeFinalizedChild <- ListContrib.findM(
                               childrenHashes,
                               (blockHash: BlockHash) =>
-                                isGreaterThanFaultToleranceThreshold(dag, blockHash)
+                                isGreaterThanFaultToleranceThreshold(dag, blockHash)(traceId)
                             )
       newFinalizedBlock <- maybeFinalizedChild match {
                             case Some(finalizedChild) =>
                               removeDeploysInFinalizedBlock(finalizedChild) >> run(
                                 dag,
-                                finalizedChild
+                                finalizedChild,
+                                traceId
                               )
                             case None => lastFinalizedBlockHash.pure[F]
                           }
@@ -62,7 +64,7 @@ final class LastFinalizedBlockCalculator[F[_]: Sync: Log: Concurrent: BlockStore
   private def isGreaterThanFaultToleranceThreshold(
       dag: BlockDagRepresentation[F],
       blockHash: BlockHash
-  ): F[Boolean] =
+  )(implicit traceId: TraceId): F[Boolean] =
     for {
       faultTolerance <- SafetyOracle[F].normalizedFaultTolerance(dag, blockHash)
       _ <- Log[F].info(

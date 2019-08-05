@@ -3,7 +3,6 @@ package coop.rchain.casper.engine
 import cats.{Applicative, Monad}
 import cats.effect.{Concurrent, Sync}
 import cats.implicits._
-
 import EngineCell._
 import coop.rchain.blockstorage.{BlockDagStorage, BlockStore}
 import coop.rchain.casper._
@@ -18,16 +17,16 @@ import coop.rchain.comm.transport.{Blob, TransportLayer}
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.shared
 import coop.rchain.shared._
-
 import com.google.protobuf.ByteString
+import coop.rchain.metrics.Span.TraceId
 
 trait Engine[F[_]] {
 
   def applicative: Applicative[F]
   val noop: F[Unit] = applicative.unit
 
-  def init: F[Unit]                                       = noop
-  def handle(peer: PeerNode, msg: CasperMessage): F[Unit] = noop
+  def init: F[Unit]                                                         = noop
+  def handle(peer: PeerNode, msg: CasperMessage, traceId: TraceId): F[Unit] = noop
   def withCasper[A](
       f: MultiParentCasper[F] => F[A],
       default: F[A]

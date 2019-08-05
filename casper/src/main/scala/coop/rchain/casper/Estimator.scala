@@ -13,6 +13,7 @@ import coop.rchain.models.BlockMetadata
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.Validator.Validator
 import com.google.protobuf.ByteString
+import coop.rchain.metrics.Span.TraceId
 import coop.rchain.shared.{Log, LogSource}
 
 object Estimator {
@@ -31,13 +32,14 @@ object Estimator {
 
   def tips[F[_]: Monad: Log: Metrics: Span](
       dag: BlockDagRepresentation[F],
-      genesis: BlockMessage
+      genesis: BlockMessage,
+      parentTraceId: TraceId
   ): F[IndexedSeq[BlockHash]] =
-    Span[F].trace(Tips0MetricsSource) {
+    Span[F].trace(Tips0MetricsSource, parentTraceId) { implicit traceId =>
       for {
         latestMessageHashes <- dag.latestMessageHashes
         _                   <- Span[F].mark("latest-message-hashes")
-        result              <- Estimator.tips[F](dag, genesis, latestMessageHashes)
+        result              <- Estimator.tips[F](dag, genesis, latestMessageHashes, traceId)
       } yield result
     }
 
@@ -47,28 +49,30 @@ object Estimator {
   def tips[F[_]: Monad: Log: Metrics: Span](
       dag: BlockDagRepresentation[F],
       genesis: BlockMessage,
-      latestMessagesHashes: Map[Validator, BlockHash]
-  ): F[IndexedSeq[BlockHash]] = Span[F].trace(Tips1MetricsSource) {
-    for {
-      invalidLatestMessages        <- ProtoUtil.invalidLatestMessages[F](dag, latestMessagesHashes)
-      filteredLatestMessagesHashes = latestMessagesHashes -- invalidLatestMessages.keys
-      lca <- calculateLCA(
-              dag,
-              BlockMetadata.fromBlock(genesis, false),
-              filteredLatestMessagesHashes
-            )
-      _         <- Span[F].mark("lca")
-      scoresMap <- buildScoresMap(dag, filteredLatestMessagesHashes, lca)
-      _         <- Span[F].mark("score-map")
-      scoresMapString = scoresMap
-        .map {
-          case (blockHash, score) => s"${PrettyPrinter.buildString(blockHash)}: $score"
-        }
-        .mkString(", ")
-      _                          <- Log[F].info(s"The scores map is $scoresMapString")
-      rankedLatestMessagesHashes <- rankForkchoices(List(lca), dag, scoresMap)
-      _                          <- Span[F].mark("ranked-latest-messages-hashes")
-    } yield rankedLatestMessagesHashes
+      latestMessagesHashes: Map[Validator, BlockHash],
+      parentTraceId: TraceId
+  ): F[IndexedSeq[BlockHash]] = Span[F].trace(Tips1MetricsSource, parentTraceId) {
+    implicit traceId =>
+      for {
+        invalidLatestMessages        <- ProtoUtil.invalidLatestMessages[F](dag, latestMessagesHashes)
+        filteredLatestMessagesHashes = latestMessagesHashes -- invalidLatestMessages.keys
+        lca <- calculateLCA(
+                dag,
+                BlockMetadata.fromBlock(genesis, false),
+                filteredLatestMessagesHashes
+              )
+        _         <- Span[F].mark("lca")
+        scoresMap <- buildScoresMap(dag, filteredLatestMessagesHashes, lca)
+        _         <- Span[F].mark("score-map")
+        scoresMapString = scoresMap
+          .map {
+            case (blockHash, score) => s"${PrettyPrinter.buildString(blockHash)}: $score"
+          }
+          .mkString(", ")
+        _                          <- Log[F].info(s"The scores map is $scoresMapString")
+        rankedLatestMessagesHashes <- rankForkchoices(List(lca), dag, scoresMap)
+        _                          <- Span[F].mark("ranked-latest-messages-hashes")
+      } yield rankedLatestMessagesHashes
   }
 
   private def calculateLCA[F[_]: Monad](

@@ -3,7 +3,6 @@ package coop.rchain.casper.engine
 import cats.effect.{Concurrent, Sync}
 import cats.implicits._
 import cats.Applicative
-
 import coop.rchain.blockstorage.{BlockDagStorage, BlockStore}
 import coop.rchain.casper._
 import coop.rchain.casper.LastApprovedBlock.LastApprovedBlock
@@ -18,8 +17,8 @@ import coop.rchain.comm.PeerNode
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.shared._
 import coop.rchain.shared
-
 import com.google.protobuf.ByteString
+import coop.rchain.metrics.Span.TraceId
 
 /** Node in this state will query peers in the network with [[ApprovedBlockRequest]] message
   * and will wait for the [[ApprovedBlock]] message to arrive. Until then  it will respond with
@@ -36,13 +35,14 @@ class Initializing[F[_]: Sync: Metrics: Span: Concurrent: ConnectionsCell: Block
 
   override def init: F[Unit] = theInit
 
-  override def handle(peer: PeerNode, msg: CasperMessage): F[Unit] = msg match {
+  override def handle(peer: PeerNode, msg: CasperMessage, traceId: TraceId): F[Unit] = msg match {
     case ab: ApprovedBlock =>
       onApprovedBlockTransition(
         ab,
         validators,
         validatorId,
-        shardId
+        shardId,
+        traceId
       )
     case br: ApprovedBlockRequest     => sendNoApprovedBlockAvailable(peer, br.identifier)
     case na: NoApprovedBlockAvailable => logNoApprovedBlockAvailable[F](na.nodeIdentifer)
@@ -53,7 +53,8 @@ class Initializing[F[_]: Sync: Metrics: Span: Concurrent: ConnectionsCell: Block
       approvedBlock: ApprovedBlock,
       validators: Set[ByteString],
       validatorId: Option[ValidatorIdentity],
-      shardId: String
+      shardId: String,
+      traceId: TraceId
   ): F[Unit] =
     for {
       _       <- Log[F].info("Received ApprovedBlock message.")
@@ -74,7 +75,7 @@ class Initializing[F[_]: Sync: Metrics: Span: Concurrent: ConnectionsCell: Block
                         _       <- insertIntoBlockAndDagStore[F](genesis, approvedBlock)
                         _       <- LastApprovedBlock[F].set(approvedBlock)
                         casper <- MultiParentCasper
-                                   .hashSetCasper[F](validatorId, genesis, shardId)
+                                   .hashSetCasper[F](validatorId, genesis, shardId, traceId)
                         _ <- Engine
                               .transitionToRunning[F](casper, approvedBlock, ().pure[F])
                         _ <- CommUtil.sendForkChoiceTipRequest[F]

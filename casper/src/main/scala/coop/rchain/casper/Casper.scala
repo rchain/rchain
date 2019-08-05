@@ -2,14 +2,11 @@ package coop.rchain.casper
 
 import coop.rchain.comm.rp.Connect.{ConnectionsCell, RPConfAsk}
 import cats._
-import cats.data._
 import cats.implicits._
 import cats.effect.{Concurrent, Sync}
-import com.google.protobuf.ByteString
 import coop.rchain.casper.engine.Running
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.rholang._
-import coop.rchain.catscontrib._
 import coop.rchain.comm.transport.TransportLayer
 import coop.rchain.shared._
 import cats.effect.concurrent.Semaphore
@@ -17,6 +14,7 @@ import coop.rchain.blockstorage.{BlockDagRepresentation, BlockDagStorage, BlockS
 import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
 import coop.rchain.catscontrib.ski.kp2
+import coop.rchain.metrics.Span.TraceId
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.Validator.Validator
@@ -53,11 +51,11 @@ trait Casper[F[_], A] {
   def addBlock(
       b: BlockMessage,
       handleDoppelganger: (BlockMessage, Validator) => F[Unit]
-  ): F[BlockStatus]
+  )(implicit traceId: TraceId): F[BlockStatus]
   def contains(hash: BlockHash): F[Boolean]
   def deploy(d: DeployData): F[Either[DeployError, DeployId]]
-  def estimator(dag: BlockDagRepresentation[F]): F[A]
-  def createBlock: F[CreateBlockStatus]
+  def estimator(dag: BlockDagRepresentation[F])(implicit traceId: TraceId): F[A]
+  def createBlock(implicit traceId: TraceId): F[CreateBlockStatus]
 }
 
 trait MultiParentCasper[F[_]] extends Casper[F, IndexedSeq[BlockHash]] {
@@ -67,7 +65,7 @@ trait MultiParentCasper[F[_]] extends Casper[F, IndexedSeq[BlockHash]] {
   // We want the clique oracle to give us a fault tolerance that is greater than
   // this initial fault weight combined with our fault tolerance threshold t.
   def normalizedInitialFault(weights: Map[Validator, Long]): F[Float]
-  def lastFinalizedBlock: F[BlockMessage]
+  def lastFinalizedBlock(implicit traceId: TraceId): F[BlockMessage]
   def getRuntimeManager: F[RuntimeManager[F]]
 }
 
@@ -76,7 +74,9 @@ object MultiParentCasper extends MultiParentCasperInstances {
   def ignoreDoppelgangerCheck[F[_]: Applicative]: (BlockMessage, Validator) => F[Unit] =
     kp2(().pure[F])
 
-  def forkChoiceTip[F[_]: Monad: BlockStore](casper: MultiParentCasper[F]): F[BlockMessage] =
+  def forkChoiceTip[F[_]: Monad: BlockStore](
+      casper: MultiParentCasper[F]
+  )(implicit traceId: TraceId): F[BlockMessage] =
     for {
       dag       <- casper.blockDag
       tipHashes <- casper.estimator(dag)
@@ -93,9 +93,10 @@ sealed abstract class MultiParentCasperInstances {
   def hashSetCasper[F[_]: Sync: Metrics: Concurrent: ConnectionsCell: TransportLayer: Log: Time: SafetyOracle: LastFinalizedBlockCalculator: BlockStore: RPConfAsk: BlockDagStorage: Span: Running.RequestedBlocks](
       validatorId: Option[ValidatorIdentity],
       genesis: BlockMessage,
-      shardId: String
+      shardId: String,
+      parentTraceId: TraceId
   )(implicit runtimeManager: RuntimeManager[F]): F[MultiParentCasper[F]] =
-    Span[F].trace(genesisLabel) {
+    Span[F].trace(genesisLabel, parentTraceId) { implicit traceId =>
       for {
         dag <- BlockDagStorage[F].getRepresentation
         maybePostGenesisStateHash <- InterpreterUtil

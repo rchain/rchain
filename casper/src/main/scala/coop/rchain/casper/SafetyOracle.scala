@@ -2,15 +2,14 @@ package coop.rchain.casper
 
 import cats.Monad
 import cats.implicits._
-
 import coop.rchain.catscontrib._
 import Catscontrib._
 import cats.data.OptionT
-
 import coop.rchain.blockstorage.BlockDagRepresentation
 import coop.rchain.casper.protocol.Justification
 import coop.rchain.casper.util.ProtoUtil._
 import coop.rchain.casper.util.{Clique, DagOperations, ProtoUtil}
+import coop.rchain.metrics.Span.TraceId
 import coop.rchain.models.BlockMetadata
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.models.BlockHash.BlockHash
@@ -49,7 +48,7 @@ trait SafetyOracle[F[_]] {
   def normalizedFaultTolerance(
       blockDag: BlockDagRepresentation[F],
       candidateBlockHash: BlockHash
-  ): F[Float]
+  )(implicit traceId: TraceId): F[Float]
 }
 
 object SafetyOracle extends SafetyOracleInstances {
@@ -71,7 +70,14 @@ sealed abstract class SafetyOracleInstances {
       def normalizedFaultTolerance(
           blockDag: BlockDagRepresentation[F],
           candidateBlockHash: BlockHash
-      ): F[Float] = Span[F].trace(SafetyOracleMetricsSource) {
+      )(implicit traceId: TraceId): F[Float] =
+        internalNormalizedFaultTolerance(blockDag, candidateBlockHash, traceId)
+
+      def internalNormalizedFaultTolerance(
+          blockDag: BlockDagRepresentation[F],
+          candidateBlockHash: BlockHash,
+          parentTraceId: TraceId
+      ): F[Float] = Span[F].trace(SafetyOracleMetricsSource, parentTraceId) { implicit traceId =>
         for {
           totalWeight <- computeTotalWeight(blockDag, candidateBlockHash)
           _           <- Span[F].mark("total-weight")
