@@ -34,7 +34,7 @@ trait SystemProcesses[F[_]] {
   def getDeployParams(runtimeParametersRef: Ref[F, DeployParameters]): Contract[F]
   def getBlockData(blockData: Ref[F, BlockData]): Contract[F]
   def invalidBlocks(invalidBlocks: InvalidBlocks[F]): Contract[F]
-  def validateRevAddress: Contract[F]
+  def revAddress: Contract[F]
   def deployerIdOps: Contract[F]
 }
 
@@ -134,7 +134,7 @@ object SystemProcesses {
           } yield ()
       }
 
-      def validateRevAddress: Contract[F] = {
+      def revAddress: Contract[F] = {
         case isContractCall(
             produce,
             Seq(RhoType.String("validate"), RhoType.String(address), ack)
