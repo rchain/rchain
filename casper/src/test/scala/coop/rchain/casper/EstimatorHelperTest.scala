@@ -7,8 +7,8 @@ import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.{BlockDagStorage, BlockStore, IndexedBlockDagStorage}
 import coop.rchain.casper.EstimatorHelper.conflicts
 import coop.rchain.casper.helper.{BlockDagStorageFixture, BlockGenerator, HashSetCasperTestNode}
-import coop.rchain.casper.protocol.Event.EventInstance.Produce
-import coop.rchain.casper.protocol.{Event, ProcessedDeploy, ProduceEvent}
+import coop.rchain.casper.protocol.Event.EventInstance.{Consume, Produce}
+import coop.rchain.casper.protocol.{ConsumeEvent, Event, ProcessedDeploy, ProduceEvent}
 import coop.rchain.casper.scalatestcontrib._
 import coop.rchain.casper.util.ConstructDeploy.{basicDeployData, basicProcessedDeploy}
 import coop.rchain.casper.util.GenesisBuilder
@@ -89,7 +89,7 @@ class EstimatorHelperTest
     }
   }
 
-  it should "conflict if their deploys contain same channel in deployLog" in withStorage {
+  it should "conflict if their deploys conflict in the deployLog" in withStorage {
     implicit blockStore => implicit blockDagStorage =>
       testConflict[Task] { deploy =>
         deploy.copy(
@@ -97,24 +97,30 @@ class EstimatorHelperTest
             produce(ByteString.copyFromUtf8(channelsHash))
           )
         )
+      } { deploy =>
+        deploy.copy(deployLog = Seq(consume(ByteString.copyFromUtf8(channelsHash))))
       }
   }
 
-  it should "conflict if their deploys contain same channel in paymentLog" in withStorage {
+  it should "conflict if their deploys conflict in the paymentLog" in withStorage {
     implicit blockStore => implicit blockDagStorage =>
       testConflict[Task] { deploy =>
         deploy.copy(paymentLog = Seq(produce(ByteString.copyFromUtf8(channelsHash))))
+      } { deploy =>
+        deploy.copy(paymentLog = Seq(consume(ByteString.copyFromUtf8(channelsHash))))
       }
   }
 
   private def testConflict[F[_]: BlockStore: IndexedBlockDagStorage: Time: Log: Monad](
-      deployMod: ProcessedDeploy => ProcessedDeploy
+      deployMod1: ProcessedDeploy => ProcessedDeploy
+  )(
+      deployMod2: ProcessedDeploy => ProcessedDeploy
   ): F[Unit] =
     for {
       genesis <- createGenesis[F]()
-      deployA <- basicProcessedDeploy[F](1).map(deployMod)
+      deployA <- basicProcessedDeploy[F](1).map(deployMod1)
       a       <- createBlock[F](Seq(genesis.blockHash), genesis, deploys = Seq(deployA))
-      deployB <- basicProcessedDeploy[F](2).map(deployMod)
+      deployB <- basicProcessedDeploy[F](2).map(deployMod2)
       b       <- createBlock[F](Seq(genesis.blockHash), genesis, deploys = Seq(deployB))
       dag     <- BlockDagStorage[F].getRepresentation
 
@@ -128,6 +134,16 @@ class EstimatorHelperTest
       Produce(
         ProduceEvent(
           channelsHash,
+          hash = ByteString.copyFromUtf8("Asdfg753213fdsadfueias9fje35mv43")
+        )
+      )
+    )
+
+  private def consume(channelsHash: ByteString) =
+    Event(
+      Consume(
+        ConsumeEvent(
+          Seq(channelsHash),
           hash = ByteString.copyFromUtf8("Asdfg753213fdsadfueias9fje35mv43")
         )
       )
