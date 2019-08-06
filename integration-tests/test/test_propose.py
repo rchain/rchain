@@ -1,6 +1,8 @@
 import os
 import shutil
 from random import Random
+import pytest
+
 from rchain.crypto import PrivateKey
 from .rnode import (
     Node,
@@ -26,6 +28,7 @@ FIX_COST_RHO_CONTRACTS = {
     # "contract_5.rho": 1970,  # it is non-deterministic now
 }
 
+@pytest.mark.skip(reason="Skipped because of non-deterministic failures")
 def test_propose_cost(started_standalone_bootstrap_node: Node, random_generator: Random) -> None:
     rho_contract, contract_cost = random_generator.choice(list(FIX_COST_RHO_CONTRACTS.items()))
     shutil.copyfile(os.path.join('resources/cost', rho_contract), os.path.join(started_standalone_bootstrap_node.local_deploy_dir, rho_contract))
