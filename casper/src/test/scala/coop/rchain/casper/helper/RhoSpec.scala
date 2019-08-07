@@ -5,6 +5,7 @@ import cats.implicits._
 import coop.rchain.casper.genesis.contracts.TestUtil
 import coop.rchain.casper.genesis.contracts.TestUtil.eval
 import coop.rchain.casper.protocol.DeployData
+import coop.rchain.casper.util.GenesisBuilder.GenesisParameters
 import coop.rchain.casper.util.rholang.Resources.copyStorage
 import coop.rchain.casper.util.{GenesisBuilder, ProtoUtil}
 import coop.rchain.crypto.hash.Blake2b512Random
@@ -24,7 +25,8 @@ import scala.concurrent.duration.{Duration, FiniteDuration}
 class RhoSpec(
     testObject: CompiledRholangSource,
     extraNonGenesisDeploys: Seq[DeployData],
-    executionTimeout: FiniteDuration
+    executionTimeout: FiniteDuration,
+    genesisParameters: GenesisParameters = GenesisBuilder.buildGenesisParameters()
 ) extends FlatSpec
     with AppendedClues
     with Matchers {
@@ -106,8 +108,6 @@ class RhoSpec(
     testResultCollectorService
   }
 
-  private val genesisContext = GenesisBuilder.buildGenesis()
-
   private def getResults(
       testObject: CompiledRholangSource,
       otherLibs: Seq[DeployData],
@@ -115,7 +115,9 @@ class RhoSpec(
   ): Task[TestResult] =
     TestResultCollector[Task].flatMap { testResultCollector =>
       val runtimeResource = for {
-        storageDirs <- copyStorage[Task](genesisContext.storageDirectory)
+        storageDirs <- copyStorage[Task](
+                        GenesisBuilder.buildGenesis(genesisParameters).storageDirectory
+                      )
         runtime <- mkRuntimeAt[Task](storageDirs.rspaceDir)(
                     storageSize = 10 * 1024 * 1024,
                     additionalSystemProcesses = testFrameworkContracts(testResultCollector)
