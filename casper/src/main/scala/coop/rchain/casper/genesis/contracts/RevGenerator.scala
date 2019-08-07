@@ -21,23 +21,12 @@ final case class RevGenerator(
     s""" new rl(`rho:registry:lookup`), revVaultCh in {
        #   rl!(`rho:rchain:revVault`, *revVaultCh) |
        #   for (@(_, RevVault) <- revVaultCh) {
-       #
-       #     new genesisVaultCh in {
-       #       @RevVault!(
-       #         "findOrCreateGenesisVault",
-       #         "${genesisAddress.toBase58}",
-       #         $supply,
-       #         *genesisVaultCh
-       #       )
-       #     } |
-       #
        #     new ret in {
        #       @RevVault!("init", *ret) |
        #       for (vaultMapStore, initVault <- ret) {
        #         ${vaultInitCode()}
        #       }
        #     }
-       #
        #   }
        # }
      """.stripMargin('#')
