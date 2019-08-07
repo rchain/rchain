@@ -1,12 +1,13 @@
 package coop.rchain.casper.engine
 
 import cats._
+import cats.implicits._
 import cats.effect.concurrent.Ref
 import cats.effect.{Concurrent, ContextShift}
 import cats.temp.par
 import coop.rchain.blockstorage._
 import coop.rchain.casper._
-import coop.rchain.casper.genesis.contracts.Validator
+import coop.rchain.casper.genesis.contracts.{Validator, Vault}
 import coop.rchain.casper.helper.BlockDagStorageTestFixture
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.rholang.RuntimeManager
@@ -19,6 +20,7 @@ import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.p2p.EffectsTestInstances._
 import coop.rchain.rholang.interpreter.Runtime
+import coop.rchain.rholang.interpreter.util.RevAddress
 import coop.rchain.shared.Cell
 import monix.eval.Task
 import monix.execution.Scheduler
@@ -62,7 +64,10 @@ object Setup {
     val bap = new BlockApproverProtocol(
       validatorId,
       deployTimestamp,
-      Seq(),
+      Traverse[List]
+        .traverse(genesisParams.proofOfStake.validators.map(_.pk).toList)(RevAddress.fromPublicKey)
+        .get
+        .map(Vault(_, 0L)),
       bonds,
       genesisParams.proofOfStake.minimumBond,
       genesisParams.proofOfStake.maximumBond,
