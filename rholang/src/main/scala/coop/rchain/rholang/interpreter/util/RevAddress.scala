@@ -16,6 +16,9 @@ object RevAddress {
 
   private val tools = new AddressTools(prefix, keyLength = Validator.Length, checksumLength = 4)
 
+  def fromDeployerId(deployerId: Array[Byte]): Option[RevAddress] =
+    fromPublicKey(PublicKey(deployerId))
+
   def fromPublicKey(pk: PublicKey): Option[RevAddress] =
     tools.fromPublicKey(pk).map(RevAddress(_))
 

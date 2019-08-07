@@ -34,7 +34,7 @@ trait SystemProcesses[F[_]] {
   def getDeployParams(runtimeParametersRef: Ref[F, DeployParameters]): Contract[F]
   def getBlockData(blockData: Ref[F, BlockData]): Contract[F]
   def invalidBlocks(invalidBlocks: InvalidBlocks[F]): Contract[F]
-  def validateRevAddress: Contract[F]
+  def revAddress: Contract[F]
   def deployerIdOps: Contract[F]
 }
 
@@ -134,7 +134,7 @@ object SystemProcesses {
           } yield ()
       }
 
-      def validateRevAddress: Contract[F] = {
+      def revAddress: Contract[F] = {
         case isContractCall(
             produce,
             Seq(RhoType.String("validate"), RhoType.String(address), ack)
@@ -149,6 +149,9 @@ object SystemProcesses {
 
           produce(Seq(errorMessage), ack)
 
+        case isContractCall(produce, Seq(RhoType.String("validate"), _, ack)) =>
+          produce(Seq(Par()), ack)
+
         case isContractCall(
             produce,
             Seq(RhoType.String("fromPublicKey"), RhoType.ByteArray(publicKey), ack)
@@ -161,6 +164,24 @@ object SystemProcesses {
 
           produce(Seq(response), ack)
 
+        case isContractCall(produce, Seq(RhoType.String("fromPublicKey"), _, ack)) =>
+          produce(Seq(Par()), ack)
+
+        case isContractCall(
+            produce,
+            Seq(RhoType.String("fromDeployerId"), RhoType.DeployerId(id), ack)
+            ) =>
+          val response =
+            RevAddress
+              .fromDeployerId(id)
+              .map(ra => RhoType.String(ra.toBase58))
+              .getOrElse(Par())
+
+          produce(Seq(response), ack)
+
+        case isContractCall(produce, Seq(RhoType.String("fromDeployerId"), _, ack)) =>
+          produce(Seq(Par()), ack)
+
         case isContractCall(
             produce,
             Seq(RhoType.String("fromUnforgeable"), argument, ack)
@@ -172,6 +193,9 @@ object SystemProcesses {
           }
 
           produce(Seq(response), ack)
+
+        case isContractCall(produce, Seq(RhoType.String("fromUnforgeable"), _, ack)) =>
+          produce(Seq(Par()), ack)
       }
 
       def deployerIdOps: Contract[F] = {
@@ -180,6 +204,9 @@ object SystemProcesses {
             Seq(RhoType.String("pubKeyBytes"), RhoType.DeployerId(publicKey), ack)
             ) =>
           produce(Seq(RhoType.ByteArray(publicKey)), ack)
+
+        case isContractCall(produce, Seq(RhoType.String("pubKeyBytes"), _, ack)) =>
+          produce(Seq(Par()), ack)
       }
 
       def secp256k1Verify: Contract[F] =

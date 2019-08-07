@@ -21,17 +21,31 @@ new
   _makeVault,
   _newVault,
   _getOrCreate,
-  _revVault
+  _revVault,
+  _transferTemplate,
+  _depositTemplate
 in {
   rl!(`rho:rchain:makeMint`, *MakeMintCh) |
   rl!(`rho:rchain:authKey`, *AuthKeyCh) |
   rl!(`rho:lang:either`, *EitherCh) |
   for(@(_, MakeMint) <- MakeMintCh; @(_, AuthKey) <- AuthKeyCh; @(_, Either) <- EitherCh) {
 
-    new mintCh, vaultMapStore in {
-      vaultMapStore!({}) |
+    new mintCh, vaultMapStore, initVault in {
       @MakeMint!(*mintCh) |
       for (mint <- mintCh) {
+
+        contract initVault(name, @address, @initialAmount) = {
+          new purseCh in {
+            mint!("makePurse", initialAmount, *purseCh) |
+            for (purse <- purseCh) {
+              _newVault!(*name, address, *purse)
+            }
+          }
+        } |
+
+        for (@"init", ret <- RevVault) {
+          ret!(*vaultMapStore, *initVault)
+        } |
 
         contract RevVault(@"deployerAuthKey", deployerId, ret) = {
 
@@ -137,69 +151,76 @@ in {
 
         contract _makeVault(@ownerRevAddress, @initialAmount, ret) = {
 
-          new revAddrCh, eitherRevAddrCh, purseCh, eitherPurseCh in {
+          new revAddrCh, eitherRevAddrCh, purseCh, eitherPurseCh, mkVault in {
             @Either!("fromNillable", ownerRevAddress, "Required `revAddress` parameter was Nil", *eitherRevAddrCh) |
             mint!("makePurse", initialAmount, *purseCh) |
             @Either!("fromNillable <-", *purseCh, "Couldn't create purse", *eitherPurseCh) |
-            @Either!("map2 <-", *eitherRevAddrCh, *eitherPurseCh, *_newVault, *ret)
+            @Either!("map2 <-", *eitherRevAddrCh, *eitherPurseCh, for (@addr, purse, r <- mkVault) {
+              new revVault in {
+                _newVault!(*revVault, addr, *purse) |
+                r!(bundle+{*revVault})
+              }
+            }, *ret)
           }
 
         } |
 
-        contract _newVault(@ownRevAddress, purse, ret) = {
-          new revVault in {
-
-            ret!(bundle+{*revVault}) |
+        contract _newVault(revVault, @ownRevAddress, purse) = {
 
             contract revVault(@"balance", ret) = {
               purse!("getBalance", *ret)
             } |
 
             contract revVault(@"transfer", @revAddress, @amount, authKey, ret) = {
-
-              new
-                revAddressValid, revAddressValidEither, amountNonNegative,
-                authKeyValidCh, authKeyValidEitherCh,
-                parametersOkCh, parametersAndAuthOkCh,
-                split, eitherPurseCh, doDeposit
-              in {
-                RevAddress!("validate", revAddress, *revAddressValid) |
-                @Either!("fromNillableError <-", *revAddressValid, *revAddressValidEither) |
-
-                @Either!("fromBoolean", amount >= 0, "Amount must be non-negative", *amountNonNegative) |
-
-                @AuthKey!("check", *authKey, (*_revVault, ownRevAddress), *authKeyValidCh) |
-                @Either!("fromBoolean <-", *authKeyValidCh, "Invalid AuthKey", *authKeyValidEitherCh) |
-
-                @Either!("productR <-", *revAddressValidEither, *amountNonNegative, *parametersOkCh) |
-                @Either!("productR <-", *parametersOkCh, *authKeyValidEitherCh, *parametersAndAuthOkCh) |
-
-                @Either!("flatMap <-", *parametersAndAuthOkCh, *split, *eitherPurseCh) |
-                for (_, retCh <- split) {
-                  new amountPurseCh in {
-                    purse!("split", amount, *amountPurseCh) |
-                    @Either!("fromSingletonList <-", *amountPurseCh, "Insufficient funds", *retCh)
-                  }
-                } |
-
-                @Either!("flatMap <-", *eitherPurseCh, *doDeposit, *ret) |
-                for (@p, retCh <- doDeposit) {
-                  @{revAddress | bundle0{*_revVault}}!("_deposit", p, *retCh)
-                }
-              }
-
+              _transferTemplate!(ownRevAddress, *purse, revAddress, amount, *authKey, *ret)
             } |
 
             contract @{ownRevAddress | bundle0{*_revVault}}(@"_deposit", depositPurse, retCh) = {
+              _depositTemplate!(*purse, *depositPurse, *retCh)
+            }
 
-              new amountCh, depositSuccessCh in {
-                depositPurse!("getBalance", *amountCh) |
-                for (@amount <- amountCh) {
+        } |
 
-                  purse!("deposit", amount, *depositPurse, *depositSuccessCh) |
-                  @Either!("fromBoolean <-", *depositSuccessCh, "BUG FOUND: purse deposit failed", *retCh)
-                }
+        contract _transferTemplate(@ownRevAddress, purse, @revAddress, @amount, authKey, ret) = {
+          new
+            revAddressValid, revAddressValidEither, amountNonNegative,
+            authKeyValidCh, authKeyValidEitherCh,
+            parametersOkCh, parametersAndAuthOkCh,
+            split, eitherPurseCh, doDeposit
+          in {
+            RevAddress!("validate", revAddress, *revAddressValid) |
+            @Either!("fromNillableError <-", *revAddressValid, *revAddressValidEither) |
+
+            @Either!("fromBoolean", amount >= 0, "Amount must be non-negative", *amountNonNegative) |
+
+            @AuthKey!("check", *authKey, (*_revVault, ownRevAddress), *authKeyValidCh) |
+            @Either!("fromBoolean <-", *authKeyValidCh, "Invalid AuthKey", *authKeyValidEitherCh) |
+
+            @Either!("productR <-", *revAddressValidEither, *amountNonNegative, *parametersOkCh) |
+            @Either!("productR <-", *parametersOkCh, *authKeyValidEitherCh, *parametersAndAuthOkCh) |
+
+            @Either!("flatMap <-", *parametersAndAuthOkCh, *split, *eitherPurseCh) |
+            for (_, retCh <- split) {
+              new amountPurseCh in {
+                purse!("split", amount, *amountPurseCh) |
+                @Either!("fromSingletonList <-", *amountPurseCh, "Insufficient funds", *retCh)
               }
+            } |
+
+            @Either!("flatMap <-", *eitherPurseCh, *doDeposit, *ret) |
+            for (@p, retCh <- doDeposit) {
+              @{revAddress | bundle0{*_revVault}}!("_deposit", p, *retCh)
+            }
+          }
+        } |
+
+        contract _depositTemplate(purse, depositPurse, retCh) = {
+          new amountCh, depositSuccessCh in {
+            depositPurse!("getBalance", *amountCh) |
+            for (@amount <- amountCh) {
+
+              purse!("deposit", amount, *depositPurse, *depositSuccessCh) |
+              @Either!("fromBoolean <-", *depositSuccessCh, "BUG FOUND: purse deposit failed", *retCh)
             }
           }
         } |

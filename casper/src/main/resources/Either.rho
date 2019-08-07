@@ -109,9 +109,14 @@ new  Either, rs(`rho:registry:insertSigned:secp256k1`), uriOut, rl(`rho:registry
         (_, (false, _))               => return!(b)
         ((true, va), (true, vb)) => {
           new ret in {
-            f!(va, vb, *ret) |
-            for (@v <- ret) {
-              return!((true, v))
+            match *f {
+              { for (x, y, r <- fName) { _ } } => {
+                *f |
+                fName!(va, vb, *ret) |
+                for (@v <- ret) {
+                  return!((true, v))
+                }
+              }
             }
           }
         }

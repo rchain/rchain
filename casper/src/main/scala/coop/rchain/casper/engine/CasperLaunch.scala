@@ -1,5 +1,7 @@
 package coop.rchain.casper.engine
 
+import java.nio.file.Paths
+
 import cats.effect.{Concurrent, Sync}
 import cats.implicits._
 import cats.Monad
@@ -78,9 +80,15 @@ object CasperLaunch {
                 init.conf.genesisPath
               )
       validatorId <- ValidatorIdentity.fromConfig[F](init.conf)
+      vaults <- Genesis.vaultFromFile(
+                 init.conf.walletsFile
+                   .map(Paths.get(_))
+                   .getOrElse(init.conf.genesisPath.resolve("wallets.txt"))
+               )
       bap = new BlockApproverProtocol(
         validatorId.get,
         timestamp,
+        vaults,
         bonds,
         init.conf.minimumBond,
         init.conf.maximumBond,

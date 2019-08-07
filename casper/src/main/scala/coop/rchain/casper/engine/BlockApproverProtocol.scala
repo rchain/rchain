@@ -33,6 +33,7 @@ import scala.util.Try
 class BlockApproverProtocol(
     validatorId: ValidatorIdentity,
     deployTimestamp: Long,
+    vaults: Seq[Vault],
     bonds: Map[PublicKey, Long],
     minimumBond: Long,
     maximumBond: Long,
@@ -54,6 +55,7 @@ class BlockApproverProtocol(
           candidate,
           requiredSigs,
           deployTimestamp,
+          vaults,
           _bonds,
           minimumBond,
           maximumBond
@@ -97,6 +99,7 @@ object BlockApproverProtocol {
       candidate: ApprovedBlockCandidate,
       requiredSigs: Int,
       timestamp: Long,
+      vaults: Seq[Vault],
       bonds: Map[ByteString, Long],
       minimumBond: Long,
       maximumBond: Long
@@ -120,10 +123,6 @@ object BlockApproverProtocol {
         }
         posParams      = ProofOfStake(minimumBond, maximumBond, validators)
         (_, genesisPk) = Secp256k1.newKeyPair
-        vaults = Traverse[List]
-          .traverse(posParams.validators.map(_.pk).toList)(RevAddress.fromPublicKey)
-          .get
-          .map(Vault(_, 0L)) //FIXME the initial supplies should be read from the wallets file
         genesisBlessedContracts = Genesis
           .defaultBlessedTerms(
             timestamp,

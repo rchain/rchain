@@ -2,9 +2,9 @@ package coop.rchain.casper.genesis.contracts
 
 import cats.implicits._
 import coop.rchain.casper.helper.RhoSpec
-import coop.rchain.crypto.PublicKey
-import coop.rchain.crypto.codec.Base16
+import coop.rchain.casper.util.ConstructDeploy
 import coop.rchain.rholang.build.CompiledRholangSource
+
 import coop.rchain.rholang.interpreter.NormalizerEnv
 
 class RevVaultSpec
@@ -15,10 +15,6 @@ class RevVaultSpec
     )
 
 object RevVaultSpec {
-  val genesisPk = PublicKey(
-    Base16.unsafeDecode(
-      "0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
-    )
-  )
-  val normalizerEnv = NormalizerEnv(none, genesisPk.some)
+  val deployerPk    = ConstructDeploy.defaultPub
+  val normalizerEnv = NormalizerEnv(none, deployerPk.some)
 }

@@ -1,6 +1,8 @@
 package coop.rchain.casper.engine
 
+import cats.Traverse
 import cats.implicits._
+import coop.rchain.casper.genesis.contracts.Vault
 import coop.rchain.casper.helper.HashSetCasperTestNode
 import coop.rchain.casper.helper.HashSetCasperTestNode._
 import coop.rchain.casper.protocol._
@@ -9,6 +11,7 @@ import coop.rchain.casper.util.GenesisBuilder
 import coop.rchain.casper.util.comm.TestNetwork
 import coop.rchain.comm.protocol.routing.Packet
 import coop.rchain.comm.transport
+import coop.rchain.rholang.interpreter.util.RevAddress
 import monix.execution.Scheduler
 import org.scalatest.{FlatSpec, Matchers}
 
@@ -87,6 +90,12 @@ object BlockApproverProtocolTest {
       (new BlockApproverProtocol(
         node.validatorId,
         genesisParams.timestamp,
+        Traverse[List]
+          .traverse(genesisParams.proofOfStake.validators.map(_.pk).toList)(
+            RevAddress.fromPublicKey
+          )
+          .get
+          .map(Vault(_, 0L)),
         genesisParams.proofOfStake.validators.map(v => v.pk -> v.stake).toMap,
         genesisParams.proofOfStake.minimumBond,
         genesisParams.proofOfStake.maximumBond,

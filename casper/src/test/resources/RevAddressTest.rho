@@ -5,7 +5,14 @@ new
   rl(`rho:registry:lookup`), RhoSpecCh,
   revAddress(`rho:rev:address`),
   stdlog(`rho:io:stdlog`),
-  test_valid_address, test_invalid_address, test_fromPublicKey, test_fromPublicKey_invalid, test_fromUnforgeable, test_fromUnforgeable_invalid
+  test_valid_address,
+  test_invalid_address,
+  test_fromPublicKey,
+  test_fromPublicKey_invalid,
+  test_fromUnforgeable,
+  test_fromUnforgeable_invalid,
+  test_fromDeployerId,
+  test_fromDeployerId_invalid
 in {
   rl!(`rho:id:zphjgsfy13h1k85isc8rtwtgt3t9zzt5pjd5ihykfmyapfc4wt3x5h`, *RhoSpecCh) |
   for(@(_, RhoSpec) <- RhoSpecCh) {
@@ -17,6 +24,8 @@ in {
         ("Reject an invalid public key", *test_fromPublicKey_invalid),
         ("RevAddresses derived from different unforgeable names should be different", *test_fromUnforgeable),
         ("Reject arguments which are not unforgeable names", *test_fromUnforgeable_invalid),
+        ("Get deployer's rev address", *test_fromDeployerId),
+        ("Reject arguments which are not deployerId-s", *test_fromDeployerId_invalid)
 ])
   } |
 
@@ -77,6 +86,20 @@ in {
   contract test_fromUnforgeable_invalid(rhoSpec, _, ackCh) = {
     new retCh in {
       revAddress!("fromUnforgeable", 42, *retCh) |
+      rhoSpec!("assert", (Nil, "== <-", *retCh), "correct RevAddress", *ackCh)
+    }
+  } |
+
+  contract test_fromDeployerId(rhoSpec, _, ackCh) = {
+    new deployerId(`rho:rchain:deployerId`), retCh in {
+      revAddress!("fromDeployerId", *deployerId, *retCh) |
+      rhoSpec!("assert", ("11112VYAt8rUGNRRZX3eJdgagaAhtWTK8Js7F7X5iqddMVqyDTtYau", "== <-", *retCh), "correct RevAddress", *ackCh)
+    }
+  } |
+
+  contract test_fromDeployerId_invalid(rhoSpec, _, ackCh) = {
+    new retCh in {
+      revAddress!("fromDeployerId", 42, *retCh) |
       rhoSpec!("assert", (Nil, "== <-", *retCh), "correct RevAddress", *ackCh)
     }
   }

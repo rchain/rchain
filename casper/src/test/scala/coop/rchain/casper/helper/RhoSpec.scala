@@ -5,6 +5,7 @@ import cats.implicits._
 import coop.rchain.casper.genesis.contracts.TestUtil
 import coop.rchain.casper.genesis.contracts.TestUtil.eval
 import coop.rchain.casper.protocol.DeployData
+import coop.rchain.casper.util.GenesisBuilder.GenesisParameters
 import coop.rchain.casper.util.rholang.Resources.copyStorage
 import coop.rchain.casper.util.{GenesisBuilder, ProtoUtil}
 import coop.rchain.crypto.hash.Blake2b512Random
@@ -21,11 +22,51 @@ import org.scalatest.{AppendedClues, FlatSpec, Matchers}
 
 import scala.concurrent.duration.{Duration, FiniteDuration}
 
-object RhoSpec {
+class RhoSpec(
+    testObject: CompiledRholangSource,
+    extraNonGenesisDeploys: Seq[DeployData],
+    executionTimeout: FiniteDuration,
+    genesisParameters: GenesisParameters = GenesisBuilder.buildGenesisParameters()
+) extends FlatSpec
+    with AppendedClues
+    with Matchers {
 
   implicit val logger: Log[Task]         = Log.log[Task]
   implicit val metricsEff: Metrics[Task] = new Metrics.MetricsNOP[Task]
   implicit val noopSpan: Span[Task]      = NoopSpan[Task]()
+
+  private val printer = PrettyPrinter()
+
+  def mkTest(test: (String, Map[Long, List[RhoTestAssertion]])): Unit =
+    test match {
+      case (testName, testAttempts) =>
+        assert(testAttempts.size > 0, "It doesn't make sense to have less than one attempt")
+
+        val (attempt, assertions) =
+          testAttempts
+            .find { case (_, assertions) => hasFailures(assertions) }
+            .getOrElse(testAttempts.head)
+
+        def clueMsg(clue: String) = s"$clue (test attempt: $attempt)"
+
+        it should testName in {
+          assertions.foreach {
+            case RhoAssertEquals(_, expected, actual, clue) =>
+              printer.buildString(actual) should be(printer.buildString(expected)) withClue clueMsg(
+                clue
+              )
+              actual should be(expected) withClue clueMsg(clue)
+            case RhoAssertNotEquals(_, unexpected, actual, clue) =>
+              printer.buildString(actual) should not be (printer
+                .buildString(unexpected)) withClue clueMsg(clue)
+              actual should not be (unexpected) withClue clueMsg(clue)
+            case RhoAssertTrue(_, v, clue) =>
+              v should be(true) withClue clueMsg(clue)
+          }
+        }
+    }
+
+  def hasFailures(assertions: List[RhoTestAssertion]) = assertions.find(_.isSuccess).isDefined
 
   private def testFrameworkContracts[F[_]: Log: Concurrent: Span](
       testResultCollector: TestResultCollector[F]
@@ -67,16 +108,16 @@ object RhoSpec {
     testResultCollectorService
   }
 
-  private val genesisContext = GenesisBuilder.buildGenesis()
-
-  def getResults(
+  private def getResults(
       testObject: CompiledRholangSource,
       otherLibs: Seq[DeployData],
       timeout: FiniteDuration
   ): Task[TestResult] =
     TestResultCollector[Task].flatMap { testResultCollector =>
       val runtimeResource = for {
-        storageDirs <- copyStorage[Task](genesisContext.storageDirectory)
+        storageDirs <- copyStorage[Task](
+                        GenesisBuilder.buildGenesis(genesisParameters).storageDirectory
+                      )
         runtime <- mkRuntimeAt[Task](storageDirs.rspaceDir)(
                     storageSize = 10 * 1024 * 1024,
                     additionalSystemProcesses = testFrameworkContracts(testResultCollector)
@@ -133,52 +174,9 @@ object RhoSpec {
       timestamp = 1559158671800L,
       term = CompiledRholangSource("RhoSpecContract.rho", NormalizerEnv.Empty).code
     )
-}
 
-class RhoSpec(
-    testObject: CompiledRholangSource,
-    extraNonGenesisDeploys: Seq[DeployData],
-    executionTimeout: FiniteDuration
-) extends FlatSpec
-    with AppendedClues
-    with Matchers {
-
-  private val printer = PrettyPrinter()
-
-  def mkTest(test: (String, Map[Long, List[RhoTestAssertion]])): Unit =
-    test match {
-      case (testName, testAttempts) =>
-        assert(testAttempts.size > 0, "It doesn't make sense to have less than one attempt")
-
-        val (attempt, assertions) =
-          testAttempts
-            .find { case (_, assertions) => hasFailures(assertions) }
-            .getOrElse(testAttempts.head)
-
-        def clueMsg(clue: String) = s"$clue (test attempt: $attempt)"
-
-        it should testName in {
-          assertions.foreach {
-            case RhoAssertEquals(_, expected, actual, clue) =>
-              printer.buildString(actual) should be(printer.buildString(expected)) withClue clueMsg(
-                clue
-              )
-              actual should be(expected) withClue clueMsg(clue)
-            case RhoAssertNotEquals(_, unexpected, actual, clue) =>
-              printer.buildString(actual) should not be (printer
-                .buildString(unexpected)) withClue clueMsg(clue)
-              actual should not be (unexpected) withClue clueMsg(clue)
-            case RhoAssertTrue(_, v, clue) =>
-              v should be(true) withClue clueMsg(clue)
-          }
-        }
-    }
-
-  def hasFailures(assertions: List[RhoTestAssertion]) = assertions.find(_.isSuccess).isDefined
-
-  private val result = RhoSpec
-    .getResults(testObject, extraNonGenesisDeploys, executionTimeout)
-    .runSyncUnsafe(Duration.Inf)
+  val result =
+    getResults(testObject, extraNonGenesisDeploys, executionTimeout).runSyncUnsafe(Duration.Inf)
 
   it should "finish execution within timeout" in {
     if (!result.hasFinished) fail(s"Timeout of $executionTimeout expired")

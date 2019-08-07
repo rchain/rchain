@@ -264,7 +264,7 @@ object Runtime {
       FixedChannels.REV_ADDRESS,
       3,
       BodyRefs.REV_ADDRESS, { ctx =>
-        ctx.systemProcesses.validateRevAddress
+        ctx.systemProcesses.revAddress
       }
     ),
     SystemProcess.Definition[F](
