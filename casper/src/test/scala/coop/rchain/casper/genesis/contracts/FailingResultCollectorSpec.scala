@@ -1,10 +1,15 @@
-import coop.rchain.casper.helper.{RhoAssertEquals, RhoAssertTrue, RhoSpec, RhoTestAssertion}
+import coop.rchain.casper.helper.{
+  RhoAssertEquals,
+  RhoAssertTrue,
+  RhoSpec,
+  RhoTestAssertion,
+  TestResult
+}
 import coop.rchain.rholang.build.CompiledRholangSource
 import coop.rchain.rholang.interpreter.NormalizerEnv
 import org.scalatest.{AppendedClues, FlatSpec, Matchers}
 
 import scala.concurrent.duration._
-import monix.execution.Scheduler.Implicits.global
 
 class FailingResultCollectorSpec extends FlatSpec with AppendedClues with Matchers {
   def clue(clueMsg: String, attempt: Long) = s"$clueMsg (attempt $attempt)"
@@ -25,17 +30,14 @@ class FailingResultCollectorSpec extends FlatSpec with AppendedClues with Matche
         }
     }
 
-  val result =
-    RhoSpec
-      .getResults(
-        CompiledRholangSource("FailingResultCollectorTest.rho", NormalizerEnv.Empty),
-        Seq.empty,
-        10.seconds
-      )
-      .runSyncUnsafe(Duration.Inf)
+  val result: TestResult = new RhoSpec(
+    CompiledRholangSource("FailingResultCollectorTest.rho", NormalizerEnv.Empty),
+    Seq.empty,
+    10.seconds
+  ).result
 
   result.assertions
-    .foreach(mkTest(_))
+    .foreach(mkTest)
 
   it should "complete within timeout" in {
     result.hasFinished should be(true)
