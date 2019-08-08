@@ -139,10 +139,16 @@ object Genesis {
     )
 
   private def fromLine(line: String): Either[String, Vault] = line.split(",") match {
-    case Array(ethAddress, initRevBalanceStr, _) =>
+    case Array(ethAddressString, initRevBalanceStr, _) =>
       Try(initRevBalanceStr.toLong) match {
         case Success(initRevBalance) =>
-          Right(Vault(RevAddress.fromEthAddress(ethAddress), initRevBalance))
+          RevAddress.fromEthAddress(ethAddressString) match {
+            case Some(ethAddress) => Right(Vault(ethAddress, initRevBalance))
+            case None =>
+              Left(
+                s"Failed to calculate REV address from given Ethereum address: $ethAddressString"
+              )
+          }
         case Failure(_) =>
           Left(s"Failed to parse given initial balance $initRevBalanceStr as long.")
       }

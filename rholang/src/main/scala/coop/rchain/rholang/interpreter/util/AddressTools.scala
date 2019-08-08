@@ -47,14 +47,15 @@ class AddressTools(prefix: Array[Byte], keyLength: Int, checksumLength: Int) {
   def fromPublicKey(pk: PublicKey): Option[Address] =
     if (keyLength == pk.bytes.length) {
       val ethAddress = Base16.encode(Keccak256.hash(pk.bytes.drop(1))).takeRight(40)
-      Some(fromEthAddress(ethAddress))
+      fromEthAddress(ethAddress)
     } else None
 
-  def fromEthAddress(ethAddress: String): Address = {
-    val keyHash = Keccak256.hash(Base16.unsafeDecode(ethAddress))
-    val payload = prefix ++ keyHash
-    Address(prefix, keyHash, computeChecksum(payload))
-  }
+  def fromEthAddress(ethAddress: String): Option[Address] =
+    Base16.decode(ethAddress).map { bytes =>
+      val keyHash = Keccak256.hash(bytes)
+      val payload = prefix ++ keyHash
+      Address(prefix, keyHash, computeChecksum(payload))
+    }
 
   def fromUnforgeable(gprivate: GPrivate): Address = {
     val keyHash = Keccak256.hash(gprivate.toByteArray)
