@@ -121,7 +121,7 @@ object BlockApproverProtocol {
           case (pk, stake) =>
             Validator(PublicKey(pk.toByteArray), stake)
         }
-        posParams      = ProofOfStake(minimumBond, maximumBond, validators)
+        posParams = ProofOfStake(minimumBond, maximumBond, validators)
         genesisBlessedContracts = Genesis
           .defaultBlessedTerms(
             timestamp,
@@ -130,7 +130,7 @@ object BlockApproverProtocol {
             Long.MaxValue
           )
           .toSet
-        blockDeploys          = body.deploys.flatMap(InternalProcessedDeploy.fromProcessedDeploy)
+        blockDeploys = body.deploys.flatMap(InternalProcessedDeploy.fromProcessedDeploy)
         _ <- (blockDeploys.size == genesisBlessedContracts.size)
               .either(())
               .or("Mismatch between number of candidate deploys and expected number of deploys.")
