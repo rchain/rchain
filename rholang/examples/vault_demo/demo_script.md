@@ -1,82 +1,68 @@
 # SETUP
 
-    #execute from the `examples` directory
+If you've run RNode previously, delete the pre-existing configuration files.
+
+    rm -rf ~/.rnode/
+    
+From the `rchain` directory, build RNode.
+
+    sbt node/universal:stage
+    
+From `node/target/universal/stage`, start RNode.
+
+    ./bin/rnode run -s --wallets-file $HOME/IdeaProjects/rchain/rholang/examples/wallets.txt
+    
+This generates a random Secp256k1 private key corresponding to a validator. Next, terminate RNode and restart as one of 
+the randomly generated validators.
+
+    ./bin/rnode run -s --validator-private-key $(cat ~/.rnode/genesis/*.sk | tail -1) --wallets-file $HOME/IdeaProjects/rchain/rholang/examples/wallets.txt
+
+Open a new terminal and navigate to `rholang/examples`, then add simulated user credentials to bash environment.
+
     . keys.env
-    ./propose.sh $GENESIS_PRV vault_demo/0.create_genesis_vault.rho "-e s/%REV_ADDR/$GENESIS_REV/"
 
 # DEMO START
 
-## Access your own vault
-
-Here's how you'd access your vault once you're on-chain:
-
-    ./propose.sh $ALICE_PRV vault_demo/2.check_balance.rho "-e s/%REV_ADDR/$ALICE_REV/"
-    
 ## Know your RevAddress
+
+Here's how Alice would check her REV vault address:
 
     ./propose.sh $ALICE_PRV vault_demo/1.know_ones_revaddress.rho "-e s/%PUB_KEY/$ALICE_PUB/"
 
-Notice that this doesn't need to be executed using Alice's private key.
+## Access your own vault
+
+Here's how Alice would check her REV vault balance:
+
+    ./propose.sh $ALICE_PRV vault_demo/2.check_balance.rho "-e s/%REV_ADDR/$ALICE_REV/"
+        
+Notice that anyone can check Alice's REV vault balance.
+
+    ./propose.sh $BOB_PRV vault_demo/2.check_balance.rho "-e s/%REV_ADDR/$ALICE_REV/"
 
 ## Transfer to a RevAddress
 
-Here's how you'd transfer funds to any other RevVault.
-The only things needed are access to your RevVault, and the target RevAddress.
-
-*In this example we're deploying as a Testnet operator, but it works exactly the same for a normal user.*
-
-    ./propose.sh $GENESIS_PRV vault_demo/3.transfer_funds.rho "-e s/%FROM/$GENESIS_REV/ -e s/%TO/$ALICE_REV/"
-    ./propose.sh $ALICE_PRV vault_demo/2.check_balance.rho "-e s/%REV_ADDR/$ALICE_REV/"
-
-Notice that anybody can query the balance of any RevVault.
-
-    ./propose.sh $GENESIS_PRV vault_demo/2.check_balance.rho "-e s/%REV_ADDR/$ALICE_REV/"
-
-An exchange would do the transfer exactly the same way.
-That's also exactly what the Testnet operators are going to do to distribute initial funds.
-
-Because the "transfer" method takes a RevAddress (and not a RevVault),
-transfers between different "kinds", or security schemes of RevVaults are possible.
-
-For now, we only provide a simple RevVault that only grants access to its designated user.
-By "user" here we mean the deployer of the contract that uses the RevVault and its corresponding AuthKey.
-
-## Onboard a friend on the platform
+Suppose Alice wants to on-board Bob and that she knows his REV address. Here's how she would transfer 100 REV to Bob.
 
     ./propose.sh $ALICE_PRV vault_demo/3.transfer_funds.rho "-e s/%FROM/$ALICE_REV/ -e s/%TO/$BOB_REV/"
     ./propose.sh $ALICE_PRV vault_demo/2.check_balance.rho "-e s/%REV_ADDR/$ALICE_REV/"
-
+    
 Notice the transfer hasn't been finished yet. Still, funds have been deducted from Alice's vault.
 
-Let's execute as Bob and check his balance:
+Now, let's have Bob check his own balance:
 
     ./propose.sh $BOB_PRV vault_demo/2.check_balance.rho "-e s/%REV_ADDR/$BOB_REV/"
 
-Notice the transfer that was initiated previously has now been finished.
+When Bob checks his balance for the first time, a REV vault is created at the REV address he provides. Once his vault is 
+created, all previous transfers to his vault complete. In other words, the order in which one creates a vault and transfers
+REV into that vault doesn't matter.
 
-## There's been a race
-
-You might've been lucky to observe a **race** between the balance check and the transfer arrival.
-So it might be that you've seen "Balance is 0" followed by "Finished transfer" instead of
-"Finished transfer" followed by "Balance is 100". This is OK though, the next deploy will no longer
-be subject to this race, as Bob's vault exists after the balance check has been done.
-
-This also means that the first access to one's vault needs to be done by a 3rd-party having the REV
+This means that the first access to one's vault needs to be done by a 3rd-party having the REV
 to pay for it. So the exchanges should not only do a `transfer`, but also at `findOrCreate`
 the destination vault. So should the Testnet operators distributing the funds.
 
-## Transfer back to the genesis vault
-
-    #check balances
-    ./propose.sh $BOB_PRV vault_demo/2.check_balance.rho "-e s/%REV_ADDR/$BOB_REV/"
-    ./propose.sh $BOB_PRV vault_demo/2.check_balance.rho "-e s/%REV_ADDR/$GENESIS_REV/"
-
-    #transfer
-    ./propose.sh $BOB_PRV vault_demo/3.transfer_funds.rho "-e s/%FROM/$BOB_REV/ -e s/%TO/$GENESIS_REV/"
-
-    #check balances
-    ./propose.sh $BOB_PRV vault_demo/2.check_balance.rho "-e s/%REV_ADDR/$BOB_REV/"
-    ./propose.sh $BOB_PRV vault_demo/2.check_balance.rho "-e s/%REV_ADDR/$GENESIS_REV/"
+Because the "transfer" method takes a RevAddress (and not a RevVault), transfers between different "kinds", or security 
+schemes of RevVaults are possible. For now, we only provide a simple RevVault that only grants access to its designated 
+user.
 
 ## Attempt a transfer despite insufficient funds
 
