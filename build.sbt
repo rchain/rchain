@@ -242,7 +242,7 @@ lazy val node = (project in file("node"))
   .settings(commonSettings: _*)
   .enablePlugins(RpmPlugin, DebianPlugin, JavaAppPackaging, BuildInfoPlugin)
   .settings(
-    version := "0.9.11" + git.gitHeadCommit.value.map(".git" + _.take(8)).getOrElse(""),
+    version := "0.9.12" + git.gitHeadCommit.value.map(".git" + _.take(8)).getOrElse(""),
     name := "rnode",
     maintainer := "RChain Cooperative https://www.rchain.coop/",
     packageSummary := "RChain Node",
