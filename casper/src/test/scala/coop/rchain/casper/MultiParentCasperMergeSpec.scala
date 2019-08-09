@@ -175,7 +175,7 @@ class MultiParentCasperMergeSpec extends FlatSpec with Matchers with Inspectors 
     "!4 (4!)"   -> VOLATILE_EVENT             -> merges(S0, S1 | F_, F0),
     "!4 4!!"    -> HAD_ITS_MATCH              -> merges(S0, F_, F0 | R1),
     "!4 !!X"    -> SAME_POLARITY_MERGE        -> merges(S0, R1, F0),
-    "!4 !!4"    -> COULD_MATCH_SAME_CONFLICTS -> conflicts(S0, R1, F_ | F1),
+    "!4 !!4"    -> COULD_MATCH_SAME_CONFLICTS -> conflicts(S0, R1, F_),
     "!4 !!4"    -> COULD_MATCH_SAME_MERGES    -> merges(S0, R1, F0 | F1),
     "!4 CX"     -> HAD_ITS_MATCH              -> merges(S0, C_, F_),
     "!4 C!"     -> HAD_ITS_MATCH              -> merges(S0, C_, F0 | S1),

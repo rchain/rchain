@@ -14,6 +14,8 @@ import coop.rchain.rspace.trace._
 
 import scala.collection.BitSet
 
+final case class BlockEvents(produces: Set[Produce], consumes: Set[Consume], comms: Set[COMM])
+
 object EstimatorHelper {
 
   def chooseNonConflicting[F[_]: Monad: Log: BlockStore](
@@ -89,13 +91,15 @@ object EstimatorHelper {
         // TODO: fail fast
       } yield (res)).contains(true)
 
+    val b1Ops = tuplespaceEventsPerChannel(b1Events)
     val b2Ops = tuplespaceEventsPerChannel(b2Events)
-    tuplespaceEventsPerChannel(b1Events)
+    val conflictPerChannel = b1Ops
       .map {
-        case (k, v) =>
-          (k, channelConflicts(v, b2Ops.get(k).getOrElse(Set.empty)))
+        case (channel, v) =>
+          (channel, channelConflicts(v, b2Ops.get(channel).getOrElse(Set.empty)))
       }
-      .filter { case (_, v) => v }
+    conflictPerChannel
+      .filter { case (_, conflicts) => conflicts }
       .keys
       .nonEmpty
   }
@@ -105,16 +109,12 @@ object EstimatorHelper {
       produce => !produce.persistent && produces.contains(produce)
     )
 
-  type BlockEvents = (Set[Produce], Set[Consume], Set[COMM])
-
-  private[this] def allChannels(events: BlockEvents) = events match {
-    case (freeProduceEvents, freeConsumeEvents, nonVolatileCommEvents) =>
-      freeProduceEvents.map(_.channelsHash).toSet ++ freeConsumeEvents
-        .flatMap(_.channelsHashes)
-        .toSet ++ nonVolatileCommEvents.flatMap { comm =>
-        comm.consume.channelsHashes ++ comm.produces.map(_.channelsHash)
-      }.toSet
-  }
+  private[this] def allChannels(events: BlockEvents) =
+    events.produces.map(_.channelsHash).toSet ++ events.consumes
+      .flatMap(_.channelsHashes)
+      .toSet ++ events.comms.flatMap { comm =>
+      comm.consume.channelsHashes ++ comm.produces.map(_.channelsHash)
+    }.toSet
 
   private[this] def extractBlockEvents[F[_]: Monad: BlockStore](
       blockAncestorsMeta: List[BlockMetadata]
@@ -138,121 +138,32 @@ object EstimatorHelper {
       consumesInVolatileCommEvents = volatileCommEvents.map(_.consume)
       produceEvents                = allProduceEvents.filterNot(producesInVolatileCommEvents.contains(_))
       consumeEvents                = allConsumeEvents.filterNot(consumesInVolatileCommEvents.contains(_))
-    } yield (produceEvents, consumeEvents, nonVolatileCommEvents)
+    } yield BlockEvents(produceEvents, consumeEvents, nonVolatileCommEvents)
 
   private[this] def extractJoinedChannels(b: BlockEvents): Set[Blake2b256Hash] = {
+
     def joinedChannels(consumes: Set[Consume]) =
       consumes.withFilter(Consume.hasJoins).flatMap(_.channelsHashes)
-    b match {
-      case (_, consumes, comms) =>
-        joinedChannels(consumes) ++ joinedChannels(comms.map(_.consume))
-    }
+
+    joinedChannels(b.consumes) ++ joinedChannels(b.comms.map(_.consume))
+
   }
 
   private[this] def tuplespaceEventsPerChannel(
       b: BlockEvents
-  ): Map[Blake2b256Hash, Set[TuplespaceEvent]] =
-    b match {
-      case (produces, consumes, comms) =>
-        val nonPersistentProducesInComms = comms.flatMap(_.produces).filterNot(_.persistent)
-        val nonPersistentConsumesInComms = comms.map(_.consume).filterNot(_.persistent)
-        val freeProduces                 = produces.filterNot(nonPersistentProducesInComms.contains)
-        val freeConsumes                 = consumes.filterNot(nonPersistentConsumesInComms.contains)
-        val produceEvents = freeProduces
-          .map(TuplespaceEvent.from(_))
+  ): Map[Blake2b256Hash, Set[TuplespaceEvent]] = {
+    val nonPersistentProducesInComms = b.comms.flatMap(_.produces).filterNot(_.persistent)
+    val nonPersistentConsumesInComms = b.comms.map(_.consume).filterNot(_.persistent)
+    val freeProduces                 = b.produces.diff(nonPersistentProducesInComms)
+    val freeConsumes                 = b.consumes.diff(nonPersistentConsumesInComms)
 
-        val consumeEvents = freeConsumes
-          .flatMap(TuplespaceEvent.from(_))
+    val produceEvents = freeProduces.map(TuplespaceEvent.from(_))
+    val consumeEvents = freeConsumes.flatMap(TuplespaceEvent.from(_))
+    val commEvents    = b.comms.flatMap(TuplespaceEvent.from(_, b.produces))
 
-        val commEvents = comms
-          .flatMap(TuplespaceEvent.from(_, produces))
-
-        (produceEvents
-          .combine(consumeEvents)
-          .combine(commEvents))
-          .groupBy(_._1)
-          .mapValues[Set[TuplespaceEvent]](_.map(_._2))
-    }
-
-  final case class TuplespaceEvent(
-      incoming: TuplespaceOperation,
-      matched: Option[TuplespaceOperation]
-  )
-  final case class TuplespaceOperation(
-      polarity: Polarity,
-      cardinality: Cardinality,
-      eventHash: Blake2b256Hash
-  )
-
-  trait Polarity
-  case object Send    extends Polarity
-  case object Receive extends Polarity
-
-  trait Cardinality
-  case object Linear    extends Cardinality
-  case object NonLinear extends Cardinality
-
-  object TuplespaceEvent {
-
-    implicit private[this] def liftProduce(produce: Produce): TuplespaceOperation =
-      TuplespaceOperation(Send, if (produce.persistent) NonLinear else Linear, produce.hash)
-
-    implicit private[this] def liftConsume(consume: Consume): TuplespaceOperation =
-      TuplespaceOperation(Receive, if (consume.persistent) NonLinear else Linear, consume.hash)
-
-    def from(produce: Produce): (Blake2b256Hash, TuplespaceEvent) =
-      produce.channelsHash -> TuplespaceEvent(
-        produce,
-        None
-      )
-
-    def from(consume: Consume): Option[(Blake2b256Hash, TuplespaceEvent)] = consume match {
-      case Consume(singleChannelHash :: Nil, _, _, _) =>
-        Some(
-          singleChannelHash -> TuplespaceEvent(
-            consume,
-            None
-          )
-        )
-      case _ => None
-    }
-
-    def from(
-        comm: COMM,
-        produces: Set[Produce]
-    ): Option[(Blake2b256Hash, TuplespaceEvent)] =
-      comm match {
-        case COMM(consume, produce :: Nil, _) => {
-          val incoming: TuplespaceOperation =
-            if (produces.contains(produce)) produce else consume
-          val matched: Option[TuplespaceOperation] = Some(
-            if (incoming == liftProduce(produce)) consume else produce
-          )
-          Some(
-            produce.channelsHash -> TuplespaceEvent(
-              incoming,
-              matched
-            )
-          )
-        }
-        case _ => None
-      }
+    (produceEvents ++ consumeEvents ++ commEvents)
+      .groupBy(_._1)
+      .mapValues[Set[TuplespaceEvent]](_.map(_._2))
   }
 
-  implicit class TuplespaceEventOps(val ev: TuplespaceEvent) extends AnyVal {
-
-    private[casper] def conflicts(other: TuplespaceEvent): Boolean =
-      if (ev.incoming.polarity == other.incoming.polarity)
-        (for {
-          leftMatched  <- ev.matched
-          rightMatched <- other.matched
-        } yield leftMatched == rightMatched && rightMatched.cardinality == Linear).getOrElse(false)
-      else
-        !(
-          ev.incoming.cardinality == Linear && other.incoming.cardinality == Linear && (ev.matched != None || other.matched != None) ||
-
-            ev.incoming.cardinality == NonLinear && other.matched != None ||
-            other.incoming.cardinality == NonLinear && ev.matched != None
-        )
-  }
 }
