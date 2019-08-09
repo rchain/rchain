@@ -110,7 +110,7 @@ trait BlockStoreTest
   }
 }
 
-class InMemBlockStoreTest extends BlockStoreTest {
+object InMemBlockStoreTest extends BlockStoreTest {
   override def withStore[R](f: BlockStore[Task] => Task[R]): R = {
     val test = for {
       refTask          <- emptyMapRef[Task]
@@ -124,7 +124,7 @@ class InMemBlockStoreTest extends BlockStoreTest {
   }
 }
 
-class FileLMDBIndexBlockStoreTest extends BlockStoreTest {
+object FileLMDBIndexBlockStoreTest extends BlockStoreTest {
   val scheduler = Scheduler.fixedPool("block-storage-test-scheduler", 4)
 
   import java.nio.file.{Files, Path}
