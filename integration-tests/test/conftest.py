@@ -4,6 +4,7 @@ from random import Random
 import tempfile
 import logging
 import contextlib
+from collections import defaultdict
 from typing import (
     Any,
     List,
@@ -13,6 +14,8 @@ from typing import (
 )
 
 import pytest
+from _pytest.terminal import TerminalReporter
+from _pytest.reports import TestReport
 from _pytest.config.argparsing import Parser
 import docker as docker_py
 from docker.client import DockerClient
@@ -46,6 +49,21 @@ def pytest_addoption(parser: Parser) -> None:
     parser.addoption("--mount-dir", action="store", default=None, help="globally accesible directory for mounting between containers")
     parser.addoption("--random-seed", type=int, action="store", default=None, help="seed for the random numbers generator used in integration tests")
 
+def pytest_terminal_summary(terminalreporter:TerminalReporter) -> None:
+    tr = terminalreporter
+    dlist: Dict[str, List[TestReport]] = defaultdict(list)
+    for replist in tr.stats.values():
+        for rep in replist:
+            if hasattr(rep, "duration"):
+                dlist[rep.nodeid].append(rep)
+    if not dlist:
+        return
+    tr.write_sep("=", "test durations")
+
+    for nodeid, reps in dlist.items():
+        total_second = sum([rep.duration for rep in reps])
+        detail_duration = ",".join(["{:<8} {:8.2f}s".format(rep.when, rep.duration) for rep in reps])
+        tr.write_line("Total: {:8.2f}s, {}    {}".format(total_second, detail_duration, nodeid))
 
 @pytest.yield_fixture(scope='session')
 def command_line_options(request: Any) -> Generator[CommandLineOptions, None, None]:
