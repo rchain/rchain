@@ -51,7 +51,7 @@ def test_successful_genesis_ceremony(command_line_options: CommandLineOptions, r
     ]
 
     with testing_context(command_line_options, random_generator, docker_client, bootstrap_key=CEREMONY_MASTER_KEYPAIR, peers_keys=peers_keypairs) as context, \
-        temporary_wallets_file(context.random_generator, [context.bootstrap_key] + context.peers_keys) as wallets, \
+        temporary_wallets_file(context.random_generator) as wallets, \
         ready_bootstrap(context=context, cli_options=bootstrap_cli_options, wallets_file=wallets) as ceremony_master, \
         started_peer(context=context, network=ceremony_master.network, bootstrap=ceremony_master, name='validator-a', private_key=VALIDATOR_A_KEYPAIR, wallets_file=wallets, cli_flags=peers_cli_flags, cli_options=peers_cli_options) as validator_a, \
         started_peer(context=context, network=ceremony_master.network, bootstrap=ceremony_master, name='validator-b', private_key=VALIDATOR_B_KEYPAIR, wallets_file=wallets, cli_flags=peers_cli_flags, cli_options=peers_cli_options) as validator_b, \
@@ -104,7 +104,7 @@ def test_validator_catching_up(command_line_options: CommandLineOptions, random_
         VALIDATOR_C_KEYPAIR
     ]
     with testing_context(command_line_options, random_generator, docker_client, bootstrap_key=CEREMONY_MASTER_KEYPAIR, peers_keys=peers_keypairs) as context, \
-        temporary_wallets_file(context.random_generator, [context.bootstrap_key] + context.peers_keys) as wallets, \
+        temporary_wallets_file(context.random_generator) as wallets, \
         ready_bootstrap(context=context, cli_options=bootstrap_cli_options, wallets_file=wallets) as ceremony_master, \
         started_peer(context=context, network=ceremony_master.network, bootstrap=ceremony_master, name='validator-a', private_key=VALIDATOR_A_KEYPAIR, wallets_file=wallets, cli_flags=peers_cli_flags, cli_options=peers_cli_options) as validator_a, \
         started_peer(context=context, network=ceremony_master.network, bootstrap=ceremony_master, name='validator-b', private_key=VALIDATOR_B_KEYPAIR, wallets_file=wallets, cli_flags=peers_cli_flags, cli_options=peers_cli_options) as validator_b:

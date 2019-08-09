@@ -1,6 +1,5 @@
 """Tests for the testing code itself."""
 
-import random
 from rchain.crypto import PrivateKey
 
 from .rnode import (
@@ -154,19 +153,18 @@ def test_extract_validator_stake_from_deploy_cost_str() -> None:
 
 
 def test_make_wallets_file_lines() -> None:
-    random_generator = random.Random(1547120283)
-    validator_keys = [
-        PrivateKey.from_hex("80366db5fbb8dad7946f27037422715e4176dda41d582224db87b6c3b783d709"),
-        PrivateKey.from_hex("120d42175739387af0264921bb117e4c4c05fbe2ce5410031e8b158c6e414bb5"),
-        PrivateKey.from_hex("1f52d0bce0a92f5c79f2a88aae6d391ddf853e2eb8e688c5aa68002205f92dad")
-    ]
+    wallets_map = {
+        PrivateKey.from_hex("80366db5fbb8dad7946f27037422715e4176dda41d582224db87b6c3b783d709"): 40,
+        PrivateKey.from_hex("120d42175739387af0264921bb117e4c4c05fbe2ce5410031e8b158c6e414bb5"): 45,
+        PrivateKey.from_hex("1f52d0bce0a92f5c79f2a88aae6d391ddf853e2eb8e688c5aa68002205f92dad"): 26
+    }
 
-    output = make_wallets_file_lines(random_generator, validator_keys)
+    output = make_wallets_file_lines(wallets_map)
 
     assert output == [
-        '0x04126107bc353c73e044fb21a5085aeafeecd69895fc05ec5033764a586bf044ddb19da5140a00912d892bfe8e10aa34eb7f9a68308646c3ac8804096ba605c2d2,40,0',
-        '0x0412ce31a3c3cbf9c69c098e593568c476a6bf7efdf9f7579c80e5328af05db7693b077d04fabbed28bb4e2d28aaba4ee50af6eddfab957c9c3c16d629c9d6aac3,45,0',
-        '0x04f42348554ab10387739d6f709ddba0eb9b80792f57ed68a1c9341635c0777590e9dbdd316c57cff51587f2f320e30605e6641e042f030b83aaaa3a3268a00fb0,26,0',
+        '26218db6e5a2eed1901f72cea58fda7ef1f602c6,40,0',
+        '42c828c183163cb50f6ad5207a10899b59aae91c,45,0',
+        '2a11fd494610330f3b522562f7204670f8928133,26,0',
     ]
 
 

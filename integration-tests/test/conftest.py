@@ -8,6 +8,8 @@ from typing import (
     Any,
     List,
     Generator,
+    Dict,
+    Optional,
 )
 
 import pytest
@@ -80,18 +82,24 @@ def temporary_bonds_file(random_generator: Random, validator_keys: List[PrivateK
         os.unlink(file)
 
 
-def make_wallets_file_lines(random_generator: Random, validator_keys: List[PrivateKey]) -> List[str]:
+def make_wallets_file_lines(wallet_balance_from_private_key: Dict[PrivateKey, int]) -> List[str]:
     result = []
-    for keypair in validator_keys:
-        token_amount = random_generator.randint(1, 100)
-        line = '0x{},{},0'.format(keypair.get_public_key().to_hex(), token_amount)
+    for private_key, token_amount in wallet_balance_from_private_key.items():
+        line = '{},{},0'.format(private_key.get_public_key().get_eth_address(), token_amount)
         result.append(line)
     return result
 
+def generate_random_wallet_map(random_generator: Random, wallets_amount:int = 5) -> Dict[PrivateKey, int]:
+    wallet_balance_from_private_key = {}
+    for _  in range(wallets_amount):
+        wallet_balance_from_private_key[PrivateKey.generate()] = random_generator.randint(10, 1000)
+    return wallet_balance_from_private_key
 
 @contextlib.contextmanager
-def temporary_wallets_file(random_generator: Random, validator_keys: List[PrivateKey]) -> Generator[str, None, None]:
-    lines = make_wallets_file_lines(random_generator, validator_keys)
+def temporary_wallets_file(random_generator: Random, wallet_balance_from_private_key: Optional[Dict[PrivateKey, int]]= None) -> Generator[str, None, None]:
+    if wallet_balance_from_private_key is None:
+        wallet_balance_from_private_key = generate_random_wallet_map(random_generator)
+    lines = make_wallets_file_lines(wallet_balance_from_private_key)
     (fd, file) = tempfile.mkstemp(prefix="rchain-wallets-file-", suffix=".txt")
     try:
         with os.fdopen(fd, "w") as f:
