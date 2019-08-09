@@ -163,6 +163,7 @@ class HoconConfigurationSpec extends FunSuite with Matchers {
         |  blockstorage {
         |    block-store-size = 1G
         |    dag-storage-size = 512M
+        |    block-store-cache-max-size = 256M
         |  }
         |}
       """.stripMargin
@@ -170,7 +171,8 @@ class HoconConfigurationSpec extends FunSuite with Matchers {
     val expectedBlockstorage =
       configuration.BlockStorage(
         blockStoreSize = 1024 * 1024 * 1024,
-        dagStorageSize = 512 * 1024 * 1024
+        dagStorageSize = 512 * 1024 * 1024,
+        blockStoreCacheMaxSize = 256 * 1024 * 1024
       )
 
     val blockstorage = BlockStorage.fromConfig(ConfigFactory.parseString(conf))

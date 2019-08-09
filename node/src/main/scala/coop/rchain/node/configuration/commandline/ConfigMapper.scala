@@ -80,6 +80,7 @@ object ConfigMapper {
 
         add(keys.BlockStoreSize, run.blockstorageBlockStoreSize)
         add(keys.DagStorageSize, run.blockstorageDagStorageSize)
+        add(keys.BlockStoreCacheMaxSize, run.blockstorageBlockStoreCacheMaxSize)
       }
 
       {

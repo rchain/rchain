@@ -157,7 +157,8 @@ class ConfigMapperSpec extends FunSuite with Matchers {
       Seq(
         "run",
         "--blockstorage-block-store-size 2000",
-        "--blockstorage-dag-storage-size 3000"
+        "--blockstorage-dag-storage-size 3000",
+        "--blockstorage-block-store-cache-max-size 4000"
       ).mkString(" ")
 
     val options = Options(args.split(' '))
@@ -166,7 +167,8 @@ class ConfigMapperSpec extends FunSuite with Matchers {
     val expectedBlockstorage =
       configuration.BlockStorage(
         blockStoreSize = 2000,
-        dagStorageSize = 3000
+        dagStorageSize = 3000,
+        blockStoreCacheMaxSize = 4000
       )
 
     val blockstorage = hocon.BlockStorage.fromConfig(config)

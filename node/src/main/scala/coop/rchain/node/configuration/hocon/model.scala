@@ -221,8 +221,9 @@ object BlockStorage {
   val Keys: List[String] = keys.all.map(k => s"$Key.$k")
 
   object keys {
-    val BlockStoreSize = "block-store-size"
-    val DagStorageSize = "dag-storage-size"
+    val BlockStoreSize         = "block-store-size"
+    val DagStorageSize         = "dag-storage-size"
+    val BlockStoreCacheMaxSize = "block-store-cache-max-size"
 
     val all =
       List(
@@ -236,7 +237,8 @@ object BlockStorage {
 
     configuration.BlockStorage(
       blockStoreSize = blockStorage.getBytes(keys.BlockStoreSize),
-      dagStorageSize = blockStorage.getBytes(keys.DagStorageSize)
+      dagStorageSize = blockStorage.getBytes(keys.DagStorageSize),
+      blockStoreCacheMaxSize = blockStorage.getBytes(keys.BlockStoreCacheMaxSize)
     )
   }
 }

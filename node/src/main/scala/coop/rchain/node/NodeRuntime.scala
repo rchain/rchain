@@ -441,6 +441,12 @@ class NodeRuntime private[node] (
                      log
                    )
                    .map(_.right.get) // TODO handle errors
+                   .flatMap { underlying =>
+                     CachingBlockStore(underlying, conf.blockstorage.blockStoreCacheMaxSize)(
+                       Sync[Task],
+                       metrics
+                     )
+                   }
     dagConfig = BlockDagFileStorage.Config(
       latestMessagesLogPath = dagStoragePath.resolve("latestMessagesLogPath"),
       latestMessagesCrcPath = dagStoragePath.resolve("latestMessagesCrcPath"),

@@ -56,7 +56,8 @@ final case class Kamon(
 
 final case class BlockStorage(
     blockStoreSize: Long,
-    dagStorageSize: Long
+    dagStorageSize: Long,
+    blockStoreCacheMaxSize: Long
 )
 
 sealed trait Command

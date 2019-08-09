@@ -287,6 +287,12 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
     val blockstorageDagStorageSize =
       opt[Long](required = false, descr = "Casper BlockDagStorage map size (in bytes)")
 
+    val blockstorageBlockStoreCacheMaxSize =
+      opt[Long](
+        required = false,
+        descr = "Maximum size of in-memory cache for block store in bytes."
+      )
+
     val validatorPublicKey = opt[String](
       descr = "Base16 encoding of the public key to use for signing a proposed blocks. " +
         "Can be inferred from the private key for some signature algorithms."
