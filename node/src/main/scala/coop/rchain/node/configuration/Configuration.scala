@@ -125,30 +125,9 @@ object Configuration {
         customCertificateLocation = customCertificateLocation,
         customKeyLocation = customKeyLocation
       )
-    val kamon   = hocon.Kamon.fromConfig(config)
-    val casper  = hocon.Casper.fromConfig(config)
-    val dataDir = server.dataDir
-    val blockDagStorage = BlockDagFileStorage.Config(
-      dataDir.resolve("casper-block-dag-file-storage-latest-messages-log"),
-      dataDir.resolve("casper-block-dag-file-storage-latest-messages-crc"),
-      dataDir.resolve("casper-block-dag-file-storage-block-metadata-log"),
-      dataDir.resolve("casper-block-dag-file-storage-block-metadata-crc"),
-      dataDir.resolve("casper-block-dag-file-storage-equivocation-tracker-log"),
-      dataDir.resolve("casper-block-dag-file-storage-equivocation-tracker-crc"),
-      dataDir.resolve("casper-block-dag-file-storage-invalid-blocks-log"),
-      dataDir.resolve("casper-block-dag-file-storage-invalid-blocks-crc"),
-      dataDir.resolve("casper-block-dag-file-storage-checkpoints"),
-      dataDir.resolve("casper-block-dag-file-storage-block-number-index"),
-      server.dagStorageSize
-    )
-    val blockStorage =
-      FileLMDBIndexBlockStore.Config(
-        dataDir.resolve("casper-block-store").resolve("storage"),
-        dataDir.resolve("casper-block-store").resolve("index"),
-        dataDir.resolve("casper-block-store").resolve("approved-block"),
-        dataDir.resolve("casper-block-store").resolve("checkpoints"),
-        server.storeSize
-      )
+    val kamon        = hocon.Kamon.fromConfig(config)
+    val casper       = hocon.Casper.fromConfig(config)
+    val blockstorage = hocon.BlockStorage.fromConfig(config)
     val maxMessageSize: Int =
       Math.max(
         MaxMessageSizeMinimumValue,
@@ -191,8 +170,7 @@ object Configuration {
       grpcServer.copy(maxMessageSize = grpcMaxMessageSize),
       tls,
       casper.copy(createGenesis = server.standalone),
-      blockStorage,
-      blockDagStorage,
+      blockstorage,
       kamon
     )
   }
@@ -243,8 +221,7 @@ final case class Configuration(
     grpcServer: GrpcServer,
     tls: Tls,
     casper: CasperConf,
-    blockstorage: FileLMDBIndexBlockStore.Config,
-    blockDagStorage: BlockDagFileStorage.Config,
+    blockstorage: BlockStorage,
     kamon: Kamon,
     printHelpToConsole: () => Unit = () => ()
 ) {

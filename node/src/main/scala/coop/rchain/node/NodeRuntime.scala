@@ -433,7 +433,7 @@ class NodeRuntime private[node] (
     _             <- mkDirs(conf.server.dataDir)
     _             <- mkDirs(blockstorePath)
     _             <- mkDirs(dagStoragePath)
-    blockstoreEnv = Context.env(blockstorePath, 8L * 1024L * 1024L * 1024L)
+    blockstoreEnv = Context.env(blockstorePath, conf.blockstorage.blockStoreSize)
     blockStore <- FileLMDBIndexBlockStore
                    .create[Task](blockstoreEnv, blockstorePath)(
                      Concurrent[Task],
@@ -452,7 +452,7 @@ class NodeRuntime private[node] (
       invalidBlocksCrcPath = dagStoragePath.resolve("invalidBlocksCrcPath"),
       checkpointsDirPath = dagStoragePath.resolve("checkpointsDirPath"),
       blockNumberIndexPath = dagStoragePath.resolve("blockNumberIndexPath"),
-      mapSize = 8L * 1024L * 1024L * 1024L,
+      mapSize = conf.blockstorage.dagStorageSize,
       latestMessagesLogMaxSizeFactor = 10
     )
     blockDagStorage <- BlockDagFileStorage.create[Task](dagConfig)(

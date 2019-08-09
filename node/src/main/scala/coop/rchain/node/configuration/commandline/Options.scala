@@ -281,17 +281,11 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
     val threadPoolSize =
       opt[Int](descr = "Maximum number of threads used by rnode", hidden = true)
 
-    val casperBlockStoreSize =
+    val blockstorageBlockStoreSize =
       opt[Long](required = false, descr = "Casper BlockStore map size (in bytes)")
 
-    val casperBlockDagStorageSize =
+    val blockstorageDagStorageSize =
       opt[Long](required = false, descr = "Casper BlockDagStorage map size (in bytes)")
-
-    val casperLatestMessagesDataPath =
-      opt[Path](required = false, descr = "Path to latest messages data file")
-
-    val casperLatestMessagesCrcPath =
-      opt[Path](required = false, descr = "Path to latest messages crc file")
 
     val validatorPublicKey = opt[String](
       descr = "Base16 encoding of the public key to use for signing a proposed blocks. " +

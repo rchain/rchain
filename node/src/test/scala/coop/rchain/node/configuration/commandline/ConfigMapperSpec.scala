@@ -30,8 +30,6 @@ class ConfigMapperSpec extends FunSuite with Matchers {
         "--standalone",
         "--bootstrap rnode://de6eed5d00cf080fc587eeb412cb31a75fd10358@52.119.8.109?protocol=40400&discovery=40404",
         "--data-dir /root/.rnode",
-        "--casper-block-store-size 2000",
-        "--casper-block-dag-storage-size 3000",
         "--map-size 1000",
         "--max-num-of-connections 500",
         "--allow-private-addresses",
@@ -65,8 +63,6 @@ class ConfigMapperSpec extends FunSuite with Matchers {
         standalone = true,
         dataDir = Paths.get("/root/.rnode"),
         mapSize = 1000,
-        storeSize = 2000,
-        dagStorageSize = 3000,
         maxNumOfConnections = 500,
         allowPrivateAddresses = true,
         maxMessageSize = 256,
@@ -154,6 +150,27 @@ class ConfigMapperSpec extends FunSuite with Matchers {
 
     val grpc = hocon.GrpcServer.fromConfig(config)
     grpc shouldEqual expectedGrpc
+  }
+
+  test("Map blockstorage command line arguments to Lightbend config") {
+    val args =
+      Seq(
+        "run",
+        "--blockstorage-block-store-size 2000",
+        "--blockstorage-dag-storage-size 3000"
+      ).mkString(" ")
+
+    val options = Options(args.split(' '))
+    val config  = ConfigMapper.fromOptions(options)
+
+    val expectedBlockstorage =
+      configuration.BlockStorage(
+        blockStoreSize = 2000,
+        dagStorageSize = 3000
+      )
+
+    val blockstorage = hocon.BlockStorage.fromConfig(config)
+    blockstorage shouldEqual expectedBlockstorage
   }
 
   test("Map Casper command line arguments to Lightbend config") {

@@ -47,8 +47,6 @@ object Server {
     val SendTimeout             = "send-timeout"
     val Standalone              = "standalone"
     val DataDir                 = "data-dir"
-    val StoreSize               = "store-size"
-    val DagStorageSize          = "dag-storage-size"
     val MapSize                 = "map-size"
     val MaxConnections          = "max-connections"
     val AllowPrivateAddresses   = "allow-private-addresses"
@@ -72,8 +70,6 @@ object Server {
         SendTimeout,
         Standalone,
         DataDir,
-        StoreSize,
-        DagStorageSize,
         MapSize,
         MaxConnections,
         AllowPrivateAddresses,
@@ -111,8 +107,6 @@ object Server {
       standalone = server.getBoolean(keys.Standalone),
       bootstrap = bootstrap,
       dataDir = server.getPath(keys.DataDir),
-      storeSize = server.getBytes(keys.StoreSize),
-      dagStorageSize = server.getBytes(keys.DagStorageSize),
       mapSize = server.getBytes(keys.MapSize),
       maxNumOfConnections = server.getInt(keys.MaxConnections),
       allowPrivateAddresses = server.getBoolean(keys.AllowPrivateAddresses),
@@ -218,6 +212,31 @@ object GrpcServer {
       portExternal = grpc.getInt(keys.PortExternal),
       portInternal = grpc.getInt(keys.PortInternal),
       maxMessageSize = grpc.getBytes(keys.MaxMessageSize).toInt
+    )
+  }
+}
+
+object BlockStorage {
+  val Key                = s"${Configuration.Key}.blockstorage"
+  val Keys: List[String] = keys.all.map(k => s"$Key.$k")
+
+  object keys {
+    val BlockStoreSize = "block-store-size"
+    val DagStorageSize = "dag-storage-size"
+
+    val all =
+      List(
+        BlockStoreSize,
+        DagStorageSize
+      )
+  }
+
+  def fromConfig(config: Config): configuration.BlockStorage = {
+    val blockStorage = config.getConfig(Key)
+
+    configuration.BlockStorage(
+      blockStoreSize = blockStorage.getBytes(keys.BlockStoreSize),
+      dagStorageSize = blockStorage.getBytes(keys.DagStorageSize)
     )
   }
 }

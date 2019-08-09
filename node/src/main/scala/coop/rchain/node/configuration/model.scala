@@ -22,8 +22,6 @@ final case class Server(
     standalone: Boolean,
     dataDir: Path,
     mapSize: Long,
-    storeSize: Long,
-    dagStorageSize: Long,
     maxNumOfConnections: Int,
     allowPrivateAddresses: Boolean,
     maxMessageSize: Int,
@@ -54,6 +52,11 @@ final case class Kamon(
     influxDbUdp: Boolean,
     zipkin: Boolean,
     sigar: Boolean
+)
+
+final case class BlockStorage(
+    blockStoreSize: Long,
+    dagStorageSize: Long
 )
 
 sealed trait Command

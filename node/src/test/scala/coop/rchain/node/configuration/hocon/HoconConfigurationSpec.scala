@@ -30,8 +30,6 @@ class HoconConfigurationSpec extends FunSuite with Matchers {
       |    standalone = true
       |    bootstrap = "rnode://de6eed5d00cf080fc587eeb412cb31a75fd10358@52.119.8.109?protocol=40400&discovery=40404"
       |    data-dir = /root/.rnode
-      |    store-size = 1G
-      |    dag-storage-size = 512M
       |    map-size = 1G
       |    max-connections = 500
       |    allow-private-addresses = true
@@ -64,8 +62,6 @@ class HoconConfigurationSpec extends FunSuite with Matchers {
         standalone = true,
         dataDir = Paths.get("/root/.rnode"),
         mapSize = 1024 * 1024 * 1024,
-        storeSize = 1024 * 1024 * 1024,
-        dagStorageSize = 512 * 1024 * 1024,
         maxNumOfConnections = 500,
         allowPrivateAddresses = true,
         maxMessageSize = 256 * 1024,
@@ -158,6 +154,27 @@ class HoconConfigurationSpec extends FunSuite with Matchers {
 
     val grpc = GrpcServer.fromConfig(ConfigFactory.parseString(conf))
     grpc shouldEqual expectedGrpc
+  }
+
+  test("Parse blockstorage section") {
+    val conf =
+      """
+        |rnode {
+        |  blockstorage {
+        |    block-store-size = 1G
+        |    dag-storage-size = 512M
+        |  }
+        |}
+      """.stripMargin
+
+    val expectedBlockstorage =
+      configuration.BlockStorage(
+        blockStoreSize = 1024 * 1024 * 1024,
+        dagStorageSize = 512 * 1024 * 1024
+      )
+
+    val blockstorage = BlockStorage.fromConfig(ConfigFactory.parseString(conf))
+    blockstorage shouldEqual expectedBlockstorage
   }
 
   test("Parse casper section") {

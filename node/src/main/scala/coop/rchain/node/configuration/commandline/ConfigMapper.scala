@@ -46,8 +46,6 @@ object ConfigMapper {
         add(keys.Standalone, run.standalone)
         add(keys.Bootstrap, run.bootstrap)
         add(keys.DataDir, run.dataDir)
-        add(keys.StoreSize, run.casperBlockStoreSize)
-        add(keys.DagStorageSize, run.casperBlockDagStorageSize)
         add(keys.MapSize, run.mapSize)
         add(keys.MaxConnections, run.maxNumOfConnections)
         add(keys.AllowPrivateAddresses, run.allowPrivateAddresses)
@@ -74,6 +72,14 @@ object ConfigMapper {
         add(keys.InfluxdbUdp, run.influxdbUdp)
         add(keys.Zipkin, run.zipkin)
         add(keys.Sigar, run.sigar)
+      }
+
+      {
+        import BlockStorage._
+        val add = addToMap(Key)
+
+        add(keys.BlockStoreSize, run.blockstorageBlockStoreSize)
+        add(keys.DagStorageSize, run.blockstorageDagStorageSize)
       }
 
       {
