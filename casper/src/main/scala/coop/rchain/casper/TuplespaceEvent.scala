@@ -1,10 +1,7 @@
 package coop.rchain.casper
 
-import com.google.protobuf.ByteString
 import coop.rchain.rspace.Blake2b256Hash
 import coop.rchain.rspace.trace._
-
-import scala.collection.BitSet
 
 final case class TuplespaceEvent(
     incoming: TuplespaceOperation,
@@ -57,17 +54,23 @@ object TuplespaceEvent {
   implicit class TuplespaceEventOps(val ev: TuplespaceEvent) extends AnyVal {
 
     private[casper] def conflicts(other: TuplespaceEvent): Boolean =
-      if (ev.incoming.polarity == other.incoming.polarity)
-        (for {
+      if (ev.incoming.polarity == other.incoming.polarity) {
+
+        val bothMatchedSameLinearEvent = for {
           thisMatched  <- ev.matched
           otherMatched <- other.matched
-        } yield thisMatched == otherMatched && otherMatched.cardinality == Linear).getOrElse(false)
-      else
-        !(
-          ev.incoming.cardinality == Linear && other.incoming.cardinality == Linear && (ev.matched != None || other.matched != None) ||
+        } yield thisMatched == otherMatched && otherMatched.cardinality == Linear
 
-            ev.incoming.cardinality == NonLinear && other.matched != None ||
-            other.incoming.cardinality == NonLinear && ev.matched != None
-        )
+        bothMatchedSameLinearEvent.getOrElse(false)
+      } else {
+        ev.unsatisfied && other.unsatisfied
+      }
+
+    private[casper] def unsatisfied: Boolean =
+      ev.incoming.cardinality match {
+        case Linear    => ev.matched.isEmpty
+        case NonLinear => ev.matched.forall(_.cardinality == Linear)
+      }
+
   }
 }
