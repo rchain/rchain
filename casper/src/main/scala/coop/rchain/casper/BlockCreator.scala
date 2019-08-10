@@ -14,6 +14,7 @@ import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.{PrivateKey, PublicKey}
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.models.BlockHash.BlockHash
+import coop.rchain.models.BlockMetadata
 import coop.rchain.models.Validator.Validator
 import coop.rchain.rholang.interpreter.Runtime.BlockData
 import coop.rchain.rholang.interpreter.accounting
@@ -146,17 +147,20 @@ object BlockCreator {
       validDeploys = deploys.filter(
         d => notFutureDeploy(currentBlockNumber, d) && notExpiredDeploy(earliestBlockNumber, d)
       )
-      deploysInCurrentChain <- DagOperations
-                                .bfTraverseF[F, BlockMessage](parents.toList)(
-                                  b =>
-                                    ProtoUtil
-                                      .unsafeGetParentsAboveBlockNumber[F](b, earliestBlockNumber)
-                                )
-                                .map { b =>
-                                  ProtoUtil.deploys(b).flatMap(_.deploy)
-                                }
-                                .toList
-    } yield (validDeploys -- deploysInCurrentChain.flatten).toSeq
+      parentsMetadata = parents.map(p => BlockMetadata.fromBlock(p, invalid = false))
+      result <- DagOperations
+                 .bfTraverseF[F, BlockMetadata](parentsMetadata.toList)(
+                   b =>
+                     ProtoUtil
+                       .getParentMetadatasAboveBlockNumber[F](b, earliestBlockNumber, dag)
+                 )
+                 .foldLeftF(validDeploys) { (deploys, blockMetadata) =>
+                   for {
+                     block        <- ProtoUtil.unsafeGetBlock[F](blockMetadata.blockHash)
+                     blockDeploys = ProtoUtil.deploys(block).flatMap(_.deploy)
+                   } yield deploys -- blockDeploys
+                 }
+    } yield result.toSeq
 
   private def notExpiredDeploy(earliestBlockNumber: Long, d: DeployData): Boolean =
     d.validAfterBlockNumber > earliestBlockNumber
