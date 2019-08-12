@@ -270,7 +270,7 @@ object Validate {
     *
     * Agnostic of non-parent justifications
     */
-  def repeatDeploy[F[_]: Monad: Log: BlockStore: Span](
+  def repeatDeploy[F[_]: Sync: Log: BlockStore: Span](
       block: BlockMessage,
       dag: BlockDagRepresentation[F],
       expirationThreshold: Int
@@ -282,44 +282,52 @@ object Validate {
 
     for {
       _                   <- Span[F].mark("before-repeat-deploy-get-parents")
-      initParents         <- ProtoUtil.unsafeGetParents[F](block)
-      maxBlockNumber      = ProtoUtil.maxBlockNumber(initParents)
+      blockMetadata       = BlockMetadata.fromBlock(block, invalid = false)
+      initParents         <- ProtoUtil.getParentsMetadata[F](blockMetadata, dag)
+      maxBlockNumber      = ProtoUtil.maxBlockNumberMetadata(initParents)
       earliestBlockNumber = maxBlockNumber + 1 - expirationThreshold
       _                   <- Span[F].mark("before-repeat-deploy-duplicate-block")
-      maybeDuplicatedBlock <- DagOperations
-                               .bfTraverseF[F, BlockMessage](initParents)(
-                                 b =>
-                                   ProtoUtil
-                                     .unsafeGetParentsAboveBlockNumber[F](b, earliestBlockNumber)
-                               )
-                               .find { b =>
-                                 ProtoUtil
-                                   .deploys(b)
-                                   .flatMap(_.deploy)
-                                   .exists(d => deployKeySet.contains(d.sig))
-                               }
+      maybeDuplicatedBlockMetadata <- DagOperations
+                                       .bfTraverseF[F, BlockMetadata](initParents)(
+                                         b =>
+                                           ProtoUtil
+                                             .getParentMetadatasAboveBlockNumber[F](
+                                               b,
+                                               earliestBlockNumber,
+                                               dag
+                                             )
+                                       )
+                                       .findF { blockMetadata =>
+                                         for {
+                                           block <- ProtoUtil.unsafeGetBlock[F](
+                                                     blockMetadata.blockHash
+                                                   )
+                                           blockDeploys = ProtoUtil.deploys(block).flatMap(_.deploy)
+                                         } yield blockDeploys.exists(
+                                           d => deployKeySet.contains(d.sig)
+                                         )
+                                       }
       _ <- Span[F].mark("before-repeat-deploy-duplicate-block-log")
-      maybeError <- maybeDuplicatedBlock
+      maybeError <- maybeDuplicatedBlockMetadata
                      .traverse(
-                       duplicatedBlock => {
-                         val currentBlockHashString = PrettyPrinter.buildString(block.blockHash)
-                         val blockHashString        = PrettyPrinter.buildString(duplicatedBlock.blockHash)
-                         val duplicatedDeploy = ProtoUtil
-                           .deploys(duplicatedBlock)
-                           .flatMap(_.deploy)
-                           .find(d => deployKeySet.contains(d.sig))
-                           .get
-                         val term            = duplicatedDeploy.term
-                         val deployerString  = PrettyPrinter.buildString(duplicatedDeploy.deployer)
-                         val timestampString = duplicatedDeploy.timestamp.toString
-                         val message =
-                           s"found deploy [$term (user $deployerString, millisecond timestamp $timestampString)] with the same sig in the block $blockHashString as current block $currentBlockHashString"
-                         Log[F].warn(
-                           ignore(
-                             block,
-                             message
-                           )
-                         ) >> InvalidRepeatDeploy.pure[F]
+                       duplicatedBlockMetadata => {
+                         for {
+                           duplicatedBlock <- ProtoUtil.unsafeGetBlock[F](
+                                               duplicatedBlockMetadata.blockHash
+                                             )
+                           currentBlockHashString = PrettyPrinter.buildString(block.blockHash)
+                           blockHashString        = PrettyPrinter.buildString(duplicatedBlock.blockHash)
+                           duplicatedDeploy = ProtoUtil
+                             .deploys(duplicatedBlock)
+                             .flatMap(_.deploy)
+                             .find(d => deployKeySet.contains(d.sig))
+                             .get
+                           term            = duplicatedDeploy.term
+                           deployerString  = PrettyPrinter.buildString(duplicatedDeploy.deployer)
+                           timestampString = duplicatedDeploy.timestamp.toString
+                           message         = s"found deploy [$term (user $deployerString, millisecond timestamp $timestampString)] with the same sig in the block $blockHashString as current block $currentBlockHashString"
+                           _               <- Log[F].warn(ignore(block, message))
+                         } yield InvalidRepeatDeploy
                        }
                      )
     } yield maybeError.toLeft(Valid)
@@ -527,7 +535,7 @@ object Validate {
   /**
     * Works only with fully explicit justifications.
     */
-  def parents[F[_]: Monad: Log: BlockStore: Metrics: Span](
+  def parents[F[_]: Sync: Log: BlockStore: Metrics: Span](
       b: BlockMessage,
       genesis: BlockMessage,
       dag: BlockDagRepresentation[F]

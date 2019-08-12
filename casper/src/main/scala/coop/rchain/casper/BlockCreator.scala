@@ -14,6 +14,7 @@ import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.{PrivateKey, PublicKey}
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.models.BlockHash.BlockHash
+import coop.rchain.models.BlockMetadata
 import coop.rchain.models.Validator.Validator
 import coop.rchain.rholang.interpreter.Runtime.BlockData
 import coop.rchain.rholang.interpreter.accounting
@@ -53,8 +54,8 @@ object BlockCreator {
       for {
         tipHashes             <- Estimator.tips[F](dag, genesis)
         _                     <- spanF.mark("after-estimator")
-        parents               <- EstimatorHelper.chooseNonConflicting[F](tipHashes, dag)
-        maxBlockNumber        = ProtoUtil.maxBlockNumber(parents)
+        parentMetadatas       <- EstimatorHelper.chooseNonConflicting[F](tipHashes, dag)
+        maxBlockNumber        = ProtoUtil.maxBlockNumberMetadata(parentMetadatas)
         invalidLatestMessages <- ProtoUtil.invalidLatestMessages[F](dag)
         slashingDeploys <- invalidLatestMessages.values.toList.traverse { invalidBlockHash =>
                             val encodedInvalidBlockHash =
@@ -77,7 +78,8 @@ object BlockCreator {
               s.copy(deployHistory = s.deployHistory ++ slashingDeploys)
             }
         _                <- updateDeployHistory[F](state, maxBlockNumber)
-        deploys          <- extractDeploys[F](dag, parents, maxBlockNumber, expirationThreshold)
+        deploys          <- extractDeploys[F](dag, parentMetadatas, maxBlockNumber, expirationThreshold)
+        parents          <- parentMetadatas.toList.traverse(p => ProtoUtil.unsafeGetBlock[F](p.blockHash))
         justifications   <- computeJustifications[F](dag, parents)
         now              <- Time[F].currentMillis
         invalidBlocksSet <- dag.invalidBlocks
@@ -132,9 +134,9 @@ object BlockCreator {
   }
 
   // TODO: Remove no longer valid deploys here instead of with lastFinalizedBlock call
-  private def extractDeploys[F[_]: Monad: Log: Time: BlockStore](
+  private def extractDeploys[F[_]: Sync: Log: Time: BlockStore](
       dag: BlockDagRepresentation[F],
-      parents: Seq[BlockMessage],
+      parents: Seq[BlockMetadata],
       maxBlockNumber: Long,
       expirationThreshold: Int
   )(implicit state: CasperStateCell[F]): F[Seq[DeployData]] =
@@ -146,17 +148,19 @@ object BlockCreator {
       validDeploys = deploys.filter(
         d => notFutureDeploy(currentBlockNumber, d) && notExpiredDeploy(earliestBlockNumber, d)
       )
-      deploysInCurrentChain <- DagOperations
-                                .bfTraverseF[F, BlockMessage](parents.toList)(
-                                  b =>
-                                    ProtoUtil
-                                      .unsafeGetParentsAboveBlockNumber[F](b, earliestBlockNumber)
-                                )
-                                .map { b =>
-                                  ProtoUtil.deploys(b).flatMap(_.deploy)
-                                }
-                                .toList
-    } yield (validDeploys -- deploysInCurrentChain.flatten).toSeq
+      result <- DagOperations
+                 .bfTraverseF[F, BlockMetadata](parents.toList)(
+                   b =>
+                     ProtoUtil
+                       .getParentMetadatasAboveBlockNumber[F](b, earliestBlockNumber, dag)
+                 )
+                 .foldLeftF(validDeploys) { (deploys, blockMetadata) =>
+                   for {
+                     block        <- ProtoUtil.unsafeGetBlock[F](blockMetadata.blockHash)
+                     blockDeploys = ProtoUtil.deploys(block).flatMap(_.deploy)
+                   } yield deploys -- blockDeploys
+                 }
+    } yield result.toSeq
 
   private def notExpiredDeploy(earliestBlockNumber: Long, d: DeployData): Boolean =
     d.validAfterBlockNumber > earliestBlockNumber
