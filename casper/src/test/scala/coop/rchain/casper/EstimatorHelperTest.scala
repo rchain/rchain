@@ -1,7 +1,7 @@
 package coop.rchain.casper
 
 import cats.Monad
-import cats.effect.Resource
+import cats.effect.{Resource, Sync}
 import cats.implicits._
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.{BlockDagStorage, BlockStore, IndexedBlockDagStorage}
@@ -130,7 +130,7 @@ class EstimatorHelperTest
       }
   }
 
-  private def testConflict[F[_]: BlockStore: IndexedBlockDagStorage: Time: Log: Monad](
+  private def testConflict[F[_]: Sync: BlockStore: IndexedBlockDagStorage: Time: Log](
       deployMod1: ProcessedDeploy => ProcessedDeploy
   )(
       deployMod2: ProcessedDeploy => ProcessedDeploy

@@ -134,7 +134,7 @@ object BlockCreator {
   }
 
   // TODO: Remove no longer valid deploys here instead of with lastFinalizedBlock call
-  private def extractDeploys[F[_]: Monad: Log: Time: BlockStore](
+  private def extractDeploys[F[_]: Sync: Log: Time: BlockStore](
       dag: BlockDagRepresentation[F],
       parents: Seq[BlockMetadata],
       maxBlockNumber: Long,

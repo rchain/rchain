@@ -1,6 +1,7 @@
 package coop.rchain.casper
 
 import cats.Monad
+import cats.effect.Sync
 import cats.implicits._
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.{BlockDagRepresentation, BlockStore}
@@ -18,7 +19,7 @@ final case class BlockEvents(produces: Set[Produce], consumes: Set[Consume], com
 
 object EstimatorHelper {
 
-  def chooseNonConflicting[F[_]: Monad: Log: BlockStore](
+  def chooseNonConflicting[F[_]: Sync: Log: BlockStore](
       blockHashes: Seq[BlockHash],
       dag: BlockDagRepresentation[F]
   ): F[Seq[BlockMetadata]] = {

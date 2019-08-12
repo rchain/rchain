@@ -91,18 +91,21 @@ object ProtoUtil {
       }
     } yield block
 
-  @SuppressWarnings(Array("org.wartremover.warts.Throw")) // TODO remove throw
-  def getBlockMetadata[F[_]: Monad](
+  def getBlockMetadata[F[_]: Sync](
       hash: BlockHash,
       dag: BlockDagRepresentation[F]
   ): F[BlockMetadata] =
     for {
       maybeBlockMetadata <- dag.lookup(hash)
-      blockMetadata = maybeBlockMetadata match {
-        case Some(b) => b
-        case None =>
-          throw new Exception(s"DAG storage is missing hash ${PrettyPrinter.buildString(hash)}")
-      }
+      blockMetadata <- maybeBlockMetadata match {
+                        case Some(b) => b.pure[F]
+                        case None =>
+                          Sync[F].raiseError[BlockMetadata](
+                            new Exception(
+                              s"DAG storage is missing hash ${PrettyPrinter.buildString(hash)}"
+                            )
+                          )
+                      }
     } yield blockMetadata
 
   def creatorJustification(block: BlockMessage): Option[Justification] =
@@ -219,7 +222,7 @@ object ProtoUtil {
       ProtoUtil.unsafeGetBlock[F](parentHash)
     }
 
-  def getParentsMetadata[F[_]: Monad](
+  def getParentsMetadata[F[_]: Sync](
       b: BlockMetadata,
       dag: BlockDagRepresentation[F]
   ): F[List[BlockMetadata]] =
@@ -227,7 +230,7 @@ object ProtoUtil {
       ProtoUtil.getBlockMetadata[F](parentHash, dag)
     }
 
-  def getParentMetadatasAboveBlockNumber[F[_]: Monad](
+  def getParentMetadatasAboveBlockNumber[F[_]: Sync](
       b: BlockMetadata,
       blockNumber: Long,
       dag: BlockDagRepresentation[F]

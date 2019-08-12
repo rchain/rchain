@@ -270,7 +270,7 @@ object Validate {
     *
     * Agnostic of non-parent justifications
     */
-  def repeatDeploy[F[_]: Monad: Log: BlockStore: Span](
+  def repeatDeploy[F[_]: Sync: Log: BlockStore: Span](
       block: BlockMessage,
       dag: BlockDagRepresentation[F],
       expirationThreshold: Int
@@ -535,7 +535,7 @@ object Validate {
   /**
     * Works only with fully explicit justifications.
     */
-  def parents[F[_]: Monad: Log: BlockStore: Metrics: Span](
+  def parents[F[_]: Sync: Log: BlockStore: Metrics: Span](
       b: BlockMessage,
       genesis: BlockMessage,
       dag: BlockDagRepresentation[F]
