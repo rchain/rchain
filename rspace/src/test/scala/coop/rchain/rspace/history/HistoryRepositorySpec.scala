@@ -221,5 +221,8 @@ trait InMemoryHistoryRepositoryTestBase extends InMemoryHistoryTestBase {
       Task.delay { data.get(hash) }
 
     override def close(): Task[Unit] = Task.delay(())
+
+    override def put(list: List[(Blake2b256Hash, PersistedData)]): Task[Unit] =
+      list.traverse_(Function.tupled(put))
   }
 }
