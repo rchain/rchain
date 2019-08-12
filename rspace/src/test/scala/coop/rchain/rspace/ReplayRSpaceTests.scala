@@ -124,7 +124,10 @@ trait ReplayRSpaceTests extends ReplayRSpaceTestsBase[String, Pattern, String, S
 
         _ = resultConsume shouldBe None
         _ = resultProduce shouldBe Some(
-          (ContResult(continuation, false, channels, patterns, 1), List(Result(datum, false)))
+          (
+            ContResult(continuation, false, channels, patterns, 1),
+            List(Result(datum, datum, false))
+          )
         )
 
         _ <- replaySpace.rigAndReset(emptyPoint.root, rigPoint.log)
@@ -162,7 +165,10 @@ trait ReplayRSpaceTests extends ReplayRSpaceTestsBase[String, Pattern, String, S
 
         _ = resultConsume shouldBe None
         _ = resultProduce shouldBe Some(
-          (ContResult(continuation, false, channels, patterns, 1, true), List(Result(datum, false)))
+          (
+            ContResult(continuation, false, channels, patterns, 1, true),
+            List(Result(datum, datum, false))
+          )
         )
 
         _ <- replaySpace.rigAndReset(emptyPoint.root, rigPoint.log)
@@ -349,7 +355,10 @@ trait ReplayRSpaceTests extends ReplayRSpaceTestsBase[String, Pattern, String, S
         _ = resultConsume4 shouldBe defined
         _ = resultConsume5 shouldBe defined
         _ = resultProduce shouldBe Some(
-          (ContResult(continuation, false, channels, patterns, 1, true), List(Result(datum, false)))
+          (
+            ContResult(continuation, false, channels, patterns, 1, true),
+            List(Result(datum, datum, false))
+          )
         )
         _ <- replaySpace.rigAndReset(emptyPoint.root, rigPoint.log)
 

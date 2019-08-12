@@ -143,7 +143,7 @@ class ReplayRSpace[F[_]: Sync, C, P, A, K](
                       contSequenceNumber,
                       peeks.nonEmpty
                     ),
-                    mats.map(dc => Result(dc.datum.a, dc.datum.persist))
+                    mats.map(dc => Result(dc.datum.a, dc.removedDatum, dc.datum.persist))
                   )
                 )
               }
@@ -360,7 +360,9 @@ class ReplayRSpace[F[_]: Sync, C, P, A, K](
                         contSequenceNumber,
                         peeks.nonEmpty
                       ),
-                      dataCandidates.map(dc => Result(dc.datum.a, dc.datum.persist))
+                      dataCandidates.map(
+                        dc => Result(dc.datum.a, dc.removedDatum, dc.datum.persist)
+                      )
                     )
                   )
                 }

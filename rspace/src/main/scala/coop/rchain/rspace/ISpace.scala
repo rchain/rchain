@@ -5,7 +5,7 @@ import coop.rchain.rspace.internal._
 
 import scala.collection.SortedSet
 
-final case class Result[A](matchedDatum: A, persistent: Boolean)
+final case class Result[A](matchedDatum: A, removedDatum: A, persistent: Boolean)
 final case class ContResult[C, P, A](
     value: A,
     persistent: Boolean,
