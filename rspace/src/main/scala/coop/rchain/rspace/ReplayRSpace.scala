@@ -5,6 +5,7 @@ import java.nio.file.Path
 import cats.Applicative
 import cats.effect.{Concurrent, ContextShift, Sync}
 import cats.implicits._
+import cats.temp.par.Par
 import com.google.common.collect.Multiset
 import com.typesafe.scalalogging.Logger
 import coop.rchain.catscontrib._
@@ -486,7 +487,8 @@ object ReplayRSpace {
       contextShift: ContextShift[F],
       scheduler: ExecutionContext,
       metricsF: Metrics[F],
-      spanF: Span[F]
+      spanF: Span[F],
+      par: Par[F]
   ): F[IReplaySpace[F, C, P, A, K]] =
     RSpace.setUp[F, C, P, A, K](dataDir, mapSize, branch).map {
       case (historyReader, store) =>

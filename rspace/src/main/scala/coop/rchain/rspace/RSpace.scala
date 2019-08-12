@@ -1,9 +1,11 @@
 package coop.rchain.rspace
 
+import java.lang
 import java.nio.file.{Files, Path}
 
 import cats.effect.{Concurrent, ContextShift, Sync}
 import cats.implicits._
+import cats.temp.par.Par
 import com.typesafe.scalalogging.Logger
 import coop.rchain.catscontrib._
 import coop.rchain.metrics.Metrics.Source
@@ -425,6 +427,7 @@ class RSpace[F[_], C, P, A, K] private[rspace] (
 }
 
 object RSpace {
+  val parallelism = lang.Runtime.getRuntime.availableProcessors() * 2
 
   def create[F[_], C, P, A, K](
       historyRepository: HistoryRepository[F, C, P, A, K],
@@ -461,7 +464,8 @@ object RSpace {
       contextShift: ContextShift[F],
       scheduler: ExecutionContext,
       metricsF: Metrics[F],
-      spanF: Span[F]
+      spanF: Span[F],
+      par: Par[F]
   ): F[(ISpace[F, C, P, A, K], IReplaySpace[F, C, P, A, K])] = {
     val v2Dir = dataDir.resolve("v2")
     for {
@@ -492,7 +496,8 @@ object RSpace {
       contextShift: ContextShift[F],
       scheduler: ExecutionContext,
       metricsF: Metrics[F],
-      spanF: Span[F]
+      spanF: Span[F],
+      par: Par[F]
   ): F[ISpace[F, C, P, A, K]] =
     setUp[F, C, P, A, K](dataDir, mapSize, branch).map {
       case (historyReader, store) =>
@@ -509,7 +514,8 @@ object RSpace {
       sp: Serialize[P],
       sa: Serialize[A],
       sk: Serialize[K],
-      concurrent: Concurrent[F]
+      concurrent: Concurrent[F],
+      par: Par[F]
   ): F[(HistoryRepository[F, C, P, A, K], HotStore[F, C, P, A, K])] = {
 
     import coop.rchain.rspace.history._

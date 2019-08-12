@@ -5,6 +5,7 @@ import java.nio.file.{Files, Path, Paths}
 import cats._
 import cats.implicits._
 import cats.effect._
+import cats.temp.par.Par
 import com.typesafe.scalalogging.Logger
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.rspace._
@@ -39,6 +40,7 @@ trait StorageTestsBase[F[_], C, P, A, K] extends FlatSpec with Matchers with Opt
   type AtST = AtomicAny[ST]
 
   implicit def concurrentF: Concurrent[F]
+  implicit def parF: Par[F]
   implicit def logF: Log[F]
   implicit def metricsF: Metrics[F]
   implicit def spanF: Span[F]
@@ -113,6 +115,7 @@ trait TaskTests[C, P, A, R, K] extends StorageTestsBase[Task, C, P, R, K] {
       monix.execution.Scheduler.Implicits.global,
       Task.defaultOptions
     )
+  implicit val parF: Par[Task]         = Par.fromParallel(Task.catsParallel)
   implicit val logF: Log[Task]         = Log.log[Task]
   implicit val metricsF: Metrics[Task] = new Metrics.MetricsNOP[Task]()
   implicit val spanF: Span[Task]       = NoopSpan[Task]()
