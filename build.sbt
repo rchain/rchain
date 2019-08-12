@@ -242,7 +242,14 @@ lazy val node = (project in file("node"))
   .settings(commonSettings: _*)
   .enablePlugins(RpmPlugin, DebianPlugin, JavaAppPackaging, BuildInfoPlugin)
   .settings(
-    version := "0.9.12" + git.gitHeadCommit.value.map(".git" + _.take(8)).getOrElse(""),
+    /*
+     * Components in Git describe string are separated by dashes, but RPM version
+     * strings cannot contain dashes[1]. Let's replace dashes with dots. FYI
+     * underscores are also out of question because of Debian packages[2].
+     * [1] http://ftp.rpm.org/max-rpm/ch-rpm-file-format.html
+     * [2] https://wiki.debian.org/DebianPackageInformation
+     */
+    version := git.gitDescribedVersion.value.get.replace('-', '.'),
     name := "rnode",
     maintainer := "RChain Cooperative https://www.rchain.coop/",
     packageSummary := "RChain Node",
