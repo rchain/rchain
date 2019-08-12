@@ -50,13 +50,11 @@ private[rspace] trait SpaceMatcher[F[_], C, P, A, K] extends ISpace[F, C, P, A, 
                 m.get(pattern, matchCandidate).flatMap {
                   case None =>
                     findMatchingDataCandidate(channel, remaining, pattern, indexedDatum +: prefix)
-                  case Some(mat) if persist =>
-                    (DataCandidate(channel, Datum(mat, persist, produceRef), dataIndex), data).some
-                      .pure[F]
                   case Some(mat) =>
+                    val indexedDatums = if (persist) data else prefix ++ remaining
                     (
                       DataCandidate(channel, Datum(mat, persist, produceRef), dataIndex),
-                      prefix ++ remaining
+                      indexedDatums
                     ).some.pure[F]
                 }
               case _ => none[MatchingDataCandidate].pure[F]
