@@ -179,14 +179,30 @@ class DebruijnInterpreter[M[_], F[_]](
       else if (terms.size > 256) rand.splitShort(id.toShort)
       else rand.splitByte(id.toByte)
 
-    // we index terms before shuffling to have deterministic Blake2b512Random seeds for each term
-    val indexedTermsShuffled = Random.shuffle(terms.zipWithIndex)
-    val groups               = indexedTermsShuffled.groupBy(_._2 % Reduce.parallelism).values
-    groups.toList.parTraverse_ {
-      _.toList.traverse_ {
+    val indexedTerms = terms.zipWithIndex.toList
+    if (terms.size <= Reduce.parallelism) {
+      indexedTerms.parTraverse_ {
         case (term, index) =>
           val random = split(index)
           eval(term)(env, random, sequenceNumber)
+      }
+    } else {
+      //TODO: Investigate if we can avoid the shuffling and manual parallelism limiting by tweaking:
+      // - the scheduler used
+      // - the monix ExecutionModel used
+      // Verify if using traverse-per-batch inside parTraverse means that less tasks are spawned at once
+      // (surmise: the task for the next element of a batch is not spawned until the previous one is processed)
+      // Track memory usage along with raw performance when investigating. Clean slate POC could be helpful here.
+
+      // we index terms before shuffling to have deterministic Blake2b512Random seeds for each term
+      val indexedTermsShuffled = Random.shuffle(indexedTerms)
+      val groups               = indexedTermsShuffled.groupBy(_._2 % Reduce.parallelism).values.toList
+      groups.parTraverse_ {
+        _.traverse_ {
+          case (term, index) =>
+            val random = split(index)
+            eval(term)(env, random, sequenceNumber)
+        }
       }
     }
   }
