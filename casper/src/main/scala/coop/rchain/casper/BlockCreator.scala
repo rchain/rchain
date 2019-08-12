@@ -54,8 +54,8 @@ object BlockCreator {
       for {
         tipHashes             <- Estimator.tips[F](dag, genesis)
         _                     <- spanF.mark("after-estimator")
-        parents               <- EstimatorHelper.chooseNonConflicting[F](tipHashes, dag)
-        maxBlockNumber        = ProtoUtil.maxBlockNumber(parents)
+        parentMetadatas       <- EstimatorHelper.chooseNonConflicting[F](tipHashes, dag)
+        maxBlockNumber        = ProtoUtil.maxBlockNumberMetadata(parentMetadatas)
         invalidLatestMessages <- ProtoUtil.invalidLatestMessages[F](dag)
         slashingDeploys <- invalidLatestMessages.values.toList.traverse { invalidBlockHash =>
                             val encodedInvalidBlockHash =
@@ -78,7 +78,8 @@ object BlockCreator {
               s.copy(deployHistory = s.deployHistory ++ slashingDeploys)
             }
         _                <- updateDeployHistory[F](state, maxBlockNumber)
-        deploys          <- extractDeploys[F](dag, parents, maxBlockNumber, expirationThreshold)
+        deploys          <- extractDeploys[F](dag, parentMetadatas, maxBlockNumber, expirationThreshold)
+        parents          <- parentMetadatas.toList.traverse(p => ProtoUtil.unsafeGetBlock[F](p.blockHash))
         justifications   <- computeJustifications[F](dag, parents)
         now              <- Time[F].currentMillis
         invalidBlocksSet <- dag.invalidBlocks
@@ -135,7 +136,7 @@ object BlockCreator {
   // TODO: Remove no longer valid deploys here instead of with lastFinalizedBlock call
   private def extractDeploys[F[_]: Monad: Log: Time: BlockStore](
       dag: BlockDagRepresentation[F],
-      parents: Seq[BlockMessage],
+      parents: Seq[BlockMetadata],
       maxBlockNumber: Long,
       expirationThreshold: Int
   )(implicit state: CasperStateCell[F]): F[Seq[DeployData]] =
@@ -147,9 +148,8 @@ object BlockCreator {
       validDeploys = deploys.filter(
         d => notFutureDeploy(currentBlockNumber, d) && notExpiredDeploy(earliestBlockNumber, d)
       )
-      parentsMetadata = parents.map(p => BlockMetadata.fromBlock(p, invalid = false))
       result <- DagOperations
-                 .bfTraverseF[F, BlockMetadata](parentsMetadata.toList)(
+                 .bfTraverseF[F, BlockMetadata](parents.toList)(
                    b =>
                      ProtoUtil
                        .getParentMetadatasAboveBlockNumber[F](b, earliestBlockNumber, dag)

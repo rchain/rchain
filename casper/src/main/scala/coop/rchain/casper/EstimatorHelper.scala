@@ -21,14 +21,14 @@ object EstimatorHelper {
   def chooseNonConflicting[F[_]: Monad: Log: BlockStore](
       blockHashes: Seq[BlockHash],
       dag: BlockDagRepresentation[F]
-  ): F[Seq[BlockMessage]] = {
-    def nonConflicting(b: BlockMessage): BlockMessage => F[Boolean] =
+  ): F[Seq[BlockMetadata]] = {
+    def nonConflicting(b: BlockMetadata): BlockMetadata => F[Boolean] =
       conflicts[F](_, b, dag).map(b => !b)
 
     for {
-      blocks <- blockHashes.toList.traverse(hash => ProtoUtil.unsafeGetBlock[F](hash))
+      blocks <- blockHashes.toList.traverse(hash => ProtoUtil.getBlockMetadata[F](hash, dag))
       result <- blocks
-                 .foldM(List.empty[BlockMessage]) {
+                 .foldM(List.empty[BlockMetadata]) {
                    case (acc, b) =>
                      Monad[F].ifM(acc.forallM(nonConflicting(b)))(
                        (b :: acc).pure[F],
@@ -40,18 +40,13 @@ object EstimatorHelper {
   }
 
   private[casper] def conflicts[F[_]: Monad: Log: BlockStore](
-      b1: BlockMessage,
-      b2: BlockMessage,
+      b1: BlockMetadata,
+      b2: BlockMetadata,
       dag: BlockDagRepresentation[F]
   ): F[Boolean] =
     dag.deriveOrdering(0L).flatMap { implicit ordering =>
       for {
-        b1MetaDataOpt <- dag.lookup(b1.blockHash)
-        b2MetaDataOpt <- dag.lookup(b2.blockHash)
-        uncommonAncestorsMap <- DagOperations.uncommonAncestors[F](
-                                 Vector(b1MetaDataOpt.get, b2MetaDataOpt.get),
-                                 dag
-                               )
+        uncommonAncestorsMap <- DagOperations.uncommonAncestors[F](Vector(b1, b2), dag)
         (b1AncestorsMap, b2AncestorsMap) = uncommonAncestorsMap.partition {
           case (_, bitSet) => bitSet == BitSet(0)
         }

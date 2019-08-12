@@ -8,13 +8,14 @@ import coop.rchain.blockstorage.{BlockDagStorage, BlockStore, IndexedBlockDagSto
 import coop.rchain.casper.EstimatorHelper.conflicts
 import coop.rchain.casper.helper.{BlockDagStorageFixture, BlockGenerator, HashSetCasperTestNode}
 import coop.rchain.casper.protocol.Event.EventInstance.{Consume, Produce}
-import coop.rchain.casper.protocol.{ConsumeEvent, Event, ProcessedDeploy, ProduceEvent}
+import coop.rchain.casper.protocol._
 import coop.rchain.casper.scalatestcontrib._
 import coop.rchain.casper.util.ConstructDeploy._
 import coop.rchain.casper.util.GenesisBuilder
 import coop.rchain.casper.util.rholang.{Resources, RuntimeManager}
 import coop.rchain.metrics
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
+import coop.rchain.models.BlockMetadata
 import coop.rchain.p2p.EffectsTestInstances.LogicalTime
 import coop.rchain.shared.{Log, Time}
 import monix.eval.Task
@@ -57,6 +58,9 @@ class EstimatorHelperTest
     HashSetCasperTestNode.networkEff(genesisContext, networkSize = 4).use {
       case n1 +: n2 +: n3 +: n4 +: _ =>
         implicit val blockStore = n4.blockStore
+
+        implicit def blockMessageToBlockMetadata(b: BlockMessage): BlockMetadata =
+          BlockMetadata.fromBlock(b, invalid = false)
 
         for {
           produceDeploys <- (0 until 6).toList.traverse(i => basicSendDeployData[Task](i))
@@ -130,7 +134,10 @@ class EstimatorHelperTest
       deployMod1: ProcessedDeploy => ProcessedDeploy
   )(
       deployMod2: ProcessedDeploy => ProcessedDeploy
-  ): F[Unit] =
+  ): F[Unit] = {
+    implicit def blockMessageToBlockMetadata(b: BlockMessage): BlockMetadata =
+      BlockMetadata.fromBlock(b, invalid = false)
+
     for {
       genesis <- createGenesis[F]()
       deployA <- basicProcessedDeploy[F](1).map(deployMod1)
@@ -141,8 +148,9 @@ class EstimatorHelperTest
 
       _              <- conflicts[F](a, b, dag) shouldBeF true
       nonconflicting <- EstimatorHelper.chooseNonConflicting(Seq(a, b).map(_.blockHash), dag)
-      result         = assert(nonconflicting == Seq(a))
+      _              = assert(nonconflicting == List[BlockMetadata](a))
     } yield ()
+  }
 
   private def produce(channelsHash: ByteString) =
     Event(
