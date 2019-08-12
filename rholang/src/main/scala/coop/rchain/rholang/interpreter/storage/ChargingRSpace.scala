@@ -5,17 +5,9 @@ import cats.implicits._
 import coop.rchain.metrics.Span
 import coop.rchain.models.TaggedContinuation.TaggedCont.ParBody
 import coop.rchain.models._
-import coop.rchain.rholang.interpreter.Runtime.{RhoISpace, RhoTuplespace}
+import coop.rchain.rholang.interpreter.Runtime.RhoTuplespace
 import coop.rchain.rholang.interpreter.accounting._
-import coop.rchain.rspace.{
-  Blake2b256Hash,
-  Checkpoint,
-  ContResult,
-  Result,
-  SoftCheckpoint,
-  internal,
-  Match => StorageMatch
-}
+import coop.rchain.rspace.{ContResult, Result, Match => StorageMatch}
 
 import scala.collection.SortedSet
 
@@ -123,7 +115,7 @@ object ChargingRSpace {
           .filterNot { case (data, _) => data.persistent }
           .map {
             case (data, channel) =>
-              storageCostProduce(channel, data.value)
+              storageCostProduce(channel, data.matchedDatum)
           }
           .foldLeft(Cost(0))(_ + _)
 
