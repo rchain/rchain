@@ -23,7 +23,12 @@ object internal {
       Datum(a, persist, Produce.create(channel, a, persist, sequenceNumber))
   }
 
-  final case class DataCandidate[C, A](channel: C, datum: Datum[A], datumIndex: Int)
+  final case class DataCandidate[C, A](
+      channel: C,
+      datum: Datum[A],
+      removedDatum: A,
+      datumIndex: Int
+  )
 
   final case class WaitingContinuation[P, K](
       patterns: Seq[P],

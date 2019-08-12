@@ -118,7 +118,7 @@ class ReplayRSpace[F[_]: Sync, C, P, A, K](
         r <- mats.toList
               .sortBy(_.datumIndex)(Ordering[Int].reverse)
               .traverse {
-                case DataCandidate(candidateChannel, Datum(_, persistData, _), dataIndex) =>
+                case DataCandidate(candidateChannel, Datum(_, persistData, _), _, dataIndex) =>
                   if (shouldRemove(persistData, candidateChannel)) {
                     store.removeDatum(candidateChannel, dataIndex)
                   } else ().pure[F]
@@ -336,7 +336,7 @@ class ReplayRSpace[F[_]: Sync, C, P, A, K](
             _ <- dataCandidates.toList
                   .sortBy(_.datumIndex)(Ordering[Int].reverse)
                   .traverse {
-                    case DataCandidate(candidateChannel, Datum(_, persistData, _), dataIndex) =>
+                    case DataCandidate(candidateChannel, Datum(_, persistData, _), _, dataIndex) =>
                       def shouldRemove: Boolean = {
                         val idx = channelsToIndex(candidateChannel)
                         dataIndex >= 0 && (!persistData && !peeks.contains(idx))

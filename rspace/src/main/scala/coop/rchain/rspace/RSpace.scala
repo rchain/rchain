@@ -80,6 +80,7 @@ class RSpace[F[_], C, P, A, K] private[rspace] (
         case DataCandidate(
             candidateChannel,
             Datum(_, persistData, _),
+            _,
             dataIndex
             ) if shouldRemove(persistData, candidateChannel) =>
           store.removeDatum(candidateChannel, dataIndex)
@@ -203,7 +204,7 @@ class RSpace[F[_], C, P, A, K] private[rspace] (
     Math.max(
       consumeRef.sequenceNumber,
       dataCandidates.map {
-        case DataCandidate(_, Datum(_, _, source), _) => source.sequenceNumber
+        case DataCandidate(_, Datum(_, _, source), _, _) => source.sequenceNumber
       }.max
     ) + 1
 
@@ -308,6 +309,7 @@ class RSpace[F[_], C, P, A, K] private[rspace] (
               case DataCandidate(
                   candidateChannel,
                   Datum(_, persistData, _),
+                  _,
                   dataIndex
                   ) => {
                 def shouldRemove: Boolean = {

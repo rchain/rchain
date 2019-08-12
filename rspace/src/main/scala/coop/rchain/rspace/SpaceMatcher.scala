@@ -53,7 +53,12 @@ private[rspace] trait SpaceMatcher[F[_], C, P, A, K] extends ISpace[F, C, P, A, 
                   case Some(mat) =>
                     val indexedDatums = if (persist) data else prefix ++ remaining
                     (
-                      DataCandidate(channel, Datum(mat, persist, produceRef), dataIndex),
+                      DataCandidate(
+                        channel,
+                        Datum(mat, persist, produceRef),
+                        matchCandidate,
+                        dataIndex
+                      ),
                       indexedDatums
                     ).some.pure[F]
                 }
