@@ -205,7 +205,7 @@ object Running {
           }
     } yield ()
 
-  def handleForkChoiceTipRequest[F[_]: Monad: RPConfAsk: Log: TransportLayer: BlockStore](
+  def handleForkChoiceTipRequest[F[_]: Sync: RPConfAsk: Log: TransportLayer: BlockStore](
       peer: PeerNode,
       fctr: ForkChoiceTipRequest
   )(casper: MultiParentCasper[F]): F[Unit] =
@@ -233,7 +233,7 @@ object Running {
 
 }
 
-class Running[F[_]: RPConfAsk: BlockStore: Monad: ConnectionsCell: TransportLayer: Log: Time: Running.RequestedBlocks](
+class Running[F[_]: Sync: RPConfAsk: BlockStore: ConnectionsCell: TransportLayer: Log: Time: Running.RequestedBlocks](
     casper: MultiParentCasper[F],
     approvedBlock: ApprovedBlock,
     theInit: F[Unit]

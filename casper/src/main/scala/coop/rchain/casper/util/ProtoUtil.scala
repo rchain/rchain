@@ -51,7 +51,7 @@ object ProtoUtil {
       } yield result
     }
 
-  def getMainChainUntilDepth[F[_]: Monad: BlockStore](
+  def getMainChainUntilDepth[F[_]: Sync: BlockStore](
       estimate: BlockMessage,
       acc: IndexedSeq[BlockMessage],
       depth: Int
@@ -80,15 +80,16 @@ object ProtoUtil {
     } yield mainChain
   }
 
-  @SuppressWarnings(Array("org.wartremover.warts.Throw")) // TODO remove throw
-  def unsafeGetBlock[F[_]: Monad: BlockStore](hash: BlockHash): F[BlockMessage] =
+  def unsafeGetBlock[F[_]: Sync: BlockStore](hash: BlockHash): F[BlockMessage] =
     for {
       maybeBlock <- BlockStore[F].get(hash)
-      block = maybeBlock match {
-        case Some(b) => b
-        case None =>
-          throw new Exception(s"BlockStore is missing hash ${PrettyPrinter.buildString(hash)}")
-      }
+      block <- maybeBlock match {
+                case Some(b) => b.pure[F]
+                case None =>
+                  Sync[F].raiseError[BlockMessage](
+                    new Exception(s"BlockStore is missing hash ${PrettyPrinter.buildString(hash)}")
+                  )
+              }
     } yield block
 
   def getBlockMetadata[F[_]: Sync](
@@ -217,7 +218,7 @@ object ProtoUtil {
   def parentHashes(b: BlockMessage): Seq[ByteString] =
     b.header.fold(Seq.empty[ByteString])(_.parentsHashList)
 
-  def unsafeGetParents[F[_]: Monad: BlockStore](b: BlockMessage): F[List[BlockMessage]] =
+  def unsafeGetParents[F[_]: Sync: BlockStore](b: BlockMessage): F[List[BlockMessage]] =
     ProtoUtil.parentHashes(b).toList.traverse { parentHash =>
       ProtoUtil.unsafeGetBlock[F](parentHash)
     }

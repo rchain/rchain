@@ -1,5 +1,6 @@
 package coop.rchain.casper
 
+import cats.effect.Sync
 import cats.{Applicative, Monad}
 import cats.implicits._
 import com.google.protobuf.ByteString
@@ -67,7 +68,7 @@ object EquivocationDetector {
     } yield maybeCreatorJustification.latestBlockHash
 
   // See summary of algorithm above
-  def checkNeglectedEquivocationsWithUpdate[F[_]: Monad: BlockStore: BlockDagStorage](
+  def checkNeglectedEquivocationsWithUpdate[F[_]: Sync: BlockStore: BlockDagStorage](
       block: BlockMessage,
       dag: BlockDagRepresentation[F],
       genesis: BlockMessage
@@ -85,7 +86,7 @@ object EquivocationDetector {
       }
     } yield status
 
-  private def isNeglectedEquivocationDetectedWithUpdate[F[_]: Monad: BlockStore: BlockDagStorage](
+  private def isNeglectedEquivocationDetectedWithUpdate[F[_]: Sync: BlockStore: BlockDagStorage](
       block: BlockMessage,
       dag: BlockDagRepresentation[F],
       genesis: BlockMessage
@@ -111,7 +112,7 @@ object EquivocationDetector {
     *
     * @return Whether a neglected equivocation was discovered.
     */
-  private def updateEquivocationsTracker[F[_]: Monad: BlockStore](
+  private def updateEquivocationsTracker[F[_]: Sync: BlockStore](
       block: BlockMessage,
       dag: BlockDagRepresentation[F],
       equivocationRecord: EquivocationRecord,
@@ -141,7 +142,7 @@ object EquivocationDetector {
           } else ().pure[F]
     } yield neglectedEquivocationDetected
 
-  private def getEquivocationDiscoveryStatus[F[_]: Monad: BlockStore](
+  private def getEquivocationDiscoveryStatus[F[_]: Sync: BlockStore](
       block: BlockMessage,
       dag: BlockDagRepresentation[F],
       equivocationRecord: EquivocationRecord,
@@ -170,7 +171,7 @@ object EquivocationDetector {
     }
   }
 
-  private def getEquivocationDiscoveryStatusForBondedValidator[F[_]: Monad: BlockStore](
+  private def getEquivocationDiscoveryStatusForBondedValidator[F[_]: Sync: BlockStore](
       blockDag: BlockDagRepresentation[F],
       equivocationRecord: EquivocationRecord,
       latestMessages: Map[Validator, BlockHash],
@@ -197,7 +198,7 @@ object EquivocationDetector {
       Applicative[F].pure(EquivocationDetected)
     }
 
-  private def isEquivocationDetectable[F[_]: Monad: BlockStore](
+  private def isEquivocationDetectable[F[_]: Sync: BlockStore](
       blockDag: BlockDagRepresentation[F],
       latestMessages: Seq[(Validator, BlockHash)],
       equivocationRecord: EquivocationRecord,
@@ -217,7 +218,7 @@ object EquivocationDetector {
         )
     }
 
-  private def isEquivocationDetectableAfterViewingBlock[F[_]: Monad: BlockStore](
+  private def isEquivocationDetectableAfterViewingBlock[F[_]: Sync: BlockStore](
       blockDag: BlockDagRepresentation[F],
       justificationBlockHash: BlockHash,
       equivocationRecord: EquivocationRecord,
@@ -241,7 +242,7 @@ object EquivocationDetector {
       } yield equivocationDetected
     }
 
-  private def isEquivocationDetectableThroughChildren[F[_]: Monad: BlockStore](
+  private def isEquivocationDetectableThroughChildren[F[_]: Sync: BlockStore](
       blockDag: BlockDagRepresentation[F],
       equivocationRecord: EquivocationRecord,
       equivocationChildren: Set[BlockMessage],
@@ -276,7 +277,7 @@ object EquivocationDetector {
   }
 
   @SuppressWarnings(Array("org.wartremover.warts.Throw")) // TODO remove throw
-  private def maybeAddEquivocationChild[F[_]: Monad: BlockStore](
+  private def maybeAddEquivocationChild[F[_]: Sync: BlockStore](
       blockDag: BlockDagRepresentation[F],
       justificationBlock: BlockMessage,
       equivocatingValidator: Validator,
@@ -326,7 +327,7 @@ object EquivocationDetector {
     }
 
   @SuppressWarnings(Array("org.wartremover.warts.Throw")) // TODO remove throw
-  private def addEquivocationChild[F[_]: Monad: BlockStore](
+  private def addEquivocationChild[F[_]: Sync: BlockStore](
       blockDag: BlockDagRepresentation[F],
       justificationBlock: BlockMessage,
       equivocationBaseBlockSeqNum: SequenceNumber,

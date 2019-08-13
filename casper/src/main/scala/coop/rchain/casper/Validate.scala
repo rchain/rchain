@@ -334,7 +334,7 @@ object Validate {
   }
 
   // This is not a slashable offence
-  def timestamp[F[_]: Monad: Log: Time: BlockStore](
+  def timestamp[F[_]: Sync: Log: Time: BlockStore](
       b: BlockMessage,
       dag: BlockDagRepresentation[F]
   ): F[Either[InvalidBlock, ValidBlock]] =
@@ -575,7 +575,7 @@ object Validate {
   /*
    * This check must come before Validate.parents
    */
-  def justificationFollows[F[_]: Monad: Log: BlockStore](
+  def justificationFollows[F[_]: Sync: Log: BlockStore](
       b: BlockMessage,
       genesis: BlockMessage,
       dag: BlockDagRepresentation[F]
