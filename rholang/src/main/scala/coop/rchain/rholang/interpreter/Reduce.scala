@@ -1,5 +1,7 @@
 package coop.rchain.rholang.interpreter
 
+import java.lang
+
 import cats.effect.Sync
 import cats.implicits._
 import cats.mtl.FunctorTell
@@ -7,8 +9,7 @@ import cats.{Eval => _}
 import com.google.protobuf.ByteString
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.hash.Blake2b512Random
-import coop.rchain.metrics.Metrics.Source
-import coop.rchain.metrics.{Metrics, Span}
+import coop.rchain.metrics.Span
 import coop.rchain.models.Expr.ExprInstance._
 import coop.rchain.models.TaggedContinuation.TaggedCont.ParBody
 import coop.rchain.models.Var.VarInstance
@@ -24,9 +25,14 @@ import coop.rchain.rholang.interpreter.matcher.SpatialMatcher.spatialMatchResult
 import coop.rchain.rspace.Serialize
 import coop.rchain.rspace.util._
 import monix.eval.Coeval
+import scalapb.GeneratedMessage
 
 import scala.collection.immutable.BitSet
-import scala.util.Try
+import scala.util.{Random, Try}
+
+object Reduce {
+  val parallelism = lang.Runtime.getRuntime.availableProcessors() * 2
+}
 
 /** Reduce is the interface for evaluating Rholang expressions.
   *
@@ -152,13 +158,8 @@ class DebruijnInterpreter[M[_], F[_]](
       sequenceNumber: Int
   ): M[Unit] = spanM.mark(parSpanLabel) >> {
 
-    def reportErrors(process: M[Unit]): M[Unit] =
-      process.handleErrorWith {
-        case e @ OutOfPhlogistonsError => e.raiseError[M, Unit]
-        case e                         => fTell.tell(e)
-      }
-
-    val terms = Seq(
+    // for lack of a better type...
+    val terms: Seq[GeneratedMessage] = Seq(
       par.sends,
       par.receives,
       par.news,
@@ -178,25 +179,61 @@ class DebruijnInterpreter[M[_], F[_]](
       else if (terms.size > 256) rand.splitShort(id.toShort)
       else rand.splitByte(id.toByte)
 
-    terms.zipWithIndex.toList.parTraverse_ {
-      case (term, id) =>
-        implicit val rand: Blake2b512Random = split(id)
-        term match {
-          case term: Send    => reportErrors(eval(term))
-          case term: Receive => reportErrors(eval(term))
-          case term: New     => reportErrors(eval(term))
-          case term: Match   => reportErrors(eval(term))
-          case term: Bundle  => reportErrors(eval(term))
-          case term: Expr =>
-            term.exprInstance match {
-              case e: EVarBody    => reportErrors(eval(e.value.v) >>= (eval(_)))
-              case e: EMethodBody => reportErrors(evalExprToPar(e) >>= (eval(_)))
-              case other          => BugFoundError(s"Undefined term: \n $other").raiseError[M, Unit]
-            }
-          case other => BugFoundError(s"Undefined term: \n $other").raiseError[M, Unit]
+    val indexedTerms = terms.zipWithIndex.toList
+    if (terms.size <= Reduce.parallelism) {
+      indexedTerms.parTraverse_ {
+        case (term, index) =>
+          val random = split(index)
+          eval(term)(env, random, sequenceNumber)
+      }
+    } else {
+      //TODO: Investigate if we can avoid the shuffling and manual parallelism limiting by tweaking:
+      // - the scheduler used
+      // - the monix ExecutionModel used
+      // Verify if using traverse-per-batch inside parTraverse means that less tasks are spawned at once
+      // (surmise: the task for the next element of a batch is not spawned until the previous one is processed)
+      // Track memory usage along with raw performance when investigating. Clean slate POC could be helpful here.
+
+      // we index terms before shuffling to have deterministic Blake2b512Random seeds for each term
+      val indexedTermsShuffled = Random.shuffle(indexedTerms)
+      val groups               = indexedTermsShuffled.groupBy(_._2 % Reduce.parallelism).values.toList
+      groups.parTraverse_ {
+        _.traverse_ {
+          case (term, index) =>
+            val random = split(index)
+            eval(term)(env, random, sequenceNumber)
         }
+      }
     }
   }
+
+  private def eval(
+      term: GeneratedMessage
+  )(
+      implicit env: Env[Par],
+      rand: Blake2b512Random,
+      sequenceNumber: Int
+  ): M[Unit] =
+    term match {
+      case term: Send    => reportErrors(eval(term))
+      case term: Receive => reportErrors(eval(term))
+      case term: New     => reportErrors(eval(term))
+      case term: Match   => reportErrors(eval(term))
+      case term: Bundle  => reportErrors(eval(term))
+      case term: Expr =>
+        term.exprInstance match {
+          case e: EVarBody    => reportErrors(eval(e.value.v) >>= (eval(_)))
+          case e: EMethodBody => reportErrors(evalExprToPar(e) >>= (eval(_)))
+          case other          => BugFoundError(s"Undefined term: \n $other").raiseError[M, Unit]
+        }
+      case other => BugFoundError(s"Undefined term: \n $other").raiseError[M, Unit]
+    }
+
+  private def reportErrors(process: M[Unit]): M[Unit] =
+    process.handleErrorWith {
+      case e @ OutOfPhlogistonsError => e.raiseError[M, Unit]
+      case e                         => fTell.tell(e)
+    }
 
   override def inj(
       par: Par
