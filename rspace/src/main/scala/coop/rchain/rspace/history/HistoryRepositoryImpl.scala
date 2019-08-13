@@ -148,8 +148,8 @@ final case class HistoryRepositoryImpl[F[_]: Sync, C, P, A, K](
         s"${key.toHex};delete-join;0"
     }
 
-  private def transform(actions: List[HotStoreAction]): List[Result] =
-    actions.map {
+  private def transform(action: HotStoreAction): Result =
+    action match {
       case i: InsertData[C, A] =>
         val key      = hashDataChannel(i.channel)
         val data     = encodeData(i.data)
@@ -193,7 +193,7 @@ final case class HistoryRepositoryImpl[F[_]: Sync, C, P, A, K](
 
   override def checkpoint(actions: List[HotStoreAction]): F[HistoryRepository[F, C, P, A, K]] =
     for {
-      trieActions    <- Applicative[F].pure(transform(actions))
+      trieActions    <- Applicative[F].pure(actions.par.map(transform).toList)
       historyActions <- storeLeaves(trieActions)
       next           <- history.process(historyActions)
       _              <- rootsRepository.commit(next.root)

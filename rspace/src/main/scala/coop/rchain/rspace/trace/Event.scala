@@ -158,4 +158,6 @@ object Consume {
 
   implicit val codecConsume: Codec[Consume] =
     (Codec[Seq[Blake2b256Hash]] :: Codec[Blake2b256Hash] :: bool :: int32).as[Consume]
+
+  def hasJoins(consume: Consume): Boolean = consume.channelsHashes.size > 1
 }

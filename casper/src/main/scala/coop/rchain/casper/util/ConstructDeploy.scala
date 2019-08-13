@@ -58,10 +58,20 @@ object ConstructDeploy {
     Time[F].currentMillis
       .map(sourceDeploy(source, _, phloLimit = phloLimit, phloPrice = phloPrice, sec = sec))
 
+  // TODO: replace usages with basicSendDeployData
   def basicDeployData[F[_]: Monad: Time](
       id: Int
   ): F[DeployData] =
     sourceDeployNowF(source = s"@$id!($id)")
+
+  def basicSendDeployData[F[_]: Monad: Time](
+      id: Int
+  ): F[DeployData] = basicDeployData[F](id)
+
+  def basicReceiveDeployData[F[_]: Monad: Time](
+      id: Int
+  ): F[DeployData] =
+    sourceDeployNowF(source = s"for(_ <- @$id){ Nil }")
 
   def basicProcessedDeploy[F[_]: Monad: Time](
       id: Int

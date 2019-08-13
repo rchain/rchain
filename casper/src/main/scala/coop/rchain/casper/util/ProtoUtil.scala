@@ -91,6 +91,23 @@ object ProtoUtil {
       }
     } yield block
 
+  def getBlockMetadata[F[_]: Sync](
+      hash: BlockHash,
+      dag: BlockDagRepresentation[F]
+  ): F[BlockMetadata] =
+    for {
+      maybeBlockMetadata <- dag.lookup(hash)
+      blockMetadata <- maybeBlockMetadata match {
+                        case Some(b) => b.pure[F]
+                        case None =>
+                          Sync[F].raiseError[BlockMetadata](
+                            new Exception(
+                              s"DAG storage is missing hash ${PrettyPrinter.buildString(hash)}"
+                            )
+                          )
+                      }
+    } yield blockMetadata
+
   def creatorJustification(block: BlockMessage): Option[Justification] =
     block.justifications
       .find {
@@ -205,13 +222,22 @@ object ProtoUtil {
       ProtoUtil.unsafeGetBlock[F](parentHash)
     }
 
-  def unsafeGetParentsAboveBlockNumber[F[_]: Monad: BlockStore](
-      b: BlockMessage,
-      blockNumber: Long
-  ): F[List[BlockMessage]] =
+  def getParentsMetadata[F[_]: Sync](
+      b: BlockMetadata,
+      dag: BlockDagRepresentation[F]
+  ): F[List[BlockMetadata]] =
+    b.parents.traverse { parentHash =>
+      ProtoUtil.getBlockMetadata[F](parentHash, dag)
+    }
+
+  def getParentMetadatasAboveBlockNumber[F[_]: Sync](
+      b: BlockMetadata,
+      blockNumber: Long,
+      dag: BlockDagRepresentation[F]
+  ): F[List[BlockMetadata]] =
     ProtoUtil
-      .unsafeGetParents[F](b)
-      .map(parents => parents.filter(p => ProtoUtil.blockNumber(p) >= blockNumber))
+      .getParentsMetadata[F](b, dag)
+      .map(parents => parents.filter(p => p.blockNum >= blockNumber))
 
   def containsDeploy(b: BlockMessage, user: ByteString, timestamp: Long): Boolean =
     containsDeploy(
@@ -259,6 +285,10 @@ object ProtoUtil {
 
   def maxBlockNumber(blocks: Seq[BlockMessage]): Long = blocks.foldLeft(-1L) {
     case (acc, b) => math.max(acc, ProtoUtil.blockNumber(b))
+  }
+
+  def maxBlockNumberMetadata(blocks: Seq[BlockMetadata]): Long = blocks.foldLeft(-1L) {
+    case (acc, b) => math.max(acc, b.blockNum)
   }
 
   def toJustification(
