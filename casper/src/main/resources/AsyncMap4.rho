@@ -1,4 +1,16 @@
-//  Rholang map: speedy insert & lookup, no conflicts on lookup, no conflicts on inserts to different keys
+// Rholang map desiderata: speedy insert & lookup,  no conflicts on lookup, no conflicts on inserts to different keys
+// This implementation: O(log n) insert & lookup.
+// Conflict analysis
+//   Lookup
+//     The cell implementation uses a linear for, and when two processes send
+//     to the same linear for, you get a conflict. When looking up an item when
+//     you don't know if it's in the map or not, it necessarily sends "get" to
+//     the root cell of the map, so lookups of that kind conflict.  When
+//     looking up an item where you know it's in the map, you can use
+//     "fastUnsafeGet" and avoid the root cell.
+//   Insert
+//     As above, inserting necessarily sends a "get" to the root cell, thus
+//     inserts conflict.
 
 new AsyncMap, o(`rho:io:stdout`) in {
   new MakeCell, ByteArrayToNybbleList, AsyncMapSetter, AsyncMapGetter, powersCh in {
@@ -107,6 +119,22 @@ new AsyncMap, o(`rho:io:stdout`) in {
         }
       } |
 
+      // Doesn't walk the path, just tries to fetch it directly.
+      // Will hang if there's no value there.
+      contract AsyncMap(@"fastUnsafeGet", @map, @key, ret) = {
+        new hashCh, nybListCh in {
+          // Hash the key to get a 256-bit array
+          @"keccak256Hash"!(key.toByteArray(), *hashCh) |
+          for (@hash <- hashCh) {
+            // Get the bit list
+            ByteArrayToNybbleList!(hash, 0, hash.length(), [], *nybListCh) |
+            for (@nybList <- nybListCh) {
+              @[map, nybList.slice(0, 16)]!("get", [*ret])
+            }
+          }
+        }
+      } |
+
       contract AsyncMapSetter(@map, @nybList, @n, @len, @newVal, ret) = {
         o!(["In loop: ", n, len]) |
         // Look up the value of the cell at [map, nybList.slice(0, n + 1)
@@ -128,7 +156,7 @@ new AsyncMap, o(`rho:io:stdout`) in {
                 // Create cell, set cell to 0
                 MakeCell!(0, [map, nybList.slice(0, n + 1)]) |
                 new ack in {
-                  // set current cell to val | (1 << nybList.nth(n))
+                  // Atomically update current cell to val | (1 << nybList.nth(n))
                   @[map, nybList.slice(0, n)]!("setBit", [nybList.nth(n), *ack]) |
                   for (_ <- ack) {
                     AsyncMapSetter!(map, nybList, n + 1, len, newVal, *ret)
@@ -172,7 +200,7 @@ new AsyncMap, o(`rho:io:stdout`) in {
             for (_ <- ret1; _ <- ret2) {
               o!("Value set, getting") |
               AsyncMap!("get", map, "some key", *ret1) |
-              AsyncMap!("get", map, "monkey", *ret2) |
+              AsyncMap!("fastUnsafeGet", map, "monkey", *ret2) |
               for (@val1 <- ret1; @val2 <- ret2) {
                 o!(["Got these from the map: ", val1, val2])
               }
