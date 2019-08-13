@@ -132,19 +132,19 @@ class MultiParentCasperMergeSpec extends FlatSpec with Matchers with Inspectors 
         |""".stripMargin
 
   // Sends (linear sends)
-  val S0 = Rho("@0!(0)")
-  val S1 = Rho("@0!(1)")
+  val S0 = Rho("@0!(0)", Some(Send))
+  val S1 = Rho("@0!(1)", Some(Send))
   // Repeats (persistent sends)
-  val R0 = Rho("@0!!(0)")
-  val R1 = Rho("@0!!(1)")
+  val R0 = Rho("@0!!(0)", Some(Send))
+  val R1 = Rho("@0!!(1)", Some(Send))
   // For-s (linear receives)
-  val F_ = Rho("for (_ <- @0) { 0 }")
-  val F0 = Rho("for (@0 <- @0) { 0 }")
-  val F1 = Rho("for (@1 <- @0) { 0 }")
+  val F_ = Rho("for (_ <- @0) { 0 }", Some(Receive))
+  val F0 = Rho("for (@0 <- @0) { 0 }", Some(Receive))
+  val F1 = Rho("for (@1 <- @0) { 0 }", Some(Receive))
   // Contracts (persistent receives)
-  val C_ = Rho("contract @0(id) = { 0 }")
-  val C0 = Rho("contract @0(@0) = { 0 }")
-  val C1 = Rho("contract @0(@1) = { 0 }")
+  val C_ = Rho("contract @0(id) = { 0 }", Some(Receive))
+  val C0 = Rho("contract @0(@0) = { 0 }", Some(Receive))
+  val C1 = Rho("contract @0(@1) = { 0 }", Some(Receive))
 
   // TODO: Peek rows/column
   // Note this skips pairs that lead to infinite loops
@@ -258,10 +258,10 @@ class MultiParentCasperMergeSpec extends FlatSpec with Matchers with Inspectors 
       }
   }
 
-  case class Rho(value: String) {
+  case class Rho(value: String, maybePolarity: Option[Polarity] = None) {
     def |(other: Rho): Rho = Rho(s"$value | ${other.value}")
   }
-  object Nil extends Rho("Nil")
+  object Nil extends Rho("Nil", None)
 
   private[this] def conflicts(b1: Rho, b2: Rho, base: Rho)(
       implicit file: sourcecode.File,
