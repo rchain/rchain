@@ -2,7 +2,7 @@
 
 new AsyncMap, o(`rho:io:stdout`) in {
   new MakeCell, ByteArrayToNybbleList, AsyncMapSetter, AsyncMapGetter, powersCh in {
-    powersCh!([1,2,4,8,16,32,64,128,256,512,1024,2048,4096,8192,16384,32768]) |
+    powersCh!([1,2,4,8,16,32,64,128,256,512,1024,2048,4096,8192,16384,32768, 65536]) |
     for (@powers <- powersCh) {
       contract MakeCell(@val, cell) = {
         for (@cmd, @args <- cell) {
@@ -25,8 +25,24 @@ new AsyncMap, o(`rho:io:stdout`) in {
                 x => { o!(["ERROR: MATCH FAIL. MakeCell.get line 25", x]) }
               }
             }
+            "setBit" => {
+              match args {
+                [bit, ret] => {
+                  @ret!(Nil) |
+                  MakeCell!(
+                    // val | (1 << bit)
+                    // Bitwise operators would be really nice to have!
+                    (val % powers.nth(bit)) +
+                      (val / powers.nth(bit + 1)) * powers.nth(bit + 1) +
+                      powers.nth(bit),
+                    *cell
+                  )
+                }
+                x => { o!(["ERROR: MATCH FAIL. MakeCell.get line 41", x]) }
+              }
+            }
             "die" => { Nil }
-            x => { o!(["ERROR: MATCH FAIL. MakeCell line 29", x]) }
+            x => { o!(["ERROR: MATCH FAIL. MakeCell line 45", x]) }
           }
         }
       } |
@@ -112,9 +128,8 @@ new AsyncMap, o(`rho:io:stdout`) in {
                 // Create cell, set cell to 0
                 MakeCell!(0, [map, nybList.slice(0, n + 1)]) |
                 new ack in {
-                  // set current cell to val | 2**nybList.nth(n)
-                  // = val + powers.nth(nybList.nth(n)) because that bit is zero
-                  @[map, nybList.slice(0, n)]!("set", [val + powers.nth(nybList.nth(n)), *ack]) |
+                  // set current cell to val | (1 << nybList.nth(n))
+                  @[map, nybList.slice(0, n)]!("setBit", [nybList.nth(n), *ack]) |
                   for (_ <- ack) {
                     AsyncMapSetter!(map, nybList, n + 1, len, newVal, *ret)
                   }
@@ -151,13 +166,15 @@ new AsyncMap, o(`rho:io:stdout`) in {
         AsyncMap!("init", *mapCh) |
         for (@map <- mapCh) {
           o!("Map initialized, setting") |
-          new ret in {
-            AsyncMap!("set", map, "some key", "some val", *ret) |
-            for (_ <- ret) {
+          new ret1, ret2 in {
+            AsyncMap!("set", map, "some key", "some val", *ret1) |
+            AsyncMap!("set", map, "monkey", "some other val", *ret2) |
+            for (_ <- ret1; _ <- ret2) {
               o!("Value set, getting") |
-              AsyncMap!("get", map, "some key", *ret) |
-              for (@val <- ret) {
-                o!(["Got this from the map: ", val])
+              AsyncMap!("get", map, "some key", *ret1) |
+              AsyncMap!("get", map, "monkey", *ret2) |
+              for (@val1 <- ret1; @val2 <- ret2) {
+                o!(["Got these from the map: ", val1, val2])
               }
             }
           }
