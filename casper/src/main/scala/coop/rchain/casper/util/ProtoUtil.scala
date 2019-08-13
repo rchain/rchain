@@ -62,7 +62,7 @@ object ProtoUtil {
       mainChain <- maybeMainParentHash match {
                     case Some(mainParentHash) =>
                       for {
-                        updatedEstimate <- unsafeGetBlock[F](mainParentHash)
+                        updatedEstimate <- getBlock[F](mainParentHash)
                         depthDelta      = blockNumber(updatedEstimate) - blockNumber(estimate)
                         newDepth        = depth + depthDelta.toInt
                         mainChain <- if (newDepth <= 0) {
@@ -80,7 +80,7 @@ object ProtoUtil {
     } yield mainChain
   }
 
-  def unsafeGetBlock[F[_]: Sync: BlockStore](hash: BlockHash): F[BlockMessage] =
+  def getBlock[F[_]: Sync: BlockStore](hash: BlockHash): F[BlockMessage] =
     for {
       maybeBlock <- BlockStore[F].get(hash)
       block <- maybeBlock match {
@@ -220,7 +220,7 @@ object ProtoUtil {
 
   def unsafeGetParents[F[_]: Sync: BlockStore](b: BlockMessage): F[List[BlockMessage]] =
     ProtoUtil.parentHashes(b).toList.traverse { parentHash =>
-      ProtoUtil.unsafeGetBlock[F](parentHash)
+      ProtoUtil.getBlock[F](parentHash)
     }
 
   def getParentsMetadata[F[_]: Sync](

@@ -230,7 +230,7 @@ object EquivocationDetector {
       true.pure[F]
     } else {
       for {
-        justificationBlock <- ProtoUtil.unsafeGetBlock[F](justificationBlockHash)
+        justificationBlock <- ProtoUtil.getBlock[F](justificationBlockHash)
         equivocationDetected <- isEquivocationDetectableThroughChildren[F](
                                  blockDag,
                                  equivocationRecord,
@@ -307,7 +307,7 @@ object EquivocationDetector {
       maybeLatestEquivocatingValidatorBlockHash match {
         case Some(blockHash) =>
           for {
-            latestEquivocatingValidatorBlock <- ProtoUtil.unsafeGetBlock[F](blockHash)
+            latestEquivocatingValidatorBlock <- ProtoUtil.getBlock[F](blockHash)
             updatedEquivocationChildren <- if (latestEquivocatingValidatorBlock.seqNum > equivocationBaseBlockSeqNum) {
                                             addEquivocationChild[F](
                                               blockDag,
@@ -340,7 +340,7 @@ object EquivocationDetector {
     ).flatMap {
       case Some(equivocationChildHash) =>
         for {
-          equivocationChild <- ProtoUtil.unsafeGetBlock[F](equivocationChildHash)
+          equivocationChild <- ProtoUtil.getBlock[F](equivocationChildHash)
         } yield equivocationChildren + equivocationChild
       case None =>
         throw new Exception(

@@ -299,7 +299,7 @@ object Validate {
                                        )
                                        .findF { blockMetadata =>
                                          for {
-                                           block <- ProtoUtil.unsafeGetBlock[F](
+                                           block <- ProtoUtil.getBlock[F](
                                                      blockMetadata.blockHash
                                                    )
                                            blockDeploys = ProtoUtil.deploys(block).flatMap(_.deploy)
@@ -312,7 +312,7 @@ object Validate {
                      .traverse(
                        duplicatedBlockMetadata => {
                          for {
-                           duplicatedBlock <- ProtoUtil.unsafeGetBlock[F](
+                           duplicatedBlock <- ProtoUtil.getBlock[F](
                                                duplicatedBlockMetadata.blockHash
                                              )
                            currentBlockHashString = PrettyPrinter.buildString(block.blockHash)
@@ -345,7 +345,7 @@ object Validate {
       latestParentTimestamp <- ProtoUtil.parentHashes(b).toList.foldM(0L) {
                                 case (latestTimestamp, parentHash) =>
                                   ProtoUtil
-                                    .unsafeGetBlock[F](parentHash)
+                                    .getBlock[F](parentHash)
                                     .map(parent => {
                                       val timestamp =
                                         parent.header.fold(latestTimestamp)(_.timestamp)
@@ -583,7 +583,7 @@ object Validate {
     val justifiedValidators = b.justifications.map(_.validator).toSet
     val mainParentHash      = ProtoUtil.parentHashes(b).head
     for {
-      mainParent       <- ProtoUtil.unsafeGetBlock[F](mainParentHash)
+      mainParent       <- ProtoUtil.getBlock[F](mainParentHash)
       bondedValidators = ProtoUtil.bonds(mainParent).map(_.validator).toSet
       status <- if (bondedValidators == justifiedValidators) {
                  Applicative[F].pure(Right(Valid))

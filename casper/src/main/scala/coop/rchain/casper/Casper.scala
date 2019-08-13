@@ -83,7 +83,7 @@ object MultiParentCasper extends MultiParentCasperInstances {
       dag       <- casper.blockDag
       tipHashes <- casper.estimator(dag)
       tipHash   = tipHashes.head
-      tip       <- ProtoUtil.unsafeGetBlock[F](tipHash)
+      tip       <- ProtoUtil.getBlock[F](tipHash)
     } yield tip
 }
 
