@@ -4,166 +4,165 @@ new AsyncMap, o(`rho:io:stdout`) in {
   new MakeCell, ByteArrayToNybbleList, AsyncMapSetter, AsyncMapGetter, powersCh in {
     powersCh!([1,2,4,8,16,32,64,128,256,512,1024,2048,4096,8192,16384,32768]) |
     for (@powers <- powersCh) {
-        contract MakeCell(@val, cell) = {
-          for (@cmd, @args <- cell) {
-            match cmd {
-              "get" => {
-                match args {
-                  [ret] => {
-                    @ret!(val) |
-                    MakeCell!(val, *cell)
-                  }
-                  x => { o!(["ERROR: MATCH FAIL. MakeCell.get line 16", x]) }
+      contract MakeCell(@val, cell) = {
+        for (@cmd, @args <- cell) {
+          match cmd {
+            "get" => {
+              match args {
+                [ret] => {
+                  @ret!(val) |
+                  MakeCell!(val, *cell)
                 }
+                x => { o!(["ERROR: MATCH FAIL. MakeCell.get line 16", x]) }
               }
-              "set" => {
-                match args {
-                  [newVal, ret] => {
-                    @ret!(Nil) |
-                    MakeCell!(newVal, *cell)
-                  }
-                  x => { o!(["ERROR: MATCH FAIL. MakeCell.get line 25", x]) }
-                }
-              }
-              "die" => { Nil }
-              x => { o!(["ERROR: MATCH FAIL. MakeCell line 29", x]) }
             }
+            "set" => {
+              match args {
+                [newVal, ret] => {
+                  @ret!(Nil) |
+                  MakeCell!(newVal, *cell)
+                }
+                x => { o!(["ERROR: MATCH FAIL. MakeCell.get line 25", x]) }
+              }
+            }
+            "die" => { Nil }
+            x => { o!(["ERROR: MATCH FAIL. MakeCell line 29", x]) }
           }
-        } |
+        }
+      } |
 
-        contract ByteArrayToNybbleList(@ba, @n, @len, @acc, ret) = {
-          if (n == len) {
-            ret!(acc)
-          } else {
-            ByteArrayToNybbleList!(ba, n+1, len, acc ++ [ ba.nth(n) % 16, ba.nth(n) / 16 ], *ret)
-          }
-        } |
+      contract ByteArrayToNybbleList(@ba, @n, @len, @acc, ret) = {
+        if (n == len) {
+          ret!(acc)
+        } else {
+          ByteArrayToNybbleList!(ba, n+1, len, acc ++ [ ba.nth(n) % 16, ba.nth(n) / 16 ], *ret)
+        }
+      } |
 
-        contract AsyncMap(@"init", ret) = {
-          new map in {
-            MakeCell!(0, [*map, []]) |
-            ret!(*map)
-          }
-        } |
+      contract AsyncMap(@"init", ret) = {
+        new map in {
+          MakeCell!(0, [*map, []]) |
+          ret!(*map)
+        }
+      } |
 
-        contract AsyncMapGetter(@map, @nybList, @n, @len, ret) = {
-          o!(["In getter: ", nybList, n, len]) |
-          // Look up the value of the cell at [map, nybList.slice(0, n + 1)]
-          new valCh in {
-            o!(["Getting from ", nybList.slice(0, n)]) |
-            @[map, nybList.slice(0, n)]!("get", [*valCh]) |
-            for (@val <- valCh) {
-              o!(["Got ", val]) |
-              if (n == len) {
-                o!(["n == len, returning ", val]) |
-                // If we're at the end of the path, return.
-                ret!(val)
+      contract AsyncMapGetter(@map, @nybList, @n, @len, ret) = {
+        o!(["In getter: ", nybList, n, len]) |
+        // Look up the value of the cell at [map, nybList.slice(0, n + 1)]
+        new valCh in {
+          o!(["Getting from ", nybList.slice(0, n)]) |
+          @[map, nybList.slice(0, n)]!("get", [*valCh]) |
+          for (@val <- valCh) {
+            o!(["Got ", val]) |
+            if (n == len) {
+              o!(["n == len, returning ", val]) |
+              // If we're at the end of the path, return.
+              ret!(val)
+            } else {
+              o!(["nybList.nth(n) = ", nybList.nth(n)]) |
+              // Otherwise check if the rest of the path exists.
+              // Bit k set means cell k exists.
+              // nybList.nth(n) is the cell number
+              // val & powers.nth(nybList.nth(n)) is nonzero if the cell exists
+              // (val/powers.nth(nybList.nth(n))) % 2 is 1 if the cell exists
+              if ((val/powers.nth(nybList.nth(n))) % 2 == 0) {
+                o!(["Cell missing"]) |
+                ret!([])
               } else {
-                o!(["nybList.nth(n) = ", nybList.nth(n)]) |
-                // Otherwise check if the rest of the path exists.
-                // Bit k set means cell k exists.
-                // nybList.nth(n) is the cell number
-                // val & powers.nth(nybList.nth(n)) is nonzero if the cell exists
-                // (val/powers.nth(nybList.nth(n))) % 2 is 1 if the cell exists
-                if ((val/powers.nth(nybList.nth(n))) % 2 == 0) {
-                  o!(["Cell missing"]) |
-                  ret!([])
-                } else {
-                  o!(["Cell found, recursing"]) |
-                  AsyncMapGetter!(map, nybList, n + 1, len, *ret)
-                }
+                o!(["Cell found, recursing"]) |
+                AsyncMapGetter!(map, nybList, n + 1, len, *ret)
               }
             }
           }
-        } |
+        }
+      } |
 
-        contract AsyncMap(@"get", @map, @key, ret) = {
-          new hashCh, nybListCh in {
-            // Hash the key to get a 256-bit array
-            @"keccak256Hash"!(key.toByteArray(), *hashCh) |
-            for (@hash <- hashCh) {
-              // Get the bit list
-              ByteArrayToNybbleList!(hash, 0, hash.length(), [], *nybListCh) |
-              for (@nybList <- nybListCh) {
-                AsyncMapGetter!(map, nybList.slice(0, 64), 0, 64, *ret)
-              }
+      contract AsyncMap(@"get", @map, @key, ret) = {
+        new hashCh, nybListCh in {
+          // Hash the key to get a 256-bit array
+          @"keccak256Hash"!(key.toByteArray(), *hashCh) |
+          for (@hash <- hashCh) {
+            // Get the bit list
+            ByteArrayToNybbleList!(hash, 0, hash.length(), [], *nybListCh) |
+            for (@nybList <- nybListCh) {
+              AsyncMapGetter!(map, nybList.slice(0, 16), 0, 16, *ret)
             }
           }
-        } |
+        }
+      } |
 
-        contract AsyncMapSetter(@map, @nybList, @n, @len, @newVal, ret) = {
-          o!(["In loop: ", n, len]) |
-          // Look up the value of the cell at [map, nybList.slice(0, n + 1)
-          new valCh in {
-            o!(["Getting slice", nybList.slice(0, n)]) |
-            @[map, nybList.slice(0, n)]!("get", [*valCh]) |
-            for (@val <- valCh) {
-              o!(["Got val ", val]) |
-              if (n == len) {
-                // If we're at the end of the path, set the cell to newVal.
-                // TODO: remove the slice once done testing
-                o!(["Setting final cell to ", [newVal]]) |
-                @[map, nybList.slice(0, n)]!("set", [[newVal], *ret])
-              } else {
-                // Otherwise make the rest of the path exist.
-                // Bit k set means cell k exists.
-                o!(["nybList.nth()", n, nybList.nth(n)]) |
-                if ((val/powers.nth(nybList.nth(n))) % 2 == 0) {
-                  // Cell missing
-                  // Create cell, set cell to 0
-                  MakeCell!(0, [map, nybList.slice(0, n + 1)]) |
-                  new ack in {
-                    // set current cell to val | 2**nybList.nth(n)
-                    // = val + powers.nth(nybList.nth(n)) because that bit is zero
-                    @[map, nybList.slice(0, n)]!("set", [val + powers.nth(nybList.nth(n)), *ack]) |
-                    for (_ <- ack) {
-                      AsyncMapSetter!(map, nybList, n + 1, len, newVal, *ret)
-                    }
+      contract AsyncMapSetter(@map, @nybList, @n, @len, @newVal, ret) = {
+        o!(["In loop: ", n, len]) |
+        // Look up the value of the cell at [map, nybList.slice(0, n + 1)
+        new valCh in {
+          o!(["Getting slice", nybList.slice(0, n)]) |
+          @[map, nybList.slice(0, n)]!("get", [*valCh]) |
+          for (@val <- valCh) {
+            o!(["Got val ", val]) |
+            if (n == len) {
+              // If we're at the end of the path, set the cell to newVal.
+              o!(["Setting final cell to ", [newVal]]) |
+              @[map, nybList]!("set", [[newVal], *ret])
+            } else {
+              // Otherwise make the rest of the path exist.
+              // Bit k set means cell k exists.
+              o!(["nybList.nth()", n, nybList.nth(n)]) |
+              if ((val/powers.nth(nybList.nth(n))) % 2 == 0) {
+                // Cell missing
+                // Create cell, set cell to 0
+                MakeCell!(0, [map, nybList.slice(0, n + 1)]) |
+                new ack in {
+                  // set current cell to val | 2**nybList.nth(n)
+                  // = val + powers.nth(nybList.nth(n)) because that bit is zero
+                  @[map, nybList.slice(0, n)]!("set", [val + powers.nth(nybList.nth(n)), *ack]) |
+                  for (_ <- ack) {
+                    AsyncMapSetter!(map, nybList, n + 1, len, newVal, *ret)
                   }
-                } else {
-                  // Cell exists, loop
-                  AsyncMapSetter!(map, nybList, n + 1, len, newVal, *ret)
                 }
+              } else {
+                // Cell exists, loop
+                AsyncMapSetter!(map, nybList, n + 1, len, newVal, *ret)
               }
             }
           }
-        } |
+        }
+      } |
 
-        contract AsyncMap(@"set", @map, @key, @newVal, ret) = {
-          new hashCh, nybListCh in {
-            o!(["Hashing ", key]) |
-            // Hash the key to get a 256-bit array
-            @"keccak256Hash"!(key.toByteArray(), *hashCh) |
-            for (@hash <- hashCh) {
-              o!(["Got hash, converting to nybbles ", hash]) |
-              // Get the bit list
-              ByteArrayToNybbleList!(hash, 0, hash.length(), [], *nybListCh) |
-              for (@nybList <- nybListCh) {
-                o!(["Converted to nybbles, starting loop", nybList]) |
-                AsyncMapSetter!(map, nybList.slice(0, 64), 0, 64, newVal, *ret)
-              }
+      contract AsyncMap(@"set", @map, @key, @newVal, ret) = {
+        new hashCh, nybListCh in {
+          o!(["Hashing ", key]) |
+          // Hash the key to get a 256-bit array
+          @"keccak256Hash"!(key.toByteArray(), *hashCh) |
+          for (@hash <- hashCh) {
+            o!(["Got hash, converting to nybbles ", hash]) |
+            // Get the bit list
+            ByteArrayToNybbleList!(hash, 0, hash.length(), [], *nybListCh) |
+            for (@nybList <- nybListCh) {
+              o!(["Converted to nybbles, starting loop", nybList]) |
+              AsyncMapSetter!(map, nybList.slice(0, 16), 0, 16, newVal, *ret)
             }
           }
-        } |
+        }
+      } |
 
-        // Usage
-        new o(`rho:io:stdout`), mapCh in {
-          o!("Initializing map") |
-          AsyncMap!("init", *mapCh) |
-          for (@map <- mapCh) {
-            o!("Map initialized, setting") |
-            new ret in {
-              AsyncMap!("set", map, "some key", "some val", *ret) |
-              for (_ <- ret) {
-                o!("Value set, getting") |
-                AsyncMap!("get", map, "some key", *ret) |
-                for (@val <- ret) {
-                  o!(["Got this from the map: ", val])
-                }
+      // Usage
+      new o(`rho:io:stdout`), mapCh in {
+        o!("Initializing map") |
+        AsyncMap!("init", *mapCh) |
+        for (@map <- mapCh) {
+          o!("Map initialized, setting") |
+          new ret in {
+            AsyncMap!("set", map, "some key", "some val", *ret) |
+            for (_ <- ret) {
+              o!("Value set, getting") |
+              AsyncMap!("get", map, "some key", *ret) |
+              for (@val <- ret) {
+                o!(["Got this from the map: ", val])
               }
             }
           }
         }
       }
     }
+  }
 }
