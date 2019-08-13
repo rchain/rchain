@@ -218,7 +218,7 @@ object ProtoUtil {
   def parentHashes(b: BlockMessage): Seq[ByteString] =
     b.header.fold(Seq.empty[ByteString])(_.parentsHashList)
 
-  def unsafeGetParents[F[_]: Sync: BlockStore](b: BlockMessage): F[List[BlockMessage]] =
+  def getParents[F[_]: Sync: BlockStore](b: BlockMessage): F[List[BlockMessage]] =
     ProtoUtil.parentHashes(b).toList.traverse { parentHash =>
       ProtoUtil.getBlock[F](parentHash)
     }

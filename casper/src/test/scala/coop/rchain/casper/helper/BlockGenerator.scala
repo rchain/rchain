@@ -51,7 +51,7 @@ object BlockGenerator {
       runtimeManager: RuntimeManager[F]
   ): F[(StateHash, Seq[ProcessedDeploy])] = Span[F].trace(GenerateBlockMetricsSource) {
     for {
-      parents <- ProtoUtil.unsafeGetParents[F](b)
+      parents <- ProtoUtil.getParents[F](b)
       deploys = ProtoUtil.deploys(b).flatMap(_.deploy)
       now     <- Time[F].currentMillis
       result <- computeDeploysCheckpoint[F](
