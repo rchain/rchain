@@ -131,6 +131,15 @@ class MultiParentCasperMergeSpec extends FlatSpec with Matchers with Inspectors 
         |These could not spawn more work.
         |""".stripMargin
 
+  case class Rho(
+      value: String,
+      maybePolarity: Option[Polarity] = None,
+      maybeCardinality: Option[Cardinality] = None
+  ) {
+    def |(other: Rho): Rho = Rho(s"$value | ${other.value}")
+  }
+  object Nil extends Rho("Nil")
+
   // Sends (linear sends)
   val S0 = Rho("@0!(0)", Some(Send), Some(Linear))
   val S1 = Rho("@0!(1)", Some(Send), Some(Linear))
@@ -257,15 +266,6 @@ class MultiParentCasperMergeSpec extends FlatSpec with Matchers with Inspectors 
         r shouldBe empty
       }
   }
-
-  case class Rho(
-      value: String,
-      maybePolarity: Option[Polarity] = None,
-      maybeCardinality: Option[Cardinality] = None
-  ) {
-    def |(other: Rho): Rho = Rho(s"$value | ${other.value}")
-  }
-  object Nil extends Rho("Nil")
 
   private[this] def conflicts(b1: Rho, b2: Rho, base: Rho)(
       implicit file: sourcecode.File,
