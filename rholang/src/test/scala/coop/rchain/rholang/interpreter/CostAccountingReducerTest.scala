@@ -160,7 +160,6 @@ class CostAccountingReducerTest extends FlatSpec with Matchers with TripleEquals
     def data(p: Par, rand: Blake2b512Random) = Row(
       List(
         Datum.create(
-          channel,
           ListParWithRandom(Seq(p), rand),
           false
         )

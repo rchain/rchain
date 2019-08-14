@@ -2,7 +2,6 @@ package coop.rchain.rspace
 
 import cats.effect._
 import cats.implicits._
-import coop.rchain.rspace._
 import coop.rchain.rspace.examples.StringExamples._
 import coop.rchain.rspace.examples.StringExamples.implicits._
 import coop.rchain.rspace.test._
@@ -38,7 +37,7 @@ trait StorageActionsTests[F[_]]
     for {
       r          <- space.produce(key.head, "datum", persist = false)
       data       <- store.getData(channel)
-      _          = data shouldBe List(Datum.create(channel, "datum", persist = false))
+      _          = data shouldBe List(Datum.create("datum", persist = false))
       cont       <- store.getContinuations(key)
       _          = cont shouldBe Nil
       _          = r shouldBe None
@@ -57,15 +56,15 @@ trait StorageActionsTests[F[_]]
     for {
       r1  <- space.produce(channel, "datum1", persist = false)
       d1  <- store.getData(channel)
-      _   = d1 shouldBe List(Datum.create(channel, "datum1", false))
+      _   = d1 shouldBe List(Datum.create("datum1", false))
       wc1 <- store.getContinuations(key)
       _   = wc1 shouldBe Nil
       _   = r1 shouldBe None
       r2  <- space.produce(key.head, "datum2", persist = false)
       d2  <- store.getData(channel)
       _ = d2 should contain theSameElementsAs List(
-        Datum.create(key.head, "datum1", false),
-        Datum.create(key.head, "datum2", false)
+        Datum.create("datum1", false),
+        Datum.create("datum2", false)
       )
       wc2        <- store.getContinuations(key)
       _          = wc2 shouldBe Nil
@@ -133,7 +132,7 @@ trait StorageActionsTests[F[_]]
     for {
       r1 <- space.produce(channel, "datum", persist = false)
       d1 <- store.getData(channel)
-      _  = d1 shouldBe List(Datum.create(channel, "datum", false))
+      _  = d1 shouldBe List(Datum.create("datum", false))
       c1 <- store.getContinuations(key)
       _  = c1 shouldBe Nil
       _  = r1 shouldBe None
@@ -158,9 +157,9 @@ trait StorageActionsTests[F[_]]
       val key     = List(channel)
 
       for {
-        r1 <- space.produce(channel, "datum", persist = false)
+        r1 <- space.produce(key.head, "datum", false)
         d1 <- store.getData(channel)
-        _  = d1 shouldBe List(Datum.create(channel, "datum", false))
+        _  = d1 shouldBe List(Datum.create("datum", false))
         c1 <- store.getContinuations(key)
         _  = c1 shouldBe Nil
         _  = r1 shouldBe None
@@ -173,7 +172,7 @@ trait StorageActionsTests[F[_]]
                peeks = SortedSet(0)
              )
         d2            <- store.getData(channel)
-        _             = d2 shouldBe List(Datum.create(channel, "datum", false))
+        _             = d2 shouldBe List(Datum.create("datum", false))
         c2            <- store.getContinuations(key)
         _             = c2 shouldBe Nil
         _             = r2 shouldBe defined
@@ -204,7 +203,7 @@ trait StorageActionsTests[F[_]]
 
         r2            <- space.produce(channel, "datum", persist = false)
         d1            <- store.getData(channel)
-        _             = d1 shouldBe List(Datum.create(channel, "datum", false))
+        _             = d1 shouldBe List(Datum.create("datum", false))
         c2            <- store.getContinuations(key)
         _             = c2 shouldBe Nil
         _             = r2 shouldBe defined
@@ -250,7 +249,7 @@ trait StorageActionsTests[F[_]]
       r1 <- space.produce(produceKey1.head, "datum1", persist = false)
       d1 <- store.getData(produceKey1.head)
       _ = d1 shouldBe List(
-        Datum.create(produceKey1.head, "datum1", persist = false)
+        Datum.create("datum1", persist = false)
       )
       c1 <- store.getContinuations(produceKey1)
       _  = c1 shouldBe Nil
@@ -259,7 +258,7 @@ trait StorageActionsTests[F[_]]
       r2 <- space.consume(consumeKey, consumePattern, new StringsCaptor, persist = false)
       d2 <- store.getData(produceKey1.head)
       _ = d2 shouldBe List(
-        Datum.create(produceKey1.head, "datum1", persist = false)
+        Datum.create("datum1", persist = false)
       )
       _ <- store.getContinuations(produceKey1).map(_ shouldBe Nil)
       _ <- store.getData(produceKey2.head).map(_ shouldBe Nil)
@@ -291,7 +290,7 @@ trait StorageActionsTests[F[_]]
       r1 <- space.produce(produceKey1.head, "datum1", persist = false)
       d1 <- store.getData(produceKey1.head)
       _ = d1 shouldBe List(
-        Datum.create(produceKey1.head, "datum1", false)
+        Datum.create("datum1", false)
       )
       c1 <- store.getContinuations(produceKey1)
       _  = c1 shouldBe Nil
@@ -300,7 +299,7 @@ trait StorageActionsTests[F[_]]
       r2 <- space.produce(produceKey2.head, "datum2", persist = false)
       d2 <- store.getData(produceKey2.head)
       _ = d2 shouldBe List(
-        Datum.create(produceKey2.head, "datum2", false)
+        Datum.create("datum2", false)
       )
       c2 <- store.getContinuations(produceKey2)
       _  = c2 shouldBe Nil
@@ -309,7 +308,7 @@ trait StorageActionsTests[F[_]]
       r3 <- space.produce(produceKey3.head, "datum3", persist = false)
       d3 <- store.getData(produceKey3.head)
       _ = d3 shouldBe List(
-        Datum.create(produceKey3.head, "datum3", false)
+        Datum.create("datum3", false)
       )
       c3 <- store.getContinuations(produceKey3)
       _  = c3 shouldBe Nil
@@ -538,7 +537,7 @@ trait StorageActionsTests[F[_]]
       d1 <- store.getData("ch2")
       _  = d1 shouldBe Nil
       d2 <- store.getData("ch1")
-      _  = d2 shouldBe List(Datum.create("ch1", "datum1", false))
+      _  = d2 shouldBe List(Datum.create("datum1", false))
 
       c1 <- store.getContinuations(List("ch1", "ch2"))
       _  = c1 should not be empty
@@ -604,7 +603,7 @@ trait StorageActionsTests[F[_]]
         _ <- store.getContinuations(List("ch1")).map(_ shouldBe Nil)
         _ <- store.getContinuations(List("ch2")).map(_ shouldBe Nil)
         _ <- store.getData("ch1").map(_ shouldBe Nil)
-        _ <- store.getData("ch2").map(_ shouldBe List(Datum.create("ch2", "datum2", false)))
+        _ <- store.getData("ch2").map(_ shouldBe List(Datum.create("datum2", false)))
 
         _ = r3 shouldBe defined
         _ = r4 shouldBe None
@@ -627,7 +626,7 @@ trait StorageActionsTests[F[_]]
 
     for {
       r1 <- space.produce(key.head, "datum", persist = false)
-      _  <- store.getData(key.head).map(_ shouldBe List(Datum.create(key.head, "datum", false)))
+      _  <- store.getData(key.head).map(_ shouldBe List(Datum.create("datum", false)))
       _  <- store.getContinuations(key).map(_ shouldBe Nil)
       _  = r1 shouldBe None
 
@@ -655,7 +654,7 @@ trait StorageActionsTests[F[_]]
 
       for {
         r1 <- space.produce(key.head, "datum1", persist = false)
-        _  <- store.getData(key.head).map(_ shouldBe List(Datum.create(key.head, "datum1", false)))
+        _  <- store.getData(key.head).map(_ shouldBe List(Datum.create("datum1", false)))
         _  <- store.getContinuations(key).map(_ shouldBe Nil)
         _  = r1 shouldBe None
 
@@ -729,7 +728,7 @@ trait StorageActionsTests[F[_]]
       // All matching continuations have been produced, so the write will "stick"
       r3 <- space.produce("ch1", "datum1", persist = true)
       _  = r3 shouldBe None
-      _  <- store.getData("ch1").map(_ shouldBe List(Datum.create("ch1", "datum1", true)))
+      _  <- store.getData("ch1").map(_ shouldBe List(Datum.create("datum1", true)))
       _  <- store.getContinuations(List("ch1")) map (_ shouldBe Nil)
     } yield ()
   }
@@ -753,12 +752,12 @@ trait StorageActionsTests[F[_]]
         // All matching continuations have been produced, so the write will "stick"
         r3 <- space.produce("ch1", "datum1", persist = true)
         _  = r3 shouldBe None
-        _  <- store.getData("ch1") map (_ shouldBe List(Datum.create("ch1", "datum1", true)))
+        _  <- store.getData("ch1") map (_ shouldBe List(Datum.create("datum1", true)))
         _  <- store.getContinuations(List("ch1")) map (_ shouldBe Nil)
 
         r4 <- space.consume(List("ch1"), List(Wildcard), new StringsCaptor, persist = false)
         _  = r4 shouldBe defined
-        _  <- store.getData("ch1") map (_ shouldBe List(Datum.create("ch1", "datum1", true)))
+        _  <- store.getData("ch1") map (_ shouldBe List(Datum.create("datum1", true)))
         _  <- store.getContinuations(List("ch1")) map (_ shouldBe Nil)
 
         _ = runK(r4)
@@ -768,12 +767,12 @@ trait StorageActionsTests[F[_]]
   "doing a persistent produce and consuming twice" should "work" in fixture { (store, _, space) =>
     for {
       r1 <- space.produce("ch1", "datum1", persist = true)
-      _  <- store.getData("ch1") map (_ shouldBe List(Datum.create("ch1", "datum1", true)))
+      _  <- store.getData("ch1") map (_ shouldBe List(Datum.create("datum1", true)))
       _  <- store.getContinuations(List("ch1")) map (_ shouldBe Nil)
       _  = r1 shouldBe None
 
       r2 <- space.consume(List("ch1"), List(Wildcard), new StringsCaptor, persist = false)
-      _  <- store.getData("ch1") map (_ shouldBe List(Datum.create("ch1", "datum1", true)))
+      _  <- store.getData("ch1") map (_ shouldBe List(Datum.create("datum1", true)))
       _  <- store.getContinuations(List("ch1")) map (_ shouldBe Nil)
       _  = r2 shouldBe defined
 
@@ -781,7 +780,7 @@ trait StorageActionsTests[F[_]]
       _ = getK(r2).results should contain theSameElementsAs List(List("datum1"))
 
       r3 <- space.consume(List("ch1"), List(Wildcard), new StringsCaptor, persist = false)
-      _  <- store.getData("ch1") map (_ shouldBe List(Datum.create("ch1", "datum1", true)))
+      _  <- store.getData("ch1") map (_ shouldBe List(Datum.create("datum1", true)))
       _  <- store.getContinuations(List("ch1")) map (_ shouldBe Nil)
 
       _ = r3 shouldBe defined
@@ -803,9 +802,9 @@ trait StorageActionsTests[F[_]]
         // Matching data exists so the write will not "stick"
         r4 <- space.consume(List("ch1"), List(Wildcard), new StringsCaptor, persist = true)
         _ <- store.getData("ch1") map (_ should contain atLeastOneOf (
-              Datum.create("ch1", "datum1", false),
-              Datum.create("ch1", "datum2", false),
-              Datum.create("ch1", "datum3", false)
+              Datum.create("datum1", false),
+              Datum.create("datum2", false),
+              Datum.create("datum3", false)
             ))
         _ <- store.getContinuations(List("ch1")) map (_ shouldBe Nil)
         _ = r4 shouldBe defined
@@ -816,9 +815,9 @@ trait StorageActionsTests[F[_]]
         // Matching data exists so the write will not "stick"
         r5 <- space.consume(List("ch1"), List(Wildcard), new StringsCaptor, persist = true)
         _ <- store.getData("ch1") map (_ should contain oneOf (
-              Datum.create("ch1", "datum1", false),
-              Datum.create("ch1", "datum2", false),
-              Datum.create("ch1", "datum3", false)
+              Datum.create("datum1", false),
+              Datum.create("datum2", false),
+              Datum.create("datum3", false)
             ))
         _ <- store.getContinuations(List("ch1")) map (_ shouldBe Nil)
         _ = r5 shouldBe defined

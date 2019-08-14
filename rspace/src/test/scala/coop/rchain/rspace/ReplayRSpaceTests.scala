@@ -133,7 +133,12 @@ trait ReplayRSpaceTests extends ReplayRSpaceTestsBase[String, Pattern, String, S
 
         _ <- replaySpace.rigAndReset(emptyPoint.root, rigPoint.log)
 
-        replayResultConsume <- replaySpace.consume(channels, patterns, continuation, false)
+        replayResultConsume <- replaySpace.consume(
+                                channels,
+                                patterns,
+                                continuation,
+                                false
+                              )
         replayResultProduce <- replaySpace.produce(channels(0), datum, false)
         finalPoint          <- replaySpace.createCheckpoint()
 

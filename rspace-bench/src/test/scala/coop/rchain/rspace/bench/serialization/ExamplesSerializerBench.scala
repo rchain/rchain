@@ -85,7 +85,7 @@ abstract class ExamplesSerializerBenchState {
 
   val channel  = Channel("colleagues")
   val channels = List(channel, Channel("friends"))
-  val datum    = Datum.create(channel, data, false)
+  val datum    = Datum.create(data, false)
   val patterns = Seq[Pattern](CityMatch(city = "Crystal Lake"))
   val continuation =
     WaitingContinuation.create(channels, patterns, new EntriesCaptor(), false, SortedSet.empty)
@@ -103,7 +103,7 @@ abstract class ExamplesSerializerBenchState {
 
     GNAT[Channel, Pattern, Entry, EntriesCaptor](
       channels,
-      range.map(i => Datum.create(channels(i - 1), data, false)),
+      range.map(i => Datum.create(data, false)),
       range.map(
         i =>
           WaitingContinuation

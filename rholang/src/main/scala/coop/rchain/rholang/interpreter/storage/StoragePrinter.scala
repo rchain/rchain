@@ -119,7 +119,7 @@ object StoragePrinter {
 
   private[this] def toSends(data: Seq[Datum[ListParWithRandom]])(channels: Seq[Par]): Par = {
     val sends: Seq[Send] = data.flatMap {
-      case Datum(as: ListParWithRandom, persist: Boolean, _: Produce, _) =>
+      case Datum(as: ListParWithRandom, persist: Boolean, _) =>
         channels.map { channel =>
           Send(channel, as.pars, persist)
         }
@@ -138,7 +138,7 @@ object StoragePrinter {
           continuation: TaggedContinuation,
           persist: Boolean,
           peeks: SortedSet[Int],
-          _: Consume
+          _: Int
           ) =>
         val receiveBinds: Seq[ReceiveBind] = (channels zip patterns).map {
           case (channel, pattern) =>

@@ -50,7 +50,7 @@ trait HotStoreSpec[F[_], M[_]] extends FlatSpec with Matchers with GeneratorDriv
       installedContinuations <- Arbitrary.arbitrary[
                                  TrieMap[Seq[String], WaitingContinuation[Pattern, StringsCaptor]]
                                ]
-      data           <- Arbitrary.arbitrary[TrieMap[String, Seq[Datum[String]]]]
+      data           <- Arbitrary.arbitrary[TrieMap[String, Seq[Data]]]
       joins          <- Arbitrary.arbitrary[TrieMap[String, Seq[Seq[String]]]]
       installedJoins <- Arbitrary.arbitrary[TrieMap[String, Seq[Seq[String]]]]
     } yield Cache(
@@ -940,7 +940,7 @@ trait HotStoreSpec[F[_], M[_]] extends FlatSpec with Matchers with GeneratorDriv
     (channel: String, datumValue: String) =>
       fixture { (_, _, hotStore) =>
         val key   = channel
-        val datum = Datum.create(channel, datumValue, false)
+        val datum = Datum.create(datumValue, false)
 
         for {
           _   <- hotStore.putDatum(key, datum)
@@ -954,8 +954,8 @@ trait HotStoreSpec[F[_], M[_]] extends FlatSpec with Matchers with GeneratorDriv
     (channel: String, datumValue: String) =>
       fixture { (_, _, store) =>
         val key    = channel
-        val datum1 = Datum.create(channel, datumValue, false)
-        val datum2 = Datum.create(channel, datumValue + "2", false)
+        val datum1 = Datum.create(datumValue, false)
+        val datum2 = Datum.create(datumValue + "2", false)
 
         for {
           _   <- store.putDatum(key, datum1)
@@ -976,7 +976,7 @@ trait HotStoreSpec[F[_], M[_]] extends FlatSpec with Matchers with GeneratorDriv
         fixture { (_, _, store) =>
           val key = channel
           val data = List.tabulate(size) { i =>
-            Datum.create(channel, datumValue + i, false)
+            Datum.create(datumValue + i, false)
           }
 
           for {

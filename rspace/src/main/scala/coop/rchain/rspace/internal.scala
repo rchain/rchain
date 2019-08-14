@@ -12,28 +12,43 @@ import scala.collection.SortedSet
 @SuppressWarnings(Array("org.wartremover.warts.NonUnitStatements"))
 object internal {
 
-  final case class Datum[A](a: A, persist: Boolean, source: Produce, sequenceNumber: Int = 0)
+  final case class Datum[A](a: A, persist: Boolean, sequenceNumber: Int = 0)
+
+  final case class DataCandidate[C, A](channel: C, datum: Datum[A], datumIndex: Int)
 
   object Datum {
-    def create[C, A](channel: C, a: A, persist: Boolean, sequenceNumber: Int = 0)(
+    def create[C, A](a: A, persist: Boolean, sequenceNumber: Int = 0): Datum[A] =
+      Datum(a, persist, sequenceNumber)
+
+    def produce[C, A](channel: C, data: A, persist: Boolean, sequenceNumber: Int)(
         implicit
         serializeC: Serialize[C],
         serializeA: Serialize[A]
-    ): Datum[A] =
-      Datum(a, persist, Produce.create(channel, a, persist, sequenceNumber), sequenceNumber)
-  }
+    ): Produce =
+      Produce.create(channel, data, persist, sequenceNumber)
 
-  final case class DataCandidate[C, A](channel: C, datum: Datum[A], datumIndex: Int)
+    def fromDataCandidate[C, A](
+        dc: DataCandidate[C, A]
+    )(implicit serializeC: Serialize[C], serializeA: Serialize[A]): Produce =
+      produce(dc.channel, dc.datum.a, dc.datum.persist, dc.datum.sequenceNumber)
+  }
 
   final case class WaitingContinuation[P, K](
       patterns: Seq[P],
       continuation: K,
       persist: Boolean,
       peeks: SortedSet[Int],
-      source: Consume
+      sequenceNumber: Int
   )
 
   object WaitingContinuation {
+    def source[C, P, K](channels: Seq[C], wc: WaitingContinuation[P, K])(
+        implicit
+        serializeC: Serialize[C],
+        serializeP: Serialize[P],
+        serializeK: Serialize[K]
+    ): Consume =
+      Consume.create(channels, wc.patterns, wc.continuation, wc.persist, wc.sequenceNumber)
     def create[C, P, K](
         channels: Seq[C],
         patterns: Seq[P],
@@ -41,19 +56,8 @@ object internal {
         persist: Boolean,
         peek: SortedSet[Int],
         sequenceNumber: Int = 0
-    )(
-        implicit
-        serializeC: Serialize[C],
-        serializeP: Serialize[P],
-        serializeK: Serialize[K]
     ): WaitingContinuation[P, K] =
-      WaitingContinuation(
-        patterns,
-        continuation,
-        persist,
-        peek,
-        Consume.create(channels, patterns, continuation, persist, sequenceNumber)
-      )
+      WaitingContinuation(patterns, continuation, persist, peek, sequenceNumber)
   }
 
   final case class ProduceCandidate[C, P, A, K](
@@ -91,7 +95,7 @@ object internal {
     seqOfN(int32, codecA)
 
   implicit def codecDatum[A](implicit codecA: Codec[A]): Codec[Datum[A]] =
-    (codecA :: bool :: Codec[Produce] :: int32).as[Datum[A]]
+    (codecA :: bool :: int32).as[Datum[A]]
 
   def sortedSet[A](codecA: Codec[A])(implicit O: Ordering[A]): Codec[SortedSet[A]] =
     codecSeq[A](codecA).xmap[SortedSet[A]](s => SortedSet(s: _*), _.toSeq)
@@ -101,7 +105,7 @@ object internal {
       codecP: Codec[P],
       codecK: Codec[K]
   ): Codec[WaitingContinuation[P, K]] =
-    (codecSeq(codecP) :: codecK :: bool :: sortedSet[Int](uint8) :: Codec[Consume])
+    (codecSeq(codecP) :: codecK :: bool :: sortedSet[Int](uint8) :: int32)
       .as[WaitingContinuation[P, K]]
 
   implicit def codecGNAT[C, P, A, K](

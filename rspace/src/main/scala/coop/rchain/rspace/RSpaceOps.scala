@@ -173,7 +173,7 @@ abstract class RSpaceOps[F[_]: Concurrent, C, P, A, K](
                                continuation,
                                persist = true,
                                SortedSet.empty,
-                               consumeRef
+                               consumeRef.sequenceNumber
                              )
                            )
                        _ <- channels.traverse { channel =>

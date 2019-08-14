@@ -142,22 +142,17 @@ abstract class ModelSerializerBenchState {
 
   implicit def arbitraryDatum[C, T](chan: C)(
       implicit
-      arbT: Arbitrary[T],
-      serializeC: Serialize[C],
-      serializeT: Serialize[T]
+      arbT: Arbitrary[T]
   ): Arbitrary[Datum[T]] =
     Arbitrary(for {
       t <- arbT.arbitrary
       b <- Arbitrary.arbitrary[Boolean]
-    } yield Datum.create(chan, t, b))
+    } yield Datum.create(t, b))
 
   def arbitraryWaitingContinuation[C, P, K](chans: List[C])(
       implicit
       arbP: Arbitrary[P],
-      arbK: Arbitrary[K],
-      serializeC: Serialize[C],
-      serializeP: Serialize[P],
-      serializeK: Serialize[K]
+      arbK: Arbitrary[K]
   ): Arbitrary[WaitingContinuation[P, K]] =
     Arbitrary(
       for {
@@ -167,13 +162,7 @@ abstract class ModelSerializerBenchState {
       } yield WaitingContinuation.create(chans, pats, continuation, boolean, SortedSet.empty)
     )
 
-  implicit def arbitraryGnat()(
-      implicit
-      serializeC: Serialize[Par],
-      serializeP: Serialize[BindPattern],
-      serializeA: Serialize[ListParWithRandom],
-      serializeK: Serialize[TaggedContinuation]
-  ): Arbitrary[TestGNAT] =
+  implicit def arbitraryGnat(): Arbitrary[TestGNAT] =
     Arbitrary(Gen.sized { size =>
       val constrainedSize = Math.max(1, size)
       for {

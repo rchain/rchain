@@ -43,7 +43,6 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
           Row[BindPattern, ListParWithRandom, TaggedContinuation](
             List(
               Datum.create(
-                channel,
                 ListParWithRandom(
                   data,
                   rand
@@ -960,7 +959,7 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
           Row(
             List(
               Datum.create(
-                channel0,
+                
                 ListParWithRandom(Seq(GPrivate(ByteString.copyFrom(Array[Byte](42)))), result0Rand),
                 persist = false)),
             List()),
@@ -968,7 +967,7 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
           Row(
             List(
               Datum.create(
-                channel1,
+               
                 ListParWithRandom(Seq(GPrivate(ByteString.copyFrom(chosenName))), result1Rand),
                 persist = false)),
             List())

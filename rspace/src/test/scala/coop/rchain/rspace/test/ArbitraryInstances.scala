@@ -25,25 +25,20 @@ object ArbitraryInstances {
     Arbitrary(Gen.nonEmptyListOf[Char](Arbitrary.arbChar.arbitrary).map(_.mkString))
 
   implicit def arbitraryDatumString(
-      implicit
-      serializeC: Serialize[String]
-  ): Arbitrary[Datum[String]] =
+      ): Arbitrary[Datum[String]] =
     Arbitrary(for {
-      chan <- Arbitrary.arbitrary[String]
-      t    <- Arbitrary.arbitrary[String]
-      b    <- Arbitrary.arbitrary[Boolean]
-    } yield Datum.create(chan, t, b))
+      t <- Arbitrary.arbitrary[String]
+      b <- Arbitrary.arbitrary[Boolean]
+    } yield Datum.create(t, b))
 
-  implicit def arbitraryDatum[C, T](chan: C)(
+  implicit def arbitraryDatum[T](
       implicit
-      arbT: Arbitrary[T],
-      serializeC: Serialize[C],
-      serializeT: Serialize[T]
+      arbT: Arbitrary[T]
   ): Arbitrary[Datum[T]] =
     Arbitrary(for {
       t <- arbT.arbitrary
       b <- Arbitrary.arbitrary[Boolean]
-    } yield Datum.create(chan, t, b))
+    } yield Datum.create(t, b))
 
   implicit val arbitraryBlake2b256Hash: Arbitrary[Blake2b256Hash] =
     Arbitrary(Arbitrary.arbitrary[Array[Byte]].map(bytes => Blake2b256Hash.create(bytes)))
@@ -91,26 +86,20 @@ object ArbitraryInstances {
     )
   }
 
-  implicit def arbitraryNonEmptyMapStringDatumString(
-      implicit serializeString: Serialize[String]
-  ): Arbitrary[Map[String, Datum[String]]] =
+  implicit def arbitraryNonEmptyMapStringDatumString: Arbitrary[Map[String, Datum[String]]] =
     Arbitrary(
       Gen
         .sized { size =>
           Gen.nonEmptyContainerOf[Seq, (String, Datum[String])](for {
             str <- arbNonEmptyString.arbitrary
-            dat <- arbitraryDatum[String, String](str).arbitrary
+            dat <- arbitraryDatum[String].arbitrary
           } yield (str, dat))
         }
         .map(_.toMap)
     )
 
-  implicit def arbitraryWaitingContinuation(
-      implicit
-      serializeString: Serialize[String],
-      serializePattern: Serialize[Pattern],
-      serializeStringsCaptor: Serialize[StringsCaptor]
-  ): Arbitrary[WaitingContinuation[Pattern, StringsCaptor]] =
+  implicit def arbitraryWaitingContinuation
+      : Arbitrary[WaitingContinuation[Pattern, StringsCaptor]] =
     Arbitrary(
       for {
         chans   <- Gen.nonEmptyListOf[String](Arbitrary.arbitrary[String])
@@ -119,11 +108,8 @@ object ArbitraryInstances {
       } yield WaitingContinuation.create(chans, pats, new StringsCaptor, boolean, SortedSet.empty)
     )
 
-  def arbitraryWaitingContinuation(chans: List[String])(
-      implicit
-      serializeString: Serialize[String],
-      serializePattern: Serialize[Pattern],
-      serializeStringsCaptor: Serialize[StringsCaptor]
+  def arbitraryWaitingContinuation(
+      chans: List[String]
   ): Arbitrary[WaitingContinuation[Pattern, StringsCaptor]] =
     Arbitrary(
       for {
@@ -132,18 +118,13 @@ object ArbitraryInstances {
       } yield WaitingContinuation.create(chans, pats, new StringsCaptor, boolean, SortedSet.empty)
     )
 
-  implicit def arbitraryGnat(
-      implicit
-      serializeString: Serialize[String],
-      serializePattern: Serialize[Pattern],
-      serializeStringsCaptor: Serialize[StringsCaptor]
-  ): Arbitrary[GNAT[String, Pattern, String, StringsCaptor]] =
+  implicit def arbitraryGnat: Arbitrary[GNAT[String, Pattern, String, StringsCaptor]] =
     Arbitrary(Gen.sized { size =>
       val constrainedSize = if (size > 1) size else 1
       for {
         chans <- Gen.containerOfN[List, String](constrainedSize, Arbitrary.arbitrary[String])
         data <- Gen.nonEmptyContainerOf[List, Datum[String]](
-                 arbitraryDatum[String, String](chans.head).arbitrary
+                 arbitraryDatum[String].arbitrary
                )
         wks <- Gen.nonEmptyContainerOf[List, WaitingContinuation[Pattern, StringsCaptor]](
                 arbitraryWaitingContinuation(chans).arbitrary
@@ -151,12 +132,8 @@ object ArbitraryInstances {
       } yield GNAT(chans, data, wks)
     })
 
-  implicit def arbitraryNonEmptyMapListStringWaitingContinuation(
-      implicit
-      serializeString: Serialize[String],
-      serializePattern: Serialize[Pattern],
-      serializeStringsCaptor: Serialize[StringsCaptor]
-  ): Arbitrary[Map[List[String], WaitingContinuation[Pattern, StringsCaptor]]] =
+  implicit def arbitraryNonEmptyMapListStringWaitingContinuation
+      : Arbitrary[Map[List[String], WaitingContinuation[Pattern, StringsCaptor]]] =
     Arbitrary(Gen.sized { size =>
       val constrainedSize = if (size > 1) size else 1
       Gen

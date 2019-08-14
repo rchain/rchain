@@ -46,8 +46,6 @@ class RSpace[F[_], C, P, A, K] private[rspace] (
   implicit protected[this] lazy val MetricsSource: Source = RSpaceMetricsSource
   private[this] val consumeCommLabel                      = "comm.consume"
   private[this] val produceCommLabel                      = "comm.produce"
-  private[this] val consumeSpanLabel                      = Metrics.Source(MetricsSource, "consume")
-  private[this] val produceSpanLabel                      = Metrics.Source(MetricsSource, "produce")
 
   /*
    * Here, we create a cache of the data at each channel as `channelToIndexedData`
@@ -78,7 +76,7 @@ class RSpace[F[_], C, P, A, K] private[rspace] (
       .traverse {
         case DataCandidate(
             candidateChannel,
-            Datum(_, persistData, _, _),
+            Datum(_, persistData, _),
             dataIndex
             ) if shouldRemove(persistData, candidateChannel) =>
           store.removeDatum(candidateChannel, dataIndex)
@@ -103,7 +101,7 @@ class RSpace[F[_], C, P, A, K] private[rspace] (
         dataCandidates: Seq[DataCandidate[C, A]]
     ): MaybeActionResult = {
       val contSequenceNumber: Int =
-        nextSequenceNumber(consumeRef, dataCandidates)
+        nextSequenceNumber(consumeRef.sequenceNumber, dataCandidates)
       Some(
         (
           ContResult(
@@ -128,88 +126,90 @@ class RSpace[F[_], C, P, A, K] private[rspace] (
         val msg = "channels.length must equal patterns.length"
         logF.error(msg) >> syncF.raiseError(new IllegalArgumentException(msg))
       } else
-        spanF.trace(consumeSpanLabel) {
-          for {
-            _ <- spanF.mark("before-consume-ref-compute")
-            consumeRef <- syncF.delay {
-                           Consume.create(channels, patterns, continuation, persist, sequenceNumber)
-                         }
-            result <- consumeLockF(channels) {
-                       for {
-                         _ <- spanF.mark("consume-lock-acquired")
-                         _ <- logF
-                               .debug(
-                                 s"""|consume: searching for data matching <patterns: $patterns>
+        for {
+          _ <- spanF.mark("before-consume-ref-compute")
+          consumeRef <- syncF.delay {
+                         Consume.create(channels, patterns, continuation, persist, sequenceNumber)
+                       }
+          result <- consumeLockF(channels) {
+                     for {
+                       _ <- spanF.mark("consume-lock-acquired")
+                       _ <- logF
+                             .debug(
+                               s"""|consume: searching for data matching <patterns: $patterns>
                       |at <channels: $channels>""".stripMargin.replace('\n', ' ')
-                               )
-                         _ <- syncF.delay {
-                               eventLog.update(consumeRef +: _)
-                             }
-                         _ <- spanF.mark("event-log-updated")
-
-                         channelToIndexedData <- fetchChannelToIndexData(channels)
-                         _                    <- spanF.mark("channel-to-indexed-data-fetched")
-
-                         options <- extractDataCandidates(
-                                     channels.zip(patterns),
-                                     channelToIndexedData,
-                                     Nil
-                                   ).map(_.sequence)
-                         _ <- spanF.mark("extract-consume-candidate")
-                         result <- options match {
-                                    case None =>
-                                      storeWaitingContinuation(
-                                        channels,
-                                        WaitingContinuation(
-                                          patterns,
-                                          continuation,
-                                          persist,
-                                          peeks,
-                                          consumeRef
-                                        )
+                             )
+                       channelToIndexedData <- fetchChannelToIndexData(channels)
+                       _                    <- spanF.mark("channel-to-indexed-data-fetched")
+                       _ <- syncF.delay {
+                             eventLog.update(consumeRef +: _)
+                           }
+                       _ <- spanF.mark("event-log-updated")
+                       options <- extractDataCandidates(
+                                   channels.zip(patterns),
+                                   channelToIndexedData,
+                                   Nil
+                                 ).map(_.sequence)
+                       _ <- spanF.mark("extract-consume-candidate")
+                       result <- options match {
+                                  case None =>
+                                    storeWaitingContinuation(
+                                      channels,
+                                      WaitingContinuation(
+                                        patterns,
+                                        continuation,
+                                        persist,
+                                        peeks,
+                                        sequenceNumber
                                       )
-                                    case Some(dataCandidates) =>
-                                      for {
-                                        _ <- metricsF.incrementCounter(consumeCommLabel)
-                                        _ <- syncF.delay {
-                                              eventLog.update(
-                                                COMM(
-                                                  consumeRef,
-                                                  dataCandidates.map(_.datum.source),
-                                                  peeks
-                                                ) +: _
-                                              )
-                                            }
-                                        channelsToIndex = channels.zipWithIndex.toMap
-                                        _ <- storePersistentData(
-                                              dataCandidates,
-                                              peeks,
-                                              channelsToIndex
+                                    )
+                                  case Some(dataCandidates) =>
+                                    for {
+                                      _ <- metricsF.incrementCounter(consumeCommLabel)
+                                      _ <- syncF.delay {
+                                            eventLog.update(
+                                              COMM(
+                                                consumeRef,
+                                                dataCandidates
+                                                  .map(
+                                                    d =>
+                                                      Datum.fromDataCandidate(d)(
+                                                        serializeC,
+                                                        serializeA
+                                                      )
+                                                  ),
+                                                peeks
+                                              ) +: _
                                             )
-                                        _ <- logF.debug(
-                                              s"consume: data found for <patterns: $patterns> at <channels: $channels>"
-                                            )
-                                      } yield wrapResult(consumeRef, dataCandidates)
+                                          }
+                                      channelsToIndex = channels.zipWithIndex.toMap
+                                      _ <- storePersistentData(
+                                            dataCandidates,
+                                            peeks,
+                                            channelsToIndex
+                                          )
+                                      _ <- logF.debug(
+                                            s"consume: data found for <patterns: $patterns> at <channels: $channels>"
+                                          )
+                                    } yield wrapResult(consumeRef, dataCandidates)
+                                }
+                       _ <- spanF.mark("extract-consume-candidate")
+                     } yield result
 
-                                  }
-                         _ <- spanF.mark("extract-consume-candidate")
-                       } yield result
-
-                     }
-            _ <- spanF.mark("post-consume-lock")
-          } yield result
-        }
+                   }
+          _ <- spanF.mark("post-consume-lock")
+        } yield result
     }
   }
 
   private[this] def nextSequenceNumber(
-      consumeRef: Consume,
+      consumeRefSequenceNumber: Int,
       dataCandidates: Seq[DataCandidate[C, A]]
   ): Int =
     Math.max(
-      consumeRef.sequenceNumber,
+      consumeRefSequenceNumber,
       dataCandidates.map {
-        case DataCandidate(_, Datum(_, _, source, _), _) => source.sequenceNumber
+        case DataCandidate(_, Datum(_, _, sequenceNumber), _) => sequenceNumber
       }.max
     ) + 1
 
@@ -286,7 +286,7 @@ class RSpace[F[_], C, P, A, K] private[rspace] (
             continuation,
             persistK,
             peeks,
-            consumeRef
+            sequenceNumber
           ),
           continuationIndex,
           dataCandidates
@@ -295,7 +295,11 @@ class RSpace[F[_], C, P, A, K] private[rspace] (
           syncF.delay {
             eventLog
               .update(
-                COMM(consumeRef, dataCandidates.map(_.datum.source), peeks) +: _
+                COMM(
+                  WaitingContinuation.source(channels, pc.continuation),
+                  dataCandidates.map(d => Datum.fromDataCandidate(d)(serializeC, serializeA)),
+                  peeks
+                ) +: _
               )
           }
 
@@ -313,7 +317,7 @@ class RSpace[F[_], C, P, A, K] private[rspace] (
             .traverse {
               case DataCandidate(
                   candidateChannel,
-                  Datum(_, persistData, _, _),
+                  Datum(_, persistData, _),
                   dataIndex
                   ) => {
                 def shouldRemove: Boolean = {
@@ -327,7 +331,7 @@ class RSpace[F[_], C, P, A, K] private[rspace] (
             }
 
         def constructResult: MaybeActionResult = {
-          val contSequenceNumber = nextSequenceNumber(consumeRef, dataCandidates)
+          val contSequenceNumber = nextSequenceNumber(sequenceNumber, dataCandidates)
           Some(
             (
               ContResult[C, P, K](
@@ -363,7 +367,7 @@ class RSpace[F[_], C, P, A, K] private[rspace] (
   ): F[MaybeActionResult] =
     for {
       _ <- logF.debug(s"produce: no matching continuation found")
-      _ <- store.putDatum(channel, Datum(data, persist, produceRef, produceRef.sequenceNumber))
+      _ <- store.putDatum(channel, Datum(data, persist, produceRef.sequenceNumber))
       _ <- logF.debug(s"produce: persisted <data: $data> at <channel: $channel>")
     } yield None
 
@@ -371,54 +375,52 @@ class RSpace[F[_], C, P, A, K] private[rspace] (
       implicit m: Match[F, P, A]
   ): F[MaybeActionResult] =
     contextShift.evalOn(scheduler) {
-      spanF.trace(produceSpanLabel) {
-        for {
-          _ <- spanF.mark("before-produce-ref-computed")
-          produceRef <- syncF.delay {
-                         Produce.create(channel, data, persist, sequenceNumber)
-                       }
-          _ <- spanF.mark("before-produce-lock")
-          result <- produceLockF(channel) {
-                     for {
-                       _ <- spanF.mark("produce-lock-acquired")
-                       //TODO fix double join fetch
-                       groupedChannels <- store.getJoins(channel)
-                       _               <- spanF.mark("grouped-channels")
-                       _ <- logF.debug(
-                             s"""|produce: searching for matching continuations
+      for {
+        _ <- spanF.mark("before-produce-ref-computed")
+        produceRef <- syncF.delay {
+                       Produce.create(channel, data, persist, sequenceNumber)
+                     }
+        _ <- spanF.mark("before-produce-lock")
+        result <- produceLockF(channel) {
+                   for {
+                     _ <- spanF.mark("produce-lock-acquired")
+                     //TODO fix double join fetch
+                     groupedChannels <- store.getJoins(channel)
+                     _               <- spanF.mark("grouped-channels")
+                     _ <- logF.debug(
+                           s"""|produce: searching for matching continuations
                     |at <groupedChannels: $groupedChannels>""".stripMargin
-                               .replace('\n', ' ')
-                           )
-                       _ <- syncF.delay {
-                             eventLog.update(produceRef +: _)
-                           }
-                       _ <- spanF.mark("event-log-updated")
-                       extracted <- extractProduceCandidate(
-                                     groupedChannels,
-                                     channel,
-                                     Datum(data, persist, produceRef, sequenceNumber)
-                                   )
-                       _ <- spanF.mark("extract-produce-candidate")
-                       r <- extracted match {
-                             case Some(pc) =>
-                               for {
-                                 a               <- processMatchFound(pc)
-                                 indexedChannels = pc.channels.zipWithIndex.toMap
-                                 _ <- if (pc.continuation.peeks.contains(indexedChannels(channel))) {
-                                       storeData(channel, data, persist, produceRef)
-                                     } else
-                                       ().pure[F]
-                               } yield a
+                             .replace('\n', ' ')
+                         )
+                     _ <- syncF.delay {
+                           eventLog.update(produceRef +: _)
+                         }
+                     _ <- spanF.mark("event-log-updated")
+                     extracted <- extractProduceCandidate(
+                                   groupedChannels,
+                                   channel,
+                                   Datum(data, persist, sequenceNumber)
+                                 )
+                     _ <- spanF.mark("extract-produce-candidate")
+                     r <- extracted match {
+                           case Some(pc) =>
+                             for {
+                               a               <- processMatchFound(pc)
+                               indexedChannels = pc.channels.zipWithIndex.toMap
+                               _ <- if (pc.continuation.peeks.contains(indexedChannels(channel))) {
+                                     storeData(channel, data, persist, produceRef)
+                                   } else
+                                     ().pure[F]
+                             } yield a
 
-                             case None =>
-                               storeData(channel, data, persist, produceRef)
-                           }
-                       _ <- spanF.mark("process-matching")
-                     } yield r
-                   }
-          _ <- spanF.mark("post-produce-lock")
-        } yield result
-      }
+                           case None =>
+                             storeData(channel, data, persist, produceRef)
+                         }
+                     _ <- spanF.mark("process-matching")
+                   } yield r
+                 }
+        _ <- spanF.mark("post-produce-lock")
+      } yield result
     }
 
   override def createCheckpoint(): F[Checkpoint] =

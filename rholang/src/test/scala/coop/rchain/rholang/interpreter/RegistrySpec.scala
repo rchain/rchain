@@ -317,7 +317,6 @@ class RegistrySpec extends FlatSpec with Matchers with RegistryTester {
         Row(
           List(
             Datum.create[Par, ListParWithRandom](
-              GString(s),
               ListParWithRandom(Seq(expected), rand),
               false,
               sequenceNumber
@@ -335,7 +334,7 @@ class RegistrySpec extends FlatSpec with Matchers with RegistryTester {
   private def resultSequenceNumber(
       resultRow: Option[Row[BindPattern, ListParWithRandom, TaggedContinuation]]
   ) =
-    resultRow.fold(0)(_.data.head.source.sequenceNumber)
+    resultRow.fold(0)(_.data.head.sequenceNumber)
 
   "lookup" should "recurse" in {
     val lookupString: String =
@@ -592,7 +591,6 @@ class RegistrySpec extends FlatSpec with Matchers with RegistryTester {
         Row(
           List(
             Datum.create[Par, ListParWithRandom](
-              Registry.registryRoot,
               ListParWithRandom(Seq(EMapBody(ParMap(SortedParMap.empty))), rootRand),
               false,
               sequenceNumber
