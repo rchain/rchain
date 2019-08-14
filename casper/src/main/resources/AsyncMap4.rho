@@ -16,29 +16,29 @@ new AsyncMap, o(`rho:io:stdout`) in {
       contract MakeCell(@initVal, cell) = {
         new cellStore in {
           cellStore!(initVal) |
-          contract cell(@"get", @[ret]) = {
+          contract cell(@"get", ret) = {
             // TODO: convert to peek
             for (@val <- cellStore) {
               cellStore!(val) |
-              @ret!(val)
+              ret!(val)
             }
           } |
           
-          contract cell(@"set", @[newVal, ack]) = {
+          contract cell(@"set", @newVal, ack) = {
             for (_ <- cellStore) {
               cellStore!(newVal) |
-              @ack!(Nil)
+              ack!(Nil)
             }
           } |
           
-          contract cell(@"setBit", @[bit, ack]) = {
+          contract cell(@"setBit", @bit, ack) = {
             for (@val <- cellStore) {
               // val | (1 << bit)
               // Bitwise operators would be really nice to have!
               cellStore!((val % powers.nth(bit)) +
                 (val / powers.nth(bit + 1)) * powers.nth(bit + 1) +
                 powers.nth(bit)) |
-              @ack!(Nil)
+              ack!(Nil)
             }
           }
         }
@@ -54,7 +54,7 @@ new AsyncMap, o(`rho:io:stdout`) in {
 
       contract AsyncMap(@"init", ret) = {
         new map in {
-          MakeCell!(0, [*map, []]) |
+          MakeCell!(0, (*map, [])) |
           ret!(*map)
         }
       } |
@@ -64,7 +64,7 @@ new AsyncMap, o(`rho:io:stdout`) in {
         // Look up the value of the cell at [map, nybList.slice(0, n + 1)]
         new valCh in {
           o!(["Getting from ", nybList.slice(0, n)]) |
-          @[map, nybList.slice(0, n)]!("get", [*valCh]) |
+          @(map, nybList.slice(0, n))!("get", *valCh) |
           for (@val <- valCh) {
             o!(["Got ", val]) |
             if (n == len) {
@@ -96,9 +96,9 @@ new AsyncMap, o(`rho:io:stdout`) in {
           @"keccak256Hash"!(key.toByteArray(), *hashCh) |
           for (@hash <- hashCh) {
             // Get the bit list
-            ByteArrayToNybbleList!(hash, 0, hash.length(), [], *nybListCh) |
+            ByteArrayToNybbleList!(hash, 0, 8, [], *nybListCh) |
             for (@nybList <- nybListCh) {
-              AsyncMapGetter!(map, nybList.slice(0, 16), 0, 16, *ret)
+              AsyncMapGetter!(map, nybList, 0, 16, *ret)
             }
           }
         }
@@ -112,9 +112,10 @@ new AsyncMap, o(`rho:io:stdout`) in {
           @"keccak256Hash"!(key.toByteArray(), *hashCh) |
           for (@hash <- hashCh) {
             // Get the bit list
-            ByteArrayToNybbleList!(hash, 0, hash.length(), [], *nybListCh) |
+            ByteArrayToNybbleList!(hash, 0, 8, [], *nybListCh) |
             for (@nybList <- nybListCh) {
-              @[map, nybList.slice(0, 16)]!("get", [*ret])
+              o!(["fastUnsafeGet", nybList]) |
+              @(map, nybList)!("get", *ret)
             }
           }
         }
@@ -125,13 +126,13 @@ new AsyncMap, o(`rho:io:stdout`) in {
         // Look up the value of the cell at [map, nybList.slice(0, n + 1)
         new valCh in {
           o!(["Getting slice", nybList.slice(0, n)]) |
-          @[map, nybList.slice(0, n)]!("get", [*valCh]) |
+          @(map, nybList.slice(0, n))!("get", *valCh) |
           for (@val <- valCh) {
             o!(["Got val ", val]) |
             if (n == len) {
               // If we're at the end of the path, set the cell to newVal.
               o!(["Setting final cell to ", [newVal]]) |
-              @[map, nybList]!("set", [[newVal], *ret])
+              @(map, nybList)!("set", [newVal], *ret)
             } else {
               // Otherwise make the rest of the path exist.
               // Bit k set means cell k exists.
@@ -139,10 +140,10 @@ new AsyncMap, o(`rho:io:stdout`) in {
               if ((val/powers.nth(nybList.nth(n))) % 2 == 0) {
                 // Cell missing
                 // Create cell, set cell to 0
-                MakeCell!(0, [map, nybList.slice(0, n + 1)]) |
+                MakeCell!(0, (map, nybList.slice(0, n + 1))) |
                 new ack in {
                   // Atomically update current cell to val | (1 << nybList.nth(n))
-                  @[map, nybList.slice(0, n)]!("setBit", [nybList.nth(n), *ack]) |
+                  @(map, nybList.slice(0, n))!("setBit", nybList.nth(n), *ack) |
                   for (_ <- ack) {
                     AsyncMapSetter!(map, nybList, n + 1, len, newVal, *ret)
                   }
@@ -179,15 +180,16 @@ new AsyncMap, o(`rho:io:stdout`) in {
         AsyncMap!("init", *mapCh) |
         for (@map <- mapCh) {
           o!("Map initialized, setting") |
-          new ret1, ret2 in {
+          new ret1, ret2, ret3 in {
             AsyncMap!("set", map, "some key", "some val", *ret1) |
             AsyncMap!("set", map, "monkey", "some other val", *ret2) |
             for (_ <- ret1; _ <- ret2) {
               o!("Value set, getting") |
               AsyncMap!("get", map, "some key", *ret1) |
               AsyncMap!("fastUnsafeGet", map, "monkey", *ret2) |
-              for (@val1 <- ret1; @val2 <- ret2) {
-                o!(["Got these from the map: ", val1, val2])
+              AsyncMap!("get", map, "some unused key", *ret3) |
+              for (@val1 <- ret1; @val2 <- ret2; @val3 <- ret3) {
+                o!(["Got these from the map: ", val1, val2, val3])
               }
             }
           }
