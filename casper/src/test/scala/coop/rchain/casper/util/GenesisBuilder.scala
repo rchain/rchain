@@ -33,7 +33,6 @@ object GenesisBuilder {
 
   val defaultValidatorKeyPairs                   = (1 to 4).map(_ => Secp256k1.newKeyPair)
   val (defaultValidatorSks, defaultValidatorPks) = defaultValidatorKeyPairs.unzip
-  val defaultGenesisPk                           = Secp256k1.newKeyPair._2
 
   def buildGenesisParameters(
       bondsFunction: Iterable[PublicKey] => Map[PublicKey, Long] = createBonds
@@ -55,7 +54,6 @@ object GenesisBuilder {
           epochLength = 1,
           validators = bonds.map(Validator.tupled).toSeq
         ),
-        genesisPk = defaultGenesisPk,
         vaults = Seq(predefinedVault(defaultPub), predefinedVault(defaultPub2)) ++
           bonds.toList.map {
             case (pk, stake) =>

@@ -8,12 +8,7 @@ import coop.rchain.rholang.interpreter.{NormalizerEnv, ParBuilder}
 import coop.rchain.rholang.interpreter.util.RevAddress
 import monix.eval.Coeval
 
-final case class RevGenerator(
-    genesisPk: PublicKey,
-    genesisAddress: RevAddress,
-    userVaults: Seq[Vault],
-    supply: Long
-) extends CompiledRholangSource {
+final case class RevGenerator(userVaults: Seq[Vault], supply: Long) extends CompiledRholangSource {
 
   val path: String = "<synthetic in Rev.scala>"
 
@@ -31,7 +26,7 @@ final case class RevGenerator(
        # }
      """.stripMargin('#')
 
-  val normalizerEnv: NormalizerEnv = NormalizerEnv(deployId = none, deployerPk = genesisPk.some)
+  val normalizerEnv: NormalizerEnv = NormalizerEnv(deployId = none, deployerPk = none)
 
   val term: Par =
     ParBuilder[Coeval]
