@@ -149,6 +149,12 @@ final case class HistoryRepositoryImpl[F[_]: Sync: Par, C, P, A, K](
         s"${key.toHex};delete-join;0"
     }
 
+  private def transformAndStore(hotStoreActions: List[HotStoreAction]): F[List[HistoryAction]] =
+    for {
+      transformedActions <- Sync[F].delay(hotStoreActions.map(transform))
+      historyActions     <- storeLeaves(transformedActions)
+    } yield historyActions
+
   private def transform(action: HotStoreAction): Result =
     action match {
       case i: InsertData[C, A] =>
@@ -188,9 +194,6 @@ final case class HistoryRepositoryImpl[F[_]: Sync: Par, C, P, A, K](
     val toBeStored = leafs.collect { case (key, Some(data), _) => (key, data) }
     leafStore.put(toBeStored).map(_ => leafs.map(_._3))
   }
-
-  val transformAndStore: List[HotStoreAction] => F[List[HistoryAction]] =
-    ((l: List[HotStoreAction]) => l.map(transform)).andThen(storeLeaves)
 
   override def checkpoint(actions: List[HotStoreAction]): F[HistoryRepository[F, C, P, A, K]] = {
     implicit val P = Par[F].parallel
