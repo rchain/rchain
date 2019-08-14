@@ -27,7 +27,6 @@ final case class Genesis(
     shardId: String,
     timestamp: Long,
     proofOfStake: ProofOfStake,
-    genesisPk: PublicKey,
     vaults: Seq[Vault],
     supply: Long
 )
@@ -39,7 +38,6 @@ object Genesis {
   def defaultBlessedTerms(
       timestamp: Long,
       posParams: ProofOfStake,
-      genesisPk: PublicKey,
       vaults: Seq[Vault],
       supply: Long
   ): Seq[DeployData] =
@@ -51,7 +49,7 @@ object Genesis {
       StandardDeploys.lockbox,
       StandardDeploys.authKey,
       StandardDeploys.revVault,
-      StandardDeploys.revGenerator(genesisPk, vaults, supply),
+      StandardDeploys.revGenerator(vaults, supply),
       StandardDeploys.poSGenerator(posParams)
     )
 
@@ -86,7 +84,6 @@ object Genesis {
                            maximumBond = maximumBond,
                            validators = validators
                          ),
-                         genesisPk = Secp256k1.newKeyPair._2,
                          vaults = vaults,
                          supply = Long.MaxValue
                        )
@@ -162,7 +159,6 @@ object Genesis {
     val blessedTerms = defaultBlessedTerms(
       timestamp,
       proofOfStake,
-      genesisPk,
       vaults,
       supply = Long.MaxValue
     )

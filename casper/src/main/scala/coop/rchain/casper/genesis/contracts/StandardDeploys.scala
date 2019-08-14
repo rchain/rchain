@@ -76,11 +76,11 @@ object StandardDeploys {
       1559156420651L
     )
 
-  def revGenerator(genesisPk: PublicKey, vaults: Seq[Vault], supply: Long): DeployData =
+  def revGenerator(vaults: Seq[Vault], supply: Long): DeployData =
     toDeploy(
-      RevGenerator(genesisPk, RevAddress.fromPublicKey(genesisPk).get, vaults, supply),
-      Base16.encode(genesisPk.bytes),
-      System.currentTimeMillis()
+      RevGenerator(vaults, supply),
+      "04d66ec9347960994d8ecda61cdcf9b636b2c95846c831b129ee0a41d29814dbe0073d41744b300bd4ea9827e444d7613677d19dee32710edef47957034163ac09",
+      1565818101792L
     )
 
 }
