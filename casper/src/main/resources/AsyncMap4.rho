@@ -2,59 +2,44 @@
 // This implementation: O(log n) insert & lookup.
 // Conflict analysis
 //   Lookup
-//     The cell implementation uses a linear for, and when two processes send
-//     to the same linear for, you get a conflict. When looking up an item when
-//     you don't know if it's in the map or not, it necessarily sends "get" to
-//     the root cell of the map, so lookups of that kind conflict.  When
-//     looking up an item where you know it's in the map, you can use
-//     "fastUnsafeGet" and avoid the root cell.
+//     When looking up a value, only peeks are used, so lookups will not conflict.
 //   Insert
-//     As above, inserting necessarily sends a "get" to the root cell, thus
-//     inserts conflict.
+//     When inserting, only peeks are used on existing cells (except the last
+//     shared one in the path), while newly created cells have a different name.
+//     So there's conflict only if the keys share a common prefix that hadn't
+//     already been populated.
 
 new AsyncMap, o(`rho:io:stdout`) in {
   new MakeCell, ByteArrayToNybbleList, AsyncMapSetter, AsyncMapGetter, powersCh in {
     powersCh!([1,2,4,8,16,32,64,128,256,512,1024,2048,4096,8192,16384,32768, 65536]) |
     for (@powers <- powersCh) {
-      contract MakeCell(@val, cell) = {
-        for (@cmd, @args <- cell) {
-          match cmd {
-            "get" => {
-              match args {
-                [ret] => {
-                  @ret!(val) |
-                  MakeCell!(val, *cell)
-                }
-                x => { o!(["ERROR: MATCH FAIL. MakeCell.get line 16", x]) }
-              }
+      contract MakeCell(@initVal, cell) = {
+        new cellStore in {
+          cellStore!(initVal) |
+          contract cell(@"get", @[ret]) = {
+            // TODO: convert to peek
+            for (@val <- cellStore) {
+              cellStore!(val) |
+              @ret!(val)
             }
-            "set" => {
-              match args {
-                [newVal, ret] => {
-                  @ret!(Nil) |
-                  MakeCell!(newVal, *cell)
-                }
-                x => { o!(["ERROR: MATCH FAIL. MakeCell.get line 25", x]) }
-              }
+          } |
+          
+          contract cell(@"set", @[newVal, ack]) = {
+            for (_ <- cellStore) {
+              cellStore!(newVal) |
+              @ack!(Nil)
             }
-            "setBit" => {
-              match args {
-                [bit, ret] => {
-                  @ret!(Nil) |
-                  MakeCell!(
-                    // val | (1 << bit)
-                    // Bitwise operators would be really nice to have!
-                    (val % powers.nth(bit)) +
-                      (val / powers.nth(bit + 1)) * powers.nth(bit + 1) +
-                      powers.nth(bit),
-                    *cell
-                  )
-                }
-                x => { o!(["ERROR: MATCH FAIL. MakeCell.get line 41", x]) }
-              }
+          } |
+          
+          contract cell(@"setBit", @[bit, ack]) = {
+            for (@val <- cellStore) {
+              // val | (1 << bit)
+              // Bitwise operators would be really nice to have!
+              cellStore!((val % powers.nth(bit)) +
+                (val / powers.nth(bit + 1)) * powers.nth(bit + 1) +
+                powers.nth(bit)) |
+              @ack!(Nil)
             }
-            "die" => { Nil }
-            x => { o!(["ERROR: MATCH FAIL. MakeCell line 45", x]) }
           }
         }
       } |
