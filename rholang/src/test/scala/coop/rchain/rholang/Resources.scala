@@ -35,7 +35,7 @@ object Resources {
         })
     )
 
-  def mkRhoISpace[F[_]: Concurrent: ContextShift: Log: Metrics: Span](
+  def mkRhoISpace[F[_]: Concurrent: ContextShift: par.Par: Log: Metrics: Span](
       prefix: String = ""
   ): Resource[F, RhoISpace[F]] = {
 

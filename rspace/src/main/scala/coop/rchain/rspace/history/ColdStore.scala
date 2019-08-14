@@ -11,6 +11,7 @@ import coop.rchain.shared.AttemptOpsF.RichAttempt
 
 trait ColdStore[F[_]] {
   def put(hash: Blake2b256Hash, data: PersistedData): F[Unit]
+  def put(data: List[(Blake2b256Hash, PersistedData)]): F[Unit]
 
   def get(hash: Blake2b256Hash): F[Option[PersistedData]]
 
@@ -47,6 +48,14 @@ object ColdStoreInstances {
       } yield (maybeDecoded.map(_.value))
 
     override def close(): F[Unit] = store.close()
+
+    override def put(data: List[(Blake2b256Hash, PersistedData)]): F[Unit] =
+      data
+        .traverse {
+          case (key, data) => codec.encode(data).get.map((key, _))
+        }
+        .flatMap(encoded => store.put(encoded))
+
   }
 }
 

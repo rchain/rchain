@@ -3,18 +3,24 @@ package coop.rchain.rspace.history
 import cats.{Applicative, FlatMap}
 import cats.effect.Sync
 import cats.implicits._
+import cats.temp.par.Par
 import coop.rchain.rspace.Blake2b256Hash
 import coop.rchain.rspace.history.History._
 import scodec.bits.ByteVector
-import Ordering.Implicits.seqDerivedOrdering
 
+import Ordering.Implicits.seqDerivedOrdering
 import scala.collection.concurrent.TrieMap
+import scala.Function.tupled
 
 object HistoryInstances {
 
+  type Index            = Byte
+  type LastModification = (KeyPath, Trie)
+  type SubtrieAtIndex   = (Index, KeyPath, NonEmptyTriePointer)
+
   def MalformedTrieError = new RuntimeException("malformed trie")
 
-  final case class MergingHistory[F[_]: Sync](
+  final case class MergingHistory[F[_]: Par: Sync](
       root: Blake2b256Hash,
       historyStore: CachingHistoryStore[F]
   ) extends History[F] {
@@ -303,66 +309,200 @@ object HistoryInstances {
       }
 
     def process(actions: List[HistoryAction]): F[History[F]] = {
-      type LastModification = (KeyPath, Trie)
-      val start: (Blake2b256Hash, Option[LastModification]) = (this.root, None)
-      val sorted                                            = actions.sortBy(_.key)
-      def insert(
-          currentRoot: Blake2b256Hash,
-          previousModificationOpt: Option[LastModification],
-          remainingPath: KeyPath,
-          value: Blake2b256Hash
-      ): F[(Blake2b256Hash, Option[LastModification])] =
-        for {
-          _              <- commitPreviousModification(remainingPath, previousModificationOpt)
-          traverseResult <- findPath(remainingPath, currentRoot)
-          (_, triePath)  = traverseResult
-          elements       <- rebalanceInsert(LeafPointer(value), remainingPath, triePath)
-          _              <- historyStore.put(elements)
-        } yield (Trie.hash(elements.last), (remainingPath, elements.last).some)
-
-      def delete(
-          currentRoot: Blake2b256Hash,
-          previousModificationOpt: Option[LastModification],
-          remainingPath: KeyPath
-      ): F[(Blake2b256Hash, Option[LastModification])] =
-        for {
-          _              <- commitPreviousModification(remainingPath, previousModificationOpt)
-          traverseResult <- findPath(remainingPath, currentRoot)
-          (_, triePath)  = traverseResult
-          elements <- triePath match {
-                       case TriePath(elems, None, path) if remainingPath == path =>
-                         rebalanceDelete(remainingPath, elems)
-                       case _ =>
-                         Applicative[F].pure[List[Trie]](Nil)
-                     }
-          _ <- historyStore.put(elements)
-        } yield (
-          elements.lastOption.map(Trie.hash).getOrElse(currentRoot),
-          elements.lastOption.map(t => (remainingPath, t))
-        )
-
+      implicit val parallel = Par[F].parallel
       for {
-        _ <- Sync[F].ifM((actions.map(_.key).toSet.size == actions.size).pure[F])(
-              ifTrue = Applicative[F].unit,
-              ifFalse = Sync[F].raiseError(
-                new RuntimeException("Cannot process duplicate actions on one key")
-              )
-            )
-        result <- sorted.foldLeftM(start) {
-                   case (
-                       (currentRoot, previousModificationOpt),
-                       InsertAction(remainingPath, value)
-                       ) =>
-                     insert(currentRoot, previousModificationOpt, remainingPath, value)
-
-                   case ((currentRoot, previousModificationOpt), DeleteAction(remainingPath)) =>
-                     delete(currentRoot, previousModificationOpt, remainingPath)
-                 }
-        (newRoot, _) = result
-        _            <- historyStore.commit(newRoot)
-        _            <- historyStore.clear()
-      } yield this.copy(root = newRoot)
+        _ <- Sync[F].ensure(actions.pure[F])(
+              new RuntimeException("Cannot process duplicate actions on one key")
+            )(hasNoDuplicates)
+        unsortedPartitions = actions.groupBy(_.key.head).toList
+        partitions         = unsortedPartitions.map(v => v.map(p => p.sortBy(_.key)))
+        roots              <- partitions.parTraverse(tupled(processSubtree(this.root)))
+        modified           = roots.flatMap(tupled(extractSubtrieAtIndex))
+        unmodified         <- extractUnmodifiedRootElements(partitions)
+        all                = modified ++ unmodified
+        results            <- constructRoot(all)
+        (newRoot, tries)   = results
+        _                  <- historyStore.put(newRoot :: tries)
+        newRootHash        = Trie.hash(newRoot)
+        _                  <- historyStore.commit(newRootHash)
+        _                  <- historyStore.clear()
+      } yield this.copy(root = newRootHash)
     }
+
+    private def hasNoDuplicates(actions: List[HistoryAction]) =
+      actions.map(_.key).toSet.size == actions.size
+
+    private def processSubtree(
+        start: Blake2b256Hash
+    )(index: Index, actions: List[HistoryAction]): F[(Index, Trie)] =
+      for {
+        result <- actions
+                   .foldLeftM((start, Option.empty[LastModification])) {
+                     case (
+                         (currentRoot, previousModificationOpt),
+                         InsertAction(remainingPath, value)
+                         ) =>
+                       insert(currentRoot, previousModificationOpt, remainingPath, value)
+
+                     case (
+                         (currentRoot, previousModificationOpt),
+                         DeleteAction(remainingPath)
+                         ) =>
+                       delete(currentRoot, previousModificationOpt, remainingPath)
+                   }
+        root <- historyStore.get(result._1)
+      } yield (index, root)
+
+    private def insert(
+        currentRoot: Blake2b256Hash,
+        previousModificationOpt: Option[LastModification],
+        remainingPath: KeyPath,
+        value: Blake2b256Hash
+    ): F[(Blake2b256Hash, Option[LastModification])] =
+      for {
+        _              <- commitPreviousModification(remainingPath, previousModificationOpt)
+        traverseResult <- findPath(remainingPath, currentRoot)
+        (_, triePath)  = traverseResult
+        elements       <- rebalanceInsert(LeafPointer(value), remainingPath, triePath)
+        _              <- historyStore.put(elements)
+      } yield (Trie.hash(elements.last), (remainingPath, elements.last).some)
+
+    private def delete(
+        currentRoot: Blake2b256Hash,
+        previousModificationOpt: Option[LastModification],
+        remainingPath: KeyPath
+    ): F[(Blake2b256Hash, Option[LastModification])] =
+      for {
+        _              <- commitPreviousModification(remainingPath, previousModificationOpt)
+        traverseResult <- findPath(remainingPath, currentRoot)
+        (_, triePath)  = traverseResult
+        elements <- triePath match {
+                     case TriePath(elems, None, path) if remainingPath == path =>
+                       rebalanceDelete(remainingPath, elems)
+                     case _ =>
+                       Applicative[F].pure[List[Trie]](Nil)
+                   }
+        _ <- historyStore.put(elements)
+      } yield (
+        elements.lastOption.map(Trie.hash).getOrElse(currentRoot),
+        elements.lastOption.map(t => (remainingPath, t))
+      )
+
+    private def extractSubtrieAtIndex(
+        index: Index,
+        node: Trie
+    ): Seq[SubtrieAtIndex] =
+      node match {
+        case EmptyTrie => Nil //produced empty root
+        case Skip(prefix, ptr) if index == prefix.head =>
+          (index, prefix.tail.toSeq, ptr) :: Nil //produced skip at current index
+        case _: Skip => Nil
+        //started with PointerBlock to 2 sub-tries, the one not under index is left
+        case pb: PointerBlock => // produced multiple sub tries
+          val idx = toInt(index)
+          val t   = pb.toVector(idx)
+          t match {
+            case EmptyPointer             => Nil
+            case ptr: NonEmptyTriePointer => (index, Seq.empty, ptr) :: Nil
+          }
+      }
+
+    private def extractUnmodifiedRootElements(
+        partitions: List[(Index, List[HistoryAction])]
+    ): F[List[SubtrieAtIndex]] =
+      for {
+        oldRoot   <- historyStore.get(this.root)
+        changed   = partitions.map(_._1).toSet.map(toInt)
+        unchanged = cutModifiedIndices(changed)(oldRoot)
+      } yield unchanged
+
+    private def cutModifiedIndices(changed: Set[Int])(root: Trie): List[SubtrieAtIndex] =
+      root match {
+        case EmptyTrie                                               => Nil
+        case Skip(prefix, _) if changed.contains(toInt(prefix.head)) => Nil
+        case Skip(prefix, ptr)                                       => (prefix.head, prefix.tail.toSeq, ptr) :: Nil
+        case pointerBlock: PointerBlock =>
+          pointerBlock.toVector.toList.zipWithIndex.collect {
+            case (ptr: NonEmptyTriePointer, i) if !changed.contains(i) =>
+              (toByte(i), Seq.empty, ptr)
+          }
+      }
+
+    private def constructRoot(elems: List[SubtrieAtIndex]): F[(Trie, List[Trie])] =
+      elems match {
+        case Nil =>
+          (EmptyTrie: Trie, List.empty[Trie]).pure[F]
+        case (b, rest, vp: ValuePointer) :: Nil =>
+          (Skip(ByteVector(b) ++ ByteVector(rest), vp): Trie, List.empty[Trie]).pure[F]
+        case (b, rest, sp: SkipPointer) :: Nil =>
+          collapseToSkip(b, rest, sp)
+        case elems: List[(Byte, Seq[Byte], TriePointer)] =>
+          constructPointerBlock(elems)
+      }
+
+    private def collapseToSkip(
+        index: Index,
+        rest: KeyPath,
+        skipPointer: SkipPointer
+    ): F[(Trie, List[Trie])] =
+      for {
+        skip <- historyStore.get(skipPointer.hash)
+        r <- skip match {
+              case Skip(affix, ptr) =>
+                val t: Trie = Skip(ByteVector(index) ++ ByteVector(rest) ++ affix, ptr)
+                t.pure[F]
+              case _ =>
+                Sync[F].raiseError[Trie](MalformedTrieError)
+            }
+      } yield (r, Nil)
+
+    private def constructPointerBlock(
+        elems: List[SubtrieAtIndex]
+    ): F[(Trie, List[Trie])] =
+      elems
+        .traverse(tupled(processRootLevelTrie))
+        .map(_.foldLeft(List.empty[(Int, TriePointer)], List.empty[Trie]) {
+          case ((indexes, tries), (index, mods)) =>
+            (index :: indexes, tries ++ mods)
+        })
+        .map(r => (PointerBlock.create().updated(r._1): Trie, r._2))
+
+    private def processRootLevelTrie(
+        index: Index,
+        affix: KeyPath,
+        triePointer: NonEmptyTriePointer
+    ): F[((Int, TriePointer), List[Trie])] =
+      (affix, triePointer) match {
+        case (Seq(), ptr)             => ((toInt(index), ptr: TriePointer), List.empty[Trie]).pure[F]
+        case (rest, vp: ValuePointer) => wrapSkip(index, ByteVector(rest), vp)
+        case (rest, vp: SkipPointer) =>
+          for {
+            skip <- historyStore.get(vp.hash)
+            r <- skip match {
+                  case Skip(affix, ptr) =>
+                    wrapSkip(index, ByteVector(rest) ++ affix, ptr)
+                  case _ =>
+                    Sync[F].raiseError[((Int, TriePointer), List[Trie])](MalformedTrieError)
+                }
+          } yield r
+      }
+
+    private def wrapSkip(
+        b: Byte,
+        affix: ByteVector,
+        vp: ValuePointer
+    ): F[((Int, TriePointer), List[Trie])] = {
+      val skip = Skip(affix, vp)
+      val ptr  = pointer(skip)
+      ((toInt(b), ptr), List[Trie](skip)).pure[F]
+    }
+
+    def find(key: KeyPath): F[(TriePointer, Vector[Trie])] = findPath(key).map {
+      case (trie, path) => (trie, path.nodes)
+    }
+
+    private[history] def findPath(key: KeyPath): F[(TriePointer, TriePath)] =
+      findPath(key, root)
 
     private[history] def findPath(
         key: KeyPath,
@@ -413,20 +553,13 @@ object HistoryInstances {
 
     }
 
-    private[history] def findPath(key: KeyPath): F[(TriePointer, TriePath)] =
-      findPath(key, root)
-
-    def find(key: KeyPath): F[(TriePointer, Vector[Trie])] = findPath(key).map {
-      case (trie, path) => (trie, path.nodes)
-    }
-
     override def close(): F[Unit] = historyStore.close()
 
     override def reset(root: Blake2b256Hash): History[F] = this.copy(root = root)
 
   }
 
-  def merging[F[_]: Sync](root: Blake2b256Hash, historyStore: HistoryStore[F]): History[F] =
+  def merging[F[_]: Sync: Par](root: Blake2b256Hash, historyStore: HistoryStore[F]): History[F] =
     new MergingHistory[F](root, CachingHistoryStore(historyStore))
 
   final case class CachingHistoryStore[F[_]: Sync](historyStore: HistoryStore[F])

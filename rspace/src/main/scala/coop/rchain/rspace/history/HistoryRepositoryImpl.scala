@@ -16,16 +16,17 @@ import coop.rchain.rspace.{
   InsertContinuations,
   InsertData,
   InsertJoins,
+  RSpace,
   Serialize
 }
 import coop.rchain.rspace.internal._
 import scodec.Codec
 import scodec.bits.{BitVector, ByteVector}
 import HistoryRepositoryImpl._
+import cats.temp.par.Par
 import com.typesafe.scalalogging.Logger
-import monix.execution.schedulers.TestScheduler.Task
 
-final case class HistoryRepositoryImpl[F[_]: Sync, C, P, A, K](
+final case class HistoryRepositoryImpl[F[_]: Sync: Par, C, P, A, K](
     history: History[F],
     rootsRepository: RootRepository[F],
     leafStore: ColdStore[F]
@@ -183,22 +184,25 @@ final case class HistoryRepositoryImpl[F[_]: Sync, C, P, A, K](
         (key, None, DeleteAction(key.bytes.toSeq.toList))
     }
 
-  private def storeLeaves(leafs: List[Result]): F[List[HistoryAction]] =
-    leafs.traverse {
-      case (key, Some(data), historyAction) =>
-        leafStore.put(key, data).map(_ => historyAction)
-      case (_, None, historyAction) =>
-        Applicative[F].pure(historyAction)
-    }
+  private def storeLeaves(leafs: List[Result]): F[List[HistoryAction]] = {
+    val toBeStored = leafs.collect { case (key, Some(data), _) => (key, data) }
+    leafStore.put(toBeStored).map(_ => leafs.map(_._3))
+  }
 
-  override def checkpoint(actions: List[HotStoreAction]): F[HistoryRepository[F, C, P, A, K]] =
+  val transformAndStore: List[HotStoreAction] => F[List[HistoryAction]] =
+    ((l: List[HotStoreAction]) => l.map(transform)).andThen(storeLeaves)
+
+  override def checkpoint(actions: List[HotStoreAction]): F[HistoryRepository[F, C, P, A, K]] = {
+    implicit val P = Par[F].parallel
+    val batchSize  = Math.max(1, actions.size / RSpace.parallelism)
     for {
-      trieActions    <- Applicative[F].pure(actions.par.map(transform).toList)
-      historyActions <- storeLeaves(trieActions)
+      batches        <- Sync[F].delay(actions.grouped(batchSize).toList)
+      historyActions <- batches.parFlatTraverse(transformAndStore)
       next           <- history.process(historyActions)
       _              <- rootsRepository.commit(next.root)
       _              <- measure(actions)
     } yield this.copy(history = next)
+  }
 
   override def reset(root: Blake2b256Hash): F[HistoryRepository[F, C, P, A, K]] =
     for {
