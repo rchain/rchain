@@ -140,6 +140,9 @@ object Runtime {
     val GET_INVALID_BLOCKS: Par = byteName(14)
     val REV_ADDRESS: Par        = byteName(15)
     val DEPLOYER_ID_OPS: Par    = byteName(16)
+    val REG_LOOKUP2: Par        = byteName(17)
+    val REG_INSERT_RANDOM2: Par = byteName(18)
+    val REG_INSERT_SIGNED2: Par = byteName(19)
   }
 
   private def introduceSystemProcesses[F[_]: Sync: _cost: Span](
