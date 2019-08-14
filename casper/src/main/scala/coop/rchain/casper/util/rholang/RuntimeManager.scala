@@ -253,9 +253,7 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span] private[rholang] (
       _ <- runtime.space.reset(Blake2b256Hash.fromByteString(startHash))
       res <- terms.toList
               .foldM(Seq.empty[InternalProcessedDeploy]) {
-                case (results, deploy) => {
-                  processDeploy(deploy).map(results :+ _)
-                }
+                case (results, deploy) => processDeploy(deploy).map(results :+ _)
               }
       _               <- Span[F].mark("before-process-deploys-create-checkpoint")
       finalCheckpoint <- runtime.space.createCheckpoint()
@@ -370,18 +368,18 @@ object RuntimeManager {
   type StateHash = ByteString
 
   def fromRuntime[F[_]: Concurrent: Sync: Metrics: Span](
-      active: Runtime[F]
+      runtime: Runtime[F]
   ): F[RuntimeManager[F]] =
     for {
-      _                <- active.space.clear()
-      _                <- active.replaySpace.clear()
-      _                <- Runtime.injectEmptyRegistryRoot(active.space, active.replaySpace)
-      checkpoint       <- active.space.createCheckpoint()
-      replayCheckpoint <- active.replaySpace.createCheckpoint()
+      _                <- runtime.space.clear()
+      _                <- runtime.replaySpace.clear()
+      _                <- Runtime.injectEmptyRegistryRoot(runtime.space, runtime.replaySpace)
+      _                <- Runtime.bootstrapRegistry(runtime)
+      checkpoint       <- runtime.space.createCheckpoint()
+      replayCheckpoint <- runtime.replaySpace.createCheckpoint()
       hash             = ByteString.copyFrom(checkpoint.root.bytes.toArray)
       replayHash       = ByteString.copyFrom(replayCheckpoint.root.bytes.toArray)
       _                = assert(hash == replayHash)
-      runtime          <- MVar[F].of(active)
+      runtime          <- MVar[F].of(runtime)
     } yield new RuntimeManagerImpl(hash, runtime)
-
 }

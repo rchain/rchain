@@ -21,6 +21,7 @@ import coop.rchain.rholang.interpreter.accounting.{noOpCostLog, _}
 import coop.rchain.rholang.interpreter.errors.SetupError
 import coop.rchain.rholang.interpreter.storage.ChargingRSpace
 import coop.rchain.rspace.{Match, RSpace, _}
+import coop.rchain.rholang.interpreter.registry.RegistryBootstrap
 import coop.rchain.shared.Log
 
 import scala.concurrent.ExecutionContext
@@ -430,6 +431,22 @@ object Runtime {
         invalidBlocks
       )
     }
+  }
+
+  def bootstrapRegistry[F[_]: FlatMap](runtime: Runtime[F]): F[Unit] = {
+    // This is from Nassim Taleb's "Skin in the Game"
+    implicit val rand = Blake2b512Random(
+      ("Decentralization is based on the simple notion that it is easier to macrobull***t than microbull***t. " +
+        "Decentralization reduces large structural asymmetries.")
+        .getBytes()
+    )
+    for {
+      cost <- runtime.cost.get
+      _    <- runtime.cost.set(Cost.UNSAFE_MAX)
+      _    <- runtime.reducer.inj(RegistryBootstrap.AST)
+      _    <- runtime.replayReducer.inj(RegistryBootstrap.AST)
+      _    <- runtime.cost.set(cost)
+    } yield ()
   }
 
   def injectEmptyRegistryRoot[F[_]](space: RhoISpace[F], replaySpace: RhoReplayISpace[F])(
