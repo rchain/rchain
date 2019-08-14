@@ -133,7 +133,7 @@ object Runtime {
     val SHA256_HASH: Par        = GString("sha256Hash")
     val KECCAK256_HASH: Par     = GString("keccak256Hash")
     val BLAKE2B256_HASH: Par    = GString("blake2b256Hash")
-    val SECP256K1_VERIFY: Par   = GString("secp256k1Verify")
+    val SECP256K1_VERIFY: Par   = byteName(8)
     val REG_LOOKUP: Par         = byteName(9)
     val REG_INSERT_RANDOM: Par  = byteName(10)
     val REG_INSERT_SIGNED: Par  = byteName(11)
@@ -368,6 +368,7 @@ object Runtime {
     }
 
     val urnMap: Map[String, Par] = Map[String, Par](
+      "rho:crypto:secp256k1Verify" -> Bundle(FixedChannels.SECP256K1_VERIFY, writeFlag = true),
       "rho:registry:lookup" -> Bundle(FixedChannels.REG_LOOKUP, writeFlag = true)
     ) ++ (stdSystemProcesses[F] ++ extraSystemProcesses).map(_.toUrnMap)
 
