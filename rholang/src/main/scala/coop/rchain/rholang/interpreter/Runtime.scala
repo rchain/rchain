@@ -119,6 +119,7 @@ object Runtime {
     val GET_INVALID_BLOCKS: Long           = 24L
     val REV_ADDRESS: Long                  = 25L
     val DEPLOYER_ID_OPS: Long              = 26L
+    val REG_OPS: Long                      = 27L
   }
 
   def byteName(b: Byte): Par = GPrivate(ByteString.copyFrom(Array[Byte](b)))
@@ -144,6 +145,7 @@ object Runtime {
     val REG_LOOKUP2: Par        = byteName(17)
     val REG_INSERT_RANDOM2: Par = byteName(18)
     val REG_INSERT_SIGNED2: Par = byteName(19)
+    val REG_OPS: Par            = byteName(20)
   }
 
   private def introduceSystemProcesses[F[_]: Sync: _cost: Span](
@@ -276,6 +278,14 @@ object Runtime {
       3,
       BodyRefs.DEPLOYER_ID_OPS, { ctx =>
         ctx.systemProcesses.deployerIdOps
+      }
+    ),
+    SystemProcess.Definition[F](
+      "rho:registry:ops",
+      FixedChannels.REG_OPS,
+      3,
+      BodyRefs.REG_OPS, { ctx =>
+        ctx.systemProcesses.registryOps
       }
     )
   )
