@@ -138,6 +138,13 @@ class MultiParentCasperMergeSpec extends FlatSpec with Matchers with Inspectors 
 
   }
 
+  object CouldMatchSameConflicts {
+
+    def apply(left: Rho*)(right: Rho*)(base: Rho*): Effect[Unit] =
+      conflicts(left.reduce(_ | _), right.reduce(_ | _), base.reduce(_ | _))
+
+  }
+
   case class Rho(
       value: String,
       maybePolarity: Option[Polarity] = None,
@@ -181,7 +188,7 @@ class MultiParentCasperMergeSpec extends FlatSpec with Matchers with Inspectors 
     "!X CX"     -> INCOMING_COULD_MATCH       -> conflicts(S0, C_, Nil),
     "!X C!"     -> INCOMING_COULD_MATCH       -> conflicts(S0, C_, S0),
     "!X (C!)"   -> PERSISTENT_COULD_MATCH     -> conflicts(S0, C_ | S0, Nil),
-    "!4 !4"     -> COULD_MATCH_SAME_CONFLICTS -> conflicts(S0, S1, F_),
+    "!4 !4"     -> COULD_MATCH_SAME_CONFLICTS -> CouldMatchSameConflicts(S0)(S1)(F_),
     "!4 !4"     -> COULD_MATCH_SAME_MERGES    -> merges(S0, S1, F0 | F1),
     "!4 (!4)"   -> VOLATILE_EVENT             -> merges(S0, S1 | F_, F0),
     "(!4) (!4)" -> VOLATILE_EVENT             -> merges(S0 | F_, S0 | F_, Nil),
@@ -191,7 +198,7 @@ class MultiParentCasperMergeSpec extends FlatSpec with Matchers with Inspectors 
     "!4 (4!)"   -> VOLATILE_EVENT             -> merges(S0, S1 | F_, F0),
     "!4 4!!"    -> HAD_ITS_MATCH              -> merges(S0, F_, F0 | R1),
     "!4 !!X"    -> SAME_POLARITY_MERGE        -> SamePolarityMerge(S0)(R1)(F0),
-    "!4 !!4"    -> COULD_MATCH_SAME_CONFLICTS -> conflicts(S0, R1, F_),
+    "!4 !!4"    -> COULD_MATCH_SAME_CONFLICTS -> CouldMatchSameConflicts(S0)(R1)(F_),
     "!4 !!4"    -> COULD_MATCH_SAME_MERGES    -> merges(S0, R1, F0 | F1),
     "!4 CX"     -> HAD_ITS_MATCH              -> merges(S0, C_, F_),
     "!4 C!"     -> HAD_ITS_MATCH              -> merges(S0, C_, F0 | S1),
@@ -214,15 +221,15 @@ class MultiParentCasperMergeSpec extends FlatSpec with Matchers with Inspectors 
     "4X CX"     -> SAME_POLARITY_MERGE        -> SamePolarityMerge(F_)(C_)(Nil),
     "4X C!"     -> SAME_POLARITY_MERGE        -> SamePolarityMerge(F0)(C1)(S1),
     "4X (!!4)"  -> PERSISTENT_COULD_MATCH     -> conflicts(F_, R0 | F_, Nil),
-    "4! 4!"     -> COULD_MATCH_SAME_CONFLICTS -> conflicts(F_, F_, S0),
+    "4! 4!"     -> COULD_MATCH_SAME_CONFLICTS -> CouldMatchSameConflicts(F_)(F_)(S0),
     "4! 4!"     -> COULD_MATCH_SAME_MERGES    -> merges(F0, F1, S0 | S1),
     "4! CX"     -> SAME_POLARITY_MERGE        -> SamePolarityMerge(F_)(C1)(S0),
-    "4! C!"     -> COULD_MATCH_SAME_CONFLICTS -> conflicts(F_, C_, S0),
+    "4! C!"     -> COULD_MATCH_SAME_CONFLICTS -> CouldMatchSameConflicts(F_)(C_)(S0),
     "4! C!"     -> COULD_MATCH_SAME_MERGES    -> merges(F0, C1, S0 | S1),
     "CX CX"     -> SAME_POLARITY_MERGE        -> SamePolarityMerge(C_)(C_)(Nil),
-    "CX C!"     -> COULD_MATCH_SAME_CONFLICTS -> conflicts(C0, C0, S0),
+    "CX C!"     -> COULD_MATCH_SAME_CONFLICTS -> CouldMatchSameConflicts(C0)(C0)(S0),
     "CX C!"     -> COULD_MATCH_SAME_MERGES    -> merges(C1, C0, S0),
-    "C! C!"     -> COULD_MATCH_SAME_CONFLICTS -> conflicts(C_, C_, S0),
+    "C! C!"     -> COULD_MATCH_SAME_CONFLICTS -> CouldMatchSameConflicts(C_)(C_)(S0),
     "C! C!"     -> COULD_MATCH_SAME_MERGES    -> merges(C0, C1, S0 | S1),
     "CX !!X"    -> INCOMING_COULD_MATCH       -> conflicts(R0, C_, Nil),
     "(!4) !4"   -> VOLATILE_EVENT             -> coveredBy("!4 (!4)"),
