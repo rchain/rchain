@@ -155,6 +155,8 @@ class MultiParentCasperMergeSpec extends FlatSpec with Matchers with Inspectors 
 
   object PersistentCouldMatch extends ConflictingCase
 
+  object PersistentNoMatch extends MergeableCase
+
   case class Rho(
       value: String,
       maybePolarity: Option[Polarity] = None,
@@ -191,7 +193,7 @@ class MultiParentCasperMergeSpec extends FlatSpec with Matchers with Inspectors 
     "!X 4!"     -> HAD_ITS_MATCH              -> HadItsMatch(S0)(F_)(S0),
     "!X (4!)"   -> VOLATILE_EVENT             -> coveredBy("!X (!4)"),
     "!X 4!!"    -> HAD_ITS_MATCH              -> HadItsMatch(S0)(F_)(R0),
-    "!X (4!!)"  -> PERSISTENT_COULD_NOT_MATCH -> merges(S0, F_ | R0, Nil),
+    "!X (4!!)"  -> PERSISTENT_COULD_NOT_MATCH -> PersistentNoMatch(S0)(F_ | R0)(Nil),
     "!X !!X"    -> SAME_POLARITY_MERGE        -> SamePolarityMerge(S0)(R0)(Nil),
     "!X !!4"    -> SAME_POLARITY_MERGE        -> SamePolarityMerge(S0)(R1)(F1),
     "!X (!!4)"  -> PERSISTENT_COULD_NOT_MATCH -> coveredBy("!X (4!!)"),
@@ -212,10 +214,10 @@ class MultiParentCasperMergeSpec extends FlatSpec with Matchers with Inspectors 
     "!4 !!4"    -> COULD_MATCH_SAME_MERGES    -> CouldMatchSameMerges(S0)(R1)(F0 | F1),
     "!4 CX"     -> HAD_ITS_MATCH              -> HadItsMatch(S0)(C_)(F_),
     "!4 C!"     -> HAD_ITS_MATCH              -> HadItsMatch(S0)(C_)(F0 | S1),
-    "!4 (C!)"   -> PERSISTENT_COULD_NOT_MATCH -> merges(S0, C_ | S1, F0),
-    "!4 (!C)"   -> PERSISTENT_COULD_NOT_MATCH -> merges(S0, S1 | C_, F0),
+    "!4 (C!)"   -> PERSISTENT_COULD_NOT_MATCH -> PersistentNoMatch(S0)(C_ | S1)(F0),
+    "!4 (!C)"   -> PERSISTENT_COULD_NOT_MATCH -> PersistentNoMatch(S0)(S1 | C_)(F0),
     "!C !C"     -> COULD_MATCH_SAME_MERGES    -> CouldMatchSameMerges(S0)(S0)(C_),
-    "!C (!C)"   -> PERSISTENT_COULD_NOT_MATCH -> merges(S0, C_ | S1, C0),
+    "!C (!C)"   -> PERSISTENT_COULD_NOT_MATCH -> PersistentNoMatch(S0)(C_ | S1)(C0),
     "(!C) !C"   -> PERSISTENT_COULD_NOT_MATCH -> coveredBy("!C (!C)"),
     "!C 4X"     -> HAD_ITS_MATCH              -> HadItsMatch(S0)(F_)(C_),
     "!C 4!"     -> HAD_ITS_MATCH              -> HadItsMatch(S0)(F_)(C0 | S1),
@@ -245,16 +247,16 @@ class MultiParentCasperMergeSpec extends FlatSpec with Matchers with Inspectors 
     "(!4) !4"   -> VOLATILE_EVENT             -> coveredBy("!4 (!4)"),
     "(!4) (!C)" -> VOLATILE_EVENT             -> coveredBy("(!4) !C"),
     "(!4) (4!)" -> VOLATILE_EVENT             -> VolatileEvent(S0 | F_)(S0 | F_)(Nil),
-    "(!4) (C!)" -> PERSISTENT_COULD_NOT_MATCH -> merges(S0 | F_, C_ | S0, Nil),
+    "(!4) (C!)" -> PERSISTENT_COULD_NOT_MATCH -> PersistentNoMatch(S0 | F_)(C_ | S0)(Nil),
     "(!4) 4X"   -> VOLATILE_EVENT             -> VolatileEvent(S0 | F_)(F_)(Nil),
     "(!4) CX"   -> VOLATILE_EVENT             -> VolatileEvent(S0 | F_)(C_)(Nil),
-    "(!C) (!C)" -> PERSISTENT_COULD_NOT_MATCH -> merges(S0 | C_, S0 | C_, Nil),
+    "(!C) (!C)" -> PERSISTENT_COULD_NOT_MATCH -> PersistentNoMatch(S0 | C_)(S0 | C_)(Nil),
     "(!C) (4!)" -> VOLATILE_EVENT             -> VolatileEvent(S0 | C_)(F_ | S0)(Nil),
-    "(!C) (C!)" -> PERSISTENT_COULD_NOT_MATCH -> merges(S0 | C_, C_ | S0, Nil),
+    "(!C) (C!)" -> PERSISTENT_COULD_NOT_MATCH -> PersistentNoMatch(S0 | C_)(C_ | S0)(Nil),
     "(!C) 4!"   -> PERSISTENT_COULD_MATCH     -> PersistentCouldMatch(S0 | C_)(F_)(S0),
-    "(!C) 4X"   -> PERSISTENT_COULD_NOT_MATCH -> merges(S0 | C_, F_, Nil),
+    "(!C) 4X"   -> PERSISTENT_COULD_NOT_MATCH -> PersistentNoMatch(S0 | C_)(F_)(Nil),
     "(!C) C!"   -> PERSISTENT_COULD_MATCH     -> PersistentCouldMatch(S0 | C_)(C_)(S0),
-    "(!C) CX"   -> PERSISTENT_COULD_NOT_MATCH -> merges(S0 | C_, C_, Nil),
+    "(!C) CX"   -> PERSISTENT_COULD_NOT_MATCH -> PersistentNoMatch(S0 | C_)(C_)(Nil),
     "(4!) (4!)" -> VOLATILE_EVENT             -> VolatileEvent(F_ | S0)(F_ | S0)(Nil),
     "(4!) (C!)" -> VOLATILE_EVENT             -> VolatileEvent(F_ | S0)(C_ | S0)(Nil),
     "(4!) 4!"   -> VOLATILE_EVENT             -> VolatileEvent(F1 | S1)(F_)(S0),
@@ -263,14 +265,14 @@ class MultiParentCasperMergeSpec extends FlatSpec with Matchers with Inspectors 
     "4! (4!)"   -> VOLATILE_EVENT             -> VolatileEvent(F_)(F1 | S1)(S0),
     "4! (C!)"   -> PERSISTENT_COULD_NOT_MATCH -> conflicts(F_, C_ | S0, S0),
     "4X (4!)"   -> VOLATILE_EVENT             -> VolatileEvent(F_)(F_ | S0)(Nil),
-    "4X (C!)"   -> PERSISTENT_COULD_NOT_MATCH -> merges(F_, C_ | S0, Nil),
-    "C! (C!)"   -> PERSISTENT_COULD_NOT_MATCH -> merges(C_, C1 | S1, S0),
-    "CX (C!)"   -> PERSISTENT_COULD_NOT_MATCH -> merges(C_, C_ | S0, Nil),
+    "4X (C!)"   -> PERSISTENT_COULD_NOT_MATCH -> PersistentNoMatch(F_)(C_ | S0)(Nil),
+    "C! (C!)"   -> PERSISTENT_COULD_NOT_MATCH -> PersistentNoMatch(C_)(C1 | S1)(S0),
+    "CX (C!)"   -> PERSISTENT_COULD_NOT_MATCH -> PersistentNoMatch(C_)(C_ | S0)(Nil),
     "(!4) 4!"   -> VOLATILE_EVENT             -> VolatileEvent(S1 | F1)(F_)(S0),
     "(!4) !C"   -> VOLATILE_EVENT             -> VolatileEvent(S1 | F1)(S0)(C0),
     "(!4) C!"   -> VOLATILE_EVENT             -> VolatileEvent(S0 | F0)(C_)(S1),
     "(4!) CX"   -> VOLATILE_EVENT             -> VolatileEvent(F_ | S0)(C_)(Nil),
-    "(C!) (C!)" -> PERSISTENT_COULD_NOT_MATCH -> merges(C_ | S0, C_ | S0, Nil)
+    "(C!) (C!)" -> PERSISTENT_COULD_NOT_MATCH -> PersistentNoMatch(C_ | S0)(C_ | S0)(Nil)
   )
 
   it should "respect mergeability rules when merging blocks" in effectTest {
