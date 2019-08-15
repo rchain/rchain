@@ -65,72 +65,6 @@ class MultiParentCasperMergeSpec extends FlatSpec with Matchers with Inspectors 
     merges(echoContract(1), echoContract(2), Rho("Nil"))
   }
 
-  //same polarity, merges
-  val SAME_POLARITY_MERGE =
-    """
-        |Two incoming sends/receives, at most one had a matching dual in TS.
-        |The incoming events won't cause more COMMs together (same polarity).
-        |They couldn't be competing for the same linear receive/send (at most one had a match).
-        |
-        |Notice this includes "two unsatisfied" and "must be looking for different data" cases.
-        |""".stripMargin
-
-  //same polarity, could sometimes merge
-  val COULD_MATCH_SAME =
-    """
-        |Two incoming sends/receives each matched a receive/send that was in TS.
-        |The incoming events won't cause more COMMs together (same polarity).
-        |They could've matched the same linear event.
-        |Mergeable if different events, or at least one matched event is non-linear.
-        |""".stripMargin
-
-  val COULD_MATCH_SAME_CONFLICTS = COULD_MATCH_SAME + "This is the case where both incoming events could have matched what was in the other TS."
-  val COULD_MATCH_SAME_MERGES    = COULD_MATCH_SAME + "This is the case where the incoming events match differently."
-
-  //diff polarity, merges
-  val HAD_ITS_MATCH =
-    """
-        |A send and a receive were incoming, at least one had a match, either:
-        | - both were linear
-        | - one was non-linear, the other had a match
-        |They couldn't match the same linear event (they have different polarity)
-        |They couldn't spawn more work, because either:
-        | - both were linear, one of them had a match in TS
-        | - one was non-linear, but the other chose to go with its match
-        |""".stripMargin
-
-  //diff polarity, could sometimes merge
-  val INCOMING_COULD_MATCH =
-    """
-        |An incoming send and an incoming receive could match each other,
-        |leading to more COMMs needing to happen.
-        |Mergeable if we use spatial matcher to prove they don't match.
-        |""".stripMargin
-
-  //deploy-local, merges
-  val VOLATILE_EVENT =
-    """
-        |There's been a COMM within one of the deploys,
-        |the other deploy saw none of it.
-        |""".stripMargin
-
-  //deploy-local, could sometimes merge
-  val PERSISTENT_COULD_MATCH =
-    """
-        |There's been a COMM within one of the deploys, with one side non-linear.
-        |The other deploy had an event without a match in TS, dual to the non-linear.
-        |These could spawn more work.
-        |Mergeable if we use spatial matcher to prove they don't match.
-        |""".stripMargin
-
-  //deploy-local, merges
-  val PERSISTENT_COULD_NOT_MATCH =
-    """
-        |There's been a COMM within one of the deploys, with one side non-linear.
-        |The other deploy had an event without a match in TS, of same polarity to the non-linear.
-        |These could not spawn more work.
-        |""".stripMargin
-
   trait MergeableCase {
     def apply(left: Rho*)(right: Rho*)(base: Rho*): Effect[Unit] =
       merges(left.reduce(_ | _), right.reduce(_ | _), base.reduce(_ | _))
@@ -141,20 +75,69 @@ class MultiParentCasperMergeSpec extends FlatSpec with Matchers with Inspectors 
       conflicts(left.reduce(_ | _), right.reduce(_ | _), base.reduce(_ | _))
   }
 
+  /***
+   Two incoming sends/receives, at most one had a matching dual in TS.
+   The incoming events won't cause more COMMs together (same polarity).
+   They couldn't be competing for the same linear receive/send (at most one had a match).
+   Notice this includes "two unsatisfied" and "must be looking for different data" cases.
+    */
   object SamePolarityMerge extends MergeableCase
 
+  /***
+   Two incoming sends/receives each matched a receive/send that was in TS.
+   The incoming events won't cause more COMMs together (same polarity).
+   They could've matched the same linear event.
+   Mergeable if different events, or at least one matched event is non-linear.
+   This is the case where both incoming events could have matched what was in the other TS.
+    */
   object CouldMatchSameConflicts extends ConflictingCase
 
+  /***
+   Two incoming sends/receives each matched a receive/send that was in TS.
+   The incoming events won't cause more COMMs together (same polarity).
+   They could've matched the same linear event.
+   Mergeable if different events, or at least one matched event is non-linear.
+   This is the case where the incoming events match differently
+    */
   object CouldMatchSameMerges extends MergeableCase
 
+  /***
+   A send and a receive were incoming, at least one had a match, either:
+   - both were linear
+   - one was non-linear, the other had a match
+   They couldn't match the same linear event (they have different polarity)
+   They couldn't spawn more work, because either:
+   - both were linear, one of them had a match in TS
+   - one was non-linear, but the other chose to go with its match
+    */
   object HadItsMatch extends MergeableCase
 
+  /***
+   An incoming send and an incoming receive could match each other,
+   leading to more COMMs needing to happen.
+   Mergeable if we use spatial matcher to prove they don't match.
+    */
   object IncomingCouldMatch extends ConflictingCase
 
+  /***
+   There was a COMM within one of the deploys.
+   The other deploy saw none of it.
+    */
   object VolatileEvent extends MergeableCase
 
+  /***
+   There was a COMM within one of the deploys, with one side non-linear.
+   The other deploy had an event without a match in TS, dual to the non-linear.
+   These could spawn more work.
+   Mergeable if we use spatial matcher to prove they don't match.
+    */
   object PersistentCouldMatch extends ConflictingCase
 
+  /***
+   There was a COMM within one of the deploys, with one side non-linear.
+   The other deploy had an event without a match in TS, of same polarity to the non-linear.
+   These could not spawn more work.
+    */
   object PersistentNoMatch extends MergeableCase
 
   case class Rho(
