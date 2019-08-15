@@ -184,7 +184,7 @@ class DebruijnInterpreter[M[_], F[_]](
       indexedTerms.parTraverse_ {
         case (term, index) =>
           val random = split(index)
-          eval(term)(env, random, sequenceNumber)
+          reportErrors(eval(term)(env, random, sequenceNumber))
       }
     } else {
       //TODO: Investigate if we can avoid the shuffling and manual parallelism limiting by tweaking:
@@ -201,7 +201,7 @@ class DebruijnInterpreter[M[_], F[_]](
         _.traverse_ {
           case (term, index) =>
             val random = split(index)
-            eval(term)(env, random, sequenceNumber)
+            reportErrors(eval(term)(env, random, sequenceNumber))
         }
       }
     }
@@ -215,15 +215,15 @@ class DebruijnInterpreter[M[_], F[_]](
       sequenceNumber: Int
   ): M[Unit] =
     term match {
-      case term: Send    => reportErrors(eval(term))
-      case term: Receive => reportErrors(eval(term))
-      case term: New     => reportErrors(eval(term))
-      case term: Match   => reportErrors(eval(term))
-      case term: Bundle  => reportErrors(eval(term))
+      case term: Send    => eval(term)
+      case term: Receive => eval(term)
+      case term: New     => eval(term)
+      case term: Match   => eval(term)
+      case term: Bundle  => eval(term)
       case term: Expr =>
         term.exprInstance match {
-          case e: EVarBody    => reportErrors(eval(e.value.v) >>= (eval(_)))
-          case e: EMethodBody => reportErrors(evalExprToPar(e) >>= (eval(_)))
+          case e: EVarBody    => eval(e.value.v) >>= (eval(_))
+          case e: EMethodBody => evalExprToPar(e) >>= (eval(_))
           case other          => BugFoundError(s"Undefined term: \n $other").raiseError[M, Unit]
         }
       case other => BugFoundError(s"Undefined term: \n $other").raiseError[M, Unit]
