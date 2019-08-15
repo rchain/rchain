@@ -157,7 +157,7 @@ class MultiParentCasperMergeSpec extends FlatSpec with Matchers with Inspectors 
 
   // TODO: Peek rows/column
   // Note this skips pairs that lead to infinite loops
-  val mergeabilityCases = Map(
+  val mergeabilityCases = List(
     "!X !X"     -> SAME_POLARITY_MERGE        -> merges(S0, S0, Nil),
     "!X !4"     -> SAME_POLARITY_MERGE        -> merges(S0, S1, F1),
     "!X (!4)"   -> VOLATILE_EVENT             -> merges(S0, S0 | F_, Nil),
@@ -250,7 +250,7 @@ class MultiParentCasperMergeSpec extends FlatSpec with Matchers with Inspectors 
   )
 
   it should "respect mergeability rules when merging blocks" in effectTest {
-    mergeabilityCases.toList
+    mergeabilityCases
       .map {
         case ((name, desc), y) =>
           val key = s"$name $desc"
@@ -510,7 +510,7 @@ class MultiParentCasperMergeSpec extends FlatSpec with Matchers with Inspectors 
         .toSet
     }
 
-    val testedMergeabilityCases = mergeabilityCases.keys.map(_._1)
+    val testedMergeabilityCases = mergeabilityCases.map(_._1._1)
     withClue(s"""Missing cases: ${allMergeabilityCases
       .diff(testedMergeabilityCases.toSet)
       .toList
