@@ -368,9 +368,15 @@ object Runtime {
     }
 
     val urnMap: Map[String, Par] = Map[String, Par](
-      "rho:crypto:secp256k1Verify" -> Bundle(FixedChannels.SECP256K1_VERIFY, writeFlag = true),
-      "rho:crypto:blake2b256Hash"  -> Bundle(FixedChannels.BLAKE2B256_HASH, writeFlag = true),
-      "rho:registry:lookup"        -> Bundle(FixedChannels.REG_LOOKUP, writeFlag = true)
+      "rho:crypto:secp256k1Verify"    -> Bundle(FixedChannels.SECP256K1_VERIFY, writeFlag = true),
+      "rho:crypto:blake2b256Hash"     -> Bundle(FixedChannels.BLAKE2B256_HASH, writeFlag = true),
+      "rho:registry:lookup"           -> Bundle(FixedChannels.REG_LOOKUP, writeFlag = true),
+      "rho:registry:lookup2"          -> Bundle(FixedChannels.REG_LOOKUP2, writeFlag = true),
+      "rho:registry:insertArbitrary2" -> Bundle(FixedChannels.REG_INSERT_RANDOM2, writeFlag = true),
+      "rho:registry:insertSigned2:secp256k1" -> Bundle(
+        FixedChannels.REG_INSERT_SIGNED2,
+        writeFlag = true
+      )
     ) ++ (stdSystemProcesses[F] ++ extraSystemProcesses).map(_.toUrnMap)
 
     val invalidBlocks = InvalidBlocks.unsafe[F]()
