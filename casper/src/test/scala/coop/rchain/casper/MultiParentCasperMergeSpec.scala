@@ -131,26 +131,23 @@ class MultiParentCasperMergeSpec extends FlatSpec with Matchers with Inspectors 
         |These could not spawn more work.
         |""".stripMargin
 
-  object SamePolarityMerge {
-
+  trait MergeableCase {
     def apply(left: Rho*)(right: Rho*)(base: Rho*): Effect[Unit] =
       merges(left.reduce(_ | _), right.reduce(_ | _), base.reduce(_ | _))
-
   }
 
-  object CouldMatchSameConflicts {
-
+  trait ConflictingCase {
     def apply(left: Rho*)(right: Rho*)(base: Rho*): Effect[Unit] =
       conflicts(left.reduce(_ | _), right.reduce(_ | _), base.reduce(_ | _))
-
   }
 
-  object CouldMatchSameMerges {
+  object SamePolarityMerge extends MergeableCase
 
-    def apply(left: Rho*)(right: Rho*)(base: Rho*): Effect[Unit] =
-      merges(left.reduce(_ | _), right.reduce(_ | _), base.reduce(_ | _))
+  object CouldMatchSameConflicts extends ConflictingCase
 
-  }
+  object CouldMatchSameMerges extends MergeableCase
+
+  object HadItsMatch extends MergeableCase
 
   case class Rho(
       value: String,
@@ -185,9 +182,9 @@ class MultiParentCasperMergeSpec extends FlatSpec with Matchers with Inspectors 
     "!X !C"     -> SAME_POLARITY_MERGE        -> SamePolarityMerge(S0)(S1)(C1),
     "!X (!C)"   -> PERSISTENT_COULD_MATCH     -> conflicts(S0, S0 | C_, Nil),
     "!X 4X"     -> INCOMING_COULD_MATCH       -> conflicts(S0, F_, Nil),
-    "!X 4!"     -> HAD_ITS_MATCH              -> merges(S0, F_, S0),
+    "!X 4!"     -> HAD_ITS_MATCH              -> HadItsMatch(S0)(F_)(S0),
     "!X (4!)"   -> VOLATILE_EVENT             -> coveredBy("!X (!4)"),
-    "!X 4!!"    -> HAD_ITS_MATCH              -> merges(S0, F_, R0),
+    "!X 4!!"    -> HAD_ITS_MATCH              -> HadItsMatch(S0)(F_)(R0),
     "!X (4!!)"  -> PERSISTENT_COULD_NOT_MATCH -> merges(S0, F_ | R0, Nil),
     "!X !!X"    -> SAME_POLARITY_MERGE        -> SamePolarityMerge(S0)(R0)(Nil),
     "!X !!4"    -> SAME_POLARITY_MERGE        -> SamePolarityMerge(S0)(R1)(F1),
@@ -200,28 +197,28 @@ class MultiParentCasperMergeSpec extends FlatSpec with Matchers with Inspectors 
     "!4 (!4)"   -> VOLATILE_EVENT             -> merges(S0, S1 | F_, F0),
     "(!4) (!4)" -> VOLATILE_EVENT             -> merges(S0 | F_, S0 | F_, Nil),
     "!4 !C"     -> COULD_MATCH_SAME_MERGES    -> CouldMatchSameMerges(S0)(S1)(F0 | C1),
-    "!4 4X"     -> HAD_ITS_MATCH              -> merges(S0, F_, F_),
-    "!4 4!"     -> HAD_ITS_MATCH              -> merges(S0, F_, F0 | S1),
+    "!4 4X"     -> HAD_ITS_MATCH              -> HadItsMatch(S0)(F_)(F_),
+    "!4 4!"     -> HAD_ITS_MATCH              -> HadItsMatch(S0)(F_)(F0 | S1),
     "!4 (4!)"   -> VOLATILE_EVENT             -> merges(S0, S1 | F_, F0),
-    "!4 4!!"    -> HAD_ITS_MATCH              -> merges(S0, F_, F0 | R1),
+    "!4 4!!"    -> HAD_ITS_MATCH              -> HadItsMatch(S0)(F_)(F0 | R1),
     "!4 !!X"    -> SAME_POLARITY_MERGE        -> SamePolarityMerge(S0)(R1)(F0),
     "!4 !!4"    -> COULD_MATCH_SAME_CONFLICTS -> CouldMatchSameConflicts(S0)(R1)(F_),
     "!4 !!4"    -> COULD_MATCH_SAME_MERGES    -> CouldMatchSameMerges(S0)(R1)(F0 | F1),
-    "!4 CX"     -> HAD_ITS_MATCH              -> merges(S0, C_, F_),
-    "!4 C!"     -> HAD_ITS_MATCH              -> merges(S0, C_, F0 | S1),
+    "!4 CX"     -> HAD_ITS_MATCH              -> HadItsMatch(S0)(C_)(F_),
+    "!4 C!"     -> HAD_ITS_MATCH              -> HadItsMatch(S0)(C_)(F0 | S1),
     "!4 (C!)"   -> PERSISTENT_COULD_NOT_MATCH -> merges(S0, C_ | S1, F0),
     "!4 (!C)"   -> PERSISTENT_COULD_NOT_MATCH -> merges(S0, S1 | C_, F0),
     "!C !C"     -> COULD_MATCH_SAME_MERGES    -> CouldMatchSameMerges(S0)(S0)(C_),
     "!C (!C)"   -> PERSISTENT_COULD_NOT_MATCH -> merges(S0, C_ | S1, C0),
     "(!C) !C"   -> PERSISTENT_COULD_NOT_MATCH -> coveredBy("!C (!C)"),
-    "!C 4X"     -> HAD_ITS_MATCH              -> merges(S0, F_, C_),
-    "!C 4!"     -> HAD_ITS_MATCH              -> merges(S0, F_, C0 | S1),
+    "!C 4X"     -> HAD_ITS_MATCH              -> HadItsMatch(S0)(F_)(C_),
+    "!C 4!"     -> HAD_ITS_MATCH              -> HadItsMatch(S0)(F_)(C0 | S1),
     "!C (4!)"   -> VOLATILE_EVENT             -> merges(S0, F1 | S1, C0),
-    "!C 4!!"    -> HAD_ITS_MATCH              -> merges(S0, F_, C0 | R1),
+    "!C 4!!"    -> HAD_ITS_MATCH              -> HadItsMatch(S0)(F_)(C0 | R1),
     "!C !!X"    -> SAME_POLARITY_MERGE        -> SamePolarityMerge(S0)(R1)(C0),
     "!C !!4"    -> COULD_MATCH_SAME_MERGES    -> CouldMatchSameMerges(S0)(R1)(C0 | F1),
-    "!C CX"     -> HAD_ITS_MATCH              -> merges(S0, C_, C_),
-    "!C C!"     -> HAD_ITS_MATCH              -> merges(S0, C_, C0 | S1),
+    "!C CX"     -> HAD_ITS_MATCH              -> HadItsMatch(S0)(C_)(C_),
+    "!C C!"     -> HAD_ITS_MATCH              -> HadItsMatch(S0)(C_)(C0 | S1),
     "!C (C!)"   -> PERSISTENT_COULD_NOT_MATCH -> coveredBy("!C (!C)"),
     "4X 4X"     -> SAME_POLARITY_MERGE        -> SamePolarityMerge(F_)(F_)(Nil),
     "4X 4!"     -> SAME_POLARITY_MERGE        -> SamePolarityMerge(F0)(F_)(S1),
