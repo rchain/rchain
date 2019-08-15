@@ -149,6 +149,8 @@ class MultiParentCasperMergeSpec extends FlatSpec with Matchers with Inspectors 
 
   object HadItsMatch extends MergeableCase
 
+  object IncomingCouldMatch extends ConflictingCase
+
   case class Rho(
       value: String,
       maybePolarity: Option[Polarity] = None,
@@ -181,7 +183,7 @@ class MultiParentCasperMergeSpec extends FlatSpec with Matchers with Inspectors 
     "!X (!4)"   -> VOLATILE_EVENT             -> merges(S0, S0 | F_, Nil),
     "!X !C"     -> SAME_POLARITY_MERGE        -> SamePolarityMerge(S0)(S1)(C1),
     "!X (!C)"   -> PERSISTENT_COULD_MATCH     -> conflicts(S0, S0 | C_, Nil),
-    "!X 4X"     -> INCOMING_COULD_MATCH       -> conflicts(S0, F_, Nil),
+    "!X 4X"     -> INCOMING_COULD_MATCH       -> IncomingCouldMatch(S0)(F_)(Nil),
     "!X 4!"     -> HAD_ITS_MATCH              -> HadItsMatch(S0)(F_)(S0),
     "!X (4!)"   -> VOLATILE_EVENT             -> coveredBy("!X (!4)"),
     "!X 4!!"    -> HAD_ITS_MATCH              -> HadItsMatch(S0)(F_)(R0),
@@ -189,8 +191,8 @@ class MultiParentCasperMergeSpec extends FlatSpec with Matchers with Inspectors 
     "!X !!X"    -> SAME_POLARITY_MERGE        -> SamePolarityMerge(S0)(R0)(Nil),
     "!X !!4"    -> SAME_POLARITY_MERGE        -> SamePolarityMerge(S0)(R1)(F1),
     "!X (!!4)"  -> PERSISTENT_COULD_NOT_MATCH -> coveredBy("!X (4!!)"),
-    "!X CX"     -> INCOMING_COULD_MATCH       -> conflicts(S0, C_, Nil),
-    "!X C!"     -> INCOMING_COULD_MATCH       -> conflicts(S0, C_, S0),
+    "!X CX"     -> INCOMING_COULD_MATCH       -> IncomingCouldMatch(S0)(C_)(Nil),
+    "!X C!"     -> INCOMING_COULD_MATCH       -> IncomingCouldMatch(S0)(C_)(S0),
     "!X (C!)"   -> PERSISTENT_COULD_MATCH     -> conflicts(S0, C_ | S0, Nil),
     "!4 !4"     -> COULD_MATCH_SAME_CONFLICTS -> CouldMatchSameConflicts(S0)(S1)(F_),
     "!4 !4"     -> COULD_MATCH_SAME_MERGES    -> CouldMatchSameMerges(S0)(S1)(F0 | F1),
@@ -235,7 +237,7 @@ class MultiParentCasperMergeSpec extends FlatSpec with Matchers with Inspectors 
     "CX C!"     -> COULD_MATCH_SAME_MERGES    -> CouldMatchSameMerges(C1)(C0)(S0),
     "C! C!"     -> COULD_MATCH_SAME_CONFLICTS -> CouldMatchSameConflicts(C_)(C_)(S0),
     "C! C!"     -> COULD_MATCH_SAME_MERGES    -> CouldMatchSameMerges(C0)(C1)(S0 | S1),
-    "CX !!X"    -> INCOMING_COULD_MATCH       -> conflicts(R0, C_, Nil),
+    "CX !!X"    -> INCOMING_COULD_MATCH       -> IncomingCouldMatch(R0)(C_)(Nil),
     "(!4) !4"   -> VOLATILE_EVENT             -> coveredBy("!4 (!4)"),
     "(!4) (!C)" -> VOLATILE_EVENT             -> coveredBy("(!4) !C"),
     "(!4) (4!)" -> VOLATILE_EVENT             -> merges(S0 | F_, S0 | F_, Nil),
