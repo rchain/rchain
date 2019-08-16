@@ -60,15 +60,7 @@ class NodeRuntime private[node] (
     Scheduler.fixedPool("loop", 4, reporter = UncaughtExceptionLogger)
   private[this] val grpcScheduler =
     Scheduler.cached("grpc-io", 4, 64, reporter = UncaughtExceptionLogger)
-  private[this] val availableProcessors = java.lang.Runtime.getRuntime.availableProcessors()
-  // TODO: make it configurable
-  // TODO: fine tune this
-  private[this] val rspaceScheduler = Scheduler.forkJoin(
-    name = "rspace",
-    parallelism = availableProcessors * 2,
-    maxThreads = availableProcessors * 2,
-    reporter = UncaughtExceptionLogger
-  )
+  private[this] val rspaceScheduler = RChainScheduler.interpreterScheduler
 
   implicit private val logSource: LogSource = LogSource(this.getClass)
 
