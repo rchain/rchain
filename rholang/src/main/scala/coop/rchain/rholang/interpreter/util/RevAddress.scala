@@ -22,8 +22,8 @@ object RevAddress {
   def fromPublicKey(pk: PublicKey): Option[RevAddress] =
     tools.fromPublicKey(pk).map(RevAddress(_))
 
-  def fromEthAddress(ethAddress: String): RevAddress =
-    RevAddress(tools.fromEthAddress(ethAddress))
+  def fromEthAddress(ethAddress: String): Option[RevAddress] =
+    tools.fromEthAddress(ethAddress).map(RevAddress(_))
 
   def fromUnforgeable(gprivate: GPrivate): RevAddress =
     RevAddress(tools.fromUnforgeable(gprivate))

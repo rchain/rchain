@@ -47,18 +47,20 @@ class AddressTools(prefix: Array[Byte], keyLength: Int, checksumLength: Int) {
   def fromPublicKey(pk: PublicKey): Option[Address] =
     if (keyLength == pk.bytes.length) {
       val ethAddress = Base16.encode(Keccak256.hash(pk.bytes.drop(1))).takeRight(40)
-      Some(fromEthAddress(ethAddress))
+      fromEthAddress(ethAddress)
     } else None
 
-  def fromEthAddress(ethAddress: String): Address = {
+  def fromEthAddress(ethAddress: String): Option[Address] = {
     val ethAddressWithoutPrefix = if (ethAddress.startsWith("0x")) {
       ethAddress.drop(2)
     } else {
       ethAddress
     }
-    val keyHash = Keccak256.hash(Base16.unsafeDecode(ethAddressWithoutPrefix))
-    val payload = prefix ++ keyHash
-    Address(prefix, keyHash, computeChecksum(payload))
+    if (ethAddressWithoutPrefix.length == ETH_ADDRESS_LENGTH) {
+      val keyHash = Keccak256.hash(Base16.unsafeDecode(ethAddressWithoutPrefix))
+      val payload = prefix ++ keyHash
+      Some(Address(prefix, keyHash, computeChecksum(payload)))
+    } else None
   }
 
   def fromUnforgeable(gprivate: GPrivate): Address = {
@@ -69,8 +71,9 @@ class AddressTools(prefix: Array[Byte], keyLength: Int, checksumLength: Int) {
 
   def isValid(address: String): Boolean = parse(address).isRight
 
-  private val checksumStart = prefix.length + Blake2b256.hashLength
-  private val addressLength = prefix.length + Blake2b256.hashLength + checksumLength
+  private val checksumStart      = prefix.length + Blake2b256.hashLength
+  private val addressLength      = prefix.length + Blake2b256.hashLength + checksumLength
+  private val ETH_ADDRESS_LENGTH = 40
 
   def parse(address: String): Either[String, Address] = {
     def validateLength(bytes: Array[Byte]) =
