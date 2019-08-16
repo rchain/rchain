@@ -1,41 +1,13 @@
 package coop.rchain.node.api
 
-import coop.rchain.node.diagnostics
-import coop.rchain.p2p.effects._
-import io.grpc.{Server, ServerBuilder}
-
-import scala.concurrent.Future
-import cats._
-import cats.data._
-import cats.implicits._
-import com.google.protobuf.empty.Empty
-import coop.rchain.catscontrib.mtl.implicits._
-import coop.rchain.casper.MultiParentCasper
-import coop.rchain.casper.protocol._
-import coop.rchain.casper.util.ProtoUtil
-import coop.rchain.casper.protocol.{DeployData, DeployServiceGrpc, DeployServiceResponse}
-import coop.rchain.casper.util.rholang.InterpreterUtil
-import coop.rchain.catscontrib._
-import Catscontrib._
-import coop.rchain.crypto.codec.Base16
-import coop.rchain.node.model.repl._
-import coop.rchain.rholang.interpreter.{RholangCLI, Runtime}
-import coop.rchain.rholang.interpreter.accounting._
-import coop.rchain.rholang.interpreter.storage.StoragePrinter
-import monix.eval.{Coeval, Task}
-import monix.execution.Scheduler
-import com.google.protobuf.ByteString
-import java.io.{Reader, StringReader}
-
-import coop.rchain.casper.api.BlockAPI
-import coop.rchain.rholang.interpreter.errors.InterpreterError
-import coop.rchain.comm.transport._
-import coop.rchain.comm.discovery._
-import coop.rchain.shared._
 import coop.rchain.models.Par
-import coop.rchain.rholang.interpreter._
-import Interpreter._
-import storage.StoragePrinter
+import coop.rchain.node.model.repl._
+import coop.rchain.rholang.interpreter.Interpreter._
+import coop.rchain.rholang.interpreter.{Runtime, _}
+import coop.rchain.rholang.interpreter.error_handling.errors.InterpreterError
+import coop.rchain.rholang.interpreter.storage.StoragePrinter
+import monix.eval.Task
+import monix.execution.Scheduler
 
 private[api] class ReplGrpcService(runtime: Runtime[Task], worker: Scheduler)
     extends ReplGrpcMonix.Repl {

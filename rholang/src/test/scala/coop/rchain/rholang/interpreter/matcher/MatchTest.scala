@@ -20,7 +20,10 @@ import coop.rchain.models.rholang.sorter.Sortable
 import coop.rchain.rholang.interpreter._
 import coop.rchain.rholang.interpreter.accounting._
 import coop.rchain.rholang.interpreter.accounting.utils._
-import coop.rchain.rholang.interpreter.errors.{InterpreterError, OutOfPhlogistonsError}
+import coop.rchain.rholang.interpreter.error_handling.errors.{
+  InterpreterError,
+  OutOfPhlogistonsError
+}
 import monix.eval.{Coeval, Task}
 import monix.execution.Scheduler.Implicits.global
 import org.scalactic.TripleEqualsSupport

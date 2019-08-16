@@ -13,7 +13,7 @@ import coop.rchain.models.Var.VarInstance._
 import coop.rchain.models._
 import coop.rchain.models.rholang.implicits._
 import coop.rchain.rholang.interpreter.accounting._
-import coop.rchain.rholang.interpreter.errors._
+import coop.rchain.rholang.interpreter.error_handling.errors._
 import coop.rchain.rholang.interpreter.storage.implicits._
 import coop.rchain.rspace._
 import coop.rchain.rspace.internal.{Datum, Row, WaitingContinuation}

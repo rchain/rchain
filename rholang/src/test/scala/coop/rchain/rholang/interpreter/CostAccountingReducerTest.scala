@@ -9,7 +9,7 @@ import coop.rchain.models.rholang.implicits._
 import coop.rchain.rholang.Resources.mkRhoISpace
 import coop.rchain.rholang.interpreter.Runtime.RhoISpace
 import coop.rchain.rholang.interpreter.accounting._
-import coop.rchain.rholang.interpreter.errors.OutOfPhlogistonsError
+import coop.rchain.rholang.interpreter.error_handling.errors.OutOfPhlogistonsError
 import coop.rchain.rholang.interpreter.storage.{ChargingRSpace, ISpaceStub}
 import coop.rchain.rholang.interpreter.storage.implicits._
 import coop.rchain.rspace.internal.{Datum, Row}

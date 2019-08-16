@@ -1,7 +1,7 @@
 package coop.rchain.rholang.interpreter
 
 import coop.rchain.models.Par
-import coop.rchain.rholang.interpreter.errors.LexerError
+import coop.rchain.rholang.interpreter.error_handling.errors.LexerError
 import monix.eval.Coeval
 import org.scalatest.EitherValues._
 import org.scalatest.{FlatSpec, Matchers}

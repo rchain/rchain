@@ -12,7 +12,7 @@ import coop.rchain.models.Expr.ExprInstance.{GInt, GString}
 import coop.rchain.models.TaggedContinuation.TaggedCont.ParBody
 import coop.rchain.models._
 import coop.rchain.rholang.interpreter.accounting._
-import coop.rchain.rholang.interpreter.errors.InterpreterError
+import coop.rchain.rholang.interpreter.error_handling.errors.InterpreterError
 import coop.rchain.rspace._
 import coop.rchain.rspace.{RSpace, ReplayRSpace}
 import coop.rchain.rspace.history.Branch

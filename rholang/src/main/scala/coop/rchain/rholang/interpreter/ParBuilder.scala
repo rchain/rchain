@@ -9,7 +9,7 @@ import coop.rchain.models.Connective.ConnectiveInstance
 import coop.rchain.models.Par
 import coop.rchain.models.rholang.implicits.VectorPar
 import coop.rchain.models.rholang.sorter.Sortable
-import coop.rchain.rholang.interpreter.errors._
+import coop.rchain.rholang.interpreter.error_handling.errors._
 import coop.rchain.rholang.syntax.rholang_mercury.{parser, Yylex}
 import coop.rchain.rholang.syntax.rholang_mercury.Absyn.Proc
 

@@ -5,7 +5,7 @@ import coop.rchain.metrics.Metrics
 import coop.rchain.rholang.Resources.mkRuntime
 import coop.rchain.rholang.interpreter.accounting._
 import coop.rchain.rholang.interpreter.storage.StoragePrinter
-import coop.rchain.rholang.interpreter.{EvaluateResult, InterpreterUtil, Runtime}
+import coop.rchain.rholang.interpreter.{error_handling, EvaluateResult, InterpreterUtil, Runtime}
 import coop.rchain.shared.Log
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
@@ -116,7 +116,7 @@ class InterpreterSpec extends FlatSpec with Matchers {
         .runSyncUnsafe(maxDuration)
 
     errors should not be empty
-    errors(0) shouldBe a[coop.rchain.rholang.interpreter.errors.SyntaxError]
+    errors(0) shouldBe a[error_handling.errors.SyntaxError]
   }
 
   it should "capture rholang parsing errors and charge for parsing" in {

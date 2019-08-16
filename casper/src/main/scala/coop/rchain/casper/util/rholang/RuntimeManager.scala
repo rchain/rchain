@@ -18,7 +18,7 @@ import coop.rchain.models.Validator.Validator
 import coop.rchain.models._
 import coop.rchain.rholang.interpreter.Runtime.BlockData
 import coop.rchain.rholang.interpreter.accounting._
-import coop.rchain.rholang.interpreter.errors.BugFoundError
+import coop.rchain.rholang.interpreter.error_handling.errors.BugFoundError
 import coop.rchain.rholang.interpreter.{
   ChargingReducer,
   ErrorLog,

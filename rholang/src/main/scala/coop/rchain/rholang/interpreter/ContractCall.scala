@@ -1,17 +1,13 @@
 package coop.rchain.rholang.interpreter
 
 import cats.effect.{Concurrent, Sync}
-import cats.effect.concurrent.Semaphore
+import cats.implicits._
 import coop.rchain.crypto.hash.Blake2b512Random
+import coop.rchain.metrics.Span
 import coop.rchain.models.{ListParWithRandom, Par, TaggedContinuation}
 import coop.rchain.rholang.interpreter.Runtime.RhoISpace
-import coop.rchain.rholang.interpreter.accounting.{loggingCost, noOpCostLog}
-import coop.rchain.rholang.interpreter.errors.OutOfPhlogistonsError
 import coop.rchain.rholang.interpreter.storage.implicits.matchListPar
 import coop.rchain.rspace.util.unpackCont
-import cats.implicits._
-import coop.rchain.metrics.Span
-import coop.rchain.rholang.interpreter.accounting.{Cost, CostAccounting}
 
 /**
   * This is a tool for unapplying the messages sent to the system contracts.

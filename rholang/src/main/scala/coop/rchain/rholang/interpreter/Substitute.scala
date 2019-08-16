@@ -11,7 +11,7 @@ import coop.rchain.models._
 import coop.rchain.models.rholang.implicits._
 import coop.rchain.models.rholang.sorter._
 import coop.rchain.rholang.interpreter.accounting._
-import coop.rchain.rholang.interpreter.errors.SubstituteError
+import coop.rchain.rholang.interpreter.error_handling.errors.SubstituteError
 
 trait Substitute[M[_], A] {
   def substitute(term: A)(implicit depth: Int, env: Env[Par]): M[A]

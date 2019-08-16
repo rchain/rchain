@@ -1,6 +1,6 @@
 package coop.rchain.casper.util.rholang
 
-import coop.rchain.rholang.interpreter.errors.InterpreterError
+import coop.rchain.rholang.interpreter.error_handling.errors.InterpreterError
 import coop.rchain.rspace.ReplayException
 
 sealed trait DeployStatus { self =>

@@ -1,22 +1,20 @@
 package coop.rchain.rholang.interpreter
 
 import cats.implicits._
-import cats.effect.concurrent.Ref
 import com.google.protobuf.ByteString
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.hash.{Blake2b256, Blake2b512Random}
 import coop.rchain.metrics.{NoopSpan, Span}
 import coop.rchain.models.Expr.ExprInstance._
-import coop.rchain.models._
 import coop.rchain.models.TaggedContinuation.TaggedCont.ScalaBodyRef
 import coop.rchain.models.Var.VarInstance.FreeVar
+import coop.rchain.models._
 import coop.rchain.models.rholang.implicits._
 import coop.rchain.rholang.interpreter.Runtime.{BodyRefs, RhoDispatchMap}
 import coop.rchain.rholang.interpreter.accounting._
-import coop.rchain.rholang.interpreter.errors.InterpreterError
 import coop.rchain.rholang.interpreter.storage.implicits._
-import coop.rchain.rspace.{ISpace, Match}
 import coop.rchain.rspace.internal.{Datum, Row}
+import coop.rchain.rspace.{ISpace, Match}
 import monix.eval.{Coeval, Task}
 import monix.execution.Scheduler.Implicits.global
 import org.scalatest.{FlatSpec, Matchers}

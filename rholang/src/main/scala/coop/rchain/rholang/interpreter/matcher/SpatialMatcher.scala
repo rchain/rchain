@@ -19,7 +19,7 @@ import coop.rchain.models.rholang.implicits.{VectorPar, _}
 import coop.rchain.rholang.interpreter._
 import coop.rchain.rholang.interpreter.Splittable
 import coop.rchain.rholang.interpreter.accounting._
-import coop.rchain.rholang.interpreter.errors.{BugFoundError, OutOfPhlogistonsError}
+import coop.rchain.rholang.interpreter.error_handling.errors.{BugFoundError, OutOfPhlogistonsError}
 import coop.rchain.rholang.interpreter.matcher.ParSpatialMatcherUtils.{noFrees, subPars}
 import coop.rchain.rholang.interpreter.matcher.SpatialMatcher._
 import coop.rchain.rholang.interpreter.matcher.StreamT._

@@ -1,7 +1,10 @@
 package coop.rchain.rholang.interpreter
 import java.io.{ByteArrayOutputStream, PrintStream}
 
-import coop.rchain.rholang.interpreter.errors.{InterpreterError, UnrecognizedInterpreterError}
+import coop.rchain.rholang.interpreter.error_handling.errors.{
+  InterpreterError,
+  UnrecognizedInterpreterError
+}
 import org.scalacheck.ScalacheckShapeless._
 import org.scalatest.prop.GeneratorDrivenPropertyChecks
 import org.scalatest.{Assertion, FlatSpec, Matchers}

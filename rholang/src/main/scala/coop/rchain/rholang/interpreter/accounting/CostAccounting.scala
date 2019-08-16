@@ -1,12 +1,11 @@
 package coop.rchain.rholang.interpreter.accounting
 
+import cats.Monad
 import cats.data._
 import cats.effect.Concurrent
 import cats.effect.concurrent._
 import cats.implicits._
 import cats.mtl._
-import cats.{FlatMap, Monad}
-import coop.rchain.rholang.interpreter.errors.OutOfPhlogistonsError
 
 object CostAccounting {
 

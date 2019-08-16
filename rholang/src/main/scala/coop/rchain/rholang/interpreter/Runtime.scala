@@ -18,7 +18,7 @@ import coop.rchain.models._
 import coop.rchain.models.rholang.implicits._
 import coop.rchain.rholang.interpreter.Runtime._
 import coop.rchain.rholang.interpreter.accounting.{noOpCostLog, _}
-import coop.rchain.rholang.interpreter.errors.SetupError
+import coop.rchain.rholang.interpreter.error_handling.errors.SetupError
 import coop.rchain.rholang.interpreter.storage.implicits._
 import coop.rchain.rspace.{RSpace, _}
 import coop.rchain.rspace.pure.PureRSpace

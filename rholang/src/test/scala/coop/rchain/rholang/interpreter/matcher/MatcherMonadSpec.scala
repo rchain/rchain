@@ -13,7 +13,7 @@ import coop.rchain.models.Par
 import coop.rchain.rholang.interpreter._
 import coop.rchain.rholang.interpreter.accounting._
 import coop.rchain.rholang.interpreter.accounting.CostAccounting._
-import coop.rchain.rholang.interpreter.errors.OutOfPhlogistonsError
+import coop.rchain.rholang.interpreter.error_handling.errors.OutOfPhlogistonsError
 import coop.rchain.rholang.interpreter.matcher.{run => runMatcher, _}
 import org.scalatest._
 

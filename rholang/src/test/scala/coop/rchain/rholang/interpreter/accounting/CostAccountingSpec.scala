@@ -7,7 +7,7 @@ import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.rholang.Resources
 import coop.rchain.rholang.interpreter._
 import coop.rchain.rholang.interpreter.accounting.utils._
-import coop.rchain.rholang.interpreter.errors.OutOfPhlogistonsError
+import coop.rchain.rholang.interpreter.error_handling.errors.OutOfPhlogistonsError
 import coop.rchain.shared.Log
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global

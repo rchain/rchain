@@ -20,7 +20,8 @@ import coop.rchain.models.{Match, MatchCase, _}
 import coop.rchain.rholang.interpreter.Runtime.{RhoDispatch, RhoPureSpace}
 import coop.rchain.rholang.interpreter.Substitute.{charge => _, _}
 import coop.rchain.rholang.interpreter.accounting._
-import coop.rchain.rholang.interpreter.errors._
+import coop.rchain.rholang.interpreter.error_handling.{_error, errors}
+import coop.rchain.rholang.interpreter.error_handling.errors._
 import coop.rchain.rholang.interpreter.matcher.SpatialMatcher.spatialMatchResult
 import coop.rchain.rspace.Serialize
 import coop.rchain.rspace.util._

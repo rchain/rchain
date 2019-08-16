@@ -18,7 +18,7 @@ import coop.rchain.models.Expr.ExprInstance._
 import coop.rchain.models.Var.VarInstance._
 import coop.rchain.models.Var.WildcardMsg
 import coop.rchain.models._
-import errors._
+import coop.rchain.rholang.interpreter.error_handling.errors._
 import coop.rchain.models.rholang.implicits._
 import monix.eval.Coeval
 
