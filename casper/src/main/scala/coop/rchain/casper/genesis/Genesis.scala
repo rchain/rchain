@@ -145,7 +145,8 @@ object Genesis {
     case Array(ethAddress, initRevBalanceStr, _) =>
       Try(initRevBalanceStr.toLong) match {
         case Success(initRevBalance) =>
-          Right(Vault(RevAddress.fromEthAddress(ethAddress), initRevBalance))
+          val ethAddressWithoutPrefix = ethAddress.drop(2)
+          Right(Vault(RevAddress.fromEthAddress(ethAddressWithoutPrefix), initRevBalance))
         case Failure(_) =>
           Left(s"Failed to parse given initial balance $initRevBalanceStr as long.")
       }
