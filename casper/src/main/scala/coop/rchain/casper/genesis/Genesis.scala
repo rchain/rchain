@@ -139,12 +139,15 @@ object Genesis {
     )
 
   private def fromLine(line: String): Either[String, Vault] = line.split(",") match {
-    case Array(ethAddress, initRevBalanceStr, _) =>
+    case Array(ethAddressString, initRevBalanceStr, _) =>
       Try(initRevBalanceStr.toLong) match {
-        case Success(initRevBalance) =>
-          Right(Vault(RevAddress.fromEthAddress(ethAddress), initRevBalance))
+        case Success(initRevBalance) if initRevBalance >= 0 =>
+          RevAddress
+            .fromEthAddress(ethAddressString)
+            .map(Vault(_, initRevBalance))
+            .toRight(s"Ethereum address $ethAddressString is invalid.")
         case Failure(_) =>
-          Left(s"Failed to parse given initial balance $initRevBalanceStr as long.")
+          Left(s"Failed to parse given initial balance $initRevBalanceStr as positive long.")
       }
 
     case _ => Left(s"Invalid vault specification:\n$line")
