@@ -74,6 +74,26 @@ class MultiParentCasperMergeSpec extends FlatSpec with Matchers with Inspectors 
 
   }
 
+  trait VolatileCase extends TestCase {
+
+    override def precondition(left: Rho*)(right: Rho*)(base: Rho*)(
+        implicit pos: source.Position
+    ): Effect[_] = {
+      if (left.size == 1 && right.size == 1) fail("No volatile COMM event")
+      differentPolarities(left: _*)
+      differentPolarities(right: _*)
+      ifCommEvent(left) {
+        case (rho1, rho2) =>
+          assert(matches(rho1, rho2))
+      }
+      ifCommEvent(right) {
+        case (rho1, rho2) =>
+          assert(matches(rho1, rho2))
+      }
+    }.pure[Effect]
+
+  }
+
   trait MergeableCase extends TestCase {
     def apply(left: Rho*)(right: Rho*)(
         base: Rho*
@@ -154,13 +174,37 @@ class MultiParentCasperMergeSpec extends FlatSpec with Matchers with Inspectors 
       assert(rho.forall(_.maybeCardinality.get == Linear))
   }
 
-  def onePersistent(rho: Seq[Rho])(
-      implicit
-      pos: source.Position
-  ) = {
-    assert(rho.forall(_.maybeCardinality.isDefined))
-    assert(rho.exists(_.maybeCardinality.get == NonLinear))
+  def onePersistent(rho: Seq[Rho]): Boolean =
+    rho.forall(_.maybeCardinality.isDefined) &&
+      rho.exists(_.maybeCardinality.get == NonLinear)
+
+  def matches(x: Rho, y: Rho) = {
+    val (a, b)    = if (x.maybePolarity == Some(Send)) (x, y) else (y, x)
+    val wildcards = List(F_, C_)
+    val knownMatches =
+      List(S0, R0).flatMap(s => (F0 :: C0 :: wildcards).map(r => s   -> r)) ++
+        List(S1, R1).flatMap(s => (F1 :: C1 :: wildcards).map(r => s -> r))
+
+    knownMatches.contains(a -> b)
   }
+
+  def allMatch(left: Seq[Rho], right: Seq[Rho]) =
+    (for {
+      l <- left
+      r <- right
+    } yield matches(l, r)).fold(true)(_ && _)
+
+  def someMatch(left: Seq[Rho], right: Seq[Rho]) =
+    (for {
+      l <- left
+      r <- right
+    } yield matches(l, r)).fold(false)(_ || _)
+
+  def ifCommEvent(rhos: Seq[Rho])(f: (Rho, Rho) => Assertion) =
+    if (rhos.size == 2) {
+      val rho1 :: rho2 :: scala.collection.immutable.Nil = rhos.toList
+      f(rho1, rho2)
+    }
 
   /***
    Two incoming sends/receives, at most one had a matching dual in TS.
@@ -176,6 +220,7 @@ class MultiParentCasperMergeSpec extends FlatSpec with Matchers with Inspectors 
       samePolarities(left)(right)
       differentPolarities(left)(base)
       differentPolarities(right)(base)
+      assert(!allMatch(left ++ right, base))
     }.pure[Effect]
 
   }
@@ -195,6 +240,7 @@ class MultiParentCasperMergeSpec extends FlatSpec with Matchers with Inspectors 
       samePolarities(left)(right)
       differentPolarities(left)(base)
       differentPolarities(right)(base)
+      assert(allMatch(left ++ right, base))
     }.pure[Effect]
 
   }
@@ -214,6 +260,7 @@ class MultiParentCasperMergeSpec extends FlatSpec with Matchers with Inspectors 
       samePolarities(left)(right)
       differentPolarities(left)(base)
       differentPolarities(right)(base)
+      assert(!allMatch(left ++ right, base) || onePersistent(base))
     }.pure[Effect]
 
   }
@@ -235,6 +282,7 @@ class MultiParentCasperMergeSpec extends FlatSpec with Matchers with Inspectors 
       differentPolarities(left)(right)
       crossedPolarity(left)(base)
       crossedPolarity(right)(base)
+      assert(someMatch(left, base) || someMatch(right, base))
     }.pure[Effect]
 
   }
@@ -250,6 +298,7 @@ class MultiParentCasperMergeSpec extends FlatSpec with Matchers with Inspectors 
         left: Rho*
     )(right: Rho*)(base: Rho*)(implicit pos: source.Position): Effect[_] = {
       differentPolarities(left)(right)
+      assert(someMatch(left, right))
     }.pure[Effect]
 
   }
@@ -258,17 +307,15 @@ class MultiParentCasperMergeSpec extends FlatSpec with Matchers with Inspectors 
    There was a COMM within one of the deploys.
    The other deploy saw none of it.
     */
-  object VolatileEvent extends MergeableCase {
+  object VolatileEvent extends VolatileCase with MergeableCase {
 
     override def precondition(
         left: Rho*
-    )(right: Rho*)(base: Rho*)(implicit pos: source.Position): Effect[_] = {
-      if (left.size == 1 && right.size == 1) fail("No volatile COMM event")
-      differentPolarities(left: _*)
-      allLinearWhenTwo(left)
-      differentPolarities(right: _*)
-      allLinearWhenTwo(right)
-    }.pure[Effect]
+    )(right: Rho*)(base: Rho*)(implicit pos: source.Position): Effect[_] =
+      super.precondition(left: _*)(right: _*)(base: _*) >> {
+        allLinearWhenTwo(left)
+        allLinearWhenTwo(right)
+      }.pure[Effect]
 
   }
 
@@ -278,15 +325,13 @@ class MultiParentCasperMergeSpec extends FlatSpec with Matchers with Inspectors 
    These could spawn more work.
    Mergeable if we use spatial matcher to prove they don't match.
     */
-  object PersistentCouldMatch extends ConflictingCase {
+  object PersistentCouldMatch extends VolatileCase with ConflictingCase {
     override def precondition(
         left: Rho*
-    )(right: Rho*)(base: Rho*)(implicit pos: source.Position): Effect[_] = {
-      if (left.size == 1 && right.size == 1) fail("No volatile COMM event")
-      differentPolarities(left: _*)
-      differentPolarities(right: _*)
-      onePersistent(left ++ right)
-    }.pure[Effect]
+    )(right: Rho*)(base: Rho*)(implicit pos: source.Position): Effect[_] =
+      super.precondition(left: _*)(right: _*)(base: _*) >> {
+        assert(onePersistent(left ++ right))
+      }.pure[Effect]
 
   }
 
@@ -295,16 +340,14 @@ class MultiParentCasperMergeSpec extends FlatSpec with Matchers with Inspectors 
    The other deploy had an event without a match in TS, of same polarity to the non-linear.
    These could not spawn more work.
     */
-  object PersistentNoMatch extends MergeableCase {
+  object PersistentNoMatch extends VolatileCase with MergeableCase {
 
     override def precondition(
         left: Rho*
-    )(right: Rho*)(base: Rho*)(implicit pos: source.Position): Effect[_] = {
-      if (left.size == 1 && right.size == 1) fail("No volatile COMM event")
-      differentPolarities(left: _*)
-      differentPolarities(right: _*)
-      onePersistent(left ++ right)
-    }.pure[Effect]
+    )(right: Rho*)(base: Rho*)(implicit pos: source.Position): Effect[_] =
+      super.precondition(left: _*)(right: _*)(base: _*) >> {
+        assert(onePersistent(left ++ right))
+      }.pure[Effect]
 
   }
 
