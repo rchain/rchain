@@ -51,7 +51,12 @@ class AddressTools(prefix: Array[Byte], keyLength: Int, checksumLength: Int) {
     } else None
 
   def fromEthAddress(ethAddress: String): Address = {
-    val keyHash = Keccak256.hash(Base16.unsafeDecode(ethAddress))
+    val ethAddressWithoutPrefix = if (ethAddress.startsWith("0x")) {
+      ethAddress.drop(2)
+    } else {
+      ethAddress
+    }
+    val keyHash = Keccak256.hash(Base16.unsafeDecode(ethAddressWithoutPrefix))
     val payload = prefix ++ keyHash
     Address(prefix, keyHash, computeChecksum(payload))
   }
