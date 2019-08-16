@@ -145,13 +145,10 @@ object Genesis {
     case Array(ethAddressString, initRevBalanceStr, _) =>
       Try(initRevBalanceStr.toLong) match {
         case Success(initRevBalance) =>
-          RevAddress.fromEthAddress(ethAddressString) match {
-            case Some(ethAddress) => Right(Vault(ethAddress, initRevBalance))
-            case None =>
-              Left(
-                s"Ethereum address $ethAddressString is invalid."
-              )
-          }
+          RevAddress
+            .fromEthAddress(ethAddressString)
+            .map(Vault(_, initRevBalance))
+            .toRight(s"Ethereum address $ethAddressString is invalid.")
         case Failure(_) =>
           Left(s"Failed to parse given initial balance $initRevBalanceStr as long.")
       }
