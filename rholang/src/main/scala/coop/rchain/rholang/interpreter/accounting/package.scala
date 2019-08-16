@@ -43,7 +43,7 @@ package object accounting extends Costs {
 
   def charge[F[_]: Monad](
       amount: Cost
-  )(implicit cost: _cost[F], error: _error[F]): F[Unit] =
+  )(implicit cost: _cost[F], error: _bracket[F]): F[Unit] =
     for {
       _ <- error.bracket(cost.acquire)(
             _ =>
