@@ -3,7 +3,7 @@ package coop.rchain.shared
 import monix.execution.Scheduler
 import monix.execution.schedulers.SchedulerService
 
-object RchainScheduler {
+object RChainScheduler {
   val availableProcessors: Int = java.lang.Runtime.getRuntime.availableProcessors()
   // TODO: make it configurable
   // TODO: fine tune this

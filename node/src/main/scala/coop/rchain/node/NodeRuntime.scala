@@ -60,7 +60,7 @@ class NodeRuntime private[node] (
     Scheduler.fixedPool("loop", 4, reporter = UncaughtExceptionLogger)
   private[this] val grpcScheduler =
     Scheduler.cached("grpc-io", 4, 64, reporter = UncaughtExceptionLogger)
-  private[this] val rspaceScheduler = RchainScheduler.interpreterScheduler
+  private[this] val rspaceScheduler = RChainScheduler.interpreterScheduler
 
   implicit private val logSource: LogSource = LogSource(this.getClass)
 
