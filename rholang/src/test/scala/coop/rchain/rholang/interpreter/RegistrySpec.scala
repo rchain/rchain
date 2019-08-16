@@ -12,6 +12,7 @@ import coop.rchain.models._
 import coop.rchain.models.rholang.implicits._
 import coop.rchain.rholang.interpreter.Runtime.{BodyRefs, RhoDispatchMap}
 import coop.rchain.rholang.interpreter.accounting._
+import coop.rchain.rholang.interpreter.error_handling.ErrorHandling
 import coop.rchain.rholang.interpreter.storage.implicits._
 import coop.rchain.rspace.internal.{Datum, Row}
 import coop.rchain.rspace.{ISpace, Match}
@@ -23,7 +24,7 @@ import scala.concurrent.Await
 import scala.concurrent.duration._
 
 trait RegistryTester extends PersistentStoreTester {
-  implicit val errorLog         = new ErrorLog[Task]()
+  implicit val error            = ErrorHandling.emptyError[Task].runSyncUnsafe()
   implicit val span: Span[Task] = NoopSpan[Task]
 
   private[this] def dispatchTableCreator(registry: Registry[Task]): RhoDispatchMap[Task] = {
@@ -56,9 +57,9 @@ trait RegistryTester extends PersistentStoreTester {
           ]
       ) => R
   ): R =
-    withTestSpace(errorLog) {
+    withTestSpace(error) {
       case TestFixture(space, _) =>
-        val _             = errorLog.readAndClearErrorVector().runSyncUnsafe(1.second)
+        val _             = error.getAndSet(None).runSyncUnsafe(1.second)
         implicit val cost = CostAccounting.emptyCost[Task].runSyncUnsafe(1.second)
         implicit val span = NoopSpan[Task]
 

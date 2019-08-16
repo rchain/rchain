@@ -13,6 +13,7 @@ import coop.rchain.shared.Log
 import monix.eval.Task
 import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.rholang.Resources.mkRhoISpace
+import coop.rchain.rholang.interpreter.error_handling.{_error, ErrorHandling}
 import monix.execution.Scheduler.Implicits.global
 
 import scala.concurrent.duration._
@@ -24,15 +25,14 @@ final case class TestFixture(space: RhoISpace[Task], reducer: ChargingReducer[Ta
 trait PersistentStoreTester {
 
   def withTestSpace[R](
-      errorLog: ErrorLog[Task]
+      error: _error[Task]
   )(f: TestFixture => R): R = {
     val dbDir                              = Files.createTempDirectory("rholang-interpreter-test-")
     implicit val logF: Log[Task]           = new Log.NOPLog[Task]
     implicit val metricsEff: Metrics[Task] = new metrics.Metrics.MetricsNOP[Task]
     implicit val noopSpan: Span[Task]      = NoopSpan[Task]()
-
-    implicit val cost = CostAccounting.emptyCost[Task].unsafeRunSync
-
+    implicit val cost                      = CostAccounting.emptyCost[Task].unsafeRunSync
+    implicit val e: _error[Task]           = error
     val space = (RSpace
       .create[
         Task,
@@ -42,8 +42,8 @@ trait PersistentStoreTester {
         TaggedContinuation
       ](dbDir, 1024L * 1024L * 1024L, Branch("test")))
       .unsafeRunSync
-    implicit val errLog = errorLog
-    val reducer         = RholangOnlyDispatcher.create[Task, Task.Par](space)._2
+
+    val reducer = RholangOnlyDispatcher.create[Task, Task.Par](space)._2
     reducer.setPhlo(Cost.UNSAFE_MAX).runSyncUnsafe(1.second)
     try {
       f(TestFixture(space, reducer))
@@ -54,7 +54,7 @@ trait PersistentStoreTester {
   }
 
   def fixture[R](f: (RhoISpace[Task], ChargingReducer[Task]) => Task[R])(
-      implicit errorLog: ErrorLog[Task]
+      implicit error: _error[Task]
   ): R = {
     implicit val logF: Log[Task]           = new Log.NOPLog[Task]
     implicit val metricsEff: Metrics[Task] = new metrics.Metrics.MetricsNOP[Task]

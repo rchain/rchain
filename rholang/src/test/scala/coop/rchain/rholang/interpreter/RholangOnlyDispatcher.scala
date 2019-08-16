@@ -10,6 +10,7 @@ import coop.rchain.models.TaggedContinuation.TaggedCont.{Empty, ParBody, ScalaBo
 import coop.rchain.models._
 import coop.rchain.rholang.interpreter.Runtime.RhoISpace
 import coop.rchain.rholang.interpreter.accounting._
+import coop.rchain.rholang.interpreter.error_handling._error
 import coop.rchain.rholang.interpreter.storage.implicits._
 import coop.rchain.rspace.pure.PureRSpace
 
@@ -20,7 +21,7 @@ object RholangOnlyDispatcher {
       cost: _cost[M],
       parallel: Parallel[M, F],
       s: Sync[M],
-      ft: FunctorTell[M, Throwable],
+      error: _error[M],
       spanM: Span[M]
   ): (Dispatch[M, ListParWithRandom, TaggedContinuation], ChargingReducer[M]) = {
 

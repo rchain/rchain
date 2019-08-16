@@ -18,6 +18,7 @@ import coop.rchain.models._
 import coop.rchain.models.rholang.implicits._
 import coop.rchain.rholang.interpreter.Runtime._
 import coop.rchain.rholang.interpreter.accounting.{noOpCostLog, _}
+import coop.rchain.rholang.interpreter.error_handling.{_error, ErrorHandling}
 import coop.rchain.rholang.interpreter.error_handling.errors.SetupError
 import coop.rchain.rholang.interpreter.storage.implicits._
 import coop.rchain.rspace.{RSpace, _}
@@ -31,13 +32,13 @@ class Runtime[F[_]: Sync] private (
     val replayReducer: ChargingReducer[F],
     val space: RhoISpace[F],
     val replaySpace: RhoReplayISpace[F],
-    val errorLog: ErrorLog[F],
+    val error: _error[F],
     val cost: _cost[F],
     val deployParametersRef: Ref[F, DeployParameters],
     val blockData: Ref[F, BlockData],
     val invalidBlocks: Runtime.InvalidBlocks[F]
 ) {
-  def readAndClearErrorVector(): F[Vector[Throwable]] = errorLog.readAndClearErrorVector()
+  def readAndClearErrorVector(): F[Vector[Throwable]] = error.getAndSet(None).map(_.toVector)
   def close(): F[Unit] =
     for {
       _ <- space.close()
@@ -315,8 +316,6 @@ object Runtime {
       executionContext: ExecutionContext,
       cost: _cost[F]
   ): F[Runtime[F]] = {
-    val errorLog                               = new ErrorLog[F]()
-    implicit val ft: FunctorTell[F, Throwable] = errorLog
 
     def dispatchTableCreator(
         space: RhoISpace[F],
@@ -376,8 +375,12 @@ object Runtime {
       setup                <- setupRSpace[F](dataDir, mapSize)
       deployParametersRef  <- Ref.of(DeployParameters.empty)
       blockDataRef         <- Ref.of(BlockData.empty)
+      error                <- ErrorHandling.emptyError[F]
       (space, replaySpace) = setup
       (reducer, replayReducer) = {
+
+        implicit val e: _error[F] = error
+
         lazy val replayDispatchTable: RhoDispatchMap[F] =
           dispatchTableCreator(
             replaySpace,
@@ -417,7 +420,7 @@ object Runtime {
         replayReducer,
         space,
         replaySpace,
-        errorLog,
+        error,
         cost,
         deployParametersRef,
         blockDataRef,

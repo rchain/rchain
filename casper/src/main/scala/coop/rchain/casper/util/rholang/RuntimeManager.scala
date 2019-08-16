@@ -18,6 +18,7 @@ import coop.rchain.models.Validator.Validator
 import coop.rchain.models._
 import coop.rchain.rholang.interpreter.Runtime.BlockData
 import coop.rchain.rholang.interpreter.accounting._
+import coop.rchain.rholang.interpreter.error_handling._error
 import coop.rchain.rholang.interpreter.error_handling.errors.BugFoundError
 import coop.rchain.rholang.interpreter.{
   ChargingReducer,
@@ -98,7 +99,7 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span] private[rholang] (
   ): F[EvaluateResult] =
     for {
       _      <- runtime.deployParametersRef.set(ProtoUtil.getRholangDeployParams(deploy))
-      result <- doInj(deploy, reducer, runtime.errorLog)(runtime.cost)
+      result <- doInj(deploy, reducer, runtime.error)(runtime.cost)
     } yield result
 
   def replayComputeState(startHash: StateHash)(
@@ -340,14 +341,14 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span] private[rholang] (
   private[this] def doInj(
       deploy: DeployData,
       reducer: ChargingReducer[F],
-      errorLog: ErrorLog[F]
+      error: _error[F]
   )(implicit C: _cost[F]): F[EvaluateResult] = {
     implicit val rand: Blake2b512Random = Blake2b512Random(
       DeployData.toByteArray(ProtoUtil.stripDeployData(deploy))
     )
     Interpreter[F].injAttempt(
       reducer,
-      errorLog,
+      error,
       deploy.term,
       Cost(deploy.phloLimit),
       NormalizerEnv(deploy)

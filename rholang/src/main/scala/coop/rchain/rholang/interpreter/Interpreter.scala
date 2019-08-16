@@ -4,6 +4,7 @@ import cats.effect._
 import cats.implicits._
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.rholang.interpreter.accounting._
+import coop.rchain.rholang.interpreter.error_handling._error
 
 final case class EvaluateResult(cost: Cost, errors: Vector[Throwable])
 
@@ -19,7 +20,7 @@ trait Interpreter[F[_]] {
 
   def injAttempt(
       reducer: ChargingReducer[F],
-      errorLog: ErrorLog[F],
+      error: _error[F],
       term: String,
       initialPhlo: Cost,
       normalizerEnv: NormalizerEnv
@@ -52,14 +53,14 @@ object Interpreter {
         implicit val rand: Blake2b512Random = Blake2b512Random(128)
         for {
           checkpoint <- runtime.space.createSoftCheckpoint()
-          res        <- injAttempt(runtime.reducer, runtime.errorLog, term, initialPhlo, normalizerEnv)
+          res        <- injAttempt(runtime.reducer, runtime.error, term, initialPhlo, normalizerEnv)
           _          <- if (res.errors.nonEmpty) runtime.space.revertToSoftCheckpoint(checkpoint) else S.unit
         } yield res
       }
 
       def injAttempt(
           reducer: ChargingReducer[F],
-          errorLog: ErrorLog[F],
+          error: _error[F],
           term: String,
           initialPhlo: Cost,
           normalizerEnv: NormalizerEnv
@@ -75,7 +76,7 @@ object Interpreter {
                         for {
                           result    <- reducer.inj(parsed).attempt
                           phlosLeft <- C.inspect(identity)
-                          oldErrors <- errorLog.readAndClearErrorVector()
+                          oldErrors <- error.getAndSet(None).map(_.toVector)
                           newErrors = result.swap.toSeq.toVector
                           allErrors = oldErrors |+| newErrors
                         } yield EvaluateResult(initialPhlo - phlosLeft, allErrors)

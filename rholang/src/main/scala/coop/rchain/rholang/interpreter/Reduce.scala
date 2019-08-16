@@ -68,10 +68,12 @@ class DebruijnInterpreter[M[_], F[_]](
 )(
     implicit parallel: cats.Parallel[M, F],
     syncM: Sync[M],
-    fTell: FunctorTell[M, Throwable],
+    error: _error[M],
     cost: _cost[M],
     spanM: Span[M]
 ) extends Reduce[M] {
+
+  def dummy = error
 
   private[this] val injectSpanLabel                 = "inject"
   private[this] val parSpanLabel                    = "par"
@@ -185,7 +187,7 @@ class DebruijnInterpreter[M[_], F[_]](
       indexedTerms.parTraverse_ {
         case (term, index) =>
           val random = split(index)
-          reportErrors(eval(term)(env, random, sequenceNumber))
+          eval(term)(env, random, sequenceNumber)
       }
     } else {
       //TODO: Investigate if we can avoid the shuffling and manual parallelism limiting by tweaking:
@@ -202,7 +204,7 @@ class DebruijnInterpreter[M[_], F[_]](
         _.traverse_ {
           case (term, index) =>
             val random = split(index)
-            reportErrors(eval(term)(env, random, sequenceNumber))
+            eval(term)(env, random, sequenceNumber)
         }
       }
     }
@@ -228,12 +230,6 @@ class DebruijnInterpreter[M[_], F[_]](
           case other          => BugFoundError(s"Undefined term: \n $other").raiseError[M, Unit]
         }
       case other => BugFoundError(s"Undefined term: \n $other").raiseError[M, Unit]
-    }
-
-  private def reportErrors(process: M[Unit]): M[Unit] =
-    process.handleErrorWith {
-      case e @ OutOfPhlogistonsError => e.raiseError[M, Unit]
-      case e                         => fTell.tell(e)
     }
 
   override def inj(

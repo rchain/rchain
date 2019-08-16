@@ -11,6 +11,7 @@ import coop.rchain.models.rholang.implicits._
 import coop.rchain.rholang.interpreter.Runtime.RhoISpace
 import coop.rchain.rholang.interpreter._
 import coop.rchain.rholang.interpreter.accounting.Chargeable._
+import coop.rchain.rholang.interpreter.error_handling.{_error, ErrorHandling}
 import coop.rchain.rholang.interpreter.error_handling.errors.InterpreterError
 import coop.rchain.rspace.history.Branch
 import coop.rchain.rspace._
@@ -52,9 +53,9 @@ class RholangMethodsCostsSpec
           (listN(0), 1L)
         )
         forAll(table) { (pars, n) =>
-          implicit val errLog = new ErrorLog[Task]()
-          implicit val env    = Env[Par]()
-          val method          = methodCall("nth", EList(pars), List(GInt(n)))
+          implicit val error = ErrorHandling.emptyError[Task].runSyncUnsafe()
+          implicit val env   = Env[Par]()
+          val method         = methodCall("nth", EList(pars), List(GInt(n)))
           withReducer[Assertion] { reducer =>
             for {
               err  <- reducer.evalExprToPar(method).attempt
@@ -86,9 +87,9 @@ class RholangMethodsCostsSpec
           (listN(0), 1L)
         )
         forAll(table) { (pars, n) =>
-          implicit val errLog = new ErrorLog[Task]()
-          implicit val env    = Env[Par]()
-          val method          = methodCall("nth", EList(pars), List(GInt(n)))
+          implicit val error = ErrorHandling.emptyError[Task].runSyncUnsafe()
+          implicit val env   = Env[Par]()
+          val method         = methodCall("nth", EList(pars), List(GInt(n)))
           withReducer[Assertion] { reducer =>
             for {
               err  <- reducer.evalExprToPar(method).attempt
@@ -109,8 +110,8 @@ class RholangMethodsCostsSpec
       factor: Double,
       method: Expr
   ): Assertion = {
-    implicit val errorLog = new ErrorLog[Task]()
-    implicit val env      = Env[Par]()
+    implicit val error = ErrorHandling.emptyError[Task].runSyncUnsafe()
+    implicit val env   = Env[Par]()
     withReducer { reducer =>
       for {
         _    <- reducer.evalExprToPar(method)
@@ -775,8 +776,8 @@ class RholangMethodsCostsSpec
   def emptyString: String = ""
 
   def test(method: Expr, expectedCost: Cost): Assertion = {
-    implicit val errLog = new ErrorLog[Task]()
-    implicit val env    = Env[Par]()
+    implicit val error = ErrorHandling.emptyError[Task].runSyncUnsafe()
+    implicit val env   = Env[Par]()
     withReducer[Assertion] { reducer =>
       for {
         _    <- reducer.evalExprToPar(method)
@@ -784,7 +785,7 @@ class RholangMethodsCostsSpec
       } yield assert(cost.value === expectedCost.value)
     }
   }
-  def withReducer[R](f: ChargingReducer[Task] => Task[R])(implicit errLog: ErrorLog[Task]): R = {
+  def withReducer[R](f: ChargingReducer[Task] => Task[R])(implicit error: _error[Task]): R = {
 
     val test = for {
       costAlg <- CostAccounting.emptyCost[Task]
