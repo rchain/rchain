@@ -38,7 +38,7 @@ class Runtime[F[_]: Sync] private (
     val blockData: Ref[F, BlockData],
     val invalidBlocks: Runtime.InvalidBlocks[F]
 ) {
-  def readAndClearErrorVector(): F[Vector[Throwable]] = error.getAndSet(None).map(_.toVector)
+  def readAndClearErrorReference(): F[Option[Throwable]] = error.getAndSet(None)
   def close(): F[Unit] =
     for {
       _ <- space.close()

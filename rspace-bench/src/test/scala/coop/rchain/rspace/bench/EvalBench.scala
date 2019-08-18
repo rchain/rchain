@@ -17,7 +17,7 @@ class EvalBench {
 
   import EvalBench._
 
-  def processErrors(errors: Vector[Throwable]): Unit = if (errors.nonEmpty) {
+  def processErrors(errors: Option[Throwable]): Unit = if (errors.nonEmpty) {
     throw new RuntimeException(
       errors
         .map(_.toString())
@@ -25,11 +25,11 @@ class EvalBench {
     )
   }
 
-  def createTest(state: EvalBenchStateBase): Task[Vector[Throwable]] = {
+  def createTest(state: EvalBenchStateBase): Task[Option[Throwable]] = {
     val par = state.term.getOrElse(throw new Error("Failed to prepare executable rholang term"))
     state.runtime.reducer
       .inj(par)(state.rand)
-      .flatMap(_ => state.runtime.readAndClearErrorVector())
+      .flatMap(_ => state.runtime.readAndClearErrorReference())
   }
 
   //if we run multiple tests on a single-threaded scheduler

@@ -46,7 +46,7 @@ class ReplayFineBenchState extends ReplayWideBenchState {
 abstract class ReplayWideBenchState extends WideBenchBaseState {
 
   implicit val rand: Blake2b512Random        = Blake2b512Random(128)
-  var runReplayTask: Task[Vector[Throwable]] = null
+  var runReplayTask: Task[Option[Throwable]] = null
 
   @Setup(value = Level.Iteration)
   override def doSetup(): Unit = {

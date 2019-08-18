@@ -8,7 +8,7 @@ import monix.eval.Task
 
 package object wide {
 
-  def processErrors(errors: Vector[Throwable]): Vector[Throwable] = {
+  def processErrors(errors: Option[Throwable]): Option[Throwable] = {
 
     if (errors.nonEmpty) {
       errors.foreach(_.printStackTrace())
@@ -22,10 +22,10 @@ package object wide {
   }
 
   def createTest(t: Option[Par])(
-      implicit errorProcessor: () => Vector[Throwable],
+      implicit errorProcessor: () => Option[Throwable],
       reducer: ChargingReducer[Task],
       rand: Blake2b512Random
-  ): Task[Vector[Throwable]] = {
+  ): Task[Option[Throwable]] = {
     val par = t.getOrElse(throw new Error("Failed to prepare executable rholang term"))
     reducer
       .inj(par)

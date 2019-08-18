@@ -33,9 +33,9 @@ abstract class WideBenchBaseState {
   var setupTerm: Option[Par] = None
   var term: Option[Par]      = None
 
-  var runTask: Task[Vector[Throwable]] = null
+  var runTask: Task[Option[Throwable]] = null
 
-  implicit def readErrors                 = () => runtime.readAndClearErrorVector().unsafeRunSync
+  implicit def readErrors                 = () => runtime.readAndClearErrorReference().unsafeRunSync
   implicit val logF: Log[Task]            = Log.log[Task]
   implicit val noopMetrics: Metrics[Task] = new metrics.Metrics.MetricsNOP[Task]
   implicit val noopSpan: Span[Task]       = NoopSpan[Task]()
