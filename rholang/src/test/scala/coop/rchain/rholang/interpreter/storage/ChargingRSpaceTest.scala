@@ -172,8 +172,8 @@ class ChargingRSpaceTest extends fixture.FlatSpec with TripleEqualsSupport with 
 
     val test = for {
       _         <- cost.set(initPhlos)
-      _         <- chargingRSpace.consume(channels, List(pattern), cont, false)
       _         <- chargingRSpace.produce(channels.head, data, true)
+      _         <- chargingRSpace.consume(channels, List(pattern), cont, false)
       phlosLeft <- cost.get
       _         = phlosLeft.value shouldBe (initPhlos - produceCost - matchCost).value
     } yield ()

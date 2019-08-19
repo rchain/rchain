@@ -12,6 +12,11 @@ import coop.rchain.rspace.{ContResult, Result, Match => StorageMatch}
 import scala.collection.SortedSet
 
 object ChargingRSpace {
+
+  private sealed trait TriggeredBy
+  private object Consume                                     extends TriggeredBy
+  private final case class Produce(datum: ListParWithRandom) extends TriggeredBy
+
   def storageCostConsume(
       channels: Seq[Par],
       patterns: Seq[BindPattern],
@@ -44,7 +49,10 @@ object ChargingRSpace {
         Option[(ContResult[Par, BindPattern, TaggedContinuation], Seq[Result[ListParWithRandom]])]
       ] =
         for {
-          _ <- charge[F](storageCostConsume(channels, patterns, continuation))
+          _ <- charge[F](
+                storageCostConsume(channels, patterns, continuation)
+                  .copy(operation = "consume storage")
+              )
           consRes <- space.consume(
                       channels,
                       patterns,
@@ -53,7 +61,7 @@ object ChargingRSpace {
                       sequenceNumber,
                       peeks
                     )
-          _ <- handleResult(consRes)
+          _ <- handleResult(consRes, Consume)
         } yield consRes
 
       override def install(
@@ -72,15 +80,16 @@ object ChargingRSpace {
         Option[(ContResult[Par, BindPattern, TaggedContinuation], Seq[Result[ListParWithRandom]])]
       ] =
         for {
-          _       <- charge[F](storageCostProduce(channel, data))
+          _       <- charge[F](storageCostProduce(channel, data).copy(operation = "produces storage"))
           prodRes <- space.produce(channel, data, persist, sequenceNumber)
-          _       <- handleResult(prodRes)
+          _       <- handleResult(prodRes, Produce(data))
         } yield prodRes
 
       private def handleResult(
           result: Option[
             (ContResult[Par, BindPattern, TaggedContinuation], Seq[Result[ListParWithRandom]])
-          ]
+          ],
+          triggeredBy: TriggeredBy
       ): F[Unit] =
         result match {
 
@@ -88,36 +97,39 @@ object ChargingRSpace {
 
           case Some((cont, dataList)) =>
             val refundForConsume =
-              if (cont.persistent) Cost(0)
+              if (cont.persistent && triggeredBy != Consume) Cost(0)
               else
                 storageCostConsume(cont.channels, cont.patterns, cont.value)
 
             val refundForProduces = refundForRemovingProduces(
               dataList,
-              cont.channels
+              cont.channels,
+              triggeredBy
             )
 
-            val refundValue = refundForConsume + refundForProduces
-
-            for {
-              _ <- if (refundValue == Cost(0))
-                    Sync[F].unit
-                  else charge[F](Cost(-refundValue.value, "storage refund"))
-            } yield ()
+            charge[F](Cost(-refundForConsume.value, "consume storage refund")) >>
+              charge[F](Cost(-refundForProduces.value, "produces storage refund"))
         }
 
       private def refundForRemovingProduces(
           dataList: Seq[Result[ListParWithRandom]],
-          channels: Seq[Par]
-      ): Cost =
-        dataList
+          channels: Seq[Par],
+          triggeredBy: TriggeredBy
+      ): Cost = {
+        val removedData = dataList
           .zip(channels)
-          .filterNot { case (data, _) => data.persistent }
+          // A persistent produce is charged for upfront before reaching the TS, and needs to be refunded
+          // after each iteration it matches an existing consume. We treat it as 'removed' on each such iteration.
+          .filterNot {
+            case (data, _) => data.persistent && triggeredBy != Produce(data.removedDatum)
+          }
+        removedData
           .map {
             case (data, channel) =>
-              storageCostProduce(channel, data.matchedDatum)
+              storageCostProduce(channel, data.removedDatum)
           }
           .foldLeft(Cost(0))(_ + _)
+      }
 
       override def close(): F[Unit] = space.close()
     }
