@@ -48,7 +48,7 @@ trait RegistryTester extends PersistentStoreTester {
 
   def withRegistryAndTestSpace[R](
       f: (
-          ChargingReducer[Task],
+          Reduce[Task],
           ISpace[
             Task,
             Par,
@@ -72,7 +72,7 @@ trait RegistryTester extends PersistentStoreTester {
               dispatchTable,
               Registry.testingUrnMap
             )
-        reducer.setPhlo(Cost.UNSAFE_MAX).runSyncUnsafe(1.second)
+        cost.set(Cost.UNSAFE_MAX).runSyncUnsafe(1.second)
         testInstall(space).runSyncUnsafe(1.second)
         f(reducer, space)
     }

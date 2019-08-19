@@ -32,7 +32,7 @@ class DeployParamsSpec extends fixture.FlatSpec with Matchers {
     val size      = 1024L * 1024 * 10
     (for {
       runtime <- Runtime.createWithEmptyCost[Task](dbDir, size)
-      _       <- runtime.reducer.setPhlo(Cost.UNSAFE_MAX)
+      _       <- runtime.cost.set(Cost.UNSAFE_MAX)
       outcome = try {
         test(runtime)
       } finally {

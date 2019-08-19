@@ -22,7 +22,7 @@ object RholangOnlyDispatcher {
       s: Sync[M],
       ft: FunctorTell[M, Throwable],
       spanM: Span[M]
-  ): (Dispatch[M, ListParWithRandom, TaggedContinuation], ChargingReducer[M]) = {
+  ): (Dispatch[M, ListParWithRandom, TaggedContinuation], Reduce[M]) = {
 
     val pureSpace = PureRSpace[M].of(tuplespace)(matchListPar)
 
@@ -36,13 +36,11 @@ object RholangOnlyDispatcher {
         urnMap
       )
 
-    val chargingReducer: ChargingReducer[M] = ChargingReducer[M]
-
-    (dispatcher, chargingReducer)
+    (dispatcher, reducer)
   }
 }
 
-class RholangOnlyDispatcher[M[_]](implicit s: Sync[M], chargingReducer: ChargingReducer[M])
+class RholangOnlyDispatcher[M[_]](implicit s: Sync[M], reducer: Reduce[M])
     extends Dispatch[M, ListParWithRandom, TaggedContinuation] {
 
   def dispatch(
@@ -55,7 +53,7 @@ class RholangOnlyDispatcher[M[_]](implicit s: Sync[M], chargingReducer: Charging
               case ParBody(parWithRand) =>
                 val env     = Dispatch.buildEnv(dataList)
                 val randoms = parWithRand.randomState +: dataList.toVector.map(_.randomState)
-                chargingReducer.eval(parWithRand.body)(env, Blake2b512Random.merge(randoms))
+                reducer.eval(parWithRand.body)(env, Blake2b512Random.merge(randoms))
               case ScalaBodyRef(_) =>
                 s.unit
               case Empty =>

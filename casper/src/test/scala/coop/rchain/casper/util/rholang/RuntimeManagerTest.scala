@@ -89,10 +89,10 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
           for {
             deploy <- ConstructDeploy.sourceDeployNowF(correctRholang)
 
-            _             <- runtime.reducer.setPhlo(initialPhlo)
+            _             <- runtime.cost.set(initialPhlo)
             term          <- ParBuilderUtil.buildNormalizedTerm[Task](deploy.term)
             _             <- runtime.reducer.inj(term)
-            phlosLeft     <- runtime.reducer.phlo
+            phlosLeft     <- runtime.cost.get
             reductionCost = initialPhlo - phlosLeft
 
             parsingCost = accounting.parsingCost(correctRholang)

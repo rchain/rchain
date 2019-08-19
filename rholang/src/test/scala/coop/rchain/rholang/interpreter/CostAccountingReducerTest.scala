@@ -151,7 +151,7 @@ class CostAccountingReducerTest extends FlatSpec with Matchers with TripleEquals
       val initPhlos = sendACost + sendBCost - SEND_EVAL_COST - Cost(1)
 
       for {
-        _           <- reducer.setPhlo(initPhlos)
+        _           <- cost.set(initPhlos)
         result      <- reducer.inj(program).attempt
         mappedSpace <- pureRSpace.toMap
       } yield (result, mappedSpace)

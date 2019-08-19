@@ -1,7 +1,6 @@
 package coop.rchain.rspace.bench.wide
 
 import coop.rchain.rspace.bench._
-import coop.rchain.rholang.interpreter.ChargingReducer
 import coop.rchain.rspace.bench.EvalBenchStateBase
 import java.io.{FileNotFoundException, InputStreamReader}
 import java.nio.file.{Files, Path}

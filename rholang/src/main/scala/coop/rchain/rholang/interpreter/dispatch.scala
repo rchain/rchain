@@ -24,7 +24,7 @@ object Dispatch {
 
 class RholangAndScalaDispatcher[M[_]] private (
     _dispatchTable: => Map[Long, (Seq[ListParWithRandom], Int) => M[Unit]]
-)(implicit s: Sync[M], reducer: ChargingReducer[M])
+)(implicit s: Sync[M], reducer: Reduce[M])
     extends Dispatch[M, ListParWithRandom, TaggedContinuation] {
 
   def dispatch(
@@ -64,7 +64,7 @@ object RholangAndScalaDispatcher {
       s: Sync[M],
       ft: FunctorTell[M, Throwable],
       spanM: Span[M]
-  ): (Dispatch[M, ListParWithRandom, TaggedContinuation], ChargingReducer[M], Registry[M]) = {
+  ): (Dispatch[M, ListParWithRandom, TaggedContinuation], Reduce[M], Registry[M]) = {
 
     implicit lazy val dispatcher: Dispatch[M, ListParWithRandom, TaggedContinuation] =
       new RholangAndScalaDispatcher(dispatchTable)
@@ -75,9 +75,7 @@ object RholangAndScalaDispatcher {
     lazy val chargingRSpace: RhoPureSpace[M] =
       ChargingRSpace.pureRSpace(tuplespace)
 
-    val chargingReducer: ChargingReducer[M] = ChargingReducer[M]
-
     val registry: Registry[M] = new RegistryImpl(chargingRSpace, dispatcher)
-    (dispatcher, chargingReducer, registry)
+    (dispatcher, reducer, registry)
   }
 }

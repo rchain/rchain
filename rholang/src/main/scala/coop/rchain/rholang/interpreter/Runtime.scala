@@ -27,8 +27,8 @@ import coop.rchain.shared.Log
 import scala.concurrent.ExecutionContext
 
 class Runtime[F[_]: Sync] private (
-    val reducer: ChargingReducer[F],
-    val replayReducer: ChargingReducer[F],
+    val reducer: Reduce[F],
+    val replayReducer: Reduce[F],
     val space: RhoISpace[F],
     val replaySpace: RhoReplayISpace[F],
     val errorLog: ErrorLog[F],

@@ -104,7 +104,7 @@ object CostAccountingPropertyTest {
     val prefix = "cost-accounting-property-test"
     mkRuntime[Task](prefix, 1024 * 1024).use { runtime =>
       for {
-        _    <- runtime.reducer.setPhlo(Cost.UNSAFE_MAX)
+        _    <- runtime.cost.set(Cost.UNSAFE_MAX)
         _    <- Runtime.injectEmptyRegistryRoot[Task](runtime.space, runtime.replaySpace)
         cost <- CostAccounting.emptyCost[Task]
         res <- {

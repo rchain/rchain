@@ -19,7 +19,7 @@ import scala.concurrent.duration._
 import coop.rchain.shared.PathOps._
 import coop.rchain.rholang.interpreter.storage.implicits._
 
-final case class TestFixture(space: RhoISpace[Task], reducer: ChargingReducer[Task])
+final case class TestFixture(space: RhoISpace[Task], reducer: Reduce[Task])
 
 trait PersistentStoreTester {
 
@@ -44,7 +44,7 @@ trait PersistentStoreTester {
       .unsafeRunSync
     implicit val errLog = errorLog
     val reducer         = RholangOnlyDispatcher.create[Task, Task.Par](space)._2
-    reducer.setPhlo(Cost.UNSAFE_MAX).runSyncUnsafe(1.second)
+    cost.set(Cost.UNSAFE_MAX).runSyncUnsafe(1.second)
     try {
       f(TestFixture(space, reducer))
     } finally {
@@ -53,7 +53,7 @@ trait PersistentStoreTester {
     }
   }
 
-  def fixture[R](f: (RhoISpace[Task], ChargingReducer[Task]) => Task[R])(
+  def fixture[R](f: (RhoISpace[Task], Reduce[Task]) => Task[R])(
       implicit errorLog: ErrorLog[Task]
   ): R = {
     implicit val logF: Log[Task]           = new Log.NOPLog[Task]
@@ -67,7 +67,7 @@ trait PersistentStoreTester {
             implicit val c = cost
             RholangOnlyDispatcher.create[Task, Task.Par](rspace)._2
           }
-          _   <- reducer.setPhlo(Cost.UNSAFE_MAX)
+          _   <- cost.set(Cost.UNSAFE_MAX)
           res <- f(rspace, reducer)
         } yield res
       }

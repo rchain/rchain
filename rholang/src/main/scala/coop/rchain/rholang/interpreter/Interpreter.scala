@@ -18,7 +18,7 @@ trait Interpreter[F[_]] {
   ): F[EvaluateResult]
 
   def injAttempt(
-      reducer: ChargingReducer[F],
+      reducer: Reduce[F],
       errorLog: ErrorLog[F],
       term: String,
       initialPhlo: Cost,
@@ -58,7 +58,7 @@ object Interpreter {
       }
 
       def injAttempt(
-          reducer: ChargingReducer[F],
+          reducer: Reduce[F],
           errorLog: ErrorLog[F],
           term: String,
           initialPhlo: Cost,
