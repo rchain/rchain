@@ -4,7 +4,6 @@ import java.lang
 
 import cats.effect.Sync
 import cats.implicits._
-import cats.mtl.FunctorTell
 import cats.{Eval => _}
 import com.google.protobuf.ByteString
 import coop.rchain.crypto.codec.Base16
@@ -27,6 +26,7 @@ import coop.rchain.rspace.Serialize
 import coop.rchain.rspace.util._
 import monix.eval.Coeval
 import scalapb.GeneratedMessage
+import coop.rchain.rholang.interpreter.error_handling._
 
 import scala.collection.immutable.BitSet
 import scala.util.{Random, Try}
@@ -73,8 +73,6 @@ class DebruijnInterpreter[M[_], F[_]](
     spanM: Span[M]
 ) extends Reduce[M] {
 
-  def dummy = error
-
   private[this] val injectSpanLabel                 = "inject"
   private[this] val parSpanLabel                    = "par"
   private[this] val sendSpanLabel                   = "send"
@@ -106,12 +104,14 @@ class DebruijnInterpreter[M[_], F[_]](
     def go(res: Application): M[Unit] =
       res match {
         case Some((continuation, dataList, updatedSequenceNumber, peek)) =>
-          if (persistent && !peek)
-            List(
-              dispatcher.dispatch(continuation, dataList, updatedSequenceNumber),
-              produce(chan, data, persistent, sequenceNumber)
-            ).parSequence_
-          else dispatcher.dispatch(continuation, dataList, updatedSequenceNumber)
+          runAndReportErrors[M] {
+            if (persistent && !peek)
+              List(
+                dispatcher.dispatch(continuation, dataList, updatedSequenceNumber),
+                produce(chan, data, persistent, sequenceNumber)
+              ).parSequence_
+            else dispatcher.dispatch(continuation, dataList, updatedSequenceNumber)
+          }
         case None => syncM.unit
       }
     pureRSpace.produce(chan, data, persist = persistent, sequenceNumber) >>= (go(_))
@@ -137,12 +137,14 @@ class DebruijnInterpreter[M[_], F[_]](
     def go(res: Application): M[Unit] =
       res match {
         case Some((continuation, dataList, updatedSequenceNumber, _)) =>
-          if (persistent)
-            List(
-              dispatcher.dispatch(continuation, dataList, updatedSequenceNumber),
-              consume(binds, body, persistent, peek, sequenceNumber)
-            ).parSequence_
-          else dispatcher.dispatch(continuation, dataList, updatedSequenceNumber)
+          runAndReportErrors[M] {
+            if (persistent)
+              List(
+                dispatcher.dispatch(continuation, dataList, updatedSequenceNumber),
+                consume(binds, body, persistent, peek, sequenceNumber)
+              ).parSequence_
+            else dispatcher.dispatch(continuation, dataList, updatedSequenceNumber)
+          }
         case None => syncM.unit
       }
     pureRSpace.consume(
@@ -184,10 +186,12 @@ class DebruijnInterpreter[M[_], F[_]](
 
     val indexedTerms = terms.zipWithIndex.toList
     if (terms.size <= Reduce.parallelism) {
-      indexedTerms.parTraverse_ {
-        case (term, index) =>
-          val random = split(index)
-          eval(term)(env, random, sequenceNumber)
+      runAndReportErrors[M] {
+        indexedTerms.parTraverse_ {
+          case (term, index) =>
+            val random = split(index)
+            runAndReportErrors[M](eval(term)(env, random, sequenceNumber))
+        }
       }
     } else {
       //TODO: Investigate if we can avoid the shuffling and manual parallelism limiting by tweaking:
@@ -200,11 +204,13 @@ class DebruijnInterpreter[M[_], F[_]](
       // we index terms before shuffling to have deterministic Blake2b512Random seeds for each term
       val indexedTermsShuffled = Random.shuffle(indexedTerms)
       val groups               = indexedTermsShuffled.groupBy(_._2 % Reduce.parallelism).values.toList
-      groups.parTraverse_ {
-        _.traverse_ {
-          case (term, index) =>
-            val random = split(index)
-            eval(term)(env, random, sequenceNumber)
+      runAndReportErrors[M] {
+        groups.parTraverse_ {
+          _.traverse_ {
+            case (term, index) =>
+              val random = split(index)
+              runAndReportErrors[M](eval(term)(env, random, sequenceNumber))
+          }
         }
       }
     }
