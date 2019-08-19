@@ -34,8 +34,7 @@ class GrpcTransportServer(
     maxMessageSize: Int,
     maxStreamMessageSize: Long,
     tempFolder: Path,
-    parallelism: Int,
-    tracing: Boolean
+    parallelism: Int
 )(
     implicit scheduler: Scheduler,
     rPConfAsk: RPConfAsk[Task],
@@ -79,10 +78,7 @@ class GrpcTransportServer(
   ): Task[Cancelable] = {
 
     val dispatchSend: Send => Task[Unit] =
-      s =>
-        dispatch(s.msg)
-          .executeWithOptions(TaskContrib.enableTracing(tracing))
-          .attemptAndLog >> metrics.incrementCounter("dispatched.messages")
+      s => dispatch(s.msg).attemptAndLog >> metrics.incrementCounter("dispatched.messages")
 
     val dispatchBlob: StreamMessage => Task[Unit] =
       msg =>
@@ -90,7 +86,7 @@ class GrpcTransportServer(
           case Left(ex) =>
             Log[Task].error("Could not restore data from file while handling stream", ex)
           case Right(blob) =>
-            handleStreamed(blob).executeWithOptions(TaskContrib.enableTracing(tracing))
+            handleStreamed(blob)
         }) >> metrics.incrementCounter("dispatched.packets")
 
     for {
@@ -128,8 +124,7 @@ object GrpcTransportServer {
       maxMessageSize: Int,
       maxStreamMessageSize: Long,
       folder: Path,
-      parallelism: Int,
-      tracing: Boolean
+      parallelism: Int
   )(
       implicit scheduler: Scheduler,
       rPConfAsk: RPConfAsk[Task],
@@ -147,8 +142,7 @@ object GrpcTransportServer {
         maxMessageSize,
         maxStreamMessageSize,
         folder,
-        parallelism,
-        tracing
+        parallelism
       )
     )
   }

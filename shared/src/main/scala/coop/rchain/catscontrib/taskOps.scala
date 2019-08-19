@@ -8,19 +8,11 @@ import scala.concurrent.Await
 import scala.concurrent.duration._
 
 object TaskContrib {
-  def enableTracing(tracing: Boolean): Task.Options => Task.Options =
-    opts => if (tracing) opts.enableLocalContextPropagation else opts
 
   implicit class TaskOps[A](task: Task[A]) {
     def unsafeRunSync(implicit scheduler: Scheduler): A =
       Await.result(
         task.runToFuture,
-        Duration.Inf
-      )
-
-    def unsafeRunSyncTracing(tracing: Boolean)(implicit scheduler: Scheduler): A =
-      Await.result(
-        task.executeWithOptions(enableTracing(tracing)).runToFuture,
         Duration.Inf
       )
 

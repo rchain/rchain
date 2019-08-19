@@ -49,7 +49,7 @@ object Main {
 
     Task
       .defer(logUnknownConfigurationKeys(configuration) >> mainProgram(configuration))
-      .unsafeRunSyncTracing(configuration.kamon.zipkin)
+      .unsafeRunSync
   }
 
   private def logUnknownConfigurationKeys(conf: Configuration): Task[Unit] =
@@ -141,7 +141,7 @@ object Main {
         proposeService.close()
         replService.close()
         deployService.close()
-        console.close.unsafeRunSyncTracing(conf.kamon.zipkin)(scheduler)
+        console.close.unsafeRunSync(scheduler)
       }
     ) >> program
   }

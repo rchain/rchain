@@ -26,8 +26,7 @@ package object api {
       port: Int,
       runtime: Runtime[Task],
       grpcExecutor: Scheduler,
-      blockApiLock: Semaphore[Task],
-      tracing: Boolean
+      blockApiLock: Semaphore[Task]
   )(
       implicit worker: Scheduler,
       safetyOracle: SafetyOracle[Task],
@@ -46,7 +45,7 @@ package object api {
         )
         .addService(
           ProposeServiceGrpcMonix
-            .bindService(ProposeGrpcService.instance(blockApiLock, tracing), grpcExecutor)
+            .bindService(ProposeGrpcService.instance(blockApiLock), grpcExecutor)
         )
         .build
     )
@@ -54,8 +53,7 @@ package object api {
   def acquireExternalServer[F[_]: Concurrent: Log: SafetyOracle: BlockStore: Taskable: Span](
       port: Int,
       grpcExecutor: Scheduler,
-      blockApiLock: Semaphore[F],
-      tracing: Boolean
+      blockApiLock: Semaphore[F]
   )(implicit worker: Scheduler, engineCell: EngineCell[F]): F[Server[F]] =
     GrpcServer[F](
       NettyServerBuilder
@@ -64,11 +62,11 @@ package object api {
         .maxMessageSize(maxMessageSize)
         .addService(
           DeployServiceGrpcMonix
-            .bindService(DeployGrpcService.instance(blockApiLock, tracing), grpcExecutor)
+            .bindService(DeployGrpcService.instance(blockApiLock), grpcExecutor)
         )
         .addService(
           ProposeServiceGrpcMonix
-            .bindService(ProposeGrpcService.instance(blockApiLock, tracing), grpcExecutor)
+            .bindService(ProposeGrpcService.instance(blockApiLock), grpcExecutor)
         )
         .build
     )

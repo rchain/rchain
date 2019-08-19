@@ -113,8 +113,7 @@ class NodeRuntime private[node] (
                               conf.server.maxMessageSize,
                               conf.server.maxStreamMessageSize,
                               conf.server.dataDir.resolve("tmp").resolve("comm"),
-                              conf.server.messageConsumers,
-                              conf.kamon.zipkin
+                              conf.server.messageConsumers
                             )(grpcScheduler, rPConfAsk, log, metrics)
                           )
 
@@ -122,16 +121,14 @@ class NodeRuntime private[node] (
                             .acquireExternalServer[Task](
                               conf.grpcServer.portExternal,
                               grpcScheduler,
-                              blockApiLock,
-                              conf.kamon.zipkin
+                              blockApiLock
                             )
       internalApiServer <- api
                             .acquireInternalServer(
                               conf.grpcServer.portInternal,
                               runtime,
                               grpcScheduler,
-                              blockApiLock,
-                              conf.kamon.zipkin
+                              blockApiLock
                             )
 
       prometheusReporter = new NewPrometheusReporter()
@@ -192,7 +189,7 @@ class NodeRuntime private[node] (
       _ <- log.info("Bringing BlockStore down ...")
       _ <- blockStore.close()
       _ <- log.info("Goodbye.")
-    } yield ()).unsafeRunSyncTracing(conf.kamon.zipkin)(scheduler)
+    } yield ()).unsafeRunSync(scheduler)
 
   def addShutdownHook(servers: Servers, runtime: Runtime[Task], casperRuntime: Runtime[Task])(
       implicit blockStore: BlockStore[Task],
@@ -316,26 +313,8 @@ class NodeRuntime private[node] (
         }
       } >> exit0.as(Right(()))
 
-  private def localScope(source: Metrics.Source): Task[ApplicativeLocal[Task, TraceId]] =
-    TaskLocal[TraceId](Trace.next)
-      .map { ls =>
-        new DefaultApplicativeLocal[Task, TraceId] {
-          val tl: TaskLocal[TraceId] = ls
-
-          override def local[A](f: TraceId => TraceId)(fa: Task[A]): Task[A] =
-            tl.read.flatMap(t => tl.bind(f(t))(fa))
-
-          override val applicative: Applicative[Task] = Applicative[Task]
-
-          override def ask: Task[TraceId] = tl.read
-        }
-      }
-
   private def setupSpan(enabled: Boolean, networkId: String, host: String): Task[Span[Task]] =
-    if (!enabled) Task.now(Span.noop[Task])
-    else
-      localScope(Metrics.BaseSource)
-        .map(implicit ls => diagnostics.effects.span[Task](networkId, host))
+    Task.now(Span.noop[Task])
 
   private val rpClearConnConf = ClearConnectionsConf(
     numOfConnectionsPinged = 10
@@ -503,10 +482,7 @@ class NodeRuntime private[node] (
     envVars         = EnvVars.envVars[Task]
     raiseIOError    = IOError.raiseIOErrorThroughSync[Task]
     requestedBlocks <- Cell.mvarCell[Task, Map[BlockHash, Running.Requested]](Map.empty)
-    casperInit = new CasperInit[Task](
-      conf.casper,
-      conf.kamon.zipkin
-    )
+    casperInit      = new CasperInit[Task](conf.casper)
     _ <- CasperLaunch[Task](casperInit, identity)(
           lab,
           metrics,

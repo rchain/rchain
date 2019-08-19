@@ -26,8 +26,7 @@ import monix.execution.Scheduler
 object CasperLaunch {
 
   class CasperInit[F[_]](
-      val conf: CasperConf,
-      val tracing: Boolean
+      val conf: CasperConf
   )
   def apply[F[_]: LastApprovedBlock: Metrics: Span: BlockStore: ConnectionsCell: NodeDiscovery: TransportLayer: RPConfAsk: SafetyOracle: LastFinalizedBlockCalculator: Sync: Concurrent: Time: Log: EventLog: BlockDagStorage: EngineCell: EnvVars: RaiseIOError: RuntimeManager: Running.RequestedBlocks](
       init: CasperInit[F],
@@ -45,7 +44,7 @@ object CasperLaunch {
       case None if (init.conf.createGenesis) =>
         val msg =
           "ApprovedBlock not found in storage, taking part in ceremony as ceremony master"
-        val action = initBootstrap[F](init, toTask, init.tracing)
+        val action = initBootstrap[F](init, toTask)
         (msg, action)
       case None =>
         val msg    = "ApprovedBlock not found in storage, connecting to existing network"
@@ -101,8 +100,7 @@ object CasperLaunch {
 
   def initBootstrap[F[_]: Monad: Sync: LastApprovedBlock: Time: Log: EventLog: RPConfAsk: BlockStore: ConnectionsCell: TransportLayer: Concurrent: Metrics: Span: SafetyOracle: LastFinalizedBlockCalculator: BlockDagStorage: EngineCell: EnvVars: RaiseIOError: RuntimeManager: Running.RequestedBlocks](
       init: CasperInit[F],
-      toTask: F[_] => Task[_],
-      tracing: Boolean
+      toTask: F[_] => Task[_]
   )(implicit scheduler: Scheduler): F[Unit] =
     for {
       genesis <- Genesis.fromInputFiles[F](
@@ -132,7 +130,7 @@ object CasperLaunch {
                   init.conf.shardId,
                   validatorId
                 )
-            ).executeWithOptions(TaskContrib.enableTracing(tracing)).forkAndForget.runToFuture
+            ).forkAndForget.runToFuture
             ().pure[F]
           }
       _ <- EngineCell[F].set(new GenesisCeremonyMaster[F](abp))
