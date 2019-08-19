@@ -48,26 +48,29 @@ trait RegistryTester extends PersistentStoreTester {
   }
 
   override def fixture[R](
-      f: (RhoISpace[Task], ChargingReducer[Task]) => Task[R]
-  )(implicit error: _error[Task]): R = {
+      expectedError: Option[Throwable] = None
+  )(f: (RhoISpace[Task], ChargingReducer[Task]) => Task[R]): R = {
     implicit val logF: Log[Task]           = new Log.NOPLog[Task]
     implicit val metricsEff: Metrics[Task] = new metrics.Metrics.MetricsNOP[Task]
     implicit val noopSpan: Span[Task]      = NoopSpan[Task]()
     mkRhoISpace[Task]("rholang-interpreter-test-")
       .use { rspace =>
         for {
-          _    <- error.set(None)
-          cost <- CostAccounting.emptyCost[Task]
+          cost  <- CostAccounting.emptyCost[Task]
+          error <- ErrorHandling.emptyError[Task]
           reducer = {
             implicit val c: _cost[Task]                  = cost
+            implicit val e: _error[Task]                 = error
             lazy val dispatchTable: RhoDispatchMap[Task] = dispatchTableCreator(registry)
             lazy val (_, reducer, registry) =
               RholangAndScalaDispatcher.create(rspace, dispatchTable, Registry.testingUrnMap)
             reducer
           }
-          _   <- reducer.setPhlo(Cost.UNSAFE_MAX)
-          _   <- testInstall(rspace)
-          res <- f(rspace, reducer)
+          _           <- reducer.setPhlo(Cost.UNSAFE_MAX)
+          _           <- testInstall(rspace)
+          res         <- f(rspace, reducer)
+          actualError <- error.get
+          _           = assert(actualError === expectedError)
         } yield res
       }
       .runSyncUnsafe(10.seconds)
@@ -796,12 +799,10 @@ class RegistrySpec extends FlatSpec with Matchers with RegistryTester {
     checkResult(result, "result6", GUri(expectedUri), result6Rand)
   }
 
-  private def evaluate(completePar: Par)(implicit rand: Blake2b512Random) = {
-    implicit val error: _error[Task] = ErrorHandling.emptyError[Task].runSyncUnsafe(1.second)
-    fixture { (space, reducer) =>
+  private def evaluate(completePar: Par)(implicit rand: Blake2b512Random) =
+    fixture() { (space, reducer) =>
       implicit val env = Env[Par]()
       reducer.eval(completePar) >> space.toMap
     }
-  }
 
 }
