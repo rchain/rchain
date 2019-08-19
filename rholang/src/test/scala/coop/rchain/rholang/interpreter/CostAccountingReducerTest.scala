@@ -97,11 +97,12 @@ class CostAccountingReducerTest extends FlatSpec with Matchers with TripleEquals
     implicit val cost           = CostAccounting.initialCost[Task](Cost(1000)).runSyncUnsafe(1.second)
     val (_, chargingReducer, _) = RholangAndScalaDispatcher.create(iSpace, Map.empty, Map.empty)
     val send                    = Send(Par(exprs = Seq(GString("x"))), Seq(Par()))
-    val test                    = chargingReducer.inj(send).attempt.runSyncUnsafe(1.second)
-    assert(test === Left(OutOfPhlogistonsError))
+    chargingReducer.inj(send).attempt.runSyncUnsafe(1.second)
+    val runtimeError = error.get.runSyncUnsafe(1.second)
+    assert(runtimeError.contains(OutOfPhlogistonsError))
   }
 
-  it should "stop interpreter threads as soon as deploy runs out of phlo" ignore {
+  it should "stop interpreter threads as soon as deploy runs out of phlo" in {
     // Given
     // new x in { @x!("a") | @x!("b") }
     // and not enough phlos to reduce successfully
@@ -177,12 +178,11 @@ class CostAccountingReducerTest extends FlatSpec with Matchers with TripleEquals
       map.get(List(channel)) === Some(data(p, rand))
 
     (for {
-      res           <- mkRhoISpace[Task]("cost-accounting-reducer-test-").use(testImplementation(_))
-      (result, map) = res
-      errors        <- error.getAndSet(None)
-      _             = assert(errors === Vector.empty)
-      _             = assert(result === Left(OutOfPhlogistonsError))
-      _             = assert(stored(map, a, rand.splitByte(0)) || stored(map, b, rand.splitByte(1)))
+      res      <- mkRhoISpace[Task]("cost-accounting-reducer-test-").use(testImplementation)
+      (_, map) = res
+      errors   <- error.get
+      _        = assert(errors.contains(OutOfPhlogistonsError))
+      _        = assert(stored(map, a, rand.splitByte(0)) || stored(map, b, rand.splitByte(1)))
     } yield ()).runSyncUnsafe(5.seconds)
 
   }
