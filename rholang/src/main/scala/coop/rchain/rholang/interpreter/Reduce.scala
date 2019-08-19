@@ -40,10 +40,11 @@ object Reduce {
   */
 trait Reduce[M[_]] {
 
+  // TODO: Remove `sequenceNumber` default argument.
   def eval(par: Par)(
       implicit env: Env[Par],
       rand: Blake2b512Random,
-      sequenceNumber: Int
+      sequenceNumber: Int = 0
   ): M[Unit]
 
   def inj(
