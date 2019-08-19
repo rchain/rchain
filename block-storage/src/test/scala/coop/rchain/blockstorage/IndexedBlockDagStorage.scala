@@ -14,34 +14,32 @@ final class IndexedBlockDagStorage[F[_]: Monad](
     idToBlocksRef: Ref[F, Map[Long, BlockMessage]],
     currentIdRef: Ref[F, Long]
 ) extends BlockDagStorage[F] {
+
   def getRepresentation: F[BlockDagRepresentation[F]] =
-    for {
-      _      <- lock.acquire
-      result <- underlying.getRepresentation
-      _      <- lock.release
-    } yield result
+    lock.withPermit(
+      underlying.getRepresentation
+    )
+
   def insert(
       block: BlockMessage,
       genesis: BlockMessage,
       invalid: Boolean
   ): F[BlockDagRepresentation[F]] =
-    for {
-      _          <- lock.acquire
-      _          <- underlying.insert(block, genesis, invalid)
-      _          <- lock.release
-      updatedDag <- getRepresentation
-    } yield updatedDag
+    lock.withPermit(
+      underlying.insert(block, genesis, invalid) >> underlying.getRepresentation
+    )
+
   def insertIndexed(block: BlockMessage, genesis: BlockMessage, invalid: Boolean): F[BlockMessage] =
+    lock.withPermit(
     for {
-      _                 <- lock.acquire
-      body              = block.body.get
-      header            = block.header.get
       currentId         <- currentIdRef.get
-      nextId            = if (block.seqNum == 0) currentId + 1L else block.seqNum.toLong
       dag               <- underlying.getRepresentation
       nextCreatorSeqNum <- dag.latestMessage(block.sender).map(_.fold(-1)(_.seqNum) + 1)
+      body              = block.body.get
+      nextId            = if (block.seqNum == 0) currentId + 1L else block.seqNum.toLong
       newPostState      = body.getState.withBlockNumber(nextId)
       newPostStateHash  = Blake2b256.hash(newPostState.toByteArray)
+      header            = block.header.get
       modifiedBlock = block
         .withBody(body.withState(newPostState))
         .withHeader(header.withPostStateHash(ByteString.copyFrom(newPostStateHash)))
@@ -49,38 +47,32 @@ final class IndexedBlockDagStorage[F[_]: Monad](
       _ <- underlying.insert(modifiedBlock, genesis, invalid)
       _ <- idToBlocksRef.update(_.updated(nextId, modifiedBlock))
       _ <- currentIdRef.set(nextId)
-      _ <- lock.release
-    } yield modifiedBlock
+    } yield modifiedBlock)
+
   def inject(index: Int, block: BlockMessage, genesis: BlockMessage, invalid: Boolean): F[Unit] =
-    for {
-      _ <- lock.acquire
-      _ <- idToBlocksRef.update(_.updated(index.toLong, block))
-      _ <- underlying.insert(block, genesis, invalid)
-      _ <- lock.release
-    } yield ()
+    lock.withPermit(
+      idToBlocksRef.update(_.updated(index.toLong, block)) >> underlying.insert(block, genesis, invalid)
+    ).void
 
   def accessEquivocationsTracker[A](f: EquivocationsTracker[F] => F[A]): F[A] =
     lock.withPermit(
       underlying.accessEquivocationsTracker(f)
     )
+
   def checkpoint(): F[Unit] = underlying.checkpoint()
+
   def clear(): F[Unit] =
-    for {
-      _ <- lock.acquire
-      _ <- underlying.clear()
-      _ <- idToBlocksRef.set(Map.empty)
-      _ <- currentIdRef.set(-1)
-      _ <- lock.release
-    } yield ()
+    lock.withPermit(
+      underlying.clear() >> idToBlocksRef.set(Map.empty) >> currentIdRef.set(-1)
+    )
+
   def close(): F[Unit] = underlying.close()
+
   def lookupById(id: Int): F[Option[BlockMessage]] =
-    for {
-      idToBlocks <- idToBlocksRef.get
-    } yield idToBlocks.get(id.toLong)
+    idToBlocksRef.get.map(_.get(id.toLong))
+
   def lookupByIdUnsafe(id: Int): F[BlockMessage] =
-    for {
-      idToBlocks <- idToBlocksRef.get
-    } yield idToBlocks(id.toLong)
+    idToBlocksRef.get.map(_(id.toLong))
 }
 
 object IndexedBlockDagStorage {

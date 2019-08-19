@@ -81,14 +81,15 @@ final class InMemBlockDagStorage[F[_]: Concurrent: Sync: Log: BlockStore](
   }
 
   override def getRepresentation: F[BlockDagRepresentation[F]] =
+    lock.withPermit(getRepresentationInternal)
+
+  private def getRepresentationInternal: F[BlockDagRepresentation[F]] =
     for {
-      _              <- lock.acquire
       latestMessages <- latestMessagesRef.get
       childMap       <- childMapRef.get
       dataLookup     <- dataLookupRef.get
       topoSort       <- topoSortRef.get
       invalidBlocks  <- invalidBlocksRef.get
-      _              <- lock.release
     } yield InMemBlockDagRepresentation(
       latestMessages,
       childMap,
@@ -102,66 +103,69 @@ final class InMemBlockDagStorage[F[_]: Concurrent: Sync: Log: BlockStore](
       genesis: BlockMessage,
       invalid: Boolean
   ): F[BlockDagRepresentation[F]] =
-    for {
-      _             <- lock.acquire
-      blockMetadata = BlockMetadata.fromBlock(block, invalid)
-      _             <- dataLookupRef.update(_.updated(block.blockHash, blockMetadata))
-      _ <- childMapRef.update(
-            childMap =>
-              parentHashes(block).foldLeft(childMap) {
-                case (acc, p) =>
-                  val currChildren = acc.getOrElse(p, HashSet.empty[BlockHash])
-                  acc.updated(p, currChildren + block.blockHash)
-              }
-          )
-      _ <- topoSortRef.update(topoSort => TopologicalSortUtil.update(topoSort, 0L, block))
-      newValidators = bonds(block)
-        .map(_.validator)
-        .toSet
-        .diff(block.justifications.map(_.validator).toSet)
-      newValidatorsLatestMessages = newValidators.map(v => (v, genesis.blockHash))
-      newValidatorsWithSenderLatestMessages <- if (block.sender.isEmpty) {
-                                                // Ignore empty sender for special cases such as genesis block
-                                                Log[F].warn(
-                                                  s"Block ${Base16.encode(block.blockHash.toByteArray)} sender is empty"
-                                                ) >> newValidatorsLatestMessages.pure[F]
-                                              } else if (block.sender.size() == BlockHash.Length) {
-                                                (newValidatorsLatestMessages + (
-                                                  (
-                                                    block.sender,
-                                                    block.blockHash
+    lock.withPermit(
+      for {
+        blockMetadata <- Sync[F].delay(BlockMetadata.fromBlock(block, invalid))
+        _             <- dataLookupRef.update(_.updated(block.blockHash, blockMetadata))
+        _ <- childMapRef.update(
+              childMap =>
+                parentHashes(block).foldLeft(childMap) {
+                  case (acc, p) =>
+                    val currChildren = acc.getOrElse(p, HashSet.empty[BlockHash])
+                    acc.updated(p, currChildren + block.blockHash)
+                }
+            )
+        _ <- topoSortRef.update(topoSort => TopologicalSortUtil.update(topoSort, 0L, block))
+        newValidators = bonds(block)
+          .map(_.validator)
+          .toSet
+          .diff(block.justifications.map(_.validator).toSet)
+        newValidatorsLatestMessages = newValidators.map(v => (v, genesis.blockHash))
+        newValidatorsWithSenderLatestMessages <- if (block.sender.isEmpty) {
+                                                  // Ignore empty sender for special cases such as genesis block
+                                                  Log[F].warn(
+                                                    s"Block ${Base16.encode(block.blockHash.toByteArray)} sender is empty"
+                                                  ) >> newValidatorsLatestMessages.pure[F]
+                                                } else if (block.sender
+                                                             .size() == BlockHash.Length) {
+                                                  (newValidatorsLatestMessages + (
+                                                    (
+                                                      block.sender,
+                                                      block.blockHash
+                                                    )
+                                                  )).pure[F]
+                                                } else {
+                                                  Sync[F].raiseError[Set[(ByteString, ByteString)]](
+                                                    BlockSenderIsMalformed(block)
                                                   )
-                                                )).pure[F]
-                                              } else {
-                                                Sync[F].raiseError[Set[(ByteString, ByteString)]](
-                                                  BlockSenderIsMalformed(block)
-                                                )
-                                              }
-      _ <- latestMessagesRef.update { latestMessages =>
-            newValidatorsWithSenderLatestMessages.foldLeft(latestMessages) {
-              case (acc, (validator, blockHash)) => acc.updated(validator, blockHash)
+                                                }
+        _ <- latestMessagesRef.update { latestMessages =>
+              newValidatorsWithSenderLatestMessages.foldLeft(latestMessages) {
+                case (acc, (validator, blockHash)) => acc.updated(validator, blockHash)
+              }
             }
-          }
-      _   <- if (invalid) invalidBlocksRef.update(_ + blockMetadata) else ().pure[F]
-      _   <- lock.release
-      dag <- getRepresentation
-    } yield dag
+        _   <- if (invalid) invalidBlocksRef.update(_ + blockMetadata) else ().pure[F]
+        dag <- getRepresentationInternal
+      } yield dag
+    )
 
   override def accessEquivocationsTracker[A](f: EquivocationsTracker[F] => F[A]): F[A] =
     lock.withPermit(
       f(InMemEquivocationsTracker)
     )
   override def checkpoint(): F[Unit] = ().pure[F]
+
   override def clear(): F[Unit] =
-    for {
-      _ <- lock.acquire
-      _ <- dataLookupRef.set(Map.empty)
-      _ <- childMapRef.set(Map.empty)
-      _ <- topoSortRef.set(Vector.empty)
-      _ <- latestMessagesRef.set(Map.empty)
-      _ <- equivocationsTrackerRef.set(Set.empty)
-      _ <- lock.release
-    } yield ()
+    lock.withPermit(
+      for {
+        _ <- dataLookupRef.set(Map.empty)
+        _ <- childMapRef.set(Map.empty)
+        _ <- topoSortRef.set(Vector.empty)
+        _ <- latestMessagesRef.set(Map.empty)
+        _ <- equivocationsTrackerRef.set(Set.empty)
+      } yield ()
+    )
+
   override def close(): F[Unit] = ().pure[F]
 }
 
