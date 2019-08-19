@@ -74,25 +74,21 @@ class MultiParentCasperMergeSpec extends FlatSpec with Matchers with Inspectors 
 
   }
 
-  trait VolatileCase extends TestCase {
-
-    override def precondition(left: Rho*)(right: Rho*)(base: Rho*)(
-        implicit pos: source.Position
-    ): Effect[_] = {
-      if (left.size == 1 && right.size == 1) fail("No volatile COMM event")
-      differentPolarities(left: _*)
-      differentPolarities(right: _*)
-      ifCommEvent(left) {
-        case (rho1, rho2) =>
-          assert(matches(rho1, rho2))
-      }
-      ifCommEvent(right) {
-        case (rho1, rho2) =>
-          assert(matches(rho1, rho2))
-      }
-    }.pure[Effect]
-
-  }
+  def volatileEventPrecondition(left: Rho*)(right: Rho*)(base: Rho*)(
+      implicit pos: source.Position
+  ): Effect[_] = {
+    if (left.size == 1 && right.size == 1) fail("No volatile COMM event")
+    differentPolarities(left: _*)
+    differentPolarities(right: _*)
+    ifTwo(left) {
+      case (rho1, rho2) =>
+        assert(matches(rho1, rho2))
+    }
+    ifTwo(right) {
+      case (rho1, rho2) =>
+        assert(matches(rho1, rho2))
+    }
+  }.pure[Effect]
 
   trait MergeableCase extends TestCase {
     def apply(left: Rho*)(right: Rho*)(
@@ -113,7 +109,7 @@ class MultiParentCasperMergeSpec extends FlatSpec with Matchers with Inspectors 
   def samePolarities(left: Seq[Rho])(right: Seq[Rho])(
       implicit
       pos: source.Position
-  ) =
+  ): Seq[Assertion] =
     for {
       leftPolarity  <- left.flatMap(_.maybePolarity)
       rightPolarity <- right.flatMap(_.maybePolarity)
@@ -124,11 +120,10 @@ class MultiParentCasperMergeSpec extends FlatSpec with Matchers with Inspectors 
   def differentPolarities(rho: Rho*)(
       implicit
       pos: source.Position
-  ): Any =
-    if (rho.size == 2) {
-      val rho1 :: rho2 :: scala.collection.immutable.Nil = rho.toList
-      differentPolarities(rho1)(rho2)
-    }
+  ): Assertion = {
+    val polarities = rho.flatMap(_.maybePolarity)
+    polarities should contain theSameElementsAs (polarities.toSet)
+  }
 
   def differentPolarities(left: Rho)(right: Rho)(
       implicit
@@ -146,24 +141,10 @@ class MultiParentCasperMergeSpec extends FlatSpec with Matchers with Inspectors 
       assert(leftPolarity !== rightPolarity)
     }
 
-  def crossedPolarity(rhos: Seq[Rho])(base: Seq[Rho])(
-      implicit
-      pos: source.Position
-  ) = if (rhos.size == 1 && base.size == 2) {
-    val rho :: scala.collection.immutable.Nil            = rhos.toList
-    val base1 :: base2 :: scala.collection.immutable.Nil = base.toList
-    assert(
-      ((rho.maybePolarity === base1.maybePolarity) && (rho.maybePolarity !== base2.maybePolarity)) || ((rho.maybePolarity !== base1.maybePolarity) && (rho.maybePolarity === base2.maybePolarity))
-    )
-  }
-
   def allLinear(rho: Seq[Rho])(
       implicit
       pos: source.Position
-  ) = {
-    assert(rho.forall(_.maybeCardinality.isDefined))
-    assert(rho.forall(_.maybeCardinality.get == Linear))
-  }
+  ): Assertion = assert(rho.forall(_.maybeCardinality == Some(Linear)))
 
   def allLinearWhenTwo(rho: Seq[Rho])(
       implicit
@@ -174,11 +155,16 @@ class MultiParentCasperMergeSpec extends FlatSpec with Matchers with Inspectors 
       assert(rho.forall(_.maybeCardinality.get == Linear))
   }
 
-  def onePersistent(rho: Seq[Rho]): Boolean =
-    rho.forall(_.maybeCardinality.isDefined) &&
-      rho.exists(_.maybeCardinality.get == NonLinear)
+  def atLeastOnePersistent(rho: Seq[Rho]): Boolean =
+    rho.flatMap(_.maybeCardinality).exists(_ == NonLinear)
 
-  def matches(x: Rho, y: Rho) = {
+  def findMatch(x: Rho, base: Seq[Rho]): Option[Rho] =
+    base.find(matches(x, _)).headOption
+
+  def hasMatch(x: Rho, base: Seq[Rho]): Boolean =
+    findMatch(x, base).isDefined
+
+  def matches(x: Rho, y: Rho): Boolean = {
     val (a, b)    = if (x.maybePolarity == Some(Send)) (x, y) else (y, x)
     val wildcards = List(F_, C_)
     val knownMatches =
@@ -200,7 +186,13 @@ class MultiParentCasperMergeSpec extends FlatSpec with Matchers with Inspectors 
       r <- right
     } yield matches(l, r)).fold(false)(_ || _)
 
-  def ifCommEvent(rhos: Seq[Rho])(f: (Rho, Rho) => Assertion) =
+  def expectOne[A](rhos: Seq[Rho])(f: (Rho) => A): A =
+    if (rhos.size == 1) {
+      val rho1 :: scala.collection.immutable.Nil = rhos.toList
+      f(rho1)
+    } else fail(s"Expected a single Rho but got $rhos")
+
+  def ifTwo(rhos: Seq[Rho])(f: (Rho, Rho) => Assertion) =
     if (rhos.size == 2) {
       val rho1 :: rho2 :: scala.collection.immutable.Nil = rhos.toList
       f(rho1, rho2)
@@ -220,7 +212,11 @@ class MultiParentCasperMergeSpec extends FlatSpec with Matchers with Inspectors 
       samePolarities(left)(right)
       differentPolarities(left)(base)
       differentPolarities(right)(base)
-      assert(!allMatch(left ++ right, base))
+
+      (expectOne(left) { findMatch(_, base) }, expectOne(right) { findMatch(_, base) }) match {
+        case (Some(m1), Some(m2)) => fail(s"Expected at most one match but got $m1 and $m2")
+        case _                    => succeed
+      }
     }.pure[Effect]
 
   }
@@ -240,7 +236,14 @@ class MultiParentCasperMergeSpec extends FlatSpec with Matchers with Inspectors 
       samePolarities(left)(right)
       differentPolarities(left)(base)
       differentPolarities(right)(base)
-      assert(allMatch(left ++ right, base))
+
+      (expectOne(left) { findMatch(_, base) }, expectOne(right) { findMatch(_, base) }) match {
+        case (Some(m1), Some(m2)) =>
+          assert(
+            m1 == m2 && m1.maybeCardinality == Some(Linear) || m2.maybeCardinality == Some(Linear)
+          )
+        case (m1, m2) => fail(s"Expected two matches but got $m1 and $m2")
+      }
     }.pure[Effect]
 
   }
@@ -260,7 +263,16 @@ class MultiParentCasperMergeSpec extends FlatSpec with Matchers with Inspectors 
       samePolarities(left)(right)
       differentPolarities(left)(base)
       differentPolarities(right)(base)
-      assert(!allMatch(left ++ right, base) || onePersistent(base))
+
+      (expectOne(left) { findMatch(_, base) }, expectOne(right) { findMatch(_, base) }) match {
+        case (Some(m1), Some(m2)) =>
+          assert(
+            m1 != m2 || m1.maybeCardinality == Some(NonLinear) || m2.maybeCardinality == Some(
+              NonLinear
+            )
+          )
+        case (m1, m2) => fail(s"Expected two matches but got $m1 and $m2")
+      }
     }.pure[Effect]
 
   }
@@ -280,9 +292,19 @@ class MultiParentCasperMergeSpec extends FlatSpec with Matchers with Inspectors 
         left: Rho*
     )(right: Rho*)(base: Rho*)(implicit pos: source.Position): Effect[_] = {
       differentPolarities(left)(right)
-      crossedPolarity(left)(base)
-      crossedPolarity(right)(base)
-      assert(someMatch(left, base) || someMatch(right, base))
+
+      expectOne(left) { left =>
+        expectOne(right) { right =>
+          val (a, b) = if (left.maybeCardinality == Some(Linear)) (left, right) else (right, left)
+          assert(
+            a.maybeCardinality == Some(Linear) && (b.maybeCardinality == Some(Linear) || hasMatch(
+              a,
+              base
+            ))
+          )
+        }
+      }
+
     }.pure[Effect]
 
   }
@@ -307,12 +329,12 @@ class MultiParentCasperMergeSpec extends FlatSpec with Matchers with Inspectors 
    There was a COMM within one of the deploys.
    The other deploy saw none of it.
     */
-  object VolatileEvent extends VolatileCase with MergeableCase {
+  object VolatileEvent extends MergeableCase {
 
     override def precondition(
         left: Rho*
     )(right: Rho*)(base: Rho*)(implicit pos: source.Position): Effect[_] =
-      super.precondition(left: _*)(right: _*)(base: _*) >> {
+      volatileEventPrecondition(left: _*)(right: _*)(base: _*) >> {
         allLinearWhenTwo(left)
         allLinearWhenTwo(right)
       }.pure[Effect]
@@ -325,12 +347,12 @@ class MultiParentCasperMergeSpec extends FlatSpec with Matchers with Inspectors 
    These could spawn more work.
    Mergeable if we use spatial matcher to prove they don't match.
     */
-  object PersistentCouldMatch extends VolatileCase with ConflictingCase {
+  object PersistentCouldMatch extends ConflictingCase {
     override def precondition(
         left: Rho*
     )(right: Rho*)(base: Rho*)(implicit pos: source.Position): Effect[_] =
-      super.precondition(left: _*)(right: _*)(base: _*) >> {
-        assert(onePersistent(left ++ right))
+      volatileEventPrecondition(left: _*)(right: _*)(base: _*) >> {
+        assert(atLeastOnePersistent(left ++ right))
       }.pure[Effect]
 
   }
@@ -340,13 +362,13 @@ class MultiParentCasperMergeSpec extends FlatSpec with Matchers with Inspectors 
    The other deploy had an event without a match in TS, of same polarity to the non-linear.
    These could not spawn more work.
     */
-  object PersistentNoMatch extends VolatileCase with MergeableCase {
+  object PersistentNoMatch extends MergeableCase {
 
     override def precondition(
         left: Rho*
     )(right: Rho*)(base: Rho*)(implicit pos: source.Position): Effect[_] =
-      super.precondition(left: _*)(right: _*)(base: _*) >> {
-        assert(onePersistent(left ++ right))
+      volatileEventPrecondition(left: _*)(right: _*)(base: _*) >> {
+        assert(atLeastOnePersistent(left ++ right))
       }.pure[Effect]
 
   }
@@ -434,7 +456,7 @@ class MultiParentCasperMergeSpec extends FlatSpec with Matchers with Inspectors 
     "4! C!"     -> CouldMatchSameMerges(F0)(C1)(S0, S1),
     "CX CX"     -> SamePolarityMerge(C_)(C_)(Nil),
     "CX C!"     -> CouldMatchSameConflicts(C0)(C0)(S0),
-    "CX C!"     -> CouldMatchSameMerges(C1)(C0)(S0),
+    "CX C!"     -> SamePolarityMerge(C1)(C0)(S0),
     "C! C!"     -> CouldMatchSameConflicts(C_)(C_)(S0),
     "C! C!"     -> CouldMatchSameMerges(C0)(C1)(S0, S1),
     "CX !!X"    -> IncomingCouldMatch(R0)(C_)(Nil),
