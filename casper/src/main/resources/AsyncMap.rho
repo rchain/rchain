@@ -1,6 +1,23 @@
+/*
+ The table below describes the required computations and their dependencies
+
+ No. | Dependency | Computation method | Result
+ ----+------------+--------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------
+ 1.  |            | given              | sk = 634e0c91a56a94c6b876af8c8d0682dfcbe96b3b8f4d87fea06d72fd9eea635c
+ 2.  |            | given              | timestamp = 1566323852884
+ 3.  |            | lastNonce          | nonce = 9223372036854775807
+ 4.  | 1,         | secp256k1          | pk = 040d9b9a04a7574bfbbce95eaa7bccb8e63bb4bffb617be2dfcd0bcee7d744f8b34a967c28fb5c6c497923c7d2385eb14a45c42378720235eace46a2ce949784bf
+ 5.  | 4, 2,      | genIds             | uname = Unforgeable(0xd57718c311ee536be37e9d706bfa39c554434b8a47056ead4aae0885f455e0a0)
+ 6.  | 3, 5,      | registry           | value = (9223372036854775807, bundle+ {   Unforgeable(0xd57718c311ee536be37e9d706bfa39c554434b8a47056ead4aae0885f455e0a0) })
+ 7.  | 6,         | protobuf           | toSign = 2a40aa013d0a0d2a0b10feffffffffffffffff010a2c5a2a0a263a240a220a20d57718c311ee536be37e9d706bfa39c554434b8a47056ead4aae0885f455e0a01001
+ 8.  | 7, 1,      | secp256k1          | sig = 3045022100c0e13111ecf63bc33f022f72b35498be9fec98939057ace3446ec96a52aca8ab0220330f5c89a4afe68309f32d67df1337a3b63dab3c6d6c1ed4e93bfb3c1ef4bc3f
+ 9.  | 4,         | registry           | uri = rho:id:9nw585aaqszdai4k9qdh88ysoy1hqddacyhunrs93t9qeuedo9m8ja
+ ----+------------+--------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------
+ */
+
 // Rholang map desiderata: speedy insert & lookup,  no conflicts on lookup, no conflicts on inserts to different keys
 // This implementation: O(log n) insert & lookup; also provides O(1) lookup when it is known that the value at a key exists.
-// Conflict analysis
+// Conflict analysis, once peek has been implemented
 //   Lookup
 //     When looking up a value, only peeks are used, so lookups will not conflict.
 //   Insert
@@ -32,7 +49,7 @@
 //   }
 // }
 
-new AsyncMap, o(`rho:io:stdout`) in {
+new AsyncMap, rs(`rho:registry:insertSigned:secp256k1`), uriOut in {
   new MakeCell, ByteArrayToNybbleList, AsyncMapSetter, AsyncMapGetter, powersCh in {
     powersCh!([1,2,4,8,16,32,64,128,256,512,1024,2048,4096,8192,16384,32768,65536]) |
     for (@powers <- powersCh) {
@@ -204,5 +221,11 @@ new AsyncMap, o(`rho:io:stdout`) in {
         }
       }
     }
-  }
+  } |
+  rs!(
+    "040d9b9a04a7574bfbbce95eaa7bccb8e63bb4bffb617be2dfcd0bcee7d744f8b34a967c28fb5c6c497923c7d2385eb14a45c42378720235eace46a2ce949784bf".hexToBytes(),
+    (9223372036854775807, bundle+{*AsyncMap}),
+    "3045022100c0e13111ecf63bc33f022f72b35498be9fec98939057ace3446ec96a52aca8ab0220330f5c89a4afe68309f32d67df1337a3b63dab3c6d6c1ed4e93bfb3c1ef4bc3f".hexToBytes(),
+    *uriOut
+  )
 }
