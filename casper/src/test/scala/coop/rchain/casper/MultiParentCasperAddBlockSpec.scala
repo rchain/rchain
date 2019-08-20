@@ -124,6 +124,17 @@ class MultiParentCasperAddBlockSpec extends FlatSpec with Matchers with Inspecto
     }
   }
 
+  it should "create valid blocks when peek syntax is present in a deploy" in effectTest {
+    HashSetCasperTestNode.standaloneEff(genesis).use { node =>
+      val source = " for(@x <<- @0){ Nil } | @0!(0) "
+      for {
+        deploy <- ConstructDeploy.sourceDeployNowF[Effect](source)
+        block  <- node.addBlock(deploy)
+        result <- node.casperEff.contains(block.blockHash) shouldBeF true
+      } yield result
+    }
+  }
+
   it should "reject unsigned blocks" in effectTest {
     HashSetCasperTestNode.standaloneEff(genesis).use { node =>
       implicit val timeEff = new LogicalTime[Effect]
