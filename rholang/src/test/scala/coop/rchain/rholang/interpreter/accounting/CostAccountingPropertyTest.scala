@@ -105,7 +105,6 @@ object CostAccountingPropertyTest {
     mkRuntime[Task](prefix, 1024 * 1024).use { runtime =>
       for {
         _    <- runtime.cost.set(Cost.UNSAFE_MAX)
-        _    <- Runtime.injectEmptyRegistryRoot[Task](runtime.space, runtime.replaySpace)
         cost <- CostAccounting.emptyCost[Task]
         res <- {
           implicit val c = cost

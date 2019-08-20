@@ -93,33 +93,21 @@ object Runtime {
   }
 
   object BodyRefs {
-    val STDOUT: Long                       = 0L
-    val STDOUT_ACK: Long                   = 1L
-    val STDERR: Long                       = 2L
-    val STDERR_ACK: Long                   = 3L
-    val ED25519_VERIFY: Long               = 4L
-    val SHA256_HASH: Long                  = 5L
-    val KECCAK256_HASH: Long               = 6L
-    val BLAKE2B256_HASH: Long              = 7L
-    val SECP256K1_VERIFY: Long             = 9L
-    val REG_LOOKUP: Long                   = 10L
-    val REG_LOOKUP_CALLBACK: Long          = 11L
-    val REG_INSERT: Long                   = 12L
-    val REG_INSERT_CALLBACK: Long          = 13L
-    val REG_DELETE: Long                   = 14L
-    val REG_DELETE_ROOT_CALLBACK: Long     = 15L
-    val REG_DELETE_CALLBACK: Long          = 16L
-    val REG_PUBLIC_LOOKUP: Long            = 17L
-    val REG_PUBLIC_REGISTER_RANDOM: Long   = 18L
-    val REG_REGISTER_INSERT_CALLBACK: Long = 19L
-    val REG_PUBLIC_REGISTER_SIGNED: Long   = 20L
-    val REG_NONCE_INSERT_CALLBACK: Long    = 21L
-    val GET_DEPLOY_PARAMS: Long            = 22L
-    val GET_BLOCK_DATA: Long               = 23L
-    val GET_INVALID_BLOCKS: Long           = 24L
-    val REV_ADDRESS: Long                  = 25L
-    val DEPLOYER_ID_OPS: Long              = 26L
-    val REG_OPS: Long                      = 27L
+    val STDOUT: Long             = 0L
+    val STDOUT_ACK: Long         = 1L
+    val STDERR: Long             = 2L
+    val STDERR_ACK: Long         = 3L
+    val ED25519_VERIFY: Long     = 4L
+    val SHA256_HASH: Long        = 5L
+    val KECCAK256_HASH: Long     = 6L
+    val BLAKE2B256_HASH: Long    = 7L
+    val SECP256K1_VERIFY: Long   = 9L
+    val GET_DEPLOY_PARAMS: Long  = 10L
+    val GET_BLOCK_DATA: Long     = 11L
+    val GET_INVALID_BLOCKS: Long = 12L
+    val REV_ADDRESS: Long        = 13L
+    val DEPLOYER_ID_OPS: Long    = 14L
+    val REG_OPS: Long            = 15L
   }
 
   def byteName(b: Byte): Par = GPrivate(ByteString.copyFrom(Array[Byte](b)))
@@ -134,18 +122,15 @@ object Runtime {
     val KECCAK256_HASH: Par     = GString("keccak256Hash")
     val BLAKE2B256_HASH: Par    = byteName(7)
     val SECP256K1_VERIFY: Par   = byteName(8)
-    val REG_LOOKUP: Par         = byteName(9)
-    val REG_INSERT_RANDOM: Par  = byteName(10)
-    val REG_INSERT_SIGNED: Par  = byteName(11)
-    val GET_DEPLOY_PARAMS: Par  = byteName(12)
-    val GET_BLOCK_DATA: Par     = byteName(13)
-    val GET_INVALID_BLOCKS: Par = byteName(14)
-    val REV_ADDRESS: Par        = byteName(15)
-    val DEPLOYER_ID_OPS: Par    = byteName(16)
-    val REG_LOOKUP2: Par        = byteName(17)
-    val REG_INSERT_RANDOM2: Par = byteName(18)
-    val REG_INSERT_SIGNED2: Par = byteName(19)
-    val REG_OPS: Par            = byteName(20)
+    val GET_DEPLOY_PARAMS: Par  = byteName(9)
+    val GET_BLOCK_DATA: Par     = byteName(10)
+    val GET_INVALID_BLOCKS: Par = byteName(11)
+    val REV_ADDRESS: Par        = byteName(12)
+    val DEPLOYER_ID_OPS: Par    = byteName(13)
+    val REG_LOOKUP: Par         = byteName(14)
+    val REG_INSERT_RANDOM: Par  = byteName(15)
+    val REG_INSERT_SIGNED: Par  = byteName(16)
+    val REG_OPS: Par            = byteName(17)
   }
 
   private def introduceSystemProcesses[F[_]: Sync: _cost: Span](
@@ -174,7 +159,6 @@ object Runtime {
     final case class Context[F[_]: Concurrent: Span](
         space: RhoTuplespace[F],
         dispatcher: RhoDispatch[F],
-        registry: Registry[F],
         deployParametersRef: Ref[F, DeployParameters],
         blockData: Ref[F, BlockData],
         invalidBlocks: InvalidBlocks[F]
@@ -224,22 +208,6 @@ object Runtime {
         ctx: SystemProcess.Context[F] =>
           ctx.systemProcesses.stdErrAck
       }),
-    SystemProcess.Definition[F](
-      "rho:registry:insertArbitrary",
-      FixedChannels.REG_INSERT_RANDOM,
-      2,
-      BodyRefs.REG_PUBLIC_REGISTER_RANDOM, { ctx =>
-        ctx.registry.publicRegisterRandom
-      }
-    ),
-    SystemProcess.Definition[F](
-      "rho:registry:insertSigned:secp256k1",
-      FixedChannels.REG_INSERT_SIGNED,
-      4,
-      BodyRefs.REG_PUBLIC_REGISTER_SIGNED, { ctx =>
-        ctx.registry.publicRegisterSigned
-      }
-    ),
     SystemProcess.Definition[F](
       "rho:deploy:params",
       FixedChannels.GET_DEPLOY_PARAMS,
@@ -334,7 +302,6 @@ object Runtime {
     def dispatchTableCreator(
         space: RhoTuplespace[F],
         dispatcher: RhoDispatch[F],
-        registry: Registry[F],
         deployParametersRef: Ref[F, DeployParameters],
         blockData: Ref[F, BlockData],
         invalidBlocks: InvalidBlocks[F]
@@ -342,39 +309,28 @@ object Runtime {
       val systemProcesses = SystemProcesses[F](dispatcher, space)
       import BodyRefs._
       Map(
-        ED25519_VERIFY               -> systemProcesses.ed25519Verify,
-        SHA256_HASH                  -> systemProcesses.sha256Hash,
-        KECCAK256_HASH               -> systemProcesses.keccak256Hash,
-        BLAKE2B256_HASH              -> systemProcesses.blake2b256Hash,
-        SECP256K1_VERIFY             -> systemProcesses.secp256k1Verify,
-        REG_LOOKUP                   -> (registry.lookup(_, _)),
-        REG_LOOKUP_CALLBACK          -> (registry.lookupCallback(_, _)),
-        REG_INSERT                   -> (registry.insert(_, _)),
-        REG_INSERT_CALLBACK          -> (registry.insertCallback(_, _)),
-        REG_REGISTER_INSERT_CALLBACK -> (registry.registerInsertCallback(_, _)),
-        REG_DELETE                   -> (registry.delete(_, _)),
-        REG_DELETE_ROOT_CALLBACK     -> (registry.deleteRootCallback(_, _)),
-        REG_DELETE_CALLBACK          -> (registry.deleteCallback(_, _)),
-        REG_PUBLIC_LOOKUP            -> (registry.publicLookup(_, _)),
-        REG_NONCE_INSERT_CALLBACK    -> (registry.nonceInsertCallback(_, _))
+        ED25519_VERIFY   -> systemProcesses.ed25519Verify,
+        SHA256_HASH      -> systemProcesses.sha256Hash,
+        KECCAK256_HASH   -> systemProcesses.keccak256Hash,
+        BLAKE2B256_HASH  -> systemProcesses.blake2b256Hash,
+        SECP256K1_VERIFY -> systemProcesses.secp256k1Verify
       ) ++
         (stdSystemProcesses[F] ++ extraSystemProcesses)
           .map(
             _.toDispatchTable(
               SystemProcess
-                .Context(space, dispatcher, registry, deployParametersRef, blockData, invalidBlocks)
+                .Context(space, dispatcher, deployParametersRef, blockData, invalidBlocks)
             )
           )
     }
 
     val urnMap: Map[String, Par] = Map[String, Par](
-      "rho:crypto:secp256k1Verify"    -> Bundle(FixedChannels.SECP256K1_VERIFY, writeFlag = true),
-      "rho:crypto:blake2b256Hash"     -> Bundle(FixedChannels.BLAKE2B256_HASH, writeFlag = true),
-      "rho:registry:lookup"           -> Bundle(FixedChannels.REG_LOOKUP, writeFlag = true),
-      "rho:registry:lookup2"          -> Bundle(FixedChannels.REG_LOOKUP2, writeFlag = true),
-      "rho:registry:insertArbitrary2" -> Bundle(FixedChannels.REG_INSERT_RANDOM2, writeFlag = true),
-      "rho:registry:insertSigned2:secp256k1" -> Bundle(
-        FixedChannels.REG_INSERT_SIGNED2,
+      "rho:crypto:secp256k1Verify"   -> Bundle(FixedChannels.SECP256K1_VERIFY, writeFlag = true),
+      "rho:crypto:blake2b256Hash"    -> Bundle(FixedChannels.BLAKE2B256_HASH, writeFlag = true),
+      "rho:registry:lookup"          -> Bundle(FixedChannels.REG_LOOKUP, writeFlag = true),
+      "rho:registry:insertArbitrary" -> Bundle(FixedChannels.REG_INSERT_RANDOM, writeFlag = true),
+      "rho:registry:insertSigned:secp256k1" -> Bundle(
+        FixedChannels.REG_INSERT_SIGNED,
         writeFlag = true
       )
     ) ++ (stdSystemProcesses[F] ++ extraSystemProcesses).map(_.toUrnMap)
@@ -388,8 +344,7 @@ object Runtime {
         (FixedChannels.SHA256_HASH, 2, None, SHA256_HASH),
         (FixedChannels.KECCAK256_HASH, 2, None, KECCAK256_HASH),
         (FixedChannels.BLAKE2B256_HASH, 2, None, BLAKE2B256_HASH),
-        (FixedChannels.SECP256K1_VERIFY, 4, None, SECP256K1_VERIFY),
-        (FixedChannels.REG_LOOKUP, 2, None, REG_PUBLIC_LOOKUP)
+        (FixedChannels.SECP256K1_VERIFY, 4, None, SECP256K1_VERIFY)
       ) ++ (stdSystemProcesses[F] ++ extraSystemProcesses).map(_.toProcDefs)
     }
 
@@ -405,13 +360,12 @@ object Runtime {
           dispatchTableCreator(
             chargingReplaySpace,
             replayDispatcher,
-            replayRegistry,
             deployParametersRef,
             blockDataRef,
             invalidBlocks
           )
 
-        lazy val (replayDispatcher, replayReducer, replayRegistry) =
+        lazy val (replayDispatcher, replayReducer) =
           RholangAndScalaDispatcher.create(
             chargingReplaySpace,
             replayDispatchTable,
@@ -423,13 +377,12 @@ object Runtime {
           dispatchTableCreator(
             chargingRSpace,
             dispatcher,
-            registry,
             deployParametersRef,
             blockDataRef,
             invalidBlocks
           )
 
-        lazy val (dispatcher, reducer, registry) =
+        lazy val (dispatcher, reducer) =
           RholangAndScalaDispatcher.create(chargingRSpace, dispatchTable, urnMap)
 
         (reducer, replayReducer)
@@ -464,43 +417,6 @@ object Runtime {
       _    <- runtime.reducer.inj(RegistryBootstrap.AST)
       _    <- runtime.replayReducer.inj(RegistryBootstrap.AST)
       _    <- runtime.cost.set(cost)
-    } yield ()
-  }
-
-  def injectEmptyRegistryRoot[F[_]](space: RhoISpace[F], replaySpace: RhoReplayISpace[F])(
-      implicit F: Concurrent[F]
-  ): F[Unit] = {
-    // This random value stays dead in the tuplespace, so we can have some fun.
-    // This is from Jeremy Bentham's "Defence of Usury"
-    val rand = Blake2b512Random(
-      ("there can be no such thing as usury: " +
-        "for what rate of interest is there that can naturally be more proper than another?")
-        .getBytes()
-    )
-
-    for {
-      spaceResult <- space.produce(
-                      Registry.registryRoot,
-                      ListParWithRandom(Seq(Registry.emptyMap), rand),
-                      false,
-                      0
-                    )
-      replayResult <- replaySpace.produce(
-                       Registry.registryRoot,
-                       ListParWithRandom(Seq(Registry.emptyMap), rand),
-                       false,
-                       0
-                     )
-      _ <- spaceResult match {
-            case None =>
-              replayResult match {
-                case None => F.unit
-                case Some(_) =>
-                  SetupError("Registry insertion in replay fired continuation.").raiseError[F, Unit]
-              }
-            case Some(_) =>
-              SetupError("Registry insertion fired continuation.").raiseError[F, Unit]
-          }
     } yield ()
   }
 

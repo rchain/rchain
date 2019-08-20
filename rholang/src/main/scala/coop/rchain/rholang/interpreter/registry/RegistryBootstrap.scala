@@ -8,9 +8,9 @@ import coop.rchain.rholang.interpreter.Runtime.FixedChannels
 object RegistryBootstrap {
   val AST: Par = Par(
     news = Seq(
-      bootstrap(FixedChannels.REG_LOOKUP2),
-      bootstrap(FixedChannels.REG_INSERT_RANDOM2),
-      bootstrap(FixedChannels.REG_INSERT_SIGNED2)
+      bootstrap(FixedChannels.REG_LOOKUP),
+      bootstrap(FixedChannels.REG_INSERT_RANDOM),
+      bootstrap(FixedChannels.REG_INSERT_SIGNED)
     )
   )
 

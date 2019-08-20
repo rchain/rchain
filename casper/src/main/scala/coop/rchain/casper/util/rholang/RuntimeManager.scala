@@ -373,7 +373,6 @@ object RuntimeManager {
     for {
       _                <- runtime.space.clear()
       _                <- runtime.replaySpace.clear()
-      _                <- Runtime.injectEmptyRegistryRoot(runtime.space, runtime.replaySpace)
       _                <- Runtime.bootstrapRegistry(runtime)
       checkpoint       <- runtime.space.createCheckpoint()
       replayCheckpoint <- runtime.replaySpace.createCheckpoint()
