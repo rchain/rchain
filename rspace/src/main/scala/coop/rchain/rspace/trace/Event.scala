@@ -40,7 +40,7 @@ object Event {
 final case class COMM(
     consume: Consume,
     produces: Seq[Produce],
-    peeks: SortedSet[Int] = SortedSet.empty
+    peeks: SortedSet[Int]
 ) extends Event {
   def nextSequenceNumber: Int =
     Math.max(
