@@ -255,7 +255,8 @@ class Node:
 
     def show_block_parsed(self, hash: str) -> Dict[str, str]:
         show_block_output = self.show_block(hash)
-        return parse_show_block_output(show_block_output)
+        block_info = parse_show_block_output(show_block_output)
+        return block_info
 
     def get_block(self, block_hash: str) -> str:
         try:
@@ -305,7 +306,9 @@ class Node:
         return self.rnode_command('eval', rho_file_path)
 
     def deploy(self, rho_file_path: str, private_key: PrivateKey) -> str:
-        return extract_deploy_id_from_deploy_output(self.rnode_command('deploy', '--private-key={}'.format(private_key.to_hex()), '--phlo-limit=1000000', '--phlo-price=1', rho_file_path, stderr=False))
+        output = self.rnode_command('deploy', '--private-key={}'.format(private_key.to_hex()), '--phlo-limit=1000000', '--phlo-price=1', rho_file_path, stderr=False)
+        deploy_id = extract_deploy_id_from_deploy_output(output)
+        return deploy_id
 
     def get_vdag(self) -> str:
         return self.rnode_command('vdag')
@@ -326,12 +329,19 @@ class Node:
         return extract_deploy_id_from_deploy_output(deploy_out)
 
     def find_deploy(self, deploy_id: str) -> Dict[str, str]:
-        return parse_show_block_output(self.rnode_command("find-deploy", "--deploy-id", deploy_id, stderr=False))
+        output = self.rnode_command("find-deploy", "--deploy-id", deploy_id, stderr=False)
+        block_info = parse_show_block_output(output)
+        return block_info
 
     def propose(self) -> str:
         output = self.rnode_command('propose', stderr=False)
         block_hash = extract_block_hash_from_propose_output(output)
         return block_hash
+
+    def last_finalized_block(self) -> Dict[str, str]:
+        output = self.rnode_command('last-finalized-block')
+        block_info = parse_show_block_output(output)
+        return block_info
 
     def repl(self, rholang_code: str, stderr: bool = False) -> str:
         quoted_rholang_code = shlex.quote(rholang_code)
@@ -668,6 +678,7 @@ def bootstrap_connected_peer(
     bootstrap: Node,
     name: str,
     private_key: PrivateKey,
+    cli_options: Optional[Dict[str, str]] = None,
 ) -> Generator[Node, None, None]:
     with started_peer(
         context=context,
@@ -675,6 +686,7 @@ def bootstrap_connected_peer(
         name=name,
         bootstrap=bootstrap,
         private_key=private_key,
+        cli_options=cli_options,
     ) as peer:
         wait_for_approved_block_received_handler_state(context, peer)
         yield peer
@@ -741,7 +753,7 @@ def started_bootstrap(
     network: str,
     mount_dir: str = None,
     cli_flags: Optional[AbstractSet] = None,
-    cli_options: Optional[Dict] = None,
+    cli_options: Optional[Dict[str, str]] = None,
     wallets_file: Optional[str] = None,
 ) -> Generator[Node, None, None]:
     bootstrap_node = make_bootstrap_node(
@@ -763,9 +775,13 @@ def started_bootstrap(
 
 
 @contextlib.contextmanager
-def docker_network_with_started_bootstrap(context: TestingContext, cli_flags: Optional[AbstractSet] = None) -> Generator[Node, None, None]:
+def docker_network_with_started_bootstrap(
+    context: TestingContext,
+    cli_flags: Optional[AbstractSet] = None,
+    cli_options: Optional[Dict] = None,
+) -> Generator[Node, None, None]:
     with docker_network(context, context.docker) as network:
-        with started_bootstrap(context=context, network=network, mount_dir=context.mount_dir, cli_flags=cli_flags) as bootstrap:
+        with started_bootstrap(context=context, network=network, mount_dir=context.mount_dir, cli_flags=cli_flags, cli_options=cli_options) as bootstrap:
             wait_for_approved_block_received_handler_state(context, bootstrap)
             yield bootstrap
 
