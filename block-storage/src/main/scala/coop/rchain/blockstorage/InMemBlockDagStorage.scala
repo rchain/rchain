@@ -3,6 +3,7 @@ package coop.rchain.blockstorage
 import cats.effect.concurrent.{Ref, Semaphore}
 import cats.effect.{Concurrent, Sync}
 import cats.implicits._
+
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.util.BlockMessageUtil.{bonds, parentHashes}
 import coop.rchain.blockstorage.util.TopologicalSortUtil
@@ -12,8 +13,10 @@ import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.Validator.Validator
 import coop.rchain.models.{BlockHash, BlockMetadata, EquivocationRecord}
 import coop.rchain.shared.Log
-
 import scala.collection.immutable.HashSet
+
+import coop.rchain.metrics.{Metrics, MetricsSemaphore}
+import coop.rchain.metrics.Metrics.Source
 
 final class InMemBlockDagStorage[F[_]: Concurrent: Sync: Log: BlockStore](
     lock: Semaphore[F],
@@ -170,9 +173,12 @@ final class InMemBlockDagStorage[F[_]: Concurrent: Sync: Log: BlockStore](
 }
 
 object InMemBlockDagStorage {
-  def create[F[_]: Concurrent: Sync: Log: BlockStore]: F[InMemBlockDagStorage[F]] =
+  implicit private val InMemBlockDagStorageMetricsSource: Source =
+    Metrics.Source(BlockStorageMetricsSource, "in-mem")
+
+  def create[F[_]: Concurrent: Sync: Log: BlockStore: Metrics]: F[InMemBlockDagStorage[F]] =
     for {
-      lock                    <- Semaphore[F](1)
+      lock                    <- MetricsSemaphore.single[F]
       latestMessagesRef       <- Ref.of[F, Map[Validator, BlockHash]](Map.empty)
       childMapRef             <- Ref.of[F, Map[BlockHash, Set[BlockHash]]](Map.empty)
       dataLookupRef           <- Ref.of[F, Map[BlockHash, BlockMetadata]](Map.empty)

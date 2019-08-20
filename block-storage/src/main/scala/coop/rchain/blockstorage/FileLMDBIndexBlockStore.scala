@@ -8,6 +8,7 @@ import cats.effect.concurrent.Semaphore
 import cats.effect.{Concurrent, Sync}
 import cats.implicits._
 import cats.mtl.MonadState
+
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.FileLMDBIndexBlockStore.Checkpoint
 import coop.rchain.blockstorage.StorageError.StorageErr
@@ -20,11 +21,14 @@ import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.shared.ByteStringOps._
 import coop.rchain.shared.Language.ignore
 import coop.rchain.shared.{AtomicMonadState, Log}
+
 import monix.execution.atomic.AtomicAny
 import org.lmdbjava.DbiFlags.MDB_CREATE
 import org.lmdbjava._
-
 import scala.util.matching.Regex
+
+import coop.rchain.metrics.{Metrics, MetricsSemaphore}
+import coop.rchain.metrics.Metrics.Source
 
 private final case class FileLMDBIndexBlockStoreState[F[_]: Sync](
     blockMessageRandomAccessFile: RandomAccessIO[F],
@@ -205,6 +209,9 @@ class FileLMDBIndexBlockStore[F[_]: Monad: Sync: RaiseIOError: Log] private (
 }
 
 object FileLMDBIndexBlockStore {
+  implicit private val FileLMDBIndexBlockStoreMetricsSource: Source =
+    Metrics.Source(BlockStorageMetricsSource, "file-lmdb-index")
+
   private val checkpointPattern: Regex = "([0-9]+)".r
 
   final case class Config(
@@ -261,7 +268,7 @@ object FileLMDBIndexBlockStore {
       }
     } yield result
 
-  def create[F[_]: Concurrent: Sync: Log](
+  def create[F[_]: Concurrent: Sync: Log: Metrics](
       env: Env[ByteBuffer],
       blockStoreDataDir: Path
   ): F[StorageErr[BlockStore[F]]] =
@@ -272,7 +279,7 @@ object FileLMDBIndexBlockStore {
       blockStoreDataDir.resolve("checkpoints")
     )
 
-  def create[F[_]: Monad: Concurrent: Sync: Log](
+  def create[F[_]: Monad: Concurrent: Sync: Log: Metrics](
       env: Env[ByteBuffer],
       storagePath: Path,
       approvedBlockPath: Path,
@@ -280,7 +287,7 @@ object FileLMDBIndexBlockStore {
   ): F[StorageErr[BlockStore[F]]] = {
     implicit val raiseIOError: RaiseIOError[F] = IOError.raiseIOErrorThroughSync[F]
     for {
-      lock <- Semaphore[F](1)
+      lock <- MetricsSemaphore.single[F]
       dbi <- Sync[F].delay {
               env.openDbi(s"block_store_index", MDB_CREATE)
             }
@@ -312,7 +319,7 @@ object FileLMDBIndexBlockStore {
     } yield result
   }
 
-  def create[F[_]: Monad: Concurrent: Sync: Log](
+  def create[F[_]: Monad: Concurrent: Sync: Log: Metrics](
       config: Config
   ): F[StorageErr[BlockStore[F]]] =
     for {

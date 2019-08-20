@@ -4,9 +4,12 @@ import cats.effect.Concurrent
 import cats.{Id, Monad}
 import cats.implicits._
 import cats.effect.concurrent.{Ref, Semaphore}
+
 import com.google.protobuf.ByteString
 import coop.rchain.casper.protocol.BlockMessage
 import coop.rchain.crypto.hash.Blake2b256
+import coop.rchain.metrics.{Metrics, MetricsSemaphore}
+import coop.rchain.metrics.Metrics.Source
 
 final class IndexedBlockDagStorage[F[_]: Monad](
     lock: Semaphore[F],
@@ -30,8 +33,7 @@ final class IndexedBlockDagStorage[F[_]: Monad](
     )
 
   def insertIndexed(block: BlockMessage, genesis: BlockMessage, invalid: Boolean): F[BlockMessage] =
-    lock.withPermit(
-    for {
+    lock.withPermit(for {
       currentId         <- currentIdRef.get
       dag               <- underlying.getRepresentation
       nextCreatorSeqNum <- dag.latestMessage(block.sender).map(_.fold(-1)(_.seqNum) + 1)
@@ -50,9 +52,12 @@ final class IndexedBlockDagStorage[F[_]: Monad](
     } yield modifiedBlock)
 
   def inject(index: Int, block: BlockMessage, genesis: BlockMessage, invalid: Boolean): F[Unit] =
-    lock.withPermit(
-      idToBlocksRef.update(_.updated(index.toLong, block)) >> underlying.insert(block, genesis, invalid)
-    ).void
+    lock
+      .withPermit(
+        idToBlocksRef
+          .update(_.updated(index.toLong, block)) >> underlying.insert(block, genesis, invalid)
+      )
+      .void
 
   def accessEquivocationsTracker[A](f: EquivocationsTracker[F] => F[A]): F[A] =
     lock.withPermit(
@@ -76,11 +81,16 @@ final class IndexedBlockDagStorage[F[_]: Monad](
 }
 
 object IndexedBlockDagStorage {
+  implicit private val IndexedBlockDagStorageMetricsSource: Source =
+    Metrics.Source(BlockStorageMetricsSource, "dag-indexed")
+
   def apply[F[_]](implicit B: IndexedBlockDagStorage[F]): IndexedBlockDagStorage[F] = B
 
-  def create[F[_]: Concurrent](underlying: BlockDagStorage[F]): F[IndexedBlockDagStorage[F]] =
+  def create[F[_]: Concurrent: Metrics](
+      underlying: BlockDagStorage[F]
+  ): F[IndexedBlockDagStorage[F]] =
     for {
-      semaphore  <- Semaphore[F](1)
+      semaphore  <- MetricsSemaphore.single[F]
       idToBlocks <- Ref.of[F, Map[Long, BlockMessage]](Map.empty)
       currentId  <- Ref.of[F, Long](-1L)
     } yield new IndexedBlockDagStorage[F](
