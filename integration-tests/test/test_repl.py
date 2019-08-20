@@ -18,4 +18,4 @@ def test_repl_detects_invalid_rholang(started_standalone_bootstrap_node: Node) -
     output = started_standalone_bootstrap_node.repl(input, stderr=False)
     formatted_input = '{}\n'.format(input)
     without_input = output[len(formatted_input):]
-    assert without_input.startswith('Error: coop.rchain.rholang.interpreter.errors$TopLevelFreeVariablesNotAllowedError')
+    assert without_input.startswith('Error: coop.rchain.rholang.interpreter.error_handling.errors$TopLevelFreeVariablesNotAllowedError')
