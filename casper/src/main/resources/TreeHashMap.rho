@@ -41,7 +41,7 @@
 //         TreeHashMap!("fastUnsafeGet", map, "monkey", *ret2) |
 //         TreeHashMap!("get", map, "some unused key", *ret3) |
 //         for (@val1 <- ret1; @val2 <- ret2; @val3 <- ret3) {
-//           // Should print ["Got these from the map: ", ["some val"], ["some other val"], []]
+//           // Should print ["Got these from the map: ", "some val", "some other val", Nil]
 //           o!(["Got these from the map: ", val1, val2, val3])
 //         }
 //       }
@@ -107,10 +107,7 @@ new TreeHashMap, rs(`rho:registry:insertSigned:secp256k1`), uriOut in {
           nodeGet!((map, nybList.slice(0, n)), *valCh) |
           for (@val <- valCh) {
             if (n == len) {
-              match { val.get(suffix) } {
-                Nil => { ret!([]) }
-                rest =>{ ret!(rest) }
-              }
+              ret!(val.get(suffix))
             } else {
               // Otherwise check if the rest of the path exists.
               // Bit k set means node k exists.
@@ -118,7 +115,7 @@ new TreeHashMap, rs(`rho:registry:insertSigned:secp256k1`), uriOut in {
               // val & powers.nth(nybList.nth(n)) is nonzero if the node exists
               // (val/powers.nth(nybList.nth(n))) % 2 is 1 if the node exists
               if ((val/powers.nth(nybList.nth(n))) % 2 == 0) {
-                ret!([])
+                ret!(Nil)
               } else {
                 TreeHashMapGetter!(map, nybList, n + 1, len, suffix, *ret)
               }
@@ -158,7 +155,7 @@ new TreeHashMap, rs(`rho:registry:insertSigned:secp256k1`), uriOut in {
                 for (@rest <- restCh) {
                   valCh!(rest.get(hash.slice(depth, 32))) |
                   for (@val <- valCh) {
-                    if (val == Nil) { ret!([]) }
+                    if (val == Nil) { ret!(Nil) }
                     else { ret!(val) }
                   }
                 }
@@ -175,7 +172,7 @@ new TreeHashMap, rs(`rho:registry:insertSigned:secp256k1`), uriOut in {
           for (@val <- valCh) {
             if (n == len) {
               // If we're at the end of the path, set the node to newVal.
-              nodeSetMap!((map, nybList), suffix, [newVal], *ret)
+              nodeSetMap!((map, nybList), suffix, newVal, *ret)
             } else {
               // Otherwise make the rest of the path exist.
               // Bit k set means node k exists.
