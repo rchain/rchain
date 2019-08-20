@@ -22,7 +22,7 @@ import scodec.Codec
 
 import scala.collection.SortedSet
 
-abstract class RSpaceOps[F[_]: Concurrent, C, P, A, K](
+abstract class RSpaceOps[F[_]: Concurrent: Metrics, C, P, A, K](
     historyRepository: HistoryRepository[F, C, P, A, K],
     val storeAtom: AtomicAny[HotStore[F, C, P, A, K]],
     val branch: Branch
@@ -62,7 +62,7 @@ abstract class RSpaceOps[F[_]: Concurrent, C, P, A, K](
 
   val syncF: Sync[F] = Concurrent[F]
 
-  private val lockF: TwoStepLock[F, Blake2b256Hash] = new ConcurrentTwoStepLockF()
+  private val lockF: TwoStepLock[F, Blake2b256Hash] = new ConcurrentTwoStepLockF(MetricsSource)
 
   type MaybeActionResult = Option[(ContResult[C, P, K], Seq[Result[A]])]
 
