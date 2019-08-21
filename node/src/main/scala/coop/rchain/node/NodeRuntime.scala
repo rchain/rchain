@@ -432,30 +432,7 @@ class NodeRuntime private[node] (
       mapSize = 8L * 1024L * 1024L * 1024L,
       latestMessagesLogMaxSizeFactor = 10
     )
-    blockDagStorage <- BlockDagFileStorage.create[Task](dagConfig)(
-                        Concurrent[Task],
-                        Sync[Task],
-                        log,
-                        metrics
-                      )
-    oracle = SafetyOracle
-      .cliqueOracle[Task](
-        Monad[Task],
-        log,
-        metrics,
-        span
-      )
-    lastFinalizedBlockCalculator = LastFinalizedBlockCalculator[Task](
-      conf.server.faultToleranceThreshold
-    )(
-      Sync[Task],
-      log,
-      Concurrent[Task],
-      blockStore,
-      blockDagStorage,
-      oracle
-    )
-    result <- setupNodeProgramF[Task](conf)(
+    result <- setupNodeProgramF[Task](conf, dagConfig)(
                lab,
                metrics,
                span,
@@ -464,22 +441,15 @@ class NodeRuntime private[node] (
                nodeDiscovery,
                transport,
                rpConfAsk,
-               oracle,
-               lastFinalizedBlockCalculator,
                Sync[Task],
                Concurrent[Task],
                time,
                log,
                eventLog,
-               blockDagStorage,
                ContextShift[Task],
                Par[Task]
              )
-    (engineCell, requestedBlocks, runtime, casperRuntime) = result
-    packetHandler = {
-      implicit val ev: EngineCell[Task] = engineCell
-      CasperPacketHandler[Task]
-    }
+    (blockDagStorage, oracle, engineCell, requestedBlocks, runtime, casperRuntime, packetHandler) = result
 
     // 4. run the node program.
     program = nodeProgram(runtime, casperRuntime)(
@@ -503,11 +473,23 @@ class NodeRuntime private[node] (
     _ <- handleUnrecoverableErrors(program)
   } yield ()
 
-  def setupNodeProgramF[F[_]: LastApprovedBlock: Metrics: Span: BlockStore: ConnectionsCell: NodeDiscovery: TransportLayer: RPConfAsk: SafetyOracle: LastFinalizedBlockCalculator: Sync: Concurrent: Time: Log: EventLog: BlockDagStorage: ContextShift: Par](
-      conf: Configuration
+  def setupNodeProgramF[F[_]: LastApprovedBlock: Metrics: Span: BlockStore: ConnectionsCell: NodeDiscovery: TransportLayer: RPConfAsk: Sync: Concurrent: Time: Log: EventLog: ContextShift: Par](
+      conf: Configuration,
+      dagConfig: BlockDagFileStorage.Config
   ) =
     for {
-
+      blockDagStorage <- BlockDagFileStorage.create[F](dagConfig)
+      oracle          = SafetyOracle.cliqueOracle[F]
+      lastFinalizedBlockCalculator = LastFinalizedBlockCalculator[F](
+        conf.server.faultToleranceThreshold
+      )(
+        Sync[F],
+        Log[F],
+        Concurrent[F],
+        BlockStore[F],
+        blockDagStorage,
+        oracle
+      )
       runtime <- {
         implicit val s = rspaceScheduler
         Runtime
@@ -535,9 +517,24 @@ class NodeRuntime private[node] (
         implicit val re = raiseIOError
         implicit val rb = requestedBlocks
         implicit val rm = runtimeManager
+        implicit val or = oracle
+        implicit val lc = lastFinalizedBlockCalculator
+        implicit val bd = blockDagStorage
         CasperLaunch[F](casperInit)
       }
-    } yield (engineCell, requestedBlocks, runtime, casperRuntime)
+      packetHandler = {
+        implicit val ev: EngineCell[F] = engineCell
+        CasperPacketHandler[F]
+      }
+    } yield (
+      blockDagStorage,
+      oracle,
+      engineCell,
+      requestedBlocks,
+      runtime,
+      casperRuntime,
+      packetHandler
+    )
 }
 
 object NodeRuntime {
