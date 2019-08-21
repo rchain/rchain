@@ -32,6 +32,7 @@ class RSpace[F[_], C, P, A, K] private[rspace] (
     serializeP: Serialize[P],
     serializeA: Serialize[A],
     serializeK: Serialize[K],
+    val m: Match[F, P, A],
     val concurrent: Concurrent[F],
     logF: Log[F],
     contextShift: ContextShift[F],
@@ -94,8 +95,6 @@ class RSpace[F[_], C, P, A, K] private[rspace] (
       persist: Boolean,
       sequenceNumber: Int,
       peeks: SortedSet[Int] = SortedSet.empty
-  )(
-      implicit m: Match[F, P, A]
   ): F[MaybeActionResult] = {
 
     def wrapResult(
@@ -220,7 +219,7 @@ class RSpace[F[_], C, P, A, K] private[rspace] (
       groupedChannels: Seq[CandidateChannels],
       batChannel: C,
       data: Datum[A]
-  )(implicit m: Match[F, P, A]): F[MaybeProduceCandidate] = {
+  ): F[MaybeProduceCandidate] = {
 
     def go(
         acc: Seq[CandidateChannels]
@@ -362,8 +361,11 @@ class RSpace[F[_], C, P, A, K] private[rspace] (
       _ <- logF.debug(s"produce: persisted <data: $data> at <channel: $channel>")
     } yield None
 
-  override def produce(channel: C, data: A, persist: Boolean, sequenceNumber: Int)(
-      implicit m: Match[F, P, A]
+  override def produce(
+      channel: C,
+      data: A,
+      persist: Boolean,
+      sequenceNumber: Int
   ): F[MaybeActionResult] =
     contextShift.evalOn(scheduler) {
       for {
@@ -439,6 +441,7 @@ object RSpace {
       sp: Serialize[P],
       sa: Serialize[A],
       sk: Serialize[K],
+      m: Match[F, P, A],
       concurrent: Concurrent[F],
       logF: Log[F],
       contextShift: ContextShift[F],
@@ -459,6 +462,7 @@ object RSpace {
       sp: Serialize[P],
       sa: Serialize[A],
       sk: Serialize[K],
+      m: Match[F, P, A],
       concurrent: Concurrent[F],
       logF: Log[F],
       contextShift: ContextShift[F],
@@ -491,6 +495,7 @@ object RSpace {
       sp: Serialize[P],
       sa: Serialize[A],
       sk: Serialize[K],
+      m: Match[F, P, A],
       concurrent: Concurrent[F],
       logF: Log[F],
       contextShift: ContextShift[F],

@@ -37,9 +37,7 @@ object PureRSpace {
   def apply[F[_]](implicit F: Sync[F]): PureRSpaceApplyBuilders[F] = new PureRSpaceApplyBuilders(F)
 
   final class PureRSpaceApplyBuilders[F[_]](val F: Sync[F]) extends AnyVal {
-    def of[C, P, A, K](
-        space: ISpace[F, C, P, A, K]
-    )(implicit mat: Match[F, P, A]): PureRSpace[F, C, P, A, K] =
+    def of[C, P, A, K](space: ISpace[F, C, P, A, K]): PureRSpace[F, C, P, A, K] =
       new PureRSpace[F, C, P, A, K] {
         def consume(
             channels: Seq[C],

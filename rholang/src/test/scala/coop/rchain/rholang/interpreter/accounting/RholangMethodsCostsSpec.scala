@@ -11,10 +11,8 @@ import coop.rchain.models.rholang.implicits._
 import coop.rchain.rholang.interpreter.Runtime.RhoISpace
 import coop.rchain.rholang.interpreter._
 import coop.rchain.rholang.interpreter.accounting.Chargeable._
-import coop.rchain.rholang.interpreter.errors.InterpreterError
 import coop.rchain.rspace.history.Branch
-import coop.rchain.rspace._
-import coop.rchain.rspace.{RSpace, ReplayRSpace}
+import coop.rchain.rspace.{Match, RSpace}
 import coop.rchain.shared.Log
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
@@ -808,7 +806,8 @@ class RholangMethodsCostsSpec
 
   protected override def beforeAll(): Unit = {
     import coop.rchain.catscontrib.TaskContrib._
-    import coop.rchain.rholang.interpreter.storage.implicits._
+    import coop.rchain.rholang.interpreter.storage._
+    implicit val m: Match[Task, BindPattern, ListParWithRandom] = matchListPar[Task]
     dbDir = Files.createTempDirectory("rholang-interpreter-test-")
     space = RSpace
       .create[

@@ -19,8 +19,7 @@ import coop.rchain.models.rholang.implicits._
 import coop.rchain.rholang.interpreter.Runtime._
 import coop.rchain.rholang.interpreter.accounting.{noOpCostLog, _}
 import coop.rchain.rholang.interpreter.errors.SetupError
-import coop.rchain.rholang.interpreter.storage.implicits._
-import coop.rchain.rspace.{RSpace, _}
+import coop.rchain.rspace.{Match, RSpace, _}
 import coop.rchain.rspace.pure.PureRSpace
 import coop.rchain.shared.Log
 
@@ -160,8 +159,8 @@ object Runtime {
         )
         val continuation = TaggedContinuation(ScalaBodyRef(ref))
         List(
-          space.install(channels, patterns, continuation)(matchListPar),
-          replaySpace.install(channels, patterns, continuation)(matchListPar)
+          space.install(channels, patterns, continuation),
+          replaySpace.install(channels, patterns, continuation)
         )
     }.sequence
 
@@ -427,8 +426,7 @@ object Runtime {
   }
 
   def injectEmptyRegistryRoot[F[_]](space: RhoISpace[F], replaySpace: RhoReplayISpace[F])(
-      implicit F: Concurrent[F],
-      spanF: Span[F]
+      implicit F: Concurrent[F]
   ): F[Unit] = {
     // This random value stays dead in the tuplespace, so we can have some fun.
     // This is from Jeremy Bentham's "Defence of Usury"
@@ -444,13 +442,13 @@ object Runtime {
                       ListParWithRandom(Seq(Registry.emptyMap), rand),
                       false,
                       0
-                    )(matchListPar(F, spanF))
+                    )
       replayResult <- replaySpace.produce(
                        Registry.registryRoot,
                        ListParWithRandom(Seq(Registry.emptyMap), rand),
                        false,
                        0
-                     )(matchListPar(F, spanF))
+                     )
       _ <- spaceResult match {
             case None =>
               replayResult match {
@@ -468,6 +466,10 @@ object Runtime {
       dataDir: Path,
       mapSize: Long
   )(implicit scheduler: ExecutionContext): F[(RhoISpace[F], RhoReplayISpace[F])] = {
+
+    import coop.rchain.rholang.interpreter.storage._
+    implicit val m: Match[F, BindPattern, ListParWithRandom] = matchListPar[F]
+
     def checkCreateDataDir: F[Unit] =
       for {
         notexists <- Sync[F].delay(Files.notExists(dataDir))

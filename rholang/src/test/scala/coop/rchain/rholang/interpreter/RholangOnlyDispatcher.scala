@@ -10,7 +10,6 @@ import coop.rchain.models.TaggedContinuation.TaggedCont.{Empty, ParBody, ScalaBo
 import coop.rchain.models._
 import coop.rchain.rholang.interpreter.Runtime.RhoISpace
 import coop.rchain.rholang.interpreter.accounting._
-import coop.rchain.rholang.interpreter.storage.implicits._
 import coop.rchain.rspace.pure.PureRSpace
 
 object RholangOnlyDispatcher {
@@ -24,7 +23,7 @@ object RholangOnlyDispatcher {
       spanM: Span[M]
   ): (Dispatch[M, ListParWithRandom, TaggedContinuation], Reduce[M]) = {
 
-    val pureSpace = PureRSpace[M].of(tuplespace)(matchListPar)
+    val pureSpace = PureRSpace[M].of(tuplespace)
 
     lazy val dispatcher: Dispatch[M, ListParWithRandom, TaggedContinuation] =
       new RholangOnlyDispatcher

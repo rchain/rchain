@@ -1,4 +1,4 @@
-package coop.rchain.rholang.interpreter.storage
+package coop.rchain.rholang.interpreter
 
 import cats.effect.Sync
 import cats.implicits._
@@ -15,7 +15,7 @@ import coop.rchain.rholang.interpreter.matcher._
 import coop.rchain.rspace.{Serialize, Match => StorageMatch}
 
 //noinspection ConvertExpressionToSAM
-object implicits {
+package object storage {
 
   /* Match instance */
 

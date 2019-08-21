@@ -7,8 +7,7 @@ import coop.rchain.models.TaggedContinuation.TaggedCont.ParBody
 import coop.rchain.models._
 import coop.rchain.rholang.interpreter.Runtime.{RhoISpace, RhoPureSpace}
 import coop.rchain.rholang.interpreter.accounting._
-import coop.rchain.rholang.interpreter.storage.implicits.matchListPar
-import coop.rchain.rspace.{Blake2b256Hash, Checkpoint, ContResult, Result, Match => StorageMatch}
+import coop.rchain.rspace.{Blake2b256Hash, Checkpoint, ContResult, Result}
 
 import scala.collection.SortedSet
 
@@ -29,9 +28,6 @@ object ChargingRSpace {
 
   def pureRSpace[F[_]: Sync: Span](space: RhoISpace[F])(implicit cost: _cost[F]): RhoPureSpace[F] =
     new RhoPureSpace[F] {
-
-      implicit val m: StorageMatch[F, BindPattern, ListParWithRandom] =
-        matchListPar[F]
 
       override def consume(
           channels: Seq[Par],

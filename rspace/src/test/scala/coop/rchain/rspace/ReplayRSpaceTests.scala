@@ -65,8 +65,6 @@ trait ReplayRSpaceTests extends ReplayRSpaceTestsBase[String, Pattern, String, S
       continuationCreator: Int => K,
       persist: Boolean,
       peeks: SortedSet[Int] = SortedSet.empty
-  )(
-      implicit matcher: Match[Task, P, A]
   ): Task[List[Option[(ContResult[C, P, K], Seq[Result[A]])]]] =
     shuffle(range).toList.parTraverse { i: Int =>
       logger.debug("Started consume {}", i)
@@ -84,8 +82,6 @@ trait ReplayRSpaceTests extends ReplayRSpaceTestsBase[String, Pattern, String, S
       channelCreator: Int => C,
       datumCreator: Int => A,
       persist: Boolean
-  )(
-      implicit matcher: Match[Task, P, A]
   ): Task[List[Option[(ContResult[C, P, K], Seq[Result[A]])]]] =
     shuffle(range).toList.parTraverse { i: Int =>
       logger.debug("Started produce {}", i)
@@ -1238,7 +1234,8 @@ trait ReplayRSpaceTestsBase[C, P, A, K]
       sc: Serialize[C],
       sp: Serialize[P],
       sa: Serialize[A],
-      sk: Serialize[K]
+      sk: Serialize[K],
+      m: Match[Task, P, A]
   ): S
 }
 
@@ -1256,7 +1253,8 @@ trait InMemoryReplayRSpaceTestsBase[C, P, A, K] extends ReplayRSpaceTestsBase[C,
       sc: Serialize[C],
       sp: Serialize[P],
       sa: Serialize[A],
-      sk: Serialize[K]
+      sk: Serialize[K],
+      m: Match[Task, P, A]
   ): S = {
     implicit val log: Log[Task]          = Log.log[Task]
     implicit val metricsF: Metrics[Task] = new Metrics.MetricsNOP[Task]()

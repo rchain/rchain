@@ -11,7 +11,7 @@ import coop.rchain.rholang.interpreter.Runtime.RhoISpace
 import coop.rchain.rholang.interpreter.accounting._
 import coop.rchain.rholang.interpreter.errors.OutOfPhlogistonsError
 import coop.rchain.rholang.interpreter.storage.{ChargingRSpace, ISpaceStub}
-import coop.rchain.rholang.interpreter.storage.implicits._
+import coop.rchain.rholang.interpreter.storage._
 import coop.rchain.rspace.internal.{Datum, Row}
 import coop.rchain.rspace._
 import coop.rchain.rspace.Match
@@ -82,8 +82,6 @@ class CostAccountingReducerTest extends FlatSpec with Matchers with TripleEquals
           data: ListParWithRandom,
           persist: Boolean,
           sequenceNumber: Int
-      )(
-          implicit m: Match[Task, BindPattern, ListParWithRandom]
       ): Task[
         Option[(ContResult[Par, BindPattern, TaggedContinuation], Seq[Result[ListParWithRandom]])]
       ] =

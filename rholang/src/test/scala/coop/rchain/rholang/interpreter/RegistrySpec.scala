@@ -14,7 +14,7 @@ import coop.rchain.models.rholang.implicits._
 import coop.rchain.rholang.interpreter.Runtime.{BodyRefs, RhoDispatchMap}
 import coop.rchain.rholang.interpreter.accounting._
 import coop.rchain.rholang.interpreter.errors.InterpreterError
-import coop.rchain.rholang.interpreter.storage.implicits._
+import coop.rchain.rholang.interpreter.storage._
 import coop.rchain.rspace.{ISpace, Match}
 import coop.rchain.rspace.internal.{Datum, Row}
 import monix.eval.{Coeval, Task}
@@ -156,10 +156,7 @@ trait RegistryTester extends PersistentStoreTester {
     GPrivate(ByteString.copyFrom(Array[Byte](19)))
   )
 
-  def testInstall(space: Runtime.RhoISpace[Task]): Task[Unit] = {
-    implicit val m: Match[Task, BindPattern, ListParWithRandom] =
-      matchListPar[Task]
-
+  def testInstall(space: Runtime.RhoISpace[Task]): Task[Unit] =
     for {
       _ <- space.install(
             lookupChannels,
@@ -192,7 +189,6 @@ trait RegistryTester extends PersistentStoreTester {
             TaggedContinuation(ScalaBodyRef(BodyRefs.REG_PUBLIC_REGISTER_SIGNED))
           )
     } yield ()
-  }
 
 }
 

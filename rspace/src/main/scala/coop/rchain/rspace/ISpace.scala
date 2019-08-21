@@ -24,6 +24,8 @@ final case class ContResult[C, P, A](
   */
 trait ISpace[F[_], C, P, A, K] {
 
+  implicit val m: Match[F, P, A]
+
   /** Searches the store for data matching all the given patterns at the given channels.
     *
     * If no match is found, then the continuation and patterns are put in the store at the given
@@ -54,13 +56,9 @@ trait ISpace[F[_], C, P, A, K] {
       persist: Boolean,
       sequenceNumber: Int = 0,
       peeks: SortedSet[Int] = SortedSet.empty
-  )(
-      implicit m: Match[F, P, A]
   ): F[Option[(ContResult[C, P, K], Seq[Result[A]])]]
 
-  def install(channels: Seq[C], patterns: Seq[P], continuation: K)(
-      implicit m: Match[F, P, A]
-  ): F[Option[(K, Seq[A])]]
+  def install(channels: Seq[C], patterns: Seq[P], continuation: K): F[Option[(K, Seq[A])]]
 
   /** Searches the store for a continuation that has patterns that match the given data at the
     * given channel.
@@ -85,8 +83,11 @@ trait ISpace[F[_], C, P, A, K] {
     * @param data A piece of data
     * @param persist Whether or not to attempt to persist the data
     */
-  def produce(channel: C, data: A, persist: Boolean, sequenceNumber: Int = 0)(
-      implicit m: Match[F, P, A]
+  def produce(
+      channel: C,
+      data: A,
+      persist: Boolean,
+      sequenceNumber: Int = 0
   ): F[Option[(ContResult[C, P, K], Seq[Result[A]])]]
 
   /** Creates a checkpoint.

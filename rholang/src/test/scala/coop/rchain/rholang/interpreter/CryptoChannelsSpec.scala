@@ -39,10 +39,9 @@ class CryptoChannelsSpec
 
   behavior of "Crypto channels"
 
-  implicit val rand: Blake2b512Random       = Blake2b512Random(Array.empty[Byte])
-  implicit val serializePar: Serialize[Par] = storage.implicits.serializePar
-  implicit val serializePars: Serialize[ListParWithRandom] =
-    storage.implicits.serializePars
+  implicit val rand: Blake2b512Random                      = Blake2b512Random(Array.empty[Byte])
+  implicit val serializePar: Serialize[Par]                = storage.serializePar
+  implicit val serializePars: Serialize[ListParWithRandom] = storage.serializePars
 
   val serialize: Par => Array[Byte]                    = Serialize[Par].encode(_).toArray
   val byteArrayToByteString: Array[Byte] => ByteString = ba => ByteString.copyFrom(ba)

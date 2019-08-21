@@ -6,7 +6,7 @@ import scala.collection.immutable.Seq
 
 import coop.rchain.models._
 import coop.rchain.models.testImplicits._
-import coop.rchain.rholang.interpreter.storage.implicits._
+import coop.rchain.rholang.interpreter.storage._
 import coop.rchain.rspace._
 import coop.rchain.rspace.bench._
 import coop.rchain.rspace.trace.Consume
