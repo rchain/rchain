@@ -430,7 +430,8 @@ class NodeRuntime private[node] (
                    .create[Task](blockstoreEnv, blockstorePath)(
                      Concurrent[Task],
                      Sync[Task],
-                     log
+                     log,
+                     metrics
                    )
                    .map(_.right.get) // TODO handle errors
     dagConfig = BlockDagFileStorage.Config(
@@ -450,7 +451,8 @@ class NodeRuntime private[node] (
     blockDagStorage <- BlockDagFileStorage.create[Task](dagConfig)(
                         Concurrent[Task],
                         Sync[Task],
-                        log
+                        log,
+                        metrics
                       )
     oracle = SafetyOracle
       .cliqueOracle[Task](

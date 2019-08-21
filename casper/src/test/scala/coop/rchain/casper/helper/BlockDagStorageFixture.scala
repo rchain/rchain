@@ -118,7 +118,8 @@ object BlockDagStorageTestFixture {
   }
 
   def createBlockDagStorage(blockDagStorageDir: Path)(
-      implicit log: Log[Task]
+      implicit log: Log[Task],
+      metrics: Metrics[Task]
   ): Task[BlockDagStorage[Task]] =
     BlockDagFileStorage.create[Task](
       BlockDagFileStorage.Config(

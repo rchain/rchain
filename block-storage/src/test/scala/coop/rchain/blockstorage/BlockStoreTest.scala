@@ -4,6 +4,7 @@ import cats._
 import cats.effect.Sync
 import cats.effect.concurrent.Ref
 import cats.implicits._
+
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.InMemBlockStore.emptyMapRef
 import coop.rchain.casper.protocol._
@@ -14,14 +15,16 @@ import coop.rchain.models.blockImplicits.{blockBatchesGen, blockElementsGen}
 import coop.rchain.rspace.Context
 import coop.rchain.shared.Log
 import coop.rchain.shared.PathOps._
+
 import monix.eval.Task
 import monix.execution.Scheduler
 import monix.execution.Scheduler.Implicits.global
 import org.scalactic.anyvals.PosInt
 import org.scalatest._
 import org.scalatest.prop.GeneratorDrivenPropertyChecks
-
 import scala.language.higherKinds
+
+import coop.rchain.metrics.Metrics
 
 trait BlockStoreTest
     extends FlatSpecLike
@@ -135,6 +138,7 @@ class FileLMDBIndexBlockStoreTest extends BlockStoreTest {
   override def withStore[R](f: BlockStore[Task] => Task[R]): R = {
     val dbDir                   = mkTmpDir()
     implicit val log: Log[Task] = new Log.NOPLog[Task]()
+    implicit val metrics        = new Metrics.MetricsNOP[Task]
     val env                     = Context.env(dbDir, mapSize)
     val test = for {
       store  <- FileLMDBIndexBlockStore.create[Task](env, dbDir).map(_.right.get)
@@ -150,8 +154,9 @@ class FileLMDBIndexBlockStoreTest extends BlockStoreTest {
   }
 
   private def createBlockStore(blockStoreDataDir: Path): Task[BlockStore[Task]] = {
-    implicit val log = new Log.NOPLog[Task]()
-    val env          = Context.env(blockStoreDataDir, 100L * 1024L * 1024L * 4096L)
+    implicit val log     = new Log.NOPLog[Task]()
+    implicit val metrics = new Metrics.MetricsNOP[Task]
+    val env              = Context.env(blockStoreDataDir, 100L * 1024L * 1024L * 4096L)
     FileLMDBIndexBlockStore.create[Task](env, blockStoreDataDir).map(_.right.get)
   }
 

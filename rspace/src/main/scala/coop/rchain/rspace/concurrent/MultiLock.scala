@@ -1,17 +1,24 @@
 package coop.rchain.rspace.concurrent
 
-import cats.implicits._
-import cats.effect.Concurrent
-import cats.effect.concurrent.Semaphore
-
 import scala.collection.concurrent.TrieMap
 
-class MultiLock[F[_]: Concurrent, K] {
+import cats.effect.Concurrent
+import cats.effect.concurrent.Semaphore
+import cats.implicits._
 
-  private[this] val locks = TrieMap.empty[K, Semaphore[F]]
+import coop.rchain.catscontrib.ski.kp
+import coop.rchain.metrics.Metrics
+import coop.rchain.metrics.Metrics.Source
 
-  def acquire[R](keys: Seq[K])(thunk: => F[R])(implicit o: Ordering[K]): F[R] = {
-    def acquireLocks =
+class MultiLock[F[_]: Concurrent: Metrics, K](metricSource: Metrics.Source) {
+
+  implicit private val ms: Source = metricSource
+  private[this] val locks         = TrieMap.empty[K, Semaphore[F]]
+
+  def acquire[R](
+      keys: Seq[K]
+  )(thunk: => F[R])(implicit o: Ordering[K]): F[R] = {
+    def acquireLocks: F[List[Semaphore[F]]] =
       for {
         semaphores <- keys.toSet.toList.sorted.traverse(
                        k =>
@@ -22,8 +29,17 @@ class MultiLock[F[_]: Concurrent, K] {
                      )
         acquired <- semaphores.traverse(s => s.acquire.map(_ => s))
       } yield acquired
-    def releaseLocks(acquired: List[Semaphore[F]]) = acquired.traverse(_.release).as(())
 
-    Concurrent[F].bracket(acquireLocks)(_ => thunk)(releaseLocks)
+    def releaseLocks(acquired: List[Semaphore[F]]): F[Unit] = acquired.traverse(_.release).as(())
+
+    import coop.rchain.metrics.implicits._
+
+    Concurrent[F].bracket(
+      for {
+        _     <- Metrics[F].incrementGauge("lock.queue")
+        locks <- Concurrent[F].defer(acquireLocks).timer("lock.acquire")
+        _     <- Metrics[F].decrementGauge("lock.queue")
+      } yield locks
+    )(kp(thunk))(releaseLocks)
   }
 }
