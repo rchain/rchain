@@ -7,7 +7,15 @@ import coop.rchain.models.TaggedContinuation.TaggedCont.ParBody
 import coop.rchain.models._
 import coop.rchain.rholang.interpreter.Runtime.RhoISpace
 import coop.rchain.rholang.interpreter.accounting._
-import coop.rchain.rspace.{Blake2b256Hash, Checkpoint, ContResult, Result, SoftCheckpoint, internal, Match => StorageMatch}
+import coop.rchain.rspace.{
+  Blake2b256Hash,
+  Checkpoint,
+  ContResult,
+  Result,
+  SoftCheckpoint,
+  internal,
+  Match => StorageMatch
+}
 
 import scala.collection.SortedSet
 
@@ -26,7 +34,7 @@ object ChargingRSpace {
   def storageCostProduce(channel: Par, data: ListParWithRandom): Cost =
     channel.storageCost + data.pars.storageCost
 
-  def pureRSpace[F[_]: Sync: Span](space: RhoISpace[F])(implicit cost: _cost[F]): RhoISpace[F] =
+  def chargingRSpace[F[_]: Sync: Span](space: RhoISpace[F])(implicit cost: _cost[F]): RhoISpace[F] =
     new RhoISpace[F] {
 
       override def consume(

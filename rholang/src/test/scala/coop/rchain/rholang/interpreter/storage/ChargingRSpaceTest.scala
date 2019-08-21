@@ -338,7 +338,7 @@ class ChargingRSpaceTest extends fixture.FlatSpec with TripleEqualsSupport with 
     implicit val span     = NoopSpan[Task]
     def mkChargingRspace(rhoISpace: RhoISpace[Task]): Task[ChargingRSpace] = {
       val s = implicitly[Sync[Task]]
-      Task.delay(ChargingRSpace.pureRSpace(rhoISpace)(s, span, cost))
+      Task.delay(ChargingRSpace.chargingRSpace(rhoISpace)(s, span, cost))
     }
 
     val chargingRSpaceResource =

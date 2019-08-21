@@ -19,6 +19,7 @@ import coop.rchain.models.rholang.implicits._
 import coop.rchain.rholang.interpreter.Runtime._
 import coop.rchain.rholang.interpreter.accounting.{noOpCostLog, _}
 import coop.rchain.rholang.interpreter.errors.SetupError
+import coop.rchain.rholang.interpreter.storage.ChargingRSpace
 import coop.rchain.rspace.{Match, RSpace, _}
 import coop.rchain.shared.Log
 
@@ -375,9 +376,11 @@ object Runtime {
       blockDataRef         <- Ref.of(BlockData.empty)
       (space, replaySpace) = setup
       (reducer, replayReducer) = {
+
+        val chargingReplaySpace = ChargingRSpace.chargingRSpace[F](replaySpace)
         lazy val replayDispatchTable: RhoDispatchMap[F] =
           dispatchTableCreator(
-            replaySpace,
+            chargingReplaySpace,
             replayDispatcher,
             replayRegistry,
             deployParametersRef,
@@ -385,9 +388,17 @@ object Runtime {
             invalidBlocks
           )
 
+        lazy val (replayDispatcher, replayReducer, replayRegistry) =
+          RholangAndScalaDispatcher.create(
+            chargingReplaySpace,
+            replayDispatchTable,
+            urnMap
+          )
+
+        val chargingRSpace = ChargingRSpace.chargingRSpace[F](space)
         lazy val dispatchTable: RhoDispatchMap[F] =
           dispatchTableCreator(
-            space,
+            chargingRSpace,
             dispatcher,
             registry,
             deployParametersRef,
@@ -396,14 +407,8 @@ object Runtime {
           )
 
         lazy val (dispatcher, reducer, registry) =
-          RholangAndScalaDispatcher.create(space, dispatchTable, urnMap)
+          RholangAndScalaDispatcher.create(chargingRSpace, dispatchTable, urnMap)
 
-        lazy val (replayDispatcher, replayReducer, replayRegistry) =
-          RholangAndScalaDispatcher.create(
-            replaySpace,
-            replayDispatchTable,
-            urnMap
-          )
         (reducer, replayReducer)
       }
       res <- introduceSystemProcesses(space, replaySpace, procDefs)
@@ -460,7 +465,7 @@ object Runtime {
     } yield ()
   }
 
-  def setupRSpace[F[_]: Concurrent: ContextShift: par.Par: Log: Metrics: Span](
+  private def setupRSpace[F[_]: Concurrent: ContextShift: par.Par: Log: Metrics: Span](
       dataDir: Path,
       mapSize: Long
   )(implicit scheduler: ExecutionContext): F[(RhoISpace[F], RhoReplayISpace[F])] = {
