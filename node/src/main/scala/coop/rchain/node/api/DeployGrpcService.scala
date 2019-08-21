@@ -24,7 +24,7 @@ import monix.eval.Task
 import monix.execution.Scheduler
 import monix.reactive.Observable
 
-private[api] object DeployGrpcService {
+object DeployGrpcService {
   def instance[F[_]: Concurrent: Log: SafetyOracle: BlockStore: Taskable: Span: EngineCell](
       blockApiLock: Semaphore[F]
   )(

@@ -37,8 +37,7 @@ import coop.rchain.rholang.interpreter._
 import Interpreter._
 import storage.StoragePrinter
 
-private[api] class ReplGrpcService(runtime: Runtime[Task], worker: Scheduler)
-    extends ReplGrpcMonix.Repl {
+class ReplGrpcService(runtime: Runtime[Task], worker: Scheduler) extends ReplGrpcMonix.Repl {
 
   def exec(source: String, printUnmatchedSendsOnly: Boolean = false): Task[ReplResponse] =
     ParBuilder[Task]

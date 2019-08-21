@@ -18,6 +18,7 @@ import coop.rchain.casper._
 import coop.rchain.casper.engine.CasperLaunch.CasperInit
 import coop.rchain.casper.engine.EngineCell._
 import coop.rchain.casper.engine._
+import coop.rchain.casper.protocol.{DeployServiceGrpcMonix, ProposeServiceGrpcMonix}
 import coop.rchain.casper.util.comm.CasperPacketHandler
 import coop.rchain.casper.util.rholang.RuntimeManager
 import coop.rchain.catscontrib.Catscontrib._
@@ -31,6 +32,7 @@ import coop.rchain.comm.transport._
 import coop.rchain.grpc.Server
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.models.BlockHash.BlockHash
+import coop.rchain.node.api.{DeployGrpcService, ProposeGrpcService, ReplGrpcService}
 import coop.rchain.node.configuration.Configuration
 import coop.rchain.node.diagnostics.Trace.TraceId
 import coop.rchain.node.diagnostics._
@@ -85,18 +87,35 @@ class NodeRuntime private[node] (
       httpServer: Fiber[Task, Unit]
   )
 
-  def acquireServers(runtime: Runtime[Task], blockApiLock: Semaphore[Task])(
+  case class APIServers(
+      repl: ReplGrpcService,
+      propose: ProposeServiceGrpcMonix.ProposeService,
+      deploy: DeployServiceGrpcMonix.DeployService
+  )
+
+  def acquireAPIServers(runtime: Runtime[Task], blockApiLock: Semaphore[Task])(
+      implicit
+      blockStore: BlockStore[Task],
+      oracle: SafetyOracle[Task],
+      concurrent: Concurrent[Task],
+      span: Span[Task],
+      engineCell: EngineCell[Task]
+  ): APIServers = {
+    implicit val s: Scheduler = scheduler
+    val repl                  = new ReplGrpcService(runtime, s)
+    val deploy                = DeployGrpcService.instance(blockApiLock)
+    val propose               = ProposeGrpcService.instance(blockApiLock)
+    APIServers(repl, propose, deploy)
+  }
+
+  def acquireServers(runtime: Runtime[Task], apiServers: APIServers)(
       implicit
       kademliaStore: KademliaStore[Task],
       nodeDiscovery: NodeDiscovery[Task],
-      blockStore: BlockStore[Task],
-      oracle: SafetyOracle[Task],
       connectionsCell: ConnectionsCell[Task],
       concurrent: Concurrent[Task],
       metrics: Metrics[Task],
-      rPConfAsk: RPConfAsk[Task],
-      span: Span[Task],
-      engineCell: EngineCell[Task]
+      rPConfAsk: RPConfAsk[Task]
   ): Task[Servers] = {
     implicit val s: Scheduler = scheduler
     for {
@@ -126,14 +145,16 @@ class NodeRuntime private[node] (
                             .acquireExternalServer[Task](
                               conf.grpcServer.portExternal,
                               grpcScheduler,
-                              blockApiLock
+                              apiServers.deploy,
+                              apiServers.propose
                             )
       internalApiServer <- api
                             .acquireInternalServer(
                               conf.grpcServer.portInternal,
                               runtime,
                               grpcScheduler,
-                              blockApiLock
+                              apiServers.repl,
+                              apiServers.propose
                             )
 
       prometheusReporter = new NewPrometheusReporter()
@@ -169,7 +190,11 @@ class NodeRuntime private[node] (
     )
   }
 
-  def clearResources(servers: Servers, runtime: Runtime[Task], casperRuntime: Runtime[Task])(
+  def clearResources(
+      servers: Servers,
+      runtime: Runtime[Task],
+      casperRuntime: Runtime[Task]
+  )(
       implicit
       blockStore: BlockStore[Task],
       blockDagStorage: BlockDagStorage[Task]
@@ -196,7 +221,11 @@ class NodeRuntime private[node] (
       _ <- log.info("Goodbye.")
     } yield ()).unsafeRunSync(scheduler)
 
-  def addShutdownHook(servers: Servers, runtime: Runtime[Task], casperRuntime: Runtime[Task])(
+  def addShutdownHook(
+      servers: Servers,
+      runtime: Runtime[Task],
+      casperRuntime: Runtime[Task]
+  )(
       implicit blockStore: BlockStore[Task],
       blockDagStorage: BlockDagStorage[Task]
   ): Task[Unit] =
@@ -206,7 +235,8 @@ class NodeRuntime private[node] (
 
   private def nodeProgram(
       runtime: Runtime[Task],
-      casperRuntime: Runtime[Task]
+      casperRuntime: Runtime[Task],
+      apiServers: APIServers
   )(
       implicit
       time: Time[Task],
@@ -214,14 +244,12 @@ class NodeRuntime private[node] (
       rpConfAsk: RPConfAsk[Task],
       peerNodeAsk: PeerNodeAsk[Task],
       metrics: Metrics[Task],
-      span: Span[Task],
       transport: TransportLayer[Task],
       kademliaStore: KademliaStore[Task],
       nodeDiscovery: NodeDiscovery[Task],
-      rpConnectons: ConnectionsCell[Task],
+      rpConnections: ConnectionsCell[Task],
       blockDagStorage: BlockDagStorage[Task],
       blockStore: BlockStore[Task],
-      oracle: SafetyOracle[Task],
       packetHandler: PacketHandler[Task],
       engineCell: EngineCell[Task],
       requestedBlocks: Running.RequestedBlocks[Task]
@@ -257,10 +285,10 @@ class NodeRuntime private[node] (
         _ <- time.sleep(10.minutes)
       } yield ()
 
-    def waitForFirstConnetion: Task[Unit] =
+    def waitForFirstConnection: Task[Unit] =
       for {
         _ <- time.sleep(10.second)
-        _ <- ConnectionsCell[Task].read.map(_.isEmpty).ifM(waitForFirstConnetion, ().pure[Task])
+        _ <- ConnectionsCell[Task].read.map(_.isEmpty).ifM(waitForFirstConnection, ().pure[Task])
       } yield ()
 
     val casperLoop: Task[Unit] =
@@ -272,13 +300,19 @@ class NodeRuntime private[node] (
       } yield ()
 
     for {
-      blockApiLock <- Semaphore[Task](1)
-      _            <- info
-      local        <- peerNodeAsk.ask
-      host         = local.endpoint.host
-      servers      <- acquireServers(runtime, blockApiLock)
-      _            <- addShutdownHook(servers, runtime, casperRuntime)
-      _            <- servers.externalApiServer.start
+      _     <- info
+      local <- peerNodeAsk.ask
+      host  = local.endpoint.host
+      servers <- acquireServers(runtime, apiServers)(
+                  kademliaStore,
+                  nodeDiscovery,
+                  rpConnections,
+                  Concurrent[Task],
+                  metrics,
+                  rpConfAsk
+                )
+      _ <- addShutdownHook(servers, runtime, casperRuntime)
+      _ <- servers.externalApiServer.start
       _ <- Log[Task].info(
             s"External API server started at $host:${servers.externalApiServer.port}"
           )
@@ -300,7 +334,7 @@ class NodeRuntime private[node] (
       _       <- Task.defer(nodeDiscoveryLoop.forever).executeOn(loopScheduler).start
       _       <- Task.defer(clearConnectionsLoop.forever).executeOn(loopScheduler).start
       _ <- if (conf.server.standalone) ().pure[Task]
-          else Log[Task].info(s"Waiting for first connection.") >> waitForFirstConnetion
+          else Log[Task].info(s"Waiting for first connection.") >> waitForFirstConnection
       _ <- Concurrent[Task].start(EngineCell[Task].read >>= (_.init))
       _ <- Task.defer(casperLoop.forever).executeOn(loopScheduler)
     } yield ()
@@ -443,21 +477,28 @@ class NodeRuntime private[node] (
       span
     ) = result
 
+    blockApiLock <- Semaphore[Task](1)
+    apiServers = acquireAPIServers(runtime, blockApiLock)(
+      blockStore,
+      oracle,
+      Concurrent[Task],
+      span,
+      engineCell
+    )
+
     // 4. run the node program.
-    program = nodeProgram(runtime, casperRuntime)(
+    program = nodeProgram(runtime, casperRuntime, apiServers)(
       time,
       rpConfState,
       rpConfAsk,
       peerNodeAsk,
       metrics,
-      span,
       transport,
       kademliaStore,
       nodeDiscovery,
       rpConnections,
       blockDagStorage,
       blockStore,
-      oracle,
       packetHandler,
       engineCell,
       requestedBlocks

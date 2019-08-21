@@ -19,7 +19,7 @@ import coop.rchain.metrics.Span
 import monix.eval.Task
 import monix.execution.Scheduler
 
-private[api] object ProposeGrpcService {
+object ProposeGrpcService {
   def instance[F[_]: Concurrent: Log: SafetyOracle: BlockStore: Taskable: Span: EngineCell](
       blockApiLock: Semaphore[F]
   )(
