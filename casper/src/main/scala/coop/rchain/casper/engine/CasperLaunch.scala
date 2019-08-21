@@ -14,14 +14,11 @@ import coop.rchain.blockstorage.util.io.IOError.RaiseIOError
 import coop.rchain.casper.genesis.Genesis
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.rholang.RuntimeManager
-import coop.rchain.catscontrib.TaskContrib
 import coop.rchain.comm.discovery.NodeDiscovery
 import coop.rchain.comm.rp.Connect.{ConnectionsCell, RPConfAsk}
 import coop.rchain.comm.transport.TransportLayer
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.shared._
-import monix.eval.Task
-import monix.execution.Scheduler
 
 object CasperLaunch {
 
@@ -29,9 +26,8 @@ object CasperLaunch {
       val conf: CasperConf
   )
   def apply[F[_]: LastApprovedBlock: Metrics: Span: BlockStore: ConnectionsCell: NodeDiscovery: TransportLayer: RPConfAsk: SafetyOracle: LastFinalizedBlockCalculator: Sync: Concurrent: Time: Log: EventLog: BlockDagStorage: EngineCell: EnvVars: RaiseIOError: RuntimeManager: Running.RequestedBlocks](
-      init: CasperInit[F],
-      toTask: F[_] => Task[_]
-  )(implicit scheduler: Scheduler): F[Unit] =
+      init: CasperInit[F]
+  ): F[Unit] =
     BlockStore[F].getApprovedBlock map {
       case Some(approvedBlock) =>
         val msg    = "Found ApprovedBlock in storage, reconnecting to existing network"
@@ -44,7 +40,7 @@ object CasperLaunch {
       case None if (init.conf.createGenesis) =>
         val msg =
           "ApprovedBlock not found in storage, taking part in ceremony as ceremony master"
-        val action = initBootstrap[F](init, toTask)
+        val action = initBootstrap[F](init)
         (msg, action)
       case None =>
         val msg    = "ApprovedBlock not found in storage, connecting to existing network"
@@ -99,9 +95,8 @@ object CasperLaunch {
     } yield ()
 
   def initBootstrap[F[_]: Monad: Sync: LastApprovedBlock: Time: Log: EventLog: RPConfAsk: BlockStore: ConnectionsCell: TransportLayer: Concurrent: Metrics: Span: SafetyOracle: LastFinalizedBlockCalculator: BlockDagStorage: EngineCell: EnvVars: RaiseIOError: RuntimeManager: Running.RequestedBlocks](
-      init: CasperInit[F],
-      toTask: F[_] => Task[_]
-  )(implicit scheduler: Scheduler): F[Unit] =
+      init: CasperInit[F]
+  ): F[Unit] =
     for {
       genesis <- Genesis.fromInputFiles[F](
                   init.conf.bondsFile,
@@ -122,17 +117,14 @@ object CasperLaunch {
                 init.conf.approveGenesisInterval
               )
       // TODO OMG Fix, use Concurrent+!11
-      _ <- Sync[F].delay {
-            val _ = toTask(
-              GenesisCeremonyMaster
-                .approveBlockInterval[F](
-                  init.conf.approveGenesisInterval,
-                  init.conf.shardId,
-                  validatorId
-                )
-            ).forkAndForget.runToFuture
-            ().pure[F]
-          }
+      _ <- Concurrent[F].start(
+            GenesisCeremonyMaster
+              .approveBlockInterval[F](
+                init.conf.approveGenesisInterval,
+                init.conf.shardId,
+                validatorId
+              )
+          )
       _ <- EngineCell[F].set(new GenesisCeremonyMaster[F](abp))
     } yield ()
 

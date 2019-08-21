@@ -483,7 +483,7 @@ class NodeRuntime private[node] (
     raiseIOError    = IOError.raiseIOErrorThroughSync[Task]
     requestedBlocks <- Cell.mvarCell[Task, Map[BlockHash, Running.Requested]](Map.empty)
     casperInit      = new CasperInit[Task](conf.casper)
-    _ <- CasperLaunch[Task](casperInit, identity)(
+    _ <- CasperLaunch[Task](casperInit)(
           lab,
           metrics,
           span,
@@ -504,8 +504,7 @@ class NodeRuntime private[node] (
           envVars,
           raiseIOError,
           runtimeManager,
-          requestedBlocks,
-          scheduler
+          requestedBlocks
         )
     packetHandler = {
       implicit val ev: EngineCell[Task] = engineCell
