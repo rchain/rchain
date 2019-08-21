@@ -17,7 +17,7 @@ import coop.rchain.models.Var.VarInstance.{BoundVar, FreeVar, Wildcard}
 import coop.rchain.models.rholang.implicits._
 import coop.rchain.models.serialization.implicits._
 import coop.rchain.models.{Match, MatchCase, _}
-import coop.rchain.rholang.interpreter.Runtime.{RhoDispatch, RhoPureSpace}
+import coop.rchain.rholang.interpreter.Runtime.{RhoDispatch, RhoISpace}
 import coop.rchain.rholang.interpreter.Substitute.{charge => _, _}
 import coop.rchain.rholang.interpreter.accounting._
 import coop.rchain.rholang.interpreter.errors._
@@ -27,6 +27,7 @@ import coop.rchain.rspace.util._
 import monix.eval.Coeval
 import scalapb.GeneratedMessage
 
+import scala.collection.SortedSet
 import scala.collection.immutable.BitSet
 import scala.util.{Random, Try}
 
@@ -62,7 +63,7 @@ trait Reduce[M[_]] {
 }
 
 class DebruijnInterpreter[M[_], F[_]](
-    pureRSpace: RhoPureSpace[M],
+    pureRSpace: RhoISpace[M],
     dispatcher: => RhoDispatch[M],
     urnMap: Map[String, Par]
 )(
@@ -149,7 +150,7 @@ class DebruijnInterpreter[M[_], F[_]](
       TaggedContinuation(ParBody(body)),
       persist = persistent,
       sequenceNumber,
-      peek
+      if (peek) SortedSet(sources.indices: _*) else SortedSet.empty[Int]
     ) >>= (go(_))
   }
 

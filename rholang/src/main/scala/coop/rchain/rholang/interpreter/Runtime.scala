@@ -20,7 +20,6 @@ import coop.rchain.rholang.interpreter.Runtime._
 import coop.rchain.rholang.interpreter.accounting.{noOpCostLog, _}
 import coop.rchain.rholang.interpreter.errors.SetupError
 import coop.rchain.rspace.{Match, RSpace, _}
-import coop.rchain.rspace.pure.PureRSpace
 import coop.rchain.shared.Log
 
 import scala.concurrent.ExecutionContext
@@ -47,7 +46,6 @@ class Runtime[F[_]: Sync] private (
 object Runtime {
 
   type RhoISpace[F[_]]       = TCPAK[F, ISpace]
-  type RhoPureSpace[F[_]]    = TCPAK[F, PureRSpace]
   type RhoReplayISpace[F[_]] = TCPAK[F, IReplaySpace]
 
   type RhoDispatch[F[_]]    = Dispatch[F, ListParWithRandom, TaggedContinuation]

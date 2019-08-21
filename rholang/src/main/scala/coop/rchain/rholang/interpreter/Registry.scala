@@ -65,7 +65,7 @@ trait Registry[F[_]] {
 }
 
 class RegistryImpl[F[_]](
-    private val space: Runtime.RhoPureSpace[F],
+    private val space: Runtime.RhoISpace[F],
     private val dispatcher: Runtime.RhoDispatch[F]
 )(implicit F: Sync[F])
     extends Registry[F] {

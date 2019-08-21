@@ -7,7 +7,7 @@ import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.metrics.Span
 import coop.rchain.models.TaggedContinuation.TaggedCont.{Empty, ParBody, ScalaBodyRef}
 import coop.rchain.models._
-import coop.rchain.rholang.interpreter.Runtime.{RhoISpace, RhoPureSpace}
+import coop.rchain.rholang.interpreter.Runtime.RhoISpace
 import coop.rchain.rholang.interpreter.accounting._
 import coop.rchain.rholang.interpreter.storage.ChargingRSpace
 
@@ -70,12 +70,9 @@ object RholangAndScalaDispatcher {
       new RholangAndScalaDispatcher(dispatchTable)
 
     implicit lazy val reducer: Reduce[M] =
-      new DebruijnInterpreter[M, F](chargingRSpace, dispatcher, urnMap)
+      new DebruijnInterpreter[M, F](tuplespace, dispatcher, urnMap)
 
-    lazy val chargingRSpace: RhoPureSpace[M] =
-      ChargingRSpace.pureRSpace(tuplespace)
-
-    val registry: Registry[M] = new RegistryImpl(chargingRSpace, dispatcher)
+    val registry: Registry[M] = new RegistryImpl(tuplespace, dispatcher)
     (dispatcher, reducer, registry)
   }
 }
