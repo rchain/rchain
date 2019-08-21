@@ -47,7 +47,7 @@ class CostAccountingSpec extends FlatSpec with Matchers with PropertyChecks with
             InterpreterUtil.evaluateResult(runtime, contract, Cost(initialPhlo.toLong))
           }
       }
-      .runSyncUnsafe(25.seconds)
+      .runSyncUnsafe(75.seconds)
   }
 
   val contracts = Table(
@@ -56,6 +56,20 @@ class CostAccountingSpec extends FlatSpec with Matchers with PropertyChecks with
     ("""@0!(2) | @1!(1)""", 197L),
     ("""for(x <- @0){ Nil }""", 128L),
     ("""for(x <- @0){ Nil } | @0!(2)""", 329L),
+    ("@0!!(0) | for (_ <- @0) { 0 }", 342L),
+    ("@0!!(0) | for (x <- @0) { 0 }", 342L),
+    ("@0!!(0) | for (@0 <- @0) { 0 }", 336L),
+    ("@0!!(0) | @0!!(0) | for (_ <- @0) { 0 }", 443L),
+    ("@0!!(0) | @1!!(1) | for (_ <- @0;_ <- @1) { 0 }", 594L),
+    ("@0!(0) | for (_ <- @0) { 0 }", 333L),
+    ("@0!(0) | for (x <- @0) { 0 }", 333L),
+    ("@0!(0) | for (@0 <- @0) { 0 }", 327L),
+    ("@0!(0) | for (_ <= @0) { 0 }", 354L),
+    ("@0!(0) | for (x <= @0) { 0 }", 356L),
+    ("@0!(0) | for (@0 <= @0) { 0 }", 341L),
+    ("@0!(0) | @0!(0) | for (_ <= @0) { 0 }", 574L),
+    ("@0!(0) | for (@0 <- @0) { 0 } | @0!(0) | for (_ <- @0) { 0 }", 663L),
+    ("@0!(0) | for (@0 <- @0) { 0 } | @0!(0) | for (@1 <- @0) { 0 }", 551L),
     ("""new loop in {
          contract loop(@n) = {
            match n {
@@ -74,10 +88,12 @@ class CostAccountingSpec extends FlatSpec with Matchers with PropertyChecks with
           42 => @3!(42)
         }
      """.stripMargin, 1264L),
+    // test that we charge for system processes
     ("""new ret in {
        |  @"keccak256Hash"!("TEST".toByteArray(), *ret) |
        |  for (_ <- ret) { Nil }
        |}""".stripMargin, 734L)
+    // TODO add a test making sure registry usage has deterministic cost too
   )
 
   "Total cost of evaluation" should "be equal to the sum of all costs in the log" in {
@@ -87,6 +103,31 @@ class CostAccountingSpec extends FlatSpec with Matchers with PropertyChecks with
         val (result, costLog) = evaluateWithCostLog(initialPhlo, contract)
         result shouldBe EvaluateResult(Cost(expectedTotalCost), Vector.empty)
         costLog.map(_.value).toList.sum shouldEqual expectedTotalCost
+      }
+    }
+  }
+
+  it should "be repeatable" in
+    forAll(contracts) { (contract: String, _) =>
+      checkRepeatableCost {
+        val result = evaluateWithCostLog(Integer.MAX_VALUE, contract)
+        assert(result._1.errors.isEmpty)
+        result
+      }
+    }
+
+  def checkRepeatableCost(block: => (EvaluateResult, Chain[Cost])): Unit = {
+    val repetitions = 20
+    val first       = block
+    // execute in parallel to trigger different interleaves
+    val subsequents = (1 to repetitions).par.map(_ => block).toList
+    // check assertions sequentially to avoid "suppressed exceptions" output on assertion failure
+    subsequents.foreach { subsequent =>
+      val expected = first._1.cost.value
+      val actual   = subsequent._1.cost.value
+      if (expected != actual) {
+        assert(subsequent._2.map(_ + "\n") == first._2.map(_ + "\n"))
+          .withClue(s"Cost was not repeatable, expected $expected, got $actual.\n")
       }
     }
   }
