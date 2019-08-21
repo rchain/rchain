@@ -8,6 +8,7 @@ import cats.effect._
 import cats.effect.concurrent.Semaphore
 import cats.implicits._
 import cats.mtl.{ApplicativeLocal, DefaultApplicativeLocal}
+import cats.temp.par.Par
 import coop.rchain.blockstorage._
 import coop.rchain.blockstorage.util.io.IOError
 import coop.rchain.blockstorage.util.io.IOError.RaiseIOError
@@ -454,32 +455,6 @@ class NodeRuntime private[node] (
       blockDagStorage,
       oracle
     )
-    runtime <- {
-      implicit val s                = rspaceScheduler
-      implicit val m: Metrics[Task] = metrics
-      implicit val sp: Span[Task]   = span
-      Runtime
-        .createWithEmptyCost[Task](storagePath, storageSize, Seq.empty)
-    }
-    _ <- Runtime.bootstrapRegistry[Task](runtime)
-
-    casperRuntime <- {
-      implicit val s                = rspaceScheduler
-      implicit val m: Metrics[Task] = metrics
-      implicit val sp: Span[Task]   = span
-      Runtime
-        .createWithEmptyCost[Task](
-          casperStoragePath,
-          storageSize,
-          Seq.empty
-        )
-
-    }
-    runtimeManager <- {
-      implicit val m: Metrics[Task] = metrics
-      implicit val sp: Span[Task]   = span
-      RuntimeManager.fromRuntime[Task](casperRuntime)
-    }
     result <- setupNodeProgramF[Task](conf)(
                lab,
                metrics,
@@ -497,9 +472,10 @@ class NodeRuntime private[node] (
                log,
                eventLog,
                blockDagStorage,
-               runtimeManager
+               ContextShift[Task],
+               Par[Task]
              )
-    (engineCell, requestedBlocks) = result
+    (engineCell, requestedBlocks, runtime, casperRuntime) = result
     packetHandler = {
       implicit val ev: EngineCell[Task] = engineCell
       CasperPacketHandler[Task]
@@ -527,10 +503,27 @@ class NodeRuntime private[node] (
     _ <- handleUnrecoverableErrors(program)
   } yield ()
 
-  def setupNodeProgramF[F[_]: LastApprovedBlock: Metrics: Span: BlockStore: ConnectionsCell: NodeDiscovery: TransportLayer: RPConfAsk: SafetyOracle: LastFinalizedBlockCalculator: Sync: Concurrent: Time: Log: EventLog: BlockDagStorage: RuntimeManager](
+  def setupNodeProgramF[F[_]: LastApprovedBlock: Metrics: Span: BlockStore: ConnectionsCell: NodeDiscovery: TransportLayer: RPConfAsk: SafetyOracle: LastFinalizedBlockCalculator: Sync: Concurrent: Time: Log: EventLog: BlockDagStorage: ContextShift: Par](
       conf: Configuration
   ) =
     for {
+
+      runtime <- {
+        implicit val s = rspaceScheduler
+        Runtime
+          .createWithEmptyCost[F](storagePath, storageSize, Seq.empty)
+      }
+      _ <- Runtime.bootstrapRegistry[F](runtime)
+      casperRuntime <- {
+        implicit val s = rspaceScheduler
+        Runtime
+          .createWithEmptyCost[F](
+            casperStoragePath,
+            storageSize,
+            Seq.empty
+          )
+      }
+      runtimeManager  <- RuntimeManager.fromRuntime[F](casperRuntime)
       engineCell      <- EngineCell.init[F]
       envVars         = EnvVars.envVars[F]
       raiseIOError    = IOError.raiseIOErrorThroughSync[F]
@@ -541,9 +534,10 @@ class NodeRuntime private[node] (
         implicit val ev = envVars
         implicit val re = raiseIOError
         implicit val rb = requestedBlocks
+        implicit val rm = runtimeManager
         CasperLaunch[F](casperInit)
       }
-    } yield (engineCell, requestedBlocks)
+    } yield (engineCell, requestedBlocks, runtime, casperRuntime)
 }
 
 object NodeRuntime {
