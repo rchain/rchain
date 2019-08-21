@@ -10,6 +10,8 @@ import cats.implicits._
 import cats.mtl.{ApplicativeLocal, DefaultApplicativeLocal}
 import coop.rchain.blockstorage._
 import coop.rchain.blockstorage.util.io.IOError
+import coop.rchain.blockstorage.util.io.IOError.RaiseIOError
+import coop.rchain.casper.LastApprovedBlock.LastApprovedBlock
 import coop.rchain.casper._
 import coop.rchain.casper.engine.CasperLaunch.CasperInit
 import coop.rchain.casper.engine.EngineCell._
@@ -483,7 +485,7 @@ class NodeRuntime private[node] (
     raiseIOError    = IOError.raiseIOErrorThroughSync[Task]
     requestedBlocks <- Cell.mvarCell[Task, Map[BlockHash, Running.Requested]](Map.empty)
     casperInit      = new CasperInit[Task](conf.casper)
-    _ <- CasperLaunch[Task](casperInit)(
+    _ <- setupNodeProgramF[Task](casperInit)(
           lab,
           metrics,
           span,
@@ -533,6 +535,12 @@ class NodeRuntime private[node] (
     _ <- handleUnrecoverableErrors(program)
   } yield ()
 
+  def setupNodeProgramF[F[_]: LastApprovedBlock: Metrics: Span: BlockStore: ConnectionsCell: NodeDiscovery: TransportLayer: RPConfAsk: SafetyOracle: LastFinalizedBlockCalculator: Sync: Concurrent: Time: Log: EventLog: BlockDagStorage: EngineCell: EnvVars: RaiseIOError: RuntimeManager: Running.RequestedBlocks](
+      casperInit: CasperInit[F]
+  ) =
+    for {
+      _ <- CasperLaunch[F](casperInit)
+    } yield ()
 }
 
 object NodeRuntime {

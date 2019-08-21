@@ -116,7 +116,7 @@ object CasperLaunch {
                 init.conf.approveGenesisDuration,
                 init.conf.approveGenesisInterval
               )
-      // TODO OMG Fix, use Concurrent+!11
+      // TODO track fiber
       _ <- Concurrent[F].start(
             GenesisCeremonyMaster
               .approveBlockInterval[F](
