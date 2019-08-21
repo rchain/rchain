@@ -1,5 +1,6 @@
 package coop.rchain.node
 
+import java.nio.ByteBuffer
 import java.nio.file.{Files, Path}
 import java.util.UUID
 
@@ -46,6 +47,7 @@ import monix.execution.Scheduler
 import org.http4s.implicits._
 import org.http4s.server.blaze._
 import org.http4s.server.Router
+import org.lmdbjava.Env
 
 import scala.concurrent.duration._
 
@@ -158,13 +160,14 @@ class NodeRuntime private[node] (
             if (conf.kamon.zipkin) Kamon.addReporter(new ZipkinReporter())
             if (conf.kamon.sigar) SystemMetrics.startCollecting()
           }
-    } yield Servers(
-      kademliaRPCServer,
-      transportServer,
-      externalApiServer,
-      internalApiServer,
-      httpServerFiber
-    )
+    } yield
+      Servers(
+        kademliaRPCServer,
+        transportServer,
+        externalApiServer,
+        internalApiServer,
+        httpServerFiber
+      )
   }
 
   def clearResources(servers: Servers, runtime: Runtime[Task], casperRuntime: Runtime[Task])(
@@ -367,7 +370,6 @@ class NodeRuntime private[node] (
     metrics       = diagnostics.effects.metrics[Task]
     span          <- setupSpan(conf.kamon.zipkin, conf.server.networkId, local.endpoint.host)
     time          = effects.time
-    timerTask     = Task.timer
     lab           <- LastApprovedBlock.of[Task]
     commTmpFolder = conf.server.dataDir.resolve("tmp").resolve("comm")
     _ <- commTmpFolder.toFile
@@ -408,14 +410,6 @@ class NodeRuntime private[node] (
     _             <- mkDirs(blockstorePath)
     _             <- mkDirs(dagStoragePath)
     blockstoreEnv = Context.env(blockstorePath, 8L * 1024L * 1024L * 1024L)
-    blockStore <- FileLMDBIndexBlockStore
-                   .create[Task](blockstoreEnv, blockstorePath)(
-                     Concurrent[Task],
-                     Sync[Task],
-                     log,
-                     metrics
-                   )
-                   .map(_.right.get) // TODO handle errors
     dagConfig = BlockDagFileStorage.Config(
       latestMessagesLogPath = dagStoragePath.resolve("latestMessagesLogPath"),
       latestMessagesCrcPath = dagStoragePath.resolve("latestMessagesCrcPath"),
@@ -432,11 +426,10 @@ class NodeRuntime private[node] (
       mapSize = 8L * 1024L * 1024L * 1024L,
       latestMessagesLogMaxSizeFactor = 10
     )
-    result <- setupNodeProgramF[Task](conf, dagConfig)(
+    result <- setupNodeProgramF[Task](conf, dagConfig, blockstoreEnv)(
                lab,
                metrics,
                span,
-               blockStore,
                rpConnections,
                nodeDiscovery,
                transport,
@@ -449,7 +442,16 @@ class NodeRuntime private[node] (
                ContextShift[Task],
                Par[Task]
              )
-    (blockDagStorage, oracle, engineCell, requestedBlocks, runtime, casperRuntime, packetHandler) = result
+    (
+      blockStore,
+      blockDagStorage,
+      oracle,
+      engineCell,
+      requestedBlocks,
+      runtime,
+      casperRuntime,
+      packetHandler
+    ) = result
 
     // 4. run the node program.
     program = nodeProgram(runtime, casperRuntime)(
@@ -473,11 +475,20 @@ class NodeRuntime private[node] (
     _ <- handleUnrecoverableErrors(program)
   } yield ()
 
-  def setupNodeProgramF[F[_]: LastApprovedBlock: Metrics: Span: BlockStore: ConnectionsCell: NodeDiscovery: TransportLayer: RPConfAsk: Sync: Concurrent: Time: Log: EventLog: ContextShift: Par](
+  def setupNodeProgramF[
+      F[_]: LastApprovedBlock: Metrics: Span: ConnectionsCell: NodeDiscovery: TransportLayer: RPConfAsk: Sync: Concurrent: Time: Log: EventLog: ContextShift: Par](
       conf: Configuration,
-      dagConfig: BlockDagFileStorage.Config
+      dagConfig: BlockDagFileStorage.Config,
+      blockstoreEnv: Env[ByteBuffer]
   ) =
     for {
+      blockStore <- FileLMDBIndexBlockStore
+                     .create[F](blockstoreEnv, blockstorePath)(
+                       Concurrent[F],
+                       Sync[F],
+                       Log[F]
+                     )
+                     .map(_.right.get) // TODO handle errors
       blockDagStorage <- BlockDagFileStorage.create[F](dagConfig)
       oracle          = SafetyOracle.cliqueOracle[F]
       lastFinalizedBlockCalculator = LastFinalizedBlockCalculator[F](
@@ -486,7 +497,7 @@ class NodeRuntime private[node] (
         Sync[F],
         Log[F],
         Concurrent[F],
-        BlockStore[F],
+        blockStore,
         blockDagStorage,
         oracle
       )
@@ -512,6 +523,8 @@ class NodeRuntime private[node] (
       requestedBlocks <- Cell.mvarCell[F, Map[BlockHash, Running.Requested]](Map.empty)
       casperInit      = new CasperInit[F](conf.casper)
       _ <- {
+        implicit val bs = blockStore
+        implicit val bd = blockDagStorage
         implicit val ec = engineCell
         implicit val ev = envVars
         implicit val re = raiseIOError
@@ -519,22 +532,23 @@ class NodeRuntime private[node] (
         implicit val rm = runtimeManager
         implicit val or = oracle
         implicit val lc = lastFinalizedBlockCalculator
-        implicit val bd = blockDagStorage
         CasperLaunch[F](casperInit)
       }
       packetHandler = {
         implicit val ev: EngineCell[F] = engineCell
         CasperPacketHandler[F]
       }
-    } yield (
-      blockDagStorage,
-      oracle,
-      engineCell,
-      requestedBlocks,
-      runtime,
-      casperRuntime,
-      packetHandler
-    )
+    } yield
+      (
+        blockStore,
+        blockDagStorage,
+        oracle,
+        engineCell,
+        requestedBlocks,
+        runtime,
+        casperRuntime,
+        packetHandler
+      )
 }
 
 object NodeRuntime {
