@@ -480,34 +480,26 @@ class NodeRuntime private[node] (
       implicit val sp: Span[Task]   = span
       RuntimeManager.fromRuntime[Task](casperRuntime)
     }
-    engineCell      <- EngineCell.init[Task]
-    envVars         = EnvVars.envVars[Task]
-    raiseIOError    = IOError.raiseIOErrorThroughSync[Task]
-    requestedBlocks <- Cell.mvarCell[Task, Map[BlockHash, Running.Requested]](Map.empty)
-    casperInit      = new CasperInit[Task](conf.casper)
-    _ <- setupNodeProgramF[Task](casperInit)(
-          lab,
-          metrics,
-          span,
-          blockStore,
-          rpConnections,
-          nodeDiscovery,
-          transport,
-          rpConfAsk,
-          oracle,
-          lastFinalizedBlockCalculator,
-          Sync[Task],
-          Concurrent[Task],
-          time,
-          log,
-          eventLog,
-          blockDagStorage,
-          engineCell,
-          envVars,
-          raiseIOError,
-          runtimeManager,
-          requestedBlocks
-        )
+    result <- setupNodeProgramF[Task](conf)(
+               lab,
+               metrics,
+               span,
+               blockStore,
+               rpConnections,
+               nodeDiscovery,
+               transport,
+               rpConfAsk,
+               oracle,
+               lastFinalizedBlockCalculator,
+               Sync[Task],
+               Concurrent[Task],
+               time,
+               log,
+               eventLog,
+               blockDagStorage,
+               runtimeManager
+             )
+    (engineCell, requestedBlocks) = result
     packetHandler = {
       implicit val ev: EngineCell[Task] = engineCell
       CasperPacketHandler[Task]
@@ -535,12 +527,23 @@ class NodeRuntime private[node] (
     _ <- handleUnrecoverableErrors(program)
   } yield ()
 
-  def setupNodeProgramF[F[_]: LastApprovedBlock: Metrics: Span: BlockStore: ConnectionsCell: NodeDiscovery: TransportLayer: RPConfAsk: SafetyOracle: LastFinalizedBlockCalculator: Sync: Concurrent: Time: Log: EventLog: BlockDagStorage: EngineCell: EnvVars: RaiseIOError: RuntimeManager: Running.RequestedBlocks](
-      casperInit: CasperInit[F]
+  def setupNodeProgramF[F[_]: LastApprovedBlock: Metrics: Span: BlockStore: ConnectionsCell: NodeDiscovery: TransportLayer: RPConfAsk: SafetyOracle: LastFinalizedBlockCalculator: Sync: Concurrent: Time: Log: EventLog: BlockDagStorage: RuntimeManager](
+      conf: Configuration
   ) =
     for {
-      _ <- CasperLaunch[F](casperInit)
-    } yield ()
+      engineCell      <- EngineCell.init[F]
+      envVars         = EnvVars.envVars[F]
+      raiseIOError    = IOError.raiseIOErrorThroughSync[F]
+      requestedBlocks <- Cell.mvarCell[F, Map[BlockHash, Running.Requested]](Map.empty)
+      casperInit      = new CasperInit[F](conf.casper)
+      _ <- {
+        implicit val ec = engineCell
+        implicit val ev = envVars
+        implicit val re = raiseIOError
+        implicit val rb = requestedBlocks
+        CasperLaunch[F](casperInit)
+      }
+    } yield (engineCell, requestedBlocks)
 }
 
 object NodeRuntime {
