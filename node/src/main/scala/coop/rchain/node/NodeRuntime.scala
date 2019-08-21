@@ -160,14 +160,13 @@ class NodeRuntime private[node] (
             if (conf.kamon.zipkin) Kamon.addReporter(new ZipkinReporter())
             if (conf.kamon.sigar) SystemMetrics.startCollecting()
           }
-    } yield
-      Servers(
-        kademliaRPCServer,
-        transportServer,
-        externalApiServer,
-        internalApiServer,
-        httpServerFiber
-      )
+    } yield Servers(
+      kademliaRPCServer,
+      transportServer,
+      externalApiServer,
+      internalApiServer,
+      httpServerFiber
+    )
   }
 
   def clearResources(servers: Servers, runtime: Runtime[Task], casperRuntime: Runtime[Task])(
@@ -319,9 +318,6 @@ class NodeRuntime private[node] (
         }
       } >> exit0.as(Right(()))
 
-  private def setupSpan(enabled: Boolean, networkId: String, host: String): Task[Span[Task]] =
-    Task.now(Span.noop[Task])
-
   private val rpClearConnConf = ClearConnectionsConf(
     numOfConnectionsPinged = 10
   ) // TODO read from conf
@@ -358,19 +354,13 @@ class NodeRuntime private[node] (
                 id
               )
 
-    // 2. set up configurations
-    defaultTimeout = conf.server.defaultTimeout
-
     // 3. create instances of typeclasses
     initPeer      = if (conf.server.standalone) None else Some(conf.server.bootstrap)
     rpConfState   = effects.rpConfState(rpConf(local, initPeer))
     rpConfAsk     = effects.rpConfAsk(rpConfState)
     peerNodeAsk   = effects.peerNodeAsk(rpConfState)
-    rpConnections <- effects.rpConnections
     metrics       = diagnostics.effects.metrics[Task]
-    span          <- setupSpan(conf.kamon.zipkin, conf.server.networkId, local.endpoint.host)
     time          = effects.time
-    lab           <- LastApprovedBlock.of[Task]
     commTmpFolder = conf.server.dataDir.resolve("tmp").resolve("comm")
     _ <- commTmpFolder.toFile
           .exists()
@@ -388,6 +378,7 @@ class NodeRuntime private[node] (
                     commTmpFolder
                   )(grpcScheduler, log, metrics)
 
+    defaultTimeout = conf.server.defaultTimeout
     kademliaRPC = effects.kademliaRPC(
       conf.server.networkId,
       defaultTimeout,
@@ -427,10 +418,7 @@ class NodeRuntime private[node] (
       latestMessagesLogMaxSizeFactor = 10
     )
     result <- setupNodeProgramF[Task](conf, dagConfig, blockstoreEnv)(
-               lab,
                metrics,
-               span,
-               rpConnections,
                nodeDiscovery,
                transport,
                rpConfAsk,
@@ -443,6 +431,7 @@ class NodeRuntime private[node] (
                Par[Task]
              )
     (
+      rpConnections,
       blockStore,
       blockDagStorage,
       oracle,
@@ -450,7 +439,8 @@ class NodeRuntime private[node] (
       requestedBlocks,
       runtime,
       casperRuntime,
-      packetHandler
+      packetHandler,
+      span
     ) = result
 
     // 4. run the node program.
@@ -475,22 +465,28 @@ class NodeRuntime private[node] (
     _ <- handleUnrecoverableErrors(program)
   } yield ()
 
-  def setupNodeProgramF[
-      F[_]: LastApprovedBlock: Metrics: Span: ConnectionsCell: NodeDiscovery: TransportLayer: RPConfAsk: Sync: Concurrent: Time: Log: EventLog: ContextShift: Par](
+  def setupNodeProgramF[F[_]: Metrics: NodeDiscovery: TransportLayer: RPConfAsk: Sync: Concurrent: Time: Log: EventLog: ContextShift: Par](
       conf: Configuration,
       dagConfig: BlockDagFileStorage.Config,
       blockstoreEnv: Env[ByteBuffer]
   ) =
     for {
+      rpConnections <- effects.rpConnections
+      lab           <- LastApprovedBlock.of[F]
       blockStore <- FileLMDBIndexBlockStore
                      .create[F](blockstoreEnv, blockstorePath)(
                        Concurrent[F],
                        Sync[F],
-                       Log[F]
+                       Log[F],
+                       Metrics[F]
                      )
                      .map(_.right.get) // TODO handle errors
+      span            = Span.noop[F]
       blockDagStorage <- BlockDagFileStorage.create[F](dagConfig)
-      oracle          = SafetyOracle.cliqueOracle[F]
+      oracle = {
+        implicit val sp = span
+        SafetyOracle.cliqueOracle[F]
+      }
       lastFinalizedBlockCalculator = LastFinalizedBlockCalculator[F](
         conf.server.faultToleranceThreshold
       )(
@@ -502,13 +498,15 @@ class NodeRuntime private[node] (
         oracle
       )
       runtime <- {
-        implicit val s = rspaceScheduler
+        implicit val s  = rspaceScheduler
+        implicit val sp = span
         Runtime
           .createWithEmptyCost[F](storagePath, storageSize, Seq.empty)
       }
       _ <- Runtime.bootstrapRegistry[F](runtime)
       casperRuntime <- {
-        implicit val s = rspaceScheduler
+        implicit val s  = rspaceScheduler
+        implicit val sp = span
         Runtime
           .createWithEmptyCost[F](
             casperStoragePath,
@@ -516,7 +514,10 @@ class NodeRuntime private[node] (
             Seq.empty
           )
       }
-      runtimeManager  <- RuntimeManager.fromRuntime[F](casperRuntime)
+      runtimeManager <- {
+        implicit val sp = span
+        RuntimeManager.fromRuntime[F](casperRuntime)
+      }
       engineCell      <- EngineCell.init[F]
       envVars         = EnvVars.envVars[F]
       raiseIOError    = IOError.raiseIOErrorThroughSync[F]
@@ -532,23 +533,27 @@ class NodeRuntime private[node] (
         implicit val rm = runtimeManager
         implicit val or = oracle
         implicit val lc = lastFinalizedBlockCalculator
+        implicit val sp = span
+        implicit val lb = lab
+        implicit val rc = rpConnections
         CasperLaunch[F](casperInit)
       }
       packetHandler = {
         implicit val ev: EngineCell[F] = engineCell
         CasperPacketHandler[F]
       }
-    } yield
-      (
-        blockStore,
-        blockDagStorage,
-        oracle,
-        engineCell,
-        requestedBlocks,
-        runtime,
-        casperRuntime,
-        packetHandler
-      )
+    } yield (
+      rpConnections,
+      blockStore,
+      blockDagStorage,
+      oracle,
+      engineCell,
+      requestedBlocks,
+      runtime,
+      casperRuntime,
+      packetHandler,
+      span
+    )
 }
 
 object NodeRuntime {

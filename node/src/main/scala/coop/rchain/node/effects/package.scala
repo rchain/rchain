@@ -5,11 +5,9 @@ import java.nio.file.Path
 import scala.concurrent.duration._
 import scala.io.Source
 import scala.tools.jline.console._
-
-import cats.effect.Timer
+import cats.effect.{Concurrent, Timer}
 import cats.mtl._
 import cats.Applicative
-
 import coop.rchain.comm._
 import coop.rchain.comm.discovery._
 import coop.rchain.comm.rp._
@@ -17,7 +15,6 @@ import coop.rchain.comm.rp.Connect._
 import coop.rchain.comm.transport._
 import coop.rchain.metrics.Metrics
 import coop.rchain.shared._
-
 import monix.eval._
 import monix.execution._
 import monix.execution.atomic.AtomicAny
@@ -72,8 +69,8 @@ package object effects {
 
   def consoleIO(consoleReader: ConsoleReader): ConsoleIO[Task] = new JLineConsoleIO(consoleReader)
 
-  def rpConnections: Task[ConnectionsCell[Task]] =
-    Cell.mvarCell[Task, Connections](Connections.empty)
+  def rpConnections[F[_]: Concurrent]: F[ConnectionsCell[F]] =
+    Cell.mvarCell[F, Connections](Connections.empty)
 
   def rpConfState(conf: RPConf): MonadState[Task, RPConf] =
     new AtomicMonadState[Task, RPConf](AtomicAny(conf))
