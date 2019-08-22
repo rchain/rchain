@@ -31,10 +31,6 @@ import scala.collection.SortedSet
 import scala.collection.immutable.BitSet
 import scala.util.{Random, Try}
 
-object Reduce {
-  val parallelism = lang.Runtime.getRuntime.availableProcessors() * 2
-}
-
 /** Reduce is the interface for evaluating Rholang expressions.
   *
   * @tparam M The kind of Monad used for evaluation.
@@ -174,8 +170,10 @@ class DebruijnInterpreter[M[_], F[_]](
       else if (terms.size > 256) rand.splitShort(id.toShort)
       else rand.splitByte(id.toByte)
 
+    val parallelism = lang.Runtime.getRuntime.availableProcessors() * 2
+
     val indexedTerms = terms.zipWithIndex.toList
-    if (terms.size <= Reduce.parallelism) {
+    if (terms.size <= parallelism) {
       indexedTerms.parTraverse_ {
         case (term, index) =>
           val random = split(index)
@@ -191,7 +189,7 @@ class DebruijnInterpreter[M[_], F[_]](
 
       // we index terms before shuffling to have deterministic Blake2b512Random seeds for each term
       val indexedTermsShuffled = Random.shuffle(indexedTerms)
-      val groups               = indexedTermsShuffled.groupBy(_._2 % Reduce.parallelism).values.toList
+      val groups               = indexedTermsShuffled.groupBy(_._2 % parallelism).values.toList
       groups.parTraverse_ {
         _.traverse_ {
           case (term, index) =>
