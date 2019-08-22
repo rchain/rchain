@@ -23,14 +23,11 @@ package object wide {
   }
 
   def createTest(t: Option[Par])(
-      implicit errorProcessor: () => Vector[Throwable],
-      reducer: Reduce[Task],
+      implicit reducer: Reduce[Task],
       rand: Blake2b512Random
   ): Task[Vector[Throwable]] = {
     val par = t.getOrElse(throw new Error("Failed to prepare executable rholang term"))
-    reducer
-      .inj(par)
-      .map(_ => errorProcessor())
+    reducer.inj(par).attempt.map(_.swap.toSeq.toVector)
   }
 
   def resourceFileReader(path: String): InputStreamReader =

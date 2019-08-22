@@ -25,7 +25,6 @@ import scala.concurrent.Await
 import scala.concurrent.duration._
 
 trait RegistryTester extends PersistentStoreTester {
-  implicit val errorLog         = new ErrorLog[Task]()
   implicit val span: Span[Task] = NoopSpan[Task]
 
   private[this] def dispatchTableCreator(registry: Registry[Task]): RhoDispatchMap[Task] = {
@@ -58,9 +57,8 @@ trait RegistryTester extends PersistentStoreTester {
           ]
       ) => R
   ): R =
-    withTestSpace(errorLog) {
+    withTestSpace {
       case TestFixture(space, _) =>
-        val _             = errorLog.readAndClearErrorVector().runSyncUnsafe(1.second)
         implicit val cost = CostAccounting.emptyCost[Task].runSyncUnsafe(1.second)
         implicit val span = NoopSpan[Task]
 

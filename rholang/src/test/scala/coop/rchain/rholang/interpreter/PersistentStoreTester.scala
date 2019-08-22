@@ -23,9 +23,7 @@ final case class TestFixture(space: RhoISpace[Task], reducer: Reduce[Task])
 
 trait PersistentStoreTester {
 
-  def withTestSpace[R](
-      errorLog: ErrorLog[Task]
-  )(f: TestFixture => R): R = {
+  def withTestSpace[R](f: TestFixture => R): R = {
     val dbDir                              = Files.createTempDirectory("rholang-interpreter-test-")
     implicit val logF: Log[Task]           = new Log.NOPLog[Task]
     implicit val metricsEff: Metrics[Task] = new metrics.Metrics.MetricsNOP[Task]
@@ -42,8 +40,7 @@ trait PersistentStoreTester {
         TaggedContinuation
       ](dbDir, 1024L * 1024L * 1024L, Branch("test"))
       .unsafeRunSync
-    implicit val errLog = errorLog
-    val reducer         = RholangOnlyDispatcher.create[Task, Task.Par](space)._2
+    val reducer = RholangOnlyDispatcher.create[Task, Task.Par](space)._2
     cost.set(Cost.UNSAFE_MAX).runSyncUnsafe(1.second)
     try {
       f(TestFixture(space, reducer))
@@ -53,9 +50,7 @@ trait PersistentStoreTester {
     }
   }
 
-  def fixture[R](f: (RhoISpace[Task], Reduce[Task]) => Task[R])(
-      implicit errorLog: ErrorLog[Task]
-  ): R = {
+  def fixture[R](f: (RhoISpace[Task], Reduce[Task]) => Task[R]): R = {
     implicit val logF: Log[Task]           = new Log.NOPLog[Task]
     implicit val metricsEff: Metrics[Task] = new metrics.Metrics.MetricsNOP[Task]
     implicit val noopSpan: Span[Task]      = NoopSpan[Task]()

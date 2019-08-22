@@ -80,8 +80,7 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
     )
 
   "evalExpr" should "handle simple addition" in {
-    implicit val errorLog = new ErrorLog[Task]()
-    val result = withTestSpace(errorLog) {
+    val result = withTestSpace {
       case TestFixture(_, reducer) =>
         val addExpr      = EPlus(GInt(7L), GInt(8L))
         implicit val env = Env[Par]()
@@ -91,12 +90,10 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
 
     val expected = Seq(Expr(GInt(15L)))
     result.exprs should be(expected)
-    errorLog.readAndClearErrorVector.unsafeRunSync should be(Vector.empty[InterpreterError])
   }
 
   "evalExpr" should "handle long addition" in {
-    implicit val errorLog = new ErrorLog[Task]()
-    val result = withTestSpace(errorLog) {
+    val result = withTestSpace {
       case TestFixture(_, reducer) =>
         val addExpr      = EPlus(GInt(Int.MaxValue), GInt(Int.MaxValue))
         implicit val env = Env[Par]()
@@ -106,12 +103,10 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
 
     val expected = Seq(Expr(GInt(2 * Int.MaxValue.toLong)))
     result.exprs should be(expected)
-    errorLog.readAndClearErrorVector.unsafeRunSync should be(Vector.empty[InterpreterError])
   }
 
   "evalExpr" should "leave ground values alone" in {
-    implicit val errorLog = new ErrorLog[Task]()
-    val result = withTestSpace(errorLog) {
+    val result = withTestSpace {
       case TestFixture(_, reducer) =>
         val groundExpr   = GInt(7L)
         implicit val env = Env[Par]()
@@ -121,12 +116,10 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
 
     val expected = Seq(Expr(GInt(7L)))
     result.exprs should be(expected)
-    errorLog.readAndClearErrorVector.unsafeRunSync should be(Vector.empty[InterpreterError])
   }
 
   "evalExpr" should "handle equality between arbitary processes" in {
-    implicit val errorLog = new ErrorLog[Task]()
-    val result = withTestSpace(errorLog) {
+    val result = withTestSpace {
       case TestFixture(_, reducer) =>
         val eqExpr       = EEq(GPrivateBuilder("private_name"), GPrivateBuilder("private_name"))
         implicit val env = Env[Par]()
@@ -135,12 +128,10 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
     }
     val expected = Seq(Expr(GBool(true)))
     result.exprs should be(expected)
-    errorLog.readAndClearErrorVector.unsafeRunSync should be(Vector.empty[InterpreterError])
   }
 
   "evalExpr" should "substitute before comparison." in {
-    implicit val errorLog = new ErrorLog[Task]()
-    val result = withTestSpace(errorLog) {
+    val result = withTestSpace {
       case TestFixture(_, reducer) =>
         implicit val emptyEnv = Env.makeEnv(Par(), Par())
         val eqExpr            = EEq(EVar(BoundVar(0)), EVar(BoundVar(1)))
@@ -149,14 +140,12 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
     }
     val expected = Seq(Expr(GBool(true)))
     result.exprs should be(expected)
-    errorLog.readAndClearErrorVector.unsafeRunSync should be(Vector.empty[InterpreterError])
   }
 
   "eval of Bundle" should "evaluate contents of bundle" in {
-    implicit val errorLog = new ErrorLog[Task]()
-    val splitRand         = rand.splitByte(0)
-    val channel: Par      = GString("channel")
-    val result = withTestSpace(errorLog) {
+    val splitRand    = rand.splitByte(0)
+    val channel: Par = GString("channel")
+    val result = withTestSpace {
       case TestFixture(space, reducer) =>
         val bundleSend =
           Bundle(Send(channel, List(GInt(7L), GInt(8L), GInt(9L)), persistent = false, BitSet()))
@@ -175,11 +164,9 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
       )
     )
     result.toIterable should contain theSameElementsAs expectedResult
-    errorLog.readAndClearErrorVector.unsafeRunSync should be(Vector.empty[InterpreterError])
   }
 
   it should "throw an error if names are used against their polarity" in {
-    implicit val errorLog = new ErrorLog[Task]()
 
     /* for (n <- @bundle+ { y } ) { }  -> for (n <- y) { }
      */
@@ -189,16 +176,14 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
       Par()
     )
 
-    val receiveResult = withTestSpace(errorLog) {
+    val receiveResult = withTestSpace {
       case TestFixture(space, reducer) =>
         implicit val env = Env[Par]()
         val task         = reducer.eval(receive) >> space.toMap
         Await.result(task.runToFuture, 3.seconds)
     }
     receiveResult should be(HashMap.empty)
-    errorLog.readAndClearErrorVector.unsafeRunSync should be(
-      Vector(ReduceError("Trying to read from non-readable channel."))
-    )
+    // TODO: Guarantee ReduceError("Trying to read from non-readable channel.")
 
     /* @bundle- { x } !(7) -> x!(7)
      */
@@ -206,7 +191,7 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
     val send =
       Send(Bundle(x, writeFlag = false, readFlag = true), Seq(Expr(GInt(7L))))
 
-    val sendResult = withTestSpace(errorLog) {
+    val sendResult = withTestSpace {
       case TestFixture(space, reducer) =>
         implicit val env = Env[Par]()
 
@@ -214,16 +199,13 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
         Await.result(task.runToFuture, 3.seconds)
     }
     sendResult should be(HashMap.empty)
-    errorLog.readAndClearErrorVector.unsafeRunSync should be(
-      Vector(ReduceError("Trying to send on non-writeable channel."))
-    )
+    // TODO: Guarantee ReduceError("Trying to send on non-writeable channel.")
   }
 
   "eval of Send" should "place something in the tuplespace." in {
-    implicit val errorLog = new ErrorLog[Task]()
-    val channel: Par      = GString("channel")
-    val splitRand         = rand.splitByte(0)
-    val result = withTestSpace(errorLog) {
+    val channel: Par = GString("channel")
+    val splitRand    = rand.splitByte(0)
+    val result = withTestSpace {
       case TestFixture(space, reducer) =>
         val send =
           Send(channel, List(GInt(7L), GInt(8L), GInt(9L)), false, BitSet())
@@ -242,11 +224,9 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
       )
     )
     result.toIterable should contain theSameElementsAs expectedResult
-    errorLog.readAndClearErrorVector.unsafeRunSync should be(Vector.empty[InterpreterError])
   }
 
   it should "verify that Bundle is writeable before sending on Bundle " in {
-    implicit val errorLog = new ErrorLog[Task]()
 
     val splitRand = rand.splitByte(0)
     /* @bundle+ { x } !(7) -> x!(7)
@@ -255,7 +235,7 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
     val send =
       Send(Bundle(channel, writeFlag = true), Seq(Expr(GInt(7L))))
 
-    val result = withTestSpace(errorLog) {
+    val result = withTestSpace {
       case TestFixture(space, reducer) =>
         implicit val env = Env[Par]()
         val task         = reducer.eval(send)(env, splitRand).flatMap(_ => space.toMap)
@@ -268,15 +248,13 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
       )
     )
     result.toIterable should contain theSameElementsAs expectedResult
-    errorLog.readAndClearErrorVector.unsafeRunSync should be(Vector.empty[InterpreterError])
   }
 
   "eval of single channel Receive" should "place something in the tuplespace." in {
-    implicit val errorLog = new ErrorLog[Task]()
 
     val splitRand    = rand.splitByte(0)
     val channel: Par = GString("channel")
-    val result = withTestSpace(errorLog) {
+    val result = withTestSpace {
       case TestFixture(space, reducer) =>
         val receive =
           Receive(
@@ -309,11 +287,9 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
       None
     )
     checkContinuation(result)(List(channel), List(bindPattern), ParWithRandom(Par(), splitRand))
-    errorLog.readAndClearErrorVector.unsafeRunSync should be(Vector.empty[InterpreterError])
   }
 
   it should "verify that bundle is readable if receiving on Bundle" in {
-    implicit val errorLog = new ErrorLog[Task]()
 
     val splitRand = rand.splitByte(1)
     /* for (@Nil <- @bundle- { y } ) { }  -> for (n <- y) { }
@@ -330,7 +306,7 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
       body = Par()
     )
 
-    val result = withTestSpace(errorLog) {
+    val result = withTestSpace {
       case TestFixture(space, reducer) =>
         implicit val env = Env[Par]()
         val task         = reducer.eval(receive)(env, splitRand).flatMap(_ => space.toMap)
@@ -343,11 +319,9 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
       List(BindPattern(List(Par()), None)),
       ParWithRandom(Par(), splitRand)
     )
-    errorLog.readAndClearErrorVector.unsafeRunSync should be(Vector.empty[InterpreterError])
   }
 
   "eval of Send | Receive" should "meet in the tuplespace and proceed." in {
-    implicit val errorLog = new ErrorLog[Task]()
 
     val splitRand0 = rand.splitByte(0)
     val splitRand1 = rand.splitByte(1)
@@ -368,7 +342,7 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
       3,
       BitSet()
     )
-    val sendFirstResult = withTestSpace(errorLog) {
+    val sendFirstResult = withTestSpace {
       case TestFixture(space, reducer) =>
         implicit val env = Env[Par]()
         val inspectTaskSendFirst = for {
@@ -388,9 +362,8 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
     )
 
     sendFirstResult.toIterable should contain theSameElementsAs expectedResult
-    errorLog.readAndClearErrorVector.unsafeRunSync should be(Vector.empty[InterpreterError])
 
-    val receiveFirstResult = withTestSpace(errorLog) {
+    val receiveFirstResult = withTestSpace {
       case TestFixture(space, reducer) =>
         implicit val env = Env[Par]()
         val inspectTaskReceiveFirst = for {
@@ -402,11 +375,9 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
     }
 
     receiveFirstResult.toIterable should contain theSameElementsAs expectedResult
-    errorLog.readAndClearErrorVector.unsafeRunSync should be(Vector.empty[InterpreterError])
   }
 
   "eval of Send | Receive with peek" should "meet in the tuplespace and proceed." in {
-    implicit val errorLog = new ErrorLog[Task]()
 
     val channel: Par       = GString("channel")
     val resultChannel: Par = GString("result")
@@ -449,7 +420,6 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
     }
 
     sendFirstResult.toIterable should contain theSameElementsAs expectedResult
-    errorLog.readAndClearErrorVector.unsafeRunSync should be(Vector.empty[InterpreterError])
 
     val receiveFirstResult = fixture {
       case (space, reducer) =>
@@ -462,12 +432,10 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
     }
 
     receiveFirstResult.toIterable should contain theSameElementsAs expectedResult
-    errorLog.readAndClearErrorVector.unsafeRunSync should be(Vector.empty[InterpreterError])
   }
 
   "eval of Send | Receive" should "when whole list is bound to list remainder, meet in the tuplespace and proceed. (RHOL-422)" in {
     // for(@[...a] <- @"channel") { … } | @"channel"!([7,8,9])
-    implicit val errorLog = new ErrorLog[Task]()
 
     val splitRand0 = rand.splitByte(0)
     val splitRand1 = rand.splitByte(1)
@@ -487,7 +455,7 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
       BitSet()
     )
     // format: on
-    val sendFirstResult = withTestSpace(errorLog) {
+    val sendFirstResult = withTestSpace {
       case TestFixture(space, reducer) =>
         implicit val env = Env[Par]()
         val inspectTaskSendFirst = for {
@@ -505,9 +473,8 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
       )
     )
     sendFirstResult.toIterable should contain theSameElementsAs expectedResult
-    errorLog.readAndClearErrorVector.unsafeRunSync should be(Vector.empty[InterpreterError])
 
-    val receiveFirstResult = withTestSpace(errorLog) {
+    val receiveFirstResult = withTestSpace {
       case TestFixture(space, reducer) =>
         implicit val env = Env[Par]()
         val inspectTaskReceiveFirst = for {
@@ -519,11 +486,9 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
     }
 
     receiveFirstResult.toIterable should contain theSameElementsAs expectedResult
-    errorLog.readAndClearErrorVector.unsafeRunSync should be(Vector.empty[InterpreterError])
   }
 
   "eval of Send on (7 + 8) | Receive on 15" should "meet in the tuplespace and proceed." in {
-    implicit val errorLog = new ErrorLog[Task]()
 
     val splitRand0 = rand.splitByte(0)
     val splitRand1 = rand.splitByte(1)
@@ -550,7 +515,7 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
       BitSet()
     )
 
-    val sendFirstResult = withTestSpace(errorLog) {
+    val sendFirstResult = withTestSpace {
       case TestFixture(space, reducer) =>
         implicit val env = Env[Par]()
         val inspectTaskSendFirst = for {
@@ -568,9 +533,8 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
       )
     )
     sendFirstResult.toIterable should contain theSameElementsAs expectedResult
-    errorLog.readAndClearErrorVector.unsafeRunSync should be(Vector.empty[InterpreterError])
 
-    val receiveFirstResult = withTestSpace(errorLog) {
+    val receiveFirstResult = withTestSpace {
       case TestFixture(space, reducer) =>
         implicit val env = Env[Par]()
         val inspectTaskReceiveFirst = for {
@@ -581,11 +545,9 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
         Await.result(inspectTaskReceiveFirst.runToFuture, 3.seconds)
     }
     receiveFirstResult.toIterable should contain theSameElementsAs expectedResult
-    errorLog.readAndClearErrorVector.unsafeRunSync should be(Vector.empty[InterpreterError])
   }
 
   "eval of Send of Receive | Receive" should "meet in the tuplespace and proceed." in {
-    implicit val errorLog = new ErrorLog[Task]()
 
     val baseRand   = rand.splitByte(2)
     val splitRand0 = baseRand.splitByte(0)
@@ -610,7 +572,7 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
       BitSet()
     )
 
-    val sendFirstResult = withTestSpace(errorLog) {
+    val sendFirstResult = withTestSpace {
       case TestFixture(space, reducer) =>
         implicit val env = Env[Par]()
         val inspectTaskSendFirst = for {
@@ -629,9 +591,8 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
       List(BindPattern(List(GInt(2L)))),
       ParWithRandom(Par(), mergeRand)
     )
-    errorLog.readAndClearErrorVector.unsafeRunSync should be(Vector.empty[InterpreterError])
 
-    val receiveFirstResult = withTestSpace(errorLog) {
+    val receiveFirstResult = withTestSpace {
       case TestFixture(space, reducer) =>
         implicit val env = Env[Par]()
         val inspectTaskReceiveFirst = for {
@@ -647,9 +608,8 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
       List(BindPattern(List(GInt(2L)))),
       ParWithRandom(Par(), mergeRand)
     )
-    errorLog.readAndClearErrorVector.unsafeRunSync should be(Vector.empty[InterpreterError])
 
-    val bothResult = withTestSpace(errorLog) {
+    val bothResult = withTestSpace {
       case TestFixture(space, reducer) =>
         implicit val env = Env[Par]()
         val inspectTaskReceiveFirst = for {
@@ -664,14 +624,12 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
       List(BindPattern(List(GInt(2L)))),
       ParWithRandom(Par(), mergeRand)
     )
-    errorLog.readAndClearErrorVector.unsafeRunSync should be(Vector.empty[InterpreterError])
   }
 
   "Simple match" should "capture and add to the environment." in {
-    implicit val errorLog = new ErrorLog[Task]()
 
     val splitRand = rand.splitByte(0)
-    val result = withTestSpace(errorLog) {
+    val result = withTestSpace {
       case TestFixture(space, reducer) =>
         val pattern =
           Send(EVar(FreeVar(0)), List(GInt(7L), EVar(FreeVar(1))), persistent = false, BitSet())
@@ -716,11 +674,9 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
       )
     )
     result.toIterable should contain theSameElementsAs expectedResult
-    errorLog.readAndClearErrorVector.unsafeRunSync should be(Vector.empty[InterpreterError])
   }
 
   "eval of Send | Send | Receive join" should "meet in the tuplespace and proceed." in {
-    implicit val errorLog = new ErrorLog[Task]()
 
     val splitRand0 = rand.splitByte(0)
     val splitRand1 = rand.splitByte(1)
@@ -749,7 +705,7 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
       3,
       BitSet()
     )
-    val sendFirstResult = withTestSpace(errorLog) {
+    val sendFirstResult = withTestSpace {
       case TestFixture(space, reducer) =>
         val inspectTaskSendFirst = for {
           _   <- reducer.inj(send1)(splitRand0)
@@ -767,9 +723,8 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
       )
     )
     sendFirstResult.toIterable should contain theSameElementsAs expectedResult
-    errorLog.readAndClearErrorVector.unsafeRunSync should be(Vector.empty[InterpreterError])
 
-    val receiveFirstResult = withTestSpace(errorLog) {
+    val receiveFirstResult = withTestSpace {
       case TestFixture(space, reducer) =>
         implicit val env = Env[Par]()
         val inspectTaskReceiveFirst = for {
@@ -782,9 +737,8 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
     }
 
     receiveFirstResult.toIterable should contain theSameElementsAs expectedResult
-    errorLog.readAndClearErrorVector.unsafeRunSync should be(Vector.empty[InterpreterError])
 
-    val interleavedResult = withTestSpace(errorLog) {
+    val interleavedResult = withTestSpace {
       case TestFixture(space, reducer) =>
         implicit val env = Env[Par]()
         val inspectTaskInterleaved = for {
@@ -797,11 +751,9 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
     }
 
     interleavedResult.toIterable should contain theSameElementsAs expectedResult
-    errorLog.readAndClearErrorVector.unsafeRunSync should be(Vector.empty[InterpreterError])
   }
 
   "eval of Send with remainder receive" should "capture the remainder." in {
-    implicit val errorLog = new ErrorLog[Task]()
 
     val splitRand0 = rand.splitByte(0)
     val splitRand1 = rand.splitByte(1)
@@ -814,7 +766,7 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
         Send(GString("result"), Seq(EVar(BoundVar(0))))
       )
 
-    val result = withTestSpace(errorLog) {
+    val result = withTestSpace {
       case TestFixture(space, reducer) =>
         implicit val env = Env[Par]()
         val task = for {
@@ -832,16 +784,14 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
       )
     )
     result.toIterable should contain theSameElementsAs expectedResult
-    errorLog.readAndClearErrorVector.unsafeRunSync should be(Vector.empty[InterpreterError])
   }
 
   "eval of nth method" should "pick out the nth item from a list" in {
-    implicit val errorLog = new ErrorLog[Task]()
 
     val splitRand = rand.splitByte(0)
     val nthCall: Expr =
       EMethod("nth", EList(List(GInt(7L), GInt(8L), GInt(9L), GInt(10L))), List[Par](GInt(2L)))
-    val directResult: Par = withTestSpace(errorLog) {
+    val directResult: Par = withTestSpace {
       case TestFixture(_, reducer) =>
         implicit val env = Env[Par]()
         Await.result(reducer.evalExprToPar(nthCall).runToFuture, 3.seconds)
@@ -862,7 +812,7 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
         ),
         List[Par](GInt(1L))
       )
-    val indirectResult = withTestSpace(errorLog) {
+    val indirectResult = withTestSpace {
       case TestFixture(space, reducer) =>
         implicit val env = Env[Par]()
         val nthTask      = reducer.eval(nthCallEvalToSend)(env, splitRand)
@@ -880,15 +830,13 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
       )
     )
     indirectResult.toIterable should contain theSameElementsAs expectedIndirectResult
-    errorLog.readAndClearErrorVector.unsafeRunSync should be(Vector.empty[InterpreterError])
   }
 
   "eval of nth method" should "pick out the nth item from a ByteArray" in {
-    implicit val errorLog = new ErrorLog[Task]()
 
     val nthCall: Expr =
       EMethod("nth", GByteArray(ByteString.copyFrom(Array[Byte](1, 2, -1))), List[Par](GInt(2L)))
-    val directResult: Par = withTestSpace(errorLog) {
+    val directResult: Par = withTestSpace {
       case TestFixture(_, reducer) =>
         implicit val env = Env[Par]()
         Await.result(reducer.evalExprToPar(nthCall).runToFuture, 3.seconds)
@@ -898,11 +846,10 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
   }
 
   "eval of length method" should "get length of ByteArray" in {
-    implicit val errorLog = new ErrorLog[Task]()
 
     val nthCall: Expr =
       EMethod("length", GByteArray(ByteString.copyFrom(Array[Byte](1, 2, -1))), List[Par]())
-    val directResult: Par = withTestSpace(errorLog) {
+    val directResult: Par = withTestSpace {
       case TestFixture(_, reducer) =>
         implicit val env = Env[Par]()
         Await.result(reducer.evalExprToPar(nthCall).runToFuture, 3.seconds)
@@ -912,8 +859,7 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
   }
 
   "eval of New" should "use deterministic names and provide urn-based resources" in {
-    implicit val errorLog = new ErrorLog[Task]()
-    implicit val span     = NoopSpan[Task]
+    implicit val span = NoopSpan[Task]
 
     val splitRand   = rand.splitByte(42)
     val resultRand  = rand.splitByte(42)
@@ -933,7 +879,7 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
         )
       )
 
-    val result = withTestSpace(errorLog) {
+    val result = withTestSpace {
       case TestFixture(space, _) =>
         implicit val cost          = CostAccounting.emptyCost[Task].unsafeRunSync
         def byteName(b: Byte): Par = GPrivate(ByteString.copyFrom(Array[Byte](b)))
@@ -976,7 +922,6 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
   }
   // format: on
   "eval of nth method in send position" should "change what is sent" in {
-    implicit val errorLog = new ErrorLog[Task]()
 
     val splitRand = rand.splitByte(0)
     val nthCallEvalToSend: Expr =
@@ -994,7 +939,7 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
       )
     val send: Par =
       Send(GString("result"), List[Par](nthCallEvalToSend), persistent = false, BitSet())
-    val result = withTestSpace(errorLog) {
+    val result = withTestSpace {
       case TestFixture(space, reducer) =>
         implicit val env = Env[Par]()
         val nthTask      = reducer.eval(send)(env, splitRand)
@@ -1018,15 +963,13 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
       )
     )
     result.toIterable should contain theSameElementsAs expectedResult
-    errorLog.readAndClearErrorVector.unsafeRunSync should be(Vector.empty[InterpreterError])
   }
 
   "eval of a method" should "substitute target before evaluating" in {
-    implicit val errorLog = new ErrorLog[Task]()
 
     val hexToBytesCall: Expr =
       EMethod("hexToBytes", Expr(EVarBody(EVar(Var(BoundVar(0))))))
-    val directResult: Par = withTestSpace(errorLog) {
+    val directResult: Par = withTestSpace {
       case TestFixture(_, reducer) =>
         implicit val env = Env.makeEnv[Par](Expr(GString("deadbeef")))
         Await.result(reducer.evalExprToPar(hexToBytesCall).runToFuture, 3.seconds)
@@ -1034,11 +977,9 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
     val expectedResult: Par = Expr(GByteArray(ByteString.copyFrom(Base16.unsafeDecode("deadbeef"))))
     directResult should be(expectedResult)
 
-    errorLog.readAndClearErrorVector.unsafeRunSync should be(Vector.empty[InterpreterError])
   }
 
   "eval of `toByteArray` method on any process" should "return that process serialized" in {
-    implicit val errorLog = new ErrorLog[Task]()
 
     val splitRand = rand.splitByte(0)
     val proc = Receive(
@@ -1054,7 +995,7 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
     val toByteArrayCall = EMethod("toByteArray", proc, List[Par]())
     def wrapWithSend(p: Par): Par =
       Send(GString("result"), List[Par](p), persistent = false, BitSet())
-    val result = withTestSpace(errorLog) {
+    val result = withTestSpace {
       case TestFixture(space, reducer) =>
         val env         = Env[Par]()
         val task        = reducer.eval(wrapWithSend(toByteArrayCall))(env, splitRand)
@@ -1069,11 +1010,9 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
       )
     )
     result.toIterable should contain theSameElementsAs expectedResult
-    errorLog.readAndClearErrorVector.unsafeRunSync should be(Vector.empty[InterpreterError])
   }
 
   it should "substitute before serialization" in {
-    implicit val errorLog = new ErrorLog[Task]()
 
     val splitRand = rand.splitByte(0)
     val unsubProc: Par =
@@ -1085,7 +1024,7 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
     val channel: Par              = GString("result")
     def wrapWithSend(p: Par): Par = Send(channel, List[Par](p), persistent = false, p.locallyFree)
 
-    val result = withTestSpace(errorLog) {
+    val result = withTestSpace {
       case TestFixture(space, reducer) =>
         val env         = Env.makeEnv[Par](GPrivateBuilder("one"), GPrivateBuilder("zero"))
         val task        = reducer.eval(wrapWithSend(toByteArrayCall))(env, splitRand)
@@ -1099,11 +1038,9 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
       )
     )
     result.toIterable should contain theSameElementsAs expectedResult
-    errorLog.readAndClearErrorVector.unsafeRunSync should be(Vector.empty[InterpreterError])
   }
 
   it should "return an error when `toByteArray` is called with arguments" in {
-    implicit val errorLog = new ErrorLog[Task]()
 
     val toByteArrayWithArgumentsCall: EMethod =
       EMethod(
@@ -1115,7 +1052,7 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
         List[Par](GInt(1L))
       )
 
-    val result = withTestSpace(errorLog) {
+    val result = withTestSpace {
       case TestFixture(space, reducer) =>
         implicit val env = Env[Par]()
         val nthTask      = reducer.eval(toByteArrayWithArgumentsCall)
@@ -1123,13 +1060,10 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
         Await.result(inspectTask.runToFuture, 3.seconds)
     }
     result should be(HashMap.empty)
-    errorLog.readAndClearErrorVector.unsafeRunSync should be(
-      Vector(MethodArgumentNumberMismatch("toByteArray", 0, 1))
-    )
+    // TODO: Guarantee MethodArgumentNumberMismatch("toByteArray", 0, 1)
   }
 
   "eval of hexToBytes" should "transform encoded string to byte array (not the rholang term)" in {
-    implicit val errorLog = new ErrorLog[Task]()
 
     val splitRand       = rand.splitByte(0)
     val testString      = "testing testing"
@@ -1138,7 +1072,7 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
     val toByteArrayCall = EMethod("hexToBytes", proc, List[Par]())
     def wrapWithSend(p: Par): Par =
       Send(GString("result"), List[Par](p), persistent = false, BitSet())
-    val result = withTestSpace(errorLog) {
+    val result = withTestSpace {
       case TestFixture(space, reducer) =>
         val env         = Env[Par]()
         val task        = reducer.eval(wrapWithSend(toByteArrayCall))(env, splitRand)
@@ -1153,18 +1087,16 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
       )
     )
     result.toIterable should contain theSameElementsAs expectedResult
-    errorLog.readAndClearErrorVector.unsafeRunSync should be(Vector.empty[InterpreterError])
   }
 
   "eval of `toUtf8Bytes`" should "transform string to UTF-8 byte array (not the rholang term)" in {
-    implicit val errorLog = new ErrorLog[Task]()
-    val splitRand         = rand.splitByte(0)
-    val testString        = "testing testing"
-    val proc: Par         = GString(testString)
-    val toUtf8BytesCall   = EMethod("toUtf8Bytes", proc, List[Par]())
+    val splitRand       = rand.splitByte(0)
+    val testString      = "testing testing"
+    val proc: Par       = GString(testString)
+    val toUtf8BytesCall = EMethod("toUtf8Bytes", proc, List[Par]())
     def wrapWithSend(p: Par): Par =
       Send(GString("result"), List[Par](p), persistent = false, BitSet())
-    val result = withTestSpace(errorLog) {
+    val result = withTestSpace {
       case TestFixture(space, reducer) =>
         val env         = Env[Par]()
         val task        = reducer.eval(wrapWithSend(toUtf8BytesCall))(env, splitRand)
@@ -1179,11 +1111,9 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
       )
     )
     result.toIterable should contain theSameElementsAs expectedResult
-    errorLog.readAndClearErrorVector.unsafeRunSync should be(Vector.empty[InterpreterError])
   }
 
   it should "return an error when `toUtf8Bytes` is called with arguments" in {
-    implicit val errorLog = new ErrorLog[Task]()
     val toUtfBytesWithArgumentsCall: EMethod =
       EMethod(
         "toUtf8Bytes",
@@ -1194,7 +1124,7 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
         List[Par](GInt(1L))
       )
 
-    val result = withTestSpace(errorLog) {
+    val result = withTestSpace {
       case TestFixture(space, reducer) =>
         implicit val env = Env[Par]()
         val nthTask      = reducer.eval(toUtfBytesWithArgumentsCall)
@@ -1202,16 +1132,13 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
         Await.result(inspectTask.runToFuture, 3.seconds)
     }
     result should be(HashMap.empty)
-    errorLog.readAndClearErrorVector.unsafeRunSync should be(
-      Vector(MethodArgumentNumberMismatch("toUtf8Bytes", 0, 1))
-    )
+    // TODO: Guarantee MethodArgumentNumberMismatch("toUtf8Bytes", 0, 1)
   }
 
   it should "return an error when `toUtf8Bytes` is evaluated on a non String" in {
-    implicit val errorLog = new ErrorLog[Task]()
-    val toUtfBytesCall    = EMethod("toUtf8Bytes", GInt(44L), List[Par]())
+    val toUtfBytesCall = EMethod("toUtf8Bytes", GInt(44L), List[Par]())
 
-    val result = withTestSpace(errorLog) {
+    val result = withTestSpace {
       case TestFixture(space, reducer) =>
         implicit val env = Env[Par]()
         val nthTask      = reducer.eval(toUtfBytesCall)
@@ -1219,15 +1146,12 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
         Await.result(inspectTask.runToFuture, 3.seconds)
     }
     result should be(HashMap.empty)
-    errorLog.readAndClearErrorVector.unsafeRunSync should be(
-      Vector(MethodNotDefined("toUtf8Bytes", "Int"))
-    )
+    // TODO: Guarantee MethodNotDefined("toUtf8Bytes", "Int")
   }
 
   "variable references" should "be substituted before being used." in {
-    implicit val errorLog = new ErrorLog[Task]()
-    val splitRandResult   = rand.splitByte(3)
-    val splitRandSrc      = rand.splitByte(3)
+    val splitRandResult = rand.splitByte(3)
+    val splitRandSrc    = rand.splitByte(3)
     splitRandResult.next()
     val mergeRand =
       Blake2b512Random.merge(Seq(splitRandResult.splitByte(1), splitRandResult.splitByte(0)))
@@ -1257,7 +1181,7 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
       )
     )
 
-    val result = withTestSpace(errorLog) {
+    val result = withTestSpace {
       case TestFixture(space, reducer) =>
         val env         = Env[Par]()
         val task        = reducer.eval(proc)(env, splitRandSrc)
@@ -1272,13 +1196,11 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
       )
     )
     result.toIterable should contain theSameElementsAs expectedResult
-    errorLog.readAndClearErrorVector.unsafeRunSync should be(Vector.empty[InterpreterError])
   }
 
   it should "be substituted before being used in a match." in {
-    implicit val errorLog = new ErrorLog[Task]()
-    val splitRandResult   = rand.splitByte(4)
-    val splitRandSrc      = rand.splitByte(4)
+    val splitRandResult = rand.splitByte(4)
+    val splitRandSrc    = rand.splitByte(4)
     splitRandResult.next()
     val proc = New(
       bindCount = 1,
@@ -1293,7 +1215,7 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
       )
     )
 
-    val result = withTestSpace(errorLog) {
+    val result = withTestSpace {
       case TestFixture(space, reducer) =>
         val env         = Env[Par]()
         val task        = reducer.eval(proc)(env, splitRandSrc)
@@ -1307,15 +1229,13 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
       )
     )
     result.toIterable should contain theSameElementsAs expectedResult
-    errorLog.readAndClearErrorVector.unsafeRunSync should be(Vector.empty[InterpreterError])
   }
 
   it should "reference a variable that comes from a match in tuplespace" in {
-    implicit val errorLog = new ErrorLog[Task]()
-    val baseRand          = rand.splitByte(7)
-    val splitRand0        = baseRand.splitByte(0)
-    val splitRand1        = baseRand.splitByte(1)
-    val mergeRand         = Blake2b512Random.merge(Seq(splitRand1, splitRand0))
+    val baseRand   = rand.splitByte(7)
+    val splitRand0 = baseRand.splitByte(0)
+    val splitRand1 = baseRand.splitByte(1)
+    val mergeRand  = Blake2b512Random.merge(Seq(splitRand1, splitRand0))
     val proc = Par(
       sends = List(Send(chan = GInt(7L), data = List(GInt(10L)))),
       receives = List(
@@ -1340,7 +1260,7 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
       )
     )
 
-    val result = withTestSpace(errorLog) {
+    val result = withTestSpace {
       case TestFixture(space, reducer) =>
         val env         = Env[Par]()
         val task        = reducer.eval(proc)(env, baseRand)
@@ -1355,13 +1275,11 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
       )
     )
     result.toIterable should contain theSameElementsAs expectedResult
-    errorLog.readAndClearErrorVector.unsafeRunSync should be(Vector.empty[InterpreterError])
   }
 
   "1 matches 1" should "return true" in {
-    implicit val errorLog = new ErrorLog[Task]()
 
-    val result = withTestSpace(errorLog) {
+    val result = withTestSpace {
       case TestFixture(_, reducer) =>
         implicit val env = Env.makeEnv[Par]()
         val inspectTask  = reducer.evalExpr(EMatches(GInt(1L), GInt(1L)))
@@ -1369,13 +1287,11 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
     }
 
     result.exprs should be(Seq(Expr(GBool(true))))
-    errorLog.readAndClearErrorVector.unsafeRunSync should be(Vector.empty[InterpreterError])
   }
 
   "1 matches 0" should "return false" in {
-    implicit val errorLog = new ErrorLog[Task]()
 
-    val result = withTestSpace(errorLog) {
+    val result = withTestSpace {
       case TestFixture(_, reducer) =>
         implicit val env = Env.makeEnv[Par]()
         val inspectTask  = reducer.evalExpr(EMatches(GInt(1L), GInt(0L)))
@@ -1383,13 +1299,11 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
     }
 
     result.exprs should be(Seq(Expr(GBool(false))))
-    errorLog.readAndClearErrorVector.unsafeRunSync should be(Vector.empty[InterpreterError])
   }
 
   "1 matches _" should "return true" in {
-    implicit val errorLog = new ErrorLog[Task]()
 
-    val result = withTestSpace(errorLog) {
+    val result = withTestSpace {
       case TestFixture(_, reducer) =>
         implicit val env = Env.makeEnv[Par]()
         val inspectTask  = reducer.evalExpr(EMatches(GInt(1L), EVar(Wildcard(Var.WildcardMsg()))))
@@ -1397,13 +1311,11 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
     }
 
     result.exprs should be(Seq(Expr(GBool(true))))
-    errorLog.readAndClearErrorVector.unsafeRunSync should be(Vector.empty[InterpreterError])
   }
 
   "x matches 1" should "return true when x is bound to 1" in {
-    implicit val errorLog = new ErrorLog[Task]()
 
-    val result = withTestSpace(errorLog) {
+    val result = withTestSpace {
       case TestFixture(_, reducer) =>
         implicit val env = Env.makeEnv[Par](GInt(1L))
         val inspectTask  = reducer.evalExpr(EMatches(EVar(BoundVar(0)), GInt(1L)))
@@ -1411,13 +1323,11 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
     }
 
     result.exprs should be(Seq(Expr(GBool(true))))
-    errorLog.readAndClearErrorVector.unsafeRunSync should be(Vector.empty[InterpreterError])
   }
 
   "1 matches =x" should "return true when x is bound to 1" in {
-    implicit val errorLog = new ErrorLog[Task]()
 
-    val result = withTestSpace(errorLog) {
+    val result = withTestSpace {
       case TestFixture(_, reducer) =>
         implicit val env = Env.makeEnv[Par](GInt(1L))
 
@@ -1427,26 +1337,22 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
     }
 
     result.exprs should be(Seq(Expr(GBool(true))))
-    errorLog.readAndClearErrorVector.unsafeRunSync should be(Vector.empty[InterpreterError])
   }
 
   "'abc'.length()" should "return the length of the string" in {
-    implicit val errorLog = new ErrorLog[Task]()
 
-    val result = withTestSpace(errorLog) {
+    val result = withTestSpace {
       case TestFixture(_, reducer) =>
         implicit val env = Env.makeEnv[Par]()
         val inspectTask  = reducer.evalExpr(EMethodBody(EMethod("length", GString("abc"))))
         Await.result(inspectTask.runToFuture, 3.seconds)
     }
     result.exprs should be(Seq(Expr(GInt(3L))))
-    errorLog.readAndClearErrorVector.unsafeRunSync should be(Vector.empty[InterpreterError])
   }
 
   "'abcabac'.slice(3, 6)" should "return 'aba'" in {
-    implicit val errorLog = new ErrorLog[Task]()
 
-    val result = withTestSpace(errorLog) {
+    val result = withTestSpace {
       case TestFixture(_, reducer) =>
         implicit val env = Env.makeEnv[Par]()
         val inspectTask = reducer.evalExpr(
@@ -1455,13 +1361,11 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
         Await.result(inspectTask.runToFuture, 3.seconds)
     }
     result.exprs should be(Seq(Expr(GString("aba"))))
-    errorLog.readAndClearErrorVector.unsafeRunSync should be(Vector.empty[InterpreterError])
   }
 
   "'abcabcac'.slice(2,1)" should "return empty string" in {
-    implicit val errorLog = new ErrorLog[Task]()
 
-    val result = withTestSpace(errorLog) {
+    val result = withTestSpace {
       case TestFixture(_, reducer) =>
         implicit val env = Env.makeEnv[Par]()
         val inspectTask = reducer.evalExpr(
@@ -1470,13 +1374,11 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
         Await.result(inspectTask.runToFuture, 3.seconds)
     }
     result.exprs should be(Seq(Expr(GString(""))))
-    errorLog.readAndClearErrorVector.unsafeRunSync should be(Vector.empty[InterpreterError])
   }
 
   "'abcabcac'.slice(8,9)" should "return empty string" in {
-    implicit val errorLog = new ErrorLog[Task]()
 
-    val result = withTestSpace(errorLog) {
+    val result = withTestSpace {
       case TestFixture(_, reducer) =>
         implicit val env = Env.makeEnv[Par]()
         val inspectTask = reducer.evalExpr(
@@ -1485,13 +1387,11 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
         Await.result(inspectTask.runToFuture, 3.seconds)
     }
     result.exprs should be(Seq(Expr(GString(""))))
-    errorLog.readAndClearErrorVector.unsafeRunSync should be(Vector.empty[InterpreterError])
   }
 
   "'abcabcac'.slice(-2,2)" should "return 'ab'" in {
-    implicit val errorLog = new ErrorLog[Task]()
 
-    val result = withTestSpace(errorLog) {
+    val result = withTestSpace {
       case TestFixture(_, reducer) =>
         implicit val env = Env.makeEnv[Par]()
         val inspectTask = reducer.evalExpr(
@@ -1500,13 +1400,11 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
         Await.result(inspectTask.runToFuture, 3.seconds)
     }
     result.exprs should be(Seq(Expr(GString("ab"))))
-    errorLog.readAndClearErrorVector.unsafeRunSync should be(Vector.empty[InterpreterError])
   }
 
   "'Hello, ${name}!' % {'name': 'Alice'}" should "return 'Hello, Alice!" in {
-    implicit val errorLog = new ErrorLog[Task]()
 
-    val result = withTestSpace(errorLog) {
+    val result = withTestSpace {
       case TestFixture(_, reducer) =>
         implicit val env = Env.makeEnv[Par]()
         val inspectTask = reducer.evalExpr(
@@ -1520,13 +1418,11 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
         Await.result(inspectTask.runToFuture, 3.seconds)
     }
     result.exprs should be(Seq(Expr(GString("Hello, Alice!"))))
-    errorLog.readAndClearErrorVector.unsafeRunSync should be(Vector.empty[InterpreterError])
   }
 
   "'abc' ++ 'def'" should "return 'abcdef" in {
-    implicit val errorLog = new ErrorLog[Task]()
 
-    val result = withTestSpace(errorLog) {
+    val result = withTestSpace {
       case TestFixture(_, reducer) =>
         implicit val env = Env.makeEnv[Par]()
         val inspectTask = reducer.evalExpr(
@@ -1540,13 +1436,11 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
         Await.result(inspectTask.runToFuture, 3.seconds)
     }
     result.exprs should be(Seq(Expr(GString("abcdef"))))
-    errorLog.readAndClearErrorVector.unsafeRunSync should be(Vector.empty[InterpreterError])
   }
 
   "ByteArray('dead') ++ ByteArray('beef)'" should "return ByteArray('deadbeef')" in {
-    implicit val errorLog = new ErrorLog[Task]()
 
-    val result = withTestSpace(errorLog) {
+    val result = withTestSpace {
       case TestFixture(_, reducer) =>
         implicit val env = Env.makeEnv[Par]()
         val inspectTask = reducer.evalExpr(
@@ -1562,7 +1456,6 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
     result.exprs should be(
       Seq(Expr(GByteArray(ByteString.copyFrom(Base16.unsafeDecode("deadbeef")))))
     )
-    errorLog.readAndClearErrorVector.unsafeRunSync should be(Vector.empty[InterpreterError])
   }
 
   def interpolate(base: String, substitutes: Seq[(Par, Par)]): Expr =
@@ -1574,9 +1467,8 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
     )
 
   "'${a} ${b}' % {'a': '1 ${b}', 'b': '2 ${a}'" should "return '1 ${b} 2 ${a}" in {
-    implicit val errorLog = new ErrorLog[Task]()
 
-    val result = withTestSpace(errorLog) {
+    val result = withTestSpace {
       case TestFixture(_, reducer) =>
         implicit val env = Env.makeEnv[Par]()
         val inspectTask = reducer.evalExpr(
@@ -1591,13 +1483,11 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
         Await.result(inspectTask.runToFuture, 3.seconds)
     }
     result.exprs should be(Seq(Expr(GString("1 ${b} 2 ${a}"))))
-    errorLog.readAndClearErrorVector.unsafeRunSync should be(Vector.empty[InterpreterError])
   }
 
   "interpolate" should "interpolate Boolean values" in {
-    implicit val errorLog = new ErrorLog[Task]()
 
-    val result = withTestSpace(errorLog) {
+    val result = withTestSpace {
       case TestFixture(_, reducer) =>
         implicit val env = Env.makeEnv[Par]()
         val task = reducer.evalExpr(
@@ -1613,13 +1503,11 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
     }
 
     result.exprs should be(Seq(Expr(GString("false true"))))
-    errorLog.readAndClearErrorVector.unsafeRunSync should be(Vector.empty[InterpreterError])
   }
 
   "interpolate" should "interpolate URIs" in {
-    implicit val errorLog = new ErrorLog[Task]()
 
-    val result = withTestSpace(errorLog) {
+    val result = withTestSpace {
       case TestFixture(_, reducer) =>
         implicit val env = Env.makeEnv[Par]()
         val task = reducer.evalExpr(
@@ -1635,13 +1523,11 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
     }
 
     result.exprs should be(Seq(Expr(GString("testUriA testUriB"))))
-    errorLog.readAndClearErrorVector.unsafeRunSync should be(Vector.empty[InterpreterError])
   }
 
   "[0, 1, 2, 3].length()" should "return the length of the list" in {
-    implicit val errorLog = new ErrorLog[Task]()
 
-    val result = withTestSpace(errorLog) {
+    val result = withTestSpace {
       case TestFixture(_, reducer) =>
         implicit val env = Env.makeEnv[Par]()
         val list         = EList(List(GInt(0L), GInt(1L), GInt(2L), GInt(3L)))
@@ -1650,13 +1536,11 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
         Await.result(inspectTask.runToFuture, 3.seconds)
     }
     result.exprs should be(Seq(Expr(GInt(4L))))
-    errorLog.readAndClearErrorVector.unsafeRunSync should be(Vector.empty[InterpreterError])
   }
 
   "[3, 7, 2, 9, 4, 3, 7].slice(3, 5)" should "return [9, 4]" in {
-    implicit val errorLog = new ErrorLog[Task]()
 
-    val result = withTestSpace(errorLog) {
+    val result = withTestSpace {
       case TestFixture(_, reducer) =>
         implicit val env = Env.makeEnv[Par]()
         val list         = EList(List(GInt(3L), GInt(7L), GInt(2L), GInt(9L), GInt(4L), GInt(3L), GInt(7L)))
@@ -1666,13 +1550,11 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
         Await.result(inspectTask.runToFuture, 3.seconds)
     }
     result.exprs should be(Seq(Expr(EListBody(EList(List(GInt(9L), GInt(4L)))))))
-    errorLog.readAndClearErrorVector.unsafeRunSync should be(Vector.empty[InterpreterError])
   }
 
   "[3, 7, 2, 9, 4, 3, 7].slice(5, 4)" should "return []" in {
-    implicit val errorLog = new ErrorLog[Task]()
 
-    val result = withTestSpace(errorLog) {
+    val result = withTestSpace {
       case TestFixture(_, reducer) =>
         implicit val env = Env.makeEnv[Par]()
         val list         = EList(List(GInt(3L), GInt(7L), GInt(2L), GInt(9L), GInt(4L), GInt(3L), GInt(7L)))
@@ -1682,13 +1564,11 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
         Await.result(inspectTask.runToFuture, 3.seconds)
     }
     result.exprs should be(Seq(Expr(EListBody(EList(List())))))
-    errorLog.readAndClearErrorVector.unsafeRunSync should be(Vector.empty[InterpreterError])
   }
 
   "[3, 7, 2, 9, 4, 3, 7].slice(7, 8)" should "return []" in {
-    implicit val errorLog = new ErrorLog[Task]()
 
-    val result = withTestSpace(errorLog) {
+    val result = withTestSpace {
       case TestFixture(_, reducer) =>
         implicit val env = Env.makeEnv[Par]()
         val list         = EList(List(GInt(3L), GInt(7L), GInt(2L), GInt(9L), GInt(4L), GInt(3L), GInt(7L)))
@@ -1698,13 +1578,11 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
         Await.result(inspectTask.runToFuture, 3.seconds)
     }
     result.exprs should be(Seq(Expr(EListBody(EList(List())))))
-    errorLog.readAndClearErrorVector.unsafeRunSync should be(Vector.empty[InterpreterError])
   }
 
   "[3, 7, 2, 9, 4, 3, 7].slice(-2, 2)" should "return [3, 7]" in {
-    implicit val errorLog = new ErrorLog[Task]()
 
-    val result = withTestSpace(errorLog) {
+    val result = withTestSpace {
       case TestFixture(_, reducer) =>
         implicit val env = Env.makeEnv[Par]()
         val list         = EList(List(GInt(3L), GInt(7L), GInt(2L), GInt(9L), GInt(4L), GInt(3L), GInt(7L)))
@@ -1714,13 +1592,11 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
         Await.result(inspectTask.runToFuture, 3.seconds)
     }
     result.exprs should be(Seq(Expr(EListBody(EList(List(GInt(3L), GInt(7L)))))))
-    errorLog.readAndClearErrorVector.unsafeRunSync should be(Vector.empty[InterpreterError])
   }
 
   "[3, 2, 9] ++ [6, 1, 7]" should "return [3, 2, 9, 6, 1, 7]" in {
-    implicit val errorLog = new ErrorLog[Task]()
 
-    val result = withTestSpace(errorLog) {
+    val result = withTestSpace {
       case TestFixture(_, reducer) =>
         implicit val env = Env.makeEnv[Par]()
         val lhsList      = EList(List(GInt(3L), GInt(2L), GInt(9L)))
@@ -1737,13 +1613,11 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
     }
     val resultList = EList(List(GInt(3L), GInt(2L), GInt(9L), GInt(6L), GInt(1L), GInt(7L)))
     result.exprs should be(Seq(Expr(EListBody(resultList))))
-    errorLog.readAndClearErrorVector.unsafeRunSync should be(Vector.empty[InterpreterError])
   }
 
   "{1: 'a', 2: 'b'}.getOrElse(1, 'c')" should "return 'a'" in {
-    implicit val errorLog = new ErrorLog[Task]()
 
-    val result = withTestSpace(errorLog) {
+    val result = withTestSpace {
       case TestFixture(_, reducer) =>
         implicit val env = Env.makeEnv[Par]()
         val map =
@@ -1754,13 +1628,11 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
         Await.result(inspectTask.runToFuture, 3.seconds)
     }
     result.exprs should be(Seq(Expr(GString("a"))))
-    errorLog.readAndClearErrorVector.unsafeRunSync should be(Vector.empty[InterpreterError])
   }
 
   "{1: 'a', 2: 'b'}.getOrElse(3, 'c')" should "return 'c'" in {
-    implicit val errorLog = new ErrorLog[Task]()
 
-    val result = withTestSpace(errorLog) {
+    val result = withTestSpace {
       case TestFixture(_, reducer) =>
         implicit val env = Env.makeEnv[Par]()
         val map =
@@ -1771,13 +1643,11 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
         Await.result(inspectTask.runToFuture, 3.seconds)
     }
     result.exprs should be(Seq(Expr(GString("c"))))
-    errorLog.readAndClearErrorVector.unsafeRunSync should be(Vector.empty[InterpreterError])
   }
 
   "{1: 'a', 2: 'b'}.set(3, 'c')" should "return {1: 'a', 2: 'b', 3: 'c'}" in {
-    implicit val errorLog = new ErrorLog[Task]()
 
-    val result = withTestSpace(errorLog) {
+    val result = withTestSpace {
       case TestFixture(_, reducer) =>
         implicit val env = Env.makeEnv[Par]()
         val map =
@@ -1797,13 +1667,11 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
       )
     )
     result.exprs should be(Seq(Expr(resultMap)))
-    errorLog.readAndClearErrorVector.unsafeRunSync should be(Vector.empty[InterpreterError])
   }
 
   "{1: 'a', 2: 'b'}.set(2, 'c')" should "return {1: 'a', 2: 'c'}" in {
-    implicit val errorLog = new ErrorLog[Task]()
 
-    val result = withTestSpace(errorLog) {
+    val result = withTestSpace {
       case TestFixture(_, reducer) =>
         implicit val env = Env.makeEnv[Par]()
         val map =
@@ -1816,13 +1684,11 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
     val resultMap =
       EMapBody(ParMap(List[(Par, Par)]((GInt(1L), GString("a")), (GInt(2L), GString("c")))))
     result.exprs should be(Seq(Expr(resultMap)))
-    errorLog.readAndClearErrorVector.unsafeRunSync should be(Vector.empty[InterpreterError])
   }
 
   "{1: 'a', 2: 'b', 3: 'c'}.keys()" should "return Set(1, 2, 3)" in {
-    implicit val errorLog = new ErrorLog[Task]()
 
-    val result = withTestSpace(errorLog) {
+    val result = withTestSpace {
       case TestFixture(_, reducer) =>
         implicit val env = Env.makeEnv[Par]()
         val map = EMapBody(
@@ -1845,13 +1711,11 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
       )
     )
     result.exprs should be(Seq(Expr(resultSet)))
-    errorLog.readAndClearErrorVector.unsafeRunSync should be(Vector.empty[InterpreterError])
   }
 
   "{1: 'a', 2: 'b', 3: 'c'}.size()" should "return 3" in {
-    implicit val errorLog = new ErrorLog[Task]()
 
-    val result = withTestSpace(errorLog) {
+    val result = withTestSpace {
       case TestFixture(_, reducer) =>
         implicit val env = Env.makeEnv[Par]()
         val map = EMapBody(
@@ -1869,13 +1733,11 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
         Await.result(inspectTask.runToFuture, 3.seconds)
     }
     result.exprs should be(Seq(Expr(GInt(3L))))
-    errorLog.readAndClearErrorVector.unsafeRunSync should be(Vector.empty[InterpreterError])
   }
 
   "Set(1, 2, 3).size()" should "return 3" in {
-    implicit val errorLog = new ErrorLog[Task]()
 
-    val result = withTestSpace(errorLog) {
+    val result = withTestSpace {
       case TestFixture(_, reducer) =>
         implicit val env = Env.makeEnv[Par]()
 
@@ -1887,13 +1749,11 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
         Await.result(inspectTask.runToFuture, 3.seconds)
     }
     result.exprs should be(Seq(Expr(GInt(3L))))
-    errorLog.readAndClearErrorVector.unsafeRunSync should be(Vector.empty[InterpreterError])
   }
 
   "Set(1, 2) + 3" should "return Set(1, 2, 3)" in {
-    implicit val errorLog = new ErrorLog[Task]()
 
-    val result = withTestSpace(errorLog) {
+    val result = withTestSpace {
       case TestFixture(_, reducer) =>
         implicit val env = Env.makeEnv[Par]()
         val set          = ESetBody(ParSet(List[Par](GInt(1L), GInt(2L))))
@@ -1904,13 +1764,11 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
     }
     val resultSet = ESetBody(ParSet(List[Par](GInt(1L), GInt(2L), GInt(3L))))
     result.exprs should be(Seq(Expr(resultSet)))
-    errorLog.readAndClearErrorVector.unsafeRunSync should be(Vector.empty[InterpreterError])
   }
 
   "{1: 'a', 2: 'b', 3: 'c'} - 3" should "return {1: 'a', 2: 'b'}" in {
-    implicit val errorLog = new ErrorLog[Task]()
 
-    val result = withTestSpace(errorLog) {
+    val result = withTestSpace {
       case TestFixture(_, reducer) =>
         implicit val env = Env.makeEnv[Par]()
         val map = EMapBody(
@@ -1930,13 +1788,11 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
     val resultMap =
       EMapBody(ParMap(List[(Par, Par)]((GInt(1L), GString("a")), (GInt(2L), GString("b")))))
     result.exprs should be(Seq(Expr(resultMap)))
-    errorLog.readAndClearErrorVector.unsafeRunSync should be(Vector.empty[InterpreterError])
   }
 
   "Set(1, 2, 3) - 3" should "return Set(1, 2)" in {
-    implicit val errorLog = new ErrorLog[Task]()
 
-    val result = withTestSpace(errorLog) {
+    val result = withTestSpace {
       case TestFixture(_, reducer) =>
         implicit val env = Env.makeEnv[Par]()
         val set          = ESetBody(ParSet(List[Par](GInt(1L), GInt(2L), GInt(3L))))
@@ -1947,13 +1803,11 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
     }
     val resultSet = ESetBody(ParSet(List[Par](GInt(1L), GInt(2L))))
     result.exprs should be(Seq(Expr(resultSet)))
-    errorLog.readAndClearErrorVector.unsafeRunSync should be(Vector.empty[InterpreterError])
   }
 
   "Set(1, 2) ++ Set(3, 4)" should "return Set(1, 2, 3, 4)" in {
-    implicit val errorLog = new ErrorLog[Task]()
 
-    val result = withTestSpace(errorLog) {
+    val result = withTestSpace {
       case TestFixture(_, reducer) =>
         implicit val env = Env.makeEnv[Par]()
         val lhsSet       = ESetBody(ParSet(List[Par](GInt(1L), GInt(2L))))
@@ -1965,13 +1819,11 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
     }
     val resultSet = ESetBody(ParSet(List[Par](GInt(1L), GInt(2L), GInt(3L), GInt(4L))))
     result.exprs should be(Seq(Expr(resultSet)))
-    errorLog.readAndClearErrorVector.unsafeRunSync should be(Vector.empty[InterpreterError])
   }
 
   "{1: 'a', 2: 'b'} ++ {3: 'c', 4: 'd'}" should "return union" in {
-    implicit val errorLog = new ErrorLog[Task]()
 
-    val result = withTestSpace(errorLog) {
+    val result = withTestSpace {
       case TestFixture(_, reducer) =>
         implicit val env = Env.makeEnv[Par]()
         val lhsMap =
@@ -1994,13 +1846,11 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
       )
     )
     result.exprs should be(Seq(Expr(resultMap)))
-    errorLog.readAndClearErrorVector.unsafeRunSync should be(Vector.empty[InterpreterError])
   }
 
   "Set(1, 2, 3, 4) -- Set(1, 2)" should "return Set(3, 4)" in {
-    implicit val errorLog = new ErrorLog[Task]()
 
-    val result = withTestSpace(errorLog) {
+    val result = withTestSpace {
       case TestFixture(_, reducer) =>
         implicit val env = Env.makeEnv[Par]()
         val lhsSet       = ESetBody(ParSet(List[Par](GInt(1L), GInt(2L), GInt(3L), GInt(4L))))
@@ -2012,28 +1862,23 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
     }
     val resultSet = ESetBody(ParSet(List[Par](GInt(3L), GInt(4L))))
     result.exprs should be(Seq(Expr(resultSet)))
-    errorLog.readAndClearErrorVector.unsafeRunSync should be(Vector.empty[InterpreterError])
   }
 
   "Set(1, 2, 3).get(1)" should "not work" in {
-    implicit val errorLog = new ErrorLog[Task]()
 
-    withTestSpace(errorLog) {
+    withTestSpace {
       case TestFixture(_, reducer) =>
         implicit val env = Env.makeEnv[Par]()
         val set          = ESetBody(ParSet(List[Par](GInt(1L), GInt(2L), GInt(3L))))
         val inspectTask  = reducer.eval(EMethodBody(EMethod("get", set, List(GInt(1L)))))
         Await.result(inspectTask.runToFuture, 3.seconds)
     }
-    errorLog.readAndClearErrorVector.unsafeRunSync should be(
-      Vector(MethodNotDefined("get", "Set"))
-    )
+    // TODO: Guarantee MethodNotDefined("get", "Set")
   }
 
   "{1: 'a', 2: 'b'}.add(1)" should "not work" in {
-    implicit val errorLog = new ErrorLog[Task]()
 
-    withTestSpace(errorLog) {
+    withTestSpace {
       case TestFixture(_, reducer) =>
         implicit val env = Env.makeEnv[Par]()
         val map =
@@ -2041,13 +1886,10 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
         val inspectTask = reducer.eval(EMethodBody(EMethod("add", map, List(GInt(1L)))))
         Await.result(inspectTask.runToFuture, 3.seconds)
     }
-    errorLog.readAndClearErrorVector.unsafeRunSync should be(
-      Vector(MethodNotDefined("add", "Map"))
-    )
+    // TODO: Guarantee MethodNotDefined("add", "Map")
   }
 
   it should "return an error when `toList` is called with arguments" in {
-    implicit val errorLog: ErrorLog[Task] = new ErrorLog[Task]()
     val toListCall: EMethod =
       EMethod(
         "toList",
@@ -2055,7 +1897,7 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
         List[Par](GInt(1L))
       )
 
-    val result = withTestSpace(errorLog) {
+    val result = withTestSpace {
       case TestFixture(space, reducer) =>
         implicit val env = Env[Par]()
         val nthTask      = reducer.eval(toListCall)
@@ -2063,13 +1905,10 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
         Await.result(inspectTask.runToFuture, 3.seconds)
     }
     result should be(mutable.HashMap.empty)
-    errorLog.readAndClearErrorVector().unsafeRunSync should be(
-      Vector(MethodArgumentNumberMismatch("toList", 0, 1))
-    )
+    // TODO: Guarantee MethodArgumentNumberMismatch("toList", 0, 1)
   }
 
   it should "transform Set(1, 2, 3) into a [1, 2, 3]" in {
-    implicit val errorLog: ErrorLog[Task] = new ErrorLog[Task]()
     val toListCall: EMethod =
       EMethod(
         "toList",
@@ -2085,7 +1924,7 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
         List[Par]()
       )
 
-    val result: Par = withTestSpace(errorLog) {
+    val result: Par = withTestSpace {
       case TestFixture(_, reducer) =>
         implicit val env: Env[Par] = Env[Par]()
         val toListTask             = reducer.evalExpr(toListCall)
@@ -2102,11 +1941,9 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
         )
       )
     result.exprs should be(Seq(Expr(resultList)))
-    errorLog.readAndClearErrorVector().unsafeRunSync should be(Vector.empty[InterpreterError])
   }
 
   it should "transform {'a':1, 'b':2, 'c':3} into [('a',1), ('b',2), ('c',3)]" in {
-    implicit val errorLog: ErrorLog[Task] = new ErrorLog[Task]()
     val toListCall: EMethod =
       EMethod(
         "toList",
@@ -2121,7 +1958,7 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
         ),
         List[Par]()
       )
-    val result: Par = withTestSpace(errorLog) {
+    val result: Par = withTestSpace {
       case TestFixture(_, reducer) =>
         implicit val env: Env[Par] = Env[Par]()
         val toListTask             = reducer.evalExpr(toListCall)
@@ -2138,11 +1975,9 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
         )
       )
     result.exprs should be(Seq(Expr(resultList)))
-    errorLog.readAndClearErrorVector().unsafeRunSync should be(Vector.empty[InterpreterError])
   }
 
   it should "transform (1, 2, 3) into [1, 2, 3]" in {
-    implicit val errorLog: ErrorLog[Task] = new ErrorLog[Task]()
     val toListCall: EMethod =
       EMethod(
         "toList",
@@ -2157,7 +1992,7 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
         ),
         List[Par]()
       )
-    val result: Par = withTestSpace(errorLog) {
+    val result: Par = withTestSpace {
       case TestFixture(_, reducer) =>
         implicit val env: Env[Par] = Env[Par]()
         val toListTask             = reducer.evalExpr(toListCall)
@@ -2174,7 +2009,6 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
         )
       )
     result.exprs should be(Seq(Expr(resultList)))
-    errorLog.readAndClearErrorVector().unsafeRunSync should be(Vector.empty[InterpreterError])
   }
 
   val successfulExamples = Table(
@@ -2489,10 +2323,9 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
   type RSpaceMap = Map[Seq[Par], Row[BindPattern, ListParWithRandom, TaggedContinuation]]
 
   def runReducer(input: Par, timeout: Duration = 3.seconds): Either[Throwable, Par] = {
-    val errorLog: ErrorLog[Task] = new ErrorLog[Task]()
 
     val task =
-      withTestSpace(errorLog) {
+      withTestSpace {
         case TestFixture(_, reducer) =>
           implicit val env: Env[Par] = Env[Par]()
           reducer.evalExpr(input).attempt

@@ -30,13 +30,11 @@ class Runtime[F[_]: Sync] private (
     val replayReducer: Reduce[F],
     val space: RhoISpace[F],
     val replaySpace: RhoReplayISpace[F],
-    val errorLog: ErrorLog[F],
     val cost: _cost[F],
     val deployParametersRef: Ref[F, DeployParameters],
     val blockData: Ref[F, BlockData],
     val invalidBlocks: Runtime.InvalidBlocks[F]
 ) {
-  def readAndClearErrorVector(): F[Vector[Throwable]] = errorLog.readAndClearErrorVector()
   def close(): F[Unit] =
     for {
       _ <- space.close()
@@ -314,8 +312,6 @@ object Runtime {
       executionContext: ExecutionContext,
       cost: _cost[F]
   ): F[Runtime[F]] = {
-    val errorLog                               = new ErrorLog[F]()
-    implicit val ft: FunctorTell[F, Throwable] = errorLog
 
     def dispatchTableCreator(
         space: RhoTuplespace[F],
@@ -420,7 +416,6 @@ object Runtime {
         replayReducer,
         space,
         replaySpace,
-        errorLog,
         cost,
         deployParametersRef,
         blockDataRef,

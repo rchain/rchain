@@ -19,7 +19,6 @@ trait Interpreter[F[_]] {
 
   def injAttempt(
       reducer: Reduce[F],
-      errorLog: ErrorLog[F],
       term: String,
       initialPhlo: Cost,
       normalizerEnv: NormalizerEnv
@@ -52,14 +51,13 @@ object Interpreter {
         implicit val rand: Blake2b512Random = Blake2b512Random(128)
         for {
           checkpoint <- runtime.space.createSoftCheckpoint()
-          res        <- injAttempt(runtime.reducer, runtime.errorLog, term, initialPhlo, normalizerEnv)
+          res        <- injAttempt(runtime.reducer, term, initialPhlo, normalizerEnv)
           _          <- if (res.errors.nonEmpty) runtime.space.revertToSoftCheckpoint(checkpoint) else S.unit
         } yield res
       }
 
       def injAttempt(
           reducer: Reduce[F],
-          errorLog: ErrorLog[F],
           term: String,
           initialPhlo: Cost,
           normalizerEnv: NormalizerEnv
@@ -75,10 +73,7 @@ object Interpreter {
                         for {
                           result    <- reducer.inj(parsed).attempt
                           phlosLeft <- C.inspect(identity)
-                          oldErrors <- errorLog.readAndClearErrorVector()
-                          newErrors = result.swap.toSeq.toVector
-                          allErrors = oldErrors |+| newErrors
-                        } yield EvaluateResult(initialPhlo - phlosLeft, allErrors)
+                        } yield EvaluateResult(initialPhlo - phlosLeft, result.swap.toSeq.toVector)
                       case Left(error) =>
                         EvaluateResult(parsingCost, Vector(error)).pure[F]
                     }

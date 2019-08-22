@@ -61,7 +61,6 @@ object RholangAndScalaDispatcher {
       cost: _cost[M],
       parallel: Parallel[M, F],
       s: Sync[M],
-      ft: FunctorTell[M, Throwable],
       spanM: Span[M]
   ): (Dispatch[M, ListParWithRandom, TaggedContinuation], Reduce[M], Registry[M]) = {
 

@@ -51,16 +51,16 @@ abstract class ReplayWideBenchState extends WideBenchBaseState {
   override def doSetup(): Unit = {
     super.doSetup()
 
-    assert(createTest(setupTerm)(readErrors, runtime.reducer, rand).unsafeRunSync.isEmpty)
+    assert(createTest(setupTerm)(runtime.reducer, rand).unsafeRunSync.isEmpty)
     (for {
       setupCheckpoint <- runtime.space.createCheckpoint()
       _               <- runtime.replaySpace.rigAndReset(setupCheckpoint.root, setupCheckpoint.log)
-      _               = assert(createTest(setupTerm)(readErrors, runtime.reducer, rand).unsafeRunSync.isEmpty)
-      runTask         = createTest(setupTerm)(readErrors, runtime.reducer, rand)
+      _               = assert(createTest(setupTerm)(runtime.reducer, rand).unsafeRunSync.isEmpty)
+      runTask         = createTest(setupTerm)(runtime.reducer, rand)
       _               = assert(runTask.unsafeRunSync.isEmpty)
       checkpoint      <- runtime.space.createCheckpoint()
       _               <- runtime.replaySpace.rigAndReset(checkpoint.root, checkpoint.log)
-      _               = runReplayTask = createTest(setupTerm)(readErrors, runtime.reducer, rand)
+      _               = runReplayTask = createTest(setupTerm)(runtime.reducer, rand)
     } yield ()).unsafeRunSync
   }
 }
