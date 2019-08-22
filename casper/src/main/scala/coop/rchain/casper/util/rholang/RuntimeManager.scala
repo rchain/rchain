@@ -5,6 +5,7 @@ import cats.data.EitherT
 import cats.effect.concurrent.MVar
 import cats.effect.{Sync, _}
 import cats.implicits._
+
 import com.google.protobuf.ByteString
 import coop.rchain.casper.CasperMetricsSource
 import coop.rchain.casper.protocol._
@@ -12,6 +13,7 @@ import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
 import coop.rchain.casper.util.{ConstructDeploy, ProtoUtil}
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.metrics.{Metrics, Span}
+import coop.rchain.metrics.Metrics.Source
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.Expr.ExprInstance.GString
 import coop.rchain.models.Validator.Validator
@@ -196,7 +198,15 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span] private[rholang] (
        """.stripMargin('#')
 
   def withRuntimeLock[A](f: Runtime[F] => F[A]): F[A] =
-    Sync[F].bracket(runtimeContainer.take)(f)(runtimeContainer.put)
+    Sync[F].bracket {
+      import coop.rchain.metrics.implicits._
+      implicit val ms: Source = RuntimeManagerMetricsSource
+      for {
+        _       <- Metrics[F].incrementGauge("lock.queue")
+        runtime <- Sync[F].defer(runtimeContainer.take).timer("lock.acquire")
+        _       <- Metrics[F].decrementGauge("lock.queue")
+      } yield runtime
+    }(f)(runtimeContainer.put)
 
   private def withResetRuntimeLock[R](hash: StateHash)(block: Runtime[F] => F[R]): F[R] =
     withRuntimeLock(

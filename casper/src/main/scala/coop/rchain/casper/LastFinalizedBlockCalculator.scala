@@ -37,7 +37,7 @@ final class LastFinalizedBlockCalculator[F[_]: Sync: Log: Concurrent: BlockStore
       finalizedChildHash: BlockHash
   )(implicit state: CasperStateCell[F]): F[Unit] =
     for {
-      block              <- ProtoUtil.unsafeGetBlock[F](finalizedChildHash)
+      block              <- ProtoUtil.getBlock[F](finalizedChildHash)
       deploys            = block.body.get.deploys.map(_.deploy.get).toList
       stateBefore        <- state.read
       initialHistorySize = stateBefore.deployHistory.size

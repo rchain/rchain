@@ -269,13 +269,23 @@ object Main {
       )
 
     for {
-      _ <- List(
-            conf.server.httpPort,
-            conf.grpcServer.portExternal,
-            conf.grpcServer.portInternal
-          ).traverse(isLocalPortAvailable)
-            .map(_.forall(identity))
-            .ifM(Task.unit, Task.raiseError(new Exception("Port is in use")))
+      portsAvailability <- List(
+                            ("http", conf.server.httpPort),
+                            ("grpc server external", conf.grpcServer.portExternal),
+                            ("grpc server internal", conf.grpcServer.portInternal)
+                          ).traverse { _.traverse(isLocalPortAvailable) }
+
+      unavailablePorts = portsAvailability.filter(!_._2).map(_._1)
+
+      _ <- if (unavailablePorts.isEmpty)
+            Task.unit
+          else
+            Task.raiseError(
+              new Exception(
+                s"Required ports are already in use: ${unavailablePorts.mkString(", ")}"
+              )
+            )
+
       rpPortConf       <- checkRChainProtocolPort(conf)
       kademliaPortConf <- checkKademliaPort(rpPortConf)
     } yield kademliaPortConf

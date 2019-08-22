@@ -332,7 +332,7 @@ object HistoryInstances {
     private def hasNoDuplicates(actions: List[HistoryAction]) =
       actions.map(_.key).toSet.size == actions.size
 
-    private def processSubtree(
+    private[rspace] def processSubtree(
         start: Blake2b256Hash
     )(index: Index, actions: List[HistoryAction]): F[(Index, Trie)] =
       for {
@@ -385,7 +385,7 @@ object HistoryInstances {
         _ <- historyStore.put(elements)
       } yield (
         elements.lastOption.map(Trie.hash).getOrElse(currentRoot),
-        elements.lastOption.map(t => (remainingPath, t))
+        elements.lastOption.map(t => (remainingPath, t)).orElse(previousModificationOpt)
       )
 
     private def extractSubtrieAtIndex(
@@ -564,7 +564,7 @@ object HistoryInstances {
 
   final case class CachingHistoryStore[F[_]: Sync](historyStore: HistoryStore[F])
       extends HistoryStore[F] {
-    private[this] val cache: TrieMap[Blake2b256Hash, Trie] = TrieMap.empty
+    private[rspace] val cache: TrieMap[Blake2b256Hash, Trie] = TrieMap.empty
 
     override def put(tries: List[Trie]): F[Unit] =
       Sync[F].delay {

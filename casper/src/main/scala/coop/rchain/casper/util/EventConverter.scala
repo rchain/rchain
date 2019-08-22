@@ -1,7 +1,7 @@
 package coop.rchain.casper.util
 
 import com.google.protobuf.ByteString
-import coop.rchain.casper.protocol.{CommEvent, ConsumeEvent, Event, ProduceEvent}
+import coop.rchain.casper.protocol.{CommEvent, ConsumeEvent, Event, Peek, ProduceEvent}
 import coop.rchain.casper.protocol.Event.EventInstance.{Comm, Consume, Produce}
 import coop.rchain.rspace.Blake2b256Hash
 import coop.rchain.rspace.trace.{
@@ -10,6 +10,8 @@ import coop.rchain.rspace.trace.{
   Event => RspaceEvent,
   Produce => RspaceProduce
 }
+
+import scala.collection.SortedSet
 
 object EventConverter {
   implicit private def byteStringToBlake2b256Hash(hash: ByteString): Blake2b256Hash =
@@ -44,7 +46,7 @@ object EventConverter {
           )
         )
       )
-    case RspaceComm(rspaceConsume, rspaceProduces, _) => // TODO address peek
+    case RspaceComm(rspaceConsume, rspaceProduces, peeks) =>
       Event(
         Comm(
           CommEvent(
@@ -65,7 +67,8 @@ object EventConverter {
                     rspaceProduce.persistent,
                     rspaceProduce.sequenceNumber
                   )
-              )
+              ),
+            peeks.toSeq.map(Peek(_))
           )
         )
       )
@@ -83,7 +86,7 @@ object EventConverter {
         consume.persistent,
         consume.sequenceNumber
       )
-    case Event(Comm(CommEvent(Some(consume: ConsumeEvent), produces))) =>
+    case Event(Comm(CommEvent(Some(consume: ConsumeEvent), produces, peeks))) =>
       val rspaceProduces: Seq[RspaceProduce] = produces.map { produce =>
         val rspaceProduce: RspaceProduce =
           RspaceProduce.fromHash(
@@ -101,7 +104,8 @@ object EventConverter {
           consume.persistent,
           consume.sequenceNumber
         ),
-        rspaceProduces
+        rspaceProduces,
+        SortedSet(peeks.map(_.channelIndex): _*)
       )
     case _ => throw new RuntimeException("Could not calculate toRspaceEvent")
   }

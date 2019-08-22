@@ -1,38 +1,26 @@
 package coop.rchain.casper
 
-import java.nio.file.{Path, Paths}
-
-import cats.effect.Sync
 import cats.implicits._
-import coop.rchain.blockstorage.util.io.IOError.RaiseIOError
-import coop.rchain.blockstorage.util.io.SourceIO
 import coop.rchain.casper.MultiParentCasper.ignoreDoppelgangerCheck
-import coop.rchain.casper.genesis.Genesis
-import coop.rchain.casper.genesis.Genesis.{fromLine, getVaults}
-import coop.rchain.casper.genesis.contracts.{ProofOfStake, RevGenerator, Validator, Vault}
-import coop.rchain.casper.genesis.contracts.StandardDeploys.toDeploy
+import coop.rchain.casper.genesis.contracts.Vault
 import coop.rchain.casper.helper.HashSetCasperTestNode
 import coop.rchain.casper.helper.HashSetCasperTestNode._
 import coop.rchain.casper.scalatestcontrib._
 import coop.rchain.casper.util.ConstructDeploy
-import coop.rchain.casper.util.ConstructDeploy.{defaultPub, defaultPub2}
 import coop.rchain.casper.util.GenesisBuilder._
 import coop.rchain.casper.util.RSpaceUtil._
 import coop.rchain.casper.util.rholang.RegistrySigGen
-import coop.rchain.crypto.{PrivateKey, PublicKey}
+import coop.rchain.crypto.PublicKey
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.signatures.Secp256k1
 import coop.rchain.rholang.interpreter.util.RevAddress
-import coop.rchain.shared.Log
-import monix.execution.Scheduler.Implicits.global
+import coop.rchain.shared.RChainScheduler
 import org.scalatest.{FlatSpec, Matchers}
-
-import scala.io.Source
-import scala.util.{Failure, Success, Try}
 
 class RholangBuildTest extends FlatSpec with Matchers {
 
-  val genesis = buildGenesis()
+  implicit val scheduler = RChainScheduler.interpreterScheduler
+  val genesis            = buildGenesis()
 
   "Our build system" should "allow import of rholang sources into scala code" in effectTest {
     HashSetCasperTestNode

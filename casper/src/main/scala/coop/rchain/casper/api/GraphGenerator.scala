@@ -106,7 +106,7 @@ object GraphzGenerator {
       blockHashes: Vector[BlockHash]
   ): F[DagInfo[G]] =
     for {
-      blocks    <- blockHashes.traverse(ProtoUtil.unsafeGetBlock[F])
+      blocks    <- blockHashes.traverse(ProtoUtil.getBlock[F])
       timeEntry = blocks.head.getBody.getState.blockNumber
       validators = blocks.toList.map {
         case b =>

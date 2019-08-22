@@ -299,7 +299,7 @@ object Validate {
                                        )
                                        .findF { blockMetadata =>
                                          for {
-                                           block <- ProtoUtil.unsafeGetBlock[F](
+                                           block <- ProtoUtil.getBlock[F](
                                                      blockMetadata.blockHash
                                                    )
                                            blockDeploys = ProtoUtil.deploys(block).flatMap(_.deploy)
@@ -312,7 +312,7 @@ object Validate {
                      .traverse(
                        duplicatedBlockMetadata => {
                          for {
-                           duplicatedBlock <- ProtoUtil.unsafeGetBlock[F](
+                           duplicatedBlock <- ProtoUtil.getBlock[F](
                                                duplicatedBlockMetadata.blockHash
                                              )
                            currentBlockHashString = PrettyPrinter.buildString(block.blockHash)
@@ -334,7 +334,7 @@ object Validate {
   }
 
   // This is not a slashable offence
-  def timestamp[F[_]: Monad: Log: Time: BlockStore](
+  def timestamp[F[_]: Sync: Log: Time: BlockStore](
       b: BlockMessage,
       dag: BlockDagRepresentation[F]
   ): F[Either[InvalidBlock, ValidBlock]] =
@@ -345,7 +345,7 @@ object Validate {
       latestParentTimestamp <- ProtoUtil.parentHashes(b).toList.foldM(0L) {
                                 case (latestTimestamp, parentHash) =>
                                   ProtoUtil
-                                    .unsafeGetBlock[F](parentHash)
+                                    .getBlock[F](parentHash)
                                     .map(parent => {
                                       val timestamp =
                                         parent.header.fold(latestTimestamp)(_.timestamp)
@@ -575,7 +575,7 @@ object Validate {
   /*
    * This check must come before Validate.parents
    */
-  def justificationFollows[F[_]: Monad: Log: BlockStore](
+  def justificationFollows[F[_]: Sync: Log: BlockStore](
       b: BlockMessage,
       genesis: BlockMessage,
       dag: BlockDagRepresentation[F]
@@ -583,7 +583,7 @@ object Validate {
     val justifiedValidators = b.justifications.map(_.validator).toSet
     val mainParentHash      = ProtoUtil.parentHashes(b).head
     for {
-      mainParent       <- ProtoUtil.unsafeGetBlock[F](mainParentHash)
+      mainParent       <- ProtoUtil.getBlock[F](mainParentHash)
       bondedValidators = ProtoUtil.bonds(mainParent).map(_.validator).toSet
       status <- if (bondedValidators == justifiedValidators) {
                  Applicative[F].pure(Right(Valid))

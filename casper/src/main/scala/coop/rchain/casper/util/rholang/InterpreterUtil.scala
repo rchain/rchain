@@ -42,7 +42,7 @@ object InterpreterUtil {
     val blockNumber     = b.body.get.state.get.blockNumber
     for {
       _                    <- Span[F].mark("before-unsafe-get-parents")
-      parents              <- ProtoUtil.unsafeGetParents[F](b)
+      parents              <- ProtoUtil.getParents[F](b)
       _                    <- Span[F].mark("before-compute-parents-post-state")
       possiblePreStateHash <- computeParentsPostState[F](parents, dag, runtimeManager)
       _                    <- Log[F].info(s"Computed parents post state for ${PrettyPrinter.buildString(b)}.")
@@ -216,7 +216,7 @@ object InterpreterUtil {
       _                  <- Span[F].mark("before-compute-parents-post-state-find-multi-parents")
       blockHashesToApply <- findMultiParentsBlockHashesForReplay(parents, dag)
       _                  <- Span[F].mark("before-compute-parents-post-state-get-blocks")
-      blocksToApply      <- blockHashesToApply.traverse(b => ProtoUtil.unsafeGetBlock[F](b.blockHash))
+      blocksToApply      <- blockHashesToApply.traverse(b => ProtoUtil.getBlock[F](b.blockHash))
       _                  <- Span[F].mark("before-compute-parents-post-state-replay")
       replayResult <- blocksToApply.toList.foldM(Right(initStateHash).leftCast[Throwable]) {
                        (acc, block) =>

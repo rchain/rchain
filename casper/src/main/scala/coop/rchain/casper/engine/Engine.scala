@@ -73,7 +73,7 @@ object Engine {
       _   <- TransportLayer[F].stream(peer, msg)
     } yield ()
 
-  def transitionToRunning[F[_]: Monad: EngineCell: Log: EventLog: RPConfAsk: BlockStore: ConnectionsCell: TransportLayer: Time: Running.RequestedBlocks](
+  def transitionToRunning[F[_]: Sync: EngineCell: Log: EventLog: RPConfAsk: BlockStore: ConnectionsCell: TransportLayer: Time: Running.RequestedBlocks](
       casper: MultiParentCasper[F],
       approvedBlock: ApprovedBlock,
       init: F[Unit]

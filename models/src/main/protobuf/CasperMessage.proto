@@ -195,6 +195,11 @@ message ConsumeEvent {
 message CommEvent {
   ConsumeEvent consume = 1;
   repeated ProduceEvent produces = 2;
+  repeated Peek peeks = 3;
+}
+
+message Peek {
+  int32 channelIndex = 1;
 }
 
 message Bond {

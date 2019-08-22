@@ -44,7 +44,7 @@ object Resources {
       BlockDagStorageTestFixture.createBlockStorage[F](path)
     )(_.close())
 
-  def mkBlockDagStorageAt[F[_]: Concurrent: Sync: Log](
+  def mkBlockDagStorageAt[F[_]: Concurrent: Sync: Log: Metrics](
       path: Path
   ): Resource[F, BlockDagStorage[F]] =
     Resource

@@ -165,6 +165,19 @@ class BlocksCountAtLeast:
         return actual_blocks_count >= self.blocks_count
 
 
+class BlockFinalized:
+    def __init__(self, node: 'Node', block_hash_prefix: str) -> None:
+        self.node = node
+        self.block_hash_prefix = block_hash_prefix
+
+    def __str__(self) -> str:
+        args = ', '.join(repr(a) for a in (self.node.name, self.block_hash_prefix))
+        return '<{}({})>'.format(self.__class__.__name__, args)
+
+    def is_satisfied(self) -> bool:
+        return self.node.last_finalized_block()['blockHash'].startswith(self.block_hash_prefix)
+
+
 def wait_using_wall_clock_time(predicate: PredicateProtocol, timeout: int) -> None:
     logging.info("AWAITING {}".format(predicate))
 
@@ -277,3 +290,8 @@ def wait_for_log_match_result(context: TestingContext, node: 'Node', pattern: Pa
     predicate = LogsReMatchWithResult(node, pattern)
     wait_using_wall_clock_time_or_fail(predicate, context.command_timeout)
     return predicate.result
+
+
+def wait_for_block_finalized(context: TestingContext, node: 'Node', *, block_hash_prefix: str) -> None:
+    predicate = BlockFinalized(node, block_hash_prefix)
+    wait_using_wall_clock_time_or_fail(predicate, context.network_converge_timeout)

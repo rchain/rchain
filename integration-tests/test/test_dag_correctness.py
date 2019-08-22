@@ -12,6 +12,7 @@ from .rnode import (
 from .wait import (
     wait_for_peers_count_at_least,
     wait_for_blocks_count_at_least,
+    wait_for_node_sees_block,
 )
 from .common import (
     CommandLineOptions,
@@ -26,9 +27,84 @@ BONDED_VALIDATOR_KEY_3 = PrivateKey.from_hex("af47862137d4e772f540029ae73ee01443
 BONDED_VALIDATOR_KEY_4 = PrivateKey.from_hex("2a6018851984203e0983f0671e94fcf649ec04b614e5924f435081f7d1e3b44b")
 
 
-@pytest.mark.xfail
-def test_fault_tolerance(command_line_options: CommandLineOptions, docker_client: DockerClient) -> None:
-    assert False
+def test_fault_tolerance(command_line_options: CommandLineOptions, random_generator: Random, docker_client: DockerClient)-> None:
+    """
+    Below test would generate a dag like below. Every validator has the most latest block of other validators.
+    ^
+    |
+    |                               b7=-1.0
+    |                                                   b6=-1.0
+    |                               b5=-1.0
+    |           b4=0.2631579
+    |                                                   b3=0.57894737
+    |                               b2=1
+    |           b1=1
+    |
+    |           Genesis=1
+    |
+    |           Bootstrap           Validator1          Validator2
+    | bonds         25                  20                  15
+    |
+    time
+    """
+    peers_keypairs = [BONDED_VALIDATOR_KEY_1, BONDED_VALIDATOR_KEY_2]
+    contract_path = '/opt/docker/examples/tut-hello.rho'
+    validator_bonds_map = {
+        BOOTSTRAP_NODE_KEYS: 60,
+        BONDED_VALIDATOR_KEY_1: 20,
+        BONDED_VALIDATOR_KEY_2: 15
+    }
+    with conftest.testing_context(command_line_options, random_generator, docker_client, bootstrap_key=BOOTSTRAP_NODE_KEYS, peers_keys=peers_keypairs, validator_bonds_dict=validator_bonds_map) as context, \
+        docker_network_with_started_bootstrap(context=context) as bootstrap_node, \
+        bootstrap_connected_peer(context=context, bootstrap=bootstrap_node, name='bonded-validator-1', private_key=BONDED_VALIDATOR_KEY_1) as validator1, \
+        bootstrap_connected_peer(context=context, bootstrap=bootstrap_node, name='bonded-validator-2', private_key=BONDED_VALIDATOR_KEY_2) as validator2:
+            wait_for_peers_count_at_least(context, validator1, 2)
+            wait_for_peers_count_at_least(context, validator2, 2)
+
+            genesis_hash = bootstrap_node.show_blocks_parsed(1)[0]['blockHash']
+
+            bootstrap_node.deploy(contract_path, BOOTSTRAP_NODE_KEYS)
+            b1_hash = bootstrap_node.propose()
+            wait_for_node_sees_block(context, validator1, b1_hash)
+            wait_for_node_sees_block(context, validator2, b1_hash)
+
+            validator1.deploy(contract_path, BONDED_VALIDATOR_KEY_1)
+            b2_hash = validator1.propose()
+            wait_for_node_sees_block(context, bootstrap_node, b2_hash)
+            wait_for_node_sees_block(context, validator2, b2_hash)
+
+            validator2.deploy(contract_path, BONDED_VALIDATOR_KEY_2)
+            b3_hash = validator2.propose()
+            wait_for_node_sees_block(context, bootstrap_node, b3_hash)
+            wait_for_node_sees_block(context, validator1, b3_hash)
+
+            bootstrap_node.deploy(contract_path, BOOTSTRAP_NODE_KEYS)
+            b4_hash = bootstrap_node.propose()
+            wait_for_node_sees_block(context, validator2, b4_hash)
+            wait_for_node_sees_block(context, validator1, b4_hash)
+
+            validator1.deploy(contract_path, BONDED_VALIDATOR_KEY_1)
+            b5_hash = validator1.propose()
+            wait_for_node_sees_block(context, bootstrap_node, b5_hash)
+            wait_for_node_sees_block(context, validator2, b5_hash)
+
+            validator2.deploy(contract_path, BONDED_VALIDATOR_KEY_2)
+            b6_hash = validator2.propose()
+            wait_for_node_sees_block(context, bootstrap_node, b6_hash)
+            wait_for_node_sees_block(context, validator1, b6_hash)
+
+            validator1.deploy(contract_path, BONDED_VALIDATOR_KEY_1)
+            b7_hash = validator1.propose()
+            wait_for_node_sees_block(context, bootstrap_node, b7_hash)
+            wait_for_node_sees_block(context, validator2, b7_hash)
+
+            assert float(validator1.show_block_parsed(b1_hash)['faultTolerance']) <= float(validator1.show_block_parsed(genesis_hash)['faultTolerance'])
+            assert float(validator1.show_block_parsed(b2_hash)['faultTolerance']) <= float(validator1.show_block_parsed(b1_hash)['faultTolerance'])
+            assert float(validator1.show_block_parsed(b3_hash)['faultTolerance']) <= float(validator1.show_block_parsed(b2_hash)['faultTolerance'])
+            assert float(validator1.show_block_parsed(b4_hash)['faultTolerance']) <= float(validator1.show_block_parsed(b3_hash)['faultTolerance'])
+            assert float(validator1.show_block_parsed(b5_hash)['faultTolerance']) <= float(validator1.show_block_parsed(b4_hash)['faultTolerance'])
+            assert float(validator1.show_block_parsed(b6_hash)['faultTolerance']) <= float(validator1.show_block_parsed(b5_hash)['faultTolerance'])
+            assert float(validator1.show_block_parsed(b7_hash)['faultTolerance']) <= float(validator1.show_block_parsed(b6_hash)['faultTolerance'])
 
 
 @pytest.mark.xfail

@@ -8,6 +8,7 @@ import cats.effect.concurrent.Semaphore
 import cats.effect.{Concurrent, Resource, Sync}
 import cats.implicits._
 import cats.mtl.MonadState
+
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockDagFileStorage.{Checkpoint, CheckpointedDagInfo}
 import coop.rchain.blockstorage.util.BlockMessageUtil.{blockNumber, bonds, parentHashes}
@@ -24,12 +25,15 @@ import coop.rchain.models.{BlockHash, BlockMetadata, EquivocationRecord, Validat
 import coop.rchain.shared.ByteStringOps._
 import coop.rchain.shared.Language.ignore
 import coop.rchain.shared.{AtomicMonadState, Log, LogSource}
+
 import monix.execution.atomic.AtomicAny
 import org.lmdbjava.DbiFlags.MDB_CREATE
 import org.lmdbjava.{Env, EnvFlags}
-
 import scala.ref.WeakReference
 import scala.util.matching.Regex
+
+import coop.rchain.metrics.{Metrics, MetricsSemaphore}
+import coop.rchain.metrics.Metrics.Source
 
 private final case class BlockDagFileStorageState[F[_]: Sync](
     latestMessages: Map[Validator, BlockHash],
@@ -65,7 +69,7 @@ final class BlockDagFileStorage[F[_]: Concurrent: Sync: Log: RaiseIOError] priva
     invalidBlocksCrcPath: Path,
     state: MonadState[F, BlockDagFileStorageState[F]]
 ) extends BlockDagStorage[F] {
-  implicit private val logSource = LogSource(BlockDagFileStorage.getClass)
+  implicit private val logSource: LogSource = LogSource(BlockDagFileStorage.getClass)
 
   private[this] def getLatestMessages: F[Map[Validator, BlockHash]] =
     state.get.map(_.latestMessages)
@@ -593,6 +597,8 @@ final class BlockDagFileStorage[F[_]: Concurrent: Sync: Log: RaiseIOError] priva
 object BlockDagFileStorage {
   val IntSize = 4L
 
+  implicit private val BlockDagFileStorageMetricsSource: Source =
+    Metrics.Source(BlockStorageMetricsSource, "dag-file")
   implicit private val logSource       = LogSource(BlockDagFileStorage.getClass)
   private val checkpointPattern: Regex = "([0-9]+)-([0-9]+)".r
 
@@ -1034,12 +1040,12 @@ object BlockDagFileStorage {
             }
     } yield LMDBStore[F](env, dbi)
 
-  def create[F[_]: Concurrent: Sync: Log](
+  def create[F[_]: Concurrent: Sync: Log: Metrics](
       config: Config
   ): F[BlockDagFileStorage[F]] = {
     implicit val raiseIOError: RaiseIOError[F] = IOError.raiseIOErrorThroughSync[F]
     for {
-      lock                  <- Semaphore[F](1)
+      lock                  <- MetricsSemaphore.single[F]
       blockNumberIndex      <- loadBlockNumberIndexLmdbStore(config)
       readLatestMessagesCrc <- readCrc[F](config.latestMessagesCrcPath)
       latestMessagesFileResource = Resource.make(

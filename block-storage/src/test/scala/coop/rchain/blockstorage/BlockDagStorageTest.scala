@@ -3,9 +3,11 @@ package coop.rchain.blockstorage
 import java.nio.file.StandardOpenOption
 
 import cats.implicits._
+
 import coop.rchain.shared.PathOps._
 import coop.rchain.catscontrib.TaskContrib.TaskOps
 import cats.effect.Sync
+
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.util.byteOps._
 import coop.rchain.blockstorage.util.io.IOError.RaiseIOError
@@ -19,14 +21,18 @@ import coop.rchain.models.Validator
 import coop.rchain.models.{BlockMetadata, EquivocationRecord}
 import coop.rchain.models.blockImplicits._
 import coop.rchain.rspace.Context
-import coop.rchain.shared
+import coop.rchain.{metrics, shared}
 import coop.rchain.shared.Log
+
 import monix.eval.Task
 import monix.execution.Scheduler
 import org.scalatest._
 import org.scalatest.prop.GeneratorDrivenPropertyChecks
-
 import scala.util.Random
+
+import coop.rchain.metrics.Metrics
+
+import kamon.metric.Metric
 
 trait BlockDagStorageTest
     extends FlatSpecLike
@@ -146,7 +152,8 @@ class BlockDagFileStorageTest extends BlockDagStorageTest {
       dagDataDir: Path,
       maxSizeFactor: Int = 10
   ): Task[BlockDagFileStorage[Task]] = {
-    implicit val log = new shared.Log.NOPLog[Task]()
+    implicit val log     = new shared.Log.NOPLog[Task]()
+    implicit val metrics = new Metrics.MetricsNOP[Task]
     BlockDagFileStorage.create[Task](
       BlockDagFileStorage.Config(
         defaultLatestMessagesLog(dagDataDir),

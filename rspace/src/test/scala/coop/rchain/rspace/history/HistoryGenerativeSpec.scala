@@ -7,6 +7,7 @@ import History._
 import org.scalacheck.{Arbitrary, Gen, Shrink}
 import coop.rchain.shared.GeneratorUtils.distinctListOf
 import monix.eval.Task
+import monix.execution.Scheduler
 import org.scalatest.prop._
 
 import scala.concurrent.duration._
@@ -56,9 +57,9 @@ class HistoryGenerativeSpec
       case ((k, v), postModifyMergingHistory, postModifySimplisticHistory) =>
         val actions = DeleteAction(k) :: Nil
         val postDeleteMergingHistory =
-          postModifyMergingHistory.process(actions).runSyncUnsafe(20.seconds)
+          runEffect(postModifyMergingHistory.process(actions))
         val postDeleteSimplisticHistory =
-          postModifySimplisticHistory.process(actions).runSyncUnsafe(20.seconds)
+          runEffect(postModifySimplisticHistory.process(actions))
 
         fetchData(postModifyMergingHistory, k)._1 shouldBe LeafPointer(v)
         fetchData(postDeleteMergingHistory, k)._1 shouldBe EmptyPointer
@@ -70,10 +71,10 @@ class HistoryGenerativeSpec
 
     val deletions           = map.values.map(_._1).map(v => DeleteAction(v._1)).toList
     val finalMergingHistory = resultMergingHistory.process(deletions)
-    finalMergingHistory.runSyncUnsafe(20.seconds).root shouldBe emptyRootHash
+    runEffect(finalMergingHistory).root shouldBe emptyRootHash
 
     val finalSimplisticHistory = resultSimplisticHistory.process(deletions)
-    finalSimplisticHistory.runSyncUnsafe(20.seconds).root shouldBe emptyRootHash
+    runEffect(finalSimplisticHistory).root shouldBe emptyRootHash
   }
 
   "process" should "accept new leafs in bulk" in forAll(distinctListOf(arbitraryRandomThreeBytes)) {
@@ -85,18 +86,18 @@ class HistoryGenerativeSpec
         SimplisticHistory.noMerging[Task](emptyRootHash, inMemHistoryStore)
 
       val inserts                  = actions.map { case (k, v) => InsertAction(k, v) }
-      val postInsertMergingHistory = emptyMergingHistory.process(inserts).runSyncUnsafe(20.seconds)
+      val postInsertMergingHistory = runEffect(emptyMergingHistory.process(inserts))
       val postInsertNonMergingHistory =
-        emptySimplisticHistory.process(inserts).runSyncUnsafe(20.seconds)
+        runEffect(emptySimplisticHistory.process(inserts))
 
       postInsertMergingHistory.root shouldBe postInsertNonMergingHistory.root
 
       val deletions = actions.map { case (k, _) => DeleteAction(k) }
 
       val postDeletionMergingHistory =
-        postInsertMergingHistory.process(deletions).runSyncUnsafe(20.seconds)
+        runEffect(postInsertMergingHistory.process(deletions))
       val postDeletionNonMergingHistory =
-        postInsertNonMergingHistory.process(deletions).runSyncUnsafe(20.seconds)
+        runEffect(postInsertNonMergingHistory.process(deletions))
 
       postDeletionMergingHistory.root shouldBe emptyRootHash
       postDeletionNonMergingHistory.root shouldBe emptyRootHash
@@ -115,11 +116,11 @@ class HistoryGenerativeSpec
       pastData: List[Data]
   ): (History[Task], List[Data]) = {
     val inserts      = toBeProcessed.map(v => InsertAction(v._1, v._2))
-    val insertResult = history.process(inserts).runSyncUnsafe(20.seconds)
+    val insertResult = runEffect(history.process(inserts))
     insertResult.root should not be history.root
 
     val deletions      = toBeProcessed.map(v => DeleteAction(v._1))
-    val deletionResult = insertResult.process(deletions).runSyncUnsafe(20.seconds)
+    val deletionResult = runEffect(insertResult.process(deletions))
     fetchData(deletionResult, toBeProcessed.head)._1 shouldBe EmptyPointer
 
     val notDeletedData = pastData.filter(v => v._1 != toBeProcessed.head._1)
@@ -138,10 +139,12 @@ class HistoryGenerativeSpec
     fetchData(h, data._1)
 
   def fetchData(h: History[Task], k: Key): (TriePointer, Vector[Trie]) =
-    h.find(k).runSyncUnsafe(20.seconds)
+    runEffect(h.find(k))
 }
 
 trait InMemoryHistoryTestBase {
+
+  def runEffect[A](task: Task[A]): A = task.runSyncUnsafe(20.seconds)
 
   def inMemHistoryStore: HistoryStore[Task] = new HistoryStore[Task] {
     val data: TrieMap[Blake2b256Hash, Trie] = TrieMap.empty

@@ -1,15 +1,18 @@
 package coop.rchain.rspace.concurrent
 
 import org.scalatest._
-
 import monix.eval.Task
 import scala.collection._
 import scala.collection.immutable.Seq
 
+import coop.rchain.metrics
+import coop.rchain.metrics.Metrics
+
 class MultiLockTest extends FlatSpec with Matchers {
 
   import monix.execution.Scheduler
-  implicit val s = Scheduler.fixedPool("test-scheduler", 8)
+  implicit val s       = Scheduler.fixedPool("test-scheduler", 8)
+  implicit val metrics = new Metrics.MetricsNOP[Task]
 
   implicit class TaskOps[A](task: Task[A])(implicit scheduler: Scheduler) {
     import scala.concurrent.Await
@@ -19,7 +22,7 @@ class MultiLockTest extends FlatSpec with Matchers {
       Await.result(task.runToFuture, Duration.Inf)
   }
 
-  val tested = new MultiLock[Task, String]
+  val tested = new MultiLock[Task, String](Metrics.BaseSource)
 
   def acquire(m: mutable.Map[String, Int])(seq: Seq[String]) =
     tested.acquire(seq) {
@@ -90,7 +93,9 @@ class MultiLockTest extends FlatSpec with Matchers {
     implicit val ioContextShift: ContextShift[IO] =
       IO.contextShift(scala.concurrent.ExecutionContext.Implicits.global)
 
-    val tested = new MultiLock[IO, String]()
+    implicit val metrics: Metrics.MetricsNOP[IO] = new Metrics.MetricsNOP[IO]
+
+    val tested = new MultiLock[IO, String](Metrics.BaseSource)
 
     val m = scala.collection.mutable.Map.empty[String, Int]
 

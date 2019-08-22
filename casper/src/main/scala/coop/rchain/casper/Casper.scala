@@ -5,6 +5,7 @@ import cats._
 import cats.data._
 import cats.implicits._
 import cats.effect.{Concurrent, Sync}
+
 import com.google.protobuf.ByteString
 import coop.rchain.casper.engine.Running
 import coop.rchain.casper.protocol._
@@ -13,11 +14,12 @@ import coop.rchain.catscontrib._
 import coop.rchain.comm.transport.TransportLayer
 import coop.rchain.shared._
 import cats.effect.concurrent.Semaphore
+
 import coop.rchain.blockstorage.{BlockDagRepresentation, BlockDagStorage, BlockStore}
 import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
 import coop.rchain.catscontrib.ski.kp2
-import coop.rchain.metrics.{Metrics, Span}
+import coop.rchain.metrics.{Metrics, MetricsSemaphore, Span}
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.Validator.Validator
 
@@ -76,12 +78,12 @@ object MultiParentCasper extends MultiParentCasperInstances {
   def ignoreDoppelgangerCheck[F[_]: Applicative]: (BlockMessage, Validator) => F[Unit] =
     kp2(().pure[F])
 
-  def forkChoiceTip[F[_]: Monad: BlockStore](casper: MultiParentCasper[F]): F[BlockMessage] =
+  def forkChoiceTip[F[_]: Sync: BlockStore](casper: MultiParentCasper[F]): F[BlockMessage] =
     for {
       dag       <- casper.blockDag
       tipHashes <- casper.estimator(dag)
       tipHash   = tipHashes.head
-      tip       <- ProtoUtil.unsafeGetBlock[F](tipHash)
+      tip       <- ProtoUtil.getBlock[F](tipHash)
     } yield tip
 }
 
@@ -112,7 +114,7 @@ sealed abstract class MultiParentCasperInstances {
                                    )
                                  case Right(Some(hash)) => hash.pure[F]
                                }
-        blockProcessingLock <- Semaphore[F](1)
+        blockProcessingLock <- MetricsSemaphore.single[F]
         casperState <- Cell.mvarCell[F, CasperState](
                         CasperState()
                       )

@@ -3,6 +3,7 @@ package coop.rchain.blockstorage
 import cats.effect.concurrent.{Ref, Semaphore}
 import cats.effect.{Concurrent, Sync}
 import cats.implicits._
+
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.util.BlockMessageUtil.{bonds, parentHashes}
 import coop.rchain.blockstorage.util.TopologicalSortUtil
@@ -12,8 +13,10 @@ import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.Validator.Validator
 import coop.rchain.models.{BlockHash, BlockMetadata, EquivocationRecord}
 import coop.rchain.shared.Log
-
 import scala.collection.immutable.HashSet
+
+import coop.rchain.metrics.{Metrics, MetricsSemaphore}
+import coop.rchain.metrics.Metrics.Source
 
 final class InMemBlockDagStorage[F[_]: Concurrent: Sync: Log: BlockStore](
     lock: Semaphore[F],
@@ -81,14 +84,15 @@ final class InMemBlockDagStorage[F[_]: Concurrent: Sync: Log: BlockStore](
   }
 
   override def getRepresentation: F[BlockDagRepresentation[F]] =
+    lock.withPermit(getRepresentationInternal)
+
+  private def getRepresentationInternal: F[BlockDagRepresentation[F]] =
     for {
-      _              <- lock.acquire
       latestMessages <- latestMessagesRef.get
       childMap       <- childMapRef.get
       dataLookup     <- dataLookupRef.get
       topoSort       <- topoSortRef.get
       invalidBlocks  <- invalidBlocksRef.get
-      _              <- lock.release
     } yield InMemBlockDagRepresentation(
       latestMessages,
       childMap,
@@ -102,73 +106,79 @@ final class InMemBlockDagStorage[F[_]: Concurrent: Sync: Log: BlockStore](
       genesis: BlockMessage,
       invalid: Boolean
   ): F[BlockDagRepresentation[F]] =
-    for {
-      _             <- lock.acquire
-      blockMetadata = BlockMetadata.fromBlock(block, invalid)
-      _             <- dataLookupRef.update(_.updated(block.blockHash, blockMetadata))
-      _ <- childMapRef.update(
-            childMap =>
-              parentHashes(block).foldLeft(childMap) {
-                case (acc, p) =>
-                  val currChildren = acc.getOrElse(p, HashSet.empty[BlockHash])
-                  acc.updated(p, currChildren + block.blockHash)
-              }
-          )
-      _ <- topoSortRef.update(topoSort => TopologicalSortUtil.update(topoSort, 0L, block))
-      newValidators = bonds(block)
-        .map(_.validator)
-        .toSet
-        .diff(block.justifications.map(_.validator).toSet)
-      newValidatorsLatestMessages = newValidators.map(v => (v, genesis.blockHash))
-      newValidatorsWithSenderLatestMessages <- if (block.sender.isEmpty) {
-                                                // Ignore empty sender for special cases such as genesis block
-                                                Log[F].warn(
-                                                  s"Block ${Base16.encode(block.blockHash.toByteArray)} sender is empty"
-                                                ) >> newValidatorsLatestMessages.pure[F]
-                                              } else if (block.sender.size() == BlockHash.Length) {
-                                                (newValidatorsLatestMessages + (
-                                                  (
-                                                    block.sender,
-                                                    block.blockHash
+    lock.withPermit(
+      for {
+        blockMetadata <- Sync[F].delay(BlockMetadata.fromBlock(block, invalid))
+        _             <- dataLookupRef.update(_.updated(block.blockHash, blockMetadata))
+        _ <- childMapRef.update(
+              childMap =>
+                parentHashes(block).foldLeft(childMap) {
+                  case (acc, p) =>
+                    val currChildren = acc.getOrElse(p, HashSet.empty[BlockHash])
+                    acc.updated(p, currChildren + block.blockHash)
+                }
+            )
+        _ <- topoSortRef.update(topoSort => TopologicalSortUtil.update(topoSort, 0L, block))
+        newValidators = bonds(block)
+          .map(_.validator)
+          .toSet
+          .diff(block.justifications.map(_.validator).toSet)
+        newValidatorsLatestMessages = newValidators.map(v => (v, genesis.blockHash))
+        newValidatorsWithSenderLatestMessages <- if (block.sender.isEmpty) {
+                                                  // Ignore empty sender for special cases such as genesis block
+                                                  Log[F].warn(
+                                                    s"Block ${Base16.encode(block.blockHash.toByteArray)} sender is empty"
+                                                  ) >> newValidatorsLatestMessages.pure[F]
+                                                } else if (block.sender
+                                                             .size() == BlockHash.Length) {
+                                                  (newValidatorsLatestMessages + (
+                                                    (
+                                                      block.sender,
+                                                      block.blockHash
+                                                    )
+                                                  )).pure[F]
+                                                } else {
+                                                  Sync[F].raiseError[Set[(ByteString, ByteString)]](
+                                                    BlockSenderIsMalformed(block)
                                                   )
-                                                )).pure[F]
-                                              } else {
-                                                Sync[F].raiseError[Set[(ByteString, ByteString)]](
-                                                  BlockSenderIsMalformed(block)
-                                                )
-                                              }
-      _ <- latestMessagesRef.update { latestMessages =>
-            newValidatorsWithSenderLatestMessages.foldLeft(latestMessages) {
-              case (acc, (validator, blockHash)) => acc.updated(validator, blockHash)
+                                                }
+        _ <- latestMessagesRef.update { latestMessages =>
+              newValidatorsWithSenderLatestMessages.foldLeft(latestMessages) {
+                case (acc, (validator, blockHash)) => acc.updated(validator, blockHash)
+              }
             }
-          }
-      _   <- if (invalid) invalidBlocksRef.update(_ + blockMetadata) else ().pure[F]
-      _   <- lock.release
-      dag <- getRepresentation
-    } yield dag
+        _   <- if (invalid) invalidBlocksRef.update(_ + blockMetadata) else ().pure[F]
+        dag <- getRepresentationInternal
+      } yield dag
+    )
 
   override def accessEquivocationsTracker[A](f: EquivocationsTracker[F] => F[A]): F[A] =
     lock.withPermit(
       f(InMemEquivocationsTracker)
     )
   override def checkpoint(): F[Unit] = ().pure[F]
+
   override def clear(): F[Unit] =
-    for {
-      _ <- lock.acquire
-      _ <- dataLookupRef.set(Map.empty)
-      _ <- childMapRef.set(Map.empty)
-      _ <- topoSortRef.set(Vector.empty)
-      _ <- latestMessagesRef.set(Map.empty)
-      _ <- equivocationsTrackerRef.set(Set.empty)
-      _ <- lock.release
-    } yield ()
+    lock.withPermit(
+      for {
+        _ <- dataLookupRef.set(Map.empty)
+        _ <- childMapRef.set(Map.empty)
+        _ <- topoSortRef.set(Vector.empty)
+        _ <- latestMessagesRef.set(Map.empty)
+        _ <- equivocationsTrackerRef.set(Set.empty)
+      } yield ()
+    )
+
   override def close(): F[Unit] = ().pure[F]
 }
 
 object InMemBlockDagStorage {
-  def create[F[_]: Concurrent: Sync: Log: BlockStore]: F[InMemBlockDagStorage[F]] =
+  implicit private val InMemBlockDagStorageMetricsSource: Source =
+    Metrics.Source(BlockStorageMetricsSource, "in-mem")
+
+  def create[F[_]: Concurrent: Sync: Log: BlockStore: Metrics]: F[InMemBlockDagStorage[F]] =
     for {
-      lock                    <- Semaphore[F](1)
+      lock                    <- MetricsSemaphore.single[F]
       latestMessagesRef       <- Ref.of[F, Map[Validator, BlockHash]](Map.empty)
       childMapRef             <- Ref.of[F, Map[BlockHash, Set[BlockHash]]](Map.empty)
       dataLookupRef           <- Ref.of[F, Map[BlockHash, BlockMetadata]](Map.empty)
