@@ -25,7 +25,6 @@ import org.scalatest.{AppendedClues, Assertion, FlatSpec, Matchers}
 import scala.collection.immutable.BitSet
 import scala.collection.mutable.HashMap
 import scala.collection.{mutable, SortedSet}
-import scala.concurrent.Await
 import scala.concurrent.duration._
 
 class ReduceSpec extends FlatSpec with Matchers with AppendedClues with PersistentStoreTester {
@@ -80,12 +79,11 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
     )
 
   "evalExpr" should "handle simple addition" in {
-    val result = withTestSpace {
-      case TestFixture(_, reducer) =>
+    val result = fixture {
+      case (_, reducer) =>
         val addExpr      = EPlus(GInt(7L), GInt(8L))
         implicit val env = Env[Par]()
-        val resultTask   = reducer.evalExpr(addExpr)
-        Await.result(resultTask.runToFuture, 3.seconds)
+        reducer.evalExpr(addExpr)
     }
 
     val expected = Seq(Expr(GInt(15L)))
@@ -93,12 +91,11 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
   }
 
   "evalExpr" should "handle long addition" in {
-    val result = withTestSpace {
-      case TestFixture(_, reducer) =>
+    val result = fixture {
+      case (_, reducer) =>
         val addExpr      = EPlus(GInt(Int.MaxValue), GInt(Int.MaxValue))
         implicit val env = Env[Par]()
-        val resultTask   = reducer.evalExpr(addExpr)
-        Await.result(resultTask.runToFuture, 3.seconds)
+        reducer.evalExpr(addExpr)
     }
 
     val expected = Seq(Expr(GInt(2 * Int.MaxValue.toLong)))
@@ -106,12 +103,11 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
   }
 
   "evalExpr" should "leave ground values alone" in {
-    val result = withTestSpace {
-      case TestFixture(_, reducer) =>
+    val result = fixture {
+      case (_, reducer) =>
         val groundExpr   = GInt(7L)
         implicit val env = Env[Par]()
-        val resultTask   = reducer.evalExpr(groundExpr)
-        Await.result(resultTask.runToFuture, 3.seconds)
+        reducer.evalExpr(groundExpr)
     }
 
     val expected = Seq(Expr(GInt(7L)))
@@ -119,24 +115,22 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
   }
 
   "evalExpr" should "handle equality between arbitary processes" in {
-    val result = withTestSpace {
-      case TestFixture(_, reducer) =>
+    val result = fixture {
+      case (_, reducer) =>
         val eqExpr       = EEq(GPrivateBuilder("private_name"), GPrivateBuilder("private_name"))
         implicit val env = Env[Par]()
-        val resultTask   = reducer.evalExpr(eqExpr)
-        Await.result(resultTask.runToFuture, 3.seconds)
+        reducer.evalExpr(eqExpr)
     }
     val expected = Seq(Expr(GBool(true)))
     result.exprs should be(expected)
   }
 
   "evalExpr" should "substitute before comparison." in {
-    val result = withTestSpace {
-      case TestFixture(_, reducer) =>
+    val result = fixture {
+      case (_, reducer) =>
         implicit val emptyEnv = Env.makeEnv(Par(), Par())
         val eqExpr            = EEq(EVar(BoundVar(0)), EVar(BoundVar(1)))
-        val resultTask        = reducer.evalExpr(eqExpr)
-        Await.result(resultTask.runToFuture, 3.seconds)
+        reducer.evalExpr(eqExpr)
     }
     val expected = Seq(Expr(GBool(true)))
     result.exprs should be(expected)
@@ -145,17 +139,12 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
   "eval of Bundle" should "evaluate contents of bundle" in {
     val splitRand    = rand.splitByte(0)
     val channel: Par = GString("channel")
-    val result = withTestSpace {
-      case TestFixture(space, reducer) =>
+    val result = fixture {
+      case (space, reducer) =>
         val bundleSend =
           Bundle(Send(channel, List(GInt(7L), GInt(8L), GInt(9L)), persistent = false, BitSet()))
         implicit val env = Env[Par]()
-        val resultTask   = reducer.eval(bundleSend)(env, splitRand)
-        val inspectTask = for {
-          _   <- resultTask
-          res <- space.toMap
-        } yield res
-        Await.result(inspectTask.runToFuture, 3.seconds)
+        reducer.eval(bundleSend)(env, splitRand) >> space.toMap
     }
 
     val expectedResult = mapData(
@@ -176,11 +165,10 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
       Par()
     )
 
-    val receiveResult = withTestSpace {
-      case TestFixture(space, reducer) =>
+    val receiveResult = fixture {
+      case (space, reducer) =>
         implicit val env = Env[Par]()
-        val task         = reducer.eval(receive) >> space.toMap
-        Await.result(task.runToFuture, 3.seconds)
+        reducer.eval(receive) >> space.toMap
     }
     receiveResult should be(HashMap.empty)
     // TODO: Guarantee ReduceError("Trying to read from non-readable channel.")
@@ -191,12 +179,10 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
     val send =
       Send(Bundle(x, writeFlag = false, readFlag = true), Seq(Expr(GInt(7L))))
 
-    val sendResult = withTestSpace {
-      case TestFixture(space, reducer) =>
+    val sendResult = fixture {
+      case (space, reducer) =>
         implicit val env = Env[Par]()
-
-        val task = reducer.eval(send) >> space.toMap
-        Await.result(task.runToFuture, 3.seconds)
+        reducer.eval(send) >> space.toMap
     }
     sendResult should be(HashMap.empty)
     // TODO: Guarantee ReduceError("Trying to send on non-writeable channel.")
@@ -205,17 +191,12 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
   "eval of Send" should "place something in the tuplespace." in {
     val channel: Par = GString("channel")
     val splitRand    = rand.splitByte(0)
-    val result = withTestSpace {
-      case TestFixture(space, reducer) =>
+    val result = fixture {
+      case (space, reducer) =>
         val send =
           Send(channel, List(GInt(7L), GInt(8L), GInt(9L)), false, BitSet())
         implicit val env = Env[Par]()
-        val resultTask   = reducer.eval(send)(env, splitRand)
-        val inspectTask = for {
-          _   <- resultTask
-          res <- space.toMap
-        } yield res
-        Await.result(inspectTask.runToFuture, 3.seconds)
+        reducer.eval(send)(env, splitRand) >> space.toMap
     }
 
     val expectedResult = mapData(
@@ -235,11 +216,10 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
     val send =
       Send(Bundle(channel, writeFlag = true), Seq(Expr(GInt(7L))))
 
-    val result = withTestSpace {
-      case TestFixture(space, reducer) =>
+    val result = fixture {
+      case (space, reducer) =>
         implicit val env = Env[Par]()
-        val task         = reducer.eval(send)(env, splitRand).flatMap(_ => space.toMap)
-        Await.result(task.runToFuture, 3.seconds)
+        reducer.eval(send)(env, splitRand) >> space.toMap
     }
 
     val expectedResult = mapData(
@@ -254,8 +234,8 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
 
     val splitRand    = rand.splitByte(0)
     val channel: Par = GString("channel")
-    val result = withTestSpace {
-      case TestFixture(space, reducer) =>
+    val result = fixture {
+      case (space, reducer) =>
         val receive =
           Receive(
             Seq(
@@ -271,12 +251,7 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
             BitSet()
           )
         implicit val env = Env[Par]()
-        val resultTask   = reducer.eval(receive)(env, splitRand)
-        val inspectTask = for {
-          _   <- resultTask
-          res <- space.toMap
-        } yield res
-        Await.result(inspectTask.runToFuture, 3.seconds)
+        reducer.eval(receive)(env, splitRand) >> space.toMap
     }
     val bindPattern = BindPattern(
       List(
@@ -306,11 +281,10 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
       body = Par()
     )
 
-    val result = withTestSpace {
-      case TestFixture(space, reducer) =>
+    val result = fixture {
+      case (space, reducer) =>
         implicit val env = Env[Par]()
-        val task         = reducer.eval(receive)(env, splitRand).flatMap(_ => space.toMap)
-        Await.result(task.runToFuture, 3.seconds)
+        reducer.eval(receive)(env, splitRand) >> space.toMap
     }
 
     val channels = List[Par](y)
@@ -342,15 +316,14 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
       3,
       BitSet()
     )
-    val sendFirstResult = withTestSpace {
-      case TestFixture(space, reducer) =>
+    val sendFirstResult = fixture {
+      case (space, reducer) =>
         implicit val env = Env[Par]()
-        val inspectTaskSendFirst = for {
+        for {
           _   <- reducer.eval(send)(env, splitRand0)
           _   <- reducer.eval(receive)(env, splitRand1)
           res <- space.toMap
         } yield res
-        Await.result(inspectTaskSendFirst.runToFuture, 3.seconds)
     }
 
     val channel: Par = GString("result")
@@ -363,15 +336,14 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
 
     sendFirstResult.toIterable should contain theSameElementsAs expectedResult
 
-    val receiveFirstResult = withTestSpace {
-      case TestFixture(space, reducer) =>
+    val receiveFirstResult = fixture {
+      case (space, reducer) =>
         implicit val env = Env[Par]()
-        val inspectTaskReceiveFirst = for {
+        for {
           _   <- reducer.eval(receive)(env, splitRand1)
           _   <- reducer.eval(send)(env, splitRand0)
           res <- space.toMap
         } yield res
-        Await.result(inspectTaskReceiveFirst.runToFuture, 3.seconds)
     }
 
     receiveFirstResult.toIterable should contain theSameElementsAs expectedResult
@@ -455,15 +427,14 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
       BitSet()
     )
     // format: on
-    val sendFirstResult = withTestSpace {
-      case TestFixture(space, reducer) =>
+    val sendFirstResult = fixture {
+      case (space, reducer) =>
         implicit val env = Env[Par]()
-        val inspectTaskSendFirst = for {
+        for {
           _   <- reducer.eval(send)(env, splitRand0)
           _   <- reducer.eval(receive)(env, splitRand1)
           res <- space.toMap
         } yield res
-        Await.result(inspectTaskSendFirst.runToFuture, 3.seconds)
     }
 
     val channel: Par = GString("result")
@@ -474,15 +445,14 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
     )
     sendFirstResult.toIterable should contain theSameElementsAs expectedResult
 
-    val receiveFirstResult = withTestSpace {
-      case TestFixture(space, reducer) =>
+    val receiveFirstResult = fixture {
+      case (space, reducer) =>
         implicit val env = Env[Par]()
-        val inspectTaskReceiveFirst = for {
+        for {
           _   <- reducer.eval(receive)(env, splitRand1)
           _   <- reducer.eval(send)(env, splitRand0)
           res <- space.toMap
         } yield res
-        Await.result(inspectTaskReceiveFirst.runToFuture, 3.seconds)
     }
 
     receiveFirstResult.toIterable should contain theSameElementsAs expectedResult
@@ -515,15 +485,14 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
       BitSet()
     )
 
-    val sendFirstResult = withTestSpace {
-      case TestFixture(space, reducer) =>
+    val sendFirstResult = fixture {
+      case (space, reducer) =>
         implicit val env = Env[Par]()
-        val inspectTaskSendFirst = for {
+        for {
           _   <- reducer.eval(send)(env, splitRand0)
           _   <- reducer.eval(receive)(env, splitRand1)
           res <- space.toMap
         } yield res
-        Await.result(inspectTaskSendFirst.runToFuture, 3.seconds)
     }
 
     val channel: Par = GString("result")
@@ -534,15 +503,14 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
     )
     sendFirstResult.toIterable should contain theSameElementsAs expectedResult
 
-    val receiveFirstResult = withTestSpace {
-      case TestFixture(space, reducer) =>
+    val receiveFirstResult = fixture {
+      case (space, reducer) =>
         implicit val env = Env[Par]()
-        val inspectTaskReceiveFirst = for {
+        for {
           _   <- reducer.eval(receive)(env, splitRand1)
           _   <- reducer.eval(send)(env, splitRand0)
           res <- space.toMap
         } yield res
-        Await.result(inspectTaskReceiveFirst.runToFuture, 3.seconds)
     }
     receiveFirstResult.toIterable should contain theSameElementsAs expectedResult
   }
@@ -572,15 +540,14 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
       BitSet()
     )
 
-    val sendFirstResult = withTestSpace {
-      case TestFixture(space, reducer) =>
+    val sendFirstResult = fixture {
+      case (space, reducer) =>
         implicit val env = Env[Par]()
-        val inspectTaskSendFirst = for {
+        for {
           _   <- reducer.eval(send)(env, splitRand0)
           _   <- reducer.eval(receive)(env, splitRand1)
           res <- space.toMap
         } yield res
-        Await.result(inspectTaskSendFirst.runToFuture, 3.seconds)
     }
 
     val channels = List[Par](GInt(2L))
@@ -592,15 +559,14 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
       ParWithRandom(Par(), mergeRand)
     )
 
-    val receiveFirstResult = withTestSpace {
-      case TestFixture(space, reducer) =>
+    val receiveFirstResult = fixture {
+      case (space, reducer) =>
         implicit val env = Env[Par]()
-        val inspectTaskReceiveFirst = for {
+        for {
           _   <- reducer.eval(receive)(env, splitRand1)
           _   <- reducer.eval(send)(env, splitRand0)
           res <- space.toMap
         } yield res
-        Await.result(inspectTaskReceiveFirst.runToFuture, 3.seconds)
     }
 
     checkContinuation(receiveFirstResult)(
@@ -609,14 +575,10 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
       ParWithRandom(Par(), mergeRand)
     )
 
-    val bothResult = withTestSpace {
-      case TestFixture(space, reducer) =>
+    val bothResult = fixture {
+      case (space, reducer) =>
         implicit val env = Env[Par]()
-        val inspectTaskReceiveFirst = for {
-          _   <- reducer.eval(Par(receives = Seq(receive), sends = Seq(send)))(env, baseRand)
-          res <- space.toMap
-        } yield res
-        Await.result(inspectTaskReceiveFirst.runToFuture, 3.seconds)
+        reducer.eval(Par(receives = Seq(receive), sends = Seq(send)))(env, baseRand) >> space.toMap
     }
 
     checkContinuation(bothResult)(
@@ -629,8 +591,8 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
   "Simple match" should "capture and add to the environment." in {
 
     val splitRand = rand.splitByte(0)
-    val result = withTestSpace {
-      case TestFixture(space, reducer) =>
+    val result = fixture {
+      case (space, reducer) =>
         val pattern =
           Send(EVar(FreeVar(0)), List(GInt(7L), EVar(FreeVar(1))), persistent = false, BitSet())
             .withConnectiveUsed(true)
@@ -658,13 +620,7 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
           BitSet()
         )
         implicit val env = Env.makeEnv[Par](GPrivateBuilder("one"), GPrivateBuilder("zero"))
-
-        val matchTask = reducer.eval(matchTerm)(env, splitRand)
-        val inspectTask = for {
-          _   <- matchTask
-          res <- space.toMap
-        } yield res
-        Await.result(inspectTask.runToFuture, 3.seconds)
+        reducer.eval(matchTerm)(env, splitRand) >> space.toMap
     }
 
     val channel: Par = GString("result")
@@ -705,15 +661,14 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
       3,
       BitSet()
     )
-    val sendFirstResult = withTestSpace {
-      case TestFixture(space, reducer) =>
-        val inspectTaskSendFirst = for {
+    val sendFirstResult = fixture {
+      case (space, reducer) =>
+        for {
           _   <- reducer.inj(send1)(splitRand0)
           _   <- reducer.inj(send2)(splitRand1)
           _   <- reducer.inj(receive)(splitRand2)
           res <- space.toMap
         } yield res
-        Await.result(inspectTaskSendFirst.runToFuture, 3.seconds)
     }
 
     val channel: Par = GString("result")
@@ -724,30 +679,28 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
     )
     sendFirstResult.toIterable should contain theSameElementsAs expectedResult
 
-    val receiveFirstResult = withTestSpace {
-      case TestFixture(space, reducer) =>
+    val receiveFirstResult = fixture {
+      case (space, reducer) =>
         implicit val env = Env[Par]()
-        val inspectTaskReceiveFirst = for {
+        for {
           _   <- reducer.eval(receive)(env, splitRand2)
           _   <- reducer.eval(send1)(env, splitRand0)
           _   <- reducer.eval(send2)(env, splitRand1)
           res <- space.toMap
         } yield res
-        Await.result(inspectTaskReceiveFirst.runToFuture, 3.seconds)
     }
 
     receiveFirstResult.toIterable should contain theSameElementsAs expectedResult
 
-    val interleavedResult = withTestSpace {
-      case TestFixture(space, reducer) =>
+    val interleavedResult = fixture {
+      case (space, reducer) =>
         implicit val env = Env[Par]()
-        val inspectTaskInterleaved = for {
+        for {
           _   <- reducer.eval(send1)(env, splitRand0)
           _   <- reducer.eval(receive)(env, splitRand2)
           _   <- reducer.eval(send2)(env, splitRand1)
           res <- space.toMap
         } yield res
-        Await.result(inspectTaskInterleaved.runToFuture, 3.seconds)
     }
 
     interleavedResult.toIterable should contain theSameElementsAs expectedResult
@@ -766,15 +719,14 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
         Send(GString("result"), Seq(EVar(BoundVar(0))))
       )
 
-    val result = withTestSpace {
-      case TestFixture(space, reducer) =>
+    val result = fixture {
+      case (space, reducer) =>
         implicit val env = Env[Par]()
-        val task = for {
+        for {
           _   <- reducer.eval(receive)(env, splitRand1)
           _   <- reducer.eval(send)(env, splitRand0)
           res <- space.toMap
         } yield res
-        Await.result(task.runToFuture, 3.seconds)
     }
 
     val channel: Par = GString("result")
@@ -791,10 +743,10 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
     val splitRand = rand.splitByte(0)
     val nthCall: Expr =
       EMethod("nth", EList(List(GInt(7L), GInt(8L), GInt(9L), GInt(10L))), List[Par](GInt(2L)))
-    val directResult: Par = withTestSpace {
-      case TestFixture(_, reducer) =>
+    val directResult: Par = fixture {
+      case (_, reducer) =>
         implicit val env = Env[Par]()
-        Await.result(reducer.evalExprToPar(nthCall).runToFuture, 3.seconds)
+        reducer.evalExprToPar(nthCall)
     }
     val expectedResult: Par = GInt(9L)
     directResult should be(expectedResult)
@@ -812,15 +764,10 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
         ),
         List[Par](GInt(1L))
       )
-    val indirectResult = withTestSpace {
-      case TestFixture(space, reducer) =>
+    val indirectResult = fixture {
+      case (space, reducer) =>
         implicit val env = Env[Par]()
-        val nthTask      = reducer.eval(nthCallEvalToSend)(env, splitRand)
-        val inspectTask = for {
-          _   <- nthTask
-          res <- space.toMap
-        } yield res
-        Await.result(inspectTask.runToFuture, 3.seconds)
+        reducer.eval(nthCallEvalToSend)(env, splitRand) >> space.toMap
     }
 
     val channel: Par = GString("result")
@@ -833,26 +780,24 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
   }
 
   "eval of nth method" should "pick out the nth item from a ByteArray" in {
-
     val nthCall: Expr =
       EMethod("nth", GByteArray(ByteString.copyFrom(Array[Byte](1, 2, -1))), List[Par](GInt(2L)))
-    val directResult: Par = withTestSpace {
-      case TestFixture(_, reducer) =>
+    val directResult: Par = fixture {
+      case (_, reducer) =>
         implicit val env = Env[Par]()
-        Await.result(reducer.evalExprToPar(nthCall).runToFuture, 3.seconds)
+        reducer.evalExprToPar(nthCall)
     }
     val expectedResult: Par = GInt(255.toLong)
     directResult should be(expectedResult)
   }
 
   "eval of length method" should "get length of ByteArray" in {
-
     val nthCall: Expr =
       EMethod("length", GByteArray(ByteString.copyFrom(Array[Byte](1, 2, -1))), List[Par]())
-    val directResult: Par = withTestSpace {
-      case TestFixture(_, reducer) =>
+    val directResult: Par = fixture {
+      case (_, reducer) =>
         implicit val env = Env[Par]()
-        Await.result(reducer.evalExprToPar(nthCall).runToFuture, 3.seconds)
+        reducer.evalExprToPar(nthCall)
     }
     val expectedResult: Par = GInt(3.toLong)
     directResult should be(expectedResult)
@@ -860,12 +805,11 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
 
   "eval of New" should "use deterministic names and provide urn-based resources" in {
     implicit val span = NoopSpan[Task]
-
-    val splitRand   = rand.splitByte(42)
-    val resultRand  = rand.splitByte(42)
-    val chosenName  = resultRand.next
-    val result0Rand = resultRand.splitByte(0)
-    val result1Rand = resultRand.splitByte(1)
+    val splitRand     = rand.splitByte(42)
+    val resultRand    = rand.splitByte(42)
+    val chosenName    = resultRand.next
+    val result0Rand   = resultRand.splitByte(0)
+    val result1Rand   = resultRand.splitByte(1)
     val newProc: New =
       New(
         bindCount = 2,
@@ -879,8 +823,8 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
         )
       )
 
-    val result = withTestSpace {
-      case TestFixture(space, _) =>
+    val result = fixture {
+      case (space, _) =>
         implicit val cost          = CostAccounting.emptyCost[Task].unsafeRunSync
         def byteName(b: Byte): Par = GPrivate(ByteString.copyFrom(Array[Byte](b)))
         val reducer = RholangOnlyDispatcher
@@ -888,12 +832,7 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
           ._2
         cost.set(Cost.UNSAFE_MAX).runSyncUnsafe(1.second)
         implicit val env = Env[Par]()
-        val nthTask      = reducer.eval(newProc)(env, splitRand)
-        val inspectTask = for {
-          _   <- nthTask
-          res <- space.toMap
-        } yield res
-        Await.result(inspectTask.runToFuture, 3.seconds)
+        reducer.eval(newProc)(env, splitRand) >> space.toMap
     }
 
     val channel0: Par = GString("result0")
@@ -939,15 +878,10 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
       )
     val send: Par =
       Send(GString("result"), List[Par](nthCallEvalToSend), persistent = false, BitSet())
-    val result = withTestSpace {
-      case TestFixture(space, reducer) =>
+    val result = fixture {
+      case (space, reducer) =>
         implicit val env = Env[Par]()
-        val nthTask      = reducer.eval(send)(env, splitRand)
-        val inspectTask = for {
-          _   <- nthTask
-          res <- space.toMap
-        } yield res
-        Await.result(inspectTask.runToFuture, 3.seconds)
+        reducer.eval(send)(env, splitRand) >> space.toMap
     }
 
     val channel: Par = GString("result")
@@ -966,17 +900,15 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
   }
 
   "eval of a method" should "substitute target before evaluating" in {
-
     val hexToBytesCall: Expr =
       EMethod("hexToBytes", Expr(EVarBody(EVar(Var(BoundVar(0))))))
-    val directResult: Par = withTestSpace {
-      case TestFixture(_, reducer) =>
+    val directResult: Par = fixture {
+      case (_, reducer) =>
         implicit val env = Env.makeEnv[Par](Expr(GString("deadbeef")))
-        Await.result(reducer.evalExprToPar(hexToBytesCall).runToFuture, 3.seconds)
+        reducer.evalExprToPar(hexToBytesCall)
     }
     val expectedResult: Par = Expr(GByteArray(ByteString.copyFrom(Base16.unsafeDecode("deadbeef"))))
     directResult should be(expectedResult)
-
   }
 
   "eval of `toByteArray` method on any process" should "return that process serialized" in {
@@ -995,12 +927,10 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
     val toByteArrayCall = EMethod("toByteArray", proc, List[Par]())
     def wrapWithSend(p: Par): Par =
       Send(GString("result"), List[Par](p), persistent = false, BitSet())
-    val result = withTestSpace {
-      case TestFixture(space, reducer) =>
-        val env         = Env[Par]()
-        val task        = reducer.eval(wrapWithSend(toByteArrayCall))(env, splitRand)
-        val inspectTask = task >> space.toMap
-        Await.result(inspectTask.runToFuture, 3.seconds)
+    val result = fixture {
+      case (space, reducer) =>
+        val env = Env[Par]()
+        reducer.eval(wrapWithSend(toByteArrayCall))(env, splitRand) >> space.toMap
     }
 
     val channel: Par = GString("result")
@@ -1013,7 +943,6 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
   }
 
   it should "substitute before serialization" in {
-
     val splitRand = rand.splitByte(0)
     val unsubProc: Par =
       New(bindCount = 1, p = EVar(BoundVar(1)), locallyFree = BitSet(0))
@@ -1024,12 +953,10 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
     val channel: Par              = GString("result")
     def wrapWithSend(p: Par): Par = Send(channel, List[Par](p), persistent = false, p.locallyFree)
 
-    val result = withTestSpace {
-      case TestFixture(space, reducer) =>
-        val env         = Env.makeEnv[Par](GPrivateBuilder("one"), GPrivateBuilder("zero"))
-        val task        = reducer.eval(wrapWithSend(toByteArrayCall))(env, splitRand)
-        val inspectTask = task >> space.toMap
-        Await.result(inspectTask.runToFuture, 3.seconds)
+    val result = fixture {
+      case (space, reducer) =>
+        val env = Env.makeEnv[Par](GPrivateBuilder("one"), GPrivateBuilder("zero"))
+        reducer.eval(wrapWithSend(toByteArrayCall))(env, splitRand) >> space.toMap
     }
 
     val expectedResult = mapData(
@@ -1041,7 +968,6 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
   }
 
   it should "return an error when `toByteArray` is called with arguments" in {
-
     val toByteArrayWithArgumentsCall: EMethod =
       EMethod(
         "toByteArray",
@@ -1052,19 +978,16 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
         List[Par](GInt(1L))
       )
 
-    val result = withTestSpace {
-      case TestFixture(space, reducer) =>
+    val result = fixture {
+      case (space, reducer) =>
         implicit val env = Env[Par]()
-        val nthTask      = reducer.eval(toByteArrayWithArgumentsCall)
-        val inspectTask  = nthTask >> space.toMap
-        Await.result(inspectTask.runToFuture, 3.seconds)
+        reducer.eval(toByteArrayWithArgumentsCall) >> space.toMap
     }
     result should be(HashMap.empty)
     // TODO: Guarantee MethodArgumentNumberMismatch("toByteArray", 0, 1)
   }
 
   "eval of hexToBytes" should "transform encoded string to byte array (not the rholang term)" in {
-
     val splitRand       = rand.splitByte(0)
     val testString      = "testing testing"
     val base16Repr      = Base16.encode(testString.getBytes)
@@ -1072,12 +995,10 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
     val toByteArrayCall = EMethod("hexToBytes", proc, List[Par]())
     def wrapWithSend(p: Par): Par =
       Send(GString("result"), List[Par](p), persistent = false, BitSet())
-    val result = withTestSpace {
-      case TestFixture(space, reducer) =>
-        val env         = Env[Par]()
-        val task        = reducer.eval(wrapWithSend(toByteArrayCall))(env, splitRand)
-        val inspectTask = task >> space.toMap
-        Await.result(inspectTask.runToFuture, 3.seconds)
+    val result = fixture {
+      case (space, reducer) =>
+        val env = Env[Par]()
+        reducer.eval(wrapWithSend(toByteArrayCall))(env, splitRand) >> space.toMap
     }
 
     val channel: Par = GString("result")
@@ -1096,12 +1017,10 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
     val toUtf8BytesCall = EMethod("toUtf8Bytes", proc, List[Par]())
     def wrapWithSend(p: Par): Par =
       Send(GString("result"), List[Par](p), persistent = false, BitSet())
-    val result = withTestSpace {
-      case TestFixture(space, reducer) =>
-        val env         = Env[Par]()
-        val task        = reducer.eval(wrapWithSend(toUtf8BytesCall))(env, splitRand)
-        val inspectTask = task >> space.toMap
-        Await.result(inspectTask.runToFuture, 3.seconds)
+    val result = fixture {
+      case (space, reducer) =>
+        val env = Env[Par]()
+        reducer.eval(wrapWithSend(toUtf8BytesCall))(env, splitRand) >> space.toMap
     }
 
     val channel: Par = GString("result")
@@ -1124,12 +1043,10 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
         List[Par](GInt(1L))
       )
 
-    val result = withTestSpace {
-      case TestFixture(space, reducer) =>
+    val result = fixture {
+      case (space, reducer) =>
         implicit val env = Env[Par]()
-        val nthTask      = reducer.eval(toUtfBytesWithArgumentsCall)
-        val inspectTask  = nthTask >> space.toMap
-        Await.result(inspectTask.runToFuture, 3.seconds)
+        reducer.eval(toUtfBytesWithArgumentsCall) >> space.toMap
     }
     result should be(HashMap.empty)
     // TODO: Guarantee MethodArgumentNumberMismatch("toUtf8Bytes", 0, 1)
@@ -1138,12 +1055,10 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
   it should "return an error when `toUtf8Bytes` is evaluated on a non String" in {
     val toUtfBytesCall = EMethod("toUtf8Bytes", GInt(44L), List[Par]())
 
-    val result = withTestSpace {
-      case TestFixture(space, reducer) =>
+    val result = fixture {
+      case (space, reducer) =>
         implicit val env = Env[Par]()
-        val nthTask      = reducer.eval(toUtfBytesCall)
-        val inspectTask  = nthTask >> space.toMap
-        Await.result(inspectTask.runToFuture, 3.seconds)
+        reducer.eval(toUtfBytesCall) >> space.toMap
     }
     result should be(HashMap.empty)
     // TODO: Guarantee MethodNotDefined("toUtf8Bytes", "Int")
@@ -1181,12 +1096,10 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
       )
     )
 
-    val result = withTestSpace {
-      case TestFixture(space, reducer) =>
-        val env         = Env[Par]()
-        val task        = reducer.eval(proc)(env, splitRandSrc)
-        val inspectTask = task >> space.toMap
-        Await.result(inspectTask.runToFuture, 3.seconds)
+    val result = fixture {
+      case (space, reducer) =>
+        val env = Env[Par]()
+        reducer.eval(proc)(env, splitRandSrc) >> space.toMap
     }
 
     val channel: Par = GString("result")
@@ -1215,12 +1128,10 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
       )
     )
 
-    val result = withTestSpace {
-      case TestFixture(space, reducer) =>
-        val env         = Env[Par]()
-        val task        = reducer.eval(proc)(env, splitRandSrc)
-        val inspectTask = task >> space.toMap
-        Await.result(inspectTask.runToFuture, 3.seconds)
+    val result = fixture {
+      case (space, reducer) =>
+        val env = Env[Par]()
+        reducer.eval(proc)(env, splitRandSrc) >> space.toMap
     }
     val channel: Par = GString("result")
     val expectedResult = mapData(
@@ -1260,12 +1171,10 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
       )
     )
 
-    val result = withTestSpace {
-      case TestFixture(space, reducer) =>
-        val env         = Env[Par]()
-        val task        = reducer.eval(proc)(env, baseRand)
-        val inspectTask = task >> space.toMap
-        Await.result(inspectTask.runToFuture, 3.seconds)
+    val result = fixture {
+      case (space, reducer) =>
+        val env = Env[Par]()
+        reducer.eval(proc)(env, baseRand) >> space.toMap
     }
 
     val channel: Par = GString("result")
@@ -1279,135 +1188,109 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
 
   "1 matches 1" should "return true" in {
 
-    val result = withTestSpace {
-      case TestFixture(_, reducer) =>
+    val result = fixture {
+      case (_, reducer) =>
         implicit val env = Env.makeEnv[Par]()
-        val inspectTask  = reducer.evalExpr(EMatches(GInt(1L), GInt(1L)))
-        Await.result(inspectTask.runToFuture, 3.seconds)
+        reducer.evalExpr(EMatches(GInt(1L), GInt(1L)))
     }
 
     result.exprs should be(Seq(Expr(GBool(true))))
   }
 
   "1 matches 0" should "return false" in {
-
-    val result = withTestSpace {
-      case TestFixture(_, reducer) =>
+    val result = fixture {
+      case (_, reducer) =>
         implicit val env = Env.makeEnv[Par]()
-        val inspectTask  = reducer.evalExpr(EMatches(GInt(1L), GInt(0L)))
-        Await.result(inspectTask.runToFuture, 3.seconds)
+        reducer.evalExpr(EMatches(GInt(1L), GInt(0L)))
     }
-
     result.exprs should be(Seq(Expr(GBool(false))))
   }
 
   "1 matches _" should "return true" in {
-
-    val result = withTestSpace {
-      case TestFixture(_, reducer) =>
+    val result = fixture {
+      case (_, reducer) =>
         implicit val env = Env.makeEnv[Par]()
-        val inspectTask  = reducer.evalExpr(EMatches(GInt(1L), EVar(Wildcard(Var.WildcardMsg()))))
-        Await.result(inspectTask.runToFuture, 3.seconds)
+        reducer.evalExpr(EMatches(GInt(1L), EVar(Wildcard(Var.WildcardMsg()))))
     }
-
     result.exprs should be(Seq(Expr(GBool(true))))
   }
 
   "x matches 1" should "return true when x is bound to 1" in {
-
-    val result = withTestSpace {
-      case TestFixture(_, reducer) =>
+    val result = fixture {
+      case (_, reducer) =>
         implicit val env = Env.makeEnv[Par](GInt(1L))
-        val inspectTask  = reducer.evalExpr(EMatches(EVar(BoundVar(0)), GInt(1L)))
-        Await.result(inspectTask.runToFuture, 3.seconds)
+        reducer.evalExpr(EMatches(EVar(BoundVar(0)), GInt(1L)))
     }
-
     result.exprs should be(Seq(Expr(GBool(true))))
   }
 
   "1 matches =x" should "return true when x is bound to 1" in {
-
-    val result = withTestSpace {
-      case TestFixture(_, reducer) =>
+    val result = fixture {
+      case (_, reducer) =>
         implicit val env = Env.makeEnv[Par](GInt(1L))
-
-        val inspectTask = reducer.evalExpr(EMatches(GInt(1L), Connective(VarRefBody(VarRef(0, 1)))))
-
-        Await.result(inspectTask.runToFuture, 3.seconds)
+        reducer.evalExpr(EMatches(GInt(1L), Connective(VarRefBody(VarRef(0, 1)))))
     }
-
     result.exprs should be(Seq(Expr(GBool(true))))
   }
 
   "'abc'.length()" should "return the length of the string" in {
-
-    val result = withTestSpace {
-      case TestFixture(_, reducer) =>
+    val result = fixture {
+      case (_, reducer) =>
         implicit val env = Env.makeEnv[Par]()
-        val inspectTask  = reducer.evalExpr(EMethodBody(EMethod("length", GString("abc"))))
-        Await.result(inspectTask.runToFuture, 3.seconds)
+        reducer.evalExpr(EMethodBody(EMethod("length", GString("abc"))))
     }
     result.exprs should be(Seq(Expr(GInt(3L))))
   }
 
   "'abcabac'.slice(3, 6)" should "return 'aba'" in {
-
-    val result = withTestSpace {
-      case TestFixture(_, reducer) =>
+    val result = fixture {
+      case (_, reducer) =>
         implicit val env = Env.makeEnv[Par]()
-        val inspectTask = reducer.evalExpr(
+        reducer.evalExpr(
           EMethodBody(EMethod("slice", GString("abcabac"), List(GInt(3L), GInt(6L))))
         )
-        Await.result(inspectTask.runToFuture, 3.seconds)
     }
     result.exprs should be(Seq(Expr(GString("aba"))))
   }
 
   "'abcabcac'.slice(2,1)" should "return empty string" in {
-
-    val result = withTestSpace {
-      case TestFixture(_, reducer) =>
+    val result = fixture {
+      case (_, reducer) =>
         implicit val env = Env.makeEnv[Par]()
-        val inspectTask = reducer.evalExpr(
+        reducer.evalExpr(
           EMethodBody(EMethod("slice", GString("abcabac"), List(GInt(2L), GInt(1L))))
         )
-        Await.result(inspectTask.runToFuture, 3.seconds)
     }
     result.exprs should be(Seq(Expr(GString(""))))
   }
 
   "'abcabcac'.slice(8,9)" should "return empty string" in {
-
-    val result = withTestSpace {
-      case TestFixture(_, reducer) =>
+    val result = fixture {
+      case (_, reducer) =>
         implicit val env = Env.makeEnv[Par]()
-        val inspectTask = reducer.evalExpr(
+        reducer.evalExpr(
           EMethodBody(EMethod("slice", GString("abcabac"), List(GInt(8L), GInt(9L))))
         )
-        Await.result(inspectTask.runToFuture, 3.seconds)
     }
     result.exprs should be(Seq(Expr(GString(""))))
   }
 
   "'abcabcac'.slice(-2,2)" should "return 'ab'" in {
-
-    val result = withTestSpace {
-      case TestFixture(_, reducer) =>
+    val result = fixture {
+      case (_, reducer) =>
         implicit val env = Env.makeEnv[Par]()
-        val inspectTask = reducer.evalExpr(
+        reducer.evalExpr(
           EMethodBody(EMethod("slice", GString("abcabac"), List(GInt(-2L), GInt(2L))))
         )
-        Await.result(inspectTask.runToFuture, 3.seconds)
     }
     result.exprs should be(Seq(Expr(GString("ab"))))
   }
 
   "'Hello, ${name}!' % {'name': 'Alice'}" should "return 'Hello, Alice!" in {
-
-    val result = withTestSpace {
-      case TestFixture(_, reducer) =>
+    val result = fixture {
+      case (_, reducer) =>
         implicit val env = Env.makeEnv[Par]()
-        val inspectTask = reducer.evalExpr(
+        reducer.evalExpr(
           EPercentPercentBody(
             EPercentPercent(
               GString("Hello, ${name}!"),
@@ -1415,17 +1298,15 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
             )
           )
         )
-        Await.result(inspectTask.runToFuture, 3.seconds)
     }
     result.exprs should be(Seq(Expr(GString("Hello, Alice!"))))
   }
 
   "'abc' ++ 'def'" should "return 'abcdef" in {
-
-    val result = withTestSpace {
-      case TestFixture(_, reducer) =>
+    val result = fixture {
+      case (_, reducer) =>
         implicit val env = Env.makeEnv[Par]()
-        val inspectTask = reducer.evalExpr(
+        reducer.evalExpr(
           EPlusPlusBody(
             EPlusPlus(
               GString("abc"),
@@ -1433,17 +1314,15 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
             )
           )
         )
-        Await.result(inspectTask.runToFuture, 3.seconds)
     }
     result.exprs should be(Seq(Expr(GString("abcdef"))))
   }
 
   "ByteArray('dead') ++ ByteArray('beef)'" should "return ByteArray('deadbeef')" in {
-
-    val result = withTestSpace {
-      case TestFixture(_, reducer) =>
+    val result = fixture {
+      case (_, reducer) =>
         implicit val env = Env.makeEnv[Par]()
-        val inspectTask = reducer.evalExpr(
+        reducer.evalExpr(
           EPlusPlusBody(
             EPlusPlus(
               GByteArray(ByteString.copyFrom(Base16.unsafeDecode("dead"))),
@@ -1451,7 +1330,6 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
             )
           )
         )
-        Await.result(inspectTask.runToFuture, 3.seconds)
     }
     result.exprs should be(
       Seq(Expr(GByteArray(ByteString.copyFrom(Base16.unsafeDecode("deadbeef")))))
@@ -1467,11 +1345,10 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
     )
 
   "'${a} ${b}' % {'a': '1 ${b}', 'b': '2 ${a}'" should "return '1 ${b} 2 ${a}" in {
-
-    val result = withTestSpace {
-      case TestFixture(_, reducer) =>
+    val result = fixture {
+      case (_, reducer) =>
         implicit val env = Env.makeEnv[Par]()
-        val inspectTask = reducer.evalExpr(
+        reducer.evalExpr(
           interpolate(
             "${a} ${b}",
             List[(Par, Par)](
@@ -1480,17 +1357,15 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
             )
           )
         )
-        Await.result(inspectTask.runToFuture, 3.seconds)
     }
     result.exprs should be(Seq(Expr(GString("1 ${b} 2 ${a}"))))
   }
 
   "interpolate" should "interpolate Boolean values" in {
-
-    val result = withTestSpace {
-      case TestFixture(_, reducer) =>
+    val result = fixture {
+      case (_, reducer) =>
         implicit val env = Env.makeEnv[Par]()
-        val task = reducer.evalExpr(
+        reducer.evalExpr(
           interpolate(
             "${a} ${b}",
             Seq[(Par, Par)](
@@ -1499,18 +1374,15 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
             )
           )
         )
-        Await.result(task.runToFuture, 3.seconds)
     }
-
     result.exprs should be(Seq(Expr(GString("false true"))))
   }
 
   "interpolate" should "interpolate URIs" in {
-
-    val result = withTestSpace {
-      case TestFixture(_, reducer) =>
+    val result = fixture {
+      case (_, reducer) =>
         implicit val env = Env.makeEnv[Par]()
-        val task = reducer.evalExpr(
+        reducer.evalExpr(
           interpolate(
             "${a} ${b}",
             Seq[(Par, Par)](
@@ -1519,89 +1391,75 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
             )
           )
         )
-        Await.result(task.runToFuture, 3.seconds)
     }
-
     result.exprs should be(Seq(Expr(GString("testUriA testUriB"))))
   }
 
   "[0, 1, 2, 3].length()" should "return the length of the list" in {
-
-    val result = withTestSpace {
-      case TestFixture(_, reducer) =>
+    val result = fixture {
+      case (_, reducer) =>
         implicit val env = Env.makeEnv[Par]()
         val list         = EList(List(GInt(0L), GInt(1L), GInt(2L), GInt(3L)))
-        val inspectTask  = reducer.evalExpr(EMethodBody(EMethod("length", list)))
-
-        Await.result(inspectTask.runToFuture, 3.seconds)
+        reducer.evalExpr(EMethodBody(EMethod("length", list)))
     }
     result.exprs should be(Seq(Expr(GInt(4L))))
   }
 
   "[3, 7, 2, 9, 4, 3, 7].slice(3, 5)" should "return [9, 4]" in {
-
-    val result = withTestSpace {
-      case TestFixture(_, reducer) =>
+    val result = fixture {
+      case (_, reducer) =>
         implicit val env = Env.makeEnv[Par]()
         val list         = EList(List(GInt(3L), GInt(7L), GInt(2L), GInt(9L), GInt(4L), GInt(3L), GInt(7L)))
-        val inspectTask = reducer.evalExpr(
+        reducer.evalExpr(
           EMethodBody(EMethod("slice", list, List(GInt(3L), GInt(5L))))
         )
-        Await.result(inspectTask.runToFuture, 3.seconds)
     }
     result.exprs should be(Seq(Expr(EListBody(EList(List(GInt(9L), GInt(4L)))))))
   }
 
   "[3, 7, 2, 9, 4, 3, 7].slice(5, 4)" should "return []" in {
-
-    val result = withTestSpace {
-      case TestFixture(_, reducer) =>
+    val result = fixture {
+      case (_, reducer) =>
         implicit val env = Env.makeEnv[Par]()
         val list         = EList(List(GInt(3L), GInt(7L), GInt(2L), GInt(9L), GInt(4L), GInt(3L), GInt(7L)))
-        val inspectTask = reducer.evalExpr(
+        reducer.evalExpr(
           EMethodBody(EMethod("slice", list, List(GInt(5L), GInt(4L))))
         )
-        Await.result(inspectTask.runToFuture, 3.seconds)
     }
     result.exprs should be(Seq(Expr(EListBody(EList(List())))))
   }
 
   "[3, 7, 2, 9, 4, 3, 7].slice(7, 8)" should "return []" in {
-
-    val result = withTestSpace {
-      case TestFixture(_, reducer) =>
+    val result = fixture {
+      case (_, reducer) =>
         implicit val env = Env.makeEnv[Par]()
         val list         = EList(List(GInt(3L), GInt(7L), GInt(2L), GInt(9L), GInt(4L), GInt(3L), GInt(7L)))
-        val inspectTask = reducer.evalExpr(
+        reducer.evalExpr(
           EMethodBody(EMethod("slice", list, List(GInt(7L), GInt(8L))))
         )
-        Await.result(inspectTask.runToFuture, 3.seconds)
     }
     result.exprs should be(Seq(Expr(EListBody(EList(List())))))
   }
 
   "[3, 7, 2, 9, 4, 3, 7].slice(-2, 2)" should "return [3, 7]" in {
-
-    val result = withTestSpace {
-      case TestFixture(_, reducer) =>
+    val result = fixture {
+      case (_, reducer) =>
         implicit val env = Env.makeEnv[Par]()
         val list         = EList(List(GInt(3L), GInt(7L), GInt(2L), GInt(9L), GInt(4L), GInt(3L), GInt(7L)))
-        val inspectTask = reducer.evalExpr(
+        reducer.evalExpr(
           EMethodBody(EMethod("slice", list, List(GInt(-2L), GInt(2L))))
         )
-        Await.result(inspectTask.runToFuture, 3.seconds)
     }
     result.exprs should be(Seq(Expr(EListBody(EList(List(GInt(3L), GInt(7L)))))))
   }
 
   "[3, 2, 9] ++ [6, 1, 7]" should "return [3, 2, 9, 6, 1, 7]" in {
-
-    val result = withTestSpace {
-      case TestFixture(_, reducer) =>
+    val result = fixture {
+      case (_, reducer) =>
         implicit val env = Env.makeEnv[Par]()
         val lhsList      = EList(List(GInt(3L), GInt(2L), GInt(9L)))
         val rhsList      = EList(List(GInt(6L), GInt(1L), GInt(7L)))
-        val inspectTask = reducer.evalExpr(
+        reducer.evalExpr(
           EPlusPlusBody(
             EPlusPlus(
               lhsList,
@@ -1609,53 +1467,46 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
             )
           )
         )
-        Await.result(inspectTask.runToFuture, 3.seconds)
     }
     val resultList = EList(List(GInt(3L), GInt(2L), GInt(9L), GInt(6L), GInt(1L), GInt(7L)))
     result.exprs should be(Seq(Expr(EListBody(resultList))))
   }
 
   "{1: 'a', 2: 'b'}.getOrElse(1, 'c')" should "return 'a'" in {
-
-    val result = withTestSpace {
-      case TestFixture(_, reducer) =>
+    val result = fixture {
+      case (_, reducer) =>
         implicit val env = Env.makeEnv[Par]()
         val map =
           EMapBody(ParMap(List[(Par, Par)]((GInt(1L), GString("a")), (GInt(2L), GString("b")))))
-        val inspectTask = reducer.evalExpr(
+        reducer.evalExpr(
           EMethodBody(EMethod("getOrElse", map, List(GInt(1L), GString("c"))))
         )
-        Await.result(inspectTask.runToFuture, 3.seconds)
     }
     result.exprs should be(Seq(Expr(GString("a"))))
   }
 
   "{1: 'a', 2: 'b'}.getOrElse(3, 'c')" should "return 'c'" in {
-
-    val result = withTestSpace {
-      case TestFixture(_, reducer) =>
+    val result = fixture {
+      case (_, reducer) =>
         implicit val env = Env.makeEnv[Par]()
         val map =
           EMapBody(ParMap(List[(Par, Par)]((GInt(1L), GString("a")), (GInt(2L), GString("b")))))
-        val inspectTask = reducer.evalExpr(
+        reducer.evalExpr(
           EMethodBody(EMethod("getOrElse", map, List(GInt(3L), GString("c"))))
         )
-        Await.result(inspectTask.runToFuture, 3.seconds)
     }
     result.exprs should be(Seq(Expr(GString("c"))))
   }
 
   "{1: 'a', 2: 'b'}.set(3, 'c')" should "return {1: 'a', 2: 'b', 3: 'c'}" in {
-
-    val result = withTestSpace {
-      case TestFixture(_, reducer) =>
+    val result = fixture {
+      case (_, reducer) =>
         implicit val env = Env.makeEnv[Par]()
         val map =
           EMapBody(ParMap(List[(Par, Par)]((GInt(1L), GString("a")), (GInt(2L), GString("b")))))
-        val inspectTask = reducer.evalExpr(
+        reducer.evalExpr(
           EMethodBody(EMethod("set", map, List(GInt(3L), GString("c"))))
         )
-        Await.result(inspectTask.runToFuture, 3.seconds)
     }
     val resultMap = EMapBody(
       ParMap(
@@ -1670,16 +1521,14 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
   }
 
   "{1: 'a', 2: 'b'}.set(2, 'c')" should "return {1: 'a', 2: 'c'}" in {
-
-    val result = withTestSpace {
-      case TestFixture(_, reducer) =>
+    val result = fixture {
+      case (_, reducer) =>
         implicit val env = Env.makeEnv[Par]()
         val map =
           EMapBody(ParMap(List[(Par, Par)]((GInt(1L), GString("a")), (GInt(2L), GString("b")))))
-        val inspectTask = reducer.evalExpr(
+        reducer.evalExpr(
           EMethodBody(EMethod("set", map, List(GInt(2L), GString("c"))))
         )
-        Await.result(inspectTask.runToFuture, 3.seconds)
     }
     val resultMap =
       EMapBody(ParMap(List[(Par, Par)]((GInt(1L), GString("a")), (GInt(2L), GString("c")))))
@@ -1687,9 +1536,8 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
   }
 
   "{1: 'a', 2: 'b', 3: 'c'}.keys()" should "return Set(1, 2, 3)" in {
-
-    val result = withTestSpace {
-      case TestFixture(_, reducer) =>
+    val result = fixture {
+      case (_, reducer) =>
         implicit val env = Env.makeEnv[Par]()
         val map = EMapBody(
           ParMap(
@@ -1700,10 +1548,9 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
             )
           )
         )
-        val inspectTask = reducer.evalExpr(
+        reducer.evalExpr(
           EMethodBody(EMethod("keys", map))
         )
-        Await.result(inspectTask.runToFuture, 3.seconds)
     }
     val resultSet = ESetBody(
       ParSet(
@@ -1714,9 +1561,8 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
   }
 
   "{1: 'a', 2: 'b', 3: 'c'}.size()" should "return 3" in {
-
-    val result = withTestSpace {
-      case TestFixture(_, reducer) =>
+    val result = fixture {
+      case (_, reducer) =>
         implicit val env = Env.makeEnv[Par]()
         val map = EMapBody(
           ParMap(
@@ -1727,49 +1573,41 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
             )
           )
         )
-        val inspectTask = reducer.evalExpr(
+        reducer.evalExpr(
           EMethodBody(EMethod("size", map))
         )
-        Await.result(inspectTask.runToFuture, 3.seconds)
     }
     result.exprs should be(Seq(Expr(GInt(3L))))
   }
 
   "Set(1, 2, 3).size()" should "return 3" in {
-
-    val result = withTestSpace {
-      case TestFixture(_, reducer) =>
+    val result = fixture {
+      case (_, reducer) =>
         implicit val env = Env.makeEnv[Par]()
-
-        val set = ESetBody(ParSet(List[Par](GInt(1L), GInt(2L), GInt(3L))))
-        val inspectTask = reducer.evalExpr(
+        val set          = ESetBody(ParSet(List[Par](GInt(1L), GInt(2L), GInt(3L))))
+        reducer.evalExpr(
           EMethodBody(EMethod("size", set))
         )
-
-        Await.result(inspectTask.runToFuture, 3.seconds)
     }
     result.exprs should be(Seq(Expr(GInt(3L))))
   }
 
   "Set(1, 2) + 3" should "return Set(1, 2, 3)" in {
-
-    val result = withTestSpace {
-      case TestFixture(_, reducer) =>
+    val result = fixture {
+      case (_, reducer) =>
         implicit val env = Env.makeEnv[Par]()
         val set          = ESetBody(ParSet(List[Par](GInt(1L), GInt(2L))))
-        val inspectTask = reducer.evalExpr(
+        reducer.evalExpr(
           EPlusBody(EPlus(set, GInt(3L)))
         )
-        Await.result(inspectTask.runToFuture, 3.seconds)
     }
     val resultSet = ESetBody(ParSet(List[Par](GInt(1L), GInt(2L), GInt(3L))))
     result.exprs should be(Seq(Expr(resultSet)))
   }
 
   "{1: 'a', 2: 'b', 3: 'c'} - 3" should "return {1: 'a', 2: 'b'}" in {
-
-    val result = withTestSpace {
-      case TestFixture(_, reducer) =>
+    val result = fixture {
+      case (_, reducer) =>
         implicit val env = Env.makeEnv[Par]()
         val map = EMapBody(
           ParMap(
@@ -1780,10 +1618,9 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
             )
           )
         )
-        val inspectTask = reducer.evalExpr(
+        reducer.evalExpr(
           EMinusBody(EMinus(map, GInt(3L)))
         )
-        Await.result(inspectTask.runToFuture, 3.seconds)
     }
     val resultMap =
       EMapBody(ParMap(List[(Par, Par)]((GInt(1L), GString("a")), (GInt(2L), GString("b")))))
@@ -1791,49 +1628,43 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
   }
 
   "Set(1, 2, 3) - 3" should "return Set(1, 2)" in {
-
-    val result = withTestSpace {
-      case TestFixture(_, reducer) =>
+    val result = fixture {
+      case (_, reducer) =>
         implicit val env = Env.makeEnv[Par]()
         val set          = ESetBody(ParSet(List[Par](GInt(1L), GInt(2L), GInt(3L))))
-        val inspectTask = reducer.evalExpr(
+        reducer.evalExpr(
           EMinusBody(EMinus(set, GInt(3L)))
         )
-        Await.result(inspectTask.runToFuture, 3.seconds)
     }
     val resultSet = ESetBody(ParSet(List[Par](GInt(1L), GInt(2L))))
     result.exprs should be(Seq(Expr(resultSet)))
   }
 
   "Set(1, 2) ++ Set(3, 4)" should "return Set(1, 2, 3, 4)" in {
-
-    val result = withTestSpace {
-      case TestFixture(_, reducer) =>
+    val result = fixture {
+      case (_, reducer) =>
         implicit val env = Env.makeEnv[Par]()
         val lhsSet       = ESetBody(ParSet(List[Par](GInt(1L), GInt(2L))))
         val rhsSet       = ESetBody(ParSet(List[Par](GInt(3L), GInt(4L))))
-        val inspectTask = reducer.evalExpr(
+        reducer.evalExpr(
           EPlusPlusBody(EPlusPlus(lhsSet, rhsSet))
         )
-        Await.result(inspectTask.runToFuture, 3.seconds)
     }
     val resultSet = ESetBody(ParSet(List[Par](GInt(1L), GInt(2L), GInt(3L), GInt(4L))))
     result.exprs should be(Seq(Expr(resultSet)))
   }
 
   "{1: 'a', 2: 'b'} ++ {3: 'c', 4: 'd'}" should "return union" in {
-
-    val result = withTestSpace {
-      case TestFixture(_, reducer) =>
+    val result = fixture {
+      case (_, reducer) =>
         implicit val env = Env.makeEnv[Par]()
         val lhsMap =
           EMapBody(ParMap(List[(Par, Par)]((GInt(1L), GString("a")), (GInt(2L), GString("b")))))
         val rhsMap =
           EMapBody(ParMap(List[(Par, Par)]((GInt(3L), GString("c")), (GInt(4L), GString("d")))))
-        val inspectTask = reducer.evalExpr(
+        reducer.evalExpr(
           EPlusPlusBody(EPlusPlus(lhsMap, rhsMap))
         )
-        Await.result(inspectTask.runToFuture, 3.seconds)
     }
     val resultMap = EMapBody(
       ParMap(
@@ -1849,42 +1680,36 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
   }
 
   "Set(1, 2, 3, 4) -- Set(1, 2)" should "return Set(3, 4)" in {
-
-    val result = withTestSpace {
-      case TestFixture(_, reducer) =>
+    val result = fixture {
+      case (_, reducer) =>
         implicit val env = Env.makeEnv[Par]()
         val lhsSet       = ESetBody(ParSet(List[Par](GInt(1L), GInt(2L), GInt(3L), GInt(4L))))
         val rhsSet       = ESetBody(ParSet(List[Par](GInt(1L), GInt(2L))))
-        val inspectTask = reducer.evalExpr(
+        reducer.evalExpr(
           EMinusMinusBody(EMinusMinus(lhsSet, rhsSet))
         )
-        Await.result(inspectTask.runToFuture, 3.seconds)
     }
     val resultSet = ESetBody(ParSet(List[Par](GInt(3L), GInt(4L))))
     result.exprs should be(Seq(Expr(resultSet)))
   }
 
   "Set(1, 2, 3).get(1)" should "not work" in {
-
-    withTestSpace {
-      case TestFixture(_, reducer) =>
+    fixture {
+      case (_, reducer) =>
         implicit val env = Env.makeEnv[Par]()
         val set          = ESetBody(ParSet(List[Par](GInt(1L), GInt(2L), GInt(3L))))
-        val inspectTask  = reducer.eval(EMethodBody(EMethod("get", set, List(GInt(1L)))))
-        Await.result(inspectTask.runToFuture, 3.seconds)
+        reducer.eval(EMethodBody(EMethod("get", set, List(GInt(1L)))))
     }
     // TODO: Guarantee MethodNotDefined("get", "Set")
   }
 
   "{1: 'a', 2: 'b'}.add(1)" should "not work" in {
-
-    withTestSpace {
-      case TestFixture(_, reducer) =>
+    fixture {
+      case (_, reducer) =>
         implicit val env = Env.makeEnv[Par]()
         val map =
           EMapBody(ParMap(List[(Par, Par)]((GInt(1L), GString("a")), (GInt(2L), GString("b")))))
-        val inspectTask = reducer.eval(EMethodBody(EMethod("add", map, List(GInt(1L)))))
-        Await.result(inspectTask.runToFuture, 3.seconds)
+        reducer.eval(EMethodBody(EMethod("add", map, List(GInt(1L)))))
     }
     // TODO: Guarantee MethodNotDefined("add", "Map")
   }
@@ -1897,12 +1722,10 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
         List[Par](GInt(1L))
       )
 
-    val result = withTestSpace {
-      case TestFixture(space, reducer) =>
+    val result = fixture {
+      case (space, reducer) =>
         implicit val env = Env[Par]()
-        val nthTask      = reducer.eval(toListCall)
-        val inspectTask  = nthTask >> space.toMap
-        Await.result(inspectTask.runToFuture, 3.seconds)
+        reducer.eval(toListCall) >> space.toMap
     }
     result should be(mutable.HashMap.empty)
     // TODO: Guarantee MethodArgumentNumberMismatch("toList", 0, 1)
@@ -1924,11 +1747,10 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
         List[Par]()
       )
 
-    val result: Par = withTestSpace {
-      case TestFixture(_, reducer) =>
+    val result: Par = fixture {
+      case (_, reducer) =>
         implicit val env: Env[Par] = Env[Par]()
-        val toListTask             = reducer.evalExpr(toListCall)
-        Await.result(toListTask.runToFuture, 3.seconds)
+        reducer.evalExpr(toListCall)
     }
     val resultList =
       EListBody(
@@ -1958,11 +1780,10 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
         ),
         List[Par]()
       )
-    val result: Par = withTestSpace {
-      case TestFixture(_, reducer) =>
+    val result: Par = fixture {
+      case (_, reducer) =>
         implicit val env: Env[Par] = Env[Par]()
-        val toListTask             = reducer.evalExpr(toListCall)
-        Await.result(toListTask.runToFuture, 3.seconds)
+        reducer.evalExpr(toListCall)
     }
     val resultList =
       EListBody(
@@ -1992,11 +1813,10 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
         ),
         List[Par]()
       )
-    val result: Par = withTestSpace {
-      case TestFixture(_, reducer) =>
+    val result: Par = fixture {
+      case (_, reducer) =>
         implicit val env: Env[Par] = Env[Par]()
-        val toListTask             = reducer.evalExpr(toListCall)
-        Await.result(toListTask.runToFuture, 3.seconds)
+        reducer.evalExpr(toListCall)
     }
     val resultList =
       EListBody(
@@ -2322,15 +2142,11 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
 
   type RSpaceMap = Map[Seq[Par], Row[BindPattern, ListParWithRandom, TaggedContinuation]]
 
-  def runReducer(input: Par, timeout: Duration = 3.seconds): Either[Throwable, Par] = {
+  def runReducer(input: Par, timeout: Duration = 3.seconds): Either[Throwable, Par] =
+    fixture {
+      case (_, reducer) =>
+        implicit val env: Env[Par] = Env[Par]()
+        reducer.evalExpr(input).attempt
+    }
 
-    val task =
-      withTestSpace {
-        case TestFixture(_, reducer) =>
-          implicit val env: Env[Par] = Env[Par]()
-          reducer.evalExpr(input).attempt
-      }
-
-    task.runSyncUnsafe(timeout)
-  }
 }

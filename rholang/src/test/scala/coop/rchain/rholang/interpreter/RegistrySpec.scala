@@ -1,31 +1,29 @@
 package coop.rchain.rholang.interpreter
 
 import cats.implicits._
-import cats.effect.concurrent.Ref
 import com.google.protobuf.ByteString
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.hash.{Blake2b256, Blake2b512Random}
-import coop.rchain.metrics.{NoopSpan, Span}
+import coop.rchain.metrics
+import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.models.Expr.ExprInstance._
-import coop.rchain.models._
 import coop.rchain.models.TaggedContinuation.TaggedCont.ScalaBodyRef
 import coop.rchain.models.Var.VarInstance.FreeVar
+import coop.rchain.models._
 import coop.rchain.models.rholang.implicits._
-import coop.rchain.rholang.interpreter.Runtime.{BodyRefs, RhoDispatchMap, RhoTuplespace}
-import coop.rchain.rholang.interpreter.accounting._
-import coop.rchain.rholang.interpreter.errors.InterpreterError
 import coop.rchain.rholang.interpreter.storage._
-import coop.rchain.rspace.{ISpace, Match}
+import coop.rchain.rholang.Resources.mkRhoISpace
+import coop.rchain.rholang.interpreter.Runtime.{BodyRefs, RhoDispatchMap, RhoISpace, RhoTuplespace}
+import coop.rchain.rholang.interpreter.accounting._
 import coop.rchain.rspace.internal.{Datum, Row}
+import coop.rchain.shared.Log
 import monix.eval.{Coeval, Task}
 import monix.execution.Scheduler.Implicits.global
 import org.scalatest.{FlatSpec, Matchers}
 
-import scala.concurrent.Await
 import scala.concurrent.duration._
 
 trait RegistryTester extends PersistentStoreTester {
-  implicit val span: Span[Task] = NoopSpan[Task]
 
   private[this] def dispatchTableCreator(registry: Registry[Task]): RhoDispatchMap[Task] = {
     import coop.rchain.rholang.interpreter.Runtime.BodyRefs._
@@ -45,35 +43,28 @@ trait RegistryTester extends PersistentStoreTester {
     )
   }
 
-  def withRegistryAndTestSpace[R](
-      f: (
-          Reduce[Task],
-          ISpace[
-            Task,
-            Par,
-            BindPattern,
-            ListParWithRandom,
-            TaggedContinuation
-          ]
-      ) => R
-  ): R =
-    withTestSpace {
-      case TestFixture(space, _) =>
-        implicit val cost = CostAccounting.emptyCost[Task].runSyncUnsafe(1.second)
-        implicit val span = NoopSpan[Task]
-
-        lazy val dispatchTable: RhoDispatchMap[Task] = dispatchTableCreator(registry)
-        lazy val (dispatcher @ _, reducer, registry) =
-          RholangAndScalaDispatcher
-            .create(
-              space,
-              dispatchTable,
-              Registry.testingUrnMap
-            )
-        cost.set(Cost.UNSAFE_MAX).runSyncUnsafe(1.second)
-        testInstall(space).runSyncUnsafe(1.second)
-        f(reducer, space)
-    }
+  override def fixture[R](f: (RhoISpace[Task], Reduce[Task]) => Task[R]): R = {
+    implicit val logF: Log[Task]           = new Log.NOPLog[Task]
+    implicit val metricsEff: Metrics[Task] = new metrics.Metrics.MetricsNOP[Task]
+    implicit val noopSpan: Span[Task]      = NoopSpan[Task]()
+    mkRhoISpace[Task]("rholang-registry-test-")
+      .use { space =>
+        for {
+          cost <- CostAccounting.emptyCost[Task]
+          reducer = {
+            implicit val c: _cost[Task]                  = cost
+            lazy val dispatchTable: RhoDispatchMap[Task] = dispatchTableCreator(registry)
+            lazy val (_, reducer, registry) =
+              RholangAndScalaDispatcher.create(space, dispatchTable, Registry.testingUrnMap)
+            reducer
+          }
+          _   <- cost.set(Cost.UNSAFE_MAX)
+          _   <- testInstall(space)
+          res <- f(space, reducer)
+        } yield res
+      }
+      .runSyncUnsafe(10.seconds)
+  }
 
   private val lookupPatterns = List(
     BindPattern(
@@ -191,8 +182,6 @@ trait RegistryTester extends PersistentStoreTester {
 }
 
 class RegistrySpec extends FlatSpec with Matchers with RegistryTester {
-
-  private val EvaluateTimeout = 10.seconds
 
   /*
     0897e9533fd9c5c26e7ea3fe07f99a4dbbde31eb2c59f84810d03e078e7d31c2
@@ -796,11 +785,12 @@ class RegistrySpec extends FlatSpec with Matchers with RegistryTester {
     checkResult(result, "result6", GUri(expectedUri), result6Rand)
   }
 
-  private def evaluate(completePar: Par)(implicit rand: Blake2b512Random) =
-    withRegistryAndTestSpace { (reducer, space) =>
+  private def evaluate(completePar: Par)(
+      implicit rand: Blake2b512Random
+  ): Map[Seq[Par], Row[BindPattern, ListParWithRandom, TaggedContinuation]] =
+    fixture { (space, reducer) =>
       implicit val env = Env[Par]()
-      val resultTask   = reducer.eval(completePar) >> space.toMap
-      Await.result(resultTask.runToFuture, EvaluateTimeout)
+      reducer.eval(completePar) >> space.toMap
     }
 
 }
