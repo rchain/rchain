@@ -3,7 +3,7 @@ package coop.rchain.casper.util.rholang
 import cats.effect.Resource
 import coop.rchain.casper.helper.HashSetCasperTestNode
 import coop.rchain.casper.protocol.DeployData
-import coop.rchain.casper.scalatestcontrib._
+import coop.rchain.shared.scalatestcontrib._
 import coop.rchain.casper.util.GenesisBuilder.buildGenesis
 import coop.rchain.casper.util.rholang.Resources._
 import coop.rchain.casper.util.{ConstructDeploy, ProtoUtil}
