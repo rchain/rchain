@@ -108,12 +108,12 @@ object ChargingRSpace {
 
           case Some((cont, dataList)) =>
             for {
-              id <- consumeId(cont.value)
+              id <- consumeId(cont.continuation)
 
               // We refund for non-persistent continuations, and for the persistent continuation triggering the comm.
               // That persistent continuation is going to be charged for (without refund) once it has no matches in TS.
               refundForConsume = if (!cont.persistent || id == triggeredBy.id) {
-                storageCostConsume(cont.channels, cont.patterns, cont.value)
+                storageCostConsume(cont.channels, cont.patterns, cont.continuation)
               } else {
                 Cost(0)
               }

@@ -56,7 +56,7 @@ package object util {
     }
 
   implicit def unpack[T](v: Result[T]): T                     = v.matchedDatum
-  implicit def unpackCont[C, P, T](v: ContResult[C, P, T]): T = v.value
+  implicit def unpackCont[C, P, T](v: ContResult[C, P, T]): T = v.continuation
 
   /**
     * Extracts a continuation from a produce result
