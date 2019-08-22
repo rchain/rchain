@@ -87,7 +87,7 @@ class CostAccountingSpec extends FlatSpec with Matchers with PropertyChecks with
       {
         val initialPhlo       = 10000L
         val (result, costLog) = evaluateWithCostLog(initialPhlo, contract)
-        result shouldBe EvaluateResult(Cost(expectedTotalCost), Vector.empty)
+        result shouldBe EvaluateResult(Cost(expectedTotalCost), None)
         costLog.map(_.value).toList.sum shouldEqual expectedTotalCost
       }
     }
@@ -126,7 +126,7 @@ class CostAccountingSpec extends FlatSpec with Matchers with PropertyChecks with
     withClue("We must not expect more costs than initialPhlo allows (duh!):\n") {
       expectedCosts.map(_.value).sum should be <= initialPhlo
     }
-    errors shouldBe List(OutOfPhlogistonsError)
+    errors shouldBe Some(OutOfPhlogistonsError)
     costLog.toList should contain allElementsOf expectedCosts
     withClue("Exactly one cost should be logged past the expected ones, yet:\n") {
       elementCounts(costLog.toList) diff elementCounts(expectedCosts) should have size 1
@@ -142,7 +142,7 @@ class CostAccountingSpec extends FlatSpec with Matchers with PropertyChecks with
       check(forAllNoShrink(Gen.choose(1L, expectedTotalCost - 1)) { initialPhlo =>
         val (EvaluateResult(_, errors), costLog) =
           evaluateWithCostLog(initialPhlo, contract)
-        errors shouldBe List(OutOfPhlogistonsError)
+        errors shouldBe Some(OutOfPhlogistonsError)
         val costs = costLog.map(_.value).toList
         // The sum of all costs but last needs to be <= initialPhlo, otherwise
         // the last cost should have not been logged

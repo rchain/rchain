@@ -5,7 +5,7 @@ import cats.implicits._
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.rholang.interpreter.accounting._
 
-final case class EvaluateResult(cost: Cost, errors: Vector[Throwable])
+final case class EvaluateResult(cost: Cost, errors: Option[Throwable])
 
 trait Interpreter[F[_]] {
 
@@ -73,12 +73,12 @@ object Interpreter {
                         for {
                           result    <- reducer.inj(parsed).attempt
                           phlosLeft <- C.inspect(identity)
-                        } yield EvaluateResult(initialPhlo - phlosLeft, result.swap.toSeq.toVector)
+                        } yield EvaluateResult(initialPhlo - phlosLeft, result.swap.toOption)
                       case Left(error) =>
-                        EvaluateResult(parsingCost, Vector(error)).pure[F]
+                        EvaluateResult(parsingCost, Some(error)).pure[F]
                     }
                   case Left(error) =>
-                    EvaluateResult(parsingCost, Vector(error)).pure[F]
+                    EvaluateResult(parsingCost, Some(error)).pure[F]
                 }
         } yield res
 

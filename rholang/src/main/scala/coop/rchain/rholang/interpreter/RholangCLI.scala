@@ -146,12 +146,12 @@ object RholangCLI {
   private def printCost(cost: Cost): Unit =
     Console.println(s"Estimated deploy cost: $cost")
 
-  private def printErrors(errors: Vector[Throwable]) =
-    if (!errors.isEmpty) {
+  private def printErrors(errors: Option[Throwable]): Unit =
+    if (errors.nonEmpty) {
       Console.println("Errors received during evaluation:")
-      for {
-        error <- errors
-      } Console.println(error.getMessage)
+      errors.foreach { error =>
+        Console.println(error.getMessage)
+      }
     }
 
   @tailrec
@@ -200,7 +200,7 @@ object RholangCLI {
   def evaluate(runtime: Runtime[Task], source: String): Task[Unit] = {
     implicit val c = runtime.cost
     Interpreter[Task].evaluate(runtime, source, NormalizerEnv.Empty).map {
-      case EvaluateResult(_, Vector()) =>
+      case EvaluateResult(_, None) =>
       case EvaluateResult(_, errors) =>
         errors.foreach {
           case ie: InterpreterError =>

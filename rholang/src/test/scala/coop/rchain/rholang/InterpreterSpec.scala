@@ -116,7 +116,7 @@ class InterpreterSpec extends FlatSpec with Matchers {
         .runSyncUnsafe(maxDuration)
 
     errors should not be empty
-    errors(0) shouldBe a[coop.rchain.rholang.interpreter.errors.SyntaxError]
+    errors.get shouldBe a[coop.rchain.rholang.interpreter.errors.SyntaxError]
   }
 
   it should "capture rholang parsing errors and charge for parsing" in {

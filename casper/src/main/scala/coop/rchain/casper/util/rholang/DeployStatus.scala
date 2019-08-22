@@ -24,19 +24,13 @@ final case class UserErrors(errors: Seq[Throwable])                             
 final case class InternalErrors(errors: Seq[Throwable])                         extends Failed
 //TODO add fatal error related to rspace closed after https://github.com/rchain/rchain/pull/1339 is merged
 
+// TODO: Make UserErrors and InternalErrors take Throwable
 object DeployStatus {
-  def fromErrors(errors: Seq[Throwable]): DeployStatus = {
-    val (userErrors, internalErrors) = errors.partition {
-      case _: InterpreterError => true
-      case _                   => false
+  def fromErrors(errors: Option[Throwable]): DeployStatus =
+    errors match {
+      case Some(e: InterpreterError) => UserErrors(Seq(e))
+      case Some(e: ReplayException)  => UnusedCommEvent(e)
+      case Some(e)                   => InternalErrors(Seq(e))
+      case None                      => Succeeded
     }
-
-    internalErrors
-      .collectFirst { case ex: ReplayException => ex }
-      .fold(
-        if (internalErrors.nonEmpty) InternalErrors(internalErrors)
-        else if (userErrors.nonEmpty) UserErrors(userErrors)
-        else Succeeded
-      )(ex => UnusedCommEvent(ex))
-  }
 }
