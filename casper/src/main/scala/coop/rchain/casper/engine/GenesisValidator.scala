@@ -32,7 +32,7 @@ class GenesisValidator[F[_]: Sync: Metrics: Span: Concurrent: ConnectionsCell: T
     case ub: UnapprovedBlock =>
       blockApprover.unapprovedBlockPacketHandler(peer, ub) >> {
         val validators = Set(ByteString.copyFrom(validatorId.publicKey.bytes))
-        Engine.tranistionToInitializing(shardId, Some(validatorId), validators, init = noop)
+        Engine.transitionToInitializing(shardId, Some(validatorId), validators, init = noop)
       }
     case na: NoApprovedBlockAvailable => logNoApprovedBlockAvailable[F](na.nodeIdentifer)
     case _                            => noop

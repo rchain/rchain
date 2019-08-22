@@ -144,7 +144,7 @@ object CasperLaunch {
     for {
       validators  <- CasperConf.parseValidatorsFile[F](init.conf.knownValidatorsFile)
       validatorId <- ValidatorIdentity.fromConfig[F](init.conf)
-      _ <- Engine.tranistionToInitializing(
+      _ <- Engine.transitionToInitializing(
             init.conf.shardId,
             validatorId,
             validators,
