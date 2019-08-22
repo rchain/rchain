@@ -738,7 +738,8 @@ class RegistryImpl[F[_]](
     Map[String, String](
       "either"            -> "qrh6mgfp5z6orgchgszyxnuonanz7hw3amgrprqtciia6astt66ypn",
       "listOps"           -> "6fzorimqngeedepkrizgiqms6zjt76zjeciktt1eifequy4osz35ks",
-      "nonNegativeNumber" -> "hxyadh1ffypra47ry9mk6b8r1i33ar1w9wjsez4khfe9huzrfcytx9"
+      "nonNegativeNumber" -> "hxyadh1ffypra47ry9mk6b8r1i33ar1w9wjsez4khfe9huzrfcytx9",
+      "treeHashMap"       -> "ikbchopju4jwc5rt9q37yabkm1zeu4qzhtqi9hoj3erwwcdcmub4tz"
     )
   )
 

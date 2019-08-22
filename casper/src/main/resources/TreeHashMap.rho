@@ -17,7 +17,7 @@
 
 // Rholang map desiderata: speedy insert & lookup,  no conflicts on lookup, no conflicts on inserts to different keys
 // This implementation: O(log n) insert & lookup; also provides O(1) lookup when it is known that the value at a key exists.
-// Conflict analysis, once peek has been implemented
+// Conflict analysis
 //   Lookup
 //     When looking up a value, only peeks are used, so lookups will not conflict.
 //   Insert
@@ -32,17 +32,21 @@
 //   TreeHashMap!("init", 3, *mapCh) |
 //   for (@map <- mapCh) {
 //     o!("Map initialized, setting") |
-//     new ret1, ret2, ret3 in {
+//     new ret1, ret2, ret3, ret4, ret5, ret6, ret7 in {
 //       TreeHashMap!("set", map, "some key", "some val", *ret1) |
 //       TreeHashMap!("set", map, "monkey", "some other val", *ret2) |
-//       for (_ <- ret1; _ <- ret2) {
+//       TreeHashMap!("set", map, "donkey", Nil, *ret3) |
+//       for (_ <- ret1; _ <- ret2; _ <- ret3) {
 //         o!("Value set, getting") |
-//         TreeHashMap!("get", map, "some key", *ret1) |
-//         TreeHashMap!("fastUnsafeGet", map, "monkey", *ret2) |
-//         TreeHashMap!("get", map, "some unused key", *ret3) |
-//         for (@val1 <- ret1; @val2 <- ret2; @val3 <- ret3) {
-//           // Should print ["Got these from the map: ", "some val", "some other val", Nil]
-//           o!(["Got these from the map: ", val1, val2, val3])
+//         TreeHashMap!("get", map, "some key", *ret1) |             // "some val"
+//         TreeHashMap!("fastUnsafeGet", map, "monkey", *ret2) |     // "some other val"
+//         TreeHashMap!("get", map, "some unused key", *ret3) |      // Nil
+//         TreeHashMap!("fastUnsafeGet", map, "donkey", *ret4) |     // Nil
+//         TreeHashMap!("contains", map, "donkey", *ret5) |          // true
+//         TreeHashMap!("contains", map, "monkey", *ret6) |          // true
+//         TreeHashMap!("contains", map, "some unused key", *ret7) | // false
+//         for (@val1 <- ret1; @val2 <- ret2; @val3 <- ret3; @val4 <- ret4; @val5 <- ret5; @val6 <- ret6; @val7 <- ret7) {
+//           o!(["Got these from the map: ", val1, val2, val3, val4, val5, val6, val7])
 //         }
 //       }
 //     }
@@ -50,7 +54,7 @@
 // }
 
 new TreeHashMap, rs(`rho:registry:insertSigned:secp256k1`), uriOut in {
-  new MakeNode, ByteArrayToNybbleList, TreeHashMapSetter, TreeHashMapGetter, 
+  new MakeNode, ByteArrayToNybbleList, TreeHashMapSetter, TreeHashMapGetter, TreeHashMapContains,
       powersCh, storeToken, nodeGet, nodeSetBit, nodeSetMap in {
     powersCh!([1,2,4,8,16,32,64,128,256,512,1024,2048,4096,8192,16384,32768,65536]) |
     for (@powers <- powersCh) {
@@ -59,9 +63,7 @@ new TreeHashMap, rs(`rho:registry:insertSigned:secp256k1`), uriOut in {
       } |
         
       contract nodeGet(@node, ret) = {
-        // TODO: convert to peek
-        for (@val <- @[node, *storeToken]) {
-          @[node, *storeToken]!(val) |
+        for (@val <<- @[node, *storeToken]) {
           ret!(val)
         }
       } |
@@ -128,11 +130,13 @@ new TreeHashMap, rs(`rho:registry:insertSigned:secp256k1`), uriOut in {
         new hashCh, nybListCh in {
           // Hash the key to get a 256-bit array
           @"keccak256Hash"!(key.toByteArray(), *hashCh) |
-          for (@hash <- hashCh; @depth <- @(map, "depth")) {
-            // Get the bit list
-            ByteArrayToNybbleList!(hash, 0, depth, [], *nybListCh) |
-            for (@nybList <- nybListCh) {
-              TreeHashMapGetter!(map, nybList, 0, 2 * depth, hash.slice(depth, 32), *ret)
+          for (@hash <- hashCh) {
+            for (@depth <- @(map, "depth")) {
+              // Get the bit list
+              ByteArrayToNybbleList!(hash, 0, depth, [], *nybListCh) |
+              for (@nybList <- nybListCh) {
+                TreeHashMapGetter!(map, nybList, 0, 2 * depth, hash.slice(depth, 32), *ret)
+              }
             }
           }
         }
@@ -146,17 +150,15 @@ new TreeHashMap, rs(`rho:registry:insertSigned:secp256k1`), uriOut in {
         new hashCh, nybListCh in {
           // Hash the key to get a 256-bit array
           @"keccak256Hash"!(key.toByteArray(), *hashCh) |
-          for (@hash <- hashCh; @depth <- @(map, "depth")) {
-            // Get the bit list
-            ByteArrayToNybbleList!(hash, 0, depth, [], *nybListCh) |
-            for (@nybList <- nybListCh) {
-              new restCh, valCh in {
-                nodeGet!((map, nybList), *restCh) |
-                for (@rest <- restCh) {
-                  valCh!(rest.get(hash.slice(depth, 32))) |
-                  for (@val <- valCh) {
-                    if (val == Nil) { ret!(Nil) }
-                    else { ret!(val) }
+          for (@hash <- hashCh) {
+            for(@depth <- @(map, "depth")) {
+              // Get the bit list
+              ByteArrayToNybbleList!(hash, 0, depth, [], *nybListCh) |
+              for (@nybList <- nybListCh) {
+                new restCh, valCh in {
+                  nodeGet!((map, nybList), *restCh) |
+                  for (@rest <- restCh) {
+                    ret!(rest.get(hash.slice(depth, 32)))
                   }
                 }
               }
@@ -205,6 +207,41 @@ new TreeHashMap, rs(`rho:registry:insertSigned:secp256k1`), uriOut in {
             ByteArrayToNybbleList!(hash, 0, depth, [], *nybListCh) |
             for (@nybList <- nybListCh) {
               TreeHashMapSetter!(map, nybList, 0, 2 * depth, newVal, hash.slice(depth, 32), *ret)
+            }
+          }
+        }
+      } |
+      
+      contract TreeHashMapContains(@map, @nybList, @n, @len, @suffix, ret) = {
+        // Look up the value of the node at [map, nybList.slice(0, n + 1)]
+        new valCh in {
+          nodeGet!((map, nybList.slice(0, n)), *valCh) |
+          for (@val <- valCh) {
+            if (n == len) {
+              ret!(val.contains(suffix))
+            } else {
+              // See getter for explanation of formula
+              if ((val/powers.nth(nybList.nth(n))) % 2 == 0) {
+                ret!(false)
+              } else {
+                TreeHashMapContains!(map, nybList, n + 1, len, suffix, *ret)
+              }
+            }
+          }
+        }
+      } |
+
+      contract TreeHashMap(@"contains", @map, @key, ret) = {
+        new hashCh, nybListCh in {
+          // Hash the key to get a 256-bit array
+          @"keccak256Hash"!(key.toByteArray(), *hashCh) |
+          for (@hash <- hashCh) {
+            for (@depth <- @(map, "depth")) {
+              // Get the bit list
+              ByteArrayToNybbleList!(hash, 0, depth, [], *nybListCh) |
+              for (@nybList <- nybListCh) {
+                TreeHashMapContains!(map, nybList, 0, 2 * depth, hash.slice(depth, 32), *ret)
+              }
             }
           }
         }
