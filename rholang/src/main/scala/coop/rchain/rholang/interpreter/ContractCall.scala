@@ -5,7 +5,7 @@ import cats.implicits._
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.metrics.Span
 import coop.rchain.models.{ListParWithRandom, Par, TaggedContinuation}
-import coop.rchain.rholang.interpreter.Runtime.RhoISpace
+import coop.rchain.rholang.interpreter.Runtime.RhoTuplespace
 import coop.rchain.rspace.util.unpackCont
 
 /**
@@ -27,7 +27,7 @@ import coop.rchain.rspace.util.unpackCont
   * @param dispatcher the dispatcher
   */
 class ContractCall[F[_]: Concurrent: Span](
-    space: RhoISpace[F],
+    space: RhoTuplespace[F],
     dispatcher: Dispatch[F, ListParWithRandom, TaggedContinuation]
 ) {
   type Producer = (Seq[Par], Par) => F[Unit]

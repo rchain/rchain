@@ -7,9 +7,8 @@ import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.metrics.Span
 import coop.rchain.models.TaggedContinuation.TaggedCont.{Empty, ParBody, ScalaBodyRef}
 import coop.rchain.models._
-import coop.rchain.rholang.interpreter.Runtime.RhoISpace
+import coop.rchain.rholang.interpreter.Runtime.RhoTuplespace
 import coop.rchain.rholang.interpreter.accounting._
-import coop.rchain.rholang.interpreter.storage.ChargingRSpace
 
 trait Dispatch[M[_], A, K] {
   def dispatch(continuation: K, dataList: Seq[A], sequenceNumber: Int): M[Unit]
@@ -54,7 +53,7 @@ class RholangAndScalaDispatcher[M[_]] private (
 object RholangAndScalaDispatcher {
 
   def create[M[_], F[_]](
-      tuplespace: RhoISpace[M],
+      tuplespace: RhoTuplespace[M],
       dispatchTable: => Map[Long, (Seq[ListParWithRandom], Int) => M[Unit]],
       urnMap: Map[String, Par]
   )(

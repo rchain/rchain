@@ -17,7 +17,7 @@ import coop.rchain.models.Var.VarInstance.{BoundVar, FreeVar, Wildcard}
 import coop.rchain.models.rholang.implicits._
 import coop.rchain.models.serialization.implicits._
 import coop.rchain.models.{Match, MatchCase, _}
-import coop.rchain.rholang.interpreter.Runtime.{RhoDispatch, RhoISpace}
+import coop.rchain.rholang.interpreter.Runtime.{RhoDispatch, RhoTuplespace}
 import coop.rchain.rholang.interpreter.Substitute.{charge => _, _}
 import coop.rchain.rholang.interpreter.accounting._
 import coop.rchain.rholang.interpreter.errors._
@@ -42,28 +42,22 @@ object Reduce {
 trait Reduce[M[_]] {
 
   // TODO: Remove `sequenceNumber` default argument.
-  def eval(par: Par)(
-      implicit env: Env[Par],
-      rand: Blake2b512Random,
-      sequenceNumber: Int = 0
-  ): M[Unit]
-
-  def inj(
+  def eval(
       par: Par
-  )(implicit rand: Blake2b512Random): M[Unit]
+  )(implicit env: Env[Par], rand: Blake2b512Random, sequenceNumber: Int = 0): M[Unit]
+
+  def inj(par: Par)(implicit rand: Blake2b512Random): M[Unit]
 
   /**
     * Evaluate any top level expressions in @param Par .
     */
   def evalExpr(par: Par)(implicit env: Env[Par]): M[Par]
 
-  def evalExprToPar(
-      expr: Expr
-  )(implicit env: Env[Par]): M[Par]
+  def evalExprToPar(expr: Expr)(implicit env: Env[Par]): M[Par]
 }
 
 class DebruijnInterpreter[M[_], F[_]](
-    space: RhoISpace[M],
+    space: RhoTuplespace[M],
     dispatcher: => RhoDispatch[M],
     urnMap: Map[String, Par]
 )(

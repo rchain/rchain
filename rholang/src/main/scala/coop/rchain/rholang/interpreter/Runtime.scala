@@ -46,6 +46,7 @@ class Runtime[F[_]: Sync] private (
 
 object Runtime {
 
+  type RhoTuplespace[F[_]]   = TCPAK[F, Tuplespace]
   type RhoISpace[F[_]]       = TCPAK[F, ISpace]
   type RhoReplayISpace[F[_]] = TCPAK[F, IReplaySpace]
 
@@ -142,8 +143,8 @@ object Runtime {
   }
 
   private def introduceSystemProcesses[F[_]: Sync: _cost: Span](
-      space: RhoISpace[F],
-      replaySpace: RhoISpace[F],
+      space: RhoTuplespace[F],
+      replaySpace: RhoTuplespace[F],
       processes: List[(Name, Arity, Remainder, BodyRef)]
   ): F[List[Option[(TaggedContinuation, Seq[ListParWithRandom])]]] =
     processes.flatMap {
@@ -165,7 +166,7 @@ object Runtime {
 
   object SystemProcess {
     final case class Context[F[_]: Concurrent: Span](
-        space: RhoISpace[F],
+        space: RhoTuplespace[F],
         dispatcher: RhoDispatch[F],
         registry: Registry[F],
         deployParametersRef: Ref[F, DeployParameters],
@@ -317,7 +318,7 @@ object Runtime {
     implicit val ft: FunctorTell[F, Throwable] = errorLog
 
     def dispatchTableCreator(
-        space: RhoISpace[F],
+        space: RhoTuplespace[F],
         dispatcher: RhoDispatch[F],
         registry: Registry[F],
         deployParametersRef: Ref[F, DeployParameters],

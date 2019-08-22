@@ -11,7 +11,7 @@ import coop.rchain.models._
 import coop.rchain.models.TaggedContinuation.TaggedCont.ScalaBodyRef
 import coop.rchain.models.Var.VarInstance.FreeVar
 import coop.rchain.models.rholang.implicits._
-import coop.rchain.rholang.interpreter.Runtime.{BodyRefs, RhoDispatchMap}
+import coop.rchain.rholang.interpreter.Runtime.{BodyRefs, RhoDispatchMap, RhoTuplespace}
 import coop.rchain.rholang.interpreter.accounting._
 import coop.rchain.rholang.interpreter.errors.InterpreterError
 import coop.rchain.rholang.interpreter.storage._
@@ -156,7 +156,7 @@ trait RegistryTester extends PersistentStoreTester {
     GPrivate(ByteString.copyFrom(Array[Byte](19)))
   )
 
-  def testInstall(space: Runtime.RhoISpace[Task]): Task[Unit] =
+  def testInstall(space: RhoTuplespace[Task]): Task[Unit] =
     for {
       _ <- space.install(
             lookupChannels,

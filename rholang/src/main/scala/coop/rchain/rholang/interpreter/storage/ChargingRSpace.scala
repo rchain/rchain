@@ -5,7 +5,7 @@ import cats.implicits._
 import coop.rchain.metrics.Span
 import coop.rchain.models.TaggedContinuation.TaggedCont.ParBody
 import coop.rchain.models._
-import coop.rchain.rholang.interpreter.Runtime.RhoISpace
+import coop.rchain.rholang.interpreter.Runtime.{RhoISpace, RhoTuplespace}
 import coop.rchain.rholang.interpreter.accounting._
 import coop.rchain.rspace.{
   Blake2b256Hash,
@@ -34,8 +34,12 @@ object ChargingRSpace {
   def storageCostProduce(channel: Par, data: ListParWithRandom): Cost =
     channel.storageCost + data.pars.storageCost
 
-  def chargingRSpace[F[_]: Sync: Span](space: RhoISpace[F])(implicit cost: _cost[F]): RhoISpace[F] =
-    new RhoISpace[F] {
+  def chargingRSpace[F[_]: Sync: Span](
+      space: RhoTuplespace[F]
+  )(implicit cost: _cost[F]): RhoTuplespace[F] =
+    new RhoTuplespace[F] {
+
+      implicit override val m: StorageMatch[F, BindPattern, ListParWithRandom] = space.m
 
       override def consume(
           channels: Seq[Par],
@@ -123,32 +127,6 @@ object ChargingRSpace {
           }
           .foldLeft(Cost(0))(_ + _)
 
-      override def createCheckpoint(): F[Checkpoint]    = space.createCheckpoint()
-      override def reset(hash: Blake2b256Hash): F[Unit] = space.reset(hash)
-      override def close(): F[Unit]                     = space.close()
-
-      implicit override val m: StorageMatch[F, BindPattern, ListParWithRandom] = space.m
-
-      override def getData(channel: Par): F[Seq[internal.Datum[ListParWithRandom]]] =
-        space.getData(channel)
-
-      override def getWaitingContinuations(
-          channels: Seq[Par]
-      ): F[Seq[internal.WaitingContinuation[BindPattern, TaggedContinuation]]] =
-        space.getWaitingContinuations(channels)
-
-      override def clear(): F[Unit] = space.clear
-
-      override def toMap
-          : F[Map[Seq[Par], internal.Row[BindPattern, ListParWithRandom, TaggedContinuation]]] =
-        space.toMap
-
-      override def createSoftCheckpoint()
-          : F[SoftCheckpoint[Par, BindPattern, ListParWithRandom, TaggedContinuation]] =
-        space.createSoftCheckpoint()
-
-      override def revertToSoftCheckpoint(
-          checkpoint: SoftCheckpoint[Par, BindPattern, ListParWithRandom, TaggedContinuation]
-      ): F[Unit] = space.revertToSoftCheckpoint(checkpoint)
+      override def close(): F[Unit] = space.close()
     }
 }

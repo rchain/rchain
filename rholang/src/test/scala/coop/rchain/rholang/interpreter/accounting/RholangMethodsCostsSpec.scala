@@ -8,7 +8,7 @@ import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.models.Expr.ExprInstance._
 import coop.rchain.models._
 import coop.rchain.models.rholang.implicits._
-import coop.rchain.rholang.interpreter.Runtime.RhoISpace
+import coop.rchain.rholang.interpreter.Runtime.RhoTuplespace
 import coop.rchain.rholang.interpreter._
 import coop.rchain.rholang.interpreter.accounting.Chargeable._
 import coop.rchain.rspace.history.Branch
@@ -797,8 +797,8 @@ class RholangMethodsCostsSpec
     test.runSyncUnsafe(5.seconds)
   }
 
-  private var dbDir: Path            = null
-  private var space: RhoISpace[Task] = null
+  private var dbDir: Path                = null
+  private var space: RhoTuplespace[Task] = null
 
   implicit val logF: Log[Task]            = new Log.NOPLog[Task]
   implicit val noopMetrics: Metrics[Task] = new metrics.Metrics.MetricsNOP[Task]
