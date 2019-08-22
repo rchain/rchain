@@ -245,7 +245,7 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: ConnectionsCell: TransportLa
       updatedLastFinalizedBlockHash <- LastFinalizedBlockCalculator[F]
                                         .run(dag, lastFinalizedBlockHash)
       _            <- lastFinalizedBlockHashContainer.set(updatedLastFinalizedBlockHash)
-      blockMessage <- ProtoUtil.unsafeGetBlock[F](updatedLastFinalizedBlockHash)
+      blockMessage <- ProtoUtil.getBlock[F](updatedLastFinalizedBlockHash)
     } yield blockMessage
 
   def blockDag: F[BlockDagRepresentation[F]] =

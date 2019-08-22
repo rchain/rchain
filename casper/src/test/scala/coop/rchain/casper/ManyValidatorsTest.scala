@@ -84,7 +84,7 @@ class ManyValidatorsTest
         engineCell         <- Cell.mvarCell[Task, Engine[Task]](engine)
         cliqueOracleEffect = SafetyOracle.cliqueOracle[Task]
         result <- BlockAPI.getBlocks[Task](Some(Int.MaxValue))(
-                   Monad[Task],
+                   Sync[Task],
                    engineCell,
                    logEff,
                    cliqueOracleEffect,

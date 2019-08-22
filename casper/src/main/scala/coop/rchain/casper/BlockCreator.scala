@@ -79,7 +79,7 @@ object BlockCreator {
             }
         _                <- updateDeployHistory[F](state, maxBlockNumber)
         deploys          <- extractDeploys[F](dag, parentMetadatas, maxBlockNumber, expirationThreshold)
-        parents          <- parentMetadatas.toList.traverse(p => ProtoUtil.unsafeGetBlock[F](p.blockHash))
+        parents          <- parentMetadatas.toList.traverse(p => ProtoUtil.getBlock[F](p.blockHash))
         justifications   <- computeJustifications[F](dag, parents)
         now              <- Time[F].currentMillis
         invalidBlocksSet <- dag.invalidBlocks
@@ -156,7 +156,7 @@ object BlockCreator {
                  )
                  .foldLeftF(validDeploys) { (deploys, blockMetadata) =>
                    for {
-                     block        <- ProtoUtil.unsafeGetBlock[F](blockMetadata.blockHash)
+                     block        <- ProtoUtil.getBlock[F](blockMetadata.blockHash)
                      blockDeploys = ProtoUtil.deploys(block).flatMap(_.deploy)
                    } yield deploys -- blockDeploys
                  }

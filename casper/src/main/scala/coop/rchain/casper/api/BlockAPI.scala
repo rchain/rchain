@@ -177,14 +177,14 @@ object BlockAPI {
     ))
   }
 
-  private def getMainChainFromTip[F[_]: Monad: Log: SafetyOracle: BlockStore](depth: Int)(
+  private def getMainChainFromTip[F[_]: Sync: Log: SafetyOracle: BlockStore](depth: Int)(
       implicit casper: MultiParentCasper[F]
   ): F[IndexedSeq[BlockMessage]] =
     for {
       dag       <- casper.blockDag
       tipHashes <- casper.estimator(dag)
       tipHash   = tipHashes.head
-      tip       <- ProtoUtil.unsafeGetBlock[F](tipHash)
+      tip       <- ProtoUtil.getBlock[F](tipHash)
       mainChain <- ProtoUtil.getMainChainUntilDepth[F](tip, IndexedSeq.empty[BlockMessage], depth)
     } yield mainChain
 
@@ -300,7 +300,7 @@ object BlockAPI {
     toposortDag[F, MachineVerifyResponse](maybeDepth = None) {
       case (_, topoSort) =>
         val fetchParents: BlockHash => F[List[BlockHash]] = { blockHash =>
-          ProtoUtil.unsafeGetBlock[F](blockHash) map (_.getHeader.parentsHashList.toList)
+          ProtoUtil.getBlock[F](blockHash) map (_.getHeader.parentsHashList.toList)
         }
 
         MachineVerifiableDag[F](topoSort, fetchParents)
@@ -308,7 +308,7 @@ object BlockAPI {
           .map(MachineVerifyResponse(_).asRight[Error])
     }
 
-  def getBlocks[F[_]: Monad: EngineCell: Log: SafetyOracle: BlockStore](
+  def getBlocks[F[_]: Sync: EngineCell: Log: SafetyOracle: BlockStore](
       depth: Option[Int]
   ): Effect[F, List[LightBlockInfo]] =
     toposortDag[F, List[LightBlockInfo]](depth) {
@@ -318,7 +318,7 @@ object BlockAPI {
           .foldM(List.empty[LightBlockInfo]) {
             case (blockInfosAtHeightAcc, blockHashesAtHeight) =>
               for {
-                blocksAtHeight <- blockHashesAtHeight.traverse(ProtoUtil.unsafeGetBlock[F])
+                blocksAtHeight <- blockHashesAtHeight.traverse(ProtoUtil.getBlock[F])
                 blockInfosAtHeight <- blocksAtHeight.traverse(
                                        getLightBlockInfo[F]
                                      )
@@ -327,7 +327,7 @@ object BlockAPI {
           .map(_.reverse.asRight[Error])
     }
 
-  def showMainChain[F[_]: Monad: EngineCell: Log: SafetyOracle: BlockStore](
+  def showMainChain[F[_]: Sync: EngineCell: Log: SafetyOracle: BlockStore](
       depth: Int
   ): F[List[LightBlockInfo]] = {
 
@@ -339,7 +339,7 @@ object BlockAPI {
         dag        <- MultiParentCasper[F].blockDag
         tipHashes  <- MultiParentCasper[F].estimator(dag)
         tipHash    = tipHashes.head
-        tip        <- ProtoUtil.unsafeGetBlock[F](tipHash)
+        tip        <- ProtoUtil.getBlock[F](tipHash)
         mainChain  <- ProtoUtil.getMainChainUntilDepth[F](tip, IndexedSeq.empty[BlockMessage], depth)
         blockInfos <- mainChain.toList.traverse(getLightBlockInfo[F])
       } yield blockInfos
@@ -350,7 +350,7 @@ object BlockAPI {
     ))
   }
 
-  def findDeploy[F[_]: Monad: EngineCell: Log: SafetyOracle: BlockStore](
+  def findDeploy[F[_]: Sync: EngineCell: Log: SafetyOracle: BlockStore](
       id: DeployId
   ): Effect[F, LightBlockQueryResponse] =
     EngineCell[F].read >>= (
@@ -360,7 +360,7 @@ object BlockAPI {
             dag               <- casper.blockDag
             allBlocksTopoSort <- dag.topoSort(0L)
             maybeBlock <- allBlocksTopoSort.flatten.reverse.toStream
-                           .traverse(ProtoUtil.unsafeGetBlock[F])
+                           .traverse(ProtoUtil.getBlock[F])
                            .map(_.find(ProtoUtil.containsDeploy(_, ByteString.copyFrom(id))))
             response <- maybeBlock.traverse(getLightBlockInfo[F])
           } yield response.fold(
@@ -379,7 +379,7 @@ object BlockAPI {
     )
 
   // TODO: Replace with call to BlockStore
-  def findBlockWithDeploy[F[_]: Monad: EngineCell: Log: SafetyOracle: BlockStore](
+  def findBlockWithDeploy[F[_]: Sync: EngineCell: Log: SafetyOracle: BlockStore](
       user: ByteString,
       timestamp: Long
   ): Effect[F, BlockQueryResponse] = {
@@ -413,13 +413,13 @@ object BlockAPI {
     ))
   }
 
-  private def findBlockWithDeploy[F[_]: Monad: Log: BlockStore](
+  private def findBlockWithDeploy[F[_]: Sync: Log: BlockStore](
       blockHashes: Vector[BlockHash],
       user: ByteString,
       timestamp: Long
   ): F[Option[BlockMessage]] =
     blockHashes.toStream
-      .traverse(ProtoUtil.unsafeGetBlock[F])
+      .traverse(ProtoUtil.getBlock[F])
       .map(blocks => blocks.find(ProtoUtil.containsDeploy(_, user, timestamp)))
 
   def getBlock[F[_]: Monad: EngineCell: Log: SafetyOracle: BlockStore: Span](
