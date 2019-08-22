@@ -371,6 +371,7 @@ object Runtime {
       setup                <- setupRSpace[F](dataDir, mapSize)
       deployParametersRef  <- Ref.of(DeployParameters.empty)
       blockDataRef         <- Ref.of(BlockData.empty)
+      errorRef             <- Ref.of[F, Option[Throwable]](None)
       (space, replaySpace) = setup
       (reducer, replayReducer) = {
 
@@ -389,6 +390,7 @@ object Runtime {
           RholangAndScalaDispatcher.create(
             chargingReplaySpace,
             replayDispatchTable,
+            errorRef,
             urnMap
           )
 
@@ -404,7 +406,7 @@ object Runtime {
           )
 
         lazy val (dispatcher, reducer, registry) =
-          RholangAndScalaDispatcher.create(chargingRSpace, dispatchTable, urnMap)
+          RholangAndScalaDispatcher.create(chargingRSpace, dispatchTable, errorRef, urnMap)
 
         (reducer, replayReducer)
       }

@@ -13,7 +13,11 @@ import coop.rchain.rholang.interpreter.accounting._
 
 object RholangOnlyDispatcher {
 
-  def create[M[_], F[_]](tuplespace: RhoTuplespace[M], urnMap: Map[String, Par] = Map.empty)(
+  def create[M[_], F[_]](
+      tuplespace: RhoTuplespace[M],
+      errorRef: errorRef[M],
+      urnMap: Map[String, Par] = Map.empty
+  )(
       implicit
       cost: _cost[M],
       parallel: Parallel[M, F],
@@ -28,7 +32,8 @@ object RholangOnlyDispatcher {
       new DebruijnInterpreter[M, F](
         tuplespace,
         dispatcher,
-        urnMap
+        urnMap,
+        errorRef
       )
 
     (dispatcher, reducer)

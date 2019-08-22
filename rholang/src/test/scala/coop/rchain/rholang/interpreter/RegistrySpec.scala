@@ -1,5 +1,6 @@
 package coop.rchain.rholang.interpreter
 
+import cats.effect.concurrent.Ref
 import cats.implicits._
 import com.google.protobuf.ByteString
 import coop.rchain.crypto.codec.Base16
@@ -50,12 +51,18 @@ trait RegistryTester extends PersistentStoreTester {
     mkRhoISpace[Task]("rholang-registry-test-")
       .use { space =>
         for {
-          cost <- CostAccounting.emptyCost[Task]
+          cost     <- CostAccounting.emptyCost[Task]
+          errorRef <- Ref.of[Task, Option[Throwable]](None)
           reducer = {
             implicit val c: _cost[Task]                  = cost
             lazy val dispatchTable: RhoDispatchMap[Task] = dispatchTableCreator(registry)
             lazy val (_, reducer, registry) =
-              RholangAndScalaDispatcher.create(space, dispatchTable, Registry.testingUrnMap)
+              RholangAndScalaDispatcher.create(
+                space,
+                dispatchTable,
+                errorRef,
+                Registry.testingUrnMap
+              )
             reducer
           }
           _   <- cost.set(Cost.UNSAFE_MAX)

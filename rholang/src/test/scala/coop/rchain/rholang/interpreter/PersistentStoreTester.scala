@@ -1,5 +1,6 @@
 package coop.rchain.rholang.interpreter
 
+import cats.effect.concurrent.Ref
 import coop.rchain.metrics
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.rholang.Resources.mkRhoISpace
@@ -20,10 +21,11 @@ trait PersistentStoreTester {
     mkRhoISpace[Task]("rholang-interpreter-test-")
       .use { space =>
         for {
-          cost <- CostAccounting.emptyCost[Task]
+          cost     <- CostAccounting.emptyCost[Task]
+          errorRef <- Ref.of[Task, Option[Throwable]](None)
           reducer = {
             implicit val c = cost
-            RholangOnlyDispatcher.create[Task, Task.Par](space)._2
+            RholangOnlyDispatcher.create[Task, Task.Par](space, errorRef)._2
           }
           _   <- cost.set(Cost.UNSAFE_MAX)
           res <- f(space, reducer)

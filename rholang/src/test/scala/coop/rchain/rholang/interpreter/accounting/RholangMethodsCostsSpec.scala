@@ -2,6 +2,7 @@ package coop.rchain.rholang.interpreter.accounting
 
 import java.nio.file.{Files, Path}
 
+import cats.effect.concurrent.Ref
 import com.google.protobuf.ByteString
 import coop.rchain.metrics
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
@@ -9,7 +10,7 @@ import coop.rchain.models.Expr.ExprInstance._
 import coop.rchain.models._
 import coop.rchain.models.rholang.implicits._
 import coop.rchain.rholang.interpreter.Runtime.RhoTuplespace
-import coop.rchain.rholang.interpreter._
+import coop.rchain.rholang.interpreter.{errorRef, _}
 import coop.rchain.rholang.interpreter.accounting.Chargeable._
 import coop.rchain.rspace.history.Branch
 import coop.rchain.rspace.{Match, RSpace}
@@ -785,8 +786,9 @@ class RholangMethodsCostsSpec
 
   def withReducer[R](f: Reduce[Task] => Task[R])(implicit cost: _cost[Task]): R = {
     val test = for {
-      _   <- cost.set(Cost.UNSAFE_MAX)
-      res <- f(RholangOnlyDispatcher.create[Task, Task.Par](space)._2)
+      _        <- cost.set(Cost.UNSAFE_MAX)
+      errorRef <- Ref.of[Task, Option[Throwable]](None)
+      res      <- f(RholangOnlyDispatcher.create[Task, Task.Par](space, errorRef)._2)
     } yield res
     test.runSyncUnsafe(5.seconds)
   }

@@ -55,6 +55,7 @@ object RholangAndScalaDispatcher {
   def create[M[_], F[_]](
       tuplespace: RhoTuplespace[M],
       dispatchTable: => Map[Long, (Seq[ListParWithRandom], Int) => M[Unit]],
+      errorRef: errorRef[M],
       urnMap: Map[String, Par]
   )(
       implicit
@@ -68,7 +69,7 @@ object RholangAndScalaDispatcher {
       new RholangAndScalaDispatcher(dispatchTable)
 
     implicit lazy val reducer: Reduce[M] =
-      new DebruijnInterpreter[M, F](tuplespace, dispatcher, urnMap)
+      new DebruijnInterpreter[M, F](tuplespace, dispatcher, urnMap, errorRef)
 
     val registry: Registry[M] = new RegistryImpl(tuplespace, dispatcher)
     (dispatcher, reducer, registry)

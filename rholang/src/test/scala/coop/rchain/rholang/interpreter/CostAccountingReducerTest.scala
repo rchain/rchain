@@ -1,5 +1,6 @@
 package coop.rchain.rholang.interpreter
 
+import cats.effect.concurrent.Ref
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.models.Expr.ExprInstance.{EVarBody, GString}
@@ -89,15 +90,17 @@ class CostAccountingReducerTest extends FlatSpec with Matchers with TripleEquals
           (ContResult[Par, BindPattern, TaggedContinuation], Seq[Result[ListParWithRandom]])
         ]](OutOfPhlogistonsError)
     }
-    implicit val rand           = Blake2b512Random(128)
-    implicit val cost           = CostAccounting.initialCost[Task](Cost(1000)).runSyncUnsafe(1.second)
-    val (_, chargingReducer, _) = RholangAndScalaDispatcher.create(iSpace, Map.empty, Map.empty)
-    val send                    = Send(Par(exprs = Seq(GString("x"))), Seq(Par()))
-    val test                    = chargingReducer.inj(send).attempt.runSyncUnsafe(1.second)
+    implicit val rand = Blake2b512Random(128)
+    implicit val cost = CostAccounting.initialCost[Task](Cost(1000)).runSyncUnsafe(1.second)
+    val errorRef      = Ref.of[Task, Option[Throwable]](None).runSyncUnsafe(1.second)
+    val (_, chargingReducer, _) =
+      RholangAndScalaDispatcher.create(iSpace, Map.empty, errorRef, Map.empty)
+    val send = Send(Par(exprs = Seq(GString("x"))), Seq(Par()))
+    val test = chargingReducer.inj(send).attempt.runSyncUnsafe(1.second)
     assert(test === Left(OutOfPhlogistonsError))
   }
 
-  it should "stop interpreter threads as soon as deploy runs out of phlo" ignore {
+  it should "stop interpreter threads as soon as deploy runs out of phlo" in {
     // Given
     // new x in { @x!("a") | @x!("b") }
     // and not enough phlos to reduce successfully
@@ -122,12 +125,13 @@ class CostAccountingReducerTest extends FlatSpec with Matchers with TripleEquals
     ] = {
 
       implicit val cost = CostAccounting.emptyCost[Task].runSyncUnsafe(1.second)
-
+      val errorRef      = Ref.of[Task, Option[Throwable]](None).runSyncUnsafe(1.second)
       lazy val (_, reducer, _) =
         RholangAndScalaDispatcher
           .create[Task, Task.Par](
             pureRSpace,
             Map.empty,
+            errorRef,
             Map.empty
           )
 

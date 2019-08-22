@@ -1,5 +1,6 @@
 package coop.rchain.rholang.interpreter
 
+import cats.effect.concurrent.Ref
 import cats.implicits._
 import com.google.protobuf.ByteString
 import coop.rchain.catscontrib.TaskContrib._
@@ -165,13 +166,12 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
       Par()
     )
 
-    val receiveResult = fixture {
+    val (receiveResult, receiveSpacemap) = fixture {
       case (space, reducer) =>
-        implicit val env = Env[Par]()
-        reducer.eval(receive) >> space.toMap
+        reducer.inj(receive).attempt.product(space.toMap)
     }
-    receiveResult should be(HashMap.empty)
-    // TODO: Guarantee ReduceError("Trying to read from non-readable channel.")
+    receiveSpacemap should be(HashMap.empty)
+    receiveResult should be(Left(ReduceError("Trying to read from non-readable channel.")))
 
     /* @bundle- { x } !(7) -> x!(7)
      */
@@ -179,13 +179,12 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
     val send =
       Send(Bundle(x, writeFlag = false, readFlag = true), Seq(Expr(GInt(7L))))
 
-    val sendResult = fixture {
+    val (sendResult, sendSpacemap) = fixture {
       case (space, reducer) =>
-        implicit val env = Env[Par]()
-        reducer.eval(send) >> space.toMap
+        reducer.inj(send).attempt.product(space.toMap)
     }
-    sendResult should be(HashMap.empty)
-    // TODO: Guarantee ReduceError("Trying to send on non-writeable channel.")
+    sendSpacemap should be(HashMap.empty)
+    sendResult should be(Left(ReduceError("Trying to send on non-writeable channel.")))
   }
 
   "eval of Send" should "place something in the tuplespace." in {
@@ -195,8 +194,7 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
       case (space, reducer) =>
         val send =
           Send(channel, List(GInt(7L), GInt(8L), GInt(9L)), false, BitSet())
-        implicit val env = Env[Par]()
-        reducer.eval(send)(env, splitRand) >> space.toMap
+        reducer.inj(send)(splitRand) >> space.toMap
     }
 
     val expectedResult = mapData(
@@ -218,8 +216,7 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
 
     val result = fixture {
       case (space, reducer) =>
-        implicit val env = Env[Par]()
-        reducer.eval(send)(env, splitRand) >> space.toMap
+        reducer.inj(send)(splitRand) >> space.toMap
     }
 
     val expectedResult = mapData(
@@ -250,8 +247,7 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
             3,
             BitSet()
           )
-        implicit val env = Env[Par]()
-        reducer.eval(receive)(env, splitRand) >> space.toMap
+        reducer.inj(receive)(splitRand) >> space.toMap
     }
     val bindPattern = BindPattern(
       List(
@@ -283,8 +279,7 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
 
     val result = fixture {
       case (space, reducer) =>
-        implicit val env = Env[Par]()
-        reducer.eval(receive)(env, splitRand) >> space.toMap
+        reducer.inj(receive)(splitRand) >> space.toMap
     }
 
     val channels = List[Par](y)
@@ -318,10 +313,9 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
     )
     val sendFirstResult = fixture {
       case (space, reducer) =>
-        implicit val env = Env[Par]()
         for {
-          _   <- reducer.eval(send)(env, splitRand0)
-          _   <- reducer.eval(receive)(env, splitRand1)
+          _   <- reducer.inj(send)(splitRand0)
+          _   <- reducer.inj(receive)(splitRand1)
           res <- space.toMap
         } yield res
     }
@@ -338,10 +332,9 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
 
     val receiveFirstResult = fixture {
       case (space, reducer) =>
-        implicit val env = Env[Par]()
         for {
-          _   <- reducer.eval(receive)(env, splitRand1)
-          _   <- reducer.eval(send)(env, splitRand0)
+          _   <- reducer.inj(receive)(splitRand1)
+          _   <- reducer.inj(send)(splitRand0)
           res <- space.toMap
         } yield res
     }
@@ -383,10 +376,9 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
 
     val sendFirstResult = fixture {
       case (space, reducer) =>
-        implicit val env = Env[Par]()
         for {
-          _   <- reducer.eval(send)(env, splitRand0)
-          _   <- reducer.eval(receive)(env, splitRand1)
+          _   <- reducer.inj(send)(splitRand0)
+          _   <- reducer.inj(receive)(splitRand1)
           res <- space.toMap
         } yield res
     }
@@ -395,10 +387,9 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
 
     val receiveFirstResult = fixture {
       case (space, reducer) =>
-        implicit val env = Env[Par]()
         for {
-          _   <- reducer.eval(receive)(env, splitRand1)
-          _   <- reducer.eval(send)(env, splitRand0)
+          _   <- reducer.inj(receive)(splitRand1)
+          _   <- reducer.inj(send)(splitRand0)
           res <- space.toMap
         } yield res
     }
@@ -429,10 +420,9 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
     // format: on
     val sendFirstResult = fixture {
       case (space, reducer) =>
-        implicit val env = Env[Par]()
         for {
-          _   <- reducer.eval(send)(env, splitRand0)
-          _   <- reducer.eval(receive)(env, splitRand1)
+          _   <- reducer.inj(send)(splitRand0)
+          _   <- reducer.inj(receive)(splitRand1)
           res <- space.toMap
         } yield res
     }
@@ -447,10 +437,9 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
 
     val receiveFirstResult = fixture {
       case (space, reducer) =>
-        implicit val env = Env[Par]()
         for {
-          _   <- reducer.eval(receive)(env, splitRand1)
-          _   <- reducer.eval(send)(env, splitRand0)
+          _   <- reducer.inj(receive)(splitRand1)
+          _   <- reducer.inj(send)(splitRand0)
           res <- space.toMap
         } yield res
     }
@@ -487,10 +476,9 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
 
     val sendFirstResult = fixture {
       case (space, reducer) =>
-        implicit val env = Env[Par]()
         for {
-          _   <- reducer.eval(send)(env, splitRand0)
-          _   <- reducer.eval(receive)(env, splitRand1)
+          _   <- reducer.inj(send)(splitRand0)
+          _   <- reducer.inj(receive)(splitRand1)
           res <- space.toMap
         } yield res
     }
@@ -505,10 +493,9 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
 
     val receiveFirstResult = fixture {
       case (space, reducer) =>
-        implicit val env = Env[Par]()
         for {
-          _   <- reducer.eval(receive)(env, splitRand1)
-          _   <- reducer.eval(send)(env, splitRand0)
+          _   <- reducer.inj(receive)(splitRand1)
+          _   <- reducer.inj(send)(splitRand0)
           res <- space.toMap
         } yield res
     }
@@ -542,10 +529,9 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
 
     val sendFirstResult = fixture {
       case (space, reducer) =>
-        implicit val env = Env[Par]()
         for {
-          _   <- reducer.eval(send)(env, splitRand0)
-          _   <- reducer.eval(receive)(env, splitRand1)
+          _   <- reducer.inj(send)(splitRand0)
+          _   <- reducer.inj(receive)(splitRand1)
           res <- space.toMap
         } yield res
     }
@@ -561,10 +547,9 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
 
     val receiveFirstResult = fixture {
       case (space, reducer) =>
-        implicit val env = Env[Par]()
         for {
-          _   <- reducer.eval(receive)(env, splitRand1)
-          _   <- reducer.eval(send)(env, splitRand0)
+          _   <- reducer.inj(receive)(splitRand1)
+          _   <- reducer.inj(send)(splitRand0)
           res <- space.toMap
         } yield res
     }
@@ -577,8 +562,7 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
 
     val bothResult = fixture {
       case (space, reducer) =>
-        implicit val env = Env[Par]()
-        reducer.eval(Par(receives = Seq(receive), sends = Seq(send)))(env, baseRand) >> space.toMap
+        reducer.inj(Par(receives = Seq(receive), sends = Seq(send)))(baseRand) >> space.toMap
     }
 
     checkContinuation(bothResult)(
@@ -681,11 +665,10 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
 
     val receiveFirstResult = fixture {
       case (space, reducer) =>
-        implicit val env = Env[Par]()
         for {
-          _   <- reducer.eval(receive)(env, splitRand2)
-          _   <- reducer.eval(send1)(env, splitRand0)
-          _   <- reducer.eval(send2)(env, splitRand1)
+          _   <- reducer.inj(receive)(splitRand2)
+          _   <- reducer.inj(send1)(splitRand0)
+          _   <- reducer.inj(send2)(splitRand1)
           res <- space.toMap
         } yield res
     }
@@ -694,11 +677,10 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
 
     val interleavedResult = fixture {
       case (space, reducer) =>
-        implicit val env = Env[Par]()
         for {
-          _   <- reducer.eval(send1)(env, splitRand0)
-          _   <- reducer.eval(receive)(env, splitRand2)
-          _   <- reducer.eval(send2)(env, splitRand1)
+          _   <- reducer.inj(send1)(splitRand0)
+          _   <- reducer.inj(receive)(splitRand2)
+          _   <- reducer.inj(send2)(splitRand1)
           res <- space.toMap
         } yield res
     }
@@ -721,10 +703,9 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
 
     val result = fixture {
       case (space, reducer) =>
-        implicit val env = Env[Par]()
         for {
-          _   <- reducer.eval(receive)(env, splitRand1)
-          _   <- reducer.eval(send)(env, splitRand0)
+          _   <- reducer.inj(receive)(splitRand1)
+          _   <- reducer.inj(send)(splitRand0)
           res <- space.toMap
         } yield res
     }
@@ -766,8 +747,7 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
       )
     val indirectResult = fixture {
       case (space, reducer) =>
-        implicit val env = Env[Par]()
-        reducer.eval(nthCallEvalToSend)(env, splitRand) >> space.toMap
+        reducer.inj(nthCallEvalToSend)(splitRand) >> space.toMap
     }
 
     val channel: Par = GString("result")
@@ -825,14 +805,21 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
 
     val result = fixture {
       case (space, _) =>
-        implicit val cost          = CostAccounting.emptyCost[Task].unsafeRunSync
-        def byteName(b: Byte): Par = GPrivate(ByteString.copyFrom(Array[Byte](b)))
-        val reducer = RholangOnlyDispatcher
-          .create[Task, Task.Par](space, Map("rho:test:foo" -> byteName(42)))
-          ._2
-        cost.set(Cost.UNSAFE_MAX).runSyncUnsafe(1.second)
-        implicit val env = Env[Par]()
-        reducer.eval(newProc)(env, splitRand) >> space.toMap
+        for {
+          cost     <- CostAccounting.emptyCost[Task]
+          errorRef <- Ref.of[Task, Option[Throwable]](None)
+          reducer = {
+            implicit val c: _cost[Task] = cost
+            val urnMap: Map[String, Par] =
+              Map("rho:test:foo" -> GPrivate(ByteString.copyFrom(Array[Byte](42))))
+            RholangOnlyDispatcher
+              .create[Task, Task.Par](space, errorRef, urnMap)
+              ._2
+          }
+          _   <- cost.set(Cost.UNSAFE_MAX)
+          _   <- reducer.inj(newProc)(splitRand)
+          res <- space.toMap
+        } yield res
     }
 
     val channel0: Par = GString("result0")
@@ -880,8 +867,7 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
       Send(GString("result"), List[Par](nthCallEvalToSend), persistent = false, BitSet())
     val result = fixture {
       case (space, reducer) =>
-        implicit val env = Env[Par]()
-        reducer.eval(send)(env, splitRand) >> space.toMap
+        reducer.inj(send)(splitRand) >> space.toMap
     }
 
     val channel: Par = GString("result")
@@ -929,8 +915,7 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
       Send(GString("result"), List[Par](p), persistent = false, BitSet())
     val result = fixture {
       case (space, reducer) =>
-        val env = Env[Par]()
-        reducer.eval(wrapWithSend(toByteArrayCall))(env, splitRand) >> space.toMap
+        reducer.inj(wrapWithSend(toByteArrayCall))(splitRand) >> space.toMap
     }
 
     val channel: Par = GString("result")
@@ -978,13 +963,12 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
         List[Par](GInt(1L))
       )
 
-    val result = fixture {
+    val (result, spaceMap) = fixture {
       case (space, reducer) =>
-        implicit val env = Env[Par]()
-        reducer.eval(toByteArrayWithArgumentsCall) >> space.toMap
+        reducer.inj(toByteArrayWithArgumentsCall).attempt.product(space.toMap)
     }
-    result should be(HashMap.empty)
-    // TODO: Guarantee MethodArgumentNumberMismatch("toByteArray", 0, 1)
+    spaceMap should be(HashMap.empty)
+    result should be(Left(MethodArgumentNumberMismatch("toByteArray", 0, 1)))
   }
 
   "eval of hexToBytes" should "transform encoded string to byte array (not the rholang term)" in {
@@ -997,8 +981,7 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
       Send(GString("result"), List[Par](p), persistent = false, BitSet())
     val result = fixture {
       case (space, reducer) =>
-        val env = Env[Par]()
-        reducer.eval(wrapWithSend(toByteArrayCall))(env, splitRand) >> space.toMap
+        reducer.inj(wrapWithSend(toByteArrayCall))(splitRand) >> space.toMap
     }
 
     val channel: Par = GString("result")
@@ -1019,8 +1002,7 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
       Send(GString("result"), List[Par](p), persistent = false, BitSet())
     val result = fixture {
       case (space, reducer) =>
-        val env = Env[Par]()
-        reducer.eval(wrapWithSend(toUtf8BytesCall))(env, splitRand) >> space.toMap
+        reducer.inj(wrapWithSend(toUtf8BytesCall))(splitRand) >> space.toMap
     }
 
     val channel: Par = GString("result")
@@ -1043,25 +1025,22 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
         List[Par](GInt(1L))
       )
 
-    val result = fixture {
+    val (result, spaceMap) = fixture {
       case (space, reducer) =>
-        implicit val env = Env[Par]()
-        reducer.eval(toUtfBytesWithArgumentsCall) >> space.toMap
+        reducer.inj(toUtfBytesWithArgumentsCall).attempt.product(space.toMap)
     }
-    result should be(HashMap.empty)
-    // TODO: Guarantee MethodArgumentNumberMismatch("toUtf8Bytes", 0, 1)
+    spaceMap should be(HashMap.empty)
+    result should be(Left(MethodArgumentNumberMismatch("toUtf8Bytes", 0, 1)))
   }
 
   it should "return an error when `toUtf8Bytes` is evaluated on a non String" in {
     val toUtfBytesCall = EMethod("toUtf8Bytes", GInt(44L), List[Par]())
-
-    val result = fixture {
+    val (result, spaceMap) = fixture {
       case (space, reducer) =>
-        implicit val env = Env[Par]()
-        reducer.eval(toUtfBytesCall) >> space.toMap
+        reducer.inj(toUtfBytesCall).attempt.product(space.toMap)
     }
-    result should be(HashMap.empty)
-    // TODO: Guarantee MethodNotDefined("toUtf8Bytes", "Int")
+    spaceMap should be(HashMap.empty)
+    result should be(Left(MethodNotDefined("toUtf8Bytes", "Int")))
   }
 
   "variable references" should "be substituted before being used." in {
@@ -1098,8 +1077,7 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
 
     val result = fixture {
       case (space, reducer) =>
-        val env = Env[Par]()
-        reducer.eval(proc)(env, splitRandSrc) >> space.toMap
+        reducer.inj(proc)(splitRandSrc) >> space.toMap
     }
 
     val channel: Par = GString("result")
@@ -1130,8 +1108,7 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
 
     val result = fixture {
       case (space, reducer) =>
-        val env = Env[Par]()
-        reducer.eval(proc)(env, splitRandSrc) >> space.toMap
+        reducer.inj(proc)(splitRandSrc) >> space.toMap
     }
     val channel: Par = GString("result")
     val expectedResult = mapData(
@@ -1173,8 +1150,7 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
 
     val result = fixture {
       case (space, reducer) =>
-        val env = Env[Par]()
-        reducer.eval(proc)(env, baseRand) >> space.toMap
+        reducer.inj(proc)(baseRand) >> space.toMap
     }
 
     val channel: Par = GString("result")
@@ -1694,24 +1670,22 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
   }
 
   "Set(1, 2, 3).get(1)" should "not work" in {
-    fixture {
+    val result = fixture {
       case (_, reducer) =>
-        implicit val env = Env.makeEnv[Par]()
-        val set          = ESetBody(ParSet(List[Par](GInt(1L), GInt(2L), GInt(3L))))
-        reducer.eval(EMethodBody(EMethod("get", set, List(GInt(1L)))))
+        val set = ESetBody(ParSet(List[Par](GInt(1L), GInt(2L), GInt(3L))))
+        reducer.inj(EMethodBody(EMethod("get", set, List(GInt(1L))))).attempt
     }
-    // TODO: Guarantee MethodNotDefined("get", "Set")
+    result should be(Left(MethodNotDefined("get", "Set")))
   }
 
   "{1: 'a', 2: 'b'}.add(1)" should "not work" in {
-    fixture {
+    val result = fixture {
       case (_, reducer) =>
-        implicit val env = Env.makeEnv[Par]()
         val map =
           EMapBody(ParMap(List[(Par, Par)]((GInt(1L), GString("a")), (GInt(2L), GString("b")))))
-        reducer.eval(EMethodBody(EMethod("add", map, List(GInt(1L)))))
+        reducer.inj(EMethodBody(EMethod("add", map, List(GInt(1L))))).attempt
     }
-    // TODO: Guarantee MethodNotDefined("add", "Map")
+    result should be(Left(MethodNotDefined("add", "Map")))
   }
 
   it should "return an error when `toList` is called with arguments" in {
@@ -1721,14 +1695,11 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
         EList(List()),
         List[Par](GInt(1L))
       )
-
     val result = fixture {
-      case (space, reducer) =>
-        implicit val env = Env[Par]()
-        reducer.eval(toListCall) >> space.toMap
+      case (_, reducer) =>
+        reducer.inj(toListCall).attempt
     }
-    result should be(mutable.HashMap.empty)
-    // TODO: Guarantee MethodArgumentNumberMismatch("toList", 0, 1)
+    result should be(Left(MethodArgumentNumberMismatch("toList", 0, 1)))
   }
 
   it should "transform Set(1, 2, 3) into a [1, 2, 3]" in {

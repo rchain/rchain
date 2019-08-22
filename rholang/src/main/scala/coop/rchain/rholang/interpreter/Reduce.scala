@@ -55,7 +55,8 @@ trait Reduce[M[_]] {
 class DebruijnInterpreter[M[_], F[_]](
     space: RhoTuplespace[M],
     dispatcher: => RhoDispatch[M],
-    urnMap: Map[String, Par]
+    urnMap: Map[String, Par],
+    errorRef: errorRef[M]
 )(
     implicit parallel: Parallel[M, F],
     syncM: Sync[M],
@@ -77,6 +78,15 @@ class DebruijnInterpreter[M[_], F[_]](
 
   type Application = Option[(TaggedContinuation, Seq[ListParWithRandom], Int, Boolean)]
 
+  private def runAndReportError(process: M[Unit]): M[Unit] =
+    errorRef.get >>= {
+      case Some(_) => ().pure[M]
+      case None =>
+        process.handleErrorWith { currentError =>
+          errorRef.update(_.getOrElse(currentError).some)
+        }
+    }
+
   /**
     * Materialize a send in the store, optionally returning the matched continuation.
     *
@@ -94,12 +104,14 @@ class DebruijnInterpreter[M[_], F[_]](
     def go(res: Application): M[Unit] =
       res match {
         case Some((continuation, dataList, updatedSequenceNumber, peek)) =>
-          if (persistent && !peek)
-            List(
-              dispatcher.dispatch(continuation, dataList, updatedSequenceNumber),
-              produce(chan, data, persistent, sequenceNumber)
-            ).parSequence_
-          else dispatcher.dispatch(continuation, dataList, updatedSequenceNumber)
+          runAndReportError {
+            if (persistent && !peek)
+              List(
+                dispatcher.dispatch(continuation, dataList, updatedSequenceNumber),
+                produce(chan, data, persistent, sequenceNumber)
+              ).parSequence_
+            else dispatcher.dispatch(continuation, dataList, updatedSequenceNumber)
+          }
         case None => syncM.unit
       }
     space.produce(chan, data, persist = persistent, sequenceNumber) >>= (go(_))
@@ -125,12 +137,14 @@ class DebruijnInterpreter[M[_], F[_]](
     def go(res: Application): M[Unit] =
       res match {
         case Some((continuation, dataList, updatedSequenceNumber, _)) =>
-          if (persistent)
-            List(
-              dispatcher.dispatch(continuation, dataList, updatedSequenceNumber),
-              consume(binds, body, persistent, peek, sequenceNumber)
-            ).parSequence_
-          else dispatcher.dispatch(continuation, dataList, updatedSequenceNumber)
+          runAndReportError {
+            if (persistent)
+              List(
+                dispatcher.dispatch(continuation, dataList, updatedSequenceNumber),
+                consume(binds, body, persistent, peek, sequenceNumber)
+              ).parSequence_
+            else dispatcher.dispatch(continuation, dataList, updatedSequenceNumber)
+          }
         case None => syncM.unit
       }
     space.consume(
@@ -170,31 +184,32 @@ class DebruijnInterpreter[M[_], F[_]](
       else if (terms.size > 256) rand.splitShort(id.toShort)
       else rand.splitByte(id.toByte)
 
-    val parallelism = lang.Runtime.getRuntime.availableProcessors() * 2
-
-    val indexedTerms = terms.zipWithIndex.toList
-    if (terms.size <= parallelism) {
-      indexedTerms.parTraverse_ {
-        case (term, index) =>
-          val random = split(index)
-          eval(term)(env, random, sequenceNumber)
-      }
-    } else {
-      //TODO: Investigate if we can avoid the shuffling and manual parallelism limiting by tweaking:
-      // - the scheduler used
-      // - the monix ExecutionModel used
-      // Verify if using traverse-per-batch inside parTraverse means that less tasks are spawned at once
-      // (surmise: the task for the next element of a batch is not spawned until the previous one is processed)
-      // Track memory usage along with raw performance when investigating. Clean slate POC could be helpful here.
-
-      // we index terms before shuffling to have deterministic Blake2b512Random seeds for each term
-      val indexedTermsShuffled = Random.shuffle(indexedTerms)
-      val groups               = indexedTermsShuffled.groupBy(_._2 % parallelism).values.toList
-      groups.parTraverse_ {
-        _.traverse_ {
+    runAndReportError {
+      val parallelism  = lang.Runtime.getRuntime.availableProcessors() * 2
+      val indexedTerms = terms.zipWithIndex.toList
+      if (terms.size <= parallelism) {
+        indexedTerms.parTraverse_ {
           case (term, index) =>
             val random = split(index)
-            eval(term)(env, random, sequenceNumber)
+            runAndReportError(eval(term)(env, random, sequenceNumber))
+        }
+      } else {
+        //TODO: Investigate if we can avoid the shuffling and manual parallelism limiting by tweaking:
+        // - the scheduler used
+        // - the monix ExecutionModel used
+        // Verify if using traverse-per-batch inside parTraverse means that less tasks are spawned at once
+        // (surmise: the task for the next element of a batch is not spawned until the previous one is processed)
+        // Track memory usage along with raw performance when investigating. Clean slate POC could be helpful here.
+
+        // we index terms before shuffling to have deterministic Blake2b512Random seeds for each term
+        val indexedTermsShuffled = Random.shuffle(indexedTerms)
+        val groups               = indexedTermsShuffled.groupBy(_._2 % parallelism).values.toList
+        groups.parTraverse_ {
+          _.traverse_ {
+            case (term, index) =>
+              val random = split(index)
+              runAndReportError(eval(term)(env, random, sequenceNumber))
+          }
         }
       }
     }
@@ -202,11 +217,7 @@ class DebruijnInterpreter[M[_], F[_]](
 
   private def eval(
       term: GeneratedMessage
-  )(
-      implicit env: Env[Par],
-      rand: Blake2b512Random,
-      sequenceNumber: Int
-  ): M[Unit] =
+  )(implicit env: Env[Par], rand: Blake2b512Random, sequenceNumber: Int): M[Unit] =
     term match {
       case term: Send    => eval(term)
       case term: Receive => eval(term)
@@ -222,10 +233,11 @@ class DebruijnInterpreter[M[_], F[_]](
       case other => BugFoundError(s"Undefined term: \n $other").raiseError[M, Unit]
     }
 
-  override def inj(
-      par: Par
-  )(implicit rand: Blake2b512Random): M[Unit] =
-    spanM.mark(injectSpanLabel) >> eval(par)(Env[Par](), rand, 0)
+  override def inj(par: Par)(implicit rand: Blake2b512Random): M[Unit] =
+    spanM.mark(injectSpanLabel) >> eval(par)(Env[Par](), rand, 0) >> errorRef.getAndSet(None) >>= {
+      case Some(e) => e.raiseError[M, Unit]
+      case None    => ().pure[M]
+    }
 
   /** Algorithm as follows:
     *
@@ -240,11 +252,9 @@ class DebruijnInterpreter[M[_], F[_]](
     * @param env An execution context
     *
     */
-  private def eval(send: Send)(
-      implicit env: Env[Par],
-      rand: Blake2b512Random,
-      sequenceNumber: Int
-  ): M[Unit] =
+  private def eval(
+      send: Send
+  )(implicit env: Env[Par], rand: Blake2b512Random, sequenceNumber: Int): M[Unit] =
     spanM.mark(sendSpanLabel) >> {
       for {
         _        <- charge[M](SEND_EVAL_COST)
