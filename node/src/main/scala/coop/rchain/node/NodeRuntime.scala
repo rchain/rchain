@@ -23,6 +23,7 @@ import coop.rchain.casper.util.comm.CasperPacketHandler
 import coop.rchain.casper.util.rholang.RuntimeManager
 import coop.rchain.catscontrib.Catscontrib._
 import coop.rchain.catscontrib.TaskContrib._
+import coop.rchain.catscontrib.Taskable
 import coop.rchain.catscontrib.ski._
 import coop.rchain.comm._
 import coop.rchain.comm.discovery._
@@ -32,6 +33,7 @@ import coop.rchain.comm.transport._
 import coop.rchain.grpc.Server
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.models.BlockHash.BlockHash
+import coop.rchain.node.NodeRuntime.Cleanup
 import coop.rchain.node.api.{DeployGrpcService, ProposeGrpcService, ReplGrpcService}
 import coop.rchain.node.configuration.Configuration
 import coop.rchain.node.diagnostics.Trace.TraceId
@@ -94,13 +96,15 @@ class NodeRuntime private[node] (
       deploy: DeployServiceGrpcMonix.DeployService
   )
 
-  def acquireAPIServers(runtime: Runtime[Task], blockApiLock: Semaphore[Task])(
+  def acquireAPIServers[F[_]](runtime: Runtime[F], blockApiLock: Semaphore[F])(
       implicit
-      blockStore: BlockStore[Task],
-      oracle: SafetyOracle[Task],
-      concurrent: Concurrent[Task],
-      span: Span[Task],
-      engineCell: EngineCell[Task]
+      blockStore: BlockStore[F],
+      oracle: SafetyOracle[F],
+      concurrent: Concurrent[F],
+      span: Span[F],
+      engineCell: EngineCell[F],
+      logF: Log[F],
+      taskable: Taskable[F]
   ): APIServers = {
     implicit val s: Scheduler = scheduler
     val repl                  = ReplGrpcService.instance(runtime, s)
@@ -109,7 +113,7 @@ class NodeRuntime private[node] (
     APIServers(repl, propose, deploy)
   }
 
-  def acquireServers(runtime: Runtime[Task], apiServers: APIServers)(
+  def acquireServers(apiServers: APIServers)(
       implicit
       kademliaStore: KademliaStore[Task],
       nodeDiscovery: NodeDiscovery[Task],
@@ -192,8 +196,7 @@ class NodeRuntime private[node] (
 
   def clearResources(
       servers: Servers,
-      runtime: Runtime[Task],
-      casperRuntime: Runtime[Task]
+      runtimeCleanup: Cleanup[Task]
   )(
       implicit
       blockStore: BlockStore[Task],
@@ -210,10 +213,7 @@ class NodeRuntime private[node] (
       _ <- log.info("Shutting down HTTP server....")
       _ <- Task.delay(Kamon.stopAllReporters())
       _ <- servers.httpServer.cancel.attempt
-      _ <- log.info("Shutting down interpreter runtime ...")
-      _ <- runtime.close()
-      _ <- log.info("Shutting down Casper runtime ...")
-      _ <- casperRuntime.close()
+      _ <- runtimeCleanup.close()
       _ <- log.info("Bringing DagStorage down ...")
       _ <- blockDagStorage.close()
       _ <- log.info("Bringing BlockStore down ...")
@@ -223,20 +223,18 @@ class NodeRuntime private[node] (
 
   def addShutdownHook(
       servers: Servers,
-      runtime: Runtime[Task],
-      casperRuntime: Runtime[Task]
+      runtimeCleanup: Cleanup[Task]
   )(
       implicit blockStore: BlockStore[Task],
       blockDagStorage: BlockDagStorage[Task]
   ): Task[Unit] =
-    Task.delay(sys.addShutdownHook(clearResources(servers, runtime, casperRuntime)))
+    Task.delay(sys.addShutdownHook(clearResources(servers, runtimeCleanup)))
 
   private def exit0: Task[Unit] = Task.delay(System.exit(0))
 
   private def nodeProgram(
-      runtime: Runtime[Task],
-      casperRuntime: Runtime[Task],
-      apiServers: APIServers
+      apiServers: APIServers,
+      runtimeCleanup: Cleanup[Task]
   )(
       implicit
       time: Time[Task],
@@ -303,7 +301,7 @@ class NodeRuntime private[node] (
       _     <- info
       local <- peerNodeAsk.ask
       host  = local.endpoint.host
-      servers <- acquireServers(runtime, apiServers)(
+      servers <- acquireServers(apiServers)(
                   kademliaStore,
                   nodeDiscovery,
                   rpConnections,
@@ -311,7 +309,7 @@ class NodeRuntime private[node] (
                   metrics,
                   rpConfAsk
                 )
-      _ <- addShutdownHook(servers, runtime, casperRuntime)
+      _ <- addShutdownHook(servers, runtimeCleanup)
       _ <- servers.externalApiServer.start
       _ <- Log[Task].info(
             s"External API server started at $host:${servers.externalApiServer.port}"
@@ -462,32 +460,22 @@ class NodeRuntime private[node] (
                log,
                eventLog,
                ContextShift[Task],
-               Par[Task]
+               Par[Task],
+               Taskable[Task]
              )
     (
       rpConnections,
       blockStore,
       blockDagStorage,
-      oracle,
       engineCell,
       requestedBlocks,
-      runtime,
-      casperRuntime,
+      runtimeCleanup,
       packetHandler,
-      span
+      apiServers
     ) = result
 
-    blockApiLock <- Semaphore[Task](1)
-    apiServers = acquireAPIServers(runtime, blockApiLock)(
-      blockStore,
-      oracle,
-      Concurrent[Task],
-      span,
-      engineCell
-    )
-
     // 4. run the node program.
-    program = nodeProgram(runtime, casperRuntime, apiServers)(
+    program = nodeProgram(apiServers, runtimeCleanup)(
       time,
       rpConfState,
       rpConfAsk,
@@ -506,7 +494,7 @@ class NodeRuntime private[node] (
     _ <- handleUnrecoverableErrors(program)
   } yield ()
 
-  def setupNodeProgramF[F[_]: Metrics: NodeDiscovery: TransportLayer: RPConfAsk: Sync: Concurrent: Time: Log: EventLog: ContextShift: Par](
+  def setupNodeProgramF[F[_]: Metrics: NodeDiscovery: TransportLayer: RPConfAsk: Sync: Concurrent: Time: Log: EventLog: ContextShift: Par: Taskable](
       conf: Configuration,
       dagConfig: BlockDagFileStorage.Config,
       blockstoreEnv: Env[ByteBuffer]
@@ -583,17 +571,26 @@ class NodeRuntime private[node] (
         implicit val ev: EngineCell[F] = engineCell
         CasperPacketHandler[F]
       }
+      blockApiLock <- Semaphore[F](1)
+      apiServers = acquireAPIServers(runtime, blockApiLock)(
+        blockStore,
+        oracle,
+        Concurrent[F],
+        span,
+        engineCell,
+        Log[F],
+        Taskable[F]
+      )
+      runtimeCleanup = NodeRuntime.cleanup(runtime, casperRuntime)
     } yield (
       rpConnections,
       blockStore,
       blockDagStorage,
-      oracle,
       engineCell,
       requestedBlocks,
-      runtime,
-      casperRuntime,
+      runtimeCleanup,
       packetHandler,
-      span
+      apiServers
     )
 }
 
@@ -605,4 +602,19 @@ object NodeRuntime {
       id      <- NodeEnvironment.create(conf)
       runtime <- Task.delay(new NodeRuntime(conf, id, scheduler))
     } yield runtime
+
+  trait Cleanup[F[_]] {
+    def close(): F[Unit]
+  }
+
+  def cleanup[F[_]: Sync: Log](runtime: Runtime[F], casperRuntime: Runtime[F]): Cleanup[F] =
+    new Cleanup[F] {
+      override def close(): F[Unit] =
+        for {
+          _ <- Log[F].info("Shutting down interpreter runtime ...")
+          _ <- runtime.close()
+          _ <- Log[F].info("Shutting down Casper runtime ...")
+          _ <- casperRuntime.close()
+        } yield ()
+    }
 }
