@@ -11,12 +11,11 @@ import coop.rchain.models.Var.VarInstance.FreeVar
 import coop.rchain.models._
 import coop.rchain.models.rholang.implicits._
 import coop.rchain.rholang.Resources.mkRhoISpace
-import coop.rchain.rholang.interpreter.Runtime.{RhoISpace, RhoPureSpace}
+import coop.rchain.rholang.interpreter.Runtime.{RhoISpace, RhoTuplespace}
 import coop.rchain.rholang.interpreter.accounting.{CostAccounting, _}
 import coop.rchain.rholang.interpreter.errors.OutOfPhlogistonsError
 import coop.rchain.rholang.interpreter.storage.ChargingRSpace._
 import coop.rchain.rholang.interpreter.storage.ChargingRSpaceTest.{ChargingRSpace, _}
-import coop.rchain.rholang.interpreter.storage.implicits.matchListPar
 import coop.rchain.shared.Log
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
@@ -339,7 +338,7 @@ class ChargingRSpaceTest extends fixture.FlatSpec with TripleEqualsSupport with 
     implicit val span     = NoopSpan[Task]
     def mkChargingRspace(rhoISpace: RhoISpace[Task]): Task[ChargingRSpace] = {
       val s = implicitly[Sync[Task]]
-      Task.delay(ChargingRSpace.pureRSpace(rhoISpace)(s, span, cost))
+      Task.delay(ChargingRSpace.chargingRSpace(rhoISpace)(s, span, cost))
     }
 
     val chargingRSpaceResource =
@@ -371,7 +370,7 @@ class ChargingRSpaceTest extends fixture.FlatSpec with TripleEqualsSupport with 
 }
 
 object ChargingRSpaceTest {
-  type ChargingRSpace = RhoPureSpace[Task]
+  type ChargingRSpace = RhoTuplespace[Task]
   final case class TestFixture(chargingRSpace: ChargingRSpace, cost: _cost[Task])
 
   val NilPar                 = ListParWithRandom().withPars(Seq(Par()))

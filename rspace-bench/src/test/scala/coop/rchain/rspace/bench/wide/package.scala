@@ -2,8 +2,9 @@ package coop.rchain.rspace.bench
 
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.models.Par
-import coop.rchain.rholang.interpreter.ChargingReducer
+import coop.rchain.rholang.interpreter.Reduce
 import java.io.{FileNotFoundException, InputStreamReader}
+
 import monix.eval.Task
 
 package object wide {
@@ -23,7 +24,7 @@ package object wide {
 
   def createTest(t: Option[Par])(
       implicit errorProcessor: () => Vector[Throwable],
-      reducer: ChargingReducer[Task],
+      reducer: Reduce[Task],
       rand: Blake2b512Random
   ): Task[Vector[Throwable]] = {
     val par = t.getOrElse(throw new Error("Failed to prepare executable rholang term"))

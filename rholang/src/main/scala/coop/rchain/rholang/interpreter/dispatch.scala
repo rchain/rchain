@@ -7,9 +7,8 @@ import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.metrics.Span
 import coop.rchain.models.TaggedContinuation.TaggedCont.{Empty, ParBody, ScalaBodyRef}
 import coop.rchain.models._
-import coop.rchain.rholang.interpreter.Runtime.{RhoISpace, RhoPureSpace}
+import coop.rchain.rholang.interpreter.Runtime.RhoTuplespace
 import coop.rchain.rholang.interpreter.accounting._
-import coop.rchain.rholang.interpreter.storage.ChargingRSpace
 
 trait Dispatch[M[_], A, K] {
   def dispatch(continuation: K, dataList: Seq[A], sequenceNumber: Int): M[Unit]
@@ -24,7 +23,7 @@ object Dispatch {
 
 class RholangAndScalaDispatcher[M[_]] private (
     _dispatchTable: => Map[Long, (Seq[ListParWithRandom], Int) => M[Unit]]
-)(implicit s: Sync[M], reducer: ChargingReducer[M])
+)(implicit s: Sync[M], reducer: Reduce[M])
     extends Dispatch[M, ListParWithRandom, TaggedContinuation] {
 
   def dispatch(
@@ -54,7 +53,7 @@ class RholangAndScalaDispatcher[M[_]] private (
 object RholangAndScalaDispatcher {
 
   def create[M[_], F[_]](
-      tuplespace: RhoISpace[M],
+      tuplespace: RhoTuplespace[M],
       dispatchTable: => Map[Long, (Seq[ListParWithRandom], Int) => M[Unit]],
       urnMap: Map[String, Par]
   )(
@@ -64,20 +63,15 @@ object RholangAndScalaDispatcher {
       s: Sync[M],
       ft: FunctorTell[M, Throwable],
       spanM: Span[M]
-  ): (Dispatch[M, ListParWithRandom, TaggedContinuation], ChargingReducer[M], Registry[M]) = {
+  ): (Dispatch[M, ListParWithRandom, TaggedContinuation], Reduce[M], Registry[M]) = {
 
     implicit lazy val dispatcher: Dispatch[M, ListParWithRandom, TaggedContinuation] =
       new RholangAndScalaDispatcher(dispatchTable)
 
     implicit lazy val reducer: Reduce[M] =
-      new DebruijnInterpreter[M, F](chargingRSpace, dispatcher, urnMap)
+      new DebruijnInterpreter[M, F](tuplespace, dispatcher, urnMap)
 
-    lazy val chargingRSpace: RhoPureSpace[M] =
-      ChargingRSpace.pureRSpace(tuplespace)
-
-    val chargingReducer: ChargingReducer[M] = ChargingReducer[M]
-
-    val registry: Registry[M] = new RegistryImpl(chargingRSpace, dispatcher)
-    (dispatcher, chargingReducer, registry)
+    val registry: Registry[M] = new RegistryImpl(tuplespace, dispatcher)
+    (dispatcher, reducer, registry)
   }
 }

@@ -39,10 +39,9 @@ class CryptoChannelsSpec
 
   behavior of "Crypto channels"
 
-  implicit val rand: Blake2b512Random       = Blake2b512Random(Array.empty[Byte])
-  implicit val serializePar: Serialize[Par] = storage.implicits.serializePar
-  implicit val serializePars: Serialize[ListParWithRandom] =
-    storage.implicits.serializePars
+  implicit val rand: Blake2b512Random                      = Blake2b512Random(Array.empty[Byte])
+  implicit val serializePar: Serialize[Par]                = storage.serializePar
+  implicit val serializePars: Serialize[ListParWithRandom] = storage.serializePars
 
   val serialize: Par => Array[Byte]                    = Serialize[Par].encode(_).toArray
   val byteArrayToByteString: Array[Byte] => ByteString = ba => ByteString.copyFrom(ba)
@@ -55,8 +54,8 @@ class CryptoChannelsSpec
   def clearStore(
       ackChannel: Par,
       timeout: Duration = 3.seconds
-  )(implicit env: Env[Par], reduce: ChargingReducer[Task]): Unit = {
-    val consume = Receive(
+  )(implicit env: Env[Par], reduce: Reduce[Task]): Unit = {
+    val consume: Par = Receive(
       Seq(ReceiveBind(Seq(EVar(Var(Wildcard(WildcardMsg())))), ackChannel)),
       Par()
     )
@@ -222,8 +221,8 @@ class CryptoChannelsSpec
 
     val runtime = (for {
       runtime <- Runtime.createWithEmptyCost[Task](dbDir, size)
-      _       <- runtime.reducer.setPhlo(Cost.UNSAFE_MAX)
-    } yield (runtime)).unsafeRunSync
+      _       <- runtime.cost.set(Cost.UNSAFE_MAX)
+    } yield runtime).unsafeRunSync
 
     try {
       test((runtime.reducer, runtime.space))
@@ -236,6 +235,6 @@ class CryptoChannelsSpec
   /** TODO(mateusz.gorski): once we refactor Rholang[AndScala]Dispatcher
     *  to push effect choice up until declaration site refactor to `Reduce[Coeval]`
     */
-  override type FixtureParam = (ChargingReducer[Task], RhoISpace[Task])
+  override type FixtureParam = (Reduce[Task], RhoISpace[Task])
 
 }

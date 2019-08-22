@@ -17,7 +17,7 @@ import coop.rchain.models.Var.VarInstance.{BoundVar, FreeVar, Wildcard}
 import coop.rchain.models.rholang.implicits._
 import coop.rchain.models.serialization.implicits._
 import coop.rchain.models.{Match, MatchCase, _}
-import coop.rchain.rholang.interpreter.Runtime.{RhoDispatch, RhoPureSpace}
+import coop.rchain.rholang.interpreter.Runtime.{RhoDispatch, RhoTuplespace}
 import coop.rchain.rholang.interpreter.Substitute.{charge => _, _}
 import coop.rchain.rholang.interpreter.accounting._
 import coop.rchain.rholang.interpreter.errors._
@@ -27,6 +27,7 @@ import coop.rchain.rspace.util._
 import monix.eval.Coeval
 import scalapb.GeneratedMessage
 
+import scala.collection.SortedSet
 import scala.collection.immutable.BitSet
 import scala.util.{Random, Try}
 
@@ -40,28 +41,23 @@ object Reduce {
   */
 trait Reduce[M[_]] {
 
-  def eval(par: Par)(
-      implicit env: Env[Par],
-      rand: Blake2b512Random,
-      sequenceNumber: Int
-  ): M[Unit]
-
-  def inj(
+  // TODO: Remove `sequenceNumber` default argument.
+  def eval(
       par: Par
-  )(implicit rand: Blake2b512Random): M[Unit]
+  )(implicit env: Env[Par], rand: Blake2b512Random, sequenceNumber: Int = 0): M[Unit]
+
+  def inj(par: Par)(implicit rand: Blake2b512Random): M[Unit]
 
   /**
     * Evaluate any top level expressions in @param Par .
     */
   def evalExpr(par: Par)(implicit env: Env[Par]): M[Par]
 
-  def evalExprToPar(
-      expr: Expr
-  )(implicit env: Env[Par]): M[Par]
+  def evalExprToPar(expr: Expr)(implicit env: Env[Par]): M[Par]
 }
 
 class DebruijnInterpreter[M[_], F[_]](
-    pureRSpace: RhoPureSpace[M],
+    space: RhoTuplespace[M],
     dispatcher: => RhoDispatch[M],
     urnMap: Map[String, Par]
 )(
@@ -111,7 +107,7 @@ class DebruijnInterpreter[M[_], F[_]](
           else dispatcher.dispatch(continuation, dataList, updatedSequenceNumber)
         case None => syncM.unit
       }
-    pureRSpace.produce(chan, data, persist = persistent, sequenceNumber) >>= (go(_))
+    space.produce(chan, data, persist = persistent, sequenceNumber) >>= (go(_))
   }
 
   /**
@@ -142,13 +138,13 @@ class DebruijnInterpreter[M[_], F[_]](
           else dispatcher.dispatch(continuation, dataList, updatedSequenceNumber)
         case None => syncM.unit
       }
-    pureRSpace.consume(
+    space.consume(
       sources.toList,
       patterns.toList,
       TaggedContinuation(ParBody(body)),
       persist = persistent,
       sequenceNumber,
-      peek
+      if (peek) SortedSet(sources.indices: _*) else SortedSet.empty[Int]
     ) >>= (go(_))
   }
 
