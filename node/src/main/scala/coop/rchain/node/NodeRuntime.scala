@@ -8,7 +8,7 @@ import cats._
 import cats.effect._
 import cats.effect.concurrent.Semaphore
 import cats.implicits._
-import cats.mtl.{ApplicativeLocal, DefaultApplicativeLocal}
+import cats.mtl.{ApplicativeLocal, DefaultApplicativeLocal, MonadState}
 import cats.temp.par.Par
 import coop.rchain.blockstorage._
 import coop.rchain.blockstorage.util.io.IOError
@@ -387,10 +387,6 @@ class NodeRuntime private[node] (
               )
 
     // 3. create instances of typeclasses
-    initPeer      = if (conf.server.standalone) None else Some(conf.server.bootstrap)
-    rpConfState   = effects.rpConfState(rpConf(local, initPeer))
-    rpConfAsk     = effects.rpConfAsk(rpConfState)
-    peerNodeAsk   = effects.peerNodeAsk(rpConfState)
     metrics       = diagnostics.effects.metrics[Task]
     time          = effects.time
     commTmpFolder = conf.server.dataDir.resolve("tmp").resolve("comm")
@@ -410,6 +406,10 @@ class NodeRuntime private[node] (
                     commTmpFolder
                   )(grpcScheduler, log, metrics)
 
+    initPeer       = if (conf.server.standalone) None else Some(conf.server.bootstrap)
+    peerNode       = rpConf(local, initPeer)
+    rpConfState    = effects.rpConfState[Task](peerNode)
+    peerNodeAsk    = effects.peerNodeAsk[Task](Monad[Task], Sync[Task], rpConfState)
     defaultTimeout = conf.server.defaultTimeout
     kademliaRPC = effects.kademliaRPC(
       conf.server.networkId,
@@ -422,7 +422,7 @@ class NodeRuntime private[node] (
     )
     kademliaStore = effects.kademliaStore(id)(kademliaRPC, metrics)
     _             <- initPeer.fold(Task.unit)(p => kademliaStore.updateLastSeen(p))
-    nodeDiscovery = effects.nodeDiscovery(id)(kademliaStore, kademliaRPC)
+    nodeDiscovery = effects.nodeDiscovery(id)(Monad[Task], kademliaStore, kademliaRPC)
 
     /**
       * We need to come up with a consistent way with folder creation. Some layers create folder on their own (if not available),
@@ -449,11 +449,9 @@ class NodeRuntime private[node] (
       mapSize = 8L * 1024L * 1024L * 1024L,
       latestMessagesLogMaxSizeFactor = 10
     )
-    result <- setupNodeProgramF[Task](conf, dagConfig, blockstoreEnv)(
+    result <- setupNodeProgramF[Task](rpConfState, conf, dagConfig, blockstoreEnv)(
                metrics,
-               nodeDiscovery,
                transport,
-               rpConfAsk,
                Sync[Task],
                Concurrent[Task],
                time,
@@ -465,6 +463,7 @@ class NodeRuntime private[node] (
              )
     (
       rpConnections,
+      rpConfAsk,
       blockStore,
       blockDagStorage,
       engineCell,
@@ -494,13 +493,15 @@ class NodeRuntime private[node] (
     _ <- handleUnrecoverableErrors(program)
   } yield ()
 
-  def setupNodeProgramF[F[_]: Metrics: NodeDiscovery: TransportLayer: RPConfAsk: Sync: Concurrent: Time: Log: EventLog: ContextShift: Par: Taskable](
+  def setupNodeProgramF[F[_]: Metrics: TransportLayer: Sync: Concurrent: Time: Log: EventLog: ContextShift: Par: Taskable](
+      rpConfState: MonadState[F, RPConf],
       conf: Configuration,
       dagConfig: BlockDagFileStorage.Config,
       blockstoreEnv: Env[ByteBuffer]
   ) =
     for {
       rpConnections <- effects.rpConnections
+      rpConfAsk     = effects.rpConfAsk(Monad[F], Sync[F], rpConfState)
       lab           <- LastApprovedBlock.of[F]
       blockStore <- FileLMDBIndexBlockStore
                      .create[F](blockstoreEnv, blockstorePath)(
@@ -565,6 +566,7 @@ class NodeRuntime private[node] (
         implicit val sp = span
         implicit val lb = lab
         implicit val rc = rpConnections
+        implicit val ra = rpConfAsk
         CasperLaunch[F](casperInit)
       }
       packetHandler = {
@@ -584,6 +586,7 @@ class NodeRuntime private[node] (
       runtimeCleanup = NodeRuntime.cleanup(runtime, casperRuntime)
     } yield (
       rpConnections,
+      rpConfAsk,
       blockStore,
       blockDagStorage,
       engineCell,
