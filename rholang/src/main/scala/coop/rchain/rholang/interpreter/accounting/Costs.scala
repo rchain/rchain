@@ -1,7 +1,17 @@
 package coop.rchain.rholang.interpreter.accounting
 
 import com.google.protobuf.ByteString
-import coop.rchain.models.{PCost, Par, ProtoM, StacksafeMessage}
+import coop.rchain.models.TaggedContinuation.TaggedCont.ParBody
+import coop.rchain.models.{
+  BindPattern,
+  ListParWithRandom,
+  PCost,
+  Par,
+  ParWithRandom,
+  ProtoM,
+  StacksafeMessage,
+  TaggedContinuation
+}
 import coop.rchain.rspace.Blake2b256Hash
 
 //TODO(mateusz.gorski): Adjust the costs of operations
@@ -118,6 +128,20 @@ trait Costs {
   class StorageCostOps[A <: StacksafeMessage[_]](a: A*) {
     def storageCost: Cost = Cost(a.map(a => ProtoM.serializedSize(a).value).sum, "storage cost")
   }
+
+  def storageCostConsume(
+      channels: Seq[Par],
+      patterns: Seq[BindPattern],
+      continuation: TaggedContinuation
+  ): Cost = {
+    val bodyCost = Some(continuation).collect {
+      case TaggedContinuation(ParBody(ParWithRandom(body, _))) => body.storageCost
+    }
+    channels.storageCost + patterns.storageCost + bodyCost.getOrElse(Cost(0))
+  }
+
+  def storageCostProduce(channel: Par, data: ListParWithRandom): Cost =
+    channel.storageCost + data.pars.storageCost
 
   def commEventStorageCost(channelsInvolved: Int): Cost = {
     val consumeCost  = eventStorageCost(channelsInvolved)

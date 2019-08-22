@@ -15,7 +15,6 @@ import coop.rchain.rholang.interpreter.Runtime.{RhoISpace, RhoTuplespace}
 import coop.rchain.rholang.interpreter.accounting
 import coop.rchain.rholang.interpreter.accounting.{CostAccounting, _}
 import coop.rchain.rholang.interpreter.errors.OutOfPhlogistonsError
-import coop.rchain.rholang.interpreter.storage.ChargingRSpace._
 import coop.rchain.rholang.interpreter.storage.ChargingRSpaceTest.{ChargingRSpace, _}
 import coop.rchain.shared.Log
 import monix.eval.Task
@@ -32,10 +31,10 @@ class ChargingRSpaceTest extends fixture.FlatSpec with TripleEqualsSupport with 
   val channels                = channelsN(1)
   val patterns                = patternsN(1)
   val cont                    = continuation()
-  val consumeStorageCost      = ChargingRSpace.storageCostConsume(channels, patterns, cont)
+  val consumeStorageCost      = accounting.storageCostConsume(channels, patterns, cont)
   val channel                 = channels.head
   val data                    = NilPar
-  val produceStorageCost      = ChargingRSpace.storageCostProduce(channel, data)
+  val produceStorageCost      = accounting.storageCostProduce(channel, data)
   val produceEventStorageCost = accounting.eventStorageCost(1)
   val consumeEventStorageCost = accounting.eventStorageCost(channels.size)
   val commEventStorageCost    = accounting.commEventStorageCost(channels.size)
@@ -98,9 +97,9 @@ class ChargingRSpaceTest extends fixture.FlatSpec with TripleEqualsSupport with 
       val TestFixture(chargingRSpace, cost) = fixture
       val channels                          = channelsN(2)
       val patterns                          = patternsN(2)
-      val firstProdCost                     = ChargingRSpace.storageCostProduce(channels(0), data)
-      val secondProdCost                    = ChargingRSpace.storageCostProduce(channels(1), data)
-      val joinCost                          = ChargingRSpace.storageCostConsume(channels, patterns, cont)
+      val firstProdCost                     = accounting.storageCostProduce(channels(0), data)
+      val secondProdCost                    = accounting.storageCostProduce(channels(1), data)
+      val joinCost                          = accounting.storageCostConsume(channels, patterns, cont)
       val consumeEventStorageCost           = accounting.eventStorageCost(channels.size)
       val commEventStorageCost              = accounting.commEventStorageCost(channels.size)
 
@@ -203,7 +202,7 @@ class ChargingRSpaceTest extends fixture.FlatSpec with TripleEqualsSupport with 
     val dataX = ListParWithRandom().withPars(Vector(GInt(1)))
     val dataY = ListParWithRandom().withPars(Vector(GInt(10)))
 
-    val produceYCost            = ChargingRSpace.storageCostProduce(channels(1), dataY)
+    val produceYCost            = accounting.storageCostProduce(channels(1), dataY)
     val consumeEventStorageCost = accounting.eventStorageCost(channels.size)
     val commEventStorageCost    = accounting.commEventStorageCost(channels.size)
 
@@ -253,7 +252,7 @@ class ChargingRSpaceTest extends fixture.FlatSpec with TripleEqualsSupport with 
     val TestFixture(chargingRSpace, cost) = fixture
 
     val data        = ListParWithRandom().withPars(Vector(GInt(1)))
-    val produceCost = ChargingRSpace.storageCostProduce(channel, data)
+    val produceCost = accounting.storageCostProduce(channel, data)
 
     val initPhlos = Cost(1000)
 
@@ -283,9 +282,9 @@ class ChargingRSpaceTest extends fixture.FlatSpec with TripleEqualsSupport with 
     val dataX                = ListParWithRandom().withPars(Vector(GInt(1)))
     val dataY                = ListParWithRandom().withPars(Vector(GInt(10)))
     val dataZ                = ListParWithRandom().withPars(Vector(GInt(100)))
-    val produceXCost         = ChargingRSpace.storageCostProduce(x, dataX)
-    val produceYCost         = ChargingRSpace.storageCostProduce(y, dataY)
-    val consumeCost          = ChargingRSpace.storageCostConsume(List(x, y, z), patterns, cont)
+    val produceXCost         = accounting.storageCostProduce(x, dataX)
+    val produceYCost         = accounting.storageCostProduce(y, dataY)
+    val consumeCost          = accounting.storageCostConsume(List(x, y, z), patterns, cont)
     val commEventStorageCost = accounting.commEventStorageCost(3)
 
     val initPhlos = Cost(10000)

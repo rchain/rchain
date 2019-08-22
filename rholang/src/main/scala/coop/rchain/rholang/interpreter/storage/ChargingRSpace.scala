@@ -40,20 +40,6 @@ object ChargingRSpace {
       case Empty => BugFoundError("Damn you pROTOBUF").raiseError[F, Blake2b512Random]
     }
 
-  def storageCostConsume(
-      channels: Seq[Par],
-      patterns: Seq[BindPattern],
-      continuation: TaggedContinuation
-  ): Cost = {
-    val bodyCost = Some(continuation).collect {
-      case TaggedContinuation(ParBody(ParWithRandom(body, _))) => body.storageCost
-    }
-    channels.storageCost + patterns.storageCost + bodyCost.getOrElse(Cost(0))
-  }
-
-  def storageCostProduce(channel: Par, data: ListParWithRandom): Cost =
-    channel.storageCost + data.pars.storageCost
-
   def chargingRSpace[F[_]: Sync: Span](
       space: RhoTuplespace[F]
   )(implicit cost: _cost[F]): RhoTuplespace[F] =
@@ -73,8 +59,9 @@ object ChargingRSpace {
       ] =
         for {
           _ <- charge[F](
-                storageCostConsume(channels, patterns, continuation)
-                  .copy(operation = "consume storage")
+                storageCostConsume(channels, patterns, continuation).copy(
+                  operation = "consume storage"
+                )
               )
           consRes <- space.consume(
                       channels,
