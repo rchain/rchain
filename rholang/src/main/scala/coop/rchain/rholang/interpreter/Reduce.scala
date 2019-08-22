@@ -63,7 +63,7 @@ trait Reduce[M[_]] {
 }
 
 class DebruijnInterpreter[M[_], F[_]](
-    pureRSpace: RhoISpace[M],
+    space: RhoISpace[M],
     dispatcher: => RhoDispatch[M],
     urnMap: Map[String, Par]
 )(
@@ -113,7 +113,7 @@ class DebruijnInterpreter[M[_], F[_]](
           else dispatcher.dispatch(continuation, dataList, updatedSequenceNumber)
         case None => syncM.unit
       }
-    pureRSpace.produce(chan, data, persist = persistent, sequenceNumber) >>= (go(_))
+    space.produce(chan, data, persist = persistent, sequenceNumber) >>= (go(_))
   }
 
   /**
@@ -144,7 +144,7 @@ class DebruijnInterpreter[M[_], F[_]](
           else dispatcher.dispatch(continuation, dataList, updatedSequenceNumber)
         case None => syncM.unit
       }
-    pureRSpace.consume(
+    space.consume(
       sources.toList,
       patterns.toList,
       TaggedContinuation(ParBody(body)),
