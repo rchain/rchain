@@ -241,11 +241,10 @@ object BlockCreator {
   ): F[List[Unit]] =
     internalErrors.toList
       .traverse {
-        case InternalProcessedDeploy(deploy, _, _, _, InternalErrors(errors)) =>
-          val errorsMessage = errors.map(_.getMessage).mkString("\n")
+        case InternalProcessedDeploy(deploy, _, _, _, InternalError(error)) =>
           Log[F].error(
             s"Internal error encountered while processing deploy ${PrettyPrinter
-              .buildString(deploy)}: $errorsMessage"
+              .buildString(deploy)}: ${error.getMessage}"
           )
         case _ => ().pure[F]
       }

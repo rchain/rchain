@@ -319,7 +319,7 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span] private[rholang] (
       EvaluateResult(_, errors) = replayEvaluateResult
       _                         <- Span[F].mark("before-replay-deploy-status")
       cont <- DeployStatus.fromErrors(errors) match {
-               case int: InternalErrors =>
+               case int: InternalError =>
                  (deploy.some, int: Failed).some.pure[F]
                case replayStatus =>
                  if (status.isFailed != replayStatus.isFailed)
@@ -338,7 +338,7 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span] private[rholang] (
                          (none[DeployData], UnusedCommEvent(ex): Failed).some
                            .pure[F]
                        case Left(ex) =>
-                         (none[DeployData], UserErrors(Vector(ex)): Failed).some
+                         (none[DeployData], UserError(ex): Failed).some
                            .pure[F]
                      }
                  }

@@ -113,13 +113,13 @@ object InterpreterUtil {
       .flatMap {
         case Left((Some(deploy), status)) =>
           status match {
-            case InternalErrors(exs) =>
+            case InternalError(e) =>
               BlockException(
                 new Exception(s"Internal errors encountered while processing ${PrettyPrinter
-                  .buildString(deploy)}: ${exs.mkString("\n")}")
+                  .buildString(deploy)}: $e")
               ).asLeft[Option[StateHash]].pure[F]
-            case UserErrors(errors: Seq[Throwable]) =>
-              Log[F].warn(s"Found user error(s) ${errors.map(_.getMessage).mkString("\n")}") >>
+            case UserError(error: Throwable) =>
+              Log[F].warn(s"Found user error(s) ${error.getMessage}") >>
                 none[StateHash].asRight[BlockException].pure[F]
             case ReplayStatusMismatch(replay: DeployStatus, orig: DeployStatus) =>
               Log[F].warn(
@@ -137,11 +137,11 @@ object InterpreterUtil {
             case UnusedCommEvent(ex: ReplayException) =>
               Log[F].warn(s"Found unused comm event ${ex.getMessage}") >>
                 none[StateHash].asRight[BlockException].pure[F]
-            case InternalErrors(_) => throw new RuntimeException("found InternalErrors")
+            case InternalError(_) => throw new RuntimeException("found InternalErrors")
             case ReplayStatusMismatch(_, _) =>
               throw new RuntimeException("found ReplayStatusMismatch")
             case UnknownFailure => throw new RuntimeException("found UnknownFailure")
-            case UserErrors(_)  => throw new RuntimeException("found UserErrors")
+            case UserError(_)   => throw new RuntimeException("found UserErrors")
           }
         case Right(computedStateHash) =>
           if (tsHash.contains(computedStateHash)) {
