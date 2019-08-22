@@ -58,10 +58,10 @@ class ChargingRSpaceTest extends fixture.FlatSpec with TripleEqualsSupport with 
     val test = for {
       _                 <- cost.set(minimumPhlos)
       _                 <- chargingRSpace.produce(channel, data, false)
-      phlosAfterProduce <- cost.inspect(identity)
+      phlosAfterProduce <- cost.get
       _                 = phlosAfterProduce shouldBe (minimumPhlos - produceStorageCost)
       _                 <- chargingRSpace.consume(channels, patterns, cont, false)
-      phlosLeft         <- cost.inspect(identity)
+      phlosLeft         <- cost.get
       _                 = phlosLeft.value shouldBe (consumeStorageCost + produceStorageCost).value
     } yield ()
 
@@ -103,13 +103,13 @@ class ChargingRSpaceTest extends fixture.FlatSpec with TripleEqualsSupport with 
       val test = for {
         _                   <- cost.set(minimumPhlos)
         _                   <- chargingRSpace.consume(channels, patterns, cont, false)
-        phlosAfterConsume   <- cost.inspect(identity)
+        phlosAfterConsume   <- cost.get
         _                   = phlosAfterConsume shouldBe (minimumPhlos - joinCost)
         res                 <- chargingRSpace.produce(channels(0), data, false)
-        phlosAfterFirstSend <- cost.inspect(identity)
+        phlosAfterFirstSend <- cost.get
         _                   = phlosAfterFirstSend shouldBe (phlosAfterConsume - firstProdCost)
         _                   <- chargingRSpace.produce(channels(1), data, false)
-        phlosLeft           <- cost.inspect(identity)
+        phlosLeft           <- cost.get
         _                   = phlosLeft.value shouldBe minimumPhlos.value
       } yield ()
 
