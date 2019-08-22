@@ -52,11 +52,10 @@ class CostAccountingSpec extends FlatSpec with Matchers with PropertyChecks with
 
   val contracts = Table(
     ("contract", "expectedTotalCost"),
-    ("""@0!(2)""", 33L),
-    ("""@0!(2) | @1!(1)""", 69L),
-    ("""for(x <- @0){ Nil }""", 64L),
-    ("""for(x <- @0){ Nil } | @0!(2)""", 73L),
-    /*
+    ("""@0!(2)""", 97L),
+    ("""@0!(2) | @1!(1)""", 197L),
+    ("""for(x <- @0){ Nil }""", 128L),
+    ("""for(x <- @0){ Nil } | @0!(2)""", 329L),
     ("""new loop in {
          contract loop(@n) = {
            match n {
@@ -65,9 +64,8 @@ class CostAccountingSpec extends FlatSpec with Matchers with PropertyChecks with
            }
          } |
          loop!(10)
-       }""".stripMargin, 1936L),
-     */
-    ("""42 | @0!(2) | for (x <- @0) { Nil }""", 80L),
+       }""".stripMargin, 3892L),
+    ("""42 | @0!(2) | for (x <- @0) { Nil }""", 336L),
     ("""@1!(1) |
         for(x <- @1) { Nil } |
         new x in { x!(10) | for(X <- x) { @2!(Set(X!(7)).add(*X).contains(10)) }} |
@@ -75,11 +73,11 @@ class CostAccountingSpec extends FlatSpec with Matchers with PropertyChecks with
           38 => Nil
           42 => @3!(42)
         }
-     """.stripMargin, 624L),
+     """.stripMargin, 1264L),
     ("""new ret in {
        |  @"keccak256Hash"!("TEST".toByteArray(), *ret) |
        |  for (_ <- ret) { Nil }
-       |}""".stripMargin, 286L)
+       |}""".stripMargin, 734L)
   )
 
   "Total cost of evaluation" should "be equal to the sum of all costs in the log" in {

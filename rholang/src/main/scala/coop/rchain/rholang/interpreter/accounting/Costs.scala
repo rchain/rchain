@@ -1,8 +1,8 @@
 package coop.rchain.rholang.interpreter.accounting
 
-import cats.Monoid
 import com.google.protobuf.ByteString
 import coop.rchain.models.{PCost, Par, ProtoM, StacksafeMessage}
+import coop.rchain.rspace.Blake2b256Hash
 
 //TODO(mateusz.gorski): Adjust the costs of operations
 final case class Cost(value: Long, operation: String) {
@@ -118,6 +118,18 @@ trait Costs {
   class StorageCostOps[A <: StacksafeMessage[_]](a: A*) {
     def storageCost: Cost = Cost(a.map(a => ProtoM.serializedSize(a).value).sum, "storage cost")
   }
+
+  def commEventStorageCost(channelsInvolved: Int): Cost = {
+    val consumeCost  = eventStorageCost(channelsInvolved)
+    val produceCosts = eventStorageCost(1) * channelsInvolved
+    (consumeCost + produceCosts).copy(operation = "comm event storage cost")
+  }
+
+  def eventStorageCost(channelsInvolved: Int): Cost =
+    Cost(eventHashStorageCost + channelsInvolved * channelHashStorageCost, "event storage cost")
+
+  private val eventHashStorageCost   = Blake2b256Hash.length
+  private val channelHashStorageCost = Blake2b256Hash.length
 
   // Even though we use Long for phlo limit we can't use Long.MaxValue here.
   // This is because in tests, when  we refund deployment we add phlos to the deployment's limit
