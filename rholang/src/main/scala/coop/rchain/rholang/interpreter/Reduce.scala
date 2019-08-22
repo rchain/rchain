@@ -5,7 +5,7 @@ import java.lang
 import cats.effect.Sync
 import cats.implicits._
 import cats.mtl.FunctorTell
-import cats.{Eval => _}
+import cats.{Parallel, Eval => _}
 import com.google.protobuf.ByteString
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.hash.Blake2b512Random
@@ -57,7 +57,7 @@ class DebruijnInterpreter[M[_], F[_]](
     dispatcher: => RhoDispatch[M],
     urnMap: Map[String, Par]
 )(
-    implicit parallel: cats.Parallel[M, F],
+    implicit parallel: Parallel[M, F],
     syncM: Sync[M],
     cost: _cost[M],
     spanM: Span[M]
