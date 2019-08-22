@@ -7,6 +7,7 @@ import coop.rchain.models.TaggedContinuation.TaggedCont.ParBody
 import coop.rchain.models._
 import coop.rchain.rholang.interpreter.Runtime.{RhoISpace, RhoTuplespace}
 import coop.rchain.rholang.interpreter.accounting._
+import coop.rchain.rspace.internal.Row
 import coop.rchain.rspace.{
   Blake2b256Hash,
   Checkpoint,
@@ -128,5 +129,8 @@ object ChargingRSpace {
           .foldLeft(Cost(0))(_ + _)
 
       override def close(): F[Unit] = space.close()
+
+      override def toMap
+          : F[Map[Seq[Par], Row[BindPattern, ListParWithRandom, TaggedContinuation]]] = space.toMap
     }
 }

@@ -7,8 +7,8 @@ import coop.rchain.models.Expr.ExprInstance.{EVarBody, GString}
 import coop.rchain.models.Var.VarInstance.FreeVar
 import coop.rchain.models._
 import coop.rchain.models.rholang.implicits._
-import coop.rchain.rholang.Resources.mkRhoISpace
-import coop.rchain.rholang.interpreter.Runtime.RhoISpace
+import coop.rchain.rholang.Resources.mkChargingTuplespace
+import coop.rchain.rholang.interpreter.Runtime.{RhoISpace, RhoTuplespace}
 import coop.rchain.rholang.interpreter.accounting._
 import coop.rchain.rholang.interpreter.errors.OutOfPhlogistonsError
 import coop.rchain.rholang.interpreter.storage.{ChargingRSpace, ISpaceStub}
@@ -113,19 +113,19 @@ class CostAccountingReducerTest extends FlatSpec with Matchers with TripleEquals
     val program =
       Par(sends = Seq(Send(channel, Seq(a)), Send(channel, Seq(b))))
 
+    implicit val cost                       = CostAccounting.emptyCost[Task].runSyncUnsafe(1.second)
     implicit val rand                       = Blake2b512Random(Array.empty[Byte])
     implicit val logF: Log[Task]            = Log.log[Task]
     implicit val noopMetrics: Metrics[Task] = new metrics.Metrics.MetricsNOP[Task]
 
-    def testImplementation(pureRSpace: RhoISpace[Task]): Task[
+    def testImplementation(pureRSpace: RhoTuplespace[Task]): Task[
       (
           Either[Throwable, Unit],
           Map[Seq[Par], Row[BindPattern, ListParWithRandom, TaggedContinuation]]
       )
     ] = {
 
-      implicit val cost = CostAccounting.emptyCost[Task].runSyncUnsafe(1.second)
-      val errorRef      = Ref.of[Task, Option[Throwable]](None).runSyncUnsafe(1.second)
+      val errorRef = Ref.of[Task, Option[Throwable]](None).runSyncUnsafe(1.second)
       lazy val (_, reducer, _) =
         RholangAndScalaDispatcher
           .create[Task, Task.Par](
@@ -176,7 +176,7 @@ class CostAccountingReducerTest extends FlatSpec with Matchers with TripleEquals
       map.get(List(channel)) === Some(data(p, rand))
 
     (for {
-      res           <- mkRhoISpace[Task]("cost-accounting-reducer-test-").use(testImplementation)
+      res           <- mkChargingTuplespace[Task]("cost-accounting-reducer-test-").use(testImplementation)
       (result, map) = res
       _             = assert(result === Left(OutOfPhlogistonsError))
       _             = assert(stored(map, a, rand.splitByte(0)) || stored(map, b, rand.splitByte(1)))

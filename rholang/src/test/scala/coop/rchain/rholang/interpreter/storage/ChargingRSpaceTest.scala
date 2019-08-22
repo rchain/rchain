@@ -1,21 +1,21 @@
 package coop.rchain.rholang.interpreter.storage
 
-import cats.effect.{Resource, Sync}
+import cats.effect.Concurrent
 import com.google.protobuf.ByteString
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.metrics
-import coop.rchain.metrics.{Metrics, NoopSpan, Span}
+import coop.rchain.metrics.{Metrics, NoopSpan}
 import coop.rchain.models.Expr.ExprInstance.GInt
 import coop.rchain.models.TaggedContinuation.TaggedCont.ParBody
 import coop.rchain.models.Var.VarInstance.FreeVar
 import coop.rchain.models._
 import coop.rchain.models.rholang.implicits._
-import coop.rchain.rholang.Resources.mkRhoISpace
-import coop.rchain.rholang.interpreter.Runtime.{RhoISpace, RhoTuplespace}
-import coop.rchain.rholang.interpreter.accounting.{CostAccounting, _}
+import coop.rchain.rholang.Resources.mkChargingTuplespace
+import coop.rchain.rholang.interpreter.Runtime.RhoTuplespace
+import coop.rchain.rholang.interpreter.accounting.{_cost, Cost, CostAccounting}
 import coop.rchain.rholang.interpreter.errors.OutOfPhlogistonsError
 import coop.rchain.rholang.interpreter.storage.ChargingRSpace._
-import coop.rchain.rholang.interpreter.storage.ChargingRSpaceTest.{ChargingRSpace, _}
+import coop.rchain.rholang.interpreter.storage.ChargingRSpaceTest._
 import coop.rchain.shared.Log
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
@@ -334,16 +334,12 @@ class ChargingRSpaceTest extends fixture.FlatSpec with TripleEqualsSupport with 
   override type FixtureParam = TestFixture
 
   protected override def withFixture(test: OneArgTest): Outcome = {
-    val cost: _cost[Task] = CostAccounting.emptyCost[Task].runSyncUnsafe(1.second)
-    implicit val span     = NoopSpan[Task]
-    def mkChargingRspace(rhoISpace: RhoISpace[Task]): Task[ChargingRSpace] = {
-      val s = implicitly[Sync[Task]]
-      Task.delay(ChargingRSpace.chargingRSpace(rhoISpace)(s, span, cost))
-    }
+    implicit val cost: _cost[Task] = CostAccounting
+      .emptyCost[Task](Concurrent[Task], coop.rchain.rholang.interpreter.accounting.noOpCostLog)
+      .runSyncUnsafe(1.second)
+    implicit val span = NoopSpan[Task]
 
-    val chargingRSpaceResource =
-      mkRhoISpace[Task]("rchain-charging-rspace-test-")
-        .flatMap(rhoISpace => Resource.make(mkChargingRspace(rhoISpace))(_.close()))
+    val chargingRSpaceResource = mkChargingTuplespace[Task]("rchain-charging-rspace-test-")
 
     chargingRSpaceResource
       .use(chargingRSpace => Task.delay { test(TestFixture(chargingRSpace, cost)) })

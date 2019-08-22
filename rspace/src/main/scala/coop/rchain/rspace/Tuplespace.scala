@@ -1,5 +1,7 @@
 package coop.rchain.rspace
 
+import coop.rchain.rspace.internal.Row
+
 import scala.collection.SortedSet
 
 trait Tuplespace[F[_], C, P, A, K] {
@@ -73,5 +75,8 @@ trait Tuplespace[F[_], C, P, A, K] {
   /** Closes the ISpace freeing all underlying resources.
     */
   def close(): F[Unit]
+
+  // TODO: this should not be exposed
+  def toMap: F[Map[Seq[C], Row[P, A, K]]]
 
 }

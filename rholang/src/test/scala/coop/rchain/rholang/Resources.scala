@@ -10,7 +10,9 @@ import com.typesafe.scalalogging.Logger
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.models._
 import coop.rchain.rholang.interpreter.Runtime
-import coop.rchain.rholang.interpreter.Runtime.{RhoISpace, SystemProcess}
+import coop.rchain.rholang.interpreter.Runtime.{RhoISpace, RhoTuplespace, SystemProcess}
+import coop.rchain.rholang.interpreter.accounting._cost
+import coop.rchain.rholang.interpreter.storage.ChargingRSpace
 import coop.rchain.rspace
 import coop.rchain.rspace.RSpace
 import coop.rchain.rspace.history.Branch
@@ -59,6 +61,11 @@ object Resources {
     mkTempDir(prefix)(implicitly[Concurrent[F]])
       .flatMap(tmpDir => Resource.make(mkRspace(tmpDir))(_.close()))
   }
+
+  def mkChargingTuplespace[F[_]: Concurrent: ContextShift: par.Par: Log: Metrics: Span: _cost](
+      prefix: String = ""
+  ): Resource[F, RhoTuplespace[F]] =
+    mkRhoISpace[F](prefix).map(ChargingRSpace.chargingRSpace[F])
 
   def mkRuntime[F[_]: Log: Metrics: Span: Concurrent: par.Par: ContextShift](
       prefix: String,
