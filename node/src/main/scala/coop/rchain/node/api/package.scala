@@ -23,9 +23,8 @@ package object api {
 
   def acquireInternalServer(
       port: Int,
-      runtime: Runtime[Task],
       grpcExecutor: Scheduler,
-      replGrpcService: ReplGrpcService,
+      replGrpcService: ReplGrpcMonix.Repl,
       proposeGrpcService: ProposeServiceGrpcMonix.ProposeService
   ): Task[Server[Task]] =
     GrpcServer[Task](

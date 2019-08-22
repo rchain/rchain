@@ -36,6 +36,7 @@ import coop.rchain.node.api.{DeployGrpcService, ProposeGrpcService, ReplGrpcServ
 import coop.rchain.node.configuration.Configuration
 import coop.rchain.node.diagnostics.Trace.TraceId
 import coop.rchain.node.diagnostics._
+import coop.rchain.node.model.repl.ReplGrpcMonix
 import coop.rchain.p2p.effects._
 import coop.rchain.rholang.interpreter.Runtime
 import coop.rchain.rspace.Context
@@ -88,7 +89,7 @@ class NodeRuntime private[node] (
   )
 
   case class APIServers(
-      repl: ReplGrpcService,
+      repl: ReplGrpcMonix.Repl,
       propose: ProposeServiceGrpcMonix.ProposeService,
       deploy: DeployServiceGrpcMonix.DeployService
   )
@@ -102,7 +103,7 @@ class NodeRuntime private[node] (
       engineCell: EngineCell[Task]
   ): APIServers = {
     implicit val s: Scheduler = scheduler
-    val repl                  = new ReplGrpcService(runtime, s)
+    val repl                  = ReplGrpcService.instance(runtime, s)
     val deploy                = DeployGrpcService.instance(blockApiLock)
     val propose               = ProposeGrpcService.instance(blockApiLock)
     APIServers(repl, propose, deploy)
@@ -151,7 +152,6 @@ class NodeRuntime private[node] (
       internalApiServer <- api
                             .acquireInternalServer(
                               conf.grpcServer.portInternal,
-                              runtime,
                               grpcScheduler,
                               apiServers.repl,
                               apiServers.propose
