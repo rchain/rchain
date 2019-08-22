@@ -121,27 +121,22 @@ trait Costs {
 
   final val MATCH_EVAL_COST = Cost(12, "match eval")
 
-  implicit def toStorageCostOps[A <: StacksafeMessage[_]](a: Seq[A]) = new StorageCostOps(a: _*)
-
-  implicit def toStorageCostOps[A <: StacksafeMessage[_]](a: A) = new StorageCostOps(a)
-
-  class StorageCostOps[A <: StacksafeMessage[_]](a: A*) {
-    def storageCost: Cost = Cost(a.map(a => ProtoM.serializedSize(a).value).sum, "storage cost")
-  }
-
   def storageCostConsume(
       channels: Seq[Par],
       patterns: Seq[BindPattern],
       continuation: TaggedContinuation
   ): Cost = {
     val bodyCost = Some(continuation).collect {
-      case TaggedContinuation(ParBody(ParWithRandom(body, _))) => body.storageCost
+      case TaggedContinuation(ParBody(ParWithRandom(body, _))) => storageCost(body)
     }
-    channels.storageCost + patterns.storageCost + bodyCost.getOrElse(Cost(0))
+    storageCost(channels: _*) + storageCost(patterns: _*) + bodyCost.getOrElse(Cost(0))
   }
 
   def storageCostProduce(channel: Par, data: ListParWithRandom): Cost =
-    channel.storageCost + data.pars.storageCost
+    storageCost(channel) + storageCost(data.pars: _*)
+
+  private def storageCost[A <: StacksafeMessage[_]](as: A*): Cost =
+    Cost(as.map(a => ProtoM.serializedSize(a).value).sum, "storage cost")
 
   def commEventStorageCost(channelsInvolved: Int): Cost = {
     val consumeCost  = eventStorageCost(channelsInvolved)
