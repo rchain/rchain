@@ -11,6 +11,7 @@ import coop.rchain.metrics.Span
 import coop.rchain.models._
 import coop.rchain.models.rholang.implicits._
 import coop.rchain.rholang.interpreter.Runtime.{BlockData, InvalidBlocks, RhoTuplespace}
+import coop.rchain.rholang.interpreter.registry.Registry
 import coop.rchain.rholang.interpreter.util.RevAddress
 import coop.rchain.rspace.{ContResult, Result}
 

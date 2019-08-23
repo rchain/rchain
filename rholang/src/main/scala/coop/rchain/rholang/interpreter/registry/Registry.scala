@@ -1,4 +1,4 @@
-package coop.rchain.rholang.interpreter
+package coop.rchain.rholang.interpreter.registry
 
 import org.lightningj.util.ZBase32
 

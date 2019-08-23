@@ -9,7 +9,8 @@ import coop.rchain.crypto.{PrivateKey, PublicKey}
 import coop.rchain.models.Expr.ExprInstance.{GInt, GString}
 import coop.rchain.models.rholang.implicits._
 import coop.rchain.models.{Bundle, ETuple, GPrivate, Par}
-import coop.rchain.rholang.interpreter.{PrettyPrinter, Registry}
+import coop.rchain.rholang.interpreter.PrettyPrinter
+import coop.rchain.rholang.interpreter.registry.Registry
 
 /**
   * A signed insertion into the RChain registry.
