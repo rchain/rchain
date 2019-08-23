@@ -172,7 +172,7 @@ class NodeClient:
         server_credential = grpc.ssl_server_credentials([(self.node_pem_key, self.node_pem_cert)])
         server = grpc.server(futures.ThreadPoolExecutor())
         add_TransportLayerServicer_to_server(TransportServer(self.node_pb, self.network_id, self.return_queue), server)
-        self.tcp_port = server.add_secure_port(self.host, server_credential)
+        self.tcp_port = server.add_secure_port("{}:0".format(self.host), server_credential)
         server.start()
         return server
 

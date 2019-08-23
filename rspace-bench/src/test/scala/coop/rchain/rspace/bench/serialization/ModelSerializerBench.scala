@@ -20,7 +20,7 @@ import scala.collection.SortedSet
 @OperationsPerInvocation(value = 100)
 class ParSerializerBench {
 
-  import coop.rchain.rholang.interpreter.storage.implicits._
+  import coop.rchain.rholang.interpreter.storage._
 
   @Benchmark
   @BenchmarkMode(Array(Mode.AverageTime))
@@ -188,7 +188,7 @@ abstract class ModelSerializerBenchState {
       } yield GNAT(chans, data, wks)
     })
 
-  import coop.rchain.rholang.interpreter.storage.implicits._
+  import coop.rchain.rholang.interpreter.storage._
 
   val lightGnats = generateSeq[TestGNAT](1)(arbitraryGnat)
   val midGnats   = generateSeq[TestGNAT](5)(arbitraryGnat)
@@ -210,7 +210,7 @@ class RspaceProtobufModelBenchState extends ModelSerializerBenchState {
   import scodec.Codec
   import scodec.bits.BitVector
 
-  import coop.rchain.rholang.interpreter.storage.implicits._
+  import coop.rchain.rholang.interpreter.storage._
   implicit val cg: Codec[TestGNAT] = codecGNAT(
     serializePar.toCodec,
     serializeBindPattern.toCodec,

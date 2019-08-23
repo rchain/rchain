@@ -5,10 +5,17 @@ import cats.implicits._
 import coop.rchain.metrics.Span
 import coop.rchain.models.TaggedContinuation.TaggedCont.ParBody
 import coop.rchain.models._
-import coop.rchain.rholang.interpreter.Runtime.{RhoISpace, RhoPureSpace}
+import coop.rchain.rholang.interpreter.Runtime.{RhoISpace, RhoTuplespace}
 import coop.rchain.rholang.interpreter.accounting._
-import coop.rchain.rholang.interpreter.storage.implicits.matchListPar
-import coop.rchain.rspace.{Blake2b256Hash, Checkpoint, ContResult, Result, Match => StorageMatch}
+import coop.rchain.rspace.{
+  Blake2b256Hash,
+  Checkpoint,
+  ContResult,
+  Result,
+  SoftCheckpoint,
+  internal,
+  Match => StorageMatch
+}
 
 import scala.collection.SortedSet
 
@@ -27,11 +34,12 @@ object ChargingRSpace {
   def storageCostProduce(channel: Par, data: ListParWithRandom): Cost =
     channel.storageCost + data.pars.storageCost
 
-  def pureRSpace[F[_]: Sync: Span](space: RhoISpace[F])(implicit cost: _cost[F]): RhoPureSpace[F] =
-    new RhoPureSpace[F] {
+  def chargingRSpace[F[_]: Sync: Span](
+      space: RhoTuplespace[F]
+  )(implicit cost: _cost[F]): RhoTuplespace[F] =
+    new RhoTuplespace[F] {
 
-      implicit val m: StorageMatch[F, BindPattern, ListParWithRandom] =
-        matchListPar[F]
+      implicit override val m: StorageMatch[F, BindPattern, ListParWithRandom] = space.m
 
       override def consume(
           channels: Seq[Par],
@@ -39,20 +47,19 @@ object ChargingRSpace {
           continuation: TaggedContinuation,
           persist: Boolean,
           sequenceNumber: Int,
-          peek: Boolean
+          peeks: SortedSet[Int] = SortedSet.empty[Int]
       ): F[
         Option[(ContResult[Par, BindPattern, TaggedContinuation], Seq[Result[ListParWithRandom]])]
       ] =
         for {
-          _            <- charge[F](storageCostConsume(channels, patterns, continuation))
-          peekChannels = if (peek) SortedSet(channels.indices: _*) else SortedSet.empty[Int]
+          _ <- charge[F](storageCostConsume(channels, patterns, continuation))
           consRes <- space.consume(
                       channels,
                       patterns,
                       continuation,
                       persist,
                       sequenceNumber,
-                      peekChannels
+                      peeks
                     )
           _ <- handleResult(consRes)
         } yield consRes
@@ -120,8 +127,6 @@ object ChargingRSpace {
           }
           .foldLeft(Cost(0))(_ + _)
 
-      override def createCheckpoint(): F[Checkpoint]    = space.createCheckpoint()
-      override def reset(hash: Blake2b256Hash): F[Unit] = space.reset(hash)
-      override def close(): F[Unit]                     = space.close()
+      override def close(): F[Unit] = space.close()
     }
 }

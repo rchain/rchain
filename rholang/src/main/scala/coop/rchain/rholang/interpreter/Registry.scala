@@ -12,7 +12,7 @@ import coop.rchain.models.TaggedContinuation.TaggedCont.ScalaBodyRef
 import coop.rchain.models.Var.VarInstance.FreeVar
 import coop.rchain.models._
 import coop.rchain.models.rholang.implicits._
-import coop.rchain.rholang.interpreter.Runtime.BodyRefs
+import coop.rchain.rholang.interpreter.Runtime.{BodyRefs, RhoDispatch, RhoTuplespace}
 import coop.rchain.rspace.util._
 import coop.rchain.shared.Matcher.WithPrefix
 import org.lightningj.util.ZBase32
@@ -64,10 +64,7 @@ trait Registry[F[_]] {
   def registerInsertCallback(args: RootSeq[ListParWithRandom], sequenceNumber: Int): F[Unit]
 }
 
-class RegistryImpl[F[_]](
-    private val space: Runtime.RhoPureSpace[F],
-    private val dispatcher: Runtime.RhoDispatch[F]
-)(implicit F: Sync[F])
+class RegistryImpl[F[_]](space: RhoTuplespace[F], dispatcher: RhoDispatch[F])(implicit F: Sync[F])
     extends Registry[F] {
 
   import Registry._

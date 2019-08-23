@@ -119,8 +119,8 @@ abstract class RSpaceOps[F[_]: Concurrent: Metrics, C, P, A, K](
   protected[this] def restoreInstalls(): F[Unit] = spanF.trace(restoreInstallsSpanLabel) {
     installs.get.toList
       .traverse {
-        case (channels, Install(patterns, continuation, _match)) =>
-          install(channels, patterns, continuation)(_match)
+        case (channels, Install(patterns, continuation)) =>
+          install(channels, patterns, continuation)
       }
       .as(())
   }
@@ -131,7 +131,7 @@ abstract class RSpaceOps[F[_]: Concurrent: Metrics, C, P, A, K](
       channels: Seq[C],
       patterns: Seq[P],
       continuation: K
-  )(implicit m: Match[F, P, A]): F[Option[(K, Seq[A])]] =
+  ): F[Option[(K, Seq[A])]] =
     if (channels.length =!= patterns.length) {
       val msg = "channels.length must equal patterns.length"
       logger.error(msg)
@@ -163,7 +163,7 @@ abstract class RSpaceOps[F[_]: Concurrent: Metrics, C, P, A, K](
                      for {
                        _ <- syncF.delay {
                              installs.update(
-                               _.updated(channels, Install(patterns, continuation, m))
+                               _.updated(channels, Install(patterns, continuation))
                              )
                            }
                        _ <- store.installContinuation(
@@ -190,8 +190,10 @@ abstract class RSpaceOps[F[_]: Concurrent: Metrics, C, P, A, K](
       } yield result
     }
 
-  override def install(channels: Seq[C], patterns: Seq[P], continuation: K)(
-      implicit m: Match[F, P, A]
+  override def install(
+      channels: Seq[C],
+      patterns: Seq[P],
+      continuation: K
   ): F[Option[(K, Seq[A])]] = spanF.trace(installSpanLabel) {
     installLockF(channels) {
       lockedInstall(channels, patterns, continuation)

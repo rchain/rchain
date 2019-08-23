@@ -30,6 +30,7 @@ class ReplayRSpace[F[_]: Sync, C, P, A, K](
     serializeP: Serialize[P],
     serializeA: Serialize[A],
     serializeK: Serialize[K],
+    val m: Match[F, P, A],
     val concurrent: Concurrent[F],
     protected val logF: Log[F],
     contextShift: ContextShift[F],
@@ -56,8 +57,6 @@ class ReplayRSpace[F[_]: Sync, C, P, A, K](
       persist: Boolean,
       sequenceNumber: Int,
       peeks: SortedSet[Int] = SortedSet.empty
-  )(
-      implicit m: Match[F, P, A]
   ): F[MaybeActionResult] =
     contextShift.evalOn(scheduler) {
       if (channels.length =!= patterns.length) {
@@ -87,8 +86,6 @@ class ReplayRSpace[F[_]: Sync, C, P, A, K](
       persist: Boolean,
       sequenceNumber: Int,
       peeks: SortedSet[Int]
-  )(
-      implicit m: Match[F, P, A]
   ): F[MaybeActionResult] = {
     def runMatcher(comm: COMM): F[Option[Seq[DataCandidate[C, A]]]] =
       for {
@@ -212,9 +209,7 @@ class ReplayRSpace[F[_]: Sync, C, P, A, K](
           }
     } yield r
   }
-  def produce(channel: C, data: A, persist: Boolean, sequenceNumber: Int)(
-      implicit m: Match[F, P, A]
-  ): F[MaybeActionResult] =
+  def produce(channel: C, data: A, persist: Boolean, sequenceNumber: Int): F[MaybeActionResult] =
     contextShift.evalOn(scheduler) {
       for {
         _ <- spanF.mark("before-produce-lock")
@@ -230,8 +225,6 @@ class ReplayRSpace[F[_]: Sync, C, P, A, K](
       data: A,
       persist: Boolean,
       sequenceNumber: Int
-  )(
-      implicit m: Match[F, P, A]
   ): F[MaybeActionResult] = {
 
     type MaybeProduceCandidate = Option[ProduceCandidate[C, P, A, K]]
@@ -458,6 +451,7 @@ object ReplayRSpace {
       sp: Serialize[P],
       sa: Serialize[A],
       sk: Serialize[K],
+      m: Match[F, P, A],
       concurrent: Concurrent[F],
       logF: Log[F],
       contextShift: ContextShift[F],
@@ -482,6 +476,7 @@ object ReplayRSpace {
       sp: Serialize[P],
       sa: Serialize[A],
       sk: Serialize[K],
+      m: Match[F, P, A],
       concurrent: Concurrent[F],
       logF: Log[F],
       contextShift: ContextShift[F],

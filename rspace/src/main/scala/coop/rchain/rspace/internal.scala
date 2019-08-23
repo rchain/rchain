@@ -150,15 +150,11 @@ object internal {
       }
   }
 
-  final case class Install[F[_], P, A, K](
-      patterns: Seq[P],
-      continuation: K,
-      _match: Match[F, P, A]
-  )
+  final case class Install[F[_], P, A, K](patterns: Seq[P], continuation: K)
 
   type Installs[F[_], C, P, A, K] = Map[Seq[C], Install[F, P, A, K]]
 
-  import scodec.{Attempt, Err}
+  import scodec.Attempt
 
   @SuppressWarnings(Array("org.wartremover.warts.Throw"))
   implicit class RichAttempt[T](a: Attempt[T]) {

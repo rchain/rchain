@@ -11,10 +11,10 @@ import coop.rchain.models._
 import coop.rchain.models.TaggedContinuation.TaggedCont.ScalaBodyRef
 import coop.rchain.models.Var.VarInstance.FreeVar
 import coop.rchain.models.rholang.implicits._
-import coop.rchain.rholang.interpreter.Runtime.{BodyRefs, RhoDispatchMap}
+import coop.rchain.rholang.interpreter.Runtime.{BodyRefs, RhoDispatchMap, RhoTuplespace}
 import coop.rchain.rholang.interpreter.accounting._
 import coop.rchain.rholang.interpreter.errors.InterpreterError
-import coop.rchain.rholang.interpreter.storage.implicits._
+import coop.rchain.rholang.interpreter.storage._
 import coop.rchain.rspace.{ISpace, Match}
 import coop.rchain.rspace.internal.{Datum, Row}
 import monix.eval.{Coeval, Task}
@@ -48,7 +48,7 @@ trait RegistryTester extends PersistentStoreTester {
 
   def withRegistryAndTestSpace[R](
       f: (
-          ChargingReducer[Task],
+          Reduce[Task],
           ISpace[
             Task,
             Par,
@@ -72,7 +72,7 @@ trait RegistryTester extends PersistentStoreTester {
               dispatchTable,
               Registry.testingUrnMap
             )
-        reducer.setPhlo(Cost.UNSAFE_MAX).runSyncUnsafe(1.second)
+        cost.set(Cost.UNSAFE_MAX).runSyncUnsafe(1.second)
         testInstall(space).runSyncUnsafe(1.second)
         f(reducer, space)
     }
@@ -156,10 +156,7 @@ trait RegistryTester extends PersistentStoreTester {
     GPrivate(ByteString.copyFrom(Array[Byte](19)))
   )
 
-  def testInstall(space: Runtime.RhoISpace[Task]): Task[Unit] = {
-    implicit val m: Match[Task, BindPattern, ListParWithRandom] =
-      matchListPar[Task]
-
+  def testInstall(space: RhoTuplespace[Task]): Task[Unit] =
     for {
       _ <- space.install(
             lookupChannels,
@@ -192,7 +189,6 @@ trait RegistryTester extends PersistentStoreTester {
             TaggedContinuation(ScalaBodyRef(BodyRefs.REG_PUBLIC_REGISTER_SIGNED))
           )
     } yield ()
-  }
 
 }
 

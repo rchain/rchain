@@ -22,11 +22,11 @@ import coop.rchain.rholang.interpreter.Runtime.BlockData
 import coop.rchain.rholang.interpreter.accounting._
 import coop.rchain.rholang.interpreter.errors.BugFoundError
 import coop.rchain.rholang.interpreter.{
-  ChargingReducer,
   ErrorLog,
   EvaluateResult,
   Interpreter,
   NormalizerEnv,
+  Reduce,
   RhoType,
   Runtime
 }
@@ -95,7 +95,7 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span] private[rholang] (
         ) >> getData(runtime)(name)
     }
 
-  private def computeEffect(runtime: Runtime[F], reducer: ChargingReducer[F])(
+  private def computeEffect(runtime: Runtime[F], reducer: Reduce[F])(
       deploy: DeployData
   ): F[EvaluateResult] =
     for {
@@ -349,7 +349,7 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span] private[rholang] (
 
   private[this] def doInj(
       deploy: DeployData,
-      reducer: ChargingReducer[F],
+      reducer: Reduce[F],
       errorLog: ErrorLog[F]
   )(implicit C: _cost[F]): F[EvaluateResult] = {
     implicit val rand: Blake2b512Random = Blake2b512Random(

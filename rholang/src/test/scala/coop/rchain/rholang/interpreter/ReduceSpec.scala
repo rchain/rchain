@@ -14,7 +14,7 @@ import coop.rchain.models._
 import coop.rchain.models.rholang.implicits._
 import coop.rchain.rholang.interpreter.accounting._
 import coop.rchain.rholang.interpreter.errors._
-import coop.rchain.rholang.interpreter.storage.implicits._
+import coop.rchain.rholang.interpreter.storage._
 import coop.rchain.rspace._
 import coop.rchain.rspace.internal.{Datum, Row, WaitingContinuation}
 import monix.eval.Task
@@ -751,11 +751,10 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
     )
     val sendFirstResult = withTestSpace(errorLog) {
       case TestFixture(space, reducer) =>
-        implicit val env = Env[Par]()
         val inspectTaskSendFirst = for {
-          _   <- reducer.eval(send1)(env, splitRand0)
-          _   <- reducer.eval(send2)(env, splitRand1)
-          _   <- reducer.eval(receive)(env, splitRand2)
+          _   <- reducer.inj(send1)(splitRand0)
+          _   <- reducer.inj(send2)(splitRand1)
+          _   <- reducer.inj(receive)(splitRand2)
           res <- space.toMap
         } yield res
         Await.result(inspectTaskSendFirst.runToFuture, 3.seconds)
@@ -941,7 +940,7 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
         val reducer = RholangOnlyDispatcher
           .create[Task, Task.Par](space, Map("rho:test:foo" -> byteName(42)))
           ._2
-        reducer.setPhlo(Cost.UNSAFE_MAX).runSyncUnsafe(1.second)
+        cost.set(Cost.UNSAFE_MAX).runSyncUnsafe(1.second)
         implicit val env = Env[Par]()
         val nthTask      = reducer.eval(newProc)(env, splitRand)
         val inspectTask = for {

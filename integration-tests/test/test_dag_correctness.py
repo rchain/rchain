@@ -29,7 +29,7 @@ BONDED_VALIDATOR_KEY_4 = PrivateKey.from_hex("2a6018851984203e0983f0671e94fcf649
 
 def test_fault_tolerance(command_line_options: CommandLineOptions, random_generator: Random, docker_client: DockerClient)-> None:
     """
-    Below test would generate a dag like below. Every validator has the most latest block of other validators.
+    Below test would generate a dag like below. Every validator has the latest block of other validators.
     ^
     |
     |                               b7=-1.0

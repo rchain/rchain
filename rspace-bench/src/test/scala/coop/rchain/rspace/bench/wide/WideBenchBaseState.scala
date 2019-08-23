@@ -1,7 +1,7 @@
 package coop.rchain.rspace.bench.wide
 
 import coop.rchain.rspace.bench._
-import coop.rchain.rholang.interpreter.{ChargingReducer, ParBuilderUtil, Runtime}
+import coop.rchain.rholang.interpreter.{ParBuilderUtil, Runtime}
 import java.io.{FileNotFoundException, InputStreamReader}
 import java.nio.file.{Files, Path}
 import java.util.concurrent.TimeUnit
@@ -66,8 +66,7 @@ abstract class WideBenchBaseState {
       case Left(err)  => throw err
     }
     runtime = createRuntime()
-    runtime.reducer.setPhlo(Cost.UNSAFE_MAX).runSyncUnsafe(1.second)
-    runtime.replayReducer.setPhlo(Cost.UNSAFE_MAX).runSyncUnsafe(1.second)
+    runtime.cost.set(Cost.UNSAFE_MAX).runSyncUnsafe(1.second)
 
     (for {
       emptyCheckpoint <- runtime.space.createCheckpoint()
