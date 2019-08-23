@@ -396,7 +396,7 @@ class RSpace[F[_], C, P, A, K] private[rspace] (
                        extracted <- extractProduceCandidate(
                                      groupedChannels,
                                      channel,
-                                     Datum(data, persist, produceRef, sequenceNumber)
+                                     Datum(data, persist, produceRef, produceRef.sequenceNumber)
                                    )
                        _ <- spanF.mark("extract-produce-candidate")
                        r <- extracted match {

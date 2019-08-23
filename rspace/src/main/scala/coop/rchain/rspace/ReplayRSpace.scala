@@ -99,9 +99,12 @@ class ReplayRSpace[F[_]: Sync, C, P, A, K](
                                      store
                                        .getData(c)
                                        .map(_.zipWithIndex.filter {
-                                         case (Datum(_data, _persist, _, _), _) =>
+                                         case (Datum(_data, _persist, _source, seqNum), _) =>
+                                           val csource =
+                                             Produce.create(c, _data, _persist, seqNum)
+                                           if (_source != csource) println("wait what2?")
                                            comm.produces.contains(
-                                             Produce.create(c, _data, _persist, sequenceNumber)
+                                             _source
                                            )
                                        })
                                        .map(v => c -> v)
@@ -263,15 +266,29 @@ class ReplayRSpace[F[_]: Sync, C, P, A, K](
                                            (for {
                                              data <- store.getData(c)
                                            } yield (data.zipWithIndex.filter {
-                                             case (Datum(_data, _persist, _, seqNum), _) =>
-                                               comm.produces.contains(
+                                             case (Datum(_data, _persist, source, seqNum), _) =>
+                                               val csource =
                                                  Produce.create(c, _data, _persist, seqNum)
+                                               if (source != csource) println("wait what?")
+                                               comm.produces.contains(
+                                                 source
+//                                                   csource
                                                )
                                            })).map(
                                              as =>
                                                c -> {
                                                  if (c == channel)
-                                                   Seq((Datum(data, persist, produceRef), -1))
+                                                   Seq(
+                                                     (
+                                                       Datum(
+                                                         data,
+                                                         persist,
+                                                         produceRef,
+                                                         produceRef.sequenceNumber
+                                                       ),
+                                                       -1
+                                                     )
+                                                   )
                                                  else as
                                                }
                                            )
@@ -320,7 +337,7 @@ class ReplayRSpace[F[_]: Sync, C, P, A, K](
         maybeCommRef: Option[COMM]
     ): F[MaybeActionResult] =
       for {
-        _ <- store.putDatum(channel, Datum(data, persist, produceRef))
+        _ <- store.putDatum(channel, Datum(data, persist, produceRef, produceRef.sequenceNumber))
         _ <- logF.debug(s"""|produce: no matching continuation found
                             |storing <data: $data> at <channel: $channel>""".stripMargin)
       } yield None

@@ -12,7 +12,7 @@ import scala.collection.SortedSet
 @SuppressWarnings(Array("org.wartremover.warts.NonUnitStatements"))
 object internal {
 
-  final case class Datum[A](a: A, persist: Boolean, source: Produce, sequenceNumber: Int = 0)
+  final case class Datum[A](a: A, persist: Boolean, source: Produce, sequenceNumber: Int)
 
   object Datum {
     def create[C, A](channel: C, a: A, persist: Boolean, sequenceNumber: Int = 0)(
