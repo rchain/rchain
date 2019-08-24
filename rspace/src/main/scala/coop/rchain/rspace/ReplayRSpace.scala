@@ -266,14 +266,8 @@ class ReplayRSpace[F[_]: Sync, C, P, A, K](
                                            (for {
                                              data <- store.getData(c)
                                            } yield (data.zipWithIndex.filter {
-                                             case (Datum(_data, _persist, source, seqNum), _) =>
-                                               val csource =
-                                                 Produce.create(c, _data, _persist, seqNum)
-                                               if (source != csource) println("wait what?")
-                                               comm.produces.contains(
-                                                 source
-//                                                   csource
-                                               )
+                                             case (Datum(_, _, source, _), _) =>
+                                               comm.produces.contains(source)
                                            })).map(
                                              as =>
                                                c -> {
