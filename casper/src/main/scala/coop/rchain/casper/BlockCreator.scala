@@ -84,7 +84,7 @@ object BlockCreator {
         now              <- Time[F].currentMillis
         invalidBlocksSet <- dag.invalidBlocks
         invalidBlocks    = invalidBlocksSet.map(block => (block.blockHash, block.sender)).toMap
-        unsignedBlock <- if (deploys.nonEmpty || parents.length > 1) {
+        unsignedBlock <- if (deploys.nonEmpty) {
                           processDeploysAndCreateBlock[F](
                             dag,
                             runtimeManager,
