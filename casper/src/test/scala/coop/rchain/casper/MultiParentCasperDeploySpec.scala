@@ -27,7 +27,7 @@ class MultiParentCasperDeploySpec extends FlatSpec with Matchers with Inspectors
         deploy   <- ConstructDeploy.basicDeployData[Effect](0)
         res      <- MultiParentCasper[Effect].deploy(deploy)
         deployId = res.right.get
-        _        = deployId shouldBe ConstructDeploy.sign(deploy).sig.toByteArray
+        _        = deployId shouldBe ConstructDeploy.sign(deploy).sig
         _        = logEff.infos.size should be(1)
         result   = logEff.infos.head.contains("Received Deploy") should be(true)
       } yield result

@@ -6,6 +6,7 @@ import cats.implicits._
 import coop.rchain.blockstorage.BlockDagRepresentation
 import coop.rchain.casper.MultiParentCasper.ignoreDoppelgangerCheck
 import coop.rchain.casper.engine._, EngineCell._
+import coop.rchain.blockstorage.BlockDagStorage.DeployId
 import coop.rchain.casper._
 import coop.rchain.casper.api.BlockAPI.ApiErr
 import coop.rchain.casper.helper.HashSetCasperTestNode
