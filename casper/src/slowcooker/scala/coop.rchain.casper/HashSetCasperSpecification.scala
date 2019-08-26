@@ -3,6 +3,7 @@ package coop.rchain.casper
 import cats.data.EitherT
 import cats.effect.{Resource, Sync}
 import cats.implicits._
+import coop.rchain.blockstorage.BlockDagStorage.DeployId
 import coop.rchain.casper.MultiParentCasper.ignoreDoppelgangerCheck
 import coop.rchain.casper.genesis.Genesis
 import coop.rchain.casper.genesis.contracts._

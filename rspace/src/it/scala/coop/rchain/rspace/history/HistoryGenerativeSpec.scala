@@ -2,16 +2,11 @@ package coop.rchain.rspace.history
 import coop.rchain.rspace.Blake2b256Hash
 import org.scalatest.{FlatSpec, Matchers, OptionValues}
 
-import scala.collection.concurrent.TrieMap
 import History._
 import org.scalacheck.{Arbitrary, Gen, Shrink}
 import coop.rchain.shared.GeneratorUtils.distinctListOf
 import monix.eval.Task
-import monix.execution.Scheduler
 import org.scalatest.prop._
-
-import scala.concurrent.duration._
-import monix.execution.Scheduler.Implicits.global
 
 class HistoryGenerativeSpec
     extends FlatSpec
@@ -140,25 +135,4 @@ class HistoryGenerativeSpec
 
   def fetchData(h: History[Task], k: Key): (TriePointer, Vector[Trie]) =
     runEffect(h.find(k))
-}
-
-trait InMemoryHistoryTestBase {
-
-  def runEffect[A](task: Task[A]): A = task.runSyncUnsafe(20.seconds)
-
-  def inMemHistoryStore: HistoryStore[Task] = new HistoryStore[Task] {
-    val data: TrieMap[Blake2b256Hash, Trie] = TrieMap.empty
-
-    override def put(tries: List[Trie]): Task[Unit] = Task.delay {
-      tries.foreach { t =>
-        val key = Trie.hash(t)
-        data.put(key, t)
-      }
-    }
-
-    override def get(key: Blake2b256Hash): Task[Trie] =
-      Task.delay { data.getOrElse(key, EmptyTrie) }
-
-    override def close(): Task[Unit] = Task.now(())
-  }
 }

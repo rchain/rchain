@@ -142,6 +142,12 @@ class BlockDagFileStorageTest extends BlockDagStorageTest {
   private def defaultInvalidBlocksCrc(dagDataDir: Path): Path =
     dagDataDir.resolve("invalid-blocks-checksum")
 
+  private def defaultBlockHasesByDeploy(dagDataDir: Path): Path =
+    dagDataDir.resolve("block-hashes-by-deploy")
+
+  private def defaultBlockHasesByDeployCrc(dagDataDir: Path): Path =
+    dagDataDir.resolve("block-hashes-by-deploy-checksum")
+
   private def defaultCheckpointsDir(dagDataDir: Path): Path =
     dagDataDir.resolve("checkpoints")
 
@@ -164,6 +170,8 @@ class BlockDagFileStorageTest extends BlockDagStorageTest {
         defaultEquivocationsTrackerCrc(dagDataDir),
         defaultInvalidBlocksLog(dagDataDir),
         defaultInvalidBlocksCrc(dagDataDir),
+        defaultBlockHasesByDeploy(dagDataDir),
+        defaultBlockHasesByDeployCrc(dagDataDir),
         defaultCheckpointsDir(dagDataDir),
         defaultBlockNumberIndex(dagDataDir),
         100L * 1024L * 1024L * 4096L,
@@ -479,6 +487,25 @@ class BlockDagFileStorageTest extends BlockDagStorageTest {
           invalidBlocks <- dag.invalidBlocks
           _             <- secondStorage.close()
         } yield invalidBlocks shouldBe blockElements.map(BlockMetadata.fromBlock(_, true)).toSet
+      }
+    }
+  }
+
+  it should "be able to restore deploy index on startup" in {
+    forAll(blockElementsWithParentsGen, minSize(0), sizeRange(10)) { blockElements =>
+      withDagStorageLocation { dagDataDir =>
+        for {
+          firstStorage  <- createAtDefaultLocation(dagDataDir)
+          _             <- blockElements.traverse_(firstStorage.insert(_, genesis, true))
+          _             <- firstStorage.close()
+          secondStorage <- createAtDefaultLocation(dagDataDir)
+          dag           <- secondStorage.getRepresentation
+          (deploys, blockHashes) = blockElements
+            .flatMap(b => b.body.get.deploys.map(_ -> b.blockHash))
+            .unzip
+          deployLookups <- deploys.traverse(d => dag.lookupByDeployId(d.deploy.get.sig))
+          _             <- secondStorage.close()
+        } yield deployLookups shouldBe blockHashes.map(_.some)
       }
     }
   }

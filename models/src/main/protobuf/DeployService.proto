@@ -49,9 +49,6 @@ service DeployService {
   // Find processes receiving on a name.
   // Returns on success ListeningNameContinuationResponse
   rpc listenForContinuationAtName(ContinuationAtNameQuery) returns (Either) {}
-  // Find block from a deploy.
-  // Returns on success BlockQueryResponse
-  rpc findBlockWithDeploy(FindDeployInBlockQuery) returns (Either) {}
   // Find block containing a deploy.
   // Returns on success LightBlockQueryResponse
   rpc findDeploy(FindDeployQuery) returns (Either) {}
@@ -65,11 +62,6 @@ service DeployService {
 
 message FindDeployQuery {
   bytes deployId = 1;
-}
-
-message FindDeployInBlockQuery {
-  bytes user = 1;
-  int64 timestamp = 2;
 }
 
 message BlockQuery {

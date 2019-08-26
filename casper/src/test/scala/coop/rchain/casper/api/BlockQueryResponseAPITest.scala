@@ -36,7 +36,7 @@ class BlockQueryResponseAPITest
   private val runtimeManagerResource: Resource[Task, RuntimeManager[Task]] =
     mkRuntimeManager("block-query-response-api-test")
 
-  private val (sk, pk) = ConstructDeploy.defaultKeyPair
+  private val (sk, _)  = ConstructDeploy.defaultKeyPair
   val secondBlockQuery = "1234"
   val badTestHashQuery = "No such a hash"
 
@@ -151,61 +151,6 @@ class BlockQueryResponseAPITest
       } yield ()
   }
 
-  "findBlockWithDeploy" should "return successful block info response" in withStorage {
-    implicit blockStore => implicit blockDagStorage =>
-      for {
-        effects                                 <- effectsForSimpleCasperSetup(blockStore, blockDagStorage)
-        (logEff, casperRef, cliqueOracleEffect) = effects
-        user                                    = ByteString.copyFrom(pk.bytes)
-        timestamp                               = 1L
-        blockQueryResponse <- BlockAPI.findBlockWithDeploy[Task](user, timestamp)(
-                               Sync[Task],
-                               casperRef,
-                               logEff,
-                               cliqueOracleEffect,
-                               blockStore
-                             )
-        _ = inside(blockQueryResponse) {
-          case Right(BlockQueryResponse(Some(blockInfo))) =>
-            blockInfo.blockHash should be(secondHashString)
-            blockInfo.blockSize should be(secondBlock.serializedSize.toString)
-            blockInfo.blockNumber should be(blockNumber)
-            blockInfo.version should be(version)
-            blockInfo.deployCount should be(deployCount)
-            blockInfo.faultTolerance should be(faultTolerance)
-            blockInfo.mainParentHash should be(genesisHashString)
-            blockInfo.parentsHashList should be(parentsString)
-            blockInfo.sender should be(senderString)
-            blockInfo.shardId should be(shardId)
-            blockInfo.bondsValidatorList should be(bondValidatorHashList)
-            blockInfo.deployCost should be(deployCostList)
-        }
-      } yield ()
-  }
-
-  it should "return error when no block matching query exists" in withStorage {
-    implicit blockStore => implicit blockDagStorage =>
-      for {
-        effects                                 <- emptyEffects(blockStore, blockDagStorage)
-        (logEff, casperRef, cliqueOracleEffect) = effects
-        user                                    = ByteString.EMPTY
-        timestamp                               = 0L
-        blockQueryResponse <- BlockAPI.findBlockWithDeploy[Task](user, timestamp)(
-                               Sync[Task],
-                               casperRef,
-                               logEff,
-                               cliqueOracleEffect,
-                               blockStore
-                             )
-        _ = inside(blockQueryResponse) {
-          case Left(msg) =>
-            msg should be(
-              s"Error: Failure to find block containing deploy signed by  with timestamp $timestamp"
-            )
-        }
-      } yield ()
-  }
-
   "findDeploy" should "return successful block info response when a block contains the deploy with given signature" in withStorage {
     implicit blockStore => implicit blockDagStorage =>
       for {
@@ -214,7 +159,6 @@ class BlockQueryResponseAPITest
         deployId = SignDeployment
           .sign(PrivateKey(sk.bytes), randomDeploys.head.deploy.get)
           .sig
-          .toByteArray
         blockQueryResponse <- BlockAPI.findDeploy[Task](deployId)(
                                Sync[Task],
                                casperRef,
@@ -242,7 +186,7 @@ class BlockQueryResponseAPITest
       for {
         effects                                 <- emptyEffects(blockStore, blockDagStorage)
         (logEff, casperRef, cliqueOracleEffect) = effects
-        deployId                                = "asdfQwertyUiopxyzcbv".getBytes
+        deployId                                = ByteString.copyFromUtf8("asdfQwertyUiopxyzcbv")
         blockQueryResponse <- BlockAPI.findDeploy[Task](deployId)(
                                Sync[Task],
                                casperRef,

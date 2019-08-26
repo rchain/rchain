@@ -7,6 +7,7 @@ import cats.implicits._
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.{BlockDagRepresentation, BlockStore}
 import coop.rchain.casper.engine._, EngineCell._
+import coop.rchain.blockstorage.BlockDagStorage.DeployId
 import coop.rchain.casper.DeployError._
 import coop.rchain.casper.MultiParentCasper.ignoreDoppelgangerCheck
 import coop.rchain.casper._
@@ -357,12 +358,10 @@ object BlockAPI {
       _.withCasper[ApiErr[LightBlockQueryResponse]](
         implicit casper =>
           for {
-            dag               <- casper.blockDag
-            allBlocksTopoSort <- dag.topoSort(0L)
-            maybeBlock <- allBlocksTopoSort.flatten.reverse.toStream
-                           .traverse(ProtoUtil.getBlock[F])
-                           .map(_.find(ProtoUtil.containsDeploy(_, ByteString.copyFrom(id))))
-            response <- maybeBlock.traverse(getLightBlockInfo[F])
+            dag            <- casper.blockDag
+            maybeBlockHash <- dag.lookupByDeployId(id)
+            maybeBlock     <- maybeBlockHash.traverse(ProtoUtil.getBlock[F])
+            response       <- maybeBlock.traverse(getLightBlockInfo[F])
           } yield response.fold(
             s"Couldn't find block containing deploy with id: ${PrettyPrinter
               .buildStringNoLimit(id)}".asLeft[LightBlockQueryResponse]
@@ -377,50 +376,6 @@ object BlockAPI {
           .as(s"Error: errorMessage".asLeft)
       )
     )
-
-  // TODO: Replace with call to BlockStore
-  def findBlockWithDeploy[F[_]: Sync: EngineCell: Log: SafetyOracle: BlockStore](
-      user: ByteString,
-      timestamp: Long
-  ): Effect[F, BlockQueryResponse] = {
-
-    val errorMessage =
-      "Could not find block with deploy, casper instance was not available yet."
-
-    def casperResponse(
-        implicit casper: MultiParentCasper[F]
-    ): Effect[F, BlockQueryResponse] =
-      for {
-        dag                <- MultiParentCasper[F].blockDag
-        allBlocksTopoSort  <- dag.topoSort(0L)
-        maybeBlock         <- findBlockWithDeploy[F](allBlocksTopoSort.flatten.reverse, user, timestamp)
-        blockQueryResponse <- maybeBlock.traverse(getFullBlockInfo[F])
-      } yield blockQueryResponse.fold(
-        s"Error: Failure to find block containing deploy signed by ${PrettyPrinter
-          .buildString(user)} with timestamp ${timestamp.toString}".asLeft[BlockQueryResponse]
-      )(
-        blockInfo =>
-          BlockQueryResponse(
-            blockInfo = Some(blockInfo)
-          ).asRight
-      )
-
-    EngineCell[F].read >>= (_.withCasper[ApiErr[BlockQueryResponse]](
-      casperResponse(_),
-      Log[F]
-        .warn(errorMessage)
-        .as(s"Error: errorMessage".asLeft)
-    ))
-  }
-
-  private def findBlockWithDeploy[F[_]: Sync: Log: BlockStore](
-      blockHashes: Vector[BlockHash],
-      user: ByteString,
-      timestamp: Long
-  ): F[Option[BlockMessage]] =
-    blockHashes.toStream
-      .traverse(ProtoUtil.getBlock[F])
-      .map(blocks => blocks.find(ProtoUtil.containsDeploy(_, user, timestamp)))
 
   def getBlock[F[_]: Monad: EngineCell: Log: SafetyOracle: BlockStore: Span](
       q: BlockQuery

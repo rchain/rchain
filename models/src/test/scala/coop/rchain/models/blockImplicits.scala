@@ -2,9 +2,12 @@ package coop.rchain.models
 
 import com.google.protobuf.ByteString
 import coop.rchain.casper.protocol._
+import coop.rchain.crypto.{PrivateKey, PublicKey}
+import coop.rchain.crypto.codec.Base16
+import coop.rchain.crypto.hash.Blake2b256
+import coop.rchain.crypto.signatures.Secp256k1
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.Validator.Validator
-import coop.rchain.shared.GeneratorUtils._
 import org.scalacheck.Arbitrary.arbitrary
 import org.scalacheck.{Arbitrary, Gen}
 import org.scalacheck.Gen.listOfN
@@ -35,6 +38,29 @@ object blockImplicits {
 
   implicit val arbitraryJustification: Arbitrary[Justification] = Arbitrary(justificationGen)
 
+  val processedDeployGen: Gen[ProcessedDeploy] =
+    for {
+      term        <- listOfN(32, Gen.alphaNumChar).map(_.mkString)
+      timestamp   <- arbitrary[Long]
+      (sec, pub)  = Secp256k1.newKeyPair
+      bytesLength <- Gen.chooseNum(128, 256)
+      randomBytes <- listOfN(bytesLength, arbitrary[Byte]).map(_.toArray)
+      hash        = Blake2b256.hash(randomBytes)
+      deployData = DeployData(
+        deployer = ByteString.copyFrom(pub.bytes),
+        timestamp = timestamp,
+        term = term,
+        phloLimit = 90000,
+        phloPrice = 1L,
+        sig = ByteString.copyFrom(Secp256k1.sign(hash, sec)),
+        sigAlgorithm = Secp256k1.name
+      )
+    } yield ProcessedDeploy(
+      deploy = Some(deployData)
+    )
+
+  implicit val arbitraryProcessedDeploy: Arbitrary[ProcessedDeploy] = Arbitrary(processedDeployGen)
+
   val blockElementGen: Gen[BlockMessage] =
     for {
       hash            <- arbitrary[BlockHash](arbitraryHash)
@@ -42,8 +68,12 @@ object blockImplicits {
       version         <- arbitrary[Long]
       timestamp       <- arbitrary[Long]
       parentsHashList <- arbitrary[Seq[Validator]](arbitraryValidators)
-      justifications  <- arbitrary[Seq[Justification]]
+      deploys         <- arbitrary[Seq[ProcessedDeploy]]
     } yield BlockMessage(blockHash = hash)
+      .withBody(
+        Body()
+          .withDeploys(deploys)
+      )
       .withHeader(
         Header()
           .withParentsHashList(parentsHashList)

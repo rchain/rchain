@@ -110,11 +110,8 @@ private[api] object DeployGrpcService {
           .fromTask(deferList(BlockAPI.showMainChain[F](request.depth)))
           .flatMap(Observable.fromIterable)
 
-      override def findBlockWithDeploy(request: FindDeployInBlockQuery): Task[GrpcEither] =
-        defer(BlockAPI.findBlockWithDeploy[F](request.user, request.timestamp))
-
       override def findDeploy(request: FindDeployQuery): Task[GrpcEither] =
-        defer(BlockAPI.findDeploy[F](request.deployId.toByteArray))
+        defer(BlockAPI.findDeploy[F](request.deployId))
 
       override def previewPrivateNames(
           request: PrivateNamePreviewQuery
