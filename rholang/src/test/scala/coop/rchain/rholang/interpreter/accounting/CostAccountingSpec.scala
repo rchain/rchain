@@ -176,7 +176,8 @@ class CostAccountingSpec extends FlatSpec with Matchers with PropertyChecks with
   private def elementCounts[A](list: Iterable[A]): Set[(A, Int)] =
     list.groupBy(identity).mapValues(_.size).toSet
 
-  it should "stop the evaluation of all execution branches when one of them runs out of phlo with a more sophisiticated contract" in {
+  // FIXME make this pass consistently - https://rchain.atlassian.net/browse/RCHAIN-3790
+  it should "stop the evaluation of all execution branches when one of them runs out of phlo with a more sophisiticated contract" ignore {
     forAll(contracts) { (contract: String, expectedTotalCost: Long) =>
       check(forAllNoShrink(Gen.choose(1L, expectedTotalCost - 1)) { initialPhlo =>
         val (EvaluateResult(_, errors), costLog) =
