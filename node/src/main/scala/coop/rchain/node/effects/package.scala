@@ -36,11 +36,11 @@ package object effects {
       kademliaRPC: KademliaRPC[F]
   ): NodeDiscovery[F] = NodeDiscovery.kademlia(id)
 
-  def time(implicit timer: Timer[Task]): Time[Task] =
-    new Time[Task] {
-      def currentMillis: Task[Long]                   = timer.clock.realTime(MILLISECONDS)
-      def nanoTime: Task[Long]                        = timer.clock.monotonic(NANOSECONDS)
-      def sleep(duration: FiniteDuration): Task[Unit] = timer.sleep(duration)
+  def time[F[_]](implicit timer: Timer[F]): Time[F] =
+    new Time[F] {
+      def currentMillis: F[Long]                   = timer.clock.realTime(MILLISECONDS)
+      def nanoTime: F[Long]                        = timer.clock.monotonic(NANOSECONDS)
+      def sleep(duration: FiniteDuration): F[Unit] = timer.sleep(duration)
     }
 
   def kademliaRPC(networkId: String, timeout: FiniteDuration, allowPrivateAddresses: Boolean)(

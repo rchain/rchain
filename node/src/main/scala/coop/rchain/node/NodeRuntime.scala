@@ -388,7 +388,7 @@ class NodeRuntime private[node] (
 
     // 3. create instances of typeclasses
     metrics       = diagnostics.effects.metrics[Task]
-    time          = effects.time
+    time          = effects.time[Task]
     commTmpFolder = conf.server.dataDir.resolve("tmp").resolve("comm")
     _ <- commTmpFolder.toFile
           .exists()
