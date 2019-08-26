@@ -1,10 +1,14 @@
 package coop.rchain.shared
 
 import cats._, cats.data._, cats.implicits._
+import cats.tagless._
 import coop.rchain.catscontrib._, Catscontrib._
 
 import scala.concurrent.duration.FiniteDuration
 
+@autoFunctorK
+@autoSemigroupalK
+@autoProductNK
 trait Time[F[_]] {
   def currentMillis: F[Long]
   def nanoTime: F[Long]
