@@ -23,6 +23,7 @@ object Dependencies {
   val catsMtl             = "org.typelevel"              %% "cats-mtl-core"             % catsMtlVersion
   val catsMtlLawsTest     = "org.typelevel"              %% "cats-mtl-laws"             % catsMtlVersion % "test"
   val catsPar             = "io.chrisdavenport"          %% "cats-par"                  % "0.3.0-M1"
+  val catsTagless         = "org.typelevel"              %% "cats-tagless-macros"       % "0.9"
   val circeCore           = "io.circe"                   %% "circe-core"                % circeVersion
   val circeGeneric        = "io.circe"                   %% "circe-generic"             % circeVersion
   val circeGenericExtras  = "io.circe"                   %% "circe-generic-extras"      % circeVersion
@@ -100,6 +101,9 @@ object Dependencies {
 
   private val kindProjector = compilerPlugin("org.spire-math" %% "kind-projector" % "0.9.9")
 
+  private val macroParadise = compilerPlugin(
+    "org.scalamacros" % "paradise" % "2.1.0" cross CrossVersion.full)
+
   private val testing = Seq(scalactic, scalatest, scalacheck)
 
   private val logging = Seq(slf4j, julToSlf4j, scalaLogging, logbackClassic, logstashLogback)
@@ -123,5 +127,5 @@ object Dependencies {
     http4sDependencies ++ circeDependencies
 
   val commonDependencies: Seq[ModuleID] =
-    logging ++ testing :+ kindProjector
+    logging ++ testing :+ kindProjector :+ macroParadise
 }

@@ -125,6 +125,7 @@ lazy val shared = (project in file("shared"))
       catsEffect,
       catsMtl,
       catsPar,
+      catsTagless,
       lz4,
       monix,
       scodecCore,
@@ -189,6 +190,7 @@ lazy val comm = (project in file("comm"))
       hasher,
       catsCore,
       catsMtl,
+      catsTagless,
       monix,
       guava
     ),
@@ -257,6 +259,7 @@ lazy val node = (project in file("node"))
     libraryDependencies ++=
       apiServerDependencies ++ commonDependencies ++ kamonDependencies ++ protobufDependencies ++ Seq(
         catsCore,
+        catsTagless,
         grpcNetty,
         jline,
         scallop,
