@@ -1,7 +1,8 @@
-import base64
 import hashlib
 import re
 import sys
+import time
+from pathlib import Path
 from random import Random
 from typing import Generator, Tuple, Dict
 from contextlib import contextmanager
@@ -10,6 +11,8 @@ import pytest
 from docker.client import DockerClient
 from rchain.crypto import PrivateKey, gen_block_hash_from_block, gen_deploys_hash_from_block, gen_state_hash_from_block
 from rchain.pb.CasperMessage_pb2 import BlockMessage, Justification
+from rchain.util import create_deploy_data
+
 
 from . import conftest
 from .common import (TestingContext,
@@ -34,10 +37,6 @@ def generate_block_hash() -> bytes:
     blake = hashlib.blake2b(digest_size=32)
     blake.update(b'evil')
     return blake.digest()
-
-
-def hex_block_hash(block_hash: bytes) -> bytes:
-    return base64.b16encode(block_hash).lower()
 
 
 @contextmanager
@@ -68,10 +67,11 @@ def test_simple_slash(command_line_options: CommandLineOptions, random_generator
 
         block_msg.blockHash = evil_block_hash
         block_msg.sig = BONDED_VALIDATOR_KEY_1.sign_block_hash(evil_block_hash)
+        block_msg.header.timestamp = int(time.time()*1000)
 
         client.send_block(block_msg, validator2)
 
-        record_invalid = re.compile("Recording invalid block {}... for InvalidBlockHash".format(hex_block_hash(evil_block_hash)[:10].decode('utf8')))
+        record_invalid = re.compile("Recording invalid block {}... for InvalidBlockHash".format(evil_block_hash.hex()[:10]))
         wait_for_log_match(context, validator2, record_invalid)
 
         validator2.deploy(contract, BONDED_VALIDATOR_KEY_2)
@@ -155,11 +155,91 @@ def test_slash_justification_not_correct(command_line_options: CommandLineOption
         invalid_justifications_block.sig = BONDED_VALIDATOR_KEY_1.sign_block_hash(invalid_block_hash)
         invalid_justifications_block.blockHash = invalid_block_hash
         client.send_block(invalid_justifications_block, validator2)
-        validator2.deploy(contract, BONDED_VALIDATOR_KEY_2)
 
+        validator2.deploy(contract, BONDED_VALIDATOR_KEY_2)
         slashed_block_hash = validator2.propose()
 
         block_info = validator2.show_block_parsed(slashed_block_hash)
         bonds_validators = extract_validator_stake_from_bonds_validator_str(block_info['bondsValidatorList'])
 
         assert bonds_validators[BONDED_VALIDATOR_KEY_1.get_public_key().to_hex()] == 0.0
+
+
+@pytest.mark.skipif(sys.platform in ('win32', 'cygwin', 'darwin'), reason="Only Linux docker support connection between host and container which node client needs")
+def test_slash_invalid_validator_approve_evil_block(command_line_options: CommandLineOptions, random_generator: Random, docker_client: DockerClient) -> None:
+    with three_nodes_network_with_node_client(command_line_options, random_generator, docker_client) as  (context, validator3 , validator1, validator2, client):
+
+        genesis_block = validator3.show_blocks_parsed(2)[0]
+
+        contract = '/opt/docker/examples/tut-hello.rho'
+
+        validator1.deploy(contract, BONDED_VALIDATOR_KEY_1)
+        blockhash = validator1.propose()
+
+        wait_for_node_sees_block(context, validator3, blockhash)
+        wait_for_node_sees_block(context, validator2, blockhash)
+
+        block_info = validator1.show_block_parsed(blockhash)
+
+        block_msg = client.block_request(block_info['blockHash'], validator1)
+
+        evil_block_hash = generate_block_hash()
+
+        # invalid block from validator1
+        invalid_block = BlockMessage()
+        invalid_block.CopyFrom(block_msg)
+        invalid_block.seqNum = block_msg.seqNum + 1
+        invalid_block.body.state.blockNumber = block_msg.body.state.blockNumber + 1  # pylint: disable=maybe-no-member
+        invalid_block.blockHash = evil_block_hash
+        invalid_block.header.timestamp = int(time.time()*1000)  # pylint: disable=maybe-no-member
+        invalid_block.sig = BONDED_VALIDATOR_KEY_1.sign_block_hash(evil_block_hash)
+        invalid_block.header.ClearField("parentsHashList")  # pylint: disable=maybe-no-member
+        invalid_block.header.parentsHashList.append(bytes.fromhex(genesis_block['blockHash']))  # pylint: disable=maybe-no-member
+        invalid_block.ClearField("justifications")
+        invalid_block.justifications.extend([  # pylint: disable=maybe-no-member
+            Justification(validator=BONDED_VALIDATOR_KEY_1.get_public_key().to_bytes(), latestBlockHash=block_msg.blockHash),
+            Justification(validator=BONDED_VALIDATOR_KEY_2.get_public_key().to_bytes(), latestBlockHash=bytes.fromhex(genesis_block['blockHash'])),
+            Justification(validator=BOOTSTRAP_NODE_KEY.get_public_key().to_bytes(), latestBlockHash=bytes.fromhex(genesis_block['blockHash'])),
+        ])
+        client.send_block(invalid_block, validator2)
+
+        wait_for_node_sees_block(context, validator2, evil_block_hash.hex())
+
+        # block which is created by validator2 but not slashing validator1
+        block_not_slash_invalid_block = BlockMessage()
+        block_not_slash_invalid_block.CopyFrom(block_msg)
+        block_not_slash_invalid_block.seqNum = 1
+        block_not_slash_invalid_block.body.state.blockNumber = 1  # pylint: disable=maybe-no-member
+        block_not_slash_invalid_block.sender = BONDED_VALIDATOR_KEY_2.get_public_key().to_bytes()
+        block_not_slash_invalid_block.ClearField("justifications")
+        block_not_slash_invalid_block.justifications.extend([  # pylint: disable=maybe-no-member
+            Justification(validator=BONDED_VALIDATOR_KEY_1.get_public_key().to_bytes(), latestBlockHash=evil_block_hash),
+            Justification(validator=BONDED_VALIDATOR_KEY_2.get_public_key().to_bytes(), latestBlockHash=bytes.fromhex(genesis_block['blockHash'])),
+            Justification(validator=BOOTSTRAP_NODE_KEY.get_public_key().to_bytes(), latestBlockHash=bytes.fromhex(genesis_block['blockHash'])),
+        ])
+        deploy_data = create_deploy_data(BONDED_VALIDATOR_KEY_2, Path("../rholang/examples/tut-hello.rho").read_text(), 1, 1000000)
+        block_not_slash_invalid_block.body.deploys[0].deploy.CopyFrom(deploy_data)  # pylint: disable=maybe-no-member
+        block_not_slash_invalid_block.header.ClearField("parentsHashList")  # pylint: disable=maybe-no-member
+        block_not_slash_invalid_block.header.parentsHashList.append(bytes.fromhex(genesis_block['blockHash']))  # pylint: disable=maybe-no-member
+        block_not_slash_invalid_block.header.timestamp = int(time.time()*1000)  # pylint: disable=maybe-no-member
+        block_not_slash_invalid_block.header.postStateHash = gen_state_hash_from_block(block_not_slash_invalid_block)  # pylint: disable=maybe-no-member
+        block_not_slash_invalid_block.header.deploysHash = gen_deploys_hash_from_block(block_not_slash_invalid_block)  # pylint: disable=maybe-no-member
+        invalid_block_hash = gen_block_hash_from_block(block_not_slash_invalid_block)
+        block_not_slash_invalid_block.sig = BONDED_VALIDATOR_KEY_2.sign_block_hash(invalid_block_hash)
+        block_not_slash_invalid_block.blockHash = invalid_block_hash
+
+        client.send_block(block_not_slash_invalid_block, validator3)
+
+        # Because validator2 doesn't slash validator1's block while validator3 slash validator1's block,
+        # hence there are some comm events lack of in validator3 which cause an invalid transaction
+        record_invalid = re.compile("Recording invalid block {}... for InvalidTransaction".format(invalid_block_hash.hex()[:10]))
+        wait_for_log_match(context, validator3, record_invalid)
+
+
+        validator3.deploy(contract, BOOTSTRAP_NODE_KEY)
+        slashed_blockhash = validator3.propose()
+        slashed_block_info = validator2.show_block_parsed(slashed_blockhash)
+        bonds_validators = extract_validator_stake_from_bonds_validator_str(slashed_block_info['bondsValidatorList'])
+
+        assert bonds_validators[BONDED_VALIDATOR_KEY_1.get_public_key().to_hex()] == 0
+        assert bonds_validators[BONDED_VALIDATOR_KEY_2.get_public_key().to_hex()] == 0

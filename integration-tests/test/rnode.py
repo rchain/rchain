@@ -24,7 +24,9 @@ from docker.client import DockerClient
 from docker.models.containers import Container
 from docker.models.containers import ExecResult
 from rchain.crypto import PrivateKey
-
+from rchain.certificate import get_node_id_raw
+from cryptography.hazmat.primitives.serialization import load_pem_private_key
+from cryptography.hazmat.backends import default_backend
 from .common import (
     make_tempdir,
     make_tempfile,
@@ -210,6 +212,10 @@ class Node:
 
     def get_node_pem_key(self) -> bytes:
         return self.shell_out("cat", rnode_key_path).encode('utf8')
+
+    def get_node_id_raw(self) -> bytes:
+        key = load_pem_private_key(self.get_node_pem_key(), None, default_backend())
+        return get_node_id_raw(key)
 
     def logs(self) -> str:
         return self.container.logs().decode('utf-8')
