@@ -108,13 +108,17 @@ new  ListOps, rs(`rho:registry:insertSigned:secp256k1`), uriOut in {
       } |
       //add a result to our accumulating list
       contract collect(@result) = {
-        for(@sc <- startCount; @cc <- completeCount; @acc <- accCh) {
-          startCount!(sc) |
-          if (sc == cc + 1) { //all started processes completed!
-            ListOps!("prepend", result, acc, *return)
-          } else {            //still waiting on some
-            completeCount!(cc + 1) |
-            ListOps!("prepend", result, acc, *accCh)
+        for(@sc <- startCount) {
+          for (@cc <- completeCount) {
+            for (@acc <- accCh) {
+              startCount!(sc) |
+              if (sc == cc + 1) { //all started processes completed!
+                ListOps!("prepend", result, acc, *return)
+              } else {            //still waiting on some
+                completeCount!(cc + 1) |
+                ListOps!("prepend", result, acc, *accCh)
+              }
+            }
           }
         }
       } |
