@@ -1,0 +1,29 @@
+new
+  RhoSpecCh, rl(`rho:registry:lookup`),
+  registryOps(`rho:registry:ops`),
+  test_buildUri,
+  test_buildUriIllegalArgument
+in {
+  rl!(`rho:id:zphjgsfy13h1k85isc8rtwtgt3t9zzt5pjd5ihykfmyapfc4wt3x5h`, *RhoSpecCh) |
+  for(@(_, RhoSpec) <- RhoSpecCh) {
+    @RhoSpec!("testSuite",
+      [
+        ("buildUri should work", *test_buildUri),
+        ("buildUri should return Nil for illegal arguments", *test_buildUriIllegalArgument),
+    ])
+  } |
+
+  contract test_buildUri(rhoSpec, _, ackCh) = {
+    new retCh in {
+      registryOps!("buildUri", "foo".toByteArray(), *retCh) |
+      rhoSpec!("assert", (`rho:id:5zsti8g1zpshouu8f7dm1dmqmte3wreeb1abf5dj51h1dds1cjizja`, "== <-", *retCh), "Expecting an uri", *ackCh)
+    }
+  } |
+
+  contract test_buildUriIllegalArgument(rhoSpec, _, ackCh) = {
+    new retCh, name in {
+      registryOps!("buildUri", *name, *retCh) |
+      rhoSpec!("assert", (Nil, "== <-", *retCh), "Expecting Nil", *ackCh)
+    }
+  }
+}
