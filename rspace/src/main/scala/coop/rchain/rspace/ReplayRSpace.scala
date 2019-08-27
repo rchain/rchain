@@ -392,15 +392,7 @@ class ReplayRSpace[F[_]: Sync, C, P, A, K](
                        storeDatum(produceRef, Some(comm))
                      case Right(produceCandidate) =>
                        val indexedChannels = produceCandidate.channels.zipWithIndex.toMap
-                       for {
-                         a <- handleMatch(produceCandidate, produceRef, comms, indexedChannels)
-                         _ <- if (produceCandidate.continuation.peeks.contains(
-                                    indexedChannels(channel)
-                                  )) {
-                               storeDatum(produceRef, None)
-                             } else
-                               ().pure[F]
-                       } yield a
+                       handleMatch(produceCandidate, produceRef, comms, indexedChannels)
                    }
                    r
                }
