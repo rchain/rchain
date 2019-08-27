@@ -62,11 +62,6 @@ final class IndexedBlockDagStorage[F[_]: Monad](
 
   def checkpoint(): F[Unit] = underlying.checkpoint()
 
-  def clear(): F[Unit] =
-    lock.withPermit(
-      underlying.clear() >> idToBlocksRef.set(Map.empty) >> currentIdRef.set(-1)
-    )
-
   def close(): F[Unit] = underlying.close()
 
   def lookupById(id: Int): F[Option[BlockMessage]] =

@@ -16,7 +16,6 @@ trait BlockDagStorage[F[_]] {
   ): F[BlockDagRepresentation[F]]
   def accessEquivocationsTracker[A](f: EquivocationsTracker[F] => F[A]): F[A]
   def checkpoint(): F[Unit]
-  def clear(): F[Unit]
   def close(): F[Unit]
 }
 

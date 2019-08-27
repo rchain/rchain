@@ -99,28 +99,12 @@ final class BlockDagFileStorage[F[_]: Concurrent: Sync: Log: RaiseIOError] priva
   private[this] def getEquivocationsTrackerCrc: F[Crc32[F]] =
     state.get.map(_.equivocationsTrackerCrc)
 
-  private[this] def setLatestMessages(v: Map[Validator, BlockHash]): F[Unit] =
-    state.modify(s => s.copy(latestMessages = v))
-  private[this] def setChildMap(v: Map[BlockHash, Set[BlockHash]]): F[Unit] =
-    state.modify(s => s.copy(childMap = v))
-  private[this] def setDataLookup(v: Map[BlockHash, BlockMetadata]): F[Unit] =
-    state.modify(s => s.copy(dataLookup = v))
-  private[this] def setTopoSort(v: Vector[Vector[BlockHash]]): F[Unit] =
-    state.modify(s => s.copy(topoSort = v))
-  private[this] def setEquviocationsTracker(v: Set[EquivocationRecord]): F[Unit] =
-    state.modify(s => s.copy(equivocationsTracker = v))
   private[this] def setLatestMessagesLogOutputStream(v: FileOutputStreamIO[F]): F[Unit] =
     state.modify(s => s.copy(latestMessagesLogOutputStream = v))
   private[this] def setLatestMessagesLogSize(v: Int): F[Unit] =
     state.modify(s => s.copy(latestMessagesLogSize = v))
   private[this] def setLatestMessagesCrc(v: Crc32[F]): F[Unit] =
     state.modify(s => s.copy(latestMessagesCrc = v))
-  private[this] def setBlockMetadataLogOutputStream(v: FileOutputStreamIO[F]): F[Unit] =
-    state.modify(s => s.copy(blockMetadataLogOutputStream = v))
-  private[this] def setBlockMetadataCrc(v: Crc32[F]): F[Unit] =
-    state.modify(s => s.copy(blockMetadataCrc = v))
-  private[this] def setEquivocationsTrackerLogOutputStream(v: FileOutputStreamIO[F]): F[Unit] =
-    state.modify(s => s.copy(equivocationsTrackerLogOutputStream = v))
 
   private[this] def modifyLatestMessages(
       f: Map[Validator, BlockHash] => Map[Validator, BlockHash]
@@ -525,41 +509,6 @@ final class BlockDagFileStorage[F[_]: Concurrent: Sync: Log: RaiseIOError] priva
 
   def checkpoint(): F[Unit] =
     ().pure[F]
-
-  def clear(): F[Unit] =
-    lock.withPermit(
-      for {
-        latestMessagesLogOutputStream <- getLatestMessagesLogOutputStream
-        _                             <- latestMessagesLogOutputStream.close
-        blockMetadataLogOutputStream  <- getBlockMetadataLogOutputStream
-        _                             <- blockMetadataLogOutputStream.close
-        _                             <- writeToFile(latestMessagesDataFilePath, Array.emptyByteArray)
-        _                             <- writeToFile(blockMetadataLogPath, Array.emptyByteArray)
-        newLatestMessagesCrc          = Crc32.empty[F]()
-        newLatestMessagesCrcBytes     <- newLatestMessagesCrc.bytes
-        _                             <- writeToFile(latestMessagesCrcFilePath, newLatestMessagesCrcBytes)
-        newBlockMetadataCrc           = Crc32.empty[F]()
-        newBlockMetadataCrcBytes      <- newBlockMetadataCrc.bytes
-        _                             <- writeToFile(blockMetadataCrcPath, newBlockMetadataCrcBytes)
-        _                             <- setDataLookup(Map.empty)
-        _                             <- setChildMap(Map.empty)
-        _                             <- setTopoSort(Vector.empty)
-        _                             <- setLatestMessages(Map.empty)
-        _                             <- setEquviocationsTracker(Set.empty)
-        newLatestMessagesLogOutputStream <- FileOutputStreamIO
-                                             .open[F](latestMessagesDataFilePath, true)
-        _                               <- setLatestMessagesLogOutputStream(newLatestMessagesLogOutputStream)
-        newBlockMetadataLogOutputStream <- FileOutputStreamIO.open[F](blockMetadataLogPath, true)
-        _                               <- setBlockMetadataLogOutputStream(newBlockMetadataLogOutputStream)
-        newEquviocationsTrackerLogOutputStream <- FileOutputStreamIO
-                                                   .open[F](equivocationTrackerLogPath, true)
-        _ <- setEquivocationsTrackerLogOutputStream(newEquviocationsTrackerLogOutputStream)
-        _ <- setLatestMessagesLogSize(0)
-        _ <- setLatestMessagesCrc(newLatestMessagesCrc)
-        _ <- setBlockMetadataCrc(newBlockMetadataCrc)
-        _ <- blockNumberIndex.drop
-      } yield ()
-    )
 
   def close(): F[Unit] =
     lock.withPermit(

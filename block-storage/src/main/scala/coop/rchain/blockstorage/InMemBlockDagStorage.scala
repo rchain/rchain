@@ -167,17 +167,6 @@ final class InMemBlockDagStorage[F[_]: Concurrent: Sync: Log: BlockStore](
     )
   override def checkpoint(): F[Unit] = ().pure[F]
 
-  override def clear(): F[Unit] =
-    lock.withPermit(
-      for {
-        _ <- dataLookupRef.set(Map.empty)
-        _ <- childMapRef.set(Map.empty)
-        _ <- topoSortRef.set(Vector.empty)
-        _ <- latestMessagesRef.set(Map.empty)
-        _ <- equivocationsTrackerRef.set(Set.empty)
-      } yield ()
-    )
-
   override def close(): F[Unit] = ().pure[F]
 }
 
