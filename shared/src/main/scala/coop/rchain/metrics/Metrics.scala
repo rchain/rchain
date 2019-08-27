@@ -1,6 +1,7 @@
 package coop.rchain.metrics
 
 import cats._
+import cats.data.ReaderT
 import cats.implicits._
 import coop.rchain.metrics.Metrics.Source
 
@@ -68,4 +69,43 @@ object Metrics extends MetricsInstances {
   val BaseSource: Source                           = Source("rchain")
 }
 
-sealed abstract class MetricsInstances {}
+sealed abstract class MetricsInstances {
+  def readerTMetrics[F[_], E](m: Metrics[F]): Metrics[ReaderT[F, E, ?]] =
+    new Metrics[ReaderT[F, E, ?]] {
+      override def incrementCounter(name: String, delta: Long)(
+          implicit ev: Source
+      ): ReaderT[F, E, Unit] =
+        ReaderT.liftF(m.incrementCounter(name, delta)(ev))
+
+      override def incrementSampler(name: String, delta: Long)(
+          implicit ev: Source
+      ): ReaderT[F, E, Unit] =
+        ReaderT.liftF(m.incrementSampler(name, delta)(ev))
+
+      override def sample(name: String)(implicit ev: Source): ReaderT[F, E, Unit] =
+        ReaderT.liftF(m.sample(name)(ev))
+
+      override def setGauge(name: String, value: Long)(implicit ev: Source): ReaderT[F, E, Unit] =
+        ReaderT.liftF(m.setGauge(name, value)(ev))
+
+      override def incrementGauge(name: String, delta: Long)(
+          implicit ev: Source
+      ): ReaderT[F, E, Unit] =
+        ReaderT.liftF(m.incrementGauge(name, delta)(ev))
+
+      override def decrementGauge(name: String, delta: Long)(
+          implicit ev: Source
+      ): ReaderT[F, E, Unit] =
+        ReaderT.liftF(m.decrementGauge(name, delta)(ev))
+
+      override def record(name: String, value: Long, count: Long)(
+          implicit ev: Source
+      ): ReaderT[F, E, Unit] = ReaderT.liftF(m.record(name, value)(ev))
+
+      override def timer[A](name: String, block: ReaderT[F, E, A])(
+          implicit ev: Source
+      ): ReaderT[F, E, A] = ReaderT { e =>
+        m.timer(name, block.run(e))(ev)
+      }
+    }
+}

@@ -30,7 +30,7 @@ import coop.rchain.comm.transport._
 import coop.rchain.grpc.Server
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.models.BlockHash.BlockHash
-import coop.rchain.node.NodeRuntime.{APIServers, CasperLoop, Cleanup, RuntimeConf}
+import coop.rchain.node.NodeRuntime.{APIServers, CasperLoop, Cleanup, EngineInit, RuntimeConf}
 import coop.rchain.node.api.{DeployGrpcService, ProposeGrpcService, ReplGrpcService}
 import coop.rchain.node.configuration.Configuration
 import coop.rchain.node.diagnostics._
@@ -188,16 +188,15 @@ class NodeRuntime private[node] (
       rpConfAsk,
       blockStore,
       blockDagStorage,
-      engineCell,
-      requestedBlocks,
       runtimeCleanup,
       packetHandler,
       apiServers,
-      casperLoop
+      casperLoop,
+      engineInit
     ) = result
 
     // 4. run the node program.
-    program = nodeProgram(apiServers, casperLoop, runtimeCleanup)(
+    program = nodeProgram(apiServers, casperLoop, engineInit, runtimeCleanup)(
       time,
       rpConfState,
       rpConfAsk,
@@ -209,8 +208,7 @@ class NodeRuntime private[node] (
       rpConnections,
       blockDagStorage,
       blockStore,
-      packetHandler,
-      engineCell
+      packetHandler
     )
     _ <- handleUnrecoverableErrors(program)
   } yield ()
@@ -236,6 +234,7 @@ class NodeRuntime private[node] (
   private def nodeProgram(
       apiServers: APIServers,
       casperLoop: CasperLoop[Task],
+      engineInit: EngineInit[Task],
       runtimeCleanup: Cleanup[Task]
   )(
       implicit
@@ -250,8 +249,7 @@ class NodeRuntime private[node] (
       rpConnections: ConnectionsCell[Task],
       blockDagStorage: BlockDagStorage[Task],
       blockStore: BlockStore[Task],
-      packetHandler: PacketHandler[Task],
-      engineCell: EngineCell[Task]
+      packetHandler: PacketHandler[Task]
   ): Task[Unit] = {
 
     val info: Task[Unit] =
@@ -326,7 +324,7 @@ class NodeRuntime private[node] (
       _       <- Task.defer(clearConnectionsLoop.forever).executeOn(loopScheduler).start
       _ <- if (conf.server.standalone) ().pure[Task]
           else Log[Task].info(s"Waiting for first connection.") >> waitForFirstConnection
-      _ <- Concurrent[Task].start(EngineCell[Task].read >>= (_.init))
+      _ <- Concurrent[Task].start(engineInit)
       _ <- Task.defer(casperLoop.forever).executeOn(loopScheduler)
     } yield ()
   }
@@ -475,6 +473,7 @@ class NodeRuntime private[node] (
 object NodeRuntime {
 
   type CasperLoop[F[_]] = F[Unit]
+  type EngineInit[F[_]] = F[Unit]
 
   final case class RuntimeConf(
       storage: Path,
@@ -520,12 +519,11 @@ object NodeRuntime {
         ApplicativeAsk[F, RPConf],
         BlockStore[F],
         BlockDagFileStorage[F],
-        EngineCell[F],
-        Cell[F, Map[BlockHash, Running.Requested]],
         Cleanup[F],
         PacketHandler[F],
         APIServers,
-        CasperLoop[F]
+        CasperLoop[F],
+        EngineInit[F]
     )
   ] =
     for {
@@ -625,18 +623,18 @@ object NodeRuntime {
             )
         _ <- Time[F].sleep(30.seconds)
       } yield ()
+      engineInit     = engineCell.read >>= (_.init)
       runtimeCleanup = NodeRuntime.cleanup(runtime, casperRuntime)
     } yield (
       rpConnections,
       rpConfAsk,
       blockStore,
       blockDagStorage,
-      engineCell,
-      requestedBlocks,
       runtimeCleanup,
       packetHandler,
       apiServers,
-      casperLoop
+      casperLoop,
+      engineInit
     )
 
   final case class APIServers(

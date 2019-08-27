@@ -10,8 +10,7 @@ import scala.tools.jline.console._
 import cats.effect.{Concurrent, Sync, Timer}
 import cats.mtl._
 import cats.implicits._
-import cats.tagless.FunctorK
-import cats.{~>, Applicative, Monad}
+import cats.{Applicative, Monad}
 import coop.rchain.comm._
 import coop.rchain.comm.discovery._
 import coop.rchain.comm.rp._
@@ -95,15 +94,15 @@ package object effects {
       def ask: F[PeerNode]            = state.get.map(_.local)
     }
 
-  def readerTApplicativeAsk[F[_]: Monad: Sync, E](
-      askF: ApplicativeAsk[F, E]
-  ): ApplicativeAsk[ReaderT[F, E, ?], E] =
-    new ApplicativeAsk[ReaderT[F, E, ?], E] {
+  def readerTApplicativeAsk[F[_]: Monad: Sync, E, B](
+      askF: ApplicativeAsk[F, B]
+  ): ApplicativeAsk[ReaderT[F, E, ?], B] =
+    new ApplicativeAsk[ReaderT[F, E, ?], B] {
       override val applicative: Applicative[ReaderT[F, E, ?]] = Applicative[ReaderT[F, E, ?]]
 
-      override def ask: ReaderT[F, E, E] = ReaderT.liftF(askF.ask)
+      override def ask: ReaderT[F, E, B] = ReaderT.liftF(askF.ask)
 
-      override def reader[A](f: E => A): ReaderT[F, E, A] = ReaderT.liftF(askF.reader(f))
+      override def reader[A](f: B => A): ReaderT[F, E, A] = ReaderT.liftF(askF.reader(f))
     }
 
   def readerTMonadState[F[_]: Monad: Sync, E, S](
