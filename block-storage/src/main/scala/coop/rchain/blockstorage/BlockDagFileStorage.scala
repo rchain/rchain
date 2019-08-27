@@ -11,6 +11,8 @@ import cats.mtl.MonadState
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockDagFileStorage.{Checkpoint, CheckpointedDagInfo}
 import coop.rchain.blockstorage.BlockDagStorage.DeployId
+import coop.rchain.blockstorage.dag._
+import coop.rchain.blockstorage.dag.DeployPersistentIndex._
 import coop.rchain.blockstorage.util.BlockMessageUtil._
 import coop.rchain.blockstorage.util.byteOps._
 import coop.rchain.blockstorage.util.io.IOError.RaiseIOError
@@ -39,7 +41,6 @@ private final case class BlockDagFileStorageState[F[_]: Sync](
     childMap: Map[BlockHash, Set[BlockHash]],
     dataLookup: Map[BlockHash, BlockMetadata],
     topoSort: Vector[Vector[BlockHash]],
-    blockHashesByDeploy: Map[DeployId, BlockHash],
     equivocationsTracker: Set[EquivocationRecord],
     invalidBlocks: Set[BlockMetadata],
     sortOffset: Long,
@@ -49,8 +50,6 @@ private final case class BlockDagFileStorageState[F[_]: Sync](
     latestMessagesCrc: Crc32[F],
     blockMetadataLogOutputStream: FileOutputStreamIO[F],
     blockMetadataCrc: Crc32[F],
-    blockHashesByDeployLogOutputStream: FileOutputStreamIO[F],
-    blockHashesByDeployCrc: Crc32[F],
     equivocationsTrackerLogOutputStream: FileOutputStreamIO[F],
     equivocationsTrackerCrc: Crc32[F],
     invalidBlocksLogOutputStream: FileOutputStreamIO[F],
@@ -69,8 +68,7 @@ final class BlockDagFileStorage[F[_]: Concurrent: Sync: Log: RaiseIOError] priva
     equivocationTrackerCrcPath: Path,
     invalidBlocksLogPath: Path,
     invalidBlocksCrcPath: Path,
-    blockHashesByDeployLogPath: Path,
-    blockHashesByDeployCrcPath: Path,
+    deployIndex: PersistentDeployIndex[F],
     state: MonadState[F, BlockDagFileStorageState[F]]
 ) extends BlockDagStorage[F] {
   implicit private val logSource: LogSource = LogSource(BlockDagFileStorage.getClass)
@@ -83,8 +81,6 @@ final class BlockDagFileStorage[F[_]: Concurrent: Sync: Log: RaiseIOError] priva
     state.get.map(_.dataLookup)
   private[this] def getTopoSort: F[Vector[Vector[BlockHash]]] =
     state.get.map(_.topoSort)
-  private[this] def getBlockHashesByDeploy: F[Map[DeployId, BlockHash]] =
-    state.get.map(_.blockHashesByDeploy)
   private[this] def getSortOffset: F[Long] =
     state.get.map(_.sortOffset)
   private[this] def getEquviocationsTracker: F[Set[EquivocationRecord]] =
@@ -103,10 +99,6 @@ final class BlockDagFileStorage[F[_]: Concurrent: Sync: Log: RaiseIOError] priva
     state.get.map(_.blockMetadataLogOutputStream)
   private[this] def getBlockMetadataCrc: F[Crc32[F]] =
     state.get.map(_.blockMetadataCrc)
-  private[this] def getBlockHashesByDeployLogOutputStream: F[FileOutputStreamIO[F]] =
-    state.get.map(_.blockHashesByDeployLogOutputStream)
-  private[this] def getBlockHashesByDeployCrc: F[Crc32[F]] =
-    state.get.map(_.blockHashesByDeployCrc)
   private[this] def getEquivocationsTrackerLogOutputStream: F[FileOutputStreamIO[F]] =
     state.get.map(_.equivocationsTrackerLogOutputStream)
   private[this] def getEquivocationsTrackerCrc: F[Crc32[F]] =
@@ -155,10 +147,6 @@ final class BlockDagFileStorage[F[_]: Concurrent: Sync: Log: RaiseIOError] priva
       f: Vector[Vector[BlockHash]] => Vector[Vector[BlockHash]]
   ): F[Unit] =
     state.modify(s => s.copy(topoSort = f(s.topoSort)))
-  private[this] def modifyBlockHashesByDeploy(
-      f: Map[DeployId, BlockHash] => Map[DeployId, BlockHash]
-  ): F[Unit] =
-    state.modify(s => s.copy(blockHashesByDeploy = f(s.blockHashesByDeploy)))
   private[this] def modifyEquivocationsTracker(
       f: Set[EquivocationRecord] => Set[EquivocationRecord]
   ): F[Unit] =
@@ -437,26 +425,6 @@ final class BlockDagFileStorage[F[_]: Concurrent: Sync: Log: RaiseIOError] priva
       _                      <- updateCrcFile(dataLookupCrc, blockMetadataCrcPath)
     } yield ()
 
-  private def updateBlockHashByDeployFile(
-      newDeployIds: List[DeployId],
-      blockHash: BlockHash
-  ): F[Unit] =
-    for {
-      blockHashesByDeployCrc             <- getBlockHashesByDeployCrc
-      blockHashesByDeployLogOutputStream <- getBlockHashesByDeployLogOutputStream
-      _ <- newDeployIds.traverse_ { deployId =>
-            // Deploy signatures have variable length (70-71 usually) hence we need to know its size
-            val toAppend = deployId.size.toByteString.concat(deployId).concat(blockHash).toByteArray
-            for {
-              _ <- blockHashesByDeployLogOutputStream.write(toAppend)
-              _ <- blockHashesByDeployLogOutputStream.flush
-              _ <- blockHashesByDeployCrc.update(toAppend).flatMap { _ =>
-                    updateCrcFile(blockHashesByDeployCrc, blockHashesByDeployCrcPath)
-                  }
-            } yield ()
-          }
-    } yield ()
-
   private def updateEquivocationsTrackerFile(equivocationRecord: EquivocationRecord): F[Unit] =
     for {
       equivocationsTrackerCrc             <- getEquivocationsTrackerCrc
@@ -488,7 +456,7 @@ final class BlockDagFileStorage[F[_]: Concurrent: Sync: Log: RaiseIOError] priva
       childMap            <- getChildMap
       dataLookup          <- getDataLookup
       topoSort            <- getTopoSort
-      blockHashesByDeploy <- getBlockHashesByDeploy
+      blockHashesByDeploy <- deployIndex.data
       invalidBlocks       <- getInvalidBlocks
       sortOffset          <- getSortOffset
     } yield FileDagRepresentation(
@@ -568,11 +536,10 @@ final class BlockDagFileStorage[F[_]: Concurrent: Sync: Log: RaiseIOError] priva
                       }
                     }
                 _ <- putBlockNumber(block.blockHash, blockNumber(block))
-                _ <- modifyBlockHashesByDeploy(_ ++ deployHashes.map(_ -> block.blockHash).toMap)
+                _ <- deployIndex.addAll(deployHashes.map(_ -> block.blockHash))
                 _ <- updateLatestMessagesFile(newValidatorsWithSenderLatestMessages.toList)
                 _ <- updateDataLookupFile(blockMetadata)
                 _ <- updateInvalidBlocksFile(blockMetadata)
-                _ <- updateBlockHashByDeployFile(deployHashes, block.blockHash)
               } yield ()
             }
         dag <- representation
@@ -631,8 +598,7 @@ final class BlockDagFileStorage[F[_]: Concurrent: Sync: Log: RaiseIOError] priva
         _                                   <- blockMetadataLogOutputStream.close
         equivocationsTrackerLogOutputStream <- getEquivocationsTrackerLogOutputStream
         _                                   <- equivocationsTrackerLogOutputStream.close
-        blockHashesByDeployLogOutputStream  <- getBlockHashesByDeployLogOutputStream
-        _                                   <- blockHashesByDeployLogOutputStream.close
+        _                                   <- deployIndex.close
         _                                   <- blockNumberIndex.close
       } yield ()
     )
@@ -1086,100 +1052,6 @@ object BlockDagFileStorage {
             }
     } yield LMDBStore[F](env, dbi)
 
-  private def readBlockHashesByDeploy[F[_]: Sync](
-      randomAccessIO: RandomAccessIO[F]
-  ): F[List[(DeployId, BlockHash)]] = {
-    def readDeployBytes(deployIdSize: Int): F[(DeployId, BlockHash)] =
-      for {
-        deployIdResult       <- randomAccessIO.readByteString(deployIdSize)
-        blockHashBytesResult <- randomAccessIO.readByteString(BlockHash.Length)
-        readResult           = deployIdResult.product(blockHashBytesResult)
-        result               <- readResult.liftTo[F](BlockHashesByDeployLogIsCorrupted)
-      } yield result
-
-    StreamT
-      .continually(randomAccessIO.readInt)
-      .takeWhile(_.isDefined)
-      .mapF {
-        case Some(deployIdSize) => readDeployBytes(deployIdSize)
-        case None               => Sync[F].raiseError[(DeployId, BlockHash)](new IllegalStateException())
-      }
-      .toList
-  }
-
-  def calculateBlockHashesByDeployCrc[F[_]: Monad](
-      blockHashesByDeploy: List[(DeployId, BlockHash)]
-  ): F[Crc32[F]] = {
-    val crc = Crc32.empty[F]()
-    blockHashesByDeploy.traverse_[F, Unit] {
-      case (deployId, blockHash) =>
-        crc.update(deployId.size.toByteString.concat(deployId).concat(blockHash).toByteArray)
-    } >> crc.pure[F]
-  }
-
-  private def truncateBlockHashesByDeployLog[F[_]: Sync](
-      randomAccessIO: RandomAccessIO[F],
-      blockHashesByDeploy: List[(DeployId, BlockHash)]
-  ): F[Unit] = {
-    val lastRecordSize: Long = BlockHash.Length.toLong + BlockHash.Length.toLong
-    for {
-      length <- randomAccessIO.length
-      _      <- randomAccessIO.setLength(length - lastRecordSize)
-    } yield ()
-  }
-
-  private def validateBlockHashesByDeploy[F[_]: Sync](
-      randomAccessIO: RandomAccessIO[F],
-      readBlockHashesByDeployCrc: Long,
-      blockHashesByDeploy: List[(DeployId, BlockHash)]
-  ): F[(List[(DeployId, BlockHash)], Crc32[F])] =
-    for {
-      fullCalculatedCrc <- calculateBlockHashesByDeployCrc[F](blockHashesByDeploy)
-      result <- Monad[F].ifM(fullCalculatedCrc.value.map(_ == readBlockHashesByDeployCrc))(
-                 (blockHashesByDeploy, fullCalculatedCrc).pure[F],
-                 if (blockHashesByDeploy.isEmpty) {
-                   Sync[F].raiseError[(List[(DeployId, BlockHash)], Crc32[F])](
-                     BlockHashesByDeployLogIsCorrupted
-                   )
-                 } else {
-                   // Trying to delete the last log entry
-                   val blockHashesWithoutLast = blockHashesByDeploy.init
-                   calculateBlockHashesByDeployCrc[F](blockHashesWithoutLast).flatMap {
-                     withoutLastCrc =>
-                       Monad[F].ifM(withoutLastCrc.value.map(_ == readBlockHashesByDeployCrc))(
-                         for {
-                           _ <- truncateBlockHashesByDeployLog(randomAccessIO, blockHashesByDeploy)
-                         } yield (blockHashesWithoutLast, withoutLastCrc),
-                         Sync[F].raiseError[(List[(DeployId, BlockHash)], Crc32[F])](
-                           BlockHashesByDeployLogIsCorrupted
-                         )
-                       )
-                   }
-                 }
-               )
-    } yield result
-
-  private def loadBlockHashesByDeploy[F[_]: Sync: Log: RaiseIOError](
-      blockHashesByDeployLogPath: Path,
-      blockHashesByDeployCrcPath: Path
-  ): F[(Map[DeployId, BlockHash], Crc32[F])] =
-    Resource
-      .make(
-        RandomAccessIO.open[F](blockHashesByDeployLogPath, RandomAccessIO.ReadWrite)
-      )(_.close)
-      .use { blockHashesByDeployLogFile =>
-        for {
-          blockHashesByDeploy <- readBlockHashesByDeploy(blockHashesByDeployLogFile)
-          readCrc             <- readCrc[F](blockHashesByDeployCrcPath)
-          result <- validateBlockHashesByDeploy[F](
-                     blockHashesByDeployLogFile,
-                     readCrc,
-                     blockHashesByDeploy
-                   )
-          (blockHashesByDeployList, blockHashesCrc) = result
-        } yield (blockHashesByDeployList.toMap, blockHashesCrc)
-      }
-
   def create[F[_]: Concurrent: Sync: Log: Metrics](
       config: Config
   ): F[BlockDagFileStorage[F]] = {
@@ -1262,12 +1134,11 @@ object BlockDagFileStorage {
                               } yield result
                             }
       (invalidBlocksList, calculatedInvalidBlocksCrc) = invalidBlocksResult
-      blockHashesByDeployResult <- loadBlockHashesByDeploy(
-                                    config.blockHashesByDeployLogPath,
-                                    config.blockHashesByDeployCrcPath
-                                  )
-      (blockHashesByDeploy, blockHashesByDeployCrc) = blockHashesByDeployResult
-      sortedCheckpoints                             <- loadCheckpoints(config.checkpointsDirPath)
+      deployIndex <- DeployPersistentIndex.load[F](
+                      config.blockHashesByDeployLogPath,
+                      config.blockHashesByDeployCrcPath
+                    )
+      sortedCheckpoints <- loadCheckpoints(config.checkpointsDirPath)
       latestMessagesLogOutputStream <- FileOutputStreamIO.open[F](
                                         config.latestMessagesLogPath,
                                         true
@@ -1284,10 +1155,6 @@ object BlockDagFileStorage {
                                        config.invalidBlocksLogPath,
                                        true
                                      )
-      blockHashesByDeployLogOutputStream <- FileOutputStreamIO.open[F](
-                                             config.blockHashesByDeployLogPath,
-                                             true
-                                           )
       state = BlockDagFileStorageState(
         latestMessages = latestMessagesMap,
         childMap = childMap,
@@ -1305,10 +1172,7 @@ object BlockDagFileStorage {
         equivocationsTrackerLogOutputStream = equivocationsTrackerLogOutputStream,
         equivocationsTrackerCrc = calculatedEquivocationsTrackerCrc,
         invalidBlocksLogOutputStream = invalidBlocksLogOutputStream,
-        invalidBlocksCrc = calculatedInvalidBlocksCrc,
-        blockHashesByDeploy = blockHashesByDeploy,
-        blockHashesByDeployLogOutputStream = blockHashesByDeployLogOutputStream,
-        blockHashesByDeployCrc = blockHashesByDeployCrc
+        invalidBlocksCrc = calculatedInvalidBlocksCrc
       )
     } yield new BlockDagFileStorage[F](
       lock,
@@ -1322,8 +1186,7 @@ object BlockDagFileStorage {
       config.equivocationsTrackerCrcPath,
       config.invalidBlocksLogPath,
       config.invalidBlocksCrcPath,
-      config.blockHashesByDeployLogPath,
-      config.blockHashesByDeployCrcPath,
+      deployIndex,
       new AtomicMonadState[F, BlockDagFileStorageState[F]](AtomicAny(state))
     )
   }
