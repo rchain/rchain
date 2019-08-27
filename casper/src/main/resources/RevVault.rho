@@ -28,198 +28,203 @@ in {
   rl!(`rho:rchain:makeMint`, *MakeMintCh) |
   rl!(`rho:rchain:authKey`, *AuthKeyCh) |
   rl!(`rho:lang:either`, *EitherCh) |
-  for(@(_, MakeMint) <- MakeMintCh; @(_, AuthKey) <- AuthKeyCh; @(_, Either) <- EitherCh) {
+  for(@(_, MakeMint) <- MakeMintCh) {
+    for (@(_, AuthKey) <- AuthKeyCh) {
+      for (@(_, Either) <- EitherCh) {
+        new mintCh, vaultMapStore, initVault in {
+          @MakeMint!(*mintCh) |
+          for (mint <- mintCh) {
 
-    new mintCh, vaultMapStore, initVault in {
-      @MakeMint!(*mintCh) |
-      for (mint <- mintCh) {
-
-        contract initVault(name, @address, @initialAmount) = {
-          new purseCh in {
-            mint!("makePurse", initialAmount, *purseCh) |
-            for (purse <- purseCh) {
-              _newVault!(*name, address, *purse)
-            }
-          }
-        } |
-
-        for (@"init", ret <- RevVault) {
-          ret!(*vaultMapStore, *initVault)
-        } |
-
-        contract RevVault(@"deployerAuthKey", deployerId, ret) = {
-
-          new RevAddress(`rho:rev:address`), DeployerIdOps(`rho:rchain:deployerId:ops`), revAddrCh, deployerPubKeyBytesCh in {
-            DeployerIdOps!("pubKeyBytes", *deployerId, *deployerPubKeyBytesCh) |
-            for (@deployerPubKeyBytes <- deployerPubKeyBytesCh) {
-
-              RevAddress!("fromPublicKey", deployerPubKeyBytes, *revAddrCh) |
-              for (@deployerRevAddress <- revAddrCh) {
-
-                @AuthKey!("make", (*_revVault, deployerRevAddress), *ret)
-              }
-            }
-          }
-        } |
-
-        contract RevVault(@"unforgeableAuthKey", unf, ret) = {
-
-          new RevAddress(`rho:rev:address`), revAddrCh in {
-            RevAddress!("fromUnforgeable", *unf, *revAddrCh) |
-            for (@unfRevAddress <- revAddrCh) {
-
-              @AuthKey!("make", (*_revVault, unfRevAddress), *ret)
-            }
-          }
-        } |
-
-        // Deprecated version of `deployerAuthKey`
-        // Please use the version above where a deployer id has to be passed
-        contract RevVault(@"deployerAuthKey", ret) = {
-
-          new deployerPubKeyBytesCh in {
-            _getIdentity!(*deployerPubKeyBytesCh) |
-            for (@deployerPubKeyBytes <- deployerPubKeyBytesCh) {
-
-              new RevAddress(`rho:rev:address`), revAddrCh in {
-                RevAddress!("fromPublicKey", deployerPubKeyBytes, *revAddrCh)|
-                for (@deployerRevAddress <- revAddrCh) {
-
-                  @AuthKey!("make", (*_revVault, deployerRevAddress), *ret)
+            contract initVault(name, @address, @initialAmount) = {
+              new purseCh in {
+                mint!("makePurse", initialAmount, *purseCh) |
+                for (purse <- purseCh) {
+                  _newVault!(*name, address, *purse)
                 }
               }
-            }
-          }
-        } |
+            } |
 
-        contract _getIdentity(retCh) = {
-          new getDeployData(`rho:deploy:params`), ch in {
-            getDeployData ! (*ch) |
-            for (_, _, @userId, _ <- ch) {
-              retCh ! (userId)
-            }
-          }
-        } |
+            for (@"init", ret <- RevVault) {
+              ret!(*vaultMapStore, *initVault)
+            } |
 
-        contract RevVault(@"findOrCreate", @ownerRevAddress, ret) = {
-          new createVault in {
-            _getOrCreate!(ownerRevAddress, *createVault, *ret) |
-            for (retCh <- createVault) {
+            contract RevVault(@"deployerAuthKey", deployerId, ret) = {
 
-              _makeVault!(ownerRevAddress, 0, *retCh)
-            }
-          }
-        } |
+              new RevAddress(`rho:rev:address`), DeployerIdOps(`rho:rchain:deployerId:ops`), revAddrCh, deployerPubKeyBytesCh in {
+                DeployerIdOps!("pubKeyBytes", *deployerId, *deployerPubKeyBytesCh) |
+                for (@deployerPubKeyBytes <- deployerPubKeyBytesCh) {
 
-        contract _getOrCreate(@revAddress, constructor, retCh) = {
-          new revAddressValidCh, revAddressValidEitherCh, getOrCreate in {
-            RevAddress!("validate", revAddress, *revAddressValidCh) |
-            @Either!("fromNillableError <-", *revAddressValidCh, *revAddressValidEitherCh) |
-            @Either!("flatMap <-", *revAddressValidEitherCh, *getOrCreate, *retCh) |
-            for (_, ret <- getOrCreate; @vaultMap <- vaultMapStore) {
-              match vaultMap.get(revAddress) {
-                Nil => {
-                  new resCh in {
-                    constructor!(*resCh) |
-                    for (@eitherVault <- resCh) {
-                      match eitherVault {
-                        (true, vault) => vaultMapStore!(vaultMap.set(revAddress, vault))
-                        (false,  _    ) => vaultMapStore!(vaultMap)
-                      } |
-                      ret!(eitherVault)
+                  RevAddress!("fromPublicKey", deployerPubKeyBytes, *revAddrCh) |
+                  for (@deployerRevAddress <- revAddrCh) {
+
+                    @AuthKey!("make", (*_revVault, deployerRevAddress), *ret)
+                  }
+                }
+              }
+            } |
+
+            contract RevVault(@"unforgeableAuthKey", unf, ret) = {
+
+              new RevAddress(`rho:rev:address`), revAddrCh in {
+                RevAddress!("fromUnforgeable", *unf, *revAddrCh) |
+                for (@unfRevAddress <- revAddrCh) {
+
+                  @AuthKey!("make", (*_revVault, unfRevAddress), *ret)
+                }
+              }
+            } |
+
+            // Deprecated version of `deployerAuthKey`
+            // Please use the version above where a deployer id has to be passed
+            contract RevVault(@"deployerAuthKey", ret) = {
+
+              new deployerPubKeyBytesCh in {
+                _getIdentity!(*deployerPubKeyBytesCh) |
+                for (@deployerPubKeyBytes <- deployerPubKeyBytesCh) {
+
+                  new RevAddress(`rho:rev:address`), revAddrCh in {
+                    RevAddress!("fromPublicKey", deployerPubKeyBytes, *revAddrCh)|
+                    for (@deployerRevAddress <- revAddrCh) {
+
+                      @AuthKey!("make", (*_revVault, deployerRevAddress), *ret)
                     }
                   }
                 }
-                value => {
-                  vaultMapStore!(vaultMap) | ret!((true, value))
+              }
+            } |
+
+            contract _getIdentity(retCh) = {
+              new getDeployData(`rho:deploy:params`), ch in {
+                getDeployData ! (*ch) |
+                for (_, _, @userId, _ <- ch) {
+                  retCh ! (userId)
                 }
               }
-            }
-          }
-        } |
-
-        contract _makeVault(@ownerRevAddress, @initialAmount, ret) = {
-
-          new revAddrCh, eitherRevAddrCh, purseCh, eitherPurseCh, mkVault in {
-            @Either!("fromNillable", ownerRevAddress, "Required `revAddress` parameter was Nil", *eitherRevAddrCh) |
-            mint!("makePurse", initialAmount, *purseCh) |
-            @Either!("fromNillable <-", *purseCh, "Couldn't create purse", *eitherPurseCh) |
-            @Either!("map2 <-", *eitherRevAddrCh, *eitherPurseCh, for (@addr, purse, r <- mkVault) {
-              new revVault in {
-                _newVault!(*revVault, addr, *purse) |
-                r!(bundle+{*revVault})
-              }
-            }, *ret)
-          }
-
-        } |
-
-        contract _newVault(revVault, @ownRevAddress, purse) = {
-
-            contract revVault(@"balance", ret) = {
-              purse!("getBalance", *ret)
             } |
 
-            contract revVault(@"transfer", @revAddress, @amount, authKey, ret) = {
-              _transferTemplate!(ownRevAddress, *purse, revAddress, amount, *authKey, *ret)
-            } |
+            contract RevVault(@"findOrCreate", @ownerRevAddress, ret) = {
+              new createVault in {
+                _getOrCreate!(ownerRevAddress, *createVault, *ret) |
+                for (retCh <- createVault) {
 
-            contract @{ownRevAddress | bundle0{*_revVault}}(@"_deposit", depositPurse, retCh) = {
-              _depositTemplate!(*purse, *depositPurse, *retCh)
-            }
-
-        } |
-
-        contract _transferTemplate(@ownRevAddress, purse, @revAddress, @amount, authKey, ret) = {
-          new
-            revAddressValid, revAddressValidEither, amountNonNegative,
-            authKeyValidCh, authKeyValidEitherCh,
-            parametersOkCh, parametersAndAuthOkCh,
-            split, eitherPurseCh, doDeposit
-          in {
-            RevAddress!("validate", revAddress, *revAddressValid) |
-            @Either!("fromNillableError <-", *revAddressValid, *revAddressValidEither) |
-
-            @Either!("fromBoolean", amount >= 0, "Amount must be non-negative", *amountNonNegative) |
-
-            @AuthKey!("check", *authKey, (*_revVault, ownRevAddress), *authKeyValidCh) |
-            @Either!("fromBoolean <-", *authKeyValidCh, "Invalid AuthKey", *authKeyValidEitherCh) |
-
-            @Either!("productR <-", *revAddressValidEither, *amountNonNegative, *parametersOkCh) |
-            @Either!("productR <-", *parametersOkCh, *authKeyValidEitherCh, *parametersAndAuthOkCh) |
-
-            @Either!("flatMap <-", *parametersAndAuthOkCh, *split, *eitherPurseCh) |
-            for (_, retCh <- split) {
-              new amountPurseCh in {
-                purse!("split", amount, *amountPurseCh) |
-                @Either!("fromSingletonList <-", *amountPurseCh, "Insufficient funds", *retCh)
+                  _makeVault!(ownerRevAddress, 0, *retCh)
+                }
               }
             } |
 
-            @Either!("flatMap <-", *eitherPurseCh, *doDeposit, *ret) |
-            for (@p, retCh <- doDeposit) {
-              @{revAddress | bundle0{*_revVault}}!("_deposit", p, *retCh)
-            }
+            contract _getOrCreate(@revAddress, constructor, retCh) = {
+              new revAddressValidCh, revAddressValidEitherCh, getOrCreate in {
+                RevAddress!("validate", revAddress, *revAddressValidCh) |
+                @Either!("fromNillableError <-", *revAddressValidCh, *revAddressValidEitherCh) |
+                @Either!("flatMap <-", *revAddressValidEitherCh, *getOrCreate, *retCh) |
+                for (_, ret <- getOrCreate) {
+                  for (@vaultMap <- vaultMapStore) {
+                    match vaultMap.get(revAddress) {
+                      Nil => {
+                        new resCh in {
+                          constructor!(*resCh) |
+                          for (@eitherVault <- resCh) {
+                            match eitherVault {
+                              (true, vault) => vaultMapStore!(vaultMap.set(revAddress, vault))
+                              (false,  _    ) => vaultMapStore!(vaultMap)
+                            } |
+                            ret!(eitherVault)
+                          }
+                        }
+                      }
+                      value => {
+                        vaultMapStore!(vaultMap) | ret!((true, value))
+                      }
+                    }
+                  }
+                }
+              }
+            } |
+
+            contract _makeVault(@ownerRevAddress, @initialAmount, ret) = {
+
+              new revAddrCh, eitherRevAddrCh, purseCh, eitherPurseCh, mkVault in {
+                @Either!("fromNillable", ownerRevAddress, "Required `revAddress` parameter was Nil", *eitherRevAddrCh) |
+                mint!("makePurse", initialAmount, *purseCh) |
+                @Either!("fromNillable <-", *purseCh, "Couldn't create purse", *eitherPurseCh) |
+                @Either!("map2 <-", *eitherRevAddrCh, *eitherPurseCh, for (@addr, purse, r <- mkVault) {
+                  new revVault in {
+                    _newVault!(*revVault, addr, *purse) |
+                    r!(bundle+{*revVault})
+                  }
+                }, *ret)
+              }
+
+            } |
+
+            contract _newVault(revVault, @ownRevAddress, purse) = {
+
+                contract revVault(@"balance", ret) = {
+                  purse!("getBalance", *ret)
+                } |
+
+                contract revVault(@"transfer", @revAddress, @amount, authKey, ret) = {
+                  _transferTemplate!(ownRevAddress, *purse, revAddress, amount, *authKey, *ret)
+                } |
+
+                contract @{ownRevAddress | bundle0{*_revVault}}(@"_deposit", depositPurse, retCh) = {
+                  _depositTemplate!(*purse, *depositPurse, *retCh)
+                }
+
+            } |
+
+            contract _transferTemplate(@ownRevAddress, purse, @revAddress, @amount, authKey, ret) = {
+              new
+                revAddressValid, revAddressValidEither, amountNonNegative,
+                authKeyValidCh, authKeyValidEitherCh,
+                parametersOkCh, parametersAndAuthOkCh,
+                split, eitherPurseCh, doDeposit
+              in {
+                RevAddress!("validate", revAddress, *revAddressValid) |
+                @Either!("fromNillableError <-", *revAddressValid, *revAddressValidEither) |
+
+                @Either!("fromBoolean", amount >= 0, "Amount must be non-negative", *amountNonNegative) |
+
+                @AuthKey!("check", *authKey, (*_revVault, ownRevAddress), *authKeyValidCh) |
+                @Either!("fromBoolean <-", *authKeyValidCh, "Invalid AuthKey", *authKeyValidEitherCh) |
+
+                @Either!("productR <-", *revAddressValidEither, *amountNonNegative, *parametersOkCh) |
+                @Either!("productR <-", *parametersOkCh, *authKeyValidEitherCh, *parametersAndAuthOkCh) |
+
+                @Either!("flatMap <-", *parametersAndAuthOkCh, *split, *eitherPurseCh) |
+                for (_, retCh <- split) {
+                  new amountPurseCh in {
+                    purse!("split", amount, *amountPurseCh) |
+                    @Either!("fromSingletonList <-", *amountPurseCh, "Insufficient funds", *retCh)
+                  }
+                } |
+
+                @Either!("flatMap <-", *eitherPurseCh, *doDeposit, *ret) |
+                for (@p, retCh <- doDeposit) {
+                  @{revAddress | bundle0{*_revVault}}!("_deposit", p, *retCh)
+                }
+              }
+            } |
+
+            contract _depositTemplate(purse, depositPurse, retCh) = {
+              new amountCh, depositSuccessCh in {
+                depositPurse!("getBalance", *amountCh) |
+                for (@amount <- amountCh) {
+
+                  purse!("deposit", amount, *depositPurse, *depositSuccessCh) |
+                  @Either!("fromBoolean <-", *depositSuccessCh, "BUG FOUND: purse deposit failed", *retCh)
+                }
+              }
+            } |
+
+            rs!(
+              "040f035630a5d2199184890b4b6b83440c842da0b6becca539f788f7b35d6e873561f673cd6ebe2e32236398a86f29dad992e8fba32534734300fcc5104bcfea0e".hexToBytes(),
+              (9223372036854775807, bundle+{*RevVault}),
+              "30450221008af89d676c4cd6b3d41e90da89b03a1e83f161fc8c4ad22c9edc903db3a9f4c402204e35e29e40a5f2b2f431d3cc63b87fb52c33716b3ce331a2a19b9660c3690c18".hexToBytes(),
+              *uriOut
+            )
           }
-        } |
-
-        contract _depositTemplate(purse, depositPurse, retCh) = {
-          new amountCh, depositSuccessCh in {
-            depositPurse!("getBalance", *amountCh) |
-            for (@amount <- amountCh) {
-
-              purse!("deposit", amount, *depositPurse, *depositSuccessCh) |
-              @Either!("fromBoolean <-", *depositSuccessCh, "BUG FOUND: purse deposit failed", *retCh)
-            }
-          }
-        } |
-
-        rs!(
-          "040f035630a5d2199184890b4b6b83440c842da0b6becca539f788f7b35d6e873561f673cd6ebe2e32236398a86f29dad992e8fba32534734300fcc5104bcfea0e".hexToBytes(),
-          (9223372036854775807, bundle+{*RevVault}),
-          "30450221008af89d676c4cd6b3d41e90da89b03a1e83f161fc8c4ad22c9edc903db3a9f4c402204e35e29e40a5f2b2f431d3cc63b87fb52c33716b3ce331a2a19b9660c3690c18".hexToBytes(),
-          *uriOut
-        )
+        }
       }
     }
   }
