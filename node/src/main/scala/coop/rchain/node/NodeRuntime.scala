@@ -9,7 +9,7 @@ import cats.effect._
 import cats.effect.concurrent.Semaphore
 import cats.implicits._
 import cats.tagless.implicits._
-import cats.mtl.{ApplicativeAsk, MonadState}
+import cats.mtl.{ApplicativeAsk, ApplicativeLocal, MonadState}
 import cats.temp.par.Par
 import coop.rchain.blockstorage._
 import coop.rchain.blockstorage.util.io.IOError
@@ -198,6 +198,7 @@ class NodeRuntime private[node] (
     taskableEnv = new Taskable[TaskEnv] {
       override def toTask[A](fa: TaskEnv[A]): Task[A] = fa.run(Trace.next)
     }
+    localEnvironment = cats.mtl.instances.all.localReader[Task, NodeRuntime.Environment]
     result <- NodeRuntime.setupNodeProgramF[TaskEnv](
                rpConnectionsEnv,
                rpConfAskEnv,
@@ -220,7 +221,8 @@ class NodeRuntime private[node] (
                eventLogEnv,
                ContextShift[TaskEnv],
                Par[TaskEnv],
-               taskableEnv
+               taskableEnv,
+               localEnvironment
              )
     (
       blockStore,
@@ -543,8 +545,9 @@ class NodeRuntime private[node] (
 
 object NodeRuntime {
 
-  type Environment = TraceId
-  type TaskEnv[A]  = ReaderT[Task, Environment, A]
+  type Environment            = TraceId
+  type TaskEnv[A]             = ReaderT[Task, Environment, A]
+  type LocalEnvironment[F[_]] = ApplicativeLocal[F, Environment]
 
   val taskToEnv: Task ~> TaskEnv = λ[Task ~> TaskEnv](ReaderT.liftF(_))
 
@@ -579,7 +582,7 @@ object NodeRuntime {
         } yield ()
     }
 
-  def setupNodeProgramF[F[_]: Metrics: TransportLayer: Sync: Concurrent: Time: Log: EventLog: ContextShift: Par: Taskable](
+  def setupNodeProgramF[F[_]: Metrics: TransportLayer: Sync: Concurrent: Time: Log: EventLog: ContextShift: Par: Taskable: LocalEnvironment](
       rpConnections: ConnectionsCell[F],
       rpConfAsk: ApplicativeAsk[F, RPConf],
       rpConfState: MonadState[F, RPConf],
@@ -612,7 +615,9 @@ object NodeRuntime {
                        Metrics[F]
                      )
                      .map(_.right.get) // TODO handle errors
-      span            = Span.noop[F]
+      span = if (conf.kamon.zipkin)
+        diagnostics.effects.span(conf.server.networkId, conf.server.host.getOrElse("-"))
+      else Span.noop[F]
       blockDagStorage <- BlockDagFileStorage.create[F](dagConfig)
       oracle = {
         implicit val sp = span
