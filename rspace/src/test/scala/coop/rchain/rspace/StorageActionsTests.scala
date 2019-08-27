@@ -185,7 +185,7 @@ trait StorageActionsTests[F[_]]
   }
 
   "consuming and then producing on the same channel with peek" should
-    "return the continuation and data and not remove the peeked data" in fixture {
+    "return the continuation and data and not insert the peeked data" in fixture {
     (store, _, space) =>
       val channel = "ch1"
       val key     = List(channel)
@@ -204,14 +204,43 @@ trait StorageActionsTests[F[_]]
 
         r2            <- space.produce(channel, "datum", persist = false)
         d1            <- store.getData(channel)
-        _             = d1 shouldBe List(Datum.create(channel, "datum", false))
+        _             = d1 shouldBe Nil
         c2            <- store.getContinuations(key)
         _             = c2 shouldBe Nil
         _             = r2 shouldBe defined
         _             = runK(r2)
         _             = getK(r2).results should contain theSameElementsAs List(List("datum"))
         insertActions <- store.changes().map(collectActions[InsertAction])
-        _             = insertActions should have size 1
+        _             = insertActions should have size 0
+      } yield ()
+  }
+  "consuming and then producing on the same channel with persistent flag" should
+    "return the continuation and data and not insert the persistent data" in fixture {
+    (store, _, space) =>
+      val channel = "ch1"
+      val key     = List(channel)
+
+      for {
+        r1 <- space.consume(
+               key,
+               List(Wildcard),
+               new StringsCaptor,
+               persist = false
+             )
+        _  = r1 shouldBe None
+        c1 <- store.getContinuations(key)
+        _  = c1 should have size 1
+
+        r2            <- space.produce(channel, "datum", persist = true)
+        d1            <- store.getData(channel)
+        _             = d1 shouldBe Nil
+        c2            <- store.getContinuations(key)
+        _             = c2 shouldBe Nil
+        _             = r2 shouldBe defined
+        _             = runK(r2)
+        _             = getK(r2).results should contain theSameElementsAs List(List("datum"))
+        insertActions <- store.changes().map(collectActions[InsertAction])
+        _             = insertActions should have size 0
       } yield ()
   }
 

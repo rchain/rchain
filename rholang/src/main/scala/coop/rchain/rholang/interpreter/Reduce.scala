@@ -99,7 +99,7 @@ class DebruijnInterpreter[M[_], F[_]](
     def go(res: Application): M[Unit] =
       res match {
         case Some((continuation, dataList, updatedSequenceNumber, peek)) =>
-          if (persistent && !peek)
+          if (persistent || peek)
             List(
               dispatcher.dispatch(continuation, dataList, updatedSequenceNumber),
               produce(chan, data, persistent, sequenceNumber)

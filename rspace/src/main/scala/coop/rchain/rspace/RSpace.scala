@@ -398,16 +398,7 @@ class RSpace[F[_], C, P, A, K] private[rspace] (
                                  )
                      _ <- spanF.mark("extract-produce-candidate")
                      r <- extracted match {
-                           case Some(pc) =>
-                             for {
-                               a               <- processMatchFound(pc)
-                               indexedChannels = pc.channels.zipWithIndex.toMap
-                               _ <- if (pc.continuation.peeks.contains(indexedChannels(channel))) {
-                                     storeData(channel, data, persist, produceRef)
-                                   } else
-                                     ().pure[F]
-                             } yield a
-
+                           case Some(pc) => processMatchFound(pc)
                            case None =>
                              storeData(channel, data, persist, produceRef)
                          }
