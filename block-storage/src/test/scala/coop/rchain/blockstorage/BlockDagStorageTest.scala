@@ -9,6 +9,7 @@ import coop.rchain.catscontrib.TaskContrib.TaskOps
 import cats.effect.Sync
 
 import com.google.protobuf.ByteString
+import coop.rchain.blockstorage.dag.codecs._
 import coop.rchain.blockstorage.util.byteOps._
 import coop.rchain.blockstorage.util.io.IOError.RaiseIOError
 import coop.rchain.blockstorage.util.io._
@@ -23,12 +24,13 @@ import coop.rchain.models.blockImplicits._
 import coop.rchain.rspace.Context
 import coop.rchain.{metrics, shared}
 import coop.rchain.shared.Log
-
+import coop.rchain.shared.AttemptOps._
 import monix.eval.Task
 import monix.execution.Scheduler
 import org.scalatest._
 import org.scalatest.prop.GeneratorDrivenPropertyChecks
 import scala.util.Random
+import scodec.codecs._
 
 import coop.rchain.metrics.Metrics
 
@@ -430,6 +432,29 @@ class BlockDagFileStorageTest extends BlockDagStorageTest {
     }
   }
 
+  it should "be able to modify equivocation records" in {
+    forAll(validatorGen, blockHashGen, blockHashGen) { (equivocator, blockHash1, blockHash2) =>
+      withDagStorageLocation { dagDataDir =>
+        for {
+          firstStorage <- createAtDefaultLocation(dagDataDir)
+          record       = EquivocationRecord(equivocator, 0, Set(blockHash1))
+          _ <- firstStorage.accessEquivocationsTracker { tracker =>
+                tracker.insertEquivocationRecord(record)
+              }
+          _ <- firstStorage.accessEquivocationsTracker { tracker =>
+                tracker.updateEquivocationRecord(record, blockHash2)
+              }
+          _             <- firstStorage.close()
+          updatedRecord = EquivocationRecord(equivocator, 0, Set(blockHash1, blockHash2))
+          secondStorage <- createAtDefaultLocation(dagDataDir)
+          records       <- secondStorage.accessEquivocationsTracker(_.equivocationRecords)
+          _             = records shouldBe Set(updatedRecord)
+          _             <- secondStorage.close()
+        } yield ()
+      }
+    }
+  }
+
   it should "be able to restore equivocations tracker on startup with appended garbage equivocation record" in {
     forAll(blockElementsWithParentsGen, minSize(0), sizeRange(10)) { blockElements =>
       forAll(validatorGen) { equivocator =>
@@ -456,7 +481,15 @@ class BlockDagFileStorageTest extends BlockDagStorageTest {
                 0,
                 Set(ByteString.copyFrom(garbageBlockHash))
               )
-              garbageBytes = garbageRecord.toByteString.toByteArray
+              garbageBytes = (codecValidator ~ int32 ~ codecBlockHashSet)
+                .encode(
+                  (
+                    (garbageRecord.equivocator, garbageRecord.equivocationBaseBlockSeqNum),
+                    garbageRecord.equivocationDetectedBlockHashes
+                  )
+                )
+                .get
+                .toByteArray
               _ <- writeToFile[Task](
                     defaultEquivocationsTrackerLog(dagDataDir),
                     garbageBytes,
