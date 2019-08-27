@@ -74,7 +74,7 @@ object Interpreter {
                       case Right(parsed) =>
                         for {
                           result    <- reducer.inj(parsed).attempt
-                          phlosLeft <- C.inspect(identity)
+                          phlosLeft <- C.get
                           oldErrors <- errorLog.readAndClearErrorVector()
                           newErrors = result.swap.toSeq.toVector
                           allErrors = oldErrors |+| newErrors

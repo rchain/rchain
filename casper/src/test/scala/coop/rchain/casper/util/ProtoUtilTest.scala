@@ -5,7 +5,7 @@ import coop.rchain.casper.MultiParentCasper.ignoreDoppelgangerCheck
 import coop.rchain.casper._
 import coop.rchain.casper.helper.HashSetCasperTestNode
 import coop.rchain.casper.helper.HashSetCasperTestNode._
-import coop.rchain.casper.scalatestcontrib._
+import coop.rchain.shared.scalatestcontrib._
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.blockImplicits._
 import coop.rchain.p2p.EffectsTestInstances.LogicalTime

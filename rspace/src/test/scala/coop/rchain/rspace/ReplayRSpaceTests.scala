@@ -124,7 +124,10 @@ trait ReplayRSpaceTests extends ReplayRSpaceTestsBase[String, Pattern, String, S
 
         _ = resultConsume shouldBe None
         _ = resultProduce shouldBe Some(
-          (ContResult(continuation, false, channels, patterns, 1), List(Result(datum, false)))
+          (
+            ContResult(continuation, false, channels, patterns, 1),
+            List(Result(datum, datum, false))
+          )
         )
 
         _ <- replaySpace.rigAndReset(emptyPoint.root, rigPoint.log)
@@ -162,7 +165,10 @@ trait ReplayRSpaceTests extends ReplayRSpaceTestsBase[String, Pattern, String, S
 
         _ = resultConsume shouldBe None
         _ = resultProduce shouldBe Some(
-          (ContResult(continuation, false, channels, patterns, 1, true), List(Result(datum, false)))
+          (
+            ContResult(continuation, false, channels, patterns, 1, true),
+            List(Result(datum, datum, false))
+          )
         )
 
         _ <- replaySpace.rigAndReset(emptyPoint.root, rigPoint.log)
@@ -349,7 +355,10 @@ trait ReplayRSpaceTests extends ReplayRSpaceTestsBase[String, Pattern, String, S
         _ = resultConsume4 shouldBe defined
         _ = resultConsume5 shouldBe defined
         _ = resultProduce shouldBe Some(
-          (ContResult(continuation, false, channels, patterns, 1, true), List(Result(datum, false)))
+          (
+            ContResult(continuation, false, channels, patterns, 1, true),
+            List(Result(datum, datum, false))
+          )
         )
         _ <- replaySpace.rigAndReset(emptyPoint.root, rigPoint.log)
 
@@ -956,7 +965,7 @@ trait ReplayRSpaceTests extends ReplayRSpaceTestsBase[String, Pattern, String, S
           cr._1.peek shouldBe true
         }
         _ = extractedResults should have size 100
-        _ = extractedResults.map(_._2).flatten.map(_.value).toSet should have size 5
+        _ = extractedResults.map(_._2).flatten.map(_.matchedDatum).toSet should have size 5
         _ = replayResults should contain theSameElementsAs results
         _ = finalPoint.root shouldBe rigPoint.root
         _ = replaySpace.replayData shouldBe empty

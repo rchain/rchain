@@ -2,7 +2,7 @@ package coop.rchain.casper
 
 import coop.rchain.casper.helper.HashSetCasperTestNode
 import coop.rchain.casper.helper.HashSetCasperTestNode.Effect
-import coop.rchain.casper.scalatestcontrib._
+import coop.rchain.shared.scalatestcontrib._
 import coop.rchain.casper.util.rholang.{RegistrySigGen, RuntimeManager}
 import coop.rchain.casper.util.{ConstructDeploy, ProtoUtil, RSpaceUtil}
 import coop.rchain.crypto.codec.Base16

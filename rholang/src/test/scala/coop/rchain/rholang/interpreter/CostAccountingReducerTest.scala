@@ -1,6 +1,7 @@
 package coop.rchain.rholang.interpreter
 
 import coop.rchain.crypto.hash.Blake2b512Random
+import coop.rchain.metrics
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.models.Expr.ExprInstance.{EVarBody, GString}
 import coop.rchain.models.Var.VarInstance.FreeVar
@@ -10,19 +11,16 @@ import coop.rchain.rholang.Resources.mkRhoISpace
 import coop.rchain.rholang.interpreter.Runtime.RhoISpace
 import coop.rchain.rholang.interpreter.accounting._
 import coop.rchain.rholang.interpreter.errors.OutOfPhlogistonsError
-import coop.rchain.rholang.interpreter.storage.{ChargingRSpace, ISpaceStub}
+import coop.rchain.rholang.interpreter.storage.ISpaceStub
 import coop.rchain.rholang.interpreter.storage._
-import coop.rchain.rspace.internal.{Datum, Row}
 import coop.rchain.rspace._
-import coop.rchain.rspace.Match
+import coop.rchain.rspace.internal.{Datum, Row}
 import coop.rchain.shared.Log
-import coop.rchain.{metrics, rspace}
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
 import org.scalactic.TripleEqualsSupport
 import org.scalatest.{FlatSpec, Matchers}
 
-import scala.collection.SortedSet
 import scala.concurrent.duration._
 
 class CostAccountingReducerTest extends FlatSpec with Matchers with TripleEqualsSupport {
@@ -134,7 +132,7 @@ class CostAccountingReducerTest extends FlatSpec with Matchers with TripleEquals
           )
 
       def plainSendCost(p: Par): Cost = {
-        val storageCost = ChargingRSpace.storageCostProduce(
+        val storageCost = accounting.storageCostProduce(
           channel,
           ListParWithRandom(Seq(p))
         )

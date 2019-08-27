@@ -9,7 +9,7 @@ import coop.rchain.casper.EstimatorHelper.conflicts
 import coop.rchain.casper.helper.{BlockDagStorageFixture, BlockGenerator, HashSetCasperTestNode}
 import coop.rchain.casper.protocol.Event.EventInstance.{Consume, Produce}
 import coop.rchain.casper.protocol._
-import coop.rchain.casper.scalatestcontrib._
+import coop.rchain.shared.scalatestcontrib._
 import coop.rchain.casper.util.ConstructDeploy._
 import coop.rchain.casper.util.GenesisBuilder
 import coop.rchain.casper.util.rholang.{Resources, RuntimeManager}

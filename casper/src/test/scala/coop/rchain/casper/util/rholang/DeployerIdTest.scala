@@ -4,7 +4,7 @@ import cats.effect.Resource
 import cats.implicits._
 import com.google.protobuf.ByteString
 import coop.rchain.casper.helper.HashSetCasperTestNode
-import coop.rchain.casper.scalatestcontrib.effectTest
+import coop.rchain.shared.scalatestcontrib.effectTest
 import coop.rchain.casper.util.GenesisBuilder.{buildGenesis, buildGenesisParameters}
 import coop.rchain.casper.util.rholang.Resources._
 import coop.rchain.casper.util.{ConstructDeploy, ProtoUtil}

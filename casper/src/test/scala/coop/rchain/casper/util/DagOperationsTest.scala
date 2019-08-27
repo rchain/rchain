@@ -4,7 +4,7 @@ import cats.{Id, Monad}
 import coop.rchain.casper.helper.BlockGenerator._
 import coop.rchain.casper.helper.{BlockDagStorageFixture, BlockGenerator}
 import coop.rchain.casper.protocol.BlockMessage
-import coop.rchain.casper.scalatestcontrib._
+import coop.rchain.shared.scalatestcontrib._
 import coop.rchain.models.BlockMetadata
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.Validator.Validator
