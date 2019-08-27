@@ -5,7 +5,7 @@ import cats.implicits._
 import cats.mtl.ApplicativeLocal
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.metrics.Metrics.Source
-import coop.rchain.node.diagnostics.Trace.TraceId
+import coop.rchain.node.NodeCallCtx
 import kamon.Kamon
 import kamon.trace.{Span => KSpan}
 import monix.execution.atomic.AtomicLong
@@ -60,7 +60,7 @@ object Trace {
 
 package object effects {
 
-  type AskTrace[F[_]] = ApplicativeLocal[F, TraceId]
+  type AskTrace[F[_]] = ApplicativeLocal[F, NodeCallCtx]
   object AskTrace {
     def apply[F[_]](implicit ev: AskTrace[F]): AskTrace[F] = ev
   }
@@ -80,20 +80,22 @@ package object effects {
       private val spans: TrieMap[TraceId, SourceTrace] = TrieMap.empty
 
       override def mark(name: String): F[Unit] =
-        ask.flatMap { spans.get(_).map(_.mark(name)).getOrElse(Sync[F].unit) }
+        ask.flatMap { e =>
+          spans.get(e.trace).map(_.mark(name)).getOrElse(Sync[F].unit)
+        }
 
       override def trace[A](source: Source)(block: F[A]): F[A] =
         for {
-          r <- Sync[F].bracket(ask.map { parentTraceId =>
-                val parent  = spans.get(parentTraceId)
-                val traceId = Trace.next
+          r <- Sync[F].bracket(ask.map { parentEnvironment =>
+                val parent      = spans.get(parentEnvironment.trace)
+                val environment = parentEnvironment.next
                 spans
-                  .putIfAbsent(traceId, SourceTrace(source, networkId, host, parent))
-                  .map(_ => traceId)
-                  .getOrElse(traceId)
-              })(scope(_)(block)) { traceId =>
+                  .putIfAbsent(environment.trace, SourceTrace(source, networkId, host, parent))
+                  .map(_ => environment)
+                  .getOrElse(environment)
+              })(scope(_)(block)) { environment =>
                 Sync[F]
-                  .delay(spans.remove(traceId))
+                  .delay(spans.remove(environment.trace))
                   .flatMap(_.map(_.end()).getOrElse(Sync[F].unit))
               }
         } yield r

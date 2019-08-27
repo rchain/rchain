@@ -181,24 +181,24 @@ class NodeRuntime private[node] (
     casperConfig = RuntimeConf(casperStoragePath, storageSize)
     cliConfig    = RuntimeConf(storagePath, 800L * 1024L * 1024L) // 800MB for cli
 
-    rpConfAskEnv = effects.readerTApplicativeAsk[Task, NodeRuntime.Environment, RPConf](rpConfAsk)
-    rpConfStateEnv = effects.readerTMonadState[Task, NodeRuntime.Environment, RPConf](
+    rpConfAskEnv = effects.readerTApplicativeAsk[Task, NodeCallCtx, RPConf](rpConfAsk)
+    rpConfStateEnv = effects.readerTMonadState[Task, NodeCallCtx, RPConf](
       rpConfState
     )
-    peerNodeAskEnv = effects.readerTApplicativeAsk[Task, NodeRuntime.Environment, PeerNode](
+    peerNodeAskEnv = effects.readerTApplicativeAsk[Task, NodeCallCtx, PeerNode](
       peerNodeAsk
     )
-    metricsEnv       = Metrics.readerTMetrics[Task, NodeRuntime.Environment](metrics)
+    metricsEnv       = Metrics.readerTMetrics[Task, NodeCallCtx](metrics)
     transportEnv     = transport.mapK(taskToEnv)
     timeEnv          = time.mapK(taskToEnv)
     logEnv           = log.mapK(taskToEnv)
     eventLogEnv      = eventLog.mapK(taskToEnv)
     nodeDiscoveryEnv = nodeDiscovery.mapK(taskToEnv)
-    rpConnectionsEnv = Cell.readerT[Task, NodeRuntime.Environment, Connections](rpConnections)
+    rpConnectionsEnv = Cell.readerT[Task, NodeCallCtx, Connections](rpConnections)
     taskableEnv = new Taskable[TaskEnv] {
-      override def toTask[A](fa: TaskEnv[A]): Task[A] = fa.run(Trace.next)
+      override def toTask[A](fa: TaskEnv[A]): Task[A] = fa.run(NodeCallCtx.init)
     }
-    localEnvironment = cats.mtl.instances.all.localReader[Task, NodeRuntime.Environment]
+    localEnvironment = cats.mtl.instances.all.localReader[Task, NodeCallCtx]
     result <- NodeRuntime.setupNodeProgramF[TaskEnv](
                rpConnectionsEnv,
                rpConfAskEnv,
@@ -377,27 +377,33 @@ class NodeRuntime private[node] (
           )
       _ <- servers.transportServer
             .start(
-              pm => HandleMessages.handle[TaskEnv](pm).run(Trace.next),
-              blob => packetHandler.handlePacket(blob.sender, blob.packet).run(Trace.next)
+              pm => HandleMessages.handle[TaskEnv](pm).run(NodeCallCtx.init),
+              blob =>
+                packetHandler
+                  .handlePacket(blob.sender, blob.packet)
+                  .run(NodeCallCtx.init)
             )
             .toReaderT
       address = local.toAddress
       _       <- Log[TaskEnv].info(s"Listening for traffic on $address.")
       _       <- EventLog[TaskEnv].publish(Event.NodeStarted(address))
       _ <- Task
-            .defer(nodeDiscoveryLoop.forever.run(Trace.next))
+            .defer(nodeDiscoveryLoop.forever.run(NodeCallCtx.init))
             .executeOn(loopScheduler)
             .start
             .toReaderT
       _ <- Task
-            .defer(clearConnectionsLoop.forever.run(Trace.next))
+            .defer(clearConnectionsLoop.forever.run(NodeCallCtx.init))
             .executeOn(loopScheduler)
             .start
             .toReaderT
       _ <- if (conf.server.standalone) ().pure[TaskEnv]
           else Log[TaskEnv].info(s"Waiting for first connection.") >> waitForFirstConnection
       _ <- Concurrent[TaskEnv].start(engineInit)
-      _ <- Task.defer(casperLoop.forever.run(Trace.next)).executeOn(loopScheduler).toReaderT
+      _ <- Task
+            .defer(casperLoop.forever.run(NodeCallCtx.init))
+            .executeOn(loopScheduler)
+            .toReaderT
     } yield ()
   }
 
@@ -437,7 +443,7 @@ class NodeRuntime private[node] (
       _ <- Log[TaskEnv].info("Bringing BlockStore down ...")
       _ <- blockStore.close()
       _ <- Log[TaskEnv].info("Goodbye.")
-    } yield ()).run(Trace.next).unsafeRunSync(scheduler)
+    } yield ()).run(NodeCallCtx.init).unsafeRunSync(scheduler)
 
   private def exit0: Task[Unit] = Task.delay(System.exit(0))
 
@@ -540,14 +546,18 @@ class NodeRuntime private[node] (
       httpServerFiber
     )
   }
+}
 
+final case class NodeCallCtx(trace: TraceId) {
+  def next: NodeCallCtx = this.copy(trace = Trace.next)
+}
+object NodeCallCtx {
+  def init: NodeCallCtx = NodeCallCtx(Trace.next)
 }
 
 object NodeRuntime {
-
-  type Environment            = TraceId
-  type TaskEnv[A]             = ReaderT[Task, Environment, A]
-  type LocalEnvironment[F[_]] = ApplicativeLocal[F, Environment]
+  type TaskEnv[A]             = ReaderT[Task, NodeCallCtx, A]
+  type LocalEnvironment[F[_]] = ApplicativeLocal[F, NodeCallCtx]
 
   val taskToEnv: Task ~> TaskEnv = λ[Task ~> TaskEnv](ReaderT.liftF(_))
 

@@ -195,7 +195,7 @@ object Main {
       _             <- log.info(VersionInfo.get)
       _             <- logConfiguration(confWithPorts)
       runtime       <- NodeRuntime(confWithPorts)
-      _             <- runtime.main.run(Trace.next)
+      _             <- runtime.main.run(NodeCallCtx.init)
     } yield ()
   }
 
