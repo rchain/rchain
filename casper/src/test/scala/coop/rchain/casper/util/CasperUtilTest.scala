@@ -3,7 +3,7 @@ package coop.rchain.casper.util
 import coop.rchain.casper.helper.{BlockDagStorageFixture, BlockGenerator}
 import coop.rchain.casper.helper.BlockGenerator._
 import coop.rchain.casper.helper.BlockUtil.generateValidator
-import coop.rchain.casper.scalatestcontrib._
+import coop.rchain.shared.scalatestcontrib._
 import coop.rchain.casper.util.ProtoUtil._
 import monix.eval.Task
 import org.scalatest.{FlatSpec, Matchers}

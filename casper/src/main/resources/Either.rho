@@ -82,8 +82,10 @@ new  Either, rs(`rho:registry:insertSigned:secp256k1`), uriOut, rl(`rho:registry
 
     // Like productR, except it takes `aCh` and `bCh` and reads them to obtain the `a` and `b` parameters
     contract Either(@"productR <-", aCh, bCh, return) = {
-      for (@a <- aCh; @b <- bCh) {
-        Either!("productR", a, b, *return)
+      for (@a <- aCh) {
+        for (@b <- bCh) {
+          Either!("productR", a, b, *return)
+        }
       }
     } |
 
@@ -97,8 +99,10 @@ new  Either, rs(`rho:registry:insertSigned:secp256k1`), uriOut, rl(`rho:registry
 
     // Like map2, except it takes `aCh` and `bCh` and reads them to obtain the `a` and `b` parameters
     contract Either(@"map2 <-", aCh, bCh, f, return) = {
-      for (@a <- aCh; @b <- bCh) {
-        Either!("map2", a, b, *f, *return)
+      for (@a <- aCh) {
+        for (@b <- bCh) {
+          Either!("map2", a, b, *f, *return)
+        }
       }
     } |
 

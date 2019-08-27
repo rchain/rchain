@@ -4,7 +4,7 @@ import cats.effect.Resource
 import cats.implicits._
 import cats.{Functor, Id}
 import coop.rchain.casper.protocol.DeployData
-import coop.rchain.casper.scalatestcontrib.effectTest
+import coop.rchain.shared.scalatestcontrib.effectTest
 import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
 import coop.rchain.casper.util.{ConstructDeploy, GenesisBuilder, ProtoUtil}
 import coop.rchain.catscontrib.effect.implicits._

@@ -3,11 +3,9 @@ package coop.rchain.rspace
 import cats.Id
 import coop.rchain.rspace.internal._
 
-import scala.collection.SortedSet
-
-final case class Result[A](value: A, persistent: Boolean)
-final case class ContResult[C, P, A](
-    value: A,
+final case class Result[A](matchedDatum: A, removedDatum: A, persistent: Boolean)
+final case class ContResult[C, P, K](
+    continuation: K,
     persistent: Boolean,
     channels: Seq[C],
     patterns: Seq[P],

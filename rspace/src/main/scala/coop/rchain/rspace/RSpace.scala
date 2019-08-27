@@ -80,6 +80,7 @@ class RSpace[F[_], C, P, A, K] private[rspace] (
         case DataCandidate(
             candidateChannel,
             Datum(_, persistData, _),
+            _,
             dataIndex
             ) if shouldRemove(persistData, candidateChannel) =>
           store.removeDatum(candidateChannel, dataIndex)
@@ -114,7 +115,7 @@ class RSpace[F[_], C, P, A, K] private[rspace] (
             peeks.nonEmpty
           ),
           dataCandidates
-            .map(dc => Result(dc.datum.a, dc.datum.persist))
+            .map(dc => Result(dc.datum.a, dc.removedDatum, dc.datum.persist))
         )
       )
     }
@@ -203,7 +204,7 @@ class RSpace[F[_], C, P, A, K] private[rspace] (
     Math.max(
       consumeRef.sequenceNumber,
       dataCandidates.map {
-        case DataCandidate(_, Datum(_, _, source), _) => source.sequenceNumber
+        case DataCandidate(_, Datum(_, _, source), _, _) => source.sequenceNumber
       }.max
     ) + 1
 
@@ -308,6 +309,7 @@ class RSpace[F[_], C, P, A, K] private[rspace] (
               case DataCandidate(
                   candidateChannel,
                   Datum(_, persistData, _),
+                  _,
                   dataIndex
                   ) => {
                 def shouldRemove: Boolean = {
@@ -332,7 +334,7 @@ class RSpace[F[_], C, P, A, K] private[rspace] (
                 contSequenceNumber,
                 peeks.nonEmpty
               ),
-              dataCandidates.map(dc => Result(dc.datum.a, dc.datum.persist))
+              dataCandidates.map(dc => Result(dc.datum.a, dc.removedDatum, dc.datum.persist))
             )
           )
         }
@@ -396,16 +398,7 @@ class RSpace[F[_], C, P, A, K] private[rspace] (
                                  )
                      _ <- spanF.mark("extract-produce-candidate")
                      r <- extracted match {
-                           case Some(pc) =>
-                             for {
-                               a               <- processMatchFound(pc)
-                               indexedChannels = pc.channels.zipWithIndex.toMap
-                               _ <- if (pc.continuation.peeks.contains(indexedChannels(channel))) {
-                                     storeData(channel, data, persist, produceRef)
-                                   } else
-                                     ().pure[F]
-                             } yield a
-
+                           case Some(pc) => processMatchFound(pc)
                            case None =>
                              storeData(channel, data, persist, produceRef)
                          }

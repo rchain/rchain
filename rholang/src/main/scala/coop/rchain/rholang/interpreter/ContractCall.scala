@@ -46,7 +46,11 @@ class ContractCall[F[_]: Concurrent: Span](
                       )
       _ <- produceResult.fold(Sync[F].unit) {
             case (cont, channels) =>
-              dispatcher.dispatch(unpackCont(cont), channels.map(_.value), cont.sequenceNumber)
+              dispatcher.dispatch(
+                unpackCont(cont),
+                channels.map(_.matchedDatum),
+                cont.sequenceNumber
+              )
           }
     } yield ()
 

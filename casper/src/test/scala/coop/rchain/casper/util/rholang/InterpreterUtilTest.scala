@@ -7,7 +7,7 @@ import coop.rchain.blockstorage.{BlockDagRepresentation, BlockDagStorage, BlockS
 import coop.rchain.casper.helper.BlockGenerator._
 import coop.rchain.casper.helper._
 import coop.rchain.casper.protocol._
-import coop.rchain.casper.scalatestcontrib._
+import coop.rchain.shared.scalatestcontrib._
 import coop.rchain.casper.util.GenesisBuilder.{buildGenesis, buildGenesisParameters}
 import coop.rchain.casper.util.RSpaceUtil._
 import coop.rchain.casper.util.rholang.InterpreterUtil._

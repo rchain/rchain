@@ -49,7 +49,7 @@ package object accounting extends Costs {
         if (c.value < 0) error.raiseError[Unit](OutOfPhlogistonsError)
         else cost.tell(Chain.one(amount)) >> cost.set(c - amount)
       }
-    ) >> error.ensure(cost.inspect(identity))(OutOfPhlogistonsError)(_.value >= 0).void
+    ) >> error.ensure(cost.get)(OutOfPhlogistonsError)(_.value >= 0).void
 
   implicit def noOpCostLog[M[_]: Applicative]: FunctorTell[M, Chain[Cost]] =
     new DefaultFunctorTell[M, Chain[Cost]] {
