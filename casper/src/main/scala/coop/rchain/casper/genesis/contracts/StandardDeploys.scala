@@ -83,4 +83,11 @@ object StandardDeploys {
       1565818101792L
     )
 
+  def treeHashMap: DeployData =
+    toDeploy(
+      CompiledRholangSource("TreeHashMap.rho", NormalizerEnv.Empty),
+      "048e5ff7f865f8fca30b2cd76b5699de5fc11bf9d807c3af98f32b684bca67b4b574976f659a65391eb240376170ffa56ecc9b8d67af386b61be36da7e368b4161",
+      1566326330483L
+    )
+
 }

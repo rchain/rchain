@@ -50,7 +50,8 @@ object Genesis {
       StandardDeploys.authKey,
       StandardDeploys.revVault,
       StandardDeploys.revGenerator(vaults, supply),
-      StandardDeploys.poSGenerator(posParams)
+      StandardDeploys.poSGenerator(posParams),
+      StandardDeploys.treeHashMap
     )
 
   //TODO: Decide on version number and shard identifier
