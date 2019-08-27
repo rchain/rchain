@@ -4,9 +4,11 @@ import java.nio.ByteBuffer
 import java.nio.file.{Files, Path}
 
 import cats._
+import cats.data.ReaderT
 import cats.effect._
 import cats.effect.concurrent.Semaphore
 import cats.implicits._
+import cats.tagless.implicits._
 import cats.mtl.{ApplicativeAsk, MonadState}
 import cats.temp.par.Par
 import coop.rchain.blockstorage._
@@ -24,15 +26,24 @@ import coop.rchain.catscontrib.Taskable
 import coop.rchain.catscontrib.ski._
 import coop.rchain.comm._
 import coop.rchain.comm.discovery._
-import coop.rchain.comm.rp.Connect.{ConnectionsCell, RPConfAsk, RPConfState}
+import coop.rchain.comm.rp.Connect.{Connections, ConnectionsCell, RPConfAsk, RPConfState}
 import coop.rchain.comm.rp._
 import coop.rchain.comm.transport._
 import coop.rchain.grpc.Server
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.models.BlockHash.BlockHash
-import coop.rchain.node.NodeRuntime.{APIServers, CasperLoop, Cleanup, EngineInit, RuntimeConf}
+import coop.rchain.node.NodeRuntime.{
+  taskToEnv,
+  APIServers,
+  CasperLoop,
+  Cleanup,
+  EngineInit,
+  RuntimeConf,
+  TaskEnv
+}
 import coop.rchain.node.api.{DeployGrpcService, ProposeGrpcService, ReplGrpcService}
 import coop.rchain.node.configuration.Configuration
+import coop.rchain.node.diagnostics.Trace.TraceId
 import coop.rchain.node.diagnostics._
 import coop.rchain.node.model.repl.ReplGrpcMonix
 import coop.rchain.p2p.effects._
@@ -77,6 +88,11 @@ class NodeRuntime private[node] (
   private val storageSize       = conf.server.mapSize
   private val defaultTimeout    = conf.server.defaultTimeout // TODO remove
 
+  implicit class RichTask[A](t: Task[A]) {
+    def toReaderT: TaskEnv[A] =
+      ReaderT.liftF(t)
+  }
+
   /**
     * Main node entry. It will:
     * 1. set up configurations
@@ -84,7 +100,7 @@ class NodeRuntime private[node] (
     * 3. run the node program.
     */
   // TODO: Resolve scheduler chaos in Runtime, RuntimeManager and CasperPacketHandler
-  val main: Task[Unit] = for {
+  val main: TaskEnv[Unit] = for {
     // 1. fetch local peer node
     local <- WhoAmI
               .fetchLocalPeerNode[Task](
@@ -94,6 +110,7 @@ class NodeRuntime private[node] (
                 conf.server.noUpnp,
                 id
               )
+              .toReaderT
 
     // 3. create instances of typeclasses
     metrics       = diagnostics.effects.metrics[Task]
@@ -105,6 +122,7 @@ class NodeRuntime private[node] (
             commTmpFolder.deleteDirectory[Task](),
             Task.unit
           )
+          .toReaderT
     transport <- effects
                   .transportClient(
                     conf.server.networkId,
@@ -114,11 +132,13 @@ class NodeRuntime private[node] (
                     conf.server.packetChunkSize,
                     commTmpFolder
                   )(grpcScheduler, log, metrics)
-
+                  .toReaderT
+    rpConnections  <- effects.rpConnections[Task].toReaderT
     initPeer       = if (conf.server.standalone) None else Some(conf.server.bootstrap)
     peerNode       = rpConf(local, initPeer)
     rpConfState    = effects.rpConfState[Task](peerNode)
     peerNodeAsk    = effects.peerNodeAsk[Task](Monad[Task], Sync[Task], rpConfState)
+    rpConfAsk      = effects.rpConfAsk[Task](Monad[Task], Sync[Task], rpConfState)
     defaultTimeout = conf.server.defaultTimeout
     kademliaRPC = effects.kademliaRPC(
       conf.server.networkId,
@@ -130,7 +150,7 @@ class NodeRuntime private[node] (
       metrics
     )
     kademliaStore = effects.kademliaStore(id)(kademliaRPC, metrics)
-    _             <- initPeer.fold(Task.unit)(p => kademliaStore.updateLastSeen(p))
+    _             <- initPeer.fold(Task.unit)(p => kademliaStore.updateLastSeen(p)).toReaderT
     nodeDiscovery = effects.nodeDiscovery(id)(Monad[Task], kademliaStore, kademliaRPC)
 
     /**
@@ -138,9 +158,9 @@ class NodeRuntime private[node] (
       * others (like blockstore) relay on the structure being created for them (and will fail if it does not exist). For now
       * this small fix should suffice, but we should unify this.
       */
-    _             <- mkDirs(conf.server.dataDir)
-    _             <- mkDirs(blockstorePath)
-    _             <- mkDirs(dagStoragePath)
+    _             <- mkDirs(conf.server.dataDir).toReaderT
+    _             <- mkDirs(blockstorePath).toReaderT
+    _             <- mkDirs(dagStoragePath).toReaderT
     blockstoreEnv = Context.env(blockstorePath, 8L * 1024L * 1024L * 1024L)
     dagConfig = BlockDagFileStorage.Config(
       latestMessagesLogPath = dagStoragePath.resolve("latestMessagesLogPath"),
@@ -161,8 +181,27 @@ class NodeRuntime private[node] (
     casperConfig = RuntimeConf(casperStoragePath, storageSize)
     cliConfig    = RuntimeConf(storagePath, 800L * 1024L * 1024L) // 800MB for cli
 
-    result <- NodeRuntime.setupNodeProgramF[Task](
-               rpConfState,
+    rpConfAskEnv = effects.readerTApplicativeAsk[Task, NodeRuntime.Environment, RPConf](rpConfAsk)
+    rpConfStateEnv = effects.readerTMonadState[Task, NodeRuntime.Environment, RPConf](
+      rpConfState
+    )
+    peerNodeAskEnv = effects.readerTApplicativeAsk[Task, NodeRuntime.Environment, PeerNode](
+      peerNodeAsk
+    )
+    metricsEnv       = Metrics.readerTMetrics[Task, NodeRuntime.Environment](metrics)
+    transportEnv     = transport.mapK(taskToEnv)
+    timeEnv          = time.mapK(taskToEnv)
+    logEnv           = log.mapK(taskToEnv)
+    eventLogEnv      = eventLog.mapK(taskToEnv)
+    nodeDiscoveryEnv = nodeDiscovery.mapK(taskToEnv)
+    rpConnectionsEnv = Cell.readerT[Task, NodeRuntime.Environment, Connections](rpConnections)
+    taskableEnv = new Taskable[TaskEnv] {
+      override def toTask[A](fa: TaskEnv[A]): Task[A] = fa.run(Trace.next)
+    }
+    result <- NodeRuntime.setupNodeProgramF[TaskEnv](
+               rpConnectionsEnv,
+               rpConfAskEnv,
+               rpConfStateEnv,
                conf,
                dagConfig,
                blockstoreEnv,
@@ -172,20 +211,18 @@ class NodeRuntime private[node] (
                rspaceScheduler,
                scheduler
              )(
-               metrics,
-               transport,
-               Sync[Task],
-               Concurrent[Task],
-               time,
-               log,
-               eventLog,
-               ContextShift[Task],
-               Par[Task],
-               Taskable[Task]
+               metricsEnv,
+               transportEnv,
+               Sync[TaskEnv],
+               Concurrent[TaskEnv],
+               timeEnv,
+               logEnv,
+               eventLogEnv,
+               ContextShift[TaskEnv],
+               Par[TaskEnv],
+               taskableEnv
              )
     (
-      rpConnections,
-      rpConfAsk,
       blockStore,
       blockDagStorage,
       runtimeCleanup,
@@ -197,18 +234,24 @@ class NodeRuntime private[node] (
 
     // 4. run the node program.
     program = nodeProgram(apiServers, casperLoop, engineInit, runtimeCleanup)(
-      time,
-      rpConfState,
+      logEnv,
+      timeEnv,
+      rpConfStateEnv,
       rpConfAsk,
-      peerNodeAsk,
+      rpConfAskEnv,
+      peerNodeAskEnv,
       metrics,
-      transport,
+      metricsEnv,
+      transportEnv,
       kademliaStore,
       nodeDiscovery,
+      nodeDiscoveryEnv,
       rpConnections,
+      rpConnectionsEnv,
       blockDagStorage,
       blockStore,
-      packetHandler
+      packetHandler,
+      eventLogEnv
     )
     _ <- handleUnrecoverableErrors(program)
   } yield ()
@@ -233,59 +276,73 @@ class NodeRuntime private[node] (
 
   private def nodeProgram(
       apiServers: APIServers,
-      casperLoop: CasperLoop[Task],
-      engineInit: EngineInit[Task],
-      runtimeCleanup: Cleanup[Task]
+      casperLoop: CasperLoop[TaskEnv],
+      engineInit: EngineInit[TaskEnv],
+      runtimeCleanup: Cleanup[TaskEnv]
   )(
       implicit
-      time: Time[Task],
-      rpConfState: RPConfState[Task],
+      logEnv: Log[TaskEnv],
+      timeEnv: Time[TaskEnv],
+      rpConfState: RPConfState[TaskEnv],
       rpConfAsk: RPConfAsk[Task],
-      peerNodeAsk: PeerNodeAsk[Task],
+      rpConfAskEnv: RPConfAsk[TaskEnv],
+      peerNodeAsk: PeerNodeAsk[TaskEnv],
       metrics: Metrics[Task],
-      transport: TransportLayer[Task],
+      metricsEnv: Metrics[TaskEnv],
+      transport: TransportLayer[TaskEnv],
       kademliaStore: KademliaStore[Task],
-      nodeDiscovery: NodeDiscovery[Task],
+      nodeDiscoveryTask: NodeDiscovery[Task],
+      nodeDiscovery: NodeDiscovery[TaskEnv],
       rpConnections: ConnectionsCell[Task],
-      blockDagStorage: BlockDagStorage[Task],
-      blockStore: BlockStore[Task],
-      packetHandler: PacketHandler[Task]
-  ): Task[Unit] = {
+      rpConnectionsEnv: ConnectionsCell[TaskEnv],
+      blockDagStorage: BlockDagStorage[TaskEnv],
+      blockStore: BlockStore[TaskEnv],
+      packetHandler: PacketHandler[TaskEnv],
+      eventLog: EventLog[TaskEnv]
+  ): TaskEnv[Unit] = {
 
-    val info: Task[Unit] =
-      if (conf.server.standalone) Log[Task].info(s"Starting stand-alone node.")
-      else Log[Task].info(s"Starting node that will bootstrap from ${conf.server.bootstrap}")
+    val info: TaskEnv[Unit] =
+      if (conf.server.standalone) Log[TaskEnv].info(s"Starting stand-alone node.")
+      else Log[TaskEnv].info(s"Starting node that will bootstrap from ${conf.server.bootstrap}")
 
-    val dynamicIpCheck: Task[Unit] =
+    val dynamicIpCheck: TaskEnv[Unit] =
       if (conf.server.dynamicHostAddress)
         for {
           local <- peerNodeAsk.ask
           newLocal <- WhoAmI
-                       .checkLocalPeerNode[Task](conf.server.port, conf.server.kademliaPort, local)
-          _ <- newLocal.fold(Task.unit) { pn =>
-                Connect.resetConnections[Task].flatMap(kp(rpConfState.modify(_.copy(local = pn))))
+                       .checkLocalPeerNode[TaskEnv](
+                         conf.server.port,
+                         conf.server.kademliaPort,
+                         local
+                       )
+          _ <- newLocal.fold(Task.unit.toReaderT) { pn =>
+                Connect
+                  .resetConnections[TaskEnv]
+                  .flatMap(kp(rpConfState.modify(_.copy(local = pn))))
               }
         } yield ()
-      else Task.unit
+      else Task.unit.toReaderT
 
-    val nodeDiscoveryLoop: Task[Unit] =
+    val nodeDiscoveryLoop: TaskEnv[Unit] =
       for {
-        _ <- NodeDiscovery[Task].discover
-        _ <- Connect.findAndConnect[Task](Connect.connect[Task])
-        _ <- time.sleep(20.seconds)
+        _ <- NodeDiscovery[TaskEnv].discover
+        _ <- Connect.findAndConnect[TaskEnv](Connect.connect[TaskEnv])
+        _ <- timeEnv.sleep(20.seconds)
       } yield ()
 
-    val clearConnectionsLoop: Task[Unit] =
+    val clearConnectionsLoop: TaskEnv[Unit] =
       for {
         _ <- dynamicIpCheck
-        _ <- Connect.clearConnections[Task]
-        _ <- time.sleep(10.minutes)
+        _ <- Connect.clearConnections[TaskEnv]
+        _ <- timeEnv.sleep(10.minutes)
       } yield ()
 
-    def waitForFirstConnection: Task[Unit] =
+    def waitForFirstConnection: TaskEnv[Unit] =
       for {
-        _ <- time.sleep(10.second)
-        _ <- ConnectionsCell[Task].read.map(_.isEmpty).ifM(waitForFirstConnection, ().pure[Task])
+        _ <- timeEnv.sleep(10.second)
+        _ <- ConnectionsCell[TaskEnv].read
+              .map(_.isEmpty)
+              .ifM(waitForFirstConnection, ().pure[TaskEnv])
       } yield ()
 
     for {
@@ -294,76 +351,91 @@ class NodeRuntime private[node] (
       host  = local.endpoint.host
       servers <- acquireServers(apiServers)(
                   kademliaStore,
-                  nodeDiscovery,
+                  nodeDiscoveryTask,
                   rpConnections,
                   Concurrent[Task],
                   metrics,
                   rpConfAsk
-                )
+                ).toReaderT
       _ <- addShutdownHook(servers, runtimeCleanup)
-      _ <- servers.externalApiServer.start
-      _ <- Log[Task].info(
+      _ <- servers.externalApiServer.start.toReaderT
+
+      _ <- Log[TaskEnv].info(
             s"External API server started at $host:${servers.externalApiServer.port}"
           )
-      _ <- servers.internalApiServer.start
-      _ <- Log[Task].info(
+      _ <- servers.internalApiServer.start.toReaderT
+
+      _ <- Log[TaskEnv].info(
             s"Internal API server started at $host:${servers.internalApiServer.port}"
           )
-      _ <- servers.kademliaRPCServer.start
-      _ <- Log[Task].info(
+      _ <- servers.kademliaRPCServer.start.toReaderT
+
+      _ <- Log[TaskEnv].info(
             s"Kademlia RPC server started at $host:${servers.kademliaRPCServer.port}"
           )
-      _ <- servers.transportServer.start(
-            pm => HandleMessages.handle[Task](pm),
-            blob => packetHandler.handlePacket(blob.sender, blob.packet)
-          )
+      _ <- servers.transportServer
+            .start(
+              pm => HandleMessages.handle[TaskEnv](pm).run(Trace.next),
+              blob => packetHandler.handlePacket(blob.sender, blob.packet).run(Trace.next)
+            )
+            .toReaderT
       address = local.toAddress
-      _       <- Log[Task].info(s"Listening for traffic on $address.")
-      _       <- EventLog[Task].publish(Event.NodeStarted(address))
-      _       <- Task.defer(nodeDiscoveryLoop.forever).executeOn(loopScheduler).start
-      _       <- Task.defer(clearConnectionsLoop.forever).executeOn(loopScheduler).start
-      _ <- if (conf.server.standalone) ().pure[Task]
-          else Log[Task].info(s"Waiting for first connection.") >> waitForFirstConnection
-      _ <- Concurrent[Task].start(engineInit)
-      _ <- Task.defer(casperLoop.forever).executeOn(loopScheduler)
+      _       <- Log[TaskEnv].info(s"Listening for traffic on $address.")
+      _       <- EventLog[TaskEnv].publish(Event.NodeStarted(address))
+      _ <- Task
+            .defer(nodeDiscoveryLoop.forever.run(Trace.next))
+            .executeOn(loopScheduler)
+            .start
+            .toReaderT
+      _ <- Task
+            .defer(clearConnectionsLoop.forever.run(Trace.next))
+            .executeOn(loopScheduler)
+            .start
+            .toReaderT
+      _ <- if (conf.server.standalone) ().pure[TaskEnv]
+          else Log[TaskEnv].info(s"Waiting for first connection.") >> waitForFirstConnection
+      _ <- Concurrent[TaskEnv].start(engineInit)
+      _ <- Task.defer(casperLoop.forever.run(Trace.next)).executeOn(loopScheduler).toReaderT
     } yield ()
   }
 
   def addShutdownHook(
       servers: Servers,
-      runtimeCleanup: Cleanup[Task]
+      runtimeCleanup: Cleanup[TaskEnv]
   )(
-      implicit blockStore: BlockStore[Task],
-      blockDagStorage: BlockDagStorage[Task]
-  ): Task[Unit] =
-    Task.delay(sys.addShutdownHook(clearResources(servers, runtimeCleanup)))
+      implicit blockStore: BlockStore[TaskEnv],
+      blockDagStorage: BlockDagStorage[TaskEnv],
+      log: Log[TaskEnv]
+  ): TaskEnv[Unit] =
+    Task.delay(sys.addShutdownHook(clearResources(servers, runtimeCleanup))).as(()).toReaderT
 
   def clearResources(
       servers: Servers,
-      runtimeCleanup: Cleanup[Task]
+      runtimeCleanup: Cleanup[TaskEnv]
   )(
       implicit
-      blockStore: BlockStore[Task],
-      blockDagStorage: BlockDagStorage[Task]
+      blockStore: BlockStore[TaskEnv],
+      blockDagStorage: BlockDagStorage[TaskEnv],
+      log: Log[TaskEnv]
   ): Unit =
     (for {
-      _ <- log.info("Shutting down API servers...")
-      _ <- servers.externalApiServer.stop
-      _ <- servers.internalApiServer.stop
-      _ <- log.info("Shutting down Kademlia RPC server...")
-      _ <- servers.kademliaRPCServer.stop
-      _ <- log.info("Shutting down transport layer...")
-      _ <- servers.transportServer.stop()
-      _ <- log.info("Shutting down HTTP server....")
-      _ <- Task.delay(Kamon.stopAllReporters())
-      _ <- servers.httpServer.cancel.attempt
+      _ <- Log[TaskEnv].info("Shutting down API servers...")
+      _ <- servers.externalApiServer.stop.toReaderT
+      _ <- servers.internalApiServer.stop.toReaderT
+      _ <- Log[TaskEnv].info("Shutting down Kademlia RPC server...")
+      _ <- servers.kademliaRPCServer.stop.toReaderT
+      _ <- Log[TaskEnv].info("Shutting down transport layer...")
+      _ <- servers.transportServer.stop().toReaderT
+      _ <- Log[TaskEnv].info("Shutting down HTTP server....")
+      _ <- Task.delay(Kamon.stopAllReporters()).toReaderT
+      _ <- servers.httpServer.cancel.attempt.toReaderT
       _ <- runtimeCleanup.close()
-      _ <- log.info("Bringing DagStorage down ...")
+      _ <- Log[TaskEnv].info("Bringing DagStorage down ...")
       _ <- blockDagStorage.close()
-      _ <- log.info("Bringing BlockStore down ...")
+      _ <- Log[TaskEnv].info("Bringing BlockStore down ...")
       _ <- blockStore.close()
-      _ <- log.info("Goodbye.")
-    } yield ()).unsafeRunSync(scheduler)
+      _ <- Log[TaskEnv].info("Goodbye.")
+    } yield ()).run(Trace.next).unsafeRunSync(scheduler)
 
   private def exit0: Task[Unit] = Task.delay(System.exit(0))
 
@@ -371,13 +443,12 @@ class NodeRuntime private[node] (
     * Handles unrecoverable errors in program. Those are errors that should not happen in properly
     * configured enviornment and they mean immediate termination of the program
     */
-  private def handleUnrecoverableErrors(prog: Task[Unit]): Task[Unit] =
-    prog
-      .onErrorHandleWith { th =>
-        log.error("Caught unhandable error. Exiting. Stacktrace below.") >> Task.delay {
-          th.printStackTrace()
-        }
-      } >> exit0.as(Right(()))
+  private def handleUnrecoverableErrors(prog: TaskEnv[Unit]): TaskEnv[Unit] =
+    prog.mapF(_.onErrorHandleWith { th =>
+      log.error("Caught unhandable error. Exiting. Stacktrace below.") >> Task.delay {
+        th.printStackTrace()
+      }
+    } >> exit0.as(Right(())))
 
   case class Servers(
       kademliaRPCServer: Server[Task],
@@ -472,6 +543,11 @@ class NodeRuntime private[node] (
 
 object NodeRuntime {
 
+  type Environment = TraceId
+  type TaskEnv[A]  = ReaderT[Task, Environment, A]
+
+  val taskToEnv: Task ~> TaskEnv = λ[Task ~> TaskEnv](ReaderT.liftF(_))
+
   type CasperLoop[F[_]] = F[Unit]
   type EngineInit[F[_]] = F[Unit]
 
@@ -504,6 +580,8 @@ object NodeRuntime {
     }
 
   def setupNodeProgramF[F[_]: Metrics: TransportLayer: Sync: Concurrent: Time: Log: EventLog: ContextShift: Par: Taskable](
+      rpConnections: ConnectionsCell[F],
+      rpConfAsk: ApplicativeAsk[F, RPConf],
       rpConfState: MonadState[F, RPConf],
       conf: Configuration,
       dagConfig: BlockDagFileStorage.Config,
@@ -515,8 +593,6 @@ object NodeRuntime {
       scheduler: Scheduler
   ): F[
     (
-        ConnectionsCell[F],
-        ApplicativeAsk[F, RPConf],
         BlockStore[F],
         BlockDagFileStorage[F],
         Cleanup[F],
@@ -527,9 +603,7 @@ object NodeRuntime {
     )
   ] =
     for {
-      rpConnections <- effects.rpConnections
-      rpConfAsk     = effects.rpConfAsk(Monad[F], Sync[F], rpConfState)
-      lab           <- LastApprovedBlock.of[F]
+      lab <- LastApprovedBlock.of[F]
       blockStore <- FileLMDBIndexBlockStore
                      .create[F](blockstoreEnv, blockstorePath)(
                        Concurrent[F],
@@ -626,8 +700,6 @@ object NodeRuntime {
       engineInit     = engineCell.read >>= (_.init)
       runtimeCleanup = NodeRuntime.cleanup(runtime, casperRuntime)
     } yield (
-      rpConnections,
-      rpConfAsk,
       blockStore,
       blockDagStorage,
       runtimeCleanup,

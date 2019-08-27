@@ -12,6 +12,7 @@ import coop.rchain.crypto.util.KeyUtil
 import coop.rchain.metrics
 import coop.rchain.metrics.Metrics
 import coop.rchain.node.configuration._
+import coop.rchain.node.diagnostics.Trace
 import coop.rchain.node.effects._
 import coop.rchain.shared.StringOps._
 import coop.rchain.shared._
@@ -194,7 +195,7 @@ object Main {
       _             <- log.info(VersionInfo.get)
       _             <- logConfiguration(confWithPorts)
       runtime       <- NodeRuntime(confWithPorts)
-      _             <- runtime.main
+      _             <- runtime.main.run(Trace.next)
     } yield ()
   }
 
