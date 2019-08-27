@@ -7,7 +7,7 @@ import cats._
 import cats.effect._
 import cats.effect.concurrent.Semaphore
 import cats.implicits._
-import cats.mtl.MonadState
+import cats.mtl.{ApplicativeAsk, MonadState}
 import cats.temp.par.Par
 import coop.rchain.blockstorage._
 import coop.rchain.blockstorage.util.io.IOError
@@ -30,7 +30,7 @@ import coop.rchain.comm.transport._
 import coop.rchain.grpc.Server
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.models.BlockHash.BlockHash
-import coop.rchain.node.NodeRuntime.{APIServers, Cleanup, RuntimeConf}
+import coop.rchain.node.NodeRuntime.{APIServers, CasperLoop, Cleanup, RuntimeConf}
 import coop.rchain.node.api.{DeployGrpcService, ProposeGrpcService, ReplGrpcService}
 import coop.rchain.node.configuration.Configuration
 import coop.rchain.node.diagnostics._
@@ -192,11 +192,12 @@ class NodeRuntime private[node] (
       requestedBlocks,
       runtimeCleanup,
       packetHandler,
-      apiServers
+      apiServers,
+      casperLoop
     ) = result
 
     // 4. run the node program.
-    program = nodeProgram(apiServers, runtimeCleanup)(
+    program = nodeProgram(apiServers, casperLoop, runtimeCleanup)(
       time,
       rpConfState,
       rpConfAsk,
@@ -209,8 +210,7 @@ class NodeRuntime private[node] (
       blockDagStorage,
       blockStore,
       packetHandler,
-      engineCell,
-      requestedBlocks
+      engineCell
     )
     _ <- handleUnrecoverableErrors(program)
   } yield ()
@@ -235,6 +235,7 @@ class NodeRuntime private[node] (
 
   private def nodeProgram(
       apiServers: APIServers,
+      casperLoop: CasperLoop[Task],
       runtimeCleanup: Cleanup[Task]
   )(
       implicit
@@ -250,8 +251,7 @@ class NodeRuntime private[node] (
       blockDagStorage: BlockDagStorage[Task],
       blockStore: BlockStore[Task],
       packetHandler: PacketHandler[Task],
-      engineCell: EngineCell[Task],
-      requestedBlocks: Running.RequestedBlocks[Task]
+      engineCell: EngineCell[Task]
   ): Task[Unit] = {
 
     val info: Task[Unit] =
@@ -288,14 +288,6 @@ class NodeRuntime private[node] (
       for {
         _ <- time.sleep(10.second)
         _ <- ConnectionsCell[Task].read.map(_.isEmpty).ifM(waitForFirstConnection, ().pure[Task])
-      } yield ()
-
-    val casperLoop: Task[Unit] =
-      for {
-        engine <- engineCell.read
-        _      <- engine.withCasper(_.fetchDependencies, engine.noop)
-        _      <- Running.maintainRequestedBlocks[Task]
-        _      <- time.sleep(30.seconds)
       } yield ()
 
     for {
@@ -481,6 +473,14 @@ class NodeRuntime private[node] (
 }
 
 object NodeRuntime {
+
+  type CasperLoop[F[_]] = F[Unit]
+
+  final case class RuntimeConf(
+      storage: Path,
+      size: Long
+  )
+
   def apply(
       conf: Configuration
   )(implicit scheduler: Scheduler, log: Log[Task], eventLog: EventLog[Task]): Task[NodeRuntime] =
@@ -504,11 +504,6 @@ object NodeRuntime {
         } yield ()
     }
 
-  final case class RuntimeConf(
-      storage: Path,
-      size: Long
-  )
-
   def setupNodeProgramF[F[_]: Metrics: TransportLayer: Sync: Concurrent: Time: Log: EventLog: ContextShift: Par: Taskable](
       rpConfState: MonadState[F, RPConf],
       conf: Configuration,
@@ -519,7 +514,20 @@ object NodeRuntime {
       blockstorePath: Path,
       rspaceScheduler: Scheduler,
       scheduler: Scheduler
-  ) =
+  ): F[
+    (
+        ConnectionsCell[F],
+        ApplicativeAsk[F, RPConf],
+        BlockStore[F],
+        BlockDagFileStorage[F],
+        EngineCell[F],
+        Cell[F, Map[BlockHash, Running.Requested]],
+        Cleanup[F],
+        PacketHandler[F],
+        APIServers,
+        CasperLoop[F]
+    )
+  ] =
     for {
       rpConnections <- effects.rpConnections
       rpConfAsk     = effects.rpConfAsk(Monad[F], Sync[F], rpConfState)
@@ -604,6 +612,19 @@ object NodeRuntime {
         Log[F],
         Taskable[F]
       )
+      casperLoop = for {
+        engine <- engineCell.read
+        _      <- engine.withCasper(_.fetchDependencies, engine.noop)
+        _ <- Running.maintainRequestedBlocks[F](
+              Monad[F],
+              rpConfAsk,
+              requestedBlocks,
+              TransportLayer[F],
+              Log[F],
+              Time[F]
+            )
+        _ <- Time[F].sleep(30.seconds)
+      } yield ()
       runtimeCleanup = NodeRuntime.cleanup(runtime, casperRuntime)
     } yield (
       rpConnections,
@@ -614,7 +635,8 @@ object NodeRuntime {
       requestedBlocks,
       runtimeCleanup,
       packetHandler,
-      apiServers
+      apiServers,
+      casperLoop
     )
 
   final case class APIServers(
