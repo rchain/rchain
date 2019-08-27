@@ -202,11 +202,13 @@ new TreeHashMap, rs(`rho:registry:insertSigned:secp256k1`), uriOut in {
         new hashCh, nybListCh in {
           // Hash the key to get a 256-bit array
           @"keccak256Hash"!(key.toByteArray(), *hashCh) |
-          for (@hash <- hashCh; @depth <- @(map, "depth")) {
-            // Get the bit list
-            ByteArrayToNybbleList!(hash, 0, depth, [], *nybListCh) |
-            for (@nybList <- nybListCh) {
-              TreeHashMapSetter!(map, nybList, 0, 2 * depth, newVal, hash.slice(depth, 32), *ret)
+          for (@hash <- hashCh) {
+            for (@depth <- @(map, "depth")) {
+              // Get the bit list
+              ByteArrayToNybbleList!(hash, 0, depth, [], *nybListCh) |
+              for (@nybList <- nybListCh) {
+                TreeHashMapSetter!(map, nybList, 0, 2 * depth, newVal, hash.slice(depth, 32), *ret)
+              }
             }
           }
         }
