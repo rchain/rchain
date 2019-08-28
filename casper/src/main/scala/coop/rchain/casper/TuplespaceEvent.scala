@@ -76,6 +76,7 @@ object TuplespaceEvent {
     private[casper] def unsatisfied: Boolean =
       ev.incoming.cardinality match {
         case Linear    => ev.matched.isEmpty
+        case Peek      => ev.matched.isEmpty
         case NonLinear => ev.matched.forall(_.cardinality == Linear)
       }
 
