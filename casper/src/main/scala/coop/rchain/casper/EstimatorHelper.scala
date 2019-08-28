@@ -104,9 +104,10 @@ object EstimatorHelper {
   }
 
   private[this] def isVolatile(comm: COMM, consumes: Set[Consume], produces: Set[Produce]) =
-    !comm.consume.persistent && consumes.contains(comm.consume) && comm.produces.forall(
-      produce => !produce.persistent && produces.contains(produce)
-    )
+    !comm.consume.persistent && comm.peeks.isEmpty && consumes.contains(comm.consume) && comm.produces
+      .forall(
+        produce => !produce.persistent && produces.contains(produce)
+      )
 
   private[this] def allChannels(events: BlockEvents) =
     events.produces.map(_.channelsHash).toSet ++ events.consumes
