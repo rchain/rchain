@@ -47,6 +47,30 @@ new  ListOps, rs(`rho:registry:insertSigned:secp256k1`), uriOut in {
     }
   } |
 
+  //A fold over the list which breaks early if a condition is met.
+  //Both the condition and combinator are are combined into a single
+  //function which returns a [boolean, value] pair.
+  //Use cases: see get and indexOf
+  new loop in {
+    contract loop(@accumulatedValue, @lst, combinatorAndCondition, @state, return) = {
+      match lst {
+        [head ...tail] => {
+          new result in {
+            combinatorAndCondition!(state, head, accumulatedValue, *result) |
+            for (@done, @newValue <- result) {
+              if (done){ return!(done, newValue) }
+              else     { loop!(newValue, tail, *combinatorAndCondition, state, *return)   }
+            }
+          }
+        }
+        _ => { return!(false, accumulatedValue) }
+      }
+    } | 
+    contract ListOps(@"partialFoldClean", @list, @start, combinatorAndCondition, @state, return) = {
+      loop!(start, list, *combinatorAndCondition, state, *return)
+    }
+  } |
+
   contract ListOps(@"fold", @list, @start, combinator, return) = {
     new combinatorAndCondition in {
       contract combinatorAndCondition(@head, @accumulatedValue, return) = {
@@ -64,12 +88,29 @@ new  ListOps, rs(`rho:registry:insertSigned:secp256k1`), uriOut in {
     }
   } |
 
+  new combinatorAndCondition in {
+    contract combinatorAndCondition(@(combinator, state), @head, @accumulatedValue, return) = {
+      new result in {
+        @combinator!(state, head, accumulatedValue, *result) |
+        for(@r <- result){ return!(false, r) }
+      }
+    } |
+    contract ListOps(@"foldClean", @list, @start, combinator, @state, return) = {
+      new result in {
+        ListOps!("partialFoldClean", list, start, *combinatorAndCondition, (*combinator, state), *result) |
+        for(_, @value <- result) {
+          return!(value)
+        }
+      }
+    }
+  } |
+
   new prepend in {
-    contract prepend(@head, @tail, return) = {
-      ListOps!("prepend", head, tail, *return)
+    contract prepend(_, @head, @tail, return) = {
+      return!([head] ++ tail)
     } |
     contract ListOps(@"reverse", @list, return) = {
-      ListOps!("fold", list, [], *prepend, *return)
+      ListOps!("foldClean", list, [], *prepend, Nil, *return)
     }
   } |
 
@@ -79,11 +120,25 @@ new  ListOps, rs(`rho:registry:insertSigned:secp256k1`), uriOut in {
         new mappedHead in {
           function!(head, *mappedHead) |
           for(@x <- mappedHead) {
-            ListOps!("append", accumulatedValue, x, *return)
+            return!(accumulatedValue ++ [x])
           }
         }
       } |
       ListOps!("fold", list, [], *combinator, *return)
+    }
+  } |
+
+  new combinator in {
+    contract combinator(@(function, state), @head, @accumulatedValue, return) = {
+      new mappedHead in {
+        @function!(state, head, *mappedHead) |
+        for(@x <- mappedHead) {
+          return!(accumulatedValue ++ [x])
+        }
+      }
+    } |
+    contract ListOps(@"mapClean", @list, function, @state, return) = {
+      ListOps!("foldClean", list, [], *combinator, (*function, state), *return)
     }
   } |
 
@@ -97,6 +152,23 @@ new  ListOps, rs(`rho:registry:insertSigned:secp256k1`), uriOut in {
         for(@namesList <- namesListCh) {
           //map each name to its result
           ListOps!("map", namesList, *getOutput, *return)
+        }
+      }
+    }
+  } |
+
+  new getOutput, startProcess in {
+    contract getOutput(_, name, ret)  = { for(@result <- name){ ret!(result) } } |
+    contract startProcess(@(function, state), @x, ret) = {
+        @function!(state, x, *ret)
+    } |
+    contract ListOps(@"parMapClean", @list, function, @state, return) = {
+      new namesListCh in {
+        //map each element to a name listening for the result of the function
+        ListOps!("mapClean", list, *startProcess, (*function, state), *namesListCh) |
+        for(@namesList <- namesListCh) {
+          //map each name to its result
+          ListOps!("mapClean", namesList, *getOutput, Nil, *return)
         }
       }
     }
@@ -124,10 +196,10 @@ new  ListOps, rs(`rho:registry:insertSigned:secp256k1`), uriOut in {
               for (@acc <- accCh) {
                 startCount!(sc) |
                 if (sc == cc + 1) { //all started processes completed!
-                  ListOps!("prepend", result, acc, *return)
+                  return!([result] ++ acc)
                 } else {            //still waiting on some
                   completeCount!(cc + 1) |
-                  ListOps!("prepend", result, acc, *accCh)
+                  accCh!([result] ++ acc)
                 }
               }
             }
@@ -136,6 +208,45 @@ new  ListOps, rs(`rho:registry:insertSigned:secp256k1`), uriOut in {
         match list {
           [] => { return!([]) }
           _  => { mapLoop!(list, 0, *function, *collect, *startCount) | completeCount!(0) | accCh!([]) }
+        }
+      }
+    }
+  } |
+
+  new mapLoop in {
+    contract mapLoop(@l, @count, function, @state, collect, startCount)= {
+      match l {
+        [hd ...tl] => {
+          function!(state, hd, *collect) | 
+          mapLoop!(tl, count + 1, *function, state, *collect, *startCount)
+        }
+        _  => { startCount!(count) }
+      }
+    } |
+
+    contract ListOps(@"unorderedParMapClean", @list, function, @state, return) = {
+      new collect, startCount, completeCount, accCh in {
+        //Spawn processes, each computing one element
+        //also processes listening for the result
+        //add a result to our accumulating list
+        contract collect(@result) = {
+          for(@sc <- startCount) {
+            for (@cc <- completeCount) {
+              for (@acc <- accCh) {
+                startCount!(sc) |
+                if (sc == cc + 1) { //all started processes completed!
+                  return!([result] ++ acc)
+                } else {            //still waiting on some
+                  completeCount!(cc + 1) |
+                  accCh!([result] ++ acc)
+                }
+              }
+            }
+          }
+        } |
+        match list {
+          [] => { return!([]) }
+          _  => { mapLoop!(list, 0, *function, state, *collect, *startCount) | completeCount!(0) | accCh!([]) }
         }
       }
     }
@@ -151,13 +262,25 @@ new  ListOps, rs(`rho:registry:insertSigned:secp256k1`), uriOut in {
     }
   } |
 
-  contract ListOps(@"indexOf", @list, @value, return) = {
-    new combinatorAndCondition in {
-      contract combinatorAndCondition(@head, @accumulatedValue, return) = {
-        return!(head == value, accumulatedValue + 1)
-      } |
+  new combinator in {
+    contract combinator(@(proc, state), @head, @accumulatedValue, return) = {
+      //Need return flag from `proc` in order to guarantee execution order
+      new isDone in { @proc!(state, head, *isDone) | for(_ <- isDone){ return!(Nil) } }
+    } |
+    contract ListOps(@"foreachClean", @list, proc, @state, isDone) = {
+      new nilReturn in {
+        ListOps!("foldClean", list, Nil, *combinator, (*proc, state), *nilReturn) | for(_ <- nilReturn){ isDone!(true) }
+      }
+    }
+  } |
+
+  new combinatorAndCondition in {
+    contract combinatorAndCondition(@value, @head, @accumulatedValue, return) = {
+      return!(head == value, accumulatedValue + 1)
+    } |
+    contract ListOps(@"indexOf", @list, @value, return) = {
       new result in {
-        ListOps!("partialFold", list, -1, *combinatorAndCondition, *result) |
+        ListOps!("partialFoldClean", list, -1, *combinatorAndCondition, value, *result) |
         for(@valueFound, @i <- result) {
           if (valueFound) { return!(i)  }
           else            { return!(-1) }
@@ -213,6 +336,26 @@ new  ListOps, rs(`rho:registry:insertSigned:secp256k1`), uriOut in {
     }
   } |
 
+  new combine in {
+    contract combine(@(predicate, state), @item, @acc, accResultCh) = {
+      new predResultCh in {
+        @predicate!(state, item, *predResultCh) |
+        for (@isSatisfied <- predResultCh) {
+          accResultCh!(not isSatisfied, isSatisfied)
+        }
+      }
+    } |
+    contract ListOps(@"forallClean", @list, predicate, @state, returnCh) = {
+      new resultCh in {
+        ListOps!("partialFoldClean", list, true, *combine, (*predicate, state), *resultCh) |
+
+        for (_, @result <- resultCh) {
+          returnCh!(result)
+        }
+      }
+    }
+  } |
+
   contract ListOps(@"exists", @list, predicate, returnCh) = {
     new combine, resultCh in {
       ListOps!("partialFold", list, false, *combine, *resultCh) |
@@ -231,10 +374,30 @@ new  ListOps, rs(`rho:registry:insertSigned:secp256k1`), uriOut in {
     }
   } |
 
-  contract ListOps(@"sum", @list, returnCh) = {
-    new sum in {
-      ListOps!("fold", list, 0, *sum, *returnCh) |
-      contract sum(@n, @acc, resultCh) = { resultCh!(n + acc) }
+  new combine in {
+    contract combine(@(predicate, state), @item, @acc, accResultCh) = {
+      new predResultCh in {
+        @predicate!(state, item, *predResultCh) |
+        for (@isSatisfied <- predResultCh) {
+          accResultCh!(isSatisfied, isSatisfied)
+        }
+      }
+    } |
+    contract ListOps(@"existsClean", @list, predicate, @state, returnCh) = {
+      new resultCh in {
+        ListOps!("partialFoldClean", list, false, *combine, (*predicate, state), *resultCh) |
+
+        for (_, @result <- resultCh) {
+          returnCh!(result)
+        }
+      }
+    }
+  } |
+
+  new sum in {
+    contract sum(_, @n, @acc, resultCh) = { resultCh!(n + acc) } |
+    contract ListOps(@"sum", @list, returnCh) = {
+      ListOps!("foldClean", list, 0, *sum, Nil, *returnCh)
     }
   } |
 
@@ -254,6 +417,29 @@ new  ListOps, rs(`rho:registry:insertSigned:secp256k1`), uriOut in {
               }
             }
           }
+        }
+      }
+    }
+  } |
+
+  new accumulate in {
+    contract accumulate(@(predicate, state), @x, @acc, resultCh) = {
+      new predicateResultCh in {
+        @predicate!(state, x, *predicateResultCh) |
+        for (@matchesPredicate <- predicateResultCh) {
+          if (matchesPredicate) {
+            resultCh!([x] ++ acc)
+          } else {
+            resultCh!(acc)
+          }
+        }
+      }
+    } |
+    contract ListOps(@"filterClean", @list, predicate, @state, returnCh) = {
+      new reverseCh in {
+        ListOps!("reverse", list, *reverseCh) |
+        for (@reversed <- reverseCh) {
+          ListOps!("foldClean", reversed, [], *accumulate, (*predicate, state), *returnCh)
         }
       }
     }
