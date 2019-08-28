@@ -198,7 +198,9 @@ trait MergeabilityRules {
       (expectOne(left) { findMatch(_, base) }, expectOne(right) { findMatch(_, base) }) match {
         case (Some(m1), Some(m2)) =>
           assert(
-            m1 == m2 && m1.maybeCardinality == Some(Linear) || m2.maybeCardinality == Some(Linear)
+            m1 == m2 && m1.maybeCardinality != Some(NonLinear) || m2.maybeCardinality != Some(
+              NonLinear
+            )
           )
         case (m1, m2) => fail(s"Expected two matches but got $m1 and $m2")
       }
