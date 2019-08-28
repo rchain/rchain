@@ -64,8 +64,6 @@ new  ListOps, rs(`rho:registry:insertSigned:secp256k1`), uriOut in {
     }
   } |
 
-  // TODO before submitting this for review:
-  // inline the specific combinators to avoid creating the closure in ListOps!fold
   new prepend in {
     contract prepend(@head, @tail, return) = {
       ListOps!("prepend", head, tail, *return)
