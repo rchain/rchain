@@ -245,7 +245,7 @@ trait MergeabilityRules {
 
   /***
    A send and a receive were incoming, at least one had a match, either:
-   - both were linear
+   - both weren't non-linear
    - one was non-linear, the other had a match
    They couldn't match the same linear event (they have different polarity)
    They couldn't spawn more work, because either:
@@ -263,7 +263,9 @@ trait MergeabilityRules {
         expectOne(right) { right =>
           val (a, b) = if (left.maybeCardinality == Some(Linear)) (left, right) else (right, left)
           assert(
-            a.maybeCardinality == Some(Linear) && (b.maybeCardinality == Some(Linear) || hasMatch(
+            a.maybeCardinality == Some(Linear) && (b.maybeCardinality == Some(Linear) || b.maybeCardinality == Some(
+              Peek
+            ) || hasMatch(
               a,
               base
             ))
