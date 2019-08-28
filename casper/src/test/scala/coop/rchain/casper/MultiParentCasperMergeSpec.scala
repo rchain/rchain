@@ -68,7 +68,9 @@ class MultiParentCasperMergeSpec
   }
 
   it should "respect mergeability rules when merging blocks" in effectTest {
-    mergeabilityCases.map(_._2).parSequence
+    baseMergeabilityCases.map(_._2).parSequence
+  }
+
   }
 
   it should "not produce UnusedCommEvent while merging non conflicting blocks in the presence of conflicting ones" in effectTest {
@@ -252,7 +254,7 @@ class MultiParentCasperMergeSpec
         .toSet
     }
 
-    val testedMergeabilityCases = mergeabilityCases.map(_._1)
+    val testedMergeabilityCases = baseMergeabilityCases.map(_._1)
     withClue(s"""Missing cases: ${allMergeabilityCases
       .diff(testedMergeabilityCases.toSet)
       .toList

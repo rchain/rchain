@@ -404,7 +404,7 @@ trait MergeabilityRules {
 
   // TODO: Peek rows/column
   // Note this skips pairs that lead to infinite loops
-  val mergeabilityCases = List(
+  val baseMergeabilityCases = List(
     "!X !X"     -> SamePolarityMerge(S0)(S0)(Nil),
     "!X !4"     -> SamePolarityMerge(S0)(S1)(F1),
     "!X (!4)"   -> VolatileEvent(S0)(S0, F_)(Nil),
