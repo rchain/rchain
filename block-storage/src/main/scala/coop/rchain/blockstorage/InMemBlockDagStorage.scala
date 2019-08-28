@@ -125,7 +125,7 @@ final class InMemBlockDagStorage[F[_]: Concurrent: Sync: Log: BlockStore](
                     acc.updated(p, currChildren + block.blockHash)
                 }
             )
-        _ <- topoSortRef.update(topoSort => TopologicalSortUtil.update(topoSort, 0L, block))
+        _ <- topoSortRef.update(topoSort => TopologicalSortUtil.update(topoSort, 0L, blockMetadata))
         newValidators = bonds(block)
           .map(_.validator)
           .toSet

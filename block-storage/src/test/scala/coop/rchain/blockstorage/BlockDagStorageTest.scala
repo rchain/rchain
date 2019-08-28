@@ -226,7 +226,7 @@ class BlockDagFileStorageTest extends BlockDagStorageTest {
       blockElements: List[BlockMessage],
       topoSortStartBlockNumber: Long = 0,
       topoSortTailLength: Int = 5
-  ): Assertion = {
+  ): Unit = {
     val (list, latestMessageHashes, latestMessages, topoSort, topoSortTail) = lookupResult
     val realLatestMessages = blockElements.foldLeft(Map.empty[Validator, BlockMetadata]) {
       case (lm, b) =>
@@ -260,8 +260,20 @@ class BlockDagFileStorageTest extends BlockDagStorageTest {
         topoSort
 
     val realTopoSort = normalize(Vector(blockElements.map(_.blockHash).toVector))
-    topoSort shouldBe realTopoSort.drop(topoSortStartBlockNumber.toInt)
-    topoSortTail shouldBe realTopoSort.takeRight(topoSortTailLength)
+    for ((topoSortLevel, realTopoSortLevel) <- topoSort.zipAll(
+                                                realTopoSort,
+                                                Vector.empty,
+                                                Vector.empty
+                                              )) {
+      topoSortLevel.toSet shouldBe realTopoSortLevel.toSet
+    }
+    for ((topoSortLevel, realTopoSortLevel) <- topoSortTail.zipAll(
+                                                realTopoSort.takeRight(topoSortTailLength),
+                                                Vector.empty,
+                                                Vector.empty
+                                              )) {
+      topoSortLevel.toSet shouldBe realTopoSortLevel.toSet
+    }
   }
 
   it should "be able to restore state on startup" in {
@@ -350,11 +362,14 @@ class BlockDagFileStorageTest extends BlockDagStorageTest {
       (blockElements, garbageBlock) =>
         withDagStorageLocation { dagDataDir =>
           for {
-            firstStorage      <- createAtDefaultLocation(dagDataDir)
-            _                 <- blockElements.traverse_(firstStorage.insert(_, genesis, false))
-            _                 <- firstStorage.close()
-            garbageByteString = BlockMetadata.fromBlock(garbageBlock, false).toByteString
-            garbageBytes      = garbageByteString.size.toByteString.concat(garbageByteString).toByteArray
+            firstStorage                  <- createAtDefaultLocation(dagDataDir)
+            _                             <- blockElements.traverse_(firstStorage.insert(_, genesis, invalid = false))
+            _                             <- firstStorage.close()
+            garbageBlockMetadata          = BlockMetadata.fromBlock(garbageBlock, invalid = false)
+            keyValueCodec                 = (codecBlockHash ~ codecBlockMetadata)
+            blockHashBlockMetadataPair    = (garbageBlockMetadata.blockHash, garbageBlockMetadata)
+            garbageBlockMetadataBitVector = keyValueCodec.encode(blockHashBlockMetadataPair).get
+            garbageBytes                  = garbageBlockMetadataBitVector.toByteArray
             _ <- Sync[Task].delay {
                   Files.write(
                     defaultBlockMetadataLog(dagDataDir),
