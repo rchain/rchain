@@ -113,6 +113,9 @@ trait MergeabilityRules {
   def atLeastOnePersistent(rho: Seq[Rho]): Boolean =
     rho.flatMap(_.maybeCardinality).exists(_ == NonLinear)
 
+  def atLeastOnePeek(rho: Seq[Rho]): Boolean =
+    rho.flatMap(_.maybeCardinality).exists(_ == Peek)
+
   def findMatch(x: Rho, base: Seq[Rho]): Option[Rho] =
     base.find(matches(x, _)).headOption
 
@@ -324,6 +327,39 @@ trait MergeabilityRules {
     )(right: Rho*)(base: Rho*)(implicit pos: source.Position): Effect[_] =
       volatileEventPrecondition(left: _*)(right: _*)(base: _*) >> {
         assert(atLeastOnePersistent(left ++ right))
+      }.pure[Effect]
+
+  }
+
+  /***
+   There was a COMM within one of the deploys caused on one side by a peek.
+   The other deploy had an event without a match in TS, of same polarity to the data matched by peek.
+   These could not spawn more work.
+    */
+  object PeekedNoMatch extends MergeableCase {
+
+    override def precondition(
+        left: Rho*
+    )(right: Rho*)(base: Rho*)(implicit pos: source.Position): Effect[_] =
+      volatileEventPrecondition(left: _*)(right: _*)(base: _*) >> {
+        assert(atLeastOnePeek(left ++ right))
+      }.pure[Effect]
+
+  }
+
+  /***
+   There was a COMM within one of the deploys, with a peek on one side.
+   The other deploy had an event without a match in TS, dual to the non-linear.
+   These could spawn more work.
+   Mergeable if we use spatial matcher to prove they don't match.
+    */
+  object PeekedCouldMatch extends ConflictingCase {
+
+    override def precondition(
+        left: Rho*
+    )(right: Rho*)(base: Rho*)(implicit pos: source.Position): Effect[_] =
+      volatileEventPrecondition(left: _*)(right: _*)(base: _*) >> {
+        assert(atLeastOnePeek(left ++ right))
       }.pure[Effect]
 
   }
