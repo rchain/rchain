@@ -108,37 +108,38 @@ object ChargingRSpace {
 
           case Some((cont, dataList)) =>
             for {
-              id <- consumeId(cont.continuation)
+              consumeId <- consumeId(cont.continuation)
 
               // We refund for non-persistent continuations, and for the persistent continuation triggering the comm.
               // That persistent continuation is going to be charged for (without refund) once it has no matches in TS.
-              refundForConsume = if (!cont.persistent || id == triggeredBy.id) {
+              refundForConsume = if (!cont.persistent || consumeId == triggeredBy.id) {
                 storageCostConsume(cont.channels, cont.patterns, cont.continuation)
               } else {
                 Cost(0)
               }
-              refundForProduces = refundForRemovingProduces(dataList, cont.channels, triggeredBy)
+              refundForProduces = refundForRemovingProduces(dataList, cont, triggeredBy)
 
-              _ <- charge[F](Cost(-refundForConsume.value, "consume storage refund"))
-              _ <- charge[F](Cost(-refundForProduces.value, "produces storage refund"))
-              _ <- charge[F](eventStorageCost(triggeredBy.channelsCount))
-                    .unlessA(triggeredBy.persistent)
-              _ <- charge[F](commEventStorageCost(cont.channels.size))
+              _             <- charge[F](Cost(-refundForConsume.value, "consume storage refund"))
+              _             <- charge[F](Cost(-refundForProduces.value, "produces storage refund"))
+              lastIteration = !triggeredBy.persistent && (!cont.peek || consumeId == triggeredBy.id)
+              _             <- charge[F](eventStorageCost(triggeredBy.channelsCount)).whenA(lastIteration)
+              _             <- charge[F](commEventStorageCost(cont.channels.size))
             } yield ()
         }
 
       private def refundForRemovingProduces(
           dataList: Seq[Result[ListParWithRandom]],
-          channels: Seq[Par],
+          cont: ContResult[Par, BindPattern, TaggedContinuation],
           triggeredBy: TriggeredBy
       ): Cost = {
         val removedData = dataList
-          .zip(channels)
+          .zip(cont.channels)
           // A persistent produce is charged for upfront before reaching the TS, and needs to be refunded
           // after each iteration it matches an existing consume. We treat it as 'removed' on each such iteration.
           // It is going to be 'not removed' and charged for on the last iteration, where it doesn't match anything.
           .filter {
-            case (data, _) => !data.persistent || data.removedDatum.randomState == triggeredBy.id
+            case (data, _) =>
+              (!cont.peek && !data.persistent) || data.removedDatum.randomState == triggeredBy.id
           }
         removedData
           .map { case (data, channel) => storageCostProduce(channel, data.removedDatum) }
