@@ -385,6 +385,10 @@ trait MergeabilityRules {
   val F_ = Rho("for (_ <- @0) { 0 }", Some(Receive), Some(Linear))
   val F0 = Rho("for (@0 <- @0) { 0 }", Some(Receive), Some(Linear))
   val F1 = Rho("for (@1 <- @0) { 0 }", Some(Receive), Some(Linear))
+  // Peeks
+  val P_ = Rho("for (_ <<- @0) { 0 }", Some(Receive), Some(Peek))
+  val P0 = Rho("for (@0 <<- @0) { 0 }", Some(Receive), Some(Peek))
+  val P1 = Rho("for (@1 <<- @0) { 0 }", Some(Receive), Some(Peek))
   // Contracts (persistent receives)
   val C_ = Rho("contract @0(id) = { 0 }", Some(Receive), Some(NonLinear))
   val C0 = Rho("contract @0(@0) = { 0 }", Some(Receive), Some(NonLinear))
