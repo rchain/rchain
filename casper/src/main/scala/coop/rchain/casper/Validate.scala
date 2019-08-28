@@ -137,10 +137,6 @@ object Validate {
       for {
         _ <- Log[F].warn(ignore(b, s"block shard identifier is empty."))
       } yield false
-    } else if (b.header.get.postStateHash.isEmpty) {
-      for {
-        _ <- Log[F].warn(ignore(b, s"block post state hash is empty."))
-      } yield false
     } else if (b.header.get.deploysHash.isEmpty) {
       for {
         _ <- Log[F].warn(ignore(b, s"block new code hash is empty."))
@@ -148,6 +144,10 @@ object Validate {
     } else if (b.body.get.state.isEmpty) {
       for {
         _ <- Log[F].warn(ignore(b, s"block post state is missing."))
+      } yield false
+    } else if (b.body.get.state.get.postStateHash.isEmpty) {
+      for {
+        _ <- Log[F].warn(ignore(b, s"block post state hash is empty."))
       } yield false
     } else if (b.body.get.deploys
                  .flatMap(_.deployLog)
@@ -497,26 +497,22 @@ object Validate {
   def blockHash[F[_]: Applicative: Log](b: BlockMessage): F[Either[InvalidBlock, ValidBlock]] = {
     val blockHashComputed = ProtoUtil.hashSignedBlock(
       b.header.get,
+      b.body.get,
       b.sender,
       b.sigAlgorithm,
       b.seqNum,
       b.shardId,
       b.extraBytes
     )
-    val deployHashComputed    = ProtoUtil.protoSeqHash(b.body.get.deploys)
-    val postStateHashComputed = ProtoUtil.protoHash(b.body.get.state.get)
-    if (b.blockHash == blockHashComputed &&
-        b.header.get.deploysHash == deployHashComputed &&
-        b.header.get.postStateHash == postStateHashComputed) {
-      Applicative[F].pure(Right(Valid))
-    } else {
+    if (b.blockHash == blockHashComputed) Applicative[F].pure(Right(Valid))
+    else {
       val computedHashString = PrettyPrinter.buildString(blockHashComputed)
       val hashString         = PrettyPrinter.buildString(b.blockHash)
       for {
         _ <- Log[F].warn(
               ignore(
                 b,
-                s"block hash ${hashString} does not match to computed value ${computedHashString}."
+                s"block hash $hashString does not match to computed value $computedHashString."
               )
             )
       } yield Left(InvalidBlockHash)

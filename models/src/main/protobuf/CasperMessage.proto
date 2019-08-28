@@ -117,8 +117,7 @@ message BlockMetadataInternal {
 
 message Header {
   repeated bytes parentsHashList = 1; //list of parent block hashes
-  bytes postStateHash      = 2;
-  bytes deploysHash        = 3;
+  bytes deploysHash = 3;
   int64 timestamp = 5;
   int64 version = 6;
   int32 deployCount = 7;

@@ -1,15 +1,14 @@
 package coop.rchain.blockstorage
 
+import cats.Monad
 import cats.effect.Concurrent
-import cats.{Id, Monad}
-import cats.implicits._
 import cats.effect.concurrent.{Ref, Semaphore}
-
+import cats.implicits._
 import com.google.protobuf.ByteString
 import coop.rchain.casper.protocol.BlockMessage
 import coop.rchain.crypto.hash.Blake2b256
-import coop.rchain.metrics.{Metrics, MetricsSemaphore}
 import coop.rchain.metrics.Metrics.Source
+import coop.rchain.metrics.{Metrics, MetricsSemaphore}
 
 final class IndexedBlockDagStorage[F[_]: Monad](
     lock: Semaphore[F],
@@ -40,11 +39,8 @@ final class IndexedBlockDagStorage[F[_]: Monad](
       body              = block.body.get
       nextId            = if (block.seqNum == 0) currentId + 1L else block.seqNum.toLong
       newPostState      = body.getState.withBlockNumber(nextId)
-      newPostStateHash  = Blake2b256.hash(newPostState.toByteArray)
-      header            = block.header.get
       modifiedBlock = block
         .withBody(body.withState(newPostState))
-        .withHeader(header.withPostStateHash(ByteString.copyFrom(newPostStateHash)))
         .withSeqNum(nextCreatorSeqNum)
       _ <- underlying.insert(modifiedBlock, genesis, invalid)
       _ <- idToBlocksRef.update(_.updated(nextId, modifiedBlock))
