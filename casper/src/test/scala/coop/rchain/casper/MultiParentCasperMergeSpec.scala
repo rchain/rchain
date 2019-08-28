@@ -71,6 +71,8 @@ class MultiParentCasperMergeSpec
     baseMergeabilityCases.map(_._2).parSequence
   }
 
+  it should "respect mergeability rules when merging blocks containing events with peek" in effectTest {
+    peekMergeabilityCases.map(_._2).parSequence
   }
 
   it should "not produce UnusedCommEvent while merging non conflicting blocks in the presence of conflicting ones" in effectTest {
