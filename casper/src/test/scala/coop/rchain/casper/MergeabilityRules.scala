@@ -224,14 +224,20 @@ trait MergeabilityRules {
       differentPolarities(left)(base)
       differentPolarities(right)(base)
 
-      (expectOne(left) { findMatch(_, base) }, expectOne(right) { findMatch(_, base) }) match {
-        case (Some(m1), Some(m2)) =>
-          assert(
-            m1 != m2 || m1.maybeCardinality == Some(NonLinear) || m2.maybeCardinality == Some(
-              NonLinear
-            )
-          )
-        case (m1, m2) => fail(s"Expected two matches but got $m1 and $m2")
+      expectOne(left) { left =>
+        expectOne(right) { right =>
+          (findMatch(left, base), findMatch(right, base)) match {
+            case (Some(m1), Some(m2)) =>
+              assert(
+                (m1 != m2 || m1.maybeCardinality == Some(NonLinear) || m2.maybeCardinality == Some(
+                  NonLinear
+                )) || (m1 == m2 && left.maybeCardinality == Some(Peek) && right.maybeCardinality == Some(
+                  Peek
+                ))
+              )
+            case (m1, m2) => fail(s"Expected two matches but got $m1 and $m2")
+          }
+        }
       }
     }.pure[Effect]
 
