@@ -265,30 +265,28 @@ new  PoS,
                   }
                 } |
 
-                contract payValidators(@payments, ackCh) = {
-                  new payValidator in {
-                    @ListOps!("unorderedParMap", payments, *payValidator, *ackCh) |
-
-                    contract payValidator (@(pk, amount), returnCh) = {
-                      new vaultCh,
-                          revAddressCh in {
-                        revAddressOps!("fromPublicKey", pk, *revAddressCh) |
-                        for (@toRevAddress <- revAddressCh) {
-                          @posVault!("transfer", toRevAddress, amount, posAuthKey, *returnCh)
-                        }
+                new payValidator in {
+                  contract payValidator (@(pk, amount), returnCh) = {
+                    new vaultCh, revAddressCh in {
+                      revAddressOps!("fromPublicKey", pk, *revAddressCh) |
+                      for (@toRevAddress <- revAddressCh) {
+                        @posVault!("transfer", toRevAddress, amount, posAuthKey, *returnCh)
                       }
                     }
+                  } |
+                  contract payValidators(@payments, ackCh) = {
+                    @ListOps!("unorderedParMap", payments, *payValidator, *ackCh)
                   }
                 } |
 
-                contract commitRewards(@pendingRewards, @rewards, newRewardsCh) = {
-                  new commitReward in {
-                    @ListOps!("fold", pendingRewards.toList(), rewards, *commitReward, *newRewardsCh) |
-                    contract commitReward(@(pk, pending), @acc, resultCh) = {
-                      resultCh!(acc.set(pk, acc.getOrElse(pk, 0) + pending))
-                    }
+                new commitReward in {
+                  contract commitReward(@(pk, pending), @acc, resultCh) = {
+                    resultCh!(acc.set(pk, acc.getOrElse(pk, 0) + pending))
+                  } |
+                  contract commitRewards(@pendingRewards, @rewards, newRewardsCh) = {
+                    @ListOps!("fold", pendingRewards.toList(), rewards, *commitReward, *newRewardsCh)
                   }
-                }|
+                } |
 
                 contract changeEpoch(@currentBlockNumber, @allBonds, @activeValidators, @withdrawers, resultCh) = {
                   if (currentBlockNumber % $$epochLength$$ == 0) {
