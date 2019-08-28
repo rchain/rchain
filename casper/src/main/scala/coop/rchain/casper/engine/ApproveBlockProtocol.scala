@@ -112,9 +112,11 @@ object ApproveBlockProtocol {
 
       FlatMap[F].ifM(isValid)(
         for {
-          before <- sigsF.get
-          _      <- sigsF.update(_ + validSig.get)
-          after  <- sigsF.get
+          modifyResult <- sigsF.modify(sigs => {
+                           val newSigs = sigs + validSig.get
+                           (newSigs, (sigs, newSigs))
+                         })
+          (before, after) = modifyResult
           _ <- if (after > before)
                 Metrics[F].incrementCounter("genesis")
               else ().pure[F]
