@@ -803,6 +803,7 @@ class RholangMethodsCostsSpec
   implicit val logF: Log[Task]            = new Log.NOPLog[Task]
   implicit val noopMetrics: Metrics[Task] = new metrics.Metrics.MetricsNOP[Task]
   implicit val noopSpan: Span[Task]       = NoopSpan[Task]()
+  implicit val ms: Metrics.Source         = Metrics.BaseSource
 
   protected override def beforeAll(): Unit = {
     import coop.rchain.catscontrib.TaskContrib._

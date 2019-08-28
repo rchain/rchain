@@ -1,11 +1,12 @@
 package coop.rchain.rholang.interpreter
 
 import cats.implicits._
+
 import com.google.protobuf.ByteString
 import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.hash.Blake2b512Random
-import coop.rchain.metrics.NoopSpan
+import coop.rchain.metrics.{Metrics, NoopSpan}
 import coop.rchain.models.Connective.ConnectiveInstance._
 import coop.rchain.models.Expr.ExprInstance._
 import coop.rchain.models.TaggedContinuation.TaggedCont.ParBody
@@ -17,11 +18,11 @@ import coop.rchain.rholang.interpreter.errors._
 import coop.rchain.rholang.interpreter.storage._
 import coop.rchain.rspace._
 import coop.rchain.rspace.internal.{Datum, Row, WaitingContinuation}
+
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
 import org.scalatest.prop.TableDrivenPropertyChecks._
 import org.scalatest.{AppendedClues, Assertion, FlatSpec, Matchers}
-
 import scala.collection.immutable.BitSet
 import scala.collection.mutable.HashMap
 import scala.collection.{mutable, SortedSet}
@@ -30,6 +31,7 @@ import scala.concurrent.duration._
 
 class ReduceSpec extends FlatSpec with Matchers with AppendedClues with PersistentStoreTester {
   implicit val rand: Blake2b512Random = Blake2b512Random(Array.empty[Byte])
+  implicit val metrics: Metrics[Task] = new Metrics.MetricsNOP[Task]
 
   private[this] def mapData(elements: Map[Par, (Seq[Par], Blake2b512Random)]): Iterable[
     (

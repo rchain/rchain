@@ -2,29 +2,33 @@ package coop.rchain.rholang.interpreter
 
 import java.nio.file.{Files, Path}
 
+import scala.concurrent.ExecutionContext
+
 import cats._
+import cats.effect._
 import cats.effect.concurrent.Ref
-import cats.effect.{Concurrent, ContextShift, Sync}
 import cats.implicits._
 import cats.mtl.FunctorTell
 import cats.temp.par
-import com.google.protobuf.ByteString
+
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.metrics.{Metrics, Span}
+import coop.rchain.metrics.Metrics.Source
+import coop.rchain.models._
 import coop.rchain.models.Expr.ExprInstance.GString
 import coop.rchain.models.TaggedContinuation.TaggedCont.ScalaBodyRef
 import coop.rchain.models.Var.VarInstance.FreeVar
-import coop.rchain.models._
 import coop.rchain.models.rholang.implicits._
 import coop.rchain.rholang.interpreter.Runtime._
 import coop.rchain.rholang.interpreter.accounting.{noOpCostLog, _}
 import coop.rchain.rholang.interpreter.errors.SetupError
 import coop.rchain.rholang.interpreter.storage.ChargingRSpace
+import coop.rchain.rholang.RholangMetricsSource
 import coop.rchain.rspace.{Match, RSpace, _}
 import coop.rchain.rholang.interpreter.registry.RegistryBootstrap
 import coop.rchain.shared.Log
 
-import scala.concurrent.ExecutionContext
+import com.google.protobuf.ByteString
 
 class Runtime[F[_]: Sync] private (
     val reducer: Reduce[F],
@@ -46,6 +50,8 @@ class Runtime[F[_]: Sync] private (
 }
 
 object Runtime {
+
+  implicit val RuntimeMetricsSource: Source = Metrics.Source(RholangMetricsSource, "runtime")
 
   type RhoTuplespace[F[_]]   = TCPAK[F, Tuplespace]
   type RhoISpace[F[_]]       = TCPAK[F, ISpace]

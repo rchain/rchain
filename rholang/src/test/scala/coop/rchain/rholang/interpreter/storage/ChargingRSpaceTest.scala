@@ -349,4 +349,5 @@ object ChargingRSpaceTest {
 
   implicit val logF: Log[Task]            = new Log.NOPLog[Task]
   implicit val noopMetrics: Metrics[Task] = new metrics.Metrics.MetricsNOP[Task]
+  implicit val ms: Metrics.Source         = Metrics.BaseSource
 }

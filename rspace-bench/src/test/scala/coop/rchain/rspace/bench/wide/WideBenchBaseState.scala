@@ -39,6 +39,7 @@ abstract class WideBenchBaseState {
   implicit val logF: Log[Task]            = Log.log[Task]
   implicit val noopMetrics: Metrics[Task] = new metrics.Metrics.MetricsNOP[Task]
   implicit val noopSpan: Span[Task]       = NoopSpan[Task]()
+  implicit val ms: Metrics.Source         = Metrics.BaseSource
 
   def createRuntime(): Runtime[Task] =
     (for {

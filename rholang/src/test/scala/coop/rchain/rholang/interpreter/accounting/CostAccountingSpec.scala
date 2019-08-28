@@ -28,11 +28,12 @@ class CostAccountingSpec extends FlatSpec with Matchers with PropertyChecks with
     implicit val logF: Log[Task]           = new Log.NOPLog[Task]
     implicit val metricsEff: Metrics[Task] = new metrics.Metrics.MetricsNOP[Task]
     implicit val noopSpan: Span[Task]      = NoopSpan[Task]()
+    implicit val ms: Metrics.Source        = Metrics.BaseSource
 
     val resources = for {
       dir     <- Resources.mkTempDir[Task]("cost-accounting-spec-")
       costLog <- Resource.liftF(costLog[Task]())
-      cost    <- Resource.liftF(CostAccounting.emptyCost[Task](implicitly, costLog))
+      cost    <- Resource.liftF(CostAccounting.emptyCost[Task](implicitly, metricsEff, costLog, ms))
       runtime <- {
         implicit val c = cost
         Resource.make(Runtime.create[Task, Task.Par](dir, 10 * 1024 * 1024, Nil))(_.close())

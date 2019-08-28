@@ -1,7 +1,6 @@
 package coop.rchain.rholang.interpreter
 
 import coop.rchain.crypto.hash.Blake2b512Random
-import coop.rchain.metrics
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.models.Expr.ExprInstance.{EVarBody, GString}
 import coop.rchain.models.Var.VarInstance.FreeVar
@@ -16,16 +15,18 @@ import coop.rchain.rholang.interpreter.storage._
 import coop.rchain.rspace._
 import coop.rchain.rspace.internal.{Datum, Row}
 import coop.rchain.shared.Log
+
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
 import org.scalactic.TripleEqualsSupport
 import org.scalatest.{FlatSpec, Matchers}
-
 import scala.concurrent.duration._
 
 class CostAccountingReducerTest extends FlatSpec with Matchers with TripleEqualsSupport {
 
-  implicit val noopSpan: Span[Task] = Span.noop
+  implicit val noopSpan: Span[Task]   = Span.noop
+  implicit val metrics: Metrics[Task] = new Metrics.MetricsNOP[Task]
+  implicit val ms: Metrics.Source     = Metrics.BaseSource
 
   behavior of "Cost accounting in Reducer"
 
@@ -109,10 +110,9 @@ class CostAccountingReducerTest extends FlatSpec with Matchers with TripleEquals
     val program =
       Par(sends = Seq(Send(channel, Seq(a)), Send(channel, Seq(b))))
 
-    implicit val rand                       = Blake2b512Random(Array.empty[Byte])
-    implicit val errLog                     = new ErrorLog[Task]()
-    implicit val logF: Log[Task]            = Log.log[Task]
-    implicit val noopMetrics: Metrics[Task] = new metrics.Metrics.MetricsNOP[Task]
+    implicit val rand            = Blake2b512Random(Array.empty[Byte])
+    implicit val errLog          = new ErrorLog[Task]()
+    implicit val logF: Log[Task] = Log.log[Task]
 
     def testImplementation(pureRSpace: RhoISpace[Task]): Task[
       (
