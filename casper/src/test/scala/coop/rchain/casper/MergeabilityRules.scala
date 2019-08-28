@@ -101,13 +101,13 @@ trait MergeabilityRules {
       pos: source.Position
   ): Assertion = assert(rho.forall(_.maybeCardinality == Some(Linear)))
 
-  def allLinearWhenTwo(rho: Seq[Rho])(
+  def noPersistentWhenTwo(rho: Seq[Rho])(
       implicit
       pos: source.Position
   ) = {
     assert(rho.forall(_.maybeCardinality.isDefined))
     if (rho.size == 2)
-      assert(rho.forall(_.maybeCardinality.get == Linear))
+      assert(rho.forall(_.maybeCardinality.get != NonLinear))
   }
 
   def atLeastOnePersistent(rho: Seq[Rho]): Boolean =
@@ -295,8 +295,8 @@ trait MergeabilityRules {
         left: Rho*
     )(right: Rho*)(base: Rho*)(implicit pos: source.Position): Effect[_] =
       volatileEventPrecondition(left: _*)(right: _*)(base: _*) >> {
-        allLinearWhenTwo(left)
-        allLinearWhenTwo(right)
+        noPersistentWhenTwo(left)
+        noPersistentWhenTwo(right)
       }.pure[Effect]
 
   }
