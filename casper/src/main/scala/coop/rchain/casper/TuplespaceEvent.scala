@@ -20,31 +20,38 @@ case object Receive extends Polarity
 trait Cardinality
 case object Linear    extends Cardinality
 case object NonLinear extends Cardinality
+case object Peek      extends Cardinality
 
 object TuplespaceEvent {
 
   private[this] def toOperation(produce: Produce): TuplespaceOperation =
     TuplespaceOperation(Send, if (produce.persistent) NonLinear else Linear, produce.hash)
 
-  private[this] def toOperation(consume: Consume): TuplespaceOperation =
-    TuplespaceOperation(Receive, if (consume.persistent) NonLinear else Linear, consume.hash)
+  private[this] def toOperation(consume: Consume, peek: Boolean): TuplespaceOperation =
+    TuplespaceOperation(
+      Receive,
+      if (consume.persistent) NonLinear else if (peek) Peek else Linear,
+      consume.hash
+    )
 
   def from(produce: Produce): (Blake2b256Hash, TuplespaceEvent) =
     produce.channelsHash -> TuplespaceEvent(toOperation(produce), None)
 
   def from(consume: Consume): Option[(Blake2b256Hash, TuplespaceEvent)] = consume match {
     case Consume(singleChannelHash :: Nil, _, _, _) =>
-      Some(singleChannelHash -> TuplespaceEvent(toOperation(consume), None))
+      Some(singleChannelHash -> TuplespaceEvent(toOperation(consume, false), None))
     case _ => None
   }
 
   def from(comm: COMM, produces: Set[Produce]): Option[(Blake2b256Hash, TuplespaceEvent)] =
     comm match {
-      case COMM(consume, produce :: Nil, _) => {
+      case COMM(consume, produce :: Nil, peek) => {
         val incoming: TuplespaceOperation =
-          if (produces.contains(produce)) toOperation(produce) else toOperation(consume)
+          if (produces.contains(produce)) toOperation(produce)
+          else toOperation(consume, peek.nonEmpty)
         val matched: Option[TuplespaceOperation] = Some(
-          if (incoming == toOperation(produce)) toOperation(consume) else toOperation(produce)
+          if (incoming == toOperation(produce)) toOperation(consume, peek.nonEmpty)
+          else toOperation(produce)
         )
         Some(produce.channelsHash -> TuplespaceEvent(incoming, matched))
       }
