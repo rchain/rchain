@@ -87,10 +87,10 @@ new  ListOps, rs(`rho:registry:insertSigned:secp256k1`), uriOut in {
     }
   } |
 
-  new namesListCh, getOutput in {
+  new getOutput in {
     contract getOutput(name, ret)  = { for(@result <- name){ ret!(result) } } |
     contract ListOps(@"parMap", @list, function, return) = {
-      new startProcess in {
+      new namesListCh, startProcess in {
         contract startProcess(@x, ret) = { new outCh in { function!(x, *outCh) | ret!(*outCh) } } |
         //map each element to a name listening for the result of the function
         ListOps!("map", list, *startProcess, *namesListCh) |
