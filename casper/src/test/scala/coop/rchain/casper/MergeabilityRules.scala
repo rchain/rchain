@@ -124,10 +124,10 @@ trait MergeabilityRules {
 
   def matches(x: Rho, y: Rho): Boolean = {
     val (a, b)    = if (x.maybePolarity == Some(Send)) (x, y) else (y, x)
-    val wildcards = List(F_, C_)
+    val wildcards = List(F_, C_, P_)
     val knownMatches =
-      List(S0, R0).flatMap(s => (F0 :: C0 :: wildcards).map(r => s   -> r)) ++
-        List(S1, R1).flatMap(s => (F1 :: C1 :: wildcards).map(r => s -> r))
+      List(S0, R0).flatMap(s => (F0 :: C0 :: P0 :: wildcards).map(r => s   -> r)) ++
+        List(S1, R1).flatMap(s => (F1 :: C1 :: P1 :: wildcards).map(r => s -> r))
 
     knownMatches.contains(a -> b)
   }
