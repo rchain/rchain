@@ -164,19 +164,20 @@ new  Either, rs(`rho:registry:insertSigned:secp256k1`), uriOut, rl(`rho:registry
       }
     } |
 
-    // Composes a list of functions returning Either into a
-    // single result by using flatMap. Similar to following Scala code:
-    // for {
-    //   r0 <- Right(input)
-    //   r1 <- f1(r0)
-    //   r2 <- f2(r1)
-    //   ...
-    // } yield fn
-    contract Either(@"compose", @input, @functions, return) = {
-      new combinator in {
-        contract combinator(@head, @accumulatedValue, return) = {
-          Either!("flatMap", accumulatedValue, head, *return)
-        } |
+    new combinator in {
+      contract combinator(@head, @accumulatedValue, return) = {
+        Either!("flatMap", accumulatedValue, head, *return)
+      } |
+
+      // Composes a list of functions returning Either into a
+      // single result by using flatMap. Similar to following Scala code:
+      // for {
+      //   r0 <- Right(input)
+      //   r1 <- f1(r0)
+      //   r2 <- f2(r1)
+      //   ...
+      // } yield fn
+      contract Either(@"compose", @input, @functions, return) = {
         @ListOps!("fold", functions, (true, input), *combinator, *return)
       }
     }
