@@ -3,9 +3,11 @@ package coop.rchain.casper.api
 import cats.Monad
 import cats.effect.concurrent.Semaphore
 import cats.implicits._
+
 import coop.rchain.blockstorage.BlockDagRepresentation
 import coop.rchain.casper.MultiParentCasper.ignoreDoppelgangerCheck
-import coop.rchain.casper.engine._, EngineCell._
+import coop.rchain.casper.engine._
+import EngineCell._
 import coop.rchain.blockstorage.BlockDagStorage.DeployId
 import coop.rchain.casper._
 import coop.rchain.casper.api.BlockAPI.ApiErr
@@ -14,23 +16,26 @@ import coop.rchain.casper.protocol._
 import coop.rchain.casper.util._
 import coop.rchain.casper.util.rholang._
 import coop.rchain.catscontrib.TaskContrib._
-import coop.rchain.metrics.NoopSpan
+import coop.rchain.metrics.{Metrics, NoopSpan}
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.Validator.Validator
 import coop.rchain.p2p.EffectsTestInstances._
 import coop.rchain.shared.{Cell, Time}
+
 import monix.eval.Task
 import monix.execution.Scheduler
 import org.scalatest.{FlatSpec, Matchers}
-
 import scala.concurrent.duration._
+
+import coop.rchain.metrics
 
 class CreateBlockAPITest extends FlatSpec with Matchers {
   import GenesisBuilder._
   import HashSetCasperTestNode.Effect
 
-  val genesis                            = buildGenesis()
-  implicit val spanEff: NoopSpan[Effect] = NoopSpan[Effect]
+  val genesis                              = buildGenesis()
+  implicit val spanEff: NoopSpan[Effect]   = NoopSpan[Effect]
+  implicit val metricsEff: Metrics[Effect] = new metrics.Metrics.MetricsNOP[Effect]
 
   "createBlock" should "not allow simultaneous calls" in {
     implicit val logEff    = new LogStub[Effect]

@@ -1,23 +1,27 @@
 package coop.rchain.casper.api
 
+import scala.collection.immutable
+
 import cats.Monad
-import cats.effect.concurrent.Semaphore
 import cats.effect.{Concurrent, Sync}
+import cats.effect.concurrent.Semaphore
 import cats.implicits._
-import com.google.protobuf.ByteString
+
 import coop.rchain.blockstorage.{BlockDagRepresentation, BlockStore}
-import coop.rchain.casper.engine._, EngineCell._
+import coop.rchain.casper.engine._
+import EngineCell._
 import coop.rchain.blockstorage.BlockDagStorage.DeployId
+import coop.rchain.casper._
 import coop.rchain.casper.DeployError._
 import coop.rchain.casper.MultiParentCasper.ignoreDoppelgangerCheck
-import coop.rchain.casper._
 import coop.rchain.casper.protocol._
-import coop.rchain.casper.util.rholang.RuntimeManager
 import coop.rchain.casper.util.{EventConverter, ProtoUtil}
+import coop.rchain.casper.util.rholang.RuntimeManager
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.graphz._
 import coop.rchain.metrics.{Metrics, Span}
+import coop.rchain.metrics.implicits._
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.Par
 import coop.rchain.models.rholang.sorter.Sortable._
@@ -27,7 +31,7 @@ import coop.rchain.rspace.StableHashProvider
 import coop.rchain.rspace.trace._
 import coop.rchain.shared.Log
 
-import scala.collection.immutable
+import com.google.protobuf.ByteString
 
 object BlockAPI {
 
@@ -65,7 +69,7 @@ object BlockAPI {
     ))
   }
 
-  def createBlock[F[_]: Sync: Concurrent: EngineCell: Log: Span](
+  def createBlock[F[_]: Sync: Concurrent: EngineCell: Log: Metrics: Span](
       blockApiLock: Semaphore[F],
       printUnmatchedSends: Boolean = false
   ): Effect[F, DeployServiceResponse] = Span[F].trace(CreateBlockSource) {
@@ -75,11 +79,14 @@ object BlockAPI {
         casper => {
           Sync[F].bracket(blockApiLock.tryAcquire) {
             case true =>
-              for {
+              implicit val ms = BlockAPIMetricsSource
+              (for {
+                _          <- Metrics[F].incrementCounter("propose")
                 maybeBlock <- casper.createBlock
                 result <- maybeBlock match {
                            case err: NoBlock =>
-                             s"Error while creating block: $err"
+                             Metrics[F]
+                               .incrementCounter("propose-failed") >> s"Error while creating block: $err"
                                .asLeft[DeployServiceResponse]
                                .pure[F]
                            case Created(block) =>
@@ -91,7 +98,12 @@ object BlockAPI {
                                printUnmatchedSends
                              ))
                          }
-              } yield result
+              } yield result).timer("propose-total-time").attempt.flatMap {
+                case Left(e) =>
+                  Metrics[F].incrementCounter("propose-failed") >> Sync[F]
+                    .raiseError[ApiErr[DeployServiceResponse]](e)
+                case Right(result) => result.pure[F]
+              }
             case false =>
               "Error: There is another propose in progress.".asLeft[DeployServiceResponse].pure[F]
           } {

@@ -3,8 +3,10 @@ package coop.rchain.node.api
 import cats.implicits._
 import cats.effect.concurrent.Semaphore
 import cats.effect.Concurrent
+
 import coop.rchain.blockstorage.BlockStore
-import coop.rchain.casper.engine._, EngineCell._
+import coop.rchain.casper.engine._
+import EngineCell._
 import coop.rchain.casper.SafetyOracle
 import coop.rchain.casper.api._
 import coop.rchain.casper.protocol._
@@ -15,12 +17,13 @@ import coop.rchain.either.{Either => GrpcEither}
 import coop.rchain.models.StacksafeMessage
 import coop.rchain.models.either.implicits._
 import coop.rchain.shared._
-import coop.rchain.metrics.Span
+import coop.rchain.metrics.{Metrics, Span}
+
 import monix.eval.Task
 import monix.execution.Scheduler
 
 object ProposeGrpcService {
-  def instance[F[_]: Concurrent: Log: SafetyOracle: BlockStore: Taskable: Span: EngineCell](
+  def instance[F[_]: Concurrent: Log: SafetyOracle: BlockStore: Metrics: Taskable: Span: EngineCell](
       blockApiLock: Semaphore[F]
   )(
       implicit worker: Scheduler
