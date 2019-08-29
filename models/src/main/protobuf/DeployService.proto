@@ -185,3 +185,17 @@ message WaitingContinuationInfo {
   repeated BindPattern postBlockPatterns = 1;
   Par postBlockContinuation = 2;
 }
+
+// This type holds return types for success values inside Either for deploy service methods
+message DeployEitherMeta {
+  DeployServiceResponse DoDeploy = 1;
+  BlockQueryResponse getBlock = 2;
+  VisualizeBlocksResponse visualizeDag = 3;
+  LightBlockInfo showMainChain = 4;
+  LightBlockInfo getBlocks = 5;
+  ListeningNameDataResponse listenForDataAtName = 6;
+  ListeningNameContinuationResponse listenForContinuationAtName = 7;
+  LightBlockQueryResponse findDeploy = 8;
+  PrivateNamePreviewResponse previewPrivateNames = 9;
+  BlockQueryResponse lastFinalizedBlock = 10;
+}
