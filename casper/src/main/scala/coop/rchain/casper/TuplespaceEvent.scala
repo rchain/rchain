@@ -66,7 +66,7 @@ object TuplespaceEvent {
         val bothMatchedSameLinearEvent = for {
           thisMatched  <- ev.matched
           otherMatched <- other.matched
-        } yield thisMatched == otherMatched && otherMatched.cardinality == Linear
+        } yield thisMatched == otherMatched && (otherMatched.cardinality == Linear || otherMatched.cardinality == Peek)
 
         bothMatchedSameLinearEvent.getOrElse(false)
       } else {
