@@ -495,9 +495,7 @@ class MultiParentCasperAddBlockSpec extends FlatSpec with Matchers with Inspecto
   ): Effect[BlockMessage] = {
     val postState =
       RChainState().withBonds(ProtoUtil.bonds(genesis.genesisBlock)).withBlockNumber(1)
-    val postStateHash = Blake2b256.hash(postState.toByteArray)
     val header = Header()
-      .withPostStateHash(ByteString.copyFrom(postStateHash))
       .withParentsHashList(signedInvalidBlock.header.get.parentsHashList)
       .withDeploysHash(ProtoUtil.protoSeqHash(deploys))
     val blockHash = Blake2b256.hash(header.toByteArray)

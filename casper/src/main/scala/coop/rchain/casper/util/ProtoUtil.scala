@@ -347,7 +347,6 @@ object ProtoUtil {
   ): Header =
     Header()
       .withParentsHashList(parentHashes)
-      .withPostStateHash(protoHash(body.state.get))
       .withDeploysHash(protoSeqHash(body.deploys))
       .withDeployCount(body.deploys.size)
       .withVersion(version)
@@ -376,6 +375,7 @@ object ProtoUtil {
 
   def hashSignedBlock(
       header: Header,
+      body: Body,
       sender: ByteString,
       sigAlgorithm: String,
       seqNum: Int,
@@ -384,6 +384,7 @@ object ProtoUtil {
   ): BlockHash =
     hashByteArrays(
       header.toByteArray,
+      body.toByteArray,
       sender.toByteArray,
       StringValue.of(sigAlgorithm).toByteArray,
       Int32Value.of(seqNum).toByteArray,
@@ -407,11 +408,26 @@ object ProtoUtil {
       block.header.get
     }
 
+    val body = {
+      //TODO refactor casper code to avoid the usage of Option fields in the block data structures
+      // https://rchain.atlassian.net/browse/RHOL-572
+      assert(block.body.isDefined, "A block without a body doesn't make sense")
+      block.body.get
+    }
+
     val sender = ByteString.copyFrom(pk.bytes)
     for {
-      latestMessageOpt  <- dag.latestMessage(sender)
-      seqNum            = latestMessageOpt.fold(0)(_.seqNum) + 1
-      blockHash         = hashSignedBlock(header, sender, sigAlgorithm, seqNum, shardId, block.extraBytes)
+      latestMessageOpt <- dag.latestMessage(sender)
+      seqNum           = latestMessageOpt.fold(0)(_.seqNum) + 1
+      blockHash = hashSignedBlock(
+        header,
+        body,
+        sender,
+        sigAlgorithm,
+        seqNum,
+        shardId,
+        block.extraBytes
+      )
       sigAlgorithmBlock = block.withSigAlgorithm(sigAlgorithm)
       sig               = ByteString.copyFrom(sigAlgorithmBlock.signFunction(blockHash.toByteArray, sk))
       signedBlock = sigAlgorithmBlock

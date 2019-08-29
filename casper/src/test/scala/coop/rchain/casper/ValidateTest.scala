@@ -11,7 +11,6 @@ import coop.rchain.casper.helper.BlockUtil.generateValidator
 import coop.rchain.casper.helper.{BlockDagStorageFixture, BlockGenerator}
 import coop.rchain.casper.protocol.Event.EventInstance
 import coop.rchain.casper.protocol._
-import coop.rchain.shared.scalatestcontrib._
 import coop.rchain.casper.util.GenesisBuilder.buildGenesis
 import coop.rchain.casper.util.rholang.{InterpreterUtil, RuntimeManager}
 import coop.rchain.casper.util.{ConstructDeploy, GenesisBuilder, ProtoUtil}
@@ -24,6 +23,7 @@ import coop.rchain.models.Validator.Validator
 import coop.rchain.p2p.EffectsTestInstances.LogStub
 import coop.rchain.rholang.interpreter.Runtime
 import coop.rchain.shared.Time
+import coop.rchain.shared.scalatestcontrib._
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
 import org.scalatest.{BeforeAndAfterEach, FlatSpec, Matchers}
@@ -51,15 +51,10 @@ class ValidateTest
   ): F[BlockMessage] =
     for {
       genesis <- createGenesis[F](bonds = bonds)
-      result <- (1 until length).foldLeft(
-                 createBlock[F](Seq(genesis.blockHash), genesis, bonds = bonds)
-               ) {
-                 case (block, _) =>
-                   for {
-                     bprev <- block
-                     bnext <- createBlock[F](Seq(bprev.blockHash), genesis, bonds = bonds)
-                   } yield bnext
-               }
+      _ <- (1 to length).toList.foldLeftM(genesis) {
+            case (block, _) =>
+              createBlock[F](Seq(block.blockHash), genesis, bonds = bonds)
+          }
     } yield genesis
 
   def createChainWithRoundRobinValidators[F[_]: Monad: Time: BlockStore: IndexedBlockDagStorage](
@@ -106,14 +101,12 @@ class ValidateTest
 
   implicit class ChangeBlockNumber(b: BlockMessage) {
     def withBlockNumber(n: Long): BlockMessage = {
-      val body     = b.body.getOrElse(Body())
+      val body     = b.getBody
       val state    = body.getState
       val newState = state.withBlockNumber(n)
+      val header   = b.getHeader
 
-      val header    = b.header.getOrElse(Header())
-      val newHeader = header.withPostStateHash(ProtoUtil.protoHash(newState))
-
-      b.withBody(body.withState(newState)).withHeader(newHeader)
+      b.withBody(body.withState(newState)).withHeader(header)
     }
   }
 
@@ -259,21 +252,24 @@ class ValidateTest
       } yield result
   }
 
-  it should "correctly validate a multiparent block where the parents have different block numbers" in withStorage {
+  it should "correctly validate a multi-parent block where the parents have different block numbers" in withStorage {
     implicit blockStore => implicit blockDagStorage =>
       def createBlockWithNumber(
           n: Long,
           genesis: BlockMessage,
           parentHashes: Seq[ByteString] = Nil
-      ): Task[BlockMessage] = {
-        val blockWithNumber = BlockMessage().withBlockNumber(n)
-        val header          = blockWithNumber.getHeader.withParentsHashList(parentHashes)
-        val hash            = ProtoUtil.hashUnsignedBlock(header, Nil)
-        val block           = blockWithNumber.withHeader(header).withBlockHash(hash)
+      ): Task[BlockMessage] =
+        Time[Task].currentMillis >>= { timestamp =>
+          val blockWithNumber = BlockMessage().withBlockNumber(n)
+          // Add timestamp to uniquely identify the blocks.
+          val header =
+            blockWithNumber.getHeader.withParentsHashList(parentHashes).withTimestamp(timestamp)
+          val hash  = ProtoUtil.hashUnsignedBlock(header, Nil)
+          val block = blockWithNumber.withHeader(header).withBlockHash(hash)
 
-        blockStore.put(hash, block) >> blockDagStorage.insert(block, genesis, false) >> block
-          .pure[Task]
-      }
+          blockStore.put(hash, block) >> blockDagStorage.insert(block, genesis, invalid = false) >> block
+            .pure[Task]
+        }
 
       for {
         genesis <- createChain[Task](8) // Note we need to create a useless chain to satisfy the assert in TopoSort
@@ -737,7 +733,10 @@ class ValidateTest
         _ <- Validate.formatOfFields[Task](genesis.withShardId("")) shouldBeF false
         _ <- Validate.formatOfFields[Task](genesis.withBody(genesis.getBody.clearState)) shouldBeF false
         _ <- Validate.formatOfFields[Task](
-              genesis.withHeader(genesis.header.get.withPostStateHash(ByteString.EMPTY))
+              genesis.withBody(
+                genesis.body.get
+                  .withState(genesis.body.get.state.get.withPostStateHash(ByteString.EMPTY))
+              )
             ) shouldBeF false
         _ <- Validate.formatOfFields[Task](
               genesis.withHeader(genesis.header.get.withDeploysHash(ByteString.EMPTY))
