@@ -12,6 +12,7 @@ import cats.tagless.implicits._
 import cats.mtl.{ApplicativeAsk, ApplicativeLocal, MonadState}
 import cats.temp.par.Par
 import coop.rchain.blockstorage._
+import coop.rchain.blockstorage.dag.{BlockDagFileStorage, BlockDagStorage}
 import coop.rchain.blockstorage.util.io.IOError
 import coop.rchain.casper._
 import coop.rchain.casper.engine.CasperLaunch.CasperInit

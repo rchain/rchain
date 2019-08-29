@@ -3,7 +3,7 @@ package coop.rchain.blockstorage.dag
 import java.nio.file.Path
 
 import cats.effect.Sync
-import coop.rchain.blockstorage.BlockDagStorage.DeployId
+import coop.rchain.blockstorage.dag.BlockDagStorage.DeployId
 import coop.rchain.blockstorage.BlockHashesByDeployLogIsCorrupted
 import coop.rchain.blockstorage.util.io.IOError.RaiseIOError
 import coop.rchain.blockstorage.dag.codecs._

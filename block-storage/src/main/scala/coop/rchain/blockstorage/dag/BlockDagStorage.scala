@@ -1,7 +1,7 @@
-package coop.rchain.blockstorage
+package coop.rchain.blockstorage.dag
 
 import com.google.protobuf.ByteString
-import coop.rchain.blockstorage.BlockDagStorage.DeployId
+import coop.rchain.blockstorage.dag.BlockDagStorage.DeployId
 import coop.rchain.casper.protocol.BlockMessage
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.Validator.Validator

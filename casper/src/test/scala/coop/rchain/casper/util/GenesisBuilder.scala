@@ -3,7 +3,7 @@ package coop.rchain.casper.util
 import java.nio.file.{Files, Path}
 
 import cats.implicits._
-import coop.rchain.blockstorage.BlockDagFileStorage
+import coop.rchain.blockstorage.dag.BlockDagFileStorage
 import coop.rchain.casper.genesis.Genesis
 import coop.rchain.casper.genesis.contracts._
 import coop.rchain.casper.helper.BlockDagStorageTestFixture

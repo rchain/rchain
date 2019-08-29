@@ -6,7 +6,7 @@ import cats.effect.{Concurrent, Sync}
 import cats.implicits._
 import cats.{Applicative, Monad}
 import com.google.protobuf.ByteString
-import coop.rchain.blockstorage.{BlockDagStorage, BlockStore}
+import coop.rchain.blockstorage.BlockStore
 import coop.rchain.casper.LastApprovedBlock.LastApprovedBlock
 import coop.rchain.casper._
 import coop.rchain.casper.util.comm.CommUtil

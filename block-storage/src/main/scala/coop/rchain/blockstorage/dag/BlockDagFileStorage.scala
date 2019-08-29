@@ -1,17 +1,16 @@
-package coop.rchain.blockstorage
+package coop.rchain.blockstorage.dag
 
-import java.nio.file.{Path, StandardCopyOption}
-import java.nio.{BufferUnderflowException, ByteBuffer}
+import java.nio.file.Path
 
 import cats.Monad
 import cats.effect.concurrent.Semaphore
-import cats.effect.{Concurrent, Resource, Sync}
+import cats.effect.{Concurrent, Sync}
 import cats.implicits._
 import cats.mtl.MonadState
 import com.google.protobuf.ByteString
-import coop.rchain.blockstorage.BlockDagFileStorage.{Checkpoint, CheckpointedDagInfo}
-import coop.rchain.blockstorage.BlockDagStorage.DeployId
-import coop.rchain.blockstorage.dag._
+import coop.rchain.blockstorage._
+import coop.rchain.blockstorage.dag.BlockDagFileStorage.{Checkpoint, CheckpointedDagInfo}
+import coop.rchain.blockstorage.dag.BlockDagStorage.DeployId
 import coop.rchain.blockstorage.dag.BlockMetadataPersistentIndex._
 import coop.rchain.blockstorage.dag.DeployPersistentIndex._
 import coop.rchain.blockstorage.dag.EquivocationTrackerPersistentIndex._
@@ -21,15 +20,15 @@ import coop.rchain.blockstorage.util.BlockMessageUtil._
 import coop.rchain.blockstorage.util.byteOps._
 import coop.rchain.blockstorage.util.io.IOError.RaiseIOError
 import coop.rchain.blockstorage.util.io.{IOError, _}
-import coop.rchain.blockstorage.util.{Crc32, TopologicalSortUtil}
 import coop.rchain.casper.protocol.BlockMessage
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.lmdb.LMDBStore
+import coop.rchain.metrics.Metrics.Source
+import coop.rchain.metrics.{Metrics, MetricsSemaphore}
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.Validator.Validator
 import coop.rchain.models.{BlockHash, BlockMetadata, EquivocationRecord, Validator}
 import coop.rchain.shared.ByteStringOps._
-import coop.rchain.shared.Language.ignore
 import coop.rchain.shared.{AtomicMonadState, Log, LogSource}
 import monix.execution.atomic.AtomicAny
 import org.lmdbjava.DbiFlags.MDB_CREATE
@@ -37,8 +36,6 @@ import org.lmdbjava.{Env, EnvFlags}
 
 import scala.ref.WeakReference
 import scala.util.matching.Regex
-import coop.rchain.metrics.{Metrics, MetricsSemaphore}
-import coop.rchain.metrics.Metrics.Source
 
 private final case class BlockDagFileStorageState[F[_]: Sync](
     sortOffset: Long,

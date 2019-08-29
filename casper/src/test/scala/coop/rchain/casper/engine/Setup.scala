@@ -6,6 +6,7 @@ import cats.effect.concurrent.Ref
 import cats.effect.{Concurrent, ContextShift}
 import cats.temp.par
 import coop.rchain.blockstorage._
+import coop.rchain.blockstorage.dag.{BlockDagRepresentation, InMemBlockDagStorage}
 import coop.rchain.casper._
 import coop.rchain.casper.genesis.contracts.{Validator, Vault}
 import coop.rchain.casper.helper.BlockDagStorageTestFixture

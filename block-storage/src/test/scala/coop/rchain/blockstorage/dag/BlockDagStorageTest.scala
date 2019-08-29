@@ -1,40 +1,31 @@
-package coop.rchain.blockstorage
+package coop.rchain.blockstorage.dag
 
 import java.nio.file.StandardOpenOption
 
-import cats.implicits._
-
-import coop.rchain.shared.PathOps._
-import coop.rchain.catscontrib.TaskContrib.TaskOps
 import cats.effect.Sync
-
+import cats.implicits._
 import com.google.protobuf.ByteString
+import coop.rchain.blockstorage.LatestMessagesLogIsCorrupted
 import coop.rchain.blockstorage.dag.codecs._
-import coop.rchain.blockstorage.util.byteOps._
 import coop.rchain.blockstorage.util.io.IOError.RaiseIOError
 import coop.rchain.blockstorage.util.io._
 import coop.rchain.casper.protocol.BlockMessage
-import coop.rchain.metrics.Metrics.MetricsNOP
+import coop.rchain.catscontrib.TaskContrib.TaskOps
+import coop.rchain.metrics.Metrics
 import coop.rchain.models.BlockHash.BlockHash
-import coop.rchain.models.BlockHash
 import coop.rchain.models.Validator.Validator
-import coop.rchain.models.Validator
-import coop.rchain.models.{BlockMetadata, EquivocationRecord}
 import coop.rchain.models.blockImplicits._
-import coop.rchain.rspace.Context
-import coop.rchain.{metrics, shared}
-import coop.rchain.shared.Log
+import coop.rchain.models.{BlockHash, BlockMetadata, EquivocationRecord, Validator}
+import coop.rchain.shared
 import coop.rchain.shared.AttemptOps._
+import coop.rchain.shared.PathOps._
 import monix.eval.Task
 import monix.execution.Scheduler
 import org.scalatest._
 import org.scalatest.prop.GeneratorDrivenPropertyChecks
-import scala.util.Random
 import scodec.codecs._
 
-import coop.rchain.metrics.Metrics
-
-import kamon.metric.Metric
+import scala.util.Random
 
 trait BlockDagStorageTest
     extends FlatSpecLike

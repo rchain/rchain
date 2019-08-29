@@ -5,6 +5,7 @@ import cats.effect._
 import cats.implicits._
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage._
+import coop.rchain.blockstorage.dag._
 import coop.rchain.casper.CasperMetricsSource
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.ProtoUtil

@@ -4,7 +4,8 @@ import cats.Monad
 import cats.effect.{Resource, Sync}
 import cats.implicits._
 import com.google.protobuf.ByteString
-import coop.rchain.blockstorage.{BlockDagStorage, BlockStore, IndexedBlockDagStorage}
+import coop.rchain.blockstorage.dag.{BlockDagStorage, IndexedBlockDagStorage}
+import coop.rchain.blockstorage.BlockStore
 import coop.rchain.casper.EstimatorHelper.conflicts
 import coop.rchain.casper.helper.{BlockDagStorageFixture, BlockGenerator, HashSetCasperTestNode}
 import coop.rchain.casper.protocol.Event.EventInstance.{Consume, Produce}

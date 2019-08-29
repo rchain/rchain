@@ -3,7 +3,7 @@ package coop.rchain.casper
 import scala.collection.immutable.{Map, Set}
 import cats.Monad
 import cats.implicits._
-import coop.rchain.blockstorage.BlockDagRepresentation
+import coop.rchain.blockstorage.dag.BlockDagRepresentation
 import coop.rchain.casper.protocol.BlockMessage
 import coop.rchain.casper.util.{DagOperations, ProtoUtil}
 import coop.rchain.casper.util.ProtoUtil.weightFromValidatorByDag
@@ -13,6 +13,7 @@ import coop.rchain.models.BlockMetadata
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.Validator.Validator
 import com.google.protobuf.ByteString
+import coop.rchain.blockstorage.dag.BlockDagRepresentation
 import coop.rchain.shared.{Log, LogSource}
 
 object Estimator {
