@@ -2,23 +2,26 @@ package coop.rchain.rspace
 
 import java.nio.file.Path
 
+import scala.collection.JavaConverters._
+import scala.collection.SortedSet
+import scala.concurrent.ExecutionContext
+
 import cats.Applicative
-import cats.effect.{Concurrent, ContextShift, Sync}
+import cats.effect._
 import cats.implicits._
 import cats.temp.par.Par
-import com.google.common.collect.Multiset
-import com.typesafe.scalalogging.Logger
+
 import coop.rchain.catscontrib._
 import coop.rchain.metrics.{Metrics, Span}
+import coop.rchain.metrics.implicits._
 import coop.rchain.rspace.history.{Branch, HistoryRepository}
 import coop.rchain.rspace.internal._
 import coop.rchain.rspace.trace.{Produce, _}
 import coop.rchain.shared.Log
-import monix.execution.atomic.AtomicAny
 
-import scala.collection.JavaConverters._
-import scala.collection.SortedSet
-import scala.concurrent.ExecutionContext
+import com.google.common.collect.Multiset
+import com.typesafe.scalalogging.Logger
+import monix.execution.atomic.AtomicAny
 
 class ReplayRSpace[F[_]: Sync, C, P, A, K](
     historyRepository: HistoryRepository[F, C, P, A, K],
@@ -47,8 +50,10 @@ class ReplayRSpace[F[_]: Sync, C, P, A, K](
 
   def store: HotStore[F, C, P, A, K] = storeAtom.get()
 
-  private[this] val consumeCommLabel = "comm.consume"
-  private[this] val produceCommLabel = "comm.produce"
+  private[this] val consumeCommLabel     = "comm.consume"
+  private[this] val consumeTimeCommLabel = "comm.consume-time"
+  private[this] val produceCommLabel     = "comm.produce"
+  private[this] val produceTimeCommLabel = "comm.produce-time"
 
   def consume(
       channels: Seq[C],
@@ -63,7 +68,7 @@ class ReplayRSpace[F[_]: Sync, C, P, A, K](
         val msg = "channels.length must equal patterns.length"
         logF.error(msg) >> syncF.raiseError(new IllegalArgumentException(msg))
       } else
-        for {
+        (for {
           _ <- spanF.mark("before-consume-lock")
           result <- consumeLockF(channels) {
                      lockedConsume(
@@ -76,7 +81,7 @@ class ReplayRSpace[F[_]: Sync, C, P, A, K](
                      )
                    }
           _ <- spanF.mark("post-consume-lock")
-        } yield result
+        } yield result).timer(consumeTimeCommLabel)
     }
 
   private[this] def lockedConsume(
@@ -211,13 +216,13 @@ class ReplayRSpace[F[_]: Sync, C, P, A, K](
   }
   def produce(channel: C, data: A, persist: Boolean, sequenceNumber: Int): F[MaybeActionResult] =
     contextShift.evalOn(scheduler) {
-      for {
+      (for {
         _ <- spanF.mark("before-produce-lock")
         result <- produceLockF(channel) {
                    lockedProduce(channel, data, persist, sequenceNumber)
                  }
         _ <- spanF.mark("post-produce-lock")
-      } yield result
+      } yield result).timer(produceTimeCommLabel)
     }
 
   private[this] def lockedProduce(
