@@ -89,7 +89,7 @@ object MultiParentCasper extends MultiParentCasperInstances {
 }
 
 sealed abstract class MultiParentCasperInstances {
-  implicit private[this] val MetricsSource: Metrics.Source =
+  implicit val MetricsSource: Metrics.Source =
     Metrics.Source(CasperMetricsSource, "casper")
   private[this] val genesisLabel = Metrics.Source(MetricsSource, "genesis")
 
