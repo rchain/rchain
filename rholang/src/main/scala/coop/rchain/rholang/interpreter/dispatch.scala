@@ -63,7 +63,7 @@ object RholangAndScalaDispatcher {
       s: Sync[M],
       ft: FunctorTell[M, Throwable],
       spanM: Span[M]
-  ): (Dispatch[M, ListParWithRandom, TaggedContinuation], Reduce[M], Registry[M]) = {
+  ): (Dispatch[M, ListParWithRandom, TaggedContinuation], Reduce[M]) = {
 
     implicit lazy val dispatcher: Dispatch[M, ListParWithRandom, TaggedContinuation] =
       new RholangAndScalaDispatcher(dispatchTable)
@@ -71,7 +71,6 @@ object RholangAndScalaDispatcher {
     implicit lazy val reducer: Reduce[M] =
       new DebruijnInterpreter[M, F](tuplespace, dispatcher, urnMap)
 
-    val registry: Registry[M] = new RegistryImpl(tuplespace, dispatcher)
-    (dispatcher, reducer, registry)
+    (dispatcher, reducer)
   }
 }

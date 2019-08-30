@@ -83,11 +83,10 @@ class CryptoChannelsSpec
   ): Any = {
     implicit val (reduce, store) = fixture
 
-    val serializeAndHash: (Array[Byte] => Array[Byte]) => Par => Array[Byte] =
-      hashFn => serialize andThen hashFn
-
-    val hashChannel: Par         = GString(channelName)
-    val hash: Par => Array[Byte] = serializeAndHash(hashFn)
+    val hashChannel: Par = channelName match {
+      case "blake2b256Hash" => Runtime.FixedChannels.BLAKE2B256_HASH
+      case _                => GString(channelName)
+    }
 
     val ackChannel                  = GString("x")
     implicit val emptyEnv: Env[Par] = Env[Par]()
@@ -96,10 +95,12 @@ class CryptoChannelsSpec
       assertStoreContains(store)(ackChannel)(_)
 
     forAll { par: Par =>
-      val byteArrayToSend = Expr(GByteArray(par.toByteString))
-      val data: List[Par] = List(byteArrayToSend, ackChannel)
-      val send            = Send(hashChannel, data, persistent = false, BitSet())
-      val expected        = (hash andThen byteArrayToByteString andThen byteStringToExpr)(par)
+      val toByteArray: Array[Byte] = serialize(par)
+      val byteArrayToSend: Par     = GByteArray(ByteString.copyFrom(toByteArray))
+      val data: List[Par]          = List(byteArrayToSend, ackChannel)
+      val send                     = Send(hashChannel, data, persistent = false, BitSet())
+      val expected                 = RhoType.ByteArray(hashFn(toByteArray))
+
       // Send byte array on hash channel. This should:
       // 1. meet with the system process in the tuplespace
       // 2. hash input array
@@ -120,7 +121,6 @@ class CryptoChannelsSpec
 
   "keccak256Hash channel" should "hash input data and send result on ack channel" in { fixture =>
     hashingChannel("keccak256Hash", Keccak256.hash, fixture)
-
   }
 
   type Signature  = Array[Byte]
@@ -133,7 +133,7 @@ class CryptoChannelsSpec
     fixture =>
       implicit val (reduce, space) = fixture
 
-      val secp256k1VerifyhashChannel = GString("secp256k1Verify")
+      val secp256k1VerifyhashChannel = Runtime.FixedChannels.SECP256K1_VERIFY
 
       val pubKey = Base16.unsafeDecode(
         "04C591A8FF19AC9C4E4E5793673B83123437E975285E7B442F4EE2654DFFCA5E2D2103ED494718C697AC9AEBCFD19612E224DB46661011863ED2FC54E71861E2A6"

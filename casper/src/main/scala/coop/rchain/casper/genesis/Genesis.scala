@@ -42,6 +42,7 @@ object Genesis {
       supply: Long
   ): Seq[DeployData] =
     Seq(
+      StandardDeploys.registry,
       StandardDeploys.listOps,
       StandardDeploys.either,
       StandardDeploys.nonNegativeNumber,

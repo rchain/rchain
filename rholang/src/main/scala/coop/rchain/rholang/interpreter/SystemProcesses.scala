@@ -11,6 +11,7 @@ import coop.rchain.metrics.Span
 import coop.rchain.models._
 import coop.rchain.models.rholang.implicits._
 import coop.rchain.rholang.interpreter.Runtime.{BlockData, InvalidBlocks, RhoTuplespace}
+import coop.rchain.rholang.interpreter.registry.Registry
 import coop.rchain.rholang.interpreter.util.RevAddress
 import coop.rchain.rspace.{ContResult, Result}
 
@@ -36,6 +37,7 @@ trait SystemProcesses[F[_]] {
   def invalidBlocks(invalidBlocks: InvalidBlocks[F]): Contract[F]
   def revAddress: Contract[F]
   def deployerIdOps: Contract[F]
+  def registryOps: Contract[F]
 }
 
 object SystemProcesses {
@@ -207,6 +209,20 @@ object SystemProcesses {
 
         case isContractCall(produce, Seq(RhoType.String("pubKeyBytes"), _, ack)) =>
           produce(Seq(Par()), ack)
+      }
+
+      def registryOps: Contract[F] = {
+        case isContractCall(
+            produce,
+            Seq(RhoType.String("buildUri"), argument, ack)
+            ) =>
+          val response = argument match {
+            case RhoType.ByteArray(ba) =>
+              val hashKeyBytes = Blake2b256.hash(ba)
+              RhoType.Uri(Registry.buildURI(hashKeyBytes))
+            case _ => Par()
+          }
+          produce(Seq(response), ack)
       }
 
       def secp256k1Verify: Contract[F] =

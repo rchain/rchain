@@ -480,7 +480,8 @@ class NodeRuntime private[node] (
       Runtime
         .createWithEmptyCost[Task](storagePath, storageSize, Seq.empty)
     }
-    _ <- Runtime.injectEmptyRegistryRoot[Task](runtime.space, runtime.replaySpace)
+    _ <- Runtime.bootstrapRegistry[Task](runtime)
+
     casperRuntime <- {
       implicit val s                = rspaceScheduler
       implicit val m: Metrics[Task] = metrics

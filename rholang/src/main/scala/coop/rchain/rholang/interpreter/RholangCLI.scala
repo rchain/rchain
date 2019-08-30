@@ -70,7 +70,7 @@ object RholangCLI {
                   conf.dataDir(),
                   conf.mapSize()
                 )
-      _ <- Runtime.injectEmptyRegistryRoot[Task](runtime.space, runtime.replaySpace)
+      _ <- Runtime.bootstrapRegistry[Task](runtime)
     } yield (runtime)).unsafeRunSync
 
     val problems = try {

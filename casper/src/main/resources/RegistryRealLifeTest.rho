@@ -1,0 +1,11 @@
+new ret, ret2, lookup(`rho:registry:lookup2`), insertArb(`rho:registry:insertArbitrary2`), stdout(`rho:io:stdout`) in {
+  stdout!("Hallo?") |
+  insertArb!("test", *ret) |
+  for(@uri <- ret) {
+    stdout!("Successfully inserted") |
+    lookup!(uri, *ret2) |
+    for(@val <- ret2) {
+      stdout!("Successfully looked up") | stdout!(val)
+    }
+  }
+}

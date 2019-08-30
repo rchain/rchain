@@ -24,6 +24,12 @@ object StandardDeploys {
     deployData
   }
 
+  def registry: DeployData = toDeploy(
+    CompiledRholangSource("Registry.rho", NormalizerEnv.Empty),
+    "04cc94ab15247b0db1b8219388218eb7461ac74b3d88d4da8c1816fac8e258f5e0f5db9db6bb82b0cc066589dfe77a0d7449db295dab248fb93855ba91813154a9",
+    1559156071321L
+  )
+
   def listOps: DeployData = toDeploy(
     CompiledRholangSource("ListOps.rho", NormalizerEnv.Empty),
     "040126690519dc9b0f52876cb13458e15697794dd87d7c6477707c7efa4cce8a36b634eab5056bd4e3ba385ab14a638e4ac7d3b3e4968da3d66933fc04bc7038b5",

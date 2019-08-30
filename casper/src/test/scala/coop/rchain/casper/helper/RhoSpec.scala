@@ -103,6 +103,13 @@ class RhoSpec(
           3,
           105L,
           ctx => DeployerIdContract.get(ctx)(_, _)
+        ),
+        SystemProcess.Definition[F](
+          "rho:test:crypto:secp256k1Sign",
+          Runtime.byteName(106),
+          3,
+          106L,
+          ctx => Secp256k1SignContract.get(ctx)(_, _)
         )
       )
     testResultCollectorService
