@@ -93,7 +93,7 @@ package object effects {
                   .putIfAbsent(environment.trace, SourceTrace(source, networkId, host, parent))
                   .map(_ => environment)
                   .getOrElse(environment)
-              })(scope(_)(block)) { environment =>
+              })(scope(_)(withMarks("trace")(block))) { environment =>
                 Sync[F]
                   .delay(spans.remove(environment.trace))
                   .flatMap(_.map(_.end()).getOrElse(Sync[F].unit))
