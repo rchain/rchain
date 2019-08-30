@@ -154,8 +154,13 @@ object EstimatorHelper {
   ): Map[Blake2b256Hash, Set[TuplespaceEvent]] = {
     val nonPersistentProducesInComms = b.comms.flatMap(_.produces).filterNot(_.persistent)
     val nonPersistentConsumesInComms = b.comms.map(_.consume).filterNot(_.persistent)
-    val freeProduces                 = b.produces.diff(nonPersistentProducesInComms)
-    val freeConsumes                 = b.consumes.diff(nonPersistentConsumesInComms)
+    val peekedProducesInCommsHashes =
+      b.comms.withFilter(_.peeks.nonEmpty).flatMap(_.produces).map(_.hash)
+
+    val freeProduces = b.produces
+      .diff(nonPersistentProducesInComms)
+      .filterNot(p => peekedProducesInCommsHashes.contains(p.hash))
+    val freeConsumes = b.consumes.diff(nonPersistentConsumesInComms)
 
     val produceEvents = freeProduces.map(TuplespaceEvent.from(_))
     val consumeEvents = freeConsumes.flatMap(TuplespaceEvent.from(_))
