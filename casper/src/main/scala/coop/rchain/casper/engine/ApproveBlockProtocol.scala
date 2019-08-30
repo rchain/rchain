@@ -112,13 +112,28 @@ object ApproveBlockProtocol {
 
       FlatMap[F].ifM(isValid)(
         for {
-          before <- sigsF.get
-          _      <- sigsF.update(_ + validSig.get)
-          after  <- sigsF.get
+          modifyResult <- sigsF.modify(sigs => {
+                           val newSigs = sigs + validSig.get
+                           (newSigs, (sigs, newSigs))
+                         })
+          (before, after) = modifyResult
+
           _ <- if (after > before)
-                Metrics[F].incrementCounter("genesis")
-              else ().pure[F]
+                Log[F].info("APPROVAL: New signature received") >>
+                  Metrics[F].incrementCounter("genesis")
+              else
+                Log[F].info("APPROVAL: No new sigs received")
+
           _ <- Log[F].info(s"APPROVAL: received block approval from $sender")
+
+          _ <- Log[F].info(
+                s"APPROVAL: ${after.size} approvals received: ${after
+                  .map(s => PrettyPrinter.buildString(s.publicKey))
+                  .mkString(", ")}"
+              )
+          _ <- Log[F].info(
+                s"APPROVAL: Remaining approvals needed: ${requiredSigs - after.size + 1}"
+              )
           _ <- EventLog[F].publish(
                 shared.Event.BlockApprovalReceived(
                   a.candidate

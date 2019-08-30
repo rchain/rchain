@@ -21,8 +21,6 @@ class InitializingSpec extends WordSpec {
       val fixture = Setup()
       import fixture._
 
-      val validators = Set(ByteString.copyFrom(validatorPk.bytes))
-
       val theInit = Task.unit
 
       implicit val engineCell = Cell.unsafe[Task, Engine[Task]](Engine.noop)
@@ -32,7 +30,6 @@ class InitializingSpec extends WordSpec {
         new Initializing[Task](
           shardId,
           Some(validatorId),
-          validators,
           theInit
         )
 

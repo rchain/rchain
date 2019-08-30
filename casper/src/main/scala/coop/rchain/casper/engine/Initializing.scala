@@ -3,11 +3,9 @@ package coop.rchain.casper.engine
 import cats.effect.{Concurrent, Sync}
 import cats.implicits._
 import cats.Applicative
-
 import coop.rchain.blockstorage.{BlockDagStorage, BlockStore}
 import coop.rchain.casper._
 import coop.rchain.casper.LastApprovedBlock.LastApprovedBlock
-
 import EngineCell._
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.comm.CommUtil
@@ -19,7 +17,7 @@ import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.shared._
 import coop.rchain.shared
 
-import com.google.protobuf.ByteString
+import scala.language.higherKinds
 
 /** Node in this state will query peers in the network with [[ApprovedBlockRequest]] message
   * and will wait for the [[ApprovedBlock]] message to arrive. Until then  it will respond with
@@ -28,7 +26,6 @@ import com.google.protobuf.ByteString
 class Initializing[F[_]: Sync: Metrics: Span: Concurrent: ConnectionsCell: BlockStore: TransportLayer: Log: EventLog: Time: SafetyOracle: LastFinalizedBlockCalculator: RPConfAsk: LastApprovedBlock: BlockDagStorage: EngineCell: RuntimeManager: Running.RequestedBlocks](
     shardId: String,
     validatorId: Option[ValidatorIdentity],
-    validators: Set[ByteString],
     theInit: F[Unit]
 ) extends Engine[F] {
   import Engine._
@@ -40,7 +37,6 @@ class Initializing[F[_]: Sync: Metrics: Span: Concurrent: ConnectionsCell: Block
     case ab: ApprovedBlock =>
       onApprovedBlockTransition(
         ab,
-        validators,
         validatorId,
         shardId
       )
@@ -51,13 +47,12 @@ class Initializing[F[_]: Sync: Metrics: Span: Concurrent: ConnectionsCell: Block
 
   private def onApprovedBlockTransition(
       approvedBlock: ApprovedBlock,
-      validators: Set[ByteString],
       validatorId: Option[ValidatorIdentity],
       shardId: String
   ): F[Unit] =
     for {
       _       <- Log[F].info("Received ApprovedBlock message.")
-      isValid <- Validate.approvedBlock[F](approvedBlock, validators)
+      isValid <- Validate.approvedBlock[F](approvedBlock)
       maybeCasper <- if (isValid) {
                       for {
                         _ <- Log[F].info("Valid ApprovedBlock received!")

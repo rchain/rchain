@@ -10,6 +10,7 @@ import coop.rchain.casper.protocol.{ApprovedBlock, BlockMessage, Justification}
 import coop.rchain.casper.util.ProtoUtil.bonds
 import coop.rchain.casper.util.rholang.{InterpreterUtil, RuntimeManager}
 import coop.rchain.casper.util.{DagOperations, ProtoUtil}
+import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.hash.Blake2b256
 import coop.rchain.crypto.signatures.Secp256k1
 import coop.rchain.metrics.{Metrics, Span}
@@ -40,9 +41,8 @@ object Validate {
   def ignore(b: BlockMessage, reason: String): String =
     s"Ignoring block ${PrettyPrinter.buildString(b.blockHash)} because $reason"
 
-  def approvedBlock[F[_]: Applicative: Log](
-      approvedBlock: ApprovedBlock,
-      requiredValidators: Set[ByteString]
+  def approvedBlock[F[_]: Sync: Log](
+      approvedBlock: ApprovedBlock
   ): F[Boolean] = {
     val maybeCandidateBytesDigest = for {
       candidate <- approvedBlock.candidate
@@ -61,12 +61,23 @@ object Validate {
             if verifySig(candidateBytesDigest, signature.sig.toByteArray, publicKey.toByteArray)
           } yield publicKey).toSet
 
-        if (signatories.size >= requiredSignatures && requiredValidators.subsetOf(signatories))
-          true.pure[F]
-        else
-          Log[F]
-            .warn("Received invalid ApprovedBlock message not containing enough valid signatures.")
-            .as(false)
+        for {
+          _ <- Log[F]
+                .info(
+                  s"Block already signed by: ${signatories
+                    .map(x => "<" + Base16.encode(x.toByteArray).substring(0, 10) + "...>")
+                    .mkString(", ")}"
+                )
+
+          result <- if (signatories.size >= requiredSignatures)
+                     true.pure[F]
+                   else
+                     Log[F]
+                       .warn(
+                         "Received invalid ApprovedBlock message not containing enough valid signatures."
+                       )
+                       .as(false)
+        } yield result
 
       case None =>
         Log[F]

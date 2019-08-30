@@ -92,11 +92,10 @@ object Engine {
 
     } yield ()
 
-  def tranistionToInitializing[F[_]: Concurrent: Metrics: Span: Monad: EngineCell: Log: EventLog: RPConfAsk: BlockStore: ConnectionsCell: TransportLayer: Time: SafetyOracle: LastFinalizedBlockCalculator: LastApprovedBlock: BlockDagStorage: RuntimeManager: Running.RequestedBlocks](
+  def transitionToInitializing[F[_]: Concurrent: Metrics: Span: Monad: EngineCell: Log: EventLog: RPConfAsk: BlockStore: ConnectionsCell: TransportLayer: Time: SafetyOracle: LastFinalizedBlockCalculator: LastApprovedBlock: BlockDagStorage: RuntimeManager: Running.RequestedBlocks](
       shardId: String,
       validatorId: Option[ValidatorIdentity],
-      validators: Set[ByteString],
       init: F[Unit]
-  ): F[Unit] = EngineCell[F].set(new Initializing(shardId, validatorId, validators, init))
+  ): F[Unit] = EngineCell[F].set(new Initializing(shardId, validatorId, init))
 
 }
