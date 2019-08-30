@@ -546,15 +546,15 @@ trait MergeabilityRules {
       implicit file: sourcecode.File,
       line: sourcecode.Line
   ) =
-    randomDiamondConflictCheck(base, b1, b2, numberOfParentsForDiamondTip = 1)
+    checkBothWays(base, b1, b2, numberOfParentsForDiamondTip = 1)
 
   def merges(b1: Rho, b2: Rho, base: Rho)(
       implicit file: sourcecode.File,
       line: sourcecode.Line
   ) =
-    randomDiamondConflictCheck(base, b1, b2, numberOfParentsForDiamondTip = 2)
+    checkBothWays(base, b1, b2, numberOfParentsForDiamondTip = 2)
 
-  private[this] def randomDiamondConflictCheck(
+  def randomDiamondConflictCheck(
       base: Rho,
       b1: Rho,
       b2: Rho,
@@ -563,6 +563,15 @@ trait MergeabilityRules {
     val shuffledBlocks = shuffle(Seq(b1, b2))
     diamondConflictCheck(base, shuffledBlocks(0), shuffledBlocks(1), numberOfParentsForDiamondTip)
   }
+
+  private[this] def checkBothWays(
+      base: Rho,
+      b1: Rho,
+      b2: Rho,
+      numberOfParentsForDiamondTip: Int
+  )(implicit file: sourcecode.File, line: sourcecode.Line): Effect[Unit] =
+    diamondConflictCheck(base, b1, b2, numberOfParentsForDiamondTip) >>
+      diamondConflictCheck(base, b2, b1, numberOfParentsForDiamondTip)
 
   private[this] def coveredBy(equivalent: String) = ().pure[Effect]
 
