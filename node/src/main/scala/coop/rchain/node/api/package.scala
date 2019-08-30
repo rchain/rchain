@@ -49,6 +49,7 @@ package object api {
           ProposeServiceGrpcMonix
             .bindService(ProposeGrpcService.instance(blockApiLock, tracing), grpcExecutor)
         )
+        .addService(ProtoReflectionService.newInstance())
         .build
     )
 
