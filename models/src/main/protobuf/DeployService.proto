@@ -23,7 +23,7 @@ option (scalapb.options) = {
 };
 
 // Use `DoDeploy` to queue deployments of Rholang code and then
-// `createBlock` to make a new block with the results of running them
+// `ProposeService.propose` to make a new block with the results of running them
 // all.
 //
 // To get results back, use `listenForDataAtName`.
@@ -186,8 +186,8 @@ message WaitingContinuationInfo {
   Par postBlockContinuation = 2;
 }
 
-// This type holds return types for success values inside Either for deploy service methods
-message DeployEitherMeta {
+// This type holds response types inside Either for DeployService methods
+message DeployServiceResponseMeta {
   DeployServiceResponse DoDeploy = 1;
   BlockQueryResponse getBlock = 2;
   VisualizeBlocksResponse visualizeDag = 3;
