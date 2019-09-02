@@ -1,6 +1,5 @@
 package coop.rchain.casper
 
-import cats.{Applicative, Functor, Monad}
 import cats.implicits._
 import coop.rchain.blockstorage.BlockStore
 import coop.rchain.casper.helper.TestNode
@@ -8,10 +7,18 @@ import coop.rchain.casper.helper.TestNode._
 import coop.rchain.casper.protocol.DeployData
 import coop.rchain.shared.scalatestcontrib._
 import coop.rchain.casper.util.{ConstructDeploy, RSpaceUtil}
+import coop.rchain.crypto.hash.Blake2b256
+import coop.rchain.crypto.signatures.Secp256k1
+import coop.rchain.models.Expr.ExprInstance.{GInt, GString}
+import coop.rchain.models.rholang.implicits._
+import coop.rchain.models.{ETuple, Par}
 import coop.rchain.p2p.EffectsTestInstances.LogicalTime
+import coop.rchain.rholang.interpreter.storage
+import coop.rchain.rspace.Serialize
+import coop.rchain.shared.ByteArrayOps._
+import coop.rchain.shared.scalatestcontrib._
 import monix.execution.Scheduler.Implicits.global
-import org.scalatest.{Assertion, FlatSpec, Inspectors, Matchers}
-import org.scalactic._
+import org.scalatest.{FlatSpec, Inspectors, Matchers}
 
 class MultiParentCasperMergeSpec
     extends FlatSpec
@@ -22,7 +29,8 @@ class MultiParentCasperMergeSpec
   import RSpaceUtil._
   import coop.rchain.casper.util.GenesisBuilder._
 
-  implicit val timeEff = new LogicalTime[Effect]
+  implicit val timeEff                      = new LogicalTime[Effect]
+  implicit val serializePar: Serialize[Par] = storage.serializePar
 
   val genesis = buildGenesis()
 
@@ -61,6 +69,32 @@ class MultiParentCasperMergeSpec
     def echoContract(no: Int) =
       Rho(s"""new stdout(`rho:io:stdout`) in { stdout!("Contract $no") }""")
     merges(echoContract(1), echoContract(2), Rho("Nil"))
+  }
+
+  it should "not conflict on registry lookups" in effectTest {
+    val uri         = "rho:id:i1kuw4znrkazgbmc4mxe7ua4s1x41zd7qd8md96edxh1n87a5seht3"
+    val toSign: Par = ETuple(Seq(GInt(0), GString("foo")))
+    val toByteArray = Serialize[Par].encode(toSign).toArray
+    val sig         = Secp256k1.sign(Blake2b256.hash(toByteArray), ConstructDeploy.defaultSec)
+    val setup =
+      Rho(s"""
+             |new rs(`rho:registry:insertSigned:secp256k1`) in {
+             |  rs!(
+             |    "${ConstructDeploy.defaultPub.bytes.toHex}".hexToBytes(),
+             |    (0, "foo"),
+             |    "${sig.toHex}".hexToBytes(),
+             |    Nil
+             |  )
+             |}
+        """.stripMargin)
+    val lookup =
+      Rho(s"""
+             |new rl(`rho:registry:lookup`) in {
+             |  rl!(`$uri`, Nil)
+             |}
+        """.stripMargin)
+
+    merges(lookup, lookup, setup)
   }
 
   it should "respect mergeability rules when merging blocks" in effectTest {
