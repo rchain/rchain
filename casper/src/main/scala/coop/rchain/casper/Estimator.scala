@@ -65,7 +65,6 @@ object Estimator {
           case (blockHash, score) => s"${PrettyPrinter.buildString(blockHash)}: $score"
         }
         .mkString(", ")
-      _                          <- Log[F].info(s"The scores map is $scoresMapString")
       rankedLatestMessagesHashes <- rankForkchoices(List(lca), dag, scoresMap)
       _                          <- Span[F].mark("ranked-latest-messages-hashes")
     } yield rankedLatestMessagesHashes
