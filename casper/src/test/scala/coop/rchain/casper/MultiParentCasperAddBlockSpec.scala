@@ -124,6 +124,24 @@ class MultiParentCasperAddBlockSpec extends FlatSpec with Matchers with Inspecto
     }
   }
 
+  it should "not allow empty blocks with multiple parents" in effectTest {
+    HashSetCasperTestNode.networkEff(genesis, networkSize = 2).use { nodes =>
+      for {
+        deployDatas <- (0 to 1).toList
+                        .traverse[Effect, DeployData](
+                          i => ConstructDeploy.basicDeployData[Effect](i)
+                        )
+        _ <- nodes(0).addBlock(deployDatas(0))
+        _ <- nodes(1).addBlock(deployDatas(1))
+        _ <- nodes(1).receive() // receive block1
+        _ <- nodes(0).receive() // receive block2
+
+        status <- nodes(1).casperEff.createBlock
+        _      = assert(status == NoNewDeploys)
+      } yield ()
+    }
+  }
+
   it should "create valid blocks when peek syntax is present in a deploy" in effectTest {
     HashSetCasperTestNode.standaloneEff(genesis).use { node =>
       val source = " for(@x <<- @0){ Nil } | @0!(0) "
