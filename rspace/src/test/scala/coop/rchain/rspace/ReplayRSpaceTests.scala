@@ -65,7 +65,7 @@ trait ReplayRSpaceTests extends ReplayRSpaceTestsBase[String, Pattern, String, S
       continuationCreator: Int => K,
       persist: Boolean,
       peeks: SortedSet[Int] = SortedSet.empty
-  ): Task[List[Option[(ContResult[C, P, K], Seq[Result[A]])]]] =
+  ): Task[List[Option[(ContResult[C, P, K], Seq[Result[C, A]])]]] =
     shuffle(range).toList.parTraverse { i: Int =>
       logger.debug("Started consume {}", i)
       space
@@ -82,7 +82,7 @@ trait ReplayRSpaceTests extends ReplayRSpaceTestsBase[String, Pattern, String, S
       channelCreator: Int => C,
       datumCreator: Int => A,
       persist: Boolean
-  ): Task[List[Option[(ContResult[C, P, K], Seq[Result[A]])]]] =
+  ): Task[List[Option[(ContResult[C, P, K], Seq[Result[C, A]])]]] =
     shuffle(range).toList.parTraverse { i: Int =>
       logger.debug("Started produce {}", i)
       space.produce(channelCreator(i), datumCreator(i), persist).map { r =>
@@ -126,7 +126,7 @@ trait ReplayRSpaceTests extends ReplayRSpaceTestsBase[String, Pattern, String, S
         _ = resultProduce shouldBe Some(
           (
             ContResult(continuation, false, channels, patterns, 1),
-            List(Result(datum, datum, false))
+            List(Result(channels(0), datum, datum, false))
           )
         )
 
@@ -167,7 +167,7 @@ trait ReplayRSpaceTests extends ReplayRSpaceTestsBase[String, Pattern, String, S
         _ = resultProduce shouldBe Some(
           (
             ContResult(continuation, false, channels, patterns, 1, true),
-            List(Result(datum, datum, false))
+            List(Result(channels(0), datum, datum, false))
           )
         )
 
@@ -375,7 +375,7 @@ trait ReplayRSpaceTests extends ReplayRSpaceTestsBase[String, Pattern, String, S
         _ = resultProduce shouldBe Some(
           (
             ContResult(continuation, false, channels, patterns, 1, true),
-            List(Result(datum, datum, false))
+            List(Result(channels(0), datum, datum, false))
           )
         )
         _ <- replaySpace.rigAndReset(emptyPoint.root, rigPoint.log)

@@ -120,7 +120,7 @@ class RSpace[F[_], C, P, A, K] private[rspace] (
             peeks.nonEmpty
           ),
           dataCandidates
-            .map(dc => Result(dc.datum.a, dc.removedDatum, dc.datum.persist))
+            .map(dc => Result(dc.channel, dc.datum.a, dc.removedDatum, dc.datum.persist))
         )
       )
     }
@@ -332,7 +332,9 @@ class RSpace[F[_], C, P, A, K] private[rspace] (
                 contSequenceNumber,
                 peeks.nonEmpty
               ),
-              dataCandidates.map(dc => Result(dc.datum.a, dc.removedDatum, dc.datum.persist))
+              dataCandidates.map(
+                dc => Result(dc.channel, dc.datum.a, dc.removedDatum, dc.datum.persist)
+              )
             )
           )
         }

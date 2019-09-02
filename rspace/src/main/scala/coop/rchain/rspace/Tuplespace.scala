@@ -36,7 +36,7 @@ trait Tuplespace[F[_], C, P, A, K] {
       persist: Boolean,
       sequenceNumber: Int = 0,
       peeks: SortedSet[Int] = SortedSet.empty
-  ): F[Option[(ContResult[C, P, K], Seq[Result[A]])]]
+  ): F[Option[(ContResult[C, P, K], Seq[Result[C, A]])]]
 
   /** Searches the store for a continuation that has patterns that match the given data at the
     * given channel.
@@ -66,7 +66,7 @@ trait Tuplespace[F[_], C, P, A, K] {
       data: A,
       persist: Boolean,
       sequenceNumber: Int = 0
-  ): F[Option[(ContResult[C, P, K], Seq[Result[A]])]]
+  ): F[Option[(ContResult[C, P, K], Seq[Result[C, A]])]]
 
   def install(channels: Seq[C], patterns: Seq[P], continuation: K): F[Option[(K, Seq[A])]]
 

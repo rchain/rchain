@@ -55,7 +55,9 @@ object ChargingRSpace {
           sequenceNumber: Int,
           peeks: SortedSet[Int] = SortedSet.empty[Int]
       ): F[
-        Option[(ContResult[Par, BindPattern, TaggedContinuation], Seq[Result[ListParWithRandom]])]
+        Option[
+          (ContResult[Par, BindPattern, TaggedContinuation], Seq[Result[Par, ListParWithRandom]])
+        ]
       ] =
         for {
           _ <- charge[F](
@@ -88,7 +90,9 @@ object ChargingRSpace {
           persist: Boolean,
           sequenceNumber: Int
       ): F[
-        Option[(ContResult[Par, BindPattern, TaggedContinuation], Seq[Result[ListParWithRandom]])]
+        Option[
+          (ContResult[Par, BindPattern, TaggedContinuation], Seq[Result[Par, ListParWithRandom]])
+        ]
       ] =
         for {
           _       <- charge[F](storageCostProduce(channel, data).copy(operation = "produces storage"))
@@ -98,7 +102,7 @@ object ChargingRSpace {
 
       private def handleResult(
           result: Option[
-            (ContResult[Par, BindPattern, TaggedContinuation], Seq[Result[ListParWithRandom]])
+            (ContResult[Par, BindPattern, TaggedContinuation], Seq[Result[Par, ListParWithRandom]])
           ],
           triggeredBy: TriggeredBy
       ): F[Unit] =
@@ -128,7 +132,7 @@ object ChargingRSpace {
         }
 
       private def refundForRemovingProduces(
-          dataList: Seq[Result[ListParWithRandom]],
+          dataList: Seq[Result[Par, ListParWithRandom]],
           cont: ContResult[Par, BindPattern, TaggedContinuation],
           triggeredBy: TriggeredBy
       ): Cost = {

@@ -63,7 +63,7 @@ abstract class RSpaceOps[F[_]: Concurrent: Metrics, C, P, A, K](
 
   private val lockF: TwoStepLock[F, Blake2b256Hash] = new ConcurrentTwoStepLockF(MetricsSource)
 
-  type MaybeActionResult = Option[(ContResult[C, P, K], Seq[Result[A]])]
+  type MaybeActionResult = Option[(ContResult[C, P, K], Seq[Result[C, A]])]
 
   protected[this] def consumeLockF(
       channels: Seq[C]
