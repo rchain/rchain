@@ -47,15 +47,12 @@ class GrpcTransportServer(
   implicit val metricsSource: Metrics.Source =
     Metrics.Source(CommMetricsSource, "rp.transport")
 
-  private val queueSendScheduler =
+  private val queueScheduler =
     Scheduler.fixedPool(
-      "tl-dispatcher-server-send",
+      "tl-dispatcher-server-queue",
       parallelism,
       reporter = UncaughtExceptionLogger
     )
-
-  private val queueBlobScheduler =
-    Scheduler.singleThread("tl-dispatcher-server-blob", reporter = UncaughtExceptionLogger)
 
   private val serverSslContextTask: Task[SslContext] =
     Task
@@ -106,10 +103,10 @@ class GrpcTransportServer(
       tellConsumer <- Task.delay(
                        tellBuffer
                          .mapParallelUnordered(parallelism)(dispatchSend)
-                         .subscribe()(queueSendScheduler)
+                         .subscribe()(queueScheduler)
                      )
       blobConsumer <- Task.delay(
-                       blobBuffer.mapEval(dispatchBlob).subscribe()(queueBlobScheduler)
+                       blobBuffer.mapEval(dispatchBlob).subscribe()(queueScheduler)
                      )
     } yield Cancelable.collection(receiver, tellConsumer, blobConsumer)
   }

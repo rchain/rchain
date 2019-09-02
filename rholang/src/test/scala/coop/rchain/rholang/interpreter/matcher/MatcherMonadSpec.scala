@@ -7,20 +7,24 @@ import cats.effect.implicits._
 import cats.implicits._
 import cats.mtl.implicits._
 import cats.{Alternative, Foldable, Functor, MonoidK, SemigroupK}
+
 import coop.rchain.catscontrib.mtl.implicits._
 import coop.rchain.catscontrib.TaskContrib._
+import coop.rchain.metrics.Metrics
 import coop.rchain.models.Par
 import coop.rchain.rholang.interpreter._
 import coop.rchain.rholang.interpreter.accounting._
 import coop.rchain.rholang.interpreter.accounting.CostAccounting._
 import coop.rchain.rholang.interpreter.errors.OutOfPhlogistonsError
 import coop.rchain.rholang.interpreter.matcher.{run => runMatcher, _}
-import org.scalatest._
 
+import org.scalatest._
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
 
 class MatcherMonadSpec extends FlatSpec with Matchers {
+  implicit val metrics: Metrics[Task] = new Metrics.MetricsNOP[Task]
+  implicit val ms: Metrics.Source     = Metrics.BaseSource
 
   type F[A] = MatcherMonadT[Task, A]
 

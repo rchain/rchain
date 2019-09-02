@@ -112,6 +112,7 @@ object BasicBench {
     implicit val noopSpan: Span[Task]                           = NoopSpan[Task]()
     implicit val m: Match[Task, BindPattern, ListParWithRandom] = matchListPar[Task]
     implicit val contextShiftF: ContextShift[Task]              = Task.contextShift
+    implicit val ms: Metrics.Source                             = Metrics.BaseSource
 
     private val dbDir: Path = Files.createTempDirectory("rchain-storage-test-")
 

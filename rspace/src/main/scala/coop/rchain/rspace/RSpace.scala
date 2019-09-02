@@ -3,24 +3,27 @@ package coop.rchain.rspace
 import java.lang
 import java.nio.file.{Files, Path}
 
-import cats.effect.{Concurrent, ContextShift, Sync}
-import cats.implicits._
-import cats.temp.par.Par
-import com.typesafe.scalalogging.Logger
-import coop.rchain.catscontrib._
-import coop.rchain.metrics.Metrics.Source
-import coop.rchain.metrics.{Metrics, Span}
-import coop.rchain.rspace.history.{Branch, HistoryRepository}
-import coop.rchain.rspace.internal._
-import coop.rchain.rspace.trace._
-import coop.rchain.shared.SyncVarOps._
-import coop.rchain.shared.{Cell, Log}
-import monix.execution.atomic.AtomicAny
-import scodec.Codec
-
 import scala.collection.SortedSet
 import scala.concurrent.ExecutionContext
 import scala.util.Random
+
+import cats.effect._
+import cats.implicits._
+import cats.temp.par.Par
+
+import coop.rchain.catscontrib._
+import coop.rchain.metrics.{Metrics, Span}
+import coop.rchain.metrics.Metrics.Source
+import coop.rchain.metrics.implicits._
+import coop.rchain.rspace.history.{Branch, HistoryRepository}
+import coop.rchain.rspace.internal._
+import coop.rchain.rspace.trace._
+import coop.rchain.shared.{Cell, Log}
+import coop.rchain.shared.SyncVarOps._
+
+import com.typesafe.scalalogging.Logger
+import monix.execution.atomic.AtomicAny
+import scodec.Codec
 
 class RSpace[F[_], C, P, A, K] private[rspace] (
     historyRepository: HistoryRepository[F, C, P, A, K],
@@ -48,7 +51,9 @@ class RSpace[F[_], C, P, A, K] private[rspace] (
 
   implicit protected[this] lazy val MetricsSource: Source = RSpaceMetricsSource
   private[this] val consumeCommLabel                      = "comm.consume"
+  private[this] val consumeTimeCommLabel                  = "comm.consume-time"
   private[this] val produceCommLabel                      = "comm.produce"
+  private[this] val produceTimeCommLabel                  = "comm.produce-time"
 
   /*
    * Here, we create a cache of the data at each channel as `channelToIndexedData`
@@ -128,7 +133,7 @@ class RSpace[F[_], C, P, A, K] private[rspace] (
         val msg = "channels.length must equal patterns.length"
         logF.error(msg) >> syncF.raiseError(new IllegalArgumentException(msg))
       } else
-        for {
+        (for {
           _ <- spanF.mark("before-consume-ref-compute")
           consumeRef <- syncF.delay {
                          Consume.create(channels, patterns, continuation, persist, sequenceNumber)
@@ -193,7 +198,7 @@ class RSpace[F[_], C, P, A, K] private[rspace] (
 
                    }
           _ <- spanF.mark("post-consume-lock")
-        } yield result
+        } yield result).timer(consumeTimeCommLabel)
     }
   }
 
@@ -370,7 +375,7 @@ class RSpace[F[_], C, P, A, K] private[rspace] (
       sequenceNumber: Int
   ): F[MaybeActionResult] =
     contextShift.evalOn(scheduler) {
-      for {
+      (for {
         _ <- spanF.mark("before-produce-ref-computed")
         produceRef <- syncF.delay {
                        Produce.create(channel, data, persist, sequenceNumber)
@@ -406,7 +411,7 @@ class RSpace[F[_], C, P, A, K] private[rspace] (
                    } yield r
                  }
         _ <- spanF.mark("post-produce-lock")
-      } yield result
+      } yield result).timer(produceTimeCommLabel)
     }
 
   override def createCheckpoint(): F[Checkpoint] =

@@ -22,6 +22,7 @@ import coop.rchain.rholang.interpreter.storage._
 final case class TestFixture(space: RhoISpace[Task], reducer: Reduce[Task])
 
 trait PersistentStoreTester {
+  implicit val ms: Metrics.Source = Metrics.BaseSource
 
   def withTestSpace[R](
       errorLog: ErrorLog[Task]

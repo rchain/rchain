@@ -1,31 +1,34 @@
 package coop.rchain.casper
 
 import cats._
-import cats.effect.concurrent.{Ref, Semaphore}
 import cats.effect.{Concurrent, Sync}
+import cats.effect.concurrent.{Ref, Semaphore}
 import cats.implicits._
-import com.google.protobuf.ByteString
+
+import coop.rchain.blockstorage._
 import coop.rchain.blockstorage.BlockDagStorage.DeployId
-import coop.rchain.blockstorage.{BlockDagRepresentation, BlockDagStorage, BlockStore}
 import coop.rchain.casper.CasperState.CasperStateCell
 import coop.rchain.casper.DeployError._
 import coop.rchain.casper.engine.Running
 import coop.rchain.casper.protocol._
-import coop.rchain.casper.util.ProtoUtil._
 import coop.rchain.casper.util._
+import coop.rchain.casper.util.ProtoUtil._
 import coop.rchain.casper.util.comm.CommUtil
-import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
 import coop.rchain.casper.util.rholang._
+import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
 import coop.rchain.catscontrib.BooleanF._
 import coop.rchain.catscontrib.ski._
 import coop.rchain.comm.rp.Connect.{ConnectionsCell, RPConfAsk}
 import coop.rchain.comm.transport.TransportLayer
 import coop.rchain.metrics.{Metrics, Span}
+import coop.rchain.metrics.implicits._
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.EquivocationRecord
 import coop.rchain.models.Validator.Validator
 import coop.rchain.rholang.interpreter.NormalizerEnv
 import coop.rchain.shared._
+
+import com.google.protobuf.ByteString
 
 /**
   Encapsulates mutable state of the MultiParentCasperImpl
@@ -56,6 +59,7 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: ConnectionsCell: TransportLa
     spanF: Span[F],
     runtimeManager: RuntimeManager[F]
 ) extends MultiParentCasper[F] {
+  import MultiParentCasper.MetricsSource
 
   implicit private val logSource: LogSource = LogSource(this.getClass)
 
@@ -113,7 +117,7 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: ConnectionsCell: TransportLa
               ().pure[F]
           }
     } yield status
-  }
+  }.timer("add-block-time")
 
   private def internalAddBlock(
       b: BlockMessage,
@@ -221,23 +225,24 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: ConnectionsCell: TransportLa
   def estimator(dag: BlockDagRepresentation[F]): F[IndexedSeq[BlockHash]] =
     Estimator.tips[F](dag, genesis)
 
-  def createBlock: F[CreateBlockStatus] = validatorId match {
-    case Some(ValidatorIdentity(publicKey, privateKey, sigAlgorithm)) =>
-      BlockDagStorage[F].getRepresentation.flatMap { dag =>
-        BlockCreator.createBlock(
-          dag,
-          genesis,
-          publicKey,
-          privateKey,
-          sigAlgorithm,
-          shardId,
-          version,
-          expirationThreshold,
-          runtimeManager
-        )
-      }
-    case None => CreateBlockStatus.readOnlyMode.pure[F]
-  }
+  def createBlock: F[CreateBlockStatus] =
+    (validatorId match {
+      case Some(ValidatorIdentity(publicKey, privateKey, sigAlgorithm)) =>
+        BlockDagStorage[F].getRepresentation.flatMap { dag =>
+          BlockCreator.createBlock(
+            dag,
+            genesis,
+            publicKey,
+            privateKey,
+            sigAlgorithm,
+            shardId,
+            version,
+            expirationThreshold,
+            runtimeManager
+          )
+        }
+      case None => CreateBlockStatus.readOnlyMode.pure[F]
+    }).timer("create-block-time")
 
   def lastFinalizedBlock: F[BlockMessage] =
     for {

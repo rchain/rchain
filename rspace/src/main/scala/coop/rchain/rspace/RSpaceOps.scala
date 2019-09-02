@@ -1,26 +1,25 @@
 package coop.rchain.rspace
 
-import cats.effect.{Concurrent, Sync}
-import cats.implicits._
-import com.typesafe.scalalogging.Logger
-import coop.rchain.catscontrib._
-import coop.rchain.metrics.{Metrics, Span}
-import coop.rchain.rspace._
-import coop.rchain.rspace.concurrent.{ConcurrentTwoStepLockF, TwoStepLock}
-import coop.rchain.rspace.history.Branch
-import coop.rchain.rspace.internal._
-import coop.rchain.rspace.trace.Consume
-import coop.rchain.rspace.trace.{Log => EventLog}
-import coop.rchain.rspace.history.{History, HistoryRepository}
-import coop.rchain.shared.{Cell, Log}
-import coop.rchain.shared.SyncVarOps._
-import monix.execution.atomic.AtomicAny
-
+import scala.collection.SortedSet
 import scala.concurrent.SyncVar
 import scala.util.Random
-import scodec.Codec
 
-import scala.collection.SortedSet
+import cats.effect.{Concurrent, Sync}
+import cats.implicits._
+
+import coop.rchain.catscontrib._
+import coop.rchain.metrics.{Metrics, Span}
+import coop.rchain.metrics.implicits._
+import coop.rchain.rspace.concurrent.{ConcurrentTwoStepLockF, TwoStepLock}
+import coop.rchain.rspace.history._
+import coop.rchain.rspace.internal._
+import coop.rchain.rspace.trace.{Consume, Log => EventLog}
+import coop.rchain.shared.{Cell, Log}
+import coop.rchain.shared.SyncVarOps._
+
+import com.typesafe.scalalogging.Logger
+import monix.execution.atomic.AtomicAny
+import scodec.Codec
 
 abstract class RSpaceOps[F[_]: Concurrent: Metrics, C, P, A, K](
     historyRepository: HistoryRepository[F, C, P, A, K],
@@ -196,7 +195,8 @@ abstract class RSpaceOps[F[_]: Concurrent: Metrics, C, P, A, K](
       continuation: K
   ): F[Option[(K, Seq[A])]] = spanF.trace(installSpanLabel) {
     installLockF(channels) {
-      lockedInstall(channels, patterns, continuation)
+      implicit val ms = MetricsSource
+      lockedInstall(channels, patterns, continuation).timer("install-time")
     }
   }
 
