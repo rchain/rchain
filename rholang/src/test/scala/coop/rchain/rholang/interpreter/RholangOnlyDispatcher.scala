@@ -18,8 +18,7 @@ object RholangOnlyDispatcher {
       cost: _cost[M],
       parallel: Parallel[M, F],
       s: Sync[M],
-      ft: FunctorTell[M, Throwable],
-      spanM: Span[M]
+      ft: FunctorTell[M, Throwable]
   ): (Dispatch[M, ListParWithRandom, TaggedContinuation], Reduce[M]) = {
 
     lazy val dispatcher: Dispatch[M, ListParWithRandom, TaggedContinuation] =
