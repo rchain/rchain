@@ -159,7 +159,7 @@ object InterpreterUtil {
           }
       }
 
-  def computeDeploysCheckpoint[F[_]: Sync: BlockStore: Span](
+  def computeDeploysCheckpoint[F[_]: Sync: BlockStore: Log: Span](
       parents: Seq[BlockMessage],
       deploys: Seq[DeployData],
       dag: BlockDagRepresentation[F],
@@ -184,7 +184,7 @@ object InterpreterUtil {
                }
     } yield result
 
-  private def computeParentsPostState[F[_]: Sync: BlockStore: Span](
+  private def computeParentsPostState[F[_]: Sync: BlockStore: Log: Span](
       parents: Seq[BlockMessage],
       dag: BlockDagRepresentation[F],
       runtimeManager: RuntimeManager[F]
@@ -206,7 +206,7 @@ object InterpreterUtil {
   // In the case of multiple parents we need to apply all of the deploys that have been
   // made in all of the branches of the DAG being merged. This is done by computing uncommon ancestors
   // and applying the deploys in those blocks on top of the initial parent.
-  private def computeMultiParentsPostState[F[_]: Sync: BlockStore: Span](
+  private def computeMultiParentsPostState[F[_]: Sync: BlockStore: Log: Span](
       parents: Seq[BlockMessage],
       dag: BlockDagRepresentation[F],
       runtimeManager: RuntimeManager[F],
@@ -215,9 +215,12 @@ object InterpreterUtil {
     for {
       _                  <- Span[F].mark("before-compute-parents-post-state-find-multi-parents")
       blockHashesToApply <- findMultiParentsBlockHashesForReplay(parents, dag)
-      _                  <- Span[F].mark("before-compute-parents-post-state-get-blocks")
-      blocksToApply      <- blockHashesToApply.traverse(b => ProtoUtil.getBlock[F](b.blockHash))
-      _                  <- Span[F].mark("before-compute-parents-post-state-replay")
+      _ <- Log[F].info(
+            s"computeMultiParentsPostState computed number of parents: ${blockHashesToApply.length}"
+          )
+      _             <- Span[F].mark("before-compute-parents-post-state-get-blocks")
+      blocksToApply <- blockHashesToApply.traverse(b => ProtoUtil.getBlock[F](b.blockHash))
+      _             <- Span[F].mark("before-compute-parents-post-state-replay")
       replayResult <- blocksToApply.toList.foldM(Right(initStateHash).leftCast[Throwable]) {
                        (acc, block) =>
                          acc match {

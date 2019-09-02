@@ -22,6 +22,7 @@ import coop.rchain.models.Validator.Validator
 import coop.rchain.p2p.EffectsTestInstances.LogStub
 import coop.rchain.rholang.interpreter.Runtime.BlockData
 import coop.rchain.shared.Time
+import coop.rchain.shared.{Log, LogSource}
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
 import org.scalatest._
@@ -35,11 +36,12 @@ class InterpreterUtilTest
   implicit val logEff                    = new LogStub[Task]
   implicit val metricsEff: Metrics[Task] = new metrics.Metrics.MetricsNOP[Task]
   implicit val span: Span[Task]          = new NoopSpan[Task]
+  implicit val logSource: LogSource      = LogSource(this.getClass)
 
   val genesisContext = GenesisBuilder.buildGenesis()
   val genesis        = genesisContext.genesisBlock
 
-  def computeDeploysCheckpoint[F[_]: Sync: BlockStore: Span](
+  def computeDeploysCheckpoint[F[_]: Sync: Log: BlockStore: Span](
       parents: Seq[BlockMessage],
       deploys: Seq[DeployData],
       dag: BlockDagRepresentation[F],
