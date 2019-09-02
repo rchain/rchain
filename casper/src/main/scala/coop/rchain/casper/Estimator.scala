@@ -27,8 +27,6 @@ object Estimator {
   private val Tips0MetricsSource: Metrics.Source = Metrics.Source(EstimatorMetricsSource, "tips0")
   private val Tips1MetricsSource: Metrics.Source = Metrics.Source(EstimatorMetricsSource, "tips1")
 
-  implicit private val logSource: LogSource = LogSource(this.getClass)
-
   def tips[F[_]: Monad: Log: Metrics: Span](
       dag: BlockDagRepresentation[F],
       genesis: BlockMessage
