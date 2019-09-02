@@ -9,7 +9,7 @@ from contextlib import contextmanager
 import logging
 import pytest
 from docker.client import DockerClient
-from rchain.crypto import PrivateKey, gen_block_hash_from_block, gen_deploys_hash_from_block, gen_state_hash_from_block
+from rchain.crypto import PrivateKey, gen_block_hash_from_block, gen_deploys_hash_from_block
 from rchain.pb.CasperMessage_pb2 import BlockMessage, Justification
 from rchain.util import create_deploy_data
 
@@ -105,13 +105,15 @@ def test_slash_invalid_block_seq(command_line_options: CommandLineOptions, rando
         invalid_block_num_block.seqNum = 1000
         # change timestamp to make block hash different
         invalid_block_num_block.header.timestamp = block_msg.header.timestamp + 1  # pylint: disable=maybe-no-member
-        invalid_block_num_block.header.postStateHash = gen_state_hash_from_block(invalid_block_num_block)  # pylint: disable=maybe-no-member
         invalid_block_num_block.header.deploysHash = gen_deploys_hash_from_block(invalid_block_num_block)  # pylint: disable=maybe-no-member
         invalid_block_hash = gen_block_hash_from_block(invalid_block_num_block)
         invalid_block_num_block.sig = BONDED_VALIDATOR_KEY_1.sign_block_hash(invalid_block_hash)
         invalid_block_num_block.blockHash = invalid_block_hash
         logging.info("Invalid block {}".format(invalid_block_hash.hex()))
         client.send_block(invalid_block_num_block, validator2)
+        record_invalid = re.compile("Recording invalid block {}... for InvalidSequenceNumber".format(invalid_block_hash.hex()[:10]))
+        wait_for_log_match(context, validator2, record_invalid)
+
         validator2.deploy(contract, BONDED_VALIDATOR_KEY_2)
 
         slashed_block_hash = validator2.propose()
@@ -156,6 +158,9 @@ def test_slash_justification_not_correct(command_line_options: CommandLineOption
         invalid_justifications_block.blockHash = invalid_block_hash
         client.send_block(invalid_justifications_block, validator2)
 
+        record_invalid = re.compile("Recording invalid block {}... for InvalidFollows".format(invalid_block_hash.hex()[:10]))
+        wait_for_log_match(context, validator2, record_invalid)
+
         validator2.deploy(contract, BONDED_VALIDATOR_KEY_2)
         slashed_block_hash = validator2.propose()
 
@@ -167,6 +172,14 @@ def test_slash_justification_not_correct(command_line_options: CommandLineOption
 
 @pytest.mark.skipif(sys.platform in ('win32', 'cygwin', 'darwin'), reason="Only Linux docker support connection between host and container which node client needs")
 def test_slash_invalid_validator_approve_evil_block(command_line_options: CommandLineOptions, random_generator: Random, docker_client: DockerClient) -> None:
+    """Slash a validator who doesn't slash invalid block
+
+    1.v1 proposes valid block
+    2.v1 creates another block with invalid parent block hash and sends it to v2
+    3.v2 creates block using v1's second block as parent hash (i.e. no slashing, another invalid block) and sends it to v3
+    4.v3 records invalid block (InvalidTransaction) from v2
+    5.v3 proposes block which slashes both v1 and v2
+    """
     with three_nodes_network_with_node_client(command_line_options, random_generator, docker_client) as  (context, validator3 , validator1, validator2, client):
 
         genesis_block = validator3.show_blocks_parsed(2)[0]
@@ -222,7 +235,6 @@ def test_slash_invalid_validator_approve_evil_block(command_line_options: Comman
         block_not_slash_invalid_block.header.ClearField("parentsHashList")  # pylint: disable=maybe-no-member
         block_not_slash_invalid_block.header.parentsHashList.append(bytes.fromhex(genesis_block['blockHash']))  # pylint: disable=maybe-no-member
         block_not_slash_invalid_block.header.timestamp = int(time.time()*1000)  # pylint: disable=maybe-no-member
-        block_not_slash_invalid_block.header.postStateHash = gen_state_hash_from_block(block_not_slash_invalid_block)  # pylint: disable=maybe-no-member
         block_not_slash_invalid_block.header.deploysHash = gen_deploys_hash_from_block(block_not_slash_invalid_block)  # pylint: disable=maybe-no-member
         invalid_block_hash = gen_block_hash_from_block(block_not_slash_invalid_block)
         block_not_slash_invalid_block.sig = BONDED_VALIDATOR_KEY_2.sign_block_hash(invalid_block_hash)
