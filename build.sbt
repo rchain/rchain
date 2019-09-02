@@ -261,6 +261,7 @@ lazy val node = (project in file("node"))
         catsCore,
         catsTagless,
         grpcNetty,
+        grpcServices,
         jline,
         scallop,
         scalaUri,

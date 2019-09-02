@@ -12,6 +12,7 @@ import coop.rchain.node.model.repl._
 import coop.rchain.rholang.interpreter.Runtime
 import coop.rchain.shared._
 import io.grpc.netty.NettyServerBuilder
+import io.grpc.protobuf.services.ProtoReflectionService
 import monix.eval.Task
 import monix.execution.Scheduler
 
@@ -39,6 +40,7 @@ package object api {
           ProposeServiceGrpcMonix
             .bindService(proposeGrpcService, grpcExecutor)
         )
+        .addService(ProtoReflectionService.newInstance())
         .build
     )
 
@@ -61,6 +63,7 @@ package object api {
           ProposeServiceGrpcMonix
             .bindService(proposeGrpcService, grpcExecutor)
         )
+        .addService(ProtoReflectionService.newInstance())
         .build
     )
 }

@@ -58,6 +58,7 @@ import monix.eval.Task
 import monix.execution.Scheduler
 import org.http4s.implicits._
 import org.http4s.server.blaze._
+import org.http4s.server.middleware._
 import org.http4s.server.Router
 import org.lmdbjava.Env
 
@@ -521,9 +522,9 @@ class NodeRuntime private[node] (
                           .bindHttp(conf.server.httpPort, "0.0.0.0")
                           .withHttpApp(
                             Router(
-                              "/metrics" -> prometheusService,
-                              "/version" -> VersionInfo.service[Task],
-                              "/status"  -> StatusInfo.service[Task]
+                              "/metrics" -> CORS(prometheusService),
+                              "/version" -> CORS(VersionInfo.service[Task]),
+                              "/status"  -> CORS(StatusInfo.service[Task])
                             ).orNotFound
                           )
                           .resource
