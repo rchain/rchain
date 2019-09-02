@@ -18,6 +18,7 @@ import coop.rchain.models.Validator.Validator
 import coop.rchain.p2p.EffectsTestInstances.LogicalTime
 import coop.rchain.rholang.interpreter.Runtime.BlockData
 import coop.rchain.shared.Time
+import coop.rchain.shared.{Log, LogSource}
 import monix.eval.Task
 
 import scala.collection.immutable.HashMap
@@ -25,11 +26,12 @@ import scala.language.higherKinds
 
 object BlockGenerator {
   implicit val timeEff = new LogicalTime[Task]
-
   private[this] val GenerateBlockMetricsSource =
     Metrics.Source(CasperMetricsSource, "generate-block")
 
-  def step[F[_]: BlockDagStorage: BlockStore: Time: Metrics: Span: Sync](
+  implicit val logSource: LogSource = LogSource(this.getClass)
+
+  def step[F[_]: BlockDagStorage: BlockStore: Time: Metrics: Log: Span: Sync](
       runtimeManager: RuntimeManager[F]
   )(block: BlockMessage, genesis: BlockMessage): F[Unit] =
     for {
@@ -44,7 +46,7 @@ object BlockGenerator {
                )
     } yield result
 
-  private def computeBlockCheckpoint[F[_]: Sync: BlockStore: Time: Metrics: Span](
+  private def computeBlockCheckpoint[F[_]: Sync: Log: BlockStore: Time: Metrics: Span](
       b: BlockMessage,
       genesis: BlockMessage,
       dag: BlockDagRepresentation[F],
