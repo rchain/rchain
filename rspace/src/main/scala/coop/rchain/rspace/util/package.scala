@@ -16,25 +16,10 @@ package object util {
   ): Seq[Option[(K, Seq[R], Int)]] =
     v.map(unpackOption)
 
-  implicit def unpackEither[C, P, E, K, R](
-      v: Either[E, Option[(ContResult[C, P, K], Seq[Result[C, R]])]]
-  ): Either[E, Option[(K, Seq[R], Int)]] =
-    v.map(unpackOption)
-
-  implicit def unpackEitherF[F[_], C, P, E, K, R](
-      v: F[Either[E, Option[(ContResult[C, P, K], Seq[Result[C, R]])]]]
-  )(implicit ev: Functor[F]): F[Either[E, Option[(K, Seq[R], Int)]]] =
-    ev.map(v)(_.map(unpackOption))
-
   implicit def unpackOption[C, P, K, R](
       v: Option[(ContResult[C, P, K], Seq[Result[C, R]])]
   ): Option[(K, Seq[R], Int)] =
     v.map(unpackTuple)
-
-  implicit def unpackOptionF[F[_], C, P, K, R](
-      v: F[Option[(ContResult[C, P, K], Seq[Result[C, R]])]]
-  )(implicit ev: Functor[F]): F[Option[(K, Seq[R], Int)]] =
-    ev.map(v)(unpackOption)
 
   implicit def unpackTuple[C, P, K, R](
       v: (ContResult[C, P, K], Seq[Result[C, R]])
@@ -57,7 +42,6 @@ package object util {
         (continuation, data.map(_.matchedDatum), sequenceNumber, peek)
     }
 
-  implicit def unpack[C, A](v: Result[C, A]): A               = v.matchedDatum
   implicit def unpackCont[C, P, T](v: ContResult[C, P, T]): T = v.continuation
 
   /**
@@ -65,9 +49,6 @@ package object util {
     */
   def getK[A, K](t: Option[(K, A, Int)]): K =
     t.map(_._1).get
-
-  def getK[A, K](e: Either[_, Option[(K, A, Int)]]): K =
-    e.map(_.map(_._1).get).right.get
 
   /** Runs a continuation with the accompanying data
     */
