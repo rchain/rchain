@@ -671,6 +671,7 @@ object NodeRuntime {
       raiseIOError    = IOError.raiseIOErrorThroughSync[F]
       requestedBlocks <- Cell.mvarCell[F, Map[BlockHash, Running.Requested]](Map.empty)
       casperInit      = new CasperInit[F](conf.casper)
+      eventBus        = EventPublisher.noop[F]
       _ <- {
         implicit val bs = blockStore
         implicit val bd = blockDagStorage
@@ -685,6 +686,7 @@ object NodeRuntime {
         implicit val lb = lab
         implicit val rc = rpConnections
         implicit val ra = rpConfAsk
+        implicit val eb = eventBus
         CasperLaunch[F](casperInit)
       }
       packetHandler = {

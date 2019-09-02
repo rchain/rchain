@@ -70,6 +70,7 @@ class HashSetCasperTestNode[F[_]](
   implicit val cliqueOracleEffect           = SafetyOracle.cliqueOracle[F]
   implicit val lastFinalizedBlockCalculator = LastFinalizedBlockCalculator[F](0f)
   implicit val rpConfAsk                    = createRPConfAsk[F](local)
+  implicit val eventBus                     = EventPublisher.noop[F]
 
   // Scalatest `assert` macro needs some member of the Assertions trait.
   // An (inferior) alternative would be to inherit the trait...

@@ -8,12 +8,13 @@ import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.comm.rp.ProtocolHelper
 import coop.rchain.comm.rp.ProtocolHelper._
 import coop.rchain.comm.transport
-import coop.rchain.shared.Cell
+import coop.rchain.shared.{Cell, EventPublisher}
 import monix.eval.Task
 import monix.execution.Scheduler
 import org.scalatest.WordSpec
 
 class GenesisValidatorSpec extends WordSpec {
+  implicit val eventBus = EventPublisher.noop[Task]
 
   "GenesisCeremonyMaster" should {
     "respond on UnapprovedBlock messages with BlockApproval" in {

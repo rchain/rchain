@@ -10,11 +10,13 @@ import coop.rchain.comm.rp.ProtocolHelper._
 import coop.rchain.comm.transport
 import coop.rchain.crypto.hash.Blake2b256
 import coop.rchain.crypto.signatures.Secp256k1
-import coop.rchain.shared.Cell
+import coop.rchain.shared.{Cell, EventPublisher}
 import monix.eval.Task
 import org.scalatest.WordSpec
 
 class InitializingSpec extends WordSpec {
+  implicit val eventBus = EventPublisher.noop[Task]
+
   "Initializing state" should {
     "make a transition to Running once ApprovedBlock has been received" in {
       import monix.execution.Scheduler.Implicits.global
