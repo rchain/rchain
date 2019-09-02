@@ -1,6 +1,7 @@
 package coop.rchain.shared
 
 import cats._
+import cats.data.ReaderT
 import cats.effect.concurrent.{MVar, Ref}
 import cats.effect.{Concurrent, Sync}
 import cats.syntax.applicative._
@@ -19,6 +20,21 @@ trait Cell[F[_], S] {
 
 object Cell {
   def apply[F[_], S](implicit ev: Cell[F, S]): Cell[F, S] = ev
+
+  def readerT[F[_], E, S](cell: Cell[F, S]): Cell[ReaderT[F, E, ?], S] =
+    new Cell[ReaderT[F, E, ?], S] {
+      override def modify(f: S => S): ReaderT[F, E, Unit] = ReaderT.liftF(cell.modify(f))
+
+      override def flatModify(f: S => ReaderT[F, E, S]): ReaderT[F, E, Unit] =
+        ReaderT { e =>
+          val af: S => F[S] = s => f(s).run(e)
+          cell.flatModify(af)
+        }
+
+      override def read: ReaderT[F, E, S] = ReaderT.liftF(cell.read)
+
+      override def reads[A](f: S => A): ReaderT[F, E, A] = ReaderT.liftF(cell.reads(f))
+    }
 
   abstract class DefaultCell[F[_]: Functor, S] extends Cell[F, S] {
     override def reads[A](f: S => A) = read map f

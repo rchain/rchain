@@ -1,5 +1,7 @@
 package coop.rchain.shared
 
+import cats.tagless._
+
 sealed trait Event
 object Event {
   final case class NodeStarted(address: String)                             extends Event
@@ -10,6 +12,9 @@ object Event {
   final case class SentApprovedBlock(blockHash: String)                     extends Event
 }
 
+@autoFunctorK
+@autoSemigroupalK
+@autoProductNK
 trait EventLog[F[_]] {
   def publish(event: Event): F[Unit]
 }

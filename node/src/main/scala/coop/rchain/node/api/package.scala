@@ -1,7 +1,6 @@
 package coop.rchain.node
 
 import cats.effect.Concurrent
-import cats.effect.concurrent.Semaphore
 import coop.rchain.blockstorage.BlockStore
 import coop.rchain.casper.engine._, EngineCell._
 import coop.rchain.casper.SafetyOracle
@@ -24,17 +23,9 @@ package object api {
 
   def acquireInternalServer(
       port: Int,
-      runtime: Runtime[Task],
       grpcExecutor: Scheduler,
-      blockApiLock: Semaphore[Task],
-      tracing: Boolean
-  )(
-      implicit worker: Scheduler,
-      safetyOracle: SafetyOracle[Task],
-      blocStore: BlockStore[Task],
-      log: Log[Task],
-      span: Span[Task],
-      engineCell: EngineCell[Task]
+      replGrpcService: ReplGrpcMonix.Repl,
+      proposeGrpcService: ProposeServiceGrpcMonix.ProposeService
   ): Task[Server[Task]] =
     GrpcServer[Task](
       NettyServerBuilder
@@ -42,21 +33,21 @@ package object api {
         .executor(grpcExecutor)
         .maxMessageSize(maxMessageSize)
         .addService(
-          ReplGrpcMonix.bindService(new ReplGrpcService(runtime, worker), grpcExecutor)
+          ReplGrpcMonix.bindService(replGrpcService, grpcExecutor)
         )
         .addService(
           ProposeServiceGrpcMonix
-            .bindService(ProposeGrpcService.instance(blockApiLock, tracing), grpcExecutor)
+            .bindService(proposeGrpcService, grpcExecutor)
         )
         .build
     )
 
-  def acquireExternalServer[F[_]: Concurrent: Log: SafetyOracle: BlockStore: Taskable: Span](
+  def acquireExternalServer[F[_]: Concurrent: Log: Taskable](
       port: Int,
       grpcExecutor: Scheduler,
-      blockApiLock: Semaphore[F],
-      tracing: Boolean
-  )(implicit worker: Scheduler, engineCell: EngineCell[F]): F[Server[F]] =
+      deployGrpcService: DeployServiceGrpcMonix.DeployService,
+      proposeGrpcService: ProposeServiceGrpcMonix.ProposeService
+  ): F[Server[F]] =
     GrpcServer[F](
       NettyServerBuilder
         .forPort(port)
@@ -64,11 +55,11 @@ package object api {
         .maxMessageSize(maxMessageSize)
         .addService(
           DeployServiceGrpcMonix
-            .bindService(DeployGrpcService.instance(blockApiLock, tracing), grpcExecutor)
+            .bindService(deployGrpcService, grpcExecutor)
         )
         .addService(
           ProposeServiceGrpcMonix
-            .bindService(ProposeGrpcService.instance(blockApiLock, tracing), grpcExecutor)
+            .bindService(proposeGrpcService, grpcExecutor)
         )
         .build
     )

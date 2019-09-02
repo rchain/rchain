@@ -24,10 +24,9 @@ import monix.eval.Task
 import monix.execution.Scheduler
 import monix.reactive.Observable
 
-private[api] object DeployGrpcService {
+object DeployGrpcService {
   def instance[F[_]: Concurrent: Log: SafetyOracle: BlockStore: Taskable: Span: EngineCell](
-      blockApiLock: Semaphore[F],
-      tracing: Boolean
+      blockApiLock: Semaphore[F]
   )(
       implicit worker: Scheduler
   ): DeployServiceGrpcMonix.DeployService =
@@ -39,7 +38,6 @@ private[api] object DeployGrpcService {
         Task
           .defer(task.toTask)
           .executeOn(worker)
-          .executeWithOptions(TaskContrib.enableTracing(tracing))
           .attemptAndLog
           .attempt
           .map(_.fold(_.asLeft[A].toGrpcEither, _.toGrpcEither))
@@ -48,7 +46,6 @@ private[api] object DeployGrpcService {
         Task
           .defer(task.toTask)
           .executeOn(worker)
-          .executeWithOptions(TaskContrib.enableTracing(tracing))
           .attemptAndLog
           .attempt
           .map(_.fold(t => List(t.asLeft[A].toGrpcEither), _.map(_.asRight[String].toGrpcEither)))

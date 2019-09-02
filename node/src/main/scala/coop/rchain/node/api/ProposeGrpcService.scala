@@ -19,10 +19,9 @@ import coop.rchain.metrics.Span
 import monix.eval.Task
 import monix.execution.Scheduler
 
-private[api] object ProposeGrpcService {
+object ProposeGrpcService {
   def instance[F[_]: Concurrent: Log: SafetyOracle: BlockStore: Taskable: Span: EngineCell](
-      blockApiLock: Semaphore[F],
-      tracing: Boolean
+      blockApiLock: Semaphore[F]
   )(
       implicit worker: Scheduler
   ): ProposeServiceGrpcMonix.ProposeService =
@@ -34,7 +33,6 @@ private[api] object ProposeGrpcService {
         Task
           .defer(task.toTask)
           .executeOn(worker)
-          .executeWithOptions(TaskContrib.enableTracing(tracing))
           .attemptAndLog
           .attempt
           .map(_.fold(_.asLeft[A].toGrpcEither, _.toGrpcEither))

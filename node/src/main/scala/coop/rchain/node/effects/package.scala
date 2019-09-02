@@ -2,14 +2,15 @@ package coop.rchain.node
 
 import java.nio.file.Path
 
+import cats.data.ReaderT
+
 import scala.concurrent.duration._
 import scala.io.Source
 import scala.tools.jline.console._
-
-import cats.effect.Timer
+import cats.effect.{Concurrent, Sync, Timer}
 import cats.mtl._
-import cats.Applicative
-
+import cats.implicits._
+import cats.{Applicative, Monad}
 import coop.rchain.comm._
 import coop.rchain.comm.discovery._
 import coop.rchain.comm.rp._
@@ -17,7 +18,6 @@ import coop.rchain.comm.rp.Connect._
 import coop.rchain.comm.transport._
 import coop.rchain.metrics.Metrics
 import coop.rchain.shared._
-
 import monix.eval._
 import monix.execution._
 import monix.execution.atomic.AtomicAny
@@ -32,17 +32,17 @@ package object effects {
       metrics: Metrics[Task]
   ): KademliaStore[Task] = KademliaStore.table(id)
 
-  def nodeDiscovery(id: NodeIdentifier)(
+  def nodeDiscovery[F[_]: Monad](id: NodeIdentifier)(
       implicit
-      kademliaStore: KademliaStore[Task],
-      kademliaRPC: KademliaRPC[Task]
-  ): NodeDiscovery[Task] = NodeDiscovery.kademlia(id)
+      kademliaStore: KademliaStore[F],
+      kademliaRPC: KademliaRPC[F]
+  ): NodeDiscovery[F] = NodeDiscovery.kademlia(id)
 
-  def time(implicit timer: Timer[Task]): Time[Task] =
-    new Time[Task] {
-      def currentMillis: Task[Long]                   = timer.clock.realTime(MILLISECONDS)
-      def nanoTime: Task[Long]                        = timer.clock.monotonic(NANOSECONDS)
-      def sleep(duration: FiniteDuration): Task[Unit] = timer.sleep(duration)
+  def time[F[_]](implicit timer: Timer[F]): Time[F] =
+    new Time[F] {
+      def currentMillis: F[Long]                   = timer.clock.realTime(MILLISECONDS)
+      def nanoTime: F[Long]                        = timer.clock.monotonic(NANOSECONDS)
+      def sleep(duration: FiniteDuration): F[Unit] = timer.sleep(duration)
     }
 
   def kademliaRPC(networkId: String, timeout: FiniteDuration, allowPrivateAddresses: Boolean)(
@@ -72,22 +72,52 @@ package object effects {
 
   def consoleIO(consoleReader: ConsoleReader): ConsoleIO[Task] = new JLineConsoleIO(consoleReader)
 
-  def rpConnections: Task[ConnectionsCell[Task]] =
-    Cell.mvarCell[Task, Connections](Connections.empty)
+  def rpConnections[F[_]: Concurrent]: F[ConnectionsCell[F]] =
+    Cell.mvarCell[F, Connections](Connections.empty)
 
-  def rpConfState(conf: RPConf): MonadState[Task, RPConf] =
-    new AtomicMonadState[Task, RPConf](AtomicAny(conf))
+  def rpConfState[F[_]: Monad: Sync](conf: RPConf): MonadState[F, RPConf] =
+    new AtomicMonadState[F, RPConf](AtomicAny(conf))
 
-  def rpConfAsk(implicit state: MonadState[Task, RPConf]): ApplicativeAsk[Task, RPConf] =
-    new DefaultApplicativeAsk[Task, RPConf] {
-      val applicative: Applicative[Task] = Applicative[Task]
-      def ask: Task[RPConf]              = state.get
+  def rpConfAsk[F[_]: Monad: Sync](
+      implicit state: MonadState[F, RPConf]
+  ): ApplicativeAsk[F, RPConf] =
+    new DefaultApplicativeAsk[F, RPConf] {
+      val applicative: Applicative[F] = Applicative[F]
+      def ask: F[RPConf]              = state.get
     }
 
-  def peerNodeAsk(implicit state: MonadState[Task, RPConf]): ApplicativeAsk[Task, PeerNode] =
-    new DefaultApplicativeAsk[Task, PeerNode] {
-      val applicative: Applicative[Task] = Applicative[Task]
-      def ask: Task[PeerNode]            = state.get.map(_.local)
+  def peerNodeAsk[F[_]: Monad: Sync](
+      implicit state: MonadState[F, RPConf]
+  ): ApplicativeAsk[F, PeerNode] =
+    new DefaultApplicativeAsk[F, PeerNode] {
+      val applicative: Applicative[F] = Applicative[F]
+      def ask: F[PeerNode]            = state.get.map(_.local)
+    }
+
+  def readerTApplicativeAsk[F[_]: Monad: Sync, E, B](
+      askF: ApplicativeAsk[F, B]
+  ): ApplicativeAsk[ReaderT[F, E, ?], B] =
+    new ApplicativeAsk[ReaderT[F, E, ?], B] {
+      override val applicative: Applicative[ReaderT[F, E, ?]] = Applicative[ReaderT[F, E, ?]]
+
+      override def ask: ReaderT[F, E, B] = ReaderT.liftF(askF.ask)
+
+      override def reader[A](f: B => A): ReaderT[F, E, A] = ReaderT.liftF(askF.reader(f))
+    }
+
+  def readerTMonadState[F[_]: Monad: Sync, E, S](
+      stateF: MonadState[F, S]
+  ): MonadState[ReaderT[F, E, ?], S] =
+    new MonadState[ReaderT[F, E, ?], S] {
+      override val monad: Monad[ReaderT[F, E, ?]] = Monad[ReaderT[F, E, ?]]
+
+      override def get: ReaderT[F, E, S] = ReaderT.liftF(stateF.get)
+
+      override def set(s: S): ReaderT[F, E, Unit] = ReaderT.liftF(stateF.set(s))
+
+      override def inspect[A](f: S => A): ReaderT[F, E, A] = ReaderT.liftF(stateF.inspect(f))
+
+      override def modify(f: S => S): ReaderT[F, E, Unit] = ReaderT.liftF(stateF.modify(f))
     }
 
 }

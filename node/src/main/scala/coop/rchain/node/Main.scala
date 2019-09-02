@@ -12,6 +12,7 @@ import coop.rchain.crypto.util.KeyUtil
 import coop.rchain.metrics
 import coop.rchain.metrics.Metrics
 import coop.rchain.node.configuration._
+import coop.rchain.node.diagnostics.Trace
 import coop.rchain.node.effects._
 import coop.rchain.shared.StringOps._
 import coop.rchain.shared._
@@ -49,7 +50,7 @@ object Main {
 
     Task
       .defer(logUnknownConfigurationKeys(configuration) >> mainProgram(configuration))
-      .unsafeRunSyncTracing(configuration.kamon.zipkin)
+      .unsafeRunSync
   }
 
   private def logUnknownConfigurationKeys(conf: Configuration): Task[Unit] =
@@ -141,7 +142,7 @@ object Main {
         proposeService.close()
         replService.close()
         deployService.close()
-        console.close.unsafeRunSyncTracing(conf.kamon.zipkin)(scheduler)
+        console.close.unsafeRunSync(scheduler)
       }
     ) >> program
   }
@@ -194,7 +195,7 @@ object Main {
       _             <- log.info(VersionInfo.get)
       _             <- logConfiguration(confWithPorts)
       runtime       <- NodeRuntime(confWithPorts)
-      _             <- runtime.main
+      _             <- runtime.main.run(NodeCallCtx.init)
     } yield ()
   }
 
