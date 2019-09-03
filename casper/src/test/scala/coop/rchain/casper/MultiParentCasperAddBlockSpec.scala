@@ -162,7 +162,7 @@ class MultiParentCasperAddBlockSpec extends FlatSpec with Matchers with Inspecto
         block           <- node.createBlock(basicDeployData)
         invalidBlock    = block.withSig(ByteString.EMPTY)
         status          <- node.casperEff.addBlock(invalidBlock, ignoreDoppelgangerCheck[Effect])
-        _               = status shouldBe InvalidUnslashableBlock
+        _               = status shouldBe InvalidFormat
         _               <- node.casperEff.contains(invalidBlock.blockHash) shouldBeF false
         _               = node.logEff.warns.head.contains("Ignoring block") should be(true)
       } yield ()
@@ -196,14 +196,14 @@ class MultiParentCasperAddBlockSpec extends FlatSpec with Matchers with Inspecto
       implicit val timeEff = new LogicalTime[Effect]
 
       for {
-        basicDeployData         <- ConstructDeploy.basicDeployData[Effect](0)
-        block                   <- node.createBlock(basicDeployData)
-        dag                     <- node.blockDagStorage.getRepresentation
-        (sk, pk)                = Secp256k1.newKeyPair
-        illSignedBlock          <- ProtoUtil.signBlock(block, dag, pk, sk, Secp256k1.name, block.shardId)
-        status                  <- node.casperEff.addBlock(illSignedBlock, ignoreDoppelgangerCheck[Effect])
-        InvalidUnslashableBlock = status
-        _                       = node.logEff.warns.head.contains("Ignoring block") should be(true)
+        basicDeployData <- ConstructDeploy.basicDeployData[Effect](0)
+        block           <- node.createBlock(basicDeployData)
+        dag             <- node.blockDagStorage.getRepresentation
+        (sk, pk)        = Secp256k1.newKeyPair
+        illSignedBlock  <- ProtoUtil.signBlock(block, dag, pk, sk, Secp256k1.name, block.shardId)
+        status          <- node.casperEff.addBlock(illSignedBlock, ignoreDoppelgangerCheck[Effect])
+        InvalidSender   = status
+        _               = node.logEff.warns.head.contains("Ignoring block") should be(true)
       } yield ()
     }
   }

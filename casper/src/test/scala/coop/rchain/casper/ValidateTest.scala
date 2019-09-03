@@ -176,7 +176,7 @@ class ValidateTest
         _ <- Validate.timestamp[Task](
               block.withHeader(modifiedTimestampHeader),
               dag
-            ) shouldBeF InvalidUnslashableBlock.asLeft[ValidBlock]
+            ) shouldBeF InvalidTimestamp.asLeft[ValidBlock]
         _      <- Validate.timestamp[Task](block, dag) shouldBeF Valid.asRight[InvalidBlock]
         _      = log.warns.size should be(1)
         result = log.warns.head.contains("block timestamp") should be(true)
@@ -193,7 +193,7 @@ class ValidateTest
         _ <- Validate.timestamp[Task](
               block.withHeader(modifiedTimestampHeader),
               dag
-            ) shouldBeF Left(InvalidUnslashableBlock)
+            ) shouldBeF Left(InvalidTimestamp)
         _      <- Validate.timestamp[Task](block, dag) shouldBeF Right(Valid)
         _      = log.warns.size should be(1)
         result = log.warns.head.contains("block timestamp") should be(true)
