@@ -17,11 +17,9 @@ import coop.rchain.comm.transport.{Blob, TransportLayer}
 import coop.rchain.comm.{transport, PeerNode}
 import coop.rchain.crypto.PublicKey
 import coop.rchain.crypto.hash.Blake2b256
-import coop.rchain.crypto.signatures.Secp256k1
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.Validator.Validator
 import coop.rchain.rholang.interpreter.Runtime.BlockData
-import coop.rchain.rholang.interpreter.util.RevAddress
 import coop.rchain.shared._
 
 import scala.util.Try
