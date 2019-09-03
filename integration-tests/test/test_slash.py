@@ -250,8 +250,70 @@ def test_slash_invalid_validator_approve_evil_block(command_line_options: Comman
 
         validator3.deploy(contract, BOOTSTRAP_NODE_KEY)
         slashed_blockhash = validator3.propose()
-        slashed_block_info = validator2.show_block_parsed(slashed_blockhash)
+        slashed_block_info = validator3.show_block_parsed(slashed_blockhash)
         bonds_validators = extract_validator_stake_from_bonds_validator_str(slashed_block_info['bondsValidatorList'])
 
         assert bonds_validators[BONDED_VALIDATOR_KEY_1.get_public_key().to_hex()] == 0
         assert bonds_validators[BONDED_VALIDATOR_KEY_2.get_public_key().to_hex()] == 0
+
+
+@pytest.mark.skipif(sys.platform in ('win32', 'cygwin', 'darwin'), reason="Only Linux docker support connection between host and container which node client needs")
+def test_slash_GHOST_disobeyed(command_line_options: CommandLineOptions, random_generator: Random, docker_client: DockerClient) -> None:
+    """
+    Slash a validator who doesn't follow GHOST.
+
+    1. bootstrap proposes a valid block B1
+    2. v2 proposes a valid block B2
+    3. v1 proposes a valid block B3
+    4. v1 proposes an invalid block B4 whose parent is B1 and send it to v2
+    5. v2 records invalid block B4
+    6. v2 proposes a new block B5 which slashes v1
+    """
+    with three_nodes_network_with_node_client(command_line_options, random_generator, docker_client) as  (context, bootstrap_node , validator1, validator2, client):
+
+        contract = '/opt/docker/examples/tut-hello.rho'
+
+        bootstrap_node.deploy(contract, BONDED_VALIDATOR_KEY_1)
+        blockhash1 = bootstrap_node.propose()
+
+        wait_for_node_sees_block(context, validator1, blockhash1)
+        wait_for_node_sees_block(context, validator2, blockhash1)
+
+        validator2.deploy(contract, BONDED_VALIDATOR_KEY_2)
+        blockhash2 = validator2.propose()
+
+        wait_for_node_sees_block(context, validator1, blockhash2)
+        wait_for_node_sees_block(context, bootstrap_node, blockhash2)
+
+        validator1.deploy(contract, BONDED_VALIDATOR_KEY_3)
+        blockhash3 = validator1.propose()
+
+        wait_for_node_sees_block(context, validator2, blockhash3)
+        wait_for_node_sees_block(context, bootstrap_node, blockhash3)
+
+        block_info1 = validator1.show_block_parsed(blockhash1)
+        block_info3 = validator1.show_block_parsed(blockhash3)
+        block_msg3 = client.block_request(block_info3['blockHash'], validator1)
+
+        invalid_block =  BlockMessage()
+        invalid_block.CopyFrom(block_msg3)
+        invalid_block.header.ClearField("parentsHashList")  # pylint: disable=maybe-no-member
+        invalid_block.body.state.blockNumber = 2  # pylint: disable=maybe-no-member
+        invalid_block.header.parentsHashList.append(bytes.fromhex(block_info1['blockHash']))  # pylint: disable=maybe-no-member
+        invalid_block.header.timestamp = int(time.time()*1000)  # pylint: disable=maybe-no-member
+        deploy_data = create_deploy_data(BONDED_VALIDATOR_KEY_2, Path("../rholang/examples/tut-hello.rho").read_text(), 1, 1000000)
+        invalid_block.body.deploys[0].deploy.CopyFrom(deploy_data)  # pylint: disable=maybe-no-member
+        invalid_block.header.deploysHash = gen_deploys_hash_from_block(invalid_block)  # pylint: disable=maybe-no-member
+        invalid_block_hash = gen_block_hash_from_block(invalid_block)
+        invalid_block.sig = BONDED_VALIDATOR_KEY_1.sign_block_hash(invalid_block_hash)
+        invalid_block.blockHash = invalid_block_hash
+        client.send_block(invalid_block, validator2)
+
+        record_invalid = re.compile("Recording invalid block {}... for InvalidParents".format(invalid_block_hash.hex()[:10]))
+        wait_for_log_match(context, validator2, record_invalid)
+
+        validator2.deploy(contract, BONDED_VALIDATOR_KEY_1)
+        slashed_blockhash = validator2.propose()
+        slashed_block_info = validator2.show_block_parsed(slashed_blockhash)
+        bonds_validators = extract_validator_stake_from_bonds_validator_str(slashed_block_info['bondsValidatorList'])
+        assert bonds_validators[BONDED_VALIDATOR_KEY_1.get_public_key().to_hex()] == 0
