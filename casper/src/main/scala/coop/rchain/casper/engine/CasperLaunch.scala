@@ -74,21 +74,22 @@ object CasperLaunch {
                 init.conf.numValidators,
                 init.conf.genesisPath
               )
+
       validatorId <- ValidatorIdentity.fromConfig[F](init.conf)
       vaults <- Genesis.vaultFromFile(
                  init.conf.walletsFile
                    .map(Paths.get(_))
                    .getOrElse(init.conf.genesisPath.resolve("wallets.txt"))
                )
-      bap = new BlockApproverProtocol(
-        validatorId.get,
-        timestamp,
-        vaults,
-        bonds,
-        init.conf.minimumBond,
-        init.conf.maximumBond,
-        init.conf.requiredSigs
-      )
+      bap <- BlockApproverProtocol.of(
+              validatorId.get,
+              timestamp,
+              vaults,
+              bonds,
+              init.conf.minimumBond,
+              init.conf.maximumBond,
+              init.conf.requiredSigs
+            )(Sync[F])
       _ <- EngineCell[F].set(
             new GenesisValidator(validatorId.get, init.conf.shardId, bap)
           )

@@ -1,6 +1,6 @@
 package coop.rchain.casper.engine
 
-import cats.Traverse
+import cats.MonadError
 import cats.data.EitherT
 import cats.effect.Concurrent
 import cats.implicits._
@@ -30,7 +30,7 @@ import scala.util.Try
   * Validator side of the protocol defined in
   * https://rchain.atlassian.net/wiki/spaces/CORE/pages/485556483/Initializing+the+Blockchain+--+Protocol+for+generating+the+Genesis+block
   */
-class BlockApproverProtocol(
+class BlockApproverProtocol private (
     validatorId: ValidatorIdentity,
     deployTimestamp: Long,
     vaults: Seq[Vault],
@@ -80,6 +80,30 @@ class BlockApproverProtocol(
 }
 
 object BlockApproverProtocol {
+  def of[F[_]](
+      validatorId: ValidatorIdentity,
+      deployTimestamp: Long,
+      vaults: Seq[Vault],
+      bonds: Map[PublicKey, Long],
+      minimumBond: Long,
+      maximumBond: Long,
+      requiredSigs: Int
+  )(implicit monadError: MonadError[F, Throwable]): F[BlockApproverProtocol] =
+    if (bonds.size > requiredSigs)
+      new BlockApproverProtocol(
+        validatorId,
+        deployTimestamp,
+        vaults,
+        bonds,
+        minimumBond,
+        maximumBond,
+        requiredSigs
+      ).pure[F]
+    else
+      monadError.raiseError(
+        new Exception("Required sigs must be smaller than the number of bonded validators")
+      )
+
   def getBlockApproval(
       expectedCandidate: ApprovedBlockCandidate,
       validatorId: ValidatorIdentity

@@ -21,7 +21,7 @@ class BlockApproverProtocolTest extends FlatSpec with Matchers {
   implicit private val scheduler: Scheduler = Scheduler.fixedPool("block-approval-protocol-test", 4)
 
   "BlockApproverProtocol" should "respond to valid ApprovedBlockCandidates" in {
-    val n = 8
+    val n = 3
     createProtocol(n).flatMap {
       case (approver, node) =>
         val unapproved = createUnapproved(n, node.genesis)
@@ -43,7 +43,7 @@ class BlockApproverProtocolTest extends FlatSpec with Matchers {
   }
 
   it should "log a warning for invalid ApprovedBlockCandidates" in effectTest {
-    val n = 8
+    val n = 3
     createProtocol(n).flatMap {
       case (approver, node) =>
         val differentUnapproved1 = createUnapproved(n / 2, node.genesis)             //wrong number of signatures
@@ -87,20 +87,22 @@ object BlockApproverProtocolTest {
     val context                     = GenesisBuilder.buildGenesis(params)
     HashSetCasperTestNode.networkEff(context, networkSize = 1).use { nodes =>
       val node = nodes.head
-      (new BlockApproverProtocol(
-        node.validatorId,
-        genesisParams.timestamp,
-        Traverse[List]
-          .traverse(genesisParams.proofOfStake.validators.map(_.pk).toList)(
-            RevAddress.fromPublicKey
-          )
-          .get
-          .map(Vault(_, 0L)),
-        genesisParams.proofOfStake.validators.map(v => v.pk -> v.stake).toMap,
-        genesisParams.proofOfStake.minimumBond,
-        genesisParams.proofOfStake.maximumBond,
-        requiredSigs
-      ) -> node).pure[Effect]
+      BlockApproverProtocol
+        .of[Effect](
+          node.validatorId,
+          genesisParams.timestamp,
+          Traverse[List]
+            .traverse(genesisParams.proofOfStake.validators.map(_.pk).toList)(
+              RevAddress.fromPublicKey
+            )
+            .get
+            .map(Vault(_, 0L)),
+          genesisParams.proofOfStake.validators.map(v => v.pk -> v.stake).toMap,
+          genesisParams.proofOfStake.minimumBond,
+          genesisParams.proofOfStake.maximumBond,
+          requiredSigs
+        )
+        .map(_ -> node)
     }
   }
 

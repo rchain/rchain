@@ -62,18 +62,23 @@ object Setup {
     val genesis: BlockMessage = context.genesisBlock
 
     val validatorId = ValidatorIdentity(validatorPk, validatorSk, "secp256k1")
-    val bap = new BlockApproverProtocol(
-      validatorId,
-      deployTimestamp,
-      Traverse[List]
-        .traverse(genesisParams.proofOfStake.validators.map(_.pk).toList)(RevAddress.fromPublicKey)
-        .get
-        .map(Vault(_, 0L)),
-      bonds,
-      genesisParams.proofOfStake.minimumBond,
-      genesisParams.proofOfStake.maximumBond,
-      requiredSigs
-    )
+    val bap = BlockApproverProtocol
+      .of[Task](
+        validatorId,
+        deployTimestamp,
+        Traverse[List]
+          .traverse(genesisParams.proofOfStake.validators.map(_.pk).toList)(
+            RevAddress.fromPublicKey
+          )
+          .get
+          .map(Vault(_, 0L)),
+        bonds,
+        genesisParams.proofOfStake.minimumBond,
+        genesisParams.proofOfStake.maximumBond,
+        requiredSigs
+      )
+      .unsafeRunSync(monix.execution.Scheduler.Implicits.global)
+
     val local: PeerNode = peerNode("src", 40400)
 
     implicit val nodeDiscovery = new NodeDiscoveryStub[Task]
