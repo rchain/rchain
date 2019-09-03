@@ -134,30 +134,25 @@ class RSpace[F[_], C, P, A, K] private[rspace] (
         logF.error(msg) >> syncF.raiseError(new IllegalArgumentException(msg))
       } else
         (for {
-          _ <- spanF.mark("before-consume-ref-compute")
           consumeRef <- syncF.delay {
                          Consume.create(channels, patterns, continuation, persist, sequenceNumber)
                        }
           result <- consumeLockF(channels) {
                      for {
-                       _ <- spanF.mark("consume-lock-acquired")
                        _ <- logF
                              .debug(
                                s"""|consume: searching for data matching <patterns: $patterns>
                       |at <channels: $channels>""".stripMargin.replace('\n', ' ')
                              )
                        channelToIndexedData <- fetchChannelToIndexData(channels)
-                       _                    <- spanF.mark("channel-to-indexed-data-fetched")
                        _ <- syncF.delay {
                              eventLog.update(consumeRef +: _)
                            }
-                       _ <- spanF.mark("event-log-updated")
                        options <- extractDataCandidates(
                                    channels.zip(patterns),
                                    channelToIndexedData,
                                    Nil
                                  ).map(_.sequence)
-                       _ <- spanF.mark("extract-consume-candidate")
                        result <- options match {
                                   case None =>
                                     storeWaitingContinuation(
@@ -193,11 +188,9 @@ class RSpace[F[_], C, P, A, K] private[rspace] (
                                           )
                                     } yield wrapResult(consumeRef, dataCandidates)
                                 }
-                       _ <- spanF.mark("extract-consume-candidate")
                      } yield result
 
                    }
-          _ <- spanF.mark("post-consume-lock")
         } yield result).timer(consumeTimeCommLabel)
     }
   }
@@ -376,17 +369,13 @@ class RSpace[F[_], C, P, A, K] private[rspace] (
   ): F[MaybeActionResult] =
     contextShift.evalOn(scheduler) {
       (for {
-        _ <- spanF.mark("before-produce-ref-computed")
         produceRef <- syncF.delay {
                        Produce.create(channel, data, persist, sequenceNumber)
                      }
-        _ <- spanF.mark("before-produce-lock")
         result <- produceLockF(channel) {
                    for {
-                     _ <- spanF.mark("produce-lock-acquired")
                      //TODO fix double join fetch
                      groupedChannels <- store.getJoins(channel)
-                     _               <- spanF.mark("grouped-channels")
                      _ <- logF.debug(
                            s"""|produce: searching for matching continuations
                     |at <groupedChannels: $groupedChannels>""".stripMargin
@@ -395,22 +384,18 @@ class RSpace[F[_], C, P, A, K] private[rspace] (
                      _ <- syncF.delay {
                            eventLog.update(produceRef +: _)
                          }
-                     _ <- spanF.mark("event-log-updated")
                      extracted <- extractProduceCandidate(
                                    groupedChannels,
                                    channel,
                                    Datum(data, persist, produceRef)
                                  )
-                     _ <- spanF.mark("extract-produce-candidate")
                      r <- extracted match {
                            case Some(pc) => processMatchFound(pc)
                            case None =>
                              storeData(channel, data, persist, produceRef)
                          }
-                     _ <- spanF.mark("process-matching")
                    } yield r
                  }
-        _ <- spanF.mark("post-produce-lock")
       } yield result).timer(produceTimeCommLabel)
     }
 

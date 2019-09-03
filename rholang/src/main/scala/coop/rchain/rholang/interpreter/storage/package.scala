@@ -36,7 +36,6 @@ package object storage {
         type R[A] = MatcherMonadT[F, A]
         implicit val matcherMonadError = implicitly[Sync[R]]
         for {
-          _ <- Span[F].mark("storage-match-get")
           matchResult <- runFirst[F, Seq[Par]](
                           SpatialMatcher
                             .foldMatch[R, Par, Par](
@@ -45,7 +44,6 @@ package object storage {
                               pattern.remainder
                             )
                         )
-          _ <- Span[F].mark("post-storage-match-get")
         } yield {
           matchResult.map {
             case (freeMap, caughtRem) =>

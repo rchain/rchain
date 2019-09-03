@@ -69,7 +69,6 @@ class ReplayRSpace[F[_]: Sync, C, P, A, K](
         logF.error(msg) >> syncF.raiseError(new IllegalArgumentException(msg))
       } else
         (for {
-          _ <- spanF.mark("before-consume-lock")
           result <- consumeLockF(channels) {
                      lockedConsume(
                        channels,
@@ -80,7 +79,6 @@ class ReplayRSpace[F[_]: Sync, C, P, A, K](
                        peeks
                      )
                    }
-          _ <- spanF.mark("post-consume-lock")
         } yield result).timer(consumeTimeCommLabel)
     }
 
@@ -183,7 +181,6 @@ class ReplayRSpace[F[_]: Sync, C, P, A, K](
       consumeRef <- syncF.delay {
                      Consume.create(channels, patterns, continuation, persist, sequenceNumber)
                    }
-      _ <- spanF.mark("after-compute-consumeref")
       r <- replayData.get(consumeRef) match {
             case None =>
               storeWaitingContinuation(
@@ -217,11 +214,9 @@ class ReplayRSpace[F[_]: Sync, C, P, A, K](
   def produce(channel: C, data: A, persist: Boolean, sequenceNumber: Int): F[MaybeActionResult] =
     contextShift.evalOn(scheduler) {
       (for {
-        _ <- spanF.mark("before-produce-lock")
         result <- produceLockF(channel) {
                    lockedProduce(channel, data, persist, sequenceNumber)
                  }
-        _ <- spanF.mark("post-produce-lock")
       } yield result).timer(produceTimeCommLabel)
     }
 
@@ -376,14 +371,12 @@ class ReplayRSpace[F[_]: Sync, C, P, A, K](
 
     for {
       groupedChannels <- store.getJoins(channel)
-      _               <- spanF.mark("after-fetch-joins")
       _ <- logF.debug(
             s"""|produce: searching for matching continuations
                 |at <groupedChannels: $groupedChannels>""".stripMargin
               .replace('\n', ' ')
           )
       produceRef <- syncF.delay { Produce.create(channel, data, persist, sequenceNumber) }
-      _          <- spanF.mark("after-compute-produceref")
       result <- replayData.get(produceRef) match {
                  case None =>
                    storeDatum(produceRef, None)
