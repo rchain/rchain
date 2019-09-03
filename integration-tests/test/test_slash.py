@@ -51,7 +51,15 @@ def three_nodes_network_with_node_client(command_line_options: CommandLineOption
 
 
 @pytest.mark.skipif(sys.platform in ('win32', 'cygwin', 'darwin'), reason="Only Linux docker support connection between host and container which node client needs")
-def test_simple_slash(command_line_options: CommandLineOptions, random_generator: Random, docker_client: DockerClient) -> None:
+def test_slash_invalid_block_hash(command_line_options: CommandLineOptions, random_generator: Random, docker_client: DockerClient) -> None:
+    """
+    Slash a validator which proposes an invalid block contains invalid block hash
+
+    1. v1 proposes a valid block b1
+    2. v1 proposes an invalid block b2 with invalid block hash and send it to v2
+    3. v2 records b2 as invalid block (InvalidBlockHash)
+    4. v2 proposes a new block which slashes v1
+    """
     with three_nodes_network_with_node_client(command_line_options, random_generator, docker_client) as  (context, _ , validator1, validator2, client):
         contract = '/opt/docker/examples/tut-hello.rho'
 
@@ -87,6 +95,11 @@ def test_simple_slash(command_line_options: CommandLineOptions, random_generator
 def test_slash_invalid_block_seq(command_line_options: CommandLineOptions, random_generator: Random, docker_client: DockerClient) -> None:
     """
     Propose an block with invalid block seq number(a block seq number that isn't one more than the max of all the parents block's numbers).
+
+    1. v1 proposes a valid block b1
+    2. v1 proposes an invalid block b2 which contains invalid seq number and send it to v2
+    3. v2 records b2 as invalid block (InvalidSequenceNumber)
+    4. v2 proposes a new block which slashes v1
     """
     with three_nodes_network_with_node_client(command_line_options, random_generator, docker_client) as  (context, _ , validator1, validator2, client):
         contract = '/opt/docker/examples/tut-hello.rho'
@@ -127,6 +140,11 @@ def test_slash_invalid_block_seq(command_line_options: CommandLineOptions, rando
 def test_slash_justification_not_correct(command_line_options: CommandLineOptions, random_generator: Random, docker_client: DockerClient) -> None:
     """
     Slash a validator which proposed a block with justifications not matching bonded validators of main parent
+
+    1. v1 proposes a valid block b1
+    2. v1 proposes an invalid block b3 which contains justifications not matching bonded validators and send it to v2
+    3. v2 records the invalid block b3 (InvalidFollows)
+    4. v2 proposes a new block which slashes v1.
     """
     bonded_validators = {
         BOOTSTRAP_NODE_KEY: 100,
@@ -266,7 +284,7 @@ def test_slash_GHOST_disobeyed(command_line_options: CommandLineOptions, random_
     2. v2 proposes a valid block B2
     3. v1 proposes a valid block B3
     4. v1 proposes an invalid block B4 whose parent is B1 and send it to v2
-    5. v2 records invalid block B4
+    5. v2 records invalid block B4 (InvalidParents)
     6. v2 proposes a new block B5 which slashes v1
     """
     with three_nodes_network_with_node_client(command_line_options, random_generator, docker_client) as  (context, bootstrap_node , validator1, validator2, client):
