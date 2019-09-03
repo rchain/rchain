@@ -7,7 +7,7 @@ import cats.Monad
 import cats.effect.Sync
 import cats.implicits._
 import coop.rchain.blockstorage.util.io.IOError.RaiseIOError
-import coop.rchain.blockstorage.util.io.{FileNotFound, SourceIO, exists}
+import coop.rchain.blockstorage.util.io.{exists, FileNotFound, SourceIO}
 import coop.rchain.casper.genesis.contracts.Vault
 import coop.rchain.rholang.interpreter.util.RevAddress
 import coop.rchain.shared.Log

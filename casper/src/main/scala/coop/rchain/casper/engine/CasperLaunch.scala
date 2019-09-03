@@ -2,20 +2,19 @@ package coop.rchain.casper.engine
 
 import java.nio.file.Paths
 
+import cats.Monad
 import cats.effect.{Concurrent, Sync}
 import cats.implicits._
-import cats.Monad
 import coop.rchain.blockstorage.BlockStore
-import coop.rchain.casper._
-import coop.rchain.casper.LastApprovedBlock.LastApprovedBlock
-import coop.rchain.casper.util.comm._
-import EngineCell._
 import coop.rchain.blockstorage.dag.BlockDagStorage
 import coop.rchain.blockstorage.util.io.IOError.RaiseIOError
-import coop.rchain.casper.genesis.Genesis
+import coop.rchain.casper.LastApprovedBlock.LastApprovedBlock
+import coop.rchain.casper._
+import coop.rchain.casper.engine.EngineCell._
 import coop.rchain.casper.protocol._
-import coop.rchain.casper.util.VaultParser
+import coop.rchain.casper.util.comm._
 import coop.rchain.casper.util.rholang.RuntimeManager
+import coop.rchain.casper.util.{BondsParser, VaultParser}
 import coop.rchain.comm.rp.Connect.{ConnectionsCell, RPConfAsk}
 import coop.rchain.comm.transport.TransportLayer
 import coop.rchain.metrics.{Metrics, Span}
@@ -69,7 +68,7 @@ object CasperLaunch {
   ): F[Unit] =
     for {
       timestamp <- init.conf.deployTimestamp.fold(Time[F].currentMillis)(_.pure[F])
-      bonds <- Genesis.getBonds[F](
+      bonds <- BondsParser.parse[F](
                 init.conf.bondsFile,
                 init.conf.genesisPath.resolve("bonds.txt"),
                 init.conf.numValidators,
