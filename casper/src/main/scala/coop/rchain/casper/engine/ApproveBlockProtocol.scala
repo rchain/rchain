@@ -9,7 +9,10 @@ import cats.implicits._
 import coop.rchain.blockstorage.util.io.IOError.RaiseIOError
 import coop.rchain.casper.LastApprovedBlock.LastApprovedBlock
 import coop.rchain.casper.genesis.Genesis
+import coop.rchain.casper.genesis.Genesis.createGenesisBlock
+import coop.rchain.casper.genesis.contracts.{ProofOfStake, Validator}
 import coop.rchain.casper.protocol._
+import coop.rchain.casper.util.{BondsParser, VaultParser}
 import coop.rchain.casper.util.comm.CommUtil
 import coop.rchain.casper.util.rholang.RuntimeManager
 import coop.rchain.casper.{LastApprovedBlock, PrettyPrinter, Validate, _}
@@ -69,17 +72,32 @@ object ApproveBlockProtocol {
       interval: FiniteDuration
   ): F[ApproveBlockProtocol[F]] =
     for {
-      genesisBlock <- Genesis.fromInputFiles[F](
-                       maybeBondsPath,
-                       numValidators,
-                       genesisPath,
-                       maybeVaultsPath,
-                       minimumBond,
-                       maximumBond,
-                       shardId,
-                       deployTimestamp
+      now       <- Time[F].currentMillis
+      timestamp = deployTimestamp.getOrElse(now)
+
+      vaults <- VaultParser.parse[F](maybeVaultsPath, genesisPath.resolve("wallets.txt"))
+      bonds <- BondsParser.parse[F](
+                maybeBondsPath,
+                genesisPath.resolve("bonds.txt"),
+                numValidators,
+                genesisPath
+              )
+      validators = bonds.toSeq.map(Validator.tupled)
+      genesisBlock <- createGenesisBlock(
+                       implicitly[RuntimeManager[F]],
+                       Genesis(
+                         shardId = shardId,
+                         timestamp = timestamp,
+                         proofOfStake = ProofOfStake(
+                           minimumBond = minimumBond,
+                           maximumBond = maximumBond,
+                           validators = validators
+                         ),
+                         vaults = vaults,
+                         supply = Long.MaxValue
+                       )
                      )
-      now   <- Time[F].currentMillis
+
       sigsF <- Ref.of[F, Set[Signature]](Set.empty)
     } yield new ApproveBlockProtocolImpl[F](
       genesisBlock,
