@@ -82,23 +82,32 @@ object ApproveBlockProtocol {
                 numValidators,
                 genesisPath
               )
-      validators = bonds.toSeq.map(Validator.tupled)
-      genesisBlock <- createGenesisBlock(
-                       implicitly[RuntimeManager[F]],
-                       Genesis(
-                         shardId = shardId,
-                         timestamp = timestamp,
-                         proofOfStake = ProofOfStake(
-                           minimumBond = minimumBond,
-                           maximumBond = maximumBond,
-                           validators = validators
-                         ),
-                         vaults = vaults,
-                         supply = Long.MaxValue
-                       )
-                     )
 
+      genesisBlock <- if (bonds.size <= requiredSigs)
+                       Sync[F].raiseError[BlockMessage](
+                         new Exception(
+                           "Required sigs must be smaller than the number of bonded validators"
+                         )
+                       )
+                     else {
+                       val validators = bonds.toSeq.map(Validator.tupled)
+                       createGenesisBlock(
+                         implicitly[RuntimeManager[F]],
+                         Genesis(
+                           shardId = shardId,
+                           timestamp = timestamp,
+                           proofOfStake = ProofOfStake(
+                             minimumBond = minimumBond,
+                             maximumBond = maximumBond,
+                             validators = validators
+                           ),
+                           vaults = vaults,
+                           supply = Long.MaxValue
+                         )
+                       )
+                     }
       sigsF <- Ref.of[F, Set[Signature]](Set.empty)
+
     } yield new ApproveBlockProtocolImpl[F](
       genesisBlock,
       requiredSigs,
@@ -160,7 +169,7 @@ object ApproveBlockProtocol {
                     .map(s => PrettyPrinter.buildString(s.publicKey))
                     .mkString(", ")}"
                 )
-            
+
             _ <- EventLog[F].publish(
                   shared.Event.BlockApprovalReceived(
                     a.candidate
