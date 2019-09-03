@@ -125,7 +125,7 @@ object ChargingRSpace {
 
               _             <- charge[F](Cost(-refundForConsume.value, "consume storage refund"))
               _             <- charge[F](Cost(-refundForProduces.value, "produces storage refund"))
-              lastIteration = !triggeredBy.persistent && (!cont.peek || consumeId == triggeredBy.id)
+              lastIteration = !triggeredBy.persistent
               _             <- charge[F](eventStorageCost(triggeredBy.channelsCount)).whenA(lastIteration)
               _             <- charge[F](commEventStorageCost(cont.channels.size))
             } yield ()
@@ -143,7 +143,7 @@ object ChargingRSpace {
           // It is going to be 'not removed' and charged for on the last iteration, where it doesn't match anything.
           .filter {
             case (data, _) =>
-              (!cont.peek && !data.persistent) || data.removedDatum.randomState == triggeredBy.id
+              !data.persistent || data.removedDatum.randomState == triggeredBy.id
           }
         removedData
           .map { case (data, channel) => storageCostProduce(channel, data.removedDatum) }

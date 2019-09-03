@@ -31,15 +31,20 @@ package object util {
 
   implicit def unpackOptionWithPeek[C, P, K, R](
       v: Option[(ContResult[C, P, K], Seq[Result[C, R]])]
-  ): Option[(K, Seq[R], Int, Boolean)] =
+  ): Option[(K, Seq[(C, R, R, Boolean)], Int, Boolean)] =
     v.map(unpackTupleWithPeek)
 
   implicit def unpackTupleWithPeek[C, P, K, R](
       v: (ContResult[C, P, K], Seq[Result[C, R]])
-  ): (K, Seq[R], Int, Boolean) =
+  ): (K, Seq[(C, R, R, Boolean)], Int, Boolean) =
     v match {
       case (ContResult(continuation, _, _, _, sequenceNumber, peek), data) =>
-        (continuation, data.map(_.matchedDatum), sequenceNumber, peek)
+        (
+          continuation,
+          data.map(d => (d.channel, d.matchedDatum, d.removedDatum, d.persistent)),
+          sequenceNumber,
+          peek
+        )
     }
 
   implicit def unpackCont[C, P, T](v: ContResult[C, P, T]): T = v.continuation

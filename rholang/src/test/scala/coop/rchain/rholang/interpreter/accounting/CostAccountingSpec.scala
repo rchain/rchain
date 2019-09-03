@@ -71,7 +71,7 @@ class CostAccountingSpec extends FlatSpec with Matchers with PropertyChecks with
     ("@0!(0) | @0!(0) | for (_ <= @0) { 0 }", 574L),
     ("@0!(0) | for (@0 <- @0) { 0 } | @0!(0) | for (_ <- @0) { 0 }", 663L),
     ("@0!(0) | for (@0 <- @0) { 0 } | @0!(0) | for (@1 <- @0) { 0 }", 551L),
-    ("@0!(0) | for (_ <<- @0) { 0 }", 342L),
+    ("@0!(0) | for (_ <<- @0) { 0 }", 406L),
     ("@0!!(0) | for (_ <<- @0) { 0 }", 343L),
     ("@0!!(0) | @0!!(0) | for (_ <<- @0) { 0 }", 444L),
     ("""new loop in {

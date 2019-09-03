@@ -980,16 +980,6 @@ trait ReplayRSpaceTests extends ReplayRSpaceTestsBase[String, Pattern, String, S
                         )
         finalPoint <- replaySpace.createCheckpoint()
 
-        extractedPlayResults = results.flatten
-        _ = extractedPlayResults.foreach { cr =>
-          cr._1.peek shouldBe true
-        }
-        extractedResults = replayResults.flatten
-        _ = extractedResults.foreach { cr =>
-          cr._1.peek shouldBe true
-        }
-        _ = extractedResults should have size 100
-        _ = extractedResults.map(_._2).flatten.map(_.matchedDatum).toSet should have size 5
         _ = replayResults should contain theSameElementsAs results
         _ = finalPoint.root shouldBe rigPoint.root
         _ = replaySpace.replayData shouldBe empty

@@ -8,6 +8,7 @@ import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.metrics.{Metrics, NoopSpan}
 import coop.rchain.models.Connective.ConnectiveInstance._
+import coop.rchain.models.Expr.ExprInstance
 import coop.rchain.models.Expr.ExprInstance._
 import coop.rchain.models.TaggedContinuation.TaggedCont.ParBody
 import coop.rchain.models.Var.VarInstance._
@@ -33,24 +34,34 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
   implicit val rand: Blake2b512Random = Blake2b512Random(Array.empty[Byte])
   implicit val metrics: Metrics[Task] = new Metrics.MetricsNOP[Task]
 
+  case class DataMapEntry(data: Seq[Par], rand: Blake2b512Random, seqNo: Int = 0)
+
   private[this] def mapData(elements: Map[Par, (Seq[Par], Blake2b512Random)]): Iterable[
+    (
+        Seq[Par],
+        Row[BindPattern, ListParWithRandom, TaggedContinuation]
+    )
+  ] = mapDataEntries(elements.mapValues { case (data, rand) => DataMapEntry(data, rand) })
+
+  private[this] def mapDataEntries(elements: Map[Par, DataMapEntry]): Iterable[
     (
         Seq[Par],
         Row[BindPattern, ListParWithRandom, TaggedContinuation]
     )
   ] =
     elements.map {
-      case (channel, (data, rand)) =>
+      case (channel, entry) =>
         Seq(channel) ->
           Row[BindPattern, ListParWithRandom, TaggedContinuation](
             List(
               Datum.create(
                 channel,
                 ListParWithRandom(
-                  data,
-                  rand
+                  entry.data,
+                  entry.rand
                 ),
-                false
+                false,
+                entry.seqNo
               )
             ),
             List.empty
@@ -433,10 +444,10 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
       BitSet()
     )
 
-    val expectedResult = mapData(
+    val expectedResult = mapDataEntries(
       Map(
-        channel       -> ((Seq(GInt(7L), GInt(8L), GInt(9L)), splitRand0)),
-        resultChannel -> ((Seq(GString("Success")), mergeRand))
+        channel       -> (DataMapEntry(Seq(GInt(7L), GInt(8L), GInt(9L)), splitRand0, 1)),
+        resultChannel -> (DataMapEntry(Seq(GString("Success")), mergeRand))
       )
     )
 

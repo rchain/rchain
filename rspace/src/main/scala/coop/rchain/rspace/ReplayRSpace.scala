@@ -111,9 +111,7 @@ class ReplayRSpace[F[_]: Sync, C, P, A, K](
         comms: Multiset[COMM],
         peeks: SortedSet[Int],
         channelsToIndex: Map[C, Int]
-    ): F[MaybeActionResult] = {
-      def shouldRemove(persist: Boolean, channel: C): Boolean =
-        !persist && !peeks.contains(channelsToIndex(channel))
+    ): F[MaybeActionResult] =
       for {
         _       <- metricsF.incrementCounter(consumeCommLabel)
         commRef <- syncF.delay { COMM(consumeRef, mats.map(_.datum.source), peeks) }
@@ -122,7 +120,7 @@ class ReplayRSpace[F[_]: Sync, C, P, A, K](
               .sortBy(_.datumIndex)(Ordering[Int].reverse)
               .traverse {
                 case DataCandidate(candidateChannel, Datum(_, persistData, _), _, dataIndex) =>
-                  if (shouldRemove(persistData, candidateChannel)) {
+                  if (!persistData) {
                     store.removeDatum(candidateChannel, dataIndex)
                   } else ().pure[F]
               }
@@ -152,7 +150,6 @@ class ReplayRSpace[F[_]: Sync, C, P, A, K](
                 )
               }
       } yield r
-    }
 
     def getCommOrDataCandidates(comms: Seq[COMM]): F[Either[COMM, Seq[DataCandidate[C, A]]]] = {
       type COMMOrData = Either[COMM, Seq[DataCandidate[C, A]]]
@@ -338,11 +335,7 @@ class ReplayRSpace[F[_]: Sync, C, P, A, K](
                   .sortBy(_.datumIndex)(Ordering[Int].reverse)
                   .traverse {
                     case DataCandidate(candidateChannel, Datum(_, persistData, _), _, dataIndex) =>
-                      def shouldRemove: Boolean = {
-                        val idx = channelsToIndex(candidateChannel)
-                        dataIndex >= 0 && (!persistData && !peeks.contains(idx))
-                      }
-                      (if (shouldRemove) {
+                      (if (dataIndex >= 0 && !persistData) {
                          store.removeDatum(candidateChannel, dataIndex)
                        } else Applicative[F].unit) >>
                         store.removeJoin(candidateChannel, channels)
