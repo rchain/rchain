@@ -14,6 +14,7 @@ import coop.rchain.blockstorage.dag.BlockDagStorage
 import coop.rchain.blockstorage.util.io.IOError.RaiseIOError
 import coop.rchain.casper.genesis.Genesis
 import coop.rchain.casper.protocol._
+import coop.rchain.casper.util.VaultParser
 import coop.rchain.casper.util.rholang.RuntimeManager
 import coop.rchain.comm.rp.Connect.{ConnectionsCell, RPConfAsk}
 import coop.rchain.comm.transport.TransportLayer
@@ -76,7 +77,7 @@ object CasperLaunch {
               )
 
       validatorId <- ValidatorIdentity.fromConfig[F](init.conf)
-      vaults <- Genesis.vaultFromFile(
+      vaults <- VaultParser.parse(
                  init.conf.walletsFile
                    .map(Paths.get(_))
                    .getOrElse(init.conf.genesisPath.resolve("wallets.txt"))
