@@ -120,9 +120,7 @@ object ApproveBlockProtocol {
                     .map(s => PrettyPrinter.buildString(s.publicKey))
                     .mkString(", ")}"
                 )
-            _ <- Log[F].info(
-                  s"APPROVAL: Remaining approvals needed: ${requiredSigs - after.size + 1}"
-                )
+            
             _ <- EventLog[F].publish(
                   shared.Event.BlockApprovalReceived(
                     a.candidate
