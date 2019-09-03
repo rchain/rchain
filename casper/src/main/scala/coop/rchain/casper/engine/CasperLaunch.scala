@@ -99,20 +99,17 @@ object CasperLaunch {
       init: CasperInit[F]
   ): F[Unit] =
     for {
-      genesis <- Genesis.fromInputFiles[F](
-                  init.conf.bondsFile,
-                  init.conf.numValidators,
-                  init.conf.genesisPath,
-                  init.conf.walletsFile,
-                  init.conf.minimumBond,
-                  init.conf.maximumBond,
-                  init.conf.shardId,
-                  init.conf.deployTimestamp
-                )
       validatorId <- ValidatorIdentity.fromConfig[F](init.conf)
       abp <- ApproveBlockProtocol
               .of[F](
-                genesis,
+                init.conf.bondsFile,
+                init.conf.numValidators,
+                init.conf.genesisPath,
+                init.conf.walletsFile,
+                init.conf.minimumBond,
+                init.conf.maximumBond,
+                init.conf.shardId,
+                init.conf.deployTimestamp,
                 init.conf.requiredSigs,
                 init.conf.approveGenesisDuration,
                 init.conf.approveGenesisInterval

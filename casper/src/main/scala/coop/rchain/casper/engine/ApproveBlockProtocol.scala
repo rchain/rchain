@@ -1,12 +1,17 @@
 package coop.rchain.casper.engine
 
+import java.nio.file.Path
+
 import cats.FlatMap
-import cats.effect.Sync
+import cats.effect.{Concurrent, Sync}
 import cats.effect.concurrent.Ref
 import cats.implicits._
+import coop.rchain.blockstorage.util.io.IOError.RaiseIOError
 import coop.rchain.casper.LastApprovedBlock.LastApprovedBlock
+import coop.rchain.casper.genesis.Genesis
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.comm.CommUtil
+import coop.rchain.casper.util.rholang.RuntimeManager
 import coop.rchain.casper.{LastApprovedBlock, PrettyPrinter, Validate, _}
 import coop.rchain.comm.rp.Connect.{ConnectionsCell, RPConfAsk}
 import coop.rchain.comm.transport
@@ -50,13 +55,30 @@ object ApproveBlockProtocol {
       sigsF
     )
 
-  def of[F[_]: Sync: ConnectionsCell: TransportLayer: Log: EventLog: Time: Metrics: RPConfAsk: LastApprovedBlock](
-      genesisBlock: BlockMessage,
+  def of[F[_]: Sync: Concurrent: RaiseIOError: ConnectionsCell: TransportLayer: Log: EventLog: Time: Metrics: RuntimeManager: RPConfAsk: LastApprovedBlock](
+      maybeBondsPath: Option[String],
+      numValidators: Int,
+      genesisPath: Path,
+      maybeVaultsPath: Option[String],
+      minimumBond: Long,
+      maximumBond: Long,
+      shardId: String,
+      deployTimestamp: Option[Long],
       requiredSigs: Int,
       duration: FiniteDuration,
       interval: FiniteDuration
   ): F[ApproveBlockProtocol[F]] =
     for {
+      genesisBlock <- Genesis.fromInputFiles[F](
+                       maybeBondsPath,
+                       numValidators,
+                       genesisPath,
+                       maybeVaultsPath,
+                       minimumBond,
+                       maximumBond,
+                       shardId,
+                       deployTimestamp
+                     )
       now   <- Time[F].currentMillis
       sigsF <- Ref.of[F, Set[Signature]](Set.empty)
     } yield new ApproveBlockProtocolImpl[F](
