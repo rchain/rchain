@@ -129,10 +129,10 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: ConnectionsCell: TransportLa
       validSig     <- Validate.blockSignature[F](b)
       validSender  <- Validate.blockSender[F](b, genesis, dag)
       validVersion <- Validate.version[F](b, version)
-      attemptResult <- if (!validFormat) (InvalidUnslashableBlock, dag).pure[F]
-                      else if (!validSig) (InvalidUnslashableBlock, dag).pure[F]
-                      else if (!validSender) (InvalidUnslashableBlock, dag).pure[F]
-                      else if (!validVersion) (InvalidUnslashableBlock, dag).pure[F]
+      attemptResult <- if (!validFormat) (InvalidFormat, dag).pure[F]
+                      else if (!validSig) (InvalidSignature, dag).pure[F]
+                      else if (!validSender) (InvalidSender, dag).pure[F]
+                      else if (!validVersion) (InvalidVersion, dag).pure[F]
                       else attemptAdd(b, dag)
       (attempt, updatedDag) = attemptResult
       _ <- attempt match {
@@ -147,9 +147,9 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: ConnectionsCell: TransportLa
           }
       _ <- Span[F].mark("attempt-result")
       _ <- attempt match {
-            case MissingBlocks           => ().pure[F]
-            case IgnorableEquivocation   => ().pure[F]
-            case InvalidUnslashableBlock => ().pure[F]
+            case MissingBlocks              => ().pure[F]
+            case IgnorableEquivocation      => ().pure[F]
+            case _: InvalidUnslashableBlock => ().pure[F]
             case _ =>
               reAttemptBuffer(updatedDag) // reAttempt for any status that resulted in the adding of the block into the view
           }
@@ -387,7 +387,7 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: ConnectionsCell: TransportLa
         Log[F].info(
           s"Did not add block ${PrettyPrinter.buildString(block.blockHash)} as that would add an equivocation to the BlockDAG"
         ) >> dag.pure[F]
-      case InvalidUnslashableBlock =>
+      case _: InvalidUnslashableBlock =>
         Log[F].warn(
           s"Recording invalid block ${PrettyPrinter.buildString(block.blockHash)} for ${status.toString}."
         ) >> dag.pure[F]

@@ -374,7 +374,7 @@ object Validate {
                            s"block timestamp $timestamp is not between latest parent block time and current time."
                          )
                        )
-                 } yield Left(InvalidUnslashableBlock)
+                 } yield Left(InvalidTimestamp)
                }
     } yield result
 

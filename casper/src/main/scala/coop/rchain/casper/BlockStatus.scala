@@ -28,9 +28,15 @@ final case object AdmissibleEquivocation extends InvalidBlock with Slashable
 // For now we won't eagerly slash equivocations that we can just ignore,
 // as we aren't forced to add it to our view as a dependency.
 // TODO: The above will become a DOS vector if we don't fix.
-final case object IgnorableEquivocation   extends InvalidBlock
-final case object InvalidUnslashableBlock extends InvalidBlock
-final case object MissingBlocks           extends InvalidBlock
+final case object IgnorableEquivocation extends InvalidBlock
+final case object MissingBlocks         extends InvalidBlock
+
+sealed trait InvalidUnslashableBlock extends InvalidBlock
+final case object InvalidFormat      extends InvalidUnslashableBlock
+final case object InvalidSignature   extends InvalidUnslashableBlock
+final case object InvalidSender      extends InvalidUnslashableBlock
+final case object InvalidVersion     extends InvalidUnslashableBlock
+final case object InvalidTimestamp   extends InvalidUnslashableBlock
 
 final case object InvalidBlockNumber      extends InvalidBlock with Slashable
 final case object InvalidRepeatDeploy     extends InvalidBlock with Slashable
