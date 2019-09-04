@@ -44,7 +44,9 @@ object EventsInfo {
     HttpRoutes.of[F] {
       case GET -> Root =>
         val data =
-          EventConsumer[F].consume.map(rca => transformRChainEvent(rca)).map(j => Text(j.noSpaces))
+          EventConsumer[F].consume
+            .map(rca => { transformRChainEvent(rca) })
+            .map(j => Text(j.noSpaces))
         val noop: Pipe[F, WebSocketFrame, Unit] = _.evalMap(_ => Sync[F].unit)
         WebSocketBuilder[F].build(data, noop)
     }

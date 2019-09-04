@@ -539,6 +539,18 @@ object MultiParentCasperImpl {
     val justificationHashes =
       cbs.block.justifications.toList
         .map(j => (j.validator.base16String, j.latestBlockHash.base16String))
-    RChainEvent.created(cbs.block.blockHash.base16String, parentHashes, justificationHashes)
+    val deployIds: List[String] =
+      cbs.block.body
+        .flatMap(
+          _.deploys.toList.traverse(_.deploy.map(d => PrettyPrinter.buildStringNoLimit(d.sig)))
+        )
+        .getOrElse(List.empty[String])
+
+    RChainEvent.created(
+      cbs.block.blockHash.base16String,
+      parentHashes,
+      justificationHashes,
+      deployIds
+    )
   }
 }

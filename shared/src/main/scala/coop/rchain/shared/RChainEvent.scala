@@ -7,17 +7,21 @@ sealed trait RChainEvent {}
 final case class BlockCreated(
     blockHash: String,
     parentHashes: List[String],
-    justificationHashes: List[(String, String)]
+    justificationHashes: List[(String, String)],
+    deployIds: List[String]
 ) extends RChainEvent
+
 final case class BlockFinalised(blockHash: String) extends RChainEvent
 
 object RChainEvent {
   def created(
       bs: => String,
       parents: List[String],
-      justifications: List[(String, String)]
+      justifications: List[(String, String)],
+      deployIds: List[String]
   ): RChainEvent =
-    BlockCreated(bs, parents, justifications)
+    BlockCreated(bs, parents, justifications, deployIds)
+
   def finalised(bs: => String): RChainEvent = BlockFinalised(bs)
 }
 
