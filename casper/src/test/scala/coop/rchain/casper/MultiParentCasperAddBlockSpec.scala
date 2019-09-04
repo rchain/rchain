@@ -135,6 +135,20 @@ class MultiParentCasperAddBlockSpec extends FlatSpec with Matchers with Inspecto
     }
   }
 
+  it should "propose and replay peek" ignore effectTest {
+    (1 to 50).toList.map { _ =>
+      HashSetCasperTestNode.networkEff(genesis, networkSize = 1).use { nodes =>
+        for {
+          deploy <- ConstructDeploy.sourceDeployNowF[Effect](
+                     "for(_ <<- @0) { Nil } | @0!(0) | for(_ <- @0) { Nil }"
+                   )
+          block  <- nodes(0).addBlock(deploy)
+          result <- nodes(0).casperEff.contains(block.blockHash) shouldBeF true
+        } yield result
+      }
+    }.parSequence_
+  }
+
   it should "reject unsigned blocks" in effectTest {
     HashSetCasperTestNode.standaloneEff(genesis).use { node =>
       implicit val timeEff = new LogicalTime[Effect]
