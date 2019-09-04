@@ -24,6 +24,7 @@ trait DeployService[F[_]] {
       request: ContinuationAtNameQuery
   ): F[Either[Seq[String], Seq[ContinuationsWithBlockInfo]]]
   def lastFinalizedBlock: F[Either[Seq[String], String]]
+  def isFinalized(q: IsFinalizedQuery): F[Either[Seq[String], String]]
 }
 
 object DeployService {
@@ -107,6 +108,15 @@ class GrpcDeployService(host: String, port: Int, maxMessageSize: Int)
     stub
       .lastFinalizedBlock(LastFinalizedBlockQuery())
       .map(_.toEither[LastFinalizedBlockResponse].map(_.toProtoString))
+
+  def isFinalized(request: IsFinalizedQuery): Task[Either[Seq[String], String]] =
+    stub
+      .isFinalized(request)
+      .map(_.toEither[IsFinalizedResponse].flatMap {
+        case IsFinalizedResponse(true)  => Right("Block is finalized")
+        case IsFinalizedResponse(false) => Left(Seq("Block is not finalized"))
+      })
+
   @SuppressWarnings(Array("org.wartremover.warts.NonUnitStatements"))
   override def close(): Unit = {
     val terminated = channel.shutdown().awaitTermination(10, TimeUnit.SECONDS)

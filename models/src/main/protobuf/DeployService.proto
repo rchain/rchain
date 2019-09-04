@@ -55,9 +55,12 @@ service DeployService {
   // Preview new top-level unforgeable names (for example, to compute signatures over them).
   // Returns on success PrivateNamePreviewResponse
   rpc previewPrivateNames(PrivateNamePreviewQuery) returns (Either) {}
-  // Get details about a particular block.
-  // Returns on success BlockQueryResponse
+  // Get details about the last finalized block.
+  // Returns on success LastFinalizedBlockResponse
   rpc lastFinalizedBlock(LastFinalizedBlockQuery) returns (Either) {}
+  // Check if a given block is finalized.
+  // Returns on success IsFinalizedResponse
+  rpc isFinalized(IsFinalizedQuery) returns (Either) {}
 }
 
 message FindDeployQuery {
@@ -137,6 +140,14 @@ message LastFinalizedBlockQuery {
 
 message LastFinalizedBlockResponse {
   BlockInfo blockInfo = 1;
+}
+
+message IsFinalizedQuery {
+  string hash = 1;
+}
+
+message IsFinalizedResponse {
+  bool isFinalized = 1;
 }
 
 message LightBlockInfo {

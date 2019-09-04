@@ -65,6 +65,9 @@ sealed abstract class StreamT[F[_], +A] { self =>
     case _: SNil[F] => none[AA].pure[F]
   }
 
+  def contains[AA >: A](x: AA)(implicit monad: Monad[F]): F[Boolean] =
+    find(_ == x).map(_.isDefined)
+
   def flatMap[B](f: A => StreamT[F, B])(implicit monad: Monad[F]): StreamT[F, B] = self match {
     case SCons(curr, lazyTail) =>
       f(curr) match {

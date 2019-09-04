@@ -76,6 +76,7 @@ final case object MachineVerifiableDag                                     exten
 final case object Run                                                      extends Command
 final case class Keygen(algorithm: String, privateKeyPath: Path)           extends Command
 final case object LastFinalizedBlock                                       extends Command
+final case class IsFinalized(hash: String)                                 extends Command
 final case object Help                                                     extends Command
 final case class DataAtName(name: Name)                                    extends Command
 final case class ContAtName(names: List[Name])                             extends Command

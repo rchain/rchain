@@ -342,6 +342,18 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
   }
   addSubcommand(lastFinalizedBlock)
 
+  val isFinalized = new Subcommand("is-finalized") {
+    descr(
+      "Check if the given block has been finalized by Casper on an existing running node."
+    )
+
+    val hash = trailArg[String](
+      descr = "The hash value of the block to check",
+      required = true
+    )
+  }
+  addSubcommand(isFinalized)
+
   val repl = new Subcommand("repl") {
     descr("Starts a thin client, that will connect to existing node. See grpcHost and grpcPort.")
   }
