@@ -56,7 +56,7 @@ trait IReplaySpace[F[_], C, P, A, K] extends ISpace[F, C, P, A, K] {
         ifTrue = syncF.unit,
         ifFalse = {
           val msg =
-            s"unused comm event: replayData multimap has ${replayData.size}"
+            s"Unused COMM event: replayData multimap has ${replayData.size} elements left"
           logF.error(msg) >> logF.error(replayData.toString) >> syncF.raiseError[Unit](
             new ReplayException(msg)
           )
