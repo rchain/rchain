@@ -31,6 +31,7 @@ import coop.rchain.rholang.interpreter.{
   Runtime
 }
 import coop.rchain.rspace.{trace, Blake2b256Hash, ReplayException}
+import coop.rchain.shared.Log
 
 trait RuntimeManager[F[_]] {
 
@@ -65,7 +66,7 @@ trait RuntimeManager[F[_]] {
   def withRuntimeLock[A](f: Runtime[F] => F[A]): F[A]
 }
 
-class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span] private[rholang] (
+class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log] private[rholang] (
     val emptyStateHash: StateHash,
     runtimeContainer: MVar[F, Runtime[F]]
 ) extends RuntimeManager[F] {
@@ -333,9 +334,11 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span] private[rholang] (
                      .attempt
                      .flatMap {
                        case Right(_) => none[ReplayFailure].pure[F]
-                       case Left(ex: ReplayException) =>
-                         (none[DeployData], UnusedCommEvent(ex): Failed).some
-                           .pure[F]
+                       case Left(ex: ReplayException) => {
+                         Log[F].error(s"Failed during processing of deploy: ${processedDeploy}") >>
+                           (none[DeployData], UnusedCommEvent(ex): Failed).some
+                             .pure[F]
+                       }
                        case Left(ex) =>
                          (none[DeployData], UserErrors(Vector(ex)): Failed).some
                            .pure[F]
@@ -367,7 +370,7 @@ object RuntimeManager {
 
   type StateHash = ByteString
 
-  def fromRuntime[F[_]: Concurrent: Sync: Metrics: Span](
+  def fromRuntime[F[_]: Concurrent: Sync: Metrics: Span: Log](
       runtime: Runtime[F]
   ): F[RuntimeManager[F]] =
     for {

@@ -134,9 +134,8 @@ object InterpreterUtil {
           }
         case Left((None, status)) =>
           status match {
-            case UnusedCommEvent(ex: ReplayException) =>
-              Log[F].warn(s"Found unused comm event ${ex.getMessage}") >>
-                none[StateHash].asRight[BlockException].pure[F]
+            case UnusedCommEvent(_: ReplayException) =>
+              none[StateHash].asRight[BlockException].pure[F]
             case InternalErrors(_) => throw new RuntimeException("found InternalErrors")
             case ReplayStatusMismatch(_, _) =>
               throw new RuntimeException("found ReplayStatusMismatch")

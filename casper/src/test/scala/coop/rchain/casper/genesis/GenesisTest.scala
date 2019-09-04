@@ -269,7 +269,10 @@ object GenesisTest {
   )(implicit metrics: Metrics[Task], span: Span[Task]): Task[Unit] =
     withRawGenResources {
       (runtime: Runtime[Task], genesisPath: Path, log: LogStub[Task], time: LogicalTime[Task]) =>
-        RuntimeManager.fromRuntime(runtime).flatMap(body(_, genesisPath, log, time))
+        {
+          implicit val _log = log
+          RuntimeManager.fromRuntime(runtime).flatMap(body(_, genesisPath, log, time))
+        }
     }
 
   def taskTest[R](f: Task[R]): R =
