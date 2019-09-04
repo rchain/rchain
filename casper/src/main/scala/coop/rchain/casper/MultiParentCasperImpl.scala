@@ -22,10 +22,9 @@ import coop.rchain.catscontrib.BooleanF._
 import coop.rchain.catscontrib.ski._
 import coop.rchain.comm.rp.Connect.{ConnectionsCell, RPConfAsk}
 import coop.rchain.comm.transport.TransportLayer
-import coop.rchain.crypto.codec.Base16
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.metrics.implicits._
-import coop.rchain.models.BlockHash.BlockHash
+import coop.rchain.models.BlockHash._
 import coop.rchain.models.EquivocationRecord
 import coop.rchain.models.Validator.Validator
 import coop.rchain.rholang.interpreter.NormalizerEnv
@@ -249,7 +248,7 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: ConnectionsCell: TransportLa
           .flatMap {
             case c: Created =>
               EventPublisher[F]
-                .publish(RChainEvent.created(Base16.encode(c.block.blockHash.toByteArray)))
+                .publish(RChainEvent.created(c.block.blockHash.base16String))
                 .as[CreateBlockStatus](c)
             case o: CreateBlockStatus => o.pure[F]
           }
@@ -262,7 +261,12 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: ConnectionsCell: TransportLa
       lastFinalizedBlockHash <- lastFinalizedBlockHashContainer.get
       updatedLastFinalizedBlockHash <- LastFinalizedBlockCalculator[F]
                                         .run(dag, lastFinalizedBlockHash)
-      _            <- lastFinalizedBlockHashContainer.set(updatedLastFinalizedBlockHash)
+      _ <- lastFinalizedBlockHashContainer.set(updatedLastFinalizedBlockHash)
+      _ <- EventPublisher[F]
+            .publish(
+              RChainEvent.finalised(updatedLastFinalizedBlockHash.base16String)
+            )
+            .whenA(lastFinalizedBlockHash != updatedLastFinalizedBlockHash)
       blockMessage <- ProtoUtil.getBlock[F](updatedLastFinalizedBlockHash)
     } yield blockMessage
 

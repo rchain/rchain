@@ -4,11 +4,16 @@ import cats.Applicative
 
 sealed trait RChainEvent {}
 
-final case class BlockCreated(hash: String)   extends RChainEvent
-final case class BlockFinalised(hash: String) extends RChainEvent
+final case class BlockCreated(
+    blockHash: String,
+    parentHashes: List[String],
+    justificationHashes: List[String]
+) extends RChainEvent
+final case class BlockFinalised(blockHash: String) extends RChainEvent
 
 object RChainEvent {
-  def created(bs: => String): RChainEvent = BlockCreated(bs)
+  def created(bs: => String): RChainEvent   = BlockCreated(bs, Nil, Nil)
+  def finalised(bs: => String): RChainEvent = BlockFinalised(bs)
 }
 
 trait EventPublisher[F[_]] {
