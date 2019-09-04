@@ -46,6 +46,7 @@ import coop.rchain.node.api.{DeployGrpcService, ProposeGrpcService, ReplGrpcServ
 import coop.rchain.node.configuration.Configuration
 import coop.rchain.node.diagnostics.Trace.TraceId
 import coop.rchain.node.diagnostics._
+import coop.rchain.node.effects.{EventConsumer, RchainEvents}
 import coop.rchain.node.model.repl.ReplGrpcMonix
 import coop.rchain.p2p.effects._
 import coop.rchain.rholang.interpreter.Runtime
@@ -201,6 +202,7 @@ class NodeRuntime private[node] (
       override def toTask[A](fa: TaskEnv[A]): Task[A] = fa.run(NodeCallCtx.init)
     }
     localEnvironment = cats.mtl.instances.all.localReader[Task, NodeCallCtx]
+    eventBus         <- RchainEvents.readerTInstance[Task, NodeCallCtx]
     result <- NodeRuntime.setupNodeProgramF[TaskEnv](
                rpConnectionsEnv,
                rpConfAskEnv,
@@ -212,7 +214,8 @@ class NodeRuntime private[node] (
                cliConfig,
                blockstorePath,
                rspaceScheduler,
-               scheduler
+               scheduler,
+               eventBus
              )(
                metricsEnv,
                transportEnv,
@@ -255,7 +258,8 @@ class NodeRuntime private[node] (
       blockDagStorage,
       blockStore,
       packetHandler,
-      eventLogEnv
+      eventLogEnv,
+      eventBus
     )
     _ <- handleUnrecoverableErrors(program)
   } yield ()
@@ -302,7 +306,8 @@ class NodeRuntime private[node] (
       blockDagStorage: BlockDagStorage[TaskEnv],
       blockStore: BlockStore[TaskEnv],
       packetHandler: PacketHandler[TaskEnv],
-      eventLog: EventLog[TaskEnv]
+      eventLog: EventLog[TaskEnv],
+      consumer: EventConsumer[Task]
   ): TaskEnv[Unit] = {
 
     val info: TaskEnv[Unit] =
@@ -359,7 +364,8 @@ class NodeRuntime private[node] (
                   rpConnections,
                   Concurrent[Task],
                   metrics,
-                  rpConfAsk
+                  rpConfAsk,
+                  consumer
                 ).toReaderT
       _ <- addShutdownHook(servers, runtimeCleanup)
       _ <- servers.externalApiServer.start.toReaderT
@@ -475,7 +481,8 @@ class NodeRuntime private[node] (
       connectionsCell: ConnectionsCell[Task],
       concurrent: Concurrent[Task],
       metrics: Metrics[Task],
-      rPConfAsk: RPConfAsk[Task]
+      rPConfAsk: RPConfAsk[Task],
+      consumer: EventConsumer[Task]
   ): Task[Servers] = {
     implicit val s: Scheduler = scheduler
     for {
@@ -523,9 +530,10 @@ class NodeRuntime private[node] (
                           .bindHttp(conf.server.httpPort, "0.0.0.0")
                           .withHttpApp(
                             Router(
-                              "/metrics" -> CORS(prometheusService),
-                              "/version" -> CORS(VersionInfo.service[Task]),
-                              "/status"  -> CORS(StatusInfo.service[Task])
+                              "/metrics"   -> CORS(prometheusService),
+                              "/version"   -> CORS(VersionInfo.service[Task]),
+                              "/status"    -> CORS(StatusInfo.service[Task]),
+                              "/ws/events" -> CORS(EventsInfo.service[Task])
                             ).orNotFound
                           )
                           .resource
@@ -605,7 +613,8 @@ object NodeRuntime {
       cliConf: RuntimeConf,
       blockstorePath: Path,
       rspaceScheduler: Scheduler,
-      scheduler: Scheduler
+      scheduler: Scheduler,
+      eventPublisher: EventPublisher[F]
   ): F[
     (
         BlockStore[F],
@@ -671,7 +680,6 @@ object NodeRuntime {
       raiseIOError    = IOError.raiseIOErrorThroughSync[F]
       requestedBlocks <- Cell.mvarCell[F, Map[BlockHash, Running.Requested]](Map.empty)
       casperInit      = new CasperInit[F](conf.casper)
-      eventBus        = EventPublisher.noop[F]
       _ <- {
         implicit val bs = blockStore
         implicit val bd = blockDagStorage
@@ -686,7 +694,7 @@ object NodeRuntime {
         implicit val lb = lab
         implicit val rc = rpConnections
         implicit val ra = rpConfAsk
-        implicit val eb = eventBus
+        implicit val eb = eventPublisher
         CasperLaunch[F](casperInit)
       }
       packetHandler = {

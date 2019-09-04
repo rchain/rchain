@@ -14,6 +14,7 @@ object RChainEvent {
 trait EventPublisher[F[_]] {
   def publish(e: => RChainEvent): F[Unit]
 }
+
 object EventPublisher {
   def apply[F[_]](implicit P: EventPublisher[F]): EventPublisher[F] = P
 
