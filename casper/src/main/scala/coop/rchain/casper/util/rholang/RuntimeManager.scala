@@ -31,6 +31,7 @@ import coop.rchain.rholang.interpreter.{
   Runtime
 }
 import coop.rchain.rspace.{trace, Blake2b256Hash, ReplayException}
+import coop.rchain.shared.Log
 
 trait RuntimeManager[F[_]] {
 
@@ -65,7 +66,7 @@ trait RuntimeManager[F[_]] {
   def withRuntimeLock[A](f: Runtime[F] => F[A]): F[A]
 }
 
-class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span] private[rholang] (
+class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log] private[rholang] (
     val emptyStateHash: StateHash,
     runtimeContainer: MVar[F, Runtime[F]]
 ) extends RuntimeManager[F] {
@@ -367,7 +368,7 @@ object RuntimeManager {
 
   type StateHash = ByteString
 
-  def fromRuntime[F[_]: Concurrent: Sync: Metrics: Span](
+  def fromRuntime[F[_]: Concurrent: Sync: Metrics: Span: Log](
       runtime: Runtime[F]
   ): F[RuntimeManager[F]] =
     for {
