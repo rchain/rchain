@@ -248,7 +248,7 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: ConnectionsCell: TransportLa
           .flatMap {
             case c: Created =>
               EventPublisher[F]
-                .publish(RChainEvent.created(c.block.blockHash.base16String))
+                .publish(MultiParentCasperImpl.createdEvent(c))
                 .as[CreateBlockStatus](c)
             case o: CreateBlockStatus => o.pure[F]
           }
@@ -530,4 +530,15 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: ConnectionsCell: TransportLa
       s <- Cell[F, CasperState].read
       _ <- s.dependencyDag.dependencyFree.toList.traverse(CommUtil.sendBlockRequest[F])
     } yield ()
+}
+
+object MultiParentCasperImpl {
+  def createdEvent(cbs: Created): RChainEvent = {
+    val parentHashes =
+      cbs.block.header.map(_.parentsHashList.toList.map(_.base16String)).getOrElse(Nil)
+    val justificationHashes =
+      cbs.block.justifications.toList
+        .map(j => (j.validator.base16String, j.latestBlockHash.base16String))
+    RChainEvent.created(cbs.block.blockHash.base16String, parentHashes, justificationHashes)
+  }
 }
