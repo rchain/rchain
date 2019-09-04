@@ -23,15 +23,15 @@ object EquivocationDetector {
       blockBufferDependencyDag: DoublyLinkedDag[BlockHash],
       block: BlockMessage,
       dag: BlockDagRepresentation[F]
-  ): F[Either[InvalidBlock, ValidBlock]] =
+  ): F[Either[BlockError, ValidBlock]] =
     for {
       maybeLatestMessageOfCreatorHash <- dag.latestMessageHash(block.sender)
       maybeCreatorJustification       = creatorJustificationHash(block)
       isNotEquivocation               = maybeCreatorJustification == maybeLatestMessageOfCreatorHash
       result <- if (isNotEquivocation) {
-                 Applicative[F].pure(Right(Valid))
+                 BlockStatus.valid.asRight[BlockError].pure[F]
                } else if (requestedAsDependency(block, blockBufferDependencyDag)) {
-                 Applicative[F].pure(Left(AdmissibleEquivocation))
+                 BlockStatus.admissibleEquivocation.asLeft[ValidBlock].pure[F]
                } else {
                  for {
                    sender <- PrettyPrinter.buildString(block.sender).pure[F]
@@ -44,7 +44,7 @@ object EquivocationDetector {
                    _ <- Log[F].warn(
                          s"Ignorable equivocation: sender is $sender, creator justification is $creatorJustificationHash, latest message of creator is $latestMessageOfCreator"
                        )
-                 } yield Left(IgnorableEquivocation)
+                 } yield BlockStatus.ignorableEquivocation.asLeft[ValidBlock]
                }
     } yield result
 
@@ -64,7 +64,7 @@ object EquivocationDetector {
       block: BlockMessage,
       dag: BlockDagRepresentation[F],
       genesis: BlockMessage
-  ): F[Either[InvalidBlock, ValidBlock]] =
+  ): F[Either[BlockError, ValidBlock]] =
     for {
       neglectedEquivocationDetected <- isNeglectedEquivocationDetectedWithUpdate[F](
                                         block,
@@ -72,9 +72,9 @@ object EquivocationDetector {
                                         genesis
                                       )
       status = if (neglectedEquivocationDetected) {
-        Left(NeglectedEquivocation)
+        BlockStatus.neglectedEquivocation.asLeft[ValidBlock]
       } else {
-        Right(Valid)
+        BlockStatus.valid.asRight[BlockError]
       }
     } yield status
 

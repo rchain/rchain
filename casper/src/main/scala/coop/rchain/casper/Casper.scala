@@ -109,6 +109,10 @@ sealed abstract class MultiParentCasperInstances {
                                       )
         postGenesisStateHash <- maybePostGenesisStateHash match {
                                  case Left(BlockException(ex)) => Sync[F].raiseError[StateHash](ex)
+                                 case Left(error) =>
+                                   Sync[F].raiseError[StateHash](
+                                     new Exception(s"Block error: $error")
+                                   )
                                  case Right(None) =>
                                    Sync[F].raiseError[StateHash](
                                      new Exception("Genesis tuplespace validation failed!")

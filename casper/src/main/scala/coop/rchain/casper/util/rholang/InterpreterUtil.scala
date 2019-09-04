@@ -7,18 +7,19 @@ import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockStore
 import coop.rchain.blockstorage.dag.BlockDagRepresentation
 import coop.rchain.casper.protocol._
-import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
 import coop.rchain.casper.util.{DagOperations, ProtoUtil}
-import coop.rchain.casper.{BlockException, PrettyPrinter}
+import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.metrics.Span
+import coop.rchain.models.{BlockMetadata, Par}
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.Validator.Validator
-import coop.rchain.models.{BlockMetadata, Par}
 import coop.rchain.rholang.interpreter.{NormalizerEnv, ParBuilder}
 import coop.rchain.rholang.interpreter.Runtime.BlockData
 import coop.rchain.rspace.ReplayException
 import coop.rchain.shared.{Log, LogSource}
+
+import com.google.protobuf.ByteString
 import monix.eval.Coeval
 
 object InterpreterUtil {
@@ -34,7 +35,7 @@ object InterpreterUtil {
       b: BlockMessage,
       dag: BlockDagRepresentation[F],
       runtimeManager: RuntimeManager[F]
-  ): F[Either[BlockException, Option[StateHash]]] = {
+  ): F[Either[BlockError, Option[StateHash]]] = {
     val preStateHash    = ProtoUtil.preStateHash(b)
     val tsHash          = ProtoUtil.tuplespace(b)
     val deploys         = ProtoUtil.deploys(b)
@@ -76,10 +77,10 @@ object InterpreterUtil {
       blockData: BlockData,
       invalidBlocks: Map[BlockHash, Validator],
       isGenesis: Boolean
-  ): F[Either[BlockException, Option[StateHash]]] =
+  ): F[Either[BlockError, Option[StateHash]]] =
     possiblePreStateHash match {
       case Left(ex) =>
-        BlockException(ex).asLeft[Option[StateHash]].pure[F]
+        BlockStatus.exception(ex).asLeft[Option[StateHash]].pure[F]
       case Right(computedPreStateHash) =>
         if (preStateHash == computedPreStateHash) {
           processPreStateHash[F](
@@ -95,7 +96,7 @@ object InterpreterUtil {
           Log[F].warn(
             s"Computed pre-state hash ${PrettyPrinter.buildString(computedPreStateHash)} does not equal block's pre-state hash ${PrettyPrinter
               .buildString(preStateHash)}"
-          ) >> Right(none[StateHash]).leftCast[BlockException].pure[F]
+          ) >> none[StateHash].asRight[BlockError].pure[F]
         }
     }
 
@@ -108,35 +109,38 @@ object InterpreterUtil {
       blockData: BlockData,
       invalidBlocks: Map[BlockHash, Validator],
       isGenesis: Boolean
-  ): F[Either[BlockException, Option[StateHash]]] =
+  ): F[Either[BlockError, Option[StateHash]]] =
     runtimeManager
       .replayComputeState(preStateHash)(internalDeploys, blockData, invalidBlocks, isGenesis)
       .flatMap {
         case Left((Some(deploy), status)) =>
           status match {
             case InternalErrors(exs) =>
-              BlockException(
-                new Exception(s"Internal errors encountered while processing ${PrettyPrinter
-                  .buildString(deploy)}: ${exs.mkString("\n")}")
-              ).asLeft[Option[StateHash]].pure[F]
+              BlockStatus
+                .exception(
+                  new Exception(s"Internal errors encountered while processing ${PrettyPrinter
+                    .buildString(deploy)}: ${exs.mkString("\n")}")
+                )
+                .asLeft[Option[StateHash]]
+                .pure[F]
             case UserErrors(errors: Seq[Throwable]) =>
               Log[F].warn(s"Found user error(s) ${errors.map(_.getMessage).mkString("\n")}") >>
-                none[StateHash].asRight[BlockException].pure[F]
+                none[StateHash].asRight[BlockError].pure[F]
             case ReplayStatusMismatch(replay: DeployStatus, orig: DeployStatus) =>
               Log[F].warn(
                 s"Found replay status mismatch; replay failure is ${replay.isFailed} and orig failure is ${orig.isFailed}"
               ) >>
-                none[StateHash].asRight[BlockException].pure[F]
+                none[StateHash].asRight[BlockError].pure[F]
             case UnknownFailure =>
               Log[F].warn(s"Found unknown failure") >>
-                none[StateHash].asRight[BlockException].pure[F]
+                none[StateHash].asRight[BlockError].pure[F]
             case UnusedCommEvent(_) =>
               Sync[F].raiseError(new RuntimeException("found UnusedCommEvent"))
           }
         case Left((None, status)) =>
           status match {
             case UnusedCommEvent(_: ReplayException) =>
-              none[StateHash].asRight[BlockException].pure[F]
+              none[StateHash].asRight[BlockError].pure[F]
             case InternalErrors(_) => throw new RuntimeException("found InternalErrors")
             case ReplayStatusMismatch(_, _) =>
               throw new RuntimeException("found ReplayStatusMismatch")
@@ -146,7 +150,7 @@ object InterpreterUtil {
         case Right(computedStateHash) =>
           if (tsHash.contains(computedStateHash)) {
             // state hash in block matches computed hash!
-            computedStateHash.some.asRight[BlockException].pure[F]
+            computedStateHash.some.asRight[BlockError].pure[F]
           } else {
             // state hash in block does not match computed hash -- invalid!
             // return no state hash, do not update the state hash set
@@ -154,7 +158,7 @@ object InterpreterUtil {
               s"Tuplespace hash ${PrettyPrinter.buildString(tsHash.getOrElse(ByteString.EMPTY))} does not match computed hash ${PrettyPrinter
                 .buildString(computedStateHash)}."
             ) >>
-              none[StateHash].asRight[BlockException].pure[F]
+              none[StateHash].asRight[BlockError].pure[F]
 
           }
       }
