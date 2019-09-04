@@ -334,9 +334,11 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log] private[rholang] 
                      .attempt
                      .flatMap {
                        case Right(_) => none[ReplayFailure].pure[F]
-                       case Left(ex: ReplayException) =>
-                         (none[DeployData], UnusedCommEvent(ex): Failed).some
-                           .pure[F]
+                       case Left(ex: ReplayException) => {
+                         Log[F].error(s"Failed during processing of deploy: ${processedDeploy}") >>
+                           (none[DeployData], UnusedCommEvent(ex): Failed).some
+                             .pure[F]
+                       }
                        case Left(ex) =>
                          (none[DeployData], UserErrors(Vector(ex)): Failed).some
                            .pure[F]
