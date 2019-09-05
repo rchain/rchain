@@ -108,7 +108,8 @@ sealed abstract class MultiParentCasperInstances {
                                         runtimeManager
                                       )
         postGenesisStateHash <- maybePostGenesisStateHash match {
-                                 case Left(BlockException(ex)) => Sync[F].raiseError[StateHash](ex)
+                                 case Left(BlockError.BlockException(ex)) =>
+                                   Sync[F].raiseError[StateHash](ex)
                                  case Left(error) =>
                                    Sync[F].raiseError[StateHash](
                                      new Exception(s"Block error: $error")

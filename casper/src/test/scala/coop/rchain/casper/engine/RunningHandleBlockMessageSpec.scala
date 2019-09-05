@@ -2,7 +2,7 @@ package coop.rchain.casper.engine
 
 import Running.{Requested, RequestedBlocks}
 import coop.rchain.catscontrib.ski._
-import coop.rchain.casper.{BlockStatus, Processing, Valid}
+import coop.rchain.casper.{BlockError, BlockStatus, ValidBlock}
 import coop.rchain.casper.protocol._
 import coop.rchain.comm.{CommError, Endpoint, NodeIdentifier, PeerNode}, CommError._
 import coop.rchain.comm.protocol.routing.Protocol
@@ -73,6 +73,7 @@ class RunningHandleBlockMessageSpec extends FunSpec with BeforeAndAfterEach with
 
   private def alwaysSuccess: PeerNode => Protocol => CommErr[Unit] = kp(kp(Right(())))
   private def alwaysDoesntContain: BlockHash => Coeval[Boolean]    = kp(false.pure[Coeval])
-  private def blockInDag: BlockMessage => Coeval[BlockStatus]      = kp(Valid.pure[Coeval])
-  private def blockNotInDag: BlockMessage => Coeval[BlockStatus]   = kp(Processing.pure[Coeval])
+  private def blockInDag: BlockMessage => Coeval[BlockStatus]      = kp(ValidBlock.Valid.pure[Coeval])
+  private def blockNotInDag: BlockMessage => Coeval[BlockStatus] =
+    kp(BlockError.Processing.pure[Coeval])
 }

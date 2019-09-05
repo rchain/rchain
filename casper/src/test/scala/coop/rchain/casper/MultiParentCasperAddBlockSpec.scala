@@ -29,6 +29,9 @@ class MultiParentCasperAddBlockSpec extends FlatSpec with Matchers with Inspecto
 
   import RSpaceUtil._
   import coop.rchain.casper.util.GenesisBuilder._
+  import ValidBlock._
+  import BlockError._
+  import InvalidBlock._
 
   implicit val timeEff = new LogicalTime[Effect]
 

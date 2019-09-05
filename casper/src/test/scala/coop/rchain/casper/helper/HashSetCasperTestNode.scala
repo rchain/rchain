@@ -101,7 +101,7 @@ class HashSetCasperTestNode[F[_]](
   implicit val packetHandlerEff          = CasperPacketHandler[F]
 
   def addBlock(deployDatums: DeployData*): F[BlockMessage] =
-    addBlockStatus(Valid)(deployDatums: _*)
+    addBlockStatus(ValidBlock.Valid)(deployDatums: _*)
 
   def addBlockStatus(expectedStatus: BlockStatus)(deployDatums: DeployData*): F[BlockMessage] =
     for {

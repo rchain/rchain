@@ -407,9 +407,12 @@ object BlockAPI {
                                case Some(block) =>
                                  for {
                                    blockInfo <- getFullBlockInfo[F](block)
-                                 } yield BlockQueryResponse(blockInfo = Some(blockInfo)).asRight
+                                 } yield BlockQueryResponse(blockInfo = Some(blockInfo))
+                                   .asRight[Error]
                                case None =>
-                                 s"Error: Failure to find block with hash ${q.hash}".asLeft.pure[F]
+                                 s"Error: Failure to find block with hash ${q.hash}"
+                                   .asLeft[BlockQueryResponse]
+                                   .pure[F]
                              }
       } yield blockQueryResponse
 
@@ -565,9 +568,9 @@ object BlockAPI {
                 s"Success! Block $hash created and added.${maybeOutput.map("\n" + _).getOrElse("")}"
               ).asRight[Error].pure[F]
           )
-      case BlockException(ex) =>
+      case BlockError.BlockException(ex) =>
         s"Error during block processing: $ex".asLeft[DeployServiceResponse].pure[F]
-      case Processing =>
+      case BlockError.Processing =>
         "No action taken since other thread is already processing the block."
           .asLeft[DeployServiceResponse]
           .pure[F]

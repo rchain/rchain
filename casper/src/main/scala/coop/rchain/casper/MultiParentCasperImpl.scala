@@ -79,14 +79,14 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: ConnectionsCell: TransportLa
       handleDoppelganger: (BlockMessage, Validator) => F[Unit]
   ): F[BlockStatus] = {
 
-    def logAlreadyProcessed =
+    def logAlreadyProcessed: F[BlockStatus] =
       Log[F]
         .info(
           s"Block ${PrettyPrinter.buildString(b.blockHash)} has already been processed by another thread."
         )
         .as(BlockStatus.processing)
 
-    def doppelgangerAndAdd = spanF.trace(AddBlockMetricsSource) {
+    def doppelgangerAndAdd: F[BlockStatus] = spanF.trace(AddBlockMetricsSource) {
       for {
         dag <- blockDag
         _ <- validatorId match {
@@ -141,7 +141,7 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: ConnectionsCell: TransportLa
                       else attemptAdd(b, dag)
       (attempt, updatedDag) = attemptResult
       _ <- attempt match {
-            case Left(MissingBlocks) => ().pure[F]
+            case Left(InvalidBlock.MissingBlocks) => ().pure[F]
             case _ =>
               Cell[F, CasperState].modify { s =>
                 s.copy(
@@ -152,9 +152,8 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: ConnectionsCell: TransportLa
           }
       _ <- Span[F].mark("attempt-result")
       _ <- attempt match {
-            case Left(MissingBlocks)              => ().pure[F]
-            case Left(IgnorableEquivocation)      => ().pure[F]
-            case Left(_: InvalidUnslashableBlock) => ().pure[F]
+            case Left(ib: InvalidBlock) if !InvalidBlock.isSlashable(ib) => ().pure[F]
+            case Left(bs) if !BlockStatus.isInDag(bs)                    => ().pure[F]
             case _ =>
               reAttemptBuffer(updatedDag) // reAttempt for any status that resulted in the adding of the block into the view
           }
@@ -320,7 +319,7 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: ConnectionsCell: TransportLa
       dag: BlockDagRepresentation[F]
   ): F[BlockDagRepresentation[F]] =
     status match {
-      case Valid =>
+      case ValidBlock.Valid =>
         // Add successful! Send block to peers, log success, try to add other blocks
         for {
           updatedDag <- BlockDagStorage[F].insert(block, genesis, invalid = false)
@@ -329,11 +328,13 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: ConnectionsCell: TransportLa
                 s"Added ${PrettyPrinter.buildString(block.blockHash)}"
               )
         } yield updatedDag
-      case MissingBlocks =>
+
+      case InvalidBlock.MissingBlocks =>
         Cell[F, CasperState].modify { s =>
           s.copy(blockBuffer = s.blockBuffer + block.blockHash)
         } >> fetchMissingDependencies(block) >> dag.pure[F]
-      case s: AdmissibleEquivocation.type =>
+
+      case InvalidBlock.AdmissibleEquivocation =>
         val baseEquivocationBlockSeqNum = block.seqNum - 1
         for {
           _ <- BlockDagStorage[F].accessEquivocationsTracker { tracker =>
@@ -358,10 +359,11 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: ConnectionsCell: TransportLa
               }
           // We can only treat admissible equivocations as invalid blocks if
           // casper is single threaded.
-          updatedDag <- handleInvalidBlockEffect(s, block)
+          updatedDag <- handleInvalidBlockEffect(InvalidBlock.AdmissibleEquivocation, block)
           _          <- CommUtil.sendBlock[F](block)
         } yield updatedDag
-      case IgnorableEquivocation =>
+
+      case InvalidBlock.IgnorableEquivocation =>
         /*
          * We don't have to include these blocks to the equivocation tracker because if any validator
          * will build off this side of the equivocation, we will get another attempt to add this block
@@ -370,45 +372,21 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: ConnectionsCell: TransportLa
         Log[F].info(
           s"Did not add block ${PrettyPrinter.buildString(block.blockHash)} as that would add an equivocation to the BlockDAG"
         ) >> dag.pure[F]
-      case _: InvalidUnslashableBlock =>
+
+      case ib: InvalidBlock if InvalidBlock.isSlashable(ib) =>
+        handleInvalidBlockEffect(ib, block)
+
+      case ib: InvalidBlock =>
         Log[F].warn(
-          s"Recording invalid block ${PrettyPrinter.buildString(block.blockHash)} for ${status.toString}."
+          s"Recording invalid block ${PrettyPrinter.buildString(block.blockHash)} for $ib."
         ) >> dag.pure[F]
-      case s: InvalidFollows.type =>
-        handleInvalidBlockEffect(s, block)
-      case s: InvalidBlockNumber.type =>
-        handleInvalidBlockEffect(s, block)
-      case s: InvalidParents.type =>
-        handleInvalidBlockEffect(s, block)
-      case s: JustificationRegression.type =>
-        handleInvalidBlockEffect(s, block)
-      case s: InvalidSequenceNumber.type =>
-        handleInvalidBlockEffect(s, block)
-      case s: NeglectedInvalidBlock.type =>
-        handleInvalidBlockEffect(s, block)
-      case s: NeglectedEquivocation.type =>
-        handleInvalidBlockEffect(s, block)
-      case s: InvalidTransaction.type =>
-        handleInvalidBlockEffect(s, block)
-      case s: InvalidBondsCache.type =>
-        handleInvalidBlockEffect(s, block)
-      case s: InvalidRepeatDeploy.type =>
-        handleInvalidBlockEffect(s, block)
-      case s: InvalidShardId.type =>
-        handleInvalidBlockEffect(s, block)
-      case s: InvalidBlockHash.type =>
-        handleInvalidBlockEffect(s, block)
-      case s: InvalidDeployCount.type =>
-        handleInvalidBlockEffect(s, block)
-      case s: ContainsExpiredDeploy.type =>
-        handleInvalidBlockEffect(s, block)
-      case s: ContainsFutureDeploy.type =>
-        handleInvalidBlockEffect(s, block)
-      case Processing =>
+
+      case BlockError.Processing =>
         Sync[F].raiseError[BlockDagRepresentation[F]](
           new RuntimeException(s"A block should not be processing at this stage.")
         )
-      case BlockException(ex) =>
+
+      case BlockError.BlockException(ex) =>
         Log[F].error(s"Encountered exception in while processing block ${PrettyPrinter
           .buildString(block.blockHash)}: ${ex.getMessage}") >> dag.pure[F]
     }
