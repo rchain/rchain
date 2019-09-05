@@ -526,6 +526,8 @@ class NodeRuntime private[node] (
       prometheusReporter = new NewPrometheusReporter()
       prometheusService  = NewPrometheusReporter.service[Task](prometheusReporter)
 
+      eventsInfoService <- EventsInfo.service[Task]
+
       httpServerFiber <- BlazeServerBuilder[Task]
                           .bindHttp(conf.server.httpPort, "0.0.0.0")
                           .withHttpApp(
@@ -533,7 +535,7 @@ class NodeRuntime private[node] (
                               "/metrics"   -> CORS(prometheusService),
                               "/version"   -> CORS(VersionInfo.service[Task]),
                               "/status"    -> CORS(StatusInfo.service[Task]),
-                              "/ws/events" -> CORS(EventsInfo.service[Task])
+                              "/ws/events" -> CORS(eventsInfoService)
                             ).orNotFound
                           )
                           .resource

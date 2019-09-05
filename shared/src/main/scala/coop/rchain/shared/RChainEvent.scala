@@ -10,7 +10,6 @@ final case class BlockCreated(
     justificationHashes: List[(String, String)],
     deployIds: List[String]
 ) extends RChainEvent
-
 final case class BlockFinalised(blockHash: String) extends RChainEvent
 
 object RChainEvent {

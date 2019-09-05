@@ -19,7 +19,7 @@ trait RchainEvents[F[_], G[_]] extends EventPublisher[F] with EventConsumer[G]
 object RchainEvents {
   def readerTInstance[F[_]: Sync: Concurrent, E]: ReaderT[F, E, RchainEvents[ReaderT[F, E, ?], F]] =
     for {
-      q <- Queue.in[ReaderT[F, E, ?]].circularBuffer[F, RChainEvent](1000)
+      q <- Queue.in[ReaderT[F, E, ?]].circularBuffer[F, RChainEvent](1)
     } yield new RchainEvents[ReaderT[F, E, ?], F] {
       override def publish(e: => RChainEvent): ReaderT[F, E, Unit] = ReaderT.liftF(
         q.enqueue1(e)
