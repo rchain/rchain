@@ -114,7 +114,10 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: ConnectionsCell: TransportLa
                }
       _ <- status.fold(
             kp(().pure[F]),
-            kp(metricsF.setGauge("block-height", blockNumber(b))(AddBlockMetricsSource))
+            kp(
+              metricsF.setGauge("block-height", blockNumber(b))(AddBlockMetricsSource) >>
+                EventPublisher[F].publish(MultiParentCasperImpl.addedEvent(b))
+            )
           )
     } yield status
   }.timer("add-block-time")
@@ -533,24 +536,45 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: ConnectionsCell: TransportLa
 }
 
 object MultiParentCasperImpl {
+  def addedEvent(block: BlockMessage): RChainEvent = {
+    val (blockHash, parents, justifications, deployIds, creator, seqNum) = blockEvent(block)
+    RChainEvent.added(
+      blockHash,
+      parents,
+      justifications,
+      deployIds,
+      creator,
+      seqNum
+    )
+  }
+
   def createdEvent(cbs: Created): RChainEvent = {
+    val (blockHash, parents, justifications, deployIds, creator, seqNum) = blockEvent(cbs.block)
+    RChainEvent.added(
+      blockHash,
+      parents,
+      justifications,
+      deployIds,
+      creator,
+      seqNum
+    )
+  }
+
+  private def blockEvent(block: BlockMessage) = {
+    val blockHash = block.blockHash.base16String
     val parentHashes =
-      cbs.block.header.map(_.parentsHashList.toList.map(_.base16String)).getOrElse(Nil)
+      block.header.map(_.parentsHashList.toList.map(_.base16String)).getOrElse(Nil)
     val justificationHashes =
-      cbs.block.justifications.toList
+      block.justifications.toList
         .map(j => (j.validator.base16String, j.latestBlockHash.base16String))
     val deployIds: List[String] =
-      cbs.block.body
+      block.body
         .flatMap(
           _.deploys.toList.traverse(_.deploy.map(d => PrettyPrinter.buildStringNoLimit(d.sig)))
         )
         .getOrElse(List.empty[String])
-
-    RChainEvent.created(
-      cbs.block.blockHash.base16String,
-      parentHashes,
-      justificationHashes,
-      deployIds
-    )
+    val creator = block.sender.base16String
+    val seqNum  = block.seqNum
+    (blockHash, parentHashes, justificationHashes, deployIds, creator, seqNum)
   }
 }
