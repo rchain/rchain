@@ -637,13 +637,11 @@ object Validate {
               validator,
               genesis.blockHash
             )
-          Monad[F].ifM(
-            isJustificationRegression[F](
-              dag,
-              currentBlockJustificationHash,
-              previousBlockJustificationHash
-            )
-          )(
+          isJustificationRegression[F](
+            dag,
+            currentBlockJustificationHash,
+            previousBlockJustificationHash
+          ).ifM(
             {
               val message =
                 s"block ${PrettyPrinter.buildString(currentBlockJustificationHash)} by ${PrettyPrinter

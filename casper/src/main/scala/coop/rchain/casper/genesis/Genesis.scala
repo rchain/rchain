@@ -99,7 +99,7 @@ object Genesis {
     maybeVaultPath match {
       case Some(vaultsPathStr) =>
         val vaultsPath = Paths.get(vaultsPathStr)
-        Monad[F].ifM(exists(vaultsPath))(
+        exists(vaultsPath).ifM(
           vaultFromFile[F](vaultsPath),
           RaiseIOError[F].raise(
             FileNotFound(
@@ -108,7 +108,7 @@ object Genesis {
           )
         )
       case None =>
-        Monad[F].ifM(exists(defaultVaultPath))(
+        exists(defaultVaultPath).ifM(
           Log[F].info(s"Using default file $defaultVaultPath") >> vaultFromFile[F](
             defaultVaultPath
           ),
@@ -250,12 +250,12 @@ object Genesis {
     maybeBondsPath match {
       case Some(bondsPathStr) =>
         val bondsPath = Paths.get(bondsPathStr)
-        Monad[F].ifM(exists(bondsPath))(
+        exists(bondsPath).ifM(
           readBonds(bondsPath),
           Sync[F].raiseError(new Exception(s"Specified bonds file $bondsPath does not exist"))
         )
       case None =>
-        Monad[F].ifM(exists(defaultBondsPath))(
+        exists(defaultBondsPath).ifM(
           Log[F].info(s"Using default file $defaultBondsPath") >> readBonds(defaultBondsPath),
           Log[F].warn(
             s"Bonds file was not specified and default bonds file does not exist. Falling back on generating random validators."
@@ -290,11 +290,12 @@ object Genesis {
     for {
       _       <- skFiles
       printer <- Sync[F].delay { new PrintWriter(genBondsFile) }
-      _ <- Foldable[List].foldM[F, (PublicKey, Long), Unit](bonds.toList, ()) {
-            case (_, (pub, stake)) =>
+      _ <- bonds.toList.traverse_ {
+            case (pub, stake) =>
               val pk = Base16.encode(pub.bytes)
-              Log[F].info(s"Created validator $pk with bond $stake") >>
-                Sync[F].delay { printer.println(s"$pk $stake") }
+              Log[F].info(s"Created validator $pk with bond $stake") >> Sync[F].delay(
+                printer.println(s"$pk $stake")
+              )
           }
       _ <- Sync[F].delay { printer.close() }
     } yield bonds

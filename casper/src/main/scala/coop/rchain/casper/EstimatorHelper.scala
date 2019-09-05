@@ -32,10 +32,12 @@ object EstimatorHelper {
       result <- blocks
                  .foldM(List.empty[BlockMetadata]) {
                    case (acc, b) =>
-                     Monad[F].ifM(acc.forallM(nonConflicting(b)))(
-                       (b :: acc).pure[F],
-                       acc.pure[F]
-                     )
+                     acc
+                       .forallM(nonConflicting(b))
+                       .ifM(
+                         (b :: acc).pure[F],
+                         acc.pure[F]
+                       )
                  }
                  .map(_.reverse)
     } yield result
