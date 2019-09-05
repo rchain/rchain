@@ -502,7 +502,7 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: ConnectionsCell: TransportLa
     for {
       successfulAdds <- attempts
                          .filter {
-                           case (_, (status, _)) => status.inDag
+                           case (_, (status, _)) => BlockStatus.isInDag(status)
                          }
                          .pure[F]
       _ <- unsafeRemoveFromBlockBuffer(successfulAdds)

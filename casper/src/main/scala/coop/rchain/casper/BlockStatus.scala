@@ -1,30 +1,20 @@
 package coop.rchain.casper
 
-sealed trait BlockStatus {
-  val inDag: Boolean
-}
+sealed trait BlockStatus
 
 sealed trait BlockError extends BlockStatus
 
-sealed trait InvalidBlock extends BlockError {
-  override val inDag: Boolean = true
-}
+sealed trait InvalidBlock extends BlockError
 
 sealed trait Slashable
 
-sealed trait ValidBlock extends BlockStatus {
-  override val inDag: Boolean = true
-}
+sealed trait ValidBlock extends BlockStatus
 
 case object Valid extends ValidBlock
 
-case object Processing extends BlockStatus {
-  override val inDag: Boolean = false
-}
+case object Processing extends BlockStatus
 
-final case class BlockException(ex: Throwable) extends BlockError {
-  override val inDag: Boolean = false
-}
+final case class BlockException(ex: Throwable) extends BlockError
 
 // AdmissibleEquivocation are blocks that would create an equivocation but are
 // pulled in through a justification of another block
@@ -86,4 +76,11 @@ object BlockStatus {
   def invalidDeployCount: BlockError       = InvalidDeployCount
   def containsExpiredDeploy: BlockError    = ContainsExpiredDeploy
   def containsFutureDeploy: BlockError     = ContainsFutureDeploy
+
+  def isInDag(blockStatus: BlockStatus): Boolean =
+    blockStatus match {
+      case _: ValidBlock   => true
+      case _: InvalidBlock => true
+      case _               => false
+    }
 }

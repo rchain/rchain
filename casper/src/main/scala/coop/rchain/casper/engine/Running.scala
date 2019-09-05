@@ -181,7 +181,8 @@ object Running {
         for {
           _      <- Log[F].info(s"Received ${PrettyPrinter.buildString(b)}.")
           status <- casperAdd(b)
-          _      <- if (status.inDag) RequestedBlocks[F].modify(_ - b.blockHash) else noop[F]
+          _ <- if (BlockStatus.isInDag(status)) RequestedBlocks[F].modify(_ - b.blockHash)
+              else noop[F]
         } yield ()
       )
 
