@@ -30,11 +30,11 @@ class NoOpsCasperEffect[F[_]: Sync: BlockStore: BlockDagStorage] private (
   def addBlock(
       b: BlockMessage,
       handleDoppelganger: (BlockMessage, Validator) => F[Unit]
-  ): F[BlockStatus] =
+  ): F[ValidBlockProcessing] =
     for {
       _ <- Sync[F].delay(blockStore.update(b.blockHash, b))
       _ <- BlockStore[F].put(b.blockHash, b)
-    } yield BlockStatus.valid
+    } yield BlockStatus.valid.asRight
   def contains(blockHash: BlockHash): F[Boolean] = false.pure[F]
   def deploy(r: DeployData): F[Either[DeployError, DeployId]] =
     Applicative[F].pure(Right(ByteString.EMPTY))

@@ -35,7 +35,7 @@ object InterpreterUtil {
       b: BlockMessage,
       dag: BlockDagRepresentation[F],
       runtimeManager: RuntimeManager[F]
-  ): F[Either[BlockError, Option[StateHash]]] = {
+  ): F[BlockProcessing[Option[StateHash]]] = {
     val preStateHash    = ProtoUtil.preStateHash(b)
     val tsHash          = ProtoUtil.tuplespace(b)
     val deploys         = ProtoUtil.deploys(b)
@@ -77,7 +77,7 @@ object InterpreterUtil {
       blockData: BlockData,
       invalidBlocks: Map[BlockHash, Validator],
       isGenesis: Boolean
-  ): F[Either[BlockError, Option[StateHash]]] =
+  ): F[BlockProcessing[Option[StateHash]]] =
     possiblePreStateHash match {
       case Left(ex) =>
         BlockStatus.exception(ex).asLeft[Option[StateHash]].pure[F]
@@ -109,7 +109,7 @@ object InterpreterUtil {
       blockData: BlockData,
       invalidBlocks: Map[BlockHash, Validator],
       isGenesis: Boolean
-  ): F[Either[BlockError, Option[StateHash]]] =
+  ): F[BlockProcessing[Option[StateHash]]] =
     runtimeManager
       .replayComputeState(preStateHash)(internalDeploys, blockData, invalidBlocks, isGenesis)
       .flatMap {

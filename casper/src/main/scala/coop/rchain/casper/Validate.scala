@@ -24,10 +24,9 @@ import coop.rchain.models.Validator.Validator
 import coop.rchain.shared._
 
 object Validate {
-  type PublicKey              = Array[Byte]
-  type Data                   = Array[Byte]
-  type Signature              = Array[Byte]
-  type ValidationStatus[F[_]] = F[Either[BlockError, ValidBlock]]
+  type PublicKey = Array[Byte]
+  type Data      = Array[Byte]
+  type Signature = Array[Byte]
 
   val DRIFT                                 = 15000 // 15 seconds
   implicit private val logSource: LogSource = LogSource(this.getClass)
@@ -202,7 +201,7 @@ object Validate {
       dag: BlockDagRepresentation[F],
       shardId: String,
       expirationThreshold: Int
-  ): ValidationStatus[F] =
+  ): F[ValidBlockProcessing] =
     (for {
       _ <- EitherT.liftF(Span[F].mark("before-block-hash-validation"))
       _ <- EitherT(Validate.blockHash[F](block))
@@ -238,7 +237,7 @@ object Validate {
   def missingBlocks[F[_]: Monad: Log](
       block: BlockMessage,
       dag: BlockDagRepresentation[F]
-  ): ValidationStatus[F] =
+  ): F[ValidBlockProcessing] =
     for {
       parentsPresent <- ProtoUtil.parentHashes(block).toList.forallM(p => dag.contains(p))
       justificationsPresent <- block.justifications.toList
@@ -263,7 +262,7 @@ object Validate {
       block: BlockMessage,
       dag: BlockDagRepresentation[F],
       expirationThreshold: Int
-  ): ValidationStatus[F] = {
+  ): F[ValidBlockProcessing] = {
     val deployKeySet = (for {
       bd <- block.body.toList
       r  <- bd.deploys.flatMap(_.deploy)
@@ -326,7 +325,7 @@ object Validate {
   def timestamp[F[_]: Sync: Log: Time: BlockStore](
       b: BlockMessage,
       dag: BlockDagRepresentation[F]
-  ): ValidationStatus[F] =
+  ): F[ValidBlockProcessing] =
     for {
       currentTime  <- Time[F].currentMillis
       timestamp    = b.header.get.timestamp
@@ -360,7 +359,7 @@ object Validate {
   def blockNumber[F[_]: Sync: Log](
       b: BlockMessage,
       dag: BlockDagRepresentation[F]
-  ): ValidationStatus[F] =
+  ): F[ValidBlockProcessing] =
     for {
       parents <- ProtoUtil.parentHashes(b).toList.traverse { parentHash =>
                   dag.lookup(parentHash).flatMap {
@@ -392,7 +391,7 @@ object Validate {
                }
     } yield status
 
-  def futureTransaction[F[_]: Monad: Log](b: BlockMessage): ValidationStatus[F] = {
+  def futureTransaction[F[_]: Monad: Log](b: BlockMessage): F[ValidBlockProcessing] = {
     val blockNumber       = ProtoUtil.blockNumber(b)
     val deploys           = ProtoUtil.deploys(b).flatMap(_.deploy)
     val maybeFutureDeploy = deploys.find(_.validAfterBlockNumber >= blockNumber)
@@ -411,7 +410,7 @@ object Validate {
   def transactionExpiration[F[_]: Monad: Log](
       b: BlockMessage,
       expirationThreshold: Int
-  ): ValidationStatus[F] = {
+  ): F[ValidBlockProcessing] = {
     val earliestAcceptableValidAfterBlockNumber = ProtoUtil.blockNumber(b) - expirationThreshold
     val deploys                                 = ProtoUtil.deploys(b).flatMap(_.deploy)
     val maybeExpiredDeploy =
@@ -438,7 +437,7 @@ object Validate {
   def sequenceNumber[F[_]: Monad: Log](
       b: BlockMessage,
       dag: BlockDagRepresentation[F]
-  ): ValidationStatus[F] =
+  ): F[ValidBlockProcessing] =
     for {
       creatorJustificationSeqNumber <- ProtoUtil.creatorJustification(b).foldM(-1) {
                                         case (_, Justification(_, latestBlockHash)) =>
@@ -471,7 +470,7 @@ object Validate {
   def shardIdentifier[F[_]: Monad: Log: BlockStore](
       b: BlockMessage,
       shardId: String
-  ): ValidationStatus[F] =
+  ): F[ValidBlockProcessing] =
     if (b.shardId == shardId) {
       BlockStatus.valid.asRight[BlockError].pure[F]
     } else {
@@ -483,7 +482,7 @@ object Validate {
     }
 
   // TODO: Double check this validation isn't shadowed by the blockSignature validation
-  def blockHash[F[_]: Applicative: Log](b: BlockMessage): ValidationStatus[F] = {
+  def blockHash[F[_]: Applicative: Log](b: BlockMessage): F[ValidBlockProcessing] = {
     val blockHashComputed = ProtoUtil.hashSignedBlock(
       b.header.get,
       b.body.get,
@@ -509,7 +508,7 @@ object Validate {
     }
   }
 
-  def deployCount[F[_]: Applicative: Log](b: BlockMessage): ValidationStatus[F] =
+  def deployCount[F[_]: Applicative: Log](b: BlockMessage): F[ValidBlockProcessing] =
     if (b.header.get.deployCount == b.body.get.deploys.length) {
       BlockStatus.valid.asRight[BlockError].pure[F]
     } else {
@@ -525,7 +524,7 @@ object Validate {
       b: BlockMessage,
       genesis: BlockMessage,
       dag: BlockDagRepresentation[F]
-  ): ValidationStatus[F] = {
+  ): F[ValidBlockProcessing] = {
     val maybeParentHashes = ProtoUtil.parentHashes(b)
     val parentHashes = maybeParentHashes match {
       case hashes if hashes.isEmpty => Seq(genesis.blockHash)
@@ -565,7 +564,7 @@ object Validate {
       b: BlockMessage,
       genesis: BlockMessage,
       dag: BlockDagRepresentation[F]
-  ): ValidationStatus[F] = {
+  ): F[ValidBlockProcessing] = {
     val justifiedValidators = b.justifications.map(_.validator).toSet
     val mainParentHash      = ProtoUtil.parentHashes(b).head
     for {
@@ -599,7 +598,7 @@ object Validate {
       b: BlockMessage,
       genesis: BlockMessage,
       dag: BlockDagRepresentation[F]
-  ): ValidationStatus[F] =
+  ): F[ValidBlockProcessing] =
     dag.latestMessage(b.sender).flatMap {
       case Some(latestMessage) =>
         val latestMessagesOfBlock = ProtoUtil.toLatestMessageHashes(b.justifications)
@@ -623,7 +622,7 @@ object Validate {
       currentLatestMessages: Map[Validator, BlockHash],
       previousLatestMessages: Map[Validator, BlockHash],
       genesis: BlockMessage
-  ): ValidationStatus[F] =
+  ): F[ValidBlockProcessing] =
     currentLatestMessages.toList.tailRecM {
       case Nil =>
         // No more latest messages to check
@@ -695,7 +694,7 @@ object Validate {
       block: BlockMessage,
       dag: BlockDagRepresentation[F],
       runtimeManager: RuntimeManager[F]
-  ): ValidationStatus[F] =
+  ): F[ValidBlockProcessing] =
     for {
       maybeStateHash <- InterpreterUtil
                          .validateBlockCheckpoint[F](
@@ -716,7 +715,7 @@ object Validate {
   def neglectedInvalidBlock[F[_]: Applicative](
       block: BlockMessage,
       dag: BlockDagRepresentation[F]
-  ): ValidationStatus[F] =
+  ): F[ValidBlockProcessing] =
     for {
       invalidJustifications <- block.justifications.toList.filterA { justification =>
                                 for {
@@ -740,7 +739,7 @@ object Validate {
   def bondsCache[F[_]: Log: Concurrent](
       b: BlockMessage,
       runtimeManager: RuntimeManager[F]
-  ): ValidationStatus[F] = {
+  ): F[ValidBlockProcessing] = {
     val bonds = ProtoUtil.bonds(b)
     ProtoUtil.tuplespace(b) match {
       case Some(tuplespaceHash) =>

@@ -23,7 +23,7 @@ object EquivocationDetector {
       blockBufferDependencyDag: DoublyLinkedDag[BlockHash],
       block: BlockMessage,
       dag: BlockDagRepresentation[F]
-  ): F[Either[BlockError, ValidBlock]] =
+  ): F[ValidBlockProcessing] =
     for {
       maybeLatestMessageOfCreatorHash <- dag.latestMessageHash(block.sender)
       maybeCreatorJustification       = creatorJustificationHash(block)
@@ -64,7 +64,7 @@ object EquivocationDetector {
       block: BlockMessage,
       dag: BlockDagRepresentation[F],
       genesis: BlockMessage
-  ): F[Either[BlockError, ValidBlock]] =
+  ): F[ValidBlockProcessing] =
     for {
       neglectedEquivocationDetected <- isNeglectedEquivocationDetectedWithUpdate[F](
                                         block,

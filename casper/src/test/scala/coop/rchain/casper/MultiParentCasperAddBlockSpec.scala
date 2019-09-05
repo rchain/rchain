@@ -65,10 +65,12 @@ class MultiParentCasperAddBlockSpec extends FlatSpec with Matchers with Inspecto
                      }
         } yield result
       }
-    val threadStatuses: (BlockStatus, BlockStatus) =
+    val threadStatuses: (ValidBlockProcessing, ValidBlockProcessing) =
       testProgram.unsafeRunSync(scheduler)
 
-    threadStatuses should matchPattern { case (Processing, Valid) | (Valid, Processing) => }
+    threadStatuses should matchPattern {
+      case (Left(Processing), Right(Valid)) | (Right(Valid), Left(Processing)) =>
+    }
   }
 
   it should "accept signed blocks" in effectTest {
@@ -165,7 +167,7 @@ class MultiParentCasperAddBlockSpec extends FlatSpec with Matchers with Inspecto
         block           <- node.createBlock(basicDeployData)
         invalidBlock    = block.withSig(ByteString.EMPTY)
         status          <- node.casperEff.addBlock(invalidBlock, ignoreDoppelgangerCheck[Effect])
-        _               = status shouldBe InvalidFormat
+        _               = status shouldBe Left(InvalidFormat)
         _               <- node.casperEff.contains(invalidBlock.blockHash) shouldBeF false
         _               = node.logEff.warns.head.contains("Ignoring block") should be(true)
       } yield ()
@@ -199,14 +201,14 @@ class MultiParentCasperAddBlockSpec extends FlatSpec with Matchers with Inspecto
       implicit val timeEff = new LogicalTime[Effect]
 
       for {
-        basicDeployData <- ConstructDeploy.basicDeployData[Effect](0)
-        block           <- node.createBlock(basicDeployData)
-        dag             <- node.blockDagStorage.getRepresentation
-        (sk, pk)        = Secp256k1.newKeyPair
-        illSignedBlock  <- ProtoUtil.signBlock(block, dag, pk, sk, Secp256k1.name, block.shardId)
-        status          <- node.casperEff.addBlock(illSignedBlock, ignoreDoppelgangerCheck[Effect])
-        InvalidSender   = status
-        _               = node.logEff.warns.head.contains("Ignoring block") should be(true)
+        basicDeployData     <- ConstructDeploy.basicDeployData[Effect](0)
+        block               <- node.createBlock(basicDeployData)
+        dag                 <- node.blockDagStorage.getRepresentation
+        (sk, pk)            = Secp256k1.newKeyPair
+        illSignedBlock      <- ProtoUtil.signBlock(block, dag, pk, sk, Secp256k1.name, block.shardId)
+        status              <- node.casperEff.addBlock(illSignedBlock, ignoreDoppelgangerCheck[Effect])
+        Left(InvalidSender) = status
+        _                   = node.logEff.warns.head.contains("Ignoring block") should be(true)
       } yield ()
     }
   }
@@ -476,7 +478,7 @@ class MultiParentCasperAddBlockSpec extends FlatSpec with Matchers with Inspecto
           _    <- add(v2, v2c1) //V2#1
           _    <- v3.receive()
           r    <- deploy(v3, deployment(6)) >> create(v3) >>= (b => add(v3, b))
-          _    = r shouldBe Right(Valid)
+          _    = r shouldBe Right(Right(Valid))
           _    = v3.logEff.warns shouldBe empty
         } yield ()
       }
@@ -500,10 +502,10 @@ class MultiParentCasperAddBlockSpec extends FlatSpec with Matchers with Inspecto
         createBlockResult3    <- nodes(2).casperEff.createBlock
         Created(signedBlock3) = createBlockResult3
         status4               <- nodes(2).casperEff.addBlock(signedBlock3, ignoreDoppelgangerCheck[Effect])
-        _                     = status1 should be(InvalidBlockHash)
-        _                     = status2 should be(InvalidBlockHash)
-        _                     = status3 should be(Valid)
-        _                     = status4 should be(Valid)
+        _                     = status1 should be(Left(InvalidBlockHash))
+        _                     = status2 should be(Left(InvalidBlockHash))
+        _                     = status3 should be(Right(Valid))
+        _                     = status4 should be(Right(Valid))
         // TODO: assert no effect as already slashed
       } yield ()
     }

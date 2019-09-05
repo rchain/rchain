@@ -101,9 +101,11 @@ class HashSetCasperTestNode[F[_]](
   implicit val packetHandlerEff          = CasperPacketHandler[F]
 
   def addBlock(deployDatums: DeployData*): F[BlockMessage] =
-    addBlockStatus(ValidBlock.Valid)(deployDatums: _*)
+    addBlockStatus(ValidBlock.Valid.asRight)(deployDatums: _*)
 
-  def addBlockStatus(expectedStatus: BlockStatus)(deployDatums: DeployData*): F[BlockMessage] =
+  def addBlockStatus(
+      expectedStatus: ValidBlockProcessing
+  )(deployDatums: DeployData*): F[BlockMessage] =
     for {
       block  <- createBlock(deployDatums: _*)
       status <- casperEff.addBlock(block, ignoreDoppelgangerCheck[F])

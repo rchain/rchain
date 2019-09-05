@@ -1,22 +1,22 @@
 package coop.rchain.casper.engine
 
+import cats.implicits._
+
 import Running.{Requested, RequestedBlocks}
-import coop.rchain.catscontrib.ski._
-import coop.rchain.casper.{BlockError, BlockStatus, ValidBlock}
 import coop.rchain.casper.protocol._
-import coop.rchain.comm.{CommError, Endpoint, NodeIdentifier, PeerNode}, CommError._
+import coop.rchain.catscontrib.ski._
+import coop.rchain.comm._
+import CommError._
+import coop.rchain.casper.{BlockError, ValidBlock, _}
 import coop.rchain.comm.protocol.routing.Protocol
-import coop.rchain.comm.transport.TransportLayer
-import coop.rchain.comm.rp.{ProtocolHelper, RPConf}, ProtocolHelper.toPacket
-import coop.rchain.shared._
-import coop.rchain.p2p.EffectsTestInstances.{LogStub, TransportLayerStub}
+import coop.rchain.comm.rp.RPConf
 import coop.rchain.models.BlockHash.BlockHash
+import coop.rchain.p2p.EffectsTestInstances.{LogStub, TransportLayerStub}
+import coop.rchain.shared._
+
 import com.google.protobuf.ByteString
 import monix.eval.Coeval
 import org.scalatest._
-import cats._, cats.data._, cats.implicits._
-
-import scala.collection.mutable.{Map => MutableMap}
 
 class RunningHandleBlockMessageSpec extends FunSpec with BeforeAndAfterEach with Matchers {
 
@@ -73,7 +73,8 @@ class RunningHandleBlockMessageSpec extends FunSpec with BeforeAndAfterEach with
 
   private def alwaysSuccess: PeerNode => Protocol => CommErr[Unit] = kp(kp(Right(())))
   private def alwaysDoesntContain: BlockHash => Coeval[Boolean]    = kp(false.pure[Coeval])
-  private def blockInDag: BlockMessage => Coeval[BlockStatus]      = kp(ValidBlock.Valid.pure[Coeval])
-  private def blockNotInDag: BlockMessage => Coeval[BlockStatus] =
-    kp(BlockError.Processing.pure[Coeval])
+  private def blockInDag: BlockMessage => Coeval[ValidBlockProcessing] =
+    kp(ValidBlock.Valid.asRight.pure[Coeval])
+  private def blockNotInDag: BlockMessage => Coeval[ValidBlockProcessing] =
+    kp(BlockError.Processing.asLeft.pure[Coeval])
 }
