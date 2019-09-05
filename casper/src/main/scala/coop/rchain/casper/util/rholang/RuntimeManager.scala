@@ -5,13 +5,15 @@ import cats.data.EitherT
 import cats.effect.concurrent.MVar
 import cats.effect.{Sync, _}
 import cats.implicits._
-
 import com.google.protobuf.ByteString
 import coop.rchain.casper.CasperMetricsSource
+import coop.rchain.casper.genesis.Genesis
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
 import coop.rchain.casper.util.{ConstructDeploy, ProtoUtil}
+import coop.rchain.crypto.PublicKey
 import coop.rchain.crypto.hash.Blake2b512Random
+import coop.rchain.crypto.signatures.Secp256k1
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.metrics.Metrics.Source
 import coop.rchain.models.BlockHash.BlockHash
@@ -145,7 +147,7 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log] private[rholang] 
     withRuntimeLock { runtime =>
       Span[F].trace(computeGenesisLabel) {
         for {
-          _          <- runtime.blockData.set(BlockData(blockTime, 0))
+          _          <- runtime.blockData.set(BlockData(blockTime, 0, PublicKey(Array[Byte]())))
           _          <- Span[F].mark("before-process-deploys")
           evalResult <- processDeploys(runtime, startHash, terms, processDeploy(runtime))
         } yield (startHash, evalResult._1, evalResult._2)

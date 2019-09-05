@@ -1,19 +1,14 @@
 package coop.rchain.casper.genesis
 
-import java.nio.file.Path
-
-import cats.effect.{Concurrent, Sync}
+import cats.effect.Concurrent
 import cats.implicits._
 import com.google.protobuf.ByteString
-import coop.rchain.blockstorage.util.io.IOError.RaiseIOError
 import coop.rchain.casper.genesis.contracts._
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.ProtoUtil.{blockHeader, unsignedBlockProto}
 import coop.rchain.casper.util.Sorting.byteArrayOrdering
 import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
 import coop.rchain.casper.util.rholang.{InternalProcessedDeploy, RuntimeManager}
-import coop.rchain.casper.util.{BondsParser, VaultParser}
-import coop.rchain.shared.{Log, LogSource, Time}
 
 final case class Genesis(
     shardId: String,
@@ -24,7 +19,6 @@ final case class Genesis(
 )
 
 object Genesis {
-
   def defaultBlessedTerms(
       timestamp: Long,
       posParams: ProofOfStake,

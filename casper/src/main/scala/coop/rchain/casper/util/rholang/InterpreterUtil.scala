@@ -3,7 +3,6 @@ package coop.rchain.casper.util.rholang
 import cats.Monad
 import cats.effect._
 import cats.implicits._
-
 import coop.rchain.blockstorage.BlockStore
 import coop.rchain.blockstorage.dag.BlockDagRepresentation
 import coop.rchain.casper._
@@ -19,8 +18,8 @@ import coop.rchain.rholang.interpreter.{NormalizerEnv, ParBuilder}
 import coop.rchain.rholang.interpreter.Runtime.BlockData
 import coop.rchain.rspace.ReplayException
 import coop.rchain.shared.{Log, LogSource}
-
 import com.google.protobuf.ByteString
+import coop.rchain.crypto.PublicKey
 import monix.eval.Coeval
 
 object InterpreterUtil {
@@ -43,6 +42,7 @@ object InterpreterUtil {
     val internalDeploys = deploys.map(InternalProcessedDeploy.fromProcessedDeploy)
     val timestamp       = b.header.timestamp
     val blockNumber     = b.body.state.blockNumber
+    val sender          = PublicKey(b.sender)
     for {
       _                    <- Span[F].mark("before-unsafe-get-parents")
       parents              <- ProtoUtil.getParents[F](b)
@@ -62,7 +62,7 @@ object InterpreterUtil {
                  tsHash,
                  internalDeploys,
                  possiblePreStateHash,
-                 BlockData(timestamp, blockNumber),
+                 BlockData(timestamp, blockNumber, sender),
                  invalidBlocks,
                  isGenesis = b.header.parentsHashList.isEmpty
                )
@@ -257,6 +257,7 @@ object InterpreterUtil {
     val deploys     = block.body.deploys.map(InternalProcessedDeploy.fromProcessedDeploy)
     val timestamp   = block.header.timestamp
     val blockNumber = block.body.state.blockNumber
+    val sender      = PublicKey(block.sender)
 
     for {
       invalidBlocksSet <- dag.invalidBlocks
@@ -269,7 +270,7 @@ object InterpreterUtil {
         .toMap
       replayResult <- runtimeManager.replayComputeState(hash)(
                        deploys,
-                       BlockData(timestamp, blockNumber),
+                       BlockData(timestamp, blockNumber, sender),
                        invalidBlocks,
                        isGenesis //should always be false
                      )

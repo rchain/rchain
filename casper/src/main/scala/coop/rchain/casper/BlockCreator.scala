@@ -98,6 +98,7 @@ object BlockCreator {
                                 deploys,
                                 justifications,
                                 maxBlockNumber,
+                                publicKey,
                                 shardId,
                                 version,
                                 now,
@@ -200,6 +201,7 @@ object BlockCreator {
       deploys: Seq[DeployData],
       justifications: Seq[Justification],
       maxBlockNumber: Long,
+      sender: PublicKey,
       shardId: String,
       version: Long,
       now: Long,
@@ -211,7 +213,7 @@ object BlockCreator {
         deploys,
         dag,
         runtimeManager,
-        BlockData(now, maxBlockNumber + 1),
+        BlockData(now, maxBlockNumber + 1, sender),
         invalidBlocks
       )
       .flatMap {

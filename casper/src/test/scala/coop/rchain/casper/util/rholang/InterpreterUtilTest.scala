@@ -15,6 +15,7 @@ import coop.rchain.casper.util.rholang.InterpreterUtil._
 import coop.rchain.casper.util.rholang.Resources.mkRuntimeManager
 import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
 import coop.rchain.casper.util.{ConstructDeploy, GenesisBuilder}
+import coop.rchain.crypto.PublicKey
 import coop.rchain.metrics
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.models.BlockHash.BlockHash
@@ -53,7 +54,7 @@ class InterpreterUtilTest
       deploys,
       dag,
       runtimeManager,
-      BlockData(deploys.maxBy(_.timestamp).timestamp, 0),
+      BlockData(deploys.maxBy(_.timestamp).timestamp, 0, PublicKey(Array[Byte]())),
       Map.empty[BlockHash, Validator]
     )
 

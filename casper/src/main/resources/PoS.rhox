@@ -137,7 +137,7 @@ new  PoS,
                 getUser!(*userCh) |
                 for(@state, resultCh <- processCh;
                     @userPk <- userCh;
-                    _, @blockNumber <- blockDataCh) {
+                    _, @blockNumber, _ <- blockDataCh) {
                   if (state.get("allBonds").contains(userPk)) {
                     // the withdwal is in effect starting from the next epoch
                     resultCh!(
@@ -220,7 +220,7 @@ new  PoS,
                   getBlockData!(*blockDataCh) |
 
                   runMVar!(*stateCh, *mvarProcessCh, *ackCh) |
-                  for(_, @blockNumber <- blockDataCh;
+                  for(_, @blockNumber, _ <- blockDataCh;
                       @state, mvarResultCh <- mvarProcessCh) {
 
                     changeEpoch!(

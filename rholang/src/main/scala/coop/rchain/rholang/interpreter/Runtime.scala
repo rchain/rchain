@@ -3,14 +3,12 @@ package coop.rchain.rholang.interpreter
 import java.nio.file.{Files, Path}
 
 import scala.concurrent.ExecutionContext
-
 import cats._
 import cats.effect._
 import cats.effect.concurrent.Ref
 import cats.implicits._
 import cats.mtl.FunctorTell
 import cats.temp.par
-
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.metrics.Metrics.Source
@@ -27,8 +25,9 @@ import coop.rchain.rholang.RholangMetricsSource
 import coop.rchain.rspace.{Match, RSpace, _}
 import coop.rchain.rholang.interpreter.registry.RegistryBootstrap
 import coop.rchain.shared.Log
-
 import com.google.protobuf.ByteString
+import coop.rchain.crypto.PublicKey
+import coop.rchain.crypto.codec.Base16
 
 class Runtime[F[_]: Sync] private (
     val reducer: Reduce[F],
@@ -78,9 +77,9 @@ object Runtime {
   type Remainder = Option[Var]
   type BodyRef   = Long
 
-  final case class BlockData(timeStamp: Long, blockNumber: Long)
+  final case class BlockData(timeStamp: Long, blockNumber: Long, sender: PublicKey)
   object BlockData {
-    def empty: BlockData = BlockData(0, 0)
+    def empty: BlockData = BlockData(0, 0, PublicKey(Base16.unsafeDecode("00")))
   }
 
   class InvalidBlocks[F[_]](val invalidBlocks: Ref[F, Par]) {
