@@ -28,7 +28,7 @@ import scala.util.Try
   * Validator side of the protocol defined in
   * https://rchain.atlassian.net/wiki/spaces/CORE/pages/485556483/Initializing+the+Blockchain+--+Protocol+for+generating+the+Genesis+block
   */
-class BlockApproverProtocol private (
+final case class BlockApproverProtocol private (
     validatorId: ValidatorIdentity,
     deployTimestamp: Long,
     vaults: Seq[Vault],
