@@ -1,38 +1,31 @@
-package coop.rchain.blockstorage
+package coop.rchain.blockstorage.dag
 
 import java.nio.file.StandardOpenOption
 
-import cats.implicits._
-
-import coop.rchain.shared.PathOps._
-import coop.rchain.catscontrib.TaskContrib.TaskOps
 import cats.effect.Sync
-
+import cats.implicits._
 import com.google.protobuf.ByteString
-import coop.rchain.blockstorage.util.byteOps._
+import coop.rchain.blockstorage.LatestMessagesLogIsCorrupted
+import coop.rchain.blockstorage.dag.codecs._
 import coop.rchain.blockstorage.util.io.IOError.RaiseIOError
 import coop.rchain.blockstorage.util.io._
 import coop.rchain.casper.protocol.BlockMessage
-import coop.rchain.metrics.Metrics.MetricsNOP
+import coop.rchain.catscontrib.TaskContrib.TaskOps
+import coop.rchain.metrics.Metrics
 import coop.rchain.models.BlockHash.BlockHash
-import coop.rchain.models.BlockHash
 import coop.rchain.models.Validator.Validator
-import coop.rchain.models.Validator
-import coop.rchain.models.{BlockMetadata, EquivocationRecord}
 import coop.rchain.models.blockImplicits._
-import coop.rchain.rspace.Context
-import coop.rchain.{metrics, shared}
-import coop.rchain.shared.Log
-
+import coop.rchain.models.{BlockHash, BlockMetadata, EquivocationRecord, Validator}
+import coop.rchain.shared
+import coop.rchain.shared.AttemptOps._
+import coop.rchain.shared.PathOps._
 import monix.eval.Task
 import monix.execution.Scheduler
 import org.scalatest._
 import org.scalatest.prop.GeneratorDrivenPropertyChecks
+import scodec.codecs._
+
 import scala.util.Random
-
-import coop.rchain.metrics.Metrics
-
-import kamon.metric.Metric
 
 trait BlockDagStorageTest
     extends FlatSpecLike
@@ -62,7 +55,6 @@ trait BlockDagStorageTest
                                 }
           latestMessageHashes <- dag.latestMessageHashes
           latestMessages      <- dag.latestMessages
-          _                   <- dagStorage.clear()
           _ = blockElementLookups.zip(blockElements).foreach {
             case ((blockMetadata, latestMessageHash, latestMessage), b) =>
               blockMetadata shouldBe Some(BlockMetadata.fromBlock(b, false))
@@ -225,7 +217,7 @@ class BlockDagFileStorageTest extends BlockDagStorageTest {
       blockElements: List[BlockMessage],
       topoSortStartBlockNumber: Long = 0,
       topoSortTailLength: Int = 5
-  ): Assertion = {
+  ): Unit = {
     val (list, latestMessageHashes, latestMessages, topoSort, topoSortTail) = lookupResult
     val realLatestMessages = blockElements.foldLeft(Map.empty[Validator, BlockMetadata]) {
       case (lm, b) =>
@@ -259,8 +251,20 @@ class BlockDagFileStorageTest extends BlockDagStorageTest {
         topoSort
 
     val realTopoSort = normalize(Vector(blockElements.map(_.blockHash).toVector))
-    topoSort shouldBe realTopoSort.drop(topoSortStartBlockNumber.toInt)
-    topoSortTail shouldBe realTopoSort.takeRight(topoSortTailLength)
+    for ((topoSortLevel, realTopoSortLevel) <- topoSort.zipAll(
+                                                realTopoSort,
+                                                Vector.empty,
+                                                Vector.empty
+                                              )) {
+      topoSortLevel.toSet shouldBe realTopoSortLevel.toSet
+    }
+    for ((topoSortLevel, realTopoSortLevel) <- topoSortTail.zipAll(
+                                                realTopoSort.takeRight(topoSortTailLength),
+                                                Vector.empty,
+                                                Vector.empty
+                                              )) {
+      topoSortLevel.toSet shouldBe realTopoSortLevel.toSet
+    }
   }
 
   it should "be able to restore state on startup" in {
@@ -349,11 +353,14 @@ class BlockDagFileStorageTest extends BlockDagStorageTest {
       (blockElements, garbageBlock) =>
         withDagStorageLocation { dagDataDir =>
           for {
-            firstStorage      <- createAtDefaultLocation(dagDataDir)
-            _                 <- blockElements.traverse_(firstStorage.insert(_, genesis, false))
-            _                 <- firstStorage.close()
-            garbageByteString = BlockMetadata.fromBlock(garbageBlock, false).toByteString
-            garbageBytes      = garbageByteString.size.toByteString.concat(garbageByteString).toByteArray
+            firstStorage                  <- createAtDefaultLocation(dagDataDir)
+            _                             <- blockElements.traverse_(firstStorage.insert(_, genesis, invalid = false))
+            _                             <- firstStorage.close()
+            garbageBlockMetadata          = BlockMetadata.fromBlock(garbageBlock, invalid = false)
+            keyValueCodec                 = (codecBlockHash ~ codecBlockMetadata)
+            blockHashBlockMetadataPair    = (garbageBlockMetadata.blockHash, garbageBlockMetadata)
+            garbageBlockMetadataBitVector = keyValueCodec.encode(blockHashBlockMetadataPair).get
+            garbageBytes                  = garbageBlockMetadataBitVector.toByteArray
             _ <- Sync[Task].delay {
                   Files.write(
                     defaultBlockMetadataLog(dagDataDir),
@@ -431,6 +438,29 @@ class BlockDagFileStorageTest extends BlockDagStorageTest {
     }
   }
 
+  it should "be able to modify equivocation records" in {
+    forAll(validatorGen, blockHashGen, blockHashGen) { (equivocator, blockHash1, blockHash2) =>
+      withDagStorageLocation { dagDataDir =>
+        for {
+          firstStorage <- createAtDefaultLocation(dagDataDir)
+          record       = EquivocationRecord(equivocator, 0, Set(blockHash1))
+          _ <- firstStorage.accessEquivocationsTracker { tracker =>
+                tracker.insertEquivocationRecord(record)
+              }
+          _ <- firstStorage.accessEquivocationsTracker { tracker =>
+                tracker.updateEquivocationRecord(record, blockHash2)
+              }
+          _             <- firstStorage.close()
+          updatedRecord = EquivocationRecord(equivocator, 0, Set(blockHash1, blockHash2))
+          secondStorage <- createAtDefaultLocation(dagDataDir)
+          records       <- secondStorage.accessEquivocationsTracker(_.equivocationRecords)
+          _             = records shouldBe Set(updatedRecord)
+          _             <- secondStorage.close()
+        } yield ()
+      }
+    }
+  }
+
   it should "be able to restore equivocations tracker on startup with appended garbage equivocation record" in {
     forAll(blockElementsWithParentsGen, minSize(0), sizeRange(10)) { blockElements =>
       forAll(validatorGen) { equivocator =>
@@ -457,7 +487,15 @@ class BlockDagFileStorageTest extends BlockDagStorageTest {
                 0,
                 Set(ByteString.copyFrom(garbageBlockHash))
               )
-              garbageBytes = garbageRecord.toByteString.toByteArray
+              garbageBytes = (codecValidator ~ int32 ~ codecBlockHashSet)
+                .encode(
+                  (
+                    (garbageRecord.equivocator, garbageRecord.equivocationBaseBlockSeqNum),
+                    garbageRecord.equivocationDetectedBlockHashes
+                  )
+                )
+                .get
+                .toByteArray
               _ <- writeToFile[Task](
                     defaultEquivocationsTrackerLog(dagDataDir),
                     garbageBytes,

@@ -3,7 +3,7 @@ package coop.rchain.blockstorage.util.io
 import java.io.{EOFException, FileNotFoundException, RandomAccessFile}
 import java.nio.file.Path
 
-import cats.effect.Sync
+import cats.effect.{Resource, Sync}
 import cats.implicits._
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.util.io.IOError.RaiseIOError
@@ -60,4 +60,10 @@ object RandomAccessIO {
       case e: FileNotFoundException => FileNotFound(e)
       case e                        => UnexpectedIOError(e)
     }).map(RandomAccessIO.apply[F])
+
+  def openResource[F[_]: Sync: RaiseIOError](
+      path: Path,
+      mode: Mode
+  ): Resource[F, RandomAccessIO[F]] =
+    Resource.make(open(path, mode))(_.close)
 }

@@ -4,8 +4,8 @@ import java.nio.file.{Path, Paths}
 
 import collection.JavaConverters._
 import scala.util.Try
-
-import coop.rchain.blockstorage.{BlockDagFileStorage, FileLMDBIndexBlockStore}
+import coop.rchain.blockstorage.FileLMDBIndexBlockStore
+import coop.rchain.blockstorage.dag.BlockDagFileStorage
 import coop.rchain.casper.CasperConf
 import coop.rchain.node.configuration.commandline.ConfigMapper
 

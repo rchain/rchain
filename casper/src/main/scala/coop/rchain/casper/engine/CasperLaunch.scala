@@ -5,11 +5,12 @@ import java.nio.file.Paths
 import cats.effect.{Concurrent, Sync}
 import cats.implicits._
 import cats.Monad
-import coop.rchain.blockstorage.{BlockDagStorage, BlockStore}
+import coop.rchain.blockstorage.BlockStore
 import coop.rchain.casper._
 import coop.rchain.casper.LastApprovedBlock.LastApprovedBlock
 import coop.rchain.casper.util.comm._
 import EngineCell._
+import coop.rchain.blockstorage.dag.BlockDagStorage
 import coop.rchain.blockstorage.util.io.IOError.RaiseIOError
 import coop.rchain.casper.genesis.Genesis
 import coop.rchain.casper.protocol._

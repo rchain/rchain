@@ -6,7 +6,8 @@ import java.nio.file.{Files, Path}
 import cats.effect.{Concurrent, ContextShift, Resource, Sync}
 import cats.implicits._
 import cats.temp.par
-import coop.rchain.blockstorage.{BlockDagFileStorage, BlockDagStorage, BlockStore}
+import coop.rchain.blockstorage.dag.{BlockDagFileStorage, BlockDagStorage}
+import coop.rchain.blockstorage.BlockStore
 import coop.rchain.casper.helper.BlockDagStorageTestFixture
 import coop.rchain.casper.helper.HashSetCasperTestNode.makeBlockDagFileStorageConfig
 import coop.rchain.metrics

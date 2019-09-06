@@ -8,6 +8,7 @@ import cats.effect.{Concurrent, Resource, Sync}
 import cats.syntax.functor._
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage._
+import coop.rchain.blockstorage.dag.{BlockDagFileStorage, BlockDagStorage, IndexedBlockDagStorage}
 import coop.rchain.casper.protocol.BlockMessage
 import coop.rchain.casper.util.GenesisBuilder.GenesisContext
 import coop.rchain.casper.util.rholang.{Resources, RuntimeManager}

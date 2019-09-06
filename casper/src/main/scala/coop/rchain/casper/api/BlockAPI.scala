@@ -7,10 +7,11 @@ import cats.effect.{Concurrent, Sync}
 import cats.effect.concurrent.Semaphore
 import cats.implicits._
 
-import coop.rchain.blockstorage.{BlockDagRepresentation, BlockStore}
+import coop.rchain.blockstorage.BlockStore
 import coop.rchain.casper.engine._
 import EngineCell._
-import coop.rchain.blockstorage.BlockDagStorage.DeployId
+import coop.rchain.blockstorage.dag.BlockDagRepresentation
+import coop.rchain.blockstorage.dag.BlockDagStorage.DeployId
 import coop.rchain.casper._
 import coop.rchain.casper.DeployError._
 import coop.rchain.casper.MultiParentCasper.ignoreDoppelgangerCheck

@@ -1,16 +1,14 @@
 package coop.rchain.casper.engine
 
 import scala.concurrent.duration.FiniteDuration
-
 import cats.effect.{Concurrent, Sync}
 import cats.implicits._
 import cats.Applicative
-
 import EngineCell._
-import coop.rchain.blockstorage.{BlockDagStorage, BlockStore}
+import coop.rchain.blockstorage.BlockStore
+import coop.rchain.blockstorage.dag.BlockDagStorage
 import coop.rchain.casper._
 import coop.rchain.casper.LastApprovedBlock.LastApprovedBlock
-
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.comm.CommUtil
 import coop.rchain.casper.util.rholang.RuntimeManager

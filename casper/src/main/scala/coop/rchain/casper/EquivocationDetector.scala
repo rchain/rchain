@@ -4,19 +4,11 @@ import cats.effect.Sync
 import cats.{Applicative, Monad}
 import cats.implicits._
 import com.google.protobuf.ByteString
-import coop.rchain.blockstorage.{
-  BlockDagRepresentation,
-  BlockDagStorage,
-  BlockStore,
-  EquivocationsTracker
-}
+import coop.rchain.blockstorage.dag.{BlockDagRepresentation, BlockDagStorage, EquivocationsTracker}
+import coop.rchain.blockstorage.BlockStore
 import coop.rchain.casper.protocol.{BlockMessage, Bond}
 import coop.rchain.casper.util.{DagOperations, DoublyLinkedDag, ProtoUtil}
-import coop.rchain.casper.util.ProtoUtil.{
-  bonds,
-  getCreatorJustificationAsListUntilGoalInMemory,
-  toLatestMessageHashes
-}
+import coop.rchain.casper.util.ProtoUtil._
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.EquivocationRecord.SequenceNumber
 import coop.rchain.models.Validator.Validator

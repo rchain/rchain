@@ -2,7 +2,7 @@ package coop.rchain.casper
 
 import cats.{Applicative, Functor, Monad}
 import cats.implicits._
-import coop.rchain.blockstorage.{BlockStore, IndexedBlockDagStorage}
+import coop.rchain.blockstorage.BlockStore
 import coop.rchain.casper.helper.HashSetCasperTestNode
 import coop.rchain.casper.helper.HashSetCasperTestNode._
 import coop.rchain.casper.protocol.DeployData

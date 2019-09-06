@@ -4,7 +4,8 @@ import cats.Monad
 import cats.effect.Sync
 import cats.implicits._
 import com.google.protobuf.ByteString
-import coop.rchain.blockstorage.{BlockDagRepresentation, BlockStore}
+import coop.rchain.blockstorage.BlockStore
+import coop.rchain.blockstorage.dag.BlockDagRepresentation
 import coop.rchain.casper.protocol.{Event => CasperEvent, _}
 import coop.rchain.casper.util.{DagOperations, EventConverter, ProtoUtil}
 import coop.rchain.models.BlockHash.BlockHash

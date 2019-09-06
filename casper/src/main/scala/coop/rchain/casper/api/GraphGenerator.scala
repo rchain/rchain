@@ -1,6 +1,6 @@
 package coop.rchain.casper.api
 
-import coop.rchain.blockstorage.{BlockDagRepresentation, BlockStore}
+import coop.rchain.blockstorage.BlockStore
 import coop.rchain.casper._
 import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.graphz._

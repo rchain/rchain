@@ -6,7 +6,8 @@ import cats.effect.concurrent.{Ref, Semaphore}
 import cats.implicits._
 
 import coop.rchain.blockstorage._
-import coop.rchain.blockstorage.BlockDagStorage.DeployId
+import coop.rchain.blockstorage.dag.{BlockDagRepresentation, BlockDagStorage}
+import coop.rchain.blockstorage.dag.BlockDagStorage.DeployId
 import coop.rchain.casper.CasperState.CasperStateCell
 import coop.rchain.casper.DeployError._
 import coop.rchain.casper.engine.Running

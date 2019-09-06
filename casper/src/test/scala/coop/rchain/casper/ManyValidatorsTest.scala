@@ -3,8 +3,9 @@ package coop.rchain.casper
 import cats.Monad
 import cats.effect.{Resource, Sync}
 import com.google.protobuf.ByteString
-import coop.rchain.blockstorage.IndexedBlockDagStorage
-import coop.rchain.casper.engine._, EngineCell._
+import coop.rchain.casper.engine._
+import EngineCell._
+import coop.rchain.blockstorage.dag.IndexedBlockDagStorage
 import coop.rchain.casper.api.BlockAPI
 import coop.rchain.casper.helper.BlockGenerator._
 import coop.rchain.casper.helper._

@@ -6,8 +6,7 @@ import cats.implicits._
 import coop.rchain.catscontrib._
 import Catscontrib._
 import cats.data.OptionT
-
-import coop.rchain.blockstorage.BlockDagRepresentation
+import coop.rchain.blockstorage.dag.BlockDagRepresentation
 import coop.rchain.casper.protocol.Justification
 import coop.rchain.casper.util.ProtoUtil._
 import coop.rchain.casper.util.{Clique, DagOperations, ProtoUtil}

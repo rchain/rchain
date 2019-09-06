@@ -1,10 +1,11 @@
-package coop.rchain.blockstorage
+package coop.rchain.blockstorage.dag
 
 import cats.Monad
 import cats.effect.Concurrent
 import cats.effect.concurrent.{Ref, Semaphore}
 import cats.implicits._
 import com.google.protobuf.ByteString
+import coop.rchain.blockstorage.BlockStorageMetricsSource
 import coop.rchain.casper.protocol.BlockMessage
 import coop.rchain.crypto.hash.Blake2b256
 import coop.rchain.metrics.Metrics.Source
@@ -61,11 +62,6 @@ final class IndexedBlockDagStorage[F[_]: Monad](
     )
 
   def checkpoint(): F[Unit] = underlying.checkpoint()
-
-  def clear(): F[Unit] =
-    lock.withPermit(
-      underlying.clear() >> idToBlocksRef.set(Map.empty) >> currentIdRef.set(-1)
-    )
 
   def close(): F[Unit] = underlying.close()
 

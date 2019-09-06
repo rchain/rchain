@@ -11,7 +11,7 @@
 
     <!--This is needed for RhoSpec tests output-->
     <logger name="coop.rchain.casper.helper.RhoLoggerContract" level="info"/>
-    <logger name="coop.rchain.blockstorage.BlockDagFileStorage" level="error"/>
+    <logger name="coop.rchain.blockstorage.dag.BlockDagFileStorage" level="error"/>
 
     <root level="warn">
         <appender-ref ref="STDOUT"/>

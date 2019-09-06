@@ -3,12 +3,10 @@ package coop.rchain.casper.engine
 import cats.{Applicative, Monad}
 import cats.effect.{Concurrent, Sync}
 import cats.implicits._
-
 import EngineCell._
-import coop.rchain.blockstorage.{BlockDagStorage, BlockStore}
+import coop.rchain.blockstorage.BlockStore
 import coop.rchain.casper._
 import coop.rchain.casper.LastApprovedBlock.LastApprovedBlock
-
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.rholang.RuntimeManager
 import coop.rchain.comm.{transport, PeerNode}
@@ -18,8 +16,8 @@ import coop.rchain.comm.transport.{Blob, TransportLayer}
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.shared
 import coop.rchain.shared._
-
 import com.google.protobuf.ByteString
+import coop.rchain.blockstorage.dag.BlockDagStorage
 
 trait Engine[F[_]] {
 

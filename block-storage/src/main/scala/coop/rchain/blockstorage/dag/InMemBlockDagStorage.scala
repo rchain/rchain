@@ -1,23 +1,24 @@
-package coop.rchain.blockstorage
+package coop.rchain.blockstorage.dag
 
 import cats.effect.concurrent.{Ref, Semaphore}
 import cats.effect.{Concurrent, Sync}
 import cats.implicits._
 
 import com.google.protobuf.ByteString
-import coop.rchain.blockstorage.BlockDagStorage.DeployId
+import coop.rchain.blockstorage.dag.BlockDagStorage.DeployId
 import coop.rchain.blockstorage.util.BlockMessageUtil.{bonds, deployData, parentHashes}
 import coop.rchain.blockstorage.util.TopologicalSortUtil
+import coop.rchain.blockstorage.{BlockSenderIsMalformed, BlockStorageMetricsSource, BlockStore}
 import coop.rchain.casper.protocol.BlockMessage
 import coop.rchain.crypto.codec.Base16
+import coop.rchain.metrics.Metrics.Source
+import coop.rchain.metrics.{Metrics, MetricsSemaphore}
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.Validator.Validator
 import coop.rchain.models.{BlockHash, BlockMetadata, EquivocationRecord}
 import coop.rchain.shared.Log
-import scala.collection.immutable.HashSet
 
-import coop.rchain.metrics.{Metrics, MetricsSemaphore}
-import coop.rchain.metrics.Metrics.Source
+import scala.collection.immutable.HashSet
 
 final class InMemBlockDagStorage[F[_]: Concurrent: Sync: Log: BlockStore](
     lock: Semaphore[F],
@@ -125,7 +126,7 @@ final class InMemBlockDagStorage[F[_]: Concurrent: Sync: Log: BlockStore](
                     acc.updated(p, currChildren + block.blockHash)
                 }
             )
-        _ <- topoSortRef.update(topoSort => TopologicalSortUtil.update(topoSort, 0L, block))
+        _ <- topoSortRef.update(topoSort => TopologicalSortUtil.update(topoSort, 0L, blockMetadata))
         newValidators = bonds(block)
           .map(_.validator)
           .toSet
@@ -166,17 +167,6 @@ final class InMemBlockDagStorage[F[_]: Concurrent: Sync: Log: BlockStore](
       f(InMemEquivocationsTracker)
     )
   override def checkpoint(): F[Unit] = ().pure[F]
-
-  override def clear(): F[Unit] =
-    lock.withPermit(
-      for {
-        _ <- dataLookupRef.set(Map.empty)
-        _ <- childMapRef.set(Map.empty)
-        _ <- topoSortRef.set(Vector.empty)
-        _ <- latestMessagesRef.set(Map.empty)
-        _ <- equivocationsTrackerRef.set(Set.empty)
-      } yield ()
-    )
 
   override def close(): F[Unit] = ().pure[F]
 }

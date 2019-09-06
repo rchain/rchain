@@ -1,7 +1,7 @@
-package coop.rchain.blockstorage
+package coop.rchain.blockstorage.dag
 
 import com.google.protobuf.ByteString
-import coop.rchain.blockstorage.BlockDagStorage.DeployId
+import coop.rchain.blockstorage.dag.BlockDagStorage.DeployId
 import coop.rchain.casper.protocol.BlockMessage
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.Validator.Validator
@@ -16,7 +16,6 @@ trait BlockDagStorage[F[_]] {
   ): F[BlockDagRepresentation[F]]
   def accessEquivocationsTracker[A](f: EquivocationsTracker[F] => F[A]): F[A]
   def checkpoint(): F[Unit]
-  def clear(): F[Unit]
   def close(): F[Unit]
 }
 

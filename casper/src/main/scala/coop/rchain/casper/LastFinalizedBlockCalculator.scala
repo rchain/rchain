@@ -2,7 +2,8 @@ package coop.rchain.casper
 
 import cats.effect.{Concurrent, Sync}
 import cats.implicits._
-import coop.rchain.blockstorage.{BlockDagRepresentation, BlockDagStorage, BlockStore}
+import coop.rchain.blockstorage.dag.{BlockDagRepresentation, BlockDagStorage}
+import coop.rchain.blockstorage.BlockStore
 import coop.rchain.casper.CasperState.CasperStateCell
 import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.catscontrib.ListContrib
