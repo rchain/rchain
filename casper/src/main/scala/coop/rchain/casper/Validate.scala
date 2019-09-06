@@ -6,10 +6,10 @@ import cats.{Applicative, Monad}
 import cats.data.EitherT
 import cats.effect.{Concurrent, Sync}
 import cats.implicits._
-import cats.{Applicative, Monad}
-import com.google.protobuf.ByteString
+
 import coop.rchain.blockstorage.BlockStore
 import coop.rchain.blockstorage.dag.BlockDagRepresentation
+import coop.rchain.casper.protocol._
 import coop.rchain.casper.protocol.Event.EventInstance
 import coop.rchain.casper.util.{DagOperations, ProtoUtil}
 import coop.rchain.casper.util.ProtoUtil.bonds
