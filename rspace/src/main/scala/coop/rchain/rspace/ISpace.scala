@@ -3,7 +3,12 @@ package coop.rchain.rspace
 import cats.Id
 import coop.rchain.rspace.internal._
 
-final case class Result[A](matchedDatum: A, removedDatum: A, persistent: Boolean)
+final case class Result[C, A](
+    channel: C,
+    matchedDatum: A,
+    removedDatum: A,
+    persistent: Boolean
+)
 final case class ContResult[C, P, K](
     continuation: K,
     persistent: Boolean,

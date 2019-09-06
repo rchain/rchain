@@ -66,7 +66,11 @@ class DebruijnInterpreter[M[_], F[_]](
     fTell: FunctorTell[M, Throwable],
     cost: _cost[M]
 ) extends Reduce[M] {
-  type Application = Option[(TaggedContinuation, Seq[ListParWithRandom], Int, Boolean)]
+
+  type Application =
+    Option[
+      (TaggedContinuation, Seq[(Par, ListParWithRandom, ListParWithRandom, Boolean)], Int, Boolean)
+    ]
 
   /**
     * Materialize a send in the store, optionally returning the matched continuation.
@@ -81,20 +85,12 @@ class DebruijnInterpreter[M[_], F[_]](
       data: ListParWithRandom,
       persistent: Boolean,
       sequenceNumber: Int
-  ): M[Unit] = {
-    def go(res: Application): M[Unit] =
-      res match {
-        case Some((continuation, dataList, updatedSequenceNumber, peek)) =>
-          if (persistent || peek)
-            List(
-              dispatcher.dispatch(continuation, dataList, updatedSequenceNumber),
-              produce(chan, data, persistent, sequenceNumber)
-            ).parSequence_
-          else dispatcher.dispatch(continuation, dataList, updatedSequenceNumber)
-        case None => syncM.unit
-      }
-    space.produce(chan, data, persist = persistent, sequenceNumber) >>= (go(_))
-  }
+  ): M[Unit] =
+    space.produce(chan, data, persist = persistent, sequenceNumber) >>= (continue(
+      _,
+      produce(chan, data, persistent, sequenceNumber),
+      persistent
+    ))
 
   /**
     * Materialize a send in the store, optionally returning the matched continuation.
@@ -113,17 +109,6 @@ class DebruijnInterpreter[M[_], F[_]](
       sequenceNumber: Int
   ): M[Unit] = {
     val (patterns: Seq[BindPattern], sources: Seq[Par]) = binds.unzip
-    def go(res: Application): M[Unit] =
-      res match {
-        case Some((continuation, dataList, updatedSequenceNumber, _)) =>
-          if (persistent)
-            List(
-              dispatcher.dispatch(continuation, dataList, updatedSequenceNumber),
-              consume(binds, body, persistent, peek, sequenceNumber)
-            ).parSequence_
-          else dispatcher.dispatch(continuation, dataList, updatedSequenceNumber)
-        case None => syncM.unit
-      }
     space.consume(
       sources.toList,
       patterns.toList,
@@ -131,8 +116,53 @@ class DebruijnInterpreter[M[_], F[_]](
       persist = persistent,
       sequenceNumber,
       if (peek) SortedSet(sources.indices: _*) else SortedSet.empty[Int]
-    ) >>= (go(_))
+    ) >>= (continue(_, consume(binds, body, persistent, peek, sequenceNumber), persistent))
   }
+
+  private[this] def continue(res: Application, repeatOp: M[Unit], persistent: Boolean) =
+    res match {
+      case Some((continuation, dataList, updatedSequenceNumber, _)) if persistent =>
+        dispatchAndRun(continuation, dataList, updatedSequenceNumber)(
+          repeatOp
+        )
+      case Some((continuation, dataList, updatedSequenceNumber, peek)) if peek =>
+        dispatchAndRun(continuation, dataList, updatedSequenceNumber)(
+          producePeeks(dataList, updatedSequenceNumber): _*
+        )
+      case Some((continuation, dataList, updatedSequenceNumber, _)) =>
+        dispatch(continuation, dataList, updatedSequenceNumber)
+      case None => syncM.unit
+    }
+
+  private[this] def dispatchAndRun(
+      continuation: TaggedContinuation,
+      dataList: Seq[(Par, ListParWithRandom, ListParWithRandom, Boolean)],
+      sequenceNumber: Int
+  )(ops: M[Unit]*) =
+    (dispatch(continuation, dataList, sequenceNumber) :: ops.toList).parSequence_
+
+  private[this] def dispatch(
+      continuation: TaggedContinuation,
+      dataList: Seq[(Par, ListParWithRandom, ListParWithRandom, Boolean)],
+      sequenceNumber: Int
+  ) = dispatcher.dispatch(
+    continuation,
+    dataList.map(_._2),
+    sequenceNumber
+  )
+
+  private[this] def producePeeks(
+      dataList: Seq[(Par, ListParWithRandom, ListParWithRandom, Boolean)],
+      sequenceNumber: Int
+  ) =
+    dataList
+      .withFilter {
+        case (_, _, _, persist) => !persist
+      }
+      .map {
+        case (chan, _, removedData, _) =>
+          produce(chan, removedData, false, sequenceNumber)
+      }
 
   override def eval(par: Par)(
       implicit env: Env[Par],

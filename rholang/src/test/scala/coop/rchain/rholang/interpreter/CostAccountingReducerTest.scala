@@ -82,10 +82,12 @@ class CostAccountingReducerTest extends FlatSpec with Matchers with TripleEquals
           persist: Boolean,
           sequenceNumber: Int
       ): Task[
-        Option[(ContResult[Par, BindPattern, TaggedContinuation], Seq[Result[ListParWithRandom]])]
+        Option[
+          (ContResult[Par, BindPattern, TaggedContinuation], Seq[Result[Par, ListParWithRandom]])
+        ]
       ] =
         Task.raiseError[Option[
-          (ContResult[Par, BindPattern, TaggedContinuation], Seq[Result[ListParWithRandom]])
+          (ContResult[Par, BindPattern, TaggedContinuation], Seq[Result[Par, ListParWithRandom]])
         ]](OutOfPhlogistonsError)
     }
     implicit val errorLog    = new ErrorLog[Task]()

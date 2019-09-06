@@ -76,9 +76,7 @@ class RSpace[F[_], C, P, A, K] private[rspace] (
       dataCandidates: Seq[DataCandidate[C, A]],
       peeks: SortedSet[Int],
       channelsToIndex: Map[C, Int]
-  ): F[List[Unit]] = {
-    def shouldRemove(persist: Boolean, channel: C): Boolean =
-      !persist && !peeks.contains(channelsToIndex(channel))
+  ): F[List[Unit]] =
     dataCandidates.toList
       .sortBy(_.datumIndex)(Ordering[Int].reverse)
       .traverse {
@@ -87,12 +85,11 @@ class RSpace[F[_], C, P, A, K] private[rspace] (
             Datum(_, persistData, _),
             _,
             dataIndex
-            ) if shouldRemove(persistData, candidateChannel) =>
+            ) if !persistData =>
           store.removeDatum(candidateChannel, dataIndex)
         case _ =>
           ().pure[F]
       }
-  }
 
   override def consume(
       channels: Seq[C],
@@ -120,7 +117,7 @@ class RSpace[F[_], C, P, A, K] private[rspace] (
             peeks.nonEmpty
           ),
           dataCandidates
-            .map(dc => Result(dc.datum.a, dc.removedDatum, dc.datum.persist))
+            .map(dc => Result(dc.channel, dc.datum.a, dc.removedDatum, dc.datum.persist))
         )
       )
     }
@@ -310,11 +307,7 @@ class RSpace[F[_], C, P, A, K] private[rspace] (
                   _,
                   dataIndex
                   ) => {
-                def shouldRemove: Boolean = {
-                  val idx = channelsToIndex(candidateChannel)
-                  dataIndex >= 0 && (!persistData && !peeks.contains(idx))
-                }
-                (if (shouldRemove) {
+                (if (dataIndex >= 0 && !persistData) {
                    store.removeDatum(candidateChannel, dataIndex)
                  } else ().pure[F]) >> store.removeJoin(candidateChannel, channels)
               }
@@ -332,7 +325,9 @@ class RSpace[F[_], C, P, A, K] private[rspace] (
                 contSequenceNumber,
                 peeks.nonEmpty
               ),
-              dataCandidates.map(dc => Result(dc.datum.a, dc.removedDatum, dc.datum.persist))
+              dataCandidates.map(
+                dc => Result(dc.channel, dc.datum.a, dc.removedDatum, dc.datum.persist)
+              )
             )
           )
         }

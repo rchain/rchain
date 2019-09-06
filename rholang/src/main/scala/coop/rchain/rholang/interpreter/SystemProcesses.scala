@@ -51,7 +51,7 @@ object SystemProcesses {
 
       type ContWithMetaData = ContResult[Par, BindPattern, TaggedContinuation]
 
-      type Channels = Seq[Result[ListParWithRandom]]
+      type Channels = Seq[Result[Par, ListParWithRandom]]
 
       private val prettyPrinter = PrettyPrinter()
 

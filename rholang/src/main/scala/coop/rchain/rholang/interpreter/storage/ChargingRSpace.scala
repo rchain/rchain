@@ -55,7 +55,9 @@ object ChargingRSpace {
           sequenceNumber: Int,
           peeks: SortedSet[Int] = SortedSet.empty[Int]
       ): F[
-        Option[(ContResult[Par, BindPattern, TaggedContinuation], Seq[Result[ListParWithRandom]])]
+        Option[
+          (ContResult[Par, BindPattern, TaggedContinuation], Seq[Result[Par, ListParWithRandom]])
+        ]
       ] =
         for {
           _ <- charge[F](
@@ -88,7 +90,9 @@ object ChargingRSpace {
           persist: Boolean,
           sequenceNumber: Int
       ): F[
-        Option[(ContResult[Par, BindPattern, TaggedContinuation], Seq[Result[ListParWithRandom]])]
+        Option[
+          (ContResult[Par, BindPattern, TaggedContinuation], Seq[Result[Par, ListParWithRandom]])
+        ]
       ] =
         for {
           _       <- charge[F](storageCostProduce(channel, data).copy(operation = "produces storage"))
@@ -98,7 +102,7 @@ object ChargingRSpace {
 
       private def handleResult(
           result: Option[
-            (ContResult[Par, BindPattern, TaggedContinuation], Seq[Result[ListParWithRandom]])
+            (ContResult[Par, BindPattern, TaggedContinuation], Seq[Result[Par, ListParWithRandom]])
           ],
           triggeredBy: TriggeredBy
       ): F[Unit] =
@@ -121,14 +125,14 @@ object ChargingRSpace {
 
               _             <- charge[F](Cost(-refundForConsume.value, "consume storage refund"))
               _             <- charge[F](Cost(-refundForProduces.value, "produces storage refund"))
-              lastIteration = !triggeredBy.persistent && (!cont.peek || consumeId == triggeredBy.id)
+              lastIteration = !triggeredBy.persistent
               _             <- charge[F](eventStorageCost(triggeredBy.channelsCount)).whenA(lastIteration)
               _             <- charge[F](commEventStorageCost(cont.channels.size))
             } yield ()
         }
 
       private def refundForRemovingProduces(
-          dataList: Seq[Result[ListParWithRandom]],
+          dataList: Seq[Result[Par, ListParWithRandom]],
           cont: ContResult[Par, BindPattern, TaggedContinuation],
           triggeredBy: TriggeredBy
       ): Cost = {
@@ -139,7 +143,7 @@ object ChargingRSpace {
           // It is going to be 'not removed' and charged for on the last iteration, where it doesn't match anything.
           .filter {
             case (data, _) =>
-              (!cont.peek && !data.persistent) || data.removedDatum.randomState == triggeredBy.id
+              !data.persistent || data.removedDatum.randomState == triggeredBy.id
           }
         removedData
           .map { case (data, channel) => storageCostProduce(channel, data.removedDatum) }
