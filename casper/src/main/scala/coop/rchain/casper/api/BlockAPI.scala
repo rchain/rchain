@@ -407,9 +407,12 @@ object BlockAPI {
                                case Some(block) =>
                                  for {
                                    blockInfo <- getFullBlockInfo[F](block)
-                                 } yield BlockQueryResponse(blockInfo = Some(blockInfo)).asRight
+                                 } yield BlockQueryResponse(blockInfo = Some(blockInfo))
+                                   .asRight[Error]
                                case None =>
-                                 s"Error: Failure to find block with hash ${q.hash}".asLeft.pure[F]
+                                 s"Error: Failure to find block with hash ${q.hash}"
+                                   .asLeft[BlockQueryResponse]
+                                   .pure[F]
                              }
       } yield blockQueryResponse
 
@@ -545,15 +548,13 @@ object BlockAPI {
     }
 
   private def addResponse[F[_]: Concurrent](
-      status: BlockStatus,
+      status: ValidBlockProcessing,
       block: BlockMessage,
       casper: MultiParentCasper[F],
       printUnmatchedSends: Boolean
   ): Effect[F, DeployServiceResponse] =
-    status match {
-      case _: InvalidBlock =>
-        s"Failure! Invalid block: $status".asLeft[DeployServiceResponse].pure[F]
-      case _: ValidBlock =>
+    status
+      .map { _ =>
         val hash    = PrettyPrinter.buildString(block.blockHash)
         val deploys = block.body.get.deploys.map(_.deploy.get)
         val maybeUnmatchedSendsOutputF =
@@ -565,13 +566,18 @@ object BlockAPI {
                 s"Success! Block $hash created and added.${maybeOutput.map("\n" + _).getOrElse("")}"
               ).asRight[Error].pure[F]
           )
-      case BlockException(ex) =>
-        s"Error during block processing: $ex".asLeft[DeployServiceResponse].pure[F]
-      case Processing =>
-        "No action taken since other thread is already processing the block."
-          .asLeft[DeployServiceResponse]
-          .pure[F]
-    }
+      }
+      .leftMap {
+        case _: InvalidBlock =>
+          s"Failure! Invalid block: $status".asLeft[DeployServiceResponse].pure[F]
+        case BlockError.BlockException(ex) =>
+          s"Error during block processing: $ex".asLeft[DeployServiceResponse].pure[F]
+        case BlockError.Processing =>
+          "No action taken since other thread is already processing the block."
+            .asLeft[DeployServiceResponse]
+            .pure[F]
+      }
+      .merge
 
   private def prettyPrintUnmatchedSends[F[_]: Concurrent](
       casper: MultiParentCasper[F],

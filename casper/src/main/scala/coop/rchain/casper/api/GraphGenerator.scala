@@ -59,8 +59,7 @@ object GraphzGenerator {
             case (_, blocks) =>
               blocks.get(firstTs).map(_.flatMap(b => b.parentsHashes)).getOrElse(List.empty[String])
           }
-          .toSet
-          .toList
+          .distinct
           .sorted
         // draw ancesotrs first
         _ <- allAncestors.traverse(
@@ -108,20 +107,19 @@ object GraphzGenerator {
     for {
       blocks    <- blockHashes.traverse(ProtoUtil.getBlock[F])
       timeEntry = blocks.head.getBody.getState.blockNumber
-      validators = blocks.toList.map {
-        case b =>
-          val blockHash       = PrettyPrinter.buildString(b.blockHash)
-          val blockSenderHash = PrettyPrinter.buildString(b.sender)
-          val parents = b.getHeader.parentsHashList.toList
-            .map(PrettyPrinter.buildString)
-          val justifications = b.justifications
-            .map(_.latestBlockHash)
-            .map(PrettyPrinter.buildString)
-            .toSet
-            .toList
-          val validatorBlocks =
-            Map(timeEntry -> List(ValidatorBlock(blockHash, parents, justifications)))
-          Map(blockSenderHash -> validatorBlocks)
+      validators = blocks.toList.map { b =>
+        val blockHash       = PrettyPrinter.buildString(b.blockHash)
+        val blockSenderHash = PrettyPrinter.buildString(b.sender)
+        val parents = b.getHeader.parentsHashList.toList
+          .map(PrettyPrinter.buildString)
+        val justifications = b.justifications
+          .map(_.latestBlockHash)
+          .map(PrettyPrinter.buildString)
+          .toSet
+          .toList
+        val validatorBlocks =
+          Map(timeEntry -> List(ValidatorBlock(blockHash, parents, justifications)))
+        Map(blockSenderHash -> validatorBlocks)
       }
     } yield acc.copy(
       timeseries = timeEntry :: acc.timeseries,

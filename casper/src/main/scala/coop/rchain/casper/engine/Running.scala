@@ -173,7 +173,7 @@ object Running {
 
   def handleBlockMessage[F[_]: Monad: Log: RequestedBlocks](peer: PeerNode, b: BlockMessage)(
       casperContains: BlockHash => F[Boolean],
-      casperAdd: BlockMessage => F[BlockStatus]
+      casperAdd: BlockMessage => F[ValidBlockProcessing]
   ): F[Unit] =
     casperContains(b.blockHash)
       .ifM(
@@ -181,7 +181,8 @@ object Running {
         for {
           _      <- Log[F].info(s"Received ${PrettyPrinter.buildString(b)}.")
           status <- casperAdd(b)
-          _      <- if (status.inDag) RequestedBlocks[F].modify(_ - b.blockHash) else noop[F]
+          _ <- if (BlockStatus.isInDag(status.merge)) RequestedBlocks[F].modify(_ - b.blockHash)
+              else noop[F]
         } yield ()
       )
 
@@ -241,7 +242,7 @@ class Running[F[_]: Sync: RPConfAsk: BlockStore: ConnectionsCell: TransportLayer
   import Engine._
   import Running._
 
-  private def casperAdd(peer: PeerNode): BlockMessage => F[BlockStatus] = {
+  private def casperAdd(peer: PeerNode): BlockMessage => F[ValidBlockProcessing] = {
     def handleDoppelganger: (BlockMessage, Validator) => F[Unit] =
       (bm: BlockMessage, self: Validator) =>
         if (bm.sender == self) {
@@ -250,7 +251,7 @@ class Running[F[_]: Sync: RPConfAsk: BlockStore: ConnectionsCell: TransportLayer
           Log[F].warn(warnMessage)
         } else ().pure[F]
 
-    (b: BlockMessage) => casper.addBlock(b, handleDoppelganger)
+    b: BlockMessage => casper.addBlock(b, handleDoppelganger)
   }
 
   def applicative: Applicative[F] = Applicative[F]

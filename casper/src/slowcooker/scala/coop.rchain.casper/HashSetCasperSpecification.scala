@@ -1,8 +1,10 @@
 package coop.rchain.casper
 
-import cats.data.EitherT
-import cats.effect.{Resource, Sync}
+import scala.util.{Random, Try}
+
+import cats.effect.Sync
 import cats.implicits._
+
 import coop.rchain.blockstorage.dag.BlockDagStorage.DeployId
 import coop.rchain.casper.MultiParentCasper.ignoreDoppelgangerCheck
 import coop.rchain.casper.genesis.Genesis
@@ -10,24 +12,16 @@ import coop.rchain.casper.genesis.contracts._
 import coop.rchain.casper.helper.HashSetCasperTestNode
 import coop.rchain.casper.helper.HashSetCasperTestNode._
 import coop.rchain.casper.protocol.{BlockMessage, DeployData}
-import coop.rchain.casper.util.{ConstructDeploy, GenesisBuilder, ProtoUtil}
-import coop.rchain.casper.util.comm.TestNetwork
-import coop.rchain.crypto.codec.Base16
-import coop.rchain.crypto.hash.Keccak256
-import coop.rchain.rholang.interpreter.accounting
-import monix.execution.Scheduler.Implicits.global
-import coop.rchain.catscontrib._
+import coop.rchain.casper.util.{ConstructDeploy, GenesisBuilder}
 import coop.rchain.catscontrib.TaskContrib._
-import coop.rchain.comm.CommError
 import coop.rchain.crypto.signatures.Secp256k1
-import coop.rchain.crypto.{PrivateKey, PublicKey}
+import coop.rchain.crypto.PublicKey
 import coop.rchain.rholang.interpreter.util.RevAddress
+
 import monix.eval.Task
+import monix.execution.Scheduler.Implicits.global
 import org.scalacheck._
 import org.scalacheck.commands.Commands
-
-import scala.collection.immutable
-import scala.util.{Random, Try}
 
 case class RNode(idx: Int, name: String, deployed: Boolean)
 
@@ -91,7 +85,7 @@ object HashSetCasperActions {
   def add(
       node: HashSetCasperTestNode[Effect],
       signed: BlockMessage
-  ): Effect[Either[Throwable, BlockStatus]] =
+  ): Effect[Either[Throwable, ValidBlockProcessing]] =
     Sync[Effect].attempt(
       node.casperEff.addBlock(signed, ignoreDoppelgangerCheck[Effect])
     )
@@ -195,11 +189,11 @@ object HashSetCasperSpecification extends Commands {
 
   }
 
-  def isValidAndNoErrors(result: Try[(BlockStatus, List[String])]): Boolean =
-    result.isSuccess && result.get._1 == Valid && result.get._2.isEmpty
+  def isValidAndNoErrors(result: Try[(ValidBlockProcessing, List[String])]): Boolean =
+    result.isSuccess && result.get._1.isRight && result.get._2.isEmpty
 
   case class Propose(node: RNode) extends Command {
-    override type Result = (BlockStatus, List[String])
+    override type Result = (ValidBlockProcessing, List[String])
 
     override def run(sut: Sut): Result = {
       val validator = sut.nodes(node.idx)
@@ -217,7 +211,7 @@ object HashSetCasperSpecification extends Commands {
   }
 
   case class DeployAndPropose(node: RNode) extends Command {
-    override type Result = (BlockStatus, List[String])
+    override type Result = (ValidBlockProcessing, List[String])
 
     override def run(sut: Sut): Result = {
       val validator = sut.nodes(node.idx).node

@@ -37,6 +37,10 @@ class ValidateTest
     with BeforeAndAfterEach
     with BlockGenerator
     with BlockDagStorageFixture {
+  import ValidBlock._
+  import BlockError._
+  import InvalidBlock._
+
   implicit val log                        = new LogStub[Task]
   implicit val noopMetrics: Metrics[Task] = new Metrics.MetricsNOP[Task]
   implicit val span: Span[Task]           = new NoopSpan[Task]

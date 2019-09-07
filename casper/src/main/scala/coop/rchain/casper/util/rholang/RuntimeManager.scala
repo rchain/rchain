@@ -34,8 +34,7 @@ import coop.rchain.rspace.{trace, Blake2b256Hash, ReplayException}
 import coop.rchain.shared.Log
 
 trait RuntimeManager[F[_]] {
-
-  type ReplayFailure = (Option[DeployData], Failed)
+  import RuntimeManager.ReplayFailure
 
   def captureResults(
       startHash: StateHash,
@@ -47,7 +46,7 @@ trait RuntimeManager[F[_]] {
       blockData: BlockData,
       invalidBlocks: Map[BlockHash, Validator],
       isGenesis: Boolean
-  ): F[Either[(Option[DeployData], Failed), StateHash]]
+  ): F[Either[ReplayFailure, StateHash]]
   def computeState(hash: StateHash)(
       terms: Seq[DeployData],
       blockData: BlockData,
@@ -70,6 +69,7 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log] private[rholang] 
     val emptyStateHash: StateHash,
     runtimeContainer: MVar[F, Runtime[F]]
 ) extends RuntimeManager[F] {
+  import RuntimeManager.ReplayFailure
 
   private[this] val RuntimeManagerMetricsSource =
     Metrics.Source(CasperMetricsSource, "runtime-manager")
@@ -288,23 +288,18 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log] private[rholang] 
       terms: Seq[InternalProcessedDeploy],
       replayDeploy: InternalProcessedDeploy => F[Option[ReplayFailure]]
   ): F[Either[ReplayFailure, StateHash]] =
-    for {
-      _ <- runtime.replaySpace.reset(Blake2b256Hash.fromByteString(startHash))
-      result <- terms.toList.foldM(().asRight[ReplayFailure]) {
-                 case (previousResult, deploy) =>
-                   previousResult.flatTraverse { _ =>
-                     replayDeploy(deploy).map(_.toLeft(()))
-                   }
-               }
-      res <- EitherT
-              .fromEither[F](result)
-              .flatMapF { _ =>
-                Span[F].mark("before-replay-deploys-create-checkpoint") >> runtime.replaySpace
-                  .createCheckpoint()
-                  .map(finalCheckpoint => finalCheckpoint.root.toByteString.asRight[ReplayFailure])
-              }
-              .value
-    } yield res
+    (for {
+      _ <- EitherT.right(runtime.replaySpace.reset(Blake2b256Hash.fromByteString(startHash)))
+      _ <- EitherT(
+            terms.tailRecM { ts =>
+              if (ts.isEmpty)
+                ().asRight[ReplayFailure].asRight[Seq[InternalProcessedDeploy]].pure[F]
+              else replayDeploy(ts.head).map(_.map(_.asLeft[Unit]).toRight(ts.tail))
+            }
+          )
+      _   <- EitherT.right(Span[F].mark("before-replay-deploys-create-checkpoint"))
+      res <- EitherT.right[ReplayFailure](runtime.replaySpace.createCheckpoint())
+    } yield res.root.toByteString).value
 
   private def replayDeploy(runtime: Runtime[F])(
       processedDeploy: InternalProcessedDeploy
@@ -368,7 +363,8 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log] private[rholang] 
 
 object RuntimeManager {
 
-  type StateHash = ByteString
+  type StateHash     = ByteString
+  type ReplayFailure = (Option[DeployData], Failed)
 
   def fromRuntime[F[_]: Concurrent: Sync: Metrics: Span: Log](
       runtime: Runtime[F]

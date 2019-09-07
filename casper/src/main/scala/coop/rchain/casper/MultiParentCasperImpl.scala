@@ -1,6 +1,7 @@
 package coop.rchain.casper
 
 import cats._
+import cats.data.EitherT
 import cats.effect.{Concurrent, Sync}
 import cats.effect.concurrent.{Ref, Semaphore}
 import cats.implicits._
@@ -76,16 +77,16 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: ConnectionsCell: TransportLa
   def addBlock(
       b: BlockMessage,
       handleDoppelganger: (BlockMessage, Validator) => F[Unit]
-  ): F[BlockStatus] = {
+  ): F[ValidBlockProcessing] = {
 
-    def logAlreadyProcessed =
+    def logAlreadyProcessed: F[ValidBlockProcessing] =
       Log[F]
         .info(
           s"Block ${PrettyPrinter.buildString(b.blockHash)} has already been processed by another thread."
         )
-        .as(BlockStatus.processing)
+        .as(BlockStatus.processing.asLeft)
 
-    def doppelgangerAndAdd = spanF.trace(AddBlockMetricsSource) {
+    def doppelgangerAndAdd: F[ValidBlockProcessing] = spanF.trace(AddBlockMetricsSource) {
       for {
         dag <- blockDag
         _ <- validatorId match {
@@ -111,33 +112,34 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: ConnectionsCell: TransportLa
 
                  exists.ifM(logAlreadyProcessed, doppelgangerAndAdd)
                }
-      _ <- status match {
-            case _: ValidBlock =>
-              metricsF.setGauge("block-height", blockNumber(b))(AddBlockMetricsSource)
-            case _ =>
-              ().pure[F]
-          }
+      _ <- status.fold(
+            kp(().pure[F]),
+            kp(metricsF.setGauge("block-height", blockNumber(b))(AddBlockMetricsSource))
+          )
     } yield status
   }.timer("add-block-time")
 
   private def internalAddBlock(
       b: BlockMessage,
       dag: BlockDagRepresentation[F]
-  ): F[BlockStatus] =
+  ): F[ValidBlockProcessing] =
     for {
       _            <- Span[F].mark("internal-add-block")
       validFormat  <- Validate.formatOfFields[F](b)
       validSig     <- Validate.blockSignature[F](b)
       validSender  <- Validate.blockSender[F](b, genesis, dag)
       validVersion <- Validate.version[F](b, version)
-      attemptResult <- if (!validFormat) (InvalidFormat, dag).pure[F]
-                      else if (!validSig) (InvalidSignature, dag).pure[F]
-                      else if (!validSender) (InvalidSender, dag).pure[F]
-                      else if (!validVersion) (InvalidVersion, dag).pure[F]
+      attemptResult <- if (!validFormat) (BlockStatus.invalidFormat.asLeft[ValidBlock], dag).pure[F]
+                      else if (!validSig)
+                        (BlockStatus.invalidSignature.asLeft[ValidBlock], dag).pure[F]
+                      else if (!validSender)
+                        (BlockStatus.invalidSender.asLeft[ValidBlock], dag).pure[F]
+                      else if (!validVersion)
+                        (BlockStatus.invalidVersion.asLeft[ValidBlock], dag).pure[F]
                       else attemptAdd(b, dag)
       (attempt, updatedDag) = attemptResult
       _ <- attempt match {
-            case MissingBlocks => ().pure[F]
+            case Left(InvalidBlock.MissingBlocks) => ().pure[F]
             case _ =>
               Cell[F, CasperState].modify { s =>
                 s.copy(
@@ -148,9 +150,8 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: ConnectionsCell: TransportLa
           }
       _ <- Span[F].mark("attempt-result")
       _ <- attempt match {
-            case MissingBlocks              => ().pure[F]
-            case IgnorableEquivocation      => ().pure[F]
-            case _: InvalidUnslashableBlock => ().pure[F]
+            case Left(ib: InvalidBlock) if !InvalidBlock.isSlashable(ib) => ().pure[F]
+            case Left(bs) if !BlockStatus.isInDag(bs)                    => ().pure[F]
             case _ =>
               reAttemptBuffer(updatedDag) // reAttempt for any status that resulted in the adding of the block into the view
           }
@@ -279,66 +280,44 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: ConnectionsCell: TransportLa
   private def attemptAdd(
       b: BlockMessage,
       dag: BlockDagRepresentation[F]
-  ): F[(BlockStatus, BlockDagRepresentation[F])] =
+  ): F[(ValidBlockProcessing, BlockDagRepresentation[F])] = {
+    val validationStatus: EitherT[F, BlockError, ValidBlock] =
+      for {
+        _ <- EitherT(
+              Validate
+                .blockSummary[F](b, genesis, dag, shardId, expirationThreshold)
+            )
+        _      <- EitherT.liftF(Span[F].mark("post-validation-block-summary"))
+        _      <- EitherT(Validate.transactions[F](b, dag, runtimeManager))
+        _      <- EitherT.liftF(Span[F].mark("transactions-validated"))
+        _      <- EitherT(Validate.bondsCache[F](b, runtimeManager))
+        _      <- EitherT.liftF(Span[F].mark("bonds-cache-validated"))
+        _      <- EitherT(Validate.neglectedInvalidBlock[F](b, dag))
+        _      <- EitherT.liftF(Span[F].mark("neglected-invalid-block-validated"))
+        _      <- EitherT(EquivocationDetector.checkNeglectedEquivocationsWithUpdate[F](b, dag, genesis))
+        _      <- EitherT.liftF(Span[F].mark("neglected-equivocation-validated"))
+        state  <- EitherT.liftF(Cell[F, CasperState].read)
+        status <- EitherT(EquivocationDetector.checkEquivocations[F](state.dependencyDag, b, dag))
+        _      <- EitherT.liftF(Span[F].mark("equivocation-validated"))
+      } yield status
+
     for {
-      _ <- Span[F].mark("attempt-add")
-      _ <- Log[F].info(s"Attempting to add Block ${PrettyPrinter.buildString(b.blockHash)} to DAG.")
-      postValidationStatus <- Validate
-                               .blockSummary[F](b, genesis, dag, shardId, expirationThreshold)
-      _ <- Span[F].mark("post-validation-block-summary")
-      postTransactionsCheckStatus <- postValidationStatus.traverse(
-                                      _ =>
-                                        Validate.transactions[F](
-                                          b,
-                                          dag,
-                                          runtimeManager
-                                        )
-                                    )
-      _ <- Span[F].mark("transactions-validated")
-      postBondsCacheStatus <- postTransactionsCheckStatus.joinRight.traverse(
-                               _ => Validate.bondsCache[F](b, runtimeManager)
-                             )
-      _ <- Span[F].mark("bonds-cache-validated")
-      s <- Cell[F, CasperState].read
-      postNeglectedInvalidBlockStatus <- postBondsCacheStatus.joinRight.traverse(
-                                          _ =>
-                                            Validate
-                                              .neglectedInvalidBlock[F](
-                                                b,
-                                                dag
-                                              )
-                                        )
-      _ <- Span[F].mark("neglected-invalid-block-validated")
-      postNeglectedEquivocationCheckStatus <- postNeglectedInvalidBlockStatus.joinRight
-                                               .traverse(
-                                                 _ =>
-                                                   EquivocationDetector
-                                                     .checkNeglectedEquivocationsWithUpdate[F](
-                                                       b,
-                                                       dag,
-                                                       genesis
-                                                     )
-                                               )
-      _ <- Span[F].mark("neglected-equivocation-validated")
-      postEquivocationCheckStatus <- postNeglectedEquivocationCheckStatus.joinRight.traverse(
-                                      _ =>
-                                        EquivocationDetector
-                                          .checkEquivocations[F](s.dependencyDag, b, dag)
-                                    )
-      status     = postEquivocationCheckStatus.joinRight.merge
-      _          <- Span[F].mark("equivocation-validated")
+      _          <- Span[F].mark("attempt-add")
+      _          <- Log[F].info(s"Attempting to add Block ${PrettyPrinter.buildString(b.blockHash)} to DAG.")
+      status     <- validationStatus.value
       updatedDag <- addEffects(status, b, dag)
       _          <- Span[F].mark("effects-added")
     } yield (status, updatedDag)
+  }
 
   // TODO: Handle slashing
   private def addEffects(
-      status: BlockStatus,
+      blockProcessingResult: ValidBlockProcessing,
       block: BlockMessage,
       dag: BlockDagRepresentation[F]
   ): F[BlockDagRepresentation[F]] =
-    status match {
-      case Valid =>
+    blockProcessingResult
+      .map { _ =>
         // Add successful! Send block to peers, log success, try to add other blocks
         for {
           updatedDag <- BlockDagStorage[F].insert(block, genesis, invalid = false)
@@ -347,89 +326,71 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: ConnectionsCell: TransportLa
                 s"Added ${PrettyPrinter.buildString(block.blockHash)}"
               )
         } yield updatedDag
-      case MissingBlocks =>
-        Cell[F, CasperState].modify { s =>
-          s.copy(blockBuffer = s.blockBuffer + block.blockHash)
-        } >> fetchMissingDependencies(block) >> dag.pure[F]
-      case AdmissibleEquivocation =>
-        val baseEquivocationBlockSeqNum = block.seqNum - 1
-        for {
-          _ <- BlockDagStorage[F].accessEquivocationsTracker { tracker =>
-                for {
-                  equivocations <- tracker.equivocationRecords
-                  _ <- if (equivocations.exists {
-                             case EquivocationRecord(validator, seqNum, _) =>
-                               block.sender == validator && baseEquivocationBlockSeqNum == seqNum
-                           }) {
-                        // More than 2 equivocating children from base equivocation block and base block has already been recorded
-                        ().pure[F]
-                      } else {
-                        val newEquivocationRecord =
-                          EquivocationRecord(
-                            block.sender,
-                            baseEquivocationBlockSeqNum,
-                            Set.empty[BlockHash]
-                          )
-                        tracker.insertEquivocationRecord(newEquivocationRecord)
-                      }
-                } yield ()
-              }
-          // We can only treat admissible equivocations as invalid blocks if
-          // casper is single threaded.
-          updatedDag <- handleInvalidBlockEffect(status, block)
-          _          <- CommUtil.sendBlock[F](block)
-        } yield updatedDag
-      case IgnorableEquivocation =>
-        /*
-         * We don't have to include these blocks to the equivocation tracker because if any validator
-         * will build off this side of the equivocation, we will get another attempt to add this block
-         * through the admissible equivocations.
-         */
-        Log[F].info(
-          s"Did not add block ${PrettyPrinter.buildString(block.blockHash)} as that would add an equivocation to the BlockDAG"
-        ) >> dag.pure[F]
-      case _: InvalidUnslashableBlock =>
-        Log[F].warn(
-          s"Recording invalid block ${PrettyPrinter.buildString(block.blockHash)} for ${status.toString}."
-        ) >> dag.pure[F]
-      case InvalidFollows =>
-        handleInvalidBlockEffect(status, block)
-      case InvalidBlockNumber =>
-        handleInvalidBlockEffect(status, block)
-      case InvalidParents =>
-        handleInvalidBlockEffect(status, block)
-      case JustificationRegression =>
-        handleInvalidBlockEffect(status, block)
-      case InvalidSequenceNumber =>
-        handleInvalidBlockEffect(status, block)
-      case NeglectedInvalidBlock =>
-        handleInvalidBlockEffect(status, block)
-      case NeglectedEquivocation =>
-        handleInvalidBlockEffect(status, block)
-      case InvalidTransaction =>
-        handleInvalidBlockEffect(status, block)
-      case InvalidBondsCache =>
-        handleInvalidBlockEffect(status, block)
-      case InvalidRepeatDeploy =>
-        handleInvalidBlockEffect(status, block)
-      case InvalidShardId =>
-        handleInvalidBlockEffect(status, block)
-      case InvalidBlockHash =>
-        handleInvalidBlockEffect(status, block)
-      case InvalidDeployCount =>
-        handleInvalidBlockEffect(status, block)
-      case ContainsExpiredDeploy =>
-        handleInvalidBlockEffect(status, block)
-      case ContainsFutureDeploy =>
-        handleInvalidBlockEffect(status, block)
-      case Processing =>
-        Sync[F].raiseError[BlockDagRepresentation[F]](
-          new RuntimeException(s"A block should not be processing at this stage.")
-        )
-      case BlockException(ex) =>
-        Log[F].error(s"Encountered exception in while processing block ${PrettyPrinter
-          .buildString(block.blockHash)}: ${ex.getMessage}") >> dag.pure[F]
-    }
+      }
+      .leftMap {
+        case InvalidBlock.MissingBlocks =>
+          Cell[F, CasperState].modify { s =>
+            s.copy(blockBuffer = s.blockBuffer + block.blockHash)
+          } >> fetchMissingDependencies(block) >> dag.pure[F]
+
+        case InvalidBlock.AdmissibleEquivocation =>
+          val baseEquivocationBlockSeqNum = block.seqNum - 1
+          for {
+            _ <- BlockDagStorage[F].accessEquivocationsTracker { tracker =>
+                  for {
+                    equivocations <- tracker.equivocationRecords
+                    _ <- if (equivocations.exists {
+                               case EquivocationRecord(validator, seqNum, _) =>
+                                 block.sender == validator && baseEquivocationBlockSeqNum == seqNum
+                             }) {
+                          // More than 2 equivocating children from base equivocation block and base block has already been recorded
+                          ().pure[F]
+                        } else {
+                          val newEquivocationRecord =
+                            EquivocationRecord(
+                              block.sender,
+                              baseEquivocationBlockSeqNum,
+                              Set.empty[BlockHash]
+                            )
+                          tracker.insertEquivocationRecord(newEquivocationRecord)
+                        }
+                  } yield ()
+                }
+            // We can only treat admissible equivocations as invalid blocks if
+            // casper is single threaded.
+            updatedDag <- handleInvalidBlockEffect(InvalidBlock.AdmissibleEquivocation, block)
+            _          <- CommUtil.sendBlock[F](block)
+          } yield updatedDag
+
+        case InvalidBlock.IgnorableEquivocation =>
+          /*
+           * We don't have to include these blocks to the equivocation tracker because if any validator
+           * will build off this side of the equivocation, we will get another attempt to add this block
+           * through the admissible equivocations.
+           */
+          Log[F].info(
+            s"Did not add block ${PrettyPrinter.buildString(block.blockHash)} as that would add an equivocation to the BlockDAG"
+          ) >> dag.pure[F]
+
+        case ib: InvalidBlock if InvalidBlock.isSlashable(ib) =>
+          handleInvalidBlockEffect(ib, block)
+
+        case ib: InvalidBlock =>
+          Log[F].warn(
+            s"Recording invalid block ${PrettyPrinter.buildString(block.blockHash)} for $ib."
+          ) >> dag.pure[F]
+
+        case BlockError.Processing =>
+          Sync[F].raiseError[BlockDagRepresentation[F]](
+            new RuntimeException(s"A block should not be processing at this stage.")
+          )
+
+        case BlockError.BlockException(ex) =>
+          Log[F].error(s"Encountered exception in while processing block ${PrettyPrinter
+            .buildString(block.blockHash)}: ${ex.getMessage}") >> dag.pure[F]
+
+      }
+      .merge
 
   private def fetchMissingDependencies(
       b: BlockMessage
@@ -464,7 +425,7 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: ConnectionsCell: TransportLa
 
   // TODO: Slash block for status except InvalidUnslashableBlock
   private def handleInvalidBlockEffect(
-      status: BlockStatus,
+      status: BlockError,
       block: BlockMessage
   ): F[BlockDagRepresentation[F]] =
     Log[F].warn(
@@ -475,15 +436,18 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: ConnectionsCell: TransportLa
       dag: BlockDagRepresentation[F]
   ): F[Unit] =
     for {
-      _              <- Span[F].mark("reattempt-buffer")
-      state          <- Cell[F, CasperState].read
-      dependencyFree = state.dependencyDag.dependencyFree
-      dependencyFreeBlocks = state.blockBuffer
-        .filter(blockHash => dependencyFree.contains(blockHash))
-        .toList
+      _                    <- Span[F].mark("reattempt-buffer")
+      state                <- Cell[F, CasperState].read
+      dependencyFree       = state.dependencyDag.dependencyFree
+      dependencyFreeBlocks = state.blockBuffer.intersect(dependencyFree).toList
       attemptsWithDag <- dependencyFreeBlocks.foldM(
                           (
-                            List.empty[(BlockMessage, (BlockStatus, BlockDagRepresentation[F]))],
+                            List.empty[
+                              (
+                                  BlockMessage,
+                                  (ValidBlockProcessing, BlockDagRepresentation[F])
+                              )
+                            ],
                             dag
                           )
                         ) {
@@ -506,8 +470,11 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: ConnectionsCell: TransportLa
       _ <- if (attempts.isEmpty) {
             ().pure[F]
           } else {
+            val addedBlocks = attempts.collect {
+              case (bm, (status, _)) if BlockStatus.isInDag(status.merge) => bm.blockHash
+            }
             for {
-              _ <- removeAdded(state.dependencyDag, attempts)
+              _ <- removeAdded(state.dependencyDag, addedBlocks)
               _ <- Span[F].mark("added-removed")
               _ <- reAttemptBuffer(updatedDag)
             } yield ()
@@ -516,35 +483,28 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: ConnectionsCell: TransportLa
 
   private def removeAdded(
       blockBufferDependencyDag: DoublyLinkedDag[BlockHash],
-      attempts: List[(BlockMessage, (BlockStatus, BlockDagRepresentation[F]))]
+      addedBlocks: List[ByteString]
   ): F[Unit] =
     for {
-      successfulAdds <- attempts
-                         .filter {
-                           case (_, (status, _)) => status.inDag
-                         }
-                         .pure[F]
-      _ <- unsafeRemoveFromBlockBuffer(successfulAdds)
-      _ <- removeFromBlockBufferDependencyDag(blockBufferDependencyDag, successfulAdds)
+      _ <- unsafeRemoveFromBlockBuffer(addedBlocks)
+      _ <- removeFromBlockBufferDependencyDag(blockBufferDependencyDag, addedBlocks)
     } yield ()
 
   private def unsafeRemoveFromBlockBuffer(
-      successfulAdds: List[(BlockMessage, (BlockStatus, BlockDagRepresentation[F]))]
-  ): F[Unit] = {
-    val addedBlocks = successfulAdds.map(_._1.blockHash)
+      addedBlocks: List[ByteString]
+  ): F[Unit] =
     Cell[F, CasperState].modify { s =>
       s.copy(blockBuffer = s.blockBuffer -- addedBlocks)
     }
-  }
 
   private def removeFromBlockBufferDependencyDag(
       blockBufferDependencyDag: DoublyLinkedDag[BlockHash],
-      successfulAdds: List[(BlockMessage, (BlockStatus, BlockDagRepresentation[F]))]
+      addedBlocks: List[ByteString]
   ): F[Unit] =
     Cell[F, CasperState].modify { s =>
-      s.copy(dependencyDag = successfulAdds.foldLeft(blockBufferDependencyDag) {
-        case (acc, successfulAdd) =>
-          DoublyLinkedDagOperations.remove(acc, successfulAdd._1.blockHash)
+      s.copy(dependencyDag = addedBlocks.foldLeft(blockBufferDependencyDag) {
+        case (acc, addedBlock) =>
+          DoublyLinkedDagOperations.remove(acc, addedBlock)
       })
     }
 

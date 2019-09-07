@@ -56,7 +56,7 @@ trait Casper[F[_], A] {
   def addBlock(
       b: BlockMessage,
       handleDoppelganger: (BlockMessage, Validator) => F[Unit]
-  ): F[BlockStatus]
+  ): F[ValidBlockProcessing]
   def contains(hash: BlockHash): F[Boolean]
   def deploy(d: DeployData): F[Either[DeployError, DeployId]]
   def estimator(dag: BlockDagRepresentation[F]): F[A]
@@ -108,7 +108,12 @@ sealed abstract class MultiParentCasperInstances {
                                         runtimeManager
                                       )
         postGenesisStateHash <- maybePostGenesisStateHash match {
-                                 case Left(BlockException(ex)) => Sync[F].raiseError[StateHash](ex)
+                                 case Left(BlockError.BlockException(ex)) =>
+                                   Sync[F].raiseError[StateHash](ex)
+                                 case Left(error) =>
+                                   Sync[F].raiseError[StateHash](
+                                     new Exception(s"Block error: $error")
+                                   )
                                  case Right(None) =>
                                    Sync[F].raiseError[StateHash](
                                      new Exception("Genesis tuplespace validation failed!")

@@ -3,22 +3,24 @@ package coop.rchain.casper.util.rholang
 import cats.Monad
 import cats.effect._
 import cats.implicits._
-import com.google.protobuf.ByteString
+
 import coop.rchain.blockstorage.BlockStore
 import coop.rchain.blockstorage.dag.BlockDagRepresentation
+import coop.rchain.casper._
 import coop.rchain.casper.protocol._
-import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
 import coop.rchain.casper.util.{DagOperations, ProtoUtil}
-import coop.rchain.casper.{BlockException, PrettyPrinter}
+import coop.rchain.casper.util.rholang.RuntimeManager._
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.metrics.Span
+import coop.rchain.models.{BlockMetadata, Par}
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.Validator.Validator
-import coop.rchain.models.{BlockMetadata, Par}
 import coop.rchain.rholang.interpreter.{NormalizerEnv, ParBuilder}
 import coop.rchain.rholang.interpreter.Runtime.BlockData
 import coop.rchain.rspace.ReplayException
 import coop.rchain.shared.{Log, LogSource}
+
+import com.google.protobuf.ByteString
 import monix.eval.Coeval
 
 object InterpreterUtil {
@@ -34,7 +36,7 @@ object InterpreterUtil {
       b: BlockMessage,
       dag: BlockDagRepresentation[F],
       runtimeManager: RuntimeManager[F]
-  ): F[Either[BlockException, Option[StateHash]]] = {
+  ): F[BlockProcessing[Option[StateHash]]] = {
     val preStateHash    = ProtoUtil.preStateHash(b)
     val tsHash          = ProtoUtil.tuplespace(b)
     val deploys         = ProtoUtil.deploys(b)
@@ -76,10 +78,10 @@ object InterpreterUtil {
       blockData: BlockData,
       invalidBlocks: Map[BlockHash, Validator],
       isGenesis: Boolean
-  ): F[Either[BlockException, Option[StateHash]]] =
+  ): F[BlockProcessing[Option[StateHash]]] =
     possiblePreStateHash match {
       case Left(ex) =>
-        BlockException(ex).asLeft[Option[StateHash]].pure[F]
+        BlockStatus.exception(ex).asLeft[Option[StateHash]].pure[F]
       case Right(computedPreStateHash) =>
         if (preStateHash == computedPreStateHash) {
           processPreStateHash[F](
@@ -95,7 +97,7 @@ object InterpreterUtil {
           Log[F].warn(
             s"Computed pre-state hash ${PrettyPrinter.buildString(computedPreStateHash)} does not equal block's pre-state hash ${PrettyPrinter
               .buildString(preStateHash)}"
-          ) >> Right(none[StateHash]).leftCast[BlockException].pure[F]
+          ) >> none[StateHash].asRight[BlockError].pure[F]
         }
     }
 
@@ -108,35 +110,38 @@ object InterpreterUtil {
       blockData: BlockData,
       invalidBlocks: Map[BlockHash, Validator],
       isGenesis: Boolean
-  ): F[Either[BlockException, Option[StateHash]]] =
+  ): F[BlockProcessing[Option[StateHash]]] =
     runtimeManager
       .replayComputeState(preStateHash)(internalDeploys, blockData, invalidBlocks, isGenesis)
       .flatMap {
         case Left((Some(deploy), status)) =>
           status match {
             case InternalErrors(exs) =>
-              BlockException(
-                new Exception(s"Internal errors encountered while processing ${PrettyPrinter
-                  .buildString(deploy)}: ${exs.mkString("\n")}")
-              ).asLeft[Option[StateHash]].pure[F]
+              BlockStatus
+                .exception(
+                  new Exception(s"Internal errors encountered while processing ${PrettyPrinter
+                    .buildString(deploy)}: ${exs.mkString("\n")}")
+                )
+                .asLeft[Option[StateHash]]
+                .pure[F]
             case UserErrors(errors: Seq[Throwable]) =>
               Log[F].warn(s"Found user error(s) ${errors.map(_.getMessage).mkString("\n")}") >>
-                none[StateHash].asRight[BlockException].pure[F]
+                none[StateHash].asRight[BlockError].pure[F]
             case ReplayStatusMismatch(replay: DeployStatus, orig: DeployStatus) =>
               Log[F].warn(
                 s"Found replay status mismatch; replay failure is ${replay.isFailed} and orig failure is ${orig.isFailed}"
               ) >>
-                none[StateHash].asRight[BlockException].pure[F]
+                none[StateHash].asRight[BlockError].pure[F]
             case UnknownFailure =>
               Log[F].warn(s"Found unknown failure") >>
-                none[StateHash].asRight[BlockException].pure[F]
+                none[StateHash].asRight[BlockError].pure[F]
             case UnusedCommEvent(_) =>
               Sync[F].raiseError(new RuntimeException("found UnusedCommEvent"))
           }
         case Left((None, status)) =>
           status match {
             case UnusedCommEvent(_: ReplayException) =>
-              none[StateHash].asRight[BlockException].pure[F]
+              none[StateHash].asRight[BlockError].pure[F]
             case InternalErrors(_) => throw new RuntimeException("found InternalErrors")
             case ReplayStatusMismatch(_, _) =>
               throw new RuntimeException("found ReplayStatusMismatch")
@@ -146,7 +151,7 @@ object InterpreterUtil {
         case Right(computedStateHash) =>
           if (tsHash.contains(computedStateHash)) {
             // state hash in block matches computed hash!
-            computedStateHash.some.asRight[BlockException].pure[F]
+            computedStateHash.some.asRight[BlockError].pure[F]
           } else {
             // state hash in block does not match computed hash -- invalid!
             // return no state hash, do not update the state hash set
@@ -154,7 +159,7 @@ object InterpreterUtil {
               s"Tuplespace hash ${PrettyPrinter.buildString(tsHash.getOrElse(ByteString.EMPTY))} does not match computed hash ${PrettyPrinter
                 .buildString(computedStateHash)}."
             ) >>
-              none[StateHash].asRight[BlockException].pure[F]
+              none[StateHash].asRight[BlockError].pure[F]
 
           }
       }
@@ -203,6 +208,7 @@ object InterpreterUtil {
         computeMultiParentsPostState[F](parents, dag, runtimeManager, initStateHash)
     }
   }
+
   // In the case of multiple parents we need to apply all of the deploys that have been
   // made in all of the branches of the DAG being merged. This is done by computing uncommon ancestors
   // and applying the deploys in those blocks on top of the initial parent.
@@ -221,49 +227,53 @@ object InterpreterUtil {
       _             <- Span[F].mark("before-compute-parents-post-state-get-blocks")
       blocksToApply <- blockHashesToApply.traverse(b => ProtoUtil.getBlock[F](b.blockHash))
       _             <- Span[F].mark("before-compute-parents-post-state-replay")
-      replayResult <- blocksToApply.toList.foldM(Right(initStateHash).leftCast[Throwable]) {
-                       (acc, block) =>
-                         acc match {
-                           case Right(stateHash) =>
-                             val deploys =
-                               block.getBody.deploys
-                                 .flatMap(InternalProcessedDeploy.fromProcessedDeploy)
+      replayResult <- (initStateHash, blocksToApply).tailRecM {
+                       case (hash, blocks) if blocks.isEmpty =>
+                         hash.asRight[Throwable].asRight[(StateHash, Vector[BlockMessage])].pure[F]
 
-                             val timestamp   = block.header.get.timestamp // TODO: Ensure header exists through type
-                             val blockNumber = block.body.get.state.get.blockNumber
-
-                             for {
-                               invalidBlocksSet <- dag.invalidBlocks
-                               unseenBlocksSet  <- ProtoUtil.unseenBlockHashes(dag, block)
-                               seenInvalidBlocksSet = invalidBlocksSet.filterNot(
-                                 block => unseenBlocksSet.contains(block.blockHash)
-                               )
-                               invalidBlocks = seenInvalidBlocksSet
-                                 .map(block => (block.blockHash, block.sender))
-                                 .toMap
-                               replayResult <- runtimeManager.replayComputeState(stateHash)(
-                                                deploys,
-                                                BlockData(timestamp, blockNumber),
-                                                invalidBlocks,
-                                                isGenesis = parents.isEmpty //should always be false
-                                              )
-                             } yield replayResult match {
-                               case result @ Right(_) => result.leftCast[Throwable]
-                               case Left((_, status)) =>
-                                 val parentHashes =
-                                   parents.map(
-                                     p => Base16.encode(p.blockHash.toByteArray).take(8)
-                                   )
-                                 Left(
-                                   new Exception(
-                                     s"Failed status while computing post state of $parentHashes: $status"
-                                   )
-                                 )
-                             }
-                           case Left(_) => acc.pure[F]
+                       case (hash, blocks) =>
+                         replayBlock(hash, blocks.head, parents.isEmpty, dag, runtimeManager).map {
+                           case Right(h) => (h, blocks.tail).asLeft
+                           case Left((_, status)) =>
+                             val parentHashes =
+                               parents.map(p => Base16.encode(p.blockHash.toByteArray).take(8))
+                             new Exception(
+                               s"Failed status while computing post state of $parentHashes: $status"
+                             ).asInstanceOf[Throwable]
+                               .asLeft[StateHash]
+                               .asRight
                          }
                      }
     } yield replayResult
+
+  private[rholang] def replayBlock[F[_]: Sync: BlockStore](
+      hash: StateHash,
+      block: BlockMessage,
+      isGenesis: Boolean,
+      dag: BlockDagRepresentation[F],
+      runtimeManager: RuntimeManager[F]
+  ): F[Either[ReplayFailure, StateHash]] = {
+    val deploys     = block.getBody.deploys.flatMap(InternalProcessedDeploy.fromProcessedDeploy)
+    val timestamp   = block.header.get.timestamp // TODO: Ensure header exists through type
+    val blockNumber = block.body.get.state.get.blockNumber
+
+    for {
+      invalidBlocksSet <- dag.invalidBlocks
+      unseenBlocksSet  <- ProtoUtil.unseenBlockHashes(dag, block)
+      seenInvalidBlocksSet = invalidBlocksSet.filterNot(
+        block => unseenBlocksSet.contains(block.blockHash)
+      )
+      invalidBlocks = seenInvalidBlocksSet
+        .map(block => (block.blockHash, block.sender))
+        .toMap
+      replayResult <- runtimeManager.replayComputeState(hash)(
+                       deploys,
+                       BlockData(timestamp, blockNumber),
+                       invalidBlocks,
+                       isGenesis //should always be false
+                     )
+    } yield replayResult
+  }
 
   private[rholang] def findMultiParentsBlockHashesForReplay[F[_]: Monad](
       parents: Seq[BlockMessage],

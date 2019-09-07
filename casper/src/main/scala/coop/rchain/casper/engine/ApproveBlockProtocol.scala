@@ -95,56 +95,45 @@ object ApproveBlockProtocol {
         sig <- a.sig if Validate.signature(sigData, sig)
       } yield sig
 
-      val trustedValidator =
-        if (signedByTrustedValidator(a)) {
-          true.pure[F]
-        } else {
-          Log[F].warn(s"APPROVAL: Received BlockApproval from untrusted validator.") >> false
-            .pure[F]
-        }
-
-      val isValid = for {
-        validValidators <- trustedValidator
-      } yield validValidators && validSig.isDefined
-
       val sender =
         a.sig.fold("<Empty Signature>")(sig => Base16.encode(sig.publicKey.toByteArray))
 
-      FlatMap[F].ifM(isValid)(
-        for {
-          modifyResult <- sigsF.modify(sigs => {
-                           val newSigs = sigs + validSig.get
-                           (newSigs, (sigs, newSigs))
-                         })
-          (before, after) = modifyResult
+      if (signedByTrustedValidator(a)) {
+        if (validSig.isDefined) {
+          for {
+            modifyResult <- sigsF.modify(sigs => {
+                             val newSigs = sigs + validSig.get
+                             (newSigs, (sigs, newSigs))
+                           })
+            (before, after) = modifyResult
 
-          _ <- if (after > before)
-                Log[F].info("APPROVAL: New signature received") >>
-                  Metrics[F].incrementCounter("genesis")
-              else
-                Log[F].info("APPROVAL: No new sigs received")
+            _ <- if (after > before)
+                  Log[F].info("APPROVAL: New signature received") >>
+                    Metrics[F].incrementCounter("genesis")
+                else
+                  Log[F].info("APPROVAL: No new sigs received")
 
-          _ <- Log[F].info(s"APPROVAL: received block approval from $sender")
+            _ <- Log[F].info(s"APPROVAL: received block approval from $sender")
 
-          _ <- Log[F].info(
-                s"APPROVAL: ${after.size} approvals received: ${after
-                  .map(s => PrettyPrinter.buildString(s.publicKey))
-                  .mkString(", ")}"
-              )
-          _ <- Log[F].info(
-                s"APPROVAL: Remaining approvals needed: ${requiredSigs - after.size + 1}"
-              )
-          _ <- EventLog[F].publish(
-                shared.Event.BlockApprovalReceived(
-                  a.candidate
-                    .flatMap(_.block.map(b => PrettyPrinter.buildStringNoLimit(b.blockHash)))
-                    .getOrElse(""),
-                  sender
+            _ <- Log[F].info(
+                  s"APPROVAL: ${after.size} approvals received: ${after
+                    .map(s => PrettyPrinter.buildString(s.publicKey))
+                    .mkString(", ")}"
                 )
-              )
-        } yield (),
-        Log[F].warn(s"APPROVAL: ignoring invalid block approval from $sender")
-      )
+            _ <- Log[F].info(
+                  s"APPROVAL: Remaining approvals needed: ${requiredSigs - after.size + 1}"
+                )
+            _ <- EventLog[F].publish(
+                  shared.Event.BlockApprovalReceived(
+                    a.candidate
+                      .flatMap(_.block.map(b => PrettyPrinter.buildStringNoLimit(b.blockHash)))
+                      .getOrElse(""),
+                    sender
+                  )
+                )
+          } yield ()
+        } else Log[F].warn(s"APPROVAL: ignoring invalid block approval from $sender")
+      } else Log[F].warn(s"APPROVAL: Received BlockApproval from untrusted validator.")
     }
 
     private def signedByTrustedValidator(a: BlockApproval): Boolean =
