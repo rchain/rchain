@@ -1,10 +1,7 @@
-package coop.rchain.rspace.bench.wide
+package coop.rchain.rspace.bench
 
-import coop.rchain.rspace.bench._
 import coop.rchain.rholang.interpreter.{ParBuilderUtil, Runtime}
-import java.io.{FileNotFoundException, InputStreamReader}
 import java.nio.file.{Files, Path}
-import java.util.concurrent.TimeUnit
 
 import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.crypto.hash.Blake2b512Random
@@ -19,19 +16,31 @@ import org.openjdk.jmh.annotations._
 import org.openjdk.jmh.infra.Blackhole
 
 import scala.concurrent.Await
-import scala.concurrent.duration.{Duration, _}
+import scala.concurrent.duration._
 
-abstract class WideBenchBaseState {
-  val rhoSetupScriptPath: String = "/rholang/wide-setup.rho"
-  val rhoScriptSource: String    = "/rholang/wide.rho"
+abstract class RhoBenchBaseState {
 
-  implicit val scheduler: Scheduler = Scheduler.fixedPool(name = "wide-1", poolSize = 100)
+  def setupRho: Option[String] = None
+  def testedRho: String
+
+  def execute(bh: Blackhole): Unit = {
+    val r = (for {
+      result <- runTask
+      _      <- runtime.space.createCheckpoint()
+    } yield result).unsafeRunSync
+    assert(r.isEmpty)
+    bh.consume(processErrors(r))
+  }
+
+  implicit val scheduler: Scheduler = Scheduler.fixedPool(name = "rho-1", poolSize = 100)
   lazy val dbDir: Path              = Files.createTempDirectory(BenchStorageDirPrefix)
   val mapSize: Long                 = 1024L * 1024L * 1024L * 10L
 
-  var runtime: Runtime[Task] = null
-  var setupTerm: Option[Par] = None
-  var term: Option[Par]      = None
+  var runtime: Runtime[Task]      = null
+  var setupTerm: Option[Par]      = None
+  var term: Par                   = _
+  var randSetup: Blake2b512Random = null
+  var randRun: Blake2b512Random   = null
 
   var runTask: Task[Vector[Throwable]] = null
 
@@ -40,6 +49,7 @@ abstract class WideBenchBaseState {
   implicit val noopMetrics: Metrics[Task] = new metrics.Metrics.MetricsNOP[Task]
   implicit val noopSpan: Span[Task]       = NoopSpan[Task]()
   implicit val ms: Metrics.Source         = Metrics.BaseSource
+  def rand: Blake2b512Random              = Blake2b512Random(128)
 
   def createRuntime(): Runtime[Task] =
     (for {
@@ -53,17 +63,19 @@ abstract class WideBenchBaseState {
   @Setup(value = Level.Iteration)
   def doSetup(): Unit = {
     deleteOldStorage(dbDir)
-    setupTerm = ParBuilderUtil
-      .buildNormalizedTerm[Coeval](resourceFileReader(rhoSetupScriptPath))
-      .runAttempt match {
-      case Right(par) => Some(par)
-      case Left(err)  => throw err
+    setupTerm = setupRho.flatMap { p =>
+      ParBuilderUtil
+        .buildNormalizedTerm[Coeval](p)
+        .runAttempt match {
+        case Right(par) => Some(par)
+        case Left(err)  => throw err
+      }
     }
 
     term = ParBuilderUtil
-      .buildNormalizedTerm[Coeval](resourceFileReader(rhoScriptSource))
+      .buildNormalizedTerm[Coeval](testedRho)
       .runAttempt match {
-      case Right(par) => Some(par)
+      case Right(par) => par
       case Left(err)  => throw err
     }
     runtime = createRuntime()
@@ -75,7 +87,19 @@ abstract class WideBenchBaseState {
       _ <- runtime.replaySpace.clear()
       _ <- runtime.replaySpace.reset(emptyCheckpoint.root)
       _ <- runtime.space.clear()
-    } yield (runtime.space.reset(emptyCheckpoint.root))).unsafeRunSync
+      _ <- runtime.space.reset(emptyCheckpoint.root)
+    } yield ()).unsafeRunSync
+
+    randSetup = rand
+    randRun = rand
+    processErrors(
+      Await
+        .result(
+          createTest(setupTerm)(readErrors, runtime.reducer, randSetup).runToFuture,
+          Duration.Inf
+        )
+    )
+    runTask = createTest(Some(term))(readErrors, runtime.reducer, randRun)
   }
 
   @TearDown

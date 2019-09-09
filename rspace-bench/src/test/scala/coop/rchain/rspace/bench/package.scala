@@ -1,14 +1,18 @@
 package coop.rchain.rspace
 
+import java.io.{FileNotFoundException, InputStreamReader}
 import java.nio.file.Path
 
+import com.google.common.io.CharStreams
+import coop.rchain.crypto.hash.Blake2b512Random
+import coop.rchain.models.Par
+import coop.rchain.rholang.interpreter.Reduce
+
 import scala.collection.immutable.Seq
-
 import coop.rchain.shared.PathOps.RichPath
+import monix.eval.Task
 import org.scalacheck._
-import org.scalacheck.Arbitrary._
 import org.scalacheck.rng.Seed
-
 import org.scalacheck.Gen.Parameters
 
 package object bench {
@@ -44,4 +48,41 @@ package object bench {
     )
   }
 
+  def resourceFileReader(path: String): String = {
+    var reader: InputStreamReader = null
+    try {
+      reader = new InputStreamReader(
+        Option(getClass.getResourceAsStream(path))
+          .getOrElse(throw new FileNotFoundException(path))
+      )
+      CharStreams.toString(reader)
+    } finally {
+      reader.close()
+    }
+  }
+
+  def processErrors(errors: Vector[Throwable]): Vector[Throwable] = {
+    if (errors.nonEmpty) {
+      errors.foreach(_.printStackTrace())
+      throw new RuntimeException(
+        errors
+          .map(_.toString())
+          .mkString("Errors received during evaluation:\n", "\n", "\n")
+      )
+    }
+    errors
+  }
+
+  def createTest(t: Option[Par])(
+      implicit errorProcessor: () => Vector[Throwable],
+      reducer: Reduce[Task],
+      rand: Blake2b512Random
+  ): Task[Vector[Throwable]] =
+    t match {
+      case Some(par) =>
+        reducer
+          .inj(par)
+          .map(_ => errorProcessor())
+      case None => Task.delay(Vector.empty)
+    }
 }
