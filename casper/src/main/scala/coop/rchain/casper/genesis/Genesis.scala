@@ -45,43 +45,6 @@ object Genesis {
       StandardDeploys.treeHashMap
     )
 
-  //TODO: Decide on version number and shard identifier
-  def fromInputFiles[F[_]: Concurrent: Sync: Log: Time: RaiseIOError](
-      maybeBondsPath: Option[String],
-      numValidators: Int,
-      genesisPath: Path,
-      maybeVaultsPath: Option[String],
-      minimumBond: Long,
-      maximumBond: Long,
-      shardId: String,
-      deployTimestamp: Option[Long]
-  )(implicit runtimeManager: RuntimeManager[F]): F[BlockMessage] =
-    for {
-      timestamp <- deployTimestamp.fold(Time[F].currentMillis)(_.pure[F])
-      vaults    <- VaultParser.parse[F](maybeVaultsPath, genesisPath.resolve("wallets.txt"))
-      bonds <- BondsParser.parse[F](
-                maybeBondsPath,
-                genesisPath.resolve("bonds.txt"),
-                numValidators,
-                genesisPath
-              )
-      validators = bonds.toSeq.map(Validator.tupled)
-      genesisBlock <- createGenesisBlock(
-                       runtimeManager,
-                       Genesis(
-                         shardId = shardId,
-                         timestamp = timestamp,
-                         proofOfStake = ProofOfStake(
-                           minimumBond = minimumBond,
-                           maximumBond = maximumBond,
-                           validators = validators
-                         ),
-                         vaults = vaults,
-                         supply = Long.MaxValue
-                       )
-                     )
-    } yield genesisBlock
-
   def createGenesisBlock[F[_]: Concurrent](
       runtimeManager: RuntimeManager[F],
       genesis: Genesis
