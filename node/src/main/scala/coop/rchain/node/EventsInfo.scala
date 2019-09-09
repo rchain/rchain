@@ -15,6 +15,24 @@ import org.http4s.websocket.WebSocketFrame._
 import scala.{Stream => _}
 
 object EventsInfo {
+
+  /**
+    * The goal of this service is to provide a live view into what is happening in the node without grokking logs.
+    *
+    * This service is designed to drain all the data from an `EventConsumer` source
+    * and push them to all WebSocket clients
+    *
+    * The source defines a `def consume` method which results in a stream connected to an internal Queue.
+    * This could be connected straight to `WebSocketBuilder`
+    * but would result in a round-robin type behaviour for client_size > 1.
+    *
+    * To overcome this behavior an internal topic is introduced that pushes ALL the events from the mentioned Queue
+    * to the internal topic.
+    *
+    * The topic is able to replicate the messages to all its current clients (broadcast).
+    *
+    * The topic itself caches only 10 messages and the queue should do no caching at all as it will just be drained.
+    */
   def service[F[_]: EventConsumer: Sync: Concurrent]: F[HttpRoutes[F]] = {
 
     import io.circe.syntax._
@@ -57,7 +75,7 @@ object EventsInfo {
         .map(j => Text(j.noSpaces))
         .flatMap(fs2.Stream.emit)
         .through(topic.publish)
-      dataTopic = topic.subscribe(10)
+      dataTopic = topic.subscribe(maxQueued = 10)
       _         <- Concurrent[F].start(consumer.compile.drain)
       routes = {
         val dsl = org.http4s.dsl.Http4sDsl[F]
