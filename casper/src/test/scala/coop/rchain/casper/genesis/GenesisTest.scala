@@ -153,7 +153,7 @@ class GenesisTest extends FlatSpec with Matchers with EitherValues with BlockDag
                       time
                     )
           bonds = ProtoUtil.bonds(genesis)
-          _     = log.infos.isEmpty should be(true)
+          _     = log.infos.length should be(2)
           result = validators
             .map {
               case (v, i) => Bond(ByteString.copyFrom(Base16.unsafeDecode(v)), i.toLong)
@@ -199,7 +199,7 @@ class GenesisTest extends FlatSpec with Matchers with EitherValues with BlockDag
       for {
         genesis <- fromInputFiles()(runtimeManager, genesisPath, log, time)
         bonds   = ProtoUtil.bonds(genesis)
-        _       = log.infos.length should be(1)
+        _       = log.infos.length should be(3)
         result = validators
           .map {
             case (v, i) => Bond(ByteString.copyFrom(Base16.unsafeDecode(v)), i.toLong)

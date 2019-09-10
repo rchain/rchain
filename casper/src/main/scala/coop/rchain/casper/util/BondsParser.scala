@@ -16,9 +16,10 @@ import coop.rchain.shared.{Log, LogSource}
 import scala.util.{Failure, Success, Try}
 
 object BondsParser {
+
   implicit private val logSource: LogSource = LogSource(this.getClass)
 
-  private def parse[F[_]: Sync: RaiseIOError](
+  private def parse[F[_]: Sync: RaiseIOError: Log](
       bondsPath: Path
   ): F[Map[PublicKey, Long]] =
     SourceIO
@@ -35,7 +36,11 @@ object BondsParser {
         }
       }
       .flatMap {
-        case Success(bonds) => bonds.pure[F]
+        case Success(bonds) =>
+          bonds.toList.traverse_ {
+            case (pk, stake) =>
+              Log[F].info(s"Parsed validator ${Base16.encode(pk.bytes)} with bond $stake")
+          } >> bonds.pure[F]
         case Failure(_) =>
           Sync[F].raiseError(new Exception(s"Bonds file $bondsPath cannot be parsed"))
       }
