@@ -32,7 +32,10 @@ object BlockMetadataPersistentIndex {
                 }
                 .updated(block.blockHash, Set.empty[BlockHash])
             }
-        _ <- topoSortState.modify(topoSort => TopologicalSortUtil.update(topoSort, 0L, block))
+        _ <- if (!block.invalid)
+              topoSortState.modify(topoSort => TopologicalSortUtil.update(topoSort, 0L, block))
+            else
+              ().pure[F]
         _ <- persistentIndex.add(block.blockHash, block)
       } yield ()
 
@@ -64,7 +67,7 @@ object BlockMetadataPersistentIndex {
   private def extractTopoSort(
       blockMetadataMap: Map[BlockHash, BlockMetadata]
   ): Vector[Vector[BlockHash]] = {
-    val blockMetadatas = blockMetadataMap.values.toVector
+    val blockMetadatas = blockMetadataMap.values.filter(!_.invalid).toVector
     val indexedTopoSort =
       blockMetadatas.groupBy(_.blockNum).mapValues(_.map(_.blockHash)).toVector.sortBy(_._1)
     assert(indexedTopoSort.zipWithIndex.forall { case ((readI, _), i) => readI == i })
