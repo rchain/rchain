@@ -413,7 +413,7 @@ new  PoS,
       contract getUser (returnCh) = {
         new parametersCh, getParameters(`rho:deploy:params`) in {
           getParameters!(*parametersCh) |
-          for (_, _, @userPk, _ <- parametersCh) {
+          for (@userPk <- parametersCh) {
             returnCh!(userPk)
           }
         }

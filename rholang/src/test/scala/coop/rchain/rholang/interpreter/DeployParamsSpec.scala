@@ -62,17 +62,15 @@ class DeployParamsSpec extends fixture.FlatSpec with Matchers {
     implicit val rand     = Blake2b512Random(Array.empty[Byte])
     implicit val emptyEnv = Env[Par]()
     val ackChannel: Par   = GPrivate(ByteString.copyFrom(rand.next()))
-    val empty: Par        = GByteArray(ByteString.copyFrom(new Array[Byte](32)))
-    val phloRate: Par     = GInt(98765)
-    val timestamp: Par    = GInt(1234567890)
+    val deployerPk: Par   = GByteArray(ByteString.copyFrom(rand.next()))
     val send              = Send(Runtime.FixedChannels.GET_DEPLOY_PARAMS, List(ackChannel))
     (for {
-      _ <- runtime.deployParametersRef.set(DeployParameters(empty, phloRate, empty, timestamp))
+      _ <- runtime.deployParametersRef.set(DeployParameters(deployerPk))
       _ <- runtime.reducer.eval(send)
       _ <- assertStoreContains(
             runtime.space,
             ackChannel,
-            ListParWithRandom(List(empty, phloRate, empty, timestamp), rand)
+            ListParWithRandom(List(deployerPk), rand)
           )
     } yield ()).runSyncUnsafe(3.seconds)
 
