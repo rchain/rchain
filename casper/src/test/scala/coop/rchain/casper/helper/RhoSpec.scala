@@ -1,5 +1,6 @@
 package coop.rchain.casper.helper
 
+import cats.implicits._
 import coop.rchain.casper.genesis.contracts.TestUtil
 import coop.rchain.casper.genesis.contracts.TestUtil.eval
 import coop.rchain.casper.protocol.{DeployData, DeployDataProto}
@@ -37,12 +38,10 @@ class RhoSpec(
   def mkTest(test: (String, Map[Long, List[RhoTestAssertion]])): Unit =
     test match {
       case (testName, testAttempts) =>
-        assert(testAttempts.size > 0, "It doesn't make sense to have less than one attempt")
+        assert(testAttempts.nonEmpty, "It doesn't make sense to have less than one attempt")
 
         val (attempt, assertions) =
-          testAttempts
-            .find { case (_, assertions) => hasFailures(assertions) }
-            .getOrElse(testAttempts.head)
+          testAttempts.find(_._2.exists(!_.isSuccess)).getOrElse(testAttempts.head)
 
         def clueMsg(clue: String) = s"$clue (test attempt: $attempt)"
 
@@ -54,69 +53,61 @@ class RhoSpec(
               )
               actual should be(expected) withClue clueMsg(clue)
             case RhoAssertNotEquals(_, unexpected, actual, clue) =>
-              printer.buildString(actual) should not be (printer
-                .buildString(unexpected)) withClue clueMsg(clue)
-              actual should not be (unexpected) withClue clueMsg(clue)
+              printer.buildString(actual) should not be printer
+                .buildString(unexpected) withClue clueMsg(clue)
+              actual should not be unexpected withClue clueMsg(clue)
             case RhoAssertTrue(_, v, clue) =>
               v should be(true) withClue clueMsg(clue)
           }
         }
     }
 
-  def hasFailures(assertions: List[RhoTestAssertion]) = assertions.find(_.isSuccess).isDefined
-
   private def testFrameworkContracts(
       testResultCollector: TestResultCollector[Task]
-  ): Seq[SystemProcess.Definition[Task]] = {
-    val testResultCollectorService =
-      Seq((5, "assertAck", 101), (1, "testSuiteCompleted", 102))
-        .map {
-          case (arity, name, n) =>
-            SystemProcess.Definition[Task](
-              s"rho:test:$name",
-              Runtime.byteName(n.toByte),
-              arity,
-              n.toLong,
-              ctx => testResultCollector.handleMessage(ctx)(_, _)
-            )
-        } ++ Seq(
-        SystemProcess.Definition[Task](
-          "rho:io:stdlog",
-          Runtime.byteName(103),
-          2,
-          103L,
-          ctx => RhoLoggerContract.handleMessage(ctx)(_, _)
-        ),
-        SystemProcess.Definition[Task](
-          "rho:test:deploy:set",
-          Runtime.byteName(104),
-          3,
-          104L,
-          ctx => DeployDataContract.set(ctx)(_, _)
-        ),
-        SystemProcess.Definition[Task](
-          "rho:test:deployerId:get",
-          Runtime.byteName(105),
-          3,
-          105L,
-          ctx => DeployerIdContract.get(ctx)(_, _)
-        ),
-        SystemProcess.Definition[Task](
-          "rho:test:crypto:secp256k1Sign",
-          Runtime.byteName(106),
-          3,
-          106L,
-          ctx => Secp256k1SignContract.get(ctx)(_, _)
-        )
+  ): Seq[SystemProcess.Definition[Task]] =
+    Seq((5, "assertAck", 101), (1, "testSuiteCompleted", 102))
+      .map {
+        case (arity, name, n) =>
+          SystemProcess.Definition[Task](
+            s"rho:test:$name",
+            Runtime.byteName(n.toByte),
+            arity,
+            n.toLong,
+            ctx => testResultCollector.handleMessage(ctx)(_, _)
+          )
+      } ++ Seq(
+      SystemProcess.Definition[Task](
+        "rho:io:stdlog",
+        Runtime.byteName(103),
+        2,
+        103L,
+        ctx => RhoLoggerContract.handleMessage(ctx)(_, _)
+      ),
+      SystemProcess.Definition[Task](
+        "rho:test:deploy:set",
+        Runtime.byteName(104),
+        3,
+        104L,
+        ctx => DeployDataContract.set(ctx)(_, _)
+      ),
+      SystemProcess.Definition[Task](
+        "rho:test:deployerId:get",
+        Runtime.byteName(105),
+        3,
+        105L,
+        ctx => DeployerIdContract.get(ctx)(_, _)
+      ),
+      SystemProcess.Definition[Task](
+        "rho:test:crypto:secp256k1Sign",
+        Runtime.byteName(106),
+        3,
+        106L,
+        ctx => Secp256k1SignContract.get(ctx)(_, _)
       )
-    testResultCollectorService
-  }
+    )
 
-  private def getResults(
-      testObject: CompiledRholangSource,
-      timeout: FiniteDuration
-  ): Task[TestResult] =
-    TestResultCollector[Task].flatMap { testResultCollector =>
+  private def getResults: Task[TestResult] =
+    TestResultCollector[Task] >>= { testResultCollector =>
       val runtimeResource = for {
         storageDirs <- copyStorage[Task](
                         GenesisBuilder.buildGenesis(genesisParameters).storageDirectory
@@ -137,7 +128,7 @@ class RhoSpec(
                   implicitly,
                   rand.splitShort(1)
                 )
-                .timeout(timeout)
+                .timeout(executionTimeout)
 
           result <- testResultCollector.getResult
         } yield result
@@ -156,10 +147,10 @@ class RhoSpec(
       deploy: DeployData,
       runtime: Runtime[Task]
   ): Task[Unit] = {
-    val rand: Blake2b512Random = Blake2b512Random(
+    implicit val rand: Blake2b512Random = Blake2b512Random(
       ProtoUtil.stripDeployData(deploy).toProto.toByteArray
     )
-    eval(deploy.term, runtime, NormalizerEnv(deploy.toProto))(implicitly, rand)
+    eval(deploy.term, runtime, NormalizerEnv(deploy.toProto))
   }
 
   private val rhoSpecDeploy: DeployData =
@@ -173,12 +164,11 @@ class RhoSpec(
       )
     )
 
-  val result: TestResult = getResults(testObject, executionTimeout).runSyncUnsafe()
+  val result: TestResult = getResults.runSyncUnsafe()
 
   it should "finish execution within timeout" in {
     if (!result.hasFinished) fail(s"Timeout of $executionTimeout expired")
   }
 
-  result.assertions
-    .foreach(mkTest)
+  result.assertions.foreach(mkTest)
 }
