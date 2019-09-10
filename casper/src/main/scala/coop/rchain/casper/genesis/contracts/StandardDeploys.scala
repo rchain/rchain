@@ -61,13 +61,6 @@ object StandardDeploys {
       1559156356769L
     )
 
-  def lockbox: DeployData =
-    toDeploy(
-      CompiledRholangSource("Lockbox.rho", NormalizerEnv.Empty),
-      "04c1a88afc0810d0b7e4dea817f458c9d0a1913ec3459fb91bb9acdf0d867873d5144366275c5a63b0225a5167c6a838bb02285072d7177dc9f6407aaba87bca93",
-      1559156146649L
-    )
-
   def revVault: DeployData =
     toDeploy(
       CompiledRholangSource("RevVault.rho", NormalizerEnv.Empty),

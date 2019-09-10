@@ -22,7 +22,6 @@ in {
         `rho:lang:nonNegativeNumber` : `rho:id:hxyadh1ffypra47ry9mk6b8r1i33ar1w9wjsez4khfe9huzrfcytx9`,
         `rho:lang:treeHashMap` : `rho:id:ikbchopju4jwc5rt9q37yabkm1zeu4qzhtqi9hoj3erwwcdcmub4tz`,
         `rho:rchain:authKey` : `rho:id:1qw5ehmq1x49dey4eadr1h4ncm361w3536asho7dr38iyookwcsp6i`,
-        `rho:rchain:lockbox` : `rho:id:w5zfefaasr5euzu1x551wwbgnt8o1c4345r3cgcwa1guyfre36fihu`,
         `rho:rchain:makeMint` : `rho:id:asysrwfgzf8bf7sxkiowp4b3tcsy4f8ombi3w96ysox4u3qdmn1wbc`,
         `rho:rchain:pos` : `rho:id:m3xk7h8r54dtqtwsrnxqzhe81baswey66nzw6m533nyd45ptyoybqr`,
         `rho:rchain:revVault` : `rho:id:6zcfqnwnaqcwpeyuysx1rm48ndr6sgsbbgjuwf45i5nor3io7dr76j`
