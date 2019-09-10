@@ -96,7 +96,7 @@ in {
             contract _getIdentity(retCh) = {
               new getDeployData(`rho:deploy:params`), ch in {
                 getDeployData ! (*ch) |
-                for (_, _, @userId, _ <- ch) {
+                for (@userId <- ch) {
                   retCh ! (userId)
                 }
               }

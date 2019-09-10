@@ -244,12 +244,9 @@ object SystemProcesses {
       def getDeployParams(runtimeParametersRef: Ref[F, DeployParameters]): Contract[F] = {
         case isContractCall(produce, Seq(ack)) =>
           for {
-            params                                                  <- runtimeParametersRef.get
-            DeployParameters(codeHash, phloRate, userId, timestamp) = params
-            _ <- produce(
-                  Seq(codeHash, phloRate, userId, timestamp),
-                  ack
-                )
+            params                   <- runtimeParametersRef.get
+            DeployParameters(userId) = params
+            _                        <- produce(Seq(userId), ack)
           } yield ()
         case _ =>
           illegalArgumentException("deployParameters expects only a return channel")

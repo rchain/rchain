@@ -15,12 +15,12 @@ in {
 
   contract test_get_after_set(rhoSpec, _, ackCh) = {
     new retCh in {
-      getDeployData!( *retCh) |
-      for (@_,@_,@originalUserId, @_ <- retCh) {
+      getDeployData!(*retCh) |
+      for (@originalUserId <- retCh) {
         setDeployData!("userId", "00".hexToBytes(), *retCh) |
         for (_ <- retCh) {
           getDeployData!(*retCh) |
-          for (@_,@_,@newUserId,@_ <- retCh) {
+          for (@newUserId <- retCh) {
             rhoSpec!("assertMany",
               [
                 ((Nil, "==", originalUserId), "the userId should be Nil by default"),

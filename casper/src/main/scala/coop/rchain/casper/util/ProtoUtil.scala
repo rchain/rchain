@@ -460,10 +460,8 @@ object ProtoUtil {
   }
 
   def getRholangDeployParams(dd: DeployData): DeployParameters = {
-    val phloPrice: Par = Par(exprs = Seq(Expr(Expr.ExprInstance.GInt(dd.phloPrice))))
-    val userId: Par    = Par(exprs = Seq(Expr(Expr.ExprInstance.GByteArray(dd.deployer))))
-    val timestamp: Par = Par(exprs = Seq(Expr(Expr.ExprInstance.GInt(dd.timestamp))))
-    DeployParameters(computeCodeHash(dd), phloPrice, userId, timestamp)
+    val userId: Par = Par(exprs = Seq(Expr(Expr.ExprInstance.GByteArray(dd.deployer))))
+    DeployParameters(userId)
   }
 
   def dependenciesHashesOf(b: BlockMessage): List[BlockHash] = {
