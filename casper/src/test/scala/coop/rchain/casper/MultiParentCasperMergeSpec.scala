@@ -251,12 +251,11 @@ class MultiParentCasperMergeSpec
       // TODO: Do not filter out missing cases
       withVolatiles
         .map(_.mkString(" "))
-        .filterNot(_.contains("P"))
         .filterNot(_.contains("!!"))
         .toSet
     }
 
-    val testedMergeabilityCases = baseMergeabilityCases.map(_._1)
+    val testedMergeabilityCases = (baseMergeabilityCases ++ peekMergeabilityCases).map(_._1)
     withClue(s"""Missing cases: ${allMergeabilityCases
       .diff(testedMergeabilityCases.toSet)
       .toList
