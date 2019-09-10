@@ -1,7 +1,5 @@
 package coop.rchain.casper.helper
 
-import cats.effect.{Concurrent, Sync}
-import cats.implicits._
 import coop.rchain.casper.genesis.contracts.TestUtil
 import coop.rchain.casper.genesis.contracts.TestUtil.eval
 import coop.rchain.casper.protocol.{DeployData, DeployDataProto}
@@ -20,7 +18,7 @@ import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
 import org.scalatest.{AppendedClues, FlatSpec, Matchers}
 
-import scala.concurrent.duration.{Duration, FiniteDuration}
+import scala.concurrent.duration.FiniteDuration
 
 class RhoSpec(
     testObject: CompiledRholangSource,
@@ -67,14 +65,14 @@ class RhoSpec(
 
   def hasFailures(assertions: List[RhoTestAssertion]) = assertions.find(_.isSuccess).isDefined
 
-  private def testFrameworkContracts[F[_]: Log: Concurrent: Span](
-      testResultCollector: TestResultCollector[F]
-  ): Seq[SystemProcess.Definition[F]] = {
+  private def testFrameworkContracts(
+      testResultCollector: TestResultCollector[Task]
+  ): Seq[SystemProcess.Definition[Task]] = {
     val testResultCollectorService =
       Seq((5, "assertAck", 101), (1, "testSuiteCompleted", 102))
         .map {
           case (arity, name, n) =>
-            SystemProcess.Definition[F](
+            SystemProcess.Definition[Task](
               s"rho:test:$name",
               Runtime.byteName(n.toByte),
               arity,
@@ -82,28 +80,28 @@ class RhoSpec(
               ctx => testResultCollector.handleMessage(ctx)(_, _)
             )
         } ++ Seq(
-        SystemProcess.Definition[F](
+        SystemProcess.Definition[Task](
           "rho:io:stdlog",
           Runtime.byteName(103),
           2,
           103L,
           ctx => RhoLoggerContract.handleMessage(ctx)(_, _)
         ),
-        SystemProcess.Definition[F](
+        SystemProcess.Definition[Task](
           "rho:test:deploy:set",
           Runtime.byteName(104),
           3,
           104L,
           ctx => DeployDataContract.set(ctx)(_, _)
         ),
-        SystemProcess.Definition[F](
+        SystemProcess.Definition[Task](
           "rho:test:deployerId:get",
           Runtime.byteName(105),
           3,
           105L,
           ctx => DeployerIdContract.get(ctx)(_, _)
         ),
-        SystemProcess.Definition[F](
+        SystemProcess.Definition[Task](
           "rho:test:crypto:secp256k1Sign",
           Runtime.byteName(106),
           3,
@@ -132,7 +130,7 @@ class RhoSpec(
       runtimeResource.use { runtime =>
         for {
           _    <- logger.info("Starting tests from " + testObject.path)
-          _    <- setupRuntime[Task](runtime)
+          _    <- setupRuntime(runtime)
           rand = Blake2b512Random(128)
           _ <- TestUtil
                 .eval(testObject.code, runtime, testObject.normalizerEnv)(
@@ -146,7 +144,7 @@ class RhoSpec(
       }
     }
 
-  private def setupRuntime[F[_]: Sync](runtime: Runtime[F]): F[Runtime[F]] =
+  private def setupRuntime(runtime: Runtime[Task]): Task[Runtime[Task]] =
     for {
       _ <- evalDeploy(rhoSpecDeploy, runtime)
       // reset the deployParams.userId before executing the test
@@ -154,10 +152,10 @@ class RhoSpec(
       _ <- runtime.deployParametersRef.update(_.copy(userId = Par()))
     } yield runtime
 
-  private def evalDeploy[F[_]: Sync](
+  private def evalDeploy(
       deploy: DeployData,
-      runtime: Runtime[F]
-  ): F[Unit] = {
+      runtime: Runtime[Task]
+  ): Task[Unit] = {
     val rand: Blake2b512Random = Blake2b512Random(
       ProtoUtil.stripDeployData(deploy).toProto.toByteArray
     )
@@ -175,8 +173,7 @@ class RhoSpec(
       )
     )
 
-  val result =
-    getResults(testObject, executionTimeout).runSyncUnsafe(Duration.Inf)
+  val result: TestResult = getResults(testObject, executionTimeout).runSyncUnsafe()
 
   it should "finish execution within timeout" in {
     if (!result.hasFinished) fail(s"Timeout of $executionTimeout expired")
