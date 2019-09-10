@@ -7,6 +7,5 @@ import coop.rchain.rholang.interpreter.NormalizerEnv
 class AuthKeySpec
     extends RhoSpec(
       CompiledRholangSource("AuthKeyTest.rho", NormalizerEnv.Empty),
-      Seq.empty,
       GENESIS_TEST_TIMEOUT
     )

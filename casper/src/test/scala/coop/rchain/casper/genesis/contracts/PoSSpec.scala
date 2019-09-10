@@ -14,7 +14,6 @@ import scala.concurrent.duration._
 class PoSSpec
     extends RhoSpec(
       CompiledRholangSource("PoSTest.rho", NormalizerEnv.Empty),
-      Seq.empty,
       120.seconds,
       genesisParameters = GenesisBuilder
         .buildGenesisParameters()

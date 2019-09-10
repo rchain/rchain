@@ -8,6 +8,5 @@ import scala.concurrent.duration._
 class ListOpsSpec
     extends RhoSpec(
       CompiledRholangSource("ListOpsTest.rho", NormalizerEnv.Empty),
-      Seq.empty,
       GENESIS_TEST_TIMEOUT
     )

@@ -10,7 +10,6 @@ import coop.rchain.rholang.interpreter.NormalizerEnv
 class RevVaultSpec
     extends RhoSpec(
       CompiledRholangSource("RevVaultTest.rho", RevVaultSpec.normalizerEnv),
-      Seq.empty,
       GENESIS_TEST_TIMEOUT
     )
 

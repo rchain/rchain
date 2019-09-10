@@ -24,7 +24,6 @@ import scala.concurrent.duration.{Duration, FiniteDuration}
 
 class RhoSpec(
     testObject: CompiledRholangSource,
-    extraNonGenesisDeploys: Seq[DeployData],
     executionTimeout: FiniteDuration,
     genesisParameters: GenesisParameters = GenesisBuilder.buildGenesisParameters()
 ) extends FlatSpec
@@ -117,7 +116,6 @@ class RhoSpec(
 
   private def getResults(
       testObject: CompiledRholangSource,
-      otherLibs: Seq[DeployData],
       timeout: FiniteDuration
   ): Task[TestResult] =
     TestResultCollector[Task].flatMap { testResultCollector =>
@@ -133,11 +131,8 @@ class RhoSpec(
 
       runtimeResource.use { runtime =>
         for {
-          _ <- logger.info("Starting tests from " + testObject.path)
-          _ <- setupRuntime[Task](
-                runtime,
-                otherLibs
-              )
+          _    <- logger.info("Starting tests from " + testObject.path)
+          _    <- setupRuntime[Task](runtime)
           rand = Blake2b512Random(128)
           _ <- TestUtil
                 .eval(testObject.code, runtime, testObject.normalizerEnv)(
@@ -151,13 +146,9 @@ class RhoSpec(
       }
     }
 
-  private def setupRuntime[F[_]: Sync](
-      runtime: Runtime[F],
-      otherLibs: Seq[DeployData]
-  ): F[Runtime[F]] =
+  private def setupRuntime[F[_]: Sync](runtime: Runtime[F]): F[Runtime[F]] =
     for {
       _ <- evalDeploy(rhoSpecDeploy, runtime)
-      _ <- otherLibs.toList.traverse(evalDeploy(_, runtime))
       // reset the deployParams.userId before executing the test
       // otherwise it'd execute as the deployer of last deployed contract
       _ <- runtime.deployParametersRef.update(_.copy(userId = Par()))
@@ -185,7 +176,7 @@ class RhoSpec(
     )
 
   val result =
-    getResults(testObject, extraNonGenesisDeploys, executionTimeout).runSyncUnsafe(Duration.Inf)
+    getResults(testObject, executionTimeout).runSyncUnsafe(Duration.Inf)
 
   it should "finish execution within timeout" in {
     if (!result.hasFinished) fail(s"Timeout of $executionTimeout expired")

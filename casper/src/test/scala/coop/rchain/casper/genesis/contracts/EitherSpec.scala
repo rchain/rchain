@@ -6,6 +6,5 @@ import coop.rchain.rholang.interpreter.NormalizerEnv
 class EitherSpec
     extends RhoSpec(
       CompiledRholangSource("EitherTest.rho", NormalizerEnv.Empty),
-      Seq.empty,
       GENESIS_TEST_TIMEOUT
     )

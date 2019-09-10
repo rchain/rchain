@@ -6,6 +6,5 @@ import coop.rchain.rholang.interpreter.NormalizerEnv
 class TreeHashMapSpec
     extends RhoSpec(
       CompiledRholangSource("TreeHashMapTest.rho", NormalizerEnv.Empty),
-      Seq.empty,
       GENESIS_TEST_TIMEOUT
     )

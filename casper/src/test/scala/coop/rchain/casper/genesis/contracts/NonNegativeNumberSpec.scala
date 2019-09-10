@@ -6,6 +6,5 @@ import coop.rchain.rholang.interpreter.NormalizerEnv
 class NonNegativeNumberSpec
     extends RhoSpec(
       CompiledRholangSource("NonNegativeNumberTest.rho", NormalizerEnv.Empty),
-      Seq.empty,
       GENESIS_TEST_TIMEOUT
     )

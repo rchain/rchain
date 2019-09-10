@@ -7,6 +7,5 @@ import coop.rchain.rholang.interpreter.NormalizerEnv
 class RegistrySpec
     extends RhoSpec(
       CompiledRholangSource("RegistryTest.rho", NormalizerEnv.Empty),
-      Seq.empty,
       GENESIS_TEST_TIMEOUT
     )

@@ -8,6 +8,5 @@ import scala.concurrent.duration._
 class BlockDataContractSpec
     extends RhoSpec(
       CompiledRholangSource("BlockDataContractTest.rho", NormalizerEnv.Empty),
-      Seq.empty,
       30.seconds
     )
