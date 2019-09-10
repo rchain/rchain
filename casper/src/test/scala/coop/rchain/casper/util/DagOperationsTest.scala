@@ -72,9 +72,10 @@ class DagOperationsTest
         dag <- blockDagStorage.getRepresentation
 
         _      <- DagOperations.lowestCommonAncestorF[Task](b1, b5, dag) shouldBeF b1
+        _      <- DagOperations.lowestCommonAncestorF[Task](b2, b8, dag) shouldBeF b2
         _      <- DagOperations.lowestCommonAncestorF[Task](b2, b3, dag) shouldBeF b1
         _      <- DagOperations.lowestCommonAncestorF[Task](b3, b2, dag) shouldBeF b1
-        _      <- DagOperations.lowestCommonAncestorF[Task](b6, b7, dag) shouldBeF b1
+        _      <- DagOperations.lowestCommonAncestorF[Task](b6, b7, dag) shouldBeF b4
         _      <- DagOperations.lowestCommonAncestorF[Task](b2, b2, dag) shouldBeF b2
         _      <- DagOperations.lowestCommonAncestorF[Task](b10, b9, dag) shouldBeF b8
         result <- DagOperations.lowestCommonAncestorF[Task](b3, b7, dag) shouldBeF b3

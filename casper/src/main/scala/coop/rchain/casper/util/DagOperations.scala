@@ -117,22 +117,29 @@ object DagOperations {
     def getParents(p: BlockMetadata): F[Set[BlockMetadata]] =
       p.parents.traverse(dag.lookup).map(_.toSet.flatten)
 
-    def extractParentsFromHighestNumBlock(
-        blocks: SortedSet[BlockMetadata]
-    ): F[SortedSet[BlockMetadata]] = {
-      val (head, tail) = (blocks.head, blocks.tail)
-      getParents(head).map(newBlocks => tail ++ newBlocks)
+    type LeftRightAncestors = (SortedSet[BlockMetadata], SortedSet[BlockMetadata])
+
+    def extractParentsFromHighestNumBlock(blocks: LeftRightAncestors): F[LeftRightAncestors] = {
+      val (leftAncestors, rightAncestors) = blocks
+      val (leftMin, leftTail)             = (leftAncestors.head, leftAncestors.tail)
+      val (rightMin, rightTail)           = (rightAncestors.head, rightAncestors.tail)
+      if (blockMetadataByNumDecreasing.compare(leftMin, rightMin) <= 0) {
+        getParents(leftMin).map(newBlocks => (leftTail ++ newBlocks, rightAncestors))
+      } else {
+        getParents(rightMin).map(newBlocks => (leftAncestors, rightTail ++ newBlocks))
+      }
     }
 
     if (b1 == b2) {
       b1.pure[F]
     } else {
-      val start = SortedSet.empty[BlockMetadata] + b1 + b2
+      val start = (SortedSet(b1), SortedSet(b2))
       Monad[F]
-        .iterateWhileM(start)(extractParentsFromHighestNumBlock)(
-          _.size != 1
-        )
-        .map(_.head)
+        .iterateWhileM(start)(extractParentsFromHighestNumBlock) {
+          case (leftAncestors, rightAncestors) =>
+            leftAncestors.head != rightAncestors.head
+        }
+        .map(_._1.head)
     }
   }
 }
