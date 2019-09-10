@@ -1,12 +1,20 @@
 package coop.rchain.casper.engine
 
+import java.nio.file.Path
+
 import cats.FlatMap
-import cats.effect.Sync
+import cats.effect.{Concurrent, Sync}
 import cats.effect.concurrent.Ref
 import cats.implicits._
+import coop.rchain.blockstorage.util.io.IOError.RaiseIOError
 import coop.rchain.casper.LastApprovedBlock.LastApprovedBlock
+import coop.rchain.casper.genesis.Genesis
+import coop.rchain.casper.genesis.Genesis.createGenesisBlock
+import coop.rchain.casper.genesis.contracts.{ProofOfStake, Validator}
 import coop.rchain.casper.protocol._
+import coop.rchain.casper.util.{BondsParser, VaultParser}
 import coop.rchain.casper.util.comm.CommUtil
+import coop.rchain.casper.util.rholang.RuntimeManager
 import coop.rchain.casper.{LastApprovedBlock, PrettyPrinter, Validate, _}
 import coop.rchain.comm.rp.Connect.{ConnectionsCell, RPConfAsk}
 import coop.rchain.comm.transport
@@ -50,15 +58,56 @@ object ApproveBlockProtocol {
       sigsF
     )
 
-  def of[F[_]: Sync: ConnectionsCell: TransportLayer: Log: EventLog: Time: Metrics: RPConfAsk: LastApprovedBlock](
-      genesisBlock: BlockMessage,
+  def of[F[_]: Sync: Concurrent: RaiseIOError: ConnectionsCell: TransportLayer: Log: EventLog: Time: Metrics: RuntimeManager: RPConfAsk: LastApprovedBlock](
+      maybeBondsPath: Option[String],
+      numValidators: Int,
+      genesisPath: Path,
+      maybeVaultsPath: Option[String],
+      minimumBond: Long,
+      maximumBond: Long,
+      shardId: String,
+      deployTimestamp: Option[Long],
       requiredSigs: Int,
       duration: FiniteDuration,
       interval: FiniteDuration
   ): F[ApproveBlockProtocol[F]] =
     for {
-      now   <- Time[F].currentMillis
+      now       <- Time[F].currentMillis
+      timestamp = deployTimestamp.getOrElse(now)
+
+      vaults <- VaultParser.parse[F](maybeVaultsPath, genesisPath.resolve("wallets.txt"))
+      bonds <- BondsParser.parse[F](
+                maybeBondsPath,
+                genesisPath.resolve("bonds.txt"),
+                numValidators,
+                genesisPath
+              )
+
+      genesisBlock <- if (bonds.size <= requiredSigs)
+                       Sync[F].raiseError[BlockMessage](
+                         new Exception(
+                           "Required sigs must be smaller than the number of bonded validators"
+                         )
+                       )
+                     else {
+                       val validators = bonds.toSeq.map(Validator.tupled)
+                       createGenesisBlock(
+                         implicitly[RuntimeManager[F]],
+                         Genesis(
+                           shardId = shardId,
+                           timestamp = timestamp,
+                           proofOfStake = ProofOfStake(
+                             minimumBond = minimumBond,
+                             maximumBond = maximumBond,
+                             validators = validators
+                           ),
+                           vaults = vaults,
+                           supply = Long.MaxValue
+                         )
+                       )
+                     }
       sigsF <- Ref.of[F, Set[Signature]](Set.empty)
+
     } yield new ApproveBlockProtocolImpl[F](
       genesisBlock,
       requiredSigs,
@@ -120,9 +169,7 @@ object ApproveBlockProtocol {
                     .map(s => PrettyPrinter.buildString(s.publicKey))
                     .mkString(", ")}"
                 )
-            _ <- Log[F].info(
-                  s"APPROVAL: Remaining approvals needed: ${requiredSigs - after.size + 1}"
-                )
+
             _ <- EventLog[F].publish(
                   shared.Event.BlockApprovalReceived(
                     a.candidate

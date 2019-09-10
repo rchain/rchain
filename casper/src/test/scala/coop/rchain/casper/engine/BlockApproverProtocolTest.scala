@@ -21,10 +21,9 @@ class BlockApproverProtocolTest extends FlatSpec with Matchers {
   implicit private val scheduler: Scheduler = Scheduler.fixedPool("block-approval-protocol-test", 4)
 
   "BlockApproverProtocol" should "respond to valid ApprovedBlockCandidates" in {
-    val n = 8
-    createProtocol(n).flatMap {
+    createProtocol.flatMap {
       case (approver, node) =>
-        val unapproved = createUnapproved(n, node.genesis)
+        val unapproved = createUnapproved(approver.requiredSigs, node.genesis)
         import node._
 
         for {
@@ -43,11 +42,11 @@ class BlockApproverProtocolTest extends FlatSpec with Matchers {
   }
 
   it should "log a warning for invalid ApprovedBlockCandidates" in effectTest {
-    val n = 8
-    createProtocol(n).flatMap {
+    createProtocol.flatMap {
       case (approver, node) =>
-        val differentUnapproved1 = createUnapproved(n / 2, node.genesis)             //wrong number of signatures
-        val differentUnapproved2 = createUnapproved(n, BlockMessage.defaultInstance) //wrong block
+        val differentUnapproved1 = createUnapproved(approver.requiredSigs / 2, node.genesis) //wrong number of signatures
+        val differentUnapproved2 =
+          createUnapproved(approver.requiredSigs, BlockMessage.defaultInstance) //wrong block
         import node._
 
         for {
@@ -78,29 +77,33 @@ object BlockApproverProtocolTest {
   def unapprovedToPacket(u: UnapprovedBlock): Packet =
     Packet(transport.UnapprovedBlock.id, u.toByteString)
 
-  def createProtocol(
-      requiredSigs: Int
-  ): Effect[(BlockApproverProtocol, HashSetCasperTestNode[Effect])] = {
+  def createProtocol: Effect[(BlockApproverProtocol, HashSetCasperTestNode[Effect])] = {
     import monix.execution.Scheduler.Implicits.global
 
     val params @ (_, genesisParams) = GenesisBuilder.buildGenesisParameters()
     val context                     = GenesisBuilder.buildGenesis(params)
+
+    val bonds        = genesisParams.proofOfStake.validators.map(v => v.pk -> v.stake).toMap
+    val requiredSigs = bonds.size - 1
+
     HashSetCasperTestNode.networkEff(context, networkSize = 1).use { nodes =>
       val node = nodes.head
-      (new BlockApproverProtocol(
-        node.validatorId,
-        genesisParams.timestamp,
-        Traverse[List]
-          .traverse(genesisParams.proofOfStake.validators.map(_.pk).toList)(
-            RevAddress.fromPublicKey
-          )
-          .get
-          .map(Vault(_, 0L)),
-        genesisParams.proofOfStake.validators.map(v => v.pk -> v.stake).toMap,
-        genesisParams.proofOfStake.minimumBond,
-        genesisParams.proofOfStake.maximumBond,
-        requiredSigs
-      ) -> node).pure[Effect]
+      BlockApproverProtocol
+        .of[Effect](
+          node.validatorId,
+          genesisParams.timestamp,
+          Traverse[List]
+            .traverse(genesisParams.proofOfStake.validators.map(_.pk).toList)(
+              RevAddress.fromPublicKey
+            )
+            .get
+            .map(Vault(_, 0L)),
+          bonds,
+          genesisParams.proofOfStake.minimumBond,
+          genesisParams.proofOfStake.maximumBond,
+          requiredSigs
+        )
+        .map(_ -> node)
     }
   }
 
