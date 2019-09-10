@@ -92,10 +92,11 @@ object DagOperations {
   }
 
   /**
-    * Conceptually, the LCA is the lowest point at which the histories of b1 and b2 diverge.
-    * We compute by finding the first block that is the "lowest" (has highest blocknum) common block.
+    * Conceptually, the LUCA is the lowest point at which the histories of b1 and b2 diverge.
+    * We compute by finding the first block that is the "lowest" (has highest blocknum) block common
+    * for both blocks' ancestors.
     */
-  def lowestCommonAncestorF[F[_]: Monad](
+  def lowestUniversalCommonAncestorF[F[_]: Monad](
       b1: BlockMetadata,
       b2: BlockMetadata,
       dag: BlockDagRepresentation[F]

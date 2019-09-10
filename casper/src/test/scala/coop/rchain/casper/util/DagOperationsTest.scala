@@ -24,7 +24,7 @@ class DagOperationsTest
     stream.take(10).toList shouldBe List(1, 2, 3, 4, 6, 9, 8, 12, 18, 27)
   }
 
-  "lowest common ancestor" should "be computed properly" in withStorage {
+  "lowest common universal ancestor" should "be computed properly" in withStorage {
     implicit blockStore => implicit blockDagStorage =>
       def createBlockWithMeta(genesis: BlockMessage, bh: BlockHash*): Task[BlockMetadata] =
         createBlock[Task](bh.toSeq, genesis).map(b => BlockMetadata.fromBlock(b, false))
@@ -71,13 +71,13 @@ class DagOperationsTest
 
         dag <- blockDagStorage.getRepresentation
 
-        _      <- DagOperations.lowestCommonAncestorF[Task](b1, b5, dag) shouldBeF b1
-        _      <- DagOperations.lowestCommonAncestorF[Task](b2, b3, dag) shouldBeF b1
-        _      <- DagOperations.lowestCommonAncestorF[Task](b3, b2, dag) shouldBeF b1
-        _      <- DagOperations.lowestCommonAncestorF[Task](b6, b7, dag) shouldBeF b1
-        _      <- DagOperations.lowestCommonAncestorF[Task](b2, b2, dag) shouldBeF b2
-        _      <- DagOperations.lowestCommonAncestorF[Task](b10, b9, dag) shouldBeF b8
-        result <- DagOperations.lowestCommonAncestorF[Task](b3, b7, dag) shouldBeF b3
+        _      <- DagOperations.lowestUniversalCommonAncestorF[Task](b1, b5, dag) shouldBeF b1
+        _      <- DagOperations.lowestUniversalCommonAncestorF[Task](b2, b3, dag) shouldBeF b1
+        _      <- DagOperations.lowestUniversalCommonAncestorF[Task](b3, b2, dag) shouldBeF b1
+        _      <- DagOperations.lowestUniversalCommonAncestorF[Task](b6, b7, dag) shouldBeF b1
+        _      <- DagOperations.lowestUniversalCommonAncestorF[Task](b2, b2, dag) shouldBeF b2
+        _      <- DagOperations.lowestUniversalCommonAncestorF[Task](b10, b9, dag) shouldBeF b8
+        result <- DagOperations.lowestUniversalCommonAncestorF[Task](b3, b7, dag) shouldBeF b3
       } yield result
   }
 

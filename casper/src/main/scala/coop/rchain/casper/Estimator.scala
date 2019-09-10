@@ -85,7 +85,7 @@ object Estimator {
                    .foldM(latestMessages.head) {
                      case (acc, latestMessage) =>
                        // TODO: Change to mainParentLCA
-                       DagOperations.lowestCommonAncestorF[F](
+                       DagOperations.lowestUniversalCommonAncestorF[F](
                          acc,
                          latestMessage,
                          blockDag
