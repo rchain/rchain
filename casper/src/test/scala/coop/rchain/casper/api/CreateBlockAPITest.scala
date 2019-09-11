@@ -22,15 +22,16 @@ import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.Validator.Validator
 import coop.rchain.p2p.EffectsTestInstances._
 import coop.rchain.shared.{Cell, Time}
+import coop.rchain.shared.scalatestcontrib._
 
 import monix.eval.Task
 import monix.execution.Scheduler
-import org.scalatest.{FlatSpec, Matchers}
+import org.scalatest.{EitherValues, FlatSpec, Matchers}
 import scala.concurrent.duration._
 
 import coop.rchain.metrics
 
-class CreateBlockAPITest extends FlatSpec with Matchers {
+class CreateBlockAPITest extends FlatSpec with Matchers with EitherValues {
   import GenesisBuilder._
   import HashSetCasperTestNode.Effect
 
@@ -38,10 +39,11 @@ class CreateBlockAPITest extends FlatSpec with Matchers {
   implicit val spanEff: NoopSpan[Effect]   = NoopSpan[Effect]
   implicit val metricsEff: Metrics[Effect] = new metrics.Metrics.MetricsNOP[Effect]
 
-  "createBlock" should "not allow simultaneous calls" in {
-    implicit val logEff    = new LogStub[Effect]
-    implicit val scheduler = Scheduler.fixedPool("three-threads", 3)
-    implicit val spanEff   = NoopSpan[Effect]
+  implicit val scheduler = Scheduler.fixedPool("three-threads", 3)
+
+  "createBlock" should "not allow simultaneous calls" in effectTest {
+    implicit val logEff  = new LogStub[Effect]
+    implicit val spanEff = NoopSpan[Effect]
     implicit val time = new Time[Task] {
       private val timer                               = Task.timer
       def currentMillis: Task[Long]                   = timer.clock.realTime(MILLISECONDS)
@@ -67,9 +69,9 @@ class CreateBlockAPITest extends FlatSpec with Matchers {
           implicit engineCell: EngineCell[Effect]
       ): Effect[
         (
-            Either[Throwable, ApiErr[DeployServiceResponse]],
-            Either[Throwable, ApiErr[DeployServiceResponse]],
-            Either[Throwable, ApiErr[DeployServiceResponse]]
+            ApiErr[DeployServiceResponse],
+            ApiErr[DeployServiceResponse],
+            ApiErr[DeployServiceResponse]
         )
       ] =
         for {
@@ -80,7 +82,7 @@ class CreateBlockAPITest extends FlatSpec with Matchers {
           r1 <- t1.join.attempt
           r2 <- t2.join.attempt
           r3 <- t3.join.attempt
-        } yield (r1, r2, r3)
+        } yield (r1.right.value, r2.right.value, r3.right.value)
 
       val (response1, response2, response3) = (for {
         engine       <- new EngineWithCasper[Task](casper).pure[Task]
@@ -92,8 +94,8 @@ class CreateBlockAPITest extends FlatSpec with Matchers {
       response1 shouldBe a[Right[_, DeployServiceResponse]]
       response2 shouldBe a[Left[_, DeployServiceResponse]]
       response3 shouldBe a[Left[_, DeployServiceResponse]]
-      response2.left.map(_.getMessage) shouldBe "Error: There is another propose in progress."
-      response3.left.map(_.getMessage) shouldBe "Error: There is another propose in progress."
+      response2.left.value shouldBe "Error: There is another propose in progress."
+      response3.left.value shouldBe "Error: There is another propose in progress."
 
       ().pure[Effect]
     }
