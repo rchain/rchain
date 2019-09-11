@@ -267,7 +267,7 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: ConnectionsCell: TransportLa
       _ <- lastFinalizedBlockHashContainer.set(updatedLastFinalizedBlockHash)
       _ <- EventPublisher[F]
             .publish(
-              RChainEvent.finalised(updatedLastFinalizedBlockHash.base16String)
+              RChainEvent.blockFinalised(updatedLastFinalizedBlockHash.base16String)
             )
             .whenA(lastFinalizedBlockHash != updatedLastFinalizedBlockHash)
       blockMessage <- ProtoUtil.getBlock[F](updatedLastFinalizedBlockHash)
@@ -538,7 +538,7 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: ConnectionsCell: TransportLa
 object MultiParentCasperImpl {
   def addedEvent(block: BlockMessage): RChainEvent = {
     val (blockHash, parents, justifications, deployIds, creator, seqNum) = blockEvent(block)
-    RChainEvent.added(
+    RChainEvent.blockAdded(
       blockHash,
       parents,
       justifications,
@@ -550,7 +550,7 @@ object MultiParentCasperImpl {
 
   def createdEvent(cbs: Created): RChainEvent = {
     val (blockHash, parents, justifications, deployIds, creator, seqNum) = blockEvent(cbs.block)
-    RChainEvent.added(
+    RChainEvent.blockAdded(
       blockHash,
       parents,
       justifications,
