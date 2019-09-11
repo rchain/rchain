@@ -79,7 +79,9 @@ in {
     new unf1, unf2, r1, r2 in {
       revAddress!("fromUnforgeable", *unf1, *r1) |
       revAddress!("fromUnforgeable", *unf2, *r2) |
-      rhoSpec!("assert", (*r1, "!= <-", *r2), "expecting RevAddresses to be unequal", *ackCh)
+      for (@fromUnf1 <- r1) {
+        rhoSpec!("assert", (fromUnf1, "!= <-", *r2), "expecting RevAddresses to be unequal", *ackCh)
+      }
     }
   } |
 
