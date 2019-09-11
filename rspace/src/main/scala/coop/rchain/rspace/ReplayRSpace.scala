@@ -177,7 +177,7 @@ class ReplayRSpace[F[_]: Sync, C, P, A, K](
       _ <- logF.debug(s"""|consume: searching for data matching <patterns: $patterns>
                           |at <channels: $channels>""".stripMargin.replace('\n', ' '))
       consumeRef <- syncF.delay {
-                     Consume.create(channels, patterns, continuation, persist, sequenceNumber)
+                     Consume.create(channels, patterns, continuation, persist)
                    }
       r <- replayData.get(consumeRef) match {
             case None =>

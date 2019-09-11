@@ -132,7 +132,7 @@ class RSpace[F[_], C, P, A, K] private[rspace] (
       } else
         (for {
           consumeRef <- syncF.delay {
-                         Consume.create(channels, patterns, continuation, persist, sequenceNumber)
+                         Consume.create(channels, patterns, continuation, persist)
                        }
           result <- consumeLockF(channels) {
                      for {
@@ -196,12 +196,9 @@ class RSpace[F[_], C, P, A, K] private[rspace] (
       consumeRef: Consume,
       dataCandidates: Seq[DataCandidate[C, A]]
   ): Int =
-    Math.max(
-      consumeRef.sequenceNumber,
-      dataCandidates.map {
-        case DataCandidate(_, Datum(_, _, source), _, _) => source.sequenceNumber
-      }.max
-    ) + 1
+    dataCandidates.map {
+      case DataCandidate(_, Datum(_, _, source), _, _) => source.sequenceNumber
+    }.max + 1
 
   /*
    * Find produce candidate

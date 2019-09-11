@@ -148,7 +148,7 @@ abstract class RSpaceOps[F[_]: Concurrent: Metrics, C, P, A, K](
       for {
         _          <- logF.debug(s"""|install: searching for data matching <patterns: $patterns>
                                   |at <channels: $channels>""".stripMargin.replace('\n', ' '))
-        consumeRef = Consume.create(channels, patterns, continuation, true, 0)
+        consumeRef = Consume.create(channels, patterns, continuation, true)
         channelToIndexedData <- channels
                                  .traverse { c =>
                                    for {

@@ -43,10 +43,7 @@ final case class COMM(
     peeks: SortedSet[Int]
 ) extends Event {
   def nextSequenceNumber: Int =
-    Math.max(
-      consume.sequenceNumber,
-      produces.map(_.sequenceNumber).max
-    ) + 1
+    produces.map(_.sequenceNumber).max + 1
 }
 
 object COMM {
@@ -107,32 +104,30 @@ object Produce {
 final case class Consume private (
     channelsHashes: Seq[Blake2b256Hash],
     hash: Blake2b256Hash,
-    persistent: Boolean,
-    sequenceNumber: Int
+    persistent: Boolean
 ) extends IOEvent {
 
   override def equals(obj: scala.Any): Boolean = obj match {
-    case consume: Consume => consume.hash == hash && consume.sequenceNumber == sequenceNumber
+    case consume: Consume => consume.hash == hash
     case _                => false
   }
 
-  override def hashCode(): Int = hash.hashCode() * 47 + sequenceNumber.hashCode()
+  override def hashCode(): Int = hash.hashCode() * 47
 
   override def toString: String =
-    s"Consume(channels: ${channelsHashes.toString}, hash: ${hash.toString}, persistent: $persistent, seqNo: ${sequenceNumber})"
+    s"Consume(channels: ${channelsHashes.toString}, hash: ${hash.toString}, persistent: $persistent)"
 }
 
 object Consume {
 
   def unapply(arg: Consume): Option[(Seq[Blake2b256Hash], Blake2b256Hash, Int)] =
-    Some((arg.channelsHashes, arg.hash, arg.sequenceNumber))
+    Some((arg.channelsHashes, arg.hash, 0))
 
   def create[C, P, K](
       channels: Seq[C],
       patterns: Seq[P],
       continuation: K,
-      persistent: Boolean,
-      sequenceNumber: Int = 0
+      persistent: Boolean
   )(
       implicit
       serializeC: Serialize[C],
@@ -143,21 +138,19 @@ object Consume {
     new Consume(
       channelsByteVectors.map(Blake2b256Hash.create),
       hash(channelsByteVectors, patterns, continuation, persistent),
-      persistent,
-      sequenceNumber
+      persistent
     )
   }
 
   def fromHash(
       channelsHashes: Seq[Blake2b256Hash],
       hash: Blake2b256Hash,
-      persistent: Boolean,
-      sequenceNumber: Int
+      persistent: Boolean
   ): Consume =
-    new Consume(channelsHashes, hash, persistent, sequenceNumber)
+    new Consume(channelsHashes, hash, persistent)
 
   implicit val codecConsume: Codec[Consume] =
-    (Codec[Seq[Blake2b256Hash]] :: Codec[Blake2b256Hash] :: bool :: int32).as[Consume]
+    (Codec[Seq[Blake2b256Hash]] :: Codec[Blake2b256Hash] :: bool).as[Consume]
 
   def hasJoins(consume: Consume): Boolean = consume.channelsHashes.size > 1
 }

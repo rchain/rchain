@@ -36,16 +36,14 @@ object EventConverter {
       ConsumeEvent(
         consume.channelsHashes.toList,
         consume.hash,
-        consume.persistent,
-        consume.sequenceNumber
+        consume.persistent
       )
     case RspaceComm(rspaceConsume, rspaceProduces, peeks) =>
       CommEvent(
         ConsumeEvent(
           rspaceConsume.channelsHashes.toList,
           rspaceConsume.hash,
-          rspaceConsume.persistent,
-          rspaceConsume.sequenceNumber
+          rspaceConsume.persistent
         ),
         rspaceProduces
           .map(
@@ -67,12 +65,11 @@ object EventConverter {
     case ProduceEvent(channelsHash, hash, persistent, sequenceNumber) =>
       RspaceProduce
         .fromHash(channelsHash, hash, persistent, sequenceNumber)
-    case ConsumeEvent(channelsHashes, hash, persistent, sequenceNumber) =>
+    case ConsumeEvent(channelsHashes, hash, persistent) =>
       RspaceConsume.fromHash(
         collection.immutable.Seq(channelsHashes.map(byteStringToBlake2b256Hash): _*),
         hash,
-        persistent,
-        sequenceNumber
+        persistent
       )
     case CommEvent(consume, produces, peeks) =>
       val rspaceProduces: Seq[RspaceProduce] = produces.map { produce =>
@@ -89,8 +86,7 @@ object EventConverter {
         RspaceConsume.fromHash(
           collection.immutable.Seq(consume.channelsHashes.map(byteStringToBlake2b256Hash): _*),
           consume.hash,
-          consume.persistent,
-          consume.sequenceNumber
+          consume.persistent
         ),
         rspaceProduces,
         SortedSet(peeks.map(_.channelIndex): _*)

@@ -189,7 +189,6 @@ message ConsumeEventProto {
   repeated bytes channelsHashes = 1;
   bytes hash = 2;
   bool persistent = 3;
-  int32 sequenceNumber = 4;
 }
 
 message CommEventProto {

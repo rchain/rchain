@@ -44,8 +44,7 @@ object internal {
         patterns: Seq[P],
         continuation: K,
         persist: Boolean,
-        peek: SortedSet[Int],
-        sequenceNumber: Int = 0
+        peek: SortedSet[Int]
     )(
         implicit
         serializeC: Serialize[C],
@@ -57,7 +56,7 @@ object internal {
         continuation,
         persist,
         peek,
-        Consume.create(channels, patterns, continuation, persist, sequenceNumber)
+        Consume.create(channels, patterns, continuation, persist)
       )
   }
 

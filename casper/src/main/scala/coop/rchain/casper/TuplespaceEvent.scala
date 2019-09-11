@@ -38,7 +38,7 @@ object TuplespaceEvent {
     produce.channelsHash -> TuplespaceEvent(toOperation(produce), None)
 
   def from(consume: Consume): Option[(Blake2b256Hash, TuplespaceEvent)] = consume match {
-    case Consume(singleChannelHash :: Nil, _, _, _) =>
+    case Consume(singleChannelHash :: Nil, _, _) =>
       Some(singleChannelHash -> TuplespaceEvent(toOperation(consume, false), None))
     case _ => None
   }
