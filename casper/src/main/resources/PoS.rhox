@@ -429,13 +429,16 @@ new  PoS,
       } |
 
       contract pickActiveValidators(@allBonds, @withdrawers, returnCh) = {
-        new availableValidatorsCh, isAvailable in {
+        new availableValidatorsCh, isAvailable, pksCh in {
           @ListOps!("filter", allBonds.toList(), *isAvailable, *availableValidatorsCh) |
           contract isAvailable(@(pk, _), resultCh) = { resultCh!(not withdrawers.contains(pk))} |
 
           for (@availableValidators <- availableValidatorsCh) {
-            //TODO choose only a limited number of validators
-            @ListOps!("map", availableValidators, *fst, *returnCh)
+            @ListOps!("map", availableValidators, *fst, *pksCh) |
+            for (@pks <- pksCh) {
+              // TODO: Randomly select 100 active validators once we have on-chain randomness
+              returnCh!(pks.take($$numberOfActiveValidators$$))
+            }
           }
         }
       } |

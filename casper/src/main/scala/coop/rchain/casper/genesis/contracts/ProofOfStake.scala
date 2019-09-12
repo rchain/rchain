@@ -11,15 +11,17 @@ final case class ProofOfStake(
     maximumBond: Long,
     validators: Seq[Validator],
     epochLength: Int = 10000,
-    quarantineLength: Int = 50000
+    quarantineLength: Int = 50000,
+    numberOfActiveValidators: Int = 100
 ) extends CompiledRholangTemplate(
       "PoS.rhox",
       NormalizerEnv.Empty,
-      "minimumBond"      -> minimumBond,
-      "maximumBond"      -> maximumBond,
-      "initialBonds"     -> ProofOfStake.initialBonds(validators),
-      "epochLength"      -> epochLength,
-      "quarantineLength" -> quarantineLength
+      "minimumBond"              -> minimumBond,
+      "maximumBond"              -> maximumBond,
+      "initialBonds"             -> ProofOfStake.initialBonds(validators),
+      "epochLength"              -> epochLength,
+      "quarantineLength"         -> quarantineLength,
+      "numberOfActiveValidators" -> numberOfActiveValidators
     ) {
 
   require(minimumBond <= maximumBond)
