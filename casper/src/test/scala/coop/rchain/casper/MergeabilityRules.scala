@@ -332,7 +332,7 @@ trait MergeabilityRules {
   /***
    An incoming send and an incoming receive could match each other,
    leading to more COMMs needing to happen.
-   Mergeable if we use spatial matcher to prove they don't match.
+   Not mergeable. Determining if the send matches the produce would require re-running the deploys, defeating the purpose of merging rules (knowing if deploys can be merged without replaying them).
     */
   object IncomingCouldMatch extends ConflictingCase {
 
@@ -363,7 +363,7 @@ trait MergeabilityRules {
 
   /***
    There was a COMM within one of the deploys, with one side non-linear.
-   The other deploy had an event without a match in TS, dual to the non-linear.
+   The other deploy had an event without a match waiting in TS, dual to the non-linear.
    These could spawn more work.
    Mergeable if we use spatial matcher to prove they don't match.
     */
@@ -379,7 +379,7 @@ trait MergeabilityRules {
 
   /***
    There was a COMM within one of the deploys, with one side non-linear.
-   The other deploy had an event without a match in TS, of same polarity to the non-linear.
+   The other deploy had an event without a match waiting in TS, of same polarity to the non-linear.
    These could not spawn more work.
     */
   object PersistentNoMatch extends MergeableCase {
@@ -395,7 +395,7 @@ trait MergeabilityRules {
 
   /***
    There was a COMM within one of the deploys caused on one side by a peek.
-   The other deploy had an event without a match in TS, of same polarity to the data matched by peek.
+   The other deploy had an event without a match waiting in TS, of same polarity to the data matched by peek.
    These could not spawn more work.
     */
   object PeekedNoMatch extends MergeableCase {
@@ -408,9 +408,9 @@ trait MergeabilityRules {
 
   /***
    There was a COMM within one of the deploys, with a peek on one side.
-   The other deploy had an event without a match in TS, dual to the peeked.
+   The other deploy had an event without a match waiting in TS, dual to the peeked.
    These could spawn more work.
-   Mergeable if we use spatial matcher to prove they don't match.
+   Not mergeable. Determining if the send matches the produce would require re-running the deploys, defeating the purpose of merging rules (knowing if deploys can be merged without replaying them).
     */
   object PeekedCouldMatch extends ConflictingCase {
 
