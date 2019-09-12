@@ -245,14 +245,15 @@ class NodeRuntime private[node] (
       apiServers,
       casperLoop,
       engineInit,
-      casperLaunch
+      casperLaunch,
+      reportingCasper
     ) = result
 
     // 4. launch casper
     _ <- casperLaunch.launch()
 
     // 5. run the node program.
-    program = nodeProgram(apiServers, casperLoop, engineInit, runtimeCleanup)(
+    program = nodeProgram(apiServers, casperLoop, engineInit, runtimeCleanup, reportingCasper)(
       logEnv,
       timeEnv,
       rpConfStateEnv,
@@ -298,7 +299,8 @@ class NodeRuntime private[node] (
       apiServers: APIServers,
       casperLoop: CasperLoop[TaskEnv],
       engineInit: EngineInit[TaskEnv],
-      runtimeCleanup: Cleanup[TaskEnv]
+      runtimeCleanup: Cleanup[TaskEnv],
+      reportingCasper: ReportingCasper[TaskEnv]
   )(
       implicit
       logEnv: Log[TaskEnv],
@@ -370,7 +372,7 @@ class NodeRuntime private[node] (
       _     <- info
       local <- peerNodeAsk.ask
       host  = local.endpoint.host
-      servers <- acquireServers(apiServers)(
+      servers <- acquireServers(apiServers, reportingCasper)(
                   kademliaStore,
                   nodeDiscoveryTask,
                   rpConnections,
@@ -486,7 +488,7 @@ class NodeRuntime private[node] (
       httpServer: Fiber[Task, Unit]
   )
 
-  def acquireServers(apiServers: APIServers)(
+  def acquireServers(apiServers: APIServers, reportingCasper: ReportingCasper[TaskEnv])(
       implicit
       kademliaStore: KademliaStore[Task],
       nodeDiscovery: NodeDiscovery[Task],
@@ -548,7 +550,12 @@ class NodeRuntime private[node] (
                               "/version"   -> CORS(VersionInfo.service[Task]),
                               "/status"    -> CORS(StatusInfo.service[Task]),
                               "/ws/events" -> CORS(eventsInfoService),
-                              "/reporting" -> CORS(ReportingRoutes.service[Task])
+                              "/reporting" -> CORS(
+                                ReportingRoutes.service[Task, TaskEnv](reportingCasper)(
+                                  Sync[Task],
+                                  NodeRuntime.envToTask
+                                )
+                              )
                             ).orNotFound
                           )
                           .resource
@@ -585,6 +592,7 @@ object NodeRuntime {
   type LocalEnvironment[F[_]] = ApplicativeLocal[F, NodeCallCtx]
 
   val taskToEnv: Task ~> TaskEnv = λ[Task ~> TaskEnv](ReaderT.liftF(_))
+  val envToTask: TaskEnv ~> Task = λ[TaskEnv ~> Task](_.run(NodeCallCtx.init))
 
   type CasperLoop[F[_]] = F[Unit]
   type EngineInit[F[_]] = F[Unit]
@@ -641,7 +649,8 @@ object NodeRuntime {
         APIServers,
         CasperLoop[F],
         EngineInit[F],
-        CasperLaunch[F]
+        CasperLaunch[F],
+        ReportingCasper[F]
     )
   ] =
     for {
@@ -747,8 +756,9 @@ object NodeRuntime {
             )
         _ <- Time[F].sleep(30.seconds)
       } yield ()
-      engineInit     = engineCell.read >>= (_.init)
-      runtimeCleanup = NodeRuntime.cleanup(runtime, casperRuntime)
+      engineInit      = engineCell.read >>= (_.init)
+      runtimeCleanup  = NodeRuntime.cleanup(runtime, casperRuntime)
+      reportingCasper = ReportingCasper.noop
     } yield (
       blockStore,
       blockDagStorage,
@@ -757,7 +767,8 @@ object NodeRuntime {
       apiServers,
       casperLoop,
       engineInit,
-      casperLaunch
+      casperLaunch,
+      reportingCasper
     )
 
   final case class APIServers(
