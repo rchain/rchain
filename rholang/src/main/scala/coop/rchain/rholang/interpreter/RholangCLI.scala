@@ -66,11 +66,9 @@ object RholangCLI {
     implicit val spanF: Span[Task]       = NoopSpan[Task]()
 
     val runtime = (for {
-      runtime <- Runtime.createWithEmptyCost[Task](
-                  conf.dataDir(),
-                  conf.mapSize()
-                )
-      _ <- Runtime.bootstrapRegistry[Task](runtime)
+      spaceAndReplay <- Runtime.setupRSpace[Task](conf.dataDir(), conf.mapSize())
+      runtime        <- Runtime.createWithEmptyCost[Task](spaceAndReplay)
+      _              <- Runtime.bootstrapRegistry[Task](runtime)
     } yield (runtime)).unsafeRunSync
 
     val problems = try {

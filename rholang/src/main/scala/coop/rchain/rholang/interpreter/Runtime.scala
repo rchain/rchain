@@ -53,6 +53,8 @@ object Runtime {
 
   implicit val RuntimeMetricsSource: Source = Metrics.Source(RholangMetricsSource, "runtime")
 
+  type ISpaceAndReplay[F[_]] = (RhoISpace[F], RhoReplayISpace[F])
+
   type RhoTuplespace[F[_]]   = TCPAK[F, Tuplespace]
   type RhoISpace[F[_]]       = TCPAK[F, ISpace]
   type RhoReplayISpace[F[_]] = TCPAK[F, IReplaySpace]
@@ -264,42 +266,34 @@ object Runtime {
     )
   )
 
-  def createWithEmptyCost[F[_]: ContextShift: Concurrent: Log: Metrics: Span: par.Par](
-      dataDir: Path,
-      mapSize: Long,
+  def createWithEmptyCost[F[_]: Concurrent: Log: Metrics: Span: par.Par](
+      spaceAndReplay: ISpaceAndReplay[F],
       extraSystemProcesses: Seq[SystemProcess.Definition[F]] = Seq.empty
-  )(
-      implicit
-      executionContext: ExecutionContext
   ): F[Runtime[F]] = {
     implicit val P = par.Par[F].parallel
-    createWithEmptyCost_(dataDir, mapSize, extraSystemProcesses)
+    createWithEmptyCost_(spaceAndReplay, extraSystemProcesses)
   }
 
-  private def createWithEmptyCost_[F[_]: ContextShift: Concurrent: Log: Metrics: Span, M[_]](
-      dataDir: Path,
-      mapSize: Long,
+  private def createWithEmptyCost_[F[_]: Concurrent: Log: Metrics: Span, M[_]](
+      spaceAndReplay: ISpaceAndReplay[F],
       extraSystemProcesses: Seq[SystemProcess.Definition[F]]
   )(
       implicit
-      P: Parallel[F, M],
-      executionContext: ExecutionContext
+      P: Parallel[F, M]
   ): F[Runtime[F]] =
     for {
       cost <- CostAccounting.emptyCost[F]
       runtime <- {
         implicit val c = cost
-        create(dataDir, mapSize, extraSystemProcesses)
+        create(spaceAndReplay, extraSystemProcesses)
       }
     } yield runtime
 
-  def create[F[_]: ContextShift: Concurrent: Log: Metrics: Span, M[_]](
-      dataDir: Path,
-      mapSize: Long,
+  def create[F[_]: Concurrent: Log: Metrics: Span, M[_]](
+      spaceAndReplay: ISpaceAndReplay[F],
       extraSystemProcesses: Seq[SystemProcess.Definition[F]] = Seq.empty
   )(
       implicit P: Parallel[F, M],
-      executionContext: ExecutionContext,
       cost: _cost[F]
   ): F[Runtime[F]] = {
     val errorLog                               = new ErrorLog[F]()
@@ -356,10 +350,9 @@ object Runtime {
     }
 
     for {
-      setup                <- setupRSpace[F](dataDir, mapSize)
       deployParametersRef  <- Ref.of(DeployParameters.empty)
       blockDataRef         <- Ref.of(BlockData.empty)
-      (space, replaySpace) = setup
+      (space, replaySpace) = spaceAndReplay
       (reducer, replayReducer) = {
 
         val chargingReplaySpace = ChargingRSpace.chargingRSpace[F](replaySpace)
@@ -427,7 +420,7 @@ object Runtime {
     } yield ()
   }
 
-  private def setupRSpace[F[_]: Concurrent: ContextShift: par.Par: Log: Metrics: Span](
+  def setupRSpace[F[_]: Concurrent: ContextShift: par.Par: Log: Metrics: Span](
       dataDir: Path,
       mapSize: Long
   )(implicit scheduler: ExecutionContext): F[(RhoISpace[F], RhoReplayISpace[F])] = {
