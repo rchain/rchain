@@ -71,14 +71,20 @@ class DagOperationsTest
 
         dag <- blockDagStorage.getRepresentation
 
-        _      <- DagOperations.lowestUniversalCommonAncestorF[Task](b1, b5, dag) shouldBeF b1
-        _      <- DagOperations.lowestUniversalCommonAncestorF[Task](b2, b3, dag) shouldBeF b1
-        _      <- DagOperations.lowestUniversalCommonAncestorF[Task](b3, b2, dag) shouldBeF b1
-        _      <- DagOperations.lowestUniversalCommonAncestorF[Task](b6, b7, dag) shouldBeF b1
-        _      <- DagOperations.lowestUniversalCommonAncestorF[Task](b2, b2, dag) shouldBeF b2
-        _      <- DagOperations.lowestUniversalCommonAncestorF[Task](b10, b9, dag) shouldBeF b8
-        result <- DagOperations.lowestUniversalCommonAncestorF[Task](b3, b7, dag) shouldBeF b3
-      } yield result
+        _ <- DagOperations.lowestUniversalCommonAncestorF[Task](b1, b5, dag) shouldBeF b1
+        _ <- DagOperations.lowestUniversalCommonAncestorF[Task](b2, b3, dag) shouldBeF b1
+        _ <- DagOperations.lowestUniversalCommonAncestorF[Task](b3, b2, dag) shouldBeF b1
+        _ <- DagOperations.lowestUniversalCommonAncestorF[Task](b6, b7, dag) shouldBeF b1
+        _ <- DagOperations.lowestUniversalCommonAncestorF[Task](b2, b2, dag) shouldBeF b2
+        _ <- DagOperations.lowestUniversalCommonAncestorF[Task](b10, b9, dag) shouldBeF b8
+        _ <- DagOperations.lowestUniversalCommonAncestorF[Task](b3, b7, dag) shouldBeF b3
+        _ <- DagOperations.lowestUniversalCommonAncestorF[Task](b3, b8, dag) shouldBeF b1
+        _ <- DagOperations.lowestUniversalCommonAncestorF[Task](b4, b5, dag) shouldBeF b3
+        _ <- DagOperations.lowestUniversalCommonAncestorF[Task](b4, b6, dag) shouldBeF b1
+        _ <- DagOperations.lowestUniversalCommonAncestorF[Task](b7, b7, dag) shouldBeF b7
+        _ <- DagOperations.lowestUniversalCommonAncestorF[Task](b7, b8, dag) shouldBeF b1
+        _ <- DagOperations.lowestUniversalCommonAncestorF[Task](b8, b9, dag) shouldBeF b8
+      } yield ()
   }
 
   "uncommon ancestors" should "be computed properly" in withStorage {
