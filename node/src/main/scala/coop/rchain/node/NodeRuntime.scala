@@ -547,7 +547,8 @@ class NodeRuntime private[node] (
                               "/metrics"   -> CORS(prometheusService),
                               "/version"   -> CORS(VersionInfo.service[Task]),
                               "/status"    -> CORS(StatusInfo.service[Task]),
-                              "/ws/events" -> CORS(eventsInfoService)
+                              "/ws/events" -> CORS(eventsInfoService),
+                              "/reporting" -> CORS(ReportingRoutes.service[Task])
                             ).orNotFound
                           )
                           .resource
