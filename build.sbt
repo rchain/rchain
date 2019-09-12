@@ -244,7 +244,12 @@ lazy val node = (project in file("node"))
   .settings(commonSettings: _*)
   .enablePlugins(RpmPlugin, DebianPlugin, JavaAppPackaging, BuildInfoPlugin)
   .settings(
-    version := git.gitDescribedVersion.value.get,
+    version := git.gitDescribedVersion.value.getOrElse({
+      val v = "0.0.0-unknown"
+      System.err.println("Could not get version from `git describe`.")
+      System.err.println("Using the fallback version: " + v)
+      v
+    }),
     name := "rnode",
     maintainer := "RChain Cooperative https://www.rchain.coop/",
     packageSummary := "RChain Node",
