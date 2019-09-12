@@ -553,6 +553,7 @@ class NodeRuntime private[node] (
                               "/reporting" -> CORS(
                                 ReportingRoutes.service[Task, TaskEnv](reportingCasper)(
                                   Sync[Task],
+                                  Applicative[TaskEnv],
                                   NodeRuntime.envToTask
                                 )
                               )
