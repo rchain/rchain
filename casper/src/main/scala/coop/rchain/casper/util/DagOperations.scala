@@ -101,11 +101,12 @@ object DagOperations {
       b2: BlockMetadata,
       dag: BlockDagRepresentation[F]
   ): F[BlockMetadata] = {
+    val iterableByteOrdering = Ordering.Iterable[Byte]
 
     implicit val blockMetadataByNumDecreasing: Ordering[BlockMetadata] =
       (l: BlockMetadata, r: BlockMetadata) => {
         def compareByteString(l: ByteString, r: ByteString): Int =
-          l.hashCode().compareTo(r.hashCode())
+          iterableByteOrdering.compare(l.toByteArray, r.toByteArray)
 
         val ln = l.blockNum
         val rn = r.blockNum
