@@ -677,19 +677,15 @@ object NodeRuntime {
       runtime <- {
         implicit val s  = rspaceScheduler
         implicit val sp = span
-        Runtime
-          .createWithEmptyCost[F](cliConf.storage, cliConf.size, Seq.empty)
+        Runtime.setupRSpace[F](cliConf.storage, cliConf.size) >>=
+          (sar => Runtime.createWithEmptyCost[F](sar, Seq.empty))
       }
       _ <- Runtime.bootstrapRegistry[F](runtime)
       casperRuntime <- {
         implicit val s  = rspaceScheduler
         implicit val sp = span
-        Runtime
-          .createWithEmptyCost[F](
-            casperConf.storage,
-            casperConf.size,
-            Seq.empty
-          )
+        Runtime.setupRSpace[F](casperConf.storage, casperConf.size) >>=
+          (sar => Runtime.createWithEmptyCost[F](sar, Seq.empty))
       }
       runtimeManager <- {
         implicit val sp = span
