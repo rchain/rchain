@@ -110,6 +110,7 @@ object DagOperations {
 
         val ln = l.blockNum
         val rn = r.blockNum
+        // Notice the inverted order of compared items, which makes the ordering descending
         rn.compare(ln) match {
           case 0 => compareByteString(l.blockHash, r.blockHash)
           case v => v
