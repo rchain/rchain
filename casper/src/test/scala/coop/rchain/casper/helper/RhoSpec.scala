@@ -1,20 +1,26 @@
 package coop.rchain.casper.helper
 
 import cats.implicits._
-import coop.rchain.casper.genesis.contracts.TestUtil
-import coop.rchain.casper.genesis.contracts.TestUtil.eval
 import coop.rchain.casper.protocol.{DeployData, DeployDataProto}
 import coop.rchain.casper.util.GenesisBuilder.GenesisParameters
 import coop.rchain.casper.util.rholang.Resources.copyStorage
-import coop.rchain.casper.util.{GenesisBuilder, ProtoUtil}
+import coop.rchain.casper.util.{ConstructDeploy, GenesisBuilder, ProtoUtil}
+import coop.rchain.crypto.PrivateKey
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
-import coop.rchain.models.Par
+import coop.rchain.p2p.EffectsTestInstances.LogicalTime
 import coop.rchain.rholang.Resources.mkRuntimeAt
 import coop.rchain.rholang.build.CompiledRholangSource
 import coop.rchain.rholang.interpreter.Runtime.SystemProcess
-import coop.rchain.rholang.interpreter.{NormalizerEnv, PrettyPrinter, Runtime}
-import coop.rchain.shared.Log
+import coop.rchain.rholang.interpreter.accounting.{_cost, Cost}
+import coop.rchain.rholang.interpreter.{
+  EvaluateResult,
+  Interpreter,
+  NormalizerEnv,
+  PrettyPrinter,
+  Runtime
+}
+import coop.rchain.shared.{Log, Time}
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
 import org.scalatest.{AppendedClues, FlatSpec, Matchers}
@@ -22,7 +28,7 @@ import org.scalatest.{AppendedClues, FlatSpec, Matchers}
 import scala.concurrent.duration.FiniteDuration
 
 class RhoSpec(
-    testObject: CompiledRholangSource,
+    tests: Seq[(String, PrivateKey)],
     executionTimeout: FiniteDuration,
     genesisParameters: GenesisParameters = GenesisBuilder.buildGenesisParameters()
 ) extends FlatSpec
@@ -32,6 +38,7 @@ class RhoSpec(
   implicit val logger: Log[Task]         = Log.log[Task]
   implicit val metricsEff: Metrics[Task] = new Metrics.MetricsNOP[Task]
   implicit val noopSpan: Span[Task]      = NoopSpan[Task]()
+  implicit val time: Time[Task]          = new LogicalTime[Task]
 
   private val printer = PrettyPrinter()
 
@@ -119,38 +126,35 @@ class RhoSpec(
       } yield runtime
 
       runtimeResource.use { runtime =>
-        for {
-          _    <- logger.info("Starting tests from " + testObject.path)
-          _    <- setupRuntime(runtime)
-          rand = Blake2b512Random(128)
-          _ <- TestUtil
-                .eval(testObject.code, runtime, testObject.normalizerEnv)(
-                  implicitly,
-                  rand.splitShort(1)
-                )
-                .timeout(executionTimeout)
-
-          result <- testResultCollector.getResult
-        } yield result
-      }
+        evaluateDeploy(rhoSpecDeploy, runtime) >> tests.toList
+          .traverse_ {
+            case (source, userSk) =>
+              ConstructDeploy.sourceDeployNowF[Task](
+                source,
+                sec = userSk
+              ) >>= (evaluateDeploy(_, runtime))
+          }
+          .timeout(executionTimeout)
+      } >> testResultCollector.getResult
     }
 
-  private def setupRuntime(runtime: Runtime[Task]): Task[Runtime[Task]] =
-    for {
-      _ <- evalDeploy(rhoSpecDeploy, runtime)
-      // reset the deployParams.userId before executing the test
-      // otherwise it'd execute as the deployer of last deployed contract
-      _ <- runtime.deployParametersRef.update(_.copy(userId = Par()))
-    } yield runtime
-
-  private def evalDeploy(
-      deploy: DeployData,
-      runtime: Runtime[Task]
-  ): Task[Unit] = {
+  private def evaluateDeploy(deploy: DeployData, runtime: Runtime[Task]): Task[Unit] = {
     implicit val rand: Blake2b512Random = Blake2b512Random(
       ProtoUtil.stripDeployData(deploy).toProto.toByteArray
     )
-    eval(deploy.term, runtime, NormalizerEnv(deploy.toProto))
+    implicit val c: _cost[Task] = runtime.cost
+    runtime.deployParametersRef.set(ProtoUtil.getRholangDeployParams(deploy)) >> Interpreter[Task]
+      .injAttempt(
+        runtime.reducer,
+        runtime.errorLog,
+        deploy.term,
+        Cost.UNSAFE_MAX,
+        NormalizerEnv(deploy.toProto)
+      ) >>= {
+      case EvaluateResult(_, errors) =>
+        if (errors.nonEmpty) errors.head.raiseError[Task, Unit]
+        else Task.unit
+    }
   }
 
   private val rhoSpecDeploy: DeployData =

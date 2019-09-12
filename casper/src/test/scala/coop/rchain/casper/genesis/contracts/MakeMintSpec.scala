@@ -1,11 +1,12 @@
 package coop.rchain.casper.genesis.contracts
 
 import coop.rchain.casper.helper.RhoSpec
-import coop.rchain.rholang.build.CompiledRholangSource
-import coop.rchain.rholang.interpreter.NormalizerEnv
+import coop.rchain.casper.util.ConstructDeploy.defaultSec
+
+import scala.io.Source
 
 class MakeMintSpec
     extends RhoSpec(
-      CompiledRholangSource("MakeMintTest.rho", NormalizerEnv.Empty),
+      Seq((Source.fromResource("MakeMintTest.rho").mkString, defaultSec)),
       GENESIS_TEST_TIMEOUT
     )

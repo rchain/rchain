@@ -5,15 +5,14 @@ import coop.rchain.casper.helper.RhoSpec
 import coop.rchain.casper.util.GenesisBuilder
 import coop.rchain.crypto.PublicKey
 import coop.rchain.crypto.codec.Base16
-import coop.rchain.rholang.build.CompiledRholangSource
-import coop.rchain.rholang.interpreter.NormalizerEnv
 import coop.rchain.rholang.interpreter.util.RevAddress
-
+import coop.rchain.casper.util.ConstructDeploy.defaultSec
 import scala.concurrent.duration._
+import scala.io.Source
 
 class PoSSpec
     extends RhoSpec(
-      CompiledRholangSource("PoSTest.rho", NormalizerEnv.Empty),
+      Seq((Source.fromResource("PoSTest.rho").mkString, defaultSec)),
       120.seconds,
       genesisParameters = GenesisBuilder
         .buildGenesisParameters()
