@@ -6,13 +6,15 @@ import cats.effect.concurrent.Ref
 import coop.rchain.casper._
 import coop.rchain.casper.protocol._
 import coop.rchain.catscontrib.TaskContrib._
-import coop.rchain.shared.Cell
+import coop.rchain.shared.{Cell, EventPublisher}
 import monix.eval.Task
 import org.scalatest.WordSpec
 
 import scala.concurrent.duration._
 
 class GenesisCeremonyMasterSpec extends WordSpec {
+  implicit val eventBus = EventPublisher.noop[Task]
+
   "GenesisCeremonyMaster" should {
     "make a transition to Running state after block has been approved" in {
       import monix.execution.Scheduler.Implicits.global

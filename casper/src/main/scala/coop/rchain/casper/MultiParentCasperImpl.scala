@@ -24,7 +24,7 @@ import coop.rchain.comm.rp.Connect.{ConnectionsCell, RPConfAsk}
 import coop.rchain.comm.transport.TransportLayer
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.metrics.implicits._
-import coop.rchain.models.BlockHash.BlockHash
+import coop.rchain.models.BlockHash._
 import coop.rchain.models.EquivocationRecord
 import coop.rchain.models.Validator.Validator
 import coop.rchain.rholang.interpreter.NormalizerEnv
@@ -49,7 +49,7 @@ object CasperState {
   type CasperStateCell[F[_]] = Cell[F, CasperState]
 }
 
-class MultiParentCasperImpl[F[_]: Sync: Concurrent: ConnectionsCell: TransportLayer: Log: Time: SafetyOracle: LastFinalizedBlockCalculator: BlockStore: RPConfAsk: BlockDagStorage: Running.RequestedBlocks](
+class MultiParentCasperImpl[F[_]: Sync: Concurrent: ConnectionsCell: TransportLayer: Log: Time: SafetyOracle: LastFinalizedBlockCalculator: BlockStore: RPConfAsk: BlockDagStorage: Running.RequestedBlocks: EventPublisher](
     validatorId: Option[ValidatorIdentity],
     genesis: BlockMessage,
     postGenesisStateHash: StateHash,
@@ -114,7 +114,10 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: ConnectionsCell: TransportLa
                }
       _ <- status.fold(
             kp(().pure[F]),
-            kp(metricsF.setGauge("block-height", blockNumber(b))(AddBlockMetricsSource))
+            kp(
+              metricsF.setGauge("block-height", blockNumber(b))(AddBlockMetricsSource) >>
+                EventPublisher[F].publish(MultiParentCasperImpl.addedEvent(b))
+            )
           )
     } yield status
   }.timer("add-block-time")
@@ -230,19 +233,28 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: ConnectionsCell: TransportLa
   def createBlock: F[CreateBlockStatus] =
     (validatorId match {
       case Some(ValidatorIdentity(publicKey, privateKey, sigAlgorithm)) =>
-        BlockDagStorage[F].getRepresentation.flatMap { dag =>
-          BlockCreator.createBlock(
-            dag,
-            genesis,
-            publicKey,
-            privateKey,
-            sigAlgorithm,
-            shardId,
-            version,
-            expirationThreshold,
-            runtimeManager
-          )
-        }
+        BlockDagStorage[F].getRepresentation
+          .flatMap { dag =>
+            BlockCreator
+              .createBlock(
+                dag,
+                genesis,
+                publicKey,
+                privateKey,
+                sigAlgorithm,
+                shardId,
+                version,
+                expirationThreshold,
+                runtimeManager
+              )
+          }
+          .flatMap {
+            case c: Created =>
+              EventPublisher[F]
+                .publish(MultiParentCasperImpl.createdEvent(c))
+                .as[CreateBlockStatus](c)
+            case o: CreateBlockStatus => o.pure[F]
+          }
       case None => CreateBlockStatus.readOnlyMode.pure[F]
     }).timer("create-block-time")
 
@@ -252,7 +264,12 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: ConnectionsCell: TransportLa
       lastFinalizedBlockHash <- lastFinalizedBlockHashContainer.get
       updatedLastFinalizedBlockHash <- LastFinalizedBlockCalculator[F]
                                         .run(dag, lastFinalizedBlockHash)
-      _            <- lastFinalizedBlockHashContainer.set(updatedLastFinalizedBlockHash)
+      _ <- lastFinalizedBlockHashContainer.set(updatedLastFinalizedBlockHash)
+      _ <- EventPublisher[F]
+            .publish(
+              RChainEvent.blockFinalised(updatedLastFinalizedBlockHash.base16String)
+            )
+            .whenA(lastFinalizedBlockHash != updatedLastFinalizedBlockHash)
       blockMessage <- ProtoUtil.getBlock[F](updatedLastFinalizedBlockHash)
     } yield blockMessage
 
@@ -516,4 +533,48 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: ConnectionsCell: TransportLa
       s <- Cell[F, CasperState].read
       _ <- s.dependencyDag.dependencyFree.toList.traverse(CommUtil.sendBlockRequest[F])
     } yield ()
+}
+
+object MultiParentCasperImpl {
+  def addedEvent(block: BlockMessage): RChainEvent = {
+    val (blockHash, parents, justifications, deployIds, creator, seqNum) = blockEvent(block)
+    RChainEvent.blockAdded(
+      blockHash,
+      parents,
+      justifications,
+      deployIds,
+      creator,
+      seqNum
+    )
+  }
+
+  def createdEvent(cbs: Created): RChainEvent = {
+    val (blockHash, parents, justifications, deployIds, creator, seqNum) = blockEvent(cbs.block)
+    RChainEvent.blockAdded(
+      blockHash,
+      parents,
+      justifications,
+      deployIds,
+      creator,
+      seqNum
+    )
+  }
+
+  private def blockEvent(block: BlockMessage) = {
+    val blockHash = block.blockHash.base16String
+    val parentHashes =
+      block.header.map(_.parentsHashList.toList.map(_.base16String)).getOrElse(Nil)
+    val justificationHashes =
+      block.justifications.toList
+        .map(j => (j.validator.base16String, j.latestBlockHash.base16String))
+    val deployIds: List[String] =
+      block.body
+        .flatMap(
+          _.deploys.toList.traverse(_.deploy.map(d => PrettyPrinter.buildStringNoLimit(d.sig)))
+        )
+        .getOrElse(List.empty[String])
+    val creator = block.sender.base16String
+    val seqNum  = block.seqNum
+    (blockHash, parentHashes, justificationHashes, deployIds, creator, seqNum)
+  }
 }
