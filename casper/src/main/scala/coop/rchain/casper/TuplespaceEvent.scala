@@ -27,10 +27,10 @@ object TuplespaceEvent {
   private[this] def toOperation(produce: Produce): TuplespaceOperation =
     TuplespaceOperation(Send, if (produce.persistent) NonLinear else Linear, produce.hash)
 
-  private[this] def toOperation(consume: Consume, peek: Boolean): TuplespaceOperation =
+  private[this] def toOperation(consume: Consume, peeks: Boolean): TuplespaceOperation =
     TuplespaceOperation(
       Receive,
-      if (consume.persistent) NonLinear else if (peek) Peek else Linear,
+      if (consume.persistent) NonLinear else if (peeks) Peek else Linear,
       consume.hash
     )
 
@@ -45,13 +45,15 @@ object TuplespaceEvent {
 
   def from(comm: COMM, produces: Set[Produce]): Option[(Blake2b256Hash, TuplespaceEvent)] =
     comm match {
-      case COMM(consume, produce :: Nil, peek) => {
+      case COMM(consume, produce :: Nil, peeks) => {
+        val produceOp = toOperation(produce)
+        val consumeOp = toOperation(consume, peeks.nonEmpty)
         val incoming: TuplespaceOperation =
-          if (produces.contains(produce)) toOperation(produce)
-          else toOperation(consume, peek.nonEmpty)
+          if (produces.contains(produce)) produceOp
+          else consumeOp
         val matched: Option[TuplespaceOperation] = Some(
-          if (incoming == toOperation(produce)) toOperation(consume, peek.nonEmpty)
-          else toOperation(produce)
+          if (incoming == produceOp) consumeOp
+          else produceOp
         )
         Some(produce.channelsHash -> TuplespaceEvent(incoming, matched))
       }
@@ -66,32 +68,22 @@ object TuplespaceEvent {
         val bothPeeks = (ev.incoming.cardinality == Peek) && (other.incoming.cardinality ==
           Peek)
 
-        val bothMatchedSameLinearEvent = for {
+        val bothMatchedSameNonPersistentEvent = for {
           thisMatched  <- ev.matched
           otherMatched <- other.matched
-        } yield (thisMatched == otherMatched) && (otherMatched.cardinality != NonLinear)
+        } yield thisMatched == otherMatched && otherMatched.cardinality != NonLinear
 
         if (bothPeeks) {
           // TODO - should always return false
-          bothMatchedSameLinearEvent.getOrElse(false)
-        } else bothMatchedSameLinearEvent.getOrElse(false)
+          bothMatchedSameNonPersistentEvent.getOrElse(false)
+        } else bothMatchedSameNonPersistentEvent.getOrElse(false)
 
-      } else {
-        ev.peeked.map(peeked => TuplespaceEvent(peeked, None).conflicts(other)).getOrElse(false) ||
-        other.peeked.map(peeked => TuplespaceEvent(peeked, None).conflicts(ev)).getOrElse(false) ||
-        ev.unsatisfied && other.unsatisfied
-      }
-
-    private[casper] def peeked: Option[TuplespaceOperation] =
-      if (ev.incoming.cardinality == Peek) ev.matched
-      else if (ev.matched.fold(false)(_.cardinality == Peek))
-        Some(ev.incoming)
-      else None
+      } else ev.unsatisfied && other.unsatisfied
 
     private[casper] def unsatisfied: Boolean =
       ev.incoming.cardinality match {
-        case Linear    => ev.matched.isEmpty
         case Peek      => ev.matched.isEmpty
+        case Linear    => ev.matched.forall(_.cardinality == Peek)
         case NonLinear => ev.matched.forall(_.cardinality != NonLinear)
       }
 
