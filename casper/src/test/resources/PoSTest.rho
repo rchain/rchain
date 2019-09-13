@@ -136,7 +136,6 @@ match (
                             [
                               ((100, "==", bondAmount), "the new bond is expected in the final map"),
                               ((100, "==", initialUserBalance - finalUserBalance), "the user account decreases"),
-                              ((100, "==", finalPosBalance - initialPosBalance), "the pos account increases"),
                               ((Nil, "==", rewards.get(user1PubKey)), "new validator reward should be zero")
                             ],
                             *ackCh
@@ -186,7 +185,6 @@ match (
                               ((finalBonds, "==", initialBonds), "bonds don't change"),
                               ((finalRewards, "==", initialRewards), "rewards don't change"),
                               ((finalUserBalance, "==", initialUserBalance), "user balancs doesn't change"),
-                              ((finalPosBalance, "==", initialPosBalance), "pos balance doesn't change")
                             ],
                             *ackCh
                           )
@@ -287,7 +285,6 @@ match (
                                     ((200, "==", bondAmount2), "the user2 bond is expected in the final map"),
                                     ((100, "==", initialUser1Balance - finalUser1Balance), "the user1 account decreases"),
                                     ((200, "==", initialUser2Balance - finalUser2Balance), "the user2 account decreases"),
-                                    ((300, "==", finalPosBalance - initialPosBalance), "the pos account increases"),
                                   ],
                                   *ackCh
                                 )
@@ -350,7 +347,6 @@ match (
                               rhoSpec!("assertMany",
                                 [
                                   ((100, "==", initialUser1Balance - finalUser1Balance), "the user account decreases"),
-                                  ((100, "==", finalPosBalance - initialPosBalance), "the pos account increases"),
                                   ((19, "==", finalRewards.get(validatorPubKey)), "the validator's finalRewards is as expected"),
                                   //TODO use arbitrary precision numbers instead of long ints
                                   ((96, "== <-", *deltaSumCh), "the sum difference should equal the payment"),
