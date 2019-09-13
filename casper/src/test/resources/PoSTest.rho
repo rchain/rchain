@@ -24,7 +24,8 @@ match (
       test_bonding_fails_if_bond_too_small,
       test_pay_succeeds,
       test_dont_pay_inactive_validators,
-      test_bonding_failure
+      test_bonding_failure,
+      closeBlock
     in {
       revAddressOps!("fromPublicKey", posPubKey, *posRevAddressCh) |
       rl!(`rho:rchain:revVault`, *RevVaultCh) |
@@ -98,8 +99,8 @@ match (
 
           contract test_close_block_finishes(rhoSpec, _, ackCh) = {
             new resultCh in {
-              @PoS!("closeBlock", *resultCh) |
-              for ( _ <- resultCh) {
+              closeBlock!(*resultCh) |
+              for (_ <- resultCh) {
                 rhoSpec!("assertMany",
                   [
                     (true, "all good here")
@@ -170,7 +171,7 @@ match (
                   for ( @(true, _) <- retCh) {
                     @PoS!("withdraw", *withdrawCh) |
                     for (_ <- withdrawCh) {
-                      @PoS!("closeBlock", *closeBlockCh) |
+                      closeBlock!(*closeBlockCh) |
                       for (_ <- closeBlockCh) {
                         @PoS!("getBonds", *finalBondsCh) |
                         @posVault!("balance", *finalPosBalanceCh) |
@@ -211,19 +212,19 @@ match (
                     @initialBonds <- initialBondsCh) {
                   @PoS!("bond", 100, *retCh) |
                   for ( @(true, _) <- retCh) {
-                    @PoS!("closeBlock", *closeBlockCh) |
+                    closeBlock!(*closeBlockCh) |
                     for (_ <- closeBlockCh) {
                       prepareUser!("cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc", *setupCh) |
                       for (@userPubKey, _, @userVault <- setupCh) {
                         @PoS!("pay", 100, *retCh) |
                         for ( @(true, _) <- retCh) {
-                          @PoS!("closeBlock", *closeBlockCh) |
+                          closeBlock!(*closeBlockCh) |
                           for (_ <- closeBlockCh) {
                             setDeployData!("userId", validatorPubKey, *identitySet) |
                             for(_ <- identitySet) {
                               @PoS!("withdraw", *withdrawCh) |
                               for (_ <- withdrawCh) {
-                                @PoS!("closeBlock", *closeBlockCh) |
+                                closeBlock!(*closeBlockCh) |
                                 for (_ <- closeBlockCh) {
                                   @validatorVault!("balance", *finalValidatorBalanceCh) |
                                   @PoS!("getBonds", *finalBondsCh) |
@@ -311,7 +312,7 @@ match (
               for (@validatorPubKey, _, _ <- setupCh) {
                 @PoS!("bond", 100, *setupCh) |
                 for (@(true, _) <- setupCh) {
-                  @PoS!("closeBlock", *closeBlockCh) |
+                  closeBlock!(*closeBlockCh) |
                   prepareUser!("5555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555", *setupCh) |
                   for (@user1PubKey, _, @user1Vault <- setupCh;
                        _ <- closeBlockCh) {
@@ -323,7 +324,7 @@ match (
                         @initialRewards <- initialRewardsCh) {
                       @PoS!("pay", 100, *retCh) |
                       for ( @(true, _) <- retCh) {
-                        @PoS!("closeBlock", *closeBlockCh) |
+                        closeBlock!(*closeBlockCh) |
                         for (_ <- closeBlockCh) {
                           @posVault!("balance", *finalPosBalanceCh) |
                           @user1Vault!("balance", *finalUser1BalanceCh) |
@@ -446,7 +447,7 @@ match (
                   for (@user1PubKey, _, @user1Vault <- setupCh) {
                     @PoS!("pay", 100, *retCh) |
                     for ( @(true, _) <- retCh) {
-                      @PoS!("closeBlock", *closeBlockCh) |
+                      closeBlock!(*closeBlockCh) |
                       for (_ <- closeBlockCh) {
                         @PoS!("getRewards", *finalRewardsCh) |
                         for(@finalRewards <- finalRewardsCh) {
@@ -460,6 +461,20 @@ match (
                       }
                     }
                   }
+                }
+              }
+            }
+          } |
+
+          contract closeBlock(ackCh) = {
+            new ackCh0, activeValidatorsCh, setBlockData(`rho:test:block:data:set`), blockDataSet in {
+              @PoS!("closeBlock", *ackCh0) |
+              @PoS!("getActiveValidators", *activeValidatorsCh) |
+              for (@ack <- ackCh0; @activeValidators <- activeValidatorsCh) {
+                // For testing we need one of the active validators to be the block sender
+                setBlockData!("sender", activeValidators.nth(0), *blockDataSet) |
+                for (_ <- blockDataSet) {
+                  ackCh!(ack)
                 }
               }
             }
