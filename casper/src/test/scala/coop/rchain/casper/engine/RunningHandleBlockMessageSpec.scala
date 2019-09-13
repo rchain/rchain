@@ -3,6 +3,9 @@ package coop.rchain.casper.engine
 import cats.implicits._
 
 import Running.{Requested, RequestedBlocks}
+import coop.rchain.casper.CasperMessageFactory._
+import coop.rchain.catscontrib.ski._
+import coop.rchain.casper.{BlockStatus}
 import coop.rchain.casper.protocol._
 import coop.rchain.catscontrib.ski._
 import coop.rchain.comm._
@@ -21,7 +24,7 @@ import org.scalatest._
 class RunningHandleBlockMessageSpec extends FunSpec with BeforeAndAfterEach with Matchers {
 
   val hash = ByteString.copyFrom("hash", "UTF-8")
-  val bm   = BlockMessage(hash)
+  val bm   = createBlockMessage(blockHash = hash)
 
   override def beforeEach(): Unit = {
     transport.reset()

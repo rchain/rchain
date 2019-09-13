@@ -98,7 +98,7 @@ object Setup {
       })
     implicit val lab =
       LastApprovedBlock.of[Task].unsafeRunSync(monix.execution.Scheduler.Implicits.global)
-    implicit val blockMap         = Ref.unsafe[Task, Map[BlockHash, BlockMessage]](Map.empty)
+    implicit val blockMap         = Ref.unsafe[Task, Map[BlockHash, BlockMessageProto]](Map.empty)
     implicit val approvedBlockRef = Ref.unsafe[Task, Option[ApprovedBlock]](None)
     implicit val blockStore       = InMemBlockStore.create[Task]
     implicit val blockDagStorage = InMemBlockDagStorage

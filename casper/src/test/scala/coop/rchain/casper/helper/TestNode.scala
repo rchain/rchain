@@ -84,7 +84,11 @@ class TestNode[F[_]](
 
   val validatorId = ValidatorIdentity(Secp256k1.toPublic(sk), sk, "secp256k1")
 
-  val approvedBlock = ApprovedBlock(candidate = Some(ApprovedBlockCandidate(block = Some(genesis))))
+  val approvedBlock =
+    ApprovedBlock(
+      candidate = (ApprovedBlockCandidate(block = genesis, requiredSigs = 0)),
+      sigs = List.empty
+    )
 
   implicit val labF        = LastApprovedBlock.unsafe[F](Some(approvedBlock))
   val postGenesisStateHash = ProtoUtil.postStateHash(genesis)

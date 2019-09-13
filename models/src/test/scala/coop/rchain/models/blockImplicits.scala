@@ -34,7 +34,7 @@ object blockImplicits {
 
   val justificationGen: Gen[Justification] = for {
     latestBlockHash <- arbitrary[BlockHash](arbitraryHash)
-  } yield Justification().withLatestBlockHash(latestBlockHash)
+  } yield Justification.from(JustificationProto().withLatestBlockHash(latestBlockHash))
 
   implicit val arbitraryJustification: Arbitrary[Justification] = Arbitrary(justificationGen)
 
@@ -48,15 +48,20 @@ object blockImplicits {
       hash        = Blake2b256.hash(randomBytes)
       deployData = DeployData(
         deployer = ByteString.copyFrom(pub.bytes),
-        timestamp = timestamp,
         term = term,
+        timestamp = timestamp,
+        sig = ByteString.copyFrom(Secp256k1.sign(hash, sec)),
+        sigAlgorithm = Secp256k1.name,
         phloLimit = 90000,
         phloPrice = 1L,
-        sig = ByteString.copyFrom(Secp256k1.sign(hash, sec)),
-        sigAlgorithm = Secp256k1.name
+        validAfterBlockNumber = 0
       )
     } yield ProcessedDeploy(
-      deploy = Some(deployData)
+      deploy = deployData,
+      cost = PCost(0L),
+      deployLog = List.empty,
+      paymentLog = List.empty,
+      errored = false
     )
 
   implicit val arbitraryProcessedDeploy: Arbitrary[ProcessedDeploy] = Arbitrary(processedDeployGen)
@@ -68,19 +73,33 @@ object blockImplicits {
       version         <- arbitrary[Long]
       timestamp       <- arbitrary[Long]
       parentsHashList <- arbitrary[Seq[Validator]](arbitraryValidators)
+      justifications  <- arbitrary[Seq[Justification]]
       deploys         <- arbitrary[Seq[ProcessedDeploy]]
-    } yield BlockMessage(blockHash = hash)
-      .withBody(
-        Body()
-          .withDeploys(deploys)
-      )
-      .withHeader(
-        Header()
-          .withParentsHashList(parentsHashList)
-          .withVersion(version)
-          .withTimestamp(timestamp)
-      )
-      .withSender(validator)
+    } yield BlockMessage(
+      blockHash = hash,
+      header = Header(
+        parentsHashList = parentsHashList.toList,
+        deploysHash = ByteString.EMPTY,
+        timestamp = timestamp,
+        version = version,
+        deployCount = 0
+      ),
+      body = Body(
+        state = RChainState(
+          preStateHash = ByteString.EMPTY,
+          postStateHash = ByteString.EMPTY,
+          bonds = List.empty,
+          blockNumber = 0L
+        ),
+        deploys = deploys.toList
+      ),
+      justifications = justifications.toList,
+      sender = validator,
+      seqNum = 0,
+      sig = ByteString.EMPTY,
+      sigAlgorithm = "",
+      shardId = ""
+    )
 
   val blockElementsGen: Gen[List[BlockMessage]] =
     Gen.listOf(blockElementGen)
@@ -96,8 +115,8 @@ object blockImplicits {
             blocks       <- gen
             b            <- blockElementGen
             parents      <- Gen.someOf(blocks)
-            parentHashes = parents.map(_.blockHash)
-            newBlock     = b.withHeader(b.header.get.withParentsHashList(parentHashes))
+            parentHashes = parents.map(_.blockHash).toList
+            newBlock     = b.copy(header = b.header.copy(parentsHashList = parentHashes))
           } yield newBlock :: blocks
       }
     }
@@ -105,7 +124,7 @@ object blockImplicits {
   def blockWithNewHashesGen(blockElements: List[BlockMessage]): Gen[List[BlockMessage]] =
     Gen.listOfN(blockElements.size, blockHashGen).map { blockHashes =>
       blockElements.zip(blockHashes).map {
-        case (b, hash) => b.withBlockHash(hash)
+        case (b, hash) => b.copy(blockHash = hash)
       }
     }
 }

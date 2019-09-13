@@ -1,5 +1,6 @@
 package coop.rchain.casper.api
 
+import coop.rchain.casper.CasperMessageFactory._
 import cats.effect.{Resource, Sync}
 import cats.implicits._
 import com.google.protobuf.ByteString
@@ -53,12 +54,11 @@ class BlockQueryResponseAPITest
     val genesisHash = ProtoUtil.stringToByteString(genesisHashString)
     val blockNumber = 0L
     val timestamp   = 1527191663L
-    val ps = RChainState()
-      .withBlockNumber(blockNumber)
-      .withBonds(Seq(bondsValidator))
-    val body   = Body().withState(ps)
-    val header = ProtoUtil.blockHeader(body, Seq.empty[ByteString], version, timestamp)
-    BlockMessage().withBlockHash(genesisHash).withHeader(header).withBody(body)
+    val ps          = createRChainState(blockNumber = blockNumber, bonds = List(bondsValidator))
+    val body        = createBody(state = ps)
+    val header      = ProtoUtil.blockHeader(body, Seq.empty[ByteString], version, timestamp)
+
+    createBlockMessage(blockHash = genesisHash, header = header, body = body)
   }
   val genesisBlock: BlockMessage = genesisBlock(genesisHashString, version)
 
@@ -66,27 +66,26 @@ class BlockQueryResponseAPITest
   val blockHash: BlockHash = ProtoUtil.stringToByteString(secondHashString)
   val blockNumber          = 1L
   val timestamp            = 1527191665L
-  val ps: RChainState = RChainState()
-    .withBlockNumber(blockNumber)
-    .withBonds(Seq(bondsValidator))
-  val deployCount = 10
+  val ps: RChainState      = createRChainState(blockNumber = blockNumber, bonds = List(bondsValidator))
+  val deployCount          = 10
   val randomDeploys =
     (0 until deployCount).toList
       .traverse(i => ConstructDeploy.basicProcessedDeploy[Task](i))
       .unsafeRunSync(scheduler)
-  val body: Body                       = Body().withState(ps).withDeploys(randomDeploys)
+  val body: Body                       = createBody(state = ps, deploys = randomDeploys)
   val parentsString                    = List(genesisHashString, "0000000001")
   val parentsHashList: List[BlockHash] = parentsString.map(ProtoUtil.stringToByteString)
   val header: Header                   = ProtoUtil.blockHeader(body, parentsHashList, version, timestamp)
   val shardId: String                  = "abcdefgh"
   val secondBlock: BlockMessage =
-    BlockMessage()
-      .withBlockHash(blockHash)
-      .withHeader(header)
-      .withBody(body)
-      .withSender(sender)
-      .withShardId(shardId)
-      .withJustifications(Seq(Justification(bondsValidator.validator, genesisBlock.blockHash)))
+    createBlockMessage(
+      blockHash = blockHash,
+      header = header,
+      body = body,
+      justifications = List(Justification(bondsValidator.validator, genesisBlock.blockHash)),
+      sender = sender,
+      shardId = shardId
+    )
 
   val faultTolerance = 1f
 
@@ -113,7 +112,7 @@ class BlockQueryResponseAPITest
         _ = inside(blockQueryResponse) {
           case Right(BlockQueryResponse(Some(blockInfo))) =>
             blockInfo.blockHash should be(secondHashString)
-            blockInfo.blockSize should be(secondBlock.serializedSize.toString)
+            blockInfo.blockSize should be(secondBlock.toProto.serializedSize.toString)
             blockInfo.blockNumber should be(blockNumber)
             blockInfo.version should be(version)
             blockInfo.deployCount should be(deployCount)
@@ -158,7 +157,7 @@ class BlockQueryResponseAPITest
         effects                                 <- effectsForSimpleCasperSetup(blockStore, blockDagStorage)
         (logEff, casperRef, cliqueOracleEffect) = effects
         deployId = SignDeployment
-          .sign(PrivateKey(sk.bytes), randomDeploys.head.deploy.get)
+          .sign(PrivateKey(sk.bytes), randomDeploys.head.deploy)
           .sig
         blockQueryResponse <- BlockAPI.findDeploy[Task](deployId)(
                                Sync[Task],
@@ -170,7 +169,7 @@ class BlockQueryResponseAPITest
         _ = inside(blockQueryResponse) {
           case Right(LightBlockQueryResponse(Some(blockInfo))) =>
             blockInfo.blockHash should be(secondHashString)
-            blockInfo.blockSize should be(secondBlock.serializedSize.toString)
+            blockInfo.blockSize should be(secondBlock.toProto.serializedSize.toString)
             blockInfo.blockNumber should be(blockNumber)
             blockInfo.version should be(version)
             blockInfo.deployCount should be(deployCount)

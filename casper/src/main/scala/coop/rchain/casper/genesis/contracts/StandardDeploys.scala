@@ -1,6 +1,6 @@
 package coop.rchain.casper.genesis.contracts
 
-import coop.rchain.casper.protocol.DeployData
+import coop.rchain.casper.protocol.{DeployData, DeployDataProto}
 import coop.rchain.casper.util.ProtoUtil.stringToByteString
 import coop.rchain.crypto.PublicKey
 import coop.rchain.crypto.codec.Base16
@@ -14,11 +14,13 @@ object StandardDeploys {
       user: String,
       timestamp: Long
   ): DeployData = {
-    val deployData = DeployData(
-      deployer = stringToByteString(user),
-      timestamp = timestamp,
-      term = compiledSource.code,
-      phloLimit = accounting.MAX_VALUE
+    val deployData = DeployData.from(
+      DeployDataProto(
+        deployer = stringToByteString(user),
+        timestamp = timestamp,
+        term = compiledSource.code,
+        phloLimit = accounting.MAX_VALUE
+      )
     )
 
     deployData

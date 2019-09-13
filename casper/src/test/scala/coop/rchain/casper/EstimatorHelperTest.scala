@@ -9,6 +9,7 @@ import coop.rchain.blockstorage.BlockStore
 import coop.rchain.casper.EstimatorHelper.conflicts
 import coop.rchain.casper.helper.{BlockDagStorageFixture, BlockGenerator, TestNode}
 import coop.rchain.casper.protocol.Event.EventInstance.{Consume, Produce}
+import coop.rchain.casper.helper.{BlockDagStorageFixture, BlockGenerator, HashSetCasperTestNode}
 import coop.rchain.casper.protocol._
 import coop.rchain.shared.scalatestcontrib._
 import coop.rchain.casper.util.ConstructDeploy._
@@ -104,30 +105,30 @@ class EstimatorHelperTest
     implicit blockStore => implicit blockDagStorage =>
       testConflict[Task] { deploy =>
         deploy.copy(
-          deployLog = Seq(
+          deployLog = List(
             produce(ByteString.copyFromUtf8(channelsHash))
           )
         )
       } { deploy =>
-        deploy.copy(deployLog = Seq(consume(ByteString.copyFromUtf8(channelsHash))))
+        deploy.copy(deployLog = List(consume(ByteString.copyFromUtf8(channelsHash))))
       }
   }
 
   it should "conflict if their deploys conflict in the paymentLog" in withStorage {
     implicit blockStore => implicit blockDagStorage =>
       testConflict[Task] { deploy =>
-        deploy.copy(paymentLog = Seq(produce(ByteString.copyFromUtf8(channelsHash))))
+        deploy.copy(paymentLog = List(produce(ByteString.copyFromUtf8(channelsHash))))
       } { deploy =>
-        deploy.copy(paymentLog = Seq(consume(ByteString.copyFromUtf8(channelsHash))))
+        deploy.copy(paymentLog = List(consume(ByteString.copyFromUtf8(channelsHash))))
       }
   }
 
   it should "conflict if a deploy in their paymentLog confilcts with a deploy in the deployLog" in withStorage {
     implicit blockStore => implicit blockDagStorage =>
       testConflict[Task] { deploy =>
-        deploy.copy(paymentLog = Seq(produce(ByteString.copyFromUtf8(channelsHash))))
+        deploy.copy(paymentLog = List(produce(ByteString.copyFromUtf8(channelsHash))))
       } { deploy =>
-        deploy.copy(deployLog = Seq(consume(ByteString.copyFromUtf8(channelsHash))))
+        deploy.copy(deployLog = List(consume(ByteString.copyFromUtf8(channelsHash))))
       }
   }
 
@@ -154,22 +155,18 @@ class EstimatorHelperTest
   }
 
   private def produce(channelsHash: ByteString) =
-    Event(
-      Produce(
-        ProduceEvent(
-          channelsHash,
-          hash = ByteString.copyFromUtf8("Asdfg753213fdsadfueias9fje35mv43")
-        )
-      )
+    ProduceEvent(
+      channelsHash,
+      hash = ByteString.copyFromUtf8("Asdfg753213fdsadfueias9fje35mv43"),
+      persistent = false,
+      sequenceNumber = 0
     )
 
   private def consume(channelsHash: ByteString) =
-    Event(
-      Consume(
-        ConsumeEvent(
-          Seq(channelsHash),
-          hash = ByteString.copyFromUtf8("Asdfg753213fdsadfueias9fje35mv43")
-        )
-      )
+    ConsumeEvent(
+      List(channelsHash),
+      hash = ByteString.copyFromUtf8("Asdfg753213fdsadfueias9fje35mv43"),
+      persistent = false,
+      sequenceNumber = 0
     )
 }

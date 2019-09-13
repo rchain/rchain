@@ -1,7 +1,8 @@
 package coop.rchain.casper
 
-import java.nio.file.Files
+import CasperMessageFactory._
 
+import java.nio.file.Files
 import cats.Monad
 import cats.implicits._
 import com.google.protobuf.ByteString
@@ -10,7 +11,6 @@ import coop.rchain.blockstorage.dag.IndexedBlockDagStorage
 import coop.rchain.casper.helper.BlockGenerator._
 import coop.rchain.casper.helper.BlockUtil.generateValidator
 import coop.rchain.casper.helper.{BlockDagStorageFixture, BlockGenerator}
-import coop.rchain.casper.protocol.Event.EventInstance
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.GenesisBuilder.buildGenesis
 import coop.rchain.casper.util.rholang.{InterpreterUtil, RuntimeManager}
@@ -28,7 +28,6 @@ import coop.rchain.shared.scalatestcontrib._
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
 import org.scalatest.{BeforeAndAfterEach, FlatSpec, Matchers}
-
 import scala.collection.immutable.HashMap
 
 class ValidateTest
@@ -106,12 +105,8 @@ class ValidateTest
 
   implicit class ChangeBlockNumber(b: BlockMessage) {
     def withBlockNumber(n: Long): BlockMessage = {
-      val body     = b.getBody
-      val state    = body.getState
-      val newState = state.withBlockNumber(n)
-      val header   = b.getHeader
-
-      b.withBody(body.withState(newState)).withHeader(header)
+      val newState = b.body.state.copy(blockNumber = n)
+      b.copy(body = b.body.copy(state = newState))
     }
   }
 
@@ -121,8 +116,8 @@ class ValidateTest
         _                <- createChain[Task](2)
         unknownAlgorithm = "unknownAlgorithm"
         rsa              = "RSA"
-        block0           <- blockDagStorage.lookupByIdUnsafe(0).map(_.withSigAlgorithm(unknownAlgorithm))
-        block1           <- blockDagStorage.lookupByIdUnsafe(1).map(_.withSigAlgorithm(rsa))
+        block0           <- blockDagStorage.lookupByIdUnsafe(0).map(_.copy(sigAlgorithm = unknownAlgorithm))
+        block1           <- blockDagStorage.lookupByIdUnsafe(1).map(_.copy(sigAlgorithm = rsa))
         _                <- Validate.blockSignature[Task](block0) shouldBeF false
         _ = log.warns.last
           .contains(s"signature algorithm $unknownAlgorithm is unsupported") should be(
@@ -141,12 +136,12 @@ class ValidateTest
         (_, wrongPk) = Secp256k1.newKeyPair
         empty        = ByteString.EMPTY
         invalidKey   = ByteString.copyFrom(Base16.unsafeDecode("abcdef1234567890"))
-        block0       <- signedBlock(0).map(_.withSender(empty))
-        block1       <- signedBlock(1).map(_.withSender(invalidKey))
-        block2       <- signedBlock(2).map(_.withSender(ByteString.copyFrom(wrongPk.bytes)))
-        block3       <- signedBlock(3).map(_.withSig(empty))
-        block4       <- signedBlock(4).map(_.withSig(invalidKey))
-        block5       <- signedBlock(5).map(_.withSig(block0.sig)) //wrong sig
+        block0       <- signedBlock(0).map(_.copy(sender = empty))
+        block1       <- signedBlock(1).map(_.copy(sender = invalidKey))
+        block2       <- signedBlock(2).map(_.copy(sender = ByteString.copyFrom(wrongPk.bytes)))
+        block3       <- signedBlock(3).map(_.copy(sig = empty))
+        block4       <- signedBlock(4).map(_.copy(sig = invalidKey))
+        block5       <- signedBlock(5).map(_.copy(sig = block0.sig)) //wrong sig
         blocks       = Vector(block0, block1, block2, block3, block4, block5)
         _            <- blocks.existsM[Task](Validate.blockSignature[Task]) shouldBeF false
         _            = log.warns.size should be(blocks.length)
@@ -176,10 +171,10 @@ class ValidateTest
       for {
         _                       <- createChain[Task](1)
         block                   <- blockDagStorage.lookupByIdUnsafe(0)
-        modifiedTimestampHeader = block.header.get.withTimestamp(99999999)
+        modifiedTimestampHeader = block.header.copy(timestamp = 99999999)
         dag                     <- blockDagStorage.getRepresentation
         _ <- Validate.timestamp[Task](
-              block.withHeader(modifiedTimestampHeader),
+              block.copy(header = modifiedTimestampHeader),
               dag
             ) shouldBeF InvalidTimestamp.asLeft[ValidBlock]
         _      <- Validate.timestamp[Task](block, dag) shouldBeF Valid.asRight[InvalidBlock]
@@ -193,10 +188,10 @@ class ValidateTest
       for {
         _                       <- createChain[Task](2)
         block                   <- blockDagStorage.lookupByIdUnsafe(1)
-        modifiedTimestampHeader = block.header.get.withTimestamp(-1)
+        modifiedTimestampHeader = block.header.copy(timestamp = -1)
         dag                     <- blockDagStorage.getRepresentation
         _ <- Validate.timestamp[Task](
-              block.withHeader(modifiedTimestampHeader),
+              block.copy(header = modifiedTimestampHeader),
               dag
             ) shouldBeF Left(InvalidTimestamp)
         _      <- Validate.timestamp[Task](block, dag) shouldBeF Right(Valid)
@@ -265,14 +260,13 @@ class ValidateTest
           parentHashes: Seq[ByteString] = Nil
       ): Task[BlockMessage] =
         Time[Task].currentMillis >>= { timestamp =>
-          val blockWithNumber = BlockMessage().withBlockNumber(n)
-          // Add timestamp to uniquely identify the blocks.
-          val header =
-            blockWithNumber.getHeader.withParentsHashList(parentHashes).withTimestamp(timestamp)
-          val hash  = ProtoUtil.hashUnsignedBlock(header, Nil)
-          val block = blockWithNumber.withHeader(header).withBlockHash(hash)
+          val blockWithNumber: BlockMessage =
+            createBlockMessage(header = createHeader(parentHashes.toList, timestamp = timestamp))
+              .withBlockNumber(n)
+          val hash  = ProtoUtil.hashUnsignedBlock(blockWithNumber.header, Nil)
+          val block = blockWithNumber.copy(blockHash = hash)
 
-          blockStore.put(hash, block) >> blockDagStorage.insert(block, genesis, invalid = false) >> block
+          blockStore.put(hash, block) >> blockDagStorage.insert(block, genesis, false) >> block
             .pure[Task]
         }
 
@@ -293,10 +287,10 @@ class ValidateTest
     implicit blockStore => implicit blockDagStorage =>
       for {
         deploy            <- ConstructDeploy.basicProcessedDeploy[Task](0)
-        deployData        = deploy.deploy.get
-        updatedDeployData = deployData.withValidAfterBlockNumber(-1)
+        deployData        = deploy.deploy
+        updatedDeployData = deployData.copy(validAfterBlockNumber = -1)
         block <- createGenesis[Task](
-                  deploys = Seq(deploy.withDeploy(updatedDeployData))
+                  deploys = Seq(deploy.copy(deploy = updatedDeployData))
                 )
         status <- Validate.futureTransaction[Task](block)
         _      = status should be(Right(Valid))
@@ -307,10 +301,10 @@ class ValidateTest
     implicit blockStore => implicit blockDagStorage =>
       for {
         deploy            <- ConstructDeploy.basicProcessedDeploy[Task](0)
-        deployData        = deploy.deploy.get
-        updatedDeployData = deployData.withValidAfterBlockNumber(Long.MaxValue)
+        deployData        = deploy.deploy
+        updatedDeployData = deployData.copy(validAfterBlockNumber = Long.MaxValue)
         blockWithFutureDeploy <- createGenesis[Task](
-                                  deploys = Seq(deploy.withDeploy(updatedDeployData))
+                                  deploys = Seq(deploy.copy(deploy = updatedDeployData))
                                 )
         status <- Validate.futureTransaction[Task](blockWithFutureDeploy)
         _      = status should be(Left(ContainsFutureDeploy))
@@ -333,10 +327,10 @@ class ValidateTest
     implicit blockStore => implicit blockDagStorage =>
       for {
         deploy            <- ConstructDeploy.basicProcessedDeploy[Task](0)
-        deployData        = deploy.deploy.get
-        updatedDeployData = deployData.withValidAfterBlockNumber(Long.MinValue)
+        deployData        = deploy.deploy
+        updatedDeployData = deployData.copy(validAfterBlockNumber = Long.MinValue)
         blockWithExpiredDeploy <- createGenesis[Task](
-                                   deploys = Seq(deploy.withDeploy(updatedDeployData))
+                                   deploys = Seq(deploy.copy(deploy = updatedDeployData))
                                  )
         status <- Validate
                    .transactionExpiration[Task](blockWithExpiredDeploy, expirationThreshold = 10)
@@ -350,7 +344,7 @@ class ValidateTest
         _     <- createChain[Task](1)
         block <- blockDagStorage.lookupByIdUnsafe(0)
         dag   <- blockDagStorage.getRepresentation
-        _ <- Validate.sequenceNumber[Task](block.withSeqNum(1), dag) shouldBeF Left(
+        _ <- Validate.sequenceNumber[Task](block.copy(seqNum = 1), dag) shouldBeF Left(
               InvalidSequenceNumber
             )
         _      <- Validate.sequenceNumber[Task](block, dag) shouldBeF Right(Valid)
@@ -364,7 +358,7 @@ class ValidateTest
         _     <- createChain[Task](2)
         block <- blockDagStorage.lookupByIdUnsafe(1)
         dag   <- blockDagStorage.getRepresentation
-        _ <- Validate.sequenceNumber[Task](block.withSeqNum(1), dag) shouldBeF Left(
+        _ <- Validate.sequenceNumber[Task](block.copy(seqNum = 1), dag) shouldBeF Left(
               InvalidSequenceNumber
             )
         result = log.warns.size should be(1)
@@ -426,8 +420,8 @@ class ValidateTest
       for {
         _            <- createChain[Task](3, List(Bond(validator, 1)))
         genesis      <- blockDagStorage.lookupByIdUnsafe(0)
-        validBlock   <- blockDagStorage.lookupByIdUnsafe(1).map(_.withSender(validator))
-        invalidBlock <- blockDagStorage.lookupByIdUnsafe(2).map(_.withSender(impostor))
+        validBlock   <- blockDagStorage.lookupByIdUnsafe(1).map(_.copy(sender = validator))
+        invalidBlock <- blockDagStorage.lookupByIdUnsafe(2).map(_.copy(sender = impostor))
         dag          <- blockDagStorage.getRepresentation
         _            <- Validate.blockSender[Task](genesis, genesis, dag) shouldBeF true
         _            <- Validate.blockSender[Task](validBlock, genesis, dag) shouldBeF true
@@ -527,7 +521,7 @@ class ValidateTest
         dag      <- blockDagStorage.getRepresentation
         (sk, pk) = Secp256k1.newKeyPair
         signedBlock <- ProtoUtil.signBlock[Task](
-                        block.withBlockNumber(17).withSeqNum(1),
+                        block.withBlockNumber(17).copy(seqNum = 1),
                         dag,
                         pk,
                         sk,
@@ -536,7 +530,7 @@ class ValidateTest
                       )
         _ <- Validate.blockSummary[Task](
               signedBlock,
-              BlockMessage.defaultInstance,
+              createBlockMessage(),
               dag,
               "rchain",
               Int.MaxValue
@@ -682,9 +676,10 @@ class ValidateTest
           Justification(validators(0), b1.blockHash),
           Justification(validators(1), b4.blockHash)
         )
-        blockWithJustificationRegression = BlockMessage()
-          .withSender(validators(1))
-          .withJustifications(justificationsWithRegression)
+        blockWithJustificationRegression = createBlockMessage(
+          sender = validators(1),
+          justifications = justificationsWithRegression.toList
+        )
         dag <- blockDagStorage.getRepresentation
         _ <- Validate.justificationRegressions[Task](
               blockWithJustificationRegression,
@@ -711,9 +706,9 @@ class ValidateTest
         _                 <- InterpreterUtil.validateBlockCheckpoint[Task](genesis, dag, runtimeManager)
         _                 <- Validate.bondsCache[Task](genesis, runtimeManager) shouldBeF Right(Valid)
         modifiedBonds     = Seq.empty[Bond]
-        modifiedPostState = genesis.getBody.getState.withBonds(modifiedBonds)
-        modifiedBody      = genesis.getBody.withState(modifiedPostState)
-        modifiedGenesis   = genesis.withBody(modifiedBody)
+        modifiedPostState = genesis.body.state.copy(bonds = modifiedBonds.toList)
+        modifiedBody      = genesis.body.copy(state = modifiedPostState)
+        modifiedGenesis   = genesis.copy(body = modifiedBody)
         result <- Validate.bondsCache[Task](modifiedGenesis, runtimeManager) shouldBeF Left(
                    InvalidBondsCache
                  )
@@ -730,30 +725,18 @@ class ValidateTest
         genesis <- ProtoUtil
                     .signBlock[Task](context.genesisBlock, dag, pk, sk, "secp256k1", "rchain")
         _ <- Validate.formatOfFields[Task](genesis) shouldBeF true
-        _ <- Validate.formatOfFields[Task](genesis.withBlockHash(ByteString.EMPTY)) shouldBeF false
-        _ <- Validate.formatOfFields[Task](genesis.clearHeader) shouldBeF false
-        _ <- Validate.formatOfFields[Task](genesis.clearBody) shouldBeF false
-        _ <- Validate.formatOfFields[Task](genesis.withSig(ByteString.EMPTY)) shouldBeF false
-        _ <- Validate.formatOfFields[Task](genesis.withSigAlgorithm("")) shouldBeF false
-        _ <- Validate.formatOfFields[Task](genesis.withShardId("")) shouldBeF false
-        _ <- Validate.formatOfFields[Task](genesis.withBody(genesis.getBody.clearState)) shouldBeF false
+        _ <- Validate.formatOfFields[Task](genesis.copy(blockHash = ByteString.EMPTY)) shouldBeF false
+        _ <- Validate.formatOfFields[Task](genesis.copy(sig = ByteString.EMPTY)) shouldBeF false
+        _ <- Validate.formatOfFields[Task](genesis.copy(sigAlgorithm = "")) shouldBeF false
+        _ <- Validate.formatOfFields[Task](genesis.copy(shardId = "")) shouldBeF false
         _ <- Validate.formatOfFields[Task](
-              genesis.withBody(
-                genesis.body.get
-                  .withState(genesis.body.get.state.get.withPostStateHash(ByteString.EMPTY))
+              genesis.copy(
+                body = genesis.body
+                  .copy(state = genesis.body.state.copy(postStateHash = ByteString.EMPTY))
               )
             ) shouldBeF false
-        _ <- Validate.formatOfFields[Task](
-              genesis.withHeader(genesis.header.get.withDeploysHash(ByteString.EMPTY))
-            ) shouldBeF false
         result <- Validate.formatOfFields[Task](
-                   genesis.withBody(
-                     genesis.body.get
-                       .withDeploys(
-                         genesis.body.get.deploys
-                           .map(_.withDeployLog(List(Event(EventInstance.Empty))))
-                       )
-                   )
+                   genesis.copy(header = genesis.header.copy(deploysHash = ByteString.EMPTY))
                  ) shouldBeF false
       } yield result
   }
@@ -768,7 +751,7 @@ class ValidateTest
                     .signBlock[Task](context.genesisBlock, dag, pk, sk, "secp256k1", "rchain")
         _ <- Validate.blockHash[Task](genesis) shouldBeF Right(Valid)
         result <- Validate.blockHash[Task](
-                   genesis.withBlockHash(ByteString.copyFromUtf8("123"))
+                   genesis.copy(blockHash = ByteString.copyFromUtf8("123"))
                  ) shouldBeF Left(InvalidBlockHash)
       } yield result
   }
@@ -783,7 +766,7 @@ class ValidateTest
                     .signBlock[Task](context.genesisBlock, dag, pk, sk, "secp256k1", "rchain")
         _ <- Validate.deployCount[Task](genesis) shouldBeF Right(Valid)
         result <- Validate.deployCount[Task](
-                   genesis.withHeader(genesis.header.get.withDeployCount(100))
+                   genesis.copy(header = genesis.header.copy(deployCount = 100))
                  ) shouldBeF Left(InvalidDeployCount)
       } yield result
   }
@@ -798,4 +781,5 @@ class ValidateTest
       result  <- Validate.version[Task](genesis, 1) shouldBeF true
     } yield result
   }
+
 }

@@ -129,7 +129,7 @@ object BlockCreator {
   ): F[Unit] = {
     def updateDeployValidAfterBlock(deployData: DeployData, max: Long): DeployData =
       if (deployData.validAfterBlockNumber == -1)
-        deployData.withValidAfterBlockNumber(max)
+        deployData.copy(validAfterBlockNumber = max)
       else
         deployData
 
@@ -165,7 +165,7 @@ object BlockCreator {
                  .foldLeftF(validDeploys) { (deploys, blockMetadata) =>
                    for {
                      block        <- ProtoUtil.getBlock[F](blockMetadata.blockHash)
-                     blockDeploys = ProtoUtil.deploys(block).flatMap(_.deploy)
+                     blockDeploys = ProtoUtil.deploys(block).map(_.deploy)
                    } yield deploys -- blockDeploys
                  }
     } yield result.toSeq
@@ -252,8 +252,7 @@ object BlockCreator {
         case InternalProcessedDeploy(deploy, _, _, _, InternalErrors(errors)) =>
           val errorsMessage = errors.map(_.getMessage).mkString("\n")
           Log[F].error(
-            s"Internal error encountered while processing deploy ${PrettyPrinter
-              .buildString(deploy)}: $errorsMessage"
+            s"Internal error encountered while processing deploy '$deploy': $errorsMessage"
           )
         case _ => ().pure[F]
       }
@@ -270,17 +269,9 @@ object BlockCreator {
       shardId: String,
       version: Long
   ): CreateBlockStatus = {
-    val postState = RChainState()
-      .withPreStateHash(preStateHash)
-      .withPostStateHash(postStateHash)
-      .withBonds(newBonds)
-      .withBlockNumber(maxBlockNumber + 1)
+    val postState = RChainState(preStateHash, postStateHash, newBonds.toList, maxBlockNumber + 1)
 
-    val body = Body()
-      .withState(postState)
-      .withDeploys(
-        persistableDeploys.map(_.toProcessedDeploy)
-      )
+    val body   = Body(postState, persistableDeploys.map(_.toProcessedDeploy).toList)
     val header = blockHeader(body, p.map(_.blockHash), version, now)
     val block  = unsignedBlockProto(body, header, justifications, shardId)
     CreateBlockStatus.created(block)

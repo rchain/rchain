@@ -131,7 +131,7 @@ class MultiParentCasperCommunicationSpec extends FlatSpec with Matchers with Ins
         _ <- nodes(2).casperEff.contains(br.blockHash) shouldBeF true
 
         nr <- makeDeploy(0) >>= (nodes(2).addBlock(_))
-        _  = nr.header.get.parentsHashList shouldBe Seq(br.blockHash)
+        _  = nr.header.parentsHashList shouldBe List(br.blockHash)
       } yield ()
     }
   }

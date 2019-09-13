@@ -59,14 +59,11 @@ class Initializing[F[_]: Sync: Metrics: Span: Concurrent: ConnectionsCell: Block
                         _ <- Log[F].info("Valid ApprovedBlock received!")
                         _ <- EventLog[F].publish(
                               shared.Event.ApprovedBlockReceived(
-                                approvedBlock.candidate
-                                  .flatMap(
-                                    _.block.map(b => PrettyPrinter.buildStringNoLimit(b.blockHash))
-                                  )
-                                  .getOrElse("")
+                                PrettyPrinter
+                                  .buildStringNoLimit(approvedBlock.candidate.block.blockHash)
                               )
                             )
-                        genesis = approvedBlock.candidate.flatMap(_.block).get
+                        genesis = approvedBlock.candidate.block
                         _       <- insertIntoBlockAndDagStore[F](genesis, approvedBlock)
                         _       <- LastApprovedBlock[F].set(approvedBlock)
                         casper <- MultiParentCasper

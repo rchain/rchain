@@ -40,9 +40,9 @@ object InterpreterUtil {
     val preStateHash    = ProtoUtil.preStateHash(b)
     val tsHash          = ProtoUtil.tuplespace(b)
     val deploys         = ProtoUtil.deploys(b)
-    val internalDeploys = deploys.flatMap(InternalProcessedDeploy.fromProcessedDeploy)
-    val timestamp       = b.header.get.timestamp // TODO: Ensure header exists through type
-    val blockNumber     = b.body.get.state.get.blockNumber
+    val internalDeploys = deploys.map(InternalProcessedDeploy.fromProcessedDeploy)
+    val timestamp       = b.header.timestamp
+    val blockNumber     = b.body.state.blockNumber
     for {
       _                    <- Span[F].mark("before-unsafe-get-parents")
       parents              <- ProtoUtil.getParents[F](b)
@@ -64,7 +64,7 @@ object InterpreterUtil {
                  possiblePreStateHash,
                  BlockData(timestamp, blockNumber),
                  invalidBlocks,
-                 isGenesis = b.header.get.parentsHashList.isEmpty
+                 isGenesis = b.header.parentsHashList.isEmpty
                )
     } yield result
   }
@@ -72,7 +72,7 @@ object InterpreterUtil {
   private def processPossiblePreStateHash[F[_]: Sync: Log: BlockStore](
       runtimeManager: RuntimeManager[F],
       preStateHash: StateHash,
-      tsHash: Option[StateHash],
+      tsHash: StateHash,
       internalDeploys: Seq[InternalProcessedDeploy],
       possiblePreStateHash: Either[Throwable, StateHash],
       blockData: BlockData,
@@ -105,7 +105,7 @@ object InterpreterUtil {
   private def processPreStateHash[F[_]: Sync: Log: BlockStore](
       runtimeManager: RuntimeManager[F],
       preStateHash: StateHash,
-      tsHash: Option[StateHash],
+      tsHash: StateHash,
       internalDeploys: Seq[InternalProcessedDeploy],
       blockData: BlockData,
       invalidBlocks: Map[BlockHash, Validator],
@@ -149,14 +149,14 @@ object InterpreterUtil {
             case UserErrors(_)  => throw new RuntimeException("found UserErrors")
           }
         case Right(computedStateHash) =>
-          if (tsHash.contains(computedStateHash)) {
+          if (tsHash == computedStateHash) {
             // state hash in block matches computed hash!
             computedStateHash.some.asRight[BlockError].pure[F]
           } else {
             // state hash in block does not match computed hash -- invalid!
             // return no state hash, do not update the state hash set
             Log[F].warn(
-              s"Tuplespace hash ${PrettyPrinter.buildString(tsHash.getOrElse(ByteString.EMPTY))} does not match computed hash ${PrettyPrinter
+              s"Tuplespace hash ${PrettyPrinter.buildString(tsHash)} does not match computed hash ${PrettyPrinter
                 .buildString(computedStateHash)}."
             ) >>
               none[StateHash].asRight[BlockError].pure[F]
@@ -194,7 +194,8 @@ object InterpreterUtil {
       dag: BlockDagRepresentation[F],
       runtimeManager: RuntimeManager[F]
   ): F[Either[Throwable, StateHash]] = {
-    val parentTuplespaces = parents.flatMap(p => ProtoUtil.tuplespace(p).map(p -> _))
+    val parentTuplespaces =
+      parents.map(p => p -> ProtoUtil.tuplespace(p))
 
     parentTuplespaces match {
       // For genesis, use empty trie's root hash
@@ -253,9 +254,9 @@ object InterpreterUtil {
       dag: BlockDagRepresentation[F],
       runtimeManager: RuntimeManager[F]
   ): F[Either[ReplayFailure, StateHash]] = {
-    val deploys     = block.getBody.deploys.flatMap(InternalProcessedDeploy.fromProcessedDeploy)
-    val timestamp   = block.header.get.timestamp // TODO: Ensure header exists through type
-    val blockNumber = block.body.get.state.get.blockNumber
+    val deploys     = block.body.deploys.map(InternalProcessedDeploy.fromProcessedDeploy)
+    val timestamp   = block.header.timestamp
+    val blockNumber = block.body.state.blockNumber
 
     for {
       invalidBlocksSet <- dag.invalidBlocks

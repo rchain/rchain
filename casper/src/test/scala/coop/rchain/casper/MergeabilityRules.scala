@@ -678,7 +678,6 @@ trait MergeabilityRules {
             multiParentBlock <- nodes(0).addBlock(deploys(3))
 
             _ = nodes(0).logEff.warns.isEmpty shouldBe true
-            _ = multiParentBlock.header.get.parentsHashList.size shouldBe numberOfParentsForDiamondTip
             _ = nodes(0).casperEff.contains(multiParentBlock.blockHash) shouldBeF true
           } yield ()
         }

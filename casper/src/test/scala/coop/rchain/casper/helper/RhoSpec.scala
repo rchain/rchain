@@ -4,7 +4,7 @@ import cats.effect.{Concurrent, Sync}
 import cats.implicits._
 import coop.rchain.casper.genesis.contracts.TestUtil
 import coop.rchain.casper.genesis.contracts.TestUtil.eval
-import coop.rchain.casper.protocol.DeployData
+import coop.rchain.casper.protocol.{DeployData, DeployDataProto}
 import coop.rchain.casper.util.GenesisBuilder.GenesisParameters
 import coop.rchain.casper.util.rholang.Resources.copyStorage
 import coop.rchain.casper.util.{GenesisBuilder, ProtoUtil}
@@ -168,18 +168,20 @@ class RhoSpec(
       runtime: Runtime[F]
   ): F[Unit] = {
     val rand: Blake2b512Random = Blake2b512Random(
-      DeployData.toByteArray(ProtoUtil.stripDeployData(deploy))
+      ProtoUtil.stripDeployData(deploy).toProto.toByteArray
     )
-    eval(deploy.term, runtime, NormalizerEnv(deploy))(implicitly, rand)
+    eval(deploy.term, runtime, NormalizerEnv(deploy.toProto))(implicitly, rand)
   }
 
   private val rhoSpecDeploy: DeployData =
-    DeployData(
-      deployer = ProtoUtil.stringToByteString(
-        "0401f5d998c9be9b1a753771920c6e968def63fe95b20c71a163a7f7311b6131ac65a49f796b5947fa9d94b0542895e7b7ebe8b91eefcbc5c7604aaf281922ccac"
-      ),
-      timestamp = 1559158671800L,
-      term = CompiledRholangSource("RhoSpecContract.rho", NormalizerEnv.Empty).code
+    DeployData.from(
+      DeployDataProto(
+        deployer = ProtoUtil.stringToByteString(
+          "0401f5d998c9be9b1a753771920c6e968def63fe95b20c71a163a7f7311b6131ac65a49f796b5947fa9d94b0542895e7b7ebe8b91eefcbc5c7604aaf281922ccac"
+        ),
+        timestamp = 1559158671800L,
+        term = CompiledRholangSource("RhoSpecContract.rho", NormalizerEnv.Empty).code
+      )
     )
 
   val result =

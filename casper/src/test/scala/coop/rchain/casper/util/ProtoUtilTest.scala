@@ -21,7 +21,7 @@ class ProtoUtilTest extends FlatSpec with Matchers with GeneratorDrivenPropertyC
       val justificationsHashes = blockElement.justifications.map(
         _.latestBlockHash
       )
-      val parentsHashes = blockElement.header.toSeq.flatMap(_.parentsHashList)
+      val parentsHashes = blockElement.header.parentsHashList
       result should contain allElementsOf (justificationsHashes)
       result should contain allElementsOf (parentsHashes)
       result should contain theSameElementsAs ((justificationsHashes ++ parentsHashes).toSet)

@@ -6,7 +6,7 @@ import scala.util.Try
 
 package object protocol {
 
-  def toCasperMessage(packet: Packet): Option[CasperMessage] =
+  def toCasperMessageProto(packet: Packet): Option[CasperMessageProto] =
     packetToBlockRequest(packet) orElse
       packetToHasBlockRequest(packet) orElse
       packetToHasBlock(packet) orElse
@@ -18,41 +18,41 @@ package object protocol {
       packetToUnapprovedBlock(packet) orElse
       packetToNoApprovedBlockAvailable(packet)
 
-  private def packetToBlockMessage(msg: Packet): Option[BlockMessage] =
-    convert[BlockMessage](msg, transport.BlockMessage, BlockMessage.parseFrom)
-  private def packetToApprovedBlock(msg: Packet): Option[ApprovedBlock] =
-    convert[ApprovedBlock](msg, transport.ApprovedBlock, ApprovedBlock.parseFrom)
-  private def packetToApprovedBlockRequest(msg: Packet): Option[ApprovedBlockRequest] =
-    convert[ApprovedBlockRequest](
+  private def packetToBlockMessage(msg: Packet): Option[BlockMessageProto] =
+    convert[BlockMessageProto](msg, transport.BlockMessage, BlockMessageProto.parseFrom)
+  private def packetToApprovedBlock(msg: Packet): Option[ApprovedBlockProto] =
+    convert[ApprovedBlockProto](msg, transport.ApprovedBlock, ApprovedBlockProto.parseFrom)
+  private def packetToApprovedBlockRequest(msg: Packet): Option[ApprovedBlockRequestProto] =
+    convert[ApprovedBlockRequestProto](
       msg,
       transport.ApprovedBlockRequest,
-      ApprovedBlockRequest.parseFrom
+      ApprovedBlockRequestProto.parseFrom
     )
-  def packetToBlockRequest(msg: Packet): Option[BlockRequest] =
-    convert[BlockRequest](msg, transport.BlockRequest, BlockRequest.parseFrom)
-  def packetToHasBlockRequest(msg: Packet): Option[HasBlockRequest] =
-    convert[HasBlockRequest](msg, transport.HasBlockRequest, HasBlockRequest.parseFrom)
-  def packetToHasBlock(msg: Packet): Option[HasBlock] =
-    convert[HasBlock](msg, transport.HasBlock, HasBlock.parseFrom)
+  def packetToBlockRequest(msg: Packet): Option[BlockRequestProto] =
+    convert[BlockRequestProto](msg, transport.BlockRequest, BlockRequestProto.parseFrom)
+  def packetToHasBlockRequest(msg: Packet): Option[HasBlockRequestProto] =
+    convert[HasBlockRequestProto](msg, transport.HasBlockRequest, HasBlockRequestProto.parseFrom)
+  def packetToHasBlock(msg: Packet): Option[HasBlockProto] =
+    convert[HasBlockProto](msg, transport.HasBlock, HasBlockProto.parseFrom)
 
-  private def packetToForkChoiceTipRequest(msg: Packet): Option[ForkChoiceTipRequest] =
-    convert[ForkChoiceTipRequest](
+  private def packetToForkChoiceTipRequest(msg: Packet): Option[ForkChoiceTipRequestProto] =
+    convert[ForkChoiceTipRequestProto](
       msg,
       transport.ForkChoiceTipRequest,
-      ForkChoiceTipRequest.parseFrom
+      ForkChoiceTipRequestProto.parseFrom
     )
-  private def packetToBlockApproval(msg: Packet): Option[BlockApproval] =
-    convert[BlockApproval](msg, transport.BlockApproval, BlockApproval.parseFrom)
-  private def packetToUnapprovedBlock(msg: Packet): Option[UnapprovedBlock] =
-    convert[UnapprovedBlock](msg, transport.UnapprovedBlock, UnapprovedBlock.parseFrom)
-  private def packetToNoApprovedBlockAvailable(msg: Packet): Option[NoApprovedBlockAvailable] =
-    convert[NoApprovedBlockAvailable](
+  private def packetToBlockApproval(msg: Packet): Option[BlockApprovalProto] =
+    convert[BlockApprovalProto](msg, transport.BlockApproval, BlockApprovalProto.parseFrom)
+  private def packetToUnapprovedBlock(msg: Packet): Option[UnapprovedBlockProto] =
+    convert[UnapprovedBlockProto](msg, transport.UnapprovedBlock, UnapprovedBlockProto.parseFrom)
+  private def packetToNoApprovedBlockAvailable(msg: Packet): Option[NoApprovedBlockAvailableProto] =
+    convert[NoApprovedBlockAvailableProto](
       msg,
       transport.NoApprovedBlockAvailable,
-      NoApprovedBlockAvailable.parseFrom
+      NoApprovedBlockAvailableProto.parseFrom
     )
 
-  private def convert[A](
+  private def convert[A <: CasperMessageProto](
       msg: Packet,
       pt: transport.PacketType,
       parse: Array[Byte] => A

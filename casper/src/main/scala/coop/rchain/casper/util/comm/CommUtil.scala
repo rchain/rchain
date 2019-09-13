@@ -34,7 +34,7 @@ object CommUtil {
   def sendBlock[F[_]: Monad: ConnectionsCell: TransportLayer: Log: Time: RPConfAsk](
       b: BlockMessage
   ): F[Unit] = {
-    val serializedBlock = b.toByteString
+    val serializedBlock = b.toProto.toByteString
     for {
       _ <- streamToPeers[F](transport.BlockMessage, serializedBlock)
       _ <- Log[F].info(s"Sent ${PrettyPrinter.buildString(b)} to peers")
@@ -44,22 +44,18 @@ object CommUtil {
   def sendBlockRequest[F[_]: Monad: ConnectionsCell: TransportLayer: Log: Time: RPConfAsk: Running.RequestedBlocks](
       hash: BlockHash
   ): F[Unit] =
-    Running
-      .RequestedBlocks[F]
-      .read
-      .map(_.contains(hash))
-      .ifM(
-        ().pure[F],
-        for {
-          _ <- Running.addNewEntry[F](hash)
-          _ <- sendToPeers[F](transport.HasBlockRequest, HasBlockRequest(hash).toByteString)
-          _ <- Log[F].info(s"Requested missing block ${PrettyPrinter.buildString(hash)} from peers")
-        } yield ()
-      )
+    (Running.RequestedBlocks[F].read map (_.contains(hash))).ifM(
+      ().pure[F],
+      for {
+        _ <- Running.addNewEntry[F](hash)
+        _ <- sendToPeers[F](transport.HasBlockRequest, HasBlockRequestProto(hash).toByteString)
+        _ <- Log[F].info(s"Requested missing block ${PrettyPrinter.buildString(hash)} from peers")
+      } yield ()
+    )
 
   def sendForkChoiceTipRequest[F[_]: Monad: ConnectionsCell: TransportLayer: Log: Time: RPConfAsk]
       : F[Unit] = {
-    val serialized = ForkChoiceTipRequest().toByteString
+    val serialized = ForkChoiceTipRequestProto().toByteString
     for {
       _ <- sendToPeers[F](transport.ForkChoiceTipRequest, serialized)
       _ <- Log[F].info(s"Requested fork tip from peers")
@@ -101,7 +97,7 @@ object CommUtil {
           ) >> Time[F].sleep(10 seconds) >> keepOnRequestingTillRunning(bootstrap, msg)
       }
 
-    val request = ApprovedBlockRequest("PleaseSendMeAnApprovedBlock").toByteString
+    val request = ApprovedBlockRequestProto("PleaseSendMeAnApprovedBlock").toByteString
     RPConfAsk[F].ask >>= {
       case conf =>
         conf.bootstrap match {

@@ -160,7 +160,7 @@ class RunningMaintainRequestedBlocksSpec extends FunSpec with BeforeAndAfterEach
     Cell.unsafe[Coeval, Map[BlockHash, Running.Requested]](init)
 
   private def toBlockRequest(protocol: Protocol): BlockRequest =
-    packetToBlockRequest(toPacket(protocol).right.get).get
+    BlockRequest.from(packetToBlockRequest(toPacket(protocol).right.get).get)
 
   private def endpoint(port: Int): Endpoint = Endpoint("host", port, port)
   private def peerNode(name: String, port: Int = 40400): PeerNode =

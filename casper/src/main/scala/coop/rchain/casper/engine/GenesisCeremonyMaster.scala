@@ -48,7 +48,7 @@ object GenesisCeremonyMaster {
                case None =>
                  approveBlockInterval[F](interval, shardId, validatorId)
                case Some(approvedBlock) =>
-                 val genesis = approvedBlock.candidate.flatMap(_.block).get
+                 val genesis = approvedBlock.candidate.block
                  for {
                    _ <- insertIntoBlockAndDagStore[F](genesis, approvedBlock)
                    casper <- MultiParentCasper

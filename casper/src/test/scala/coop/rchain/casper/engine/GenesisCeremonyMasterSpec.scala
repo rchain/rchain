@@ -56,7 +56,7 @@ class GenesisCeremonyMasterSpec extends WordSpec {
           .forkAndForget
           .runToFuture
         blockApproval = ApproveBlockProtocolTest.approval(
-          ApprovedBlockCandidate(Some(genesis), requiredSigns),
+          ApprovedBlockCandidate(genesis, requiredSigns),
           validatorSk,
           validatorPk
         )
@@ -73,10 +73,19 @@ class GenesisCeremonyMasterSpec extends WordSpec {
         lastApprovedBlock <- LastApprovedBlock[Task].get
         _                 = assert(lastApprovedBlock.isDefined)
         _                 <- EngineCell[Task].read >>= (_.handle(local, blockApproval))
-        head              = transportLayer.requests.head
+        head              = transportLayer.requests(1)
+        _                 = println("lastApprovedBlock.get.sigs: " + lastApprovedBlock.get.sigs)
+        proto             = ApprovedBlockProto.parseFrom(head.msg.message.packet.get.content.toByteArray)
+        _                 = println("proto.sigs: " + proto.sigs)
         _ = assert(
           ApprovedBlock
-            .parseFrom(head.msg.message.packet.get.content.toByteArray) == lastApprovedBlock.get
+            .from(
+              proto
+            )
+            .right
+            .get
+            .sigs
+            == lastApprovedBlock.get.toProto.sigs
         )
       } yield ()
 

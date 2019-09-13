@@ -3,7 +3,7 @@ package coop.rchain.blockstorage
 import java.nio.file.Path
 
 import cats.data.EitherT
-import coop.rchain.casper.protocol.BlockMessage
+import coop.rchain.casper.protocol.{BlockMessage, BlockMessageProto}
 import coop.rchain.crypto.codec.Base16
 
 sealed abstract class StorageError extends Exception

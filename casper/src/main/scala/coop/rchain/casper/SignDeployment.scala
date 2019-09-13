@@ -11,16 +11,17 @@ object SignDeployment {
   private def fill(
       deployData: DeployData
   )(deployer: PublicKey, sig: Array[Byte], sigAlgorithm: String): DeployData =
-    deployData
-      .withDeployer(ByteString.copyFrom(deployer.bytes))
-      .withSig(ByteString.copyFrom(sig))
-      .withSigAlgorithm(sigAlgorithm)
+    deployData.copy(
+      deployer = ByteString.copyFrom(deployer.bytes),
+      sig = ByteString.copyFrom(sig),
+      sigAlgorithm = sigAlgorithm
+    )
 
   private def clear(deployData: DeployData): DeployData =
     fill(deployData)(PublicKey(Array.empty[Byte]), Array.empty[Byte], "")
 
   def sign(sec: PrivateKey, deployData: DeployData, alg: SignaturesAlg = Secp256k1): DeployData = {
-    val toSign    = clear(deployData).toByteString.toByteArray
+    val toSign    = DeployData.toProto(clear(deployData)).toByteString.toByteArray
     val hash      = Blake2b256.hash(toSign)
     val signature = alg.sign(hash, sec)
 
@@ -29,7 +30,7 @@ object SignDeployment {
 
   def verify(deployData: DeployData): Option[Boolean] =
     SignaturesAlg(deployData.sigAlgorithm).map { alg =>
-      val toVerify = clear(deployData).toByteString.toByteArray
+      val toVerify = DeployData.toProto(clear(deployData)).toByteString.toByteArray
       val hash     = Blake2b256.hash(toVerify)
       alg.verify(hash, deployData.sig.toByteArray, PublicKey(deployData.deployer.toByteArray))
     }

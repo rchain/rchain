@@ -47,7 +47,7 @@ class MultiParentCasperMergeSpec
 
         _ = nodes(0).logEff.warns.isEmpty shouldBe true
         _ = nodes(1).logEff.warns.isEmpty shouldBe true
-        _ = multiparentBlock.header.get.parentsHashList.size shouldBe 2
+        _ = multiparentBlock.header.parentsHashList.size shouldBe 2
         _ = nodes(0).casperEff.contains(multiparentBlock.blockHash) shouldBeF true
         _ = nodes(1).casperEff.contains(multiparentBlock.blockHash) shouldBeF true
         _ <- getDataAtPublicChannel[Effect](multiparentBlock, 0).map(_ shouldBe Seq("0"))
@@ -198,7 +198,7 @@ class MultiParentCasperMergeSpec
 
         _      = nodes(0).logEff.warns.isEmpty shouldBe true
         _      = nodes(1).logEff.warns.isEmpty shouldBe true
-        _      = singleParentBlock.header.get.parentsHashList.size shouldBe 1
+        _      = singleParentBlock.header.parentsHashList.size shouldBe 1
         _      <- nodes(0).casperEff.contains(singleParentBlock.blockHash) shouldBeF true
         result <- nodes(1).casperEff.contains(singleParentBlock.blockHash) shouldBeF true
       } yield result

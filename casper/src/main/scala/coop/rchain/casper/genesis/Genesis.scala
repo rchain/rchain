@@ -74,9 +74,10 @@ object Genesis {
     import genesis._
 
     val state = RChainState(
-      bonds = bondsProto(proofOfStake),
       preStateHash = startHash,
-      postStateHash = stateHash
+      postStateHash = stateHash,
+      blockNumber = 0,
+      bonds = bondsProto(proofOfStake).toList
     )
 
     val blockDeploys =
@@ -84,12 +85,12 @@ object Genesis {
     val sortedDeploys = blockDeploys.map(
       d =>
         d.copy(
-          deployLog = d.deployLog.sortBy(_.toByteArray),
-          paymentLog = d.paymentLog.sortBy(_.toByteArray)
+          deployLog = d.deployLog.sortBy(_.toProto.toByteArray),
+          paymentLog = d.paymentLog.sortBy(_.toProto.toByteArray)
         )
     )
 
-    val body    = Body(state = Some(state), deploys = sortedDeploys)
+    val body    = Body(state = state, deploys = sortedDeploys.toList)
     val version = 1L //FIXME make this part of Genesis, and pass it from upstream
     val header  = blockHeader(body, List.empty[StateHash], version, timestamp)
 

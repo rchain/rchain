@@ -45,7 +45,7 @@ final class SynchronyConstraintChecker[F[_]: Sync: BlockStore](
           lastProposedBlock <- ProtoUtil.getBlock[F](lastProposedBlockHash)
           // Guaranteed to be present since last proposed block was present
           seenSenders            <- calculateSeenSendersSince(lastProposedBlock, dag)
-          lastProposedTuplespace = ProtoUtil.tuplespace(lastProposedBlock).get
+          lastProposedTuplespace = ProtoUtil.tuplespace(lastProposedBlock)
           bonds                  <- runtimeManager.computeBonds(lastProposedTuplespace)
           validatorWeightMap     = bonds.map(b => b.validator -> b.stake).toMap
           sendersWeight          = seenSenders.toList.flatMap(s => validatorWeightMap.get(s)).sum

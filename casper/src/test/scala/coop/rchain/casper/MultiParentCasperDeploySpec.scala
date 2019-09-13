@@ -41,7 +41,7 @@ class MultiParentCasperDeploySpec extends FlatSpec with Matchers with Inspectors
 
       for {
         correctDeploy   <- ConstructDeploy.basicDeployData[Effect](0)
-        incorrectDeploy = correctDeploy.withSig(ByteString.EMPTY)
+        incorrectDeploy = correctDeploy.copy(sig = ByteString.EMPTY)
         deployResult    <- casper.deploy(incorrectDeploy)
       } yield deployResult should be(Left(MissingSignature))
     }
@@ -54,7 +54,7 @@ class MultiParentCasperDeploySpec extends FlatSpec with Matchers with Inspectors
 
       for {
         correctDeploy   <- ConstructDeploy.basicDeployData[Effect](0)
-        incorrectDeploy = correctDeploy.withSigAlgorithm("")
+        incorrectDeploy = correctDeploy.copy(sigAlgorithm = "")
         deployResult    <- casper.deploy(incorrectDeploy)
       } yield deployResult should be(Left(MissingSignatureAlgorithm))
     }
@@ -67,7 +67,7 @@ class MultiParentCasperDeploySpec extends FlatSpec with Matchers with Inspectors
 
       for {
         correctDeploy   <- ConstructDeploy.basicDeployData[Effect](0)
-        incorrectDeploy = correctDeploy.withDeployer(ByteString.EMPTY)
+        incorrectDeploy = correctDeploy.copy(deployer = ByteString.EMPTY)
         deployResult    <- casper.deploy(incorrectDeploy)
       } yield deployResult should be(Left(MissingUser))
     }
@@ -80,7 +80,7 @@ class MultiParentCasperDeploySpec extends FlatSpec with Matchers with Inspectors
 
       for {
         correctDeploy   <- ConstructDeploy.basicDeployData[Effect](0)
-        incorrectDeploy = correctDeploy.withSigAlgorithm("SOME_RANDOME_STUFF")
+        incorrectDeploy = correctDeploy.copy(sigAlgorithm = "SOME_RANDOME_STUFF")
         deployResult    <- casper.deploy(incorrectDeploy)
       } yield deployResult should be(Left(UnknownSignatureAlgorithm("SOME_RANDOME_STUFF")))
     }
@@ -93,9 +93,8 @@ class MultiParentCasperDeploySpec extends FlatSpec with Matchers with Inspectors
 
       for {
         correctDeploy <- ConstructDeploy.basicDeployData[Effect](0)
-        incorrectDeploy = correctDeploy.withSig(
-          ByteString.copyFrom(correctDeploy.sig.toByteArray.reverse)
-        )
+        incorrectDeploy = correctDeploy
+          .copy(sig = ByteString.copyFrom(correctDeploy.sig.toByteArray.reverse))
         deployResult <- casper.deploy(incorrectDeploy)
       } yield deployResult should be(Left(SignatureVerificationFailed))
     }
@@ -123,7 +122,7 @@ class MultiParentCasperDeploySpec extends FlatSpec with Matchers with Inspectors
       for {
         deployData <- ConstructDeploy.sourceDeployNowF[Effect]("Nil", phloLimit = 1)
         block      <- node.createBlock(deployData)
-      } yield assert(block.body.get.deploys.head.errored)
+      } yield assert(block.body.deploys.head.errored)
     }
   }
 
@@ -134,7 +133,7 @@ class MultiParentCasperDeploySpec extends FlatSpec with Matchers with Inspectors
       for {
         deployData <- ConstructDeploy.sourceDeployNowF[Effect]("Nil", phloLimit = 100)
         block      <- node.createBlock(deployData)
-      } yield assert(!block.body.get.deploys.head.errored)
+      } yield assert(!block.body.deploys.head.errored)
     }
   }
 }

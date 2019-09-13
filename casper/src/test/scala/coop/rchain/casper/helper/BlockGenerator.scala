@@ -7,6 +7,7 @@ import com.google.protobuf.ByteString
 import coop.rchain.blockstorage._
 import coop.rchain.blockstorage.dag._
 import coop.rchain.casper.CasperMetricsSource
+import coop.rchain.casper._, CasperMessageFactory._
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.casper.util.rholang.InterpreterUtil.computeDeploysCheckpoint
@@ -55,14 +56,14 @@ object BlockGenerator {
   ): F[(StateHash, Seq[ProcessedDeploy])] = Span[F].trace(GenerateBlockMetricsSource) {
     for {
       parents <- ProtoUtil.getParents[F](b)
-      deploys = ProtoUtil.deploys(b).flatMap(_.deploy)
+      deploys = ProtoUtil.deploys(b).map(_.deploy)
       now     <- Time[F].currentMillis
       result <- computeDeploysCheckpoint[F](
                  parents,
                  deploys,
                  dag,
                  runtimeManager,
-                 BlockData(now, b.body.get.state.get.blockNumber),
+                 BlockData(now, b.body.state.blockNumber),
                  Map.empty[BlockHash, Validator]
                )
       Right((preStateHash, postStateHash, processedDeploys)) = result
@@ -75,10 +76,10 @@ object BlockGenerator {
       postGenStateHash: StateHash,
       processedDeploys: Seq[ProcessedDeploy]
   ): F[Unit] = {
-    val updatedBlockPostState = b.getBody.getState.withPostStateHash(postGenStateHash)
+    val updatedBlockPostState = b.body.state.copy(postStateHash = postGenStateHash)
     val updatedBlockBody =
-      b.getBody.withState(updatedBlockPostState).withDeploys(processedDeploys)
-    val updatedBlock = b.withBody(updatedBlockBody)
+      b.body.copy(state = updatedBlockPostState, deploys = processedDeploys.toList)
+    val updatedBlock = b.copy(body = updatedBlockBody)
     BlockStore[F].put(b.blockHash, updatedBlock) >>
       BlockDagStorage[F].insert(updatedBlock, genesis, invalid = false).void
   }
@@ -96,32 +97,36 @@ trait BlockGenerator {
       preStateHash: ByteString = ByteString.EMPTY,
       seqNum: Int = 0
   ): F[BlockMessage] =
-    for {
-      now <- Time[F].currentMillis
-      postState = RChainState()
-        .withPreStateHash(preStateHash)
-        .withPostStateHash(tsHash)
-        .withBonds(bonds)
-      header = Header()
-        .withParentsHashList(parentsHashList)
-        .withDeploysHash(ProtoUtil.protoSeqHash(deploys))
-        .withTimestamp(now)
-      blockHash = Blake2b256.hash(header.toByteArray)
-      body      = Body().withState(postState).withDeploys(deploys)
-      serializedJustifications = justifications.toList.map {
+    Time[F].currentMillis.map(now => {
+      val postState: RChainState = createRChainState(
+        preStateHash = preStateHash,
+        postStateHash = tsHash,
+        bonds = bonds.toList
+      )
+      val header = createHeader(
+        parentHashes = parentsHashList.toList,
+        deploysHash = ProtoUtil.protoSeqHash(deploys.map(_.toProto)),
+        timestamp = now
+      )
+      val blockHash = Blake2b256.hash(header.toProto.toByteArray)
+      val body      = createBody(state = postState, deploys = deploys.toList)
+      val serializedJustifications = justifications.toList.map {
         case (cr: Validator, latestBlockHash: BlockHash) =>
           Justification(cr, latestBlockHash)
       }
-      serializedBlockHash = ByteString.copyFrom(blockHash)
-    } yield BlockMessage(
-      serializedBlockHash,
-      Some(header),
-      Some(body),
-      serializedJustifications,
-      creator,
-      shardId = shardId,
-      seqNum = seqNum
-    )
+      val serializedBlockHash = ByteString.copyFrom(blockHash)
+
+      createBlockMessage(
+        blockHash = serializedBlockHash,
+        header = header,
+        body = body,
+        justifications = serializedJustifications,
+        sender = creator,
+        shardId = shardId,
+        seqNum = seqNum
+      )
+
+    })
 
   def createGenesis[F[_]: Monad: Time: BlockStore: IndexedBlockDagStorage](
       creator: Validator = ByteString.EMPTY,

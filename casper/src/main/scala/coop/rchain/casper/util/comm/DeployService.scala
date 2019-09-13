@@ -45,7 +45,7 @@ class GrpcDeployService(host: String, port: Int, maxMessageSize: Int)
   private val stub = DeployServiceGrpcMonix.stub(channel)
 
   def deploy(d: DeployData): Task[Either[Seq[String], String]] =
-    stub.doDeploy(d).map(_.toEither[DeployServiceResponse].map(_.message))
+    stub.doDeploy(d.toProto).map(_.toEither[DeployServiceResponse].map(_.message))
 
   def getBlock(q: BlockQuery): Task[Either[Seq[String], String]] =
     stub.getBlock(q).map(_.toEither[BlockQueryResponse].map(_.toProtoString))

@@ -56,7 +56,7 @@ object CasperLaunch {
     private def connectToExistingNetwork(approvedBlock: ApprovedBlock): F[Unit] =
       for {
         validatorId <- ValidatorIdentity.fromConfig[F](conf)
-        genesis     = approvedBlock.candidate.flatMap(_.block).get
+        genesis     = approvedBlock.candidate.block
         casper <- MultiParentCasper
                    .hashSetCasper[F](validatorId, genesis, conf.shardId)
         _ <- Engine

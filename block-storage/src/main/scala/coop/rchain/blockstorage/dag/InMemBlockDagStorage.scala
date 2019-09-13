@@ -9,7 +9,7 @@ import coop.rchain.blockstorage.dag.BlockDagStorage.DeployId
 import coop.rchain.blockstorage.util.BlockMessageUtil.{bonds, deployData, parentHashes}
 import coop.rchain.blockstorage.util.TopologicalSortUtil
 import coop.rchain.blockstorage.{BlockSenderIsMalformed, BlockStorageMetricsSource, BlockStore}
-import coop.rchain.casper.protocol.BlockMessage
+import coop.rchain.casper.protocol.{BlockMessage, BlockMessageProto}
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.metrics.Metrics.Source
 import coop.rchain.metrics.{Metrics, MetricsSemaphore}
