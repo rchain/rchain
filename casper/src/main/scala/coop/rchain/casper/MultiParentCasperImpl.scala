@@ -49,7 +49,7 @@ object CasperState {
   type CasperStateCell[F[_]] = Cell[F, CasperState]
 }
 
-class MultiParentCasperImpl[F[_]: Sync: Concurrent: ConnectionsCell: TransportLayer: Log: Time: SafetyOracle: LastFinalizedBlockCalculator: BlockStore: RPConfAsk: BlockDagStorage: Running.RequestedBlocks: EventPublisher](
+class MultiParentCasperImpl[F[_]: Sync: Concurrent: ConnectionsCell: TransportLayer: Log: Time: SafetyOracle: LastFinalizedBlockCalculator: BlockStore: RPConfAsk: BlockDagStorage: Running.RequestedBlocks: EventPublisher: SynchronyConstraintChecker](
     validatorId: Option[ValidatorIdentity],
     genesis: BlockMessage,
     postGenesisStateHash: StateHash,
@@ -235,17 +235,23 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: ConnectionsCell: TransportLa
       case Some(ValidatorIdentity(publicKey, privateKey, sigAlgorithm)) =>
         BlockDagStorage[F].getRepresentation
           .flatMap { dag =>
-            BlockCreator
-              .createBlock(
-                dag,
-                genesis,
-                publicKey,
-                privateKey,
-                sigAlgorithm,
-                shardId,
-                version,
-                expirationThreshold,
-                runtimeManager
+            val validator = ByteString.copyFrom(publicKey.bytes)
+            SynchronyConstraintChecker[F]
+              .check(dag, runtimeManager, genesis, validator)
+              .ifM(
+                BlockCreator
+                  .createBlock(
+                    dag,
+                    genesis,
+                    publicKey,
+                    privateKey,
+                    sigAlgorithm,
+                    shardId,
+                    version,
+                    expirationThreshold,
+                    runtimeManager
+                  ),
+                CreateBlockStatus.notEnoughNewBlocks.pure[F]
               )
           }
           .flatMap {

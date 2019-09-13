@@ -113,6 +113,7 @@ object Setup {
     implicit val lastFinalizedBlockCalculator = LastFinalizedBlockCalculator[Task](0f)
     implicit val currentRequests: Running.RequestedBlocks[Task] =
       Cell.unsafe[Task, Map[BlockHash, Running.Requested]](Map.empty[BlockHash, Running.Requested])
+    implicit val synchronyConstraintChecker = SynchronyConstraintChecker[Task](0d)
   }
   private def endpoint(port: Int): Endpoint = Endpoint("host", port, port)
 

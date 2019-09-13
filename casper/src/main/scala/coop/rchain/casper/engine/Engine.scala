@@ -90,7 +90,7 @@ object Engine {
 
     } yield ()
 
-  def transitionToInitializing[F[_]: Concurrent: Metrics: Span: Monad: EngineCell: Log: EventLog: RPConfAsk: BlockStore: ConnectionsCell: TransportLayer: Time: SafetyOracle: LastFinalizedBlockCalculator: LastApprovedBlock: BlockDagStorage: RuntimeManager: Running.RequestedBlocks: EventPublisher](
+  def transitionToInitializing[F[_]: Concurrent: Metrics: Span: Monad: EngineCell: Log: EventLog: RPConfAsk: BlockStore: ConnectionsCell: TransportLayer: Time: SafetyOracle: LastFinalizedBlockCalculator: LastApprovedBlock: BlockDagStorage: RuntimeManager: Running.RequestedBlocks: EventPublisher: SynchronyConstraintChecker](
       shardId: String,
       validatorId: Option[ValidatorIdentity],
       init: F[Unit]

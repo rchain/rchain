@@ -69,6 +69,7 @@ class HashSetCasperTestNode[F[_]](
   implicit val transportLayerEff            = tle
   implicit val cliqueOracleEffect           = SafetyOracle.cliqueOracle[F]
   implicit val lastFinalizedBlockCalculator = LastFinalizedBlockCalculator[F](0f)
+  implicit val synchronyConstraintChecker   = SynchronyConstraintChecker[F](0f)
   implicit val rpConfAsk                    = createRPConfAsk[F](local)
   implicit val eventBus                     = EventPublisher.noop[F]
 
