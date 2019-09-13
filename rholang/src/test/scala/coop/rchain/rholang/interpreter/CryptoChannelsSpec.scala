@@ -220,7 +220,8 @@ class CryptoChannelsSpec
     implicit val noopSpan: Span[Task]       = NoopSpan[Task]()
 
     val runtime = (for {
-      runtime <- Runtime.createWithEmptyCost[Task](dbDir, size)
+      sar     <- Runtime.setupRSpace[Task](dbDir, size)
+      runtime <- Runtime.createWithEmptyCost[Task](sar)
       _       <- runtime.cost.set(Cost.UNSAFE_MAX)
     } yield runtime).unsafeRunSync
 
