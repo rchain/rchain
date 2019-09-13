@@ -112,6 +112,9 @@ object DeployRuntime {
   def lastFinalizedBlock[F[_]: Sync: DeployService]: F[Unit] =
     gracefulExit(DeployService[F].lastFinalizedBlock)
 
+  def isFinalized[F[_]: Sync: DeployService](blockHash: String): F[Unit] =
+    gracefulExit(DeployService[F].isFinalized(IsFinalizedQuery(hash = blockHash)))
+
   private def gracefulExit[F[_]: Monad: Sync, A](
       program: F[Either[Seq[String], String]]
   ): F[Unit] =

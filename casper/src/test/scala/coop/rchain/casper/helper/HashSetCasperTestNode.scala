@@ -55,8 +55,8 @@ class HashSetCasperTestNode[F[_]](
     shardId: String = "rchain"
 )(
     implicit concurrentF: Concurrent[F],
-    val blockStore: BlockStore[F],
-    val blockDagStorage: BlockDagStorage[F],
+    implicit val blockStore: BlockStore[F],
+    implicit val blockDagStorage: BlockDagStorage[F],
     val metricEff: Metrics[F],
     val span: Span[F],
     val casperState: CasperStateCell[F],
@@ -103,6 +103,12 @@ class HashSetCasperTestNode[F[_]](
 
   def addBlock(deployDatums: DeployData*): F[BlockMessage] =
     addBlockStatus(ValidBlock.Valid.asRight)(deployDatums: _*)
+
+  def publishBlock(deployDatums: DeployData*)(nodes: HashSetCasperTestNode[F]*): F[BlockMessage] =
+    for {
+      block <- addBlock(deployDatums: _*)
+      _     <- nodes.toList.filter(_ != this).traverse_(_.receive())
+    } yield block
 
   def addBlockStatus(
       expectedStatus: ValidBlockProcessing

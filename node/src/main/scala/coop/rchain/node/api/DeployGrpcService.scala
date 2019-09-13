@@ -117,5 +117,8 @@ object DeployGrpcService {
 
       override def lastFinalizedBlock(request: LastFinalizedBlockQuery): Task[GrpcEither] =
         defer(BlockAPI.lastFinalizedBlock[F])
+
+      override def isFinalized(request: IsFinalizedQuery): Task[GrpcEither] =
+        defer(BlockAPI.isFinalized[F](request))
     }
 }

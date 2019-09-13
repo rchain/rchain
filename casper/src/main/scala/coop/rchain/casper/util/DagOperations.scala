@@ -92,22 +92,25 @@ object DagOperations {
   }
 
   /**
-    * Conceptually, the LCA is the lowest point at which the histories of b1 and b2 diverge.
-    * We compute by finding the first block that is the "lowest" (has highest blocknum) common block.
+    * Conceptually, the LUCA is the lowest point at which the histories of b1 and b2 diverge.
+    * We compute by finding the first block that is the "lowest" (has highest blocknum) block common
+    * for both blocks' ancestors.
     */
-  def lowestCommonAncestorF[F[_]: Monad](
+  def lowestUniversalCommonAncestorF[F[_]: Monad](
       b1: BlockMetadata,
       b2: BlockMetadata,
       dag: BlockDagRepresentation[F]
   ): F[BlockMetadata] = {
+    val iterableByteOrdering = Ordering.Iterable[Byte]
 
     implicit val blockMetadataByNumDecreasing: Ordering[BlockMetadata] =
       (l: BlockMetadata, r: BlockMetadata) => {
         def compareByteString(l: ByteString, r: ByteString): Int =
-          l.hashCode().compareTo(r.hashCode())
+          iterableByteOrdering.compare(l.toByteArray, r.toByteArray)
 
         val ln = l.blockNum
         val rn = r.blockNum
+        // Notice the inverted order of compared items, which makes the ordering descending
         rn.compare(ln) match {
           case 0 => compareByteString(l.blockHash, r.blockHash)
           case v => v

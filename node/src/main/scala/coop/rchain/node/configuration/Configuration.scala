@@ -229,6 +229,7 @@ object Configuration {
       case Some(options.keygen) =>
         Keygen(options.keygen.algorithm(), options.keygen.privateKeyPath())
       case Some(options.lastFinalizedBlock) => LastFinalizedBlock
+      case Some(options.isFinalized)        => IsFinalized(options.isFinalized.hash())
       case Some(options.dataAtName)         => DataAtName(options.dataAtName.name())
       case Some(options.contAtName)         => ContAtName(options.contAtName.name())
       case _                                => Help

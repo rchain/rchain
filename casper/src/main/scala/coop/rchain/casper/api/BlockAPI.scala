@@ -16,7 +16,7 @@ import coop.rchain.casper._
 import coop.rchain.casper.DeployError._
 import coop.rchain.casper.MultiParentCasper.ignoreDoppelgangerCheck
 import coop.rchain.casper.protocol._
-import coop.rchain.casper.util.{EventConverter, ProtoUtil}
+import coop.rchain.casper.util.{DagOperations, EventConverter, ProtoUtil}
 import coop.rchain.casper.util.rholang.RuntimeManager
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.hash.Blake2b512Random
@@ -24,7 +24,7 @@ import coop.rchain.graphz._
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.metrics.implicits._
 import coop.rchain.models.BlockHash.BlockHash
-import coop.rchain.models.Par
+import coop.rchain.models.{BlockMetadata, Par}
 import coop.rchain.models.rholang.sorter.Sortable._
 import coop.rchain.models.serialization.implicits.mkProtobufInstance
 import coop.rchain.rholang.interpreter.storage.StoragePrinter
@@ -609,6 +609,48 @@ object BlockAPI {
             lastFinalizedBlock <- casper.lastFinalizedBlock
             blockInfo          <- getFullBlockInfo[F](lastFinalizedBlock)
           } yield LastFinalizedBlockResponse(blockInfo = Some(blockInfo)).asRight,
+        Log[F].warn(errorMessage).as(s"Error: $errorMessage".asLeft)
+      )
+    )
+  }
+
+  def isFinalized[F[_]: Monad: EngineCell: SafetyOracle: BlockStore: Log](
+      request: IsFinalizedQuery
+  ): Effect[F, IsFinalizedResponse] = {
+    val errorMessage =
+      "Could not check if block is finalized, casper instance was not available yet."
+    EngineCell[F].read >>= (
+      _.withCasper[ApiErr[IsFinalizedResponse]](
+        implicit casper =>
+          for {
+            lastFinalizedBlock <- casper.lastFinalizedBlock
+            lastFinalizedBlockMetadata = BlockMetadata
+              .fromBlock(lastFinalizedBlock, invalid = false)
+            dag                   <- casper.blockDag
+            givenBlockHash        = ProtoUtil.stringToByteString(request.hash)
+            givenBlockMetadataOpt <- dag.lookup(givenBlockHash)
+            result <- givenBlockMetadataOpt match {
+                       case None =>
+                         s"Could not find block with hash ${request.hash}"
+                           .asLeft[IsFinalizedResponse]
+                           .pure[F]
+                       case Some(givenBlockMetadata) =>
+                         DagOperations
+                           .bfTraverseF(List(lastFinalizedBlockMetadata)) { b =>
+                             b.parents.traverse(dag.lookup).map { parentOpts =>
+                               parentOpts.flatten.distinct
+                                 .filter(_.blockNum >= givenBlockMetadata.blockNum)
+                             }
+                           }
+                           .contains(givenBlockMetadata)
+                           .map(
+                             isContained =>
+                               IsFinalizedResponse(
+                                 isFinalized = isContained
+                               ).asRight[Error]
+                           )
+                     }
+          } yield result,
         Log[F].warn(errorMessage).as(s"Error: $errorMessage".asLeft)
       )
     )
