@@ -7,6 +7,7 @@ import cats.effect.Sync
 import cats.implicits._
 import com.google.protobuf.ByteString
 import coop.rchain.casper.protocol._
+import coop.rchain.casper.protocol.deployV2
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.models.Expr.ExprInstance.GInt
 
@@ -150,6 +151,15 @@ object HashM extends HashMDerivation {
   implicit val TaggedContinuationHash = gen[TaggedContinuation]
 
   implicit val PrivateNamePreviewQueryHash = gen[PrivateNamePreviewQuery]
+
+  // deploy service V2
+  implicit val ContinuationAtNamePayloadV2Hash  = gen[deployV2.ContinuationAtNamePayload]
+  implicit val BlockResponseV2Hash              = gen[deployV2.BlockResponse]
+  implicit val BlockInfoResponseV2Hash          = gen[deployV2.BlockInfoResponse]
+  implicit val ContinuationAtNameResponseV2Hash = gen[deployV2.ContinuationAtNameResponse]
+  implicit val FindDeployResponseV2Hash         = gen[deployV2.FindDeployResponse]
+  implicit val LastFinalizedBlockResponseV2Hash = gen[deployV2.LastFinalizedBlockResponse]
+
 }
 
 trait HashMDerivation {
