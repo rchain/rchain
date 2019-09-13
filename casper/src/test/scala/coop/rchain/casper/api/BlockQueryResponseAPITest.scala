@@ -100,8 +100,8 @@ class BlockQueryResponseAPITest
         effects                                  <- effectsForSimpleCasperSetup(blockStore, blockDagStorage)
         spanEff                                  = NoopSpan[Task]()
         (logEff, engineCell, cliqueOracleEffect) = effects
-        q                                        = BlockQuery(hash = secondBlockQuery)
-        blockQueryResponse <- BlockAPI.getBlock[Task](q)(
+        hash                                     = secondBlockQuery
+        blockQueryResponse <- BlockAPI.getBlock[Task](hash)(
                                Sync[Task],
                                engineCell,
                                logEff,
@@ -110,7 +110,7 @@ class BlockQueryResponseAPITest
                                spanEff
                              )
         _ = inside(blockQueryResponse) {
-          case Right(BlockQueryResponse(Some(blockInfo))) =>
+          case Right(blockInfo) =>
             blockInfo.blockHash should be(secondHashString)
             blockInfo.blockSize should be(secondBlock.toProto.serializedSize.toString)
             blockInfo.blockNumber should be(blockNumber)
@@ -133,8 +133,8 @@ class BlockQueryResponseAPITest
         effects                                  <- emptyEffects(blockStore, blockDagStorage)
         spanEff                                  = NoopSpan[Task]()
         (logEff, engineCell, cliqueOracleEffect) = effects
-        q                                        = BlockQuery(hash = badTestHashQuery)
-        blockQueryResponse <- BlockAPI.getBlock[Task](q)(
+        hash                                     = badTestHashQuery
+        blockQueryResponse <- BlockAPI.getBlock[Task](hash)(
                                Sync[Task],
                                engineCell,
                                logEff,
@@ -167,7 +167,7 @@ class BlockQueryResponseAPITest
                                blockStore
                              )
         _ = inside(blockQueryResponse) {
-          case Right(LightBlockQueryResponse(Some(blockInfo))) =>
+          case Right(blockInfo) =>
             blockInfo.blockHash should be(secondHashString)
             blockInfo.blockSize should be(secondBlock.toProto.serializedSize.toString)
             blockInfo.blockNumber should be(blockNumber)

@@ -39,11 +39,15 @@ class LastFinalizedAPITest
       log: Log[Task]
   ): Task[Boolean] =
     BlockAPI
-      .isFinalized[Task](
-        IsFinalizedQuery(hash = ProtoUtil.hashString(block))
-      )(Sync[Task], engineCell, safetyOracle, blockStore, log)
+      .isFinalized[Task](ProtoUtil.hashString(block))(
+        Sync[Task],
+        engineCell,
+        safetyOracle,
+        blockStore,
+        log
+      )
       .map(
-        _.right.value.isFinalized
+        _.right.value
       )
 
   /*

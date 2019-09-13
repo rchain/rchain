@@ -51,10 +51,10 @@ object DeployGrpcService {
           .map(_.fold(t => List(t.asLeft[A].toGrpcEither), _.map(_.asRight[String].toGrpcEither)))
 
       override def doDeploy(d: DeployDataProto): Task[GrpcEither] =
-        defer(BlockAPI.deploy[F](DeployData.from(d)))
+        defer(BlockAPI.deploy[F](DeployData.from(d).map(_.map(DeployServiceResponse(_)))))
 
       override def getBlock(q: BlockQuery): Task[GrpcEither] =
-        defer(BlockAPI.getBlock[F](q))
+        defer(BlockAPI.getBlock[F](q.hash).map(_.map(bi => BlockQueryResponse(Some(bi)))))
 
       override def visualizeDag(q: VisualizeDagQuery): Observable[GrpcEither] = {
         type Effect[A] = State[Vector[String], A]
@@ -81,7 +81,7 @@ object DeployGrpcService {
       }
 
       override def machineVerifiableDag(q: MachineVerifyQuery): Task[GrpcEither] =
-        defer(BlockAPI.machineVerifiableDag[F])
+        defer(BlockAPI.machineVerifiableDag[F].map(_.map(MachineVerifyResponse(_))))
 
       override def getBlocks(request: BlocksQuery): Observable[GrpcEither] =
         Observable
@@ -95,12 +95,20 @@ object DeployGrpcService {
           .flatMap(Observable.fromIterable)
 
       override def listenForDataAtName(request: DataAtNameQuery): Task[GrpcEither] =
-        defer(BlockAPI.getListeningNameDataResponse[F](request.depth, request.name.get))
+        defer(
+          BlockAPI
+            .getListeningNameDataResponse[F](request.depth, request.name.get)
+            .map(_.map { case (br, l) => ListeningNameDataResponse(br, l) })
+        )
 
       override def listenForContinuationAtName(
           request: ContinuationAtNameQuery
       ): Task[GrpcEither] =
-        defer(BlockAPI.getListeningNameContinuationResponse[F](request.depth, request.names))
+        defer(
+          BlockAPI
+            .getListeningNameContinuationResponse[F](request.depth, request.names)
+            .map(_.map { case (br, l) => ListeningNameContinuationResponse(br, l) })
+        )
 
       override def showMainChain(request: BlocksQuery): Observable[GrpcEither] =
         Observable
@@ -108,17 +116,25 @@ object DeployGrpcService {
           .flatMap(Observable.fromIterable)
 
       override def findDeploy(request: FindDeployQuery): Task[GrpcEither] =
-        defer(BlockAPI.findDeploy[F](request.deployId))
+        defer(
+          BlockAPI
+            .findDeploy[F](request.deployId)
+            .map(_.map(lbi => LightBlockQueryResponse(Some(lbi))))
+        )
 
       override def previewPrivateNames(
           request: PrivateNamePreviewQuery
       ): Task[GrpcEither] =
-        defer(BlockAPI.previewPrivateNames[F](request.user, request.timestamp, request.nameQty))
+        defer(
+          BlockAPI
+            .previewPrivateNames[F](request.user, request.timestamp, request.nameQty)
+            .map(_.map(PrivateNamePreviewResponse(_)))
+        )
 
       override def lastFinalizedBlock(request: LastFinalizedBlockQuery): Task[GrpcEither] =
-        defer(BlockAPI.lastFinalizedBlock[F])
+        defer(BlockAPI.lastFinalizedBlock[F].map(_.map(bi => LastFinalizedBlockResponse(Some(bi)))))
 
       override def isFinalized(request: IsFinalizedQuery): Task[GrpcEither] =
-        defer(BlockAPI.isFinalized[F](request))
+        defer(BlockAPI.isFinalized[F](request.hash).map(_.map(IsFinalizedResponse(_))))
     }
 }
