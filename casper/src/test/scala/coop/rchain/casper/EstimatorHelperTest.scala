@@ -157,7 +157,8 @@ class EstimatorHelperTest
       channelsHash,
       hash = ByteString.copyFromUtf8("Asdfg753213fdsadfueias9fje35mv43"),
       persistent = false,
-      sequenceNumber = 0
+      sequenceNumber = 0,
+      timesRepeated = 0
     )
 
   private def consume(channelsHash: ByteString) =

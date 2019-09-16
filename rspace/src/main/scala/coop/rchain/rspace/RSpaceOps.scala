@@ -13,7 +13,7 @@ import coop.rchain.metrics.implicits._
 import coop.rchain.rspace.concurrent.{ConcurrentTwoStepLockF, TwoStepLock}
 import coop.rchain.rspace.history._
 import coop.rchain.rspace.internal._
-import coop.rchain.rspace.trace.{Consume, Log => EventLog}
+import coop.rchain.rspace.trace.{Consume, Log => EventLog, Produce}
 import coop.rchain.shared.{Cell, Log}
 import coop.rchain.shared.SyncVarOps._
 
@@ -34,7 +34,23 @@ abstract class RSpaceOps[F[_]: Concurrent: Metrics, C, P, A, K](
     spanF: Span[F]
 ) extends SpaceMatcher[F, C, P, A, K] {
 
+  implicit class MapOps(underlying: Map[Produce, Int]) {
+    def putAndIncrementCounter(elem: Produce): Map[Produce, Int] =
+      underlying
+        .get(elem)
+        .fold(underlying.+((elem, 1)))(currentCount => underlying.+((elem, currentCount + 1)))
+  }
+
   protected[this] val eventLog: SyncVar[EventLog] = create[EventLog](Seq.empty)
+  protected[this] val produceCounter: SyncVar[Map[Produce, Int]] =
+    create[Map[Produce, Int]](Map.empty.withDefaultValue(0))
+
+  protected[this] def produceCounters(produceRefs: Seq[Produce]) =
+    produceRefs
+      .map(
+        p => (p -> produceCounter.get(p))
+      )
+      .toMap
 
   private[this] val installSpanLabel         = Metrics.Source(MetricsSource, "install")
   private[this] val restoreInstallsSpanLabel = Metrics.Source(MetricsSource, "restore-installs")
@@ -230,10 +246,12 @@ abstract class RSpaceOps[F[_]: Concurrent: Metrics, C, P, A, K](
   override def createSoftCheckpoint(): F[SoftCheckpoint[C, P, A, K]] =
     spanF.trace(createSoftCheckpointSpanLabel) {
       for {
-        cache <- storeAtom.get().snapshot()
-        log   = eventLog.take()
-        _     = eventLog.put(Seq.empty)
-      } yield SoftCheckpoint[C, P, A, K](cache, log)
+        cache    <- storeAtom.get().snapshot()
+        log      = eventLog.take()
+        _        = eventLog.put(Seq.empty)
+        pCounter = produceCounter.take()
+        _        = produceCounter.put(Map.empty.withDefaultValue(0))
+      } yield SoftCheckpoint[C, P, A, K](cache, log, pCounter)
     }
 
   override def revertToSoftCheckpoint(checkpoint: SoftCheckpoint[C, P, A, K]): F[Unit] =
@@ -243,7 +261,10 @@ abstract class RSpaceOps[F[_]: Concurrent: Metrics, C, P, A, K](
         hotStore <- HotStore.from(checkpoint.cacheSnapshot.cache, historyRepository)
         _        = storeAtom.set(hotStore)
         _        = eventLog.take()
-        _        = eventLog.put(checkpoint.log)
+
+        _ = eventLog.put(checkpoint.log)
+        _ = produceCounter.take()
+        _ = produceCounter.put(checkpoint.produceCounter)
       } yield ()
     }
 

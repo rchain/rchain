@@ -45,7 +45,7 @@ object TuplespaceEvent {
 
   def from(comm: COMM, produces: Set[Produce]): Option[(Blake2b256Hash, TuplespaceEvent)] =
     comm match {
-      case COMM(consume, produce :: Nil, peeks) => {
+      case COMM(consume, produce :: Nil, peeks, _) => {
         val produceOp = toOperation(produce)
         val consumeOp = toOperation(consume, peeks.nonEmpty)
         val incoming: TuplespaceOperation =

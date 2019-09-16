@@ -18,6 +18,7 @@ import coop.rchain.rspace.history.{Branch, HistoryRepository}
 import coop.rchain.rspace.internal._
 import coop.rchain.rspace.trace.{Produce, _}
 import coop.rchain.shared.Log
+import coop.rchain.shared.SyncVarOps._
 
 import com.google.common.collect.Multiset
 import com.typesafe.scalalogging.Logger
@@ -95,10 +96,7 @@ class ReplayRSpace[F[_]: Sync, C, P, A, K](
         channelToIndexedDataList <- channels.traverse { c: C =>
                                      store
                                        .getData(c)
-                                       .map(_.zipWithIndex.filter {
-                                         case (Datum(_, _, source), _) =>
-                                           comm.produces.contains(source)
-                                       })
+                                       .map(_.zipWithIndex.filter(matches(comm)))
                                        .map(v => c -> v)
                                    }
         result <- extractDataCandidates(channels.zip(patterns), channelToIndexedDataList.toMap, Nil)
@@ -109,13 +107,19 @@ class ReplayRSpace[F[_]: Sync, C, P, A, K](
         mats: Seq[DataCandidate[C, A]],
         consumeRef: Consume,
         comms: Multiset[COMM],
+        comm: COMM,
         peeks: SortedSet[Int],
         channelsToIndex: Map[C, Int]
     ): F[MaybeActionResult] =
       for {
-        _       <- metricsF.incrementCounter(consumeCommLabel)
-        commRef <- syncF.delay { COMM(consumeRef, mats.map(_.datum.source), peeks) }
-        _       <- assertF(comms.contains(commRef), "COMM Event was not contained in the trace")
+        _ <- metricsF.incrementCounter(consumeCommLabel)
+        commRef <- syncF.delay {
+                    COMM(consumeRef, mats.map(_.datum.source), peeks, comm.timesRepeated)
+                  }
+        _ <- assertF(
+              comms.contains(commRef),
+              s"COMM Event $commRef was not contained in the trace $comms"
+            )
         r <- mats.toList
               .sortBy(_.datumIndex)(Ordering[Int].reverse)
               .traverse {
@@ -133,7 +137,6 @@ class ReplayRSpace[F[_]: Sync, C, P, A, K](
                 removeBindingsFor(commRef)
               }
               .map { _ =>
-                val contSequenceNumber = commRef.nextSequenceNumber
                 Some(
                   (
                     ContResult(
@@ -141,7 +144,7 @@ class ReplayRSpace[F[_]: Sync, C, P, A, K](
                       persist,
                       channels,
                       patterns,
-                      contSequenceNumber,
+                      0,
                       peeks.nonEmpty
                     ),
                     mats
@@ -151,9 +154,14 @@ class ReplayRSpace[F[_]: Sync, C, P, A, K](
               }
       } yield r
 
-    def getCommOrDataCandidates(comms: Seq[COMM]): F[Either[COMM, Seq[DataCandidate[C, A]]]] = {
-      type COMMOrData = Either[COMM, Seq[DataCandidate[C, A]]]
-      def go(comms: Seq[COMM]): F[Either[Seq[COMM], Either[COMM, Seq[DataCandidate[C, A]]]]] =
+    // TODO: refactor this monster
+    def getCommAndDataCandidates(
+        comms: Seq[COMM]
+    ): F[Option[(COMM, Seq[DataCandidate[C, A]])]] = {
+      type COMMOrData = Either[COMM, (COMM, Seq[DataCandidate[C, A]])]
+      def go(
+          comms: Seq[COMM]
+      ): F[Either[Seq[COMM], COMMOrData]] =
         comms match {
           case Nil =>
             val msg = "List comms must not be empty"
@@ -161,16 +169,18 @@ class ReplayRSpace[F[_]: Sync, C, P, A, K](
             Sync[F].raiseError(new IllegalArgumentException(msg))
           case commRef :: Nil =>
             runMatcher(commRef).map {
-              case Some(x) => x.asRight[COMM].asRight[Seq[COMM]]
-              case None    => commRef.asLeft[Seq[DataCandidate[C, A]]].asRight[Seq[COMM]]
+              case Some(dataCandidates) =>
+                (commRef, dataCandidates).asRight[COMM].asRight[Seq[COMM]]
+              case None => commRef.asLeft[(COMM, Seq[DataCandidate[C, A]])].asRight[Seq[COMM]]
             }
           case commRef :: rem =>
             runMatcher(commRef).map {
-              case Some(x) => x.asRight[COMM].asRight[Seq[COMM]]
-              case None    => rem.asLeft[COMMOrData]
+              case Some(dataCandidates) =>
+                (commRef, dataCandidates).asRight[COMM].asRight[Seq[COMM]]
+              case None => rem.asLeft[COMMOrData]
             }
         }
-      comms.tailRecM(go)
+      comms.tailRecM(go).map(_.toOption)
     }
 
     for {
@@ -179,36 +189,38 @@ class ReplayRSpace[F[_]: Sync, C, P, A, K](
       consumeRef <- syncF.delay {
                      Consume.create(channels, patterns, continuation, persist)
                    }
-      r <- replayData.get(consumeRef) match {
-            case None =>
+      r <- replayData
+            .get(consumeRef)
+            .fold(
               storeWaitingContinuation(
                 channels,
                 WaitingContinuation(patterns, continuation, persist, peeks, consumeRef)
               )
-            case Some(comms) =>
-              val commOrDataCandidates: F[Either[COMM, Seq[DataCandidate[C, A]]]] =
-                getCommOrDataCandidates(comms.iterator().asScala.toList)
-
-              val x: F[MaybeActionResult] = commOrDataCandidates.flatMap {
-                case Left(_) =>
-                  storeWaitingContinuation(
-                    channels,
-                    WaitingContinuation(patterns, continuation, persist, peeks, consumeRef)
-                  )
-                case Right(dataCandidates) =>
-                  val channelsToIndex = channels.zipWithIndex.toMap
-                  handleMatches(
-                    dataCandidates,
-                    consumeRef,
-                    comms,
-                    peeks,
-                    channelsToIndex
-                  )
-              }
-              x
-          }
+            )(
+              comms =>
+                getCommAndDataCandidates(comms.iterator().asScala.toList).flatMap {
+                  _.fold(
+                    storeWaitingContinuation(
+                      channels,
+                      WaitingContinuation(patterns, continuation, persist, peeks, consumeRef)
+                    )
+                  ) {
+                    case (comm, dataCandidates) =>
+                      val channelsToIndex = channels.zipWithIndex.toMap
+                      handleMatches(
+                        dataCandidates,
+                        consumeRef,
+                        comms,
+                        comm,
+                        peeks,
+                        channelsToIndex
+                      )
+                  }
+                }
+            )
     } yield r
   }
+
   def produce(channel: C, data: A, persist: Boolean, sequenceNumber: Int): F[MaybeActionResult] =
     contextShift.evalOn(scheduler) {
       (for {
@@ -244,19 +256,17 @@ class ReplayRSpace[F[_]: Sync, C, P, A, K](
                   comm.consume == source
               }
               channelToIndexedDataList <- channels.traverse { c: C =>
-                                           (for {
-                                             data <- store.getData(c)
-                                           } yield (data.zipWithIndex.filter {
-                                             case (Datum(_, _, source), _) =>
-                                               comm.produces.contains(source)
-                                           })).map(
-                                             as =>
-                                               c -> {
-                                                 if (c == channel)
-                                                   Seq((Datum(data, persist, produceRef), -1))
-                                                 else as
-                                               }
-                                           )
+                                           store
+                                             .getData(c)
+                                             .map(_.zipWithIndex)
+                                             .map(
+                                               as =>
+                                                 c -> {
+                                                   if (c == channel)
+                                                     Seq((Datum(data, persist, produceRef), -1))
+                                                   else as
+                                                 }.filter { matches(comm) }
+                                             )
                                          }
               firstMatch <- extractFirstMatch(
                              channels,
@@ -275,8 +285,8 @@ class ReplayRSpace[F[_]: Sync, C, P, A, K](
         comms: Seq[COMM],
         produceRef: Produce,
         groupedChannels: Seq[Seq[C]]
-    ): F[Either[COMM, ProduceCandidate[C, P, A, K]]] = {
-      type COMMOrProduce = Either[COMM, ProduceCandidate[C, P, A, K]]
+    ): F[Either[COMM, (COMM, ProduceCandidate[C, P, A, K])]] = {
+      type COMMOrProduce = Either[COMM, (COMM, ProduceCandidate[C, P, A, K])]
       def go(comms: Seq[COMM]): F[Either[Seq[COMM], COMMOrProduce]] =
         comms match {
           case Nil =>
@@ -285,12 +295,12 @@ class ReplayRSpace[F[_]: Sync, C, P, A, K](
             Sync[F].raiseError(new IllegalArgumentException(msg))
           case commRef :: Nil =>
             runMatcher(commRef, produceRef, groupedChannels) map {
-              case Some(x) => x.asRight[COMM].asRight[Seq[COMM]]
-              case None    => commRef.asLeft[ProduceCandidate[C, P, A, K]].asRight[Seq[COMM]]
+              case Some(x) => (commRef, x).asRight[COMM].asRight[Seq[COMM]]
+              case None    => commRef.asLeft[(COMM, ProduceCandidate[C, P, A, K])].asRight[Seq[COMM]]
             }
           case commRef :: rem =>
             runMatcher(commRef, produceRef, groupedChannels) map {
-              case Some(x) => x.asRight[COMM].asRight[Seq[COMM]]
+              case Some(x) => (commRef, x).asRight[COMM].asRight[Seq[COMM]]
               case None    => rem.asLeft[COMMOrProduce]
             }
         }
@@ -311,6 +321,7 @@ class ReplayRSpace[F[_]: Sync, C, P, A, K](
         mat: ProduceCandidate[C, P, A, K],
         produceRef: Produce,
         comms: Multiset[COMM],
+        comm: COMM,
         channelsToIndex: Map[C, Int]
     ): F[MaybeActionResult] =
       mat match {
@@ -323,9 +334,13 @@ class ReplayRSpace[F[_]: Sync, C, P, A, K](
           for {
             _ <- metricsF.incrementCounter(produceCommLabel)
             commRef <- syncF.delay {
-                        COMM(consumeRef, dataCandidates.map(_.datum.source), peeks)
+                        val produceRefs = dataCandidates.map(_.datum.source)
+                        COMM(consumeRef, produceRefs, peeks, comm.timesRepeated)
                       }
-            _ <- assertF(comms.contains(commRef), "COMM Event was not contained in the trace")
+            _ <- assertF(
+                  comms.contains(commRef),
+                  s"COMM Event $commRef was not contained in the trace $comms"
+                )
             _ <- if (!persistK) {
                   store.removeContinuation(channels, continuationIndex)
                 } else {
@@ -343,7 +358,6 @@ class ReplayRSpace[F[_]: Sync, C, P, A, K](
             _ <- logF.debug(s"produce: matching continuation found at <channels: $channels>")
             _ <- removeBindingsFor(commRef)
             r <- syncF.delay {
-                  val contSequenceNumber = commRef.nextSequenceNumber
                   Some(
                     (
                       ContResult(
@@ -351,7 +365,7 @@ class ReplayRSpace[F[_]: Sync, C, P, A, K](
                         persistK,
                         channels,
                         patterns,
-                        contSequenceNumber,
+                        0,
                         peeks.nonEmpty
                       ),
                       dataCandidates.map(
@@ -371,11 +385,16 @@ class ReplayRSpace[F[_]: Sync, C, P, A, K](
               .replace('\n', ' ')
           )
       produceRef <- syncF.delay { Produce.create(channel, data, persist, sequenceNumber) }
+      _ <- syncF.delay {
+            if (!persist)
+              produceCounter.update(_.putAndIncrementCounter(produceRef))
+          }
       result <- replayData.get(produceRef) match {
                  case None =>
                    storeDatum(produceRef, None)
                  case Some(comms) =>
-                   val commOrProduceCandidate: F[Either[COMM, ProduceCandidate[C, P, A, K]]] =
+                   val commOrProduceCandidate
+                       : F[Either[COMM, (COMM, ProduceCandidate[C, P, A, K])]] =
                      getCommOrProduceCandidate(
                        comms.iterator().asScala.toList,
                        produceRef,
@@ -384,9 +403,9 @@ class ReplayRSpace[F[_]: Sync, C, P, A, K](
                    val r: F[MaybeActionResult] = commOrProduceCandidate.flatMap {
                      case Left(comm) =>
                        storeDatum(produceRef, Some(comm))
-                     case Right(produceCandidate) =>
+                     case Right((comm, produceCandidate)) =>
                        val indexedChannels = produceCandidate.channels.zipWithIndex.toMap
-                       handleMatch(produceCandidate, produceRef, comms, indexedChannels)
+                       handleMatch(produceCandidate, produceRef, comms, comm, indexedChannels)
                    }
                    r
                }
@@ -423,6 +442,18 @@ class ReplayRSpace[F[_]: Sync, C, P, A, K](
   override def clear(): F[Unit] = syncF.delay { replayData.clear() } >> super.clear()
 
   protected[rspace] def isDirty(root: Blake2b256Hash): F[Boolean] = true.pure[F]
+
+  private[this] def matches(comm: COMM)(datumWithIndex: (Datum[A], _)) = {
+    val (datum, _) = datumWithIndex
+    def wasRepeatedEnoughTimes =
+      (if (!datum.persist) {
+         comm.timesRepeated(datum.source) === produceCounter.get(
+           datum.source
+         )
+       } else true)
+    comm.produces.contains(datum.source) && wasRepeatedEnoughTimes
+  }
+
 }
 
 object ReplayRSpace {

@@ -183,6 +183,7 @@ message ProduceEventProto {
   bytes hash = 2;
   bool persistent = 3;
   int32 sequenceNumber = 4;
+  int32 timesRepeated = 5;
 }
 
 message ConsumeEventProto {

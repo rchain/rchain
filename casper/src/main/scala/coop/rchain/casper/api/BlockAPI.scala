@@ -256,7 +256,7 @@ object BlockAPI {
           .map(StableHashProvider.hash(_))
           .toList
           .sorted
-      case COMM(consume, produces, _) =>
+      case COMM(consume, produces, _, _) =>
         (consume.channelsHashes.toList.sorted ==
           sortedListeningName.map(StableHashProvider.hash(_)).toList.sorted) ||
           produces.exists(

@@ -125,7 +125,7 @@ trait ReplayRSpaceTests extends ReplayRSpaceTestsBase[String, Pattern, String, S
         _ = resultConsume shouldBe None
         _ = resultProduce shouldBe Some(
           (
-            ContResult(continuation, false, channels, patterns, 1),
+            ContResult(continuation, false, channels, patterns, 0),
             List(Result(channels(0), datum, datum, false))
           )
         )
@@ -166,7 +166,7 @@ trait ReplayRSpaceTests extends ReplayRSpaceTestsBase[String, Pattern, String, S
         _ = resultConsume shouldBe None
         _ = resultProduce shouldBe Some(
           (
-            ContResult(continuation, false, channels, patterns, 1, true),
+            ContResult(continuation, false, channels, patterns, 0, true),
             List(Result(channels(0), datum, datum, false))
           )
         )
@@ -374,7 +374,7 @@ trait ReplayRSpaceTests extends ReplayRSpaceTestsBase[String, Pattern, String, S
         _ = resultConsume5 shouldBe defined
         _ = resultProduce shouldBe Some(
           (
-            ContResult(continuation, false, channels, patterns, 1, true),
+            ContResult(continuation, false, channels, patterns, 0, true),
             List(Result(channels(0), datum, datum, false))
           )
         )
@@ -714,14 +714,14 @@ trait ReplayRSpaceTests extends ReplayRSpaceTestsBase[String, Pattern, String, S
                 space,
                 range,
                 channelCreator = kp("ch1"),
-                datumCreator = kp("datum1"),
+                datumCreator = i => s"datum$i",
                 persist = false
               )
           results <- produceMany(
                       space,
                       range,
                       channelCreator = kp("ch2"),
-                      datumCreator = kp("datum2"),
+                      datumCreator = i => s"datum$i",
                       persist = false
                     )
           rigPoint <- space.createCheckpoint()
@@ -740,14 +740,14 @@ trait ReplayRSpaceTests extends ReplayRSpaceTestsBase[String, Pattern, String, S
                 replaySpace,
                 range,
                 channelCreator = kp("ch1"),
-                datumCreator = kp("datum1"),
+                datumCreator = i => s"datum$i",
                 persist = false
               )
           replayResults <- produceMany(
                             replaySpace,
                             range,
                             channelCreator = kp("ch2"),
-                            datumCreator = kp("datum2"),
+                            datumCreator = i => s"datum$i",
                             persist = false
                           )
           finalPoint <- replaySpace.createCheckpoint()

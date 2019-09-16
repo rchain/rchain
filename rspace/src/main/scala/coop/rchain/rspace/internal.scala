@@ -75,6 +75,9 @@ object internal {
   implicit def codecSeq[A](implicit codecA: Codec[A]): Codec[Seq[A]] =
     seqOfN(int32, codecA)
 
+  implicit def codecMap[K, V](implicit codecK: Codec[K], codecV: Codec[V]): Codec[Map[K, V]] =
+    seqOfN(int32, codecK.pairedWith(codecV)).xmap(_.toMap, _.toSeq)
+
   implicit def codecDatum[A](implicit codecA: Codec[A]): Codec[Datum[A]] =
     (codecA :: bool :: Codec[Produce]).as[Datum[A]]
 

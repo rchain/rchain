@@ -40,15 +40,14 @@ object Event {
 final case class COMM(
     consume: Consume,
     produces: Seq[Produce],
-    peeks: SortedSet[Int]
-) extends Event {
-  def nextSequenceNumber: Int =
-    produces.map(_.sequenceNumber).max + 1
-}
+    peeks: SortedSet[Int],
+    timesRepeated: Map[Produce, Int]
+) extends Event
 
 object COMM {
+  implicit val codecInt = int32
   implicit val codecCOMM: Codec[COMM] =
-    (Codec[Consume] :: Codec[Seq[Produce]] :: sortedSet(uint8)).as[COMM]
+    (Codec[Consume] :: Codec[Seq[Produce]] :: sortedSet(uint8) :: Codec[Map[Produce, Int]]).as[COMM]
 }
 
 sealed trait IOEvent extends Event

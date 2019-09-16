@@ -103,9 +103,7 @@ class RSpace[F[_], C, P, A, K] private[rspace] (
     def wrapResult(
         consumeRef: Consume,
         dataCandidates: Seq[DataCandidate[C, A]]
-    ): MaybeActionResult = {
-      val contSequenceNumber: Int =
-        nextSequenceNumber(consumeRef, dataCandidates)
+    ): MaybeActionResult =
       Some(
         (
           ContResult(
@@ -113,14 +111,13 @@ class RSpace[F[_], C, P, A, K] private[rspace] (
             persist,
             channels,
             patterns,
-            contSequenceNumber,
+            0,
             peeks.nonEmpty
           ),
           dataCandidates
             .map(dc => Result(dc.channel, dc.datum.a, dc.removedDatum, dc.datum.persist))
         )
       )
-    }
 
     contextShift.evalOn(scheduler) {
       if (channels.isEmpty) {
@@ -166,11 +163,13 @@ class RSpace[F[_], C, P, A, K] private[rspace] (
                                     for {
                                       _ <- metricsF.incrementCounter(consumeCommLabel)
                                       _ <- syncF.delay {
+                                            val produceRefs = dataCandidates.map(_.datum.source)
                                             eventLog.update(
                                               COMM(
                                                 consumeRef,
-                                                dataCandidates.map(_.datum.source),
-                                                peeks
+                                                produceRefs,
+                                                peeks,
+                                                produceCounters(produceRefs)
                                               ) +: _
                                             )
                                           }
@@ -191,14 +190,6 @@ class RSpace[F[_], C, P, A, K] private[rspace] (
         } yield result).timer(consumeTimeCommLabel)
     }
   }
-
-  private[this] def nextSequenceNumber(
-      consumeRef: Consume,
-      dataCandidates: Seq[DataCandidate[C, A]]
-  ): Int =
-    dataCandidates.map {
-      case DataCandidate(_, Datum(_, _, source), _, _) => source.sequenceNumber
-    }.max + 1
 
   /*
    * Find produce candidate
@@ -280,9 +271,10 @@ class RSpace[F[_], C, P, A, K] private[rspace] (
           ) =>
         def registerCOMM: F[Unit] =
           syncF.delay {
+            val produceRefs = dataCandidates.map(_.datum.source)
             eventLog
               .update(
-                COMM(consumeRef, dataCandidates.map(_.datum.source), peeks) +: _
+                COMM(consumeRef, produceRefs, peeks, produceCounters(produceRefs)) +: _
               )
           }
 
@@ -310,8 +302,7 @@ class RSpace[F[_], C, P, A, K] private[rspace] (
               }
             }
 
-        def constructResult: MaybeActionResult = {
-          val contSequenceNumber = nextSequenceNumber(consumeRef, dataCandidates)
+        def constructResult: MaybeActionResult =
           Some(
             (
               ContResult[C, P, K](
@@ -319,7 +310,7 @@ class RSpace[F[_], C, P, A, K] private[rspace] (
                 persistK,
                 channels,
                 patterns,
-                contSequenceNumber,
+                0,
                 peeks.nonEmpty
               ),
               dataCandidates.map(
@@ -327,7 +318,6 @@ class RSpace[F[_], C, P, A, K] private[rspace] (
               )
             )
           )
-        }
 
         for {
           _               <- metricsF.incrementCounter(produceCommLabel)
@@ -375,6 +365,8 @@ class RSpace[F[_], C, P, A, K] private[rspace] (
                          )
                      _ <- syncF.delay {
                            eventLog.update(produceRef +: _)
+                           if (!persist)
+                             produceCounter.update(_.putAndIncrementCounter(produceRef))
                          }
                      extracted <- extractProduceCandidate(
                                    groupedChannels,
@@ -399,6 +391,8 @@ class RSpace[F[_], C, P, A, K] private[rspace] (
       _           <- createNewHotStore(nextHistory)(serializeK.toCodec)
       log         = eventLog.take()
       _           = eventLog.put(Seq.empty)
+      _           = produceCounter.take()
+      _           = produceCounter.put(Map.empty.withDefaultValue(0))
       _           <- restoreInstalls()
     } yield Checkpoint(nextHistory.history.root, log)
 }
