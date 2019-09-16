@@ -11,7 +11,6 @@ import coop.rchain.rspace.examples.AddressBookExample
 import coop.rchain.rspace.examples.AddressBookExample._
 import coop.rchain.rspace.examples.AddressBookExample.implicits._
 import coop.rchain.rspace.history.Branch
-import coop.rchain.rspace.internal.{codecGNAT, GNAT}
 import coop.rchain.rspace.util._
 import coop.rchain.rspace.test._
 import coop.rchain.shared.Cell

@@ -4,7 +4,7 @@ import scala.collection.mutable.ListBuffer
 import coop.rchain.rspace._
 import coop.rchain.rspace.examples.StringExamples.{Pattern, StringMatch, StringsCaptor, Wildcard}
 import coop.rchain.rspace.history._
-import coop.rchain.rspace.internal.{Datum, GNAT, WaitingContinuation}
+import coop.rchain.rspace.internal.{Datum, WaitingContinuation}
 import coop.rchain.shared.GeneratorUtils._
 import org.scalacheck._
 import org.scalacheck.Arbitrary._
@@ -131,25 +131,6 @@ object ArbitraryInstances {
         boolean <- Arbitrary.arbitrary[Boolean]
       } yield WaitingContinuation.create(chans, pats, new StringsCaptor, boolean, SortedSet.empty)
     )
-
-  implicit def arbitraryGnat(
-      implicit
-      serializeString: Serialize[String],
-      serializePattern: Serialize[Pattern],
-      serializeStringsCaptor: Serialize[StringsCaptor]
-  ): Arbitrary[GNAT[String, Pattern, String, StringsCaptor]] =
-    Arbitrary(Gen.sized { size =>
-      val constrainedSize = if (size > 1) size else 1
-      for {
-        chans <- Gen.containerOfN[List, String](constrainedSize, Arbitrary.arbitrary[String])
-        data <- Gen.nonEmptyContainerOf[List, Datum[String]](
-                 arbitraryDatum[String, String](chans.head).arbitrary
-               )
-        wks <- Gen.nonEmptyContainerOf[List, WaitingContinuation[Pattern, StringsCaptor]](
-                arbitraryWaitingContinuation(chans).arbitrary
-              )
-      } yield GNAT(chans, data, wks)
-    })
 
   implicit def arbitraryNonEmptyMapListStringWaitingContinuation(
       implicit

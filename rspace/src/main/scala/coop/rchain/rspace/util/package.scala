@@ -3,7 +3,6 @@ package coop.rchain.rspace
 import java.nio.charset.StandardCharsets
 
 import cats.Functor
-import coop.rchain.rspace.internal.GNAT
 import scodec.Codec
 import scodec.bits.ByteVector
 
@@ -64,12 +63,6 @@ package object util {
     */
   def runKs[T](t: Seq[Option[((T) => Unit, T, Int)]]): Unit =
     t.foreach { case Some((k, data, _)) => k(data); case None => () }
-
-  def canonicalize[C, P, A, K](gnat: GNAT[C, P, A, K]): GNAT[C, P, A, K] =
-    gnat.copy(
-      wks = gnat.wks.sortBy(_.source.hash.bytes)(ordByteVector),
-      data = gnat.data.sortBy(_.source.hash.bytes)(ordByteVector)
-    )
 
   @SuppressWarnings(Array("org.wartremover.warts.Return"))
   def veccmp(a: ByteVector, b: ByteVector): Int = {
