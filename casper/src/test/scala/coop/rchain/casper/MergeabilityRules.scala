@@ -588,7 +588,39 @@ trait MergeabilityRules {
     "4X P!"     -> SamePolarityMerge(F0)(P_)(S1),
     "PX P!"     -> SamePolarityMerge(P0)(P_)(S1),
     // TODO:
-    "P! P!" -> CouldMatchSameConflicts(P_)(P_)(S0) // conflicts until replay errors are fixed
+    "P! P!"       -> CouldMatchSameConflicts(P_)(P_)(S0), // conflicts until replay errors are fixed
+    "!4 (P!!)"    -> PeekedCouldMatch(S0)(P_, R0)(F0),
+    "!4 P!!"      -> HadItsMatch(S0)(P_)(F0, R1),
+    "!C (P!!)"    -> PeekedNoMatch(S0)(R1, P_)(C_),
+    "!C P!!"      -> HadItsMatch(S0)(P_)(C0, R1),
+    "!X (P!!)"    -> PeekedNoMatch(S0)(P_, R0)(Nil),
+    "!X P!!"      -> HadItsMatch(S0)(P_)(R0),
+    "(!4) (P!!)"  -> PersistentNoMatch(S0, F0)(P_, R0)(Nil),
+    "(!4) P!!"    -> VolatileEvent(S0, F0)(P_)(R1),
+    "(!C) (P!!)"  -> PersistentCouldMatch(S0, C_)(P_, R0)(Nil),
+    "(!C) P!!"    -> PersistentNoMatch(S0, C0)(P_)(R1),
+    "(4!) (P!!)"  -> PersistentNoMatch(F_, S0)(P_, R0)(Nil),
+    "(4!) P!!"    -> VolatileEvent(F_, S0)(P_)(R1),
+    "(P!!) (C!)"  -> PersistentCouldMatch(P_, R0)(C_, S0)(Nil),
+    "(P!!) (P!!)" -> PeekedNoMatch(P_, R0)(P_, R0)(Nil),
+    "(P!!) C!"    -> PeekedCouldMatch(C_)(P_, R0)(S1),
+    "(P!!) CX"    -> PeekedCouldMatch(C_)(P_, R0)(Nil),
+    "(P!!) P!!"   -> PeekedNoMatch(P_)(P_, R1)(R0),
+    "(P!) (P!!)"  -> PersistentNoMatch(P_, S0)(P_, R0)(Nil),
+    "(P!) P!!"    -> PeekedNoMatch(P_)(P_, S0)(R0),
+    "4! (P!!)"    -> PersistentNoMatch(F_)(P1, R1)(S0),
+    "4! P!!"      -> CouldMatchSameMerges(F0)(P1)(S0, R1),
+    "4X (P!!)"    -> PersistentCouldMatch(F_)(P_, R0)(Nil),
+    "4X P!!"      -> CouldMatchSameMerges(F_)(P_)(R0),
+    "P! (P!!)"    -> PersistentNoMatch(P_)(P1, R1)(S0),
+    "P! P!!"      -> CouldMatchSameMerges(P0)(P1)(S0, R1),
+    "P!! (C!)"    -> PersistentNoMatch(P_)(C_, S0)(R0),
+    "P!! (P!!)"   -> PersistentNoMatch(P_)(P_, R1)(R0),
+    "P!! C!"      -> CouldMatchSameMerges(P0)(C1)(R0, S1),
+    "P!! CX"      -> SamePolarityMerge(P_)(C1)(R0),
+    "P!! P!!"     -> CouldMatchSameMerges(P_)(P_)(R0),
+    "PX (P!!)"    -> PersistentCouldMatch(P_)(P_, R0)(Nil),
+    "PX P!!"      -> SamePolarityMerge(P1)(P_)(R0)
   )
 
   private[this] def conflicts(b1: Rho, b2: Rho, base: Rho)(

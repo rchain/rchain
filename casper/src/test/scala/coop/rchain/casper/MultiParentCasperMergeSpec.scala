@@ -217,16 +217,16 @@ class MultiParentCasperMergeSpec
         "!C",
         "4X",
         "4!",
-        "4!!",
+        //"4!!",
         "PX",
         "P!",
         "P!!",
-        "!!X",
-        "!!4",
-        "!!C",
+        //"!!X",
+        //"!!4",
+        //"!!C",
         "CX",
-        "C!",
-        "C!!"
+        "C!"
+        //"C!!"
       )
 
       val pairs    = events.combinations(2)
@@ -251,11 +251,12 @@ class MultiParentCasperMergeSpec
       // TODO: Do not filter out missing cases
       withVolatiles
         .map(_.mkString(" "))
-        .filterNot(_.contains("!!"))
         .toSet
     }
 
-    val testedMergeabilityCases = (baseMergeabilityCases ++ peekMergeabilityCases).map(_._1)
+    val testedMergeabilityCases =
+      (baseMergeabilityCases ++ peekMergeabilityCases)
+        .map(_._1)
     withClue(s"""Missing cases: ${allMergeabilityCases
       .diff(testedMergeabilityCases.toSet)
       .toList
