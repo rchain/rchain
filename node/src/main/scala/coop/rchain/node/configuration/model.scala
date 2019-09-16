@@ -30,7 +30,8 @@ final case class Server(
     maxStreamMessageSize: Long,
     packetChunkSize: Int,
     messageConsumers: Int,
-    faultToleranceThreshold: Float
+    faultToleranceThreshold: Float,
+    synchronyConstraintThreshold: Double
 )
 
 final case class GrpcServer(

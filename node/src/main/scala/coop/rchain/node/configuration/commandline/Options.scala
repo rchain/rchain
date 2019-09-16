@@ -316,6 +316,12 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
       descr = "Float value representing that the node tolerates up " +
         "to fault-tolerance-threshold fraction of the total weight to equivocate."
     )
+
+    val synchronyConstraintThreshold = opt[Float](
+      descr = "Float value representing that the node waits until at least " +
+        "synchrony-constraint-threshold fraction of the validators (by stake weight) " +
+        "proposed at least one block since this node's last proposal."
+    )
   }
   addSubcommand(run)
 

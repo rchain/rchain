@@ -657,7 +657,7 @@ object NodeRuntime {
         oracle
       )
       synchronyConstraintChecker = SynchronyConstraintChecker[F](
-        0d
+        conf.server.synchronyConstraintThreshold
       )(Sync[F], blockStore)
       runtime <- {
         implicit val s  = rspaceScheduler

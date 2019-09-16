@@ -40,6 +40,7 @@ class HoconConfigurationSpec extends FunSuite with Matchers {
       |    packet-chunk-size = 64K
       |    message-consumers = 8
       |    fault-tolerance-threshold = 0.2
+      |    synchrony-constraint-threshold = 0.3333333333333333
       |  }
       |}
     """.stripMargin
@@ -72,7 +73,8 @@ class HoconConfigurationSpec extends FunSuite with Matchers {
         maxStreamMessageSize = 200 * 1024 * 1024,
         packetChunkSize = 64 * 1024,
         messageConsumers = 8,
-        faultToleranceThreshold = 0.2f
+        faultToleranceThreshold = 0.2f,
+        synchronyConstraintThreshold = 0.3333333333333333d
       )
 
     val server = Server.fromConfig(ConfigFactory.parseString(conf))
