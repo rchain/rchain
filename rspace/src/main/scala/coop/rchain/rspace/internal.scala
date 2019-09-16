@@ -70,10 +70,6 @@ object internal {
 
   final case class Row[P, A, K](data: Seq[Datum[A]], wks: Seq[WaitingContinuation[P, K]])
 
-
-  sealed trait Operation extends Product with Serializable
-  case object Insert     extends Operation
-  case object Delete     extends Operation
   implicit val codecByteVector: Codec[ByteVector] =
     variableSizeBytesLong(int64, bytes)
 
