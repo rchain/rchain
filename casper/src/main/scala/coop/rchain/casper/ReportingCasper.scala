@@ -11,7 +11,7 @@ import cats.temp.par.{Par => CatsPar}
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockStore
 import coop.rchain.blockstorage.dag.{BlockDagRepresentation, BlockDagStorage}
-import coop.rchain.casper.ReportingCasper.Report
+import coop.rchain.casper.ReportingCasper.{Report, RhoReportingRspace}
 import coop.rchain.casper.protocol.{BlockMessage, DeployData}
 import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.casper.util.rholang.RuntimeManager.{ReplayFailure, StateHash}
@@ -25,38 +25,19 @@ import coop.rchain.casper.util.rholang.{
   UnusedCommEvent,
   UserErrors
 }
-import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.metrics.Metrics.Source
 import coop.rchain.metrics.{Metrics, Span}
-import coop.rchain.models.{
-  BindPattern,
-  Bundle,
-  EVar,
-  Expr,
-  ListParWithRandom,
-  Par,
-  ParMap,
-  SortedParMap,
-  TaggedContinuation
-}
+import coop.rchain.models.{BindPattern, ListParWithRandom, Par, TaggedContinuation}
 import coop.rchain.models.BlockHash.BlockHash
-import coop.rchain.models.TaggedContinuation.TaggedCont.ScalaBodyRef
-import coop.rchain.models.Validator.Validator
-import coop.rchain.models.Var.VarInstance.FreeVar
-import coop.rchain.models.rholang.implicits._
 import coop.rchain.rholang.RholangMetricsSource
 import coop.rchain.rholang.interpreter.{
   DeployParameters,
   ErrorLog,
   EvaluateResult,
   HasCost,
-  Interpreter,
-  NormalizerEnv,
   Reduce,
-  RhoType,
   RholangAndScalaDispatcher,
-  Runtime,
-  SystemProcesses
+  Runtime
 }
 import coop.rchain.rholang.interpreter.Runtime.{
   setupMapsAndRefs,
@@ -65,33 +46,25 @@ import coop.rchain.rholang.interpreter.Runtime.{
   Arity,
   BlockData,
   BodyRef,
-  BodyRefs,
-  FixedChannels,
   InvalidBlocks,
   Name,
   Remainder,
-  RhoDispatch,
   RhoDispatchMap,
   RhoHistoryRepository,
-  RhoReplayISpace,
-  RhoTuplespace,
   SystemProcess
 }
-import coop.rchain.rholang.interpreter.accounting.{_cost, Cost, CostAccounting}
-import coop.rchain.rholang.interpreter.registry.RegistryBootstrap
+import coop.rchain.rholang.interpreter.accounting.{_cost, CostAccounting}
 import coop.rchain.rspace.{
   Blake2b256Hash,
   RSpace,
   ReplayException,
-  ReplayRSpace,
+  ReportingRspace,
   Match => RSpaceMatch
 }
 import coop.rchain.rspace.history.Branch
 import monix.execution.atomic.AtomicAny
 import coop.rchain.rholang.interpreter.storage._
 import coop.rchain.shared.Log
-
-import scala.concurrent.ExecutionContext
 
 trait ReportingCasper[F[_]] {
   def trace(hash: BlockHash): F[Report]
@@ -116,9 +89,12 @@ object ReportingCasper {
       Sync[F].delay(BlockNotFound(hash.toStringUtf8))
   }
 
+  type RhoReportingRspace[F[_]] =
+    ReportingRspace[F, Par, BindPattern, ListParWithRandom, TaggedContinuation]
+
   def rhoReporter[F[_]: ContextShift: Monad: Concurrent: Log: Metrics: Span: CatsPar: BlockStore: BlockDagStorage](
       historyRepository: RhoHistoryRepository[F]
-  )(implicit scheduler: ExecutionContext) =
+  ) =
     new ReportingCasper[F] {
       val codecK                                                     = serializeTaggedContinuation.toCodec
       implicit val m: RSpaceMatch[F, BindPattern, ListParWithRandom] = matchListPar[F]
@@ -126,12 +102,18 @@ object ReportingCasper {
       override def trace(hash: BlockHash): F[Report] =
         for {
           replayStore <- RSpace.inMemoryStore(historyRepository)(codecK, Concurrent[F])
-          replay = new ReplayRSpace[F, Par, BindPattern, ListParWithRandom, TaggedContinuation](
+          reporting = new ReportingRspace[
+            F,
+            Par,
+            BindPattern,
+            ListParWithRandom,
+            TaggedContinuation
+          ](
             historyRepository,
             AtomicAny(replayStore),
             Branch.REPLAY
           )
-          r     <- ReportingRuntime.createWithEmptyCost[F](replay, Seq.empty)
+          r     <- ReportingRuntime.createWithEmptyCost[F](reporting, Seq.empty)
           rm    <- fromRuntime(r)
           dag   <- BlockDagStorage[F].getRepresentation
           bmO   <- BlockStore[F].get(hash)
@@ -156,9 +138,9 @@ object ReportingCasper {
       runtime: ReportingRuntime[F]
   ): F[ReportingRuntimeManagerImpl[F]] =
     for {
-      _                <- runtime.replaySpace.clear()
+      _                <- runtime.reportingSpace.clear()
       _                <- Runtime.bootstrapRegistry(runtime, runtime.replayReducer :: Nil)
-      replayCheckpoint <- runtime.replaySpace.createCheckpoint()
+      replayCheckpoint <- runtime.reportingSpace.createCheckpoint()
       replayHash       = ByteString.copyFrom(replayCheckpoint.root.bytes.toArray)
       runtime          <- MVar[F].of(runtime)
     } yield new ReportingRuntimeManagerImpl(replayHash, runtime)
@@ -185,7 +167,7 @@ object ReportingCasper {
         replayDeploy: InternalProcessedDeploy => F[Option[ReplayFailure]]
     ): F[Either[ReplayFailure, StateHash]] =
       (for {
-        _ <- EitherT.right(runtime.replaySpace.reset(Blake2b256Hash.fromByteString(startHash)))
+        _ <- EitherT.right(runtime.reportingSpace.reset(Blake2b256Hash.fromByteString(startHash)))
         _ <- EitherT(
               terms.tailRecM { ts =>
                 if (ts.isEmpty)
@@ -194,7 +176,7 @@ object ReportingCasper {
                 else replayDeploy(ts.head).map(_.map(_.asLeft[Unit]).toRight(ts.tail))
               }
             )
-        res <- EitherT.right[ReplayFailure](runtime.replaySpace.createCheckpoint())
+        res <- EitherT.right[ReplayFailure](runtime.reportingSpace.createCheckpoint())
       } yield res.root.toByteString).value
 
     private def replayDeploy(runtime: ReportingRuntime[F])(
@@ -202,8 +184,8 @@ object ReportingCasper {
     ): F[Option[ReplayFailure]] = {
       import processedDeploy._
       for {
-        _              <- runtime.replaySpace.rig(processedDeploy.deployLog)
-        softCheckpoint <- runtime.replaySpace.createSoftCheckpoint()
+        _              <- runtime.reportingSpace.rig(processedDeploy.deployLog)
+        softCheckpoint <- runtime.reportingSpace.createSoftCheckpoint()
         replayEvaluateResult <- computeEffect(runtime, runtime.replayReducer)(
                                  processedDeploy.deploy
                                )
@@ -216,11 +198,11 @@ object ReportingCasper {
                      (deploy.some, ReplayStatusMismatch(replayStatus, status): Failed).some
                        .pure[F]
                    else if (errors.nonEmpty)
-                     runtime.replaySpace
+                     runtime.reportingSpace
                        .revertToSoftCheckpoint(softCheckpoint) >> none[ReplayFailure]
                        .pure[F]
                    else {
-                     runtime.replaySpace
+                     runtime.reportingSpace
                        .checkReplayData()
                        .attempt
                        .flatMap {
@@ -252,7 +234,7 @@ object ReportingCasper {
 
 class ReportingRuntime[F[_]: Sync](
     val replayReducer: Reduce[F],
-    val replaySpace: RhoReplayISpace[F],
+    val reportingSpace: RhoReportingRspace[F],
     val errorLog: ErrorLog[F],
     val cost: _cost[F],
     val deployParametersRef: Ref[F, DeployParameters],
@@ -262,7 +244,7 @@ class ReportingRuntime[F[_]: Sync](
   def readAndClearErrorVector(): F[Vector[Throwable]] = errorLog.readAndClearErrorVector()
   def close(): F[Unit] =
     for {
-      _ <- replaySpace.close()
+      _ <- reportingSpace.close()
     } yield ()
 }
 
@@ -270,7 +252,7 @@ object ReportingRuntime {
   implicit val RuntimeMetricsSource: Source = Metrics.Source(RholangMetricsSource, "runtime")
 
   def createWithEmptyCost[F[_]: Concurrent: Log: Metrics: Span: par.Par](
-      reporting: RhoReplayISpace[F],
+      reporting: RhoReportingRspace[F],
       extraSystemProcesses: Seq[SystemProcess.Definition[F]] = Seq.empty
   ): F[ReportingRuntime[F]] = {
     implicit val P = par.Par[F].parallel
@@ -284,7 +266,7 @@ object ReportingRuntime {
   }
 
   def create[F[_]: Concurrent: Log: Metrics: Span, M[_]](
-      reporting: RhoReplayISpace[F],
+      reporting: RhoReportingRspace[F],
       extraSystemProcesses: Seq[SystemProcess.Definition[F]] = Seq.empty
   )(
       implicit P: Parallel[F, M],
