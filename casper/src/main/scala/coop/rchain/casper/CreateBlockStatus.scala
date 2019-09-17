@@ -19,6 +19,9 @@ final case class InternalDeployError(ex: Throwable) extends NoBlock
 final case object ReadOnlyMode                      extends NoBlock
 final case object LockUnavailable                   extends NoBlock
 final case object NoNewDeploys                      extends NoBlock
+final case object NotEnoughNewBlocks extends NoBlock {
+  override def toString: String = "Must wait for more blocks from other validators"
+}
 
 object CreateBlockStatus {
   def created(block: BlockMessage): CreateBlockStatus       = Created(block)
@@ -26,4 +29,5 @@ object CreateBlockStatus {
   def readOnlyMode: CreateBlockStatus                       = ReadOnlyMode
   def lockUnavailable: CreateBlockStatus                    = LockUnavailable
   def noNewDeploys: CreateBlockStatus                       = NoNewDeploys
+  def notEnoughNewBlocks: CreateBlockStatus                 = NotEnoughNewBlocks
 }

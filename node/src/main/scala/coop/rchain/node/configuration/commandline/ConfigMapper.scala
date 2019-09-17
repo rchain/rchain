@@ -56,6 +56,7 @@ object ConfigMapper {
         add(keys.PacketChunkSize, run.packetChunkSize)
         add(keys.MessageConsumers, run.messageConsumers)
         add(keys.FaultToleranceThreshold, run.faultToleranceThreshold)
+        add(keys.SynchronyConstraintThreshold, run.synchronyConstraintThreshold)
       }
 
       {

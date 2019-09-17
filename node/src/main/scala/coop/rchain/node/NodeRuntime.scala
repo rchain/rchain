@@ -656,6 +656,9 @@ object NodeRuntime {
         blockDagStorage,
         oracle
       )
+      synchronyConstraintChecker = SynchronyConstraintChecker[F](
+        conf.server.synchronyConstraintThreshold
+      )(Sync[F], blockStore)
       runtime <- {
         implicit val s  = rspaceScheduler
         implicit val sp = span
@@ -697,6 +700,7 @@ object NodeRuntime {
         implicit val rc = rpConnections
         implicit val ra = rpConfAsk
         implicit val eb = eventPublisher
+        implicit val sc = synchronyConstraintChecker
         CasperLaunch[F](casperInit)
       }
       packetHandler = {

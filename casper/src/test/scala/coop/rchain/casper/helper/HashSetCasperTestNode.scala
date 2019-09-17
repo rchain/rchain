@@ -52,6 +52,7 @@ class HashSetCasperTestNode[F[_]](
     val blockDagDir: Path,
     val blockStoreDir: Path,
     blockProcessingLock: Semaphore[F],
+    synchronyConstraintThreshold: Double,
     shardId: String = "rchain"
 )(
     implicit concurrentF: Concurrent[F],
@@ -69,8 +70,10 @@ class HashSetCasperTestNode[F[_]](
   implicit val transportLayerEff            = tle
   implicit val cliqueOracleEffect           = SafetyOracle.cliqueOracle[F]
   implicit val lastFinalizedBlockCalculator = LastFinalizedBlockCalculator[F](0f)
-  implicit val rpConfAsk                    = createRPConfAsk[F](local)
-  implicit val eventBus                     = EventPublisher.noop[F]
+  implicit val synchronyConstraintChecker =
+    SynchronyConstraintChecker[F](synchronyConstraintThreshold)
+  implicit val rpConfAsk = createRPConfAsk[F](local)
+  implicit val eventBus  = EventPublisher.noop[F]
 
   // Scalatest `assert` macro needs some member of the Assertions trait.
   // An (inferior) alternative would be to inherit the trait...
@@ -180,14 +183,18 @@ object HashSetCasperTestNode {
       storageSize = storageSize
     ).map(_.head)
 
-  def networkEff(genesis: GenesisContext, networkSize: Int, storageSize: Long = 1024L * 1024 * 10)(
-      implicit scheduler: Scheduler
-  ): Resource[Effect, IndexedSeq[HashSetCasperTestNode[Effect]]] =
+  def networkEff(
+      genesis: GenesisContext,
+      networkSize: Int,
+      storageSize: Long = 1024L * 1024 * 10,
+      synchronyConstraintThreshold: Double = 0d
+  )(implicit scheduler: Scheduler): Resource[Effect, IndexedSeq[HashSetCasperTestNode[Effect]]] =
     networkF[Effect](
       genesis.validatorSks.take(networkSize).toVector,
       genesis.genesisBlock,
       genesis.storageDirectory,
-      Resources.mkRuntimeManagerAt[Effect](_)(storageSize)
+      Resources.mkRuntimeManagerAt[Effect](_)(storageSize),
+      synchronyConstraintThreshold
     )(
       Concurrent[Effect],
       TestNetwork.empty[Effect]
@@ -197,7 +204,8 @@ object HashSetCasperTestNode {
       sks: IndexedSeq[PrivateKey],
       genesis: BlockMessage,
       storageMatrixPath: Path,
-      createRuntime: Path => Resource[F, RuntimeManager[F]]
+      createRuntime: Path => Resource[F, RuntimeManager[F]],
+      synchronyConstraintThreshold: Double
   ): Resource[F, IndexedSeq[HashSetCasperTestNode[F]]] = {
     val n     = sks.length
     val names = (1 to n).map(i => s"node-$i")
@@ -219,7 +227,8 @@ object HashSetCasperTestNode {
               sk,
               storageMatrixPath,
               logicalTime,
-              createRuntime
+              createRuntime,
+              synchronyConstraintThreshold
             )
         }
         .map(_.toVector)
@@ -256,7 +265,8 @@ object HashSetCasperTestNode {
       sk: PrivateKey,
       storageMatrixPath: Path,
       logicalTime: LogicalTime[F],
-      createRuntime: Path => Resource[F, RuntimeManager[F]]
+      createRuntime: Path => Resource[F, RuntimeManager[F]],
+      synchronyConstraintThreshold: Double
   ): Resource[F, HashSetCasperTestNode[F]] = {
     val tle                = new TransportLayerTestImpl[F]()
     val tls                = new TransportLayerServerTestImpl[F](currentPeerNode)
@@ -286,6 +296,7 @@ object HashSetCasperTestNode {
                    paths.blockDagDir,
                    paths.blockStoreDir,
                    blockProcessingLock,
+                   synchronyConstraintThreshold,
                    "rchain"
                  )(
                    Concurrent[F],
