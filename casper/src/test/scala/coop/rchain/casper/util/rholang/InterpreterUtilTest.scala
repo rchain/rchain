@@ -58,24 +58,25 @@ class InterpreterUtilTest
     )
 
   "computeBlockCheckpoint" should "compute the final post-state of a chain properly" in effectTest {
+    val time = 0L
     val b0Deploys = Vector(
       "@1!(1)",
       "@2!(2)",
       "for(@a <- @1){ @123!(5 * a) }"
-    ).map(ConstructDeploy.sourceDeployNow)
+    ).map(d => ConstructDeploy.sourceDeploy(d, time + 1))
 
     val b1Deploys = Vector(
       "@1!(1)",
       "for(@a <- @2){ @456!(5 * a) }"
-    ).map(ConstructDeploy.sourceDeployNow)
+    ).map(d => ConstructDeploy.sourceDeploy(d, time + 2))
 
     val b2Deploys = Vector(
       "for(@a <- @123; @b <- @456){ @1!(a + b) }"
-    ).map(ConstructDeploy.sourceDeployNow)
+    ).map(d => ConstructDeploy.sourceDeploy(d, time + 3))
 
     val b3Deploys = Vector(
       "@7!(7)"
-    ).map(ConstructDeploy.sourceDeployNow)
+    ).map(d => ConstructDeploy.sourceDeploy(d, time + 4))
 
     /*
      * DAG Looks like this:
