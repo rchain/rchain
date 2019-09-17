@@ -525,6 +525,7 @@ def make_bootstrap_node(
     cli_options: Optional[Dict] = None,
     mount_dir: Optional[str] = None,
     wallets_file: Optional[str] = None,
+    synchrony_constraint_threshold: float = 0.0
 ) -> Node:
     key_file = get_absolute_path_for_mounting("bootstrap_certificate/node.key.pem", mount_dir=mount_dir)
     cert_file = get_absolute_path_for_mounting("bootstrap_certificate/node.certificate.pem", mount_dir=mount_dir)
@@ -539,10 +540,11 @@ def make_bootstrap_node(
     ])
 
     container_command_options = {
-        "--port":                   40400,
-        "--validator-private-key":  private_key.to_hex(),
-        "--validator-public-key":   private_key.get_public_key().to_hex(),
-        "--host":                   container_name,
+        "--port":                           40400,
+        "--validator-private-key":          private_key.to_hex(),
+        "--validator-public-key":           private_key.get_public_key().to_hex(),
+        "--host":                           container_name,
+        "--synchrony-constraint-threshold": synchrony_constraint_threshold,
     }
 
     if cli_flags is not None:
@@ -603,6 +605,7 @@ def make_peer(
     wallets_file: Optional[str] = None,
     cli_flags: Optional[AbstractSet] = None,
     cli_options: Optional[Dict] = None,
+    synchrony_constraint_threshold: float = 0.0
 ) -> Node:
     assert isinstance(name, str)
     assert '_' not in name, 'Underscore is not allowed in host name'
@@ -620,10 +623,11 @@ def make_peer(
         container_command_flags.update(cli_flags)
 
     container_command_options = {
-        "--bootstrap":              bootstrap_address,
-        "--validator-private-key":  private_key.to_hex(),
-        "--validator-public-key":   private_key.get_public_key().to_hex(),
-        "--host":                   name,
+        "--bootstrap":                      bootstrap_address,
+        "--validator-private-key":          private_key.to_hex(),
+        "--validator-public-key":           private_key.get_public_key().to_hex(),
+        "--host":                           name,
+        "--synchrony-constraint-threshold": synchrony_constraint_threshold,
     }
 
     if cli_options is not None:
@@ -657,6 +661,7 @@ def started_peer(
     wallets_file: Optional[str] = None,
     cli_flags: Optional[AbstractSet] = None,
     cli_options: Optional[Dict] = None,
+    synchrony_constraint_threshold: float = 0.0
 ) -> Generator[Node, None, None]:
     peer = make_peer(
         docker_client=context.docker,
@@ -669,6 +674,7 @@ def started_peer(
         wallets_file=wallets_file,
         cli_flags=cli_flags,
         cli_options=cli_options,
+        synchrony_constraint_threshold=synchrony_constraint_threshold
     )
     try:
         wait_for_node_started(context, peer)
@@ -685,6 +691,7 @@ def bootstrap_connected_peer(
     name: str,
     private_key: PrivateKey,
     cli_options: Optional[Dict[str, str]] = None,
+    synchrony_constraint_threshold: float = 0.0
 ) -> Generator[Node, None, None]:
     with started_peer(
         context=context,
@@ -693,6 +700,7 @@ def bootstrap_connected_peer(
         bootstrap=bootstrap,
         private_key=private_key,
         cli_options=cli_options,
+        synchrony_constraint_threshold=synchrony_constraint_threshold
     ) as peer:
         wait_for_approved_block_received_handler_state(context, peer)
         yield peer
@@ -761,6 +769,7 @@ def started_bootstrap(
     cli_flags: Optional[AbstractSet] = None,
     cli_options: Optional[Dict[str, str]] = None,
     wallets_file: Optional[str] = None,
+    synchrony_constraint_threshold: float = 0.0
 ) -> Generator[Node, None, None]:
     bootstrap_node = make_bootstrap_node(
         docker_client=context.docker,
@@ -772,6 +781,7 @@ def started_bootstrap(
         cli_flags=cli_flags,
         cli_options=cli_options,
         wallets_file=wallets_file,
+        synchrony_constraint_threshold=synchrony_constraint_threshold
     )
     try:
         wait_for_node_started(context, bootstrap_node)
@@ -785,9 +795,17 @@ def docker_network_with_started_bootstrap(
     context: TestingContext,
     cli_flags: Optional[AbstractSet] = None,
     cli_options: Optional[Dict] = None,
+    synchrony_constraint_threshold: float = 0.0
 ) -> Generator[Node, None, None]:
     with docker_network(context, context.docker) as network:
-        with started_bootstrap(context=context, network=network, mount_dir=context.mount_dir, cli_flags=cli_flags, cli_options=cli_options) as bootstrap:
+        with started_bootstrap(
+                context=context,
+                network=network,
+                mount_dir=context.mount_dir,
+                cli_flags=cli_flags,
+                cli_options=cli_options,
+                synchrony_constraint_threshold=synchrony_constraint_threshold
+        ) as bootstrap:
             wait_for_approved_block_received_handler_state(context, bootstrap)
             yield bootstrap
 
