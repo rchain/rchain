@@ -105,14 +105,9 @@ class MultiParentCasperDeploySpec extends FlatSpec with Matchers with Inspectors
     implicit val timeEff = new LogicalTime[Effect]
     TestNode.networkEff(genesis, networkSize = 2).use { nodes =>
       val List(node0, node1) = nodes.toList
-      val casper0            = node0.casperEff
       for {
         deploy             <- ConstructDeploy.basicDeployData[Effect](0)
-        _                  <- casper0.deploy(deploy)
-        createBlockResult  <- casper0.createBlock
-        Created(block)     = createBlockResult
-        _                  <- casper0.addBlock(block, ignoreDoppelgangerCheck[Effect])
-        _                  <- node1.receive()
+        _                  <- node0.publishBlock(deploy)(node1)
         casper1            = node1.casperEff
         _                  <- casper1.deploy(deploy)
         createBlockResult2 <- casper1.createBlock

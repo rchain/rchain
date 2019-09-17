@@ -231,8 +231,7 @@ class MultiParentCasperAddBlockSpec extends FlatSpec with Matchers with Inspecto
     TestNode.networkEff(genesis, networkSize = 2).use { nodes =>
       for {
         deployData  <- ConstructDeploy.basicDeployData[Effect](0)
-        signedBlock <- nodes(0).addBlock(deployData)
-        _           <- nodes(1).receive()
+        signedBlock <- nodes(0).publishBlock(deployData)(nodes: _*)
         result      <- nodes(1).casperEff.contains(signedBlock.blockHash) shouldBeF true
         _ <- nodes.toList.traverse_ { node =>
               node.blockStore.get(signedBlock.blockHash) shouldBeF Some(signedBlock)
@@ -245,8 +244,7 @@ class MultiParentCasperAddBlockSpec extends FlatSpec with Matchers with Inspecto
     TestNode.networkEff(genesis, networkSize = 2).use { nodes =>
       for {
         deployData        <- ConstructDeploy.basicDeployData[Effect](1)
-        signedBlock1Prime <- nodes(0).addBlock(deployData)
-        _                 <- nodes(1).receive()
+        signedBlock1Prime <- nodes(0).publishBlock(deployData)(nodes: _*)
         _                 = nodes(1).logEff.infos.count(_ startsWith "Added") should be(1)
         result            = nodes(1).logEff.warns.count(_ startsWith "Recording invalid block") should be(0)
         _ <- nodes.toList.traverse_ { node =>
@@ -268,19 +266,11 @@ class MultiParentCasperAddBlockSpec extends FlatSpec with Matchers with Inspecto
             .withTimestamp(deployDatas(0).timestamp)
             .withDeployer(deployDatas(0).deployer)
         ) // deployPrim0 has the same (user, millisecond timestamp) with deployDatas(0)
-        signedBlock1 <- nodes(0).addBlock(deployDatas(0))
-        _            <- nodes(1).receive() // receive block1
-
-        signedBlock2 <- nodes(0).addBlock(deployDatas(1))
-        _            <- nodes(1).receive() // receive block2
-
-        signedBlock3 <- nodes(0).addBlock(deployDatas(2))
-        _            <- nodes(1).receive() // receive block3
-
-        _ <- nodes(1).casperEff.contains(signedBlock3.blockHash) shouldBeF true
-
-        signedBlock4 <- nodes(1).addBlock(deployPrim0) // should succeed
-        _            <- nodes(0).receive()             // still receive signedBlock4
+        signedBlock1 <- nodes(0).publishBlock(deployDatas(0))(nodes: _*)
+        signedBlock2 <- nodes(0).publishBlock(deployDatas(1))(nodes: _*)
+        signedBlock3 <- nodes(0).publishBlock(deployDatas(2))(nodes: _*)
+        _            <- nodes(1).casperEff.contains(signedBlock3.blockHash) shouldBeF true
+        signedBlock4 <- nodes(1).publishBlock(deployPrim0)(nodes: _*)
 
         result <- nodes(1).casperEff
                    .contains(signedBlock4.blockHash) shouldBeF true // Invalid blocks are still added

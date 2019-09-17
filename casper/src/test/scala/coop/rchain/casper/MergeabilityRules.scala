@@ -485,11 +485,9 @@ trait MergeabilityRules {
       .flatMap { deploys =>
         TestNode.networkEff(genesis, networkSize = 2).use { nodes =>
           for {
-            _ <- nodes(0).addBlock(deploys(0))
-            _ <- nodes(1).receive()
+            _ <- nodes(0).publishBlock(deploys(0))(nodes(1))
             _ <- nodes(0).addBlock(deploys(1))
-            _ <- nodes(1).addBlock(deploys(2))
-            _ <- nodes(0).receive()
+            _ <- nodes(1).publishBlock(deploys(2))(nodes(0))
 
             multiParentBlock <- nodes(0).addBlock(deploys(3))
 

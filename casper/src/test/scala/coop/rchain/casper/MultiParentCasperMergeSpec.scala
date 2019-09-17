@@ -40,14 +40,10 @@ class MultiParentCasperMergeSpec
         )
         block0 <- nodes(0).addBlock(deploys(0))
         block1 <- nodes(1).addBlock(deploys(1))
-        _      <- nodes(0).receive()
-        _      <- nodes(1).receive()
-        _      <- nodes(0).receive()
-        _      <- nodes(1).receive()
+        _      <- nodes.toList.traverse_(_.receive())
 
         //multiparent block joining block0 and block1 since they do not conflict
-        multiparentBlock <- nodes(0).addBlock(deploys(2))
-        _                <- nodes(1).receive()
+        multiparentBlock <- nodes(0).publishBlock(deploys(2))(nodes: _*)
 
         _ = nodes(0).logEff.warns.isEmpty shouldBe true
         _ = nodes(1).logEff.warns.isEmpty shouldBe true

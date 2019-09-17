@@ -142,8 +142,7 @@ class InterpreterUtilTest
         implicit val runtimeManager = node1.runtimeManager
         for {
           b1 <- node1.addBlock(b1Deploys: _*)
-          b2 <- node2.addBlock(b2Deploys: _*)
-          _  <- node1.receive()
+          b2 <- node2.publishBlock(b2Deploys: _*)(node1)
           b3 <- node1.addBlock(b3Deploys: _*)
 
           _ = b3.header.get.parentsHashList.toSet shouldBe Set(b1, b2).map(_.blockHash)

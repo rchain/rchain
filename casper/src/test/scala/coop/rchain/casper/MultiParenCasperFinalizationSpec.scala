@@ -26,48 +26,28 @@ class MultiParentCasperFinalizationSpec extends FlatSpec with Matchers with Insp
       for {
         deployDatas <- (0 to 7).toList.traverse(i => ConstructDeploy.basicDeployData[Effect](i))
 
-        block1 <- nodes(0).addBlock(deployDatas(0))
-        _      <- nodes(1).receive()
-        _      <- nodes(2).receive()
-
-        block2 <- nodes(1).addBlock(deployDatas(1))
-        _      <- nodes(0).receive()
-        _      <- nodes(2).receive()
-
-        block3 <- nodes(2).addBlock(deployDatas(2))
-        _      <- nodes(0).receive()
-        _      <- nodes(1).receive()
-
-        block4 <- nodes(0).addBlock(deployDatas(3))
-        _      <- nodes(1).receive()
-        _      <- nodes(2).receive()
-
-        block5 <- nodes(1).addBlock(deployDatas(4))
-        _      <- nodes(0).receive()
-        _      <- nodes(2).receive()
+        block1 <- nodes(0).publishBlock(deployDatas(0))(nodes: _*)
+        block2 <- nodes(1).publishBlock(deployDatas(1))(nodes: _*)
+        block3 <- nodes(2).publishBlock(deployDatas(2))(nodes: _*)
+        block4 <- nodes(0).publishBlock(deployDatas(3))(nodes: _*)
+        block5 <- nodes(1).publishBlock(deployDatas(4))(nodes: _*)
 
         _     <- nodes(0).casperEff.lastFinalizedBlock shouldBeF block1
         state <- nodes(0).casperState.read
         _     = state.deployHistory.size should be(1)
 
-        block6 <- nodes(2).addBlock(deployDatas(5))
-        _      <- nodes(0).receive()
-        _      <- nodes(1).receive()
+        block6 <- nodes(2).publishBlock(deployDatas(5))(nodes: _*)
 
         _     <- nodes(0).casperEff.lastFinalizedBlock shouldBeF block2
         state <- nodes(0).casperState.read
         _     = state.deployHistory.size should be(1)
 
-        block7 <- nodes(0).addBlock(deployDatas(6))
-        _      <- nodes(1).receive()
-        _      <- nodes(2).receive()
+        block7 <- nodes(0).publishBlock(deployDatas(6))(nodes: _*)
 
         _ <- nodes(0).casperEff.lastFinalizedBlock shouldBeF block3
         _ = state.deployHistory.size should be(1)
 
-        block8 <- nodes(1).addBlock(deployDatas(7))
-        _      <- nodes(0).receive()
-        _      <- nodes(2).receive()
+        block8 <- nodes(1).publishBlock(deployDatas(7))(nodes: _*)
 
         _     <- nodes(0).casperEff.lastFinalizedBlock shouldBeF block4
         state <- nodes(0).casperState.read
