@@ -1,0 +1,6 @@
+syntax = "proto3";
+package coop.rchain.casper.protocol;
+
+message ServiceError {
+  repeated string messages = 1;
+}

@@ -3,7 +3,7 @@ package coop.rchain.models.either.syntax
 import cats.effect.Sync
 import cats.implicits._
 
-import coop.rchain.casper.protocol.deployV2.ServiceError
+import coop.rchain.casper.protocol.ServiceError
 import coop.rchain.models.StacksafeMessage
 import coop.rchain.models.either.EitherHelper
 

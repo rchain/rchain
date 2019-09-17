@@ -3,6 +3,7 @@ package coop.rchain.casper.protocol;
 
 import "CasperMessage.proto";
 import "google/protobuf/empty.proto";
+import "ProposeServiceCommon.proto";
 import "Either.proto";
 import "scalapb/scalapb.proto";
 
@@ -14,8 +15,4 @@ option (scalapb.options) = {
 
 service ProposeService {
   rpc propose(PrintUnmatchedSendsQuery) returns (Either) {}
-}
-
-message PrintUnmatchedSendsQuery {
-  bool printUnmatchedSends = 1;
 }

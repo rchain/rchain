@@ -5,6 +5,7 @@ syntax = "proto3";
 package coop.rchain.casper.protocol.deployV2;
 
 import "CasperMessage.proto";
+import "ServiceError.proto";
 import "DeployServiceCommon.proto";
 
 // If you are building for other languages "scalapb.proto"
@@ -26,7 +27,7 @@ option (scalapb.options) = {
 // To get results back, use `listenForDataAtName`.
 service DeployServiceV2 {
   // Queue deployment of Rholang code (or fail to parse).
-  rpc doDeploy(DeployData) returns (DeployServiceResponse) {}
+  rpc doDeploy(DeployData) returns (DeployResponse) {}
   // Get details about a particular block.
   rpc getBlock(BlockQuery) returns (BlockResponse) {}
   // Get dag
@@ -50,12 +51,8 @@ service DeployServiceV2 {
   rpc isFinalized(IsFinalizedQuery) returns (IsFinalizedResponse) {}
 }
 
-message ServiceError {
-  repeated string messages = 1;
-}
-
 // doDeploy
-message DeployServiceResponse {
+message DeployResponse {
   oneof message {
     ServiceError error = 1;
     string result      = 2;

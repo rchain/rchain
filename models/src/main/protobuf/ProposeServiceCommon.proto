@@ -1,0 +1,14 @@
+syntax = "proto3";
+package coop.rchain.casper.protocol;
+
+import "scalapb/scalapb.proto";
+
+option (scalapb.options) = {
+  package_name: "coop.rchain.casper.protocol"
+  flat_package: true
+  single_file: true
+};
+
+message PrintUnmatchedSendsQuery {
+  bool printUnmatchedSends = 1;
+}

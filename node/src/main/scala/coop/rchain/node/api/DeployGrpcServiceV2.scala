@@ -75,11 +75,11 @@ object DeployGrpcServiceV2 {
             )
           )
 
-      def doDeploy(request: DeployData): Task[DeployServiceResponse] =
+      def doDeploy(request: DeployData): Task[DeployResponse] =
         defer(BlockAPI.deploy[F](request)) { r =>
-          import DeployServiceResponse.Message
-          import DeployServiceResponse.Message._
-          DeployServiceResponse(r.fold[Message](Error, Result))
+          import DeployResponse.Message
+          import DeployResponse.Message._
+          DeployResponse(r.fold[Message](Error, Result))
         }
 
       def getBlock(request: BlockQuery): Task[BlockResponse] =
