@@ -4,6 +4,7 @@ import cats.effect.Concurrent
 
 import coop.rchain.casper.protocol.{DeployServiceGrpcMonix, ProposeServiceGrpcMonix}
 import coop.rchain.casper.protocol.deployV2.DeployServiceV2GrpcMonix
+import coop.rchain.casper.protocol.propose.ProposeServiceV2GrpcMonix
 import coop.rchain.catscontrib._
 import coop.rchain.grpc.{GrpcServer, Server}
 import coop.rchain.node.model.repl._
@@ -24,7 +25,8 @@ package object api {
       port: Int,
       grpcExecutor: Scheduler,
       replGrpcService: ReplGrpcMonix.Repl,
-      proposeGrpcService: ProposeServiceGrpcMonix.ProposeService
+      proposeGrpcService: ProposeServiceGrpcMonix.ProposeService,
+      proposeGrpcServiceV2: ProposeServiceV2GrpcMonix.ProposeServiceV2
   ): Task[Server[Task]] =
     GrpcServer[Task](
       NettyServerBuilder
@@ -38,6 +40,10 @@ package object api {
           ProposeServiceGrpcMonix
             .bindService(proposeGrpcService, grpcExecutor)
         )
+        .addService(
+          ProposeServiceV2GrpcMonix
+            .bindService(proposeGrpcServiceV2, grpcExecutor)
+        )
         .addService(ProtoReflectionService.newInstance())
         .build
     )
@@ -47,7 +53,8 @@ package object api {
       grpcExecutor: Scheduler,
       deployGrpcService: DeployServiceGrpcMonix.DeployService,
       deployGrpcServiceV2: DeployServiceV2GrpcMonix.DeployServiceV2,
-      proposeGrpcService: ProposeServiceGrpcMonix.ProposeService
+      proposeGrpcService: ProposeServiceGrpcMonix.ProposeService,
+      proposeGrpcServiceV2: ProposeServiceV2GrpcMonix.ProposeServiceV2
   ): F[Server[F]] =
     GrpcServer[F](
       NettyServerBuilder
@@ -65,6 +72,10 @@ package object api {
         .addService(
           ProposeServiceGrpcMonix
             .bindService(proposeGrpcService, grpcExecutor)
+        )
+        .addService(
+          ProposeServiceV2GrpcMonix
+            .bindService(proposeGrpcServiceV2, grpcExecutor)
         )
         .addService(ProtoReflectionService.newInstance())
         .build

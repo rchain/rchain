@@ -36,9 +36,8 @@ import com.google.protobuf.ByteString
 
 object BlockAPI {
 
-  type Error           = String
-  type ApiErr[A]       = Either[Error, A]
-  type Effect[F[_], A] = F[ApiErr[A]]
+  type Error     = String
+  type ApiErr[A] = Either[Error, A]
 
   val BlockAPIMetricsSource: Metrics.Source = Metrics.Source(Metrics.BaseSource, "block-api")
   val CreateBlockSource: Metrics.Source     = Metrics.Source(BlockAPIMetricsSource, "create-block")
@@ -49,7 +48,7 @@ object BlockAPI {
       d: DeployData
   ): F[ApiErr[String]] = Span[F].trace(DeploySource) {
 
-    def casperDeploy(casper: MultiParentCasper[F]): Effect[F, String] =
+    def casperDeploy(casper: MultiParentCasper[F]): F[ApiErr[String]] =
       casper
         .deploy(d)
         .map(
@@ -70,10 +69,10 @@ object BlockAPI {
   def createBlock[F[_]: Sync: Concurrent: EngineCell: Log: Metrics: Span](
       blockApiLock: Semaphore[F],
       printUnmatchedSends: Boolean = false
-  ): Effect[F, DeployServiceResponse] = Span[F].trace(CreateBlockSource) {
+  ): F[ApiErr[String]] = Span[F].trace(CreateBlockSource) {
     val errorMessage = "Could not create block, casper instance was not available yet."
     EngineCell[F].read >>= (
-      _.withCasper[ApiErr[DeployServiceResponse]](
+      _.withCasper[ApiErr[String]](
         casper => {
           Sync[F].bracket(blockApiLock.tryAcquire) {
             case true =>
@@ -85,7 +84,7 @@ object BlockAPI {
                 result <- maybeBlock match {
                            case err: NoBlock =>
                              s"Error while creating block: $err"
-                               .asLeft[DeployServiceResponse]
+                               .asLeft[String]
                                .pure[F]
                            case Created(block) =>
                              casper
@@ -104,12 +103,12 @@ object BlockAPI {
                   case Left(error) =>
                     Metrics[F].incrementCounter("propose-failed") >>
                       Log[F].warn(error) >>
-                      error.asLeft[DeployServiceResponse].pure[F]
+                      error.asLeft[String].pure[F]
                   case result =>
                     result.pure[F]
                 }
             case false =>
-              "Error: There is another propose in progress.".asLeft[DeployServiceResponse].pure[F]
+              "Error: There is another propose in progress.".asLeft[String].pure[F]
           } {
             case true =>
               blockApiLock.release
@@ -267,12 +266,12 @@ object BlockAPI {
       A
   ](maybeDepth: Option[Int])(
       doIt: (MultiParentCasper[F], Vector[Vector[BlockHash]]) => F[ApiErr[A]]
-  ): Effect[F, A] = {
+  ): F[ApiErr[A]] = {
 
     val errorMessage =
       "Could not visualize graph, casper instance was not available yet."
 
-    def casperResponse(implicit casper: MultiParentCasper[F]): Effect[F, A] =
+    def casperResponse(implicit casper: MultiParentCasper[F]): F[ApiErr[A]] =
       for {
         dag      <- MultiParentCasper[F].blockDag
         depth    <- maybeDepth.fold(dag.topoSort(0L).map(_.length - 1))(_.pure[F])
@@ -538,7 +537,7 @@ object BlockAPI {
       block: BlockMessage,
       casper: MultiParentCasper[F],
       printUnmatchedSends: Boolean
-  ): Effect[F, DeployServiceResponse] =
+  ): F[ApiErr[String]] =
     status
       .map { _ =>
         val hash    = block.blockHash.base16String
@@ -548,19 +547,19 @@ object BlockAPI {
           else none[String].pure[F]
         maybeUnmatchedSendsOutputF >>= (
             maybeOutput =>
-              DeployServiceResponse(
-                s"Success! Block $hash created and added.${maybeOutput.map("\n" + _).getOrElse("")}"
-              ).asRight[Error].pure[F]
+              s"Success! Block $hash created and added.${maybeOutput.map("\n" + _).getOrElse("")}"
+                .asRight[Error]
+                .pure[F]
           )
       }
       .leftMap {
         case _: InvalidBlock =>
-          s"Failure! Invalid block: $status".asLeft[DeployServiceResponse].pure[F]
+          s"Failure! Invalid block: $status".asLeft[String].pure[F]
         case BlockError.BlockException(ex) =>
-          s"Error during block processing: $ex".asLeft[DeployServiceResponse].pure[F]
+          s"Error during block processing: $ex".asLeft[String].pure[F]
         case BlockError.Processing =>
           "No action taken since other thread is already processing the block."
-            .asLeft[DeployServiceResponse]
+            .asLeft[String]
             .pure[F]
       }
       .merge

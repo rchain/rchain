@@ -40,7 +40,7 @@ class CreateBlockAPITest extends FlatSpec with Matchers with EitherValues {
       implicit log: Log[Task],
       metrics: Metrics[Task],
       span: Span[Task]
-  ): Task[Either[String, DeployServiceResponse]] =
+  ): Task[Either[String, String]] =
     BlockAPI.createBlock[Task](blockApiLock)(
       Sync[Task],
       Concurrent[Task],
@@ -78,7 +78,7 @@ class CreateBlockAPITest extends FlatSpec with Matchers with EitherValues {
 
       def createBlock(deploy: DeployData, blockApiLock: Semaphore[Effect])(
           implicit engineCell: EngineCell[Effect]
-      ): Effect[ApiErr[DeployServiceResponse]] =
+      ): Effect[ApiErr[String]] =
         for {
           _ <- BlockAPI.deploy[Effect](deploy)
           r <- BlockAPI.createBlock[Effect](blockApiLock)
@@ -88,9 +88,9 @@ class CreateBlockAPITest extends FlatSpec with Matchers with EitherValues {
           implicit engineCell: EngineCell[Effect]
       ): Effect[
         (
-            ApiErr[DeployServiceResponse],
-            ApiErr[DeployServiceResponse],
-            ApiErr[DeployServiceResponse]
+            ApiErr[String],
+            ApiErr[String],
+            ApiErr[String]
         )
       ] =
         for {
