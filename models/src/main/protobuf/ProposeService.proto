@@ -1,11 +1,11 @@
 syntax = "proto3";
-package coop.rchain.casper.protocol;
+package propose.v1;
 
-import "CasperMessage.proto";
-import "google/protobuf/empty.proto";
 import "ProposeServiceCommon.proto";
 import "Either.proto";
 import "scalapb/scalapb.proto";
+
+option java_package = "coop.rchain.casper.protocol";
 
 option (scalapb.options) = {
   package_name: "coop.rchain.casper.protocol"

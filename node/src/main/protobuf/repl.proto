@@ -1,6 +1,7 @@
 syntax = "proto3";
+package repl;
 
-package coop.rchain.node.model;
+option java_package = "coop.rchain.node.model";
 
 service Repl {
   rpc Run (CmdRequest) returns (ReplResponse) {}

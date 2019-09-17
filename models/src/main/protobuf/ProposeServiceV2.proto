@@ -1,9 +1,11 @@
 syntax = "proto3";
-package coop.rchain.casper.protocol.propose;
+package propose.v2;
 
 import "ServiceError.proto";
 import "ProposeServiceCommon.proto";
 import "scalapb/scalapb.proto";
+
+option java_package = "coop.rchain.casper.protocol.propose";
 
 option (scalapb.options) = {
   flat_package: true

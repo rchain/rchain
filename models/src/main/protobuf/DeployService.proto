@@ -2,11 +2,10 @@
  * The main API is `DeployService`.
  */
 syntax = "proto3";
-package coop.rchain.casper.protocol;
+package deploy.v1;
 
 import "CasperMessage.proto";
 import "DeployServiceCommon.proto";
-import "google/protobuf/empty.proto";
 
 // If you are building for other languages "scalapb.proto"
 // can be manually obtained here:
@@ -14,8 +13,9 @@ import "google/protobuf/empty.proto";
 // make a scalapb directory in this file's location and place it inside
 
 import "scalapb/scalapb.proto";
-import "RhoTypes.proto";
 import "Either.proto";
+
+option java_package = "coop.rchain.casper.protocol";
 
 option (scalapb.options) = {
   package_name: "coop.rchain.casper.protocol"

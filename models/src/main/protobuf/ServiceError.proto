@@ -1,5 +1,5 @@
 syntax = "proto3";
-package coop.rchain.casper.protocol;
+option java_package = "coop.rchain.casper.protocol";
 
 message ServiceError {
   repeated string messages = 1;

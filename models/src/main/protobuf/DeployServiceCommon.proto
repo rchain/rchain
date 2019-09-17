@@ -2,7 +2,7 @@
  * The main API is `DeployService`.
  */
 syntax = "proto3";
-package coop.rchain.casper.protocol;
+package deploy;
 
 import "CasperMessage.proto";
 import "google/protobuf/empty.proto";
@@ -14,6 +14,8 @@ import "google/protobuf/empty.proto";
 
 import "scalapb/scalapb.proto";
 import "RhoTypes.proto";
+
+option java_package = "coop.rchain.casper.protocol";
 
 option (scalapb.options) = {
   flat_package: true

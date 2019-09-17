@@ -2,7 +2,7 @@
  * The main API is `DeployService`.
  */
 syntax = "proto3";
-package coop.rchain.casper.protocol.deployV2;
+package deploy.v2;
 
 import "CasperMessage.proto";
 import "ServiceError.proto";
@@ -15,13 +15,15 @@ import "DeployServiceCommon.proto";
 
 import "scalapb/scalapb.proto";
 
+option java_package = "coop.rchain.casper.protocol.deployV2";
+
 option (scalapb.options) = {
   flat_package: true
   single_file: true
 };
 
-// Use `DoDeploy` to queue deployments of Rholang code and then
-// `ProposeService.propose` to make a new block with the results of running them
+// Use `doDeploy` to queue deployments of Rholang code and then
+// `ProposeServiceV2.propose` to make a new block with the results of running them
 // all.
 //
 // To get results back, use `listenForDataAtName`.
