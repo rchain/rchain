@@ -4,7 +4,7 @@ from random import Random
 import pytest
 
 from rchain.crypto import PrivateKey
-from .common import NonZeroExitCodeError
+from .common import ParsingError
 from .rnode import (
     Node,
     extract_validator_stake_from_deploy_cost_str,
@@ -59,9 +59,8 @@ def test_deploy_invalid_contract(started_standalone_bootstrap_node: Node) -> Non
     invalid_contract_path = os.path.join(started_standalone_bootstrap_node.remote_deploy_dir, 'invalid.rho')
 
 
-    with pytest.raises(NonZeroExitCodeError) as exc:
+    with pytest.raises(ParsingError):
         started_standalone_bootstrap_node.deploy(invalid_contract_path, DEPLOY_KEY)
-    assert "Parsing error" in exc.value.output
 
     started_standalone_bootstrap_node.deploy('/opt/docker/examples/hello_world_again.rho', DEPLOY_KEY)
     block_hash = started_standalone_bootstrap_node.propose()
