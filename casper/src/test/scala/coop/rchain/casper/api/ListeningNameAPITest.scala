@@ -1,8 +1,8 @@
 package coop.rchain.casper.api
 
 import cats.implicits._
-import coop.rchain.casper.helper.HashSetCasperTestNode
-import coop.rchain.casper.helper.HashSetCasperTestNode._
+import coop.rchain.casper.helper.TestNode
+import coop.rchain.casper.helper.TestNode._
 import coop.rchain.casper.protocol._
 import coop.rchain.shared.scalatestcontrib._
 import coop.rchain.casper.util.{ConstructDeploy, GenesisBuilder}
@@ -19,7 +19,7 @@ class ListeningNameAPITest extends FlatSpec with Matchers with Inside {
   val genesis = buildGenesis()
 
   "getListeningNameDataResponse" should "work with unsorted channels" in effectTest {
-    HashSetCasperTestNode.standaloneEff(genesis).use { node =>
+    TestNode.standaloneEff(genesis).use { node =>
       import node._
 
       for {
@@ -45,7 +45,7 @@ class ListeningNameAPITest extends FlatSpec with Matchers with Inside {
   }
 
   it should "work across a chain" in effectTest {
-    HashSetCasperTestNode.networkEff(genesis, networkSize = 3).use { nodes =>
+    TestNode.networkEff(genesis, networkSize = 3).use { nodes =>
       implicit val nodeEngineCell             = nodes(0).engineCell
       implicit val nodeZeroSafetyOracleEffect = nodes(0).cliqueOracleEffect
       implicit val nodeZeroLogEffect          = nodes(0).logEff
@@ -166,7 +166,7 @@ class ListeningNameAPITest extends FlatSpec with Matchers with Inside {
   }
 
   "getListeningNameContinuationResponse" should "work with unsorted channels" in {
-    HashSetCasperTestNode.standaloneEff(genesis).use { node =>
+    TestNode.standaloneEff(genesis).use { node =>
       import node._
 
       def basicDeployData: DeployData =

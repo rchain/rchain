@@ -64,7 +64,7 @@ class LastFinalizedAPITest
    *         genesis
    */
   "isFinalized" should "return true for ancestors of last finalized block" in effectTest {
-    HashSetCasperTestNode.networkEff(genesisContext, networkSize = 3).use {
+    TestNode.networkEff(genesisContext, networkSize = 3).use {
       case nodes @ n1 +: n2 +: n3 +: Seq() =>
         import n1.{blockStore, cliqueOracleEffect, logEff}
         val engine = new EngineWithCasper[Task](n1.casperEff)
@@ -109,7 +109,7 @@ class LastFinalizedAPITest
    *         genesis
    */
   it should "return false for children, uncles and cousins of last finalized block" in effectTest {
-    HashSetCasperTestNode.networkEff(genesisContext, networkSize = 3).use {
+    TestNode.networkEff(genesisContext, networkSize = 3).use {
       case nodes @ n1 +: n2 +: n3 +: Seq() =>
         import n1.{blockStore, cliqueOracleEffect, logEff}
         val engine = new EngineWithCasper[Task](n1.casperEff)

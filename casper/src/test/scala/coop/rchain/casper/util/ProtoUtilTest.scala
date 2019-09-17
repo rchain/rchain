@@ -3,8 +3,8 @@ package coop.rchain.casper.util
 import cats.implicits._
 import coop.rchain.casper.MultiParentCasper.ignoreDoppelgangerCheck
 import coop.rchain.casper._
-import coop.rchain.casper.helper.HashSetCasperTestNode
-import coop.rchain.casper.helper.HashSetCasperTestNode._
+import coop.rchain.casper.helper.TestNode
+import coop.rchain.casper.helper.TestNode._
 import coop.rchain.shared.scalatestcontrib._
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.blockImplicits._
@@ -35,7 +35,7 @@ class ProtoUtilTest extends FlatSpec with Matchers with GeneratorDrivenPropertyC
   val genesis = buildGenesis()
 
   "unseenBlockHashes" should "return empty for a single block dag" in effectTest {
-    HashSetCasperTestNode.standaloneEff(genesis).use { node =>
+    TestNode.standaloneEff(genesis).use { node =>
       import node._
       implicit val timeEff = new LogicalTime[Effect]
 
@@ -54,7 +54,7 @@ class ProtoUtilTest extends FlatSpec with Matchers with GeneratorDrivenPropertyC
   }
 
   it should "return all but the first block when passed the first block in a chain" in effectTest {
-    HashSetCasperTestNode.standaloneEff(genesis).use { node =>
+    TestNode.standaloneEff(genesis).use { node =>
       import node._
       implicit val timeEff = new LogicalTime[Effect]
 

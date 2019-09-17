@@ -1,8 +1,8 @@
 package coop.rchain.casper
 
 import cats.implicits._
-import coop.rchain.casper.helper.HashSetCasperTestNode
-import coop.rchain.casper.helper.HashSetCasperTestNode._
+import coop.rchain.casper.helper.TestNode
+import coop.rchain.casper.helper.TestNode._
 import coop.rchain.shared.scalatestcontrib._
 import coop.rchain.casper.util.ConstructDeploy
 import coop.rchain.p2p.EffectsTestInstances.LogicalTime
@@ -22,7 +22,7 @@ class MultiParentCasperFinalizationSpec extends FlatSpec with Matchers with Insp
   //put a new casper instance at the start of each
   //test since we cannot reset it
   "MultiParentCasper" should "increment last finalized block as appropriate in round robin" in effectTest {
-    HashSetCasperTestNode.networkEff(genesis, networkSize = 3).use { nodes =>
+    TestNode.networkEff(genesis, networkSize = 3).use { nodes =>
       for {
         deployDatas <- (0 to 7).toList.traverse(i => ConstructDeploy.basicDeployData[Effect](i))
 

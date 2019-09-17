@@ -1,7 +1,7 @@
 package coop.rchain.casper
 
-import coop.rchain.casper.helper.HashSetCasperTestNode
-import coop.rchain.casper.helper.HashSetCasperTestNode.Effect
+import coop.rchain.casper.helper.TestNode
+import coop.rchain.casper.helper.TestNode.Effect
 import coop.rchain.shared.scalatestcontrib._
 import coop.rchain.casper.util.rholang.{RegistrySigGen, RuntimeManager}
 import coop.rchain.casper.util.{ConstructDeploy, ProtoUtil, RSpaceUtil}
@@ -23,7 +23,7 @@ class MultiParentCasperRholangSpec extends FlatSpec with Matchers with Inspector
   //put a new casper instance at the start of each
   //test since we cannot reset it
   "MultiParentCasper" should "create blocks based on deploys" in effectTest {
-    HashSetCasperTestNode.standaloneEff(genesis).use { implicit node =>
+    TestNode.standaloneEff(genesis).use { implicit node =>
       implicit val casper: MultiParentCasperImpl[Effect] = node.casperEff
       implicit val rm: RuntimeManager[Effect]            = node.runtimeManager
 
@@ -47,7 +47,7 @@ class MultiParentCasperRholangSpec extends FlatSpec with Matchers with Inspector
   }
 
   it should "be able to use the registry" in effectTest {
-    HashSetCasperTestNode.standaloneEff(genesis).use { node =>
+    TestNode.standaloneEff(genesis).use { node =>
       implicit val rm: RuntimeManager[Effect] = node.runtimeManager
 
       val registerSource =

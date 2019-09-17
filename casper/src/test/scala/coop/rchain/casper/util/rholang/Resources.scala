@@ -9,7 +9,7 @@ import cats.temp.par
 import coop.rchain.blockstorage.dag.{BlockDagFileStorage, BlockDagStorage}
 import coop.rchain.blockstorage.BlockStore
 import coop.rchain.casper.helper.BlockDagStorageTestFixture
-import coop.rchain.casper.helper.HashSetCasperTestNode.makeBlockDagFileStorageConfig
+import coop.rchain.casper.helper.TestNode.makeBlockDagFileStorageConfig
 import coop.rchain.metrics
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.rholang.Resources.{mkRuntimeAt, mkTempDir}

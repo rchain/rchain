@@ -3,8 +3,8 @@ package coop.rchain.casper
 import cats.implicits._
 import coop.rchain.casper.MultiParentCasper.ignoreDoppelgangerCheck
 import coop.rchain.casper.genesis.contracts.Vault
-import coop.rchain.casper.helper.HashSetCasperTestNode
-import coop.rchain.casper.helper.HashSetCasperTestNode._
+import coop.rchain.casper.helper.TestNode
+import coop.rchain.casper.helper.TestNode._
 import coop.rchain.shared.scalatestcontrib._
 import coop.rchain.casper.util.ConstructDeploy
 import coop.rchain.casper.util.GenesisBuilder._
@@ -23,7 +23,7 @@ class RholangBuildTest extends FlatSpec with Matchers {
   val genesis            = buildGenesis()
 
   "Our build system" should "allow import of rholang sources into scala code" in effectTest {
-    HashSetCasperTestNode
+    TestNode
       .standaloneEff(genesis)
       .use { node =>
         import node._
@@ -73,7 +73,7 @@ class RholangBuildTest extends FlatSpec with Matchers {
       .toSeq
     val (keyPairs, genesis) = buildGenesisParameters()
     val genesisParams       = (keyPairs, genesis.copy(vaults = vaults))
-    HashSetCasperTestNode
+    TestNode
       .standaloneEff(buildGenesis(genesisParams))
       .use { node =>
         import node._

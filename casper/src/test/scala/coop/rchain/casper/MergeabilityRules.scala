@@ -4,8 +4,8 @@ import scala.util.Random._
 
 import cats.{Applicative, Functor, Monad}
 import cats.implicits._
-import coop.rchain.casper.helper.HashSetCasperTestNode
-import coop.rchain.casper.helper.HashSetCasperTestNode._
+import coop.rchain.casper.helper.TestNode
+import coop.rchain.casper.helper.TestNode._
 import coop.rchain.casper.protocol.DeployData
 import coop.rchain.shared.scalatestcontrib._
 import coop.rchain.casper.util.ConstructDeploy
@@ -483,7 +483,7 @@ trait MergeabilityRules {
       ConstructDeploy.sourceDeployNowF[Effect]("Nil")
     ).sequence[Effect, DeployData]
       .flatMap { deploys =>
-        HashSetCasperTestNode.networkEff(genesis, networkSize = 2).use { nodes =>
+        TestNode.networkEff(genesis, networkSize = 2).use { nodes =>
           for {
             _ <- nodes(0).addBlock(deploys(0))
             _ <- nodes(1).receive()

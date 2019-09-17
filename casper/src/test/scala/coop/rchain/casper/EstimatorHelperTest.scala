@@ -7,7 +7,7 @@ import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.dag.{BlockDagStorage, IndexedBlockDagStorage}
 import coop.rchain.blockstorage.BlockStore
 import coop.rchain.casper.EstimatorHelper.conflicts
-import coop.rchain.casper.helper.{BlockDagStorageFixture, BlockGenerator, HashSetCasperTestNode}
+import coop.rchain.casper.helper.{BlockDagStorageFixture, BlockGenerator, TestNode}
 import coop.rchain.casper.protocol.Event.EventInstance.{Consume, Produce}
 import coop.rchain.casper.protocol._
 import coop.rchain.shared.scalatestcontrib._
@@ -56,7 +56,7 @@ class EstimatorHelperTest
 
   "Conflicts" should "be also detected when they occur in uncommon ancestor blocks" in effectTest {
 
-    HashSetCasperTestNode.networkEff(genesisContext, networkSize = 4).use {
+    TestNode.networkEff(genesisContext, networkSize = 4).use {
       case n1 +: n2 +: n3 +: n4 +: _ =>
         implicit val blockStore = n4.blockStore
 

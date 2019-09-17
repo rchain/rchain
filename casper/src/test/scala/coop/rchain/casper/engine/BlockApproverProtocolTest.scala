@@ -3,8 +3,8 @@ package coop.rchain.casper.engine
 import cats.Traverse
 import cats.implicits._
 import coop.rchain.casper.genesis.contracts.Vault
-import coop.rchain.casper.helper.HashSetCasperTestNode
-import coop.rchain.casper.helper.HashSetCasperTestNode._
+import coop.rchain.casper.helper.TestNode
+import coop.rchain.casper.helper.TestNode._
 import coop.rchain.casper.protocol._
 import coop.rchain.shared.scalatestcontrib._
 import coop.rchain.casper.util.GenesisBuilder
@@ -77,7 +77,7 @@ object BlockApproverProtocolTest {
   def unapprovedToPacket(u: UnapprovedBlock): Packet =
     Packet(transport.UnapprovedBlock.id, u.toByteString)
 
-  def createProtocol: Effect[(BlockApproverProtocol, HashSetCasperTestNode[Effect])] = {
+  def createProtocol: Effect[(BlockApproverProtocol, TestNode[Effect])] = {
     import monix.execution.Scheduler.Implicits.global
 
     val params @ (_, genesisParams) = GenesisBuilder.buildGenesisParameters()
@@ -86,7 +86,7 @@ object BlockApproverProtocolTest {
     val bonds        = genesisParams.proofOfStake.validators.map(v => v.pk -> v.stake).toMap
     val requiredSigs = bonds.size - 1
 
-    HashSetCasperTestNode.networkEff(context, networkSize = 1).use { nodes =>
+    TestNode.networkEff(context, networkSize = 1).use { nodes =>
       val node = nodes.head
       BlockApproverProtocol
         .of[Effect](

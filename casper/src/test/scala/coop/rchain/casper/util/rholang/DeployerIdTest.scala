@@ -3,7 +3,7 @@ package coop.rchain.casper.util.rholang
 import cats.effect.Resource
 import cats.implicits._
 import com.google.protobuf.ByteString
-import coop.rchain.casper.helper.HashSetCasperTestNode
+import coop.rchain.casper.helper.TestNode
 import coop.rchain.shared.scalatestcontrib.effectTest
 import coop.rchain.casper.util.GenesisBuilder.{buildGenesis, buildGenesisParameters}
 import coop.rchain.casper.util.rholang.Resources._
@@ -77,7 +77,7 @@ class DeployerIdTest extends FlatSpec with Matchers {
          |  }
          |} """.stripMargin
 
-    HashSetCasperTestNode.standaloneEff(genesisContext).use { node =>
+    TestNode.standaloneEff(genesisContext).use { node =>
       for {
         contract        <- ConstructDeploy.sourceDeployNowF(checkDeployerDefinition, sec = deployer)
         block           <- node.addBlock(contract)

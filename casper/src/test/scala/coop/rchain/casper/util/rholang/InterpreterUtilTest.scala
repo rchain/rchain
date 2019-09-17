@@ -91,7 +91,7 @@ class InterpreterUtilTest
      *          genesis
      */
     val genesisContext = buildGenesis(buildGenesisParameters())
-    HashSetCasperTestNode.standaloneEff(genesisContext).use { node =>
+    TestNode.standaloneEff(genesisContext).use { node =>
       implicit val runtimeManager = node.runtimeManager
       for {
         b0 <- node.addBlock(b0Deploys: _*)
@@ -137,7 +137,7 @@ class InterpreterUtilTest
      *         genesis
      */
 
-    HashSetCasperTestNode.networkEff(genesisContext, networkSize = 2).use {
+    TestNode.networkEff(genesisContext, networkSize = 2).use {
       case node1 +: node2 +: _ =>
         implicit val runtimeManager = node1.runtimeManager
         for {
