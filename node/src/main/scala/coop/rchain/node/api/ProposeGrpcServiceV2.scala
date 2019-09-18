@@ -27,8 +27,8 @@ object ProposeGrpcServiceV2 {
       blockApiLock: Semaphore[F]
   )(
       implicit worker: Scheduler
-  ): ProposeServiceV2GrpcMonix.ProposeServiceV2 =
-    new ProposeServiceV2GrpcMonix.ProposeServiceV2 {
+  ): ProposeServiceV2GrpcMonix.ProposeService =
+    new ProposeServiceV2GrpcMonix.ProposeService {
 
       private def defer[A, R <: StacksafeMessage[R]](
           task: F[Either[String, A]]

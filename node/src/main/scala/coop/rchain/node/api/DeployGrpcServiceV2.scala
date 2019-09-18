@@ -40,8 +40,8 @@ object DeployGrpcServiceV2 {
       blockApiLock: Semaphore[F]
   )(
       implicit worker: Scheduler
-  ): DeployServiceV2GrpcMonix.DeployServiceV2 =
-    new DeployServiceV2GrpcMonix.DeployServiceV2 {
+  ): DeployServiceV2GrpcMonix.DeployService =
+    new DeployServiceV2GrpcMonix.DeployService {
 
       private def defer[A, R <: StacksafeMessage[R]](
           task: F[Either[String, A]]

@@ -26,7 +26,7 @@ package object api {
       grpcExecutor: Scheduler,
       replGrpcService: ReplGrpcMonix.Repl,
       proposeGrpcService: ProposeServiceGrpcMonix.ProposeService,
-      proposeGrpcServiceV2: ProposeServiceV2GrpcMonix.ProposeServiceV2
+      proposeGrpcServiceV2: ProposeServiceV2GrpcMonix.ProposeService
   ): Task[Server[Task]] =
     GrpcServer[Task](
       NettyServerBuilder
@@ -52,9 +52,9 @@ package object api {
       port: Int,
       grpcExecutor: Scheduler,
       deployGrpcService: DeployServiceGrpcMonix.DeployService,
-      deployGrpcServiceV2: DeployServiceV2GrpcMonix.DeployServiceV2,
+      deployGrpcServiceV2: DeployServiceV2GrpcMonix.DeployService,
       proposeGrpcService: ProposeServiceGrpcMonix.ProposeService,
-      proposeGrpcServiceV2: ProposeServiceV2GrpcMonix.ProposeServiceV2
+      proposeGrpcServiceV2: ProposeServiceV2GrpcMonix.ProposeService
   ): F[Server[F]] =
     GrpcServer[F](
       NettyServerBuilder

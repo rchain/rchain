@@ -763,9 +763,9 @@ object NodeRuntime {
   final case class APIServers(
       repl: ReplGrpcMonix.Repl,
       propose: ProposeServiceGrpcMonix.ProposeService,
-      proposeV2: ProposeServiceV2GrpcMonix.ProposeServiceV2,
+      proposeV2: ProposeServiceV2GrpcMonix.ProposeService,
       deploy: DeployServiceGrpcMonix.DeployService,
-      deployV2: DeployServiceV2GrpcMonix.DeployServiceV2
+      deployV2: DeployServiceV2GrpcMonix.DeployService
   )
 
   def acquireAPIServers[F[_]](
