@@ -122,8 +122,6 @@ object Validate {
       } yield result
     }
 
-  /** TODO move to CasperPacketHandler, we should never work with empty fields
-    */
   def formatOfFields[F[_]: Monad: Log](b: BlockMessage): F[Boolean] =
     if (b.blockHash.isEmpty) {
       for {
