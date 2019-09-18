@@ -43,7 +43,7 @@ object TuplespaceEvent {
     case _ => None
   }
 
-  def from(comm: COMM, incomingProduces: Set[Produce]): Option[(Blake2b256Hash, TuplespaceEvent)] =
+  def from(comm: COMM, incomingConsumes: Set[Consume]): Option[(Blake2b256Hash, TuplespaceEvent)] =
     comm match {
       case COMM(consume, produces, peeks, _) if produces.size == 1 => {
         val produce   = produces.head
@@ -51,7 +51,7 @@ object TuplespaceEvent {
         val consumeOp = toOperation(consume, peeks.nonEmpty)
 
         val incoming: TuplespaceOperation =
-          if (incomingProduces.contains(produce)) produceOp else consumeOp
+          if (incomingConsumes.contains(consume)) consumeOp else produceOp
 
         val matched: Option[TuplespaceOperation] = Some(
           if (incoming == produceOp) consumeOp

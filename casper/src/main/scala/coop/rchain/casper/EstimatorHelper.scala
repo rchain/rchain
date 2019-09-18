@@ -164,7 +164,7 @@ object EstimatorHelper {
 
     val produceEvents = freeProduces.map(TuplespaceEvent.from(_))
     val consumeEvents = freeConsumes.flatMap(TuplespaceEvent.from(_))
-    val commEvents    = b.comms.flatMap(TuplespaceEvent.from(_, b.produces))
+    val commEvents    = b.comms.flatMap(TuplespaceEvent.from(_, b.consumes))
 
     (produceEvents ++ consumeEvents ++ commEvents)
       .groupBy(_._1)
