@@ -42,7 +42,6 @@ new  PoS,
   for(@(_, RevVault) <- revVaultCh;
       @(_, ListOps) <- listOpsCh) {
     new posRevAddressCh, posAuthKeyCh, posVaultCh, initialActiveCh in {
-
       @RevVault!("deployerAuthKey", *posAuthKeyCh) |
       getCurrentUserAddress!(*posRevAddressCh) |
 
@@ -103,6 +102,12 @@ new  PoS,
                 for (@state <- tmpCh) {
                   returnCh!(state.get("activeValidators"))
                 }
+              }
+            } |
+
+            contract PoS (@"getActiveValidatorVaults", returnCh) = {
+              for(@vaults <<- perActiveValidatorPosVaultsCh) {
+                returnCh!(vaults)
               }
             } |
 
@@ -279,7 +284,8 @@ new  PoS,
                     } |
 
                     for(@newValidators <- newValidatorsCh;
-                        @(payments, newBonds, newWithdrawers, newRewards) <- removeQuarantinedCh) {
+                        @(payments, newBonds, newWithdrawers, newRewards) <- removeQuarantinedCh;
+                        _ <- accDepositsDoneCh) {
 
                       payValidators!(payments, *paymentDoneCh) |
 
