@@ -9,8 +9,8 @@ import coop.rchain.blockstorage.dag.BlockDagStorage.DeployId
 import coop.rchain.casper.MultiParentCasper.ignoreDoppelgangerCheck
 import coop.rchain.casper.genesis.Genesis
 import coop.rchain.casper.genesis.contracts._
-import coop.rchain.casper.helper.HashSetCasperTestNode
-import coop.rchain.casper.helper.HashSetCasperTestNode._
+import coop.rchain.casper.helper.TestNode
+import coop.rchain.casper.helper.TestNode._
 import coop.rchain.casper.protocol.{BlockMessage, DeployData}
 import coop.rchain.casper.util.{ConstructDeploy, GenesisBuilder}
 import coop.rchain.catscontrib.TaskContrib._
@@ -35,7 +35,7 @@ object HashSetCasperPropertiesApp {
     HashSetCasperSpecification.property().check(_.withMinSuccessfulTests(1))
 }
 
-class NodeBox(val node: HashSetCasperTestNode[Effect], var lastBlock: Option[BlockMessage]) {
+class NodeBox(val node: TestNode[Effect], var lastBlock: Option[BlockMessage]) {
   def update(bm: Option[BlockMessage]): Unit = this.lastBlock = bm
 }
 
@@ -71,19 +71,19 @@ object HashSetCasperActions {
   }
 
   def deploy(
-      node: HashSetCasperTestNode[Effect],
+      node: TestNode[Effect],
       deployData: DeployData
   ): Effect[Either[DeployError, DeployId]] =
     node.casperEff.deploy(deployData)
 
-  def create(node: HashSetCasperTestNode[Effect]): Task[BlockMessage] =
+  def create(node: TestNode[Effect]): Task[BlockMessage] =
     for {
       createBlockResult1    <- node.casperEff.createBlock
       Created(signedBlock1) = createBlockResult1
     } yield signedBlock1
 
   def add(
-      node: HashSetCasperTestNode[Effect],
+      node: TestNode[Effect],
       signed: BlockMessage
   ): Effect[Either[Throwable, ValidBlockProcessing]] =
     Sync[Effect].attempt(
@@ -124,7 +124,7 @@ object HashSetCasperSpecification extends Commands {
       validators.zip(weights).toMap
     })
 
-    val nodesResource = HashSetCasperTestNode
+    val nodesResource = TestNode
       .networkEff(genesisContext, networkSize = state.size)
       .map(_.toList)
 

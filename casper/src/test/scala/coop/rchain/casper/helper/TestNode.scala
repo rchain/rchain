@@ -41,7 +41,7 @@ import org.scalatest.Assertions
 
 import scala.concurrent.duration.{FiniteDuration, MILLISECONDS}
 
-class HashSetCasperTestNode[F[_]](
+class TestNode[F[_]](
     name: String,
     val local: PeerNode,
     tle: TransportLayerTestImpl[F],
@@ -107,7 +107,7 @@ class HashSetCasperTestNode[F[_]](
   def addBlock(deployDatums: DeployData*): F[BlockMessage] =
     addBlockStatus(ValidBlock.Valid.asRight)(deployDatums: _*)
 
-  def publishBlock(deployDatums: DeployData*)(nodes: HashSetCasperTestNode[F]*): F[BlockMessage] =
+  def publishBlock(deployDatums: DeployData*)(nodes: TestNode[F]*): F[BlockMessage] =
     for {
       block <- addBlock(deployDatums: _*)
       _     <- nodes.toList.filter(_ != this).traverse_(_.receive())
@@ -168,7 +168,7 @@ class HashSetCasperTestNode[F[_]](
     } yield ()
 }
 
-object HashSetCasperTestNode {
+object TestNode {
   type Effect[A] = Task[A]
 
   def standaloneEff(
@@ -176,7 +176,7 @@ object HashSetCasperTestNode {
       storageSize: Long = 1024L * 1024 * 10
   )(
       implicit scheduler: Scheduler
-  ): Resource[Effect, HashSetCasperTestNode[Effect]] =
+  ): Resource[Effect, TestNode[Effect]] =
     networkEff(
       genesis,
       networkSize = 1,
@@ -188,7 +188,7 @@ object HashSetCasperTestNode {
       networkSize: Int,
       storageSize: Long = 1024L * 1024 * 10,
       synchronyConstraintThreshold: Double = 0d
-  )(implicit scheduler: Scheduler): Resource[Effect, IndexedSeq[HashSetCasperTestNode[Effect]]] =
+  )(implicit scheduler: Scheduler): Resource[Effect, IndexedSeq[TestNode[Effect]]] =
     networkF[Effect](
       genesis.validatorSks.take(networkSize).toVector,
       genesis.genesisBlock,
@@ -206,7 +206,7 @@ object HashSetCasperTestNode {
       storageMatrixPath: Path,
       createRuntime: Path => Resource[F, RuntimeManager[F]],
       synchronyConstraintThreshold: Double
-  ): Resource[F, IndexedSeq[HashSetCasperTestNode[F]]] = {
+  ): Resource[F, IndexedSeq[TestNode[F]]] = {
     val n     = sks.length
     val names = (1 to n).map(i => s"node-$i")
     val peers = names.map(peerNode(_, 40400))
@@ -267,7 +267,7 @@ object HashSetCasperTestNode {
       logicalTime: LogicalTime[F],
       createRuntime: Path => Resource[F, RuntimeManager[F]],
       synchronyConstraintThreshold: Double
-  ): Resource[F, HashSetCasperTestNode[F]] = {
+  ): Resource[F, TestNode[F]] = {
     val tle                = new TransportLayerTestImpl[F]()
     val tls                = new TransportLayerServerTestImpl[F](currentPeerNode)
     implicit val log       = Log.log[F]
@@ -285,7 +285,7 @@ object HashSetCasperTestNode {
                  _                   <- TestNetwork.addPeer(currentPeerNode)
                  blockProcessingLock <- Semaphore[F](1)
                  casperState         <- Cell.mvarCell[F, CasperState](CasperState())
-                 node = new HashSetCasperTestNode[F](
+                 node = new TestNode[F](
                    name,
                    currentPeerNode,
                    tle,

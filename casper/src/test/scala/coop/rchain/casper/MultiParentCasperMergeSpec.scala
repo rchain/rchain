@@ -3,8 +3,8 @@ package coop.rchain.casper
 import cats.{Applicative, Functor, Monad}
 import cats.implicits._
 import coop.rchain.blockstorage.BlockStore
-import coop.rchain.casper.helper.HashSetCasperTestNode
-import coop.rchain.casper.helper.HashSetCasperTestNode._
+import coop.rchain.casper.helper.TestNode
+import coop.rchain.casper.helper.TestNode._
 import coop.rchain.casper.protocol.DeployData
 import coop.rchain.shared.scalatestcontrib._
 import coop.rchain.casper.util.{ConstructDeploy, RSpaceUtil}
@@ -27,7 +27,7 @@ class MultiParentCasperMergeSpec
   val genesis = buildGenesis()
 
   "HashSetCasper" should "handle multi-parent blocks correctly" in effectTest {
-    HashSetCasperTestNode.networkEff(genesis, networkSize = 2).use { nodes =>
+    TestNode.networkEff(genesis, networkSize = 2).use { nodes =>
       implicit val rm = nodes(1).runtimeManager
       for {
         deployData0 <- ConstructDeploy.basicDeployData[Effect](0)
@@ -40,14 +40,10 @@ class MultiParentCasperMergeSpec
         )
         block0 <- nodes(0).addBlock(deploys(0))
         block1 <- nodes(1).addBlock(deploys(1))
-        _      <- nodes(0).receive()
-        _      <- nodes(1).receive()
-        _      <- nodes(0).receive()
-        _      <- nodes(1).receive()
+        _      <- nodes.toList.traverse_(_.receive())
 
         //multiparent block joining block0 and block1 since they do not conflict
-        multiparentBlock <- nodes(0).addBlock(deploys(2))
-        _                <- nodes(1).receive()
+        multiparentBlock <- nodes(0).publishBlock(deploys(2))(nodes: _*)
 
         _ = nodes(0).logEff.warns.isEmpty shouldBe true
         _ = nodes(1).logEff.warns.isEmpty shouldBe true
@@ -152,7 +148,7 @@ class MultiParentCasperMergeSpec
         |}
       """.stripMargin
 
-    HashSetCasperTestNode.networkEff(genesis, networkSize = 3).use { nodes =>
+    TestNode.networkEff(genesis, networkSize = 3).use { nodes =>
       val n1     = nodes(0)
       val n2     = nodes(1)
       val n3     = nodes(2)
@@ -171,7 +167,7 @@ class MultiParentCasperMergeSpec
   }
 
   it should "not merge blocks that touch the same channel involving joins" in effectTest {
-    HashSetCasperTestNode.networkEff(genesis, networkSize = 2).use { nodes =>
+    TestNode.networkEff(genesis, networkSize = 2).use { nodes =>
       for {
         current0 <- timeEff.currentMillis
         deploy0 = ConstructDeploy.sourceDeploy(

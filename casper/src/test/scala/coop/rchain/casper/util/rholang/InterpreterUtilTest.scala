@@ -92,7 +92,7 @@ class InterpreterUtilTest
      *          genesis
      */
     val genesisContext = buildGenesis(buildGenesisParameters())
-    HashSetCasperTestNode.standaloneEff(genesisContext).use { node =>
+    TestNode.standaloneEff(genesisContext).use { node =>
       implicit val runtimeManager = node.runtimeManager
       for {
         b0 <- node.addBlock(b0Deploys: _*)
@@ -138,13 +138,12 @@ class InterpreterUtilTest
      *         genesis
      */
 
-    HashSetCasperTestNode.networkEff(genesisContext, networkSize = 2).use {
+    TestNode.networkEff(genesisContext, networkSize = 2).use {
       case node1 +: node2 +: _ =>
         implicit val runtimeManager = node1.runtimeManager
         for {
           b1 <- node1.addBlock(b1Deploys: _*)
-          b2 <- node2.addBlock(b2Deploys: _*)
-          _  <- node1.receive()
+          b2 <- node2.publishBlock(b2Deploys: _*)(node1)
           b3 <- node1.addBlock(b3Deploys: _*)
 
           _ = b3.header.get.parentsHashList.toSet shouldBe Set(b1, b2).map(_.blockHash)

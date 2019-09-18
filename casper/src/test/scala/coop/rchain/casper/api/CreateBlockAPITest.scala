@@ -13,7 +13,7 @@ import coop.rchain.blockstorage.dag.BlockDagRepresentation
 import coop.rchain.blockstorage.dag.BlockDagStorage.DeployId
 import coop.rchain.casper._
 import coop.rchain.casper.api.BlockAPI.ApiErr
-import coop.rchain.casper.helper.HashSetCasperTestNode
+import coop.rchain.casper.helper.TestNode
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util._
 import coop.rchain.casper.util.ConstructDeploy.basicDeployData
@@ -35,7 +35,7 @@ import coop.rchain.metrics
 
 class CreateBlockAPITest extends FlatSpec with Matchers with EitherValues {
   import GenesisBuilder._
-  import HashSetCasperTestNode.Effect
+  import TestNode.Effect
 
   def createBlock(blockApiLock: Semaphore[Task])(engineCell: Cell[Task, Engine[Task]])(
       implicit log: Log[Task],
@@ -68,7 +68,7 @@ class CreateBlockAPITest extends FlatSpec with Matchers with EitherValues {
       def nanoTime: Task[Long]                        = timer.clock.monotonic(NANOSECONDS)
       def sleep(duration: FiniteDuration): Task[Unit] = timer.sleep(duration)
     }
-    HashSetCasperTestNode.standaloneEff(genesis).use { node =>
+    TestNode.standaloneEff(genesis).use { node =>
       val casper = new SleepingMultiParentCasperImpl[Effect](node.casperEff)
       val deploys = List(
         "@0!(0) | for(_ <- @0){ @1!(1) }",
@@ -120,7 +120,7 @@ class CreateBlockAPITest extends FlatSpec with Matchers with EitherValues {
   }
 
   it should "not allow proposals without enough new blocks from other validators" in effectTest {
-    HashSetCasperTestNode
+    TestNode
       .networkEff(genesis, networkSize = 4, synchronyConstraintThreshold = 1d / 3d)
       .use {
         case nodes @ n1 +: n2 +: _ +: _ +: Seq() =>
@@ -145,7 +145,7 @@ class CreateBlockAPITest extends FlatSpec with Matchers with EitherValues {
   }
 
   it should "allow proposals with enough new blocks from other validators" in effectTest {
-    HashSetCasperTestNode
+    TestNode
       .networkEff(genesis, networkSize = 4, synchronyConstraintThreshold = 1d / 3d)
       .use {
         case nodes @ n1 +: n2 +: n3 +: _ +: Seq() =>

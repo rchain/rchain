@@ -7,7 +7,7 @@ import coop.rchain.blockstorage.dag.BlockDagFileStorage
 import coop.rchain.casper.genesis.Genesis
 import coop.rchain.casper.genesis.contracts._
 import coop.rchain.casper.helper.BlockDagStorageTestFixture
-import coop.rchain.casper.helper.HashSetCasperTestNode.makeBlockDagFileStorageConfig
+import coop.rchain.casper.helper.TestNode.makeBlockDagFileStorageConfig
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.ConstructDeploy.{defaultPub, defaultPub2}
 import coop.rchain.casper.util.rholang.RuntimeManager

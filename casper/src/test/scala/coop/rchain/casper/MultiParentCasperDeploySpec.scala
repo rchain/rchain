@@ -2,8 +2,8 @@ package coop.rchain.casper
 
 import com.google.protobuf.ByteString
 import coop.rchain.casper.MultiParentCasper.ignoreDoppelgangerCheck
-import coop.rchain.casper.helper.HashSetCasperTestNode
-import coop.rchain.casper.helper.HashSetCasperTestNode._
+import coop.rchain.casper.helper.TestNode
+import coop.rchain.casper.helper.TestNode._
 import coop.rchain.shared.scalatestcontrib._
 import coop.rchain.casper.util.ConstructDeploy
 import coop.rchain.p2p.EffectsTestInstances.LogicalTime
@@ -19,7 +19,7 @@ class MultiParentCasperDeploySpec extends FlatSpec with Matchers with Inspectors
   val genesis = buildGenesis()
 
   "MultiParentCasper" should "accept a deploy and return it's id" in effectTest {
-    HashSetCasperTestNode.standaloneEff(genesis).use { node =>
+    TestNode.standaloneEff(genesis).use { node =>
       import node._
       implicit val timeEff = new LogicalTime[Effect]
 
@@ -35,7 +35,7 @@ class MultiParentCasperDeploySpec extends FlatSpec with Matchers with Inspectors
   }
 
   it should "not allow deploy if deploy is missing signature" in effectTest {
-    HashSetCasperTestNode.standaloneEff(genesis).use { node =>
+    TestNode.standaloneEff(genesis).use { node =>
       val casper           = node.casperEff
       implicit val timeEff = new LogicalTime[Effect]
 
@@ -48,7 +48,7 @@ class MultiParentCasperDeploySpec extends FlatSpec with Matchers with Inspectors
   }
 
   it should "not allow deploy if deploy is missing signature algorithm" in effectTest {
-    HashSetCasperTestNode.standaloneEff(genesis).use { node =>
+    TestNode.standaloneEff(genesis).use { node =>
       val casper           = node.casperEff
       implicit val timeEff = new LogicalTime[Effect]
 
@@ -61,7 +61,7 @@ class MultiParentCasperDeploySpec extends FlatSpec with Matchers with Inspectors
   }
 
   it should "not allow deploy if deploy is missing user" in effectTest {
-    HashSetCasperTestNode.standaloneEff(genesis).use { node =>
+    TestNode.standaloneEff(genesis).use { node =>
       val casper           = node.casperEff
       implicit val timeEff = new LogicalTime[Effect]
 
@@ -74,7 +74,7 @@ class MultiParentCasperDeploySpec extends FlatSpec with Matchers with Inspectors
   }
 
   it should "not allow deploy if deploy is holding non-existing algorithm" in effectTest {
-    HashSetCasperTestNode.standaloneEff(genesis).use { node =>
+    TestNode.standaloneEff(genesis).use { node =>
       val casper           = node.casperEff
       implicit val timeEff = new LogicalTime[Effect]
 
@@ -87,7 +87,7 @@ class MultiParentCasperDeploySpec extends FlatSpec with Matchers with Inspectors
   }
 
   it should "not allow deploy if deploy is incorrectly signed" in effectTest {
-    HashSetCasperTestNode.standaloneEff(genesis).use { node =>
+    TestNode.standaloneEff(genesis).use { node =>
       val casper           = node.casperEff
       implicit val timeEff = new LogicalTime[Effect]
 
@@ -103,16 +103,11 @@ class MultiParentCasperDeploySpec extends FlatSpec with Matchers with Inspectors
 
   it should "not create a block with a repeated deploy" in effectTest {
     implicit val timeEff = new LogicalTime[Effect]
-    HashSetCasperTestNode.networkEff(genesis, networkSize = 2).use { nodes =>
+    TestNode.networkEff(genesis, networkSize = 2).use { nodes =>
       val List(node0, node1) = nodes.toList
-      val casper0            = node0.casperEff
       for {
         deploy             <- ConstructDeploy.basicDeployData[Effect](0)
-        _                  <- casper0.deploy(deploy)
-        createBlockResult  <- casper0.createBlock
-        Created(block)     = createBlockResult
-        _                  <- casper0.addBlock(block, ignoreDoppelgangerCheck[Effect])
-        _                  <- node1.receive()
+        _                  <- node0.publishBlock(deploy)(node1)
         casper1            = node1.casperEff
         _                  <- casper1.deploy(deploy)
         createBlockResult2 <- casper1.createBlock
@@ -122,7 +117,7 @@ class MultiParentCasperDeploySpec extends FlatSpec with Matchers with Inspectors
   }
 
   it should "fail when deploying with insufficient phlos" in effectTest {
-    HashSetCasperTestNode.standaloneEff(genesis).use { node =>
+    TestNode.standaloneEff(genesis).use { node =>
       implicit val timeEff = new LogicalTime[Effect]
 
       for {
@@ -133,7 +128,7 @@ class MultiParentCasperDeploySpec extends FlatSpec with Matchers with Inspectors
   }
 
   it should "succeed if given enough phlos for deploy" in effectTest {
-    HashSetCasperTestNode.standaloneEff(genesis).use { node =>
+    TestNode.standaloneEff(genesis).use { node =>
       implicit val timeEff = new LogicalTime[Effect]
 
       for {

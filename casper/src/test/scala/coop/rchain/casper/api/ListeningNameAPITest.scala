@@ -1,8 +1,8 @@
 package coop.rchain.casper.api
 
 import cats.implicits._
-import coop.rchain.casper.helper.HashSetCasperTestNode
-import coop.rchain.casper.helper.HashSetCasperTestNode._
+import coop.rchain.casper.helper.TestNode
+import coop.rchain.casper.helper.TestNode._
 import coop.rchain.casper.protocol._
 import coop.rchain.shared.scalatestcontrib._
 import coop.rchain.casper.util.{ConstructDeploy, GenesisBuilder}
@@ -19,7 +19,7 @@ class ListeningNameAPITest extends FlatSpec with Matchers with Inside {
   val genesis = buildGenesis()
 
   "getListeningNameDataResponse" should "work with unsorted channels" in effectTest {
-    HashSetCasperTestNode.standaloneEff(genesis).use { node =>
+    TestNode.standaloneEff(genesis).use { node =>
       import node._
 
       for {
@@ -45,7 +45,7 @@ class ListeningNameAPITest extends FlatSpec with Matchers with Inside {
   }
 
   it should "work across a chain" in effectTest {
-    HashSetCasperTestNode.networkEff(genesis, networkSize = 3).use { nodes =>
+    TestNode.networkEff(genesis, networkSize = 3).use { nodes =>
       implicit val nodeEngineCell             = nodes(0).engineCell
       implicit val nodeZeroSafetyOracleEffect = nodes(0).cliqueOracleEffect
       implicit val nodeZeroLogEffect          = nodes(0).logEff
@@ -58,9 +58,7 @@ class ListeningNameAPITest extends FlatSpec with Matchers with Inside {
                           _ => ConstructDeploy.basicDeployData[Effect](0)
                         )
 
-        block1 <- nodes(0).addBlock(deployDatas(0))
-        _      <- nodes(1).receive()
-        _      <- nodes(2).receive()
+        block1 <- nodes(0).publishBlock(deployDatas(0))(nodes: _*)
 
         listeningName = Par().copy(exprs = Seq(Expr(GInt(0))))
         resultData    = Par().copy(exprs = Seq(Expr(GInt(0))))
@@ -76,17 +74,9 @@ class ListeningNameAPITest extends FlatSpec with Matchers with Inside {
             blocks1.length should be(1)
             l should be(1)
         }
-        block2 <- nodes(1).addBlock(deployDatas(1))
-        _      <- nodes(0).receive()
-        _      <- nodes(2).receive()
-
-        block3 <- nodes(2).addBlock(deployDatas(2))
-        _      <- nodes(0).receive()
-        _      <- nodes(1).receive()
-
-        block4 <- nodes(0).addBlock(deployDatas(3))
-        _      <- nodes(1).receive()
-        _      <- nodes(2).receive()
+        block2 <- nodes(1).publishBlock(deployDatas(1))(nodes: _*)
+        block3 <- nodes(2).publishBlock(deployDatas(2))(nodes: _*)
+        block4 <- nodes(0).publishBlock(deployDatas(3))(nodes: _*)
 
         listeningNameResponse2 <- BlockAPI.getListeningNameDataResponse[Effect](
                                    Int.MaxValue,
@@ -107,17 +97,9 @@ class ListeningNameAPITest extends FlatSpec with Matchers with Inside {
             blocks2.length should be(4)
             l should be(4)
         }
-        block5 <- nodes(1).addBlock(deployDatas(4))
-        _      <- nodes(0).receive()
-        _      <- nodes(2).receive()
-
-        block6 <- nodes(2).addBlock(deployDatas(5))
-        _      <- nodes(0).receive()
-        _      <- nodes(1).receive()
-
-        block7 <- nodes(0).addBlock(deployDatas(6))
-        _      <- nodes(1).receive()
-        _      <- nodes(2).receive()
+        block5 <- nodes(1).publishBlock(deployDatas(4))(nodes: _*)
+        block6 <- nodes(2).publishBlock(deployDatas(5))(nodes: _*)
+        block7 <- nodes(0).publishBlock(deployDatas(6))(nodes: _*)
 
         listeningNameResponse3 <- BlockAPI.getListeningNameDataResponse[Effect](
                                    Int.MaxValue,
@@ -166,7 +148,7 @@ class ListeningNameAPITest extends FlatSpec with Matchers with Inside {
   }
 
   "getListeningNameContinuationResponse" should "work with unsorted channels" in {
-    HashSetCasperTestNode.standaloneEff(genesis).use { node =>
+    TestNode.standaloneEff(genesis).use { node =>
       import node._
 
       def basicDeployData: DeployData =

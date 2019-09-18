@@ -1,8 +1,8 @@
 package coop.rchain.casper
 
 import cats.implicits._
-import coop.rchain.casper.helper.HashSetCasperTestNode
-import coop.rchain.casper.helper.HashSetCasperTestNode._
+import coop.rchain.casper.helper.TestNode
+import coop.rchain.casper.helper.TestNode._
 import coop.rchain.casper.protocol._
 import coop.rchain.shared.scalatestcontrib._
 import coop.rchain.casper.util.ConstructDeploy
@@ -21,7 +21,7 @@ class MultiParentCasperCommunicationSpec extends FlatSpec with Matchers with Ins
   //put a new casper instance at the start of each
   //test since we cannot reset it
   "MultiParentCasper" should "ask peers for blocks it is missing" in effectTest {
-    HashSetCasperTestNode.networkEff(genesis, networkSize = 3).use { nodes =>
+    TestNode.networkEff(genesis, networkSize = 3).use { nodes =>
       for {
         deploy1 <- ConstructDeploy.sourceDeployNowF("for(_ <- @1){ Nil } | @1!(1)")
 
@@ -85,7 +85,7 @@ class MultiParentCasperCommunicationSpec extends FlatSpec with Matchers with Ins
     def makeDeploy(i: Int): Effect[DeployData] =
       ConstructDeploy.sourceDeployNowF(Vector("@2!(2)", "@1!(1)")(i))
 
-    def stepSplit(nodes: Seq[HashSetCasperTestNode[Effect]]) =
+    def stepSplit(nodes: Seq[TestNode[Effect]]) =
       for {
         _ <- makeDeploy(0) >>= (nodes(0).addBlock(_))
         _ <- makeDeploy(1) >>= (nodes(1).addBlock(_))
@@ -95,7 +95,7 @@ class MultiParentCasperCommunicationSpec extends FlatSpec with Matchers with Ins
         _ <- nodes(2).transportLayerEff.clear(nodes(2).local) //nodes(2) misses this block
       } yield ()
 
-    def stepSingle(nodes: Seq[HashSetCasperTestNode[Effect]]) =
+    def stepSingle(nodes: Seq[TestNode[Effect]]) =
       for {
         _ <- makeDeploy(0) >>= (nodes(0).addBlock(_))
 
@@ -104,14 +104,14 @@ class MultiParentCasperCommunicationSpec extends FlatSpec with Matchers with Ins
         _ <- nodes(2).transportLayerEff.clear(nodes(2).local) //nodes(2) misses this block
       } yield ()
 
-    def propagate(nodes: Seq[HashSetCasperTestNode[Effect]]) =
+    def propagate(nodes: Seq[TestNode[Effect]]) =
       for {
         _ <- nodes(0).receive()
         _ <- nodes(1).receive()
         _ <- nodes(2).receive()
       } yield ()
 
-    HashSetCasperTestNode.networkEff(genesis, networkSize = 3).use { nodes =>
+    TestNode.networkEff(genesis, networkSize = 3).use { nodes =>
       for {
         _ <- stepSplit(nodes) // blocks a1 a2
         _ <- stepSplit(nodes) // blocks b1 b2
@@ -137,7 +137,7 @@ class MultiParentCasperCommunicationSpec extends FlatSpec with Matchers with Ins
   }
 
   it should "handle a long chain of block requests appropriately" in effectTest {
-    HashSetCasperTestNode
+    TestNode
       .networkEff(genesis, networkSize = 2)
       .use { nodes =>
         for {
