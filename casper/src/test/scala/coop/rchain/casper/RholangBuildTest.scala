@@ -45,12 +45,9 @@ class RholangBuildTest extends FlatSpec with Matchers {
           |}
           |""".stripMargin
         for {
-          deploy <- ConstructDeploy.sourceDeployNowF(code)
-          createBlockResult <- MultiParentCasper[Effect]
-                                .deploy(deploy) >> MultiParentCasper[Effect].createBlock
-          Created(signedBlock) = createBlockResult
-          _                    <- MultiParentCasper[Effect].addBlock(signedBlock, ignoreDoppelgangerCheck[Effect])
-          _                    = logEff.warns should be(Nil)
+          deploy      <- ConstructDeploy.sourceDeployNowF(code)
+          signedBlock <- node.addBlock(deploy)
+          _           = logEff.warns should be(Nil)
           _ <- getDataAtPrivateChannel[Effect](
                 signedBlock,
                 Base16.encode(
