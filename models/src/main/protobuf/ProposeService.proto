@@ -1,5 +1,5 @@
 syntax = "proto3";
-package propose.v1;
+package casper.v1;
 
 import "ProposeServiceCommon.proto";
 import "Either.proto";

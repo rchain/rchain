@@ -2,7 +2,7 @@
  * The main API is `DeployService`.
  */
 syntax = "proto3";
-package deploy.v2;
+package casper.v2;
 
 import "CasperMessage.proto";
 import "ServiceError.proto";

@@ -1,5 +1,5 @@
 syntax = "proto3";
-package propose;
+package casper;
 
 // If you are building for other languages "scalapb.proto"
 // can be manually obtained here:

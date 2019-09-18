@@ -1,5 +1,5 @@
 syntax = "proto3";
-package propose.v2;
+package casper.v2;
 
 import "ServiceError.proto";
 import "ProposeServiceCommon.proto";

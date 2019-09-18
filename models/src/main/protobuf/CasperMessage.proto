@@ -2,7 +2,7 @@
  * The main API is `DeployService`.
  */
 syntax = "proto3";
-package deploy;
+package casper;
 
 // If you are building for other languages "scalapb.proto"
 // can be manually obtained here:
