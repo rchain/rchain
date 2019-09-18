@@ -68,7 +68,11 @@ class MultiParentCasperMergeSpec
   }
 
   it should "respect mergeability rules when merging blocks" in effectTest {
-    mergeabilityCases.map(_._2).parSequence
+    baseMergeabilityCases.map(_._2).parSequence
+  }
+
+  it should "respect mergeability rules when merging blocks containing events with peek" in effectTest {
+    peekMergeabilityCases.map(_._2).parSequence
   }
 
   it should "not produce UnusedCommEvent while merging non conflicting blocks in the presence of conflicting ones" in effectTest {
@@ -213,16 +217,16 @@ class MultiParentCasperMergeSpec
         "!C",
         "4X",
         "4!",
-        "4!!",
+        //"4!!",
         "PX",
         "P!",
         "P!!",
-        "!!X",
-        "!!4",
-        "!!C",
+        //"!!X",
+        //"!!4",
+        //"!!C",
         "CX",
-        "C!",
-        "C!!"
+        "C!"
+        //"C!!"
       )
 
       val pairs    = events.combinations(2)
@@ -247,12 +251,12 @@ class MultiParentCasperMergeSpec
       // TODO: Do not filter out missing cases
       withVolatiles
         .map(_.mkString(" "))
-        .filterNot(_.contains("P"))
-        .filterNot(_.contains("!!"))
         .toSet
     }
 
-    val testedMergeabilityCases = mergeabilityCases.map(_._1)
+    val testedMergeabilityCases =
+      (baseMergeabilityCases ++ peekMergeabilityCases)
+        .map(_._1)
     withClue(s"""Missing cases: ${allMergeabilityCases
       .diff(testedMergeabilityCases.toSet)
       .toList

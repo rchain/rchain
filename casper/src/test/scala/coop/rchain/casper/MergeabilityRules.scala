@@ -45,6 +45,27 @@ trait MergeabilityRules {
     }
   }.pure[Effect]
 
+  def volatileEventWithPeekPrecondition(left: Rho*)(right: Rho*)(base: Rho*)(shouldMatch: Boolean)(
+      implicit pos: source.Position
+  ) =
+    volatileEventPrecondition(left: _*)(right: _*)(base: _*) >> {
+      def checkPeeked(remaining: Rho, right: Seq[Rho])(implicit pos: source.Position) = assert(
+        peekedMatches(remaining, right) == shouldMatch,
+        if (shouldMatch) "Expected peeked to match" else "Expected peeked not to match"
+      )
+      assert(atLeastOnePeek(left ++ right))
+      ifOne(left) { left =>
+        if (!hasMatch(left, base))
+          checkPeeked(left, right)
+        else
+          succeed
+      }
+      ifTwo(left) {
+        case (l1, l2) =>
+          checkPeeked(remaining(l1, l2).get, right)
+      }.pure[Effect]
+    }
+
   trait MergeableCase extends TestCase {
     def apply(left: Rho*)(right: Rho*)(
         base: Rho*
@@ -99,19 +120,22 @@ trait MergeabilityRules {
   def allLinear(rho: Seq[Rho])(
       implicit
       pos: source.Position
-  ): Assertion = assert(rho.forall(_.maybeCardinality == Some(Linear)))
+  ): Assertion = assert(rho.forall(_.maybeCardinality === Some(Linear)))
 
-  def allLinearWhenTwo(rho: Seq[Rho])(
+  def noPersistentWhenTwo(rho: Seq[Rho])(
       implicit
       pos: source.Position
   ) = {
     assert(rho.forall(_.maybeCardinality.isDefined))
     if (rho.size == 2)
-      assert(rho.forall(_.maybeCardinality.get == Linear))
+      assert(rho.forall(_.maybeCardinality.get != NonLinear))
   }
 
   def atLeastOnePersistent(rho: Seq[Rho]): Boolean =
-    rho.flatMap(_.maybeCardinality).exists(_ == NonLinear)
+    rho.flatMap(_.maybeCardinality).exists(_ === NonLinear)
+
+  def atLeastOnePeek(rho: Seq[Rho]): Boolean =
+    rho.flatMap(_.maybeCardinality).exists(_ === Peek)
 
   def findMatch(x: Rho, base: Seq[Rho]): Option[Rho] =
     base.find(matches(x, _)).headOption
@@ -121,10 +145,10 @@ trait MergeabilityRules {
 
   def matches(x: Rho, y: Rho): Boolean = {
     val (a, b)    = if (x.maybePolarity == Some(Send)) (x, y) else (y, x)
-    val wildcards = List(F_, C_)
+    val wildcards = List(F_, C_, P_)
     val knownMatches =
-      List(S0, R0).flatMap(s => (F0 :: C0 :: wildcards).map(r => s   -> r)) ++
-        List(S1, R1).flatMap(s => (F1 :: C1 :: wildcards).map(r => s -> r))
+      List(S0, R0).flatMap(s => (F0 :: C0 :: P0 :: wildcards).map(r => s   -> r)) ++
+        List(S1, R1).flatMap(s => (F1 :: C1 :: P1 :: wildcards).map(r => s -> r))
 
     knownMatches.contains(a -> b)
   }
@@ -141,16 +165,53 @@ trait MergeabilityRules {
       r <- right
     } yield matches(l, r)).fold(false)(_ || _)
 
-  def expectOne[A](rhos: Seq[Rho])(f: (Rho) => A): A =
+  def expectOne[A](rhos: Seq[Rho])(f: Rho => A)(
+      implicit
+      pos: source.Position
+  ): A =
     if (rhos.size == 1) {
       val rho1 :: scala.collection.immutable.Nil = rhos.toList
       f(rho1)
     } else fail(s"Expected a single Rho but got $rhos")
 
+  def expectTwo[A](rhos: Seq[Rho])(f: (Rho, Rho) => A)(
+      implicit
+      pos: source.Position
+  ): A =
+    if (rhos.size == 2) {
+      val rho1 :: rho2 :: scala.collection.immutable.Nil = rhos.toList
+      f(rho1, rho2)
+    } else fail(s"Expected two Rhos but got $rhos")
+
+  def ifOne(rhos: Seq[Rho])(f: Rho => Assertion) =
+    if (rhos.size == 1) {
+      val rho1 :: scala.collection.immutable.Nil = rhos.toList
+      f(rho1)
+    }
+
   def ifTwo(rhos: Seq[Rho])(f: (Rho, Rho) => Assertion) =
     if (rhos.size == 2) {
       val rho1 :: rho2 :: scala.collection.immutable.Nil = rhos.toList
       f(rho1, rho2)
+    }
+
+  def remaining(rho1: Rho, rho2: Rho): Option[Rho] = {
+    assert(matches(rho1, rho2))
+    (rho1.maybeCardinality, rho2.maybeCardinality) match {
+      case (Some(NonLinear), _) => Some(rho1)
+      case (_, Some(NonLinear)) => Some(rho2)
+      case (Some(Peek), _)      => Some(rho2)
+      case (_, Some(Peek))      => Some(rho1)
+      case _                    => None
+    }
+  }
+
+  def peekedMatches(remaining: Rho, matchCandidates: Seq[Rho])(implicit pos: source.Position) =
+    expectTwo(matchCandidates) {
+      case (r1, r2) =>
+        assert(matches(r1, r2))
+        val peeked = if (r1.maybeCardinality.contains(Peek)) r2 else r1
+        matches(remaining, peeked)
     }
 
   /***
@@ -195,7 +256,7 @@ trait MergeabilityRules {
       (expectOne(left) { findMatch(_, base) }, expectOne(right) { findMatch(_, base) }) match {
         case (Some(m1), Some(m2)) =>
           assert(
-            m1 == m2 && m1.maybeCardinality == Some(Linear) || m2.maybeCardinality == Some(Linear)
+            m1 == m2 && (!m1.isNonLinear || !m2.isNonLinear)
           )
         case (m1, m2) => fail(s"Expected two matches but got $m1 and $m2")
       }
@@ -219,14 +280,16 @@ trait MergeabilityRules {
       differentPolarities(left)(base)
       differentPolarities(right)(base)
 
-      (expectOne(left) { findMatch(_, base) }, expectOne(right) { findMatch(_, base) }) match {
-        case (Some(m1), Some(m2)) =>
-          assert(
-            m1 != m2 || m1.maybeCardinality == Some(NonLinear) || m2.maybeCardinality == Some(
-              NonLinear
-            )
-          )
-        case (m1, m2) => fail(s"Expected two matches but got $m1 and $m2")
+      expectOne(left) { left =>
+        expectOne(right) { right =>
+          (findMatch(left, base), findMatch(right, base)) match {
+            case (Some(m1), Some(m2)) =>
+              assert(
+                (m1 != m2 || m1.isNonLinear || m2.isNonLinear) || (m1 == m2 && left.isPeek && right.isPeek)
+              )
+            case (m1, m2) => fail(s"Expected two matches but got $m1 and $m2")
+          }
+        }
       }
     }.pure[Effect]
 
@@ -234,7 +297,7 @@ trait MergeabilityRules {
 
   /***
    A send and a receive were incoming, at least one had a match, either:
-   - both were linear
+   - both weren't non-linear
    - one was non-linear, the other had a match
    They couldn't match the same linear event (they have different polarity)
    They couldn't spawn more work, because either:
@@ -252,7 +315,9 @@ trait MergeabilityRules {
         expectOne(right) { right =>
           val (a, b) = if (left.maybeCardinality == Some(Linear)) (left, right) else (right, left)
           assert(
-            a.maybeCardinality == Some(Linear) && (b.maybeCardinality == Some(Linear) || hasMatch(
+            a.maybeCardinality == Some(Linear) && (b.maybeCardinality == Some(Linear) || b.maybeCardinality == Some(
+              Peek
+            ) || hasMatch(
               a,
               base
             ))
@@ -267,7 +332,7 @@ trait MergeabilityRules {
   /***
    An incoming send and an incoming receive could match each other,
    leading to more COMMs needing to happen.
-   Mergeable if we use spatial matcher to prove they don't match.
+   Not mergeable. Determining if the send matches the produce would require re-running the deploys, defeating the purpose of merging rules (knowing if deploys can be merged without replaying them).
     */
   object IncomingCouldMatch extends ConflictingCase {
 
@@ -290,15 +355,15 @@ trait MergeabilityRules {
         left: Rho*
     )(right: Rho*)(base: Rho*)(implicit pos: source.Position): Effect[_] =
       volatileEventPrecondition(left: _*)(right: _*)(base: _*) >> {
-        allLinearWhenTwo(left)
-        allLinearWhenTwo(right)
+        noPersistentWhenTwo(left)
+        noPersistentWhenTwo(right)
       }.pure[Effect]
 
   }
 
   /***
    There was a COMM within one of the deploys, with one side non-linear.
-   The other deploy had an event without a match in TS, dual to the non-linear.
+   The other deploy had an event without a match waiting in TS, dual to the non-linear.
    These could spawn more work.
    Mergeable if we use spatial matcher to prove they don't match.
     */
@@ -314,7 +379,7 @@ trait MergeabilityRules {
 
   /***
    There was a COMM within one of the deploys, with one side non-linear.
-   The other deploy had an event without a match in TS, of same polarity to the non-linear.
+   The other deploy had an event without a match waiting in TS, of same polarity to the non-linear.
    These could not spawn more work.
     */
   object PersistentNoMatch extends MergeableCase {
@@ -328,12 +393,41 @@ trait MergeabilityRules {
 
   }
 
+  /***
+   There was a COMM within one of the deploys caused on one side by a peek.
+   The other deploy had an event without a match waiting in TS, of same polarity to the data matched by peek.
+   These could not spawn more work.
+    */
+  object PeekedNoMatch extends MergeableCase {
+
+    override def precondition(
+        left: Rho*
+    )(right: Rho*)(base: Rho*)(implicit pos: source.Position): Effect[_] =
+      volatileEventWithPeekPrecondition(left: _*)(right: _*)(base: _*)(shouldMatch = false)
+  }
+
+  /***
+   There was a COMM within one of the deploys, with a peek on one side.
+   The other deploy had an event without a match waiting in TS, dual to the peeked.
+   These could spawn more work.
+   Not mergeable. Determining if the send matches the produce would require re-running the deploys, defeating the purpose of merging rules (knowing if deploys can be merged without replaying them).
+    */
+  object PeekedCouldMatch extends ConflictingCase {
+
+    override def precondition(
+        left: Rho*
+    )(right: Rho*)(base: Rho*)(implicit pos: source.Position): Effect[_] =
+      volatileEventWithPeekPrecondition(left: _*)(right: _*)(base: _*)(shouldMatch = true)
+  }
+
   case class Rho(
       value: String,
       maybePolarity: Option[Polarity] = None,
       maybeCardinality: Option[Cardinality] = None
   ) {
     def |(other: Rho): Rho = Rho(s"$value | ${other.value}")
+    def isNonLinear()      = this.maybeCardinality.contains(NonLinear)
+    def isPeek()           = this.maybeCardinality.contains(Peek)
   }
   object Nil extends Rho("Nil")
 
@@ -347,6 +441,10 @@ trait MergeabilityRules {
   val F_ = Rho("for (_ <- @0) { 0 }", Some(Receive), Some(Linear))
   val F0 = Rho("for (@0 <- @0) { 0 }", Some(Receive), Some(Linear))
   val F1 = Rho("for (@1 <- @0) { 0 }", Some(Receive), Some(Linear))
+  // Peeks
+  val P_ = Rho("for (_ <<- @0) { 0 }", Some(Receive), Some(Peek))
+  val P0 = Rho("for (@0 <<- @0) { 0 }", Some(Receive), Some(Peek))
+  val P1 = Rho("for (@1 <<- @0) { 0 }", Some(Receive), Some(Peek))
   // Contracts (persistent receives)
   val C_ = Rho("contract @0(id) = { 0 }", Some(Receive), Some(NonLinear))
   val C0 = Rho("contract @0(@0) = { 0 }", Some(Receive), Some(NonLinear))
@@ -354,7 +452,7 @@ trait MergeabilityRules {
 
   // TODO: Peek rows/column
   // Note this skips pairs that lead to infinite loops
-  val mergeabilityCases = List(
+  val baseMergeabilityCases = List(
     "!X !X"     -> SamePolarityMerge(S0)(S0)(Nil),
     "!X !4"     -> SamePolarityMerge(S0)(S1)(F1),
     "!X (!4)"   -> VolatileEvent(S0)(S0, F_)(Nil),
@@ -446,19 +544,98 @@ trait MergeabilityRules {
     "(C!) (C!)" -> PersistentNoMatch(C_, S0)(C_, S0)(Nil)
   )
 
+  val peekMergeabilityCases = List(
+    "!4 P!"     -> HadItsMatch(S0)(P_)(F0, S1),
+    "!4 (P!)"   -> PeekedNoMatch(S0)(P_, S1)(F0),
+    "!X PX"     -> IncomingCouldMatch(S0)(P_)(Nil),
+    "!4 PX"     -> HadItsMatch(S0)(P_)(F_),
+    "!C PX"     -> HadItsMatch(S0)(P_)(C_),
+    "!X (P!)"   -> PeekedNoMatch(S0)(P_, S0)(Nil),
+    "!X P!"     -> HadItsMatch(S0)(P_)(S0),
+    "(!4) P!"   -> VolatileEvent(S0, F0)(P_)(S1),
+    "(!4) PX"   -> VolatileEvent(S0, F0)(P_)(Nil),
+    "(!C) P!"   -> PersistentNoMatch(S0, C0)(P_)(S1),
+    "(!C) PX"   -> PersistentNoMatch(S0, C_)(P_)(Nil),
+    "(4!) (P!)" -> VolatileEvent(F_, S0)(P_, S0)(Nil),
+    "(4!) P!"   -> PeekedNoMatch(P_)(F0, S0)(S1),
+    "(4!) PX"   -> VolatileEvent(F_, S0)(P_)(Nil),
+    "(P!) (P!)" -> PeekedNoMatch(P_, S0)(P_, S0)(Nil),
+    "(P!) P!"   -> PeekedNoMatch(P_)(P0, S0)(S1),
+    "4! (P!)"   -> PeekedNoMatch(F_)(P1, S1)(S0),
+    // The case below can merge iff peek block is executed as first - conflicts for now
+    "4! P!"     -> CouldMatchSameConflicts(F_)(P_)(S0),
+    "4! P!"     -> CouldMatchSameMerges(F0)(P1)(S0, S1),
+    "4! PX"     -> SamePolarityMerge(F_)(P1)(S0),
+    "4X PX"     -> SamePolarityMerge(F_)(P_)(Nil),
+    "P! (C!)"   -> PersistentNoMatch(P_)(C0, S0)(S1),
+    "P! (P!)"   -> PeekedNoMatch(P_)(P1, S1)(S0),
+    "P! C!"     -> CouldMatchSameConflicts(P_)(C_)(S0),
+    "P! P!"     -> CouldMatchSameMerges(P0)(P1)(S0, S1),
+    "PX (C!)"   -> PersistentNoMatch(P_)(C_, S0)(Nil),
+    "PX (P!)"   -> PeekedCouldMatch(P_)(P_, S0)(Nil),
+    "PX C!"     -> SamePolarityMerge(P0)(C_)(S1),
+    "PX CX"     -> SamePolarityMerge(P_)(C_)(Nil),
+    "PX PX"     -> SamePolarityMerge(P_)(P_)(Nil),
+    "!C P!"     -> HadItsMatch(S0)(P_)(C0, S1),
+    "(!4) (P!)" -> VolatileEvent(S0, F_)(P_, S0)(Nil),
+    "!C (P!)"   -> PeekedNoMatch(S0)(P_, S1)(C0),
+    "(P!) (C!)" -> PeekedCouldMatch(P_, S0)(C_, S0)(Nil),
+    "(!C) (P!)" -> PeekedCouldMatch(S0, C_)(P_, S0)(Nil),
+    "(P!) C!"   -> PeekedCouldMatch(C_)(P0, S0)(S1),
+    "(P!) CX"   -> PeekedCouldMatch(C_)(P_, S0)(Nil),
+    "4X (P!)"   -> PeekedCouldMatch(F_)(P_, S0)(Nil),
+    "P! CX"     -> SamePolarityMerge(P_)(C1)(S0),
+    "4X P!"     -> SamePolarityMerge(F0)(P_)(S1),
+    "PX P!"     -> SamePolarityMerge(P0)(P_)(S1),
+    // TODO:
+    "P! P!"       -> CouldMatchSameConflicts(P_)(P_)(S0), // conflicts until replay errors are fixed
+    "!4 (P!!)"    -> PeekedCouldMatch(S0)(P_, R0)(F0),
+    "!4 P!!"      -> HadItsMatch(S0)(P_)(F0, R1),
+    "!C (P!!)"    -> PeekedNoMatch(S0)(R1, P_)(C_),
+    "!C P!!"      -> HadItsMatch(S0)(P_)(C0, R1),
+    "!X (P!!)"    -> PeekedNoMatch(S0)(P_, R0)(Nil),
+    "!X P!!"      -> HadItsMatch(S0)(P_)(R0),
+    "(!4) (P!!)"  -> PersistentNoMatch(S0, F0)(P_, R0)(Nil),
+    "(!4) P!!"    -> VolatileEvent(S0, F0)(P_)(R1),
+    "(!C) (P!!)"  -> PersistentCouldMatch(S0, C_)(P_, R0)(Nil),
+    "(!C) P!!"    -> PersistentNoMatch(S0, C0)(P_)(R1),
+    "(4!) (P!!)"  -> PersistentNoMatch(F_, S0)(P_, R0)(Nil),
+    "(4!) P!!"    -> VolatileEvent(F_, S0)(P_)(R1),
+    "(P!!) (C!)"  -> PersistentCouldMatch(P_, R0)(C_, S0)(Nil),
+    "(P!!) (P!!)" -> PeekedNoMatch(P_, R0)(P_, R0)(Nil),
+    "(P!!) C!"    -> PeekedCouldMatch(C_)(P_, R0)(S1),
+    "(P!!) CX"    -> PeekedCouldMatch(C_)(P_, R0)(Nil),
+    "(P!!) P!!"   -> PeekedNoMatch(P_)(P_, R1)(R0),
+    "(P!) (P!!)"  -> PersistentNoMatch(P_, S0)(P_, R0)(Nil),
+    "(P!) P!!"    -> PeekedNoMatch(P_)(P_, S0)(R0),
+    "4! (P!!)"    -> PersistentNoMatch(F_)(P1, R1)(S0),
+    "4! P!!"      -> CouldMatchSameMerges(F0)(P1)(S0, R1),
+    "4X (P!!)"    -> PersistentCouldMatch(F_)(P_, R0)(Nil),
+    "4X P!!"      -> CouldMatchSameMerges(F_)(P_)(R0),
+    "P! (P!!)"    -> PersistentNoMatch(P_)(P1, R1)(S0),
+    "P! P!!"      -> CouldMatchSameMerges(P0)(P1)(S0, R1),
+    "P!! (C!)"    -> PersistentNoMatch(P_)(C_, S0)(R0),
+    "P!! (P!!)"   -> PersistentNoMatch(P_)(P_, R1)(R0),
+    "P!! C!"      -> CouldMatchSameMerges(P0)(C1)(R0, S1),
+    "P!! CX"      -> SamePolarityMerge(P_)(C1)(R0),
+    "P!! P!!"     -> CouldMatchSameMerges(P_)(P_)(R0),
+    "PX (P!!)"    -> PersistentCouldMatch(P_)(P_, R0)(Nil),
+    "PX P!!"      -> SamePolarityMerge(P1)(P_)(R0)
+  )
+
   private[this] def conflicts(b1: Rho, b2: Rho, base: Rho)(
       implicit file: sourcecode.File,
       line: sourcecode.Line
   ) =
-    randomDiamondConflictCheck(base, b1, b2, numberOfParentsForDiamondTip = 1)
+    checkBothWays(base, b1, b2, numberOfParentsForDiamondTip = 1)
 
   def merges(b1: Rho, b2: Rho, base: Rho)(
       implicit file: sourcecode.File,
       line: sourcecode.Line
   ) =
-    randomDiamondConflictCheck(base, b1, b2, numberOfParentsForDiamondTip = 2)
+    checkBothWays(base, b1, b2, numberOfParentsForDiamondTip = 2)
 
-  private[this] def randomDiamondConflictCheck(
+  def randomDiamondConflictCheck(
       base: Rho,
       b1: Rho,
       b2: Rho,
@@ -467,6 +644,15 @@ trait MergeabilityRules {
     val shuffledBlocks = shuffle(Seq(b1, b2))
     diamondConflictCheck(base, shuffledBlocks(0), shuffledBlocks(1), numberOfParentsForDiamondTip)
   }
+
+  private[this] def checkBothWays(
+      base: Rho,
+      b1: Rho,
+      b2: Rho,
+      numberOfParentsForDiamondTip: Int
+  )(implicit file: sourcecode.File, line: sourcecode.Line): Effect[Unit] =
+    diamondConflictCheck(base, b1, b2, numberOfParentsForDiamondTip) >>
+      diamondConflictCheck(base, b2, b1, numberOfParentsForDiamondTip)
 
   private[this] def coveredBy(equivalent: String) = ().pure[Effect]
 

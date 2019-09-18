@@ -104,9 +104,10 @@ object EstimatorHelper {
   }
 
   private[this] def isVolatile(comm: COMM, consumes: Set[Consume], produces: Set[Produce]) =
-    !comm.consume.persistent && consumes.contains(comm.consume) && comm.produces.forall(
-      produce => !produce.persistent && produces.contains(produce)
-    )
+    !comm.consume.persistent && comm.peeks.isEmpty && consumes.contains(comm.consume) && comm.produces
+      .forall(
+        produce => !produce.persistent && produces.contains(produce)
+      )
 
   private[this] def allChannels(events: BlockEvents) =
     events.produces.map(_.channelsHash).toSet ++ events.consumes
@@ -153,8 +154,13 @@ object EstimatorHelper {
   ): Map[Blake2b256Hash, Set[TuplespaceEvent]] = {
     val nonPersistentProducesInComms = b.comms.flatMap(_.produces).filterNot(_.persistent)
     val nonPersistentConsumesInComms = b.comms.map(_.consume).filterNot(_.persistent)
-    val freeProduces                 = b.produces.diff(nonPersistentProducesInComms)
-    val freeConsumes                 = b.consumes.diff(nonPersistentConsumesInComms)
+    val peekedProducesInCommsHashes =
+      b.comms.withFilter(_.peeks.nonEmpty).flatMap(_.produces).map(_.hash)
+
+    val freeProduces = b.produces
+      .diff(nonPersistentProducesInComms)
+      .filterNot(p => peekedProducesInCommsHashes.contains(p.hash))
+    val freeConsumes = b.consumes.diff(nonPersistentConsumesInComms)
 
     val produceEvents = freeProduces.map(TuplespaceEvent.from(_))
     val consumeEvents = freeConsumes.flatMap(TuplespaceEvent.from(_))
