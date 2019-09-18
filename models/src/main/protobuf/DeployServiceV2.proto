@@ -15,9 +15,8 @@ import "DeployServiceCommon.proto";
 
 import "scalapb/scalapb.proto";
 
-option java_package = "coop.rchain.casper.protocol.deployV2";
-
 option (scalapb.options) = {
+  package_name: "coop.rchain.casper.protocol.deployV2"
   flat_package: true
   single_file: true
 };

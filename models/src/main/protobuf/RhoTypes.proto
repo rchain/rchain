@@ -5,12 +5,15 @@
  */
 syntax = "proto3";
 
-// See CapserMessage.proto if this is causing problems
+// If you are building for other languages "scalapb.proto"
+// can be manually obtained here:
+// https://raw.githubusercontent.com/scalapb/ScalaPB/master/protobuf/scalapb/scalapb.proto
+// make a scalapb directory in this file's location and place it inside
+
 import "scalapb/scalapb.proto";
 
-option java_package = "coop.rchain.models";
-
 option (scalapb.options) = {
+  package_name: "coop.rchain.models"
   import: "coop.rchain.models.BitSetBytesMapper.bitSetBytesMapper"
   import: "coop.rchain.models.ParSetTypeMapper.parSetESetTypeMapper"
   import: "coop.rchain.models.ParMapTypeMapper.parMapEMapTypeMapper"
