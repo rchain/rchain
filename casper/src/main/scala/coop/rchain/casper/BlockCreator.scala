@@ -3,6 +3,7 @@ package coop.rchain.casper
 import cats.Monad
 import cats.effect.Sync
 import cats.implicits._
+import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockStore
 import coop.rchain.blockstorage.dag.BlockDagRepresentation
 import coop.rchain.casper.CasperState.CasperStateCell
@@ -36,7 +37,7 @@ object BlockCreator {
    *  3. Extract all valid deploys that aren't already in all ancestors of S (the parents).
    *  4. Create a new block that contains the deploys from the previous step.
    */
-  def createBlock[F[_]: Sync: Log: Time: BlockStore](
+  def createBlock[F[_]: Sync: Log: Time: BlockStore: SynchronyConstraintChecker](
       dag: BlockDagRepresentation[F],
       genesis: BlockMessage,
       publicKey: PublicKey,
@@ -52,6 +53,7 @@ object BlockCreator {
       spanF: Span[F]
   ): F[CreateBlockStatus] =
     spanF.trace(CreateBlockMetricsSource) {
+      val validator = ByteString.copyFrom(publicKey.bytes)
       for {
         tipHashes             <- Estimator.tips[F](dag, genesis)
         _                     <- spanF.mark("after-estimator")
@@ -86,18 +88,23 @@ object BlockCreator {
         invalidBlocksSet <- dag.invalidBlocks
         invalidBlocks    = invalidBlocksSet.map(block => (block.blockHash, block.sender)).toMap
         unsignedBlock <- if (deploys.nonEmpty) {
-                          processDeploysAndCreateBlock[F](
-                            dag,
-                            runtimeManager,
-                            parents,
-                            deploys,
-                            justifications,
-                            maxBlockNumber,
-                            shardId,
-                            version,
-                            now,
-                            invalidBlocks
-                          )
+                          SynchronyConstraintChecker[F]
+                            .check(dag, runtimeManager, genesis, validator)
+                            .ifM(
+                              processDeploysAndCreateBlock[F](
+                                dag,
+                                runtimeManager,
+                                parents,
+                                deploys,
+                                justifications,
+                                maxBlockNumber,
+                                shardId,
+                                version,
+                                now,
+                                invalidBlocks
+                              ),
+                              CreateBlockStatus.notEnoughNewBlocks.pure[F]
+                            )
                         } else {
                           CreateBlockStatus.noNewDeploys.pure[F]
                         }

@@ -235,23 +235,17 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: ConnectionsCell: TransportLa
       case Some(ValidatorIdentity(publicKey, privateKey, sigAlgorithm)) =>
         BlockDagStorage[F].getRepresentation
           .flatMap { dag =>
-            val validator = ByteString.copyFrom(publicKey.bytes)
-            SynchronyConstraintChecker[F]
-              .check(dag, runtimeManager, genesis, validator)
-              .ifM(
-                BlockCreator
-                  .createBlock(
-                    dag,
-                    genesis,
-                    publicKey,
-                    privateKey,
-                    sigAlgorithm,
-                    shardId,
-                    version,
-                    expirationThreshold,
-                    runtimeManager
-                  ),
-                CreateBlockStatus.notEnoughNewBlocks.pure[F]
+            BlockCreator
+              .createBlock(
+                dag,
+                genesis,
+                publicKey,
+                privateKey,
+                sigAlgorithm,
+                shardId,
+                version,
+                expirationThreshold,
+                runtimeManager
               )
           }
           .flatMap {
