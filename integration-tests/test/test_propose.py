@@ -4,6 +4,7 @@ from random import Random
 import pytest
 
 from rchain.crypto import PrivateKey
+from .common import ParsingError
 from .rnode import (
     Node,
     extract_validator_stake_from_deploy_cost_str,
@@ -51,3 +52,18 @@ def test_find_block_by_deploy_id(started_standalone_bootstrap_node: Node, random
 
     # block_hash is not a full hash but omiited one like 1964aa120ae
     assert block_info['blockHash'][:10] == block_hash[:10]
+
+
+def test_deploy_invalid_contract(started_standalone_bootstrap_node: Node) -> None:
+    shutil.copyfile('resources/invalid.rho', os.path.join(started_standalone_bootstrap_node.local_deploy_dir, 'invalid.rho'))
+    invalid_contract_path = os.path.join(started_standalone_bootstrap_node.remote_deploy_dir, 'invalid.rho')
+
+
+    with pytest.raises(ParsingError):
+        started_standalone_bootstrap_node.deploy(invalid_contract_path, DEPLOY_KEY)
+
+    started_standalone_bootstrap_node.deploy('/opt/docker/examples/hello_world_again.rho', DEPLOY_KEY)
+    block_hash = started_standalone_bootstrap_node.propose()
+    output = started_standalone_bootstrap_node.show_block(block_hash)
+    block_info = parse_show_block_output(output)
+    assert block_info['deployCount'] == '1'

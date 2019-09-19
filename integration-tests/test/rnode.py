@@ -33,6 +33,7 @@ from .common import (
     TestingContext,
     NonZeroExitCodeError,
     GetBlockError,
+    ParsingError,
 )
 from .wait import (
     wait_for_node_started,
@@ -312,9 +313,15 @@ class Node:
         return self.rnode_command('eval', rho_file_path)
 
     def deploy(self, rho_file_path: str, private_key: PrivateKey) -> str:
-        output = self.rnode_command('deploy', '--private-key={}'.format(private_key.to_hex()), '--phlo-limit=1000000', '--phlo-price=1', rho_file_path, stderr=False)
-        deploy_id = extract_deploy_id_from_deploy_output(output)
-        return deploy_id
+        try:
+            output = self.rnode_command('deploy', '--private-key={}'.format(private_key.to_hex()), '--phlo-limit=1000000', '--phlo-price=1', rho_file_path, stderr=False)
+            deploy_id = extract_deploy_id_from_deploy_output(output)
+            return deploy_id
+        except NonZeroExitCodeError as e:
+            if "Parsing error" in e.output:
+                raise ParsingError(command=e.command, exit_code=e.exit_code, output=e.output)
+            # TODO out of phlogiston error
+            raise e
 
     def get_vdag(self) -> str:
         return self.rnode_command('vdag')

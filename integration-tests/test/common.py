@@ -57,6 +57,10 @@ class GetBlockError(NonZeroExitCodeError):
     pass
 
 
+class ParsingError(NonZeroExitCodeError):
+    pass
+
+
 class WaitTimeoutError(Exception):
     def __init__(self, predicate: 'PredicateProtocol', timeout: int) -> None:
         super().__init__()
