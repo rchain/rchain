@@ -50,8 +50,10 @@ object TuplespaceEvent {
         val produceOp = toOperation(produce)
         val consumeOp = toOperation(consume, peeks.nonEmpty)
 
+        def peekInitiated = comm.timesRepeated(produce) != 0
         val incoming: TuplespaceOperation =
-          if (incomingConsumes.contains(consume)) consumeOp else produceOp
+          if (incomingConsumes.contains(consume) && !peekInitiated) consumeOp
+          else produceOp
 
         val matched: Option[TuplespaceOperation] = Some(
           if (incoming == produceOp) consumeOp
