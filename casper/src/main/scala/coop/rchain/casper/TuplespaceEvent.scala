@@ -77,10 +77,8 @@ object TuplespaceEvent {
           otherMatched <- other.matched
         } yield thisMatched == otherMatched && otherMatched.cardinality != NonLinear
 
-        if (bothPeeks) {
-          // TODO - should always return false
-          bothMatchedSameNonPersistentEvent.getOrElse(false)
-        } else bothMatchedSameNonPersistentEvent.getOrElse(false)
+        if (bothPeeks) false
+        else bothMatchedSameNonPersistentEvent.getOrElse(false)
 
       } else ev.unsatisfied && other.unsatisfied
 
