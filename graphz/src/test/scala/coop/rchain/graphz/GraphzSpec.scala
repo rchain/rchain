@@ -1,13 +1,15 @@
 package coop.rchain.graphz
 
-import cats._, cats.data._, cats.implicits._
-import cats.mtl._
+import cats._
+import cats.data._
+import cats.implicits._
 import cats.mtl.implicits._
+
 import org.scalatest._
 
 class GraphzSpec extends FunSpec with Matchers with BeforeAndAfterEach with AppendedClues {
 
-  type Effect[A] = StateT[Id, StringBuffer, A]
+  type Effect[A] = State[StringBuffer, A]
 
   implicit val ser = new StringSerializer[Effect]
 
@@ -334,14 +336,21 @@ class GraphzSpec extends FunSpec with Matchers with BeforeAndAfterEach with Appe
       )
     }
 
+    it("Huge graph") { // test for a stack overflow
+      val graph = for {
+        g <- Graphz[Effect]("G", DiGraph)
+        _ <- (1 to 1000).toList.traverse(i => g.edge(s"e$i" -> s"e${i + 1}"))
+        _ <- g.close
+      } yield g
+      graph.show // ignore
+    }
   }
 
   implicit class GraphzOps(graph: Effect[Graphz[Effect]]) {
     def show: String =
-      graph.runS(new StringBuffer).toString
+      graph.runS(new StringBuffer).value.toString
 
-    import java.io.File
-    import java.io.PrintWriter
+    import java.io.{File, PrintWriter}
 
     def view(): Unit = {
       val sourcePath = "/Users/rabbit/temp.gv"
