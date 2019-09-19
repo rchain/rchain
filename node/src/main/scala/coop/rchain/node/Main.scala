@@ -134,6 +134,7 @@ object Main {
       case Keygen(algorithm, privateKeyPath) => generateKey(conf, algorithm, privateKeyPath)
       case LastFinalizedBlock                => DeployRuntime.lastFinalizedBlock[Task]
       case IsFinalized(hash)                 => DeployRuntime.isFinalized[Task](hash)
+      case BondStatus(publicKey)             => DeployRuntime.bondStatus[Task](publicKey)
       case Run                               => nodeProgram(conf)
       case _                                 => conf.printHelp()
     }

@@ -6,7 +6,7 @@ import scala.concurrent.duration.FiniteDuration
 
 import coop.rchain.casper.util.comm.ListenAtName.Name
 import coop.rchain.comm.PeerNode
-import coop.rchain.crypto.PrivateKey
+import coop.rchain.crypto.{PrivateKey, PublicKey}
 
 final case class Server(
     networkId: String,
@@ -79,6 +79,7 @@ final case object Run                                                      exten
 final case class Keygen(algorithm: String, privateKeyPath: Path)           extends Command
 final case object LastFinalizedBlock                                       extends Command
 final case class IsFinalized(hash: String)                                 extends Command
+final case class BondStatus(publicKey: PublicKey)                          extends Command
 final case object Help                                                     extends Command
 final case class DataAtName(name: Name)                                    extends Command
 final case class ContAtName(names: List[Name])                             extends Command

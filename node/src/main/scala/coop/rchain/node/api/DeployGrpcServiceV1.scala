@@ -204,5 +204,12 @@ object DeployGrpcServiceV1 {
           import IsFinalizedResponse.Message._
           IsFinalizedResponse(r.fold[Message](Error, IsFinalized))
         }
+
+      def bondStatus(request: BondStatusQuery): Task[BondStatusResponse] =
+        defer(BlockAPI.bondStatus[F](request.publicKey)) { r =>
+          import BondStatusResponse.Message
+          import BondStatusResponse.Message._
+          BondStatusResponse(r.fold[Message](Error, IsBonded))
+        }
     }
 }
