@@ -167,6 +167,28 @@ class CreateBlockAPITest extends FlatSpec with Matchers with EitherValues {
           } yield ()
       }
   }
+
+  it should "check for new deploys before checking synchrony constraint" in effectTest {
+    TestNode
+      .networkEff(genesis, networkSize = 4, synchronyConstraintThreshold = 1d / 3d)
+      .use {
+        case nodes @ n1 +: n2 +: _ +: _ +: Seq() =>
+          import n1.{logEff, metricEff, span, timeEff}
+          val engine = new EngineWithCasper[Task](n1.casperEff)
+          for {
+            deploys      <- (0 until 3).toList.traverse(i => basicDeployData[Task](i))
+            engineCell   <- Cell.mvarCell[Task, Engine[Task]](engine)
+            blockApiLock <- Semaphore[Effect](1)
+
+            b1 <- n1.publishBlock(deploys(0))(nodes: _*)
+            b2 <- n2.publishBlock(deploys(1))(nodes: _*)
+
+            b3Status <- createBlock(blockApiLock)(engineCell)
+
+            _ = b3Status.left.value should include("NoNewDeploys")
+          } yield ()
+      }
+  }
 }
 
 private class SleepingMultiParentCasperImpl[F[_]: Monad: Time](underlying: MultiParentCasper[F])
