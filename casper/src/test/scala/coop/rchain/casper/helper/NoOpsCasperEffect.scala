@@ -1,6 +1,5 @@
 package coop.rchain.casper.helper
 
-import coop.rchain.casper.CasperMessageFactory._
 import cats.effect.{Resource, Sync}
 import cats.implicits._
 import cats.{Applicative, Monad}
@@ -10,7 +9,7 @@ import coop.rchain.blockstorage.dag.BlockDagStorage.DeployId
 import coop.rchain.blockstorage.BlockStore
 import coop.rchain.casper._
 import coop.rchain.casper.DeployError
-import coop.rchain.casper.protocol.{BlockMessage, DeployData}
+import coop.rchain.casper.protocol.{BlockMessage, DeployData, Dummies}
 import coop.rchain.casper.util.rholang.Resources.mkRuntimeManager
 import coop.rchain.casper.util.rholang.RuntimeManager
 import coop.rchain.casper.{BlockStatus, CreateBlockStatus, MultiParentCasper}
@@ -44,7 +43,7 @@ class NoOpsCasperEffect[F[_]: Sync: BlockStore: BlockDagStorage] private (
   def createBlock: F[CreateBlockStatus]                               = CreateBlockStatus.noNewDeploys.pure[F]
   def blockDag: F[BlockDagRepresentation[F]]                          = BlockDagStorage[F].getRepresentation
   def normalizedInitialFault(weights: Map[Validator, Long]): F[Float] = 0f.pure[F]
-  def lastFinalizedBlock: F[BlockMessage]                             = createBlockMessage().pure[F]
+  def lastFinalizedBlock: F[BlockMessage]                             = Dummies.createBlockMessage().pure[F]
   def getRuntimeManager: F[RuntimeManager[F]]                         = runtimeManager.pure[F]
   def fetchDependencies: F[Unit]                                      = ().pure[F]
 }
@@ -60,7 +59,7 @@ object NoOpsCasperEffect {
           }
     } yield new NoOpsCasperEffect[F](MutableMap(blocks.toSeq: _*), estimatorFunc)
   def apply[F[_]: Sync: BlockStore: BlockDagStorage: RuntimeManager](): F[NoOpsCasperEffect[F]] =
-    apply(Map(ByteString.EMPTY -> createBlockMessage()), Vector(ByteString.EMPTY))
+    apply(Map(ByteString.EMPTY -> Dummies.createBlockMessage()), Vector(ByteString.EMPTY))
   def apply[F[_]: Sync: BlockStore: BlockDagStorage: RuntimeManager](
       blocks: Map[BlockHash, BlockMessage]
   ): F[NoOpsCasperEffect[F]] =

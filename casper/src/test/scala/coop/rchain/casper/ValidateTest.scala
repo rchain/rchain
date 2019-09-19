@@ -1,7 +1,5 @@
 package coop.rchain.casper
 
-import CasperMessageFactory._
-
 import java.nio.file.Files
 import cats.Monad
 import cats.implicits._
@@ -261,7 +259,10 @@ class ValidateTest
       ): Task[BlockMessage] =
         Time[Task].currentMillis >>= { timestamp =>
           val blockWithNumber: BlockMessage =
-            createBlockMessage(header = createHeader(parentHashes.toList, timestamp = timestamp))
+            Dummies
+              .createBlockMessage(
+                header = Dummies.createHeader(parentHashes.toList, timestamp = timestamp)
+              )
               .withBlockNumber(n)
           val hash  = ProtoUtil.hashUnsignedBlock(blockWithNumber.header, Nil)
           val block = blockWithNumber.copy(blockHash = hash)
@@ -530,7 +531,7 @@ class ValidateTest
                       )
         _ <- Validate.blockSummary[Task](
               signedBlock,
-              createBlockMessage(),
+              Dummies.createBlockMessage(),
               dag,
               "rchain",
               Int.MaxValue
@@ -676,7 +677,7 @@ class ValidateTest
           Justification(validators(0), b1.blockHash),
           Justification(validators(1), b4.blockHash)
         )
-        blockWithJustificationRegression = createBlockMessage(
+        blockWithJustificationRegression = Dummies.createBlockMessage(
           sender = validators(1),
           justifications = justificationsWithRegression.toList
         )

@@ -7,7 +7,7 @@ import com.google.protobuf.ByteString
 import coop.rchain.blockstorage._
 import coop.rchain.blockstorage.dag._
 import coop.rchain.casper.CasperMetricsSource
-import coop.rchain.casper._, CasperMessageFactory._
+import coop.rchain.casper._
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.casper.util.rholang.InterpreterUtil.computeDeploysCheckpoint
@@ -98,25 +98,25 @@ trait BlockGenerator {
       seqNum: Int = 0
   ): F[BlockMessage] =
     Time[F].currentMillis.map(now => {
-      val postState: RChainState = createRChainState(
+      val postState: RChainState = Dummies.createRChainState(
         preStateHash = preStateHash,
         postStateHash = tsHash,
         bonds = bonds.toList
       )
-      val header = createHeader(
+      val header = Dummies.createHeader(
         parentHashes = parentsHashList.toList,
         deploysHash = ProtoUtil.protoSeqHash(deploys.map(_.toProto)),
         timestamp = now
       )
       val blockHash = Blake2b256.hash(header.toProto.toByteArray)
-      val body      = createBody(state = postState, deploys = deploys.toList)
+      val body      = Dummies.createBody(state = postState, deploys = deploys.toList)
       val serializedJustifications = justifications.toList.map {
         case (cr: Validator, latestBlockHash: BlockHash) =>
           Justification(cr, latestBlockHash)
       }
       val serializedBlockHash = ByteString.copyFrom(blockHash)
 
-      createBlockMessage(
+      Dummies.createBlockMessage(
         blockHash = serializedBlockHash,
         header = header,
         body = body,

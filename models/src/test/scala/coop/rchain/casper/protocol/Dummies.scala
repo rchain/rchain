@@ -1,13 +1,8 @@
-package coop.rchain.casper
+package coop.rchain.casper.protocol
 
-import coop.rchain.casper.protocol._
 import com.google.protobuf.ByteString
 
-/** "Fun" way to create CasperMessage objects for tests
-  *  This how things were done with protobufs anyway, so no harm there
-  *  It might get deleted in upcoming PRs
-  */
-object CasperMessageFactory {
+object Dummies {
 
   def createBlockMessage(
       blockHash: ByteString = ByteString.EMPTY,

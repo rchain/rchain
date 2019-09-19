@@ -1,7 +1,7 @@
 package coop.rchain.casper.engine
 
 import com.google.protobuf.ByteString
-import coop.rchain.casper._, CasperMessageFactory._
+import coop.rchain.casper._
 import coop.rchain.casper.helper.NoOpsCasperEffect
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.GenesisBuilder
@@ -45,7 +45,7 @@ class RunningSpec extends WordSpec {
 
     "respond to BlockMessage messages " in {
       val blockMessage =
-        createBlockMessage(blockHash = ByteString.copyFrom("Test BlockMessage", "UTF-8"))
+        Dummies.createBlockMessage(blockHash = ByteString.copyFrom("Test BlockMessage", "UTF-8"))
       val test: Task[Unit] = for {
         _ <- engine.handle(local, blockMessage)
         _ = assert(casper.store.contains(blockMessage.blockHash))

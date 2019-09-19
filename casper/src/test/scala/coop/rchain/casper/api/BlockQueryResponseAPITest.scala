@@ -1,6 +1,5 @@
 package coop.rchain.casper.api
 
-import coop.rchain.casper.CasperMessageFactory._
 import cats.effect.{Resource, Sync}
 import cats.implicits._
 import com.google.protobuf.ByteString
@@ -54,11 +53,11 @@ class BlockQueryResponseAPITest
     val genesisHash = ProtoUtil.stringToByteString(genesisHashString)
     val blockNumber = 0L
     val timestamp   = 1527191663L
-    val ps          = createRChainState(blockNumber = blockNumber, bonds = List(bondsValidator))
-    val body        = createBody(state = ps)
+    val ps          = Dummies.createRChainState(blockNumber = blockNumber, bonds = List(bondsValidator))
+    val body        = Dummies.createBody(state = ps)
     val header      = ProtoUtil.blockHeader(body, Seq.empty[ByteString], version, timestamp)
 
-    createBlockMessage(blockHash = genesisHash, header = header, body = body)
+    Dummies.createBlockMessage(blockHash = genesisHash, header = header, body = body)
   }
   val genesisBlock: BlockMessage = genesisBlock(genesisHashString, version)
 
@@ -66,19 +65,20 @@ class BlockQueryResponseAPITest
   val blockHash: BlockHash = ProtoUtil.stringToByteString(secondHashString)
   val blockNumber          = 1L
   val timestamp            = 1527191665L
-  val ps: RChainState      = createRChainState(blockNumber = blockNumber, bonds = List(bondsValidator))
-  val deployCount          = 10
+  val ps: RChainState =
+    Dummies.createRChainState(blockNumber = blockNumber, bonds = List(bondsValidator))
+  val deployCount = 10
   val randomDeploys =
     (0 until deployCount).toList
       .traverse(i => ConstructDeploy.basicProcessedDeploy[Task](i))
       .unsafeRunSync(scheduler)
-  val body: Body                       = createBody(state = ps, deploys = randomDeploys)
+  val body: Body                       = Dummies.createBody(state = ps, deploys = randomDeploys)
   val parentsString                    = List(genesisHashString, "0000000001")
   val parentsHashList: List[BlockHash] = parentsString.map(ProtoUtil.stringToByteString)
   val header: Header                   = ProtoUtil.blockHeader(body, parentsHashList, version, timestamp)
   val shardId: String                  = "abcdefgh"
   val secondBlock: BlockMessage =
-    createBlockMessage(
+    Dummies.createBlockMessage(
       blockHash = blockHash,
       header = header,
       body = body,

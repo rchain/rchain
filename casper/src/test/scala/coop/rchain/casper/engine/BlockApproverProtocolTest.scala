@@ -2,7 +2,6 @@ package coop.rchain.casper.engine
 
 import cats.Traverse
 import cats.implicits._
-import coop.rchain.casper.CasperMessageFactory._
 import coop.rchain.casper.genesis.contracts.Vault
 import coop.rchain.casper.helper.TestNode
 import coop.rchain.casper.helper.TestNode._
@@ -47,7 +46,7 @@ class BlockApproverProtocolTest extends FlatSpec with Matchers {
       case (approver, node) =>
         val differentUnapproved1 = createUnapproved(approver.requiredSigs / 2, node.genesis) //wrong number of signatures
         val differentUnapproved2 =
-          createUnapproved(approver.requiredSigs, createBlockMessage()) //wrong block
+          createUnapproved(approver.requiredSigs, Dummies.createBlockMessage()) //wrong block
         import node._
 
         for {
