@@ -99,15 +99,13 @@ trait BlockStoreTest
           _ <- items.traverse_[Task, Assertion] {
                 case (k, v1, _) => store.get(k).map(_ shouldBe Some(v1))
               }
-          /*
+
           _ <- items.traverse_[Task, Unit] { case (k, _, v2) => store.put(k, v2) }
           _ <- items.traverse_[Task, Assertion] {
                 case (k, _, v2) => store.get(k).map(_ shouldBe Some(v2))
               }
           result <- store.find(_ => true).map(_.size shouldEqual items.size)
         } yield result
-         */
-        } yield ()
       }
     }
 
