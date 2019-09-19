@@ -3,7 +3,6 @@ package coop.rchain.casper.api
 import cats.Monad
 import cats.effect.concurrent.Semaphore
 import cats.implicits._
-
 import coop.rchain.casper.MultiParentCasper.ignoreDoppelgangerCheck
 import coop.rchain.casper.engine._
 import EngineCell._
@@ -19,18 +18,18 @@ import coop.rchain.casper.util._
 import coop.rchain.casper.util.ConstructDeploy.basicDeployData
 import coop.rchain.casper.util.rholang._
 import coop.rchain.catscontrib.TaskContrib._
+import coop.rchain.crypto.signatures.Secp256k1
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.Validator.Validator
 import coop.rchain.p2p.EffectsTestInstances._
 import coop.rchain.shared.{Cell, Log, Time}
 import coop.rchain.shared.scalatestcontrib._
-
 import monix.eval.Task
 import monix.execution.Scheduler
 import org.scalatest.{EitherValues, FlatSpec, Matchers}
-import scala.concurrent.duration._
 
+import scala.concurrent.duration._
 import coop.rchain.metrics
 
 class CreateBlockAPITest extends FlatSpec with Matchers with EitherValues {
@@ -51,8 +50,10 @@ class CreateBlockAPITest extends FlatSpec with Matchers with EitherValues {
       span
     )
 
+  val validatorKeyPairs = (1 to 5).map(_ => Secp256k1.newKeyPair)
   val genesisParameters = buildGenesisParameters(
-    bondsFunction = _.zip(List(10L, 10L, 10L, 10L)).toMap
+    validatorKeyPairs,
+    validatorKeyPairs.map(_._2).zip(List.fill(5)(10L)).toMap
   )
   val genesis = buildGenesis(genesisParameters)
 
@@ -121,9 +122,9 @@ class CreateBlockAPITest extends FlatSpec with Matchers with EitherValues {
 
   it should "not allow proposals without enough new blocks from other validators" in effectTest {
     TestNode
-      .networkEff(genesis, networkSize = 4, synchronyConstraintThreshold = 1d / 3d)
+      .networkEff(genesis, networkSize = 5, synchronyConstraintThreshold = 1d / 3d)
       .use {
-        case nodes @ n1 +: n2 +: _ +: _ +: Seq() =>
+        case nodes @ n1 +: n2 +: _ +: _ +: _ +: Seq() =>
           import n1.{logEff, metricEff, span, timeEff}
           val engine = new EngineWithCasper[Task](n1.casperEff)
           for {
@@ -146,9 +147,9 @@ class CreateBlockAPITest extends FlatSpec with Matchers with EitherValues {
 
   it should "allow proposals with enough new blocks from other validators" in effectTest {
     TestNode
-      .networkEff(genesis, networkSize = 4, synchronyConstraintThreshold = 1d / 3d)
+      .networkEff(genesis, networkSize = 5, synchronyConstraintThreshold = 1d / 3d)
       .use {
-        case nodes @ n1 +: n2 +: n3 +: _ +: Seq() =>
+        case nodes @ n1 +: n2 +: n3 +: _ +: _ +: Seq() =>
           import n1.{logEff, metricEff, span, timeEff}
           val engine = new EngineWithCasper[Task](n1.casperEff)
           for {
@@ -170,9 +171,9 @@ class CreateBlockAPITest extends FlatSpec with Matchers with EitherValues {
 
   it should "check for new deploys before checking synchrony constraint" in effectTest {
     TestNode
-      .networkEff(genesis, networkSize = 4, synchronyConstraintThreshold = 1d / 3d)
+      .networkEff(genesis, networkSize = 5, synchronyConstraintThreshold = 1d / 3d)
       .use {
-        case nodes @ n1 +: n2 +: _ +: _ +: Seq() =>
+        case nodes @ n1 +: n2 +: _ +: _ +: _ +: Seq() =>
           import n1.{logEff, metricEff, span, timeEff}
           val engine = new EngineWithCasper[Task](n1.casperEff)
           for {
