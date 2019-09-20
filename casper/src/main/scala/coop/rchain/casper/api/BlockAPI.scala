@@ -16,17 +16,17 @@ import coop.rchain.casper._
 import coop.rchain.casper.DeployError._
 import coop.rchain.casper.MultiParentCasper.ignoreDoppelgangerCheck
 import coop.rchain.casper.protocol._
-import coop.rchain.casper.util.{DagOperations, EventConverter, ProtoUtil}
+import coop.rchain.casper.util._
 import coop.rchain.casper.util.rholang.RuntimeManager
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.graphz._
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.metrics.implicits._
-import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.{BlockMetadata, Par}
 import coop.rchain.models.rholang.sorter.Sortable._
 import coop.rchain.models.serialization.implicits.mkProtobufInstance
+import coop.rchain.models.BlockHash.{BlockHash, _}
 import coop.rchain.rholang.interpreter.storage.StoragePrinter
 import coop.rchain.rspace.StableHashProvider
 import coop.rchain.rspace.trace._
@@ -550,7 +550,7 @@ object BlockAPI {
   ): Effect[F, DeployServiceResponse] =
     status
       .map { _ =>
-        val hash    = PrettyPrinter.buildString(block.blockHash)
+        val hash    = block.blockHash.base16String
         val deploys = block.body.deploys.map(_.deploy)
         val maybeUnmatchedSendsOutputF =
           if (printUnmatchedSends) prettyPrintUnmatchedSends(casper, deploys).map(_.some)
