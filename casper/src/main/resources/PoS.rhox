@@ -176,8 +176,7 @@ new  PoS,
                     resultCh!(
                       state.set("withdrawers",
                                 state.get("withdrawers")
-                                     .set(userPk,
-                                       $$quarantineLength$$ + $$epochLength$$ * (1 + blockNumber / $$epochLength$$))),
+                                     .set(userPk, $$quarantineLength$$ + $$epochLength$$ + blockNumber)),
                       (true, Nil))
                   } else {
                     resultCh!(state, (false, "User is not bonded"))
