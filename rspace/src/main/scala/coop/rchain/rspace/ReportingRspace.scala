@@ -13,7 +13,32 @@ import coop.rchain.rspace.trace.{Produce, _}
 import coop.rchain.shared.Log
 import com.google.common.collect.Multiset
 import com.typesafe.scalalogging.Logger
+import coop.rchain.rspace.ReportingRspace.{
+  ReportingComm,
+  ReportingConsume,
+  ReportingEvent,
+  ReportingProduce
+}
 import monix.execution.atomic.AtomicAny
+import coop.rchain.shared.SyncVarOps._
+
+import scala.concurrent.SyncVar
+
+object ReportingRspace {
+  trait ReportingEvent
+
+  final case class ReportingProduce[C, A](channel: C, data: A) extends ReportingEvent
+  final case class ReportingConsume[C, P, K](
+      channels: Seq[C],
+      patterns: Seq[P],
+      continuation: K,
+      peeks: Seq[Int]
+  ) extends ReportingEvent
+  final case class ReportingComm[C, P, A, K](
+      consume: ReportingConsume[C, P, K],
+      produces: Seq[ReportingProduce[C, A]]
+  ) extends ReportingEvent
+}
 
 class ReportingRspace[F[_]: Sync, C, P, A, K](
     historyRepository: HistoryRepository[F, C, P, A, K],
@@ -42,6 +67,10 @@ class ReportingRspace[F[_]: Sync, C, P, A, K](
   implicit protected[this] lazy val MetricsSource: Metrics.Source =
     Metrics.Source(RSpaceMetricsSource, "reporting")
 
+  val report: SyncVar[Seq[ReportingEvent]] = create[Seq[ReportingEvent]](Seq.empty)
+
+  def getReport: F[Seq[ReportingEvent]] = Sync[F].delay(report.get)
+
   /** Creates a checkpoint.
     *
     * @return A [[Checkpoint]]
@@ -53,6 +82,9 @@ class ReportingRspace[F[_]: Sync, C, P, A, K](
       _ <- restoreInstalls()
     } yield (Checkpoint(historyRepository.history.root, Seq.empty))
   }
+
+  override def createSoftCheckpoint(): F[SoftCheckpoint[C, P, A, K]] =
+    Sync[F].delay(report.update(_ => Seq.empty[ReportingEvent])) >> super.createSoftCheckpoint()
 
   def consume(
       channels: Seq[C],
@@ -176,6 +208,8 @@ class ReportingRspace[F[_]: Sync, C, P, A, K](
       consumeRef <- syncF.delay {
                      Consume.create(channels, patterns, continuation, persist, sequenceNumber)
                    }
+      reportingConsume = ReportingConsume(channels, patterns, continuation, peeks.toSeq)
+      _                <- Sync[F].delay(report.update(s => s :+ reportingConsume))
       r <- replayData.get(consumeRef) match {
             case None =>
               storeWaitingContinuation(
@@ -194,13 +228,19 @@ class ReportingRspace[F[_]: Sync, C, P, A, K](
                   )
                 case Right(dataCandidates) =>
                   val channelsToIndex = channels.zipWithIndex.toMap
-                  handleMatches(
-                    dataCandidates,
-                    consumeRef,
-                    comms,
-                    peeks,
-                    channelsToIndex
-                  )
+                  val produces        = dataCandidates.map(dc => ReportingProduce(dc.channel, dc.datum.a))
+                  Sync[F].delay(
+                    report.update(
+                      s => s :+ ReportingComm(consume = reportingConsume, produces = produces)
+                    )
+                  ) >>
+                    handleMatches(
+                      dataCandidates,
+                      consumeRef,
+                      comms,
+                      peeks,
+                      channelsToIndex
+                    )
               }
               x
           }
@@ -320,7 +360,12 @@ class ReportingRspace[F[_]: Sync, C, P, A, K](
             commRef <- syncF.delay {
                         COMM(consumeRef, dataCandidates.map(_.datum.source), peeks)
                       }
-            _ <- assertF(comms.contains(commRef), "COMM Event was not contained in the trace")
+            _                 <- assertF(comms.contains(commRef), "COMM Event was not contained in the trace")
+            reportingConsume  = ReportingConsume(channels, patterns, continuation, peeks.toSeq)
+            reportingProduces = dataCandidates.map(dc => ReportingProduce(dc.channel, dc.datum.a))
+            _ <- Sync[F].delay(
+                  report.update(s => s :+ ReportingComm(reportingConsume, reportingProduces))
+                )
             _ <- if (!persistK) {
                   store.removeContinuation(channels, continuationIndex)
                 } else {
@@ -366,6 +411,7 @@ class ReportingRspace[F[_]: Sync, C, P, A, K](
               .replace('\n', ' ')
           )
       produceRef <- syncF.delay { Produce.create(channel, data, persist, sequenceNumber) }
+      _          <- Sync[F].delay(report.update(s => s :+ ReportingProduce(channel, data)))
       result <- replayData.get(produceRef) match {
                  case None =>
                    storeDatum(produceRef, None)
