@@ -20,7 +20,7 @@ object internal {
         serializeC: Serialize[C],
         serializeA: Serialize[A]
     ): Datum[A] =
-      Datum(a, persist, Produce.create(channel, a, persist, sequenceNumber))
+      Datum(a, persist, Produce.create(channel, a, persist))
   }
 
   final case class DataCandidate[C, A](

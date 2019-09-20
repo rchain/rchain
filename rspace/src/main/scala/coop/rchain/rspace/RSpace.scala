@@ -352,7 +352,7 @@ class RSpace[F[_], C, P, A, K] private[rspace] (
     contextShift.evalOn(scheduler) {
       (for {
         produceRef <- syncF.delay {
-                       Produce.create(channel, data, persist, sequenceNumber)
+                       Produce.create(channel, data, persist)
                      }
         result <- produceLockF(channel) {
                    for {

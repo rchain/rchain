@@ -384,7 +384,7 @@ class ReplayRSpace[F[_]: Sync, C, P, A, K](
                 |at <groupedChannels: $groupedChannels>""".stripMargin
               .replace('\n', ' ')
           )
-      produceRef <- syncF.delay { Produce.create(channel, data, persist, sequenceNumber) }
+      produceRef <- syncF.delay { Produce.create(channel, data, persist) }
       _ <- syncF.delay {
             if (!persist)
               produceCounter.update(_.putAndIncrementCounter(produceRef))
