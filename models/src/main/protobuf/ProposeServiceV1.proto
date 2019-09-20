@@ -1,5 +1,5 @@
 syntax = "proto3";
-package casper.v2;
+package casper.v1;
 
 import "ServiceError.proto";
 import "ProposeServiceCommon.proto";
@@ -12,7 +12,7 @@ import "ProposeServiceCommon.proto";
 import "scalapb/scalapb.proto";
 
 option (scalapb.options) = {
-  package_name: "coop.rchain.casper.protocol.propose"
+  package_name: "coop.rchain.casper.protocol.propose.v1"
   flat_package: true
   single_file: true
 };

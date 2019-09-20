@@ -2,7 +2,7 @@
  * The main API is `DeployService`.
  */
 syntax = "proto3";
-package casper.v2;
+package casper.v1;
 
 import "CasperMessage.proto";
 import "ServiceError.proto";
@@ -16,7 +16,7 @@ import "DeployServiceCommon.proto";
 import "scalapb/scalapb.proto";
 
 option (scalapb.options) = {
-  package_name: "coop.rchain.casper.protocol.deployV2"
+  package_name: "coop.rchain.casper.protocol.deploy.v1"
   flat_package: true
   single_file: true
 };
