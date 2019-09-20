@@ -5,7 +5,6 @@ import coop.rchain.catscontrib.ski._
 import coop.rchain.casper.protocol._
 import coop.rchain.comm.{CommError, Endpoint, NodeIdentifier, PeerNode}, CommError._
 import coop.rchain.comm.protocol.routing.Protocol
-import coop.rchain.comm.transport.TransportLayer
 import coop.rchain.comm.rp.{ProtocolHelper, RPConf}, ProtocolHelper.toPacket
 import coop.rchain.shared._
 import coop.rchain.p2p.EffectsTestInstances.{LogStub, LogicalTime, TransportLayerStub}
@@ -13,9 +12,6 @@ import coop.rchain.models.BlockHash.BlockHash
 import com.google.protobuf.ByteString
 import monix.eval.Coeval
 import org.scalatest._
-import cats._, cats.data._, cats.implicits._
-
-import scala.collection.mutable.{Map => MutableMap}
 
 class RunningHandleHasBlockSpec extends FunSpec with BeforeAndAfterEach with Matchers {
 
@@ -94,8 +90,9 @@ class RunningHandleHasBlockSpec extends FunSpec with BeforeAndAfterEach with Mat
             // then
             val (recipient, msg) = transport.getRequest(0)
             // assert requested
-            val br: BlockRequest =
-              BlockRequest.from(packetToBlockRequest(toPacket(msg).right.get).get)
+            val br = BlockRequest.from(
+              convert[PacketTypeTag.BlockRequest.type](toPacket(msg).right.get).get
+            )
             br.hash shouldBe hash
             recipient shouldBe sender
             transport.requests.size shouldBe 1
@@ -115,8 +112,9 @@ class RunningHandleHasBlockSpec extends FunSpec with BeforeAndAfterEach with Mat
             // then
             val (recipient, msg) = transport.getRequest(0)
             // assert requested
-            val br: BlockRequest =
-              BlockRequest.from(packetToBlockRequest(toPacket(msg).right.get).get)
+            val br = BlockRequest.from(
+              convert[PacketTypeTag.BlockRequest.type](toPacket(msg).right.get).get
+            )
             br.hash shouldBe hash
             recipient shouldBe sender
             transport.requests.size shouldBe 1

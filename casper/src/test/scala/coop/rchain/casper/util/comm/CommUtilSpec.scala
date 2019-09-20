@@ -1,24 +1,22 @@
 package coop.rchain.casper.engine
 
-import Running.{Requested, RequestedBlocks}
-import coop.rchain.catscontrib.ski._
+import com.google.protobuf.ByteString
 import coop.rchain.casper.PrettyPrinter
+import coop.rchain.casper.engine.Running.{Requested, RequestedBlocks}
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.comm.CommUtil
-import coop.rchain.comm.{CommError, Endpoint, NodeIdentifier, PeerNode}, CommError._
+import coop.rchain.catscontrib.ski._
+import coop.rchain.comm.CommError._
 import coop.rchain.comm.protocol.routing.Protocol
-import coop.rchain.comm.transport.TransportLayer
 import coop.rchain.comm.rp.Connect._
-import coop.rchain.comm.rp.{ProtocolHelper, RPConf}, ProtocolHelper.toPacket
-import coop.rchain.shared._
-import coop.rchain.p2p.EffectsTestInstances.{LogStub, LogicalTime, TransportLayerStub}
+import coop.rchain.comm.rp.ProtocolHelper.toPacket
+import coop.rchain.comm.rp.{ProtocolHelper, RPConf}
+import coop.rchain.comm.{CommError, Endpoint, NodeIdentifier, PeerNode}
 import coop.rchain.models.BlockHash.BlockHash
-import com.google.protobuf.ByteString
+import coop.rchain.p2p.EffectsTestInstances.{LogStub, LogicalTime, TransportLayerStub}
+import coop.rchain.shared._
 import monix.eval.Coeval
 import org.scalatest._
-import cats._, cats.data._, cats.implicits._
-
-import scala.collection.mutable.{Map => MutableMap}
 
 class CommUtilSpec extends FunSpec with BeforeAndAfterEach with Matchers {
 
@@ -121,7 +119,9 @@ class CommUtilSpec extends FunSpec with BeforeAndAfterEach with Matchers {
     PeerNode(NodeIdentifier(name.getBytes), endpoint(port))
 
   private def toHasBlockRequest(protocol: Protocol): HasBlockRequest =
-    HasBlockRequest.from(packetToHasBlockRequest(toPacket(protocol).right.get).get)
+    HasBlockRequest.from(
+      convert[PacketTypeTag.HasBlockRequest.type](toPacket(protocol).right.get).get
+    )
 
   private def alwaysSuccess: PeerNode => Protocol => CommErr[Unit] = kp(kp(Right(())))
 }

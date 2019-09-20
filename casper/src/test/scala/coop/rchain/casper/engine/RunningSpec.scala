@@ -9,7 +9,6 @@ import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.comm.protocol.routing.Packet
 import coop.rchain.comm.rp.ProtocolHelper._
 import coop.rchain.comm.transport
-import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.hash.Blake2b256
 import coop.rchain.crypto.signatures.Secp256k1
 import monix.eval.Task
@@ -61,7 +60,7 @@ class RunningSpec extends WordSpec {
         _     <- blockStore.put(genesis.blockHash, genesis)
         _     <- engine.handle(local, blockRequest)
         head  = transportLayer.requests.head
-        block = packet(local, networkId, transport.BlockMessage, genesis.toProto.toByteString)
+        block = packet(local, networkId, genesis.toProto)
         _     = assert(head.peer == local && head.msg == block)
       } yield ()
 
@@ -99,7 +98,7 @@ class RunningSpec extends WordSpec {
         head = transportLayer.requests.head
         _    = assert(head.peer == local)
         _ = assert(
-          head.msg.message.packet.get == Packet(transport.BlockMessage.id, tip.toProto.toByteString)
+          head.msg.message.packet.get == ToPacket(tip.toProto)
         )
       } yield ()
 

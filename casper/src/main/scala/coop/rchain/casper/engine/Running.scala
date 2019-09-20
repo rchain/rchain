@@ -58,8 +58,7 @@ object Running {
       msg = packet(
         conf.local,
         conf.networkId,
-        transport.BlockRequest,
-        BlockRequestProto(hash).toByteString
+        BlockRequestProto(hash)
       )
       _ <- TransportLayer[F].send(peer, msg)
     } yield ()
@@ -163,8 +162,7 @@ object Running {
         msg = packet(
           conf.local,
           conf.networkId,
-          transport.HasBlock,
-          HasBlockProto(hbr.hash).toByteString
+          HasBlockProto(hbr.hash)
         )
         _ <- TransportLayer[F].send(peer, msg)
       } yield (),
@@ -193,9 +191,9 @@ object Running {
     for {
       local           <- RPConfAsk[F].reader(_.local)
       maybeBlock      <- BlockStore[F].get(br.hash) // TODO: Refactor
-      maybeSerialized = maybeBlock.map(_.toProto.toByteString)
+      maybeSerialized = maybeBlock.map(_.toProto)
       maybeMsg = maybeSerialized.map(
-        serializedMessage => Blob(local, Packet(transport.BlockMessage.id, serializedMessage))
+        serializedMessage => Blob(local, ToPacket(serializedMessage))
       )
       _        <- maybeMsg.traverse(msg => TransportLayer[F].stream(peer, msg))
       hash     = PrettyPrinter.buildString(br.hash)
@@ -214,7 +212,7 @@ object Running {
       _     <- Log[F].info(s"Received ForkChoiceTipRequest from $peer")
       tip   <- MultiParentCasper.forkChoiceTip(casper)
       local <- RPConfAsk[F].reader(_.local)
-      msg   = Blob(local, Packet(transport.BlockMessage.id, tip.toProto.toByteString))
+      msg   = Blob(local, ToPacket(tip.toProto))
       _     <- TransportLayer[F].stream(peer, msg)
       _     <- Log[F].info(s"Sending Block ${tip.blockHash} to $peer")
     } yield ()
@@ -227,7 +225,7 @@ object Running {
     for {
       local <- RPConfAsk[F].reader(_.local)
       _     <- Log[F].info(s"Received ApprovedBlockRequest from $peer")
-      msg   = Blob(local, Packet(transport.ApprovedBlock.id, approvedBlock.toProto.toByteString))
+      msg   = Blob(local, ToPacket(approvedBlock.toProto))
       _     <- TransportLayer[F].stream(peer, msg)
       _     <- Log[F].info(s"Sending ApprovedBlock to $peer")
     } yield ()

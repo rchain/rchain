@@ -55,10 +55,8 @@ object Engine {
       _ <- BlockStore[F].putApprovedBlock(approvedBlock)
     } yield ()
 
-  private def noApprovedBlockAvailable(peer: PeerNode, identifier: String): Packet = Packet(
-    transport.NoApprovedBlockAvailable.id,
-    NoApprovedBlockAvailable(identifier, peer.toString).toProto.toByteString
-  )
+  private def noApprovedBlockAvailable(peer: PeerNode, identifier: String): Packet =
+    ToPacket(NoApprovedBlockAvailable(identifier, peer.toString).toProto)
 
   def sendNoApprovedBlockAvailable[F[_]: RPConfAsk: TransportLayer: Monad](
       peer: PeerNode,

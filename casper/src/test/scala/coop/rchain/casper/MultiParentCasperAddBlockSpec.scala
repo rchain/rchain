@@ -3,36 +3,35 @@ package coop.rchain.casper
 import cats.effect.Sync
 import cats.implicits._
 import com.google.protobuf.ByteString
-import coop.rchain.models.PCost
 import coop.rchain.casper.MultiParentCasper.ignoreDoppelgangerCheck
 import coop.rchain.casper.helper.TestNode._
 import coop.rchain.casper.helper.{BlockUtil, TestNode}
 import coop.rchain.casper.protocol._
-import coop.rchain.shared.scalatestcontrib._
 import coop.rchain.casper.util.rholang.RegistrySigGen
 import coop.rchain.casper.util.{ConstructDeploy, ProtoUtil, RSpaceUtil}
 import coop.rchain.catscontrib.TaskContrib.TaskOps
 import coop.rchain.comm.rp.ProtocolHelper.packet
-import coop.rchain.comm.transport
 import coop.rchain.crypto.PublicKey
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.hash.Blake2b256
 import coop.rchain.crypto.signatures.Secp256k1
+import coop.rchain.models.PCost
 import coop.rchain.p2p.EffectsTestInstances.LogicalTime
+import coop.rchain.shared.scalatestcontrib._
 import monix.eval.Task
 import monix.execution.Scheduler
 import monix.execution.Scheduler.Implicits.global
-import org.scalatest.{Assertion, FlatSpec, Inspectors, Matchers}
+import org.scalatest.{FlatSpec, Inspectors, Matchers}
 
 import scala.collection.immutable
 
 class MultiParentCasperAddBlockSpec extends FlatSpec with Matchers with Inspectors {
 
-  import RSpaceUtil._
-  import coop.rchain.casper.util.GenesisBuilder._
-  import ValidBlock._
   import BlockError._
   import InvalidBlock._
+  import RSpaceUtil._
+  import ValidBlock._
+  import coop.rchain.casper.util.GenesisBuilder._
 
   implicit val timeEff = new LogicalTime[Effect]
 
@@ -423,8 +422,7 @@ class MultiParentCasperAddBlockSpec extends FlatSpec with Matchers with Inspecto
         signedInvalidBlockPacketMessage = packet(
           nodes(0).local,
           "test",
-          transport.BlockMessage,
-          signedInvalidBlock.toProto.toByteString
+          signedInvalidBlock.toProto
         )
         _ <- nodes(0).transportLayerEff.send(nodes(1).local, signedInvalidBlockPacketMessage)
         _ <- nodes(1).receive() // receives signedInvalidBlock; attempts to add both blocks

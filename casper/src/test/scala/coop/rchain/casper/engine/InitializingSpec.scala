@@ -7,7 +7,6 @@ import coop.rchain.casper._
 import coop.rchain.casper.protocol._
 import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.comm.rp.ProtocolHelper._
-import coop.rchain.comm.transport
 import coop.rchain.crypto.hash.Blake2b256
 import coop.rchain.crypto.signatures.Secp256k1
 import coop.rchain.shared.{Cell, EventPublisher}
@@ -66,8 +65,7 @@ class InitializingSpec extends WordSpec {
           transportLayer.requests.head.msg == packet(
             local,
             networkId,
-            transport.ForkChoiceTipRequest,
-            ByteString.EMPTY
+            ForkChoiceTipRequestProto()
           )
         )
         _ = transportLayer.reset()
