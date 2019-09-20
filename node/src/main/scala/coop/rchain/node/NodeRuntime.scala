@@ -3,63 +3,51 @@ package coop.rchain.node
 import java.nio.ByteBuffer
 import java.nio.file.{Files, Path}
 
+import scala.concurrent.duration._
+
 import cats._
 import cats.data.ReaderT
 import cats.effect._
 import cats.effect.concurrent.Semaphore
 import cats.implicits._
+import cats.mtl._
 import cats.tagless.implicits._
-import cats.mtl.{ApplicativeAsk, ApplicativeLocal, MonadState}
 import cats.temp.par.Par
 
 import coop.rchain.blockstorage._
 import coop.rchain.blockstorage.dag.{BlockDagFileStorage, BlockDagStorage}
 import coop.rchain.blockstorage.util.io.IOError
 import coop.rchain.casper._
-import coop.rchain.casper.engine.EngineCell._
 import coop.rchain.casper.engine._
-import coop.rchain.casper.protocol.{DeployServiceGrpcMonix, ProposeServiceGrpcMonix}
-import coop.rchain.casper.protocol.deployV2.DeployServiceV2GrpcMonix
+import coop.rchain.casper.engine.EngineCell._
+import coop.rchain.casper.protocol.deploy.v1.DeployServiceV1GrpcMonix
+import coop.rchain.casper.protocol.propose.v1.ProposeServiceV1GrpcMonix
 import coop.rchain.casper.util.comm.CasperPacketHandler
 import coop.rchain.casper.util.rholang.RuntimeManager
 import coop.rchain.catscontrib.Catscontrib._
-import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.catscontrib.Taskable
+import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.catscontrib.ski._
 import coop.rchain.comm._
 import coop.rchain.comm.discovery._
-import coop.rchain.comm.rp.Connect.{Connections, ConnectionsCell, RPConfAsk, RPConfState}
 import coop.rchain.comm.rp._
+import coop.rchain.comm.rp.Connect.{Connections, ConnectionsCell, RPConfAsk, RPConfState}
 import coop.rchain.comm.transport._
 import coop.rchain.grpc.Server
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.models.BlockHash.BlockHash
-import coop.rchain.node.NodeRuntime.{
-  taskToEnv,
-  APIServers,
-  CasperLoop,
-  Cleanup,
-  EngineInit,
-  RuntimeConf,
-  TaskEnv
-}
-import coop.rchain.node.api.{
-  DeployGrpcService,
-  DeployGrpcServiceV2,
-  ProposeGrpcService,
-  ProposeGrpcServiceV2,
-  ReplGrpcService
-}
+import coop.rchain.node.NodeRuntime.{apply => _, _}
+import coop.rchain.node.api._
 import coop.rchain.node.configuration.Configuration
-import coop.rchain.node.diagnostics.Trace.TraceId
 import coop.rchain.node.diagnostics._
+import coop.rchain.node.diagnostics.Trace.TraceId
 import coop.rchain.node.effects.{EventConsumer, RchainEvents}
 import coop.rchain.node.model.repl.ReplGrpcMonix
 import coop.rchain.p2p.effects._
 import coop.rchain.rholang.interpreter.Runtime
 import coop.rchain.rspace.Context
-import coop.rchain.shared.PathOps._
 import coop.rchain.shared._
+import coop.rchain.shared.PathOps._
 
 import kamon._
 import kamon.system.SystemMetrics
@@ -71,9 +59,6 @@ import org.http4s.server.blaze._
 import org.http4s.server.middleware._
 import org.http4s.server.Router
 import org.lmdbjava.Env
-import scala.concurrent.duration._
-
-import coop.rchain.casper.protocol.propose.ProposeServiceV2GrpcMonix
 
 @SuppressWarnings(Array("org.wartremover.warts.NonUnitStatements"))
 class NodeRuntime private[node] (
@@ -526,17 +511,14 @@ class NodeRuntime private[node] (
                               conf.grpcServer.portExternal,
                               grpcScheduler,
                               apiServers.deploy,
-                              apiServers.deployV2,
-                              apiServers.propose,
-                              apiServers.proposeV2
+                              apiServers.propose
                             )
       internalApiServer <- api
                             .acquireInternalServer(
                               conf.grpcServer.portInternal,
                               grpcScheduler,
                               apiServers.repl,
-                              apiServers.propose,
-                              apiServers.proposeV2
+                              apiServers.propose
                             )
 
       prometheusReporter = new NewPrometheusReporter()
@@ -762,10 +744,8 @@ object NodeRuntime {
 
   final case class APIServers(
       repl: ReplGrpcMonix.Repl,
-      propose: ProposeServiceGrpcMonix.ProposeService,
-      proposeV2: ProposeServiceV2GrpcMonix.ProposeService,
-      deploy: DeployServiceGrpcMonix.DeployService,
-      deployV2: DeployServiceV2GrpcMonix.DeployService
+      propose: ProposeServiceV1GrpcMonix.ProposeService,
+      deploy: DeployServiceV1GrpcMonix.DeployService
   )
 
   def acquireAPIServers[F[_]](
@@ -785,10 +765,8 @@ object NodeRuntime {
   ): APIServers = {
     implicit val s: Scheduler = scheduler
     val repl                  = ReplGrpcService.instance(runtime, s)
-    val deploy                = DeployGrpcService.instance(blockApiLock)
-    val deploy2               = DeployGrpcServiceV2.instance(blockApiLock)
-    val propose               = ProposeGrpcService.instance(blockApiLock)
-    val propose2              = ProposeGrpcServiceV2.instance(blockApiLock)
-    APIServers(repl, propose, propose2, deploy, deploy2)
+    val deploy                = DeployGrpcServiceV1.instance(blockApiLock)
+    val propose               = ProposeGrpcServiceV1.instance(blockApiLock)
+    APIServers(repl, propose, deploy)
   }
 }

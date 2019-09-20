@@ -10,7 +10,7 @@ import EngineCell._
 import coop.rchain.casper.SafetyOracle
 import coop.rchain.casper.api.BlockAPI
 import coop.rchain.casper.protocol.{PrintUnmatchedSendsQuery, ServiceError}
-import coop.rchain.casper.protocol.propose.{ProposeResponse, ProposeServiceV2GrpcMonix}
+import coop.rchain.casper.protocol.propose.v1.{ProposeResponse, ProposeServiceV1GrpcMonix}
 import coop.rchain.catscontrib.Catscontrib._
 import coop.rchain.catscontrib.Taskable
 import coop.rchain.catscontrib.TaskContrib._
@@ -22,13 +22,13 @@ import coop.rchain.shared.ThrowableOps._
 import monix.eval.Task
 import monix.execution.Scheduler
 
-object ProposeGrpcServiceV2 {
+object ProposeGrpcServiceV1 {
   def instance[F[_]: Concurrent: Log: SafetyOracle: BlockStore: Metrics: Taskable: Span: EngineCell](
       blockApiLock: Semaphore[F]
   )(
       implicit worker: Scheduler
-  ): ProposeServiceV2GrpcMonix.ProposeService =
-    new ProposeServiceV2GrpcMonix.ProposeService {
+  ): ProposeServiceV1GrpcMonix.ProposeService =
+    new ProposeServiceV1GrpcMonix.ProposeService {
 
       private def defer[A, R <: StacksafeMessage[R]](
           task: F[Either[String, A]]

@@ -1,27 +1,17 @@
 package coop.rchain.node.api
 
-import cats.data.StateT
+import cats.data.State
 import cats.effect.Concurrent
 import cats.effect.concurrent.Semaphore
 import cats.implicits._
-import cats.Id
 import cats.mtl.implicits._
 
 import coop.rchain.blockstorage.BlockStore
 import coop.rchain.casper.engine.EngineCell.EngineCell
-import coop.rchain.casper.protocol.deployV2._
+import coop.rchain.casper.protocol.deploy.v1._
 import coop.rchain.casper.SafetyOracle
 import coop.rchain.casper.api._
-import coop.rchain.casper.protocol.{
-  DeployServiceResponse => _,
-  IsFinalizedResponse => _,
-  LastFinalizedBlockResponse => _,
-  ListeningNameDataResponse => _,
-  MachineVerifyResponse => _,
-  PrivateNamePreviewResponse => _,
-  VisualizeBlocksResponse => _,
-  _
-}
+import coop.rchain.casper.protocol._
 import coop.rchain.catscontrib.Catscontrib._
 import coop.rchain.catscontrib.Taskable
 import coop.rchain.catscontrib.TaskContrib._
@@ -35,13 +25,13 @@ import monix.eval.Task
 import monix.execution.Scheduler
 import monix.reactive.Observable
 
-object DeployGrpcServiceV2 {
+object DeployGrpcServiceV1 {
   def instance[F[_]: Concurrent: Log: SafetyOracle: BlockStore: Taskable: Span: EngineCell](
       blockApiLock: Semaphore[F]
   )(
       implicit worker: Scheduler
-  ): DeployServiceV2GrpcMonix.DeployService =
-    new DeployServiceV2GrpcMonix.DeployService {
+  ): DeployServiceV1GrpcMonix.DeployService =
+    new DeployServiceV1GrpcMonix.DeployService {
 
       private def defer[A, R <: StacksafeMessage[R]](
           task: F[Either[String, A]]
@@ -75,8 +65,8 @@ object DeployGrpcServiceV2 {
             )
           )
 
-      def doDeploy(request: DeployData): Task[DeployResponse] =
-        defer(BlockAPI.deploy[F](request)) { r =>
+      def doDeploy(request: DeployDataProto): Task[DeployResponse] =
+        defer(BlockAPI.deploy[F](DeployData.from(request))) { r =>
           import DeployResponse.Message
           import DeployResponse.Message._
           DeployResponse(r.fold[Message](Error, Result))
@@ -90,9 +80,9 @@ object DeployGrpcServiceV2 {
         }
 
       def visualizeDag(request: VisualizeDagQuery): Observable[VisualizeBlocksResponse] = {
-        type Effect[A] = StateT[Id, Vector[String], A]
+        type Effect[A] = State[Vector[String], A]
         implicit val ser: GraphSerializer[Effect]             = new ListSerializer[Effect]
-        val serialize: Effect[Graphz[Effect]] => List[String] = _.runS(Vector.empty).toList
+        val serialize: Effect[Graphz[Effect]] => List[String] = _.runS(Vector.empty).value.toList
 
         val depth  = if (request.depth <= 0) None else Some(request.depth)
         val config = GraphConfig(request.showJustificationLines)

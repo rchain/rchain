@@ -2,9 +2,8 @@ package coop.rchain.node
 
 import cats.effect.Concurrent
 
-import coop.rchain.casper.protocol.{DeployServiceGrpcMonix, ProposeServiceGrpcMonix}
-import coop.rchain.casper.protocol.deployV2.DeployServiceV2GrpcMonix
-import coop.rchain.casper.protocol.propose.ProposeServiceV2GrpcMonix
+import coop.rchain.casper.protocol.deploy.v1.DeployServiceV1GrpcMonix
+import coop.rchain.casper.protocol.propose.v1.ProposeServiceV1GrpcMonix
 import coop.rchain.catscontrib._
 import coop.rchain.grpc.{GrpcServer, Server}
 import coop.rchain.node.model.repl._
@@ -25,8 +24,7 @@ package object api {
       port: Int,
       grpcExecutor: Scheduler,
       replGrpcService: ReplGrpcMonix.Repl,
-      proposeGrpcService: ProposeServiceGrpcMonix.ProposeService,
-      proposeGrpcServiceV2: ProposeServiceV2GrpcMonix.ProposeService
+      proposeGrpcService: ProposeServiceV1GrpcMonix.ProposeService
   ): Task[Server[Task]] =
     GrpcServer[Task](
       NettyServerBuilder
@@ -37,12 +35,8 @@ package object api {
           ReplGrpcMonix.bindService(replGrpcService, grpcExecutor)
         )
         .addService(
-          ProposeServiceGrpcMonix
+          ProposeServiceV1GrpcMonix
             .bindService(proposeGrpcService, grpcExecutor)
-        )
-        .addService(
-          ProposeServiceV2GrpcMonix
-            .bindService(proposeGrpcServiceV2, grpcExecutor)
         )
         .addService(ProtoReflectionService.newInstance())
         .build
@@ -51,10 +45,8 @@ package object api {
   def acquireExternalServer[F[_]: Concurrent: Log: Taskable](
       port: Int,
       grpcExecutor: Scheduler,
-      deployGrpcService: DeployServiceGrpcMonix.DeployService,
-      deployGrpcServiceV2: DeployServiceV2GrpcMonix.DeployService,
-      proposeGrpcService: ProposeServiceGrpcMonix.ProposeService,
-      proposeGrpcServiceV2: ProposeServiceV2GrpcMonix.ProposeService
+      deployGrpcService: DeployServiceV1GrpcMonix.DeployService,
+      proposeGrpcService: ProposeServiceV1GrpcMonix.ProposeService
   ): F[Server[F]] =
     GrpcServer[F](
       NettyServerBuilder
@@ -62,20 +54,12 @@ package object api {
         .executor(grpcExecutor)
         .maxMessageSize(maxMessageSize)
         .addService(
-          DeployServiceGrpcMonix
+          DeployServiceV1GrpcMonix
             .bindService(deployGrpcService, grpcExecutor)
         )
         .addService(
-          DeployServiceV2GrpcMonix
-            .bindService(deployGrpcServiceV2, grpcExecutor)
-        )
-        .addService(
-          ProposeServiceGrpcMonix
+          ProposeServiceV1GrpcMonix
             .bindService(proposeGrpcService, grpcExecutor)
-        )
-        .addService(
-          ProposeServiceV2GrpcMonix
-            .bindService(proposeGrpcServiceV2, grpcExecutor)
         )
         .addService(ProtoReflectionService.newInstance())
         .build

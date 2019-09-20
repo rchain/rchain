@@ -8,7 +8,7 @@ import scala.util.Either
 import cats.implicits._
 
 import coop.rchain.casper.protocol._
-import coop.rchain.casper.protocol.deployV2.DeployServiceV2GrpcMonix
+import coop.rchain.casper.protocol.deploy.v1.DeployServiceV1GrpcMonix
 import coop.rchain.models.either.implicits._
 
 import io.grpc.{ManagedChannel, ManagedChannelBuilder}
@@ -44,7 +44,7 @@ class GrpcDeployService(host: String, port: Int, maxMessageSize: Int)
       .usePlaintext()
       .build
 
-  private val stub = DeployServiceV2GrpcMonix.stub(channel)
+  private val stub = DeployServiceV1GrpcMonix.stub(channel)
 
   def deploy(d: DeployData): Task[Either[Seq[String], String]] =
     stub
