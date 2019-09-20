@@ -28,7 +28,7 @@ option (scalapb.options) = {
 // To get results back, use `listenForDataAtName`.
 service DeployService {
   // Queue deployment of Rholang code (or fail to parse).
-  rpc doDeploy(DeployData) returns (DeployResponse) {}
+  rpc doDeploy(DeployDataProto) returns (DeployResponse) {}
   // Get details about a particular block.
   rpc getBlock(BlockQuery) returns (BlockResponse) {}
   // Get dag
