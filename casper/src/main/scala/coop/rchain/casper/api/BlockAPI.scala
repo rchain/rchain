@@ -82,12 +82,12 @@ object BlockAPI {
             case true =>
               implicit val ms = BlockAPIMetricsSource
               (for {
-                _          <- Metrics[F].incrementCounter("propose")
+                _ <- Metrics[F].incrementCounter("propose")
+                // TODO: Get rid off CreateBlockStatus and use EitherT
                 maybeBlock <- casper.createBlock
                 result <- maybeBlock match {
                            case err: NoBlock =>
-                             Metrics[F]
-                               .incrementCounter("propose-failed") >> s"Error while creating block: $err"
+                             s"Error while creating block: $err"
                                .asLeft[DeployServiceResponse]
                                .pure[F]
                            case Created(block) =>
@@ -99,12 +99,18 @@ object BlockAPI {
                                printUnmatchedSends
                              ))
                          }
-              } yield result).timer("propose-total-time").attempt.flatMap {
-                case Left(e) =>
-                  Metrics[F].incrementCounter("propose-failed") >> Sync[F]
-                    .raiseError[ApiErr[DeployServiceResponse]](e)
-                case Right(result) => result.pure[F]
-              }
+              } yield result)
+                .timer("propose-total-time")
+                .attempt
+                .map(_.leftMap(e => s"Error while creating block: ${e.getMessage}").joinRight)
+                .flatMap {
+                  case Left(error) =>
+                    Metrics[F].incrementCounter("propose-failed") >>
+                      Log[F].warn(error) >>
+                      error.asLeft[DeployServiceResponse].pure[F]
+                  case result =>
+                    result.pure[F]
+                }
             case false =>
               "Error: There is another propose in progress.".asLeft[DeployServiceResponse].pure[F]
           } {
