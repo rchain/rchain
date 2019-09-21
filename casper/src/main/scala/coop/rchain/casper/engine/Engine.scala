@@ -20,12 +20,8 @@ import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.dag.BlockDagStorage
 
 trait Engine[F[_]] {
-
-  def applicative: Applicative[F]
-  val noop: F[Unit] = applicative.unit
-
-  def init: F[Unit]                                       = noop
-  def handle(peer: PeerNode, msg: CasperMessage): F[Unit] = noop
+  def init: F[Unit]
+  def handle(peer: PeerNode, msg: CasperMessage): F[Unit]
   def withCasper[A](
       f: MultiParentCasper[F] => F[A],
       default: F[A]
@@ -35,7 +31,9 @@ trait Engine[F[_]] {
 object Engine {
 
   def noop[F[_]: Applicative] = new Engine[F] {
-    override def applicative: Applicative[F] = Applicative[F]
+    private[this] val noop                                           = Applicative[F].unit
+    override def handle(peer: PeerNode, msg: CasperMessage): F[Unit] = noop
+    override val init: F[Unit]                                       = noop
   }
 
   def logNoApprovedBlockAvailable[F[_]: Log](identifier: String): F[Unit] =

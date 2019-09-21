@@ -723,7 +723,7 @@ object NodeRuntime {
       )
       casperLoop = for {
         engine <- engineCell.read
-        _      <- engine.withCasper(_.fetchDependencies, engine.noop)
+        _      <- engine.withCasper(_.fetchDependencies, Applicative[F].unit)
         _ <- Running.maintainRequestedBlocks[F](
               Monad[F],
               rpConfAsk,
