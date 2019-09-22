@@ -57,10 +57,10 @@ object DeployGrpcService {
         defer(BlockAPI.getBlock[F](q))
 
       override def visualizeDag(q: VisualizeDagQuery): Observable[GrpcEither] = {
-        type Effect[A] = StateT[Id, Vector[String], A]
+        type Effect[A] = State[Vector[String], A]
         implicit val ser: GraphSerializer[Effect] = new ListSerializer[Effect]
         val serialize: Effect[Graphz[Effect]] => List[VisualizeBlocksResponse] =
-          _.runS(Vector.empty).toList.map(VisualizeBlocksResponse(_))
+          _.runS(Vector.empty).value.toList.map(VisualizeBlocksResponse(_))
 
         val depth  = if (q.depth <= 0) None else Some(q.depth)
         val config = GraphConfig(q.showJustificationLines)

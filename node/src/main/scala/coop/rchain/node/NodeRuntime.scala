@@ -15,7 +15,6 @@ import coop.rchain.blockstorage._
 import coop.rchain.blockstorage.dag.{BlockDagFileStorage, BlockDagStorage}
 import coop.rchain.blockstorage.util.io.IOError
 import coop.rchain.casper._
-import coop.rchain.casper.engine.CasperLaunch.CasperInit
 import coop.rchain.casper.engine.EngineCell._
 import coop.rchain.casper.engine._
 import coop.rchain.casper.protocol.{DeployServiceGrpcMonix, ProposeServiceGrpcMonix}
@@ -236,10 +235,14 @@ class NodeRuntime private[node] (
       packetHandler,
       apiServers,
       casperLoop,
-      engineInit
+      engineInit,
+      casperLaunch
     ) = result
 
-    // 4. run the node program.
+    // 4. launch casper
+    _ <- casperLaunch.launch()
+
+    // 5. run the node program.
     program = nodeProgram(apiServers, casperLoop, engineInit, runtimeCleanup)(
       logEnv,
       timeEnv,
@@ -625,7 +628,8 @@ object NodeRuntime {
         PacketHandler[F],
         APIServers,
         CasperLoop[F],
-        EngineInit[F]
+        EngineInit[F],
+        CasperLaunch[F]
     )
   ] =
     for {
@@ -684,8 +688,7 @@ object NodeRuntime {
       envVars         = EnvVars.envVars[F]
       raiseIOError    = IOError.raiseIOErrorThroughSync[F]
       requestedBlocks <- Cell.mvarCell[F, Map[BlockHash, Running.Requested]](Map.empty)
-      casperInit      = new CasperInit[F](conf.casper)
-      _ <- {
+      casperLaunch = {
         implicit val bs = blockStore
         implicit val bd = blockDagStorage
         implicit val ec = engineCell
@@ -701,7 +704,7 @@ object NodeRuntime {
         implicit val ra = rpConfAsk
         implicit val eb = eventPublisher
         implicit val sc = synchronyConstraintChecker
-        CasperLaunch[F](casperInit)
+        CasperLaunch.of(conf.casper)
       }
       packetHandler = {
         implicit val ev: EngineCell[F] = engineCell
@@ -740,7 +743,8 @@ object NodeRuntime {
       packetHandler,
       apiServers,
       casperLoop,
-      engineInit
+      engineInit,
+      casperLaunch
     )
 
   final case class APIServers(

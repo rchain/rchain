@@ -49,8 +49,8 @@ final class SynchronyConstraintChecker[F[_]: Sync: BlockStore](
           bonds                  <- runtimeManager.computeBonds(lastProposedTuplespace)
           validatorWeightMap     = bonds.map(b => b.validator -> b.stake).toMap
           sendersWeight          = seenSenders.toList.flatMap(s => validatorWeightMap.get(s)).sum
-          validatorsWeight       = validatorWeightMap.values.sum
-        } yield sendersWeight.toDouble / validatorsWeight >= synchronyConstraintThreshold
+          otherValidatorsWeight  = validatorWeightMap.values.sum - validatorWeightMap(validator)
+        } yield sendersWeight.toDouble / otherValidatorsWeight >= synchronyConstraintThreshold
       case None =>
         Sync[F].raiseError[Boolean](
           new IllegalStateException("Validator does not have a latest message")
