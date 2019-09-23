@@ -3,14 +3,12 @@ package coop.rchain.rholang.interpreter
 import java.nio.file.{Files, Path}
 
 import scala.concurrent.ExecutionContext
-
 import cats._
 import cats.effect._
 import cats.effect.concurrent.Ref
 import cats.implicits._
 import cats.mtl.FunctorTell
 import cats.temp.par
-
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.metrics.Metrics.Source
@@ -27,8 +25,8 @@ import coop.rchain.rholang.RholangMetricsSource
 import coop.rchain.rspace.{Match, RSpace, _}
 import coop.rchain.rholang.interpreter.registry.RegistryBootstrap
 import coop.rchain.shared.Log
-
 import com.google.protobuf.ByteString
+import coop.rchain.rspace.history.HistoryRepository
 
 class Runtime[F[_]: Sync] private (
     val reducer: Reduce[F],
@@ -40,7 +38,7 @@ class Runtime[F[_]: Sync] private (
     val deployParametersRef: Ref[F, DeployParameters],
     val blockData: Ref[F, BlockData],
     val invalidBlocks: Runtime.InvalidBlocks[F]
-) {
+) extends HasCost[F] {
   def readAndClearErrorVector(): F[Vector[Throwable]] = errorLog.readAndClearErrorVector()
   def close(): F[Unit] =
     for {
@@ -49,11 +47,17 @@ class Runtime[F[_]: Sync] private (
     } yield ()
 }
 
+trait HasCost[F[_]] {
+  def cost: _cost[F]
+}
+
 object Runtime {
 
   implicit val RuntimeMetricsSource: Source = Metrics.Source(RholangMetricsSource, "runtime")
 
   type ISpaceAndReplay[F[_]] = (RhoISpace[F], RhoReplayISpace[F])
+  type RhoHistoryRepository[F[_]] =
+    HistoryRepository[F, Par, BindPattern, ListParWithRandom, TaggedContinuation]
 
   type RhoTuplespace[F[_]]   = TCPAK[F, Tuplespace]
   type RhoISpace[F[_]]       = TCPAK[F, ISpace]
@@ -141,9 +145,8 @@ object Runtime {
     val REG_OPS: Par            = byteName(17)
   }
 
-  private def introduceSystemProcesses[F[_]: Sync: _cost: Span](
-      space: RhoTuplespace[F],
-      replaySpace: RhoTuplespace[F],
+  def introduceSystemProcesses[F[_]: Sync: _cost: Span](
+      spaces: List[RhoTuplespace[F]],
       processes: List[(Name, Arity, Remainder, BodyRef)]
   ): F[List[Option[(TaggedContinuation, Seq[ListParWithRandom])]]] =
     processes.flatMap {
@@ -157,10 +160,7 @@ object Runtime {
           )
         )
         val continuation = TaggedContinuation(ScalaBodyRef(ref))
-        List(
-          space.install(channels, patterns, continuation),
-          replaySpace.install(channels, patterns, continuation)
-        )
+        spaces.map(_.install(channels, patterns, continuation))
     }.sequence
 
   object SystemProcess {
@@ -289,6 +289,94 @@ object Runtime {
       }
     } yield runtime
 
+  def dispatchTableCreator[F[_]: Concurrent: Span](
+      space: RhoTuplespace[F],
+      dispatcher: RhoDispatch[F],
+      deployParametersRef: Ref[F, DeployParameters],
+      blockData: Ref[F, BlockData],
+      invalidBlocks: InvalidBlocks[F],
+      extraSystemProcesses: Seq[SystemProcess.Definition[F]]
+  ): RhoDispatchMap[F] = {
+    val systemProcesses = SystemProcesses[F](dispatcher, space)
+    import BodyRefs._
+    Map(
+      ED25519_VERIFY   -> systemProcesses.ed25519Verify,
+      SHA256_HASH      -> systemProcesses.sha256Hash,
+      KECCAK256_HASH   -> systemProcesses.keccak256Hash,
+      BLAKE2B256_HASH  -> systemProcesses.blake2b256Hash,
+      SECP256K1_VERIFY -> systemProcesses.secp256k1Verify
+    ) ++
+      (stdSystemProcesses[F] ++ extraSystemProcesses)
+        .map(
+          _.toDispatchTable(
+            SystemProcess
+              .Context(space, dispatcher, deployParametersRef, blockData, invalidBlocks)
+          )
+        )
+  }
+
+  val basicProcesses: Map[String, Par] = Map[String, Par](
+    "rho:crypto:secp256k1Verify"   -> Bundle(FixedChannels.SECP256K1_VERIFY, writeFlag = true),
+    "rho:crypto:blake2b256Hash"    -> Bundle(FixedChannels.BLAKE2B256_HASH, writeFlag = true),
+    "rho:crypto:keccak256Hash"     -> Bundle(FixedChannels.KECCAK256_HASH, writeFlag = true),
+    "rho:registry:lookup"          -> Bundle(FixedChannels.REG_LOOKUP, writeFlag = true),
+    "rho:registry:insertArbitrary" -> Bundle(FixedChannels.REG_INSERT_RANDOM, writeFlag = true),
+    "rho:registry:insertSigned:secp256k1" -> Bundle(
+      FixedChannels.REG_INSERT_SIGNED,
+      writeFlag = true
+    )
+  )
+
+  val basicProcessDefs: List[(Name, Arity, Remainder, BodyRef)] = {
+    import BodyRefs._
+    List(
+      (FixedChannels.ED25519_VERIFY, 4, None, ED25519_VERIFY),
+      (FixedChannels.SHA256_HASH, 2, None, SHA256_HASH),
+      (FixedChannels.KECCAK256_HASH, 2, None, KECCAK256_HASH),
+      (FixedChannels.BLAKE2B256_HASH, 2, None, BLAKE2B256_HASH),
+      (FixedChannels.SECP256K1_VERIFY, 4, None, SECP256K1_VERIFY)
+    )
+  }
+
+  def setupReducer[F[_]: Concurrent: Log: Metrics: Span, M[_]](
+      chargingRSpace: RhoTuplespace[F],
+      deployParametersRef: Ref[F, DeployParameters],
+      blockDataRef: Ref[F, BlockData],
+      invalidBlocks: InvalidBlocks[F],
+      extraSystemProcesses: Seq[SystemProcess.Definition[F]],
+      urnMap: Map[String, Par]
+  )(implicit ft: FunctorTell[F, Throwable], cost: _cost[F], P: Parallel[F, M]): Reduce[F] = {
+    lazy val replayDispatchTable: RhoDispatchMap[F] =
+      dispatchTableCreator(
+        chargingRSpace,
+        replayDispatcher,
+        deployParametersRef,
+        blockDataRef,
+        invalidBlocks,
+        extraSystemProcesses
+      )
+
+    lazy val (replayDispatcher, replayReducer) =
+      RholangAndScalaDispatcher.create(
+        chargingRSpace,
+        replayDispatchTable,
+        urnMap
+      )
+    replayReducer
+  }
+
+  def setupMapsAndRefs[F[_]: Sync](
+      extraSystemProcesses: Seq[SystemProcess.Definition[F]] = Seq.empty
+  ) =
+    for {
+      deployParametersRef <- Ref.of(DeployParameters.empty)
+      blockDataRef        <- Ref.of(BlockData.empty)
+      invalidBlocks       = InvalidBlocks.unsafe[F]()
+      urnMap              = basicProcesses ++ (stdSystemProcesses[F] ++ extraSystemProcesses).map(_.toUrnMap)
+      procDefs = basicProcessDefs ++ (stdSystemProcesses[F] ++ extraSystemProcesses)
+        .map(_.toProcDefs)
+    } yield (deployParametersRef, blockDataRef, invalidBlocks, urnMap, procDefs)
+
   def create[F[_]: Concurrent: Log: Metrics: Span, M[_]](
       spaceAndReplay: ISpaceAndReplay[F],
       extraSystemProcesses: Seq[SystemProcess.Definition[F]] = Seq.empty
@@ -298,96 +386,33 @@ object Runtime {
   ): F[Runtime[F]] = {
     val errorLog                               = new ErrorLog[F]()
     implicit val ft: FunctorTell[F, Throwable] = errorLog
-
-    def dispatchTableCreator(
-        space: RhoTuplespace[F],
-        dispatcher: RhoDispatch[F],
-        deployParametersRef: Ref[F, DeployParameters],
-        blockData: Ref[F, BlockData],
-        invalidBlocks: InvalidBlocks[F]
-    ): RhoDispatchMap[F] = {
-      val systemProcesses = SystemProcesses[F](dispatcher, space)
-      import BodyRefs._
-      Map(
-        ED25519_VERIFY   -> systemProcesses.ed25519Verify,
-        SHA256_HASH      -> systemProcesses.sha256Hash,
-        KECCAK256_HASH   -> systemProcesses.keccak256Hash,
-        BLAKE2B256_HASH  -> systemProcesses.blake2b256Hash,
-        SECP256K1_VERIFY -> systemProcesses.secp256k1Verify
-      ) ++
-        (stdSystemProcesses[F] ++ extraSystemProcesses)
-          .map(
-            _.toDispatchTable(
-              SystemProcess
-                .Context(space, dispatcher, deployParametersRef, blockData, invalidBlocks)
-            )
-          )
-    }
-
-    val urnMap: Map[String, Par] = Map[String, Par](
-      "rho:crypto:secp256k1Verify"   -> Bundle(FixedChannels.SECP256K1_VERIFY, writeFlag = true),
-      "rho:crypto:blake2b256Hash"    -> Bundle(FixedChannels.BLAKE2B256_HASH, writeFlag = true),
-      "rho:crypto:keccak256Hash"     -> Bundle(FixedChannels.KECCAK256_HASH, writeFlag = true),
-      "rho:registry:lookup"          -> Bundle(FixedChannels.REG_LOOKUP, writeFlag = true),
-      "rho:registry:insertArbitrary" -> Bundle(FixedChannels.REG_INSERT_RANDOM, writeFlag = true),
-      "rho:registry:insertSigned:secp256k1" -> Bundle(
-        FixedChannels.REG_INSERT_SIGNED,
-        writeFlag = true
-      )
-    ) ++ (stdSystemProcesses[F] ++ extraSystemProcesses).map(_.toUrnMap)
-
-    val invalidBlocks = InvalidBlocks.unsafe[F]()
-
-    val procDefs: List[(Name, Arity, Remainder, BodyRef)] = {
-      import BodyRefs._
-      List(
-        (FixedChannels.ED25519_VERIFY, 4, None, ED25519_VERIFY),
-        (FixedChannels.SHA256_HASH, 2, None, SHA256_HASH),
-        (FixedChannels.KECCAK256_HASH, 2, None, KECCAK256_HASH),
-        (FixedChannels.BLAKE2B256_HASH, 2, None, BLAKE2B256_HASH),
-        (FixedChannels.SECP256K1_VERIFY, 4, None, SECP256K1_VERIFY)
-      ) ++ (stdSystemProcesses[F] ++ extraSystemProcesses).map(_.toProcDefs)
-    }
-
+    val (space, replaySpace)                   = spaceAndReplay
     for {
-      deployParametersRef  <- Ref.of(DeployParameters.empty)
-      blockDataRef         <- Ref.of(BlockData.empty)
-      (space, replaySpace) = spaceAndReplay
+      mapsAndRefs                                                          <- setupMapsAndRefs(extraSystemProcesses)
+      (deployParametersRef, blockDataRef, invalidBlocks, urnMap, procDefs) = mapsAndRefs
       (reducer, replayReducer) = {
 
-        val chargingReplaySpace = ChargingRSpace.chargingRSpace[F](replaySpace)
-        lazy val replayDispatchTable: RhoDispatchMap[F] =
-          dispatchTableCreator(
-            chargingReplaySpace,
-            replayDispatcher,
-            deployParametersRef,
-            blockDataRef,
-            invalidBlocks
-          )
+        val replayReducer = setupReducer(
+          ChargingRSpace.chargingRSpace[F](replaySpace),
+          deployParametersRef,
+          blockDataRef,
+          invalidBlocks,
+          extraSystemProcesses,
+          urnMap
+        )
 
-        lazy val (replayDispatcher, replayReducer) =
-          RholangAndScalaDispatcher.create(
-            chargingReplaySpace,
-            replayDispatchTable,
-            urnMap
-          )
-
-        val chargingRSpace = ChargingRSpace.chargingRSpace[F](space)
-        lazy val dispatchTable: RhoDispatchMap[F] =
-          dispatchTableCreator(
-            chargingRSpace,
-            dispatcher,
-            deployParametersRef,
-            blockDataRef,
-            invalidBlocks
-          )
-
-        lazy val (dispatcher, reducer) =
-          RholangAndScalaDispatcher.create(chargingRSpace, dispatchTable, urnMap)
+        val reducer = setupReducer(
+          ChargingRSpace.chargingRSpace[F](space),
+          deployParametersRef,
+          blockDataRef,
+          invalidBlocks,
+          extraSystemProcesses,
+          urnMap
+        )
 
         (reducer, replayReducer)
       }
-      res <- introduceSystemProcesses(space, replaySpace, procDefs)
+      res <- introduceSystemProcesses(space :: replaySpace :: Nil, procDefs)
     } yield {
       assert(res.forall(_.isEmpty))
       new Runtime[F](
@@ -404,26 +429,32 @@ object Runtime {
     }
   }
 
-  def bootstrapRegistry[F[_]: FlatMap](runtime: Runtime[F]): F[Unit] = {
-    // This is from Nassim Taleb's "Skin in the Game"
-    implicit val rand = Blake2b512Random(
-      ("Decentralization is based on the simple notion that it is easier to macrobull***t than microbull***t. " +
-        "Decentralization reduces large structural asymmetries.")
-        .getBytes()
-    )
+  // This is from Nassim Taleb's "Skin in the Game"
+  val bootstrapRand = Blake2b512Random(
+    ("Decentralization is based on the simple notion that it is easier to macrobull***t than microbull***t. " +
+      "Decentralization reduces large structural asymmetries.")
+      .getBytes()
+  )
+
+  def bootstrapRegistry[F[_]: Monad](runtime: Runtime[F]): F[Unit] =
+    bootstrapRegistry(runtime, runtime.reducer :: runtime.replayReducer :: Nil)
+
+  def bootstrapRegistry[F[_]: Monad](hasCost: HasCost[F], reducers: List[Reduce[F]]): F[Unit] = {
+    implicit val rand = bootstrapRand
     for {
-      cost <- runtime.cost.get
-      _    <- runtime.cost.set(Cost.UNSAFE_MAX)
-      _    <- runtime.reducer.inj(RegistryBootstrap.AST)
-      _    <- runtime.replayReducer.inj(RegistryBootstrap.AST)
-      _    <- runtime.cost.set(cost)
+      cost <- hasCost.cost.get
+      _    <- hasCost.cost.set(Cost.UNSAFE_MAX)
+      _    <- reducers.traverse_[F, Unit](_.inj(RegistryBootstrap.AST))
+      _    <- hasCost.cost.set(cost)
     } yield ()
   }
 
   def setupRSpace[F[_]: Concurrent: ContextShift: par.Par: Log: Metrics: Span](
       dataDir: Path,
       mapSize: Long
-  )(implicit scheduler: ExecutionContext): F[(RhoISpace[F], RhoReplayISpace[F])] = {
+  )(
+      implicit scheduler: ExecutionContext
+  ): F[(RhoISpace[F], RhoReplayISpace[F], RhoHistoryRepository[F])] = {
 
     import coop.rchain.rholang.interpreter.storage._
     implicit val m: Match[F, BindPattern, ListParWithRandom] = matchListPar[F]

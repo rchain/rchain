@@ -72,14 +72,14 @@ object Resources {
       additionalSystemProcesses: Seq[SystemProcess.Definition[F]] = Seq.empty
   )(implicit scheduler: Scheduler): Resource[F, Runtime[F]] =
     Resource.make[F, Runtime[F]](
-      Runtime.setupRSpace[F](path, storageSize) >>= (
-          sar =>
-            Runtime
-              .createWithEmptyCost[F](
-                sar,
-                additionalSystemProcesses
-              )
-        )
+      Runtime.setupRSpace[F](path, storageSize) >>= {
+        case (space, replay, _) =>
+          Runtime
+            .createWithEmptyCost[F](
+              (space, replay),
+              additionalSystemProcesses
+            )
+      }
     )(_.close())
 
 }

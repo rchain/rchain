@@ -25,7 +25,7 @@ import com.typesafe.scalalogging.Logger
 import monix.execution.atomic.AtomicAny
 import scodec.Codec
 
-class RSpace[F[_], C, P, A, K] private[rspace] (
+class RSpace[F[_], C, P, A, K](
     historyRepository: HistoryRepository[F, C, P, A, K],
     storeAtom: AtomicAny[HotStore[F, C, P, A, K]],
     branch: Branch
@@ -435,7 +435,7 @@ object RSpace {
       metricsF: Metrics[F],
       spanF: Span[F],
       par: Par[F]
-  ): F[(ISpace[F, C, P, A, K], IReplaySpace[F, C, P, A, K])] = {
+  ): F[(ISpace[F, C, P, A, K], IReplaySpace[F, C, P, A, K], HistoryRepository[F, C, P, A, K])] = {
     val v2Dir = dataDir.resolve("v2")
     for {
       setup                  <- setUp[F, C, P, A, K](v2Dir, mapSize, Branch.MASTER)
@@ -447,7 +447,7 @@ object RSpace {
         AtomicAny(replayStore),
         Branch.REPLAY
       )
-    } yield (space, replay)
+    } yield (space, replay, historyReader)
   }
 
   def create[F[_], C, P, A, K](

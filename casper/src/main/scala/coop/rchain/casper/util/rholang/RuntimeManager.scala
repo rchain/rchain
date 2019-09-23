@@ -65,7 +65,7 @@ trait RuntimeManager[F[_]] {
   def withRuntimeLock[A](f: Runtime[F] => F[A]): F[A]
 }
 
-class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log] private[rholang] (
+class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log](
     val emptyStateHash: StateHash,
     runtimeContainer: MVar[F, Runtime[F]]
 ) extends RuntimeManager[F] {
@@ -101,7 +101,7 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log] private[rholang] 
   ): F[EvaluateResult] =
     for {
       _      <- runtime.deployParametersRef.set(ProtoUtil.getRholangDeployParams(deploy))
-      result <- doInj(deploy, reducer, runtime.errorLog)(runtime.cost)
+      result <- RuntimeManager.doInj(deploy, reducer, runtime.errorLog)(Sync[F], runtime.cost)
     } yield result
 
   def replayComputeState(startHash: StateHash)(
@@ -342,23 +342,6 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log] private[rholang] 
              }
     } yield cont
   }
-
-  private[this] def doInj(
-      deploy: DeployData,
-      reducer: Reduce[F],
-      errorLog: ErrorLog[F]
-  )(implicit C: _cost[F]): F[EvaluateResult] = {
-    implicit val rand: Blake2b512Random = Blake2b512Random(
-      ProtoUtil.stripDeployData(deploy).toProto.toByteArray
-    )
-    Interpreter[F].injAttempt(
-      reducer,
-      errorLog,
-      deploy.term,
-      Cost(deploy.phloLimit),
-      NormalizerEnv(deploy.toProto)
-    )
-  }
 }
 
 object RuntimeManager {
@@ -380,4 +363,21 @@ object RuntimeManager {
       _                = assert(hash == replayHash)
       runtime          <- MVar[F].of(runtime)
     } yield new RuntimeManagerImpl(hash, runtime)
+
+  def doInj[F[_]](
+      deploy: DeployData,
+      reducer: Reduce[F],
+      errorLog: ErrorLog[F]
+  )(implicit S: Sync[F], C: _cost[F]): F[EvaluateResult] = {
+    implicit val rand: Blake2b512Random = Blake2b512Random(
+      ProtoUtil.stripDeployData(deploy).toProto.toByteArray
+    )
+    Interpreter[F].injAttempt(
+      reducer,
+      errorLog,
+      deploy.term,
+      Cost(deploy.phloLimit),
+      NormalizerEnv(deploy.toProto)
+    )
+  }
 }

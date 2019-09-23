@@ -699,7 +699,7 @@ class ValidateTest
       val storageSize: Long = 3024L * 1024
       for {
         sar               <- Runtime.setupRSpace[Task](storageDirectory, storageSize)
-        activeRuntime     <- Runtime.createWithEmptyCost[Task](sar)
+        activeRuntime     <- Runtime.createWithEmptyCost[Task]((sar._1, sar._2))
         runtimeManager    <- RuntimeManager.fromRuntime[Task](activeRuntime)
         dag               <- blockDagStorage.getRepresentation
         _                 <- InterpreterUtil.validateBlockCheckpoint[Task](genesis, dag, runtimeManager)

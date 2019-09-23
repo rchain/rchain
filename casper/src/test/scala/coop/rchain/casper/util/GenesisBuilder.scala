@@ -102,7 +102,7 @@ object GenesisBuilder {
     (for {
       rspaceDir      <- Task.delay(Files.createDirectory(storageDirectory.resolve("rspace")))
       sar            <- Runtime.setupRSpace[Task](rspaceDir, storageSize)
-      activeRuntime  <- Runtime.createWithEmptyCost[Task](sar)
+      activeRuntime  <- Runtime.createWithEmptyCost[Task]((sar._1, sar._2))
       runtimeManager <- RuntimeManager.fromRuntime[Task](activeRuntime)
       genesis        <- Genesis.createGenesisBlock(runtimeManager, genesisParameters)
       _              <- activeRuntime.close()

@@ -272,7 +272,7 @@ object GenesisTest {
 
     for {
       sar     <- Runtime.setupRSpace[Task](storePath, storageSize)
-      runtime <- Runtime.createWithEmptyCost[Task](sar)
+      runtime <- Runtime.createWithEmptyCost[Task]((sar._1, sar._2))
       result  <- body(runtime, genesisPath, log, time)
       _       <- runtime.close()
       _       <- Sync[Task].delay { storePath.recursivelyDelete() }
