@@ -15,7 +15,12 @@ import coop.rchain.blockstorage.StorageError.StorageErr
 import coop.rchain.blockstorage.util.byteOps._
 import coop.rchain.blockstorage.util.io.IOError.RaiseIOError
 import coop.rchain.blockstorage.util.io.{IOError, _}
-import coop.rchain.casper.protocol.{ApprovedBlock, BlockMessage}
+import coop.rchain.casper.protocol.{
+  ApprovedBlock,
+  ApprovedBlockProto,
+  BlockMessage,
+  BlockMessageProto
+}
 import coop.rchain.lmdb.LMDBStore
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.shared.ByteStringOps._
@@ -66,14 +71,14 @@ class FileLMDBIndexBlockStore[F[_]: Monad: Sync: RaiseIOError: Log] private (
   private[this] def modifyCurrentIndex(f: Int => Int): F[Unit] =
     state.modify(s => s.copy(currentIndex = f(s.currentIndex)))
 
-  private def readBlockMessage(indexEntry: IndexEntry): F[BlockMessage] = {
-    def readBlockMessageFromFile(storageFile: RandomAccessIO[F]): F[BlockMessage] =
+  private def readBlockMessage(indexEntry: IndexEntry): F[BlockMessageProto] = {
+    def readBlockMessageFromFile(storageFile: RandomAccessIO[F]): F[BlockMessageProto] =
       for {
         _                      <- storageFile.seek(indexEntry.offset)
         blockMessageSizeOpt    <- storageFile.readInt
         blockMessagesByteArray = Array.ofDim[Byte](blockMessageSizeOpt.get)
         _                      <- storageFile.readFully(blockMessagesByteArray)
-        blockMessage           = BlockMessage.parseFrom(blockMessagesByteArray)
+        blockMessage           = BlockMessageProto.parseFrom(blockMessagesByteArray)
       } yield blockMessage
 
     for {
@@ -99,7 +104,7 @@ class FileLMDBIndexBlockStore[F[_]: Monad: Sync: RaiseIOError: Log] private (
                                         storageFile.close
                                       }
                                     case None =>
-                                      RaiseIOError[F].raise[BlockMessage](
+                                      RaiseIOError[F].raise[BlockMessageProto](
                                         UnavailableReferencedCheckpoint(
                                           indexEntry.checkpointIndex
                                         )
@@ -112,10 +117,10 @@ class FileLMDBIndexBlockStore[F[_]: Monad: Sync: RaiseIOError: Log] private (
   override def get(blockHash: BlockHash): F[Option[BlockMessage]] =
     lock.withPermit(
       for {
-        indexEntryBytesOpt <- index.get(blockHash.toDirectByteBuffer)
-        indexEntryOpt      = indexEntryBytesOpt.map(IndexEntry.load)
-        result             <- indexEntryOpt.traverse(readBlockMessage)
-      } yield result
+        indexEntryBytesOpt     <- index.get(blockHash.toDirectByteBuffer)
+        indexEntryOpt          = indexEntryBytesOpt.map(IndexEntry.load)
+        maybeBlockMessageProto <- indexEntryOpt.traverse(readBlockMessage)
+      } yield maybeBlockMessageProto >>= (bmp => BlockMessage.from(bmp).toOption)
     )
 
   override def find(p: BlockHash => Boolean): F[Seq[(BlockHash, BlockMessage)]] =
@@ -131,7 +136,7 @@ class FileLMDBIndexBlockStore[F[_]: Monad: Sync: RaiseIOError: Log] private (
         result <- filteredIndex.flatTraverse {
                    case (blockHash, indexEntry) =>
                      readBlockMessage(indexEntry)
-                       .map(block => List(blockHash -> block))
+                       .map(block => List(blockHash -> BlockMessage.from(block).right.get)) // TODO FIX-ME
                  }
       } yield result
     )
@@ -144,7 +149,7 @@ class FileLMDBIndexBlockStore[F[_]: Monad: Sync: RaiseIOError: Log] private (
         endOfFileOffset           <- randomAccessFile.length
         _                         <- randomAccessFile.seek(endOfFileOffset)
         (blockHash, blockMessage) = f
-        blockMessageByteArray     = blockMessage.toByteArray
+        blockMessageByteArray     = BlockMessage.toProto(blockMessage).toByteArray
         _                         <- randomAccessFile.writeInt(blockMessageByteArray.length)
         _                         <- randomAccessFile.write(blockMessageByteArray)
         _ <- index.put(
@@ -160,14 +165,14 @@ class FileLMDBIndexBlockStore[F[_]: Monad: Sync: RaiseIOError: Log] private (
         case bytes if bytes.isEmpty =>
           None
         case bytes =>
-          Some(ApprovedBlock.parseFrom(bytes))
+          ApprovedBlock.from(ApprovedBlockProto.parseFrom(bytes)).toOption
       }
     )
 
   def putApprovedBlock(block: ApprovedBlock): F[Unit] =
     lock.withPermit {
       val tmpFile = approvedBlockPath.resolveSibling(approvedBlockPath.getFileName + ".tmp")
-      writeToFile(tmpFile, block.toByteArray) >>
+      writeToFile(tmpFile, block.toProto.toByteArray) >>
         moveFile(tmpFile, approvedBlockPath, StandardCopyOption.ATOMIC_MOVE).as(())
     }
 

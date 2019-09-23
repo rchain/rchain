@@ -1,7 +1,7 @@
 package coop.rchain.casper.util.rholang
 
 import com.google.protobuf.ByteString
-import coop.rchain.casper.protocol.DeployData
+import coop.rchain.casper.protocol.DeployDataProto
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.hash.{Blake2b256, Blake2b512Random}
 import coop.rchain.crypto.signatures.Secp256k1
@@ -174,11 +174,11 @@ object RegistrySigGen {
     */
   def generateUnforgeableNameId(deployer: PublicKey, timestamp: Long) = {
     val seed =
-      DeployData()
+      DeployDataProto()
         .withDeployer(ByteString.copyFrom(deployer.bytes))
         .withTimestamp(timestamp)
 
-    val rnd = Blake2b512Random(DeployData.toByteArray(seed))
+    val rnd = Blake2b512Random(DeployDataProto.toByteArray(seed))
 
     rnd.next()
   }

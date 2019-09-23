@@ -37,12 +37,14 @@ final class IndexedBlockDagStorage[F[_]: Monad](
       currentId         <- currentIdRef.get
       dag               <- underlying.getRepresentation
       nextCreatorSeqNum <- dag.latestMessage(block.sender).map(_.fold(-1)(_.seqNum) + 1)
-      body              = block.body.get
       nextId            = if (block.seqNum == 0) currentId + 1L else block.seqNum.toLong
-      newPostState      = body.getState.withBlockNumber(nextId)
+      newPostState      = block.body.state.copy(blockNumber = nextId)
+      newPostStateHash  = Blake2b256.hash(newPostState.toProto.toByteArray)
       modifiedBlock = block
-        .withBody(body.withState(newPostState))
-        .withSeqNum(nextCreatorSeqNum)
+        .copy(
+          body = block.body.copy(state = newPostState),
+          seqNum = nextCreatorSeqNum
+        )
       _ <- underlying.insert(modifiedBlock, genesis, invalid)
       _ <- idToBlocksRef.update(_.updated(nextId, modifiedBlock))
       _ <- currentIdRef.set(nextId)

@@ -129,29 +129,24 @@ object ApproveBlockProtocol {
     implicit private val metricsSource: Metrics.Source =
       Metrics.Source(CasperMetricsSource, "approve-block")
 
-    private val trustedValidators = genesisBlock.body
-      .flatMap(_.state.map(_.bonds.map(_.validator).toSet))
-      .getOrElse(Set.empty)
-    private val candidate                 = ApprovedBlockCandidate(Some(genesisBlock), requiredSigs)
-    private val u                         = UnapprovedBlock(Some(candidate), start, duration.toMillis)
-    private val serializedUnapprovedBlock = u.toByteString
+    private val trustedValidators         = genesisBlock.body.state.bonds.map(_.validator).toSet
+    private val candidate                 = ApprovedBlockCandidate(genesisBlock, requiredSigs)
+    private val u                         = UnapprovedBlock(candidate, start, duration.toMillis)
+    private val serializedUnapprovedBlock = u.toProto.toByteString
     private val candidateHash             = PrettyPrinter.buildString(genesisBlock.blockHash)
-    private val sigData                   = Blake2b256.hash(candidate.toByteArray)
+    private val sigData                   = Blake2b256.hash(candidate.toProto.toByteArray)
 
     def addApproval(a: BlockApproval): F[Unit] = {
-      val validSig = for {
-        c   <- a.candidate if c == this.candidate
-        sig <- a.sig if Validate.signature(sigData, sig)
-      } yield sig
+      val validSig =
+        (a.candidate == this.candidate) && Validate.signature(sigData, a.sig)
 
-      val sender =
-        a.sig.fold("<Empty Signature>")(sig => Base16.encode(sig.publicKey.toByteArray))
+      val sender = Base16.encode(a.sig.publicKey.toByteArray)
 
       if (signedByTrustedValidator(a)) {
-        if (validSig.isDefined) {
+        if (validSig) {
           for {
             modifyResult <- sigsF.modify(sigs => {
-                             val newSigs = sigs + validSig.get
+                             val newSigs = sigs + a.sig
                              (newSigs, (sigs, newSigs))
                            })
             (before, after) = modifyResult
@@ -172,19 +167,18 @@ object ApproveBlockProtocol {
 
             _ <- EventLog[F].publish(
                   shared.Event.BlockApprovalReceived(
-                    a.candidate
-                      .flatMap(_.block.map(b => PrettyPrinter.buildStringNoLimit(b.blockHash)))
-                      .getOrElse(""),
+                    PrettyPrinter.buildStringNoLimit(a.candidate.block.blockHash),
                     sender
                   )
                 )
+
           } yield ()
         } else Log[F].warn(s"APPROVAL: ignoring invalid block approval from $sender")
       } else Log[F].warn(s"APPROVAL: Received BlockApproval from untrusted validator.")
     }
 
     private def signedByTrustedValidator(a: BlockApproval): Boolean =
-      a.sig.fold(false)(s => trustedValidators.contains(s.publicKey))
+      trustedValidators.contains(a.sig.publicKey)
 
     def run(): F[Unit] =
       Log[F].info("Start execution of ApprovedBlockProtocol") >>
@@ -212,7 +206,7 @@ object ApproveBlockProtocol {
     private def completeIf(time: Long, signatures: Set[Signature]): F[Unit] =
       if ((time >= start + duration.toMillis && signatures.size >= requiredSigs) || requiredSigs == 0) {
         for {
-          _ <- LastApprovedBlock[F].set(ApprovedBlock(Some(candidate), signatures.toSeq))
+          _ <- LastApprovedBlock[F].set(ApprovedBlock(candidate, signatures.toList))
           _ <- sendApprovedBlock
         } yield ()
       } else Time[F].sleep(interval) >> internalRun()
@@ -224,7 +218,7 @@ object ApproveBlockProtocol {
               case None =>
                 Log[F].warn(s"APPROVAL: Expected ApprovedBlock but was None.")
               case Some(b) =>
-                val serializedApprovedBlock = b.toByteString
+                val serializedApprovedBlock = b.toProto.toByteString
                 for {
                   _ <- Log[F].info(
                         s"APPROVAL: Beginning send of ApprovedBlock $candidateHash to peers..."

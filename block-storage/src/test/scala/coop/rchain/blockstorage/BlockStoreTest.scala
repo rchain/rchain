@@ -38,8 +38,19 @@ trait BlockStoreTest
     PropertyCheckConfiguration(minSuccessful = PosInt(100))
 
   private[this] def toBlockMessage(bh: BlockHash, v: Long, ts: Long): BlockMessage =
-    BlockMessage(blockHash = bh)
-      .withHeader(Header().withVersion(v).withTimestamp(ts))
+    BlockMessage
+      .from(
+        BlockMessageProto()
+          .withBlockHash(bh)
+          .withHeader(
+            HeaderProto()
+              .withVersion(v)
+              .withTimestamp(ts)
+          )
+          .withBody(BodyProto().withState(RChainStateProto()))
+      )
+      .right
+      .get
 
   def withStore[R](f: BlockStore[Task] => Task[R]): R
 
@@ -82,11 +93,13 @@ trait BlockStoreTest
         val items = blockStoreElements.map { block =>
           (block.blockHash, block, toBlockMessage(block.blockHash, 200L, 20000L))
         }
+
         for {
           _ <- items.traverse_[Task, Unit] { case (k, v1, _) => store.put(k, v1) }
           _ <- items.traverse_[Task, Assertion] {
                 case (k, v1, _) => store.get(k).map(_ shouldBe Some(v1))
               }
+
           _ <- items.traverse_[Task, Unit] { case (k, _, v2) => store.put(k, v2) }
           _ <- items.traverse_[Task, Assertion] {
                 case (k, _, v2) => store.get(k).map(_ shouldBe Some(v2))
@@ -196,10 +209,24 @@ class FileLMDBIndexBlockStoreTest extends BlockStoreTest {
   "FileLMDBIndexBlockStore" should "persist approved block on restart" in {
     withStoreLocation { blockStoreDataDir =>
       val approvedBlock =
-        ApprovedBlock(
-          Some(ApprovedBlockCandidate(Some(BlockMessage()), 1)),
-          List(Signature(ByteString.EMPTY, "", ByteString.EMPTY))
-        )
+        ApprovedBlock
+          .from(
+            ApprovedBlockProto(
+              Some(
+                ApprovedBlockCandidateProto(
+                  Some(
+                    BlockMessageProto()
+                      .withBody(BodyProto().withState(RChainStateProto()))
+                      .withHeader(HeaderProto())
+                  ),
+                  1
+                )
+              ),
+              List(Signature(ByteString.EMPTY, "", ByteString.EMPTY))
+            )
+          )
+          .right
+          .get
       for {
         firstStore          <- createBlockStore(blockStoreDataDir)
         _                   <- firstStore.putApprovedBlock(approvedBlock)

@@ -81,7 +81,7 @@ class DeployerIdTest extends FlatSpec with Matchers {
       for {
         contract        <- ConstructDeploy.sourceDeployNowF(checkDeployerDefinition, sec = deployer)
         block           <- node.addBlock(contract)
-        stateHash       = ProtoUtil.tuplespace(block).get
+        stateHash       = ProtoUtil.tuplespace(block)
         checkAuthDeploy <- ConstructDeploy.sourceDeployNowF(checkDeployerCall, sec = contractUser)
         result          <- node.runtimeManager.captureResults(stateHash, checkAuthDeploy, captureChannel)
         _               = assert(result.size == 1)

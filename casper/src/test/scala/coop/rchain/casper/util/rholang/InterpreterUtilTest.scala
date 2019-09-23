@@ -146,7 +146,7 @@ class InterpreterUtilTest
           b2 <- node2.publishBlock(b2Deploys: _*)(node1)
           b3 <- node1.addBlock(b3Deploys: _*)
 
-          _ = b3.header.get.parentsHashList.toSet shouldBe Set(b1, b2).map(_.blockHash)
+          _ = b3.header.parentsHashList.toSet shouldBe Set(b1, b2).map(_.blockHash)
           _ <- getDataAtPublicChannel[Task](b3, 5) shouldBeF Seq("5")
           _ <- getDataAtPublicChannel[Task](b3, 1) shouldBeF Seq("15")
         } yield ()
@@ -183,7 +183,7 @@ class InterpreterUtilTest
 
   def prepareDeploys(v: Vector[String], c: PCost) = {
     val genesisDeploys = v.map(ConstructDeploy.sourceDeployNow)
-    genesisDeploys.map(d => ProcessedDeploy().withDeploy(d).withCost(c))
+    genesisDeploys.map(d => ProcessedDeploy(d, c, List.empty, List.empty, false))
   }
 
   it should "merge histories in case of multiple parents with complex contract" ignore withGenesis(
@@ -322,7 +322,7 @@ class InterpreterUtilTest
     implicit blockStore => implicit blockDagStorage =>
       val deploys = Vector("@1!(1)").map(ConstructDeploy.sourceDeployNow)
       val processedDeploys =
-        deploys.map(d => ProcessedDeploy().withDeploy(d).withCost(PCost(1L)))
+        deploys.map(d => ProcessedDeploy(d, PCost(1L), List.empty, List.empty, false))
       val invalidHash = ByteString.EMPTY
       mkRuntimeManager("interpreter-util-test").use { runtimeManager =>
         for {

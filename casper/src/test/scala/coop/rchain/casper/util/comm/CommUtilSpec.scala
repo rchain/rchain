@@ -43,7 +43,11 @@ class CommUtilSpec extends FunSpec with BeforeAndAfterEach with Matchers {
           // when
           CommUtil.sendBlockRequest[Coeval](hash).apply()
           // then
-          val requested = transport.requests.map(_.msg).map(toHasBlockRequest).map(_.hash).toSet
+          val requested = transport.requests
+            .map(_.msg)
+            .map(toHasBlockRequest)
+            .map(_.hash)
+            .toSet
           requested should be(Set(hash))
           val requestedPeers = transport.requests.map(_.peer)
           requestedPeers should contain(peers(0))
@@ -117,7 +121,7 @@ class CommUtilSpec extends FunSpec with BeforeAndAfterEach with Matchers {
     PeerNode(NodeIdentifier(name.getBytes), endpoint(port))
 
   private def toHasBlockRequest(protocol: Protocol): HasBlockRequest =
-    packetToHasBlockRequest(toPacket(protocol).right.get).get
+    HasBlockRequest.from(packetToHasBlockRequest(toPacket(protocol).right.get).get)
 
   private def alwaysSuccess: PeerNode => Protocol => CommErr[Unit] = kp(kp(Right(())))
 }

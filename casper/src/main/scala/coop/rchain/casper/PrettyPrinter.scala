@@ -13,23 +13,20 @@ object PrettyPrinter {
   def buildStringNoLimit(b: Array[Byte]): String = Base16.encode(b)
   def buildStringNoLimit(b: ByteString): String  = Base16.encode(b.toByteArray)
 
-  def buildString(t: GeneratedMessage): String =
+  def buildString(t: CasperMessage): String =
     t match {
       case b: BlockMessage => buildString(b)
-      case d: DeployData   => buildString(d)
       case _               => "Unknown consensus protocol message"
     }
 
+  // TODO shouldn header.parentsHashList be nonempty list?
   private def buildString(b: BlockMessage): String = {
     val blockString = for {
-      header     <- b.header
-      mainParent <- header.parentsHashList.headOption
-      body       <- b.body
-      postState  <- body.state
-    } yield s"Block #${postState.blockNumber} (${buildString(b.blockHash)}) " +
+      mainParent <- b.header.parentsHashList.headOption
+    } yield s"Block #${b.body.state.blockNumber} (${buildString(b.blockHash)}) " +
       s"-- Sender ID ${buildString(b.sender)} " +
       s"-- M Parent Hash ${buildString(mainParent)} " +
-      s"-- Contents ${buildString(postState)}" +
+      s"-- Contents ${buildString(b.body.state)}" +
       s"-- Shard ID ${limit(b.shardId, 10)}"
     blockString match {
       case Some(str) => str
@@ -44,23 +41,17 @@ object PrettyPrinter {
       str
     }
 
-  def buildString(d: ProcessedDeploy): String = {
-    val deployString = for {
-      deployData <- d.deploy
-      pCost      <- d.cost
-      cost       = pCost.cost
-    } yield s"User: ${buildStringNoLimit(deployData.deployer)}, Cost: ${cost.toString} " +
-      s"${buildString(deployData)}"
-    deployString.getOrElse("No deploy data")
-  }
+  def buildString(d: ProcessedDeploy): String =
+    s"User: ${buildStringNoLimit(d.deploy.deployer)}, Cost: ${d.cost.toString} " +
+      s"${buildString(d.deploy)}"
 
   def buildString(b: ByteString): String =
     limit(Base16.encode(b.toByteArray), 10)
 
-  private def buildString(d: DeployData): String =
+  def buildString(d: DeployData): String =
     s"DeployData #${d.timestamp} -- ${d.term}}"
 
-  private def buildString(r: RChainState): String =
+  def buildString(r: RChainState): String =
     buildString(r.postStateHash)
 
   def buildString(b: Bond): String =

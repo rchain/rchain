@@ -94,17 +94,19 @@ object DeployRuntime {
             timestamp <- Sync[F].delay(System.currentTimeMillis())
 
             //TODO: allow user to specify their public key
-            d = DeployData()
-              .withTimestamp(timestamp)
-              .withTerm(code)
-              .withPhloLimit(phloLimit)
-              .withPhloPrice(phloPrice)
-              .withValidAfterBlockNumber(validAfterBlock)
-              .withTimestamp(timestamp)
+            d = DeployData(
+              deployer = ByteString.EMPTY,
+              term = code,
+              timestamp = timestamp,
+              sig = ByteString.EMPTY,
+              sigAlgorithm = "",
+              phloPrice = phloPrice,
+              phloLimit = phloLimit,
+              validAfterBlockNumber = validAfterBlock
+            )
 
             signedData = maybePrivateKey.fold(d)(SignDeployment.sign(_, d))
-
-            response <- DeployService[F].deploy(signedData)
+            response   <- DeployService[F].deploy(signedData)
           } yield response.map(r => s"Response: $r")
       }
     )

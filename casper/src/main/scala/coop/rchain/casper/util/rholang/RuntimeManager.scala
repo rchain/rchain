@@ -349,14 +349,14 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log] private[rholang] 
       errorLog: ErrorLog[F]
   )(implicit C: _cost[F]): F[EvaluateResult] = {
     implicit val rand: Blake2b512Random = Blake2b512Random(
-      DeployData.toByteArray(ProtoUtil.stripDeployData(deploy))
+      ProtoUtil.stripDeployData(deploy).toProto.toByteArray
     )
     Interpreter[F].injAttempt(
       reducer,
       errorLog,
       deploy.term,
       Cost(deploy.phloLimit),
-      NormalizerEnv(deploy)
+      NormalizerEnv(deploy.toProto)
     )
   }
 }

@@ -1,10 +1,11 @@
 package coop.rchain.casper.util
 
+import coop.rchain.models.PCost
 import cats.implicits._
 import cats.{Functor, Monad}
 import com.google.protobuf.ByteString
 import coop.rchain.casper.SignDeployment
-import coop.rchain.casper.protocol.{DeployData, ProcessedDeploy}
+import coop.rchain.casper.protocol.{DeployData, ProcessedDeploy, ProcessedDeployProto}
 import coop.rchain.crypto.PrivateKey
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.signatures.Secp256k1
@@ -34,13 +35,18 @@ object ConstructDeploy {
       phloPrice: Long = 1L,
       sec: PrivateKey = defaultSec
   ): DeployData = {
-    val data = DeployData(
-      deployer = ByteString.copyFrom(Secp256k1.toPublic(sec).bytes),
-      timestamp = timestamp,
-      term = source,
-      phloLimit = phloLimit,
-      phloPrice = phloPrice
-    )
+    val data =
+      DeployData(
+        deployer = ByteString.copyFrom(Secp256k1.toPublic(sec).bytes),
+        term = source,
+        timestamp = timestamp,
+        sig = ByteString.EMPTY,
+        sigAlgorithm = "",
+        phloLimit = phloLimit,
+        phloPrice = phloPrice,
+        validAfterBlockNumber = 0L
+      )
+
     sign(data, sec)
   }
 
@@ -76,5 +82,7 @@ object ConstructDeploy {
   def basicProcessedDeploy[F[_]: Monad: Time](
       id: Int
   ): F[ProcessedDeploy] =
-    basicDeployData[F](id).map(deploy => ProcessedDeploy(deploy = Some(deploy)))
+    basicDeployData[F](id).map(
+      deploy => ProcessedDeploy(deploy = deploy, cost = PCost(0L), List.empty, List.empty, false)
+    )
 }

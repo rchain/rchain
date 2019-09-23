@@ -24,7 +24,7 @@ class GenesisValidatorSpec extends WordSpec {
 
       implicit val engineCell: EngineCell[Task] =
         Cell.unsafe[Task, Engine[Task]](Engine.noop)
-      val expectedCandidate = ApprovedBlockCandidate(Some(genesis), requiredSigs)
+      val expectedCandidate = ApprovedBlockCandidate(genesis, requiredSigs)
       val unapprovedBlock   = BlockApproverProtocolTest.createUnapproved(requiredSigs, genesis)
       val test = for {
         _ <- engineCell.set(
@@ -36,7 +36,7 @@ class GenesisValidatorSpec extends WordSpec {
           local,
           networkId,
           transport.BlockApproval,
-          blockApproval.toByteString
+          blockApproval.toProto.toByteString
         )
         _ = {
           val lastMessage = transportLayer.requests.last
@@ -65,7 +65,7 @@ class GenesisValidatorSpec extends WordSpec {
           local,
           networkId,
           transport.NoApprovedBlockAvailable,
-          NoApprovedBlockAvailable(approvedBlockRequest.identifier, local.toString).toByteString
+          NoApprovedBlockAvailable(approvedBlockRequest.identifier, local.toString).toProto.toByteString
         )
         _            = assert(head.peer == local && head.msg == response)
         _            = transportLayer.reset()

@@ -6,22 +6,14 @@ import coop.rchain.casper.protocol.{BlockMessage, Bond, DeployData}
 object BlockMessageUtil {
   // TODO: Remove once optional fields are removed
   def blockNumber(b: BlockMessage): Long =
-    (for {
-      bd <- b.body
-      ps <- bd.state
-    } yield ps.blockNumber).getOrElse(0L)
+    b.body.state.blockNumber
 
   def bonds(b: BlockMessage): Seq[Bond] =
-    (for {
-      bd <- b.body
-      ps <- bd.state
-    } yield ps.bonds).getOrElse(List.empty[Bond])
+    b.body.state.bonds
 
   def deployData(b: BlockMessage): Seq[DeployData] =
-    (for {
-      bs <- b.body
-    } yield bs.deploys.flatMap(_.deploy)).getOrElse(List.empty)
+    b.body.deploys.map(_.deploy)
 
   def parentHashes(b: BlockMessage): Seq[ByteString] =
-    b.header.fold(Seq.empty[ByteString])(_.parentsHashList)
+    b.header.parentsHashList
 }

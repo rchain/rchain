@@ -6,12 +6,19 @@ import cats.{Applicative, Monad}
 import cats.data.EitherT
 import cats.effect.{Concurrent, Sync}
 import cats.implicits._
-
+import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockStore
 import coop.rchain.blockstorage.dag.BlockDagRepresentation
-import coop.rchain.casper.protocol._
-import coop.rchain.casper.protocol.Event.EventInstance
-import coop.rchain.casper.util.{DagOperations, ProtoUtil}
+import coop.rchain.casper.util.ProtoUtil
+import coop.rchain.casper.protocol.EventProto.EventInstance
+import coop.rchain.casper.protocol.{
+  ApprovedBlock,
+  BlockMessage,
+  Justification,
+  ProcessedDeploy,
+  RChainState
+}
+import coop.rchain.casper.util.DagOperations
 import coop.rchain.casper.util.ProtoUtil.bonds
 import coop.rchain.casper.util.rholang.{InterpreterUtil, RuntimeManager}
 import coop.rchain.crypto.codec.Base16
@@ -46,46 +53,36 @@ object Validate {
   def approvedBlock[F[_]: Sync: Log](
       approvedBlock: ApprovedBlock
   ): F[Boolean] = {
-    val maybeCandidateBytesDigest = for {
-      candidate <- approvedBlock.candidate
-      bytes     = candidate.toByteArray
-    } yield Blake2b256.hash(bytes)
+    val candidateBytesDigest = Blake2b256.hash(approvedBlock.candidate.toProto.toByteArray)
 
-    val requiredSignatures = approvedBlock.candidate.map(_.requiredSigs).getOrElse(0)
+    val requiredSignatures = approvedBlock.candidate.requiredSigs
 
-    maybeCandidateBytesDigest match {
-      case Some(candidateBytesDigest) =>
-        val signatories =
-          (for {
-            signature <- approvedBlock.sigs
-            verifySig <- signatureVerifiers.get(signature.algorithm)
-            publicKey = signature.publicKey
-            if verifySig(candidateBytesDigest, signature.sig.toByteArray, publicKey.toByteArray)
-          } yield publicKey).toSet
+    val signatories =
+      (for {
+        signature <- approvedBlock.sigs
+        verifySig <- signatureVerifiers.get(signature.algorithm)
+        publicKey = signature.publicKey
+        if verifySig(candidateBytesDigest, signature.sig.toByteArray, publicKey.toByteArray)
+      } yield publicKey).toSet
 
-        for {
-          _ <- Log[F]
-                .info(
-                  s"Block already signed by: ${signatories
-                    .map(x => "<" + Base16.encode(x.toByteArray).substring(0, 10) + "...>")
-                    .mkString(", ")}"
-                )
+    for {
+      _ <- Log[F]
+            .info(
+              s"Block already signed by: ${signatories
+                .map(x => "<" + Base16.encode(x.toByteArray).substring(0, 10) + "...>")
+                .mkString(", ")}"
+            )
 
-          result <- if (signatories.size >= requiredSignatures)
-                     true.pure[F]
-                   else
-                     Log[F]
-                       .warn(
-                         "Received invalid ApprovedBlock message not containing enough valid signatures."
-                       )
-                       .as(false)
-        } yield result
+      result <- if (signatories.size >= requiredSignatures)
+                 true.pure[F]
+               else
+                 Log[F]
+                   .warn(
+                     "Received invalid ApprovedBlock message not containing enough valid signatures."
+                   )
+                   .as(false)
+    } yield result
 
-      case None =>
-        Log[F]
-          .warn("Received invalid ApprovedBlock message not containing any candidate.")
-          .as(false)
-    }
   }
 
   def blockSignature[F[_]: Applicative: Log](b: BlockMessage): F[Boolean] =
@@ -130,14 +127,6 @@ object Validate {
       for {
         _ <- Log[F].warn(ignore(b, s"block hash is empty."))
       } yield false
-    } else if (b.header.isEmpty) {
-      for {
-        _ <- Log[F].warn(ignore(b, s"block header is missing."))
-      } yield false
-    } else if (b.body.isEmpty) {
-      for {
-        _ <- Log[F].warn(ignore(b, s"block body is missing."))
-      } yield false
     } else if (b.sig.isEmpty) {
       for {
         _ <- Log[F].warn(ignore(b, s"block signature is empty."))
@@ -150,36 +139,20 @@ object Validate {
       for {
         _ <- Log[F].warn(ignore(b, s"block shard identifier is empty."))
       } yield false
-    } else if (b.header.get.deploysHash.isEmpty) {
+    } else if (b.header.deploysHash.isEmpty) {
       for {
         _ <- Log[F].warn(ignore(b, s"block new code hash is empty."))
       } yield false
-    } else if (b.body.get.state.isEmpty) {
-      for {
-        _ <- Log[F].warn(ignore(b, s"block post state is missing."))
-      } yield false
-    } else if (b.body.get.state.get.postStateHash.isEmpty) {
+    } else if (b.body.state.postStateHash.isEmpty) {
       for {
         _ <- Log[F].warn(ignore(b, s"block post state hash is empty."))
-      } yield false
-    } else if (b.body.get.deploys
-                 .flatMap(_.deployLog)
-                 .exists(_.eventInstance == EventInstance.Empty)) {
-      for {
-        _ <- Log[F].warn(ignore(b, s"one of block deploy comm reduction events is empty."))
-      } yield false
-    } else if (b.body.get.deploys
-                 .flatMap(_.paymentLog)
-                 .exists(_.eventInstance == EventInstance.Empty)) {
-      for {
-        _ <- Log[F].warn(ignore(b, s"one of block payment comm reduction events is empty."))
       } yield false
     } else {
       true.pure[F]
     }
 
   def version[F[_]: Monad: Log](b: BlockMessage, version: Long): F[Boolean] = {
-    val blockVersion = b.header.get.version
+    val blockVersion = b.header.version
     if (blockVersion == version) {
       true.pure[F]
     } else {
@@ -263,10 +236,7 @@ object Validate {
       dag: BlockDagRepresentation[F],
       expirationThreshold: Int
   ): F[ValidBlockProcessing] = {
-    val deployKeySet = (for {
-      bd <- block.body.toList
-      r  <- bd.deploys.flatMap(_.deploy)
-    } yield r.sig).toSet
+    val deployKeySet = block.body.deploys.map(_.deploy.sig).toSet
 
     for {
       _                   <- Span[F].mark("before-repeat-deploy-get-parents")
@@ -290,7 +260,7 @@ object Validate {
                                            block <- ProtoUtil.getBlock[F](
                                                      blockMetadata.blockHash
                                                    )
-                                           blockDeploys = ProtoUtil.deploys(block).flatMap(_.deploy)
+                                           blockDeploys = ProtoUtil.deploys(block).map(_.deploy)
                                          } yield blockDeploys.exists(
                                            d => deployKeySet.contains(d.sig)
                                          )
@@ -307,7 +277,7 @@ object Validate {
                            blockHashString        = PrettyPrinter.buildString(duplicatedBlock.blockHash)
                            duplicatedDeploy = ProtoUtil
                              .deploys(duplicatedBlock)
-                             .flatMap(_.deploy)
+                             .map(_.deploy)
                              .find(d => deployKeySet.contains(d.sig))
                              .get
                            term            = duplicatedDeploy.term
@@ -328,15 +298,14 @@ object Validate {
   ): F[ValidBlockProcessing] =
     for {
       currentTime  <- Time[F].currentMillis
-      timestamp    = b.header.get.timestamp
+      timestamp    = b.header.timestamp
       beforeFuture = currentTime + DRIFT >= timestamp
       latestParentTimestamp <- ProtoUtil.parentHashes(b).toList.foldM(0L) {
                                 case (latestTimestamp, parentHash) =>
                                   ProtoUtil
                                     .getBlock[F](parentHash)
                                     .map(parent => {
-                                      val timestamp =
-                                        parent.header.fold(latestTimestamp)(_.timestamp)
+                                      val timestamp = parent.header.timestamp
                                       math.max(latestTimestamp, timestamp)
                                     })
                               }
@@ -393,7 +362,7 @@ object Validate {
 
   def futureTransaction[F[_]: Monad: Log](b: BlockMessage): F[ValidBlockProcessing] = {
     val blockNumber       = ProtoUtil.blockNumber(b)
-    val deploys           = ProtoUtil.deploys(b).flatMap(_.deploy)
+    val deploys           = ProtoUtil.deploys(b).map(_.deploy)
     val maybeFutureDeploy = deploys.find(_.validAfterBlockNumber >= blockNumber)
     maybeFutureDeploy
       .traverse { futureDeploy =>
@@ -412,7 +381,7 @@ object Validate {
       expirationThreshold: Int
   ): F[ValidBlockProcessing] = {
     val earliestAcceptableValidAfterBlockNumber = ProtoUtil.blockNumber(b) - expirationThreshold
-    val deploys                                 = ProtoUtil.deploys(b).flatMap(_.deploy)
+    val deploys                                 = ProtoUtil.deploys(b).map(_.deploy)
     val maybeExpiredDeploy =
       deploys.find(_.validAfterBlockNumber <= earliestAcceptableValidAfterBlockNumber)
     maybeExpiredDeploy
@@ -484,8 +453,8 @@ object Validate {
   // TODO: Double check this validation isn't shadowed by the blockSignature validation
   def blockHash[F[_]: Applicative: Log](b: BlockMessage): F[ValidBlockProcessing] = {
     val blockHashComputed = ProtoUtil.hashSignedBlock(
-      b.header.get,
-      b.body.get,
+      b.header,
+      b.body,
       b.sender,
       b.sigAlgorithm,
       b.seqNum,
@@ -509,7 +478,7 @@ object Validate {
   }
 
   def deployCount[F[_]: Applicative: Log](b: BlockMessage): F[ValidBlockProcessing] =
-    if (b.header.get.deployCount == b.body.get.deploys.length) {
+    if (b.header.deployCount == b.body.deploys.length) {
       BlockStatus.valid.asRight[BlockError].pure[F]
     } else {
       for {
@@ -738,28 +707,23 @@ object Validate {
       b: BlockMessage,
       runtimeManager: RuntimeManager[F]
   ): F[ValidBlockProcessing] = {
-    val bonds = ProtoUtil.bonds(b)
-    ProtoUtil.tuplespace(b) match {
-      case Some(tuplespaceHash) =>
-        runtimeManager.computeBonds(tuplespaceHash).attempt.flatMap {
-          case Right(computedBonds) =>
-            if (bonds.toSet == computedBonds.toSet) {
-              BlockStatus.valid.asRight[BlockError].pure[F]
-            } else {
-              for {
-                _ <- Log[F].warn(
-                      "Bonds in proof of stake contract do not match block's bond cache."
-                    )
-              } yield BlockStatus.invalidBondsCache.asLeft[ValidBlock]
-            }
-          case Left(ex: Throwable) =>
-            for {
-              _ <- Log[F].warn(s"Failed to compute bonds from tuplespace hash ${ex.getMessage}")
-            } yield BlockStatus.invalidBondsCache.asLeft[ValidBlock]
+    val bonds          = ProtoUtil.bonds(b)
+    val tuplespaceHash = ProtoUtil.tuplespace(b)
+
+    runtimeManager.computeBonds(tuplespaceHash).attempt.flatMap {
+      case Right(computedBonds) =>
+        if (bonds.toSet == computedBonds.toSet) {
+          BlockStatus.valid.asRight[BlockError].pure[F]
+        } else {
+          for {
+            _ <- Log[F].warn(
+                  "Bonds in proof of stake contract do not match block's bond cache."
+                )
+          } yield BlockStatus.invalidBondsCache.asLeft[ValidBlock]
         }
-      case None =>
+      case Left(ex: Throwable) =>
         for {
-          _ <- Log[F].warn(s"Block ${PrettyPrinter.buildString(b)} is missing a tuplespace hash.")
+          _ <- Log[F].warn(s"Failed to compute bonds from tuplespace hash ${ex.getMessage}")
         } yield BlockStatus.invalidBondsCache.asLeft[ValidBlock]
     }
   }

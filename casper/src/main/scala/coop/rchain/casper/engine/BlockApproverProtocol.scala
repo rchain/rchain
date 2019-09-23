@@ -43,38 +43,34 @@ final case class BlockApproverProtocol private (
   def unapprovedBlockPacketHandler[F[_]: Concurrent: TransportLayer: Log: Time: RPConfAsk: RuntimeManager](
       peer: PeerNode,
       u: UnapprovedBlock
-  ): F[Unit] =
-    if (u.candidate.isEmpty) {
-      Log[F].warn("Candidate is not defined.")
-    } else {
-      val candidate = u.candidate.get
-      BlockApproverProtocol
-        .validateCandidate(
-          candidate,
-          requiredSigs,
-          deployTimestamp,
-          vaults,
-          _bonds,
-          minimumBond,
-          maximumBond
-        )
-        .flatMap {
-          case Right(_) =>
-            for {
-              local <- RPConfAsk[F].reader(_.local)
-              serializedApproval = BlockApproverProtocol
-                .getApproval(candidate, validatorId)
-                .toByteString
-              msg = Blob(local, Packet(transport.BlockApproval.id, serializedApproval))
-              _   <- TransportLayer[F].stream(peer, msg)
-              _ <- Log[F].info(
-                    s"Received expected candidate from $peer. Approval sent in response."
-                  )
-            } yield ()
-          case Left(errMsg) =>
-            Log[F].warn(s"Received unexpected candidate from $peer because: $errMsg")
-        }
-    }
+  ): F[Unit] = {
+    val candidate = u.candidate
+    BlockApproverProtocol
+      .validateCandidate(
+        candidate,
+        requiredSigs,
+        deployTimestamp,
+        vaults,
+        _bonds,
+        minimumBond,
+        maximumBond
+      )
+      .flatMap {
+        case Right(_) =>
+          for {
+            local <- RPConfAsk[F].reader(_.local)
+            serializedApproval = BlockApproverProtocol
+              .getApproval(candidate, validatorId)
+              .toProto
+              .toByteString
+            msg = Blob(local, Packet(transport.BlockApproval.id, serializedApproval))
+            _   <- TransportLayer[F].stream(peer, msg)
+            _   <- Log[F].info(s"Received expected candidate from $peer. Approval sent in response.")
+          } yield ()
+        case Left(errMsg) =>
+          Log[F].warn(s"Received unexpected candidate from $peer because: $errMsg")
+      }
+  }
 }
 
 object BlockApproverProtocol {
@@ -106,9 +102,9 @@ object BlockApproverProtocol {
       expectedCandidate: ApprovedBlockCandidate,
       validatorId: ValidatorIdentity
   ): BlockApproval = {
-    val sigData = Blake2b256.hash(expectedCandidate.toByteArray)
+    val sigData = Blake2b256.hash(expectedCandidate.toProto.toByteArray)
     val sig     = validatorId.signature(sigData)
-    BlockApproval(Some(expectedCandidate), Some(sig))
+    BlockApproval(expectedCandidate, sig)
   }
 
   def getApproval(
@@ -132,10 +128,10 @@ object BlockApproverProtocol {
         _ <- (candidate.requiredSigs == requiredSigs)
               .either(())
               .or("Candidate didn't have required signatures number.")
-        block      <- Either.fromOption(candidate.block, "Candidate block is empty.")
-        body       <- Either.fromOption(block.body, "Body is empty")
-        postState  <- Either.fromOption(body.state, "Post state is empty")
-        blockBonds = postState.bonds.map { case Bond(validator, stake) => validator -> stake }.toMap
+        block = candidate.block
+        blockBonds = block.body.state.bonds.map {
+          case Bond(validator, stake) => validator -> stake
+        }.toMap
         _ <- (blockBonds == bonds)
               .either(())
               .or("Block bonds don't match expected.")
@@ -152,17 +148,17 @@ object BlockApproverProtocol {
             Long.MaxValue
           )
           .toSet
-        blockDeploys = body.deploys.flatMap(InternalProcessedDeploy.fromProcessedDeploy)
+        blockDeploys = block.body.deploys.map(InternalProcessedDeploy.fromProcessedDeploy)
         _ <- (blockDeploys.size == genesisBlessedContracts.size)
               .either(())
               .or("Mismatch between number of candidate deploys and expected number of deploys.")
-      } yield (blockDeploys, postState)
+      } yield (blockDeploys, block.body.state)
 
     (for {
       result                    <- EitherT(validate.pure[F])
       (blockDeploys, postState) = result
-      time                      = candidate.block.get.header.get.timestamp
-      blockNumber               = candidate.block.get.body.get.state.get.blockNumber
+      time                      = candidate.block.header.timestamp
+      blockNumber               = candidate.block.body.state.blockNumber
       stateHash <- EitherT(
                     runtimeManager
                       .replayComputeState(runtimeManager.emptyStateHash)(
@@ -193,11 +189,6 @@ object BlockApproverProtocol {
           )
     } yield ()).value
   }
-
-  def packetToUnapprovedBlock(msg: Packet): Option[UnapprovedBlock] =
-    if (msg.typeId == transport.UnapprovedBlock.id)
-      Try(UnapprovedBlock.parseFrom(msg.content.toByteArray)).toOption
-    else None
 
   val deployDataEq: cats.kernel.Eq[DeployData] = new cats.kernel.Eq[DeployData] {
     override def eqv(x: DeployData, y: DeployData): Boolean =

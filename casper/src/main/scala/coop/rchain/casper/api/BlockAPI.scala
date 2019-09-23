@@ -208,8 +208,7 @@ object BlockAPI {
       block: BlockMessage
   )(implicit casper: MultiParentCasper[F]): F[Option[DataWithBlockInfo]] =
     if (isListeningNameReduced(block, immutable.Seq(sortedListeningName))) {
-      val stateHash =
-        ProtoUtil.tuplespace(block).get
+      val stateHash = ProtoUtil.tuplespace(block)
       for {
         data      <- runtimeManager.getData(stateHash)(sortedListeningName)
         blockInfo <- getLightBlockInfo[F](block)
@@ -225,7 +224,7 @@ object BlockAPI {
   )(implicit casper: MultiParentCasper[F]): F[Option[ContinuationsWithBlockInfo]] =
     if (isListeningNameReduced(block, sortedListeningNames)) {
       val stateHash =
-        ProtoUtil.tuplespace(block).get
+        ProtoUtil.tuplespace(block)
       for {
         continuations <- runtimeManager.getContinuation(stateHash)(sortedListeningNames)
         continuationInfos = continuations.map(
@@ -244,8 +243,7 @@ object BlockAPI {
       sortedListeningName: immutable.Seq[Par]
   ): Boolean = {
     val serializedLog = for {
-      bd    <- block.body.toSeq
-      pd    <- bd.deploys
+      pd    <- block.body.deploys
       event <- pd.deployLog
     } yield event
     val log =
@@ -314,7 +312,7 @@ object BlockAPI {
     toposortDag[F, MachineVerifyResponse](maybeDepth = None) {
       case (_, topoSort) =>
         val fetchParents: BlockHash => F[List[BlockHash]] = { blockHash =>
-          ProtoUtil.getBlock[F](blockHash) map (_.getHeader.parentsHashList.toList)
+          ProtoUtil.getBlock[F](blockHash) map (_.header.parentsHashList)
         }
 
         MachineVerifiableDag[F](topoSort, fetchParents)
@@ -439,14 +437,11 @@ object BlockAPI {
       ) => F[A]
   )(implicit casper: MultiParentCasper[F]): F[A] =
     for {
-      dag         <- casper.blockDag
-      header      = block.header.getOrElse(Header.defaultInstance)
-      version     = header.version
-      deployCount = header.deployCount
-      tsHash = ProtoUtil.tuplespace(block) match {
-        case Some(hash) => hash
-        case None       => ByteString.EMPTY
-      }
+      dag             <- casper.blockDag
+      header          = block.header
+      version         = header.version
+      deployCount     = header.deployCount
+      tsHash          = ProtoUtil.tuplespace(block)
       timestamp       = header.timestamp
       mainParent      = header.parentsHashList.headOption.getOrElse(ByteString.EMPTY)
       parentsHashList = header.parentsHashList
@@ -494,7 +489,7 @@ object BlockAPI {
   ): F[BlockInfo] =
     BlockInfo(
       blockHash = PrettyPrinter.buildStringNoLimit(block.blockHash),
-      blockSize = block.serializedSize.toString,
+      blockSize = BlockMessage.toProto(block).serializedSize.toString,
       blockNumber = ProtoUtil.blockNumber(block),
       version = version,
       deployCount = deployCount,
@@ -524,7 +519,7 @@ object BlockAPI {
   ): F[LightBlockInfo] =
     LightBlockInfo(
       blockHash = PrettyPrinter.buildStringNoLimit(block.blockHash),
-      blockSize = block.serializedSize.toString,
+      blockSize = block.toProto.serializedSize.toString,
       blockNumber = ProtoUtil.blockNumber(block),
       version = version,
       deployCount = deployCount,
@@ -556,7 +551,7 @@ object BlockAPI {
     status
       .map { _ =>
         val hash    = PrettyPrinter.buildString(block.blockHash)
-        val deploys = block.body.get.deploys.map(_.deploy.get)
+        val deploys = block.body.deploys.map(_.deploy)
         val maybeUnmatchedSendsOutputF =
           if (printUnmatchedSends) prettyPrintUnmatchedSends(casper, deploys).map(_.some)
           else none[String].pure[F]
@@ -592,8 +587,8 @@ object BlockAPI {
       timestamp: Long,
       nameQty: Int
   ): Effect[F, PrivateNamePreviewResponse] = {
-    val seed    = DeployData().withDeployer(deployer).withTimestamp(timestamp)
-    val rand    = Blake2b512Random(DeployData.toByteArray(seed))
+    val seed    = DeployDataProto().withDeployer(deployer).withTimestamp(timestamp)
+    val rand    = Blake2b512Random(DeployDataProto.toByteArray(seed))
     val safeQty = nameQty min 1024
     val ids     = (0 until safeQty).map(_ => ByteString.copyFrom(rand.next()))
     PrivateNamePreviewResponse(ids).asRight[String].pure[F]

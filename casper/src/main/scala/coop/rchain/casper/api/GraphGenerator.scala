@@ -106,11 +106,11 @@ object GraphzGenerator {
   ): F[DagInfo[G]] =
     for {
       blocks    <- blockHashes.traverse(ProtoUtil.getBlock[F])
-      timeEntry = blocks.head.getBody.getState.blockNumber
+      timeEntry = blocks.head.body.state.blockNumber
       validators = blocks.toList.map { b =>
         val blockHash       = PrettyPrinter.buildString(b.blockHash)
         val blockSenderHash = PrettyPrinter.buildString(b.sender)
-        val parents = b.getHeader.parentsHashList.toList
+        val parents = b.header.parentsHashList.toList
           .map(PrettyPrinter.buildString)
         val justifications = b.justifications
           .map(_.latestBlockHash)

@@ -50,8 +50,8 @@ object DeployGrpcService {
           .attempt
           .map(_.fold(t => List(t.asLeft[A].toGrpcEither), _.map(_.asRight[String].toGrpcEither)))
 
-      override def doDeploy(d: DeployData): Task[GrpcEither] =
-        defer(BlockAPI.deploy[F](d))
+      override def doDeploy(d: DeployDataProto): Task[GrpcEither] =
+        defer(BlockAPI.deploy[F](DeployData.from(d)))
 
       override def getBlock(q: BlockQuery): Task[GrpcEither] =
         defer(BlockAPI.getBlock[F](q))

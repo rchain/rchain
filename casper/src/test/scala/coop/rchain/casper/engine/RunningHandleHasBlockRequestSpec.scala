@@ -68,7 +68,7 @@ class RunningHandleHasBlockRequestSpec extends FunSpec with BeforeAndAfterEach w
     PeerNode(NodeIdentifier(name.getBytes), endpoint(port))
 
   def toHasBlock(protocol: Protocol): HasBlock =
-    packetToHasBlock(toPacket(protocol).right.get).get
+    HasBlock.from(packetToHasBlock(toPacket(protocol).right.get).get)
 
   private def alwaysSuccess: PeerNode => Protocol => CommErr[Unit] = kp(kp(Right(())))
 }

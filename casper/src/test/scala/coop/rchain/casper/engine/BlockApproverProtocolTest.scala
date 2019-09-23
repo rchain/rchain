@@ -46,7 +46,7 @@ class BlockApproverProtocolTest extends FlatSpec with Matchers {
       case (approver, node) =>
         val differentUnapproved1 = createUnapproved(approver.requiredSigs / 2, node.genesis) //wrong number of signatures
         val differentUnapproved2 =
-          createUnapproved(approver.requiredSigs, BlockMessage.defaultInstance) //wrong block
+          createUnapproved(approver.requiredSigs, Dummies.createBlockMessage()) //wrong block
         import node._
 
         for {
@@ -72,10 +72,10 @@ class BlockApproverProtocolTest extends FlatSpec with Matchers {
 
 object BlockApproverProtocolTest {
   def createUnapproved(requiredSigs: Int, block: BlockMessage): UnapprovedBlock =
-    UnapprovedBlock(Some(ApprovedBlockCandidate(Some(block), requiredSigs)), 0L, 0L)
+    UnapprovedBlock(ApprovedBlockCandidate(block, requiredSigs), 0L, 0L)
 
   def unapprovedToPacket(u: UnapprovedBlock): Packet =
-    Packet(transport.UnapprovedBlock.id, u.toByteString)
+    Packet(transport.UnapprovedBlock.id, u.toProto.toByteString)
 
   def createProtocol: Effect[(BlockApproverProtocol, TestNode[Effect])] = {
     import monix.execution.Scheduler.Implicits.global

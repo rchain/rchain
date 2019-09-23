@@ -132,7 +132,8 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: ConnectionsCell: TransportLa
       validSig     <- Validate.blockSignature[F](b)
       validSender  <- Validate.blockSender[F](b, genesis, dag)
       validVersion <- Validate.version[F](b, version)
-      attemptResult <- if (!validFormat) (BlockStatus.invalidFormat.asLeft[ValidBlock], dag).pure[F]
+      attemptResult <- if (!validFormat)
+                        (BlockStatus.invalidFormat.asLeft[ValidBlock], dag).pure[F]
                       else if (!validSig)
                         (BlockStatus.invalidSignature.asLeft[ValidBlock], dag).pure[F]
                       else if (!validSender)
@@ -211,7 +212,7 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: ConnectionsCell: TransportLa
       _.asLeft[DeployId].pure[F],
       kp(
         InterpreterUtil
-          .mkTerm(d.term, NormalizerEnv(d))
+          .mkTerm(d.term, NormalizerEnv(DeployData.toProto(d)))
           .bitraverse(
             err => DeployError.parsingError(s"Error in parsing term: \n$err").pure[F],
             _ => addDeploy(d)
@@ -563,16 +564,12 @@ object MultiParentCasperImpl {
   private def blockEvent(block: BlockMessage) = {
     val blockHash = block.blockHash.base16String
     val parentHashes =
-      block.header.map(_.parentsHashList.toList.map(_.base16String)).getOrElse(Nil)
+      block.header.parentsHashList.map(_.base16String)
     val justificationHashes =
       block.justifications.toList
         .map(j => (j.validator.base16String, j.latestBlockHash.base16String))
     val deployIds: List[String] =
-      block.body
-        .flatMap(
-          _.deploys.toList.traverse(_.deploy.map(d => PrettyPrinter.buildStringNoLimit(d.sig)))
-        )
-        .getOrElse(List.empty[String])
+      block.body.deploys.map(pd => PrettyPrinter.buildStringNoLimit(pd.deploy.sig))
     val creator = block.sender.base16String
     val seqNum  = block.seqNum
     (blockHash, parentHashes, justificationHashes, deployIds, creator, seqNum)

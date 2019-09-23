@@ -35,16 +35,17 @@ class InitializingSpec extends WordSpec {
           theInit
         )
 
-      val approvedBlockCandidate = ApprovedBlockCandidate(block = Some(genesis))
+      val approvedBlockCandidate = ApprovedBlockCandidate(block = genesis, requiredSigs = 0)
 
       val approvedBlock: ApprovedBlock = ApprovedBlock(
-        candidate = Some(approvedBlockCandidate),
-        sigs = Seq(
+        candidate = approvedBlockCandidate,
+        sigs = List(
           Signature(
             ByteString.copyFrom(validatorPk.bytes),
             "secp256k1",
             ByteString.copyFrom(
-              Secp256k1.sign(Blake2b256.hash(approvedBlockCandidate.toByteArray), validatorSk)
+              Secp256k1
+                .sign(Blake2b256.hash(approvedBlockCandidate.toProto.toByteArray), validatorSk)
             )
           )
         )
@@ -75,7 +76,7 @@ class InitializingSpec extends WordSpec {
         _                  = assert(lastApprovedBlockO.isDefined)
         _                  <- EngineCell[Task].read >>= (_.handle(local, ApprovedBlockRequest("test")))
         head               = transportLayer.requests.head
-        _                  = assert(head.msg.message.packet.get.content == approvedBlock.toByteString)
+        _                  = assert(head.msg.message.packet.get.content == approvedBlock.toProto.toByteString)
       } yield ()
 
       test.unsafeRunSync

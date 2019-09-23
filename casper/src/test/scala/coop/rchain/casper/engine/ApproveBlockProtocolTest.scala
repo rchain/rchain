@@ -298,21 +298,21 @@ object ApproveBlockProtocolTest {
       validatorSk: PrivateKey,
       validatorPk: PublicKey
   ): BlockApproval = {
-    val sigData = Blake2b256.hash(c.toByteArray)
+    val sigData = Blake2b256.hash(c.toProto.toByteArray)
     val sig     = Secp256k1.sign(sigData, validatorSk)
     BlockApproval(
-      Some(c),
-      Some(Signature(ByteString.copyFrom(validatorPk.bytes), "secp256k1", ByteString.copyFrom(sig)))
+      c,
+      Signature(ByteString.copyFrom(validatorPk.bytes), "secp256k1", ByteString.copyFrom(sig))
     )
   }
 
   def invalidApproval(c: ApprovedBlockCandidate): BlockApproval = {
     val (sk, pk) = Secp256k1.newKeyPair
-    val sigData  = Blake2b256.hash(c.toByteArray ++ "wrong data".toArray.map(_.toByte))
+    val sigData  = Blake2b256.hash(c.toProto.toByteArray ++ "wrong data".toArray.map(_.toByte))
     val sig      = Secp256k1.sign(sigData, sk)
     BlockApproval(
-      Some(c),
-      Some(Signature(ByteString.copyFrom(pk.bytes), "secp256k1", ByteString.copyFrom(sig)))
+      c,
+      Signature(ByteString.copyFrom(pk.bytes), "secp256k1", ByteString.copyFrom(sig))
     )
   }
 
@@ -348,7 +348,7 @@ object ApproveBlockProtocolTest {
         createBonds(validatorKeyPairs.map(_._2))
       )
     ).genesisBlock
-    val candidate = ApprovedBlockCandidate(Some(genesis), requiredSigs)
+    val candidate = ApprovedBlockCandidate(genesis, requiredSigs)
     val sigs      = Ref.unsafe[Task, Set[Signature]](Set.empty)
     val startTime = System.currentTimeMillis()
 

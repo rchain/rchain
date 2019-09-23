@@ -94,7 +94,8 @@ class RunningHandleHasBlockSpec extends FunSpec with BeforeAndAfterEach with Mat
             // then
             val (recipient, msg) = transport.getRequest(0)
             // assert requested
-            val br: BlockRequest = packetToBlockRequest(toPacket(msg).right.get).get
+            val br: BlockRequest =
+              BlockRequest.from(packetToBlockRequest(toPacket(msg).right.get).get)
             br.hash shouldBe hash
             recipient shouldBe sender
             transport.requests.size shouldBe 1
@@ -114,7 +115,8 @@ class RunningHandleHasBlockSpec extends FunSpec with BeforeAndAfterEach with Mat
             // then
             val (recipient, msg) = transport.getRequest(0)
             // assert requested
-            val br: BlockRequest = packetToBlockRequest(toPacket(msg).right.get).get
+            val br: BlockRequest =
+              BlockRequest.from(packetToBlockRequest(toPacket(msg).right.get).get)
             br.hash shouldBe hash
             recipient shouldBe sender
             transport.requests.size shouldBe 1

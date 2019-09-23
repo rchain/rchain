@@ -124,8 +124,8 @@ object EstimatorHelper {
                          blockAncestorMeta => BlockStore[F].get(blockAncestorMeta.blockHash)
                        )
       ancestors = maybeAncestors.flatten
-      ancestorEvents = (ancestors.flatMap(_.getBody.deploys.flatMap(_.deployLog)) ++
-        ancestors.flatMap(_.getBody.deploys.flatMap(_.paymentLog)))
+      ancestorEvents = (ancestors.flatMap(_.body.deploys.flatMap(_.deployLog)) ++
+        ancestors.flatMap(_.body.deploys.flatMap(_.paymentLog)))
         .map(EventConverter.toRspaceEvent)
         .toSet
 

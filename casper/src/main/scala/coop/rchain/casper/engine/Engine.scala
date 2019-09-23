@@ -57,7 +57,7 @@ object Engine {
 
   private def noApprovedBlockAvailable(peer: PeerNode, identifier: String): Packet = Packet(
     transport.NoApprovedBlockAvailable.id,
-    NoApprovedBlockAvailable(identifier, peer.toString).toByteString
+    NoApprovedBlockAvailable(identifier, peer.toString).toProto.toByteString
   )
 
   def sendNoApprovedBlockAvailable[F[_]: RPConfAsk: TransportLayer: Monad](
@@ -80,9 +80,7 @@ object Engine {
       _ <- Log[F].info("Making a transition to Running state.")
       _ <- EventLog[F].publish(
             shared.Event.EnteredRunningState(
-              approvedBlock.candidate
-                .flatMap(_.block.map(b => PrettyPrinter.buildStringNoLimit(b.blockHash)))
-                .getOrElse("")
+              PrettyPrinter.buildStringNoLimit(approvedBlock.candidate.block.blockHash)
             )
           )
       running = new Running[F](casper, approvedBlock, init)

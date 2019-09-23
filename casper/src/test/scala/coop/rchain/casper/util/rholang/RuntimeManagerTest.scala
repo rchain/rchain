@@ -51,7 +51,7 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
       deploy: DeployData
   ): F[(StateHash, InternalProcessedDeploy)] =
     for {
-      res <- runtimeManager.computeState(ProtoUtil.tuplespace(genesis).get)(
+      res <- runtimeManager.computeState(ProtoUtil.tuplespace(genesis))(
               deploy :: Nil,
               BlockData(deploy.timestamp, 0),
               Map.empty[BlockHash, Validator]
@@ -185,7 +185,7 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
                     """ for(@x <- @"x"; @y <- @"y"){ @"xy"!(x + y) | @"x"!(1) | @"y"!(10) } """
                   )
         time          <- timeF.currentMillis
-        genPostState  = genesis.body.get.state.get.postStateHash
+        genPostState  = genesis.body.state.postStateHash
         blockData     = BlockData(time, 0L)
         invalidBlocks = Map.empty[BlockHash, Validator]
         firstDeploy <- mgr

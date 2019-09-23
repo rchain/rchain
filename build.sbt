@@ -171,7 +171,7 @@ lazy val casper = (project in file("casper"))
     shared       % "compile->compile;test->test",
     graphz,
     crypto,
-    models,
+    models   % "compile->compile;test->test",
     rspace,
     rholang % "compile->compile;test->test"
   )

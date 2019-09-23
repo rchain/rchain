@@ -3,6 +3,7 @@ package coop.rchain.casper
 import cats.effect.Sync
 import cats.implicits._
 import com.google.protobuf.ByteString
+import coop.rchain.models.PCost
 import coop.rchain.casper.MultiParentCasper.ignoreDoppelgangerCheck
 import coop.rchain.casper.helper.TestNode._
 import coop.rchain.casper.helper.{BlockUtil, TestNode}
@@ -179,7 +180,7 @@ class MultiParentCasperAddBlockSpec extends FlatSpec with Matchers with Inspecto
       for {
         basicDeployData <- ConstructDeploy.basicDeployData[Effect](0)
         block           <- node.createBlock(basicDeployData)
-        invalidBlock    = block.withSig(ByteString.EMPTY)
+        invalidBlock    = block.copy(sig = ByteString.EMPTY)
         status          <- node.casperEff.addBlock(invalidBlock, ignoreDoppelgangerCheck[Effect])
         _               = status shouldBe Left(InvalidFormat)
         _               <- node.casperEff.contains(invalidBlock.blockHash) shouldBeF false
@@ -263,8 +264,7 @@ class MultiParentCasperAddBlockSpec extends FlatSpec with Matchers with Inspecto
                         )
         deployPrim0 = ConstructDeploy.sign(
           deployDatas(1)
-            .withTimestamp(deployDatas(0).timestamp)
-            .withDeployer(deployDatas(0).deployer)
+            .copy(timestamp = deployDatas(0).timestamp, deployer = deployDatas(0).deployer)
         ) // deployPrim0 has the same (user, millisecond timestamp) with deployDatas(0)
         signedBlock1 <- nodes(0).publishBlock(deployDatas(0))(nodes: _*)
         signedBlock2 <- nodes(0).publishBlock(deployDatas(1))(nodes: _*)
@@ -389,12 +389,23 @@ class MultiParentCasperAddBlockSpec extends FlatSpec with Matchers with Inspecto
   it should "prepare to slash an block that includes a invalid block pointer" in effectTest {
     TestNode.networkEff(genesis, networkSize = 3).use { nodes =>
       for {
-        deploys         <- (0 to 5).toList.traverse(i => ConstructDeploy.basicDeployData[Effect](i))
-        deploysWithCost = deploys.map(d => ProcessedDeploy(deploy = Some(d))).toIndexedSeq
+        deploys <- (0 to 5).toList.traverse(i => ConstructDeploy.basicDeployData[Effect](i))
+        deploysWithCost = deploys
+          .map(
+            d =>
+              ProcessedDeploy(
+                deploy = d,
+                cost = PCost(0L),
+                List.empty,
+                List.empty,
+                errored = false
+              )
+          )
+          .toIndexedSeq
 
         signedBlock <- nodes(0).createBlock(deploys(0))
         signedInvalidBlock = BlockUtil.resignBlock(
-          signedBlock.withSeqNum(-2),
+          signedBlock.copy(seqNum = -2),
           nodes(0).validatorId.privateKey
         ) // Invalid seq num
 
@@ -413,7 +424,7 @@ class MultiParentCasperAddBlockSpec extends FlatSpec with Matchers with Inspecto
           nodes(0).local,
           "test",
           transport.BlockMessage,
-          signedInvalidBlock.toByteString
+          signedInvalidBlock.toProto.toByteString
         )
         _ <- nodes(0).transportLayerEff.send(nodes(1).local, signedInvalidBlockPacketMessage)
         _ <- nodes(1).receive() // receives signedInvalidBlock; attempts to add both blocks
@@ -494,7 +505,7 @@ class MultiParentCasperAddBlockSpec extends FlatSpec with Matchers with Inspecto
         deployData            <- ConstructDeploy.basicDeployData[Effect](0)
         createBlockResult     <- nodes(0).casperEff.deploy(deployData) >> nodes(0).casperEff.createBlock
         Created(signedBlock)  = createBlockResult
-        invalidBlock          = signedBlock.withSeqNum(47)
+        invalidBlock          = signedBlock.copy(seqNum = 47)
         status1               <- nodes(1).casperEff.addBlock(invalidBlock, ignoreDoppelgangerCheck[Effect])
         status2               <- nodes(2).casperEff.addBlock(invalidBlock, ignoreDoppelgangerCheck[Effect])
         createBlockResult2    <- nodes(1).casperEff.createBlock
@@ -520,18 +531,37 @@ class MultiParentCasperAddBlockSpec extends FlatSpec with Matchers with Inspecto
       deploys: immutable.IndexedSeq[ProcessedDeploy],
       signedInvalidBlock: BlockMessage
   ): Effect[BlockMessage] = {
-    val postState =
-      RChainState().withBonds(ProtoUtil.bonds(genesis.genesisBlock)).withBlockNumber(1)
-    val header = Header()
-      .withParentsHashList(signedInvalidBlock.header.get.parentsHashList)
-      .withDeploysHash(ProtoUtil.protoSeqHash(deploys))
-    val blockHash = Blake2b256.hash(header.toByteArray)
-    val body      = Body().withState(postState).withDeploys(deploys)
+    val postState: RChainState =
+      RChainState(
+        preStateHash = ByteString.EMPTY,
+        postStateHash = ByteString.EMPTY,
+        bonds = ProtoUtil.bonds(genesis.genesisBlock).toList,
+        blockNumber = 1
+      )
+    val header = Header(
+      parentsHashList = signedInvalidBlock.header.parentsHashList,
+      deploysHash = ProtoUtil.protoSeqHash(deploys.map(_.toProto)),
+      timestamp = 0L,
+      version = 0L,
+      deployCount = 0
+    )
+    val blockHash = Blake2b256.hash(header.toProto.toByteArray)
+    val body      = Body(postState, deploys.toList)
     val serializedJustifications =
-      Seq(Justification(signedInvalidBlock.sender, signedInvalidBlock.blockHash))
+      List(Justification(signedInvalidBlock.sender, signedInvalidBlock.blockHash))
     val serializedBlockHash = ByteString.copyFrom(blockHash)
     val blockThatPointsToInvalidBlock =
-      BlockMessage(serializedBlockHash, Some(header), Some(body), serializedJustifications)
+      BlockMessage(
+        serializedBlockHash,
+        header,
+        body,
+        serializedJustifications,
+        sender = ByteString.EMPTY,
+        seqNum = 0,
+        sig = ByteString.EMPTY,
+        sigAlgorithm = "",
+        shardId = ""
+      )
     nodes(1).casperEff.blockDag.flatMap { dag =>
       ProtoUtil.signBlock[Effect](
         blockThatPointsToInvalidBlock,

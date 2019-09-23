@@ -9,7 +9,7 @@ import coop.rchain.blockstorage.LatestMessagesLogIsCorrupted
 import coop.rchain.blockstorage.dag.codecs._
 import coop.rchain.blockstorage.util.io.IOError.RaiseIOError
 import coop.rchain.blockstorage.util.io._
-import coop.rchain.casper.protocol.BlockMessage
+import coop.rchain.casper.protocol._
 import coop.rchain.catscontrib.TaskContrib.TaskOps
 import coop.rchain.metrics.Metrics
 import coop.rchain.models.BlockHash.BlockHash
@@ -38,7 +38,14 @@ trait BlockDagStorageTest
 
   def withDagStorage[R](f: BlockDagStorage[Task] => Task[R]): R
 
-  val genesis = BlockMessage()
+  val genesis = BlockMessage
+    .from(
+      BlockMessageProto()
+        .withHeader(HeaderProto())
+        .withBody(BodyProto().withState(RChainStateProto()))
+    )
+    .right
+    .get
 
   "DAG Storage" should "be able to lookup a stored block" in {
     forAll(blockElementsWithParentsGen, minSize(0), sizeRange(10)) { blockElements =>
@@ -235,7 +242,7 @@ class BlockDagFileStorageTest extends BlockDagStorageTest {
         children shouldBe
           Some(
             blockElements
-              .filter(_.header.get.parentsHashList.contains(b.blockHash))
+              .filter(_.header.parentsHashList.contains(b.blockHash))
               .map(_.blockHash)
               .toSet
           )
@@ -286,7 +293,7 @@ class BlockDagFileStorageTest extends BlockDagStorageTest {
     forAll(blockElementsWithParentsGen, minSize(0), sizeRange(10)) { blockElements =>
       val blockElementsWithGenesis = blockElements match {
         case x :: xs =>
-          val genesis = x.withSender(ByteString.EMPTY)
+          val genesis = x.copy(sender = ByteString.EMPTY)
           genesis :: xs
         case Nil =>
           Nil
@@ -539,9 +546,9 @@ class BlockDagFileStorageTest extends BlockDagStorageTest {
           secondStorage <- createAtDefaultLocation(dagDataDir)
           dag           <- secondStorage.getRepresentation
           (deploys, blockHashes) = blockElements
-            .flatMap(b => b.body.get.deploys.map(_ -> b.blockHash))
+            .flatMap(b => b.body.deploys.map(_ -> b.blockHash))
             .unzip
-          deployLookups <- deploys.traverse(d => dag.lookupByDeployId(d.deploy.get.sig))
+          deployLookups <- deploys.traverse(d => dag.lookupByDeployId(d.deploy.sig))
           _             <- secondStorage.close()
         } yield deployLookups shouldBe blockHashes.map(_.some)
       }
