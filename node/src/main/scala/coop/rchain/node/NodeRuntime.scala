@@ -693,13 +693,19 @@ object NodeRuntime {
         }
       }
       _ <- Runtime.bootstrapRegistry[F](runtime)
-      casperRuntime <- {
+      casperRuntimeAndReporter <- {
         implicit val s  = rspaceScheduler
         implicit val sp = span
-        Runtime.setupRSpace[F](casperConf.storage, casperConf.size) >>= {
-          case (space, replay, _) => Runtime.createWithEmptyCost[F]((space, replay), Seq.empty)
-        }
+        implicit val bs = blockStore
+        implicit val bd = blockDagStorage
+        for {
+          sarAndHR            <- Runtime.setupRSpace[F](casperConf.storage, casperConf.size)
+          (space, replay, hr) = sarAndHR
+          runtime             <- Runtime.createWithEmptyCost[F]((space, replay), Seq.empty)
+          reporter            = ReportingCasper.rhoReporter(hr)
+        } yield (runtime, reporter)
       }
+      (casperRuntime, reportingCasper) = casperRuntimeAndReporter
       runtimeManager <- {
         implicit val sp = span
         RuntimeManager.fromRuntime[F](casperRuntime)
@@ -755,9 +761,8 @@ object NodeRuntime {
             )
         _ <- Time[F].sleep(30.seconds)
       } yield ()
-      engineInit      = engineCell.read >>= (_.init)
-      runtimeCleanup  = NodeRuntime.cleanup(runtime, casperRuntime)
-      reportingCasper = ReportingCasper.noop
+      engineInit     = engineCell.read >>= (_.init)
+      runtimeCleanup = NodeRuntime.cleanup(runtime, casperRuntime)
     } yield (
       blockStore,
       blockDagStorage,
