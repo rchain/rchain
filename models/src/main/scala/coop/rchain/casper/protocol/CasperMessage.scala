@@ -49,7 +49,7 @@ object BlockRequest {
 }
 
 case object ForkChoiceTipRequest extends CasperMessage {
-  def toProto: ForkChoiceTipRequestProto = ForkChoiceTipRequestProto()
+  val toProto: ForkChoiceTipRequestProto = ForkChoiceTipRequestProto()
 }
 
 final case class ApprovedBlockCandidate(block: BlockMessage, requiredSigs: Int)

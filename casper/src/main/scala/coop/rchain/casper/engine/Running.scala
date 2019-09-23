@@ -13,9 +13,9 @@ import coop.rchain.casper._
 import coop.rchain.casper.protocol._
 import coop.rchain.comm.protocol.routing.Packet
 import coop.rchain.comm.rp.Connect.{ConnectionsCell, RPConfAsk}
-import coop.rchain.comm.rp.ProtocolHelper.{mkPacket, protocol}
+import coop.rchain.comm.rp.ProtocolHelper.protocol
 import coop.rchain.comm.transport.{Blob, TransportLayer}
-import coop.rchain.comm.{transport, PeerNode}
+import coop.rchain.comm.PeerNode
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.Validator.Validator
 import coop.rchain.shared.{Cell, Log, Time}
@@ -35,6 +35,10 @@ object Running {
   type RequestedBlocks[F[_]] = Cell[F, Map[BlockHash, Requested]]
   object RequestedBlocks {
     def apply[F[_]: RequestedBlocks]: RequestedBlocks[F] = implicitly[RequestedBlocks[F]]
+    def put[F[_]: RequestedBlocks](hash: BlockHash, requested: Requested) =
+      RequestedBlocks[F].modify(_ + (hash -> requested))
+    def remove[F[_]: RequestedBlocks](hash: BlockHash) = RequestedBlocks[F].modify(_ - hash)
+    def get[F[_]: RequestedBlocks](hash: BlockHash)    = RequestedBlocks[F].reads(_.get(hash))
   }
 
   private def sendToPeer[F[_]: Monad: RPConfAsk: TransportLayer](peer: PeerNode)(packet: Packet) =
@@ -50,7 +54,7 @@ object Running {
   private def requestForBlock[F[_]: Monad: RPConfAsk: TransportLayer: RequestedBlocks](
       peer: PeerNode,
       hash: BlockHash
-  ) = sendToPeer(peer)(mkPacket(transport.BlockRequest, BlockRequest(hash)))
+  ) = sendToPeer(peer)(ToPacket(BlockRequestProto(hash)))
 
   private def requestForNewBlock[F[_]: Monad: RPConfAsk: TransportLayer: RequestedBlocks: Log: Time](
       peer: PeerNode,
@@ -109,11 +113,7 @@ object Running {
       peer: Option[PeerNode] = None
   ): F[Unit] =
     Log[F].info(s"Creating new entry for the ${PrettyPrinter.buildString(hash)} request") >> Time[F].currentMillis >>= (
-        ts => {
-          RequestedBlocks[F].modify(
-            _ + (hash -> Requested(timestamp = ts, peers = peer.toSet))
-          )
-        }
+        ts => RequestedBlocks.put(hash, Requested(timestamp = ts, peers = peer.toSet))
     )
 
   def handleHasBlock[F[_]: Monad: RPConfAsk: RequestedBlocks: TransportLayer: Time: Log](
@@ -126,17 +126,15 @@ object Running {
     val hashStr = PrettyPrinter.buildString(hb.hash)
 
     def addToWaitingList(requested: Requested): F[Unit] =
-      Log[F].info(s"Adding $peer to waiting list of $hashStr request") >> RequestedBlocks[F]
-        .modify { requestedBlocks =>
-          requestedBlocks + (hb.hash -> requested.copy(
-            waitingList = requested.waitingList ++ List(peer)
-          ))
-        }
+      Log[F].info(s"Adding $peer to waiting list of $hashStr request") >> RequestedBlocks.put(
+        hb.hash,
+        requested.copy(waitingList = requested.waitingList ++ List(peer))
+      )
 
     val logIntro = s"Received confirmation from $peer that it has block $hashStr."
     Log[F].info(logIntro) >> casperContains(hb.hash).ifM(
       Applicative[F].unit,
-      RequestedBlocks[F].read >>= (_.get(hb.hash).fold(requestForNewBlock(peer, hb.hash))(
+      RequestedBlocks.get(hb.hash) >>= (_.fold(requestForNewBlock(peer, hb.hash))(
         req =>
           if (req.peers.isEmpty) requestForNewBlock(peer, hb.hash)
           else addToWaitingList(req)
@@ -151,7 +149,7 @@ object Running {
     blockLookup(hbr.hash).flatMap(
       present =>
         Applicative[F].whenA(present)(
-          sendToPeer(peer)(mkPacket(transport.HasBlock, HasBlock(hbr.hash)))
+          sendToPeer(peer)(ToPacket(HasBlockProto(hbr.hash)))
         )
     )
 
@@ -165,7 +163,7 @@ object Running {
         Log[F].info(s"Received ${PrettyPrinter.buildString(b)}.") *> casperAdd(b) >>= (
             status =>
               Applicative[F].whenA(BlockStatus.isInDag(status.merge))(
-                RequestedBlocks[F].modify(_ - b.blockHash)
+                RequestedBlocks.remove(b.blockHash)
               )
           )
       )
@@ -180,7 +178,7 @@ object Running {
       _ <- maybeBlock match {
             case None => Log[F].info(logIntro + "No response given since block not found.")
             case Some(block) =>
-              streamToPeer(peer)(mkPacket(transport.BlockMessage, block)) <* Log[F].info(
+              streamToPeer(peer)(ToPacket(block.toProto)) <* Log[F].info(
                 logIntro + "Response sent."
               )
           }
@@ -194,7 +192,7 @@ object Running {
       casper
     ) >>= (
         tip =>
-          streamToPeer(peer)(mkPacket(transport.BlockMessage, tip)) <* Log[F].info(
+          streamToPeer(peer)(ToPacket(tip.toProto)) <* Log[F].info(
             s"Sending Block ${tip.blockHash} to $peer"
           )
       )
@@ -205,7 +203,7 @@ object Running {
       approvedBlock: ApprovedBlock
   ): F[Unit] =
     Log[F].info(s"Received ApprovedBlockRequest from $peer") *> streamToPeer(peer)(
-      mkPacket(transport.ApprovedBlock, approvedBlock)
+      ToPacket(approvedBlock.toProto)
     ) <* Log[F].info(s"Sending ApprovedBlock to $peer")
 
 }
@@ -235,14 +233,14 @@ class Running[F[_]: Sync: RPConfAsk: BlockStore: ConnectionsCell: TransportLayer
   override def init: F[Unit] = theInit
 
   override def handle(peer: PeerNode, msg: CasperMessage): F[Unit] = msg match {
-    case b: BlockMessage              => handleBlockMessage(peer, b)(casper.contains, casperAdd(peer))
-    case br: BlockRequest             => handleBlockRequest(peer, br)
-    case hbr: HasBlockRequest         => handleHasBlockRequest(peer, hbr)(casper.contains)
-    case hb: HasBlock                 => handleHasBlock(peer, hb)(casper.contains)
-    case fctr: ForkChoiceTipRequest   => handleForkChoiceTipRequest(peer, fctr)(casper)
-    case abr: ApprovedBlockRequest    => handleApprovedBlockRequest(peer, abr, approvedBlock)
-    case na: NoApprovedBlockAvailable => logNoApprovedBlockAvailable(na.nodeIdentifer)
-    case _                            => noop
+    case b: BlockMessage                 => handleBlockMessage(peer, b)(casper.contains, casperAdd(peer))
+    case br: BlockRequest                => handleBlockRequest(peer, br)
+    case hbr: HasBlockRequest            => handleHasBlockRequest(peer, hbr)(casper.contains)
+    case hb: HasBlock                    => handleHasBlock(peer, hb)(casper.contains)
+    case fctr: ForkChoiceTipRequest.type => handleForkChoiceTipRequest(peer, fctr)(casper)
+    case abr: ApprovedBlockRequest       => handleApprovedBlockRequest(peer, abr, approvedBlock)
+    case na: NoApprovedBlockAvailable    => logNoApprovedBlockAvailable(na.nodeIdentifer)
+    case _                               => noop
   }
 
   override def withCasper[A](
