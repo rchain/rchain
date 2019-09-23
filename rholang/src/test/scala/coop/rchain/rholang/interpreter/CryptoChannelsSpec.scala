@@ -221,7 +221,7 @@ class CryptoChannelsSpec
 
     val runtime = (for {
       sar     <- Runtime.setupRSpace[Task](dbDir, size)
-      runtime <- Runtime.createWithEmptyCost[Task](sar)
+      runtime <- Runtime.createWithEmptyCost[Task]((sar._1, sar._2))
       _       <- runtime.cost.set(Cost.UNSAFE_MAX)
     } yield runtime).unsafeRunSync
 

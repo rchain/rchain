@@ -5,6 +5,7 @@ import cats.effect.Sync
 import cats.{~>, Applicative}
 import com.google.protobuf.ByteString
 import coop.rchain.casper.ReportingCasper
+import coop.rchain.crypto.codec.Base16
 import coop.rchain.models.BlockHash._
 import org.http4s.{HttpRoutes, QueryParamDecoder}
 
@@ -26,7 +27,7 @@ object ReportingRoutes {
         .withKebabCaseMemberNames
 
     implicit val BlockHashQueryParamDecoder: QueryParamDecoder[BlockHash] =
-      QueryParamDecoder[String].map(s => ByteString.copyFromUtf8(s))
+      QueryParamDecoder[String].map(s => ByteString.copyFrom(Base16.decode(s).get))
 
     object BlockHashQueryParamMatcher extends QueryParamDecoderMatcher[ByteString]("blockHash")
 

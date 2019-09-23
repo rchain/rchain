@@ -98,9 +98,9 @@ object Interactive {
     implicit val logger: Log[Task]         = Log.log[Task]
     implicit val metricsEff: Metrics[Task] = new Metrics.MetricsNOP[Task]
     implicit val noopSpan: Span[Task]      = NoopSpan[Task]()
-    val sar = Runtime
+    val (space, replay, _) = Runtime
       .setupRSpace[Task](Files.createTempDirectory("interactive-"), 1024 * 1024L)
       .unsafeRunSync
-    new Interactive(Runtime.createWithEmptyCost[Task](sar).runSyncUnsafe(5.seconds))
+    new Interactive(Runtime.createWithEmptyCost[Task]((space, replay)).runSyncUnsafe(5.seconds))
   }
 }

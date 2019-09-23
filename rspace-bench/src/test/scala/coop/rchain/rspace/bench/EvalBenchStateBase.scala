@@ -25,10 +25,11 @@ trait EvalBenchStateBase {
 
   val rhoScriptSource: String
 
-  lazy val sar                    = Runtime.setupRSpace[Task](dbDir, mapSize).unsafeRunSync
-  lazy val runtime: Runtime[Task] = Runtime.createWithEmptyCost[Task](sar).unsafeRunSync
-  val rand: Blake2b512Random      = Blake2b512Random(128)
-  var term: Option[Par]           = None
+  lazy val sar = Runtime.setupRSpace[Task](dbDir, mapSize).unsafeRunSync
+  lazy val runtime: Runtime[Task] =
+    Runtime.createWithEmptyCost[Task]((sar._1, sar._2)).unsafeRunSync
+  val rand: Blake2b512Random = Blake2b512Random(128)
+  var term: Option[Par]      = None
 
   @Setup
   def doSetup(): Unit = {

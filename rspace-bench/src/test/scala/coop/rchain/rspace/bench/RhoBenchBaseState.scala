@@ -57,7 +57,7 @@ abstract class RhoBenchBaseState {
       sar  <- Runtime.setupRSpace[Task](dbDir, mapSize)
       runtime <- {
         implicit val c: _cost[Task] = cost
-        Runtime.create[Task, Task.Par](sar)
+        Runtime.create[Task, Task.Par]((sar._1, sar._2))
       }
     } yield (runtime)).unsafeRunSync
 
