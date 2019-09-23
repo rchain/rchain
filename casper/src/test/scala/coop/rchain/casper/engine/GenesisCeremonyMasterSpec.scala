@@ -74,9 +74,7 @@ class GenesisCeremonyMasterSpec extends WordSpec {
         _                 = assert(lastApprovedBlock.isDefined)
         _                 <- EngineCell[Task].read >>= (_.handle(local, blockApproval))
         head              = transportLayer.requests(1)
-        _                 = println("lastApprovedBlock.get.sigs: " + lastApprovedBlock.get.sigs)
         proto             = ApprovedBlockProto.parseFrom(head.msg.message.packet.get.content.toByteArray)
-        _                 = println("proto.sigs: " + proto.sigs)
         _ = assert(
           ApprovedBlock
             .from(
