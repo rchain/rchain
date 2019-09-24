@@ -551,7 +551,7 @@ object MultiParentCasperImpl {
 
   def createdEvent(cbs: Created): RChainEvent = {
     val (blockHash, parents, justifications, deployIds, creator, seqNum) = blockEvent(cbs.block)
-    RChainEvent.blockAdded(
+    RChainEvent.blockCreated(
       blockHash,
       parents,
       justifications,
