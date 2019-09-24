@@ -367,17 +367,22 @@ trait ReplayRSpaceTests extends ReplayRSpaceTestsBase[String, Pattern, String, S
                          )
         rigPoint <- space.createCheckpoint()
 
-        _ = resultConsume1 shouldBe None
-        _ = resultConsume2 shouldBe defined
-        _ = resultConsume3 shouldBe defined
-        _ = resultConsume4 shouldBe defined
-        _ = resultConsume5 shouldBe defined
-        _ = resultProduce shouldBe Some(
+        expectedResult = Some(
           (
             ContResult(continuation, false, channels, patterns, 0, true),
             List(Result(channels(0), datum, datum, false))
           )
         )
+        _ = resultConsume1 shouldBe None
+        _ = resultConsume2 shouldBe expectedResult
+        _ = resultConsume3 shouldBe expectedResult
+        _ = resultConsume4 shouldBe expectedResult
+        _ = resultConsume5 shouldBe expectedResult
+        _ = resultProduce shouldBe expectedResult
+        _ = resultProduce2 shouldBe None
+        _ = resultProduce3 shouldBe None
+        _ = resultProduce4 shouldBe None
+        _ = resultProduce5 shouldBe None
         _ <- replaySpace.rigAndReset(emptyPoint.root, rigPoint.log)
 
         replayResultConsume1 <- replaySpace.consume(
@@ -422,16 +427,16 @@ trait ReplayRSpaceTests extends ReplayRSpaceTestsBase[String, Pattern, String, S
                                )
         finalPoint <- replaySpace.createCheckpoint()
 
-        _ = replayResultConsume1 shouldBe None
-        _ = replayResultConsume2 shouldBe defined
-        _ = replayResultConsume3 shouldBe defined
-        _ = replayResultConsume4 shouldBe defined
-        _ = replayResultConsume5 shouldBe defined
+        _ = replayResultConsume1 shouldBe resultConsume1
+        _ = replayResultConsume2 shouldBe resultConsume2
+        _ = replayResultConsume3 shouldBe resultConsume3
+        _ = replayResultConsume4 shouldBe resultConsume4
+        _ = replayResultConsume5 shouldBe resultConsume5
         _ = replayResultProduce shouldBe resultProduce
-        _ = replayResultProduce2 shouldBe None
-        _ = replayResultProduce3 shouldBe None
-        _ = replayResultProduce4 shouldBe None
-        _ = replayResultProduce5 shouldBe None
+        _ = replayResultProduce2 shouldBe resultProduce2
+        _ = replayResultProduce3 shouldBe resultProduce3
+        _ = replayResultProduce4 shouldBe resultProduce4
+        _ = replayResultProduce5 shouldBe resultProduce5
         _ = finalPoint.root shouldBe rigPoint.root
         _ = replaySpace.replayData shouldBe empty
       } yield ()
