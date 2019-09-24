@@ -13,7 +13,6 @@ match (
       posRevAddressCh, posVaultCh,
       RhoSpecCh, PoSCh, RevVaultCh, ListOpsCh,
       setup, prepareUser,
-      test_bonding_fails_if_already_bonded,
       test_bonding_fails_if_bond_too_small,
       test_dont_pay_inactive_validators,
       test_bonding_failure
@@ -34,7 +33,6 @@ match (
         for(@(true, posVault) <- posVaultCh) {
           @RhoSpec!("testSuite", *setup,
             [
-              ("bonding fails if already bonded", *test_bonding_fails_if_already_bonded),
               ("bonding fails is bond is too small", *test_bonding_fails_if_bond_too_small),
               ("payment is not distributed to inactive validators", *test_dont_pay_inactive_validators)
             ]) |
@@ -59,38 +57,6 @@ match (
 
           contract test_bonding_fails_if_bond_too_small(rhoSpec, _, ackCh) = {
             test_bonding_failure!(*rhoSpec, "7777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777", -1, "Bond is less than minimum!", *ackCh)
-          } |
-
-          contract test_bonding_fails_if_already_bonded(rhoSpec, _, ackCh) = {
-            new setupCh, initialBondsCh, bond1Ch, bond2Ch, bondsCh,
-                finalRewardsCh, initialRewardsCh in {
-              prepareUser!("8888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888", *setupCh) |
-              for (@user1PubKey, _, _ <- setupCh) {
-                @PoS!("bond", 150, *bond1Ch) |
-                for ( @(result1, _) <- bond1Ch) {
-                  @PoS!("getBonds", *initialBondsCh) |
-                  @PoS!("getRewards", *initialRewardsCh) |
-                  for ( @initialBonds <- initialBondsCh;
-                        @initialRewards <- initialRewardsCh) {
-                    @PoS!("bond", 150, *bond2Ch) |
-                    for ( @(result2, msg2) <- bond2Ch) {
-                      @PoS!("getBonds", *bondsCh) |
-                      @PoS!("getRewards", *finalRewardsCh) |
-                      rhoSpec!("assertMany",
-                        [
-                          ((true, "==", result1), "the first bond should succeed"),
-                          ((false, "==", result2), "the second bond should fail"),
-                          (("Public key is already bonded.", "==", msg2), "the message should be as expected"),
-                          ((initialBonds, "== <-", *bondsCh), "the bonds map remains unchanged"),
-                          ((initialRewards, "== <-", *finalRewardsCh), "the rewards map should not change")
-                        ],
-                        *ackCh
-                      )
-                    }
-                  }
-                }
-              }
-            }
           } |
 
           contract test_bonding_failure(rhoSpec, @pk, @transferAmount, @expectedMsg, ackCh) = {

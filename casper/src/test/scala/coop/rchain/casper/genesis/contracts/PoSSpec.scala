@@ -111,6 +111,17 @@ class TestPaySucceeds
       120.seconds
     )
 
+class TestBondingFailsIfAlreadyBonded
+    extends RhoSpec(
+      Seq(
+        (
+          Source.fromResource("PoSTest/test_bonding_fails_if_already_bonded.rho").mkString,
+          defaultSec
+        )
+      ),
+      120.seconds
+    )
+
 class PoSSpec
     extends RhoSpec(
       Seq((Source.fromResource("PoSTest.rho").mkString, defaultSec)),

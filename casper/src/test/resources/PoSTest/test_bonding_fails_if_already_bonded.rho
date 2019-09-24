@@ -1,0 +1,35 @@
+new rl(`rho:registry:lookup`), PoSCh in {
+  rl!(`rho:rchain:pos`, *PoSCh) |
+  for(@(_, PoS) <- PoSCh){
+    new bondAck in {
+      @PoS!("bond", 100, *bondAck) |
+      for(@(result1, _) <- bondAck){
+        new bondsCh, rewardsCh in {
+          @PoS!("getBonds", *bondsCh) |
+          @PoS!("getRewards", *rewardsCh) |
+          for(@initialBonds <- bondsCh;
+              @initialRewards <- rewardsCh){
+            new assert(`rho:test:assertAck`), ack in {
+              assert!("succeed upon the first bond", 1, result1 == true, "", *ack) |
+              @PoS!("bond", 150, *bondAck) |
+              for(@(result2, msg) <- bondAck){
+                @PoS!("getBonds", *bondsCh) |
+                @PoS!("getRewards", *rewardsCh) |
+                for(@finalBonds <- bondsCh;
+                    @finalRewards <- rewardsCh){
+                  new testSuiteCompleted(`rho:test:testSuiteCompleted`) in {
+                    testSuiteCompleted!(true) |
+                    assert!("fail upon the second bond", 1, result2 == false, "", *ack) |
+                    assert!("fail with the expected error message", 1, "Public key is already bonded." == msg, "", *ack) |
+                    assert!("not change the bonds map", 1, initialBonds == finalBonds, "no clue", *ack) |
+                    assert!("not change the rewards map", 1, initialRewards == finalRewards, "", *ack)
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
