@@ -1,0 +1,70 @@
+
+match "047b43d6548b72813b89ac1b9f9ca67624a8b372feedd71d4e2da036384a3e1236812227e524e6f237cde5f80dbb921cac12e6500791e9a9ed1254a745a816fe1f".hexToBytes() {
+  posPk => {
+    new revVaultCh, rl(`rho:registry:lookup`) in {
+      rl!(`rho:rchain:revVault`, *revVaultCh) |
+      for(@(_, RevVault) <- revVaultCh){
+        new deployerId(`rho:rchain:deployerId`),
+            revAddressOps(`rho:rev:address`),
+            deployerRevAddressCh,
+            posRevAddressCh in {
+          revAddressOps!("fromDeployerId", *deployerId, *deployerRevAddressCh) |
+          revAddressOps!("fromPublicKey", posPk, *posRevAddressCh) |
+          for(@deployerRevAddress <- deployerRevAddressCh; @posRevAddress <- posRevAddressCh){
+            new deployerVaultCh, posVaultCh in {
+              @RevVault!("findOrCreate", deployerRevAddress, *deployerVaultCh) |
+              @RevVault!("findOrCreate", posRevAddress, *posVaultCh) |
+              for(@(true, deployerVault) <- deployerVaultCh;
+                  @(true, posVault) <- posVaultCh) {
+                new poSBalanceCh, deployerBalanceCh in {
+                  @posVault!("balance", *poSBalanceCh) |
+                  @deployerVault!("balance", *deployerBalanceCh) |
+                  for(@initialPoSBalance <- poSBalanceCh;
+                      @initialDeployerBalance <- deployerBalanceCh){
+                    new PoSCh in {
+                      rl!(`rho:rchain:pos`, *PoSCh) |
+                      for(@(_, PoS) <- PoSCh){
+                        new bondAck in {
+                          @PoS!("bond", 100, *bondAck) |
+                          for(@(true, _) <- bondAck){
+                            new bondsCh,
+                                rewardsCh,
+                                deployerIdOps(`rho:rchain:deployerId:ops`),
+                                deployerPkCh in {
+                              @PoS!("getBonds", *bondsCh) |
+                              @posVault!("balance", *poSBalanceCh) |
+                              @deployerVault!("balance", *deployerBalanceCh) |
+                              @PoS!("getRewards", *rewardsCh) |
+                              deployerIdOps!("pubKeyBytes", *deployerId, *deployerPkCh) |
+                              for(@finalPoSBalance <- poSBalanceCh;
+                                  @finalDeployerBalance <- deployerBalanceCh;
+                                  @bonds <- bondsCh;
+                                  @rewards <- rewardsCh;
+                                  @deployerPk <- deployerPkCh){
+                                match bonds.get(deployerPk) {
+                                  bondAmount => {
+                                    new assert(`rho:test:assertAck`), testSuiteCompleted(`rho:test:testSuiteCompleted`), ack in {
+                                      testSuiteCompleted!(true) |
+                                      assert!("add the new bond to the bonds map", 1, bondAmount == 100, "", *ack) |
+                                      assert!("decrease deployer vault balance by 100", 1, initialDeployerBalance - finalDeployerBalance == 100, "", *ack) |
+                                      assert!("increase PoS vault balance by 100", 1, finalPoSBalance - initialPoSBalance == 100, "", *ack) |
+                                      assert!("record no rewards for new validator", 1, rewards.get(deployerPk) == Nil, "", *ack)
+                                    }
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
