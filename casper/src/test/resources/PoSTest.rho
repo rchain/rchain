@@ -13,7 +13,6 @@ match (
       posRevAddressCh, posVaultCh,
       RhoSpecCh, PoSCh, RevVaultCh, ListOpsCh,
       setup, prepareUser,
-      test_bonding_fails_if_bond_too_small,
       test_dont_pay_inactive_validators,
       test_bonding_failure
     in {
@@ -33,7 +32,6 @@ match (
         for(@(true, posVault) <- posVaultCh) {
           @RhoSpec!("testSuite", *setup,
             [
-              ("bonding fails is bond is too small", *test_bonding_fails_if_bond_too_small),
               ("payment is not distributed to inactive validators", *test_dont_pay_inactive_validators)
             ]) |
 
@@ -53,10 +51,6 @@ match (
                 }
               }
             }
-          } |
-
-          contract test_bonding_fails_if_bond_too_small(rhoSpec, _, ackCh) = {
-            test_bonding_failure!(*rhoSpec, "7777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777", -1, "Bond is less than minimum!", *ackCh)
           } |
 
           contract test_bonding_failure(rhoSpec, @pk, @transferAmount, @expectedMsg, ackCh) = {

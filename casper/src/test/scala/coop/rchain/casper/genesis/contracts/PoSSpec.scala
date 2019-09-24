@@ -122,6 +122,17 @@ class TestBondingFailsIfAlreadyBonded
       120.seconds
     )
 
+class TestBondingFailsIfBondTooSmall
+    extends RhoSpec(
+      Seq(
+        (
+          Source.fromResource("PoSTest/test_bonding_fails_if_bond_too_small.rho").mkString,
+          defaultSec
+        )
+      ),
+      120.seconds
+    )
+
 class PoSSpec
     extends RhoSpec(
       Seq((Source.fromResource("PoSTest.rho").mkString, defaultSec)),
