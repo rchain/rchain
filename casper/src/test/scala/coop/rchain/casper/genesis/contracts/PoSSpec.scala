@@ -6,7 +6,8 @@ import coop.rchain.casper.util.GenesisBuilder
 import coop.rchain.crypto.PublicKey
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.rholang.interpreter.util.RevAddress
-import coop.rchain.casper.util.ConstructDeploy.defaultSec
+import coop.rchain.casper.util.ConstructDeploy.{defaultSec, defaultSec2}
+
 import scala.concurrent.duration._
 import scala.io.Source
 
@@ -42,6 +43,25 @@ class TestWithdrawSucceeds
       ),
       120.seconds
     )
+
+class TestValidatorIsPaidAfterWithdrawal
+  extends RhoSpec(
+    Seq(
+      (
+        Source.fromResource("PoSTest/test_validator_is_paid_after_withdraw_1.rho").mkString,
+        defaultSec
+      ),
+      (
+        Source.fromResource("PoSTest/test_validator_is_paid_after_withdraw_2.rho").mkString,
+        defaultSec2
+      ),
+      (
+        Source.fromResource("PoSTest/test_validator_is_paid_after_withdraw_3.rho").mkString,
+        defaultSec
+      )
+    ),
+    120.seconds
+  )
 
 class PoSSpec
     extends RhoSpec(

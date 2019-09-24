@@ -1,0 +1,47 @@
+
+new rl(`rho:registry:lookup`), poSCh, revVaultCh in {
+  rl!(`rho:rchain:pos`, *poSCh) |
+  rl!(`rho:rchain:revVault`, *revVaultCh) |
+  for(@(_, PoS) <- poSCh; @(_, RevVault) <- revVaultCh){
+    new revAddressOps(`rho:rev:address`), deployerId(`rho:rchain:deployerId`), revAddressCh in {
+      revAddressOps!("fromDeployerId", *deployerId, *revAddressCh) |
+      for(@revAddress <- revAddressCh){
+        new vaultCh in {
+          @RevVault!("findOrCreate", revAddress, *vaultCh) |
+          for(@(true, vault) <- vaultCh){
+            new balanceCh in {
+              @vault!("balance", *balanceCh) |
+              for(@initialBalance <- balanceCh){
+                new withdrawAck in {
+                  @PoS!("withdraw", *withdrawAck) |
+                  for(_ <- withdrawAck){
+                    new closeBlockAck in {
+                      @PoS!("closeBlock", *closeBlockAck) |
+                      for(_ <- closeBlockAck){
+                        @vault!("balance", *balanceCh) |
+                        for(@finalBalance <- balanceCh){
+                          new assert(`rho:test:assertAck`), testSuiteCompleted(`rho:test:testSuiteCompleted`), ack in {
+                            testSuiteCompleted!(true) |
+                            // final balance calculated from the weight of the default validators
+                            // instantiated in the genesis block used for RhoSpec.
+                            assert!(
+                              "pay validator after withdrawal",
+                              1,
+                              finalBalance == 9000086,
+                              "",
+                              *ack
+                            )
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
