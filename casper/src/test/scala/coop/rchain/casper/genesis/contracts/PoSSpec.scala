@@ -32,6 +32,17 @@ class TestBondingSucceeds
       120.seconds
     )
 
+class TestWithdrawSucceeds
+    extends RhoSpec(
+      Seq(
+        (
+          Source.fromResource("PoSTest/test_withdraw_succeeds.rho").mkString,
+          defaultSec
+        )
+      ),
+      120.seconds
+    )
+
 class PoSSpec
     extends RhoSpec(
       Seq((Source.fromResource("PoSTest.rho").mkString, defaultSec)),

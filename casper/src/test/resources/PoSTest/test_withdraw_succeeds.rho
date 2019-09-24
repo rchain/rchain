@@ -1,0 +1,72 @@
+match "047b43d6548b72813b89ac1b9f9ca67624a8b372feedd71d4e2da036384a3e1236812227e524e6f237cde5f80dbb921cac12e6500791e9a9ed1254a745a816fe1f".hexToBytes() {
+  posPk => {
+    new revVaultCh, posCh, rl(`rho:registry:lookup`) in {
+      rl!(`rho:rchain:revVault`, *revVaultCh) |
+      rl!(`rho:rchain:pos`, *posCh) |
+      for(@(_, RevVault) <- revVaultCh; @(_, PoS) <- posCh){
+        new revAddressOps(`rho:rev:address`),
+            deployerId(`rho:rchain:deployerId`),
+            deployerRevAddressCh,
+            posRevAddressCh in {
+          revAddressOps!("fromDeployerId", *deployerId, *deployerRevAddressCh) |
+          revAddressOps!("fromPublicKey", posPk, *posRevAddressCh) |
+          for (@deployerRevAddress <- deployerRevAddressCh;
+               @posRevAddress <- posRevAddressCh) {
+            new deployerVaultCh, posVaultCh in {
+              @RevVault!("findOrCreate", deployerRevAddress, *deployerVaultCh) |
+              @RevVault!("findOrCreate", posRevAddress, *posVaultCh) |
+              for(@(true, deployerVault) <- deployerVaultCh;
+                  @(true, posVault) <- posVaultCh) {
+                new poSBalanceCh,
+                    deployerBalanceCh,
+                    bondsCh,
+                    rewardsCh in {
+                  @posVault!("balance", *poSBalanceCh) |
+                  @deployerVault!("balance", *deployerBalanceCh) |
+                  @PoS!("getBonds", *bondsCh) |
+                  @PoS!("getRewards", *rewardsCh) |
+                  for(@initialPoSBalance <- poSBalanceCh;
+                      @initialDeployerBalance <- deployerBalanceCh;
+                      @initialBonds <- bondsCh;
+                      @initialRewards <- rewardsCh){
+                    new bondAck in {
+                      @PoS!("bond", 100, *bondAck) |
+                      for(@(true, _) <- bondAck){
+                        new withdrawAck in {
+                          @PoS!("withdraw", *withdrawAck) |
+                          for(_ <- withdrawAck){
+                            new closeBlockAck in {
+                              @PoS!("closeBlock", *closeBlockAck) |
+                              for(_ <- closeBlockAck){
+                                @posVault!("balance", *poSBalanceCh) |
+                                @deployerVault!("balance", *deployerBalanceCh) |
+                                @PoS!("getBonds", *bondsCh) |
+                                @PoS!("getRewards", *rewardsCh) |
+                                for(@finalPoSBalance <- poSBalanceCh;
+                                    @finalDeployerBalance <- deployerBalanceCh;
+                                    @finalBonds <- bondsCh;
+                                    @finalRewards <- rewardsCh) {
+                                  new assert(`rho:test:assertAck`), testSuiteCompleted(`rho:test:testSuiteCompleted`), ack in {
+                                    testSuiteCompleted!(true) |
+                                    assert!("not change the bonds map", 1, initialBonds == finalBonds, "", *ack) |
+                                    assert!("not change the rewards map", 1, initialRewards == finalRewards, "", *ack) |
+                                    assert!("not change the deployer balance", 1, initialDeployerBalance == finalDeployerBalance, "", *ack) |
+                                    assert!("not change the PoS balance", 1, initialPoSBalance == finalPoSBalance, "", *ack)
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
