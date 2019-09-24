@@ -8,8 +8,9 @@ import coop.rchain.casper.protocol.{BlockMessage, Justification}
 import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.casper.util.rholang.RuntimeManager
 import coop.rchain.models.Validator.Validator
+import coop.rchain.shared.Log
 
-final class SynchronyConstraintChecker[F[_]: Sync: BlockStore](
+final class SynchronyConstraintChecker[F[_]: Sync: BlockStore: Log](
     synchronyConstraintThreshold: Double
 ) {
   private def calculateSeenSendersSince(
@@ -50,6 +51,10 @@ final class SynchronyConstraintChecker[F[_]: Sync: BlockStore](
           validatorWeightMap     = bonds.map(b => b.validator -> b.stake).toMap
           sendersWeight          = seenSenders.toList.flatMap(s => validatorWeightMap.get(s)).sum
           otherValidatorsWeight  = validatorWeightMap.values.sum - validatorWeightMap(validator)
+          _ <- Log[F].info(
+                s"Seen ${seenSenders.size} senders with weight $sendersWeight out of total $otherValidatorsWeight " +
+                  s"(${sendersWeight.toDouble / otherValidatorsWeight} out of $synchronyConstraintThreshold needed)"
+              )
         } yield sendersWeight.toDouble / otherValidatorsWeight >= synchronyConstraintThreshold
       case None =>
         Sync[F].raiseError[Boolean](
@@ -62,7 +67,7 @@ object SynchronyConstraintChecker {
   def apply[F[_]](implicit ev: SynchronyConstraintChecker[F]): SynchronyConstraintChecker[F] =
     ev
 
-  def apply[F[_]: Sync: BlockStore](
+  def apply[F[_]: Sync: BlockStore: Log](
       synchronyConstraintThreshold: Double
   ): SynchronyConstraintChecker[F] =
     new SynchronyConstraintChecker[F](synchronyConstraintThreshold)
