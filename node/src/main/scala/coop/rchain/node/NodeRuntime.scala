@@ -696,7 +696,7 @@ object NodeRuntime {
       )
       synchronyConstraintChecker = SynchronyConstraintChecker[F](
         conf.server.synchronyConstraintThreshold
-      )(Sync[F], blockStore)
+      )(Sync[F], blockStore, Log[F])
       runtime <- {
         implicit val s  = rspaceScheduler
         implicit val sp = span
