@@ -7,6 +7,7 @@ import coop.rchain.crypto.PublicKey
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.rholang.interpreter.util.RevAddress
 import coop.rchain.casper.util.ConstructDeploy.{defaultSec, defaultSec2}
+import coop.rchain.crypto.signatures.Secp256k1
 
 import scala.concurrent.duration._
 import scala.io.Source
@@ -89,6 +90,27 @@ class TestMultipleBondingSucceeds
       120.seconds
     )
 
+class TestPaySucceeds
+    extends RhoSpec(
+      Seq(
+        (
+          Source.fromResource("PoSTest/test_pay_succeeds_1.rho").mkString,
+          defaultSec
+        ),
+        (
+          PoSSpec.templateSource(
+            Source.fromResource("PoSTest/test_pay_succeeds_2.rho").mkString,
+            Map(
+              "validatorPk" -> Base16
+                .encode(Secp256k1.toPublic(GenesisBuilder.defaultValidatorSks(1)).bytes)
+            )
+          ),
+          defaultSec2
+        )
+      ),
+      120.seconds
+    )
+
 class PoSSpec
     extends RhoSpec(
       Seq((Source.fromResource("PoSTest.rho").mkString, defaultSec)),
@@ -99,6 +121,11 @@ class PoSSpec
     )
 
 object PoSSpec {
+
+  def templateSource(source: String, substitutions: Map[String, String]): String =
+    substitutions.foldLeft(source) {
+      case (acc, (name, value)) => acc.replace(s"""$$$$$name$$$$""", value.toString)
+    }
 
   def prepareVault(vaultData: (String, Long)): Vault =
     Vault(RevAddress.fromPublicKey(PublicKey(Base16.decode(vaultData._1).get)).get, vaultData._2)

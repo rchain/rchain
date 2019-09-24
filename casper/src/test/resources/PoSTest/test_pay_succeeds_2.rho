@@ -1,0 +1,94 @@
+
+match ["047b43d6548b72813b89ac1b9f9ca67624a8b372feedd71d4e2da036384a3e1236812227e524e6f237cde5f80dbb921cac12e6500791e9a9ed1254a745a816fe1f".hexToBytes(),
+       "$$validatorPk$$".hexToBytes()]{
+  [posPk, validatorPk] => {
+    new rl(`rho:registry:lookup`), PoSCh, RevVaultCh, ListOpsCh in {
+      rl!(`rho:rchain:pos`, *PoSCh) |
+      rl!(`rho:rchain:revVault`, *RevVaultCh) |
+      rl!(`rho:lang:listOps`, *ListOpsCh) |
+      for(@(_, PoS) <- PoSCh;
+          @(_, RevVault) <- RevVaultCh;
+          @(_, ListOps) <- ListOpsCh){
+        new deployerId(`rho:rchain:deployerId`),
+            revAddressOps(`rho:rev:address`),
+            deployerRevAddressCh,
+            posRevAddressCh in {
+          revAddressOps!("fromDeployerId", *deployerId, *deployerRevAddressCh) |
+          revAddressOps!("fromPublicKey", posPk, *posRevAddressCh) |
+          for(@deployerRevAddress <- deployerRevAddressCh; @posRevAddress <- posRevAddressCh){
+            new posVaultCh, deployerVaultCh in {
+              @RevVault!("findOrCreate", deployerRevAddress, *deployerVaultCh) |
+              @RevVault!("findOrCreate", posRevAddress, *posVaultCh) |
+              for(@(true, deployerVault) <- deployerVaultCh;
+                  @(true, posVault) <- posVaultCh){
+                new poSBalanceCh,
+                    deployerBalanceCh,
+                    rewardsCh in {
+                  @posVault!("balance", *poSBalanceCh) |
+                  @deployerVault!("balance", *deployerBalanceCh) |
+                  @PoS!("getRewards", *rewardsCh) |
+                  for(@initialPoSBalance <- poSBalanceCh;
+                      @initialDeployerBalance <- deployerBalanceCh;
+                      @initialRewards <- rewardsCh){
+                    new payAck in {
+                      @PoS!("pay", 100, *payAck) |
+                      for(@(true, _) <- payAck){
+                        new closeBlockAck in {
+                          @PoS!("closeBlock", *closeBlockAck) |
+                          for(_ <- closeBlockAck){
+                            @posVault!("balance", *poSBalanceCh) |
+                            @deployerVault!("balance", *deployerBalanceCh) |
+                            @PoS!("getRewards", *rewardsCh) |
+                            for(@finalPoSBalance <- poSBalanceCh;
+                                @finalDeployerBalance <- deployerBalanceCh;
+                                @finalRewards <- rewardsCh) {
+                              new computeDelta, deltaRewardsCh in {
+                                @ListOps!("fold", finalRewards.toList(), {}, *computeDelta, *deltaRewardsCh) |
+                                contract computeDelta(@(pk, finalReward), @acc, resultCh) = {
+                                  resultCh!(acc.set(pk, finalReward - initialRewards.getOrElse(pk, 0)))
+                                } |
+                                for (@deltaRewards <- deltaRewardsCh) {
+                                  new isPositive, allRewardsPositiveCh, sumDelta, deltaSumCh in {
+                                    @ListOps!("forall", deltaRewards, *isPositive, *allRewardsPositiveCh) |
+                                    contract isPositive(@n, resultCh) = { resultCh!(n > 0)} |
+
+                                    @ListOps!("fold", deltaRewards.toList(), 0, *sumDelta, *deltaSumCh) |
+                                    contract sumDelta(@(_, delta), @acc, resultCh) = {
+                                      resultCh!(acc + delta)
+                                    } |
+
+                                    new deployerIdOps(`rho:rchain:deployerId:ops`), deployerPkCh in {
+                                      deployerIdOps!("pubKeyBytes", *deployerId, *deployerPkCh) |
+                                      for(@deployerPk <- deployerPkCh;
+                                          @allRewardsPositive <- allRewardsPositiveCh;
+                                          @deltaSum <- deltaSumCh){
+                                        new assert(`rho:test:assertAck`), testSuiteCompleted(`rho:test:testSuiteCompleted`), ack in {
+                                          testSuiteCompleted!(true) |
+                                          assert!("decrement the deployer vault balance", 1, initialDeployerBalance - finalDeployerBalance == 100, "", *ack) |
+                                          assert!("decrement the PoS vault balance", 1, finalPoSBalance - initialPoSBalance == 100, "", *ack) |
+                                          // final rewards balance calculated from the weight of the validator
+                                          // instantiated in the genesis block used for RhoSpec.
+                                          assert!("increase validators final rewards balance", 1, finalRewards.get(validatorPk) == 2, "", *ack) |
+                                          assert!("the sum difference equals the payment", 1, 98 == deltaSum, "", *ack) |
+                                          assert!("only grow the rewards map", 1, true == allRewardsPositive, "", *ack)
+                                        }
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
