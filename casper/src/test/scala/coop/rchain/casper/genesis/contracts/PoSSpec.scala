@@ -74,6 +74,21 @@ class TestBondingFailsIfDepositFails
       120.seconds
     )
 
+class TestMultipleBondingSucceeds
+    extends RhoSpec(
+      Seq(
+        (
+          Source.fromResource("PoSTest/test_bonding_succeeds.rho").mkString,
+          defaultSec
+        ),
+        (
+          Source.fromResource("PoSTest/test_bonding_succeeds.rho").mkString,
+          defaultSec2
+        )
+      ),
+      120.seconds
+    )
+
 class PoSSpec
     extends RhoSpec(
       Seq((Source.fromResource("PoSTest.rho").mkString, defaultSec)),
