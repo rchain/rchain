@@ -1,0 +1,35 @@
+
+// TODO: deploy this test as a user with REV balance < bond
+new rl(`rho:registry:lookup`), PoSCh in {
+  rl!(`rho:rchain:pos`, *PoSCh) |
+  for(@(_, PoS) <- PoSCh){
+    new bondsCh, rewardsCh in {
+      @PoS!("getBonds", *bondsCh) |
+      @PoS!("getRewards", *rewardsCh) |
+      for(@initialBonds <- bondsCh;
+          @initialRewards <- rewardsCh){
+        new bondAck in {
+          // for the bond to fail, the bond amount must exceed default vault
+          // amount defined in GenesisBuilder
+          @PoS!("bond", 9000001, *bondAck) |
+          for(@(result, msg) <- bondAck){
+            new assert(`rho:test:assertAck`), ack in {
+              assert!("fail with (false, error)", 1, false == result, "", *ack) |
+              assert!("fail with the expected error message", 1, "Bond deposit failed: Insufficient funds" == msg, "", *ack) |
+              @PoS!("getBonds", *bondsCh) |
+              @PoS!("getRewards", *rewardsCh) |
+              for(@finalBonds <- bondsCh;
+                  @finalRewards <- rewardsCh){
+                new testSuiteCompleted(`rho:test:testSuiteCompleted`) in {
+                  testSuiteCompleted!(true) |
+                  assert!("not change the bonds map", 1, initialBonds == finalBonds, "", *ack) |
+                  assert!("not change the rewards map", 1, initialRewards == finalRewards, "", *ack)
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

@@ -14,7 +14,6 @@ match (
       RhoSpecCh, PoSCh, RevVaultCh, ListOpsCh,
       setup, prepareUser,
       test_multiple_bonding_succeeds,
-      test_bonding_fails_if_deposit_fails,
       test_bonding_fails_if_already_bonded,
       test_bonding_fails_if_bond_too_small,
       test_pay_succeeds,
@@ -37,7 +36,6 @@ match (
         for(@(true, posVault) <- posVaultCh) {
           @RhoSpec!("testSuite", *setup,
             [
-              ("bonding fails if deposit fails", *test_bonding_fails_if_deposit_fails),
               ("multiple bondings work", *test_multiple_bonding_succeeds),
               ("payment works", *test_pay_succeeds),
               ("bonding fails if already bonded", *test_bonding_fails_if_already_bonded),
@@ -179,10 +177,6 @@ match (
                 }
               }
             }
-          } |
-
-          contract test_bonding_fails_if_deposit_fails(rhoSpec, _, ackCh) = {
-            test_bonding_failure!(*rhoSpec, "6666666666666666666666666666666666666666666666666666666666666666666666666666666666666666666666666666666666666666666666666666666666", 20000, "Bond deposit failed: Insufficient funds", *ackCh)
           } |
 
           contract test_bonding_fails_if_bond_too_small(rhoSpec, _, ackCh) = {

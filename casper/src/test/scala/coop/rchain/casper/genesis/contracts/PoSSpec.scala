@@ -45,23 +45,34 @@ class TestWithdrawSucceeds
     )
 
 class TestValidatorIsPaidAfterWithdrawal
-  extends RhoSpec(
-    Seq(
-      (
-        Source.fromResource("PoSTest/test_validator_is_paid_after_withdraw_1.rho").mkString,
-        defaultSec
+    extends RhoSpec(
+      Seq(
+        (
+          Source.fromResource("PoSTest/test_validator_is_paid_after_withdraw_1.rho").mkString,
+          defaultSec
+        ),
+        (
+          Source.fromResource("PoSTest/test_validator_is_paid_after_withdraw_2.rho").mkString,
+          defaultSec2
+        ),
+        (
+          Source.fromResource("PoSTest/test_validator_is_paid_after_withdraw_3.rho").mkString,
+          defaultSec
+        )
       ),
-      (
-        Source.fromResource("PoSTest/test_validator_is_paid_after_withdraw_2.rho").mkString,
-        defaultSec2
+      120.seconds
+    )
+
+class TestBondingFailsIfDepositFails
+    extends RhoSpec(
+      Seq(
+        (
+          Source.fromResource("PoSTest/test_bonding_fails_if_deposit_fails.rho").mkString,
+          defaultSec
+        )
       ),
-      (
-        Source.fromResource("PoSTest/test_validator_is_paid_after_withdraw_3.rho").mkString,
-        defaultSec
-      )
-    ),
-    120.seconds
-  )
+      120.seconds
+    )
 
 class PoSSpec
     extends RhoSpec(
