@@ -102,6 +102,7 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: ConnectionsCell: TransportLa
       } yield status
     }
 
+    import cats.instances.either._
     for {
       status <- blockProcessingLock.withPermit {
                  val exists = for {
@@ -112,13 +113,10 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: ConnectionsCell: TransportLa
 
                  exists.ifM(logAlreadyProcessed, doppelgangerAndAdd)
                }
-      _ <- status.fold(
-            kp(noop),
-            kp(
-              metricsF.setGauge("block-height", blockNumber(b))(AddBlockMetricsSource) >>
-                EventPublisher[F].publish(MultiParentCasperImpl.addedEvent(b))
-            )
-          )
+      _ <- status.traverse_ { _ =>
+            metricsF.setGauge("block-height", blockNumber(b))(AddBlockMetricsSource) >>
+              EventPublisher[F].publish(MultiParentCasperImpl.addedEvent(b))
+          }
     } yield status
   }.timer("add-block-time")
 
