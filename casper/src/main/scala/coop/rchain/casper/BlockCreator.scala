@@ -56,8 +56,9 @@ object BlockCreator {
       val validator = ByteString.copyFrom(publicKey.bytes)
       for {
         tipHashes             <- Estimator.tips[F](dag, genesis)
+        tip                   = tipHashes.head
         _                     <- spanF.mark("after-estimator")
-        parentMetadatas       <- EstimatorHelper.chooseNonConflicting[F](tipHashes, dag)
+        parentMetadatas       <- EstimatorHelper.chooseNonConflicting[F](List(tip), dag)
         maxBlockNumber        = ProtoUtil.maxBlockNumberMetadata(parentMetadatas)
         invalidLatestMessages <- ProtoUtil.invalidLatestMessages[F](dag)
         slashingDeploys <- invalidLatestMessages.values.toList.traverse { invalidBlockHash =>

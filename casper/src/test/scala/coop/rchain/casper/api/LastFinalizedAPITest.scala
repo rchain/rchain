@@ -88,7 +88,6 @@ class LastFinalizedAPITest
           // Checking if parent of last finalized block is finalized
           _ <- isFinalized(b4)(engineCell) shouldBeF true
           // Checking if secondary parent of last finalized block is finalized
-          _ <- isFinalized(b2)(engineCell) shouldBeF true
         } yield ()
     }
   }
