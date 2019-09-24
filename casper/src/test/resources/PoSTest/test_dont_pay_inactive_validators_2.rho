@@ -1,0 +1,29 @@
+
+new rl(`rho:registry:lookup`), PoSCh in {
+  rl!(`rho:rchain:pos`, *PoSCh) |
+  for(@(_, PoS) <- PoSCh){
+    new payAck in {
+      @PoS!("pay", 100, *payAck) |
+      for(@(true, _) <- payAck){
+        new closeBlockAck in {
+          @PoS!("closeBlock", *closeBlockAck) |
+          for(_ <- closeBlockAck){
+            new rewardsCh in {
+              @PoS!("getRewards", *rewardsCh) |
+              for(@rewards <- rewardsCh){
+                match "$$validatorPk$$".hexToBytes() {
+                  validatorPk => {
+                    new assert(`rho:test:assertAck`), testSuiteCompleted(`rho:test:testSuiteCompleted`), ack in {
+                      testSuiteCompleted!(true) |
+                      assert!("not give the new validator a reward", 1, Nil == rewards.get(validatorPk), "", *ack)
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

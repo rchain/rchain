@@ -13,7 +13,6 @@ match (
       posRevAddressCh, posVaultCh,
       RhoSpecCh, PoSCh, RevVaultCh, ListOpsCh,
       setup, prepareUser,
-      test_dont_pay_inactive_validators,
       test_bonding_failure
     in {
       revAddressOps!("fromPublicKey", posPubKey, *posRevAddressCh) |
@@ -30,10 +29,7 @@ match (
 
         @RevVault!("findOrCreate", posRevAddress, *posVaultCh) |
         for(@(true, posVault) <- posVaultCh) {
-          @RhoSpec!("testSuite", *setup,
-            [
-              ("payment is not distributed to inactive validators", *test_dont_pay_inactive_validators)
-            ]) |
+          @RhoSpec!("testSuite", *setup, []) |
 
           contract setup(_, retCh) = {
             retCh!({})
@@ -81,37 +77,6 @@ match (
               }
             }
           } |
-
-          contract test_dont_pay_inactive_validators(rhoSpec, _, ackCh) = {
-            new setupCh, closeBlockCh, retCh,
-                finalRewardsCh
-            in {
-              prepareUser!("9999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999", *setupCh) |
-              for (@validatorPubKey, _, _ <- setupCh) {
-                @PoS!("bond", 100, *setupCh) |
-                for (@(true, _) <- setupCh) {
-                  prepareUser!("0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000", *setupCh) |
-                  for (@user1PubKey, _, @user1Vault <- setupCh) {
-                    @PoS!("pay", 100, *retCh) |
-                    for ( @(true, _) <- retCh) {
-                      @PoS!("closeBlock", *closeBlockCh) |
-                      for (_ <- closeBlockCh) {
-                        @PoS!("getRewards", *finalRewardsCh) |
-                        for(@finalRewards <- finalRewardsCh) {
-                          rhoSpec!("assertMany",
-                            [
-                              ((Nil, "==", finalRewards.get(validatorPubKey)), "the new validator should have no reward")
-                            ],
-                            *ackCh
-                          )
-                        }
-                      }
-                    }
-                  }
-                }
-              }
-            }
-          }
         }
       }
     }

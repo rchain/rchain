@@ -1,0 +1,9 @@
+
+new rl(`rho:registry:lookup`), PoSCh in {
+  rl!(`rho:rchain:pos`, *PoSCh) |
+  for(@(_, PoS) <- PoSCh){
+    new bondAck in {
+      @PoS!("bond", 100, *bondAck)
+    }
+  }
+}

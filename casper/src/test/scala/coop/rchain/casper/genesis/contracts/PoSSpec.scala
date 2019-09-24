@@ -6,7 +6,7 @@ import coop.rchain.casper.util.GenesisBuilder
 import coop.rchain.crypto.PublicKey
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.rholang.interpreter.util.RevAddress
-import coop.rchain.casper.util.ConstructDeploy.{defaultSec, defaultSec2}
+import coop.rchain.casper.util.ConstructDeploy.{defaultPub, defaultSec, defaultSec2}
 import coop.rchain.crypto.signatures.Secp256k1
 
 import scala.concurrent.duration._
@@ -128,6 +128,24 @@ class TestBondingFailsIfBondTooSmall
         (
           Source.fromResource("PoSTest/test_bonding_fails_if_bond_too_small.rho").mkString,
           defaultSec
+        )
+      ),
+      120.seconds
+    )
+
+class TestDontPayInactiveValidators
+    extends RhoSpec(
+      Seq(
+        (
+          Source.fromResource("PoSTest/test_dont_pay_inactive_validators_1.rho").mkString,
+          defaultSec
+        ),
+        (
+          PoSSpec.templateSource(
+            Source.fromResource("PoSTest/test_dont_pay_inactive_validators_2.rho").mkString,
+            Map("validatorPk" -> Base16.encode(defaultPub.bytes))
+          ),
+          defaultSec2
         )
       ),
       120.seconds
