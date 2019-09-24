@@ -13,7 +13,6 @@ match (
       posRevAddressCh, posVaultCh,
       RhoSpecCh, PoSCh, RevVaultCh, ListOpsCh,
       setup, prepareUser,
-      test_make_pos_succeeds,
       test_close_block_finishes,
       test_bonding_succeeds,
       test_withdraw_succeeds,
@@ -42,7 +41,6 @@ match (
         for(@(true, posVault) <- posVaultCh) {
           @RhoSpec!("testSuite", *setup,
             [
-              ("PoS is created with empty bonds", *test_make_pos_succeeds),
               ("closeBlock finishes successfully", *test_close_block_finishes),
               ("bonding success", *test_bonding_succeeds),
               ("withdraw succeeds", *test_withdraw_succeeds),
@@ -72,29 +70,6 @@ match (
               }
             }
           } |
-
-          contract test_make_pos_succeeds(rhoSpec, _, ackCh) = {
-            new bondsCh, rewardsCh, rewardsZeroCh, rewardsZeroPred in {
-              @PoS!("getBonds", *bondsCh) |
-              @PoS!("getRewards", *rewardsCh) |
-              for ( @bonds <- bondsCh; @rewards <- rewardsCh) {
-                @ListOps!("forall", rewards.toList(), *rewardsZeroPred, *rewardsZeroCh) |
-                contract rewardsZeroPred(@(_, reward), resultCh) = {
-                  resultCh!(reward == 0)
-                } |
-
-                rhoSpec!("assertMany",
-                  [
-                    (bonds.size() >= 0, "some bonds map should be received"),
-                    ((0, "==", rewards.size()), "the rewards map is initially empty"),
-                    ((true, "== <-", *rewardsZeroCh), "no rewards yet")
-                  ],
-                  *ackCh
-                )
-              }
-            }
-          } |
-
 
           contract test_close_block_finishes(rhoSpec, _, ackCh) = {
             new resultCh in {

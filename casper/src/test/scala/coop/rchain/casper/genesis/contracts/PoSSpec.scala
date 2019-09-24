@@ -10,6 +10,17 @@ import coop.rchain.casper.util.ConstructDeploy.defaultSec
 import scala.concurrent.duration._
 import scala.io.Source
 
+class TestMakePoSSucceeds
+    extends RhoSpec(
+      Seq(
+        (
+          Source.fromResource("PoSTest/test_make_pos_succeeds.rho").mkString,
+          defaultSec
+        )
+      ),
+      120.seconds
+    )
+
 class PoSSpec
     extends RhoSpec(
       Seq((Source.fromResource("PoSTest.rho").mkString, defaultSec)),

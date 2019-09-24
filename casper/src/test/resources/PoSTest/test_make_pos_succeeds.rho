@@ -1,0 +1,25 @@
+new rl(`rho:registry:lookup`), PoSCh, ListOpsCh in {
+  rl!(`rho:rchain:pos`, *PoSCh) |
+  rl!(`rho:lang:listOps`, *ListOpsCh) |
+  for(@(_, PoS) <- PoSCh; @(_, ListOps) <- ListOpsCh){
+    new bondsCh, rewardsCh in {
+      @PoS!("getBonds", *bondsCh) |
+      @PoS!("getRewards", *rewardsCh) |
+      for(@bonds <- bondsCh; @rewards <- rewardsCh) {
+        new rewardsZeroPred, rewardsZeroCh in {
+          @ListOps!("forall", rewards.toList(), *rewardsZeroPred, *rewardsZeroCh) |
+          contract rewardsZeroPred(@(_, reward), resultCh) = {
+            resultCh!(reward == 0)
+          } |
+          for(@rewardsZero <- rewardsZeroCh){
+            new assert(`rho:test:assertAck`), testSuiteCompleted(`rho:test:testSuiteCompleted`), ack in {
+              testSuiteCompleted!(true) |
+              assert!("have a bonds map", 1, bonds.size() >= 0, "", *ack) |
+              assert!("have an empty rewards map", 1, rewards.size() == 0, "", *ack)
+            }
+          }
+        }
+      }
+    }
+  }
+}
