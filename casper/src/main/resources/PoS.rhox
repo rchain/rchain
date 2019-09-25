@@ -54,7 +54,7 @@ new  PoS,
              @initialActive <- initialActiveCh) {
           new stateCh in {
             // State structure:
-            // pendingRewards : Map[PublickKey, Int] - are accummulated by calling "pay"
+            // pendingRewards : Map[PublickKey, Int] - are accummulated by calling "chargeDeploy"
             // committedRewards : Map[PublickKey, Int] - are moved from pendingRewards at each closeBlock
             // activeValidators : List[PublicKey] - the active validators
             // withdrawers : Map[PublicKey, Int] - the validators willing to withdraw and the blocknumber when their quarantine ends
@@ -152,13 +152,13 @@ new  PoS,
               }
             } |
 
-            contract PoS (@"pay", @amount, deployerId, returnCh) = {
+            contract PoS (@"chargeDeploy", @amount, deployerId, returnCh) = {
               new vaultCh, transferCh, userCh, processPayCh,
                   depositCh,
                   newPendingCh in {
                 getUser!(*userCh) |
                 runMVar!(*stateCh, *processPayCh, *returnCh) |
-                for(@state, payResultCh <- processPayCh;
+                for(@state, chargeDeployResultCh <- processPayCh;
                     @userPk <- userCh) {
                   deposit!(*deployerId, amount, *depositCh) |
 
@@ -171,7 +171,7 @@ new  PoS,
 
                   for(@depositResult <- depositCh;
                       @newPending <- newPendingCh) {
-                    payResultCh!(state.set("pendingRewards", newPending), depositResult)
+                    chargeDeployResultCh!(state.set("pendingRewards", newPending), depositResult)
                   }
                 }
               }
