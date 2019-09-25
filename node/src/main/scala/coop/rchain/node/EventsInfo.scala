@@ -11,6 +11,7 @@ import org.http4s.HttpRoutes
 import org.http4s.server.websocket.WebSocketBuilder
 import org.http4s.websocket.WebSocketFrame
 import org.http4s.websocket.WebSocketFrame._
+import de.huxhorn.sulky.ulid.ULID
 
 import scala.{Stream => _}
 
@@ -39,6 +40,7 @@ object EventsInfo {
     import io.circe.generic.extras.auto._
     import io.circe.generic.extras.Configuration
 
+    val ulid               = new ULID();
     val eventTypeLabel     = "event"
     val schemaVersionLabel = "schema-version"
     val schemaVersionJson  = Json.fromInt(1)
@@ -61,7 +63,9 @@ object EventsInfo {
     def transformRChainEvent(e: RChainEvent): Json = {
       val serialized = e.asJson
       val eventType  = serialized.findAllByKey(eventTypeLabel).head
+      val id         = Json.fromString(ulid.nextULID())
       Json.obj(
+        ("id", id),
         ("event", eventType),
         (schemaVersionLabel, schemaVersionJson),
         ("payload", serialized.mapObject(_.remove(eventTypeLabel)))
