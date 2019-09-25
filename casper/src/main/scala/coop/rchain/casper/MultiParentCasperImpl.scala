@@ -128,7 +128,7 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: ConnectionsCell: TransportLa
       _            <- Span[F].mark("internal-add-block")
       validFormat  <- Validate.formatOfFields(b)
       validSig     <- Validate.blockSignature(b)
-      validSender  <- Validate.blockSender(b, genesis, dag)
+      validSender  <- Validate.blockSenderHasWeight(b, genesis, dag)
       validVersion <- Validate.version(b, version)
       attemptResult <- if (!validFormat) (BlockStatus.invalidFormat.asLeft[ValidBlock], dag).pure
                       else if (!validSig)
