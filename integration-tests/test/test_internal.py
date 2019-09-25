@@ -140,7 +140,7 @@ def test_extract_validator_stake_from_bonds_validator_str() -> None:
     assert validator_stake['23bb89653c1d43578ed421e655e7a0ed9f3ed2e7eab820ad7739277e380cafa3'] == 81
 
 def test_extract_block_hash_from_propose_output() -> None:
-    response = "Response: Success! Block a91208047c... created and added.\n"
+    response = "Response: Success! Block a91208047c created and added.\n"
     assert extract_block_hash_from_propose_output(response) == "a91208047c"
 
 

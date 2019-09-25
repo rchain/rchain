@@ -16,17 +16,17 @@ import coop.rchain.casper._
 import coop.rchain.casper.DeployError._
 import coop.rchain.casper.MultiParentCasper.ignoreDoppelgangerCheck
 import coop.rchain.casper.protocol._
-import coop.rchain.casper.util.{DagOperations, EventConverter, ProtoUtil}
+import coop.rchain.casper.util._
 import coop.rchain.casper.util.rholang.RuntimeManager
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.graphz._
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.metrics.implicits._
-import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.{BlockMetadata, Par}
 import coop.rchain.models.rholang.sorter.Sortable._
 import coop.rchain.models.serialization.implicits.mkProtobufInstance
+import coop.rchain.models.BlockHash.{BlockHash, _}
 import coop.rchain.rholang.interpreter.storage.StoragePrinter
 import coop.rchain.rspace.StableHashProvider
 import coop.rchain.rspace.trace._
@@ -82,12 +82,12 @@ object BlockAPI {
             case true =>
               implicit val ms = BlockAPIMetricsSource
               (for {
-                _          <- Metrics[F].incrementCounter("propose")
+                _ <- Metrics[F].incrementCounter("propose")
+                // TODO: Get rid off CreateBlockStatus and use EitherT
                 maybeBlock <- casper.createBlock
                 result <- maybeBlock match {
                            case err: NoBlock =>
-                             Metrics[F]
-                               .incrementCounter("propose-failed") >> s"Error while creating block: $err"
+                             s"Error while creating block: $err"
                                .asLeft[DeployServiceResponse]
                                .pure[F]
                            case Created(block) =>
@@ -99,12 +99,18 @@ object BlockAPI {
                                printUnmatchedSends
                              ))
                          }
-              } yield result).timer("propose-total-time").attempt.flatMap {
-                case Left(e) =>
-                  Metrics[F].incrementCounter("propose-failed") >> Sync[F]
-                    .raiseError[ApiErr[DeployServiceResponse]](e)
-                case Right(result) => result.pure[F]
-              }
+              } yield result)
+                .timer("propose-total-time")
+                .attempt
+                .map(_.leftMap(e => s"Error while creating block: ${e.getMessage}").joinRight)
+                .flatMap {
+                  case Left(error) =>
+                    Metrics[F].incrementCounter("propose-failed") >>
+                      Log[F].warn(error) >>
+                      error.asLeft[DeployServiceResponse].pure[F]
+                  case result =>
+                    result.pure[F]
+                }
             case false =>
               "Error: There is another propose in progress.".asLeft[DeployServiceResponse].pure[F]
           } {
@@ -550,7 +556,7 @@ object BlockAPI {
   ): Effect[F, DeployServiceResponse] =
     status
       .map { _ =>
-        val hash    = PrettyPrinter.buildString(block.blockHash)
+        val hash    = block.blockHash.base16String
         val deploys = block.body.deploys.map(_.deploy)
         val maybeUnmatchedSendsOutputF =
           if (printUnmatchedSends) prettyPrintUnmatchedSends(casper, deploys).map(_.some)
