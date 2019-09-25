@@ -12,7 +12,7 @@ object RhoLoggerContract {
   //TODO extract a `RhoPatterns[F]` algebra that will move passing the Span, the Dispatcher, and the Space parameters closer to the edge of the world
   def handleMessage[F[_]: Log: Concurrent: Span](
       ctx: SystemProcess.Context[F]
-  )(message: (Seq[ListParWithRandom], Int)): F[Unit] = {
+  )(message: Seq[ListParWithRandom]): F[Unit] = {
     val isContractCall = new ContractCall(ctx.space, ctx.dispatcher)
 
     message match {

@@ -80,7 +80,7 @@ class RhoSpec(
               Runtime.byteName(n.toByte),
               arity,
               n.toLong,
-              ctx => testResultCollector.handleMessage(ctx)(_, _)
+              ctx => testResultCollector.handleMessage(ctx)(_)
             )
         } ++ Seq(
         SystemProcess.Definition[F](
@@ -88,28 +88,28 @@ class RhoSpec(
           Runtime.byteName(103),
           2,
           103L,
-          ctx => RhoLoggerContract.handleMessage(ctx)(_, _)
+          ctx => RhoLoggerContract.handleMessage(ctx)(_)
         ),
         SystemProcess.Definition[F](
           "rho:test:deploy:set",
           Runtime.byteName(104),
           3,
           104L,
-          ctx => DeployDataContract.set(ctx)(_, _)
+          ctx => DeployDataContract.set(ctx)(_)
         ),
         SystemProcess.Definition[F](
           "rho:test:deployerId:make",
           Runtime.byteName(105),
           3,
           105L,
-          ctx => DeployerIdContract.get(ctx)(_, _)
+          ctx => DeployerIdContract.get(ctx)(_)
         ),
         SystemProcess.Definition[F](
           "rho:test:crypto:secp256k1Sign",
           Runtime.byteName(106),
           3,
           106L,
-          ctx => Secp256k1SignContract.get(ctx)(_, _)
+          ctx => Secp256k1SignContract.get(ctx)(_)
         )
       )
     testResultCollectorService

@@ -41,7 +41,7 @@ trait SystemProcesses[F[_]] {
 }
 
 object SystemProcesses {
-  type Contract[F[_]] = (Seq[ListParWithRandom], Int) => F[Unit]
+  type Contract[F[_]] = Seq[ListParWithRandom] => F[Unit]
 
   def apply[F[_]](
       dispatcher: Dispatch[F, ListParWithRandom, TaggedContinuation],

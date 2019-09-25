@@ -121,39 +121,35 @@ class DebruijnInterpreter[M[_], F[_]](
 
   private[this] def continue(res: Application, repeatOp: M[Unit], persistent: Boolean) =
     res match {
-      case Some((continuation, dataList, updatedSequenceNumber, _)) if persistent =>
-        dispatchAndRun(continuation, dataList, updatedSequenceNumber)(
+      case Some((continuation, dataList, _, _)) if persistent =>
+        dispatchAndRun(continuation, dataList)(
           repeatOp
         )
-      case Some((continuation, dataList, updatedSequenceNumber, peek)) if peek =>
-        dispatchAndRun(continuation, dataList, updatedSequenceNumber)(
-          producePeeks(dataList, updatedSequenceNumber): _*
+      case Some((continuation, dataList, _, peek)) if peek =>
+        dispatchAndRun(continuation, dataList)(
+          producePeeks(dataList): _*
         )
-      case Some((continuation, dataList, updatedSequenceNumber, _)) =>
-        dispatch(continuation, dataList, updatedSequenceNumber)
+      case Some((continuation, dataList, _, _)) =>
+        dispatch(continuation, dataList)
       case None => syncM.unit
     }
 
   private[this] def dispatchAndRun(
       continuation: TaggedContinuation,
-      dataList: Seq[(Par, ListParWithRandom, ListParWithRandom, Boolean)],
-      sequenceNumber: Int
+      dataList: Seq[(Par, ListParWithRandom, ListParWithRandom, Boolean)]
   )(ops: M[Unit]*) =
-    (dispatch(continuation, dataList, sequenceNumber) :: ops.toList).parSequence_
+    (dispatch(continuation, dataList) :: ops.toList).parSequence_
 
   private[this] def dispatch(
       continuation: TaggedContinuation,
-      dataList: Seq[(Par, ListParWithRandom, ListParWithRandom, Boolean)],
-      sequenceNumber: Int
+      dataList: Seq[(Par, ListParWithRandom, ListParWithRandom, Boolean)]
   ) = dispatcher.dispatch(
     continuation,
-    dataList.map(_._2),
-    sequenceNumber
+    dataList.map(_._2)
   )
 
   private[this] def producePeeks(
-      dataList: Seq[(Par, ListParWithRandom, ListParWithRandom, Boolean)],
-      sequenceNumber: Int
+      dataList: Seq[(Par, ListParWithRandom, ListParWithRandom, Boolean)]
   ) =
     dataList
       .withFilter {
@@ -161,7 +157,7 @@ class DebruijnInterpreter[M[_], F[_]](
       }
       .map {
         case (chan, _, removedData, _) =>
-          produce(chan, removedData, false, sequenceNumber)
+          produce(chan, removedData, false, 0)
       }
 
   override def eval(par: Par)(

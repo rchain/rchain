@@ -58,7 +58,7 @@ object Runtime {
   type RhoReplayISpace[F[_]] = TCPAK[F, IReplaySpace]
 
   type RhoDispatch[F[_]]    = Dispatch[F, ListParWithRandom, TaggedContinuation]
-  type RhoSysFunction[F[_]] = (Seq[ListParWithRandom], Int) => F[Unit]
+  type RhoSysFunction[F[_]] = Seq[ListParWithRandom] => F[Unit]
   type RhoDispatchMap[F[_]] = Map[Long, RhoSysFunction[F]]
 
   type CPAK[M[_], F[_[_], _, _, _, _]] =
@@ -177,12 +177,12 @@ object Runtime {
         fixedChannel: Name,
         arity: Arity,
         bodyRef: BodyRef,
-        handler: Context[F] => (Seq[ListParWithRandom], Int) => F[Unit],
+        handler: Context[F] => Seq[ListParWithRandom] => F[Unit],
         remainder: Remainder = None
     ) {
       def toDispatchTable(
           context: SystemProcess.Context[F]
-      ): (BodyRef, (Seq[ListParWithRandom], Arity) => F[Unit]) =
+      ): (BodyRef, Seq[ListParWithRandom] => F[Unit]) =
         bodyRef -> handler(context)
 
       def toUrnMap: (String, Par) = {
