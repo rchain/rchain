@@ -6,8 +6,8 @@ new rl(`rho:registry:lookup`), PoSCh in {
       @PoS!("getRewards", *rewardsCh) |
       for(@initialBonds <- bondsCh;
           @initialRewards <- rewardsCh){
-        new bondAck in {
-          @PoS!("bond", -1, *bondAck) |
+        new deployerId(`rho:rchain:deployerId`), bondAck in {
+          @PoS!("bond", *deployerId, -1, *bondAck) |
           for(@(result, msg) <- bondAck){
             new assert(`rho:test:assertAck`), ack in {
               assert!("fail with (false, error)", 1, false == result, "", *ack) |

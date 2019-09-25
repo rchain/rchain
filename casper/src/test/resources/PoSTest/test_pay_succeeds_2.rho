@@ -30,8 +30,8 @@ match ["047b43d6548b72813b89ac1b9f9ca67624a8b372feedd71d4e2da036384a3e1236812227
                   for(@initialPoSBalance <- poSBalanceCh;
                       @initialDeployerBalance <- deployerBalanceCh;
                       @initialRewards <- rewardsCh){
-                    new payAck in {
-                      @PoS!("pay", 100, *payAck) |
+                    new deployerId(`rho:rchain:deployerId`), payAck in {
+                      @PoS!("pay", 100, *deployerId, *payAck) |
                       for(@(true, _) <- payAck){
                         new closeBlockAck in {
                           @PoS!("closeBlock", *closeBlockAck) |

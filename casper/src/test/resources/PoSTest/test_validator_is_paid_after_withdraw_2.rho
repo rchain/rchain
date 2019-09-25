@@ -1,8 +1,8 @@
 new rl(`rho:registry:lookup`), PoSCh in {
   rl!(`rho:rchain:pos`, *PoSCh) |
   for(@(_, PoS) <- PoSCh){
-    new payAck in {
-      @PoS!("pay", 100, *payAck) |
+    new deployerId(`rho:rchain:deployerId`), payAck in {
+      @PoS!("pay", 100, *deployerId, *payAck) |
       for(@(true, _) <- payAck){
         new closeBlockAck in {
           @PoS!("closeBlock", *closeBlockAck)

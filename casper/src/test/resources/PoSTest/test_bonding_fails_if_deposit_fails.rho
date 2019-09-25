@@ -8,10 +8,10 @@ new rl(`rho:registry:lookup`), PoSCh in {
       @PoS!("getRewards", *rewardsCh) |
       for(@initialBonds <- bondsCh;
           @initialRewards <- rewardsCh){
-        new bondAck in {
+        new bondAck, deployerId(`rho:rchain:deployerId`) in {
           // for the bond to fail, the bond amount must exceed default vault
           // amount defined in GenesisBuilder
-          @PoS!("bond", 9000001, *bondAck) |
+          @PoS!("bond", *deployerId, 9000001, *bondAck) |
           for(@(result, msg) <- bondAck){
             new assert(`rho:test:assertAck`), ack in {
               assert!("fail with (false, error)", 1, false == result, "", *ack) |

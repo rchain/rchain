@@ -29,8 +29,8 @@ match "047b43d6548b72813b89ac1b9f9ca67624a8b372feedd71d4e2da036384a3e1236812227e
                       @initialDeployerBalance <- deployerBalanceCh;
                       @initialBonds <- bondsCh;
                       @initialRewards <- rewardsCh){
-                    new bondAck in {
-                      @PoS!("bond", 100, *bondAck) |
+                    new deployerId(`rho:rchain:deployerId`), bondAck in {
+                      @PoS!("bond", *deployerId, 100, *bondAck) |
                       for(@(true, _) <- bondAck){
                         new withdrawAck in {
                           @PoS!("withdraw", *withdrawAck) |

@@ -90,10 +90,9 @@ new  PoS,
               }
             } |
 
-            contract PoS (@"bond", @amount, returnCh) = {
+            contract PoS (@"bond", deployerId, @amount, returnCh) = {
               new userCh, depositCh, processCh in {
                 runMVar!(*stateCh, *processCh, *returnCh) |
-
                 getUser!(*userCh) |
                 for(@state, resultCh <- processCh;
                     @userPk <- userCh) {
@@ -104,7 +103,7 @@ new  PoS,
                   } else if (amount > $$maximumBond$$) {
                     resultCh!(state, (false, "Bond is greater than maximum!"))
                   } else {
-                    deposit!(userPk, amount, *depositCh) |
+                    deposit!(*deployerId, amount, *depositCh) |
                     for(@depositResult <- depositCh) {
                       match depositResult {
                         (true, _) => {
@@ -153,7 +152,7 @@ new  PoS,
               }
             } |
 
-            contract PoS (@"pay", @amount, returnCh) = {
+            contract PoS (@"pay", @amount, deployerId, returnCh) = {
               new vaultCh, transferCh, userCh, processPayCh,
                   depositCh,
                   newPendingCh in {
@@ -161,7 +160,7 @@ new  PoS,
                 runMVar!(*stateCh, *processPayCh, *returnCh) |
                 for(@state, payResultCh <- processPayCh;
                     @userPk <- userCh) {
-                  deposit!(userPk, amount, *depositCh) |
+                  deposit!(*deployerId, amount, *depositCh) |
 
                   distributeRewards!(
                     amount,
@@ -344,13 +343,13 @@ new  PoS,
           }
         } |
 
-        contract deposit (@fromUserPk, @amount, returnCh) = {
+        contract deposit (deployerId, @amount, returnCh) = {
           new vaultCh,
               revAddressCh,
               authKeyCh in {
-            @RevVault!("deployerAuthKey", *authKeyCh) |
+            @RevVault!("deployerAuthKey", *deployerId, *authKeyCh) |
             for (@authKey <- authKeyCh) {
-              revAddressOps!("fromPublicKey", fromUserPk, *revAddressCh) |
+              revAddressOps!("fromDeployerId", *deployerId, *revAddressCh) |
               for (@fromRevAddress <- revAddressCh) {
                 @RevVault!("findOrCreate", fromRevAddress, *vaultCh) |
                 for (@(true, fromVault) <- vaultCh) {
