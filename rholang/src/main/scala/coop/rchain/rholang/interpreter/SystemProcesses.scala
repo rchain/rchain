@@ -171,6 +171,31 @@ object SystemProcesses {
 
         case isContractCall(
             produce,
+            Seq(
+              RhoType.String("fromMultiSigParams"),
+              RhoType.Sequence(publicKeys),
+              RhoType.Number(quorumSize),
+              ack
+            )
+            ) =>
+          val response =
+            RevAddress
+              .fromMultiSigParams(
+                publicKeys.map(_ match {
+                  case RhoType.ByteArray(publicKey) => PublicKey(publicKey)
+                }),
+                (quorumSize: java.lang.Long).intValue()
+              )
+              .map(ra => RhoType.String(ra.toBase58))
+              .getOrElse(Par())
+
+          produce(Seq(response), ack)
+
+        case isContractCall(produce, Seq(RhoType.String("fromMultiSigParams"), _, _, ack)) =>
+          produce(Seq(Par()), ack)
+
+        case isContractCall(
+            produce,
             Seq(RhoType.String("fromDeployerId"), RhoType.DeployerId(id), ack)
             ) =>
           val response =

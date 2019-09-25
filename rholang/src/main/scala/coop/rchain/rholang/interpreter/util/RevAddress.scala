@@ -22,6 +22,9 @@ object RevAddress {
   def fromPublicKey(pk: PublicKey): Option[RevAddress] =
     tools.fromPublicKey(pk).map(RevAddress(_))
 
+  def fromMultiSigParams(pks: List[PublicKey], quorumSize: Int): Option[RevAddress] =
+    tools.fromMultiSigParams(pks, quorumSize).map(RevAddress(_))
+
   def fromEthAddress(ethAddress: String): Option[RevAddress] =
     tools.fromEthAddress(ethAddress).map(RevAddress(_))
 

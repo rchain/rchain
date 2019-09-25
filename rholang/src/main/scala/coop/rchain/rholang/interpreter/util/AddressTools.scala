@@ -1,6 +1,7 @@
 package coop.rchain.rholang.interpreter.util
 
 import java.util.Arrays
+import scala.math.BigInt
 
 import coop.rchain.crypto.PublicKey
 import coop.rchain.crypto.codec.Base16
@@ -49,6 +50,34 @@ class AddressTools(prefix: Array[Byte], keyLength: Int, checksumLength: Int) {
       val ethAddress = Base16.encode(Keccak256.hash(pk.bytes.drop(1))).takeRight(40)
       fromEthAddress(ethAddress)
     } else None
+
+  def fromMultiSigParams(pks: List[PublicKey], quorumSize: Int): Option[Address] =
+    if (0 <= quorumSize || quorumSize > pks.length) {
+      None
+    } else {
+      pks
+        .map(
+          (pk) =>
+            if (keyLength == pk.bytes.length) {
+              Some(Keccak256.hash(pk.bytes.drop(1)))
+            } else {
+              None
+            }
+        )
+        .fold(Some(Array[Byte]()))(
+          (a, b) =>
+            for {
+              x <- a
+              y <- b
+            } yield x ++ y
+        )
+        .flatMap((bytes) => {
+          val size       = java.nio.ByteBuffer.allocate(4).putInt(pks.length).array
+          val qs         = java.nio.ByteBuffer.allocate(4).putInt(quorumSize).array
+          val ethAddress = Base16.encode(Keccak256.hash(size ++ qs ++ bytes)).takeRight(40)
+          fromEthAddress(ethAddress)
+        })
+    }
 
   def fromEthAddress(ethAddress: String): Option[Address] = {
     val ethAddressWithoutPrefix = if (ethAddress.startsWith("0x")) {

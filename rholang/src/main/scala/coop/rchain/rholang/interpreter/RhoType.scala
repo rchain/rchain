@@ -2,7 +2,7 @@ package coop.rchain.rholang.interpreter
 import com.google.protobuf.ByteString
 import coop.rchain.models.Expr.ExprInstance._
 import coop.rchain.models.GUnforgeable.UnfInstance.{GDeployerIdBody, GPrivateBody}
-import coop.rchain.models.{ETuple, Expr, GDeployerId, GPrivate, GUnforgeable, Par}
+import coop.rchain.models.{EList, ETuple, Expr, GDeployerId, GPrivate, GUnforgeable, Par}
 import coop.rchain.shared.ByteStringOps._
 
 object RhoType {
@@ -79,5 +79,12 @@ object RhoType {
       }
 
     def apply(gprivate: GPrivate): Par = GUnforgeable(GPrivateBody(gprivate))
+  }
+
+  object Sequence {
+    def unapply(p: Par): Option[List[Par]] =
+      p.singleExpr().collect {
+        case Expr(EListBody(EList(seq, _, _, _))) => seq.toList
+      }
   }
 }
