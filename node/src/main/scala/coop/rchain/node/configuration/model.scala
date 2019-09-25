@@ -31,7 +31,8 @@ final case class Server(
     packetChunkSize: Int,
     messageConsumers: Int,
     faultToleranceThreshold: Float,
-    synchronyConstraintThreshold: Double
+    synchronyConstraintThreshold: Double,
+    reporting: Boolean
 )
 
 final case class GrpcServer(
