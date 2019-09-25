@@ -1035,8 +1035,7 @@ trait StorageActionsTests[F[_]]
             patterns,
             continuation,
             false,
-            SortedSet.empty,
-            0
+            SortedSet.empty
           )
       )
 
@@ -1067,8 +1066,7 @@ trait StorageActionsTests[F[_]]
         patterns,
         continuation,
         false,
-        SortedSet.empty,
-        0
+        SortedSet.empty
       )
 
     for {
@@ -1104,8 +1102,7 @@ trait StorageActionsTests[F[_]]
           channels,
           patterns,
           continuation,
-          false,
-          0
+          false
         )
       s2 <- space.createSoftCheckpoint()
       // assert that the event log has been cleared
