@@ -489,11 +489,11 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: ConnectionsCell: TransportLa
       addedBlocks: List[ByteString]
   ): F[Unit] =
     for {
-      _ <- unsafeRemoveFromBlockBuffer(addedBlocks)
+      _ <- removeFromBlockBuffer(addedBlocks)
       _ <- removeFromBlockBufferDependencyDag(blockBufferDependencyDag, addedBlocks)
     } yield ()
 
-  private def unsafeRemoveFromBlockBuffer(
+  private def removeFromBlockBuffer(
       addedBlocks: List[ByteString]
   ): F[Unit] =
     Cell[F, CasperState].modify { s =>
