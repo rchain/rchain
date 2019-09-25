@@ -52,6 +52,7 @@ import kamon.system.SystemMetrics
 import kamon.zipkin.ZipkinReporter
 import monix.eval.Task
 import monix.execution.Scheduler
+import org.http4s.HttpRoutes
 import org.http4s.implicits._
 import org.http4s.server.blaze._
 import org.http4s.server.middleware._
@@ -542,23 +543,29 @@ class NodeRuntime private[node] (
 
       eventsInfoService <- EventsInfo.service[Task]
 
+      baseRoutes = Map(
+        "/metrics"   -> CORS(prometheusService),
+        "/version"   -> CORS(VersionInfo.service[Task]),
+        "/status"    -> CORS(StatusInfo.service[Task]),
+        "/ws/events" -> CORS(eventsInfoService)
+      )
+      extraRoutes = if (conf.server.reporting)
+        Map(
+          "/reporting" -> CORS(
+            ReportingRoutes.service[Task, TaskEnv](reportingCasper)(
+              Sync[Task],
+              Applicative[TaskEnv],
+              NodeRuntime.envToTask
+            )
+          )
+        )
+      else
+        Map.empty
+      allRoutes = baseRoutes ++ extraRoutes
+
       httpServerFiber <- BlazeServerBuilder[Task]
                           .bindHttp(conf.server.httpPort, "0.0.0.0")
-                          .withHttpApp(
-                            Router(
-                              "/metrics"   -> CORS(prometheusService),
-                              "/version"   -> CORS(VersionInfo.service[Task]),
-                              "/status"    -> CORS(StatusInfo.service[Task]),
-                              "/ws/events" -> CORS(eventsInfoService),
-                              "/reporting" -> CORS(
-                                ReportingRoutes.service[Task, TaskEnv](reportingCasper)(
-                                  Sync[Task],
-                                  Applicative[TaskEnv],
-                                  NodeRuntime.envToTask
-                                )
-                              )
-                            ).orNotFound
-                          )
+                          .withHttpApp(Router(allRoutes.toList: _*).orNotFound)
                           .resource
                           .use(_ => Task.never[Unit])
                           .start
@@ -702,7 +709,10 @@ object NodeRuntime {
           sarAndHR            <- Runtime.setupRSpace[F](casperConf.storage, casperConf.size)
           (space, replay, hr) = sarAndHR
           runtime             <- Runtime.createWithEmptyCost[F]((space, replay), Seq.empty)
-          reporter            = ReportingCasper.rhoReporter(hr)
+          reporter = if (conf.server.reporting)
+            ReportingCasper.rhoReporter(hr)
+          else
+            ReportingCasper.noop
         } yield (runtime, reporter)
       }
       (casperRuntime, reportingCasper) = casperRuntimeAndReporter
