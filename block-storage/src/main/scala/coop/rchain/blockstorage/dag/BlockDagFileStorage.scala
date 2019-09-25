@@ -53,6 +53,19 @@ final class BlockDagFileStorage[F[_]: Concurrent: Sync: Log: RaiseIOError] priva
     state: MonadState[F, BlockDagFileStorageState[F]]
 ) extends BlockDagStorage[F] {
   implicit private val logSource: LogSource = LogSource(BlockDagFileStorage.getClass)
+  private val iterableByteOrdering          = Ordering.Iterable[Byte]
+  private val blockMetadataByNum: Ordering[BlockMetadata] =
+    (l: BlockMetadata, r: BlockMetadata) => {
+      def compareByteString(l: ByteString, r: ByteString): Int =
+        iterableByteOrdering.compare(l.toByteArray, r.toByteArray)
+
+      val ln = l.blockNum
+      val rn = r.blockNum
+      ln.compare(rn) match {
+        case 0 => compareByteString(l.blockHash, r.blockHash)
+        case v => v
+      }
+    }
 
   private[this] def getSortOffset: F[Long] =
     state.get.map(_.sortOffset)
@@ -163,10 +176,7 @@ final class BlockDagFileStorage[F[_]: Concurrent: Sync: Log: RaiseIOError] priva
       topoSort(startBlockNumber)
     }
     def deriveOrdering(startBlockNumber: Long): F[Ordering[BlockMetadata]] =
-      topoSort(startBlockNumber).map { topologicalSorting =>
-        val order = topologicalSorting.flatten.zipWithIndex.toMap
-        Ordering.by(b => order(b.blockHash))
-      }
+      blockMetadataByNum.pure[F]
     def latestMessageHash(validator: Validator): F[Option[BlockHash]] =
       latestMessagesMap.get(validator).pure[F]
     def latestMessage(validator: Validator): F[Option[BlockMetadata]] =
