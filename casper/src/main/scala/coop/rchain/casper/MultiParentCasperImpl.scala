@@ -422,12 +422,12 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: ConnectionsCell: TransportLa
       missingUnseenDependencies <- missingDependencies.filterA(
                                     blockHash => ~^(BlockStore[F].contains(blockHash))
                                   )
-      _ <- missingDependencies.traverse(hash => handleMissingDependency(hash, b))
+      _ <- missingDependencies.traverse(hash => addDependencyToDag(hash, b))
       _ <- missingUnseenDependencies.traverse(hash => requestMissingDependency(hash))
     } yield ()
   }
 
-  private def handleMissingDependency(hash: BlockHash, childBlock: BlockMessage): F[Unit] =
+  private def addDependencyToDag(hash: BlockHash, childBlock: BlockMessage): F[Unit] =
     Cell[F, CasperState].modify(
       s =>
         s.copy(
