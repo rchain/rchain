@@ -487,29 +487,15 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: ConnectionsCell: TransportLa
   private def removeAdded(
       blockBufferDependencyDag: DoublyLinkedDag[BlockHash],
       addedBlocks: List[ByteString]
-  ): F[Unit] =
-    for {
-      _ <- removeFromBlockBuffer(addedBlocks)
-      _ <- removeFromBlockBufferDependencyDag(blockBufferDependencyDag, addedBlocks)
-    } yield ()
-
-  private def removeFromBlockBuffer(
-      addedBlocks: List[ByteString]
-  ): F[Unit] =
-    Cell[F, CasperState].modify { s =>
-      s.copy(blockBuffer = s.blockBuffer -- addedBlocks)
-    }
-
-  private def removeFromBlockBufferDependencyDag(
-      blockBufferDependencyDag: DoublyLinkedDag[BlockHash],
-      addedBlocks: List[ByteString]
-  ): F[Unit] =
-    Cell[F, CasperState].modify { s =>
-      s.copy(dependencyDag = addedBlocks.foldLeft(blockBufferDependencyDag) {
+  ): F[Unit] = Cell[F, CasperState].modify { s =>
+    s.copy(
+      blockBuffer = s.blockBuffer -- addedBlocks,
+      dependencyDag = addedBlocks.foldLeft(blockBufferDependencyDag) {
         case (acc, addedBlock) =>
           DoublyLinkedDagOperations.remove(acc, addedBlock)
-      })
-    }
+      }
+    )
+  }
 
   def getRuntimeManager: F[RuntimeManager[F]] = syncF.pure(runtimeManager)
 
