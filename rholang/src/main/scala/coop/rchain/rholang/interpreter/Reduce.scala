@@ -41,10 +41,9 @@ object Reduce {
   */
 trait Reduce[M[_]] {
 
-  // TODO: Remove `sequenceNumber` default argument.
   def eval(
       par: Par
-  )(implicit env: Env[Par], rand: Blake2b512Random, sequenceNumber: Int = 0): M[Unit]
+  )(implicit env: Env[Par], rand: Blake2b512Random): M[Unit]
 
   def inj(par: Par)(implicit rand: Blake2b512Random): M[Unit]
 
@@ -83,12 +82,11 @@ class DebruijnInterpreter[M[_], F[_]](
   private def produce(
       chan: Par,
       data: ListParWithRandom,
-      persistent: Boolean,
-      sequenceNumber: Int
+      persistent: Boolean
   ): M[Unit] =
-    space.produce(chan, data, persist = persistent, sequenceNumber) >>= (continue(
+    space.produce(chan, data, persist = persistent) >>= (continue(
       _,
-      produce(chan, data, persistent, sequenceNumber),
+      produce(chan, data, persistent),
       persistent
     ))
 
@@ -105,8 +103,7 @@ class DebruijnInterpreter[M[_], F[_]](
       binds: Seq[(BindPattern, Par)],
       body: ParWithRandom,
       persistent: Boolean,
-      peek: Boolean,
-      sequenceNumber: Int
+      peek: Boolean
   ): M[Unit] = {
     val (patterns: Seq[BindPattern], sources: Seq[Par]) = binds.unzip
     space.consume(
@@ -114,9 +111,9 @@ class DebruijnInterpreter[M[_], F[_]](
       patterns.toList,
       TaggedContinuation(ParBody(body)),
       persist = persistent,
-      sequenceNumber,
+      0,
       if (peek) SortedSet(sources.indices: _*) else SortedSet.empty[Int]
-    ) >>= (continue(_, consume(binds, body, persistent, peek, sequenceNumber), persistent))
+    ) >>= (continue(_, consume(binds, body, persistent, peek), persistent))
   }
 
   private[this] def continue(res: Application, repeatOp: M[Unit], persistent: Boolean) =
@@ -157,13 +154,12 @@ class DebruijnInterpreter[M[_], F[_]](
       }
       .map {
         case (chan, _, removedData, _) =>
-          produce(chan, removedData, false, 0)
+          produce(chan, removedData, false)
       }
 
   override def eval(par: Par)(
       implicit env: Env[Par],
-      rand: Blake2b512Random,
-      sequenceNumber: Int
+      rand: Blake2b512Random
   ): M[Unit] = {
 
     // for lack of a better type...
@@ -192,7 +188,7 @@ class DebruijnInterpreter[M[_], F[_]](
       indexedTerms.parTraverse_ {
         case (term, index) =>
           val random = split(index)
-          eval(term)(env, random, sequenceNumber)
+          eval(term)(env, random)
       }
     } else {
       //TODO: Investigate if we can avoid the shuffling and manual parallelism limiting by tweaking:
@@ -209,7 +205,7 @@ class DebruijnInterpreter[M[_], F[_]](
         _.traverse_ {
           case (term, index) =>
             val random = split(index)
-            eval(term)(env, random, sequenceNumber)
+            eval(term)(env, random)
         }
       }
     }
@@ -219,8 +215,7 @@ class DebruijnInterpreter[M[_], F[_]](
       term: GeneratedMessage
   )(
       implicit env: Env[Par],
-      rand: Blake2b512Random,
-      sequenceNumber: Int
+      rand: Blake2b512Random
   ): M[Unit] =
     term match {
       case term: Send    => reportErrors(eval(term))
@@ -246,7 +241,7 @@ class DebruijnInterpreter[M[_], F[_]](
   override def inj(
       par: Par
   )(implicit rand: Blake2b512Random): M[Unit] =
-    eval(par)(Env[Par](), rand, 0)
+    eval(par)(Env[Par](), rand)
 
   /** Algorithm as follows:
     *
@@ -263,8 +258,7 @@ class DebruijnInterpreter[M[_], F[_]](
     */
   private def eval(send: Send)(
       implicit env: Env[Par],
-      rand: Blake2b512Random,
-      sequenceNumber: Int
+      rand: Blake2b512Random
   ): M[Unit] =
     for {
       _        <- charge[M](SEND_EVAL_COST)
@@ -279,13 +273,12 @@ class DebruijnInterpreter[M[_], F[_]](
                   }
       data      <- send.data.toList.traverse(evalExpr)
       substData <- data.traverse(substituteAndCharge[Par, M](_, 0, env))
-      _         <- produce(unbundled, ListParWithRandom(substData, rand), send.persistent, sequenceNumber)
+      _         <- produce(unbundled, ListParWithRandom(substData, rand), send.persistent)
     } yield ()
 
   private def eval(receive: Receive)(
       implicit env: Env[Par],
-      rand: Blake2b512Random,
-      sequenceNumber: Int
+      rand: Blake2b512Random
   ): M[Unit] =
     for {
       _ <- charge[M](RECEIVE_EVAL_COST)
@@ -307,8 +300,7 @@ class DebruijnInterpreter[M[_], F[_]](
             binds,
             ParWithRandom(substBody, rand),
             receive.persistent,
-            receive.peek,
-            sequenceNumber
+            receive.peek
           )
     } yield ()
 
@@ -346,8 +338,7 @@ class DebruijnInterpreter[M[_], F[_]](
 
   private def eval(mat: Match)(
       implicit env: Env[Par],
-      rand: Blake2b512Random,
-      sequenceNumber: Int
+      rand: Blake2b512Random
   ): M[Unit] = {
 
     def addToEnv(env: Env[Par], freeMap: Map[Int, Par], freeCount: Int): Env[Par] =
@@ -378,8 +369,7 @@ class DebruijnInterpreter[M[_], F[_]](
                       case Some((freeMap, _)) =>
                         eval(singleCase.source)(
                           addToEnv(env, freeMap, singleCase.freeCount),
-                          implicitly,
-                          sequenceNumber
+                          implicitly
                         ).map(_.asRight[(Par, Seq[MatchCase])])
                     }
             } yield res
@@ -407,7 +397,7 @@ class DebruijnInterpreter[M[_], F[_]](
   // TODO: Eliminate variable shadowing
   private def eval(
       neu: New
-  )(implicit env: Env[Par], rand: Blake2b512Random, sequenceNumber: Int): M[Unit] = {
+  )(implicit env: Env[Par], rand: Blake2b512Random): M[Unit] = {
 
     def alloc(count: Int, urns: Seq[String]): M[Env[Par]] = {
       val deployIdUrn   = "rho:rchain:deployId"
@@ -445,7 +435,7 @@ class DebruijnInterpreter[M[_], F[_]](
     }
 
     charge[M](newBindingsCost(neu.bindCount)) >>
-      alloc(neu.bindCount, neu.uri).flatMap(eval(neu.p)(_, rand, sequenceNumber))
+      alloc(neu.bindCount, neu.uri).flatMap(eval(neu.p)(_, rand))
   }
 
   private[this] def unbundleReceive(rb: ReceiveBind)(implicit env: Env[Par]): M[Par] =
@@ -464,7 +454,7 @@ class DebruijnInterpreter[M[_], F[_]](
 
   private def eval(
       bundle: Bundle
-  )(implicit env: Env[Par], rand: Blake2b512Random, sequenceNumber: Int): M[Unit] =
+  )(implicit env: Env[Par], rand: Blake2b512Random): M[Unit] =
     eval(bundle.body)
 
   def evalExprToPar(expr: Expr)(implicit env: Env[Par]): M[Par] =
