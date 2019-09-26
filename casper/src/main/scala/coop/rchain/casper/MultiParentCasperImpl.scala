@@ -417,7 +417,7 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: ConnectionsCell: TransportLa
                                     blockHash => ~^(BlockStore[F].contains(blockHash))
                                   )
       _ <- missingDependencies.traverse(addDependencyToDag(_, b))
-      _ <- missingUnseenDependencies.traverse(requestMissingDependency)
+      _ <- missingUnseenDependencies.traverse(CommUtil.sendBlockRequest[F])
     } yield ()
   }
 
@@ -428,9 +428,6 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: ConnectionsCell: TransportLa
           dependencyDag = DoublyLinkedDagOperations.add(s.dependencyDag, hash, childBlock.blockHash)
         )
     )
-
-  private def requestMissingDependency(hash: BlockHash) =
-    CommUtil.sendBlockRequest(hash)
 
   // TODO: Slash block for status except InvalidUnslashableBlock
   private def handleInvalidBlockEffect(
