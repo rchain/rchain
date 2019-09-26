@@ -336,10 +336,10 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: ConnectionsCell: TransportLa
   ): F[BlockDagRepresentation[F]] =
     blockProcessingResult
       .map { _ =>
-        // Add successful! Send block to peers, log success, try to add other blocks
+        // Add successful! Send block hash to peers, log success, try to add other blocks
         for {
           updatedDag <- BlockDagStorage[F].insert(block, genesis, invalid = false)
-          _          <- CommUtil.sendBlock(block)
+          _          <- CommUtil.sendBlockHash(block.blockHash)
           _ <- Log[F].info(
                 s"Added ${PrettyPrinter.buildString(block.blockHash)}"
               )
@@ -375,7 +375,7 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: ConnectionsCell: TransportLa
             // We can only treat admissible equivocations as invalid blocks if
             // casper is single threaded.
             updatedDag <- handleInvalidBlockEffect(InvalidBlock.AdmissibleEquivocation, block)
-            _          <- CommUtil.sendBlock(block)
+            _          <- CommUtil.sendBlockHash(block.blockHash)
           } yield updatedDag
 
         case InvalidBlock.IgnorableEquivocation =>

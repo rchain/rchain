@@ -12,6 +12,7 @@ import scala.util.{Failure, Try}
 sealed abstract class PacketTypeTag extends EnumEntry
 
 object PacketTypeTag extends Enum[PacketTypeTag] {
+  case object BlockHashMessage         extends PacketTypeTag
   case object BlockMessage             extends PacketTypeTag
   case object HasBlockRequest          extends PacketTypeTag
   case object HasBlock                 extends PacketTypeTag
@@ -34,13 +35,14 @@ object PacketTypeTag extends Enum[PacketTypeTag] {
     }
     def apply[A <: PacketTypeTag](implicit ev: ValueOf[A]) = ev
 
-    implicit val valueOfBlockMessage: ValueOf[BlockMessage.type]       = summon(BlockMessage)
-    implicit val valueOfHasBlockRequest: ValueOf[HasBlockRequest.type] = summon(HasBlockRequest)
-    implicit val valueOfHasBlock: ValueOf[HasBlock.type]               = summon(HasBlock)
-    implicit val valueOfBlockRequest: ValueOf[BlockRequest.type]       = summon(BlockRequest)
-    implicit val valueOfApprovedBlock: ValueOf[ApprovedBlock.type]     = summon(ApprovedBlock)
-    implicit val valueOfBlockApproval: ValueOf[BlockApproval.type]     = summon(BlockApproval)
-    implicit val valueOfUnapprovedBlock: ValueOf[UnapprovedBlock.type] = summon(UnapprovedBlock)
+    implicit val valueOfBlockHashMessage: ValueOf[BlockHashMessage.type] = summon(BlockHashMessage)
+    implicit val valueOfBlockMessage: ValueOf[BlockMessage.type]         = summon(BlockMessage)
+    implicit val valueOfHasBlockRequest: ValueOf[HasBlockRequest.type]   = summon(HasBlockRequest)
+    implicit val valueOfHasBlock: ValueOf[HasBlock.type]                 = summon(HasBlock)
+    implicit val valueOfBlockRequest: ValueOf[BlockRequest.type]         = summon(BlockRequest)
+    implicit val valueOfApprovedBlock: ValueOf[ApprovedBlock.type]       = summon(ApprovedBlock)
+    implicit val valueOfBlockApproval: ValueOf[BlockApproval.type]       = summon(BlockApproval)
+    implicit val valueOfUnapprovedBlock: ValueOf[UnapprovedBlock.type]   = summon(UnapprovedBlock)
     implicit val valueOfForkChoiceTipRequest: ValueOf[ForkChoiceTipRequest.type] = summon(
       ForkChoiceTipRequest
     )

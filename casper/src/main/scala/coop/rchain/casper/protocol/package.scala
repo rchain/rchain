@@ -9,6 +9,7 @@ package object protocol extends CasperMessageProtocol {
     PacketTypeTag
       .withNameOption(packet.typeId)
       .flatMap {
+        case BlockHashMessage         => convert[BlockHashMessage.type](packet)
         case BlockMessage             => convert[BlockMessage.type](packet)
         case ApprovedBlock            => convert[ApprovedBlock.type](packet)
         case ApprovedBlockRequest     => convert[ApprovedBlockRequest.type](packet)

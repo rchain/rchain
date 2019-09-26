@@ -3,6 +3,7 @@ package coop.rchain.casper.protocol
 import cats.implicits._
 import com.google.protobuf.ByteString
 import coop.rchain.models.PCost
+import coop.rchain.models.BlockHash.BlockHash
 
 sealed trait CasperMessage {
   def toProto: CasperMessageProto
@@ -10,6 +11,7 @@ sealed trait CasperMessage {
 
 object CasperMessage {
   def from(cm: CasperMessageProto): Either[String, CasperMessage] = cm match {
+    case hash: BlockHashMessageProto      => Right(BlockHashMessage.from(hash))
     case bmp: BlockMessageProto           => BlockMessage.from(bmp)
     case p: ApprovedBlockCandidateProto   => ApprovedBlockCandidate.from(p)
     case p: ApprovedBlockProto            => ApprovedBlock.from(p)
@@ -141,6 +143,14 @@ final case class ApprovedBlockRequest(identifier: String) extends CasperMessage 
 object ApprovedBlockRequest {
   def from(abr: ApprovedBlockRequestProto): ApprovedBlockRequest =
     ApprovedBlockRequest(abr.identifier)
+}
+
+final case class BlockHashMessage(blockHash: BlockHash) extends CasperMessage {
+  def toProto: BlockHashMessageProto = BlockHashMessageProto(blockHash)
+}
+
+object BlockHashMessage {
+  def from(hash: BlockHashMessageProto) = BlockHashMessage(hash.hash)
 }
 
 final case class BlockMessage(
