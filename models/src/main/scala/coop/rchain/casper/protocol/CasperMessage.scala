@@ -2,7 +2,8 @@ package coop.rchain.casper.protocol
 
 import cats.implicits._
 import com.google.protobuf.ByteString
-import coop.rchain.models.PCost
+import coop.rchain.casper.PrettyPrinter
+import coop.rchain.models.{PCost, Pretty}
 import coop.rchain.models.BlockHash.BlockHash
 
 sealed trait CasperMessage {
@@ -166,6 +167,8 @@ final case class BlockMessage(
     extraBytes: ByteString = ByteString.EMPTY
 ) extends CasperMessage {
   def toProto: BlockMessageProto = BlockMessage.toProto(this)
+
+  override def toString: String = PrettyPrinter.buildString(this)
 }
 
 object BlockMessage {
@@ -199,6 +202,7 @@ object BlockMessage {
       .withSigAlgorithm(bm.sigAlgorithm)
       .withShardId(bm.shardId)
       .withExtraBytes(bm.extraBytes)
+
 }
 
 final case class Header(

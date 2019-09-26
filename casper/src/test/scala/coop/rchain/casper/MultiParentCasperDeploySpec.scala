@@ -1,12 +1,11 @@
 package coop.rchain.casper
 
 import com.google.protobuf.ByteString
-import coop.rchain.casper.MultiParentCasper.ignoreDoppelgangerCheck
 import coop.rchain.casper.helper.TestNode
 import coop.rchain.casper.helper.TestNode._
-import coop.rchain.shared.scalatestcontrib._
 import coop.rchain.casper.util.ConstructDeploy
 import coop.rchain.p2p.EffectsTestInstances.LogicalTime
+import coop.rchain.shared.scalatestcontrib._
 import monix.execution.Scheduler.Implicits.global
 import org.scalatest.{FlatSpec, Inspectors, Matchers}
 
@@ -27,10 +26,7 @@ class MultiParentCasperDeploySpec extends FlatSpec with Matchers with Inspectors
         deploy   <- ConstructDeploy.basicDeployData[Effect](0)
         res      <- MultiParentCasper[Effect].deploy(deploy)
         deployId = res.right.get
-        _        = deployId shouldBe ConstructDeploy.sign(deploy).sig
-        _        = logEff.infos.size should be(1)
-        result   = logEff.infos.head.contains("Received Deploy") should be(true)
-      } yield result
+      } yield deployId shouldBe ConstructDeploy.sign(deploy).sig
     }
   }
 
@@ -106,12 +102,11 @@ class MultiParentCasperDeploySpec extends FlatSpec with Matchers with Inspectors
       val List(node0, node1) = nodes.toList
       for {
         deploy             <- ConstructDeploy.basicDeployData[Effect](0)
-        _                  <- node0.publishBlock(deploy)(node1)
+        _                  <- node0.propagateBlock(deploy)(node1)
         casper1            = node1.casperEff
         _                  <- casper1.deploy(deploy)
         createBlockResult2 <- casper1.createBlock
-        _                  = createBlockResult2 should be(NoNewDeploys)
-      } yield ()
+      } yield (createBlockResult2 should be(NoNewDeploys))
     }
   }
 

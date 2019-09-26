@@ -43,7 +43,7 @@ class RunningHandleBlockMessageSpec extends FunSpec with BeforeAndAfterEach with
         requestedBlocks.read.apply().size should be(0)
       }
 
-      it("should NOT remove entry from requested blocks if block did NOT ended up in casper DAG") {
+      it("should NOT remove entry from requested blocks if block did NOT end up in casper DAG") {
         // given
         val sender                   = peerNode("peer", 40400)
         val requestedBefore          = Map(hash -> Requested(timestamp = 0))
