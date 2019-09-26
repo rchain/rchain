@@ -1,11 +1,13 @@
 package coop.rchain.casper.genesis.contracts
 
+import coop.rchain.crypto.PublicKey
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.rholang.build.CompiledRholangTemplate
 import coop.rchain.rholang.interpreter.NormalizerEnv
 
 // TODO: Eliminate validators argument if unnecessary.
 // TODO: eliminate the default for epochLength. Now it is used in order to minimise the impact of adding this parameter
+// TODO: Remove hardcoded keys from standard deploys: https://rchain.atlassian.net/browse/RCHAIN-3321?atlOrigin=eyJpIjoiNDc0NjE4YzYxOTRkNDcyYjljZDdlOWMxYjE1NWUxNjIiLCJwIjoiaiJ9
 final case class ProofOfStake(
     minimumBond: Long,
     maximumBond: Long,
@@ -14,7 +16,16 @@ final case class ProofOfStake(
     quarantineLength: Int = 50000
 ) extends CompiledRholangTemplate(
       "PoS.rhox",
-      NormalizerEnv.Empty,
+      NormalizerEnv(
+        None,
+        Some(
+          PublicKey(
+            Base16.unsafeDecode(
+              "047b43d6548b72813b89ac1b9f9ca67624a8b372feedd71d4e2da036384a3e1236812227e524e6f237cde5f80dbb921cac12e6500791e9a9ed1254a745a816fe1f"
+            )
+          )
+        )
+      ),
       "minimumBond"      -> minimumBond,
       "maximumBond"      -> maximumBond,
       "initialBonds"     -> ProofOfStake.initialBonds(validators),

@@ -63,12 +63,13 @@ object BlockCreator {
         slashingDeploys <- invalidLatestMessages.values.toList.traverse { invalidBlockHash =>
                             val encodedInvalidBlockHash =
                               Base16.encode(invalidBlockHash.toByteArray)
+                            // TODO: Do something useful with the result of "slash".
                             ConstructDeploy.sourceDeployNowF(
                               s"""
-                               #new rl(`rho:registry:lookup`), posCh in {
+                               #new rl(`rho:registry:lookup`), deployerId(`rho:rchain:deployerId`), posCh in {
                                #  rl!(`rho:rchain:pos`, *posCh) |
                                #  for(@(_, PoS) <- posCh) {
-                               #    @PoS!("slash", "$encodedInvalidBlockHash".hexToBytes(), "IGNOREFORNOW")
+                               #    @PoS!("slash", *deployerId, "$encodedInvalidBlockHash".hexToBytes(), "IGNOREFORNOW")
                                #  }
                                #}
                                #
