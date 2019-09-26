@@ -411,19 +411,13 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: ConnectionsCell: TransportLa
   ): F[Unit] = {
     import cats.instances.list._
     for {
-      dag <- blockDag
-      missingDependencies <- dependenciesHashesOf(b)
-                              .filterA(
-                                blockHash =>
-                                  dag
-                                    .lookup(blockHash)
-                                    .map(_.isEmpty)
-                              )
+      dag                 <- blockDag
+      missingDependencies <- dependenciesHashesOf(b).filterA(dag.lookup(_).map(_.isEmpty))
       missingUnseenDependencies <- missingDependencies.filterA(
                                     blockHash => ~^(BlockStore[F].contains(blockHash))
                                   )
-      _ <- missingDependencies.traverse(hash => addDependencyToDag(hash, b))
-      _ <- missingUnseenDependencies.traverse(hash => requestMissingDependency(hash))
+      _ <- missingDependencies.traverse(addDependencyToDag(_, b))
+      _ <- missingUnseenDependencies.traverse(requestMissingDependency)
     } yield ()
   }
 
