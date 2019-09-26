@@ -282,9 +282,7 @@ object InterpreterUtil {
   ): F[Vector[BlockMetadata]] =
     for {
       parentsMetadata <- parents.toList.traverse(b => dag.lookup(b.blockHash).map(_.get))
-      ordering        <- dag.deriveOrdering(0L) // TODO: Replace with an actual starting number
       blockHashesToApply <- {
-        implicit val o: Ordering[BlockMetadata] = ordering
         for {
           uncommonAncestors          <- DagOperations.uncommonAncestors[F](parentsMetadata.toVector, dag)
           ancestorsOfInitParentIndex = 0
@@ -294,7 +292,7 @@ object InterpreterUtil {
             .filterNot { case (_, set) => set.contains(ancestorsOfInitParentIndex) }
             .keys
             .toVector
-            .sorted // Ensure blocks to apply is topologically sorted to maintain any causal dependencies
+            .sorted(BlockMetadata.orderingByNum) // Ensure blocks to apply is topologically sorted to maintain any causal dependencies
         } yield result
       }
     } yield blockHashesToApply
