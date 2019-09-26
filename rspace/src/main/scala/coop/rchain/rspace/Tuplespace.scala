@@ -34,7 +34,6 @@ trait Tuplespace[F[_], C, P, A, K] {
       patterns: Seq[P],
       continuation: K,
       persist: Boolean,
-      sequenceNumber: Int = 0,
       peeks: SortedSet[Int] = SortedSet.empty
   ): F[Option[(ContResult[C, P, K], Seq[Result[C, A]])]]
 
@@ -64,8 +63,7 @@ trait Tuplespace[F[_], C, P, A, K] {
   def produce(
       channel: C,
       data: A,
-      persist: Boolean,
-      sequenceNumber: Int = 0
+      persist: Boolean
   ): F[Option[(ContResult[C, P, K], Seq[Result[C, A]])]]
 
   def install(channels: Seq[C], patterns: Seq[P], continuation: K): F[Option[(K, Seq[A])]]

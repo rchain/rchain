@@ -111,7 +111,6 @@ class DebruijnInterpreter[M[_], F[_]](
       patterns.toList,
       TaggedContinuation(ParBody(body)),
       persist = persistent,
-      0,
       if (peek) SortedSet(sources.indices: _*) else SortedSet.empty[Int]
     ) >>= (continue(_, consume(binds, body, persistent, peek), persistent))
   }

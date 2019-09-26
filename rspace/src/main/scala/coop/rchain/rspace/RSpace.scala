@@ -96,7 +96,6 @@ class RSpace[F[_], C, P, A, K] private[rspace] (
       patterns: Seq[P],
       continuation: K,
       persist: Boolean,
-      sequenceNumber: Int,
       peeks: SortedSet[Int] = SortedSet.empty
   ): F[MaybeActionResult] = {
 
@@ -346,8 +345,7 @@ class RSpace[F[_], C, P, A, K] private[rspace] (
   override def produce(
       channel: C,
       data: A,
-      persist: Boolean,
-      sequenceNumber: Int
+      persist: Boolean
   ): F[MaybeActionResult] =
     contextShift.evalOn(scheduler) {
       (for {

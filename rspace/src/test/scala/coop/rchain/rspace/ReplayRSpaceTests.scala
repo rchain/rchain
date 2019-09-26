@@ -1177,35 +1177,35 @@ trait ReplayRSpaceTests extends ReplayRSpaceTestsBase[String, Pattern, String, S
 
       for {
         emptyCh <- space.createCheckpoint()
-        _       <- space.produce(channel1, data3, false, 0) shouldBeF noMatch
-        _       <- space.produce(channel1, data3, false, 0) shouldBeF noMatch
-        _       <- space.produce(channel2, data1, false, 0) shouldBeF noMatch
+        _       <- space.produce(channel1, data3, false) shouldBeF noMatch
+        _       <- space.produce(channel1, data3, false) shouldBeF noMatch
+        _       <- space.produce(channel2, data1, false) shouldBeF noMatch
 
         _ <- space
-              .consume(key1, patterns, continuation1, false, 0) shouldNotBeF Option.empty
+              .consume(key1, patterns, continuation1, false) shouldNotBeF Option.empty
         //continuation1 produces data1 on ch2
-        _ <- space.produce(channel2, data1, false, 1) shouldBeF noMatch
+        _ <- space.produce(channel2, data1, false) shouldBeF noMatch
         _ <- space
-              .consume(key1, patterns, continuation2, false, 0) shouldNotBeF Option.empty
+              .consume(key1, patterns, continuation2, false) shouldNotBeF Option.empty
         //continuation2 produces data2 on ch2
-        _         <- space.produce(channel2, data2, false, 2) shouldBeF noMatch
+        _         <- space.produce(channel2, data2, false) shouldBeF noMatch
         afterPlay <- space.createCheckpoint()
 
         //rig
         _ <- replaySpace.rigAndReset(emptyCh.root, afterPlay.log)
 
-        _ <- replaySpace.produce(channel1, data3, false, 0) shouldBeF noMatch
-        _ <- replaySpace.produce(channel1, data3, false, 0) shouldBeF noMatch
-        _ <- replaySpace.produce(channel2, data1, false, 0) shouldBeF noMatch
-        _ <- replaySpace.consume(key1, patterns, continuation2, false, 0) shouldBeF noMatch
+        _ <- replaySpace.produce(channel1, data3, false) shouldBeF noMatch
+        _ <- replaySpace.produce(channel1, data3, false) shouldBeF noMatch
+        _ <- replaySpace.produce(channel2, data1, false) shouldBeF noMatch
+        _ <- replaySpace.consume(key1, patterns, continuation2, false) shouldBeF noMatch
 
         _ <- replaySpace
-              .consume(key1, patterns, continuation1, false, 0) shouldNotBeF Option.empty
+              .consume(key1, patterns, continuation1, false) shouldNotBeF Option.empty
         //continuation1 produces data1 on ch2
         _ <- replaySpace
-              .produce(channel2, data1, false, 1) shouldNotBeF Option.empty //matches continuation2
+              .produce(channel2, data1, false) shouldNotBeF Option.empty //matches continuation2
         //continuation2 produces data2 on ch2
-        _ <- replaySpace.produce(channel2, data2, false, 1) shouldBeF noMatch
+        _ <- replaySpace.produce(channel2, data2, false) shouldBeF noMatch
 
         _ = replaySpace.replayData.isEmpty shouldBe true
       } yield ()
