@@ -21,7 +21,7 @@ match (
       RhoSpecCh,
       ListOpsCh,
       setDeployData(`rho:test:deploy:set`),
-      getDeployerId(`rho:test:deployerId:get`),
+      getDeployerId(`rho:test:deployerId:make`),
       setup,
       testFindOrCreateGenesisVault,
       testDepositToGenesisCreatedVault,

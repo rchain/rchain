@@ -98,7 +98,7 @@ class RhoSpec(
           ctx => DeployDataContract.set(ctx)(_, _)
         ),
         SystemProcess.Definition[F](
-          "rho:test:deployerId:get",
+          "rho:test:deployerId:make",
           Runtime.byteName(105),
           3,
           105L,
