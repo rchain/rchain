@@ -116,21 +116,20 @@ class DagOperationsTest
 
           dag <- blockDagStorage.getRepresentation
 
-          ordering <- dag.deriveOrdering(0L)
-          _ <- DagOperations.uncommonAncestors(Vector(b6, b7), dag)(Monad[Task], ordering) shouldBeF Map(
+          _ <- DagOperations.uncommonAncestors(Vector(b6, b7), dag)(Monad[Task]) shouldBeF Map(
                 toMetadata(b6) -> BitSet(0),
                 toMetadata(b4) -> BitSet(0),
                 toMetadata(b7) -> BitSet(1),
                 toMetadata(b2) -> BitSet(1)
               )
 
-          _ <- DagOperations.uncommonAncestors(Vector(b6, b3), dag)(Monad[Task], ordering) shouldBeF Map(
+          _ <- DagOperations.uncommonAncestors(Vector(b6, b3), dag)(Monad[Task]) shouldBeF Map(
                 toMetadata(b6) -> BitSet(0),
                 toMetadata(b4) -> BitSet(0),
                 toMetadata(b5) -> BitSet(0)
               )
 
-          _ <- DagOperations.uncommonAncestors(Vector(b2, b4, b5), dag)(Monad[Task], ordering) shouldBeF Map(
+          _ <- DagOperations.uncommonAncestors(Vector(b2, b4, b5), dag)(Monad[Task]) shouldBeF Map(
                 toMetadata(b2) -> BitSet(0),
                 toMetadata(b4) -> BitSet(1),
                 toMetadata(b5) -> BitSet(2),
@@ -138,7 +137,7 @@ class DagOperationsTest
                 toMetadata(b1) -> BitSet(1, 2)
               )
 
-          result <- DagOperations.uncommonAncestors(Vector(b1), dag)(Monad[Task], ordering) shouldBeF Map
+          result <- DagOperations.uncommonAncestors(Vector(b1), dag)(Monad[Task]) shouldBeF Map
                      .empty[BlockMetadata, BitSet]
         } yield result
   }
