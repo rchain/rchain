@@ -20,7 +20,6 @@ match (
       rl(`rho:registry:lookup`),
       RhoSpecCh,
       ListOpsCh,
-      stdout(`rho:io:stdout`),
       setDeployData(`rho:test:deploy:set`),
       getDeployerId(`rho:test:deployerId:get`),
       setup,
