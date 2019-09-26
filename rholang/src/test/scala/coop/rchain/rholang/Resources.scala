@@ -10,10 +10,10 @@ import com.typesafe.scalalogging.Logger
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.models._
 import coop.rchain.rholang.interpreter.Runtime
-import coop.rchain.rholang.interpreter.Runtime.{RhoISpace, SystemProcess}
+import coop.rchain.rholang.interpreter.Runtime.{RhoHistoryRepository, RhoISpace, SystemProcess}
 import coop.rchain.rspace
 import coop.rchain.rspace.RSpace
-import coop.rchain.rspace.history.Branch
+import coop.rchain.rspace.history.{Branch, HistoryRepository}
 import coop.rchain.shared.Log
 import monix.execution.Scheduler
 
@@ -65,21 +65,30 @@ object Resources {
       storageSize: Long = 1024 * 1024,
       additionalSystemProcesses: Seq[SystemProcess.Definition[F]] = Seq.empty
   )(implicit scheduler: Scheduler): Resource[F, Runtime[F]] =
+    mkRuntimeWithHistory(prefix, storageSize, additionalSystemProcesses).map(_._1)
+
+  def mkRuntimeWithHistory[F[_]: Log: Metrics: Span: Concurrent: par.Par: ContextShift](
+      prefix: String,
+      storageSize: Long,
+      additionalSystemProcesses: Seq[SystemProcess.Definition[F]]
+  )(implicit scheduler: Scheduler): Resource[F, (Runtime[F], RhoHistoryRepository[F])] =
     mkTempDir[F](prefix) >>= (mkRuntimeAt(_)(storageSize, additionalSystemProcesses))
 
   def mkRuntimeAt[F[_]: Log: Metrics: Span: Concurrent: par.Par: ContextShift](path: Path)(
       storageSize: Long = 1024 * 1024,
       additionalSystemProcesses: Seq[SystemProcess.Definition[F]] = Seq.empty
-  )(implicit scheduler: Scheduler): Resource[F, Runtime[F]] =
-    Resource.make[F, Runtime[F]](
+  )(implicit scheduler: Scheduler): Resource[F, (Runtime[F], RhoHistoryRepository[F])] =
+    Resource.make[F, (Runtime[F], RhoHistoryRepository[F])](
       Runtime.setupRSpace[F](path, storageSize) >>= {
-        case (space, replay, _) =>
+        case (space, replay, hr) =>
           Runtime
             .createWithEmptyCost[F](
               (space, replay),
               additionalSystemProcesses
             )
+            .map((_, hr))
+
       }
-    )(_.close())
+    )(_._1.close())
 
 }

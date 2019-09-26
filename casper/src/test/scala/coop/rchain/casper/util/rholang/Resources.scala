@@ -13,6 +13,7 @@ import coop.rchain.casper.helper.TestNode.makeBlockDagFileStorageConfig
 import coop.rchain.metrics
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.rholang.Resources.{mkRuntimeAt, mkTempDir}
+import coop.rchain.rholang.interpreter.Runtime.RhoHistoryRepository
 import coop.rchain.shared.Log
 import monix.eval.Task
 import monix.execution.Scheduler
@@ -36,8 +37,25 @@ object Resources {
 
     for {
       runtime        <- mkRuntimeAt[F](storageDirectory)(storageSize)
-      runtimeManager <- Resource.liftF(RuntimeManager.fromRuntime(runtime))
+      runtimeManager <- Resource.liftF(RuntimeManager.fromRuntime(runtime._1))
     } yield runtimeManager
+  }
+
+  def mkRuntimeManagerWithHistoryAt[F[_]: Concurrent: par.Par: ContextShift](
+      storageDirectory: Path
+  )(
+      storageSize: Long = 10 * 1024 * 1024L
+  )(
+      implicit scheduler: Scheduler
+  ): Resource[F, (RuntimeManager[F], RhoHistoryRepository[F])] = {
+    implicit val log               = Log.log[F]
+    implicit val metricsEff        = new metrics.Metrics.MetricsNOP[F]
+    implicit val noopSpan: Span[F] = NoopSpan[F]()
+
+    for {
+      rhr            <- mkRuntimeAt[F](storageDirectory)(storageSize)
+      runtimeManager <- Resource.liftF(RuntimeManager.fromRuntime(rhr._1))
+    } yield (runtimeManager, rhr._2)
   }
 
   def mkBlockStoreAt[F[_]: Concurrent: Metrics: Sync: Log](path: Path): Resource[F, BlockStore[F]] =

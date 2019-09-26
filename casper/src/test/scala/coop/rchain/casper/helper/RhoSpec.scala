@@ -129,7 +129,7 @@ class RhoSpec(
                     storageSize = 10 * 1024 * 1024,
                     additionalSystemProcesses = testFrameworkContracts(testResultCollector)
                   )
-      } yield runtime
+      } yield runtime._1
 
       runtimeResource.use { runtime =>
         for {

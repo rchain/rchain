@@ -34,6 +34,7 @@ import coop.rchain.graphz.{Graphz, StringSerializer}
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.p2p.EffectsTestInstances._
+import coop.rchain.rholang.interpreter.Runtime.RhoHistoryRepository
 import coop.rchain.shared._
 import monix.eval.Task
 import monix.execution.Scheduler
@@ -61,7 +62,8 @@ class TestNode[F[_]](
     val metricEff: Metrics[F],
     val span: Span[F],
     val casperState: CasperStateCell[F],
-    val runtimeManager: RuntimeManager[F]
+    val runtimeManager: RuntimeManager[F],
+    val rhoHistoryRepository: RhoHistoryRepository[F]
 ) {
 
   implicit val logEff                       = new LogStub[F](Log.log[F])
@@ -265,7 +267,7 @@ object TestNode {
       genesis.validatorSks.take(networkSize).toVector,
       genesis.genesisBlock,
       genesis.storageDirectory,
-      Resources.mkRuntimeManagerAt[Effect](_)(storageSize),
+      Resources.mkRuntimeManagerWithHistoryAt[Effect](_)(storageSize),
       synchronyConstraintThreshold
     )(
       Concurrent[Effect],
@@ -276,7 +278,7 @@ object TestNode {
       sks: IndexedSeq[PrivateKey],
       genesis: BlockMessage,
       storageMatrixPath: Path,
-      createRuntime: Path => Resource[F, RuntimeManager[F]],
+      createRuntime: Path => Resource[F, (RuntimeManager[F], RhoHistoryRepository[F])],
       synchronyConstraintThreshold: Double
   ): Resource[F, IndexedSeq[TestNode[F]]] = {
     val n     = sks.length
@@ -337,7 +339,7 @@ object TestNode {
       sk: PrivateKey,
       storageMatrixPath: Path,
       logicalTime: LogicalTime[F],
-      createRuntime: Path => Resource[F, RuntimeManager[F]],
+      createRuntime: Path => Resource[F, (RuntimeManager[F], RhoHistoryRepository[F])],
       synchronyConstraintThreshold: Double
   ): Resource[F, TestNode[F]] = {
     val tle                = new TransportLayerTestImpl[F]()
@@ -377,7 +379,8 @@ object TestNode {
                    metricEff,
                    spanEff,
                    casperState,
-                   runtimeManager
+                   runtimeManager._1,
+                   runtimeManager._2
                  )
                } yield node
              )
