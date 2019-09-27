@@ -62,7 +62,8 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: ConnectionsCell: TransportLa
   import MultiParentCasper.MetricsSource
 
   implicit private val logSource: LogSource = LogSource(this.getClass)
-  private[this] val F                       = Sync[F]
+  private[this] val syncF                   = Sync[F]
+  private[this] val noop                    = syncF.unit
 
   //TODO: Extract hardcoded version and expirationThreshold
   private val version             = 1L
@@ -92,7 +93,7 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: ConnectionsCell: TransportLa
               case Some(ValidatorIdentity(publicKey, _, _)) =>
                 val sender = ByteString.copyFrom(publicKey.bytes)
                 handleDoppelganger(b, sender)
-              case None => F.unit
+              case None => noop
             }
         _      <- BlockStore[F].put(b)
         _      <- spanF.mark("block-store-put")
@@ -112,7 +113,7 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: ConnectionsCell: TransportLa
                  exists.ifM(logAlreadyProcessed, doppelgangerAndAdd)
                }
       _ <- status.fold(
-            kp(F.unit),
+            kp(noop),
             kp(
               metricsF.setGauge("block-height", blockNumber(b))(AddBlockMetricsSource) >>
                 EventPublisher[F].publish(MultiParentCasperImpl.addedEvent(b))
@@ -141,7 +142,7 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: ConnectionsCell: TransportLa
                       else attemptAdd(b, dag)
       (attempt, updatedDag) = attemptResult
       _ <- attempt match {
-            case Left(InvalidBlock.MissingBlocks) => F.unit
+            case Left(InvalidBlock.MissingBlocks) => noop
             case _ =>
               Cell[F, CasperState].modify { s =>
                 s.copy(
@@ -152,8 +153,8 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: ConnectionsCell: TransportLa
           }
       _ <- Span[F].mark("attempt-result")
       _ <- attempt match {
-            case Left(ib: InvalidBlock) if !InvalidBlock.isSlashable(ib) => F.unit
-            case Left(bs) if !BlockStatus.isInDag(bs)                    => F.unit
+            case Left(ib: InvalidBlock) if !InvalidBlock.isSlashable(ib) => noop
+            case Left(bs) if !BlockStatus.isInDag(bs)                    => noop
             case _ =>
               reAttemptBuffer(updatedDag) // reAttempt for any status that resulted in the adding of the block into the view
           }
@@ -356,7 +357,7 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: ConnectionsCell: TransportLa
             _ <- BlockDagStorage[F].accessEquivocationsTracker { tracker =>
                   for {
                     equivocations <- tracker.equivocationRecords
-                    _ <- F.unlessA(equivocations.exists {
+                    _ <- syncF.unlessA(equivocations.exists {
                           case EquivocationRecord(validator, seqNum, _) =>
                             block.sender == validator && baseEquivocationBlockSeqNum == seqNum
                           // More than 2 equivocating children from base equivocation block and base block has already been recorded
@@ -396,7 +397,7 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: ConnectionsCell: TransportLa
           ) >> dag.pure
 
         case BlockError.Processing =>
-          F.raiseError[BlockDagRepresentation[F]](
+          syncF.raiseError[BlockDagRepresentation[F]](
             new RuntimeException(s"A block should not be processing at this stage.")
           )
 
@@ -462,7 +463,7 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: ConnectionsCell: TransportLa
                           case ((attempts, updatedDag), blockHash) =>
                             for {
                               maybeBlock <- BlockStore[F].get(blockHash)
-                              b <- F.fromOption(
+                              b <- syncF.fromOption(
                                     maybeBlock,
                                     new RuntimeException(
                                       s"Could not find a block for hash $blockHash in the blockstore. Exiting..."
@@ -472,7 +473,7 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: ConnectionsCell: TransportLa
                             } yield ((b, status) :: attempts, status._2)
                         }
       (attempts, updatedDag) = attemptsWithDag
-      _ <- F.unlessA(attempts.isEmpty) {
+      _ <- syncF.whenA(attempts.nonEmpty) {
             val addedBlocks = attempts.collect {
               case (bm, (status, _)) if BlockStatus.isInDag(status.merge) => bm.blockHash
             }
@@ -512,7 +513,7 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: ConnectionsCell: TransportLa
       })
     }
 
-  def getRuntimeManager: F[RuntimeManager[F]] = F.pure(runtimeManager)
+  def getRuntimeManager: F[RuntimeManager[F]] = syncF.pure(runtimeManager)
 
   def fetchDependencies: F[Unit] = {
     import cats.instances.list._
