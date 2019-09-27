@@ -7,6 +7,7 @@ import cats.effect.implicits._
 import coop.rchain.catscontrib.mtl.implicits._
 import coop.rchain.catscontrib.seq._
 import coop.rchain.shared.Cell
+import coop.rchain.shared.Language._
 import coop.rchain.shared.MapOps._
 import coop.rchain.rspace.internal._
 import coop.rchain.rspace.Serialize._
@@ -81,10 +82,9 @@ private class InMemHotStore[F[_]: Sync, C, P, A, K](
               case None =>
                 for {
                   historyContinuations <- HR.getContinuations(channels)
-                  _ <- S.flatModify { cache =>
-                        Sync[F]
-                          .delay(cache.continuations.putIfAbsent(channels, historyContinuations))
-                          .as(cache)
+                  _ <- S.modify { cache =>
+                        ignore(cache.continuations.putIfAbsent(channels, historyContinuations))
+                        cache
                       }
                 } yield (historyContinuations)
               case Some(continuations) => Applicative[F].pure(continuations)
@@ -94,14 +94,16 @@ private class InMemHotStore[F[_]: Sync, C, P, A, K](
   def putContinuation(channels: Seq[C], wc: WaitingContinuation[P, K]): F[Unit] =
     for {
       continuations <- internalGetContinuations(channels)
-      _ <- S.flatModify { cache =>
-            Sync[F].delay(cache.continuations.put(channels, wc +: continuations)).as(cache)
+      _ <- S.modify { cache =>
+            ignore(cache.continuations.put(channels, wc +: continuations))
+            cache
           }
     } yield ()
 
-  def installContinuation(channels: Seq[C], wc: WaitingContinuation[P, K]): F[Unit] = S.flatModify {
+  def installContinuation(channels: Seq[C], wc: WaitingContinuation[P, K]): F[Unit] = S.modify {
     cache =>
-      Sync[F].delay(cache.installedContinuations.put(channels, wc)).map(_ => cache)
+      ignore(cache.installedContinuations.put(channels, wc))
+      cache
   }
 
   def removeContinuation(channels: Seq[C], index: Int): F[Unit] =
@@ -113,20 +115,16 @@ private class InMemHotStore[F[_]: Sync, C, P, A, K](
             Sync[F].raiseError {
               new IllegalArgumentException("Attempted to remove an installed continuation")
             } else
-            S.flatModify { cache =>
-              removeIndex(
+            checkIndex(continuations, index) >> S.modify { cache =>
+              val updated = removeIndex(
                 continuations,
                 index
-              ) >>= { updated =>
-                Sync[F]
-                  .delay {
-                    installed match {
-                      case Some(_) => cache.continuations.put(channels, updated tail)
-                      case None    => cache.continuations.put(channels, updated)
-                    }
-                  }
-                  .as(cache)
-              }
+              )
+              ignore(installed match {
+                case Some(_) => cache.continuations.put(channels, updated tail)
+                case None    => cache.continuations.put(channels, updated)
+              })
+              cache
             }
     } yield ()
 
@@ -137,8 +135,9 @@ private class InMemHotStore[F[_]: Sync, C, P, A, K](
               case None =>
                 for {
                   historyData <- HR.getData(channel)
-                  _ <- S.flatModify { cache =>
-                        Sync[F].delay(cache.data.putIfAbsent(channel, historyData)).as(cache)
+                  _ <- S.modify { cache =>
+                        ignore(cache.data.putIfAbsent(channel, historyData))
+                        cache
                       }
                 } yield (historyData)
               case Some(data) => Applicative[F].pure(data)
@@ -148,22 +147,21 @@ private class InMemHotStore[F[_]: Sync, C, P, A, K](
   def putDatum(channel: C, datum: Datum[A]): F[Unit] =
     for {
       data <- getData(channel)
-      _ <- S.flatModify { cache =>
-            Sync[F].delay(cache.data.put(channel, datum +: data)).as(cache)
+      _ <- S.modify { cache =>
+            ignore(cache.data.put(channel, datum +: data))
+            cache
           }
     } yield ()
 
   def removeDatum(channel: C, index: Int): F[Unit] =
     for {
       data <- getData(channel)
-      _ <- S.flatModify { cache =>
-            removeIndex(cache.data(channel), index) >>= { updated =>
-              Sync[F]
-                .delay {
-                  cache.data.put(channel, updated)
-                }
-                .as(cache)
-            }
+      s    <- S.read
+      _    <- checkIndex(s.data(channel), index)
+      _ <- S.modify { cache =>
+            val updated = removeIndex(cache.data(channel), index)
+            ignore(cache.data.put(channel, updated))
+            cache
           }
     } yield ()
 
@@ -180,8 +178,9 @@ private class InMemHotStore[F[_]: Sync, C, P, A, K](
               case None =>
                 for {
                   historyJoins <- HR.getJoins(channel)
-                  _ <- S.flatModify { cache =>
-                        Sync[F].delay(cache.joins.putIfAbsent(channel, historyJoins)).as(cache)
+                  _ <- S.modify { cache =>
+                        ignore(cache.joins.putIfAbsent(channel, historyJoins))
+                        cache
                       }
                 } yield (historyJoins)
               case Some(joins) => Applicative[F].pure(joins)
@@ -191,37 +190,47 @@ private class InMemHotStore[F[_]: Sync, C, P, A, K](
   def putJoin(channel: C, join: Seq[C]): F[Unit] =
     for {
       joins <- getJoins(channel)
-      _ <- if (!joins.contains(join)) S.flatModify { cache =>
-            Sync[F].delay(cache.joins.put(channel, join +: joins)).as(cache)
+      _ <- if (!joins.contains(join)) S.modify { cache =>
+            ignore(cache.joins.put(channel, join +: joins))
+            cache
           } else Applicative[F].unit
     } yield ()
 
-  def installJoin(channel: C, join: Seq[C]): F[Unit] = S.flatModify { cache =>
-    Sync[F]
-      .delay {
-        val installed = cache.installedJoins.get(channel).getOrElse(Seq.empty)
+  def installJoin(channel: C, join: Seq[C]): F[Unit] = S.modify { cache =>
+    ignore {
+      val installed = cache.installedJoins.get(channel).getOrElse(Seq.empty)
 
-        if (!installed.contains(join))
-          cache.installedJoins
-            .put(channel, join +: installed)
-      }
-      .map(_ => cache)
+      if (!installed.contains(join))
+        cache.installedJoins
+          .put(channel, join +: installed)
+    }
+    cache
   }
 
   def removeJoin(channel: C, join: Seq[C]): F[Unit] =
     for {
       joins         <- internalGetJoins(channel)
       continuations <- getContinuations(join)
-      _ <- if (continuations.isEmpty) S.flatModify { cache =>
-            val index = cache.joins(channel).indexOf(join)
-            if (index != -1) removeIndex(cache.joins(channel), index) >>= { updated =>
-              Sync[F]
-                .delay {
-                  cache.joins.put(channel, updated)
-                }
-                .as(cache)
-            } else cache.pure[F]
-          } else Applicative[F].unit
+      s             <- S.read
+      index         = s.joins(channel).indexOf(join)
+      _ <- if (continuations.isEmpty && index != -1)
+            checkIndex(s.joins(channel), index) >>
+              S.modify { cache =>
+                val updated =
+                  removeIndex(
+                    cache.joins(
+                      channel
+                    ),
+                    index
+                  )
+                ignore(
+                  cache.joins.put(
+                    channel,
+                    updated
+                  )
+                )
+                cache
+              } else Applicative[F].unit
     } yield ()
 
   def changes(): F[Seq[HotStoreAction]] =
@@ -250,16 +259,19 @@ private class InMemHotStore[F[_]: Sync, C, P, A, K](
         .toVector
     } yield (continuations ++ data ++ joins)
 
-  private def removeIndex[E](col: Seq[E], index: Int): F[Seq[E]] =
-    if (col.isDefinedAt(index)) {
-      val (l1, l2) = col splitAt index
-      (l1 ++ (l2 tail)).pure[F]
-    } else
+  private def removeIndex[E](col: Seq[E], index: Int): Seq[E] = {
+    val (l1, l2) = col splitAt index
+    (l1 ++ (l2 tail))
+  }
+
+  private def checkIndex[E](col: Seq[E], index: Int): F[Unit] =
+    if (!col.isDefinedAt(index)) {
       Sync[F].raiseError(
         new IndexOutOfBoundsException(
           s"Tried to remove index ${index} from a Vector of size ${col.size}"
         )
       )
+    } else ().pure[F]
 
   def toMap: F[Map[Seq[C], Row[P, A, K]]] =
     for {
