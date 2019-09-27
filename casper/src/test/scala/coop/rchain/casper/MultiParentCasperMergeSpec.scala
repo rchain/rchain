@@ -71,14 +71,13 @@ class MultiParentCasperMergeSpec
     merges(echoContract(1), echoContract(2), Rho("Nil"))
   }
 
-  it should "not conflict on registry lookups" in pendingUntilFixed {
-    effectTest {
-      val uri         = "rho:id:i1kuw4znrkazgbmc4mxe7ua4s1x41zd7qd8md96edxh1n87a5seht3"
-      val toSign: Par = ETuple(Seq(GInt(0), GString("foo")))
-      val toByteArray = Serialize[Par].encode(toSign).toArray
-      val sig         = Secp256k1.sign(Blake2b256.hash(toByteArray), ConstructDeploy.defaultSec)
-      val setup =
-        Rho(s"""
+  it should "not conflict on registry lookups" in effectTest {
+    val uri         = "rho:id:i1kuw4znrkazgbmc4mxe7ua4s1x41zd7qd8md96edxh1n87a5seht3"
+    val toSign: Par = ETuple(Seq(GInt(0), GString("foo")))
+    val toByteArray = Serialize[Par].encode(toSign).toArray
+    val sig         = Secp256k1.sign(Blake2b256.hash(toByteArray), ConstructDeploy.defaultSec)
+    val setup =
+      Rho(s"""
              |new rs(`rho:registry:insertSigned:secp256k1`) in {
              |  rs!(
              |    "${ConstructDeploy.defaultPub.bytes.toHex}".hexToBytes(),
@@ -88,15 +87,14 @@ class MultiParentCasperMergeSpec
              |  )
              |}
         """.stripMargin)
-      val lookup =
-        Rho(s"""
+    val lookup =
+      Rho(s"""
              |new rl(`rho:registry:lookup`) in {
              |  rl!(`$uri`, Nil)
              |}
         """.stripMargin)
 
-      merges(lookup, lookup, setup)
-    }
+    merges(lookup, lookup, setup)
   }
 
   it should "respect mergeability rules when merging blocks" in effectTest {

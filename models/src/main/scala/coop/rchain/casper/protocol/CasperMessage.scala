@@ -374,13 +374,12 @@ final case class ProduceEvent(
     channelsHash: ByteString,
     hash: ByteString,
     persistent: Boolean,
-    sequenceNumber: Int
+    timesRepeated: Int
 ) extends Event
 final case class ConsumeEvent(
     channelsHashes: List[ByteString],
     hash: ByteString,
-    persistent: Boolean,
-    sequenceNumber: Int
+    persistent: Boolean
 ) extends Event
 final case class CommEvent(
     consume: ConsumeEvent,
@@ -416,15 +415,15 @@ object Event {
       )
   }
   private def fromConsumeEvent(ce: ConsumeEventProto): ConsumeEvent =
-    ConsumeEvent(ce.channelsHashes.toList, ce.hash, ce.persistent, ce.sequenceNumber)
+    ConsumeEvent(ce.channelsHashes.toList, ce.hash, ce.persistent)
   private def fromProduceEvent(pe: ProduceEventProto): ProduceEvent =
-    ProduceEvent(pe.channelsHash, pe.hash, pe.persistent, pe.sequenceNumber)
+    ProduceEvent(pe.channelsHash, pe.hash, pe.persistent, pe.timesRepeated)
 
   private def toProduceEventProto(pe: ProduceEvent): ProduceEventProto =
-    ProduceEventProto(pe.channelsHash, pe.hash, pe.persistent, pe.sequenceNumber)
+    ProduceEventProto(pe.channelsHash, pe.hash, pe.persistent, pe.timesRepeated)
 
   private def toConsumeEventProto(ce: ConsumeEvent): ConsumeEventProto =
-    ConsumeEventProto(ce.channelsHashes, ce.hash, ce.persistent, ce.sequenceNumber)
+    ConsumeEventProto(ce.channelsHashes, ce.hash, ce.persistent)
 }
 
 final case class Bond(

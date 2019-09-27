@@ -172,7 +172,7 @@ def extract_block_hash_from_propose_output(propose_output: str) -> str:
 
     Response: Success! Block a91208047c... created and added.\n
     """
-    match = re.match(r'Response: Success! Block ([0-9a-f]+)\.\.\. created and added.', propose_output.strip())
+    match = re.match(r'Response: Success! Block ([0-9a-f]+) created and added.', propose_output.strip())
     if match is None:
         raise UnexpectedProposeOutputFormatError(propose_output)
     return match.group(1)

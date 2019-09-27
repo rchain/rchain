@@ -30,22 +30,20 @@ object EventConverter {
         produce.channelsHash,
         produce.hash,
         produce.persistent,
-        produce.sequenceNumber
+        0
       )
     case consume: RspaceConsume =>
       ConsumeEvent(
         consume.channelsHashes.toList,
         consume.hash,
-        consume.persistent,
-        consume.sequenceNumber
+        consume.persistent
       )
-    case RspaceComm(rspaceConsume, rspaceProduces, peeks) =>
+    case RspaceComm(rspaceConsume, rspaceProduces, peeks, timesRepeated) =>
       CommEvent(
         ConsumeEvent(
           rspaceConsume.channelsHashes.toList,
           rspaceConsume.hash,
-          rspaceConsume.persistent,
-          rspaceConsume.sequenceNumber
+          rspaceConsume.persistent
         ),
         rspaceProduces
           .map(
@@ -54,7 +52,7 @@ object EventConverter {
                 rspaceProduce.channelsHash,
                 rspaceProduce.hash,
                 rspaceProduce.persistent,
-                rspaceProduce.sequenceNumber
+                timesRepeated(rspaceProduce)
               )
           )
           .toList,
@@ -64,36 +62,37 @@ object EventConverter {
 
   @SuppressWarnings(Array("org.wartremover.warts.Throw"))
   def toRspaceEvent(event: Event): RspaceEvent = event match {
-    case ProduceEvent(channelsHash, hash, persistent, sequenceNumber) =>
+    case ProduceEvent(channelsHash, hash, persistent, _) =>
       RspaceProduce
-        .fromHash(channelsHash, hash, persistent, sequenceNumber)
-    case ConsumeEvent(channelsHashes, hash, persistent, sequenceNumber) =>
+        .fromHash(channelsHash, hash, persistent)
+    case ConsumeEvent(channelsHashes, hash, persistent) =>
       RspaceConsume.fromHash(
         collection.immutable.Seq(channelsHashes.map(byteStringToBlake2b256Hash): _*),
         hash,
-        persistent,
-        sequenceNumber
+        persistent
       )
     case CommEvent(consume, produces, peeks) =>
-      val rspaceProduces: Seq[RspaceProduce] = produces.map { produce =>
-        val rspaceProduce: RspaceProduce =
-          RspaceProduce.fromHash(
-            produce.channelsHash,
-            produce.hash,
-            produce.persistent,
-            produce.sequenceNumber
-          )
-        rspaceProduce
-      }.toList
+      val rspaceProduceCounts: Map[RspaceProduce, Int] = produces
+        .map { produce =>
+          val rspaceProduce: RspaceProduce =
+            RspaceProduce.fromHash(
+              produce.channelsHash,
+              produce.hash,
+              produce.persistent
+            )
+          rspaceProduce -> produce.timesRepeated
+        }
+        .toMap
+        .withDefaultValue(0)
       RspaceComm(
         RspaceConsume.fromHash(
           collection.immutable.Seq(consume.channelsHashes.map(byteStringToBlake2b256Hash): _*),
           consume.hash,
-          consume.persistent,
-          consume.sequenceNumber
+          consume.persistent
         ),
-        rspaceProduces,
-        SortedSet(peeks.map(_.channelIndex): _*)
+        rspaceProduceCounts.keys.toSeq,
+        SortedSet(peeks.map(_.channelIndex): _*),
+        rspaceProduceCounts
       )
     case _ => throw new RuntimeException("Could not calculate toRspaceEvent")
   }

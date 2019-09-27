@@ -159,12 +159,13 @@ object EstimatorHelper {
 
     val freeProduces = b.produces
       .diff(nonPersistentProducesInComms)
-      .filterNot(p => peekedProducesInCommsHashes.contains(p.hash))
+      .filterNot(p => peekedProducesInCommsHashes.contains(p.hash) && !p.persistent)
+
     val freeConsumes = b.consumes.diff(nonPersistentConsumesInComms)
 
     val produceEvents = freeProduces.map(TuplespaceEvent.from(_))
     val consumeEvents = freeConsumes.flatMap(TuplespaceEvent.from(_))
-    val commEvents    = b.comms.flatMap(TuplespaceEvent.from(_, b.produces))
+    val commEvents    = b.comms.flatMap(TuplespaceEvent.from(_, b.consumes))
 
     (produceEvents ++ consumeEvents ++ commEvents)
       .groupBy(_._1)

@@ -38,19 +38,23 @@ object TuplespaceEvent {
     produce.channelsHash -> TuplespaceEvent(toOperation(produce), None)
 
   def from(consume: Consume): Option[(Blake2b256Hash, TuplespaceEvent)] = consume match {
-    case Consume(singleChannelHash :: Nil, _, _, _) =>
+    case Consume(singleChannelHash :: Nil, _, _) =>
       Some(singleChannelHash -> TuplespaceEvent(toOperation(consume, false), None))
     case _ => None
   }
 
-  def from(comm: COMM, produces: Set[Produce]): Option[(Blake2b256Hash, TuplespaceEvent)] =
+  def from(comm: COMM, incomingConsumes: Set[Consume]): Option[(Blake2b256Hash, TuplespaceEvent)] =
     comm match {
-      case COMM(consume, produce :: Nil, peeks) => {
+      case COMM(consume, produces, peeks, _) if produces.size == 1 => {
+        val produce   = produces.head
         val produceOp = toOperation(produce)
         val consumeOp = toOperation(consume, peeks.nonEmpty)
+
+        def peekInitiated = comm.timesRepeated(produce) != 0
         val incoming: TuplespaceOperation =
-          if (produces.contains(produce)) produceOp
-          else consumeOp
+          if (incomingConsumes.contains(consume) && !peekInitiated) consumeOp
+          else produceOp
+
         val matched: Option[TuplespaceOperation] = Some(
           if (incoming == produceOp) consumeOp
           else produceOp
@@ -73,10 +77,8 @@ object TuplespaceEvent {
           otherMatched <- other.matched
         } yield thisMatched == otherMatched && otherMatched.cardinality != NonLinear
 
-        if (bothPeeks) {
-          // TODO - should always return false
-          bothMatchedSameNonPersistentEvent.getOrElse(false)
-        } else bothMatchedSameNonPersistentEvent.getOrElse(false)
+        if (bothPeeks) false
+        else bothMatchedSameNonPersistentEvent.getOrElse(false)
 
       } else ev.unsatisfied && other.unsatisfied
 
