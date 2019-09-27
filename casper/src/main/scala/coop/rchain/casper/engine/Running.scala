@@ -160,7 +160,7 @@ object Running {
     casperContains(b.blockHash)
       .ifM(
         Log[F].info(s"Received block ${PrettyPrinter.buildString(b.blockHash)} again."),
-        Log[F].info(s"Received ${PrettyPrinter.buildString(b)}.") *> casperAdd(b) >>= (
+        Log[F].info(s"Received ${PrettyPrinter.buildString(b)}.") >> casperAdd(b) >>= (
             status =>
               Applicative[F].whenA(BlockStatus.isInDag(status.merge))(
                 RequestedBlocks.remove(b.blockHash)
@@ -188,7 +188,7 @@ object Running {
       peer: PeerNode,
       fctr: ForkChoiceTipRequest.type
   )(casper: MultiParentCasper[F]): F[Unit] =
-    Log[F].info(s"Received ForkChoiceTipRequest from $peer") *> MultiParentCasper.forkChoiceTip(
+    Log[F].info(s"Received ForkChoiceTipRequest from $peer") >> MultiParentCasper.forkChoiceTip(
       casper
     ) >>= (
         tip =>
@@ -202,7 +202,7 @@ object Running {
       br: ApprovedBlockRequest,
       approvedBlock: ApprovedBlock
   ): F[Unit] =
-    Log[F].info(s"Received ApprovedBlockRequest from $peer") *> streamToPeer(peer)(
+    Log[F].info(s"Received ApprovedBlockRequest from $peer") >> streamToPeer(peer)(
       ToPacket(approvedBlock.toProto)
     ) <* Log[F].info(s"Sending ApprovedBlock to $peer")
 
