@@ -132,7 +132,7 @@ object ApproveBlockProtocol {
     private val trustedValidators         = genesisBlock.body.state.bonds.map(_.validator).toSet
     private val candidate                 = ApprovedBlockCandidate(genesisBlock, requiredSigs)
     private val u                         = UnapprovedBlock(candidate, start, duration.toMillis)
-    private val serializedUnapprovedBlock = u.toProto.toByteString
+    private val serializedUnapprovedBlock = ToPacket(u.toProto)
     private val candidateHash             = PrettyPrinter.buildString(genesisBlock.blockHash)
     private val sigData                   = Blake2b256.hash(candidate.toProto.toByteArray)
 
@@ -198,7 +198,7 @@ object ApproveBlockProtocol {
     private def sendUnapprovedBlock: F[Unit] =
       for {
         _ <- Log[F].info(s"APPROVAL: Beginning send of UnapprovedBlock $candidateHash to peers...")
-        _ <- CommUtil.streamToPeers[F](transport.UnapprovedBlock, serializedUnapprovedBlock)
+        _ <- CommUtil.streamToPeers[F](serializedUnapprovedBlock)
         _ <- Log[F].info(s"APPROVAL: Sent UnapprovedBlock $candidateHash to peers.")
         _ <- EventLog[F].publish(shared.Event.SentUnapprovedBlock(candidateHash))
       } yield ()
@@ -218,12 +218,12 @@ object ApproveBlockProtocol {
               case None =>
                 Log[F].warn(s"APPROVAL: Expected ApprovedBlock but was None.")
               case Some(b) =>
-                val serializedApprovedBlock = b.toProto.toByteString
+                val serializedApprovedBlock = ToPacket(b.toProto)
                 for {
                   _ <- Log[F].info(
                         s"APPROVAL: Beginning send of ApprovedBlock $candidateHash to peers..."
                       )
-                  _ <- CommUtil.streamToPeers[F](transport.ApprovedBlock, serializedApprovedBlock)
+                  _ <- CommUtil.streamToPeers[F](serializedApprovedBlock)
                   _ <- Log[F].info(s"APPROVAL: Sent ApprovedBlock $candidateHash to peers.")
                   _ <- EventLog[F].publish(shared.Event.SentApprovedBlock(candidateHash))
                 } yield ()

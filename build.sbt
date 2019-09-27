@@ -225,6 +225,7 @@ lazy val models = (project in file("models"))
   .settings(
     libraryDependencies ++= commonDependencies ++ protobufDependencies ++ Seq(
       catsCore,
+      enumeratum,
       magnolia,
       scalapbCompiler,
       scalacheck % "test",

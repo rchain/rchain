@@ -1,11 +1,9 @@
 package coop.rchain.casper.engine
 
-import Running.{Requested, RequestedBlocks}
 import coop.rchain.catscontrib.ski._
 import coop.rchain.casper.protocol._
 import coop.rchain.comm.{CommError, Endpoint, NodeIdentifier, PeerNode}, CommError._
 import coop.rchain.comm.protocol.routing.Protocol
-import coop.rchain.comm.transport.TransportLayer
 import coop.rchain.comm.rp.{ProtocolHelper, RPConf}, ProtocolHelper.toPacket
 import coop.rchain.shared._
 import coop.rchain.p2p.EffectsTestInstances.TransportLayerStub
@@ -13,9 +11,6 @@ import coop.rchain.models.BlockHash.BlockHash
 import com.google.protobuf.ByteString
 import monix.eval.Coeval
 import org.scalatest._
-import cats._, cats.data._, cats.implicits._
-
-import scala.collection.mutable.{Map => MutableMap}
 
 class RunningHandleHasBlockRequestSpec extends FunSpec with BeforeAndAfterEach with Matchers {
 
@@ -68,7 +63,7 @@ class RunningHandleHasBlockRequestSpec extends FunSpec with BeforeAndAfterEach w
     PeerNode(NodeIdentifier(name.getBytes), endpoint(port))
 
   def toHasBlock(protocol: Protocol): HasBlock =
-    HasBlock.from(packetToHasBlock(toPacket(protocol).right.get).get)
+    HasBlock.from(convert[PacketTypeTag.HasBlock.type](toPacket(protocol).right.get).get)
 
   private def alwaysSuccess: PeerNode => Protocol => CommErr[Unit] = kp(kp(Right(())))
 }

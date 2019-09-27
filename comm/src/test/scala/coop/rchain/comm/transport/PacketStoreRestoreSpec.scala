@@ -35,7 +35,7 @@ class PacketStoreRestoreSpec
       forAll(contentGen) { content: Array[Byte] =>
         // given
         val parent = tempFolder.resolve("inner").resolve("folder")
-        val packet = Packet(BlockMessage.id, ByteString.copyFrom(content))
+        val packet = Packet("Test", ByteString.copyFrom(content))
         // when
         val storedIn = packet.store[Task](parent).runSyncUnsafe().right.get
         val restored = PacketOps.restore[Task](storedIn).runSyncUnsafe().right.get

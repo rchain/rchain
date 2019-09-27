@@ -1,7 +1,6 @@
 package coop.rchain.casper.protocol
 
-import cats._, cats.data._, cats.implicits._
-import coop.rchain.catscontrib.Catscontrib._
+import cats.implicits._
 import com.google.protobuf.ByteString
 import coop.rchain.models.PCost
 
@@ -49,8 +48,8 @@ object BlockRequest {
   def from(hbr: BlockRequestProto): BlockRequest = BlockRequest(hbr.hash)
 }
 
-final case object ForkChoiceTipRequest extends CasperMessage {
-  def toProto: ForkChoiceTipRequestProto = ForkChoiceTipRequestProto()
+case object ForkChoiceTipRequest extends CasperMessage {
+  val toProto: ForkChoiceTipRequestProto = ForkChoiceTipRequestProto()
 }
 
 final case class ApprovedBlockCandidate(block: BlockMessage, requiredSigs: Int)
@@ -69,8 +68,11 @@ object ApprovedBlockCandidate {
     } yield ApprovedBlockCandidate(block, abc.requiredSigs)
 }
 
-final case class UnapprovedBlock(candidate: ApprovedBlockCandidate, timestamp: Long, duration: Long)
-    extends CasperMessage {
+final case class UnapprovedBlock(
+    candidate: ApprovedBlockCandidate,
+    timestamp: Long,
+    duration: Long
+) extends CasperMessage {
   def toProto: UnapprovedBlockProto =
     UnapprovedBlockProto()
       .withCandidate(candidate.toProto)
