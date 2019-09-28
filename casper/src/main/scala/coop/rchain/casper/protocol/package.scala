@@ -5,10 +5,10 @@ import coop.rchain.comm.protocol.routing.Packet
 package object protocol extends CasperMessageProtocol {
   import PacketTypeTag._
 
-  def toCasperMessageProto(packet: Packet): Option[CasperMessageProto] =
+  def toCasperMessageProto(packet: Packet): PacketParseResult[CasperMessageProto] =
     PacketTypeTag
       .withNameOption(packet.typeId)
-      .flatMap {
+      .map {
         case BlockHashMessage         => convert[BlockHashMessage.type](packet)
         case BlockMessage             => convert[BlockMessage.type](packet)
         case ApprovedBlock            => convert[ApprovedBlock.type](packet)
@@ -21,10 +21,10 @@ package object protocol extends CasperMessageProtocol {
         case UnapprovedBlock          => convert[UnapprovedBlock.type](packet)
         case NoApprovedBlockAvailable => convert[NoApprovedBlockAvailable.type](packet)
       }
+      .getOrElse(PacketParseResult.IllegalPacket(s"Unrecognized typeId: ${packet.typeId}"))
 
-  @inline def convert[Tag <: PacketTypeTag](
-      msg: Packet
-  )(implicit fromPacket: FromPacket[Tag]): Option[fromPacket.To] =
-    fromPacket.parseFrom(msg).toOption
+  @inline def convert[Tag <: PacketTypeTag](msg: Packet)(
+      implicit fromPacket: FromPacket[Tag]
+  ): PacketParseResult[fromPacket.To] = fromPacket.parseFrom(msg)
 
 }
