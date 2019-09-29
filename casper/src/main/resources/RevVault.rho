@@ -30,7 +30,7 @@ in {
   rl!(`rho:rchain:makeMint`, *MakeMintCh) |
   rl!(`rho:rchain:authKey`, *AuthKeyCh) |
   rl!(`rho:lang:either`, *EitherCh) |
-  rl!(`rho:lang:listOps`, *EitherCh) |
+  rl!(`rho:lang:listOps`, *ListOpsCh) |
   for(@(_, MakeMint) <- MakeMintCh) {
     for (@(_, AuthKey) <- AuthKeyCh) {
       for (@(_, Either) <- EitherCh) {
@@ -53,8 +53,7 @@ in {
               } |
 
               contract RevVault(@"deployerAuthKey", deployerId, ret) = {
-
-                new RevAddress(`rho:rev:address`), DeployerIdOps(`rho:rchain:deployerId:ops`), revAddrCh, deployerPubKeyBytesCh in {
+                new DeployerIdOps(`rho:rchain:deployerId:ops`), revAddrCh, deployerPubKeyBytesCh in {
                   DeployerIdOps!("pubKeyBytes", *deployerId, *deployerPubKeyBytesCh) |
                   for (@deployerPubKeyBytes <- deployerPubKeyBytesCh) {
                     _toAuthKey!(deployerPubKeyBytes, *ret)
@@ -106,6 +105,7 @@ in {
                 new createVault in {
                   _getOrCreate!(ownerRevAddress, *createVault, *ret) |
                   for (retCh <- createVault) {
+
                     _makeVault!(ownerRevAddress, 0, *_newVault, *retCh)
                   }
                 }
