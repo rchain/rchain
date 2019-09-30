@@ -1,0 +1,112 @@
+/**
+ * The main API is `DeployService`.
+ */
+syntax = "proto3";
+package casper;
+
+import "CasperMessage.proto";
+import "google/protobuf/empty.proto";
+
+// If you are building for other languages "scalapb.proto"
+// can be manually obtained here:
+// https://raw.githubusercontent.com/scalapb/ScalaPB/master/protobuf/scalapb/scalapb.proto
+// make a scalapb directory in this file's location and place it inside
+
+import "scalapb/scalapb.proto";
+import "RhoTypes.proto";
+
+option (scalapb.options) = {
+  package_name: "coop.rchain.casper.protocol"
+  flat_package: true
+  single_file: true
+};
+
+message FindDeployQuery {
+  bytes deployId = 1;
+}
+
+message BlockQuery {
+  string hash = 1;
+}
+
+message BlocksQuery {
+  int32 depth = 1;
+}
+
+message DataAtNameQuery {
+  int32 depth = 1;
+  Par name = 2;
+}
+
+message ContinuationAtNameQuery {
+  int32 depth = 1;
+  repeated Par names = 2;
+}
+
+message VisualizeDagQuery {
+  int32 depth                 = 1;
+  bool showJustificationLines = 2;
+}
+
+message MachineVerifyQuery {
+}
+
+message PrivateNamePreviewQuery {
+  bytes  user         = 1; // public key a la DeployData
+  int64  timestamp    = 2; // millisecond timestamp
+  int32  nameQty      = 3; // how many names to preview? (max: 1024)
+}
+
+message LastFinalizedBlockQuery {
+}
+
+message IsFinalizedQuery {
+  string hash = 1;
+}
+
+message LightBlockInfo {
+  string blockHash = 1;
+  string blockSize = 2;
+  int64 blockNumber = 3;
+  int64 version = 4;
+  int32 deployCount = 5;
+  string tupleSpaceHash = 6; // Same as postStateHash of BlockMessage
+  int64 timestamp = 7;
+  float faultTolerance = 8;
+  string mainParentHash = 9;
+  repeated string parentsHashList = 10;
+  string sender = 11;
+}
+
+// For node clients, see BlockMessage for actual Casper protocol Block representation
+message BlockInfo {
+  string blockHash = 1;
+  string blockSize = 2;
+  int64 blockNumber = 3;
+  int64 version = 4;
+  int32 deployCount = 5;
+  string tupleSpaceHash = 6; // Same as postStateHash of BlockMessage
+  int64 timestamp = 7;
+  float faultTolerance = 8;
+  string mainParentHash = 9;
+  repeated string parentsHashList = 10;
+  string sender = 11;
+  string shardId = 12;
+  repeated string bondsValidatorList = 13;
+  repeated string deployCost = 14;
+}
+
+message DataWithBlockInfo {
+  repeated Par postBlockData = 1;
+  LightBlockInfo block = 2;
+}
+
+message ContinuationsWithBlockInfo {
+  repeated WaitingContinuationInfo postBlockContinuations = 1;
+  LightBlockInfo block = 2;
+}
+
+message WaitingContinuationInfo {
+  repeated BindPattern postBlockPatterns = 1;
+  Par postBlockContinuation = 2;
+}

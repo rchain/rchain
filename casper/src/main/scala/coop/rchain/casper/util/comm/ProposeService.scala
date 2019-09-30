@@ -6,6 +6,7 @@ import java.util.concurrent.TimeUnit
 import scala.util.Either
 
 import coop.rchain.casper.protocol._
+import coop.rchain.casper.protocol.propose.v1.ProposeServiceV1GrpcMonix
 import coop.rchain.models.either.implicits._
 
 import io.grpc.{ManagedChannel, ManagedChannelBuilder}
@@ -30,12 +31,15 @@ class GrpcProposeService(host: String, port: Int, maxMessageSize: Int)
       .usePlaintext()
       .build
 
-  private val stub = ProposeServiceGrpcMonix.stub(channel)
+  private val stub = ProposeServiceV1GrpcMonix.stub(channel)
 
   def propose(printUnmatchedSends: Boolean): Task[Either[Seq[String], String]] =
     stub
       .propose(PrintUnmatchedSendsQuery(printUnmatchedSends))
-      .map(_.toEither[DeployServiceResponse].map(_.message))
+      .toEitherF(
+        _.message.error,
+        _.message.result
+      )
 
   @SuppressWarnings(Array("org.wartremover.warts.NonUnitStatements"))
   override def close(): Unit = {

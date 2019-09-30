@@ -2,9 +2,7 @@
  * The main API is `DeployService`.
  */
 syntax = "proto3";
-package coop.rchain.casper.protocol;
-
-import "google/protobuf/empty.proto";
+package casper;
 
 // If you are building for other languages "scalapb.proto"
 // can be manually obtained here:
@@ -13,7 +11,6 @@ import "google/protobuf/empty.proto";
 
 import "scalapb/scalapb.proto";
 import "RhoTypes.proto";
-import "Either.proto";
 
 option (scalapb.options) = {
   package_name: "coop.rchain.casper.protocol"

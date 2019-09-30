@@ -1,16 +1,14 @@
 package coop.rchain.node
 
 import cats.effect.Concurrent
-import coop.rchain.blockstorage.BlockStore
-import coop.rchain.casper.engine._, EngineCell._
-import coop.rchain.casper.SafetyOracle
-import coop.rchain.casper.protocol.{DeployServiceGrpcMonix, ProposeServiceGrpcMonix}
+
+import coop.rchain.casper.protocol.deploy.v1.DeployServiceV1GrpcMonix
+import coop.rchain.casper.protocol.propose.v1.ProposeServiceV1GrpcMonix
 import coop.rchain.catscontrib._
 import coop.rchain.grpc.{GrpcServer, Server}
-import coop.rchain.metrics.Span
 import coop.rchain.node.model.repl._
-import coop.rchain.rholang.interpreter.Runtime
 import coop.rchain.shared._
+
 import io.grpc.netty.NettyServerBuilder
 import io.grpc.protobuf.services.ProtoReflectionService
 import monix.eval.Task
@@ -26,7 +24,7 @@ package object api {
       port: Int,
       grpcExecutor: Scheduler,
       replGrpcService: ReplGrpcMonix.Repl,
-      proposeGrpcService: ProposeServiceGrpcMonix.ProposeService
+      proposeGrpcService: ProposeServiceV1GrpcMonix.ProposeService
   ): Task[Server[Task]] =
     GrpcServer[Task](
       NettyServerBuilder
@@ -37,7 +35,7 @@ package object api {
           ReplGrpcMonix.bindService(replGrpcService, grpcExecutor)
         )
         .addService(
-          ProposeServiceGrpcMonix
+          ProposeServiceV1GrpcMonix
             .bindService(proposeGrpcService, grpcExecutor)
         )
         .addService(ProtoReflectionService.newInstance())
@@ -47,8 +45,8 @@ package object api {
   def acquireExternalServer[F[_]: Concurrent: Log: Taskable](
       port: Int,
       grpcExecutor: Scheduler,
-      deployGrpcService: DeployServiceGrpcMonix.DeployService,
-      proposeGrpcService: ProposeServiceGrpcMonix.ProposeService
+      deployGrpcService: DeployServiceV1GrpcMonix.DeployService,
+      proposeGrpcService: ProposeServiceV1GrpcMonix.ProposeService
   ): F[Server[F]] =
     GrpcServer[F](
       NettyServerBuilder
@@ -56,11 +54,11 @@ package object api {
         .executor(grpcExecutor)
         .maxMessageSize(maxMessageSize)
         .addService(
-          DeployServiceGrpcMonix
+          DeployServiceV1GrpcMonix
             .bindService(deployGrpcService, grpcExecutor)
         )
         .addService(
-          ProposeServiceGrpcMonix
+          ProposeServiceV1GrpcMonix
             .bindService(proposeGrpcService, grpcExecutor)
         )
         .addService(ProtoReflectionService.newInstance())
