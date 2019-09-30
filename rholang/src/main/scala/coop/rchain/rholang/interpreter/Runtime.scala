@@ -333,6 +333,7 @@ object Runtime {
     val urnMap: Map[String, Par] = Map[String, Par](
       "rho:crypto:secp256k1Verify"   -> Bundle(FixedChannels.SECP256K1_VERIFY, writeFlag = true),
       "rho:crypto:blake2b256Hash"    -> Bundle(FixedChannels.BLAKE2B256_HASH, writeFlag = true),
+      "rho:crypto:keccak256Hash"     -> Bundle(FixedChannels.KECCAK256_HASH, writeFlag = true),
       "rho:registry:lookup"          -> Bundle(FixedChannels.REG_LOOKUP, writeFlag = true),
       "rho:registry:insertArbitrary" -> Bundle(FixedChannels.REG_INSERT_RANDOM, writeFlag = true),
       "rho:registry:insertSigned:secp256k1" -> Bundle(

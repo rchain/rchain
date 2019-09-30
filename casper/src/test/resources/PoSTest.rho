@@ -23,6 +23,7 @@ match (
       test_bonding_fails_if_already_bonded,
       test_bonding_fails_if_bond_too_small,
       test_pay_succeeds,
+      test_commit_random,
       test_dont_pay_inactive_validators,
       test_bonding_failure
     in {
@@ -52,7 +53,8 @@ match (
               ("payment works", *test_pay_succeeds),
               ("bonding fails if already bonded", *test_bonding_fails_if_already_bonded),
               ("bonding fails is bond is too small", *test_bonding_fails_if_bond_too_small),
-              ("payment is not distributed to inactive validators", *test_dont_pay_inactive_validators)
+              ("payment is not distributed to inactive validators", *test_dont_pay_inactive_validators),
+              ("commited random matches its image", *test_commit_random)
             ]) |
 
           contract setup(_, retCh) = {
@@ -457,6 +459,47 @@ match (
                           rhoSpec!("assertMany",
                             [
                               ((Nil, "==", finalRewards.get(validatorPubKey)), "the new validator should have no reward")
+                            ],
+                            *ackCh
+                          )
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          } |
+
+          contract test_commit_random(rhoSpec, _, ackCh) = {
+            new setupCh, closeBlockCh, retCh,
+                finalRewardsCh, computeHash(`rho:crypto:keccak256Hash`), hash00Ch, hashFFCh
+            in {
+              prepareUser!("dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd", *setupCh) |
+              for (@validatorPubKey, _, _ <- setupCh) {
+                @PoS!("revealRandom", "FF".hexToBytes(), *retCh) |
+
+                computeHash!("00".hexToBytes(), *hash00Ch) |
+                computeHash!("FF".hexToBytes(), *hashFFCh) |
+
+                for (@result0 <- retCh;
+                     @hash00 <- hash00Ch;
+                     @hashFF <- hashFFCh) {
+                  @PoS!("commitRandomImage", hash00, *retCh) |
+                  for (@result1 <- retCh) {
+                    @PoS!("commitRandomImage", hashFF, *retCh) |
+                    for (@result2 <- retCh) {
+                      @PoS!("revealRandom", "FF".hexToBytes(), *retCh) |
+                      for (@result3 <- retCh) {
+                        @PoS!("revealRandom", "00".hexToBytes(), *retCh) |
+                        for (@result4 <- retCh) {
+                          rhoSpec!("assertMany",
+                            [
+                              (((false, "Previously committed random image not found"), "==", result0), "commitRandom before commitRandomImage fails"),
+                              ((true, "==", result1), "the first commitRandomImage is successful"),
+                              (((false, "Image already committed"), "==", result2), "the second commitRandomImage for the same validator fails"),
+                              (((false, "Previously committed image doesn't match the random number"), "==", result3), "the random value doesn't match the commited image stored by the first commitRandomImage"),
+                              ((true, "==", result4), "the random value matches the commited image")
                             ],
                             *ackCh
                           )
