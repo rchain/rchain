@@ -1,11 +1,11 @@
 package coop.rchain.comm.rp
 
-import coop.rchain.comm._
-import coop.rchain.comm.CommError._
-import coop.rchain.comm.protocol.routing._
-import coop.rchain.comm.transport.{Blob, PacketType}
-
 import com.google.protobuf.ByteString
+import coop.rchain.casper.protocol.ToPacket
+import coop.rchain.comm.CommError._
+import coop.rchain.comm._
+import coop.rchain.comm.protocol.routing._
+import coop.rchain.comm.transport.Blob
 
 object ProtocolHelper {
 
@@ -56,11 +56,12 @@ object ProtocolHelper {
       Left(UnknownProtocolError(s"Was expecting Heartbeat, got ${proto.message}"))
     )(Right(_))
 
-  def packet(src: PeerNode, networkId: String, pType: PacketType, content: Array[Byte]): Protocol =
-    packet(src, networkId, pType, ByteString.copyFrom(content))
+  def packet(src: PeerNode, networkId: String, packet: Packet): Protocol =
+    protocol(src, networkId).withPacket(packet)
 
-  def packet(src: PeerNode, networkId: String, pType: PacketType, content: ByteString): Protocol =
-    protocol(src, networkId).withPacket(Packet(pType.id, content))
+  def packet[A](src: PeerNode, networkId: String, content: A)(
+      implicit toPacket: ToPacket[A]
+  ): Protocol = packet(src, networkId, toPacket.mkPacket(content))
 
   def toPacket(proto: Protocol): CommErr[Packet] =
     proto.message.packet.fold[CommErr[Packet]](

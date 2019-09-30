@@ -10,7 +10,6 @@ import coop.rchain.shared.scalatestcontrib._
 import coop.rchain.casper.util.GenesisBuilder
 import coop.rchain.casper.util.comm.TestNetwork
 import coop.rchain.comm.protocol.routing.Packet
-import coop.rchain.comm.transport
 import coop.rchain.rholang.interpreter.util.RevAddress
 import monix.execution.Scheduler
 import org.scalatest.{FlatSpec, Matchers}
@@ -74,8 +73,7 @@ object BlockApproverProtocolTest {
   def createUnapproved(requiredSigs: Int, block: BlockMessage): UnapprovedBlock =
     UnapprovedBlock(ApprovedBlockCandidate(block, requiredSigs), 0L, 0L)
 
-  def unapprovedToPacket(u: UnapprovedBlock): Packet =
-    Packet(transport.UnapprovedBlock.id, u.toProto.toByteString)
+  def unapprovedToPacket(u: UnapprovedBlock): Packet = ToPacket(u.toProto)
 
   def createProtocol: Effect[(BlockApproverProtocol, TestNode[Effect])] = {
     import monix.execution.Scheduler.Implicits.global

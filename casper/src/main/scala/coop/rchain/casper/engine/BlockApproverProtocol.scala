@@ -62,8 +62,7 @@ final case class BlockApproverProtocol private (
             serializedApproval = BlockApproverProtocol
               .getApproval(candidate, validatorId)
               .toProto
-              .toByteString
-            msg = Blob(local, Packet(transport.BlockApproval.id, serializedApproval))
+            msg = Blob(local, ToPacket(serializedApproval))
             _   <- TransportLayer[F].stream(peer, msg)
             _   <- Log[F].info(s"Received expected candidate from $peer. Approval sent in response.")
           } yield ()

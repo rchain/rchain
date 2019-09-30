@@ -30,7 +30,8 @@ class Initializing[F[_]: Sync: Metrics: Span: Concurrent: ConnectionsCell: Block
     theInit: F[Unit]
 ) extends Engine[F] {
   import Engine._
-  def applicative: Applicative[F] = Applicative[F]
+  private val F    = Applicative[F]
+  private val noop = F.unit
 
   override def init: F[Unit] = theInit
 

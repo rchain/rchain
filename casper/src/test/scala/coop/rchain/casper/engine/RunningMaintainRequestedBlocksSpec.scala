@@ -6,7 +6,6 @@ import coop.rchain.casper.protocol._
 import coop.rchain.casper.PrettyPrinter
 import coop.rchain.comm.{CommError, Endpoint, NodeIdentifier, PeerNode}, CommError._
 import coop.rchain.comm.protocol.routing.Protocol
-import coop.rchain.comm.transport.TransportLayer
 import coop.rchain.comm.rp.{ProtocolHelper, RPConf}, ProtocolHelper.toPacket
 import coop.rchain.shared._
 import coop.rchain.p2p.EffectsTestInstances.{LogStub, LogicalTime, TransportLayerStub}
@@ -14,10 +13,6 @@ import coop.rchain.models.BlockHash.BlockHash
 import com.google.protobuf.ByteString
 import monix.eval.Coeval
 import org.scalatest._
-import scala.concurrent.duration._
-import cats._, cats.data._, cats.implicits._
-
-import scala.collection.mutable.{Map => MutableMap}
 
 class RunningMaintainRequestedBlocksSpec extends FunSpec with BeforeAndAfterEach with Matchers {
 
@@ -160,7 +155,7 @@ class RunningMaintainRequestedBlocksSpec extends FunSpec with BeforeAndAfterEach
     Cell.unsafe[Coeval, Map[BlockHash, Running.Requested]](init)
 
   private def toBlockRequest(protocol: Protocol): BlockRequest =
-    BlockRequest.from(packetToBlockRequest(toPacket(protocol).right.get).get)
+    BlockRequest.from(convert[PacketTypeTag.BlockRequest.type](toPacket(protocol).right.get).get)
 
   private def endpoint(port: Int): Endpoint = Endpoint("host", port, port)
   private def peerNode(name: String, port: Int = 40400): PeerNode =

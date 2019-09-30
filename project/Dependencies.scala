@@ -5,6 +5,7 @@ object Dependencies {
   val osClassifier: String = Detector.detect(Seq("fedora")).osClassifier
 
   val circeVersion      = "0.12.0-M4"
+  val enumeratumVersion = "1.5.13"
   val http4sVersion     = "0.21.0-M2"
   val kamonVersion      = "1.1.5"
   val catsVersion       = "1.5.0"
@@ -29,6 +30,7 @@ object Dependencies {
   val circeGenericExtras  = "io.circe"                   %% "circe-generic-extras"      % circeVersion
   val circeLiteral        = "io.circe"                   %% "circe-literal"             % circeVersion
   val circeParser         = "io.circe"                   %% "circe-parser"              % circeVersion
+  val enumeratum          = "com.beachape"               %% "enumeratum"                % enumeratumVersion
   val guava               = "com.google.guava"            % "guava"                     % "24.1.1-jre"
   val hasher              = "com.roundeights"            %% "hasher"                    % "1.2.0"
   val http4sBlazeClient   = "org.http4s"                 %% "http4s-blaze-client"       % http4sVersion

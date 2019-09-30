@@ -22,7 +22,8 @@ class GenesisCeremonyMaster[F[_]: Sync: ConnectionsCell: BlockStore: TransportLa
     approveProtocol: ApproveBlockProtocol[F]
 ) extends Engine[F] {
   import Engine._
-  def applicative: Applicative[F] = Applicative[F]
+  private val F    = Applicative[F]
+  private val noop = F.unit
 
   override def init: F[Unit] = approveProtocol.run()
 

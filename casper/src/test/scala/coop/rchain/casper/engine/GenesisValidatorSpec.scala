@@ -7,7 +7,6 @@ import coop.rchain.casper.protocol.{NoApprovedBlockAvailable, _}
 import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.comm.rp.ProtocolHelper
 import coop.rchain.comm.rp.ProtocolHelper._
-import coop.rchain.comm.transport
 import coop.rchain.shared.{Cell, EventPublisher}
 import monix.eval.Task
 import monix.execution.Scheduler
@@ -35,8 +34,7 @@ class GenesisValidatorSpec extends WordSpec {
         expectedPacket = ProtocolHelper.packet(
           local,
           networkId,
-          transport.BlockApproval,
-          blockApproval.toProto.toByteString
+          blockApproval.toProto
         )
         _ = {
           val lastMessage = transportLayer.requests.last
@@ -64,8 +62,7 @@ class GenesisValidatorSpec extends WordSpec {
         response = packet(
           local,
           networkId,
-          transport.NoApprovedBlockAvailable,
-          NoApprovedBlockAvailable(approvedBlockRequest.identifier, local.toString).toProto.toByteString
+          NoApprovedBlockAvailable(approvedBlockRequest.identifier, local.toString).toProto
         )
         _            = assert(head.peer == local && head.msg == response)
         _            = transportLayer.reset()
