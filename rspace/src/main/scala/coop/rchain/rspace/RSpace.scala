@@ -445,7 +445,7 @@ object RSpace {
       setup                  <- setUp[F, C, P, A, K](v2Dir, mapSize, Branch.MASTER)
       (historyReader, store) = setup
       space                  = new RSpace[F, C, P, A, K](historyReader, AtomicAny(store), Branch.MASTER)
-      replayStore            <- inMemoryStore(historyReader)(sk.toCodec, concurrent)
+      replayStore            <- HotStore.empty(historyReader)(sk.toCodec, concurrent)
       replay = new ReplayRSpace[F, C, P, A, K](
         historyReader,
         AtomicAny(replayStore),
@@ -515,15 +515,7 @@ object RSpace {
       _ <- checkCreateDir(rootsStore.path)
       historyReader <- HistoryRepositoryInstances
                         .lmdbRepository[F, C, P, A, K](config)
-      store <- inMemoryStore(historyReader)
+      store <- HotStore.empty(historyReader)
     } yield (historyReader, store)
-
   }
-
-  // TODO: inline
-  private def inMemoryStore[F[_], C, P, A, K](
-      historyReader: HistoryReader[F, C, P, A, K]
-  )(implicit ck: Codec[K], sync: Sync[F]) =
-    HotStore.empty(historyReader)
-
 }
