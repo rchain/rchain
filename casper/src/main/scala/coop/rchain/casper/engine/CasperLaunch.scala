@@ -25,7 +25,7 @@ trait CasperLaunch[F[_]] {
 
 object CasperLaunch {
 
-  def of[F[_]: LastApprovedBlock: Metrics: Span: BlockStore: ConnectionsCell: TransportLayer: RPConfAsk: SafetyOracle: LastFinalizedBlockCalculator: Concurrent: Time: Log: EventLog: BlockDagStorage: EngineCell: EnvVars: RaiseIOError: RuntimeManager: Running.RequestedBlocks: EventPublisher: SynchronyConstraintChecker](
+  def of[F[_]: LastApprovedBlock: Metrics: Span: BlockStore: CommUtil: ConnectionsCell: TransportLayer: RPConfAsk: SafetyOracle: LastFinalizedBlockCalculator: Concurrent: Time: Log: EventLog: BlockDagStorage: EngineCell: EnvVars: RaiseIOError: RuntimeManager: Running.RequestedBlocks: EventPublisher: SynchronyConstraintChecker](
       conf: CasperConf
   ): CasperLaunch[F] = new CasperLaunch[F] {
 
@@ -60,7 +60,7 @@ object CasperLaunch {
         casper <- MultiParentCasper
                    .hashSetCasper[F](validatorId, genesis, conf.shardId)
         _ <- Engine
-              .transitionToRunning[F](casper, approvedBlock, CommUtil.sendForkChoiceTipRequest[F])
+              .transitionToRunning[F](casper, approvedBlock, CommUtil[F].sendForkChoiceTipRequest)
       } yield ()
 
     private def connectAsGenesisValidator(): F[Unit] =
@@ -128,7 +128,7 @@ object CasperLaunch {
         _ <- Engine.transitionToInitializing(
               conf.shardId,
               validatorId,
-              CommUtil.requestApprovedBlock[F]
+              CommUtil[F].requestApprovedBlock
             )
       } yield ()
   }

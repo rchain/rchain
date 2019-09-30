@@ -5,7 +5,6 @@ import cats._
 import cats.data._
 import cats.implicits._
 import cats.effect.{Concurrent, Sync}
-
 import com.google.protobuf.ByteString
 import coop.rchain.casper.engine.Running
 import coop.rchain.casper.protocol._
@@ -18,6 +17,7 @@ import coop.rchain.blockstorage.dag.{BlockDagRepresentation, BlockDagStorage}
 import coop.rchain.blockstorage.dag.BlockDagStorage.DeployId
 import coop.rchain.blockstorage.BlockStore
 import coop.rchain.casper.util.ProtoUtil
+import coop.rchain.casper.util.comm.CommUtil
 import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
 import coop.rchain.catscontrib.ski.kp2
 import coop.rchain.metrics.{Metrics, MetricsSemaphore, Span}
@@ -93,7 +93,7 @@ sealed abstract class MultiParentCasperInstances {
     Metrics.Source(CasperMetricsSource, "casper")
   private[this] val genesisLabel = Metrics.Source(MetricsSource, "genesis")
 
-  def hashSetCasper[F[_]: Sync: Metrics: Concurrent: ConnectionsCell: TransportLayer: Log: Time: SafetyOracle: LastFinalizedBlockCalculator: BlockStore: RPConfAsk: BlockDagStorage: Span: Running.RequestedBlocks: EventPublisher: SynchronyConstraintChecker](
+  def hashSetCasper[F[_]: Sync: Metrics: Concurrent: CommUtil: Log: Time: SafetyOracle: LastFinalizedBlockCalculator: BlockStore: BlockDagStorage: Span: Running.RequestedBlocks: EventPublisher: SynchronyConstraintChecker](
       validatorId: Option[ValidatorIdentity],
       genesis: BlockMessage,
       shardId: String

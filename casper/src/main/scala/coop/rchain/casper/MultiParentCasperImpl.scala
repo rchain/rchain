@@ -47,7 +47,7 @@ object CasperState {
   type CasperStateCell[F[_]] = Cell[F, CasperState]
 }
 
-class MultiParentCasperImpl[F[_]: Sync: Concurrent: ConnectionsCell: TransportLayer: Log: Time: SafetyOracle: LastFinalizedBlockCalculator: BlockStore: RPConfAsk: BlockDagStorage: Running.RequestedBlocks: EventPublisher: SynchronyConstraintChecker](
+class MultiParentCasperImpl[F[_]: Sync: Concurrent: Log: Time: SafetyOracle: LastFinalizedBlockCalculator: BlockStore: BlockDagStorage: CommUtil: EventPublisher: SynchronyConstraintChecker](
     validatorId: Option[ValidatorIdentity],
     genesis: BlockMessage,
     postGenesisStateHash: StateHash,
@@ -337,7 +337,7 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: ConnectionsCell: TransportLa
         // Add successful! Send block hash to peers, log success, try to add other blocks
         for {
           updatedDag <- BlockDagStorage[F].insert(block, genesis, invalid = false)
-          _          <- CommUtil.sendBlockHash(block.blockHash)
+          _          <- CommUtil[F].sendBlockHash(block.blockHash)
           _ <- Log[F].info(
                 s"Added ${PrettyPrinter.buildString(block.blockHash)}"
               )
@@ -373,7 +373,7 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: ConnectionsCell: TransportLa
             // We can only treat admissible equivocations as invalid blocks if
             // casper is single threaded.
             updatedDag <- handleInvalidBlockEffect(InvalidBlock.AdmissibleEquivocation, block)
-            _          <- CommUtil.sendBlockHash(block.blockHash)
+            _          <- CommUtil[F].sendBlockHash(block.blockHash)
           } yield updatedDag
 
         case InvalidBlock.IgnorableEquivocation =>
@@ -417,7 +417,7 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: ConnectionsCell: TransportLa
                                     blockHash => ~^(BlockStore[F].contains(blockHash))
                                   )
       _ <- missingDependencies.traverse(addDependencyToDag(_, b))
-      _ <- missingUnseenDependencies.traverse(CommUtil.sendBlockRequest[F])
+      _ <- missingUnseenDependencies.traverse(CommUtil[F].sendBlockRequest)
     } yield ()
   }
 
@@ -494,7 +494,7 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: ConnectionsCell: TransportLa
     import cats.instances.list._
     for {
       s <- Cell[F, CasperState].read
-      _ <- s.dependencyDag.dependencyFree.toList.traverse(CommUtil.sendBlockRequest[F])
+      _ <- s.dependencyDag.dependencyFree.toList.traverse(CommUtil[F].sendBlockRequest)
     } yield ()
   }
 }

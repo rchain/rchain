@@ -4,7 +4,6 @@ import java.nio.ByteBuffer
 import java.nio.file.{Files, Path}
 
 import scala.concurrent.duration._
-
 import cats._
 import cats.data.ReaderT
 import cats.effect._
@@ -13,16 +12,16 @@ import cats.implicits._
 import cats.mtl._
 import cats.tagless.implicits._
 import cats.temp.par.Par
-
 import coop.rchain.blockstorage._
 import coop.rchain.blockstorage.dag.{BlockDagFileStorage, BlockDagStorage}
 import coop.rchain.blockstorage.util.io.IOError
 import coop.rchain.casper._
 import coop.rchain.casper.engine._
 import coop.rchain.casper.engine.EngineCell._
+import coop.rchain.casper.engine.Running.Requested
 import coop.rchain.casper.protocol.deploy.v1.DeployServiceV1GrpcMonix
 import coop.rchain.casper.protocol.propose.v1.ProposeServiceV1GrpcMonix
-import coop.rchain.casper.util.comm.CasperPacketHandler
+import coop.rchain.casper.util.comm.{CasperPacketHandler, CommUtil}
 import coop.rchain.casper.util.rholang.RuntimeManager
 import coop.rchain.catscontrib.Catscontrib._
 import coop.rchain.catscontrib.Taskable
@@ -48,7 +47,6 @@ import coop.rchain.rholang.interpreter.Runtime
 import coop.rchain.rspace.Context
 import coop.rchain.shared._
 import coop.rchain.shared.PathOps._
-
 import kamon._
 import kamon.system.SystemMetrics
 import kamon.zipkin.ZipkinReporter
@@ -130,12 +128,24 @@ class NodeRuntime private[node] (
                     commTmpFolder
                   )(grpcScheduler, log, metrics)
                   .toReaderT
-    rpConnections  <- effects.rpConnections[Task].toReaderT
-    initPeer       = if (conf.server.standalone) None else Some(conf.server.bootstrap)
-    peerNode       = rpConf(local, initPeer)
-    rpConfState    = effects.rpConfState[Task](peerNode)
-    peerNodeAsk    = effects.peerNodeAsk[Task](Monad[Task], Sync[Task], rpConfState)
-    rpConfAsk      = effects.rpConfAsk[Task](Monad[Task], Sync[Task], rpConfState)
+    rpConnections   <- effects.rpConnections[Task].toReaderT
+    initPeer        = if (conf.server.standalone) None else Some(conf.server.bootstrap)
+    peerNode        = rpConf(local, initPeer)
+    rpConfState     = effects.rpConfState[Task](peerNode)
+    peerNodeAsk     = effects.peerNodeAsk[Task](Monad[Task], Sync[Task], rpConfState)
+    rpConfAsk       = effects.rpConfAsk[Task](Monad[Task], Sync[Task], rpConfState)
+    requestedBlocks <- Cell.mvarCell[Task, Map[BlockHash, Running.Requested]](Map.empty).toReaderT
+    commUtil = CommUtil.of[Task](
+      Concurrent[Task],
+      log,
+      time,
+      metrics,
+      transport,
+      rpConnections,
+      rpConfAsk,
+      requestedBlocks
+    )
+
     defaultTimeout = conf.server.defaultTimeout
     kademliaRPC = effects.kademliaRPC(
       conf.server.networkId,
@@ -185,13 +195,15 @@ class NodeRuntime private[node] (
     peerNodeAskEnv = effects.readerTApplicativeAsk[Task, NodeCallCtx, PeerNode](
       peerNodeAsk
     )
-    metricsEnv       = Metrics.readerTMetrics[Task, NodeCallCtx](metrics)
-    transportEnv     = transport.mapK(taskToEnv)
-    timeEnv          = time.mapK(taskToEnv)
-    logEnv           = log.mapK(taskToEnv)
-    eventLogEnv      = eventLog.mapK(taskToEnv)
-    nodeDiscoveryEnv = nodeDiscovery.mapK(taskToEnv)
-    rpConnectionsEnv = Cell.readerT[Task, NodeCallCtx, Connections](rpConnections)
+    metricsEnv         = Metrics.readerTMetrics[Task, NodeCallCtx](metrics)
+    transportEnv       = transport.mapK(taskToEnv)
+    timeEnv            = time.mapK(taskToEnv)
+    logEnv             = log.mapK(taskToEnv)
+    eventLogEnv        = eventLog.mapK(taskToEnv)
+    nodeDiscoveryEnv   = nodeDiscovery.mapK(taskToEnv)
+    rpConnectionsEnv   = Cell.readerT[Task, NodeCallCtx, Connections](rpConnections)
+    requestedBlocksEnv = Cell.readerT[Task, NodeCallCtx, Map[BlockHash, Requested]](requestedBlocks)
+    commUtilEnv        = commUtil.mapK(taskToEnv)
     taskableEnv = new Taskable[TaskEnv] {
       override def toTask[A](fa: TaskEnv[A]): Task[A] = fa.run(NodeCallCtx.init)
     }
@@ -201,6 +213,8 @@ class NodeRuntime private[node] (
                rpConnectionsEnv,
                rpConfAskEnv,
                rpConfStateEnv,
+               commUtilEnv,
+               requestedBlocksEnv,
                conf,
                dagConfig,
                blockstoreEnv,
@@ -606,6 +620,8 @@ object NodeRuntime {
       rpConnections: ConnectionsCell[F],
       rpConfAsk: ApplicativeAsk[F, RPConf],
       rpConfState: MonadState[F, RPConf],
+      commUtil: CommUtil[F],
+      requestedBlocks: Running.RequestedBlocks[F],
       conf: Configuration,
       dagConfig: BlockDagFileStorage.Config,
       blockstoreEnv: Env[ByteBuffer],
@@ -679,10 +695,9 @@ object NodeRuntime {
         implicit val sp = span
         RuntimeManager.fromRuntime[F](casperRuntime)
       }
-      engineCell      <- EngineCell.init[F]
-      envVars         = EnvVars.envVars[F]
-      raiseIOError    = IOError.raiseIOErrorThroughSync[F]
-      requestedBlocks <- Cell.mvarCell[F, Map[BlockHash, Running.Requested]](Map.empty)
+      engineCell   <- EngineCell.init[F]
+      envVars      = EnvVars.envVars[F]
+      raiseIOError = IOError.raiseIOErrorThroughSync[F]
       casperLaunch = {
         implicit val bs = blockStore
         implicit val bd = blockDagStorage
@@ -699,6 +714,8 @@ object NodeRuntime {
         implicit val ra = rpConfAsk
         implicit val eb = eventPublisher
         implicit val sc = synchronyConstraintChecker
+        implicit val cu = commUtil
+
         CasperLaunch.of(conf.casper)
       }
       packetHandler = {

@@ -18,6 +18,7 @@ import coop.rchain.shared
 import coop.rchain.shared._
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.dag.BlockDagStorage
+import coop.rchain.casper.util.comm.CommUtil
 
 trait Engine[F[_]] {
   def init: F[Unit]
@@ -43,7 +44,7 @@ object Engine {
    * Note the ordering of the insertions is important.
    * We always want the block dag store to be a subset of the block store.
    */
-  def insertIntoBlockAndDagStore[F[_]: Sync: Concurrent: TransportLayer: ConnectionsCell: Log: BlockStore: BlockDagStorage](
+  def insertIntoBlockAndDagStore[F[_]: Sync: Concurrent: Log: BlockStore: BlockDagStorage](
       genesis: BlockMessage,
       approvedBlock: ApprovedBlock
   ): F[Unit] =
@@ -67,7 +68,7 @@ object Engine {
       _   <- TransportLayer[F].stream(peer, msg)
     } yield ()
 
-  def transitionToRunning[F[_]: Sync: EngineCell: Log: EventLog: RPConfAsk: BlockStore: ConnectionsCell: TransportLayer: Time: Running.RequestedBlocks](
+  def transitionToRunning[F[_]: Sync: EngineCell: Log: EventLog: BlockStore: CommUtil: TransportLayer: ConnectionsCell: RPConfAsk: Time: Running.RequestedBlocks](
       casper: MultiParentCasper[F],
       approvedBlock: ApprovedBlock,
       init: F[Unit]
@@ -84,7 +85,7 @@ object Engine {
 
     } yield ()
 
-  def transitionToInitializing[F[_]: Concurrent: Metrics: Span: Monad: EngineCell: Log: EventLog: RPConfAsk: BlockStore: ConnectionsCell: TransportLayer: Time: SafetyOracle: LastFinalizedBlockCalculator: LastApprovedBlock: BlockDagStorage: RuntimeManager: Running.RequestedBlocks: EventPublisher: SynchronyConstraintChecker](
+  def transitionToInitializing[F[_]: Concurrent: Metrics: Span: Monad: EngineCell: Log: EventLog: BlockStore: CommUtil: TransportLayer: ConnectionsCell: RPConfAsk: Time: SafetyOracle: LastFinalizedBlockCalculator: LastApprovedBlock: BlockDagStorage: RuntimeManager: Running.RequestedBlocks: EventPublisher: SynchronyConstraintChecker](
       shardId: String,
       validatorId: Option[ValidatorIdentity],
       init: F[Unit]

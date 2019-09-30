@@ -11,6 +11,7 @@ import cats.{Applicative, Monad}
 import coop.rchain.blockstorage.BlockStore
 import coop.rchain.casper._
 import coop.rchain.casper.protocol._
+import coop.rchain.casper.util.comm.CommUtil
 import coop.rchain.comm.protocol.routing.Packet
 import coop.rchain.comm.rp.Connect.{ConnectionsCell, RPConfAsk}
 import coop.rchain.comm.rp.ProtocolHelper.protocol
@@ -228,7 +229,7 @@ object Running {
 
 }
 
-class Running[F[_]: Sync: RPConfAsk: BlockStore: ConnectionsCell: TransportLayer: Log: Time: Running.RequestedBlocks](
+class Running[F[_]: Sync: BlockStore: CommUtil: TransportLayer: ConnectionsCell: RPConfAsk: Log: Time: Running.RequestedBlocks](
     casper: MultiParentCasper[F],
     approvedBlock: ApprovedBlock,
     theInit: F[Unit]

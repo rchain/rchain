@@ -96,6 +96,8 @@ class TestNode[F[_]](
   implicit val requestedBlocks: Running.RequestedBlocks[F] =
     Cell.unsafe[F, Map[BlockHash, Running.Requested]](Map.empty[BlockHash, Running.Requested])
 
+  implicit val commUtil: CommUtil[F] = CommUtil.of[F]
+
   implicit val casperEff = new MultiParentCasperImpl[F](
     Some(validatorId),
     genesis,
