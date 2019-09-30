@@ -5,6 +5,7 @@ import java.nio.file.{Files, Path, Paths}
 import cats._
 import cats.implicits._
 import cats.effect._
+import cats.effect.concurrent.Ref
 import cats.temp.par.Par
 import com.typesafe.scalalogging.Logger
 import coop.rchain.metrics.{Metrics, Span}
@@ -19,7 +20,6 @@ import coop.rchain.rspace.history.{
   LMDBRSpaceStorageConfig,
   StoreConfig
 }
-import coop.rchain.shared.Cell
 import coop.rchain.shared.PathOps._
 import coop.rchain.shared.Log
 import org.scalatest._
@@ -89,7 +89,7 @@ trait StorageTestsBase[F[_], C, P, A, K] extends FlatSpec with Matchers with Opt
 
     run(for {
       historyRepository    <- HistoryRepositoryInstances.lmdbRepository[F, C, P, A, K](config)
-      cache                <- Cell.refCell[F, Cache[C, P, A, K]](Cache[C, P, A, K]())
+      cache                <- Ref.of[F, Cache[C, P, A, K]](Cache[C, P, A, K]())
       testStore            = HotStore.inMem[F, C, P, A, K](Sync[F], cache, historyRepository, codecK)
       spaceAndStore        <- createISpace(historyRepository, testStore, branch)
       (store, atom, space) = spaceAndStore

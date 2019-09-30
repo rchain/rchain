@@ -520,11 +520,10 @@ object RSpace {
 
   }
 
+  // TODO: inline
   private def inMemoryStore[F[_], C, P, A, K](
       historyReader: HistoryReader[F, C, P, A, K]
   )(implicit ck: Codec[K], sync: Sync[F]) =
-    for {
-      cache <- Cell.refCell[F, Cache[C, P, A, K]](Cache())
-      store = HotStore.inMem(Sync[F], cache, historyReader, ck)
-    } yield store
+    HotStore.empty(historyReader)
+
 }
