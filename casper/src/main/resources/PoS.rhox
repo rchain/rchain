@@ -117,7 +117,6 @@ new  PoS,
                             depositResult
                           )
                         }
-
                         (false, errorMsg) => {
                           resultCh!(state, (false, "Bond deposit failed: " ++ errorMsg))
                         }
@@ -155,26 +154,64 @@ new  PoS,
               }
             } |
 
-            contract PoS (@"chargeDeploy", @deployerId, @amount, returnCh) = {
-              new vaultCh, transferCh, userCh, processPayCh,
-                  depositCh,
-                  newPendingCh in {
-                getUser!(deployerId, *userCh) |
-                runMVar!(*stateCh, *processPayCh, *returnCh) |
-                for(@state, payResultCh <- processPayCh;
-                    @userPk <- userCh) {
+            new currentDeployerData in {
+              contract PoS (@"chargeDeploy", @deployerId, @amount, return) = {
+                new depositCh in {
                   deposit!(deployerId, amount, *depositCh) |
+                  for(@depositResult <- depositCh){
+                    match depositResult {
+                      (true, _) => {
+                        currentDeployerData!((deployerId, amount)) |
+                        return!(depositResult)
+                      }
+                      (_, errorMessage) => {
+                        return!((false, "Deploy payment failed: " ++ errorMessage))
+                      }
+                    }
+                  }
+                }
+              } |
 
-                  distributeRewards!(
-                    amount,
-                    state.get("activeValidators"),
-                    state.get("allBonds"),
-                    state.get("pendingRewards"),
-                    *newPendingCh) |
-
-                  for(@depositResult <- depositCh;
-                      @newPending <- newPendingCh) {
-                    payResultCh!(state.set("pendingRewards", newPending), depositResult)
+              // Note: under no circumstances should this method be merged as is.
+              //       this method, along with "chargeDeploy", "closeBlock", and "slash"
+              //       must be made private, as they're only used in the protocol.
+              contract PoS (@"refundDeploy", @refundAmount, return) = {
+                for(@(deployerId, initialPaymentAmount) <- currentDeployerData){
+                  new revAddressCh in {
+                    revAddressOps!("fromDeployerId", deployerId, *revAddressCh) |
+                    for(@deployerRevAddress <- revAddressCh){
+                      new transferCh in {
+                        @posVault!("transfer", deployerRevAddress, refundAmount, posAuthKey, *transferCh) |
+                        for(@transferResult <- transferCh){
+                          match transferResult {
+                            (true, _) => {
+                              new processRefundCh in {
+                                runMVar!(*stateCh, *processRefundCh, *return) |
+                                for(@state, refundResultCh <- processRefundCh){
+                                  new newPendingCh in {
+                                    distributeRewards!(
+                                      initialPaymentAmount - refundAmount,
+                                      state.get("activeValidators"),
+                                      state.get("allBonds"),
+                                      state.get("pendingRewards"),
+                                      *newPendingCh) |
+                                    for(@newPending <- newPendingCh){
+                                      refundResultCh!(
+                                        state.set("pendingRewards", newPending),
+                                        (true, Nil)
+                                      )
+                                    }
+                                  }
+                                }
+                              }
+                            }
+                            (_, errorMessage) => {
+                              return!((false, "(Bug found) Deploy refund failed: " ++ errorMessage))
+                            }
+                          }
+                        }
+                      }
+                    }
                   }
                 }
               }
