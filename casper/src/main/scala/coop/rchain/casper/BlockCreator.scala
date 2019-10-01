@@ -40,9 +40,7 @@ object BlockCreator {
   def createBlock[F[_]: Sync: Log: Time: BlockStore: SynchronyConstraintChecker](
       dag: BlockDagRepresentation[F],
       genesis: BlockMessage,
-      publicKey: PublicKey,
-      privateKey: PrivateKey,
-      sigAlgorithm: String,
+      validatorIdentity: ValidatorIdentity,
       shardId: String,
       version: Long,
       expirationThreshold: Int,
@@ -53,7 +51,7 @@ object BlockCreator {
       spanF: Span[F]
   ): F[CreateBlockStatus] =
     spanF.trace(CreateBlockMetricsSource) {
-      val validator = ByteString.copyFrom(publicKey.bytes)
+      val validator = ByteString.copyFrom(validatorIdentity.publicKey.bytes)
       for {
         tipHashes             <- Estimator.tips[F](dag, genesis)
         _                     <- spanF.mark("after-estimator")
@@ -75,7 +73,7 @@ object BlockCreator {
                                #
                             """.stripMargin('#'),
                               phloPrice = 0,
-                              sec = privateKey
+                              sec = validatorIdentity.privateKey
                             )
                           }
         _ <- Cell[F, CasperState].modify { s =>
@@ -110,7 +108,14 @@ object BlockCreator {
                           CreateBlockStatus.noNewDeploys.pure[F]
                         }
         signedBlock <- unsignedBlock.mapF(
-                        signBlock(_, dag, publicKey, privateKey, sigAlgorithm, shardId)
+                        signBlock(
+                          _,
+                          dag,
+                          validatorIdentity.publicKey,
+                          validatorIdentity.privateKey,
+                          validatorIdentity.sigAlgorithm,
+                          shardId
+                        )
                       )
         _ <- spanF.mark("block-signed")
       } yield signedBlock

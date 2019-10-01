@@ -234,16 +234,14 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Log: Time: SafetyOracle: Las
 
   def createBlock: F[CreateBlockStatus] =
     (validatorId match {
-      case Some(ValidatorIdentity(publicKey, privateKey, sigAlgorithm)) =>
+      case Some(validatorIdentity) =>
         BlockDagStorage[F].getRepresentation
           .flatMap { dag =>
             BlockCreator
               .createBlock(
                 dag,
                 genesis,
-                publicKey,
-                privateKey,
-                sigAlgorithm,
+                validatorIdentity,
                 shardId,
                 version,
                 expirationThreshold,
