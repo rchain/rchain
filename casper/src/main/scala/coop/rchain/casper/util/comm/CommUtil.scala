@@ -25,11 +25,11 @@ object CommUtil {
 
   implicit private val logSource: LogSource = LogSource(this.getClass)
 
-  def sendBlock[F[_]: Monad: ConnectionsCell: TransportLayer: Log: Time: RPConfAsk](
-      b: BlockMessage
+  def sendBlockHash[F[_]: Monad: ConnectionsCell: TransportLayer: Log: Time: RPConfAsk](
+      hash: BlockHash
   ): F[Unit] =
-    streamToPeers(b.toProto) <* Log[F].info(
-      s"Sent ${PrettyPrinter.buildString(b)} to peers"
+    sendToPeers(BlockHashMessageProto(hash)) <* Log[F].info(
+      s"Sent hash ${PrettyPrinter.buildString(hash)} to peers"
     )
 
   def sendBlockRequest[F[_]: Monad: ConnectionsCell: TransportLayer: Log: Time: RPConfAsk: Running.RequestedBlocks](
@@ -41,7 +41,7 @@ object CommUtil {
       .flatMap(
         requested =>
           Applicative[F].unlessA(requested.contains(hash))(
-            Running.addNewEntry(hash) >> sendToPeers(HasBlockRequest(hash).toProto) <* Log[F]
+            Running.addNewEntry(hash) >> sendToPeers(HasBlockRequestProto(hash)) <* Log[F]
               .info(s"Requested missing block ${PrettyPrinter.buildString(hash)} from peers")
           )
       )

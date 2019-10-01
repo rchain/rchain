@@ -12,6 +12,7 @@ import scala.util.{Failure, Try}
 sealed abstract class PacketTypeTag extends EnumEntry
 
 object PacketTypeTag extends Enum[PacketTypeTag] {
+  case object BlockHashMessage         extends PacketTypeTag
   case object BlockMessage             extends PacketTypeTag
   case object HasBlockRequest          extends PacketTypeTag
   case object HasBlock                 extends PacketTypeTag
@@ -34,13 +35,14 @@ object PacketTypeTag extends Enum[PacketTypeTag] {
     }
     def apply[A <: PacketTypeTag](implicit ev: ValueOf[A]) = ev
 
-    implicit val valueOfBlockMessage: ValueOf[BlockMessage.type]       = summon(BlockMessage)
-    implicit val valueOfHasBlockRequest: ValueOf[HasBlockRequest.type] = summon(HasBlockRequest)
-    implicit val valueOfHasBlock: ValueOf[HasBlock.type]               = summon(HasBlock)
-    implicit val valueOfBlockRequest: ValueOf[BlockRequest.type]       = summon(BlockRequest)
-    implicit val valueOfApprovedBlock: ValueOf[ApprovedBlock.type]     = summon(ApprovedBlock)
-    implicit val valueOfBlockApproval: ValueOf[BlockApproval.type]     = summon(BlockApproval)
-    implicit val valueOfUnapprovedBlock: ValueOf[UnapprovedBlock.type] = summon(UnapprovedBlock)
+    implicit val valueOfBlockHashMessage: ValueOf[BlockHashMessage.type] = summon(BlockHashMessage)
+    implicit val valueOfBlockMessage: ValueOf[BlockMessage.type]         = summon(BlockMessage)
+    implicit val valueOfHasBlockRequest: ValueOf[HasBlockRequest.type]   = summon(HasBlockRequest)
+    implicit val valueOfHasBlock: ValueOf[HasBlock.type]                 = summon(HasBlock)
+    implicit val valueOfBlockRequest: ValueOf[BlockRequest.type]         = summon(BlockRequest)
+    implicit val valueOfApprovedBlock: ValueOf[ApprovedBlock.type]       = summon(ApprovedBlock)
+    implicit val valueOfBlockApproval: ValueOf[BlockApproval.type]       = summon(BlockApproval)
+    implicit val valueOfUnapprovedBlock: ValueOf[UnapprovedBlock.type]   = summon(UnapprovedBlock)
     implicit val valueOfForkChoiceTipRequest: ValueOf[ForkChoiceTipRequest.type] = summon(
       ForkChoiceTipRequest
     )
@@ -56,14 +58,37 @@ object PacketTypeTag extends Enum[PacketTypeTag] {
 
 import coop.rchain.casper.protocol.PacketTypeTag.ValueOf
 
+sealed abstract class PacketParseResult[+A](val isSuccess: Boolean) {
+  @SuppressWarnings(Array("org.wartremover.warts.Throw"))
+  final def get: A   = fold(identity)(err => throw new NoSuchElementException(err))
+  final def toEither = fold(Right(_): Either[String, A])(Left(_))
+
+  def fold[B](onSuccess: A => B)(onFailure: String => B): B
+}
+object PacketParseResult {
+  final case class Success[A](parsed: A) extends PacketParseResult[A](true) {
+    override def fold[B](onSuccess: A => B)(onFailure: String => B): B = onSuccess(parsed)
+  }
+  final case class Failure(throwable: Throwable) extends PacketParseResult[Nothing](false) {
+    override def fold[B](onSuccess: Nothing => B)(onFailure: String => B): B =
+      onFailure(throwable.getMessage)
+  }
+  final case class IllegalPacket(message: String) extends PacketParseResult[Nothing](false) {
+    override def fold[B](onSuccess: Nothing => B)(onFailure: String => B): B = onFailure(message)
+  }
+
+  @inline def fromTry[A](a: Try[A]): PacketParseResult[A] = a.fold(Failure, Success(_))
+}
+
+import PacketParseResult._
+
 trait FromPacket[Tag <: PacketTypeTag] {
   type To
   def witness: ValueOf[Tag]
-  final def parseFrom(packet: Packet): Try[To] =
+  final def parseFrom(packet: Packet): PacketParseResult[To] =
     if (packet.typeId == witness.tag) parse(packet.content.toByteArray)
-    else
-      Failure(new IOException(s"Cannot parse ${packet.typeId} packet - need ${witness.tag} packet"))
-  protected def parse(content: Array[Byte]): Try[To]
+    else IllegalPacket(s"Got ${packet.typeId} packet - need ${witness.tag} packet")
+  protected def parse(content: Array[Byte]): PacketParseResult[To]
 }
 
 object FromPacket {
@@ -73,7 +98,7 @@ object FromPacket {
   ): FromPacket[Tag] { type To = A } = new FromPacket[Tag] {
     override type To = A
     override val witness                               = witness0
-    protected override def parse(content: Array[Byte]) = Try(companion.parseFrom(content))
+    protected override def parse(content: Array[Byte]) = fromTry(Try(companion.parseFrom(content)))
   }
 }
 

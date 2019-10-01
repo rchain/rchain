@@ -1,12 +1,8 @@
 package coop.rchain.casper
 
 import com.google.protobuf.ByteString
-
 import coop.rchain.casper.protocol._
-import scalapb.GeneratedMessage
 import coop.rchain.crypto.codec._
-import coop.rchain.models.Par
-import coop.rchain.rholang.interpreter.{PrettyPrinter => RholangPP}
 
 object PrettyPrinter {
 
@@ -20,19 +16,16 @@ object PrettyPrinter {
     }
 
   // TODO shouldn header.parentsHashList be nonempty list?
-  private def buildString(b: BlockMessage): String = {
-    val blockString = for {
-      mainParent <- b.header.parentsHashList.headOption
-    } yield s"Block #${b.body.state.blockNumber} (${buildString(b.blockHash)}) " +
-      s"-- Sender ID ${buildString(b.sender)} " +
-      s"-- M Parent Hash ${buildString(mainParent)} " +
-      s"-- Contents ${buildString(b.body.state)}" +
-      s"-- Shard ID ${limit(b.shardId, 10)}"
-    blockString match {
-      case Some(str) => str
-      case None      => s"Block ${buildString(b.blockHash)} with missing elements"
-    }
-  }
+  private def buildString(b: BlockMessage): String =
+    b.header.parentsHashList.headOption
+      .fold(s"Block ${buildString(b.blockHash)} with missing elements")(
+        mainParent =>
+          s"Block #${b.body.state.blockNumber} (${buildString(b.blockHash)}) " +
+            s"-- Sender ID ${buildString(b.sender)} " +
+            s"-- M Parent Hash ${buildString(mainParent)} " +
+            s"-- Contents ${buildString(b.body.state)}" +
+            s"-- Shard ID ${limit(b.shardId, 10)}"
+      )
 
   private def limit(str: String, maxLength: Int): String =
     if (str.length > maxLength) {

@@ -75,13 +75,13 @@ class LastFinalizedAPITest
         for {
           produceDeploys <- (0 until 7).toList.traverse(i => basicDeployData[Task](i))
 
-          b1 <- n1.publishBlock(produceDeploys(0))(nodes: _*)
+          b1 <- n1.propagateBlock(produceDeploys(0))(nodes: _*)
           b2 <- n2.publishBlock(produceDeploys(1))()
-          b3 <- n3.publishBlock(produceDeploys(2))(n1)
-          b4 <- n1.publishBlock(produceDeploys(3))(nodes: _*)
-          b5 <- n2.publishBlock(produceDeploys(4))(nodes: _*)
-          b6 <- n1.publishBlock(produceDeploys(5))(nodes: _*)
-          b7 <- n2.publishBlock(produceDeploys(6))(nodes: _*)
+          b3 <- n3.propagateBlock(produceDeploys(2))(n1)
+          b4 <- n1.propagateBlock(produceDeploys(3))(nodes: _*)
+          b5 <- n2.propagateBlock(produceDeploys(4))(nodes: _*)
+          b6 <- n1.propagateBlock(produceDeploys(5))(nodes: _*)
+          b7 <- n2.propagateBlock(produceDeploys(6))(nodes: _*)
 
           lastFinalizedBlock <- n1.casperEff.lastFinalizedBlock
           _                  = lastFinalizedBlock shouldBe b5
@@ -120,14 +120,14 @@ class LastFinalizedAPITest
         for {
           produceDeploys <- (0 until 7).toList.traverse(i => basicDeployData[Task](i))
 
-          b1 <- n1.publishBlock(produceDeploys(0))(nodes: _*)
-          b2 <- n2.publishBlock(produceDeploys(1))(n1)
-          b3 <- n1.publishBlock(produceDeploys(2))(n2)
-          b4 <- n2.publishBlock(produceDeploys(3))(n1)
-          b5 <- n1.publishBlock(produceDeploys(4))(n2)
-          _  <- n3.transportLayerEff.clear(n3.local) // n3 misses b2, b3, b4, b5
-          b6 <- n3.publishBlock(produceDeploys(5))(nodes: _*)
-          b7 <- n3.publishBlock(produceDeploys(6))(nodes: _*)
+          b1 <- n1.propagateBlock(produceDeploys(0))(nodes: _*)
+          b2 <- n2.propagateBlock(produceDeploys(1))(n1)
+          b3 <- n1.propagateBlock(produceDeploys(2))(n2)
+          b4 <- n2.propagateBlock(produceDeploys(3))(n1)
+          b5 <- n1.propagateBlock(produceDeploys(4))(n2)
+          _  <- n3.shutoff() // n3 misses b2, b3, b4, b5
+          b6 <- n3.propagateBlock(produceDeploys(5))(nodes: _*)
+          b7 <- n3.propagateBlock(produceDeploys(6))(nodes: _*)
 
           lastFinalizedBlock <- n1.casperEff.lastFinalizedBlock
           _                  = lastFinalizedBlock shouldBe b3

@@ -98,6 +98,11 @@ message BlockMessageProto {
   bytes                       extraBytes     = 10;
 }
 
+message BlockHashMessageProto {
+  option (scalapb.message).extends = "CasperMessageProto";
+  bytes  hash       = 1;
+}
+
 message BlockMetadataInternal {
   // This message in mapped to a different Scala class because of protobuf's inability to create map<bytes, int64> for
   // bonds.

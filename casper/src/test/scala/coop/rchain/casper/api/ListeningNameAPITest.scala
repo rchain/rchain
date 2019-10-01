@@ -58,7 +58,7 @@ class ListeningNameAPITest extends FlatSpec with Matchers with Inside {
                           _ => ConstructDeploy.basicDeployData[Effect](0)
                         )
 
-        block1 <- nodes(0).publishBlock(deployDatas(0))(nodes: _*)
+        block1 <- nodes(0).propagateBlock(deployDatas(0))(nodes: _*)
 
         listeningName = Par().copy(exprs = Seq(Expr(GInt(0))))
         resultData    = Par().copy(exprs = Seq(Expr(GInt(0))))
@@ -74,9 +74,9 @@ class ListeningNameAPITest extends FlatSpec with Matchers with Inside {
             blocks1.length should be(1)
             l should be(1)
         }
-        block2 <- nodes(1).publishBlock(deployDatas(1))(nodes: _*)
-        block3 <- nodes(2).publishBlock(deployDatas(2))(nodes: _*)
-        block4 <- nodes(0).publishBlock(deployDatas(3))(nodes: _*)
+        block2 <- nodes(1).propagateBlock(deployDatas(1))(nodes: _*)
+        block3 <- nodes(2).propagateBlock(deployDatas(2))(nodes: _*)
+        block4 <- nodes(0).propagateBlock(deployDatas(3))(nodes: _*)
 
         listeningNameResponse2 <- BlockAPI.getListeningNameDataResponse[Effect](
                                    Int.MaxValue,
@@ -97,9 +97,9 @@ class ListeningNameAPITest extends FlatSpec with Matchers with Inside {
             blocks2.length should be(4)
             l should be(4)
         }
-        block5 <- nodes(1).publishBlock(deployDatas(4))(nodes: _*)
-        block6 <- nodes(2).publishBlock(deployDatas(5))(nodes: _*)
-        block7 <- nodes(0).publishBlock(deployDatas(6))(nodes: _*)
+        block5 <- nodes(1).propagateBlock(deployDatas(4))(nodes: _*)
+        block6 <- nodes(2).propagateBlock(deployDatas(5))(nodes: _*)
+        block7 <- nodes(0).propagateBlock(deployDatas(6))(nodes: _*)
 
         listeningNameResponse3 <- BlockAPI.getListeningNameDataResponse[Effect](
                                    Int.MaxValue,

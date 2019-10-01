@@ -133,6 +133,7 @@ class CreateBlockAPITest extends FlatSpec with Matchers with EitherValues {
 
             b1 <- n1.publishBlock(deploys(0))(nodes: _*)
             b2 <- n2.publishBlock(deploys(1))(nodes: _*)
+            _  <- n1.syncWith(n2)
 
             _        <- n1.casperEff.addDeploy(deploys(2))
             b3Status <- createBlock(blockApiLock)(engineCell)
@@ -159,6 +160,7 @@ class CreateBlockAPITest extends FlatSpec with Matchers with EitherValues {
             b1 <- n1.publishBlock(deploys(0))(nodes: _*)
             b2 <- n2.publishBlock(deploys(1))(nodes: _*)
             b3 <- n3.publishBlock(deploys(2))(nodes: _*)
+            _  <- n1.syncWith(n2, n3)
 
             _        <- n1.casperEff.addDeploy(deploys(3))
             b4Status <- createBlock(blockApiLock)(engineCell)
