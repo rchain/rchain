@@ -484,8 +484,8 @@ match (
                 finalRewardsCh, computeHash(`rho:crypto:keccak256Hash`), hash00Ch, hashFFCh
             in {
               prepareUser!("dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd", *setupCh) |
-              for (@validatorPubKey, _, _ <- setupCh) {
-                @PoS!("revealRandom", "FF".hexToBytes(), *retCh) |
+              for (@validatorPubKey, _, _, @validatorDeployerId <- setupCh) {
+                @PoS!("revealRandom", validatorDeployerId, "FF".hexToBytes(), *retCh) |
 
                 computeHash!("00".hexToBytes(), *hash00Ch) |
                 computeHash!("FF".hexToBytes(), *hashFFCh) |
@@ -493,13 +493,13 @@ match (
                 for (@result0 <- retCh;
                      @hash00 <- hash00Ch;
                      @hashFF <- hashFFCh) {
-                  @PoS!("commitRandomImage", hash00, *retCh) |
+                  @PoS!("commitRandomImage", validatorDeployerId, hash00, *retCh) |
                   for (@result1 <- retCh) {
-                    @PoS!("commitRandomImage", hashFF, *retCh) |
+                    @PoS!("commitRandomImage", validatorDeployerId, hashFF, *retCh) |
                     for (@result2 <- retCh) {
-                      @PoS!("revealRandom", "FF".hexToBytes(), *retCh) |
+                      @PoS!("revealRandom", validatorDeployerId, "FF".hexToBytes(), *retCh) |
                       for (@result3 <- retCh) {
-                        @PoS!("revealRandom", "00".hexToBytes(), *retCh) |
+                        @PoS!("revealRandom", validatorDeployerId, "00".hexToBytes(), *retCh) |
                         for (@result4 <- retCh) {
                           rhoSpec!("assertMany",
                             [

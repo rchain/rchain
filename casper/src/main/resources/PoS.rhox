@@ -346,9 +346,9 @@ new  PoS,
               }
             } |
 
-            contract PoS(@"commitRandomImage", @hash, ackCh) = {
+            contract PoS(@"commitRandomImage", @deployerId, @hash, ackCh) = {
               new userCh, mvarCh in {
-                getUser!(*userCh) |
+                getUser!(deployerId, *userCh) |
 
                 runMVar!(*stateCh, *mvarCh, *ackCh) |
                 for (@validator <- userCh;
@@ -366,9 +366,9 @@ new  PoS,
              }
             } |
 
-            contract PoS(@"revealRandom", @random, ackCh) = {
+            contract PoS(@"revealRandom", @deployerId, @random, ackCh) = {
               new userCh, mvarCh, computeHash(`rho:crypto:keccak256Hash`), hashCh in {
-                getUser!(*userCh) |
+                getUser!(deployerId, *userCh) |
 
                 runMVar!(*stateCh, *mvarCh, *ackCh) |
                 computeHash!(random, *hashCh) |
