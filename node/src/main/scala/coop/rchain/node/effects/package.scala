@@ -67,7 +67,7 @@ package object effects {
     Task.delay {
       val cert = Resources.withResource(Source.fromFile(certPath.toFile))(_.mkString)
       val key  = Resources.withResource(Source.fromFile(keyPath.toFile))(_.mkString)
-      new GrpcTransportClient(networkId, cert, key, maxMessageSize, packetChunkSize, folder, 1000)
+      new GrpcTransportClient(networkId, cert, key, maxMessageSize, packetChunkSize, folder, 100)
     }
 
   def consoleIO(consoleReader: ConsoleReader): ConsoleIO[Task] = new JLineConsoleIO(consoleReader)
