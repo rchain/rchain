@@ -42,6 +42,17 @@ object BlockMetadata {
     )
   }
 
+  private val byteStringOrdering =
+    Ordering.by[ByteString, Iterable[Byte]](_.toByteArray)(Ordering.Iterable[Byte])
+
+  val orderingByNum: Ordering[BlockMetadata] =
+    (l: BlockMetadata, r: BlockMetadata) => {
+      l.blockNum.compare(r.blockNum) match {
+        case 0 => byteStringOrdering.compare(l.blockHash, r.blockHash)
+        case v => v
+      }
+    }
+
   def fromBytes(bytes: Array[Byte]): BlockMetadata =
     typeMapper.toCustom(BlockMetadataInternal.parseFrom(bytes))
 

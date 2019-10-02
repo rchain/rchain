@@ -50,11 +50,6 @@ final class InMemBlockDagStorage[F[_]: Concurrent: Sync: Log: BlockStore](
       topoSortVector.drop(startBlockNumber.toInt).pure[F]
     def topoSortTail(tailLength: Int): F[Vector[Vector[BlockHash]]] =
       topoSortVector.takeRight(tailLength).pure[F]
-    def deriveOrdering(startBlockNumber: Long): F[Ordering[BlockMetadata]] =
-      topoSort(startBlockNumber).map { topologicalSorting =>
-        val order = topologicalSorting.flatten.zipWithIndex.toMap
-        Ordering.by(b => order(b.blockHash))
-      }
     def latestMessageHash(validator: Validator): F[Option[BlockHash]] =
       latestMessagesMap.get(validator).pure[F]
     def latestMessage(validator: Validator): F[Option[BlockMetadata]] =

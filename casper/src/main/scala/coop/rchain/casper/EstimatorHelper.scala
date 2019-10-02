@@ -48,32 +48,28 @@ object EstimatorHelper {
       b2: BlockMetadata,
       dag: BlockDagRepresentation[F]
   ): F[Boolean] =
-    dag.deriveOrdering(0L).flatMap { implicit ordering =>
-      for {
-        uncommonAncestorsMap <- DagOperations.uncommonAncestors[F](Vector(b1, b2), dag)
-        (b1AncestorsMap, b2AncestorsMap) = uncommonAncestorsMap.partition {
-          case (_, bitSet) => bitSet == BitSet(0)
-        }
-        b1Events <- extractBlockEvents[F](b1AncestorsMap.keys.toList)
-        b2Events <- extractBlockEvents[F](b2AncestorsMap.keys.toList)
-        conflictsBecauseOfJoins = extractJoinedChannels(b1Events)
-          .intersect(allChannels(b2Events))
-          .nonEmpty || extractJoinedChannels(b2Events).intersect(allChannels(b1Events)).nonEmpty
-        conflicts = conflictsBecauseOfJoins || containConflictingEvents(b1Events, b2Events)
-        _ <- if (conflicts) {
-              Log[F].info(
-                s"Blocks ${PrettyPrinter.buildString(b1.blockHash)} and ${PrettyPrinter
-                  .buildString(b2.blockHash)} conflict."
-              )
-            } else {
-              Log[F].info(
-                s"Blocks ${PrettyPrinter
-                  .buildString(b1.blockHash)} and ${PrettyPrinter
-                  .buildString(b2.blockHash)} don't conflict."
-              )
-            }
-      } yield conflicts
-    }
+    for {
+      uncommonAncestorsMap <- DagOperations.uncommonAncestors[F](Vector(b1, b2), dag)
+      (b1AncestorsMap, b2AncestorsMap) = uncommonAncestorsMap.partition(_._2 == BitSet(0))
+      b1Events <- extractBlockEvents[F](b1AncestorsMap.keys.toList)
+      b2Events <- extractBlockEvents[F](b2AncestorsMap.keys.toList)
+      conflictsBecauseOfJoins = extractJoinedChannels(b1Events)
+        .intersect(allChannels(b2Events))
+        .nonEmpty || extractJoinedChannels(b2Events).intersect(allChannels(b1Events)).nonEmpty
+      conflicts = conflictsBecauseOfJoins || containConflictingEvents(b1Events, b2Events)
+      _ <- if (conflicts) {
+            Log[F].info(
+              s"Blocks ${PrettyPrinter.buildString(b1.blockHash)} and ${PrettyPrinter
+                .buildString(b2.blockHash)} conflict."
+            )
+          } else {
+            Log[F].info(
+              s"Blocks ${PrettyPrinter
+                .buildString(b1.blockHash)} and ${PrettyPrinter
+                .buildString(b2.blockHash)} don't conflict."
+            )
+          }
+    } yield conflicts
 
   private[this] def containConflictingEvents(
       b1Events: BlockEvents,
