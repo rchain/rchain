@@ -23,6 +23,7 @@ match (
       test_bonding_fails_if_already_bonded,
       test_bonding_fails_if_bond_too_small,
       test_pay_succeeds,
+      test_refund_succeeds,
       test_commit_random,
       test_dont_pay_inactive_validators,
       test_bonding_failure
@@ -51,6 +52,7 @@ match (
               ("bonding fails if deposit fails", *test_bonding_fails_if_deposit_fails),
               ("multiple bondings work", *test_multiple_bonding_succeeds),
               ("payment works", *test_pay_succeeds),
+              ("payment refund works", *test_refund_succeeds),
               ("bonding fails if already bonded", *test_bonding_fails_if_already_bonded),
               ("bonding fails is bond is too small", *test_bonding_fails_if_bond_too_small),
               ("payment is not distributed to inactive validators", *test_dont_pay_inactive_validators),
@@ -210,7 +212,7 @@ match (
           } |
 
           contract test_validator_is_paid_after_withdraw(rhoSpec, _, ackCh) = {
-            new setupCh, retCh,
+            new setupCh, retCh0, retCh1,
                 initialValidatorBalanceCh, finalValidatorBalanceCh,
                 initialBondsCh, finalBondsCh,
                 withdrawCh, closeBlockCh,
@@ -221,14 +223,15 @@ match (
                 @PoS!("getBonds", *initialBondsCh) |
                 for(@initialValidatorBalance <- initialValidatorBalanceCh;
                     @initialBonds <- initialBondsCh) {
-                  @PoS!("bond", validatorDeployerId, 100, *retCh) |
-                  for ( @(true, _) <- retCh) {
+                  @PoS!("bond", validatorDeployerId, 100, *retCh0) |
+                  for ( @(true, _) <- retCh0) {
                     @PoS!("closeBlock", *closeBlockCh) |
                     for (_ <- closeBlockCh) {
                       prepareUser!("cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc", *setupCh) |
                       for (@userPubKey, _, @userVault, @userDeployerId <- setupCh) {
-                        @PoS!("chargeDeploy", userDeployerId, 100, *retCh) |
-                        for ( @(true, _) <- retCh) {
+                        @PoS!("chargeDeploy", userDeployerId, 100, *retCh0) |
+                        @PoS!("refundDeploy", 0, *retCh1) |
+                        for ( @(true, _) <- retCh0; @(true, _) <- retCh1){
                           @PoS!("closeBlock", *closeBlockCh) |
                           for (_ <- closeBlockCh) {
                             setDeployData!("userId", validatorPubKey, *identitySet) |
@@ -314,7 +317,7 @@ match (
           } |
 
           contract test_pay_succeeds(rhoSpec, _, ackCh) = {
-            new setupCh, closeBlockCh, retCh, initialPosBalanceCh, finalPosBalanceCh,
+            new setupCh, closeBlockCh, retCh0, retCh1, initialPosBalanceCh, finalPosBalanceCh,
                 initialUser1BalanceCh, finalUser1BalanceCh,
                 initialRewardsCh, finalRewardsCh,
                 computeDelta, deltaRewardsCh, deltaSumCh, sumDelta,
@@ -334,8 +337,9 @@ match (
                     for(@initialPosBalance <- initialPosBalanceCh;
                         @initialUser1Balance <- initialUser1BalanceCh;
                         @initialRewards <- initialRewardsCh) {
-                      @PoS!("chargeDeploy", user1DeployerId, 100, *retCh) |
-                      for ( @(true, _) <- retCh) {
+                      @PoS!("chargeDeploy", user1DeployerId, 100, *retCh0) |
+                      @PoS!("refundDeploy", 0, *retCh1) |
+                      for ( @(true, _) <- retCh0; @(true, _) <- retCh1) {
                         @PoS!("closeBlock", *closeBlockCh) |
                         for (_ <- closeBlockCh) {
                           @posVault!("balance", *finalPosBalanceCh) |
@@ -364,6 +368,76 @@ match (
                                   ((19, "==", finalRewards.get(validatorPubKey)), "the validator's finalRewards is as expected"),
                                   //TODO use arbitrary precision numbers instead of long ints
                                   ((96, "== <-", *deltaSumCh), "the sum difference should equal the payment"),
+                                  ((true, "== <-", *allRewardsPositiveCh), "the rewards can only grow")
+                                ],
+                                *ackCh
+                              )
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          } |
+
+          contract test_refund_succeeds(rhoSpec, _, ackCh) = {
+            new prepareUserAck,
+                bondAck,
+                closeBlockAck,
+                posBalanceCh,
+                userBalanceCh,
+                rewardsCh,
+                chargeDeployAck,
+                refundDeployAck,
+                computeDelta, deltaRewardsCh, deltaSumCh, sumDelta,
+                isPositive, allRewardsPositiveCh
+            in {
+              prepareUser!("dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd", *prepareUserAck) |
+              for (@validatorPubKey, _, _, @validatorDeployerId <- prepareUserAck) {
+                @PoS!("bond", validatorDeployerId, 100, *bondAck) |
+                for (@(true, _) <- bondAck) {
+                  @PoS!("closeBlock", *closeBlockAck) |
+                  prepareUser!("eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee", *prepareUserAck) |
+                  for (@userPubKey, _, @userVault, @userDeployerId <- prepareUserAck; _ <- closeBlockAck) {
+                    @posVault!("balance", *posBalanceCh) |
+                    @userVault!("balance", *userBalanceCh) |
+                    @PoS!("getRewards", *rewardsCh) |
+                    for(@initialPosBalance <- posBalanceCh;
+                        @initialUserBalance <- userBalanceCh;
+                        @initialRewards <- rewardsCh) {
+                      @PoS!("chargeDeploy", userDeployerId, 100, *chargeDeployAck) |
+                      @PoS!("refundDeploy", 50, *refundDeployAck) |
+                      for ( @(true, _) <- chargeDeployAck; @(true, _) <- refundDeployAck) {
+                        @PoS!("closeBlock", *closeBlockAck) |
+                        for (_ <- closeBlockAck) {
+                          @posVault!("balance", *posBalanceCh) |
+                          @userVault!("balance", *userBalanceCh) |
+                          @PoS!("getRewards", *rewardsCh) |
+                          for(@finalPosBalance <- posBalanceCh;
+                              @finalUserBalance <- userBalanceCh;
+                              @finalRewards <- rewardsCh) {
+                            @ListOps!("fold", finalRewards.toList(), {}, *computeDelta, *deltaRewardsCh) |
+                            contract computeDelta(@(pk, finalReward), @acc, resultCh) = {
+                              resultCh!(acc.set(pk, finalReward - initialRewards.getOrElse(pk, 0)))
+                            } |
+                            for (@deltaRewards <- deltaRewardsCh) {
+                              @ListOps!("forall", deltaRewards, *isPositive, *allRewardsPositiveCh) |
+                              contract isPositive(@n, resultCh) = {resultCh!(n > 0)} |
+
+                              @ListOps!("fold", deltaRewards.toList(), 0, *sumDelta, *deltaSumCh) |
+                              contract sumDelta(@(_, delta), @acc, resultCh) = {
+                                resultCh!(acc + delta)
+                              } |
+                              rhoSpec!("assertMany",
+                                [
+                                  ((50, "==", initialUserBalance - finalUserBalance), "the user account decreases"),
+                                  ((50, "==", finalPosBalance - initialPosBalance), "the pos account increases"),
+                                  ((8, "==", finalRewards.get(validatorPubKey)), "the validator's finalRewards is as expected"),
+                                  //TODO use arbitrary precision numbers instead of long ints
+                                  ((48, "== <-", *deltaSumCh), "the sum difference should equal the payment"),
                                   ((true, "== <-", *allRewardsPositiveCh), "the rewards can only grow")
                                 ],
                                 *ackCh
