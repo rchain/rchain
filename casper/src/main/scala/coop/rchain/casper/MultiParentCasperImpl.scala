@@ -47,7 +47,7 @@ object CasperState {
   type CasperStateCell[F[_]] = Cell[F, CasperState]
 }
 
-class MultiParentCasperImpl[F[_]: Sync: Concurrent: ConnectionsCell: TransportLayer: Log: Time: SafetyOracle: LastFinalizedBlockCalculator: BlockStore: RPConfAsk: BlockDagStorage: Running.RequestedBlocks: EventPublisher: SynchronyConstraintChecker](
+class MultiParentCasperImpl[F[_]: Sync: Concurrent: Log: Time: SafetyOracle: LastFinalizedBlockCalculator: BlockStore: BlockDagStorage: CommUtil: EventPublisher: SynchronyConstraintChecker](
     validatorId: Option[ValidatorIdentity],
     genesis: BlockMessage,
     postGenesisStateHash: StateHash,
@@ -87,13 +87,12 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: ConnectionsCell: TransportLa
         .as(BlockStatus.processing.asLeft)
 
     def doppelgangerAndAdd: F[ValidBlockProcessing] = spanF.trace(AddBlockMetricsSource) {
+      import cats.instances.option._
       for {
         dag <- blockDag
-        _ <- validatorId match {
-              case Some(ValidatorIdentity(publicKey, _, _)) =>
-                val sender = ByteString.copyFrom(publicKey.bytes)
-                handleDoppelganger(b, sender)
-              case None => noop
+        _ <- validatorId.traverse_ { id =>
+              val sender = ByteString.copyFrom(id.publicKey.bytes)
+              handleDoppelganger(b, sender)
             }
         _      <- BlockStore[F].put(b)
         _      <- spanF.mark("block-store-put")
@@ -102,6 +101,7 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: ConnectionsCell: TransportLa
       } yield status
     }
 
+    import cats.instances.either._
     for {
       status <- blockProcessingLock.withPermit {
                  val exists = for {
@@ -112,13 +112,10 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: ConnectionsCell: TransportLa
 
                  exists.ifM(logAlreadyProcessed, doppelgangerAndAdd)
                }
-      _ <- status.fold(
-            kp(noop),
-            kp(
-              metricsF.setGauge("block-height", blockNumber(b))(AddBlockMetricsSource) >>
-                EventPublisher[F].publish(MultiParentCasperImpl.addedEvent(b))
-            )
-          )
+      _ <- status.traverse_ { _ =>
+            metricsF.setGauge("block-height", blockNumber(b))(AddBlockMetricsSource) >>
+              EventPublisher[F].publish(MultiParentCasperImpl.addedEvent(b))
+          }
     } yield status
   }.timer("add-block-time")
 
@@ -130,7 +127,7 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: ConnectionsCell: TransportLa
       _            <- Span[F].mark("internal-add-block")
       validFormat  <- Validate.formatOfFields(b)
       validSig     <- Validate.blockSignature(b)
-      validSender  <- Validate.blockSender(b, genesis, dag)
+      validSender  <- Validate.blockSenderHasWeight(b, genesis, dag)
       validVersion <- Validate.version(b, version)
       attemptResult <- if (!validFormat) (BlockStatus.invalidFormat.asLeft[ValidBlock], dag).pure
                       else if (!validSig)
@@ -236,16 +233,14 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: ConnectionsCell: TransportLa
 
   def createBlock: F[CreateBlockStatus] =
     (validatorId match {
-      case Some(ValidatorIdentity(publicKey, privateKey, sigAlgorithm)) =>
+      case Some(validatorIdentity) =>
         BlockDagStorage[F].getRepresentation
           .flatMap { dag =>
             BlockCreator
               .createBlock(
                 dag,
                 genesis,
-                publicKey,
-                privateKey,
-                sigAlgorithm,
+                validatorIdentity,
                 shardId,
                 version,
                 expirationThreshold,
@@ -339,7 +334,7 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: ConnectionsCell: TransportLa
         // Add successful! Send block hash to peers, log success, try to add other blocks
         for {
           updatedDag <- BlockDagStorage[F].insert(block, genesis, invalid = false)
-          _          <- CommUtil.sendBlockHash(block.blockHash)
+          _          <- CommUtil[F].sendBlockHash(block.blockHash)
           _ <- Log[F].info(
                 s"Added ${PrettyPrinter.buildString(block.blockHash)}"
               )
@@ -375,7 +370,7 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: ConnectionsCell: TransportLa
             // We can only treat admissible equivocations as invalid blocks if
             // casper is single threaded.
             updatedDag <- handleInvalidBlockEffect(InvalidBlock.AdmissibleEquivocation, block)
-            _          <- CommUtil.sendBlockHash(block.blockHash)
+            _          <- CommUtil[F].sendBlockHash(block.blockHash)
           } yield updatedDag
 
         case InvalidBlock.IgnorableEquivocation =>
@@ -413,32 +408,23 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: ConnectionsCell: TransportLa
   ): F[Unit] = {
     import cats.instances.list._
     for {
-      dag <- blockDag
-      missingDependencies <- dependenciesHashesOf(b)
-                              .filterA(
-                                blockHash =>
-                                  dag
-                                    .lookup(blockHash)
-                                    .map(_.isEmpty)
-                              )
+      dag                 <- blockDag
+      missingDependencies <- dependenciesHashesOf(b).filterA(dag.lookup(_).map(_.isEmpty))
       missingUnseenDependencies <- missingDependencies.filterA(
                                     blockHash => ~^(BlockStore[F].contains(blockHash))
                                   )
-      _ <- missingDependencies.traverse(hash => handleMissingDependency(hash, b))
-      _ <- missingUnseenDependencies.traverse(hash => requestMissingDependency(hash))
+      _ <- missingDependencies.traverse(addDependencyToDag(_, b))
+      _ <- missingUnseenDependencies.traverse(CommUtil[F].sendBlockRequest)
     } yield ()
   }
 
-  private def handleMissingDependency(hash: BlockHash, childBlock: BlockMessage): F[Unit] =
+  private def addDependencyToDag(hash: BlockHash, childBlock: BlockMessage): F[Unit] =
     Cell[F, CasperState].modify(
       s =>
         s.copy(
           dependencyDag = DoublyLinkedDagOperations.add(s.dependencyDag, hash, childBlock.blockHash)
         )
     )
-
-  private def requestMissingDependency(hash: BlockHash) =
-    CommUtil.sendBlockRequest(hash)
 
   // TODO: Slash block for status except InvalidUnslashableBlock
   private def handleInvalidBlockEffect(
@@ -489,29 +475,15 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: ConnectionsCell: TransportLa
   private def removeAdded(
       blockBufferDependencyDag: DoublyLinkedDag[BlockHash],
       addedBlocks: List[ByteString]
-  ): F[Unit] =
-    for {
-      _ <- unsafeRemoveFromBlockBuffer(addedBlocks)
-      _ <- removeFromBlockBufferDependencyDag(blockBufferDependencyDag, addedBlocks)
-    } yield ()
-
-  private def unsafeRemoveFromBlockBuffer(
-      addedBlocks: List[ByteString]
-  ): F[Unit] =
-    Cell[F, CasperState].modify { s =>
-      s.copy(blockBuffer = s.blockBuffer -- addedBlocks)
-    }
-
-  private def removeFromBlockBufferDependencyDag(
-      blockBufferDependencyDag: DoublyLinkedDag[BlockHash],
-      addedBlocks: List[ByteString]
-  ): F[Unit] =
-    Cell[F, CasperState].modify { s =>
-      s.copy(dependencyDag = addedBlocks.foldLeft(blockBufferDependencyDag) {
+  ): F[Unit] = Cell[F, CasperState].modify { s =>
+    s.copy(
+      blockBuffer = s.blockBuffer -- addedBlocks,
+      dependencyDag = addedBlocks.foldLeft(blockBufferDependencyDag) {
         case (acc, addedBlock) =>
           DoublyLinkedDagOperations.remove(acc, addedBlock)
-      })
-    }
+      }
+    )
+  }
 
   def getRuntimeManager: F[RuntimeManager[F]] = syncF.pure(runtimeManager)
 
@@ -519,7 +491,7 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: ConnectionsCell: TransportLa
     import cats.instances.list._
     for {
       s <- Cell[F, CasperState].read
-      _ <- s.dependencyDag.dependencyFree.toList.traverse(CommUtil.sendBlockRequest[F])
+      _ <- s.dependencyDag.dependencyFree.toList.traverse(CommUtil[F].sendBlockRequest)
     } yield ()
   }
 }

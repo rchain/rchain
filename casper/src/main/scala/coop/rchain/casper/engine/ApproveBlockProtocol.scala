@@ -41,7 +41,7 @@ object ApproveBlockProtocol {
   def apply[F[_]](implicit instance: ApproveBlockProtocol[F]): ApproveBlockProtocol[F] = instance
 
   //For usage in tests only
-  def unsafe[F[_]: Sync: ConnectionsCell: TransportLayer: Log: EventLog: Time: Metrics: RPConfAsk: LastApprovedBlock](
+  def unsafe[F[_]: Sync: CommUtil: Log: EventLog: Time: Metrics: LastApprovedBlock](
       genesisBlock: BlockMessage,
       requiredSigs: Int,
       duration: FiniteDuration,
@@ -58,7 +58,7 @@ object ApproveBlockProtocol {
       sigsF
     )
 
-  def of[F[_]: Sync: Concurrent: RaiseIOError: ConnectionsCell: TransportLayer: Log: EventLog: Time: Metrics: RuntimeManager: RPConfAsk: LastApprovedBlock](
+  def of[F[_]: Sync: Concurrent: RaiseIOError: CommUtil: Log: EventLog: Time: Metrics: RuntimeManager: LastApprovedBlock](
       maybeBondsPath: Option[String],
       numValidators: Int,
       genesisPath: Path,
@@ -117,7 +117,7 @@ object ApproveBlockProtocol {
       sigsF
     )
 
-  private class ApproveBlockProtocolImpl[F[_]: Sync: ConnectionsCell: TransportLayer: Log: EventLog: Time: Metrics: RPConfAsk: LastApprovedBlock](
+  private class ApproveBlockProtocolImpl[F[_]: Sync: CommUtil: Log: EventLog: Time: Metrics: LastApprovedBlock](
       val genesisBlock: BlockMessage,
       val requiredSigs: Int,
       val start: Long,
@@ -198,7 +198,7 @@ object ApproveBlockProtocol {
     private def sendUnapprovedBlock: F[Unit] =
       for {
         _ <- Log[F].info(s"APPROVAL: Beginning send of UnapprovedBlock $candidateHash to peers...")
-        _ <- CommUtil.streamToPeers[F](serializedUnapprovedBlock)
+        _ <- CommUtil[F].streamToPeers(serializedUnapprovedBlock)
         _ <- Log[F].info(s"APPROVAL: Sent UnapprovedBlock $candidateHash to peers.")
         _ <- EventLog[F].publish(shared.Event.SentUnapprovedBlock(candidateHash))
       } yield ()
@@ -223,7 +223,7 @@ object ApproveBlockProtocol {
                   _ <- Log[F].info(
                         s"APPROVAL: Beginning send of ApprovedBlock $candidateHash to peers..."
                       )
-                  _ <- CommUtil.streamToPeers[F](serializedApprovedBlock)
+                  _ <- CommUtil[F].streamToPeers(serializedApprovedBlock)
                   _ <- Log[F].info(s"APPROVAL: Sent ApprovedBlock $candidateHash to peers.")
                   _ <- EventLog[F].publish(shared.Event.SentApprovedBlock(candidateHash))
                 } yield ()

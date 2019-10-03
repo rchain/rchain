@@ -24,7 +24,7 @@ import scala.language.higherKinds
   * and will wait for the [[ApprovedBlock]] message to arrive. Until then  it will respond with
   * `F[None]` to all other message types.
     **/
-class Initializing[F[_]: Sync: Metrics: Span: Concurrent: ConnectionsCell: BlockStore: TransportLayer: Log: EventLog: Time: SafetyOracle: LastFinalizedBlockCalculator: RPConfAsk: LastApprovedBlock: BlockDagStorage: EngineCell: RuntimeManager: Running.RequestedBlocks: EventPublisher: SynchronyConstraintChecker](
+class Initializing[F[_]: Sync: Metrics: Span: Concurrent: BlockStore: CommUtil: TransportLayer: ConnectionsCell: RPConfAsk: Running.RequestedBlocks: Log: EventLog: Time: SafetyOracle: LastFinalizedBlockCalculator: LastApprovedBlock: BlockDagStorage: EngineCell: RuntimeManager: EventPublisher: SynchronyConstraintChecker](
     shardId: String,
     validatorId: Option[ValidatorIdentity],
     theInit: F[Unit]
@@ -71,7 +71,7 @@ class Initializing[F[_]: Sync: Metrics: Span: Concurrent: ConnectionsCell: Block
                                    .hashSetCasper[F](validatorId, genesis, shardId)
                         _ <- Engine
                               .transitionToRunning[F](casper, approvedBlock, ().pure[F])
-                        _ <- CommUtil.sendForkChoiceTipRequest[F]
+                        _ <- CommUtil[F].sendForkChoiceTipRequest
                       } yield Option(casper)
                     } else
                       Log[F]
