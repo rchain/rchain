@@ -1,6 +1,6 @@
 package coop.rchain.casper
 
-import coop.rchain.casper.ReportingCasper.BlockTracesReport
+import coop.rchain.casper.ReportingCasperData.BlockTracesReport
 import coop.rchain.casper.helper.TestNode
 import coop.rchain.casper.helper.TestNode.Effect
 import coop.rchain.casper.util.ConstructDeploy

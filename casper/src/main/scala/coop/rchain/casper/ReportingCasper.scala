@@ -1,9 +1,8 @@
 package coop.rchain.casper
 
 import cats.data.EitherT
-import cats.{Eval, FlatMap, Foldable, Monad, Parallel}
+import cats.{Monad, Parallel}
 import cats.effect.concurrent.{MVar, Ref}
-import cats._
 import cats.implicits._
 import cats.effect.{Concurrent, ContextShift, Sync}
 import cats.mtl.FunctorTell
@@ -12,14 +11,7 @@ import cats.temp.par.{Par => CatsPar}
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockStore
 import coop.rchain.blockstorage.dag.{BlockDagRepresentation, BlockDagStorage}
-import coop.rchain.casper.ReportingCasper.{
-  Report,
-  RhoComm,
-  RhoConsume,
-  RhoEvent,
-  RhoProduce,
-  RhoReportingRspace
-}
+import coop.rchain.casper.ReportingCasper.RhoReportingRspace
 import coop.rchain.casper.protocol.{BlockMessage, DeployData}
 import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.casper.util.rholang.RuntimeManager.{ReplayFailure, StateHash}
@@ -45,21 +37,13 @@ import coop.rchain.rholang.interpreter.{
   EvaluateResult,
   HasCost,
   Reduce,
-  RholangAndScalaDispatcher,
   Runtime,
   PrettyPrinter => RhoPrinter
 }
 import coop.rchain.rholang.interpreter.Runtime.{
   setupMapsAndRefs,
   setupReducer,
-  stdSystemProcesses,
-  Arity,
   BlockData,
-  BodyRef,
-  InvalidBlocks,
-  Name,
-  Remainder,
-  RhoDispatchMap,
   RhoHistoryRepository,
   SystemProcess
 }
@@ -82,6 +66,7 @@ import coop.rchain.rspace.ReportingRspace.{
   ReportingProduce
 }
 import coop.rchain.shared.Log
+import ReportingCasperData._
 
 import scala.concurrent.ExecutionContext
 
@@ -123,8 +108,7 @@ class ReportingEventTransformer[C, P, A, K](
   }
 }
 
-object ReportingCasper {
-
+object ReportingCasperData {
   sealed trait RhoEvent
   final case class RhoComm(consume: RhoConsume, produces: List[RhoProduce]) extends RhoEvent
   final case class RhoProduce(channel: String, data: String)                extends RhoEvent
@@ -147,6 +131,61 @@ object ReportingCasper {
   final case class BlockReplayFailed(hash: String, msg: String, deployId: Option[String])
       extends Report
 
+  def transformDeploy[C, P, A, K](transformer: ReportingEventTransformer[C, P, A, K])(
+      ipd: InternalProcessedDeploy,
+      events: Seq[ReportingEvent]
+  ): DeployTrace =
+    DeployTrace(
+      ipd.deploy.sig.base16String,
+      ipd.deploy.term,
+      events.map(transformer.transformEvent).toList
+    )
+
+  def createResponse[C, P, A, K](
+      hash: BlockHash,
+      state: Option[
+        (
+            Either[(Option[DeployData], Failed), List[
+              (InternalProcessedDeploy, Seq[ReportingEvent])
+            ]],
+            BlockMessage
+        )
+      ],
+      transformer: ReportingEventTransformer[C, P, A, K]
+  ): Report =
+    state match {
+      case None => BlockNotFound(hash.base16String)
+      case Some((Left((Some(deployData), failed)), _)) =>
+        BlockReplayFailed(hash.base16String, failed.toString, deployData.sig.base16String.some)
+      case Some((Left((None, failed)), _)) =>
+        BlockReplayFailed(hash.base16String, failed.toString, None)
+      case Some((Right(deploys), bm)) =>
+        val t = transformDeploy(transformer)(_, _)
+        BlockTracesReport(
+          hash.base16String,
+          bm.seqNum,
+          bm.sender.base16String,
+          deploys.map(Function.tupled(t)),
+          bm.header.parentsHashList.map(_.base16String)
+        )
+      case _ => BlockReplayError(hash.base16String)
+    }
+
+  def setupTransformer(prettyPrinter: RhoPrinter) =
+    new ReportingEventTransformer[Par, BindPattern, ListParWithRandom, TaggedContinuation](
+      serializeC = channel => prettyPrinter.buildString(channel),
+      serializeP = p => p.patterns.map(prettyPrinter.buildString).mkString("[", ";", "]"),
+      serializeA = data => data.pars.map(prettyPrinter.buildString).mkString("[", ";", "]"),
+      serializeK = k =>
+        k.taggedCont match {
+          case ParBody(value)      => prettyPrinter.buildString(value.body)
+          case ScalaBodyRef(value) => s"ScalaBodyRef($value)"
+          case Empty               => "empty"
+        }
+    )
+}
+
+object ReportingCasper {
   def noop[F[_]: Sync]: ReportingCasper[F] = new ReportingCasper[F] {
     override def trace(hash: BlockHash): F[Report] =
       Sync[F].delay(BlockNotFound(hash.toStringUtf8))
@@ -162,54 +201,7 @@ object ReportingCasper {
       val codecK                                                     = serializeTaggedContinuation.toCodec
       implicit val m: RSpaceMatch[F, BindPattern, ListParWithRandom] = matchListPar[F]
       val prettyPrinter                                              = RhoPrinter()
-
-      val transformer =
-        new ReportingEventTransformer[Par, BindPattern, ListParWithRandom, TaggedContinuation](
-          serializeC = channel => prettyPrinter.buildString(channel),
-          serializeP = p => p.patterns.map(prettyPrinter.buildString).mkString("[", ";", "]"),
-          serializeA = data => data.pars.map(prettyPrinter.buildString).mkString("[", ";", "]"),
-          serializeK = k =>
-            k.taggedCont match {
-              case ParBody(value)      => prettyPrinter.buildString(value.body)
-              case ScalaBodyRef(value) => s"ScalaBodyRef($value)"
-              case Empty               => "empty"
-            }
-        )
-
-      def transformDeploy(ipd: InternalProcessedDeploy, events: Seq[ReportingEvent]): DeployTrace =
-        DeployTrace(
-          ipd.deploy.sig.base16String,
-          ipd.deploy.term,
-          events.map(transformer.transformEvent).toList
-        )
-
-      def createResponse(
-          hash: BlockHash,
-          state: Option[
-            (
-                Either[(Option[DeployData], Failed), List[
-                  (InternalProcessedDeploy, Seq[ReportingEvent])
-                ]],
-                BlockMessage
-            )
-          ]
-      ): Report =
-        state match {
-          case None => BlockNotFound(hash.base16String)
-          case Some((Left((Some(deployData), failed)), _)) =>
-            BlockReplayFailed(hash.base16String, failed.toString, deployData.sig.base16String.some)
-          case Some((Left((None, failed)), _)) =>
-            BlockReplayFailed(hash.base16String, failed.toString, None)
-          case Some((Right(deploys), bm)) =>
-            BlockTracesReport(
-              hash.base16String,
-              bm.seqNum,
-              bm.sender.base16String,
-              deploys.map(Function.tupled(transformDeploy)),
-              bm.header.parentsHashList.map(_.base16String)
-            )
-          case _ => BlockReplayError(hash.base16String)
-        }
+      val transformer                                                = setupTransformer(prettyPrinter)
 
       override def trace(hash: BlockHash): F[Report] =
         for {
@@ -234,7 +226,7 @@ object ReportingCasper {
                        replayBlock(bm, dag, manager)
                          .map(s => (s, bm))
                    )
-          response = createResponse(hash, result)
+          response = createResponse(hash, result, transformer)
         } yield response
     }
 
