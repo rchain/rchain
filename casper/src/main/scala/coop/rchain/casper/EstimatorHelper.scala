@@ -49,10 +49,10 @@ object EstimatorHelper {
       dag: BlockDagRepresentation[F]
   ): F[Boolean] =
     for {
-      uncommonAncestorsMap <- DagOperations.uncommonAncestors[F](Vector(b1, b2), dag)
+      uncommonAncestorsMap             <- DagOperations.uncommonAncestors[F](Vector(b1, b2), dag)
       (b1AncestorsMap, b2AncestorsMap) = uncommonAncestorsMap.partition(_._2 == BitSet(0))
-      b1Events <- extractBlockEvents[F](b1AncestorsMap.keys.toList)
-      b2Events <- extractBlockEvents[F](b2AncestorsMap.keys.toList)
+      b1Events                         <- extractBlockEvents[F](b1AncestorsMap.keys.toList)
+      b2Events                         <- extractBlockEvents[F](b2AncestorsMap.keys.toList)
       conflictsBecauseOfJoins = extractJoinedChannels(b1Events)
         .intersect(allChannels(b2Events))
         .nonEmpty || extractJoinedChannels(b2Events).intersect(allChannels(b1Events)).nonEmpty
