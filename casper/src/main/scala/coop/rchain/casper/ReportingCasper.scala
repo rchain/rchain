@@ -135,9 +135,15 @@ object ReportingCasper {
 
   sealed trait Report
 
-  final case class BlockTracesReport(hash: String, traces: List[DeployTrace]) extends Report
-  final case class BlockNotFound(hash: String)                                extends Report
-  final case class BlockReplayError(hash: String)                             extends Report
+  final case class BlockTracesReport(
+      hash: String,
+      seqNum: Int,
+      creator: String,
+      traces: List[DeployTrace],
+      parents: List[String]
+  ) extends Report
+  final case class BlockNotFound(hash: String)    extends Report
+  final case class BlockReplayError(hash: String) extends Report
   final case class BlockReplayFailed(hash: String, msg: String, deployId: Option[String])
       extends Report
 
@@ -179,18 +185,29 @@ object ReportingCasper {
 
       def createResponse(
           hash: BlockHash,
-          state: Option[Either[(Option[DeployData], Failed), List[
-            (InternalProcessedDeploy, Seq[ReportingEvent])
-          ]]]
+          state: Option[
+            (
+                Either[(Option[DeployData], Failed), List[
+                  (InternalProcessedDeploy, Seq[ReportingEvent])
+                ]],
+                BlockMessage
+            )
+          ]
       ): Report =
         state match {
           case None => BlockNotFound(hash.base16String)
-          case Some(Left((Some(deployData), failed))) =>
+          case Some((Left((Some(deployData), failed)), _)) =>
             BlockReplayFailed(hash.base16String, failed.toString, deployData.sig.base16String.some)
-          case Some(Left((None, failed))) =>
+          case Some((Left((None, failed)), _)) =>
             BlockReplayFailed(hash.base16String, failed.toString, None)
-          case Some(Right(deploys)) =>
-            BlockTracesReport(hash.base16String, deploys.map(Function.tupled(transformDeploy)))
+          case Some((Right(deploys), bm)) =>
+            BlockTracesReport(
+              hash.base16String,
+              bm.seqNum,
+              bm.sender.base16String,
+              deploys.map(Function.tupled(transformDeploy)),
+              bm.header.parentsHashList.map(_.base16String)
+            )
           case _ => BlockReplayError(hash.base16String)
         }
 
@@ -208,12 +225,16 @@ object ReportingCasper {
             AtomicAny(replayStore),
             Branch.REPLAY
           )
-          runtime  <- ReportingRuntime.createWithEmptyCost[F](reporting, Seq.empty)
-          manager  <- fromRuntime(runtime)
-          dag      <- BlockDagStorage[F].getRepresentation
-          bmO      <- BlockStore[F].get(hash)
-          state    <- bmO.traverse(bm => replayBlock(bm, dag, manager))
-          response = createResponse(hash, state)
+          runtime <- ReportingRuntime.createWithEmptyCost[F](reporting, Seq.empty)
+          manager <- fromRuntime(runtime)
+          dag     <- BlockDagStorage[F].getRepresentation
+          bmO     <- BlockStore[F].get(hash)
+          result <- bmO.traverse(
+                     bm =>
+                       replayBlock(bm, dag, manager)
+                         .map(s => (s, bm))
+                   )
+          response = createResponse(hash, result)
         } yield response
     }
 
