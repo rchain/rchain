@@ -87,13 +87,12 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Log: Time: SafetyOracle: Las
         .as(BlockStatus.processing.asLeft)
 
     def doppelgangerAndAdd: F[ValidBlockProcessing] = spanF.trace(AddBlockMetricsSource) {
+      import cats.instances.option._
       for {
         dag <- blockDag
-        _ <- validatorId match {
-              case Some(ValidatorIdentity(publicKey, _, _)) =>
-                val sender = ByteString.copyFrom(publicKey.bytes)
-                handleDoppelganger(b, sender)
-              case None => noop
+        _ <- validatorId.traverse_ { id =>
+              val sender = ByteString.copyFrom(id.publicKey.bytes)
+              handleDoppelganger(b, sender)
             }
         _      <- BlockStore[F].put(b)
         _      <- spanF.mark("block-store-put")
