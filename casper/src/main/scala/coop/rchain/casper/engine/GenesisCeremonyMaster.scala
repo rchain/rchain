@@ -18,11 +18,12 @@ import coop.rchain.comm.PeerNode
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.shared._
 
-class GenesisCeremonyMaster[F[_]: Sync: ConnectionsCell: BlockStore: TransportLayer: Log: Time: SafetyOracle: RPConfAsk: LastApprovedBlock](
+class GenesisCeremonyMaster[F[_]: Sync: BlockStore: CommUtil: TransportLayer: RPConfAsk: Log: Time: SafetyOracle: LastApprovedBlock](
     approveProtocol: ApproveBlockProtocol[F]
 ) extends Engine[F] {
   import Engine._
-  def applicative: Applicative[F] = Applicative[F]
+  private val F    = Applicative[F]
+  private val noop = F.unit
 
   override def init: F[Unit] = approveProtocol.run()
 
@@ -36,7 +37,7 @@ class GenesisCeremonyMaster[F[_]: Sync: ConnectionsCell: BlockStore: TransportLa
 
 object GenesisCeremonyMaster {
   import Engine._
-  def approveBlockInterval[F[_]: Sync: Metrics: Span: Concurrent: ConnectionsCell: BlockStore: TransportLayer: Log: EventLog: Time: SafetyOracle: LastFinalizedBlockCalculator: RPConfAsk: LastApprovedBlock: BlockDagStorage: EngineCell: RuntimeManager: Running.RequestedBlocks: EventPublisher: SynchronyConstraintChecker](
+  def approveBlockInterval[F[_]: Sync: Metrics: Span: Concurrent: CommUtil: TransportLayer: ConnectionsCell: RPConfAsk: Running.RequestedBlocks: BlockStore: Log: EventLog: Time: SafetyOracle: LastFinalizedBlockCalculator: LastApprovedBlock: BlockDagStorage: EngineCell: RuntimeManager: EventPublisher: SynchronyConstraintChecker](
       interval: FiniteDuration,
       shardId: String,
       validatorId: Option[ValidatorIdentity]
@@ -55,7 +56,7 @@ object GenesisCeremonyMaster {
                               .hashSetCasper[F](validatorId, genesis, shardId)
                    _ <- Engine
                          .transitionToRunning[F](casper, approvedBlock, ().pure[F])
-                   _ <- CommUtil.sendForkChoiceTipRequest[F]
+                   _ <- CommUtil[F].sendForkChoiceTipRequest
                  } yield ()
              }
     } yield cont

@@ -19,11 +19,7 @@ final class LastFinalizedBlockCalculator[F[_]: Sync: Log: Concurrent: BlockStore
     for {
       maybeChildrenHashes <- dag.children(lastFinalizedBlockHash)
       childrenHashes      = maybeChildrenHashes.getOrElse(Set.empty[BlockHash]).toList
-      maybeFinalizedChild <- ListContrib.findM(
-                              childrenHashes,
-                              (blockHash: BlockHash) =>
-                                isGreaterThanFaultToleranceThreshold(dag, blockHash)
-                            )
+      maybeFinalizedChild <- childrenHashes.findM(isGreaterThanFaultToleranceThreshold(dag, _))
       newFinalizedBlock <- maybeFinalizedChild match {
                             case Some(finalizedChild) =>
                               removeDeploysInFinalizedBlock(finalizedChild) >> run(

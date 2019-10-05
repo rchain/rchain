@@ -670,15 +670,15 @@ trait MergeabilityRules {
       .flatMap { deploys =>
         TestNode.networkEff(genesis, networkSize = 2).use { nodes =>
           for {
-            _ <- nodes(0).publishBlock(deploys(0))(nodes(1))
+            _ <- nodes(0).propagateBlock(deploys(0))(nodes(1))
             _ <- nodes(0).addBlock(deploys(1))
-            _ <- nodes(1).publishBlock(deploys(2))(nodes(0))
+            _ <- nodes(1).propagateBlock(deploys(2))(nodes(0))
 
             multiParentBlock <- nodes(0).addBlock(deploys(3))
 
             _ = nodes(0).logEff.warns.isEmpty shouldBe true
             _ = multiParentBlock.header.parentsHashList.size shouldBe numberOfParentsForDiamondTip
-            _ = nodes(0).casperEff.contains(multiParentBlock.blockHash) shouldBeF true
+            _ = nodes(0).contains(multiParentBlock.blockHash) shouldBeF true
           } yield ()
         }
       }

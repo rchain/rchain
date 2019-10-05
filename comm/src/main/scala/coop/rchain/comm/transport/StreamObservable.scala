@@ -2,14 +2,13 @@ package coop.rchain.comm.transport
 
 import java.nio.file._
 
-import scala.concurrent.duration._
-
 import cats.implicits._
 
 import PacketOps._
 import coop.rchain.catscontrib.Catscontrib._
 import coop.rchain.comm.PeerNode
 import coop.rchain.shared.Log
+import coop.rchain.shared.PathOps._
 
 import monix.eval.Task
 import monix.execution.{Cancelable, Scheduler}
@@ -20,9 +19,6 @@ final case class StreamToPeers(peers: Seq[PeerNode], path: Path, sender: PeerNod
 
 class StreamObservable(bufferSize: Int, folder: Path)(implicit log: Log[Task], scheduler: Scheduler)
     extends Observable[StreamToPeers] {
-
-  val LogRetryEvery: Int         = 60 // With a delay of 1 second log every minute
-  val RetryDelay: FiniteDuration = 1.second
 
   private val subject = buffer.LimitedBufferObservable.dropNew[StreamToPeers](bufferSize)
 
@@ -40,23 +36,17 @@ class StreamObservable(bufferSize: Int, folder: Path)(implicit log: Log[Task], s
     def push(file: Path): Task[Boolean] =
       Task.delay(subject.pushNext(StreamToPeers(peers, file, blob.sender)))
 
-    def propose(file: Path, retryCount: Int): Task[Unit] =
-      push(file) >>= (_.fold(
-        log.debug(s"Enqueued for streaming packet $file"),
-        retry(file, retryCount)
-      ))
+    def propose(file: Path): Task[Unit] =
+      push(file) >>= (
+        _.fold(
+          log.debug(s"Enqueued for streaming packet $file"),
+          log.warn(
+            s"Client stream message queue is full. Dropping packet (type = ${blob.packet.typeId})"
+          ) >> file.deleteSingleFile[Task]
+        )
+      )
 
-    def retry(file: Path, retryCount: Int): Task[Unit] =
-      Task
-        .defer(logRetry(retryCount) >> propose(file, retryCount + 1))
-        .delayExecution(RetryDelay)
-
-    def logRetry(retryCount: Int): Task[Unit] =
-      if (retryCount % LogRetryEvery == 0)
-        log.warn(s"Client stream message queue is full. Retrying push. Retry $retryCount")
-      else Task.unit
-
-    logStreamInformation >> storeBlob >>= (_.fold(Task.unit)(propose(_, 1)))
+    logStreamInformation >> storeBlob >>= (_.fold(Task.unit)(propose))
   }
 
   def unsafeSubscribeFn(subscriber: Subscriber[StreamToPeers]): Cancelable = {

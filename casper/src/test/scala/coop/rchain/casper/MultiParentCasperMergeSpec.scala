@@ -1,11 +1,8 @@
 package coop.rchain.casper
 
 import cats.implicits._
-import coop.rchain.blockstorage.BlockStore
 import coop.rchain.casper.helper.TestNode
 import coop.rchain.casper.helper.TestNode._
-import coop.rchain.casper.protocol.DeployData
-import coop.rchain.shared.scalatestcontrib._
 import coop.rchain.casper.util.{ConstructDeploy, RSpaceUtil}
 import coop.rchain.crypto.hash.Blake2b256
 import coop.rchain.crypto.signatures.Secp256k1
@@ -48,16 +45,14 @@ class MultiParentCasperMergeSpec
         )
         block0 <- nodes(0).addBlock(deploys(0))
         block1 <- nodes(1).addBlock(deploys(1))
-        _      <- nodes.toList.traverse_(_.receive())
+        _      <- TestNode.propagate(nodes)
 
         //multiparent block joining block0 and block1 since they do not conflict
-        multiparentBlock <- nodes(0).publishBlock(deploys(2))(nodes: _*)
+        multiparentBlock <- nodes(0).propagateBlock(deploys(2))(nodes: _*)
 
-        _ = nodes(0).logEff.warns.isEmpty shouldBe true
-        _ = nodes(1).logEff.warns.isEmpty shouldBe true
         _ = multiparentBlock.header.parentsHashList.size shouldBe 2
-        _ = nodes(0).casperEff.contains(multiparentBlock.blockHash) shouldBeF true
-        _ = nodes(1).casperEff.contains(multiparentBlock.blockHash) shouldBeF true
+        _ <- nodes(0).contains(multiparentBlock.blockHash) shouldBeF true
+        _ <- nodes(1).contains(multiparentBlock.blockHash) shouldBeF true
         _ <- getDataAtPublicChannel[Effect](multiparentBlock, 0).map(_ shouldBe Seq("0"))
         _ <- getDataAtPublicChannel[Effect](multiparentBlock, 1).map(_ shouldBe Seq("1"))
         _ <- getDataAtPublicChannel[Effect](multiparentBlock, 2).map(_ shouldBe Seq("2"))
@@ -222,20 +217,15 @@ class MultiParentCasperMergeSpec
 
         block0 <- nodes(0).addBlock(deploys(0))
         block1 <- nodes(1).addBlock(deploys(1))
-        _      <- nodes(0).receive()
-        _      <- nodes(1).receive()
-        _      <- nodes(0).receive()
-        _      <- nodes(1).receive()
+        _      <- TestNode.propagate(nodes)
 
         singleParentBlock <- nodes(0).addBlock(deploys(2))
         _                 <- nodes(1).receive()
 
-        _      = nodes(0).logEff.warns.isEmpty shouldBe true
-        _      = nodes(1).logEff.warns.isEmpty shouldBe true
-        _      = singleParentBlock.header.parentsHashList.size shouldBe 1
-        _      <- nodes(0).casperEff.contains(singleParentBlock.blockHash) shouldBeF true
-        result <- nodes(1).casperEff.contains(singleParentBlock.blockHash) shouldBeF true
-      } yield result
+        _ = singleParentBlock.header.parentsHashList.size shouldBe 1
+        _ <- nodes(0).contains(singleParentBlock.blockHash) shouldBeF true
+        _ <- nodes(1).knowsAbout(singleParentBlock.blockHash) shouldBeF true
+      } yield ()
     }
   }
 

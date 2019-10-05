@@ -162,11 +162,6 @@ final class BlockDagFileStorage[F[_]: Concurrent: Sync: Log: RaiseIOError] priva
       val startBlockNumber = Math.max(0L, sortOffset - (tailLength - topoSortVector.length))
       topoSort(startBlockNumber)
     }
-    def deriveOrdering(startBlockNumber: Long): F[Ordering[BlockMetadata]] =
-      topoSort(startBlockNumber).map { topologicalSorting =>
-        val order = topologicalSorting.flatten.zipWithIndex.toMap
-        Ordering.by(b => order(b.blockHash))
-      }
     def latestMessageHash(validator: Validator): F[Option[BlockHash]] =
       latestMessagesMap.get(validator).pure[F]
     def latestMessage(validator: Validator): F[Option[BlockMetadata]] =

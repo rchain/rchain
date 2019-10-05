@@ -99,7 +99,7 @@ object Validate {
       } yield false
     }
 
-  def blockSender[F[_]: Monad: Log: BlockStore](
+  def blockSenderHasWeight[F[_]: Monad: Log: BlockStore](
       b: BlockMessage,
       genesis: BlockMessage,
       dag: BlockDagRepresentation[F]

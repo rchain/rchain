@@ -3,6 +3,7 @@ package coop.rchain.casper.helper
 import java.net.URLEncoder
 import java.nio.file.Path
 
+import cats.Monad
 import cats.data.State
 import cats.effect.concurrent.Semaphore
 import cats.effect.{Concurrent, Resource, Sync}
@@ -12,11 +13,9 @@ import coop.rchain.blockstorage.dag.{BlockDagFileStorage, BlockDagStorage}
 import coop.rchain.casper.CasperState.CasperStateCell
 import coop.rchain.casper.MultiParentCasper.ignoreDoppelgangerCheck
 import coop.rchain.casper._
-import coop.rchain.casper.api.BlockAPI
-import coop.rchain.casper.api.{GraphConfig, GraphzGenerator}
+import coop.rchain.casper.api.{BlockAPI, GraphConfig, GraphzGenerator}
 import coop.rchain.casper.engine.EngineCell._
 import coop.rchain.casper.engine._
-import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.casper.helper.BlockDagStorageTestFixture.mapSize
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.GenesisBuilder.GenesisContext
@@ -33,6 +32,7 @@ import coop.rchain.crypto.PrivateKey
 import coop.rchain.crypto.signatures.Secp256k1
 import coop.rchain.graphz.{Graphz, StringSerializer}
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
+import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.p2p.EffectsTestInstances._
 import coop.rchain.shared._
 import monix.eval.Task
@@ -96,6 +96,8 @@ class TestNode[F[_]](
   implicit val requestedBlocks: Running.RequestedBlocks[F] =
     Cell.unsafe[F, Map[BlockHash, Running.Requested]](Map.empty[BlockHash, Running.Requested])
 
+  implicit val commUtil: CommUtil[F] = CommUtil.of[F]
+
   implicit val casperEff = new MultiParentCasperImpl[F](
     Some(validatorId),
     genesis,
@@ -117,6 +119,12 @@ class TestNode[F[_]](
       _     <- nodes.toList.filter(_ != this).traverse_(_.receive())
     } yield block
 
+  def propagateBlock(deployDatums: DeployData*)(nodes: TestNode[F]*): F[BlockMessage] =
+    for {
+      block <- addBlock(deployDatums: _*)
+      _     <- TestNode.propagate(nodes :+ this)
+    } yield block
+
   def addBlockStatus(
       expectedStatus: ValidBlockProcessing
   )(deployDatums: DeployData*): F[BlockMessage] =
@@ -134,6 +142,66 @@ class TestNode[F[_]](
     } yield block
 
   def receive(): F[Unit] = tls.receive(p => handle[F](p), kp(().pure[F])).void
+
+  val maxSyncAttempts = 10
+  def syncWith(nodes: Seq[TestNode[F]]): F[Unit] = {
+    val networkMap = nodes.filterNot(_.local == local).map(node => node.local -> node).toMap
+    val asked = Running
+      .RequestedBlocks[F]
+      .reads(
+        _.values
+          .flatMap(
+            requested =>
+              if (requested.peers.isEmpty)
+                /* this means request for blok has been sent to "ether", check everyone */ networkMap.keySet
+              else requested.peers
+          )
+          .toList
+      )
+    val allSynced = Running.RequestedBlocks[F].reads(_.isEmpty)
+    val doNothing = concurrentF.unit
+
+    def drainQueueOf(peerNode: PeerNode) = networkMap.get(peerNode).fold(doNothing)(_.receive())
+
+    val step = asked.flatMap(_.traverse(drainQueueOf)) >> receive()
+
+    def loop(cnt: Int, done: Boolean) =
+      concurrentF.iterateUntilM(cnt -> done)({
+        case (i, _) => step.as(i + 1) mproduct (_ => allSynced)
+      }) {
+        case (i, done) => i >= maxSyncAttempts || done
+      }
+
+    (receive() >> allSynced >>= (done => loop(0, done))).flatTap {
+      case (_, false) =>
+        Running
+          .RequestedBlocks[F]
+          .read
+          .flatMap(
+            requestedBlocks =>
+              logEff.warn(
+                s"Node $local Still pending requests for blocks (after $maxSyncAttempts attempts): ${requestedBlocks
+                  .map { case (hash, req) => PrettyPrinter.buildString(hash) -> req }}"
+              )
+          )
+      case (i, _) =>
+        logEff.info(
+          s"Node $local has exchanged all the requested blocks with ${networkMap.keysIterator
+            .mkString("[", "; ", "]")} after $i round(s)"
+        )
+    }.void
+  }
+
+  def syncWith(node: TestNode[F]): F[Unit]                      = syncWith(IndexedSeq(node))
+  def syncWith(node1: TestNode[F], node2: TestNode[F]): F[Unit] = syncWith(IndexedSeq(node1, node2))
+  def syncWith(node1: TestNode[F], node2: TestNode[F], rest: TestNode[F]*): F[Unit] =
+    syncWith(IndexedSeq(node1, node2) ++ rest)
+
+  def contains(blockHash: BlockHash) = casperEff.contains(blockHash)
+  def knowsAbout(blockHash: BlockHash) =
+    (contains(blockHash), Running.RequestedBlocks.contains(blockHash)).mapN(_ || _)
+
+  def shutoff() = transportLayerEff.clear(local)
 
   def visualizeDag(): F[String] = {
 
@@ -337,5 +405,19 @@ object TestNode {
     PeerNode(NodeIdentifier(name.getBytes), endpoint(port))
 
   private def endpoint(port: Int): Endpoint = Endpoint("host", port, port)
+
+  def propagate[F[_]: Monad](nodes: Seq[TestNode[F]]): F[Unit] = {
+    val nodesList = nodes.toList
+    val peers     = nodesList.map(_.local).toSet
+    val network   = nodesList.head.transportLayerEff.testNetworkF
+    val heatDeath =
+      network.inspect(_.filterKeys(peers.contains(_)).valuesIterator.forall(_.isEmpty))
+    val propagation = nodesList.traverse_(_.receive())
+
+    propagation.untilM_(heatDeath)
+  }
+
+  def propagate[F[_]: Monad](node1: TestNode[F], node2: TestNode[F]): F[Unit] =
+    propagate(Seq(node1, node2))
 
 }

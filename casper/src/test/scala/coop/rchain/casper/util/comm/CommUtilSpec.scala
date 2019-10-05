@@ -1,24 +1,25 @@
 package coop.rchain.casper.engine
 
-import Running.{Requested, RequestedBlocks}
-import coop.rchain.catscontrib.ski._
+import com.google.protobuf.ByteString
 import coop.rchain.casper.PrettyPrinter
+import coop.rchain.casper.engine.Running.{Requested, RequestedBlocks}
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.comm.CommUtil
-import coop.rchain.comm.{CommError, Endpoint, NodeIdentifier, PeerNode}, CommError._
+import coop.rchain.catscontrib.TaskContrib.TaskOps
+import coop.rchain.catscontrib.ski._
+import coop.rchain.comm.CommError._
 import coop.rchain.comm.protocol.routing.Protocol
-import coop.rchain.comm.transport.TransportLayer
 import coop.rchain.comm.rp.Connect._
-import coop.rchain.comm.rp.{ProtocolHelper, RPConf}, ProtocolHelper.toPacket
-import coop.rchain.shared._
-import coop.rchain.p2p.EffectsTestInstances.{LogStub, LogicalTime, TransportLayerStub}
+import coop.rchain.comm.rp.ProtocolHelper.toPacket
+import coop.rchain.comm.rp.RPConf
+import coop.rchain.comm.{Endpoint, NodeIdentifier, PeerNode}
+import coop.rchain.metrics.Metrics.MetricsNOP
 import coop.rchain.models.BlockHash.BlockHash
-import com.google.protobuf.ByteString
-import monix.eval.Coeval
+import coop.rchain.p2p.EffectsTestInstances.{LogStub, LogicalTime, TransportLayerStub}
+import coop.rchain.shared._
+import monix.eval.Task
+import monix.execution.Scheduler.Implicits.global
 import org.scalatest._
-import cats._, cats.data._, cats.implicits._
-
-import scala.collection.mutable.{Map => MutableMap}
 
 class CommUtilSpec extends FunSpec with BeforeAndAfterEach with Matchers {
 
@@ -40,8 +41,9 @@ class CommUtilSpec extends FunSpec with BeforeAndAfterEach with Matchers {
           )
           implicit val requestedBlocks = initRequestedBlocks()
           implicit val connectionsCell = initConnectionsCell(connections = peers)
+          implicit val commUtil        = CommUtil.of[Task]
           // when
-          CommUtil.sendBlockRequest[Coeval](hash).apply()
+          CommUtil[Task].sendBlockRequest(hash).unsafeRunSync
           // then
           val requested = transport.requests
             .map(_.msg)
@@ -61,8 +63,9 @@ class CommUtilSpec extends FunSpec with BeforeAndAfterEach with Matchers {
           )
           implicit val requestedBlocks = initRequestedBlocks()
           implicit val connectionsCell = initConnectionsCell(connections = peers)
+          implicit val commUtil        = CommUtil.of[Task]
           // when
-          CommUtil.sendBlockRequest[Coeval](hash).apply()
+          CommUtil[Task].sendBlockRequest(hash).unsafeRunSync
           // then
           log.infos contains (s"Requested missing block ${PrettyPrinter.buildString(hash)} from peers")
         }
@@ -70,10 +73,11 @@ class CommUtilSpec extends FunSpec with BeforeAndAfterEach with Matchers {
           // given
           implicit val requestedBlocks = initRequestedBlocks()
           implicit val connectionsCell = initConnectionsCell()
+          implicit val commUtil        = CommUtil.of[Task]
           // when
-          CommUtil.sendBlockRequest[Coeval](hash).apply()
+          CommUtil[Task].sendBlockRequest(hash).unsafeRunSync
           // then
-          requestedBlocks.read.apply().contains(hash) should be(true)
+          requestedBlocks.read.unsafeRunSync.contains(hash) should be(true)
         }
       }
       describe("if given block was already requested") {
@@ -90,8 +94,9 @@ class CommUtilSpec extends FunSpec with BeforeAndAfterEach with Matchers {
           )
           implicit val requestedBlocks = initRequestedBlocks(init = requestedBefore)
           implicit val connectionsCell = initConnectionsCell(connections = peers)
+          implicit val commUtil        = CommUtil.of[Task]
           // when
-          CommUtil.sendBlockRequest[Coeval](hash).apply()
+          CommUtil[Task].sendBlockRequest(hash).unsafeRunSync
           // then
           transport.requests.size shouldBe 0
           log.infos.size shouldBe 0
@@ -105,23 +110,26 @@ class CommUtilSpec extends FunSpec with BeforeAndAfterEach with Matchers {
   val maxNoConnections = 10
   val conf             = RPConf(local, networkId, null, null, maxNoConnections, null)
 
-  implicit val transport = new TransportLayerStub[Coeval]
-  implicit val askConf   = new ConstApplicativeAsk[Coeval, RPConf](conf)
-  implicit val log       = new LogStub[Coeval]
-  implicit val time      = new LogicalTime[Coeval]
+  implicit val transport = new TransportLayerStub[Task]
+  implicit val askConf   = new ConstApplicativeAsk[Task, RPConf](conf)
+  implicit val log       = new LogStub[Task]
+  implicit val time      = new LogicalTime[Task]
+  implicit val metrics   = new MetricsNOP[Task]
 
   private def initRequestedBlocks(
       init: Map[BlockHash, Requested] = Map.empty
-  ): RequestedBlocks[Coeval] =
-    Cell.unsafe[Coeval, Map[BlockHash, Running.Requested]](init)
+  ): RequestedBlocks[Task] =
+    Cell.unsafe[Task, Map[BlockHash, Running.Requested]](init)
   private def initConnectionsCell(connections: Connections = List.empty) =
-    Cell.unsafe[Coeval, Connections](connections)
+    Cell.unsafe[Task, Connections](connections)
   private def endpoint(port: Int): Endpoint = Endpoint("host", port, port)
   private def peerNode(name: String, port: Int): PeerNode =
     PeerNode(NodeIdentifier(name.getBytes), endpoint(port))
 
   private def toHasBlockRequest(protocol: Protocol): HasBlockRequest =
-    HasBlockRequest.from(packetToHasBlockRequest(toPacket(protocol).right.get).get)
+    HasBlockRequest.from(
+      convert[PacketTypeTag.HasBlockRequest.type](toPacket(protocol).right.get).get
+    )
 
   private def alwaysSuccess: PeerNode => Protocol => CommErr[Unit] = kp(kp(Right(())))
 }

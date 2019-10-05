@@ -74,25 +74,6 @@ in {
               }
             } |
 
-            // Deprecated version of `deployerAuthKey`
-            // Please use the version above where a deployer id has to be passed
-            contract RevVault(@"deployerAuthKey", ret) = {
-
-              new deployerPubKeyBytesCh in {
-                _getIdentity!(*deployerPubKeyBytesCh) |
-                for (@deployerPubKeyBytes <- deployerPubKeyBytesCh) {
-
-                  new RevAddress(`rho:rev:address`), revAddrCh in {
-                    RevAddress!("fromPublicKey", deployerPubKeyBytes, *revAddrCh)|
-                    for (@deployerRevAddress <- revAddrCh) {
-
-                      @AuthKey!("make", (*_revVault, deployerRevAddress), *ret)
-                    }
-                  }
-                }
-              }
-            } |
-
             contract _getIdentity(retCh) = {
               new getDeployData(`rho:deploy:params`), ch in {
                 getDeployData ! (*ch) |

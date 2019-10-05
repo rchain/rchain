@@ -8,12 +8,14 @@ import coop.rchain.casper.engine.ApproveBlockProtocolTest.TestFixture
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.GenesisBuilder._
 import coop.rchain.casper.util.TestTime
+import coop.rchain.casper.util.comm.CommUtil
 import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.comm._
 import coop.rchain.comm.rp.Connect.Connections
 import coop.rchain.crypto.hash.Blake2b256
 import coop.rchain.crypto.signatures.Secp256k1
 import coop.rchain.crypto.{PrivateKey, PublicKey}
+import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.p2p.EffectsTestInstances._
 import coop.rchain.shared.{Cell, _}
 import monix.eval.Task
@@ -341,6 +343,9 @@ object ApproveBlockProtocolTest {
     implicit val ctx             = monix.execution.Scheduler.Implicits.global
     implicit val connectionsCell = Cell.mvarCell[Task, Connections](List(src)).unsafeRunSync
     implicit val lab             = LastApprovedBlock.unsafe[Task](None)
+    implicit val requestedBlocks =
+      Cell.unsafe[Task, Map[BlockHash, Running.Requested]](Map.empty[BlockHash, Running.Requested])
+    implicit val commUtil = CommUtil.of[Task]
 
     val genesis = buildGenesis(
       buildGenesisParameters(

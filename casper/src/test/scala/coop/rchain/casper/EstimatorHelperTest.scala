@@ -1,22 +1,20 @@
 package coop.rchain.casper
 
-import cats.Monad
-import cats.effect.{Resource, Sync}
+import cats.effect.Sync
 import cats.implicits._
 import com.google.protobuf.ByteString
-import coop.rchain.blockstorage.dag.{BlockDagStorage, IndexedBlockDagStorage}
 import coop.rchain.blockstorage.BlockStore
+import coop.rchain.blockstorage.dag.{BlockDagStorage, IndexedBlockDagStorage}
 import coop.rchain.casper.EstimatorHelper.conflicts
 import coop.rchain.casper.helper.{BlockDagStorageFixture, BlockGenerator, TestNode}
 import coop.rchain.casper.protocol._
-import coop.rchain.shared.scalatestcontrib._
 import coop.rchain.casper.util.ConstructDeploy._
 import coop.rchain.casper.util.GenesisBuilder
-import coop.rchain.casper.util.rholang.{Resources, RuntimeManager}
 import coop.rchain.metrics
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.models.BlockMetadata
 import coop.rchain.p2p.EffectsTestInstances.LogicalTime
+import coop.rchain.shared.scalatestcontrib._
 import coop.rchain.shared.{Log, Time}
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
@@ -69,19 +67,19 @@ class EstimatorHelperTest
 
           b2 <- n1.addBlock(produceDeploys(0))
           b3 <- n2.addBlock(produceDeploys(1))
-          _  <- n3.receive()
+          _  <- n3.syncWith(n1, n2)
 
           b4 <- n1.addBlock(produceDeploys(2))
           b5 <- n2.addBlock(consumeDeploys(2))
           b6 <- n3.addBlock(produceDeploys(2))
-          _  <- n4.receive()
+          _  <- n4.syncWith(n1, n2, n3)
 
           b7  <- n3.addBlock(produceDeploys(3))
           b8  <- n4.addBlock(produceDeploys(5))
           b9  <- n3.addBlock(consumeDeploys(5))
           b10 <- n4.addBlock(produceDeploys(4))
 
-          _   <- n4.receive()
+          _   <- n4.syncWith(n3)
           dag <- n4.blockDagStorage.getRepresentation
 
           _ <- conflicts[Task](b2, b3, dag) shouldBeF false

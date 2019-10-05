@@ -3,55 +3,50 @@ package coop.rchain.node
 import java.nio.ByteBuffer
 import java.nio.file.{Files, Path}
 
+import scala.concurrent.duration._
 import cats._
 import cats.data.ReaderT
 import cats.effect._
 import cats.effect.concurrent.Semaphore
 import cats.implicits._
+import cats.mtl._
 import cats.tagless.implicits._
-import cats.mtl.{ApplicativeAsk, ApplicativeLocal, MonadState}
 import cats.temp.par.Par
 import coop.rchain.blockstorage._
 import coop.rchain.blockstorage.dag.{BlockDagFileStorage, BlockDagStorage}
 import coop.rchain.blockstorage.util.io.IOError
 import coop.rchain.casper._
-import coop.rchain.casper.engine.EngineCell._
 import coop.rchain.casper.engine._
-import coop.rchain.casper.protocol.{DeployServiceGrpcMonix, ProposeServiceGrpcMonix}
-import coop.rchain.casper.util.comm.CasperPacketHandler
+import coop.rchain.casper.engine.EngineCell._
+import coop.rchain.casper.engine.Running.Requested
+import coop.rchain.casper.protocol.deploy.v1.DeployServiceV1GrpcMonix
+import coop.rchain.casper.protocol.propose.v1.ProposeServiceV1GrpcMonix
+import coop.rchain.casper.util.comm.{CasperPacketHandler, CommUtil}
 import coop.rchain.casper.util.rholang.RuntimeManager
 import coop.rchain.catscontrib.Catscontrib._
-import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.catscontrib.Taskable
+import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.catscontrib.ski._
 import coop.rchain.comm._
 import coop.rchain.comm.discovery._
-import coop.rchain.comm.rp.Connect.{Connections, ConnectionsCell, RPConfAsk, RPConfState}
 import coop.rchain.comm.rp._
+import coop.rchain.comm.rp.Connect.{Connections, ConnectionsCell, RPConfAsk, RPConfState}
 import coop.rchain.comm.transport._
 import coop.rchain.grpc.Server
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.models.BlockHash.BlockHash
-import coop.rchain.node.NodeRuntime.{
-  taskToEnv,
-  APIServers,
-  CasperLoop,
-  Cleanup,
-  EngineInit,
-  RuntimeConf,
-  TaskEnv
-}
-import coop.rchain.node.api.{DeployGrpcService, ProposeGrpcService, ReplGrpcService}
+import coop.rchain.node.NodeRuntime.{apply => _, _}
+import coop.rchain.node.api._
 import coop.rchain.node.configuration.Configuration
-import coop.rchain.node.diagnostics.Trace.TraceId
 import coop.rchain.node.diagnostics._
+import coop.rchain.node.diagnostics.Trace.TraceId
 import coop.rchain.node.effects.{EventConsumer, RchainEvents}
 import coop.rchain.node.model.repl.ReplGrpcMonix
 import coop.rchain.p2p.effects._
 import coop.rchain.rholang.interpreter.Runtime
 import coop.rchain.rspace.Context
-import coop.rchain.shared.PathOps._
 import coop.rchain.shared._
+import coop.rchain.shared.PathOps._
 import kamon._
 import kamon.system.SystemMetrics
 import kamon.zipkin.ZipkinReporter
@@ -62,8 +57,6 @@ import org.http4s.server.blaze._
 import org.http4s.server.middleware._
 import org.http4s.server.Router
 import org.lmdbjava.Env
-
-import scala.concurrent.duration._
 
 @SuppressWarnings(Array("org.wartremover.warts.NonUnitStatements"))
 class NodeRuntime private[node] (
@@ -135,12 +128,24 @@ class NodeRuntime private[node] (
                     commTmpFolder
                   )(grpcScheduler, log, metrics)
                   .toReaderT
-    rpConnections  <- effects.rpConnections[Task].toReaderT
-    initPeer       = if (conf.server.standalone) None else Some(conf.server.bootstrap)
-    peerNode       = rpConf(local, initPeer)
-    rpConfState    = effects.rpConfState[Task](peerNode)
-    peerNodeAsk    = effects.peerNodeAsk[Task](Monad[Task], Sync[Task], rpConfState)
-    rpConfAsk      = effects.rpConfAsk[Task](Monad[Task], Sync[Task], rpConfState)
+    rpConnections   <- effects.rpConnections[Task].toReaderT
+    initPeer        = if (conf.server.standalone) None else Some(conf.server.bootstrap)
+    peerNode        = rpConf(local, initPeer)
+    rpConfState     = effects.rpConfState[Task](peerNode)
+    peerNodeAsk     = effects.peerNodeAsk[Task](Monad[Task], Sync[Task], rpConfState)
+    rpConfAsk       = effects.rpConfAsk[Task](Monad[Task], Sync[Task], rpConfState)
+    requestedBlocks <- Cell.mvarCell[Task, Map[BlockHash, Running.Requested]](Map.empty).toReaderT
+    commUtil = CommUtil.of[Task](
+      Concurrent[Task],
+      log,
+      time,
+      metrics,
+      transport,
+      rpConnections,
+      rpConfAsk,
+      requestedBlocks
+    )
+
     defaultTimeout = conf.server.defaultTimeout
     kademliaRPC = effects.kademliaRPC(
       conf.server.networkId,
@@ -190,13 +195,15 @@ class NodeRuntime private[node] (
     peerNodeAskEnv = effects.readerTApplicativeAsk[Task, NodeCallCtx, PeerNode](
       peerNodeAsk
     )
-    metricsEnv       = Metrics.readerTMetrics[Task, NodeCallCtx](metrics)
-    transportEnv     = transport.mapK(taskToEnv)
-    timeEnv          = time.mapK(taskToEnv)
-    logEnv           = log.mapK(taskToEnv)
-    eventLogEnv      = eventLog.mapK(taskToEnv)
-    nodeDiscoveryEnv = nodeDiscovery.mapK(taskToEnv)
-    rpConnectionsEnv = Cell.readerT[Task, NodeCallCtx, Connections](rpConnections)
+    metricsEnv         = Metrics.readerTMetrics[Task, NodeCallCtx](metrics)
+    transportEnv       = transport.mapK(taskToEnv)
+    timeEnv            = time.mapK(taskToEnv)
+    logEnv             = log.mapK(taskToEnv)
+    eventLogEnv        = eventLog.mapK(taskToEnv)
+    nodeDiscoveryEnv   = nodeDiscovery.mapK(taskToEnv)
+    rpConnectionsEnv   = Cell.readerT[Task, NodeCallCtx, Connections](rpConnections)
+    requestedBlocksEnv = Cell.readerT[Task, NodeCallCtx, Map[BlockHash, Requested]](requestedBlocks)
+    commUtilEnv        = commUtil.mapK(taskToEnv)
     taskableEnv = new Taskable[TaskEnv] {
       override def toTask[A](fa: TaskEnv[A]): Task[A] = fa.run(NodeCallCtx.init)
     }
@@ -206,6 +213,8 @@ class NodeRuntime private[node] (
                rpConnectionsEnv,
                rpConfAskEnv,
                rpConfStateEnv,
+               commUtilEnv,
+               requestedBlocksEnv,
                conf,
                dagConfig,
                blockstoreEnv,
@@ -611,6 +620,8 @@ object NodeRuntime {
       rpConnections: ConnectionsCell[F],
       rpConfAsk: ApplicativeAsk[F, RPConf],
       rpConfState: MonadState[F, RPConf],
+      commUtil: CommUtil[F],
+      requestedBlocks: Running.RequestedBlocks[F],
       conf: Configuration,
       dagConfig: BlockDagFileStorage.Config,
       blockstoreEnv: Env[ByteBuffer],
@@ -684,10 +695,9 @@ object NodeRuntime {
         implicit val sp = span
         RuntimeManager.fromRuntime[F](casperRuntime)
       }
-      engineCell      <- EngineCell.init[F]
-      envVars         = EnvVars.envVars[F]
-      raiseIOError    = IOError.raiseIOErrorThroughSync[F]
-      requestedBlocks <- Cell.mvarCell[F, Map[BlockHash, Running.Requested]](Map.empty)
+      engineCell   <- EngineCell.init[F]
+      envVars      = EnvVars.envVars[F]
+      raiseIOError = IOError.raiseIOErrorThroughSync[F]
       casperLaunch = {
         implicit val bs = blockStore
         implicit val bd = blockDagStorage
@@ -704,6 +714,8 @@ object NodeRuntime {
         implicit val ra = rpConfAsk
         implicit val eb = eventPublisher
         implicit val sc = synchronyConstraintChecker
+        implicit val cu = commUtil
+
         CasperLaunch.of(conf.casper)
       }
       packetHandler = {
@@ -723,7 +735,7 @@ object NodeRuntime {
       )
       casperLoop = for {
         engine <- engineCell.read
-        _      <- engine.withCasper(_.fetchDependencies, engine.noop)
+        _      <- engine.withCasper(_.fetchDependencies, Applicative[F].unit)
         _ <- Running.maintainRequestedBlocks[F](
               Monad[F],
               rpConfAsk,
@@ -749,8 +761,8 @@ object NodeRuntime {
 
   final case class APIServers(
       repl: ReplGrpcMonix.Repl,
-      propose: ProposeServiceGrpcMonix.ProposeService,
-      deploy: DeployServiceGrpcMonix.DeployService
+      propose: ProposeServiceV1GrpcMonix.ProposeService,
+      deploy: DeployServiceV1GrpcMonix.DeployService
   )
 
   def acquireAPIServers[F[_]](
@@ -770,8 +782,8 @@ object NodeRuntime {
   ): APIServers = {
     implicit val s: Scheduler = scheduler
     val repl                  = ReplGrpcService.instance(runtime, s)
-    val deploy                = DeployGrpcService.instance(blockApiLock)
-    val propose               = ProposeGrpcService.instance(blockApiLock)
+    val deploy                = DeployGrpcServiceV1.instance(blockApiLock)
+    val propose               = ProposeGrpcServiceV1.instance(blockApiLock)
     APIServers(repl, propose, deploy)
   }
 }

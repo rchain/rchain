@@ -33,7 +33,7 @@ class ListeningNameAPITest extends FlatSpec with Matchers with Inside {
                                      listeningName
                                    )
         _ = inside(listeningNameResponse1) {
-          case Right(ListeningNameDataResponse(blockResults, l)) =>
+          case Right((blockResults, l)) =>
             val data1   = blockResults.map(_.postBlockData)
             val blocks1 = blockResults.map(_.block)
             data1 should be(List(List(resultData)))
@@ -58,7 +58,7 @@ class ListeningNameAPITest extends FlatSpec with Matchers with Inside {
                           _ => ConstructDeploy.basicDeployData[Effect](0)
                         )
 
-        block1 <- nodes(0).publishBlock(deployDatas(0))(nodes: _*)
+        block1 <- nodes(0).propagateBlock(deployDatas(0))(nodes: _*)
 
         listeningName = Par().copy(exprs = Seq(Expr(GInt(0))))
         resultData    = Par().copy(exprs = Seq(Expr(GInt(0))))
@@ -67,23 +67,23 @@ class ListeningNameAPITest extends FlatSpec with Matchers with Inside {
                                    listeningName
                                  )
         _ = inside(listeningNameResponse1) {
-          case Right(ListeningNameDataResponse(blockResults, l)) =>
+          case Right((blockResults, l)) =>
             val data1   = blockResults.map(_.postBlockData)
             val blocks1 = blockResults.map(_.block)
             data1 should be(List(List(resultData)))
             blocks1.length should be(1)
             l should be(1)
         }
-        block2 <- nodes(1).publishBlock(deployDatas(1))(nodes: _*)
-        block3 <- nodes(2).publishBlock(deployDatas(2))(nodes: _*)
-        block4 <- nodes(0).publishBlock(deployDatas(3))(nodes: _*)
+        block2 <- nodes(1).propagateBlock(deployDatas(1))(nodes: _*)
+        block3 <- nodes(2).propagateBlock(deployDatas(2))(nodes: _*)
+        block4 <- nodes(0).propagateBlock(deployDatas(3))(nodes: _*)
 
         listeningNameResponse2 <- BlockAPI.getListeningNameDataResponse[Effect](
                                    Int.MaxValue,
                                    listeningName
                                  )
         _ = inside(listeningNameResponse2) {
-          case Right(ListeningNameDataResponse(blockResults, l)) =>
+          case Right((blockResults, l)) =>
             val data2   = blockResults.map(_.postBlockData)
             val blocks2 = blockResults.map(_.block)
             data2 should be(
@@ -97,16 +97,16 @@ class ListeningNameAPITest extends FlatSpec with Matchers with Inside {
             blocks2.length should be(4)
             l should be(4)
         }
-        block5 <- nodes(1).publishBlock(deployDatas(4))(nodes: _*)
-        block6 <- nodes(2).publishBlock(deployDatas(5))(nodes: _*)
-        block7 <- nodes(0).publishBlock(deployDatas(6))(nodes: _*)
+        block5 <- nodes(1).propagateBlock(deployDatas(4))(nodes: _*)
+        block6 <- nodes(2).propagateBlock(deployDatas(5))(nodes: _*)
+        block7 <- nodes(0).propagateBlock(deployDatas(6))(nodes: _*)
 
         listeningNameResponse3 <- BlockAPI.getListeningNameDataResponse[Effect](
                                    Int.MaxValue,
                                    listeningName
                                  )
         _ = inside(listeningNameResponse3) {
-          case Right(ListeningNameDataResponse(blockResults, l)) =>
+          case Right((blockResults, l)) =>
             val data3   = blockResults.map(_.postBlockData)
             val blocks3 = blockResults.map(_.block)
             data3 should be(
@@ -134,14 +134,14 @@ class ListeningNameAPITest extends FlatSpec with Matchers with Inside {
         listeningNameResponse3UntilDepth <- BlockAPI
                                              .getListeningNameDataResponse[Effect](1, listeningName)
         _ = inside(listeningNameResponse3UntilDepth) {
-          case Right(ListeningNameDataResponse(_, l)) => l should be(1)
+          case Right((_, l)) => l should be(1)
         }
         listeningNameResponse3UntilDepth2 <- BlockAPI.getListeningNameDataResponse[Effect](
                                               2,
                                               listeningName
                                             )
         _ = inside(listeningNameResponse3UntilDepth2) {
-          case Right(ListeningNameDataResponse(_, l)) => l should be(2)
+          case Right((_, l)) => l should be(2)
         }
       } yield ()
     }
@@ -173,7 +173,7 @@ class ListeningNameAPITest extends FlatSpec with Matchers with Inside {
                                    listeningNamesShuffled1
                                  )
         _ = inside(listeningNameResponse1) {
-          case Right(ListeningNameContinuationResponse(blockResults, l)) =>
+          case Right((blockResults, l)) =>
             val continuations1 = blockResults.map(_.postBlockContinuations)
             val blocks1        = blockResults.map(_.block)
             continuations1 should be(List(List(desiredResult)))
@@ -189,7 +189,7 @@ class ListeningNameAPITest extends FlatSpec with Matchers with Inside {
                                    listeningNamesShuffled2
                                  )
         _ = inside(listeningNameResponse2) {
-          case Right(ListeningNameContinuationResponse(blockResults, l)) =>
+          case Right((blockResults, l)) =>
             val continuations2 = blockResults.map(_.postBlockContinuations)
             val blocks2        = blockResults.map(_.block)
             continuations2 should be(List(List(desiredResult)))

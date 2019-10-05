@@ -88,8 +88,8 @@ class GrpcTransportServer(
 
     for {
       serverSslContext <- serverSslContextTask
-      tellBuffer       <- Task.delay(buffer.LimitedBufferObservable.dropNew[Send](4096))
-      blobBuffer       <- Task.delay(buffer.LimitedBufferObservable.dropNew[StreamMessage](1024))
+      tellBuffer       <- Task.delay(buffer.LimitedBufferObservable.dropNew[Send](1024))
+      blobBuffer       <- Task.delay(buffer.LimitedBufferObservable.dropNew[StreamMessage](100))
       receiver <- GrpcTransportReceiver.create(
                    networkId: String,
                    port,

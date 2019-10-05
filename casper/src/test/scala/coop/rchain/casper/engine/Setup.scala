@@ -11,6 +11,7 @@ import coop.rchain.casper._
 import coop.rchain.casper.genesis.contracts.{Validator, Vault}
 import coop.rchain.casper.helper.BlockDagStorageTestFixture
 import coop.rchain.casper.protocol._
+import coop.rchain.casper.util.comm.CommUtil
 import coop.rchain.casper.util.rholang.RuntimeManager
 import coop.rchain.casper.util.{GenesisBuilder, TestTime}
 import coop.rchain.catscontrib.ApplicativeError_
@@ -87,6 +88,9 @@ object Setup {
     implicit val transportLayer = new TransportLayerStub[Task]
     implicit val rpConf         = createRPConfAsk[Task](local)
     implicit val time           = TestTime.instance
+    implicit val currentRequests: Running.RequestedBlocks[Task] =
+      Cell.unsafe[Task, Map[BlockHash, Running.Requested]](Map.empty[BlockHash, Running.Requested])
+    implicit val commUtil = CommUtil.of[Task]
     implicit val errHandler =
       ApplicativeError_.applicativeError(new ApplicativeError[Task, CommError] {
         override def raiseError[A](e: CommError): Task[A] =
@@ -111,9 +115,7 @@ object Setup {
       ): Task[Float] = Task.pure(1.0f)
     }
     implicit val lastFinalizedBlockCalculator = LastFinalizedBlockCalculator[Task](0f)
-    implicit val currentRequests: Running.RequestedBlocks[Task] =
-      Cell.unsafe[Task, Map[BlockHash, Running.Requested]](Map.empty[BlockHash, Running.Requested])
-    implicit val synchronyConstraintChecker = SynchronyConstraintChecker[Task](0d)
+    implicit val synchronyConstraintChecker   = SynchronyConstraintChecker[Task](0d)
   }
   private def endpoint(port: Int): Endpoint = Endpoint("host", port, port)
 

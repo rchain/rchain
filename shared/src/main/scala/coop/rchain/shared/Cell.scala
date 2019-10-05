@@ -3,9 +3,7 @@ package coop.rchain.shared
 import cats._
 import cats.data.ReaderT
 import cats.effect.concurrent.{MVar, Ref}
-import cats.effect.{Concurrent, Sync}
-import cats.syntax.applicative._
-import cats.syntax.applicativeError._
+import cats.effect.{Concurrent, ExitCase, Sync}
 import cats.syntax.flatMap._
 import cats.syntax.functor._
 import coop.rchain.catscontrib.ski._
@@ -40,59 +38,29 @@ object Cell {
     override def reads[A](f: S => A) = read map f
   }
 
-  def mvarCell[F[_]: Concurrent, S](initalState: S): F[Cell[F, S]] =
-    MVar[F].of(initalState) map { mvar =>
-      new DefaultCell[F, S] {
-        def modify(f: S => S): F[Unit] =
-          for {
-            s <- mvar.take
-            _ <- mvar.put(f(s))
-          } yield ()
-
-        def flatModify(f: S => F[S]): F[Unit] =
-          for {
-            s <- mvar.take
-            _ <- f(s).attempt.flatMap {
-                  case Left(e)   => mvar.put(s).flatMap(_ => e.raiseError[F, Unit])
-                  case Right(ns) => mvar.put(ns)
-                }
-          } yield ()
-
-        def read: F[S] = mvar.read
-      }
+  private class MVarCell[F[_], S](mvar: MVar[F, S])(implicit F: Sync[F]) extends DefaultCell[F, S] {
+    def modify(f: S => S): F[Unit] = flatModify(s => F.pure(f(s)))
+    def flatModify(f: S => F[S]): F[Unit] = F.bracketCase(mvar.take)(s => f(s).flatMap(mvar.put)) {
+      case (oldState, ExitCase.Error(_) | ExitCase.Canceled) => mvar.put(oldState)
+      case _                                                 => F.unit
     }
+    def read: F[S] = mvar.read
+  }
+
+  private class RefCell[F[_], S](ref: Ref[F, S])(implicit F: Monad[F]) extends DefaultCell[F, S] {
+    def modify(f: S => S): F[Unit]        = ref.update(f)
+    def flatModify(f: S => F[S]): F[Unit] = ref.get.flatMap(f).flatMap(ref.set)
+    def read: F[S]                        = ref.get
+  }
+
+  def mvarCell[F[_]: Concurrent, S](initalState: S): F[Cell[F, S]] =
+    MVar[F].of(initalState) map (cell => new MVarCell[F, S](cell))
 
   def refCell[F[_]: Sync, S](initalState: S): F[Cell[F, S]] =
-    Ref[F].of(initalState) map { ref =>
-      new DefaultCell[F, S] {
-        def modify(f: S => S): F[Unit] = ref.modify { in =>
-          (f(in), ())
-        }
+    Ref[F].of(initalState) map (ref => new RefCell[F, S](ref))
 
-        def flatModify(f: S => F[S]): F[Unit] =
-          for {
-            s <- ref.get
-            _ <- f(s).attempt.flatMap {
-                  case Left(e)   => e.raiseError[F, Unit]
-                  case Right(ns) => ref.set(ns)
-                }
-          } yield ()
-
-        def read: F[S] = ref.get
-      }
-    }
-
-  @SuppressWarnings(Array("org.wartremover.warts.Var"))
-  def unsafe[F[_]: Applicative, S](const: S): Cell[F, S] =
-    new DefaultCell[F, S] {
-      private var s: S               = const
-      def modify(f: S => S): F[Unit] = { s = f(s) }.pure[F]
-      def flatModify(f: S => F[S]): F[Unit] = f(s).map { newS =>
-        s = newS
-        ()
-      }
-      def read: F[S] = s.pure[F]
-    }
+  def unsafe[F[_]: Sync, S](initialState: S): Cell[F, S] =
+    new RefCell[F, S](Ref.unsafe(initialState))
 
   @SuppressWarnings(Array("org.wartremover.warts.Var"))
   def id[S](init: S): Cell[Id, S] = new DefaultCell[Id, S] {

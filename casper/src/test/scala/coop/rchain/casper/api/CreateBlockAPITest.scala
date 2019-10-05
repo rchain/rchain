@@ -1,13 +1,14 @@
 package coop.rchain.casper.api
 
+import scala.concurrent.duration._
+
 import cats.Monad
+import cats.effect.{Concurrent, Sync}
 import cats.effect.concurrent.Semaphore
 import cats.implicits._
 import coop.rchain.casper.MultiParentCasper.ignoreDoppelgangerCheck
 import coop.rchain.casper.engine._
 import EngineCell._
-import cats.effect.{Concurrent, Sync}
-import coop.rchain.blockstorage.BlockStore
 import coop.rchain.blockstorage.dag.BlockDagRepresentation
 import coop.rchain.blockstorage.dag.BlockDagStorage.DeployId
 import coop.rchain.casper._
@@ -19,18 +20,16 @@ import coop.rchain.casper.util.ConstructDeploy.basicDeployData
 import coop.rchain.casper.util.rholang._
 import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.crypto.signatures.Secp256k1
-import coop.rchain.metrics.{Metrics, NoopSpan, Span}
+import coop.rchain.metrics._
+import coop.rchain.metrics
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.Validator.Validator
 import coop.rchain.p2p.EffectsTestInstances._
-import coop.rchain.shared.{Cell, Log, Time}
+import coop.rchain.shared._
 import coop.rchain.shared.scalatestcontrib._
 import monix.eval.Task
 import monix.execution.Scheduler
-import org.scalatest.{EitherValues, FlatSpec, Matchers}
-
-import scala.concurrent.duration._
-import coop.rchain.metrics
+import org.scalatest.{Engine => _, _}
 
 class CreateBlockAPITest extends FlatSpec with Matchers with EitherValues {
   import GenesisBuilder._
@@ -40,7 +39,7 @@ class CreateBlockAPITest extends FlatSpec with Matchers with EitherValues {
       implicit log: Log[Task],
       metrics: Metrics[Task],
       span: Span[Task]
-  ): Task[Either[String, DeployServiceResponse]] =
+  ): Task[Either[String, String]] =
     BlockAPI.createBlock[Task](blockApiLock)(
       Sync[Task],
       Concurrent[Task],
@@ -78,7 +77,7 @@ class CreateBlockAPITest extends FlatSpec with Matchers with EitherValues {
 
       def createBlock(deploy: DeployData, blockApiLock: Semaphore[Effect])(
           implicit engineCell: EngineCell[Effect]
-      ): Effect[ApiErr[DeployServiceResponse]] =
+      ): Effect[ApiErr[String]] =
         for {
           _ <- BlockAPI.deploy[Effect](deploy)
           r <- BlockAPI.createBlock[Effect](blockApiLock)
@@ -88,9 +87,9 @@ class CreateBlockAPITest extends FlatSpec with Matchers with EitherValues {
           implicit engineCell: EngineCell[Effect]
       ): Effect[
         (
-            ApiErr[DeployServiceResponse],
-            ApiErr[DeployServiceResponse],
-            ApiErr[DeployServiceResponse]
+            ApiErr[String],
+            ApiErr[String],
+            ApiErr[String]
         )
       ] =
         for {
@@ -110,9 +109,9 @@ class CreateBlockAPITest extends FlatSpec with Matchers with EitherValues {
         result       <- testProgram(blockApiLock)(engineCell)
       } yield result).unsafeRunSync
 
-      response1 shouldBe a[Right[_, DeployServiceResponse]]
-      response2 shouldBe a[Left[_, DeployServiceResponse]]
-      response3 shouldBe a[Left[_, DeployServiceResponse]]
+      response1 shouldBe a[Right[_, String]]
+      response2 shouldBe a[Left[_, String]]
+      response3 shouldBe a[Left[_, String]]
       response2.left.value shouldBe "Error: There is another propose in progress."
       response3.left.value shouldBe "Error: There is another propose in progress."
 
@@ -134,6 +133,7 @@ class CreateBlockAPITest extends FlatSpec with Matchers with EitherValues {
 
             b1 <- n1.publishBlock(deploys(0))(nodes: _*)
             b2 <- n2.publishBlock(deploys(1))(nodes: _*)
+            _  <- n1.syncWith(n2)
 
             _        <- n1.casperEff.addDeploy(deploys(2))
             b3Status <- createBlock(blockApiLock)(engineCell)
@@ -160,11 +160,12 @@ class CreateBlockAPITest extends FlatSpec with Matchers with EitherValues {
             b1 <- n1.publishBlock(deploys(0))(nodes: _*)
             b2 <- n2.publishBlock(deploys(1))(nodes: _*)
             b3 <- n3.publishBlock(deploys(2))(nodes: _*)
+            _  <- n1.syncWith(n2, n3)
 
             _        <- n1.casperEff.addDeploy(deploys(3))
             b4Status <- createBlock(blockApiLock)(engineCell)
 
-            _ = b4Status shouldBe a[Right[_, DeployServiceResponse]]
+            _ = b4Status shouldBe a[Right[_, String]]
           } yield ()
       }
   }

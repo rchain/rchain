@@ -1,5 +1,4 @@
 syntax = "proto3";
-package repl;
 
 // If you are building for other languages "scalapb.proto"
 // can be manually obtained here:
@@ -9,23 +8,9 @@ package repl;
 import "scalapb/scalapb.proto";
 
 option (scalapb.options) = {
-  package_name: "coop.rchain.node.model"
+  package_name: "coop.rchain.casper.protocol"
 };
 
-service Repl {
-  rpc Run (CmdRequest) returns (ReplResponse) {}
-  rpc Eval (EvalRequest) returns (ReplResponse) {}
-}
-
-message CmdRequest {
-  string line = 1;
-}
-
-message EvalRequest {
-  string program = 1;
-  bool printUnmatchedSendsOnly = 2;
-}
-
-message ReplResponse {
-  string output = 1;
+message ServiceError {
+  repeated string messages = 1;
 }

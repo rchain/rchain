@@ -18,7 +18,7 @@ class PreviewPrivateNameTest extends FlatSpec with Matchers {
       nth + 1
     )
 
-    Base16.encode(preview.right.get.ids(nth).toByteArray)
+    Base16.encode(preview.right.get(nth).toByteArray)
   }
 
   val myNodePk = "464f6780d71b724525be14348b59c53dc8795346dfd7576c9f01c397ee7523e6"

@@ -27,13 +27,13 @@ new  PoS,
     revVaultCh, listOpsCh,
     getUser,
     getCurrentUserAddress,
-    getCurrentUserVault,
     pickActiveValidators,
     getMVar,
     runMVar,
     fst,
     deposit, distributeRewards,
     rs(`rho:registry:insertSigned:secp256k1`),
+    posId(`rho:rchain:deployerId`),
     uriOut in {
   registryLookup!(`rho:rchain:revVault`, *revVaultCh) |
   registryLookup!(`rho:lang:listOps`, *listOpsCh) |
@@ -42,11 +42,12 @@ new  PoS,
       @(_, ListOps) <- listOpsCh) {
     new posRevAddressCh, posAuthKeyCh, posVaultCh, initialActiveCh in {
 
-      @RevVault!("deployerAuthKey", *posAuthKeyCh) |
-      getCurrentUserAddress!(*posRevAddressCh) |
+      @RevVault!("deployerAuthKey", *posId, *posAuthKeyCh) |
+      getCurrentUserAddress!(*posId, *posRevAddressCh) |
 
       for(@posRevAddress <- posRevAddressCh;
           @posAuthKey <- posAuthKeyCh) {
+
         @RevVault!("findOrCreate", posRevAddress, *posVaultCh) |
         pickActiveValidators!($$initialBonds$$, {}, *initialActiveCh) |
 
@@ -54,7 +55,7 @@ new  PoS,
              @initialActive <- initialActiveCh) {
           new stateCh in {
             // State structure:
-            // pendingRewards : Map[PublickKey, Int] - are accummulated by calling "pay"
+            // pendingRewards : Map[PublickKey, Int] - are accummulated by calling "chargeDeploy"
             // committedRewards : Map[PublickKey, Int] - are moved from pendingRewards at each closeBlock
             // activeValidators : List[PublicKey] - the active validators
             // withdrawers : Map[PublicKey, Int] - the validators willing to withdraw and the blocknumber when their quarantine ends
@@ -65,6 +66,8 @@ new  PoS,
               "committedRewards":{},
               "activeValidators":initialActive,
               "withdrawers":{},
+              "randomImages":{},
+              "randomNumbers":{},
               "allBonds":$$initialBonds$$
             }) |
 
@@ -90,11 +93,10 @@ new  PoS,
               }
             } |
 
-            contract PoS (@"bond", @amount, returnCh) = {
+            contract PoS (@"bond", @deployerId, @amount, returnCh) = {
               new userCh, depositCh, processCh in {
                 runMVar!(*stateCh, *processCh, *returnCh) |
-
-                getUser!(*userCh) |
+                getUser!(deployerId, *userCh) |
                 for(@state, resultCh <- processCh;
                     @userPk <- userCh) {
                   if (state.get("allBonds").contains(userPk)) {
@@ -104,7 +106,7 @@ new  PoS,
                   } else if (amount > $$maximumBond$$) {
                     resultCh!(state, (false, "Bond is greater than maximum!"))
                   } else {
-                    deposit!(userPk, amount, *depositCh) |
+                    deposit!(deployerId, amount, *depositCh) |
                     for(@depositResult <- depositCh) {
                       match depositResult {
                         (true, _) => {
@@ -115,7 +117,6 @@ new  PoS,
                             depositResult
                           )
                         }
-
                         (false, errorMsg) => {
                           resultCh!(state, (false, "Bond deposit failed: " ++ errorMsg))
                         }
@@ -126,7 +127,7 @@ new  PoS,
               }
             } |
 
-            contract PoS (@"withdraw", returnCh) = {
+            contract PoS (@"withdraw", @deployerId, returnCh) = {
               new userCh, processCh,
                   getBlockData(`rho:block:data`),
                   blockDataCh
@@ -134,7 +135,7 @@ new  PoS,
                 runMVar!(*stateCh, *processCh, *returnCh) |
 
                 getBlockData!(*blockDataCh) |
-                getUser!(*userCh) |
+                getUser!(deployerId, *userCh) |
                 for(@state, resultCh <- processCh;
                     @userPk <- userCh;
                     _, @blockNumber <- blockDataCh) {
@@ -153,36 +154,74 @@ new  PoS,
               }
             } |
 
-            contract PoS (@"pay", @amount, returnCh) = {
-              new vaultCh, transferCh, userCh, processPayCh,
-                  depositCh,
-                  newPendingCh in {
-                getUser!(*userCh) |
-                runMVar!(*stateCh, *processPayCh, *returnCh) |
-                for(@state, payResultCh <- processPayCh;
-                    @userPk <- userCh) {
-                  deposit!(userPk, amount, *depositCh) |
+            new currentDeployerData in {
+              contract PoS (@"chargeDeploy", @deployerId, @amount, return) = {
+                new depositCh in {
+                  deposit!(deployerId, amount, *depositCh) |
+                  for(@depositResult <- depositCh){
+                    match depositResult {
+                      (true, _) => {
+                        currentDeployerData!((deployerId, amount)) |
+                        return!(depositResult)
+                      }
+                      (_, errorMessage) => {
+                        return!((false, "Deploy payment failed: " ++ errorMessage))
+                      }
+                    }
+                  }
+                }
+              } |
 
-                  distributeRewards!(
-                    amount,
-                    state.get("activeValidators"),
-                    state.get("allBonds"),
-                    state.get("pendingRewards"),
-                    *newPendingCh) |
-
-                  for(@depositResult <- depositCh;
-                      @newPending <- newPendingCh) {
-                    payResultCh!(state.set("pendingRewards", newPending), depositResult)
+              // Note: under no circumstances should this method be merged as is.
+              //       this method, along with "chargeDeploy", "closeBlock", and "slash"
+              //       must be made private, as they're only used in the protocol.
+              contract PoS (@"refundDeploy", @refundAmount, return) = {
+                for(@(deployerId, initialPaymentAmount) <- currentDeployerData){
+                  new revAddressCh in {
+                    revAddressOps!("fromDeployerId", deployerId, *revAddressCh) |
+                    for(@deployerRevAddress <- revAddressCh){
+                      new transferCh in {
+                        @posVault!("transfer", deployerRevAddress, refundAmount, posAuthKey, *transferCh) |
+                        for(@transferResult <- transferCh){
+                          match transferResult {
+                            (true, _) => {
+                              new processRefundCh in {
+                                runMVar!(*stateCh, *processRefundCh, *return) |
+                                for(@state, refundResultCh <- processRefundCh){
+                                  new newPendingCh in {
+                                    distributeRewards!(
+                                      initialPaymentAmount - refundAmount,
+                                      state.get("activeValidators"),
+                                      state.get("allBonds"),
+                                      state.get("pendingRewards"),
+                                      *newPendingCh) |
+                                    for(@newPending <- newPendingCh){
+                                      refundResultCh!(
+                                        state.set("pendingRewards", newPending),
+                                        (true, Nil)
+                                      )
+                                    }
+                                  }
+                                }
+                              }
+                            }
+                            (_, errorMessage) => {
+                              return!((false, "(Bug found) Deploy refund failed: " ++ errorMessage))
+                            }
+                          }
+                        }
+                      }
+                    }
                   }
                 }
               }
             } |
 
-            contract PoS(@"slash", @blockHash, returnCh) = {
+            contract PoS(@"slash", @deployerId, @blockHash, returnCh) = {
               new userCh, invalidBlocksCh, doSlashCh,
                   getInvalidBlocks(`rho:casper:invalidBlocks`) in {
                 getInvalidBlocks!(*invalidBlocksCh) |
-                getUser!(*userCh) |
+                getUser!(deployerId, *userCh) |
 
                 runMVar!(*stateCh, *doSlashCh, *returnCh) |
                 for (@invalidBlocks <- invalidBlocksCh;
@@ -257,7 +296,9 @@ new  PoS,
                             "committedRewards":newRewards,
                             "activeValidators":newValidators,
                             "withdrawers":newWithdrawers,
-                            "allBonds":newBonds
+                            "allBonds":newBonds,
+                            "randomImages":{},
+                            "randomNumbers":{},
                           },
                           Nil)
                       }
@@ -340,17 +381,65 @@ new  PoS,
                   }
                 }
               }
+            } |
+
+            contract PoS(@"commitRandomImage", @deployerId, @hash, ackCh) = {
+              new userCh, mvarCh in {
+                getUser!(deployerId, *userCh) |
+
+                runMVar!(*stateCh, *mvarCh, *ackCh) |
+                for (@validator <- userCh;
+                     @state, resultCh <- mvarCh) {
+                  if (state.get("randomImages").contains(validator)) {
+                    resultCh!(state, (false, "Image already committed"))
+                  }
+                  else {
+                    resultCh!(
+                      state.set("randomImages",
+                               state.get("randomImages").set(validator, hash)),
+                      true)
+                  }
+               }
+             }
+            } |
+
+            contract PoS(@"revealRandom", @deployerId, @random, ackCh) = {
+              new userCh, mvarCh, computeHash(`rho:crypto:keccak256Hash`), hashCh in {
+                getUser!(deployerId, *userCh) |
+
+                runMVar!(*stateCh, *mvarCh, *ackCh) |
+                computeHash!(random, *hashCh) |
+                for (@validator <- userCh;
+                     @state, resultCh <- mvarCh;
+                     @hash <- hashCh) {
+                  if (state.get("randomImages").contains(validator)) {
+                    if (hash == state.get("randomImages").get(validator))
+                    {
+                      resultCh!(
+                        state.set("randomNumbers",
+                          state.get("randomNumbers").set(validator, random)),
+                        true)
+                    } else
+                    {
+                      resultCh!(state, (false, "Previously committed image doesn't match the random number"))
+                    }
+                  }
+                  else {
+                      resultCh! (state, (false, "Previously committed random image not found"))
+                  }
+               }
+             }
             }
           }
         } |
 
-        contract deposit (@fromUserPk, @amount, returnCh) = {
+        contract deposit (@deployerId, @amount, returnCh) = {
           new vaultCh,
               revAddressCh,
               authKeyCh in {
-            @RevVault!("deployerAuthKey", *authKeyCh) |
+            @RevVault!("deployerAuthKey", deployerId, *authKeyCh) |
             for (@authKey <- authKeyCh) {
-              revAddressOps!("fromPublicKey", fromUserPk, *revAddressCh) |
+              revAddressOps!("fromDeployerId", deployerId, *revAddressCh) |
               for (@fromRevAddress <- revAddressCh) {
                 @RevVault!("findOrCreate", fromRevAddress, *vaultCh) |
                 for (@(true, fromVault) <- vaultCh) {
@@ -410,18 +499,18 @@ new  PoS,
         resultCh!(first)
       } |
 
-      contract getUser (returnCh) = {
-        new parametersCh, getParameters(`rho:deploy:params`) in {
-          getParameters!(*parametersCh) |
-          for (@userPk <- parametersCh) {
+      contract getUser (@deployerId, returnCh) = {
+        new deployerIdOps(`rho:rchain:deployerId:ops`), userPkCh in {
+          deployerIdOps!("pubKeyBytes", deployerId, *userPkCh) |
+          for (@userPk <- userPkCh) {
             returnCh!(userPk)
           }
         }
       } |
 
-      contract getCurrentUserAddress(returnCh) = {
+      contract getCurrentUserAddress(@deployerId, returnCh) = {
         new userCh in {
-          getUser!(*userCh) |
+          getUser!(deployerId, *userCh) |
           for (@userPk <- userCh) {
             revAddressOps!("fromPublicKey", userPk, *returnCh)
           }
@@ -436,15 +525,6 @@ new  PoS,
           for (@availableValidators <- availableValidatorsCh) {
             //TODO choose only a limited number of validators
             @ListOps!("map", availableValidators, *fst, *returnCh)
-          }
-        }
-      } |
-
-      contract getCurrentUserVault(returnCh) = {
-        new revAddressCh in {
-          getCurrentUserAddress!(*revAddressCh) |
-          for (@revAddress <- revAddressCh) {
-            @RevVault!("findOrCreate", revAddress, *returnCh)
           }
         }
       }

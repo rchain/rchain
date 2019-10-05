@@ -1,13 +1,11 @@
 package coop.rchain.comm.transport
 
-import scala.concurrent.duration._
-
 import cats._
-import cats.implicits._
-import coop.rchain.comm._, rp.ProtocolHelper
-import coop.rchain.comm.protocol.routing.{Packet, Protocol}
-import coop.rchain.comm.CommError.CommErr
 import com.google.protobuf.ByteString
+import coop.rchain.comm.CommError.CommErr
+import coop.rchain.comm._
+import coop.rchain.comm.protocol.routing.Packet
+import coop.rchain.comm.rp.ProtocolHelper
 import org.scalatest._
 
 abstract class TransportLayerSpec[F[_]: Monad: cats.effect.Timer, E <: Environment]
@@ -85,14 +83,14 @@ abstract class TransportLayerSpec[F[_]: Monad: cats.effect.Timer, E <: Environme
           ): F[Unit] =
             transportLayer.stream(
               remote,
-              Blob(local, Packet(BlockMessage.id, bigContent))
+              Blob(local, Packet("Test", bigContent))
             )
 
           run()
 
           streamDispatcher.received should have length 1
           val (_, blob) = streamDispatcher.received.head
-          blob.packet.typeId shouldBe (BlockMessage.id)
+          blob.packet.typeId shouldBe ("Test")
           blob.packet.content shouldBe (bigContent)
         }
       }

@@ -1,9 +1,10 @@
 package coop.rchain.casper.protocol
 
-import cats._, cats.data._, cats.implicits._
-import coop.rchain.catscontrib.Catscontrib._
+import cats.implicits._
 import com.google.protobuf.ByteString
-import coop.rchain.models.PCost
+import coop.rchain.casper.PrettyPrinter
+import coop.rchain.models.{PCost, Pretty}
+import coop.rchain.models.BlockHash.BlockHash
 
 sealed trait CasperMessage {
   def toProto: CasperMessageProto
@@ -11,6 +12,7 @@ sealed trait CasperMessage {
 
 object CasperMessage {
   def from(cm: CasperMessageProto): Either[String, CasperMessage] = cm match {
+    case hash: BlockHashMessageProto      => Right(BlockHashMessage.from(hash))
     case bmp: BlockMessageProto           => BlockMessage.from(bmp)
     case p: ApprovedBlockCandidateProto   => ApprovedBlockCandidate.from(p)
     case p: ApprovedBlockProto            => ApprovedBlock.from(p)
@@ -49,8 +51,8 @@ object BlockRequest {
   def from(hbr: BlockRequestProto): BlockRequest = BlockRequest(hbr.hash)
 }
 
-final case object ForkChoiceTipRequest extends CasperMessage {
-  def toProto: ForkChoiceTipRequestProto = ForkChoiceTipRequestProto()
+case object ForkChoiceTipRequest extends CasperMessage {
+  val toProto: ForkChoiceTipRequestProto = ForkChoiceTipRequestProto()
 }
 
 final case class ApprovedBlockCandidate(block: BlockMessage, requiredSigs: Int)
@@ -69,8 +71,11 @@ object ApprovedBlockCandidate {
     } yield ApprovedBlockCandidate(block, abc.requiredSigs)
 }
 
-final case class UnapprovedBlock(candidate: ApprovedBlockCandidate, timestamp: Long, duration: Long)
-    extends CasperMessage {
+final case class UnapprovedBlock(
+    candidate: ApprovedBlockCandidate,
+    timestamp: Long,
+    duration: Long
+) extends CasperMessage {
   def toProto: UnapprovedBlockProto =
     UnapprovedBlockProto()
       .withCandidate(candidate.toProto)
@@ -141,6 +146,14 @@ object ApprovedBlockRequest {
     ApprovedBlockRequest(abr.identifier)
 }
 
+final case class BlockHashMessage(blockHash: BlockHash) extends CasperMessage {
+  def toProto: BlockHashMessageProto = BlockHashMessageProto(blockHash)
+}
+
+object BlockHashMessage {
+  def from(hash: BlockHashMessageProto) = BlockHashMessage(hash.hash)
+}
+
 final case class BlockMessage(
     blockHash: ByteString,
     header: Header,
@@ -154,6 +167,8 @@ final case class BlockMessage(
     extraBytes: ByteString = ByteString.EMPTY
 ) extends CasperMessage {
   def toProto: BlockMessageProto = BlockMessage.toProto(this)
+
+  override def toString: String = PrettyPrinter.buildString(this)
 }
 
 object BlockMessage {
@@ -187,6 +202,7 @@ object BlockMessage {
       .withSigAlgorithm(bm.sigAlgorithm)
       .withShardId(bm.shardId)
       .withExtraBytes(bm.extraBytes)
+
 }
 
 final case class Header(

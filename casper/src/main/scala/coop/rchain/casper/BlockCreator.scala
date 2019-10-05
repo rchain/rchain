@@ -40,9 +40,7 @@ object BlockCreator {
   def createBlock[F[_]: Sync: Log: Time: BlockStore: SynchronyConstraintChecker](
       dag: BlockDagRepresentation[F],
       genesis: BlockMessage,
-      publicKey: PublicKey,
-      privateKey: PrivateKey,
-      sigAlgorithm: String,
+      validatorIdentity: ValidatorIdentity,
       shardId: String,
       version: Long,
       expirationThreshold: Int,
@@ -53,7 +51,7 @@ object BlockCreator {
       spanF: Span[F]
   ): F[CreateBlockStatus] =
     spanF.trace(CreateBlockMetricsSource) {
-      val validator = ByteString.copyFrom(publicKey.bytes)
+      val validator = ByteString.copyFrom(validatorIdentity.publicKey.bytes)
       for {
         tipHashes             <- Estimator.tips[F](dag, genesis)
         _                     <- spanF.mark("after-estimator")
@@ -63,18 +61,19 @@ object BlockCreator {
         slashingDeploys <- invalidLatestMessages.values.toList.traverse { invalidBlockHash =>
                             val encodedInvalidBlockHash =
                               Base16.encode(invalidBlockHash.toByteArray)
+                            // TODO: Do something useful with the result of "slash".
                             ConstructDeploy.sourceDeployNowF(
                               s"""
-                               #new rl(`rho:registry:lookup`), posCh in {
+                               #new rl(`rho:registry:lookup`), deployerId(`rho:rchain:deployerId`), posCh in {
                                #  rl!(`rho:rchain:pos`, *posCh) |
                                #  for(@(_, PoS) <- posCh) {
-                               #    @PoS!("slash", "$encodedInvalidBlockHash".hexToBytes(), "IGNOREFORNOW")
+                               #    @PoS!("slash", *deployerId, "$encodedInvalidBlockHash".hexToBytes(), "IGNOREFORNOW")
                                #  }
                                #}
                                #
                             """.stripMargin('#'),
                               phloPrice = 0,
-                              sec = privateKey
+                              sec = validatorIdentity.privateKey
                             )
                           }
         _ <- Cell[F, CasperState].modify { s =>
@@ -109,7 +108,14 @@ object BlockCreator {
                           CreateBlockStatus.noNewDeploys.pure[F]
                         }
         signedBlock <- unsignedBlock.mapF(
-                        signBlock(_, dag, publicKey, privateKey, sigAlgorithm, shardId)
+                        signBlock(
+                          _,
+                          dag,
+                          validatorIdentity.publicKey,
+                          validatorIdentity.privateKey,
+                          validatorIdentity.sigAlgorithm,
+                          shardId
+                        )
                       )
         _ <- spanF.mark("block-signed")
       } yield signedBlock

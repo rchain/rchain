@@ -424,9 +424,9 @@ class ValidateTest
         validBlock   <- blockDagStorage.lookupByIdUnsafe(1).map(_.copy(sender = validator))
         invalidBlock <- blockDagStorage.lookupByIdUnsafe(2).map(_.copy(sender = impostor))
         dag          <- blockDagStorage.getRepresentation
-        _            <- Validate.blockSender[Task](genesis, genesis, dag) shouldBeF true
-        _            <- Validate.blockSender[Task](validBlock, genesis, dag) shouldBeF true
-        result       <- Validate.blockSender[Task](invalidBlock, genesis, dag) shouldBeF false
+        _            <- Validate.blockSenderHasWeight[Task](genesis, genesis, dag) shouldBeF true
+        _            <- Validate.blockSenderHasWeight[Task](validBlock, genesis, dag) shouldBeF true
+        result       <- Validate.blockSenderHasWeight[Task](invalidBlock, genesis, dag) shouldBeF false
       } yield result
   }
 
