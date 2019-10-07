@@ -1,8 +1,8 @@
 package coop.rchain.rholang.interpreter.matcher
 
-import cats._
+import cats.Monad
 import cats.data.StateT
-import cats.implicits._
+import cats.syntax.all._
 
 import scala.Function.tupled
 import scala.collection.immutable.Stream
@@ -34,7 +34,7 @@ object MaximumBipartiteMatch {
   * All the effects produced by calling the provided `matchFunction`
   * are going to be retained in the final effect via which the algo returns.
   * <p/>
-  * See type signatures for `machFunction` and `findMatches`.
+  * See type signatures for `matchFunction` and `findMatches`.
   *
   * @tparam P type of pattern / the U set
   * @tparam T type of term / the V set
@@ -55,6 +55,7 @@ trait MaximumBipartiteMatch[P, T, R, F[_]] {
   private case class Indexed[A](value: A, index: Int)
 
   def findMatches(patterns: Seq[P], targets: Seq[T]): F[Option[Seq[(T, P, R)]]] = {
+    import cats.instances.list._
 
     val ts: Seq[Candidate]      = targets.zipWithIndex.map(tupled(Indexed[T]))
     val ps: List[Pattern]       = patterns.toList.zip(Stream.continually(ts))
@@ -76,9 +77,9 @@ trait MaximumBipartiteMatch[P, T, R, F[_]] {
       //there are no more candidates for this pattern, there's not a match
       case (_, Stream.Empty) => pure(false)
       case (p, candidate +: candidates) =>
-        FlatMap[MBM].ifM(notSeen(candidate))(
+        notSeen(candidate).ifM(
           //that is a new candidate, let's try to match it
-          liftF(matchFunction(p, candidate.value)).flatMap {
+          liftF(matchFunction(p, candidate.value)) >>= {
             case Some(matchResult) =>
               //this candidate matches the pattern, let's try to assign it a match
               addSeen(candidate) >> tryClaimMatch(candidate, pattern, matchResult)
@@ -97,12 +98,12 @@ trait MaximumBipartiteMatch[P, T, R, F[_]] {
       result <- previousMatch match {
                  case None =>
                    //we're first, we claim a match
-                   claimMatch(candidate, pattern, result) >> pure(true)
+                   claimMatch(candidate, pattern, result).as(true)
                  case Some(previousPattern) =>
                    //try to find a different match for the previous pattern
-                   FlatMap[MBM].ifM(findMatch(previousPattern))(
+                   findMatch(previousPattern).ifM(
                      //if found, we can match current pattern with this candidate despite it being taken
-                     claimMatch(candidate, pattern, result) >> pure(true),
+                     claimMatch(candidate, pattern, result).as(true),
                      //else, current pattern can't be matched with this candidate given the current matches, try others
                      findMatch(pattern)
                    )
