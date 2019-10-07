@@ -110,24 +110,6 @@ class EstimatorHelperTest
       }
   }
 
-  it should "conflict if their deploys conflict in the paymentLog" in withStorage {
-    implicit blockStore => implicit blockDagStorage =>
-      testConflict[Task] { deploy =>
-        deploy.copy(paymentLog = List(produce(ByteString.copyFromUtf8(channelsHash))))
-      } { deploy =>
-        deploy.copy(paymentLog = List(consume(ByteString.copyFromUtf8(channelsHash))))
-      }
-  }
-
-  it should "conflict if a deploy in their paymentLog confilcts with a deploy in the deployLog" in withStorage {
-    implicit blockStore => implicit blockDagStorage =>
-      testConflict[Task] { deploy =>
-        deploy.copy(paymentLog = List(produce(ByteString.copyFromUtf8(channelsHash))))
-      } { deploy =>
-        deploy.copy(deployLog = List(consume(ByteString.copyFromUtf8(channelsHash))))
-      }
-  }
-
   private def testConflict[F[_]: Sync: BlockStore: IndexedBlockDagStorage: Time: Log](
       deployMod1: ProcessedDeploy => ProcessedDeploy
   )(

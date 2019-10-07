@@ -267,7 +267,6 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log](
         deploy,
         Cost.toProto(cost),
         checkpoint.log,
-        Seq.empty[trace.Event],
         DeployStatus.fromErrors(errors)
       )
       _ <- if (errors.nonEmpty) runtime.space.revertToSoftCheckpoint(fallback)

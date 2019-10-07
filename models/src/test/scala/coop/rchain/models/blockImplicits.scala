@@ -60,7 +60,6 @@ object blockImplicits {
       deploy = deployData,
       cost = PCost(0L),
       deployLog = List.empty,
-      paymentLog = List.empty,
       errored = false
     )
 
