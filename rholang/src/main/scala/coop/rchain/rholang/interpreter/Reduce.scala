@@ -68,7 +68,7 @@ class DebruijnInterpreter[M[_], F[_]](
 
   type Application =
     Option[
-      (TaggedContinuation, Seq[(Par, ListParWithRandom, ListParWithRandom, Boolean)], Int, Boolean)
+      (TaggedContinuation, Seq[(Par, ListParWithRandom, ListParWithRandom, Boolean)], Boolean)
     ]
 
   /**
@@ -117,15 +117,15 @@ class DebruijnInterpreter[M[_], F[_]](
 
   private[this] def continue(res: Application, repeatOp: M[Unit], persistent: Boolean) =
     res match {
-      case Some((continuation, dataList, _, _)) if persistent =>
+      case Some((continuation, dataList, _)) if persistent =>
         dispatchAndRun(continuation, dataList)(
           repeatOp
         )
-      case Some((continuation, dataList, _, peek)) if peek =>
+      case Some((continuation, dataList, peek)) if peek =>
         dispatchAndRun(continuation, dataList)(
           producePeeks(dataList): _*
         )
-      case Some((continuation, dataList, _, _)) =>
+      case Some((continuation, dataList, _)) =>
         dispatch(continuation, dataList)
       case None => syncM.unit
     }

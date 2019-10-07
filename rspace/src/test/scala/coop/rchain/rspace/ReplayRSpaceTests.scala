@@ -125,7 +125,7 @@ trait ReplayRSpaceTests extends ReplayRSpaceTestsBase[String, Pattern, String, S
         _ = resultConsume shouldBe None
         _ = resultProduce shouldBe Some(
           (
-            ContResult(continuation, false, channels, patterns, 0),
+            ContResult(continuation, false, channels, patterns),
             List(Result(channels(0), datum, datum, false))
           )
         )
@@ -166,7 +166,7 @@ trait ReplayRSpaceTests extends ReplayRSpaceTestsBase[String, Pattern, String, S
         _ = resultConsume shouldBe None
         _ = resultProduce shouldBe Some(
           (
-            ContResult(continuation, false, channels, patterns, 0, true),
+            ContResult(continuation, false, channels, patterns, true),
             List(Result(channels(0), datum, datum, false))
           )
         )
@@ -369,7 +369,7 @@ trait ReplayRSpaceTests extends ReplayRSpaceTestsBase[String, Pattern, String, S
 
         expectedResult = Some(
           (
-            ContResult(continuation, false, channels, patterns, 0, true),
+            ContResult(continuation, false, channels, patterns, true),
             List(Result(channels(0), datum, datum, false))
           )
         )

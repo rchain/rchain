@@ -14,7 +14,6 @@ final case class ContResult[C, P, K](
     persistent: Boolean,
     channels: Seq[C],
     patterns: Seq[P],
-    sequenceNumber: Int,
     peek: Boolean = false
 )
 

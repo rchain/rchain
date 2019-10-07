@@ -141,7 +141,6 @@ class ReplayRSpace[F[_]: Sync, C, P, A, K](
                       persist,
                       channels,
                       patterns,
-                      0,
                       peeks.nonEmpty
                     ),
                     mats
@@ -361,7 +360,6 @@ class ReplayRSpace[F[_]: Sync, C, P, A, K](
                         persistK,
                         channels,
                         patterns,
-                        0,
                         peeks.nonEmpty
                       ),
                       dataCandidates.map(

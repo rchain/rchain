@@ -110,7 +110,6 @@ class RSpace[F[_], C, P, A, K] private[rspace] (
             persist,
             channels,
             patterns,
-            0,
             peeks.nonEmpty
           ),
           dataCandidates
@@ -309,7 +308,6 @@ class RSpace[F[_], C, P, A, K] private[rspace] (
                 persistK,
                 channels,
                 patterns,
-                0,
                 peeks.nonEmpty
               ),
               dataCandidates.map(
