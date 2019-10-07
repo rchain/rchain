@@ -191,10 +191,10 @@ private class InMemHotStore[F[_]: Sync, C, P, A, K](
   def putJoin(channel: C, join: Seq[C]): F[Unit] =
     for {
       joins <- getJoins(channel)
-      _ <- if (!joins.contains(join)) S.update { cache =>
+      _ <- Applicative[F].whenA(!joins.contains(join))(S.update { cache =>
             ignore(cache.joins.put(channel, join +: joins))
             cache
-          } else Applicative[F].unit
+          })
     } yield ()
 
   def installJoin(channel: C, join: Seq[C]): F[Unit] = S.update { cache =>
@@ -266,13 +266,13 @@ private class InMemHotStore[F[_]: Sync, C, P, A, K](
   }
 
   private def checkIndex[E](col: Seq[E], index: Int): F[Unit] =
-    if (!col.isDefinedAt(index)) {
+    Applicative[F].unlessA(col.isDefinedAt(index)) {
       Sync[F].raiseError(
         new IndexOutOfBoundsException(
           s"Tried to remove index ${index} from a Vector of size ${col.size}"
         )
       )
-    } else ().pure[F]
+    }
 
   def toMap: F[Map[Seq[C], Row[P, A, K]]] =
     for {
