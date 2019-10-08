@@ -63,6 +63,7 @@ object InterpreterUtil {
     } yield result
   }
 
+  //TODO deduplicate with `replayBlock` below - they are virtually identical!
   private def replayBlockDeploys[F[_]: Sync: Log: BlockStore: Span](
       block: BlockMessage,
       dag: BlockDagRepresentation[F],
