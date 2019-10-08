@@ -52,10 +52,12 @@ object InterpreterUtil {
                      replayBlockDeploys(block, dag, runtimeManager)
                    } else {
                      //TODO at this point we may just as well terminate the replay, there's no way it will succeed.
-                     Log[F].warn(
-                       s"Computed pre-state hash ${PrettyPrinter.buildString(computedPreStateHash)} does not equal block's pre-state hash ${PrettyPrinter
-                         .buildString(incomingPreStateHash)}"
-                     ) >> none[StateHash].asRight[BlockError].pure
+                     Log[F]
+                       .warn(
+                         s"Computed pre-state hash ${PrettyPrinter.buildString(computedPreStateHash)} does not equal block's pre-state hash ${PrettyPrinter
+                           .buildString(incomingPreStateHash)}"
+                       )
+                       .as(none[StateHash].asRight[BlockError])
                    }
                }
     } yield result
@@ -112,13 +114,15 @@ object InterpreterUtil {
             Log[F].warn(s"Found user error(s) ${errors.map(_.getMessage).mkString("\n")}") >>
               none[StateHash].asRight[BlockError].pure
           case ReplayStatusMismatch(replay: DeployStatus, orig: DeployStatus) =>
-            Log[F].warn(
-              s"Found replay status mismatch; replay failure is ${replay.isFailed} and orig failure is ${orig.isFailed}"
-            ) >>
-              none[StateHash].asRight[BlockError].pure
+            Log[F]
+              .warn(
+                s"Found replay status mismatch; replay failure is ${replay.isFailed} and orig failure is ${orig.isFailed}"
+              )
+              .as(none[StateHash].asRight[BlockError])
           case UnknownFailure =>
-            Log[F].warn(s"Found unknown failure") >>
-              none[StateHash].asRight[BlockError].pure
+            Log[F]
+              .warn(s"Found unknown failure")
+              .as(none[StateHash].asRight[BlockError])
           case UnusedCommEvent(_) =>
             Sync[F].raiseError(new RuntimeException("found UnusedCommEvent"))
         }
@@ -139,11 +143,12 @@ object InterpreterUtil {
         } else {
           // state hash in block does not match computed hash -- invalid!
           // return no state hash, do not update the state hash set
-          Log[F].warn(
-            s"Tuplespace hash ${PrettyPrinter.buildString(tsHash)} does not match computed hash ${PrettyPrinter
-              .buildString(computedStateHash)}."
-          ) >>
-            none[StateHash].asRight[BlockError].pure
+          Log[F]
+            .warn(
+              s"Tuplespace hash ${PrettyPrinter.buildString(tsHash)} does not match computed hash ${PrettyPrinter
+                .buildString(computedStateHash)}."
+            )
+            .as(none[StateHash].asRight[BlockError])
         }
     }
 

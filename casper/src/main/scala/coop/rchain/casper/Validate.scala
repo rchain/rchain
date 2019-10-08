@@ -156,12 +156,14 @@ object Validate {
     if (blockVersion == version) {
       true.pure[F]
     } else {
-      Log[F].warn(
-        ignore(
-          b,
-          s"received block version $blockVersion is the expected version $version."
+      Log[F]
+        .warn(
+          ignore(
+            b,
+            s"received block version $blockVersion is the expected version $version."
+          )
         )
-      ) >> false.pure[F]
+        .as(false)
     }
   }
 
@@ -366,12 +368,14 @@ object Validate {
     val maybeFutureDeploy = deploys.find(_.validAfterBlockNumber >= blockNumber)
     maybeFutureDeploy
       .traverse { futureDeploy =>
-        Log[F].warn(
-          ignore(
-            b,
-            s"block contains an future deploy with valid after block number of ${futureDeploy.validAfterBlockNumber}: ${futureDeploy.term}"
+        Log[F]
+          .warn(
+            ignore(
+              b,
+              s"block contains an future deploy with valid after block number of ${futureDeploy.validAfterBlockNumber}: ${futureDeploy.term}"
+            )
           )
-        ) >> BlockStatus.containsFutureDeploy.pure[F]
+          .as(BlockStatus.containsFutureDeploy)
       }
       .map(maybeError => maybeError.toLeft(BlockStatus.valid))
   }
@@ -386,12 +390,14 @@ object Validate {
       deploys.find(_.validAfterBlockNumber <= earliestAcceptableValidAfterBlockNumber)
     maybeExpiredDeploy
       .traverse { expiredDeploy =>
-        Log[F].warn(
-          ignore(
-            b,
-            s"block contains an expired deploy with valid after block number of ${expiredDeploy.validAfterBlockNumber}: ${expiredDeploy.term}"
+        Log[F]
+          .warn(
+            ignore(
+              b,
+              s"block contains an expired deploy with valid after block number of ${expiredDeploy.validAfterBlockNumber}: ${expiredDeploy.term}"
+            )
           )
-        ) >> BlockStatus.containsExpiredDeploy.pure[F]
+          .as(BlockStatus.containsExpiredDeploy)
       }
       .map(maybeError => maybeError.toLeft(BlockStatus.valid))
   }
@@ -615,9 +621,11 @@ object Validate {
               val message =
                 s"block ${PrettyPrinter.buildString(currentBlockJustificationHash)} by ${PrettyPrinter
                   .buildString(validator)} has a lower sequence number than ${PrettyPrinter.buildString(previousBlockJustificationHash)}."
-              Log[F].warn(ignore(b, message)) >> Applicative[F].pure(
-                BlockStatus.justificationRegression.asLeft.asRight
-              )
+              Log[F]
+                .warn(ignore(b, message))
+                .as(
+                  BlockStatus.justificationRegression.asLeft.asRight
+                )
             },
             Applicative[F].pure(Left(tail))
           )

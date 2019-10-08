@@ -387,17 +387,21 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Log: Time: SafetyOracle: Las
            * will build off this side of the equivocation, we will get another attempt to add this block
            * through the admissible equivocations.
            */
-          Log[F].info(
-            s"Did not add block ${PrettyPrinter.buildString(block.blockHash)} as that would add an equivocation to the BlockDAG"
-          ) >> dag.pure
+          Log[F]
+            .info(
+              s"Did not add block ${PrettyPrinter.buildString(block.blockHash)} as that would add an equivocation to the BlockDAG"
+            )
+            .as(dag)
 
         case ib: InvalidBlock if InvalidBlock.isSlashable(ib) =>
           handleInvalidBlockEffect(ib, block)
 
         case ib: InvalidBlock =>
-          Log[F].warn(
-            s"Recording invalid block ${PrettyPrinter.buildString(block.blockHash)} for $ib."
-          ) >> dag.pure
+          Log[F]
+            .warn(
+              s"Recording invalid block ${PrettyPrinter.buildString(block.blockHash)} for $ib."
+            )
+            .as(dag)
 
         case BlockError.Processing =>
           syncF.raiseError[BlockDagRepresentation[F]](
@@ -405,8 +409,10 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Log: Time: SafetyOracle: Las
           )
 
         case BlockError.BlockException(ex) =>
-          Log[F].error(s"Encountered exception in while processing block ${PrettyPrinter
-            .buildString(block.blockHash)}: ${ex.getMessage}") >> dag.pure
+          Log[F]
+            .error(s"Encountered exception in while processing block ${PrettyPrinter
+              .buildString(block.blockHash)}: ${ex.getMessage}")
+            .as(dag)
 
       }
       .merge
