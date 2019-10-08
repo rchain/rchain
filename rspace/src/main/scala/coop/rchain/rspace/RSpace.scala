@@ -208,10 +208,9 @@ class RSpace[F[_], C, P, A, K](
           none[ProduceCandidate[C, P, A, K]].asRight[Seq[CandidateChannels]].pure[F]
         case channels :: remaining =>
           for {
-            matchCandidates <- for {
-                                data <- store.getContinuations(channels)
-                              } yield (Random.shuffle(data.zipWithIndex))
-
+            matchCandidates <- store
+                                .getContinuations(channels)
+                                .map(d => Random.shuffle(d.zipWithIndex))
             /*
              * Here, we create a cache of the data at each channel as `channelToIndexedData`
              * which is used for finding matches.  When a speculative match is found, we can
@@ -223,107 +222,84 @@ class RSpace[F[_], C, P, A, K](
              * In this version, we also add the produced data directly to this cache.
              */
             channelToIndexedDataList <- channels.traverse { c: C =>
-                                         (for {
-                                           data <- store.getData(c)
-                                         } yield (Random.shuffle(data.zipWithIndex)))
-                                           .map(
-                                             as =>
-                                               c -> {
-                                                 if (c == batChannel)
-                                                   (data, -1) +: as
-                                                 else as
-                                               }
-                                           )
+                                         for {
+                                           d  <- store.getData(c)
+                                           as = Random.shuffle(d.zipWithIndex)
+                                           sp = if (c == batChannel) (data, -1) +: as else as
+                                         } yield (c -> sp)
                                        }
             firstMatch <- extractFirstMatch(
                            channels,
                            matchCandidates,
                            channelToIndexedDataList.toMap
                          )
-          } yield firstMatch match {
-            case None             => remaining.asLeft[MaybeProduceCandidate]
-            case produceCandidate => produceCandidate.asRight[Seq[CandidateChannels]]
-          }
+          } yield
+            firstMatch match {
+              case None             => remaining.asLeft[MaybeProduceCandidate]
+              case produceCandidate => produceCandidate.asRight[Seq[CandidateChannels]]
+            }
       }
     groupedChannels.tailRecM(go)
   }
 
   private[this] def processMatchFound(
       pc: ProduceCandidate[C, P, A, K]
-  ): F[MaybeActionResult] =
-    pc match {
-      case ProduceCandidate(
-          channels,
-          WaitingContinuation(
-            patterns,
+  ): F[MaybeActionResult] = {
+    val ProduceCandidate(
+      channels,
+      WaitingContinuation(
+        patterns,
+        continuation,
+        persistK,
+        peeks,
+        consumeRef
+      ),
+      continuationIndex,
+      dataCandidates
+    ) = pc
+
+    def removeMatchedDatumAndJoin(channelsToIndex: Map[C, Int]): F[Seq[Unit]] =
+      dataCandidates
+        .sortBy(_.datumIndex)(Ordering[Int].reverse)
+        .traverse {
+          case DataCandidate(
+              candidateChannel,
+              Datum(_, persistData, _),
+              _,
+              dataIndex
+              ) => {
+            store
+              .removeDatum(candidateChannel, dataIndex)
+              .whenA((dataIndex >= 0 && !persistData)) >>
+              store.removeJoin(candidateChannel, channels)
+          }
+        }
+
+    def constructResult: MaybeActionResult =
+      Some(
+        (
+          ContResult[C, P, K](
             continuation,
             persistK,
-            peeks,
-            consumeRef
+            channels,
+            patterns,
+            peeks.nonEmpty
           ),
-          continuationIndex,
-          dataCandidates
-          ) =>
-        def registerCOMM: F[Unit] =
-          syncF.delay {
-            val produceRefs = dataCandidates.map(_.datum.source)
-            eventLog
-              .update(
-                COMM(consumeRef, produceRefs, peeks, produceCounters(produceRefs)) +: _
-              )
-          }
-
-        def maybePersistWaitingContinuation: F[Unit] =
-          if (!persistK) {
-            store.removeContinuation(
-              channels,
-              continuationIndex
-            )
-          } else ().pure[F]
-
-        def removeMatchedDatumAndJoin(channelsToIndex: Map[C, Int]): F[Seq[Unit]] =
-          dataCandidates
-            .sortBy(_.datumIndex)(Ordering[Int].reverse)
-            .traverse {
-              case DataCandidate(
-                  candidateChannel,
-                  Datum(_, persistData, _),
-                  _,
-                  dataIndex
-                  ) => {
-                (if (dataIndex >= 0 && !persistData) {
-                   store.removeDatum(candidateChannel, dataIndex)
-                 } else ().pure[F]) >> store.removeJoin(candidateChannel, channels)
-              }
-            }
-
-        def constructResult: MaybeActionResult =
-          Some(
-            (
-              ContResult[C, P, K](
-                continuation,
-                persistK,
-                channels,
-                patterns,
-                peeks.nonEmpty
-              ),
-              dataCandidates.map(
-                dc => Result(dc.channel, dc.datum.a, dc.removedDatum, dc.datum.persist)
-              )
-            )
+          dataCandidates.map(
+            dc => Result(dc.channel, dc.datum.a, dc.removedDatum, dc.datum.persist)
           )
+        )
+      )
 
-        for {
-          _               <- metricsF.incrementCounter(produceCommLabel)
-          _               <- registerCOMM
-          _               <- maybePersistWaitingContinuation
-          indexedChannels = channels.zipWithIndex.toMap
-          _               <- removeMatchedDatumAndJoin(indexedChannels)
-          _ <- logF.debug(
-                s"produce: matching continuation found at <channels: $channels>"
-              )
-        } yield constructResult
-    }
+    for {
+      _               <- metricsF.incrementCounter(produceCommLabel)
+      _               <- logComm(consumeRef, peeks, dataCandidates)
+      _               <- store.removeContinuation(channels, continuationIndex).unlessA(persistK)
+      indexedChannels = channels.zipWithIndex.toMap
+      _               <- removeMatchedDatumAndJoin(indexedChannels)
+      _               <- logF.debug(s"produce: matching continuation found at <channels: $channels>")
+    } yield constructResult
+  }
 
   private[this] def storeData(
       channel: C,
@@ -344,37 +320,52 @@ class RSpace[F[_], C, P, A, K](
   ): F[MaybeActionResult] =
     contextShift.evalOn(scheduler) {
       (for {
-        produceRef <- syncF.delay {
-                       Produce.create(channel, data, persist)
-                     }
-        result <- produceLockF(channel) {
-                   for {
-                     //TODO fix double join fetch
-                     groupedChannels <- store.getJoins(channel)
-                     _ <- logF.debug(
-                           s"""|produce: searching for matching continuations
-                    |at <groupedChannels: $groupedChannels>""".stripMargin
-                             .replace('\n', ' ')
-                         )
-                     _ <- syncF.delay {
-                           eventLog.update(produceRef +: _)
-                           if (!persist)
-                             produceCounter.update(_.putAndIncrementCounter(produceRef))
-                         }
-                     extracted <- extractProduceCandidate(
-                                   groupedChannels,
-                                   channel,
-                                   Datum(data, persist, produceRef)
-                                 )
-                     r <- extracted match {
-                           case Some(pc) => processMatchFound(pc)
-                           case None =>
-                             storeData(channel, data, persist, produceRef)
-                         }
-                   } yield r
-                 }
+        produceRef <- Produce.createF(channel, data, persist)
+        result <- produceLockF(channel)(
+                   lockedProduce(channel, data, persist, sequenceNumber, produceRef)
+                 )
       } yield result).timer(produceTimeCommLabel)
     }
+
+  private[this] def lockedProduce(
+      channel: C,
+      data: A,
+      persist: Boolean,
+      sequenceNumber: Int,
+      produceRef: Produce
+  ): F[MaybeActionResult] =
+    for {
+      //TODO fix double join fetch
+      groupedChannels <- store.getJoins(channel)
+      _ <- logF.debug(
+            s"produce: searching for matching continuations at <groupedChannels: $groupedChannels>"
+          )
+      _ <- logProduce(produceRef, persist)
+      extracted <- extractProduceCandidate(
+                    groupedChannels,
+                    channel,
+                    Datum(data, persist, produceRef)
+                  )
+      r <- extracted.fold(storeData(channel, data, persist, produceRef))(processMatchFound)
+    } yield r
+
+  private[this] def logComm(
+      consumeRef: Consume,
+      peeks: SortedSet[Int],
+      dataCandidates: Seq[DataCandidate[C, A]]
+  ) = syncF.delay {
+    val produceRefs = dataCandidates.map(_.datum.source)
+    eventLog
+      .update(
+        COMM(consumeRef, produceRefs, peeks, produceCounters(produceRefs)) +: _
+      )
+  }
+
+  private[this] def logProduce(produceRef: Produce, persist: Boolean): F[Unit] = syncF.delay {
+    eventLog.update(produceRef +: _)
+    if (!persist)
+      produceCounter.update(_.putAndIncrementCounter(produceRef))
+  }
 
   override def createCheckpoint(): F[Checkpoint] =
     for {

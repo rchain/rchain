@@ -1,5 +1,6 @@
 package coop.rchain.rspace.trace
 
+import cats.effect.Sync
 import coop.rchain.rspace.StableHashProvider._
 import coop.rchain.rspace.internal._
 import cats.implicits._
@@ -84,6 +85,12 @@ object Produce {
       hash(channel, datum, persistent),
       persistent
     )
+
+  def createF[F[_]: Sync, C, A](channel: C, datum: A, persistent: Boolean)(
+      implicit
+      serializeC: Serialize[C],
+      serializeA: Serialize[A]
+  ): F[Produce] = Sync[F].delay(create(channel, datum, persistent))
 
   def fromHash(
       channelsHash: Blake2b256Hash,
