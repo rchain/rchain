@@ -657,19 +657,6 @@ object Validate {
         false
       }
 
-  def transactions[F[_]: Sync: Log: BlockStore: Span](
-      block: BlockMessage,
-      dag: BlockDagRepresentation[F],
-      runtimeManager: RuntimeManager[F]
-  ): F[ValidBlockProcessing] =
-    InterpreterUtil
-      .validateBlockCheckpoint[F](block, dag, runtimeManager)
-      .map {
-        case Left(ex)       => Left(ex)
-        case Right(Some(_)) => Right(BlockStatus.valid)
-        case Right(None)    => Left(BlockStatus.invalidTransaction)
-      }
-
   /**
     * If block contains an invalid justification block B and the creator of B is still bonded,
     * return a RejectableBlock. Otherwise return an IncludeableBlock.

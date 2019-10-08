@@ -299,9 +299,17 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Log: Time: SafetyOracle: Las
   ): F[(ValidBlockProcessing, BlockDagRepresentation[F])] = {
     val validationStatus: EitherT[F, BlockError, ValidBlock] =
       for {
-        _      <- EitherT(Validate.blockSummary(b, genesis, dag, shardId, expirationThreshold))
-        _      <- EitherT.liftF(Span[F].mark("post-validation-block-summary"))
-        _      <- EitherT(Validate.transactions(b, dag, runtimeManager))
+        _ <- EitherT(Validate.blockSummary(b, genesis, dag, shardId, expirationThreshold))
+        _ <- EitherT.liftF(Span[F].mark("post-validation-block-summary"))
+        _ <- EitherT(
+              InterpreterUtil
+                .validateBlockCheckpoint(b, dag, runtimeManager)
+                .map {
+                  case Left(ex)       => Left(ex)
+                  case Right(Some(_)) => Right(BlockStatus.valid)
+                  case Right(None)    => Left(BlockStatus.invalidTransaction)
+                }
+            )
         _      <- EitherT.liftF(Span[F].mark("transactions-validated"))
         _      <- EitherT(Validate.bondsCache(b, runtimeManager))
         _      <- EitherT.liftF(Span[F].mark("bonds-cache-validated"))
