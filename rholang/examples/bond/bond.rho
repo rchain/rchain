@@ -3,9 +3,11 @@ new retCh, PoSCh, rl(`rho:registry:lookup`), stdout(`rho:io:stdout`) in {
   rl!(`rho:rchain:pos`, *PoSCh) |
   for(@(_, PoS) <- PoSCh) {
     stdout!("About to bond...") |
-    @PoS!("bond", 100, *retCh) |
-    for ( @(true, message) <- retCh) {
-      stdout!("Successfully bonded!")
+    new deployerId(`rho:rchain:deployerId`) in {
+      @PoS!("bond", *deployerId, 100, *retCh) |
+      for ( @(true, message) <- retCh) {
+        stdout!("Successfully bonded!")
+      }
     }
   }
 }
