@@ -186,14 +186,14 @@ object InterpreterUtil {
         parentStateHash.asRight[Throwable].pure[F]
 
       case (_, initStateHash) +: _ =>
-        computeMultiParentsPostState[F](parents, dag, runtimeManager, initStateHash)
+        replayIntoMergeBlock[F](parents, dag, runtimeManager, initStateHash)
     }
   }
 
   // In the case of multiple parents we need to apply all of the deploys that have been
   // made in all of the branches of the DAG being merged. This is done by computing uncommon ancestors
   // and applying the deploys in those blocks on top of the initial parent.
-  private def computeMultiParentsPostState[F[_]: Sync: BlockStore: Log: Span](
+  private def replayIntoMergeBlock[F[_]: Sync: BlockStore: Log: Span](
       parents: Seq[BlockMessage],
       dag: BlockDagRepresentation[F],
       runtimeManager: RuntimeManager[F],
@@ -203,7 +203,7 @@ object InterpreterUtil {
       _                  <- Span[F].mark("before-compute-parents-post-state-find-multi-parents")
       blockHashesToApply <- findMultiParentsBlockHashesForReplay(parents, dag)
       _ <- Log[F].info(
-            s"computeMultiParentsPostState computed number of parents: ${blockHashesToApply.length}"
+            s"replayIntoMergeBlock computed number of parents: ${blockHashesToApply.length}"
           )
       _             <- Span[F].mark("before-compute-parents-post-state-get-blocks")
       blocksToApply <- blockHashesToApply.traverse(b => ProtoUtil.getBlock[F](b.blockHash))
