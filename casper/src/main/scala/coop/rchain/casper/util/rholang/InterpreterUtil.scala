@@ -44,20 +44,20 @@ object InterpreterUtil {
     val timestamp            = b.header.timestamp
     val blockNumber          = b.body.state.blockNumber
     for {
-      _                    <- Span[F].mark("before-unsafe-get-parents")
-      parents              <- ProtoUtil.getParents(b)
-      _                    <- Span[F].mark("before-compute-parents-post-state")
-      possiblePreStateHash <- computeParentsPostState(parents, dag, runtimeManager).attempt
-      _                    <- Log[F].info(s"Computed parents post state for ${PrettyPrinter.buildString(b)}.")
-      invalidBlocksSet     <- dag.invalidBlocks
-      unseenBlocksSet      <- ProtoUtil.unseenBlockHashes(dag, b)
+      _                  <- Span[F].mark("before-unsafe-get-parents")
+      parents            <- ProtoUtil.getParents(b)
+      _                  <- Span[F].mark("before-compute-parents-post-state")
+      preStateHashEither <- computeParentsPostState(parents, dag, runtimeManager).attempt
+      _                  <- Log[F].info(s"Computed parents post state for ${PrettyPrinter.buildString(b)}.")
+      invalidBlocksSet   <- dag.invalidBlocks
+      unseenBlocksSet    <- ProtoUtil.unseenBlockHashes(dag, b)
       seenInvalidBlocksSet = invalidBlocksSet.filterNot(
         block => unseenBlocksSet.contains(block.blockHash)
       ) // TODO: Write test in which switching this to .filter makes it fail
       invalidBlocks = seenInvalidBlocksSet.map(block => (block.blockHash, block.sender)).toMap
       _             <- Span[F].mark("before-process-pre-state-hash")
       isGenesis     = b.header.parentsHashList.isEmpty
-      result <- possiblePreStateHash match {
+      result <- preStateHashEither match {
                  case Left(ex) =>
                    BlockStatus.exception(ex).asLeft[Option[StateHash]].pure
                  case Right(computedPreStateHash) =>
