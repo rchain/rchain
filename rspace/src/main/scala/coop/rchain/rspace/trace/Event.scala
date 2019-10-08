@@ -144,6 +144,18 @@ object Consume {
     )
   }
 
+  def createF[F[_]: Sync, C, P, K](
+      channels: Seq[C],
+      patterns: Seq[P],
+      continuation: K,
+      persistent: Boolean
+  )(
+      implicit
+      serializeC: Serialize[C],
+      serializeP: Serialize[P],
+      serializeK: Serialize[K]
+  ): F[Consume] = Sync[F].delay(create(channels, patterns, continuation, persistent))
+
   def fromHash(
       channelsHashes: Seq[Blake2b256Hash],
       hash: Blake2b256Hash,
