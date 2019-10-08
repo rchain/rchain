@@ -48,14 +48,16 @@ class InterpreterUtilTest
       dag: BlockDagRepresentation[F],
       runtimeManager: RuntimeManager[F]
   ): F[Either[Throwable, (StateHash, StateHash, Seq[InternalProcessedDeploy])]] =
-    InterpreterUtil.computeDeploysCheckpoint[F](
-      parents,
-      deploys,
-      dag,
-      runtimeManager,
-      BlockData(deploys.maxBy(_.timestamp).timestamp, 0),
-      Map.empty[BlockHash, Validator]
-    )
+    InterpreterUtil
+      .computeDeploysCheckpoint[F](
+        parents,
+        deploys,
+        dag,
+        runtimeManager,
+        BlockData(deploys.maxBy(_.timestamp).timestamp, 0),
+        Map.empty[BlockHash, Validator]
+      )
+      .attempt
 
   "computeBlockCheckpoint" should "compute the final post-state of a chain properly" in effectTest {
     val time = 0L

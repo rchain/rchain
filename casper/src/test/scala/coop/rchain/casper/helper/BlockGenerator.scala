@@ -65,7 +65,7 @@ object BlockGenerator {
                  runtimeManager,
                  BlockData(now, b.body.state.blockNumber),
                  Map.empty[BlockHash, Validator]
-               )
+               ).attempt
       Right((preStateHash, postStateHash, processedDeploys)) = result
     } yield (postStateHash, processedDeploys.map(_.toProcessedDeploy))
   }

@@ -220,6 +220,7 @@ object BlockCreator {
         BlockData(now, maxBlockNumber + 1),
         invalidBlocks
       )
+      .attempt
       .flatMap {
         case Left(ex) =>
           Log[F]
