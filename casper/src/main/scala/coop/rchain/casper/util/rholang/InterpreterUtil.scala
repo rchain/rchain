@@ -47,7 +47,7 @@ object InterpreterUtil {
       _                    <- Span[F].mark("before-unsafe-get-parents")
       parents              <- ProtoUtil.getParents[F](b)
       _                    <- Span[F].mark("before-compute-parents-post-state")
-      possiblePreStateHash <- computeParentsPostState[F](parents, dag, runtimeManager)
+      possiblePreStateHash <- computeParentsPostState[F](parents, dag, runtimeManager).attempt
       _                    <- Log[F].info(s"Computed parents post state for ${PrettyPrinter.buildString(b)}.")
       invalidBlocksSet     <- dag.invalidBlocks
       unseenBlocksSet      <- ProtoUtil.unseenBlockHashes(dag, b)
@@ -158,7 +158,7 @@ object InterpreterUtil {
                           .ensure(new IllegalArgumentException("Parents must not be empty"))(
                             _.nonEmpty
                           )
-      possiblePreStateHash <- computeParentsPostState[F](nonEmptyParents, dag, runtimeManager)
+      possiblePreStateHash <- computeParentsPostState[F](nonEmptyParents, dag, runtimeManager).attempt
       result <- possiblePreStateHash.flatTraverse { preStateHash =>
                  runtimeManager
                    .computeState(preStateHash)(deploys, blockData, invalidBlocks)
@@ -173,20 +173,20 @@ object InterpreterUtil {
       parents: Seq[BlockMessage],
       dag: BlockDagRepresentation[F],
       runtimeManager: RuntimeManager[F]
-  ): F[Either[Throwable, StateHash]] = {
+  ): F[StateHash] = {
     val parentTuplespaces =
       parents.map(p => p -> ProtoUtil.tuplespace(p))
 
     parentTuplespaces match {
       // For genesis, use empty trie's root hash
       case Seq() =>
-        runtimeManager.emptyStateHash.asRight[Throwable].pure[F]
+        runtimeManager.emptyStateHash.pure[F]
 
       case Seq((_, parentStateHash)) =>
-        parentStateHash.asRight[Throwable].pure[F]
+        parentStateHash.pure[F]
 
       case (_, initStateHash) +: _ =>
-        replayIntoMergeBlock[F](parents, dag, runtimeManager, initStateHash)
+        replayIntoMergeBlock[F](parents, dag, runtimeManager, initStateHash).rethrow
     }
   }
 
