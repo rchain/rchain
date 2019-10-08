@@ -72,6 +72,7 @@ object InterpreterUtil {
                        isGenesis
                      )
                    } else {
+                     //TODO at this point we may just as well terminate the replay, there's no way it will succeed.
                      Log[F].warn(
                        s"Computed pre-state hash ${PrettyPrinter.buildString(computedPreStateHash)} does not equal block's pre-state hash ${PrettyPrinter
                          .buildString(incomingPreStateHash)}"
