@@ -33,48 +33,23 @@ object InterpreterUtil {
   //Returns (None, checkpoints) if the block's tuplespace hash
   //does not match the computed hash based on the deploys
   def validateBlockCheckpoint[F[_]: Sync: Log: BlockStore: Span](
-      b: BlockMessage,
+      block: BlockMessage,
       dag: BlockDagRepresentation[F],
       runtimeManager: RuntimeManager[F]
   ): F[BlockProcessing[Option[StateHash]]] = {
-    val incomingPreStateHash = ProtoUtil.preStateHash(b)
-    val tsHash               = ProtoUtil.tuplespace(b)
-    val deploys              = ProtoUtil.deploys(b)
-    val internalDeploys      = deploys.map(InternalProcessedDeploy.fromProcessedDeploy)
-    val timestamp            = b.header.timestamp
-    val blockNumber          = b.body.state.blockNumber
+    val incomingPreStateHash = ProtoUtil.preStateHash(block)
     for {
       _                  <- Span[F].mark("before-unsafe-get-parents")
-      parents            <- ProtoUtil.getParents(b)
+      parents            <- ProtoUtil.getParents(block)
       _                  <- Span[F].mark("before-compute-parents-post-state")
       preStateHashEither <- computeParentsPostState(parents, dag, runtimeManager).attempt
-      _                  <- Log[F].info(s"Computed parents post state for ${PrettyPrinter.buildString(b)}.")
+      _                  <- Log[F].info(s"Computed parents post state for ${PrettyPrinter.buildString(block)}.")
       result <- preStateHashEither match {
                  case Left(ex) =>
                    BlockStatus.exception(ex).asLeft[Option[StateHash]].pure
                  case Right(computedPreStateHash) =>
                    if (incomingPreStateHash == computedPreStateHash) {
-                     for {
-                       invalidBlocksSet <- dag.invalidBlocks
-                       unseenBlocksSet  <- ProtoUtil.unseenBlockHashes(dag, b)
-                       seenInvalidBlocksSet = invalidBlocksSet.filterNot(
-                         block => unseenBlocksSet.contains(block.blockHash)
-                       ) // TODO: Write test in which switching this to .filter makes it fail
-                       invalidBlocks = seenInvalidBlocksSet
-                         .map(block => (block.blockHash, block.sender))
-                         .toMap
-                       _         <- Span[F].mark("before-process-pre-state-hash")
-                       isGenesis = b.header.parentsHashList.isEmpty
-                       result <- replayBlockDeploys(
-                                  runtimeManager,
-                                  incomingPreStateHash,
-                                  tsHash,
-                                  internalDeploys,
-                                  BlockData(timestamp, blockNumber),
-                                  invalidBlocks,
-                                  isGenesis
-                                )
-                     } yield result
+                     replayBlockDeploys(block, dag, runtimeManager)
                    } else {
                      //TODO at this point we may just as well terminate the replay, there's no way it will succeed.
                      Log[F].warn(
@@ -86,67 +61,91 @@ object InterpreterUtil {
     } yield result
   }
 
-  private def replayBlockDeploys[F[_]: Sync: Log: BlockStore](
-      runtimeManager: RuntimeManager[F],
-      preStateHash: StateHash,
-      tsHash: StateHash,
-      internalDeploys: Seq[InternalProcessedDeploy],
-      blockData: BlockData,
-      invalidBlocks: Map[BlockHash, Validator],
-      isGenesis: Boolean
+  private def replayBlockDeploys[F[_]: Sync: Log: BlockStore: Span](
+      block: BlockMessage,
+      dag: BlockDagRepresentation[F],
+      runtimeManager: RuntimeManager[F]
+  ): F[BlockProcessing[Option[StateHash]]] = {
+    val preStateHash    = ProtoUtil.preStateHash(block)
+    val internalDeploys = ProtoUtil.deploys(block).map(InternalProcessedDeploy.fromProcessedDeploy)
+    val timestamp       = block.header.timestamp
+    val blockNumber     = block.body.state.blockNumber
+    for {
+      invalidBlocksSet <- dag.invalidBlocks
+      unseenBlocksSet  <- ProtoUtil.unseenBlockHashes(dag, block)
+      seenInvalidBlocksSet = invalidBlocksSet.filterNot(
+        block => unseenBlocksSet.contains(block.blockHash)
+      ) // TODO: Write test in which switching this to .filter makes it fail
+      invalidBlocks = seenInvalidBlocksSet
+        .map(block => (block.blockHash, block.sender))
+        .toMap
+      _         <- Span[F].mark("before-process-pre-state-hash")
+      blockData = BlockData(timestamp, blockNumber)
+      isGenesis = block.header.parentsHashList.isEmpty
+      replayResult <- runtimeManager.replayComputeState(preStateHash)(
+                       internalDeploys,
+                       blockData,
+                       invalidBlocks,
+                       isGenesis
+                     )
+      tsHash = ProtoUtil.tuplespace(block)
+      result <- handleErrors(tsHash, replayResult)
+    } yield result
+  }
+
+  private def handleErrors[F[_]: Sync: Log](
+      tsHash: ByteString,
+      result: Either[ReplayFailure, StateHash]
   ): F[BlockProcessing[Option[StateHash]]] =
-    runtimeManager
-      .replayComputeState(preStateHash)(internalDeploys, blockData, invalidBlocks, isGenesis)
-      .flatMap {
-        case Left((Some(deploy), status)) =>
-          status match {
-            case InternalErrors(exs) =>
-              BlockStatus
-                .exception(
-                  new Exception(s"Internal errors encountered while processing ${PrettyPrinter
-                    .buildString(deploy)}: ${exs.mkString("\n")}")
-                )
-                .asLeft[Option[StateHash]]
-                .pure
-            case UserErrors(errors: Seq[Throwable]) =>
-              Log[F].warn(s"Found user error(s) ${errors.map(_.getMessage).mkString("\n")}") >>
-                none[StateHash].asRight[BlockError].pure
-            case ReplayStatusMismatch(replay: DeployStatus, orig: DeployStatus) =>
-              Log[F].warn(
-                s"Found replay status mismatch; replay failure is ${replay.isFailed} and orig failure is ${orig.isFailed}"
-              ) >>
-                none[StateHash].asRight[BlockError].pure
-            case UnknownFailure =>
-              Log[F].warn(s"Found unknown failure") >>
-                none[StateHash].asRight[BlockError].pure
-            case UnusedCommEvent(_) =>
-              Sync[F].raiseError(new RuntimeException("found UnusedCommEvent"))
-          }
-        case Left((None, status)) =>
-          status match {
-            case UnusedCommEvent(_: ReplayException) =>
+    result.pure.flatMap {
+      case Left((Some(deploy), status)) =>
+        status match {
+          case InternalErrors(exs) =>
+            BlockStatus
+              .exception(
+                new Exception(s"Internal errors encountered while processing ${PrettyPrinter
+                  .buildString(deploy)}: ${exs.mkString("\n")}")
+              )
+              .asLeft[Option[StateHash]]
+              .pure
+          case UserErrors(errors: Seq[Throwable]) =>
+            Log[F].warn(s"Found user error(s) ${errors.map(_.getMessage).mkString("\n")}") >>
               none[StateHash].asRight[BlockError].pure
-            case InternalErrors(_) => new RuntimeException("found InternalErrors").raiseError
-            case ReplayStatusMismatch(_, _) =>
-              new RuntimeException("found ReplayStatusMismatch").raiseError
-            case UnknownFailure => new RuntimeException("found UnknownFailure").raiseError
-            case UserErrors(_)  => new RuntimeException("found UserErrors").raiseError
-          }
-        case Right(computedStateHash) =>
-          if (tsHash == computedStateHash) {
-            // state hash in block matches computed hash!
-            computedStateHash.some.asRight[BlockError].pure
-          } else {
-            // state hash in block does not match computed hash -- invalid!
-            // return no state hash, do not update the state hash set
+          case ReplayStatusMismatch(replay: DeployStatus, orig: DeployStatus) =>
             Log[F].warn(
-              s"Tuplespace hash ${PrettyPrinter.buildString(tsHash)} does not match computed hash ${PrettyPrinter
-                .buildString(computedStateHash)}."
+              s"Found replay status mismatch; replay failure is ${replay.isFailed} and orig failure is ${orig.isFailed}"
             ) >>
               none[StateHash].asRight[BlockError].pure
-
-          }
-      }
+          case UnknownFailure =>
+            Log[F].warn(s"Found unknown failure") >>
+              none[StateHash].asRight[BlockError].pure
+          case UnusedCommEvent(_) =>
+            Sync[F].raiseError(new RuntimeException("found UnusedCommEvent"))
+        }
+      case Left((None, status)) =>
+        status match {
+          case UnusedCommEvent(_: ReplayException) =>
+            none[StateHash].asRight[BlockError].pure
+          case InternalErrors(_) => new RuntimeException("found InternalErrors").raiseError
+          case ReplayStatusMismatch(_, _) =>
+            new RuntimeException("found ReplayStatusMismatch").raiseError
+          case UnknownFailure => new RuntimeException("found UnknownFailure").raiseError
+          case UserErrors(_)  => new RuntimeException("found UserErrors").raiseError
+        }
+      case Right(computedStateHash) =>
+        if (tsHash == computedStateHash) {
+          // state hash in block matches computed hash!
+          computedStateHash.some.asRight[BlockError].pure
+        } else {
+          // state hash in block does not match computed hash -- invalid!
+          // return no state hash, do not update the state hash set
+          Log[F].warn(
+            s"Tuplespace hash ${PrettyPrinter.buildString(tsHash)} does not match computed hash ${PrettyPrinter
+              .buildString(computedStateHash)}."
+          ) >>
+            none[StateHash].asRight[BlockError].pure
+        }
+    }
 
   def computeDeploysCheckpoint[F[_]: Sync: BlockStore: Log: Span](
       parents: Seq[BlockMessage],
