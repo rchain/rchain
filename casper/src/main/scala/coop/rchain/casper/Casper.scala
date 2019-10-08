@@ -102,28 +102,19 @@ sealed abstract class MultiParentCasperInstances {
       for {
         dag <- BlockDagStorage[F].getRepresentation
         maybePostGenesisStateHash <- InterpreterUtil
-                                      .validateBlockCheckpoint[F](
-                                        genesis,
-                                        dag,
-                                        runtimeManager
-                                      )
+                                      .validateBlockCheckpoint[F](genesis, dag, runtimeManager)
         postGenesisStateHash <- maybePostGenesisStateHash match {
                                  case Left(BlockError.BlockException(ex)) =>
-                                   Sync[F].raiseError[StateHash](ex)
+                                   ex.raiseError[F, StateHash]
                                  case Left(error) =>
-                                   Sync[F].raiseError[StateHash](
-                                     new Exception(s"Block error: $error")
-                                   )
+                                   new Exception(s"Block error: $error").raiseError[F, StateHash]
                                  case Right(None) =>
-                                   Sync[F].raiseError[StateHash](
-                                     new Exception("Genesis tuplespace validation failed!")
-                                   )
+                                   new Exception("Genesis tuplespace validation failed!")
+                                     .raiseError[F, StateHash]
                                  case Right(Some(hash)) => hash.pure[F]
                                }
         blockProcessingLock <- MetricsSemaphore.single[F]
-        casperState <- Cell.mvarCell[F, CasperState](
-                        CasperState()
-                      )
+        casperState         <- Cell.mvarCell[F, CasperState](CasperState())
       } yield {
         implicit val state = casperState
         new MultiParentCasperImpl[F](
