@@ -2,7 +2,7 @@ package coop.rchain.casper.util.rholang
 
 import cats.Monad
 import cats.effect._
-import cats.implicits._
+import cats.syntax.all._
 
 import coop.rchain.blockstorage.BlockStore
 import coop.rchain.blockstorage.dag.BlockDagRepresentation
@@ -152,7 +152,8 @@ object InterpreterUtil {
       runtimeManager: RuntimeManager[F],
       blockData: BlockData,
       invalidBlocks: Map[BlockHash, Validator]
-  ): F[Either[Throwable, (StateHash, StateHash, Seq[InternalProcessedDeploy])]] =
+  ): F[Either[Throwable, (StateHash, StateHash, Seq[InternalProcessedDeploy])]] = {
+    import cats.instances.either._
     for {
       nonEmptyParents <- parents
                           .pure[F]
@@ -169,6 +170,7 @@ object InterpreterUtil {
                    }
                }
     } yield result
+  }
 
   private def computeParentsPostState[F[_]: Sync: BlockStore: Log: Span](
       parents: Seq[BlockMessage],
@@ -199,7 +201,8 @@ object InterpreterUtil {
       dag: BlockDagRepresentation[F],
       runtimeManager: RuntimeManager[F],
       initStateHash: StateHash
-  ): F[Either[Throwable, StateHash]] =
+  ): F[Either[Throwable, StateHash]] = {
+    import cats.instances.vector._
     for {
       _                  <- Span[F].mark("before-compute-parents-post-state-find-multi-parents")
       blockHashesToApply <- findMultiParentsBlockHashesForReplay(parents, dag)
@@ -227,6 +230,7 @@ object InterpreterUtil {
                          }
                      }
     } yield replayResult
+  }
 
   private[rholang] def replayBlock[F[_]: Sync: BlockStore](
       hash: StateHash,
@@ -260,7 +264,8 @@ object InterpreterUtil {
   private[rholang] def findMultiParentsBlockHashesForReplay[F[_]: Monad](
       parents: Seq[BlockMessage],
       dag: BlockDagRepresentation[F]
-  ): F[Vector[BlockMetadata]] =
+  ): F[Vector[BlockMetadata]] = {
+    import cats.instances.list._
     for {
       parentsMetadata <- parents.toList.traverse(b => dag.lookup(b.blockHash).map(_.get))
       blockHashesToApply <- {
@@ -277,4 +282,5 @@ object InterpreterUtil {
         } yield result
       }
     } yield blockHashesToApply
+  }
 }
