@@ -1,14 +1,13 @@
 package coop.rchain.models.rholang
 
-import com.google.protobuf.ByteString
 import coop.rchain.models.Connective.ConnectiveInstance._
 import coop.rchain.models.Expr.ExprInstance._
 import coop.rchain.models.Var.VarInstance.{BoundVar, FreeVar, Wildcard}
-import coop.rchain.models._
 import coop.rchain.models.rholang.SortTest.sort
 import coop.rchain.models.rholang.implicits._
 import coop.rchain.models.rholang.sorter._
 import coop.rchain.models.testUtils.TestUtils.forAllSimilarA
+import coop.rchain.models.{New, _}
 import monix.eval.Coeval
 import org.scalacheck.Arbitrary
 import org.scalatest._
@@ -525,61 +524,29 @@ class ParSortMatcherSpec extends FlatSpec with Matchers {
     result.term should be(sortedParMatch)
   }
 
-  it should "sort News based on bindCount, uri's, deployId, deployerId and then body" in {
+  it should "sort News based on bindCount, uri's and then body" in {
     val parNew =
       Par(
         news = List(
-          New(bindCount = 2, deployerId = None, p = Par()),
+          New(bindCount = 2, p = Par()),
           New(
             bindCount = 2,
             uri = Vector("rho:io:stderr"),
-            deployId = Some(DeployId(ByteString.EMPTY)),
-            deployerId = Some(DeployerId(ByteString.EMPTY)),
             p = Par()
           ),
           New(bindCount = 2, uri = Vector("rho:io:stdout"), p = Par()),
-          New(bindCount = 1, deployerId = None, p = Par()),
-          New(
-            bindCount = 2,
-            uri = Vector("rho:io:stderr"),
-            deployId = None,
-            deployerId = Some(DeployerId(ByteString.EMPTY)),
-            p = Par()
-          ),
-          New(
-            bindCount = 2,
-            uri = Vector("rho:io:stderr"),
-            deployId = None,
-            deployerId = None,
-            p = Par()
-          ),
+          New(bindCount = 1, p = Par()),
           New(bindCount = 2, uri = Vector("rho:io:stdout"), p = GInt(7))
         )
       )
     val sortedParNew =
       Par(
         news = List(
-          New(bindCount = 1, deployerId = None, p = Par()),
-          New(bindCount = 2, deployerId = None, p = Par()),
+          New(bindCount = 1, p = Par()),
+          New(bindCount = 2, p = Par()),
           New(
             bindCount = 2,
             uri = Vector("rho:io:stderr"),
-            deployId = None,
-            deployerId = None,
-            p = Par()
-          ),
-          New(
-            bindCount = 2,
-            uri = Vector("rho:io:stderr"),
-            deployId = None,
-            deployerId = Some(DeployerId(ByteString.EMPTY)),
-            p = Par()
-          ),
-          New(
-            bindCount = 2,
-            uri = Vector("rho:io:stderr"),
-            deployId = Some(DeployId(ByteString.EMPTY)),
-            deployerId = Some(DeployerId(ByteString.EMPTY)),
             p = Par()
           ),
           New(bindCount = 2, uri = Vector("rho:io:stdout"), p = Par()),

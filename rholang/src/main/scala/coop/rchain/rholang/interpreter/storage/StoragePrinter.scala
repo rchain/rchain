@@ -9,7 +9,7 @@ import coop.rchain.models.TaggedContinuation.TaggedCont.ParBody
 import coop.rchain.models._
 import coop.rchain.models.rholang.implicits._
 import coop.rchain.rholang.interpreter.Runtime.RhoISpace
-import coop.rchain.rholang.interpreter.{Interpreter, NormalizerEnv, PrettyPrinter, Runtime}
+import coop.rchain.rholang.interpreter.{Interpreter, PrettyPrinter, Runtime}
 import coop.rchain.rspace.internal.{Datum, Row, WaitingContinuation}
 import coop.rchain.rspace.trace.{Consume, Produce}
 

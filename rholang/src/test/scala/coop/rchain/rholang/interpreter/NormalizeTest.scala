@@ -15,6 +15,7 @@ import coop.rchain.models.rholang.sorter.ordering._
 import scala.collection.immutable.BitSet
 import coop.rchain.models.Connective.ConnectiveInstance._
 import coop.rchain.models.Expr.ExprInstance._
+import coop.rchain.models.NormalizerEnv.NormalizerEnv
 import coop.rchain.models.Var.VarInstance._
 import coop.rchain.models.Var.WildcardMsg
 import coop.rchain.models._
@@ -911,7 +912,6 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
             .prepend(Send(EVar(BoundVar(1)), List[Par](GInt(8)), false, BitSet(1)))
             .prepend(Send(EVar(BoundVar(0)), List[Par](GInt(9)), false, BitSet(0))),
           uri = Vector.empty,
-          deployerId = None,
           locallyFree = BitSet()
         )
       )
@@ -965,7 +965,6 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
             .prepend(Send(EVar(BoundVar(0)), List[Par](GInt(10)), false, BitSet(0)))
             .prepend(Send(EVar(BoundVar(2)), List[Par](GInt(11)), false, BitSet(2))),
           uri = Vector("rho:registry", "rho:stdout"),
-          deployerId = None,
           locallyFree = BitSet()
         )
       )
@@ -1136,7 +1135,6 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
                 bindCount = 1,
                 p = Send(EVar(BoundVar(0)), List[Par](GInt(47)), false, BitSet(0)),
                 uri = Vector.empty,
-                deployerId = None,
                 locallyFree = BitSet()
               )
             ),
@@ -1146,7 +1144,6 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
                 bindCount = 1,
                 p = Send(EVar(BoundVar(0)), List[Par](GInt(47)), false, BitSet(0)),
                 uri = Vector.empty,
-                deployerId = None,
                 locallyFree = BitSet()
               )
             )

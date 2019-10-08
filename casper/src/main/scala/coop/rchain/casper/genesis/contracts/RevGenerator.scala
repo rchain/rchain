@@ -1,11 +1,9 @@
 package coop.rchain.casper.genesis.contracts
 
-import cats.implicits._
-import coop.rchain.crypto.PublicKey
-import coop.rchain.models.Par
+import coop.rchain.models.NormalizerEnv.NormalizerEnv
+import coop.rchain.models.{NormalizerEnv, Par}
 import coop.rchain.rholang.build.CompiledRholangSource
-import coop.rchain.rholang.interpreter.{NormalizerEnv, ParBuilder}
-import coop.rchain.rholang.interpreter.util.RevAddress
+import coop.rchain.rholang.interpreter.ParBuilder
 import monix.eval.Coeval
 
 final case class RevGenerator(userVaults: Seq[Vault], supply: Long) extends CompiledRholangSource {
@@ -26,7 +24,7 @@ final case class RevGenerator(userVaults: Seq[Vault], supply: Long) extends Comp
        # }
      """.stripMargin('#')
 
-  val normalizerEnv: NormalizerEnv = NormalizerEnv(deployId = none, deployerPk = none)
+  val normalizerEnv: NormalizerEnv = NormalizerEnv.Empty
 
   val term: Par =
     ParBuilder[Coeval]

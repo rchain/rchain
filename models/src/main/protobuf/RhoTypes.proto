@@ -153,9 +153,8 @@ message New {
     Par p = 2 [(scalapb.field).no_box = true];
     // For normalization, uri-referenced variables come at the end, and in lexicographical order.
     repeated string uri = 3;
-    DeployId deployId = 4;
-    DeployerId deployerId = 5;
-    bytes locallyFree = 6 [(scalapb.field).type = "coop.rchain.models.AlwaysEqual[scala.collection.immutable.BitSet]"];
+    map<string, Par> injections = 4;
+    bytes locallyFree = 5 [(scalapb.field).type = "coop.rchain.models.AlwaysEqual[scala.collection.immutable.BitSet]"];
 }
 
 message MatchCase {
@@ -404,6 +403,7 @@ message GUnforgeable {
         GDeployerId g_deployer_id_body = 3;
     }
 }
+
 message GPrivate {
     bytes id = 1;
 }

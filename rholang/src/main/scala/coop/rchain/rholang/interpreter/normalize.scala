@@ -5,6 +5,7 @@ import cats.effect.Sync
 import cats.implicits._
 import coop.rchain.models.Connective.ConnectiveInstance._
 import coop.rchain.models.Expr.ExprInstance._
+import coop.rchain.models.NormalizerEnv.NormalizerEnv
 import coop.rchain.models.Var.VarInstance._
 import coop.rchain.models._
 import coop.rchain.models.rholang.implicits._
@@ -956,29 +957,21 @@ object ProcNormalizeMatcher {
         val newCount           = newEnv.count - input.env.count
         val requiresDeployId   = uris.contains(deployIdUri)
         val requiresDeployerId = uris.contains(deployerIdUri)
+
         def missingEnvElement(name: String, uri: String) =
           NormalizerError(s"`$uri` was used in rholang usage context where $name is not available.")
-        if (requiresDeployId && env.deployId.isEmpty)
+        if (requiresDeployId && env.get(deployIdUri).forall(_.singleDeployId().isEmpty))
           missingEnvElement("DeployId", deployIdUri).raiseError[M, ProcVisitOutputs]
-        else if (requiresDeployerId && env.deployerPk.isEmpty)
+        else if (requiresDeployerId && env.get(deployerIdUri).forall(_.singleDeployerId().isEmpty))
           missingEnvElement("DeployerId", deployerIdUri).raiseError[M, ProcVisitOutputs]
         else {
-          val maybeDeployId =
-            if (requiresDeployId)
-              env.deployId.map(sig => DeployId(sig.toByteString))
-            else none[DeployId]
-          val maybeDeployerId =
-            if (requiresDeployerId)
-              env.deployerPk.map(pk => DeployerId(pk.bytes.toByteString))
-            else none[DeployerId]
           normalizeMatch[M](p.proc_, ProcVisitInputs(VectorPar(), newEnv, input.knownFree)).map {
             bodyResult =>
               val resultNew = New(
                 bindCount = newCount,
                 p = bodyResult.par,
                 uri = uris,
-                deployId = maybeDeployId,
-                deployerId = maybeDeployerId,
+                injections = env,
                 locallyFree = bodyResult.par.locallyFree.from(newCount).map(x => x - newCount)
               )
               ProcVisitOutputs(input.par.prepend(resultNew), bodyResult.knownFree)

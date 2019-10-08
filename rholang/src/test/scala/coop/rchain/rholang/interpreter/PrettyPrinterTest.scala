@@ -3,6 +3,7 @@ package coop.rchain.rholang.interpreter
 import java.io.StringReader
 
 import coop.rchain.models.Expr.ExprInstance._
+import coop.rchain.models.NormalizerEnv.NormalizerEnv
 import coop.rchain.models.rholang.implicits.{GPrivateBuilder, _}
 import coop.rchain.models.{Send, _}
 import coop.rchain.rholang.syntax.rholang_mercury.Absyn._

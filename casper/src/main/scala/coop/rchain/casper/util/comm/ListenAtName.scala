@@ -10,10 +10,9 @@ import cats.syntax.flatMap._
 import cats.syntax.functor._
 import cats.syntax.traverse._
 import coop.rchain.casper.util.rholang.InterpreterUtil
-import coop.rchain.models.{GPrivate, Par}
+import coop.rchain.models.{GPrivate, NormalizerEnv, Par}
 import coop.rchain.shared.Time
 import com.google.protobuf.ByteString
-import coop.rchain.rholang.interpreter.NormalizerEnv
 
 object ListenAtName {
   sealed trait Name

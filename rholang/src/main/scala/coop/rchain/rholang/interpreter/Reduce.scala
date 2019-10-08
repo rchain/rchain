@@ -11,6 +11,8 @@ import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.metrics.Span
 import coop.rchain.models.Expr.ExprInstance._
+import coop.rchain.models.GUnforgeable.UnfInstance
+import coop.rchain.models.GUnforgeable.UnfInstance.{GDeployIdBody, GDeployerIdBody, GPrivateBody}
 import coop.rchain.models.TaggedContinuation.TaggedCont.ParBody
 import coop.rchain.models.Var.VarInstance
 import coop.rchain.models.Var.VarInstance.{BoundVar, FreeVar, Wildcard}
@@ -387,28 +389,32 @@ class DebruijnInterpreter[M[_], F[_]](
   )(implicit env: Env[Par], rand: Blake2b512Random): M[Unit] = {
 
     def alloc(count: Int, urns: Seq[String]): M[Env[Par]] = {
-      val deployIdUrn   = "rho:rchain:deployId"
-      val deployerIdUrn = "rho:rchain:deployerId"
-
       val simpleNews = (0 until (count - urns.size)).toList.foldLeft(env) { (_env, _) =>
         val addr: Par = GPrivate(ByteString.copyFrom(rand.next()))
         _env.put(addr)
       }
 
-      def normalizerBugFound(name: String, urn: String) =
+      def normalizerBugFound(urn: String) =
         BugFoundError(
-          s"No $name set despite `$urn` being used in a term. This is a bug in the normalizer or on the path from it."
+          s"No value set for `$urn`. This is a bug in the normalizer or on the path from it."
         )
 
       def addUrn(newEnv: Env[Par], urn: String): Either[InterpreterError, Env[Par]] =
-        if (urn == deployIdUrn)
-          neu.deployId
-            .map { case DeployId(sig) => newEnv.put(GDeployId(sig)).asRight[InterpreterError] }
-            .getOrElse(normalizerBugFound("DeployId", deployIdUrn).asLeft[Env[Par]])
-        else if (urn == deployerIdUrn)
-          neu.deployerId
-            .map { case DeployerId(pk) => newEnv.put(GDeployerId(pk)).asRight[InterpreterError] }
-            .getOrElse(normalizerBugFound("DeployerId", deployerIdUrn).asLeft[Env[Par]])
+        if (urnMap.get(urn).isEmpty)
+          // If `urn` can't be found in `urnMap`, it must be referencing an injection
+          neu.injections
+            .get(urn)
+            .map {
+              case RhoType.Unforgeable(GUnforgeable(unfInstance)) if unfInstance.isDefined =>
+                newEnv.put(unfInstance).asRight[InterpreterError]
+
+              case RhoType.Expression(Expr(exprInstance)) if exprInstance.isDefined =>
+                newEnv.put(exprInstance).asRight[InterpreterError]
+
+              case _ =>
+                BugFoundError("Invalid injection.").asLeft[Env[Par]]
+            }
+            .getOrElse(normalizerBugFound(urn).asLeft[Env[Par]])
         else
           urnMap.get(urn) match {
             case Some(p) => newEnv.put(p).asRight[InterpreterError]

@@ -10,7 +10,7 @@ import coop.rchain.rholang.interpreter.accounting.CostAccounting
 import coop.rchain.shared.PathOps.RichPath
 import java.nio.file.{Files, Path, Paths}
 
-import coop.rchain.rholang.interpreter.{NormalizerEnv, PrettyPrinter, Runtime}
+import coop.rchain.rholang.interpreter.{PrettyPrinter, Runtime}
 import coop.rchain.rspace.Checkpoint
 import coop.rchain.shared.Log
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}

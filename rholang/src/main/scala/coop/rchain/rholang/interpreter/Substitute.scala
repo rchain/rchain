@@ -251,8 +251,7 @@ object Substitute {
                 bindCount = term.bindCount,
                 p = newSub,
                 uri = term.uri,
-                deployerId = term.deployerId,
-                deployId = term.deployId,
+                injections = term.injections,
                 locallyFree = term.locallyFree.until(env.shift)
               )
           )

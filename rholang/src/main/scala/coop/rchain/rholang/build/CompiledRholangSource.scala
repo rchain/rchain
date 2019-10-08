@@ -1,6 +1,7 @@
 package coop.rchain.rholang.build
+import coop.rchain.models.NormalizerEnv.NormalizerEnv
 import coop.rchain.models.Par
-import coop.rchain.rholang.interpreter.{NormalizerEnv, ParBuilder}
+import coop.rchain.rholang.interpreter.ParBuilder
 import monix.eval.Coeval
 
 import scala.io.Source

@@ -4,9 +4,10 @@ import com.google.protobuf.ByteString
 import coop.rchain.casper.protocol.{DeployData, DeployDataProto}
 import coop.rchain.metrics
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
+import coop.rchain.models.NormalizerEnv
 import coop.rchain.rholang.Resources.mkRuntime
 import coop.rchain.rholang.interpreter.storage.StoragePrinter
-import coop.rchain.rholang.interpreter.{Interpreter, InterpreterUtil, NormalizerEnv}
+import coop.rchain.rholang.interpreter.{Interpreter, InterpreterUtil}
 import coop.rchain.shared.Log
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global

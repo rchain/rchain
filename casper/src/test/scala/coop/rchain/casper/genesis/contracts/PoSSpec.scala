@@ -5,8 +5,8 @@ import coop.rchain.casper.helper.RhoSpec
 import coop.rchain.casper.util.GenesisBuilder
 import coop.rchain.crypto.PublicKey
 import coop.rchain.crypto.codec.Base16
+import coop.rchain.models.NormalizerEnv
 import coop.rchain.rholang.build.CompiledRholangSource
-import coop.rchain.rholang.interpreter.NormalizerEnv
 import coop.rchain.rholang.interpreter.util.RevAddress
 
 import scala.concurrent.duration._

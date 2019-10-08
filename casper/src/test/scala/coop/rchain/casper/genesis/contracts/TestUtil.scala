@@ -4,9 +4,10 @@ import cats.FlatMap
 import cats.effect.Sync
 import cats.implicits._
 import coop.rchain.crypto.hash.Blake2b512Random
+import coop.rchain.models.NormalizerEnv.NormalizerEnv
 import coop.rchain.models.Par
 import coop.rchain.rholang.interpreter.accounting.Cost
-import coop.rchain.rholang.interpreter.{NormalizerEnv, ParBuilder, Runtime}
+import coop.rchain.rholang.interpreter.{ParBuilder, Runtime}
 
 object TestUtil {
 

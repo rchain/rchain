@@ -6,6 +6,7 @@ import cats.effect.Sync
 import cats.implicits._
 import coop.rchain.crypto.PublicKey
 import coop.rchain.models.Connective.ConnectiveInstance
+import coop.rchain.models.NormalizerEnv.NormalizerEnv
 import coop.rchain.models.Par
 import coop.rchain.models.rholang.implicits.VectorPar
 import coop.rchain.models.rholang.sorter.Sortable

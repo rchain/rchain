@@ -5,8 +5,8 @@ import coop.rchain.casper.helper.{
   RhoTestAssertion,
   TestResult
 }
+import coop.rchain.models.NormalizerEnv
 import coop.rchain.rholang.build.CompiledRholangSource
-import coop.rchain.rholang.interpreter.NormalizerEnv
 import org.scalatest.{AppendedClues, FlatSpec, Matchers}
 
 import scala.concurrent.duration._

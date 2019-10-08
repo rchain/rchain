@@ -10,6 +10,7 @@ import coop.rchain.casper.protocol._
 import coop.rchain.casper.protocol.deploy.v1
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.models.Expr.ExprInstance.GInt
+import coop.rchain.models.NormalizerEnv.NormalizerEnv
 
 import scala.collection.immutable.BitSet
 import scala.util.hashing.MurmurHash3
@@ -62,6 +63,7 @@ object HashM extends HashMDerivation {
   implicit val BitSetHash: HashM[BitSet]                     = opaqueHash
   implicit val ByteStringHash: HashM[ByteString]             = opaqueHash
   implicit val Blake2b512RandomHash: HashM[Blake2b512Random] = opaqueHash
+  implicit val NormalizerEnvHash: HashM[NormalizerEnv]       = opaqueHash
   implicit def alwaysEqualHash[A]: HashM[AlwaysEqual[A]]     = opaqueHash
 
   /** The instance for Long is private, because - for the whole derivation to be consistent with default hashCode
