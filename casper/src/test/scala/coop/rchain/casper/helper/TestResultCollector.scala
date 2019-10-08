@@ -92,7 +92,7 @@ class TestResultCollector[F[_]: Concurrent: Span](result: Ref[F, TestResult]) {
 
   def handleMessage(
       ctx: SystemProcess.Context[F]
-  )(message: (Seq[ListParWithRandom], Int)): F[Unit] = {
+  )(message: Seq[ListParWithRandom]): F[Unit] = {
 
     val isContractCall = new ContractCall[F](ctx.space, ctx.dispatcher)
 

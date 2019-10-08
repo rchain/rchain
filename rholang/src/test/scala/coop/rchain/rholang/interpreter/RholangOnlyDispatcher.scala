@@ -40,8 +40,7 @@ class RholangOnlyDispatcher[M[_]](implicit s: Sync[M], reducer: Reduce[M])
 
   def dispatch(
       continuation: TaggedContinuation,
-      dataList: Seq[ListParWithRandom],
-      sequenceNumber: Int
+      dataList: Seq[ListParWithRandom]
   ): M[Unit] =
     for {
       res <- continuation.taggedCont match {

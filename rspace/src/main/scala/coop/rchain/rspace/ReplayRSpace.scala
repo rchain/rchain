@@ -61,7 +61,6 @@ class ReplayRSpace[F[_]: Sync, C, P, A, K](
       patterns: Seq[P],
       continuation: K,
       persist: Boolean,
-      sequenceNumber: Int,
       peeks: SortedSet[Int] = SortedSet.empty
   ): F[MaybeActionResult] =
     contextShift.evalOn(scheduler) {
@@ -76,7 +75,6 @@ class ReplayRSpace[F[_]: Sync, C, P, A, K](
                        patterns,
                        continuation,
                        persist,
-                       sequenceNumber,
                        peeks
                      )
                    }
@@ -88,7 +86,6 @@ class ReplayRSpace[F[_]: Sync, C, P, A, K](
       patterns: Seq[P],
       continuation: K,
       persist: Boolean,
-      sequenceNumber: Int,
       peeks: SortedSet[Int]
   ): F[MaybeActionResult] = {
     def runMatcher(comm: COMM): F[Option[Seq[DataCandidate[C, A]]]] =
@@ -144,7 +141,6 @@ class ReplayRSpace[F[_]: Sync, C, P, A, K](
                       persist,
                       channels,
                       patterns,
-                      0,
                       peeks.nonEmpty
                     ),
                     mats
@@ -221,11 +217,11 @@ class ReplayRSpace[F[_]: Sync, C, P, A, K](
     } yield r
   }
 
-  def produce(channel: C, data: A, persist: Boolean, sequenceNumber: Int): F[MaybeActionResult] =
+  def produce(channel: C, data: A, persist: Boolean): F[MaybeActionResult] =
     contextShift.evalOn(scheduler) {
       (for {
         result <- produceLockF(channel) {
-                   lockedProduce(channel, data, persist, sequenceNumber)
+                   lockedProduce(channel, data, persist)
                  }
       } yield result).timer(produceTimeCommLabel)
     }
@@ -233,8 +229,7 @@ class ReplayRSpace[F[_]: Sync, C, P, A, K](
   private[this] def lockedProduce(
       channel: C,
       data: A,
-      persist: Boolean,
-      sequenceNumber: Int
+      persist: Boolean
   ): F[MaybeActionResult] = {
 
     type MaybeProduceCandidate = Option[ProduceCandidate[C, P, A, K]]
@@ -365,7 +360,6 @@ class ReplayRSpace[F[_]: Sync, C, P, A, K](
                         persistK,
                         channels,
                         patterns,
-                        0,
                         peeks.nonEmpty
                       ),
                       dataCandidates.map(
