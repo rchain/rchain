@@ -62,7 +62,7 @@ object InterpreterUtil {
                    BlockStatus.exception(ex).asLeft[Option[StateHash]].pure[F]
                  case Right(computedPreStateHash) =>
                    if (incomingPreStateHash == computedPreStateHash) {
-                     processPreStateHash[F](
+                     replayBlockDeploys[F](
                        runtimeManager,
                        incomingPreStateHash,
                        tsHash,
@@ -83,7 +83,7 @@ object InterpreterUtil {
   }
 
   @SuppressWarnings(Array("org.wartremover.warts.Throw"))
-  private def processPreStateHash[F[_]: Sync: Log: BlockStore](
+  private def replayBlockDeploys[F[_]: Sync: Log: BlockStore](
       runtimeManager: RuntimeManager[F],
       preStateHash: StateHash,
       tsHash: StateHash,
