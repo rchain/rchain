@@ -56,50 +56,30 @@ object InterpreterUtil {
       ) // TODO: Write test in which switching this to .filter makes it fail
       invalidBlocks = seenInvalidBlocksSet.map(block => (block.blockHash, block.sender)).toMap
       _             <- Span[F].mark("before-process-pre-state-hash")
-      result <- processPossiblePreStateHash[F](
-                 runtimeManager,
-                 preStateHash,
-                 tsHash,
-                 internalDeploys,
-                 possiblePreStateHash,
-                 BlockData(timestamp, blockNumber),
-                 invalidBlocks,
-                 isGenesis = b.header.parentsHashList.isEmpty
-               )
+      isGenesis     = b.header.parentsHashList.isEmpty
+      result <- possiblePreStateHash match {
+                 case Left(ex) =>
+                   BlockStatus.exception(ex).asLeft[Option[StateHash]].pure[F]
+                 case Right(computedPreStateHash) =>
+                   if (preStateHash == computedPreStateHash) {
+                     processPreStateHash[F](
+                       runtimeManager,
+                       preStateHash,
+                       tsHash,
+                       internalDeploys,
+                       BlockData(timestamp, blockNumber),
+                       invalidBlocks,
+                       isGenesis
+                     )
+                   } else {
+                     Log[F].warn(
+                       s"Computed pre-state hash ${PrettyPrinter.buildString(computedPreStateHash)} does not equal block's pre-state hash ${PrettyPrinter
+                         .buildString(preStateHash)}"
+                     ) >> none[StateHash].asRight[BlockError].pure[F]
+                   }
+               }
     } yield result
   }
-
-  private def processPossiblePreStateHash[F[_]: Sync: Log: BlockStore](
-      runtimeManager: RuntimeManager[F],
-      preStateHash: StateHash,
-      tsHash: StateHash,
-      internalDeploys: Seq[InternalProcessedDeploy],
-      possiblePreStateHash: Either[Throwable, StateHash],
-      blockData: BlockData,
-      invalidBlocks: Map[BlockHash, Validator],
-      isGenesis: Boolean
-  ): F[BlockProcessing[Option[StateHash]]] =
-    possiblePreStateHash match {
-      case Left(ex) =>
-        BlockStatus.exception(ex).asLeft[Option[StateHash]].pure[F]
-      case Right(computedPreStateHash) =>
-        if (preStateHash == computedPreStateHash) {
-          processPreStateHash[F](
-            runtimeManager,
-            preStateHash,
-            tsHash,
-            internalDeploys,
-            blockData,
-            invalidBlocks,
-            isGenesis
-          )
-        } else {
-          Log[F].warn(
-            s"Computed pre-state hash ${PrettyPrinter.buildString(computedPreStateHash)} does not equal block's pre-state hash ${PrettyPrinter
-              .buildString(preStateHash)}"
-          ) >> none[StateHash].asRight[BlockError].pure[F]
-        }
-    }
 
   @SuppressWarnings(Array("org.wartremover.warts.Throw"))
   private def processPreStateHash[F[_]: Sync: Log: BlockStore](
