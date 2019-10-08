@@ -49,28 +49,32 @@ object InterpreterUtil {
       _                  <- Span[F].mark("before-compute-parents-post-state")
       preStateHashEither <- computeParentsPostState(parents, dag, runtimeManager).attempt
       _                  <- Log[F].info(s"Computed parents post state for ${PrettyPrinter.buildString(b)}.")
-      invalidBlocksSet   <- dag.invalidBlocks
-      unseenBlocksSet    <- ProtoUtil.unseenBlockHashes(dag, b)
-      seenInvalidBlocksSet = invalidBlocksSet.filterNot(
-        block => unseenBlocksSet.contains(block.blockHash)
-      ) // TODO: Write test in which switching this to .filter makes it fail
-      invalidBlocks = seenInvalidBlocksSet.map(block => (block.blockHash, block.sender)).toMap
-      _             <- Span[F].mark("before-process-pre-state-hash")
-      isGenesis     = b.header.parentsHashList.isEmpty
       result <- preStateHashEither match {
                  case Left(ex) =>
                    BlockStatus.exception(ex).asLeft[Option[StateHash]].pure
                  case Right(computedPreStateHash) =>
                    if (incomingPreStateHash == computedPreStateHash) {
-                     replayBlockDeploys(
-                       runtimeManager,
-                       incomingPreStateHash,
-                       tsHash,
-                       internalDeploys,
-                       BlockData(timestamp, blockNumber),
-                       invalidBlocks,
-                       isGenesis
-                     )
+                     for {
+                       invalidBlocksSet <- dag.invalidBlocks
+                       unseenBlocksSet  <- ProtoUtil.unseenBlockHashes(dag, b)
+                       seenInvalidBlocksSet = invalidBlocksSet.filterNot(
+                         block => unseenBlocksSet.contains(block.blockHash)
+                       ) // TODO: Write test in which switching this to .filter makes it fail
+                       invalidBlocks = seenInvalidBlocksSet
+                         .map(block => (block.blockHash, block.sender))
+                         .toMap
+                       _         <- Span[F].mark("before-process-pre-state-hash")
+                       isGenesis = b.header.parentsHashList.isEmpty
+                       result <- replayBlockDeploys(
+                                  runtimeManager,
+                                  incomingPreStateHash,
+                                  tsHash,
+                                  internalDeploys,
+                                  BlockData(timestamp, blockNumber),
+                                  invalidBlocks,
+                                  isGenesis
+                                )
+                     } yield result
                    } else {
                      //TODO at this point we may just as well terminate the replay, there's no way it will succeed.
                      Log[F].warn(
