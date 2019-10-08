@@ -82,7 +82,6 @@ object InterpreterUtil {
     } yield result
   }
 
-  @SuppressWarnings(Array("org.wartremover.warts.Throw"))
   private def replayBlockDeploys[F[_]: Sync: Log: BlockStore](
       runtimeManager: RuntimeManager[F],
       preStateHash: StateHash,
@@ -123,11 +122,11 @@ object InterpreterUtil {
           status match {
             case UnusedCommEvent(_: ReplayException) =>
               none[StateHash].asRight[BlockError].pure
-            case InternalErrors(_) => throw new RuntimeException("found InternalErrors")
+            case InternalErrors(_) => new RuntimeException("found InternalErrors").raiseError
             case ReplayStatusMismatch(_, _) =>
-              throw new RuntimeException("found ReplayStatusMismatch")
-            case UnknownFailure => throw new RuntimeException("found UnknownFailure")
-            case UserErrors(_)  => throw new RuntimeException("found UserErrors")
+              new RuntimeException("found ReplayStatusMismatch").raiseError
+            case UnknownFailure => new RuntimeException("found UnknownFailure").raiseError
+            case UserErrors(_)  => new RuntimeException("found UserErrors").raiseError
           }
         case Right(computedStateHash) =>
           if (tsHash == computedStateHash) {
