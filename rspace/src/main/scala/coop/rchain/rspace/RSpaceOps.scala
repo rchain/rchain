@@ -231,15 +231,11 @@ abstract class RSpaceOps[F[_]: Concurrent: Metrics, C, P, A, K](
 
   override def clear(): F[Unit] = reset(History.emptyRootHash)
 
-  protected def createCache: F[Cell[F, Cache[C, P, A, K]]] =
-    Cell.refCell[F, Cache[C, P, A, K]](Cache())
-
   protected def createNewHotStore(
       historyReader: HistoryReader[F, C, P, A, K]
   )(implicit ck: Codec[K]): F[Unit] =
     for {
-      cache        <- createCache
-      nextHotStore = HotStore.inMem(Sync[F], cache, historyReader, ck)
+      nextHotStore <- HotStore.empty(historyReader)
       _            = storeAtom.set(nextHotStore)
     } yield ()
 

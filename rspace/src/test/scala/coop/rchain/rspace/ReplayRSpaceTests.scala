@@ -6,6 +6,7 @@ import cats.Functor
 import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.catscontrib.ski._
 import cats.effect._
+import cats.effect.concurrent.Ref
 import cats.implicits._
 import com.typesafe.scalalogging.Logger
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
@@ -1315,7 +1316,7 @@ trait InMemoryReplayRSpaceTestsBase[C, P, A, K] extends ReplayRSpaceTestsBase[C,
 
     (for {
       historyRepository <- HistoryRepositoryInstances.lmdbRepository[Task, C, P, A, K](config)
-      cache <- Cell.refCell[Task, Cache[C, P, A, K]](
+      cache <- Ref.of[Task, Cache[C, P, A, K]](
                 Cache[C, P, A, K]()
               )
       store = {
@@ -1328,7 +1329,7 @@ trait InMemoryReplayRSpaceTestsBase[C, P, A, K] extends ReplayRSpaceTestsBase[C,
         store,
         branch
       )
-      historyCache <- Cell.refCell[Task, Cache[C, P, A, K]](
+      historyCache <- Ref.of[Task, Cache[C, P, A, K]](
                        Cache[C, P, A, K]()
                      )
       replayStore = {
