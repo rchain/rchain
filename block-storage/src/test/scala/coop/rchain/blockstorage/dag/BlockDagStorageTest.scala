@@ -581,4 +581,15 @@ class BlockDagFileStorageTest extends BlockDagStorageTest {
       }
     }
   }
+
+  it should "handle blocks with invalid numbers" in {
+    forAll(blockElementGen, blockElementGen) { (genesis, block) =>
+      withDagStorage { dagStorage =>
+        val invalidBlock =
+          block.copy(body = block.body.copy(state = block.body.state.copy(blockNumber = 1000)))
+        dagStorage.insert(genesis, genesis, false) >>
+          dagStorage.insert(invalidBlock, genesis, true)
+      }
+    }
+  }
 }
