@@ -45,9 +45,9 @@ object InterpreterUtil {
     val blockNumber          = b.body.state.blockNumber
     for {
       _                    <- Span[F].mark("before-unsafe-get-parents")
-      parents              <- ProtoUtil.getParents[F](b)
+      parents              <- ProtoUtil.getParents(b)
       _                    <- Span[F].mark("before-compute-parents-post-state")
-      possiblePreStateHash <- computeParentsPostState[F](parents, dag, runtimeManager).attempt
+      possiblePreStateHash <- computeParentsPostState(parents, dag, runtimeManager).attempt
       _                    <- Log[F].info(s"Computed parents post state for ${PrettyPrinter.buildString(b)}.")
       invalidBlocksSet     <- dag.invalidBlocks
       unseenBlocksSet      <- ProtoUtil.unseenBlockHashes(dag, b)
@@ -59,10 +59,10 @@ object InterpreterUtil {
       isGenesis     = b.header.parentsHashList.isEmpty
       result <- possiblePreStateHash match {
                  case Left(ex) =>
-                   BlockStatus.exception(ex).asLeft[Option[StateHash]].pure[F]
+                   BlockStatus.exception(ex).asLeft[Option[StateHash]].pure
                  case Right(computedPreStateHash) =>
                    if (incomingPreStateHash == computedPreStateHash) {
-                     replayBlockDeploys[F](
+                     replayBlockDeploys(
                        runtimeManager,
                        incomingPreStateHash,
                        tsHash,
@@ -76,7 +76,7 @@ object InterpreterUtil {
                      Log[F].warn(
                        s"Computed pre-state hash ${PrettyPrinter.buildString(computedPreStateHash)} does not equal block's pre-state hash ${PrettyPrinter
                          .buildString(incomingPreStateHash)}"
-                     ) >> none[StateHash].asRight[BlockError].pure[F]
+                     ) >> none[StateHash].asRight[BlockError].pure
                    }
                }
     } yield result
@@ -104,25 +104,25 @@ object InterpreterUtil {
                     .buildString(deploy)}: ${exs.mkString("\n")}")
                 )
                 .asLeft[Option[StateHash]]
-                .pure[F]
+                .pure
             case UserErrors(errors: Seq[Throwable]) =>
               Log[F].warn(s"Found user error(s) ${errors.map(_.getMessage).mkString("\n")}") >>
-                none[StateHash].asRight[BlockError].pure[F]
+                none[StateHash].asRight[BlockError].pure
             case ReplayStatusMismatch(replay: DeployStatus, orig: DeployStatus) =>
               Log[F].warn(
                 s"Found replay status mismatch; replay failure is ${replay.isFailed} and orig failure is ${orig.isFailed}"
               ) >>
-                none[StateHash].asRight[BlockError].pure[F]
+                none[StateHash].asRight[BlockError].pure
             case UnknownFailure =>
               Log[F].warn(s"Found unknown failure") >>
-                none[StateHash].asRight[BlockError].pure[F]
+                none[StateHash].asRight[BlockError].pure
             case UnusedCommEvent(_) =>
               Sync[F].raiseError(new RuntimeException("found UnusedCommEvent"))
           }
         case Left((None, status)) =>
           status match {
             case UnusedCommEvent(_: ReplayException) =>
-              none[StateHash].asRight[BlockError].pure[F]
+              none[StateHash].asRight[BlockError].pure
             case InternalErrors(_) => throw new RuntimeException("found InternalErrors")
             case ReplayStatusMismatch(_, _) =>
               throw new RuntimeException("found ReplayStatusMismatch")
@@ -132,7 +132,7 @@ object InterpreterUtil {
         case Right(computedStateHash) =>
           if (tsHash == computedStateHash) {
             // state hash in block matches computed hash!
-            computedStateHash.some.asRight[BlockError].pure[F]
+            computedStateHash.some.asRight[BlockError].pure
           } else {
             // state hash in block does not match computed hash -- invalid!
             // return no state hash, do not update the state hash set
@@ -140,7 +140,7 @@ object InterpreterUtil {
               s"Tuplespace hash ${PrettyPrinter.buildString(tsHash)} does not match computed hash ${PrettyPrinter
                 .buildString(computedStateHash)}."
             ) >>
-              none[StateHash].asRight[BlockError].pure[F]
+              none[StateHash].asRight[BlockError].pure
 
           }
       }
@@ -160,7 +160,7 @@ object InterpreterUtil {
                           .ensure(new IllegalArgumentException("Parents must not be empty"))(
                             _.nonEmpty
                           )
-      possiblePreStateHash <- computeParentsPostState[F](nonEmptyParents, dag, runtimeManager).attempt
+      possiblePreStateHash <- computeParentsPostState(nonEmptyParents, dag, runtimeManager).attempt
       result <- possiblePreStateHash.flatTraverse { preStateHash =>
                  runtimeManager
                    .computeState(preStateHash)(deploys, blockData, invalidBlocks)
@@ -183,13 +183,13 @@ object InterpreterUtil {
     parentTuplespaces match {
       // For genesis, use empty trie's root hash
       case Seq() =>
-        runtimeManager.emptyStateHash.pure[F]
+        runtimeManager.emptyStateHash.pure
 
       case Seq((_, parentStateHash)) =>
-        parentStateHash.pure[F]
+        parentStateHash.pure
 
       case (_, initStateHash) +: _ =>
-        replayIntoMergeBlock[F](parents, dag, runtimeManager, initStateHash).rethrow
+        replayIntoMergeBlock(parents, dag, runtimeManager, initStateHash).rethrow
     }
   }
 
@@ -210,7 +210,7 @@ object InterpreterUtil {
             s"replayIntoMergeBlock computed number of parents: ${blockHashesToApply.length}"
           )
       _             <- Span[F].mark("before-compute-parents-post-state-get-blocks")
-      blocksToApply <- blockHashesToApply.traverse(b => ProtoUtil.getBlock[F](b.blockHash))
+      blocksToApply <- blockHashesToApply.traverse(b => ProtoUtil.getBlock(b.blockHash))
       _             <- Span[F].mark("before-compute-parents-post-state-replay")
       replayResult <- (initStateHash, blocksToApply).tailRecM {
                        case (hash, blocks) if blocks.isEmpty =>
@@ -270,7 +270,7 @@ object InterpreterUtil {
       parentsMetadata <- parents.toList.traverse(b => dag.lookup(b.blockHash).map(_.get))
       blockHashesToApply <- {
         for {
-          uncommonAncestors          <- DagOperations.uncommonAncestors[F](parentsMetadata.toVector, dag)
+          uncommonAncestors          <- DagOperations.uncommonAncestors(parentsMetadata.toVector, dag)
           ancestorsOfInitParentIndex = 0
           // Filter out blocks that already included by starting from the chosen initial parent
           // as otherwise we will be applying the initial parent's ancestor's twice.
