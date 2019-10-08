@@ -1,17 +1,20 @@
 package coop.rchain.casper.engine
 
+import cats._, cats.data._, cats.implicits._
+import cats.effect._
 import cats.effect.concurrent.Ref
-import cats.implicits._
 import coop.rchain.casper._
 import coop.rchain.casper.protocol._
 import coop.rchain.catscontrib.TaskContrib._
-import coop.rchain.shared.Cell
+import coop.rchain.shared.{Cell, EventPublisher}
 import monix.eval.Task
 import org.scalatest.WordSpec
 
 import scala.concurrent.duration._
 
 class GenesisCeremonyMasterSpec extends WordSpec {
+  implicit val eventBus = EventPublisher.noop[Task]
+
   "GenesisCeremonyMaster" should {
     "make a transition to Running state after block has been approved" in {
       import monix.execution.Scheduler.Implicits.global
@@ -24,16 +27,13 @@ class GenesisCeremonyMasterSpec extends WordSpec {
       val duration  = 1.second
       val startTime = System.currentTimeMillis()
 
-      def waitUtilCasperIsDefined: Task[MultiParentCasper[Task]] =
-        for {
-          casperO <- MultiParentCasperRef[Task].get
-          casper <- casperO match {
-                     case None         => Task.sleep(3.seconds).flatMap(_ => waitUtilCasperIsDefined)
-                     case Some(casper) => Task.pure(casper)
-                   }
-        } yield casper
-
       implicit val engineCell = Cell.unsafe[Task, Engine[Task]](Engine.noop)
+
+      def waitUtilCasperIsDefined: Task[MultiParentCasper[Task]] =
+        EngineCell[Task].read >>= (_.withCasper(
+          casper => Task.pure(casper),
+          Task.sleep(3.seconds).flatMap(_ => waitUtilCasperIsDefined)
+        ))
 
       val test = for {
         sigs <- Ref.of[Task, Set[Signature]](Set.empty)
@@ -48,16 +48,15 @@ class GenesisCeremonyMasterSpec extends WordSpec {
         _  <- EngineCell[Task].set(new GenesisCeremonyMaster[Task](abp))
         c1 = abp.run().forkAndForget.runToFuture
         c2 = GenesisCeremonyMaster
-          .approveBlockInterval(
+          .approveBlockInterval[Task](
             interval,
             shardId,
-            runtimeManager,
             Some(validatorId)
           )
           .forkAndForget
           .runToFuture
         blockApproval = ApproveBlockProtocolTest.approval(
-          ApprovedBlockCandidate(Some(genesis), requiredSigns),
+          ApprovedBlockCandidate(genesis, requiredSigns),
           validatorSk,
           validatorPk
         )
@@ -74,10 +73,17 @@ class GenesisCeremonyMasterSpec extends WordSpec {
         lastApprovedBlock <- LastApprovedBlock[Task].get
         _                 = assert(lastApprovedBlock.isDefined)
         _                 <- EngineCell[Task].read >>= (_.handle(local, blockApproval))
-        head              = transportLayer.requests.head
+        head              = transportLayer.requests(1)
+        proto             = ApprovedBlockProto.parseFrom(head.msg.message.packet.get.content.toByteArray)
         _ = assert(
           ApprovedBlock
-            .parseFrom(head.msg.message.packet.get.content.toByteArray) == lastApprovedBlock.get
+            .from(
+              proto
+            )
+            .right
+            .get
+            .sigs
+            == lastApprovedBlock.get.toProto.sigs
         )
       } yield ()
 

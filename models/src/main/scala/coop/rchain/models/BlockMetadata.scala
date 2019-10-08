@@ -23,7 +23,7 @@ object BlockMetadata {
       internal.blockHash,
       internal.parents,
       internal.sender,
-      internal.justifications,
+      internal.justifications.map(Justification.from),
       internal.bonds.map(b => b.validator -> b.stake).toMap,
       internal.blockNum,
       internal.seqNum,
@@ -34,26 +34,27 @@ object BlockMetadata {
       metadata.blockHash,
       metadata.parents,
       metadata.sender,
-      metadata.justifications,
-      metadata.weightMap.map { case (validator, stake) => Bond(validator, stake) }.toList,
+      metadata.justifications.map(Justification.toProto),
+      metadata.weightMap.map { case (validator, stake) => BondProto(validator, stake) }.toList,
       metadata.blockNum,
       metadata.seqNum,
       metadata.invalid
     )
   }
 
+  private val byteStringOrdering =
+    Ordering.by[ByteString, Iterable[Byte]](_.toByteArray)(Ordering.Iterable[Byte])
+
+  val orderingByNum: Ordering[BlockMetadata] =
+    (l: BlockMetadata, r: BlockMetadata) => {
+      l.blockNum.compare(r.blockNum) match {
+        case 0 => byteStringOrdering.compare(l.blockHash, r.blockHash)
+        case v => v
+      }
+    }
+
   def fromBytes(bytes: Array[Byte]): BlockMetadata =
     typeMapper.toCustom(BlockMetadataInternal.parseFrom(bytes))
-
-  private def weightMap(blockMessage: BlockMessage): Map[ByteString, Long] =
-    blockMessage.body match {
-      case Some(block) =>
-        block.state match {
-          case Some(state) => weightMap(state)
-          case None        => Map.empty[ByteString, Long]
-        }
-      case None => Map.empty[ByteString, Long]
-    }
 
   private def weightMap(state: RChainState): Map[ByteString, Long] =
     state.bonds.map {
@@ -63,11 +64,11 @@ object BlockMetadata {
   def fromBlock(b: BlockMessage, invalid: Boolean): BlockMetadata =
     BlockMetadata(
       b.blockHash,
-      b.header.fold(List.empty[ByteString])(_.parentsHashList.toList),
+      b.header.parentsHashList,
       b.sender,
-      b.justifications.toList,
-      weightMap(b),
-      b.body.flatMap(_.state.map(_.blockNumber)).getOrElse(0L),
+      b.justifications,
+      weightMap(b.body.state),
+      b.body.state.blockNumber,
       b.seqNum,
       invalid
     )

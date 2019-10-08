@@ -29,10 +29,8 @@ class PeekSpec extends FlatSpec with Matchers {
       .use { runtime =>
         implicit val c = runtime.cost
         for {
-          res1 <- evaluate[Task](runtime, """@1!("v1") | for(_ <<- @1) { Nil }""")
-          _    = res1.errors shouldBe empty
-          res2 <- evaluate[Task](runtime, """for(_ <- @1) { @2!("v2") }""")
-          _    = res2.errors shouldBe empty
+          _    <- evaluate[Task](runtime, """@1!("v1") | for(_ <<- @1) { Nil }""")
+          _    <- evaluate[Task](runtime, """for(_ <- @1) { @2!("v2") }""")
           data <- runtime.space.getData(GInt(2L))
           _ = withClue(
             "Continuation didn't produce expected data. Did it fire?"
@@ -47,12 +45,9 @@ class PeekSpec extends FlatSpec with Matchers {
       .use { runtime =>
         implicit val c = runtime.cost
         for {
-          res1       <- evaluate[Task](runtime, """@1!!("v1")""")
-          _          = res1.errors shouldBe empty
-          res1a      <- evaluate[Task](runtime, """for(_ <<- @1) { Nil }""")
-          _          = res1a.errors shouldBe empty
-          res2       <- evaluate[Task](runtime, """for(_ <- @1) { @2!("v2") }""")
-          _          = res2.errors shouldBe empty
+          _          <- evaluate[Task](runtime, """@1!!("v1")""")
+          _          <- evaluate[Task](runtime, """for(_ <<- @1) { Nil }""")
+          _          <- evaluate[Task](runtime, """for(_ <- @1) { @2!("v2") }""")
           v1Data     <- runtime.space.getData(GInt(1L))
           _          = v1Data should have size 1
           resultData <- runtime.space.getData(GInt(2L))
@@ -69,12 +64,9 @@ class PeekSpec extends FlatSpec with Matchers {
       .use { runtime =>
         implicit val c = runtime.cost
         for {
-          res1       <- evaluate[Task](runtime, """for(_ <<- @1) { Nil }""")
-          _          = res1.errors shouldBe empty
-          res1a      <- evaluate[Task](runtime, """@1!!("v1")""")
-          _          = res1a.errors shouldBe empty
-          res2       <- evaluate[Task](runtime, """for(_ <- @1) { @2!("v2") }""")
-          _          = res2.errors shouldBe empty
+          _          <- evaluate[Task](runtime, """for(_ <<- @1) { Nil }""")
+          _          <- evaluate[Task](runtime, """@1!!("v1")""")
+          _          <- evaluate[Task](runtime, """for(_ <- @1) { @2!("v2") }""")
           v1Data     <- runtime.space.getData(GInt(1L))
           _          = v1Data should have size 1
           resultData <- runtime.space.getData(GInt(2L))
@@ -82,6 +74,53 @@ class PeekSpec extends FlatSpec with Matchers {
             "Continuation didn't produce expected data. Did it fire?"
           ) { resultData should have size 1 }
         } yield (resultData.head.a.pars.head.exprs.head.exprInstance shouldBe GString("v2"))
+      }
+      .runSyncUnsafe(2.seconds)
+  }
+
+  it should "clear all peeks when inserting a persistent send" in {
+    mkRuntime[Task](tmpPrefix)
+      .use { runtime =>
+        implicit val c = runtime.cost
+        for {
+          _   <- evaluate[Task](runtime, """for (_ <<- @0) { @1!(0) }""")
+          _   <- evaluate[Task](runtime, """for (_ <<- @0) { @1!(0) }""")
+          _   <- evaluate[Task](runtime, """@0!!(0)""")
+          res <- runtime.space.getData(GInt(1L)).map(_.size)
+        } yield (res shouldBe 2)
+      }
+      .runSyncUnsafe(2.seconds)
+  }
+
+  it should "clear all peeks when inserting a send" in {
+    mkRuntime[Task](tmpPrefix)
+      .use { runtime =>
+        implicit val c = runtime.cost
+        for {
+          _   <- evaluate[Task](runtime, """for (_ <<- @0) { @1!(0) }""")
+          _   <- evaluate[Task](runtime, """for (_ <<- @0) { @1!(0) }""")
+          _   <- evaluate[Task](runtime, """@0!(0)""")
+          res <- runtime.space.getData(GInt(1L)).map(_.size)
+        } yield (res shouldBe 2)
+      }
+      .runSyncUnsafe(2.seconds)
+  }
+
+  it should "continue executing the loop until quiescence" in {
+    mkRuntime[Task](tmpPrefix)
+      .use { runtime =>
+        implicit val c = runtime.cost
+        for {
+          _  <- evaluate[Task](runtime, """for (_ <<- @0; _ <<- @1) { @2!(0) }""")
+          _  <- evaluate[Task](runtime, """for (_ <<- @0; _ <<- @1) { @2!(0) }""")
+          _  <- evaluate[Task](runtime, """@1!!(1)""")
+          _  <- evaluate[Task](runtime, """@0!(0)""")
+          r1 <- runtime.space.getData(GInt(0L)).map(_.size)
+          r2 <- runtime.space.getData(GInt(1L)).map(_.size)
+          r3 <- runtime.space.getData(GInt(2L)).map(_.size)
+          _  = r1 shouldBe 1
+          _  = r2 shouldBe 1
+        } yield (r3 shouldBe 2)
       }
       .runSyncUnsafe(2.seconds)
   }

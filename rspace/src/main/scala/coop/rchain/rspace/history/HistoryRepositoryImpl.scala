@@ -16,16 +16,17 @@ import coop.rchain.rspace.{
   InsertContinuations,
   InsertData,
   InsertJoins,
+  RSpace,
   Serialize
 }
 import coop.rchain.rspace.internal._
 import scodec.Codec
 import scodec.bits.{BitVector, ByteVector}
 import HistoryRepositoryImpl._
+import cats.temp.par.Par
 import com.typesafe.scalalogging.Logger
-import monix.execution.schedulers.TestScheduler.Task
 
-final case class HistoryRepositoryImpl[F[_]: Sync, C, P, A, K](
+final case class HistoryRepositoryImpl[F[_]: Sync: Par, C, P, A, K](
     history: History[F],
     rootsRepository: RootRepository[F],
     leafStore: ColdStore[F]
@@ -148,8 +149,14 @@ final case class HistoryRepositoryImpl[F[_]: Sync, C, P, A, K](
         s"${key.toHex};delete-join;0"
     }
 
-  private def transform(actions: List[HotStoreAction]): List[Result] =
-    actions.map {
+  private def transformAndStore(hotStoreActions: List[HotStoreAction]): F[List[HistoryAction]] =
+    for {
+      transformedActions <- Sync[F].delay(hotStoreActions.map(transform))
+      historyActions     <- storeLeaves(transformedActions)
+    } yield historyActions
+
+  private def transform(action: HotStoreAction): Result =
+    action match {
       case i: InsertData[C, A] =>
         val key      = hashDataChannel(i.channel)
         val data     = encodeData(i.data)
@@ -183,22 +190,22 @@ final case class HistoryRepositoryImpl[F[_]: Sync, C, P, A, K](
         (key, None, DeleteAction(key.bytes.toSeq.toList))
     }
 
-  private def storeLeaves(leafs: List[Result]): F[List[HistoryAction]] =
-    leafs.traverse {
-      case (key, Some(data), historyAction) =>
-        leafStore.put(key, data).map(_ => historyAction)
-      case (_, None, historyAction) =>
-        Applicative[F].pure(historyAction)
-    }
+  private def storeLeaves(leafs: List[Result]): F[List[HistoryAction]] = {
+    val toBeStored = leafs.collect { case (key, Some(data), _) => (key, data) }
+    leafStore.put(toBeStored).map(_ => leafs.map(_._3))
+  }
 
-  override def checkpoint(actions: List[HotStoreAction]): F[HistoryRepository[F, C, P, A, K]] =
+  override def checkpoint(actions: List[HotStoreAction]): F[HistoryRepository[F, C, P, A, K]] = {
+    implicit val P = Par[F].parallel
+    val batchSize  = Math.max(1, actions.size / RSpace.parallelism)
     for {
-      trieActions    <- Applicative[F].pure(transform(actions))
-      historyActions <- storeLeaves(trieActions)
+      batches        <- Sync[F].delay(actions.grouped(batchSize).toList)
+      historyActions <- batches.parFlatTraverse(transformAndStore)
       next           <- history.process(historyActions)
       _              <- rootsRepository.commit(next.root)
       _              <- measure(actions)
     } yield this.copy(history = next)
+  }
 
   override def reset(root: Blake2b256Hash): F[HistoryRepository[F, C, P, A, K]] =
     for {

@@ -10,7 +10,8 @@ import coop.rchain.crypto.signatures.{Ed25519, Secp256k1}
 import coop.rchain.metrics.Span
 import coop.rchain.models._
 import coop.rchain.models.rholang.implicits._
-import coop.rchain.rholang.interpreter.Runtime.{BlockData, InvalidBlocks, RhoISpace}
+import coop.rchain.rholang.interpreter.Runtime.{BlockData, InvalidBlocks, RhoTuplespace}
+import coop.rchain.rholang.interpreter.registry.Registry
 import coop.rchain.rholang.interpreter.util.RevAddress
 import coop.rchain.rspace.{ContResult, Result}
 
@@ -34,8 +35,9 @@ trait SystemProcesses[F[_]] {
   def getDeployParams(runtimeParametersRef: Ref[F, DeployParameters]): Contract[F]
   def getBlockData(blockData: Ref[F, BlockData]): Contract[F]
   def invalidBlocks(invalidBlocks: InvalidBlocks[F]): Contract[F]
-  def validateRevAddress: Contract[F]
+  def revAddress: Contract[F]
   def deployerIdOps: Contract[F]
+  def registryOps: Contract[F]
 }
 
 object SystemProcesses {
@@ -43,13 +45,13 @@ object SystemProcesses {
 
   def apply[F[_]](
       dispatcher: Dispatch[F, ListParWithRandom, TaggedContinuation],
-      space: RhoISpace[F]
+      space: RhoTuplespace[F]
   )(implicit F: Concurrent[F], spanF: Span[F]): SystemProcesses[F] =
     new SystemProcesses[F] {
 
       type ContWithMetaData = ContResult[Par, BindPattern, TaggedContinuation]
 
-      type Channels = Seq[Result[ListParWithRandom]]
+      type Channels = Seq[Result[Par, ListParWithRandom]]
 
       private val prettyPrinter = PrettyPrinter()
 
@@ -134,7 +136,7 @@ object SystemProcesses {
           } yield ()
       }
 
-      def validateRevAddress: Contract[F] = {
+      def revAddress: Contract[F] = {
         case isContractCall(
             produce,
             Seq(RhoType.String("validate"), RhoType.String(address), ack)
@@ -149,6 +151,9 @@ object SystemProcesses {
 
           produce(Seq(errorMessage), ack)
 
+        case isContractCall(produce, Seq(RhoType.String("validate"), _, ack)) =>
+          produce(Seq(Par()), ack)
+
         case isContractCall(
             produce,
             Seq(RhoType.String("fromPublicKey"), RhoType.ByteArray(publicKey), ack)
@@ -160,6 +165,39 @@ object SystemProcesses {
               .getOrElse(Par())
 
           produce(Seq(response), ack)
+
+        case isContractCall(produce, Seq(RhoType.String("fromPublicKey"), _, ack)) =>
+          produce(Seq(Par()), ack)
+
+        case isContractCall(
+            produce,
+            Seq(RhoType.String("fromDeployerId"), RhoType.DeployerId(id), ack)
+            ) =>
+          val response =
+            RevAddress
+              .fromDeployerId(id)
+              .map(ra => RhoType.String(ra.toBase58))
+              .getOrElse(Par())
+
+          produce(Seq(response), ack)
+
+        case isContractCall(produce, Seq(RhoType.String("fromDeployerId"), _, ack)) =>
+          produce(Seq(Par()), ack)
+
+        case isContractCall(
+            produce,
+            Seq(RhoType.String("fromUnforgeable"), argument, ack)
+            ) =>
+          val response = argument match {
+            case RhoType.Name(gprivate) =>
+              RhoType.String(RevAddress.fromUnforgeable(gprivate).toBase58)
+            case _ => Par()
+          }
+
+          produce(Seq(response), ack)
+
+        case isContractCall(produce, Seq(RhoType.String("fromUnforgeable"), _, ack)) =>
+          produce(Seq(Par()), ack)
       }
 
       def deployerIdOps: Contract[F] = {
@@ -168,6 +206,23 @@ object SystemProcesses {
             Seq(RhoType.String("pubKeyBytes"), RhoType.DeployerId(publicKey), ack)
             ) =>
           produce(Seq(RhoType.ByteArray(publicKey)), ack)
+
+        case isContractCall(produce, Seq(RhoType.String("pubKeyBytes"), _, ack)) =>
+          produce(Seq(Par()), ack)
+      }
+
+      def registryOps: Contract[F] = {
+        case isContractCall(
+            produce,
+            Seq(RhoType.String("buildUri"), argument, ack)
+            ) =>
+          val response = argument match {
+            case RhoType.ByteArray(ba) =>
+              val hashKeyBytes = Blake2b256.hash(ba)
+              RhoType.Uri(Registry.buildURI(hashKeyBytes))
+            case _ => Par()
+          }
+          produce(Seq(response), ack)
       }
 
       def secp256k1Verify: Contract[F] =
@@ -189,12 +244,9 @@ object SystemProcesses {
       def getDeployParams(runtimeParametersRef: Ref[F, DeployParameters]): Contract[F] = {
         case isContractCall(produce, Seq(ack)) =>
           for {
-            params                                                  <- runtimeParametersRef.get
-            DeployParameters(codeHash, phloRate, userId, timestamp) = params
-            _ <- produce(
-                  Seq(codeHash, phloRate, userId, timestamp),
-                  ack
-                )
+            params                   <- runtimeParametersRef.get
+            DeployParameters(userId) = params
+            _                        <- produce(Seq(userId), ack)
           } yield ()
         case _ =>
           illegalArgumentException("deployParameters expects only a return channel")

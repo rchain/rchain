@@ -4,8 +4,8 @@ import java.nio.file.{Path, Paths}
 
 import collection.JavaConverters._
 import scala.util.Try
-
-import coop.rchain.blockstorage.{BlockDagFileStorage, FileLMDBIndexBlockStore}
+import coop.rchain.blockstorage.FileLMDBIndexBlockStore
+import coop.rchain.blockstorage.dag.BlockDagFileStorage
 import coop.rchain.casper.CasperConf
 import coop.rchain.node.configuration.commandline.ConfigMapper
 
@@ -137,6 +137,8 @@ object Configuration {
       dataDir.resolve("casper-block-dag-file-storage-equivocation-tracker-crc"),
       dataDir.resolve("casper-block-dag-file-storage-invalid-blocks-log"),
       dataDir.resolve("casper-block-dag-file-storage-invalid-blocks-crc"),
+      dataDir.resolve("casper-block-dag-file-storage-block-hashes-by-deploy-data"),
+      dataDir.resolve("casper-block-dag-file-storage-block-hashes-by-deploy-crc"),
       dataDir.resolve("casper-block-dag-file-storage-checkpoints"),
       dataDir.resolve("casper-block-dag-file-storage-block-number-index"),
       server.dagStorageSize
@@ -199,7 +201,8 @@ object Configuration {
 
   private def subcommand(options: commandline.Options): Command =
     options.subcommand match {
-      case Some(options.eval)   => Eval(options.eval.fileNames())
+      case Some(options.eval) =>
+        Eval(options.eval.fileNames(), options.eval.printUnmatchedSendsOnly())
       case Some(options.repl)   => Repl
       case Some(options.deploy) =>
         //TODO: change the defaults before main net
@@ -213,7 +216,7 @@ object Configuration {
           location()
         )
       case Some(options.findDeploy) => FindDeploy(options.findDeploy.deployId())
-      case Some(options.propose)    => Propose
+      case Some(options.propose)    => Propose(options.propose.printUnmatchedSends())
       case Some(options.showBlock)  => ShowBlock(options.showBlock.hash())
       case Some(options.showBlocks) =>
         import options.showBlocks._
@@ -226,6 +229,7 @@ object Configuration {
       case Some(options.keygen) =>
         Keygen(options.keygen.algorithm(), options.keygen.privateKeyPath())
       case Some(options.lastFinalizedBlock) => LastFinalizedBlock
+      case Some(options.isFinalized)        => IsFinalized(options.isFinalized.hash())
       case Some(options.dataAtName)         => DataAtName(options.dataAtName.name())
       case Some(options.contAtName)         => ContAtName(options.contAtName.name())
       case _                                => Help

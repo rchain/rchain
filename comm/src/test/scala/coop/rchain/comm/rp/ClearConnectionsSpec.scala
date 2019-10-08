@@ -148,10 +148,8 @@ class ClearConnectionsSpec
       )
     )
 
-  def alwaysSuccess: Protocol => CommErr[Protocol] =
-    kp(Right(heartbeat(peer("src"), networkId)))
+  def alwaysSuccess: Protocol => CommErr[Unit] = kp(Right(()))
 
-  def alwaysFail: Protocol => CommErr[Protocol] =
-    kp(Left(timeout))
+  def alwaysFail: Protocol => CommErr[Unit] = kp(Left(timeout))
 
 }

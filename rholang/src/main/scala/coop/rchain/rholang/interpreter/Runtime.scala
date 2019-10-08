@@ -2,33 +2,37 @@ package coop.rchain.rholang.interpreter
 
 import java.nio.file.{Files, Path}
 
+import scala.concurrent.ExecutionContext
+
 import cats._
+import cats.effect._
 import cats.effect.concurrent.Ref
-import cats.effect.{Concurrent, ContextShift, Sync}
 import cats.implicits._
 import cats.mtl.FunctorTell
 import cats.temp.par
-import com.google.protobuf.ByteString
+
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.metrics.{Metrics, Span}
+import coop.rchain.metrics.Metrics.Source
+import coop.rchain.models._
 import coop.rchain.models.Expr.ExprInstance.GString
 import coop.rchain.models.TaggedContinuation.TaggedCont.ScalaBodyRef
 import coop.rchain.models.Var.VarInstance.FreeVar
-import coop.rchain.models._
 import coop.rchain.models.rholang.implicits._
 import coop.rchain.rholang.interpreter.Runtime._
 import coop.rchain.rholang.interpreter.accounting.{noOpCostLog, _}
 import coop.rchain.rholang.interpreter.errors.SetupError
-import coop.rchain.rholang.interpreter.storage.implicits._
-import coop.rchain.rspace.{RSpace, _}
-import coop.rchain.rspace.pure.PureRSpace
+import coop.rchain.rholang.interpreter.storage.ChargingRSpace
+import coop.rchain.rholang.RholangMetricsSource
+import coop.rchain.rspace.{Match, RSpace, _}
+import coop.rchain.rholang.interpreter.registry.RegistryBootstrap
 import coop.rchain.shared.Log
 
-import scala.concurrent.ExecutionContext
+import com.google.protobuf.ByteString
 
 class Runtime[F[_]: Sync] private (
-    val reducer: ChargingReducer[F],
-    val replayReducer: ChargingReducer[F],
+    val reducer: Reduce[F],
+    val replayReducer: Reduce[F],
     val space: RhoISpace[F],
     val replaySpace: RhoReplayISpace[F],
     val errorLog: ErrorLog[F],
@@ -47,9 +51,11 @@ class Runtime[F[_]: Sync] private (
 
 object Runtime {
 
-  type RhoISpace[F[_]]       = TCPARK[F, ISpace]
-  type RhoPureSpace[F[_]]    = TCPARK[F, PureRSpace]
-  type RhoReplayISpace[F[_]] = TCPARK[F, IReplaySpace]
+  implicit val RuntimeMetricsSource: Source = Metrics.Source(RholangMetricsSource, "runtime")
+
+  type RhoTuplespace[F[_]]   = TCPAK[F, Tuplespace]
+  type RhoISpace[F[_]]       = TCPAK[F, ISpace]
+  type RhoReplayISpace[F[_]] = TCPAK[F, IReplaySpace]
 
   type RhoDispatch[F[_]]    = Dispatch[F, ListParWithRandom, TaggedContinuation]
   type RhoSysFunction[F[_]] = (Seq[ListParWithRandom], Int) => F[Unit]
@@ -58,12 +64,11 @@ object Runtime {
   type CPAK[M[_], F[_[_], _, _, _, _]] =
     F[M, Par, BindPattern, ListParWithRandom, TaggedContinuation]
 
-  type TCPARK[M[_], F[_[_], _, _, _, _, _]] =
+  type TCPAK[M[_], F[_[_], _, _, _, _]] =
     F[
       M,
       Par,
       BindPattern,
-      ListParWithRandom,
       ListParWithRandom,
       TaggedContinuation
     ]
@@ -94,32 +99,21 @@ object Runtime {
   }
 
   object BodyRefs {
-    val STDOUT: Long                       = 0L
-    val STDOUT_ACK: Long                   = 1L
-    val STDERR: Long                       = 2L
-    val STDERR_ACK: Long                   = 3L
-    val ED25519_VERIFY: Long               = 4L
-    val SHA256_HASH: Long                  = 5L
-    val KECCAK256_HASH: Long               = 6L
-    val BLAKE2B256_HASH: Long              = 7L
-    val SECP256K1_VERIFY: Long             = 9L
-    val REG_LOOKUP: Long                   = 10L
-    val REG_LOOKUP_CALLBACK: Long          = 11L
-    val REG_INSERT: Long                   = 12L
-    val REG_INSERT_CALLBACK: Long          = 13L
-    val REG_DELETE: Long                   = 14L
-    val REG_DELETE_ROOT_CALLBACK: Long     = 15L
-    val REG_DELETE_CALLBACK: Long          = 16L
-    val REG_PUBLIC_LOOKUP: Long            = 17L
-    val REG_PUBLIC_REGISTER_RANDOM: Long   = 18L
-    val REG_REGISTER_INSERT_CALLBACK: Long = 19L
-    val REG_PUBLIC_REGISTER_SIGNED: Long   = 20L
-    val REG_NONCE_INSERT_CALLBACK: Long    = 21L
-    val GET_DEPLOY_PARAMS: Long            = 22L
-    val GET_BLOCK_DATA: Long               = 23L
-    val GET_INVALID_BLOCKS: Long           = 24L
-    val REV_ADDRESS: Long                  = 25L
-    val DEPLOYER_ID_OPS: Long              = 26L
+    val STDOUT: Long             = 0L
+    val STDOUT_ACK: Long         = 1L
+    val STDERR: Long             = 2L
+    val STDERR_ACK: Long         = 3L
+    val ED25519_VERIFY: Long     = 4L
+    val SHA256_HASH: Long        = 5L
+    val KECCAK256_HASH: Long     = 6L
+    val BLAKE2B256_HASH: Long    = 7L
+    val SECP256K1_VERIFY: Long   = 9L
+    val GET_DEPLOY_PARAMS: Long  = 10L
+    val GET_BLOCK_DATA: Long     = 11L
+    val GET_INVALID_BLOCKS: Long = 12L
+    val REV_ADDRESS: Long        = 13L
+    val DEPLOYER_ID_OPS: Long    = 14L
+    val REG_OPS: Long            = 15L
   }
 
   def byteName(b: Byte): Par = GPrivate(ByteString.copyFrom(Array[Byte](b)))
@@ -132,21 +126,22 @@ object Runtime {
     val ED25519_VERIFY: Par     = GString("ed25519Verify")
     val SHA256_HASH: Par        = GString("sha256Hash")
     val KECCAK256_HASH: Par     = GString("keccak256Hash")
-    val BLAKE2B256_HASH: Par    = GString("blake2b256Hash")
-    val SECP256K1_VERIFY: Par   = GString("secp256k1Verify")
-    val REG_LOOKUP: Par         = byteName(9)
-    val REG_INSERT_RANDOM: Par  = byteName(10)
-    val REG_INSERT_SIGNED: Par  = byteName(11)
-    val GET_DEPLOY_PARAMS: Par  = byteName(12)
-    val GET_BLOCK_DATA: Par     = byteName(13)
-    val GET_INVALID_BLOCKS: Par = byteName(14)
-    val REV_ADDRESS: Par        = byteName(15)
-    val DEPLOYER_ID_OPS: Par    = byteName(16)
+    val BLAKE2B256_HASH: Par    = byteName(7)
+    val SECP256K1_VERIFY: Par   = byteName(8)
+    val GET_DEPLOY_PARAMS: Par  = byteName(9)
+    val GET_BLOCK_DATA: Par     = byteName(10)
+    val GET_INVALID_BLOCKS: Par = byteName(11)
+    val REV_ADDRESS: Par        = byteName(12)
+    val DEPLOYER_ID_OPS: Par    = byteName(13)
+    val REG_LOOKUP: Par         = byteName(14)
+    val REG_INSERT_RANDOM: Par  = byteName(15)
+    val REG_INSERT_SIGNED: Par  = byteName(16)
+    val REG_OPS: Par            = byteName(17)
   }
 
   private def introduceSystemProcesses[F[_]: Sync: _cost: Span](
-      space: RhoISpace[F],
-      replaySpace: RhoISpace[F],
+      space: RhoTuplespace[F],
+      replaySpace: RhoTuplespace[F],
       processes: List[(Name, Arity, Remainder, BodyRef)]
   ): F[List[Option[(TaggedContinuation, Seq[ListParWithRandom])]]] =
     processes.flatMap {
@@ -161,16 +156,15 @@ object Runtime {
         )
         val continuation = TaggedContinuation(ScalaBodyRef(ref))
         List(
-          space.install(channels, patterns, continuation)(matchListPar),
-          replaySpace.install(channels, patterns, continuation)(matchListPar)
+          space.install(channels, patterns, continuation),
+          replaySpace.install(channels, patterns, continuation)
         )
     }.sequence
 
   object SystemProcess {
     final case class Context[F[_]: Concurrent: Span](
-        space: RhoISpace[F],
+        space: RhoTuplespace[F],
         dispatcher: RhoDispatch[F],
-        registry: Registry[F],
         deployParametersRef: Ref[F, DeployParameters],
         blockData: Ref[F, BlockData],
         invalidBlocks: InvalidBlocks[F]
@@ -221,22 +215,6 @@ object Runtime {
           ctx.systemProcesses.stdErrAck
       }),
     SystemProcess.Definition[F](
-      "rho:registry:insertArbitrary",
-      FixedChannels.REG_INSERT_RANDOM,
-      2,
-      BodyRefs.REG_PUBLIC_REGISTER_RANDOM, { ctx =>
-        ctx.registry.publicRegisterRandom
-      }
-    ),
-    SystemProcess.Definition[F](
-      "rho:registry:insertSigned:secp256k1",
-      FixedChannels.REG_INSERT_SIGNED,
-      4,
-      BodyRefs.REG_PUBLIC_REGISTER_SIGNED, { ctx =>
-        ctx.registry.publicRegisterSigned
-      }
-    ),
-    SystemProcess.Definition[F](
       "rho:deploy:params",
       FixedChannels.GET_DEPLOY_PARAMS,
       1,
@@ -265,7 +243,7 @@ object Runtime {
       FixedChannels.REV_ADDRESS,
       3,
       BodyRefs.REV_ADDRESS, { ctx =>
-        ctx.systemProcesses.validateRevAddress
+        ctx.systemProcesses.revAddress
       }
     ),
     SystemProcess.Definition[F](
@@ -274,6 +252,14 @@ object Runtime {
       3,
       BodyRefs.DEPLOYER_ID_OPS, { ctx =>
         ctx.systemProcesses.deployerIdOps
+      }
+    ),
+    SystemProcess.Definition[F](
+      "rho:registry:ops",
+      FixedChannels.REG_OPS,
+      3,
+      BodyRefs.REG_OPS, { ctx =>
+        ctx.systemProcesses.registryOps
       }
     )
   )
@@ -320,9 +306,8 @@ object Runtime {
     implicit val ft: FunctorTell[F, Throwable] = errorLog
 
     def dispatchTableCreator(
-        space: RhoISpace[F],
+        space: RhoTuplespace[F],
         dispatcher: RhoDispatch[F],
-        registry: Registry[F],
         deployParametersRef: Ref[F, DeployParameters],
         blockData: Ref[F, BlockData],
         invalidBlocks: InvalidBlocks[F]
@@ -330,33 +315,31 @@ object Runtime {
       val systemProcesses = SystemProcesses[F](dispatcher, space)
       import BodyRefs._
       Map(
-        ED25519_VERIFY               -> systemProcesses.ed25519Verify,
-        SHA256_HASH                  -> systemProcesses.sha256Hash,
-        KECCAK256_HASH               -> systemProcesses.keccak256Hash,
-        BLAKE2B256_HASH              -> systemProcesses.blake2b256Hash,
-        SECP256K1_VERIFY             -> systemProcesses.secp256k1Verify,
-        REG_LOOKUP                   -> (registry.lookup(_, _)),
-        REG_LOOKUP_CALLBACK          -> (registry.lookupCallback(_, _)),
-        REG_INSERT                   -> (registry.insert(_, _)),
-        REG_INSERT_CALLBACK          -> (registry.insertCallback(_, _)),
-        REG_REGISTER_INSERT_CALLBACK -> (registry.registerInsertCallback(_, _)),
-        REG_DELETE                   -> (registry.delete(_, _)),
-        REG_DELETE_ROOT_CALLBACK     -> (registry.deleteRootCallback(_, _)),
-        REG_DELETE_CALLBACK          -> (registry.deleteCallback(_, _)),
-        REG_PUBLIC_LOOKUP            -> (registry.publicLookup(_, _)),
-        REG_NONCE_INSERT_CALLBACK    -> (registry.nonceInsertCallback(_, _))
+        ED25519_VERIFY   -> systemProcesses.ed25519Verify,
+        SHA256_HASH      -> systemProcesses.sha256Hash,
+        KECCAK256_HASH   -> systemProcesses.keccak256Hash,
+        BLAKE2B256_HASH  -> systemProcesses.blake2b256Hash,
+        SECP256K1_VERIFY -> systemProcesses.secp256k1Verify
       ) ++
         (stdSystemProcesses[F] ++ extraSystemProcesses)
           .map(
             _.toDispatchTable(
               SystemProcess
-                .Context(space, dispatcher, registry, deployParametersRef, blockData, invalidBlocks)
+                .Context(space, dispatcher, deployParametersRef, blockData, invalidBlocks)
             )
           )
     }
 
     val urnMap: Map[String, Par] = Map[String, Par](
-      "rho:registry:lookup" -> Bundle(FixedChannels.REG_LOOKUP, writeFlag = true)
+      "rho:crypto:secp256k1Verify"   -> Bundle(FixedChannels.SECP256K1_VERIFY, writeFlag = true),
+      "rho:crypto:blake2b256Hash"    -> Bundle(FixedChannels.BLAKE2B256_HASH, writeFlag = true),
+      "rho:crypto:keccak256Hash"     -> Bundle(FixedChannels.KECCAK256_HASH, writeFlag = true),
+      "rho:registry:lookup"          -> Bundle(FixedChannels.REG_LOOKUP, writeFlag = true),
+      "rho:registry:insertArbitrary" -> Bundle(FixedChannels.REG_INSERT_RANDOM, writeFlag = true),
+      "rho:registry:insertSigned:secp256k1" -> Bundle(
+        FixedChannels.REG_INSERT_SIGNED,
+        writeFlag = true
+      )
     ) ++ (stdSystemProcesses[F] ++ extraSystemProcesses).map(_.toUrnMap)
 
     val invalidBlocks = InvalidBlocks.unsafe[F]()
@@ -368,8 +351,7 @@ object Runtime {
         (FixedChannels.SHA256_HASH, 2, None, SHA256_HASH),
         (FixedChannels.KECCAK256_HASH, 2, None, KECCAK256_HASH),
         (FixedChannels.BLAKE2B256_HASH, 2, None, BLAKE2B256_HASH),
-        (FixedChannels.SECP256K1_VERIFY, 4, None, SECP256K1_VERIFY),
-        (FixedChannels.REG_LOOKUP, 2, None, REG_PUBLIC_LOOKUP)
+        (FixedChannels.SECP256K1_VERIFY, 4, None, SECP256K1_VERIFY)
       ) ++ (stdSystemProcesses[F] ++ extraSystemProcesses).map(_.toProcDefs)
     }
 
@@ -379,35 +361,37 @@ object Runtime {
       blockDataRef         <- Ref.of(BlockData.empty)
       (space, replaySpace) = setup
       (reducer, replayReducer) = {
+
+        val chargingReplaySpace = ChargingRSpace.chargingRSpace[F](replaySpace)
         lazy val replayDispatchTable: RhoDispatchMap[F] =
           dispatchTableCreator(
-            replaySpace,
+            chargingReplaySpace,
             replayDispatcher,
-            replayRegistry,
             deployParametersRef,
             blockDataRef,
             invalidBlocks
           )
 
-        lazy val dispatchTable: RhoDispatchMap[F] =
-          dispatchTableCreator(
-            space,
-            dispatcher,
-            registry,
-            deployParametersRef,
-            blockDataRef,
-            invalidBlocks
-          )
-
-        lazy val (dispatcher, reducer, registry) =
-          RholangAndScalaDispatcher.create(space, dispatchTable, urnMap)
-
-        lazy val (replayDispatcher, replayReducer, replayRegistry) =
+        lazy val (replayDispatcher, replayReducer) =
           RholangAndScalaDispatcher.create(
-            replaySpace,
+            chargingReplaySpace,
             replayDispatchTable,
             urnMap
           )
+
+        val chargingRSpace = ChargingRSpace.chargingRSpace[F](space)
+        lazy val dispatchTable: RhoDispatchMap[F] =
+          dispatchTableCreator(
+            chargingRSpace,
+            dispatcher,
+            deployParametersRef,
+            blockDataRef,
+            invalidBlocks
+          )
+
+        lazy val (dispatcher, reducer) =
+          RholangAndScalaDispatcher.create(chargingRSpace, dispatchTable, urnMap)
+
         (reducer, replayReducer)
       }
       res <- introduceSystemProcesses(space, replaySpace, procDefs)
@@ -427,49 +411,30 @@ object Runtime {
     }
   }
 
-  def injectEmptyRegistryRoot[F[_]](space: RhoISpace[F], replaySpace: RhoReplayISpace[F])(
-      implicit F: Concurrent[F],
-      spanF: Span[F]
-  ): F[Unit] = {
-    // This random value stays dead in the tuplespace, so we can have some fun.
-    // This is from Jeremy Bentham's "Defence of Usury"
-    val rand = Blake2b512Random(
-      ("there can be no such thing as usury: " +
-        "for what rate of interest is there that can naturally be more proper than another?")
+  def bootstrapRegistry[F[_]: FlatMap](runtime: Runtime[F]): F[Unit] = {
+    // This is from Nassim Taleb's "Skin in the Game"
+    implicit val rand = Blake2b512Random(
+      ("Decentralization is based on the simple notion that it is easier to macrobull***t than microbull***t. " +
+        "Decentralization reduces large structural asymmetries.")
         .getBytes()
     )
-
     for {
-      cost <- CostAccounting.initialCost[F](Cost.UNSAFE_MAX)
-      spaceResult <- space.produce(
-                      Registry.registryRoot,
-                      ListParWithRandom(Seq(Registry.emptyMap), rand),
-                      false,
-                      0
-                    )(matchListPar(F, spanF, cost))
-      replayResult <- replaySpace.produce(
-                       Registry.registryRoot,
-                       ListParWithRandom(Seq(Registry.emptyMap), rand),
-                       false,
-                       0
-                     )(matchListPar(F, spanF, cost))
-      _ <- spaceResult match {
-            case None =>
-              replayResult match {
-                case None => F.unit
-                case Some(_) =>
-                  SetupError("Registry insertion in replay fired continuation.").raiseError[F, Unit]
-              }
-            case Some(_) =>
-              SetupError("Registry insertion fired continuation.").raiseError[F, Unit]
-          }
+      cost <- runtime.cost.get
+      _    <- runtime.cost.set(Cost.UNSAFE_MAX)
+      _    <- runtime.reducer.inj(RegistryBootstrap.AST)
+      _    <- runtime.replayReducer.inj(RegistryBootstrap.AST)
+      _    <- runtime.cost.set(cost)
     } yield ()
   }
 
-  def setupRSpace[F[_]: Concurrent: ContextShift: Log: Metrics: Span](
+  private def setupRSpace[F[_]: Concurrent: ContextShift: par.Par: Log: Metrics: Span](
       dataDir: Path,
       mapSize: Long
   )(implicit scheduler: ExecutionContext): F[(RhoISpace[F], RhoReplayISpace[F])] = {
+
+    import coop.rchain.rholang.interpreter.storage._
+    implicit val m: Match[F, BindPattern, ListParWithRandom] = matchListPar[F]
+
     def checkCreateDataDir: F[Unit] =
       for {
         notexists <- Sync[F].delay(Files.notExists(dataDir))
@@ -481,7 +446,6 @@ object Runtime {
       F,
       Par,
       BindPattern,
-      ListParWithRandom,
       ListParWithRandom,
       TaggedContinuation
     ](dataDir, mapSize)

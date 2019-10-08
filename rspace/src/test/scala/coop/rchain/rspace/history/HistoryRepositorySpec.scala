@@ -151,11 +151,11 @@ class HistoryRepositorySpec
       "cont-" + s,
       true,
       SortedSet.empty,
-      Consume(randomBlake :: Nil, randomBlake, 0)
+      Consume(randomBlake :: Nil, randomBlake, true)
     )
 
   def datum(s: Any): Datum[String] =
-    Datum[String]("data-" + s, false, Produce(randomBlake, randomBlake, 0))
+    Datum[String]("data-" + s, false, Produce(randomBlake, randomBlake, false))
 
   protected def withEmptyRepository(f: TestHistoryRepository => Task[Unit]): Unit = {
     implicit val codecString: Codec[String] = util.stringCodec
@@ -221,5 +221,8 @@ trait InMemoryHistoryRepositoryTestBase extends InMemoryHistoryTestBase {
       Task.delay { data.get(hash) }
 
     override def close(): Task[Unit] = Task.delay(())
+
+    override def put(list: List[(Blake2b256Hash, PersistedData)]): Task[Unit] =
+      list.traverse_(Function.tupled(put))
   }
 }

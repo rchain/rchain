@@ -7,20 +7,24 @@ import cats.effect.implicits._
 import cats.implicits._
 import cats.mtl.implicits._
 import cats.{Alternative, Foldable, Functor, MonoidK, SemigroupK}
+
 import coop.rchain.catscontrib.mtl.implicits._
 import coop.rchain.catscontrib.TaskContrib._
+import coop.rchain.metrics.Metrics
 import coop.rchain.models.Par
 import coop.rchain.rholang.interpreter._
 import coop.rchain.rholang.interpreter.accounting._
 import coop.rchain.rholang.interpreter.accounting.CostAccounting._
 import coop.rchain.rholang.interpreter.errors.OutOfPhlogistonsError
 import coop.rchain.rholang.interpreter.matcher.{run => runMatcher, _}
-import org.scalatest._
 
+import org.scalatest._
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
 
 class MatcherMonadSpec extends FlatSpec with Matchers {
+  implicit val metrics: Metrics[Task] = new Metrics.MetricsNOP[Task]
+  implicit val ms: Metrics.Source     = Metrics.BaseSource
 
   type F[A] = MatcherMonadT[Task, A]
 
@@ -46,12 +50,12 @@ class MatcherMonadSpec extends FlatSpec with Matchers {
   it should "charge for each non-deterministic branch" in {
     val possibleResults = Stream((0, 1), (0, 2))
     val computation     = Alternative[F].unite(possibleResults.pure[F])
-    val sum             = computation.map { case (x, y) => x + y } <* charge[F](Cost(1))
+    val sum             = computation.map { case (x, y) => x + y } >>= (charge[F](Cost(1)).as(_))
     val (phloLeft, _)   = runWithCost(runMatcher(sum), possibleResults.size)
     assert(phloLeft.value == 0)
 
     val moreVariants    = sum.flatMap(x => Alternative[F].unite(Stream(x, 0, -x).pure[F]))
-    val moreComputation = moreVariants.map(x => "Do sth with " + x) <* charge[F](Cost(1))
+    val moreComputation = moreVariants.map(x => "Do sth with " + x) >>= (charge[F](Cost(1)).as(_))
     val (phloLeft2, _) =
       runWithCost(runMatcher(moreComputation), possibleResults.size * 3 + possibleResults.size)
     assert(phloLeft2.value == 0)

@@ -93,19 +93,19 @@ object CostAccountingPropertyTest {
   ): F[EvaluateResult] = {
     val term = PP().buildString(par)
 
-    InterpreterUtil.evaluate(runtime, term)
+    InterpreterUtil.evaluateResult(runtime, term)
   }
 
   def costOfExecution(procs: Proc*): Task[Long] = {
     implicit val logF: Log[Task]            = new Log.NOPLog[Task]
     implicit val noopMetrics: Metrics[Task] = new metrics.Metrics.MetricsNOP[Task]
     implicit val noopSpan: Span[Task]       = NoopSpan[Task]()
+    implicit val ms: Metrics.Source         = Metrics.BaseSource
 
     val prefix = "cost-accounting-property-test"
     mkRuntime[Task](prefix, 1024 * 1024).use { runtime =>
       for {
-        _    <- runtime.reducer.setPhlo(Cost.UNSAFE_MAX)
-        _    <- Runtime.injectEmptyRegistryRoot[Task](runtime.space, runtime.replaySpace)
+        _    <- runtime.cost.set(Cost.UNSAFE_MAX)
         cost <- CostAccounting.emptyCost[Task]
         res <- {
           implicit val c = cost

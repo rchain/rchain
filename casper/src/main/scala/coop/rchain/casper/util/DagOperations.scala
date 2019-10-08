@@ -3,7 +3,7 @@ package coop.rchain.casper.util
 import cats.{Eval, Monad}
 import cats.implicits._
 import com.google.protobuf.ByteString
-import coop.rchain.blockstorage.BlockDagRepresentation
+import coop.rchain.blockstorage.dag.BlockDagRepresentation
 import coop.rchain.models.BlockMetadata
 import coop.rchain.shared.StreamT
 
@@ -37,16 +37,12 @@ object DagOperations {
     * B contains i.
     * @param blocks indexed sequence of blocks to determine uncommon ancestors of
     * @param dag the DAG
-    * @param topoSort topological sort of the DAG, ensures ancestor computation is
-    *                 done correctly
     * @return A map from uncommon ancestor blocks to BitSets, where a block B is
     *         and ancestor of starting block with index i if B's BitSet contains i.
     */
   def uncommonAncestors[F[_]: Monad](
       blocks: IndexedSeq[BlockMetadata],
       dag: BlockDagRepresentation[F]
-  )(
-      implicit topoSort: Ordering[BlockMetadata]
   ): F[Map[BlockMetadata, BitSet]] = {
     val commonSet = BitSet(0 until blocks.length: _*)
     def parents(b: BlockMetadata): F[List[BlockMetadata]] =
@@ -54,7 +50,7 @@ object DagOperations {
     def isCommon(set: BitSet): Boolean = set == commonSet
 
     val initMap = blocks.zipWithIndex.map { case (b, i) => b -> BitSet(i) }.toMap
-    val q       = new mutable.PriorityQueue[BlockMetadata]()
+    val q       = new mutable.PriorityQueue[BlockMetadata]()(BlockMetadata.orderingByNum)
     q.enqueue(blocks: _*)
 
     def loop(
@@ -92,28 +88,15 @@ object DagOperations {
   }
 
   /**
-    * Conceptually, the LCA is the lowest point at which the histories of b1 and b2 diverge.
-    * We compute by finding the first block that is the "lowest" (has highest blocknum) common block.
+    * Conceptually, the LUCA is the lowest point at which the histories of b1 and b2 diverge.
+    * We compute by finding the first block that is the "lowest" (has highest blocknum) block common
+    * for both blocks' ancestors.
     */
-  def lowestCommonAncestorF[F[_]: Monad](
+  def lowestUniversalCommonAncestorF[F[_]: Monad](
       b1: BlockMetadata,
       b2: BlockMetadata,
       dag: BlockDagRepresentation[F]
   ): F[BlockMetadata] = {
-
-    implicit val blockMetadataByNumDecreasing: Ordering[BlockMetadata] =
-      (l: BlockMetadata, r: BlockMetadata) => {
-        def compareByteString(l: ByteString, r: ByteString): Int =
-          l.hashCode().compareTo(r.hashCode())
-
-        val ln = l.blockNum
-        val rn = r.blockNum
-        rn.compare(ln) match {
-          case 0 => compareByteString(l.blockHash, r.blockHash)
-          case v => v
-        }
-      }
-
     def getParents(p: BlockMetadata): F[Set[BlockMetadata]] =
       p.parents.traverse(dag.lookup).map(_.toSet.flatten)
 
@@ -127,7 +110,7 @@ object DagOperations {
     if (b1 == b2) {
       b1.pure[F]
     } else {
-      val start = SortedSet.empty[BlockMetadata] + b1 + b2
+      val start = SortedSet.empty[BlockMetadata](BlockMetadata.orderingByNum.reverse) + b1 + b2
       Monad[F]
         .iterateWhileM(start)(extractParentsFromHighestNumBlock)(
           _.size != 1

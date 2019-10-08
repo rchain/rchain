@@ -2,16 +2,10 @@ package coop.rchain.rspace.bench.wide
 
 import java.util.concurrent.TimeUnit
 
-import coop.rchain.catscontrib.TaskContrib._
-import coop.rchain.crypto.hash.Blake2b512Random
-import coop.rchain.rholang.interpreter.Runtime
+import coop.rchain.rspace.bench._
+import coop.rchain.rspace.bench.RhoBenchBaseState
 import org.openjdk.jmh.annotations._
 import org.openjdk.jmh.infra.Blackhole
-
-import scala.concurrent.Await
-import scala.concurrent.duration.Duration
-
-import monix.eval.Task
 
 class WideBench {
 
@@ -22,54 +16,12 @@ class WideBench {
   @Threads(1)
   @Warmup(iterations = 2)
   @Measurement(iterations = 5)
-  def wideReduceFine(bh: Blackhole, state: FineBenchState): Unit = {
-    implicit val scheduler = state.scheduler
-    val result             = state.runTask.unsafeRunSync
-    bh.consume(processErrors(result))
-  }
-
-  @Benchmark
-  @BenchmarkMode(Array(Mode.SingleShotTime))
-  @OutputTimeUnit(TimeUnit.MILLISECONDS)
-  @Fork(value = 1)
-  @Threads(1)
-  @Warmup(iterations = 2)
-  @Measurement(iterations = 5)
-  def inmemWideReduceFine(bh: Blackhole, state: InMemBenchState): Unit = {
-    implicit val scheduler = state.scheduler
-    val result             = state.runTask.unsafeRunSync
-    bh.consume(processErrors(result))
-  }
+  def wideReduce(bh: Blackhole, state: WideBenchState): Unit =
+    state.execute(bh)
 }
 
 @State(Scope.Benchmark)
-class FineBenchState extends WideBenchState {
-  override def createRuntime() =
-    Runtime.createWithEmptyCost[Task](dbDir, mapSize).unsafeRunSync
-}
-
-@State(Scope.Benchmark)
-class InMemBenchState extends WideBenchState {
-  override def createRuntime() =
-    Runtime
-      .createWithEmptyCost[Task](dbDir, mapSize)
-      .unsafeRunSync
-}
-
-abstract class WideBenchState extends WideBenchBaseState {
-
-  implicit def rand: Blake2b512Random = Blake2b512Random(128)
-
-  @Setup(value = Level.Iteration)
-  override def doSetup(): Unit = {
-    super.doSetup()
-    //make sure we always start from clean rspace
-    runtime.replaySpace.clear()
-    runtime.space.clear()
-    processErrors(
-      Await
-        .result(createTest(setupTerm)(readErrors, runtime.reducer, rand).runToFuture, Duration.Inf)
-    )
-    runTask = createTest(setupTerm)(readErrors, runtime.reducer, rand)
-  }
+class WideBenchState extends RhoBenchBaseState {
+  override def setupRho: Option[String] = Some(resourceFileReader("/rholang/wide-setup.rho"))
+  override def testedRho: String        = resourceFileReader("/rholang/wide.rho")
 }

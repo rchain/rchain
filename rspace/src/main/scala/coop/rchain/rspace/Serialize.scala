@@ -33,14 +33,6 @@ object Serialize {
         .fold(err => Left(new Exception(err.message)), v => Right(v.value))
   }
 
-  def roundTrip[F[_]: Applicative, E: Serialize](
-      k: E
-  )(implicit FR: FunctorRaise[F, Throwable]): F[E] =
-    Serialize[E].decode(Serialize[E].encode(k)) match {
-      case Left(ex)     => FR.raise(ex)
-      case Right(value) => value.pure[F]
-    }
-
   implicit class RichSerialize[A](private val instance: Serialize[A]) extends AnyVal {
 
     def toCodec: Codec[A] = new Codec[A] {

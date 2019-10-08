@@ -7,13 +7,13 @@ import coop.rchain.casper.protocol.{NoApprovedBlockAvailable, _}
 import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.comm.rp.ProtocolHelper
 import coop.rchain.comm.rp.ProtocolHelper._
-import coop.rchain.comm.transport
-import coop.rchain.shared.Cell
+import coop.rchain.shared.{Cell, EventPublisher}
 import monix.eval.Task
 import monix.execution.Scheduler
 import org.scalatest.WordSpec
 
 class GenesisValidatorSpec extends WordSpec {
+  implicit val eventBus = EventPublisher.noop[Task]
 
   "GenesisCeremonyMaster" should {
     "respond on UnapprovedBlock messages with BlockApproval" in {
@@ -23,19 +23,18 @@ class GenesisValidatorSpec extends WordSpec {
 
       implicit val engineCell: EngineCell[Task] =
         Cell.unsafe[Task, Engine[Task]](Engine.noop)
-      val expectedCandidate = ApprovedBlockCandidate(Some(genesis), requiredSigs)
+      val expectedCandidate = ApprovedBlockCandidate(genesis, requiredSigs)
       val unapprovedBlock   = BlockApproverProtocolTest.createUnapproved(requiredSigs, genesis)
       val test = for {
         _ <- engineCell.set(
-              new GenesisValidator(runtimeManager, validatorId, shardId, bap)
+              new GenesisValidator(validatorId, shardId, bap)
             )
         _             <- engineCell.read >>= (_.handle(local, unapprovedBlock))
         blockApproval = BlockApproverProtocol.getBlockApproval(expectedCandidate, validatorId)
         expectedPacket = ProtocolHelper.packet(
           local,
           networkId,
-          transport.BlockApproval,
-          blockApproval.toByteString
+          blockApproval.toProto
         )
         _ = {
           val lastMessage = transportLayer.requests.last
@@ -56,19 +55,18 @@ class GenesisValidatorSpec extends WordSpec {
       val approvedBlockRequest = ApprovedBlockRequest("test")
       val test = for {
         _ <- engineCell.set(
-              new GenesisValidator(runtimeManager, validatorId, shardId, bap)
+              new GenesisValidator(validatorId, shardId, bap)
             )
         _    <- engineCell.read >>= (_.handle(local, approvedBlockRequest))
         head = transportLayer.requests.head
         response = packet(
           local,
           networkId,
-          transport.NoApprovedBlockAvailable,
-          NoApprovedBlockAvailable(approvedBlockRequest.identifier, local.toString).toByteString
+          NoApprovedBlockAvailable(approvedBlockRequest.identifier, local.toString).toProto
         )
         _            = assert(head.peer == local && head.msg == response)
         _            = transportLayer.reset()
-        blockRequest = BlockRequest("base16Hash", ByteString.copyFromUtf8("base16Hash"))
+        blockRequest = BlockRequest(ByteString.copyFromUtf8("base16Hash"))
         _            <- engineCell.read >>= (_.handle(local, blockRequest))
         _            = assert(transportLayer.requests.isEmpty)
       } yield ()

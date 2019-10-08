@@ -2,28 +2,31 @@ package coop.rchain.casper
 
 import cats.implicits._
 import coop.rchain.casper.MultiParentCasper.ignoreDoppelgangerCheck
-import coop.rchain.casper.helper.HashSetCasperTestNode
-import coop.rchain.casper.helper.HashSetCasperTestNode._
-import coop.rchain.casper.scalatestcontrib._
+import coop.rchain.casper.genesis.contracts.Vault
+import coop.rchain.casper.helper.TestNode
+import coop.rchain.casper.helper.TestNode._
+import coop.rchain.shared.scalatestcontrib._
 import coop.rchain.casper.util.ConstructDeploy
-import coop.rchain.casper.util.GenesisBuilder.buildGenesis
+import coop.rchain.casper.util.GenesisBuilder._
 import coop.rchain.casper.util.RSpaceUtil._
 import coop.rchain.casper.util.rholang.RegistrySigGen
 import coop.rchain.crypto.PublicKey
 import coop.rchain.crypto.codec.Base16
-import monix.execution.Scheduler.Implicits.global
+import coop.rchain.crypto.signatures.Secp256k1
+import coop.rchain.rholang.interpreter.util.RevAddress
+import coop.rchain.shared.RChainScheduler
 import org.scalatest.{FlatSpec, Matchers}
 
 class RholangBuildTest extends FlatSpec with Matchers {
 
-  val genesis = buildGenesis()
+  implicit val scheduler = RChainScheduler.interpreterScheduler
+  val genesis            = buildGenesis()
 
   "Our build system" should "allow import of rholang sources into scala code" in effectTest {
-    HashSetCasperTestNode
+    TestNode
       .standaloneEff(genesis)
       .use { node =>
         import node._
-        implicit val rm = node.runtimeManager
 
         val code =
           """
@@ -42,12 +45,9 @@ class RholangBuildTest extends FlatSpec with Matchers {
           |}
           |""".stripMargin
         for {
-          deploy <- ConstructDeploy.sourceDeployNowF(code)
-          createBlockResult <- MultiParentCasper[Effect]
-                                .deploy(deploy) >> MultiParentCasper[Effect].createBlock
-          Created(signedBlock) = createBlockResult
-          _                    <- MultiParentCasper[Effect].addBlock(signedBlock, ignoreDoppelgangerCheck[Effect])
-          _                    = logEff.warns should be(Nil)
+          deploy      <- ConstructDeploy.sourceDeployNowF(code)
+          signedBlock <- node.addBlock(deploy)
+          _           = logEff.warns should be(Nil)
           _ <- getDataAtPrivateChannel[Effect](
                 signedBlock,
                 Base16.encode(
@@ -61,4 +61,20 @@ class RholangBuildTest extends FlatSpec with Matchers {
       }
   }
 
+  "Our build system" should "execute the genesis block" ignore effectTest {
+    val REV_ADDRESS_COUNT = 16000
+
+    val vaults = (1 to REV_ADDRESS_COUNT)
+      .map(i => (Secp256k1.newKeyPair, i))
+      .map { case ((_, publicKey), i) => Vault(RevAddress.fromPublicKey(publicKey).get, i.toLong) }
+      .toSeq
+    val (keyPairs, genesis) = buildGenesisParameters()
+    val genesisParams       = (keyPairs, genesis.copy(vaults = vaults))
+    TestNode
+      .standaloneEff(buildGenesis(genesisParams))
+      .use { node =>
+        import node._
+        (logEff.warns should be(Nil)).pure[Effect]
+      }
+  }
 }

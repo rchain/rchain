@@ -5,6 +5,7 @@ import java.util.Arrays
 import coop.rchain.crypto.PublicKey
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.hash.{Blake2b256, Keccak256}
+import coop.rchain.models.GPrivate
 import coop.rchain.rholang.interpreter.util.codec.Base58
 
 final case class Address(prefix: Array[Byte], keyHash: Array[Byte], checksum: Array[Byte]) {
@@ -46,19 +47,33 @@ class AddressTools(prefix: Array[Byte], keyLength: Int, checksumLength: Int) {
   def fromPublicKey(pk: PublicKey): Option[Address] =
     if (keyLength == pk.bytes.length) {
       val ethAddress = Base16.encode(Keccak256.hash(pk.bytes.drop(1))).takeRight(40)
-      Some(fromEthAddress(ethAddress))
+      fromEthAddress(ethAddress)
     } else None
 
-  def fromEthAddress(ethAddress: String): Address = {
-    val keyHash = Keccak256.hash(Base16.unsafeDecode(ethAddress))
+  def fromEthAddress(ethAddress: String): Option[Address] = {
+    val ethAddressWithoutPrefix = if (ethAddress.startsWith("0x")) {
+      ethAddress.drop(2)
+    } else {
+      ethAddress
+    }
+    if (ethAddressWithoutPrefix.length == ETH_ADDRESS_LENGTH) {
+      val keyHash = Keccak256.hash(Base16.unsafeDecode(ethAddressWithoutPrefix))
+      val payload = prefix ++ keyHash
+      Some(Address(prefix, keyHash, computeChecksum(payload)))
+    } else None
+  }
+
+  def fromUnforgeable(gprivate: GPrivate): Address = {
+    val keyHash = Keccak256.hash(gprivate.toByteArray)
     val payload = prefix ++ keyHash
     Address(prefix, keyHash, computeChecksum(payload))
   }
 
   def isValid(address: String): Boolean = parse(address).isRight
 
-  private val checksumStart = prefix.length + Blake2b256.hashLength
-  private val addressLength = prefix.length + Blake2b256.hashLength + checksumLength
+  private val checksumStart      = prefix.length + Blake2b256.hashLength
+  private val addressLength      = prefix.length + Blake2b256.hashLength + checksumLength
+  private val ETH_ADDRESS_LENGTH = 40
 
   def parse(address: String): Either[String, Address] = {
     def validateLength(bytes: Array[Byte]) =

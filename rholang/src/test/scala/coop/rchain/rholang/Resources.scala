@@ -11,6 +11,7 @@ import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.models._
 import coop.rchain.rholang.interpreter.Runtime
 import coop.rchain.rholang.interpreter.Runtime.{RhoISpace, SystemProcess}
+import coop.rchain.rspace
 import coop.rchain.rspace.RSpace
 import coop.rchain.rspace.history.Branch
 import coop.rchain.shared.Log
@@ -35,15 +36,15 @@ object Resources {
         })
     )
 
-  def mkRhoISpace[F[_]: Concurrent: ContextShift: Log: Metrics: Span](
+  def mkRhoISpace[F[_]: Concurrent: ContextShift: par.Par: Log: Metrics: Span](
       prefix: String = ""
   ): Resource[F, RhoISpace[F]] = {
 
     val branch: String = "test"
     val mapSize: Long  = 1024L * 1024L * 4
 
-    import coop.rchain.rholang.interpreter.storage.implicits._
-
+    import coop.rchain.rholang.interpreter.storage._
+    implicit val m: rspace.Match[F, BindPattern, ListParWithRandom] = matchListPar[F]
     import scala.concurrent.ExecutionContext.Implicits.global
 
     def mkRspace(dbDir: Path): F[RhoISpace[F]] =
@@ -51,7 +52,6 @@ object Resources {
         F,
         Par,
         BindPattern,
-        ListParWithRandom,
         ListParWithRandom,
         TaggedContinuation
       ](dbDir, mapSize, Branch(branch))

@@ -12,6 +12,7 @@ import coop.rchain.crypto.util.KeyUtil
 import coop.rchain.metrics
 import coop.rchain.metrics.Metrics
 import coop.rchain.node.configuration._
+import coop.rchain.node.diagnostics.Trace
 import coop.rchain.node.effects._
 import coop.rchain.shared.StringOps._
 import coop.rchain.shared._
@@ -49,7 +50,7 @@ object Main {
 
     Task
       .defer(logUnknownConfigurationKeys(configuration) >> mainProgram(configuration))
-      .unsafeRunSyncTracing(configuration.kamon.zipkin)
+      .unsafeRunSync
   }
 
   private def logUnknownConfigurationKeys(conf: Configuration): Task[Unit] =
@@ -84,8 +85,9 @@ object Main {
     implicit val console: ConsoleIO[Task] = consoleIO
 
     val program = conf.command match {
-      case Eval(files) => new ReplRuntime().evalProgram[Task](files)
-      case Repl        => new ReplRuntime().replProgram[Task].as(())
+      case Eval(files, printUnmatchedSendsOnly) =>
+        new ReplRuntime().evalProgram[Task](files, printUnmatchedSendsOnly)
+      case Repl => new ReplRuntime().replProgram[Task].as(())
       case Deploy(
           phlo,
           phloPrice,
@@ -120,10 +122,10 @@ object Main {
                 location
               )
         } yield ()
-      case FindDeploy(deployId) => DeployRuntime.findDeploy[Task](deployId)
-      case Propose              => DeployRuntime.propose[Task]()
-      case ShowBlock(hash)      => DeployRuntime.getBlock[Task](hash)
-      case ShowBlocks(depth)    => DeployRuntime.getBlocks[Task](depth)
+      case FindDeploy(deployId)         => DeployRuntime.findDeploy[Task](deployId)
+      case Propose(printUnmatchedSends) => DeployRuntime.propose[Task](printUnmatchedSends)
+      case ShowBlock(hash)              => DeployRuntime.getBlock[Task](hash)
+      case ShowBlocks(depth)            => DeployRuntime.getBlocks[Task](depth)
       case VisualizeDag(depth, showJustificationLines) =>
         DeployRuntime.visualizeDag[Task](depth, showJustificationLines)
       case MachineVerifiableDag              => DeployRuntime.machineVerifiableDag[Task]
@@ -131,6 +133,7 @@ object Main {
       case ContAtName(names)                 => DeployRuntime.listenForContinuationAtName[Task](names)
       case Keygen(algorithm, privateKeyPath) => generateKey(conf, algorithm, privateKeyPath)
       case LastFinalizedBlock                => DeployRuntime.lastFinalizedBlock[Task]
+      case IsFinalized(hash)                 => DeployRuntime.isFinalized[Task](hash)
       case Run                               => nodeProgram(conf)
       case _                                 => conf.printHelp()
     }
@@ -140,7 +143,7 @@ object Main {
         proposeService.close()
         replService.close()
         deployService.close()
-        console.close.unsafeRunSyncTracing(conf.kamon.zipkin)(scheduler)
+        console.close.unsafeRunSync(scheduler)
       }
     ) >> program
   }
@@ -193,7 +196,7 @@ object Main {
       _             <- log.info(VersionInfo.get)
       _             <- logConfiguration(confWithPorts)
       runtime       <- NodeRuntime(confWithPorts)
-      _             <- runtime.main
+      _             <- runtime.main.run(NodeCallCtx.init)
     } yield ()
   }
 
@@ -268,13 +271,23 @@ object Main {
       )
 
     for {
-      _ <- List(
-            conf.server.httpPort,
-            conf.grpcServer.portExternal,
-            conf.grpcServer.portInternal
-          ).traverse(isLocalPortAvailable)
-            .map(_.forall(identity))
-            .ifM(Task.unit, Task.raiseError(new Exception("Port is in use")))
+      portsAvailability <- List(
+                            ("http", conf.server.httpPort),
+                            ("grpc server external", conf.grpcServer.portExternal),
+                            ("grpc server internal", conf.grpcServer.portInternal)
+                          ).traverse { _.traverse(isLocalPortAvailable) }
+
+      unavailablePorts = portsAvailability.filter(!_._2).map(_._1)
+
+      _ <- if (unavailablePorts.isEmpty)
+            Task.unit
+          else
+            Task.raiseError(
+              new Exception(
+                s"Required ports are already in use: ${unavailablePorts.mkString(", ")}"
+              )
+            )
+
       rpPortConf       <- checkRChainProtocolPort(conf)
       kademliaPortConf <- checkKademliaPort(rpPortConf)
     } yield kademliaPortConf

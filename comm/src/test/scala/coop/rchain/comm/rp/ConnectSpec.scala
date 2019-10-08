@@ -65,8 +65,7 @@ class ConnectSpec
 
   }
 
-  def alwaysSuccess: Protocol => CommErr[Protocol] =
-    kp(Right(protocolHandshake(src, networkId)))
+  def alwaysSuccess: Protocol => CommErr[Unit] = kp(Right(()))
 
   private def endpoint(port: Int): Endpoint = Endpoint("host", port, port)
   private def peerNode(name: String, port: Int): PeerNode =

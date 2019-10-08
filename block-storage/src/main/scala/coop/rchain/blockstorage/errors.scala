@@ -3,7 +3,7 @@ package coop.rchain.blockstorage
 import java.nio.file.Path
 
 import cats.data.EitherT
-import coop.rchain.casper.protocol.BlockMessage
+import coop.rchain.casper.protocol.{BlockMessage, BlockMessageProto}
 import coop.rchain.crypto.codec.Base16
 
 sealed abstract class StorageError extends Exception
@@ -18,6 +18,7 @@ final case object EquivocationsTrackerLogIsMalformed                          ex
 final case object LatestMessagesLogIsCorrupted                                extends StorageError
 final case object DataLookupIsCorrupted                                       extends StorageError
 final case object InvalidBlocksIsCorrupted                                    extends StorageError
+final case object BlockHashesByDeployLogIsCorrupted                           extends StorageError
 
 object StorageError {
   type StorageErr[A]        = Either[StorageError, A]
@@ -45,6 +46,8 @@ object StorageError {
         "Data lookup log is corrupted"
       case InvalidBlocksIsCorrupted =>
         "Invalid blocks log is corrupted"
+      case BlockHashesByDeployLogIsCorrupted =>
+        "Block hashes by deploy log is corrupted"
     }
 
   implicit class StorageErrorToMessage(storageError: StorageError) {

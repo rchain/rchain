@@ -4,28 +4,36 @@ import java.nio.ByteBuffer
 import java.nio.file._
 
 import cats.Monad
+import cats.effect.concurrent.Semaphore
 import cats.effect.{Concurrent, Sync}
 import cats.implicits._
-import cats.effect.concurrent.Semaphore
 import cats.mtl.MonadState
+
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.FileLMDBIndexBlockStore.Checkpoint
 import coop.rchain.blockstorage.StorageError.StorageErr
-import coop.rchain.casper.protocol.{ApprovedBlock, BlockMessage}
-import coop.rchain.shared.Resources.withResource
 import coop.rchain.blockstorage.util.byteOps._
 import coop.rchain.blockstorage.util.io.IOError.RaiseIOError
-import coop.rchain.blockstorage.util.io._
-import coop.rchain.blockstorage.util.io.IOError
+import coop.rchain.blockstorage.util.io.{IOError, _}
+import coop.rchain.casper.protocol.{
+  ApprovedBlock,
+  ApprovedBlockProto,
+  BlockMessage,
+  BlockMessageProto
+}
+import coop.rchain.lmdb.LMDBStore
 import coop.rchain.models.BlockHash.BlockHash
-import coop.rchain.shared.{AtomicMonadState, Log}
 import coop.rchain.shared.ByteStringOps._
 import coop.rchain.shared.Language.ignore
+import coop.rchain.shared.{AtomicMonadState, Log}
+
 import monix.execution.atomic.AtomicAny
 import org.lmdbjava.DbiFlags.MDB_CREATE
 import org.lmdbjava._
-
 import scala.util.matching.Regex
+
+import coop.rchain.metrics.{Metrics, MetricsSemaphore}
+import coop.rchain.metrics.Metrics.Source
 
 private final case class FileLMDBIndexBlockStoreState[F[_]: Sync](
     blockMessageRandomAccessFile: RandomAccessIO[F],
@@ -35,7 +43,7 @@ private final case class FileLMDBIndexBlockStoreState[F[_]: Sync](
 
 class FileLMDBIndexBlockStore[F[_]: Monad: Sync: RaiseIOError: Log] private (
     lock: Semaphore[F],
-    index: LmdbDbi[F, ByteBuffer],
+    index: LMDBStore[F],
     storagePath: Path,
     approvedBlockPath: Path,
     checkpointsDir: Path,
@@ -63,14 +71,14 @@ class FileLMDBIndexBlockStore[F[_]: Monad: Sync: RaiseIOError: Log] private (
   private[this] def modifyCurrentIndex(f: Int => Int): F[Unit] =
     state.modify(s => s.copy(currentIndex = f(s.currentIndex)))
 
-  private def readBlockMessage(indexEntry: IndexEntry): F[BlockMessage] = {
-    def readBlockMessageFromFile(storageFile: RandomAccessIO[F]): F[BlockMessage] =
+  private def readBlockMessage(indexEntry: IndexEntry): F[BlockMessageProto] = {
+    def readBlockMessageFromFile(storageFile: RandomAccessIO[F]): F[BlockMessageProto] =
       for {
         _                      <- storageFile.seek(indexEntry.offset)
         blockMessageSizeOpt    <- storageFile.readInt
         blockMessagesByteArray = Array.ofDim[Byte](blockMessageSizeOpt.get)
         _                      <- storageFile.readFully(blockMessagesByteArray)
-        blockMessage           = BlockMessage.parseFrom(blockMessagesByteArray)
+        blockMessage           = BlockMessageProto.parseFrom(blockMessagesByteArray)
       } yield blockMessage
 
     for {
@@ -96,7 +104,7 @@ class FileLMDBIndexBlockStore[F[_]: Monad: Sync: RaiseIOError: Log] private (
                                         storageFile.close
                                       }
                                     case None =>
-                                      RaiseIOError[F].raise[BlockMessage](
+                                      RaiseIOError[F].raise[BlockMessageProto](
                                         UnavailableReferencedCheckpoint(
                                           indexEntry.checkpointIndex
                                         )
@@ -109,31 +117,26 @@ class FileLMDBIndexBlockStore[F[_]: Monad: Sync: RaiseIOError: Log] private (
   override def get(blockHash: BlockHash): F[Option[BlockMessage]] =
     lock.withPermit(
       for {
-        indexEntryOpt <- index.withReadTxn { txn =>
-                          index
-                            .get(txn, blockHash.toDirectByteBuffer)
-                            .map(IndexEntry.load)
-                        }
-        result <- indexEntryOpt.traverse(readBlockMessage)
-      } yield result
+        indexEntryBytesOpt     <- index.get(blockHash.toDirectByteBuffer)
+        indexEntryOpt          = indexEntryBytesOpt.map(IndexEntry.load)
+        maybeBlockMessageProto <- indexEntryOpt.traverse(readBlockMessage)
+      } yield maybeBlockMessageProto >>= (bmp => BlockMessage.from(bmp).toOption)
     )
 
   override def find(p: BlockHash => Boolean): F[Seq[(BlockHash, BlockMessage)]] =
     lock.withPermit(
       for {
-        filteredIndex <- index.withReadTxn { txn =>
-                          index.iterate(txn) { iterator =>
-                            iterator
-                              .map(kv => (ByteString.copyFrom(kv.key()), kv.`val`()))
-                              .withFilter { case (key, _) => p(key) }
-                              .map { case (key, value) => (key, IndexEntry.load(value)) }
-                              .toList
-                          }
+        filteredIndex <- index.iterate { iterator =>
+                          iterator
+                            .map(kv => (ByteString.copyFrom(kv.key()), kv.`val`()))
+                            .withFilter { case (key, _) => p(key) }
+                            .map { case (key, value) => (key, IndexEntry.load(value)) }
+                            .toList
                         }
         result <- filteredIndex.flatTraverse {
                    case (blockHash, indexEntry) =>
                      readBlockMessage(indexEntry)
-                       .map(block => List(blockHash -> block))
+                       .map(block => List(blockHash -> BlockMessage.from(block).right.get)) // TODO FIX-ME
                  }
       } yield result
     )
@@ -146,18 +149,13 @@ class FileLMDBIndexBlockStore[F[_]: Monad: Sync: RaiseIOError: Log] private (
         endOfFileOffset           <- randomAccessFile.length
         _                         <- randomAccessFile.seek(endOfFileOffset)
         (blockHash, blockMessage) = f
-        blockMessageByteArray     = blockMessage.toByteArray
+        blockMessageByteArray     = BlockMessage.toProto(blockMessage).toByteArray
         _                         <- randomAccessFile.writeInt(blockMessageByteArray.length)
         _                         <- randomAccessFile.write(blockMessageByteArray)
-        _ <- index.withWriteTxn { txn =>
-              ignore {
-                index.put(
-                  txn,
-                  blockHash.toDirectByteBuffer,
-                  currentIndex.toByteString.concat(endOfFileOffset.toByteString).toDirectByteBuffer
-                )
-              }
-            }
+        _ <- index.put(
+              blockHash.toDirectByteBuffer,
+              currentIndex.toByteString.concat(endOfFileOffset.toByteString).toDirectByteBuffer
+            )
       } yield ()
     )
 
@@ -167,14 +165,14 @@ class FileLMDBIndexBlockStore[F[_]: Monad: Sync: RaiseIOError: Log] private (
         case bytes if bytes.isEmpty =>
           None
         case bytes =>
-          Some(ApprovedBlock.parseFrom(bytes))
+          ApprovedBlock.from(ApprovedBlockProto.parseFrom(bytes)).toOption
       }
     )
 
   def putApprovedBlock(block: ApprovedBlock): F[Unit] =
     lock.withPermit {
       val tmpFile = approvedBlockPath.resolveSibling(approvedBlockPath.getFileName + ".tmp")
-      writeToFile(tmpFile, block.toByteArray) >>
+      writeToFile(tmpFile, block.toProto.toByteArray) >>
         moveFile(tmpFile, approvedBlockPath, StandardCopyOption.ATOMIC_MOVE).as(())
     }
 
@@ -200,10 +198,8 @@ class FileLMDBIndexBlockStore[F[_]: Monad: Sync: RaiseIOError: Log] private (
     lock.withPermit(
       for {
         blockMessageRandomAccessFile <- getBlockMessageRandomAccessFile
-        _ <- index.withWriteTxn { txn =>
-              index.drop(txn)
-            }
-        result <- blockMessageRandomAccessFile.setLength(0)
+        _                            <- index.drop
+        result                       <- blockMessageRandomAccessFile.setLength(0)
       } yield result
     )
 
@@ -218,6 +214,9 @@ class FileLMDBIndexBlockStore[F[_]: Monad: Sync: RaiseIOError: Log] private (
 }
 
 object FileLMDBIndexBlockStore {
+  implicit private val FileLMDBIndexBlockStoreMetricsSource: Source =
+    Metrics.Source(BlockStorageMetricsSource, "file-lmdb-index")
+
   private val checkpointPattern: Regex = "([0-9]+)".r
 
   final case class Config(
@@ -253,7 +252,7 @@ object FileLMDBIndexBlockStore {
                           List(Checkpoint(index.toInt, filePath)).pure[F]
                         case other =>
                           Log[F]
-                            .warn(s"Ignoring directory '$other': not a valid checkpoint name") *>
+                            .warn(s"Ignoring directory '$other': not a valid checkpoint name") >>
                             List.empty[Checkpoint].pure[F]
                       }
                     }
@@ -274,7 +273,7 @@ object FileLMDBIndexBlockStore {
       }
     } yield result
 
-  def create[F[_]: Concurrent: Sync: Log](
+  def create[F[_]: Concurrent: Sync: Log: Metrics](
       env: Env[ByteBuffer],
       blockStoreDataDir: Path
   ): F[StorageErr[BlockStore[F]]] =
@@ -285,7 +284,7 @@ object FileLMDBIndexBlockStore {
       blockStoreDataDir.resolve("checkpoints")
     )
 
-  def create[F[_]: Monad: Concurrent: Sync: Log](
+  def create[F[_]: Monad: Concurrent: Sync: Log: Metrics](
       env: Env[ByteBuffer],
       storagePath: Path,
       approvedBlockPath: Path,
@@ -293,11 +292,11 @@ object FileLMDBIndexBlockStore {
   ): F[StorageErr[BlockStore[F]]] = {
     implicit val raiseIOError: RaiseIOError[F] = IOError.raiseIOErrorThroughSync[F]
     for {
-      lock <- Semaphore[F](1)
+      lock <- MetricsSemaphore.single[F]
       dbi <- Sync[F].delay {
               env.openDbi(s"block_store_index", MDB_CREATE)
             }
-      index                        = LmdbDbi[F, ByteBuffer](env, dbi)
+      index                        = LMDBStore[F](env, dbi)
       _                            <- createNewFile(approvedBlockPath)
       blockMessageRandomAccessFile <- RandomAccessIO.open(storagePath, RandomAccessIO.ReadWrite)
       sortedCheckpointsEither      <- loadCheckpoints(checkpointsDirPath)
@@ -325,7 +324,7 @@ object FileLMDBIndexBlockStore {
     } yield result
   }
 
-  def create[F[_]: Monad: Concurrent: Sync: Log](
+  def create[F[_]: Monad: Concurrent: Sync: Log: Metrics](
       config: Config
   ): F[StorageErr[BlockStore[F]]] =
     for {

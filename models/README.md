@@ -33,3 +33,4 @@ sbt coverageReport
 The HTML version of the generated report is located at:
 
  `./target/scala-<version>/scoverage-report/index.html`
+ 

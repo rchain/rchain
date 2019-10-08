@@ -35,28 +35,29 @@ object Server {
   val Keys: List[String] = keys.all.map(k => s"$Key.$k")
 
   object keys {
-    val NetworkId               = "network-id"
-    val Bootstrap               = "bootstrap"
-    val Host                    = "host"
-    val HostDynamic             = "host-dynamic"
-    val Upnp                    = "upnp"
-    val Port                    = "port"
-    val PortHttp                = "port-http"
-    val PortKademlia            = "port-kademlia"
-    val UseRandomPorts          = "use-random-ports"
-    val SendTimeout             = "send-timeout"
-    val Standalone              = "standalone"
-    val DataDir                 = "data-dir"
-    val StoreSize               = "store-size"
-    val DagStorageSize          = "dag-storage-size"
-    val MapSize                 = "map-size"
-    val MaxConnections          = "max-connections"
-    val AllowPrivateAddresses   = "allow-private-addresses"
-    val MaxMessageSize          = "max-message-size"
-    val MaxStreamMessageSize    = "max-stream-message-size"
-    val PacketChunkSize         = "packet-chunk-size"
-    val MessageConsumers        = "message-consumers"
-    val FaultToleranceThreshold = "fault-tolerance-threshold"
+    val NetworkId                    = "network-id"
+    val Bootstrap                    = "bootstrap"
+    val Host                         = "host"
+    val HostDynamic                  = "host-dynamic"
+    val Upnp                         = "upnp"
+    val Port                         = "port"
+    val PortHttp                     = "port-http"
+    val PortKademlia                 = "port-kademlia"
+    val UseRandomPorts               = "use-random-ports"
+    val SendTimeout                  = "send-timeout"
+    val Standalone                   = "standalone"
+    val DataDir                      = "data-dir"
+    val StoreSize                    = "store-size"
+    val DagStorageSize               = "dag-storage-size"
+    val MapSize                      = "map-size"
+    val MaxConnections               = "max-connections"
+    val AllowPrivateAddresses        = "allow-private-addresses"
+    val MaxMessageSize               = "max-message-size"
+    val MaxStreamMessageSize         = "max-stream-message-size"
+    val PacketChunkSize              = "packet-chunk-size"
+    val MessageConsumers             = "message-consumers"
+    val FaultToleranceThreshold      = "fault-tolerance-threshold"
+    val SynchronyConstraintThreshold = "synchrony-constraint-threshold"
 
     val all =
       List(
@@ -81,7 +82,8 @@ object Server {
         MaxStreamMessageSize,
         PacketChunkSize,
         MessageConsumers,
-        FaultToleranceThreshold
+        FaultToleranceThreshold,
+        SynchronyConstraintThreshold
       )
   }
 
@@ -120,7 +122,8 @@ object Server {
       maxStreamMessageSize = server.getBytes(keys.MaxStreamMessageSize),
       packetChunkSize = server.getBytes(keys.PacketChunkSize).toInt,
       messageConsumers = server.getIntOpt(keys.MessageConsumers).getOrElse(messageConsumers),
-      faultToleranceThreshold = server.getFloat(keys.FaultToleranceThreshold)
+      faultToleranceThreshold = server.getFloat(keys.FaultToleranceThreshold),
+      synchronyConstraintThreshold = server.getDouble(keys.SynchronyConstraintThreshold)
     )
   }
 }
@@ -230,7 +233,6 @@ object Casper {
     val ValidatorPrivateKey     = "validator-private-key"
     val ValidatorPrivateKeyPath = "validator-private-key-path"
     val ValidatorPublicKey      = "validator-public-key"
-    val SigAlgorithm            = "sig-algorithm"
     val BondsFile               = "bonds-file"
     val KnownValidatorsFile     = "known-validators-file"
     val Validators              = "validators"
@@ -250,7 +252,6 @@ object Casper {
         ValidatorPrivateKey,
         ValidatorPrivateKeyPath,
         ValidatorPublicKey,
-        SigAlgorithm,
         BondsFile,
         KnownValidatorsFile,
         Validators,
@@ -277,7 +278,6 @@ object Casper {
     CasperConf(
       publicKeyBase16 = casper.getStringOpt(keys.ValidatorPublicKey),
       privateKey = pkPath.orElse(pk),
-      sigAlgorithm = casper.getString(keys.SigAlgorithm),
       bondsFile = casper.getStringOpt(keys.BondsFile),
       knownValidatorsFile = casper.getStringOpt(keys.KnownValidatorsFile),
       numValidators = casper.getInt(keys.Validators),

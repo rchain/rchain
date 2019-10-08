@@ -54,14 +54,9 @@ class VarMatcherSpec extends FlatSpec with Matchers with TimeLimits with TripleE
 
     implicit val matcherMonadError = implicitly[Sync[F]]
     (for {
-      costAccounting <- CostAccounting.initialCost[Task](Cost.UNSAFE_MAX)
-      maybeResultWithCost <- {
-        implicit val cost: _cost[Task] = costAccounting
-        implicit val costF: _cost[F]   = matcherMonadCostLog[Task]
-        runFirst(spatialMatch[F, Par, Par](target, pattern))
-      }
-      result = maybeResultWithCost.map(_._1)
-      _      = assert(prettyCaptures(result) == prettyCaptures(expectedCaptures))
+      maybeResultWithCost <- runFirst(spatialMatch[F, Par, Par](target, pattern))
+      result              = maybeResultWithCost.map(_._1)
+      _                   = assert(prettyCaptures(result) == prettyCaptures(expectedCaptures))
     } yield (assert(result === expectedCaptures))).runSyncUnsafe(5.seconds)
   }
 
@@ -932,54 +927,4 @@ class VarMatcherSpec extends FlatSpec with Matchers with TimeLimits with TripleE
     assertSpatialMatch(failTarget, pattern, None)
   }
 
-  private def doMatchAndCharge(initialPhlo: Long) = {
-    val target: Par = EList(Seq(GInt(1), GInt(2), GInt(3)))
-    val pattern: Par =
-      EList(Seq(GInt(1), EVar(FreeVar(0)), EVar(FreeVar(1))), connectiveUsed = true)
-
-    (for {
-      costL <- costLog[Task]
-      cost  <- CostAccounting.initialCost[Task](Cost(initialPhlo))(Concurrent[Task], costL)
-      program = {
-        implicit val c = cost
-        spatialMatchAndCharge[Task](target, pattern).attempt
-      }
-      r          <- costL.listen(program)
-      phloLeft   <- cost.get
-      (res, log) = r
-    } yield ((phloLeft, res), log)).unsafeRunSync
-  }
-
-  "spatialMatchAndCharge" should "short-circuit when runs out of phlo in the middle of matching" in {
-    val ((_, res), _) = doMatchAndCharge(initialPhlo = 0)
-    res should be(Left(OutOfPhlogistonsError))
-  }
-
-  it should "charge for matching operations" in {
-    val ((phloLeft, _), log) = doMatchAndCharge(initialPhlo = 100)
-    phloLeft.value shouldBe 90
-    log.toList should contain theSameElementsAs List(
-      Cost(4, "equality check"),
-      Cost(0, "(comparison * 0)"),
-      Cost(0, "(comparison * 0)"),
-      Cost(0, "(comparison * 0)"),
-      Cost(3, "(comparison * 1)"),
-      Cost(0, "(comparison * 0)"),
-      Cost(0, "(comparison * 0)"),
-      Cost(0, "(comparison * 0)"),
-      Cost(0, "(comparison * 0)"),
-      Cost(0, "(comparison * 0)"),
-      Cost(0, "(comparison * 0)"),
-      Cost(3, "(comparison * 1)"),
-      Cost(0, "(comparison * 0)"),
-      Cost(0, "(comparison * 0)"),
-      Cost(0, "(comparison * 0)")
-    )
-  }
-
-  it should "be allowed to finish with a negative cost" in {
-    val ((phloLeft, res), _) = doMatchAndCharge(initialPhlo = 8)
-    res should be(Left(OutOfPhlogistonsError))
-    phloLeft.value shouldBe -2
-  }
 }

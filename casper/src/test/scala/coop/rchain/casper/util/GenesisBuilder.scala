@@ -3,12 +3,13 @@ package coop.rchain.casper.util
 import java.nio.file.{Files, Path}
 
 import cats.implicits._
-import coop.rchain.blockstorage.BlockDagFileStorage
+import coop.rchain.blockstorage.dag.BlockDagFileStorage
 import coop.rchain.casper.genesis.Genesis
 import coop.rchain.casper.genesis.contracts._
 import coop.rchain.casper.helper.BlockDagStorageTestFixture
-import coop.rchain.casper.helper.HashSetCasperTestNode.makeBlockDagFileStorageConfig
+import coop.rchain.casper.helper.TestNode.makeBlockDagFileStorageConfig
 import coop.rchain.casper.protocol._
+import coop.rchain.casper.util.ConstructDeploy.{defaultPub, defaultPub2}
 import coop.rchain.casper.util.rholang.RuntimeManager
 import coop.rchain.catscontrib.TaskContrib.TaskOps
 import coop.rchain.crypto.signatures.Secp256k1
@@ -32,7 +33,6 @@ object GenesisBuilder {
 
   val defaultValidatorKeyPairs                   = (1 to 4).map(_ => Secp256k1.newKeyPair)
   val (defaultValidatorSks, defaultValidatorPks) = defaultValidatorKeyPairs.unzip
-  val defaultGenesisPk                           = Secp256k1.newKeyPair._2
 
   def buildGenesisParameters(
       bondsFunction: Iterable[PublicKey] => Map[PublicKey, Long] = createBonds
@@ -54,17 +54,17 @@ object GenesisBuilder {
           epochLength = 1,
           validators = bonds.map(Validator.tupled).toSeq
         ),
-        genesisPk = defaultGenesisPk,
-        vaults = Vault(
-          RevAddress.fromPublicKey(ConstructDeploy.defaultPub).get,
-          9000000
-        ) :: bonds.toList.map {
-          case (pk, stake) =>
-            RevAddress.fromPublicKey(pk).map(Vault(_, stake))
-        }.flattenOption,
+        vaults = Seq(predefinedVault(defaultPub), predefinedVault(defaultPub2)) ++
+          bonds.toList.map {
+            case (pk, stake) =>
+              RevAddress.fromPublicKey(pk).map(Vault(_, stake))
+          }.flattenOption,
         supply = Long.MaxValue
       )
     )
+
+  private def predefinedVault(pub: PublicKey): Vault =
+    Vault(RevAddress.fromPublicKey(pub).get, 9000000)
 
   type GenesisParameters = (Iterable[(PrivateKey, PublicKey)], Genesis)
 
@@ -92,7 +92,7 @@ object GenesisBuilder {
 
     val (validavalidatorKeyPairs, genesisParameters) = parameters
     val storageDirectory                             = Files.createTempDirectory(s"hash-set-casper-test-genesis-")
-    val storageSize: Long                            = 3024L * 1024 * 10
+    val storageSize: Long                            = 256L * 1024 * 1024
     implicit val log: Log.NOPLog[Task]               = new Log.NOPLog[Task]
     implicit val metricsEff: Metrics[Task]           = new metrics.Metrics.MetricsNOP[Task]
     implicit val spanEff                             = NoopSpan[Task]()

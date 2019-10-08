@@ -3,7 +3,7 @@ package coop.rchain.casper
 import scala.collection.immutable.{Map, Set}
 import cats.Monad
 import cats.implicits._
-import coop.rchain.blockstorage.BlockDagRepresentation
+import coop.rchain.blockstorage.dag.BlockDagRepresentation
 import coop.rchain.casper.protocol.BlockMessage
 import coop.rchain.casper.util.{DagOperations, ProtoUtil}
 import coop.rchain.casper.util.ProtoUtil.weightFromValidatorByDag
@@ -13,6 +13,7 @@ import coop.rchain.models.BlockMetadata
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.Validator.Validator
 import com.google.protobuf.ByteString
+import coop.rchain.blockstorage.dag.BlockDagRepresentation
 import coop.rchain.shared.{Log, LogSource}
 
 object Estimator {
@@ -26,8 +27,6 @@ object Estimator {
     Metrics.Source(CasperMetricsSource, "estimator")
   private val Tips0MetricsSource: Metrics.Source = Metrics.Source(EstimatorMetricsSource, "tips0")
   private val Tips1MetricsSource: Metrics.Source = Metrics.Source(EstimatorMetricsSource, "tips1")
-
-  implicit private val logSource: LogSource = LogSource(this.getClass)
 
   def tips[F[_]: Monad: Log: Metrics: Span](
       dag: BlockDagRepresentation[F],
@@ -65,7 +64,6 @@ object Estimator {
           case (blockHash, score) => s"${PrettyPrinter.buildString(blockHash)}: $score"
         }
         .mkString(", ")
-      _                          <- Log[F].info(s"The scores map is $scoresMapString")
       rankedLatestMessagesHashes <- rankForkchoices(List(lca), dag, scoresMap)
       _                          <- Span[F].mark("ranked-latest-messages-hashes")
     } yield rankedLatestMessagesHashes
@@ -87,7 +85,7 @@ object Estimator {
                    .foldM(latestMessages.head) {
                      case (acc, latestMessage) =>
                        // TODO: Change to mainParentLCA
-                       DagOperations.lowestCommonAncestorF[F](
+                       DagOperations.lowestUniversalCommonAncestorF[F](
                          acc,
                          latestMessage,
                          blockDag

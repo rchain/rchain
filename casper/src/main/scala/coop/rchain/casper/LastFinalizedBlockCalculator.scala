@@ -2,12 +2,13 @@ package coop.rchain.casper
 
 import cats.effect.{Concurrent, Sync}
 import cats.implicits._
-import coop.rchain.blockstorage.{BlockDagRepresentation, BlockDagStorage, BlockStore}
+import coop.rchain.blockstorage.dag.{BlockDagRepresentation, BlockDagStorage}
+import coop.rchain.blockstorage.BlockStore
 import coop.rchain.casper.CasperState.CasperStateCell
 import coop.rchain.casper.util.ProtoUtil
-import coop.rchain.shared.Log
 import coop.rchain.catscontrib.ListContrib
 import coop.rchain.models.BlockHash.BlockHash
+import coop.rchain.shared.Log
 
 final class LastFinalizedBlockCalculator[F[_]: Sync: Log: Concurrent: BlockStore: BlockDagStorage: SafetyOracle](
     faultToleranceThreshold: Float
@@ -18,14 +19,10 @@ final class LastFinalizedBlockCalculator[F[_]: Sync: Log: Concurrent: BlockStore
     for {
       maybeChildrenHashes <- dag.children(lastFinalizedBlockHash)
       childrenHashes      = maybeChildrenHashes.getOrElse(Set.empty[BlockHash]).toList
-      maybeFinalizedChild <- ListContrib.findM(
-                              childrenHashes,
-                              (blockHash: BlockHash) =>
-                                isGreaterThanFaultToleranceThreshold(dag, blockHash)
-                            )
+      maybeFinalizedChild <- childrenHashes.findM(isGreaterThanFaultToleranceThreshold(dag, _))
       newFinalizedBlock <- maybeFinalizedChild match {
                             case Some(finalizedChild) =>
-                              removeDeploysInFinalizedBlock(finalizedChild) *> run(
+                              removeDeploysInFinalizedBlock(finalizedChild) >> run(
                                 dag,
                                 finalizedChild
                               )
@@ -37,8 +34,8 @@ final class LastFinalizedBlockCalculator[F[_]: Sync: Log: Concurrent: BlockStore
       finalizedChildHash: BlockHash
   )(implicit state: CasperStateCell[F]): F[Unit] =
     for {
-      block              <- ProtoUtil.unsafeGetBlock[F](finalizedChildHash)
-      deploys            = block.body.get.deploys.map(_.deploy.get).toList
+      block              <- ProtoUtil.getBlock[F](finalizedChildHash)
+      deploys            = block.body.deploys.map(_.deploy)
       stateBefore        <- state.read
       initialHistorySize = stateBefore.deployHistory.size
       _ <- state.modify { s =>

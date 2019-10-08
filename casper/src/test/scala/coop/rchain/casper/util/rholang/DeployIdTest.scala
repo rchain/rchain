@@ -1,9 +1,9 @@
 package coop.rchain.casper.util.rholang
 
 import cats.effect.Resource
-import coop.rchain.casper.helper.HashSetCasperTestNode
+import coop.rchain.casper.helper.TestNode
 import coop.rchain.casper.protocol.DeployData
-import coop.rchain.casper.scalatestcontrib._
+import coop.rchain.shared.scalatestcontrib._
 import coop.rchain.casper.util.GenesisBuilder.buildGenesis
 import coop.rchain.casper.util.rholang.Resources._
 import coop.rchain.casper.util.{ConstructDeploy, ProtoUtil}
@@ -67,11 +67,11 @@ class DeployIdTest extends FlatSpec with Matchers {
       s"""new deployId(`rho:rchain:deployId`), ret in { @"check"!(*deployId, "$captureChannel") }"""
     )
 
-    HashSetCasperTestNode.standaloneEff(genesisContext).use { node =>
+    TestNode.standaloneEff(genesisContext).use { node =>
       for {
         block <- node.addBlock(contract)
         result <- node.runtimeManager
-                   .captureResults(ProtoUtil.tuplespace(block).get, contractCall, captureChannel)
+                   .captureResults(ProtoUtil.tuplespace(block), contractCall, captureChannel)
         _ = assert(result.size == 1)
         _ = assert(result.head == (GBool(false): Par))
       } yield ()

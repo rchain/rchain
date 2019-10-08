@@ -3,11 +3,10 @@ package coop.rchain.casper.engine
 import cats.effect.{Concurrent, Sync}
 import cats.implicits._
 import cats.Applicative
-
-import coop.rchain.blockstorage.{BlockDagStorage, BlockStore}
+import coop.rchain.blockstorage.BlockStore
+import coop.rchain.blockstorage.dag.BlockDagStorage
 import coop.rchain.casper._
 import coop.rchain.casper.LastApprovedBlock.LastApprovedBlock
-import coop.rchain.casper.MultiParentCasperRef.MultiParentCasperRef
 import EngineCell._
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.comm.CommUtil
@@ -19,21 +18,20 @@ import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.shared._
 import coop.rchain.shared
 
-import com.google.protobuf.ByteString
+import scala.language.higherKinds
 
 /** Node in this state will query peers in the network with [[ApprovedBlockRequest]] message
   * and will wait for the [[ApprovedBlock]] message to arrive. Until then  it will respond with
   * `F[None]` to all other message types.
     **/
-class Initializing[F[_]: Sync: Metrics: Span: Concurrent: ConnectionsCell: BlockStore: TransportLayer: Log: EventLog: Time: SafetyOracle: LastFinalizedBlockCalculator: RPConfAsk: LastApprovedBlock: BlockDagStorage: MultiParentCasperRef: EngineCell](
-    runtimeManager: RuntimeManager[F],
+class Initializing[F[_]: Sync: Metrics: Span: Concurrent: BlockStore: CommUtil: TransportLayer: ConnectionsCell: RPConfAsk: Running.RequestedBlocks: Log: EventLog: Time: SafetyOracle: LastFinalizedBlockCalculator: LastApprovedBlock: BlockDagStorage: EngineCell: RuntimeManager: EventPublisher: SynchronyConstraintChecker](
     shardId: String,
     validatorId: Option[ValidatorIdentity],
-    validators: Set[ByteString],
     theInit: F[Unit]
 ) extends Engine[F] {
   import Engine._
-  def applicative: Applicative[F] = Applicative[F]
+  private val F    = Applicative[F]
+  private val noop = F.unit
 
   override def init: F[Unit] = theInit
 
@@ -41,8 +39,6 @@ class Initializing[F[_]: Sync: Metrics: Span: Concurrent: ConnectionsCell: Block
     case ab: ApprovedBlock =>
       onApprovedBlockTransition(
         ab,
-        validators,
-        runtimeManager,
         validatorId,
         shardId
       )
@@ -53,34 +49,29 @@ class Initializing[F[_]: Sync: Metrics: Span: Concurrent: ConnectionsCell: Block
 
   private def onApprovedBlockTransition(
       approvedBlock: ApprovedBlock,
-      validators: Set[ByteString],
-      runtimeManager: RuntimeManager[F],
       validatorId: Option[ValidatorIdentity],
       shardId: String
   ): F[Unit] =
     for {
       _       <- Log[F].info("Received ApprovedBlock message.")
-      isValid <- Validate.approvedBlock[F](approvedBlock, validators)
+      isValid <- Validate.approvedBlock[F](approvedBlock)
       maybeCasper <- if (isValid) {
                       for {
                         _ <- Log[F].info("Valid ApprovedBlock received!")
                         _ <- EventLog[F].publish(
                               shared.Event.ApprovedBlockReceived(
-                                approvedBlock.candidate
-                                  .flatMap(
-                                    _.block.map(b => PrettyPrinter.buildStringNoLimit(b.blockHash))
-                                  )
-                                  .getOrElse("")
+                                PrettyPrinter
+                                  .buildStringNoLimit(approvedBlock.candidate.block.blockHash)
                               )
                             )
-                        genesis = approvedBlock.candidate.flatMap(_.block).get
+                        genesis = approvedBlock.candidate.block
                         _       <- insertIntoBlockAndDagStore[F](genesis, approvedBlock)
                         _       <- LastApprovedBlock[F].set(approvedBlock)
                         casper <- MultiParentCasper
-                                   .hashSetCasper[F](runtimeManager, validatorId, genesis, shardId)
+                                   .hashSetCasper[F](validatorId, genesis, shardId)
                         _ <- Engine
                               .transitionToRunning[F](casper, approvedBlock, ().pure[F])
-                        _ <- CommUtil.sendForkChoiceTipRequest[F]
+                        _ <- CommUtil[F].sendForkChoiceTipRequest
                       } yield Option(casper)
                     } else
                       Log[F]

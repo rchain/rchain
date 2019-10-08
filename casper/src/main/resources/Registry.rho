@@ -1,0 +1,94 @@
+new _registryStore,
+    lookupCh,
+    bootstrapLookup(`rho:registry:lookup`),
+    insertArbitraryCh,
+    bootstrapInsertArbitrary(`rho:registry:insertArbitrary`),
+    insertSignedCh,
+    bootstrapInsertSigned(`rho:registry:insertSigned:secp256k1`),
+    buildUri,
+    ops(`rho:registry:ops`),
+    secpVerify(`rho:crypto:secp256k1Verify`),
+    blake2b256(`rho:crypto:blake2b256Hash`)
+in {
+  _registryStore!({}) |
+
+  bootstrapLookup!(*lookupCh) | // this will work only once
+  for (lookup <- lookupCh) {
+    contract lookup(@uriOrShorthand, ret) = {
+
+      match {
+        `rho:lang:either` : `rho:id:qrh6mgfp5z6orgchgszyxnuonanz7hw3amgrprqtciia6astt66ypn`,
+        `rho:lang:listOps` : `rho:id:6fzorimqngeedepkrizgiqms6zjt76zjeciktt1eifequy4osz35ks`,
+        `rho:lang:nonNegativeNumber` : `rho:id:hxyadh1ffypra47ry9mk6b8r1i33ar1w9wjsez4khfe9huzrfcytx9`,
+        `rho:lang:treeHashMap` : `rho:id:ikbchopju4jwc5rt9q37yabkm1zeu4qzhtqi9hoj3erwwcdcmub4tz`,
+        `rho:rchain:authKey` : `rho:id:1qw5ehmq1x49dey4eadr1h4ncm361w3536asho7dr38iyookwcsp6i`,
+        `rho:rchain:makeMint` : `rho:id:asysrwfgzf8bf7sxkiowp4b3tcsy4f8ombi3w96ysox4u3qdmn1wbc`,
+        `rho:rchain:pos` : `rho:id:m3xk7h8r54dtqtwsrnxqzhe81baswey66nzw6m533nyd45ptyoybqr`,
+        `rho:rchain:revVault` : `rho:id:6zcfqnwnaqcwpeyuysx1rm48ndr6sgsbbgjuwf45i5nor3io7dr76j`
+      } {
+        shorthands => {
+          for (@map <<- _registryStore) {
+            ret!(map.get(shorthands.getOrElse(uriOrShorthand, uriOrShorthand)))
+          }
+        }
+      }
+    }
+  } |
+
+  bootstrapInsertArbitrary!(*insertArbitraryCh) | // this will work only once
+  for (insertArbitrary <- insertArbitraryCh) {
+    contract insertArbitrary(@data, ret) = {
+
+      new seed, uriCh in {
+        ops!("buildUri", *seed.toByteArray(), *uriCh) |
+        for (@uri <- uriCh) {
+          for (@map <- _registryStore) {
+            _registryStore!(map.set(uri, data)) |
+            ret!(uri)
+          }
+        }
+      }
+    }
+  } |
+
+  bootstrapInsertSigned!(*insertSignedCh) | // this will work only once
+  for (insertSigned <- insertSignedCh) {
+    contract insertSigned(@pubKeyBytes, @value, @sig, ret) = {
+
+      match value {
+        (nonce, data) => {
+          new uriCh, hashCh, verifyCh in {
+            blake2b256!((nonce, data).toByteArray(), *hashCh) |
+            for (@hash <- hashCh) {
+              secpVerify!(hash, sig, pubKeyBytes, *verifyCh) |
+              for (@verified <- verifyCh) {
+                if (verified) {
+                  ops!("buildUri", pubKeyBytes, *uriCh) |
+                  for (@uri <- uriCh) {
+                    for (@map <- _registryStore) {
+                      match map.get(uri) {
+                        Nil => {
+                          _registryStore!(map.set(uri, (nonce, data))) |
+                          ret!(uri)
+                        }
+                        (oldNonce, _) => {
+                          if (nonce > oldNonce) {
+                            _registryStore!(map.set(uri, (nonce, data))) | ret!(uri)
+                          } else {
+                            ret!(Nil) | _registryStore!(map)
+                          }
+                        }
+                      }
+                    }
+                  }
+                } else {
+                  ret!(Nil)
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

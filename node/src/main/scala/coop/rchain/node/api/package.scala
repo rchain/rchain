@@ -1,18 +1,16 @@
 package coop.rchain.node
 
 import cats.effect.Concurrent
-import cats.effect.concurrent.Semaphore
-import coop.rchain.blockstorage.BlockStore
-import coop.rchain.casper.MultiParentCasperRef.MultiParentCasperRef
-import coop.rchain.casper.SafetyOracle
-import coop.rchain.casper.protocol.{DeployServiceGrpcMonix, ProposeServiceGrpcMonix}
+
+import coop.rchain.casper.protocol.deploy.v1.DeployServiceV1GrpcMonix
+import coop.rchain.casper.protocol.propose.v1.ProposeServiceV1GrpcMonix
 import coop.rchain.catscontrib._
 import coop.rchain.grpc.{GrpcServer, Server}
-import coop.rchain.metrics.Span
 import coop.rchain.node.model.repl._
-import coop.rchain.rholang.interpreter.Runtime
 import coop.rchain.shared._
+
 import io.grpc.netty.NettyServerBuilder
+import io.grpc.protobuf.services.ProtoReflectionService
 import monix.eval.Task
 import monix.execution.Scheduler
 
@@ -24,17 +22,9 @@ package object api {
 
   def acquireInternalServer(
       port: Int,
-      runtime: Runtime[Task],
       grpcExecutor: Scheduler,
-      blockApiLock: Semaphore[Task],
-      tracing: Boolean
-  )(
-      implicit worker: Scheduler,
-      multiParentCasperRef: MultiParentCasperRef[Task],
-      safetyOracle: SafetyOracle[Task],
-      blocStore: BlockStore[Task],
-      log: Log[Task],
-      span: Span[Task]
+      replGrpcService: ReplGrpcMonix.Repl,
+      proposeGrpcService: ProposeServiceV1GrpcMonix.ProposeService
   ): Task[Server[Task]] =
     GrpcServer[Task](
       NettyServerBuilder
@@ -42,34 +32,36 @@ package object api {
         .executor(grpcExecutor)
         .maxMessageSize(maxMessageSize)
         .addService(
-          ReplGrpcMonix.bindService(new ReplGrpcService(runtime, worker), grpcExecutor)
+          ReplGrpcMonix.bindService(replGrpcService, grpcExecutor)
         )
         .addService(
-          ProposeServiceGrpcMonix
-            .bindService(ProposeGrpcService.instance(blockApiLock, tracing), grpcExecutor)
+          ProposeServiceV1GrpcMonix
+            .bindService(proposeGrpcService, grpcExecutor)
         )
+        .addService(ProtoReflectionService.newInstance())
         .build
     )
 
-  def acquireExternalServer[F[_]: Concurrent: MultiParentCasperRef: Log: SafetyOracle: BlockStore: Taskable: Span](
+  def acquireExternalServer[F[_]: Concurrent: Log: Taskable](
       port: Int,
       grpcExecutor: Scheduler,
-      blockApiLock: Semaphore[F],
-      tracing: Boolean
-  )(implicit worker: Scheduler): F[Server[F]] =
+      deployGrpcService: DeployServiceV1GrpcMonix.DeployService,
+      proposeGrpcService: ProposeServiceV1GrpcMonix.ProposeService
+  ): F[Server[F]] =
     GrpcServer[F](
       NettyServerBuilder
         .forPort(port)
         .executor(grpcExecutor)
         .maxMessageSize(maxMessageSize)
         .addService(
-          DeployServiceGrpcMonix
-            .bindService(DeployGrpcService.instance(blockApiLock, tracing), grpcExecutor)
+          DeployServiceV1GrpcMonix
+            .bindService(deployGrpcService, grpcExecutor)
         )
         .addService(
-          ProposeServiceGrpcMonix
-            .bindService(ProposeGrpcService.instance(blockApiLock, tracing), grpcExecutor)
+          ProposeServiceV1GrpcMonix
+            .bindService(proposeGrpcService, grpcExecutor)
         )
+        .addService(ProtoReflectionService.newInstance())
         .build
     )
 }

@@ -5,8 +5,10 @@ import coop.rchain.metrics.Metrics
 import coop.rchain.models.BlockHash.BlockHash
 
 package object casper {
-  type DeployId = Array[Byte]
-  type TopoSort = Vector[Vector[BlockHash]]
+  type TopoSort             = Vector[Vector[BlockHash]]
+  type BlockProcessing[A]   = Either[BlockError, A]
+  type ValidBlockProcessing = BlockProcessing[ValidBlock]
 
   val CasperMetricsSource: Metrics.Source = Metrics.Source(Metrics.BaseSource, "casper")
+
 }

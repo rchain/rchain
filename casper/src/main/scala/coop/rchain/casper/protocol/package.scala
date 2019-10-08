@@ -1,56 +1,30 @@
 package coop.rchain.casper
 
 import coop.rchain.comm.protocol.routing.Packet
-import coop.rchain.comm.transport
-import scala.util.Try
 
-package object protocol {
+package object protocol extends CasperMessageProtocol {
+  import PacketTypeTag._
 
-  def toCasperMessage(packet: Packet): Option[CasperMessage] =
-    packetToBlockRequest(packet) orElse
-      packetToForkChoiceTipRequest(packet) orElse
-      packetToApprovedBlock(packet) orElse
-      packetToApprovedBlockRequest(packet) orElse
-      packetToBlockMessage(packet) orElse
-      packetToBlockApproval(packet) orElse
-      packetToUnapprovedBlock(packet) orElse
-      packetToNoApprovedBlockAvailable(packet)
+  def toCasperMessageProto(packet: Packet): PacketParseResult[CasperMessageProto] =
+    PacketTypeTag
+      .withNameOption(packet.typeId)
+      .map {
+        case BlockHashMessage         => convert[BlockHashMessage.type](packet)
+        case BlockMessage             => convert[BlockMessage.type](packet)
+        case ApprovedBlock            => convert[ApprovedBlock.type](packet)
+        case ApprovedBlockRequest     => convert[ApprovedBlockRequest.type](packet)
+        case BlockRequest             => convert[BlockRequest.type](packet)
+        case HasBlockRequest          => convert[HasBlockRequest.type](packet)
+        case HasBlock                 => convert[HasBlock.type](packet)
+        case ForkChoiceTipRequest     => convert[ForkChoiceTipRequest.type](packet)
+        case BlockApproval            => convert[BlockApproval.type](packet)
+        case UnapprovedBlock          => convert[UnapprovedBlock.type](packet)
+        case NoApprovedBlockAvailable => convert[NoApprovedBlockAvailable.type](packet)
+      }
+      .getOrElse(PacketParseResult.IllegalPacket(s"Unrecognized typeId: ${packet.typeId}"))
 
-  private def packetToBlockMessage(msg: Packet): Option[BlockMessage] =
-    convert[BlockMessage](msg, transport.BlockMessage, BlockMessage.parseFrom)
-  private def packetToApprovedBlock(msg: Packet): Option[ApprovedBlock] =
-    convert[ApprovedBlock](msg, transport.ApprovedBlock, ApprovedBlock.parseFrom)
-  private def packetToApprovedBlockRequest(msg: Packet): Option[ApprovedBlockRequest] =
-    convert[ApprovedBlockRequest](
-      msg,
-      transport.ApprovedBlockRequest,
-      ApprovedBlockRequest.parseFrom
-    )
-  private def packetToBlockRequest(msg: Packet): Option[BlockRequest] =
-    convert[BlockRequest](msg, transport.BlockRequest, BlockRequest.parseFrom)
-  private def packetToForkChoiceTipRequest(msg: Packet): Option[ForkChoiceTipRequest] =
-    convert[ForkChoiceTipRequest](
-      msg,
-      transport.ForkChoiceTipRequest,
-      ForkChoiceTipRequest.parseFrom
-    )
-  private def packetToBlockApproval(msg: Packet): Option[BlockApproval] =
-    convert[BlockApproval](msg, transport.BlockApproval, BlockApproval.parseFrom)
-  private def packetToUnapprovedBlock(msg: Packet): Option[UnapprovedBlock] =
-    convert[UnapprovedBlock](msg, transport.UnapprovedBlock, UnapprovedBlock.parseFrom)
-  private def packetToNoApprovedBlockAvailable(msg: Packet): Option[NoApprovedBlockAvailable] =
-    convert[NoApprovedBlockAvailable](
-      msg,
-      transport.NoApprovedBlockAvailable,
-      NoApprovedBlockAvailable.parseFrom
-    )
+  @inline def convert[Tag <: PacketTypeTag](msg: Packet)(
+      implicit fromPacket: FromPacket[Tag]
+  ): PacketParseResult[fromPacket.To] = fromPacket.parseFrom(msg)
 
-  private def convert[A](
-      msg: Packet,
-      pt: transport.PacketType,
-      parse: Array[Byte] => A
-  ): Option[A] =
-    if (msg.typeId == pt.id)
-      Try(parse(msg.content.toByteArray)).toOption
-    else None
 }

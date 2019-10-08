@@ -1,5 +1,7 @@
 package coop.rchain.rholang.interpreter.storage
 
+import cats.implicits._
+import cats.Applicative
 import coop.rchain.rspace.{
   internal,
   Blake2b256Hash,
@@ -13,7 +15,9 @@ import coop.rchain.rspace.{
 
 import scala.collection.SortedSet
 
-class ISpaceStub[F[_], C, P, A, R, K] extends ISpace[F, C, P, A, R, K] {
+class ISpaceStub[F[_]: Applicative, C, P, A, K] extends ISpace[F, C, P, A, K] {
+
+  implicit val m: Match[F, P, A] = (_: P, _: A) => Applicative[F].pure(none)
 
   override def consume(
       channels: Seq[C],
@@ -22,15 +26,20 @@ class ISpaceStub[F[_], C, P, A, R, K] extends ISpace[F, C, P, A, R, K] {
       persist: Boolean,
       sequenceNumber: Int,
       peeks: SortedSet[Int]
-  )(implicit m: Match[F, P, A, R]): F[Option[(ContResult[C, P, K], Seq[Result[R]])]] = ???
+  ): F[Option[(ContResult[C, P, K], Seq[Result[C, A]])]] = ???
 
-  override def install(channels: Seq[C], patterns: Seq[P], continuation: K)(
-      implicit m: Match[F, P, A, R]
-  ): F[Option[(K, Seq[R])]] = ???
+  override def install(
+      channels: Seq[C],
+      patterns: Seq[P],
+      continuation: K
+  ): F[Option[(K, Seq[A])]] = ???
 
-  override def produce(channel: C, data: A, persist: Boolean, sequenceNumber: Int)(
-      implicit m: Match[F, P, A, R]
-  ): F[Option[(ContResult[C, P, K], Seq[Result[R]])]] = ???
+  override def produce(
+      channel: C,
+      data: A,
+      persist: Boolean,
+      sequenceNumber: Int
+  ): F[Option[(ContResult[C, P, K], Seq[Result[C, A]])]] = ???
 
   override def createCheckpoint(): F[Checkpoint] = ???
 

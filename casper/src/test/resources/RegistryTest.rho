@@ -1,0 +1,136 @@
+//requires RhoSpec
+match (
+  "0452c6f82b5eff2293e26f97b22a84e4d72f23eff2cd764952ace56455810f4aebb6b6b4ca2fffab6f0e03538dead5dd5ac410fcc85ec2e18ec46e886dd0522889".hexToBytes(),
+  "3d6673619b5f4a5b8b9d8b7fd6a60776da6ae0883ceb5e22bcea0cf946f8e780".hexToBytes(),
+  "04db580f781a3759ea92284e8734588c37e3c326049401ad8565da8e25c20287b2c6818b40ec4d8b6455a41d1939e1f1bc75417d95a73172cd4bf4cbeef45e47ab".hexToBytes(),
+  "c319f6eee832ea313faf64af6d4ea325fc014d579c4a59d069ee4a1cda4c0078".hexToBytes(),
+  "041b5f17da6e7d828ce3890a545725631b6807fd3893b2b984eeb863fc9861e465996d6f403ec570c377a1ea21ada77dd288191fa10d7fadb1b22b8afa637123d5".hexToBytes(),
+  "8171de2528878058f0de32644918fb98240188cdf35a70713e4a3161a6f691e5".hexToBytes()
+) {
+  (
+    pk1,
+    sk1,
+    pk2,
+    sk2,
+    pk3,
+    sk3
+  ) => {
+
+  new
+    RhoSpecCh,
+    lookup(`rho:registry:lookup`),
+    insertSigned(`rho:registry:insertSigned:secp256k1`),
+    insertArbitrary(`rho:registry:insertArbitrary`),
+    sign(`rho:test:crypto:secp256k1Sign`),
+    secpVerify(`rho:crypto:secp256k1Verify`),
+    blake2b256(`rho:crypto:blake2b256Hash`),
+    test_secp,
+    test_insertSignedAndLookup,
+    test_insertArbitraryAndLookup,
+    test_insertSignedValidNonce,
+    test_insertSignedInvalidNonce,
+    test_insertSignedInvalidSig,
+    test_unknownLookup,
+    insertSignedHelper
+  in {
+    lookup!(`rho:id:zphjgsfy13h1k85isc8rtwtgt3t9zzt5pjd5ihykfmyapfc4wt3x5h`, *RhoSpecCh) |
+    for(@(_, RhoSpec) <- RhoSpecCh) {
+      @RhoSpec!("testSuite",
+        [
+          ("Verifying a signature should work", *test_secp),
+          ("InsertSigned and lookup should work", *test_insertSignedAndLookup),
+          ("InsertArbitrary and lookup should work", *test_insertArbitraryAndLookup),
+          ("InsertArbitrary should work with increased nonce", *test_insertSignedValidNonce),
+          ("InsertArbitrary should return Nil for invalid nonce", *test_insertSignedInvalidNonce),
+          ("InsertArbitrary should return Nil for invalid signature", *test_insertSignedInvalidSig),
+          ("Lookup should return Nil for unknown uri", *test_unknownLookup)
+        ])
+    } |
+
+    contract test_secp(rhoSpec, _, ackCh) = {
+      new signCh, retCh, hashCh in {
+        blake2b256!("foo".toByteArray(), *hashCh) |
+        for (@hash <- hashCh) {
+          sign!(hash, sk1, *signCh) |
+          for (@sig <- signCh) {
+            secpVerify!(hash, sig, pk1, *retCh) |
+            rhoSpec!("assert", (true, "== <-", *retCh), "Expecting true", *ackCh)
+          }
+        }
+      }
+    } |
+
+    contract test_unknownLookup(rhoSpec, _, ackCh) = {
+      new retCh in {
+        lookup!(`rho:id:unknown`, *retCh) |
+        rhoSpec!("assert", (Nil, "== <-", *retCh), "Expecting Nil", *ackCh)
+      }
+    } |
+
+    contract test_insertSignedAndLookup(rhoSpec, _, ackCh) = {
+      new uriCh, valueCh in {
+        insertSignedHelper!(1, "foo", pk1, sk1, *uriCh) |
+        for (@uri <- uriCh) {
+          lookup!(uri, *valueCh) |
+          rhoSpec!("assert", ((1, "foo"), "== <-", *valueCh), "Expecting a tuple with the inserted nonce and data", *ackCh)
+        }
+      }
+    } |
+
+    contract test_insertArbitraryAndLookup(rhoSpec, _, ackCh) = {
+      new uriCh, valueCh in {
+        insertArbitrary!("foo", *uriCh) |
+        for (@uri <- uriCh) {
+          lookup!(uri, *valueCh) |
+          rhoSpec!("assert", ("foo", "== <-", *valueCh), "Expecting the string 'foo'", *ackCh)
+        }
+      }
+    } |
+
+    contract test_insertSignedValidNonce(rhoSpec, _, ackCh) = {
+      new uriCh, retCh in {
+        insertSignedHelper!(42, "foo", pk2, sk2, *uriCh) |
+        for (@uri <- uriCh) {
+          insertSignedHelper!(43, "bar", pk2, sk2, *retCh) |
+          rhoSpec!("assert", (uri, "== <-", *retCh), "Expecting the uris to be the same", *ackCh)
+        }
+      }
+    } |
+
+    contract test_insertSignedInvalidNonce(rhoSpec, _, ackCh) = {
+      new uriCh, retCh in {
+        insertSignedHelper!(42, "foo", pk3, sk3, *uriCh) |
+        for (@uri <- uriCh) {
+          insertSignedHelper!(42, "bar", pk3, sk3, *retCh) |
+          rhoSpec!("assert", (Nil, "== <-", *retCh), "Expecting Nil", *ackCh)
+        }
+      }
+    } |
+
+    contract test_insertSignedInvalidSig(rhoSpec, _, ackCh) = {
+      new retCh in {
+        insertSigned!(pk3, (1, "foo"), "foo".toByteArray(), *retCh) |
+        rhoSpec!("assert", (Nil, "== <-", *retCh), "Expecting Nil", *ackCh)
+      }
+    } |
+
+    contract test_unknownLookup(rhoSpec, _, ackCh) = {
+      new retCh in {
+        lookup!(`rho:id:unknown`, *retCh) |
+        rhoSpec!("assert", (Nil, "== <-", *retCh), "Expecting Nil", *ackCh)
+      }
+    } |
+
+    contract insertSignedHelper(@nonce, @data, @pk, @sk, ret) = {
+      new hashCh, signCh in {
+        blake2b256!((nonce, data).toByteArray(), *hashCh) |
+        for (@hash <- hashCh) {
+          sign!(hash, sk, *signCh) |
+          for (@sig <- signCh) {
+            insertSigned!(pk, (nonce, data), sig, *ret)
+          }
+        }
+      }
+    }
+  }
+}}

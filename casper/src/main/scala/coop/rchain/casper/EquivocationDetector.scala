@@ -1,21 +1,14 @@
 package coop.rchain.casper
 
+import cats.effect.Sync
 import cats.{Applicative, Monad}
 import cats.implicits._
 import com.google.protobuf.ByteString
-import coop.rchain.blockstorage.{
-  BlockDagRepresentation,
-  BlockDagStorage,
-  BlockStore,
-  EquivocationsTracker
-}
+import coop.rchain.blockstorage.dag.{BlockDagRepresentation, BlockDagStorage, EquivocationsTracker}
+import coop.rchain.blockstorage.BlockStore
 import coop.rchain.casper.protocol.{BlockMessage, Bond}
 import coop.rchain.casper.util.{DagOperations, DoublyLinkedDag, ProtoUtil}
-import coop.rchain.casper.util.ProtoUtil.{
-  bonds,
-  getCreatorJustificationAsListUntilGoalInMemory,
-  toLatestMessageHashes
-}
+import coop.rchain.casper.util.ProtoUtil._
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.EquivocationRecord.SequenceNumber
 import coop.rchain.models.Validator.Validator
@@ -30,15 +23,15 @@ object EquivocationDetector {
       blockBufferDependencyDag: DoublyLinkedDag[BlockHash],
       block: BlockMessage,
       dag: BlockDagRepresentation[F]
-  ): F[Either[InvalidBlock, ValidBlock]] =
+  ): F[ValidBlockProcessing] =
     for {
       maybeLatestMessageOfCreatorHash <- dag.latestMessageHash(block.sender)
       maybeCreatorJustification       = creatorJustificationHash(block)
       isNotEquivocation               = maybeCreatorJustification == maybeLatestMessageOfCreatorHash
       result <- if (isNotEquivocation) {
-                 Applicative[F].pure(Right(Valid))
+                 BlockStatus.valid.asRight[BlockError].pure[F]
                } else if (requestedAsDependency(block, blockBufferDependencyDag)) {
-                 Applicative[F].pure(Left(AdmissibleEquivocation))
+                 BlockStatus.admissibleEquivocation.asLeft[ValidBlock].pure[F]
                } else {
                  for {
                    sender <- PrettyPrinter.buildString(block.sender).pure[F]
@@ -51,7 +44,7 @@ object EquivocationDetector {
                    _ <- Log[F].warn(
                          s"Ignorable equivocation: sender is $sender, creator justification is $creatorJustificationHash, latest message of creator is $latestMessageOfCreator"
                        )
-                 } yield Left(IgnorableEquivocation)
+                 } yield BlockStatus.ignorableEquivocation.asLeft[ValidBlock]
                }
     } yield result
 
@@ -67,11 +60,11 @@ object EquivocationDetector {
     } yield maybeCreatorJustification.latestBlockHash
 
   // See summary of algorithm above
-  def checkNeglectedEquivocationsWithUpdate[F[_]: Monad: BlockStore: BlockDagStorage](
+  def checkNeglectedEquivocationsWithUpdate[F[_]: Sync: BlockStore: BlockDagStorage](
       block: BlockMessage,
       dag: BlockDagRepresentation[F],
       genesis: BlockMessage
-  ): F[Either[InvalidBlock, ValidBlock]] =
+  ): F[ValidBlockProcessing] =
     for {
       neglectedEquivocationDetected <- isNeglectedEquivocationDetectedWithUpdate[F](
                                         block,
@@ -79,13 +72,13 @@ object EquivocationDetector {
                                         genesis
                                       )
       status = if (neglectedEquivocationDetected) {
-        Left(NeglectedEquivocation)
+        BlockStatus.neglectedEquivocation.asLeft[ValidBlock]
       } else {
-        Right(Valid)
+        BlockStatus.valid.asRight[BlockError]
       }
     } yield status
 
-  private def isNeglectedEquivocationDetectedWithUpdate[F[_]: Monad: BlockStore: BlockDagStorage](
+  private def isNeglectedEquivocationDetectedWithUpdate[F[_]: Sync: BlockStore: BlockDagStorage](
       block: BlockMessage,
       dag: BlockDagRepresentation[F],
       genesis: BlockMessage
@@ -111,7 +104,7 @@ object EquivocationDetector {
     *
     * @return Whether a neglected equivocation was discovered.
     */
-  private def updateEquivocationsTracker[F[_]: Monad: BlockStore](
+  private def updateEquivocationsTracker[F[_]: Sync: BlockStore](
       block: BlockMessage,
       dag: BlockDagRepresentation[F],
       equivocationRecord: EquivocationRecord,
@@ -141,7 +134,7 @@ object EquivocationDetector {
           } else ().pure[F]
     } yield neglectedEquivocationDetected
 
-  private def getEquivocationDiscoveryStatus[F[_]: Monad: BlockStore](
+  private def getEquivocationDiscoveryStatus[F[_]: Sync: BlockStore](
       block: BlockMessage,
       dag: BlockDagRepresentation[F],
       equivocationRecord: EquivocationRecord,
@@ -170,7 +163,7 @@ object EquivocationDetector {
     }
   }
 
-  private def getEquivocationDiscoveryStatusForBondedValidator[F[_]: Monad: BlockStore](
+  private def getEquivocationDiscoveryStatusForBondedValidator[F[_]: Sync: BlockStore](
       blockDag: BlockDagRepresentation[F],
       equivocationRecord: EquivocationRecord,
       latestMessages: Map[Validator, BlockHash],
@@ -197,7 +190,7 @@ object EquivocationDetector {
       Applicative[F].pure(EquivocationDetected)
     }
 
-  private def isEquivocationDetectable[F[_]: Monad: BlockStore](
+  private def isEquivocationDetectable[F[_]: Sync: BlockStore](
       blockDag: BlockDagRepresentation[F],
       latestMessages: Seq[(Validator, BlockHash)],
       equivocationRecord: EquivocationRecord,
@@ -217,7 +210,7 @@ object EquivocationDetector {
         )
     }
 
-  private def isEquivocationDetectableAfterViewingBlock[F[_]: Monad: BlockStore](
+  private def isEquivocationDetectableAfterViewingBlock[F[_]: Sync: BlockStore](
       blockDag: BlockDagRepresentation[F],
       justificationBlockHash: BlockHash,
       equivocationRecord: EquivocationRecord,
@@ -229,7 +222,7 @@ object EquivocationDetector {
       true.pure[F]
     } else {
       for {
-        justificationBlock <- ProtoUtil.unsafeGetBlock[F](justificationBlockHash)
+        justificationBlock <- ProtoUtil.getBlock[F](justificationBlockHash)
         equivocationDetected <- isEquivocationDetectableThroughChildren[F](
                                  blockDag,
                                  equivocationRecord,
@@ -241,7 +234,7 @@ object EquivocationDetector {
       } yield equivocationDetected
     }
 
-  private def isEquivocationDetectableThroughChildren[F[_]: Monad: BlockStore](
+  private def isEquivocationDetectableThroughChildren[F[_]: Sync: BlockStore](
       blockDag: BlockDagRepresentation[F],
       equivocationRecord: EquivocationRecord,
       equivocationChildren: Set[BlockMessage],
@@ -276,7 +269,7 @@ object EquivocationDetector {
   }
 
   @SuppressWarnings(Array("org.wartremover.warts.Throw")) // TODO remove throw
-  private def maybeAddEquivocationChild[F[_]: Monad: BlockStore](
+  private def maybeAddEquivocationChild[F[_]: Sync: BlockStore](
       blockDag: BlockDagRepresentation[F],
       justificationBlock: BlockMessage,
       equivocatingValidator: Validator,
@@ -306,7 +299,7 @@ object EquivocationDetector {
       maybeLatestEquivocatingValidatorBlockHash match {
         case Some(blockHash) =>
           for {
-            latestEquivocatingValidatorBlock <- ProtoUtil.unsafeGetBlock[F](blockHash)
+            latestEquivocatingValidatorBlock <- ProtoUtil.getBlock[F](blockHash)
             updatedEquivocationChildren <- if (latestEquivocatingValidatorBlock.seqNum > equivocationBaseBlockSeqNum) {
                                             addEquivocationChild[F](
                                               blockDag,
@@ -326,7 +319,7 @@ object EquivocationDetector {
     }
 
   @SuppressWarnings(Array("org.wartremover.warts.Throw")) // TODO remove throw
-  private def addEquivocationChild[F[_]: Monad: BlockStore](
+  private def addEquivocationChild[F[_]: Sync: BlockStore](
       blockDag: BlockDagRepresentation[F],
       justificationBlock: BlockMessage,
       equivocationBaseBlockSeqNum: SequenceNumber,
@@ -339,7 +332,7 @@ object EquivocationDetector {
     ).flatMap {
       case Some(equivocationChildHash) =>
         for {
-          equivocationChild <- ProtoUtil.unsafeGetBlock[F](equivocationChildHash)
+          equivocationChild <- ProtoUtil.getBlock[F](equivocationChildHash)
         } yield equivocationChildren + equivocationChild
       case None =>
         throw new Exception(

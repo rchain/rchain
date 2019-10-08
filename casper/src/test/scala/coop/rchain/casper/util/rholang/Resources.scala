@@ -6,8 +6,12 @@ import java.nio.file.{Files, Path}
 import cats.effect.{Concurrent, ContextShift, Resource, Sync}
 import cats.implicits._
 import cats.temp.par
+import coop.rchain.blockstorage.dag.{BlockDagFileStorage, BlockDagStorage}
+import coop.rchain.blockstorage.BlockStore
+import coop.rchain.casper.helper.BlockDagStorageTestFixture
+import coop.rchain.casper.helper.TestNode.makeBlockDagFileStorageConfig
 import coop.rchain.metrics
-import coop.rchain.metrics.{NoopSpan, Span}
+import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.rholang.Resources.{mkRuntimeAt, mkTempDir}
 import coop.rchain.shared.Log
 import monix.eval.Task
@@ -35,6 +39,22 @@ object Resources {
       runtimeManager <- Resource.liftF(RuntimeManager.fromRuntime(runtime))
     } yield runtimeManager
   }
+
+  def mkBlockStoreAt[F[_]: Concurrent: Metrics: Sync: Log](path: Path): Resource[F, BlockStore[F]] =
+    Resource.make(
+      BlockDagStorageTestFixture.createBlockStorage[F](path)
+    )(_.close())
+
+  def mkBlockDagStorageAt[F[_]: Concurrent: Sync: Log: Metrics](
+      path: Path
+  ): Resource[F, BlockDagStorage[F]] =
+    Resource
+      .make(
+        BlockDagFileStorage
+          .create[F](makeBlockDagFileStorageConfig(path))
+          .widen
+      )(_.close())
+      .widen
 
   case class StoragePaths(
       blockStoreDir: Path,

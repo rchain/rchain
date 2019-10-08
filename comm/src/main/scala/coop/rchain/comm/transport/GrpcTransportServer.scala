@@ -6,16 +6,14 @@ import java.util.concurrent.atomic.AtomicReference
 
 import scala.io.Source
 import scala.util.{Left, Right}
-
 import cats.implicits._
-
+import coop.rchain.catscontrib.TaskContrib
 import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.comm.protocol.routing.Protocol
 import coop.rchain.comm.rp.Connect.RPConfAsk
 import coop.rchain.comm.CommMetricsSource
 import coop.rchain.metrics.Metrics
 import coop.rchain.shared._
-
 import io.grpc.netty.GrpcSslContexts
 import io.netty.handler.ssl._
 import monix.eval.Task
@@ -49,15 +47,12 @@ class GrpcTransportServer(
   implicit val metricsSource: Metrics.Source =
     Metrics.Source(CommMetricsSource, "rp.transport")
 
-  private val queueSendScheduler =
+  private val queueScheduler =
     Scheduler.fixedPool(
-      "tl-dispatcher-server-send",
+      "tl-dispatcher-server-queue",
       parallelism,
       reporter = UncaughtExceptionLogger
     )
-
-  private val queueBlobScheduler =
-    Scheduler.singleThread("tl-dispatcher-server-blob", reporter = UncaughtExceptionLogger)
 
   private val serverSslContextTask: Task[SslContext] =
     Task
@@ -87,13 +82,14 @@ class GrpcTransportServer(
         (StreamHandler.restore(msg) >>= {
           case Left(ex) =>
             Log[Task].error("Could not restore data from file while handling stream", ex)
-          case Right(blob) => handleStreamed(blob)
+          case Right(blob) =>
+            handleStreamed(blob)
         }) >> metrics.incrementCounter("dispatched.packets")
 
     for {
       serverSslContext <- serverSslContextTask
-      tellBuffer       <- Task.delay(buffer.LimitedBufferObservable.dropNew[Send](4096))
-      blobBuffer       <- Task.delay(buffer.LimitedBufferObservable.dropNew[StreamMessage](1024))
+      tellBuffer       <- Task.delay(buffer.LimitedBufferObservable.dropNew[Send](1024))
+      blobBuffer       <- Task.delay(buffer.LimitedBufferObservable.dropNew[StreamMessage](100))
       receiver <- GrpcTransportReceiver.create(
                    networkId: String,
                    port,
@@ -107,10 +103,10 @@ class GrpcTransportServer(
       tellConsumer <- Task.delay(
                        tellBuffer
                          .mapParallelUnordered(parallelism)(dispatchSend)
-                         .subscribe()(queueSendScheduler)
+                         .subscribe()(queueScheduler)
                      )
       blobConsumer <- Task.delay(
-                       blobBuffer.mapEval(dispatchBlob).subscribe()(queueBlobScheduler)
+                       blobBuffer.mapEval(dispatchBlob).subscribe()(queueScheduler)
                      )
     } yield Cancelable.collection(receiver, tellConsumer, blobConsumer)
   }

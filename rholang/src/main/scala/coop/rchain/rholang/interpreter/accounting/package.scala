@@ -3,11 +3,11 @@ package coop.rchain.rholang.interpreter
 import cats._
 import cats.data._
 import cats.effect.Sync
-import cats.effect.ExitCase
-import cats.effect.ExitCase._
 import cats.effect.concurrent.Semaphore
 import cats.implicits._
 import cats.mtl._
+
+import coop.rchain.catscontrib.ski.kp
 import coop.rchain.rholang.interpreter.errors.OutOfPhlogistonsError
 
 package object accounting extends Costs {
@@ -44,25 +44,12 @@ package object accounting extends Costs {
   def charge[F[_]: Monad](
       amount: Cost
   )(implicit cost: _cost[F], error: _error[F]): F[Unit] =
-    for {
-      _ <- error.bracket(cost.acquire)(
-            _ =>
-              for {
-                c <- cost.get
-                _ <- Monad[F].ifM[Unit]((c.value < 0).pure[F])(
-                      ifTrue = error.raiseError[Unit](OutOfPhlogistonsError),
-                      ifFalse = for {
-                        _        <- cost.tell(Chain.one(amount))
-                        newValue = c - amount
-                        _        <- cost.set(newValue)
-                      } yield (())
-                    )
-              } yield ()
-          ) { _ =>
-            cost.release
-          }
-      _ <- error.ensure(cost.inspect(identity))(OutOfPhlogistonsError)(_.value >= 0)
-    } yield ()
+    cost.withPermit(
+      cost.get.flatMap { c =>
+        if (c.value < 0) error.raiseError[Unit](OutOfPhlogistonsError)
+        else cost.tell(Chain.one(amount)) >> cost.set(c - amount)
+      }
+    ) >> error.ensure(cost.get)(OutOfPhlogistonsError)(_.value >= 0).void
 
   implicit def noOpCostLog[M[_]: Applicative]: FunctorTell[M, Chain[Cost]] =
     new DefaultFunctorTell[M, Chain[Cost]] {
@@ -70,7 +57,7 @@ package object accounting extends Costs {
       def tell(l: Chain[Cost]): M[Unit] = Applicative[M].pure(())
     }
 
-  implicit def ntCostLog[F[_]: Monad, G[_]: Monad: Sync](
+  implicit def ntCostLog[F[_]: Monad, G[_]: Sync](
       nt: F ~> G
   )(implicit C: _cost[F]): _cost[G] =
     new Semaphore[G] with MonadState[G, Cost] with FunctorTell[G, Chain[Cost]] {
@@ -91,11 +78,7 @@ package object accounting extends Costs {
       override def releaseN(n: Long): G[Unit]       = nt(C.releaseN(n))
       override def tryAcquireN(n: Long): G[Boolean] = nt(C.tryAcquireN(n))
       override def withPermit[A](t: G[A]): G[A] =
-        Sync[G].bracket[Unit, A](acquire) { _ =>
-          t
-        }(
-          r => Applicative[G].pure[Unit](r)
-        )
+        Sync[G].bracket[Unit, A](acquire)(kp(t))(kp(release))
     }
 
 }

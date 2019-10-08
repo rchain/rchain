@@ -4,7 +4,7 @@ import cats._
 import cats.effect.Sync
 import cats.effect.concurrent.Ref
 import cats.implicits._
-import coop.rchain.casper.protocol.{ApprovedBlock, BlockMessage}
+import coop.rchain.casper.protocol.{ApprovedBlock, BlockMessage, BlockMessageProto}
 import coop.rchain.metrics.Metrics
 import coop.rchain.models.BlockHash.BlockHash
 
@@ -13,7 +13,7 @@ import scala.language.higherKinds
 class InMemBlockStore[F[_]] private ()(
     implicit
     monadF: Monad[F],
-    refF: Ref[F, Map[BlockHash, BlockMessage]],
+    refF: Ref[F, Map[BlockHash, BlockMessageProto]],
     approvedBlockRef: Ref[F, Option[ApprovedBlock]],
     metricsF: Metrics[F]
 ) extends BlockStore[F] {
@@ -25,20 +25,22 @@ class InMemBlockStore[F[_]] private ()(
     for {
       _     <- metricsF.incrementCounter("get")
       state <- refF.get
-    } yield state.get(blockHash)
+    } yield state.get(blockHash) >>= (bmp => BlockMessage.from(bmp).toOption)
 
   override def find(p: BlockHash => Boolean): F[Seq[(BlockHash, BlockMessage)]] =
     for {
       _     <- metricsF.incrementCounter("find")
       state <- refF.get
-    } yield state.filterKeys(p(_)).toSeq
+    } yield state.filterKeys(p(_)).toSeq.map {
+      case (bh, bmp) => (bh, BlockMessage.from(bmp).right.get) //TODO FIX-ME
+    }
 
   def put(f: => (BlockHash, BlockMessage)): F[Unit] =
     for {
       _ <- metricsF.incrementCounter("put")
       _ <- refF.update { state =>
             val (hash, message) = f
-            state.updated(hash, message)
+            state.updated(hash, BlockMessage.toProto(message))
           }
     } yield ()
 
@@ -63,7 +65,7 @@ object InMemBlockStore {
   def create[F[_]](
       implicit
       monadF: Monad[F],
-      refF: Ref[F, Map[BlockHash, BlockMessage]],
+      refF: Ref[F, Map[BlockHash, BlockMessageProto]],
       approvedBlockRef: Ref[F, Option[ApprovedBlock]],
       metricsF: Metrics[F]
   ): BlockStore[F] =
@@ -78,7 +80,7 @@ object InMemBlockStore {
     InMemBlockStore.create(syncId, refId, approvedBlockRef, metrics)
   }
 
-  def emptyMapRef[F[_]](implicit syncEv: Sync[F]): F[Ref[F, Map[BlockHash, BlockMessage]]] =
-    Ref[F].of(Map.empty[BlockHash, BlockMessage])
+  def emptyMapRef[F[_]](implicit syncEv: Sync[F]): F[Ref[F, Map[BlockHash, BlockMessageProto]]] =
+    Ref[F].of(Map.empty[BlockHash, BlockMessageProto])
 
 }

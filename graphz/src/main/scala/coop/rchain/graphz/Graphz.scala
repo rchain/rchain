@@ -2,22 +2,21 @@ package coop.rchain.graphz
 
 import java.io.FileOutputStream
 
-import cats._, cats.data._, cats.implicits._
+import cats._
 import cats.effect.Sync
+import cats.implicits._
 import cats.mtl._
 
 trait GraphSerializer[F[_]] {
   def push(str: String, suffix: String = "\n"): F[Unit]
 }
 
-class StringSerializer[F[_]: Applicative: MonadState[?[_], StringBuffer]]
-    extends GraphSerializer[F] {
+class StringSerializer[F[_]: MonadState[?[_], StringBuffer]] extends GraphSerializer[F] {
   def push(str: String, suffix: String): F[Unit] =
     MonadState[F, StringBuffer].modify(sb => sb.append(str + suffix))
 }
 
-class ListSerializer[F[_]: Applicative: MonadState[?[_], Vector[String]]]
-    extends GraphSerializer[F] {
+class ListSerializer[F[_]: MonadState[?[_], Vector[String]]] extends GraphSerializer[F] {
   def push(str: String, suffix: String): F[Unit] =
     MonadState[F, Vector[String]].modify(_ :+ (str + suffix))
 }
@@ -184,7 +183,7 @@ class Graphz[F[_]: Monad](gtype: GraphType, t: String)(implicit ser: GraphSerial
       arrowHead: Option[GraphArrowType] = None,
       constraint: Option[Boolean] = None
   ): F[Unit] = {
-    import Graphz.{showArrowType, showShape, showStyle}
+    import Graphz.{showArrowType, showStyle}
     val attrStyle: Map[String, String] = style.map(s => Map("style" -> s.show)).getOrElse(Map.empty)
     val attrArrowHead: Map[String, String] =
       arrowHead.map(s => Map("arrowhead" -> s.show)).getOrElse(Map.empty)

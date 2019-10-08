@@ -1,9 +1,8 @@
-import base64
 import logging
 import socket
 from concurrent import futures
 from contextlib import contextmanager
-from queue import Queue
+from queue import Queue, Empty
 from typing import Generator, Iterator
 import os
 import subprocess
@@ -33,11 +32,19 @@ from rchain.pb.routing_pb2_grpc import (
 )
 
 from .rnode import Node as RNode
+from .common import TestingContext
 
 DEFAULT_TRANSPORT_SERVER_PORT = 40400
 DEFAULT_NETWORK_ID = 'testnet'
 
 logger = logging.getLogger("node_client")
+
+
+class BlockNotFound(Exception):
+    def __init__(self, block_hash: str, rnode: RNode):
+        super().__init__()
+        self.block_hash = block_hash
+        self.rnode = rnode
 
 
 def get_node_id_raw(key: _EllipticCurvePrivateKey) -> bytes:
@@ -48,7 +55,7 @@ def get_node_id_raw(key: _EllipticCurvePrivateKey) -> bytes:
 
 def get_node_id_str(key: _EllipticCurvePrivateKey) -> str:
     raw_id = get_node_id_raw(key)
-    return base64.b16encode(raw_id).lower().decode('utf8')
+    return raw_id.hex()
 
 
 def get_free_tcp_port() -> int:
@@ -74,7 +81,7 @@ def get_node_ip_of_network(docker_client: DockerClient, network_name: str) -> Ge
     WARNING: For Windows and MacOS, you can not connect to the container from host
     without any other configuration. For more info, see https://github.com/docker/for-mac/issues/2670.
     """
-    if os.environ['DRONE'] == 'true':
+    if os.environ.get("DRONE") == 'true':
         current_container_id = get_current_container_id()
         current_container = docker_client.containers.get(current_container_id)
         network = docker_client.networks.get(network_name)
@@ -125,11 +132,12 @@ class TransportServer(TransportLayerServicer):
         stream_message = message_cls()
         stream_message.ParseFromString(data)
         self.return_queue.put(stream_message)
-        return TLResponse(noResponse=Ack(header=self.header))
+        return TLResponse(ack=Ack(header=self.header))
 
 
 class NodeClient:
-    def __init__(self, node_pem_cert: bytes, node_pem_key: bytes, host: str, network_name: str, network_id: str = DEFAULT_NETWORK_ID):
+    def __init__(self, node_pem_cert: bytes, node_pem_key: bytes, host: str, network_name: str, receive_timeout: int,
+                 network_id: str = DEFAULT_NETWORK_ID):
         self.node_pem_cert = node_pem_cert
         self.node_pem_key = node_pem_key
         self.ec_key = load_pem_private_key(self.node_pem_key, password=None, backend=default_backend())
@@ -139,6 +147,7 @@ class NodeClient:
         self.tcp_port = 0
         self.udp_port = get_free_tcp_port()
         self.network_name = network_name  # docker network name
+        self._receive_timeout = receive_timeout
 
         self.return_queue = Queue() # type: ignore
 
@@ -163,17 +172,20 @@ class NodeClient:
         server_credential = grpc.ssl_server_credentials([(self.node_pem_key, self.node_pem_cert)])
         server = grpc.server(futures.ThreadPoolExecutor())
         add_TransportLayerServicer_to_server(TransportServer(self.node_pb, self.network_id, self.return_queue), server)
-        self.tcp_port = server.add_secure_port(self.host, server_credential)
+        self.tcp_port = server.add_secure_port("{}:0".format(self.host), server_credential)
         server.start()
         return server
 
     def block_request(self, block_hash: str, rnode: RNode) -> BlockMessage:
-        block_request = BlockRequest(base16Hash=block_hash, hash=base64.b16decode(block_hash, True))
+        block_request = BlockRequest(hash=bytes.fromhex(block_hash))
         request_msg_packet = Packet(typeId="BlockRequest", content=block_request.SerializeToString())
         protocol = Protocol(header=self.header_pb, packet=request_msg_packet)
         request = TLRequest(protocol=protocol)
         self.send_request(request, rnode)
-        return self.return_queue.get(timeout=20)
+        try:
+            return self.return_queue.get(timeout=self._receive_timeout)
+        except Empty:
+            raise BlockNotFound(block_hash, rnode)
 
     def send_request(self, request: TLRequest, rnode: RNode) -> None:
         credential = grpc.ssl_channel_credentials(rnode.get_node_pem_cert(), self.node_pem_key, self.node_pem_cert)
@@ -202,12 +214,12 @@ class NodeClient:
 
 
 @contextmanager
-def node_protocol_client(network_name: str, docker_client: DockerClient) -> Generator[NodeClient, None, None]:
+def node_protocol_client(network_name: str, docker_client: DockerClient, context: TestingContext) -> Generator[NodeClient, None, None]:
     cert = Path("resources/bootstrap_certificate/protocol.cert.pem").read_bytes()
     key = Path("resources/bootstrap_certificate/protocol.key.pem").read_bytes()
 
     with get_node_ip_of_network(docker_client, network_name) as node_ip:
-        protocol_client = NodeClient(cert, key, node_ip, network_name)
+        protocol_client = NodeClient(cert, key, node_ip, network_name, context.receive_timeout)
         try:
             yield protocol_client
         finally:

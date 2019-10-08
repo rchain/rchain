@@ -18,7 +18,6 @@ new
   AuthKey,
   rs(`rho:registry:insertSigned:secp256k1`),
   uriOut,
-  getDeployData(`rho:deploy:params`),
   _authKey,
   stdout(`rho:io:stdout`)
 in {

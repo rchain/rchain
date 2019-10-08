@@ -30,7 +30,8 @@ final case class Server(
     maxStreamMessageSize: Long,
     packetChunkSize: Int,
     messageConsumers: Int,
-    faultToleranceThreshold: Float
+    faultToleranceThreshold: Float,
+    synchronyConstraintThreshold: Double
 )
 
 final case class GrpcServer(
@@ -57,8 +58,8 @@ final case class Kamon(
 )
 
 sealed trait Command
-final case class Eval(files: List[String]) extends Command
-final case object Repl                     extends Command
+final case class Eval(files: List[String], printUnmatchedSendsOnly: Boolean) extends Command
+final case object Repl                                                       extends Command
 final case class Deploy(
     phloLimit: Long,
     phloPrice: Long,
@@ -68,7 +69,7 @@ final case class Deploy(
     location: String
 ) extends Command
 final case class FindDeploy(id: Array[Byte])                               extends Command
-final case object Propose                                                  extends Command
+final case class Propose(printUnmatchedSends: Boolean)                     extends Command
 final case class ShowBlock(hash: String)                                   extends Command
 final case class ShowBlocks(depth: Int)                                    extends Command
 final case class VisualizeDag(depth: Int, showJustificationLines: Boolean) extends Command
@@ -76,6 +77,7 @@ final case object MachineVerifiableDag                                     exten
 final case object Run                                                      extends Command
 final case class Keygen(algorithm: String, privateKeyPath: Path)           extends Command
 final case object LastFinalizedBlock                                       extends Command
+final case class IsFinalized(hash: String)                                 extends Command
 final case object Help                                                     extends Command
 final case class DataAtName(name: Name)                                    extends Command
 final case class ContAtName(names: List[Name])                             extends Command

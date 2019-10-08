@@ -18,7 +18,7 @@ trait Interpreter[F[_]] {
   ): F[EvaluateResult]
 
   def injAttempt(
-      reducer: ChargingReducer[F],
+      reducer: Reduce[F],
       errorLog: ErrorLog[F],
       term: String,
       initialPhlo: Cost,
@@ -58,7 +58,7 @@ object Interpreter {
       }
 
       def injAttempt(
-          reducer: ChargingReducer[F],
+          reducer: Reduce[F],
           errorLog: ErrorLog[F],
           term: String,
           initialPhlo: Cost,
@@ -74,7 +74,7 @@ object Interpreter {
                       case Right(parsed) =>
                         for {
                           result    <- reducer.inj(parsed).attempt
-                          phlosLeft <- C.inspect(identity)
+                          phlosLeft <- C.get
                           oldErrors <- errorLog.readAndClearErrorVector()
                           newErrors = result.swap.toSeq.toVector
                           allErrors = oldErrors |+| newErrors

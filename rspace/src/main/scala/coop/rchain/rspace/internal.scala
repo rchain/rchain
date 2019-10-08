@@ -20,10 +20,15 @@ object internal {
         serializeC: Serialize[C],
         serializeA: Serialize[A]
     ): Datum[A] =
-      Datum(a, persist, Produce.create(channel, a, persist, sequenceNumber))
+      Datum(a, persist, Produce.create(channel, a, persist))
   }
 
-  final case class DataCandidate[C, A](channel: C, datum: Datum[A], datumIndex: Int)
+  final case class DataCandidate[C, A](
+      channel: C,
+      datum: Datum[A],
+      removedDatum: A,
+      datumIndex: Int
+  )
 
   final case class WaitingContinuation[P, K](
       patterns: Seq[P],
@@ -39,8 +44,7 @@ object internal {
         patterns: Seq[P],
         continuation: K,
         persist: Boolean,
-        peek: SortedSet[Int],
-        sequenceNumber: Int = 0
+        peek: SortedSet[Int]
     )(
         implicit
         serializeC: Serialize[C],
@@ -52,7 +56,7 @@ object internal {
         continuation,
         persist,
         peek,
-        Consume.create(channels, patterns, continuation, persist, sequenceNumber)
+        Consume.create(channels, patterns, continuation, persist)
       )
   }
 
@@ -65,30 +69,14 @@ object internal {
 
   final case class Row[P, A, K](data: Seq[Datum[A]], wks: Seq[WaitingContinuation[P, K]])
 
-  /** [[GNAT]] is not a `Tuple3`
-    */
-  final case class GNAT[C, P, A, K](
-      channels: Seq[C],
-      data: Seq[Datum[A]],
-      wks: Seq[WaitingContinuation[P, K]]
-  )
-
-  sealed trait Operation extends Product with Serializable
-  case object Insert     extends Operation
-  case object Delete     extends Operation
-
-  final case class TrieUpdate[C, P, A, K](
-      count: Long,
-      operation: Operation,
-      channelsHash: Blake2b256Hash,
-      gnat: GNAT[C, P, A, K]
-  )
-
   implicit val codecByteVector: Codec[ByteVector] =
     variableSizeBytesLong(int64, bytes)
 
   implicit def codecSeq[A](implicit codecA: Codec[A]): Codec[Seq[A]] =
     seqOfN(int32, codecA)
+
+  implicit def codecMap[K, V](implicit codecK: Codec[K], codecV: Codec[V]): Codec[Map[K, V]] =
+    seqOfN(int32, codecK.pairedWith(codecV)).xmap(_.toMap, _.toSeq)
 
   implicit def codecDatum[A](implicit codecA: Codec[A]): Codec[Datum[A]] =
     (codecA :: bool :: Codec[Produce]).as[Datum[A]]
@@ -103,17 +91,6 @@ object internal {
   ): Codec[WaitingContinuation[P, K]] =
     (codecSeq(codecP) :: codecK :: bool :: sortedSet[Int](uint8) :: Codec[Consume])
       .as[WaitingContinuation[P, K]]
-
-  implicit def codecGNAT[C, P, A, K](
-      implicit
-      codecC: Codec[C],
-      codecP: Codec[P],
-      codecA: Codec[A],
-      codecK: Codec[K]
-  ): Codec[GNAT[C, P, A, K]] =
-    (codecSeq(codecC) ::
-      codecSeq(codecDatum(codecA)) ::
-      codecSeq(codecWaitingContinuation(codecP, codecK))).as[GNAT[C, P, A, K]]
 
   import scala.collection.concurrent.TrieMap
   type MultisetMultiMap[K, V] = TrieMap[K, Multiset[V]]
@@ -150,15 +127,11 @@ object internal {
       }
   }
 
-  final case class Install[F[_], P, A, R, K](
-      patterns: Seq[P],
-      continuation: K,
-      _match: Match[F, P, A, R]
-  )
+  final case class Install[F[_], P, A, K](patterns: Seq[P], continuation: K)
 
-  type Installs[F[_], C, P, A, R, K] = Map[Seq[C], Install[F, P, A, R, K]]
+  type Installs[F[_], C, P, A, K] = Map[Seq[C], Install[F, P, A, K]]
 
-  import scodec.{Attempt, Err}
+  import scodec.Attempt
 
   @SuppressWarnings(Array("org.wartremover.warts.Throw"))
   implicit class RichAttempt[T](a: Attempt[T]) {

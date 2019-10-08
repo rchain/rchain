@@ -5,10 +5,12 @@ import java.util.concurrent.TimeUnit
 
 import scala.util.Either
 
+import cats.implicits._
+
 import coop.rchain.casper.protocol._
+import coop.rchain.casper.protocol.deploy.v1.DeployServiceV1GrpcMonix
 import coop.rchain.models.either.implicits._
 
-import com.google.protobuf.empty.Empty
 import io.grpc.{ManagedChannel, ManagedChannelBuilder}
 import monix.eval.Task
 
@@ -24,6 +26,7 @@ trait DeployService[F[_]] {
       request: ContinuationAtNameQuery
   ): F[Either[Seq[String], Seq[ContinuationsWithBlockInfo]]]
   def lastFinalizedBlock: F[Either[Seq[String], String]]
+  def isFinalized(q: IsFinalizedQuery): F[Either[Seq[String], String]]
 }
 
 object DeployService {
@@ -41,21 +44,36 @@ class GrpcDeployService(host: String, port: Int, maxMessageSize: Int)
       .usePlaintext()
       .build
 
-  private val stub = DeployServiceGrpcMonix.stub(channel)
+  private val stub = DeployServiceV1GrpcMonix.stub(channel)
 
   def deploy(d: DeployData): Task[Either[Seq[String], String]] =
-    stub.doDeploy(d).map(_.toEither[DeployServiceResponse].map(_.message))
+    stub
+      .doDeploy(d.toProto)
+      .toEitherF(
+        _.message.error,
+        _.message.result
+      )
 
   def getBlock(q: BlockQuery): Task[Either[Seq[String], String]] =
-    stub.getBlock(q).map(_.toEither[BlockQueryResponse].map(_.toProtoString))
+    stub
+      .getBlock(q)
+      .toEitherF(
+        _.message.error,
+        _.message.blockInfo.map(_.toProtoString)
+      )
 
   def findDeploy(q: FindDeployQuery): Task[Either[Seq[String], String]] =
-    stub.findDeploy(q).map(_.toEither[LightBlockQueryResponse].map(_.toProtoString))
+    stub
+      .findDeploy(q)
+      .toEitherF(
+        _.message.error,
+        _.message.blockInfo.map(_.toProtoString)
+      )
 
   def visualizeDag(q: VisualizeDagQuery): Task[Either[Seq[String], String]] =
     stub
       .visualizeDag(q)
-      .map(_.toEither[VisualizeBlocksResponse].map(_.content))
+      .mapEval(_.pure[Task].toEitherF(_.message.error, _.message.content))
       .toListL
       .map { bs =>
         val (l, r) = bs.partition(_.isLeft)
@@ -64,12 +82,18 @@ class GrpcDeployService(host: String, port: Int, maxMessageSize: Int)
       }
 
   def machineVerifiableDag(q: MachineVerifyQuery): Task[Either[Seq[String], String]] =
-    stub.machineVerifiableDag(q).map(_.toEither[MachineVerifyResponse].map(_.content))
+    stub
+      .machineVerifiableDag(q)
+      .toEitherF(
+        _.message.error,
+        _.message.content
+      )
 
   def getBlocks(q: BlocksQuery): Task[Either[Seq[String], String]] =
     stub
       .getBlocks(q)
-      .map(_.toEither[LightBlockInfo].map { bi =>
+      .mapEval(_.pure[Task].toEitherF(_.message.error, _.message.blockInfo))
+      .map(_.map { bi =>
         s"""
          |------------- block ${bi.blockNumber} ---------------
          |${bi.toProtoString}
@@ -94,19 +118,40 @@ class GrpcDeployService(host: String, port: Int, maxMessageSize: Int)
   ): Task[Either[Seq[String], Seq[DataWithBlockInfo]]] =
     stub
       .listenForDataAtName(request)
-      .map(_.toEither[ListeningNameDataResponse].map(_.blockResults))
+      .toEitherF(
+        _.message.error,
+        _.message.payload.map(_.blockInfo)
+      )
 
   def listenForContinuationAtName(
       request: ContinuationAtNameQuery
   ): Task[Either[Seq[String], Seq[ContinuationsWithBlockInfo]]] =
     stub
       .listenForContinuationAtName(request)
-      .map(_.toEither[ListeningNameContinuationResponse].map(_.blockResults))
+      .toEitherF(
+        _.message.error,
+        _.message.payload.map(_.blockResults)
+      )
 
   def lastFinalizedBlock: Task[Either[Seq[String], String]] =
     stub
       .lastFinalizedBlock(LastFinalizedBlockQuery())
-      .map(_.toEither[LastFinalizedBlockResponse].map(_.toProtoString))
+      .toEitherF(
+        _.message.error,
+        _.message.blockInfo.map(_.toProtoString)
+      )
+
+  def isFinalized(request: IsFinalizedQuery): Task[Either[Seq[String], String]] =
+    stub
+      .isFinalized(request)
+      .toEitherF(_.message.error, _.message.isFinalized)
+      .map(
+        _.ifM(
+          "Block is finalized".asRight,
+          Seq("Block is not finalized").asLeft
+        )
+      )
+
   @SuppressWarnings(Array("org.wartremover.warts.NonUnitStatements"))
   override def close(): Unit = {
     val terminated = channel.shutdown().awaitTermination(10, TimeUnit.SECONDS)

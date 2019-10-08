@@ -3,7 +3,6 @@ package coop.rchain.rspace
 import java.nio.charset.StandardCharsets
 
 import cats.Functor
-import coop.rchain.rspace.internal.GNAT
 import scodec.Codec
 import scodec.bits.ByteVector
 
@@ -12,60 +11,48 @@ import scala.util.Try
 package object util {
 
   implicit def unpackSeq[C, P, K, R](
-      v: Seq[Option[(ContResult[C, P, K], Seq[Result[R]])]]
+      v: Seq[Option[(ContResult[C, P, K], Seq[Result[C, R]])]]
   ): Seq[Option[(K, Seq[R], Int)]] =
     v.map(unpackOption)
 
-  implicit def unpackEither[C, P, E, K, R](
-      v: Either[E, Option[(ContResult[C, P, K], Seq[Result[R]])]]
-  ): Either[E, Option[(K, Seq[R], Int)]] =
-    v.map(unpackOption)
-
-  implicit def unpackEitherF[F[_], C, P, E, K, R](
-      v: F[Either[E, Option[(ContResult[C, P, K], Seq[Result[R]])]]]
-  )(implicit ev: Functor[F]): F[Either[E, Option[(K, Seq[R], Int)]]] =
-    ev.map(v)(_.map(unpackOption))
-
   implicit def unpackOption[C, P, K, R](
-      v: Option[(ContResult[C, P, K], Seq[Result[R]])]
+      v: Option[(ContResult[C, P, K], Seq[Result[C, R]])]
   ): Option[(K, Seq[R], Int)] =
     v.map(unpackTuple)
 
-  implicit def unpackOptionF[F[_], C, P, K, R](
-      v: F[Option[(ContResult[C, P, K], Seq[Result[R]])]]
-  )(implicit ev: Functor[F]): F[Option[(K, Seq[R], Int)]] =
-    ev.map(v)(unpackOption)
-
-  implicit def unpackTuple[C, P, K, R](v: (ContResult[C, P, K], Seq[Result[R]])): (K, Seq[R], Int) =
+  implicit def unpackTuple[C, P, K, R](
+      v: (ContResult[C, P, K], Seq[Result[C, R]])
+  ): (K, Seq[R], Int) =
     v match {
       case (ContResult(continuation, _, _, _, sequenceNumber, _), data) =>
-        (continuation, data.map(_.value), sequenceNumber)
+        (continuation, data.map(_.matchedDatum), sequenceNumber)
     }
 
   implicit def unpackOptionWithPeek[C, P, K, R](
-      v: Option[(ContResult[C, P, K], Seq[Result[R]])]
-  ): Option[(K, Seq[R], Int, Boolean)] =
+      v: Option[(ContResult[C, P, K], Seq[Result[C, R]])]
+  ): Option[(K, Seq[(C, R, R, Boolean)], Int, Boolean)] =
     v.map(unpackTupleWithPeek)
 
   implicit def unpackTupleWithPeek[C, P, K, R](
-      v: (ContResult[C, P, K], Seq[Result[R]])
-  ): (K, Seq[R], Int, Boolean) =
+      v: (ContResult[C, P, K], Seq[Result[C, R]])
+  ): (K, Seq[(C, R, R, Boolean)], Int, Boolean) =
     v match {
       case (ContResult(continuation, _, _, _, sequenceNumber, peek), data) =>
-        (continuation, data.map(_.value), sequenceNumber, peek)
+        (
+          continuation,
+          data.map(d => (d.channel, d.matchedDatum, d.removedDatum, d.persistent)),
+          sequenceNumber,
+          peek
+        )
     }
 
-  implicit def unpack[T](v: Result[T]): T                     = v.value
-  implicit def unpackCont[C, P, T](v: ContResult[C, P, T]): T = v.value
+  implicit def unpackCont[C, P, T](v: ContResult[C, P, T]): T = v.continuation
 
   /**
     * Extracts a continuation from a produce result
     */
   def getK[A, K](t: Option[(K, A, Int)]): K =
     t.map(_._1).get
-
-  def getK[A, K](e: Either[_, Option[(K, A, Int)]]): K =
-    e.map(_.map(_._1).get).right.get
 
   /** Runs a continuation with the accompanying data
     */
@@ -76,12 +63,6 @@ package object util {
     */
   def runKs[T](t: Seq[Option[((T) => Unit, T, Int)]]): Unit =
     t.foreach { case Some((k, data, _)) => k(data); case None => () }
-
-  def canonicalize[C, P, A, K](gnat: GNAT[C, P, A, K]): GNAT[C, P, A, K] =
-    gnat.copy(
-      wks = gnat.wks.sortBy(_.source.hash.bytes)(ordByteVector),
-      data = gnat.data.sortBy(_.source.hash.bytes)(ordByteVector)
-    )
 
   @SuppressWarnings(Array("org.wartremover.warts.Return"))
   def veccmp(a: ByteVector, b: ByteVector): Int = {

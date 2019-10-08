@@ -1,14 +1,17 @@
 package coop.rchain.casper.engine
 
 import cats._
+import cats.implicits._
 import cats.effect.concurrent.Ref
 import cats.effect.{Concurrent, ContextShift}
 import cats.temp.par
 import coop.rchain.blockstorage._
+import coop.rchain.blockstorage.dag.{BlockDagRepresentation, InMemBlockDagStorage}
 import coop.rchain.casper._
-import coop.rchain.casper.genesis.contracts.Validator
+import coop.rchain.casper.genesis.contracts.{Validator, Vault}
 import coop.rchain.casper.helper.BlockDagStorageTestFixture
 import coop.rchain.casper.protocol._
+import coop.rchain.casper.util.comm.CommUtil
 import coop.rchain.casper.util.rholang.RuntimeManager
 import coop.rchain.casper.util.{GenesisBuilder, TestTime}
 import coop.rchain.catscontrib.ApplicativeError_
@@ -19,6 +22,7 @@ import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.p2p.EffectsTestInstances._
 import coop.rchain.rholang.interpreter.Runtime
+import coop.rchain.rholang.interpreter.util.RevAddress
 import coop.rchain.shared.Cell
 import monix.eval.Task
 import monix.execution.Scheduler
@@ -45,7 +49,7 @@ object Setup {
         )
         .unsafeRunSync(scheduler)
 
-    val runtimeManager = RuntimeManager.fromRuntime(activeRuntime).unsafeRunSync(scheduler)
+    implicit val runtimeManager = RuntimeManager.fromRuntime(activeRuntime).unsafeRunSync(scheduler)
 
     val params @ (_, genesisParams) = GenesisBuilder.buildGenesisParameters()
     val context                     = GenesisBuilder.buildGenesis(params)
@@ -59,14 +63,23 @@ object Setup {
     val genesis: BlockMessage = context.genesisBlock
 
     val validatorId = ValidatorIdentity(validatorPk, validatorSk, "secp256k1")
-    val bap = new BlockApproverProtocol(
-      validatorId,
-      deployTimestamp,
-      bonds,
-      genesisParams.proofOfStake.minimumBond,
-      genesisParams.proofOfStake.maximumBond,
-      requiredSigs
-    )
+    val bap = BlockApproverProtocol
+      .of[Task](
+        validatorId,
+        deployTimestamp,
+        Traverse[List]
+          .traverse(genesisParams.proofOfStake.validators.map(_.pk).toList)(
+            RevAddress.fromPublicKey
+          )
+          .get
+          .map(Vault(_, 0L)),
+        bonds,
+        genesisParams.proofOfStake.minimumBond,
+        genesisParams.proofOfStake.maximumBond,
+        requiredSigs
+      )
+      .unsafeRunSync(monix.execution.Scheduler.Implicits.global)
+
     val local: PeerNode = peerNode("src", 40400)
 
     implicit val nodeDiscovery = new NodeDiscoveryStub[Task]
@@ -75,6 +88,9 @@ object Setup {
     implicit val transportLayer = new TransportLayerStub[Task]
     implicit val rpConf         = createRPConfAsk[Task](local)
     implicit val time           = TestTime.instance
+    implicit val currentRequests: Running.RequestedBlocks[Task] =
+      Cell.unsafe[Task, Map[BlockHash, Running.Requested]](Map.empty[BlockHash, Running.Requested])
+    implicit val commUtil = CommUtil.of[Task]
     implicit val errHandler =
       ApplicativeError_.applicativeError(new ApplicativeError[Task, CommError] {
         override def raiseError[A](e: CommError): Task[A] =
@@ -86,13 +102,12 @@ object Setup {
       })
     implicit val lab =
       LastApprovedBlock.of[Task].unsafeRunSync(monix.execution.Scheduler.Implicits.global)
-    implicit val blockMap         = Ref.unsafe[Task, Map[BlockHash, BlockMessage]](Map.empty)
+    implicit val blockMap         = Ref.unsafe[Task, Map[BlockHash, BlockMessageProto]](Map.empty)
     implicit val approvedBlockRef = Ref.unsafe[Task, Option[ApprovedBlock]](None)
     implicit val blockStore       = InMemBlockStore.create[Task]
     implicit val blockDagStorage = InMemBlockDagStorage
       .create[Task]
       .unsafeRunSync(monix.execution.Scheduler.Implicits.global)
-    implicit val casperRef = MultiParentCasperRef.unsafe[Task](None)
     implicit val safetyOracle = new SafetyOracle[Task] {
       override def normalizedFaultTolerance(
           blockDag: BlockDagRepresentation[Task],
@@ -100,6 +115,7 @@ object Setup {
       ): Task[Float] = Task.pure(1.0f)
     }
     implicit val lastFinalizedBlockCalculator = LastFinalizedBlockCalculator[Task](0f)
+    implicit val synchronyConstraintChecker   = SynchronyConstraintChecker[Task](0d)
   }
   private def endpoint(port: Int): Endpoint = Endpoint("host", port, port)
 

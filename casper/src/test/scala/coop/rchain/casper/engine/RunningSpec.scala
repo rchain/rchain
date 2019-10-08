@@ -9,7 +9,6 @@ import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.comm.protocol.routing.Packet
 import coop.rchain.comm.rp.ProtocolHelper._
 import coop.rchain.comm.transport
-import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.hash.Blake2b256
 import coop.rchain.crypto.signatures.Secp256k1
 import monix.eval.Task
@@ -23,15 +22,15 @@ class RunningSpec extends WordSpec {
     import fixture._
 
     val genesis                = GenesisBuilder.createGenesis()
-    val approvedBlockCandidate = ApprovedBlockCandidate(block = Some(genesis))
+    val approvedBlockCandidate = ApprovedBlockCandidate(block = genesis, requiredSigs = 0)
     val approvedBlock: ApprovedBlock = ApprovedBlock(
-      candidate = Some(approvedBlockCandidate),
-      sigs = Seq(
+      candidate = approvedBlockCandidate,
+      sigs = List(
         Signature(
           ByteString.copyFrom(validatorPk.bytes),
           "secp256k1",
           ByteString.copyFrom(
-            Secp256k1.sign(Blake2b256.hash(approvedBlockCandidate.toByteArray), validatorSk)
+            Secp256k1.sign(Blake2b256.hash(approvedBlockCandidate.toProto.toByteArray), validatorSk)
           )
         )
       )
@@ -41,10 +40,11 @@ class RunningSpec extends WordSpec {
 
     val engine = new Running[Task](casper, approvedBlock, Task.unit)
 
-    transportLayer.setResponses(_ => p => Right(p))
+    transportLayer.setResponses(_ => p => Right(()))
 
     "respond to BlockMessage messages " in {
-      val blockMessage = BlockMessage(ByteString.copyFrom("Test BlockMessage", "UTF-8"))
+      val blockMessage =
+        Dummies.createBlockMessage(blockHash = ByteString.copyFrom("Test BlockMessage", "UTF-8"))
       val test: Task[Unit] = for {
         _ <- engine.handle(local, blockMessage)
         _ = assert(casper.store.contains(blockMessage.blockHash))
@@ -55,13 +55,12 @@ class RunningSpec extends WordSpec {
     }
 
     "respond to BlockRequest messages" in {
-      val blockRequest =
-        BlockRequest(Base16.encode(genesis.blockHash.toByteArray), genesis.blockHash)
+      val blockRequest = BlockRequest(genesis.blockHash)
       val test = for {
         _     <- blockStore.put(genesis.blockHash, genesis)
         _     <- engine.handle(local, blockRequest)
         head  = transportLayer.requests.head
-        block = packet(local, networkId, transport.BlockMessage, genesis.toByteString)
+        block = packet(local, networkId, genesis.toProto)
         _     = assert(head.peer == local && head.msg == block)
       } yield ()
 
@@ -78,7 +77,12 @@ class RunningSpec extends WordSpec {
         _    = assert(head.peer == local)
         _ = assert(
           ApprovedBlock
-            .parseFrom(head.msg.message.packet.get.content.toByteArray) == approvedBlock
+            .from(
+              ApprovedBlockProto
+                .parseFrom(head.msg.message.packet.get.content.toByteArray)
+            )
+            .right
+            .get == approvedBlock
         )
       } yield ()
 
@@ -87,14 +91,14 @@ class RunningSpec extends WordSpec {
     }
 
     "respond to ForkChoiceTipRequest messages" in {
-      val request = ForkChoiceTipRequest()
+      val request = ForkChoiceTipRequest
       val test: Task[Unit] = for {
-        tip  <- MultiParentCasper.forkChoiceTip[Task]
+        tip  <- MultiParentCasper.forkChoiceTip[Task](casper)
         _    <- engine.handle(local, request)
         head = transportLayer.requests.head
         _    = assert(head.peer == local)
         _ = assert(
-          head.msg.message.packet.get == Packet(transport.BlockMessage.id, tip.toByteString)
+          head.msg.message.packet.get == ToPacket(tip.toProto)
         )
       } yield ()
 

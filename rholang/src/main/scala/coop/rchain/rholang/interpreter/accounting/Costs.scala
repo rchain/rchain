@@ -1,8 +1,18 @@
 package coop.rchain.rholang.interpreter.accounting
 
-import cats.Monoid
 import com.google.protobuf.ByteString
-import coop.rchain.models.{PCost, Par, ProtoM, StacksafeMessage}
+import coop.rchain.models.TaggedContinuation.TaggedCont.ParBody
+import coop.rchain.models.{
+  BindPattern,
+  ListParWithRandom,
+  PCost,
+  Par,
+  ParWithRandom,
+  ProtoM,
+  StacksafeMessage,
+  TaggedContinuation
+}
+import coop.rchain.rspace.Blake2b256Hash
 
 //TODO(mateusz.gorski): Adjust the costs of operations
 final case class Cost(value: Long, operation: String) {
@@ -111,13 +121,34 @@ trait Costs {
 
   final val MATCH_EVAL_COST = Cost(12, "match eval")
 
-  implicit def toStorageCostOps[A <: StacksafeMessage[_]](a: Seq[A]) = new StorageCostOps(a: _*)
-
-  implicit def toStorageCostOps[A <: StacksafeMessage[_]](a: A) = new StorageCostOps(a)
-
-  class StorageCostOps[A <: StacksafeMessage[_]](a: A*) {
-    def storageCost: Cost = Cost(a.map(a => ProtoM.serializedSize(a).value).sum, "storage cost")
+  def storageCostConsume(
+      channels: Seq[Par],
+      patterns: Seq[BindPattern],
+      continuation: TaggedContinuation
+  ): Cost = {
+    val bodyCost = Some(continuation).collect {
+      case TaggedContinuation(ParBody(ParWithRandom(body, _))) => storageCost(body)
+    }
+    storageCost(channels: _*) + storageCost(patterns: _*) + bodyCost.getOrElse(Cost(0))
   }
+
+  def storageCostProduce(channel: Par, data: ListParWithRandom): Cost =
+    storageCost(channel) + storageCost(data.pars: _*)
+
+  private def storageCost[A <: StacksafeMessage[_]](as: A*): Cost =
+    Cost(as.map(a => ProtoM.serializedSize(a).value).sum, "storage cost")
+
+  def commEventStorageCost(channelsInvolved: Int): Cost = {
+    val consumeCost  = eventStorageCost(channelsInvolved)
+    val produceCosts = eventStorageCost(1) * channelsInvolved
+    (consumeCost + produceCosts).copy(operation = "comm event storage cost")
+  }
+
+  def eventStorageCost(channelsInvolved: Int): Cost =
+    Cost(eventHashStorageCost + channelsInvolved * channelHashStorageCost, "event storage cost")
+
+  private val eventHashStorageCost   = Blake2b256Hash.length
+  private val channelHashStorageCost = Blake2b256Hash.length
 
   // Even though we use Long for phlo limit we can't use Long.MaxValue here.
   // This is because in tests, when  we refund deployment we add phlos to the deployment's limit

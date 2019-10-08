@@ -33,9 +33,10 @@ object RholangCLI {
     version("Rholang Mercury 0.2")
     banner("""Options:""")
 
-    val binary = opt[Boolean](descr = "outputs binary protobuf serialization")
-    val text   = opt[Boolean](descr = "outputs textual protobuf serialization")
-    val quiet  = opt[Boolean](descr = "don't print tuplespace after evaluation")
+    val binary             = opt[Boolean](descr = "outputs binary protobuf serialization")
+    val text               = opt[Boolean](descr = "outputs textual protobuf serialization")
+    val quiet              = opt[Boolean](descr = "don't print tuplespace after evaluation")
+    val unmatchedSendsOnly = opt[Boolean](descr = "only print unmatched sends after evaluation")
 
     val dataDir = opt[Path](
       required = false,
@@ -69,14 +70,20 @@ object RholangCLI {
                   conf.dataDir(),
                   conf.mapSize()
                 )
-      _ <- Runtime.injectEmptyRegistryRoot[Task](runtime.space, runtime.replaySpace)
+      _ <- Runtime.bootstrapRegistry[Task](runtime)
     } yield (runtime)).unsafeRunSync
 
     val problems = try {
       if (conf.files.supplied) {
         val problems = for {
-          f                <- conf.files()
-          result           = processFile(conf, runtime, f, conf.quiet.getOrElse(false)) if result.isFailure
+          f <- conf.files()
+          result = processFile(
+            conf,
+            runtime,
+            f,
+            conf.quiet.getOrElse(false),
+            conf.unmatchedSendsOnly.getOrElse(false)
+          ) if result.isFailure
           Failure(problem) = result
         } yield (f, problem)
         problems.foreach {
@@ -123,10 +130,18 @@ object RholangCLI {
     Console.println(PrettyPrinter().buildString(normalizedTerm))
   }
 
-  private def printStorageContents[F[_]: Sync](space: RhoISpace[F]): F[Unit] =
+  private def printStorageContents[F[_]: Sync](
+      space: RhoISpace[F],
+      unmatchedSendsOnly: Boolean
+  ): F[Unit] =
     Sync[F].delay {
       Console.println("\nStorage Contents:")
-    } >> StoragePrinter.prettyPrint(space).map(Console.println)
+    } >> FlatMap[F]
+      .ifM(unmatchedSendsOnly.pure[F])(
+        ifTrue = StoragePrinter.prettyPrintUnmatchedSends(space),
+        ifFalse = StoragePrinter.prettyPrint(space)
+      )
+      .map(Console.println)
 
   private def printCost(cost: Cost): Unit =
     Console.println(s"Estimated deploy cost: $cost")
@@ -153,14 +168,25 @@ object RholangCLI {
     repl(runtime)
   }
 
-  def processFile(conf: Conf, runtime: Runtime[Task], fileName: String, quiet: Boolean)(
+  def processFile(
+      conf: Conf,
+      runtime: Runtime[Task],
+      fileName: String,
+      quiet: Boolean,
+      unmatchedSendsOnly: Boolean
+  )(
       implicit scheduler: Scheduler
   ): Try[Unit] = {
     val processTerm: Par => Try[Unit] =
       if (conf.binary()) writeBinary(fileName)
       else if (conf.text()) writeHumanReadable(fileName)
       else
-        evaluatePar(runtime, Resources.withResource(Source.fromFile(fileName))(_.mkString), quiet)
+        evaluatePar(
+          runtime,
+          Resources.withResource(Source.fromFile(fileName))(_.mkString),
+          quiet,
+          unmatchedSendsOnly
+        )
 
     val source = reader(fileName)
 
@@ -226,7 +252,12 @@ object RholangCLI {
     })
   }
 
-  def evaluatePar(runtime: Runtime[Task], source: String, quiet: Boolean = false)(
+  def evaluatePar(
+      runtime: Runtime[Task],
+      source: String,
+      quiet: Boolean,
+      unmatchedSendsOnly: Boolean
+  )(
       par: Par
   )(implicit scheduler: Scheduler): Try[Unit] = {
     val evaluatorTask =
@@ -242,7 +273,7 @@ object RholangCLI {
 
     Try(waitForSuccess(evaluatorTask.runToFuture)).map { _ok =>
       if (!quiet) {
-        printStorageContents(runtime.space).unsafeRunSync
+        printStorageContents(runtime.space, unmatchedSendsOnly).unsafeRunSync
       }
     }
   }

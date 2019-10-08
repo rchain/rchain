@@ -3,12 +3,13 @@ package coop.rchain.casper.genesis
 import java.io.PrintWriter
 import java.nio.file.{Files, Path}
 
+import cats.implicits._
 import cats.effect.Sync
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockStore
 import coop.rchain.casper.helper.BlockDagStorageFixture
 import coop.rchain.casper.protocol.{BlockMessage, Bond}
-import coop.rchain.casper.util.{ProtoUtil, RSpaceUtil}
+import coop.rchain.casper.util.{BondsParser, ProtoUtil, RSpaceUtil, VaultParser}
 import coop.rchain.casper.util.rholang.{InterpreterUtil, RuntimeManager}
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.p2p.EffectsTestInstances.{LogStub, LogicalTime}
@@ -18,8 +19,11 @@ import org.scalatest.{BeforeAndAfterEach, EitherValues, FlatSpec, Matchers}
 import java.nio.file.Path
 
 import coop.rchain.blockstorage.util.io.IOError
+import coop.rchain.casper.genesis.Genesis.createGenesisBlock
+import coop.rchain.casper.genesis.contracts.{ProofOfStake, Validator}
 import coop.rchain.metrics
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
+import coop.rchain.shared.Time
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
 
@@ -149,7 +153,7 @@ class GenesisTest extends FlatSpec with Matchers with EitherValues with BlockDag
                       time
                     )
           bonds = ProtoUtil.bonds(genesis)
-          _     = log.infos.isEmpty should be(true)
+          _     = log.infos.length should be(2)
           result = validators
             .map {
               case (v, i) => Bond(ByteString.copyFrom(Base16.unsafeDecode(v)), i.toLong)
@@ -195,7 +199,7 @@ class GenesisTest extends FlatSpec with Matchers with EitherValues with BlockDag
       for {
         genesis <- fromInputFiles()(runtimeManager, genesisPath, log, time)
         bonds   = ProtoUtil.bonds(genesis)
-        _       = log.infos.length should be(1)
+        _       = log.infos.length should be(3)
         result = validators
           .map {
             case (v, i) => Bond(ByteString.copyFrom(Base16.unsafeDecode(v)), i.toLong)
@@ -219,7 +223,7 @@ object GenesisTest {
   def fromInputFiles(
       maybeBondsPath: Option[String] = None,
       numValidators: Int = numValidators,
-      maybeWalletsPath: Option[String] = None,
+      maybeVaultsPath: Option[String] = None,
       minimumBond: Long = 1L,
       maximumBond: Long = Long.MaxValue,
       shardId: String = rchainShardId,
@@ -230,18 +234,31 @@ object GenesisTest {
       log: LogStub[Task],
       time: LogicalTime[Task]
   ): Task[BlockMessage] =
-    Genesis
-      .fromInputFiles[Task](
-        maybeBondsPath,
-        numValidators,
-        genesisPath,
-        maybeWalletsPath,
-        minimumBond,
-        maximumBond,
-        runtimeManager,
-        shardId,
-        deployTimestamp
-      )
+    for {
+      timestamp <- deployTimestamp.fold(Time[Task].currentMillis)(x => x.pure[Task])
+      vaults    <- VaultParser.parse[Task](maybeVaultsPath, genesisPath.resolve("wallets.txt"))
+      bonds <- BondsParser.parse[Task](
+                maybeBondsPath,
+                genesisPath.resolve("bonds.txt"),
+                numValidators,
+                genesisPath
+              )
+      validators = bonds.toSeq.map(Validator.tupled)
+      genesisBlock <- createGenesisBlock(
+                       runtimeManager,
+                       Genesis(
+                         shardId = shardId,
+                         timestamp = timestamp,
+                         proofOfStake = ProofOfStake(
+                           minimumBond = minimumBond,
+                           maximumBond = maximumBond,
+                           validators = validators
+                         ),
+                         vaults = vaults,
+                         supply = Long.MaxValue
+                       )
+                     )
+    } yield genesisBlock
 
   def withRawGenResources(
       body: (Runtime[Task], Path, LogStub[Task], LogicalTime[Task]) => Task[Unit]
@@ -270,7 +287,10 @@ object GenesisTest {
   )(implicit metrics: Metrics[Task], span: Span[Task]): Task[Unit] =
     withRawGenResources {
       (runtime: Runtime[Task], genesisPath: Path, log: LogStub[Task], time: LogicalTime[Task]) =>
-        RuntimeManager.fromRuntime(runtime).flatMap(body(_, genesisPath, log, time))
+        {
+          implicit val _log = log
+          RuntimeManager.fromRuntime(runtime).flatMap(body(_, genesisPath, log, time))
+        }
     }
 
   def taskTest[R](f: Task[R]): R =

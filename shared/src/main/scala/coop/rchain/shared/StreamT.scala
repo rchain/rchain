@@ -65,6 +65,9 @@ sealed abstract class StreamT[F[_], +A] { self =>
     case _: SNil[F] => none[AA].pure[F]
   }
 
+  def contains[AA >: A](x: AA)(implicit monad: Monad[F]): F[Boolean] =
+    find(_ == x).map(_.isDefined)
+
   def flatMap[B](f: A => StreamT[F, B])(implicit monad: Monad[F]): StreamT[F, B] = self match {
     case SCons(curr, lazyTail) =>
       f(curr) match {
@@ -145,6 +148,19 @@ sealed abstract class StreamT[F[_], +A] { self =>
     case SCons(curr, lazyTail) => StreamT.cons(f(curr), lazyTail.map(_.map(_.map(f))))
     case SLazy(lazyTail)       => StreamT.delay(lazyTail.map(_.map(_.map(f))))
     case _: SNil[F]            => StreamT.empty[F, B]
+  }
+
+  def mapF[B](f: A => F[B])(implicit functor: Functor[F]): StreamT[F, B] = self match {
+    case SCons(curr, lazyTail) =>
+      StreamT.delay(
+        Eval.now(
+          for {
+            newB <- f(curr)
+          } yield StreamT.cons(newB, lazyTail.map(_.map(_.mapF(f))))
+        )
+      )
+    case SLazy(lazyTail) => StreamT.delay(lazyTail.map(_.map(_.mapF(f))))
+    case _: SNil[F]      => StreamT.empty[F, B]
   }
 
   def tail(implicit applicativeError: ApplicativeError[F, Throwable]): StreamT[F, A] = self match {
@@ -247,6 +263,14 @@ object StreamT {
     }
 
     StreamT.delay(Eval.now(listF.map(build(_))))
+  }
+
+  def continually[F[_]: Applicative, A](f: => F[A]): StreamT[F, A] = {
+    def build: F[StreamT[F, A]] =
+      for {
+        value <- f
+      } yield SCons(value, Eval.always(build))
+    StreamT.delay(Eval.now(build))
   }
 
   private def flatMapHelper[F[_], A, B, BB <: B](

@@ -1,17 +1,12 @@
 package coop.rchain.rholang.interpreter
 
 import cats.effect.{Concurrent, Sync}
-import cats.effect.concurrent.Semaphore
-import coop.rchain.crypto.hash.Blake2b512Random
-import coop.rchain.models.{ListParWithRandom, Par, TaggedContinuation}
-import coop.rchain.rholang.interpreter.Runtime.RhoISpace
-import coop.rchain.rholang.interpreter.accounting.{loggingCost, noOpCostLog}
-import coop.rchain.rholang.interpreter.errors.OutOfPhlogistonsError
-import coop.rchain.rholang.interpreter.storage.implicits.matchListPar
-import coop.rchain.rspace.util.unpackCont
 import cats.implicits._
+import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.metrics.Span
-import coop.rchain.rholang.interpreter.accounting.{Cost, CostAccounting}
+import coop.rchain.models.{ListParWithRandom, Par, TaggedContinuation}
+import coop.rchain.rholang.interpreter.Runtime.RhoTuplespace
+import coop.rchain.rspace.util.unpackCont
 
 /**
   * This is a tool for unapplying the messages sent to the system contracts.
@@ -32,7 +27,7 @@ import coop.rchain.rholang.interpreter.accounting.{Cost, CostAccounting}
   * @param dispatcher the dispatcher
   */
 class ContractCall[F[_]: Concurrent: Span](
-    space: RhoISpace[F],
+    space: RhoTuplespace[F],
     dispatcher: Dispatch[F, ListParWithRandom, TaggedContinuation]
 ) {
   type Producer = (Seq[Par], Par) => F[Unit]
@@ -43,16 +38,19 @@ class ContractCall[F[_]: Concurrent: Span](
       sequenceNumber: Int
   )(values: Seq[Par], ch: Par): F[Unit] =
     for {
-      cost <- CostAccounting.initialCost(Cost.UNSAFE_MAX)
       produceResult <- space.produce(
                         ch,
                         ListParWithRandom(values, rand),
                         persist = false,
                         sequenceNumber
-                      )(matchListPar(Sync[F], Span[F], cost))
+                      )
       _ <- produceResult.fold(Sync[F].unit) {
             case (cont, channels) =>
-              dispatcher.dispatch(unpackCont(cont), channels.map(_.value), cont.sequenceNumber)
+              dispatcher.dispatch(
+                unpackCont(cont),
+                channels.map(_.matchedDatum),
+                cont.sequenceNumber
+              )
           }
     } yield ()
 

@@ -17,4 +17,27 @@ class RevAddressSpec extends FlatSpec with Matchers {
     )
   }
 
+  "fromEthAddress" should "work correctly without a prefix" in {
+    val ethAddress = "06a441c277bf454c5d159b0e5bdafca69b296733"
+    RevAddress.fromEthAddress(ethAddress).map(_.toBase58) should be(
+      Some("1111Gzo7ywxbcXVumSS9Lzd8JBAqnF1zniNszvMLHQ2APa3dzs2rG")
+    )
+  }
+
+  "fromEthAddress" should "work correctly with a prefix" in {
+    val ethAddress = "0x06a441c277bf454c5d159b0e5bdafca69b296733"
+    RevAddress.fromEthAddress(ethAddress).map(_.toBase58) should be(
+      Some("1111Gzo7ywxbcXVumSS9Lzd8JBAqnF1zniNszvMLHQ2APa3dzs2rG")
+    )
+  }
+
+  "fromEthAddress" should "fail when wrong prefix" in {
+    val ethAddress = "1x06a441c277bf454c5d159b0e5bdafca69b296733"
+    RevAddress.fromEthAddress(ethAddress).map(_.toBase58) should be(None)
+  }
+
+  "fromEthAddress" should "fail when wrong length" in {
+    val ethAddress = "0x06"
+    RevAddress.fromEthAddress(ethAddress).map(_.toBase58) should be(None)
+  }
 }

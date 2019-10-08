@@ -1,0 +1,155 @@
+/**
+ * The main API is `DeployService`.
+ */
+syntax = "proto3";
+package casper.v1;
+
+import "CasperMessage.proto";
+import "ServiceError.proto";
+import "DeployServiceCommon.proto";
+
+// If you are building for other languages "scalapb.proto"
+// can be manually obtained here:
+// https://raw.githubusercontent.com/scalapb/ScalaPB/master/protobuf/scalapb/scalapb.proto
+// make a scalapb directory in this file's location and place it inside
+
+import "scalapb/scalapb.proto";
+
+option (scalapb.options) = {
+  package_name: "coop.rchain.casper.protocol.deploy.v1"
+  flat_package: true
+  single_file: true
+};
+
+// Use `doDeploy` to queue deployments of Rholang code and then
+// `ProposeServiceV2.propose` to make a new block with the results of running them
+// all.
+//
+// To get results back, use `listenForDataAtName`.
+service DeployService {
+  // Queue deployment of Rholang code (or fail to parse).
+  rpc doDeploy(DeployDataProto) returns (DeployResponse) {}
+  // Get details about a particular block.
+  rpc getBlock(BlockQuery) returns (BlockResponse) {}
+  // Get dag
+  rpc visualizeDag(VisualizeDagQuery) returns (stream VisualizeBlocksResponse) {}
+  rpc machineVerifiableDag(MachineVerifyQuery) returns (MachineVerifyResponse) {}
+  // Returns on success LightBlockInfo
+  rpc showMainChain(BlocksQuery) returns (stream BlockInfoResponse) {}
+  // Get a summary of blocks on the blockchain.
+  rpc getBlocks(BlocksQuery) returns (stream BlockInfoResponse) {}
+  // Find data sent to a name.
+  rpc listenForDataAtName(DataAtNameQuery) returns (ListeningNameDataResponse) {}
+  // Find processes receiving on a name.
+  rpc listenForContinuationAtName(ContinuationAtNameQuery) returns (ContinuationAtNameResponse) {}
+  // Find block containing a deploy.
+  rpc findDeploy(FindDeployQuery) returns (FindDeployResponse) {}
+  // Preview new top-level unforgeable names (for example, to compute signatures over them).
+  rpc previewPrivateNames(PrivateNamePreviewQuery) returns (PrivateNamePreviewResponse) {}
+  // Get details about a particular block.
+  rpc lastFinalizedBlock(LastFinalizedBlockQuery) returns (LastFinalizedBlockResponse) {}
+  // Check if a given block is finalized.
+  rpc isFinalized(IsFinalizedQuery) returns (IsFinalizedResponse) {}
+}
+
+// doDeploy
+message DeployResponse {
+  oneof message {
+    ServiceError error = 1;
+    string result      = 2;
+  }
+}
+
+// getBlock
+message BlockResponse {
+  oneof message {
+    ServiceError error  = 1;
+    BlockInfo blockInfo = 2;
+  }
+}
+
+// visualizeDag
+message VisualizeBlocksResponse {
+  oneof message {
+    ServiceError error = 1;
+    string content     = 2;
+  }
+}
+
+// machineVerifiableDag
+message MachineVerifyResponse {
+  oneof message {
+    ServiceError error = 1;
+    string content     = 2;
+  }
+}
+
+// showMainChain & getBlocks
+message BlockInfoResponse {
+  oneof message {
+    ServiceError error        = 1;
+    LightBlockInfo blockInfo  = 2;
+  }
+}
+
+// listenForDataAtName
+message ListeningNameDataResponse {
+  oneof message {
+    ServiceError error                = 1;
+    ListeningNameDataPayload payload  = 2;
+  }
+}
+
+message ListeningNameDataPayload {
+  repeated DataWithBlockInfo blockInfo = 1;
+  int32 length                         = 2;
+}
+
+// listenForContinuationAtName
+message ContinuationAtNameResponse {
+  oneof message {
+    ServiceError error                 = 1;
+    ContinuationAtNamePayload payload  = 2;
+  }
+}
+
+message ContinuationAtNamePayload {
+  repeated ContinuationsWithBlockInfo blockResults = 1;
+  int32 length = 2;
+}
+
+// findDeploy
+message FindDeployResponse {
+  oneof message {
+    ServiceError error        = 1;
+    LightBlockInfo blockInfo  = 2;
+  }
+}
+
+// previewPrivateNames
+message PrivateNamePreviewResponse {
+  oneof message {
+    ServiceError error                 = 1;
+    PrivateNamePreviewPayload payload  = 2;
+  }
+}
+
+message PrivateNamePreviewPayload {
+  repeated bytes ids  = 1; // a la GPrivate
+}
+
+// lastFinalizedBlock
+message LastFinalizedBlockResponse {
+  oneof message {
+    ServiceError error   = 1;
+    BlockInfo blockInfo  = 2;
+  }
+}
+
+// isFinalized
+message IsFinalizedResponse {
+  oneof message {
+    ServiceError error = 1;
+    bool isFinalized   = 2;
+  }
+}

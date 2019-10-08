@@ -1,7 +1,7 @@
 package coop.rchain.casper.util.rholang
 
 import com.google.protobuf.ByteString
-import coop.rchain.casper.protocol.DeployData
+import coop.rchain.casper.protocol.DeployDataProto
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.hash.{Blake2b256, Blake2b512Random}
 import coop.rchain.crypto.signatures.Secp256k1
@@ -9,7 +9,8 @@ import coop.rchain.crypto.{PrivateKey, PublicKey}
 import coop.rchain.models.Expr.ExprInstance.{GInt, GString}
 import coop.rchain.models.rholang.implicits._
 import coop.rchain.models.{Bundle, ETuple, GPrivate, Par}
-import coop.rchain.rholang.interpreter.{PrettyPrinter, Registry}
+import coop.rchain.rholang.interpreter.PrettyPrinter
+import coop.rchain.rholang.interpreter.registry.Registry
 
 /**
   * A signed insertion into the RChain registry.
@@ -158,25 +159,7 @@ object RegistrySigGen {
     */
   def main(argv: Array[String]) = {
     // these could be command-line args...
-    //val info = RegistrySigGen.deriveFrom(Args.parse(argv))
-    val (key, pub) = (
-      PrivateKey(
-        Base16.unsafeDecode("84e1aa32db02b53a4024d8a3fb460f37d30996bfa566f1df953c1c14b694b618")
-      ),
-      PublicKey(
-        Base16.unsafeDecode(
-          "049d575d3b375ea985dfa087a3e7511c0e3903ce6042407cd83cfc22a8b8b32b78b3070169f20a1d050c78ec13d9ea7653e78119bb3963d470fa989d19ebfdf8bf"
-        )
-      )
-    )
-    val toSign: Par = ETuple(Seq(GInt(790), GString("entryReplace")))
-    val hash        = Blake2b256.hash(toSign.toByteArray)
-    println(Base16.encode(key.bytes))
-    println(Base16.encode(pub.bytes))
-    println(hash)
-    println(hash.length)
-    val sig  = Secp256k1.sign(hash, key.bytes)
-    val info = Base16.encode(sig)
+    val info = RegistrySigGen.deriveFrom(Args.parse(argv))
     System.out.println(info)
   }
 
@@ -191,11 +174,11 @@ object RegistrySigGen {
     */
   def generateUnforgeableNameId(deployer: PublicKey, timestamp: Long) = {
     val seed =
-      DeployData()
+      DeployDataProto()
         .withDeployer(ByteString.copyFrom(deployer.bytes))
         .withTimestamp(timestamp)
 
-    val rnd = Blake2b512Random(DeployData.toByteArray(seed))
+    val rnd = Blake2b512Random(DeployDataProto.toByteArray(seed))
 
     rnd.next()
   }

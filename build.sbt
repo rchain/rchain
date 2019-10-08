@@ -125,11 +125,13 @@ lazy val shared = (project in file("shared"))
       catsEffect,
       catsMtl,
       catsPar,
+      catsTagless,
       lz4,
       monix,
       scodecCore,
       scodecBits,
       scalapbRuntimegGrpc,
+      lmdbjava,
       catsEffectLawsTest,
       catsLawsTest,
       catsLawsTestkitTest
@@ -169,7 +171,7 @@ lazy val casper = (project in file("casper"))
     shared       % "compile->compile;test->test",
     graphz,
     crypto,
-    models,
+    models   % "compile->compile;test->test",
     rspace,
     rholang % "compile->compile;test->test"
   )
@@ -188,6 +190,7 @@ lazy val comm = (project in file("comm"))
       hasher,
       catsCore,
       catsMtl,
+      catsTagless,
       monix,
       guava
     ),
@@ -222,6 +225,7 @@ lazy val models = (project in file("models"))
   .settings(
     libraryDependencies ++= commonDependencies ++ protobufDependencies ++ Seq(
       catsCore,
+      enumeratum,
       magnolia,
       scalapbCompiler,
       scalacheck % "test",
@@ -241,7 +245,12 @@ lazy val node = (project in file("node"))
   .settings(commonSettings: _*)
   .enablePlugins(RpmPlugin, DebianPlugin, JavaAppPackaging, BuildInfoPlugin)
   .settings(
-    version := "0.9.10" + git.gitHeadCommit.value.map(".git" + _.take(8)).getOrElse(""),
+    version := git.gitDescribedVersion.value.getOrElse({
+      val v = "0.0.0-unknown"
+      System.err.println("Could not get version from `git describe`.")
+      System.err.println("Using the fallback version: " + v)
+      v
+    }),
     name := "rnode",
     maintainer := "RChain Cooperative https://www.rchain.coop/",
     packageSummary := "RChain Node",
@@ -249,12 +258,14 @@ lazy val node = (project in file("node"))
     libraryDependencies ++=
       apiServerDependencies ++ commonDependencies ++ kamonDependencies ++ protobufDependencies ++ Seq(
         catsCore,
+        catsTagless,
         grpcNetty,
+        grpcServices,
         jline,
         scallop,
         scalaUri,
         scalapbRuntimegGrpc,
-        tomlScala
+        circeGenericExtras
       ),
     PB.targets in Compile := Seq(
       PB.gens.java                              -> (sourceManaged in Compile).value / "protobuf",
@@ -312,13 +323,17 @@ lazy val node = (project in file("node"))
       Seq(
         Cmd("FROM", dockerBaseImage.value),
         ExecCmd("RUN", "apt", "update"),
-        ExecCmd("RUN", "apt", "install", "-yq", "openssl"),
+        ExecCmd("RUN", "apt", "install", "-yq", "openssl", "openssh-server", "procps"),
         Cmd("LABEL", s"""MAINTAINER="${maintainer.value}""""),
         Cmd("WORKDIR", (defaultLinuxInstallLocation in Docker).value),
         Cmd("ADD", s"--chown=$daemon:$daemon opt /opt"),
         Cmd("USER", "root"),
-        ExecCmd("ENTRYPOINT", "bin/rnode", "--profile=docker",
-          "-XX:ErrorFile=/var/lib/rnode/hs_err_pid%p.log"),
+        ExecCmd(
+          "ENTRYPOINT",
+          "bin/rnode",
+          "--profile=docker",
+          "-XX:ErrorFile=/var/lib/rnode/hs_err_pid%p.log"
+        ),
         ExecCmd("CMD", "run")
       )
     },
@@ -344,6 +359,11 @@ lazy val node = (project in file("node"))
       "bash (>= 2.05a-11)"
     ),
     /* Redhat */
+    /*
+     * RPM version string cannot contain dashes:
+     *   http://ftp.rpm.org/max-rpm/ch-rpm-file-format.html
+     */
+    version in Rpm := version.value.replace('-', '.'),
     rpmVendor := "rchain.coop",
     rpmUrl := Some("https://rchain.coop"),
     rpmLicense := Some("Apache 2.0"),
@@ -413,7 +433,11 @@ lazy val rholang = (project in file("rholang"))
 lazy val rholangCLI = (project in file("rholang-cli"))
   .settings(commonSettings: _*)
   .settings(
-    mainClass in assembly := Some("coop.rchain.rholang.interpreter.RholangCLI")
+    mainClass in assembly := Some("coop.rchain.rholang.interpreter.RholangCLI"),
+    assemblyMergeStrategy in assembly := {
+      case path if path.endsWith("module-info.class") => MergeStrategy.discard
+      case path                                       => MergeStrategy.defaultMergeStrategy(path)
+    }
   )
   .dependsOn(rholang)
 

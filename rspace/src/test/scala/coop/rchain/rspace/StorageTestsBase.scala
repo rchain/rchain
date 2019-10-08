@@ -5,6 +5,8 @@ import java.nio.file.{Files, Path, Paths}
 import cats._
 import cats.implicits._
 import cats.effect._
+import cats.effect.concurrent.Ref
+import cats.temp.par.Par
 import com.typesafe.scalalogging.Logger
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.rspace._
@@ -18,7 +20,6 @@ import coop.rchain.rspace.history.{
   LMDBRSpaceStorageConfig,
   StoreConfig
 }
-import coop.rchain.shared.Cell
 import coop.rchain.shared.PathOps._
 import coop.rchain.shared.Log
 import org.scalatest._
@@ -33,12 +34,13 @@ import org.lmdbjava.EnvFlags
 import coop.rchain.metrics.NoopSpan
 
 trait StorageTestsBase[F[_], C, P, A, K] extends FlatSpec with Matchers with OptionValues {
-  type T    = ISpace[F, C, P, A, A, K]
+  type T    = ISpace[F, C, P, A, K]
   type ST   = HotStore[F, C, P, A, K]
   type HR   = HistoryRepository[F, C, P, A, K]
   type AtST = AtomicAny[ST]
 
   implicit def concurrentF: Concurrent[F]
+  implicit def parF: Par[F]
   implicit def logF: Log[F]
   implicit def metricsF: Metrics[F]
   implicit def spanF: Span[F]
@@ -87,7 +89,7 @@ trait StorageTestsBase[F[_], C, P, A, K] extends FlatSpec with Matchers with Opt
 
     run(for {
       historyRepository    <- HistoryRepositoryInstances.lmdbRepository[F, C, P, A, K](config)
-      cache                <- Cell.refCell[F, Cache[C, P, A, K]](Cache[C, P, A, K]())
+      cache                <- Ref.of[F, Cache[C, P, A, K]](Cache[C, P, A, K]())
       testStore            = HotStore.inMem[F, C, P, A, K](Sync[F], cache, historyRepository, codecK)
       spaceAndStore        <- createISpace(historyRepository, testStore, branch)
       (store, atom, space) = spaceAndStore
@@ -113,6 +115,7 @@ trait TaskTests[C, P, A, R, K] extends StorageTestsBase[Task, C, P, R, K] {
       monix.execution.Scheduler.Implicits.global,
       Task.defaultOptions
     )
+  implicit val parF: Par[Task]         = Par.fromParallel(Task.catsParallel)
   implicit val logF: Log[Task]         = Log.log[Task]
   implicit val metricsF: Metrics[Task] = new Metrics.MetricsNOP[Task]()
   implicit val spanF: Span[Task]       = NoopSpan[Task]()
@@ -143,7 +146,7 @@ abstract class InMemoryHotStoreTestsBase[F[_]]
       (hr, ts, b) => {
         val atomicStore = AtomicAny(ts)
         val space =
-          new RSpace[F, String, Pattern, String, String, StringsCaptor](hr, atomicStore, b)
+          new RSpace[F, String, Pattern, String, StringsCaptor](hr, atomicStore, b)
         Applicative[F].pure((ts, atomicStore, space))
       }
     setupTestingSpace(creator, f)

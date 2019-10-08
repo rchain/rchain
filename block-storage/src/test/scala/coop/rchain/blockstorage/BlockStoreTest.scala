@@ -1,29 +1,30 @@
 package coop.rchain.blockstorage
 
-import java.nio.file.Paths
-
-import scala.language.higherKinds
 import cats._
-import cats.implicits._
-import com.google.protobuf.ByteString
-import coop.rchain.casper.protocol._
-import coop.rchain.rspace.Context
-import coop.rchain.shared.PathOps._
-import coop.rchain.models.blockImplicits.{blockBatchesGen, blockElementGen, blockElementsGen}
 import cats.effect.Sync
 import cats.effect.concurrent.Ref
+import cats.implicits._
+
+import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.InMemBlockStore.emptyMapRef
-import coop.rchain.metrics.Metrics
-import coop.rchain.metrics.Metrics.MetricsNOP
+import coop.rchain.casper.protocol._
 import coop.rchain.catscontrib.TaskContrib._
+import coop.rchain.metrics.Metrics.MetricsNOP
 import coop.rchain.models.BlockHash.BlockHash
+import coop.rchain.models.blockImplicits.{blockBatchesGen, blockElementsGen}
+import coop.rchain.rspace.Context
 import coop.rchain.shared.Log
+import coop.rchain.shared.PathOps._
+
 import monix.eval.Task
 import monix.execution.Scheduler
 import monix.execution.Scheduler.Implicits.global
 import org.scalactic.anyvals.PosInt
 import org.scalatest._
 import org.scalatest.prop.GeneratorDrivenPropertyChecks
+import scala.language.higherKinds
+
+import coop.rchain.metrics.Metrics
 
 trait BlockStoreTest
     extends FlatSpecLike
@@ -37,8 +38,19 @@ trait BlockStoreTest
     PropertyCheckConfiguration(minSuccessful = PosInt(100))
 
   private[this] def toBlockMessage(bh: BlockHash, v: Long, ts: Long): BlockMessage =
-    BlockMessage(blockHash = bh)
-      .withHeader(Header().withVersion(v).withTimestamp(ts))
+    BlockMessage
+      .from(
+        BlockMessageProto()
+          .withBlockHash(bh)
+          .withHeader(
+            HeaderProto()
+              .withVersion(v)
+              .withTimestamp(ts)
+          )
+          .withBody(BodyProto().withState(RChainStateProto()))
+      )
+      .right
+      .get
 
   def withStore[R](f: BlockStore[Task] => Task[R]): R
 
@@ -81,11 +93,13 @@ trait BlockStoreTest
         val items = blockStoreElements.map { block =>
           (block.blockHash, block, toBlockMessage(block.blockHash, 200L, 20000L))
         }
+
         for {
           _ <- items.traverse_[Task, Unit] { case (k, v1, _) => store.put(k, v1) }
           _ <- items.traverse_[Task, Assertion] {
                 case (k, v1, _) => store.get(k).map(_ shouldBe Some(v1))
               }
+
           _ <- items.traverse_[Task, Unit] { case (k, _, v2) => store.put(k, v2) }
           _ <- items.traverse_[Task, Assertion] {
                 case (k, _, v2) => store.get(k).map(_ shouldBe Some(v2))
@@ -137,6 +151,7 @@ class FileLMDBIndexBlockStoreTest extends BlockStoreTest {
   override def withStore[R](f: BlockStore[Task] => Task[R]): R = {
     val dbDir                   = mkTmpDir()
     implicit val log: Log[Task] = new Log.NOPLog[Task]()
+    implicit val metrics        = new Metrics.MetricsNOP[Task]
     val env                     = Context.env(dbDir, mapSize)
     val test = for {
       store  <- FileLMDBIndexBlockStore.create[Task](env, dbDir).map(_.right.get)
@@ -152,8 +167,9 @@ class FileLMDBIndexBlockStoreTest extends BlockStoreTest {
   }
 
   private def createBlockStore(blockStoreDataDir: Path): Task[BlockStore[Task]] = {
-    implicit val log = new Log.NOPLog[Task]()
-    val env          = Context.env(blockStoreDataDir, 100L * 1024L * 1024L * 4096L)
+    implicit val log     = new Log.NOPLog[Task]()
+    implicit val metrics = new Metrics.MetricsNOP[Task]
+    val env              = Context.env(blockStoreDataDir, 100L * 1024L * 1024L * 4096L)
     FileLMDBIndexBlockStore.create[Task](env, blockStoreDataDir).map(_.right.get)
   }
 
@@ -193,10 +209,24 @@ class FileLMDBIndexBlockStoreTest extends BlockStoreTest {
   "FileLMDBIndexBlockStore" should "persist approved block on restart" in {
     withStoreLocation { blockStoreDataDir =>
       val approvedBlock =
-        ApprovedBlock(
-          Some(ApprovedBlockCandidate(Some(BlockMessage()), 1)),
-          List(Signature(ByteString.EMPTY, "", ByteString.EMPTY))
-        )
+        ApprovedBlock
+          .from(
+            ApprovedBlockProto(
+              Some(
+                ApprovedBlockCandidateProto(
+                  Some(
+                    BlockMessageProto()
+                      .withBody(BodyProto().withState(RChainStateProto()))
+                      .withHeader(HeaderProto())
+                  ),
+                  1
+                )
+              ),
+              List(Signature(ByteString.EMPTY, "", ByteString.EMPTY))
+            )
+          )
+          .right
+          .get
       for {
         firstStore          <- createBlockStore(blockStoreDataDir)
         _                   <- firstStore.putApprovedBlock(approvedBlock)
@@ -243,7 +273,7 @@ class FileLMDBIndexBlockStoreTest extends BlockStoreTest {
           _ <- blockStoreBatches.traverse_[Task, Unit](
                 blockStoreElements =>
                   blockStoreElements
-                    .traverse_[Task, Unit](firstStore.put) *> firstStore.checkpoint()
+                    .traverse_[Task, Unit](firstStore.put) >> firstStore.checkpoint()
               )
           _ <- blocks.traverse[Task, Assertion] { block =>
                 firstStore.get(block.blockHash).map(_ shouldBe Some(block))

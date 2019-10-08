@@ -3,9 +3,9 @@ package coop.rchain.casper.util
 import cats.implicits._
 import coop.rchain.casper.MultiParentCasper.ignoreDoppelgangerCheck
 import coop.rchain.casper._
-import coop.rchain.casper.helper.HashSetCasperTestNode
-import coop.rchain.casper.helper.HashSetCasperTestNode._
-import coop.rchain.casper.scalatestcontrib._
+import coop.rchain.casper.helper.TestNode
+import coop.rchain.casper.helper.TestNode.{Effect, _}
+import coop.rchain.shared.scalatestcontrib._
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.blockImplicits._
 import coop.rchain.p2p.EffectsTestInstances.LogicalTime
@@ -21,7 +21,7 @@ class ProtoUtilTest extends FlatSpec with Matchers with GeneratorDrivenPropertyC
       val justificationsHashes = blockElement.justifications.map(
         _.latestBlockHash
       )
-      val parentsHashes = blockElement.header.toSeq.flatMap(_.parentsHashList)
+      val parentsHashes = blockElement.header.parentsHashList
       result should contain allElementsOf (justificationsHashes)
       result should contain allElementsOf (parentsHashes)
       result should contain theSameElementsAs ((justificationsHashes ++ parentsHashes).toSet)
@@ -35,41 +35,26 @@ class ProtoUtilTest extends FlatSpec with Matchers with GeneratorDrivenPropertyC
   val genesis = buildGenesis()
 
   "unseenBlockHashes" should "return empty for a single block dag" in effectTest {
-    HashSetCasperTestNode.standaloneEff(genesis).use { node =>
-      import node._
-      implicit val timeEff = new LogicalTime[Effect]
-
+    TestNode.standaloneEff(genesis).use { node =>
+      import node.blockStore
       for {
-        deploy               <- ConstructDeploy.basicDeployData[Effect](0)
-        casper               = node.casperEff
-        _                    <- casper.deploy(deploy)
-        createBlockResult    <- casper.createBlock
-        Created(signedBlock) = createBlockResult
-        _                    <- casper.addBlock(signedBlock, ignoreDoppelgangerCheck[Effect])
-        dag                  <- casper.blockDag
-        unseenBlockHashes    <- ProtoUtil.unseenBlockHashes[Effect](dag, signedBlock)
-        _                    = unseenBlockHashes should be(Set.empty[BlockHash])
+        signedBlock       <- ConstructDeploy.basicDeployData[Effect](0) >>= (node.addBlock(_))
+        dag               <- node.casperEff.blockDag
+        unseenBlockHashes <- ProtoUtil.unseenBlockHashes[Effect](dag, signedBlock)
+        _                 = unseenBlockHashes should be(Set.empty[BlockHash])
       } yield ()
     }
   }
 
   it should "return all but the first block when passed the first block in a chain" in effectTest {
-    HashSetCasperTestNode.standaloneEff(genesis).use { node =>
+    TestNode.standaloneEff(genesis).use { node =>
       import node._
       implicit val timeEff = new LogicalTime[Effect]
 
       for {
-        deploy            <- ConstructDeploy.basicDeployData[Effect](0)
-        casper            = node.casperEff
-        _                 <- casper.deploy(deploy)
-        createBlockResult <- casper.createBlock
-        Created(block0)   = createBlockResult
-        _                 <- casper.addBlock(block0, ignoreDoppelgangerCheck[Effect])
-        deploy            <- ConstructDeploy.basicDeployData[Effect](1)
-        createBlockResult <- casper.deploy(deploy) >> casper.createBlock
-        Created(block1)   = createBlockResult
-        _                 <- casper.addBlock(block1, ignoreDoppelgangerCheck[Effect])
-        dag               <- casper.blockDag
+        block0            <- ConstructDeploy.basicDeployData[Effect](0) >>= (node.addBlock(_))
+        block1            <- ConstructDeploy.basicDeployData[Effect](1) >>= (node.addBlock(_))
+        dag               <- node.casperEff.blockDag
         unseenBlockHashes <- ProtoUtil.unseenBlockHashes[Effect](dag, block0)
         _                 = unseenBlockHashes should be(Set(block1.blockHash))
       } yield ()

@@ -1,47 +1,74 @@
 package coop.rchain.casper.api
 
+import scala.concurrent.duration._
+
 import cats.Monad
+import cats.effect.{Concurrent, Sync}
 import cats.effect.concurrent.Semaphore
 import cats.implicits._
-import coop.rchain.blockstorage.BlockDagRepresentation
 import coop.rchain.casper.MultiParentCasper.ignoreDoppelgangerCheck
-import coop.rchain.casper.MultiParentCasperRef.MultiParentCasperRef
+import coop.rchain.casper.engine._
+import EngineCell._
+import coop.rchain.blockstorage.dag.BlockDagRepresentation
+import coop.rchain.blockstorage.dag.BlockDagStorage.DeployId
 import coop.rchain.casper._
 import coop.rchain.casper.api.BlockAPI.ApiErr
-import coop.rchain.casper.helper.HashSetCasperTestNode
+import coop.rchain.casper.helper.TestNode
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util._
+import coop.rchain.casper.util.ConstructDeploy.basicDeployData
 import coop.rchain.casper.util.rholang._
 import coop.rchain.catscontrib.TaskContrib._
-import coop.rchain.metrics.NoopSpan
+import coop.rchain.crypto.signatures.Secp256k1
+import coop.rchain.metrics._
+import coop.rchain.metrics
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.Validator.Validator
 import coop.rchain.p2p.EffectsTestInstances._
-import coop.rchain.shared.Time
+import coop.rchain.shared._
+import coop.rchain.shared.scalatestcontrib._
 import monix.eval.Task
 import monix.execution.Scheduler
-import org.scalatest.{FlatSpec, Matchers}
+import org.scalatest.{Engine => _, _}
 
-import scala.concurrent.duration._
-
-class CreateBlockAPITest extends FlatSpec with Matchers {
+class CreateBlockAPITest extends FlatSpec with Matchers with EitherValues {
   import GenesisBuilder._
-  import HashSetCasperTestNode.Effect
+  import TestNode.Effect
 
-  val genesis                            = buildGenesis()
-  implicit val spanEff: NoopSpan[Effect] = NoopSpan[Effect]
+  def createBlock(blockApiLock: Semaphore[Task])(engineCell: Cell[Task, Engine[Task]])(
+      implicit log: Log[Task],
+      metrics: Metrics[Task],
+      span: Span[Task]
+  ): Task[Either[String, String]] =
+    BlockAPI.createBlock[Task](blockApiLock)(
+      Sync[Task],
+      Concurrent[Task],
+      engineCell,
+      log,
+      metrics,
+      span
+    )
 
-  "createBlock" should "not allow simultaneous calls" in {
-    implicit val logEff    = new LogStub[Effect]
-    implicit val scheduler = Scheduler.fixedPool("three-threads", 3)
-    implicit val spanEff   = NoopSpan[Effect]
+  val validatorKeyPairs = (1 to 5).map(_ => Secp256k1.newKeyPair)
+  val genesisParameters = buildGenesisParameters(
+    validatorKeyPairs,
+    validatorKeyPairs.map(_._2).zip(List.fill(5)(10L)).toMap
+  )
+  val genesis = buildGenesis(genesisParameters)
+
+  implicit val scheduler = Scheduler.fixedPool("three-threads", 3)
+
+  "createBlock" should "not allow simultaneous calls" in effectTest {
+    implicit val metricsEff: Metrics[Effect] = new metrics.Metrics.MetricsNOP[Effect]
+    implicit val logEff                      = new LogStub[Effect]
+    implicit val spanEff                     = NoopSpan[Effect]
     implicit val time = new Time[Task] {
       private val timer                               = Task.timer
       def currentMillis: Task[Long]                   = timer.clock.realTime(MILLISECONDS)
       def nanoTime: Task[Long]                        = timer.clock.monotonic(NANOSECONDS)
       def sleep(duration: FiniteDuration): Task[Unit] = timer.sleep(duration)
     }
-    HashSetCasperTestNode.standaloneEff(genesis).use { node =>
+    TestNode.standaloneEff(genesis).use { node =>
       val casper = new SleepingMultiParentCasperImpl[Effect](node.casperEff)
       val deploys = List(
         "@0!(0) | for(_ <- @0){ @1!(1) }",
@@ -49,20 +76,20 @@ class CreateBlockAPITest extends FlatSpec with Matchers {
       ).map(ConstructDeploy.sourceDeploy(_, timestamp = System.currentTimeMillis()))
 
       def createBlock(deploy: DeployData, blockApiLock: Semaphore[Effect])(
-          implicit casperRef: MultiParentCasperRef[Effect]
-      ): Effect[ApiErr[DeployServiceResponse]] =
+          implicit engineCell: EngineCell[Effect]
+      ): Effect[ApiErr[String]] =
         for {
           _ <- BlockAPI.deploy[Effect](deploy)
           r <- BlockAPI.createBlock[Effect](blockApiLock)
         } yield r
 
       def testProgram(blockApiLock: Semaphore[Effect])(
-          implicit casperRef: MultiParentCasperRef[Effect]
+          implicit engineCell: EngineCell[Effect]
       ): Effect[
         (
-            Either[Throwable, ApiErr[DeployServiceResponse]],
-            Either[Throwable, ApiErr[DeployServiceResponse]],
-            Either[Throwable, ApiErr[DeployServiceResponse]]
+            ApiErr[String],
+            ApiErr[String],
+            ApiErr[String]
         )
       ] =
         for {
@@ -73,23 +100,96 @@ class CreateBlockAPITest extends FlatSpec with Matchers {
           r1 <- t1.join.attempt
           r2 <- t2.join.attempt
           r3 <- t3.join.attempt
-        } yield (r1, r2, r3)
+        } yield (r1.right.value, r2.right.value, r3.right.value)
 
       val (response1, response2, response3) = (for {
-        casperRef    <- MultiParentCasperRef.of[Effect]
-        _            <- casperRef.set(casper)
+        engine       <- new EngineWithCasper[Task](casper).pure[Task]
+        engineCell   <- Cell.mvarCell[Task, Engine[Task]](engine)
         blockApiLock <- Semaphore[Effect](1)
-        result       <- testProgram(blockApiLock)(casperRef)
+        result       <- testProgram(blockApiLock)(engineCell)
       } yield result).unsafeRunSync
 
-      response1 shouldBe a[Right[_, DeployServiceResponse]]
-      response2 shouldBe a[Left[_, DeployServiceResponse]]
-      response3 shouldBe a[Left[_, DeployServiceResponse]]
-      response2.left.map(_.getMessage) shouldBe "Error: There is another propose in progress."
-      response3.left.map(_.getMessage) shouldBe "Error: There is another propose in progress."
+      response1 shouldBe a[Right[_, String]]
+      response2 shouldBe a[Left[_, String]]
+      response3 shouldBe a[Left[_, String]]
+      response2.left.value shouldBe "Error: There is another propose in progress."
+      response3.left.value shouldBe "Error: There is another propose in progress."
 
       ().pure[Effect]
     }
+  }
+
+  it should "not allow proposals without enough new blocks from other validators" in effectTest {
+    TestNode
+      .networkEff(genesis, networkSize = 5, synchronyConstraintThreshold = 1d / 3d)
+      .use {
+        case nodes @ n1 +: n2 +: _ +: _ +: _ +: Seq() =>
+          import n1.{logEff, metricEff, span, timeEff}
+          val engine = new EngineWithCasper[Task](n1.casperEff)
+          for {
+            deploys      <- (0 until 3).toList.traverse(i => basicDeployData[Task](i))
+            engineCell   <- Cell.mvarCell[Task, Engine[Task]](engine)
+            blockApiLock <- Semaphore[Effect](1)
+
+            b1 <- n1.publishBlock(deploys(0))(nodes: _*)
+            b2 <- n2.publishBlock(deploys(1))(nodes: _*)
+            _  <- n1.syncWith(n2)
+
+            _        <- n1.casperEff.addDeploy(deploys(2))
+            b3Status <- createBlock(blockApiLock)(engineCell)
+
+            _ = b3Status.left.value should include(
+              "Must wait for more blocks from other validators"
+            )
+          } yield ()
+      }
+  }
+
+  it should "allow proposals with enough new blocks from other validators" in effectTest {
+    TestNode
+      .networkEff(genesis, networkSize = 5, synchronyConstraintThreshold = 1d / 3d)
+      .use {
+        case nodes @ n1 +: n2 +: n3 +: _ +: _ +: Seq() =>
+          import n1.{logEff, metricEff, span, timeEff}
+          val engine = new EngineWithCasper[Task](n1.casperEff)
+          for {
+            deploys      <- (0 until 4).toList.traverse(i => basicDeployData[Task](i))
+            engineCell   <- Cell.mvarCell[Task, Engine[Task]](engine)
+            blockApiLock <- Semaphore[Effect](1)
+
+            b1 <- n1.publishBlock(deploys(0))(nodes: _*)
+            b2 <- n2.publishBlock(deploys(1))(nodes: _*)
+            b3 <- n3.publishBlock(deploys(2))(nodes: _*)
+            _  <- n1.syncWith(n2, n3)
+
+            _        <- n1.casperEff.addDeploy(deploys(3))
+            b4Status <- createBlock(blockApiLock)(engineCell)
+
+            _ = b4Status shouldBe a[Right[_, String]]
+          } yield ()
+      }
+  }
+
+  it should "check for new deploys before checking synchrony constraint" in effectTest {
+    TestNode
+      .networkEff(genesis, networkSize = 5, synchronyConstraintThreshold = 1d / 3d)
+      .use {
+        case nodes @ n1 +: n2 +: _ +: _ +: _ +: Seq() =>
+          import n1.{logEff, metricEff, span, timeEff}
+          val engine = new EngineWithCasper[Task](n1.casperEff)
+          for {
+            deploys      <- (0 until 3).toList.traverse(i => basicDeployData[Task](i))
+            engineCell   <- Cell.mvarCell[Task, Engine[Task]](engine)
+            blockApiLock <- Semaphore[Effect](1)
+
+            b1 <- n1.publishBlock(deploys(0))(nodes: _*)
+            b2 <- n2.publishBlock(deploys(1))(nodes: _*)
+
+            b3Status <- createBlock(blockApiLock)(engineCell)
+
+            _ = b3Status.left.value should include("NoNewDeploys")
+          } yield ()
+      }
   }
 }
 
@@ -99,17 +199,17 @@ private class SleepingMultiParentCasperImpl[F[_]: Monad: Time](underlying: Multi
   def addBlock(
       b: BlockMessage,
       handleDoppelganger: (BlockMessage, Validator) => F[Unit]
-  ): F[BlockStatus]                                           = underlying.addBlock(b, ignoreDoppelgangerCheck[F])
-  def contains(b: BlockMessage): F[Boolean]                   = underlying.contains(b)
+  ): F[ValidBlockProcessing]                                  = underlying.addBlock(b, ignoreDoppelgangerCheck[F])
+  def contains(blockHash: BlockHash): F[Boolean]              = underlying.contains(blockHash)
   def deploy(d: DeployData): F[Either[DeployError, DeployId]] = underlying.deploy(d)
   def estimator(dag: BlockDagRepresentation[F]): F[IndexedSeq[BlockHash]] =
     underlying.estimator(dag)
   def blockDag: F[BlockDagRepresentation[F]] = underlying.blockDag
   def normalizedInitialFault(weights: Map[Validator, Long]): F[Float] =
     underlying.normalizedInitialFault(weights)
-  def lastFinalizedBlock: F[BlockMessage]             = underlying.lastFinalizedBlock
-  def getRuntimeManager: F[Option[RuntimeManager[F]]] = underlying.getRuntimeManager
-  def fetchDependencies: F[Unit]                      = underlying.fetchDependencies
+  def lastFinalizedBlock: F[BlockMessage]     = underlying.lastFinalizedBlock
+  def getRuntimeManager: F[RuntimeManager[F]] = underlying.getRuntimeManager
+  def fetchDependencies: F[Unit]              = underlying.fetchDependencies
 
   override def createBlock: F[CreateBlockStatus] =
     for {

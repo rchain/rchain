@@ -1,31 +1,18 @@
 package coop.rchain.node.diagnostics
 
-import cats.effect.Sync
+import cats.effect.{ExitCase, Sync}
 import cats.implicits._
 import cats.mtl.ApplicativeLocal
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.metrics.Metrics.Source
+import coop.rchain.node.NodeCallCtx
 import kamon.Kamon
 import kamon.trace.{Span => KSpan}
+import monix.execution.atomic.AtomicLong
+
+import scala.collection.concurrent.TrieMap
 
 private object KamonTracer {
-  def start[F[_]: Sync](source: Source, networkId: String, host: String): F[KSpan] = Sync[F].delay {
-    Kamon
-      .buildSpan(source)
-      .withTag("network-id", networkId)
-      .withTag("host", host)
-      .start()
-  }
-  def start[F[_]: Sync](source: Source, parent: KSpan, networkId: String, host: String): F[KSpan] =
-    Sync[F].delay {
-      Kamon
-        .buildSpan(source)
-        .withTag("network-id", networkId)
-        .withTag("host", host)
-        .asChildOf(parent)
-        .start()
-    }
-
   def end[F[_]: Sync](span: KSpan): F[Unit] =
     Sync[F].delay { span.finish() }
   def mark[F[_]: Sync](span: KSpan, mark: String): F[Unit] =
@@ -35,16 +22,45 @@ private object KamonTracer {
 trait Trace
 
 object Trace {
-  private[diagnostics] final case class DefaultTrace(s: Source) extends Trace
-  private[diagnostics] final case class KamonTrace(s: KSpan)    extends Trace
+  private[diagnostics] final case class SourceTrace(
+      s: Source,
+      networkId: String,
+      host: String,
+      parent: Option[SourceTrace] = None
+  ) extends Trace {
+    lazy val ks: KSpan = {
+      parent match {
+        case Some(st) =>
+          Kamon
+            .buildSpan(s)
+            .withTag("network-id", networkId)
+            .withTag("host", host)
+            .asChildOf(st.ks)
+            .start()
+        case None =>
+          Kamon
+            .buildSpan(s)
+            .withTag("network-id", networkId)
+            .withTag("host", host)
+            .start()
+      }
+    }
 
-  def source(s: Source): Trace = DefaultTrace(s)
-  def kamon(s: KSpan): Trace   = KamonTrace(s)
+    def mark[F[_]: Sync](name: String): F[Unit] = KamonTracer.mark(ks, name)
+    def end[F[_]: Sync](): F[Unit]              = KamonTracer.end(ks)
+  }
+
+  def source(s: Source, networkId: String, host: String): Trace = SourceTrace(s, networkId, host)
+
+  def next: TraceId   = TraceId(counter.incrementAndGet())
+  private val counter = AtomicLong(0L)
+
+  final case class TraceId(id: Long) extends AnyVal
 }
 
 package object effects {
 
-  type AskTrace[F[_]] = ApplicativeLocal[F, Trace]
+  type AskTrace[F[_]] = ApplicativeLocal[F, NodeCallCtx]
   object AskTrace {
     def apply[F[_]](implicit ev: AskTrace[F]): AskTrace[F] = ev
   }
@@ -61,28 +77,37 @@ package object effects {
       import A._
       import Trace._
 
-      override def mark(name: String): F[Unit] = {
-        ask.map {
-          case DefaultTrace(source) =>
-            trace(source) {
-              mark(name)
-            }
-          case KamonTrace(ks) => ks.mark(name)
+      private val spans: TrieMap[TraceId, SourceTrace] = TrieMap.empty
+
+      override def mark(name: String): F[Unit] =
+        ask.flatMap { e =>
+          spans.get(e.trace).map(_.mark(name)).getOrElse(Sync[F].unit)
         }
-      }.as(())
 
       override def trace[A](source: Source)(block: F[A]): F[A] =
         for {
-          span <- ask
-          r <- Sync[F].bracket((span match {
-                case DefaultTrace(_) => KamonTracer.start[F](source, networkId, host)
-                case KamonTrace(ks)  => KamonTracer.start[F](source, ks, networkId, host)
-              }).map(kamon)) {
-                scope(_)(block)
-              } {
-                case KamonTrace(ks) => KamonTracer.end(ks)
+          r <- Sync[F].bracket(ask.map { parentEnvironment =>
+                val parent      = spans.get(parentEnvironment.trace)
+                val environment = parentEnvironment.next
+                spans
+                  .putIfAbsent(environment.trace, SourceTrace(source, networkId, host, parent))
+                  .map(_ => environment)
+                  .getOrElse(environment)
+              })(scope(_)(withMarks("trace")(block))) { environment =>
+                Sync[F]
+                  .delay(spans.remove(environment.trace))
+                  .flatMap(_.map(_.end()).getOrElse(Sync[F].unit))
               }
         } yield r
+
+      override def withMarks[A](label: String)(block: F[A]): F[A] =
+        Sync[F].bracketCase(
+          mark(s"started-$label")
+        )(_ => block) {
+          case (_, ExitCase.Completed) => mark(s"finished-$label")
+          case (_, ExitCase.Error(_))  => mark(s"failed-$label")
+          case (_, ExitCase.Canceled)  => mark(s"cancelled-$label")
+        }
     }
 
   def metrics[F[_]: Sync]: Metrics[F] =

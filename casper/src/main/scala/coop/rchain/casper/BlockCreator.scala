@@ -3,7 +3,9 @@ package coop.rchain.casper
 import cats.Monad
 import cats.effect.Sync
 import cats.implicits._
-import coop.rchain.blockstorage.{BlockDagRepresentation, BlockStore}
+import com.google.protobuf.ByteString
+import coop.rchain.blockstorage.BlockStore
+import coop.rchain.blockstorage.dag.BlockDagRepresentation
 import coop.rchain.casper.CasperState.CasperStateCell
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.ProtoUtil._
@@ -14,6 +16,7 @@ import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.{PrivateKey, PublicKey}
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.models.BlockHash.BlockHash
+import coop.rchain.models.BlockMetadata
 import coop.rchain.models.Validator.Validator
 import coop.rchain.rholang.interpreter.Runtime.BlockData
 import coop.rchain.rholang.interpreter.accounting
@@ -34,12 +37,10 @@ object BlockCreator {
    *  3. Extract all valid deploys that aren't already in all ancestors of S (the parents).
    *  4. Create a new block that contains the deploys from the previous step.
    */
-  def createBlock[F[_]: Sync: Log: Time: BlockStore](
+  def createBlock[F[_]: Sync: Log: Time: BlockStore: SynchronyConstraintChecker](
       dag: BlockDagRepresentation[F],
       genesis: BlockMessage,
-      publicKey: PublicKey,
-      privateKey: PrivateKey,
-      sigAlgorithm: String,
+      validatorIdentity: ValidatorIdentity,
       shardId: String,
       version: Long,
       expirationThreshold: Int,
@@ -50,56 +51,71 @@ object BlockCreator {
       spanF: Span[F]
   ): F[CreateBlockStatus] =
     spanF.trace(CreateBlockMetricsSource) {
+      val validator = ByteString.copyFrom(validatorIdentity.publicKey.bytes)
       for {
         tipHashes             <- Estimator.tips[F](dag, genesis)
         _                     <- spanF.mark("after-estimator")
-        parents               <- EstimatorHelper.chooseNonConflicting[F](tipHashes, dag)
-        maxBlockNumber        = ProtoUtil.maxBlockNumber(parents)
+        parentMetadatas       <- EstimatorHelper.chooseNonConflicting[F](tipHashes, dag)
+        maxBlockNumber        = ProtoUtil.maxBlockNumberMetadata(parentMetadatas)
         invalidLatestMessages <- ProtoUtil.invalidLatestMessages[F](dag)
         slashingDeploys <- invalidLatestMessages.values.toList.traverse { invalidBlockHash =>
                             val encodedInvalidBlockHash =
                               Base16.encode(invalidBlockHash.toByteArray)
+                            // TODO: Do something useful with the result of "slash".
                             ConstructDeploy.sourceDeployNowF(
                               s"""
-                               #new rl(`rho:registry:lookup`), posCh in {
+                               #new rl(`rho:registry:lookup`), deployerId(`rho:rchain:deployerId`), posCh in {
                                #  rl!(`rho:rchain:pos`, *posCh) |
                                #  for(@(_, PoS) <- posCh) {
-                               #    @PoS!("slash", "$encodedInvalidBlockHash".hexToBytes(), "IGNOREFORNOW")
+                               #    @PoS!("slash", *deployerId, "$encodedInvalidBlockHash".hexToBytes(), "IGNOREFORNOW")
                                #  }
                                #}
                                #
                             """.stripMargin('#'),
                               phloPrice = 0,
-                              sec = privateKey
+                              sec = validatorIdentity.privateKey
                             )
                           }
         _ <- Cell[F, CasperState].modify { s =>
               s.copy(deployHistory = s.deployHistory ++ slashingDeploys)
             }
         _                <- updateDeployHistory[F](state, maxBlockNumber)
-        deploys          <- extractDeploys[F](dag, parents, maxBlockNumber, expirationThreshold)
+        deploys          <- extractDeploys[F](dag, parentMetadatas, maxBlockNumber, expirationThreshold)
+        parents          <- parentMetadatas.toList.traverse(p => ProtoUtil.getBlock[F](p.blockHash))
         justifications   <- computeJustifications[F](dag, parents)
         now              <- Time[F].currentMillis
         invalidBlocksSet <- dag.invalidBlocks
         invalidBlocks    = invalidBlocksSet.map(block => (block.blockHash, block.sender)).toMap
-        unsignedBlock <- if (deploys.nonEmpty || parents.length > 1) {
-                          processDeploysAndCreateBlock[F](
-                            dag,
-                            runtimeManager,
-                            parents,
-                            deploys,
-                            justifications,
-                            maxBlockNumber,
-                            shardId,
-                            version,
-                            now,
-                            invalidBlocks
-                          )
+        unsignedBlock <- if (deploys.nonEmpty) {
+                          SynchronyConstraintChecker[F]
+                            .check(dag, runtimeManager, genesis, validator)
+                            .ifM(
+                              processDeploysAndCreateBlock[F](
+                                dag,
+                                runtimeManager,
+                                parents,
+                                deploys,
+                                justifications,
+                                maxBlockNumber,
+                                shardId,
+                                version,
+                                now,
+                                invalidBlocks
+                              ),
+                              CreateBlockStatus.notEnoughNewBlocks.pure[F]
+                            )
                         } else {
                           CreateBlockStatus.noNewDeploys.pure[F]
                         }
         signedBlock <- unsignedBlock.mapF(
-                        signBlock(_, dag, publicKey, privateKey, sigAlgorithm, shardId)
+                        signBlock(
+                          _,
+                          dag,
+                          validatorIdentity.publicKey,
+                          validatorIdentity.privateKey,
+                          validatorIdentity.sigAlgorithm,
+                          shardId
+                        )
                       )
         _ <- spanF.mark("block-signed")
       } yield signedBlock
@@ -119,7 +135,7 @@ object BlockCreator {
   ): F[Unit] = {
     def updateDeployValidAfterBlock(deployData: DeployData, max: Long): DeployData =
       if (deployData.validAfterBlockNumber == -1)
-        deployData.withValidAfterBlockNumber(max)
+        deployData.copy(validAfterBlockNumber = max)
       else
         deployData
 
@@ -132,9 +148,9 @@ object BlockCreator {
   }
 
   // TODO: Remove no longer valid deploys here instead of with lastFinalizedBlock call
-  private def extractDeploys[F[_]: Monad: Log: Time: BlockStore](
+  private def extractDeploys[F[_]: Sync: Log: Time: BlockStore](
       dag: BlockDagRepresentation[F],
-      parents: Seq[BlockMessage],
+      parents: Seq[BlockMetadata],
       maxBlockNumber: Long,
       expirationThreshold: Int
   )(implicit state: CasperStateCell[F]): F[Seq[DeployData]] =
@@ -146,17 +162,19 @@ object BlockCreator {
       validDeploys = deploys.filter(
         d => notFutureDeploy(currentBlockNumber, d) && notExpiredDeploy(earliestBlockNumber, d)
       )
-      deploysInCurrentChain <- DagOperations
-                                .bfTraverseF[F, BlockMessage](parents.toList)(
-                                  b =>
-                                    ProtoUtil
-                                      .unsafeGetParentsAboveBlockNumber[F](b, earliestBlockNumber)
-                                )
-                                .map { b =>
-                                  ProtoUtil.deploys(b).flatMap(_.deploy)
-                                }
-                                .toList
-    } yield (validDeploys -- deploysInCurrentChain.flatten).toSeq
+      result <- DagOperations
+                 .bfTraverseF[F, BlockMetadata](parents.toList)(
+                   b =>
+                     ProtoUtil
+                       .getParentMetadatasAboveBlockNumber[F](b, earliestBlockNumber, dag)
+                 )
+                 .foldLeftF(validDeploys) { (deploys, blockMetadata) =>
+                   for {
+                     block        <- ProtoUtil.getBlock[F](blockMetadata.blockHash)
+                     blockDeploys = ProtoUtil.deploys(block).map(_.deploy)
+                   } yield deploys -- blockDeploys
+                 }
+    } yield result.toSeq
 
   private def notExpiredDeploy(earliestBlockNumber: Long, d: DeployData): Boolean =
     d.validAfterBlockNumber > earliestBlockNumber
@@ -240,8 +258,7 @@ object BlockCreator {
         case InternalProcessedDeploy(deploy, _, _, _, InternalErrors(errors)) =>
           val errorsMessage = errors.map(_.getMessage).mkString("\n")
           Log[F].error(
-            s"Internal error encountered while processing deploy ${PrettyPrinter
-              .buildString(deploy)}: $errorsMessage"
+            s"Internal error encountered while processing deploy '$deploy': $errorsMessage"
           )
         case _ => ().pure[F]
       }
@@ -258,17 +275,9 @@ object BlockCreator {
       shardId: String,
       version: Long
   ): CreateBlockStatus = {
-    val postState = RChainState()
-      .withPreStateHash(preStateHash)
-      .withPostStateHash(postStateHash)
-      .withBonds(newBonds)
-      .withBlockNumber(maxBlockNumber + 1)
+    val postState = RChainState(preStateHash, postStateHash, newBonds.toList, maxBlockNumber + 1)
 
-    val body = Body()
-      .withState(postState)
-      .withDeploys(
-        persistableDeploys.map(_.toProcessedDeploy)
-      )
+    val body   = Body(postState, persistableDeploys.map(_.toProcessedDeploy).toList)
     val header = blockHeader(body, p.map(_.blockHash), version, now)
     val block  = unsignedBlockProto(body, header, justifications, shardId)
     CreateBlockStatus.created(block)

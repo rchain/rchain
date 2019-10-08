@@ -82,38 +82,75 @@ new  Either, rs(`rho:registry:insertSigned:secp256k1`), uriOut, rl(`rho:registry
 
     // Like productR, except it takes `aCh` and `bCh` and reads them to obtain the `a` and `b` parameters
     contract Either(@"productR <-", aCh, bCh, return) = {
-      for (@a <- aCh; @b <- bCh) {
-        Either!("productR", a, b, *return)
-      }
-    } |
-
-    // Combines two eithers, discarding the first value and keeping the second
-    contract Either(@"productR", @a, @b, return) = {
-      new snd in {
-        Either!("map2", a, b, *snd, *return) |
-        for (@a, @b, ret <- snd) {
-          ret!(b)
+      for (@a <- aCh) {
+        for (@b <- bCh) {
+          Either!("productR", a, b, *return)
         }
       }
     } |
 
+    // Combines two eithers, discarding the first Right value and keeping the second.  Propagates Lefts.
+    contract Either(@"productR", @a, @b, return) = {
+      match (a, b) {
+        ((false, _), _) => return!(a)
+        _ => return!(b)
+      }
+    } |
+
     // Like map2, except it takes `aCh` and `bCh` and reads them to obtain the `a` and `b` parameters
-    contract Either(@"map2 <-", aCh, bCh, f, return) = {
-      for (@a <- aCh; @b <- bCh) {
-        Either!("map2", a, b, *f, *return)
+    contract Either(@"map2 <-", aCh, bCh, @f, return) = {
+      for (@a <- aCh) {
+        for (@b <- bCh) {
+          Either!("map2", a, b, f, *return)
+        }
+      }
+    } |
+
+    // Like map2Clean, except it takes `aCh` and `bCh` and reads them to obtain the `a` and `b` parameters
+    contract Either(@"map2Clean <-", aCh, bCh, @f, @state, return) = {
+      for (@a <- aCh) {
+        for (@b <- bCh) {
+          Either!("map2Clean", a, b, f, state, *return)
+        }
       }
     } |
 
     // Composes two eithers `a: A` and `b: B` using the function `f`. See cats.Apply.map2 for details.`
-    contract Either(@"map2", @a, @b, f, return) = {
+    contract Either(@"map2", @a, @b, @f, return) = {
       match (a, b) {
         ((false, _), _)               => return!(a)
         (_, (false, _))               => return!(b)
         ((true, va), (true, vb)) => {
           new ret in {
-            f!(va, vb, *ret) |
-            for (@v <- ret) {
-              return!((true, v))
+            match f {
+              { for (x, y, r <- fName) { _ } } => {
+                f |
+                fName!(va, vb, *ret) |
+                for (@v <- ret) {
+                  return!((true, v))
+                }
+              }
+            }
+          }
+        }
+      }
+    } |
+
+    // Like map2, but allows passing state to f instead of making f close over it.
+    contract Either(@"map2Clean", @a, @b, @f, @state, return) = {
+      match (a, b) {
+        ((false, _), _)               => return!(a)
+        (_, (false, _))               => return!(b)
+        ((true, va), (true, vb)) => {
+          new ret in {
+            match f {
+              { for (@state, x, y, r <- fName) { _ } } => {
+                f |
+                fName!(state, va, vb, *ret) |
+                for (@v <- ret) {
+                  return!((true, v))
+                }
+              }
             }
           }
         }
@@ -127,6 +164,13 @@ new  Either, rs(`rho:registry:insertSigned:secp256k1`), uriOut, rl(`rho:registry
       }
     } |
 
+    // Like flatMapClean, except it takes `eitherCh` and reads it to obtain the `either` parameter
+    contract Either(@"flatMapClean <-", eitherCh, f, @state, return) = {
+      for (@either <- eitherCh) {
+        Either!("flatMapClean", either, *f, state, *return)
+      }
+    } |
+
     // Right-biased flatMap; f must also return an Either
     contract Either(@"flatMap", @either, f, return) = {
       match either {
@@ -135,10 +179,25 @@ new  Either, rs(`rho:registry:insertSigned:secp256k1`), uriOut, rl(`rho:registry
       }
     } |
 
+    // Like flatMap, except it allows passing state to f instead of making f close over it.
+    contract Either(@"flatMapClean", @either, f, @state, return) = {
+      match either {
+        (true, value) => { f!(state, value, *return) }
+        (false, _)      => { return!(either) }
+      }
+    } |
+
     // Like map, except it takes `eitherCh` and reads it to obtain the `either` parameter
     contract Either(@"map <-", eitherCh, f, return) = {
       for (@either <- eitherCh) {
         Either!("map", either, *f, *return)
+      }
+    } |
+
+    // Like mapClean, except it takes `eitherCh` and reads it to obtain the `either` parameter
+    contract Either(@"mapClean <-", eitherCh, f, @state, return) = {
+      for (@either <- eitherCh) {
+        Either!("mapClean", either, *f, state, *return)
       }
     } |
 
@@ -157,20 +216,47 @@ new  Either, rs(`rho:registry:insertSigned:secp256k1`), uriOut, rl(`rho:registry
       }
     } |
 
-    // Composes a list of functions returning Either into a
-    // single result by using flatMap. Similar to following Scala code:
-    // for {
-    //   r0 <- Right(input)
-    //   r1 <- f1(r0)
-    //   r2 <- f2(r1)
-    //   ...
-    // } yield fn
-    contract Either(@"compose", @input, @functions, return) = {
-      new combinator in {
-        contract combinator(@head, @accumulatedValue, return) = {
-          Either!("flatMap", accumulatedValue, head, *return)
-        } |
-        @ListOps!("fold", functions, (true, input), *combinator, *return)
+    // Like map, except it allows passing state to f instead of making f close over it.
+    contract Either(@"mapClean", @either, f, @state, return) = {
+      match either {
+        (true, value) => {
+          new mappedResultCh in {
+            f!(state, value, *mappedResultCh) |
+            for(@mappedResult <- mappedResultCh) {
+              return!((true, mappedResult))
+            }
+          }
+        }
+        (false, _) => return!(either)
+      }
+    } |
+
+    new combinator in {
+      contract combinator(_, @head, @accumulatedValue, return) = {
+        Either!("flatMap", accumulatedValue, head, *return)
+      } |
+
+      // Composes a list of functions returning Either into a
+      // single result by using flatMap. Similar to following Scala code:
+      // for {
+      //   r0 <- Right(input)
+      //   r1 <- f1(r0)
+      //   r2 <- f2(r1)
+      //   ...
+      // } yield fn
+      contract Either(@"compose", @input, @functions, return) = {
+        @ListOps!("foldClean", functions, (true, input), *combinator, Nil, *return)
+      }
+    } |
+
+    new combinator in {
+      contract combinator(_, @(function, state), @accumulatedValue, return) = {
+        Either!("flatMapClean", accumulatedValue, function, state, *return)
+      } |
+
+      // Like compose, but allows passing state to each f in the list instead of making f close over it
+      contract Either(@"composeClean", @input, @functionStatePairs, return) = {
+        @ListOps!("foldClean", functionStatePairs, (true, input), *combinator, Nil, *return)
       }
     }
   } |

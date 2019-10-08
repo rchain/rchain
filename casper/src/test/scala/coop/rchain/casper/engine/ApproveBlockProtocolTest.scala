@@ -8,12 +8,14 @@ import coop.rchain.casper.engine.ApproveBlockProtocolTest.TestFixture
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.GenesisBuilder._
 import coop.rchain.casper.util.TestTime
+import coop.rchain.casper.util.comm.CommUtil
 import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.comm._
 import coop.rchain.comm.rp.Connect.Connections
 import coop.rchain.crypto.hash.Blake2b256
 import coop.rchain.crypto.signatures.Secp256k1
 import coop.rchain.crypto.{PrivateKey, PublicKey}
+import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.p2p.EffectsTestInstances._
 import coop.rchain.shared.{Cell, _}
 import monix.eval.Task
@@ -298,21 +300,21 @@ object ApproveBlockProtocolTest {
       validatorSk: PrivateKey,
       validatorPk: PublicKey
   ): BlockApproval = {
-    val sigData = Blake2b256.hash(c.toByteArray)
+    val sigData = Blake2b256.hash(c.toProto.toByteArray)
     val sig     = Secp256k1.sign(sigData, validatorSk)
     BlockApproval(
-      Some(c),
-      Some(Signature(ByteString.copyFrom(validatorPk.bytes), "secp256k1", ByteString.copyFrom(sig)))
+      c,
+      Signature(ByteString.copyFrom(validatorPk.bytes), "secp256k1", ByteString.copyFrom(sig))
     )
   }
 
   def invalidApproval(c: ApprovedBlockCandidate): BlockApproval = {
     val (sk, pk) = Secp256k1.newKeyPair
-    val sigData  = Blake2b256.hash(c.toByteArray ++ "wrong data".toArray.map(_.toByte))
+    val sigData  = Blake2b256.hash(c.toProto.toByteArray ++ "wrong data".toArray.map(_.toByte))
     val sig      = Secp256k1.sign(sigData, sk)
     BlockApproval(
-      Some(c),
-      Some(Signature(ByteString.copyFrom(pk.bytes), "secp256k1", ByteString.copyFrom(sig)))
+      c,
+      Signature(ByteString.copyFrom(pk.bytes), "secp256k1", ByteString.copyFrom(sig))
     )
   }
 
@@ -341,6 +343,9 @@ object ApproveBlockProtocolTest {
     implicit val ctx             = monix.execution.Scheduler.Implicits.global
     implicit val connectionsCell = Cell.mvarCell[Task, Connections](List(src)).unsafeRunSync
     implicit val lab             = LastApprovedBlock.unsafe[Task](None)
+    implicit val requestedBlocks =
+      Cell.unsafe[Task, Map[BlockHash, Running.Requested]](Map.empty[BlockHash, Running.Requested])
+    implicit val commUtil = CommUtil.of[Task]
 
     val genesis = buildGenesis(
       buildGenesisParameters(
@@ -348,7 +353,7 @@ object ApproveBlockProtocolTest {
         createBonds(validatorKeyPairs.map(_._2))
       )
     ).genesisBlock
-    val candidate = ApprovedBlockCandidate(Some(genesis), requiredSigs)
+    val candidate = ApprovedBlockCandidate(genesis, requiredSigs)
     val sigs      = Ref.unsafe[Task, Set[Signature]](Set.empty)
     val startTime = System.currentTimeMillis()
 

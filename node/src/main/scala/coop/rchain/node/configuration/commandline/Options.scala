@@ -308,11 +308,6 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
       descr = "Path to the base16 encoded private key to use for signing a proposed blocks."
     )
 
-    val validatorSigAlgorithm = opt[String](
-      descr = "Name of the algorithm to use for signing proposed blocks. " +
-        "Currently supported values: ed25519"
-    )
-
     val shardId = opt[String](
       descr = "Identifier of the shard this node is connected to."
     )
@@ -320,6 +315,12 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
     val faultToleranceThreshold = opt[Float](
       descr = "Float value representing that the node tolerates up " +
         "to fault-tolerance-threshold fraction of the total weight to equivocate."
+    )
+
+    val synchronyConstraintThreshold = opt[Float](
+      descr = "Float value representing that the node waits until at least " +
+        "synchrony-constraint-threshold fraction of the validators (by stake weight) " +
+        "proposed at least one block since this node's last proposal."
     )
   }
   addSubcommand(run)
@@ -347,6 +348,18 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
   }
   addSubcommand(lastFinalizedBlock)
 
+  val isFinalized = new Subcommand("is-finalized") {
+    descr(
+      "Check if the given block has been finalized by Casper on an existing running node."
+    )
+
+    val hash = trailArg[String](
+      descr = "The hash value of the block to check",
+      required = true
+    )
+  }
+  addSubcommand(isFinalized)
+
   val repl = new Subcommand("repl") {
     descr("Starts a thin client, that will connect to existing node. See grpcHost and grpcPort.")
   }
@@ -357,7 +370,8 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
       "Starts a thin client that will evaluate rholang in file on a existing running node. See grpcHost and grpcPort."
     )
 
-    val fileNames = trailArg[List[String]](required = true)(stringListConverter)
+    val fileNames               = trailArg[List[String]](required = true)(stringListConverter)
+    val printUnmatchedSendsOnly = opt[Boolean](required = false)
   }
   addSubcommand(eval)
 
@@ -511,6 +525,8 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
     descr(
       "Force Casper (on an existing running node) to propose a block based on its accumulated deploys."
     )
+
+    val printUnmatchedSends = opt[Boolean](required = false)
   }
   addSubcommand(propose)
 

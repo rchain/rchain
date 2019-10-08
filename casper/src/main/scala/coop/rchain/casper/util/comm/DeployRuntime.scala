@@ -30,8 +30,10 @@ import coop.rchain.shared.ThrowableOps._
 
 object DeployRuntime {
 
-  def propose[F[_]: Monad: Sync: ProposeService](): F[Unit] =
-    gracefulExit(ProposeService[F].propose().map(r => r.map(rs => s"Response: $rs")))
+  def propose[F[_]: Monad: Sync: ProposeService](printUnmatchedSends: Boolean): F[Unit] =
+    gracefulExit(
+      ProposeService[F].propose(printUnmatchedSends).map(r => r.map(rs => s"Response: $rs"))
+    )
 
   def getBlock[F[_]: Monad: Sync: DeployService](hash: String): F[Unit] =
     gracefulExit(DeployService[F].getBlock(BlockQuery(hash)))
@@ -92,23 +94,28 @@ object DeployRuntime {
             timestamp <- Sync[F].delay(System.currentTimeMillis())
 
             //TODO: allow user to specify their public key
-            d = DeployData()
-              .withTimestamp(timestamp)
-              .withTerm(code)
-              .withPhloLimit(phloLimit)
-              .withPhloPrice(phloPrice)
-              .withValidAfterBlockNumber(validAfterBlock)
-              .withTimestamp(timestamp)
+            d = DeployData(
+              deployer = ByteString.EMPTY,
+              term = code,
+              timestamp = timestamp,
+              sig = ByteString.EMPTY,
+              sigAlgorithm = "",
+              phloPrice = phloPrice,
+              phloLimit = phloLimit,
+              validAfterBlockNumber = validAfterBlock
+            )
 
             signedData = maybePrivateKey.fold(d)(SignDeployment.sign(_, d))
-
-            response <- DeployService[F].deploy(signedData)
+            response   <- DeployService[F].deploy(signedData)
           } yield response.map(r => s"Response: $r")
       }
     )
 
   def lastFinalizedBlock[F[_]: Sync: DeployService]: F[Unit] =
     gracefulExit(DeployService[F].lastFinalizedBlock)
+
+  def isFinalized[F[_]: Sync: DeployService](blockHash: String): F[Unit] =
+    gracefulExit(DeployService[F].isFinalized(IsFinalizedQuery(hash = blockHash)))
 
   private def gracefulExit[F[_]: Monad: Sync, A](
       program: F[Either[Seq[String], String]]

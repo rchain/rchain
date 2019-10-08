@@ -39,7 +39,8 @@ class ConfigMapperSpec extends FunSuite with Matchers {
         "--max-message-size 256",
         "--max-stream-message-size 200",
         "--message-consumers 8",
-        "--fault-tolerance-threshold 0.2"
+        "--fault-tolerance-threshold 0.2",
+        "--synchrony-constraint-threshold 0.0"
       ).mkString(" ")
 
     val options = Options(args.split(' '))
@@ -73,7 +74,8 @@ class ConfigMapperSpec extends FunSuite with Matchers {
         maxStreamMessageSize = 200,
         packetChunkSize = 64,
         messageConsumers = 8,
-        faultToleranceThreshold = 0.2f
+        faultToleranceThreshold = 0.2f,
+        synchronyConstraintThreshold = 0.0d
       )
 
     val server = hocon.Server.fromConfig(config)
@@ -164,7 +166,6 @@ class ConfigMapperSpec extends FunSuite with Matchers {
         "--validator-public-key 111111111111",
         "--validator-private-key 222222222222",
         "--validator-private-key-path /root/pk.pem",
-        "--validator-sig-algorithm ed25519",
         "--bonds-file /root/bonds.txt",
         "--known-validators /root/validators.txt",
         "--num-validators 5",
@@ -189,7 +190,6 @@ class ConfigMapperSpec extends FunSuite with Matchers {
       CasperConf(
         publicKeyBase16 = Some("111111111111"),
         privateKey = Some(Right(Paths.get("/root/pk.pem"))),
-        sigAlgorithm = "ed25519",
         bondsFile = Some("/root/bonds.txt"),
         knownValidatorsFile = Some("/root/validators.txt"),
         numValidators = 5,

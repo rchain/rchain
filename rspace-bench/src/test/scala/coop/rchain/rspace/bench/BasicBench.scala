@@ -13,8 +13,7 @@ import coop.rchain.models.TaggedContinuation.TaggedCont.ParBody
 import coop.rchain.models._
 import coop.rchain.rholang.interpreter.accounting._
 import coop.rchain.rholang.interpreter.errors.InterpreterError
-import coop.rchain.rspace._
-import coop.rchain.rspace.{RSpace, ReplayRSpace}
+import coop.rchain.rspace.{Match, RSpace, ReplayRSpace, _}
 import coop.rchain.rspace.history.Branch
 import coop.rchain.shared.Log
 import coop.rchain.shared.PathOps.RichPath
@@ -48,14 +47,14 @@ class BasicBench {
           state.patterns(i) :: Nil,
           state.tc.head,
           false
-        )(state.matcher)
+        )
         .unsafeRunSync
 
       assert(c1.isEmpty)
       bh.consume(c1)
 
       val r2 =
-        space.produce(state.channels(i), state.data(i), false)(state.matcher).unsafeRunSync
+        space.produce(state.channels(i), state.data(i), false).unsafeRunSync
 
       assert(r2.nonEmpty)
       bh.consume(r2)
@@ -74,7 +73,7 @@ class BasicBench {
     val space = state.testSpace
     for (i <- 0 to 100) {
       val r2 =
-        space.produce(state.channels(i), state.data(i), false)(state.matcher).unsafeRunSync
+        space.produce(state.channels(i), state.data(i), false).unsafeRunSync
 
       assert(r2.isEmpty)
       bh.consume(r2)
@@ -85,7 +84,7 @@ class BasicBench {
           state.patterns(i) :: Nil,
           state.tc.head,
           false
-        )(state.matcher)
+        )
         .unsafeRunSync
 
       assert(c1.nonEmpty)
@@ -106,13 +105,14 @@ object BasicBench {
   class BenchState {
     val debug: Boolean = false
 
-    import coop.rchain.rholang.interpreter.storage.implicits._
-
-    implicit val syncF: Sync[Task]                 = Task.catsEffect
-    implicit val logF: Log[Task]                   = new Log.NOPLog[Task]
-    implicit val noopMetrics: Metrics[Task]        = new metrics.Metrics.MetricsNOP[Task]
-    implicit val noopSpan: Span[Task]              = NoopSpan[Task]()
-    implicit val contextShiftF: ContextShift[Task] = Task.contextShift
+    import coop.rchain.rholang.interpreter.storage._
+    implicit val syncF: Sync[Task]                              = Task.catsEffect
+    implicit val logF: Log[Task]                                = new Log.NOPLog[Task]
+    implicit val noopMetrics: Metrics[Task]                     = new metrics.Metrics.MetricsNOP[Task]
+    implicit val noopSpan: Span[Task]                           = NoopSpan[Task]()
+    implicit val m: Match[Task, BindPattern, ListParWithRandom] = matchListPar[Task]
+    implicit val contextShiftF: ContextShift[Task]              = Task.contextShift
+    implicit val ms: Metrics.Source                             = Metrics.BaseSource
 
     private val dbDir: Path = Files.createTempDirectory("rchain-storage-test-")
 
@@ -120,7 +120,6 @@ object BasicBench {
       Task,
       Par,
       BindPattern,
-      ListParWithRandom,
       ListParWithRandom,
       TaggedContinuation
     ] =
@@ -130,7 +129,6 @@ object BasicBench {
           Par,
           BindPattern,
           ListParWithRandom,
-          ListParWithRandom,
           TaggedContinuation
         ](
           dbDir,
@@ -139,8 +137,7 @@ object BasicBench {
         )
         .unsafeRunSync
 
-    implicit val cost    = CostAccounting.initialCost[Task](Cost.UNSAFE_MAX).unsafeRunSync
-    implicit val matcher = matchListPar
+    implicit val cost = CostAccounting.initialCost[Task](Cost.UNSAFE_MAX).unsafeRunSync
 
     val initSeed = 123456789L
 

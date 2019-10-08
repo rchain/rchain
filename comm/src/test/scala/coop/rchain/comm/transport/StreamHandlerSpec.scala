@@ -45,12 +45,12 @@ class StreamHandlerSpec extends FunSpec with Matchers with Inside with BeforeAnd
 
     it("should contain sender and message type information") {
       // given
-      val stream = createStream(typeId = BlockMessage.id)
+      val stream = createStream(typeId = "BlockMessageTest")
       // when
       val msg: StreamMessage = handleStream(stream)
       // then
       msg.sender shouldBe peerNode("sender")
-      msg.typeId shouldBe BlockMessage.id
+      msg.typeId shouldBe "BlockMessageTest"
     }
 
     it("should contain content length of the stored file") {
@@ -169,7 +169,7 @@ class StreamHandlerSpec extends FunSpec with Matchers with Inside with BeforeAnd
       messageSize: Int = 10 * 1024,
       contentLength: Int = 30 * 1024,
       sender: String = "sender",
-      typeId: String = BlockMessage.id
+      typeId: String = "BlockMessageTest"
   ): Observable[Chunk] =
     Observable.fromIterator(createStreamIterator(messageSize, contentLength, sender, typeId))
 
@@ -177,11 +177,11 @@ class StreamHandlerSpec extends FunSpec with Matchers with Inside with BeforeAnd
       messageSize: Int = 10 * 1024,
       contentLength: Int = 30 * 1024,
       sender: String = "sender",
-      typeId: String = BlockMessage.id
+      typeId: String = "BlockMessageTest"
   ): Task[Iterator[Chunk]] = {
 
     val content = Array.fill(contentLength)((Random.nextInt(256) - 128).toByte)
-    val packet  = Packet(BlockMessage.id, ByteString.copyFrom(content))
+    val packet  = Packet(typeId, ByteString.copyFrom(content))
     val sender  = peerNode("sender")
     val blob    = Blob(sender, packet)
     Chunker.chunkIt(networkId, blob, messageSize)

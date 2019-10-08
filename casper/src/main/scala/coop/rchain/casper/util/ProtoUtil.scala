@@ -7,7 +7,8 @@ import cats.effect.Sync
 import cats.implicits._
 import cats.{Applicative, Monad}
 import com.google.protobuf.{ByteString, Int32Value, StringValue}
-import coop.rchain.blockstorage.{BlockDagRepresentation, BlockStore}
+import coop.rchain.blockstorage.BlockStore
+import coop.rchain.blockstorage.dag.BlockDagRepresentation
 import coop.rchain.casper._
 import coop.rchain.casper.PrettyPrinter
 import coop.rchain.casper.protocol.{DeployData, _}
@@ -51,7 +52,7 @@ object ProtoUtil {
       } yield result
     }
 
-  def getMainChainUntilDepth[F[_]: Monad: BlockStore](
+  def getMainChainUntilDepth[F[_]: Sync: BlockStore](
       estimate: BlockMessage,
       acc: IndexedSeq[BlockMessage],
       depth: Int
@@ -62,7 +63,7 @@ object ProtoUtil {
       mainChain <- maybeMainParentHash match {
                     case Some(mainParentHash) =>
                       for {
-                        updatedEstimate <- unsafeGetBlock[F](mainParentHash)
+                        updatedEstimate <- getBlock[F](mainParentHash)
                         depthDelta      = blockNumber(updatedEstimate) - blockNumber(estimate)
                         newDepth        = depth + depthDelta.toInt
                         mainChain <- if (newDepth <= 0) {
@@ -80,16 +81,34 @@ object ProtoUtil {
     } yield mainChain
   }
 
-  @SuppressWarnings(Array("org.wartremover.warts.Throw")) // TODO remove throw
-  def unsafeGetBlock[F[_]: Monad: BlockStore](hash: BlockHash): F[BlockMessage] =
+  def getBlock[F[_]: Sync: BlockStore](hash: BlockHash): F[BlockMessage] =
     for {
       maybeBlock <- BlockStore[F].get(hash)
-      block = maybeBlock match {
-        case Some(b) => b
-        case None =>
-          throw new Exception(s"BlockStore is missing hash ${PrettyPrinter.buildString(hash)}")
-      }
+      block <- maybeBlock match {
+                case Some(b) => b.pure[F]
+                case None =>
+                  Sync[F].raiseError[BlockMessage](
+                    new Exception(s"BlockStore is missing hash ${PrettyPrinter.buildString(hash)}")
+                  )
+              }
     } yield block
+
+  def getBlockMetadata[F[_]: Sync](
+      hash: BlockHash,
+      dag: BlockDagRepresentation[F]
+  ): F[BlockMetadata] =
+    for {
+      maybeBlockMetadata <- dag.lookup(hash)
+      blockMetadata <- maybeBlockMetadata match {
+                        case Some(b) => b.pure[F]
+                        case None =>
+                          Sync[F].raiseError[BlockMetadata](
+                            new Exception(
+                              s"DAG storage is missing hash ${PrettyPrinter.buildString(hash)}"
+                            )
+                          )
+                      }
+    } yield blockMetadata
 
   def creatorJustification(block: BlockMessage): Option[Justification] =
     block.justifications
@@ -128,14 +147,7 @@ object ProtoUtil {
     } yield creatorJustificationAsList).fold(List.empty[BlockHash])(identity)
 
   def weightMap(blockMessage: BlockMessage): Map[ByteString, Long] =
-    blockMessage.body match {
-      case Some(block) =>
-        block.state match {
-          case Some(state) => weightMap(state)
-          case None        => Map.empty[ByteString, Long]
-        }
-      case None => Map.empty[ByteString, Long]
-    }
+    weightMap(blockMessage.body.state)
 
   private def weightMap(state: RChainState): Map[ByteString, Long] =
     state.bonds.map {
@@ -155,16 +167,11 @@ object ProtoUtil {
       sortedWeights.take(maxCliqueMinSize).sum
     }
 
-  def mainParent[F[_]: Monad: BlockStore](blockMessage: BlockMessage): F[Option[BlockMessage]] = {
-    val maybeParentHash = for {
-      hdr        <- blockMessage.header
-      parentHash <- hdr.parentsHashList.headOption
-    } yield parentHash
-    maybeParentHash match {
+  def mainParent[F[_]: Monad: BlockStore](blockMessage: BlockMessage): F[Option[BlockMessage]] =
+    blockMessage.header.parentsHashList.headOption match {
       case Some(parentHash) => BlockStore[F].get(parentHash)
       case None             => none[BlockMessage].pure[F]
     }
-  }
 
   def weightFromValidatorByDag[F[_]: Monad](
       dag: BlockDagRepresentation[F],
@@ -198,20 +205,29 @@ object ProtoUtil {
     weightFromValidator[F](b, b.sender)
 
   def parentHashes(b: BlockMessage): Seq[ByteString] =
-    b.header.fold(Seq.empty[ByteString])(_.parentsHashList)
+    b.header.parentsHashList
 
-  def unsafeGetParents[F[_]: Monad: BlockStore](b: BlockMessage): F[List[BlockMessage]] =
+  def getParents[F[_]: Sync: BlockStore](b: BlockMessage): F[List[BlockMessage]] =
     ProtoUtil.parentHashes(b).toList.traverse { parentHash =>
-      ProtoUtil.unsafeGetBlock[F](parentHash)
+      ProtoUtil.getBlock[F](parentHash)
     }
 
-  def unsafeGetParentsAboveBlockNumber[F[_]: Monad: BlockStore](
-      b: BlockMessage,
-      blockNumber: Long
-  ): F[List[BlockMessage]] =
+  def getParentsMetadata[F[_]: Sync](
+      b: BlockMetadata,
+      dag: BlockDagRepresentation[F]
+  ): F[List[BlockMetadata]] =
+    b.parents.traverse { parentHash =>
+      ProtoUtil.getBlockMetadata[F](parentHash, dag)
+    }
+
+  def getParentMetadatasAboveBlockNumber[F[_]: Sync](
+      b: BlockMetadata,
+      blockNumber: Long,
+      dag: BlockDagRepresentation[F]
+  ): F[List[BlockMetadata]] =
     ProtoUtil
-      .unsafeGetParents[F](b)
-      .map(parents => parents.filter(p => ProtoUtil.blockNumber(p) >= blockNumber))
+      .getParentsMetadata[F](b, dag)
+      .map(parents => parents.filter(p => p.blockNum >= blockNumber))
 
   def containsDeploy(b: BlockMessage, user: ByteString, timestamp: Long): Boolean =
     containsDeploy(
@@ -224,51 +240,40 @@ object ProtoUtil {
 
   private def containsDeploy(b: BlockMessage, predicate: DeployData => Boolean) =
     deploys(b).toStream
-      .flatMap(getDeployData)
+      .map(_.deploy)
       .exists(predicate)
 
-  private def getDeployData(d: ProcessedDeploy): Option[DeployData] = d.deploy
-
   def deploys(b: BlockMessage): Seq[ProcessedDeploy] =
-    b.body.fold(Seq.empty[ProcessedDeploy])(_.deploys)
+    b.body.deploys
 
-  def tuplespace(b: BlockMessage): Option[ByteString] =
-    for {
-      bd <- b.body
-      ps <- bd.state
-    } yield ps.postStateHash
+  def tuplespace(b: BlockMessage): ByteString =
+    b.body.state.postStateHash
 
   // TODO: Reconcile with def tuplespace above
-  def postStateHash(b: BlockMessage): ByteString =
-    b.getBody.getState.postStateHash
+  def postStateHash(b: BlockMessage): ByteString = tuplespace(b)
 
   def preStateHash(b: BlockMessage): ByteString =
-    b.getBody.getState.preStateHash
+    b.body.state.preStateHash
 
   def bonds(b: BlockMessage): Seq[Bond] =
-    (for {
-      bd <- b.body
-      ps <- bd.state
-    } yield ps.bonds).getOrElse(List.empty[Bond])
+    b.body.state.bonds
 
   def blockNumber(b: BlockMessage): Long =
-    (for {
-      bd <- b.body
-      ps <- bd.state
-    } yield ps.blockNumber).getOrElse(0L)
+    b.body.state.blockNumber
 
   def maxBlockNumber(blocks: Seq[BlockMessage]): Long = blocks.foldLeft(-1L) {
     case (acc, b) => math.max(acc, ProtoUtil.blockNumber(b))
+  }
+
+  def maxBlockNumberMetadata(blocks: Seq[BlockMetadata]): Long = blocks.foldLeft(-1L) {
+    case (acc, b) => math.max(acc, b.blockNum)
   }
 
   def toJustification(
       latestMessages: collection.Map[Validator, BlockMetadata]
   ): Seq[Justification] =
     latestMessages.toSeq.map {
-      case (validator, blockMetadata) =>
-        Justification()
-          .withValidator(validator)
-          .withLatestBlockHash(blockMetadata.blockHash)
+      case (validator, blockMetadata) => Justification(validator, blockMetadata.blockHash)
     }
 
   def toLatestMessageHashes(
@@ -308,19 +313,20 @@ object ProtoUtil {
   def hashByteArrays(items: Array[Byte]*): ByteString =
     ByteString.copyFrom(Blake2b256.hash(Array.concat(items: _*)))
 
+  // TODO inline this
   def blockHeader(
       body: Body,
       parentHashes: Seq[ByteString],
       version: Long,
       timestamp: Long
   ): Header =
-    Header()
-      .withParentsHashList(parentHashes)
-      .withPostStateHash(protoHash(body.state.get))
-      .withDeploysHash(protoSeqHash(body.deploys))
-      .withDeployCount(body.deploys.size)
-      .withVersion(version)
-      .withTimestamp(timestamp)
+    Header(
+      parentHashes.toList,
+      protoSeqHash(body.deploys.map(_.toProto)),
+      timestamp,
+      version,
+      body.deploys.size
+    )
 
   def unsignedBlockProto(
       body: Body,
@@ -330,21 +336,29 @@ object ProtoUtil {
   ): BlockMessage = {
     val hash = hashUnsignedBlock(header, justifications)
 
-    BlockMessage()
-      .withBlockHash(hash)
-      .withHeader(header)
-      .withBody(body)
-      .withJustifications(justifications)
-      .withShardId(shardId)
+    // TODO FIX-ME fields that can be empty SHOULD be optional
+    BlockMessage(
+      hash,
+      header,
+      body,
+      justifications.toList,
+      sender = ByteString.EMPTY,
+      seqNum = 0,
+      sig = ByteString.EMPTY,
+      sigAlgorithm = "",
+      shardId,
+      extraBytes = ByteString.EMPTY
+    )
   }
 
   def hashUnsignedBlock(header: Header, justifications: Seq[Justification]): BlockHash = {
-    val items = header.toByteArray +: justifications.map(_.toByteArray)
+    val items = header.toProto.toByteArray +: justifications.map(_.toProto.toByteArray)
     hashByteArrays(items: _*)
   }
 
   def hashSignedBlock(
       header: Header,
+      body: Body,
       sender: ByteString,
       sigAlgorithm: String,
       seqNum: Int,
@@ -352,7 +366,8 @@ object ProtoUtil {
       extraBytes: ByteString
   ): BlockHash =
     hashByteArrays(
-      header.toByteArray,
+      header.toProto.toByteArray,
+      body.toProto.toByteArray,
       sender.toByteArray,
       StringValue.of(sigAlgorithm).toByteArray,
       Int32Value.of(seqNum).toByteArray,
@@ -369,26 +384,29 @@ object ProtoUtil {
       shardId: String
   ): F[BlockMessage] = {
 
-    val header = {
-      //TODO refactor casper code to avoid the usage of Option fields in the block data structures
-      // https://rchain.atlassian.net/browse/RHOL-572
-      assert(block.header.isDefined, "A block without a header doesn't make sense")
-      block.header.get
-    }
-
+    val header = block.header
     val sender = ByteString.copyFrom(pk.bytes)
     for {
-      latestMessageOpt  <- dag.latestMessage(sender)
-      seqNum            = latestMessageOpt.fold(0)(_.seqNum) + 1
-      blockHash         = hashSignedBlock(header, sender, sigAlgorithm, seqNum, shardId, block.extraBytes)
-      sigAlgorithmBlock = block.withSigAlgorithm(sigAlgorithm)
+      latestMessageOpt <- dag.latestMessage(sender)
+      seqNum           = latestMessageOpt.fold(0)(_.seqNum) + 1
+      blockHash = hashSignedBlock(
+        header,
+        block.body,
+        sender,
+        sigAlgorithm,
+        seqNum,
+        shardId,
+        block.extraBytes
+      )
+      sigAlgorithmBlock = block.copy(sigAlgorithm = sigAlgorithm)
       sig               = ByteString.copyFrom(sigAlgorithmBlock.signFunction(blockHash.toByteArray, sk))
-      signedBlock = sigAlgorithmBlock
-        .withSender(sender)
-        .withSig(sig)
-        .withSeqNum(seqNum)
-        .withBlockHash(blockHash)
-        .withShardId(shardId)
+      signedBlock = sigAlgorithmBlock.copy(
+        sender = sender,
+        sig = sig,
+        seqNum = seqNum,
+        blockHash = blockHash,
+        shardId = shardId
+      )
     } yield signedBlock
   }
 
@@ -403,7 +421,7 @@ object ProtoUtil {
     * only those fields. This allows users to more readily pre-generate names for signing.
     */
   def stripDeployData(d: DeployData): DeployData =
-    DeployData().withDeployer(d.deployer).withTimestamp(d.timestamp)
+    DeployData.from(DeployDataProto().withDeployer(d.deployer).withTimestamp(d.timestamp))
 
   def computeCodeHash(dd: DeployData): Par = {
     val bytes             = dd.term.getBytes(StandardCharsets.UTF_8)
@@ -412,10 +430,8 @@ object ProtoUtil {
   }
 
   def getRholangDeployParams(dd: DeployData): DeployParameters = {
-    val phloPrice: Par = Par(exprs = Seq(Expr(Expr.ExprInstance.GInt(dd.phloPrice))))
-    val userId: Par    = Par(exprs = Seq(Expr(Expr.ExprInstance.GByteArray(dd.deployer))))
-    val timestamp: Par = Par(exprs = Seq(Expr(Expr.ExprInstance.GInt(dd.timestamp))))
-    DeployParameters(computeCodeHash(dd), phloPrice, userId, timestamp)
+    val userId: Par = Par(exprs = Seq(Expr(Expr.ExprInstance.GByteArray(dd.deployer))))
+    DeployParameters(userId)
   }
 
   def dependenciesHashesOf(b: BlockMessage): List[BlockHash] = {

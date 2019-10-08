@@ -1,5 +1,7 @@
 package coop.rchain.rholang.interpreter
 
+import java.lang
+
 import cats.effect.Sync
 import cats.implicits._
 import cats.mtl.FunctorTell
@@ -7,8 +9,7 @@ import cats.{Eval => _}
 import com.google.protobuf.ByteString
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.hash.Blake2b512Random
-import coop.rchain.metrics.Metrics.Source
-import coop.rchain.metrics.{Metrics, Span}
+import coop.rchain.metrics.Span
 import coop.rchain.models.Expr.ExprInstance._
 import coop.rchain.models.TaggedContinuation.TaggedCont.ParBody
 import coop.rchain.models.Var.VarInstance
@@ -16,17 +17,23 @@ import coop.rchain.models.Var.VarInstance.{BoundVar, FreeVar, Wildcard}
 import coop.rchain.models.rholang.implicits._
 import coop.rchain.models.serialization.implicits._
 import coop.rchain.models.{Match, MatchCase, _}
-import coop.rchain.rholang.interpreter.Runtime.{RhoDispatch, RhoPureSpace}
+import coop.rchain.rholang.interpreter.Runtime.{RhoDispatch, RhoTuplespace}
 import coop.rchain.rholang.interpreter.Substitute.{charge => _, _}
 import coop.rchain.rholang.interpreter.accounting._
 import coop.rchain.rholang.interpreter.errors._
-import coop.rchain.rholang.interpreter.matcher.SpatialMatcher.spatialMatchAndCharge
+import coop.rchain.rholang.interpreter.matcher.SpatialMatcher.spatialMatchResult
 import coop.rchain.rspace.Serialize
 import coop.rchain.rspace.util._
 import monix.eval.Coeval
+import scalapb.GeneratedMessage
 
+import scala.collection.SortedSet
 import scala.collection.immutable.BitSet
-import scala.util.Try
+import scala.util.{Random, Try}
+
+object Reduce {
+  val parallelism = lang.Runtime.getRuntime.availableProcessors() * 2
+}
 
 /** Reduce is the interface for evaluating Rholang expressions.
   *
@@ -34,54 +41,36 @@ import scala.util.Try
   */
 trait Reduce[M[_]] {
 
-  def eval(par: Par)(
-      implicit env: Env[Par],
-      rand: Blake2b512Random,
-      sequenceNumber: Int
-  ): M[Unit]
-
-  def inj(
+  // TODO: Remove `sequenceNumber` default argument.
+  def eval(
       par: Par
-  )(implicit rand: Blake2b512Random): M[Unit]
+  )(implicit env: Env[Par], rand: Blake2b512Random, sequenceNumber: Int = 0): M[Unit]
+
+  def inj(par: Par)(implicit rand: Blake2b512Random): M[Unit]
 
   /**
     * Evaluate any top level expressions in @param Par .
     */
   def evalExpr(par: Par)(implicit env: Env[Par]): M[Par]
 
-  def evalExprToPar(
-      expr: Expr
-  )(implicit env: Env[Par]): M[Par]
+  def evalExprToPar(expr: Expr)(implicit env: Env[Par]): M[Par]
 }
 
 class DebruijnInterpreter[M[_], F[_]](
-    pureRSpace: RhoPureSpace[M],
+    space: RhoTuplespace[M],
     dispatcher: => RhoDispatch[M],
     urnMap: Map[String, Par]
 )(
     implicit parallel: cats.Parallel[M, F],
     syncM: Sync[M],
     fTell: FunctorTell[M, Throwable],
-    cost: _cost[M],
-    spanM: Span[M]
+    cost: _cost[M]
 ) extends Reduce[M] {
 
-  implicit private[this] val MetricsSource: Source = Metrics.Source(Metrics.BaseSource, "reduce")
-  private[this] val injectSpanLabel                = Metrics.Source(MetricsSource, "inject")
-  private[this] val parSpanLabel                   = Metrics.Source(MetricsSource, "par")
-  private[this] val sendSpanLabel                  = Metrics.Source(MetricsSource, "send")
-  private[this] val receiveSpanLabel               = Metrics.Source(MetricsSource, "receive")
-  private[this] val varSpanLabel                   = Metrics.Source(MetricsSource, "var")
-  private[this] val matchSpanLabel                 = Metrics.Source(MetricsSource, "match")
-  private[this] val newSpanLabel                   = Metrics.Source(MetricsSource, "new")
-  private[this] val bundleSpanLabel                = Metrics.Source(MetricsSource, "bundle")
-  private[this] val expressionToParSpanLabel       = Metrics.Source(MetricsSource, "expression-to-par")
-  private[this] val expressionToExpressionSpanLabel =
-    Metrics.Source(MetricsSource, "expression-to-expression")
-  private[this] val topLevelExpressionSpanLabel =
-    Metrics.Source(MetricsSource, "top-level-expressions")
-
-  type Application = Option[(TaggedContinuation, Seq[ListParWithRandom], Int, Boolean)]
+  type Application =
+    Option[
+      (TaggedContinuation, Seq[(Par, ListParWithRandom, ListParWithRandom, Boolean)], Int, Boolean)
+    ]
 
   /**
     * Materialize a send in the store, optionally returning the matched continuation.
@@ -96,20 +85,12 @@ class DebruijnInterpreter[M[_], F[_]](
       data: ListParWithRandom,
       persistent: Boolean,
       sequenceNumber: Int
-  ): M[Unit] = {
-    def go(res: Application): M[Unit] =
-      res match {
-        case Some((continuation, dataList, updatedSequenceNumber, peek)) =>
-          if (persistent && !peek)
-            List(
-              dispatcher.dispatch(continuation, dataList, updatedSequenceNumber),
-              produce(chan, data, persistent, sequenceNumber)
-            ).parSequence_
-          else dispatcher.dispatch(continuation, dataList, updatedSequenceNumber)
-        case None => syncM.unit
-      }
-    pureRSpace.produce(chan, data, persist = persistent, sequenceNumber) >>= (go(_))
-  }
+  ): M[Unit] =
+    space.produce(chan, data, persist = persistent, sequenceNumber) >>= (continue(
+      _,
+      produce(chan, data, persistent, sequenceNumber),
+      persistent
+    ))
 
   /**
     * Materialize a send in the store, optionally returning the matched continuation.
@@ -128,157 +109,148 @@ class DebruijnInterpreter[M[_], F[_]](
       sequenceNumber: Int
   ): M[Unit] = {
     val (patterns: Seq[BindPattern], sources: Seq[Par]) = binds.unzip
-    def go(res: Application): M[Unit] =
-      res match {
-        case Some((continuation, dataList, updatedSequenceNumber, _)) =>
-          if (persistent)
-            List(
-              dispatcher.dispatch(continuation, dataList, updatedSequenceNumber),
-              consume(binds, body, persistent, peek, sequenceNumber)
-            ).parSequence_
-          else dispatcher.dispatch(continuation, dataList, updatedSequenceNumber)
-        case None => syncM.unit
-      }
-    pureRSpace.consume(
+    space.consume(
       sources.toList,
       patterns.toList,
       TaggedContinuation(ParBody(body)),
       persist = persistent,
       sequenceNumber,
-      peek
-    ) >>= (go(_))
+      if (peek) SortedSet(sources.indices: _*) else SortedSet.empty[Int]
+    ) >>= (continue(_, consume(binds, body, persistent, peek, sequenceNumber), persistent))
   }
 
-  private trait EvalJob {
-    def run(mkRand: Int => Blake2b512Random)(
-        env: Env[Par],
-        sequenceNumber: Int
-    ): M[Unit]
-    def size: Int
-  }
+  private[this] def continue(res: Application, repeatOp: M[Unit], persistent: Boolean) =
+    res match {
+      case Some((continuation, dataList, updatedSequenceNumber, _)) if persistent =>
+        dispatchAndRun(continuation, dataList, updatedSequenceNumber)(
+          repeatOp
+        )
+      case Some((continuation, dataList, updatedSequenceNumber, peek)) if peek =>
+        dispatchAndRun(continuation, dataList, updatedSequenceNumber)(
+          producePeeks(dataList, updatedSequenceNumber): _*
+        )
+      case Some((continuation, dataList, updatedSequenceNumber, _)) =>
+        dispatch(continuation, dataList, updatedSequenceNumber)
+      case None => syncM.unit
+    }
 
-  private object EvalJob {
+  private[this] def dispatchAndRun(
+      continuation: TaggedContinuation,
+      dataList: Seq[(Par, ListParWithRandom, ListParWithRandom, Boolean)],
+      sequenceNumber: Int
+  )(ops: M[Unit]*) =
+    (dispatch(continuation, dataList, sequenceNumber) :: ops.toList).parSequence_
 
-    private def mkJob[A](
-        input: Seq[A],
-        handler: A => (Env[Par], Blake2b512Random, Int) => M[Unit]
-    ): EvalJob =
-      new EvalJob {
-        override def run(mkRand: Int => Blake2b512Random)(
-            env: Env[Par],
-            sequenceNumber: Int
-        ): M[Unit] =
-          input.zipWithIndex.toList.parTraverse_ {
-            case (term, idx) =>
-              handler(term)(env, mkRand(idx), sequenceNumber)
-          }
+  private[this] def dispatch(
+      continuation: TaggedContinuation,
+      dataList: Seq[(Par, ListParWithRandom, ListParWithRandom, Boolean)],
+      sequenceNumber: Int
+  ) = dispatcher.dispatch(
+    continuation,
+    dataList.map(_._2),
+    sequenceNumber
+  )
 
-        override def size: Int = input.size
+  private[this] def producePeeks(
+      dataList: Seq[(Par, ListParWithRandom, ListParWithRandom, Boolean)],
+      sequenceNumber: Int
+  ) =
+    dataList
+      .withFilter {
+        case (_, _, _, persist) => !persist
       }
-
-    def apply(exprs: Seq[Expr]): EvalJob = {
-      def handler(
-          expr: Expr
-      )(
-          env: Env[Par],
-          rand: Blake2b512Random,
-          sequenceNumber: Int
-      ): M[Unit] =
-        expr.exprInstance match {
-          case EVarBody(EVar(v)) =>
-            (for {
-              varref <- eval(v)(env)
-              _      <- eval(varref)(env, rand, sequenceNumber)
-            } yield ()).handleErrorWith(fTell.tell)
-          case e: EMethodBody =>
-            (for {
-              p <- evalExprToPar(Expr(e))(env)
-              _ <- eval(p)(env, rand, sequenceNumber)
-            } yield ()).handleErrorWith(fTell.tell)
-          case _ => ().pure[M]
-        }
-
-      mkJob(exprs, handler)
-    }
-
-    def apply[A](
-        terms: Seq[A],
-        handlerImpl: A => (Env[Par], Blake2b512Random, Int) => M[Unit]
-    ): EvalJob = {
-      def handler(
-          term: A
-      )(
-          env: Env[Par],
-          rand: Blake2b512Random,
-          sequenceNumber: Int
-      ): M[Unit] =
-        handlerImpl(term)(env, rand, sequenceNumber)
-          .handleErrorWith {
-            case e: OutOfPhlogistonsError.type =>
-              e.raiseError[M, Unit]
-            case e =>
-              fTell.tell(e) >> ().pure[M]
-          }
-
-      mkJob(terms, handler)
-    }
-
-  }
+      .map {
+        case (chan, _, removedData, _) =>
+          produce(chan, removedData, false, sequenceNumber)
+      }
 
   override def eval(par: Par)(
       implicit env: Env[Par],
       rand: Blake2b512Random,
       sequenceNumber: Int
-  ): M[Unit] = spanM.trace(parSpanLabel) {
-    def split(totalSize: Int, termSize: Int, rand: Blake2b512Random)(idx: Int): Blake2b512Random =
-      if (totalSize == 1)
-        rand
-      else if (totalSize > 256)
-        rand.splitShort((termSize + idx).toShort)
-      else
-        rand.splitByte((termSize + idx).toByte)
+  ): M[Unit] = {
 
-    val filteredExprs = par.exprs.filter { expr =>
-      expr.exprInstance match {
-        case _: EVarBody    => true
-        case _: EMethodBody => true
-        case _              => false
+    // for lack of a better type...
+    val terms: Seq[GeneratedMessage] = Seq(
+      par.sends,
+      par.receives,
+      par.news,
+      par.matches,
+      par.bundles,
+      par.exprs.filter { expr =>
+        expr.exprInstance match {
+          case _: EVarBody    => true
+          case _: EMethodBody => true
+          case _              => false
+        }
       }
-    }
+    ).filter(_.nonEmpty).flatten
 
-    val jobs = List(
-      EvalJob[Send](par.sends, evalExplicit),
-      EvalJob[Receive](par.receives, evalExplicit),
-      EvalJob[New](par.news, evalExplicit),
-      EvalJob[Match](par.matches, evalExplicit),
-      EvalJob[Bundle](par.bundles, evalExplicit),
-      EvalJob(filteredExprs)
-    ).filter(_.size > 0)
+    def split(id: Int): Blake2b512Random =
+      if (terms.size == 1) rand
+      else if (terms.size > 256) rand.splitShort(id.toShort)
+      else rand.splitByte(id.toByte)
 
-    val starts = jobs.map(_.size).scanLeft(0)(_ + _).toVector
+    val indexedTerms = terms.zipWithIndex.toList
+    if (terms.size <= Reduce.parallelism) {
+      indexedTerms.parTraverse_ {
+        case (term, index) =>
+          val random = split(index)
+          eval(term)(env, random, sequenceNumber)
+      }
+    } else {
+      //TODO: Investigate if we can avoid the shuffling and manual parallelism limiting by tweaking:
+      // - the scheduler used
+      // - the monix ExecutionModel used
+      // Verify if using traverse-per-batch inside parTraverse means that less tasks are spawned at once
+      // (surmise: the task for the next element of a batch is not spawned until the previous one is processed)
+      // Track memory usage along with raw performance when investigating. Clean slate POC could be helpful here.
 
-    jobs.zipWithIndex.parTraverse_ {
-      case (job, jobIdx) => {
-        def mkRand(termIdx: Int): Blake2b512Random =
-          split(starts.last, starts(jobIdx), rand)(termIdx)
-        job.run(mkRand)(env, sequenceNumber)
+      // we index terms before shuffling to have deterministic Blake2b512Random seeds for each term
+      val indexedTermsShuffled = Random.shuffle(indexedTerms)
+      val groups               = indexedTermsShuffled.groupBy(_._2 % Reduce.parallelism).values.toList
+      groups.parTraverse_ {
+        _.traverse_ {
+          case (term, index) =>
+            val random = split(index)
+            eval(term)(env, random, sequenceNumber)
+        }
       }
     }
   }
 
-  override def inj(
-      par: Par
-  )(implicit rand: Blake2b512Random): M[Unit] =
-    spanM.trace(injectSpanLabel)(eval(par)(Env[Par](), rand, 0))
-
-  private def evalExplicit(
-      send: Send
+  private def eval(
+      term: GeneratedMessage
   )(
-      env: Env[Par],
+      implicit env: Env[Par],
       rand: Blake2b512Random,
       sequenceNumber: Int
   ): M[Unit] =
-    eval(send)(env, rand, sequenceNumber)
+    term match {
+      case term: Send    => reportErrors(eval(term))
+      case term: Receive => reportErrors(eval(term))
+      case term: New     => reportErrors(eval(term))
+      case term: Match   => reportErrors(eval(term))
+      case term: Bundle  => reportErrors(eval(term))
+      case term: Expr =>
+        term.exprInstance match {
+          case e: EVarBody    => reportErrors(eval(e.value.v) >>= (eval(_)))
+          case e: EMethodBody => reportErrors(evalExprToPar(e) >>= (eval(_)))
+          case other          => BugFoundError(s"Undefined term: \n $other").raiseError[M, Unit]
+        }
+      case other => BugFoundError(s"Undefined term: \n $other").raiseError[M, Unit]
+    }
+
+  private def reportErrors(process: M[Unit]): M[Unit] =
+    process.handleErrorWith {
+      case e @ OutOfPhlogistonsError => e.raiseError[M, Unit]
+      case e                         => fTell.tell(e)
+    }
+
+  override def inj(
+      par: Par
+  )(implicit rand: Blake2b512Random): M[Unit] =
+    eval(par)(Env[Par](), rand, 0)
 
   /** Algorithm as follows:
     *
@@ -298,64 +270,51 @@ class DebruijnInterpreter[M[_], F[_]](
       rand: Blake2b512Random,
       sequenceNumber: Int
   ): M[Unit] =
-    spanM.trace(sendSpanLabel) {
-      for {
-        evalChan <- evalExpr(send.chan)
-        subChan  <- substituteAndCharge[Par, M](evalChan, 0, env)
-        unbundled <- subChan.singleBundle() match {
-                      case Some(value) =>
-                        if (!value.writeFlag)
-                          ReduceError("Trying to send on non-writeable channel.").raiseError[M, Par]
-                        else value.body.pure[M]
-                      case None => subChan.pure[M]
-                    }
-        data      <- send.data.toList.traverse(evalExpr)
-        substData <- data.traverse(substituteAndCharge[Par, M](_, 0, env))
-        _         <- produce(unbundled, ListParWithRandom(substData, rand), send.persistent, sequenceNumber)
-        _         <- charge[M](SEND_EVAL_COST)
-      } yield ()
-    }
-
-  private def evalExplicit(
-      receive: Receive
-  )(
-      env: Env[Par],
-      rand: Blake2b512Random,
-      sequenceNumber: Int
-  ): M[Unit] =
-    eval(receive)(env, rand, sequenceNumber)
+    for {
+      _        <- charge[M](SEND_EVAL_COST)
+      evalChan <- evalExpr(send.chan)
+      subChan  <- substituteAndCharge[Par, M](evalChan, 0, env)
+      unbundled <- subChan.singleBundle() match {
+                    case Some(value) =>
+                      if (!value.writeFlag)
+                        ReduceError("Trying to send on non-writeable channel.").raiseError[M, Par]
+                      else value.body.pure[M]
+                    case None => subChan.pure[M]
+                  }
+      data      <- send.data.toList.traverse(evalExpr)
+      substData <- data.traverse(substituteAndCharge[Par, M](_, 0, env))
+      _         <- produce(unbundled, ListParWithRandom(substData, rand), send.persistent, sequenceNumber)
+    } yield ()
 
   private def eval(receive: Receive)(
       implicit env: Env[Par],
       rand: Blake2b512Random,
       sequenceNumber: Int
   ): M[Unit] =
-    spanM.trace(receiveSpanLabel) {
-      for {
-        binds <- receive.binds.toList.traverse(
-                  rb =>
-                    for {
-                      q <- unbundleReceive(rb)
-                      substPatterns <- rb.patterns.toList
-                                        .traverse(substituteAndCharge[Par, M](_, 1, env))
-                    } yield (BindPattern(substPatterns, rb.remainder, rb.freeCount), q)
-                )
-        // TODO: Allow for the environment to be stored with the body in the Tuplespace
-        substBody <- substituteNoSortAndCharge[Par, M](
-                      receive.body,
-                      0,
-                      env.shift(receive.bindCount)
-                    )
-        _ <- consume(
-              binds,
-              ParWithRandom(substBody, rand),
-              receive.persistent,
-              receive.peek,
-              sequenceNumber
-            )
-        _ <- charge[M](RECEIVE_EVAL_COST)
-      } yield ()
-    }
+    for {
+      _ <- charge[M](RECEIVE_EVAL_COST)
+      binds <- receive.binds.toList.traverse(
+                rb =>
+                  for {
+                    q <- unbundleReceive(rb)
+                    substPatterns <- rb.patterns.toList
+                                      .traverse(substituteAndCharge[Par, M](_, 1, env))
+                  } yield (BindPattern(substPatterns, rb.remainder, rb.freeCount), q)
+              )
+      // TODO: Allow for the environment to be stored with the body in the Tuplespace
+      substBody <- substituteNoSortAndCharge[Par, M](
+                    receive.body,
+                    0,
+                    env.shift(receive.bindCount)
+                  )
+      _ <- consume(
+            binds,
+            ParWithRandom(substBody, rand),
+            receive.persistent,
+            receive.peek,
+            sequenceNumber
+          )
+    } yield ()
 
   /**
     * Variable "evaluation" is an environment lookup, but
@@ -371,40 +330,29 @@ class DebruijnInterpreter[M[_], F[_]](
   private def eval(
       valproc: Var
   )(implicit env: Env[Par]): M[Par] =
-    spanM.trace(varSpanLabel) {
-      charge[M](VAR_EVAL_COST) >> {
-        valproc.varInstance match {
-          case BoundVar(level) =>
-            env.get(level) match {
-              case Some(par) =>
-                par.pure[M]
-              case None =>
-                ReduceError("Unbound variable: " + level + " in " + env.envMap).raiseError[M, Par]
-            }
-          case Wildcard(_) =>
-            ReduceError("Unbound variable: attempting to evaluate a pattern").raiseError[M, Par]
-          case FreeVar(_) =>
-            ReduceError("Unbound variable: attempting to evaluate a pattern").raiseError[M, Par]
-          case VarInstance.Empty =>
-            ReduceError("Impossible var instance EMPTY").raiseError[M, Par]
-        }
+    charge[M](VAR_EVAL_COST) >> {
+      valproc.varInstance match {
+        case BoundVar(level) =>
+          env.get(level) match {
+            case Some(par) =>
+              par.pure[M]
+            case None =>
+              ReduceError("Unbound variable: " + level + " in " + env.envMap).raiseError[M, Par]
+          }
+        case Wildcard(_) =>
+          ReduceError("Unbound variable: attempting to evaluate a pattern").raiseError[M, Par]
+        case FreeVar(_) =>
+          ReduceError("Unbound variable: attempting to evaluate a pattern").raiseError[M, Par]
+        case VarInstance.Empty =>
+          ReduceError("Impossible var instance EMPTY").raiseError[M, Par]
       }
     }
-
-  private def evalExplicit(
-      mat: Match
-  )(
-      env: Env[Par],
-      rand: Blake2b512Random,
-      sequenceNumber: Int
-  ): M[Unit] =
-    eval(mat)(env, rand, sequenceNumber)
 
   private def eval(mat: Match)(
       implicit env: Env[Par],
       rand: Blake2b512Random,
       sequenceNumber: Int
-  ): M[Unit] = spanM.trace(matchSpanLabel) {
+  ): M[Unit] = {
 
     def addToEnv(env: Env[Par], freeMap: Map[Int, Par], freeCount: Int): Env[Par] =
       Range(0, freeCount).foldLeft(env)(
@@ -427,7 +375,7 @@ class DebruijnInterpreter[M[_], F[_]](
           case singleCase +: caseRem =>
             for {
               pattern     <- substituteAndCharge[Par, M](singleCase.pattern, 1, env)
-              matchResult <- spatialMatchAndCharge[M](target, pattern)
+              matchResult <- spatialMatchResult[M](target, pattern)
               res <- matchResult match {
                       case None =>
                         (target, caseRem).asLeft[Unit].pure[M]
@@ -445,11 +393,11 @@ class DebruijnInterpreter[M[_], F[_]](
     }
 
     for {
+      _            <- charge[M](MATCH_EVAL_COST)
       evaledTarget <- evalExpr(mat.target)
       // TODO(kyle): Make the matcher accept an environment, instead of substituting it.
       substTarget <- substituteAndCharge[Par, M](evaledTarget, 0, env)
       _           <- firstMatch(substTarget, mat.cases)
-      _           <- charge[M](MATCH_EVAL_COST)
     } yield ()
   }
 
@@ -460,55 +408,49 @@ class DebruijnInterpreter[M[_], F[_]](
     * @param neu
     * @return
     */
-  private def evalExplicit(
-      neu: New
-  )(env: Env[Par], rand: Blake2b512Random, sequenceNumber: Int): M[Unit] =
-    eval(neu)(env, rand, sequenceNumber)
-
   // TODO: Eliminate variable shadowing
   private def eval(
       neu: New
-  )(implicit env: Env[Par], rand: Blake2b512Random, sequenceNumber: Int): M[Unit] =
-    spanM.trace(newSpanLabel) {
+  )(implicit env: Env[Par], rand: Blake2b512Random, sequenceNumber: Int): M[Unit] = {
 
-      def alloc(count: Int, urns: Seq[String]): M[Env[Par]] = {
-        val deployIdUrn   = "rho:rchain:deployId"
-        val deployerIdUrn = "rho:rchain:deployerId"
+    def alloc(count: Int, urns: Seq[String]): M[Env[Par]] = {
+      val deployIdUrn   = "rho:rchain:deployId"
+      val deployerIdUrn = "rho:rchain:deployerId"
 
-        val simpleNews = (0 until (count - urns.size)).toList.foldLeft(env) { (_env, _) =>
-          val addr: Par = GPrivate(ByteString.copyFrom(rand.next()))
-          _env.put(addr)
-        }
-
-        def normalizerBugFound(name: String, urn: String) =
-          BugFoundError(
-            s"No $name set despite `$urn` being used in a term. This is a bug in the normalizer or on the path from it."
-          )
-
-        def addUrn(newEnv: Env[Par], urn: String): Either[InterpreterError, Env[Par]] =
-          if (urn == deployIdUrn)
-            neu.deployId
-              .map { case DeployId(sig) => newEnv.put(GDeployId(sig)).asRight[InterpreterError] }
-              .getOrElse(normalizerBugFound("DeployId", deployIdUrn).asLeft[Env[Par]])
-          else if (urn == deployerIdUrn)
-            neu.deployerId
-              .map { case DeployerId(pk) => newEnv.put(GDeployerId(pk)).asRight[InterpreterError] }
-              .getOrElse(normalizerBugFound("DeployerId", deployerIdUrn).asLeft[Env[Par]])
-          else
-            urnMap.get(urn) match {
-              case Some(p) => newEnv.put(p).asRight[InterpreterError]
-              case None    => ReduceError(s"Unknown urn for new: $urn").asLeft[Env[Par]]
-            }
-
-        urns.toList.foldM(simpleNews)(addUrn) match {
-          case Right(tmpEnv) => tmpEnv.pure[M]
-          case Left(e)       => e.raiseError[M, Env[Par]]
-        }
+      val simpleNews = (0 until (count - urns.size)).toList.foldLeft(env) { (_env, _) =>
+        val addr: Par = GPrivate(ByteString.copyFrom(rand.next()))
+        _env.put(addr)
       }
 
-      charge[M](newBindingsCost(neu.bindCount)) >>
-        alloc(neu.bindCount, neu.uri).flatMap(eval(neu.p)(_, rand, sequenceNumber))
+      def normalizerBugFound(name: String, urn: String) =
+        BugFoundError(
+          s"No $name set despite `$urn` being used in a term. This is a bug in the normalizer or on the path from it."
+        )
+
+      def addUrn(newEnv: Env[Par], urn: String): Either[InterpreterError, Env[Par]] =
+        if (urn == deployIdUrn)
+          neu.deployId
+            .map { case DeployId(sig) => newEnv.put(GDeployId(sig)).asRight[InterpreterError] }
+            .getOrElse(normalizerBugFound("DeployId", deployIdUrn).asLeft[Env[Par]])
+        else if (urn == deployerIdUrn)
+          neu.deployerId
+            .map { case DeployerId(pk) => newEnv.put(GDeployerId(pk)).asRight[InterpreterError] }
+            .getOrElse(normalizerBugFound("DeployerId", deployerIdUrn).asLeft[Env[Par]])
+        else
+          urnMap.get(urn) match {
+            case Some(p) => newEnv.put(p).asRight[InterpreterError]
+            case None    => ReduceError(s"Unknown urn for new: $urn").asLeft[Env[Par]]
+          }
+
+      urns.toList.foldM(simpleNews)(addUrn) match {
+        case Right(tmpEnv) => tmpEnv.pure[M]
+        case Left(e)       => e.raiseError[M, Env[Par]]
+      }
     }
+
+    charge[M](newBindingsCost(neu.bindCount)) >>
+      alloc(neu.bindCount, neu.uri).flatMap(eval(neu.p)(_, rand, sequenceNumber))
+  }
 
   private[this] def unbundleReceive(rb: ReceiveBind)(implicit env: Env[Par]): M[Par] =
     for {
@@ -524,25 +466,351 @@ class DebruijnInterpreter[M[_], F[_]](
                }
     } yield unbndl
 
-  private def evalExplicit(
-      bundle: Bundle
-  )(env: Env[Par], rand: Blake2b512Random, sequenceNumber: Int): M[Unit] =
-    eval(bundle)(env, rand, sequenceNumber)
-
   private def eval(
       bundle: Bundle
   )(implicit env: Env[Par], rand: Blake2b512Random, sequenceNumber: Int): M[Unit] =
-    spanM.trace(bundleSpanLabel)(eval(bundle.body))
+    eval(bundle.body)
 
   def evalExprToPar(expr: Expr)(implicit env: Env[Par]): M[Par] =
-    spanM.trace(expressionToParSpanLabel) {
+    expr.exprInstance match {
+      case EVarBody(EVar(v)) =>
+        for {
+          p       <- eval(v)
+          evaledP <- evalExpr(p)
+        } yield evaledP
+      case EMethodBody(EMethod(method, target, arguments, _, _)) => {
+        for {
+          _            <- charge[M](METHOD_CALL_COST)
+          evaledTarget <- evalExpr(target)
+          evaledArgs   <- arguments.toList.traverse(evalExpr)
+          resultPar <- methodTable.get(method) match {
+                        case None =>
+                          ReduceError("Unimplemented method: " + method).raiseError[M, Par]
+                        case Some(f) => f(evaledTarget, evaledArgs)
+                      }
+        } yield resultPar
+      }
+      case _ => evalExprToExpr(expr).map(fromExpr(_)(identity))
+    }
+
+  private def evalExprToExpr(expr: Expr)(implicit env: Env[Par]): M[Expr] = {
+    syncM.defer {
+      def relop(
+          p1: Par,
+          p2: Par,
+          relopb: (Boolean, Boolean) => Boolean,
+          relopi: (Long, Long) => Boolean,
+          relops: (String, String) => Boolean
+      ): M[Expr] =
+        for {
+          v1 <- evalSingleExpr(p1)
+          v2 <- evalSingleExpr(p2)
+          result <- (v1.exprInstance, v2.exprInstance) match {
+                     case (GBool(b1), GBool(b2))     => GBool(relopb(b1, b2)).pure[M]
+                     case (GInt(i1), GInt(i2))       => GBool(relopi(i1, i2)).pure[M]
+                     case (GString(s1), GString(s2)) => GBool(relops(s1, s2)).pure[M]
+                     case _ =>
+                       ReduceError("Unexpected compare: " + v1 + " vs. " + v2)
+                         .raiseError[M, GBool]
+                   }
+        } yield result
+
       expr.exprInstance match {
+        case x: GBool          => (x: Expr).pure[M]
+        case x: GInt           => (x: Expr).pure[M]
+        case x: GString        => (x: Expr).pure[M]
+        case x: GUri           => (x: Expr).pure[M]
+        case x: GByteArray     => (x: Expr).pure[M]
+        case ENotBody(ENot(p)) => evalToBool(p).map(b => GBool(!b))
+        case ENegBody(ENeg(p)) => evalToLong(p).map(v => GInt(-v))
+        case EMultBody(EMult(p1, p2)) =>
+          for {
+            v1 <- evalToLong(p1)
+            v2 <- evalToLong(p2)
+            _  <- charge[M](MULTIPLICATION_COST)
+          } yield GInt(v1 * v2)
+
+        case EDivBody(EDiv(p1, p2)) =>
+          for {
+            v1 <- evalToLong(p1)
+            v2 <- evalToLong(p2)
+            _  <- charge[M](DIVISION_COST)
+          } yield GInt(v1 / v2)
+
+        case EModBody(EMod(p1, p2)) =>
+          for {
+            v1 <- evalToLong(p1)
+            v2 <- evalToLong(p2)
+            _  <- charge[M](MODULO_COST)
+          } yield GInt(v1 % v2)
+
+        case EPlusBody(EPlus(p1, p2)) =>
+          for {
+            v1 <- evalSingleExpr(p1)
+            v2 <- evalSingleExpr(p2)
+            result <- (v1.exprInstance, v2.exprInstance) match {
+                       case (GInt(lhs), GInt(rhs)) =>
+                         charge[M](SUM_COST) >> Expr(GInt(lhs + rhs)).pure[M]
+                       case (lhs: ESetBody, rhs) =>
+                         for {
+                           _         <- charge[M](OP_CALL_COST)
+                           resultPar <- add(lhs, List[Par](rhs))
+                           resultExp <- evalSingleExpr(resultPar)
+                         } yield resultExp
+                       case (_: GInt, other) =>
+                         OperatorExpectedError("+", "Int", other.typ).raiseError[M, Expr]
+                       case (other, _) => OperatorNotDefined("+", other.typ).raiseError[M, Expr]
+                     }
+          } yield result
+
+        case EMinusBody(EMinus(p1, p2)) =>
+          for {
+            v1 <- evalSingleExpr(p1)
+            v2 <- evalSingleExpr(p2)
+            result <- (v1.exprInstance, v2.exprInstance) match {
+                       case (GInt(lhs), GInt(rhs)) =>
+                         charge[M](SUBTRACTION_COST) >> Expr(GInt(lhs - rhs)).pure[M]
+                       case (lhs: EMapBody, rhs) =>
+                         for {
+                           _         <- charge[M](OP_CALL_COST)
+                           resultPar <- delete(lhs, List[Par](rhs))
+                           resultExp <- evalSingleExpr(resultPar)
+                         } yield resultExp
+                       case (lhs: ESetBody, rhs) =>
+                         for {
+                           _         <- charge[M](OP_CALL_COST)
+                           resultPar <- delete(lhs, List[Par](rhs))
+                           resultExp <- evalSingleExpr(resultPar)
+                         } yield resultExp
+                       case (_: GInt, other) =>
+                         OperatorExpectedError("-", "Int", other.typ).raiseError[M, Expr]
+                       case (other, _) =>
+                         OperatorNotDefined("-", other.typ).raiseError[M, Expr]
+                     }
+          } yield result
+
+        case ELtBody(ELt(p1, p2)) =>
+          charge[M](COMPARISON_COST) >> relop(p1, p2, (_ < _), (_ < _), (_ < _))
+
+        case ELteBody(ELte(p1, p2)) =>
+          charge[M](COMPARISON_COST) >> relop(p1, p2, (_ <= _), (_ <= _), (_ <= _))
+
+        case EGtBody(EGt(p1, p2)) =>
+          charge[M](COMPARISON_COST) >> relop(p1, p2, (_ > _), (_ > _), (_ > _))
+
+        case EGteBody(EGte(p1, p2)) =>
+          charge[M](COMPARISON_COST) >> relop(p1, p2, (_ >= _), (_ >= _), (_ >= _))
+
+        case EEqBody(EEq(p1, p2)) =>
+          for {
+            v1 <- evalExpr(p1)
+            v2 <- evalExpr(p2)
+            // TODO: build an equality operator that takes in an environment.
+            sv1 <- substituteAndCharge[Par, M](v1, 0, env)
+            sv2 <- substituteAndCharge[Par, M](v2, 0, env)
+            _   <- charge[M](equalityCheckCost(sv1, sv2))
+          } yield GBool(sv1 == sv2)
+
+        case ENeqBody(ENeq(p1, p2)) =>
+          for {
+            v1  <- evalExpr(p1)
+            v2  <- evalExpr(p2)
+            sv1 <- substituteAndCharge[Par, M](v1, 0, env)
+            sv2 <- substituteAndCharge[Par, M](v2, 0, env)
+            _   <- charge[M](equalityCheckCost(sv1, sv2))
+          } yield GBool(sv1 != sv2)
+
+        case EAndBody(EAnd(p1, p2)) =>
+          for {
+            b1 <- evalToBool(p1)
+            b2 <- evalToBool(p2)
+            _  <- charge[M](BOOLEAN_AND_COST)
+          } yield GBool(b1 && b2)
+
+        case EOrBody(EOr(p1, p2)) =>
+          for {
+            b1 <- evalToBool(p1)
+            b2 <- evalToBool(p2)
+            _  <- charge[M](BOOLEAN_OR_COST)
+          } yield GBool(b1 || b2)
+
+        case EMatchesBody(EMatches(target, pattern)) =>
+          for {
+            evaledTarget <- evalExpr(target)
+            substTarget  <- substituteAndCharge[Par, M](evaledTarget, 0, env)
+            substPattern <- substituteAndCharge[Par, M](pattern, 1, env)
+            matchResult  <- spatialMatchResult[M](substTarget, substPattern)
+          } yield GBool(matchResult.isDefined)
+
+        case EPercentPercentBody(EPercentPercent(p1, p2)) =>
+          def evalToStringPair(keyExpr: Expr, valueExpr: Expr): M[(String, String)] =
+            (keyExpr.exprInstance, valueExpr.exprInstance) match {
+              case (GString(keyString), GString(valueString)) =>
+                (keyString -> valueString).pure[M]
+              case (GString(keyString), GInt(valueInt)) =>
+                (keyString -> valueInt.toString).pure[M]
+              case (GString(keyString), GBool(valueBool)) =>
+                (keyString -> valueBool.toString).pure[M]
+              case (GString(keyString), GUri(uri)) =>
+                (keyString -> uri).pure[M]
+              // TODO: Add cases for other ground terms as well? Maybe it would be better
+              // to implement cats.Show for all ground terms.
+              case (_: GString, value) =>
+                ReduceError(s"Error: interpolation doesn't support ${value.typ}")
+                  .raiseError[M, (String, String)]
+              case _ =>
+                ReduceError("Error: interpolation Map should only contain String keys")
+                  .raiseError[M, (String, String)]
+            }
+          @SuppressWarnings(
+            Array("org.wartremover.warts.Var", "org.wartremover.warts.NonUnitStatements")
+          )
+          // TODO consider replacing while loop with tailrec recursion
+          def interpolate(string: String, keyValuePairs: List[(String, String)]): String = {
+            val result  = StringBuilder.newBuilder
+            var current = string
+            while (current.nonEmpty) {
+              keyValuePairs.find {
+                case (k, _) => current.startsWith("${" + k + "}")
+              } match {
+                case Some((k, v)) =>
+                  result ++= v
+                  current = current.drop(k.length + 3)
+                case None =>
+                  result += current.head
+                  current = current.tail
+              }
+            }
+            result.toString
+          }
+          for {
+            _  <- charge[M](OP_CALL_COST)
+            v1 <- evalSingleExpr(p1)
+            v2 <- evalSingleExpr(p2)
+            result <- (v1.exprInstance, v2.exprInstance) match {
+                       case (GString(lhs), EMapBody(ParMap(rhs, _, _, _))) =>
+                         if (lhs.nonEmpty || rhs.nonEmpty) {
+                           for {
+                             result <- rhs.toList
+                                        .traverse {
+                                          case (k, v) =>
+                                            for {
+                                              keyExpr   <- evalSingleExpr(k)
+                                              valueExpr <- evalSingleExpr(v)
+                                              result    <- evalToStringPair(keyExpr, valueExpr)
+                                            } yield result
+                                        }
+                                        .map(
+                                          keyValuePairs => GString(interpolate(lhs, keyValuePairs))
+                                        )
+                             _ <- charge[M](interpolateCost(lhs.length, rhs.size))
+                           } yield result
+                         } else GString(lhs).pure[M]
+                       case (_: GString, other) =>
+                         OperatorExpectedError("%%", "Map", other.typ).raiseError[M, GString]
+                       case (other, _) =>
+                         OperatorNotDefined("%%", other.typ).raiseError[M, GString]
+                     }
+          } yield result
+
+        case EPlusPlusBody(EPlusPlus(p1, p2)) =>
+          for {
+            _  <- charge[M](OP_CALL_COST)
+            v1 <- evalSingleExpr(p1)
+            v2 <- evalSingleExpr(p2)
+            result <- (v1.exprInstance, v2.exprInstance) match {
+                       case (GString(lhs), GString(rhs)) =>
+                         charge[M](stringAppendCost(lhs.length, rhs.length)) >>
+                           Expr(GString(lhs + rhs)).pure[M]
+                       case (GByteArray(lhs), GByteArray(rhs)) =>
+                         charge[M](byteArrayAppendCost(lhs)) >>
+                           Expr(GByteArray(lhs.concat(rhs))).pure[M]
+                       case (EListBody(lhs), EListBody(rhs)) =>
+                         charge[M](listAppendCost(rhs.ps.toVector)) >>
+                           Expr(
+                             EListBody(
+                               EList(
+                                 lhs.ps ++ rhs.ps,
+                                 lhs.locallyFree union rhs.locallyFree,
+                                 lhs.connectiveUsed || rhs.connectiveUsed
+                               )
+                             )
+                           ).pure[M]
+                       case (lhs: EMapBody, rhs: EMapBody) =>
+                         for {
+                           resultPar <- union(lhs, List[Par](rhs))
+                           resultExp <- evalSingleExpr(resultPar)
+                         } yield resultExp
+                       case (lhs: ESetBody, rhs: ESetBody) =>
+                         for {
+                           resultPar <- union(lhs, List[Par](rhs))
+                           resultExp <- evalSingleExpr(resultPar)
+                         } yield resultExp
+                       case (_: GString, other) =>
+                         OperatorExpectedError("++", "String", other.typ).raiseError[M, Expr]
+                       case (_: EListBody, other) =>
+                         OperatorExpectedError("++", "List", other.typ).raiseError[M, Expr]
+                       case (_: EMapBody, other) =>
+                         OperatorExpectedError("++", "Map", other.typ).raiseError[M, Expr]
+                       case (_: ESetBody, other) =>
+                         OperatorExpectedError("++", "Set", other.typ).raiseError[M, Expr]
+                       case (other, _) => OperatorNotDefined("++", other.typ).raiseError[M, Expr]
+                     }
+          } yield result
+
+        case EMinusMinusBody(EMinusMinus(p1, p2)) =>
+          for {
+            _  <- charge[M](OP_CALL_COST)
+            v1 <- evalSingleExpr(p1)
+            v2 <- evalSingleExpr(p2)
+            result <- (v1.exprInstance, v2.exprInstance) match {
+                       case (lhs: ESetBody, rhs: ESetBody) =>
+                         for {
+                           resultPar <- diff(lhs, List[Par](rhs))
+                           resultExp <- evalSingleExpr(resultPar)
+                         } yield resultExp
+                       case (_: ESetBody, other) =>
+                         OperatorExpectedError("--", "Set", other.typ).raiseError[M, Expr]
+                       case (other, _) => OperatorNotDefined("--", other.typ).raiseError[M, Expr]
+                     }
+          } yield result
+
         case EVarBody(EVar(v)) =>
           for {
             p       <- eval(v)
-            evaledP <- evalExpr(p)
-          } yield evaledP
-        case EMethodBody(EMethod(method, target, arguments, _, _)) => {
+            exprVal <- evalSingleExpr(p)
+          } yield exprVal
+
+        case EListBody(el) =>
+          for {
+            evaledPs  <- el.ps.toList.traverse(evalExpr)
+            updatedPs = evaledPs.map(updateLocallyFree)
+          } yield updateLocallyFree(EList(updatedPs, el.locallyFree, el.connectiveUsed))
+
+        case ETupleBody(el) =>
+          for {
+            evaledPs  <- el.ps.toList.traverse(evalExpr)
+            updatedPs = evaledPs.map(updateLocallyFree)
+          } yield updateLocallyFree(ETuple(updatedPs, el.locallyFree, el.connectiveUsed))
+
+        case ESetBody(set) =>
+          for {
+            evaledPs  <- set.ps.sortedPars.traverse(evalExpr)
+            updatedPs = evaledPs.map(updateLocallyFree)
+          } yield set.copy(ps = SortedParHashSet(updatedPs))
+
+        case EMapBody(map) =>
+          for {
+            evaledPs <- map.ps.sortedList.traverse {
+                         case (key, value) =>
+                           for {
+                             eKey   <- evalExpr(key).map(updateLocallyFree)
+                             eValue <- evalExpr(value).map(updateLocallyFree)
+                           } yield (eKey, eValue)
+                       }
+          } yield map.copy(ps = SortedParMap(evaledPs))
+
+        case EMethodBody(EMethod(method, target, arguments, _, _)) =>
           for {
             _            <- charge[M](METHOD_CALL_COST)
             evaledTarget <- evalExpr(target)
@@ -552,347 +820,12 @@ class DebruijnInterpreter[M[_], F[_]](
                             ReduceError("Unimplemented method: " + method).raiseError[M, Par]
                           case Some(f) => f(evaledTarget, evaledArgs)
                         }
-          } yield resultPar
-        }
-        case _ => evalExprToExpr(expr).map(fromExpr(_)(identity))
+            resultExpr <- evalSingleExpr(resultPar)
+          } yield resultExpr
+        case _ => ReduceError("Unimplemented expression: " + expr).raiseError[M, Expr]
       }
     }
-
-  private def evalExprToExpr(expr: Expr)(implicit env: Env[Par]): M[Expr] =
-    spanM.trace(expressionToExpressionSpanLabel) {
-      syncM.defer {
-        def relop(
-            p1: Par,
-            p2: Par,
-            relopb: (Boolean, Boolean) => Boolean,
-            relopi: (Long, Long) => Boolean,
-            relops: (String, String) => Boolean
-        ): M[Expr] =
-          for {
-            v1 <- evalSingleExpr(p1)
-            v2 <- evalSingleExpr(p2)
-            result <- (v1.exprInstance, v2.exprInstance) match {
-                       case (GBool(b1), GBool(b2))     => GBool(relopb(b1, b2)).pure[M]
-                       case (GInt(i1), GInt(i2))       => GBool(relopi(i1, i2)).pure[M]
-                       case (GString(s1), GString(s2)) => GBool(relops(s1, s2)).pure[M]
-                       case _ =>
-                         ReduceError("Unexpected compare: " + v1 + " vs. " + v2)
-                           .raiseError[M, GBool]
-                     }
-          } yield result
-
-        expr.exprInstance match {
-          case x: GBool          => (x: Expr).pure[M]
-          case x: GInt           => (x: Expr).pure[M]
-          case x: GString        => (x: Expr).pure[M]
-          case x: GUri           => (x: Expr).pure[M]
-          case x: GByteArray     => (x: Expr).pure[M]
-          case ENotBody(ENot(p)) => evalToBool(p).map(b => GBool(!b))
-          case ENegBody(ENeg(p)) => evalToLong(p).map(v => GInt(-v))
-          case EMultBody(EMult(p1, p2)) =>
-            for {
-              v1 <- evalToLong(p1)
-              v2 <- evalToLong(p2)
-              _  <- charge[M](MULTIPLICATION_COST)
-            } yield GInt(v1 * v2)
-
-          case EDivBody(EDiv(p1, p2)) =>
-            for {
-              v1 <- evalToLong(p1)
-              v2 <- evalToLong(p2)
-              _  <- charge[M](DIVISION_COST)
-            } yield GInt(v1 / v2)
-
-          case EModBody(EMod(p1, p2)) =>
-            for {
-              v1 <- evalToLong(p1)
-              v2 <- evalToLong(p2)
-              _  <- charge[M](MODULO_COST)
-            } yield GInt(v1 % v2)
-
-          case EPlusBody(EPlus(p1, p2)) =>
-            for {
-              v1 <- evalSingleExpr(p1)
-              v2 <- evalSingleExpr(p2)
-              result <- (v1.exprInstance, v2.exprInstance) match {
-                         case (GInt(lhs), GInt(rhs)) =>
-                           charge[M](SUM_COST) >> Expr(GInt(lhs + rhs)).pure[M]
-                         case (lhs: ESetBody, rhs) =>
-                           for {
-                             _         <- charge[M](OP_CALL_COST)
-                             resultPar <- add(lhs, List[Par](rhs))
-                             resultExp <- evalSingleExpr(resultPar)
-                           } yield resultExp
-                         case (_: GInt, other) =>
-                           OperatorExpectedError("+", "Int", other.typ).raiseError[M, Expr]
-                         case (other, _) => OperatorNotDefined("+", other.typ).raiseError[M, Expr]
-                       }
-            } yield result
-
-          case EMinusBody(EMinus(p1, p2)) =>
-            for {
-              v1 <- evalSingleExpr(p1)
-              v2 <- evalSingleExpr(p2)
-              result <- (v1.exprInstance, v2.exprInstance) match {
-                         case (GInt(lhs), GInt(rhs)) =>
-                           charge[M](SUBTRACTION_COST) >> Expr(GInt(lhs - rhs)).pure[M]
-                         case (lhs: EMapBody, rhs) =>
-                           for {
-                             _         <- charge[M](OP_CALL_COST)
-                             resultPar <- delete(lhs, List[Par](rhs))
-                             resultExp <- evalSingleExpr(resultPar)
-                           } yield resultExp
-                         case (lhs: ESetBody, rhs) =>
-                           for {
-                             _         <- charge[M](OP_CALL_COST)
-                             resultPar <- delete(lhs, List[Par](rhs))
-                             resultExp <- evalSingleExpr(resultPar)
-                           } yield resultExp
-                         case (_: GInt, other) =>
-                           OperatorExpectedError("-", "Int", other.typ).raiseError[M, Expr]
-                         case (other, _) =>
-                           OperatorNotDefined("-", other.typ).raiseError[M, Expr]
-                       }
-            } yield result
-
-          case ELtBody(ELt(p1, p2)) =>
-            charge[M](COMPARISON_COST) >> relop(p1, p2, (_ < _), (_ < _), (_ < _))
-
-          case ELteBody(ELte(p1, p2)) =>
-            charge[M](COMPARISON_COST) >> relop(p1, p2, (_ <= _), (_ <= _), (_ <= _))
-
-          case EGtBody(EGt(p1, p2)) =>
-            charge[M](COMPARISON_COST) >> relop(p1, p2, (_ > _), (_ > _), (_ > _))
-
-          case EGteBody(EGte(p1, p2)) =>
-            charge[M](COMPARISON_COST) >> relop(p1, p2, (_ >= _), (_ >= _), (_ >= _))
-
-          case EEqBody(EEq(p1, p2)) =>
-            for {
-              v1 <- evalExpr(p1)
-              v2 <- evalExpr(p2)
-              // TODO: build an equality operator that takes in an environment.
-              sv1 <- substituteAndCharge[Par, M](v1, 0, env)
-              sv2 <- substituteAndCharge[Par, M](v2, 0, env)
-              _   <- charge[M](equalityCheckCost(sv1, sv2))
-            } yield GBool(sv1 == sv2)
-
-          case ENeqBody(ENeq(p1, p2)) =>
-            for {
-              v1  <- evalExpr(p1)
-              v2  <- evalExpr(p2)
-              sv1 <- substituteAndCharge[Par, M](v1, 0, env)
-              sv2 <- substituteAndCharge[Par, M](v2, 0, env)
-              _   <- charge[M](equalityCheckCost(sv1, sv2))
-            } yield GBool(sv1 != sv2)
-
-          case EAndBody(EAnd(p1, p2)) =>
-            for {
-              b1 <- evalToBool(p1)
-              b2 <- evalToBool(p2)
-              _  <- charge[M](BOOLEAN_AND_COST)
-            } yield GBool(b1 && b2)
-
-          case EOrBody(EOr(p1, p2)) =>
-            for {
-              b1 <- evalToBool(p1)
-              b2 <- evalToBool(p2)
-              _  <- charge[M](BOOLEAN_OR_COST)
-            } yield GBool(b1 || b2)
-
-          case EMatchesBody(EMatches(target, pattern)) =>
-            for {
-              evaledTarget <- evalExpr(target)
-              substTarget  <- substituteAndCharge[Par, M](evaledTarget, 0, env)
-              substPattern <- substituteAndCharge[Par, M](pattern, 1, env)
-              matchResult  <- spatialMatchAndCharge[M](substTarget, substPattern)
-            } yield GBool(matchResult.isDefined)
-
-          case EPercentPercentBody(EPercentPercent(p1, p2)) =>
-            def evalToStringPair(keyExpr: Expr, valueExpr: Expr): M[(String, String)] =
-              (keyExpr.exprInstance, valueExpr.exprInstance) match {
-                case (GString(keyString), GString(valueString)) =>
-                  (keyString -> valueString).pure[M]
-                case (GString(keyString), GInt(valueInt)) =>
-                  (keyString -> valueInt.toString).pure[M]
-                case (GString(keyString), GBool(valueBool)) =>
-                  (keyString -> valueBool.toString).pure[M]
-                case (GString(keyString), GUri(uri)) =>
-                  (keyString -> uri).pure[M]
-                // TODO: Add cases for other ground terms as well? Maybe it would be better
-                // to implement cats.Show for all ground terms.
-                case (_: GString, value) =>
-                  ReduceError(s"Error: interpolation doesn't support ${value.typ}")
-                    .raiseError[M, (String, String)]
-                case _ =>
-                  ReduceError("Error: interpolation Map should only contain String keys")
-                    .raiseError[M, (String, String)]
-              }
-            @SuppressWarnings(
-              Array("org.wartremover.warts.Var", "org.wartremover.warts.NonUnitStatements")
-            )
-            // TODO consider replacing while loop with tailrec recursion
-            def interpolate(string: String, keyValuePairs: List[(String, String)]): String = {
-              val result  = StringBuilder.newBuilder
-              var current = string
-              while (current.nonEmpty) {
-                keyValuePairs.find {
-                  case (k, _) => current.startsWith("${" + k + "}")
-                } match {
-                  case Some((k, v)) =>
-                    result ++= v
-                    current = current.drop(k.length + 3)
-                  case None =>
-                    result += current.head
-                    current = current.tail
-                }
-              }
-              result.toString
-            }
-            for {
-              _  <- charge[M](OP_CALL_COST)
-              v1 <- evalSingleExpr(p1)
-              v2 <- evalSingleExpr(p2)
-              result <- (v1.exprInstance, v2.exprInstance) match {
-                         case (GString(lhs), EMapBody(ParMap(rhs, _, _, _))) =>
-                           if (lhs.nonEmpty || rhs.nonEmpty) {
-                             for {
-                               result <- rhs.toList
-                                          .traverse {
-                                            case (k, v) =>
-                                              for {
-                                                keyExpr   <- evalSingleExpr(k)
-                                                valueExpr <- evalSingleExpr(v)
-                                                result    <- evalToStringPair(keyExpr, valueExpr)
-                                              } yield result
-                                          }
-                                          .map(
-                                            keyValuePairs =>
-                                              GString(interpolate(lhs, keyValuePairs))
-                                          )
-                               _ <- charge[M](interpolateCost(lhs.length, rhs.size))
-                             } yield result
-                           } else GString(lhs).pure[M]
-                         case (_: GString, other) =>
-                           OperatorExpectedError("%%", "Map", other.typ).raiseError[M, GString]
-                         case (other, _) =>
-                           OperatorNotDefined("%%", other.typ).raiseError[M, GString]
-                       }
-            } yield result
-
-          case EPlusPlusBody(EPlusPlus(p1, p2)) =>
-            for {
-              _  <- charge[M](OP_CALL_COST)
-              v1 <- evalSingleExpr(p1)
-              v2 <- evalSingleExpr(p2)
-              result <- (v1.exprInstance, v2.exprInstance) match {
-                         case (GString(lhs), GString(rhs)) =>
-                           charge[M](stringAppendCost(lhs.length, rhs.length)) >>
-                             Expr(GString(lhs + rhs)).pure[M]
-                         case (GByteArray(lhs), GByteArray(rhs)) =>
-                           charge[M](byteArrayAppendCost(lhs)) >>
-                             Expr(GByteArray(lhs.concat(rhs))).pure[M]
-                         case (EListBody(lhs), EListBody(rhs)) =>
-                           charge[M](listAppendCost(rhs.ps.toVector)) >>
-                             Expr(
-                               EListBody(
-                                 EList(
-                                   lhs.ps ++ rhs.ps,
-                                   lhs.locallyFree union rhs.locallyFree,
-                                   lhs.connectiveUsed || rhs.connectiveUsed
-                                 )
-                               )
-                             ).pure[M]
-                         case (lhs: EMapBody, rhs: EMapBody) =>
-                           for {
-                             resultPar <- union(lhs, List[Par](rhs))
-                             resultExp <- evalSingleExpr(resultPar)
-                           } yield resultExp
-                         case (lhs: ESetBody, rhs: ESetBody) =>
-                           for {
-                             resultPar <- union(lhs, List[Par](rhs))
-                             resultExp <- evalSingleExpr(resultPar)
-                           } yield resultExp
-                         case (_: GString, other) =>
-                           OperatorExpectedError("++", "String", other.typ).raiseError[M, Expr]
-                         case (_: EListBody, other) =>
-                           OperatorExpectedError("++", "List", other.typ).raiseError[M, Expr]
-                         case (_: EMapBody, other) =>
-                           OperatorExpectedError("++", "Map", other.typ).raiseError[M, Expr]
-                         case (_: ESetBody, other) =>
-                           OperatorExpectedError("++", "Set", other.typ).raiseError[M, Expr]
-                         case (other, _) => OperatorNotDefined("++", other.typ).raiseError[M, Expr]
-                       }
-            } yield result
-
-          case EMinusMinusBody(EMinusMinus(p1, p2)) =>
-            for {
-              _  <- charge[M](OP_CALL_COST)
-              v1 <- evalSingleExpr(p1)
-              v2 <- evalSingleExpr(p2)
-              result <- (v1.exprInstance, v2.exprInstance) match {
-                         case (lhs: ESetBody, rhs: ESetBody) =>
-                           for {
-                             resultPar <- diff(lhs, List[Par](rhs))
-                             resultExp <- evalSingleExpr(resultPar)
-                           } yield resultExp
-                         case (_: ESetBody, other) =>
-                           OperatorExpectedError("--", "Set", other.typ).raiseError[M, Expr]
-                         case (other, _) => OperatorNotDefined("--", other.typ).raiseError[M, Expr]
-                       }
-            } yield result
-
-          case EVarBody(EVar(v)) =>
-            for {
-              p       <- eval(v)
-              exprVal <- evalSingleExpr(p)
-            } yield exprVal
-
-          case EListBody(el) =>
-            for {
-              evaledPs  <- el.ps.toList.traverse(evalExpr)
-              updatedPs = evaledPs.map(updateLocallyFree)
-            } yield updateLocallyFree(EList(updatedPs, el.locallyFree, el.connectiveUsed))
-
-          case ETupleBody(el) =>
-            for {
-              evaledPs  <- el.ps.toList.traverse(evalExpr)
-              updatedPs = evaledPs.map(updateLocallyFree)
-            } yield updateLocallyFree(ETuple(updatedPs, el.locallyFree, el.connectiveUsed))
-
-          case ESetBody(set) =>
-            for {
-              evaledPs  <- set.ps.sortedPars.traverse(evalExpr)
-              updatedPs = evaledPs.map(updateLocallyFree)
-            } yield set.copy(ps = SortedParHashSet(updatedPs))
-
-          case EMapBody(map) =>
-            for {
-              evaledPs <- map.ps.sortedList.traverse {
-                           case (key, value) =>
-                             for {
-                               eKey   <- evalExpr(key).map(updateLocallyFree)
-                               eValue <- evalExpr(value).map(updateLocallyFree)
-                             } yield (eKey, eValue)
-                         }
-            } yield map.copy(ps = SortedParMap(evaledPs))
-
-          case EMethodBody(EMethod(method, target, arguments, _, _)) =>
-            for {
-              _            <- charge[M](METHOD_CALL_COST)
-              evaledTarget <- evalExpr(target)
-              evaledArgs   <- arguments.toList.traverse(evalExpr)
-              resultPar <- methodTable.get(method) match {
-                            case None =>
-                              ReduceError("Unimplemented method: " + method).raiseError[M, Par]
-                            case Some(f) => f(evaledTarget, evaledArgs)
-                          }
-              resultExpr <- evalSingleExpr(resultPar)
-            } yield resultExpr
-          case _ => ReduceError("Unimplemented expression: " + expr).raiseError[M, Expr]
-        }
-      }
-    }
+  }
 
   private abstract class Method() {
     def apply(p: Par, args: Seq[Par])(
@@ -911,6 +844,7 @@ class DebruijnInterpreter[M[_], F[_]](
         errors.MethodArgumentNumberMismatch("nth", 1, args.length).raiseError[M, Par]
       else {
         for {
+          _      <- charge[M](NTH_METHOD_CALL_COST)
           nthRaw <- evalToLong(args.head)
           nth    <- restrictToInt(nthRaw)
           v      <- evalSingleExpr(p)
@@ -929,7 +863,6 @@ class DebruijnInterpreter[M[_], F[_]](
                        ReduceError("Error: nth applied to something that wasn't a list or tuple.")
                          .raiseError[M, Par]
                    }
-          _ <- charge[M](NTH_METHOD_CALL_COST)
         } yield result
       }
   }
@@ -1106,8 +1039,8 @@ class DebruijnInterpreter[M[_], F[_]](
             else ().pure[M]
         baseExpr <- evalSingleExpr(p)
         element  <- evalExpr(args.head)
-        result   <- add(baseExpr, element)
         _        <- charge[M](ADD_COST)
+        result   <- add(baseExpr, element)
       } yield result
   }
 
@@ -1148,8 +1081,8 @@ class DebruijnInterpreter[M[_], F[_]](
             else ().pure[M]
         baseExpr <- evalSingleExpr(p)
         element  <- evalExpr(args.head)
-        result   <- delete(baseExpr, element)
         _        <- charge[M](REMOVE_COST) //TODO(mateusz.gorski): think whether deletion of an element from the collection should dependent on the collection type/size
+        result   <- delete(baseExpr, element)
       } yield result
   }
 
@@ -1171,8 +1104,8 @@ class DebruijnInterpreter[M[_], F[_]](
             else ().pure[M]
         baseExpr <- evalSingleExpr(p)
         element  <- evalExpr(args.head)
-        result   <- contains(baseExpr, element)
         _        <- charge[M](LOOKUP_COST)
+        result   <- contains(baseExpr, element)
       } yield result
   }
 
@@ -1192,8 +1125,8 @@ class DebruijnInterpreter[M[_], F[_]](
             else ().pure[M]
         baseExpr <- evalSingleExpr(p)
         key      <- evalExpr(args.head)
-        result   <- get(baseExpr, key)
         _        <- charge[M](LOOKUP_COST)
+        result   <- get(baseExpr, key)
       } yield result
   }
 
@@ -1214,8 +1147,8 @@ class DebruijnInterpreter[M[_], F[_]](
         baseExpr <- evalSingleExpr(p)
         key      <- evalExpr(args.head)
         default  <- evalExpr(args(1))
-        result   <- getOrElse(baseExpr, key, default)
         _        <- charge[M](LOOKUP_COST)
+        result   <- getOrElse(baseExpr, key, default)
       } yield result
   }
 
@@ -1236,8 +1169,8 @@ class DebruijnInterpreter[M[_], F[_]](
         baseExpr <- evalSingleExpr(p)
         key      <- evalExpr(args.head)
         value    <- evalExpr(args(1))
-        result   <- set(baseExpr, key, value)
         _        <- charge[M](ADD_COST)
+        result   <- set(baseExpr, key, value)
       } yield result
   }
 
@@ -1257,8 +1190,8 @@ class DebruijnInterpreter[M[_], F[_]](
               MethodArgumentNumberMismatch("keys", 0, args.length).raiseError[M, Unit]
             else ().pure[M]
         baseExpr <- evalSingleExpr(p)
-        result   <- keys(baseExpr)
         _        <- charge[M](KEYS_METHOD_COST)
+        result   <- keys(baseExpr)
       } yield result
   }
 
@@ -1307,8 +1240,8 @@ class DebruijnInterpreter[M[_], F[_]](
               MethodArgumentNumberMismatch("length", 0, args.length).raiseError[M, Unit]
             else ().pure[M]
         baseExpr <- evalSingleExpr(p)
-        result   <- length(baseExpr)
         _        <- charge[M](LENGTH_METHOD_COST)
+        result   <- length(baseExpr)
       } yield result
   }
 
@@ -1336,8 +1269,8 @@ class DebruijnInterpreter[M[_], F[_]](
         fromArg    <- restrictToInt(fromArgRaw)
         toArgRaw   <- evalToLong(args(1))
         toArg      <- restrictToInt(toArgRaw)
-        result     <- slice(baseExpr, fromArg, toArg)
         _          <- charge[M](sliceCost(toArg))
+        result     <- slice(baseExpr, fromArg, toArg)
       } yield result
   }
 
@@ -1375,6 +1308,85 @@ class DebruijnInterpreter[M[_], F[_]](
       } yield result
   }
 
+  private[this] val toSet: Method = new Method() {
+    def toSet(baseExpr: Expr): M[Par] =
+      baseExpr.exprInstance match {
+        case e: ESetBody =>
+          (e: Par).pure[M]
+        case EMapBody(ParMap(basePs, connectiveUsed, locallyFree, remainder)) =>
+          (ESetBody(
+            ParSet(
+              basePs.toSeq.map(t => ETupleBody(ETuple(Seq(t._1, t._2))): Par),
+              connectiveUsed,
+              locallyFree,
+              remainder
+            )
+          ): Par).pure[M]
+        case EListBody(EList(basePs, locallyFree, connectiveUsed, remainder)) =>
+          (ESetBody(
+            ParSet(
+              basePs,
+              connectiveUsed,
+              locallyFree.get.pure[Coeval],
+              remainder
+            )
+          ): Par).pure[M]
+        case other =>
+          MethodNotDefined("toSet", other.typ).raiseError[M, Par]
+      }
+
+    override def apply(p: Par, args: Seq[Par])(implicit env: Env[Par]): M[Par] =
+      for {
+        _ <- if (args.nonEmpty)
+              MethodArgumentNumberMismatch("toSet", 0, args.length).raiseError[M, Unit]
+            else ().pure[M]
+        baseExpr <- evalSingleExpr(p)
+        result   <- toSet(baseExpr)
+      } yield result
+  }
+
+  private[this] val toMap: Method = new Method() {
+    def makeMap(
+        ps: Seq[Par],
+        connectiveUsed: Boolean,
+        locallyFree: Coeval[BitSet],
+        remainder: Option[Var]
+    ) = {
+      val keyPairs = ps.map(RhoType.Tuple2.unapply)
+      if (keyPairs.exists(_.isEmpty))
+        MethodNotDefined("toMap", "types except List[(K,V)]").raiseError[M, Par]
+      else
+        (EMapBody(
+          ParMap(
+            keyPairs.flatMap(_.toList),
+            connectiveUsed,
+            locallyFree,
+            remainder
+          )
+        ): Par).pure[M]
+    }
+    def toMap(baseExpr: Expr): M[Par] =
+      baseExpr.exprInstance match {
+        case e: EMapBody =>
+          (e: Par).pure[M]
+        case ESetBody(ParSet(basePs, connectiveUsed, locallyFree, remainder)) =>
+          makeMap(basePs.toSeq, connectiveUsed, locallyFree, remainder)
+        case EListBody(EList(basePs, locallyFree, connectiveUsed, remainder)) =>
+          makeMap(basePs, connectiveUsed, locallyFree.get.pure[Coeval], remainder)
+        case other =>
+          MethodNotDefined("toMap", other.typ).raiseError[M, Par]
+      }
+
+    override def apply(p: Par, args: Seq[Par])(implicit env: Env[Par]): M[Par] =
+      for {
+        _ <- if (args.nonEmpty)
+              MethodArgumentNumberMismatch("toMap", 0, args.length).raiseError[M, Unit]
+            else ().pure[M]
+        baseExpr <- evalSingleExpr(p)
+        result   <- toMap(baseExpr)
+      } yield result
+  }
+
   private val methodTable: Map[String, Method] =
     Map(
       "nth"         -> nth,
@@ -1393,7 +1405,9 @@ class DebruijnInterpreter[M[_], F[_]](
       "size"        -> size,
       "length"      -> length,
       "slice"       -> slice,
-      "toList"      -> toList
+      "toList"      -> toList,
+      "toSet"       -> toSet,
+      "toMap"       -> toMap
     )
 
   private def evalSingleExpr(p: Par)(implicit env: Env[Par]): M[Expr] =
@@ -1489,14 +1503,12 @@ class DebruijnInterpreter[M[_], F[_]](
     * Evaluate any top level expressions in @param Par .
     */
   def evalExpr(par: Par)(implicit env: Env[Par]): M[Par] =
-    spanM.trace(topLevelExpressionSpanLabel) {
-      for {
-        evaledExprs <- par.exprs.toList.traverse(evalExprToPar)
-        // Note: the locallyFree cache in par could now be invalid, but given
-        // that locallyFree is for use in the matcher, and the matcher uses
-        // substitution, it will resolve in that case. AlwaysEqual makes sure
-        // that this isn't an issue in the rest of cases.
-        result = evaledExprs.foldLeft(par.copy(exprs = Vector()))(_ ++ _)
-      } yield result
-    }
+    for {
+      evaledExprs <- par.exprs.toList.traverse(evalExprToPar)
+      // Note: the locallyFree cache in par could now be invalid, but given
+      // that locallyFree is for use in the matcher, and the matcher uses
+      // substitution, it will resolve in that case. AlwaysEqual makes sure
+      // that this isn't an issue in the rest of cases.
+      result = evaledExprs.foldLeft(par.copy(exprs = Vector()))(_ ++ _)
+    } yield result
 }

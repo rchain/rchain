@@ -7,6 +7,7 @@ from typing import (
 )
 
 from docker.client import DockerClient
+from rchain.crypto import PrivateKey
 
 from . import conftest
 from .common import (
@@ -28,6 +29,7 @@ from .wait import (
     wait_for_approved_block_received,
 )
 
+USER_KEY = PrivateKey.from_hex("3596e2e5fd14b24a6d84af04b7f0a8f13e3e68ee2ca91dc4b19550f12e61502c")
 
 @contextlib.contextmanager
 def start_network(*, context: TestingContext, bootstrap: Node, allowed_peers: List[str] = None) -> Generator[Network, None, None]:
@@ -36,7 +38,7 @@ def start_network(*, context: TestingContext, bootstrap: Node, allowed_peers: Li
         bootstrap=bootstrap,
         network=bootstrap.network,
         bonds_file=context.bonds_file,
-        key_pairs=context.peers_keypairs,
+        private_keys=context.peers_keys,
         command_timeout=context.command_timeout,
         allowed_peers=allowed_peers,
     )
@@ -85,7 +87,7 @@ def test_casper_propose_and_deploy(command_line_options: CommandLineOptions, ran
                 random_token = random_string(context, token_size)
 
                 expected_string = make_expected_string(node, random_token)
-                block_hash = node.deploy_contract_with_substitution({"@placeholder@": expected_string}, contract_path, '3596e2e5fd14b24a6d84af04b7f0a8f13e3e68ee2ca91dc4b19550f12e61502c')
+                block_hash = node.deploy_contract_with_substitution({"@placeholder@": expected_string}, contract_path, USER_KEY)
 
                 expected_string = make_expected_string(node, random_token)
                 other_nodes = [n for n in network.nodes if n.container.name != node.container.name]

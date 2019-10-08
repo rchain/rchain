@@ -3,6 +3,7 @@ package coop.rchain.shared
 import cats._
 import cats.effect.Sync
 import cats.implicits._
+import cats.tagless._
 import coop.rchain.catscontrib.effect.implicits._
 
 import scala.language.experimental.macros
@@ -34,6 +35,9 @@ class LogSourceMacros(val c: blackbox.Context) {
   }
 }
 
+@autoFunctorK
+@autoSemigroupalK
+@autoProductNK
 trait Log[F[_]] {
   def isTraceEnabled(implicit ev: LogSource): F[Boolean]
   def trace(msg: => String)(implicit ev: LogSource): F[Unit]

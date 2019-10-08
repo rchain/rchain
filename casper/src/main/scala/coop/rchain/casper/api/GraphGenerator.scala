@@ -1,7 +1,7 @@
 package coop.rchain.casper.api
 
-import coop.rchain.blockstorage.{BlockDagRepresentation, BlockStore}
-import coop.rchain.casper._, MultiParentCasperRef.MultiParentCasperRef
+import coop.rchain.blockstorage.BlockStore
+import coop.rchain.casper._
 import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.graphz._
 import coop.rchain.shared.Log
@@ -37,7 +37,7 @@ object GraphzGenerator {
   }
 
   def dagAsCluster[
-      F[_]: Monad: Sync: MultiParentCasperRef: Log: SafetyOracle: BlockStore,
+      F[_]: Monad: Sync: Log: SafetyOracle: BlockStore,
       G[_]: Monad: GraphSerializer
   ](
       topoSort: Vector[Vector[BlockHash]],
@@ -59,8 +59,7 @@ object GraphzGenerator {
             case (_, blocks) =>
               blocks.get(firstTs).map(_.flatMap(b => b.parentsHashes)).getOrElse(List.empty[String])
           }
-          .toSet
-          .toList
+          .distinct
           .sorted
         // draw ancesotrs first
         _ <- allAncestors.traverse(
@@ -99,29 +98,28 @@ object GraphzGenerator {
     }
 
   private def accumulateDagInfo[
-      F[_]: Monad: Sync: MultiParentCasperRef: Log: SafetyOracle: BlockStore,
+      F[_]: Monad: Sync: Log: SafetyOracle: BlockStore,
       G[_]
   ](
       acc: DagInfo[G],
       blockHashes: Vector[BlockHash]
   ): F[DagInfo[G]] =
     for {
-      blocks    <- blockHashes.traverse(ProtoUtil.unsafeGetBlock[F])
-      timeEntry = blocks.head.getBody.getState.blockNumber
-      validators = blocks.toList.map {
-        case b =>
-          val blockHash       = PrettyPrinter.buildString(b.blockHash)
-          val blockSenderHash = PrettyPrinter.buildString(b.sender)
-          val parents = b.getHeader.parentsHashList.toList
-            .map(PrettyPrinter.buildString)
-          val justifications = b.justifications
-            .map(_.latestBlockHash)
-            .map(PrettyPrinter.buildString)
-            .toSet
-            .toList
-          val validatorBlocks =
-            Map(timeEntry -> List(ValidatorBlock(blockHash, parents, justifications)))
-          Map(blockSenderHash -> validatorBlocks)
+      blocks    <- blockHashes.traverse(ProtoUtil.getBlock[F])
+      timeEntry = blocks.head.body.state.blockNumber
+      validators = blocks.toList.map { b =>
+        val blockHash       = PrettyPrinter.buildString(b.blockHash)
+        val blockSenderHash = PrettyPrinter.buildString(b.sender)
+        val parents = b.header.parentsHashList.toList
+          .map(PrettyPrinter.buildString)
+        val justifications = b.justifications
+          .map(_.latestBlockHash)
+          .map(PrettyPrinter.buildString)
+          .toSet
+          .toList
+        val validatorBlocks =
+          Map(timeEntry -> List(ValidatorBlock(blockHash, parents, justifications)))
+        Map(blockSenderHash -> validatorBlocks)
       }
     } yield acc.copy(
       timeseries = timeEntry :: acc.timeseries,

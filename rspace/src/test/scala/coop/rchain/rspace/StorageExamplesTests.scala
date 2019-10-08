@@ -11,7 +11,6 @@ import coop.rchain.rspace.examples.AddressBookExample
 import coop.rchain.rspace.examples.AddressBookExample._
 import coop.rchain.rspace.examples.AddressBookExample.implicits._
 import coop.rchain.rspace.history.Branch
-import coop.rchain.rspace.internal.{codecGNAT, GNAT}
 import coop.rchain.rspace.util._
 import coop.rchain.rspace.test._
 import coop.rchain.shared.Cell
@@ -288,7 +287,7 @@ abstract class InMemoryHotStoreStorageExamplesTestsBase[F[_]]
       (hr, ts, b) => {
         val atomicStore = AtomicAny(ts)
         val space =
-          new RSpace[F, Channel, Pattern, Entry, Entry, EntriesCaptor](hr, atomicStore, b)
+          new RSpace[F, Channel, Pattern, Entry, EntriesCaptor](hr, atomicStore, b)
         Applicative[F].pure((ts, atomicStore, space))
       }
     setupTestingSpace(creator, f)

@@ -111,9 +111,7 @@ class InterpreterSpec extends FlatSpec with Matchers {
     val EvaluateResult(_, errors) =
       mkRuntime[Task](tmpPrefix, mapSize)
         .use { runtime =>
-          for {
-            res <- execute(runtime, badRholang)
-          } yield (res)
+          execute(runtime, badRholang)
         }
         .runSyncUnsafe(maxDuration)
 
@@ -126,9 +124,7 @@ class InterpreterSpec extends FlatSpec with Matchers {
     val EvaluateResult(cost, errors) =
       mkRuntime[Task](tmpPrefix, mapSize)
         .use { runtime =>
-          for {
-            res <- execute(runtime, badRholang)
-          } yield (res)
+          execute(runtime, badRholang)
         }
         .runSyncUnsafe(maxDuration)
 
@@ -142,9 +138,7 @@ class InterpreterSpec extends FlatSpec with Matchers {
       mkRuntime[Task](tmpPrefix, mapSize)
         .use { runtime =>
           implicit val c = runtime.cost
-          for {
-            res <- InterpreterUtil.evaluate(runtime, sendRho, parsingCost(sendRho) - Cost(1))
-          } yield (res)
+          InterpreterUtil.evaluateResult(runtime, sendRho, parsingCost(sendRho) - Cost(1))
         }
         .runSyncUnsafe(maxDuration)
 
@@ -176,7 +170,7 @@ class InterpreterSpec extends FlatSpec with Matchers {
       source: String
   ): Task[EvaluateResult] = {
     implicit val c = runtime.cost
-    InterpreterUtil.evaluate[Task](runtime, source)
+    InterpreterUtil.evaluateResult[Task](runtime, source)
   }
 
 }

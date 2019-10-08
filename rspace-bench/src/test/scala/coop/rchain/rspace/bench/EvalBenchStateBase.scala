@@ -1,5 +1,7 @@
 package coop.rchain.rspace.bench
 
+import cats._, cats.data._, cats.implicits._
+import cats.effect._
 import java.io.{FileNotFoundException, InputStreamReader}
 import java.nio.file.{Files, Path}
 

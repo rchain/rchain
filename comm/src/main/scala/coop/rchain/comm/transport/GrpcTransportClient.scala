@@ -121,39 +121,26 @@ class GrpcTransportClient(
   private def streamBlobFile(
       path: Path,
       peer: PeerNode,
-      sender: PeerNode,
-      retries: Int = 3,
-      delayBetweenRetries: FiniteDuration = 1.second
+      sender: PeerNode
   ): Task[Unit] = {
-
-    def delay[A](a: => Task[A]): Task[A] =
-      Task.defer(a).delayExecution(delayBetweenRetries)
 
     def timeout(packet: Packet): FiniteDuration =
       Math.max(packet.content.size().toLong * 5, DefaultSendTimeout.toMicros).micros
 
-    def handle(retryCount: Int): Task[Unit] =
-      if (retryCount > 0)
-        PacketOps.restore[Task](path) >>= {
-          case Right(packet) =>
-            withClient(peer, timeout(packet))(
-              GrpcTransport.stream(networkId, peer, Blob(sender, packet), packetChunkSize)
-            ).flatMap {
-              case Left(error @ TimeOut) =>
-                log.debug(
-                  s"Error while streaming packet to $peer (timeout: ${timeout(packet).toMillis}ms): ${error.message}"
-                ) >> delay(handle(retryCount - 1))
-              case Left(error) =>
-                log.error(
-                  s"Error while streaming packet to $peer (timeout: ${timeout(packet).toMillis}ms): ${error.message}"
-                )
-              case Right(_) => log.info(s"Streamed packet $path to $peer")
-            }
+    PacketOps.restore[Task](path) >>= {
+      case Right(packet) =>
+        withClient(peer, timeout(packet))(
+          GrpcTransport.stream(networkId, peer, Blob(sender, packet), packetChunkSize)
+        ).flatMap {
           case Left(error) =>
-            log.error(s"Error while streaming packet $path to $peer: ${error.message}")
-        } else log.debug(s"Giving up on streaming packet $path to $peer")
-
-    handle(retries)
+            log.debug(
+              s"Error while streaming packet to $peer (timeout: ${timeout(packet).toMillis}ms): ${error.message}"
+            )
+          case Right(_) => log.info(s"Streamed packet $path to $peer")
+        }
+      case Left(error) =>
+        log.error(s"Error while streaming packet $path to $peer: ${error.message}")
+    }
   }
 
 }

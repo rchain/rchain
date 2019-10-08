@@ -1,10 +1,7 @@
 """Tests for the testing code itself."""
 
-import random
+from rchain.crypto import PrivateKey
 
-from .common import (
-    KeyPair,
-)
 from .rnode import (
     extract_block_hash_from_propose_output,
     extract_block_count_from_show_blocks,
@@ -143,7 +140,7 @@ def test_extract_validator_stake_from_bonds_validator_str() -> None:
     assert validator_stake['23bb89653c1d43578ed421e655e7a0ed9f3ed2e7eab820ad7739277e380cafa3'] == 81
 
 def test_extract_block_hash_from_propose_output() -> None:
-    response = "Response: Success! Block a91208047c... created and added.\n"
+    response = "Response: Success! Block a91208047c created and added.\n"
     assert extract_block_hash_from_propose_output(response) == "a91208047c"
 
 
@@ -156,19 +153,18 @@ def test_extract_validator_stake_from_deploy_cost_str() -> None:
 
 
 def test_make_wallets_file_lines() -> None:
-    random_generator = random.Random(1547120283)
-    validator_keys = [
-        KeyPair(private_key='80366db5fbb8dad7946f27037422715e4176dda41d582224db87b6c3b783d709', public_key='1cd8bf79a2c1bd0afa160f6cdfeb8597257e48135c9bf5e4823f2875a1492c97'),
-        KeyPair(private_key='120d42175739387af0264921bb117e4c4c05fbe2ce5410031e8b158c6e414bb5', public_key='02ab69930f74b931209df3ce54e3993674ab3e7c98f715608a5e74048b332821'),
-        KeyPair(private_key='1f52d0bce0a92f5c79f2a88aae6d391ddf853e2eb8e688c5aa68002205f92dad', public_key='043c56051a613623cd024976427c073fe9c198ac2b98315a4baff9d333fbb42e'),
-    ]
+    wallets_map = {
+        PrivateKey.from_hex("80366db5fbb8dad7946f27037422715e4176dda41d582224db87b6c3b783d709"): 40,
+        PrivateKey.from_hex("120d42175739387af0264921bb117e4c4c05fbe2ce5410031e8b158c6e414bb5"): 45,
+        PrivateKey.from_hex("1f52d0bce0a92f5c79f2a88aae6d391ddf853e2eb8e688c5aa68002205f92dad"): 26
+    }
 
-    output = make_wallets_file_lines(random_generator, validator_keys)
+    output = make_wallets_file_lines(wallets_map)
 
     assert output == [
-        '0x1cd8bf79a2c1bd0afa160f6cdfeb8597257e48135c9bf5e4823f2875a1492c97,40,0',
-        '0x02ab69930f74b931209df3ce54e3993674ab3e7c98f715608a5e74048b332821,45,0',
-        '0x043c56051a613623cd024976427c073fe9c198ac2b98315a4baff9d333fbb42e,26,0',
+        '26218db6e5a2eed1901f72cea58fda7ef1f602c6,40,0',
+        '42c828c183163cb50f6ad5207a10899b59aae91c,45,0',
+        '2a11fd494610330f3b522562f7204670f8928133,26,0',
     ]
 
 

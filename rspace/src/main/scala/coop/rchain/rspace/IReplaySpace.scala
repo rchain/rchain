@@ -2,11 +2,11 @@ package coop.rchain.rspace
 
 import cats.effect.Sync
 import cats.implicits._
-import coop.rchain.shared.Log
-import coop.rchain.rspace.trace._
 import coop.rchain.rspace.internal._
+import coop.rchain.rspace.trace._
+import coop.rchain.shared.Log
 
-trait IReplaySpace[F[_], C, P, A, R, K] extends ISpace[F, C, P, A, R, K] {
+trait IReplaySpace[F[_], C, P, A, K] extends ISpace[F, C, P, A, K] {
 
   protected def logF: Log[F]
 
@@ -37,8 +37,9 @@ trait IReplaySpace[F[_], C, P, A, R, K] extends ISpace[F, C, P, A, R, K] {
 
         // create and prepare the ReplayData table
         replayData.clear()
+
         commEvents.foreach {
-          case comm @ COMM(consume, produces, _) =>
+          case comm @ COMM(consume, produces, _, _) =>
             (consume +: produces).foreach { ioEvent =>
               if (newStuff(ioEvent)) {
                 replayData.addBinding(ioEvent, comm)
@@ -55,8 +56,9 @@ trait IReplaySpace[F[_], C, P, A, R, K] extends ISpace[F, C, P, A, R, K] {
       .ifM(
         ifTrue = syncF.unit,
         ifFalse = {
-          val msg = s"unused comm event: replayData multimap has ${replayData.size} elements left"
-          logF.error(msg) *> syncF.raiseError[Unit](
+          val msg =
+            s"Unused COMM event: replayData multimap has ${replayData.size} elements left"
+          logF.error(msg) >> logF.error(replayData.toString) >> syncF.raiseError[Unit](
             new ReplayException(msg)
           )
         }

@@ -1,32 +1,27 @@
 package coop.rchain.casper
 
-import cats.data.EitherT
-import cats.effect.{Resource, Sync}
+import scala.util.{Random, Try}
+
+import cats.effect.Sync
 import cats.implicits._
+
+import coop.rchain.blockstorage.dag.BlockDagStorage.DeployId
 import coop.rchain.casper.MultiParentCasper.ignoreDoppelgangerCheck
 import coop.rchain.casper.genesis.Genesis
 import coop.rchain.casper.genesis.contracts._
-import coop.rchain.casper.helper.HashSetCasperTestNode
-import coop.rchain.casper.helper.HashSetCasperTestNode._
+import coop.rchain.casper.helper.TestNode
+import coop.rchain.casper.helper.TestNode._
 import coop.rchain.casper.protocol.{BlockMessage, DeployData}
-import coop.rchain.casper.util.{ConstructDeploy, GenesisBuilder, ProtoUtil}
-import coop.rchain.casper.util.comm.TestNetwork
-import coop.rchain.crypto.codec.Base16
-import coop.rchain.crypto.hash.Keccak256
-import coop.rchain.rholang.interpreter.accounting
-import monix.execution.Scheduler.Implicits.global
-import coop.rchain.catscontrib._
+import coop.rchain.casper.util.{ConstructDeploy, GenesisBuilder}
 import coop.rchain.catscontrib.TaskContrib._
-import coop.rchain.comm.CommError
 import coop.rchain.crypto.signatures.Secp256k1
-import coop.rchain.crypto.{PrivateKey, PublicKey}
+import coop.rchain.crypto.PublicKey
 import coop.rchain.rholang.interpreter.util.RevAddress
+
 import monix.eval.Task
+import monix.execution.Scheduler.Implicits.global
 import org.scalacheck._
 import org.scalacheck.commands.Commands
-
-import scala.collection.immutable
-import scala.util.{Random, Try}
 
 case class RNode(idx: Int, name: String, deployed: Boolean)
 
@@ -40,7 +35,7 @@ object HashSetCasperPropertiesApp {
     HashSetCasperSpecification.property().check(_.withMinSuccessfulTests(1))
 }
 
-class NodeBox(val node: HashSetCasperTestNode[Effect], var lastBlock: Option[BlockMessage]) {
+class NodeBox(val node: TestNode[Effect], var lastBlock: Option[BlockMessage]) {
   def update(bm: Option[BlockMessage]): Unit = this.lastBlock = bm
 }
 
@@ -64,7 +59,6 @@ object HashSetCasperActions {
             maximumBond = Long.MaxValue,
             validators = bonds.toSeq.map(Validator.tupled)
           ),
-          genesisPk = Secp256k1.newKeyPair._2,
           timestamp = 0L,
           vaults = bonds.toList.map {
             case (pk, stake) =>
@@ -77,21 +71,21 @@ object HashSetCasperActions {
   }
 
   def deploy(
-      node: HashSetCasperTestNode[Effect],
+      node: TestNode[Effect],
       deployData: DeployData
   ): Effect[Either[DeployError, DeployId]] =
     node.casperEff.deploy(deployData)
 
-  def create(node: HashSetCasperTestNode[Effect]): Task[BlockMessage] =
+  def create(node: TestNode[Effect]): Task[BlockMessage] =
     for {
       createBlockResult1    <- node.casperEff.createBlock
       Created(signedBlock1) = createBlockResult1
     } yield signedBlock1
 
   def add(
-      node: HashSetCasperTestNode[Effect],
+      node: TestNode[Effect],
       signed: BlockMessage
-  ): Effect[Either[Throwable, BlockStatus]] =
+  ): Effect[Either[Throwable, ValidBlockProcessing]] =
     Sync[Effect].attempt(
       node.casperEff.addBlock(signed, ignoreDoppelgangerCheck[Effect])
     )
@@ -130,7 +124,7 @@ object HashSetCasperSpecification extends Commands {
       validators.zip(weights).toMap
     })
 
-    val nodesResource = HashSetCasperTestNode
+    val nodesResource = TestNode
       .networkEff(genesisContext, networkSize = state.size)
       .map(_.toList)
 
@@ -195,11 +189,11 @@ object HashSetCasperSpecification extends Commands {
 
   }
 
-  def isValidAndNoErrors(result: Try[(BlockStatus, List[String])]): Boolean =
-    result.isSuccess && result.get._1 == Valid && result.get._2.isEmpty
+  def isValidAndNoErrors(result: Try[(ValidBlockProcessing, List[String])]): Boolean =
+    result.isSuccess && result.get._1.isRight && result.get._2.isEmpty
 
   case class Propose(node: RNode) extends Command {
-    override type Result = (BlockStatus, List[String])
+    override type Result = (ValidBlockProcessing, List[String])
 
     override def run(sut: Sut): Result = {
       val validator = sut.nodes(node.idx)
@@ -217,7 +211,7 @@ object HashSetCasperSpecification extends Commands {
   }
 
   case class DeployAndPropose(node: RNode) extends Command {
-    override type Result = (BlockStatus, List[String])
+    override type Result = (ValidBlockProcessing, List[String])
 
     override def run(sut: Sut): Result = {
       val validator = sut.nodes(node.idx).node

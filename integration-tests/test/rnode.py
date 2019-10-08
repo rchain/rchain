@@ -23,14 +23,17 @@ from typing import (
 from docker.client import DockerClient
 from docker.models.containers import Container
 from docker.models.containers import ExecResult
-
+from rchain.crypto import PrivateKey
+from rchain.certificate import get_node_id_raw
+from cryptography.hazmat.primitives.serialization import load_pem_private_key
+from cryptography.hazmat.backends import default_backend
 from .common import (
-    KeyPair,
     make_tempdir,
     make_tempfile,
     TestingContext,
     NonZeroExitCodeError,
     GetBlockError,
+    ParsingError,
 )
 from .wait import (
     wait_for_node_started,
@@ -169,7 +172,7 @@ def extract_block_hash_from_propose_output(propose_output: str) -> str:
 
     Response: Success! Block a91208047c... created and added.\n
     """
-    match = re.match(r'Response: Success! Block ([0-9a-f]+)\.\.\. created and added.', propose_output.strip())
+    match = re.match(r'Response: Success! Block ([0-9a-f]+) created and added.', propose_output.strip())
     if match is None:
         raise UnexpectedProposeOutputFormatError(propose_output)
     return match.group(1)
@@ -210,6 +213,10 @@ class Node:
 
     def get_node_pem_key(self) -> bytes:
         return self.shell_out("cat", rnode_key_path).encode('utf8')
+
+    def get_node_id_raw(self) -> bytes:
+        key = load_pem_private_key(self.get_node_pem_key(), None, default_backend())
+        return get_node_id_raw(key)
 
     def logs(self) -> str:
         return self.container.logs().decode('utf-8')
@@ -255,7 +262,8 @@ class Node:
 
     def show_block_parsed(self, hash: str) -> Dict[str, str]:
         show_block_output = self.show_block(hash)
-        return parse_show_block_output(show_block_output)
+        block_info = parse_show_block_output(show_block_output)
+        return block_info
 
     def get_block(self, block_hash: str) -> str:
         try:
@@ -304,8 +312,16 @@ class Node:
     def eval(self, rho_file_path: str) -> str:
         return self.rnode_command('eval', rho_file_path)
 
-    def deploy(self, rho_file_path: str, private_key: str) -> str:
-        return extract_deploy_id_from_deploy_output(self.rnode_command('deploy', '--private-key={}'.format(private_key), '--phlo-limit=1000000', '--phlo-price=1', rho_file_path, stderr=False))
+    def deploy(self, rho_file_path: str, private_key: PrivateKey) -> str:
+        try:
+            output = self.rnode_command('deploy', '--private-key={}'.format(private_key.to_hex()), '--phlo-limit=1000000', '--phlo-price=1', rho_file_path, stderr=False)
+            deploy_id = extract_deploy_id_from_deploy_output(output)
+            return deploy_id
+        except NonZeroExitCodeError as e:
+            if "Parsing error" in e.output:
+                raise ParsingError(command=e.command, exit_code=e.exit_code, output=e.output)
+            # TODO out of phlogiston error
+            raise e
 
     def get_vdag(self) -> str:
         return self.rnode_command('vdag')
@@ -326,12 +342,19 @@ class Node:
         return extract_deploy_id_from_deploy_output(deploy_out)
 
     def find_deploy(self, deploy_id: str) -> Dict[str, str]:
-        return parse_show_block_output(self.rnode_command("find-deploy", "--deploy-id", deploy_id, stderr=False))
+        output = self.rnode_command("find-deploy", "--deploy-id", deploy_id, stderr=False)
+        block_info = parse_show_block_output(output)
+        return block_info
 
     def propose(self) -> str:
         output = self.rnode_command('propose', stderr=False)
         block_hash = extract_block_hash_from_propose_output(output)
         return block_hash
+
+    def last_finalized_block(self) -> Dict[str, str]:
+        output = self.rnode_command('last-finalized-block')
+        block_info = parse_show_block_output(output)
+        return block_info
 
     def repl(self, rholang_code: str, stderr: bool = False) -> str:
         quoted_rholang_code = shlex.quote(rholang_code)
@@ -356,7 +379,7 @@ class Node:
         log_content = self.logs()
         return Node.__log_message_rx.split(log_content)
 
-    def deploy_contract_with_substitution(self, substitute_dict: Dict[str, str], rho_file_path: str, private_key: str) -> str:
+    def deploy_contract_with_substitution(self, substitute_dict: Dict[str, str], rho_file_path: str, private_key: PrivateKey) -> str:
         """
         Supposed that you have a contract with content like below.
 
@@ -501,7 +524,7 @@ def make_bootstrap_node(
     docker_client: DockerClient,
     network: str,
     bonds_file: str,
-    keypair: KeyPair,
+    private_key: PrivateKey,
     command_timeout: int,
     allowed_peers: Optional[List[str]] = None,
     mem_limit: Optional[str] = None,
@@ -509,6 +532,7 @@ def make_bootstrap_node(
     cli_options: Optional[Dict] = None,
     mount_dir: Optional[str] = None,
     wallets_file: Optional[str] = None,
+    synchrony_constraint_threshold: float = 0.0
 ) -> Node:
     key_file = get_absolute_path_for_mounting("bootstrap_certificate/node.key.pem", mount_dir=mount_dir)
     cert_file = get_absolute_path_for_mounting("bootstrap_certificate/node.certificate.pem", mount_dir=mount_dir)
@@ -523,10 +547,11 @@ def make_bootstrap_node(
     ])
 
     container_command_options = {
-        "--port":                   40400,
-        "--validator-private-key":  keypair.private_key,
-        "--validator-public-key":   keypair.public_key,
-        "--host":                   container_name,
+        "--port":                           40400,
+        "--validator-private-key":          private_key.to_hex(),
+        "--validator-public-key":           private_key.get_public_key().to_hex(),
+        "--host":                           container_name,
+        "--synchrony-constraint-threshold": synchrony_constraint_threshold,
     }
 
     if cli_flags is not None:
@@ -581,12 +606,13 @@ def make_peer(
     bonds_file: str,
     command_timeout: int,
     bootstrap: Node,
-    keypair: KeyPair,
+    private_key: PrivateKey,
     allowed_peers: Optional[List[str]] = None,
     mem_limit: Optional[str] = None,
     wallets_file: Optional[str] = None,
     cli_flags: Optional[AbstractSet] = None,
     cli_options: Optional[Dict] = None,
+    synchrony_constraint_threshold: float = 0.0
 ) -> Node:
     assert isinstance(name, str)
     assert '_' not in name, 'Underscore is not allowed in host name'
@@ -604,10 +630,11 @@ def make_peer(
         container_command_flags.update(cli_flags)
 
     container_command_options = {
-        "--bootstrap":              bootstrap_address,
-        "--validator-private-key":  keypair.private_key,
-        "--validator-public-key":   keypair.public_key,
-        "--host":                   name,
+        "--bootstrap":                      bootstrap_address,
+        "--validator-private-key":          private_key.to_hex(),
+        "--validator-public-key":           private_key.get_public_key().to_hex(),
+        "--host":                           name,
+        "--synchrony-constraint-threshold": synchrony_constraint_threshold,
     }
 
     if cli_options is not None:
@@ -637,10 +664,11 @@ def started_peer(
     network: str,
     name: str,
     bootstrap: Node,
-    keypair: KeyPair,
+    private_key: PrivateKey,
     wallets_file: Optional[str] = None,
     cli_flags: Optional[AbstractSet] = None,
     cli_options: Optional[Dict] = None,
+    synchrony_constraint_threshold: float = 0.0
 ) -> Generator[Node, None, None]:
     peer = make_peer(
         docker_client=context.docker,
@@ -648,11 +676,12 @@ def started_peer(
         name=name,
         bonds_file=context.bonds_file,
         bootstrap=bootstrap,
-        keypair=keypair,
+        private_key=private_key,
         command_timeout=context.command_timeout,
         wallets_file=wallets_file,
         cli_flags=cli_flags,
         cli_options=cli_options,
+        synchrony_constraint_threshold=synchrony_constraint_threshold
     )
     try:
         wait_for_node_started(context, peer)
@@ -667,14 +696,18 @@ def bootstrap_connected_peer(
     context: TestingContext,
     bootstrap: Node,
     name: str,
-    keypair: KeyPair,
+    private_key: PrivateKey,
+    cli_options: Optional[Dict[str, str]] = None,
+    synchrony_constraint_threshold: float = 0.0
 ) -> Generator[Node, None, None]:
     with started_peer(
         context=context,
         network=bootstrap.network,
         name=name,
         bootstrap=bootstrap,
-        keypair=keypair,
+        private_key=private_key,
+        cli_options=cli_options,
+        synchrony_constraint_threshold=synchrony_constraint_threshold
     ) as peer:
         wait_for_approved_block_received_handler_state(context, peer)
         yield peer
@@ -686,19 +719,19 @@ def create_peer_nodes(
     bootstrap: Node,
     network: str,
     bonds_file: str,
-    key_pairs: List[KeyPair],
+    private_keys: List[PrivateKey],
     command_timeout: int,
     allowed_peers: Optional[List[str]] = None,
     mem_limit: Optional[str] = None,
 ) -> List[Node]:
-    assert len(set(key_pairs)) == len(key_pairs), "There shouldn't be any duplicates in the key pairs"
+    assert len(set(private_keys)) == len(private_keys), "There shouldn't be any duplicates in the key pairs"
 
     if allowed_peers is None:
-        allowed_peers = [bootstrap.name] + [make_peer_name(network, str(i)) for i in range(0, len(key_pairs))]
+        allowed_peers = [bootstrap.name] + [make_peer_name(network, str(i)) for i in range(0, len(private_keys))]
 
     result = []
     try:
-        for i, keypair in enumerate(key_pairs):
+        for i, private_key in enumerate(private_keys):
             peer_node = make_peer(
                 docker_client=docker_client,
                 network=network,
@@ -706,7 +739,7 @@ def create_peer_nodes(
                 bonds_file=bonds_file,
                 command_timeout=command_timeout,
                 bootstrap=bootstrap,
-                keypair=keypair,
+                private_key=private_key,
                 allowed_peers=allowed_peers,
                 mem_limit=mem_limit if mem_limit is not None else '4G',
             )
@@ -741,19 +774,21 @@ def started_bootstrap(
     network: str,
     mount_dir: str = None,
     cli_flags: Optional[AbstractSet] = None,
-    cli_options: Optional[Dict] = None,
+    cli_options: Optional[Dict[str, str]] = None,
     wallets_file: Optional[str] = None,
+    synchrony_constraint_threshold: float = 0.0
 ) -> Generator[Node, None, None]:
     bootstrap_node = make_bootstrap_node(
         docker_client=context.docker,
         network=network,
         bonds_file=context.bonds_file,
-        keypair=context.bootstrap_keypair,
+        private_key=context.bootstrap_key,
         command_timeout=context.command_timeout,
         mount_dir=mount_dir,
         cli_flags=cli_flags,
         cli_options=cli_options,
         wallets_file=wallets_file,
+        synchrony_constraint_threshold=synchrony_constraint_threshold
     )
     try:
         wait_for_node_started(context, bootstrap_node)
@@ -763,9 +798,21 @@ def started_bootstrap(
 
 
 @contextlib.contextmanager
-def docker_network_with_started_bootstrap(context: TestingContext, cli_flags: Optional[AbstractSet] = None) -> Generator[Node, None, None]:
+def docker_network_with_started_bootstrap(
+    context: TestingContext,
+    cli_flags: Optional[AbstractSet] = None,
+    cli_options: Optional[Dict] = None,
+    synchrony_constraint_threshold: float = 0.0
+) -> Generator[Node, None, None]:
     with docker_network(context, context.docker) as network:
-        with started_bootstrap(context=context, network=network, mount_dir=context.mount_dir, cli_flags=cli_flags) as bootstrap:
+        with started_bootstrap(
+                context=context,
+                network=network,
+                mount_dir=context.mount_dir,
+                cli_flags=cli_flags,
+                cli_options=cli_options,
+                synchrony_constraint_threshold=synchrony_constraint_threshold
+        ) as bootstrap:
             wait_for_approved_block_received_handler_state(context, bootstrap)
             yield bootstrap
 

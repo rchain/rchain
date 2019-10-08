@@ -1,24 +1,38 @@
 package coop.rchain.casper
 
-import coop.rchain.casper.helper.HashSetCasperTestNode
-import coop.rchain.casper.helper.HashSetCasperTestNode._
-import coop.rchain.casper.scalatestcontrib._
+import cats.implicits._
+import coop.rchain.casper.helper.TestNode
+import coop.rchain.casper.helper.TestNode._
 import coop.rchain.casper.util.{ConstructDeploy, RSpaceUtil}
+import coop.rchain.crypto.hash.Blake2b256
+import coop.rchain.crypto.signatures.Secp256k1
+import coop.rchain.models.Expr.ExprInstance.{GInt, GString}
+import coop.rchain.models.rholang.implicits._
+import coop.rchain.models.{ETuple, Par}
 import coop.rchain.p2p.EffectsTestInstances.LogicalTime
+import coop.rchain.rholang.interpreter.storage
+import coop.rchain.rspace.Serialize
+import coop.rchain.shared.ByteArrayOps._
+import coop.rchain.shared.scalatestcontrib._
 import monix.execution.Scheduler.Implicits.global
 import org.scalatest.{FlatSpec, Inspectors, Matchers}
 
-class MultiParentCasperMergeSpec extends FlatSpec with Matchers with Inspectors {
+class MultiParentCasperMergeSpec
+    extends FlatSpec
+    with Matchers
+    with Inspectors
+    with MergeabilityRules {
 
   import RSpaceUtil._
   import coop.rchain.casper.util.GenesisBuilder._
 
-  implicit val timeEff = new LogicalTime[Effect]
+  implicit val timeEff                      = new LogicalTime[Effect]
+  implicit val serializePar: Serialize[Par] = storage.serializePar
 
   val genesis = buildGenesis()
 
   "HashSetCasper" should "handle multi-parent blocks correctly" in effectTest {
-    HashSetCasperTestNode.networkEff(genesis, networkSize = 2).use { nodes =>
+    TestNode.networkEff(genesis, networkSize = 2).use { nodes =>
       implicit val rm = nodes(1).runtimeManager
       for {
         deployData0 <- ConstructDeploy.basicDeployData[Effect](0)
@@ -31,20 +45,14 @@ class MultiParentCasperMergeSpec extends FlatSpec with Matchers with Inspectors 
         )
         block0 <- nodes(0).addBlock(deploys(0))
         block1 <- nodes(1).addBlock(deploys(1))
-        _      <- nodes(0).receive()
-        _      <- nodes(1).receive()
-        _      <- nodes(0).receive()
-        _      <- nodes(1).receive()
+        _      <- TestNode.propagate(nodes)
 
         //multiparent block joining block0 and block1 since they do not conflict
-        multiparentBlock <- nodes(0).addBlock(deploys(2))
-        _                <- nodes(1).receive()
+        multiparentBlock <- nodes(0).propagateBlock(deploys(2))(nodes: _*)
 
-        _ = nodes(0).logEff.warns.isEmpty shouldBe true
-        _ = nodes(1).logEff.warns.isEmpty shouldBe true
-        _ = multiparentBlock.header.get.parentsHashList.size shouldBe 2
-        _ = nodes(0).casperEff.contains(multiparentBlock) shouldBeF true
-        _ = nodes(1).casperEff.contains(multiparentBlock) shouldBeF true
+        _ = multiparentBlock.header.parentsHashList.size shouldBe 2
+        _ <- nodes(0).contains(multiparentBlock.blockHash) shouldBeF true
+        _ <- nodes(1).contains(multiparentBlock.blockHash) shouldBeF true
         _ <- getDataAtPublicChannel[Effect](multiparentBlock, 0).map(_ shouldBe Seq("0"))
         _ <- getDataAtPublicChannel[Effect](multiparentBlock, 1).map(_ shouldBe Seq("1"))
         _ <- getDataAtPublicChannel[Effect](multiparentBlock, 2).map(_ shouldBe Seq("2"))
@@ -52,71 +60,44 @@ class MultiParentCasperMergeSpec extends FlatSpec with Matchers with Inspectors 
     }
   }
 
-  it should "handle multi-parent blocks correctly when they operate on stdout" ignore effectTest {
-    def echoContract(no: Int) = s"""new stdout(`rho:io:stdout`) in { stdout!("Contract $no") }"""
-    val time                  = System.currentTimeMillis()
-    HashSetCasperTestNode.networkEff(genesis, networkSize = 2).use { nodes =>
-      val deploys = Vector(
-        ConstructDeploy.sourceDeploy(echoContract(1), timestamp = time + 1),
-        ConstructDeploy.sourceDeploy(echoContract(2), timestamp = time + 2)
-      )
-      for {
-        block0 <- nodes(0).addBlock(deploys(0))
-        block1 <- nodes(1).addBlock(deploys(1))
-        _      <- nodes(0).receive()
-        _      <- nodes(1).receive()
-        _      <- nodes(0).receive()
-        _      <- nodes(1).receive()
-
-        //multiparent block joining block0 and block1 since they do not conflict
-        multiparentBlock <- nodes(0).addBlock(deploys(1))
-        _                <- nodes(1).receive()
-
-        _ = nodes(0).logEff.warns.isEmpty shouldBe true
-        _ = nodes(1).logEff.warns.isEmpty shouldBe true
-        _ = multiparentBlock.header.get.parentsHashList.size shouldBe 2
-        _ = nodes(0).casperEff.contains(multiparentBlock) shouldBeF true
-        _ = nodes(1).casperEff.contains(multiparentBlock) shouldBeF true
-      } yield ()
-    }
+  it should "handle multi-parent blocks correctly when they operate on stdout" in effectTest {
+    def echoContract(no: Int) =
+      Rho(s"""new stdout(`rho:io:stdout`) in { stdout!("Contract $no") }""")
+    merges(echoContract(1), echoContract(2), Rho("Nil"))
   }
 
-  it should "not merge blocks that touch the same channel" in effectTest {
-    HashSetCasperTestNode.networkEff(genesis, networkSize = 2).use { nodes =>
-      for {
-        current0 <- timeEff.currentMillis
-        deploy0 = ConstructDeploy.sourceDeploy(
-          "@1!(47)",
-          current0
-        )
-        current1 <- timeEff.currentMillis
-        deploy1 = ConstructDeploy.sourceDeploy(
-          "for(@x <- @1){ @1!(x) }",
-          current1
-        )
-        deploy2 <- ConstructDeploy.basicDeployData[Effect](2)
-        deploys = Vector(
-          deploy0,
-          deploy1,
-          deploy2
-        )
-        block0 <- nodes(0).addBlock(deploys(0))
-        block1 <- nodes(1).addBlock(deploys(1))
-        _      <- nodes(0).receive()
-        _      <- nodes(1).receive()
-        _      <- nodes(0).receive()
-        _      <- nodes(1).receive()
+  it should "not conflict on registry lookups" in effectTest {
+    val uri         = "rho:id:i1kuw4znrkazgbmc4mxe7ua4s1x41zd7qd8md96edxh1n87a5seht3"
+    val toSign: Par = ETuple(Seq(GInt(0), GString("foo")))
+    val toByteArray = Serialize[Par].encode(toSign).toArray
+    val sig         = Secp256k1.sign(Blake2b256.hash(toByteArray), ConstructDeploy.defaultSec)
+    val setup =
+      Rho(s"""
+             |new rs(`rho:registry:insertSigned:secp256k1`) in {
+             |  rs!(
+             |    "${ConstructDeploy.defaultPub.bytes.toHex}".hexToBytes(),
+             |    (0, "foo"),
+             |    "${sig.toHex}".hexToBytes(),
+             |    Nil
+             |  )
+             |}
+        """.stripMargin)
+    val lookup =
+      Rho(s"""
+             |new rl(`rho:registry:lookup`) in {
+             |  rl!(`$uri`, Nil)
+             |}
+        """.stripMargin)
 
-        singleParentBlock <- nodes(0).addBlock(deploys(2))
-        _                 <- nodes(1).receive()
+    merges(lookup, lookup, setup)
+  }
 
-        _      = nodes(0).logEff.warns.isEmpty shouldBe true
-        _      = nodes(1).logEff.warns.isEmpty shouldBe true
-        _      = singleParentBlock.header.get.parentsHashList.size shouldBe 1
-        _      <- nodes(0).casperEff.contains(singleParentBlock) shouldBeF true
-        result <- nodes(1).casperEff.contains(singleParentBlock) shouldBeF true
-      } yield result
-    }
+  it should "respect mergeability rules when merging blocks" in effectTest {
+    baseMergeabilityCases.map(_._2).parSequence
+  }
+
+  it should "respect mergeability rules when merging blocks containing events with peek" in effectTest {
+    peekMergeabilityCases.map(_._2).parSequence
   }
 
   it should "not produce UnusedCommEvent while merging non conflicting blocks in the presence of conflicting ones" in effectTest {
@@ -196,7 +177,7 @@ class MultiParentCasperMergeSpec extends FlatSpec with Matchers with Inspectors 
         |}
       """.stripMargin
 
-    HashSetCasperTestNode.networkEff(genesis, networkSize = 3).use { nodes =>
+    TestNode.networkEff(genesis, networkSize = 3).use { nodes =>
       val n1     = nodes(0)
       val n2     = nodes(1)
       val n3     = nodes(2)
@@ -215,7 +196,7 @@ class MultiParentCasperMergeSpec extends FlatSpec with Matchers with Inspectors 
   }
 
   it should "not merge blocks that touch the same channel involving joins" in effectTest {
-    HashSetCasperTestNode.networkEff(genesis, networkSize = 2).use { nodes =>
+    TestNode.networkEff(genesis, networkSize = 2).use { nodes =>
       for {
         current0 <- timeEff.currentMillis
         deploy0 = ConstructDeploy.sourceDeploy(
@@ -236,20 +217,73 @@ class MultiParentCasperMergeSpec extends FlatSpec with Matchers with Inspectors 
 
         block0 <- nodes(0).addBlock(deploys(0))
         block1 <- nodes(1).addBlock(deploys(1))
-        _      <- nodes(0).receive()
-        _      <- nodes(1).receive()
-        _      <- nodes(0).receive()
-        _      <- nodes(1).receive()
+        _      <- TestNode.propagate(nodes)
 
         singleParentBlock <- nodes(0).addBlock(deploys(2))
         _                 <- nodes(1).receive()
 
-        _      = nodes(0).logEff.warns.isEmpty shouldBe true
-        _      = nodes(1).logEff.warns.isEmpty shouldBe true
-        _      = singleParentBlock.header.get.parentsHashList.size shouldBe 1
-        _      <- nodes(0).casperEff.contains(singleParentBlock) shouldBeF true
-        result <- nodes(1).casperEff.contains(singleParentBlock) shouldBeF true
-      } yield result
+        _ = singleParentBlock.header.parentsHashList.size shouldBe 1
+        _ <- nodes(0).contains(singleParentBlock.blockHash) shouldBeF true
+        _ <- nodes(1).knowsAbout(singleParentBlock.blockHash) shouldBeF true
+      } yield ()
     }
   }
+
+  "This spec" should "cover all mergeability cases" in {
+    val allMergeabilityCases = {
+      val events = List(
+        "!X",
+        "!4",
+        "!C",
+        "4X",
+        "4!",
+        //"4!!",
+        "PX",
+        "P!",
+        "P!!",
+        //"!!X",
+        //"!!4",
+        //"!!C",
+        "CX",
+        "C!"
+        //"C!!"
+      )
+
+      val pairs    = events.combinations(2)
+      val diagonal = events.map(x => List(x, x))
+      val cases    = (pairs ++ diagonal).toList
+
+      def isComm(s: String) = !s.contains("X")
+
+      def makeVolatile(s: String): List[String] = isComm(s) match {
+        case false => List(s)
+        case true  => List(s, s"($s)")
+      }
+
+      def makeVolatiles(v: List[String]): List[List[String]] =
+        for {
+          a <- makeVolatile(v(0))
+          b <- makeVolatile(v(1))
+        } yield List(a, b)
+
+      val withVolatiles = cases.flatMap(makeVolatiles)
+
+      // TODO: Do not filter out missing cases
+      withVolatiles
+        .map(_.mkString(" "))
+        .toSet
+    }
+
+    val testedMergeabilityCases =
+      (baseMergeabilityCases ++ peekMergeabilityCases)
+        .map(_._1)
+    withClue(s"""Missing cases: ${allMergeabilityCases
+      .diff(testedMergeabilityCases.toSet)
+      .toList
+      .sorted
+      .mkString(", ")}\n""") {
+      testedMergeabilityCases should contain allElementsOf allMergeabilityCases
+    }
+  }
+
 }

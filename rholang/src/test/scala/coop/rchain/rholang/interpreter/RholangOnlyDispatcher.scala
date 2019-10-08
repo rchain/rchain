@@ -8,41 +8,34 @@ import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.metrics.Span
 import coop.rchain.models.TaggedContinuation.TaggedCont.{Empty, ParBody, ScalaBodyRef}
 import coop.rchain.models._
-import coop.rchain.rholang.interpreter.Runtime.RhoISpace
+import coop.rchain.rholang.interpreter.Runtime.RhoTuplespace
 import coop.rchain.rholang.interpreter.accounting._
-import coop.rchain.rholang.interpreter.storage.implicits._
-import coop.rchain.rspace.pure.PureRSpace
 
 object RholangOnlyDispatcher {
 
-  def create[M[_], F[_]](tuplespace: RhoISpace[M], urnMap: Map[String, Par] = Map.empty)(
+  def create[M[_], F[_]](tuplespace: RhoTuplespace[M], urnMap: Map[String, Par] = Map.empty)(
       implicit
       cost: _cost[M],
       parallel: Parallel[M, F],
       s: Sync[M],
-      ft: FunctorTell[M, Throwable],
-      spanM: Span[M]
-  ): (Dispatch[M, ListParWithRandom, TaggedContinuation], ChargingReducer[M]) = {
-
-    val pureSpace = PureRSpace[M].of(tuplespace)(matchListPar)
+      ft: FunctorTell[M, Throwable]
+  ): (Dispatch[M, ListParWithRandom, TaggedContinuation], Reduce[M]) = {
 
     lazy val dispatcher: Dispatch[M, ListParWithRandom, TaggedContinuation] =
       new RholangOnlyDispatcher
 
     implicit lazy val reducer: Reduce[M] =
       new DebruijnInterpreter[M, F](
-        pureSpace,
+        tuplespace,
         dispatcher,
         urnMap
       )
 
-    val chargingReducer: ChargingReducer[M] = ChargingReducer[M]
-
-    (dispatcher, chargingReducer)
+    (dispatcher, reducer)
   }
 }
 
-class RholangOnlyDispatcher[M[_]](implicit s: Sync[M], chargingReducer: ChargingReducer[M])
+class RholangOnlyDispatcher[M[_]](implicit s: Sync[M], reducer: Reduce[M])
     extends Dispatch[M, ListParWithRandom, TaggedContinuation] {
 
   def dispatch(
@@ -55,7 +48,7 @@ class RholangOnlyDispatcher[M[_]](implicit s: Sync[M], chargingReducer: Charging
               case ParBody(parWithRand) =>
                 val env     = Dispatch.buildEnv(dataList)
                 val randoms = parWithRand.randomState +: dataList.toVector.map(_.randomState)
-                chargingReducer.eval(parWithRand.body)(env, Blake2b512Random.merge(randoms))
+                reducer.eval(parWithRand.body)(env, Blake2b512Random.merge(randoms))
               case ScalaBodyRef(_) =>
                 s.unit
               case Empty =>

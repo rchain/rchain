@@ -1,6 +1,6 @@
 package coop.rchain.casper.genesis.contracts
 
-import coop.rchain.casper.protocol.DeployData
+import coop.rchain.casper.protocol.{DeployData, DeployDataProto}
 import coop.rchain.casper.util.ProtoUtil.stringToByteString
 import coop.rchain.crypto.PublicKey
 import coop.rchain.crypto.codec.Base16
@@ -14,15 +14,23 @@ object StandardDeploys {
       user: String,
       timestamp: Long
   ): DeployData = {
-    val deployData = DeployData(
-      deployer = stringToByteString(user),
-      timestamp = timestamp,
-      term = compiledSource.code,
-      phloLimit = accounting.MAX_VALUE
+    val deployData = DeployData.from(
+      DeployDataProto(
+        deployer = stringToByteString(user),
+        timestamp = timestamp,
+        term = compiledSource.code,
+        phloLimit = accounting.MAX_VALUE
+      )
     )
 
     deployData
   }
+
+  def registry: DeployData = toDeploy(
+    CompiledRholangSource("Registry.rho", NormalizerEnv.Empty),
+    "04cc94ab15247b0db1b8219388218eb7461ac74b3d88d4da8c1816fac8e258f5e0f5db9db6bb82b0cc066589dfe77a0d7449db295dab248fb93855ba91813154a9",
+    1559156071321L
+  )
 
   def listOps: DeployData = toDeploy(
     CompiledRholangSource("ListOps.rho", NormalizerEnv.Empty),
@@ -55,13 +63,6 @@ object StandardDeploys {
       1559156356769L
     )
 
-  def lockbox: DeployData =
-    toDeploy(
-      CompiledRholangSource("Lockbox.rho", NormalizerEnv.Empty),
-      "04c1a88afc0810d0b7e4dea817f458c9d0a1913ec3459fb91bb9acdf0d867873d5144366275c5a63b0225a5167c6a838bb02285072d7177dc9f6407aaba87bca93",
-      1559156146649L
-    )
-
   def revVault: DeployData =
     toDeploy(
       CompiledRholangSource("RevVault.rho", NormalizerEnv.Empty),
@@ -76,11 +77,18 @@ object StandardDeploys {
       1559156420651L
     )
 
-  def revGenerator(genesisPk: PublicKey, vaults: Seq[Vault], supply: Long): DeployData =
+  def revGenerator(vaults: Seq[Vault], supply: Long): DeployData =
     toDeploy(
-      RevGenerator(genesisPk, RevAddress.fromPublicKey(genesisPk).get, vaults, supply),
-      Base16.encode(genesisPk.bytes),
-      System.currentTimeMillis()
+      RevGenerator(vaults, supply),
+      "04d66ec9347960994d8ecda61cdcf9b636b2c95846c831b129ee0a41d29814dbe0073d41744b300bd4ea9827e444d7613677d19dee32710edef47957034163ac09",
+      1565818101792L
+    )
+
+  def treeHashMap: DeployData =
+    toDeploy(
+      CompiledRholangSource("TreeHashMap.rho", NormalizerEnv.Empty),
+      "048e5ff7f865f8fca30b2cd76b5699de5fc11bf9d807c3af98f32b684bca67b4b574976f659a65391eb240376170ffa56ecc9b8d67af386b61be36da7e368b4161",
+      1566326330483L
     )
 
 }

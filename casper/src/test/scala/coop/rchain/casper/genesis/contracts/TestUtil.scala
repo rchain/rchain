@@ -22,8 +22,7 @@ object TestUtil {
       runtime: Runtime[F]
   )(implicit rand: Blake2b512Random): F[Unit] =
     for {
-      _ <- runtime.reducer.setPhlo(Cost.UNSAFE_MAX)
+      _ <- runtime.cost.set(Cost.UNSAFE_MAX)
       _ <- runtime.reducer.inj(term)
-      _ <- runtime.reducer.phlo
     } yield ()
 }

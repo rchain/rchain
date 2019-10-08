@@ -6,17 +6,21 @@ import cats.data._
 import cats.implicits._
 import cats.effect.{Concurrent, Sync}
 import com.google.protobuf.ByteString
+import coop.rchain.casper.engine.Running
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.rholang._
 import coop.rchain.catscontrib._
 import coop.rchain.comm.transport.TransportLayer
 import coop.rchain.shared._
 import cats.effect.concurrent.Semaphore
-import coop.rchain.blockstorage.{BlockDagRepresentation, BlockDagStorage, BlockStore}
+import coop.rchain.blockstorage.dag.{BlockDagRepresentation, BlockDagStorage}
+import coop.rchain.blockstorage.dag.BlockDagStorage.DeployId
+import coop.rchain.blockstorage.BlockStore
 import coop.rchain.casper.util.ProtoUtil
+import coop.rchain.casper.util.comm.CommUtil
 import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
 import coop.rchain.catscontrib.ski.kp2
-import coop.rchain.metrics.{Metrics, Span}
+import coop.rchain.metrics.{Metrics, MetricsSemaphore, Span}
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.Validator.Validator
 
@@ -52,8 +56,8 @@ trait Casper[F[_], A] {
   def addBlock(
       b: BlockMessage,
       handleDoppelganger: (BlockMessage, Validator) => F[Unit]
-  ): F[BlockStatus]
-  def contains(b: BlockMessage): F[Boolean]
+  ): F[ValidBlockProcessing]
+  def contains(hash: BlockHash): F[Boolean]
   def deploy(d: DeployData): F[Either[DeployError, DeployId]]
   def estimator(dag: BlockDagRepresentation[F]): F[A]
   def createBlock: F[CreateBlockStatus]
@@ -67,8 +71,7 @@ trait MultiParentCasper[F[_]] extends Casper[F, IndexedSeq[BlockHash]] {
   // this initial fault weight combined with our fault tolerance threshold t.
   def normalizedInitialFault(weights: Map[Validator, Long]): F[Float]
   def lastFinalizedBlock: F[BlockMessage]
-  // TODO: Refactor hashSetCasper to take a RuntimeManager[F] just like BlockStore[F]
-  def getRuntimeManager: F[Option[RuntimeManager[F]]]
+  def getRuntimeManager: F[RuntimeManager[F]]
 }
 
 object MultiParentCasper extends MultiParentCasperInstances {
@@ -76,56 +79,60 @@ object MultiParentCasper extends MultiParentCasperInstances {
   def ignoreDoppelgangerCheck[F[_]: Applicative]: (BlockMessage, Validator) => F[Unit] =
     kp2(().pure[F])
 
-  def forkChoiceTip[F[_]: MultiParentCasper: Monad: BlockStore]: F[BlockMessage] =
+  def forkChoiceTip[F[_]: Sync: BlockStore](casper: MultiParentCasper[F]): F[BlockMessage] =
     for {
-      dag       <- MultiParentCasper[F].blockDag
-      tipHashes <- MultiParentCasper[F].estimator(dag)
+      dag       <- casper.blockDag
+      tipHashes <- casper.estimator(dag)
       tipHash   = tipHashes.head
-      tip       <- ProtoUtil.unsafeGetBlock[F](tipHash)
+      tip       <- ProtoUtil.getBlock[F](tipHash)
     } yield tip
 }
 
 sealed abstract class MultiParentCasperInstances {
-  implicit private[this] val MetricsSource: Metrics.Source =
+  implicit val MetricsSource: Metrics.Source =
     Metrics.Source(CasperMetricsSource, "casper")
   private[this] val genesisLabel = Metrics.Source(MetricsSource, "genesis")
 
-  def hashSetCasper[F[_]: Sync: Metrics: Concurrent: ConnectionsCell: TransportLayer: Log: Time: SafetyOracle: LastFinalizedBlockCalculator: BlockStore: RPConfAsk: BlockDagStorage: Span](
-      runtimeManager: RuntimeManager[F],
+  def hashSetCasper[F[_]: Sync: Metrics: Concurrent: CommUtil: Log: Time: SafetyOracle: LastFinalizedBlockCalculator: BlockStore: BlockDagStorage: Span: Running.RequestedBlocks: EventPublisher: SynchronyConstraintChecker](
       validatorId: Option[ValidatorIdentity],
       genesis: BlockMessage,
       shardId: String
-  ): F[MultiParentCasper[F]] = Span[F].trace(genesisLabel) {
-    for {
-      dag <- BlockDagStorage[F].getRepresentation
-      maybePostGenesisStateHash <- InterpreterUtil
-                                    .validateBlockCheckpoint[F](
-                                      genesis,
-                                      dag,
-                                      runtimeManager
-                                    )
-      postGenesisStateHash <- maybePostGenesisStateHash match {
-                               case Left(BlockException(ex)) => Sync[F].raiseError[StateHash](ex)
-                               case Right(None) =>
-                                 Sync[F].raiseError[StateHash](
-                                   new Exception("Genesis tuplespace validation failed!")
-                                 )
-                               case Right(Some(hash)) => hash.pure[F]
-                             }
-      blockProcessingLock <- Semaphore[F](1)
-      casperState <- Cell.mvarCell[F, CasperState](
-                      CasperState()
-                    )
-    } yield {
-      implicit val state = casperState
-      new MultiParentCasperImpl[F](
-        runtimeManager,
-        validatorId,
-        genesis,
-        postGenesisStateHash,
-        shardId,
-        blockProcessingLock
-      )
+  )(implicit runtimeManager: RuntimeManager[F]): F[MultiParentCasper[F]] =
+    Span[F].trace(genesisLabel) {
+      for {
+        dag <- BlockDagStorage[F].getRepresentation
+        maybePostGenesisStateHash <- InterpreterUtil
+                                      .validateBlockCheckpoint[F](
+                                        genesis,
+                                        dag,
+                                        runtimeManager
+                                      )
+        postGenesisStateHash <- maybePostGenesisStateHash match {
+                                 case Left(BlockError.BlockException(ex)) =>
+                                   Sync[F].raiseError[StateHash](ex)
+                                 case Left(error) =>
+                                   Sync[F].raiseError[StateHash](
+                                     new Exception(s"Block error: $error")
+                                   )
+                                 case Right(None) =>
+                                   Sync[F].raiseError[StateHash](
+                                     new Exception("Genesis tuplespace validation failed!")
+                                   )
+                                 case Right(Some(hash)) => hash.pure[F]
+                               }
+        blockProcessingLock <- MetricsSemaphore.single[F]
+        casperState <- Cell.mvarCell[F, CasperState](
+                        CasperState()
+                      )
+      } yield {
+        implicit val state = casperState
+        new MultiParentCasperImpl[F](
+          validatorId,
+          genesis,
+          postGenesisStateHash,
+          shardId,
+          blockProcessingLock
+        )
+      }
     }
-  }
 }

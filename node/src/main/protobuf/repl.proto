@@ -1,6 +1,16 @@
 syntax = "proto3";
+package repl;
 
-package coop.rchain.node.model;
+// If you are building for other languages "scalapb.proto"
+// can be manually obtained here:
+// https://raw.githubusercontent.com/scalapb/ScalaPB/master/protobuf/scalapb/scalapb.proto
+// make a scalapb directory in this file's location and place it inside
+
+import "scalapb/scalapb.proto";
+
+option (scalapb.options) = {
+  package_name: "coop.rchain.node.model"
+};
 
 service Repl {
   rpc Run (CmdRequest) returns (ReplResponse) {}
@@ -13,6 +23,7 @@ message CmdRequest {
 
 message EvalRequest {
   string program = 1;
+  bool printUnmatchedSendsOnly = 2;
 }
 
 message ReplResponse {
