@@ -211,14 +211,8 @@ object InterpreterUtil {
       _             <- Span[F].mark("before-compute-parents-post-state-get-blocks")
       blocksToApply <- blockHashesToApply.traverse(b => ProtoUtil.getBlock(b.blockHash))
       _             <- Span[F].mark("before-compute-parents-post-state-replay")
-      replayResult <- (initStateHash, blocksToApply).tailRecM {
-                       case (hash, blocks) if blocks.isEmpty =>
-                         hash.asRight[(StateHash, Vector[BlockMessage])].pure[F]
-
-                       case (hash, blocks) =>
-                         replayBlock(hash, blocks.head, parents, dag, runtimeManager).map { h =>
-                           (h, blocks.tail).asLeft[StateHash]
-                         }
+      replayResult <- blocksToApply.foldM(initStateHash) {
+                       replayBlock(_, _, parents, dag, runtimeManager)
                      }
     } yield replayResult
   }
