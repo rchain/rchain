@@ -188,7 +188,7 @@ object InterpreterUtil {
         parentStateHash.pure
 
       case (_, initStateHash) +: _ =>
-        replayIntoMergeBlock(parents, dag, runtimeManager, initStateHash).rethrow
+        replayIntoMergeBlock(parents, dag, runtimeManager, initStateHash)
     }
   }
 
@@ -200,7 +200,7 @@ object InterpreterUtil {
       dag: BlockDagRepresentation[F],
       runtimeManager: RuntimeManager[F],
       initStateHash: StateHash
-  ): F[Either[Throwable, StateHash]] = {
+  ): F[StateHash] = {
     import cats.instances.vector._
     for {
       _                  <- Span[F].mark("before-compute-parents-post-state-find-multi-parents")
@@ -213,19 +213,11 @@ object InterpreterUtil {
       _             <- Span[F].mark("before-compute-parents-post-state-replay")
       replayResult <- (initStateHash, blocksToApply).tailRecM {
                        case (hash, blocks) if blocks.isEmpty =>
-                         hash.asRight[Throwable].asRight[(StateHash, Vector[BlockMessage])].pure[F]
+                         hash.asRight[(StateHash, Vector[BlockMessage])].pure[F]
 
                        case (hash, blocks) =>
-                         replayBlock(hash, blocks.head, parents.isEmpty, dag, runtimeManager).map {
-                           case Right(h) => (h, blocks.tail).asLeft
-                           case Left((_, status)) =>
-                             val parentHashes =
-                               parents.map(p => Base16.encode(p.blockHash.toByteArray).take(8))
-                             new Exception(
-                               s"Failed status while computing post state of $parentHashes: $status"
-                             ).asInstanceOf[Throwable]
-                               .asLeft[StateHash]
-                               .asRight
+                         replayBlock(hash, blocks.head, parents, dag, runtimeManager).map { h =>
+                           (h, blocks.tail).asLeft[StateHash]
                          }
                      }
     } yield replayResult
@@ -234,15 +226,16 @@ object InterpreterUtil {
   private[rholang] def replayBlock[F[_]: Sync: BlockStore](
       hash: StateHash,
       block: BlockMessage,
-      isGenesis: Boolean,
+      parents: Seq[BlockMessage],
       dag: BlockDagRepresentation[F],
       runtimeManager: RuntimeManager[F]
-  ): F[Either[ReplayFailure, StateHash]] = {
+  ): F[StateHash] = {
     val deploys     = block.body.deploys.map(InternalProcessedDeploy.fromProcessedDeploy)
     val timestamp   = block.header.timestamp
     val blockNumber = block.body.state.blockNumber
+    val isGenesis   = parents.isEmpty
 
-    for {
+    (for {
       invalidBlocksSet <- dag.invalidBlocks
       unseenBlocksSet  <- ProtoUtil.unseenBlockHashes(dag, block)
       seenInvalidBlocksSet = invalidBlocksSet.filterNot(
@@ -257,7 +250,14 @@ object InterpreterUtil {
                        invalidBlocks,
                        isGenesis //should always be false
                      )
-    } yield replayResult
+    } yield replayResult.leftMap[Throwable] {
+      case (_, status) =>
+        val parentHashes =
+          parents.map(p => Base16.encode(p.blockHash.toByteArray).take(8))
+        new Exception(
+          s"Failed status while computing post state of $parentHashes: $status"
+        )
+    }).rethrow
   }
 
   private[rholang] def findMultiParentsBlockHashesForReplay[F[_]: Monad](
