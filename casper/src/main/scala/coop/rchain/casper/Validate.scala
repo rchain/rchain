@@ -662,18 +662,13 @@ object Validate {
       dag: BlockDagRepresentation[F],
       runtimeManager: RuntimeManager[F]
   ): F[ValidBlockProcessing] =
-    for {
-      maybeStateHash <- InterpreterUtil
-                         .validateBlockCheckpoint[F](
-                           block,
-                           dag,
-                           runtimeManager
-                         )
-    } yield maybeStateHash match {
-      case Left(ex)       => Left(ex)
-      case Right(Some(_)) => Right(BlockStatus.valid)
-      case Right(None)    => Left(BlockStatus.invalidTransaction)
-    }
+    InterpreterUtil
+      .validateBlockCheckpoint[F](block, dag, runtimeManager)
+      .map {
+        case Left(ex)       => Left(ex)
+        case Right(Some(_)) => Right(BlockStatus.valid)
+        case Right(None)    => Left(BlockStatus.invalidTransaction)
+      }
 
   /**
     * If block contains an invalid justification block B and the creator of B is still bonded,
