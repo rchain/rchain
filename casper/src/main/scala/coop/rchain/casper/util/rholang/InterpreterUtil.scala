@@ -37,12 +37,12 @@ object InterpreterUtil {
       dag: BlockDagRepresentation[F],
       runtimeManager: RuntimeManager[F]
   ): F[BlockProcessing[Option[StateHash]]] = {
-    val preStateHash    = ProtoUtil.preStateHash(b)
-    val tsHash          = ProtoUtil.tuplespace(b)
-    val deploys         = ProtoUtil.deploys(b)
-    val internalDeploys = deploys.map(InternalProcessedDeploy.fromProcessedDeploy)
-    val timestamp       = b.header.timestamp
-    val blockNumber     = b.body.state.blockNumber
+    val incomingPreStateHash = ProtoUtil.preStateHash(b)
+    val tsHash               = ProtoUtil.tuplespace(b)
+    val deploys              = ProtoUtil.deploys(b)
+    val internalDeploys      = deploys.map(InternalProcessedDeploy.fromProcessedDeploy)
+    val timestamp            = b.header.timestamp
+    val blockNumber          = b.body.state.blockNumber
     for {
       _                    <- Span[F].mark("before-unsafe-get-parents")
       parents              <- ProtoUtil.getParents[F](b)
@@ -61,10 +61,10 @@ object InterpreterUtil {
                  case Left(ex) =>
                    BlockStatus.exception(ex).asLeft[Option[StateHash]].pure[F]
                  case Right(computedPreStateHash) =>
-                   if (preStateHash == computedPreStateHash) {
+                   if (incomingPreStateHash == computedPreStateHash) {
                      processPreStateHash[F](
                        runtimeManager,
-                       preStateHash,
+                       incomingPreStateHash,
                        tsHash,
                        internalDeploys,
                        BlockData(timestamp, blockNumber),
@@ -74,7 +74,7 @@ object InterpreterUtil {
                    } else {
                      Log[F].warn(
                        s"Computed pre-state hash ${PrettyPrinter.buildString(computedPreStateHash)} does not equal block's pre-state hash ${PrettyPrinter
-                         .buildString(preStateHash)}"
+                         .buildString(incomingPreStateHash)}"
                      ) >> none[StateHash].asRight[BlockError].pure[F]
                    }
                }
