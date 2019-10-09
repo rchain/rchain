@@ -145,11 +145,10 @@ object ProtoUtil {
       sortedWeights.take(maxCliqueMinSize).sum
     }
 
-  def mainParent[F[_]: Monad: BlockStore](blockMessage: BlockMessage): F[Option[BlockMessage]] =
-    blockMessage.header.parentsHashList.headOption match {
-      case Some(parentHash) => BlockStore[F].get(parentHash)
-      case None             => none[BlockMessage].pure
-    }
+  def mainParent[F[_]: Monad: BlockStore](blockMessage: BlockMessage): F[Option[BlockMessage]] = {
+    import cats.instances.option._
+    blockMessage.header.parentsHashList.headOption.flatTraverse(BlockStore[F].get)
+  }
 
   def weightFromValidatorByDag[F[_]: Monad](
       dag: BlockDagRepresentation[F],
