@@ -216,7 +216,7 @@ object ProtoUtil {
 
     import cats.instances.list._
     b.parents.traverse { parentHash =>
-      ProtoUtil.getBlockMetadata(parentHash, dag)
+      getBlockMetadata(parentHash, dag)
     }
   }
 
@@ -225,8 +225,7 @@ object ProtoUtil {
       blockNumber: Long,
       dag: BlockDagRepresentation[F]
   ): F[List[BlockMetadata]] =
-    ProtoUtil
-      .getParentsMetadata(b, dag)
+    getParentsMetadata(b, dag)
       .map(parents => parents.filter(p => p.blockNum >= blockNumber))
 
   def containsDeploy(b: BlockMessage, user: ByteString, timestamp: Long): Boolean =
@@ -262,7 +261,7 @@ object ProtoUtil {
     b.body.state.blockNumber
 
   def maxBlockNumber(blocks: Seq[BlockMessage]): Long = blocks.foldLeft(-1L) {
-    case (acc, b) => math.max(acc, ProtoUtil.blockNumber(b))
+    case (acc, b) => math.max(acc, blockNumber(b))
   }
 
   def maxBlockNumberMetadata(blocks: Seq[BlockMetadata]): Long = blocks.foldLeft(-1L) {
@@ -454,7 +453,7 @@ object ProtoUtil {
 
     for {
       latestMessages        <- dag.latestMessages
-      latestMessagesOfBlock <- ProtoUtil.toLatestMessage(block.justifications, dag)
+      latestMessagesOfBlock <- toLatestMessage(block.justifications, dag)
       unseenBlockHashesAndLatestMessages <- latestMessages.toStream
                                              .traverse {
                                                case (validator, latestMessage) =>
@@ -497,7 +496,7 @@ object ProtoUtil {
       block: BlockMetadata,
       goal: BlockMetadata
   ): F[List[BlockMetadata]] =
-    ProtoUtil.creatorJustification(block) match {
+    creatorJustification(block) match {
       case Some(Justification(_, hash)) =>
         dag.lookup(hash).flatMap {
           case Some(creatorJustification) =>
