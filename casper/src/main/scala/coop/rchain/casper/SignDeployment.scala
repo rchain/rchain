@@ -12,22 +12,28 @@ object SignDeployment {
 
   private def fill(
       deployData: DeployData
-  )(deployer: PublicKey, sig: Array[Byte], sigAlgorithm: String): DeployData =
+  )(
+      deployer: PublicKey,
+      sig: Array[Byte],
+      sigAlgorithm: String,
+      validAfterBlockNumber: Long
+  ): DeployData =
     deployData.copy(
       deployer = ByteString.copyFrom(deployer.bytes),
       sig = ByteString.copyFrom(sig),
-      sigAlgorithm = sigAlgorithm
+      sigAlgorithm = sigAlgorithm,
+      validAfterBlockNumber = validAfterBlockNumber
     )
 
   private def clear(deployData: DeployData): DeployData =
-    fill(deployData)(PublicKey(Array.empty[Byte]), Array.empty[Byte], "")
+    fill(deployData)(PublicKey(Array.empty[Byte]), Array.empty[Byte], "", 0L)
 
   def sign(sec: PrivateKey, deployData: DeployData, alg: SignaturesAlg = Secp256k1): DeployData = {
     val toSign    = DeployData.toProto(clear(deployData)).toByteString.toByteArray
     val hash      = Blake2b256.hash(toSign)
     val signature = alg.sign(hash, sec)
 
-    fill(deployData)(alg.toPublic(sec), signature, alg.name)
+    fill(deployData)(alg.toPublic(sec), signature, alg.name, deployData.validAfterBlockNumber)
   }
 
   def verify(deployData: DeployData): Option[Boolean] =
