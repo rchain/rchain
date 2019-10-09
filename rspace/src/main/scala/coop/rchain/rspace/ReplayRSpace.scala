@@ -87,7 +87,11 @@ class ReplayRSpace[F[_]: Sync, C, P, A, K](
       data: A,
       persist: Boolean
   ): F[Produce] =
-    syncF.delay { Produce.create(channel, data, persist) }
+    syncF.delay {
+      val ref = Produce.create(channel, data, persist)
+      if (!persist) produceCounter.update(_.putAndIncrementCounter(ref))
+      ref
+    }
 
   def consume(
       channels: Seq[C],
@@ -161,9 +165,7 @@ class ReplayRSpace[F[_]: Sync, C, P, A, K](
               .sortBy(_.datumIndex)(Ordering[Int].reverse)
               .traverse {
                 case DataCandidate(candidateChannel, Datum(_, persistData, _), _, dataIndex) =>
-                  if (!persistData) {
-                    store.removeDatum(candidateChannel, dataIndex)
-                  } else ().pure[F]
+                  store.removeDatum(candidateChannel, dataIndex).unlessA(persistData)
               }
               .flatMap { _ =>
                 logF.debug(
@@ -174,19 +176,7 @@ class ReplayRSpace[F[_]: Sync, C, P, A, K](
                 removeBindingsFor(commRef)
               }
               .map { _ =>
-                Some(
-                  (
-                    ContResult(
-                      continuation,
-                      persist,
-                      channels,
-                      patterns,
-                      peeks.nonEmpty
-                    ),
-                    mats
-                      .map(dc => Result(dc.channel, dc.datum.a, dc.removedDatum, dc.datum.persist))
-                  )
-                )
+                wrapResult(channels, patterns, continuation, persist, peeks, consumeRef, mats)
               }
       } yield r
 
@@ -220,8 +210,9 @@ class ReplayRSpace[F[_]: Sync, C, P, A, K](
     }
 
     for {
-      _          <- logF.debug(s"""|consume: searching for data matching <patterns: $patterns>
-                          |at <channels: $channels>""".stripMargin.replace('\n', ' '))
+      _ <- logF.debug(
+            s"consume: searching for data matching <patterns: $patterns> at <channels: $channels>"
+          )
       consumeRef <- markConsume(channels, patterns, continuation, persist, peeks)
       r <- replayData
             .get(consumeRef)
@@ -380,18 +371,14 @@ class ReplayRSpace[F[_]: Sync, C, P, A, K](
                   comms.contains(commRef),
                   s"COMM Event $commRef was not contained in the trace $comms"
                 )
-            _ <- if (!persistK) {
-                  store.removeContinuation(channels, continuationIndex)
-                } else {
-                  ().pure[F]
-                }
+            _ <- store.removeContinuation(channels, continuationIndex).unlessA(persistK)
             _ <- dataCandidates.toList
                   .sortBy(_.datumIndex)(Ordering[Int].reverse)
                   .traverse {
                     case DataCandidate(candidateChannel, Datum(_, persistData, _), _, dataIndex) =>
-                      (if (dataIndex >= 0 && !persistData) {
-                         store.removeDatum(candidateChannel, dataIndex)
-                       } else Applicative[F].unit) >>
+                      store
+                        .removeDatum(candidateChannel, dataIndex)
+                        .whenA((dataIndex >= 0 && !persistData)) >>
                         store.removeJoin(candidateChannel, channels)
                   }
             _ <- logF.debug(s"produce: matching continuation found at <channels: $channels>")
@@ -418,15 +405,9 @@ class ReplayRSpace[F[_]: Sync, C, P, A, K](
     for {
       groupedChannels <- store.getJoins(channel)
       _ <- logF.debug(
-            s"""|produce: searching for matching continuations
-                |at <groupedChannels: $groupedChannels>""".stripMargin
-              .replace('\n', ' ')
+            s"produce: searching for matching continuations at <groupedChannels: $groupedChannels>"
           )
       produceRef <- markProduce(channel, data, persist)
-      _ <- syncF.delay {
-            if (!persist)
-              produceCounter.update(_.putAndIncrementCounter(produceRef))
-          }
       result <- replayData.get(produceRef) match {
                  case None =>
                    storeDatum(produceRef, None)
@@ -449,13 +430,6 @@ class ReplayRSpace[F[_]: Sync, C, P, A, K](
                }
     } yield result
   }
-
-  private def assertF(predicate: Boolean, errorMsg: String): F[Unit] =
-    if (!predicate)
-      Sync[F].raiseError(
-        new IllegalStateException(errorMsg)
-      )
-    else ().pure[F]
 
   @SuppressWarnings(Array("org.wartremover.warts.NonUnitStatements"))
   private def removeBindingsFor(

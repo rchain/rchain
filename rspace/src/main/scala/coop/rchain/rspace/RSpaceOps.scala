@@ -1,5 +1,7 @@
 package coop.rchain.rspace
 
+import cats.Applicative
+
 import scala.collection.SortedSet
 import scala.concurrent.SyncVar
 import scala.util.Random
@@ -37,6 +39,14 @@ abstract class RSpaceOps[F[_]: Concurrent: Metrics, C, P, A, K](
         .get(elem)
         .fold(underlying.+((elem, 1)))(currentCount => underlying.+((elem, currentCount + 1)))
   }
+
+  implicit class RichFSeq[M[_]: Applicative, D](t: M[Seq[D]]) {
+    def shuffleWithIndex: M[Seq[(D, Int)]] =
+      t.map(d => Random.shuffle(d.zipWithIndex))
+  }
+
+  def assertF(predicate: Boolean, errorMsg: String): F[Unit] =
+    Sync[F].raiseError(new IllegalStateException(errorMsg)).unlessA(predicate)
 
   protected[this] val eventLog: SyncVar[EventLog] = create[EventLog](Seq.empty)
   protected[this] val produceCounter: SyncVar[Map[Produce, Int]] =
@@ -164,9 +174,7 @@ abstract class RSpaceOps[F[_]: Concurrent: Metrics, C, P, A, K](
         consumeRef = Consume.create(channels, patterns, continuation, true)
         channelToIndexedData <- channels
                                  .traverse { c =>
-                                   for {
-                                     data <- store.getData(c)
-                                   } yield c -> Random.shuffle(data.zipWithIndex)
+                                   store.getData(c).shuffleWithIndex.map(c -> _)
                                  }
         options <- extractDataCandidates(channels.zip(patterns), channelToIndexedData.toMap, Nil)
                     .map(_.sequence)
@@ -263,4 +271,26 @@ abstract class RSpaceOps[F[_]: Concurrent: Metrics, C, P, A, K](
 
   override def close(): F[Unit] = historyRepository.close()
 
+  def wrapResult(
+      channels: Seq[C],
+      patterns: Seq[P],
+      continuation: K,
+      persist: Boolean,
+      peeks: SortedSet[Int],
+      consumeRef: Consume,
+      dataCandidates: Seq[DataCandidate[C, A]]
+  ): MaybeActionResult =
+    Some(
+      (
+        ContResult(
+          continuation,
+          persist,
+          channels,
+          patterns,
+          peeks.nonEmpty
+        ),
+        dataCandidates
+          .map(dc => Result(dc.channel, dc.datum.a, dc.removedDatum, dc.datum.persist))
+      )
+    )
 }

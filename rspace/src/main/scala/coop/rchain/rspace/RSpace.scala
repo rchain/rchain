@@ -89,26 +89,7 @@ class RSpace[F[_], C, P, A, K](
       persist: Boolean,
       peeks: SortedSet[Int],
       consumeRef: Consume
-  ): F[MaybeActionResult] = {
-
-    def wrapResult(
-        consumeRef: Consume,
-        dataCandidates: Seq[DataCandidate[C, A]]
-    ): MaybeActionResult =
-      Some(
-        (
-          ContResult(
-            continuation,
-            persist,
-            channels,
-            patterns,
-            peeks.nonEmpty
-          ),
-          dataCandidates
-            .map(dc => Result(dc.channel, dc.datum.a, dc.removedDatum, dc.datum.persist))
-        )
-      )
-
+  ): F[MaybeActionResult] =
     for {
       _ <- logF.debug(
             s"consume: searching for data matching <patterns: $patterns> at <channels: $channels>"
@@ -141,10 +122,17 @@ class RSpace[F[_], C, P, A, K](
                      _ <- logF.debug(
                            s"consume: data found for <patterns: $patterns> at <channels: $channels>"
                          )
-                   } yield wrapResult(consumeRef, dataCandidates)
+                   } yield wrapResult(
+                     channels,
+                     patterns,
+                     continuation,
+                     persist,
+                     peeks,
+                     consumeRef,
+                     dataCandidates
+                   )
                )
     } yield result
-  }
 
   /*
    * Here, we create a cache of the data at each channel as `channelToIndexedData`
@@ -157,7 +145,7 @@ class RSpace[F[_], C, P, A, K](
   private[this] def fetchChannelToIndexData(channels: Seq[C]): F[Map[C, Seq[(Datum[A], Int)]]] =
     channels
       .traverse { c: C =>
-        store.getData(c).map(d => c -> Random.shuffle(d.zipWithIndex))
+        store.getData(c).shuffleWithIndex.map(c -> _)
       }
       .map(_.toMap)
 
@@ -237,7 +225,7 @@ class RSpace[F[_], C, P, A, K](
           for {
             matchCandidates <- store
                                 .getContinuations(channels)
-                                .map(d => Random.shuffle(d.zipWithIndex))
+                                .shuffleWithIndex
             /*
              * Here, we create a cache of the data at each channel as `channelToIndexedData`
              * which is used for finding matches.  When a speculative match is found, we can
@@ -250,9 +238,8 @@ class RSpace[F[_], C, P, A, K](
              */
             channelToIndexedDataList <- channels.traverse { c: C =>
                                          for {
-                                           d  <- store.getData(c)
-                                           as = Random.shuffle(d.zipWithIndex)
-                                           sp = if (c == batChannel) (data, -1) +: as else as
+                                           d  <- store.getData(c).shuffleWithIndex
+                                           sp = if (c == batChannel) (data, -1) +: d else d
                                          } yield (c -> sp)
                                        }
             firstMatch <- extractFirstMatch(
