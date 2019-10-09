@@ -33,6 +33,8 @@ abstract class RSpaceOps[F[_]: Concurrent: Metrics, C, P, A, K](
     spanF: Span[F]
 ) extends SpaceMatcher[F, C, P, A, K] {
 
+  type MaybeProduceCandidate = Option[ProduceCandidate[C, P, A, K]]
+
   implicit class MapOps(underlying: Map[Produce, Int]) {
     def putAndIncrementCounter(elem: Produce): Map[Produce, Int] =
       underlying
@@ -116,6 +118,18 @@ abstract class RSpaceOps[F[_]: Concurrent: Metrics, C, P, A, K](
       _ <- logF.debug(s"""|consume: no data found,
                           |storing <(patterns, continuation): (${wc.patterns}, ${wc.continuation})>
                           |at <channels: ${channels}>""".stripMargin.replace('\n', ' '))
+    } yield None
+
+  protected[this] def storeData(
+      channel: C,
+      data: A,
+      persist: Boolean,
+      produceRef: Produce
+  ): F[MaybeActionResult] =
+    for {
+      _ <- logF.debug(s"produce: no matching continuation found")
+      _ <- store.putDatum(channel, Datum(data, persist, produceRef))
+      _ <- logF.debug(s"produce: persisted <data: $data> at <channel: $channel>")
     } yield None
 
   protected[this] def produceLockF(

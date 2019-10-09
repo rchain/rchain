@@ -238,7 +238,7 @@ class ReplayRSpace[F[_]: Sync, C, P, A, K](
       produceRef <- markProduce(channel, data, persist)
       result <- replayData.get(produceRef) match {
                  case None =>
-                   storeDatum(channel, data, persist, produceRef, None)
+                   storeData(channel, data, persist, produceRef)
                  case Some(comms) =>
                    val commOrProduceCandidate
                        : F[Either[COMM, (COMM, ProduceCandidate[C, P, A, K])]] =
@@ -251,8 +251,8 @@ class ReplayRSpace[F[_]: Sync, C, P, A, K](
                        groupedChannels
                      )
                    val r: F[MaybeActionResult] = commOrProduceCandidate.flatMap {
-                     case Left(comm) =>
-                       storeDatum(channel, data, persist, produceRef, Some(comm))
+                     case Left(_) =>
+                       storeData(channel, data, persist, produceRef)
                      case Right((comm, produceCandidate)) =>
                        val indexedChannels = produceCandidate.channels.zipWithIndex.toMap
                        handleMatch(
@@ -267,22 +267,6 @@ class ReplayRSpace[F[_]: Sync, C, P, A, K](
                    r
                }
     } yield result
-
-  private[this] def storeDatum(
-      channel: C,
-      data: A,
-      persist: Boolean,
-      produceRef: Produce,
-      maybeCommRef: Option[COMM]
-  ): F[MaybeActionResult] =
-    for {
-      _ <- store.putDatum(channel, Datum(data, persist, produceRef))
-      _ <- logF.debug(
-            s"produce: no matching continuation found storing <data: $data> at <channel: $channel>"
-          )
-    } yield None
-
-  type MaybeProduceCandidate = Option[ProduceCandidate[C, P, A, K]]
 
   private[this] def getCommOrProduceCandidate(
       channel: C,

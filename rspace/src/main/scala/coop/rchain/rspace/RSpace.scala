@@ -205,8 +205,6 @@ class RSpace[F[_], C, P, A, K](
    * Find produce candidate
    */
 
-  type MaybeProduceCandidate = Option[ProduceCandidate[C, P, A, K]]
-
   type CandidateChannels = Seq[C]
 
   private[this] def extractProduceCandidate(
@@ -313,18 +311,6 @@ class RSpace[F[_], C, P, A, K](
       _               <- logF.debug(s"produce: matching continuation found at <channels: $channels>")
     } yield constructResult
   }
-
-  private[this] def storeData(
-      channel: C,
-      data: A,
-      persist: Boolean,
-      produceRef: Produce
-  ): F[MaybeActionResult] =
-    for {
-      _ <- logF.debug(s"produce: no matching continuation found")
-      _ <- store.putDatum(channel, Datum(data, persist, produceRef))
-      _ <- logF.debug(s"produce: persisted <data: $data> at <channel: $channel>")
-    } yield None
 
   private[this] def logComm(
       consumeRef: Consume,
