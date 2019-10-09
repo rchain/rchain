@@ -204,7 +204,7 @@ object BlockAPI {
       block: BlockMessage
   )(implicit casper: MultiParentCasper[F]): F[Option[DataWithBlockInfo]] =
     if (isListeningNameReduced(block, immutable.Seq(sortedListeningName))) {
-      val stateHash = ProtoUtil.tuplespace(block)
+      val stateHash = ProtoUtil.postStateHash(block)
       for {
         data      <- runtimeManager.getData(stateHash)(sortedListeningName)
         blockInfo <- getLightBlockInfo[F](block)
@@ -219,8 +219,7 @@ object BlockAPI {
       block: BlockMessage
   )(implicit casper: MultiParentCasper[F]): F[Option[ContinuationsWithBlockInfo]] =
     if (isListeningNameReduced(block, sortedListeningNames)) {
-      val stateHash =
-        ProtoUtil.tuplespace(block)
+      val stateHash = ProtoUtil.postStateHash(block)
       for {
         continuations <- runtimeManager.getContinuation(stateHash)(sortedListeningNames)
         continuationInfos = continuations.map(
@@ -431,7 +430,7 @@ object BlockAPI {
       header          = block.header
       version         = header.version
       deployCount     = header.deployCount
-      tsHash          = ProtoUtil.tuplespace(block)
+      tsHash          = ProtoUtil.postStateHash(block)
       timestamp       = header.timestamp
       mainParent      = header.parentsHashList.headOption.getOrElse(ByteString.EMPTY)
       parentsHashList = header.parentsHashList

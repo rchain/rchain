@@ -33,30 +33,25 @@ object ProtoUtil {
       dag: BlockDagRepresentation[F],
       candidateBlockHash: BlockHash,
       targetBlockHash: BlockHash
-  ): F[Boolean] =
-    if (candidateBlockHash == targetBlockHash) {
-      true.pure
-    } else {
+  ): F[Boolean] = {
+    import coop.rchain.catscontrib.Catscontrib.ToBooleanF
+    import cats.instances.option._
+
+    (candidateBlockHash == targetBlockHash).pure[F] ||^ {
       for {
-        targetBlockOpt <- dag.lookup(targetBlockHash)
-        result <- targetBlockOpt match {
-                   case Some(targetBlockMeta) =>
-                     targetBlockMeta.parents.headOption match {
-                       case Some(mainParentHash) =>
-                         isInMainChain(dag, candidateBlockHash, mainParentHash)
-                       case None => false.pure
-                     }
-                   case None => false.pure
-                 }
-      } yield result
+        targetBlockOpt       <- dag.lookup(targetBlockHash)
+        mainParentOpt        = targetBlockOpt >>= (_.parents.headOption)
+        inMainParentChainOpt <- mainParentOpt.traverse(isInMainChain(dag, candidateBlockHash, _))
+      } yield inMainParentChainOpt.getOrElse(false)
     }
+  }
 
   def getMainChainUntilDepth[F[_]: Sync: BlockStore](
       estimate: BlockMessage,
       acc: IndexedSeq[BlockMessage],
       depth: Int
   ): F[IndexedSeq[BlockMessage]] = {
-    val parentsHashes       = ProtoUtil.parentHashes(estimate)
+    val parentsHashes       = parentHashes(estimate)
     val maybeMainParentHash = parentsHashes.headOption
     for {
       mainChain <- maybeMainParentHash match {
@@ -81,43 +76,27 @@ object ProtoUtil {
   }
 
   def getBlock[F[_]: Sync: BlockStore](hash: BlockHash): F[BlockMessage] =
-    for {
-      maybeBlock <- BlockStore[F].get(hash)
-      block <- maybeBlock match {
-                case Some(b) => b.pure
-                case None =>
-                  Sync[F].raiseError[BlockMessage](
-                    new Exception(s"BlockStore is missing hash ${PrettyPrinter.buildString(hash)}")
-                  )
-              }
-    } yield block
+    BlockStore[F].get(hash) >>= (Sync[F].fromOption(
+      _,
+      new Exception(s"BlockStore is missing hash ${PrettyPrinter.buildString(hash)}")
+    ))
 
   def getBlockMetadata[F[_]: Sync](
       hash: BlockHash,
       dag: BlockDagRepresentation[F]
   ): F[BlockMetadata] =
-    for {
-      maybeBlockMetadata <- dag.lookup(hash)
-      blockMetadata <- maybeBlockMetadata match {
-                        case Some(b) => b.pure
-                        case None =>
-                          Sync[F].raiseError[BlockMetadata](
-                            new Exception(
-                              s"DAG storage is missing hash ${PrettyPrinter.buildString(hash)}"
-                            )
-                          )
-                      }
-    } yield blockMetadata
+    dag.lookup(hash) >>= (
+      Sync[F].fromOption(
+        _,
+        new Exception(s"DAG storage is missing hash ${PrettyPrinter.buildString(hash)}")
+      )
+    )
 
   def creatorJustification(block: BlockMessage): Option[Justification] =
-    block.justifications
-      .find {
-        case Justification(validator: Validator, _) =>
-          validator == block.sender
-      }
+    block.justifications.find(_.validator == block.sender)
 
   def creatorJustification(block: BlockMetadata): Option[Justification] =
-    block.justifications.find(justification => justification.validator == block.sender)
+    block.justifications.find(_.validator == block.sender)
 
   /**
     * Since the creator justification is unique
@@ -166,11 +145,10 @@ object ProtoUtil {
       sortedWeights.take(maxCliqueMinSize).sum
     }
 
-  def mainParent[F[_]: Monad: BlockStore](blockMessage: BlockMessage): F[Option[BlockMessage]] =
-    blockMessage.header.parentsHashList.headOption match {
-      case Some(parentHash) => BlockStore[F].get(parentHash)
-      case None             => none[BlockMessage].pure
-    }
+  def mainParent[F[_]: Monad: BlockStore](blockMessage: BlockMessage): F[Option[BlockMessage]] = {
+    import cats.instances.option._
+    blockMessage.header.parentsHashList.headOption.flatTraverse(BlockStore[F].get)
+  }
 
   def weightFromValidatorByDag[F[_]: Monad](
       dag: BlockDagRepresentation[F],
@@ -206,26 +184,20 @@ object ProtoUtil {
   def weightFromSender[F[_]: Monad: BlockStore](b: BlockMessage): F[Long] =
     weightFromValidator(b, b.sender)
 
-  def parentHashes(b: BlockMessage): Seq[ByteString] =
+  def parentHashes(b: BlockMessage): List[ByteString] =
     b.header.parentsHashList
 
   def getParents[F[_]: Sync: BlockStore](b: BlockMessage): F[List[BlockMessage]] = {
     import cats.instances.list._
-
-    ProtoUtil.parentHashes(b).toList.traverse { parentHash =>
-      ProtoUtil.getBlock(parentHash)
-    }
+    parentHashes(b).traverse(getBlock[F])
   }
 
   def getParentsMetadata[F[_]: Sync](
       b: BlockMetadata,
       dag: BlockDagRepresentation[F]
   ): F[List[BlockMetadata]] = {
-
     import cats.instances.list._
-    b.parents.traverse { parentHash =>
-      ProtoUtil.getBlockMetadata(parentHash, dag)
-    }
+    b.parents.traverse(getBlockMetadata(_, dag))
   }
 
   def getParentMetadatasAboveBlockNumber[F[_]: Sync](
@@ -233,32 +205,14 @@ object ProtoUtil {
       blockNumber: Long,
       dag: BlockDagRepresentation[F]
   ): F[List[BlockMetadata]] =
-    ProtoUtil
-      .getParentsMetadata(b, dag)
+    getParentsMetadata(b, dag)
       .map(parents => parents.filter(p => p.blockNum >= blockNumber))
-
-  def containsDeploy(b: BlockMessage, user: ByteString, timestamp: Long): Boolean =
-    containsDeploy(
-      b,
-      deployData => deployData.deployer == user && deployData.timestamp == timestamp
-    )
-
-  def containsDeploy(b: BlockMessage, deployId: ByteString): Boolean =
-    containsDeploy(b, deployData => deployData.sig == deployId)
-
-  private def containsDeploy(b: BlockMessage, predicate: DeployData => Boolean) =
-    deploys(b).toStream
-      .map(_.deploy)
-      .exists(predicate)
 
   def deploys(b: BlockMessage): Seq[ProcessedDeploy] =
     b.body.deploys
 
-  def tuplespace(b: BlockMessage): ByteString =
+  def postStateHash(b: BlockMessage): ByteString =
     b.body.state.postStateHash
-
-  // TODO: Reconcile with def tuplespace above
-  def postStateHash(b: BlockMessage): ByteString = tuplespace(b)
 
   def preStateHash(b: BlockMessage): ByteString =
     b.body.state.preStateHash
@@ -268,10 +222,6 @@ object ProtoUtil {
 
   def blockNumber(b: BlockMessage): Long =
     b.body.state.blockNumber
-
-  def maxBlockNumber(blocks: Seq[BlockMessage]): Long = blocks.foldLeft(-1L) {
-    case (acc, b) => math.max(acc, ProtoUtil.blockNumber(b))
-  }
 
   def maxBlockNumberMetadata(blocks: Seq[BlockMetadata]): Long = blocks.foldLeft(-1L) {
     case (acc, b) => math.max(acc, b.blockNum)
@@ -315,13 +265,10 @@ object ProtoUtil {
     }
   }
 
-  def protoHash[A <: { def toByteArray: Array[Byte] }](protoSeq: A*): ByteString =
-    protoSeqHash(protoSeq)
-
   def protoSeqHash[A <: { def toByteArray: Array[Byte] }](protoSeq: Seq[A]): ByteString =
     hashByteArrays(protoSeq.map(_.toByteArray): _*)
 
-  def hashByteArrays(items: Array[Byte]*): ByteString =
+  private def hashByteArrays(items: Array[Byte]*): ByteString =
     ByteString.copyFrom(Blake2b256.hash(Array.concat(items: _*)))
 
   // TODO inline this
@@ -462,7 +409,7 @@ object ProtoUtil {
 
     for {
       latestMessages        <- dag.latestMessages
-      latestMessagesOfBlock <- ProtoUtil.toLatestMessage(block.justifications, dag)
+      latestMessagesOfBlock <- toLatestMessage(block.justifications, dag)
       unseenBlockHashesAndLatestMessages <- latestMessages.toStream
                                              .traverse {
                                                case (validator, latestMessage) =>
@@ -505,7 +452,7 @@ object ProtoUtil {
       block: BlockMetadata,
       goal: BlockMetadata
   ): F[List[BlockMetadata]] =
-    ProtoUtil.creatorJustification(block) match {
+    creatorJustification(block) match {
       case Some(Justification(_, hash)) =>
         dag.lookup(hash).flatMap {
           case Some(creatorJustification) =>
