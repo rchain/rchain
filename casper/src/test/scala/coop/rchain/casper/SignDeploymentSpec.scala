@@ -33,7 +33,7 @@ class SignDeploymentSpec extends FlatSpec with Matchers {
 
   "Deploy data" should "be signed the same way" in {
     val term =
-    """new
+      """new
         |  rl(`rho:registry:lookup`), RevVaultCh,
         |  vaultCh, balanceCh,
         |  stdout(`rho:io:stdout`), log
@@ -71,7 +71,6 @@ class SignDeploymentSpec extends FlatSpec with Matchers {
         |  }
         |}
         |""".stripMargin
-
 
     val data =
       DeployData(
