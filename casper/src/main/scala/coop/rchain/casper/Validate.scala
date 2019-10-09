@@ -710,7 +710,7 @@ object Validate {
       runtimeManager: RuntimeManager[F]
   ): F[ValidBlockProcessing] = {
     val bonds          = ProtoUtil.bonds(b)
-    val tuplespaceHash = ProtoUtil.tuplespace(b)
+    val tuplespaceHash = ProtoUtil.postStateHash(b)
 
     runtimeManager.computeBonds(tuplespaceHash).attempt.flatMap {
       case Right(computedBonds) =>

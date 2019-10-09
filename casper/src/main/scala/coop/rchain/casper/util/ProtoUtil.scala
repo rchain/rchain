@@ -211,11 +211,8 @@ object ProtoUtil {
   def deploys(b: BlockMessage): Seq[ProcessedDeploy] =
     b.body.deploys
 
-  def tuplespace(b: BlockMessage): ByteString =
+  def postStateHash(b: BlockMessage): ByteString =
     b.body.state.postStateHash
-
-  // TODO: Reconcile with def tuplespace above
-  def postStateHash(b: BlockMessage): ByteString = tuplespace(b)
 
   def preStateHash(b: BlockMessage): ByteString =
     b.body.state.preStateHash

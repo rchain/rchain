@@ -91,7 +91,7 @@ object InterpreterUtil {
                        invalidBlocks,
                        isGenesis
                      )
-      tsHash = ProtoUtil.tuplespace(block)
+      tsHash = ProtoUtil.postStateHash(block)
       result <- handleErrors(tsHash, replayResult)
     } yield result
   }
@@ -181,7 +181,7 @@ object InterpreterUtil {
       runtimeManager: RuntimeManager[F]
   ): F[StateHash] = {
     val parentTuplespaces =
-      parents.map(p => p -> ProtoUtil.tuplespace(p))
+      parents.map(p => p -> ProtoUtil.postStateHash(p))
 
     parentTuplespaces match {
       // For genesis, use empty trie's root hash
