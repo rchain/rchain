@@ -237,6 +237,8 @@ object BlockCreator {
         version
       )
     } yield block)
+    //TODO both the log message and block status seems misleading - the error could have happened anywhere,
+    // e.g. during `replayIntoMergeBlock`
       .onError {
         case ex =>
           Log[F].error(s"Critical error encountered while processing deploys: ${ex.getMessage}")
