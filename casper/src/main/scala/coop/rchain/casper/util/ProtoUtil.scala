@@ -85,18 +85,12 @@ object ProtoUtil {
       hash: BlockHash,
       dag: BlockDagRepresentation[F]
   ): F[BlockMetadata] =
-    for {
-      maybeBlockMetadata <- dag.lookup(hash)
-      blockMetadata <- maybeBlockMetadata match {
-                        case Some(b) => b.pure
-                        case None =>
-                          Sync[F].raiseError[BlockMetadata](
-                            new Exception(
-                              s"DAG storage is missing hash ${PrettyPrinter.buildString(hash)}"
-                            )
-                          )
-                      }
-    } yield blockMetadata
+    dag.lookup(hash) >>= (
+      Sync[F].fromOption(
+        _,
+        new Exception(s"DAG storage is missing hash ${PrettyPrinter.buildString(hash)}")
+      )
+    )
 
   def creatorJustification(block: BlockMessage): Option[Justification] =
     block.justifications
