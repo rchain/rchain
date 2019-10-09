@@ -208,20 +208,6 @@ object ProtoUtil {
     getParentsMetadata(b, dag)
       .map(parents => parents.filter(p => p.blockNum >= blockNumber))
 
-  def containsDeploy(b: BlockMessage, user: ByteString, timestamp: Long): Boolean =
-    containsDeploy(
-      b,
-      deployData => deployData.deployer == user && deployData.timestamp == timestamp
-    )
-
-  def containsDeploy(b: BlockMessage, deployId: ByteString): Boolean =
-    containsDeploy(b, deployData => deployData.sig == deployId)
-
-  private def containsDeploy(b: BlockMessage, predicate: DeployData => Boolean) =
-    deploys(b).toStream
-      .map(_.deploy)
-      .exists(predicate)
-
   def deploys(b: BlockMessage): Seq[ProcessedDeploy] =
     b.body.deploys
 
