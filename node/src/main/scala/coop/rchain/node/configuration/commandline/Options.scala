@@ -322,6 +322,8 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
         "synchrony-constraint-threshold fraction of the validators (by stake weight) " +
         "proposed at least one block since this node's last proposal."
     )
+
+    val reporting = opt[Flag](descr = "Use this flag to enable reporting endpoints.")
   }
   addSubcommand(run)
 

@@ -34,9 +34,10 @@ class CostAccountingSpec extends FlatSpec with Matchers with PropertyChecks with
       dir     <- Resources.mkTempDir[Task]("cost-accounting-spec-")
       costLog <- Resource.liftF(costLog[Task]())
       cost    <- Resource.liftF(CostAccounting.emptyCost[Task](implicitly, metricsEff, costLog, ms))
+      sar     <- Resource.liftF(Runtime.setupRSpace[Task](dir, 10 * 1024 * 1024))
       runtime <- {
         implicit val c = cost
-        Resource.make(Runtime.create[Task, Task.Par](dir, 10 * 1024 * 1024, Nil))(_.close())
+        Resource.make(Runtime.create[Task, Task.Par]((sar._1, sar._2), Nil))(_.close())
       }
     } yield (runtime, costLog)
 

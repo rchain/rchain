@@ -36,16 +36,18 @@ object Setup {
     val networkId                 = "test"
     val scheduler                 = Scheduler.io("test")
     val runtimeDir                = BlockDagStorageTestFixture.blockStorageDir
+    val (space, replay, _) = {
+      implicit val s = scheduler
+      Runtime.setupRSpace[Task](runtimeDir, 3024L * 1024).unsafeRunSync
+    }
     val activeRuntime =
       Runtime
-        .createWithEmptyCost[Task](runtimeDir, 3024L * 1024)(
-          ContextShift[Task],
+        .createWithEmptyCost[Task]((space, replay))(
           Concurrent[Task],
           log,
           metrics,
           span,
-          par.Par[Task],
-          scheduler
+          par.Par[Task]
         )
         .unsafeRunSync(scheduler)
 

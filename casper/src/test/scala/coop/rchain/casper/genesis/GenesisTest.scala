@@ -271,14 +271,12 @@ object GenesisTest {
     val time                                = new LogicalTime[Task]
 
     for {
-      runtime <- Runtime.createWithEmptyCost[Task](
-                  storePath,
-                  storageSize
-                )
-      result <- body(runtime, genesisPath, log, time)
-      _      <- runtime.close()
-      _      <- Sync[Task].delay { storePath.recursivelyDelete() }
-      _      <- Sync[Task].delay { gp.recursivelyDelete() }
+      sar     <- Runtime.setupRSpace[Task](storePath, storageSize)
+      runtime <- Runtime.createWithEmptyCost[Task]((sar._1, sar._2))
+      result  <- body(runtime, genesisPath, log, time)
+      _       <- runtime.close()
+      _       <- Sync[Task].delay { storePath.recursivelyDelete() }
+      _       <- Sync[Task].delay { gp.recursivelyDelete() }
     } yield result
   }
 

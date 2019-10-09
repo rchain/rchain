@@ -58,6 +58,7 @@ object Server {
     val MessageConsumers             = "message-consumers"
     val FaultToleranceThreshold      = "fault-tolerance-threshold"
     val SynchronyConstraintThreshold = "synchrony-constraint-threshold"
+    val Reporting                    = "reporting"
 
     val all =
       List(
@@ -83,7 +84,8 @@ object Server {
         PacketChunkSize,
         MessageConsumers,
         FaultToleranceThreshold,
-        SynchronyConstraintThreshold
+        SynchronyConstraintThreshold,
+        Reporting
       )
   }
 
@@ -123,7 +125,8 @@ object Server {
       packetChunkSize = server.getBytes(keys.PacketChunkSize).toInt,
       messageConsumers = server.getIntOpt(keys.MessageConsumers).getOrElse(messageConsumers),
       faultToleranceThreshold = server.getFloat(keys.FaultToleranceThreshold),
-      synchronyConstraintThreshold = server.getDouble(keys.SynchronyConstraintThreshold)
+      synchronyConstraintThreshold = server.getDouble(keys.SynchronyConstraintThreshold),
+      reporting = server.getBoolean(keys.Reporting)
     )
   }
 }

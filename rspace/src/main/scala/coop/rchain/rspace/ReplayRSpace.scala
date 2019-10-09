@@ -56,6 +56,42 @@ class ReplayRSpace[F[_]: Sync, C, P, A, K](
   private[this] val produceCommLabel     = "comm.produce"
   private[this] val produceTimeCommLabel = "comm.produce-time"
 
+  protected def markComm(
+      consumeRef: Consume,
+      dataCandidates: Seq[DataCandidate[C, A]],
+      channels: Seq[C],
+      patterns: Seq[P],
+      continuation: K,
+      persist: Boolean,
+      peeks: SortedSet[Int],
+      comm: COMM,
+      label: String
+  ): F[COMM] =
+    for {
+      _ <- metricsF.incrementCounter(label)
+      commRef <- syncF.delay {
+                  COMM(consumeRef, dataCandidates.map(_.datum.source), peeks, comm.timesRepeated)
+                }
+    } yield commRef
+
+  protected def markConsume(
+      channels: Seq[C],
+      patterns: Seq[P],
+      continuation: K,
+      persist: Boolean,
+      peeks: SortedSet[Int]
+  ): F[Consume] =
+    syncF.delay {
+      Consume.create(channels, patterns, continuation, persist)
+    }
+
+  protected def markProduce(
+      channel: C,
+      data: A,
+      persist: Boolean
+  ): F[Produce] =
+    syncF.delay { Produce.create(channel, data, persist) }
+
   def consume(
       channels: Seq[C],
       patterns: Seq[P],
@@ -109,10 +145,17 @@ class ReplayRSpace[F[_]: Sync, C, P, A, K](
         channelsToIndex: Map[C, Int]
     ): F[MaybeActionResult] =
       for {
-        _ <- metricsF.incrementCounter(consumeCommLabel)
-        commRef <- syncF.delay {
-                    COMM(consumeRef, mats.map(_.datum.source), peeks, comm.timesRepeated)
-                  }
+        commRef <- markComm(
+                    consumeRef,
+                    mats,
+                    channels,
+                    patterns,
+                    continuation,
+                    persist,
+                    peeks,
+                    comm,
+                    consumeCommLabel
+                  )
         _ <- assertF(
               comms.contains(commRef),
               s"COMM Event $commRef was not contained in the trace $comms"
@@ -180,11 +223,9 @@ class ReplayRSpace[F[_]: Sync, C, P, A, K](
     }
 
     for {
-      _ <- logF.debug(s"""|consume: searching for data matching <patterns: $patterns>
+      _          <- logF.debug(s"""|consume: searching for data matching <patterns: $patterns>
                           |at <channels: $channels>""".stripMargin.replace('\n', ' '))
-      consumeRef <- syncF.delay {
-                     Consume.create(channels, patterns, continuation, persist)
-                   }
+      consumeRef <- markConsume(channels, patterns, continuation, persist, peeks)
       r <- replayData
             .get(consumeRef)
             .fold(
@@ -327,11 +368,17 @@ class ReplayRSpace[F[_]: Sync, C, P, A, K](
             dataCandidates
             ) =>
           for {
-            _ <- metricsF.incrementCounter(produceCommLabel)
-            commRef <- syncF.delay {
-                        val produceRefs = dataCandidates.map(_.datum.source)
-                        COMM(consumeRef, produceRefs, peeks, comm.timesRepeated)
-                      }
+            commRef <- markComm(
+                        consumeRef,
+                        dataCandidates,
+                        channels,
+                        patterns,
+                        continuation,
+                        persist,
+                        peeks,
+                        comm,
+                        produceCommLabel
+                      )
             _ <- assertF(
                   comms.contains(commRef),
                   s"COMM Event $commRef was not contained in the trace $comms"
@@ -378,7 +425,7 @@ class ReplayRSpace[F[_]: Sync, C, P, A, K](
                 |at <groupedChannels: $groupedChannels>""".stripMargin
               .replace('\n', ' ')
           )
-      produceRef <- syncF.delay { Produce.create(channel, data, persist) }
+      produceRef <- markProduce(channel, data, persist)
       _ <- syncF.delay {
             if (!persist)
               produceCounter.update(_.putAndIncrementCounter(produceRef))

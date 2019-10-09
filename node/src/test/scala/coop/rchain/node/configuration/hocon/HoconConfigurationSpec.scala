@@ -41,6 +41,7 @@ class HoconConfigurationSpec extends FunSuite with Matchers {
       |    message-consumers = 8
       |    fault-tolerance-threshold = 0.2
       |    synchrony-constraint-threshold = 0.3333333333333333
+      |    reporting = false
       |  }
       |}
     """.stripMargin
@@ -74,7 +75,8 @@ class HoconConfigurationSpec extends FunSuite with Matchers {
         packetChunkSize = 64 * 1024,
         messageConsumers = 8,
         faultToleranceThreshold = 0.2f,
-        synchronyConstraintThreshold = 0.3333333333333333d
+        synchronyConstraintThreshold = 0.3333333333333333d,
+        reporting = false
       )
 
     val server = Server.fromConfig(ConfigFactory.parseString(conf))
