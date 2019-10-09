@@ -33,23 +33,18 @@ object ProtoUtil {
       dag: BlockDagRepresentation[F],
       candidateBlockHash: BlockHash,
       targetBlockHash: BlockHash
-  ): F[Boolean] =
-    if (candidateBlockHash == targetBlockHash) {
-      true.pure
-    } else {
+  ): F[Boolean] = {
+    import coop.rchain.catscontrib.Catscontrib.ToBooleanF
+    import cats.instances.option._
+
+    (candidateBlockHash == targetBlockHash).pure[F] ||^ {
       for {
-        targetBlockOpt <- dag.lookup(targetBlockHash)
-        result <- targetBlockOpt match {
-                   case Some(targetBlockMeta) =>
-                     targetBlockMeta.parents.headOption match {
-                       case Some(mainParentHash) =>
-                         isInMainChain(dag, candidateBlockHash, mainParentHash)
-                       case None => false.pure
-                     }
-                   case None => false.pure
-                 }
-      } yield result
+        targetBlockOpt       <- dag.lookup(targetBlockHash)
+        mainParentOpt        = targetBlockOpt >>= (_.parents.headOption)
+        inMainParentChainOpt <- mainParentOpt.traverse(isInMainChain(dag, candidateBlockHash, _))
+      } yield inMainParentChainOpt.getOrElse(false)
     }
+  }
 
   def getMainChainUntilDepth[F[_]: Sync: BlockStore](
       estimate: BlockMessage,
