@@ -76,16 +76,10 @@ object ProtoUtil {
   }
 
   def getBlock[F[_]: Sync: BlockStore](hash: BlockHash): F[BlockMessage] =
-    for {
-      maybeBlock <- BlockStore[F].get(hash)
-      block <- maybeBlock match {
-                case Some(b) => b.pure
-                case None =>
-                  Sync[F].raiseError[BlockMessage](
-                    new Exception(s"BlockStore is missing hash ${PrettyPrinter.buildString(hash)}")
-                  )
-              }
-    } yield block
+    BlockStore[F].get(hash) >>= (Sync[F].fromOption(
+      _,
+      new Exception(s"BlockStore is missing hash ${PrettyPrinter.buildString(hash)}")
+    ))
 
   def getBlockMetadata[F[_]: Sync](
       hash: BlockHash,
