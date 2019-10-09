@@ -207,7 +207,7 @@ object Validate {
     import cats.instances.list._
 
     for {
-      parentsPresent <- ProtoUtil.parentHashes(block).toList.forallM(p => dag.contains(p))
+      parentsPresent <- ProtoUtil.parentHashes(block).forallM(p => dag.contains(p))
       justificationsPresent <- block.justifications.toList
                                 .forallM(j => dag.contains(j.latestBlockHash))
       result <- if (parentsPresent && justificationsPresent) {
@@ -300,7 +300,7 @@ object Validate {
       currentTime  <- Time[F].currentMillis
       timestamp    = b.header.timestamp
       beforeFuture = currentTime + DRIFT >= timestamp
-      latestParentTimestamp <- ProtoUtil.parentHashes(b).toList.foldM(0L) {
+      latestParentTimestamp <- ProtoUtil.parentHashes(b).foldM(0L) {
                                 case (latestTimestamp, parentHash) =>
                                   ProtoUtil
                                     .getBlock(parentHash)
@@ -333,7 +333,7 @@ object Validate {
     import cats.instances.list._
 
     for {
-      parents <- ProtoUtil.parentHashes(b).toList.traverse { parentHash =>
+      parents <- ProtoUtil.parentHashes(b).traverse { parentHash =>
                   dag.lookup(parentHash).flatMap {
                     case Some(p) => p.pure[F]
                     case None =>

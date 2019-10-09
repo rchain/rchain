@@ -201,13 +201,13 @@ object ProtoUtil {
   def weightFromSender[F[_]: Monad: BlockStore](b: BlockMessage): F[Long] =
     weightFromValidator(b, b.sender)
 
-  def parentHashes(b: BlockMessage): Seq[ByteString] =
+  def parentHashes(b: BlockMessage): List[ByteString] =
     b.header.parentsHashList
 
   def getParents[F[_]: Sync: BlockStore](b: BlockMessage): F[List[BlockMessage]] = {
     import cats.instances.list._
 
-    ProtoUtil.parentHashes(b).toList.traverse { parentHash =>
+    ProtoUtil.parentHashes(b).traverse { parentHash =>
       ProtoUtil.getBlock(parentHash)
     }
   }
