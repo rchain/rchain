@@ -125,17 +125,20 @@ object InterpreterUtil {
               .warn(s"Found unknown failure")
               .as(none[StateHash].asRight[BlockError])
           case UnusedCommEvent(_) =>
-            Sync[F].raiseError(new RuntimeException("found UnusedCommEvent"))
+            new RuntimeException("found UnusedCommEvent").raiseError
         }
       case Left((None, status)) =>
         status match {
           case UnusedCommEvent(_: ReplayException) =>
             none[StateHash].asRight[BlockError].pure
-          case InternalErrors(_) => new RuntimeException("found InternalErrors").raiseError
+          case InternalErrors(_) =>
+            new RuntimeException("found InternalErrors").raiseError
           case ReplayStatusMismatch(_, _) =>
             new RuntimeException("found ReplayStatusMismatch").raiseError
-          case UnknownFailure => new RuntimeException("found UnknownFailure").raiseError
-          case UserErrors(_)  => new RuntimeException("found UserErrors").raiseError
+          case UnknownFailure =>
+            new RuntimeException("found UnknownFailure").raiseError
+          case UserErrors(_) =>
+            new RuntimeException("found UserErrors").raiseError
         }
       case Right(computedStateHash) =>
         if (tsHash == computedStateHash) {
