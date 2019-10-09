@@ -2,7 +2,7 @@ package coop.rchain.casper
 
 import cats.Monad
 import cats.effect.Sync
-import cats.implicits._
+import cats.syntax.all._
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockStore
 import coop.rchain.blockstorage.dag.BlockDagRepresentation
@@ -51,13 +51,15 @@ object BlockCreator {
       spanF: Span[F]
   ): F[CreateBlockStatus] =
     spanF.trace(CreateBlockMetricsSource) {
+      import cats.instances.list._
+
       val validator = ByteString.copyFrom(validatorIdentity.publicKey.bytes)
       for {
-        tipHashes             <- Estimator.tips[F](dag, genesis)
+        tipHashes             <- Estimator.tips(dag, genesis)
         _                     <- spanF.mark("after-estimator")
-        parentMetadatas       <- EstimatorHelper.chooseNonConflicting[F](tipHashes, dag)
+        parentMetadatas       <- EstimatorHelper.chooseNonConflicting(tipHashes, dag)
         maxBlockNumber        = ProtoUtil.maxBlockNumberMetadata(parentMetadatas)
-        invalidLatestMessages <- ProtoUtil.invalidLatestMessages[F](dag)
+        invalidLatestMessages <- ProtoUtil.invalidLatestMessages(dag)
         slashingDeploys <- invalidLatestMessages.values.toList.traverse { invalidBlockHash =>
                             val encodedInvalidBlockHash =
                               Base16.encode(invalidBlockHash.toByteArray)
@@ -79,10 +81,10 @@ object BlockCreator {
         _ <- Cell[F, CasperState].modify { s =>
               s.copy(deployHistory = s.deployHistory ++ slashingDeploys)
             }
-        _                <- updateDeployHistory[F](state, maxBlockNumber)
-        deploys          <- extractDeploys[F](dag, parentMetadatas, maxBlockNumber, expirationThreshold)
-        parents          <- parentMetadatas.toList.traverse(p => ProtoUtil.getBlock[F](p.blockHash))
-        justifications   <- computeJustifications[F](dag, parents)
+        _                <- updateDeployHistory(state, maxBlockNumber)
+        deploys          <- extractDeploys(dag, parentMetadatas, maxBlockNumber, expirationThreshold)
+        parents          <- parentMetadatas.toList.traverse(p => ProtoUtil.getBlock(p.blockHash))
+        justifications   <- computeJustifications(dag, parents)
         now              <- Time[F].currentMillis
         invalidBlocksSet <- dag.invalidBlocks
         invalidBlocks    = invalidBlocksSet.map(block => (block.blockHash, block.sender)).toMap
@@ -90,7 +92,7 @@ object BlockCreator {
                           SynchronyConstraintChecker[F]
                             .check(dag, runtimeManager, genesis, validator)
                             .ifM(
-                              processDeploysAndCreateBlock[F](
+                              processDeploysAndCreateBlock(
                                 dag,
                                 runtimeManager,
                                 parents,
@@ -166,11 +168,11 @@ object BlockCreator {
                  .bfTraverseF[F, BlockMetadata](parents.toList)(
                    b =>
                      ProtoUtil
-                       .getParentMetadatasAboveBlockNumber[F](b, earliestBlockNumber, dag)
+                       .getParentMetadatasAboveBlockNumber(b, earliestBlockNumber, dag)
                  )
                  .foldLeftF(validDeploys) { (deploys, blockMetadata) =>
                    for {
-                     block        <- ProtoUtil.getBlock[F](blockMetadata.blockHash)
+                     block        <- ProtoUtil.getBlock(blockMetadata.blockHash)
                      blockDeploys = ProtoUtil.deploys(block).map(_.deploy)
                    } yield deploys -- blockDeploys
                  }
@@ -212,7 +214,7 @@ object BlockCreator {
       invalidBlocks: Map[BlockHash, Validator]
   ): F[CreateBlockStatus] =
     InterpreterUtil
-      .computeDeploysCheckpoint[F](
+      .computeDeploysCheckpoint(
         parents,
         deploys,
         dag,
@@ -253,7 +255,9 @@ object BlockCreator {
 
   private def logInternalErrors[F[_]: Sync: Log](
       internalErrors: Seq[InternalProcessedDeploy]
-  ): F[List[Unit]] =
+  ): F[List[Unit]] = {
+    import cats.instances.list._
+
     internalErrors.toList
       .traverse {
         case InternalProcessedDeploy(deploy, _, _, _, InternalErrors(errors)) =>
@@ -263,6 +267,7 @@ object BlockCreator {
           )
         case _ => ().pure[F]
       }
+  }
 
   private def createBlock(
       now: Long,
