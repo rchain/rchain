@@ -196,11 +196,8 @@ object ProtoUtil {
       b: BlockMetadata,
       dag: BlockDagRepresentation[F]
   ): F[List[BlockMetadata]] = {
-
     import cats.instances.list._
-    b.parents.traverse { parentHash =>
-      getBlockMetadata(parentHash, dag)
-    }
+    b.parents.traverse(getBlockMetadata(_, dag))
   }
 
   def getParentMetadatasAboveBlockNumber[F[_]: Sync](
