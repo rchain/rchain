@@ -223,10 +223,6 @@ object ProtoUtil {
   def blockNumber(b: BlockMessage): Long =
     b.body.state.blockNumber
 
-  def maxBlockNumber(blocks: Seq[BlockMessage]): Long = blocks.foldLeft(-1L) {
-    case (acc, b) => math.max(acc, blockNumber(b))
-  }
-
   def maxBlockNumberMetadata(blocks: Seq[BlockMetadata]): Long = blocks.foldLeft(-1L) {
     case (acc, b) => math.max(acc, b.blockNum)
   }
@@ -269,13 +265,10 @@ object ProtoUtil {
     }
   }
 
-  def protoHash[A <: { def toByteArray: Array[Byte] }](protoSeq: A*): ByteString =
-    protoSeqHash(protoSeq)
-
   def protoSeqHash[A <: { def toByteArray: Array[Byte] }](protoSeq: Seq[A]): ByteString =
     hashByteArrays(protoSeq.map(_.toByteArray): _*)
 
-  def hashByteArrays(items: Array[Byte]*): ByteString =
+  private def hashByteArrays(items: Array[Byte]*): ByteString =
     ByteString.copyFrom(Blake2b256.hash(Array.concat(items: _*)))
 
   // TODO inline this
