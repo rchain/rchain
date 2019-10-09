@@ -163,24 +163,16 @@ object InterpreterUtil {
       runtimeManager: RuntimeManager[F],
       blockData: BlockData,
       invalidBlocks: Map[BlockHash, Validator]
-  ): F[Either[Throwable, (StateHash, StateHash, Seq[InternalProcessedDeploy])]] = {
-    import cats.instances.either._
+  ): F[(StateHash, StateHash, Seq[InternalProcessedDeploy])] = {
+    import shapeless.syntax.std.tuple._
     for {
-      nonEmptyParents <- parents
-                          .pure[F]
+      nonEmptyParents <- parents.pure
                           .ensure(new IllegalArgumentException("Parents must not be empty"))(
                             _.nonEmpty
                           )
-      possiblePreStateHash <- computeParentsPostState(nonEmptyParents, dag, runtimeManager).attempt
-      result <- possiblePreStateHash.flatTraverse { preStateHash =>
-                 runtimeManager
-                   .computeState(preStateHash)(deploys, blockData, invalidBlocks)
-                   .map {
-                     case (postStateHash, processedDeploys) =>
-                       (preStateHash, postStateHash, processedDeploys).asRight[Throwable]
-                   }
-               }
-    } yield result
+      preStateHash <- computeParentsPostState(nonEmptyParents, dag, runtimeManager)
+      result       <- runtimeManager.computeState(preStateHash)(deploys, blockData, invalidBlocks)
+    } yield preStateHash +: result
   }
 
   private def computeParentsPostState[F[_]: Sync: BlockStore: Log: Span](
