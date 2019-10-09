@@ -218,7 +218,7 @@ object InterpreterUtil {
       _                  <- Span[F].mark("before-compute-parents-post-state-find-multi-parents")
       blockHashesToApply <- findMultiParentsBlockHashesForReplay(parents, dag)
       _ <- Log[F].info(
-            s"replayIntoMergeBlock computed number of parents: ${blockHashesToApply.length}"
+            s"replayIntoMergeBlock computed number of uncommon ancestors: ${blockHashesToApply.length}"
           )
       _             <- Span[F].mark("before-compute-parents-post-state-get-blocks")
       blocksToApply <- blockHashesToApply.traverse(b => ProtoUtil.getBlock(b.blockHash))
