@@ -51,7 +51,7 @@ object ProtoUtil {
       acc: IndexedSeq[BlockMessage],
       depth: Int
   ): F[IndexedSeq[BlockMessage]] = {
-    val parentsHashes       = ProtoUtil.parentHashes(estimate)
+    val parentsHashes       = parentHashes(estimate)
     val maybeMainParentHash = parentsHashes.headOption
     for {
       mainChain <- maybeMainParentHash match {
@@ -206,10 +206,7 @@ object ProtoUtil {
 
   def getParents[F[_]: Sync: BlockStore](b: BlockMessage): F[List[BlockMessage]] = {
     import cats.instances.list._
-
-    ProtoUtil.parentHashes(b).traverse { parentHash =>
-      ProtoUtil.getBlock(parentHash)
-    }
+    parentHashes(b).traverse(getBlock[F])
   }
 
   def getParentsMetadata[F[_]: Sync](
