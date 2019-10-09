@@ -51,7 +51,7 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
       deploy: DeployData
   ): F[(StateHash, InternalProcessedDeploy)] =
     for {
-      res <- runtimeManager.computeState(ProtoUtil.tuplespace(genesis))(
+      res <- runtimeManager.computeState(ProtoUtil.postStateHash(genesis))(
               deploy :: Nil,
               BlockData(deploy.timestamp, 0),
               Map.empty[BlockHash, Validator]

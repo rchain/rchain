@@ -71,7 +71,7 @@ class DeployIdTest extends FlatSpec with Matchers {
       for {
         block <- node.addBlock(contract)
         result <- node.runtimeManager
-                   .captureResults(ProtoUtil.tuplespace(block), contractCall, captureChannel)
+                   .captureResults(ProtoUtil.postStateHash(block), contractCall, captureChannel)
         _ = assert(result.size == 1)
         _ = assert(result.head == (GBool(false): Par))
       } yield ()

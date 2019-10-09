@@ -4,16 +4,15 @@ import cats._
 import cats.data.EitherT
 import cats.effect.concurrent.MVar
 import cats.effect.{Sync, _}
-import cats.implicits._
-
+import cats.syntax.all._
 import com.google.protobuf.ByteString
 import coop.rchain.casper.CasperMetricsSource
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
 import coop.rchain.casper.util.{ConstructDeploy, ProtoUtil}
 import coop.rchain.crypto.hash.Blake2b512Random
-import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.metrics.Metrics.Source
+import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.Expr.ExprInstance.GString
 import coop.rchain.models.Validator.Validator
@@ -249,7 +248,9 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log] private[rholang] 
       startHash: StateHash,
       terms: Seq[DeployData],
       processDeploy: DeployData => F[InternalProcessedDeploy]
-  ): F[(StateHash, Seq[InternalProcessedDeploy])] =
+  ): F[(StateHash, Seq[InternalProcessedDeploy])] = {
+    import cats.instances.list._
+
     for {
       _ <- runtime.space.reset(Blake2b256Hash.fromByteString(startHash))
       res <- terms.toList
@@ -260,6 +261,7 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log] private[rholang] 
       finalCheckpoint <- runtime.space.createCheckpoint()
       finalStateHash  = finalCheckpoint.root
     } yield (finalStateHash.toByteString, res)
+  }
 
   private def processDeploy(runtime: Runtime[F])(
       deploy: DeployData

@@ -10,7 +10,7 @@ object DeployDataContract {
 
   def set[F[_]: Concurrent: Span](
       ctx: SystemProcess.Context[F]
-  )(message: (Seq[ListParWithRandom], Int)): F[Unit] = {
+  )(message: Seq[ListParWithRandom]): F[Unit] = {
 
     val isContractCall = new ContractCall(ctx.space, ctx.dispatcher)
     message match {

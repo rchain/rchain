@@ -15,7 +15,7 @@ object internal {
   final case class Datum[A](a: A, persist: Boolean, source: Produce)
 
   object Datum {
-    def create[C, A](channel: C, a: A, persist: Boolean, sequenceNumber: Int = 0)(
+    def create[C, A](channel: C, a: A, persist: Boolean)(
         implicit
         serializeC: Serialize[C],
         serializeA: Serialize[A]

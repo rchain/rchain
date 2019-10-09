@@ -37,10 +37,12 @@ object BondsParser {
       }
       .flatMap {
         case Success(bonds) =>
-          bonds.toList.traverse_ {
-            case (pk, stake) =>
-              Log[F].info(s"Parsed validator ${Base16.encode(pk.bytes)} with bond $stake")
-          } >> bonds.pure[F]
+          bonds.toList
+            .traverse_ {
+              case (pk, stake) =>
+                Log[F].info(s"Parsed validator ${Base16.encode(pk.bytes)} with bond $stake")
+            }
+            .as(bonds)
         case Failure(_) =>
           Sync[F].raiseError(new Exception(s"Bonds file $bondsPath cannot be parsed"))
       }

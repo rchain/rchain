@@ -1,28 +1,22 @@
 package coop.rchain.casper
 
-import coop.rchain.comm.rp.Connect.{ConnectionsCell, RPConfAsk}
-import cats._
-import cats.data._
-import cats.implicits._
 import cats.effect.{Concurrent, Sync}
-import com.google.protobuf.ByteString
+import cats.syntax.all._
+import cats.{Applicative, Show}
+import coop.rchain.blockstorage.BlockStore
+import coop.rchain.blockstorage.dag.BlockDagStorage.DeployId
+import coop.rchain.blockstorage.dag.{BlockDagRepresentation, BlockDagStorage}
 import coop.rchain.casper.engine.Running
 import coop.rchain.casper.protocol._
-import coop.rchain.casper.util.rholang._
-import coop.rchain.catscontrib._
-import coop.rchain.comm.transport.TransportLayer
-import coop.rchain.shared._
-import cats.effect.concurrent.Semaphore
-import coop.rchain.blockstorage.dag.{BlockDagRepresentation, BlockDagStorage}
-import coop.rchain.blockstorage.dag.BlockDagStorage.DeployId
-import coop.rchain.blockstorage.BlockStore
 import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.casper.util.comm.CommUtil
 import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
+import coop.rchain.casper.util.rholang._
 import coop.rchain.catscontrib.ski.kp2
 import coop.rchain.metrics.{Metrics, MetricsSemaphore, Span}
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.Validator.Validator
+import coop.rchain.shared._
 
 sealed trait DeployError
 final case class ParsingError(details: String)          extends DeployError
@@ -77,14 +71,14 @@ trait MultiParentCasper[F[_]] extends Casper[F, IndexedSeq[BlockHash]] {
 object MultiParentCasper extends MultiParentCasperInstances {
   def apply[F[_]](implicit instance: MultiParentCasper[F]): MultiParentCasper[F] = instance
   def ignoreDoppelgangerCheck[F[_]: Applicative]: (BlockMessage, Validator) => F[Unit] =
-    kp2(().pure[F])
+    kp2(().pure)
 
   def forkChoiceTip[F[_]: Sync: BlockStore](casper: MultiParentCasper[F]): F[BlockMessage] =
     for {
       dag       <- casper.blockDag
       tipHashes <- casper.estimator(dag)
       tipHash   = tipHashes.head
-      tip       <- ProtoUtil.getBlock[F](tipHash)
+      tip       <- ProtoUtil.getBlock(tipHash)
     } yield tip
 }
 
@@ -102,31 +96,22 @@ sealed abstract class MultiParentCasperInstances {
       for {
         dag <- BlockDagStorage[F].getRepresentation
         maybePostGenesisStateHash <- InterpreterUtil
-                                      .validateBlockCheckpoint[F](
-                                        genesis,
-                                        dag,
-                                        runtimeManager
-                                      )
+                                      .validateBlockCheckpoint(genesis, dag, runtimeManager)
         postGenesisStateHash <- maybePostGenesisStateHash match {
                                  case Left(BlockError.BlockException(ex)) =>
-                                   Sync[F].raiseError[StateHash](ex)
+                                   ex.raiseError[F, StateHash]
                                  case Left(error) =>
-                                   Sync[F].raiseError[StateHash](
-                                     new Exception(s"Block error: $error")
-                                   )
+                                   new Exception(s"Block error: $error").raiseError[F, StateHash]
                                  case Right(None) =>
-                                   Sync[F].raiseError[StateHash](
-                                     new Exception("Genesis tuplespace validation failed!")
-                                   )
-                                 case Right(Some(hash)) => hash.pure[F]
+                                   new Exception("Genesis tuplespace validation failed!")
+                                     .raiseError[F, StateHash]
+                                 case Right(Some(hash)) => hash.pure
                                }
         blockProcessingLock <- MetricsSemaphore.single[F]
-        casperState <- Cell.mvarCell[F, CasperState](
-                        CasperState()
-                      )
+        casperState         <- Cell.mvarCell[F, CasperState](CasperState())
       } yield {
         implicit val state = casperState
-        new MultiParentCasperImpl[F](
+        new MultiParentCasperImpl(
           validatorId,
           genesis,
           postGenesisStateHash,

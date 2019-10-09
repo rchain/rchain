@@ -34,7 +34,7 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
   implicit val rand: Blake2b512Random = Blake2b512Random(Array.empty[Byte])
   implicit val metrics: Metrics[Task] = new Metrics.MetricsNOP[Task]
 
-  case class DataMapEntry(data: Seq[Par], rand: Blake2b512Random, seqNo: Int = 0)
+  case class DataMapEntry(data: Seq[Par], rand: Blake2b512Random)
 
   private[this] def mapData(elements: Map[Par, (Seq[Par], Blake2b512Random)]): Iterable[
     (
@@ -60,8 +60,7 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
                   entry.data,
                   entry.rand
                 ),
-                false,
-                entry.seqNo
+                false
               )
             ),
             List.empty
@@ -446,7 +445,7 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
 
     val expectedResult = mapDataEntries(
       Map(
-        channel       -> (DataMapEntry(Seq(GInt(7L), GInt(8L), GInt(9L)), splitRand0, 1)),
+        channel       -> (DataMapEntry(Seq(GInt(7L), GInt(8L), GInt(9L)), splitRand0)),
         resultChannel -> (DataMapEntry(Seq(GString("Success")), mergeRand))
       )
     )

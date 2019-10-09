@@ -91,6 +91,44 @@ def test_slash_invalid_block_hash(command_line_options: CommandLineOptions, rand
 
         assert bonds_validators[BONDED_VALIDATOR_KEY_1.get_public_key().to_hex()] == 0
 
+
+@pytest.mark.skipif(sys.platform in ('win32', 'cygwin', 'darwin'), reason="Only Linux docker support connection between host and container which node client needs")
+def test_slash_invalid_block_number(command_line_options: CommandLineOptions, random_generator: Random, docker_client: DockerClient) -> None:
+    """
+    Propose an block with invalid block number(a block number that isn't one more than the max of all the parents block's numbers).
+    """
+    with three_nodes_network_with_node_client(command_line_options, random_generator, docker_client) as  (context, _ , validator1, validator2, client):
+        contract = '/opt/docker/examples/tut-hello.rho'
+
+        validator1.deploy(contract, BONDED_VALIDATOR_KEY_1)
+        blockhash = validator1.propose()
+
+        wait_for_node_sees_block(context, validator2, blockhash)
+
+        block_info = validator1.show_block_parsed(blockhash)
+
+        block_msg = client.block_request(block_info['blockHash'], validator1)
+
+        invalid_block_num_block = BlockMessage()
+        invalid_block_num_block.CopyFrom(block_msg)
+        invalid_block_num_block.body.state.blockNumber = 1000  # pylint: disable=maybe-no-member
+        # change timestamp to make block hash different
+        invalid_block_num_block.header.timestamp = block_msg.header.timestamp + 1  # pylint: disable=maybe-no-member
+        invalid_block_num_block.header.deploysHash = gen_deploys_hash_from_block(invalid_block_num_block)  # pylint: disable=maybe-no-member
+        invalid_block_hash = gen_block_hash_from_block(invalid_block_num_block)
+        invalid_block_num_block.sig = BONDED_VALIDATOR_KEY_1.sign_block_hash(invalid_block_hash)
+        invalid_block_num_block.blockHash = invalid_block_hash
+        logging.info("Invalid block {}".format(invalid_block_hash.hex()))
+        client.send_block(invalid_block_num_block, validator2)
+        validator2.deploy(contract, BONDED_VALIDATOR_KEY_2)
+
+        slashed_block_hash = validator2.propose()
+
+        block_info = validator2.show_block_parsed(slashed_block_hash)
+        bonds_validators = extract_validator_stake_from_bonds_validator_str(block_info['bondsValidatorList'])
+
+        assert bonds_validators[BONDED_VALIDATOR_KEY_1.get_public_key().to_hex()] == 0
+
 @pytest.mark.skipif(sys.platform in ('win32', 'cygwin', 'darwin'), reason="Only Linux docker support connection between host and container which node client needs")
 def test_slash_invalid_block_seq(command_line_options: CommandLineOptions, random_generator: Random, docker_client: DockerClient) -> None:
     """
