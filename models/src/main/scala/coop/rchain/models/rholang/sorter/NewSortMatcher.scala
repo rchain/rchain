@@ -16,6 +16,7 @@ private[sorter] object NewSortMatcher extends Sortable[New] {
                            case Some(id) => Leaf(id.publicKey).pure[F]
                            case None     => Leaf(Score.ABSENT).pure[F]
                          }
+      uriScore = if (n.uri.isEmpty) List(Leaf(Score.ABSENT)) else n.uri.map(Leaf.apply)
     } yield ScoredTerm(
       New(
         bindCount = n.bindCount,
@@ -26,8 +27,7 @@ private[sorter] object NewSortMatcher extends Sortable[New] {
         locallyFree = n.locallyFree
       ),
       new Node(
-        Leaf(Score.NEW) +: (Leaf(n.bindCount.toLong) +: n.uri
-          .map(Leaf.apply) :+ sortedDeployId :+ sortedDeployerId :+ sortedPar.score)
+        Leaf(Score.NEW) +: (Leaf(n.bindCount.toLong) +: uriScore :+ sortedDeployId :+ sortedDeployerId :+ sortedPar.score)
       )
     )
 }
