@@ -737,10 +737,7 @@ class ValidateTest
                   .copy(state = genesis.body.state.copy(postStateHash = ByteString.EMPTY))
               )
             ) shouldBeF false
-        result <- Validate.formatOfFields[Task](
-                   genesis.copy(header = genesis.header.copy(deploysHash = ByteString.EMPTY))
-                 ) shouldBeF false
-      } yield result
+      } yield ()
   }
 
   "Block hash format validation" should "fail on invalid hash" in withStorage {

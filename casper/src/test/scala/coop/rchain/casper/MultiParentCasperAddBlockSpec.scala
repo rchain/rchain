@@ -522,7 +522,6 @@ class MultiParentCasperAddBlockSpec extends FlatSpec with Matchers with Inspecto
       )
     val header = Header(
       parentsHashList = signedInvalidBlock.header.parentsHashList,
-      deploysHash = ProtoUtil.protoSeqHash(deploys.map(_.toProto)),
       timestamp = 0L,
       version = 0L
     )

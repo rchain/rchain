@@ -130,10 +130,6 @@ object Validate {
       for {
         _ <- Log[F].warn(ignore(b, s"block shard identifier is empty."))
       } yield false
-    } else if (b.header.deploysHash.isEmpty) {
-      for {
-        _ <- Log[F].warn(ignore(b, s"block new code hash is empty."))
-      } yield false
     } else if (b.body.state.postStateHash.isEmpty) {
       for {
         _ <- Log[F].warn(ignore(b, s"block post state hash is empty."))

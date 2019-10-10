@@ -120,7 +120,6 @@ message BlockMetadataInternal {
 
 message HeaderProto {
   repeated bytes parentsHashList = 1; //list of parent block hashes
-  bytes deploysHash = 3;
   int64 timestamp = 5;
   int64 version = 6;
   bytes extraBytes = 7;

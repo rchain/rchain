@@ -79,7 +79,6 @@ object blockImplicits {
       blockHash = hash,
       header = Header(
         parentsHashList = parentsHashList.toList,
-        deploysHash = ByteString.EMPTY,
         timestamp = timestamp,
         version = version
       ),

@@ -280,7 +280,6 @@ object ProtoUtil {
   ): Header =
     Header(
       parentHashes.toList,
-      protoSeqHash(body.deploys.map(_.toProto)),
       timestamp,
       version
     )

@@ -27,12 +27,10 @@ object Dummies {
 
   def createHeader(
       parentHashes: List[ByteString] = List.empty,
-      deploysHash: ByteString = ByteString.EMPTY,
       timestamp: Long = 0L
   ): Header =
     Header(
       parentsHashList = parentHashes,
-      deploysHash = deploysHash,
       timestamp = timestamp,
       version = 0L
     )
