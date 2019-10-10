@@ -5,7 +5,7 @@ import java.nio.file.Path
 import coop.rchain.casper.util.comm.ListenAtName.{Name, PrivName, PubName}
 import coop.rchain.comm.PeerNode
 import coop.rchain.crypto.signatures.Ed25519
-import coop.rchain.crypto.PrivateKey
+import coop.rchain.crypto.{PrivateKey, PublicKey}
 import coop.rchain.node.BuildInfo
 import org.rogach.scallop._
 
@@ -531,6 +531,18 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
     val printUnmatchedSends = opt[Boolean](required = false)
   }
   addSubcommand(propose)
+
+  val bondStatus = new Subcommand("bond-status") {
+    val validatorPublicKey = trailArg[PublicKey](
+      descr = "Base16 encoding of the public key to check for bond status.",
+      required = true
+    )(
+      Base16Converter
+        .flatMap(validateLength(Ed25519.keyLength))
+        .map(PublicKey.apply)
+    )
+  }
+  addSubcommand(bondStatus)
 
   verify()
 }

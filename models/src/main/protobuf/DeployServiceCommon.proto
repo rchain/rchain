@@ -64,6 +64,10 @@ message IsFinalizedQuery {
   string hash = 1;
 }
 
+message BondStatusQuery {
+  bytes publicKey = 1;
+}
+
 message LightBlockInfo {
   string blockHash = 1;
   string blockSize = 2;

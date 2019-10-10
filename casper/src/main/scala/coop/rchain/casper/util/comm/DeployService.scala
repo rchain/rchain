@@ -27,6 +27,7 @@ trait DeployService[F[_]] {
   ): F[Either[Seq[String], Seq[ContinuationsWithBlockInfo]]]
   def lastFinalizedBlock: F[Either[Seq[String], String]]
   def isFinalized(q: IsFinalizedQuery): F[Either[Seq[String], String]]
+  def bondStatus(q: BondStatusQuery): F[Either[Seq[String], String]]
 }
 
 object DeployService {
@@ -149,6 +150,17 @@ class GrpcDeployService(host: String, port: Int, maxMessageSize: Int)
         _.ifM(
           "Block is finalized".asRight,
           Seq("Block is not finalized").asLeft
+        )
+      )
+
+  def bondStatus(request: BondStatusQuery): Task[Either[Seq[String], String]] =
+    stub
+      .bondStatus(request)
+      .toEitherF(_.message.error, _.message.isBonded)
+      .map(
+        _.ifM(
+          "Validator is bonded".asRight,
+          Seq("Validator is not bonded").asLeft
         )
       )
 

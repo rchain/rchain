@@ -22,7 +22,7 @@ import coop.rchain.shared.ByteStringOps._
 import cats.syntax.either._
 import com.google.protobuf.ByteString
 import coop.rchain.casper.SignDeployment
-import coop.rchain.crypto.PrivateKey
+import coop.rchain.crypto.{PrivateKey, PublicKey}
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.hash.Blake2b256
 import coop.rchain.crypto.signatures.Secp256k1
@@ -116,6 +116,13 @@ object DeployRuntime {
 
   def isFinalized[F[_]: Sync: DeployService](blockHash: String): F[Unit] =
     gracefulExit(DeployService[F].isFinalized(IsFinalizedQuery(hash = blockHash)))
+
+  def bondStatus[F[_]: Sync: DeployService](publicKey: PublicKey): F[Unit] =
+    gracefulExit(
+      DeployService[F].bondStatus(
+        BondStatusQuery(publicKey = ByteString.copyFrom(publicKey.bytes))
+      )
+    )
 
   private def gracefulExit[F[_]: Monad: Sync, A](
       program: F[Either[Seq[String], String]]

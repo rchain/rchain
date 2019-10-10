@@ -50,6 +50,9 @@ service DeployService {
   rpc lastFinalizedBlock(LastFinalizedBlockQuery) returns (LastFinalizedBlockResponse) {}
   // Check if a given block is finalized.
   rpc isFinalized(IsFinalizedQuery) returns (IsFinalizedResponse) {}
+  // Check if a given validator is bonded.
+  // Returns on success BondStatusResponse
+  rpc bondStatus(BondStatusQuery) returns (BondStatusResponse) {}
 }
 
 // doDeploy
@@ -151,5 +154,12 @@ message IsFinalizedResponse {
   oneof message {
     ServiceError error = 1;
     bool isFinalized   = 2;
+  }
+}
+
+message BondStatusResponse {
+  oneof message {
+    ServiceError error = 1;
+    bool isBonded   = 2;
   }
 }
