@@ -282,8 +282,7 @@ object ProtoUtil {
       parentHashes.toList,
       protoSeqHash(body.deploys.map(_.toProto)),
       timestamp,
-      version,
-      body.deploys.size
+      version
     )
 
   def unsignedBlockProto(

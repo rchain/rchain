@@ -171,8 +171,6 @@ object Validate {
     (for {
       _ <- EitherT.liftF(Span[F].mark("before-block-hash-validation"))
       _ <- EitherT(Validate.blockHash(block))
-      _ <- EitherT.liftF(Span[F].mark("before-deploy-count-validation"))
-      _ <- EitherT(Validate.deployCount(block))
       _ <- EitherT.liftF(Span[F].mark("before-missing-blocks-validation"))
       _ <- EitherT(Validate.missingBlocks(block, dag))
       _ <- EitherT.liftF(Span[F].mark("before-timestamp-validation"))
@@ -503,15 +501,6 @@ object Validate {
       } yield BlockStatus.invalidBlockHash.asLeft[ValidBlock]
     }
   }
-
-  def deployCount[F[_]: Applicative: Log](b: BlockMessage): F[ValidBlockProcessing] =
-    if (b.header.deployCount == b.body.deploys.length) {
-      BlockStatus.valid.asRight[BlockError].pure
-    } else {
-      for {
-        _ <- Log[F].warn(ignore(b, s"block deploy count does not match to the amount of deploys."))
-      } yield BlockStatus.invalidDeployCount.asLeft[ValidBlock]
-    }
 
   /**
     * Works only with fully explicit justifications.

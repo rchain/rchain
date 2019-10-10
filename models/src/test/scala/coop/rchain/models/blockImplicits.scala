@@ -81,8 +81,7 @@ object blockImplicits {
         parentsHashList = parentsHashList.toList,
         deploysHash = ByteString.EMPTY,
         timestamp = timestamp,
-        version = version,
-        deployCount = 0
+        version = version
       ),
       body = Body(
         state = RChainState(

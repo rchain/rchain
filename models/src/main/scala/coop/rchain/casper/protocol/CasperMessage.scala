@@ -210,7 +210,6 @@ final case class Header(
     deploysHash: ByteString,
     timestamp: Long,
     version: Long,
-    deployCount: Int,
     extraBytes: ByteString = ByteString.EMPTY
 ) {
   def toProto: HeaderProto = Header.toProto(this)
@@ -222,7 +221,6 @@ object Header {
     h.deploysHash,
     h.timestamp,
     h.version,
-    h.deployCount,
     h.extraBytes
   )
 
@@ -232,7 +230,6 @@ object Header {
       .withDeploysHash(h.deploysHash)
       .withTimestamp(h.timestamp)
       .withVersion(h.version)
-      .withDeployCount(h.deployCount)
       .withExtraBytes(h.extraBytes)
 }
 

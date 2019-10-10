@@ -123,8 +123,7 @@ message HeaderProto {
   bytes deploysHash = 3;
   int64 timestamp = 5;
   int64 version = 6;
-  int32 deployCount = 7;
-  bytes extraBytes = 8;
+  bytes extraBytes = 7;
 }
 
 /**

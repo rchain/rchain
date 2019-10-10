@@ -758,21 +758,6 @@ class ValidateTest
       } yield result
   }
 
-  "Block deploy count validation" should "fail on invalid number of deploys" in withStorage {
-    _ => implicit blockDagStorage =>
-      val context  = buildGenesis()
-      val (sk, pk) = context.validatorKeyPairs.head
-      for {
-        dag <- blockDagStorage.getRepresentation
-        genesis <- ProtoUtil
-                    .signBlock[Task](context.genesisBlock, dag, pk, sk, "secp256k1", "rchain")
-        _ <- Validate.deployCount[Task](genesis) shouldBeF Right(Valid)
-        result <- Validate.deployCount[Task](
-                   genesis.copy(header = genesis.header.copy(deployCount = 100))
-                 ) shouldBeF Left(InvalidDeployCount)
-      } yield result
-  }
-
   "Block validDeploySignatures" should "succeed if all deploys are signed correctly" in withStorage {
     implicit blockStore =>
       implicit blockDagStorage =>

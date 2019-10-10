@@ -34,8 +34,7 @@ object Dummies {
       parentsHashList = parentHashes,
       deploysHash = deploysHash,
       timestamp = timestamp,
-      version = 0L,
-      deployCount = 0
+      version = 0L
     )
 
   def createRChainState(
