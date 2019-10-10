@@ -68,8 +68,7 @@ class ReportingRspace[F[_]: Sync, C, P, A, K](
 
   def getReport: F[Seq[ReportingEvent]] = Sync[F].delay(report.get)
 
-  protected override def markComm(
-      consumeRef: Consume,
+  protected override def logComm(
       dataCandidates: Seq[DataCandidate[C, A]],
       channels: Seq[C],
       patterns: Seq[P],
@@ -80,8 +79,7 @@ class ReportingRspace[F[_]: Sync, C, P, A, K](
       label: String
   ): F[COMM] =
     for {
-      commRef <- super.markComm(
-                  consumeRef,
+      commRef <- super.logComm(
                   dataCandidates,
                   channels,
                   patterns,
@@ -98,7 +96,8 @@ class ReportingRspace[F[_]: Sync, C, P, A, K](
           )
     } yield commRef
 
-  protected override def markConsume(
+  protected override def logConsume(
+      consumeRef: Consume,
       channels: Seq[C],
       patterns: Seq[P],
       continuation: K,
@@ -106,25 +105,27 @@ class ReportingRspace[F[_]: Sync, C, P, A, K](
       peeks: SortedSet[Int]
   ): F[Consume] =
     for {
-      consumeRef <- super.markConsume(
-                     channels,
-                     patterns,
-                     continuation,
-                     persist,
-                     peeks
-                   )
+      _ <- super.logConsume(
+            consumeRef,
+            channels,
+            patterns,
+            continuation,
+            persist,
+            peeks
+          )
       reportingConsume = ReportingConsume(channels, patterns, continuation, peeks.toSeq)
       _                <- Sync[F].delay(report.update(s => s :+ reportingConsume))
     } yield consumeRef
 
-  protected override def markProduce(
+  protected override def logProduce(
+      produceRef: Produce,
       channel: C,
       data: A,
       persist: Boolean
   ): F[Produce] =
     for {
-      produceRef <- super.markProduce(channel, data, persist)
-      _          <- Sync[F].delay(report.update(s => s :+ ReportingProduce(channel, data)))
+      _ <- super.logProduce(produceRef, channel, data, persist)
+      _ <- Sync[F].delay(report.update(s => s :+ ReportingProduce(channel, data)))
     } yield produceRef
 
   /** Creates a checkpoint.

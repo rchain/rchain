@@ -48,48 +48,19 @@ class ReplayRSpace[F[_]: Sync, C, P, A, K](
 
   def store: HotStore[F, C, P, A, K] = storeAtom.get()
 
-  private[this] val consumeCommLabel     = "comm.consume"
-  private[this] val consumeTimeCommLabel = "comm.consume-time"
-  private[this] val produceCommLabel     = "comm.produce"
-  private[this] val produceTimeCommLabel = "comm.produce-time"
-
-  def consume(
+  protected[this] override def lockedConsume(
       channels: Seq[C],
       patterns: Seq[P],
       continuation: K,
       persist: Boolean,
-      peeks: SortedSet[Int] = SortedSet.empty
-  ): F[MaybeActionResult] =
-    contextShift.evalOn(scheduler) {
-      if (channels.length =!= patterns.length) {
-        val msg = "channels.length must equal patterns.length"
-        logF.error(msg) >> syncF.raiseError(new IllegalArgumentException(msg))
-      } else
-        (for {
-          result <- consumeLockF(channels) {
-                     lockedConsume(
-                       channels,
-                       patterns,
-                       continuation,
-                       persist,
-                       peeks
-                     )
-                   }
-        } yield result).timer(consumeTimeCommLabel)
-    }
-
-  private[this] def lockedConsume(
-      channels: Seq[C],
-      patterns: Seq[P],
-      continuation: K,
-      persist: Boolean,
-      peeks: SortedSet[Int]
+      peeks: SortedSet[Int],
+      consumeRef: Consume
   ): F[MaybeActionResult] =
     for {
       _ <- logF.debug(
             s"consume: searching for data matching <patterns: $patterns> at <channels: $channels>"
           )
-      consumeRef <- markConsume(channels, patterns, continuation, persist, peeks)
+      _ <- logConsume(consumeRef, channels, patterns, continuation, persist, peeks)
       r <- replayData
             .get(consumeRef)
             .fold(
@@ -107,7 +78,7 @@ class ReplayRSpace[F[_]: Sync, C, P, A, K](
                         WaitingContinuation(patterns, continuation, persist, peeks, consumeRef)
                       )
                     ) {
-                      case (comm, dataCandidates) =>
+                      case (_, dataCandidates) =>
                         val channelsToIndex = channels.zipWithIndex.toMap
                         handleMatches(
                           channels,
@@ -117,7 +88,6 @@ class ReplayRSpace[F[_]: Sync, C, P, A, K](
                           dataCandidates,
                           consumeRef,
                           comms,
-                          comm,
                           peeks,
                           channelsToIndex
                         )
@@ -134,20 +104,18 @@ class ReplayRSpace[F[_]: Sync, C, P, A, K](
       mats: Seq[DataCandidate[C, A]],
       consumeRef: Consume,
       comms: Multiset[COMM],
-      comm: COMM,
       peeks: SortedSet[Int],
       channelsToIndex: Map[C, Int]
   ): F[MaybeActionResult] =
     for {
-      commRef <- markComm(
-                  consumeRef,
+      commRef <- logComm(
                   mats,
                   channels,
                   patterns,
                   continuation,
                   persist,
                   peeks,
-                  comm,
+                  COMM(mats, consumeRef, peeks, produceCounters _),
                   consumeCommLabel
                 )
       _ <- assertF(
@@ -210,32 +178,24 @@ class ReplayRSpace[F[_]: Sync, C, P, A, K](
                                    store
                                      .getData(c)
                                      .map(_.zipWithIndex.filter(matches(comm)))
-                                     .map(v => c -> v)
+                                     .map(c -> _)
                                  }
       result <- extractDataCandidates(channels.zip(patterns), channelToIndexedDataList.toMap, Nil)
                  .map(_.sequence)
     } yield result
 
-  def produce(channel: C, data: A, persist: Boolean): F[MaybeActionResult] =
-    contextShift.evalOn(scheduler) {
-      (for {
-        result <- produceLockF(channel) {
-                   lockedProduce(channel, data, persist)
-                 }
-      } yield result).timer(produceTimeCommLabel)
-    }
-
-  private[this] def lockedProduce(
+  protected[this] override def lockedProduce(
       channel: C,
       data: A,
-      persist: Boolean
+      persist: Boolean,
+      produceRef: Produce
   ): F[MaybeActionResult] =
     for {
       groupedChannels <- store.getJoins(channel)
       _ <- logF.debug(
             s"produce: searching for matching continuations at <groupedChannels: $groupedChannels>"
           )
-      produceRef <- markProduce(channel, data, persist)
+      produceRef <- logProduce(produceRef, channel, data, persist)
       result <- replayData.get(produceRef) match {
                  case None =>
                    storeData(channel, data, persist, produceRef)
@@ -284,12 +244,12 @@ class ReplayRSpace[F[_]: Sync, C, P, A, K](
           logger.error(msg)
           Sync[F].raiseError(new IllegalArgumentException(msg))
         case commRef :: Nil =>
-          runMatcherP(channel, data, persist, commRef, produceRef, groupedChannels) map {
+          runMatcherProduce(channel, data, persist, commRef, produceRef, groupedChannels) map {
             case Some(x) => (commRef, x).asRight[COMM].asRight[Seq[COMM]]
             case None    => commRef.asLeft[(COMM, ProduceCandidate[C, P, A, K])].asRight[Seq[COMM]]
           }
         case commRef :: rem =>
-          runMatcherP(channel, data, persist, commRef, produceRef, groupedChannels) map {
+          runMatcherProduce(channel, data, persist, commRef, produceRef, groupedChannels) map {
             case Some(x) => (commRef, x).asRight[COMM].asRight[Seq[COMM]]
             case None    => rem.asLeft[COMMOrProduce]
           }
@@ -297,50 +257,36 @@ class ReplayRSpace[F[_]: Sync, C, P, A, K](
     comms.tailRecM(go)
   }
 
-  private[this] def runMatcherP(
+  private[this] def runMatcherProduce(
       channel: C,
       data: A,
       persist: Boolean,
       comm: COMM,
       produceRef: Produce,
       groupedChannels: Seq[Seq[C]]
-  ): F[MaybeProduceCandidate] = {
-
-    def go(groupedChannels: Seq[Seq[C]]): F[Either[Seq[Seq[C]], MaybeProduceCandidate]] =
-      groupedChannels match {
-        case Nil => none[ProduceCandidate[C, P, A, K]].asRight[Seq[Seq[C]]].pure[F]
-        case channels :: remaining =>
-          for {
-            continuations <- store.getContinuations(channels)
-            matchCandidates = continuations.zipWithIndex.filter {
-              case (WaitingContinuation(_, _, _, _, source), _) =>
-                comm.consume == source
-            }
-            channelToIndexedDataList <- channels.traverse { c: C =>
-                                         store
-                                           .getData(c)
-                                           .map(_.zipWithIndex)
-                                           .map(
-                                             as =>
-                                               c -> {
-                                                 if (c == channel)
-                                                   Seq((Datum(data, persist, produceRef), -1))
-                                                 else as
-                                               }.filter { matches(comm) }
-                                           )
-                                       }
-            firstMatch <- extractFirstMatch(
-                           channels,
-                           matchCandidates,
-                           channelToIndexedDataList.toMap
-                         )
-          } yield firstMatch match {
-            case None             => remaining.asLeft[MaybeProduceCandidate]
-            case produceCandidate => produceCandidate.asRight[Seq[Seq[C]]]
-          }
-      }
-    groupedChannels.tailRecM(go)
-  }
+  ): F[MaybeProduceCandidate] =
+    runMatcherForChannels(
+      groupedChannels,
+      channels =>
+        store
+          .getContinuations(channels)
+          .map(_.zipWithIndex.filter {
+            case (WaitingContinuation(_, _, _, _, source), _) =>
+              comm.consume == source
+          }),
+      c =>
+        store
+          .getData(c)
+          .map(_.zipWithIndex)
+          .map(
+            as =>
+              c -> {
+                if (c == channel)
+                  Seq((Datum(data, persist, produceRef), -1))
+                else as
+              }.filter { matches(comm) }
+          )
+    )
 
   private[this] def handleMatch(
       mat: ProduceCandidate[C, P, A, K],
@@ -358,15 +304,14 @@ class ReplayRSpace[F[_]: Sync, C, P, A, K](
           dataCandidates
           ) =>
         for {
-          commRef <- markComm(
-                      consumeRef,
+          commRef <- logComm(
                       dataCandidates,
                       channels,
                       patterns,
                       continuation,
                       persist,
                       peeks,
-                      comm,
+                      COMM(dataCandidates, consumeRef, peeks, produceCounters _),
                       produceCommLabel
                     )
           _ <- assertF(
@@ -374,34 +319,18 @@ class ReplayRSpace[F[_]: Sync, C, P, A, K](
                 s"COMM Event $commRef was not contained in the trace $comms"
               )
           _ <- store.removeContinuation(channels, continuationIndex).unlessA(persistK)
-          _ <- dataCandidates.toList
-                .sortBy(_.datumIndex)(Ordering[Int].reverse)
-                .traverse {
-                  case DataCandidate(candidateChannel, Datum(_, persistData, _), _, dataIndex) =>
-                    store
-                      .removeDatum(candidateChannel, dataIndex)
-                      .whenA((dataIndex >= 0 && !persistData)) >>
-                      store.removeJoin(candidateChannel, channels)
-                }
+          _ <- removeMatchedDatumAndJoin(channels, dataCandidates)
           _ <- logF.debug(s"produce: matching continuation found at <channels: $channels>")
           _ <- removeBindingsFor(commRef)
-          r <- syncF.delay {
-                Some(
-                  (
-                    ContResult(
-                      continuation,
-                      persistK,
-                      channels,
-                      patterns,
-                      peeks.nonEmpty
-                    ),
-                    dataCandidates.map(
-                      dc => Result(dc.channel, dc.datum.a, dc.removedDatum, dc.datum.persist)
-                    )
-                  )
-                )
-              }
-        } yield r
+        } yield wrapResult(
+          channels,
+          patterns,
+          continuation,
+          persistK,
+          peeks,
+          consumeRef,
+          dataCandidates
+        )
     }
 
   @SuppressWarnings(Array("org.wartremover.warts.NonUnitStatements"))
@@ -437,8 +366,7 @@ class ReplayRSpace[F[_]: Sync, C, P, A, K](
     comm.produces.contains(datum.source) && wasRepeatedEnoughTimes
   }
 
-  protected def markComm(
-      consumeRef: Consume,
+  protected override def logComm(
       dataCandidates: Seq[DataCandidate[C, A]],
       channels: Seq[C],
       patterns: Seq[P],
@@ -448,34 +376,27 @@ class ReplayRSpace[F[_]: Sync, C, P, A, K](
       comm: COMM,
       label: String
   ): F[COMM] =
-    for {
-      _ <- metricsF.incrementCounter(label)
-      commRef <- syncF.delay {
-                  COMM(consumeRef, dataCandidates.map(_.datum.source), peeks, comm.timesRepeated)
-                }
-    } yield commRef
+    metricsF.incrementCounter(label).map(_ => comm)
 
-  protected def markConsume(
+  protected override def logConsume(
+      consumeRef: Consume,
       channels: Seq[C],
       patterns: Seq[P],
       continuation: K,
       persist: Boolean,
       peeks: SortedSet[Int]
-  ): F[Consume] =
-    syncF.delay {
-      Consume.create(channels, patterns, continuation, persist)
-    }
+  ): F[Consume] = syncF.delay { consumeRef }
 
-  protected def markProduce(
+  protected override def logProduce(
+      produceRef: Produce,
       channel: C,
       data: A,
       persist: Boolean
-  ): F[Produce] =
-    syncF.delay {
-      val ref = Produce.create(channel, data, persist)
-      if (!persist) produceCounter.update(_.putAndIncrementCounter(ref))
-      ref
-    }
+  ): F[Produce] = syncF.delay {
+    if (!persist) produceCounter.update(_.putAndIncrementCounter(produceRef))
+    produceRef
+  }
+
 }
 
 object ReplayRSpace {

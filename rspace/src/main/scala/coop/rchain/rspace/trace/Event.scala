@@ -48,6 +48,15 @@ final case class COMM(
 ) extends Event
 
 object COMM {
+  def apply[C, A](
+      dataCandidates: Seq[DataCandidate[C, A]],
+      consumeRef: Consume,
+      peeks: SortedSet[Int],
+      produceCounters: (Seq[Produce]) => Map[Produce, Int]
+  ): COMM = {
+    val produceRefs = dataCandidates.map(_.datum.source)
+    COMM(consumeRef, produceRefs, peeks, produceCounters(produceRefs))
+  }
   implicit val codecInt = int32
   implicit val codecCOMM: Codec[COMM] =
     (Codec[Consume] :: Codec[Seq[Produce]] :: sortedSet(uint8) :: Codec[Map[Produce, Int]]).as[COMM]
