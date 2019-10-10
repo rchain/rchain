@@ -18,9 +18,8 @@ import coop.rchain.models.rholang.implicits._
 import coop.rchain.models.testImplicits._
 import coop.rchain.rholang.interpreter.Runtime.RhoISpace
 import coop.rchain.rholang.interpreter.accounting.Cost
-import coop.rchain.rspace.Serialize
 import coop.rchain.shared.PathOps._
-import coop.rchain.shared.Log
+import coop.rchain.shared.{Log, Serialize}
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
 import org.scalactic.TripleEqualsSupport

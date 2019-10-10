@@ -10,7 +10,7 @@ import coop.rchain.catscontrib.seq._
 import coop.rchain.shared.Language._
 import coop.rchain.shared.MapOps._
 import coop.rchain.rspace.internal._
-import coop.rchain.rspace.Serialize._
+import coop.rchain.shared.Serialize._
 import scodec.Codec
 
 import scala.collection.concurrent.TrieMap

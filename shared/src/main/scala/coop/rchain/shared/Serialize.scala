@@ -1,4 +1,4 @@
-package coop.rchain.rspace
+package coop.rchain.shared
 
 import scodec.{Attempt, Codec, DecodeResult, Err, SizeBound}
 import scodec.bits.{BitVector, ByteVector}

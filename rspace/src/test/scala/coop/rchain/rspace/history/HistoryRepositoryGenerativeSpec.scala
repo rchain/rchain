@@ -11,8 +11,7 @@ import coop.rchain.rspace.{
   HotStoreAction,
   InsertContinuations,
   InsertData,
-  InsertJoins,
-  Serialize
+  InsertJoins
 }
 import coop.rchain.rspace.examples.StringExamples._
 import coop.rchain.rspace.examples.StringExamples.implicits._
@@ -27,6 +26,7 @@ import cats.implicits._
 import coop.rchain.rspace.internal.{Datum, WaitingContinuation}
 import org.lmdbjava.EnvFlags
 import coop.rchain.shared.PathOps._
+import coop.rchain.shared.Serialize
 
 import scala.concurrent.duration._
 

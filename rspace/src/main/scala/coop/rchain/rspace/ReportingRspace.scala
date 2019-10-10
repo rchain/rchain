@@ -10,7 +10,7 @@ import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.rspace.history.{Branch, HistoryRepository}
 import coop.rchain.rspace.internal._
 import coop.rchain.rspace.trace.{Produce, _}
-import coop.rchain.shared.Log
+import coop.rchain.shared.{Log, Serialize}
 import com.google.common.collect.Multiset
 import com.typesafe.scalalogging.Logger
 import coop.rchain.rspace.ReportingRspace.{

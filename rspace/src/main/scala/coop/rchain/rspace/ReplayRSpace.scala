@@ -5,21 +5,18 @@ import java.nio.file.Path
 import scala.collection.JavaConverters._
 import scala.collection.SortedSet
 import scala.concurrent.ExecutionContext
-
 import cats.Applicative
 import cats.effect._
 import cats.implicits._
 import cats.temp.par.Par
-
 import coop.rchain.catscontrib._
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.metrics.implicits._
 import coop.rchain.rspace.history.{Branch, HistoryRepository}
 import coop.rchain.rspace.internal._
 import coop.rchain.rspace.trace.{Produce, _}
-import coop.rchain.shared.Log
+import coop.rchain.shared.{Log, Serialize}
 import coop.rchain.shared.SyncVarOps._
-
 import com.google.common.collect.Multiset
 import com.typesafe.scalalogging.Logger
 import monix.execution.atomic.AtomicAny

@@ -4,7 +4,8 @@ import java.nio.charset.StandardCharsets
 
 import cats.effect.Sync
 import coop.rchain.shared.Language.ignore
-import coop.rchain.rspace.{Match, Serialize}
+import coop.rchain.rspace.Match
+import coop.rchain.shared.Serialize
 import scodec.bits.ByteVector
 
 import scala.collection.mutable

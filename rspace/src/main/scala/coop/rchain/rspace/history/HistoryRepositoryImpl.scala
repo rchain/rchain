@@ -16,8 +16,7 @@ import coop.rchain.rspace.{
   InsertContinuations,
   InsertData,
   InsertJoins,
-  RSpace,
-  Serialize
+  RSpace
 }
 import coop.rchain.rspace.internal._
 import scodec.Codec
@@ -25,6 +24,7 @@ import scodec.bits.{BitVector, ByteVector}
 import HistoryRepositoryImpl._
 import cats.temp.par.Par
 import com.typesafe.scalalogging.Logger
+import coop.rchain.shared.Serialize
 
 final case class HistoryRepositoryImpl[F[_]: Sync: Par, C, P, A, K](
     history: History[F],

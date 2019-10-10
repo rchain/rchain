@@ -2,7 +2,7 @@ package coop.rchain.models.serialization
 
 import com.google.protobuf.CodedInputStream
 import coop.rchain.models._
-import coop.rchain.rspace.Serialize
+import coop.rchain.shared.Serialize
 import monix.eval.Coeval
 import scalapb.GeneratedMessageCompanion
 import scodec.bits.ByteVector

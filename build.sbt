@@ -129,6 +129,7 @@ lazy val shared = (project in file("shared"))
       lz4,
       monix,
       scodecCore,
+      scodecCats,
       scodecBits,
       scalapbRuntimegGrpc,
       lmdbjava,
@@ -470,7 +471,6 @@ lazy val rspace = (project in file("rspace"))
       lmdbjava,
       catsCore,
       scodecCore,
-      scodecCats,
       scodecBits,
       guava
     ),

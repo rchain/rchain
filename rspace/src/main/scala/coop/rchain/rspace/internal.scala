@@ -3,6 +3,7 @@ package coop.rchain.rspace
 import com.google.common.collect.{HashMultiset, Multiset}
 import coop.rchain.rspace.trace.{Consume, Produce}
 import coop.rchain.scodec.codecs.seqOfN
+import coop.rchain.shared.Serialize
 import scodec.Codec
 import scodec.bits.ByteVector
 import scodec.codecs.{bool, bytes, int32, int64, uint8, variableSizeBytesLong}

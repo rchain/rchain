@@ -3,6 +3,7 @@ package coop.rchain.rspace
 import java.nio.charset.StandardCharsets
 
 import cats.Functor
+import coop.rchain.shared.Serialize
 import scodec.Codec
 import scodec.bits.ByteVector
 

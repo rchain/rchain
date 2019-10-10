@@ -4,6 +4,7 @@ import java.io.{ByteArrayInputStream, ByteArrayOutputStream, ObjectInputStream, 
 
 import cats.syntax.either._
 import coop.rchain.shared.Resources.withResource
+import coop.rchain.shared.Serialize
 import scodec.bits.ByteVector
 
 package object examples {

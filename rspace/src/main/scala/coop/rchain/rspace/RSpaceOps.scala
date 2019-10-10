@@ -3,20 +3,17 @@ package coop.rchain.rspace
 import scala.collection.SortedSet
 import scala.concurrent.SyncVar
 import scala.util.Random
-
 import cats.effect.{Concurrent, Sync}
 import cats.implicits._
-
 import coop.rchain.catscontrib._
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.metrics.implicits._
 import coop.rchain.rspace.concurrent.{ConcurrentTwoStepLockF, TwoStepLock}
 import coop.rchain.rspace.history._
 import coop.rchain.rspace.internal._
-import coop.rchain.rspace.trace.{Consume, Log => EventLog, Produce}
-import coop.rchain.shared.{Cell, Log}
+import coop.rchain.rspace.trace.{Consume, Produce, Log => EventLog}
+import coop.rchain.shared.{Cell, Log, Serialize}
 import coop.rchain.shared.SyncVarOps._
-
 import com.typesafe.scalalogging.Logger
 import monix.execution.atomic.AtomicAny
 import scodec.Codec
