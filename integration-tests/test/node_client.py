@@ -102,7 +102,7 @@ def get_node_ip_of_network(docker_client: DockerClient, network_name: str) -> Ge
 
 
 def get_current_container_id() -> str:
-    hostname = subprocess.run(['hostname'], stdout=subprocess.PIPE)
+    hostname = subprocess.run(['hostname'], check=True, stdout=subprocess.PIPE)
     return hostname.stdout.decode('utf8').strip("\n")
 
 
