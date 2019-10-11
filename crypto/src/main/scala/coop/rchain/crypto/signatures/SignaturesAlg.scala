@@ -12,7 +12,7 @@ trait SignaturesAlg {
     verify(data, signature, pub.bytes)
   def sign(data: Array[Byte], sec: PrivateKey): Array[Byte] = sign(data, sec.bytes)
 
-  val sigLength : Int
+  val sigLength: Int
 }
 
 object SignaturesAlg {
