@@ -30,6 +30,9 @@ class SignedSpec extends PropSpec with GeneratorDrivenPropertyChecks with Matche
       val hash = Blake2b256.hash(signed.data)
 
       sigAlgorithm.verify(hash, signed.sig.toByteArray, pk) should be(true)
+      signed.pk should be(pk)
+      signed.sigAlgorithm should be(sigAlgorithm)
+      signed.data should be(input)
     }
   }
 
@@ -39,7 +42,8 @@ class SignedSpec extends PropSpec with GeneratorDrivenPropertyChecks with Matche
 
       val signed = Signed(input, sigAlgorithm, sk)
 
-      val fromSigned = Signed.fromSignedData(signed.data, signed.pk, signed.sig, signed.sigAlgorithm)
+      val fromSigned =
+        Signed.fromSignedData(signed.data, signed.pk, signed.sig, signed.sigAlgorithm)
 
       fromSigned.isDefined should be(true)
       signed should be(fromSigned.get)
@@ -47,11 +51,12 @@ class SignedSpec extends PropSpec with GeneratorDrivenPropertyChecks with Matche
   }
 
   property("Signed.fromSignedData should return null for invalid signatures") {
-    forAll { (sigAlgorithm: SignaturesAlg, input: Array[Byte], randomByte : Byte) =>
-      val (_, pk) = sigAlgorithm.newKeyPair
+    forAll { (sigAlgorithm: SignaturesAlg, input: Array[Byte], randomByte: Byte) =>
+      val (_, pk)    = sigAlgorithm.newKeyPair
       val invalidSig = Array.fill(sigAlgorithm.sigLength)(randomByte)
 
-      val fromSigned = Signed.fromSignedData(input, pk, ByteString.copyFrom(invalidSig), sigAlgorithm)
+      val fromSigned =
+        Signed.fromSignedData(input, pk, ByteString.copyFrom(invalidSig), sigAlgorithm)
 
       fromSigned should be(None)
     }
