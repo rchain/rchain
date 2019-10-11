@@ -557,6 +557,23 @@ class ParSortMatcherSpec extends FlatSpec with Matchers {
     result.term should be(sortedParNew)
   }
 
+  it should "sort uris in News" in {
+    val parNew =
+      Par(
+        news = List(
+          New(bindCount = 1, uri = Vector("rho:io:stdout", "rho:io:stderr"), p = Par())
+        )
+      )
+    val sortedParNew =
+      Par(
+        news = List(
+          New(bindCount = 1, uri = Vector("rho:io:stderr", "rho:io:stdout"), p = Par())
+        )
+      )
+    val result = sort(parNew)
+    result.term should be(sortedParNew)
+  }
+
   it should "sort EVars based on their type and then levels" in {
     val parGround =
       Par(exprs = List(EVar(FreeVar(2)), EVar(FreeVar(1)), EVar(BoundVar(2)), EVar(BoundVar(1))))

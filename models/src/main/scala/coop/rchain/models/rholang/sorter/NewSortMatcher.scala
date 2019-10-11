@@ -9,9 +9,10 @@ private[sorter] object NewSortMatcher extends Sortable[New] {
     Sortable
       .sortMatch(n.p)
       .map {
+        val sortedUri = n.uri.sorted
         val uriScore =
-          if (n.uri.nonEmpty)
-            n.uri.map(Leaf.apply)
+          if (sortedUri.nonEmpty)
+            sortedUri.map(Leaf.apply)
           else
             List(Leaf(Score.ABSENT))
 
@@ -20,7 +21,7 @@ private[sorter] object NewSortMatcher extends Sortable[New] {
             New(
               bindCount = n.bindCount,
               p = sortedPar.term,
-              uri = n.uri,
+              uri = sortedUri,
               injections = n.injections,
               locallyFree = n.locallyFree
             ),
