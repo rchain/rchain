@@ -414,7 +414,6 @@ object BlockAPI {
       constructor: (
           BlockMessage,
           Long,
-          Int,
           BlockHash,
           Long,
           BlockHash,
@@ -429,7 +428,6 @@ object BlockAPI {
       dag             <- casper.blockDag
       header          = block.header
       version         = header.version
-      deployCount     = header.deployCount
       tsHash          = ProtoUtil.postStateHash(block)
       timestamp       = header.timestamp
       mainParent      = header.parentsHashList.headOption.getOrElse(ByteString.EMPTY)
@@ -442,7 +440,6 @@ object BlockAPI {
       blockInfo <- constructor(
                     block,
                     version,
-                    deployCount,
                     tsHash,
                     timestamp,
                     mainParent,
@@ -466,7 +463,6 @@ object BlockAPI {
   private def constructBlockInfo[F[_]: Monad: SafetyOracle: BlockStore](
       block: BlockMessage,
       version: Long,
-      deployCount: Int,
       tsHash: BlockHash,
       timestamp: Long,
       mainParent: BlockHash,
@@ -481,7 +477,7 @@ object BlockAPI {
       blockSize = BlockMessage.toProto(block).serializedSize.toString,
       blockNumber = ProtoUtil.blockNumber(block),
       version = version,
-      deployCount = deployCount,
+      deployCount = block.body.deploys.size,
       tupleSpaceHash = PrettyPrinter.buildStringNoLimit(tsHash),
       timestamp = timestamp,
       faultTolerance = normalizedFaultTolerance - initialFault, // TODO: Fix
@@ -496,7 +492,6 @@ object BlockAPI {
   private def constructLightBlockInfo[F[_]: Monad: SafetyOracle: BlockStore](
       block: BlockMessage,
       version: Long,
-      deployCount: Int,
       tsHash: BlockHash,
       timestamp: Long,
       mainParent: BlockHash,
@@ -511,7 +506,7 @@ object BlockAPI {
       blockSize = block.toProto.serializedSize.toString,
       blockNumber = ProtoUtil.blockNumber(block),
       version = version,
-      deployCount = deployCount,
+      deployCount = block.body.deploys.size,
       tupleSpaceHash = PrettyPrinter.buildStringNoLimit(tsHash),
       timestamp = timestamp,
       faultTolerance = normalizedFaultTolerance - initialFault,

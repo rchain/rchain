@@ -207,10 +207,8 @@ object BlockMessage {
 
 final case class Header(
     parentsHashList: List[ByteString],
-    deploysHash: ByteString,
     timestamp: Long,
     version: Long,
-    deployCount: Int,
     extraBytes: ByteString = ByteString.EMPTY
 ) {
   def toProto: HeaderProto = Header.toProto(this)
@@ -219,20 +217,16 @@ final case class Header(
 object Header {
   def from(h: HeaderProto): Header = Header(
     h.parentsHashList.toList,
-    h.deploysHash,
     h.timestamp,
     h.version,
-    h.deployCount,
     h.extraBytes
   )
 
   def toProto(h: Header): HeaderProto =
     HeaderProto()
       .withParentsHashList(h.parentsHashList)
-      .withDeploysHash(h.deploysHash)
       .withTimestamp(h.timestamp)
       .withVersion(h.version)
-      .withDeployCount(h.deployCount)
       .withExtraBytes(h.extraBytes)
 }
 

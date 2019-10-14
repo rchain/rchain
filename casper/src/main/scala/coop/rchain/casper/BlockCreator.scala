@@ -13,13 +13,11 @@ import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
 import coop.rchain.casper.util.rholang._
 import coop.rchain.casper.util.{ConstructDeploy, DagOperations, ProtoUtil}
 import coop.rchain.crypto.codec.Base16
-import coop.rchain.crypto.{PrivateKey, PublicKey}
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.BlockMetadata
 import coop.rchain.models.Validator.Validator
 import coop.rchain.rholang.interpreter.Runtime.BlockData
-import coop.rchain.rholang.interpreter.accounting
 import coop.rchain.shared.{Cell, Log, Time}
 
 object BlockCreator {
@@ -213,45 +211,39 @@ object BlockCreator {
       now: Long,
       invalidBlocks: Map[BlockHash, Validator]
   ): F[CreateBlockStatus] =
-    InterpreterUtil
-      .computeDeploysCheckpoint(
+    (for {
+      result <- InterpreterUtil.computeDeploysCheckpoint(
+                 parents,
+                 deploys,
+                 dag,
+                 runtimeManager,
+                 BlockData(now, maxBlockNumber + 1),
+                 invalidBlocks
+               )
+      (preStateHash, postStateHash, processedDeploys) = result
+      (internalErrors, persistableDeploys)            = processedDeploys.partition(_.status.isInternalError)
+      _                                               <- logInternalErrors(internalErrors)
+      newBonds                                        <- runtimeManager.computeBonds(postStateHash)
+      block = createBlock(
+        now,
         parents,
-        deploys,
-        dag,
-        runtimeManager,
-        BlockData(now, maxBlockNumber + 1),
-        invalidBlocks
+        justifications,
+        maxBlockNumber,
+        preStateHash,
+        postStateHash,
+        persistableDeploys,
+        newBonds,
+        shardId,
+        version
       )
-      .attempt
-      .flatMap {
-        case Left(ex) =>
-          Log[F]
-            .error(
-              s"Critical error encountered while processing deploys: ${ex.getMessage}"
-            )
-            .map(_ => CreateBlockStatus.internalDeployError(ex))
-
-        case Right((preStateHash, postStateHash, processedDeploys)) =>
-          val (internalErrors, persistableDeploys) =
-            processedDeploys.partition(_.status.isInternalError)
-          logInternalErrors(internalErrors) >>
-            runtimeManager
-              .computeBonds(postStateHash)
-              .map { newBonds =>
-                createBlock(
-                  now,
-                  parents,
-                  justifications,
-                  maxBlockNumber,
-                  preStateHash,
-                  postStateHash,
-                  persistableDeploys,
-                  newBonds,
-                  shardId,
-                  version
-                )
-              }
+    } yield block)
+    //TODO both the log message and block status seems misleading - the error could have happened anywhere,
+    // e.g. during `replayIntoMergeBlock`
+      .onError {
+        case ex =>
+          Log[F].error(s"Critical error encountered while processing deploys", ex)
       }
+      .handleError(CreateBlockStatus.internalDeployError)
 
   private def logInternalErrors[F[_]: Sync: Log](
       internalErrors: Seq[InternalProcessedDeploy]

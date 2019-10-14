@@ -105,7 +105,6 @@ trait BlockGenerator {
       )
       val header = Dummies.createHeader(
         parentHashes = parentsHashList.toList,
-        deploysHash = ProtoUtil.protoSeqHash(deploys.map(_.toProto)),
         timestamp = now
       )
       val blockHash = Blake2b256.hash(header.toProto.toByteArray)

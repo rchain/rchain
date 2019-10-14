@@ -737,10 +737,7 @@ class ValidateTest
                   .copy(state = genesis.body.state.copy(postStateHash = ByteString.EMPTY))
               )
             ) shouldBeF false
-        result <- Validate.formatOfFields[Task](
-                   genesis.copy(header = genesis.header.copy(deploysHash = ByteString.EMPTY))
-                 ) shouldBeF false
-      } yield result
+      } yield ()
   }
 
   "Block hash format validation" should "fail on invalid hash" in withStorage {
@@ -755,21 +752,6 @@ class ValidateTest
         result <- Validate.blockHash[Task](
                    genesis.copy(blockHash = ByteString.copyFromUtf8("123"))
                  ) shouldBeF Left(InvalidBlockHash)
-      } yield result
-  }
-
-  "Block deploy count validation" should "fail on invalid number of deploys" in withStorage {
-    _ => implicit blockDagStorage =>
-      val context  = buildGenesis()
-      val (sk, pk) = context.validatorKeyPairs.head
-      for {
-        dag <- blockDagStorage.getRepresentation
-        genesis <- ProtoUtil
-                    .signBlock[Task](context.genesisBlock, dag, pk, sk, "secp256k1", "rchain")
-        _ <- Validate.deployCount[Task](genesis) shouldBeF Right(Valid)
-        result <- Validate.deployCount[Task](
-                   genesis.copy(header = genesis.header.copy(deployCount = 100))
-                 ) shouldBeF Left(InvalidDeployCount)
       } yield result
   }
 

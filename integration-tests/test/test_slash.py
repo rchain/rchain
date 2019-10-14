@@ -9,7 +9,7 @@ from contextlib import contextmanager
 import logging
 import pytest
 from docker.client import DockerClient
-from rchain.crypto import PrivateKey, gen_block_hash_from_block, gen_deploys_hash_from_block
+from rchain.crypto import PrivateKey, gen_block_hash_from_block
 from rchain.pb.CasperMessage_pb2 import BlockMessageProto as BlockMessage, JustificationProto as Justification
 from rchain.util import create_deploy_data
 
@@ -114,7 +114,6 @@ def test_slash_invalid_block_number(command_line_options: CommandLineOptions, ra
         invalid_block_num_block.body.state.blockNumber = 1000  # pylint: disable=maybe-no-member
         # change timestamp to make block hash different
         invalid_block_num_block.header.timestamp = block_msg.header.timestamp + 1  # pylint: disable=maybe-no-member
-        invalid_block_num_block.header.deploysHash = gen_deploys_hash_from_block(invalid_block_num_block)  # pylint: disable=maybe-no-member
         invalid_block_hash = gen_block_hash_from_block(invalid_block_num_block)
         invalid_block_num_block.sig = BONDED_VALIDATOR_KEY_1.sign_block_hash(invalid_block_hash)
         invalid_block_num_block.blockHash = invalid_block_hash
@@ -156,7 +155,6 @@ def test_slash_invalid_block_seq(command_line_options: CommandLineOptions, rando
         invalid_block_num_block.seqNum = 1000
         # change timestamp to make block hash different
         invalid_block_num_block.header.timestamp = block_msg.header.timestamp + 1  # pylint: disable=maybe-no-member
-        invalid_block_num_block.header.deploysHash = gen_deploys_hash_from_block(invalid_block_num_block)  # pylint: disable=maybe-no-member
         invalid_block_hash = gen_block_hash_from_block(invalid_block_num_block)
         invalid_block_num_block.sig = BONDED_VALIDATOR_KEY_1.sign_block_hash(invalid_block_hash)
         invalid_block_num_block.blockHash = invalid_block_hash
@@ -291,7 +289,6 @@ def test_slash_invalid_validator_approve_evil_block(command_line_options: Comman
         block_not_slash_invalid_block.header.ClearField("parentsHashList")  # pylint: disable=maybe-no-member
         block_not_slash_invalid_block.header.parentsHashList.append(bytes.fromhex(genesis_block['blockHash']))  # pylint: disable=maybe-no-member
         block_not_slash_invalid_block.header.timestamp = int(time.time()*1000)  # pylint: disable=maybe-no-member
-        block_not_slash_invalid_block.header.deploysHash = gen_deploys_hash_from_block(block_not_slash_invalid_block)  # pylint: disable=maybe-no-member
         invalid_block_hash = gen_block_hash_from_block(block_not_slash_invalid_block)
         block_not_slash_invalid_block.sig = BONDED_VALIDATOR_KEY_2.sign_block_hash(invalid_block_hash)
         block_not_slash_invalid_block.blockHash = invalid_block_hash
@@ -359,7 +356,6 @@ def test_slash_GHOST_disobeyed(command_line_options: CommandLineOptions, random_
         invalid_block.header.timestamp = int(time.time()*1000)  # pylint: disable=maybe-no-member
         deploy_data = create_deploy_data(BONDED_VALIDATOR_KEY_2, Path("../rholang/examples/tut-hello.rho").read_text(), 1, 1000000)
         invalid_block.body.deploys[0].deploy.CopyFrom(deploy_data)  # pylint: disable=maybe-no-member
-        invalid_block.header.deploysHash = gen_deploys_hash_from_block(invalid_block)  # pylint: disable=maybe-no-member
         invalid_block_hash = gen_block_hash_from_block(invalid_block)
         invalid_block.sig = BONDED_VALIDATOR_KEY_1.sign_block_hash(invalid_block_hash)
         invalid_block.blockHash = invalid_block_hash
