@@ -337,7 +337,7 @@ object ReportingCasper {
     private def computeEffect(runtime: ReportingRuntime[F], reducer: Reduce[F])(
         deploy: DeployData
     ): F[EvaluateResult] =
-      RuntimeManager.doInj(deploy, reducer, runtime.errorLog)(Sync[F], runtime.cost)
+      RuntimeManager.evaluate(reducer, runtime.cost, runtime.errorLog)(deploy)
   }
 }
 
