@@ -35,9 +35,8 @@ class Runtime[F[_]: Sync] private (
     val replaySpace: RhoReplayISpace[F],
     val errorLog: ErrorLog[F],
     val cost: _cost[F],
-    val deployParametersRef: Ref[F, DeployParameters],
     val blockData: Ref[F, BlockData],
-    val invalidBlocks: Runtime.InvalidBlocks[F]
+    val invalidBlocks: InvalidBlocks[F]
 ) extends HasCost[F] {
   def readAndClearErrorVector(): F[Vector[Throwable]] = errorLog.readAndClearErrorVector()
   def close(): F[Unit] =
@@ -114,7 +113,6 @@ object Runtime {
     val KECCAK256_HASH: Long     = 6L
     val BLAKE2B256_HASH: Long    = 7L
     val SECP256K1_VERIFY: Long   = 9L
-    val GET_DEPLOY_PARAMS: Long  = 10L
     val GET_BLOCK_DATA: Long     = 11L
     val GET_INVALID_BLOCKS: Long = 12L
     val REV_ADDRESS: Long        = 13L
@@ -134,7 +132,6 @@ object Runtime {
     val KECCAK256_HASH: Par     = GString("keccak256Hash")
     val BLAKE2B256_HASH: Par    = byteName(7)
     val SECP256K1_VERIFY: Par   = byteName(8)
-    val GET_DEPLOY_PARAMS: Par  = byteName(9)
     val GET_BLOCK_DATA: Par     = byteName(10)
     val GET_INVALID_BLOCKS: Par = byteName(11)
     val REV_ADDRESS: Par        = byteName(12)
@@ -167,7 +164,6 @@ object Runtime {
     final case class Context[F[_]: Concurrent: Span](
         space: RhoTuplespace[F],
         dispatcher: RhoDispatch[F],
-        deployParametersRef: Ref[F, DeployParameters],
         blockData: Ref[F, BlockData],
         invalidBlocks: InvalidBlocks[F]
     ) {
@@ -216,14 +212,6 @@ object Runtime {
         ctx: SystemProcess.Context[F] =>
           ctx.systemProcesses.stdErrAck
       }),
-    SystemProcess.Definition[F](
-      "rho:deploy:params",
-      FixedChannels.GET_DEPLOY_PARAMS,
-      1,
-      BodyRefs.GET_DEPLOY_PARAMS, { ctx =>
-        ctx.systemProcesses.getDeployParams(ctx.deployParametersRef)
-      }
-    ),
     SystemProcess.Definition[F](
       "rho:block:data",
       FixedChannels.GET_BLOCK_DATA,
@@ -292,7 +280,6 @@ object Runtime {
   def dispatchTableCreator[F[_]: Concurrent: Span](
       space: RhoTuplespace[F],
       dispatcher: RhoDispatch[F],
-      deployParametersRef: Ref[F, DeployParameters],
       blockData: Ref[F, BlockData],
       invalidBlocks: InvalidBlocks[F],
       extraSystemProcesses: Seq[SystemProcess.Definition[F]]
@@ -309,8 +296,7 @@ object Runtime {
       (stdSystemProcesses[F] ++ extraSystemProcesses)
         .map(
           _.toDispatchTable(
-            SystemProcess
-              .Context(space, dispatcher, deployParametersRef, blockData, invalidBlocks)
+            SystemProcess.Context(space, dispatcher, blockData, invalidBlocks)
           )
         )
   }
@@ -340,7 +326,6 @@ object Runtime {
 
   def setupReducer[F[_]: Concurrent: Log: Metrics: Span, M[_]](
       chargingRSpace: RhoTuplespace[F],
-      deployParametersRef: Ref[F, DeployParameters],
       blockDataRef: Ref[F, BlockData],
       invalidBlocks: InvalidBlocks[F],
       extraSystemProcesses: Seq[SystemProcess.Definition[F]],
@@ -350,7 +335,6 @@ object Runtime {
       dispatchTableCreator(
         chargingRSpace,
         replayDispatcher,
-        deployParametersRef,
         blockDataRef,
         invalidBlocks,
         extraSystemProcesses
@@ -369,13 +353,12 @@ object Runtime {
       extraSystemProcesses: Seq[SystemProcess.Definition[F]] = Seq.empty
   ) =
     for {
-      deployParametersRef <- Ref.of(DeployParameters.empty)
-      blockDataRef        <- Ref.of(BlockData.empty)
-      invalidBlocks       = InvalidBlocks.unsafe[F]()
-      urnMap              = basicProcesses ++ (stdSystemProcesses[F] ++ extraSystemProcesses).map(_.toUrnMap)
+      blockDataRef  <- Ref.of(BlockData.empty)
+      invalidBlocks = InvalidBlocks.unsafe[F]()
+      urnMap        = basicProcesses ++ (stdSystemProcesses[F] ++ extraSystemProcesses).map(_.toUrnMap)
       procDefs = basicProcessDefs ++ (stdSystemProcesses[F] ++ extraSystemProcesses)
         .map(_.toProcDefs)
-    } yield (deployParametersRef, blockDataRef, invalidBlocks, urnMap, procDefs)
+    } yield (blockDataRef, invalidBlocks, urnMap, procDefs)
 
   def create[F[_]: Concurrent: Log: Metrics: Span, M[_]](
       spaceAndReplay: ISpaceAndReplay[F],
@@ -388,13 +371,12 @@ object Runtime {
     implicit val ft: FunctorTell[F, Throwable] = errorLog
     val (space, replaySpace)                   = spaceAndReplay
     for {
-      mapsAndRefs                                                          <- setupMapsAndRefs(extraSystemProcesses)
-      (deployParametersRef, blockDataRef, invalidBlocks, urnMap, procDefs) = mapsAndRefs
+      mapsAndRefs                                     <- setupMapsAndRefs(extraSystemProcesses)
+      (blockDataRef, invalidBlocks, urnMap, procDefs) = mapsAndRefs
       (reducer, replayReducer) = {
 
         val replayReducer = setupReducer(
           ChargingRSpace.chargingRSpace[F](replaySpace),
-          deployParametersRef,
           blockDataRef,
           invalidBlocks,
           extraSystemProcesses,
@@ -403,7 +385,6 @@ object Runtime {
 
         val reducer = setupReducer(
           ChargingRSpace.chargingRSpace[F](space),
-          deployParametersRef,
           blockDataRef,
           invalidBlocks,
           extraSystemProcesses,
@@ -422,7 +403,6 @@ object Runtime {
         replaySpace,
         errorLog,
         cost,
-        deployParametersRef,
         blockDataRef,
         invalidBlocks
       )

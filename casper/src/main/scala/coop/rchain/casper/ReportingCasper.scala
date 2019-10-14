@@ -337,10 +337,7 @@ object ReportingCasper {
     private def computeEffect(runtime: ReportingRuntime[F], reducer: Reduce[F])(
         deploy: DeployData
     ): F[EvaluateResult] =
-      for {
-        _      <- runtime.deployParametersRef.set(ProtoUtil.getRholangDeployParams(deploy))
-        result <- RuntimeManager.doInj(deploy, reducer, runtime.errorLog)(Sync[F], runtime.cost)
-      } yield result
+      RuntimeManager.doInj(deploy, reducer, runtime.errorLog)(Sync[F], runtime.cost)
   }
 }
 
@@ -349,7 +346,6 @@ class ReportingRuntime[F[_]: Sync](
     val reportingSpace: RhoReportingRspace[F],
     val errorLog: ErrorLog[F],
     val cost: _cost[F],
-    val deployParametersRef: Ref[F, DeployParameters],
     val blockData: Ref[F, BlockData],
     val invalidBlocks: Runtime.InvalidBlocks[F]
 ) extends HasCost[F] {
@@ -387,11 +383,10 @@ object ReportingRuntime {
     val errorLog                               = new ErrorLog[F]()
     implicit val ft: FunctorTell[F, Throwable] = errorLog
     for {
-      mapsAndRefs                                                          <- setupMapsAndRefs(extraSystemProcesses)
-      (deployParametersRef, blockDataRef, invalidBlocks, urnMap, procDefs) = mapsAndRefs
+      mapsAndRefs                                     <- setupMapsAndRefs(extraSystemProcesses)
+      (blockDataRef, invalidBlocks, urnMap, procDefs) = mapsAndRefs
       reducer = setupReducer(
         ChargingRSpace.chargingRSpace[F](reporting),
-        deployParametersRef,
         blockDataRef,
         invalidBlocks,
         extraSystemProcesses,
@@ -400,15 +395,7 @@ object ReportingRuntime {
       res <- Runtime.introduceSystemProcesses(reporting :: Nil, procDefs)
     } yield {
       assert(res.forall(_.isEmpty))
-      new ReportingRuntime[F](
-        reducer,
-        reporting,
-        errorLog,
-        cost,
-        deployParametersRef,
-        blockDataRef,
-        invalidBlocks
-      )
+      new ReportingRuntime[F](reducer, reporting, errorLog, cost, blockDataRef, invalidBlocks)
     }
   }
 }

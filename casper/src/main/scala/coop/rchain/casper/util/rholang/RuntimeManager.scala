@@ -98,10 +98,7 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log](
   private def computeEffect(runtime: Runtime[F], reducer: Reduce[F])(
       deploy: DeployData
   ): F[EvaluateResult] =
-    for {
-      _      <- runtime.deployParametersRef.set(ProtoUtil.getRholangDeployParams(deploy))
-      result <- RuntimeManager.doInj(deploy, reducer, runtime.errorLog)(Sync[F], runtime.cost)
-    } yield result
+    RuntimeManager.doInj(deploy, reducer, runtime.errorLog)(Sync[F], runtime.cost)
 
   def replayComputeState(startHash: StateHash)(
       terms: Seq[InternalProcessedDeploy],
