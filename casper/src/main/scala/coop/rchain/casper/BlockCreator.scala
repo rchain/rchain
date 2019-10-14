@@ -241,7 +241,7 @@ object BlockCreator {
     // e.g. during `replayIntoMergeBlock`
       .onError {
         case ex =>
-          Log[F].error(s"Critical error encountered while processing deploys: ${ex.getMessage}")
+          Log[F].error(s"Critical error encountered while processing deploys", ex)
       }
       .handleError(CreateBlockStatus.internalDeployError)
 
