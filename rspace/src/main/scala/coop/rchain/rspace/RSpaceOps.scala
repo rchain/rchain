@@ -156,6 +156,22 @@ abstract class RSpaceOps[F[_]: Concurrent: Metrics, C, P, A, K](
       _ <- logF.debug(s"produce: persisted <data: $data> at <channel: $channel>")
     } yield None
 
+  protected[this] def storePersistentData(
+      dataCandidates: Seq[DataCandidate[C, A]],
+      peeks: SortedSet[Int]
+  ): F[List[Unit]] =
+    dataCandidates.toList
+      .sortBy(_.datumIndex)(Ordering[Int].reverse)
+      .traverse {
+        case DataCandidate(
+            candidateChannel,
+            Datum(_, persistData, _),
+            _,
+            dataIndex
+            ) =>
+          store.removeDatum(candidateChannel, dataIndex).unlessA(persistData)
+      }
+
   protected[this] def restoreInstalls(): F[Unit] = spanF.trace(restoreInstallsSpanLabel) {
     installs.get.toList
       .traverse {
@@ -351,21 +367,18 @@ abstract class RSpaceOps[F[_]: Concurrent: Metrics, C, P, A, K](
 
   def wrapResult(
       channels: Seq[C],
-      patterns: Seq[P],
-      continuation: K,
-      persist: Boolean,
-      peeks: SortedSet[Int],
+      wk: WaitingContinuation[P, K],
       consumeRef: Consume,
       dataCandidates: Seq[DataCandidate[C, A]]
   ): MaybeActionResult =
     Some(
       (
         ContResult(
-          continuation,
-          persist,
+          wk.continuation,
+          wk.persist,
           channels,
-          patterns,
-          peeks.nonEmpty
+          wk.patterns,
+          wk.peeks.nonEmpty
         ),
         dataCandidates
           .map(dc => Result(dc.channel, dc.datum.a, dc.removedDatum, dc.datum.persist))
@@ -420,10 +433,7 @@ abstract class RSpaceOps[F[_]: Concurrent: Metrics, C, P, A, K](
   protected def logComm(
       dataCandidates: Seq[DataCandidate[C, A]],
       channels: Seq[C],
-      patterns: Seq[P],
-      continuation: K,
-      persist: Boolean,
-      peeks: SortedSet[Int],
+      wk: WaitingContinuation[P, K],
       comm: COMM,
       label: String
   ): F[COMM]

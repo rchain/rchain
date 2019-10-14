@@ -71,25 +71,13 @@ class ReportingRspace[F[_]: Sync, C, P, A, K](
   protected override def logComm(
       dataCandidates: Seq[DataCandidate[C, A]],
       channels: Seq[C],
-      patterns: Seq[P],
-      continuation: K,
-      persist: Boolean,
-      peeks: SortedSet[Int],
+      wk: WaitingContinuation[P, K],
       comm: COMM,
       label: String
   ): F[COMM] =
     for {
-      commRef <- super.logComm(
-                  dataCandidates,
-                  channels,
-                  patterns,
-                  continuation,
-                  persist,
-                  peeks,
-                  comm,
-                  label
-                )
-      reportingConsume  = ReportingConsume(channels, patterns, continuation, peeks.toSeq)
+      commRef           <- super.logComm(dataCandidates, channels, wk, comm, label)
+      reportingConsume  = ReportingConsume(channels, wk.patterns, wk.continuation, wk.peeks.toSeq)
       reportingProduces = dataCandidates.map(dc => ReportingProduce(dc.channel, dc.datum.a))
       _ <- Sync[F].delay(
             report.update(s => s :+ ReportingComm(reportingConsume, reportingProduces))

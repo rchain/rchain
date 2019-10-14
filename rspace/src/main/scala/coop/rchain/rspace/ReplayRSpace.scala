@@ -60,81 +60,42 @@ class ReplayRSpace[F[_]: Sync, C, P, A, K](
       _ <- logF.debug(
             s"consume: searching for data matching <patterns: $patterns> at <channels: $channels>"
           )
-      _ <- logConsume(consumeRef, channels, patterns, continuation, persist, peeks)
+      _  <- logConsume(consumeRef, channels, patterns, continuation, persist, peeks)
+      wk = WaitingContinuation(patterns, continuation, persist, peeks, consumeRef)
       r <- replayData
             .get(consumeRef)
-            .fold(
-              storeWaitingContinuation(
-                channels,
-                WaitingContinuation(patterns, continuation, persist, peeks, consumeRef)
-              )
-            )(
+            .fold(storeWaitingContinuation(channels, wk))(
               comms =>
                 getCommAndDataCandidates(channels, patterns, comms.iterator().asScala.toList)
                   .flatMap {
-                    _.fold(
-                      storeWaitingContinuation(
-                        channels,
-                        WaitingContinuation(patterns, continuation, persist, peeks, consumeRef)
-                      )
-                    ) {
+                    _.fold(storeWaitingContinuation(channels, wk)) {
                       case (_, dataCandidates) =>
-                        val channelsToIndex = channels.zipWithIndex.toMap
-                        handleMatches(
-                          channels,
-                          patterns,
-                          continuation,
-                          persist,
-                          dataCandidates,
-                          consumeRef,
-                          comms,
-                          peeks,
-                          channelsToIndex
-                        )
+                        for {
+                          commRef <- logComm(
+                                      dataCandidates,
+                                      channels,
+                                      wk,
+                                      COMM(
+                                        dataCandidates,
+                                        consumeRef,
+                                        peeks,
+                                        produceCounters _
+                                      ),
+                                      consumeCommLabel
+                                    )
+                          _ <- assertF(
+                                comms.contains(commRef),
+                                s"COMM Event $commRef was not contained in the trace $comms"
+                              )
+                          _ <- storePersistentData(dataCandidates, peeks)
+                          _ <- logF.debug(
+                                s"consume: data found for <patterns: $patterns> at <channels: $channels>"
+                              )
+                          _ <- removeBindingsFor(commRef)
+                        } yield wrapResult(channels, wk, consumeRef, dataCandidates)
                     }
                   }
             )
-    } yield r
-
-  def handleMatches(
-      channels: Seq[C],
-      patterns: Seq[P],
-      continuation: K,
-      persist: Boolean,
-      mats: Seq[DataCandidate[C, A]],
-      consumeRef: Consume,
-      comms: Multiset[COMM],
-      peeks: SortedSet[Int],
-      channelsToIndex: Map[C, Int]
-  ): F[MaybeActionResult] =
-    for {
-      commRef <- logComm(
-                  mats,
-                  channels,
-                  patterns,
-                  continuation,
-                  persist,
-                  peeks,
-                  COMM(mats, consumeRef, peeks, produceCounters _),
-                  consumeCommLabel
-                )
-      _ <- assertF(
-            comms.contains(commRef),
-            s"COMM Event $commRef was not contained in the trace $comms"
-          )
-      r <- for {
-            _ <- mats.toList
-                  .sortBy(_.datumIndex)(Ordering[Int].reverse)
-                  .traverse {
-                    case DataCandidate(candidateChannel, Datum(_, persistData, _), _, dataIndex) =>
-                      store.removeDatum(candidateChannel, dataIndex).unlessA(persistData)
-                  }
-            _ <- logF.debug(
-                  s"consume: data found for <patterns: $patterns> at <channels: $channels>"
-                )
-            _ <- removeBindingsFor(commRef)
-
-          } yield wrapResult(channels, patterns, continuation, persist, peeks, consumeRef, mats)
     } yield r
 
 // TODO: refactor this monster
@@ -195,36 +156,24 @@ class ReplayRSpace[F[_]: Sync, C, P, A, K](
       _ <- logF.debug(
             s"produce: searching for matching continuations at <groupedChannels: $groupedChannels>"
           )
-      produceRef <- logProduce(produceRef, channel, data, persist)
+      _ <- logProduce(produceRef, channel, data, persist)
       result <- replayData.get(produceRef) match {
                  case None =>
                    storeData(channel, data, persist, produceRef)
                  case Some(comms) =>
-                   val commOrProduceCandidate
-                       : F[Either[COMM, (COMM, ProduceCandidate[C, P, A, K])]] =
-                     getCommOrProduceCandidate(
-                       channel,
-                       data,
-                       persist,
-                       comms.iterator().asScala.toList,
-                       produceRef,
-                       groupedChannels
+                   getCommOrProduceCandidate(
+                     channel,
+                     data,
+                     persist,
+                     comms.iterator().asScala.toList,
+                     produceRef,
+                     groupedChannels
+                   ).flatMap(
+                     _.fold(
+                       _ => storeData(channel, data, persist, produceRef),
+                       _ match { case (_, pc) => handleMatch(pc, comms) }
                      )
-                   val r: F[MaybeActionResult] = commOrProduceCandidate.flatMap {
-                     case Left(_) =>
-                       storeData(channel, data, persist, produceRef)
-                     case Right((comm, produceCandidate)) =>
-                       val indexedChannels = produceCandidate.channels.zipWithIndex.toMap
-                       handleMatch(
-                         produceCandidate,
-                         produceRef,
-                         persist,
-                         comms,
-                         comm,
-                         indexedChannels
-                       )
-                   }
-                   r
+                   )
                }
     } yield result
 
@@ -290,16 +239,12 @@ class ReplayRSpace[F[_]: Sync, C, P, A, K](
 
   private[this] def handleMatch(
       mat: ProduceCandidate[C, P, A, K],
-      produceRef: Produce,
-      persist: Boolean,
-      comms: Multiset[COMM],
-      comm: COMM,
-      channelsToIndex: Map[C, Int]
+      comms: Multiset[COMM]
   ): F[MaybeActionResult] =
     mat match {
       case ProduceCandidate(
           channels,
-          WaitingContinuation(patterns, continuation, persistK, peeks, consumeRef),
+          wk @ WaitingContinuation(_, _, persistK, peeks, consumeRef),
           continuationIndex,
           dataCandidates
           ) =>
@@ -307,10 +252,7 @@ class ReplayRSpace[F[_]: Sync, C, P, A, K](
           commRef <- logComm(
                       dataCandidates,
                       channels,
-                      patterns,
-                      continuation,
-                      persist,
-                      peeks,
+                      wk,
                       COMM(dataCandidates, consumeRef, peeks, produceCounters _),
                       produceCommLabel
                     )
@@ -322,15 +264,7 @@ class ReplayRSpace[F[_]: Sync, C, P, A, K](
           _ <- removeMatchedDatumAndJoin(channels, dataCandidates)
           _ <- logF.debug(s"produce: matching continuation found at <channels: $channels>")
           _ <- removeBindingsFor(commRef)
-        } yield wrapResult(
-          channels,
-          patterns,
-          continuation,
-          persistK,
-          peeks,
-          consumeRef,
-          dataCandidates
-        )
+        } yield wrapResult(channels, wk, consumeRef, dataCandidates)
     }
 
   @SuppressWarnings(Array("org.wartremover.warts.NonUnitStatements"))
@@ -369,10 +303,7 @@ class ReplayRSpace[F[_]: Sync, C, P, A, K](
   protected override def logComm(
       dataCandidates: Seq[DataCandidate[C, A]],
       channels: Seq[C],
-      patterns: Seq[P],
-      continuation: K,
-      persist: Boolean,
-      peeks: SortedSet[Int],
+      wk: WaitingContinuation[P, K],
       comm: COMM,
       label: String
   ): F[COMM] =

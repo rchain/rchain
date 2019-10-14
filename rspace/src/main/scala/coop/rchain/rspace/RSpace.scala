@@ -67,27 +67,14 @@ class RSpace[F[_], C, P, A, K](
                   channelToIndexedData,
                   Nil
                 ).map(_.sequence)
-      result <- options.fold(
-                 storeWaitingContinuation(
-                   channels,
-                   WaitingContinuation(
-                     patterns,
-                     continuation,
-                     persist,
-                     peeks,
-                     consumeRef
-                   )
-                 )
-               )(
+      wk = WaitingContinuation(patterns, continuation, persist, peeks, consumeRef)
+      result <- options.fold(storeWaitingContinuation(channels, wk))(
                  dataCandidates =>
                    for {
                      _ <- logComm(
                            dataCandidates,
                            channels,
-                           patterns,
-                           continuation,
-                           persist,
-                           peeks,
+                           wk,
                            COMM(
                              dataCandidates,
                              consumeRef,
@@ -96,20 +83,11 @@ class RSpace[F[_], C, P, A, K](
                            ),
                            consumeCommLabel
                          )
-                     channelsToIndex = channels.zipWithIndex.toMap
-                     _               <- storePersistentData(dataCandidates, peeks, channelsToIndex)
+                     _ <- storePersistentData(dataCandidates, peeks)
                      _ <- logF.debug(
                            s"consume: data found for <patterns: $patterns> at <channels: $channels>"
                          )
-                   } yield wrapResult(
-                     channels,
-                     patterns,
-                     continuation,
-                     persist,
-                     peeks,
-                     consumeRef,
-                     dataCandidates
-                   )
+                   } yield wrapResult(channels, wk, consumeRef, dataCandidates)
                )
     } yield result
 
@@ -127,23 +105,6 @@ class RSpace[F[_], C, P, A, K](
         store.getData(c).shuffleWithIndex.map(c -> _)
       }
       .map(_.toMap)
-
-  private[this] def storePersistentData(
-      dataCandidates: Seq[DataCandidate[C, A]],
-      peeks: SortedSet[Int],
-      channelsToIndex: Map[C, Int]
-  ): F[List[Unit]] =
-    dataCandidates.toList
-      .sortBy(_.datumIndex)(Ordering[Int].reverse)
-      .traverse {
-        case DataCandidate(
-            candidateChannel,
-            Datum(_, persistData, _),
-            _,
-            dataIndex
-            ) =>
-          store.removeDatum(candidateChannel, dataIndex).unlessA(persistData)
-      }
 
   protected[this] override def lockedProduce(
       channel: C,
@@ -205,9 +166,9 @@ class RSpace[F[_], C, P, A, K](
   ): F[MaybeActionResult] = {
     val ProduceCandidate(
       channels,
-      WaitingContinuation(
-        patterns,
-        continuation,
+      wk @ WaitingContinuation(
+        _,
+        _,
         persistK,
         peeks,
         consumeRef
@@ -220,40 +181,20 @@ class RSpace[F[_], C, P, A, K](
       _ <- logComm(
             dataCandidates,
             channels,
-            patterns,
-            continuation,
-            persistK,
-            peeks,
-            COMM(
-              dataCandidates,
-              consumeRef,
-              peeks,
-              produceCounters _
-            ),
+            wk,
+            COMM(dataCandidates, consumeRef, peeks, produceCounters _),
             produceCommLabel
           )
-      _               <- store.removeContinuation(channels, continuationIndex).unlessA(persistK)
-      indexedChannels = channels.zipWithIndex.toMap
-      _               <- removeMatchedDatumAndJoin(channels, dataCandidates)
-      _               <- logF.debug(s"produce: matching continuation found at <channels: $channels>")
-    } yield wrapResult(
-      channels,
-      patterns,
-      continuation,
-      persistK,
-      peeks,
-      consumeRef,
-      dataCandidates
-    )
+      _ <- store.removeContinuation(channels, continuationIndex).unlessA(persistK)
+      _ <- removeMatchedDatumAndJoin(channels, dataCandidates)
+      _ <- logF.debug(s"produce: matching continuation found at <channels: $channels>")
+    } yield wrapResult(channels, wk, consumeRef, dataCandidates)
   }
 
   protected override def logComm(
       dataCandidates: Seq[DataCandidate[C, A]],
       channels: Seq[C],
-      patterns: Seq[P],
-      continuation: K,
-      persist: Boolean,
-      peeks: SortedSet[Int],
+      wk: WaitingContinuation[P, K],
       comm: COMM,
       label: String
   ): F[COMM] =
