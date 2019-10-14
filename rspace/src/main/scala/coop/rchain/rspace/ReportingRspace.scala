@@ -69,7 +69,7 @@ class ReportingRspace[F[_]: Sync, C, P, A, K](
   def getReport: F[Seq[ReportingEvent]] = Sync[F].delay(report.get)
 
   protected override def logComm(
-      dataCandidates: Seq[DataCandidate[C, A]],
+      dataCandidates: Seq[ConsumeCandidate[C, A]],
       channels: Seq[C],
       wk: WaitingContinuation[P, K],
       comm: COMM,

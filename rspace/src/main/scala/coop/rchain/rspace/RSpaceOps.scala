@@ -157,13 +157,13 @@ abstract class RSpaceOps[F[_]: Concurrent: Metrics, C, P, A, K](
     } yield None
 
   protected[this] def storePersistentData(
-      dataCandidates: Seq[DataCandidate[C, A]],
+      dataCandidates: Seq[ConsumeCandidate[C, A]],
       peeks: SortedSet[Int]
   ): F[List[Unit]] =
     dataCandidates.toList
       .sortBy(_.datumIndex)(Ordering[Int].reverse)
       .traverse {
-        case DataCandidate(
+        case ConsumeCandidate(
             candidateChannel,
             Datum(_, persistData, _),
             _,
@@ -369,7 +369,7 @@ abstract class RSpaceOps[F[_]: Concurrent: Metrics, C, P, A, K](
       channels: Seq[C],
       wk: WaitingContinuation[P, K],
       consumeRef: Consume,
-      dataCandidates: Seq[DataCandidate[C, A]]
+      dataCandidates: Seq[ConsumeCandidate[C, A]]
   ): MaybeActionResult =
     Some(
       (
@@ -387,12 +387,12 @@ abstract class RSpaceOps[F[_]: Concurrent: Metrics, C, P, A, K](
 
   def removeMatchedDatumAndJoin(
       channels: Seq[C],
-      dataCandidates: Seq[DataCandidate[C, A]]
+      dataCandidates: Seq[ConsumeCandidate[C, A]]
   ): F[Seq[Unit]] =
     dataCandidates
       .sortBy(_.datumIndex)(Ordering[Int].reverse)
       .traverse {
-        case DataCandidate(candidateChannel, Datum(_, persistData, _), _, dataIndex) => {
+        case ConsumeCandidate(candidateChannel, Datum(_, persistData, _), _, dataIndex) => {
           store
             .removeDatum(candidateChannel, dataIndex)
             .whenA(dataIndex >= 0 && !persistData) >>
@@ -431,7 +431,7 @@ abstract class RSpaceOps[F[_]: Concurrent: Metrics, C, P, A, K](
   }
 
   protected def logComm(
-      dataCandidates: Seq[DataCandidate[C, A]],
+      dataCandidates: Seq[ConsumeCandidate[C, A]],
       channels: Seq[C],
       wk: WaitingContinuation[P, K],
       comm: COMM,

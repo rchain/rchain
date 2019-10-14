@@ -14,7 +14,7 @@ import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.metrics.Metrics.Source
 import coop.rchain.metrics.implicits._
 import coop.rchain.rspace.history.{Branch, HistoryRepository}
-import coop.rchain.rspace.internal.{DataCandidate, _}
+import coop.rchain.rspace.internal.{ConsumeCandidate, _}
 import coop.rchain.rspace.trace._
 import coop.rchain.shared.{Cell, Log, Serialize}
 import coop.rchain.shared.SyncVarOps._
@@ -166,13 +166,7 @@ class RSpace[F[_], C, P, A, K](
   ): F[MaybeActionResult] = {
     val ProduceCandidate(
       channels,
-      wk @ WaitingContinuation(
-        _,
-        _,
-        persistK,
-        peeks,
-        consumeRef
-      ),
+      wk @ WaitingContinuation(_, _, persistK, peeks, consumeRef),
       continuationIndex,
       dataCandidates
     ) = pc
@@ -192,7 +186,7 @@ class RSpace[F[_], C, P, A, K](
   }
 
   protected override def logComm(
-      dataCandidates: Seq[DataCandidate[C, A]],
+      dataCandidates: Seq[ConsumeCandidate[C, A]],
       channels: Seq[C],
       wk: WaitingContinuation[P, K],
       comm: COMM,

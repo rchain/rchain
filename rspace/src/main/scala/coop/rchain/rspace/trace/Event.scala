@@ -49,7 +49,7 @@ final case class COMM(
 
 object COMM {
   def apply[C, A](
-      dataCandidates: Seq[DataCandidate[C, A]],
+      dataCandidates: Seq[ConsumeCandidate[C, A]],
       consumeRef: Consume,
       peeks: SortedSet[Int],
       produceCounters: (Seq[Produce]) => Map[Produce, Int]
