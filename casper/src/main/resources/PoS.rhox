@@ -500,11 +500,8 @@ new  PoS,
       } |
 
       contract getUser (@deployerId, returnCh) = {
-        new deployerIdOps(`rho:rchain:deployerId:ops`), userPkCh in {
-          deployerIdOps!("pubKeyBytes", deployerId, *userPkCh) |
-          for (@userPk <- userPkCh) {
-            returnCh!(userPk)
-          }
+        new deployerIdOps(`rho:rchain:deployerId:ops`) in {
+          deployerIdOps!("pubKeyBytes", deployerId, *returnCh)
         }
       } |
 
