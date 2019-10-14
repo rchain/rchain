@@ -19,12 +19,12 @@ object RholangOnlyDispatcher {
       parallel: Parallel[M, F],
       s: Sync[M],
       ft: FunctorTell[M, Throwable]
-  ): (Dispatch[M, ListParWithRandom, TaggedContinuation], Reduce[M]) = {
+  ): (Dispatch[M, ListParWithRandom, TaggedContinuation], DebruijnInterpreter[M, F]) = {
 
     lazy val dispatcher: Dispatch[M, ListParWithRandom, TaggedContinuation] =
       new RholangOnlyDispatcher
 
-    implicit lazy val reducer: Reduce[M] =
+    implicit lazy val reducer: DebruijnInterpreter[M, F] =
       new DebruijnInterpreter[M, F](
         tuplespace,
         dispatcher,

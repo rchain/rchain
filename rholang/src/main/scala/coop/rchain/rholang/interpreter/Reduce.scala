@@ -47,12 +47,6 @@ trait Reduce[M[_]] {
 
   def inj(par: Par)(implicit rand: Blake2b512Random): M[Unit]
 
-  /**
-    * Evaluate any top level expressions in @param Par .
-    */
-  def evalExpr(par: Par)(implicit env: Env[Par]): M[Par]
-
-  def evalExprToPar(expr: Expr)(implicit env: Env[Par]): M[Par]
 }
 
 class DebruijnInterpreter[M[_], F[_]](
@@ -456,7 +450,7 @@ class DebruijnInterpreter[M[_], F[_]](
   )(implicit env: Env[Par], rand: Blake2b512Random): M[Unit] =
     eval(bundle.body)
 
-  def evalExprToPar(expr: Expr)(implicit env: Env[Par]): M[Par] =
+  private[rholang] def evalExprToPar(expr: Expr)(implicit env: Env[Par]): M[Par] =
     expr.exprInstance match {
       case EVarBody(EVar(v)) =>
         for {
@@ -1487,7 +1481,7 @@ class DebruijnInterpreter[M[_], F[_]](
   /**
     * Evaluate any top level expressions in @param Par .
     */
-  def evalExpr(par: Par)(implicit env: Env[Par]): M[Par] =
+  private[rholang] def evalExpr(par: Par)(implicit env: Env[Par]): M[Par] =
     for {
       evaledExprs <- par.exprs.toList.traverse(evalExprToPar)
       // Note: the locallyFree cache in par could now be invalid, but given
