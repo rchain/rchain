@@ -41,11 +41,10 @@ object Reduce {
   */
 trait Reduce[M[_]] {
 
-  def eval(
-      par: Par
-  )(implicit env: Env[Par], rand: Blake2b512Random): M[Unit]
+  def eval(par: Par)(implicit env: Env[Par], rand: Blake2b512Random): M[Unit]
 
-  def inj(par: Par)(implicit rand: Blake2b512Random): M[Unit]
+  final def inj(par: Par)(implicit rand: Blake2b512Random): M[Unit] =
+    eval(par)(Env[Par](), rand)
 
 }
 
@@ -230,11 +229,6 @@ class DebruijnInterpreter[M[_], F[_]](
       case e @ OutOfPhlogistonsError => e.raiseError[M, Unit]
       case e                         => fTell.tell(e)
     }
-
-  override def inj(
-      par: Par
-  )(implicit rand: Blake2b512Random): M[Unit] =
-    eval(par)(Env[Par](), rand)
 
   /** Algorithm as follows:
     *
