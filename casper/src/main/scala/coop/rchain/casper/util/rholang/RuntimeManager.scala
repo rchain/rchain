@@ -87,18 +87,14 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log](
 
   def captureResults(start: StateHash, deploy: DeployData, name: Par): F[Seq[Par]] =
     withResetRuntimeLock(start) { runtime =>
-      computeEffect(runtime, runtime.reducer)(deploy)
+      RuntimeManager
+        .doInj(deploy, runtime.reducer, runtime.errorLog)(Sync[F], runtime.cost)
         .ensure(
           BugFoundError("Unexpected error while capturing results from rholang")
         )(
           _.errors.isEmpty
         ) >> getData(runtime)(name)
     }
-
-  private def computeEffect(runtime: Runtime[F], reducer: Reduce[F])(
-      deploy: DeployData
-  ): F[EvaluateResult] =
-    RuntimeManager.doInj(deploy, reducer, runtime.errorLog)(Sync[F], runtime.cost)
 
   def replayComputeState(startHash: StateHash)(
       terms: Seq[InternalProcessedDeploy],
@@ -264,8 +260,11 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log](
       deploy: DeployData
   ): F[InternalProcessedDeploy] = Span[F].withMarks("process-deploy") {
     for {
-      fallback                     <- runtime.space.createSoftCheckpoint()
-      evaluateResult               <- computeEffect(runtime, runtime.reducer)(deploy)
+      fallback <- runtime.space.createSoftCheckpoint()
+      evaluateResult <- RuntimeManager.doInj(deploy, runtime.reducer, runtime.errorLog)(
+                         Sync[F],
+                         runtime.cost
+                       )
       EvaluateResult(cost, errors) = evaluateResult
       _                            <- Span[F].mark("before-process-deploy-create-soft-checkpoint")
       checkpoint                   <- runtime.space.createSoftCheckpoint()
@@ -305,10 +304,14 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log](
   ): F[Option[ReplayFailure]] = Span[F].withMarks("replay-deploy") {
     import processedDeploy._
     for {
-      _                    <- runtime.replaySpace.rig(processedDeploy.deployLog)
-      softCheckpoint       <- runtime.replaySpace.createSoftCheckpoint()
-      _                    <- Span[F].mark("before-replay-deploy-compute-effect")
-      replayEvaluateResult <- computeEffect(runtime, runtime.replayReducer)(processedDeploy.deploy)
+      _              <- runtime.replaySpace.rig(processedDeploy.deployLog)
+      softCheckpoint <- runtime.replaySpace.createSoftCheckpoint()
+      _              <- Span[F].mark("before-replay-deploy-compute-effect")
+      replayEvaluateResult <- RuntimeManager.doInj(
+                               processedDeploy.deploy,
+                               runtime.replayReducer,
+                               runtime.errorLog
+                             )(Sync[F], runtime.cost)
       //TODO: compare replay deploy cost to given deploy cost
       EvaluateResult(_, errors) = replayEvaluateResult
       _                         <- Span[F].mark("before-replay-deploy-status")
