@@ -10,7 +10,7 @@ import logging
 import pytest
 from docker.client import DockerClient
 from rchain.crypto import PrivateKey, gen_block_hash_from_block, gen_deploys_hash_from_block
-from rchain.pb.CasperMessage_pb2 import BlockMessage, Justification
+from rchain.pb.CasperMessage_pb2 import BlockMessageProto as BlockMessage, JustificationProto as Justification
 from rchain.util import create_deploy_data
 
 

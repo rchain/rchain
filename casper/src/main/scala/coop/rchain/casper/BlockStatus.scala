@@ -13,6 +13,7 @@ object BlockStatus {
   def invalidSender: BlockError            = InvalidBlock.InvalidSender
   def invalidVersion: BlockError           = InvalidBlock.InvalidVersion
   def invalidTimestamp: BlockError         = InvalidBlock.InvalidTimestamp
+  def deployNotSigned: BlockError          = InvalidBlock.DeployNotSigned
   def invalidBlockNumber: BlockError       = InvalidBlock.InvalidBlockNumber
   def invalidRepeatDeploy: BlockError      = InvalidBlock.InvalidRepeatDeploy
   def invalidParents: BlockError           = InvalidBlock.InvalidParents
@@ -66,6 +67,7 @@ object InvalidBlock {
   case object InvalidVersion   extends InvalidBlock
   case object InvalidTimestamp extends InvalidBlock
 
+  case object DeployNotSigned         extends InvalidBlock
   case object InvalidBlockNumber      extends InvalidBlock
   case object InvalidRepeatDeploy     extends InvalidBlock
   case object InvalidParents          extends InvalidBlock
@@ -85,6 +87,7 @@ object InvalidBlock {
   val slashableOffenses: Set[InvalidBlock] =
     Set(
       AdmissibleEquivocation,
+      DeployNotSigned,
       InvalidBlockNumber,
       InvalidRepeatDeploy,
       InvalidParents,

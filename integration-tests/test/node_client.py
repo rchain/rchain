@@ -14,7 +14,7 @@ from cryptography.hazmat.primitives.serialization import load_pem_private_key
 from docker import DockerClient
 from eth_hash.auto import keccak
 from rchain.pb import CasperMessage_pb2
-from rchain.pb.CasperMessage_pb2 import BlockMessage, BlockRequest
+from rchain.pb.CasperMessage_pb2 import BlockMessageProto as BlockMessage, BlockRequestProto as BlockRequest
 from rchain.pb.routing_pb2 import (
     Chunk,
     Header,
@@ -123,7 +123,7 @@ class TransportServer(TransportLayerServicer):
             content_type = chunk.WhichOneof('content')
             if content_type == 'header':
                 typeId = chunk.header.typeId
-                message_cls = getattr(CasperMessage_pb2, typeId)
+                message_cls = getattr(CasperMessage_pb2, "{}Proto".format(typeId))
             elif content_type == 'data':
                 data = chunk.data.contentData
             else:

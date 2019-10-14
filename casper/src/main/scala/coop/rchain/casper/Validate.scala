@@ -177,6 +177,8 @@ object Validate {
       _ <- EitherT(Validate.missingBlocks(block, dag))
       _ <- EitherT.liftF(Span[F].mark("before-timestamp-validation"))
       _ <- EitherT(Validate.timestamp(block, dag))
+      _ <- EitherT.liftF(Span[F].mark("before-valid-deploy-signatures"))
+      _ <- EitherT(validDeploySignatures[F](block))
       _ <- EitherT.liftF(Span[F].mark("before-repeat-deploy-validation"))
       _ <- EitherT(Validate.repeatDeploy(block, dag, expirationThreshold))
       _ <- EitherT.liftF(Span[F].mark("before-block-number-validation"))
@@ -197,6 +199,16 @@ object Validate {
       s <- EitherT(Validate.shardIdentifier(block, shardId))
     } yield s).value
 
+  def validDeploySignatures[F[_]: Applicative](
+      block: BlockMessage
+  ): F[ValidBlockProcessing] = {
+    val allDeploysValid =
+      block.body.deploys.forall(pd => SignDeployment.verify(pd.deploy).exists(identity))
+
+    if (allDeploysValid) BlockStatus.valid.asRight[BlockError].pure[F]
+    else BlockStatus.deployNotSigned.asLeft[ValidBlock].pure[F]
+  }
+
   /**
     * Works with either efficient justifications or full explicit justifications
     */
@@ -208,7 +220,7 @@ object Validate {
 
     for {
       parentsPresent <- ProtoUtil.parentHashes(block).forallM(p => dag.contains(p))
-      justificationsPresent <- block.justifications.toList
+      justificationsPresent <- block.justifications
                                 .forallM(j => dag.contains(j.latestBlockHash))
       result <- if (parentsPresent && justificationsPresent) {
                  BlockStatus.valid.asRight[BlockError].pure[F]
