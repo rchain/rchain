@@ -14,11 +14,11 @@ import coop.rchain.blockstorage.dag.{BlockDagRepresentation, BlockDagStorage}
 import coop.rchain.casper.ReportingCasper.RhoReportingRspace
 import coop.rchain.casper.protocol.{BlockMessage, DeployData}
 import coop.rchain.casper.util.ProtoUtil
-import coop.rchain.casper.util.rholang.RuntimeManager.{ReplayFailure, StateHash}
+import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
 import coop.rchain.casper.util.rholang.{
-  DeployStatus,
-  Failure,
+  InternalError,
   InternalProcessedDeploy,
+  ReplayFailure,
   RuntimeManager
 }
 import coop.rchain.metrics.Metrics.Source
@@ -28,7 +28,6 @@ import coop.rchain.models.BlockHash._
 import coop.rchain.models.TaggedContinuation.TaggedCont.{Empty, ParBody, ScalaBodyRef}
 import coop.rchain.rholang.RholangMetricsSource
 import coop.rchain.rholang.interpreter.{
-  DeployParameters,
   ErrorLog,
   EvaluateResult,
   HasCost,
@@ -64,7 +63,6 @@ import coop.rchain.rspace.ReportingRspace.{
 import coop.rchain.shared.Log
 import ReportingCasperData._
 import cats.syntax.all.none
-import coop.rchain.casper.util.rholang.InvalidDeploy.InternalError
 import coop.rchain.rholang.interpreter.errors.InterpreterError
 
 import scala.concurrent.ExecutionContext
@@ -299,7 +297,7 @@ object ReportingCasper {
         failureEither <- replayEvaluateResultEither match {
                           case Right(EvaluateResult(_, replayUserErrors)) =>
                             if (isFailed != replayUserErrors.nonEmpty)
-                              DeployStatus
+                              ReplayFailure
                                 .replayStatusMismatch(isFailed, replayUserErrors.nonEmpty)
                                 .asLeft[Seq[ReportingEvent]]
                                 .pure[F]
@@ -315,18 +313,18 @@ object ReportingCasper {
                                   Log[F]
                                     .error(s"Failed during deploy replay: $processedDeploy")
                                     .as(
-                                      DeployStatus
+                                      ReplayFailure
                                         .unusedCOMMEvent(replayException)
                                         .asLeft[Seq[ReportingEvent]]
                                     )
                                 case Left(throwable) =>
-                                  DeployStatus
+                                  ReplayFailure
                                     .internalError(deploy, throwable)
                                     .asLeft[Seq[ReportingEvent]]
                                     .pure[F]
                               }
                           case Left(throwable) =>
-                            DeployStatus
+                            ReplayFailure
                               .internalError(deploy, throwable)
                               .asLeft[Seq[ReportingEvent]]
                               .pure[F]
