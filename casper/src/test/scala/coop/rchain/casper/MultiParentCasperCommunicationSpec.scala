@@ -5,6 +5,7 @@ import coop.rchain.casper.helper.TestNode
 import coop.rchain.casper.helper.TestNode._
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.ConstructDeploy
+import coop.rchain.crypto.signatures.Signed
 import coop.rchain.p2p.EffectsTestInstances.LogicalTime
 import coop.rchain.shared.scalatestcontrib._
 import monix.execution.Scheduler.Implicits.global
@@ -88,7 +89,7 @@ class MultiParentCasperCommunicationSpec extends FlatSpec with Matchers with Ins
    *
    */
   it should "ask peers for blocks it is missing and add them" in effectTest {
-    def makeDeploy(i: Int): Effect[DeployData] =
+    def makeDeploy(i: Int): Effect[Signed[DeployData]] =
       ConstructDeploy.sourceDeployNowF(Vector("@2!(2)", "@1!(1)")(i))
 
     def stepSplit(nodes: Seq[TestNode[Effect]]) =

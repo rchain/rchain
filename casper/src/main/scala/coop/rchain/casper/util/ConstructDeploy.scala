@@ -4,11 +4,10 @@ import coop.rchain.models.PCost
 import cats.implicits._
 import cats.{Functor, Monad}
 import com.google.protobuf.ByteString
-import coop.rchain.casper.SignDeployment
 import coop.rchain.casper.protocol.{DeployData, ProcessedDeploy, ProcessedDeployProto}
 import coop.rchain.crypto.PrivateKey
 import coop.rchain.crypto.codec.Base16
-import coop.rchain.crypto.signatures.Secp256k1
+import coop.rchain.crypto.signatures.{Secp256k1, Signed}
 import coop.rchain.shared.Time
 
 object ConstructDeploy {
@@ -20,13 +19,10 @@ object ConstructDeploy {
   val defaultKeyPair = (defaultSec, defaultPub)
 
   val defaultSec2 = PrivateKey(
-    Base16.unsafeDecode("1111111111111111111111111111111111111111111111111111111111111111")
+    Base16.unsafeDecode("5a0bde2f5857124b1379c78535b07a278e3b9cefbcacc02e62ab3294c02765a1")
   )
   val defaultPub2     = Secp256k1.toPublic(defaultSec2)
   val defaultKeyPair2 = (defaultSec2, defaultPub2)
-
-  def sign(deploy: DeployData, sec: PrivateKey = defaultSec): DeployData =
-    SignDeployment.sign(sec, deploy, Secp256k1)
 
   def sourceDeploy(
       source: String,
@@ -34,25 +30,23 @@ object ConstructDeploy {
       phloLimit: Long = 90000,
       phloPrice: Long = 1L,
       sec: PrivateKey = defaultSec
-  ): DeployData = {
+  ): Signed[DeployData] = {
     val data =
       DeployData(
         deployer = ByteString.copyFrom(Secp256k1.toPublic(sec).bytes),
         term = source,
         timestamp = timestamp,
-        sig = ByteString.EMPTY,
-        sigAlgorithm = "",
         phloLimit = phloLimit,
         phloPrice = phloPrice,
         validAfterBlockNumber = 0L
       )
 
-    sign(data, sec)
+    Signed(data, Secp256k1, sec)
   }
 
   def sourceDeployNow(
       source: String
-  ): DeployData =
+  ): Signed[DeployData] =
     sourceDeploy(source = source, timestamp = System.currentTimeMillis())
 
   def sourceDeployNowF[F[_]: Time: Functor](
@@ -60,23 +54,23 @@ object ConstructDeploy {
       phloLimit: Long = 90000,
       phloPrice: Long = 1L,
       sec: PrivateKey = defaultSec
-  ): F[DeployData] =
+  ): F[Signed[DeployData]] =
     Time[F].currentMillis
       .map(sourceDeploy(source, _, phloLimit = phloLimit, phloPrice = phloPrice, sec = sec))
 
   // TODO: replace usages with basicSendDeployData
   def basicDeployData[F[_]: Monad: Time](
       id: Int
-  ): F[DeployData] =
+  ): F[Signed[DeployData]] =
     sourceDeployNowF(source = s"@$id!($id)")
 
   def basicSendDeployData[F[_]: Monad: Time](
       id: Int
-  ): F[DeployData] = basicDeployData[F](id)
+  ): F[Signed[DeployData]] = basicDeployData[F](id)
 
   def basicReceiveDeployData[F[_]: Monad: Time](
       id: Int
-  ): F[DeployData] =
+  ): F[Signed[DeployData]] =
     sourceDeployNowF(source = s"for(_ <- @$id){ Nil }")
 
   def basicProcessedDeploy[F[_]: Monad: Time](

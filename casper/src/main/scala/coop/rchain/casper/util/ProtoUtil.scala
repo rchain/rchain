@@ -375,14 +375,6 @@ object ProtoUtil {
   def stringToByteString(string: String): ByteString =
     ByteString.copyFrom(Base16.unsafeDecode(string))
 
-  /**
-    * Strip a deploy down to the fields we are using to seed the Deterministic name generator.
-    * Because we enforce that a deployment must be unique on the user, timestamp pair, we leave
-    * only those fields. This allows users to more readily pre-generate names for signing.
-    */
-  def stripDeployData(d: DeployData): DeployData =
-    DeployData.from(DeployDataProto().withDeployer(d.deployer).withTimestamp(d.timestamp))
-
   def computeCodeHash(dd: DeployData): Par = {
     val bytes             = dd.term.getBytes(StandardCharsets.UTF_8)
     val hash: Array[Byte] = Blake2b256.hash(bytes)

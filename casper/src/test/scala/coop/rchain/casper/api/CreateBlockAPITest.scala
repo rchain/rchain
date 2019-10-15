@@ -1,7 +1,6 @@
 package coop.rchain.casper.api
 
 import scala.concurrent.duration._
-
 import cats.Monad
 import cats.effect.{Concurrent, Sync}
 import cats.effect.concurrent.Semaphore
@@ -19,7 +18,7 @@ import coop.rchain.casper.util._
 import coop.rchain.casper.util.ConstructDeploy.basicDeployData
 import coop.rchain.casper.util.rholang._
 import coop.rchain.catscontrib.TaskContrib._
-import coop.rchain.crypto.signatures.Secp256k1
+import coop.rchain.crypto.signatures.{Secp256k1, Signed}
 import coop.rchain.metrics._
 import coop.rchain.metrics
 import coop.rchain.models.BlockHash.BlockHash
@@ -75,7 +74,7 @@ class CreateBlockAPITest extends FlatSpec with Matchers with EitherValues {
         "for(_ <- @1){ @2!(2) }"
       ).map(ConstructDeploy.sourceDeploy(_, timestamp = System.currentTimeMillis()))
 
-      def createBlock(deploy: DeployData, blockApiLock: Semaphore[Effect])(
+      def createBlock(deploy: Signed[DeployData], blockApiLock: Semaphore[Effect])(
           implicit engineCell: EngineCell[Effect]
       ): Effect[ApiErr[String]] =
         for {
@@ -196,9 +195,9 @@ class CreateBlockAPITest extends FlatSpec with Matchers with EitherValues {
 private class SleepingMultiParentCasperImpl[F[_]: Monad: Time](underlying: MultiParentCasper[F])
     extends MultiParentCasper[F] {
 
-  def addBlock(b: BlockMessage): F[ValidBlockProcessing]      = underlying.addBlock(b)
-  def contains(blockHash: BlockHash): F[Boolean]              = underlying.contains(blockHash)
-  def deploy(d: DeployData): F[Either[DeployError, DeployId]] = underlying.deploy(d)
+  def addBlock(b: BlockMessage): F[ValidBlockProcessing]              = underlying.addBlock(b)
+  def contains(blockHash: BlockHash): F[Boolean]                      = underlying.contains(blockHash)
+  def deploy(d: Signed[DeployData]): F[Either[DeployError, DeployId]] = underlying.deploy(d)
   def estimator(dag: BlockDagRepresentation[F]): F[IndexedSeq[BlockHash]] =
     underlying.estimator(dag)
   def blockDag: F[BlockDagRepresentation[F]] = underlying.blockDag

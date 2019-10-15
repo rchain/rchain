@@ -6,6 +6,7 @@ import coop.rchain.casper.helper.TestNode._
 import coop.rchain.casper.protocol._
 import coop.rchain.shared.scalatestcontrib._
 import coop.rchain.casper.util.{ConstructDeploy, GenesisBuilder}
+import coop.rchain.crypto.signatures.Signed
 import coop.rchain.models.Expr.ExprInstance.GInt
 import coop.rchain.models._
 import coop.rchain.p2p.EffectsTestInstances.LogicalTime
@@ -54,7 +55,7 @@ class ListeningNameAPITest extends FlatSpec with Matchers with Inside {
       implicit val timeEff = new LogicalTime[Effect]
       for {
         deployDatas <- (0 to 7).toList
-                        .traverse[Effect, DeployData](
+                        .traverse[Effect, Signed[DeployData]](
                           _ => ConstructDeploy.basicDeployData[Effect](0)
                         )
 
@@ -151,7 +152,7 @@ class ListeningNameAPITest extends FlatSpec with Matchers with Inside {
     TestNode.standaloneEff(genesis).use { node =>
       import node._
 
-      def basicDeployData: DeployData =
+      def basicDeployData: Signed[DeployData] =
         ConstructDeploy.sourceDeployNow("for (@0 <- @{ 3 | 2 | 1 }; @1 <- @{ 2 | 1 }) { 0 }")
 
       for {

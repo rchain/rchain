@@ -4,18 +4,16 @@ import java.io.Closeable
 import java.util.concurrent.TimeUnit
 
 import scala.util.Either
-
 import cats.implicits._
-
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.protocol.deploy.v1.DeployServiceV1GrpcMonix
+import coop.rchain.crypto.signatures.Signed
 import coop.rchain.models.either.implicits._
-
 import io.grpc.{ManagedChannel, ManagedChannelBuilder}
 import monix.eval.Task
 
 trait DeployService[F[_]] {
-  def deploy(d: DeployData): F[Either[Seq[String], String]]
+  def deploy(d: Signed[DeployData]): F[Either[Seq[String], String]]
   def getBlock(q: BlockQuery): F[Either[Seq[String], String]]
   def getBlocks(q: BlocksQuery): F[Either[Seq[String], String]]
   def visualizeDag(q: VisualizeDagQuery): F[Either[Seq[String], String]]
@@ -47,9 +45,9 @@ class GrpcDeployService(host: String, port: Int, maxMessageSize: Int)
 
   private val stub = DeployServiceV1GrpcMonix.stub(channel)
 
-  def deploy(d: DeployData): Task[Either[Seq[String], String]] =
+  def deploy(d: Signed[DeployData]): Task[Either[Seq[String], String]] =
     stub
-      .doDeploy(d.toProto)
+      .doDeploy(DeployData.toProto(d))
       .toEitherF(
         _.message.error,
         _.message.result

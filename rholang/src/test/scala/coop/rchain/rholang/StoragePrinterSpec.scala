@@ -12,6 +12,10 @@ import coop.rchain.shared.Log
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
 import org.scalatest.{FlatSpec, Matchers}
+import cats.syntax._
+import coop.rchain.crypto.PrivateKey
+import coop.rchain.crypto.codec.Base16
+import coop.rchain.crypto.signatures.{Secp256k1, Signed}
 
 import scala.concurrent.duration._
 
@@ -19,6 +23,10 @@ class StoragePrinterSpec extends FlatSpec with Matchers {
   private val mapSize     = 10L * 1024L * 1024L
   private val tmpPrefix   = "rspace-store-"
   private val maxDuration = 5.seconds
+  private val deployerSk = PrivateKey(
+    Base16.unsafeDecode("17f242c34491ff8187ec94ec1508fed8b487b872f2bb97b437f4d4e44345cee6")
+  )
+  private val deployerPk = Secp256k1.toPublic(deployerSk)
 
   implicit val logF: Log[Task]            = new Log.NOPLog[Task]
   implicit val noopMetrics: Metrics[Task] = new metrics.Metrics.MetricsNOP[Task]
@@ -45,22 +53,35 @@ class StoragePrinterSpec extends FlatSpec with Matchers {
       .runSyncUnsafe(maxDuration)
   }
 
+  private def mkDeploy(term: String) =
+    Signed(
+      DeployData(
+        deployer = ByteString.copyFrom(deployerPk.bytes),
+        timestamp = 0,
+        phloPrice = 0,
+        phloLimit = 0,
+        validAfterBlockNumber = 0,
+        term = term
+      ),
+      Secp256k1,
+      deployerSk
+    )
+
   it should "print unmatched sends of multiple deploys" in {
-    def mkSig(n: Int) = ByteString.copyFrom(Array[Byte](n.toByte))
     mkRuntime[Task](tmpPrefix, mapSize)
       .use { runtime =>
-        val deploy1 = DeployDataProto(term = "@1!(Nil)", sig = mkSig(1))
-        val deploy2 = DeployDataProto(term = "@2!(Nil)", sig = mkSig(2))
-        val deploy3 = DeployDataProto(term = "@3!(Nil) | for(_ <- @3) { Nil }", sig = mkSig(3))
+        val deploy1 = "@1!(Nil)"
+        val deploy2 = "@2!(Nil)"
+        val deploy3 = "@3!(Nil) | for(_ <- @3) { Nil }"
         for {
           unmatchedSends <- StoragePrinter.prettyPrintUnmatchedSends(
-                             List(deploy1, deploy2, deploy3).map(DeployData.from),
+                             List(deploy1, deploy2, deploy3).map(mkDeploy),
                              runtime
                            )
-          result = """Deploy 01:
+          result = """Deploy 304502210083d7a25b6157ef5b51cb49adbb314acab716181775e766969c60a9d15171e18b02203e5d244553a9ad39bb3de39672d5db9c3870c1db213498f9695bc1c03f6bd36e:
               |@{1}!(Nil)
               |
-              |Deploy 02:
+              |Deploy 3045022100fafb2654342fd824fe91ba7c5679da99190002a863f15afaf9c0a4b4345b297902200563bb6581dde86d06573332975afdfcfa9b0e76453b5758a10df9b6bace720d:
               |@{2}!(Nil)""".stripMargin
           _      = assert(unmatchedSends == result)
         } yield ()
@@ -76,9 +97,9 @@ class StoragePrinterSpec extends FlatSpec with Matchers {
             implicit val c = runtime.cost
             InterpreterUtil.evaluate[Task](runtime, "@0!(Nil) | for(_ <- @1) { Nil }")
           }
-          deploy = DeployDataProto(term = "@1!(Nil) | @2!(Nil)")
+          deploy = mkDeploy("@1!(Nil) | @2!(Nil)")
           unmatchedSends <- StoragePrinter.prettyPrintUnmatchedSends(
-                             DeployData.from(deploy),
+                             deploy,
                              runtime
                            )
           _ = assert(unmatchedSends == "@{2}!(Nil)")

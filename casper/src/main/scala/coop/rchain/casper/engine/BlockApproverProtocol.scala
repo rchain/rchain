@@ -208,8 +208,6 @@ object BlockApproverProtocol {
     override def eqv(x: DeployData, y: DeployData): Boolean =
       x.deployer.equals(y.deployer) &&
         x.timestamp === y.timestamp &&
-        x.sig.equals(y.sig) &&
-        x.sigAlgorithm === y.sigAlgorithm &&
         x.phloPrice === y.phloPrice &&
         x.phloLimit === y.phloLimit
   }

@@ -171,8 +171,6 @@ object Validate {
       _ <- EitherT(Validate.missingBlocks(block, dag))
       _ <- EitherT.liftF(Span[F].mark("before-timestamp-validation"))
       _ <- EitherT(Validate.timestamp(block, dag))
-      _ <- EitherT.liftF(Span[F].mark("before-valid-deploy-signatures"))
-      _ <- EitherT(validDeploySignatures[F](block))
       _ <- EitherT.liftF(Span[F].mark("before-repeat-deploy-validation"))
       _ <- EitherT(Validate.repeatDeploy(block, dag, expirationThreshold))
       _ <- EitherT.liftF(Span[F].mark("before-block-number-validation"))
@@ -192,16 +190,6 @@ object Validate {
       _ <- EitherT.liftF(Span[F].mark("before-shard-identifier-validation"))
       s <- EitherT(Validate.shardIdentifier(block, shardId))
     } yield s).value
-
-  def validDeploySignatures[F[_]: Applicative](
-      block: BlockMessage
-  ): F[ValidBlockProcessing] = {
-    val allDeploysValid =
-      block.body.deploys.forall(pd => SignDeployment.verify(pd.deploy).exists(identity))
-
-    if (allDeploysValid) BlockStatus.valid.asRight[BlockError].pure[F]
-    else BlockStatus.deployNotSigned.asLeft[ValidBlock].pure[F]
-  }
 
   /**
     * Works with either efficient justifications or full explicit justifications
@@ -284,6 +272,7 @@ object Validate {
                              .map(_.deploy)
                              .find(d => deployKeySet.contains(d.sig))
                              .get
+                             .data
                            term            = duplicatedDeploy.term
                            deployerString  = PrettyPrinter.buildString(duplicatedDeploy.deployer)
                            timestampString = duplicatedDeploy.timestamp.toString
@@ -375,14 +364,14 @@ object Validate {
 
     val blockNumber       = ProtoUtil.blockNumber(b)
     val deploys           = ProtoUtil.deploys(b).map(_.deploy)
-    val maybeFutureDeploy = deploys.find(_.validAfterBlockNumber >= blockNumber)
+    val maybeFutureDeploy = deploys.find(_.data.validAfterBlockNumber >= blockNumber)
     maybeFutureDeploy
       .traverse { futureDeploy =>
         Log[F]
           .warn(
             ignore(
               b,
-              s"block contains an future deploy with valid after block number of ${futureDeploy.validAfterBlockNumber}: ${futureDeploy.term}"
+              s"block contains an future deploy with valid after block number of ${futureDeploy.data.validAfterBlockNumber}: ${futureDeploy.data.term}"
             )
           )
           .as(BlockStatus.containsFutureDeploy)
@@ -399,14 +388,14 @@ object Validate {
     val earliestAcceptableValidAfterBlockNumber = ProtoUtil.blockNumber(b) - expirationThreshold
     val deploys                                 = ProtoUtil.deploys(b).map(_.deploy)
     val maybeExpiredDeploy =
-      deploys.find(_.validAfterBlockNumber <= earliestAcceptableValidAfterBlockNumber)
+      deploys.find(_.data.validAfterBlockNumber <= earliestAcceptableValidAfterBlockNumber)
     maybeExpiredDeploy
       .traverse { expiredDeploy =>
         Log[F]
           .warn(
             ignore(
               b,
-              s"block contains an expired deploy with valid after block number of ${expiredDeploy.validAfterBlockNumber}: ${expiredDeploy.term}"
+              s"block contains an expired deploy with valid after block number of ${expiredDeploy.data.validAfterBlockNumber}: ${expiredDeploy.data.term}"
             )
           )
           .as(BlockStatus.containsExpiredDeploy)

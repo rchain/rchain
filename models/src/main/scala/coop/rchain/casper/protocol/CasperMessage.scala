@@ -3,8 +3,12 @@ package coop.rchain.casper.protocol
 import cats.implicits._
 import com.google.protobuf.ByteString
 import coop.rchain.casper.PrettyPrinter
+import coop.rchain.crypto.PublicKey
+import coop.rchain.crypto.signatures.{SignaturesAlg, Signed}
 import coop.rchain.models.{PCost, Pretty}
 import coop.rchain.models.BlockHash.BlockHash
+import coop.rchain.shared.Serialize
+import scodec.bits.ByteVector
 
 sealed trait CasperMessage {
   def toProto: CasperMessageProto
@@ -298,7 +302,7 @@ object RChainState {
 }
 
 final case class ProcessedDeploy(
-    deploy: DeployData,
+    deploy: Signed[DeployData],
     cost: PCost,
     deployLog: List[Event],
     isFailed: Boolean
@@ -309,11 +313,13 @@ final case class ProcessedDeploy(
 object ProcessedDeploy {
   def from(pd: ProcessedDeployProto): Either[String, ProcessedDeploy] =
     for {
-      ddn       <- pd.deploy.toRight("DeployData not available").map(DeployData.from)
-      cost      <- pd.cost.toRight("Cost not available")
-      deployLog <- pd.deployLog.toList.traverse(Event.from)
+      ddProto    <- pd.deploy.toRight("DeployData not available")
+      dd         <- DeployData.from(ddProto)
+      cost       <- pd.cost.toRight("Cost not available")
+      deployLog  <- pd.deployLog.toList.traverse(Event.from)
+      paymentLog <- pd.paymentLog.toList.traverse(Event.from)
     } yield ProcessedDeploy(
-      ddn,
+      dd,
       cost,
       deployLog,
       pd.errored
@@ -365,39 +371,52 @@ final case class DeployData(
     deployer: ByteString,
     term: String,
     timestamp: Long,
-    sig: ByteString,
-    sigAlgorithm: String,
     phloPrice: Long,
     phloLimit: Long,
     validAfterBlockNumber: Long
-) {
-
-  def toProto: DeployDataProto = DeployData.toProto(this)
-}
+)
 
 object DeployData {
-  def from(dd: DeployDataProto): DeployData = DeployData(
-    dd.deployer,
-    dd.term,
-    dd.timestamp,
-    dd.sig,
-    dd.sigAlgorithm,
-    dd.phloPrice,
-    dd.phloLimit,
-    dd.validAfterBlockNumber
-  )
+  implicit val serialize = new Serialize[DeployData] {
+    override def encode(a: DeployData): ByteVector =
+      ByteVector(toProto(a).toByteArray)
 
-  def toProto(dd: DeployData): DeployDataProto =
+    override def decode(bytes: ByteVector): Either[Throwable, DeployData] =
+      Right(fromProto(DeployDataProto.parseFrom(bytes.toArray)))
+
+  }
+
+  private def fromProto(proto: DeployDataProto): DeployData =
+    DeployData(
+      proto.deployer,
+      proto.term,
+      proto.timestamp,
+      proto.phloPrice,
+      proto.phloLimit,
+      proto.validAfterBlockNumber
+    )
+
+  def from(dd: DeployDataProto): Either[String, Signed[DeployData]] =
+    for {
+      algorithm <- SignaturesAlg(dd.sigAlgorithm).toRight("Invalid signing algorithm")
+      signed <- Signed
+                 .fromSignedData(fromProto(dd), PublicKey(dd.deployer), dd.sig, algorithm)
+                 .toRight("Invalid signature")
+    } yield (signed)
+
+  private def toProto(dd: DeployData): DeployDataProto =
     DeployDataProto()
       .withDeployer(dd.deployer)
       .withTerm(dd.term)
       .withTimestamp(dd.timestamp)
-      .withSig(dd.sig)
-      .withSigAlgorithm(dd.sigAlgorithm)
       .withPhloPrice(dd.phloPrice)
       .withPhloLimit(dd.phloLimit)
       .withValidAfterBlockNumber(dd.validAfterBlockNumber)
 
+  def toProto(dd: Signed[DeployData]): DeployDataProto =
+    toProto(dd.data)
+      .withSig(dd.sig)
+      .withSigAlgorithm(dd.sigAlgorithm.name)
 }
 
 final case class Peek(channelIndex: Int) {

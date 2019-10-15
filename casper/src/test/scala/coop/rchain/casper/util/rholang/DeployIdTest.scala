@@ -8,6 +8,7 @@ import coop.rchain.casper.util.GenesisBuilder.buildGenesis
 import coop.rchain.casper.util.rholang.Resources._
 import coop.rchain.casper.util.{ConstructDeploy, ProtoUtil}
 import coop.rchain.crypto.PrivateKey
+import coop.rchain.crypto.signatures.Signed
 import coop.rchain.models.Expr.ExprInstance.GBool
 import coop.rchain.models.rholang.implicits._
 import coop.rchain.models.{GDeployId, Par}
@@ -28,7 +29,7 @@ class DeployIdTest extends FlatSpec with Matchers {
       deployer: PrivateKey,
       rho: String,
       timestamp: Long = System.currentTimeMillis()
-  ): DeployData = ConstructDeploy.sourceDeploy(
+  ): Signed[DeployData] = ConstructDeploy.sourceDeploy(
     source = rho,
     timestamp = System.currentTimeMillis(),
     sec = deployer

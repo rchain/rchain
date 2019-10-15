@@ -52,8 +52,8 @@ class RholangBuildTest extends FlatSpec with Matchers {
                 signedBlock,
                 Base16.encode(
                   RegistrySigGen.generateUnforgeableNameId(
-                    PublicKey(deploy.deployer.toByteArray),
-                    deploy.timestamp
+                    PublicKey(deploy.data.deployer.toByteArray),
+                    deploy.data.timestamp
                   )
                 )
               ).map(_ shouldBe Seq("""([4, 6, 10, 14], "The timestamp is 2")"""))
