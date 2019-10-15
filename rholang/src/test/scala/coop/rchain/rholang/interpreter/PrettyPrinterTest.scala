@@ -29,19 +29,19 @@ class GroundPrinterSpec extends FlatSpec with Matchers {
   "GroundInt" should "Print as \"" + 7 + "\"" in {
     val gi             = new GroundInt("7")
     val target: String = "7"
-    PrettyPrinter().buildString(GroundNormalizeMatcher.normalizeMatch(gi)) shouldBe target
+    PrettyPrinter().buildString(GroundNormalizeMatcher.normalizeMatch[Coeval](gi).value) shouldBe target
   }
 
   "GroundString" should "Print as \"" + "String" + "\"" in {
     val gs             = new GroundString("\"String\"")
     val target: String = "\"" + "String" + "\""
-    PrettyPrinter().buildString(GroundNormalizeMatcher.normalizeMatch(gs)) shouldBe target
+    PrettyPrinter().buildString(GroundNormalizeMatcher.normalizeMatch[Coeval](gs).value) shouldBe target
   }
 
   "GroundUri" should "Print with back-ticks" in {
     val gu             = new GroundUri("`Uri`")
     val target: String = "`" + "Uri" + "`"
-    PrettyPrinter().buildString(GroundNormalizeMatcher.normalizeMatch(gu)) shouldBe target
+    PrettyPrinter().buildString(GroundNormalizeMatcher.normalizeMatch[Coeval](gu).value) shouldBe target
   }
 }
 

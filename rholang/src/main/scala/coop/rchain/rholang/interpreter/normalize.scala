@@ -1,7 +1,7 @@
 package coop.rchain.rholang.interpreter
 
-import cats.Applicative
 import cats.effect.Sync
+import cats.{Applicative, MonadError}
 import cats.implicits._
 import coop.rchain.models.Connective.ConnectiveInstance._
 import coop.rchain.models.Expr.ExprInstance._
@@ -21,6 +21,7 @@ import monix.eval.Coeval
 
 import scala.collection.convert.ImplicitConversionsToScala._
 import scala.collection.immutable.{BitSet, Vector}
+import scala.util.Try
 
 sealed trait VarSort
 case object ProcSort extends VarSort
@@ -35,13 +36,20 @@ object BoolNormalizeMatcher {
 }
 
 object GroundNormalizeMatcher {
-  def normalizeMatch(g: AbsynGround): Expr =
+  def normalizeMatch[M[_]](g: AbsynGround)(implicit M: MonadError[M, Throwable]): M[Expr] =
     g match {
-      case gb: GroundBool => BoolNormalizeMatcher.normalizeMatch(gb.boolliteral_)
+      case gb: GroundBool => Expr(BoolNormalizeMatcher.normalizeMatch(gb.boolliteral_)).pure[M]
       case gi: GroundInt =>
-        GInt(gi.longliteral_.toLong) //TODO raise NumberFormatException in a pure way
-      case gs: GroundString => GString(stripString(gs.stringliteral_))
-      case gu: GroundUri    => GUri(stripUri(gu.uriliteral_))
+        M.fromTry(
+            Try(gi.longliteral_.toLong).adaptError {
+              case e: NumberFormatException => NormalizerError(e.getMessage)
+            }
+          )
+          .map { long =>
+            Expr(GInt(long))
+          }
+      case gs: GroundString => Expr(GString(stripString(gs.stringliteral_))).pure[M]
+      case gu: GroundUri    => Expr(GUri(stripUri(gu.uriliteral_))).pure[M]
     }
   // This is necessary to remove the backticks. We don't use a regular
   // expression because they're always there.
@@ -453,10 +461,15 @@ object ProcNormalizeMatcher {
         }
 
       case p: PGround =>
-        ProcVisitOutputs(
-          input.par.prepend(GroundNormalizeMatcher.normalizeMatch(p.ground_), input.env.depth),
-          input.knownFree
-        ).pure[M]
+        GroundNormalizeMatcher
+          .normalizeMatch[M](p.ground_)
+          .map(
+            expr =>
+              ProcVisitOutputs(
+                input.par.prepend(expr, input.env.depth),
+                input.knownFree
+              )
+          )
 
       case p: PCollect =>
         CollectionNormalizeMatcher
