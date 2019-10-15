@@ -47,10 +47,7 @@ object DeployError {
 }
 
 trait Casper[F[_], A] {
-  def addBlock(
-      b: BlockMessage,
-      handleDoppelganger: (BlockMessage, Validator) => F[Unit]
-  ): F[ValidBlockProcessing]
+  def addBlock(b: BlockMessage): F[ValidBlockProcessing]
   def contains(hash: BlockHash): F[Boolean]
   def deploy(d: DeployData): F[Either[DeployError, DeployId]]
   def estimator(dag: BlockDagRepresentation[F]): F[A]

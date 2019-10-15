@@ -196,10 +196,7 @@ class CreateBlockAPITest extends FlatSpec with Matchers with EitherValues {
 private class SleepingMultiParentCasperImpl[F[_]: Monad: Time](underlying: MultiParentCasper[F])
     extends MultiParentCasper[F] {
 
-  def addBlock(
-      b: BlockMessage,
-      handleDoppelganger: (BlockMessage, Validator) => F[Unit]
-  ): F[ValidBlockProcessing]                                  = underlying.addBlock(b, ignoreDoppelgangerCheck[F])
+  def addBlock(b: BlockMessage): F[ValidBlockProcessing]      = underlying.addBlock(b)
   def contains(blockHash: BlockHash): F[Boolean]              = underlying.contains(blockHash)
   def deploy(d: DeployData): F[Either[DeployError, DeployId]] = underlying.deploy(d)
   def estimator(dag: BlockDagRepresentation[F]): F[IndexedSeq[BlockHash]] =

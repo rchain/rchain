@@ -132,7 +132,7 @@ class TestNode[F[_]](
   )(deployDatums: DeployData*): F[BlockMessage] =
     for {
       block  <- createBlock(deployDatums: _*)
-      status <- casperEff.addBlock(block, ignoreDoppelgangerCheck[F])
+      status <- casperEff.addBlock(block)
       _      = assert(status == expectedStatus)
     } yield block
 

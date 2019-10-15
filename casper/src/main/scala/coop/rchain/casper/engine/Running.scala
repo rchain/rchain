@@ -252,7 +252,7 @@ class Running[F[_]: Sync: BlockStore: CommUtil: TransportLayer: ConnectionsCell:
       val sender = ByteString.copyFrom(id.publicKey.bytes)
       handleDoppelganger(b, sender)
     } >>
-      casper.addBlock(b, MultiParentCasper.ignoreDoppelgangerCheck[F])
+      casper.addBlock(b)
   }
 
   override def init: F[Unit] = theInit
