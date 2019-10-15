@@ -166,7 +166,9 @@ object BlockApproverProtocol {
                         Map.empty[BlockHash, Validator],
                         isGenesis = true
                       )
-                  ).leftMap { case (_, status) => s"Failed status during replay: $status." }
+                  ).leftMap { status =>
+                    s"Failed status during replay: $status."
+                  }
       _ <- EitherT(
             (stateHash == postState.postStateHash)
               .either(())
