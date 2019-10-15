@@ -324,11 +324,15 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log](
                                 runtime.replaySpace.revertToSoftCheckpoint(softCheckpoint) >> {
                                   throwable match {
                                     case replayException: ReplayException =>
-                                      Log[F]
-                                        .error(s"Failed during deploy replay: $processedDeploy")
-                                        .as(ReplayFailure.unusedCOMMEvent(replayException).some)
+                                      ReplayFailure
+                                        .unusedCOMMEvent(deploy, replayException)
+                                        .some
+                                        .pure[F]
                                     case _ =>
-                                      ReplayFailure.internalError(deploy, throwable).some.pure[F]
+                                      ReplayFailure
+                                        .internalError(deploy, throwable)
+                                        .some
+                                        .pure[F]
                                   }
                                 }
                             }

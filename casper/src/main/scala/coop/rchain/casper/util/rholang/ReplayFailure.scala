@@ -13,12 +13,13 @@ object ReplayFailure {
   def replayStatusMismatch(initialFailed: Boolean, replayFailed: Boolean): ReplayFailure =
     ReplayStatusMismatch(initialFailed, replayFailed)
 
-  def unusedCOMMEvent(replayException: ReplayException): ReplayFailure =
-    UnusedCOMMEvent(replayException)
+  def unusedCOMMEvent(deployData: DeployData, replayException: ReplayException): ReplayFailure =
+    UnusedCOMMEvent(deployData, replayException)
 
 }
 
 final case class InternalError(deploy: DeployData, throwable: Throwable) extends ReplayFailure
 final case class ReplayStatusMismatch(initialFailed: Boolean, replayFailed: Boolean)
     extends ReplayFailure
-final case class UnusedCOMMEvent(replayException: ReplayException) extends ReplayFailure
+final case class UnusedCOMMEvent(deployData: DeployData, replayException: ReplayException)
+    extends ReplayFailure

@@ -316,13 +316,10 @@ object ReportingCasper {
                                   runtime.reportingSpace.revertToSoftCheckpoint(softCheckpoint) >> {
                                     throwable match {
                                       case replayException: ReplayException =>
-                                        Log[F]
-                                          .error(s"Failed during deploy replay: $processedDeploy")
-                                          .as(
-                                            ReplayFailure
-                                              .unusedCOMMEvent(replayException)
-                                              .asLeft[Seq[ReportingEvent]]
-                                          )
+                                        ReplayFailure
+                                          .unusedCOMMEvent(deploy, replayException)
+                                          .asLeft[Seq[ReportingEvent]]
+                                          .pure[F]
                                       case _ =>
                                         ReplayFailure
                                           .internalError(deploy, throwable)

@@ -114,8 +114,12 @@ object InterpreterUtil {
                 s"Found replay status mismatch; replay failure is $replayFailed and orig failure is $initialFailed"
               )
               .as(none[StateHash].asRight[BlockError])
-          case UnusedCOMMEvent(_) =>
-            Log[F].warn("Found unused COMM event").as(none[StateHash].asRight[BlockError])
+          case UnusedCOMMEvent(deploy, replayException) =>
+            Log[F]
+              .warn(
+                s"Found replay exception while processing ${PrettyPrinter.buildString(deploy)}: ${replayException.getMessage}"
+              )
+              .as(none[StateHash].asRight[BlockError])
         }
       case Right(computedStateHash) =>
         if (tsHash == computedStateHash) {
