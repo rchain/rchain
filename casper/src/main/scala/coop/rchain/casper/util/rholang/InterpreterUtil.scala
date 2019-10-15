@@ -20,6 +20,12 @@ import coop.rchain.rspace.ReplayException
 import coop.rchain.shared.{Log, LogSource}
 import com.google.protobuf.ByteString
 import coop.rchain.models.NormalizerEnv.NormalizerEnv
+import coop.rchain.casper.util.rholang.Failure.UserErrors
+import coop.rchain.casper.util.rholang.InvalidDeploy.{
+  InternalError,
+  ReplayStatusMismatch,
+  UnusedCOMMEvent
+}
 import monix.eval.Coeval
 
 object InterpreterUtil {
@@ -100,13 +106,13 @@ object InterpreterUtil {
       result: Either[ReplayFailure, StateHash]
   ): F[BlockProcessing[Option[StateHash]]] =
     result.pure.flatMap {
-      case Left((Some(deploy), status)) =>
+      case Left(status) =>
         status match {
-          case InternalErrors(exs) =>
+          case InternalError(deploy, throwable) =>
             BlockStatus
               .exception(
                 new Exception(s"Internal errors encountered while processing ${PrettyPrinter
-                  .buildString(deploy)}: ${exs.mkString("\n")}")
+                  .buildString(deploy)}: ${throwable.getMessage}")
               )
               .asLeft[Option[StateHash]]
               .pure
@@ -119,25 +125,8 @@ object InterpreterUtil {
                 s"Found replay status mismatch; replay failure is $replayFailed and orig failure is $initialFailed"
               )
               .as(none[StateHash].asRight[BlockError])
-          case UnknownFailure =>
-            Log[F]
-              .warn(s"Found unknown failure")
-              .as(none[StateHash].asRight[BlockError])
-          case UnusedCommEvent(_) =>
-            new RuntimeException("found UnusedCommEvent").raiseError
-        }
-      case Left((None, status)) =>
-        status match {
-          case UnusedCommEvent(_: ReplayException) =>
-            none[StateHash].asRight[BlockError].pure
-          case InternalErrors(_) =>
-            new RuntimeException("found InternalErrors").raiseError
-          case ReplayStatusMismatch(_, _) =>
-            new RuntimeException("found ReplayStatusMismatch").raiseError
-          case UnknownFailure =>
-            new RuntimeException("found UnknownFailure").raiseError
-          case UserErrors(_) =>
-            new RuntimeException("found UserErrors").raiseError
+          case UnusedCOMMEvent(_) =>
+            Log[F].warn("Found unused COMM event").as(none[StateHash].asRight[BlockError])
         }
       case Right(computedStateHash) =>
         if (tsHash == computedStateHash) {
@@ -247,13 +236,12 @@ object InterpreterUtil {
                        invalidBlocks,
                        isGenesis //should always be false
                      )
-    } yield replayResult.leftMap[Throwable] {
-      case (_, status) =>
-        val parentHashes =
-          parents.map(p => Base16.encode(p.blockHash.toByteArray).take(8))
-        new Exception(
-          s"Failed status while computing post state of $parentHashes: $status"
-        )
+    } yield replayResult.leftMap[Throwable] { status =>
+      val parentHashes =
+        parents.map(p => Base16.encode(p.blockHash.toByteArray).take(8))
+      new Exception(
+        s"Failed status while computing post state of $parentHashes: $status"
+      )
     }).rethrow
   }
 

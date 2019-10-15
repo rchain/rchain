@@ -301,45 +301,42 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log](
       _              <- runtime.replaySpace.rig(processedDeploy.deployLog)
       softCheckpoint <- runtime.replaySpace.createSoftCheckpoint()
       _              <- Span[F].mark("before-replay-deploy-compute-effect")
-      replayEvaluateResult <- evaluate(runtime.replayReducer, runtime.cost, runtime.errorLog)(
-                               processedDeploy.deploy
-                             )
+      replayEvaluateResultEither <- evaluate(runtime.replayReducer, runtime.cost, runtime.errorLog)(
+                                     processedDeploy.deploy
+                                   ).attempt
       //TODO: compare replay deploy cost to given deploy cost
-      EvaluateResult(_, errors) = replayEvaluateResult
-      _                         <- Span[F].mark("before-replay-deploy-status")
-      cont <- DeployStatus.fromErrors(errors) match {
-               case int: InternalErrors =>
-                 (deploy.some, int: Failed).some.pure[F]
-               case replayStatus =>
-                 if (isFailed != replayStatus.isFailed)
-                   (deploy.some, ReplayStatusMismatch(replayStatus.isFailed, isFailed): Failed).some
-                     .pure[F]
-                 else if (errors.nonEmpty)
-                   runtime.replaySpace.revertToSoftCheckpoint(softCheckpoint) >> none[ReplayFailure]
-                     .pure[F]
-                 else {
-                   runtime.replaySpace
-                     .checkReplayData()
-                     .attempt
-                     .flatMap {
-                       case Right(_) => none[ReplayFailure].pure[F]
-                       case Left(ex: ReplayException) =>
-                         runtime.replaySpace.revertToSoftCheckpoint(softCheckpoint) >> Log[F].error(
-                           s"Failed during processing of deploy: $processedDeploy"
-                         ) >> (none[DeployData], UnusedCommEvent(ex): Failed).some.pure[F]
-                       case Left(ex) =>
-                         (none[DeployData], UserErrors(Vector(ex)): Failed).some.pure[F]
-                     }
-                 }
-             }
-    } yield cont
+      failureOption <- replayEvaluateResultEither match {
+                        case Right(EvaluateResult(_, replayUserErrors)) =>
+                          if (isFailed != replayUserErrors.nonEmpty)
+                            DeployStatus
+                              .replayStatusMismatch(isFailed, replayUserErrors.nonEmpty)
+                              .some
+                              .pure[F]
+                          else if (replayUserErrors.nonEmpty)
+                            runtime.replaySpace
+                              .revertToSoftCheckpoint(softCheckpoint)
+                              .as(none[ReplayFailure])
+                          else
+                            runtime.replaySpace.checkReplayData().attempt >>= {
+                              case Right(_) => none[Failure].pure[F]
+                              case Left(replayException: ReplayException) =>
+                                runtime.replaySpace.revertToSoftCheckpoint(softCheckpoint) >> Log[F]
+                                  .error(s"Failed during deploy replay: $processedDeploy")
+                                  .as(DeployStatus.unusedCOMMEvent(replayException).some)
+                              case Left(throwable) =>
+                                DeployStatus.internalError(deploy, throwable).some.pure[F]
+                            }
+                        case Left(throwable) =>
+                          DeployStatus.internalError(deploy, throwable).some.pure[F]
+                      }
+    } yield failureOption
   }
 }
 
 object RuntimeManager {
 
   type StateHash     = ByteString
-  type ReplayFailure = (Option[DeployData], Failed)
+  type ReplayFailure = Failure
 
   def fromRuntime[F[_]: Concurrent: Sync: Metrics: Span: Log](
       runtime: Runtime[F]

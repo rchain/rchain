@@ -17,13 +17,9 @@ import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.casper.util.rholang.RuntimeManager.{ReplayFailure, StateHash}
 import coop.rchain.casper.util.rholang.{
   DeployStatus,
-  Failed,
-  InternalErrors,
+  Failure,
   InternalProcessedDeploy,
-  ReplayStatusMismatch,
-  RuntimeManager,
-  UnusedCommEvent,
-  UserErrors
+  RuntimeManager
 }
 import coop.rchain.metrics.Metrics.Source
 import coop.rchain.metrics.{Metrics, Span}
@@ -67,6 +63,8 @@ import coop.rchain.rspace.ReportingRspace.{
 }
 import coop.rchain.shared.Log
 import ReportingCasperData._
+import cats.syntax.all.none
+import coop.rchain.casper.util.rholang.InvalidDeploy.InternalError
 import coop.rchain.rholang.interpreter.errors.InterpreterError
 
 import scala.concurrent.ExecutionContext
@@ -145,20 +143,19 @@ object ReportingCasperData {
   def createResponse[C, P, A, K](
       hash: BlockHash,
       state: Option[
-        (
-            Either[(Option[DeployData], Failed), List[
-              (InternalProcessedDeploy, Seq[ReportingEvent])
-            ]],
-            BlockMessage
-        )
+        (Either[ReplayFailure, List[(InternalProcessedDeploy, Seq[ReportingEvent])]], BlockMessage)
       ],
       transformer: ReportingEventTransformer[C, P, A, K]
   ): Report =
     state match {
       case None => BlockNotFound(hash.base16String)
-      case Some((Left((Some(deployData), failed)), _)) =>
-        BlockReplayFailed(hash.base16String, failed.toString, deployData.sig.base16String.some)
-      case Some((Left((None, failed)), _)) =>
+      case Some((Left(internalError @ InternalError(deployData, _)), _)) =>
+        BlockReplayFailed(
+          hash.base16String,
+          internalError.toString,
+          deployData.sig.base16String.some
+        )
+      case Some((Left(failed), _)) =>
         BlockReplayFailed(hash.base16String, failed.toString, None)
       case Some((Right(deploys), bm)) =>
         val t = transformDeploy(transformer)(_, _)
@@ -296,43 +293,45 @@ object ReportingCasper {
       for {
         _              <- runtime.reportingSpace.rig(processedDeploy.deployLog)
         softCheckpoint <- runtime.reportingSpace.createSoftCheckpoint()
-        replayEvaluateResult <- computeEffect(runtime, runtime.replayReducer)(
-                                 processedDeploy.deploy
-                               )
-        EvaluateResult(_, errors) = replayEvaluateResult
-        cont <- DeployStatus.fromErrors(errors) match {
-                 case int: InternalErrors =>
-                   (deploy.some, int: Failed).asLeft.pure[F]
-                 case replayStatus =>
-                   if (isFailed != replayStatus.isFailed)
-                     (deploy.some, ReplayStatusMismatch(replayStatus.isFailed, isFailed): Failed).asLeft
-                       .pure[F]
-                   else if (errors.nonEmpty)
-                     runtime.reportingSpace
-                       .revertToSoftCheckpoint(softCheckpoint) >> runtime.reportingSpace.getReport
-                       .map(_.asRight[ReplayFailure])
-                   else {
-                     runtime.reportingSpace
-                       .checkReplayData()
-                       .attempt
-                       .flatMap {
-                         case Right(_) =>
-                           runtime.reportingSpace.getReport.map(_.asRight[ReplayFailure])
-                         case Left(ex: ReplayException) => {
-                           Log[F]
-                             .error(s"Failed during processing of deploy: ${processedDeploy}") >>
-                             (none[DeployData], UnusedCommEvent(ex): Failed)
-                               .asLeft[Seq[ReportingEvent]]
-                               .pure[F]
-                         }
-                         case Left(ex) =>
-                           (none[DeployData], UserErrors(Vector(ex)): Failed)
-                             .asLeft[Seq[ReportingEvent]]
-                             .pure[F]
-                       }
-                   }
-               }
-      } yield cont
+        replayEvaluateResultEither <- computeEffect(runtime, runtime.replayReducer)(
+                                       processedDeploy.deploy
+                                     ).attempt
+        failureEither <- replayEvaluateResultEither match {
+                          case Right(EvaluateResult(_, replayUserErrors)) =>
+                            if (isFailed != replayUserErrors.nonEmpty)
+                              DeployStatus
+                                .replayStatusMismatch(isFailed, replayUserErrors.nonEmpty)
+                                .asLeft[Seq[ReportingEvent]]
+                                .pure[F]
+                            else if (replayUserErrors.nonEmpty)
+                              runtime.reportingSpace
+                                .revertToSoftCheckpoint(softCheckpoint) >> runtime.reportingSpace.getReport
+                                .map(_.asRight[ReplayFailure])
+                            else
+                              runtime.reportingSpace.checkReplayData().attempt >>= {
+                                case Right(_) =>
+                                  runtime.reportingSpace.getReport.map(_.asRight[ReplayFailure])
+                                case Left(replayException: ReplayException) =>
+                                  Log[F]
+                                    .error(s"Failed during deploy replay: $processedDeploy")
+                                    .as(
+                                      DeployStatus
+                                        .unusedCOMMEvent(replayException)
+                                        .asLeft[Seq[ReportingEvent]]
+                                    )
+                                case Left(throwable) =>
+                                  DeployStatus
+                                    .internalError(deploy, throwable)
+                                    .asLeft[Seq[ReportingEvent]]
+                                    .pure[F]
+                              }
+                          case Left(throwable) =>
+                            DeployStatus
+                              .internalError(deploy, throwable)
+                              .asLeft[Seq[ReportingEvent]]
+                              .pure[F]
+                        }
+      } yield failureEither
     }
 
     private def computeEffect(runtime: ReportingRuntime[F], reducer: Reduce[F])(
