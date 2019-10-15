@@ -304,8 +304,8 @@ object ReportingCasper {
                  case int: InternalErrors =>
                    (deploy.some, int: Failed).asLeft.pure[F]
                  case replayStatus =>
-                   if (status.isFailed != replayStatus.isFailed)
-                     (deploy.some, ReplayStatusMismatch(replayStatus, status): Failed).asLeft
+                   if (isFailed != replayStatus.isFailed)
+                     (deploy.some, ReplayStatusMismatch(replayStatus.isFailed, isFailed): Failed).asLeft
                        .pure[F]
                    else if (errors.nonEmpty)
                      runtime.reportingSpace

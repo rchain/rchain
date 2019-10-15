@@ -65,7 +65,7 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
     for {
       deploy <- ConstructDeploy.sourceDeployNowF(badRholang)
       result <- runtimeManager.use(computeState(_, deploy))
-      _      = result._2.status.isFailed should be(true)
+      _      = result._2.isFailed should be(true)
     } yield ()
   }
 
@@ -74,7 +74,7 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
     for {
       deploy <- ConstructDeploy.sourceDeployNowF(badRholang)
       result <- runtimeManager.use(computeState(_, deploy))
-      _      = result._2.status.isFailed should be(true)
+      _      = result._2.isFailed should be(true)
       _      = result._2.cost.cost shouldEqual accounting.parsingCost(badRholang).value
     } yield ()
   }

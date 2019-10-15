@@ -76,8 +76,7 @@ object Genesis {
     )
 
     //FIXME any failures here should terminate the genesis ceremony
-    val blockDeploys =
-      processedDeploys.filterNot(_.status.isFailed).map(_.toProcessedDeploy)
+    val blockDeploys = processedDeploys.filterNot(_.isFailed).map(_.toProcessedDeploy)
     val sortedDeploys =
       blockDeploys.map(d => d.copy(deployLog = d.deployLog.sortBy(_.toProto.toByteArray)))
     val body    = Body(state = state, deploys = sortedDeploys.toList)
