@@ -71,6 +71,7 @@ object Engine {
   def transitionToRunning[F[_]: Sync: EngineCell: Log: EventLog: BlockStore: CommUtil: TransportLayer: ConnectionsCell: RPConfAsk: Time: Running.RequestedBlocks](
       casper: MultiParentCasper[F],
       approvedBlock: ApprovedBlock,
+      validatorId: Option[ValidatorIdentity],
       init: F[Unit]
   ): F[Unit] =
     for {
@@ -80,7 +81,7 @@ object Engine {
               PrettyPrinter.buildStringNoLimit(approvedBlock.candidate.block.blockHash)
             )
           )
-      running = new Running[F](casper, approvedBlock, init)
+      running = new Running[F](casper, approvedBlock, validatorId, init)
       _       <- EngineCell[F].set(running)
 
     } yield ()

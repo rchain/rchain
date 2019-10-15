@@ -232,6 +232,7 @@ object Running {
 class Running[F[_]: Sync: BlockStore: CommUtil: TransportLayer: ConnectionsCell: RPConfAsk: Log: Time: Running.RequestedBlocks](
     casper: MultiParentCasper[F],
     approvedBlock: ApprovedBlock,
+    validatorId: Option[ValidatorIdentity],
     theInit: F[Unit]
 ) extends Engine[F] {
   import Engine._

@@ -108,7 +108,7 @@ class TestNode[F[_]](
     blockProcessingLock
   )
 
-  val engine                             = new Running(casperEff, approvedBlock, ().pure[F])
+  val engine                             = new Running(casperEff, approvedBlock, Some(validatorId), ().pure[F])
   implicit val engineCell: EngineCell[F] = Cell.unsafe[F, Engine[F]](engine)
   implicit val packetHandlerEff          = CasperPacketHandler[F]
 
