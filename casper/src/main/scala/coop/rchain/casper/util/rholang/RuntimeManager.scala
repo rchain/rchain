@@ -33,8 +33,6 @@ import coop.rchain.rspace.{trace, Blake2b256Hash, ReplayException}
 import coop.rchain.shared.Log
 
 trait RuntimeManager[F[_]] {
-  import RuntimeManager.ReplayFailure
-
   def captureResults(
       startHash: StateHash,
       deploy: DeployData,
@@ -68,7 +66,6 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log](
     val emptyStateHash: StateHash,
     runtimeContainer: MVar[F, Runtime[F]]
 ) extends RuntimeManager[F] {
-  import RuntimeManager.ReplayFailure
 
   private[this] val RuntimeManagerMetricsSource =
     Metrics.Source(CasperMetricsSource, "runtime-manager")
@@ -309,7 +306,7 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log](
       failureOption <- replayEvaluateResultEither match {
                         case Right(EvaluateResult(_, replayUserErrors)) =>
                           if (isFailed != replayUserErrors.nonEmpty)
-                            DeployStatus
+                            ReplayFailure
                               .replayStatusMismatch(isFailed, replayUserErrors.nonEmpty)
                               .some
                               .pure[F]
@@ -319,16 +316,16 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log](
                               .as(none[ReplayFailure])
                           else
                             runtime.replaySpace.checkReplayData().attempt >>= {
-                              case Right(_) => none[Failure].pure[F]
+                              case Right(_) => none[ReplayFailure].pure[F]
                               case Left(replayException: ReplayException) =>
                                 runtime.replaySpace.revertToSoftCheckpoint(softCheckpoint) >> Log[F]
                                   .error(s"Failed during deploy replay: $processedDeploy")
-                                  .as(DeployStatus.unusedCOMMEvent(replayException).some)
+                                  .as(ReplayFailure.unusedCOMMEvent(replayException).some)
                               case Left(throwable) =>
-                                DeployStatus.internalError(deploy, throwable).some.pure[F]
+                                ReplayFailure.internalError(deploy, throwable).some.pure[F]
                             }
                         case Left(throwable) =>
-                          DeployStatus.internalError(deploy, throwable).some.pure[F]
+                          ReplayFailure.internalError(deploy, throwable).some.pure[F]
                       }
     } yield failureOption
   }
@@ -336,8 +333,7 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log](
 
 object RuntimeManager {
 
-  type StateHash     = ByteString
-  type ReplayFailure = Failure
+  type StateHash = ByteString
 
   def fromRuntime[F[_]: Concurrent: Sync: Metrics: Span: Log](
       runtime: Runtime[F]

@@ -16,15 +16,8 @@ import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.Validator.Validator
 import coop.rchain.rholang.interpreter.{NormalizerEnv, ParBuilder}
 import coop.rchain.rholang.interpreter.Runtime.BlockData
-import coop.rchain.rspace.ReplayException
 import coop.rchain.shared.{Log, LogSource}
 import com.google.protobuf.ByteString
-import coop.rchain.casper.util.rholang.Failure.UserErrors
-import coop.rchain.casper.util.rholang.InvalidDeploy.{
-  InternalError,
-  ReplayStatusMismatch,
-  UnusedCOMMEvent
-}
 import monix.eval.Coeval
 
 object InterpreterUtil {
@@ -115,9 +108,6 @@ object InterpreterUtil {
               )
               .asLeft[Option[StateHash]]
               .pure
-          case UserErrors(errors: Seq[Throwable]) =>
-            Log[F].warn(s"Found user error(s) ${errors.map(_.getMessage).mkString("\n")}") >>
-              none[StateHash].asRight[BlockError].pure
           case ReplayStatusMismatch(replayFailed, initialFailed) =>
             Log[F]
               .warn(
