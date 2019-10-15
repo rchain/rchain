@@ -8,7 +8,7 @@ import cats.syntax.all._
 import com.google.protobuf.ByteString
 import coop.rchain.casper.CasperMetricsSource
 import coop.rchain.casper.protocol._
-import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
+import coop.rchain.casper.util.rholang.RuntimeManager.{evaluate, StateHash}
 import coop.rchain.casper.util.{ConstructDeploy, ProtoUtil}
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.metrics.Metrics.Source
@@ -87,21 +87,13 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log](
 
   def captureResults(start: StateHash, deploy: DeployData, name: Par): F[Seq[Par]] =
     withResetRuntimeLock(start) { runtime =>
-      computeEffect(runtime, runtime.reducer)(deploy)
+      evaluate(runtime.reducer, runtime.cost, runtime.errorLog)(deploy)
         .ensure(
           BugFoundError("Unexpected error while capturing results from rholang")
         )(
           _.errors.isEmpty
         ) >> getData(runtime)(name)
     }
-
-  private def computeEffect(runtime: Runtime[F], reducer: Reduce[F])(
-      deploy: DeployData
-  ): F[EvaluateResult] =
-    for {
-      _      <- runtime.deployParametersRef.set(ProtoUtil.getRholangDeployParams(deploy))
-      result <- RuntimeManager.doInj(deploy, reducer, runtime.errorLog)(Sync[F], runtime.cost)
-    } yield result
 
   def replayComputeState(startHash: StateHash)(
       terms: Seq[InternalProcessedDeploy],
@@ -268,7 +260,7 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log](
   ): F[InternalProcessedDeploy] = Span[F].withMarks("process-deploy") {
     for {
       fallback                     <- runtime.space.createSoftCheckpoint()
-      evaluateResult               <- computeEffect(runtime, runtime.reducer)(deploy)
+      evaluateResult               <- evaluate(runtime.reducer, runtime.cost, runtime.errorLog)(deploy)
       EvaluateResult(cost, errors) = evaluateResult
       _                            <- Span[F].mark("before-process-deploy-create-soft-checkpoint")
       checkpoint                   <- runtime.space.createSoftCheckpoint()
@@ -308,10 +300,12 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log](
   ): F[Option[ReplayFailure]] = Span[F].withMarks("replay-deploy") {
     import processedDeploy._
     for {
-      _                    <- runtime.replaySpace.rig(processedDeploy.deployLog)
-      softCheckpoint       <- runtime.replaySpace.createSoftCheckpoint()
-      _                    <- Span[F].mark("before-replay-deploy-compute-effect")
-      replayEvaluateResult <- computeEffect(runtime, runtime.replayReducer)(processedDeploy.deploy)
+      _              <- runtime.replaySpace.rig(processedDeploy.deployLog)
+      softCheckpoint <- runtime.replaySpace.createSoftCheckpoint()
+      _              <- Span[F].mark("before-replay-deploy-compute-effect")
+      replayEvaluateResult <- evaluate(runtime.replayReducer, runtime.cost, runtime.errorLog)(
+                               processedDeploy.deploy
+                             )
       //TODO: compare replay deploy cost to given deploy cost
       EvaluateResult(_, errors) = replayEvaluateResult
       _                         <- Span[F].mark("before-replay-deploy-status")
@@ -366,14 +360,15 @@ object RuntimeManager {
       runtime          <- MVar[F].of(runtime)
     } yield new RuntimeManagerImpl(hash, runtime)
 
-  def doInj[F[_]](
-      deploy: DeployData,
+  def evaluate[F[_]: Sync](
       reducer: Reduce[F],
+      costState: _cost[F],
       errorLog: ErrorLog[F]
-  )(implicit S: Sync[F], C: _cost[F]): F[EvaluateResult] = {
+  )(deploy: DeployData): F[EvaluateResult] = {
     implicit val rand: Blake2b512Random = Blake2b512Random(
       ProtoUtil.stripDeployData(deploy).toProto.toByteArray
     )
+    implicit val cost: _cost[F] = costState
     Interpreter[F].injAttempt(
       reducer,
       errorLog,

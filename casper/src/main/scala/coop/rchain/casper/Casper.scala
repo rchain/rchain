@@ -46,18 +46,15 @@ object DeployError {
   }
 }
 
-trait Casper[F[_], A] {
-  def addBlock(
-      b: BlockMessage,
-      handleDoppelganger: (BlockMessage, Validator) => F[Unit]
-  ): F[ValidBlockProcessing]
+trait Casper[F[_]] {
+  def addBlock(b: BlockMessage): F[ValidBlockProcessing]
   def contains(hash: BlockHash): F[Boolean]
   def deploy(d: DeployData): F[Either[DeployError, DeployId]]
-  def estimator(dag: BlockDagRepresentation[F]): F[A]
+  def estimator(dag: BlockDagRepresentation[F]): F[IndexedSeq[BlockHash]]
   def createBlock: F[CreateBlockStatus]
 }
 
-trait MultiParentCasper[F[_]] extends Casper[F, IndexedSeq[BlockHash]] {
+trait MultiParentCasper[F[_]] extends Casper[F] {
   def blockDag: F[BlockDagRepresentation[F]]
   def fetchDependencies: F[Unit]
   // This is the weight of faults that have been accumulated so far.

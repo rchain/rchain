@@ -75,6 +75,7 @@ object Genesis {
       bonds = bondsProto(proofOfStake).toList
     )
 
+    //FIXME any failures here should terminate the genesis ceremony
     val blockDeploys =
       processedDeploys.filterNot(_.status.isFailed).map(_.toProcessedDeploy)
     val sortedDeploys = blockDeploys.map(

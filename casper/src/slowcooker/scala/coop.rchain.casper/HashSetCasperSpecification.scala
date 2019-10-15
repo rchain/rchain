@@ -87,7 +87,7 @@ object HashSetCasperActions {
       signed: BlockMessage
   ): Effect[Either[Throwable, ValidBlockProcessing]] =
     Sync[Effect].attempt(
-      node.casperEff.addBlock(signed, ignoreDoppelgangerCheck[Effect])
+      node.casperEff.addBlock(signed)
     )
 
   def deployment(i: Int, ts: Long = System.currentTimeMillis()): DeployData =

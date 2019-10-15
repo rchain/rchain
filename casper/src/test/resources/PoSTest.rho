@@ -65,18 +65,16 @@ match (
 
           contract prepareUser(@pk, retCh) = {
             stdlog!("info", ("preparing user ", pk)) |
-            new setDeployData(`rho:test:deploy:set`),
-                makeDeployerId(`rho:test:deployerId:make`),
-                identitySet,
+            new makeDeployerId(`rho:test:deployerId:make`),
                 deployerIdCh,
                 revAddrCh,
                 vaultCh in {
-              setDeployData!("userId", pk.hexToBytes(), *identitySet) |
               revAddressOps!("fromPublicKey", pk.hexToBytes(), *revAddrCh) |
               makeDeployerId!("deployerId", pk.hexToBytes(), *deployerIdCh) |
-              for (_ <- identitySet;
-                  @revAddress <- revAddrCh;
-                  @deployerId <- deployerIdCh) {
+              for (
+                @revAddress <- revAddrCh;
+                @deployerId <- deployerIdCh
+              ) {
                 @RevVault!("findOrCreate", revAddress, *vaultCh) |
                 for (@(true, vault) <- vaultCh) {
                   retCh!(pk.hexToBytes(), revAddress, vault, deployerId)
@@ -215,8 +213,7 @@ match (
             new setupCh, retCh0, retCh1,
                 initialValidatorBalanceCh, finalValidatorBalanceCh,
                 initialBondsCh, finalBondsCh,
-                withdrawCh, closeBlockCh,
-                setDeployData(`rho:test:deploy:set`), identitySet in {
+                withdrawCh, closeBlockCh in {
               prepareUser!("bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", *setupCh) |
               for (@validatorPubKey, _, @validatorVault, @validatorDeployerId <- setupCh) {
                 @validatorVault!("balance", *initialValidatorBalanceCh) |
@@ -234,24 +231,21 @@ match (
                         for ( @(true, _) <- retCh0; @(true, _) <- retCh1){
                           @PoS!("closeBlock", *closeBlockCh) |
                           for (_ <- closeBlockCh) {
-                            setDeployData!("userId", validatorPubKey, *identitySet) |
-                            for(_ <- identitySet) {
-                              @PoS!("withdraw", validatorDeployerId, *withdrawCh) |
-                              for (_ <- withdrawCh) {
-                                @PoS!("closeBlock", *closeBlockCh) |
-                                for (_ <- closeBlockCh) {
-                                  @validatorVault!("balance", *finalValidatorBalanceCh) |
-                                  @PoS!("getBonds", *finalBondsCh) |
-                                  for(@finalBonds <- finalBondsCh;
-                                      @finalValidatorBalance <- finalValidatorBalanceCh) {
-                                    rhoSpec!("assertMany",
-                                      [
-                                        ((finalBonds, "==", initialBonds), "bonds don't change"),
-                                        ((46, "==", finalValidatorBalance-initialValidatorBalance ), "user balance changes accordingly")
-                                      ],
-                                      *ackCh
-                                    )
-                                  }
+                            @PoS!("withdraw", validatorDeployerId, *withdrawCh) |
+                            for (_ <- withdrawCh) {
+                              @PoS!("closeBlock", *closeBlockCh) |
+                              for (_ <- closeBlockCh) {
+                                @validatorVault!("balance", *finalValidatorBalanceCh) |
+                                @PoS!("getBonds", *finalBondsCh) |
+                                for(@finalBonds <- finalBondsCh;
+                                    @finalValidatorBalance <- finalValidatorBalanceCh) {
+                                  rhoSpec!("assertMany",
+                                    [
+                                      ((finalBonds, "==", initialBonds), "bonds don't change"),
+                                      ((46, "==", finalValidatorBalance-initialValidatorBalance ), "user balance changes accordingly")
+                                    ],
+                                    *ackCh
+                                  )
                                 }
                               }
                             }

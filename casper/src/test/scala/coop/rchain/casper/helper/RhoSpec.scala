@@ -91,24 +91,17 @@ class RhoSpec(
           ctx => RhoLoggerContract.handleMessage(ctx)(_)
         ),
         SystemProcess.Definition[F](
-          "rho:test:deploy:set",
+          "rho:test:deployerId:make",
           Runtime.byteName(104),
           3,
           104L,
-          ctx => DeployDataContract.set(ctx)(_)
-        ),
-        SystemProcess.Definition[F](
-          "rho:test:deployerId:make",
-          Runtime.byteName(105),
-          3,
-          105L,
           ctx => DeployerIdContract.get(ctx)(_)
         ),
         SystemProcess.Definition[F](
           "rho:test:crypto:secp256k1Sign",
-          Runtime.byteName(106),
+          Runtime.byteName(105),
           3,
-          106L,
+          105L,
           ctx => Secp256k1SignContract.get(ctx)(_)
         )
       )
@@ -158,9 +151,6 @@ class RhoSpec(
     for {
       _ <- evalDeploy(rhoSpecDeploy, runtime)
       _ <- otherLibs.toList.traverse(evalDeploy(_, runtime))
-      // reset the deployParams.userId before executing the test
-      // otherwise it'd execute as the deployer of last deployed contract
-      _ <- runtime.deployParametersRef.update(_.copy(userId = Par()))
     } yield runtime
 
   private def evalDeploy[F[_]: Sync](

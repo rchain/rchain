@@ -1,7 +1,6 @@
 new
   rl(`rho:registry:lookup`), RhoSpecCh,
   AuthKeyCh,
-  setDeployData(`rho:test:deploy:set`),
   stdlog(`rho:io:stdlog`),
   testSuccess,
   testFailure,

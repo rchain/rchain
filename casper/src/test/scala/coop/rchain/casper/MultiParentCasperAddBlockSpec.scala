@@ -53,8 +53,8 @@ class MultiParentCasperAddBlockSpec extends FlatSpec with Matchers with Inspecto
                   }
           result <- Task
                      .racePair(
-                       casper.addBlock(block, ignoreDoppelgangerCheck[Effect]),
-                       casper.addBlock(block, ignoreDoppelgangerCheck[Effect])
+                       casper.addBlock(block),
+                       casper.addBlock(block)
                      )
                      .flatMap {
                        case Left((statusA, running)) =>
@@ -177,7 +177,7 @@ class MultiParentCasperAddBlockSpec extends FlatSpec with Matchers with Inspecto
         basicDeployData <- ConstructDeploy.basicDeployData[Effect](0)
         block           <- node.createBlock(basicDeployData)
         invalidBlock    = block.copy(sig = ByteString.EMPTY)
-        status          <- node.casperEff.addBlock(invalidBlock, ignoreDoppelgangerCheck[Effect])
+        status          <- node.casperEff.addBlock(invalidBlock)
         added           <- node.contains(invalidBlock.blockHash)
       } yield {
         status shouldBe Left(InvalidFormat)
@@ -196,7 +196,7 @@ class MultiParentCasperAddBlockSpec extends FlatSpec with Matchers with Inspecto
                           .createBlock(data0)
                           .map(_.copy(sigAlgorithm = "invalid", sig = ByteString.EMPTY))
 
-        _ <- node0.casperEff.addBlock(unsignedBlock, ignoreDoppelgangerCheck[Effect])
+        _ <- node0.casperEff.addBlock(unsignedBlock)
         _ <- node1.shutoff() //node1 misses this block
 
         signedBlock <- node0.addBlock(data1)
@@ -221,7 +221,7 @@ class MultiParentCasperAddBlockSpec extends FlatSpec with Matchers with Inspecto
         dag             <- node.blockDagStorage.getRepresentation
         (sk, pk)        = Secp256k1.newKeyPair
         illSignedBlock  <- ProtoUtil.signBlock(block, dag, pk, sk, Secp256k1.name, block.shardId)
-        status          <- node.casperEff.addBlock(illSignedBlock, ignoreDoppelgangerCheck[Effect])
+        status          <- node.casperEff.addBlock(illSignedBlock)
       } yield (status shouldBe Left(InvalidSender))
     }
   }
@@ -288,8 +288,8 @@ class MultiParentCasperAddBlockSpec extends FlatSpec with Matchers with Inspecto
         basicDeployData1  <- ConstructDeploy.basicDeployData[Effect](1)
         signedBlock1Prime <- nodes(0).createBlock(basicDeployData1)
 
-        _ <- nodes(0).casperEff.addBlock(signedBlock1, ignoreDoppelgangerCheck[Effect])
-        _ <- nodes(0).casperEff.addBlock(signedBlock1Prime, ignoreDoppelgangerCheck[Effect])
+        _ <- nodes(0).casperEff.addBlock(signedBlock1)
+        _ <- nodes(0).casperEff.addBlock(signedBlock1Prime)
 
         _ <- nodes(1).syncWith(nodes(0))
 
@@ -314,11 +314,11 @@ class MultiParentCasperAddBlockSpec extends FlatSpec with Matchers with Inspecto
         signedBlock1      <- nodes(0).createBlock(deployDatas(0))
         signedBlock1Prime <- nodes(0).createBlock(deployDatas(1))
 
-        _ <- nodes(1).casperEff.addBlock(signedBlock1, ignoreDoppelgangerCheck[Effect])
+        _ <- nodes(1).casperEff.addBlock(signedBlock1)
         _ <- nodes(0).shutoff() //nodes(0) misses this block
         _ <- nodes(2).shutoff() //nodes(2) misses this block
 
-        _ <- nodes(0).casperEff.addBlock(signedBlock1Prime, ignoreDoppelgangerCheck[Effect])
+        _ <- nodes(0).casperEff.addBlock(signedBlock1Prime)
         _ <- nodes(2).syncWith(nodes(0))
         _ <- nodes(1).shutoff() //nodes(1) misses this block
 
@@ -398,7 +398,7 @@ class MultiParentCasperAddBlockSpec extends FlatSpec with Matchers with Inspecto
                                         )
 
         _ <- nodes(1).casperEff
-              .addBlock(blockWithInvalidJustification, ignoreDoppelgangerCheck[Effect])
+              .addBlock(blockWithInvalidJustification)
         _ <- nodes(0)
               .shutoff() // nodes(0) rejects normal adding process for blockThatPointsToInvalidBlock
 
@@ -439,7 +439,7 @@ class MultiParentCasperAddBlockSpec extends FlatSpec with Matchers with Inspecto
 
     def add(node: TestNode[Effect], signed: BlockMessage) =
       Sync[Effect].attempt(
-        node.casperEff.addBlock(signed, ignoreDoppelgangerCheck[Effect])
+        node.casperEff.addBlock(signed)
       )
 
     TestNode
@@ -487,17 +487,17 @@ class MultiParentCasperAddBlockSpec extends FlatSpec with Matchers with Inspecto
         createBlockResult     <- nodes(0).casperEff.deploy(deployData) >> nodes(0).casperEff.createBlock
         Created(signedBlock)  = createBlockResult
         invalidBlock          = signedBlock.copy(seqNum = 47)
-        status1               <- nodes(1).casperEff.addBlock(invalidBlock, ignoreDoppelgangerCheck[Effect])
-        status2               <- nodes(2).casperEff.addBlock(invalidBlock, ignoreDoppelgangerCheck[Effect])
+        status1               <- nodes(1).casperEff.addBlock(invalidBlock)
+        status2               <- nodes(2).casperEff.addBlock(invalidBlock)
         createBlockResult2    <- nodes(1).casperEff.createBlock
         Created(signedBlock2) = createBlockResult2
-        status3               <- nodes(1).casperEff.addBlock(signedBlock2, ignoreDoppelgangerCheck[Effect])
+        status3               <- nodes(1).casperEff.addBlock(signedBlock2)
         bonds                 <- nodes(1).runtimeManager.computeBonds(ProtoUtil.postStateHash(signedBlock2))
         _                     = bonds.map(_.stake).min should be(0) // Slashed validator has 0 stake
         _                     <- nodes(2).receive()
         createBlockResult3    <- nodes(2).casperEff.createBlock
         Created(signedBlock3) = createBlockResult3
-        status4               <- nodes(2).casperEff.addBlock(signedBlock3, ignoreDoppelgangerCheck[Effect])
+        status4               <- nodes(2).casperEff.addBlock(signedBlock3)
       } yield {
         status1 should be(Left(InvalidBlockHash))
         status2 should be(Left(InvalidBlockHash))

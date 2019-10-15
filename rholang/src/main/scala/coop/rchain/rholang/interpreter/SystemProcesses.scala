@@ -32,7 +32,6 @@ trait SystemProcesses[F[_]] {
   def sha256Hash: Contract[F]
   def keccak256Hash: Contract[F]
   def blake2b256Hash: Contract[F]
-  def getDeployParams(runtimeParametersRef: Ref[F, DeployParameters]): Contract[F]
   def getBlockData(blockData: Ref[F, BlockData]): Contract[F]
   def invalidBlocks(invalidBlocks: InvalidBlocks[F]): Contract[F]
   def revAddress: Contract[F]
@@ -239,18 +238,6 @@ object SystemProcesses {
 
       def blake2b256Hash: Contract[F] =
         hashContract("blake2b256Hash", Blake2b256.hash)
-
-      // TODO: rename this system process to "deployParameters"?
-      def getDeployParams(runtimeParametersRef: Ref[F, DeployParameters]): Contract[F] = {
-        case isContractCall(produce, Seq(ack)) =>
-          for {
-            params                   <- runtimeParametersRef.get
-            DeployParameters(userId) = params
-            _                        <- produce(Seq(userId), ack)
-          } yield ()
-        case _ =>
-          illegalArgumentException("deployParameters expects only a return channel")
-      }
 
       def getBlockData(
           blockData: Ref[F, BlockData]

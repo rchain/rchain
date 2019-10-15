@@ -17,7 +17,6 @@
 new 
   RevVault, rs(`rho:registry:insertSigned:secp256k1`), uriOut,
   rl(`rho:registry:lookup`), RevAddress(`rho:rev:address`), MakeMintCh, AuthKeyCh, EitherCh,
-  _getIdentity,
   _makeVault,
   _newVault,
   _getOrCreate,
@@ -70,15 +69,6 @@ in {
                 for (@unfRevAddress <- revAddrCh) {
 
                   @AuthKey!("make", (*_revVault, unfRevAddress), *ret)
-                }
-              }
-            } |
-
-            contract _getIdentity(retCh) = {
-              new getDeployData(`rho:deploy:params`), ch in {
-                getDeployData ! (*ch) |
-                for (@userId <- ch) {
-                  retCh ! (userId)
                 }
               }
             } |

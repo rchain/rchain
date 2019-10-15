@@ -108,7 +108,7 @@ class TestNode[F[_]](
     blockProcessingLock
   )
 
-  val engine                             = new Running(casperEff, approvedBlock, ().pure[F])
+  val engine                             = new Running(casperEff, approvedBlock, Some(validatorId), ().pure[F])
   implicit val engineCell: EngineCell[F] = Cell.unsafe[F, Engine[F]](engine)
   implicit val packetHandlerEff          = CasperPacketHandler[F]
 
@@ -132,7 +132,7 @@ class TestNode[F[_]](
   )(deployDatums: DeployData*): F[BlockMessage] =
     for {
       block  <- createBlock(deployDatums: _*)
-      status <- casperEff.addBlock(block, ignoreDoppelgangerCheck[F])
+      status <- casperEff.addBlock(block)
       _      = assert(status == expectedStatus)
     } yield block
 

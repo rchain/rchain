@@ -70,7 +70,12 @@ class Initializing[F[_]: Sync: Metrics: Span: Concurrent: BlockStore: CommUtil: 
                         casper <- MultiParentCasper
                                    .hashSetCasper[F](validatorId, genesis, shardId)
                         _ <- Engine
-                              .transitionToRunning[F](casper, approvedBlock, ().pure[F])
+                              .transitionToRunning[F](
+                                casper,
+                                approvedBlock,
+                                validatorId,
+                                ().pure[F]
+                              )
                         _ <- CommUtil[F].sendForkChoiceTipRequest
                       } yield Option(casper)
                     } else

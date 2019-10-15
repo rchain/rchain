@@ -20,7 +20,6 @@ match (
       rl(`rho:registry:lookup`),
       RhoSpecCh,
       ListOpsCh,
-      setDeployData(`rho:test:deploy:set`),
       getDeployerId(`rho:test:deployerId:make`),
       setup,
       testFindOrCreateGenesisVault,
@@ -58,10 +57,9 @@ match (
       } |
 
       contract setup(_, ret) = {
-        new RevVaultCh, identitySet in {
+        new RevVaultCh in {
           rl!(`rho:rchain:revVault`, *RevVaultCh) |
-          setDeployData!("userId", genesisPubKey, *identitySet) |
-          for (@(_, RevVault) <- RevVaultCh; _ <- identitySet) {
+          for (@(_, RevVault) <- RevVaultCh) {
             ret!(RevVault)
           }
         }
@@ -198,13 +196,12 @@ match (
         for (@(_, RevVault) <- RevVaultCh) {
 
           contract withVaultAndIdentityOf(@pubKey, ret) = {
-            new RevAddress(`rho:rev:address`), revAddrCh, vaultCh, identityChanged, deployerIdCh, authKeyCh in {
-              setDeployData!("userId", pubKey, *identityChanged) |
+            new RevAddress(`rho:rev:address`), revAddrCh, vaultCh, deployerIdCh, authKeyCh in {
               getDeployerId!("deployerId", pubKey, *deployerIdCh) |
               RevAddress!("fromPublicKey", pubKey, *revAddrCh) |
               for (@revAddr <- revAddrCh) {
                 @RevVault!("findOrCreate", revAddr, *vaultCh) |
-                for (@(true, vault) <- vaultCh; _ <- identityChanged; deployerId <- deployerIdCh) {
+                for (@(true, vault) <- vaultCh; deployerId <- deployerIdCh) {
                   @RevVault!("deployerAuthKey", *deployerId, *authKeyCh) |
                   for (@authKey <- authKeyCh) {
                     ret!(vault, authKey)

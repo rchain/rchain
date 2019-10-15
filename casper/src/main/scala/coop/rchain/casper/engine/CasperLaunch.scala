@@ -60,7 +60,12 @@ object CasperLaunch {
         casper <- MultiParentCasper
                    .hashSetCasper[F](validatorId, genesis, conf.shardId)
         _ <- Engine
-              .transitionToRunning[F](casper, approvedBlock, CommUtil[F].sendForkChoiceTipRequest)
+              .transitionToRunning[F](
+                casper,
+                approvedBlock,
+                validatorId,
+                CommUtil[F].sendForkChoiceTipRequest
+              )
       } yield ()
 
     private def connectAsGenesisValidator(): F[Unit] =

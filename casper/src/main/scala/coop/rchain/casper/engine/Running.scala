@@ -1,13 +1,9 @@
 package coop.rchain.casper.engine
 
 import cats.effect.Sync
-import cats.syntax.applicative._
-import cats.syntax.apply._
-import cats.syntax.flatMap._
-import cats.syntax.functor._
-import cats.syntax.option._
-import cats.syntax.traverse._
+import cats.syntax.all._
 import cats.{Applicative, Monad}
+import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockStore
 import coop.rchain.casper._
 import coop.rchain.casper.protocol._
@@ -232,6 +228,7 @@ object Running {
 class Running[F[_]: Sync: BlockStore: CommUtil: TransportLayer: ConnectionsCell: RPConfAsk: Log: Time: Running.RequestedBlocks](
     casper: MultiParentCasper[F],
     approvedBlock: ApprovedBlock,
+    validatorId: Option[ValidatorIdentity],
     theInit: F[Unit]
 ) extends Engine[F] {
   import Engine._
@@ -241,14 +238,17 @@ class Running[F[_]: Sync: BlockStore: CommUtil: TransportLayer: ConnectionsCell:
   private val noop = F.unit
 
   private def casperAdd(peer: PeerNode)(b: BlockMessage): F[ValidBlockProcessing] = {
-    val handleDoppelganger: (BlockMessage, Validator) => F[Unit] =
-      (bm: BlockMessage, self: Validator) =>
-        F.whenA(bm.sender == self)(
-          Log[F].warn(
-            s"There is another node $peer proposing using the same private key as you. Or did you restart your node?"
-          )
+    import cats.instances.option._
+
+    validatorId.traverse_ { id =>
+      val self = ByteString.copyFrom(id.publicKey.bytes)
+      F.whenA(b.sender == self)(
+        Log[F].warn(
+          s"There is another node $peer proposing using the same private key as you. Or did you restart your node?"
         )
-    casper.addBlock(b, handleDoppelganger)
+      )
+    } >>
+      casper.addBlock(b)
   }
 
   override def init: F[Unit] = theInit

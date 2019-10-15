@@ -213,7 +213,7 @@ class ChargingRSpaceTest extends fixture.FlatSpec with TripleEqualsSupport with 
       _ <- cost.set(initPhlos)
       _ <- chargingRSpace.produce(channels(0), dataX, persist = true)
       _ <- chargingRSpace.produce(channels(1), dataY, persist = false)
-      _ <- cost.modify(_ => initPhlos)
+      _ <- cost.set(initPhlos)
       _ <- chargingRSpace.consume(channels, patterns, cont, false)
       _ <- cost.get shouldBeF (initPhlos + produceYCost - consumeEventStorageCost - commEventStorageCost)
     } yield ()
@@ -234,7 +234,7 @@ class ChargingRSpaceTest extends fixture.FlatSpec with TripleEqualsSupport with 
     val test = for {
       _ <- cost.set(initPhlos)
       _ <- chargingRSpace.consume(channels, patterns, cont, false)
-      _ <- cost.modify(_ => initPhlos)
+      _ <- cost.set(initPhlos)
       _ <- chargingRSpace.produce(channel, data, persist = false)
       _ <- cost.get shouldBeF (initPhlos + consumeStorageCost - produceEventStorageCost - commEventStorageCost)
     } yield ()
@@ -258,7 +258,7 @@ class ChargingRSpaceTest extends fixture.FlatSpec with TripleEqualsSupport with 
     val test = for {
       _ <- cost.set(initPhlos)
       _ <- chargingRSpace.produce(channel, data, persist = false)
-      _ <- cost.modify(_ => initPhlos)
+      _ <- cost.set(initPhlos)
       _ <- chargingRSpace.consume(channels, patterns, cont, false)
       _ <- cost.get shouldBeF (initPhlos + produceCost - consumeEventStorageCost - commEventStorageCost)
     } yield ()
@@ -292,7 +292,7 @@ class ChargingRSpaceTest extends fixture.FlatSpec with TripleEqualsSupport with 
       _ <- chargingRSpace.produce(x, dataX, false)
       _ <- chargingRSpace.produce(y, dataY, false)
       _ <- chargingRSpace.consume(List(x, y, z), patterns, cont, false)
-      _ <- cost.modify(_ => initPhlos)
+      _ <- cost.set(initPhlos)
       _ <- chargingRSpace.produce(z, dataZ, false)
       _ <- cost.get shouldBeF (
             initPhlos + produceXCost + produceYCost + consumeCost - produceEventStorageCost - commEventStorageCost

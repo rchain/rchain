@@ -88,7 +88,7 @@ object BlockAPI {
                                .pure[F]
                            case Created(block) =>
                              casper
-                               .addBlock(block, ignoreDoppelgangerCheck[F]) >>= (addResponse(
+                               .addBlock(block) >>= (addResponse(
                                _,
                                block,
                                casper,
