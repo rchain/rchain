@@ -297,10 +297,13 @@ object ReportingCasper {
         failureEither <- replayEvaluateResultEither match {
                           case Right(EvaluateResult(_, replayUserErrors)) =>
                             if (isFailed != replayUserErrors.nonEmpty)
-                              ReplayFailure
-                                .replayStatusMismatch(isFailed, replayUserErrors.nonEmpty)
-                                .asLeft[Seq[ReportingEvent]]
-                                .pure[F]
+                              runtime.reportingSpace
+                                .revertToSoftCheckpoint(softCheckpoint)
+                                .as(
+                                  ReplayFailure
+                                    .replayStatusMismatch(isFailed, replayUserErrors.nonEmpty)
+                                    .asLeft[Seq[ReportingEvent]]
+                                )
                             else if (replayUserErrors.nonEmpty)
                               runtime.reportingSpace
                                 .revertToSoftCheckpoint(softCheckpoint) >> runtime.reportingSpace.getReport
@@ -309,25 +312,33 @@ object ReportingCasper {
                               runtime.reportingSpace.checkReplayData().attempt >>= {
                                 case Right(_) =>
                                   runtime.reportingSpace.getReport.map(_.asRight[ReplayFailure])
-                                case Left(replayException: ReplayException) =>
-                                  Log[F]
-                                    .error(s"Failed during deploy replay: $processedDeploy")
-                                    .as(
-                                      ReplayFailure
-                                        .unusedCOMMEvent(replayException)
-                                        .asLeft[Seq[ReportingEvent]]
-                                    )
                                 case Left(throwable) =>
-                                  ReplayFailure
-                                    .internalError(deploy, throwable)
-                                    .asLeft[Seq[ReportingEvent]]
-                                    .pure[F]
+                                  runtime.reportingSpace.revertToSoftCheckpoint(softCheckpoint) >> {
+                                    throwable match {
+                                      case replayException: ReplayException =>
+                                        Log[F]
+                                          .error(s"Failed during deploy replay: $processedDeploy")
+                                          .as(
+                                            ReplayFailure
+                                              .unusedCOMMEvent(replayException)
+                                              .asLeft[Seq[ReportingEvent]]
+                                          )
+                                      case _ =>
+                                        ReplayFailure
+                                          .internalError(deploy, throwable)
+                                          .asLeft[Seq[ReportingEvent]]
+                                          .pure[F]
+                                    }
+                                  }
                               }
                           case Left(throwable) =>
-                            ReplayFailure
-                              .internalError(deploy, throwable)
-                              .asLeft[Seq[ReportingEvent]]
-                              .pure[F]
+                            runtime.reportingSpace
+                              .revertToSoftCheckpoint(softCheckpoint)
+                              .as(
+                                ReplayFailure
+                                  .internalError(deploy, throwable)
+                                  .asLeft[Seq[ReportingEvent]]
+                              )
                         }
       } yield failureEither
     }

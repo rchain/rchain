@@ -306,10 +306,13 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log](
       failureOption <- replayEvaluateResultEither match {
                         case Right(EvaluateResult(_, replayUserErrors)) =>
                           if (isFailed != replayUserErrors.nonEmpty)
-                            ReplayFailure
-                              .replayStatusMismatch(isFailed, replayUserErrors.nonEmpty)
-                              .some
-                              .pure[F]
+                            runtime.replaySpace
+                              .revertToSoftCheckpoint(softCheckpoint)
+                              .as(
+                                ReplayFailure
+                                  .replayStatusMismatch(isFailed, replayUserErrors.nonEmpty)
+                                  .some
+                              )
                           else if (replayUserErrors.nonEmpty)
                             runtime.replaySpace
                               .revertToSoftCheckpoint(softCheckpoint)
@@ -317,15 +320,22 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log](
                           else
                             runtime.replaySpace.checkReplayData().attempt >>= {
                               case Right(_) => none[ReplayFailure].pure[F]
-                              case Left(replayException: ReplayException) =>
-                                runtime.replaySpace.revertToSoftCheckpoint(softCheckpoint) >> Log[F]
-                                  .error(s"Failed during deploy replay: $processedDeploy")
-                                  .as(ReplayFailure.unusedCOMMEvent(replayException).some)
                               case Left(throwable) =>
-                                ReplayFailure.internalError(deploy, throwable).some.pure[F]
+                                runtime.replaySpace.revertToSoftCheckpoint(softCheckpoint) >> {
+                                  throwable match {
+                                    case replayException: ReplayException =>
+                                      Log[F]
+                                        .error(s"Failed during deploy replay: $processedDeploy")
+                                        .as(ReplayFailure.unusedCOMMEvent(replayException).some)
+                                    case _ =>
+                                      ReplayFailure.internalError(deploy, throwable).some.pure[F]
+                                  }
+                                }
                             }
                         case Left(throwable) =>
-                          ReplayFailure.internalError(deploy, throwable).some.pure[F]
+                          runtime.replaySpace
+                            .revertToSoftCheckpoint(softCheckpoint)
+                            .as(ReplayFailure.internalError(deploy, throwable).some)
                       }
     } yield failureOption
   }
