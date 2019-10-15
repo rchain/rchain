@@ -22,8 +22,8 @@ import coop.rchain.rholang.interpreter.Substitute.{charge => _, _}
 import coop.rchain.rholang.interpreter.accounting._
 import coop.rchain.rholang.interpreter.errors._
 import coop.rchain.rholang.interpreter.matcher.SpatialMatcher.spatialMatchResult
-import coop.rchain.rspace.Serialize
 import coop.rchain.rspace.util._
+import coop.rchain.shared.Serialize
 import monix.eval.Coeval
 import scalapb.GeneratedMessage
 

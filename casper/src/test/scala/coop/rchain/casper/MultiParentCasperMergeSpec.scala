@@ -11,8 +11,8 @@ import coop.rchain.models.rholang.implicits._
 import coop.rchain.models.{ETuple, Par}
 import coop.rchain.p2p.EffectsTestInstances.LogicalTime
 import coop.rchain.rholang.interpreter.storage
-import coop.rchain.rspace.Serialize
 import coop.rchain.shared.ByteArrayOps._
+import coop.rchain.shared.Serialize
 import coop.rchain.shared.scalatestcontrib._
 import monix.execution.Scheduler.Implicits.global
 import org.scalatest.{FlatSpec, Inspectors, Matchers}

@@ -6,11 +6,9 @@ import java.nio.file.{Files, Path}
 import scala.collection.SortedSet
 import scala.concurrent.ExecutionContext
 import scala.util.Random
-
 import cats.effect._
 import cats.implicits._
 import cats.temp.par.Par
-
 import coop.rchain.catscontrib._
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.metrics.Metrics.Source
@@ -18,9 +16,8 @@ import coop.rchain.metrics.implicits._
 import coop.rchain.rspace.history.{Branch, HistoryRepository}
 import coop.rchain.rspace.internal._
 import coop.rchain.rspace.trace._
-import coop.rchain.shared.{Cell, Log}
+import coop.rchain.shared.{Cell, Log, Serialize}
 import coop.rchain.shared.SyncVarOps._
-
 import com.typesafe.scalalogging.Logger
 import monix.execution.atomic.AtomicAny
 import scodec.Codec

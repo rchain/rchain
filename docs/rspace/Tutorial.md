@@ -161,13 +161,13 @@ import coop.rchain.rspace.examples._
 Let's go ahead use that to make instances for our other types.
 ```scala
 scala> implicit val serializeEntry: Serialize[Entry] = makeSerializeFromSerializable[Entry]
-serializeEntry: coop.rchain.rspace.Serialize[coop.rchain.rspace.examples.AddressBookExample.Entry] = coop.rchain.rspace.examples.package$$anon$1@77f4ba3
+serializeEntry: coop.rchain.shared.Serialize[coop.rchain.rspace.examples.AddressBookExample.Entry] = coop.rchain.rspace.examples.package$$anon$1@77f4ba3
 
 scala> implicit val serializePattern: Serialize[Pattern] = makeSerializeFromSerializable[Pattern]
-serializePattern: coop.rchain.rspace.Serialize[coop.rchain.rspace.examples.AddressBookExample.Pattern] = coop.rchain.rspace.examples.package$$anon$1@62567af
+serializePattern: coop.rchain.shared.Serialize[coop.rchain.rspace.examples.AddressBookExample.Pattern] = coop.rchain.rspace.examples.package$$anon$1@62567af
 
 scala> implicit val serializePrinter: Serialize[Printer] = makeSerializeFromSerializable[Printer]
-serializePrinter: coop.rchain.rspace.Serialize[coop.rchain.rspace.examples.AddressBookExample.Printer] = coop.rchain.rspace.examples.package$$anon$1@24a9babf
+serializePrinter: coop.rchain.shared.Serialize[coop.rchain.rspace.examples.AddressBookExample.Printer] = coop.rchain.rspace.examples.package$$anon$1@24a9babf
 ```
 
 Now we will define some example `Entry`s.

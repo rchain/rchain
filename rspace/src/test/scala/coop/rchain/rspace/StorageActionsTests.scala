@@ -10,6 +10,7 @@ import coop.rchain.rspace.trace.Consume
 import coop.rchain.rspace.util._
 import coop.rchain.rspace.internal._
 import coop.rchain.rspace.history.History._
+import coop.rchain.shared.Serialize
 import org.scalatest.prop.{Checkers, GeneratorDrivenPropertyChecks}
 import scodec.Codec
 import monix.eval.Task

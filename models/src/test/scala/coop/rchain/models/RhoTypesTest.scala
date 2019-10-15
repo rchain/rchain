@@ -6,7 +6,7 @@ import coop.rchain.models.BitSetBytesMapper._
 import coop.rchain.models.Connective.ConnectiveInstance.{Empty => _}
 import coop.rchain.models.serialization.implicits._
 import coop.rchain.models.testImplicits._
-import coop.rchain.rspace.Serialize
+import coop.rchain.shared.Serialize
 import monix.eval.Coeval
 import org.scalacheck.{Arbitrary, Shrink}
 import org.scalatest.prop.PropertyChecks

@@ -3,8 +3,10 @@ package coop.rchain.rspace.trace
 import coop.rchain.rspace.StableHashProvider._
 import coop.rchain.rspace.internal._
 import cats.implicits._
-import coop.rchain.rspace.{Blake2b256Hash, Serialize}
+import coop.rchain.rspace.Blake2b256Hash
+import coop.rchain.shared.Serialize
 import coop.rchain.rspace.internal.codecSeq
+import coop.rchain.shared.Serialize
 import scodec.Codec
 import scodec.bits.ByteVector
 import scodec.codecs._

@@ -2,6 +2,7 @@ package coop.rchain.rspace
 
 import internal._
 import cats.implicits._
+import coop.rchain.shared.Serialize
 import scodec.bits.ByteVector
 import scodec.{Attempt, Codec, Encoder}
 import scodec.bits.BitVector

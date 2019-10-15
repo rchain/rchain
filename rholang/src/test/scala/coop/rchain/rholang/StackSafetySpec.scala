@@ -9,8 +9,7 @@ import coop.rchain.models.serialization.implicits._
 import coop.rchain.rholang.Resources.mkRuntime
 import coop.rchain.rholang.StackSafetySpec.findMaxRecursionDepth
 import coop.rchain.rholang.interpreter.{InterpreterUtil, ParBuilderUtil, PrettyPrinter}
-import coop.rchain.rspace.Serialize
-import coop.rchain.shared.Log
+import coop.rchain.shared.{Log, Serialize}
 import monix.eval.{Coeval, Task}
 import monix.execution.Scheduler.Implicits.global
 import org.scalatest.prop.TableDrivenPropertyChecks

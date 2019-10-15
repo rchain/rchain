@@ -23,9 +23,8 @@ import coop.rchain.rspace.history.{
 }
 import coop.rchain.rspace.trace.Consume
 import coop.rchain.rspace.test._
-import coop.rchain.shared.Cell
+import coop.rchain.shared.{Cell, Log, Serialize}
 import coop.rchain.shared.PathOps._
-import coop.rchain.shared.Log
 import monix.eval.Task
 import monix.execution.Scheduler
 import monix.execution.atomic.AtomicAny

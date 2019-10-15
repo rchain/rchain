@@ -6,6 +6,7 @@ import coop.rchain.rspace.examples.StringExamples.{Pattern, StringMatch, Strings
 import coop.rchain.rspace.history._
 import coop.rchain.rspace.internal.{Datum, WaitingContinuation}
 import coop.rchain.shared.GeneratorUtils._
+import coop.rchain.shared.Serialize
 import org.scalacheck._
 import org.scalacheck.Arbitrary._
 import scodec.bits.ByteVector

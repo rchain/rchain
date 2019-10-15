@@ -12,7 +12,8 @@ import coop.rchain.models.serialization.implicits.mkProtobufInstance
 import coop.rchain.rholang.interpreter._
 import coop.rchain.rholang.interpreter.accounting._
 import coop.rchain.rholang.interpreter.matcher._
-import coop.rchain.rspace.{Serialize, Match => StorageMatch}
+import coop.rchain.rspace.{Match => StorageMatch}
+import coop.rchain.shared.Serialize
 
 //noinspection ConvertExpressionToSAM
 package object storage {
