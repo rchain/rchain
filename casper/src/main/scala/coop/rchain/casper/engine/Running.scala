@@ -240,17 +240,13 @@ class Running[F[_]: Sync: BlockStore: CommUtil: TransportLayer: ConnectionsCell:
   private def casperAdd(peer: PeerNode)(b: BlockMessage): F[ValidBlockProcessing] = {
     import cats.instances.option._
 
-    val handleDoppelganger: (BlockMessage, Validator) => F[Unit] =
-      (bm: BlockMessage, self: Validator) =>
-        F.whenA(bm.sender == self)(
-          Log[F].warn(
-            s"There is another node $peer proposing using the same private key as you. Or did you restart your node?"
-          )
-        )
-
     validatorId.traverse_ { id =>
-      val sender = ByteString.copyFrom(id.publicKey.bytes)
-      handleDoppelganger(b, sender)
+      val self = ByteString.copyFrom(id.publicKey.bytes)
+      F.whenA(b.sender == self)(
+        Log[F].warn(
+          s"There is another node $peer proposing using the same private key as you. Or did you restart your node?"
+        )
+      )
     } >>
       casper.addBlock(b)
   }
