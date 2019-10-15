@@ -302,9 +302,9 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log](
       replayEvaluateResultEither <- evaluate(runtime.replayReducer, runtime.cost, runtime.errorLog)(
                                      processedDeploy.deploy
                                    ).attempt
-      //TODO: compare replay deploy cost to given deploy cost
       failureOption <- replayEvaluateResultEither match {
-                        case Right(EvaluateResult(_, replayUserErrors)) =>
+                        case Right(EvaluateResult(replayCost, replayUserErrors)) =>
+                          /* Regardless of success or failure, verify that deploy status' match. */
                           if (isFailed != replayUserErrors.nonEmpty)
                             runtime.replaySpace
                               .revertToSoftCheckpoint(softCheckpoint)
@@ -313,10 +313,21 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log](
                                   .replayStatusMismatch(isFailed, replayUserErrors.nonEmpty)
                                   .some
                               )
+                          /* Error-throwing Rholang programs do not have deterministic evaluation costs
+                             and event logs, so they cannot be reliably compared. */
                           else if (replayUserErrors.nonEmpty)
                             runtime.replaySpace
                               .revertToSoftCheckpoint(softCheckpoint)
                               .as(none[ReplayFailure])
+                          /* Since there are no errors, verify evaluation costs and COMM events match. */
+                          else if (cost.cost != replayCost.value)
+                            runtime.replaySpace
+                              .revertToSoftCheckpoint(softCheckpoint)
+                              .as(
+                                ReplayFailure
+                                  .replayCostMismatch(deploy, cost.cost, replayCost.value)
+                                  .some
+                              )
                           else
                             runtime.replaySpace.checkReplayData().attempt >>= {
                               case Right(_) => none[ReplayFailure].pure[F]
