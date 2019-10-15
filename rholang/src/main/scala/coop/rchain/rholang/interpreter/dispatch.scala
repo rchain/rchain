@@ -9,6 +9,7 @@ import coop.rchain.models.TaggedContinuation.TaggedCont.{Empty, ParBody, ScalaBo
 import coop.rchain.models._
 import coop.rchain.rholang.interpreter.Runtime.RhoTuplespace
 import coop.rchain.rholang.interpreter.accounting._
+import coop.rchain.rholang.interpreter.errors.InterpreterError
 
 trait Dispatch[M[_], A, K] {
   def dispatch(continuation: K, dataList: Seq[A]): M[Unit]
@@ -59,7 +60,7 @@ object RholangAndScalaDispatcher {
       cost: _cost[M],
       parallel: Parallel[M, F],
       s: Sync[M],
-      ft: FunctorTell[M, Throwable]
+      ft: FunctorTell[M, InterpreterError]
   ): (Dispatch[M, ListParWithRandom, TaggedContinuation], Reduce[M]) = {
 
     implicit lazy val dispatcher: Dispatch[M, ListParWithRandom, TaggedContinuation] =
