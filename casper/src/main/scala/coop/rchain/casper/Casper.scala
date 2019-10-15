@@ -14,6 +14,7 @@ import coop.rchain.casper.util.comm.CommUtil
 import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
 import coop.rchain.casper.util.rholang._
 import coop.rchain.catscontrib.ski.kp2
+import coop.rchain.crypto.signatures.Signed
 import coop.rchain.metrics.{Metrics, MetricsSemaphore, Span}
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.Validator.Validator
@@ -21,16 +22,12 @@ import coop.rchain.shared._
 
 sealed trait DeployError
 final case class ParsingError(details: String)          extends DeployError
-final case object MissingSignature                      extends DeployError
-final case object MissingSignatureAlgorithm             extends DeployError
 final case object MissingUser                           extends DeployError
 final case class UnknownSignatureAlgorithm(alg: String) extends DeployError
 final case object SignatureVerificationFailed           extends DeployError
 
 object DeployError {
   def parsingError(details: String): DeployError          = ParsingError(details)
-  def missingSignature: DeployError                       = MissingSignature
-  def missingSignatureAlgorithm: DeployError              = MissingSignatureAlgorithm
   def missingUser: DeployError                            = MissingUser
   def unknownSignatureAlgorithm(alg: String): DeployError = UnknownSignatureAlgorithm(alg)
   def signatureVerificationFailed: DeployError            = SignatureVerificationFailed
@@ -38,8 +35,6 @@ object DeployError {
   implicit val showDeployError: Show[DeployError] = new Show[DeployError] {
     def show(error: DeployError): String = error match {
       case ParsingError(details)          => s"Parsing error: $details"
-      case MissingSignature               => s"Missing signature"
-      case MissingSignatureAlgorithm      => s"Missing signature algorithm"
       case MissingUser                    => s"Missing user"
       case UnknownSignatureAlgorithm(alg) => s"Unknown signature algorithm '$alg'"
       case SignatureVerificationFailed    => "Signature verification failed"
@@ -50,7 +45,7 @@ object DeployError {
 trait Casper[F[_]] {
   def addBlock(b: BlockMessage): F[ValidBlockProcessing]
   def contains(hash: BlockHash): F[Boolean]
-  def deploy(d: DeployData): F[Either[DeployError, DeployId]]
+  def deploy(d: Signed[DeployData]): F[Either[DeployError, DeployId]]
   def estimator(dag: BlockDagRepresentation[F]): F[IndexedSeq[BlockHash]]
   def createBlock: F[CreateBlockStatus]
 }

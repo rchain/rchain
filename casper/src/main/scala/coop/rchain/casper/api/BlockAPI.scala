@@ -1,12 +1,10 @@
 package coop.rchain.casper.api
 
 import scala.collection.immutable
-
 import cats.Monad
 import cats.effect.{Concurrent, Sync}
 import cats.effect.concurrent.Semaphore
 import cats.implicits._
-
 import coop.rchain.blockstorage.BlockStore
 import coop.rchain.casper.engine._
 import EngineCell._
@@ -31,8 +29,8 @@ import coop.rchain.rholang.interpreter.storage.StoragePrinter
 import coop.rchain.rspace.StableHashProvider
 import coop.rchain.rspace.trace._
 import coop.rchain.shared.Log
-
 import com.google.protobuf.ByteString
+import coop.rchain.crypto.signatures.Signed
 
 object BlockAPI {
 
@@ -45,7 +43,7 @@ object BlockAPI {
   val GetBlockSource: Metrics.Source        = Metrics.Source(BlockAPIMetricsSource, "get-block")
 
   def deploy[F[_]: Monad: EngineCell: Log: Span](
-      d: DeployData
+      d: Signed[DeployData]
   ): F[ApiErr[String]] = Span[F].trace(DeploySource) {
 
     def casperDeploy(casper: MultiParentCasper[F]): F[ApiErr[String]] =
@@ -561,7 +559,7 @@ object BlockAPI {
 
   private def prettyPrintUnmatchedSends[F[_]: Concurrent](
       casper: MultiParentCasper[F],
-      deploys: Seq[DeployData]
+      deploys: Seq[Signed[DeployData]]
   ): F[String] =
     casper.getRuntimeManager >>= (
       _.withRuntimeLock(runtime => StoragePrinter.prettyPrintUnmatchedSends(deploys, runtime))

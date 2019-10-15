@@ -9,6 +9,7 @@ import com.google.protobuf.ByteString
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.protocol.deploy.v1
 import coop.rchain.crypto.hash.Blake2b512Random
+import coop.rchain.crypto.signatures.Signed
 import coop.rchain.models.Expr.ExprInstance.GInt
 
 import scala.collection.immutable.BitSet
@@ -95,6 +96,12 @@ object HashM extends HashMDerivation {
   implicit val ReceiveBindHash              = gen[ReceiveBind]
   implicit val NewHash                      = gen[New]
   implicit val MatchHash                    = gen[Match]
+  implicit def SignedHash[A: HashM] = new HashM[Signed[A]] {
+    override def hash[F[_]: Sync](value: Signed[A]): F[Int] =
+      HashM[A]
+        .hash(value.data)
+        .map(dataHash => Objects.hash(value.sig, value.sigAlgorithm, Int.box(dataHash)))
+  }
 
   implicit val GIntHash = gen[GInt] //This is only possible to derive here, b/c LongHashM is private
 

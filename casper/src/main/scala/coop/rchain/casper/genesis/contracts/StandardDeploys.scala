@@ -1,97 +1,104 @@
 package coop.rchain.casper.genesis.contracts
 
-import coop.rchain.casper.protocol.{DeployData, DeployDataProto}
+import com.google.protobuf.ByteString
+import coop.rchain.casper.protocol.DeployData
 import coop.rchain.casper.util.ProtoUtil.stringToByteString
+import coop.rchain.crypto.PrivateKey
+import coop.rchain.crypto.signatures.{Secp256k1, Signed}
+import coop.rchain.models.NormalizerEnv
 import coop.rchain.rholang.build.CompiledRholangSource
 import coop.rchain.rholang.interpreter.accounting
 
 object StandardDeploys {
   private def toDeploy(
       compiledSource: CompiledRholangSource[_],
-      user: String,
+      privateKey: String,
       timestamp: Long
-  ): DeployData = {
-    val deployData = DeployData.from(
-      DeployDataProto(
-        deployer = stringToByteString(user),
+  ): Signed[DeployData] = {
+    val sk = PrivateKey(stringToByteString(privateKey))
+    val pk = Secp256k1.toPublic(sk)
+    val deployData =
+      DeployData(
+        deployer = ByteString.copyFrom(pk.bytes),
         timestamp = timestamp,
         term = compiledSource.code,
-        phloLimit = accounting.MAX_VALUE
+        phloLimit = accounting.MAX_VALUE,
+        phloPrice = 0,
+        validAfterBlockNumber = 0
       )
-    )
 
-    deployData
+    Signed(deployData, Secp256k1, sk)
   }
 
-  def registry: DeployData = toDeploy(
+  def registry: Signed[DeployData] = toDeploy(
     CompiledRholangSource("Registry.rho"),
-    "04cc94ab15247b0db1b8219388218eb7461ac74b3d88d4da8c1816fac8e258f5e0f5db9db6bb82b0cc066589dfe77a0d7449db295dab248fb93855ba91813154a9",
+    "5a0bde2f5857124b1379c78535b07a278e3b9cefbcacc02e62ab3294c02765a1",
     1559156071321L
   )
 
-  def listOps: DeployData = toDeploy(
+  def listOps: Signed[DeployData] = toDeploy(
     CompiledRholangSource("ListOps.rho"),
-    "040126690519dc9b0f52876cb13458e15697794dd87d7c6477707c7efa4cce8a36b634eab5056bd4e3ba385ab14a638e4ac7d3b3e4968da3d66933fc04bc7038b5",
+    "867c21c6a3245865444d80e49cac08a1c11e23b35965b566bbe9f49bb9897511",
     1559156082324L
   )
-  def either: DeployData =
+  def either: Signed[DeployData] =
     toDeploy(
       CompiledRholangSource("Either.rho"),
-      "04c71f6c7b87edf4bec14f16f715ee49c6fea918549abdf06c734d384b60ba922990317cc4bf68da8c85b455a65595cf7007f1e54bfd6be26ffee53d1ea6d7406b",
+      "5248f8913f8572d8227a3c7787b54bd8263389f7209adc1422e36bb2beb160dc",
       1559156217509L
     )
-  def nonNegativeNumber: DeployData =
+  def nonNegativeNumber: Signed[DeployData] =
     toDeploy(
       CompiledRholangSource("NonNegativeNumber.rho"),
-      "04e1559d809924e564dce57e34646e155b144d2a504ce7ee519d7a5108fd42f1038d08d745e5ea21cb53d6aa7c7174a768fa373207a83bc947a20c6a02ece7a60e",
+      "e33c9f1e925819d04733db4ec8539a84507c9e9abd32822059349449fe03997d",
       1559156251792L
     )
-  def makeMint: DeployData =
+  def makeMint: Signed[DeployData] =
     toDeploy(
       CompiledRholangSource("MakeMint.rho"),
-      "0470256c078e105d2958b9cf66f2161d83368f483c0219790277fb726a459be7f56a9a48bbecf72bcaed6a3515bd0a144faf6a6a8de8f6c9b3b7dff297eb371f28",
+      "de19d53f28d4cdee74bad062342d8486a90a652055f3de4b2efa5eb2fccc9d53",
       1559156452968L
     )
 
-  def authKey: DeployData =
+  def authKey: Signed[DeployData] =
     toDeploy(
       CompiledRholangSource("AuthKey.rho"),
-      "04f4b4417f930e6fab5765ac0defcf9fce169982acfd046e7c27f9b14c0804014623c0439e5c8035e9607599a549303b5b6b90cd9685e6965278bddca65dac7510",
+      "f450b26bac63e5dd9343cd46f5fae1986d367a893cd21eedd98a4cb3ac699abc",
       1559156356769L
     )
 
-  def revVault: DeployData =
+  def revVault: Signed[DeployData] =
     toDeploy(
       CompiledRholangSource("RevVault.rho"),
-      "040f035630a5d2199184890b4b6b83440c842da0b6becca539f788f7b35d6e873561f673cd6ebe2e32236398a86f29dad992e8fba32534734300fcc5104bcfea0e",
+      "27e5718bf55dd673cc09f13c2bcf12ed7949b178aef5dcb6cd492ad422d05e9d",
       1559156183943L
     )
 
-  def multiSigRevVault: DeployData =
+  def multiSigRevVault: Signed[DeployData] =
     toDeploy(
       CompiledRholangSource("MultiSigRevVault.rho"),
-      "04fe2eb1e0e7462b1a8f64600389e1e76727f8b2d38804eaa4b48f7a7d6715130fc24d3c4dac2d8bdc19e0b49879dbaf07c30773cd9740a9d14a092ef76339207a",
+      "2a2eaa76d6fea9f502629e32b0f8eea19b9de8e2188ec0d589fcafa98fb1f031",
       1571408470880L
     )
 
-  def poSGenerator(poS: ProofOfStake): DeployData =
+  def poSGenerator(poS: ProofOfStake): Signed[DeployData] =
     toDeploy(
       poS,
-      "047b43d6548b72813b89ac1b9f9ca67624a8b372feedd71d4e2da036384a3e1236812227e524e6f237cde5f80dbb921cac12e6500791e9a9ed1254a745a816fe1f",
+      "a9585a0687761139ab3587a4938fb5ab9fcba675c79fefba889859674046d4a5",
       1559156420651L
     )
 
-  def revGenerator(vaults: Seq[Vault], supply: Long): DeployData =
+  def revGenerator(vaults: Seq[Vault], supply: Long): Signed[DeployData] =
     toDeploy(
       RevGenerator(vaults, supply),
-      "04d66ec9347960994d8ecda61cdcf9b636b2c95846c831b129ee0a41d29814dbe0073d41744b300bd4ea9827e444d7613677d19dee32710edef47957034163ac09",
+      "a06959868e39bb3a8502846686a23119716ecd001700baf9e2ecfa0dbf1a3247",
       1565818101792L
     )
 
-  def treeHashMap: DeployData =
+  def treeHashMap: Signed[DeployData] =
     toDeploy(
       CompiledRholangSource("TreeHashMap.rho"),
-      "048e5ff7f865f8fca30b2cd76b5699de5fc11bf9d807c3af98f32b684bca67b4b574976f659a65391eb240376170ffa56ecc9b8d67af386b61be36da7e368b4161",
+      "d60d63541bb98f31b834a4acf8a5ce825a91d5b6edca4c8f2a4acf6aafa17937",
       1566326330483L
     )
 

@@ -13,6 +13,7 @@ import coop.rchain.casper.protocol.{BlockMessage, DeployData, Dummies}
 import coop.rchain.casper.util.rholang.Resources.mkRuntimeManager
 import coop.rchain.casper.util.rholang.RuntimeManager
 import coop.rchain.casper.{BlockStatus, CreateBlockStatus, MultiParentCasper}
+import coop.rchain.crypto.signatures.Signed
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.Validator.Validator
 import monix.eval.Task
@@ -33,7 +34,7 @@ class NoOpsCasperEffect[F[_]: Sync: BlockStore: BlockDagStorage] private (
       _ <- BlockStore[F].put(b.blockHash, b)
     } yield BlockStatus.valid.asRight
   def contains(blockHash: BlockHash): F[Boolean] = false.pure[F]
-  def deploy(r: DeployData): F[Either[DeployError, DeployId]] =
+  def deploy(r: Signed[DeployData]): F[Either[DeployError, DeployId]] =
     Applicative[F].pure(Right(ByteString.EMPTY))
   def estimator(dag: BlockDagRepresentation[F]): F[IndexedSeq[BlockHash]] =
     estimatorFunc.pure[F]

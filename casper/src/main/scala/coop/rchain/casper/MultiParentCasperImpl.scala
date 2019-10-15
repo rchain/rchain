@@ -28,6 +28,7 @@ import coop.rchain.models.Validator.Validator
 import coop.rchain.shared._
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.finality.LastFinalizedStorage
+import coop.rchain.crypto.signatures.Signed
 
 /**
   Encapsulates mutable state of the MultiParentCasperImpl
@@ -38,7 +39,7 @@ import coop.rchain.blockstorage.finality.LastFinalizedStorage
   */
 final case class CasperState(
     blockBuffer: Set[BlockHash] = Set.empty[BlockHash],
-    deployHistory: Set[DeployData] = Set.empty[DeployData],
+    deployHistory: Set[Signed[DeployData]] = Set.empty[Signed[DeployData]],
     dependencyDag: DoublyLinkedDag[BlockHash] = BlockDependencyDag.empty
 )
 
@@ -67,7 +68,7 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Log: Time: SafetyOracle: Las
 
   //TODO: Extract hardcoded version and expirationThreshold
   private val version             = 1L
-  private val expirationThreshold = 50
+  private val expirationThreshold = Int.MaxValue
 
   private[this] val AddBlockMetricsSource =
     Metrics.Source(CasperMetricsSource, "add-block")
@@ -185,28 +186,20 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Log: Time: SafetyOracle: Las
     * @param deployData
     * @return
     */
-  private def validateDeploy(deployData: DeployData): Either[DeployError, Unit] = deployData match {
-    case d if (d.sig == ByteString.EMPTY)      => missingSignature.asLeft
-    case d if (d.sigAlgorithm == "")           => missingSignatureAlgorithm.asLeft
-    case d if (d.deployer == ByteString.EMPTY) => missingUser.asLeft
-    case _ =>
-      val maybeVerified = SignDeployment.verify(deployData)
-      maybeVerified.fold[Either[DeployError, Unit]](
-        unknownSignatureAlgorithm(deployData.sigAlgorithm).asLeft
-      ) {
-        case false => signatureVerificationFailed.asLeft
-        case true  => ().asRight
-      }
-  }
+  private def validateDeploy(deployData: DeployData): Either[DeployError, Unit] =
+    if (deployData.deployer == ByteString.EMPTY)
+      missingUser.asLeft
+    else
+      ().asRight
 
-  def deploy(d: DeployData): F[Either[DeployError, DeployId]] = {
+  def deploy(d: Signed[DeployData]): F[Either[DeployError, DeployId]] = {
     import cats.instances.either._
     import coop.rchain.models.rholang.implicits._
-    validateDeploy(d).fold(
+    validateDeploy(d.data).fold(
       _.asLeft[DeployId].pure[F],
       kp(
         InterpreterUtil
-          .mkTerm(d.term, NormalizerEnv(d))
+          .mkTerm(d.data.term, NormalizerEnv(d))
           .bitraverse(
             err => DeployError.parsingError(s"Error in parsing term: \n$err").pure[F],
             _ => addDeploy(d)
@@ -215,7 +208,7 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Log: Time: SafetyOracle: Las
     )
   }
 
-  def addDeploy(deploy: DeployData): F[DeployId] =
+  def addDeploy(deploy: Signed[DeployData]): F[DeployId] =
     for {
       _ <- Cell[F, CasperState].modify { s =>
             s.copy(deployHistory = s.deployHistory + deploy)

@@ -2,14 +2,17 @@ package coop.rchain.casper.helper
 
 import cats.Functor
 import cats.syntax.functor._
-import coop.rchain.casper.SignDeployment
 import coop.rchain.casper.protocol.DeployData
 import coop.rchain.casper.util.ConstructDeploy
 import coop.rchain.crypto.PrivateKey
+import coop.rchain.crypto.signatures.Signed
 import coop.rchain.shared.Time
 
 object BondingUtil {
-  def bondingDeploy[F[_]: Functor: Time](amount: Long, privateKey: PrivateKey): F[DeployData] =
+  def bondingDeploy[F[_]: Functor: Time](
+      amount: Long,
+      privateKey: PrivateKey
+  ): F[Signed[DeployData]] =
     ConstructDeploy
       .sourceDeployNowF(
         s"""
@@ -21,5 +24,4 @@ object BondingUtil {
          |}
          |""".stripMargin
       )
-      .map(deploy => SignDeployment.sign(privateKey, deploy))
 }

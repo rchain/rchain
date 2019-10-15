@@ -81,13 +81,13 @@ class MultiParentCasperRholangSpec extends FlatSpec with Matchers with Inspector
         block0         <- node.addBlock(registerDeploy)
         registryId <- getDataAtPrivateChannel[Effect](
                        block0,
-                       calculateUnforgeableName(registerDeploy.timestamp)
+                       calculateUnforgeableName(registerDeploy.data.timestamp)
                      )
         callDeploy <- ConstructDeploy.sourceDeployNowF(callSource(registryId.head))
         block1     <- node.addBlock(callDeploy)
         data <- getDataAtPrivateChannel[Effect](
                  block1,
-                 calculateUnforgeableName(callDeploy.timestamp)
+                 calculateUnforgeableName(callDeploy.data.timestamp)
                )
         _ = data shouldBe Seq("\"Hello, World!\"")
       } yield ()

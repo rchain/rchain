@@ -14,6 +14,7 @@ import coop.rchain.casper.util.rholang.SystemDeployPlatformFailure._
 import coop.rchain.casper.util.rholang.SystemDeployUserError._
 import coop.rchain.casper.util.{ConstructDeploy, EventConverter, ProtoUtil}
 import coop.rchain.crypto.hash.Blake2b512Random
+import coop.rchain.crypto.signatures.Signed
 import coop.rchain.metrics.Metrics.Source
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.models.BlockHash.BlockHash
@@ -45,7 +46,7 @@ trait RuntimeManager[F[_]] {
   ): F[Either[ReplayFailure, SystemDeployReplayResult[systemDeploy.Result]]]
   def captureResults(
       startHash: StateHash,
-      deploy: DeployData,
+      deploy: Signed[DeployData],
       name: String = "__SCALA__"
   ): F[Seq[Par]]
   def replayComputeState(startHash: StateHash)(
@@ -55,12 +56,12 @@ trait RuntimeManager[F[_]] {
       isGenesis: Boolean
   ): F[Either[ReplayFailure, StateHash]]
   def computeState(hash: StateHash)(
-      terms: Seq[DeployData],
+      terms: Seq[Signed[DeployData]],
       blockData: BlockData,
       invalidBlocks: Map[BlockHash, Validator]
   ): F[(StateHash, Seq[ProcessedDeploy])]
   def computeGenesis(
-      terms: Seq[DeployData],
+      terms: Seq[Signed[DeployData]],
       blockTime: Long
   ): F[(StateHash, StateHash, Seq[ProcessedDeploy])]
   def computeBonds(startHash: StateHash): F[Seq[Bond]]
@@ -253,12 +254,12 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log](
 
   def captureResults(
       start: StateHash,
-      deploy: DeployData,
+      deploy: Signed[DeployData],
       name: String = "__SCALA__"
   ): F[Seq[Par]] =
     captureResults(start, deploy, Par().withExprs(Seq(Expr(GString(name)))))
 
-  def captureResults(start: StateHash, deploy: DeployData, name: Par): F[Seq[Par]] =
+  def captureResults(start: StateHash, deploy: Signed[DeployData], name: Par): F[Seq[Par]] =
     withResetRuntimeLock(start) { runtime =>
       evaluate(runtime.reducer, runtime.cost, runtime.errorLog)(deploy)
         .ensure(
@@ -286,7 +287,7 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log](
     }
 
   def computeState(startHash: StateHash)(
-      terms: Seq[DeployData],
+      terms: Seq[Signed[DeployData]],
       blockData: BlockData,
       invalidBlocks: Map[BlockHash, Validator] = Map.empty[BlockHash, Validator]
   ): F[(StateHash, Seq[ProcessedDeploy])] =
@@ -302,7 +303,7 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log](
     }
 
   def computeGenesis(
-      terms: Seq[DeployData],
+      terms: Seq[Signed[DeployData]],
       blockTime: Long
   ): F[(StateHash, StateHash, Seq[ProcessedDeploy])] = {
     val startHash = emptyStateHash
@@ -411,8 +412,8 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log](
   private def processDeploys(
       runtime: Runtime[F],
       startHash: StateHash,
-      terms: Seq[DeployData],
-      processDeploy: DeployData => F[ProcessedDeploy]
+      terms: Seq[Signed[DeployData]],
+      processDeploy: Signed[DeployData] => F[ProcessedDeploy]
   ): F[(StateHash, Seq[ProcessedDeploy])] = {
     import cats.instances.list._
 
@@ -426,7 +427,7 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log](
   }
 
   private def processDeploy(runtime: Runtime[F])(
-      deploy: DeployData
+      deploy: Signed[DeployData]
   ): F[ProcessedDeploy] = Span[F].withMarks("process-deploy") {
     for {
       fallback                     <- runtime.space.createSoftCheckpoint()
@@ -533,17 +534,17 @@ object RuntimeManager {
       reducer: Reduce[F],
       costState: _cost[F],
       errorLog: ErrorLog[F]
-  )(deploy: DeployData): F[EvaluateResult] = {
-    implicit val rand: Blake2b512Random = Blake2b512Random(
-      ProtoUtil.stripDeployData(deploy).toProto.toByteArray
-    )
+  )(deploy: Signed[DeployData]): F[EvaluateResult] = {
+    val seed =
+      DeployDataProto().withDeployer(deploy.data.deployer).withTimestamp(deploy.data.timestamp)
+    implicit val rand: Blake2b512Random = Blake2b512Random(DeployDataProto.toByteArray(seed))
     implicit val cost: _cost[F] = costState
     import coop.rchain.models.rholang.implicits._
     Interpreter[F].injAttempt(
       reducer,
       errorLog,
-      deploy.term,
-      Cost(deploy.phloLimit),
+      deploy.data.term,
+      Cost(deploy.data.phloLimit),
       NormalizerEnv(deploy).toEnv
     )
   }

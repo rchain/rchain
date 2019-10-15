@@ -4,6 +4,7 @@ import com.google.protobuf.ByteString
 import coop.rchain.casper.helper.TestNode
 import coop.rchain.casper.helper.TestNode._
 import coop.rchain.casper.util.ConstructDeploy
+import coop.rchain.crypto.signatures.{Secp256k1, Signed}
 import coop.rchain.p2p.EffectsTestInstances.LogicalTime
 import coop.rchain.shared.scalatestcontrib._
 import monix.execution.Scheduler.Implicits.global
@@ -26,33 +27,7 @@ class MultiParentCasperDeploySpec extends FlatSpec with Matchers with Inspectors
         deploy   <- ConstructDeploy.basicDeployData[Effect](0)
         res      <- MultiParentCasper[Effect].deploy(deploy)
         deployId = res.right.get
-      } yield deployId shouldBe ConstructDeploy.sign(deploy).sig
-    }
-  }
-
-  it should "not allow deploy if deploy is missing signature" in effectTest {
-    TestNode.standaloneEff(genesis).use { node =>
-      val casper           = node.casperEff
-      implicit val timeEff = new LogicalTime[Effect]
-
-      for {
-        correctDeploy   <- ConstructDeploy.basicDeployData[Effect](0)
-        incorrectDeploy = correctDeploy.copy(sig = ByteString.EMPTY)
-        deployResult    <- casper.deploy(incorrectDeploy)
-      } yield deployResult should be(Left(MissingSignature))
-    }
-  }
-
-  it should "not allow deploy if deploy is missing signature algorithm" in effectTest {
-    TestNode.standaloneEff(genesis).use { node =>
-      val casper           = node.casperEff
-      implicit val timeEff = new LogicalTime[Effect]
-
-      for {
-        correctDeploy   <- ConstructDeploy.basicDeployData[Effect](0)
-        incorrectDeploy = correctDeploy.copy(sigAlgorithm = "")
-        deployResult    <- casper.deploy(incorrectDeploy)
-      } yield deployResult should be(Left(MissingSignatureAlgorithm))
+      } yield deployId shouldBe deploy.sig
     }
   }
 
@@ -62,37 +37,14 @@ class MultiParentCasperDeploySpec extends FlatSpec with Matchers with Inspectors
       implicit val timeEff = new LogicalTime[Effect]
 
       for {
-        correctDeploy   <- ConstructDeploy.basicDeployData[Effect](0)
-        incorrectDeploy = correctDeploy.copy(deployer = ByteString.EMPTY)
-        deployResult    <- casper.deploy(incorrectDeploy)
-      } yield deployResult should be(Left(MissingUser))
-    }
-  }
-
-  it should "not allow deploy if deploy is holding non-existing algorithm" in effectTest {
-    TestNode.standaloneEff(genesis).use { node =>
-      val casper           = node.casperEff
-      implicit val timeEff = new LogicalTime[Effect]
-
-      for {
-        correctDeploy   <- ConstructDeploy.basicDeployData[Effect](0)
-        incorrectDeploy = correctDeploy.copy(sigAlgorithm = "SOME_RANDOME_STUFF")
-        deployResult    <- casper.deploy(incorrectDeploy)
-      } yield deployResult should be(Left(UnknownSignatureAlgorithm("SOME_RANDOME_STUFF")))
-    }
-  }
-
-  it should "not allow deploy if deploy is incorrectly signed" in effectTest {
-    TestNode.standaloneEff(genesis).use { node =>
-      val casper           = node.casperEff
-      implicit val timeEff = new LogicalTime[Effect]
-
-      for {
         correctDeploy <- ConstructDeploy.basicDeployData[Effect](0)
-        incorrectDeploy = correctDeploy
-          .copy(sig = ByteString.copyFrom(correctDeploy.sig.toByteArray.reverse))
+        incorrectDeploy = Signed(
+          correctDeploy.data.copy(deployer = ByteString.EMPTY),
+          Secp256k1,
+          ConstructDeploy.defaultSec
+        )
         deployResult <- casper.deploy(incorrectDeploy)
-      } yield deployResult should be(Left(SignatureVerificationFailed))
+      } yield deployResult should be(Left(MissingUser))
     }
   }
 
