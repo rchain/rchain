@@ -295,7 +295,7 @@ object ReportingCasper {
                                        processedDeploy.deploy
                                      ).attempt
         failureEither <- replayEvaluateResultEither match {
-                          case Right(EvaluateResult(_, replayUserErrors)) =>
+                          case Right(EvaluateResult(replayCost, replayUserErrors)) =>
                             if (isFailed != replayUserErrors.nonEmpty)
                               runtime.reportingSpace
                                 .revertToSoftCheckpoint(softCheckpoint)
@@ -308,6 +308,14 @@ object ReportingCasper {
                               runtime.reportingSpace
                                 .revertToSoftCheckpoint(softCheckpoint) >> runtime.reportingSpace.getReport
                                 .map(_.asRight[ReplayFailure])
+                            else if (cost.cost != replayCost.value)
+                              runtime.reportingSpace
+                                .revertToSoftCheckpoint(softCheckpoint)
+                                .as(
+                                  ReplayFailure
+                                    .replayCostMismatch(deploy, cost.cost, replayCost.value)
+                                    .asLeft[Seq[ReportingEvent]]
+                                )
                             else
                               runtime.reportingSpace.checkReplayData().attempt >>= {
                                 case Right(_) =>

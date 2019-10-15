@@ -121,6 +121,12 @@ object InterpreterUtil {
                 s"Found replay exception while processing ${PrettyPrinter.buildString(deploy)}: ${replayException.getMessage}"
               )
               .as(none[StateHash].asRight[BlockError])
+          case ReplayCostMismatch(deploy, initialCost, replayCost) =>
+            Log[F]
+              .warn(
+                s"Found replay cost mismatch while processing ${PrettyPrinter.buildString(deploy)}: initial deploy cost = $initialCost, replay deploy cost = $replayCost"
+              )
+              .as(none[StateHash].asRight[BlockError])
         }
       case Right(computedStateHash) =>
         if (tsHash == computedStateHash) {
