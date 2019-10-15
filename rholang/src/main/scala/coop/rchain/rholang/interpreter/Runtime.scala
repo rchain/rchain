@@ -2,31 +2,32 @@ package coop.rchain.rholang.interpreter
 
 import java.nio.file.{Files, Path}
 
-import scala.concurrent.ExecutionContext
 import cats._
 import cats.effect._
 import cats.effect.concurrent.Ref
 import cats.implicits._
 import cats.mtl.FunctorTell
 import cats.temp.par
+import com.google.protobuf.ByteString
 import coop.rchain.crypto.hash.Blake2b512Random
-import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.metrics.Metrics.Source
-import coop.rchain.models._
+import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.models.Expr.ExprInstance.GString
 import coop.rchain.models.TaggedContinuation.TaggedCont.ScalaBodyRef
 import coop.rchain.models.Var.VarInstance.FreeVar
+import coop.rchain.models._
 import coop.rchain.models.rholang.implicits._
+import coop.rchain.rholang.RholangMetricsSource
 import coop.rchain.rholang.interpreter.Runtime._
 import coop.rchain.rholang.interpreter.accounting.{noOpCostLog, _}
-import coop.rchain.rholang.interpreter.errors.SetupError
-import coop.rchain.rholang.interpreter.storage.ChargingRSpace
-import coop.rchain.rholang.RholangMetricsSource
-import coop.rchain.rspace.{Match, RSpace, _}
+import coop.rchain.rholang.interpreter.errors.InterpreterError
 import coop.rchain.rholang.interpreter.registry.RegistryBootstrap
-import coop.rchain.shared.Log
-import com.google.protobuf.ByteString
+import coop.rchain.rholang.interpreter.storage.ChargingRSpace
 import coop.rchain.rspace.history.HistoryRepository
+import coop.rchain.rspace.{Match, RSpace, _}
+import coop.rchain.shared.Log
+
+import scala.concurrent.ExecutionContext
 
 class Runtime[F[_]: Sync] private (
     val reducer: Reduce[F],
@@ -38,7 +39,7 @@ class Runtime[F[_]: Sync] private (
     val blockData: Ref[F, BlockData],
     val invalidBlocks: InvalidBlocks[F]
 ) extends HasCost[F] {
-  def readAndClearErrorVector(): F[Vector[Throwable]] = errorLog.readAndClearErrorVector()
+  def readAndClearErrorVector(): F[Vector[InterpreterError]] = errorLog.readAndClearErrorVector()
   def close(): F[Unit] =
     for {
       _ <- space.close()
@@ -330,7 +331,7 @@ object Runtime {
       invalidBlocks: InvalidBlocks[F],
       extraSystemProcesses: Seq[SystemProcess.Definition[F]],
       urnMap: Map[String, Par]
-  )(implicit ft: FunctorTell[F, Throwable], cost: _cost[F], P: Parallel[F, M]): Reduce[F] = {
+  )(implicit ft: FunctorTell[F, InterpreterError], cost: _cost[F], P: Parallel[F, M]): Reduce[F] = {
     lazy val replayDispatchTable: RhoDispatchMap[F] =
       dispatchTableCreator(
         chargingRSpace,
@@ -367,9 +368,9 @@ object Runtime {
       implicit P: Parallel[F, M],
       cost: _cost[F]
   ): F[Runtime[F]] = {
-    val errorLog                               = new ErrorLog[F]()
-    implicit val ft: FunctorTell[F, Throwable] = errorLog
-    val (space, replaySpace)                   = spaceAndReplay
+    val errorLog                                      = new ErrorLog[F]()
+    implicit val ft: FunctorTell[F, InterpreterError] = errorLog
+    val (space, replaySpace)                          = spaceAndReplay
     for {
       mapsAndRefs                                     <- setupMapsAndRefs(extraSystemProcesses)
       (blockDataRef, invalidBlocks, urnMap, procDefs) = mapsAndRefs

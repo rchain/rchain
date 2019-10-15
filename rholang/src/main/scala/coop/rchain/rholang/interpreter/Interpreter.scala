@@ -4,12 +4,14 @@ import cats.effect._
 import cats.implicits._
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.rholang.interpreter.accounting._
+import coop.rchain.rholang.interpreter.errors.{InterpreterError, OutOfPhlogistonsError}
 
-final case class EvaluateResult(cost: Cost, errors: Vector[Throwable])
+final case class EvaluateResult(cost: Cost, errors: Vector[InterpreterError])
 
 trait Interpreter[F[_]] {
 
   def evaluate(runtime: Runtime[F], term: String, normalizerEnv: NormalizerEnv): F[EvaluateResult]
+
   def evaluate(
       runtime: Runtime[F],
       term: String,
@@ -50,11 +52,17 @@ object Interpreter {
           normalizerEnv: NormalizerEnv
       ): F[EvaluateResult] = {
         implicit val rand: Blake2b512Random = Blake2b512Random(128)
-        for {
-          checkpoint <- runtime.space.createSoftCheckpoint()
-          res        <- injAttempt(runtime.reducer, runtime.errorLog, term, initialPhlo, normalizerEnv)
-          _          <- if (res.errors.nonEmpty) runtime.space.revertToSoftCheckpoint(checkpoint) else S.unit
-        } yield res
+        runtime.space.createSoftCheckpoint() >>= { checkpoint =>
+          injAttempt(runtime.reducer, runtime.errorLog, term, initialPhlo, normalizerEnv).attempt >>= {
+            case Right(evaluateResult) =>
+              if (evaluateResult.errors.nonEmpty)
+                runtime.space.revertToSoftCheckpoint(checkpoint).as(evaluateResult)
+              else evaluateResult.pure[F]
+            case Left(throwable) =>
+              runtime.space.revertToSoftCheckpoint(checkpoint) >> throwable
+                .raiseError[F, EvaluateResult]
+          }
+        }
       }
 
       def injAttempt(
@@ -68,26 +76,38 @@ object Interpreter {
         for {
           _           <- C.set(initialPhlo)
           parseResult <- charge[F](parsingCost).attempt
-          res <- parseResult match {
-                  case Right(_) =>
-                    ParBuilder[F].buildNormalizedTerm(term, normalizerEnv).attempt.flatMap {
-                      case Right(parsed) =>
-                        for {
-                          result    <- reducer.inj(parsed).attempt
-                          phlosLeft <- C.get
-                          oldErrors <- errorLog.readAndClearErrorVector()
-                          newErrors = result.swap.toSeq.toVector
-                          allErrors = oldErrors |+| newErrors
-                        } yield EvaluateResult(initialPhlo - phlosLeft, allErrors)
-                      case Left(error) =>
-                        EvaluateResult(parsingCost, Vector(error)).pure[F]
-                    }
-                  case Left(error) =>
-                    EvaluateResult(parsingCost, Vector(error)).pure[F]
-                }
-        } yield res
-
+          evaluateResult <- parseResult match {
+                             case Right(_) =>
+                               ParBuilder[F].buildNormalizedTerm(term, normalizerEnv).attempt >>= {
+                                 case Right(parsed) =>
+                                   for {
+                                     injResultEither   <- reducer.inj(parsed).attempt
+                                     phlosLeft         <- C.get
+                                     interpreterErrors <- errorLog.readAndClearErrorVector()
+                                     evaluateResult <- injResultEither.swap.toOption match {
+                                                        case Some(OutOfPhlogistonsError) =>
+                                                          EvaluateResult(
+                                                            initialPhlo - phlosLeft,
+                                                            OutOfPhlogistonsError +: interpreterErrors
+                                                          ).pure[F]
+                                                        case Some(throwable) =>
+                                                          throwable.raiseError[F, EvaluateResult]
+                                                        case None =>
+                                                          EvaluateResult(
+                                                            initialPhlo - phlosLeft,
+                                                            interpreterErrors
+                                                          ).pure[F]
+                                                      }
+                                   } yield evaluateResult
+                                 case Left(interpreterError: InterpreterError) =>
+                                   EvaluateResult(parsingCost, Vector(interpreterError)).pure[F]
+                                 case Left(throwable) => throwable.raiseError[F, EvaluateResult]
+                               }
+                             case Left(interpreterError: InterpreterError) =>
+                               EvaluateResult(parsingCost, Vector(interpreterError)).pure[F]
+                             case Left(throwable) => throwable.raiseError[F, EvaluateResult]
+                           }
+        } yield evaluateResult
       }
-
     }
 }

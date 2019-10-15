@@ -67,6 +67,7 @@ import coop.rchain.rspace.ReportingRspace.{
 }
 import coop.rchain.shared.Log
 import ReportingCasperData._
+import coop.rchain.rholang.interpreter.errors.InterpreterError
 
 import scala.concurrent.ExecutionContext
 
@@ -349,7 +350,7 @@ class ReportingRuntime[F[_]: Sync](
     val blockData: Ref[F, BlockData],
     val invalidBlocks: Runtime.InvalidBlocks[F]
 ) extends HasCost[F] {
-  def readAndClearErrorVector(): F[Vector[Throwable]] = errorLog.readAndClearErrorVector()
+  def readAndClearErrorVector(): F[Vector[InterpreterError]] = errorLog.readAndClearErrorVector()
   def close(): F[Unit] =
     for {
       _ <- reportingSpace.close()
@@ -380,8 +381,8 @@ object ReportingRuntime {
       implicit P: Parallel[F, M],
       cost: _cost[F]
   ): F[ReportingRuntime[F]] = {
-    val errorLog                               = new ErrorLog[F]()
-    implicit val ft: FunctorTell[F, Throwable] = errorLog
+    val errorLog                                      = new ErrorLog[F]()
+    implicit val ft: FunctorTell[F, InterpreterError] = errorLog
     for {
       mapsAndRefs                                     <- setupMapsAndRefs(extraSystemProcesses)
       (blockDataRef, invalidBlocks, urnMap, procDefs) = mapsAndRefs
