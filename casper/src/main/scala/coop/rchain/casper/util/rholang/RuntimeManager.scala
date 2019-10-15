@@ -268,7 +268,7 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log](
         deploy,
         Cost.toProto(cost),
         checkpoint.log,
-        DeployStatus.fromErrors(errors)
+        errors.nonEmpty
       )
       _ <- if (errors.nonEmpty) runtime.space.revertToSoftCheckpoint(fallback)
           else Applicative[F].unit
@@ -312,8 +312,8 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log](
                case int: InternalErrors =>
                  (deploy.some, int: Failed).some.pure[F]
                case replayStatus =>
-                 if (status.isFailed != replayStatus.isFailed)
-                   (deploy.some, ReplayStatusMismatch(replayStatus, status): Failed).some
+                 if (isFailed != replayStatus.isFailed)
+                   (deploy.some, ReplayStatusMismatch(replayStatus.isFailed, isFailed): Failed).some
                      .pure[F]
                  else if (errors.nonEmpty)
                    runtime.replaySpace.revertToSoftCheckpoint(softCheckpoint) >> none[ReplayFailure]

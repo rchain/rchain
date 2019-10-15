@@ -9,7 +9,7 @@ final case class InternalProcessedDeploy(
     deploy: DeployData,
     cost: PCost,
     deployLog: Seq[trace.Event],
-    status: DeployStatus
+    isFailed: Boolean
 ) {
 
   def toProcessedDeploy: ProcessedDeploy =
@@ -17,7 +17,7 @@ final case class InternalProcessedDeploy(
       deploy = deploy,
       cost = cost,
       deployLog = deployLog.map(EventConverter.toCasperEvent).toList,
-      errored = status.isFailed
+      errored = isFailed
     )
 
 }
@@ -29,6 +29,6 @@ object InternalProcessedDeploy {
       pd.deploy,
       pd.cost,
       pd.deployLog.map(EventConverter.toRspaceEvent),
-      if (pd.errored) UnknownFailure else Succeeded
+      pd.errored
     )
 }

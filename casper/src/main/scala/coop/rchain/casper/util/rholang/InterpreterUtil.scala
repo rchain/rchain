@@ -114,10 +114,10 @@ object InterpreterUtil {
           case UserErrors(errors: Seq[Throwable]) =>
             Log[F].warn(s"Found user error(s) ${errors.map(_.getMessage).mkString("\n")}") >>
               none[StateHash].asRight[BlockError].pure
-          case ReplayStatusMismatch(replay: DeployStatus, orig: DeployStatus) =>
+          case ReplayStatusMismatch(replayFailed, initialFailed) =>
             Log[F]
               .warn(
-                s"Found replay status mismatch; replay failure is ${replay.isFailed} and orig failure is ${orig.isFailed}"
+                s"Found replay status mismatch; replay failure is $replayFailed and orig failure is $initialFailed"
               )
               .as(none[StateHash].asRight[BlockError])
           case UnknownFailure =>
