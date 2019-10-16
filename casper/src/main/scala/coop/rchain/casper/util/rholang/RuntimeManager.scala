@@ -298,59 +298,40 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log](
       _              <- runtime.replaySpace.rig(processedDeploy.deployLog)
       softCheckpoint <- runtime.replaySpace.createSoftCheckpoint()
       _              <- Span[F].mark("before-replay-deploy-compute-effect")
-      replayEvaluateResultEither <- evaluate(runtime.replayReducer, runtime.cost, runtime.errorLog)(
-                                     processedDeploy.deploy
-                                   ).attempt
-      failureOption <- replayEvaluateResultEither match {
-                        case Right(EvaluateResult(replayCost, replayUserErrors)) =>
+      failureOption <- EitherT
+                        .liftF(
+                          evaluate(runtime.replayReducer, runtime.cost, runtime.errorLog)(
+                            processedDeploy.deploy
+                          )
+                        )
+                        .ensureOr(
                           /* Regardless of success or failure, verify that deploy status' match. */
-                          if (isFailed != replayUserErrors.nonEmpty)
-                            runtime.replaySpace
-                              .revertToSoftCheckpoint(softCheckpoint)
-                              .as(
-                                ReplayFailure
-                                  .replayStatusMismatch(isFailed, replayUserErrors.nonEmpty)
-                                  .some
-                              )
-                          /* Error-throwing Rholang programs do not have deterministic evaluation costs
-                             and event logs, so they cannot be reliably compared. */
-                          else if (replayUserErrors.nonEmpty)
-                            runtime.replaySpace
-                              .revertToSoftCheckpoint(softCheckpoint)
-                              .as(none[ReplayFailure])
-                          /* Since there are no errors, verify evaluation costs and COMM events match. */
-                          else if (cost.cost != replayCost.value)
-                            runtime.replaySpace
-                              .revertToSoftCheckpoint(softCheckpoint)
-                              .as(
-                                ReplayFailure
-                                  .replayCostMismatch(deploy, cost.cost, replayCost.value)
-                                  .some
-                              )
-                          else
-                            runtime.replaySpace.checkReplayData().attempt >>= {
-                              case Right(_) => none[ReplayFailure].pure[F]
-                              case Left(throwable) =>
-                                runtime.replaySpace.revertToSoftCheckpoint(softCheckpoint) >> {
-                                  throwable match {
-                                    case replayException: ReplayException =>
-                                      ReplayFailure
-                                        .unusedCOMMEvent(deploy, replayException)
-                                        .some
-                                        .pure[F]
-                                    case _ =>
-                                      ReplayFailure
-                                        .internalError(deploy, throwable)
-                                        .some
-                                        .pure[F]
-                                  }
-                                }
-                            }
-                        case Left(throwable) =>
-                          runtime.replaySpace
-                            .revertToSoftCheckpoint(softCheckpoint)
-                            .as(ReplayFailure.internalError(deploy, throwable).some)
-                      }
+                          result => ReplayFailure.replayStatusMismatch(isFailed, result.isFailed)
+                        )(result => isFailed == result.isFailed)
+                        .ensureOr(
+                          result =>
+                            /* Since there are no errors, verify evaluation costs and COMM events match. */
+                            ReplayFailure.replayCostMismatch(deploy, cost.cost, result.cost.value)
+                        )(result => result.isFailed || cost.cost == result.cost.value)
+                        .semiflatMap(
+                          result =>
+                            if (result.isFailed)
+                              /* Since the state of `replaySpace` is reset on each invocation of `replayComputeState`,
+                                 and `ReplayFailure`s mean that block processing is cancelled upstream, we only need to
+                                 reset state if the replay effects of valid deploys need to be discarded. */
+                              /* Error-throwing Rholang programs do not have deterministic evaluation costs
+                                 and event logs, so they cannot be reliably compared. */
+                              runtime.replaySpace.revertToSoftCheckpoint(softCheckpoint)
+                            else runtime.replaySpace.checkReplayData()
+                        )
+                        .swap
+                        .toOption
+                        .value
+                        .recover {
+                          case replayException: ReplayException =>
+                            ReplayFailure.unusedCOMMEvent(deploy, replayException).some
+                          case throwable => ReplayFailure.internalError(deploy, throwable).some
+                        }
     } yield failureOption
   }
 }

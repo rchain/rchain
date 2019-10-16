@@ -7,7 +7,9 @@ import coop.rchain.models.NormalizerEnv.NormalizerEnv
 import coop.rchain.rholang.interpreter.accounting._
 import coop.rchain.rholang.interpreter.errors.{InterpreterError, OutOfPhlogistonsError}
 
-final case class EvaluateResult(cost: Cost, errors: Vector[InterpreterError])
+final case class EvaluateResult(cost: Cost, errors: Vector[InterpreterError]) {
+  val isFailed: Boolean = errors.nonEmpty
+}
 
 trait Interpreter[F[_]] {
 

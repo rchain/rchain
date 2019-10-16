@@ -1,17 +1,18 @@
 package coop.rchain.casper
 
 import cats.data.EitherT
-import cats.{Monad, Parallel}
 import cats.effect.concurrent.{MVar, Ref}
-import cats.implicits._
 import cats.effect.{Concurrent, ContextShift, Sync}
+import cats.implicits._
 import cats.mtl.FunctorTell
 import cats.temp.par
 import cats.temp.par.{Par => CatsPar}
+import cats.{Applicative, Monad, Parallel}
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockStore
 import coop.rchain.blockstorage.dag.{BlockDagRepresentation, BlockDagStorage}
 import coop.rchain.casper.ReportingCasper.RhoReportingRspace
+import coop.rchain.casper.ReportingCasperData._
 import coop.rchain.casper.protocol.{BlockMessage, DeployData}
 import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
@@ -23,18 +24,10 @@ import coop.rchain.casper.util.rholang.{
 }
 import coop.rchain.metrics.Metrics.Source
 import coop.rchain.metrics.{Metrics, Span}
-import coop.rchain.models.{BindPattern, ListParWithRandom, Par, TaggedContinuation}
 import coop.rchain.models.BlockHash._
 import coop.rchain.models.TaggedContinuation.TaggedCont.{Empty, ParBody, ScalaBodyRef}
+import coop.rchain.models.{BindPattern, ListParWithRandom, Par, TaggedContinuation}
 import coop.rchain.rholang.RholangMetricsSource
-import coop.rchain.rholang.interpreter.{
-  ErrorLog,
-  EvaluateResult,
-  HasCost,
-  Reduce,
-  Runtime,
-  PrettyPrinter => RhoPrinter
-}
 import coop.rchain.rholang.interpreter.Runtime.{
   setupMapsAndRefs,
   setupReducer,
@@ -43,27 +36,32 @@ import coop.rchain.rholang.interpreter.Runtime.{
   SystemProcess
 }
 import coop.rchain.rholang.interpreter.accounting.{_cost, CostAccounting}
-import coop.rchain.rspace.{
-  Blake2b256Hash,
-  HotStore,
-  RSpace,
-  ReplayException,
-  ReportingRspace,
-  Match => RSpaceMatch
-}
-import coop.rchain.rspace.history.Branch
-import monix.execution.atomic.AtomicAny
+import coop.rchain.rholang.interpreter.errors.InterpreterError
 import coop.rchain.rholang.interpreter.storage._
+import coop.rchain.rholang.interpreter.{
+  ErrorLog,
+  EvaluateResult,
+  HasCost,
+  Reduce,
+  Runtime,
+  PrettyPrinter => RhoPrinter
+}
 import coop.rchain.rspace.ReportingRspace.{
   ReportingComm,
   ReportingConsume,
   ReportingEvent,
   ReportingProduce
 }
+import coop.rchain.rspace.history.Branch
+import coop.rchain.rspace.{
+  Blake2b256Hash,
+  HotStore,
+  ReplayException,
+  ReportingRspace,
+  Match => RSpaceMatch
+}
 import coop.rchain.shared.Log
-import ReportingCasperData._
-import cats.syntax.all.none
-import coop.rchain.rholang.interpreter.errors.InterpreterError
+import monix.execution.atomic.AtomicAny
 
 import scala.concurrent.ExecutionContext
 
@@ -291,60 +289,37 @@ object ReportingCasper {
       for {
         _              <- runtime.reportingSpace.rig(processedDeploy.deployLog)
         softCheckpoint <- runtime.reportingSpace.createSoftCheckpoint()
-        replayEvaluateResultEither <- computeEffect(runtime, runtime.replayReducer)(
-                                       processedDeploy.deploy
-                                     ).attempt
-        failureEither <- replayEvaluateResultEither match {
-                          case Right(EvaluateResult(replayCost, replayUserErrors)) =>
-                            if (isFailed != replayUserErrors.nonEmpty)
-                              runtime.reportingSpace
-                                .revertToSoftCheckpoint(softCheckpoint)
-                                .as(
-                                  ReplayFailure
-                                    .replayStatusMismatch(isFailed, replayUserErrors.nonEmpty)
-                                    .asLeft[Seq[ReportingEvent]]
-                                )
-                            else if (replayUserErrors.nonEmpty)
-                              runtime.reportingSpace
-                                .revertToSoftCheckpoint(softCheckpoint) >> runtime.reportingSpace.getReport
-                                .map(_.asRight[ReplayFailure])
-                            else if (cost.cost != replayCost.value)
-                              runtime.reportingSpace
-                                .revertToSoftCheckpoint(softCheckpoint)
-                                .as(
-                                  ReplayFailure
-                                    .replayCostMismatch(deploy, cost.cost, replayCost.value)
-                                    .asLeft[Seq[ReportingEvent]]
-                                )
-                            else
-                              runtime.reportingSpace.checkReplayData().attempt >>= {
-                                case Right(_) =>
-                                  runtime.reportingSpace.getReport.map(_.asRight[ReplayFailure])
-                                case Left(throwable) =>
-                                  runtime.reportingSpace.revertToSoftCheckpoint(softCheckpoint) >> {
-                                    throwable match {
-                                      case replayException: ReplayException =>
-                                        ReplayFailure
-                                          .unusedCOMMEvent(deploy, replayException)
-                                          .asLeft[Seq[ReportingEvent]]
-                                          .pure[F]
-                                      case _ =>
-                                        ReplayFailure
-                                          .internalError(deploy, throwable)
-                                          .asLeft[Seq[ReportingEvent]]
-                                          .pure[F]
-                                    }
-                                  }
-                              }
-                          case Left(throwable) =>
-                            runtime.reportingSpace
-                              .revertToSoftCheckpoint(softCheckpoint)
-                              .as(
-                                ReplayFailure
-                                  .internalError(deploy, throwable)
-                                  .asLeft[Seq[ReportingEvent]]
-                              )
-                        }
+        failureEither <- EitherT
+                          .liftF(
+                            computeEffect(runtime, runtime.replayReducer)(
+                              processedDeploy.deploy
+                            )
+                          )
+                          .ensureOr(
+                            result => ReplayFailure.replayStatusMismatch(isFailed, result.isFailed)
+                          )(result => isFailed == result.isFailed)
+                          .ensureOr(
+                            result =>
+                              ReplayFailure.replayCostMismatch(deploy, cost.cost, result.cost.value)
+                          )(result => result.isFailed || cost.cost == result.cost.value)
+                          .semiflatMap(
+                            result =>
+                              if (result.isFailed)
+                                runtime.reportingSpace.revertToSoftCheckpoint(softCheckpoint)
+                              else runtime.reportingSpace.checkReplayData()
+                          )
+                          .semiflatMap(_ => runtime.reportingSpace.getReport)
+                          .value
+                          .recover {
+                            case replayException: ReplayException =>
+                              ReplayFailure
+                                .unusedCOMMEvent(deploy, replayException)
+                                .asLeft[Seq[ReportingEvent]]
+                            case throwable =>
+                              ReplayFailure
+                                .internalError(deploy, throwable)
+                                .asLeft[Seq[ReportingEvent]]
+                          }
       } yield failureEither
     }
 
