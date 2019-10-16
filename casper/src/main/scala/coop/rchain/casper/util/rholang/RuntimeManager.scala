@@ -240,11 +240,8 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log](
     import cats.instances.list._
 
     for {
-      _ <- runtime.space.reset(Blake2b256Hash.fromByteString(startHash))
-      res <- terms.toList
-              .foldM(Seq.empty[InternalProcessedDeploy]) {
-                case (results, deploy) => processDeploy(deploy).map(results :+ _)
-              }
+      _               <- runtime.space.reset(Blake2b256Hash.fromByteString(startHash))
+      res             <- terms.toList.traverse(processDeploy)
       _               <- Span[F].mark("before-process-deploys-create-checkpoint")
       finalCheckpoint <- runtime.space.createCheckpoint()
       finalStateHash  = finalCheckpoint.root
