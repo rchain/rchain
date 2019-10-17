@@ -57,7 +57,9 @@ object HashSetCasperActions {
           proofOfStake = ProofOfStake(
             minimumBond = 0L,
             maximumBond = Long.MaxValue,
-            validators = bonds.toSeq.map(Validator.tupled)
+            validators = bonds.toSeq.map(Validator.tupled),
+            epochLength = 10000,
+            quarantineLength = 50000
           ),
           timestamp = 0L,
           vaults = bonds.toList.map {

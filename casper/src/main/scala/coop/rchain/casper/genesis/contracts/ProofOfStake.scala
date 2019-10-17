@@ -12,8 +12,8 @@ final case class ProofOfStake(
     minimumBond: Long,
     maximumBond: Long,
     validators: Seq[Validator],
-    epochLength: Int = 10000,
-    quarantineLength: Int = 50000
+    epochLength: Int,
+    quarantineLength: Int
 ) extends CompiledRholangTemplate(
       "PoS.rhox",
       NormalizerEnv(

@@ -35,6 +35,8 @@ final case class BlockApproverProtocol private (
     bonds: Map[PublicKey, Long],
     minimumBond: Long,
     maximumBond: Long,
+    epochLength: Int,
+    quarantineLength: Int,
     requiredSigs: Int
 ) {
   implicit private val logSource: LogSource = LogSource(this.getClass)
@@ -53,7 +55,9 @@ final case class BlockApproverProtocol private (
         vaults,
         _bonds,
         minimumBond,
-        maximumBond
+        maximumBond,
+        epochLength,
+        quarantineLength
       )
       .flatMap {
         case Right(_) =>
@@ -80,6 +84,8 @@ object BlockApproverProtocol {
       bonds: Map[PublicKey, Long],
       minimumBond: Long,
       maximumBond: Long,
+      epochLength: Int,
+      quarantineLength: Int,
       requiredSigs: Int
   )(implicit monadError: MonadError[F, Throwable]): F[BlockApproverProtocol] =
     if (bonds.size > requiredSigs)
@@ -90,6 +96,8 @@ object BlockApproverProtocol {
         bonds,
         minimumBond,
         maximumBond,
+        epochLength,
+        quarantineLength,
         requiredSigs
       ).pure[F]
     else
@@ -119,7 +127,9 @@ object BlockApproverProtocol {
       vaults: Seq[Vault],
       bonds: Map[ByteString, Long],
       minimumBond: Long,
-      maximumBond: Long
+      maximumBond: Long,
+      epochLength: Int,
+      quarantineLength: Int
   )(implicit runtimeManager: RuntimeManager[F]): F[Either[String, Unit]] = {
 
     def validate: Either[String, (Seq[InternalProcessedDeploy], RChainState)] =
@@ -138,7 +148,13 @@ object BlockApproverProtocol {
           case (pk, stake) =>
             Validator(PublicKey(pk.toByteArray), stake)
         }
-        posParams = ProofOfStake(minimumBond, maximumBond, validators)
+        posParams = ProofOfStake(
+          minimumBond,
+          maximumBond,
+          validators,
+          epochLength,
+          quarantineLength
+        )
         genesisBlessedContracts = Genesis
           .defaultBlessedTerms(
             timestamp,
