@@ -23,11 +23,9 @@ import coop.rchain.comm.transport.TransportLayer
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.metrics.implicits._
 import coop.rchain.models.BlockHash._
-import coop.rchain.models.EquivocationRecord
+import coop.rchain.models.{EquivocationRecord, NormalizerEnv}
 import coop.rchain.models.Validator.Validator
-import coop.rchain.rholang.interpreter.NormalizerEnv
 import coop.rchain.shared._
-
 import com.google.protobuf.ByteString
 
 /**

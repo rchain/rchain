@@ -1,10 +1,9 @@
 package coop.rchain.rholang.interpreter
 
 import cats.implicits._
-
 import cats.effect.Sync
+import coop.rchain.models.NormalizerEnv
 import coop.rchain.rholang.interpreter.accounting.{_cost, Cost}
-
 import org.scalatest._
 import org.scalatest.Matchers._
 

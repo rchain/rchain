@@ -4,8 +4,9 @@ import coop.rchain.casper.protocol.{DeployData, DeployDataProto}
 import coop.rchain.casper.util.ProtoUtil.stringToByteString
 import coop.rchain.crypto.PublicKey
 import coop.rchain.crypto.codec.Base16
+import coop.rchain.models.NormalizerEnv
 import coop.rchain.rholang.build.CompiledRholangSource
-import coop.rchain.rholang.interpreter.{accounting, NormalizerEnv}
+import coop.rchain.rholang.interpreter.accounting
 import coop.rchain.rholang.interpreter.util.RevAddress
 
 object StandardDeploys {

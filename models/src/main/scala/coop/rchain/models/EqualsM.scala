@@ -75,6 +75,17 @@ object EqualM extends EqualMDerivation {
 
   }
 
+  implicit def mapEqual[A: EqualM, B: EqualM]: EqualM[Map[A, B]] = new EqualM[Map[A, B]] {
+
+    override def equal[F[_]: Sync](self: Map[A, B], other: Map[A, B]): F[Boolean] = {
+      val pairsA = self.keys.toStream.zip(other.keys)
+      val pairsB = self.values.toStream.zip(other.values)
+      Sync[F].delay(self.size == other.size) &&^ pairsA
+        .forallM(tupled(EqualM[A].equal[F])) &&^ pairsB.forallM(tupled(EqualM[B].equal[F]))
+    }
+
+  }
+
   implicit def coevalEqual[A: EqualM]: EqualM[Coeval[A]] = by(_.value)
 
   implicit val ParEqual: EqualM[Par] = gen[Par]

@@ -3,7 +3,6 @@ package coop.rchain.casper.util.rholang
 import cats.Monad
 import cats.effect._
 import cats.syntax.all._
-
 import coop.rchain.blockstorage.BlockStore
 import coop.rchain.blockstorage.dag.BlockDagRepresentation
 import coop.rchain.casper._
@@ -15,12 +14,12 @@ import coop.rchain.metrics.Span
 import coop.rchain.models.{BlockMetadata, Par}
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.Validator.Validator
-import coop.rchain.rholang.interpreter.{NormalizerEnv, ParBuilder}
+import coop.rchain.rholang.interpreter.ParBuilder
 import coop.rchain.rholang.interpreter.Runtime.BlockData
 import coop.rchain.rspace.ReplayException
 import coop.rchain.shared.{Log, LogSource}
-
 import com.google.protobuf.ByteString
+import coop.rchain.models.NormalizerEnv.NormalizerEnv
 import monix.eval.Coeval
 
 object InterpreterUtil {

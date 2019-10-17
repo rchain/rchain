@@ -10,11 +10,11 @@ import coop.rchain.casper.util.rholang.Resources.copyStorage
 import coop.rchain.casper.util.{GenesisBuilder, ProtoUtil}
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
-import coop.rchain.models.Par
+import coop.rchain.models.{NormalizerEnv, Par}
 import coop.rchain.rholang.Resources.mkRuntimeAt
 import coop.rchain.rholang.build.CompiledRholangSource
 import coop.rchain.rholang.interpreter.Runtime.SystemProcess
-import coop.rchain.rholang.interpreter.{NormalizerEnv, PrettyPrinter, Runtime}
+import coop.rchain.rholang.interpreter.{PrettyPrinter, Runtime}
 import coop.rchain.shared.Log
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global

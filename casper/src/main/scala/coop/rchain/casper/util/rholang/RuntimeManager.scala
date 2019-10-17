@@ -24,7 +24,6 @@ import coop.rchain.rholang.interpreter.{
   ErrorLog,
   EvaluateResult,
   Interpreter,
-  NormalizerEnv,
   Reduce,
   RhoType,
   Runtime

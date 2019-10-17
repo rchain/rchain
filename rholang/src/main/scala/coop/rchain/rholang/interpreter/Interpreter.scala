@@ -3,6 +3,7 @@ package coop.rchain.rholang.interpreter
 import cats.effect._
 import cats.implicits._
 import coop.rchain.crypto.hash.Blake2b512Random
+import coop.rchain.models.NormalizerEnv.NormalizerEnv
 import coop.rchain.rholang.interpreter.accounting._
 
 final case class EvaluateResult(cost: Cost, errors: Vector[Throwable])

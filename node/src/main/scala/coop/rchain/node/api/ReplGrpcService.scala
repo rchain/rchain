@@ -2,16 +2,14 @@ package coop.rchain.node.api
 
 import cats.effect.Sync
 import cats.implicits._
-
 import coop.rchain.catscontrib._
 import Catscontrib._
-import coop.rchain.models.Par
+import coop.rchain.models.{NormalizerEnv, Par}
 import coop.rchain.node.model.repl._
 import coop.rchain.rholang.interpreter.{Runtime, _}
 import coop.rchain.rholang.interpreter.errors.InterpreterError
 import Interpreter._
 import storage.StoragePrinter
-
 import monix.eval.Task
 import monix.execution.Scheduler
 

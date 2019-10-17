@@ -80,4 +80,16 @@ object RhoType {
 
     def apply(gprivate: GPrivate): Par = GUnforgeable(GPrivateBody(gprivate))
   }
+
+  object Unforgeable {
+    def unapply(p: Par): Option[GUnforgeable] = p.singleUnforgeable()
+
+    def apply(unforgeable: GUnforgeable): Par = unforgeable
+  }
+
+  object Expression {
+    def unapply(p: Par): Option[Expr] = p.singleExpr()
+
+    def apply(expr: Expr): Par = expr
+  }
 }

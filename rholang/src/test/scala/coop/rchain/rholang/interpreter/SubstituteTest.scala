@@ -133,7 +133,6 @@ class SendSubSpec extends FlatSpec with Matchers {
       bindCount = 1,
       p = Send(chan0, List(Par()), false, BitSet(0)),
       uri = Vector.empty,
-      deployerId = None,
       locallyFree = BitSet()
     )
     implicit val env = Env.makeEnv(source)
@@ -142,10 +141,16 @@ class SendSubSpec extends FlatSpec with Matchers {
     val result = substituteSend[Coeval].substitute(target).value
     result should be(
       Send(
-        New(1, Send(chan0, List(Par()), false, BitSet(0)), Vector.empty, None, None, BitSet()),
+        New(
+          bindCount = 1,
+          p = Send(chan0, List(Par()), false, BitSet(0))
+        ),
         List(
           Send(
-            New(1, Send(chan0, List(Par()), false, BitSet(0)), Vector.empty, None, None, BitSet()),
+            New(
+              bindCount = 1,
+              p = Send(chan0, List(Par()), false, BitSet(0))
+            ),
             List(Par()),
             false,
             BitSet()
@@ -168,8 +173,6 @@ class NewSubSpec extends FlatSpec with Matchers {
         bindCount = 1,
         p = Send(EVar(BoundVar(1)), List(Par()), false, BitSet(1)),
         uri = Vector.empty,
-        deployerId = None,
-        deployId = None,
         locallyFree = BitSet(0)
       )
     val result = substituteNew[Coeval].substitute(target).value
@@ -178,8 +181,6 @@ class NewSubSpec extends FlatSpec with Matchers {
         bindCount = 1,
         p = Send(source, List(Par()), false, BitSet()),
         uri = Vector.empty,
-        deployerId = None,
-        deployId = None,
         locallyFree = BitSet()
       )
     )
@@ -198,7 +199,6 @@ class NewSubSpec extends FlatSpec with Matchers {
         BitSet(2, 3)
       ),
       uri = Vector.empty,
-      deployerId = None,
       locallyFree = BitSet(0, 1)
     )
 
@@ -213,7 +213,6 @@ class NewSubSpec extends FlatSpec with Matchers {
           BitSet()
         ),
         uri = Vector.empty,
-        deployerId = None,
         locallyFree = BitSet()
       )
     )

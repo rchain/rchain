@@ -304,6 +304,26 @@ object implicits {
         None
       }
 
+    def singleDeployId(): Option[GDeployId] =
+      if (p.sends.isEmpty && p.receives.isEmpty && p.news.isEmpty && p.exprs.isEmpty && p.matches.isEmpty && p.bundles.isEmpty && p.connectives.isEmpty) {
+        p.unforgeables.toList match {
+          case Seq(GUnforgeable(GDeployIdBody(single))) => Some(single)
+          case _                                        => None
+        }
+      } else {
+        None
+      }
+
+    def singleDeployerId(): Option[GDeployerId] =
+      if (p.sends.isEmpty && p.receives.isEmpty && p.news.isEmpty && p.exprs.isEmpty && p.matches.isEmpty && p.bundles.isEmpty && p.connectives.isEmpty) {
+        p.unforgeables.toList match {
+          case Seq(GUnforgeable(GDeployerIdBody(single))) => Some(single)
+          case _                                          => None
+        }
+      } else {
+        None
+      }
+
     def singleConnective(): Option[Connective] =
       if (p.sends.isEmpty && p.receives.isEmpty && p.news.isEmpty && p.exprs.isEmpty && p.matches.isEmpty && p.bundles.isEmpty && p.connectives.size == 1) {
         Some(p.connectives.head)

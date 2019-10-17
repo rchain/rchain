@@ -15,6 +15,7 @@ import coop.rchain.models.rholang.sorter.ordering._
 import scala.collection.immutable.BitSet
 import coop.rchain.models.Connective.ConnectiveInstance._
 import coop.rchain.models.Expr.ExprInstance._
+import coop.rchain.models.NormalizerEnv.NormalizerEnv
 import coop.rchain.models.Var.VarInstance._
 import coop.rchain.models.Var.WildcardMsg
 import coop.rchain.models._
@@ -911,7 +912,6 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
             .prepend(Send(EVar(BoundVar(1)), List[Par](GInt(8)), false, BitSet(1)))
             .prepend(Send(EVar(BoundVar(0)), List[Par](GInt(9)), false, BitSet(0))),
           uri = Vector.empty,
-          deployerId = None,
           locallyFree = BitSet()
         )
       )
@@ -965,7 +965,6 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
             .prepend(Send(EVar(BoundVar(0)), List[Par](GInt(10)), false, BitSet(0)))
             .prepend(Send(EVar(BoundVar(2)), List[Par](GInt(11)), false, BitSet(2))),
           uri = Vector("rho:registry", "rho:stdout"),
-          deployerId = None,
           locallyFree = BitSet()
         )
       )
@@ -974,6 +973,43 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
       List(BitSet(2), BitSet(0), BitSet(1), BitSet(3), BitSet(4))
     )
     result.par.news(0).p.locallyFree.get should be(BitSet(0, 1, 2, 3, 4))
+  }
+
+  def checkNormalizerError(uri: String, name: String)(
+      implicit normalizerEnv: NormalizerEnv
+  ): Assertion = {
+    val listNameDecl = new ListNameDecl()
+    listNameDecl.add(new NameDeclUrn(name, s"`$uri`"))
+    val pNew = new PNew(listNameDecl, new PNil())
+    assert(
+      ProcNormalizeMatcher.normalizeMatch[Coeval](pNew, inputs).failed.value == NormalizerError(
+        s"`$uri` was used in rholang usage context where $name is not available."
+      )
+    )
+  }
+
+  "PNew" should "raise a NormalizerError when deployerId uri does not point to a DeployerId" in {
+    val uri                                   = "rho:rchain:deployerId"
+    implicit val normalizerEnv: NormalizerEnv = Map(uri -> GInt(42))
+    checkNormalizerError(uri, "DeployerId")
+  }
+
+  "PNew" should "raise a NormalizerError when deployId uri does not point to a DeployId" in {
+    val uri                                   = "rho:rchain:deployId"
+    implicit val normalizerEnv: NormalizerEnv = Map(uri -> GInt(42))
+    checkNormalizerError(uri, "DeployId")
+  }
+
+  "PNew" should "raise a NormalizerError when deployerId uri is set but not available in the NormalizerEnv" in {
+    val uri                                   = "rho:rchain:deployerId"
+    implicit val normalizerEnv: NormalizerEnv = Map()
+    checkNormalizerError(uri, "DeployerId")
+  }
+
+  "PNew" should "raise a NormalizerError when deployId uri is set but not available in the NormalizerEnv" in {
+    val uri                                   = "rho:rchain:deployId"
+    implicit val normalizerEnv: NormalizerEnv = Map()
+    checkNormalizerError(uri, "DeployId")
   }
 
   "PMatch" should "Handle a match inside a for comprehension" in {
@@ -1136,7 +1172,6 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
                 bindCount = 1,
                 p = Send(EVar(BoundVar(0)), List[Par](GInt(47)), false, BitSet(0)),
                 uri = Vector.empty,
-                deployerId = None,
                 locallyFree = BitSet()
               )
             ),
@@ -1146,7 +1181,6 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
                 bindCount = 1,
                 p = Send(EVar(BoundVar(0)), List[Par](GInt(47)), false, BitSet(0)),
                 uri = Vector.empty,
-                deployerId = None,
                 locallyFree = BitSet()
               )
             )
