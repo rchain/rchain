@@ -95,6 +95,8 @@ object RhoType {
   }
 
   object Extractor {
+    def derive[RhoType, Aux](implicit ev: Extractor[RhoType] { type ScalaType = Aux }) = ev
+
     implicit object BooleanExtractor extends Extractor[Boolean.type] {
       override type ScalaType = Boolean
       override def unapply(p: Par) = Boolean.unapply(p)
