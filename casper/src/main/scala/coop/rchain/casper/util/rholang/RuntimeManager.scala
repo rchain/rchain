@@ -10,6 +10,7 @@ import coop.rchain.casper.CasperMetricsSource
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.rholang.RuntimeManager.{evaluate, StateHash}
 import coop.rchain.casper.util.{ConstructDeploy, ProtoUtil}
+import coop.rchain.crypto.PublicKey
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.metrics.Metrics.Source
 import coop.rchain.metrics.{Metrics, Span}
@@ -33,6 +34,15 @@ import coop.rchain.rspace.{trace, Blake2b256Hash, ReplayException}
 import coop.rchain.shared.Log
 
 trait RuntimeManager[F[_]] {
+
+  // TODO: the signature is likely incomplete. It is missing `inputs` and possibly more
+  def executeSystemDeploy[S <: SystemDeploy](
+      runtime: Runtime[F],
+      deploy: S,
+      deployId: Array[Byte],
+      deployerPk: PublicKey
+  ): F[Either[FailedSystemDeploy, deploy.Result]]
+
   def captureResults(
       startHash: StateHash,
       deploy: DeployData,
@@ -354,6 +364,23 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log](
                       }
     } yield failureOption
   }
+
+  override def executeSystemDeploy[S <: SystemDeploy](
+      runtime: Runtime[F],
+      deploy: S,
+      deployId: Array[Byte],
+      deployerPk: PublicKey
+  ): F[Either[FailedSystemDeploy, deploy.Result]] = /*{
+    val env                = NormalizerEnv(Some(deployId), Some(deployerPk)) /* TODO: get a proper Env somehow */
+    implicit val costState = runtime.cost
+    EitherT
+      .right[FailedSystemDeploy](
+        Interpreter[F].evaluate(runtime, deploy.code, env)
+      )
+      .ensureOr(eval => FailedSystemDeploy.EvalError(deploy.id, eval.errors))(_.executionFailed)
+    // TODO: get name of the return channel from the env and read output from it
+    // TODO: pass it
+  }*/ ???
 }
 
 object RuntimeManager {
