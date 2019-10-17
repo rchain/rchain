@@ -975,6 +975,43 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
     result.par.news(0).p.locallyFree.get should be(BitSet(0, 1, 2, 3, 4))
   }
 
+  def checkNormalizerError(uri: String, name: String)(
+      implicit normalizerEnv: NormalizerEnv
+  ): Assertion = {
+    val listNameDecl = new ListNameDecl()
+    listNameDecl.add(new NameDeclUrn(name, s"`$uri`"))
+    val pNew = new PNew(listNameDecl, new PNil())
+    assert(
+      ProcNormalizeMatcher.normalizeMatch[Coeval](pNew, inputs).failed.value == NormalizerError(
+        s"`$uri` was used in rholang usage context where $name is not available."
+      )
+    )
+  }
+
+  "PNew" should "raise a NormalizerError when deployerId uri does not point to a DeployerId" in {
+    val uri                                   = "rho:rchain:deployerId"
+    implicit val normalizerEnv: NormalizerEnv = Map(uri -> GInt(42))
+    checkNormalizerError(uri, "DeployerId")
+  }
+
+  "PNew" should "raise a NormalizerError when deployId uri does not point to a DeployId" in {
+    val uri                                   = "rho:rchain:deployId"
+    implicit val normalizerEnv: NormalizerEnv = Map(uri -> GInt(42))
+    checkNormalizerError(uri, "DeployId")
+  }
+
+  "PNew" should "raise a NormalizerError when deployerId uri is set but not available in the NormalizerEnv" in {
+    val uri                                   = "rho:rchain:deployerId"
+    implicit val normalizerEnv: NormalizerEnv = Map()
+    checkNormalizerError(uri, "DeployerId")
+  }
+
+  "PNew" should "raise a NormalizerError when deployId uri is set but not available in the NormalizerEnv" in {
+    val uri                                   = "rho:rchain:deployId"
+    implicit val normalizerEnv: NormalizerEnv = Map()
+    checkNormalizerError(uri, "DeployId")
+  }
+
   "PMatch" should "Handle a match inside a for comprehension" in {
     // for (@x <- @Nil) { match x { case 42 => Nil ; case y => Nil } | @Nil!(47)
     val listBindings = new ListName()
