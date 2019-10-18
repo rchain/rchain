@@ -1,0 +1,190 @@
+/*
+ The table below describes the required computations and their dependencies
+
+ No. | Dependency | Computation method | Result
+ ----+------------+--------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------
+ 1.  |            | given              | sk = 2a2eaa76d6fea9f502629e32b0f8eea19b9de8e2188ec0d589fcafa98fb1f031
+ 2.  |            | given              | timestamp = 1571408470880
+ 3.  |            | lastNonce          | nonce = 9223372036854775807
+ 4.  | 1,         | secp256k1          | pk = 04fe2eb1e0e7462b1a8f64600389e1e76727f8b2d38804eaa4b48f7a7d6715130fc24d3c4dac2d8bdc19e0b49879dbaf07c30773cd9740a9d14a092ef76339207a
+ 5.  | 4, 2,      | genIds             | uname = Unforgeable(0x022e67c5237b24bcc1971f00556aa180f8d864c67e23989c9d550f8c9265cb53)
+ 6.  | 3, 5,      | registry           | value = (9223372036854775807, bundle+ {   Unforgeable(0x022e67c5237b24bcc1971f00556aa180f8d864c67e23989c9d550f8c9265cb53) })
+ 7.  | 6,         | protobuf           | toSign = 2a40aa013d0a0d2a0b10feffffffffffffffff010a2c5a2a0a263a240a220a20022e67c5237b24bcc1971f00556aa180f8d864c67e23989c9d550f8c9265cb531001
+ 8.  | 7, 1,      | secp256k1          | sig = 30450221008539caafe08b2a27cfcabdcf9c7c345a1c1a926330a1a320ca614cf9240f6c77022024ad8465597c8a673431007b8e33317bd49c9c68dacb41eef6a4316d933909c4
+ 9.  | 4,         | registry           | uri = rho:id:b9s6j3xeobgset4ndn64hje64grfcj7a43eekb3fh43yso5ujiecfn
+ ----+------------+--------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------
+ */
+
+new MultiSigRevVault,
+    rs(`rho:registry:insertSigned:secp256k1`), uriOut
+    _fromPublicKey,
+    _multiSigRevVault,
+    RevVaultCh,
+    ListOpsCh
+in {
+  rl!(`rho:lang:listOps`, *ListOpsCh) |
+  for(@(_, ListOps) <- ListOpsCh;
+      @(_, RevVault) <- RevVaultCh) {
+    contract MultiSigRevVault(@"deployerAuthKey", deployerId, ret) = {
+      new RevAddress(`rho:rev:address`), 
+          DeployerIdOps(`rho:rchain:deployerId:ops`), 
+          revAddrCh, 
+          deployerPubKeyBytesCh in {
+        DeployerIdOps!("pubKeyBytes", *deployerId, *deployerPubKeyBytesCh) |
+        for (@deployerPubKeyBytes <- deployerPubKeyBytesCh) {
+          _fromPublicKey!(deployerPubKeyBytes, *ret)
+        }
+      }
+    } |
+    
+    contract _fromPublicKey(@publicKey, ret) = {
+      new RevAddress(`rho:rev:address`), revAddrCh in {
+        RevAddress!("fromPublicKey", publicKey, *revAddrCh)|
+        for (@revAddress <- revAddrCh) {
+          @AuthKey!("make", (*_multiSigRevVault, revAddress), *ret)
+        }
+      }
+    } |
+    
+    // MultiSig
+    // Returns channel on which to invoke methods
+    contract MultiSigRevVault(@"create", @publicKeys, @authKeys, @quorumSize, ret) = {
+      if (quorumSize > publicKeys.length() + authKeys.length() or
+          quorumSize <= 0) {
+        ret!((false, "invalid quorum size"))
+      } else {
+        new unf, authKeyCh, authPubKeysCh, RevAddress(`rho:rev:address`), revVaultCh in {
+          RevAddress!("fromUnforgeable", *unf, *revVaultCh) |
+          RevVault!("unforgeableAuthKey", *unf, *authKeyCh) |
+          @ListOps!("map", publicKeys, *_fromPublicKey, *authPubKeysCh) |
+          for (@vaultAuthKey <- authKeyCh; @authPubKeys <- authPubKeysCh; revVault <- revVaultCh) {
+            new vault, nonceStore, nonceMapStore in {
+              ret!(*vault) |
+              // Nonce starts at zero
+              @(*vault, *nonceStore)!(0) |
+
+              // Map from (revAddress, nonce) to
+              //   (true, confirmationSet)
+              //   (false, "transaction complete")
+              @(*vault, *nonceMapStore)!({}) |
+
+              contract vault(@"balance", ret) = {
+                revVault!("balance", *ret)
+              } |
+
+              // Creates transfer and "signs" with first account.
+              // returns (true, (true, nonce)) when more sigs required
+              //         (true, (false, "done")) when only one sig required
+              //         (false, errorMsg) on failure
+              contract vault(@"transfer", @targetRevAddress, @amount, @authKey, ret) = {
+                new idxAuthKeysCh, idxAuthPubKeysCh in {
+                  // Check that authKeys is in the list of authKeys or authPubKeys
+                  @ListOps!("indexOf", authKeys, authKey, *idxAuthKeysCh) |
+                  @ListOps!("indexOf", authPubKeys, authKey, *idxAuthPubKeysCh) |
+                  for (@idxAuthKeys <- idxAuthKeysCh; @idxAuthPubKeys <- idxAuthPubKeysCh) {
+                    if (idxAuthKeys >= 0 or idxAuthPubKeys >= 0) {
+                      for (@nonce <- @(*vault, *nonceStore); @nonceMap <- @(*vault, *nonceMapStore)) {
+                        @(*vault, *nonceStore)!(nonce + 1) |
+                        if (quorumSize == 1) {
+                          @(*vault, *nonceMapStore)!(nonceMap.set(nonce, Nil)) |
+                          new successCh in {
+                            revVault!("transfer", targetRevAddress, amount, vaultAuthKey, *successCh) |
+                            for (@(success, msg) <- successCh) {
+                              if (success) {
+                                ret!((true, (false, "done")))
+                              } else {
+                                ret!((false, msg))
+                              }
+                            }
+                          }
+                        } else {
+                          @(*vault, *nonceMapStore)!(
+                            nonceMap.set(nonce, (targetRevAddress, amount, Set(authKey)))
+                          ) |
+                          ret!(true, (true, nonce))
+                        }
+                      }
+                    } else {
+                      ret!((false, "invalid authKey"))
+                    }
+                  }
+                }
+              } |
+
+              // Confirms transfer transaction.
+              // returns (true, (true, nonce)) when more sigs required
+              //         (true, (false, "done")) when only one sig required
+              //         (false, errorMsg) on failure
+              contract vault(@"confirm", @targetRevAddress, @amount, @authKey, @nonce, ret) = {
+                // Check that authKeys is in the list of authKeys or authPubKeys
+                new idxAuthKeysCh, idxAuthPubKeysCh in {
+                  @ListOps!("indexOf", authKeys, authKey, *idxAuthKeysCh) |
+                  @ListOps!("indexOf", authPubKeys, authKey, *idxAuthPubKeysCh) |
+                  for (@idxAuthKeys <- idxAuthKeysCh; @idxAuthPubKeys <- idxAuthPubKeysCh) {
+                    if (idxAuthKeys >= 0 or idxAuthPubKeys >= 0) {
+                      for (@nonceMap <- @(*vault, *nonceMapStore)) {
+                        match nonceMap.get(nonce) {
+                          Nil => {
+                            @(*vault, *nonceMapStore)!(nonceMap) |
+                            ret!((false, "inactive transaction nonce"))
+                          }
+                          (nonceTargetRevAddress, nonceAmount, nonceConfirmers) => {
+                            if (targetRevAddress != nonceTargetRevAddress or
+                                amount != nonceAmount) {
+                              @(*vault, *nonceMapStore)!(nonceMap) |
+                              ret!((false, "given data does not match stored data"))
+                            } else {
+                              if (nonceConfirmers.contains(authKey)) {
+                                @(*vault, *nonceMapStore)!(nonceMap) |
+                                ret!((false, "already confirmed"))
+                              } else {
+                                // If this is the last confirmation
+                                if (nonceConfirmers.size() == quorumSize - 1) {
+                                  // All done with this nonce
+                                  @(*vault, *nonceMapStore)!(nonceMap.set(nonce, Nil)) |
+                                  new successCh in {
+                                    revVault!("transfer", targetRevAddress, amount, vaultAuthKey, *successCh) |
+                                    for (@(success, msg) <- successCh) {
+                                      if (success) {
+                                        ret!((true, (false, "done")))
+                                      } else {
+                                        ret!((false, msg))
+                                      }
+                                    }
+                                  }
+                                } else {
+                                  @(*vault, *nonceMapStore)!(
+                                    nonceMap.set(nonce, 
+                                      (targetRevAddress, amount, nonceConfirmers.add(authKey))
+                                    )
+                                  ) |
+                                  ret!((true, (true, nonce)))
+                                }
+                              }
+                            }
+                          }
+                          _ => {
+                            @(*vault, *nonceMapStore)!(nonceMap) |
+                            ret!((false, "INTERNAL ERROR: bad data stored in nonceMap"))
+                          }
+                        } 
+                      } 
+                    } else {
+                      ret!((false, "invalid authKey"))
+                    }
+                  }
+                }
+              } // contract vault(@"confirm", ...
+            } // new
+          } // for
+        } // new
+      } // quorum size
+    } // contract MultiSigRevVault(@"create", ...
+  } |
+  rs!(
+    "04fe2eb1e0e7462b1a8f64600389e1e76727f8b2d38804eaa4b48f7a7d6715130fc24d3c4dac2d8bdc19e0b49879dbaf07c30773cd9740a9d14a092ef76339207a".hexToBytes(),
+    (9223372036854775807, bundle+{*MultiSigRevVault}),
+    "30450221008539caafe08b2a27cfcabdcf9c7c345a1c1a926330a1a320ca614cf9240f6c77022024ad8465597c8a673431007b8e33317bd49c9c68dacb41eef6a4316d933909c4".hexToBytes(),
+    *uriOut
+  ) 
+}    
