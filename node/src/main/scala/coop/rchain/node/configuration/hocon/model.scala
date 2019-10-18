@@ -131,6 +131,35 @@ object Server {
   }
 }
 
+object RoundRobinDispatcher {
+  val Key                = s"${Server.Key}.round-robin-dispatcher"
+  val Keys: List[String] = keys.all.map(k => s"$Key.$k")
+
+  object keys {
+    val MaxPeerQueueSize     = "max-peer-queue-size"
+    val GiveUpAfterSkipped   = "give-up-after-skipped"
+    val DropPeerAfterRetries = "drop-peer-after-retries"
+
+    val all =
+      List(
+        MaxPeerQueueSize,
+        GiveUpAfterSkipped,
+        DropPeerAfterRetries
+      )
+  }
+
+  def fromConfig(config: Config): configuration.RoundRobinDispatcher = {
+
+    val rrd = config.getConfig(Key)
+
+    configuration.RoundRobinDispatcher(
+      maxPeerQueueSize = rrd.getInt(keys.MaxPeerQueueSize),
+      giveUpAfterSkipped = rrd.getInt(keys.GiveUpAfterSkipped),
+      dropPeerAfterRetries = rrd.getInt(keys.DropPeerAfterRetries)
+    )
+  }
+}
+
 object Tls {
   val Key                = s"${Server.Key}.tls"
   val Keys: List[String] = keys.all.map(k => s"$Key.$k")

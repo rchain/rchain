@@ -35,6 +35,12 @@ final case class Server(
     reporting: Boolean
 )
 
+final case class RoundRobinDispatcher(
+    maxPeerQueueSize: Int,
+    giveUpAfterSkipped: Int,
+    dropPeerAfterRetries: Int
+)
+
 final case class GrpcServer(
     host: String,
     portExternal: Int,
