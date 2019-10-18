@@ -16,15 +16,21 @@
  */
 
 new MultiSigRevVault,
-    rs(`rho:registry:insertSigned:secp256k1`), uriOut
+    rs(`rho:registry:insertSigned:secp256k1`), uriOut,
+    rl(`rho:registry:lookup`), 
     _fromPublicKey,
     _multiSigRevVault,
     RevVaultCh,
+    AuthKeyCh,
     ListOpsCh
 in {
   rl!(`rho:lang:listOps`, *ListOpsCh) |
+  rl!(`rho:rchain:authKey`, *ListOpsCh) |
+  rl!(`rho:lang:revVault`, *ListOpsCh) |
   for(@(_, ListOps) <- ListOpsCh;
+      @(_, AuthKey) <- AuthKeyCh;
       @(_, RevVault) <- RevVaultCh) {
+
     contract MultiSigRevVault(@"deployerAuthKey", deployerId, ret) = {
       new RevAddress(`rho:rev:address`), 
           DeployerIdOps(`rho:rchain:deployerId:ops`), 
@@ -37,6 +43,15 @@ in {
       }
     } |
     
+    contract MultiSigRevVault(@"unforgeableAuthKey", unf, ret) = {
+      new RevAddress(`rho:rev:address`), revAddrCh in {
+        RevAddress!("fromUnforgeable", *unf, *revAddrCh) |
+        for (@unfRevAddress <- revAddrCh) {
+          @AuthKey!("make", (*_multiSigRevVault, unfRevAddress), *ret)
+        }
+      }
+    } |
+
     contract _fromPublicKey(@publicKey, ret) = {
       new RevAddress(`rho:rev:address`), revAddrCh in {
         RevAddress!("fromPublicKey", publicKey, *revAddrCh)|
@@ -55,7 +70,7 @@ in {
       } else {
         new unf, authKeyCh, authPubKeysCh, RevAddress(`rho:rev:address`), revVaultCh in {
           RevAddress!("fromUnforgeable", *unf, *revVaultCh) |
-          RevVault!("unforgeableAuthKey", *unf, *authKeyCh) |
+          @RevVault!("unforgeableAuthKey", *unf, *authKeyCh) |
           @ListOps!("map", publicKeys, *_fromPublicKey, *authPubKeysCh) |
           for (@vaultAuthKey <- authKeyCh; @authPubKeys <- authPubKeysCh; revVault <- revVaultCh) {
             new vault, nonceStore, nonceMapStore in {

@@ -34,6 +34,7 @@ object Genesis {
       StandardDeploys.makeMint,
       StandardDeploys.authKey,
       StandardDeploys.revVault,
+      StandardDeploys.multiSigRevVault,
       StandardDeploys.revGenerator(vaults, supply),
       StandardDeploys.poSGenerator(posParams),
       StandardDeploys.treeHashMap
