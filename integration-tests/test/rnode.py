@@ -538,7 +538,10 @@ def make_bootstrap_node(
     cli_options: Optional[Dict] = None,
     mount_dir: Optional[str] = None,
     wallets_file: Optional[str] = None,
-    synchrony_constraint_threshold: float = 0.0
+    synchrony_constraint_threshold: float = 0.0,
+    max_peer_queue_size: int = 10,
+    give_up_after_skipped: int = 0,
+    drop_peer_after_retries: int = 0
 ) -> Node:
     key_file = get_absolute_path_for_mounting("bootstrap_certificate/node.key.pem", mount_dir=mount_dir)
     cert_file = get_absolute_path_for_mounting("bootstrap_certificate/node.certificate.pem", mount_dir=mount_dir)
@@ -558,6 +561,9 @@ def make_bootstrap_node(
         "--validator-public-key":           private_key.get_public_key().to_hex(),
         "--host":                           container_name,
         "--synchrony-constraint-threshold": synchrony_constraint_threshold,
+        "--max-peer-queue-size":            max_peer_queue_size,
+        "--give-up-after-skipped":          give_up_after_skipped,
+        "--drop-peer-after-retries":        drop_peer_after_retries
     }
 
     if cli_flags is not None:
@@ -618,7 +624,10 @@ def make_peer(
     wallets_file: Optional[str] = None,
     cli_flags: Optional[AbstractSet] = None,
     cli_options: Optional[Dict] = None,
-    synchrony_constraint_threshold: float = 0.0
+    synchrony_constraint_threshold: float = 0.0,
+    max_peer_queue_size: int = 10,
+    give_up_after_skipped: int = 0,
+    drop_peer_after_retries: int = 0
 ) -> Node:
     assert isinstance(name, str)
     assert '_' not in name, 'Underscore is not allowed in host name'
@@ -641,6 +650,9 @@ def make_peer(
         "--validator-public-key":           private_key.get_public_key().to_hex(),
         "--host":                           name,
         "--synchrony-constraint-threshold": synchrony_constraint_threshold,
+        "--max-peer-queue-size":            max_peer_queue_size,
+        "--give-up-after-skipped":          give_up_after_skipped,
+        "--drop-peer-after-retries":        drop_peer_after_retries
     }
 
     if cli_options is not None:

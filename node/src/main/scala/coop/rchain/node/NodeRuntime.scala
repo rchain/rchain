@@ -21,7 +21,7 @@ import coop.rchain.casper.engine.EngineCell._
 import coop.rchain.casper.engine.Running.Requested
 import coop.rchain.casper.protocol.deploy.v1.DeployServiceV1GrpcMonix
 import coop.rchain.casper.protocol.propose.v1.ProposeServiceV1GrpcMonix
-import coop.rchain.casper.util.comm.{CasperPacketHandler, CommUtil}
+import coop.rchain.casper.util.comm._
 import coop.rchain.casper.util.rholang.RuntimeManager
 import coop.rchain.catscontrib.Catscontrib._
 import coop.rchain.catscontrib.Taskable
@@ -243,6 +243,7 @@ class NodeRuntime private[node] (
       blockDagStorage,
       runtimeCleanup,
       packetHandler,
+      packetDispatcher,
       apiServers,
       casperLoop,
       engineInit,
@@ -272,6 +273,7 @@ class NodeRuntime private[node] (
       blockDagStorage,
       blockStore,
       packetHandler,
+      packetDispatcher,
       eventLogEnv,
       eventBus
     )
@@ -321,6 +323,7 @@ class NodeRuntime private[node] (
       blockDagStorage: BlockDagStorage[TaskEnv],
       blockStore: BlockStore[TaskEnv],
       packetHandler: PacketHandler[TaskEnv],
+      packetDispatcher: PacketDispatcher[TaskEnv],
       eventLog: EventLog[TaskEnv],
       consumer: EventConsumer[Task]
   ): TaskEnv[Unit] = {
@@ -402,8 +405,8 @@ class NodeRuntime private[node] (
             .start(
               pm => HandleMessages.handle[TaskEnv](pm).run(NodeCallCtx.init),
               blob =>
-                packetHandler
-                  .handlePacket(blob.sender, blob.packet)
+                packetDispatcher
+                  .dispatch(blob.sender, blob.packet)
                   .run(NodeCallCtx.init)
             )
             .toReaderT
@@ -654,6 +657,7 @@ object NodeRuntime {
         BlockDagFileStorage[F],
         Cleanup[F],
         PacketHandler[F],
+        PacketDispatcher[F],
         APIServers,
         CasperLoop[F],
         EngineInit[F],
@@ -747,6 +751,12 @@ object NodeRuntime {
         implicit val ev: EngineCell[F] = engineCell
         CasperPacketHandler[F]
       }
+      packetDispatcher <- FairRoundRobinDispatcher.packetDispatcher[F](
+                           packetHandler,
+                           conf.roundRobinDispatcher.maxPeerQueueSize,
+                           conf.roundRobinDispatcher.giveUpAfterSkipped,
+                           conf.roundRobinDispatcher.dropPeerAfterRetries
+                         )
       blockApiLock <- Semaphore[F](1)
       apiServers = NodeRuntime.acquireAPIServers[F](runtime, blockApiLock, scheduler)(
         blockStore,
@@ -778,6 +788,7 @@ object NodeRuntime {
       blockDagStorage,
       runtimeCleanup,
       packetHandler,
+      packetDispatcher,
       apiServers,
       casperLoop,
       engineInit,
