@@ -28,20 +28,19 @@ object ProtoUtil {
   /*
    * c is in the blockchain of b iff c == b or c is in the blockchain of the main parent of b
    */
-  // TODO: Move into BlockDAG and remove corresponding param once that is moved over from simulator
   def isInMainChain[F[_]: Monad](
       dag: BlockDagRepresentation[F],
-      candidateBlockHash: BlockHash,
+      candidateMetadata: BlockMetadata,
       targetBlockHash: BlockHash
   ): F[Boolean] = {
     import coop.rchain.catscontrib.Catscontrib.ToBooleanF
     import cats.instances.option._
 
-    (candidateBlockHash == targetBlockHash).pure[F] ||^ {
+    (candidateMetadata.blockHash == targetBlockHash).pure[F] ||^ {
       for {
         targetBlockOpt       <- dag.lookup(targetBlockHash)
         mainParentOpt        = targetBlockOpt >>= (_.parents.headOption)
-        inMainParentChainOpt <- mainParentOpt.traverse(isInMainChain(dag, candidateBlockHash, _))
+        inMainParentChainOpt <- mainParentOpt.traverse(isInMainChain(dag, candidateMetadata, _))
       } yield inMainParentChainOpt.getOrElse(false)
     }
   }

@@ -1,7 +1,8 @@
 package coop.rchain.casper
 
 import cats.Monad
-import cats.implicits._
+import cats.syntax.all._
+import cats.instances.list._
 
 import coop.rchain.catscontrib._
 import Catscontrib._
@@ -72,11 +73,12 @@ sealed abstract class SafetyOracleInstances {
           candidateBlockHash: BlockHash
       ): F[Float] = Span[F].trace(SafetyOracleMetricsSource) {
         for {
-          totalWeight <- computeTotalWeight(blockDag, candidateBlockHash)
-          _           <- Span[F].mark("total-weight")
+          candidateMetadata <- blockDag.lookup(candidateBlockHash).map(_.get)
+          totalWeight       <- computeTotalWeight(blockDag, candidateMetadata)
+          _                 <- Span[F].mark("total-weight")
           agreeingValidatorToWeight <- computeAgreeingValidatorToWeight(
                                         blockDag,
-                                        candidateBlockHash
+                                        candidateMetadata
                                       )
           _ <- Span[F].mark("agreeing-validator-to-weight")
           maxCliqueWeight <- if (2L * agreeingValidatorToWeight.values.sum < totalWeight) {
@@ -84,7 +86,7 @@ sealed abstract class SafetyOracleInstances {
                             } else {
                               agreementGraphMaxCliqueWeight(
                                 blockDag,
-                                candidateBlockHash,
+                                candidateMetadata,
                                 agreeingValidatorToWeight
                               )
                             }
@@ -96,23 +98,23 @@ sealed abstract class SafetyOracleInstances {
 
       private def computeTotalWeight(
           blockDag: BlockDagRepresentation[F],
-          candidateBlockHash: BlockHash
+          candidateMetadata: BlockMetadata
       ): F[Long] =
-        computeMainParentWeightMap(blockDag, candidateBlockHash).map(weightMapTotal)
+        computeMainParentWeightMap(blockDag, candidateMetadata).map(weightMapTotal)
 
       private def computeAgreeingValidatorToWeight(
           blockDag: BlockDagRepresentation[F],
-          candidateBlockHash: BlockHash
+          candidateMetadata: BlockMetadata
       ): F[Map[Validator, Long]] =
         for {
-          weights <- computeMainParentWeightMap(blockDag, candidateBlockHash)
+          weights <- computeMainParentWeightMap(blockDag, candidateMetadata)
           agreeingWeights <- weights.toList.traverse {
                               case (validator, stake) =>
                                 blockDag.latestMessageHash(validator).flatMap {
                                   case Some(latestMessageHash) =>
                                     computeCompatibility(
                                       blockDag,
-                                      candidateBlockHash,
+                                      candidateMetadata,
                                       latestMessageHash
                                     ).map { isCompatible =>
                                       if (isCompatible) {
@@ -129,18 +131,16 @@ sealed abstract class SafetyOracleInstances {
 
       private def computeMainParentWeightMap(
           blockDag: BlockDagRepresentation[F],
-          candidateBlockHash: BlockHash
+          candidateMetadata: BlockMetadata
       ): F[Map[BlockHash, Long]] =
-        blockDag.lookup(candidateBlockHash).flatMap { blockOpt =>
-          blockOpt.get.parents.headOption match {
-            case Some(parent) => blockDag.lookup(parent).map(_.get.weightMap)
-            case None         => blockDag.lookup(candidateBlockHash).map(_.get.weightMap)
-          }
+        candidateMetadata.parents.headOption match {
+          case Some(parent) => blockDag.lookup(parent).map(_.get.weightMap)
+          case None         => candidateMetadata.weightMap.pure[F]
         }
 
       private def agreementGraphMaxCliqueWeight(
           blockDag: BlockDagRepresentation[F],
-          candidateBlockHash: BlockHash,
+          candidateMetadata: BlockMetadata,
           agreeingValidatorToWeight: Map[Validator, Long]
       ): F[Long] = {
         def filterChildren(block: BlockMetadata, validator: Validator): F[StreamT[F, BlockHash]] =
@@ -182,7 +182,7 @@ sealed abstract class SafetyOracleInstances {
             // TODO: Implement forallM on StreamT
             result <- OptionT.liftF(potentialDisagreements.toList.flatMap(_.forallM {
                        potentialDisagreement =>
-                         computeCompatibility(blockDag, candidateBlockHash, potentialDisagreement)
+                         computeCompatibility(blockDag, candidateMetadata, potentialDisagreement)
                      }))
           } yield result).fold(false)(identity)
 
@@ -206,9 +206,9 @@ sealed abstract class SafetyOracleInstances {
 
       private def computeCompatibility(
           blockDag: BlockDagRepresentation[F],
-          candidateBlockHash: BlockHash,
+          candidateMetadata: BlockMetadata,
           targetBlockHash: BlockHash
       ): F[Boolean] =
-        isInMainChain(blockDag, candidateBlockHash, targetBlockHash)
+        isInMainChain(blockDag, candidateMetadata, targetBlockHash)
     }
 }
