@@ -36,13 +36,18 @@ object ProtoUtil {
     import coop.rchain.catscontrib.Catscontrib.ToBooleanF
     import cats.instances.option._
 
-    (candidateMetadata.blockHash == targetBlockHash).pure[F] ||^ {
-      for {
-        targetBlockOpt       <- dag.lookup(targetBlockHash)
-        mainParentOpt        = targetBlockOpt >>= (_.parents.headOption)
-        inMainParentChainOpt <- mainParentOpt.traverse(isInMainChain(dag, candidateMetadata, _))
-      } yield inMainParentChainOpt.getOrElse(false)
-    }
+    (candidateMetadata.blockHash == targetBlockHash).pure[F] ||^
+      dag.lookup(targetBlockHash).flatMap {
+        case Some(targetBlock) =>
+          if (targetBlock.blockNum <= candidateMetadata.blockNum) {
+            false.pure[F]
+          } else {
+            val mainParentOpt = targetBlock.parents.headOption
+            mainParentOpt.traverse(isInMainChain(dag, candidateMetadata, _)).map(_.getOrElse(false))
+          }
+        case None =>
+          false.pure[F]
+      }
   }
 
   def getMainChainUntilDepth[F[_]: Sync: BlockStore](
