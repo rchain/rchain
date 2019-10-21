@@ -628,41 +628,18 @@ class ValidateTest
 
   "Justification regression validation" should "return valid for proper justifications and justification regression detected otherwise" in withStorage {
     implicit blockStore => implicit blockDagStorage =>
-      val validators = Vector(
-        generateValidator("Validator 1"),
-        generateValidator("Valdiator 2")
-      )
-      val bonds = validators.zipWithIndex.map {
+      val v0 = generateValidator("Validator 1")
+      val v1 = generateValidator("Validator 2")
+      val bonds = List(v0, v1).zipWithIndex.map {
         case (v, i) => Bond(v, 2L * i.toLong + 1L)
       }
 
-      def latestMessages(messages: Seq[BlockMessage]): Map[Validator, BlockHash] =
-        messages.map(b => b.sender -> b.blockHash).toMap
-
-      def createValidatorBlock[F[_]: Monad: Time: BlockStore: IndexedBlockDagStorage](
-          parents: Seq[BlockMessage],
-          genesis: BlockMessage,
-          justifications: Seq[BlockMessage],
-          validator: Int
-      ): F[BlockMessage] =
-        for {
-          deploy <- ConstructDeploy.basicProcessedDeploy[F](0)
-          result <- createBlock[F](
-                     parents.map(_.blockHash),
-                     genesis,
-                     creator = validators(validator),
-                     bonds = bonds,
-                     deploys = Seq(deploy),
-                     justifications = latestMessages(justifications)
-                   )
-        } yield result
-
       for {
         b0 <- createGenesis[Task](bonds = bonds)
-        b1 <- createValidatorBlock[Task](Seq(b0), b0, Seq(b0, b0), 0)
-        b2 <- createValidatorBlock[Task](Seq(b1), b0, Seq(b1, b0), 0)
-        b3 <- createValidatorBlock[Task](Seq(b0), b0, Seq(b2, b0), 1)
-        b4 <- createValidatorBlock[Task](Seq(b3), b0, Seq(b2, b3), 1)
+        b1 <- createValidatorBlock[Task](Seq(b0), b0, Seq(b0, b0), v0, bonds)
+        b2 <- createValidatorBlock[Task](Seq(b1), b0, Seq(b1, b0), v0, bonds)
+        b3 <- createValidatorBlock[Task](Seq(b0), b0, Seq(b2, b0), v1, bonds)
+        b4 <- createValidatorBlock[Task](Seq(b3), b0, Seq(b2, b3), v1, bonds)
         _ <- (0 to 4).toList.forallM[Task](
               i =>
                 for {
@@ -677,11 +654,11 @@ class ValidateTest
             ) shouldBeF true
         // The justification block for validator 0 should point to b2 or above.
         justificationsWithRegression = Seq(
-          Justification(validators(0), b1.blockHash),
-          Justification(validators(1), b4.blockHash)
+          Justification(v0, b1.blockHash),
+          Justification(v1, b4.blockHash)
         )
         blockWithJustificationRegression = Dummies.createBlockMessage(
-          sender = validators(1),
+          sender = v1,
           justifications = justificationsWithRegression.toList
         )
         dag <- blockDagStorage.getRepresentation
@@ -692,6 +669,39 @@ class ValidateTest
             ) shouldBeF Left(JustificationRegression)
         result = log.warns.size shouldBe 1
       } yield result
+  }
+
+  "Justification regression validation" should "return valid for regressive invalid blocks" in withStorage {
+    implicit blockStore => implicit blockDagStorage =>
+      val v0 = generateValidator("Validator 1")
+      val v1 = generateValidator("Validator 2")
+      val bonds = List(v0, v1).zipWithIndex.map {
+        case (v, i) => Bond(v, 2L * i.toLong + 1L)
+      }
+
+      for {
+        b0 <- createGenesis[Task](bonds = bonds)
+        b1 <- createValidatorBlock[Task](Seq(b0), b0, Seq(b0, b0), v0, bonds, 1)
+        b2 <- createValidatorBlock[Task](Seq(b0), b0, Seq(b1, b0), v1, bonds, 1)
+        b3 <- createValidatorBlock[Task](Seq(b0), b0, Seq(b1, b2), v0, bonds, 2)
+        b4 <- createValidatorBlock[Task](Seq(b0), b0, Seq(b3, b2), v1, bonds, 2)
+        b5 <- createValidatorBlock[Task](Seq(b0), b0, Seq(b3, b4), v0, bonds, 1, invalid = true)
+
+        justificationsWithInvalidBlock = Seq(
+          Justification(v0, b5.blockHash),
+          Justification(v1, b4.blockHash)
+        )
+        blockWithInvalidJustification = Dummies.createBlockMessage(
+          sender = v1,
+          justifications = justificationsWithInvalidBlock.toList
+        )
+        dag <- blockDagStorage.getRepresentation
+        _ <- Validate.justificationRegressions[Task](
+              blockWithInvalidJustification,
+              b0,
+              dag
+            ) shouldBeF Right(Valid)
+      } yield ()
   }
 
   "Bonds cache validation" should "succeed on a valid block and fail on modified bonds" in withStorage {

@@ -664,12 +664,8 @@ object Validate {
                                          )
                                        )
                                    }
-    } yield
-      if (currentBlockJustification.seqNum < previousBlockJustification.seqNum) {
-        true
-      } else {
-        false
-      }
+    } yield !currentBlockJustification.invalid &&
+      currentBlockJustification.seqNum < previousBlockJustification.seqNum
 
   /**
     * If block contains an invalid justification block B and the creator of B is still bonded,

@@ -9,7 +9,7 @@ import coop.rchain.blockstorage.dag._
 import coop.rchain.casper.CasperMetricsSource
 import coop.rchain.casper._
 import coop.rchain.casper.protocol._
-import coop.rchain.casper.util.ProtoUtil
+import coop.rchain.casper.util.{ConstructDeploy, ProtoUtil}
 import coop.rchain.casper.util.rholang.InterpreterUtil.computeDeploysCheckpoint
 import coop.rchain.casper.util.rholang.RuntimeManager
 import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
@@ -163,7 +163,8 @@ trait BlockGenerator {
       tsHash: ByteString = ByteString.EMPTY,
       shardId: String = "rchain",
       preStateHash: ByteString = ByteString.EMPTY,
-      seqNum: Int = 0
+      seqNum: Int = 0,
+      invalid: Boolean = false
   ): F[BlockMessage] =
     for {
       block <- buildBlock[F](
@@ -177,7 +178,30 @@ trait BlockGenerator {
                 preStateHash,
                 seqNum
               )
-      modifiedBlock <- IndexedBlockDagStorage[F].insertIndexed(block, genesis, false)
+      modifiedBlock <- IndexedBlockDagStorage[F].insertIndexed(block, genesis, invalid)
       _             <- BlockStore[F].put(block.blockHash, modifiedBlock)
     } yield modifiedBlock
+
+  def createValidatorBlock[F[_]: Monad: Time: BlockStore: IndexedBlockDagStorage](
+      parents: Seq[BlockMessage],
+      genesis: BlockMessage,
+      justifications: Seq[BlockMessage],
+      validator: Validator,
+      bonds: Seq[Bond],
+      seqNum: Int = 0,
+      invalid: Boolean = false
+  ): F[BlockMessage] =
+    for {
+      deploy <- ConstructDeploy.basicProcessedDeploy[F](0)
+      result <- createBlock[F](
+                 parents.map(_.blockHash),
+                 genesis,
+                 creator = validator,
+                 bonds = bonds,
+                 deploys = Seq(deploy),
+                 justifications = justifications.map(b => b.sender -> b.blockHash).toMap,
+                 seqNum = seqNum,
+                 invalid = invalid
+               )
+    } yield result
 }
