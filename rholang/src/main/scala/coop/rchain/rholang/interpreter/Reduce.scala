@@ -13,6 +13,7 @@ import coop.rchain.metrics.Span
 import coop.rchain.models.Expr.ExprInstance._
 import coop.rchain.models.GUnforgeable.UnfInstance
 import coop.rchain.models.GUnforgeable.UnfInstance.{GDeployIdBody, GDeployerIdBody, GPrivateBody}
+import coop.rchain.models.Injection.InjInstance.{ExprBody, UnfBody}
 import coop.rchain.models.TaggedContinuation.TaggedCont.ParBody
 import coop.rchain.models.Var.VarInstance
 import coop.rchain.models.Var.VarInstance.{BoundVar, FreeVar, Wildcard}
@@ -405,10 +406,10 @@ class DebruijnInterpreter[M[_], F[_]](
           neu.injections
             .get(urn)
             .map {
-              case RhoType.Unforgeable(GUnforgeable(unfInstance)) if unfInstance.isDefined =>
+              case Injection(UnfBody(GUnforgeable(unfInstance))) if unfInstance.isDefined =>
                 newEnv.put(unfInstance).asRight[InterpreterError]
 
-              case RhoType.Expression(Expr(exprInstance)) if exprInstance.isDefined =>
+              case Injection(ExprBody(Expr(exprInstance))) if exprInstance.isDefined =>
                 newEnv.put(exprInstance).asRight[InterpreterError]
 
               case _ =>

@@ -15,6 +15,7 @@ import coop.rchain.models.rholang.sorter.ordering._
 import scala.collection.immutable.BitSet
 import coop.rchain.models.Connective.ConnectiveInstance._
 import coop.rchain.models.Expr.ExprInstance._
+import coop.rchain.models.Injection.InjInstance.ExprBody
 import coop.rchain.models.NormalizerEnv.NormalizerEnv
 import coop.rchain.models.Var.VarInstance._
 import coop.rchain.models.Var.WildcardMsg
@@ -990,13 +991,13 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
 
   "PNew" should "raise a NormalizerError when deployerId uri does not point to a DeployerId" in {
     val uri                                   = "rho:rchain:deployerId"
-    implicit val normalizerEnv: NormalizerEnv = Map(uri -> GInt(42))
+    implicit val normalizerEnv: NormalizerEnv = Map(uri -> Injection(ExprBody(Expr(GInt(42)))))
     checkNormalizerError(uri, "DeployerId")
   }
 
   "PNew" should "raise a NormalizerError when deployId uri does not point to a DeployId" in {
     val uri                                   = "rho:rchain:deployId"
-    implicit val normalizerEnv: NormalizerEnv = Map(uri -> GInt(42))
+    implicit val normalizerEnv: NormalizerEnv = Map(uri -> Injection(ExprBody(Expr(GInt(42)))))
     checkNormalizerError(uri, "DeployId")
   }
 

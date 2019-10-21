@@ -957,12 +957,17 @@ object ProcNormalizeMatcher {
         val newCount           = newEnv.count - input.env.count
         val requiresDeployId   = uris.contains(deployIdUri)
         val requiresDeployerId = uris.contains(deployerIdUri)
+        val containsDeployId =
+          env.get(deployIdUri).exists(_.injInstance.unfBody.exists(_.unfInstance.isGDeployIdBody))
+        val containsDeployerId = env
+          .get(deployerIdUri)
+          .exists(_.injInstance.unfBody.exists(_.unfInstance.isGDeployerIdBody))
 
         def missingEnvElement(name: String, uri: String) =
           NormalizerError(s"`$uri` was used in rholang usage context where $name is not available.")
-        if (requiresDeployId && env.get(deployIdUri).forall(_.singleDeployId().isEmpty))
+        if (requiresDeployId && !containsDeployId)
           missingEnvElement("DeployId", deployIdUri).raiseError[M, ProcVisitOutputs]
-        else if (requiresDeployerId && env.get(deployerIdUri).forall(_.singleDeployerId().isEmpty))
+        else if (requiresDeployerId && !containsDeployerId)
           missingEnvElement("DeployerId", deployerIdUri).raiseError[M, ProcVisitOutputs]
         else {
           normalizeMatch[M](p.proc_, ProcVisitInputs(VectorPar(), newEnv, input.knownFree)).map {
