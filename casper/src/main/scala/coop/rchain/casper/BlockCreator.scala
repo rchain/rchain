@@ -221,8 +221,6 @@ object BlockCreator {
                  invalidBlocks
                )
       (preStateHash, postStateHash, processedDeploys) = result
-      (internalErrors, persistableDeploys)            = processedDeploys.partition(_.status.isInternalError)
-      _                                               <- logInternalErrors(internalErrors)
       newBonds                                        <- runtimeManager.computeBonds(postStateHash)
       block = createBlock(
         now,
@@ -231,7 +229,7 @@ object BlockCreator {
         maxBlockNumber,
         preStateHash,
         postStateHash,
-        persistableDeploys,
+        processedDeploys,
         newBonds,
         shardId,
         version
@@ -244,22 +242,6 @@ object BlockCreator {
           Log[F].error(s"Critical error encountered while processing deploys", ex)
       }
       .handleError(CreateBlockStatus.internalDeployError)
-
-  private def logInternalErrors[F[_]: Sync: Log](
-      internalErrors: Seq[InternalProcessedDeploy]
-  ): F[List[Unit]] = {
-    import cats.instances.list._
-
-    internalErrors.toList
-      .traverse {
-        case InternalProcessedDeploy(deploy, _, _, _, InternalErrors(errors)) =>
-          val errorsMessage = errors.map(_.getMessage).mkString("\n")
-          Log[F].error(
-            s"Internal error encountered while processing deploy '$deploy': $errorsMessage"
-          )
-        case _ => ().pure[F]
-      }
-  }
 
   private def createBlock(
       now: Long,

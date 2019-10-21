@@ -16,7 +16,6 @@ import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.Validator.Validator
 import coop.rchain.rholang.interpreter.ParBuilder
 import coop.rchain.rholang.interpreter.Runtime.BlockData
-import coop.rchain.rspace.ReplayException
 import coop.rchain.shared.{Log, LogSource}
 import com.google.protobuf.ByteString
 import coop.rchain.models.NormalizerEnv.NormalizerEnv
@@ -100,44 +99,34 @@ object InterpreterUtil {
       result: Either[ReplayFailure, StateHash]
   ): F[BlockProcessing[Option[StateHash]]] =
     result.pure.flatMap {
-      case Left((Some(deploy), status)) =>
+      case Left(status) =>
         status match {
-          case InternalErrors(exs) =>
+          case InternalError(deploy, throwable) =>
             BlockStatus
               .exception(
                 new Exception(s"Internal errors encountered while processing ${PrettyPrinter
-                  .buildString(deploy)}: ${exs.mkString("\n")}")
+                  .buildString(deploy)}: ${throwable.getMessage}")
               )
               .asLeft[Option[StateHash]]
               .pure
-          case UserErrors(errors: Seq[Throwable]) =>
-            Log[F].warn(s"Found user error(s) ${errors.map(_.getMessage).mkString("\n")}") >>
-              none[StateHash].asRight[BlockError].pure
-          case ReplayStatusMismatch(replay: DeployStatus, orig: DeployStatus) =>
+          case ReplayStatusMismatch(replayFailed, initialFailed) =>
             Log[F]
               .warn(
-                s"Found replay status mismatch; replay failure is ${replay.isFailed} and orig failure is ${orig.isFailed}"
+                s"Found replay status mismatch; replay failure is $replayFailed and orig failure is $initialFailed"
               )
               .as(none[StateHash].asRight[BlockError])
-          case UnknownFailure =>
+          case UnusedCOMMEvent(deploy, replayException) =>
             Log[F]
-              .warn(s"Found unknown failure")
+              .warn(
+                s"Found replay exception while processing ${PrettyPrinter.buildString(deploy)}: ${replayException.getMessage}"
+              )
               .as(none[StateHash].asRight[BlockError])
-          case UnusedCommEvent(_) =>
-            new RuntimeException("found UnusedCommEvent").raiseError
-        }
-      case Left((None, status)) =>
-        status match {
-          case UnusedCommEvent(_: ReplayException) =>
-            none[StateHash].asRight[BlockError].pure
-          case InternalErrors(_) =>
-            new RuntimeException("found InternalErrors").raiseError
-          case ReplayStatusMismatch(_, _) =>
-            new RuntimeException("found ReplayStatusMismatch").raiseError
-          case UnknownFailure =>
-            new RuntimeException("found UnknownFailure").raiseError
-          case UserErrors(_) =>
-            new RuntimeException("found UserErrors").raiseError
+          case ReplayCostMismatch(deploy, initialCost, replayCost) =>
+            Log[F]
+              .warn(
+                s"Found replay cost mismatch while processing ${PrettyPrinter.buildString(deploy)}: initial deploy cost = $initialCost, replay deploy cost = $replayCost"
+              )
+              .as(none[StateHash].asRight[BlockError])
         }
       case Right(computedStateHash) =>
         if (tsHash == computedStateHash) {
@@ -247,13 +236,12 @@ object InterpreterUtil {
                        invalidBlocks,
                        isGenesis //should always be false
                      )
-    } yield replayResult.leftMap[Throwable] {
-      case (_, status) =>
-        val parentHashes =
-          parents.map(p => Base16.encode(p.blockHash.toByteArray).take(8))
-        new Exception(
-          s"Failed status while computing post state of $parentHashes: $status"
-        )
+    } yield replayResult.leftMap[Throwable] { status =>
+      val parentHashes =
+        parents.map(p => Base16.encode(p.blockHash.toByteArray).take(8))
+      new Exception(
+        s"Failed status while computing post state of $parentHashes: $status"
+      )
     }).rethrow
   }
 

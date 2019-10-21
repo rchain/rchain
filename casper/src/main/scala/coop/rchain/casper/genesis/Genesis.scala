@@ -76,16 +76,9 @@ object Genesis {
     )
 
     //FIXME any failures here should terminate the genesis ceremony
-    val blockDeploys =
-      processedDeploys.filterNot(_.status.isFailed).map(_.toProcessedDeploy)
-    val sortedDeploys = blockDeploys.map(
-      d =>
-        d.copy(
-          deployLog = d.deployLog.sortBy(_.toProto.toByteArray),
-          paymentLog = d.paymentLog.sortBy(_.toProto.toByteArray)
-        )
-    )
-
+    val blockDeploys = processedDeploys.filterNot(_.isFailed).map(_.toProcessedDeploy)
+    val sortedDeploys =
+      blockDeploys.map(d => d.copy(deployLog = d.deployLog.sortBy(_.toProto.toByteArray)))
     val body    = Body(state = state, deploys = sortedDeploys.toList)
     val version = 1L //FIXME make this part of Genesis, and pass it from upstream
     val header  = blockHeader(body, List.empty[StateHash], version, timestamp)

@@ -5,11 +5,11 @@ import cats.effect.Sync
 import cats.implicits._
 import cats.mtl.FunctorTell
 import coop.rchain.crypto.hash.Blake2b512Random
-import coop.rchain.metrics.Span
 import coop.rchain.models.TaggedContinuation.TaggedCont.{Empty, ParBody, ScalaBodyRef}
 import coop.rchain.models._
 import coop.rchain.rholang.interpreter.Runtime.RhoTuplespace
 import coop.rchain.rholang.interpreter.accounting._
+import coop.rchain.rholang.interpreter.errors.InterpreterError
 
 object RholangOnlyDispatcher {
 
@@ -18,7 +18,7 @@ object RholangOnlyDispatcher {
       cost: _cost[M],
       parallel: Parallel[M, F],
       s: Sync[M],
-      ft: FunctorTell[M, Throwable]
+      ft: FunctorTell[M, InterpreterError]
   ): (Dispatch[M, ListParWithRandom, TaggedContinuation], DebruijnInterpreter[M, F]) = {
 
     lazy val dispatcher: Dispatch[M, ListParWithRandom, TaggedContinuation] =
