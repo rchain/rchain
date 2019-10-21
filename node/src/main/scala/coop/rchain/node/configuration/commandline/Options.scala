@@ -202,6 +202,10 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
       descr = "Maximum bond accepted by the PoS contract in the genesis block."
     )
 
+    val epochLength = opt[Int](descr = "the length of the validation epoch in blocks")
+
+    val quarantineLength = opt[Int](descr = "the length of the quarantine time in blocks")
+
     val bootstrap =
       opt[PeerNode](
         short = 'b',

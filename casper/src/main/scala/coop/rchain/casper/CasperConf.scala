@@ -25,6 +25,8 @@ final case class CasperConf(
     walletsFile: Option[String],
     minimumBond: Long,
     maximumBond: Long,
+    epochLength: Int,
+    quarantineLength: Int,
     requiredSigs: Int,
     shardId: String,
     createGenesis: Boolean,

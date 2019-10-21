@@ -65,6 +65,8 @@ object ApproveBlockProtocol {
       maybeVaultsPath: Option[String],
       minimumBond: Long,
       maximumBond: Long,
+      epochLength: Int,
+      quarantineLength: Int,
       shardId: String,
       deployTimestamp: Option[Long],
       requiredSigs: Int,
@@ -99,6 +101,8 @@ object ApproveBlockProtocol {
                            proofOfStake = ProofOfStake(
                              minimumBond = minimumBond,
                              maximumBond = maximumBond,
+                             epochLength = epochLength,
+                             quarantineLength = quarantineLength,
                              validators = validators
                            ),
                            vaults = vaults,

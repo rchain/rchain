@@ -178,6 +178,8 @@ class HoconConfigurationSpec extends FunSuite with Matchers {
         |    wallets-file = /root/wallet.txt
         |    bond-minimum = 1
         |    bond-maximum = 9223372036854775807
+        |    epoch-length = 10000
+        |    quarantine-length = 50000
         |    required-signatures = 0
         |    shard = rchain
         |    genesis-validator = true
@@ -200,6 +202,8 @@ class HoconConfigurationSpec extends FunSuite with Matchers {
         walletsFile = Some("/root/wallet.txt"),
         minimumBond = 1L,
         maximumBond = Long.MaxValue,
+        epochLength = 10000,
+        quarantineLength = 50000,
         requiredSigs = 0,
         shardId = "rchain",
         createGenesis = false,
