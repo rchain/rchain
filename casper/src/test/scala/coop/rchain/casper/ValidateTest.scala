@@ -671,6 +671,39 @@ class ValidateTest
       } yield result
   }
 
+  "Justification regression validation" should "return valid for regressive invalid blocks" in withStorage {
+    implicit blockStore => implicit blockDagStorage =>
+      val v0 = generateValidator("Validator 1")
+      val v1 = generateValidator("Validator 2")
+      val bonds = List(v0, v1).zipWithIndex.map {
+        case (v, i) => Bond(v, 2L * i.toLong + 1L)
+      }
+
+      for {
+        b0 <- createGenesis[Task](bonds = bonds)
+        b1 <- createValidatorBlock[Task](Seq(b0), b0, Seq(b0, b0), v0, bonds, 1)
+        b2 <- createValidatorBlock[Task](Seq(b0), b0, Seq(b1, b0), v1, bonds, 1)
+        b3 <- createValidatorBlock[Task](Seq(b0), b0, Seq(b1, b2), v0, bonds, 2)
+        b4 <- createValidatorBlock[Task](Seq(b0), b0, Seq(b3, b2), v1, bonds, 2)
+        b5 <- createValidatorBlock[Task](Seq(b0), b0, Seq(b3, b4), v0, bonds, 1, invalid = true)
+
+        justificationsWithInvalidBlock = Seq(
+          Justification(v0, b5.blockHash),
+          Justification(v1, b4.blockHash)
+        )
+        blockWithInvalidJustification = Dummies.createBlockMessage(
+          sender = v1,
+          justifications = justificationsWithInvalidBlock.toList
+        )
+        dag <- blockDagStorage.getRepresentation
+        _ <- Validate.justificationRegressions[Task](
+              blockWithInvalidJustification,
+              b0,
+              dag
+            ) shouldBeF Right(Valid)
+      } yield ()
+  }
+
   "Bonds cache validation" should "succeed on a valid block and fail on modified bonds" in withStorage {
     implicit blockStore => implicit blockDagStorage =>
       val genesis = GenesisBuilder.createGenesis()
