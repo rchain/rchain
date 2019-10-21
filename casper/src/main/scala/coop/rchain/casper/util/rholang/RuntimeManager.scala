@@ -357,6 +357,7 @@ object RuntimeManager {
       costState: _cost[F],
       errorLog: ErrorLog[F]
   )(deploy: DeployData): F[EvaluateResult] = {
+    import rholang.implicits._
     implicit val rand: Blake2b512Random = Blake2b512Random(
       ProtoUtil.stripDeployData(deploy).toProto.toByteArray
     )
@@ -366,7 +367,7 @@ object RuntimeManager {
       errorLog,
       deploy.term,
       Cost(deploy.phloLimit),
-      NormalizerEnv(deploy.toProto)
+      NormalizerEnv(deploy).toEnv
     )
   }
 }

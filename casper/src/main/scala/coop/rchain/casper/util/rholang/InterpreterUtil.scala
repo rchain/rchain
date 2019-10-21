@@ -3,30 +3,32 @@ package coop.rchain.casper.util.rholang
 import cats.Monad
 import cats.effect._
 import cats.syntax.all._
+import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockStore
 import coop.rchain.blockstorage.dag.BlockDagRepresentation
 import coop.rchain.casper._
 import coop.rchain.casper.protocol._
-import coop.rchain.casper.util.{DagOperations, ProtoUtil}
 import coop.rchain.casper.util.rholang.RuntimeManager._
+import coop.rchain.casper.util.{DagOperations, ProtoUtil}
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.metrics.Span
-import coop.rchain.models.{BlockMetadata, Par}
 import coop.rchain.models.BlockHash.BlockHash
+import coop.rchain.models.NormalizerEnv.ToEnvMap
 import coop.rchain.models.Validator.Validator
+import coop.rchain.models.{BlockMetadata, NormalizerEnv, Par}
 import coop.rchain.rholang.interpreter.ParBuilder
 import coop.rchain.rholang.interpreter.Runtime.BlockData
 import coop.rchain.shared.{Log, LogSource}
-import com.google.protobuf.ByteString
-import coop.rchain.models.NormalizerEnv.NormalizerEnv
 import monix.eval.Coeval
 
 object InterpreterUtil {
 
   implicit private val logSource: LogSource = LogSource(this.getClass)
 
-  def mkTerm(rho: String, normalizerEnv: NormalizerEnv): Either[Throwable, Par] =
-    ParBuilder[Coeval].buildNormalizedTerm(rho, normalizerEnv).runAttempt
+  def mkTerm[Env](rho: String, normalizerEnv: NormalizerEnv[Env])(
+      implicit ev: ToEnvMap[Env]
+  ): Either[Throwable, Par] =
+    ParBuilder[Coeval].buildNormalizedTerm(rho, normalizerEnv.toEnv).runAttempt
 
   //Returns (None, checkpoints) if the block's tuplespace hash
   //does not match the computed hash based on the deploys

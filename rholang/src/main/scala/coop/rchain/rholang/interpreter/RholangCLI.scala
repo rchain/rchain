@@ -1,13 +1,12 @@
 package coop.rchain.rholang.interpreter
 
-import java.io.{BufferedOutputStream, FileOutputStream, FileReader, IOException, StringReader}
+import java.io.{BufferedOutputStream, FileOutputStream, FileReader, IOException}
 import java.nio.file.{Files, Path}
 import java.util.concurrent.TimeoutException
 
 import cats._
 import cats.effect.Sync
 import cats.implicits._
-import coop.rchain.catscontrib.mtl.implicits._
 import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.models._
@@ -190,7 +189,7 @@ object RholangCLI {
     val source = reader(fileName)
 
     ParBuilder[Coeval]
-      .buildNormalizedTerm(source, NormalizerEnv.Empty)
+      .buildNormalizedTerm(source, Map.empty[String, Par])
       .runAttempt
       .fold(Failure(_), processTerm)
 
@@ -198,7 +197,7 @@ object RholangCLI {
 
   def evaluate(runtime: Runtime[Task], source: String): Task[Unit] = {
     implicit val c = runtime.cost
-    Interpreter[Task].evaluate(runtime, source, NormalizerEnv.Empty).map {
+    Interpreter[Task].evaluate(runtime, source, Map.empty).map {
       case EvaluateResult(_, Vector()) =>
       case EvaluateResult(_, errors) =>
         errors.foreach {
@@ -266,7 +265,7 @@ object RholangCLI {
             })
         result <- {
           implicit val c = runtime.cost
-          Interpreter[Task].evaluate(runtime, source, NormalizerEnv.Empty)
+          Interpreter[Task].evaluate(runtime, source, Map.empty)
         }
       } yield result
 

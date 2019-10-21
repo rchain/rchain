@@ -1,34 +1,35 @@
 package coop.rchain.rholang.build
-import coop.rchain.models.NormalizerEnv.NormalizerEnv
-import coop.rchain.models.Par
+import coop.rchain.models.NormalizerEnv.ToEnvMap
+import coop.rchain.models.{NormalizerEnv, Par}
 import coop.rchain.rholang.interpreter.ParBuilder
 import monix.eval.Coeval
+import shapeless.HNil
 
 import scala.io.Source
 
-trait CompiledRholangSource {
+abstract class CompiledRholangSource[Env](val code: String, val normalizerEnv: NormalizerEnv[Env])(
+    implicit ev: ToEnvMap[Env]
+) {
   val path: String
-  val term: Par
-  val code: String
-  val normalizerEnv: NormalizerEnv
+  val term: Par = ParBuilder[Coeval].buildNormalizedTerm(code, normalizerEnv.toEnv).value()
+  final def env = normalizerEnv.toEnv
 }
 
 object CompiledRholangSource {
+  def loadSource(classpath: String) = {
+    val fileContent = Source.fromResource(classpath).mkString
+    s"""//Loaded from resource file <<$classpath>>
+       #$fileContent
+       #""".stripMargin('#')
+  }
 
-  def apply(classpath: String, env: NormalizerEnv): CompiledRholangSource =
-    new CompiledRholangSource {
-      override val path: String = classpath
-      override val code: String = {
-        val fileContent = Source.fromResource(classpath).mkString
+  def apply(classpath: String): CompiledRholangSource[HNil] = apply(classpath, NormalizerEnv.Empty)
 
-        s"""//Loaded from resource file <<$classpath>>
-         #$fileContent
-         #""".stripMargin('#')
-      }
-      override val term: Par =
-        ParBuilder[Coeval].buildNormalizedTerm(code, env).value()
-      override val normalizerEnv: NormalizerEnv = env
-    }
+  def apply[Env](classpath: String, env: NormalizerEnv[Env])(
+      implicit ev: ToEnvMap[Env]
+  ): CompiledRholangSource[Env] = new CompiledRholangSource[Env](loadSource(classpath), env) {
+    override val path: String = classpath
+  }
 }
 
 /**
@@ -38,24 +39,27 @@ object CompiledRholangSource {
   * @param env a sequence of pairs macro -> value
   * @return
   */
-abstract class CompiledRholangTemplate(
+abstract class CompiledRholangTemplate[Env](
     classpath: String,
-    normalizerEnv0: NormalizerEnv,
+    normalizerEnv0: NormalizerEnv[Env],
     env: (String, Any)*
-) extends CompiledRholangSource {
-
-  val originalContent = Source.fromResource(classpath).mkString
-
-  val finalContent = env.foldLeft(originalContent) {
-    case (content, (name, value)) => content.replace(s"""$$$$$name$$$$""", value.toString)
-  }
-
+)(implicit ev: ToEnvMap[Env])
+    extends CompiledRholangSource[Env](
+      CompiledRholangTemplate.loadTemplate(classpath, env),
+      normalizerEnv0
+    ) {
   override val path: String = classpath
-  override val code: String =
-    s"""//Loaded from resource file <<$classpath>>
-        #$finalContent
-        #""".stripMargin('#')
+}
 
-  override val term: Par                    = ParBuilder[Coeval].buildNormalizedTerm(code, normalizerEnv0).value()
-  override val normalizerEnv: NormalizerEnv = normalizerEnv0
+object CompiledRholangTemplate {
+  def loadTemplate(classpath: String, macros: Seq[(String, Any)]) = {
+    val originalContent = Source.fromResource(classpath).mkString
+    val finalContent = macros.foldLeft(originalContent) {
+      case (content, (name, value)) => content.replace(s"""$$$$$name$$$$""", value.toString)
+    }
+
+    s"""//Loaded from resource file <<$classpath>>
+       #$finalContent
+       #""".stripMargin('#')
+  }
 }

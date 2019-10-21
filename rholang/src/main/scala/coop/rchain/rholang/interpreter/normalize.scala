@@ -5,7 +5,6 @@ import cats.{Applicative, MonadError}
 import cats.implicits._
 import coop.rchain.models.Connective.ConnectiveInstance._
 import coop.rchain.models.Expr.ExprInstance._
-import coop.rchain.models.NormalizerEnv.NormalizerEnv
 import coop.rchain.models.Var.VarInstance._
 import coop.rchain.models._
 import coop.rchain.models.rholang.implicits._
@@ -109,7 +108,7 @@ object RemainderNormalizeMatcher {
 object CollectionNormalizeMatcher {
   def normalizeMatch[M[_]](c: Collection, input: CollectVisitInputs)(
       implicit sync: Sync[M],
-      env: NormalizerEnv
+      env: Map[String, Par]
   ): M[CollectVisitOutputs] = {
     def foldMatch[T](
         knownFree: DebruijnLevelMap[VarSort],
@@ -241,7 +240,7 @@ object CollectionNormalizeMatcher {
 object NameNormalizeMatcher {
   def normalizeMatch[M[_]](n: Name, input: NameVisitInputs)(
       implicit err: Sync[M],
-      env: NormalizerEnv
+      env: Map[String, Par]
   ): M[NameVisitOutputs] =
     n match {
       case wc: NameWildcard =>
@@ -285,7 +284,7 @@ object ProcNormalizeMatcher {
   // ApplicativeAsk / MonadState instead
   def normalizeMatch[M[_]](p: Proc, input: ProcVisitInputs)(
       implicit sync: Sync[M],
-      env: NormalizerEnv
+      env: Map[String, Par]
   ): M[ProcVisitOutputs] = Sync[M].defer {
     def unaryExp[T](subProc: Proc, input: ProcVisitInputs, constructor: Par => T)(
         implicit toExprInstance: T => Expr

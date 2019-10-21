@@ -15,7 +15,6 @@ import coop.rchain.models.rholang.sorter.ordering._
 import scala.collection.immutable.BitSet
 import coop.rchain.models.Connective.ConnectiveInstance._
 import coop.rchain.models.Expr.ExprInstance._
-import coop.rchain.models.NormalizerEnv.NormalizerEnv
 import coop.rchain.models.Var.VarInstance._
 import coop.rchain.models.Var.WildcardMsg
 import coop.rchain.models._
@@ -61,8 +60,8 @@ class CollectMatcherSpec extends FlatSpec with Matchers {
     IndexMapChain[VarSort]().newBindings(List(("P", ProcSort, 0, 0), ("x", NameSort, 0, 0))),
     DebruijnLevelMap[VarSort]()
   )
-  implicit val normalizerEnv: NormalizerEnv = NormalizerEnv.Empty
-  def getNormalizedPar(rho: String): Par    = ParBuilderUtil.buildNormalizedTerm[Coeval](rho).value()
+  implicit val normalizerEnv: Map[String, Par] = Map.empty
+  def getNormalizedPar(rho: String): Par       = ParBuilderUtil.buildNormalizedTerm[Coeval](rho).value()
   def assertEqualNormalized(rho1: String, rho2: String): Assertion =
     assert(getNormalizedPar(rho1) == getNormalizedPar(rho2))
 
@@ -222,8 +221,8 @@ class CollectMatcherSpec extends FlatSpec with Matchers {
 }
 
 class ProcMatcherSpec extends FlatSpec with Matchers {
-  val inputs                                = ProcVisitInputs(Par(), IndexMapChain[VarSort](), DebruijnLevelMap[VarSort]())
-  implicit val normalizerEnv: NormalizerEnv = NormalizerEnv.Empty
+  val inputs                                   = ProcVisitInputs(Par(), IndexMapChain[VarSort](), DebruijnLevelMap[VarSort]())
+  implicit val normalizerEnv: Map[String, Par] = Map.empty
 
   "PNil" should "Compile as no modification to the par object" in {
     val nil = new PNil()
@@ -977,7 +976,7 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
   }
 
   def checkNormalizerError(uri: String, name: String)(
-      implicit normalizerEnv: NormalizerEnv
+      implicit normalizerEnv: Map[String, Par]
   ): Assertion = {
     val listNameDecl = new ListNameDecl()
     listNameDecl.add(new NameDeclUrn(name, s"`$uri`"))
@@ -990,26 +989,26 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
   }
 
   "PNew" should "raise a NormalizerError when deployerId uri does not point to a DeployerId" in {
-    val uri                                   = "rho:rchain:deployerId"
-    implicit val normalizerEnv: NormalizerEnv = Map(uri -> GInt(42))
+    val uri                                      = "rho:rchain:deployerId"
+    implicit val normalizerEnv: Map[String, Par] = Map(uri -> GInt(42))
     checkNormalizerError(uri, "DeployerId")
   }
 
   "PNew" should "raise a NormalizerError when deployId uri does not point to a DeployId" in {
-    val uri                                   = "rho:rchain:deployId"
-    implicit val normalizerEnv: NormalizerEnv = Map(uri -> GInt(42))
+    val uri                                      = "rho:rchain:deployId"
+    implicit val normalizerEnv: Map[String, Par] = Map(uri -> GInt(42))
     checkNormalizerError(uri, "DeployId")
   }
 
   "PNew" should "raise a NormalizerError when deployerId uri is set but not available in the NormalizerEnv" in {
-    val uri                                   = "rho:rchain:deployerId"
-    implicit val normalizerEnv: NormalizerEnv = Map()
+    val uri                                      = "rho:rchain:deployerId"
+    implicit val normalizerEnv: Map[String, Par] = Map()
     checkNormalizerError(uri, "DeployerId")
   }
 
   "PNew" should "raise a NormalizerError when deployId uri is set but not available in the NormalizerEnv" in {
-    val uri                                   = "rho:rchain:deployId"
-    implicit val normalizerEnv: NormalizerEnv = Map()
+    val uri                                      = "rho:rchain:deployId"
+    implicit val normalizerEnv: Map[String, Par] = Map()
     checkNormalizerError(uri, "DeployId")
   }
 
@@ -1603,8 +1602,8 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
 }
 
 class NameMatcherSpec extends FlatSpec with Matchers {
-  val inputs                                = NameVisitInputs(IndexMapChain[VarSort](), DebruijnLevelMap[VarSort]())
-  implicit val normalizerEnv: NormalizerEnv = NormalizerEnv.Empty
+  val inputs                                   = NameVisitInputs(IndexMapChain[VarSort](), DebruijnLevelMap[VarSort]())
+  implicit val normalizerEnv: Map[String, Par] = Map.empty
 
   "NameWildcard" should "add a wildcard count to knownFree" in {
     val nw                  = new NameWildcard()

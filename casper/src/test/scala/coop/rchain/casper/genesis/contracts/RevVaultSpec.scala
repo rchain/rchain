@@ -4,6 +4,7 @@ import coop.rchain.casper.helper.RhoSpec
 import coop.rchain.casper.util.ConstructDeploy
 import coop.rchain.models.NormalizerEnv
 import coop.rchain.rholang.build.CompiledRholangSource
+import coop.rchain.models.rholang.implicits._
 
 class RevVaultSpec
     extends RhoSpec(
@@ -14,5 +15,5 @@ class RevVaultSpec
 
 object RevVaultSpec {
   val deployerPk    = ConstructDeploy.defaultPub
-  val normalizerEnv = NormalizerEnv(deployerPk)
+  val normalizerEnv = NormalizerEnv.withDeployerId(deployerPk)
 }
