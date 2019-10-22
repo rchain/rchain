@@ -4,6 +4,9 @@ import scala.collection.immutable.Queue
 
 import cats.effect.concurrent.Ref
 import cats.effect.SyncIO
+import cats.Show
+
+import coop.rchain.shared.Log
 
 import org.scalatest.{Matchers, WordSpecLike}
 
@@ -539,6 +542,9 @@ class FairRoundRobinDispatcherSpec extends WordSpecLike with Matchers {
       giveUpAfterSkipped: Int,
       dropSourceAfterRetries: Int
   ) {
+    implicit private val log: Log[SyncIO]   = new Log.NOPLog[SyncIO]
+    implicit private val show: Show[String] = s => s
+
     val (queue, messages, retries, skipped, handled) =
       (for {
         queue    <- Ref[SyncIO].of(Queue.empty[String])
