@@ -41,3 +41,7 @@ abstract class SystemDeploy {
   protected def getReturnChannel(env: Env): Par
 }
 
+final case class SystemDeployResult[A](
+    internalProcessedSystemDeploy: InternalProcessedSystemDeploy,
+    deploySpecific: A
+)

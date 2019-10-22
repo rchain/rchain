@@ -1,20 +1,19 @@
 package coop.rchain.casper.util.rholang.costacc
 
-import coop.rchain.casper.util.rholang.SystemDeployFailure.PreChargeFailed
+import com.google.protobuf.ByteString
 import coop.rchain.casper.util.rholang.{SystemDeploy, SystemDeployFailure}
-import coop.rchain.rholang.interpreter.RhoType._
 import coop.rchain.crypto.PublicKey
 import coop.rchain.crypto.hash.Blake2b512Random
-import com.google.protobuf.ByteString
+import coop.rchain.rholang.interpreter.RhoType._
 
 object PreChargeDeploy extends SystemDeploy {
   import coop.rchain.models._
-  import GUnforgeable.UnfInstance.GPrivateBody
   import Expr.ExprInstance._
+  import GUnforgeable.UnfInstance.GPrivateBody
   import rholang.{implicits => toPar}
   import shapeless._
-  import syntax.singleton._
   import record._
+  import syntax.singleton._
 
   type Output = (RhoBoolean, RhoString)
   type Result = Unit
@@ -35,27 +34,25 @@ object PreChargeDeploy extends SystemDeploy {
     )
 
   override val source: String =
-    """
-                                |new rl(`rho:registry:lookup`),
-                                |poSCh,
-                                |initialDeployerId(`sys:casper:initialDeployerId`),
-                                |chargeAmount(`sys:casper:chargeAmount`),
-                                |return(`sys:casper:return`) in
-                                |{
-                                |  rl!(`rho:rchain:pos`, *poSCh) |
-                                |  for(@(_, PoS) <- poSCh) {
-                                |    @PoS!("chargeDeploy", *initialDeployerId, *chargeAmount, *return)
-                                |  }
-                                |
-                                |}""".stripMargin
+    """|new rl(`rho:registry:lookup`),
+       |poSCh,
+       |initialDeployerId(`sys:casper:initialDeployerId`),
+       |chargeAmount(`sys:casper:chargeAmount`),
+       |return(`sys:casper:return`) in
+       |{
+       |  rl!(`rho:rchain:pos`, *poSCh) |
+       |  for(@(_, PoS) <- poSCh) {
+       |    @PoS!("chargeDeploy", *initialDeployerId, *chargeAmount, *return)
+       |  }
+       |
+       |}""".stripMargin
 
   protected override val extractor = Extractor.derive
   protected def processResult(value: (Boolean, String)): Either[SystemDeployFailure, Unit] =
     value match {
       case (true, _)     => Right(())
-      case (_, errorMsg) => Left(PreChargeFailed(errorMsg))
+      case (_, errorMsg) => Left(SystemDeployFailure.DeployError(errorMsg))
     }
 
-  protected override def getReturnChannel(env: PreChargeDeploy.Env): Par =
-    toPar(env.get("sys:casper:return"))
+  protected override def getReturnChannel(env: Env): Par = toPar(env.get("sys:casper:return"))
 }

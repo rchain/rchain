@@ -9,13 +9,16 @@ import com.google.protobuf.ByteString
 import coop.rchain.casper.CasperMetricsSource
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.rholang.RuntimeManager.{evaluate, StateHash}
+import coop.rchain.casper.util.rholang.SystemDeployFailure._
 import coop.rchain.casper.util.{ConstructDeploy, EventConverter, ProtoUtil}
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.metrics.Metrics.Source
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.models.BlockHash.BlockHash
-import coop.rchain.models.Expr.ExprInstance.GString
+import coop.rchain.models.Expr.ExprInstance.{EVarBody, GString}
+import coop.rchain.models.NormalizerEnv.ToEnvMap
 import coop.rchain.models.Validator.Validator
+import coop.rchain.models.Var.VarInstance.FreeVar
 import coop.rchain.models._
 import coop.rchain.rholang.interpreter.Runtime.BlockData
 import coop.rchain.rholang.interpreter.accounting._
@@ -28,7 +31,7 @@ import coop.rchain.rholang.interpreter.{
   RhoType,
   Runtime
 }
-import coop.rchain.rspace.{trace, Blake2b256Hash, ReplayException}
+import coop.rchain.rspace.{Blake2b256Hash, ReplayException, Result}
 import coop.rchain.shared.Log
 
 trait RuntimeManager[F[_]] {
@@ -65,6 +68,7 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log](
     val emptyStateHash: StateHash,
     runtimeContainer: MVar[F, Runtime[F]]
 ) extends RuntimeManager[F] {
+  import coop.rchain.models.rholang.{implicits => toPar}
 
   private[this] val RuntimeManagerMetricsSource =
     Metrics.Source(CasperMetricsSource, "runtime-manager")
@@ -73,6 +77,70 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log](
   private[this] val computeStateLabel = Metrics.Source(RuntimeManagerMetricsSource, "compute-state")
   private[this] val computeGenesisLabel =
     Metrics.Source(RuntimeManagerMetricsSource, "compute-genesis")
+  private[this] val systemDeployConsumeAllPattern =
+    BindPattern(List(toPar(Expr(EVarBody(EVar(Var(FreeVar(0))))))), freeCount = 1)
+  private[this] val emptyContinuation = TaggedContinuation()
+
+  def playSystemDeploy[S <: SystemDeploy, Env0](runtime: Runtime[F], systemDeploy: S)(
+      normalizerEnv: NormalizerEnv[Env0]
+  )(
+      implicit provided: NormalizerEnv.Provides[Env0, systemDeploy.Env],
+      ev: ToEnvMap[systemDeploy.Env]
+  ): F[Either[SystemDeployFailure, SystemDeployResult[systemDeploy.Result]]] = {
+    implicit val c: _cost[F] = runtime.cost
+    for {
+      softCheckpoint <- runtime.space.createSoftCheckpoint()
+      result <- EitherT
+                 .liftF(
+                   Interpreter[F]
+                     .evaluate(runtime, systemDeploy.source, systemDeploy.env(normalizerEnv))
+                 )
+                 .ensureOr(evalResult => UnexpectedErrors(evalResult.errors))(
+                   !_.isFailed
+                 )
+                 .flatMap(
+                   evalResult =>
+                     EitherT
+                       .fromOptionF(
+                         runtime.space
+                           .consume(
+                             List(systemDeploy.returnChannel(normalizerEnv)),
+                             List(systemDeployConsumeAllPattern),
+                             emptyContinuation,
+                             persist = false
+                           ),
+                         ifNone = ConsumeFailed: SystemDeployFailure
+                       )
+                       .subflatMap {
+                         case (_, Seq(Result(_, ListParWithRandom(Seq(output), _), _, _))) =>
+                           systemDeploy.extractResult(output)
+                         case (_, somethingWeird) =>
+                           Left(UnexpectedResult(somethingWeird.flatMap(_.matchedDatum.pars)))
+                       }
+                       .semiflatMap(
+                         deployResult =>
+                           runtime.space
+                             .createSoftCheckpoint()
+                             .map(
+                               checkpoint =>
+                                 SystemDeployResult(
+                                   InternalProcessedSystemDeploy(
+                                     Cost.toProto(evalResult.cost),
+                                     checkpoint.log
+                                   ),
+                                   deployResult
+                                 )
+                             )
+                       )
+                 )
+                 .onError {
+                   case _ =>
+                     EitherT.right(runtime.space.revertToSoftCheckpoint(softCheckpoint))
+                 }
+                 .value
+
+    } yield result
+  }
 
   def captureResults(
       start: StateHash,
