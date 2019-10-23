@@ -81,11 +81,10 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log](
     BindPattern(List(toPar(Expr(EVarBody(EVar(Var(FreeVar(0))))))), freeCount = 1)
   private[this] val emptyContinuation = TaggedContinuation()
 
-  def playSystemDeploy[S <: SystemDeploy, Env0](runtime: Runtime[F], systemDeploy: S)(
-      normalizerEnv: NormalizerEnv[Env0]
+  def playSystemDeploy[S <: SystemDeploy](runtime: Runtime[F], systemDeploy: S)(
+      normalizerEnv: NormalizerEnv[systemDeploy.Env]
   )(
-      implicit provided: NormalizerEnv.Provides[Env0, systemDeploy.Env],
-      ev: ToEnvMap[systemDeploy.Env]
+      implicit ev: ToEnvMap[systemDeploy.Env]
   ): F[Either[SystemDeployFailure, SystemDeployResult[systemDeploy.Result]]] = {
     implicit val c: _cost[F] = runtime.cost
     for {
@@ -93,7 +92,7 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log](
       result <- EitherT
                  .liftF(
                    Interpreter[F]
-                     .evaluate(runtime, systemDeploy.source, systemDeploy.env(normalizerEnv))
+                     .evaluate(runtime, systemDeploy.source, normalizerEnv.toEnv)
                  )
                  .ensureOr(evalResult => UnexpectedErrors(evalResult.errors))(
                    !_.isFailed

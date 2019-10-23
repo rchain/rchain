@@ -9,14 +9,12 @@ import scala.annotation.implicitNotFound
 final class NormalizerEnv[Env](val env: Env) {
   import NormalizerEnv._
   def toEnv(implicit ToEnvMap: ToEnvMap[Env]): Map[String, Par] = ToEnvMap(env)
-  def provide[Env0](implicit ev: Provides[Env, Env0]): NormalizerEnv[Env0] =
-    new NormalizerEnv[Env0](ev.select(env))
 }
 
 object NormalizerEnv {
   import shapeless._
   import syntax.singleton._
-  import ops.record.{Extractor, Keys, Values}
+  import ops.record.{Keys, Values}
   import ops.hlist.ToList
 
   type UriString = String
@@ -78,18 +76,6 @@ object NormalizerEnv {
         uris.iterator.zip(pars.iterator).toMap
       }
     }
-  }
-
-  @implicitNotFound("${Env0} does not provide ${Env1}")
-  trait Provides[Env0, Env1] {
-    def select(env0: Env0): Env1
-  }
-
-  object Provides {
-    implicit def summon[Env0 <: HList, Env1 <: HList](
-        implicit extractor: Extractor[Env0, Env1]
-    ): Provides[Env0, Env1] =
-      (env0: Env0) => extractor(env0)
   }
 
 }
