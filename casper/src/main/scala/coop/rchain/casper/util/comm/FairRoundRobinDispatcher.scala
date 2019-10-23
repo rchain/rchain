@@ -112,6 +112,12 @@ object FairRoundRobinDispatcher {
   object Pass   extends Dispatch
   object Drop   extends Dispatch
 
+  object Dispatch {
+    val handle: Dispatch = Handle
+    val pass: Dispatch   = Pass
+    val drop: Dispatch   = Drop
+  }
+
   def apply[F[_]: Sync: Log, S: Show, M](
       filter: M => F[Dispatch],
       handle: (S, M) => F[Unit],

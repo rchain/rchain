@@ -243,7 +243,6 @@ class NodeRuntime private[node] (
       blockDagStorage,
       runtimeCleanup,
       packetHandler,
-      packetDispatcher,
       apiServers,
       casperLoop,
       engineInit,
@@ -273,7 +272,6 @@ class NodeRuntime private[node] (
       blockDagStorage,
       blockStore,
       packetHandler,
-      packetDispatcher,
       eventLogEnv,
       eventBus
     )
@@ -323,7 +321,6 @@ class NodeRuntime private[node] (
       blockDagStorage: BlockDagStorage[TaskEnv],
       blockStore: BlockStore[TaskEnv],
       packetHandler: PacketHandler[TaskEnv],
-      packetDispatcher: PacketDispatcher[TaskEnv],
       eventLog: EventLog[TaskEnv],
       consumer: EventConsumer[Task]
   ): TaskEnv[Unit] = {
@@ -405,8 +402,8 @@ class NodeRuntime private[node] (
             .start(
               pm => HandleMessages.handle[TaskEnv](pm).run(NodeCallCtx.init),
               blob =>
-                packetDispatcher
-                  .dispatch(blob.sender, blob.packet)
+                packetHandler
+                  .handlePacket(blob.sender, blob.packet)
                   .run(NodeCallCtx.init)
             )
             .toReaderT
@@ -657,7 +654,6 @@ object NodeRuntime {
         BlockDagFileStorage[F],
         Cleanup[F],
         PacketHandler[F],
-        PacketDispatcher[F],
         APIServers,
         CasperLoop[F],
         EngineInit[F],
@@ -747,13 +743,9 @@ object NodeRuntime {
 
         CasperLaunch.of(conf.casper)
       }
-      packetHandler = {
+      packetHandler <- {
         implicit val ev: EngineCell[F] = engineCell
-        CasperPacketHandler[F]
-      }
-      packetDispatcher <- {
-        implicit val ev: PacketHandler[F] = packetHandler
-        FairRoundRobinDispatcher.packetDispatcher[F](
+        CasperPacketHandler.fairDispatcher[F](
           conf.roundRobinDispatcher.maxPeerQueueSize,
           conf.roundRobinDispatcher.giveUpAfterSkipped,
           conf.roundRobinDispatcher.dropPeerAfterRetries
@@ -790,7 +782,6 @@ object NodeRuntime {
       blockDagStorage,
       runtimeCleanup,
       packetHandler,
-      packetDispatcher,
       apiServers,
       casperLoop,
       engineInit,
