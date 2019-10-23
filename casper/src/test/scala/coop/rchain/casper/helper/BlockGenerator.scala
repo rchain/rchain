@@ -67,7 +67,7 @@ object BlockGenerator {
                  Map.empty[BlockHash, Validator]
                ).attempt
       Right((preStateHash, postStateHash, processedDeploys)) = result
-    } yield (postStateHash, processedDeploys.map(_.toProcessedDeploy))
+    } yield (postStateHash, processedDeploys)
   }
 
   private def injectPostStateHash[F[_]: Monad: BlockStore: BlockDagStorage](

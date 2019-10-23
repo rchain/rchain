@@ -68,7 +68,7 @@ object InterpreterUtil {
       runtimeManager: RuntimeManager[F]
   ): F[BlockProcessing[Option[StateHash]]] = {
     val preStateHash    = ProtoUtil.preStateHash(block)
-    val internalDeploys = ProtoUtil.deploys(block).map(InternalProcessedDeploy.fromProcessedDeploy)
+    val internalDeploys = ProtoUtil.deploys(block)
     val timestamp       = block.header.timestamp
     val blockNumber     = block.body.state.blockNumber
     for {
@@ -151,7 +151,7 @@ object InterpreterUtil {
       runtimeManager: RuntimeManager[F],
       blockData: BlockData,
       invalidBlocks: Map[BlockHash, Validator]
-  ): F[(StateHash, StateHash, Seq[InternalProcessedDeploy])] = {
+  ): F[(StateHash, StateHash, Seq[ProcessedDeploy])] = {
     import shapeless.syntax.std.tuple._
     for {
       nonEmptyParents <- parents.pure
@@ -216,7 +216,7 @@ object InterpreterUtil {
       dag: BlockDagRepresentation[F],
       runtimeManager: RuntimeManager[F]
   ): F[StateHash] = {
-    val deploys     = block.body.deploys.map(InternalProcessedDeploy.fromProcessedDeploy)
+    val deploys     = block.body.deploys
     val timestamp   = block.header.timestamp
     val blockNumber = block.body.state.blockNumber
     val isGenesis   = parents.isEmpty

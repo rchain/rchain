@@ -9,20 +9,17 @@ import coop.rchain.casper.ValidatorIdentity
 import coop.rchain.casper.genesis.Genesis
 import coop.rchain.casper.genesis.contracts._
 import coop.rchain.casper.protocol._
-import coop.rchain.casper.util.rholang.{InternalProcessedDeploy, RuntimeManager}
+import coop.rchain.casper.util.rholang.RuntimeManager
 import coop.rchain.catscontrib.Catscontrib._
-import coop.rchain.comm.protocol.routing.Packet
+import coop.rchain.comm.PeerNode
 import coop.rchain.comm.rp.Connect.RPConfAsk
 import coop.rchain.comm.transport.{Blob, TransportLayer}
-import coop.rchain.comm.{transport, PeerNode}
 import coop.rchain.crypto.PublicKey
 import coop.rchain.crypto.hash.Blake2b256
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.Validator.Validator
 import coop.rchain.rholang.interpreter.Runtime.BlockData
 import coop.rchain.shared._
-
-import scala.util.Try
 
 /**
   * Validator side of the protocol defined in
@@ -132,7 +129,7 @@ object BlockApproverProtocol {
       quarantineLength: Int
   )(implicit runtimeManager: RuntimeManager[F]): F[Either[String, Unit]] = {
 
-    def validate: Either[String, (Seq[InternalProcessedDeploy], RChainState)] =
+    def validate: Either[String, (Seq[ProcessedDeploy], RChainState)] =
       for {
         _ <- (candidate.requiredSigs == requiredSigs)
               .either(())
@@ -163,7 +160,7 @@ object BlockApproverProtocol {
             Long.MaxValue
           )
           .toSet
-        blockDeploys = block.body.deploys.map(InternalProcessedDeploy.fromProcessedDeploy)
+        blockDeploys = block.body.deploys
         _ <- (blockDeploys.size == genesisBlessedContracts.size)
               .either(())
               .or("Mismatch between number of candidate deploys and expected number of deploys.")
