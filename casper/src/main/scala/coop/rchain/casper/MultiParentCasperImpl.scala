@@ -27,6 +27,7 @@ import coop.rchain.models.{EquivocationRecord, NormalizerEnv}
 import coop.rchain.models.Validator.Validator
 import coop.rchain.shared._
 import com.google.protobuf.ByteString
+import coop.rchain.blockstorage.finality.LastFinalizedStorage
 
 /**
   Encapsulates mutable state of the MultiParentCasperImpl
@@ -45,7 +46,7 @@ object CasperState {
   type CasperStateCell[F[_]] = Cell[F, CasperState]
 }
 
-class MultiParentCasperImpl[F[_]: Sync: Concurrent: Log: Time: SafetyOracle: LastFinalizedBlockCalculator: BlockStore: BlockDagStorage: CommUtil: EventPublisher: SynchronyConstraintChecker](
+class MultiParentCasperImpl[F[_]: Sync: Concurrent: Log: Time: SafetyOracle: LastFinalizedBlockCalculator: BlockStore: BlockDagStorage: LastFinalizedStorage: CommUtil: EventPublisher: SynchronyConstraintChecker](
     validatorId: Option[ValidatorIdentity],
     genesis: BlockMessage,
     postGenesisStateHash: StateHash,
@@ -66,8 +67,6 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Log: Time: SafetyOracle: Las
   //TODO: Extract hardcoded version and expirationThreshold
   private val version             = 1L
   private val expirationThreshold = 50
-
-  private val lastFinalizedBlockHashContainer = Ref.unsafe[F, BlockHash](genesis.blockHash)
 
   private[this] val AddBlockMetricsSource =
     Metrics.Source(CasperMetricsSource, "add-block")
@@ -250,10 +249,10 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Log: Time: SafetyOracle: Las
   def lastFinalizedBlock: F[BlockMessage] =
     for {
       dag                    <- blockDag
-      lastFinalizedBlockHash <- lastFinalizedBlockHashContainer.get
+      lastFinalizedBlockHash <- LastFinalizedStorage[F].get(genesis)
       updatedLastFinalizedBlockHash <- LastFinalizedBlockCalculator[F]
                                         .run(dag, lastFinalizedBlockHash)
-      _ <- lastFinalizedBlockHashContainer.set(updatedLastFinalizedBlockHash)
+      _ <- LastFinalizedStorage[F].put(updatedLastFinalizedBlockHash)
       _ <- EventPublisher[F]
             .publish(
               RChainEvent.blockFinalised(updatedLastFinalizedBlockHash.base16String)

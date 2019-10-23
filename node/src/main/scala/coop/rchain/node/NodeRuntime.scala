@@ -14,6 +14,7 @@ import cats.tagless.implicits._
 import cats.temp.par.Par
 import coop.rchain.blockstorage._
 import coop.rchain.blockstorage.dag.{BlockDagFileStorage, BlockDagStorage}
+import coop.rchain.blockstorage.finality.LastFinalizedFileStorage
 import coop.rchain.blockstorage.util.io.IOError
 import coop.rchain.casper._
 import coop.rchain.casper.engine._
@@ -77,12 +78,13 @@ class NodeRuntime private[node] (
   implicit private val logSource: LogSource = LogSource(this.getClass)
 
   /** Configuration */
-  private val blockstorePath    = conf.server.dataDir.resolve("blockstore")
-  private val dagStoragePath    = conf.server.dataDir.resolve("dagstorage")
-  private val storagePath       = conf.server.dataDir.resolve("rspace")
-  private val casperStoragePath = storagePath.resolve("casper")
-  private val storageSize       = conf.server.mapSize
-  private val defaultTimeout    = conf.server.defaultTimeout // TODO remove
+  private val blockstorePath           = conf.server.dataDir.resolve("blockstore")
+  private val dagStoragePath           = conf.server.dataDir.resolve("dagstorage")
+  private val lastFinalizedStoragePath = conf.server.dataDir.resolve("last-finalized-block")
+  private val storagePath              = conf.server.dataDir.resolve("rspace")
+  private val casperStoragePath        = storagePath.resolve("casper")
+  private val storageSize              = conf.server.mapSize
+  private val defaultTimeout           = conf.server.defaultTimeout // TODO remove
 
   implicit class RichTask[A](t: Task[A]) {
     def toReaderT: TaskEnv[A] =
@@ -222,6 +224,7 @@ class NodeRuntime private[node] (
                casperConfig,
                cliConfig,
                blockstorePath,
+               lastFinalizedStoragePath,
                rspaceScheduler,
                scheduler,
                eventBus
@@ -645,6 +648,7 @@ object NodeRuntime {
       casperConf: RuntimeConf,
       cliConf: RuntimeConf,
       blockstorePath: Path,
+      lastFinalizedPath: Path,
       rspaceScheduler: Scheduler,
       scheduler: Scheduler,
       eventPublisher: EventPublisher[F]
@@ -674,7 +678,8 @@ object NodeRuntime {
       span = if (conf.kamon.zipkin)
         diagnostics.effects.span(conf.server.networkId, conf.server.host.getOrElse("-"))
       else Span.noop[F]
-      blockDagStorage <- BlockDagFileStorage.create[F](dagConfig)
+      blockDagStorage      <- BlockDagFileStorage.create[F](dagConfig)
+      lastFinalizedStorage <- LastFinalizedFileStorage.make[F](lastFinalizedPath)
       oracle = {
         implicit val sp = span
         SafetyOracle.cliqueOracle[F]
@@ -726,6 +731,7 @@ object NodeRuntime {
       casperLaunch = {
         implicit val bs = blockStore
         implicit val bd = blockDagStorage
+        implicit val lf = lastFinalizedStorage
         implicit val ec = engineCell
         implicit val ev = envVars
         implicit val re = raiseIOError
