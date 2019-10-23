@@ -448,7 +448,7 @@ def make_node(
     container_command_flags: AbstractSet,
     container_command_options: Dict,
     command_timeout: int,
-    extra_volumes: List[str],
+    extra_volumes: Optional[List[str]],
     allowed_peers: Optional[List[str]],
     image: str = DEFAULT_IMAGE,
     mem_limit: Optional[str] = None,
@@ -481,6 +481,10 @@ def make_node(
 
     if wallets_file is not None:
         volumes.append('{}:{}'.format(wallets_file, rnode_wallets_file))
+    if extra_volumes:
+        all_volumes = volumes + extra_volumes
+    else:
+        all_volumes = volumes
 
     logging.info('STARTING %s %s', name, command)
     container = docker_client.containers.run(
@@ -490,7 +494,7 @@ def make_node(
         detach=True,
         mem_limit=mem_limit,
         network=network,
-        volumes=volumes + extra_volumes,
+        volumes=all_volumes,
         command=command,
         hostname=name,
         environment=env,
@@ -536,12 +540,10 @@ def make_bootstrap_node(
     mem_limit: Optional[str] = None,
     cli_flags: Optional[AbstractSet] = None,
     cli_options: Optional[Dict] = None,
-    mount_dir: Optional[str] = None,
     wallets_file: Optional[str] = None,
+    extra_volumes: Optional[List[str]] = None,
     synchrony_constraint_threshold: float = 0.0
 ) -> Node:
-    key_file = get_absolute_path_for_mounting("bootstrap_certificate/node.key.pem", mount_dir=mount_dir)
-    cert_file = get_absolute_path_for_mounting("bootstrap_certificate/node.certificate.pem", mount_dir=mount_dir)
 
     container_name = make_bootstrap_name(network)
 
@@ -566,10 +568,6 @@ def make_bootstrap_node(
     if cli_options is not None:
         container_command_options.update(cli_options)
 
-    volumes = [
-        "{}:{}".format(cert_file, rnode_certificate_path),
-        "{}:{}".format(key_file, rnode_key_path)
-    ]
 
     container = make_node(
         docker_client=docker_client,
@@ -580,7 +578,7 @@ def make_bootstrap_node(
         container_command_flags=container_command_flags,
         container_command_options=container_command_options,
         command_timeout=command_timeout,
-        extra_volumes=volumes,
+        extra_volumes=extra_volumes,
         allowed_peers=allowed_peers,
         mem_limit=mem_limit if mem_limit is not None else '4G',
         wallets_file=wallets_file,
@@ -618,6 +616,7 @@ def make_peer(
     wallets_file: Optional[str] = None,
     cli_flags: Optional[AbstractSet] = None,
     cli_options: Optional[Dict] = None,
+    extra_volumes: Optional[List[str]] = None,
     synchrony_constraint_threshold: float = 0.0
 ) -> Node:
     assert isinstance(name, str)
@@ -655,7 +654,7 @@ def make_peer(
         container_command_flags=container_command_flags,
         container_command_options=container_command_options,
         command_timeout=command_timeout,
-        extra_volumes=[],
+        extra_volumes=extra_volumes,
         allowed_peers=allowed_peers,
         mem_limit=mem_limit if not None else '4G',
         wallets_file=wallets_file,
@@ -674,6 +673,7 @@ def started_peer(
     wallets_file: Optional[str] = None,
     cli_flags: Optional[AbstractSet] = None,
     cli_options: Optional[Dict] = None,
+    extra_volumes: Optional[List[str]] = None,
     synchrony_constraint_threshold: float = 0.0
 ) -> Generator[Node, None, None]:
     peer = make_peer(
@@ -687,6 +687,7 @@ def started_peer(
         wallets_file=wallets_file,
         cli_flags=cli_flags,
         cli_options=cli_options,
+        extra_volumes=extra_volumes,
         synchrony_constraint_threshold=synchrony_constraint_threshold
     )
     try:
@@ -778,10 +779,10 @@ def started_bootstrap(
     *,
     context: TestingContext,
     network: str,
-    mount_dir: str = None,
     cli_flags: Optional[AbstractSet] = None,
     cli_options: Optional[Dict[str, str]] = None,
     wallets_file: Optional[str] = None,
+    extra_volumes: Optional[List[str]] = None,
     synchrony_constraint_threshold: float = 0.0
 ) -> Generator[Node, None, None]:
     bootstrap_node = make_bootstrap_node(
@@ -790,10 +791,10 @@ def started_bootstrap(
         bonds_file=context.bonds_file,
         private_key=context.bootstrap_key,
         command_timeout=context.command_timeout,
-        mount_dir=mount_dir,
         cli_flags=cli_flags,
         cli_options=cli_options,
         wallets_file=wallets_file,
+        extra_volumes=extra_volumes,
         synchrony_constraint_threshold=synchrony_constraint_threshold
     )
     try:
@@ -814,7 +815,6 @@ def docker_network_with_started_bootstrap(
         with started_bootstrap(
                 context=context,
                 network=network,
-                mount_dir=context.mount_dir,
                 cli_flags=cli_flags,
                 cli_options=cli_options,
                 synchrony_constraint_threshold=synchrony_constraint_threshold
@@ -829,9 +829,10 @@ def ready_bootstrap(
     cli_flags: Optional[AbstractSet] = None,
     cli_options: Optional[Dict] = None,
     wallets_file: Optional[str] = None,
+    extra_volumes: Optional[List[str]] = None
 ) -> Generator[Node, None, None]:
     with docker_network(context, context.docker) as network:
-        with started_bootstrap(context=context, network=network, mount_dir=context.mount_dir, cli_flags=cli_flags, cli_options=cli_options, wallets_file=wallets_file) as node:
+        with started_bootstrap(context=context, network=network, cli_flags=cli_flags, cli_options=cli_options, wallets_file=wallets_file, extra_volumes=extra_volumes) as node:
             yield node
 
 
