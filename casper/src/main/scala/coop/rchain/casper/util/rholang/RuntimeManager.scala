@@ -81,19 +81,26 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log](
     BindPattern(List(toPar(Expr(EVarBody(EVar(Var(FreeVar(0))))))), freeCount = 1)
   private[this] val emptyContinuation = TaggedContinuation()
 
-  def playSystemDeploy[S <: SystemDeploy](runtime: Runtime[F], systemDeploy: S)(
-      normalizerEnv: NormalizerEnv[systemDeploy.Env]
-  )(
+  def playSystemDeploy[S <: SystemDeploy](
+      runtime: Runtime[F],
+      systemDeploy: S,
+      rand: Blake2b512Random
+  )(normalizerEnv: NormalizerEnv[systemDeploy.Env])(
       implicit ev: ToEnvMap[systemDeploy.Env]
-  ): F[Either[SystemDeployFailure, SystemDeployResult[systemDeploy.Result]]] = {
-    implicit val c: _cost[F] = runtime.cost
+  ): F[Either[SystemDeployFailure, SystemDeployResult[systemDeploy.Result]]] =
     for {
       softCheckpoint <- runtime.space.createSoftCheckpoint()
       result <- EitherT
-                 .liftF(
-                   Interpreter[F]
-                     .evaluate(runtime, systemDeploy.source, normalizerEnv.toEnv)
-                 )
+                 .liftF {
+                   implicit val c: _cost[F] = runtime.cost
+                   Interpreter[F].injAttempt(
+                     runtime.reducer,
+                     runtime.errorLog,
+                     systemDeploy.source,
+                     Cost.UNSAFE_MAX,
+                     normalizerEnv.toEnv
+                   )(rand)
+                 }
                  .ensureOr(evalResult => UnexpectedErrors(evalResult.errors))(
                    !_.isFailed
                  )
@@ -139,7 +146,6 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log](
                  .value
 
     } yield result
-  }
 
   def captureResults(
       start: StateHash,
