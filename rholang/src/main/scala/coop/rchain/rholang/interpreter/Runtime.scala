@@ -127,6 +127,7 @@ object Runtime {
     val REV_ADDRESS: Long        = 13L
     val DEPLOYER_ID_OPS: Long    = 14L
     val REG_OPS: Long            = 15L
+    val SYS_AUTHTOKEN_OPS: Long  = 16L
   }
 
   def byteName(b: Byte): Par = GPrivate(ByteString.copyFrom(Array[Byte](b)))
@@ -149,6 +150,7 @@ object Runtime {
     val REG_INSERT_RANDOM: Par  = byteName(15)
     val REG_INSERT_SIGNED: Par  = byteName(16)
     val REG_OPS: Par            = byteName(17)
+    val SYS_AUTHTOKEN_OPS: Par  = byteName(18)
   }
 
   def introduceSystemProcesses[F[_]: Sync: _cost: Span](
@@ -259,6 +261,14 @@ object Runtime {
       3,
       BodyRefs.REG_OPS, { ctx =>
         ctx.systemProcesses.registryOps
+      }
+    ),
+    SystemProcess.Definition[F](
+      "sys:authToken:ops",
+      FixedChannels.SYS_AUTHTOKEN_OPS,
+      3,
+      BodyRefs.SYS_AUTHTOKEN_OPS, { ctx =>
+        ctx.systemProcesses.sysAuthTokenOps
       }
     )
   )

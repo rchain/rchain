@@ -1,8 +1,12 @@
 package coop.rchain.rholang.interpreter
 import com.google.protobuf.ByteString
 import coop.rchain.models.Expr.ExprInstance._
-import coop.rchain.models.GUnforgeable.UnfInstance.{GDeployerIdBody, GPrivateBody}
-import coop.rchain.models.{ETuple, Expr, GDeployerId, GPrivate, GUnforgeable, Par}
+import coop.rchain.models.GUnforgeable.UnfInstance.{
+  GDeployerIdBody,
+  GPrivateBody,
+  GSysAuthTokenBody
+}
+import coop.rchain.models.{ETuple, Expr, GDeployerId, GPrivate, GSysAuthToken, GUnforgeable, Par}
 import coop.rchain.shared.ByteStringOps._
 
 object RhoType {
@@ -102,6 +106,16 @@ object RhoType {
   }
 
   type RhoExpression = Expression.type
+
+  object SysAuthToken {
+    def unapply(p: Par): Option[GSysAuthToken] =
+      p.singleUnforgeable().collect {
+        case GUnforgeable(GSysAuthTokenBody(token)) => token
+      }
+
+    def apply(token: GSysAuthToken): Par = GUnforgeable(GSysAuthTokenBody(token))
+  }
+
   object Expression {
     def unapply(p: Par): Option[Expr] = p.singleExpr()
 
