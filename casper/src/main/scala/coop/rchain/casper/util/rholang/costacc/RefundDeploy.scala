@@ -4,8 +4,9 @@ import com.google.protobuf.ByteString
 import coop.rchain.casper.util.rholang.{SystemDeploy, SystemDeployFailure}
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.rholang.interpreter.RhoType._
+import coop.rchain.models.NormalizerEnv.ToEnvMap
 
-object RefundDeploy extends SystemDeploy {
+final class RefundDeploy(refundAmount: Long, rand: Blake2b512Random) extends SystemDeploy(rand) {
   import coop.rchain.models._
   import Expr.ExprInstance._
   import GUnforgeable.UnfInstance.GPrivateBody
@@ -22,7 +23,9 @@ object RefundDeploy extends SystemDeploy {
 
   type Env = (`sys:casper:refundAmount` ->> GInt) :: (`sys:casper:return` ->> GUnforgeable) :: HNil
 
-  def createNormalizerEnv(refundAmount: Long, rand: Blake2b512Random) =
+  import toPar._
+  override protected val toEnvMap = ToEnvMap[Env]
+  override protected val normalizerEnv =
     new NormalizerEnv(
       ("sys:casper:refundAmount" ->> GInt(refundAmount)) ::
         ("sys:casper:return" ->> GUnforgeable(
@@ -44,13 +47,14 @@ object RefundDeploy extends SystemDeploy {
        |}""".stripMargin
 
   protected override val extractor = Extractor.derive
+
   protected def processResult(
       value: (Boolean, Either[String, Unit])
   ): Either[SystemDeployFailure, Unit] =
     value match {
       case (true, _)               => Right(())
-      case (false, Left(errorMsg)) => Left(SystemDeployFailure.DeployError(errorMsg))
-      case _                       => Left(SystemDeployFailure.DeployError("<no cause>"))
+      case (false, Left(errorMsg)) => Left(SystemDeployFailure.SystemDeployError(errorMsg))
+      case _                       => Left(SystemDeployFailure.SystemDeployError("<no cause>"))
     }
 
   protected override def getReturnChannel(env: Env): Par = toPar(env.get("sys:casper:return"))

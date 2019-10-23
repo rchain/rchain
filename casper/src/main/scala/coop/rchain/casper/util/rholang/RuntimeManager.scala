@@ -376,16 +376,16 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log](
                         )
                         .ensureOr(
                           /* Regardless of success or failure, verify that deploy status' match. */
-                          result => ReplayFailure.replayStatusMismatch(isFailed, result.isFailed)
-                        )(result => isFailed == result.isFailed)
+                          result => ReplayFailure.replayStatusMismatch(isFailed, result.failed)
+                        )(result => isFailed == result.failed)
                         .ensureOr(
                           result =>
                             /* Since there are no errors, verify evaluation costs and COMM events match. */
                             ReplayFailure.replayCostMismatch(deploy, cost.cost, result.cost.value)
-                        )(result => result.isFailed || cost.cost == result.cost.value)
+                        )(result => result.failed || cost.cost == result.cost.value)
                         .semiflatMap(
                           result =>
-                            if (result.isFailed)
+                            if (result.failed)
                               /* Since the state of `replaySpace` is reset on each invocation of `replayComputeState`,
                                  and `ReplayFailure`s mean that block processing is cancelled upstream, we only need to
                                  reset state if the replay effects of valid deploys need to be discarded. */

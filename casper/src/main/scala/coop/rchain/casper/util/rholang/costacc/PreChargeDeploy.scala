@@ -5,8 +5,10 @@ import coop.rchain.casper.util.rholang.{SystemDeploy, SystemDeployFailure}
 import coop.rchain.crypto.PublicKey
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.rholang.interpreter.RhoType._
+import coop.rchain.models.NormalizerEnv.ToEnvMap
 
-object PreChargeDeploy extends SystemDeploy {
+final class PreChargeDeploy(chargeAmount: Long, pk: PublicKey, rand: Blake2b512Random)
+    extends SystemDeploy(rand) {
   import coop.rchain.models._
   import Expr.ExprInstance._
   import GUnforgeable.UnfInstance.GPrivateBody
@@ -22,11 +24,15 @@ object PreChargeDeploy extends SystemDeploy {
   type `sys:casper:chargeAmount` = `sys:casper:chargeAmount`.T
 
   type Env =
-    (`sys:casper:initialDeployerId` ->> GDeployerId) :: (`sys:casper:chargeAmount` ->> GInt) :: (`sys:casper:return` ->> GUnforgeable) :: HNil
+    (`sys:casper:initialDeployerId` ->> GDeployerId) ::
+      (`sys:casper:chargeAmount` ->> GInt) ::
+      (`sys:casper:return` ->> GUnforgeable) :: HNil
 
-  def createNormalizerEnv(chargeAmount: Long, deployerPk: PublicKey, rand: Blake2b512Random) =
+  import toPar._
+  protected override val toEnvMap = ToEnvMap[Env]
+  protected val normalizerEnv: NormalizerEnv[Env] =
     new NormalizerEnv(
-      ("sys:casper:initialDeployerId" ->> GDeployerId(ByteString.copyFrom(deployerPk.bytes))) ::
+      ("sys:casper:initialDeployerId" ->> GDeployerId(ByteString.copyFrom(pk.bytes))) ::
         ("sys:casper:chargeAmount" ->> GInt(chargeAmount)) ::
         ("sys:casper:return" ->> GUnforgeable(
           GPrivateBody(GPrivate(ByteString.copyFrom(rand.next())))
@@ -48,13 +54,14 @@ object PreChargeDeploy extends SystemDeploy {
        |}""".stripMargin
 
   protected override val extractor = Extractor.derive
+
   protected def processResult(
       value: (Boolean, Either[String, Unit])
   ): Either[SystemDeployFailure, Unit] =
     value match {
       case (true, _)               => Right(())
-      case (false, Left(errorMsg)) => Left(SystemDeployFailure.DeployError(errorMsg))
-      case _                       => Left(SystemDeployFailure.DeployError("<no cause>"))
+      case (false, Left(errorMsg)) => Left(SystemDeployFailure.SystemDeployError(errorMsg))
+      case _                       => Left(SystemDeployFailure.SystemDeployError("<no cause>"))
     }
 
   protected override def getReturnChannel(env: Env): Par = toPar(env.get("sys:casper:return"))

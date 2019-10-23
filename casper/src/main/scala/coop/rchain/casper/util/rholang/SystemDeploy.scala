@@ -1,11 +1,14 @@
 package coop.rchain.casper.util.rholang
 
+import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.models.Par
 import coop.rchain.rholang.interpreter.RhoType.Extractor
 import coop.rchain.models.NormalizerEnv
+import coop.rchain.models.NormalizerEnv.ToEnvMap
 import shapeless.Witness
 
-abstract class SystemDeploy {
+abstract class SystemDeploy(val rand: Blake2b512Random) {
+
   import SystemDeployFailure._
 
   type Output
@@ -18,20 +21,28 @@ abstract class SystemDeploy {
   type `sys:casper:initialDeployerId` = `sys:casper:initialDeployerId`.T
   type `sys:casper:return`            = `sys:casper:return`.T
 
-  def source: String
+  protected def toEnvMap: ToEnvMap[Env]
+  final def env: Map[String, Par] = normalizerEnv.toEnv(toEnvMap)
+
+  protected val normalizerEnv: NormalizerEnv[Env]
 
   protected val extractor: Extractor[Output]
+
+  val source: String
+
   final def extractResult(output: Par): Either[SystemDeployFailure, Result] =
     extractor
       .unapply(output)
       .fold[Either[SystemDeployFailure, Result]](Left(UnexpectedResult(List(output))))(
         processResult
       )
+
   protected def processResult(value: extractor.ScalaType): Either[SystemDeployFailure, Result]
 
-  final def returnChannel(normalizerEnv: NormalizerEnv[Env]): Par =
-    getReturnChannel(normalizerEnv.env)
+  final def returnChannel: Par = getReturnChannel(normalizerEnv.env)
+
   protected def getReturnChannel(env: Env): Par
+
 }
 
 final case class SystemDeployResult[A](

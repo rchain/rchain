@@ -291,15 +291,15 @@ object ReportingCasper {
                             )
                           )
                           .ensureOr(
-                            result => ReplayFailure.replayStatusMismatch(isFailed, result.isFailed)
-                          )(result => isFailed == result.isFailed)
+                            result => ReplayFailure.replayStatusMismatch(isFailed, result.failed)
+                          )(result => isFailed == result.failed)
                           .ensureOr(
                             result =>
                               ReplayFailure.replayCostMismatch(deploy, cost.cost, result.cost.value)
-                          )(result => result.isFailed || cost.cost == result.cost.value)
+                          )(result => result.failed || cost.cost == result.cost.value)
                           .semiflatMap(
                             result =>
-                              if (result.isFailed)
+                              if (result.failed)
                                 runtime.reportingSpace.revertToSoftCheckpoint(softCheckpoint)
                               else runtime.reportingSpace.checkReplayData()
                           )

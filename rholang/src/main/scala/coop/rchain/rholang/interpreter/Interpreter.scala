@@ -8,7 +8,8 @@ import coop.rchain.rholang.interpreter.accounting._
 import coop.rchain.rholang.interpreter.errors.{InterpreterError, OutOfPhlogistonsError}
 
 final case class EvaluateResult(cost: Cost, errors: Vector[InterpreterError]) {
-  val isFailed: Boolean = errors.nonEmpty
+  val failed: Boolean    = errors.nonEmpty
+  val succeeded: Boolean = !failed
 }
 
 trait Interpreter[F[_]] {
