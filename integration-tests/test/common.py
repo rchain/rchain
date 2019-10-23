@@ -60,6 +60,8 @@ class GetBlockError(NonZeroExitCodeError):
 class ParsingError(NonZeroExitCodeError):
     pass
 
+class SynchronyConstraintError(NonZeroExitCodeError):
+    pass
 
 class WaitTimeoutError(Exception):
     def __init__(self, predicate: 'PredicateProtocol', timeout: int) -> None:

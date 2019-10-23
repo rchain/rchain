@@ -34,6 +34,7 @@ from .common import (
     NonZeroExitCodeError,
     GetBlockError,
     ParsingError,
+    SynchronyConstraintError
 )
 from .wait import (
     wait_for_node_started,
@@ -347,9 +348,14 @@ class Node:
         return block_info
 
     def propose(self) -> str:
-        output = self.rnode_command('propose', stderr=False)
-        block_hash = extract_block_hash_from_propose_output(output)
-        return block_hash
+        try:
+            output = self.rnode_command('propose', stderr=False)
+            block_hash = extract_block_hash_from_propose_output(output)
+            return block_hash
+        except NonZeroExitCodeError as e:
+            if "Must wait for more blocks from other validators" in e.output:
+                raise SynchronyConstraintError(command=e.command, exit_code=e.exit_code, output=e.output)
+            raise e
 
     def last_finalized_block(self) -> Dict[str, str]:
         output = self.rnode_command('last-finalized-block')
