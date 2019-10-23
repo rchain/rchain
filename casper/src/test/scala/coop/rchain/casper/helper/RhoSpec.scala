@@ -109,6 +109,13 @@ class RhoSpec(
           ctx => Secp256k1SignContract.get(ctx)(_)
         ),
         SystemProcess.Definition[F](
+          "sys:test:authToken:make",
+          Runtime.byteName(106),
+          1,
+          106L,
+          ctx => SysAuthTokenContract.get(ctx)(_)
+        ),
+        SystemProcess.Definition[F](
           "rho:test:block:data:set",
           Runtime.byteName(107),
           3,
