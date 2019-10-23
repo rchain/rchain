@@ -744,7 +744,8 @@ object NodeRuntime {
         CasperLaunch.of(conf.casper)
       }
       packetHandler <- {
-        implicit val ev: EngineCell[F] = engineCell
+        implicit val ec = engineCell
+        implicit val rb = requestedBlocks
         CasperPacketHandler.fairDispatcher[F](
           conf.roundRobinDispatcher.maxPeerQueueSize,
           conf.roundRobinDispatcher.giveUpAfterSkipped,

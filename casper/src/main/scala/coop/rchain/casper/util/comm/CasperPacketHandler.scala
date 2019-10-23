@@ -6,6 +6,7 @@ import cats.syntax.all._
 
 import coop.rchain.casper.engine._
 import coop.rchain.casper.engine.EngineCell._
+import coop.rchain.casper.engine.Running.RequestedBlocks
 import coop.rchain.casper.protocol._
 import coop.rchain.comm.PeerNode
 import coop.rchain.comm.protocol.routing.Packet
@@ -23,7 +24,7 @@ object CasperPacketHandler {
           message => EngineCell[F].read >>= (_.handle(peer, message))
         )
 
-  def fairDispatcher[F[_]: Concurrent: EngineCell: Log](
+  def fairDispatcher[F[_]: Concurrent: EngineCell: Running.RequestedBlocks: Log](
       maxPeerQueueSize: Int,
       giveUpAfterSkipped: Int,
       dropPeerAfterRetries: Int
@@ -33,8 +34,14 @@ object CasperPacketHandler {
 
     def checkMessage(message: CasperMessage): F[Dispatch] =
       message match {
-        case _: BlockHashMessage => Dispatch.handle.pure[F]
-        case _                   => Dispatch.pass.pure[F]
+        case msg: BlockHashMessage =>
+          for {
+            engine    <- EngineCell[F].read
+            contains  <- engine.withCasper(_.contains(msg.blockHash), false.pure[F])
+            requested <- RequestedBlocks.contains(msg.blockHash)
+          } yield if (contains || requested) Dispatch.drop else Dispatch.handle
+
+        case _ => Dispatch.pass.pure[F]
       }
 
     def handle(peer: PeerNode, message: CasperMessage): F[Unit] =
