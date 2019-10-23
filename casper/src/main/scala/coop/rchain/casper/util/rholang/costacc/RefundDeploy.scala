@@ -14,7 +14,7 @@ object RefundDeploy extends SystemDeploy {
   import record._
   import syntax.singleton._
 
-  type Output = (RhoBoolean, RhoString)
+  type Output = (RhoBoolean, Either[RhoString, RhoNil])
   type Result = Unit
 
   val `sys:casper:refundAmount` = Witness("sys:casper:refundAmount")
@@ -44,10 +44,13 @@ object RefundDeploy extends SystemDeploy {
        |}""".stripMargin
 
   protected override val extractor = Extractor.derive
-  protected def processResult(value: (Boolean, String)): Either[SystemDeployFailure, Unit] =
+  protected def processResult(
+      value: (Boolean, Either[String, Unit])
+  ): Either[SystemDeployFailure, Unit] =
     value match {
-      case (true, _)     => Right(())
-      case (_, errorMsg) => Left(SystemDeployFailure.DeployError(errorMsg))
+      case (true, _)               => Right(())
+      case (false, Left(errorMsg)) => Left(SystemDeployFailure.DeployError(errorMsg))
+      case _                       => Left(SystemDeployFailure.DeployError("<no cause>"))
     }
 
   protected override def getReturnChannel(env: Env): Par = toPar(env.get("sys:casper:return"))

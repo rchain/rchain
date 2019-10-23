@@ -8,6 +8,11 @@ import coop.rchain.shared.ByteStringOps._
 object RhoType {
   import coop.rchain.models.rholang.implicits._
 
+  type RhoNil = Nil.type
+  object Nil {
+    def unapply(p: Par): Boolean = p.isNil()
+    def apply(): Par             = Par()
+  }
   type RhoByteArray = ByteArray.type
   object ByteArray {
     def unapply(p: Par): Option[Array[Byte]] =
@@ -127,6 +132,10 @@ object RhoType {
       override type ScalaType = GPrivate
       override def unapply(p: Par) = Name.unapply(p)
     }
+    implicit object NilExtractor extends Extractor[Nil.type] {
+      override type ScalaType = Unit
+      override def unapply(p: Par) = if (Nil.unapply(p)) Some(()) else None
+    }
     implicit object NumberExtractor extends Extractor[Number.type] {
       override type ScalaType = Long
       override def unapply(p: Par) = Number.unapply(p)
@@ -163,5 +172,15 @@ object RhoType {
             b        <- B.unapply(p2)
           } yield (a, b)
       }
+
+    implicit def EitherExtractor[A, B](
+        implicit A: Extractor[A],
+        B: Extractor[B]
+    ): Extractor[Either[A, B]] {
+      type ScalaType = Either[A.ScalaType, B.ScalaType]
+    } = new Extractor[Either[A, B]] {
+      override type ScalaType = Either[A.ScalaType, B.ScalaType]
+      override def unapply(p: Par) = B.unapply(p).map(Right(_)).orElse(A.unapply(p).map(Left(_)))
+    }
   }
 }
