@@ -751,12 +751,14 @@ object NodeRuntime {
         implicit val ev: EngineCell[F] = engineCell
         CasperPacketHandler[F]
       }
-      packetDispatcher <- FairRoundRobinDispatcher.packetDispatcher[F](
-                           packetHandler,
-                           conf.roundRobinDispatcher.maxPeerQueueSize,
-                           conf.roundRobinDispatcher.giveUpAfterSkipped,
-                           conf.roundRobinDispatcher.dropPeerAfterRetries
-                         )
+      packetDispatcher <- {
+        implicit val ev: PacketHandler[F] = packetHandler
+        FairRoundRobinDispatcher.packetDispatcher[F](
+          conf.roundRobinDispatcher.maxPeerQueueSize,
+          conf.roundRobinDispatcher.giveUpAfterSkipped,
+          conf.roundRobinDispatcher.dropPeerAfterRetries
+        )
+      }
       blockApiLock <- Semaphore[F](1)
       apiServers = NodeRuntime.acquireAPIServers[F](runtime, blockApiLock, scheduler)(
         blockStore,

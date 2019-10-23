@@ -11,6 +11,7 @@ import coop.rchain.comm.PeerNode
 import coop.rchain.comm.protocol.routing.Packet
 import coop.rchain.p2p.effects.PacketHandler
 import coop.rchain.shared.Log
+import FairRoundRobinDispatcher._
 
 trait PacketDispatcher[F[_]] {
   def dispatch(peer: PeerNode, packet: Packet): F[Unit]
@@ -21,6 +22,7 @@ object PacketDispatcher {
 }
 
 class FairRoundRobinDispatcher[F[_]: Sync: Log, S: Show, M](
+    filter: M => F[Dispatch],
     handle: (S, M) => F[Unit],
     queue: Ref[F, Queue[S]],
     messages: Ref[F, Map[S, Queue[M]]],
@@ -35,9 +37,14 @@ class FairRoundRobinDispatcher[F[_]: Sync: Log, S: Show, M](
   assert(dropSourceAfterRetries >= 0)
 
   def dispatch(source: S, message: M): F[Unit] =
-    ensureSourceExists(source) >>
-      enqueueMessage(source, message) >>
-      handleMessages(source)
+    filter(message).flatMap {
+      case Handle =>
+        ensureSourceExists(source) >>
+          enqueueMessage(source, message) >>
+          handleMessages(source)
+      case Pass => handle(source, message)
+      case Drop => ().pure
+    }
 
   private[comm] def ensureSourceExists(source: S): F[Unit] =
     messages.get
@@ -110,10 +117,15 @@ class FairRoundRobinDispatcher[F[_]: Sync: Log, S: Show, M](
 }
 
 object FairRoundRobinDispatcher {
+
+  sealed trait Dispatch
+  object Handle extends Dispatch
+  object Pass   extends Dispatch
+  object Drop   extends Dispatch
+
   implicit private val showPeerNode: Show[PeerNode] = _.toString
 
-  def packetDispatcher[F[_]: Sync: Log](
-      handler: PacketHandler[F],
+  def packetDispatcher[F[_]: Sync: Log: PacketHandler](
       maxPeerQueueSize: Int,
       giveUpAfterSkipped: Int,
       dropPeerAfterRetries: Int
@@ -126,7 +138,8 @@ object FairRoundRobinDispatcher {
     } yield new PacketDispatcher[F] {
       val dispatcher =
         new FairRoundRobinDispatcher[F, PeerNode, Packet](
-          handler.handlePacket,
+          _ => Sync[F].pure(Handle),
+          PacketHandler[F].handlePacket,
           queue,
           packets,
           retries,
@@ -139,20 +152,14 @@ object FairRoundRobinDispatcher {
       def dispatch(peer: PeerNode, packet: Packet): F[Unit] = dispatcher.dispatch(peer, packet)
     }
 
-  def concurrentPacketDispatcher[F[_]: Concurrent: Log](
-      handler: PacketHandler[F],
+  def concurrentPacketDispatcher[F[_]: Concurrent: Log: PacketHandler](
       maxPeerQueueSize: Int,
       giveUpAfterSkipped: Int,
       dropPeerAfterRetries: Int
   ): F[PacketDispatcher[F]] =
     for {
-      lock <- Semaphore(1)
-      dispatcher <- packetDispatcher(
-                     handler,
-                     maxPeerQueueSize,
-                     giveUpAfterSkipped,
-                     dropPeerAfterRetries
-                   )
+      lock       <- Semaphore(1)
+      dispatcher <- packetDispatcher(maxPeerQueueSize, giveUpAfterSkipped, dropPeerAfterRetries)
     } yield new PacketDispatcher[F] {
       def dispatch(peer: PeerNode, packet: Packet): F[Unit] =
         lock.withPermit(
