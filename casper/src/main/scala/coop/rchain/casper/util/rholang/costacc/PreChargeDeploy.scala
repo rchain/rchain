@@ -20,8 +20,10 @@ final class PreChargeDeploy(chargeAmount: Long, pk: PublicKey, rand: Blake2b512R
   type Output = (RhoBoolean, Either[RhoString, RhoNil])
   type Result = Unit
 
-  val `sys:casper:chargeAmount` = Witness("sys:casper:chargeAmount")
-  type `sys:casper:chargeAmount` = `sys:casper:chargeAmount`.T
+  val `sys:casper:chargeAmount`      = Witness("sys:casper:chargeAmount")
+  val `sys:casper:initialDeployerId` = Witness("sys:casper:initialDeployerId")
+  type `sys:casper:chargeAmount`      = `sys:casper:chargeAmount`.T
+  type `sys:casper:initialDeployerId` = `sys:casper:initialDeployerId`.T
 
   type Env =
     (`sys:casper:initialDeployerId` ->> GDeployerId) ::

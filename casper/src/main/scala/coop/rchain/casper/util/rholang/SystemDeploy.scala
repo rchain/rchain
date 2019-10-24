@@ -17,11 +17,8 @@ abstract class SystemDeploy(val rand: Blake2b512Random) {
   type Result
   type Env
 
-  final val `sys:casper:initialDeployerId` = Witness("sys:casper:initialDeployerId")
-  final val `sys:casper:return`            = Witness("sys:casper:return")
-
-  type `sys:casper:initialDeployerId` = `sys:casper:initialDeployerId`.T
-  type `sys:casper:return`            = `sys:casper:return`.T
+  final val `sys:casper:return` = Witness("sys:casper:return")
+  type `sys:casper:return` = `sys:casper:return`.T
 
   protected def toEnvMap: ToEnvMap[Env]
   final def env: Map[String, Par] = normalizerEnv.toEnv(toEnvMap)
