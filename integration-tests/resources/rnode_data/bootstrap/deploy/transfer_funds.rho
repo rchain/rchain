@@ -1,0 +1,44 @@
+new
+  rl(`rho:registry:lookup`), RevVaultCh,
+  stdout(`rho:io:stdout`), log
+in {
+
+  rl!(`rho:rchain:revVault`, *RevVaultCh) |
+  for (@(_, RevVault) <- RevVaultCh) {
+
+    log!(("3.transfer_funds.rho")) |
+
+    // REPLACE THE REV ADDRESSES HERE vvv
+    match (
+      "11112DLVVFkm7mU1cW4BJtXabXPMZungbywdoi8zGfPGoCD2UKr4pJ",
+      "111125MFSfZan5xv4zYqfeoJdbKtPmdhs3rE1SZA1VKQoCZ2j4HZXn",
+      300
+    ) {
+      (from, to, amount) => {
+
+        new vaultCh, revVaultkeyCh, deployerId(`rho:rchain:deployerId`) in {
+          @RevVault!("findOrCreate", from, *vaultCh) |
+          @RevVault!("deployerAuthKey", *deployerId, *revVaultkeyCh) |
+          for (@(true, vault) <- vaultCh; key <- revVaultkeyCh) {
+
+            log!(("Beginning transfer of ", amount, "REV from", from, "to", to)) |
+
+            new resultCh in {
+              @vault!("transfer", to, amount, *key, *resultCh) |
+              for (@result <- resultCh) {
+                match result{
+                  (true, _) =>{log!("OwAswnasGU Successfully reason: ${reason}" %%{"reason": "Nil"})}
+                  (false, reason) => {log!("OwAswnasGU Failing reason: ${reason}" %%{"reason": reason})}
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  } |
+
+  contract log(@data) = {
+    @"DEMO"!(data) | stdout!(data)
+  }
+}
