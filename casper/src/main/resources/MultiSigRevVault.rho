@@ -123,7 +123,7 @@ in {
                                 @(*vault, *nonceMapStore)!(
                                   nonceMap.set(nonce, (targetRevAddress, amount, Set(authKey)))
                                 ) |
-                                ret!(true, (true, nonce))
+                                ret!((true, (true, nonce)))
                               }
                             }
                           } else {
