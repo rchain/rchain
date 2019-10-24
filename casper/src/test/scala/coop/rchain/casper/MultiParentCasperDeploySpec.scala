@@ -117,7 +117,7 @@ class MultiParentCasperDeploySpec extends FlatSpec with Matchers with Inspectors
       for {
         deployData <- ConstructDeploy.sourceDeployNowF[Effect]("Nil", phloLimit = 1)
         block      <- node.createBlock(deployData)
-      } yield assert(block.body.deploys.head.errored)
+      } yield assert(block.body.deploys.head.isFailed)
     }
   }
 
@@ -128,7 +128,7 @@ class MultiParentCasperDeploySpec extends FlatSpec with Matchers with Inspectors
       for {
         deployData <- ConstructDeploy.sourceDeployNowF[Effect]("Nil", phloLimit = 100)
         block      <- node.createBlock(deployData)
-      } yield assert(!block.body.deploys.head.errored)
+      } yield assert(!block.body.deploys.head.isFailed)
     }
   }
 }

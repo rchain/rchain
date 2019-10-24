@@ -3,7 +3,7 @@ package coop.rchain.casper.util.rholang
 import cats.effect.Resource
 import cats.implicits._
 import cats.{Functor, Id}
-import coop.rchain.casper.protocol.DeployData
+import coop.rchain.casper.protocol.{DeployData, ProcessedDeploy}
 import coop.rchain.shared.scalatestcontrib.effectTest
 import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
 import coop.rchain.casper.util.{ConstructDeploy, GenesisBuilder, ProtoUtil}
@@ -51,7 +51,7 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
   private def computeState[F[_]: Functor](
       runtimeManager: RuntimeManager[F],
       deploy: DeployData
-  ): F[(StateHash, InternalProcessedDeploy)] =
+  ): F[(StateHash, ProcessedDeploy)] =
     for {
       res <- runtimeManager.computeState(ProtoUtil.postStateHash(genesis))(
               deploy :: Nil,
@@ -203,7 +203,7 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
 
   "computeState" should "charge deploys separately" in effectTest {
 
-    def deployCost(p: Seq[InternalProcessedDeploy]): Long = p.map(_.cost.cost).sum
+    def deployCost(p: Seq[ProcessedDeploy]): Long = p.map(_.cost.cost).sum
 
     runtimeManager.use { mgr =>
       for {

@@ -379,7 +379,7 @@ class MultiParentCasperAddBlockSpec extends FlatSpec with Matchers with Inspecto
                 deploy = d,
                 cost = PCost(0L),
                 List.empty,
-                errored = false
+                isFailed = false
               )
           )
           .toIndexedSeq

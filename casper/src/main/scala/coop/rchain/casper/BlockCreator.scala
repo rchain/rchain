@@ -250,14 +250,14 @@ object BlockCreator {
       maxBlockNumber: Long,
       preStateHash: StateHash,
       postStateHash: StateHash,
-      persistableDeploys: Seq[InternalProcessedDeploy],
+      persistableDeploys: Seq[ProcessedDeploy],
       newBonds: Seq[Bond],
       shardId: String,
       version: Long
   ): CreateBlockStatus = {
     val postState = RChainState(preStateHash, postStateHash, newBonds.toList, maxBlockNumber + 1)
 
-    val body   = Body(postState, persistableDeploys.map(_.toProcessedDeploy).toList)
+    val body   = Body(postState, persistableDeploys.toList)
     val header = blockHeader(body, p.map(_.blockHash), version, now)
     val block  = unsignedBlockProto(body, header, justifications, shardId)
     CreateBlockStatus.created(block)

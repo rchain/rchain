@@ -131,8 +131,8 @@ object EstimatorHelper {
         .partition(isVolatile(_, allConsumeEvents, allProduceEvents))
       producesInVolatileCommEvents = volatileCommEvents.flatMap(_.produces)
       consumesInVolatileCommEvents = volatileCommEvents.map(_.consume)
-      produceEvents                = allProduceEvents.filterNot(producesInVolatileCommEvents.contains(_))
-      consumeEvents                = allConsumeEvents.filterNot(consumesInVolatileCommEvents.contains(_))
+      produceEvents                = allProduceEvents.filterNot(producesInVolatileCommEvents.contains)
+      consumeEvents                = allConsumeEvents.filterNot(consumesInVolatileCommEvents.contains)
     } yield BlockEvents(produceEvents, consumeEvents, nonVolatileCommEvents)
 
   private[this] def extractJoinedChannels(b: BlockEvents): Set[Blake2b256Hash] = {

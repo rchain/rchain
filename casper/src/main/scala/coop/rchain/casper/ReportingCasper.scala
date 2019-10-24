@@ -13,15 +13,10 @@ import coop.rchain.blockstorage.BlockStore
 import coop.rchain.blockstorage.dag.{BlockDagRepresentation, BlockDagStorage}
 import coop.rchain.casper.ReportingCasper.RhoReportingRspace
 import coop.rchain.casper.ReportingCasperData._
-import coop.rchain.casper.protocol.{BlockMessage, DeployData}
-import coop.rchain.casper.util.ProtoUtil
+import coop.rchain.casper.protocol.{BlockMessage, DeployData, ProcessedDeploy}
+import coop.rchain.casper.util.{EventConverter, ProtoUtil}
 import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
-import coop.rchain.casper.util.rholang.{
-  InternalError,
-  InternalProcessedDeploy,
-  ReplayFailure,
-  RuntimeManager
-}
+import coop.rchain.casper.util.rholang.{InternalError, ReplayFailure, RuntimeManager}
 import coop.rchain.metrics.Metrics.Source
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.models.BlockHash._
@@ -127,7 +122,7 @@ object ReportingCasperData {
       extends Report
 
   def transformDeploy[C, P, A, K](transformer: ReportingEventTransformer[C, P, A, K])(
-      ipd: InternalProcessedDeploy,
+      ipd: ProcessedDeploy,
       events: Seq[ReportingEvent]
   ): DeployTrace =
     DeployTrace(
@@ -139,7 +134,7 @@ object ReportingCasperData {
   def createResponse[C, P, A, K](
       hash: BlockHash,
       state: Option[
-        (Either[ReplayFailure, List[(InternalProcessedDeploy, Seq[ReportingEvent])]], BlockMessage)
+        (Either[ReplayFailure, List[(ProcessedDeploy, Seq[ReportingEvent])]], BlockMessage)
       ],
       transformer: ReportingEventTransformer[C, P, A, K]
   ): Report =
@@ -228,9 +223,9 @@ object ReportingCasper {
       block: BlockMessage,
       dag: BlockDagRepresentation[F],
       runtimeManager: ReportingRuntimeManagerImpl[F]
-  ): F[Either[ReplayFailure, List[(InternalProcessedDeploy, Seq[ReportingEvent])]]] = {
+  ): F[Either[ReplayFailure, List[(ProcessedDeploy, Seq[ReportingEvent])]]] = {
     val hash        = ProtoUtil.preStateHash(block)
-    val deploys     = block.body.deploys.map(InternalProcessedDeploy.fromProcessedDeploy)
+    val deploys     = block.body.deploys
     val timestamp   = block.header.timestamp
     val blockNumber = block.body.state.blockNumber
     runtimeManager.replayComputeState(hash)(deploys, BlockData(timestamp, blockNumber))
@@ -253,9 +248,9 @@ object ReportingCasper {
   ) {
 
     def replayComputeState(startHash: StateHash)(
-        terms: Seq[InternalProcessedDeploy],
+        terms: Seq[ProcessedDeploy],
         blockData: BlockData
-    ): F[Either[ReplayFailure, List[(InternalProcessedDeploy, Seq[ReportingEvent])]]] =
+    ): F[Either[ReplayFailure, List[(ProcessedDeploy, Seq[ReportingEvent])]]] =
       Sync[F].bracket {
         runtimeContainer.take
       } { runtime =>
@@ -265,9 +260,9 @@ object ReportingCasper {
     private def replayDeploys(
         runtime: ReportingRuntime[F],
         startHash: StateHash,
-        terms: Seq[InternalProcessedDeploy],
-        replayDeploy: InternalProcessedDeploy => F[Either[ReplayFailure, Seq[ReportingEvent]]]
-    ): F[Either[ReplayFailure, List[(InternalProcessedDeploy, Seq[ReportingEvent])]]] =
+        terms: Seq[ProcessedDeploy],
+        replayDeploy: ProcessedDeploy => F[Either[ReplayFailure, Seq[ReportingEvent]]]
+    ): F[Either[ReplayFailure, List[(ProcessedDeploy, Seq[ReportingEvent])]]] =
       (for {
         _ <- EitherT.right(runtime.reportingSpace.reset(Blake2b256Hash.fromByteString(startHash)))
         res <- EitherT.right(terms.toList.traverse { term =>
@@ -283,11 +278,11 @@ object ReportingCasper {
       } yield res).value
 
     private def replayDeploy(runtime: ReportingRuntime[F])(
-        processedDeploy: InternalProcessedDeploy
+        processedDeploy: ProcessedDeploy
     ): F[Either[ReplayFailure, Seq[ReportingEvent]]] = {
       import processedDeploy._
       for {
-        _              <- runtime.reportingSpace.rig(processedDeploy.deployLog)
+        _              <- runtime.reportingSpace.rig(processedDeploy.deployLog.map(EventConverter.toRspaceEvent))
         softCheckpoint <- runtime.reportingSpace.createSoftCheckpoint()
         failureEither <- EitherT
                           .liftF(

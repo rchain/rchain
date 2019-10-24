@@ -300,7 +300,7 @@ final case class ProcessedDeploy(
     deploy: DeployData,
     cost: PCost,
     deployLog: List[Event],
-    errored: Boolean
+    isFailed: Boolean
 ) {
   def toProto: ProcessedDeployProto = ProcessedDeploy.toProto(this)
 }
@@ -323,7 +323,7 @@ object ProcessedDeploy {
       .withDeploy(DeployData.toProto(pd.deploy))
       .withCost(pd.cost)
       .withDeployLog(pd.deployLog.map(Event.toProto))
-      .withErrored(pd.errored)
+      .withErrored(pd.isFailed)
 }
 
 final case class DeployData(

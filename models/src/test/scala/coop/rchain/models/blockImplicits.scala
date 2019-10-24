@@ -60,7 +60,7 @@ object blockImplicits {
       deploy = deployData,
       cost = PCost(0L),
       deployLog = List.empty,
-      errored = false
+      isFailed = false
     )
 
   implicit val arbitraryProcessedDeploy: Arbitrary[ProcessedDeploy] = Arbitrary(processedDeployGen)
