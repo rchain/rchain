@@ -121,22 +121,18 @@ match (
             // Single sig as a special case of multisig.
             @MultiSigRevVault!("create", [], [carolAuth, daveAuth, eveAuth], 2, *msVaultCh) |
             for (genesisVault, @genesisVaultKey <- genesisVaultCh; @maybeVault <- msVaultCh) {
-              o!("info", 1) |
               match maybeVault {
                 (false, msg) => {
                   rhoSpec!("assert", (false, "==", true), msg, *ackCh)
                 }
                 (true, (msVault, msRevAddr, msUnderlyingRevVault)) => {
-                  o!("info", 2) |
                   genesisVault!("transfer", msRevAddr, 1000, genesisVaultKey, *ret1) |
                   for (@result <- ret1) {
-                    o!("info", 3) |
                     match result {
                       (false, msg) => {
                         rhoSpec!("assert", (false, "==", true), msg, *ackCh)
                       }
                       (true, Nil) => {
-                        o!("info", 4) |
                         @msVault!("transfer", genesisRevAddress, 500, carolAuth, *ret2) |
                         for (@result2 <- ret2) {
                           match result2 {
@@ -144,10 +140,8 @@ match (
                               rhoSpec!("assert", (false, "==", true), msg, *ackCh)
                             }
                             (true, result3) => {
-                              o!("info", 5) |
                               match result3 {
                                 (true, nonce) => {
-                                  o!("info", 6) |
                                   @msVault!("confirm", genesisRevAddress, 500, eveAuth, nonce, *ret3) |
                                   rhoSpec!("assert", ((true, (false, "done")), "== <-", *ret3), "transfer successful", *ackCh) |
                                   assertBalances!(*retOk, [(*genesisVault, 8999500), (msVault, 5000)], *rhoSpec, *ackCh)                                  
