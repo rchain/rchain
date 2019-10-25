@@ -327,27 +327,37 @@ object ProcessedDeploy {
 }
 
 sealed trait ProcessedSystemDeploy {
-  def cost: PCost
   def eventList: List[Event]
   def failed: Boolean
 }
 
 object ProcessedSystemDeploy {
-  final case class Succeeded(override val cost: PCost, override val eventList: List[Event])
-      extends ProcessedSystemDeploy {
-    override val failed = false
-  }
-  final case class Failed(
-      override val cost: PCost,
-      override val eventList: List[Event],
-      errorMsg: String
-  ) extends ProcessedSystemDeploy {
-    override val failed = true
+
+  final case class Succeeded(eventList: List[Event]) extends ProcessedSystemDeploy {
+    val failed = false
   }
 
-  def from(psd: ProcessedSystemDeployProto): Either[String, ProcessedSystemDeploy] = ???
+  final case class Failed(eventList: List[Event], errorMsg: String) extends ProcessedSystemDeploy {
+    val failed = true
+  }
 
-  def toProto(psd: ProcessedSystemDeploy): ProcessedSystemDeployProto = ???
+  def from(psd: ProcessedSystemDeployProto): Either[String, ProcessedSystemDeploy] =
+    psd.deployLog.toList
+      .traverse(Event.from)
+      .map(
+        deployLog =>
+          if (psd.errorMsg.isEmpty) Succeeded(deployLog)
+          else Failed(deployLog, psd.errorMsg)
+      )
+
+  def toProto(psd: ProcessedSystemDeploy): ProcessedSystemDeployProto = {
+    val deployLog = psd.eventList.map(Event.toProto)
+    psd match {
+      case Succeeded(_) => ProcessedSystemDeployProto().withDeployLog(deployLog).withErrorMsg("")
+      case Failed(_, errorMsg) =>
+        ProcessedSystemDeployProto().withDeployLog(deployLog).withErrorMsg(errorMsg)
+    }
+  }
 }
 
 final case class DeployData(

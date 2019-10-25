@@ -127,7 +127,7 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log](
     withResetRuntimeLock(stateHash) { runtime =>
       runtime.space.createSoftCheckpoint() >>= { preDeploySoftCheckpoint =>
         evaluateSystemSource(runtime)(systemDeploy, replay = false) >>= {
-          case EvaluateResult(cost, errors) =>
+          case EvaluateResult(_, errors) =>
             if (errors.nonEmpty) UnexpectedSystemErrors(errors).raiseError
             else
               consumeResult(runtime)(systemDeploy, replay = false) >>= {
@@ -139,7 +139,7 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log](
                         .map(
                           postDeploySoftCheckpoint =>
                             SystemDeployResult
-                              .succeeded(cost, postDeploySoftCheckpoint.log, result)
+                              .succeeded(postDeploySoftCheckpoint.log, result)
                         )
                     case Left(SystemDeployError(errorMsg)) =>
                       runtime.space.createSoftCheckpoint() >>= { postDeploySoftCheckpoint =>
@@ -147,7 +147,7 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log](
                           .revertToSoftCheckpoint(preDeploySoftCheckpoint)
                           .as(
                             SystemDeployResult
-                              .failed(cost, postDeploySoftCheckpoint.log, errorMsg)
+                              .failed(postDeploySoftCheckpoint.log, errorMsg)
                           )
                       }
                     case Left(systemDeployPlatformFailure: SystemDeployPlatformFailure) =>

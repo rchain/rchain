@@ -150,9 +150,8 @@ message ProcessedDeployProto {
 }
 
 message ProcessedSystemDeployProto {
-    PCost cost = 1;
-    repeated EventProto deployLog = 2;
-    string errorMsg = 3;
+    repeated EventProto deployLog = 1;
+    string errorMsg = 2;
 }
 
 message BodyProto {

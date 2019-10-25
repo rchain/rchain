@@ -52,7 +52,6 @@ sealed abstract class SystemDeployResult[+A](
     val deploySpecificResult: Option[A]
 )
 object SystemDeployResult {
-  import coop.rchain.rholang.interpreter.accounting.Cost
   import coop.rchain.rspace.trace.Log
 
   final case class Succeeded[A](processed: ProcessedSystemDeploy.Succeeded, result: A)
@@ -60,15 +59,16 @@ object SystemDeployResult {
   final case class Failed[A](processed: ProcessedSystemDeploy.Failed)
       extends SystemDeployResult[A](processed, None)
 
-  def succeeded[A](cost: Cost, log: Log, result: A) =
+  def succeeded[A](log: Log, result: A) =
     Succeeded(
       ProcessedSystemDeploy
-        .Succeeded(Cost.toProto(cost), log.map(EventConverter.toCasperEvent).toList),
+        .Succeeded(log.map(EventConverter.toCasperEvent).toList),
       result
     )
-  def failed[A](cost: Cost, log: Log, errorMsg: String) =
+
+  def failed[A](log: Log, errorMsg: String) =
     Failed(
       ProcessedSystemDeploy
-        .Failed(Cost.toProto(cost), log.map(EventConverter.toCasperEvent).toList, errorMsg)
+        .Failed(log.map(EventConverter.toCasperEvent).toList, errorMsg)
     )
 }
