@@ -89,6 +89,34 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log](
     BindPattern(List(toPar(Expr(EVarBody(EVar(Var(FreeVar(0))))))), freeCount = 1)
   private val emptyContinuation = TaggedContinuation()
 
+  private def evaluateSystemSource[S <: SystemDeploy](
+      runtime: Runtime[F]
+  )(systemDeploy: S, replay: Boolean): F[EvaluateResult] = {
+    implicit val c: _cost[F]         = runtime.cost
+    implicit val r: Blake2b512Random = systemDeploy.rand
+    Interpreter[F].injAttempt(
+      if (replay) runtime.replayReducer else runtime.reducer,
+      runtime.errorLog,
+      systemDeploy.source,
+      Cost.UNSAFE_MAX,
+      systemDeploy.env
+    )
+  }
+
+  private def consumeResult[S <: SystemDeploy](
+      runtime: Runtime[F]
+  )(systemDeploy: S, replay: Boolean): F[Option[(TaggedContinuation, Seq[ListParWithRandom])]] = {
+    import coop.rchain.rspace.util._
+    (if (replay) runtime.replaySpace else runtime.space)
+      .consume(
+        Seq(systemDeploy.returnChannel),
+        Seq(systemDeployConsumeAllPattern),
+        emptyContinuation,
+        persist = false
+      )
+      .map(unpackOption)
+  }
+
   def replaySystemDeploy[S <: SystemDeploy](
       stateHash: StateHash
   )(systemDeploy: S, processedSystemDeploy: ProcessedSystemDeploy): F[Option[ReplayFailure]] = ???
@@ -98,53 +126,37 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log](
   )(systemDeploy: S): F[SystemDeployResult[systemDeploy.Result]] =
     withResetRuntimeLock(stateHash) { runtime =>
       runtime.space.createSoftCheckpoint() >>= { preDeploySoftCheckpoint =>
-        implicit val c: _cost[F]         = runtime.cost
-        implicit val r: Blake2b512Random = systemDeploy.rand
-        Interpreter[F].injAttempt(
-          runtime.reducer,
-          runtime.errorLog,
-          systemDeploy.source,
-          Cost.UNSAFE_MAX,
-          systemDeploy.env
-        ) >>= {
+        evaluateSystemSource(runtime)(systemDeploy, replay = false) >>= {
           case EvaluateResult(cost, errors) =>
             if (errors.nonEmpty) UnexpectedSystemErrors(errors).raiseError
             else
-              runtime.space.consume(
-                Seq(systemDeploy.returnChannel),
-                Seq(systemDeployConsumeAllPattern),
-                emptyContinuation,
-                persist = false
-              ) >>= {
-                import coop.rchain.rspace.util._
-                unpackOption(_) match {
-                  case Some((_, Seq(ListParWithRandom(Seq(par), _)))) =>
-                    systemDeploy.extractResult(par) match {
-                      case Right(result) =>
+              consumeResult(runtime)(systemDeploy, replay = false) >>= {
+                case Some((_, Seq(ListParWithRandom(Seq(par), _)))) =>
+                  systemDeploy.extractResult(par) match {
+                    case Right(result) =>
+                      runtime.space
+                        .createSoftCheckpoint()
+                        .map(
+                          postDeploySoftCheckpoint =>
+                            SystemDeployResult
+                              .succeeded(cost, postDeploySoftCheckpoint.log, result)
+                        )
+                    case Left(SystemDeployError(errorMsg)) =>
+                      runtime.space.createSoftCheckpoint() >>= { postDeploySoftCheckpoint =>
                         runtime.space
-                          .createSoftCheckpoint()
-                          .map(
-                            postDeploySoftCheckpoint =>
-                              SystemDeployResult
-                                .succeeded(cost, postDeploySoftCheckpoint.log, result)
+                          .revertToSoftCheckpoint(preDeploySoftCheckpoint)
+                          .as(
+                            SystemDeployResult
+                              .failed(cost, postDeploySoftCheckpoint.log, errorMsg)
                           )
-                      case Left(SystemDeployError(errorMsg)) =>
-                        runtime.space.createSoftCheckpoint() >>= { postDeploySoftCheckpoint =>
-                          runtime.space
-                            .revertToSoftCheckpoint(preDeploySoftCheckpoint)
-                            .as(
-                              SystemDeployResult
-                                .failed(cost, postDeploySoftCheckpoint.log, errorMsg)
-                            )
-                        }
-                      case Left(systemDeployPlatformFailure: SystemDeployPlatformFailure) =>
-                        systemDeployPlatformFailure.raiseError
-                    }
-                  case Some((_, unexpectedResults)) =>
-                    UnexpectedResult(unexpectedResults.flatMap(_.pars)).raiseError
-                  case None =>
-                    ConsumeFailed.raiseError
-                }
+                      }
+                    case Left(systemDeployPlatformFailure: SystemDeployPlatformFailure) =>
+                      systemDeployPlatformFailure.raiseError
+                  }
+                case Some((_, unexpectedResults)) =>
+                  UnexpectedResult(unexpectedResults.flatMap(_.pars)).raiseError
+                case None =>
+                  ConsumeFailed.raiseError
               }
         }
       }
