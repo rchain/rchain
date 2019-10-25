@@ -50,9 +50,17 @@ class FairRoundRobinDispatcher[F[_]: Sync: Log, S: Show, M: Show](
     messages.get
       .map(_(source).size < maxSourceQueueSize)
       .ifM(
-        messages.update(ps => ps.updated(source, ps(source).enqueue(message))) *>
-          retries.update(_.updated(source, 0)) *>
-          Log[F].info(s"Enqueued message ${message.show} from ${source.show}"),
+        messages
+          .modify { ps =>
+            val q = ps(source).enqueue(message)
+            (ps.updated(source, q), q)
+          }
+          .flatMap { q =>
+            Log[F].info(
+              s"Enqueued message ${message.show} from ${source.show} (queue length: ${q.length}"
+            )
+          } *>
+          retries.update(_.updated(source, 0)),
         Log[F].info(s"Dropped message ${message.show} from ${source.show}")
       )
 
