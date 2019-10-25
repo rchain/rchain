@@ -1,18 +1,15 @@
 package coop.rchain.casper.util.rholang.costacc
 
-import com.google.protobuf.ByteString
 import coop.rchain.casper.util.rholang.{SystemDeploy, SystemDeployFailure, SystemDeployUserError}
 import coop.rchain.crypto.hash.Blake2b512Random
+import coop.rchain.models.NormalizerEnv.{Contains, ToEnvMap}
 import coop.rchain.rholang.interpreter.RhoType._
-import coop.rchain.models.NormalizerEnv.ToEnvMap
 
 final class RefundDeploy(refundAmount: Long, rand: Blake2b512Random) extends SystemDeploy(rand) {
   import coop.rchain.models._
   import Expr.ExprInstance._
-  import GUnforgeable.UnfInstance.GPrivateBody
   import rholang.{implicits => toPar}
   import shapeless._
-  import record._
   import syntax.singleton._
 
   type Output = (RhoBoolean, Either[RhoString, RhoNil])
@@ -24,13 +21,11 @@ final class RefundDeploy(refundAmount: Long, rand: Blake2b512Random) extends Sys
   type Env = (`sys:casper:refundAmount` ->> GInt) :: (`sys:casper:return` ->> GUnforgeable) :: HNil
 
   import toPar._
-  override protected val toEnvMap = ToEnvMap[Env]
-  override protected val normalizerEnv =
+  protected override val envsReturnChannel = Contains[Env, `sys:casper:return`]
+  protected override val toEnvMap          = ToEnvMap[Env]
+  protected override val normalizerEnv =
     new NormalizerEnv(
-      ("sys:casper:refundAmount" ->> GInt(refundAmount)) ::
-        ("sys:casper:return" ->> GUnforgeable(
-          GPrivateBody(GPrivate(ByteString.copyFrom(rand.next())))
-        )) :: HNil
+      ("sys:casper:refundAmount" ->> GInt(refundAmount)) :: mkReturnChannel :: HNil
     )
 
   override val source: String =
@@ -57,5 +52,4 @@ final class RefundDeploy(refundAmount: Long, rand: Blake2b512Random) extends Sys
       case _                       => Left(SystemDeployUserError("<no cause>"))
     }
 
-  protected override def getReturnChannel(env: Env): Par = toPar(env.get("sys:casper:return"))
 }

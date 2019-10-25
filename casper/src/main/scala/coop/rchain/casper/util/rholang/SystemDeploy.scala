@@ -1,17 +1,20 @@
 package coop.rchain.casper.util.rholang
 
-import coop.rchain.crypto.hash.Blake2b512Random
-import coop.rchain.models.Par
-import coop.rchain.rholang.interpreter.RhoType.Extractor
-import coop.rchain.models.NormalizerEnv
-import coop.rchain.models.NormalizerEnv.ToEnvMap
-import shapeless.Witness
+import com.google.protobuf.ByteString
 import coop.rchain.casper.protocol.ProcessedSystemDeploy
 import coop.rchain.casper.util.EventConverter
+import coop.rchain.crypto.hash.Blake2b512Random
+import coop.rchain.models.NormalizerEnv.{Contains, ToEnvMap}
+import coop.rchain.rholang.interpreter.RhoType.Extractor
+import shapeless.Witness
 
 abstract class SystemDeploy(val rand: Blake2b512Random) {
 
   import SystemDeployPlatformFailure._
+  import coop.rchain.models._
+  import GUnforgeable.UnfInstance.GPrivateBody
+  import rholang.{implicits => toPar}
+  import shapeless.syntax.singleton._
 
   type Output
   type Result
@@ -22,6 +25,11 @@ abstract class SystemDeploy(val rand: Blake2b512Random) {
 
   protected def toEnvMap: ToEnvMap[Env]
   final def env: Map[String, Par] = normalizerEnv.toEnv(toEnvMap)
+
+  implicit protected val envsReturnChannel: Contains.Aux[Env, `sys:casper:return`, GUnforgeable]
+  protected def mkReturnChannel =
+    "sys:casper:return" ->> GUnforgeable(GPrivateBody(GPrivate(ByteString.copyFrom(rand.next()))))
+  final def returnChannel: Par = toPar(normalizerEnv.get[`sys:casper:return`])
 
   protected val normalizerEnv: NormalizerEnv[Env]
 
@@ -37,11 +45,6 @@ abstract class SystemDeploy(val rand: Blake2b512Random) {
       )
 
   protected def processResult(value: extractor.ScalaType): Either[SystemDeployFailure, Result]
-
-  final def returnChannel: Par = getReturnChannel(normalizerEnv.env)
-
-  protected def getReturnChannel(env: Env): Par
-
 }
 
 sealed abstract class SystemDeployResult[+A](
