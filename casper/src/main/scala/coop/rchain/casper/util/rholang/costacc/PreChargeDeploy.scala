@@ -1,7 +1,7 @@
 package coop.rchain.casper.util.rholang.costacc
 
 import com.google.protobuf.ByteString
-import coop.rchain.casper.util.rholang.{SystemDeploy, SystemDeployFailure}
+import coop.rchain.casper.util.rholang.{SystemDeploy, SystemDeployFailure, SystemDeployUserError}
 import coop.rchain.crypto.PublicKey
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.rholang.interpreter.RhoType._
@@ -60,8 +60,8 @@ final class PreChargeDeploy(chargeAmount: Long, pk: PublicKey, rand: Blake2b512R
   ): Either[SystemDeployFailure, Unit] =
     value match {
       case (true, _)               => Right(())
-      case (false, Left(errorMsg)) => Left(SystemDeployFailure.SystemDeployError(errorMsg))
-      case _                       => Left(SystemDeployFailure.SystemDeployError("<no cause>"))
+      case (false, Left(errorMsg)) => Left(SystemDeployUserError(errorMsg))
+      case _                       => Left(SystemDeployUserError("<no cause>"))
     }
 
   protected override def getReturnChannel(env: Env): Par = toPar(env.get("sys:casper:return"))

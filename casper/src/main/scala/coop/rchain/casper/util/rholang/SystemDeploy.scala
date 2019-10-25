@@ -6,10 +6,12 @@ import coop.rchain.rholang.interpreter.RhoType.Extractor
 import coop.rchain.models.NormalizerEnv
 import coop.rchain.models.NormalizerEnv.ToEnvMap
 import shapeless.Witness
+import coop.rchain.casper.protocol.ProcessedSystemDeploy
+import coop.rchain.casper.util.EventConverter
 
 abstract class SystemDeploy(val rand: Blake2b512Random) {
 
-  import SystemDeployFailure._
+  import SystemDeployPlatformFailure._
 
   type Output
   type Result
@@ -45,7 +47,28 @@ abstract class SystemDeploy(val rand: Blake2b512Random) {
 
 }
 
-final case class SystemDeployResult[A](
-    internalProcessedSystemDeploy: InternalProcessedSystemDeploy,
-    deploySpecific: A
+sealed abstract class SystemDeployResult[+A](
+    val processedSystemDeploy: ProcessedSystemDeploy,
+    val deploySpecificResult: Option[A]
 )
+object SystemDeployResult {
+  import coop.rchain.rholang.interpreter.accounting.Cost
+  import coop.rchain.rspace.trace.Log
+
+  final case class Succeeded[A](processed: ProcessedSystemDeploy.Succeeded, result: A)
+      extends SystemDeployResult[A](processed, Some(result))
+  final case class Failed[A](processed: ProcessedSystemDeploy.Failed)
+      extends SystemDeployResult[A](processed, None)
+
+  def succeeded[A](cost: Cost, log: Log, result: A) =
+    Succeeded(
+      ProcessedSystemDeploy
+        .Succeeded(Cost.toProto(cost), log.map(EventConverter.toCasperEvent).toList),
+      result
+    )
+  def failed[A](cost: Cost, log: Log, errorMsg: String) =
+    Failed(
+      ProcessedSystemDeploy
+        .Failed(Cost.toProto(cost), log.map(EventConverter.toCasperEvent).toList, errorMsg)
+    )
+}

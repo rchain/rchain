@@ -9,14 +9,14 @@ import com.google.protobuf.ByteString
 import coop.rchain.casper.CasperMetricsSource
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.rholang.RuntimeManager.{evaluate, StateHash}
-import coop.rchain.casper.util.rholang.SystemDeployFailure._
+import coop.rchain.casper.util.rholang.SystemDeployPlatformFailure._
+import coop.rchain.casper.util.rholang.SystemDeployUserError._
 import coop.rchain.casper.util.{ConstructDeploy, EventConverter, ProtoUtil}
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.metrics.Metrics.Source
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.Expr.ExprInstance.{EVarBody, GString}
-import coop.rchain.models.NormalizerEnv.ToEnvMap
 import coop.rchain.models.Validator.Validator
 import coop.rchain.models.Var.VarInstance.FreeVar
 import coop.rchain.models._
@@ -31,10 +31,17 @@ import coop.rchain.rholang.interpreter.{
   RhoType,
   Runtime
 }
-import coop.rchain.rspace.{Blake2b256Hash, ReplayException, Result}
+import coop.rchain.rspace.{Blake2b256Hash, ReplayException}
 import coop.rchain.shared.Log
 
 trait RuntimeManager[F[_]] {
+  def playSystemDeploy[S <: SystemDeploy](startHash: StateHash)(
+      systemDeploy: S
+  ): F[SystemDeployResult[systemDeploy.Result]]
+  def replaySystemDeploy[S <: SystemDeploy](startHash: StateHash)(
+      systemDeploy: S,
+      processedSystemDeploy: ProcessedSystemDeploy
+  ): F[Option[ReplayFailure]]
   def captureResults(
       startHash: StateHash,
       deploy: DeployData,
@@ -77,75 +84,71 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log](
   private[this] val computeStateLabel = Metrics.Source(RuntimeManagerMetricsSource, "compute-state")
   private[this] val computeGenesisLabel =
     Metrics.Source(RuntimeManagerMetricsSource, "compute-genesis")
-  private[this] val systemDeployConsumeAllPattern =
+
+  private val systemDeployConsumeAllPattern =
     BindPattern(List(toPar(Expr(EVarBody(EVar(Var(FreeVar(0))))))), freeCount = 1)
-  private[this] val emptyContinuation = TaggedContinuation()
+  private val emptyContinuation = TaggedContinuation()
+
+  def replaySystemDeploy[S <: SystemDeploy](
+      stateHash: StateHash
+  )(systemDeploy: S, processedSystemDeploy: ProcessedSystemDeploy): F[Option[ReplayFailure]] = ???
 
   def playSystemDeploy[S <: SystemDeploy](
-      runtime: Runtime[F],
-      systemDeploy: S,
-      rand: Blake2b512Random
-  )(normalizerEnv: NormalizerEnv[systemDeploy.Env])(
-      implicit ev: ToEnvMap[systemDeploy.Env]
-  ): F[Either[SystemDeployFailure, SystemDeployResult[systemDeploy.Result]]] =
-    for {
-      softCheckpoint <- runtime.space.createSoftCheckpoint()
-      result <- EitherT
-                 .liftF {
-                   implicit val c: _cost[F] = runtime.cost
-                   Interpreter[F].injAttempt(
-                     runtime.reducer,
-                     runtime.errorLog,
-                     systemDeploy.source,
-                     Cost.UNSAFE_MAX,
-                     normalizerEnv.toEnv
-                   )(rand)
-                 }
-                 .ensureOr(evalResult => UnexpectedErrors(evalResult.errors))(
-                   !_.isFailed
-                 )
-                 .flatMap(
-                   evalResult =>
-                     EitherT
-                       .fromOptionF(
-                         runtime.space
-                           .consume(
-                             List(systemDeploy.returnChannel(normalizerEnv)),
-                             List(systemDeployConsumeAllPattern),
-                             emptyContinuation,
-                             persist = false
-                           ),
-                         ifNone = ConsumeFailed: SystemDeployFailure
-                       )
-                       .subflatMap {
-                         case (_, Seq(Result(_, ListParWithRandom(Seq(output), _), _, _))) =>
-                           systemDeploy.extractResult(output)
-                         case (_, somethingWeird) =>
-                           Left(UnexpectedResult(somethingWeird.flatMap(_.matchedDatum.pars)))
-                       }
-                       .semiflatMap(
-                         deployResult =>
-                           runtime.space
-                             .createSoftCheckpoint()
-                             .map(
-                               checkpoint =>
-                                 SystemDeployResult(
-                                   InternalProcessedSystemDeploy(
-                                     Cost.toProto(evalResult.cost),
-                                     checkpoint.log
-                                   ),
-                                   deployResult
-                                 )
-                             )
-                       )
-                 )
-                 .onError {
-                   case _ =>
-                     EitherT.right(runtime.space.revertToSoftCheckpoint(softCheckpoint))
-                 }
-                 .value
-
-    } yield result
+      stateHash: StateHash
+  )(systemDeploy: S): F[SystemDeployResult[systemDeploy.Result]] =
+    withResetRuntimeLock(stateHash) { runtime =>
+      runtime.space.createSoftCheckpoint() >>= { preDeploySoftCheckpoint =>
+        implicit val c: _cost[F]         = runtime.cost
+        implicit val r: Blake2b512Random = systemDeploy.rand
+        Interpreter[F].injAttempt(
+          runtime.reducer,
+          runtime.errorLog,
+          systemDeploy.source,
+          Cost.UNSAFE_MAX,
+          systemDeploy.env
+        ) >>= {
+          case EvaluateResult(cost, errors) =>
+            if (errors.nonEmpty) UnexpectedSystemErrors(errors).raiseError
+            else
+              runtime.space.consume(
+                Seq(systemDeploy.returnChannel),
+                Seq(systemDeployConsumeAllPattern),
+                emptyContinuation,
+                persist = false
+              ) >>= {
+                import coop.rchain.rspace.util._
+                unpackOption(_) match {
+                  case Some((_, Seq(ListParWithRandom(Seq(par), _)))) =>
+                    systemDeploy.extractResult(par) match {
+                      case Right(result) =>
+                        runtime.space
+                          .createSoftCheckpoint()
+                          .map(
+                            postDeploySoftCheckpoint =>
+                              SystemDeployResult
+                                .succeeded(cost, postDeploySoftCheckpoint.log, result)
+                          )
+                      case Left(SystemDeployError(errorMsg)) =>
+                        runtime.space.createSoftCheckpoint() >>= { postDeploySoftCheckpoint =>
+                          runtime.space
+                            .revertToSoftCheckpoint(preDeploySoftCheckpoint)
+                            .as(
+                              SystemDeployResult
+                                .failed(cost, postDeploySoftCheckpoint.log, errorMsg)
+                            )
+                        }
+                      case Left(systemDeployPlatformFailure: SystemDeployPlatformFailure) =>
+                        systemDeployPlatformFailure.raiseError
+                    }
+                  case Some((_, unexpectedResults)) =>
+                    UnexpectedResult(unexpectedResults.flatMap(_.pars)).raiseError
+                  case None =>
+                    ConsumeFailed.raiseError
+                }
+              }
+        }
+      }
+    }
 
   def captureResults(
       start: StateHash,
@@ -430,11 +433,11 @@ object RuntimeManager {
       costState: _cost[F],
       errorLog: ErrorLog[F]
   )(deploy: DeployData): F[EvaluateResult] = {
-    import rholang.implicits._
     implicit val rand: Blake2b512Random = Blake2b512Random(
       ProtoUtil.stripDeployData(deploy).toProto.toByteArray
     )
     implicit val cost: _cost[F] = costState
+    import coop.rchain.models.rholang.implicits._
     Interpreter[F].injAttempt(
       reducer,
       errorLog,

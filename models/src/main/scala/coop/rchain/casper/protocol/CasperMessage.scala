@@ -326,6 +326,30 @@ object ProcessedDeploy {
       .withErrored(pd.isFailed)
 }
 
+sealed trait ProcessedSystemDeploy {
+  def cost: PCost
+  def eventList: List[Event]
+  def failed: Boolean
+}
+
+object ProcessedSystemDeploy {
+  final case class Succeeded(override val cost: PCost, override val eventList: List[Event])
+      extends ProcessedSystemDeploy {
+    override val failed = false
+  }
+  final case class Failed(
+      override val cost: PCost,
+      override val eventList: List[Event],
+      errorMsg: String
+  ) extends ProcessedSystemDeploy {
+    override val failed = true
+  }
+
+  def from(psd: ProcessedSystemDeployProto): Either[String, ProcessedSystemDeploy] = ???
+
+  def toProto(psd: ProcessedSystemDeploy): ProcessedSystemDeployProto = ???
+}
+
 final case class DeployData(
     deployer: ByteString,
     term: String,

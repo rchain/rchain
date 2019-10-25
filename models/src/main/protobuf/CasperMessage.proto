@@ -149,6 +149,12 @@ message ProcessedDeployProto {
     bool errored = 5; //true if deploy encountered a user error
 }
 
+message ProcessedSystemDeployProto {
+    PCost cost = 1;
+    repeated EventProto deployLog = 2;
+    string errorMsg = 3;
+}
+
 message BodyProto {
   RChainStateProto              state    = 1;
   repeated ProcessedDeployProto deploys      = 2;
