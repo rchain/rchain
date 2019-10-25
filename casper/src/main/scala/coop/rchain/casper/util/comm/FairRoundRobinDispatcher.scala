@@ -10,7 +10,7 @@ import cats.syntax.all._
 import FairRoundRobinDispatcher._
 import coop.rchain.shared.Log
 
-class FairRoundRobinDispatcher[F[_]: Sync: Log, S: Show, M](
+class FairRoundRobinDispatcher[F[_]: Sync: Log, S: Show, M: Show](
     filter: M => F[Dispatch],
     handle: (S, M) => F[Unit],
     queue: Ref[F, Queue[S]],
@@ -43,7 +43,7 @@ class FairRoundRobinDispatcher[F[_]: Sync: Log, S: Show, M](
         queue.update(_.enqueue(source)) *>
           messages.update(_ + (source -> Queue.empty[M])) *>
           retries.update(_ + (source  -> 0)) *>
-          Log[F].debug(s"Added ${source.show} to the dispatch queue")
+          Log[F].info(s"Added ${source.show} to the dispatch queue")
       )
 
   private[comm] def enqueueMessage(source: S, message: M): F[Unit] =
@@ -51,8 +51,9 @@ class FairRoundRobinDispatcher[F[_]: Sync: Log, S: Show, M](
       .map(_(source).size < maxSourceQueueSize)
       .ifM(
         messages.update(ps => ps.updated(source, ps(source).enqueue(message))) *>
-          retries.update(_.updated(source, 0)),
-        Log[F].debug(s"Dropped message from ${source.show}")
+          retries.update(_.updated(source, 0)) *>
+          Log[F].info(s"Enqueued message ${message.show} from ${source.show}"),
+        Log[F].info(s"Dropped message ${message.show} from ${source.show}")
       )
 
   private[comm] def handleMessages(source: S): F[Unit] =
@@ -78,29 +79,33 @@ class FairRoundRobinDispatcher[F[_]: Sync: Log, S: Show, M](
       _.dequeue match {
         case (s, q) => (q.enqueue(s), q.headOption.getOrElse(s))
       }
-    ) >>= (s => Log[F].debug(s"It's ${s.show} turn"))
+    ) >>= (s => Log[F].info(s"It's ${s.show} turn"))
 
   private[comm] def dropSource(source: S): F[Unit] =
     queue.update(_.filterNot(_ == source)) *>
       messages.update(_ - source) *>
       retries.update(_ - source) *>
-      Log[F].debug(s"Dropped ${source.show} from the dispatch queue") *>
-      queue.get >>= (q => Log[F].debug(s"It's ${q.head.show} turn"))
+      Log[F].info(s"Dropped ${source.show} from the dispatch queue") *>
+      queue.get >>= (q => Log[F].info(s"It's ${q.head.show} turn"))
 
   private[comm] def giveUp(source: S): F[Unit] =
-    Log[F].debug(s"Giving up on ${source.show}") *>
+    Log[F].info(s"Giving up on ${source.show}") *>
       skipped.update(_ => 0) *>
       retries.update(r => r.updated(source, r(source) + 1)) >>
       retries.get.map(_(source) > dropSourceAfterRetries).ifM(dropSource(source), rotate)
 
   private[comm] def success(source: S): F[Unit] =
-    Log[F].debug(s"Dispatched message from ${source.show}") *>
-      messages.update(ms => ms.updated(source, ms(source).dequeue._2)) *>
+    messages
+      .modify { ms =>
+        val (m, q) = ms(source).dequeue
+        (ms.updated(source, q), m)
+      }
+      .flatMap(m => Log[F].info(s"Dispatched message ${m.show} from ${source.show}")) *>
       skipped.update(_ => 0) *>
       rotate
 
   private[comm] def failure(source: S): F[Unit] =
-    Log[F].debug("Skipping message") *>
+    Log[F].info(s"No message to dispatch for ${source.show}") *>
       skipped.update(_ + 1) >>
       skipped.get.map(_ < giveUpAfterSkipped).ifM(().pure, giveUp(source))
 }
@@ -118,7 +123,7 @@ object FairRoundRobinDispatcher {
     val drop: Dispatch   = Drop
   }
 
-  def apply[F[_]: Sync: Log, S: Show, M](
+  def apply[F[_]: Sync: Log, S: Show, M: Show](
       filter: M => F[Dispatch],
       handle: (S, M) => F[Unit],
       maxSourceQueueSize: Int,

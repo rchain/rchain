@@ -571,8 +571,9 @@ class FairRoundRobinDispatcherSpec extends WordSpecLike with Matchers {
       dropSourceAfterRetries: Int,
       filter: Int => SyncIO[Dispatch] = _ => SyncIO.pure(Handle)
   ) {
-    implicit private val log: Log[SyncIO]   = new Log.NOPLog[SyncIO]
-    implicit private val show: Show[String] = s => s
+    implicit private val log: Log[SyncIO]         = new Log.NOPLog[SyncIO]
+    implicit private val showSource: Show[String] = s => s
+    implicit private val showMessage: Show[Int]   = m => m.toString
 
     val (queue, messages, retries, skipped, handled) =
       (for {
