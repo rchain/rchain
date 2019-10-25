@@ -6,15 +6,17 @@ import coop.rchain.crypto.PublicKey
 
 import scala.annotation.implicitNotFound
 
-final class NormalizerEnv[Env](val env: Env) {
+final class NormalizerEnv[Env](env: Env) {
   import NormalizerEnv._
-  def toEnv(implicit ToEnvMap: ToEnvMap[Env]): Map[String, Par] = ToEnvMap(env)
+  def toEnv(implicit ToEnvMap: ToEnvMap[Env]): Map[String, Par]      = ToEnvMap(env)
+  def get[T](implicit ev: Contains[Env, T]): ev.KeyType              = ev.get(env)
+  def get(uri: shapeless.Witness)(implicit ev: Contains[Env, uri.T]) = get[uri.T]
 }
 
 object NormalizerEnv {
   import shapeless._
   import syntax.singleton._
-  import ops.record.{Keys, Values}
+  import ops.record.{Keys, Selector, Values}
   import ops.hlist.ToList
 
   type UriString = String
@@ -78,4 +80,23 @@ object NormalizerEnv {
     }
   }
 
+  @implicitNotFound("${Env} does not contain ${Key}")
+  trait Contains[Env, Key] {
+    type KeyType
+
+    def get(env: Env): KeyType
+  }
+
+  object Contains {
+    type Aux[Env, Key, T] = Contains[Env, Key] { type KeyType = T }
+
+    def apply[Env, Key](implicit ev: Contains[Env, Key]): Contains.Aux[Env, Key, ev.KeyType] = ev
+
+    implicit def summon[Env <: HList, Key, T](
+        implicit selector: Selector.Aux[Env, Key, T]
+    ): Aux[Env, Key, T] = new Contains[Env, Key] {
+      type KeyType = T
+      def get(env: Env): T = selector(env)
+    }
+  }
 }
