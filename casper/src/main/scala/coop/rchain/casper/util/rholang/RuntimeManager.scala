@@ -1,14 +1,15 @@
 package coop.rchain.casper.util.rholang
 
-import cats._
+import cats.Applicative
 import cats.data.EitherT
 import cats.effect.concurrent.MVar
 import cats.effect.{Sync, _}
 import cats.syntax.all._
 import com.google.protobuf.ByteString
 import coop.rchain.casper.CasperMetricsSource
+import coop.rchain.casper.protocol.ProcessedSystemDeploy.{Failed, Succeeded}
 import coop.rchain.casper.protocol._
-import coop.rchain.casper.util.rholang.RuntimeManager.{evaluate, StateHash}
+import coop.rchain.casper.util.rholang.RuntimeManager.{StateHash, evaluate}
 import coop.rchain.casper.util.rholang.SystemDeployPlatformFailure._
 import coop.rchain.casper.util.rholang.SystemDeployUserError._
 import coop.rchain.casper.util.{ConstructDeploy, EventConverter, ProtoUtil}
@@ -23,25 +24,18 @@ import coop.rchain.models._
 import coop.rchain.rholang.interpreter.Runtime.BlockData
 import coop.rchain.rholang.interpreter.accounting._
 import coop.rchain.rholang.interpreter.errors.BugFoundError
-import coop.rchain.rholang.interpreter.{
-  ErrorLog,
-  EvaluateResult,
-  Interpreter,
-  Reduce,
-  RhoType,
-  Runtime
-}
+import coop.rchain.rholang.interpreter.{ErrorLog, EvaluateResult, Interpreter, Reduce, RhoType, Runtime}
 import coop.rchain.rspace.{Blake2b256Hash, ReplayException}
 import coop.rchain.shared.Log
 
 trait RuntimeManager[F[_]] {
   def playSystemDeploy[S <: SystemDeploy](startHash: StateHash)(
       systemDeploy: S
-  ): F[SystemDeployResult[systemDeploy.Result]]
+  ): F[SystemDeployPlayResult[systemDeploy.Result]]
   def replaySystemDeploy[S <: SystemDeploy](startHash: StateHash)(
       systemDeploy: S,
       processedSystemDeploy: ProcessedSystemDeploy
-  ): F[Option[ReplayFailure]]
+  ): F[Either[ReplayFailure, SystemDeployReplayResult[systemDeploy.Result]]]
   def captureResults(
       startHash: StateHash,
       deploy: DeployData,
@@ -117,48 +111,136 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log](
       .map(unpackOption)
   }
 
-  def replaySystemDeploy[S <: SystemDeploy](
-      stateHash: StateHash
-  )(systemDeploy: S, processedSystemDeploy: ProcessedSystemDeploy): F[Option[ReplayFailure]] = ???
+  def replaySystemDeploy[S <: SystemDeploy](stateHash: StateHash)(
+      systemDeploy: S,
+      processedSystemDeploy: ProcessedSystemDeploy
+  ): F[Either[ReplayFailure, SystemDeployReplayResult[systemDeploy.Result]]] =
+    withRuntimeLock { runtime =>
+      runtime.replaySpace.reset(Blake2b256Hash.fromByteString(stateHash)) >>
+        replaySystemDeployInternal(runtime)(systemDeploy, processedSystemDeploy) >>= {
+        case Right(Right(result)) =>
+          runtime.replaySpace
+            .createCheckpoint()
+            .map(_.root.toByteString)
+            .map(
+              finalStateHash =>
+                SystemDeployReplayResult.replaySucceeded(finalStateHash, result).asRight
+            )
+        case Right(Left(systemDeployError)) =>
+          SystemDeployReplayResult.replayFailed(systemDeployError).asRight.pure
+        case Left(replayFailure) =>
+          replayFailure.asLeft.pure
+      }
+    }
 
-  def playSystemDeploy[S <: SystemDeploy](
-      stateHash: StateHash
-  )(systemDeploy: S): F[SystemDeployResult[systemDeploy.Result]] =
-    withResetRuntimeLock(stateHash) { runtime =>
-      runtime.space.createSoftCheckpoint() >>= { preDeploySoftCheckpoint =>
-        evaluateSystemSource(runtime)(systemDeploy, replay = false) >>= {
-          case EvaluateResult(_, errors) =>
-            if (errors.nonEmpty) UnexpectedSystemErrors(errors).raiseError
+  private def replaySystemDeployInternal[S <: SystemDeploy](runtime: Runtime[F])(
+      systemDeploy: S,
+      processedSystemDeploy: ProcessedSystemDeploy
+  ): F[Either[ReplayFailure, Either[SystemDeployError, systemDeploy.Result]]] = {
+
+    def verifyReplaySuccess(
+        result: systemDeploy.Result
+    ): Either[ReplayFailure, systemDeploy.Result] =
+      if (processedSystemDeploy.failed)
+        ReplayFailure.replayStatusMismatch(initialFailed = true, replayFailed = false).asLeft
+      else result.asRight
+
+    def verifyReplayFailure(systemDeployError: SystemDeployError): Option[ReplayFailure] =
+      processedSystemDeploy match {
+        case Succeeded(_) =>
+          ReplayFailure.replayStatusMismatch(initialFailed = false, replayFailed = true).some
+        case Failed(_, errorMsg) =>
+          if (errorMsg == systemDeployError.errorMsg) none
+          else ReplayFailure.systemDeployErrorMismatch(errorMsg, systemDeployError.errorMsg).some
+      }
+
+    runtime.replaySpace.rig(processedSystemDeploy.eventList.map(EventConverter.toRspaceEvent)) >> {
+      runtime.replaySpace.createSoftCheckpoint() >>= { softCheckpoint =>
+        evaluateSystemSource(runtime)(systemDeploy, replay = true) >>= {
+          case EvaluateResult(_, interpreterErrors) =>
+            if (interpreterErrors.nonEmpty) UnexpectedSystemErrors(interpreterErrors).raiseError
             else
-              consumeResult(runtime)(systemDeploy, replay = false) >>= {
-                case Some((_, Seq(ListParWithRandom(Seq(par), _)))) =>
-                  systemDeploy.extractResult(par) match {
-                    case Right(result) =>
-                      runtime.space
-                        .createSoftCheckpoint()
-                        .map(
-                          postDeploySoftCheckpoint =>
-                            SystemDeployResult
-                              .succeeded(postDeploySoftCheckpoint.log, result)
-                        )
-                    case Left(SystemDeployError(errorMsg)) =>
-                      runtime.space.createSoftCheckpoint() >>= { postDeploySoftCheckpoint =>
-                        runtime.space
-                          .revertToSoftCheckpoint(preDeploySoftCheckpoint)
-                          .as(
-                            SystemDeployResult
-                              .failed(postDeploySoftCheckpoint.log, errorMsg)
-                          )
-                      }
-                    case Left(systemDeployPlatformFailure: SystemDeployPlatformFailure) =>
-                      systemDeployPlatformFailure.raiseError
-                  }
-                case Some((_, unexpectedResults)) =>
-                  UnexpectedResult(unexpectedResults.flatMap(_.pars)).raiseError
-                case None =>
-                  ConsumeFailed.raiseError
+              consumeResult(runtime)(systemDeploy, replay = true) >>= { consumeResultOpt =>
+                runtime.replaySpace.checkReplayData().attempt.map(_.swap.toOption) >>= {
+                  case Some(replayException: ReplayException) =>
+                    ReplayFailure.unusedCOMMEvent(replayException).asLeft.pure
+                  case Some(throwable) =>
+                    ReplayFailure.internalError(throwable).asLeft.pure
+                  case None =>
+                    consumeResultOpt match {
+                      case Some((_, Seq(ListParWithRandom(Seq(par), _)))) =>
+                        systemDeploy.extractResult(par) match {
+                          case Right(result) =>
+                            verifyReplaySuccess(result).map(_.asRight[SystemDeployError]).pure
+                          case Left(systemDeployError: SystemDeployError) =>
+                            verifyReplayFailure(systemDeployError) match {
+                              case Some(replayFailure) => replayFailure.asLeft.pure
+                              case None =>
+                                runtime.replaySpace
+                                  .revertToSoftCheckpoint(softCheckpoint)
+                                  .as(systemDeployError.asLeft.asRight)
+                            }
+                          case Left(systemDeployPlatformFailure: SystemDeployPlatformFailure) =>
+                            systemDeployPlatformFailure.raiseError
+                        }
+                      case Some((_, unexpectedResults)) =>
+                        UnexpectedResult(unexpectedResults.flatMap(_.pars)).raiseError
+                      case None =>
+                        ConsumeFailed.raiseError
+                    }
+                }
               }
         }
+      }
+    }
+  }
+
+  def playSystemDeploy[S <: SystemDeploy](stateHash: StateHash)(
+      systemDeploy: S
+  ): F[SystemDeployPlayResult[systemDeploy.Result]] =
+    withResetRuntimeLock(stateHash) { runtime =>
+      playSystemDeployInternal(runtime)(systemDeploy) >>= {
+        case (eventLog, Right(result)) =>
+          runtime.space.createCheckpoint().map(_.root.toByteString) >>= { finalStateHash =>
+            SystemDeployPlayResult.playSucceeded(finalStateHash, eventLog, result).pure
+          }
+        case (eventLog, Left(systemDeployError)) =>
+          SystemDeployPlayResult.playFailed(eventLog, systemDeployError).pure
+      }
+    }
+
+  import coop.rchain.rspace.trace.Log
+  private def playSystemDeployInternal[S <: SystemDeploy](runtime: Runtime[F])(
+      systemDeploy: S
+  ): F[(Log, Either[SystemDeployError, systemDeploy.Result])] =
+    runtime.space.createSoftCheckpoint() >>= { preDeploySoftCheckpoint =>
+      evaluateSystemSource(runtime)(systemDeploy, replay = false) >>= {
+        case EvaluateResult(_, interpreterErrors) =>
+          if (interpreterErrors.nonEmpty) UnexpectedSystemErrors(interpreterErrors).raiseError
+          else
+            consumeResult(runtime)(systemDeploy, replay = false) >>= {
+              case Some((_, Seq(ListParWithRandom(Seq(par), _)))) =>
+                systemDeploy.extractResult(par) match {
+                  case Right(result) =>
+                    runtime.space
+                      .createSoftCheckpoint()
+                      .map(
+                        postDeploySoftCheckpoint => (postDeploySoftCheckpoint.log, result.asRight)
+                      )
+                  case Left(systemDeployError: SystemDeployError) =>
+                    runtime.space.createSoftCheckpoint() >>= { postDeploySoftCheckpoint =>
+                      runtime.space
+                        .revertToSoftCheckpoint(preDeploySoftCheckpoint)
+                        .as((postDeploySoftCheckpoint.log, systemDeployError.asLeft))
+                    }
+                  case Left(systemDeployPlatformFailure: SystemDeployPlatformFailure) =>
+                    systemDeployPlatformFailure.raiseError
+                }
+              case Some((_, unexpectedResults)) =>
+                UnexpectedResult(unexpectedResults.flatMap(_.pars)).raiseError
+              case None =>
+                ConsumeFailed.raiseError
+            }
       }
     }
 
