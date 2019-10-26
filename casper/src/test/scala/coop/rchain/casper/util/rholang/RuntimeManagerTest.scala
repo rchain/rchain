@@ -253,7 +253,7 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
 
   "replayComputeState" should "catch discrepancies in initial and replay cost when no errors are thrown" in effectTest {
     invalidReplay("@0!(0) | for(@0 <- @0){ Nil }").map {
-      case Left(ReplayCostMismatch(_, initialCost, replayCost)) =>
+      case Left(ReplayCostMismatch(initialCost, replayCost)) =>
         assert(initialCost == 322L && replayCost == 323L)
       case _ => fail()
     }

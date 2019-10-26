@@ -396,7 +396,7 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log](
                         .ensureOr(
                           result =>
                             /* Since there are no errors, verify evaluation costs and COMM events match. */
-                            ReplayFailure.replayCostMismatch(deploy, cost.cost, result.cost.value)
+                            ReplayFailure.replayCostMismatch(cost.cost, result.cost.value)
                         )(result => result.failed || cost.cost == result.cost.value)
                         .semiflatMap(
                           result =>
@@ -414,8 +414,8 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log](
                         .value
                         .recover {
                           case replayException: ReplayException =>
-                            ReplayFailure.unusedCOMMEvent(deploy, replayException).some
-                          case throwable => ReplayFailure.internalError(deploy, throwable).some
+                            ReplayFailure.unusedCOMMEvent(replayException).some
+                          case throwable => ReplayFailure.internalError(throwable).some
                         }
     } yield failureOption
   }
