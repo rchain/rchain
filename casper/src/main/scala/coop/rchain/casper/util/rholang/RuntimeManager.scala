@@ -9,7 +9,7 @@ import com.google.protobuf.ByteString
 import coop.rchain.casper.CasperMetricsSource
 import coop.rchain.casper.protocol.ProcessedSystemDeploy.{Failed, Succeeded}
 import coop.rchain.casper.protocol._
-import coop.rchain.casper.util.rholang.RuntimeManager.{StateHash, evaluate}
+import coop.rchain.casper.util.rholang.RuntimeManager.{evaluate, StateHash}
 import coop.rchain.casper.util.rholang.SystemDeployPlatformFailure._
 import coop.rchain.casper.util.rholang.SystemDeployUserError._
 import coop.rchain.casper.util.{ConstructDeploy, EventConverter, ProtoUtil}
@@ -24,7 +24,14 @@ import coop.rchain.models._
 import coop.rchain.rholang.interpreter.Runtime.BlockData
 import coop.rchain.rholang.interpreter.accounting._
 import coop.rchain.rholang.interpreter.errors.BugFoundError
-import coop.rchain.rholang.interpreter.{ErrorLog, EvaluateResult, Interpreter, Reduce, RhoType, Runtime}
+import coop.rchain.rholang.interpreter.{
+  ErrorLog,
+  EvaluateResult,
+  Interpreter,
+  Reduce,
+  RhoType,
+  Runtime
+}
 import coop.rchain.rspace.{Blake2b256Hash, ReplayException}
 import coop.rchain.shared.Log
 

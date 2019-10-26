@@ -1,11 +1,16 @@
 package coop.rchain.casper.util.rholang
 
 import cats.effect.Resource
-import cats.implicits._
+import cats.syntax.all._
 import cats.{Functor, Id}
-import coop.rchain.casper.protocol.{DeployData, ProcessedDeploy}
+import coop.rchain.casper.protocol.ProcessedSystemDeploy.Failed
+import coop.rchain.casper.protocol.{DeployData, ProcessedDeploy, ProcessedSystemDeploy}
 import coop.rchain.shared.scalatestcontrib.effectTest
 import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
+import coop.rchain.casper.util.rholang.SystemDeployPlatformFailure.UnexpectedSystemErrors
+import coop.rchain.casper.util.rholang.SystemDeployPlayResult.{PlayFailed, PlaySucceeded}
+import coop.rchain.casper.util.rholang.SystemDeployReplayResult.{ReplayFailed, ReplaySucceeded}
+import coop.rchain.casper.util.rholang.costacc.{CheckBalance, PreChargeDeploy, RefundDeploy}
 import coop.rchain.casper.util.{ConstructDeploy, GenesisBuilder, ProtoUtil}
 import coop.rchain.catscontrib.effect.implicits._
 import coop.rchain.crypto.hash.Blake2b512Random
@@ -22,7 +27,7 @@ import coop.rchain.shared.{Log, Time}
 import coop.rchain.{metrics, rholang}
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
-import org.scalatest.{FlatSpec, Matchers}
+import org.scalatest.{Assertion, FlatSpec, Matchers}
 
 import scala.concurrent.duration._
 
@@ -36,7 +41,7 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
   val genesisContext = GenesisBuilder.buildGenesis()
   val genesis        = genesisContext.genesisBlock
 
-  val runtimeManager: Resource[Task, RuntimeManager[Task]] = for {
+  val runtimeManagerResource: Resource[Task, RuntimeManager[Task]] = for {
     dirs <- Resources.copyStorage[Task](genesisContext.storageDirectory)
     rm   <- Resources.mkRuntimeManagerAt[Task](dirs.rspaceDir)()
   } yield rm
@@ -62,7 +67,7 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
     } yield (hash, result)
 
   private def invalidReplay(source: String): Task[Either[ReplayFailure, StateHash]] =
-    runtimeManager.use { runtimeManager =>
+    runtimeManagerResource.use { runtimeManager =>
       for {
         deploy        <- ConstructDeploy.sourceDeployNowF(source)
         time          <- timeF.currentMillis
@@ -86,11 +91,87 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
       } yield result
     }
 
+  private def compareSuccessfulSystemDeploys[S <: SystemDeploy](
+      runtimeManager: RuntimeManager[Task]
+  )(startState: StateHash)(
+      playSystemDeploy: S,
+      replaySystemDeploy: S
+  )(resultAssertion: S#Result => Boolean): Task[StateHash] =
+    runtimeManager.playSystemDeploy(startState)(playSystemDeploy).attempt >>= {
+      case Right(PlaySucceeded(finalPlayStateHash, processedSystemDeploy, playResult)) =>
+        assert(resultAssertion(playResult))
+        runtimeManager
+          .replaySystemDeploy(startState)(replaySystemDeploy, processedSystemDeploy)
+          .attempt
+          .map {
+            case Right(Right(systemDeployReplayResult)) =>
+              systemDeployReplayResult match {
+                case ReplaySucceeded(finalReplayStateHash, replayResult) =>
+                  assert(finalPlayStateHash == finalReplayStateHash)
+                  assert(playResult == replayResult)
+                  finalReplayStateHash
+                case ReplayFailed(systemDeployError) =>
+                  fail(s"Unexpected user error during replay: ${systemDeployError.errorMsg}")
+              }
+            case Right(Left(replayFailure)) =>
+              fail(s"Unexpected replay failure: $replayFailure")
+            case Left(throwable) =>
+              fail(s"Unexpected system error during replay: ${throwable.getMessage}")
+          }
+      case Right(PlayFailed(Failed(_, errorMsg))) =>
+        fail(s"Unexpected user error during play: $errorMsg")
+      case Left(throwable) =>
+        fail(s"Unexpected system error during play: ${throwable.getMessage}")
+    }
+
+  "PreChargeDeploy" should "reduce user account balance by the correct amount" in effectTest {
+    runtimeManagerResource.use { runtimeManager =>
+      val userPk = ConstructDeploy.defaultPub
+      compareSuccessfulSystemDeploys(runtimeManager)(genesis.body.state.postStateHash)(
+        new PreChargeDeploy(
+          chargeAmount = 9000000,
+          pk = userPk,
+          rand = Blake2b512Random(Array(0.toByte))
+        ),
+        new PreChargeDeploy(
+          chargeAmount = 9000000,
+          pk = userPk,
+          rand = Blake2b512Random(Array(0.toByte))
+        )
+      )(_ => true) >>= { stateHash0 =>
+        compareSuccessfulSystemDeploys(runtimeManager)(stateHash0)(
+          new CheckBalance(pk = userPk, rand = Blake2b512Random(Array(1.toByte))),
+          new CheckBalance(pk = userPk, rand = Blake2b512Random(Array(1.toByte)))
+        )(_ == 0) >>= { stateHash1 =>
+          compareSuccessfulSystemDeploys(runtimeManager)(stateHash1)(
+            new RefundDeploy(refundAmount = 9000000, Blake2b512Random(Array(2.toByte))),
+            new RefundDeploy(refundAmount = 9000000, Blake2b512Random(Array(2.toByte)))
+          )(_ => true) >>= { stateHash2 =>
+            compareSuccessfulSystemDeploys(runtimeManager)(stateHash2)(
+              new CheckBalance(pk = userPk, rand = Blake2b512Random(Array(3.toByte))),
+              new CheckBalance(pk = userPk, rand = Blake2b512Random(Array(3.toByte)))
+            )(_ == 9000000)
+          }
+        }
+      }
+    }
+  }
+
+  "BalanceDeploy" should "compute REV balances" in effectTest {
+    runtimeManagerResource.use { runtimeManager =>
+      val userPk = ConstructDeploy.defaultPub
+      compareSuccessfulSystemDeploys(runtimeManager)(genesis.body.state.postStateHash)(
+        new CheckBalance(pk = userPk, rand = Blake2b512Random(Array.empty[Byte])),
+        new CheckBalance(pk = userPk, rand = Blake2b512Random(Array.empty[Byte]))
+      )(_ == 9000000)
+    }
+  }
+
   "computeState" should "capture rholang errors" in effectTest {
     val badRholang = """ for(@x <- @"x"; @y <- @"y"){ @"xy"!(x + y) } | @"x"!(1) | @"y"!("hi") """
     for {
       deploy <- ConstructDeploy.sourceDeployNowF(badRholang)
-      result <- runtimeManager.use(computeState(_, deploy))
+      result <- runtimeManagerResource.use(computeState(_, deploy))
       _      = result._2.isFailed should be(true)
     } yield ()
   }
@@ -99,7 +180,7 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
     val badRholang = """ for(@x <- @"x"; @y <- @"y"){ @"xy"!(x + y) | @"x"!(1) | @"y"!("hi") """
     for {
       deploy <- ConstructDeploy.sourceDeployNowF(badRholang)
-      result <- runtimeManager.use(computeState(_, deploy))
+      result <- runtimeManagerResource.use(computeState(_, deploy))
       _      = result._2.isFailed should be(true)
       _      = result._2.cost.cost shouldEqual accounting.parsingCost(badRholang).value
     } yield ()
@@ -111,7 +192,7 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
     runtimeAndManager
       .use {
         case (runtime, runtimeManager) => {
-          implicit val rand: Blake2b512Random = Blake2b512Random(128)
+          implicit val rand: Blake2b512Random = Blake2b512Random(Array.empty[Byte])
           val initialPhlo                     = Cost.UNSAFE_MAX
           for {
             deploy <- ConstructDeploy.sourceDeployNowF(correctRholang)
@@ -136,7 +217,7 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
     val purseValue     = "37"
     val captureChannel = "__PURSEVALUE__"
 
-    runtimeManager.use { mgr =>
+    runtimeManagerResource.use { mgr =>
       for {
         deploy0 <- ConstructDeploy.sourceDeployNowF(
                     s"""
@@ -165,11 +246,11 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
     val code = (1 to n).map(i => s""" @"__SCALA__"!($i) """).mkString("|")
     val term = ConstructDeploy.sourceDeploy(code, timestamp = 0)
     val manyResults =
-      runtimeManager
+      runtimeManagerResource
         .use(mgr => mgr.captureResults(mgr.emptyStateHash, term))
         .runSyncUnsafe(10.seconds)
     val noResults =
-      runtimeManager
+      runtimeManagerResource
         .use(mgr => mgr.captureResults(mgr.emptyStateHash, term, "differentName"))
         .runSyncUnsafe(10.seconds)
 
@@ -187,7 +268,7 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
     val term = ConstructDeploy.basicDeployData[Id](0)
 
     def run: Task[StateHash] =
-      runtimeManager
+      runtimeManagerResource
         .use { m =>
           val hash = m.emptyStateHash
           computeState(m, term)
@@ -201,11 +282,60 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
     } yield ()
   }
 
+  "computeState" should "be replayed by replayComputeState" in effectTest {
+    runtimeManagerResource.use { runtimeManager =>
+      for {
+        deploy <- ConstructDeploy.sourceDeployNowF(
+                   """
+                                                            # new deployerId(`rho:rchain:deployerId`),
+                                                            #     rl(`rho:registry:lookup`),
+                                                            #     revAddressOps(`rho:rev:address`),
+                                                            #     revAddressCh,
+                                                            #     revVaultCh in {
+                                                            #   rl!(`rho:rchain:revVault`, *revVaultCh) |
+                                                            #   revAddressOps!("fromDeployerId", *deployerId, *revAddressCh) |
+                                                            #   for(@userRevAddress <- revAddressCh; @(_, revVault) <- revVaultCh){
+                                                            #     new userVaultCh in {
+                                                            #       @revVault!("findOrCreate", userRevAddress, *userVaultCh) |
+                                                            #       for(@(true, userVault) <- userVaultCh){
+                                                            #         @userVault!("balance", "IGNORE")
+                                                            #       }
+                                                            #     }
+                                                            #   }
+                                                            # }
+                                                            #""".stripMargin('#')
+                 )
+        time          <- timeF.currentMillis
+        genPostState  = genesis.body.state.postStateHash
+        blockData     = BlockData(time, 0L)
+        invalidBlocks = Map.empty[BlockHash, Validator]
+        computeStateResult <- runtimeManager.computeState(genPostState)(
+                               deploy :: Nil,
+                               blockData,
+                               invalidBlocks
+                             )
+        (playPostState, processedDeploys) = computeStateResult
+        replayComputeStateResult <- runtimeManager.replayComputeState(genPostState)(
+                                     processedDeploys,
+                                     blockData,
+                                     invalidBlocks,
+                                     isGenesis = false
+                                   )
+      } yield {
+        replayComputeStateResult match {
+          case Right(replayPostState) =>
+            assert(playPostState == replayPostState)
+          case Left(replayFailure) => fail(s"Found replay failure: ${replayFailure}")
+        }
+      }
+    }
+  }
+
   "computeState" should "charge deploys separately" in effectTest {
 
     def deployCost(p: Seq[ProcessedDeploy]): Long = p.map(_.cost.cost).sum
 
-    runtimeManager.use { mgr =>
+    runtimeManagerResource.use { mgr =>
       for {
         deploy0 <- ConstructDeploy.sourceDeployNowF(""" for(@x <- @"w") { @"z"!("Got x") } """)
         deploy1 <- ConstructDeploy.sourceDeployNowF(
