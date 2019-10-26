@@ -18,29 +18,23 @@ final class PreChargeDeploy(chargeAmount: Long, pk: PublicKey, rand: Blake2b512R
   type Output = (RhoBoolean, Either[RhoString, RhoNil])
   type Result = Unit
 
-  val `sys:casper:chargeAmount`      = Witness("sys:casper:chargeAmount")
-  val `sys:casper:initialDeployerId` = Witness("sys:casper:initialDeployerId")
-  type `sys:casper:chargeAmount`      = `sys:casper:chargeAmount`.T
-  type `sys:casper:initialDeployerId` = `sys:casper:initialDeployerId`.T
+  val `sys:casper:chargeAmount` = Witness("sys:casper:chargeAmount")
+  type `sys:casper:chargeAmount` = `sys:casper:chargeAmount`.T
 
   type Env =
-    (`sys:casper:initialDeployerId` ->> GDeployerId) ::
-      (`sys:casper:chargeAmount` ->> GInt) ::
-      (`sys:casper:return` ->> GUnforgeable) :: HNil
+    (`sys:casper:deployerId` ->> GDeployerId) :: (`sys:casper:chargeAmount` ->> GInt) :: (`sys:casper:return` ->> GUnforgeable) :: HNil
 
   import toPar._
   protected override val envsReturnChannel = Contains[Env, `sys:casper:return`]
   protected override val toEnvMap          = ToEnvMap[Env]
-  protected val normalizerEnv: NormalizerEnv[Env] =
-    new NormalizerEnv(
-      ("sys:casper:initialDeployerId" ->> GDeployerId(ByteString.copyFrom(pk.bytes))) ::
-        ("sys:casper:chargeAmount" ->> GInt(chargeAmount)) :: mkReturnChannel :: HNil
-    )
+  protected val normalizerEnv: NormalizerEnv[Env] = new NormalizerEnv(
+    mkDeployerId(pk) :: ("sys:casper:chargeAmount" ->> GInt(chargeAmount)) :: mkReturnChannel :: HNil
+  )
 
   override val source: String =
     """|new rl(`rho:registry:lookup`),
        |poSCh,
-       |initialDeployerId(`sys:casper:initialDeployerId`),
+       |initialDeployerId(`sys:casper:deployerId`),
        |chargeAmount(`sys:casper:chargeAmount`),
        |return(`sys:casper:return`) in
        |{

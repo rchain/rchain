@@ -13,27 +13,17 @@ class CheckBalance(pk: PublicKey, rand: Blake2b512Random) extends SystemDeploy(r
   import coop.rchain.models._
   import rholang.{implicits => toPar}
   import shapeless._
-  import syntax.singleton._
-
-  val `sys:casper:deployerId` = Witness("sys:casper:deployerId")
-  type `sys:casper:deployerId` = `sys:casper:deployerId`.T
 
   type Output = RhoNumber
   type Result = Long
   type Env =
-    (`sys:casper:deployerId` ->> GDeployerId) ::
-      (`sys:casper:return` ->> GUnforgeable) :: HNil
+    (`sys:casper:deployerId` ->> GDeployerId) :: (`sys:casper:return` ->> GUnforgeable) :: HNil
 
   import toPar._
   protected def toEnvMap                   = ToEnvMap[Env]
   implicit protected val envsReturnChannel = Contains[Env, `sys:casper:return`]
-  protected val normalizerEnv =
-    new NormalizerEnv(
-      ("sys:casper:deployerId" ->> GDeployerId(ByteString.copyFrom(pk.bytes))) ::
-        mkReturnChannel ::
-        HNil
-    )
-  protected val extractor = Extractor.derive
+  protected val normalizerEnv              = new NormalizerEnv(mkDeployerId(pk) :: mkReturnChannel :: HNil)
+  protected val extractor                  = Extractor.derive
 
   val source: String =
     """

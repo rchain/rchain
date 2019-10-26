@@ -21,9 +21,7 @@ final class SlashDeploy(invalidBlockHash: BlockHash, pk: PublicKey, rand: Blake2
   type Output = RhoBoolean
   type Result = Unit
 
-  val `sys:casper:deployerId`       = Witness("sys:casper:deployerId")
   val `sys:casper:invalidBlockHash` = Witness("sys:casper:invalidBlockHash")
-  type `sys:casper:deployerId`       = `sys:casper:deployerId`.T
   type `sys:casper:invalidBlockHash` = `sys:casper:invalidBlockHash`.T
 
   type Env =
@@ -32,12 +30,9 @@ final class SlashDeploy(invalidBlockHash: BlockHash, pk: PublicKey, rand: Blake2
   import toPar._
   protected override val envsReturnChannel = Contains[Env, `sys:casper:return`]
   protected override val toEnvMap          = ToEnvMap[Env]
-  protected override val normalizerEnv =
-    new NormalizerEnv(
-      ("sys:casper:deployerId" ->> GDeployerId(ByteString.copyFrom(pk.bytes))) :: ("sys:casper:invalidBlockHash" ->> GString(
-        invalidBlockHash.base16String
-      )) :: mkReturnChannel :: HNil
-    )
+  protected override val normalizerEnv = new NormalizerEnv(
+    mkDeployerId(pk) :: ("sys:casper:invalidBlockHash" ->> GString(invalidBlockHash.base16String)) :: mkReturnChannel :: HNil
+  )
 
   override val source: String =
     """|new rl(`rho:registry:lookup`),

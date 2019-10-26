@@ -5,6 +5,7 @@ import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.models.NormalizerEnv.{Contains, ToEnvMap}
 import coop.rchain.rholang.interpreter.RhoType.Extractor
 import shapeless.Witness
+import coop.rchain.crypto.PublicKey
 
 abstract class SystemDeploy(val rand: Blake2b512Random) {
 
@@ -18,8 +19,10 @@ abstract class SystemDeploy(val rand: Blake2b512Random) {
   type Result
   type Env
 
-  final val `sys:casper:return` = Witness("sys:casper:return")
-  type `sys:casper:return` = `sys:casper:return`.T
+  final val `sys:casper:return`     = Witness("sys:casper:return")
+  final val `sys:casper:deployerId` = Witness("sys:casper:deployerId")
+  type `sys:casper:deployerId` = `sys:casper:deployerId`.T
+  type `sys:casper:return`     = `sys:casper:return`.T
 
   protected def toEnvMap: ToEnvMap[Env]
   final def env: Map[String, Par] = normalizerEnv.toEnv(toEnvMap)
@@ -28,6 +31,9 @@ abstract class SystemDeploy(val rand: Blake2b512Random) {
   protected def mkReturnChannel =
     "sys:casper:return" ->> GUnforgeable(GPrivateBody(GPrivate(ByteString.copyFrom(rand.next()))))
   final def returnChannel: Par = toPar(normalizerEnv.get[`sys:casper:return`])
+
+  protected def mkDeployerId(pk: PublicKey) =
+    "sys:casper:deployerId" ->> GDeployerId(ByteString.copyFrom(pk.bytes))
 
   protected val normalizerEnv: NormalizerEnv[Env]
 

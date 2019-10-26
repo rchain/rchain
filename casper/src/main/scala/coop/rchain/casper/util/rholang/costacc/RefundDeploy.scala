@@ -23,10 +23,9 @@ final class RefundDeploy(refundAmount: Long, rand: Blake2b512Random) extends Sys
   import toPar._
   protected override val envsReturnChannel = Contains[Env, `sys:casper:return`]
   protected override val toEnvMap          = ToEnvMap[Env]
-  protected override val normalizerEnv =
-    new NormalizerEnv(
-      ("sys:casper:refundAmount" ->> GInt(refundAmount)) :: mkReturnChannel :: HNil
-    )
+  protected override val normalizerEnv = new NormalizerEnv(
+    ("sys:casper:refundAmount" ->> GInt(refundAmount)) :: mkReturnChannel :: HNil
+  )
 
   override val source: String =
     """|new rl(`rho:registry:lookup`),
