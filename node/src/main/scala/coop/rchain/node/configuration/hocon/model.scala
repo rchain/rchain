@@ -131,6 +131,35 @@ object Server {
   }
 }
 
+object RoundRobinDispatcher {
+  val Key                = s"${Server.Key}.round-robin-dispatcher"
+  val Keys: List[String] = keys.all.map(k => s"$Key.$k")
+
+  object keys {
+    val MaxPeerQueueSize     = "max-peer-queue-size"
+    val GiveUpAfterSkipped   = "give-up-after-skipped"
+    val DropPeerAfterRetries = "drop-peer-after-retries"
+
+    val all =
+      List(
+        MaxPeerQueueSize,
+        GiveUpAfterSkipped,
+        DropPeerAfterRetries
+      )
+  }
+
+  def fromConfig(config: Config): configuration.RoundRobinDispatcher = {
+
+    val rrd = config.getConfig(Key)
+
+    configuration.RoundRobinDispatcher(
+      maxPeerQueueSize = rrd.getInt(keys.MaxPeerQueueSize),
+      giveUpAfterSkipped = rrd.getInt(keys.GiveUpAfterSkipped),
+      dropPeerAfterRetries = rrd.getInt(keys.DropPeerAfterRetries)
+    )
+  }
+}
+
 object Tls {
   val Key                = s"${Server.Key}.tls"
   val Keys: List[String] = keys.all.map(k => s"$Key.$k")
@@ -242,6 +271,8 @@ object Casper {
     val WalletsFile             = "wallets-file"
     val BondMinimum             = "bond-minimum"
     val BondMaximum             = "bond-maximum"
+    val QuarantineLength        = "quarantine-length"
+    val EpochLength             = "epoch-length"
     val RequiredSignatures      = "required-signatures"
     val Shard                   = "shard"
     val GenesisValidator        = "genesis-validator"
@@ -261,6 +292,8 @@ object Casper {
         WalletsFile,
         BondMinimum,
         BondMaximum,
+        QuarantineLength,
+        EpochLength,
         RequiredSignatures,
         Shard,
         GenesisValidator,
@@ -287,6 +320,8 @@ object Casper {
       walletsFile = casper.getStringOpt(keys.WalletsFile),
       minimumBond = casper.getLong(keys.BondMinimum),
       maximumBond = casper.getLong(keys.BondMaximum),
+      epochLength = casper.getInt(keys.EpochLength),
+      quarantineLength = casper.getInt(keys.QuarantineLength),
       requiredSigs = casper.getInt(keys.RequiredSignatures),
       shardId = casper.getString(keys.Shard),
       approveGenesis = casper.getBoolean(keys.GenesisValidator),

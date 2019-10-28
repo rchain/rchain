@@ -202,6 +202,10 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
       descr = "Maximum bond accepted by the PoS contract in the genesis block."
     )
 
+    val epochLength = opt[Int](descr = "the length of the validation epoch in blocks")
+
+    val quarantineLength = opt[Int](descr = "the length of the quarantine time in blocks")
+
     val bootstrap =
       opt[PeerNode](
         short = 'b',
@@ -321,6 +325,24 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
       descr = "Float value representing that the node waits until at least " +
         "synchrony-constraint-threshold fraction of the validators (by stake weight) " +
         "proposed at least one block since this node's last proposal."
+    )
+
+    val maxPeerQueueSize = opt[Int](
+      descr = "Fair round robin dispatcher individual peer packet queue size. " +
+        "Packets will get dropped by the dispatcher when the queue is full.",
+      validate = _ > 0
+    )
+
+    val giveUpAfterSkipped = opt[Int](
+      descr = "Fair round robin dispatcher give up and try next peer after skipped packets. " +
+        "Skipped packets are buffered in other peers packet queues.",
+      validate = _ >= 0
+    )
+
+    val dropPeerAfterRetries = opt[Int](
+      descr = "Fair round robin dispatcher drop inactive peer after round robin rounds. " +
+        "After giving up several times the peer gets dropped from the queue.",
+      validate = _ >= 0
     )
 
     val reporting = opt[Flag](descr = "Use this flag to enable reporting endpoints.")

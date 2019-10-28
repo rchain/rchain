@@ -120,11 +120,10 @@ object EstimatorHelper {
                          blockAncestorMeta => BlockStore[F].get(blockAncestorMeta.blockHash)
                        )
       ancestors = maybeAncestors.flatten
-      ancestorEvents = (ancestors.flatMap(_.body.deploys.flatMap(_.deployLog)) ++
-        ancestors.flatMap(_.body.deploys.flatMap(_.paymentLog)))
+      ancestorEvents = ancestors
+        .flatMap(_.body.deploys.flatMap(_.deployLog))
         .map(EventConverter.toRspaceEvent)
         .toSet
-
       allProduceEvents = ancestorEvents.collect { case p: Produce => p }
       allConsumeEvents = ancestorEvents.collect { case c: Consume => c }
       allCommEvents    = ancestorEvents.collect { case c: COMM    => c }
@@ -132,8 +131,8 @@ object EstimatorHelper {
         .partition(isVolatile(_, allConsumeEvents, allProduceEvents))
       producesInVolatileCommEvents = volatileCommEvents.flatMap(_.produces)
       consumesInVolatileCommEvents = volatileCommEvents.map(_.consume)
-      produceEvents                = allProduceEvents.filterNot(producesInVolatileCommEvents.contains(_))
-      consumeEvents                = allConsumeEvents.filterNot(consumesInVolatileCommEvents.contains(_))
+      produceEvents                = allProduceEvents.filterNot(producesInVolatileCommEvents.contains)
+      consumeEvents                = allConsumeEvents.filterNot(consumesInVolatileCommEvents.contains)
     } yield BlockEvents(produceEvents, consumeEvents, nonVolatileCommEvents)
 
   private[this] def extractJoinedChannels(b: BlockEvents): Set[Blake2b256Hash] = {

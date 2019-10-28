@@ -83,6 +83,31 @@ class HoconConfigurationSpec extends FunSuite with Matchers {
     server shouldEqual expectedServer
   }
 
+  test("Parse round-robin-dispatcher section") {
+    val conf =
+      """
+        |rnode {
+        |  server {
+        |    round-robin-dispatcher {
+        |      max-peer-queue-size = 10
+        |      give-up-after-skipped = 20
+        |      drop-peer-after-retries = 30
+        |    }
+        |  }
+        |}
+      """.stripMargin
+
+    val expectedRoundRobinDispatcher =
+      configuration.RoundRobinDispatcher(
+        maxPeerQueueSize = 10,
+        giveUpAfterSkipped = 20,
+        dropPeerAfterRetries = 30
+      )
+
+    val roundRobinDispatcher = RoundRobinDispatcher.fromConfig(ConfigFactory.parseString(conf))
+    roundRobinDispatcher shouldEqual expectedRoundRobinDispatcher
+  }
+
   test("Parse tls section") {
     val conf =
       """
@@ -178,6 +203,8 @@ class HoconConfigurationSpec extends FunSuite with Matchers {
         |    wallets-file = /root/wallet.txt
         |    bond-minimum = 1
         |    bond-maximum = 9223372036854775807
+        |    epoch-length = 10000
+        |    quarantine-length = 50000
         |    required-signatures = 0
         |    shard = rchain
         |    genesis-validator = true
@@ -200,6 +227,8 @@ class HoconConfigurationSpec extends FunSuite with Matchers {
         walletsFile = Some("/root/wallet.txt"),
         minimumBond = 1L,
         maximumBond = Long.MaxValue,
+        epochLength = 10000,
+        quarantineLength = 50000,
         requiredSigs = 0,
         shardId = "rchain",
         createGenesis = false,

@@ -8,7 +8,7 @@ import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.ProtoUtil.{blockHeader, unsignedBlockProto}
 import coop.rchain.casper.util.Sorting.byteArrayOrdering
 import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
-import coop.rchain.casper.util.rholang.{InternalProcessedDeploy, RuntimeManager}
+import coop.rchain.casper.util.rholang.RuntimeManager
 
 final case class Genesis(
     shardId: String,
@@ -57,15 +57,15 @@ object Genesis {
       .computeGenesis(blessedTerms, timestamp)
       .map {
         case (startHash, stateHash, processedDeploys) =>
-          createInternalProcessedDeploy(genesis, startHash, stateHash, processedDeploys)
+          createProcessedDeploy(genesis, startHash, stateHash, processedDeploys)
       }
   }
 
-  private def createInternalProcessedDeploy(
+  private def createProcessedDeploy(
       genesis: Genesis,
       startHash: StateHash,
       stateHash: StateHash,
-      processedDeploys: Seq[InternalProcessedDeploy]
+      processedDeploys: Seq[ProcessedDeploy]
   ): BlockMessage = {
     import genesis._
 
@@ -77,16 +77,9 @@ object Genesis {
     )
 
     //FIXME any failures here should terminate the genesis ceremony
-    val blockDeploys =
-      processedDeploys.filterNot(_.status.isFailed).map(_.toProcessedDeploy)
-    val sortedDeploys = blockDeploys.map(
-      d =>
-        d.copy(
-          deployLog = d.deployLog.sortBy(_.toProto.toByteArray),
-          paymentLog = d.paymentLog.sortBy(_.toProto.toByteArray)
-        )
-    )
-
+    val blockDeploys = processedDeploys.filterNot(_.isFailed)
+    val sortedDeploys =
+      blockDeploys.map(d => d.copy(deployLog = d.deployLog.sortBy(_.toProto.toByteArray)))
     val body    = Body(state = state, deploys = sortedDeploys.toList)
     val version = 1L //FIXME make this part of Genesis, and pass it from upstream
     val header  = blockHeader(body, List.empty[StateHash], version, timestamp)

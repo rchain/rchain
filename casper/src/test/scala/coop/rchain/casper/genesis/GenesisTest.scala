@@ -226,6 +226,8 @@ object GenesisTest {
       maybeVaultsPath: Option[String] = None,
       minimumBond: Long = 1L,
       maximumBond: Long = Long.MaxValue,
+      epochLength: Int = 10000,
+      quarantineLength: Int = 50000,
       shardId: String = rchainShardId,
       deployTimestamp: Option[Long] = Some(System.currentTimeMillis())
   )(
@@ -252,6 +254,8 @@ object GenesisTest {
                          proofOfStake = ProofOfStake(
                            minimumBond = minimumBond,
                            maximumBond = maximumBond,
+                           epochLength = epochLength,
+                           quarantineLength = quarantineLength,
                            validators = validators
                          ),
                          vaults = vaults,

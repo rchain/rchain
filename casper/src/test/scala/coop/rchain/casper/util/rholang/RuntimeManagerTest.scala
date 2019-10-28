@@ -3,7 +3,7 @@ package coop.rchain.casper.util.rholang
 import cats.effect.Resource
 import cats.implicits._
 import cats.{Functor, Id}
-import coop.rchain.casper.protocol.DeployData
+import coop.rchain.casper.protocol.{DeployData, ProcessedDeploy}
 import coop.rchain.shared.scalatestcontrib.effectTest
 import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
 import coop.rchain.casper.util.{ConstructDeploy, GenesisBuilder, ProtoUtil}
@@ -11,6 +11,7 @@ import coop.rchain.catscontrib.effect.implicits._
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.models.BlockHash.BlockHash
+import coop.rchain.models.PCost
 import coop.rchain.models.Validator.Validator
 import coop.rchain.p2p.EffectsTestInstances.LogicalTime
 import coop.rchain.rholang.interpreter
@@ -50,7 +51,7 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
   private def computeState[F[_]: Functor](
       runtimeManager: RuntimeManager[F],
       deploy: DeployData
-  ): F[(StateHash, InternalProcessedDeploy)] =
+  ): F[(StateHash, ProcessedDeploy)] =
     for {
       res <- runtimeManager.computeState(ProtoUtil.postStateHash(genesis))(
               deploy :: Nil,
@@ -60,12 +61,37 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
       (hash, Seq(result)) = res
     } yield (hash, result)
 
+  private def invalidReplay(source: String): Task[Either[ReplayFailure, StateHash]] =
+    runtimeManager.use { runtimeManager =>
+      for {
+        deploy        <- ConstructDeploy.sourceDeployNowF(source)
+        time          <- timeF.currentMillis
+        genPostState  = genesis.body.state.postStateHash
+        blockData     = BlockData(time, 0L)
+        invalidBlocks = Map.empty[BlockHash, Validator]
+        processedDeploys <- runtimeManager
+                             .computeState(genPostState)(Seq(deploy), blockData, invalidBlocks)
+                             .map(_._2)
+        processedDeploy     = processedDeploys.head
+        processedDeployCost = processedDeploy.cost.cost
+        invalidProcessedDeploy = processedDeploy.copy(
+          cost = PCost(processedDeployCost - 1)
+        )
+        result <- runtimeManager.replayComputeState(genPostState)(
+                   Seq(invalidProcessedDeploy),
+                   blockData,
+                   invalidBlocks,
+                   isGenesis = false
+                 )
+      } yield result
+    }
+
   "computeState" should "capture rholang errors" in effectTest {
     val badRholang = """ for(@x <- @"x"; @y <- @"y"){ @"xy"!(x + y) } | @"x"!(1) | @"y"!("hi") """
     for {
       deploy <- ConstructDeploy.sourceDeployNowF(badRholang)
       result <- runtimeManager.use(computeState(_, deploy))
-      _      = result._2.status.isFailed should be(true)
+      _      = result._2.isFailed should be(true)
     } yield ()
   }
 
@@ -74,7 +100,7 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
     for {
       deploy <- ConstructDeploy.sourceDeployNowF(badRholang)
       result <- runtimeManager.use(computeState(_, deploy))
-      _      = result._2.status.isFailed should be(true)
+      _      = result._2.isFailed should be(true)
       _      = result._2.cost.cost shouldEqual accounting.parsingCost(badRholang).value
     } yield ()
   }
@@ -177,7 +203,7 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
 
   "computeState" should "charge deploys separately" in effectTest {
 
-    def deployCost(p: Seq[InternalProcessedDeploy]): Long = p.map(_.cost.cost).sum
+    def deployCost(p: Seq[ProcessedDeploy]): Long = p.map(_.cost.cost).sum
 
     runtimeManager.use { mgr =>
       for {
@@ -222,6 +248,21 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
         )
         _ = assert((firstDeployCost + secondDeployCost) == compoundDeployCost)
       } yield ()
+    }
+  }
+
+  "replayComputeState" should "catch discrepancies in initial and replay cost when no errors are thrown" in effectTest {
+    invalidReplay("@0!(0) | for(@0 <- @0){ Nil }").map {
+      case Left(ReplayCostMismatch(_, initialCost, replayCost)) =>
+        assert(initialCost == 322L && replayCost == 323L)
+      case _ => fail()
+    }
+  }
+
+  "replayComputeState" should "not catch discrepancies in initial and replay cost when user errors are thrown" in effectTest {
+    invalidReplay("@0!(0) | for(@x <- @0){ x.undefined() }").map {
+      case Right(_) => succeed
+      case _        => fail
     }
   }
 }

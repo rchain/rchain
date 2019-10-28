@@ -84,6 +84,29 @@ class ConfigMapperSpec extends FunSuite with Matchers {
     server shouldEqual expectedServer
   }
 
+  test("Map round robin dispatcher command line arguments to Lightbend config") {
+    val args =
+      Seq(
+        "run",
+        "--max-peer-queue-size 10",
+        "--give-up-after-skipped 20",
+        "--drop-peer-after-retries 30"
+      ).mkString(" ")
+
+    val options = Options(args.split(' '))
+    val config  = ConfigMapper.fromOptions(options)
+
+    val expectedRoundRobinDispatcher =
+      configuration.RoundRobinDispatcher(
+        maxPeerQueueSize = 10,
+        giveUpAfterSkipped = 20,
+        dropPeerAfterRetries = 30
+      )
+
+    val roundRobinDispatcher = hocon.RoundRobinDispatcher.fromConfig(config)
+    roundRobinDispatcher shouldEqual expectedRoundRobinDispatcher
+  }
+
   test("Map TLS command line arguments to Lightbend config") {
     val args =
       Seq(
@@ -174,6 +197,8 @@ class ConfigMapperSpec extends FunSuite with Matchers {
         "--wallets-file /root/wallet.txt",
         "--minimum-bond 1",
         "--maximum-bond 1000",
+        "--epoch-length 10000",
+        "--quarantine-length 50000",
         "--required-sigs 0",
         "--shard-id rchain",
         "--genesis-validator",
@@ -199,6 +224,8 @@ class ConfigMapperSpec extends FunSuite with Matchers {
         walletsFile = Some("/root/wallet.txt"),
         minimumBond = 1L,
         maximumBond = 1000L,
+        epochLength = 10000,
+        quarantineLength = 50000,
         requiredSigs = 0,
         shardId = "rchain",
         createGenesis = false,

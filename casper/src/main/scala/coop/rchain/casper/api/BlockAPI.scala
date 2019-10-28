@@ -87,8 +87,9 @@ object BlockAPI {
                                .asLeft[String]
                                .pure[F]
                            case Created(block) =>
-                             casper
-                               .addBlock(block) >>= (addResponse(
+                             Log[F].info(s"Proposing ${PrettyPrinter.buildString(block)}") *>
+                               casper
+                                 .addBlock(block) >>= (addResponse(
                                _,
                                block,
                                casper,

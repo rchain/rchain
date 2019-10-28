@@ -91,6 +91,8 @@ object CasperLaunch {
                 bonds,
                 conf.minimumBond,
                 conf.maximumBond,
+                conf.epochLength,
+                conf.quarantineLength,
                 conf.requiredSigs
               )(Sync[F])
         _ <- EngineCell[F].set(
@@ -109,6 +111,8 @@ object CasperLaunch {
                   conf.walletsFile,
                   conf.minimumBond,
                   conf.maximumBond,
+                  conf.epochLength,
+                  conf.quarantineLength,
                   conf.shardId,
                   conf.deployTimestamp,
                   conf.requiredSigs,

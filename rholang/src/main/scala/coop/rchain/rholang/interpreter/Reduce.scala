@@ -57,7 +57,7 @@ class DebruijnInterpreter[M[_], F[_]](
 )(
     implicit parallel: cats.Parallel[M, F],
     syncM: Sync[M],
-    fTell: FunctorTell[M, Throwable],
+    fTell: FunctorTell[M, InterpreterError],
     cost: _cost[M]
 ) extends Reduce[M] {
 
@@ -207,29 +207,29 @@ class DebruijnInterpreter[M[_], F[_]](
 
   private def eval(
       term: GeneratedMessage
-  )(
-      implicit env: Env[Par],
-      rand: Blake2b512Random
-  ): M[Unit] =
-    term match {
-      case term: Send    => reportErrors(eval(term))
-      case term: Receive => reportErrors(eval(term))
-      case term: New     => reportErrors(eval(term))
-      case term: Match   => reportErrors(eval(term))
-      case term: Bundle  => reportErrors(eval(term))
-      case term: Expr =>
-        term.exprInstance match {
-          case e: EVarBody    => reportErrors(eval(e.value.v) >>= (eval(_)))
-          case e: EMethodBody => reportErrors(evalExprToPar(e) >>= (eval(_)))
-          case other          => BugFoundError(s"Undefined term: \n $other").raiseError[M, Unit]
-        }
-      case other => BugFoundError(s"Undefined term: \n $other").raiseError[M, Unit]
+  )(implicit env: Env[Par], rand: Blake2b512Random): M[Unit] =
+    reportErrors {
+      term match {
+        case term: Send    => eval(term)
+        case term: Receive => eval(term)
+        case term: New     => eval(term)
+        case term: Match   => eval(term)
+        case term: Bundle  => eval(term)
+        case term: Expr =>
+          term.exprInstance match {
+            case e: EVarBody    => eval(e.value.v) >>= (eval(_))
+            case e: EMethodBody => evalExprToPar(e) >>= (eval(_))
+            case other          => BugFoundError(s"Undefined term: \n $other").raiseError[M, Unit]
+          }
+        case other => BugFoundError(s"Undefined term: \n $other").raiseError[M, Unit]
+      }
     }
 
   private def reportErrors(process: M[Unit]): M[Unit] =
     process.handleErrorWith {
-      case e @ OutOfPhlogistonsError => e.raiseError[M, Unit]
-      case e                         => fTell.tell(e)
+      case error @ OutOfPhlogistonsError => error.raiseError[M, Unit]
+      case error: InterpreterError       => fTell.tell(error)
+      case error                         => error.raiseError[M, Unit]
     }
 
   /** Algorithm as follows:

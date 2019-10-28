@@ -83,6 +83,6 @@ object ConstructDeploy {
       id: Int
   ): F[ProcessedDeploy] =
     basicDeployData[F](id).map(
-      deploy => ProcessedDeploy(deploy = deploy, cost = PCost(0L), List.empty, List.empty, false)
+      deploy => ProcessedDeploy(deploy = deploy, cost = PCost(0L), List.empty, false)
     )
 }

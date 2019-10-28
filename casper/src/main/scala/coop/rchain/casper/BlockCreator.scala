@@ -221,8 +221,6 @@ object BlockCreator {
                  invalidBlocks
                )
       (preStateHash, postStateHash, processedDeploys) = result
-      (internalErrors, persistableDeploys)            = processedDeploys.partition(_.status.isInternalError)
-      _                                               <- logInternalErrors(internalErrors)
       newBonds                                        <- runtimeManager.computeBonds(postStateHash)
       block = createBlock(
         now,
@@ -231,7 +229,7 @@ object BlockCreator {
         maxBlockNumber,
         preStateHash,
         postStateHash,
-        persistableDeploys,
+        processedDeploys,
         newBonds,
         shardId,
         version
@@ -245,22 +243,6 @@ object BlockCreator {
       }
       .handleError(CreateBlockStatus.internalDeployError)
 
-  private def logInternalErrors[F[_]: Sync: Log](
-      internalErrors: Seq[InternalProcessedDeploy]
-  ): F[List[Unit]] = {
-    import cats.instances.list._
-
-    internalErrors.toList
-      .traverse {
-        case InternalProcessedDeploy(deploy, _, _, _, InternalErrors(errors)) =>
-          val errorsMessage = errors.map(_.getMessage).mkString("\n")
-          Log[F].error(
-            s"Internal error encountered while processing deploy '$deploy': $errorsMessage"
-          )
-        case _ => ().pure[F]
-      }
-  }
-
   private def createBlock(
       now: Long,
       p: Seq[BlockMessage],
@@ -268,14 +250,14 @@ object BlockCreator {
       maxBlockNumber: Long,
       preStateHash: StateHash,
       postStateHash: StateHash,
-      persistableDeploys: Seq[InternalProcessedDeploy],
+      persistableDeploys: Seq[ProcessedDeploy],
       newBonds: Seq[Bond],
       shardId: String,
       version: Long
   ): CreateBlockStatus = {
     val postState = RChainState(preStateHash, postStateHash, newBonds.toList, maxBlockNumber + 1)
 
-    val body   = Body(postState, persistableDeploys.map(_.toProcessedDeploy).toList)
+    val body   = Body(postState, persistableDeploys.toList)
     val header = blockHeader(body, p.map(_.blockHash), version, now)
     val block  = unsignedBlockProto(body, header, justifications, shardId)
     CreateBlockStatus.created(block)

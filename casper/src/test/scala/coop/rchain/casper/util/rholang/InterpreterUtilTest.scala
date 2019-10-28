@@ -47,7 +47,7 @@ class InterpreterUtilTest
       deploys: Seq[DeployData],
       dag: BlockDagRepresentation[F],
       runtimeManager: RuntimeManager[F]
-  ): F[Either[Throwable, (StateHash, StateHash, Seq[InternalProcessedDeploy])]] =
+  ): F[Either[Throwable, (StateHash, StateHash, Seq[ProcessedDeploy])]] =
     InterpreterUtil
       .computeDeploysCheckpoint[F](
         parents,
@@ -185,7 +185,7 @@ class InterpreterUtilTest
 
   def prepareDeploys(v: Vector[String], c: PCost) = {
     val genesisDeploys = v.map(ConstructDeploy.sourceDeployNow)
-    genesisDeploys.map(d => ProcessedDeploy(d, c, List.empty, List.empty, false))
+    genesisDeploys.map(d => ProcessedDeploy(d, c, List.empty, false))
   }
 
   it should "merge histories in case of multiple parents with complex contract" ignore withGenesis(
@@ -324,7 +324,7 @@ class InterpreterUtilTest
     implicit blockStore => implicit blockDagStorage =>
       val deploys = Vector("@1!(1)").map(ConstructDeploy.sourceDeployNow)
       val processedDeploys =
-        deploys.map(d => ProcessedDeploy(d, PCost(1L), List.empty, List.empty, false))
+        deploys.map(d => ProcessedDeploy(d, PCost(1L), List.empty, false))
       val invalidHash = ByteString.EMPTY
       mkRuntimeManager("interpreter-util-test").use { runtimeManager =>
         for {
@@ -362,7 +362,7 @@ class InterpreterUtilTest
       block <- createBlock[Task](
                 Seq(genesis.blockHash),
                 genesis,
-                deploys = processedDeploys.map(_.toProcessedDeploy),
+                deploys = processedDeploys,
                 tsHash = computedTsHash,
                 preStateHash = preStateHash
               )
@@ -412,7 +412,7 @@ class InterpreterUtilTest
         block <- createBlock[Task](
                   Seq(genesis.blockHash),
                   genesis,
-                  deploys = processedDeploys.map(_.toProcessedDeploy),
+                  deploys = processedDeploys,
                   tsHash = computedTsHash,
                   preStateHash = preStateHash
                 )
@@ -466,7 +466,7 @@ class InterpreterUtilTest
         block <- createBlock[Task](
                   Seq(genesis.blockHash),
                   genesis,
-                  deploys = processedDeploys.map(_.toProcessedDeploy),
+                  deploys = processedDeploys,
                   tsHash = computedTsHash,
                   preStateHash = preStateHash
                 )
@@ -517,7 +517,7 @@ class InterpreterUtilTest
         block <- createBlock[Task](
                   Seq(genesis.blockHash),
                   genesis,
-                  deploys = processedDeploys.map(_.toProcessedDeploy),
+                  deploys = processedDeploys,
                   tsHash = computedTsHash,
                   preStateHash = preStateHash
                 )
@@ -560,7 +560,7 @@ class InterpreterUtilTest
           block <- createBlock[Task](
                     Seq(genesis.blockHash),
                     genesis,
-                    deploys = processedDeploys.map(_.toProcessedDeploy),
+                    deploys = processedDeploys,
                     tsHash = computedTsHash,
                     preStateHash = preStateHash
                   )
@@ -586,15 +586,14 @@ class InterpreterUtilTest
                               runtimeManager
                             )
         Right((preStateHash, computedTsHash, processedDeploys)) = deploysCheckpoint
-        intProcessedDeploys                                     = processedDeploys.map(_.toProcessedDeploy)
         //create single deploy with log that includes excess comm events
-        badProcessedDeploy = intProcessedDeploys.head.copy(
-          deployLog = intProcessedDeploys.head.deployLog ++ intProcessedDeploys.last.deployLog
+        badProcessedDeploy = processedDeploys.head.copy(
+          deployLog = processedDeploys.head.deployLog ++ processedDeploys.last.deployLog
         )
         block <- createBlock[Task](
                   Seq(genesis.blockHash),
                   genesis,
-                  deploys = Seq(badProcessedDeploy, intProcessedDeploys.last),
+                  deploys = Seq(badProcessedDeploy, processedDeploys.last),
                   tsHash = computedTsHash,
                   preStateHash = preStateHash
                 )
@@ -639,7 +638,7 @@ class InterpreterUtilTest
           block <- createBlock[Task](
                     Seq(genesis.blockHash),
                     genesis,
-                    deploys = processedDeploys.map(_.toProcessedDeploy),
+                    deploys = processedDeploys,
                     tsHash = computedTsHash,
                     preStateHash = preStateHash
                   )

@@ -61,6 +61,14 @@ object ConfigMapper {
       }
 
       {
+        import RoundRobinDispatcher._
+        val add = addToMap(Key)
+        add(keys.MaxPeerQueueSize, run.maxPeerQueueSize)
+        add(keys.GiveUpAfterSkipped, run.giveUpAfterSkipped)
+        add(keys.DropPeerAfterRetries, run.dropPeerAfterRetries)
+      }
+
+      {
         import Tls._
         val add = addToMap(Key)
         add(keys.Certificate, run.certificate)
@@ -90,6 +98,8 @@ object ConfigMapper {
         add(keys.WalletsFile, run.walletsFile)
         add(keys.BondMinimum, run.minimumBond)
         add(keys.BondMaximum, run.maximumBond)
+        add(keys.EpochLength, run.epochLength)
+        add(keys.QuarantineLength, run.quarantineLength)
         add(keys.RequiredSignatures, run.requiredSigs)
         add(keys.Shard, run.shardId)
         add(keys.GenesisValidator, run.genesisValidator)

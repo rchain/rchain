@@ -300,8 +300,7 @@ final case class ProcessedDeploy(
     deploy: DeployData,
     cost: PCost,
     deployLog: List[Event],
-    paymentLog: List[Event],
-    errored: Boolean
+    isFailed: Boolean
 ) {
   def toProto: ProcessedDeployProto = ProcessedDeploy.toProto(this)
 }
@@ -309,15 +308,13 @@ final case class ProcessedDeploy(
 object ProcessedDeploy {
   def from(pd: ProcessedDeployProto): Either[String, ProcessedDeploy] =
     for {
-      ddn        <- pd.deploy.toRight("DeployData not available").map(DeployData.from)
-      cost       <- pd.cost.toRight("Cost not available")
-      deployLog  <- pd.deployLog.toList.traverse(Event.from)
-      paymentLog <- pd.paymentLog.toList.traverse(Event.from)
+      ddn       <- pd.deploy.toRight("DeployData not available").map(DeployData.from)
+      cost      <- pd.cost.toRight("Cost not available")
+      deployLog <- pd.deployLog.toList.traverse(Event.from)
     } yield ProcessedDeploy(
       ddn,
       cost,
       deployLog,
-      paymentLog,
       pd.errored
     )
 
@@ -326,8 +323,7 @@ object ProcessedDeploy {
       .withDeploy(DeployData.toProto(pd.deploy))
       .withCost(pd.cost)
       .withDeployLog(pd.deployLog.map(Event.toProto))
-      .withPaymentLog(pd.paymentLog.map(Event.toProto))
-      .withErrored(pd.errored)
+      .withErrored(pd.isFailed)
 }
 
 final case class DeployData(

@@ -9,20 +9,17 @@ import coop.rchain.casper.ValidatorIdentity
 import coop.rchain.casper.genesis.Genesis
 import coop.rchain.casper.genesis.contracts._
 import coop.rchain.casper.protocol._
-import coop.rchain.casper.util.rholang.{InternalProcessedDeploy, RuntimeManager}
+import coop.rchain.casper.util.rholang.RuntimeManager
 import coop.rchain.catscontrib.Catscontrib._
-import coop.rchain.comm.protocol.routing.Packet
+import coop.rchain.comm.PeerNode
 import coop.rchain.comm.rp.Connect.RPConfAsk
 import coop.rchain.comm.transport.{Blob, TransportLayer}
-import coop.rchain.comm.{transport, PeerNode}
 import coop.rchain.crypto.PublicKey
 import coop.rchain.crypto.hash.Blake2b256
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.Validator.Validator
 import coop.rchain.rholang.interpreter.Runtime.BlockData
 import coop.rchain.shared._
-
-import scala.util.Try
 
 /**
   * Validator side of the protocol defined in
@@ -35,6 +32,8 @@ final case class BlockApproverProtocol private (
     bonds: Map[PublicKey, Long],
     minimumBond: Long,
     maximumBond: Long,
+    epochLength: Int,
+    quarantineLength: Int,
     requiredSigs: Int
 ) {
   implicit private val logSource: LogSource = LogSource(this.getClass)
@@ -53,7 +52,9 @@ final case class BlockApproverProtocol private (
         vaults,
         _bonds,
         minimumBond,
-        maximumBond
+        maximumBond,
+        epochLength,
+        quarantineLength
       )
       .flatMap {
         case Right(_) =>
@@ -80,6 +81,8 @@ object BlockApproverProtocol {
       bonds: Map[PublicKey, Long],
       minimumBond: Long,
       maximumBond: Long,
+      epochLength: Int,
+      quarantineLength: Int,
       requiredSigs: Int
   )(implicit monadError: MonadError[F, Throwable]): F[BlockApproverProtocol] =
     if (bonds.size > requiredSigs)
@@ -90,6 +93,8 @@ object BlockApproverProtocol {
         bonds,
         minimumBond,
         maximumBond,
+        epochLength,
+        quarantineLength,
         requiredSigs
       ).pure[F]
     else
@@ -119,10 +124,12 @@ object BlockApproverProtocol {
       vaults: Seq[Vault],
       bonds: Map[ByteString, Long],
       minimumBond: Long,
-      maximumBond: Long
+      maximumBond: Long,
+      epochLength: Int,
+      quarantineLength: Int
   )(implicit runtimeManager: RuntimeManager[F]): F[Either[String, Unit]] = {
 
-    def validate: Either[String, (Seq[InternalProcessedDeploy], RChainState)] =
+    def validate: Either[String, (Seq[ProcessedDeploy], RChainState)] =
       for {
         _ <- (candidate.requiredSigs == requiredSigs)
               .either(())
@@ -138,7 +145,13 @@ object BlockApproverProtocol {
           case (pk, stake) =>
             Validator(PublicKey(pk.toByteArray), stake)
         }
-        posParams = ProofOfStake(minimumBond, maximumBond, validators)
+        posParams = ProofOfStake(
+          minimumBond,
+          maximumBond,
+          validators,
+          epochLength,
+          quarantineLength
+        )
         genesisBlessedContracts = Genesis
           .defaultBlessedTerms(
             timestamp,
@@ -147,7 +160,7 @@ object BlockApproverProtocol {
             Long.MaxValue
           )
           .toSet
-        blockDeploys = block.body.deploys.map(InternalProcessedDeploy.fromProcessedDeploy)
+        blockDeploys = block.body.deploys
         _ <- (blockDeploys.size == genesisBlessedContracts.size)
               .either(())
               .or("Mismatch between number of candidate deploys and expected number of deploys.")
@@ -166,7 +179,9 @@ object BlockApproverProtocol {
                         Map.empty[BlockHash, Validator],
                         isGenesis = true
                       )
-                  ).leftMap { case (_, status) => s"Failed status during replay: $status." }
+                  ).leftMap { status =>
+                    s"Failed status during replay: $status."
+                  }
       _ <- EitherT(
             (stateHash == postState.postStateHash)
               .either(())

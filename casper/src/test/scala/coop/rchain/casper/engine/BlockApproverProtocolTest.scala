@@ -99,6 +99,8 @@ object BlockApproverProtocolTest {
           bonds,
           genesisParams.proofOfStake.minimumBond,
           genesisParams.proofOfStake.maximumBond,
+          genesisParams.proofOfStake.epochLength,
+          genesisParams.proofOfStake.quarantineLength,
           requiredSigs
         )
         .map(_ -> node)

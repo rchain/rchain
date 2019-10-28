@@ -9,7 +9,7 @@ import com.google.protobuf.ByteString
 import coop.rchain.casper.CasperMetricsSource
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.rholang.RuntimeManager.{evaluate, StateHash}
-import coop.rchain.casper.util.{ConstructDeploy, ProtoUtil}
+import coop.rchain.casper.util.{ConstructDeploy, EventConverter, ProtoUtil}
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.metrics.Metrics.Source
 import coop.rchain.metrics.{Metrics, Span}
@@ -32,15 +32,13 @@ import coop.rchain.rspace.{trace, Blake2b256Hash, ReplayException}
 import coop.rchain.shared.Log
 
 trait RuntimeManager[F[_]] {
-  import RuntimeManager.ReplayFailure
-
   def captureResults(
       startHash: StateHash,
       deploy: DeployData,
       name: String = "__SCALA__"
   ): F[Seq[Par]]
   def replayComputeState(startHash: StateHash)(
-      terms: Seq[InternalProcessedDeploy],
+      terms: Seq[ProcessedDeploy],
       blockData: BlockData,
       invalidBlocks: Map[BlockHash, Validator],
       isGenesis: Boolean
@@ -49,11 +47,11 @@ trait RuntimeManager[F[_]] {
       terms: Seq[DeployData],
       blockData: BlockData,
       invalidBlocks: Map[BlockHash, Validator]
-  ): F[(StateHash, Seq[InternalProcessedDeploy])]
+  ): F[(StateHash, Seq[ProcessedDeploy])]
   def computeGenesis(
       terms: Seq[DeployData],
       blockTime: Long
-  ): F[(StateHash, StateHash, Seq[InternalProcessedDeploy])]
+  ): F[(StateHash, StateHash, Seq[ProcessedDeploy])]
   def computeBonds(startHash: StateHash): F[Seq[Bond]]
   def getData(hash: StateHash)(channel: Par): F[Seq[Par]]
   def getContinuation(hash: StateHash)(
@@ -67,7 +65,6 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log](
     val emptyStateHash: StateHash,
     runtimeContainer: MVar[F, Runtime[F]]
 ) extends RuntimeManager[F] {
-  import RuntimeManager.ReplayFailure
 
   private[this] val RuntimeManagerMetricsSource =
     Metrics.Source(CasperMetricsSource, "runtime-manager")
@@ -95,7 +92,7 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log](
     }
 
   def replayComputeState(startHash: StateHash)(
-      terms: Seq[InternalProcessedDeploy],
+      terms: Seq[ProcessedDeploy],
       blockData: BlockData,
       invalidBlocks: Map[BlockHash, Validator] = Map.empty[BlockHash, Validator],
       isGenesis: Boolean //FIXME have a better way of knowing this. Pass the replayDeploy function maybe?
@@ -115,7 +112,7 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log](
       terms: Seq[DeployData],
       blockData: BlockData,
       invalidBlocks: Map[BlockHash, Validator] = Map.empty[BlockHash, Validator]
-  ): F[(StateHash, Seq[InternalProcessedDeploy])] =
+  ): F[(StateHash, Seq[ProcessedDeploy])] =
     withRuntimeLock { runtime =>
       Span[F].trace(computeStateLabel) {
         for {
@@ -130,7 +127,7 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log](
   def computeGenesis(
       terms: Seq[DeployData],
       blockTime: Long
-  ): F[(StateHash, StateHash, Seq[InternalProcessedDeploy])] = {
+  ): F[(StateHash, StateHash, Seq[ProcessedDeploy])] = {
     val startHash = emptyStateHash
     withRuntimeLock { runtime =>
       Span[F].trace(computeGenesisLabel) {
@@ -238,16 +235,13 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log](
       runtime: Runtime[F],
       startHash: StateHash,
       terms: Seq[DeployData],
-      processDeploy: DeployData => F[InternalProcessedDeploy]
-  ): F[(StateHash, Seq[InternalProcessedDeploy])] = {
+      processDeploy: DeployData => F[ProcessedDeploy]
+  ): F[(StateHash, Seq[ProcessedDeploy])] = {
     import cats.instances.list._
 
     for {
-      _ <- runtime.space.reset(Blake2b256Hash.fromByteString(startHash))
-      res <- terms.toList
-              .foldM(Seq.empty[InternalProcessedDeploy]) {
-                case (results, deploy) => processDeploy(deploy).map(results :+ _)
-              }
+      _               <- runtime.space.reset(Blake2b256Hash.fromByteString(startHash))
+      res             <- terms.toList.traverse(processDeploy)
       _               <- Span[F].mark("before-process-deploys-create-checkpoint")
       finalCheckpoint <- runtime.space.createCheckpoint()
       finalStateHash  = finalCheckpoint.root
@@ -256,19 +250,18 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log](
 
   private def processDeploy(runtime: Runtime[F])(
       deploy: DeployData
-  ): F[InternalProcessedDeploy] = Span[F].withMarks("process-deploy") {
+  ): F[ProcessedDeploy] = Span[F].withMarks("process-deploy") {
     for {
       fallback                     <- runtime.space.createSoftCheckpoint()
       evaluateResult               <- evaluate(runtime.reducer, runtime.cost, runtime.errorLog)(deploy)
       EvaluateResult(cost, errors) = evaluateResult
       _                            <- Span[F].mark("before-process-deploy-create-soft-checkpoint")
       checkpoint                   <- runtime.space.createSoftCheckpoint()
-      deployResult = InternalProcessedDeploy(
+      deployResult = ProcessedDeploy(
         deploy,
         Cost.toProto(cost),
-        checkpoint.log,
-        Seq.empty[trace.Event],
-        DeployStatus.fromErrors(errors)
+        checkpoint.log.map(EventConverter.toCasperEvent).toList,
+        errors.nonEmpty
       )
       _ <- if (errors.nonEmpty) runtime.space.revertToSoftCheckpoint(fallback)
           else Applicative[F].unit
@@ -278,15 +271,15 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log](
   private def replayDeploys(
       runtime: Runtime[F],
       startHash: StateHash,
-      terms: Seq[InternalProcessedDeploy],
-      replayDeploy: InternalProcessedDeploy => F[Option[ReplayFailure]]
+      terms: Seq[ProcessedDeploy],
+      replayDeploy: ProcessedDeploy => F[Option[ReplayFailure]]
   ): F[Either[ReplayFailure, StateHash]] =
     (for {
       _ <- EitherT.right(runtime.replaySpace.reset(Blake2b256Hash.fromByteString(startHash)))
       _ <- EitherT(
             terms.tailRecM { ts =>
               if (ts.isEmpty)
-                ().asRight[ReplayFailure].asRight[Seq[InternalProcessedDeploy]].pure[F]
+                ().asRight[ReplayFailure].asRight[Seq[ProcessedDeploy]].pure[F]
               else replayDeploy(ts.head).map(_.map(_.asLeft[Unit]).toRight(ts.tail))
             }
           )
@@ -295,54 +288,54 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log](
     } yield res.root.toByteString).value
 
   private def replayDeploy(runtime: Runtime[F])(
-      processedDeploy: InternalProcessedDeploy
+      processedDeploy: ProcessedDeploy
   ): F[Option[ReplayFailure]] = Span[F].withMarks("replay-deploy") {
     import processedDeploy._
     for {
-      _              <- runtime.replaySpace.rig(processedDeploy.deployLog)
+      _              <- runtime.replaySpace.rig(processedDeploy.deployLog.map(EventConverter.toRspaceEvent))
       softCheckpoint <- runtime.replaySpace.createSoftCheckpoint()
       _              <- Span[F].mark("before-replay-deploy-compute-effect")
-      replayEvaluateResult <- evaluate(runtime.replayReducer, runtime.cost, runtime.errorLog)(
-                               processedDeploy.deploy
-                             )
-      //TODO: compare replay deploy cost to given deploy cost
-      EvaluateResult(_, errors) = replayEvaluateResult
-      _                         <- Span[F].mark("before-replay-deploy-status")
-      cont <- DeployStatus.fromErrors(errors) match {
-               case int: InternalErrors =>
-                 (deploy.some, int: Failed).some.pure[F]
-               case replayStatus =>
-                 if (status.isFailed != replayStatus.isFailed)
-                   (deploy.some, ReplayStatusMismatch(replayStatus, status): Failed).some
-                     .pure[F]
-                 else if (errors.nonEmpty)
-                   runtime.replaySpace.revertToSoftCheckpoint(softCheckpoint) >> none[ReplayFailure]
-                     .pure[F]
-                 else {
-                   runtime.replaySpace
-                     .checkReplayData()
-                     .attempt
-                     .flatMap {
-                       case Right(_) => none[ReplayFailure].pure[F]
-                       case Left(ex: ReplayException) => {
-                         Log[F].error(s"Failed during processing of deploy: ${processedDeploy}") >>
-                           (none[DeployData], UnusedCommEvent(ex): Failed).some
-                             .pure[F]
-                       }
-                       case Left(ex) =>
-                         (none[DeployData], UserErrors(Vector(ex)): Failed).some
-                           .pure[F]
-                     }
-                 }
-             }
-    } yield cont
+      failureOption <- EitherT
+                        .liftF(
+                          evaluate(runtime.replayReducer, runtime.cost, runtime.errorLog)(
+                            processedDeploy.deploy
+                          )
+                        )
+                        .ensureOr(
+                          /* Regardless of success or failure, verify that deploy status' match. */
+                          result => ReplayFailure.replayStatusMismatch(isFailed, result.isFailed)
+                        )(result => isFailed == result.isFailed)
+                        .ensureOr(
+                          result =>
+                            /* Since there are no errors, verify evaluation costs and COMM events match. */
+                            ReplayFailure.replayCostMismatch(deploy, cost.cost, result.cost.value)
+                        )(result => result.isFailed || cost.cost == result.cost.value)
+                        .semiflatMap(
+                          result =>
+                            if (result.isFailed)
+                              /* Since the state of `replaySpace` is reset on each invocation of `replayComputeState`,
+                                 and `ReplayFailure`s mean that block processing is cancelled upstream, we only need to
+                                 reset state if the replay effects of valid deploys need to be discarded. */
+                              /* Error-throwing Rholang programs do not have deterministic evaluation costs
+                                 and event logs, so they cannot be reliably compared. */
+                              runtime.replaySpace.revertToSoftCheckpoint(softCheckpoint)
+                            else runtime.replaySpace.checkReplayData()
+                        )
+                        .swap
+                        .toOption
+                        .value
+                        .recover {
+                          case replayException: ReplayException =>
+                            ReplayFailure.unusedCOMMEvent(deploy, replayException).some
+                          case throwable => ReplayFailure.internalError(deploy, throwable).some
+                        }
+    } yield failureOption
   }
 }
 
 object RuntimeManager {
 
-  type StateHash     = ByteString
-  type ReplayFailure = (Option[DeployData], Failed)
+  type StateHash = ByteString
 
   def fromRuntime[F[_]: Concurrent: Sync: Metrics: Span: Log](
       runtime: Runtime[F]
