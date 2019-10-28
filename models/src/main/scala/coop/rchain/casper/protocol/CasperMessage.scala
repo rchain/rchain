@@ -5,6 +5,7 @@ import com.google.protobuf.ByteString
 import coop.rchain.casper.PrettyPrinter
 import coop.rchain.models.{PCost, Pretty}
 import coop.rchain.models.BlockHash.BlockHash
+import coop.rchain.crypto.PublicKey
 
 sealed trait CasperMessage {
   def toProto: CasperMessageProto
@@ -301,12 +302,15 @@ final case class ProcessedDeploy(
     deploy: DeployData,
     cost: PCost,
     deployLog: List[Event],
-    isFailed: Boolean
+    isFailed: Boolean,
+    systemDeployError: Option[String] = None
 ) {
+  def refundAmount                  = (deploy.phloLimit - cost.cost).max(0) * deploy.phloPrice
   def toProto: ProcessedDeployProto = ProcessedDeploy.toProto(this)
 }
 
 object ProcessedDeploy {
+  def empty(deploy: DeployData) = ProcessedDeploy(deploy, PCost(), List.empty, isFailed = false)
   def from(pd: ProcessedDeployProto): Either[String, ProcessedDeploy] =
     for {
       ddn       <- pd.deploy.toRight("DeployData not available").map(DeployData.from)
@@ -316,15 +320,19 @@ object ProcessedDeploy {
       ddn,
       cost,
       deployLog,
-      pd.errored
+      pd.errored,
+      if (pd.systemDeployError.isEmpty()) None else Some(pd.systemDeployError)
     )
 
-  def toProto(pd: ProcessedDeploy): ProcessedDeployProto =
-    ProcessedDeployProto()
+  def toProto(pd: ProcessedDeploy): ProcessedDeployProto = {
+    val proto = ProcessedDeployProto()
       .withDeploy(DeployData.toProto(pd.deploy))
       .withCost(pd.cost)
       .withDeployLog(pd.deployLog.map(Event.toProto))
       .withErrored(pd.isFailed)
+
+    pd.systemDeployError.fold(proto)(errorMsg => proto.withSystemDeployError(errorMsg))
+  }
 }
 
 sealed trait ProcessedSystemDeploy {
@@ -371,7 +379,8 @@ final case class DeployData(
     phloLimit: Long,
     validAfterBlockNumber: Long
 ) {
-
+  def totalPhloCharge          = phloLimit * phloPrice
+  def deployerPk               = PublicKey(deployer)
   def toProto: DeployDataProto = DeployData.toProto(this)
 }
 

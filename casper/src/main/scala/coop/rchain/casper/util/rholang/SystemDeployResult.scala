@@ -4,6 +4,7 @@ import coop.rchain.casper.protocol.ProcessedSystemDeploy
 import coop.rchain.casper.util.EventConverter
 import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
 import coop.rchain.casper.util.rholang.SystemDeployUserError.SystemDeployError
+import coop.rchain.casper.protocol.Event
 
 sealed trait SystemDeployResult[+A] {
   val stateHashOpt: Option[StateHash]
@@ -27,10 +28,14 @@ object SystemDeployPlayResult {
     val resultOpt: Option[A]            = Some(result)
   }
 
-  def playSucceeded[A](stateHash: StateHash, log: Log, result: A): SystemDeployPlayResult[A] =
+  def playSucceeded[A](
+      stateHash: StateHash,
+      log: Seq[Event],
+      result: A
+  ): SystemDeployPlayResult[A] =
     PlaySucceeded(
       stateHash,
-      ProcessedSystemDeploy.Succeeded(log.map(EventConverter.toCasperEvent).toList),
+      ProcessedSystemDeploy.Succeeded(log.toList),
       result
     )
 
@@ -40,11 +45,12 @@ object SystemDeployPlayResult {
     val resultOpt: Option[A]            = None
   }
 
-  def playFailed[A](log: Log, systemDeployError: SystemDeployError): SystemDeployPlayResult[A] =
-    PlayFailed(
-      ProcessedSystemDeploy
-        .Failed(log.map(EventConverter.toCasperEvent).toList, systemDeployError.errorMsg)
-    )
+  def playFailed[A](
+      log: Seq[Event],
+      systemDeployError: SystemDeployError
+  ): SystemDeployPlayResult[A] =
+    PlayFailed(ProcessedSystemDeploy.Failed(log.toList, systemDeployError.errorMsg))
+
 }
 
 sealed trait SystemDeployReplayResult[A] extends SystemDeployResult[A]

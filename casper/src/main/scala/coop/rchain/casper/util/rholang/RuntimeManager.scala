@@ -34,6 +34,9 @@ import coop.rchain.rholang.interpreter.{
 }
 import coop.rchain.rspace.{Blake2b256Hash, ReplayException}
 import coop.rchain.shared.Log
+import cats.data.WriterT
+import coop.rchain.casper.util.rholang.costacc.PreChargeDeploy
+import coop.rchain.casper.util.rholang.costacc.RefundDeploy
 
 trait RuntimeManager[F[_]] {
   def playSystemDeploy[S <: SystemDeploy](startHash: StateHash)(
@@ -219,37 +222,39 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log](
   import coop.rchain.rspace.trace.Log
   private def playSystemDeployInternal[S <: SystemDeploy](runtime: Runtime[F])(
       systemDeploy: S
-  ): F[(Log, Either[SystemDeployError, systemDeploy.Result])] =
-    runtime.space.createSoftCheckpoint() >>= { preDeploySoftCheckpoint =>
-      evaluateSystemSource(runtime)(systemDeploy, replay = false) >>= {
-        case EvaluateResult(_, interpreterErrors) =>
-          if (interpreterErrors.nonEmpty) UnexpectedSystemErrors(interpreterErrors).raiseError
-          else
-            consumeResult(runtime)(systemDeploy, replay = false) >>= {
-              case Some((_, Seq(ListParWithRandom(Seq(par), _)))) =>
-                systemDeploy.extractResult(par) match {
-                  case Right(result) =>
-                    runtime.space
-                      .createSoftCheckpoint()
-                      .map(
-                        postDeploySoftCheckpoint => (postDeploySoftCheckpoint.log, result.asRight)
-                      )
-                  case Left(systemDeployError: SystemDeployError) =>
-                    runtime.space.createSoftCheckpoint() >>= { postDeploySoftCheckpoint =>
-                      runtime.space
-                        .revertToSoftCheckpoint(preDeploySoftCheckpoint)
-                        .as((postDeploySoftCheckpoint.log, systemDeployError.asLeft))
-                    }
-                  case Left(systemDeployPlatformFailure: SystemDeployPlatformFailure) =>
-                    systemDeployPlatformFailure.raiseError
-                }
-              case Some((_, unexpectedResults)) =>
-                UnexpectedResult(unexpectedResults.flatMap(_.pars)).raiseError
-              case None =>
-                ConsumeFailed.raiseError
-            }
-      }
-    }
+  ): F[(Vector[Event], Either[SystemDeployError, systemDeploy.Result])] =
+    for {
+      preDeploySoftCheckpoint <- runtime.space.createSoftCheckpoint()
+      evaluateResult          <- evaluateSystemSource(runtime)(systemDeploy, replay = false)
+      maybeConsumedTuple <- if (evaluateResult.failed)
+                             UnexpectedSystemErrors(evaluateResult.errors).raiseError
+                           else consumeResult(runtime)(systemDeploy, replay = false)
+      resultOrSystemDeployError <- maybeConsumedTuple match {
+                                    case Some((_, Seq(ListParWithRandom(Seq(par), _)))) =>
+                                      systemDeploy.extractResult(par).pure
+                                    case Some((_, unexpectedResults)) =>
+                                      UnexpectedResult(unexpectedResults.flatMap(_.pars)).raiseError
+                                    case None => ConsumeFailed.raiseError
+                                  }
+      logAndResult <- resultOrSystemDeployError match {
+                       case Right(result) =>
+                         runtime.space
+                           .createSoftCheckpoint()
+                           .map(
+                             postDeploySoftCheckpoint =>
+                               (postDeploySoftCheckpoint.log, result.asRight)
+                           )
+                       case Left(systemDeployError: SystemDeployError) =>
+                         runtime.space.createSoftCheckpoint() >>= { postDeploySoftCheckpoint =>
+                           runtime.space
+                             .revertToSoftCheckpoint(preDeploySoftCheckpoint)
+                             .as((postDeploySoftCheckpoint.log, systemDeployError.asLeft))
+                         }
+                       case Left(systemDeployPlatformFailure: SystemDeployPlatformFailure) =>
+                         systemDeployPlatformFailure.raiseError
+                     }
+      // TODO add better-monadic-for to stop this nonsense
+    } yield (logAndResult._1.map(EventConverter.toCasperEvent).toVector, logAndResult._2)
 
   def captureResults(
       start: StateHash,
@@ -293,10 +298,15 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log](
     withRuntimeLock { runtime =>
       Span[F].trace(computeStateLabel) {
         for {
-          _      <- runtime.blockData.set(blockData)
-          _      <- setInvalidBlocks(invalidBlocks, runtime)
-          _      <- Span[F].mark("before-process-deploys")
-          result <- processDeploys(runtime, startHash, terms, processDeploy(runtime))
+          _ <- runtime.blockData.set(blockData)
+          _ <- setInvalidBlocks(invalidBlocks, runtime)
+          _ <- Span[F].mark("before-process-deploys")
+          result <- processDeploys(
+                     runtime,
+                     startHash,
+                     terms,
+                     processDeployWithCostAccounting(runtime)
+                   )
         } yield result
       }
     }
@@ -423,6 +433,45 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log](
       finalCheckpoint <- runtime.space.createCheckpoint()
       finalStateHash  = finalCheckpoint.root
     } yield (finalStateHash.toByteString, res)
+  }
+
+  private def processDeployWithCostAccounting(runtime: Runtime[F])(deploy: DeployData) = {
+    import cats.instances.vector._
+    val rand = Blake2b512Random(deploy.sig.toByteArray())
+    EitherT(
+      WriterT(
+        /* execute pre-charge */
+        playSystemDeployInternal(runtime)(
+          new PreChargeDeploy(
+            deploy.totalPhloCharge,
+            deploy.deployerPk,
+            rand
+          )
+        )
+      )
+    ).semiflatMap( // execute user deploy
+        _ => WriterT(processDeploy(runtime)(deploy).map(pd => (pd.deployLog.toVector, pd)))
+      )
+      .flatTap(
+        pd =>
+          /*execute Refund as a side effect (keeping the logs and the possible error but discarding result)
+          only if the user deploy has been successful*/
+          if (!pd.isFailed)
+            EitherT(
+              WriterT(playSystemDeployInternal(runtime)(new RefundDeploy(pd.refundAmount, rand)))
+            )
+          else EitherT.rightT(())
+      )
+      .valueOr {
+        /* we can end up here if any of the PreCharge or Refund threw an user error
+        we still keep the logs (from the underlying WriterT) which we'll fill in the next step.
+        We're assigning it 0 cost - replay should reach the same state
+         */
+        case SystemDeployError(errorMsg) =>
+          ProcessedDeploy.empty(deploy).copy(systemDeployError = Some(errorMsg))
+      }
+      .run // run the computation and produce the logs
+      .map { case (accLog, pd) => pd.copy(deployLog = accLog.toList) }
   }
 
   private def processDeploy(runtime: Runtime[F])(
