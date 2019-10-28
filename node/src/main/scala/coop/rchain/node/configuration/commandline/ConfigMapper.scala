@@ -61,6 +61,14 @@ object ConfigMapper {
       }
 
       {
+        import RoundRobinDispatcher._
+        val add = addToMap(Key)
+        add(keys.MaxPeerQueueSize, run.maxPeerQueueSize)
+        add(keys.GiveUpAfterSkipped, run.giveUpAfterSkipped)
+        add(keys.DropPeerAfterRetries, run.dropPeerAfterRetries)
+      }
+
+      {
         import Tls._
         val add = addToMap(Key)
         add(keys.Certificate, run.certificate)

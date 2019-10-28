@@ -21,7 +21,7 @@ import coop.rchain.casper.engine.EngineCell._
 import coop.rchain.casper.engine.Running.Requested
 import coop.rchain.casper.protocol.deploy.v1.DeployServiceV1GrpcMonix
 import coop.rchain.casper.protocol.propose.v1.ProposeServiceV1GrpcMonix
-import coop.rchain.casper.util.comm.{CasperPacketHandler, CommUtil}
+import coop.rchain.casper.util.comm._
 import coop.rchain.casper.util.rholang.RuntimeManager
 import coop.rchain.catscontrib.Catscontrib._
 import coop.rchain.catscontrib.Taskable
@@ -743,9 +743,14 @@ object NodeRuntime {
 
         CasperLaunch.of(conf.casper)
       }
-      packetHandler = {
-        implicit val ev: EngineCell[F] = engineCell
-        CasperPacketHandler[F]
+      packetHandler <- {
+        implicit val ec = engineCell
+        implicit val rb = requestedBlocks
+        CasperPacketHandler.fairDispatcher[F](
+          conf.roundRobinDispatcher.maxPeerQueueSize,
+          conf.roundRobinDispatcher.giveUpAfterSkipped,
+          conf.roundRobinDispatcher.dropPeerAfterRetries
+        )
       }
       blockApiLock <- Semaphore[F](1)
       apiServers = NodeRuntime.acquireAPIServers[F](runtime, blockApiLock, scheduler)(

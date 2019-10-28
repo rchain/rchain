@@ -83,6 +83,31 @@ class HoconConfigurationSpec extends FunSuite with Matchers {
     server shouldEqual expectedServer
   }
 
+  test("Parse round-robin-dispatcher section") {
+    val conf =
+      """
+        |rnode {
+        |  server {
+        |    round-robin-dispatcher {
+        |      max-peer-queue-size = 10
+        |      give-up-after-skipped = 20
+        |      drop-peer-after-retries = 30
+        |    }
+        |  }
+        |}
+      """.stripMargin
+
+    val expectedRoundRobinDispatcher =
+      configuration.RoundRobinDispatcher(
+        maxPeerQueueSize = 10,
+        giveUpAfterSkipped = 20,
+        dropPeerAfterRetries = 30
+      )
+
+    val roundRobinDispatcher = RoundRobinDispatcher.fromConfig(ConfigFactory.parseString(conf))
+    roundRobinDispatcher shouldEqual expectedRoundRobinDispatcher
+  }
+
   test("Parse tls section") {
     val conf =
       """

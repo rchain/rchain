@@ -117,8 +117,9 @@ object Configuration {
       profile: String,
       configFile: Path
   ): Configuration = {
-    val grpcServer = hocon.GrpcServer.fromConfig(config)
-    val server     = hocon.Server.fromConfig(config)
+    val grpcServer           = hocon.GrpcServer.fromConfig(config)
+    val server               = hocon.Server.fromConfig(config)
+    val roundRobinDispatcher = hocon.RoundRobinDispatcher.fromConfig(config)
     val tls = hocon.Tls
       .fromConfig(config)
       .copy(
@@ -167,7 +168,6 @@ object Configuration {
           grpcServer.maxMessageSize
         )
       )
-
     val allKeys = config
       .getConfig(hocon.Configuration.Key)
       .entrySet()
@@ -177,6 +177,7 @@ object Configuration {
       .toSet
     val knownKeys = List(
       hocon.Casper.Keys,
+      hocon.RoundRobinDispatcher.Keys,
       hocon.GrpcServer.Keys,
       hocon.Kamon.Keys,
       hocon.Server.Keys,
@@ -190,6 +191,7 @@ object Configuration {
       profile,
       configFile,
       server.copy(maxMessageSize = maxMessageSize),
+      roundRobinDispatcher,
       grpcServer.copy(maxMessageSize = grpcMaxMessageSize),
       tls,
       casper.copy(createGenesis = server.standalone),
@@ -244,6 +246,7 @@ final case class Configuration(
     profile: String,
     configurationFile: Path,
     server: Server,
+    roundRobinDispatcher: RoundRobinDispatcher,
     grpcServer: GrpcServer,
     tls: Tls,
     casper: CasperConf,

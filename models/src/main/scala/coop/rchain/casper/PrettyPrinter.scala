@@ -27,6 +27,9 @@ object PrettyPrinter {
             s"-- Shard ID ${limit(b.shardId, 10)}"
       )
 
+  def buildString(bh: BlockHashMessage): String =
+    s"Block hash: ${buildString(bh.blockHash)}"
+
   private def limit(str: String, maxLength: Int): String =
     if (str.length > maxLength) {
       str.substring(0, maxLength) + "..."

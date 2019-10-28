@@ -84,6 +84,29 @@ class ConfigMapperSpec extends FunSuite with Matchers {
     server shouldEqual expectedServer
   }
 
+  test("Map round robin dispatcher command line arguments to Lightbend config") {
+    val args =
+      Seq(
+        "run",
+        "--max-peer-queue-size 10",
+        "--give-up-after-skipped 20",
+        "--drop-peer-after-retries 30"
+      ).mkString(" ")
+
+    val options = Options(args.split(' '))
+    val config  = ConfigMapper.fromOptions(options)
+
+    val expectedRoundRobinDispatcher =
+      configuration.RoundRobinDispatcher(
+        maxPeerQueueSize = 10,
+        giveUpAfterSkipped = 20,
+        dropPeerAfterRetries = 30
+      )
+
+    val roundRobinDispatcher = hocon.RoundRobinDispatcher.fromConfig(config)
+    roundRobinDispatcher shouldEqual expectedRoundRobinDispatcher
+  }
+
   test("Map TLS command line arguments to Lightbend config") {
     val args =
       Seq(
