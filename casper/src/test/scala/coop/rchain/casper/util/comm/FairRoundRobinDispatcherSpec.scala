@@ -27,6 +27,29 @@ class FairRoundRobinDispatcherSpec extends WordSpecLike with Matchers {
           )
         }
 
+      "add a new Sources to the head of the queue" in
+        new TestEnv(1, 0, 0) {
+          validate(
+            for {
+              _ <- dispatcher.ensureSourceExists("A")
+              _ <- dispatcher.ensureSourceExists("B")
+              _ <- dispatcher.ensureSourceExists("C")
+            } yield ()
+          )(
+            expectedQueue = Queue("C", "B", "A"),
+            expectedMessages = Map(
+              "A" -> Queue.empty,
+              "B" -> Queue.empty,
+              "C" -> Queue.empty
+            ),
+            expectedRetries = Map(
+              "A" -> 0,
+              "B" -> 0,
+              "C" -> 0
+            )
+          )
+        }
+
       "not add a Source if it exists" in
         new TestEnv(1, 0, 0) {
           validate(
@@ -102,8 +125,8 @@ class FairRoundRobinDispatcherSpec extends WordSpecLike with Matchers {
           val result: Boolean =
             validate(
               for {
-                _      <- dispatcher.ensureSourceExists("B")
                 _      <- dispatcher.ensureSourceExists("A")
+                _      <- dispatcher.ensureSourceExists("B")
                 _      <- dispatcher.enqueueMessage("A", 1)
                 result <- dispatcher.handleMessage("B")
               } yield result
@@ -134,7 +157,7 @@ class FairRoundRobinDispatcherSpec extends WordSpecLike with Matchers {
               _ <- dispatcher.rotate
             } yield ()
           )(
-            expectedQueue = Queue("B", "C", "A"),
+            expectedQueue = Queue("B", "A", "C"),
             expectedMessages = Map(
               "A" -> Queue.empty,
               "B" -> Queue.empty,
@@ -192,7 +215,7 @@ class FairRoundRobinDispatcherSpec extends WordSpecLike with Matchers {
               _ <- dispatcher.giveUp("A")
             } yield ()
           )(
-            expectedQueue = Queue("B", "C", "A"),
+            expectedQueue = Queue("B", "A", "C"),
             expectedMessages = Map(
               "A" -> Queue.empty,
               "B" -> Queue.empty,
@@ -218,7 +241,7 @@ class FairRoundRobinDispatcherSpec extends WordSpecLike with Matchers {
               _ <- dispatcher.giveUp("A")
             } yield ()
           )(
-            expectedQueue = Queue("B", "C"),
+            expectedQueue = Queue("C", "B"),
             expectedMessages = Map(
               "B" -> Queue.empty,
               "C" -> Queue.empty
@@ -246,7 +269,7 @@ class FairRoundRobinDispatcherSpec extends WordSpecLike with Matchers {
               _ <- dispatcher.success("A")
             } yield ()
           )(
-            expectedQueue = Queue("B", "C", "A"),
+            expectedQueue = Queue("B", "A", "C"),
             expectedMessages = Map(
               "A" -> Queue.empty,
               "B" -> Queue(2),
@@ -274,7 +297,7 @@ class FairRoundRobinDispatcherSpec extends WordSpecLike with Matchers {
               _ <- dispatcher.failure("A")
             } yield ()
           )(
-            expectedQueue = Queue("A", "B", "C"),
+            expectedQueue = Queue("C", "B", "A"),
             expectedMessages = Map(
               "A" -> Queue.empty,
               "B" -> Queue(2),
@@ -302,7 +325,7 @@ class FairRoundRobinDispatcherSpec extends WordSpecLike with Matchers {
               _ <- dispatcher.failure("A")
             } yield ()
           )(
-            expectedQueue = Queue("B", "C", "A"),
+            expectedQueue = Queue("B", "A", "C"),
             expectedMessages = Map(
               "A" -> Queue.empty,
               "B" -> Queue(2),
@@ -349,7 +372,7 @@ class FairRoundRobinDispatcherSpec extends WordSpecLike with Matchers {
               _ <- dispatcher.dispatch("C", 3)
             } yield ()
           )(
-            expectedQueue = Queue("A", "B", "C"),
+            expectedQueue = Queue("C", "B", "A"),
             expectedMessages = Map(
               "A" -> Queue.empty,
               "B" -> Queue.empty,
@@ -360,7 +383,7 @@ class FairRoundRobinDispatcherSpec extends WordSpecLike with Matchers {
               "B" -> 0,
               "C" -> 0
             ),
-            expectedHandled = Queue("A" -> 1, "B" -> 2, "C" -> 3)
+            expectedHandled = Queue("C" -> 3, "B" -> 2, "A" -> 1)
           )
         }
 
@@ -373,14 +396,14 @@ class FairRoundRobinDispatcherSpec extends WordSpecLike with Matchers {
               _ <- dispatcher.ensureSourceExists("C")
               _ <- dispatcher.dispatch("B", 1)
               _ <- dispatcher.dispatch("B", 2)
-              _ <- dispatcher.dispatch("C", 3)
+              _ <- dispatcher.dispatch("A", 3)
             } yield ()
           )(
-            expectedQueue = Queue("A", "B", "C"),
+            expectedQueue = Queue("C", "B", "A"),
             expectedMessages = Map(
-              "A" -> Queue.empty,
+              "A" -> Queue(3),
               "B" -> Queue(1, 2),
-              "C" -> Queue(3)
+              "C" -> Queue.empty
             ),
             expectedRetries = Map(
               "A" -> 0,
@@ -400,15 +423,15 @@ class FairRoundRobinDispatcherSpec extends WordSpecLike with Matchers {
               _ <- dispatcher.ensureSourceExists("C")
               _ <- dispatcher.dispatch("B", 1)
               _ <- dispatcher.dispatch("B", 2)
-              _ <- dispatcher.dispatch("C", 3)
+              _ <- dispatcher.dispatch("A", 3)
               _ <- dispatcher.dispatch("B", 4)
             } yield ()
           )(
-            expectedQueue = Queue("A", "B", "C"),
+            expectedQueue = Queue("C", "B", "A"),
             expectedMessages = Map(
-              "A" -> Queue.empty,
+              "A" -> Queue(3),
               "B" -> Queue(1, 2),
-              "C" -> Queue(3)
+              "C" -> Queue.empty
             ),
             expectedRetries = Map(
               "A" -> 0,
@@ -428,11 +451,11 @@ class FairRoundRobinDispatcherSpec extends WordSpecLike with Matchers {
               _ <- dispatcher.ensureSourceExists("C")
               _ <- dispatcher.dispatch("B", 1)
               _ <- dispatcher.dispatch("B", 2)
-              _ <- dispatcher.dispatch("C", 3)
-              _ <- dispatcher.dispatch("A", 4)
+              _ <- dispatcher.dispatch("A", 3)
+              _ <- dispatcher.dispatch("C", 4)
             } yield ()
           )(
-            expectedQueue = Queue("A", "B", "C"),
+            expectedQueue = Queue("C", "B", "A"),
             expectedMessages = Map(
               "A" -> Queue.empty,
               "B" -> Queue(2),
@@ -443,7 +466,7 @@ class FairRoundRobinDispatcherSpec extends WordSpecLike with Matchers {
               "B" -> 0,
               "C" -> 0
             ),
-            expectedHandled = Queue("A" -> 4, "B" -> 1, "C" -> 3)
+            expectedHandled = Queue("C" -> 4, "B" -> 1, "A" -> 3)
           )
         }
 
@@ -456,21 +479,21 @@ class FairRoundRobinDispatcherSpec extends WordSpecLike with Matchers {
               _ <- dispatcher.ensureSourceExists("C")
               _ <- dispatcher.dispatch("B", 1)
               _ <- dispatcher.dispatch("B", 2)
-              _ <- dispatcher.dispatch("C", 3)
+              _ <- dispatcher.dispatch("A", 3)
             } yield ()
           )(
-            expectedQueue = Queue("A", "B", "C"),
+            expectedQueue = Queue("C", "B", "A"),
             expectedMessages = Map(
               "A" -> Queue.empty,
               "B" -> Queue(2),
               "C" -> Queue.empty
             ),
             expectedRetries = Map(
-              "A" -> 1,
+              "A" -> 0,
               "B" -> 0,
-              "C" -> 0
+              "C" -> 1
             ),
-            expectedHandled = Queue("B" -> 1, "C" -> 3)
+            expectedHandled = Queue("B" -> 1, "A" -> 3)
           )
         }
 
@@ -483,19 +506,19 @@ class FairRoundRobinDispatcherSpec extends WordSpecLike with Matchers {
               _ <- dispatcher.ensureSourceExists("C")
               _ <- dispatcher.dispatch("B", 1)
               _ <- dispatcher.dispatch("B", 2)
-              _ <- dispatcher.dispatch("C", 3)
+              _ <- dispatcher.dispatch("A", 3)
             } yield ()
           )(
-            expectedQueue = Queue("C", "B"),
+            expectedQueue = Queue("A", "B"),
             expectedMessages = Map(
-              "B" -> Queue.empty,
-              "C" -> Queue.empty
+              "A" -> Queue.empty,
+              "B" -> Queue.empty
             ),
             expectedRetries = Map(
-              "B" -> 0,
-              "C" -> 0
+              "A" -> 0,
+              "B" -> 0
             ),
-            expectedHandled = Queue("B" -> 1, "C" -> 3, "B" -> 2)
+            expectedHandled = Queue("B" -> 1, "A" -> 3, "B" -> 2)
           )
         }
 
@@ -514,12 +537,18 @@ class FairRoundRobinDispatcherSpec extends WordSpecLike with Matchers {
               _ <- dispatcher.dispatch("C", 9)
             } yield ()
           )(
-            expectedQueue = Queue("C"),
+            expectedQueue = Queue("B", "A", "D", "C"),
             expectedMessages = Map(
-              "C" -> Queue.empty
+              "A" -> Queue.empty,
+              "B" -> Queue.empty,
+              "C" -> Queue.empty,
+              "D" -> Queue.empty
             ),
             expectedRetries = Map(
-              "C" -> 0
+              "A" -> 0,
+              "B" -> 0,
+              "C" -> 0,
+              "D" -> 0
             ),
             expectedHandled = Queue(
               "A" -> 1,

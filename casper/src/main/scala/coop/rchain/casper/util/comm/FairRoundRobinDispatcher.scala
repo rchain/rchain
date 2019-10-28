@@ -30,7 +30,7 @@ class FairRoundRobinDispatcher[F[_]: Sync: Log, S: Show, M: Show](
       case Handle =>
         ensureSourceExists(source) >>
           enqueueMessage(source, message) >>
-          handleMessages(source)
+          handleMessages
       case Pass => handle(source, message)
       case Drop => ().pure
     }
@@ -40,7 +40,7 @@ class FairRoundRobinDispatcher[F[_]: Sync: Log, S: Show, M: Show](
       .map(_.contains(source))
       .ifM(
         ().pure,
-        queue.update(_.enqueue(source)) *>
+        queue.update(source +: _) *>
           messages.update(_ + (source -> Queue.empty[M])) *>
           retries.update(_ + (source  -> 0)) *>
           Log[F].info(s"Added ${source.show} to the dispatch queue")
@@ -57,26 +57,21 @@ class FairRoundRobinDispatcher[F[_]: Sync: Log, S: Show, M: Show](
           }
           .flatMap { q =>
             Log[F].info(
-              s"Enqueued message ${message.show} from ${source.show} (queue length: ${q.length}"
+              s"Enqueued message ${message.show} from ${source.show} (queue length: ${q.length})"
             )
           } *>
           retries.update(_.updated(source, 0)),
         Log[F].info(s"Dropped message ${message.show} from ${source.show}")
       )
 
-  private[comm] def handleMessages(source: S): F[Unit] =
-    queue.get.flatMap { q =>
-      if (q.head == source) ().pure
-      else failure(q.head)
-    } >> handleNextMessage // because maybe gave up on failure
+  private[comm] val handleMessages: F[Unit] = {
+    def onSuccess: S => F[Unit] = success(_) >> handleNextMessage(onSuccess, _ => ().pure)
+    def onFailure: S => F[Unit] = failure(_).ifM(handleMessages, ().pure)
+    handleNextMessage(onSuccess, onFailure)
+  }
 
-  private[comm] val handleNextMessage: F[Unit] =
-    queue.get.map(_.head) >>= { s =>
-      handleMessage(s).ifM(
-        success(s) >> handleNextMessage,
-        ().pure
-      )
-    }
+  private[comm] def handleNextMessage(onSuccess: S => F[Unit], onFailure: S => F[Unit]): F[Unit] =
+    queue.get.map(_.head).flatMap(s => handleMessage(s).ifM(onSuccess(s), onFailure(s)))
 
   private[comm] def handleMessage(source: S): F[Boolean] =
     messages.get.map(_(source).headOption) >>=
@@ -112,10 +107,11 @@ class FairRoundRobinDispatcher[F[_]: Sync: Log, S: Show, M: Show](
       skipped.update(_ => 0) *>
       rotate
 
-  private[comm] def failure(source: S): F[Unit] =
+  // true if gave up
+  private[comm] def failure(source: S): F[Boolean] =
     Log[F].info(s"No message to dispatch for ${source.show}") *>
       skipped.update(_ + 1) >>
-      skipped.get.map(_ < giveUpAfterSkipped).ifM(().pure, giveUp(source))
+      skipped.get.map(_ < giveUpAfterSkipped).ifM(false.pure, giveUp(source).as(true))
 }
 
 object FairRoundRobinDispatcher {
