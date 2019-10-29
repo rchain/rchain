@@ -115,17 +115,17 @@ in {
                         // Check whether auth is in the list of authPubKeys
                         @ListOps!("indexOf", authPubKeys, auth, *idxAuthPubKeysCh) |
                         // Check whether auth is a sealed tuple
-                        @ListOps!("partialFold", unsealers, (false, Nil), *unsealerTest, *unsealedCh) |
+                        @ListOps!("partialFold", unsealers, Nil, *unsealerTest, *unsealedCh) |
                         contract unsealerTest(head, _, result) = {
                           new retH in {
                             head!(auth, *retH) |
                             for (@(success, value) <- retH) {
-                              result!(success, (success, value))
+                              result!(success, value)
                             }
                           }
                         } |
                         for (@idxAuthPubKeys <- idxAuthPubKeysCh; @unsealed, @info <- unsealedCh) {
-                          if (idxAuthPubKeys >= 0 or (unsealed and info.nth(1) == (*multiSig, targetRevAddress, amount, *ret))) {
+                          if (idxAuthPubKeys >= 0 or (unsealed and info == (*multiSig, targetRevAddress, amount, *ret))) {
                             for (@nonce <- @(*multiSig, *nonceStore); @nonceMap <- @(*multiSig, *nonceMapStore)) {
                               @(*multiSig, *nonceStore)!(nonce + 1) |
                               if (quorumSize == 1) {
@@ -162,17 +162,17 @@ in {
                       // Check that authKeys is in the list of authKeys or authPubKeys
                       new idxAuthPubKeysCh, unsealerTest, unsealedCh in {
                         @ListOps!("indexOf", authPubKeys, auth, *idxAuthPubKeysCh) |
-                        @ListOps!("partialFold", unsealers, (false, Nil), *unsealerTest, *unsealedCh) |
+                        @ListOps!("partialFold", unsealers, Nil, *unsealerTest, *unsealedCh) |
                         contract unsealerTest(head, _, result) = {
                           new retH in {
                             head!(auth, *retH) |
                             for (@(success, value) <- retH) {
-                              result!(success, (success, value))
+                              result!(success, value)
                             }
                           }
                         } |
                         for (@idxAuthPubKeys <- idxAuthPubKeysCh; @unsealed, @info <- unsealedCh) {
-                          if (idxAuthPubKeys >= 0 or (unsealed and info.nth(1) == (*multiSig, targetRevAddress, amount, nonce, *ret))) {
+                          if (idxAuthPubKeys >= 0 or (unsealed and info == (*multiSig, targetRevAddress, amount, nonce, *ret))) {
                             for (@nonceMap <- @(*multiSig, *nonceMapStore)) {
                               match nonceMap.get(nonce) {
                                 Nil => {
