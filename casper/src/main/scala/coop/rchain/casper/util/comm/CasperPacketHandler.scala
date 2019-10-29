@@ -33,8 +33,8 @@ object CasperPacketHandler {
     import FairRoundRobinDispatcher._
     implicit val showPeerNode: Show[PeerNode] = _.toString
     implicit val showCasperMessage: Show[CasperMessage] = {
-      case BlockHashMessage(h) => s"[${PrettyPrinter.buildString(h)}]"
-      case m: CasperMessage    => s"[Unexpected ${m.getClass.getSimpleName}!!!]"
+      case BlockHashMessage(h, _) => s"[${PrettyPrinter.buildString(h)}]"
+      case m: CasperMessage       => s"[Unexpected ${m.getClass.getSimpleName}!!!]"
     }
 
     def checkMessage(message: CasperMessage): F[Dispatch] =

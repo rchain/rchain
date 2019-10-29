@@ -146,12 +146,13 @@ object ApprovedBlockRequest {
     ApprovedBlockRequest(abr.identifier)
 }
 
-final case class BlockHashMessage(blockHash: BlockHash) extends CasperMessage {
-  def toProto: BlockHashMessageProto = BlockHashMessageProto(blockHash)
+final case class BlockHashMessage(blockHash: BlockHash, blockCreator: ByteString)
+    extends CasperMessage {
+  def toProto: BlockHashMessageProto = BlockHashMessageProto(blockHash, blockCreator)
 }
 
 object BlockHashMessage {
-  def from(hash: BlockHashMessageProto) = BlockHashMessage(hash.hash)
+  def from(msg: BlockHashMessageProto) = BlockHashMessage(msg.hash, msg.blockCreator)
 }
 
 final case class BlockMessage(

@@ -1,31 +1,32 @@
 package coop.rchain.casper.util.comm
 
+import scala.concurrent.duration._
+
 import cats.effect._
 import cats.syntax.apply._
 import cats.syntax.flatMap._
 import cats.syntax.functor._
 import cats.tagless.autoFunctorK
-import cats.{Applicative, Monad}
-import coop.rchain.casper.LastApprovedBlock.LastApprovedBlock
+import cats.Applicative
+
 import coop.rchain.casper._
-import coop.rchain.casper.engine.EngineCell._
-import coop.rchain.casper.engine.Running.RequestedBlocks
 import coop.rchain.casper.engine._
+import coop.rchain.casper.engine.Running.RequestedBlocks
 import coop.rchain.casper.protocol._
+import coop.rchain.comm.{CommError, PeerNode}
 import coop.rchain.comm.protocol.routing.{Packet, Protocol}
 import coop.rchain.comm.rp.Connect.{ConnectionsCell, RPConfAsk}
 import coop.rchain.comm.rp.ProtocolHelper.packet
 import coop.rchain.comm.transport.{Blob, TransportLayer}
-import coop.rchain.comm.{CommError, PeerNode}
 import coop.rchain.metrics.Metrics
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.shared._
 
-import scala.concurrent.duration._
+import com.google.protobuf.ByteString
 
 @autoFunctorK
 trait CommUtil[F[_]] {
-  def sendBlockHash(hash: BlockHash): F[Unit]
+  def sendBlockHash(hash: BlockHash, blockCreator: ByteString): F[Unit]
   def sendBlockRequest(hash: BlockHash): F[Unit]
   def sendForkChoiceTipRequest: F[Unit]
   def sendToPeers[Msg: ToPacket](message: Msg): F[Unit] = sendToPeers(ToPacket(message))
@@ -45,8 +46,8 @@ object CommUtil {
       : CommUtil[F] =
     new CommUtil[F] {
 
-      def sendBlockHash(hash: BlockHash): F[Unit] =
-        sendToPeers(BlockHashMessageProto(hash)) <* Log[F].info(
+      def sendBlockHash(hash: BlockHash, blockCreator: ByteString): F[Unit] =
+        sendToPeers(BlockHashMessageProto(hash, blockCreator)) <* Log[F].info(
           s"Sent hash ${PrettyPrinter.buildString(hash)} to peers"
         )
 

@@ -100,7 +100,8 @@ message BlockMessageProto {
 
 message BlockHashMessageProto {
   option (scalapb.message).extends = "CasperMessageProto";
-  bytes  hash       = 1;
+  bytes  hash         = 1;
+  bytes  blockCreator = 2;
 }
 
 message BlockMetadataInternal {
