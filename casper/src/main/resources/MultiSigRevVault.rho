@@ -17,7 +17,7 @@
 
 new MultiSigRevVault,
     rs(`rho:registry:insertSigned:secp256k1`), uriOut,
-    rl(`rho:registry:lookup`), 
+    rl(`rho:registry:lookup`),
     _fromPublicKey,
     _multiSigRevVault,
     RevVaultCh,
@@ -56,8 +56,8 @@ in {
     } |
 
     contract MultiSigRevVault(@"deployerAuthKey", deployerId, ret) = {
-      new DeployerIdOps(`rho:rchain:deployerId:ops`), 
-          revAddrCh, 
+      new DeployerIdOps(`rho:rchain:deployerId:ops`),
+          revAddrCh,
           deployerPubKeyBytesCh in {
         DeployerIdOps!("pubKeyBytes", *deployerId, *deployerPubKeyBytesCh) |
         for (@deployerPubKeyBytes <- deployerPubKeyBytesCh) {
@@ -74,7 +74,7 @@ in {
         }
       }
     } |
-    
+
     // MultiSig
     // Returns (false, errorMsg) or (true, (multiSigVault, revAddress, revVault))
     contract MultiSigRevVault(@"create", @publicKeys, @unsealers, @quorumSize, ret) = {
@@ -87,7 +87,7 @@ in {
           @RevVault!("unforgeableAuthKey", *unf, *authKeyCh) |
           @ListOps!("map", publicKeys, *_fromPublicKey, *authPubKeysCh) |
           for (@revVaultAuthKey <- authKeyCh; @authPubKeys <- authPubKeysCh; @revAddr <- revAddrCh) {
-            new multiSig, nonceStore, nonceMapStore, revVaultCh in {
+            new multiSig, nonceStore, nonceMapStore, revVaultCh, verify in {
               @RevVault!("findOrCreate", revAddr, *revVaultCh) |
               for (@maybeRevVault <- revVaultCh) {
                 match maybeRevVault {
@@ -106,28 +106,34 @@ in {
                       @revVault!("balance", *ret)
                     } |
 
+                    contract verify(@auth, idxAuthPubKeysCh, unsealedCh) = {
+                      new unsealerTest in {
+                        // Check whether auth is in the list of authPubKeys
+                        @ListOps!("indexOf", authPubKeys, auth, *idxAuthPubKeysCh) |
+                        // Check whether auth is a sealed tuple
+                        @ListOps!("partialFold", unsealers, (-1, Nil), *unsealerTest, *unsealedCh) |
+                        contract unsealerTest(head, @(prevPos, _), result) = {
+                          new retH in {
+                            head!(auth, *retH) |
+                            for (@(success, value) <- retH) {
+                              result!(success, (prevPos + 1, value))
+                            }
+                          }
+                        }
+                      }
+                    } |
+
                     // Creates transfer and "signs" with first account.
-                    // auth is either a deployerAuthKey or 
+                    // auth is either a deployerAuthKey or
                     //                a sealed (*multiSig, targetRevAddress, amount, *ret) tuple
                     // returns (true, (true, nonce)) when more sigs required
                     //         (true, (false, "done")) when only one sig required
                     //         (false, errorMsg) on failure
                     contract multiSig(@"transfer", @targetRevAddress, @amount, @auth, ret) = {
-                      new idxAuthPubKeysCh, unsealerTest, unsealedCh in {
-                        // Check whether auth is in the list of authPubKeys
-                        @ListOps!("indexOf", authPubKeys, auth, *idxAuthPubKeysCh) |
-                        // Check whether auth is a sealed tuple
-                        @ListOps!("partialFold", unsealers, Nil, *unsealerTest, *unsealedCh) |
-                        contract unsealerTest(head, _, result) = {
-                          new retH in {
-                            head!(auth, *retH) |
-                            for (@(success, value) <- retH) {
-                              result!(success, value)
-                            }
-                          }
-                        } |
+                      new idxAuthPubKeysCh, unsealedCh in {
+                        verify!(auth, *idxAuthPubKeysCh, *unsealedCh) |
                         for (@idxAuthPubKeys <- idxAuthPubKeysCh; @unsealed, @info <- unsealedCh) {
-                          if (idxAuthPubKeys >= 0 or (unsealed and info == (*multiSig, targetRevAddress, amount, *ret))) {
+                          if (idxAuthPubKeys >= 0 or (unsealed and info.nth(1) == (*multiSig, targetRevAddress, amount, *ret))) {
                             for (@nonce <- @(*multiSig, *nonceStore); @nonceMap <- @(*multiSig, *nonceMapStore)) {
                               @(*multiSig, *nonceStore)!(nonce + 1) |
                               if (quorumSize == 1) {
@@ -143,9 +149,17 @@ in {
                                   }
                                 }
                               } else {
-                                @(*multiSig, *nonceMapStore)!(
-                                  nonceMap.set(nonce, (targetRevAddress, amount, Set(auth)))
-                                ) |
+                                if (unsealed) {
+                                  // If a contract is confirming, record which unsealer was used
+                                  @(*multiSig, *nonceMapStore)!(
+                                    nonceMap.set(nonce, (targetRevAddress, amount, Set(unsealers.nth(info.nth(0)))))
+                                  )
+                                } else {
+                                  // If a human is confirming, record which deployerAuthKey was used
+                                  @(*multiSig, *nonceMapStore)!(
+                                    nonceMap.set(nonce, (targetRevAddress, amount, Set(auth)))
+                                  )
+                                } |
                                 ret!((true, (true, nonce)))
                               }
                             }
@@ -157,27 +171,16 @@ in {
                     } |
 
                     // Confirms transfer transaction.
-                    // auth is either a deployerAuthKey or 
+                    // auth is either a deployerAuthKey or
                     //                a sealed (*multiSig, targetRevAddress, amount, nonce, *ret) tuple
                     // returns (true, (true, nonce)) when more sigs required
                     //         (true, (false, "done")) when all required sigs have been provided
                     //         (false, errorMsg) on failure
                     contract multiSig(@"confirm", @targetRevAddress, @amount, @auth, @nonce, ret) = {
-                      new idxAuthPubKeysCh, unsealerTest, unsealedCh in {
-                        // Check whether auth is in the list of authPubKeys
-                        @ListOps!("indexOf", authPubKeys, auth, *idxAuthPubKeysCh) |
-                        // Check whether auth is a sealed tuple
-                        @ListOps!("partialFold", unsealers, Nil, *unsealerTest, *unsealedCh) |
-                        contract unsealerTest(head, _, result) = {
-                          new retH in {
-                            head!(auth, *retH) |
-                            for (@(success, value) <- retH) {
-                              result!(success, value)
-                            }
-                          }
-                        } |
+                      new idxAuthPubKeysCh, unsealedCh in {
+                        verify!(auth, *idxAuthPubKeysCh, *unsealedCh) |
                         for (@idxAuthPubKeys <- idxAuthPubKeysCh; @unsealed, @info <- unsealedCh) {
-                          if (idxAuthPubKeys >= 0 or (unsealed and info == (*multiSig, targetRevAddress, amount, nonce, *ret))) {
+                          if (idxAuthPubKeys >= 0 or (unsealed and info.nth(1) == (*multiSig, targetRevAddress, amount, nonce, *ret))) {
                             for (@nonceMap <- @(*multiSig, *nonceMapStore)) {
                               match nonceMap.get(nonce) {
                                 Nil => {
@@ -190,7 +193,8 @@ in {
                                     @(*multiSig, *nonceMapStore)!(nonceMap) |
                                     ret!((false, "given data does not match stored data"))
                                   } else {
-                                    if (nonceConfirmers.contains(auth)) {
+                                    if (((not unsealed) and nonceConfirmers.contains(auth)) or
+                                        (unsealed and nonceConfirmers.contains(unsealers.nth(info.nth(0))))) {
                                       @(*multiSig, *nonceMapStore)!(nonceMap) |
                                       ret!((false, "already confirmed"))
                                     } else {
@@ -209,11 +213,21 @@ in {
                                           }
                                         }
                                       } else {
-                                        @(*multiSig, *nonceMapStore)!(
-                                          nonceMap.set(nonce, 
-                                            (targetRevAddress, amount, nonceConfirmers.add(auth))
+                                        if (unsealed) {
+                                          // If a contract is confirming, record which unsealer was used
+                                          @(*multiSig, *nonceMapStore)!(
+                                            nonceMap.set(nonce,
+                                              (targetRevAddress, amount, nonceConfirmers.add(unsealers.nth(info.thn(0))))
+                                            )
                                           )
-                                        ) |
+                                        } else {
+                                          // If a human is confirming, record which deployerAuthKey was used
+                                          @(*multiSig, *nonceMapStore)!(
+                                            nonceMap.set(nonce,
+                                              (targetRevAddress, amount, nonceConfirmers.add(auth))
+                                            )
+                                          )
+                                        } |
                                         ret!((true, (true, nonce)))
                                       }
                                     }
@@ -223,8 +237,8 @@ in {
                                   @(*multiSig, *nonceMapStore)!(nonceMap) |
                                   ret!((false, "INTERNAL ERROR: bad data stored in nonceMap"))
                                 }
-                              } 
-                            } 
+                              }
+                            }
                           } else {
                             ret!((false, "invalid auth"))
                           }
@@ -245,5 +259,5 @@ in {
       "30450221008539caafe08b2a27cfcabdcf9c7c345a1c1a926330a1a320ca614cf9240f6c77022024ad8465597c8a673431007b8e33317bd49c9c68dacb41eef6a4316d933909c4".hexToBytes(),
       *uriOut
     )
-  } 
-}    
+  }
+}
