@@ -13,6 +13,7 @@ import coop.rchain.casper.util.rholang.RuntimeManager.{evaluate, StateHash}
 import coop.rchain.casper.util.rholang.SystemDeployPlatformFailure._
 import coop.rchain.casper.util.rholang.SystemDeployUserError._
 import coop.rchain.casper.util.{ConstructDeploy, EventConverter, ProtoUtil}
+import coop.rchain.crypto.PublicKey
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.crypto.signatures.Signed
 import coop.rchain.metrics.Metrics.Source
@@ -535,11 +536,12 @@ object RuntimeManager {
       costState: _cost[F],
       errorLog: ErrorLog[F]
   )(deploy: Signed[DeployData]): F[EvaluateResult] = {
-    val seed =
-      DeployDataProto().withDeployer(deploy.data.deployer).withTimestamp(deploy.data.timestamp)
-    implicit val rand: Blake2b512Random = Blake2b512Random(DeployDataProto.toByteArray(seed))
-    implicit val cost: _cost[F] = costState
     import coop.rchain.models.rholang.implicits._
+
+    implicit val rand: Blake2b512Random =
+      Tools.unforgeableNameRng(PublicKey(deploy.data.deployer), deploy.data.timestamp)
+    implicit val cost: _cost[F] = costState
+
     Interpreter[F].injAttempt(
       reducer,
       errorLog,

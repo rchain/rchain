@@ -15,7 +15,7 @@ import coop.rchain.casper.DeployError._
 import coop.rchain.casper.MultiParentCasper.ignoreDoppelgangerCheck
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util._
-import coop.rchain.casper.util.rholang.RuntimeManager
+import coop.rchain.casper.util.rholang.{RuntimeManager, Tools}
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.graphz._
@@ -30,6 +30,7 @@ import coop.rchain.rspace.StableHashProvider
 import coop.rchain.rspace.trace._
 import coop.rchain.shared.Log
 import com.google.protobuf.ByteString
+import coop.rchain.crypto.PublicKey
 import coop.rchain.crypto.signatures.Signed
 
 object BlockAPI {
@@ -570,8 +571,7 @@ object BlockAPI {
       timestamp: Long,
       nameQty: Int
   ): F[ApiErr[Seq[ByteString]]] = {
-    val seed                = DeployDataProto().withDeployer(deployer).withTimestamp(timestamp)
-    val rand                = Blake2b512Random(DeployDataProto.toByteArray(seed))
+    val rand                = Tools.unforgeableNameRng(PublicKey(deployer.toByteArray), timestamp)
     val safeQty             = nameQty min 1024
     val ids: Seq[BlockHash] = (0 until safeQty).map(_ => ByteString.copyFrom(rand.next()))
     ids.asRight[String].pure[F]
