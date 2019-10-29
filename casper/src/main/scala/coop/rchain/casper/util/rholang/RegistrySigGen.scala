@@ -173,12 +173,8 @@ object RegistrySigGen {
     *
     */
   def generateUnforgeableNameId(deployer: PublicKey, timestamp: Long) = {
-    val seed =
-      DeployDataProto()
-        .withDeployer(ByteString.copyFrom(deployer.bytes))
-        .withTimestamp(timestamp)
 
-    val rnd = Blake2b512Random(DeployDataProto.toByteArray(seed))
+    val rnd = Tools.unforgeableNameRng(deployer, timestamp)
 
     rnd.next()
   }

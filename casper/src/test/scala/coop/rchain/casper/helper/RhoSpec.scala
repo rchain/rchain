@@ -8,8 +8,9 @@ import coop.rchain.casper.genesis.contracts.TestUtil.eval
 import coop.rchain.casper.protocol.{DeployData, DeployDataProto}
 import coop.rchain.casper.util.GenesisBuilder.GenesisParameters
 import coop.rchain.casper.util.rholang.Resources.copyStorage
+import coop.rchain.casper.util.rholang.Tools
 import coop.rchain.casper.util.{GenesisBuilder, ProtoUtil}
-import coop.rchain.crypto.PrivateKey
+import coop.rchain.crypto.{PrivateKey, PublicKey}
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.crypto.signatures.{Secp256k1, Signed}
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
@@ -161,9 +162,7 @@ class RhoSpec(
       runtime: Runtime[F]
   ): F[Unit] = {
     import coop.rchain.models.rholang.implicits._
-    val seed =
-      DeployDataProto().withDeployer(deploy.data.deployer).withTimestamp(deploy.data.timestamp)
-    val rand = Blake2b512Random(DeployDataProto.toByteArray(seed))
+    val rand = Tools.unforgeableNameRng(PublicKey(deploy.data.deployer), deploy.data.timestamp)
     eval(deploy.data.term, runtime, NormalizerEnv(deploy).toEnv)(Sync[F], rand)
   }
 
