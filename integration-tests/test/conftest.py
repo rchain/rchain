@@ -125,14 +125,19 @@ def temporary_wallets_file(random_generator: Random, wallet_balance_from_private
         os.unlink(file)
 
 
-@pytest.yield_fixture(scope='session')
-def docker_client() -> Generator[DockerClient, None, None]:
+@contextlib.contextmanager
+def docker_client_context() -> Generator[DockerClient, None, None]:
     docker_client = docker_py.from_env()
     try:
         yield docker_client
     finally:
         docker_client.volumes.prune()
         docker_client.networks.prune()
+
+@pytest.yield_fixture(scope='session')
+def docker_client() -> Generator[DockerClient, None, None]:
+    with docker_client_context() as docker_cli:
+        yield docker_cli
 
 
 @pytest.yield_fixture(scope='session')

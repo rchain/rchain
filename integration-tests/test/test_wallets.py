@@ -71,7 +71,7 @@ def test_alice_pay_bob(command_line_options: CommandLineOptions, docker_client: 
     with testing_context(command_line_options, random_generator, docker_client) as context, \
             docker_network(context, context.docker) as network, \
             temporary_wallets_file(random_generator, genesis_vault) as wallets_file, \
-            started_bootstrap(context=context, network=network,mount_dir=context.mount_dir, wallets_file=wallets_file) as bootstrap:
+            started_bootstrap(context=context, network=network, wallets_file=wallets_file) as bootstrap:
 
         transfer_amount = 100
         alice_rev_address = ALICE_KEY.get_public_key().get_rev_address()
@@ -105,7 +105,7 @@ def test_transfer_failed_with_invalid_key(command_line_options: CommandLineOptio
     with testing_context(command_line_options, random_generator, docker_client) as context, \
             docker_network(context, context.docker) as network, \
             temporary_wallets_file(random_generator, genesis_vault) as wallets_file, \
-            started_bootstrap(context=context, network=network,mount_dir=context.mount_dir, wallets_file=wallets_file) as bootstrap:
+            started_bootstrap(context=context, network=network, wallets_file=wallets_file) as bootstrap:
 
         alice_rev_address = ALICE_KEY.get_public_key().get_rev_address()
         charlie_rev_address = CHARLIE_KEY.get_public_key().get_rev_address()
