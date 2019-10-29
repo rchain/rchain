@@ -50,12 +50,12 @@ match (
       } |
 
       contract testTransferIn(rhoSpec, @(RevVault, MultiSigRevVault), ackCh) = {
-        new genesisVaultCh, carolUnf, carolAuthCh, carolVaultCh, ret, retOk  in {
+        new genesisVaultCh, carolAuthCh, carolVaultCh, ret, retOk  in {
           withVaultAndIdentityOf!(genesisPubKey, *genesisVaultCh) |
-          @MultiSigRevVault!("unforgeableAuthKey", *carolUnf, *carolAuthCh) |
-          for (@carolAuth <- carolAuthCh) {
+          @MultiSigRevVault!("makeSealerUnsealer", *carolAuthCh) |
+          for (@(_, carolUnsealer) <- carolAuthCh) {
             // Single sig as a special case of multisig.
-            @MultiSigRevVault!("create", [], [carolAuth], 1, *carolVaultCh) |
+            @MultiSigRevVault!("create", [], [carolUnsealer], 1, *carolVaultCh) |
             for (genesisVault, @genesisVaultKey <- genesisVaultCh; @maybeVault <- carolVaultCh) {
               match maybeVault {
                 (false, msg) => {
@@ -75,10 +75,10 @@ match (
       contract testTransferOut1of1(rhoSpec, @(RevVault, MultiSigRevVault), ackCh) = {
         new genesisVaultCh, carolUnf, carolAuthCh, carolVaultCh, ret1, ret2, retOk in {
           withVaultAndIdentityOf!(genesisPubKey, *genesisVaultCh) |
-          @MultiSigRevVault!("unforgeableAuthKey", *carolUnf, *carolAuthCh) |
-          for (@carolAuth <- carolAuthCh) {
+          @MultiSigRevVault!("makeSealerUnsealer", *carolAuthCh) |
+          for (@(carolSealer, carolUnsealer) <- carolAuthCh) {
             // Single sig as a special case of multisig.
-            @MultiSigRevVault!("create", [], [carolAuth], 1, *carolVaultCh) |
+            @MultiSigRevVault!("create", [], [carolUnsealer], 1, *carolVaultCh) |
             for (genesisVault, @genesisVaultKey <- genesisVaultCh; @maybeVault <- carolVaultCh) {
               match maybeVault {
                 (false, msg) => {
@@ -92,9 +92,14 @@ match (
                         rhoSpec!("assert", (false, "==", true), msg, *ackCh)
                       }
                       (true, Nil) => {
-                        @carolMultiSigVault!("transfer", genesisRevAddress, 500, carolAuth, *ret2) |
-                        rhoSpec!("assert", ((true, (false, "done")), "== <-", *ret2), "transfer successful", *ackCh) |
-                        assertBalances!(*retOk, [(*genesisVault, 8999500), (carolMultiSigVault, 5000)], *rhoSpec, *ackCh)
+                        new retInfoBox in {
+                          @carolSealer!((carolMultiSigVault, genesisRevAddress, 500, *ret2), *retInfoBox) |
+                          for (@box <- retInfoBox) {
+                            @carolMultiSigVault!("transfer", genesisRevAddress, 500, box, *ret2) |
+                            rhoSpec!("assert", ((true, (false, "done")), "== <-", *ret2), "transfer successful", *ackCh) |
+                            assertBalances!(*retOk, [(*genesisVault, 8999500), (carolMultiSigVault, 5000)], *rhoSpec, *ackCh)
+                          }
+                        }
                       }
                     }
                   }
@@ -111,15 +116,15 @@ match (
             daveUnf, daveAuthCh,
             eveUnf, eveAuthCh,
             msVaultCh,
-            o(`rho:io:stdlog`),
             ret1, ret2, ret3, retOk in {
           withVaultAndIdentityOf!(genesisPubKey, *genesisVaultCh) |
-          @MultiSigRevVault!("unforgeableAuthKey", *carolUnf, *carolAuthCh) |
-          @MultiSigRevVault!("unforgeableAuthKey", *daveUnf, *daveAuthCh) |
-          @MultiSigRevVault!("unforgeableAuthKey", *eveUnf, *eveAuthCh) |
-          for (@carolAuth <- carolAuthCh; @daveAuth <- daveAuthCh; @eveAuth <- eveAuthCh) {
-            // Single sig as a special case of multisig.
-            @MultiSigRevVault!("create", [], [carolAuth, daveAuth, eveAuth], 2, *msVaultCh) |
+          @MultiSigRevVault!("makeSealerUnsealer", *carolAuthCh) |
+          @MultiSigRevVault!("makeSealerUnsealer", *daveAuthCh) |
+          @MultiSigRevVault!("makeSealerUnsealer", *eveAuthCh) |
+          for(@(carolSealer, carolUnsealer) <- carolAuthCh; 
+              @(daveSealer, daveUnsealer) <- daveAuthCh; 
+              @(eveSealer, eveUnsealer) <- eveAuthCh) {
+            @MultiSigRevVault!("create", [], [carolUnsealer, daveUnsealer, eveUnsealer], 2, *msVaultCh) |
             for (genesisVault, @genesisVaultKey <- genesisVaultCh; @maybeVault <- msVaultCh) {
               match maybeVault {
                 (false, msg) => {
@@ -133,29 +138,39 @@ match (
                         rhoSpec!("assert", (false, "==", true), msg, *ackCh)
                       }
                       (true, Nil) => {
-                        @msVault!("transfer", genesisRevAddress, 500, carolAuth, *ret2) |
-                        for (@result2 <- ret2) {
-                          match result2 {
-                            (false, msg) => {
-                              rhoSpec!("assert", (false, "==", true), msg, *ackCh)
-                            }
-                            (true, result3) => {
-                              match result3 {
-                                (true, nonce) => {
-                                  @msVault!("confirm", genesisRevAddress, 500, eveAuth, nonce, *ret3) |
-                                  rhoSpec!("assert", ((true, (false, "done")), "== <-", *ret3), "transfer successful", *ackCh) |
-                                  assertBalances!(*retOk, [(*genesisVault, 8999500), (msVault, 5000)], *rhoSpec, *ackCh)                                  
-                                }
+                        new retCarolBox in {
+                          @carolSealer!((msVault, genesisRevAddress, 500, *ret2), *retCarolBox) |
+                          for (@carolBox <- retCarolBox) {
+                            @msVault!("transfer", genesisRevAddress, 500, carolBox, *ret2) |
+                            for (@result2 <- ret2) {
+                              match result2 {
                                 (false, msg) => {
                                   rhoSpec!("assert", (false, "==", true), msg, *ackCh)
                                 }
-                                x => {
-                                  rhoSpec!("assert", (false, "==", true), x, *ackCh)
+                                (true, result3) => {
+                                  match result3 {
+                                    (true, nonce) => {
+                                      new retEveBox in {
+                                        @eveSealer!((msVault, genesisRevAddress, 500, nonce, *ret3), *retEveBox) |
+                                        for (@eveBox <- retEveBox) {
+                                          @msVault!("confirm", genesisRevAddress, 500, eveBox, nonce, *ret3) |
+                                          rhoSpec!("assert", ((true, (false, "done")), "== <-", *ret3), "transfer successful", *ackCh) |
+                                          assertBalances!(*retOk, [(*genesisVault, 8999500), (msVault, 5000)], *rhoSpec, *ackCh)                                  
+                                        }
+                                      }
+                                    }
+                                    (false, msg) => {
+                                      rhoSpec!("assert", (false, "==", true), msg, *ackCh)
+                                    }
+                                    x => {
+                                      rhoSpec!("assert", (false, "==", true), x, *ackCh)
+                                    }
+                                  }
+                                }
+                                _ => {
+                                  rhoSpec!("assert", (false, "==", true), "transfer returned something else", *ackCh)
                                 }
                               }
-                            }
-                            _ => {
-                              rhoSpec!("assert", (false, "==", true), "transfer returned something else", *ackCh)
                             }
                           }
                         }
