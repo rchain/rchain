@@ -156,12 +156,13 @@ in {
 
                     // Confirms transfer transaction.
                     // returns (true, (true, nonce)) when more sigs required
-                    //         (true, (false, "done")) when only one sig required
+                    //         (true, (false, "done")) when all required sigs have been provided
                     //         (false, errorMsg) on failure
                     contract multiSig(@"confirm", @targetRevAddress, @amount, @auth, @nonce, ret) = {
-                      // Check that authKeys is in the list of authKeys or authPubKeys
                       new idxAuthPubKeysCh, unsealerTest, unsealedCh in {
+                        // Check whether auth is in the list of authPubKeys
                         @ListOps!("indexOf", authPubKeys, auth, *idxAuthPubKeysCh) |
+                        // Check whether auth is a sealed tuple
                         @ListOps!("partialFold", unsealers, Nil, *unsealerTest, *unsealedCh) |
                         contract unsealerTest(head, _, result) = {
                           new retH in {
