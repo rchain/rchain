@@ -34,6 +34,7 @@ match (
       for(@(_, RhoSpec) <- RhoSpecCh) {
         @RhoSpec!("testSuite", *setup,
           [
+            // Because the genesis vault is stateful, the order of these tests matters.
             ("transfer from genesis to Multisig", *testTransferIn),
             ("transfer from Multisig to genesis 1 of 1", *testTransferOut1of1),
             ("transfer from Multisig to genesis 2 of 3", *testTransferOut2of3),
@@ -64,6 +65,7 @@ match (
                   rhoSpec!("assert", (false, "==", true), msg, *ackCh)
                 }
                 (true, (carolMultiSigVault, carolRevAddr, carolRevVault)) => {
+                  // 9000000 - 1000 = 8999000
                   genesisVault!("transfer", carolRevAddr, 1000, genesisVaultKey, *ret) |
                   rhoSpec!("assert", ((true, Nil), "== <-", *ret), "transfer successful", *ackCh) |
                   assertBalances!(*retOk, [(*genesisVault, 8999000), (carolMultiSigVault, 1000)], *rhoSpec, *ackCh)
@@ -75,7 +77,7 @@ match (
       } |
 
       contract testTransferOut1of1(rhoSpec, @(RevVault, MultiSigRevVault), ackCh) = {
-        new genesisVaultCh, carolUnf, carolAuthCh, carolVaultCh, ret1, ret2, retOk in {
+        new genesisVaultCh, carolUnf, carolAuthCh, carolVaultCh, ret1, ret2, now in {
           withVaultAndIdentityOf!(genesisPubKey, *genesisVaultCh) |
           @MultiSigRevVault!("makeSealerUnsealer", *carolAuthCh) |
           for (@(carolSealer, carolUnsealer) <- carolAuthCh) {
@@ -87,6 +89,7 @@ match (
                   rhoSpec!("assert", (false, "==", true), msg, *ackCh)
                 }
                 (true, (carolMultiSigVault, carolRevAddr, carolRevVault)) => {
+                  // 8999000 - 1000 = 8998000
                   genesisVault!("transfer", carolRevAddr, 1000, genesisVaultKey, *ret1) |
                   for (@result <- ret1) {
                     match result {
@@ -97,9 +100,10 @@ match (
                         new retInfoBox in {
                           @carolSealer!((carolMultiSigVault, genesisRevAddress, 500, *ret2), *retInfoBox) |
                           for (@box <- retInfoBox) {
+                            // 8998000 + 500 = 8998500
                             @carolMultiSigVault!("transfer", genesisRevAddress, 500, box, *ret2) |
-                            rhoSpec!("assert", ((true, (false, "done")), "== <-", *ret2), "transfer successful", *ackCh) |
-                            assertBalances!(*retOk, [(*genesisVault, 8999500), (carolMultiSigVault, 5000)], *rhoSpec, *ackCh)
+                            rhoSpec!("assert", ((true, (false, "done")), "== <-", *ret2), "transfer successful", *now) |
+                            assertBalances!(*now, [(*genesisVault, 8998500), (carolMultiSigVault, 500)], *rhoSpec, *ackCh)
                           }
                         }
                       }
@@ -118,7 +122,7 @@ match (
             daveUnf, daveAuthCh,
             eveUnf, eveAuthCh,
             msVaultCh,
-            ret1, ret2, ret3, retOk in {
+            ret1, ret2, ret3, now in {
           withVaultAndIdentityOf!(genesisPubKey, *genesisVaultCh) |
           @MultiSigRevVault!("makeSealerUnsealer", *carolAuthCh) |
           @MultiSigRevVault!("makeSealerUnsealer", *daveAuthCh) |
@@ -133,6 +137,7 @@ match (
                   rhoSpec!("assert", (false, "==", true), msg, *ackCh)
                 }
                 (true, (msVault, msRevAddr, msUnderlyingRevVault)) => {
+                  // 8998500 - 1000 = 8997500
                   genesisVault!("transfer", msRevAddr, 1000, genesisVaultKey, *ret1) |
                   for (@result <- ret1) {
                     match result {
@@ -143,6 +148,7 @@ match (
                         new retCarolBox in {
                           @carolSealer!((msVault, genesisRevAddress, 500, *ret2), *retCarolBox) |
                           for (@carolBox <- retCarolBox) {
+                            // 8997500 + 500 = 8998000
                             @msVault!("transfer", genesisRevAddress, 500, carolBox, *ret2) |
                             for (@result2 <- ret2) {
                               match result2 {
@@ -156,8 +162,8 @@ match (
                                         @eveSealer!((msVault, genesisRevAddress, 500, nonce, *ret3), *retEveBox) |
                                         for (@eveBox <- retEveBox) {
                                           @msVault!("confirm", genesisRevAddress, 500, eveBox, nonce, *ret3) |
-                                          rhoSpec!("assert", ((true, (false, "done")), "== <-", *ret3), "transfer successful", *ackCh) |
-                                          assertBalances!(*retOk, [(*genesisVault, 8999500), (msVault, 500)], *rhoSpec, *ackCh)
+                                          rhoSpec!("assert", ((true, (false, "done")), "== <-", *ret3), "transfer successful", *now) |
+                                          assertBalances!(*now, [(*genesisVault, 8998000), (msVault, 500)], *rhoSpec, *ackCh)
                                         }
                                       }
                                     }
@@ -192,7 +198,7 @@ match (
             daveUnf, daveAuthCh,
             eveUnf, eveAuthCh,
             msVaultCh,
-            ret1, ret2, ret3, retOk in {
+            ret1, ret2, ret3, now in {
           withVaultAndIdentityOf!(genesisPubKey, *genesisVaultCh) |
           @MultiSigRevVault!("makeSealerUnsealer", *carolAuthCh) |
           @MultiSigRevVault!("makeSealerUnsealer", *daveAuthCh) |
@@ -207,6 +213,7 @@ match (
                   rhoSpec!("assert", (false, "==", true), msg, *ackCh)
                 }
                 (true, (msVault, msRevAddr, msUnderlyingRevVault)) => {
+                  // 8998000 - 1000 = 8997000
                   genesisVault!("transfer", msRevAddr, 1000, genesisVaultKey, *ret1) |
                   for (@result <- ret1) {
                     match result {
@@ -215,6 +222,7 @@ match (
                       }
                       (true, Nil) => {
                         new retCarolBox in {
+                          // Transfer should fail, so genesis balance should be 8997000
                           @carolSealer!((msVault, genesisRevAddress, 500, *ret2), *retCarolBox) |
                           for (@carolBox <- retCarolBox) {
                             @msVault!("transfer", genesisRevAddress, 500, carolBox, *ret2) |
@@ -230,8 +238,8 @@ match (
                                         @carolSealer!((msVault, genesisRevAddress, 500, nonce, *ret3), *retCarolBox2) |
                                         for (@carolBox2 <- retCarolBox2) {
                                           @msVault!("confirm", genesisRevAddress, 500, carolBox2, nonce, *ret3) |
-                                          rhoSpec!("assert", ((false, "already confirmed"), "== <-", *ret3), "transfer failed", *ackCh) |
-                                          assertBalances!(*retOk, [(*genesisVault, 9000000), (msVault, 1)], *rhoSpec, *ackCh)
+                                          rhoSpec!("assert", ((false, "already confirmed"), "== <-", *ret3), "transfer failed", *now) |
+                                          assertBalances!(*now, [(*genesisVault, 8997000), (msVault, 1000)], *rhoSpec, *ackCh)
                                         }
                                       }
                                     }
