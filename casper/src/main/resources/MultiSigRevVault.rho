@@ -107,6 +107,8 @@ in {
                     } |
 
                     // Creates transfer and "signs" with first account.
+                    // auth is either a deployerAuthKey or 
+                    //                a sealed (*multiSig, targetRevAddress, amount, *ret) tuple
                     // returns (true, (true, nonce)) when more sigs required
                     //         (true, (false, "done")) when only one sig required
                     //         (false, errorMsg) on failure
@@ -155,6 +157,8 @@ in {
                     } |
 
                     // Confirms transfer transaction.
+                    // auth is either a deployerAuthKey or 
+                    //                a sealed (*multiSig, targetRevAddress, amount, nonce, *ret) tuple
                     // returns (true, (true, nonce)) when more sigs required
                     //         (true, (false, "done")) when all required sigs have been provided
                     //         (false, errorMsg) on failure
