@@ -1,7 +1,7 @@
-package coop.rchain.node
+package coop.rchain.node.web
 
+import cats.effect.{Concurrent, Sync}
 import cats.implicits._
-import cats.effect.{Concurrent, ExitCode, Sync}
 import coop.rchain.node.effects.EventConsumer
 import coop.rchain.shared.RChainEvent
 import fs2.Pipe
@@ -10,9 +10,7 @@ import io.circe.Json
 import org.http4s.HttpRoutes
 import org.http4s.server.websocket.WebSocketBuilder
 import org.http4s.websocket.WebSocketFrame
-import org.http4s.websocket.WebSocketFrame._
-
-import scala.{Stream => _}
+import org.http4s.websocket.WebSocketFrame.Text
 
 object EventsInfo {
 
@@ -35,9 +33,9 @@ object EventsInfo {
     */
   def service[F[_]: EventConsumer: Sync: Concurrent]: F[HttpRoutes[F]] = {
 
-    import io.circe.syntax._
-    import io.circe.generic.extras.auto._
     import io.circe.generic.extras.Configuration
+    import io.circe.generic.extras.auto._
+    import io.circe.syntax._
 
     val eventTypeLabel     = "event"
     val schemaVersionLabel = "schema-version"
