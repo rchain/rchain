@@ -462,16 +462,17 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log](
       )
       .flatTap(
         pd =>
-          /*execute Refund as a side effect (keeping the logs and the possible error but discarding result)
-          only if the user deploy has been successful*/
-          if (!pd.isFailed)
-            EitherT(
-              WriterT(playSystemDeployInternal(runtime)(new RefundDeploy(pd.refundAmount, rand)))
-            )
-          else EitherT.rightT(())
+          /*execute Refund as a side effect (keeping the logs and the possible error but discarding result)*/
+          EitherT(
+            WriterT(playSystemDeployInternal(runtime)(new RefundDeploy(pd.refundAmount, rand)))
+          ).leftSemiflatMap(
+            error =>
+              /*If pre-charge succeeds and refund fails, it's a platform error and we should signal it with raiseError*/ WriterT
+                .liftF(GasRefundFailure(error.errorMsg).raiseError)
+          )
       )
       .valueOr {
-        /* we can end up here if any of the PreCharge or Refund threw an user error
+        /* we can end up here if any of the PreCharge threw an user error
         we still keep the logs (from the underlying WriterT) which we'll fill in the next step.
         We're assigning it 0 cost - replay should reach the same state
          */
@@ -597,7 +598,8 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log](
                               EitherT.right[ReplayFailure](
                                 runtime.replaySpace.revertToSoftCheckpoint(softCheckpoint)
                               )
-                            case _ => /* This deployment represents either correct program `Some(result)`,
+                            case _ =>
+                              /* This deployment represents either correct program `Some(result)`,
                             or we have a failed pre-charge (`None`) but we agree on that it failed.
                             In both cases we want to check reply data and see if everything is in order */
                               runtime.replaySpace.checkReplayData().attemptT.leftMap {
