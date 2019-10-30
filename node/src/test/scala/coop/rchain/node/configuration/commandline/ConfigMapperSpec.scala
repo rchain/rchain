@@ -204,7 +204,8 @@ class ConfigMapperSpec extends FunSuite with Matchers {
         "--genesis-validator",
         "--interval 5seconds",
         "--duration 5minutes",
-        "--deploy-timestamp 333"
+        "--deploy-timestamp 333",
+        "--finalization-rate 4"
       ).mkString(" ")
 
     val options              = Options(args.split(' '))
@@ -232,7 +233,8 @@ class ConfigMapperSpec extends FunSuite with Matchers {
         approveGenesis = true,
         approveGenesisInterval = 5.seconds,
         approveGenesisDuration = 5.minutes,
-        deployTimestamp = Some(333)
+        deployTimestamp = Some(333),
+        finalizationRate = 4
       )
 
     val casper = hocon.Casper.fromConfig(config.withFallback(defaults))

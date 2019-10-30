@@ -106,6 +106,7 @@ object ConfigMapper {
         add(keys.GenesisApproveInterval, run.interval)
         add(keys.GenesisApproveDuration, run.duration)
         add(keys.DeployTimestamp, run.deployTimestamp)
+        add(keys.FinalizationRate, run.finalizationRate)
       }
     }
 

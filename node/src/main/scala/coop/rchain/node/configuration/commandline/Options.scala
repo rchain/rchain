@@ -346,6 +346,11 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
     )
 
     val reporting = opt[Flag](descr = "Use this flag to enable reporting endpoints.")
+
+    val finalizationRate = opt[Int](
+      descr = "Block finalization is triggered after adding every 'n' blocks. " +
+        "Use this option to configure this 'n'."
+    )
   }
   addSubcommand(run)
 
