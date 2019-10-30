@@ -40,6 +40,7 @@ object GenesisCeremonyMaster {
   def approveBlockInterval[F[_]: Sync: Metrics: Span: Concurrent: CommUtil: TransportLayer: ConnectionsCell: RPConfAsk: Running.RequestedBlocks: BlockStore: Log: EventLog: Time: SafetyOracle: LastFinalizedBlockCalculator: LastApprovedBlock: BlockDagStorage: EngineCell: RuntimeManager: EventPublisher: SynchronyConstraintChecker](
       interval: FiniteDuration,
       shardId: String,
+      finalizationRate: Int,
       validatorId: Option[ValidatorIdentity]
   ): F[Unit] =
     for {
@@ -47,13 +48,13 @@ object GenesisCeremonyMaster {
       lastApprovedBlockO <- LastApprovedBlock[F].get
       cont <- lastApprovedBlockO match {
                case None =>
-                 approveBlockInterval[F](interval, shardId, validatorId)
+                 approveBlockInterval[F](interval, shardId, finalizationRate, validatorId)
                case Some(approvedBlock) =>
                  val genesis = approvedBlock.candidate.block
                  for {
                    _ <- insertIntoBlockAndDagStore[F](genesis, approvedBlock)
                    casper <- MultiParentCasper
-                              .hashSetCasper[F](validatorId, genesis, shardId)
+                              .hashSetCasper[F](validatorId, genesis, shardId, finalizationRate)
                    _ <- Engine
                          .transitionToRunning[F](casper, approvedBlock, validatorId, ().pure[F])
                    _ <- CommUtil[F].sendForkChoiceTipRequest

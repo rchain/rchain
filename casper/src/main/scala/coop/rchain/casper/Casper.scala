@@ -87,7 +87,8 @@ sealed abstract class MultiParentCasperInstances {
   def hashSetCasper[F[_]: Sync: Metrics: Concurrent: CommUtil: Log: Time: SafetyOracle: LastFinalizedBlockCalculator: BlockStore: BlockDagStorage: Span: Running.RequestedBlocks: EventPublisher: SynchronyConstraintChecker](
       validatorId: Option[ValidatorIdentity],
       genesis: BlockMessage,
-      shardId: String
+      shardId: String,
+      finalizationRate: Int
   )(implicit runtimeManager: RuntimeManager[F]): F[MultiParentCasper[F]] =
     Span[F].trace(genesisLabel) {
       for {
@@ -113,6 +114,7 @@ sealed abstract class MultiParentCasperInstances {
           genesis,
           postGenesisStateHash,
           shardId,
+          finalizationRate,
           blockProcessingLock
         )
       }

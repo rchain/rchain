@@ -50,6 +50,7 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Log: Time: SafetyOracle: Las
     genesis: BlockMessage,
     postGenesisStateHash: StateHash,
     shardId: String,
+    finalizationRate: Int,
     blockProcessingLock: Semaphore[F]
 )(
     implicit state: CasperStateCell[F],
@@ -109,11 +110,15 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Log: Time: SafetyOracle: Las
     } yield status
   }.timer("add-block-time")
 
+  private def updateLastFinalizedBlock(newBlock: BlockMessage): F[Unit] =
+    lastFinalizedBlock.whenA(newBlock.body.state.blockNumber % finalizationRate == 0)
+
   private def internalAddBlock(
       b: BlockMessage,
       dag: BlockDagRepresentation[F]
   ): F[ValidBlockProcessing] =
     for {
+      _            <- updateLastFinalizedBlock(b)
       _            <- Span[F].mark("internal-add-block")
       validFormat  <- Validate.formatOfFields(b)
       validSig     <- Validate.blockSignature(b)

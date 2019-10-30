@@ -51,6 +51,7 @@ class GenesisCeremonyMasterSpec extends WordSpec {
           .approveBlockInterval[Task](
             interval,
             shardId,
+            finalizationRate,
             Some(validatorId)
           )
           .forkAndForget
