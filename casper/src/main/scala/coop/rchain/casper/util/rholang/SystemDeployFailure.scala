@@ -6,10 +6,10 @@ import coop.rchain.rholang.interpreter.PrettyPrinter
 
 sealed trait SystemDeployFailure
 
-sealed abstract class SystemDeployUserError extends SystemDeployFailure
+sealed abstract class SystemDeployUserError(val errorMessage: String) extends SystemDeployFailure
 
 object SystemDeployUserError {
-  final case class SystemDeployError(errorMsg: String) extends SystemDeployUserError
+  final case class SystemDeployError(errorMsg: String) extends SystemDeployUserError(errorMsg)
   def apply(errorMsg: String) = SystemDeployError(errorMsg)
 }
 

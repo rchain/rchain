@@ -66,13 +66,13 @@ object SystemDeployReplayResult {
   def replaySucceeded[A](stateHash: StateHash, result: A): SystemDeployReplayResult[A] =
     ReplaySucceeded(stateHash, result)
 
-  final case class ReplayFailed[A](systemDeployError: SystemDeployError)
+  final case class ReplayFailed[A](systemDeployError: SystemDeployUserError)
       extends SystemDeployReplayResult[A] {
     val stateHashOpt: Option[StateHash] = None
     val resultOpt: Option[A]            = None
   }
 
-  def replayFailed[A](systemDeployError: SystemDeployError): SystemDeployReplayResult[A] =
+  def replayFailed[A](systemDeployError: SystemDeployUserError): SystemDeployReplayResult[A] =
     ReplayFailed(systemDeployError)
 
 }

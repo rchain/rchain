@@ -111,7 +111,7 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
                   assert(playResult == replayResult)
                   finalReplayStateHash
                 case ReplayFailed(systemDeployError) =>
-                  fail(s"Unexpected user error during replay: ${systemDeployError.errorMsg}")
+                  fail(s"Unexpected user error during replay: ${systemDeployError.errorMessage}")
               }
             case Right(Left(replayFailure)) =>
               fail(s"Unexpected replay failure: $replayFailure")
