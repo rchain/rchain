@@ -55,16 +55,58 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
 
   private def computeState[F[_]: Functor](
       runtimeManager: RuntimeManager[F],
-      deploy: DeployData
+      deploy: DeployData,
+      stateHash: StateHash
   ): F[(StateHash, ProcessedDeploy)] =
     for {
-      res <- runtimeManager.computeState(ProtoUtil.postStateHash(genesis))(
+      res <- runtimeManager.computeState(stateHash)(
               deploy :: Nil,
               BlockData(deploy.timestamp, 0),
               Map.empty[BlockHash, Validator]
             )
       (hash, Seq(result)) = res
     } yield (hash, result)
+
+  private def replayComputeState[F[_]: Functor](runtimeManager: RuntimeManager[F])(
+      stateHash: StateHash,
+      processedDeploy: ProcessedDeploy
+  ): F[Either[ReplayFailure, StateHash]] =
+    runtimeManager.replayComputeState(stateHash)(
+      processedDeploy :: Nil,
+      BlockData(processedDeploy.deploy.timestamp, 0),
+      Map.empty[BlockHash, Validator],
+      isGenesis = false
+    )
+
+  "computeState" should "charge for deploys" in effectTest {
+    runtimeManagerResource.use { runtimeManager =>
+      val userPk       = ConstructDeploy.defaultPub
+      val genPostState = genesis.body.state.postStateHash
+      compareSuccessfulSystemDeploys(runtimeManager)(genPostState)(
+        new CheckBalance(pk = userPk, rand = Blake2b512Random(Array(0.toByte))),
+        new CheckBalance(pk = userPk, rand = Blake2b512Random(Array(0.toByte)))
+      )(_ == 9000000) >>= { stateHash0 =>
+        val source = "@0!0"
+        // TODO: Prohibit negative gas prices and gas limits in deploys.
+        // TODO: Make minimum maximum yield for deploy parameter of node.
+        ConstructDeploy.sourceDeployNowF(source = source, phloPrice = 1, phloLimit = 3) >>= {
+          deploy =>
+            computeState(runtimeManager, deploy, stateHash0) >>= {
+              case (playStateHash1, processedDeploy) =>
+                replayComputeState(runtimeManager)(stateHash0, processedDeploy) >>= {
+                  case Right(replayStateHash1) =>
+                    assert(playStateHash1 != genPostState && replayStateHash1 == playStateHash1)
+                    compareSuccessfulSystemDeploys(runtimeManager)(playStateHash1)(
+                      new CheckBalance(pk = userPk, rand = Blake2b512Random(Array(1.toByte))),
+                      new CheckBalance(pk = userPk, rand = Blake2b512Random(Array(1.toByte)))
+                    )(_ == 9000000 - processedDeploy.cost.cost)
+                  case Left(replayFailure) => fail(s"Unexpected replay failure: ${replayFailure}")
+                }
+            }
+        }
+      }
+    }
+  }
 
   private def invalidReplay(source: String): Task[Either[ReplayFailure, StateHash]] =
     runtimeManagerResource.use { runtimeManager =>
@@ -171,8 +213,10 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
     val badRholang = """ for(@x <- @"x"; @y <- @"y"){ @"xy"!(x + y) } | @"x"!(1) | @"y"!("hi") """
     for {
       deploy <- ConstructDeploy.sourceDeployNowF(badRholang)
-      result <- runtimeManagerResource.use(computeState(_, deploy))
-      _      = result._2.isFailed should be(true)
+      result <- runtimeManagerResource.use(
+                 computeState(_, deploy, genesis.body.state.postStateHash)
+               )
+      _ = result._2.isFailed should be(true)
     } yield ()
   }
 
@@ -180,9 +224,11 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
     val badRholang = """ for(@x <- @"x"; @y <- @"y"){ @"xy"!(x + y) | @"x"!(1) | @"y"!("hi") """
     for {
       deploy <- ConstructDeploy.sourceDeployNowF(badRholang)
-      result <- runtimeManagerResource.use(computeState(_, deploy))
-      _      = result._2.isFailed should be(true)
-      _      = result._2.cost.cost shouldEqual accounting.parsingCost(badRholang).value
+      result <- runtimeManagerResource.use(
+                 computeState(_, deploy, genesis.body.state.postStateHash)
+               )
+      _ = result._2.isFailed should be(true)
+      _ = result._2.cost.cost shouldEqual accounting.parsingCost(badRholang).value
     } yield ()
   }
 
@@ -205,7 +251,7 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
 
             parsingCost = accounting.parsingCost(correctRholang)
 
-            result <- computeState(runtimeManager, deploy)
+            result <- computeState(runtimeManager, deploy, genesis.body.state.postStateHash)
 
             _ = result._2.cost.cost shouldEqual (reductionCost + parsingCost).value
           } yield ()
@@ -228,7 +274,7 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
                       |  }
                       |}""".stripMargin
                   )
-        result0 <- computeState(mgr, deploy0)
+        result0 <- computeState(mgr, deploy0, genesis.body.state.postStateHash)
         hash    = result0._1
         deploy1 <- ConstructDeploy.sourceDeployNowF(
                     s""" for(nn <- @"nn"){ nn!("value", "$captureChannel") } """
@@ -271,7 +317,7 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
       runtimeManagerResource
         .use { m =>
           val hash = m.emptyStateHash
-          computeState(m, term)
+          computeState(m, term, genesis.body.state.postStateHash)
             .map(_ => hash)
         }
 
