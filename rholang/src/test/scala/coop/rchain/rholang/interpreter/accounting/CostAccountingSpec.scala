@@ -18,6 +18,7 @@ import org.scalatest.prop.PropertyChecks
 import org.scalatest.{AppendedClues, Assertion, FlatSpec, Matchers}
 
 import scala.concurrent.duration._
+import scala.collection.mutable.ListBuffer
 
 class CostAccountingSpec extends FlatSpec with Matchers with PropertyChecks with AppendedClues {
 
@@ -50,6 +51,56 @@ class CostAccountingSpec extends FlatSpec with Matchers with PropertyChecks with
           }
       }
       .runSyncUnsafe(75.seconds)
+  }
+
+  // max 0x144000000
+  def fromLong(index: Long): String = {
+    var remainder = index
+    val numPars   = (index % 4) + 1
+    remainder /= 4
+    val result        = new ListBuffer[String]()
+    var nonlinearSend = false;
+    var nonlinearRecv = false;
+    for (i <- 0 until numPars.toInt) {
+      val dir = remainder % 2
+      remainder /= 2
+      if (dir == 0) {
+        // send
+        val bang = if (remainder % 2 == 0) "!" else "!!"
+        remainder /= 2
+
+        if (bang == "!" || !nonlinearRecv) {
+          val ch = remainder % 4
+          remainder /= 4
+          result += f"@${ch}${bang}(0)"
+          nonlinearSend |= (bang == "!!")
+        }
+      } else {
+        // receive
+        val arrow = (remainder % 3) match {
+          case 0 => "<-"
+          case 1 => "<="
+          case 2 => "<<-"
+        }
+        remainder /= 3
+
+        if (arrow != "<=" || !nonlinearSend) {
+          val numJoins = (remainder % 2) + 1
+          remainder /= 2
+
+          val joins = new ListBuffer[String]()
+          for (j <- 1 to numJoins.toInt) {
+            val ch = remainder % 4
+            remainder /= 4
+            joins += f"_ ${arrow} @${ch}"
+          }
+          val joinStr = joins.mkString("; ")
+          result += f"for (${joinStr}) { 0 }"
+          nonlinearRecv |= (arrow == "<=")
+        }
+      }
+    }
+    result.mkString(" | ")
   }
 
   val contracts = Table(
@@ -120,6 +171,29 @@ class CostAccountingSpec extends FlatSpec with Matchers with PropertyChecks with
         result
       }
     }
+
+  it should "be repeatable when generated" in {
+    val r = scala.util.Random
+    println("Trying contract fromLong(1716417707L) = @2!!(0) | @0!!(0) | for (_ <<- @2) { 0 } | @2!(0)")
+    checkRepeatableCost {
+      val result = evaluateWithCostLog(Integer.MAX_VALUE, fromLong(1716417707))
+      assert(result._1.errors.isEmpty)
+      result
+    }
+
+    for (i <- 1 to 1000) {
+      val long     = ((r.nextLong % 0X144000000L) + 0X144000000L) % 0X144000000L
+      val contract = fromLong(long)
+      println(f"fromLong(${long}): ${contract}")
+      if (contract != "") {
+        checkRepeatableCost {
+          val result = evaluateWithCostLog(Integer.MAX_VALUE, contract)
+          assert(result._1.errors.isEmpty)
+          result
+        }
+      }
+    }
+  }
 
   def checkRepeatableCost(block: => (EvaluateResult, Chain[Cost])): Unit = {
     val repetitions = 20
