@@ -32,18 +32,17 @@ final class PreChargeDeploy(chargeAmount: Long, pk: PublicKey, rand: Blake2b512R
   )
 
   override val source: String =
-    """|new rl(`rho:registry:lookup`),
-       |poSCh,
-       |initialDeployerId(`sys:casper:deployerId`),
-       |chargeAmount(`sys:casper:chargeAmount`),
-       |return(`sys:casper:return`) in
-       |{
-       |  rl!(`rho:rchain:pos`, *poSCh) |
-       |  for(@(_, PoS) <- poSCh) {
-       |    @PoS!("chargeDeploy", *initialDeployerId, *chargeAmount, *return)
-       |  }
-       |
-       |}""".stripMargin
+    """#new rl(`rho:registry:lookup`),
+       #  poSCh,
+       #  initialDeployerId(`sys:casper:deployerId`),
+       #  chargeAmount(`sys:casper:chargeAmount`),
+       #  return(`sys:casper:return`) 
+       #in {
+       #  rl!(`rho:rchain:pos`, *poSCh) |
+       #  for(@(_, PoS) <- poSCh) {
+       #    @PoS!("chargeDeploy", *initialDeployerId, *chargeAmount, *return)
+       #  }
+       #}""".stripMargin('#')
 
   protected override val extractor = Extractor.derive
 

@@ -35,18 +35,17 @@ final class SlashDeploy(invalidBlockHash: BlockHash, pk: PublicKey, rand: Blake2
   )
 
   override val source: String =
-    """|new rl(`rho:registry:lookup`),
-       |poSCh,
-       |deployerId(`sys:casper:deployerId`),
-       |invalidBlockHash(`sys:casper:invalidBlockHash`),
-       |return(`sys:casper:return`) in
-       |{
-       |  rl!(`rho:rchain:pos`, *poSCh) |
-       |  for(@(_, PoS) <- poSCh) {
-       |    @PoS!("slash",  *deployerId, *invalidBlockHash.hexToBytes(), *return)
-       |  }
-       |
-       |}""".stripMargin
+    """#new rl(`rho:registry:lookup`),
+       #  poSCh,
+       #  deployerId(`sys:casper:deployerId`),
+       #  invalidBlockHash(`sys:casper:invalidBlockHash`),
+       #  return(`sys:casper:return`)
+       #in {
+       #  rl!(`rho:rchain:pos`, *poSCh) |
+       #  for(@(_, PoS) <- poSCh) {
+       #    @PoS!("slash",  *deployerId, *invalidBlockHash.hexToBytes(), *return)
+       #  }
+       #}""".stripMargin('#')
 
   protected override val extractor = Extractor.derive
 

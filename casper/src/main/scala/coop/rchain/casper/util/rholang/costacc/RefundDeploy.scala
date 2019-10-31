@@ -28,17 +28,16 @@ final class RefundDeploy(refundAmount: Long, rand: Blake2b512Random) extends Sys
   )
 
   override val source: String =
-    """|new rl(`rho:registry:lookup`),
-       |poSCh,
-       |refundAmount(`sys:casper:refundAmount`),
-       |return(`sys:casper:return`) in
-       |{
-       |  rl!(`rho:rchain:pos`, *poSCh) |
-       |  for(@(_, PoS) <- poSCh) {
-       |    @PoS!("refundDeploy", *refundAmount, *return)
-       |  }
-       |
-       |}""".stripMargin
+    """#new rl(`rho:registry:lookup`),
+       #  poSCh,
+       #  refundAmount(`sys:casper:refundAmount`),
+       #  return(`sys:casper:return`) 
+       #in {
+       #  rl!(`rho:rchain:pos`, *poSCh) |
+       #  for(@(_, PoS) <- poSCh) {
+       #    @PoS!("refundDeploy", *refundAmount, *return)
+       # }
+       #}""".stripMargin('#')
 
   protected override val extractor = Extractor.derive
 
