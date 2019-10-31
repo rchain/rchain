@@ -2,6 +2,7 @@ package coop.rchain.casper.util.comm
 
 import cats._
 import cats.effect.Concurrent
+import cats.effect.concurrent.Semaphore
 import cats.syntax.all._
 
 import coop.rchain.casper.engine._
@@ -56,19 +57,21 @@ object CasperPacketHandler {
     def handle(holder: BlockCreator, message: (PeerNode, CasperMessage)): F[Unit] =
       EngineCell[F].read >>= (_.handle(message._1, message._2))
 
-    FairRoundRobinDispatcher[F, BlockCreator, (PeerNode, CasperMessage)](
-      checkMessage,
-      handle,
-      maxPeerQueueSize,
-      giveUpAfterSkipped,
-      dropPeerAfterRetries
-    ).map { dispatcher => (peer, packet) =>
-      toCasperMessageProto(packet).toEither
-        .flatMap(proto => CasperMessage.from(proto))
-        .fold(
-          err => Log[F].warn(s"Could not extract casper message from packet sent by $peer: $err"),
-          msg => dispatcher.dispatch(BlockCreator(msg), (peer, msg))
-        )
+    Semaphore[F](1) >>= { lock =>
+      FairRoundRobinDispatcher[F, BlockCreator, (PeerNode, CasperMessage)](
+        checkMessage,
+        handle,
+        maxPeerQueueSize,
+        giveUpAfterSkipped,
+        dropPeerAfterRetries
+      ).map { dispatcher => (peer, packet) =>
+        toCasperMessageProto(packet).toEither
+          .flatMap(proto => CasperMessage.from(proto))
+          .fold(
+            err => Log[F].warn(s"Could not extract casper message from packet sent by $peer: $err"),
+            msg => lock.withPermit(dispatcher.dispatch(BlockCreator(msg), (peer, msg)))
+          )
+      }
     }
   }
 
