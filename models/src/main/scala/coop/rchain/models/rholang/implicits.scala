@@ -285,7 +285,7 @@ object implicits {
       }
 
     def isNil(): Boolean =
-      p.sends.isEmpty && p.receives.isEmpty && p.news.isEmpty && p.matches.isEmpty && p.bundles.isEmpty && p.exprs.isEmpty
+      p.sends.isEmpty && p.receives.isEmpty && p.news.isEmpty && p.matches.isEmpty && p.bundles.isEmpty && p.exprs.isEmpty && p.unforgeables.isEmpty && p.connectives.isEmpty
 
     def singleBundle(): Option[Bundle] =
       if (p.sends.isEmpty && p.receives.isEmpty && p.news.isEmpty && p.exprs.isEmpty && p.matches.isEmpty && p.unforgeables.isEmpty && p.connectives.isEmpty) {
