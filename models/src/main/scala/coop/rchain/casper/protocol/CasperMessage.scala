@@ -6,6 +6,7 @@ import coop.rchain.casper.PrettyPrinter
 import coop.rchain.models.{PCost, Pretty}
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.crypto.PublicKey
+import coop.rchain.crypto.hash.Blake2b512Random
 
 sealed trait CasperMessage {
   def toProto: CasperMessageProto
@@ -381,6 +382,7 @@ final case class DeployData(
 ) {
   def totalPhloCharge          = phloLimit * phloPrice
   def deployerPk               = PublicKey(deployer)
+  def rng                      = Blake2b512Random(sig.toByteArray())
   def toProto: DeployDataProto = DeployData.toProto(this)
 }
 

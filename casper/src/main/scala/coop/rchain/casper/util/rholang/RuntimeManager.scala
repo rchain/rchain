@@ -440,7 +440,7 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span](
 
   private def processDeployWithCostAccounting(runtime: Runtime[F])(deploy: DeployData) = {
     import cats.instances.vector._
-    val rand = Blake2b512Random(deploy.sig.toByteArray())
+    val rand = deploy.rng
     EitherT(
       WriterT(
         /* execute pre-charge */
@@ -459,7 +459,7 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span](
         pd =>
           /*execute Refund as a side effect (keeping the logs and the possible error but discarding result)*/
           EitherT(
-            WriterT(playSystemDeployInternal(runtime)(new RefundDeploy(pd.refundAmount, rand)))
+            WriterT(playSystemDeployInternal(runtime)(new RefundDeploy(pd.refundAmount, rand.splitByte(64))))
           ).leftSemiflatMap(
             error =>
               /*If pre-charge succeeds and refund fails, it's a platform error and we should signal it with raiseError*/ WriterT
@@ -523,7 +523,7 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span](
     import processedDeploy._
 
     def evaluatorT: OptionT[EitherT[F, ReplayFailure, ?], EvaluateResult] = {
-      val rand = Blake2b512Random(deploy.sig.toByteArray())
+      val rand = deploy.rng
       if (withCostAccounting) {
         OptionT(
           replaySystemDeployInternal(runtime)(
@@ -532,7 +532,10 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span](
               _ => evaluate(runtime.replayReducer, runtime.cost, runtime.errorLog)(deploy)
             )
             .flatTap(
-              result => replaySystemDeployInternal(runtime)(new RefundDeploy(refundAmount, rand))
+              result =>
+                replaySystemDeployInternal(runtime)(
+                  new RefundDeploy(refundAmount, rand.splitByte(64))
+                )
             )
             .transform {
               case Left(error) => // PV reported pre-charge error - do we agree?
