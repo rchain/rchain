@@ -183,25 +183,21 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span](
   private def replaySystemDeployInternal[S <: SystemDeploy](
       runtime: Runtime[F]
   )(systemDeploy: S): EitherT[F, SystemDeployUserError, systemDeploy.Result] =
-    EitherT.right[SystemDeployUserError](runtime.replaySpace.createSoftCheckpoint()) >>= (
-        softCheckpoint =>
-          EitherT
-            .liftF(evaluateSystemSource(runtime)(systemDeploy, replay = true))
-            .ensureOr(evaluateResult => UnexpectedSystemErrors(evaluateResult.errors))(!_.failed)
-            .semiflatMap(_ => consumeResult(runtime)(systemDeploy, replay = true))
-            .subflatMap {
-              case Some((_, Seq(ListParWithRandom(Seq(par), _)))) =>
-                systemDeploy.extractResult(par)
-              case Some((_, unexpectedResults)) =>
-                UnexpectedResult(unexpectedResults.flatMap(_.pars)).asLeft
-              case None => ConsumeFailed.asLeft
-            }
-            .leftSemiflatMap {
-              case platformFailure: SystemDeployPlatformFailure => platformFailure.raiseError
-              case failure: SystemDeployError =>
-                runtime.replaySpace.revertToSoftCheckpoint(softCheckpoint).as(failure)
-            }
-      )
+    EitherT
+      .liftF(evaluateSystemSource(runtime)(systemDeploy, replay = true))
+      .ensureOr(evaluateResult => UnexpectedSystemErrors(evaluateResult.errors))(!_.failed)
+      .semiflatMap(_ => consumeResult(runtime)(systemDeploy, replay = true))
+      .subflatMap {
+        case Some((_, Seq(ListParWithRandom(Seq(par), _)))) =>
+          systemDeploy.extractResult(par)
+        case Some((_, unexpectedResults)) =>
+          UnexpectedResult(unexpectedResults.flatMap(_.pars)).asLeft
+        case None => ConsumeFailed.asLeft
+      }
+      .leftSemiflatMap {
+        case platformFailure: SystemDeployPlatformFailure => platformFailure.raiseError
+        case failure: SystemDeployUserError               => failure.pure
+      }
 
   def playSystemDeploy[S <: SystemDeploy](stateHash: StateHash)(
       systemDeploy: S
@@ -222,37 +218,32 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span](
       systemDeploy: S
   ): F[(Vector[Event], Either[SystemDeployError, systemDeploy.Result])] =
     for {
-      preDeploySoftCheckpoint <- runtime.space.createSoftCheckpoint()
-      evaluateResult          <- evaluateSystemSource(runtime)(systemDeploy, replay = false)
+      evaluateResult <- evaluateSystemSource(runtime)(systemDeploy, replay = false)
       maybeConsumedTuple <- if (evaluateResult.failed)
                              UnexpectedSystemErrors(evaluateResult.errors).raiseError
                            else consumeResult(runtime)(systemDeploy, replay = false)
       resultOrSystemDeployError <- maybeConsumedTuple match {
                                     case Some((_, Seq(ListParWithRandom(Seq(par), _)))) =>
-                                      systemDeploy.extractResult(par).pure
+                                      systemDeploy.extractResult(par) match {
+                                        case Left(
+                                            systemDeployPlatformFailure: SystemDeployPlatformFailure
+                                            ) =>
+                                          systemDeployPlatformFailure.raiseError
+                                        // sorry about that but scala seems to be confused with everything else and promotes Left to SystemDeployFailure nonetheless
+                                        case otherwise =>
+                                          otherwise
+                                            .asInstanceOf[
+                                              Either[SystemDeployError, systemDeploy.Result]
+                                            ]
+                                            .pure
+                                      }
                                     case Some((_, unexpectedResults)) =>
                                       UnexpectedResult(unexpectedResults.flatMap(_.pars)).raiseError
                                     case None => ConsumeFailed.raiseError
                                   }
-      logAndResult <- resultOrSystemDeployError match {
-                       case Right(result) =>
-                         runtime.space
-                           .createSoftCheckpoint()
-                           .map(
-                             postDeploySoftCheckpoint =>
-                               (postDeploySoftCheckpoint.log, result.asRight)
-                           )
-                       case Left(systemDeployError: SystemDeployError) =>
-                         runtime.space.createSoftCheckpoint() >>= { postDeploySoftCheckpoint =>
-                           runtime.space
-                             .revertToSoftCheckpoint(preDeploySoftCheckpoint)
-                             .as((postDeploySoftCheckpoint.log, systemDeployError.asLeft))
-                         }
-                       case Left(systemDeployPlatformFailure: SystemDeployPlatformFailure) =>
-                         systemDeployPlatformFailure.raiseError
-                     }
-      // TODO add better-monadic-for to stop this nonsense
-    } yield (logAndResult._1.map(EventConverter.toCasperEvent).toVector, logAndResult._2)
+      postDeploySoftCheckpoint <- runtime.space.createSoftCheckpoint()
+      log                      = postDeploySoftCheckpoint.log
+    } yield (log.map(EventConverter.toCasperEvent).toVector, resultOrSystemDeployError)
 
   def captureResults(
       start: StateHash,
@@ -459,7 +450,11 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span](
         pd =>
           /*execute Refund as a side effect (keeping the logs and the possible error but discarding result)*/
           EitherT(
-            WriterT(playSystemDeployInternal(runtime)(new RefundDeploy(pd.refundAmount, rand.splitByte(64))))
+            WriterT(
+              playSystemDeployInternal(runtime)(
+                new RefundDeploy(pd.refundAmount, rand.splitByte(64))
+              )
+            )
           ).leftSemiflatMap(
             error =>
               /*If pre-charge succeeds and refund fails, it's a platform error and we should signal it with raiseError*/ WriterT
