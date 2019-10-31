@@ -8,8 +8,10 @@ import cats.implicits._
 import cats.temp.par
 import coop.rchain.blockstorage.dag.{BlockDagFileStorage, BlockDagStorage}
 import coop.rchain.blockstorage.BlockStore
+import coop.rchain.blockstorage.finality.{LastFinalizedFileStorage, LastFinalizedStorage}
 import coop.rchain.casper.helper.BlockDagStorageTestFixture
 import coop.rchain.casper.helper.TestNode.makeBlockDagFileStorageConfig
+import coop.rchain.casper.protocol.BlockMessage
 import coop.rchain.metrics
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.rholang.Resources.{mkRuntimeAt, mkTempDir}
@@ -77,6 +79,7 @@ object Resources {
   case class StoragePaths(
       blockStoreDir: Path,
       blockDagDir: Path,
+      lastFinalizedFile: Path,
       rspaceDir: Path
   )
 
@@ -84,14 +87,16 @@ object Resources {
       storageTemplatePath: Path
   ): Resource[F, StoragePaths] =
     for {
-      storageDirectory <- mkTempDir(s"casper-test-")
-      _                <- Resource.liftF(copyDir(storageTemplatePath, storageDirectory))
-      blockStoreDir    = storageDirectory.resolve("block-store")
-      blockDagDir      = storageDirectory.resolve("block-dag-store")
-      rspaceDir        = storageDirectory.resolve("rspace")
+      storageDirectory  <- mkTempDir(s"casper-test-")
+      _                 <- Resource.liftF(copyDir(storageTemplatePath, storageDirectory))
+      blockStoreDir     = storageDirectory.resolve("block-store")
+      blockDagDir       = storageDirectory.resolve("block-dag-store")
+      lastFinalizedFile = storageDirectory.resolve("last-finalized-blockhash")
+      rspaceDir         = storageDirectory.resolve("rspace")
     } yield StoragePaths(
       blockStoreDir = blockStoreDir,
       blockDagDir = blockDagDir,
+      lastFinalizedFile = lastFinalizedFile,
       rspaceDir = rspaceDir
     )
 

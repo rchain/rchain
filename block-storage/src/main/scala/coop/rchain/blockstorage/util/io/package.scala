@@ -57,6 +57,9 @@ package object io {
       }
     )
 
+  def replaceFile[F[_]: Sync: RaiseIOError](from: Path, to: Path): F[Path] =
+    moveFile[F](from, to, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING)
+
   def isDirectory[F[_]: Sync: RaiseIOError](path: Path): F[Boolean] =
     handleIo(Files.isDirectory(path), UnexpectedIOError.apply)
 

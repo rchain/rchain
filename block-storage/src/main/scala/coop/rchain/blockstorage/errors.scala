@@ -19,6 +19,7 @@ final case object LatestMessagesLogIsCorrupted                                ex
 final case object DataLookupIsCorrupted                                       extends StorageError
 final case object InvalidBlocksIsCorrupted                                    extends StorageError
 final case object BlockHashesByDeployLogIsCorrupted                           extends StorageError
+final case object LastFinalizedBlockIsCorrupted                               extends StorageError
 
 object StorageError {
   type StorageErr[A]        = Either[StorageError, A]
@@ -48,6 +49,8 @@ object StorageError {
         "Invalid blocks log is corrupted"
       case BlockHashesByDeployLogIsCorrupted =>
         "Block hashes by deploy log is corrupted"
+      case LastFinalizedBlockIsCorrupted =>
+        "Last finalized block file is corrupted"
     }
 
   implicit class StorageErrorToMessage(storageError: StorageError) {
