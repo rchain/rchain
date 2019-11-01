@@ -36,11 +36,17 @@ object CasperPacketHandler {
     import FairRoundRobinDispatcher._
     implicit def showSourceHolder: Show[BlockCreator] = sh => s"[${sh.toString}]"
     implicit val showCasperMessage: Show[(PeerNode, CasperMessage)] = {
-      case (_, BlockHashMessage(h, v)) =>
-        s"[${PrettyPrinter.buildString(h)}]@[${PrettyPrinter.buildString(v)}]"
+      case (_, BlockHashMessage(h, _)) =>
+        s"[${PrettyPrinter.buildString(h)}]"
       case (peer, m: CasperMessage) =>
         s"[Unexpected message ${m.getClass.getSimpleName} from $peer!!!]"
     }
+    implicit val eqCasperMessage: Eq[(PeerNode, CasperMessage)] =
+      (x: (PeerNode, CasperMessage), y: (PeerNode, CasperMessage)) =>
+        (x._2, y._2) match {
+          case (BlockHashMessage(h1, _), BlockHashMessage(h2, _)) => h1.equals(h2)
+          case (m1, m2)                                           => m1.equals(m2)
+        }
 
     def checkMessage(message: (PeerNode, CasperMessage)): F[Dispatch] =
       message match {
