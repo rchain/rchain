@@ -69,7 +69,7 @@ object StandardDeploys {
 
   def multiSigRevVault: DeployData =
     toDeploy(
-      CompiledRholangSource("MultiSigRevVault.rho", NormalizerEnv.Empty),
+      CompiledRholangSource("MultiSigRevVault.rho"),
       "04fe2eb1e0e7462b1a8f64600389e1e76727f8b2d38804eaa4b48f7a7d6715130fc24d3c4dac2d8bdc19e0b49879dbaf07c30773cd9740a9d14a092ef76339207a",
       1571408470880L
     )
