@@ -23,7 +23,7 @@ import org.scalatest.{AppendedClues, FlatSpec, Matchers}
 import scala.concurrent.duration.{Duration, FiniteDuration}
 
 class RhoSpec(
-    testObject: CompiledRholangSource,
+    testObject: CompiledRholangSource[_],
     extraNonGenesisDeploys: Seq[DeployData],
     executionTimeout: FiniteDuration,
     genesisParameters: GenesisParameters = GenesisBuilder.buildGenesisParameters()
@@ -40,7 +40,7 @@ class RhoSpec(
   def mkTest(test: (String, Map[Long, List[RhoTestAssertion]])): Unit =
     test match {
       case (testName, testAttempts) =>
-        assert(testAttempts.size > 0, "It doesn't make sense to have less than one attempt")
+        assert(testAttempts.nonEmpty, "It doesn't make sense to have less than one attempt")
 
         val (attempt, assertions) =
           testAttempts
@@ -109,7 +109,7 @@ class RhoSpec(
   }
 
   private def getResults(
-      testObject: CompiledRholangSource,
+      testObject: CompiledRholangSource[_],
       otherLibs: Seq[DeployData],
       timeout: FiniteDuration
   ): Task[TestResult] =
@@ -133,7 +133,7 @@ class RhoSpec(
               )
           rand = Blake2b512Random(128)
           _ <- TestUtil
-                .eval(testObject.code, runtime, testObject.normalizerEnv)(
+                .eval(testObject, runtime)(
                   implicitly,
                   rand.splitShort(1)
                 )
@@ -160,7 +160,8 @@ class RhoSpec(
     val rand: Blake2b512Random = Blake2b512Random(
       ProtoUtil.stripDeployData(deploy).toProto.toByteArray
     )
-    eval(deploy.term, runtime, NormalizerEnv(deploy.toProto))(implicitly, rand)
+    import coop.rchain.models.rholang.implicits._
+    eval(deploy.term, runtime, NormalizerEnv(deploy).toEnv)(Sync[F], rand)
   }
 
   private val rhoSpecDeploy: DeployData =

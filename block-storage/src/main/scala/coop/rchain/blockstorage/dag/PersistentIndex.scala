@@ -27,9 +27,6 @@ class PersistentIndex[F[_]: Sync: Log: RaiseIOError, K: Codec, V: Codec](
     private val keyValueCodec: Codec[(K, V)],
     private val outputStream: FileOutputStreamIO[F]
 ) {
-  private def replaceFile(from: Path, to: Path): F[Path] =
-    moveFile[F](from, to, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING)
-
   private def updateCrcFile: F[Unit] =
     for {
       newCrcBytes <- crc.bytes

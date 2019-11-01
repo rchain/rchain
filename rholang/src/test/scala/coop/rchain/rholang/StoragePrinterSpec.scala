@@ -4,7 +4,7 @@ import com.google.protobuf.ByteString
 import coop.rchain.casper.protocol.{DeployData, DeployDataProto}
 import coop.rchain.metrics
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
-import coop.rchain.models.NormalizerEnv
+import coop.rchain.models.{NormalizerEnv, Par}
 import coop.rchain.rholang.Resources.mkRuntime
 import coop.rchain.rholang.interpreter.storage.StoragePrinter
 import coop.rchain.rholang.interpreter.{Interpreter, InterpreterUtil}
@@ -35,7 +35,7 @@ class StoragePrinterSpec extends FlatSpec with Matchers {
             Interpreter[Task].evaluate(
               runtime,
               "@1!(Nil) | @2!(Nil) | for(_ <- @2) { Nil }",
-              NormalizerEnv.Empty
+              Map.empty[String, Par]
             )
           }
           pretty <- StoragePrinter.prettyPrintUnmatchedSends(runtime.space)

@@ -2,14 +2,14 @@ package coop.rchain.node.api
 
 import cats.effect.Sync
 import cats.implicits._
+import coop.rchain.catscontrib.Catscontrib._
 import coop.rchain.catscontrib._
-import Catscontrib._
-import coop.rchain.models.{NormalizerEnv, Par}
+import coop.rchain.models.Par
 import coop.rchain.node.model.repl._
-import coop.rchain.rholang.interpreter.{Runtime, _}
+import coop.rchain.rholang.interpreter.Interpreter._
 import coop.rchain.rholang.interpreter.errors.InterpreterError
-import Interpreter._
-import storage.StoragePrinter
+import coop.rchain.rholang.interpreter.storage.StoragePrinter
+import coop.rchain.rholang.interpreter.{Runtime, _}
 import monix.eval.Task
 import monix.execution.Scheduler
 
@@ -20,7 +20,7 @@ object ReplGrpcService {
         Sync[F]
           .attempt(
             ParBuilder[F]
-              .buildNormalizedTerm(source, NormalizerEnv.Empty)
+              .buildNormalizedTerm(source, Map.empty[String, Par])
           )
           .flatMap {
             case Left(er) =>
@@ -33,7 +33,7 @@ object ReplGrpcService {
                 _ <- Sync[F].delay(printNormalizedTerm(term))
                 res <- {
                   implicit val c = runtime.cost
-                  Interpreter[F].evaluate(runtime, source, NormalizerEnv.Empty)
+                  Interpreter[F].evaluate(runtime, source, Map.empty[String, Par])
                 }
                 prettyStorage <- if (printUnmatchedSendsOnly)
                                   StoragePrinter.prettyPrintUnmatchedSends(runtime.space)

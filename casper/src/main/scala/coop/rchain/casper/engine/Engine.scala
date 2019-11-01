@@ -18,6 +18,7 @@ import coop.rchain.shared
 import coop.rchain.shared._
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.dag.BlockDagStorage
+import coop.rchain.blockstorage.finality.LastFinalizedStorage
 import coop.rchain.casper.util.comm.CommUtil
 
 trait Engine[F[_]] {
@@ -86,7 +87,7 @@ object Engine {
 
     } yield ()
 
-  def transitionToInitializing[F[_]: Concurrent: Metrics: Span: Monad: EngineCell: Log: EventLog: BlockStore: CommUtil: TransportLayer: ConnectionsCell: RPConfAsk: Time: SafetyOracle: LastFinalizedBlockCalculator: LastApprovedBlock: BlockDagStorage: RuntimeManager: Running.RequestedBlocks: EventPublisher: SynchronyConstraintChecker](
+  def transitionToInitializing[F[_]: Concurrent: Metrics: Span: Monad: EngineCell: Log: EventLog: BlockStore: CommUtil: TransportLayer: ConnectionsCell: RPConfAsk: Time: SafetyOracle: LastFinalizedBlockCalculator: LastApprovedBlock: BlockDagStorage: LastFinalizedStorage: RuntimeManager: Running.RequestedBlocks: EventPublisher: SynchronyConstraintChecker](
       shardId: String,
       validatorId: Option[ValidatorIdentity],
       init: F[Unit]

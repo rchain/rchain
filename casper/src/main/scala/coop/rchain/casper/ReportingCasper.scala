@@ -140,11 +140,11 @@ object ReportingCasperData {
   ): Report =
     state match {
       case None => BlockNotFound(hash.base16String)
-      case Some((Left(internalError @ InternalError(deployData, _)), _)) =>
+      case Some((Left(internalError @ InternalError(_)), _)) =>
         BlockReplayFailed(
           hash.base16String,
           internalError.toString,
-          deployData.sig.base16String.some
+          None
         )
       case Some((Left(failed), _)) =>
         BlockReplayFailed(hash.base16String, failed.toString, None)
@@ -291,15 +291,14 @@ object ReportingCasper {
                             )
                           )
                           .ensureOr(
-                            result => ReplayFailure.replayStatusMismatch(isFailed, result.isFailed)
-                          )(result => isFailed == result.isFailed)
+                            result => ReplayFailure.replayStatusMismatch(isFailed, result.failed)
+                          )(result => isFailed == result.failed)
                           .ensureOr(
-                            result =>
-                              ReplayFailure.replayCostMismatch(deploy, cost.cost, result.cost.value)
-                          )(result => result.isFailed || cost.cost == result.cost.value)
+                            result => ReplayFailure.replayCostMismatch(cost.cost, result.cost.value)
+                          )(result => result.failed || cost.cost == result.cost.value)
                           .semiflatMap(
                             result =>
-                              if (result.isFailed)
+                              if (result.failed)
                                 runtime.reportingSpace.revertToSoftCheckpoint(softCheckpoint)
                               else runtime.reportingSpace.checkReplayData()
                           )
@@ -308,11 +307,11 @@ object ReportingCasper {
                           .recover {
                             case replayException: ReplayException =>
                               ReplayFailure
-                                .unusedCOMMEvent(deploy, replayException)
+                                .unusedCOMMEvent(replayException)
                                 .asLeft[Seq[ReportingEvent]]
                             case throwable =>
                               ReplayFailure
-                                .internalError(deploy, throwable)
+                                .internalError(throwable)
                                 .asLeft[Seq[ReportingEvent]]
                           }
       } yield failureEither
