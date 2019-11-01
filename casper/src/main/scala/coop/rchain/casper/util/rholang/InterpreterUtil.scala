@@ -3,30 +3,32 @@ package coop.rchain.casper.util.rholang
 import cats.Monad
 import cats.effect._
 import cats.syntax.all._
+import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockStore
 import coop.rchain.blockstorage.dag.BlockDagRepresentation
 import coop.rchain.casper._
 import coop.rchain.casper.protocol._
-import coop.rchain.casper.util.{DagOperations, ProtoUtil}
 import coop.rchain.casper.util.rholang.RuntimeManager._
+import coop.rchain.casper.util.{DagOperations, ProtoUtil}
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.metrics.Span
-import coop.rchain.models.{BlockMetadata, Par}
 import coop.rchain.models.BlockHash.BlockHash
+import coop.rchain.models.NormalizerEnv.ToEnvMap
 import coop.rchain.models.Validator.Validator
+import coop.rchain.models.{BlockMetadata, NormalizerEnv, Par}
 import coop.rchain.rholang.interpreter.ParBuilder
 import coop.rchain.rholang.interpreter.Runtime.BlockData
 import coop.rchain.shared.{Log, LogSource}
-import com.google.protobuf.ByteString
-import coop.rchain.models.NormalizerEnv.NormalizerEnv
 import monix.eval.Coeval
 
 object InterpreterUtil {
 
   implicit private val logSource: LogSource = LogSource(this.getClass)
 
-  def mkTerm(rho: String, normalizerEnv: NormalizerEnv): Either[Throwable, Par] =
-    ParBuilder[Coeval].buildNormalizedTerm(rho, normalizerEnv).runAttempt
+  def mkTerm[Env](rho: String, normalizerEnv: NormalizerEnv[Env])(
+      implicit ev: ToEnvMap[Env]
+  ): Either[Throwable, Par] =
+    ParBuilder[Coeval].buildNormalizedTerm(rho, normalizerEnv.toEnv).runAttempt
 
   //Returns (None, checkpoints) if the block's tuplespace hash
   //does not match the computed hash based on the deploys
@@ -101,11 +103,12 @@ object InterpreterUtil {
     result.pure.flatMap {
       case Left(status) =>
         status match {
-          case InternalError(deploy, throwable) =>
+          case InternalError(throwable) =>
             BlockStatus
               .exception(
-                new Exception(s"Internal errors encountered while processing ${PrettyPrinter
-                  .buildString(deploy)}: ${throwable.getMessage}")
+                new Exception(
+                  s"Internal errors encountered while processing deploy: ${throwable.getMessage}"
+                )
               )
               .asLeft[Option[StateHash]]
               .pure
@@ -115,16 +118,23 @@ object InterpreterUtil {
                 s"Found replay status mismatch; replay failure is $replayFailed and orig failure is $initialFailed"
               )
               .as(none[StateHash].asRight[BlockError])
-          case UnusedCOMMEvent(deploy, replayException) =>
+          case UnusedCOMMEvent(replayException) =>
             Log[F]
               .warn(
-                s"Found replay exception while processing ${PrettyPrinter.buildString(deploy)}: ${replayException.getMessage}"
+                s"Found replay exception: ${replayException.getMessage}"
               )
               .as(none[StateHash].asRight[BlockError])
-          case ReplayCostMismatch(deploy, initialCost, replayCost) =>
+          case ReplayCostMismatch(initialCost, replayCost) =>
             Log[F]
               .warn(
-                s"Found replay cost mismatch while processing ${PrettyPrinter.buildString(deploy)}: initial deploy cost = $initialCost, replay deploy cost = $replayCost"
+                s"Found replay cost mismatch: initial deploy cost = $initialCost, replay deploy cost = $replayCost"
+              )
+              .as(none[StateHash].asRight[BlockError])
+          // Restructure errors so that this case is unnecessary
+          case SystemDeployErrorMismatch(playMsg, replayMsg) =>
+            Log[F]
+              .warn(
+                s"Found system deploy error mismatch: initial deploy error message = $playMsg, replay deploy error message = $replayMsg"
               )
               .as(none[StateHash].asRight[BlockError])
         }

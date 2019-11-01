@@ -1,34 +1,31 @@
 package coop.rchain.casper.util.rholang
 
-import coop.rchain.casper.protocol.DeployData
 import coop.rchain.rspace.ReplayException
 
 sealed trait ReplayFailure
 
 object ReplayFailure {
 
-  def internalError(deploy: DeployData, throwable: Throwable): ReplayFailure =
-    InternalError(deploy, throwable)
+  def internalError(throwable: Throwable): ReplayFailure = InternalError(throwable)
 
   def replayStatusMismatch(initialFailed: Boolean, replayFailed: Boolean): ReplayFailure =
     ReplayStatusMismatch(initialFailed, replayFailed)
 
-  def unusedCOMMEvent(deployData: DeployData, replayException: ReplayException): ReplayFailure =
-    UnusedCOMMEvent(deployData, replayException)
+  def unusedCOMMEvent(replayException: ReplayException): ReplayFailure =
+    UnusedCOMMEvent(replayException)
 
-  def replayCostMismatch(
-      deployData: DeployData,
-      initialCost: Long,
-      replayCost: Long
-  ): ReplayFailure =
-    ReplayCostMismatch(deployData, initialCost, replayCost)
+  def replayCostMismatch(initialCost: Long, replayCost: Long): ReplayFailure =
+    ReplayCostMismatch(initialCost, replayCost)
+
+  def systemDeployErrorMismatch(playError: String, replayError: String): ReplayFailure =
+    SystemDeployErrorMismatch(playError, replayError)
 
 }
 
-final case class InternalError(deploy: DeployData, throwable: Throwable) extends ReplayFailure
+final case class InternalError(throwable: Throwable) extends ReplayFailure
 final case class ReplayStatusMismatch(initialFailed: Boolean, replayFailed: Boolean)
     extends ReplayFailure
-final case class UnusedCOMMEvent(deployData: DeployData, replayException: ReplayException)
-    extends ReplayFailure
-final case class ReplayCostMismatch(deployData: DeployData, initialCost: Long, replayCost: Long)
+final case class UnusedCOMMEvent(replayException: ReplayException)       extends ReplayFailure
+final case class ReplayCostMismatch(initialCost: Long, replayCost: Long) extends ReplayFailure
+final case class SystemDeployErrorMismatch(playError: String, replayError: String)
     extends ReplayFailure

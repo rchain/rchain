@@ -196,11 +196,12 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Log: Time: SafetyOracle: Las
 
   def deploy(d: DeployData): F[Either[DeployError, DeployId]] = {
     import cats.instances.either._
+    import coop.rchain.models.rholang.implicits._
     validateDeploy(d).fold(
       _.asLeft[DeployId].pure[F],
       kp(
         InterpreterUtil
-          .mkTerm(d.term, NormalizerEnv(DeployData.toProto(d)))
+          .mkTerm(d.term, NormalizerEnv(d))
           .bitraverse(
             err => DeployError.parsingError(s"Error in parsing term: \n$err").pure[F],
             _ => addDeploy(d)

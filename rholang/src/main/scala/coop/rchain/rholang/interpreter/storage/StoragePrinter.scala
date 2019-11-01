@@ -69,7 +69,7 @@ object StoragePrinter {
       beforeEval <- unmatchedSends
       _ <- {
         implicit val c = runtime.cost
-        Interpreter[F].evaluate(runtime, deploy.term, NormalizerEnv(deploy.toProto))
+        Interpreter[F].evaluate(runtime, deploy.term, NormalizerEnv(deploy).toEnv)
       }
       afterEval <- unmatchedSends
       diff      = afterEval.diff(beforeEval)

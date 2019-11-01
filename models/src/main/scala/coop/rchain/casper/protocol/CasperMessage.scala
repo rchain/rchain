@@ -326,6 +326,40 @@ object ProcessedDeploy {
       .withErrored(pd.isFailed)
 }
 
+sealed trait ProcessedSystemDeploy {
+  def eventList: List[Event]
+  def failed: Boolean
+}
+
+object ProcessedSystemDeploy {
+
+  final case class Succeeded(eventList: List[Event]) extends ProcessedSystemDeploy {
+    val failed = false
+  }
+
+  final case class Failed(eventList: List[Event], errorMsg: String) extends ProcessedSystemDeploy {
+    val failed = true
+  }
+
+  def from(psd: ProcessedSystemDeployProto): Either[String, ProcessedSystemDeploy] =
+    psd.deployLog.toList
+      .traverse(Event.from)
+      .map(
+        deployLog =>
+          if (psd.errorMsg.isEmpty) Succeeded(deployLog)
+          else Failed(deployLog, psd.errorMsg)
+      )
+
+  def toProto(psd: ProcessedSystemDeploy): ProcessedSystemDeployProto = {
+    val deployLog = psd.eventList.map(Event.toProto)
+    psd match {
+      case Succeeded(_) => ProcessedSystemDeployProto().withDeployLog(deployLog).withErrorMsg("")
+      case Failed(_, errorMsg) =>
+        ProcessedSystemDeployProto().withDeployLog(deployLog).withErrorMsg(errorMsg)
+    }
+  }
+}
+
 final case class DeployData(
     deployer: ByteString,
     term: String,
