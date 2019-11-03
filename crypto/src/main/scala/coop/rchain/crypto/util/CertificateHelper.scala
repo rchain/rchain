@@ -1,6 +1,6 @@
 package coop.rchain.crypto.util
 
-import java.io.{File, FileInputStream}
+import java.io.{ByteArrayInputStream, ByteArrayOutputStream, File, FileInputStream}
 import java.math.BigInteger
 import java.security._
 import java.security.cert._
@@ -10,6 +10,14 @@ import java.util.Base64
 
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.hash.Keccak256
+import org.bouncycastle.asn1.{
+  ASN1Encodable,
+  ASN1InputStream,
+  ASN1Integer,
+  ASN1Sequence,
+  DERSequenceGenerator
+}
+import org.bouncycastle.util.BigIntegers
 
 import scala.io.Source
 
@@ -110,12 +118,47 @@ object CertificateHelper {
     val cert = new X509CertImpl(info)
     cert.sign(privateKey, algorythm)
 
-    // Update the algorith, and resign.
+    // Update the algorithm, and resign.
     val algorithmId2 = cert.get(X509CertImpl.SIG_ALG).asInstanceOf[AlgorithmId]
     info.set(CertificateAlgorithmId.NAME + "." + CertificateAlgorithmId.ALGORITHM, algorithmId2)
     val cert2 = new X509CertImpl(info)
     cert2.sign(privateKey, algorythm)
     cert2
+  }
+
+  def encodeSignatureRStoDER(signatureRS: Array[Byte]) = {
+    def toASN1Int(bytes: Array[Byte]) = new ASN1Integer(BigIntegers.fromUnsignedByteArray(bytes))
+
+    val (r, s) = signatureRS.take(64).splitAt(32)
+    val bos    = new ByteArrayOutputStream(72)
+    val seq    = new DERSequenceGenerator(bos)
+    try {
+      seq.addObject(toASN1Int(r))
+      seq.addObject(toASN1Int(s))
+      seq.close
+      bos.toByteArray
+    } catch { case _: Throwable => Array[Byte]() } finally {
+      if (seq != null) seq.close()
+      if (bos != null) bos.close()
+    }
+  }
+
+  def decodeSignatureDERtoRS(signatureDER: Array[Byte]) = {
+    def toBytes(x: ASN1Encodable) = {
+      val asn1 = x.toASN1Primitive.asInstanceOf[ASN1Integer]
+      BigIntegers.asUnsignedByteArray(asn1.getValue)
+    }
+
+    val bis = new ByteArrayInputStream(signatureDER)
+    val asn = new ASN1InputStream(bis)
+    try {
+      val asnSeq          = asn.readObject.asInstanceOf[ASN1Sequence]
+      val Array(r, s, _*) = asnSeq.toArray
+      toBytes(r) ++ toBytes(s)
+    } catch { case _: Throwable => Array[Byte]() } finally {
+      if (bis != null) bis.close()
+      if (asn != null) asn.close()
+    }
   }
 
 }
