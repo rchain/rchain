@@ -620,7 +620,7 @@ object RuntimeManager {
       errorLog: ErrorLog[F]
   )(deploy: DeployData): F[EvaluateResult] = {
     implicit val rand: Blake2b512Random = Blake2b512Random(
-      ProtoUtil.stripDeployData(deploy).toProto.toByteArray
+      ProtoUtil.stripDeployData(deploy).toByteArray
     )
     implicit val cost: _cost[F] = costState
     import coop.rchain.models.rholang.implicits._

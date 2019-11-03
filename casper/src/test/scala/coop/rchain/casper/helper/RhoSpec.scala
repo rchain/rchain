@@ -158,7 +158,7 @@ class RhoSpec(
       runtime: Runtime[F]
   ): F[Unit] = {
     val rand: Blake2b512Random = Blake2b512Random(
-      ProtoUtil.stripDeployData(deploy).toProto.toByteArray
+      ProtoUtil.stripDeployData(deploy).toByteArray
     )
     import coop.rchain.models.rholang.implicits._
     eval(deploy.term, runtime, NormalizerEnv(deploy).toEnv)(Sync[F], rand)

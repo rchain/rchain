@@ -380,8 +380,8 @@ object ProtoUtil {
     * Because we enforce that a deployment must be unique on the user, timestamp pair, we leave
     * only those fields. This allows users to more readily pre-generate names for signing.
     */
-  def stripDeployData(d: DeployData): DeployData =
-    DeployData.from(DeployDataProto().withDeployer(d.deployer).withTimestamp(d.timestamp))
+  def stripDeployData(d: DeployData): DeployDataProto =
+    DeployDataProto().withDeployer(d.deployer).withTimestamp(d.timestamp)
 
   def computeCodeHash(dd: DeployData): Par = {
     val bytes             = dd.term.getBytes(StandardCharsets.UTF_8)
