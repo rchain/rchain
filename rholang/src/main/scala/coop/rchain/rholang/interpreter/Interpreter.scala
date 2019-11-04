@@ -3,23 +3,28 @@ package coop.rchain.rholang.interpreter
 import cats.effect._
 import cats.implicits._
 import coop.rchain.crypto.hash.Blake2b512Random
-import coop.rchain.models.NormalizerEnv.NormalizerEnv
+import coop.rchain.models.Par
 import coop.rchain.rholang.interpreter.accounting._
 import coop.rchain.rholang.interpreter.errors.{InterpreterError, OutOfPhlogistonsError}
 
 final case class EvaluateResult(cost: Cost, errors: Vector[InterpreterError]) {
-  val isFailed: Boolean = errors.nonEmpty
+  val failed: Boolean    = errors.nonEmpty
+  val succeeded: Boolean = !failed
 }
 
 trait Interpreter[F[_]] {
 
-  def evaluate(runtime: Runtime[F], term: String, normalizerEnv: NormalizerEnv): F[EvaluateResult]
+  def evaluate(
+      runtime: Runtime[F],
+      term: String,
+      normalizerEnv: Map[String, Par]
+  ): F[EvaluateResult]
 
   def evaluate(
       runtime: Runtime[F],
       term: String,
       initialPhlo: Cost,
-      normalizerEnv: NormalizerEnv
+      normalizerEnv: Map[String, Par]
   ): F[EvaluateResult]
 
   def injAttempt(
@@ -27,7 +32,7 @@ trait Interpreter[F[_]] {
       errorLog: ErrorLog[F],
       term: String,
       initialPhlo: Cost,
-      normalizerEnv: NormalizerEnv
+      normalizerEnv: Map[String, Par]
   )(implicit rand: Blake2b512Random): F[EvaluateResult]
 }
 
@@ -44,7 +49,7 @@ object Interpreter {
       def evaluate(
           runtime: Runtime[F],
           term: String,
-          normalizerEnv: NormalizerEnv
+          normalizerEnv: Map[String, Par]
       ): F[EvaluateResult] =
         evaluate(runtime, term, Cost.UNSAFE_MAX, normalizerEnv)
 
@@ -52,7 +57,7 @@ object Interpreter {
           runtime: Runtime[F],
           term: String,
           initialPhlo: Cost,
-          normalizerEnv: NormalizerEnv
+          normalizerEnv: Map[String, Par]
       ): F[EvaluateResult] = {
         implicit val rand: Blake2b512Random = Blake2b512Random(128)
         runtime.space.createSoftCheckpoint() >>= { checkpoint =>
@@ -73,7 +78,7 @@ object Interpreter {
           errorLog: ErrorLog[F],
           term: String,
           initialPhlo: Cost,
-          normalizerEnv: NormalizerEnv
+          normalizerEnv: Map[String, Par]
       )(implicit rand: Blake2b512Random): F[EvaluateResult] = {
         val parsingCost = accounting.parsingCost(term)
         for {

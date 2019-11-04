@@ -10,6 +10,7 @@ import cats.effect.{Concurrent, Resource, Sync}
 import cats.implicits._
 import coop.rchain.blockstorage._
 import coop.rchain.blockstorage.dag.{BlockDagFileStorage, BlockDagStorage}
+import coop.rchain.blockstorage.finality.{LastFinalizedFileStorage, LastFinalizedStorage}
 import coop.rchain.casper.CasperState.CasperStateCell
 import coop.rchain.casper.MultiParentCasper.ignoreDoppelgangerCheck
 import coop.rchain.casper._
@@ -59,6 +60,7 @@ class TestNode[F[_]](
     implicit concurrentF: Concurrent[F],
     implicit val blockStore: BlockStore[F],
     implicit val blockDagStorage: BlockDagStorage[F],
+    implicit val lastFinalizedStorage: LastFinalizedStorage[F],
     val metricEff: Metrics[F],
     val span: Span[F],
     val casperState: CasperStateCell[F],
@@ -356,9 +358,10 @@ object TestNode {
 
       node <- Resource.liftF(
                for {
-                 _                   <- TestNetwork.addPeer(currentPeerNode)
-                 blockProcessingLock <- Semaphore[F](1)
-                 casperState         <- Cell.mvarCell[F, CasperState](CasperState())
+                 lastFinalizedStorage <- LastFinalizedFileStorage.make[F](paths.lastFinalizedFile)
+                 _                    <- TestNetwork.addPeer(currentPeerNode)
+                 blockProcessingLock  <- Semaphore[F](1)
+                 casperState          <- Cell.mvarCell[F, CasperState](CasperState())
                  node = new TestNode[F](
                    name,
                    currentPeerNode,
@@ -376,6 +379,7 @@ object TestNode {
                    Concurrent[F],
                    blockStore,
                    blockDagStorage,
+                   lastFinalizedStorage,
                    metricEff,
                    spanEff,
                    casperState,

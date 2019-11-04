@@ -44,7 +44,7 @@ def test_heterogenous_validators(command_line_options: CommandLineOptions, rando
     with conftest.testing_context(command_line_options, random_generator, docker_client, validator_bonds_dict=bonded_validator_map) as context, \
         docker_network(context, context.docker) as network, \
         conftest.temporary_wallets_file(random_generator, genesis_vault) as wallets_file, \
-        started_bootstrap(context=context, network=network,mount_dir=context.mount_dir, wallets_file=wallets_file) as bootstrap_node, \
+        started_bootstrap(context=context, network=network, wallets_file=wallets_file) as bootstrap_node, \
         bootstrap_connected_peer(context=context, bootstrap=bootstrap_node, name='bonded-validator', private_key=BONDED_VALIDATOR_KEY) as bonded_validator:
             wait_for_peers_count_at_least(context, bonded_validator, 1)
 

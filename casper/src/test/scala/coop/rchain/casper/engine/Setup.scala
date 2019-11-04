@@ -7,6 +7,7 @@ import cats.effect.{Concurrent, ContextShift}
 import cats.temp.par
 import coop.rchain.blockstorage._
 import coop.rchain.blockstorage.dag.{BlockDagRepresentation, InMemBlockDagStorage}
+import coop.rchain.blockstorage.finality.LastFinalizedMemoryStorage
 import coop.rchain.casper._
 import coop.rchain.casper.genesis.contracts.{Validator, Vault}
 import coop.rchain.casper.helper.BlockDagStorageTestFixture
@@ -111,6 +112,9 @@ object Setup {
     implicit val blockStore       = InMemBlockStore.create[Task]
     implicit val blockDagStorage = InMemBlockDagStorage
       .create[Task]
+      .unsafeRunSync(monix.execution.Scheduler.Implicits.global)
+    implicit val lastFinalizedStorage = LastFinalizedMemoryStorage
+      .make[Task]
       .unsafeRunSync(monix.execution.Scheduler.Implicits.global)
     implicit val safetyOracle = new SafetyOracle[Task] {
       override def normalizedFaultTolerance(

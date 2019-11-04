@@ -1,21 +1,25 @@
 package coop.rchain.casper.util.rholang
 
-import cats._
+import cats.Applicative
 import cats.data.EitherT
 import cats.effect.concurrent.MVar
 import cats.effect.{Sync, _}
 import cats.syntax.all._
 import com.google.protobuf.ByteString
 import coop.rchain.casper.CasperMetricsSource
+import coop.rchain.casper.protocol.ProcessedSystemDeploy.{Failed, Succeeded}
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.rholang.RuntimeManager.{evaluate, StateHash}
+import coop.rchain.casper.util.rholang.SystemDeployPlatformFailure._
+import coop.rchain.casper.util.rholang.SystemDeployUserError._
 import coop.rchain.casper.util.{ConstructDeploy, EventConverter, ProtoUtil}
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.metrics.Metrics.Source
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.models.BlockHash.BlockHash
-import coop.rchain.models.Expr.ExprInstance.GString
+import coop.rchain.models.Expr.ExprInstance.{EVarBody, GString}
 import coop.rchain.models.Validator.Validator
+import coop.rchain.models.Var.VarInstance.FreeVar
 import coop.rchain.models._
 import coop.rchain.rholang.interpreter.Runtime.BlockData
 import coop.rchain.rholang.interpreter.accounting._
@@ -28,10 +32,17 @@ import coop.rchain.rholang.interpreter.{
   RhoType,
   Runtime
 }
-import coop.rchain.rspace.{trace, Blake2b256Hash, ReplayException}
+import coop.rchain.rspace.{Blake2b256Hash, ReplayException}
 import coop.rchain.shared.Log
 
 trait RuntimeManager[F[_]] {
+  def playSystemDeploy[S <: SystemDeploy](startHash: StateHash)(
+      systemDeploy: S
+  ): F[SystemDeployPlayResult[systemDeploy.Result]]
+  def replaySystemDeploy[S <: SystemDeploy](startHash: StateHash)(
+      systemDeploy: S,
+      processedSystemDeploy: ProcessedSystemDeploy
+  ): F[Either[ReplayFailure, SystemDeployReplayResult[systemDeploy.Result]]]
   def captureResults(
       startHash: StateHash,
       deploy: DeployData,
@@ -65,6 +76,7 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log](
     val emptyStateHash: StateHash,
     runtimeContainer: MVar[F, Runtime[F]]
 ) extends RuntimeManager[F] {
+  import coop.rchain.models.rholang.{implicits => toPar}
 
   private[this] val RuntimeManagerMetricsSource =
     Metrics.Source(CasperMetricsSource, "runtime-manager")
@@ -73,6 +85,171 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log](
   private[this] val computeStateLabel = Metrics.Source(RuntimeManagerMetricsSource, "compute-state")
   private[this] val computeGenesisLabel =
     Metrics.Source(RuntimeManagerMetricsSource, "compute-genesis")
+
+  private val systemDeployConsumeAllPattern =
+    BindPattern(List(toPar(Expr(EVarBody(EVar(Var(FreeVar(0))))))), freeCount = 1)
+  private val emptyContinuation = TaggedContinuation()
+
+  private def evaluateSystemSource[S <: SystemDeploy](
+      runtime: Runtime[F]
+  )(systemDeploy: S, replay: Boolean): F[EvaluateResult] = {
+    implicit val c: _cost[F]         = runtime.cost
+    implicit val r: Blake2b512Random = systemDeploy.rand
+    Interpreter[F].injAttempt(
+      if (replay) runtime.replayReducer else runtime.reducer,
+      runtime.errorLog,
+      systemDeploy.source,
+      Cost.UNSAFE_MAX,
+      systemDeploy.env
+    )
+  }
+
+  private def consumeResult[S <: SystemDeploy](
+      runtime: Runtime[F]
+  )(systemDeploy: S, replay: Boolean): F[Option[(TaggedContinuation, Seq[ListParWithRandom])]] = {
+    import coop.rchain.rspace.util._
+    (if (replay) runtime.replaySpace else runtime.space)
+      .consume(
+        Seq(systemDeploy.returnChannel),
+        Seq(systemDeployConsumeAllPattern),
+        emptyContinuation,
+        persist = false
+      )
+      .map(unpackOption)
+  }
+
+  def replaySystemDeploy[S <: SystemDeploy](stateHash: StateHash)(
+      systemDeploy: S,
+      processedSystemDeploy: ProcessedSystemDeploy
+  ): F[Either[ReplayFailure, SystemDeployReplayResult[systemDeploy.Result]]] =
+    withRuntimeLock { runtime =>
+      runtime.replaySpace.reset(Blake2b256Hash.fromByteString(stateHash)) >>
+        replaySystemDeployInternal(runtime)(systemDeploy, processedSystemDeploy) >>= {
+        case Right(Right(result)) =>
+          runtime.replaySpace
+            .createCheckpoint()
+            .map(_.root.toByteString)
+            .map(
+              finalStateHash =>
+                SystemDeployReplayResult.replaySucceeded(finalStateHash, result).asRight
+            )
+        case Right(Left(systemDeployError)) =>
+          SystemDeployReplayResult.replayFailed(systemDeployError).asRight.pure
+        case Left(replayFailure) =>
+          replayFailure.asLeft.pure
+      }
+    }
+
+  private def replaySystemDeployInternal[S <: SystemDeploy](runtime: Runtime[F])(
+      systemDeploy: S,
+      processedSystemDeploy: ProcessedSystemDeploy
+  ): F[Either[ReplayFailure, Either[SystemDeployError, systemDeploy.Result]]] = {
+
+    def verifyReplaySuccess(
+        result: systemDeploy.Result
+    ): Either[ReplayFailure, systemDeploy.Result] =
+      if (processedSystemDeploy.failed)
+        ReplayFailure.replayStatusMismatch(initialFailed = true, replayFailed = false).asLeft
+      else result.asRight
+
+    def verifyReplayFailure(systemDeployError: SystemDeployError): Option[ReplayFailure] =
+      processedSystemDeploy match {
+        case Succeeded(_) =>
+          ReplayFailure.replayStatusMismatch(initialFailed = false, replayFailed = true).some
+        case Failed(_, errorMsg) =>
+          if (errorMsg == systemDeployError.errorMsg) none
+          else ReplayFailure.systemDeployErrorMismatch(errorMsg, systemDeployError.errorMsg).some
+      }
+
+    runtime.replaySpace.rig(processedSystemDeploy.eventList.map(EventConverter.toRspaceEvent)) >> {
+      runtime.replaySpace.createSoftCheckpoint() >>= { softCheckpoint =>
+        evaluateSystemSource(runtime)(systemDeploy, replay = true) >>= {
+          case EvaluateResult(_, interpreterErrors) =>
+            if (interpreterErrors.nonEmpty) UnexpectedSystemErrors(interpreterErrors).raiseError
+            else
+              consumeResult(runtime)(systemDeploy, replay = true) >>= { consumeResultOpt =>
+                runtime.replaySpace.checkReplayData().attempt.map(_.swap.toOption) >>= {
+                  case Some(replayException: ReplayException) =>
+                    ReplayFailure.unusedCOMMEvent(replayException).asLeft.pure
+                  case Some(throwable) =>
+                    ReplayFailure.internalError(throwable).asLeft.pure
+                  case None =>
+                    consumeResultOpt match {
+                      case Some((_, Seq(ListParWithRandom(Seq(par), _)))) =>
+                        systemDeploy.extractResult(par) match {
+                          case Right(result) =>
+                            verifyReplaySuccess(result).map(_.asRight[SystemDeployError]).pure
+                          case Left(systemDeployError: SystemDeployError) =>
+                            verifyReplayFailure(systemDeployError) match {
+                              case Some(replayFailure) => replayFailure.asLeft.pure
+                              case None =>
+                                runtime.replaySpace
+                                  .revertToSoftCheckpoint(softCheckpoint)
+                                  .as(systemDeployError.asLeft.asRight)
+                            }
+                          case Left(systemDeployPlatformFailure: SystemDeployPlatformFailure) =>
+                            systemDeployPlatformFailure.raiseError
+                        }
+                      case Some((_, unexpectedResults)) =>
+                        UnexpectedResult(unexpectedResults.flatMap(_.pars)).raiseError
+                      case None =>
+                        ConsumeFailed.raiseError
+                    }
+                }
+              }
+        }
+      }
+    }
+  }
+
+  def playSystemDeploy[S <: SystemDeploy](stateHash: StateHash)(
+      systemDeploy: S
+  ): F[SystemDeployPlayResult[systemDeploy.Result]] =
+    withResetRuntimeLock(stateHash) { runtime =>
+      playSystemDeployInternal(runtime)(systemDeploy) >>= {
+        case (eventLog, Right(result)) =>
+          runtime.space.createCheckpoint().map(_.root.toByteString) >>= { finalStateHash =>
+            SystemDeployPlayResult.playSucceeded(finalStateHash, eventLog, result).pure
+          }
+        case (eventLog, Left(systemDeployError)) =>
+          SystemDeployPlayResult.playFailed(eventLog, systemDeployError).pure
+      }
+    }
+
+  import coop.rchain.rspace.trace.Log
+  private def playSystemDeployInternal[S <: SystemDeploy](runtime: Runtime[F])(
+      systemDeploy: S
+  ): F[(Log, Either[SystemDeployError, systemDeploy.Result])] =
+    runtime.space.createSoftCheckpoint() >>= { preDeploySoftCheckpoint =>
+      evaluateSystemSource(runtime)(systemDeploy, replay = false) >>= {
+        case EvaluateResult(_, interpreterErrors) =>
+          if (interpreterErrors.nonEmpty) UnexpectedSystemErrors(interpreterErrors).raiseError
+          else
+            consumeResult(runtime)(systemDeploy, replay = false) >>= {
+              case Some((_, Seq(ListParWithRandom(Seq(par), _)))) =>
+                systemDeploy.extractResult(par) match {
+                  case Right(result) =>
+                    runtime.space
+                      .createSoftCheckpoint()
+                      .map(
+                        postDeploySoftCheckpoint => (postDeploySoftCheckpoint.log, result.asRight)
+                      )
+                  case Left(systemDeployError: SystemDeployError) =>
+                    runtime.space.createSoftCheckpoint() >>= { postDeploySoftCheckpoint =>
+                      runtime.space
+                        .revertToSoftCheckpoint(preDeploySoftCheckpoint)
+                        .as((postDeploySoftCheckpoint.log, systemDeployError.asLeft))
+                    }
+                  case Left(systemDeployPlatformFailure: SystemDeployPlatformFailure) =>
+                    systemDeployPlatformFailure.raiseError
+                }
+              case Some((_, unexpectedResults)) =>
+                UnexpectedResult(unexpectedResults.flatMap(_.pars)).raiseError
+              case None =>
+                ConsumeFailed.raiseError
+            }
+      }
+    }
 
   def captureResults(
       start: StateHash,
@@ -303,16 +480,16 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log](
                         )
                         .ensureOr(
                           /* Regardless of success or failure, verify that deploy status' match. */
-                          result => ReplayFailure.replayStatusMismatch(isFailed, result.isFailed)
-                        )(result => isFailed == result.isFailed)
+                          result => ReplayFailure.replayStatusMismatch(isFailed, result.failed)
+                        )(result => isFailed == result.failed)
                         .ensureOr(
                           result =>
                             /* Since there are no errors, verify evaluation costs and COMM events match. */
-                            ReplayFailure.replayCostMismatch(deploy, cost.cost, result.cost.value)
-                        )(result => result.isFailed || cost.cost == result.cost.value)
+                            ReplayFailure.replayCostMismatch(cost.cost, result.cost.value)
+                        )(result => result.failed || cost.cost == result.cost.value)
                         .semiflatMap(
                           result =>
-                            if (result.isFailed)
+                            if (result.failed)
                               /* Since the state of `replaySpace` is reset on each invocation of `replayComputeState`,
                                  and `ReplayFailure`s mean that block processing is cancelled upstream, we only need to
                                  reset state if the replay effects of valid deploys need to be discarded. */
@@ -326,8 +503,8 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log](
                         .value
                         .recover {
                           case replayException: ReplayException =>
-                            ReplayFailure.unusedCOMMEvent(deploy, replayException).some
-                          case throwable => ReplayFailure.internalError(deploy, throwable).some
+                            ReplayFailure.unusedCOMMEvent(replayException).some
+                          case throwable => ReplayFailure.internalError(throwable).some
                         }
     } yield failureOption
   }
@@ -361,12 +538,13 @@ object RuntimeManager {
       ProtoUtil.stripDeployData(deploy).toProto.toByteArray
     )
     implicit val cost: _cost[F] = costState
+    import coop.rchain.models.rholang.implicits._
     Interpreter[F].injAttempt(
       reducer,
       errorLog,
       deploy.term,
       Cost(deploy.phloLimit),
-      NormalizerEnv(deploy.toProto)
+      NormalizerEnv(deploy).toEnv
     )
   }
 }

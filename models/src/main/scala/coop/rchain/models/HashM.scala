@@ -10,7 +10,6 @@ import coop.rchain.casper.protocol._
 import coop.rchain.casper.protocol.deploy.v1
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.models.Expr.ExprInstance.GInt
-import coop.rchain.models.NormalizerEnv.NormalizerEnv
 
 import scala.collection.immutable.BitSet
 import scala.util.hashing.MurmurHash3
@@ -63,7 +62,6 @@ object HashM extends HashMDerivation {
   implicit val BitSetHash: HashM[BitSet]                     = opaqueHash
   implicit val ByteStringHash: HashM[ByteString]             = opaqueHash
   implicit val Blake2b512RandomHash: HashM[Blake2b512Random] = opaqueHash
-  implicit val NormalizerEnvHash: HashM[NormalizerEnv]       = opaqueHash
   implicit def alwaysEqualHash[A]: HashM[AlwaysEqual[A]]     = opaqueHash
 
   /** The instance for Long is private, because - for the whole derivation to be consistent with default hashCode
@@ -88,14 +86,15 @@ object HashM extends HashMDerivation {
 
   }
 
-  implicit val ParHash: HashM[Par] = gen[Par]
-  implicit val ExprHash            = gen[Expr]
-  implicit val VarHash             = gen[Var]
-  implicit val SendHash            = gen[Send]
-  implicit val ReceiveHash         = gen[Receive]
-  implicit val ReceiveBindHash     = gen[ReceiveBind]
-  implicit val NewHash             = gen[New]
-  implicit val MatchHash           = gen[Match]
+  implicit val Env: HashM[Map[String, Par]] = opaqueHash
+  implicit val ParHash: HashM[Par]          = gen[Par]
+  implicit val ExprHash                     = gen[Expr]
+  implicit val VarHash                      = gen[Var]
+  implicit val SendHash                     = gen[Send]
+  implicit val ReceiveHash                  = gen[Receive]
+  implicit val ReceiveBindHash              = gen[ReceiveBind]
+  implicit val NewHash                      = gen[New]
+  implicit val MatchHash                    = gen[Match]
 
   implicit val GIntHash = gen[GInt] //This is only possible to derive here, b/c LongHashM is private
 
@@ -160,7 +159,6 @@ object HashM extends HashMDerivation {
   implicit val ContinuationAtNameResponseV2Hash = gen[v1.ContinuationAtNameResponse]
   implicit val FindDeployResponseV2Hash         = gen[v1.FindDeployResponse]
   implicit val LastFinalizedBlockResponseV2Hash = gen[v1.LastFinalizedBlockResponse]
-
 }
 
 trait HashMDerivation {
