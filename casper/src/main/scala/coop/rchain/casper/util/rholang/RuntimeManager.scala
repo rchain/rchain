@@ -1,17 +1,17 @@
 package coop.rchain.casper.util.rholang
 
 import cats.Applicative
-import cats.data.EitherT
+import cats.data.{EitherT, WriterT}
 import cats.effect.concurrent.MVar
 import cats.effect.{Sync, _}
 import cats.syntax.all._
 import com.google.protobuf.ByteString
 import coop.rchain.casper.CasperMetricsSource
-import coop.rchain.casper.protocol.ProcessedSystemDeploy.{Failed, Succeeded}
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.rholang.RuntimeManager.{evaluate, StateHash}
 import coop.rchain.casper.util.rholang.SystemDeployPlatformFailure._
 import coop.rchain.casper.util.rholang.SystemDeployUserError._
+import coop.rchain.casper.util.rholang.costacc.{PreChargeDeploy, RefundDeploy}
 import coop.rchain.casper.util.{ConstructDeploy, EventConverter, ProtoUtil}
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.metrics.Metrics.Source
@@ -33,11 +33,6 @@ import coop.rchain.rholang.interpreter.{
   Runtime
 }
 import coop.rchain.rspace.{Blake2b256Hash, ReplayException}
-import coop.rchain.shared.Log
-import cats.data.WriterT
-import coop.rchain.casper.util.rholang.costacc.PreChargeDeploy
-import coop.rchain.casper.util.rholang.costacc.RefundDeploy
-import cats.data.OptionT
 
 trait RuntimeManager[F[_]] {
   def playSystemDeploy[S <: SystemDeploy](startHash: StateHash)(
@@ -122,83 +117,6 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span](
       .map(unpackOption)
   }
 
-  def replaySystemDeploy[S <: SystemDeploy](stateHash: StateHash)(
-      systemDeploy: S,
-      processedSystemDeploy: ProcessedSystemDeploy
-  ): F[Either[ReplayFailure, SystemDeployReplayResult[systemDeploy.Result]]] = {
-    def verifyReplaySuccess(
-        result: systemDeploy.Result
-    ): Either[ReplayFailure, systemDeploy.Result] =
-      Either.cond(
-        !processedSystemDeploy.failed,
-        result,
-        ReplayFailure.replayStatusMismatch(initialFailed = true, replayFailed = false)
-      )
-
-    def verifyReplayFailure(systemDeployError: SystemDeployUserError): Option[ReplayFailure] =
-      processedSystemDeploy match {
-        case Succeeded(_) =>
-          ReplayFailure.replayStatusMismatch(initialFailed = false, replayFailed = true).some
-        case Failed(_, errorMsg) =>
-          if (errorMsg == systemDeployError.errorMessage) none
-          else
-            ReplayFailure.systemDeployErrorMismatch(errorMsg, systemDeployError.errorMessage).some
-      }
-
-    withRuntimeLock { runtime =>
-      runtime.replaySpace.rigAndReset(
-        Blake2b256Hash.fromByteString(stateHash),
-        processedSystemDeploy.eventList.map(EventConverter.toRspaceEvent)
-      ) >> replaySystemDeployInternal(runtime)(systemDeploy).value >>= {
-        case Left(failure) =>
-          verifyReplayFailure(failure) match {
-            case Some(replayFailure) => replayFailure.asLeft.pure
-            case None                => SystemDeployReplayResult.replayFailed(failure).asRight.pure
-          }
-        case Right(result) =>
-          runtime.replaySpace
-            .checkReplayData()
-            .attemptT
-            .leftMap {
-              case replayException: ReplayException =>
-                ReplayFailure.unusedCOMMEvent(replayException)
-              case throwable => ReplayFailure.internalError(throwable)
-            }
-            .subflatMap(_ => verifyReplaySuccess(result))
-            .semiflatMap(
-              _ =>
-                runtime.replaySpace
-                  .createCheckpoint()
-                  .map(_.root.toByteString)
-                  .map(
-                    finalStateHash =>
-                      SystemDeployReplayResult.replaySucceeded(finalStateHash, result)
-                  )
-            )
-            .value
-      }
-    }
-  }
-
-  private def replaySystemDeployInternal[S <: SystemDeploy](
-      runtime: Runtime[F]
-  )(systemDeploy: S): EitherT[F, SystemDeployUserError, systemDeploy.Result] =
-    EitherT
-      .liftF(evaluateSystemSource(runtime)(systemDeploy, replay = true))
-      .ensureOr(evaluateResult => UnexpectedSystemErrors(evaluateResult.errors))(!_.failed)
-      .semiflatMap(_ => consumeResult(runtime)(systemDeploy, replay = true))
-      .subflatMap {
-        case Some((_, Seq(ListParWithRandom(Seq(par), _)))) =>
-          systemDeploy.extractResult(par)
-        case Some((_, unexpectedResults)) =>
-          UnexpectedResult(unexpectedResults.flatMap(_.pars)).asLeft
-        case None => ConsumeFailed.asLeft
-      }
-      .leftSemiflatMap {
-        case platformFailure: SystemDeployPlatformFailure => platformFailure.raiseError
-        case failure: SystemDeployUserError               => failure.pure
-      }
-
   def playSystemDeploy[S <: SystemDeploy](stateHash: StateHash)(
       systemDeploy: S
   ): F[SystemDeployPlayResult[systemDeploy.Result]] =
@@ -212,8 +130,6 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span](
           SystemDeployPlayResult.playFailed(eventLog, systemDeployError).pure
       }
     }
-
-  import coop.rchain.rspace.trace.Log
   private def playSystemDeployInternal[S <: SystemDeploy](runtime: Runtime[F])(
       systemDeploy: S
   ): F[(Vector[Event], Either[SystemDeployError, systemDeploy.Result])] =
@@ -245,44 +161,95 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span](
       log                      = postDeploySoftCheckpoint.log
     } yield (log.map(EventConverter.toCasperEvent).toVector, resultOrSystemDeployError)
 
-  def captureResults(
-      start: StateHash,
-      deploy: DeployData,
-      name: String = "__SCALA__"
-  ): F[Seq[Par]] =
-    captureResults(start, deploy, Par().withExprs(Seq(Expr(GString(name)))))
+  def replaySystemDeploy[S <: SystemDeploy](stateHash: StateHash)(
+      systemDeploy: S,
+      processedSystemDeploy: ProcessedSystemDeploy
+  ): F[Either[ReplayFailure, SystemDeployReplayResult[systemDeploy.Result]]] = withRuntimeLock {
+    runtime =>
+      for {
+        _ <- runtime.replaySpace.rigAndReset(
+              Blake2b256Hash.fromByteString(stateHash),
+              processedSystemDeploy.eventList.map(EventConverter.toRspaceEvent)
+            )
+        expectedFailure = processedSystemDeploy
+          .fold(_ => None, (_, errorMsg) => Some(SystemDeployError(errorMsg)))
+        replayed <- replaySystemDeployInternal(runtime)(systemDeploy, expectedFailure)
+                     .flatMap(
+                       result =>
+                         runtime.replaySpace
+                           .checkReplayData()
+                           .attemptT
+                           .leftMap {
+                             case replayException: ReplayException =>
+                               ReplayFailure.unusedCOMMEvent(replayException)
+                             case throwable => ReplayFailure.internalError(throwable)
+                           }
+                           .semiflatMap(
+                             _ =>
+                               result match {
+                                 case Right(value) =>
+                                   runtime.replaySpace
+                                     .createCheckpoint()
+                                     .map(
+                                       checkpoint =>
+                                         SystemDeployReplayResult
+                                           .replaySucceeded(checkpoint.root.toByteString, value)
+                                     )
+                                 case Left(failure) =>
+                                   SystemDeployReplayResult
+                                     .replayFailed[systemDeploy.Result](failure)
+                                     .pure
+                               }
+                           )
+                     )
+                     .value
+      } yield replayed
+  }
 
-  def captureResults(start: StateHash, deploy: DeployData, name: Par): F[Seq[Par]] =
-    withResetRuntimeLock(start) { runtime =>
-      evaluate(runtime.reducer, runtime.cost, runtime.errorLog)(deploy)
-        .ensure(
-          BugFoundError("Unexpected error while capturing results from rholang")
-        )(
-          _.errors.isEmpty
-        ) >> getData(runtime)(name)
-    }
-
-  def replayComputeState(startHash: StateHash)(
-      terms: Seq[ProcessedDeploy],
-      blockData: BlockData,
-      invalidBlocks: Map[BlockHash, Validator] = Map.empty[BlockHash, Validator],
-      isGenesis: Boolean //FIXME have a better way of knowing this. Pass the replayDeploy function maybe?
-  ): F[Either[ReplayFailure, StateHash]] =
-    withRuntimeLock { runtime =>
-      Span[F].trace(replayComputeStateLabel) {
-        for {
-          _ <- runtime.blockData.set(blockData)
-          _ <- setInvalidBlocks(invalidBlocks, runtime)
-          _ <- Span[F].mark("before-replay-deploys")
-          result <- replayDeploys(
-                     runtime,
-                     startHash,
-                     terms,
-                     replayDeploy(runtime, withCostAccounting = !isGenesis)
-                   )
-        } yield result
+  private def replaySystemDeployInternal[S <: SystemDeploy](
+      runtime: Runtime[F]
+  )(
+      systemDeploy: S,
+      expectedFailure: Option[SystemDeployUserError]
+  ): EitherT[F, ReplayFailure, Either[SystemDeployUserError, systemDeploy.Result]] =
+    EitherT
+      .liftF(evaluateSystemSource(runtime)(systemDeploy, replay = true))
+      .ensureOr(evaluateResult => UnexpectedSystemErrors(evaluateResult.errors))(_.succeeded)
+      .semiflatMap(_ => consumeResult(runtime)(systemDeploy, replay = true))
+      .subflatMap {
+        case Some((_, Seq(ListParWithRandom(Seq(par), _)))) =>
+          systemDeploy.extractResult(par)
+        case Some((_, unexpectedResults)) =>
+          UnexpectedResult(unexpectedResults.flatMap(_.pars)).asLeft
+        case None => ConsumeFailed.asLeft
       }
-    }
+      .leftSemiflatMap {
+        case platformFailure: SystemDeployPlatformFailure =>
+          platformFailure.raiseError[F, SystemDeployUserError]
+        case failure: SystemDeployUserError => failure.pure
+      }
+      .transform {
+        case Left(error) =>
+          expectedFailure.fold(
+            ReplayFailure
+              .replayStatusMismatch(initialFailed = false, replayFailed = true)
+              .asLeft[Either[SystemDeployUserError, systemDeploy.Result]]
+          )(
+            expected =>
+              Either.cond(
+                error == expected,
+                Left(error),
+                ReplayFailure.systemDeployErrorMismatch(expected.errorMessage, error.errorMessage)
+              )
+          )
+        case Right(result) =>
+          Either.cond(
+            expectedFailure.isEmpty,
+            Right(result),
+            ReplayFailure.replayStatusMismatch(initialFailed = true, replayFailed = false)
+          )
+      }
+      .flatTap(_ => EitherT.right(runtime.replaySpace.createSoftCheckpoint())) //We need a clear demarcation of system deploys
 
   def computeState(startHash: StateHash)(
       terms: Seq[DeployData],
@@ -321,96 +288,27 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span](
     }
   }
 
-  private def setInvalidBlocks(
-      invalidBlocks: Map[BlockHash, Validator],
-      runtime: Runtime[F]
-  ): F[Unit] = {
-    val invalidBlocksPar: Par =
-      Par(
-        exprs = Seq(
-          Expr(
-            Expr.ExprInstance.EMapBody(
-              ParMap(SortedParMap(invalidBlocks.map {
-                case (validator, blockHash) =>
-                  (
-                    RhoType.ByteArray(validator.toByteArray),
-                    RhoType.ByteArray(blockHash.toByteArray)
-                  )
-              }))
-            )
-          )
-        )
-      )
-    runtime.invalidBlocks.setParams(invalidBlocksPar)
-  }
-
-  def computeBonds(hash: StateHash): F[Seq[Bond]] =
-    captureResults(hash, ConstructDeploy.sourceDeployNow(bondsQuerySource()))
-      .ensureOr(
-        bondsPar =>
-          new IllegalArgumentException(
-            s"Incorrect number of results from query of current bonds: ${bondsPar.size}"
-          )
-      )(bondsPar => bondsPar.size == 1)
-      .map { bondsPar =>
-        toBondSeq(bondsPar.head)
+  def replayComputeState(startHash: StateHash)(
+      terms: Seq[ProcessedDeploy],
+      blockData: BlockData,
+      invalidBlocks: Map[BlockHash, Validator] = Map.empty[BlockHash, Validator],
+      isGenesis: Boolean //FIXME have a better way of knowing this. Pass the replayDeploy function maybe?
+  ): F[Either[ReplayFailure, StateHash]] =
+    withRuntimeLock { runtime =>
+      Span[F].trace(replayComputeStateLabel) {
+        for {
+          _ <- runtime.blockData.set(blockData)
+          _ <- setInvalidBlocks(invalidBlocks, runtime)
+          _ <- Span[F].mark("before-replay-deploys")
+          result <- replayDeploys(
+                     runtime,
+                     startHash,
+                     terms,
+                     replayDeploy(runtime, withCostAccounting = !isGenesis)
+                   )
+        } yield result
       }
-
-  private def bondsQuerySource(name: String = "__SCALA__"): String =
-    s"""
-       # new rl(`rho:registry:lookup`), poSCh in {
-       #   rl!(`rho:rchain:pos`, *poSCh) |
-       #   for(@(_, PoS) <- poSCh) {
-       #     @PoS!("getBonds", "$name")
-       #   }
-       # }
-       """.stripMargin('#')
-
-  def withRuntimeLock[A](f: Runtime[F] => F[A]): F[A] =
-    Sync[F].bracket {
-      import coop.rchain.metrics.implicits._
-      implicit val ms: Source = RuntimeManagerMetricsSource
-      for {
-        _       <- Metrics[F].incrementGauge("lock.queue")
-        runtime <- Sync[F].defer(runtimeContainer.take).timer("lock.acquire")
-        _       <- Metrics[F].decrementGauge("lock.queue")
-      } yield runtime
-    }(f)(runtimeContainer.put)
-
-  private def withResetRuntimeLock[R](hash: StateHash)(block: Runtime[F] => F[R]): F[R] =
-    withRuntimeLock(
-      runtime => runtime.space.reset(Blake2b256Hash.fromByteString(hash)) >> block(runtime)
-    )
-
-  private def toBondSeq(bondsMap: Par): Seq[Bond] =
-    bondsMap.exprs.head.getEMapBody.ps.map {
-      case (validator: Par, bond: Par) =>
-        assert(validator.exprs.length == 1, "Validator in bonds map wasn't a single string.")
-        assert(bond.exprs.length == 1, "Stake in bonds map wasn't a single integer.")
-        val validatorName = validator.exprs.head.getGByteArray
-        val stakeAmount   = bond.exprs.head.getGInt
-        Bond(validatorName, stakeAmount)
-    }.toList
-
-  def getData(hash: StateHash)(channel: Par): F[Seq[Par]] =
-    withResetRuntimeLock(hash)(getData(_)(channel))
-
-  private def getData(
-      runtime: Runtime[F]
-  )(channel: Par): F[Seq[Par]] =
-    runtime.space.getData(channel).map(_.flatMap(_.a.pars))
-
-  def getContinuation(
-      hash: StateHash
-  )(channels: Seq[Par]): F[Seq[(Seq[BindPattern], Par)]] =
-    withResetRuntimeLock(hash)(
-      _.space
-        .getWaitingContinuations(channels)
-        .map(
-          _.filter(_.continuation.taggedCont.isParBody)
-            .map(result => (result.patterns, result.continuation.taggedCont.parBody.get.body))
-        )
-    )
+    }
 
   private def processDeploys(
       runtime: Runtime[F],
@@ -517,74 +415,67 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span](
   ): F[Option[ReplayFailure]] = {
     import processedDeploy._
 
-    def evaluatorT: OptionT[EitherT[F, ReplayFailure, ?], EvaluateResult] = {
-      val rand = deploy.rng
+    val deployEvaluator = EitherT
+      .liftF {
+        for {
+          fallback <- runtime.replaySpace.createSoftCheckpoint()
+          result   <- evaluate(runtime.replayReducer, runtime.cost, runtime.errorLog)(deploy)
+          /* Since the state of `replaySpace` is reset on each invocation of `replayComputeState`,
+            and `ReplayFailure`s mean that block processing is cancelled upstream, we only need to
+            reset state if the replay effects of valid deploys need to be discarded. */
+          _ <- runtime.replaySpace.revertToSoftCheckpoint(fallback).whenA(result.failed)
+        } yield result
+      }
+      .ensureOr(
+        /* Regardless of success or failure, verify that deploy status' match. */
+        result => ReplayFailure.replayStatusMismatch(isFailed, result.failed)
+      )(result => isFailed == result.failed)
+      .ensureOr(
+        result =>
+          /* Since there are no errors, verify evaluation costs and COMM events match. */
+          ReplayFailure.replayCostMismatch(cost.cost, result.cost.value)
+      )(result => result.failed || cost.cost == result.cost.value)
+
+    def evaluatorT: EitherT[F, ReplayFailure, Unit] =
       if (withCostAccounting) {
-        OptionT(
-          replaySystemDeployInternal(runtime)(
-            new PreChargeDeploy(deploy.totalPhloCharge, deploy.deployerPk, rand)
-          ).semiflatMap(
-              _ => evaluate(runtime.replayReducer, runtime.cost, runtime.errorLog)(deploy)
-            )
-            .flatTap(
-              result =>
-                replaySystemDeployInternal(runtime)(
-                  new RefundDeploy(refundAmount, rand.splitByte(64))
+        val rand            = deploy.rng
+        val expectedFailure = processedDeploy.systemDeployError.map(SystemDeployError)
+        replaySystemDeployInternal(runtime)(
+          new PreChargeDeploy(deploy.totalPhloCharge, deploy.deployerPk, rand),
+          expectedFailure
+        ).flatMap(
+          _ =>
+            if (expectedFailure.isEmpty)
+              deployEvaluator
+                .semiflatMap(
+                  evalResult =>
+                    runtime.replaySpace.createSoftCheckpoint().whenA(evalResult.succeeded)
                 )
-            )
-            .transform {
-              case Left(error) => // PV reported pre-charge error - do we agree?
-                if (systemDeployError.contains(error.errorMessage))
-                  /* yes */ Right(None)
-                else
-                  /* no */ Left(
-                    ReplayFailure.systemDeployErrorMismatch(
-                      systemDeployError.getOrElse(""),
-                      error.errorMessage
+                .flatTap(
+                  _ =>
+                    replaySystemDeployInternal(runtime)(
+                      new RefundDeploy(refundAmount, rand.splitByte(64)),
+                      None
                     )
-                  )
-              case Right(ev) => Right(Some(ev))
-            }
+                )
+            else EitherT.rightT(())
         )
-      } else
-        OptionT.liftF(
-          EitherT.liftF(evaluate(runtime.replayReducer, runtime.cost, runtime.errorLog)(deploy))
-        )
-    }
+      } else deployEvaluator.void
 
     Span[F].withMarks("replay-deploy") {
       for {
-        _              <- runtime.replaySpace.rig(processedDeploy.deployLog.map(EventConverter.toRspaceEvent))
-        softCheckpoint <- runtime.replaySpace.createSoftCheckpoint()
-        _              <- Span[F].mark("before-replay-deploy-compute-effect")
+        _ <- runtime.replaySpace.rig(processedDeploy.deployLog.map(EventConverter.toRspaceEvent))
+        _ <- Span[F].mark("before-replay-deploy-compute-effect")
         failureOption <- evaluatorT
-                          .ensureOr(
-                            /* Regardless of success or failure, verify that deploy status' match. */
-                            result => ReplayFailure.replayStatusMismatch(isFailed, result.failed)
-                          )(result => isFailed == result.failed)
-                          .ensureOr(
-                            result =>
-                              /* Since there are no errors, verify evaluation costs and COMM events match. */
-                              ReplayFailure.replayCostMismatch(cost.cost, result.cost.value)
-                          )(result => result.failed || cost.cost == result.cost.value)
-                          .value
-                          .flatMap {
-                            case Some(result) if (result.failed) =>
-                              /* Since the state of `replaySpace` is reset on each invocation of `replayComputeState`,
-                                 and `ReplayFailure`s mean that block processing is cancelled upstream, we only need to
-                                 reset state if the replay effects of valid deploys need to be discarded. */
-                              EitherT.right[ReplayFailure](
-                                runtime.replaySpace.revertToSoftCheckpoint(softCheckpoint)
-                              )
-                            case _ =>
-                              /* This deployment represents either correct program `Some(result)`,
-                            or we have a failed pre-charge (`None`) but we agree on that it failed.
-                            In both cases we want to check reply data and see if everything is in order */
-                              runtime.replaySpace.checkReplayData().attemptT.leftMap {
-                                case replayException: ReplayException =>
-                                  ReplayFailure.unusedCOMMEvent(replayException)
-                                case throwable => ReplayFailure.internalError(throwable)
-                              }
+                          .flatMap { _ =>
+                            /* This deployment represents either correct program `Some(result)`,
+                              or we have a failed pre-charge (`None`) but we agree on that it failed.
+                              In both cases we want to check reply data and see if everything is in order */
+                            runtime.replaySpace.checkReplayData().attemptT.leftMap {
+                              case replayException: ReplayException =>
+                                ReplayFailure.unusedCOMMEvent(replayException)
+                              case throwable => ReplayFailure.internalError(throwable)
+                            }
                           }
                           .swap
                           .value
@@ -593,6 +484,115 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span](
       } yield failureOption
     }
   }
+
+  def captureResults(
+      start: StateHash,
+      deploy: DeployData,
+      name: String = "__SCALA__"
+  ): F[Seq[Par]] =
+    captureResults(start, deploy, Par().withExprs(Seq(Expr(GString(name)))))
+
+  def captureResults(start: StateHash, deploy: DeployData, name: Par): F[Seq[Par]] =
+    withResetRuntimeLock(start) { runtime =>
+      evaluate(runtime.reducer, runtime.cost, runtime.errorLog)(deploy)
+        .ensure(
+          BugFoundError("Unexpected error while capturing results from rholang")
+        )(
+          _.errors.isEmpty
+        ) >> getData(runtime)(name)
+    }
+
+  private def setInvalidBlocks(
+      invalidBlocks: Map[BlockHash, Validator],
+      runtime: Runtime[F]
+  ): F[Unit] = {
+    val invalidBlocksPar: Par =
+      Par(
+        exprs = Seq(
+          Expr(
+            Expr.ExprInstance.EMapBody(
+              ParMap(SortedParMap(invalidBlocks.map {
+                case (validator, blockHash) =>
+                  (
+                    RhoType.ByteArray(validator.toByteArray),
+                    RhoType.ByteArray(blockHash.toByteArray)
+                  )
+              }))
+            )
+          )
+        )
+      )
+    runtime.invalidBlocks.setParams(invalidBlocksPar)
+  }
+
+  def computeBonds(hash: StateHash): F[Seq[Bond]] =
+    captureResults(hash, ConstructDeploy.sourceDeployNow(bondsQuerySource()))
+      .ensureOr(
+        bondsPar =>
+          new IllegalArgumentException(
+            s"Incorrect number of results from query of current bonds: ${bondsPar.size}"
+          )
+      )(bondsPar => bondsPar.size == 1)
+      .map { bondsPar =>
+        toBondSeq(bondsPar.head)
+      }
+
+  private def bondsQuerySource(name: String = "__SCALA__"): String =
+    s"""
+       # new rl(`rho:registry:lookup`), poSCh in {
+       #   rl!(`rho:rchain:pos`, *poSCh) |
+       #   for(@(_, PoS) <- poSCh) {
+       #     @PoS!("getBonds", "$name")
+       #   }
+       # }
+       """.stripMargin('#')
+
+  def withRuntimeLock[A](f: Runtime[F] => F[A]): F[A] =
+    Sync[F].bracket {
+      import coop.rchain.metrics.implicits._
+      implicit val ms: Source = RuntimeManagerMetricsSource
+      for {
+        _       <- Metrics[F].incrementGauge("lock.queue")
+        runtime <- Sync[F].defer(runtimeContainer.take).timer("lock.acquire")
+        _       <- Metrics[F].decrementGauge("lock.queue")
+      } yield runtime
+    }(f)(runtimeContainer.put)
+
+  private def withResetRuntimeLock[R](hash: StateHash)(block: Runtime[F] => F[R]): F[R] =
+    withRuntimeLock(
+      runtime => runtime.space.reset(Blake2b256Hash.fromByteString(hash)) >> block(runtime)
+    )
+
+  private def toBondSeq(bondsMap: Par): Seq[Bond] =
+    bondsMap.exprs.head.getEMapBody.ps.map {
+      case (validator: Par, bond: Par) =>
+        assert(validator.exprs.length == 1, "Validator in bonds map wasn't a single string.")
+        assert(bond.exprs.length == 1, "Stake in bonds map wasn't a single integer.")
+        val validatorName = validator.exprs.head.getGByteArray
+        val stakeAmount   = bond.exprs.head.getGInt
+        Bond(validatorName, stakeAmount)
+    }.toList
+
+  def getData(hash: StateHash)(channel: Par): F[Seq[Par]] =
+    withResetRuntimeLock(hash)(getData(_)(channel))
+
+  private def getData(
+      runtime: Runtime[F]
+  )(channel: Par): F[Seq[Par]] =
+    runtime.space.getData(channel).map(_.flatMap(_.a.pars))
+
+  def getContinuation(
+      hash: StateHash
+  )(channels: Seq[Par]): F[Seq[(Seq[BindPattern], Par)]] =
+    withResetRuntimeLock(hash)(
+      _.space
+        .getWaitingContinuations(channels)
+        .map(
+          _.filter(_.continuation.taggedCont.isParBody)
+            .map(result => (result.patterns, result.continuation.taggedCont.parBody.get.body))
+        )
+    )
+
 }
 
 object RuntimeManager {

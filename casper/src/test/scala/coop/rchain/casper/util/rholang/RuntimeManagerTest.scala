@@ -4,14 +4,12 @@ import cats.effect.Resource
 import cats.syntax.all._
 import cats.{Functor, Id}
 import coop.rchain.casper.protocol.ProcessedSystemDeploy.Failed
-import coop.rchain.casper.protocol.{DeployData, ProcessedDeploy, ProcessedSystemDeploy}
-import coop.rchain.shared.scalatestcontrib.effectTest
+import coop.rchain.casper.protocol.{DeployData, ProcessedDeploy}
 import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
-import coop.rchain.casper.util.rholang.SystemDeployPlatformFailure.UnexpectedSystemErrors
 import coop.rchain.casper.util.rholang.SystemDeployPlayResult.{PlayFailed, PlaySucceeded}
 import coop.rchain.casper.util.rholang.SystemDeployReplayResult.{ReplayFailed, ReplaySucceeded}
 import coop.rchain.casper.util.rholang.costacc.{CheckBalance, PreChargeDeploy, RefundDeploy}
-import coop.rchain.casper.util.{ConstructDeploy, GenesisBuilder, ProtoUtil}
+import coop.rchain.casper.util.{ConstructDeploy, GenesisBuilder}
 import coop.rchain.catscontrib.effect.implicits._
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
@@ -23,11 +21,12 @@ import coop.rchain.rholang.interpreter
 import coop.rchain.rholang.interpreter.Runtime.BlockData
 import coop.rchain.rholang.interpreter.accounting.Cost
 import coop.rchain.rholang.interpreter.{accounting, ParBuilderUtil}
+import coop.rchain.shared.scalatestcontrib.effectTest
 import coop.rchain.shared.{Log, Time}
 import coop.rchain.{metrics, rholang}
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
-import org.scalatest.{Assertion, FlatSpec, Matchers}
+import org.scalatest.{FlatSpec, Matchers}
 
 import scala.concurrent.duration._
 
@@ -80,28 +79,24 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
 
   "computeState" should "charge for deploys" in effectTest {
     runtimeManagerResource.use { runtimeManager =>
-      val userPk       = ConstructDeploy.defaultPub
       val genPostState = genesis.body.state.postStateHash
-      compareSuccessfulSystemDeploys(runtimeManager)(genPostState)(
-        new CheckBalance(pk = userPk, rand = Blake2b512Random(Array(0.toByte))),
-        new CheckBalance(pk = userPk, rand = Blake2b512Random(Array(0.toByte)))
-      )(_ == 9000000) >>= { stateHash0 =>
-        val source = "@0!0"
-        // TODO: Prohibit negative gas prices and gas limits in deploys.
-        // TODO: Make minimum maximum yield for deploy parameter of node.
-        ConstructDeploy.sourceDeployNowF(source = source, phloPrice = 1, phloLimit = 3) >>= {
-          deploy =>
-            computeState(runtimeManager, deploy, stateHash0) >>= {
-              case (playStateHash1, processedDeploy) =>
-                replayComputeState(runtimeManager)(stateHash0, processedDeploy) >>= {
-                  case Right(replayStateHash1) =>
-                    assert(playStateHash1 != genPostState && replayStateHash1 == playStateHash1)
-                    compareSuccessfulSystemDeploys(runtimeManager)(playStateHash1)(
-                      new CheckBalance(pk = userPk, rand = Blake2b512Random(Array(1.toByte))),
-                      new CheckBalance(pk = userPk, rand = Blake2b512Random(Array(1.toByte)))
-                    )(_ == 9000000 - processedDeploy.cost.cost)
-                  case Left(replayFailure) => fail(s"Unexpected replay failure: ${replayFailure}")
-                }
+      val source       = """
+                            # new rl(`rho:registry:lookup`), listOpsCh in {
+                            #   rl!(`rho:lang:listOps`, *listOpsCh) |
+                            #   for(x <- listOpsCh){
+                            #     Nil
+                            #   }
+                            # }
+                            #""".stripMargin('#')
+      // TODO: Prohibit negative gas prices and gas limits in deploys.
+      // TODO: Make minimum maximum yield for deploy parameter of node.
+      ConstructDeploy.sourceDeployNowF(source = source, phloLimit = 10000) >>= { deploy =>
+        computeState(runtimeManager, deploy, genPostState) >>= {
+          case (playStateHash1, processedDeploy) =>
+            replayComputeState(runtimeManager)(genPostState, processedDeploy) map {
+              case Right(replayStateHash1) =>
+                assert(playStateHash1 != genPostState && replayStateHash1 == playStateHash1)
+              case Left(replayFailure) => fail(s"Unexpected replay failure: $replayFailure")
             }
         }
       }

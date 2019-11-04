@@ -339,16 +339,23 @@ object ProcessedDeploy {
 sealed trait ProcessedSystemDeploy {
   def eventList: List[Event]
   def failed: Boolean
+  def fold[A](ifSucceeded: List[Event] => A, ifFailed: (List[Event], String) => A): A
 }
 
 object ProcessedSystemDeploy {
 
   final case class Succeeded(eventList: List[Event]) extends ProcessedSystemDeploy {
     val failed = false
+
+    override def fold[A](ifSucceeded: List[Event] => A, ifFailed: (List[Event], String) => A): A =
+      ifSucceeded(eventList)
   }
 
   final case class Failed(eventList: List[Event], errorMsg: String) extends ProcessedSystemDeploy {
     val failed = true
+
+    override def fold[A](ifSucceeded: List[Event] => A, ifFailed: (List[Event], String) => A): A =
+      ifFailed(eventList, errorMsg)
   }
 
   def from(psd: ProcessedSystemDeployProto): Either[String, ProcessedSystemDeploy] =
