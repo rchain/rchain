@@ -2,12 +2,15 @@ package coop.rchain.rholang.interpreter.accounting
 
 import cats.data.Chain
 import cats.effect._
+import cats.syntax.all._
+import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.metrics
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.rholang.Resources
 import coop.rchain.rholang.interpreter._
 import coop.rchain.rholang.interpreter.accounting.utils._
 import coop.rchain.rholang.interpreter.errors.OutOfPhlogistonsError
+import coop.rchain.rspace.Checkpoint
 import coop.rchain.shared.Log
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
@@ -53,6 +56,56 @@ class CostAccountingSpec extends FlatSpec with Matchers with PropertyChecks with
       .runSyncUnsafe(75.seconds)
   }
 
+  def evaluateAndReplay(
+      initialPhlo: Cost,
+      term: String
+  ): Task[(EvaluateResult, EvaluateResult)] = {
+
+    implicit val logF: Log[Task]           = new Log.NOPLog[Task]
+    implicit val metricsEff: Metrics[Task] = new metrics.Metrics.MetricsNOP[Task]
+    implicit val noopSpan: Span[Task]      = NoopSpan[Task]()
+    implicit val ms: Metrics.Source        = Metrics.BaseSource
+
+    val resources = for {
+      dir     <- Resources.mkTempDir[Task]("cost-accounting-spec-")
+      costLog <- Resource.liftF(costLog[Task]())
+      cost    <- Resource.liftF(CostAccounting.emptyCost[Task](implicitly, metricsEff, costLog, ms))
+      sar     <- Resource.liftF(Runtime.setupRSpace[Task](dir, 10 * 1024 * 1024))
+      runtime <- {
+        implicit val c: _cost[Task] = cost
+        Resource.make(Runtime.create[Task, Task.Par]((sar._1, sar._2), Nil))(_.close())
+      }
+    } yield (runtime, costLog)
+
+    resources
+      .use {
+        case (runtime, _) =>
+          implicit val c: _cost[Task]         = runtime.cost
+          implicit def rand: Blake2b512Random = Blake2b512Random(Array.empty[Byte])
+          Interpreter[Task].injAttempt(
+            runtime.reducer,
+            runtime.errorLog,
+            term,
+            initialPhlo,
+            Map.empty
+          )(rand) >>= { playResult =>
+            runtime.space.createCheckpoint() >>= {
+              case Checkpoint(root, log) =>
+                runtime.replaySpace.rigAndReset(root, log) >>
+                  Interpreter[Task].injAttempt(
+                    runtime.replayReducer,
+                    runtime.errorLog,
+                    term,
+                    initialPhlo,
+                    Map.empty
+                  )(rand) >>= { replayResult =>
+                  runtime.replaySpace.checkReplayData().as((playResult, replayResult))
+                }
+            }
+          }
+      }
+  }
+
   // max 0x144000000
   def fromLong(index: Long): String = {
     var remainder = index
@@ -73,7 +126,7 @@ class CostAccountingSpec extends FlatSpec with Matchers with PropertyChecks with
           val ch = remainder % 4
           remainder /= 4
           result += f"@${ch}${bang}(0)"
-          nonlinearSend |= (bang == "!!")
+          nonlinearSend ||= (bang == "!!")
         }
       } else {
         // receive
@@ -96,7 +149,7 @@ class CostAccountingSpec extends FlatSpec with Matchers with PropertyChecks with
           }
           val joinStr = joins.mkString("; ")
           result += f"for (${joinStr}) { 0 }"
-          nonlinearRecv |= (arrow == "<=")
+          nonlinearRecv ||= (arrow == "<=")
         }
       }
     }
@@ -165,7 +218,7 @@ class CostAccountingSpec extends FlatSpec with Matchers with PropertyChecks with
 
   it should "be repeatable" in
     forAll(contracts) { (contract: String, _) =>
-      checkRepeatableCost {
+      checkDeterministicCost {
         val result = evaluateWithCostLog(Integer.MAX_VALUE, contract)
         assert(result._1.errors.isEmpty)
         result
@@ -174,28 +227,27 @@ class CostAccountingSpec extends FlatSpec with Matchers with PropertyChecks with
 
   it should "be repeatable when generated" in {
     val r = scala.util.Random
-    println("Trying contract fromLong(1716417707L) = @2!!(0) | @0!!(0) | for (_ <<- @2) { 0 } | @2!(0)")
-    checkRepeatableCost {
-      val result = evaluateWithCostLog(Integer.MAX_VALUE, fromLong(1716417707))
+    // Try contract fromLong(1716417707L) = @2!!(0) | @0!!(0) | for (_ <<- @2) { 0 } | @2!(0)"
+    evaluateAndReplay(Cost(Integer.MAX_VALUE), fromLong(1716417707)).map(result => {
       assert(result._1.errors.isEmpty)
-      result
-    }
+      assert(result._2.errors.isEmpty)
+      assert(result._1.cost == result._2.cost)
+    })
 
-    for (i <- 1 to 1000) {
+    for (i <- 1 to 10000) {
       val long     = ((r.nextLong % 0X144000000L) + 0X144000000L) % 0X144000000L
       val contract = fromLong(long)
-      println(f"fromLong(${long}): ${contract}")
       if (contract != "") {
-        checkRepeatableCost {
-          val result = evaluateWithCostLog(Integer.MAX_VALUE, contract)
+        evaluateAndReplay(Cost(Integer.MAX_VALUE), contract).map(result => {
           assert(result._1.errors.isEmpty)
-          result
-        }
+          assert(result._2.errors.isEmpty)
+          assert(result._1.cost == result._2.cost)
+        })
       }
     }
   }
 
-  def checkRepeatableCost(block: => (EvaluateResult, Chain[Cost])): Unit = {
+  def checkDeterministicCost(block: => (EvaluateResult, Chain[Cost])): Unit = {
     val repetitions = 20
     val first       = block
     // execute in parallel to trigger different interleaves
