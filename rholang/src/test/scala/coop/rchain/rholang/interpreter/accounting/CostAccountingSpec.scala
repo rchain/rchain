@@ -216,7 +216,7 @@ class CostAccountingSpec extends FlatSpec with Matchers with PropertyChecks with
     }
   }
 
-  it should "be repeatable" in
+  it should "be deterministic" in
     forAll(contracts) { (contract: String, _) =>
       checkDeterministicCost {
         val result = evaluateWithCostLog(Integer.MAX_VALUE, contract)
