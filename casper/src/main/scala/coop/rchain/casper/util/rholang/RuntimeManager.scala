@@ -8,7 +8,7 @@ import cats.syntax.all._
 import com.google.protobuf.ByteString
 import coop.rchain.casper.CasperMetricsSource
 import coop.rchain.casper.protocol._
-import coop.rchain.casper.util.rholang.RuntimeManager.{evaluate, StateHash}
+import coop.rchain.casper.util.rholang.RuntimeManager.{StateHash, evaluate}
 import coop.rchain.casper.util.rholang.SystemDeployPlatformFailure._
 import coop.rchain.casper.util.rholang.SystemDeployUserError._
 import coop.rchain.casper.util.rholang.costacc.{PreChargeDeploy, RefundDeploy}
@@ -24,14 +24,7 @@ import coop.rchain.models._
 import coop.rchain.rholang.interpreter.Runtime.BlockData
 import coop.rchain.rholang.interpreter.accounting._
 import coop.rchain.rholang.interpreter.errors.BugFoundError
-import coop.rchain.rholang.interpreter.{
-  ErrorLog,
-  EvaluateResult,
-  Interpreter,
-  Reduce,
-  RhoType,
-  Runtime
-}
+import coop.rchain.rholang.interpreter.{ErrorLog, EvaluateResult, Interpreter, Reduce, RhoType, Runtime}
 import coop.rchain.rspace.{Blake2b256Hash, ReplayException}
 
 trait RuntimeManager[F[_]] {
@@ -494,12 +487,13 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span](
 
   def captureResults(start: StateHash, deploy: DeployData, name: Par): F[Seq[Par]] =
     withResetRuntimeLock(start) { runtime =>
+    runtime.space.createSoftCheckpoint() >>= (fallback =>
       evaluate(runtime.reducer, runtime.cost, runtime.errorLog)(deploy)
         .ensure(
           BugFoundError("Unexpected error while capturing results from rholang")
         )(
           _.errors.isEmpty
-        ) >> getData(runtime)(name)
+        ) >> getData(runtime)(name).flatTap(_ => runtime.space.revertToSoftCheckpoint(fallback)))
     }
 
   private def setInvalidBlocks(
