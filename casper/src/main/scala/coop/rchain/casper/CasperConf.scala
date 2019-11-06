@@ -33,7 +33,8 @@ final case class CasperConf(
     approveGenesis: Boolean,
     approveGenesisInterval: FiniteDuration,
     approveGenesisDuration: FiniteDuration,
-    deployTimestamp: Option[Long]
+    deployTimestamp: Option[Long],
+    finalizationRate: Int
 )
 
 object CasperConf {

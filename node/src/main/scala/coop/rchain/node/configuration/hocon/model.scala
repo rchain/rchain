@@ -280,6 +280,7 @@ object Casper {
     val GenesisApproveDuration  = "genesis-approve-duration"
     val DeployTimestamp         = "deploy-timestamp"
     val GenesisPath             = "genesis-path"
+    val FinalizationRate        = "finalization-rate"
 
     val all =
       List(
@@ -300,7 +301,8 @@ object Casper {
         GenesisApproveInterval,
         GenesisApproveDuration,
         DeployTimestamp,
-        GenesisPath
+        GenesisPath,
+        FinalizationRate
       )
   }
 
@@ -329,7 +331,8 @@ object Casper {
       approveGenesisDuration = casper.getFiniteDuration(keys.GenesisApproveDuration),
       deployTimestamp = casper.getLongOpt(keys.DeployTimestamp),
       genesisPath = casper.getPath(keys.GenesisPath),
-      createGenesis = false
+      createGenesis = false,
+      finalizationRate = casper.getInt(keys.FinalizationRate)
     )
   }
 }

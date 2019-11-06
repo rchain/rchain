@@ -89,8 +89,9 @@ object Engine {
 
   def transitionToInitializing[F[_]: Concurrent: Metrics: Span: Monad: EngineCell: Log: EventLog: BlockStore: CommUtil: TransportLayer: ConnectionsCell: RPConfAsk: Time: SafetyOracle: LastFinalizedBlockCalculator: LastApprovedBlock: BlockDagStorage: LastFinalizedStorage: RuntimeManager: Running.RequestedBlocks: EventPublisher: SynchronyConstraintChecker](
       shardId: String,
+      finalizationRate: Int,
       validatorId: Option[ValidatorIdentity],
       init: F[Unit]
-  ): F[Unit] = EngineCell[F].set(new Initializing(shardId, validatorId, init))
+  ): F[Unit] = EngineCell[F].set(new Initializing(shardId, finalizationRate, validatorId, init))
 
 }
