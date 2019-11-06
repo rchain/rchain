@@ -215,6 +215,66 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
     } yield ()
   }
 
+  "computeState then computeBonds" should "be replayable after-all" in effectTest {
+
+    import cats.instances.vector._
+
+    val gps = genesis.body.state.postStateHash
+
+    val s0 = "@1!(1)"
+    val s1 = "@2!(2)"
+    val s2 = "for(@a <- @1){ @123!(5 * a) }"
+
+    val deploys0F = Vector(s0, s1, s2).traverse(ConstructDeploy.sourceDeployNowF(_))
+
+    val s3 = "@1!(1)"
+    val s4 = "for(@a <- @2){ @456!(5 * a) }"
+
+    val deploys1F = Vector(s3, s4).traverse(ConstructDeploy.sourceDeployNowF(_))
+
+    runtimeManagerResource.use { runtimeManager =>
+      for {
+        deploys0 <- deploys0F
+        deploys1 <- deploys1F
+        time     <- timeF.currentMillis
+        playStateHash0AndProcessedDeploys0 <- runtimeManager.computeState(gps)(
+                                               deploys0.toList,
+                                               BlockData(time, 0L),
+                                               Map.empty
+                                             )
+        (playStateHash0, processedDeploys0) = playStateHash0AndProcessedDeploys0
+        bonds0                              <- runtimeManager.computeBonds(playStateHash0)
+        replayError0OrReplayStateHash0 <- runtimeManager.replayComputeState(gps)(
+                                           processedDeploys0,
+                                           BlockData(time, 0L),
+                                           Map.empty,
+                                           isGenesis = false
+                                         )
+        Right(replayStateHash0) = replayError0OrReplayStateHash0
+        _                       = assert(playStateHash0 == replayStateHash0)
+        bonds1                  <- runtimeManager.computeBonds(playStateHash0)
+        _                       = assert(bonds0 == bonds1)
+        playStateHash1AndProcessedDeploys1 <- runtimeManager.computeState(playStateHash0)(
+                                               deploys1.toList,
+                                               BlockData(time, 0L),
+                                               Map.empty
+                                             )
+        (playStateHash1, processedDeploys1) = playStateHash1AndProcessedDeploys1
+        bonds2                              <- runtimeManager.computeBonds(playStateHash1)
+        replayError1OrReplayStateHash1 <- runtimeManager.replayComputeState(playStateHash0)(
+                                           processedDeploys1,
+                                           BlockData(time, 0L),
+                                           Map.empty,
+                                           isGenesis = false
+                                         )
+        Right(replayStateHash1) = replayError1OrReplayStateHash1
+        _                       = assert(playStateHash1 == replayStateHash1)
+        bonds3                  <- runtimeManager.computeBonds(playStateHash1)
+        _                       = assert(bonds2 == bonds3)
+      } yield ()
+    }
+  }
+
   it should "capture rholang parsing errors and charge for parsing" in effectTest {
     val badRholang = """ for(@x <- @"x"; @y <- @"y"){ @"xy"!(x + y) | @"x"!(1) | @"y"!("hi") """
     for {
