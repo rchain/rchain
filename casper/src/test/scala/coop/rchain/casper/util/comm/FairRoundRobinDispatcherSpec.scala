@@ -2,9 +2,9 @@ package coop.rchain.casper.util.comm
 
 import scala.collection.immutable.Queue
 
+import cats.{Eq, Show}
 import cats.effect.concurrent.Ref
 import cats.effect.SyncIO
-import cats.Show
 
 import coop.rchain.shared.Log
 import FairRoundRobinDispatcher._
@@ -64,6 +64,44 @@ class FairRoundRobinDispatcherSpec extends WordSpecLike with Matchers {
             expectedMessages = Map("A" -> Queue(1)),
             expectedRetries = Map("A"  -> 2)
           )
+        }
+    }
+
+    "isDuplicate" should {
+      "be true if the message is already enqueued" in
+        new TestEnv(10, 0, 0) {
+          val result: Boolean =
+            validate(
+              for {
+                _ <- dispatcher.ensureSourceExists("A")
+                _ <- dispatcher.enqueueMessage("A", 1)
+                r <- dispatcher.isDuplicate("A", 1)
+              } yield r
+            )(
+              expectedQueue = Queue("A"),
+              expectedMessages = Map("A" -> Queue(1)),
+              expectedRetries = Map("A"  -> 0)
+            )
+
+          result shouldBe true
+        }
+
+      "be false if the message is not enqueued yet" in
+        new TestEnv(10, 0, 0) {
+          val result: Boolean =
+            validate(
+              for {
+                _ <- dispatcher.ensureSourceExists("A")
+                _ <- dispatcher.enqueueMessage("A", 1)
+                r <- dispatcher.isDuplicate("A", 2)
+              } yield r
+            )(
+              expectedQueue = Queue("A"),
+              expectedMessages = Map("A" -> Queue(1)),
+              expectedRetries = Map("A"  -> 0)
+            )
+
+          result shouldBe false
         }
     }
 
@@ -603,6 +641,7 @@ class FairRoundRobinDispatcherSpec extends WordSpecLike with Matchers {
     implicit private val log: Log[SyncIO]         = new Log.NOPLog[SyncIO]
     implicit private val showSource: Show[String] = s => s
     implicit private val showMessage: Show[Int]   = m => m.toString
+    implicit private val eqMessage: Eq[Int]       = (x, y) => x == y
 
     val (queue, messages, retries, skipped, handled) =
       (for {

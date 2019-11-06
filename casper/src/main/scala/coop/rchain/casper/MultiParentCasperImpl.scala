@@ -337,7 +337,7 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Log: Time: SafetyOracle: Las
         // Add successful! Send block hash to peers, log success, try to add other blocks
         for {
           updatedDag <- BlockDagStorage[F].insert(block, genesis, invalid = false)
-          _          <- CommUtil[F].sendBlockHash(block.blockHash)
+          _          <- CommUtil[F].sendBlockHash(block.blockHash, block.sender)
           _ <- Log[F].info(
                 s"Added ${PrettyPrinter.buildString(block.blockHash)}"
               )
@@ -373,7 +373,7 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Log: Time: SafetyOracle: Las
             // We can only treat admissible equivocations as invalid blocks if
             // casper is single threaded.
             updatedDag <- handleInvalidBlockEffect(InvalidBlock.AdmissibleEquivocation, block)
-            _          <- CommUtil[F].sendBlockHash(block.blockHash)
+            _          <- CommUtil[F].sendBlockHash(block.blockHash, block.sender)
           } yield updatedDag
 
         case InvalidBlock.IgnorableEquivocation =>
