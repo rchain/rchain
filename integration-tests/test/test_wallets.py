@@ -11,7 +11,6 @@ from .common import (
 
 from .conftest import (
     testing_context,
-    temporary_wallets_file,
 )
 from .rnode import (
     Node,
@@ -68,10 +67,9 @@ def test_alice_pay_bob(command_line_options: CommandLineOptions, docker_client: 
         ALICE_KEY: ALICE_GENESIS_VAULT_AMOUNT
     }
 
-    with testing_context(command_line_options, random_generator, docker_client) as context, \
+    with testing_context(command_line_options, random_generator, docker_client, wallets_dict=genesis_vault) as context, \
             docker_network(context, context.docker) as network, \
-            temporary_wallets_file(random_generator, genesis_vault) as wallets_file, \
-            started_bootstrap(context=context, network=network, wallets_file=wallets_file) as bootstrap:
+            started_bootstrap(context=context, network=network) as bootstrap:
 
         transfer_amount = 100
         alice_rev_address = ALICE_KEY.get_public_key().get_rev_address()
@@ -102,10 +100,9 @@ def test_transfer_failed_with_invalid_key(command_line_options: CommandLineOptio
     genesis_vault = {
         CHARLIE_KEY: CHARLIE_GENESIS_VAULT_AMOUNT
     }
-    with testing_context(command_line_options, random_generator, docker_client) as context, \
+    with testing_context(command_line_options, random_generator, docker_client, wallets_dict=genesis_vault) as context, \
             docker_network(context, context.docker) as network, \
-            temporary_wallets_file(random_generator, genesis_vault) as wallets_file, \
-            started_bootstrap(context=context, network=network, wallets_file=wallets_file) as bootstrap:
+            started_bootstrap(context=context, network=network) as bootstrap:
 
         alice_rev_address = ALICE_KEY.get_public_key().get_rev_address()
         charlie_rev_address = CHARLIE_KEY.get_public_key().get_rev_address()

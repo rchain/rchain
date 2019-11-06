@@ -5,7 +5,6 @@ from rchain.crypto import PrivateKey
 
 from .conftest import (
     testing_context,
-    temporary_wallets_file,
 )
 from .common import (
     CommandLineOptions,
@@ -50,11 +49,17 @@ def test_successful_genesis_ceremony(command_line_options: CommandLineOptions, r
         VALIDATOR_B_KEYPAIR,
     ]
 
-    with testing_context(command_line_options, random_generator, docker_client, bootstrap_key=CEREMONY_MASTER_KEYPAIR, peers_keys=peers_keypairs) as context, \
-        temporary_wallets_file(context.random_generator) as wallets, \
-        ready_bootstrap(context=context, cli_options=bootstrap_cli_options, wallets_file=wallets) as ceremony_master, \
-        started_peer(context=context, network=ceremony_master.network, bootstrap=ceremony_master, name='validator-a', private_key=VALIDATOR_A_KEYPAIR, wallets_file=wallets, cli_flags=peers_cli_flags, cli_options=peers_cli_options) as validator_a, \
-        started_peer(context=context, network=ceremony_master.network, bootstrap=ceremony_master, name='validator-b', private_key=VALIDATOR_B_KEYPAIR, wallets_file=wallets, cli_flags=peers_cli_flags, cli_options=peers_cli_options) as validator_b, \
+    wallet_map = {
+        CEREMONY_MASTER_KEYPAIR: 10000,
+        VALIDATOR_A_KEYPAIR: 10000,
+        VALIDATOR_B_KEYPAIR: 10000,
+        VALIDATOR_C_KEYPAIR: 10000
+    }
+
+    with testing_context(command_line_options, random_generator, docker_client, bootstrap_key=CEREMONY_MASTER_KEYPAIR, peers_keys=peers_keypairs, wallets_dict=wallet_map) as context, \
+        ready_bootstrap(context=context, cli_options=bootstrap_cli_options) as ceremony_master, \
+        started_peer(context=context, network=ceremony_master.network, bootstrap=ceremony_master, name='validator-a', private_key=VALIDATOR_A_KEYPAIR, cli_flags=peers_cli_flags, cli_options=peers_cli_options) as validator_a, \
+        started_peer(context=context, network=ceremony_master.network, bootstrap=ceremony_master, name='validator-b', private_key=VALIDATOR_B_KEYPAIR, cli_flags=peers_cli_flags, cli_options=peers_cli_options) as validator_b, \
         started_peer(context=context, network=ceremony_master.network, bootstrap=ceremony_master, name='readonly-a', private_key=READONLY_A_KEYPAIR) as readonly_a:
             wait_for_block_approval(context, ceremony_master)
             wait_for_approved_block_received_handler_state(context, ceremony_master)
@@ -103,11 +108,16 @@ def test_validator_catching_up(command_line_options: CommandLineOptions, random_
         VALIDATOR_B_KEYPAIR,
         VALIDATOR_C_KEYPAIR
     ]
-    with testing_context(command_line_options, random_generator, docker_client, bootstrap_key=CEREMONY_MASTER_KEYPAIR, peers_keys=peers_keypairs) as context, \
-        temporary_wallets_file(context.random_generator) as wallets, \
-        ready_bootstrap(context=context, cli_options=bootstrap_cli_options, wallets_file=wallets) as ceremony_master, \
-        started_peer(context=context, network=ceremony_master.network, bootstrap=ceremony_master, name='validator-a', private_key=VALIDATOR_A_KEYPAIR, wallets_file=wallets, cli_flags=peers_cli_flags, cli_options=peers_cli_options) as validator_a, \
-        started_peer(context=context, network=ceremony_master.network, bootstrap=ceremony_master, name='validator-b', private_key=VALIDATOR_B_KEYPAIR, wallets_file=wallets, cli_flags=peers_cli_flags, cli_options=peers_cli_options) as validator_b:
+    wallets_map = {
+        CEREMONY_MASTER_KEYPAIR: 10000,
+        VALIDATOR_A_KEYPAIR: 10000,
+        VALIDATOR_B_KEYPAIR: 10000,
+        VALIDATOR_C_KEYPAIR: 10000
+    }
+    with testing_context(command_line_options, random_generator, docker_client, bootstrap_key=CEREMONY_MASTER_KEYPAIR, peers_keys=peers_keypairs, wallets_dict=wallets_map) as context, \
+        ready_bootstrap(context=context, cli_options=bootstrap_cli_options) as ceremony_master, \
+        started_peer(context=context, network=ceremony_master.network, bootstrap=ceremony_master, name='validator-a', private_key=VALIDATOR_A_KEYPAIR, cli_flags=peers_cli_flags, cli_options=peers_cli_options) as validator_a, \
+        started_peer(context=context, network=ceremony_master.network, bootstrap=ceremony_master, name='validator-b', private_key=VALIDATOR_B_KEYPAIR, cli_flags=peers_cli_flags, cli_options=peers_cli_options) as validator_b:
             wait_for_block_approval(context, ceremony_master)
             wait_for_approved_block_received_handler_state(context, ceremony_master)
             wait_for_sent_approved_block(context, ceremony_master)

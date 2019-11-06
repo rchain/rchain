@@ -54,7 +54,14 @@ def test_fault_tolerance(command_line_options: CommandLineOptions, random_genera
         BONDED_VALIDATOR_KEY_1: 20,
         BONDED_VALIDATOR_KEY_2: 15
     }
-    with conftest.testing_context(command_line_options, random_generator, docker_client, bootstrap_key=BOOTSTRAP_NODE_KEYS, peers_keys=peers_keypairs, validator_bonds_dict=validator_bonds_map) as context, \
+    wallets_map = {
+        BOOTSTRAP_NODE_KEYS: 10000,
+        BONDED_VALIDATOR_KEY_1: 10000,
+        BONDED_VALIDATOR_KEY_2: 10000,
+        BONDED_VALIDATOR_KEY_3: 10000,
+        BONDED_VALIDATOR_KEY_4: 10000
+    }
+    with conftest.testing_context(command_line_options, random_generator, docker_client, bootstrap_key=BOOTSTRAP_NODE_KEYS, peers_keys=peers_keypairs, validator_bonds_dict=validator_bonds_map, wallets_dict=wallets_map) as context, \
         docker_network_with_started_bootstrap(context=context) as bootstrap_node, \
         bootstrap_connected_peer(context=context, bootstrap=bootstrap_node, name='bonded-validator-1', private_key=BONDED_VALIDATOR_KEY_1) as validator1, \
         bootstrap_connected_peer(context=context, bootstrap=bootstrap_node, name='bonded-validator-2', private_key=BONDED_VALIDATOR_KEY_2) as validator2:
@@ -109,9 +116,16 @@ def test_fault_tolerance(command_line_options: CommandLineOptions, random_genera
 
 @pytest.mark.xfail
 def test_catch_up_next_round(command_line_options: CommandLineOptions, random_generator: Random, docker_client: DockerClient) -> None:
+    wallets_map = {
+        BOOTSTRAP_NODE_KEYS: 10000,
+        BONDED_VALIDATOR_KEY_1: 10000,
+        BONDED_VALIDATOR_KEY_2: 10000,
+        BONDED_VALIDATOR_KEY_3: 10000,
+        BONDED_VALIDATOR_KEY_4: 10000
+    }
     peers_keypairs = [BONDED_VALIDATOR_KEY_1, BONDED_VALIDATOR_KEY_2, BONDED_VALIDATOR_KEY_3, BONDED_VALIDATOR_KEY_4]
     contract_path = '/opt/docker/examples/tut-hello.rho'
-    with conftest.testing_context(command_line_options, random_generator, docker_client, bootstrap_key=BOOTSTRAP_NODE_KEYS, peers_keys=peers_keypairs) as context, \
+    with conftest.testing_context(command_line_options, random_generator, docker_client, bootstrap_key=BOOTSTRAP_NODE_KEYS, peers_keys=peers_keypairs, wallets_dict=wallets_map) as context, \
         docker_network_with_started_bootstrap(context=context) as bootstrap_node, \
         bootstrap_connected_peer(context=context, bootstrap=bootstrap_node, name='bonded-validator-1', private_key=BONDED_VALIDATOR_KEY_1) as validator1, \
         bootstrap_connected_peer(context=context, bootstrap=bootstrap_node, name='bonded-validator-2', private_key=BONDED_VALIDATOR_KEY_2) as validator2, \
