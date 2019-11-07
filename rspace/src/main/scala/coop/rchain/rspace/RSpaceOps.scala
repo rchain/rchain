@@ -221,6 +221,8 @@ abstract class RSpaceOps[F[_]: Concurrent: Metrics, C, P, A, K](
       _           = historyRepositoryAtom.set(nextHistory)
       _           = eventLog.take()
       _           = eventLog.put(Seq.empty)
+      _           = produceCounter.take()
+      _           = produceCounter.put(Map.empty.withDefaultValue(0))
       _           <- createNewHotStore(nextHistory)(serializeK.toCodec)
       _           <- restoreInstalls()
     } yield ()
