@@ -482,6 +482,91 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
     }
   }
 
+  it should "just work" in effectTest {
+    runtimeManagerResource.use { runtimeManager =>
+      val genPostState = genesis.body.state.postStateHash
+      val source =
+        """
+          #new d1,d2,d3,d4,d5,d6,d7,d8,d9 in {
+          #  contract d1(@depth) = {
+          #    if (depth <= 0) {
+          #      Nil
+          #    } else {
+          #      d1!(depth - 1) | d1!(depth - 1) | d1!(depth - 1) | d1!(depth - 1) | d1!(depth - 1) | d1!(depth - 1) | d1!(depth - 1) | d1!(depth - 1) | d1!(depth - 1) | d1!(depth - 1)  }
+          #  } |
+          #  contract d2(@depth) = {
+          #    if (depth <= 0) {
+          #      Nil
+          #    } else {
+          #      d2!(depth - 1) | d2!(depth - 1) | d2!(depth - 1) | d2!(depth - 1) | d2!(depth - 1) | d2!(depth - 1) | d2!(depth - 1) | d2!(depth - 1) | d2!(depth - 1) | d2!(depth - 1)  }
+          #  } |
+          #  contract d3(@depth) = {
+          #    if (depth <= 0) {
+          #      Nil
+          #    } else {
+          #      d3!(depth - 1) | d3!(depth - 1) | d3!(depth - 1) | d3!(depth - 1) | d3!(depth - 1) | d3!(depth - 1) | d3!(depth - 1) | d3!(depth - 1) | d3!(depth - 1) | d3!(depth - 1)  }
+          #  } |
+          #  contract d4(@depth) = {
+          #    if (depth <= 0) {
+          #      Nil
+          #    } else {
+          #      d4!(depth - 1) | d4!(depth - 1) | d4!(depth - 1) | d4!(depth - 1) | d4!(depth - 1) | d4!(depth - 1) | d4!(depth - 1) | d4!(depth - 1) | d4!(depth - 1) | d4!(depth - 1)  }
+          #  } |
+          #  contract d5(@depth) = {
+          #    if (depth <= 0) {
+          #      Nil
+          #    } else {
+          #      d5!(depth - 1) | d5!(depth - 1) | d5!(depth - 1) | d5!(depth - 1) | d5!(depth - 1) | d5!(depth - 1) | d5!(depth - 1) | d5!(depth - 1) | d5!(depth - 1) | d5!(depth - 1)  }
+          #  } |
+          #  contract d6(@depth) = {
+          #    if (depth <= 0) {
+          #      Nil
+          #    } else {
+          #      d6!(depth - 1) | d6!(depth - 1) | d6!(depth - 1) | d6!(depth - 1) | d6!(depth - 1) | d6!(depth - 1) | d6!(depth - 1) | d6!(depth - 1) | d6!(depth - 1) | d6!(depth - 1)  }
+          #  } |
+          #  contract d7(@depth) = {
+          #    if (depth <= 0) {
+          #      Nil
+          #    } else {
+          #      d7!(depth - 1) | d7!(depth - 1) | d7!(depth - 1) | d7!(depth - 1) | d7!(depth - 1) | d7!(depth - 1) | d7!(depth - 1) | d7!(depth - 1) | d7!(depth - 1) | d7!(depth - 1)  }
+          #  } |
+          #  contract d8(@depth) = {
+          #    if (depth <= 0) {
+          #      Nil
+          #    } else {
+          #      d8!(depth - 1) | d8!(depth - 1) | d8!(depth - 1) | d8!(depth - 1) | d8!(depth - 1) | d8!(depth - 1) | d8!(depth - 1) | d8!(depth - 1) | d8!(depth - 1) | d8!(depth - 1) }
+          #  } |
+          #  contract d9(@depth) = {
+          #    if (depth <= 0) {
+          #      Nil
+          #    } else {
+          #      d9!(depth - 1) | d9!(depth - 1) | d9!(depth - 1) | d9!(depth - 1) | d9!(depth - 1) | d9!(depth - 1) | d9!(depth - 1) | d9!(depth - 1) | d9!(depth - 1) | d9!(depth - 1) }
+          #  } |
+          #  d1!(2) |
+          #  d2!(2) |
+          #  d3!(2) |
+          #  d4!(2) |
+          #  d5!(2) |
+          #  d6!(2) |
+          #  d7!(2) |
+          #  d8!(2) |
+          #  d9!(2)
+          #}
+          #""".stripMargin('#')
+      ConstructDeploy.sourceDeployNowF(source = source, phloLimit = Int.MaxValue - 2) >>= {
+        deploy =>
+          computeState(runtimeManager, deploy, genPostState) >>= {
+            case (playStateHash1, processedDeploy) =>
+              replayComputeState(runtimeManager)(genPostState, processedDeploy) map {
+                case Right(replayStateHash1) =>
+                  assert(playStateHash1 != genPostState && replayStateHash1 == playStateHash1)
+                case Left(replayFailure) => fail(s"Unexpected replay failure: $replayFailure")
+              }
+          }
+      }
+    }
+  }
+
   "replayComputeState" should "catch discrepancies in initial and replay cost when no errors are thrown" in effectTest {
     invalidReplay("@0!(0) | for(@0 <- @0){ Nil }").map {
       case Left(ReplayCostMismatch(initialCost, replayCost)) =>
@@ -490,10 +575,10 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
     }
   }
 
-  "replayComputeState" should "not catch discrepancies in initial and replay cost when user errors are thrown" in effectTest {
+  /*  "replayComputeState" should "not catch discrepancies in initial and replay cost when user errors are thrown" in effectTest {
     invalidReplay("@0!(0) | for(@x <- @0){ x.undefined() }").map {
       case Right(_) => succeed
       case _        => fail
     }
-  }
+  }*/
 }
