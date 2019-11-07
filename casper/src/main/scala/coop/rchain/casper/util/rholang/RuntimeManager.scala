@@ -432,9 +432,9 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span](
       )(result => isFailed == result.failed)
       .ensureOr(
         result =>
-          /* Since there are no errors, verify evaluation costs and COMM events match. */
+          /* Verify evaluation costs match. */
           ReplayFailure.replayCostMismatch(cost.cost, result.cost.value)
-      )(result => result.failed || cost.cost == result.cost.value)
+      )(result => cost.cost == result.cost.value)
 
     def evaluatorT: EitherT[F, ReplayFailure, Unit] =
       if (withCostAccounting) {

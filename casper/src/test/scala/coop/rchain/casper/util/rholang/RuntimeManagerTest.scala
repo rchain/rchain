@@ -103,31 +103,6 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
     }
   }
 
-  private def invalidReplay(source: String): Task[Either[ReplayFailure, StateHash]] =
-    runtimeManagerResource.use { runtimeManager =>
-      for {
-        deploy        <- ConstructDeploy.sourceDeployNowF(source)
-        time          <- timeF.currentMillis
-        genPostState  = genesis.body.state.postStateHash
-        blockData     = BlockData(time, 0L)
-        invalidBlocks = Map.empty[BlockHash, Validator]
-        processedDeploys <- runtimeManager
-                             .computeState(genPostState)(Seq(deploy), blockData, invalidBlocks)
-                             .map(_._2)
-        processedDeploy     = processedDeploys.head
-        processedDeployCost = processedDeploy.cost.cost
-        invalidProcessedDeploy = processedDeploy.copy(
-          cost = PCost(processedDeployCost - 1)
-        )
-        result <- runtimeManager.replayComputeState(genPostState)(
-                   Seq(invalidProcessedDeploy),
-                   blockData,
-                   invalidBlocks,
-                   isGenesis = false
-                 )
-      } yield result
-    }
-
   private def compareSuccessfulSystemDeploys[S <: SystemDeploy](
       runtimeManager: RuntimeManager[Task]
   )(startState: StateHash)(
@@ -567,6 +542,31 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
     }
   }
 
+  private def invalidReplay(source: String): Task[Either[ReplayFailure, StateHash]] =
+    runtimeManagerResource.use { runtimeManager =>
+      for {
+        deploy        <- ConstructDeploy.sourceDeployNowF(source)
+        time          <- timeF.currentMillis
+        genPostState  = genesis.body.state.postStateHash
+        blockData     = BlockData(time, 0L)
+        invalidBlocks = Map.empty[BlockHash, Validator]
+        processedDeploys <- runtimeManager
+                             .computeState(genPostState)(Seq(deploy), blockData, invalidBlocks)
+                             .map(_._2)
+        processedDeploy     = processedDeploys.head
+        processedDeployCost = processedDeploy.cost.cost
+        invalidProcessedDeploy = processedDeploy.copy(
+          cost = PCost(processedDeployCost - 1)
+        )
+        result <- runtimeManager.replayComputeState(genPostState)(
+                   Seq(invalidProcessedDeploy),
+                   blockData,
+                   invalidBlocks,
+                   isGenesis = false
+                 )
+      } yield result
+    }
+
   "replayComputeState" should "catch discrepancies in initial and replay cost when no errors are thrown" in effectTest {
     invalidReplay("@0!(0) | for(@0 <- @0){ Nil }").map {
       case Left(ReplayCostMismatch(initialCost, replayCost)) =>
@@ -575,10 +575,11 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
     }
   }
 
-  /*  "replayComputeState" should "not catch discrepancies in initial and replay cost when user errors are thrown" in effectTest {
+  "replayComputeState" should "not catch discrepancies in initial and replay cost when user errors are thrown" in effectTest {
     invalidReplay("@0!(0) | for(@x <- @0){ x.undefined() }").map {
-      case Right(_) => succeed
-      case _        => fail
+      case Left(ReplayCostMismatch(initialCost, replayCost)) =>
+        assert(initialCost == 395L && replayCost == 396L)
+      case _ => fail()
     }
-  }*/
+  }
 }
