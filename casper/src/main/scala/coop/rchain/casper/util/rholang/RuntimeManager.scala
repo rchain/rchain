@@ -13,6 +13,7 @@ import coop.rchain.casper.util.rholang.SystemDeployPlatformFailure._
 import coop.rchain.casper.util.rholang.SystemDeployUserError._
 import coop.rchain.casper.util.rholang.costacc.{PreChargeDeploy, RefundDeploy}
 import coop.rchain.casper.util.{ConstructDeploy, EventConverter, ProtoUtil}
+import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.metrics.Metrics.Source
 import coop.rchain.metrics.{Metrics, Span}
@@ -33,6 +34,7 @@ import coop.rchain.rholang.interpreter.{
   Runtime
 }
 import coop.rchain.rspace.{Blake2b256Hash, ReplayException}
+import coop.rchain.shared.Log
 
 trait RuntimeManager[F[_]] {
   def playSystemDeploy[S <: SystemDeploy](startHash: StateHash)(
@@ -71,7 +73,7 @@ trait RuntimeManager[F[_]] {
   def withRuntimeLock[A](f: Runtime[F] => F[A]): F[A]
 }
 
-class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span](
+class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log](
     val emptyStateHash: StateHash,
     runtimeContainer: MVar[F, Runtime[F]]
 ) extends RuntimeManager[F] {
@@ -327,19 +329,24 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span](
     } yield (finalStateHash.toByteString, res)
   }
 
-  private def processDeployWithCostAccounting(runtime: Runtime[F])(deploy: DeployData) = {
+  private def processDeployWithCostAccounting(
+      runtime: Runtime[F]
+  )(deploy: DeployData)(implicit Log: Log[F]) = {
     import cats.instances.vector._
     val rand = deploy.rng
     EitherT(
       WriterT(
-        /* execute pre-charge */
-        playSystemDeployInternal(runtime)(
-          new PreChargeDeploy(
-            deploy.totalPhloCharge,
-            deploy.deployerPk,
-            rand
+        Log.info(
+          s"PreCharging ${Base16.encode(deploy.deployerPk.bytes)} for ${deploy.totalPhloCharge}"
+        ) >>
+          /* execute pre-charge */
+          playSystemDeployInternal(runtime)(
+            new PreChargeDeploy(
+              deploy.totalPhloCharge,
+              deploy.deployerPk,
+              rand
+            )
           )
-        )
       )
     ).semiflatMap( // execute user deploy
         _ => WriterT(processDeploy(runtime)(deploy).map(pd => (pd.deployLog.toVector, pd)))
@@ -349,23 +356,36 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span](
           /*execute Refund as a side effect (keeping the logs and the possible error but discarding result)*/
           EitherT(
             WriterT(
-              playSystemDeployInternal(runtime)(
-                new RefundDeploy(pd.refundAmount, rand.splitByte(64))
-              )
+              Log.info(
+                s"Refunding ${Base16.encode(deploy.deployerPk.bytes)} with ${pd.refundAmount}"
+              ) >>
+                playSystemDeployInternal(runtime)(
+                  new RefundDeploy(pd.refundAmount, rand.splitByte(64))
+                )
             )
           ).leftSemiflatMap(
             error =>
               /*If pre-charge succeeds and refund fails, it's a platform error and we should signal it with raiseError*/ WriterT
-                .liftF(GasRefundFailure(error.errorMsg).raiseError)
+                .liftF(
+                  Log.warn(s"Refund failure '${error.errorMsg}'") >> GasRefundFailure(
+                    error.errorMsg
+                  ).raiseError
+                )
           )
       )
+      .onError {
+        case SystemDeployError(errorMsg) =>
+          EitherT.right(WriterT.liftF(Log.warn(s"Deploy failure '$errorMsg'")))
+      }
       .valueOr {
         /* we can end up here if any of the PreCharge threw an user error
         we still keep the logs (from the underlying WriterT) which we'll fill in the next step.
         We're assigning it 0 cost - replay should reach the same state
          */
         case SystemDeployError(errorMsg) =>
-          ProcessedDeploy.empty(deploy).copy(systemDeployError = Some(errorMsg))
+          ProcessedDeploy
+            .empty(deploy)
+            .copy(systemDeployError = Some(errorMsg))
       }
       .run // run the computation and produce the logs
       .map { case (accLog, pd) => pd.copy(deployLog = accLog.toList) }
@@ -599,7 +619,7 @@ object RuntimeManager {
 
   type StateHash = ByteString
 
-  def fromRuntime[F[_]: Concurrent: Sync: Metrics: Span](
+  def fromRuntime[F[_]: Concurrent: Sync: Metrics: Span: Log](
       runtime: Runtime[F]
   ): F[RuntimeManager[F]] =
     for {
