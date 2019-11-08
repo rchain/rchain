@@ -33,7 +33,6 @@ object ConstructDeploy {
   ): Signed[DeployData] = {
     val data =
       DeployData(
-        deployer = ByteString.copyFrom(Secp256k1.toPublic(sec).bytes),
         term = source,
         timestamp = timestamp,
         phloLimit = phloLimit,

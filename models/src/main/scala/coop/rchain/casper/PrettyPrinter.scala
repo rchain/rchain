@@ -39,7 +39,7 @@ object PrettyPrinter {
     }
 
   def buildString(d: ProcessedDeploy): String =
-    s"User: ${buildStringNoLimit(d.deploy.data.deployer)}, Cost: ${d.cost.toString} " +
+    s"User: ${buildStringNoLimit(d.deploy.pk.bytes)}, Cost: ${d.cost.toString} " +
       s"${buildString(d.deploy)}"
 
   def buildString(b: ByteString): String =

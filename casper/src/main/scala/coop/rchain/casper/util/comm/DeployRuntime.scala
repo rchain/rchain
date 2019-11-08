@@ -92,9 +92,7 @@ object DeployRuntime {
           for {
             timestamp <- Sync[F].delay(System.currentTimeMillis())
 
-            //TODO: allow user to specify their public key
             d = DeployData(
-              deployer = ByteString.EMPTY,
               term = code,
               timestamp = timestamp,
               phloPrice = phloPrice,

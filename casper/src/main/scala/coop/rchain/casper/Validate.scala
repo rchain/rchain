@@ -4,6 +4,7 @@ import cats.data.EitherT
 import cats.effect.{Concurrent, Sync}
 import cats.syntax.all._
 import cats.{Applicative, Monad}
+import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockStore
 import coop.rchain.blockstorage.dag.BlockDagRepresentation
 import coop.rchain.casper.protocol.{ApprovedBlock, BlockMessage, Justification}
@@ -272,10 +273,11 @@ object Validate {
                              .map(_.deploy)
                              .find(d => deployKeySet.contains(d.sig))
                              .get
-                             .data
-                           term            = duplicatedDeploy.term
-                           deployerString  = PrettyPrinter.buildString(duplicatedDeploy.deployer)
-                           timestampString = duplicatedDeploy.timestamp.toString
+                           term = duplicatedDeploy.data.term
+                           deployerString = PrettyPrinter.buildString(
+                             ByteString.copyFrom(duplicatedDeploy.pk.bytes)
+                           )
+                           timestampString = duplicatedDeploy.data.timestamp.toString
                            message         = s"found deploy [$term (user $deployerString, millisecond timestamp $timestampString)] with the same sig in the block $blockHashString as current block $currentBlockHashString"
                            _               <- Log[F].warn(ignore(block, message))
                          } yield BlockStatus.invalidRepeatDeploy

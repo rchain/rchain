@@ -46,7 +46,6 @@ object blockImplicits {
       bytesLength <- Gen.chooseNum(128, 256)
       deployData = Signed(
         DeployData(
-          deployer = ByteString.copyFrom(pub.bytes),
           term = term,
           timestamp = timestamp,
           phloLimit = 90000,

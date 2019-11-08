@@ -102,7 +102,7 @@ class MultiParentCasperAddBlockSpec extends FlatSpec with Matchers with Inspecto
                  signedBlock2,
                  Base16.encode(
                    RegistrySigGen.generateUnforgeableNameId(
-                     PublicKey(deploy2.data.deployer.toByteArray),
+                     deploy2.pk,
                      deploy2.data.timestamp
                    )
                  )
@@ -260,8 +260,7 @@ class MultiParentCasperAddBlockSpec extends FlatSpec with Matchers with Inspecto
         deployPrim0 = Signed(
           deployDatas(1).data
             .copy(
-              timestamp = deployDatas(0).data.timestamp,
-              deployer = deployDatas(0).data.deployer
+              timestamp = deployDatas(0).data.timestamp
             ),
           Secp256k1,
           ConstructDeploy.defaultSec

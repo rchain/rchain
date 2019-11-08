@@ -368,7 +368,6 @@ object ProcessedSystemDeploy {
 }
 
 final case class DeployData(
-    deployer: ByteString,
     term: String,
     timestamp: Long,
     phloPrice: Long,
@@ -379,7 +378,7 @@ final case class DeployData(
 object DeployData {
   implicit val serialize = new Serialize[DeployData] {
     override def encode(a: DeployData): ByteVector =
-      ByteVector(toProto2(a).toByteArray)
+      ByteVector(toProto(a).toByteArray)
 
     override def decode(bytes: ByteVector): Either[Throwable, DeployData] =
       Right(fromProto(DeployDataProto.parseFrom(bytes.toArray)))
@@ -388,7 +387,6 @@ object DeployData {
 
   private def fromProto(proto: DeployDataProto): DeployData =
     DeployData(
-      proto.deployer,
       proto.term,
       proto.timestamp,
       proto.phloPrice,
@@ -404,26 +402,8 @@ object DeployData {
                  .toRight("Invalid signature")
     } yield (signed)
 
-  /**
-  * TODO Dirty quickfix!!! The deployer should be removed from DeployData and Signed[DeployData].pk should be used instead
-    * This is because the serialization function should serialize all the fields in the datastructure such that the
-    * serialize->deserialize roundtrip should return the original datastructure
-    *
-    * https://rchain.atlassian.net/browse/RCHAIN-3910
-    * @param dd
-    * @return
-    */
-  private def toProto2(dd: DeployData): DeployDataProto =
-    DeployDataProto()
-      .withTerm(dd.term)
-      .withTimestamp(dd.timestamp)
-      .withPhloPrice(dd.phloPrice)
-      .withPhloLimit(dd.phloLimit)
-      .withValidAfterBlockNumber(dd.validAfterBlockNumber)
-
   private def toProto(dd: DeployData): DeployDataProto =
     DeployDataProto()
-      .withDeployer(dd.deployer)
       .withTerm(dd.term)
       .withTimestamp(dd.timestamp)
       .withPhloPrice(dd.phloPrice)

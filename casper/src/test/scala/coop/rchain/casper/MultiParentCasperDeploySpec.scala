@@ -31,23 +31,6 @@ class MultiParentCasperDeploySpec extends FlatSpec with Matchers with Inspectors
     }
   }
 
-  it should "not allow deploy if deploy is missing user" in effectTest {
-    TestNode.standaloneEff(genesis).use { node =>
-      val casper           = node.casperEff
-      implicit val timeEff = new LogicalTime[Effect]
-
-      for {
-        correctDeploy <- ConstructDeploy.basicDeployData[Effect](0)
-        incorrectDeploy = Signed(
-          correctDeploy.data.copy(deployer = ByteString.EMPTY),
-          Secp256k1,
-          ConstructDeploy.defaultSec
-        )
-        deployResult <- casper.deploy(incorrectDeploy)
-      } yield deployResult should be(Left(MissingUser))
-    }
-  }
-
   it should "not create a block with a repeated deploy" in effectTest {
     implicit val timeEff = new LogicalTime[Effect]
     TestNode.networkEff(genesis, networkSize = 2).use { nodes =>

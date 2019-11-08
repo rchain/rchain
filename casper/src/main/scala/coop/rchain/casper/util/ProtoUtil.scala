@@ -14,6 +14,7 @@ import coop.rchain.casper.protocol.{DeployData, _}
 import coop.rchain.casper.util.implicits._
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.hash.Blake2b256
+import coop.rchain.crypto.signatures.Signed
 import coop.rchain.crypto.{PrivateKey, PublicKey}
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.Validator.Validator
@@ -381,8 +382,10 @@ object ProtoUtil {
     Par(exprs = Seq(Expr(Expr.ExprInstance.GByteArray(ByteString.copyFrom(hash)))))
   }
 
-  def getRholangDeployParams(dd: DeployData): DeployParameters = {
-    val userId: Par = Par(exprs = Seq(Expr(Expr.ExprInstance.GByteArray(dd.deployer))))
+  def getRholangDeployParams(dd: Signed[DeployData]): DeployParameters = {
+    val userId: Par = Par(
+      exprs = Seq(Expr(Expr.ExprInstance.GByteArray(ByteString.copyFrom(dd.pk.bytes))))
+    )
     DeployParameters(userId)
   }
 

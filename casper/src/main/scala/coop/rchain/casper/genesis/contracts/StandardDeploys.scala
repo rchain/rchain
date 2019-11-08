@@ -16,10 +16,8 @@ object StandardDeploys {
       timestamp: Long
   ): Signed[DeployData] = {
     val sk = PrivateKey(stringToByteString(privateKey))
-    val pk = Secp256k1.toPublic(sk)
     val deployData =
       DeployData(
-        deployer = ByteString.copyFrom(pk.bytes),
         timestamp = timestamp,
         term = compiledSource.code,
         phloLimit = accounting.MAX_VALUE,

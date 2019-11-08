@@ -539,7 +539,7 @@ object RuntimeManager {
     import coop.rchain.models.rholang.implicits._
 
     implicit val rand: Blake2b512Random =
-      Tools.unforgeableNameRng(PublicKey(deploy.data.deployer), deploy.data.timestamp)
+      Tools.unforgeableNameRng(deploy.pk, deploy.data.timestamp)
     implicit val cost: _cost[F] = costState
 
     Interpreter[F].injAttempt(

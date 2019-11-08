@@ -52,7 +52,7 @@ class RholangBuildTest extends FlatSpec with Matchers {
                 signedBlock,
                 Base16.encode(
                   RegistrySigGen.generateUnforgeableNameId(
-                    PublicKey(deploy.data.deployer.toByteArray),
+                    deploy.pk,
                     deploy.data.timestamp
                   )
                 )

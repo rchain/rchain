@@ -35,7 +35,7 @@ object NormalizerEnv {
   def apply(deploy: Signed[DeployData]) =
     new NormalizerEnv(
       ("rho:rchain:deployId" ->> GDeployId(deploy.sig)) ::
-        ("rho:rchain:deployerId" ->> GDeployerId(deploy.data.deployer)) :: HNil
+        ("rho:rchain:deployerId" ->> GDeployerId(ByteString.copyFrom(deploy.pk.bytes))) :: HNil
     )
 
   @implicitNotFound(
