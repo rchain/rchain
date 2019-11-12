@@ -50,8 +50,15 @@ def test_finalizes_block(command_line_options: CommandLineOptions, random_genera
         BONDED_VALIDATOR_KEY_1: 20,
         BONDED_VALIDATOR_KEY_2: 15,
     }
+    wallets_map = {
+        BOOTSTRAP_NODE_KEY: 10000,
+        BONDED_VALIDATOR_KEY_1: 10000,
+        BONDED_VALIDATOR_KEY_2: 10000,
+        BONDED_VALIDATOR_KEY_3: 10000,
+        BONDED_VALIDATOR_KEY_4: 10000
+    }
     FAULT_TOLERANCE_THRESHOLD = '0.5'
-    with conftest.testing_context(command_line_options, random_generator, docker_client, bootstrap_key=BOOTSTRAP_NODE_KEY, peers_keys=peers_keypairs, validator_bonds_dict=validator_bonds_map) as context, \
+    with conftest.testing_context(command_line_options, random_generator, docker_client, bootstrap_key=BOOTSTRAP_NODE_KEY, peers_keys=peers_keypairs, validator_bonds_dict=validator_bonds_map, wallets_dict=wallets_map) as context, \
         docker_network_with_started_bootstrap(context=context, cli_options={'--fault-tolerance-threshold': FAULT_TOLERANCE_THRESHOLD}) as bootstrap_node, \
         bootstrap_connected_peer(context=context, bootstrap=bootstrap_node, name='bonded-validator-1', private_key=BONDED_VALIDATOR_KEY_1, cli_options={'--fault-tolerance-threshold': FAULT_TOLERANCE_THRESHOLD}) as validator1, \
         bootstrap_connected_peer(context=context, bootstrap=bootstrap_node, name='bonded-validator-2', private_key=BONDED_VALIDATOR_KEY_2, cli_options={'--fault-tolerance-threshold': FAULT_TOLERANCE_THRESHOLD}) as validator2:

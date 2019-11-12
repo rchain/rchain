@@ -105,21 +105,15 @@ def make_wallets_file_lines(wallet_balance_from_private_key: Dict[PrivateKey, in
         result.append(line)
     return result
 
-def generate_random_wallet_map(random_generator: Random, wallets_amount:int = 5) -> Dict[PrivateKey, int]:
-    wallet_balance_from_private_key = {}
-    for _  in range(wallets_amount):
-        wallet_balance_from_private_key[PrivateKey.generate()] = random_generator.randint(10, 1000)
-    return wallet_balance_from_private_key
 
 @contextlib.contextmanager
-def temporary_wallets_file(random_generator: Random, wallet_balance_from_private_key: Optional[Dict[PrivateKey, int]]= None) -> Generator[str, None, None]:
-    if wallet_balance_from_private_key is None:
-        wallet_balance_from_private_key = generate_random_wallet_map(random_generator)
-    lines = make_wallets_file_lines(wallet_balance_from_private_key)
+def temporary_wallets_file(dwallet_balance_from_private_key: Dict[PrivateKey, int]) -> Generator[str, None, None]:
+    lines = make_wallets_file_lines(dwallet_balance_from_private_key)
     (fd, file) = tempfile.mkstemp(prefix="rchain-wallets-file-", suffix=".txt")
     try:
         with os.fdopen(fd, "w") as f:
-            f.writelines('{}\n'.format(l) for l in lines)
+            for line in lines:
+                f.write('{}\n'.format(line))
         yield file
     finally:
         os.unlink(file)
@@ -149,12 +143,24 @@ def random_generator(command_line_options: CommandLineOptions) -> Generator[Rand
 
 
 @contextlib.contextmanager
-def testing_context(command_line_options: CommandLineOptions, random_generator: Random, docker_client: DockerClient, bootstrap_key: PrivateKey = None, peers_keys: List[PrivateKey] = None, network_peers: int = 2, validator_bonds_dict: Dict[PrivateKey, int] = None) -> Generator[TestingContext, None, None]:
+def testing_context(command_line_options: CommandLineOptions,
+                    random_generator: Random,
+                    docker_client: DockerClient,
+                    bootstrap_key: PrivateKey = None,
+                    peers_keys: List[PrivateKey] = None,
+                    network_peers: int = 2,
+                    validator_bonds_dict: Optional[Dict[PrivateKey, int]] = None,
+                    wallets_dict: Optional[Dict[PrivateKey, int]] = None) -> Generator[TestingContext, None, None]:
     if bootstrap_key is None:
         bootstrap_key = PREGENERATED_KEYPAIRS[0]
     if peers_keys is None:
         peers_keys = PREGENERATED_KEYPAIRS[1:][:network_peers]
 
+    if wallets_dict is None:
+        wallets_keys = [bootstrap_key] + peers_keys
+        wallets_dict = dict()
+        for private_key in wallets_keys:
+            wallets_dict[private_key] = random_generator.randint(10000, 50000)
 
     if validator_bonds_dict is None:
         bonds_file_keys = [bootstrap_key] + peers_keys
@@ -163,20 +169,22 @@ def testing_context(command_line_options: CommandLineOptions, random_generator: 
             validator_bonds_dict[private_key] = random_generator.randint(1, 100)
 
     with temporary_bonds_file(validator_bonds_dict) as bonds_file:
-        context = TestingContext(
-            bonds_file=bonds_file,
-            bootstrap_key=bootstrap_key,
-            peers_keys=peers_keys,
-            docker=docker_client,
-            node_startup_timeout=command_line_options.node_startup_timeout,
-            network_converge_timeout=command_line_options.network_converge_timeout,
-            receive_timeout=command_line_options.receive_timeout,
-            command_timeout=command_line_options.command_timeout,
-            mount_dir=command_line_options.mount_dir,
-            random_generator=random_generator,
-        )
+        with temporary_wallets_file(wallets_dict) as wallets_file:
+            context = TestingContext(
+                bonds_file=bonds_file,
+                wallets_file=wallets_file,
+                bootstrap_key=bootstrap_key,
+                peers_keys=peers_keys,
+                docker=docker_client,
+                node_startup_timeout=command_line_options.node_startup_timeout,
+                network_converge_timeout=command_line_options.network_converge_timeout,
+                receive_timeout=command_line_options.receive_timeout,
+                command_timeout=command_line_options.command_timeout,
+                mount_dir=command_line_options.mount_dir,
+                random_generator=random_generator,
+            )
 
-        yield context
+            yield context
 
 
 testing_context.__test__ = False # type: ignore

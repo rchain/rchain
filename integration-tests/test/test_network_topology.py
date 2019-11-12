@@ -78,8 +78,10 @@ def test_casper_propose_and_deploy(command_line_options: CommandLineOptions, ran
     """Deploy a contract and then checks if all the nodes have received the block
     containing the contract.
     """
-
-    with conftest.testing_context(command_line_options, random_generator, docker_client) as context:
+    wallet_map = {
+        USER_KEY: 10000,
+    }
+    with conftest.testing_context(command_line_options, random_generator, docker_client, wallets_dict=wallet_map) as context:
         with complete_network(context) as network:
             token_size = 20
             contract_path = os.path.join('resources', 'contract.rho')
