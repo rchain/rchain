@@ -8,6 +8,7 @@ from . import conftest
 from .rnode import (
     bootstrap_connected_peer,
     docker_network_with_started_bootstrap,
+    DeployThread
 )
 from .wait import (
     wait_for_peers_count_at_least,
@@ -18,7 +19,6 @@ from .common import (
     CommandLineOptions,
 )
 
-from .test_multiple_deploys import DeployThread
 
 BOOTSTRAP_NODE_KEYS = PrivateKey.from_hex("ff2ba092524bafdbc85fa0c7eddb2b41c69bc9bf066a4711a8a16f749199e5be")
 BONDED_VALIDATOR_KEY_1 = PrivateKey.from_hex("597623f0b50e82008d52644983699724538b4307efbe3d0b992c651ca7f860c8")

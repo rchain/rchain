@@ -431,6 +431,21 @@ class LoggingThread(threading.Thread):
             pass
 
 
+class DeployThread(threading.Thread):
+    def __init__(self, name: str, node: Node, contract: str, count: int, private_key: PrivateKey) -> None:
+        threading.Thread.__init__(self)
+        self.name = name
+        self.node = node
+        self.contract = contract
+        self.count = count
+        self.private_key = private_key
+
+    def run(self) -> None:
+        for _ in range(self.count):
+            self.node.deploy(self.contract, self.private_key)
+            self.node.propose()
+
+
 def make_container_command(container_command: str, container_command_flags: AbstractSet, container_command_options: Dict) -> str:
     opts = ['{} {}'.format(option, argument) for option, argument in container_command_options.items()]
     flags = ' '.join(container_command_flags)
@@ -859,3 +874,4 @@ def extract_deploy_id_from_deploy_output(deploy_output: str) -> str:
     if match is None:
         raise UnexpectedDeployOutputFormatError(deploy_output)
     return match.group(1)
+
