@@ -24,7 +24,7 @@ class DeployDataSpec extends PropSpec with GeneratorDrivenPropertyChecks with Ma
 
   property("Serialization roundtrip works fine") {
     forAll { (dd: DeployData) =>
-      DeployData.serialize.decode(DeployData.serialize.encode(dd)) should be(dd)
+      DeployData.serialize.decode(DeployData.serialize.encode(dd)) should be(Right(dd))
     }
   }
 
