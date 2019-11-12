@@ -68,7 +68,7 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Log: Time: SafetyOracle: Las
 
   //TODO: Extract hardcoded version and expirationThreshold
   private val version             = 1L
-  private val expirationThreshold = Int.MaxValue
+  private val expirationThreshold = 50
 
   private[this] val AddBlockMetricsSource =
     Metrics.Source(CasperMetricsSource, "add-block")
