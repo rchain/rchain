@@ -32,6 +32,7 @@ new  PoS,
     runMVar,
     fst,
     deposit, distributeRewards,
+    perActiveValidatorPosVaultsCh,
     rs(`rho:registry:insertSigned:secp256k1`),
     posId(`rho:rchain:deployerId`),
     uriOut in {
@@ -45,6 +46,25 @@ new  PoS,
       @RevVault!("deployerAuthKey", *posId, *posAuthKeyCh) |
       getCurrentUserAddress!(*posId, *posRevAddressCh) |
 
+      new rangeCh, makeVault in {
+        contract makeVault(_, returnCh) = {
+          new unf, revAddressCh, vaultCh in {
+            revAddressOps!("fromUnforgeable", *unf, *revAddressCh) |
+            for (@revAddress <- revAddressCh) {
+              @RevVault!("findOrCreate", revAddress, *vaultCh) |
+              for (@(true, vault) <- vaultCh) {
+                returnCh!((*unf, revAddress, vault))
+              }
+            }
+          }
+        } |
+
+        @ListOps!("range", 0, $$numberOfActiveValidators$$, *rangeCh) |
+        for (@range <- rangeCh) {
+          @ListOps!("parMap", range, *makeVault, *perActiveValidatorPosVaultsCh)
+        }
+      } |
+      
       for(@posRevAddress <- posRevAddressCh;
           @posAuthKey <- posAuthKeyCh) {
 
@@ -80,6 +100,21 @@ new  PoS,
               }
             } |
 
+            contract PoS (@"getActiveValidators", returnCh) = {
+              new tmpCh in {
+                getMVar!(*stateCh, *tmpCh) |
+                for (@state <- tmpCh) {
+                  returnCh!(state.get("activeValidators"))
+                }
+              }
+            } |
+
+            contract PoS (@"getActiveValidatorVaults", returnCh) = {
+              for(@vaults <<- perActiveValidatorPosVaultsCh) {
+                returnCh!(vaults)
+              }
+            } |
+
             /**
              * Returns a Map[PublidKey, Int] containing the rewards accumulated for each validator.
              * The returned map contains only the committed rewards after the last closeBlock
@@ -106,7 +141,7 @@ new  PoS,
                   } else if (amount > $$maximumBond$$) {
                     resultCh!(state, (false, "Bond is greater than maximum!"))
                   } else {
-                    deposit!(deployerId, amount, *depositCh) |
+                    deposit!(deployerId, amount, state.get("activeValidators"), *depositCh) |
                     for(@depositResult <- depositCh) {
                       match depositResult {
                         (true, _) => {
@@ -246,13 +281,15 @@ new  PoS,
             } |
 
             contract PoS(@"closeBlock", ackCh) = {
-              new commitRewards,
+              new accumulateDeposits,
+                  commitRewards,
                   changeEpoch,
                   removeQuarantinedWithdrawers,
                   payValidators
               in {
                 new blockDataCh, mvarProcessCh,
                     getBlockData(`rho:block:data`),
+                    accDepositsDoneCh,
                     commitRewardsCh,
                     newValidatorsCh, removeQuarantinedCh, paymentDoneCh
                 in {
@@ -261,6 +298,9 @@ new  PoS,
                   runMVar!(*stateCh, *mvarProcessCh, *ackCh) |
                   for(_, @blockNumber <- blockDataCh;
                       @state, mvarResultCh <- mvarProcessCh) {
+                    // Before choosing new active validators and paying out any withdrawers,
+                    // deposits have to be accumulated into one vault for now.
+                    accumulateDeposits!(posRevAddress, *accDepositsDoneCh) |
 
                     changeEpoch!(
                       blockNumber,
@@ -285,7 +325,8 @@ new  PoS,
                     } |
 
                     for(@newValidators <- newValidatorsCh;
-                        @(payments, newBonds, newWithdrawers, newRewards) <- removeQuarantinedCh) {
+                        @(payments, newBonds, newWithdrawers, newRewards) <- removeQuarantinedCh;
+                        _ <- accDepositsDoneCh) {
 
                       payValidators!(payments, *paymentDoneCh) |
 
@@ -302,6 +343,33 @@ new  PoS,
                           },
                           Nil)
                       }
+                    }
+                  }
+                } |
+
+                new moveFunds in {
+                  contract moveFunds(@(unf, _, vault), returnCh) = {
+                    new balanceCh, unfAuthKeyCh, transferDoneCh in {
+                      @vault!("balance", *balanceCh) |
+                      for (@balance <- balanceCh) {
+                        if (balance > 0) {
+                          @RevVault!("unforgeableAuthKey", unf, *unfAuthKeyCh) |
+                          for (@authKey <- unfAuthKeyCh) {
+                            @vault!("transfer", posRevAddress, balance, authKey, *transferDoneCh) |
+                            for (@(true, Nil) <- transferDoneCh) {
+                              returnCh!(true)
+                            }
+                          }
+                        } else {
+                          returnCh!(true)
+                        }
+                      }
+                    }
+                  } |
+
+                  contract accumulateDeposits(destRevAddress, ackCh) = {
+                    for(@vaults <<- perActiveValidatorPosVaultsCh) {
+                      @ListOps!("foreach", vaults, *moveFunds, *ackCh)
                     }
                   }
                 } |
@@ -433,17 +501,27 @@ new  PoS,
           }
         } |
 
-        contract deposit (@deployerId, @amount, returnCh) = {
+        contract deposit (@fromUserPk, @amount, @activeValidators, returnCh) = {
           new vaultCh,
               revAddressCh,
+              indexSender,
+              getBlockData(`rho:block:data`), blockDataCh,
               authKeyCh in {
-            @RevVault!("deployerAuthKey", deployerId, *authKeyCh) |
-            for (@authKey <- authKeyCh) {
-              revAddressOps!("fromDeployerId", deployerId, *revAddressCh) |
-              for (@fromRevAddress <- revAddressCh) {
-                @RevVault!("findOrCreate", fromRevAddress, *vaultCh) |
-                for (@(true, fromVault) <- vaultCh) {
-                  @fromVault!("transfer", posRevAddress, amount, authKey, *returnCh)
+            @RevVault!("deployerAuthKey", *authKeyCh) |
+            revAddressOps!("fromPublicKey", fromUserPk, *revAddressCh) |
+            for (@authKey <- authKeyCh; @fromRevAddress <- revAddressCh) {
+              @RevVault!("findOrCreate", fromRevAddress, *vaultCh) |
+              getBlockData!(*blockDataCh) |
+              for (@(true, fromVault) <- vaultCh; _, _, @sender <- blockDataCh) {
+                @ListOps!("indexOf", activeValidators, sender, *indexSender) |
+                for (@idx <- indexSender) {
+                  for (@vaults <<- perActiveValidatorPosVaultsCh) {
+                    match vaults.nth(idx) {
+                      (_, activeValidatorVault, _) => {
+                        @fromVault!("transfer", activeValidatorVault, amount, authKey, *returnCh)
+                      }
+                    }
+                  }
                 }
               }
             }
@@ -515,13 +593,16 @@ new  PoS,
       } |
 
       contract pickActiveValidators(@allBonds, @withdrawers, returnCh) = {
-        new availableValidatorsCh, isAvailable in {
+        new availableValidatorsCh, isAvailable, pksCh in {
           @ListOps!("filter", allBonds.toList(), *isAvailable, *availableValidatorsCh) |
           contract isAvailable(@(pk, _), resultCh) = { resultCh!(not withdrawers.contains(pk))} |
 
           for (@availableValidators <- availableValidatorsCh) {
-            //TODO choose only a limited number of validators
-            @ListOps!("map", availableValidators, *fst, *returnCh)
+            @ListOps!("map", availableValidators, *fst, *pksCh) |
+            for (@pks <- pksCh) {
+              // TODO: Randomly select 100 active validators once we have on-chain randomness
+              returnCh!(pks.take($$numberOfActiveValidators$$))
+            }
           }
         }
       }

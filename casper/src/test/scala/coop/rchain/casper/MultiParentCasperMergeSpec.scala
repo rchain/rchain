@@ -168,7 +168,7 @@ class MultiParentCasperMergeSpec
       """
         |new getBlockData(`rho:block:data`), stdout(`rho:io:stdout`), tCh in {
         |  getBlockData!(*tCh) |
-        |  for(@_, @t <- tCh) {
+        |  for(@_, @t, @_ <- tCh) {
         |    match t {
         |      Nil => { stdout!("no block time; no blocks yet? Not connected to Casper network?") }
         |      _ => { stdout!({"block time": t}) }

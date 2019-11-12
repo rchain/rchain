@@ -97,6 +97,8 @@ trait Costs {
   // if underlying string is shorter then the `to` value.
   def sliceCost(to: Int): Cost = Cost(to, "slice")
 
+  def takeCost(to: Int): Cost = Cost(to, "take")
+
   def toListCost(size: Int): Cost = Cost(size, "toList")
 
   def parsingCost(term: String): Cost = Cost(term.getBytes.size, "parsing")
