@@ -10,6 +10,8 @@ new
   test_fromPublicKey,
   test_fromPublicKey_invalid,
   test_fromUnforgeable,
+  test_fromUnforgeable_equality,
+  test_fromUnforgeable_nonNil,
   test_fromUnforgeable_invalid,
   test_fromDeployerId,
   test_fromDeployerId_invalid
@@ -23,6 +25,8 @@ in {
         ("Convert a public key into a RevAddress", *test_fromPublicKey),
         ("Reject an invalid public key", *test_fromPublicKey_invalid),
         ("RevAddresses derived from different unforgeable names should be different", *test_fromUnforgeable),
+        ("RevAddresses derived from same unforgeable names should be equal", *test_fromUnforgeable_equality),
+        ("RevAddresses derived from unforgeable names should not be Nil", *test_fromUnforgeable_nonNil),
         ("Reject arguments which are not unforgeable names", *test_fromUnforgeable_invalid),
         ("Get deployer's rev address", *test_fromDeployerId),
         ("Reject arguments which are not deployerId-s", *test_fromDeployerId_invalid)
@@ -79,7 +83,26 @@ in {
     new unf1, unf2, r1, r2 in {
       revAddress!("fromUnforgeable", *unf1, *r1) |
       revAddress!("fromUnforgeable", *unf2, *r2) |
-      rhoSpec!("assert", (*r1, "!= <-", *r2), "expecting RevAddresses to be unequal", *ackCh)
+      for (@fromUnf1 <- r1) {
+        rhoSpec!("assert", (fromUnf1, "!= <-", *r2), "expecting RevAddresses to be unequal", *ackCh)
+      }
+    }
+  } |
+
+  contract test_fromUnforgeable_equality(rhoSpec, _, ackCh) = {
+    new unf, r1, r2 in {
+      revAddress!("fromUnforgeable", *unf, *r1) |
+      revAddress!("fromUnforgeable", *unf, *r2) |
+      for (@fromUnf <- r1) {
+        rhoSpec!("assert", (fromUnf, "== <-", *r2), "expecting RevAddresses to be equal", *ackCh)
+      }
+    }
+  } |
+
+  contract test_fromUnforgeable_nonNil(rhoSpec, _, ackCh) = {
+    new unf, ret in {
+      revAddress!("fromUnforgeable", *unf, *ret) |
+      rhoSpec!("assert", (Nil, "!= <-", *ret), "expecting RevAddress to not be Nil", *ackCh)
     }
   } |
 

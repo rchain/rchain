@@ -245,10 +245,17 @@ object SystemProcesses {
         case isContractCall(produce, Seq(ack)) =>
           for {
             data <- blockData.get
-            _    <- produce(Seq(RhoType.Number(data.blockNumber), RhoType.Number(data.timeStamp)), ack)
+            _ <- produce(
+                  Seq(
+                    RhoType.Number(data.blockNumber),
+                    RhoType.Number(data.timeStamp),
+                    RhoType.ByteArray(data.sender.bytes)
+                  ),
+                  ack
+                )
           } yield ()
         case _ =>
-          illegalArgumentException("blockTime expects only a return channel")
+          illegalArgumentException("blockData expects only a return channel")
       }
 
       def invalidBlocks(invalidBlocks: Runtime.InvalidBlocks[F]): Contract[F] = {

@@ -107,6 +107,13 @@ class RhoSpec(
           3,
           105L,
           ctx => Secp256k1SignContract.get(ctx)(_)
+        ),
+        SystemProcess.Definition[F](
+          "rho:test:block:data:set",
+          Runtime.byteName(107),
+          3,
+          107L,
+          ctx => BlockDataContract.set(ctx)(_)
         )
       )
     testResultCollectorService

@@ -8,7 +8,6 @@ import coop.rchain.blockstorage.dag.BlockDagRepresentation
 import coop.rchain.casper.helper.BlockGenerator._
 import coop.rchain.casper.helper._
 import coop.rchain.casper.protocol._
-import coop.rchain.shared.scalatestcontrib._
 import coop.rchain.casper.util.GenesisBuilder.{buildGenesis, buildGenesisParameters}
 import coop.rchain.casper.util.RSpaceUtil._
 import coop.rchain.casper.util.rholang.InterpreterUtil._
@@ -16,6 +15,7 @@ import coop.rchain.casper.util.rholang.Resources.mkRuntimeManager
 import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
 import coop.rchain.casper.util.{ConstructDeploy, GenesisBuilder}
 import coop.rchain.crypto.signatures.Signed
+import coop.rchain.crypto.PublicKey
 import coop.rchain.metrics
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.models.BlockHash.BlockHash
@@ -25,6 +25,7 @@ import coop.rchain.p2p.EffectsTestInstances.LogStub
 import coop.rchain.rholang.interpreter.Runtime.BlockData
 import coop.rchain.shared.Time
 import coop.rchain.shared.{Log, LogSource}
+import coop.rchain.shared.scalatestcontrib._
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
 import org.scalatest._
@@ -55,7 +56,7 @@ class InterpreterUtilTest
         deploys,
         dag,
         runtimeManager,
-        BlockData(deploys.maxBy(_.data.timestamp).data.timestamp, 0),
+        BlockData(deploys.maxBy(_.data.timestamp).data.timestamp, 0, PublicKey(Array[Byte]())),
         Map.empty[BlockHash, Validator]
       )
       .attempt

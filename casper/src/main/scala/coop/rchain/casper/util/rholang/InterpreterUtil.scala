@@ -10,6 +10,7 @@ import coop.rchain.casper._
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.rholang.RuntimeManager._
 import coop.rchain.casper.util.{DagOperations, ProtoUtil}
+import coop.rchain.crypto.PublicKey
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.metrics.Span
 import coop.rchain.models.BlockHash.BlockHash
@@ -85,7 +86,7 @@ object InterpreterUtil {
         .map(block => (block.blockHash, block.sender))
         .toMap
       _         <- Span[F].mark("before-process-pre-state-hash")
-      blockData = BlockData(timestamp, blockNumber)
+      blockData = BlockData(timestamp, blockNumber, PublicKey(block.sender))
       isGenesis = block.header.parentsHashList.isEmpty
       replayResult <- runtimeManager.replayComputeState(preStateHash)(
                        internalDeploys,
@@ -244,7 +245,7 @@ object InterpreterUtil {
         .toMap
       replayResult <- runtimeManager.replayComputeState(hash)(
                        deploys,
-                       BlockData(timestamp, blockNumber),
+                       BlockData(timestamp, blockNumber, PublicKey(block.sender)),
                        invalidBlocks,
                        isGenesis //should always be false
                      )

@@ -12,6 +12,7 @@ import coop.rchain.casper.util.ProtoUtil._
 import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
 import coop.rchain.casper.util.rholang._
 import coop.rchain.casper.util.{ConstructDeploy, DagOperations, ProtoUtil}
+import coop.rchain.crypto.PublicKey
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.signatures.Signed
 import coop.rchain.metrics.{Metrics, Span}
@@ -98,6 +99,7 @@ object BlockCreator {
                                 deploys,
                                 justifications,
                                 maxBlockNumber,
+                                validatorIdentity.publicKey,
                                 shardId,
                                 version,
                                 now,
@@ -185,6 +187,7 @@ object BlockCreator {
       deploys: Seq[Signed[DeployData]],
       justifications: Seq[Justification],
       maxBlockNumber: Long,
+      sender: PublicKey,
       shardId: String,
       version: Long,
       now: Long,
@@ -196,7 +199,7 @@ object BlockCreator {
                  deploys,
                  dag,
                  runtimeManager,
-                 BlockData(now, maxBlockNumber + 1),
+                 BlockData(now, maxBlockNumber + 1, sender),
                  invalidBlocks
                )
       (preStateHash, postStateHash, processedDeploys) = result

@@ -13,6 +13,7 @@ import coop.rchain.casper.util.{ConstructDeploy, ProtoUtil}
 import coop.rchain.casper.util.rholang.InterpreterUtil.computeDeploysCheckpoint
 import coop.rchain.casper.util.rholang.RuntimeManager
 import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
+import coop.rchain.crypto.PublicKey
 import coop.rchain.crypto.hash.Blake2b256
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.models.BlockHash.BlockHash
@@ -63,7 +64,7 @@ object BlockGenerator {
                  deploys,
                  dag,
                  runtimeManager,
-                 BlockData(now, b.body.state.blockNumber),
+                 BlockData(now, b.body.state.blockNumber, PublicKey(b.sender)),
                  Map.empty[BlockHash, Validator]
                ).attempt
       Right((preStateHash, postStateHash, processedDeploys)) = result

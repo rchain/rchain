@@ -12,8 +12,9 @@ import coop.rchain.casper.util.rholang.RuntimeManager.{evaluate, StateHash}
 import coop.rchain.casper.util.rholang.SystemDeployPlatformFailure._
 import coop.rchain.casper.util.rholang.SystemDeployUserError._
 import coop.rchain.casper.util.rholang.costacc.{PreChargeDeploy, RefundDeploy}
-import coop.rchain.casper.util.{ConstructDeploy, EventConverter}
 import coop.rchain.crypto.codec.Base16
+import coop.rchain.casper.util.{ConstructDeploy, EventConverter, ProtoUtil}
+import coop.rchain.crypto.PublicKey
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.crypto.signatures.Signed
 import coop.rchain.metrics.Metrics.Source
@@ -283,7 +284,7 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log](
     withRuntimeLock { runtime =>
       Span[F].trace(computeGenesisLabel) {
         for {
-          _          <- runtime.blockData.set(BlockData(blockTime, 0))
+          _          <- runtime.blockData.set(BlockData(blockTime, 0, PublicKey(Array[Byte]())))
           _          <- Span[F].mark("before-process-deploys")
           evalResult <- processDeploys(runtime, startHash, terms, processDeploy(runtime))
         } yield (startHash, evalResult._1, evalResult._2)

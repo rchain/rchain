@@ -11,6 +11,7 @@ import coop.rchain.casper.util.rholang.SystemDeployReplayResult.{ReplayFailed, R
 import coop.rchain.casper.util.rholang.costacc.{CheckBalance, PreChargeDeploy, RefundDeploy}
 import coop.rchain.casper.util.{ConstructDeploy, GenesisBuilder}
 import coop.rchain.catscontrib.effect.implicits._
+import coop.rchain.crypto.PublicKey
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.crypto.signatures.Signed
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
@@ -61,7 +62,7 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
     for {
       res <- runtimeManager.computeState(stateHash)(
               deploy :: Nil,
-              BlockData(deploy.data.timestamp, 0),
+              BlockData(deploy.data.timestamp, 0, PublicKey(genesis.sender)),
               Map.empty[BlockHash, Validator]
             )
       (hash, Seq(result)) = res
@@ -384,7 +385,7 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
                  )
         time          <- timeF.currentMillis
         genPostState  = genesis.body.state.postStateHash
-        blockData     = BlockData(time, 0L)
+        blockData     = BlockData(time, 0L, PublicKey(genesis.sender))
         invalidBlocks = Map.empty[BlockHash, Validator]
         computeStateResult <- runtimeManager.computeState(genPostState)(
                                deploy :: Nil,
@@ -420,7 +421,7 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
                   )
         time          <- timeF.currentMillis
         genPostState  = genesis.body.state.postStateHash
-        blockData     = BlockData(time, 0L)
+        blockData     = BlockData(time, 0L, PublicKey(genesis.sender))
         invalidBlocks = Map.empty[BlockHash, Validator]
         firstDeploy <- mgr
                         .computeState(genPostState)(deploy0 :: Nil, blockData, invalidBlocks)

@@ -26,7 +26,9 @@ match (
       test_refund_succeeds,
       test_commit_random,
       test_dont_pay_inactive_validators,
-      test_bonding_failure
+      test_bonding_failure,
+      getPosBalance,
+      closeBlock
     in {
       revAddressOps!("fromPublicKey", posPubKey, *posRevAddressCh) |
       rl!(`rho:rchain:revVault`, *RevVaultCh) |
@@ -108,7 +110,7 @@ match (
 
           contract test_close_block_finishes(rhoSpec, _, ackCh) = {
             new resultCh in {
-              @PoS!("closeBlock", *resultCh) |
+              closeBlock!(*resultCh) |
               for ( _ <- resultCh) {
                 rhoSpec!("assertMany",
                   [
@@ -126,14 +128,14 @@ match (
                 bondsCh, rewardsCh in {
               prepareUser!("1111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111", *setupCh) |
               for (@user1PubKey, _, @user1Vault, @user1DeployerId <- setupCh) {
-                @posVault!("balance", *initialPosBalanceCh) |
+                getPosBalance!(*initialPosBalanceCh) |
                 @user1Vault!("balance", *initialUserBalanceCh) |
                 for(@initialPosBalance <- initialPosBalanceCh;
                     @initialUserBalance <- initialUserBalanceCh) {
                   @PoS!("bond", user1DeployerId, 100, *retCh) |
                   for (@(true, _) <- retCh) {
                     @PoS!("getBonds", *bondsCh) |
-                    @posVault!("balance", *finalPosBalanceCh) |
+                    getPosBalance!(*finalPosBalanceCh) |
                     @user1Vault!("balance", *finalUserBalanceCh) |
                     @PoS!("getRewards", *rewardsCh) |
                     for(@finalPosBalance <- finalPosBalanceCh;
@@ -169,7 +171,7 @@ match (
                 withdrawCh, closeBlockCh in {
               prepareUser!("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", *setupCh) |
               for (@user1PubKey, _, @user1Vault, @user1DeployerId <- setupCh) {
-                @posVault!("balance", *initialPosBalanceCh) |
+                getPosBalance!(*initialPosBalanceCh) |
                 @user1Vault!("balance", *initialUserBalanceCh) |
                 @PoS!("getBonds", *initialBondsCh) |
                 @PoS!("getRewards", *initialRewardsCh) |
@@ -181,10 +183,10 @@ match (
                   for ( @(true, _) <- retCh) {
                     @PoS!("withdraw", user1DeployerId, *withdrawCh) |
                     for (_ <- withdrawCh) {
-                      @PoS!("closeBlock", *closeBlockCh) |
+                      closeBlock!(*closeBlockCh) |
                       for (_ <- closeBlockCh) {
                         @PoS!("getBonds", *finalBondsCh) |
-                        @posVault!("balance", *finalPosBalanceCh) |
+                        getPosBalance!(*finalPosBalanceCh) |
                         @user1Vault!("balance", *finalUserBalanceCh) |
                         @PoS!("getRewards", *finalRewardsCh) |
                         for(@finalPosBalance <- finalPosBalanceCh;
@@ -222,18 +224,18 @@ match (
                     @initialBonds <- initialBondsCh) {
                   @PoS!("bond", validatorDeployerId, 100, *retCh0) |
                   for ( @(true, _) <- retCh0) {
-                    @PoS!("closeBlock", *closeBlockCh) |
+                    closeBlock!(*closeBlockCh) |
                     for (_ <- closeBlockCh) {
                       prepareUser!("cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc", *setupCh) |
                       for (@userPubKey, _, @userVault, @userDeployerId <- setupCh) {
                         @PoS!("chargeDeploy", userDeployerId, 100, *retCh0) |
                         @PoS!("refundDeploy", 0, *retCh1) |
                         for ( @(true, _) <- retCh0; @(true, _) <- retCh1){
-                          @PoS!("closeBlock", *closeBlockCh) |
+                          closeBlock!(*closeBlockCh) |
                           for (_ <- closeBlockCh) {
                             @PoS!("withdraw", validatorDeployerId, *withdrawCh) |
                             for (_ <- withdrawCh) {
-                              @PoS!("closeBlock", *closeBlockCh) |
+                              closeBlock!(*closeBlockCh) |
                               for (_ <- closeBlockCh) {
                                 @validatorVault!("balance", *finalValidatorBalanceCh) |
                                 @PoS!("getBonds", *finalBondsCh) |
@@ -264,7 +266,7 @@ match (
                 initialUser2BalanceCh, finalUser2BalanceCh in {
               prepareUser!("2222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222", *setupCh) |
               for (@user1PubKey, _, @user1Vault, @user1DeployerId <- setupCh) {
-                @posVault!("balance", *initialPosBalanceCh) |
+                getPosBalance!(*initialPosBalanceCh) |
                 @user1Vault!("balance", *initialUser1BalanceCh) |
                 for(@initialPosBalance <- initialPosBalanceCh;
                     @initialUser1Balance <- initialUser1BalanceCh) {
@@ -279,7 +281,7 @@ match (
                         for ( @(true, _) <- retCh) {
 
                           @PoS!("getBonds", *retCh) |
-                          @posVault!("balance", *finalPosBalanceCh) |
+                          getPosBalance!(*finalPosBalanceCh) |
                           @user1Vault!("balance", *finalUser1BalanceCh) |
                           @user2Vault!("balance", *finalUser2BalanceCh) |
                           for(@finalPosBalance <- finalPosBalanceCh;
@@ -321,11 +323,11 @@ match (
               for (@validatorPubKey, _, _, @validatorDeployerId <- setupCh) {
                 @PoS!("bond", validatorDeployerId, 100, *setupCh) |
                 for (@(true, _) <- setupCh) {
-                  @PoS!("closeBlock", *closeBlockCh) |
+                  closeBlock!(*closeBlockCh) |
                   prepareUser!("5555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555", *setupCh) |
                   for (@user1PubKey, _, @user1Vault, @user1DeployerId <- setupCh;
                        _ <- closeBlockCh) {
-                    @posVault!("balance", *initialPosBalanceCh) |
+                    getPosBalance!(*initialPosBalanceCh) |
                     @user1Vault!("balance", *initialUser1BalanceCh) |
                     @PoS!("getRewards", *initialRewardsCh) |
                     for(@initialPosBalance <- initialPosBalanceCh;
@@ -334,9 +336,9 @@ match (
                       @PoS!("chargeDeploy", user1DeployerId, 100, *retCh0) |
                       @PoS!("refundDeploy", 0, *retCh1) |
                       for ( @(true, _) <- retCh0; @(true, _) <- retCh1) {
-                        @PoS!("closeBlock", *closeBlockCh) |
+                        closeBlock!(*closeBlockCh) |
                         for (_ <- closeBlockCh) {
-                          @posVault!("balance", *finalPosBalanceCh) |
+                          getPosBalance!(*finalPosBalanceCh) |
                           @user1Vault!("balance", *finalUser1BalanceCh) |
                           @PoS!("getRewards", *finalRewardsCh) |
                           for(@finalPosBalance <- finalPosBalanceCh;
@@ -393,10 +395,10 @@ match (
               for (@validatorPubKey, _, _, @validatorDeployerId <- prepareUserAck) {
                 @PoS!("bond", validatorDeployerId, 100, *bondAck) |
                 for (@(true, _) <- bondAck) {
-                  @PoS!("closeBlock", *closeBlockAck) |
+                  closeBlock!(*closeBlockAck) |
                   prepareUser!("eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee", *prepareUserAck) |
                   for (@userPubKey, _, @userVault, @userDeployerId <- prepareUserAck; _ <- closeBlockAck) {
-                    @posVault!("balance", *posBalanceCh) |
+                    getPosBalance!(*posBalanceCh) |
                     @userVault!("balance", *userBalanceCh) |
                     @PoS!("getRewards", *rewardsCh) |
                     for(@initialPosBalance <- posBalanceCh;
@@ -405,9 +407,9 @@ match (
                       @PoS!("chargeDeploy", userDeployerId, 100, *chargeDeployAck) |
                       @PoS!("refundDeploy", 50, *refundDeployAck) |
                       for ( @(true, _) <- chargeDeployAck; @(true, _) <- refundDeployAck) {
-                        @PoS!("closeBlock", *closeBlockAck) |
+                        closeBlock!(*closeBlockAck) |
                         for (_ <- closeBlockAck) {
-                          @posVault!("balance", *posBalanceCh) |
+                          getPosBalance!(*posBalanceCh) |
                           @userVault!("balance", *userBalanceCh) |
                           @PoS!("getRewards", *rewardsCh) |
                           for(@finalPosBalance <- posBalanceCh;
@@ -528,7 +530,7 @@ match (
                   for (@user1PubKey, _, @user1Vault, @user1DeployerId <- setupCh) {
                     @PoS!("chargeDeploy", user1DeployerId, 100, *retCh) |
                     for ( @(true, _) <- retCh) {
-                      @PoS!("closeBlock", *closeBlockCh) |
+                      closeBlock!(*closeBlockCh) |
                       for (_ <- closeBlockCh) {
                         @PoS!("getRewards", *finalRewardsCh) |
                         for(@finalRewards <- finalRewardsCh) {
@@ -542,6 +544,41 @@ match (
                       }
                     }
                   }
+                }
+              }
+            }
+          } |
+
+          contract getPosBalance(retCh) = {
+            new accBalances, vaultsCh, posVaultBalanceCh in {
+              contract accBalances(@(_, _, vault), @acc, resultCh) = {
+                new balanceCh in {
+                  @vault!("balance", *balanceCh) |
+                  for (@balance <- balanceCh) {
+                    resultCh!(acc + balance)
+                  }
+                }
+              } |
+
+              @posVault!("balance", *posVaultBalanceCh) |
+              for (@posVaultBalance <- posVaultBalanceCh) {
+                @PoS!("getActiveValidatorVaults", *vaultsCh) |
+                for (@vaults <- vaultsCh) {
+                  @ListOps!("fold", vaults, posVaultBalance, *accBalances, *retCh)
+                }
+              }
+            }
+          } |
+
+          contract closeBlock(ackCh) = {
+            new ackCh0, activeValidatorsCh, setBlockData(`rho:test:block:data:set`), blockDataSet in {
+              @PoS!("closeBlock", *ackCh0) |
+              @PoS!("getActiveValidators", *activeValidatorsCh) |
+              for (@ack <- ackCh0; @activeValidators <- activeValidatorsCh) {
+                // For testing we need one of the active validators to be the block sender
+                setBlockData!("sender", activeValidators.nth(0), *blockDataSet) |
+                for (_ <- blockDataSet) {
+                  ackCh!(ack)
                 }
               }
             }
