@@ -61,6 +61,7 @@ object Setup {
     val bonds                      = genesisParams.proofOfStake.validators.flatMap(Validator.unapply).toMap
     val requiredSigs               = 1
     val shardId                    = genesisParams.shardId
+    val finalizationRate           = 1
     val deployTimestamp            = genesisParams.timestamp
 
     val genesis: BlockMessage = context.genesisBlock

@@ -16,7 +16,10 @@ from .wait import wait_for_log_match
 USER_KEY = PrivateKey.from_hex("3596e2e5fd14b24a6d84af04b7f0a8f13e3e68ee2ca91dc4b19550f12e61502c")
 
 def test_data_is_stored_and_served_by_node(command_line_options: CommandLineOptions, docker_client: DockerClient, random_generator: Random) -> None:
-    with testing_context(command_line_options, random_generator, docker_client) as context:
+    wallets_map = {
+        USER_KEY: 10000
+    }
+    with testing_context(command_line_options, random_generator, docker_client, wallets_dict=wallets_map) as context:
         with docker_network_with_started_bootstrap(context=context) as bootstrap_node:
             store_data_contract = os.path.join('resources/storage', "store-data.rho")
             read_data_contract = os.path.join('resources/storage', "read-data.rho")

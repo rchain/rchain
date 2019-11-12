@@ -28,7 +28,7 @@ class CommandLineOptions:
     random_seed: Optional[int]
 
 
-@dataclasses.dataclass
+@dataclasses.dataclass # pylint: disable=too-many-instance-attributes
 class TestingContext:
     # Tell pytest to ignore this class (produces warnings otherwise)
     __test__ = False
@@ -39,6 +39,7 @@ class TestingContext:
     command_timeout: int
     mount_dir: str
     bonds_file: str
+    wallets_file: str
     bootstrap_key: PrivateKey
     peers_keys: List[PrivateKey]
     docker: DockerClient

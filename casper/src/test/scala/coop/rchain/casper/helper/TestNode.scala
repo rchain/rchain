@@ -55,7 +55,8 @@ class TestNode[F[_]](
     val blockStoreDir: Path,
     blockProcessingLock: Semaphore[F],
     synchronyConstraintThreshold: Double,
-    shardId: String = "rchain"
+    shardId: String = "rchain",
+    finalizationRate: Int = 1
 )(
     implicit concurrentF: Concurrent[F],
     implicit val blockStore: BlockStore[F],
@@ -107,6 +108,7 @@ class TestNode[F[_]](
     genesis,
     postGenesisStateHash,
     shardId,
+    finalizationRate,
     blockProcessingLock
   )
 

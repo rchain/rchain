@@ -22,6 +22,7 @@ import coop.rchain.casper.util.comm.CommUtil
 class GenesisValidator[F[_]: Sync: Metrics: Span: Concurrent: CommUtil: TransportLayer: ConnectionsCell: RPConfAsk: Log: EventLog: Time: SafetyOracle: LastFinalizedBlockCalculator: BlockStore: LastApprovedBlock: BlockDagStorage: LastFinalizedStorage: EngineCell: RuntimeManager: Running.RequestedBlocks: EventPublisher: SynchronyConstraintChecker](
     validatorId: ValidatorIdentity,
     shardId: String,
+    finalizationRate: Int,
     blockApprover: BlockApproverProtocol
 ) extends Engine[F] {
   import Engine._
@@ -33,7 +34,7 @@ class GenesisValidator[F[_]: Sync: Metrics: Span: Concurrent: CommUtil: Transpor
     case br: ApprovedBlockRequest => sendNoApprovedBlockAvailable(peer, br.identifier)
     case ub: UnapprovedBlock =>
       blockApprover.unapprovedBlockPacketHandler(peer, ub) >> {
-        Engine.transitionToInitializing(shardId, Some(validatorId), init = noop)
+        Engine.transitionToInitializing(shardId, finalizationRate, Some(validatorId), init = noop)
       }
     case na: NoApprovedBlockAvailable => logNoApprovedBlockAvailable[F](na.nodeIdentifer)
     case _                            => noop

@@ -59,7 +59,7 @@ object CasperLaunch {
         validatorId <- ValidatorIdentity.fromConfig[F](conf)
         genesis     = approvedBlock.candidate.block
         casper <- MultiParentCasper
-                   .hashSetCasper[F](validatorId, genesis, conf.shardId)
+                   .hashSetCasper[F](validatorId, genesis, conf.shardId, conf.finalizationRate)
         _ <- Engine
               .transitionToRunning[F](
                 casper,
@@ -97,7 +97,7 @@ object CasperLaunch {
                 conf.requiredSigs
               )(Sync[F])
         _ <- EngineCell[F].set(
-              new GenesisValidator(validatorId.get, conf.shardId, bap)
+              new GenesisValidator(validatorId.get, conf.shardId, conf.finalizationRate, bap)
             )
       } yield ()
 
@@ -126,6 +126,7 @@ object CasperLaunch {
                 .approveBlockInterval[F](
                   conf.approveGenesisInterval,
                   conf.shardId,
+                  conf.finalizationRate,
                   validatorId
                 )
             )
@@ -137,6 +138,7 @@ object CasperLaunch {
         validatorId <- ValidatorIdentity.fromConfig[F](conf)
         _ <- Engine.transitionToInitializing(
               conf.shardId,
+              conf.finalizationRate,
               validatorId,
               CommUtil[F].requestApprovedBlock
             )

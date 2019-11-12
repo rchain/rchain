@@ -30,6 +30,7 @@ class InitializingSpec extends WordSpec {
       val initializingEngine =
         new Initializing[Task](
           shardId,
+          finalizationRate,
           Some(validatorId),
           theInit
         )

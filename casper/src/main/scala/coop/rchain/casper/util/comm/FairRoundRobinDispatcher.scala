@@ -2,7 +2,7 @@ package coop.rchain.casper.util.comm
 
 import scala.collection.immutable.Queue
 
-import cats.Show
+import cats.{Eq, Show}
 import cats.effect.Sync
 import cats.effect.concurrent.Ref
 import cats.syntax.all._
@@ -10,7 +10,7 @@ import cats.syntax.all._
 import FairRoundRobinDispatcher._
 import coop.rchain.shared.Log
 
-class FairRoundRobinDispatcher[F[_]: Sync: Log, S: Show, M: Show](
+class FairRoundRobinDispatcher[F[_]: Sync: Log, S: Show, M: Show: Eq](
     filter: M => F[Dispatch],
     handle: (S, M) => F[Unit],
     queue: Ref[F, Queue[S]],
@@ -29,8 +29,10 @@ class FairRoundRobinDispatcher[F[_]: Sync: Log, S: Show, M: Show](
     filter(message).flatMap {
       case Handle =>
         ensureSourceExists(source) >>
-          enqueueMessage(source, message) >>
-          handleMessages
+          isDuplicate(source, message).ifM(
+            Log[F].info(s"Dropped duplicate message ${message.show} from ${source.show}"),
+            enqueueMessage(source, message) >> handleMessages
+          )
       case Pass => handle(source, message)
       case Drop => ().pure
     }
@@ -45,6 +47,9 @@ class FairRoundRobinDispatcher[F[_]: Sync: Log, S: Show, M: Show](
           retries.update(_ + (source  -> 0)) *>
           Log[F].info(s"Added ${source.show} to the dispatch queue")
       )
+
+  private[comm] def isDuplicate(source: S, message: M): F[Boolean] =
+    messages.get.map(_(source).exists(_ === message))
 
   private[comm] def enqueueMessage(source: S, message: M): F[Unit] =
     messages.get
@@ -127,7 +132,7 @@ object FairRoundRobinDispatcher {
     val drop: Dispatch   = Drop
   }
 
-  def apply[F[_]: Sync: Log, S: Show, M: Show](
+  def apply[F[_]: Sync: Log, S: Show, M: Show: Eq](
       filter: M => F[Dispatch],
       handle: (S, M) => F[Unit],
       maxSourceQueueSize: Int,

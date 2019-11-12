@@ -51,6 +51,7 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Log: Time: SafetyOracle: Las
     genesis: BlockMessage,
     postGenesisStateHash: StateHash,
     shardId: String,
+    finalizationRate: Int,
     blockProcessingLock: Semaphore[F]
 )(
     implicit state: CasperStateCell[F],
@@ -108,11 +109,15 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Log: Time: SafetyOracle: Las
     } yield status
   }.timer("add-block-time")
 
+  private def updateLastFinalizedBlock(newBlock: BlockMessage): F[Unit] =
+    lastFinalizedBlock.whenA(newBlock.body.state.blockNumber % finalizationRate == 0)
+
   private def internalAddBlock(
       b: BlockMessage,
       dag: BlockDagRepresentation[F]
   ): F[ValidBlockProcessing] =
     for {
+      _            <- updateLastFinalizedBlock(b)
       _            <- Span[F].mark("internal-add-block")
       validFormat  <- Validate.formatOfFields(b)
       validSig     <- Validate.blockSignature(b)
@@ -332,7 +337,7 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Log: Time: SafetyOracle: Las
         // Add successful! Send block hash to peers, log success, try to add other blocks
         for {
           updatedDag <- BlockDagStorage[F].insert(block, genesis, invalid = false)
-          _          <- CommUtil[F].sendBlockHash(block.blockHash)
+          _          <- CommUtil[F].sendBlockHash(block.blockHash, block.sender)
           _ <- Log[F].info(
                 s"Added ${PrettyPrinter.buildString(block.blockHash)}"
               )
@@ -368,7 +373,7 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Log: Time: SafetyOracle: Las
             // We can only treat admissible equivocations as invalid blocks if
             // casper is single threaded.
             updatedDag <- handleInvalidBlockEffect(InvalidBlock.AdmissibleEquivocation, block)
-            _          <- CommUtil[F].sendBlockHash(block.blockHash)
+            _          <- CommUtil[F].sendBlockHash(block.blockHash, block.sender)
           } yield updatedDag
 
         case InvalidBlock.IgnorableEquivocation =>

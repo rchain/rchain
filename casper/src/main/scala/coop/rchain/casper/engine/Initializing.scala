@@ -27,6 +27,7 @@ import scala.language.higherKinds
     **/
 class Initializing[F[_]: Sync: Metrics: Span: Concurrent: BlockStore: CommUtil: TransportLayer: ConnectionsCell: RPConfAsk: Running.RequestedBlocks: Log: EventLog: Time: SafetyOracle: LastFinalizedBlockCalculator: LastApprovedBlock: BlockDagStorage: LastFinalizedStorage: EngineCell: RuntimeManager: EventPublisher: SynchronyConstraintChecker](
     shardId: String,
+    finalizationRate: Int,
     validatorId: Option[ValidatorIdentity],
     theInit: F[Unit]
 ) extends Engine[F] {
@@ -41,7 +42,8 @@ class Initializing[F[_]: Sync: Metrics: Span: Concurrent: BlockStore: CommUtil: 
       onApprovedBlockTransition(
         ab,
         validatorId,
-        shardId
+        shardId,
+        finalizationRate
       )
     case br: ApprovedBlockRequest     => sendNoApprovedBlockAvailable(peer, br.identifier)
     case na: NoApprovedBlockAvailable => logNoApprovedBlockAvailable[F](na.nodeIdentifer)
@@ -51,7 +53,8 @@ class Initializing[F[_]: Sync: Metrics: Span: Concurrent: BlockStore: CommUtil: 
   private def onApprovedBlockTransition(
       approvedBlock: ApprovedBlock,
       validatorId: Option[ValidatorIdentity],
-      shardId: String
+      shardId: String,
+      finalizationRate: Int
   ): F[Unit] =
     for {
       _       <- Log[F].info("Received ApprovedBlock message.")
@@ -69,7 +72,12 @@ class Initializing[F[_]: Sync: Metrics: Span: Concurrent: BlockStore: CommUtil: 
                         _       <- insertIntoBlockAndDagStore[F](genesis, approvedBlock)
                         _       <- LastApprovedBlock[F].set(approvedBlock)
                         casper <- MultiParentCasper
-                                   .hashSetCasper[F](validatorId, genesis, shardId)
+                                   .hashSetCasper[F](
+                                     validatorId,
+                                     genesis,
+                                     shardId,
+                                     finalizationRate
+                                   )
                         _ <- Engine
                               .transitionToRunning[F](
                                 casper,

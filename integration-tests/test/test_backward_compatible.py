@@ -42,7 +42,12 @@ def test_backward_compatible(command_line_options: CommandLineOptions, random_ge
     Currently we don't release our mainnet so it is Ok to fail the test. Once your pr make the test failed , you
     should shout out loudly in discord and let everybody know your update is not backward compatible.
     """
-    with  testing_context(command_line_options, random_generator, docker_client) as context, \
+    wallets_map = {
+        CEREMONY_MASTER_PRIVATE: 10000,
+        VALIDATOR_A_PRIVATE: 10000,
+        VALIDATOR_B_PRIVATE: 10000
+    }
+    with  testing_context(command_line_options, random_generator, docker_client, wallets_dict=wallets_map) as context, \
         temp_rnode_data(context.mount_dir) as temp_rnode, \
         docker_network(context, context.docker) as network, \
         started_bootstrap(context=context, network=network, extra_volumes=["{}/bootstrap/rnode:/var/lib/rnode".format(temp_rnode)]) as bootstrap_node, \
