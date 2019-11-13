@@ -697,7 +697,7 @@ object NodeRuntime {
       synchronyConstraintChecker = SynchronyConstraintChecker[F](
         conf.server.synchronyConstraintThreshold
       )(Sync[F], blockStore, Log[F])
-      estimator = Estimator[F](Estimator.UnlimitedParents)(Monad[F], Log[F], Metrics[F], span)
+      estimator = Estimator[F](conf.casper.maxNumberOfParents)(Monad[F], Log[F], Metrics[F], span)
       runtime <- {
         implicit val s  = rspaceScheduler
         implicit val sp = span

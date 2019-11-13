@@ -351,6 +351,10 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
       descr = "Block finalization is triggered after adding every 'n' blocks. " +
         "Use this option to configure this 'n'."
     )
+
+    val maxNumberOfParents = opt[Int](
+      descr = "Maximum number of block parents."
+    )
   }
   addSubcommand(run)
 
