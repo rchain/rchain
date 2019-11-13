@@ -42,7 +42,13 @@ def generate_block_hash() -> bytes:
 @contextmanager
 def three_nodes_network_with_node_client(command_line_options: CommandLineOptions, random_generator: Random, docker_client: DockerClient, validator_bonds_dict: Dict[PrivateKey, int] = None) -> Generator[Tuple[TestingContext, Node, Node, Node, NodeClient], None, None]:
     peers_keypairs = [BONDED_VALIDATOR_KEY_1, BONDED_VALIDATOR_KEY_2]
-    with conftest.testing_context(command_line_options, random_generator, docker_client, bootstrap_key=BOOTSTRAP_NODE_KEY, peers_keys=peers_keypairs, validator_bonds_dict=validator_bonds_dict) as context, \
+    wallet_map = {
+        BOOTSTRAP_NODE_KEY: 10000,
+        BONDED_VALIDATOR_KEY_1: 10000,
+        BONDED_VALIDATOR_KEY_2: 10000,
+        BONDED_VALIDATOR_KEY_3: 10000
+    }
+    with conftest.testing_context(command_line_options, random_generator, docker_client, bootstrap_key=BOOTSTRAP_NODE_KEY, peers_keys=peers_keypairs, validator_bonds_dict=validator_bonds_dict, wallets_dict=wallet_map) as context, \
         docker_network_with_started_bootstrap(context=context) as bootstrap_node, \
         bootstrap_connected_peer(context=context, bootstrap=bootstrap_node, name='bonded-validator-1', private_key=BONDED_VALIDATOR_KEY_1) as validator1, \
         bootstrap_connected_peer(context=context, bootstrap=bootstrap_node, name='bonded-validator-2', private_key=BONDED_VALIDATOR_KEY_2) as validator2, \
@@ -88,7 +94,6 @@ def test_slash_invalid_block_hash(command_line_options: CommandLineOptions, rand
 
         block_info = validator2.show_block_parsed(slashed_block_hash)
         bonds_validators = extract_validator_stake_from_bonds_validator_str(block_info['bondsValidatorList'])
-
         assert bonds_validators[BONDED_VALIDATOR_KEY_1.get_public_key().to_hex()] == 0
 
 
@@ -224,7 +229,8 @@ def test_slash_justification_not_correct(command_line_options: CommandLineOption
         assert bonds_validators[BONDED_VALIDATOR_KEY_1.get_public_key().to_hex()] == 0.0
 
 
-@pytest.mark.skipif(sys.platform in ('win32', 'cygwin', 'darwin'), reason="Only Linux docker support connection between host and container which node client needs")
+# @pytest.mark.skipif(sys.platform in ('win32', 'cygwin', 'darwin'), reason="Only Linux docker support connection between host and container which node client needs")
+@pytest.mark.skipif
 def test_slash_invalid_validator_approve_evil_block(command_line_options: CommandLineOptions, random_generator: Random, docker_client: DockerClient) -> None:
     """Slash a validator who doesn't slash invalid block
 

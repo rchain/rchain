@@ -57,10 +57,9 @@ def test_synchrony_constraint(command_line_options: CommandLineOptions, random_g
 
     sample_contract = '/opt/docker/examples/hello_world_again.rho'
 
-    with conftest.testing_context(command_line_options, random_generator, docker_client, validator_bonds_dict=bonded_validator_map, bootstrap_key=BOOTSTRAP_NODE_KEYS) as context, \
+    with conftest.testing_context(command_line_options, random_generator, docker_client, validator_bonds_dict=bonded_validator_map, bootstrap_key=BOOTSTRAP_NODE_KEYS, wallets_dict=genesis_vault) as context, \
         docker_network(context, context.docker) as network, \
-        conftest.temporary_wallets_file(random_generator, genesis_vault) as wallets_file, \
-        started_bootstrap(context=context, network=network, wallets_file=wallets_file, synchrony_constraint_threshold=0) as bootstrap_node, \
+        started_bootstrap(context=context, network=network, synchrony_constraint_threshold=0) as bootstrap_node, \
         bootstrap_connected_peer(context=context, bootstrap=bootstrap_node, name='bonded-validator-1', private_key=BONDED_VALIDATOR_KEY_1, synchrony_constraint_threshold=0.48) as bonded_validator_1, \
         bootstrap_connected_peer(context=context, bootstrap=bootstrap_node, name='bonded-validator-2',private_key=BONDED_VALIDATOR_KEY_2, synchrony_constraint_threshold=0.4) as bonded_validator_2, \
         bootstrap_connected_peer(context=context, bootstrap=bootstrap_node, name='bonded-validator-3', private_key=BONDED_VALIDATOR_KEY_3, synchrony_constraint_threshold=0.99) as bonded_validator_3:
