@@ -59,7 +59,7 @@ class CostAccountingSpec extends FlatSpec with Matchers with PropertyChecks with
   def evaluateAndReplay(
       initialPhlo: Cost,
       term: String
-  ): Task[(EvaluateResult, EvaluateResult)] = {
+  ): (EvaluateResult, EvaluateResult) = {
 
     implicit val logF: Log[Task]           = new Log.NOPLog[Task]
     implicit val metricsEff: Metrics[Task] = new metrics.Metrics.MetricsNOP[Task]
@@ -104,9 +104,13 @@ class CostAccountingSpec extends FlatSpec with Matchers with PropertyChecks with
             }
           }
       }
+      .runSyncUnsafe(75.seconds)
   }
 
-  // max 0x144000000
+  // Uses Godel numbering and a https://en.wikipedia.org/wiki/Mixed_radix
+  // to encode certain terms as numbers in the range [0, 0x144000000).
+  // Every number gets decoded into a unique term, but some terms can
+  // be encoded by more than one number.
   def fromLong(index: Long): String = {
     var remainder = index
     val numPars   = (index % 4) + 1
@@ -228,21 +232,19 @@ class CostAccountingSpec extends FlatSpec with Matchers with PropertyChecks with
   it should "be repeatable when generated" in {
     val r = scala.util.Random
     // Try contract fromLong(1716417707L) = @2!!(0) | @0!!(0) | for (_ <<- @2) { 0 } | @2!(0)"
-    evaluateAndReplay(Cost(Integer.MAX_VALUE), fromLong(1716417707)).map(result => {
-      assert(result._1.errors.isEmpty)
-      assert(result._2.errors.isEmpty)
-      assert(result._1.cost == result._2.cost)
-    })
+    val result = evaluateAndReplay(Cost(Integer.MAX_VALUE), fromLong(1716417707))
+    assert(result._1.errors.isEmpty)
+    assert(result._2.errors.isEmpty)
+    assert(result._1.cost == result._2.cost)
 
     for (i <- 1 to 10000) {
       val long     = ((r.nextLong % 0X144000000L) + 0X144000000L) % 0X144000000L
       val contract = fromLong(long)
       if (contract != "") {
-        evaluateAndReplay(Cost(Integer.MAX_VALUE), contract).map(result => {
-          assert(result._1.errors.isEmpty)
-          assert(result._2.errors.isEmpty)
-          assert(result._1.cost == result._2.cost)
-        })
+        val result = evaluateAndReplay(Cost(Integer.MAX_VALUE), contract)
+        assert(result._1.errors.isEmpty)
+        assert(result._2.errors.isEmpty)
+        assert(result._1.cost == result._2.cost)
       }
     }
   }
