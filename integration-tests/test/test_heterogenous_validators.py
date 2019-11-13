@@ -73,21 +73,13 @@ def test_heterogenous_validators(command_line_options: CommandLineOptions, rando
 
                 wait_for_node_sees_block(context, joining_validator, bonding_block_hash)
 
-                bonded_validator.deploy(contract_path, BONDED_VALIDATOR_KEY)
-                h1 = bonded_validator.propose()
-
-                wait_for_node_sees_block(context, joining_validator, h1)
-
-
                 # after bonding, the new joining validator can propose
-                # joining_validator.deploy(contract_path, JOINING_VALIDATOR_KEY)
-                # latest_block_hash = joining_validator.propose()
+                joining_validator.deploy(contract_path, JOINING_VALIDATOR_KEY)
+                latest_block_hash = joining_validator.propose()
 
-                bonded_validator.deploy(contract_path, BONDED_VALIDATOR_KEY)
-                h1 = bonded_validator.propose()
-
+                wait_for_node_sees_block(context, bonded_validator, latest_block_hash)
                 # assure the new joining validator has 100 bonded
-                block_info = bonded_validator.show_block_parsed(h1)
+                block_info = bonded_validator.show_block_parsed(latest_block_hash)
                 block_validators_map = extract_validator_stake_from_bonds_validator_str(block_info['bondsValidatorList'])
                 assert block_validators_map.get(JOINING_VALIDATOR_KEY.get_public_key().to_hex()) == 100
 
