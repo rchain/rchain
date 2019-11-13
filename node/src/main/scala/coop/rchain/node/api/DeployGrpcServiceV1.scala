@@ -69,7 +69,13 @@ object DeployGrpcServiceV1 {
         DeployData
           .from(request)
           .fold(
-            errMsg => Task.raiseError[DeployResponse](new Exception(errMsg)),
+            errMsg => {
+              import DeployResponse.Message._
+              Task({
+                val error = ServiceError(Seq[String](errMsg))
+                DeployResponse(Error(error))
+              })
+            },
             dd => {
               defer(BlockAPI.deploy[F](dd)) { r =>
                 import DeployResponse.Message
