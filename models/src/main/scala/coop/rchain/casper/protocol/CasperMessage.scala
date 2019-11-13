@@ -412,6 +412,7 @@ object DeployData {
 
   def toProto(dd: Signed[DeployData]): DeployDataProto =
     toProto(dd.data)
+      .withDeployer(ByteString.copyFrom(dd.pk.bytes))
       .withSig(dd.sig)
       .withSigAlgorithm(dd.sigAlgorithm.name)
 }
