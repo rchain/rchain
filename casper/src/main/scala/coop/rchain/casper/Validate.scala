@@ -158,7 +158,7 @@ object Validate {
   /*
    * TODO: Double check ordering of validity checks
    */
-  def blockSummary[F[_]: Sync: Log: Time: BlockStore: Metrics: Span](
+  def blockSummary[F[_]: Sync: Log: Time: BlockStore: Metrics: Span: Estimator](
       block: BlockMessage,
       genesis: BlockMessage,
       dag: BlockDagRepresentation[F],
@@ -492,7 +492,7 @@ object Validate {
   /**
     * Works only with fully explicit justifications.
     */
-  def parents[F[_]: Sync: Log: BlockStore: Metrics: Span](
+  def parents[F[_]: Sync: Log: BlockStore: Metrics: Span: Estimator](
       b: BlockMessage,
       genesis: BlockMessage,
       dag: BlockDagRepresentation[F]
@@ -505,7 +505,7 @@ object Validate {
 
     for {
       latestMessagesHashes <- ProtoUtil.toLatestMessageHashes(b.justifications).pure
-      tipHashes            <- Estimator.tips(dag, genesis, latestMessagesHashes)
+      tipHashes            <- Estimator[F].tips(dag, genesis, latestMessagesHashes)
       computedParents      <- EstimatorHelper.chooseNonConflicting(tipHashes, dag)
       computedParentHashes = computedParents.map(_.blockHash)
       status <- if (parentHashes == computedParentHashes) {

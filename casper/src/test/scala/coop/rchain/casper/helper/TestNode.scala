@@ -55,6 +55,7 @@ class TestNode[F[_]](
     val blockStoreDir: Path,
     blockProcessingLock: Semaphore[F],
     synchronyConstraintThreshold: Double,
+    maxNumberOfParents: Int = Estimator.UnlimitedParents,
     shardId: String = "rchain",
     finalizationRate: Int = 1
 )(
@@ -77,6 +78,7 @@ class TestNode[F[_]](
   implicit val lastFinalizedBlockCalculator = LastFinalizedBlockCalculator[F](0f)
   implicit val synchronyConstraintChecker =
     SynchronyConstraintChecker[F](synchronyConstraintThreshold)
+  implicit val estimator = Estimator[F](maxNumberOfParents)
   implicit val rpConfAsk = createRPConfAsk[F](local)
   implicit val eventBus  = EventPublisher.noop[F]
 
@@ -375,8 +377,7 @@ object TestNode {
                    paths.blockDagDir,
                    paths.blockStoreDir,
                    blockProcessingLock,
-                   synchronyConstraintThreshold,
-                   "rchain"
+                   synchronyConstraintThreshold
                  )(
                    Concurrent[F],
                    blockStore,

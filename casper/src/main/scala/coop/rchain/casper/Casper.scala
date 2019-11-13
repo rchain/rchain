@@ -80,7 +80,7 @@ sealed abstract class MultiParentCasperInstances {
     Metrics.Source(CasperMetricsSource, "casper")
   private[this] val genesisLabel = Metrics.Source(MetricsSource, "genesis")
 
-  def hashSetCasper[F[_]: Sync: Metrics: Concurrent: CommUtil: Log: Time: SafetyOracle: LastFinalizedBlockCalculator: BlockStore: BlockDagStorage: LastFinalizedStorage: Span: Running.RequestedBlocks: EventPublisher: SynchronyConstraintChecker](
+  def hashSetCasper[F[_]: Sync: Metrics: Concurrent: CommUtil: Log: Time: SafetyOracle: LastFinalizedBlockCalculator: BlockStore: BlockDagStorage: LastFinalizedStorage: Span: Running.RequestedBlocks: EventPublisher: SynchronyConstraintChecker: Estimator](
       validatorId: Option[ValidatorIdentity],
       genesis: BlockMessage,
       shardId: String,
