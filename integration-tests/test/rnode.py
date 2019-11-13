@@ -431,6 +431,21 @@ class LoggingThread(threading.Thread):
             pass
 
 
+class DeployThread(threading.Thread):
+    def __init__(self, name: str, node: Node, contract: str, count: int, private_key: PrivateKey) -> None:
+        threading.Thread.__init__(self)
+        self.name = name
+        self.node = node
+        self.contract = contract
+        self.count = count
+        self.private_key = private_key
+
+    def run(self) -> None:
+        for _ in range(self.count):
+            self.node.deploy(self.contract, self.private_key)
+            self.node.propose()
+
+
 def make_container_command(container_command: str, container_command_flags: AbstractSet, container_command_options: Dict) -> str:
     opts = ['{} {}'.format(option, argument) for option, argument in container_command_options.items()]
     flags = ' '.join(container_command_flags)
@@ -682,7 +697,6 @@ def started_peer(
     name: str,
     bootstrap: Node,
     private_key: PrivateKey,
-    wallets_file: Optional[str] = None,
     cli_flags: Optional[AbstractSet] = None,
     cli_options: Optional[Dict] = None,
     extra_volumes: Optional[List[str]] = None,
@@ -696,7 +710,7 @@ def started_peer(
         bootstrap=bootstrap,
         private_key=private_key,
         command_timeout=context.command_timeout,
-        wallets_file=wallets_file,
+        wallets_file=context.wallets_file,
         cli_flags=cli_flags,
         cli_options=cli_options,
         extra_volumes=extra_volumes,
@@ -793,7 +807,6 @@ def started_bootstrap(
     network: str,
     cli_flags: Optional[AbstractSet] = None,
     cli_options: Optional[Dict[str, str]] = None,
-    wallets_file: Optional[str] = None,
     extra_volumes: Optional[List[str]] = None,
     synchrony_constraint_threshold: float = 0.0
 ) -> Generator[Node, None, None]:
@@ -805,7 +818,7 @@ def started_bootstrap(
         command_timeout=context.command_timeout,
         cli_flags=cli_flags,
         cli_options=cli_options,
-        wallets_file=wallets_file,
+        wallets_file=context.wallets_file,
         extra_volumes=extra_volumes,
         synchrony_constraint_threshold=synchrony_constraint_threshold
     )
@@ -840,11 +853,10 @@ def ready_bootstrap(
     context: TestingContext,
     cli_flags: Optional[AbstractSet] = None,
     cli_options: Optional[Dict] = None,
-    wallets_file: Optional[str] = None,
     extra_volumes: Optional[List[str]] = None
 ) -> Generator[Node, None, None]:
     with docker_network(context, context.docker) as network:
-        with started_bootstrap(context=context, network=network, cli_flags=cli_flags, cli_options=cli_options, wallets_file=wallets_file, extra_volumes=extra_volumes) as node:
+        with started_bootstrap(context=context, network=network, cli_flags=cli_flags, cli_options=cli_options, extra_volumes=extra_volumes) as node:
             yield node
 
 
@@ -862,3 +874,4 @@ def extract_deploy_id_from_deploy_output(deploy_output: str) -> str:
     if match is None:
         raise UnexpectedDeployOutputFormatError(deploy_output)
     return match.group(1)
+
