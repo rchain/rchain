@@ -1,7 +1,7 @@
 from random import Random
 import pytest
-from docker.client import DockerClient
 from rchain.crypto import PrivateKey
+from docker.client import DockerClient
 
 from . import conftest
 
@@ -114,7 +114,7 @@ def test_fault_tolerance(command_line_options: CommandLineOptions, random_genera
             assert float(validator1.show_block_parsed(b7_hash)['faultTolerance']) <= float(validator1.show_block_parsed(b6_hash)['faultTolerance'])
 
 
-@pytest.mark.xfail
+@pytest.mark.skip
 def test_catch_up_next_round(command_line_options: CommandLineOptions, random_generator: Random, docker_client: DockerClient) -> None:
     wallets_map = {
         BOOTSTRAP_NODE_KEYS: 10000,

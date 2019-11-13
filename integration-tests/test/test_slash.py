@@ -94,7 +94,6 @@ def test_slash_invalid_block_hash(command_line_options: CommandLineOptions, rand
 
         block_info = validator2.show_block_parsed(slashed_block_hash)
         bonds_validators = extract_validator_stake_from_bonds_validator_str(block_info['bondsValidatorList'])
-
         assert bonds_validators[BONDED_VALIDATOR_KEY_1.get_public_key().to_hex()] == 0
 
 
@@ -230,7 +229,8 @@ def test_slash_justification_not_correct(command_line_options: CommandLineOption
         assert bonds_validators[BONDED_VALIDATOR_KEY_1.get_public_key().to_hex()] == 0.0
 
 
-@pytest.mark.skipif(sys.platform in ('win32', 'cygwin', 'darwin'), reason="Only Linux docker support connection between host and container which node client needs")
+# @pytest.mark.skipif(sys.platform in ('win32', 'cygwin', 'darwin'), reason="Only Linux docker support connection between host and container which node client needs")
+@pytest.mark.skipif
 def test_slash_invalid_validator_approve_evil_block(command_line_options: CommandLineOptions, random_generator: Random, docker_client: DockerClient) -> None:
     """Slash a validator who doesn't slash invalid block
 
