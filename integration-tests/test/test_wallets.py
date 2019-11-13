@@ -67,7 +67,7 @@ def get_vault_balance(context: TestingContext, node: Node, rev_addr: str, privat
     check_balance_match = wait_for_log_match_result(context, node, check_balance_pattern)
     return int(check_balance_match.group("balance"))
 
-@pytest.xfail
+@pytest.mark.xfail
 def test_alice_pay_bob(command_line_options: CommandLineOptions, docker_client: DockerClient, random_generator: Random) -> None:
     genesis_vault = {
         ALICE_KEY: ALICE_GENESIS_VAULT_AMOUNT
@@ -113,7 +113,7 @@ def test_alice_pay_bob(command_line_options: CommandLineOptions, docker_client: 
         bob_balance = get_vault_balance(context, bootstrap, bob_rev_address, BOB_KEY, 100000, 1)
         # assert bob_balance == 0
 
-@pytest.xfail
+@pytest.mark.xfail
 def test_transfer_failed_with_invalid_key(command_line_options: CommandLineOptions, docker_client: DockerClient, random_generator: Random) -> None:
     genesis_vault = {
         CHARLIE_KEY: CHARLIE_GENESIS_VAULT_AMOUNT
