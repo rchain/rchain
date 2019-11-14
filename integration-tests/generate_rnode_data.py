@@ -4,6 +4,7 @@ import os
 from random import Random
 import shutil
 import subprocess
+from typing import Generator
 from test.conftest import (CommandLineOptions, docker_client_context,
                            testing_context)
 from test.rnode import ready_bootstrap, started_peer, Node
@@ -11,7 +12,6 @@ from test.wait import (wait_for_approved_block_received_handler_state,
                        wait_for_block_approval,
                        wait_for_sent_approved_block, wait_for_blocks_count_at_least)
 from test.test_wallets import transfer_funds
-from typing import Generator
 
 from rchain.crypto import PrivateKey
 
@@ -125,9 +125,9 @@ def generate_rnode_data() -> None:
             validator_b.deploy(contract_path, VALIDATOR_B_PRIVATE)
             validator_b.propose()
 
-        transfer_funds(context, ceremony_master, CEREMONY_MASTER_PRIVATE.get_public_key().get_rev_address(), VALIDATOR_A_PRIVATE.get_public_key().get_rev_address(), 100, CEREMONY_MASTER_PRIVATE)
-        transfer_funds(context, ceremony_master, VALIDATOR_A_PRIVATE.get_public_key().get_rev_address(), VALIDATOR_B_PRIVATE.get_public_key().get_rev_address(), 200, VALIDATOR_A_PRIVATE)
-        transfer_funds(context, ceremony_master, VALIDATOR_B_PRIVATE.get_public_key().get_rev_address(), CEREMONY_MASTER_PRIVATE.get_public_key().get_rev_address(), 300, VALIDATOR_B_PRIVATE)
+        transfer_funds(context, ceremony_master, CEREMONY_MASTER_PRIVATE.get_public_key().get_rev_address(), VALIDATOR_A_PRIVATE.get_public_key().get_rev_address(), 100, CEREMONY_MASTER_PRIVATE, 100000, 1)
+        transfer_funds(context, ceremony_master, VALIDATOR_A_PRIVATE.get_public_key().get_rev_address(), VALIDATOR_B_PRIVATE.get_public_key().get_rev_address(), 200, VALIDATOR_A_PRIVATE, 100000, 1)
+        transfer_funds(context, ceremony_master, VALIDATOR_B_PRIVATE.get_public_key().get_rev_address(), CEREMONY_MASTER_PRIVATE.get_public_key().get_rev_address(), 300, VALIDATOR_B_PRIVATE, 100000, 1)
         # finally master: 1200, validator a: 900, validator b: 1900
 
         for _ in range(3):
