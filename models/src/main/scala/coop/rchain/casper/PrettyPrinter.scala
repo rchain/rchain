@@ -46,7 +46,7 @@ object PrettyPrinter {
     limit(Base16.encode(b.toByteArray), 10)
 
   def buildString(sd: Signed[DeployData]): String =
-    s"Sig: ${buildString(sd.sig)}, SigAlgorithm: ${sd.sigAlgorithm.name}"
+    s"${buildString(sd.data)}, SigAlgorithm: ${sd.sigAlgorithm.name}, Sig: ${buildString(sd.sig)}"
   def buildString(d: DeployData): String =
     s"DeployData #${d.timestamp} -- ${d.term}}"
 
