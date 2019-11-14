@@ -173,7 +173,7 @@ new  PoS,
                 getUser!(deployerId, *userCh) |
                 for(@state, resultCh <- processCh;
                     @userPk <- userCh;
-                    _, @blockNumber <- blockDataCh) {
+                    _, @blockNumber, _ <- blockDataCh) {
                   if (state.get("allBonds").contains(userPk)) {
                     // the withdwal is in effect starting from the next epoch
                     resultCh!(
@@ -191,16 +191,19 @@ new  PoS,
 
             new currentDeployerData in {
               contract PoS (@"chargeDeploy", @deployerId, @amount, return) = {
-                new depositCh in {
-                  deposit!(deployerId, amount, *depositCh) |
-                  for(@depositResult <- depositCh){
-                    match depositResult {
-                      (true, _) => {
-                        currentDeployerData!((deployerId, amount)) |
-                        return!(depositResult)
-                      }
-                      (_, errorMessage) => {
-                        return!((false, "Deploy payment failed: " ++ errorMessage))
+                new depositCh, tmpCh in {
+                  getMVar!(*stateCh, *tmpCh) |
+                  for (@state <- tmpCh) {
+                    deposit!(deployerId, amount, state.get("activeValidators"), *depositCh) |
+                    for(@depositResult <- depositCh){
+                      match depositResult {
+                        (true, _) => {
+                          currentDeployerData!((deployerId, amount)) |
+                          return!(depositResult)
+                        }
+                        (_, errorMessage) => {
+                          return!((false, "Deploy payment failed: " ++ errorMessage))
+                        }
                       }
                     }
                   }
@@ -296,7 +299,7 @@ new  PoS,
                   getBlockData!(*blockDataCh) |
 
                   runMVar!(*stateCh, *mvarProcessCh, *ackCh) |
-                  for(_, @blockNumber <- blockDataCh;
+                  for(_, @blockNumber, _ <- blockDataCh;
                       @state, mvarResultCh <- mvarProcessCh) {
                     // Before choosing new active validators and paying out any withdrawers,
                     // deposits have to be accumulated into one vault for now.
@@ -501,14 +504,14 @@ new  PoS,
           }
         } |
 
-        contract deposit (@fromUserPk, @amount, @activeValidators, returnCh) = {
+        contract deposit (@deployerId, @amount, @activeValidators, returnCh) = {
           new vaultCh,
               revAddressCh,
               indexSender,
               getBlockData(`rho:block:data`), blockDataCh,
               authKeyCh in {
-            @RevVault!("deployerAuthKey", *authKeyCh) |
-            revAddressOps!("fromPublicKey", fromUserPk, *revAddressCh) |
+            @RevVault!("deployerAuthKey", deployerId, *authKeyCh) |
+            revAddressOps!("fromDeployerId", deployerId, *revAddressCh) |
             for (@authKey <- authKeyCh; @fromRevAddress <- revAddressCh) {
               @RevVault!("findOrCreate", fromRevAddress, *vaultCh) |
               getBlockData!(*blockDataCh) |
