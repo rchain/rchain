@@ -229,13 +229,21 @@ class CostAccountingSpec extends FlatSpec with Matchers with PropertyChecks with
       }
     }
 
-  it should "be repeatable when generated" in {
+  // TODO: Remove ignore when bug RCHAIN-3917 is fixed.
+  it should "be repeatable when generated" ignore {
     val r = scala.util.Random
     // Try contract fromLong(1716417707L) = @2!!(0) | @0!!(0) | for (_ <<- @2) { 0 } | @2!(0)"
-    val result = evaluateAndReplay(Cost(Integer.MAX_VALUE), fromLong(1716417707))
-    assert(result._1.errors.isEmpty)
-    assert(result._2.errors.isEmpty)
-    assert(result._1.cost == result._2.cost)
+    // because the cost is nondeterministic
+    val result1 = evaluateAndReplay(Cost(Integer.MAX_VALUE), fromLong(1716417707))
+    assert(result1._1.errors.isEmpty)
+    assert(result1._2.errors.isEmpty)
+    assert(result1._1.cost == result1._2.cost)
+    // Try contract fromLong(510661906) = @1!(0) | @1!(0) | for (_ <= @1; _ <= @1) { 0 }
+    // because of bug RCHAIN-3917
+    val result2 = evaluateAndReplay(Cost(Integer.MAX_VALUE), fromLong(510661906))
+    assert(result2._1.errors.isEmpty)
+    assert(result2._2.errors.isEmpty)
+    assert(result2._1.cost == result2._2.cost)
 
     for (i <- 1 to 10000) {
       val long     = ((r.nextLong % 0X144000000L) + 0X144000000L) % 0X144000000L
