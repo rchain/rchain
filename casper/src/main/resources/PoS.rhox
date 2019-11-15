@@ -372,7 +372,7 @@ new  PoS,
 
                   contract accumulateDeposits(destRevAddress, ackCh) = {
                     for(@vaults <<- perActiveValidatorPosVaultsCh) {
-                      @ListOps!("foreach", vaults, *moveFunds, *ackCh)
+                      @ListOps!("parMap", vaults, *moveFunds, *ackCh)
                     }
                   }
                 } |
