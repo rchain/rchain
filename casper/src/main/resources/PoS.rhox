@@ -519,9 +519,13 @@ new  PoS,
                 @ListOps!("indexOf", activeValidators, sender, *indexSender) |
                 for (@idx <- indexSender) {
                   for (@vaults <<- perActiveValidatorPosVaultsCh) {
-                    match vaults.nth(idx) {
-                      (_, activeValidatorVault, _) => {
-                        @fromVault!("transfer", activeValidatorVault, amount, authKey, *returnCh)
+                    if (idx == -1) {
+                      returnCh!((false, "Sender is not an active validator"))
+                    } else {
+                      match vaults.nth(idx) {
+                        (_, activeValidatorVault, _) => {
+                          @fromVault!("transfer", activeValidatorVault, amount, authKey, *returnCh)
+                        }
                       }
                     }
                   }
