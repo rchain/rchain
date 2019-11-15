@@ -1,7 +1,6 @@
 package coop.rchain.casper
 
 import scala.util.Random._
-
 import cats.{Applicative, Functor, Monad}
 import cats.implicits._
 import coop.rchain.casper.helper.TestNode
@@ -10,6 +9,7 @@ import coop.rchain.casper.protocol.DeployData
 import coop.rchain.shared.scalatestcontrib._
 import coop.rchain.casper.util.ConstructDeploy
 import coop.rchain.casper.util.GenesisBuilder.GenesisContext
+import coop.rchain.crypto.signatures.Signed
 import coop.rchain.p2p.EffectsTestInstances.LogicalTime
 import monix.execution.Scheduler.Implicits.global
 import org.scalatest.exceptions.TestFailedException
@@ -666,7 +666,7 @@ trait MergeabilityRules {
       ConstructDeploy.sourceDeployNowF[Effect](b1.value),
       ConstructDeploy.sourceDeployNowF[Effect](b2.value),
       ConstructDeploy.sourceDeployNowF[Effect]("Nil")
-    ).sequence[Effect, DeployData]
+    ).sequence[Effect, Signed[DeployData]]
       .flatMap { deploys =>
         TestNode.networkEff(genesis, networkSize = 2).use { nodes =>
           for {

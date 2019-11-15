@@ -3,10 +3,8 @@ package coop.rchain.casper
 import java.nio.file.Files
 
 import scala.collection.immutable.HashMap
-
 import cats.Monad
 import cats.implicits._
-
 import coop.rchain.blockstorage.BlockStore
 import coop.rchain.blockstorage.dag.IndexedBlockDagStorage
 import coop.rchain.casper.helper.{BlockDagStorageFixture, BlockGenerator}
@@ -18,7 +16,7 @@ import coop.rchain.casper.util.GenesisBuilder.buildGenesis
 import coop.rchain.casper.util.rholang.{InterpreterUtil, RuntimeManager}
 import coop.rchain.crypto.{PrivateKey, PublicKey}
 import coop.rchain.crypto.codec.Base16
-import coop.rchain.crypto.signatures.Secp256k1
+import coop.rchain.crypto.signatures.{Secp256k1, Signed}
 import coop.rchain.metrics._
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.Validator.Validator
@@ -26,7 +24,6 @@ import coop.rchain.p2p.EffectsTestInstances.LogStub
 import coop.rchain.rholang.interpreter.Runtime
 import coop.rchain.shared.Time
 import coop.rchain.shared.scalatestcontrib._
-
 import com.google.protobuf.ByteString
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
@@ -290,9 +287,13 @@ class ValidateTest
   "Future deploy validation" should "work" in withStorage {
     implicit blockStore => implicit blockDagStorage =>
       for {
-        deploy            <- ConstructDeploy.basicProcessedDeploy[Task](0)
-        deployData        = deploy.deploy
-        updatedDeployData = deployData.copy(validAfterBlockNumber = -1)
+        deploy     <- ConstructDeploy.basicProcessedDeploy[Task](0)
+        deployData = deploy.deploy.data
+        updatedDeployData = Signed(
+          deployData.copy(validAfterBlockNumber = -1),
+          Secp256k1,
+          ConstructDeploy.defaultSec
+        )
         block <- createGenesis[Task](
                   deploys = Seq(deploy.copy(deploy = updatedDeployData))
                 )
@@ -304,9 +305,13 @@ class ValidateTest
   "Future deploy validation" should "not accept blocks with a deploy for a future block number" in withStorage {
     implicit blockStore => implicit blockDagStorage =>
       for {
-        deploy            <- ConstructDeploy.basicProcessedDeploy[Task](0)
-        deployData        = deploy.deploy
-        updatedDeployData = deployData.copy(validAfterBlockNumber = Long.MaxValue)
+        deploy     <- ConstructDeploy.basicProcessedDeploy[Task](0)
+        deployData = deploy.deploy.data
+        updatedDeployData = Signed(
+          deployData.copy(validAfterBlockNumber = Long.MaxValue),
+          Secp256k1,
+          ConstructDeploy.defaultSec
+        )
         blockWithFutureDeploy <- createGenesis[Task](
                                   deploys = Seq(deploy.copy(deploy = updatedDeployData))
                                 )
@@ -330,9 +335,13 @@ class ValidateTest
   "Deploy expiration validation" should "not accept blocks with a deploy that is expired" in withStorage {
     implicit blockStore => implicit blockDagStorage =>
       for {
-        deploy            <- ConstructDeploy.basicProcessedDeploy[Task](0)
-        deployData        = deploy.deploy
-        updatedDeployData = deployData.copy(validAfterBlockNumber = Long.MinValue)
+        deploy     <- ConstructDeploy.basicProcessedDeploy[Task](0)
+        deployData = deploy.deploy.data
+        updatedDeployData = Signed(
+          deployData.copy(validAfterBlockNumber = Long.MinValue),
+          Secp256k1,
+          ConstructDeploy.defaultSec
+        )
         blockWithExpiredDeploy <- createGenesis[Task](
                                    deploys = Seq(deploy.copy(deploy = updatedDeployData))
                                  )
@@ -763,53 +772,6 @@ class ValidateTest
                    genesis.copy(blockHash = ByteString.copyFromUtf8("123"))
                  ) shouldBeF Left(InvalidBlockHash)
       } yield result
-  }
-
-  "Block validDeploySignatures" should "succeed if all deploys are signed correctly" in withStorage {
-    implicit blockStore =>
-      implicit blockDagStorage =>
-        // given
-        val context  = buildGenesis()
-        val (sk, pk) = context.validatorKeyPairs.head
-        for {
-          dag     <- blockDagStorage.getRepresentation
-          deploy1 <- ConstructDeploy.basicProcessedDeploy[Task](0)
-          deploy2 <- ConstructDeploy.basicProcessedDeploy[Task](0)
-          deploy3 <- ConstructDeploy.basicProcessedDeploy[Task](0)
-          genesis <- ProtoUtil
-                      .signBlock[Task](context.genesisBlock, dag, pk, sk, "ed25519", "rchain")
-          block <- createBlock[Task](
-                    Seq(genesis.blockHash),
-                    genesis,
-                    deploys = Seq(deploy1, deploy2, deploy3)
-                  )
-          // when
-          validationResult <- Validate.validDeploySignatures[Task](block)
-          // then
-        } yield validationResult shouldBe Right(BlockStatus.valid)
-  }
-
-  it should "fail if one of deploys is not properly signed" in withStorage {
-    implicit blockStore => implicit blockDagStorage =>
-      val context  = buildGenesis()
-      val (sk, pk) = context.validatorKeyPairs.head
-      for {
-        dag     <- blockDagStorage.getRepresentation
-        deploy1 <- ConstructDeploy.basicProcessedDeploy[Task](0)
-        deploy2 <- ConstructDeploy
-                    .basicProcessedDeploy[Task](0)
-                    .map(pd => pd.copy(deploy = pd.deploy.copy(sig = ByteString.EMPTY)))
-        deploy3 <- ConstructDeploy.basicProcessedDeploy[Task](0)
-        genesis <- ProtoUtil.signBlock[Task](context.genesisBlock, dag, pk, sk, "ed25519", "rchain")
-        block <- createBlock[Task](
-                  Seq(genesis.blockHash),
-                  genesis,
-                  deploys = Seq(deploy1, deploy2, deploy3)
-                )
-        // when
-        validationResult <- Validate.validDeploySignatures[Task](block)
-        // then
-      } yield validationResult shouldBe Left(DeployNotSigned)
   }
 
   "Block version validation" should "work" in withStorage { _ => implicit blockDagStorage =>

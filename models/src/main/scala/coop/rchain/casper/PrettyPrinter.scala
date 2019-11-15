@@ -3,6 +3,7 @@ package coop.rchain.casper
 import com.google.protobuf.ByteString
 import coop.rchain.casper.protocol._
 import coop.rchain.crypto.codec._
+import coop.rchain.crypto.signatures.Signed
 
 object PrettyPrinter {
 
@@ -38,12 +39,14 @@ object PrettyPrinter {
     }
 
   def buildString(d: ProcessedDeploy): String =
-    s"User: ${buildStringNoLimit(d.deploy.deployer)}, Cost: ${d.cost.toString} " +
+    s"User: ${buildStringNoLimit(d.deploy.pk.bytes)}, Cost: ${d.cost.toString} " +
       s"${buildString(d.deploy)}"
 
   def buildString(b: ByteString): String =
     limit(Base16.encode(b.toByteArray), 10)
 
+  def buildString(sd: Signed[DeployData]): String =
+    s"${buildString(sd.data)}, SigAlgorithm: ${sd.sigAlgorithm.name}, Sig: ${buildString(sd.sig)}"
   def buildString(d: DeployData): String =
     s"DeployData #${d.timestamp} -- ${d.term}}"
 

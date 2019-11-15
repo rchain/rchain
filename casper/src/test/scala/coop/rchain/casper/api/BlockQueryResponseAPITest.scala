@@ -37,7 +37,6 @@ class BlockQueryResponseAPITest
   private val runtimeManagerResource: Resource[Task, RuntimeManager[Task]] =
     mkRuntimeManager("block-query-response-api-test")
 
-  private val (sk, _)  = ConstructDeploy.defaultKeyPair
   val secondBlockQuery = "1234"
   val badTestHashQuery = "No such a hash"
 
@@ -156,9 +155,7 @@ class BlockQueryResponseAPITest
       for {
         effects                                 <- effectsForSimpleCasperSetup(blockStore, blockDagStorage)
         (logEff, casperRef, cliqueOracleEffect) = effects
-        deployId = SignDeployment
-          .sign(PrivateKey(sk.bytes), randomDeploys.head.deploy)
-          .sig
+        deployId                                = randomDeploys.head.deploy.sig
         blockQueryResponse <- BlockAPI.findDeploy[Task](deployId)(
                                Sync[Task],
                                casperRef,

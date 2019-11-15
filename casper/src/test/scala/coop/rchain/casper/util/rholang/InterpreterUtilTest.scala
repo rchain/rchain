@@ -15,6 +15,7 @@ import coop.rchain.casper.util.rholang.InterpreterUtil._
 import coop.rchain.casper.util.rholang.Resources.mkRuntimeManager
 import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
 import coop.rchain.casper.util.{ConstructDeploy, GenesisBuilder}
+import coop.rchain.crypto.signatures.Signed
 import coop.rchain.metrics
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.models.BlockHash.BlockHash
@@ -44,7 +45,7 @@ class InterpreterUtilTest
 
   def computeDeploysCheckpoint[F[_]: Sync: Log: BlockStore: Span](
       parents: Seq[BlockMessage],
-      deploys: Seq[DeployData],
+      deploys: Seq[Signed[DeployData]],
       dag: BlockDagRepresentation[F],
       runtimeManager: RuntimeManager[F]
   ): F[Either[Throwable, (StateHash, StateHash, Seq[ProcessedDeploy])]] =
@@ -54,7 +55,7 @@ class InterpreterUtilTest
         deploys,
         dag,
         runtimeManager,
-        BlockData(deploys.maxBy(_.timestamp).timestamp, 0),
+        BlockData(deploys.maxBy(_.data.timestamp).data.timestamp, 0),
         Map.empty[BlockHash, Validator]
       )
       .attempt
@@ -271,7 +272,7 @@ class InterpreterUtilTest
   def computeDeployCosts(
       runtimeManager: RuntimeManager[Task],
       dag: BlockDagRepresentation[Task],
-      deploy: DeployData*
+      deploy: Signed[DeployData]*
   )(implicit blockStore: BlockStore[Task]): Task[Seq[PCost]] =
     for {
       computeResult          <- computeDeploysCheckpoint[Task](Seq(genesis), deploy, dag, runtimeManager)

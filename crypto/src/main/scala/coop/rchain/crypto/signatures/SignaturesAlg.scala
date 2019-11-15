@@ -11,6 +11,8 @@ trait SignaturesAlg {
   def verify(data: Array[Byte], signature: Array[Byte], pub: PublicKey): Boolean =
     verify(data, signature, pub.bytes)
   def sign(data: Array[Byte], sec: PrivateKey): Array[Byte] = sign(data, sec.bytes)
+
+  val sigLength: Int
 }
 
 object SignaturesAlg {

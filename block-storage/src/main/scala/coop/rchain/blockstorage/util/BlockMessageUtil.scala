@@ -2,6 +2,7 @@ package coop.rchain.blockstorage.util
 
 import com.google.protobuf.ByteString
 import coop.rchain.casper.protocol.{BlockMessage, Bond, DeployData}
+import coop.rchain.crypto.signatures.Signed
 
 object BlockMessageUtil {
   // TODO: Remove once optional fields are removed
@@ -11,7 +12,7 @@ object BlockMessageUtil {
   def bonds(b: BlockMessage): Seq[Bond] =
     b.body.state.bonds
 
-  def deployData(b: BlockMessage): Seq[DeployData] =
+  def deployData(b: BlockMessage): Seq[Signed[DeployData]] =
     b.body.deploys.map(_.deploy)
 
   def parentHashes(b: BlockMessage): Seq[ByteString] =

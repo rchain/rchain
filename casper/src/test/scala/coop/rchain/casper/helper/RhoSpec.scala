@@ -2,13 +2,17 @@ package coop.rchain.casper.helper
 
 import cats.effect.{Concurrent, Sync}
 import cats.implicits._
+import com.google.protobuf.ByteString
 import coop.rchain.casper.genesis.contracts.TestUtil
 import coop.rchain.casper.genesis.contracts.TestUtil.eval
 import coop.rchain.casper.protocol.{DeployData, DeployDataProto}
 import coop.rchain.casper.util.GenesisBuilder.GenesisParameters
 import coop.rchain.casper.util.rholang.Resources.copyStorage
+import coop.rchain.casper.util.rholang.Tools
 import coop.rchain.casper.util.{GenesisBuilder, ProtoUtil}
+import coop.rchain.crypto.{PrivateKey, PublicKey}
 import coop.rchain.crypto.hash.Blake2b512Random
+import coop.rchain.crypto.signatures.{Secp256k1, Signed}
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.models.{NormalizerEnv, Par}
 import coop.rchain.rholang.Resources.mkRuntimeAt
@@ -24,7 +28,7 @@ import scala.concurrent.duration.{Duration, FiniteDuration}
 
 class RhoSpec(
     testObject: CompiledRholangSource[_],
-    extraNonGenesisDeploys: Seq[DeployData],
+    extraNonGenesisDeploys: Seq[Signed[DeployData]],
     executionTimeout: FiniteDuration,
     genesisParameters: GenesisParameters = GenesisBuilder.buildGenesisParameters()
 ) extends FlatSpec
@@ -110,7 +114,7 @@ class RhoSpec(
 
   private def getResults(
       testObject: CompiledRholangSource[_],
-      otherLibs: Seq[DeployData],
+      otherLibs: Seq[Signed[DeployData]],
       timeout: FiniteDuration
   ): Task[TestResult] =
     TestResultCollector[Task].flatMap { testResultCollector =>
@@ -146,7 +150,7 @@ class RhoSpec(
 
   private def setupRuntime[F[_]: Sync](
       runtime: Runtime[F],
-      otherLibs: Seq[DeployData]
+      otherLibs: Seq[Signed[DeployData]]
   ): F[Runtime[F]] =
     for {
       _ <- evalDeploy(rhoSpecDeploy, runtime)
@@ -154,26 +158,33 @@ class RhoSpec(
     } yield runtime
 
   private def evalDeploy[F[_]: Sync](
-      deploy: DeployData,
+      deploy: Signed[DeployData],
       runtime: Runtime[F]
   ): F[Unit] = {
-    val rand: Blake2b512Random = Blake2b512Random(
-      ProtoUtil.stripDeployData(deploy).toProto.toByteArray
-    )
     import coop.rchain.models.rholang.implicits._
-    eval(deploy.term, runtime, NormalizerEnv(deploy).toEnv)(Sync[F], rand)
+    val rand = Tools.unforgeableNameRng(deploy.pk, deploy.data.timestamp)
+    eval(deploy.data.term, runtime, NormalizerEnv(deploy).toEnv)(Sync[F], rand)
   }
 
-  private val rhoSpecDeploy: DeployData =
-    DeployData.from(
-      DeployDataProto(
-        deployer = ProtoUtil.stringToByteString(
-          "0401f5d998c9be9b1a753771920c6e968def63fe95b20c71a163a7f7311b6131ac65a49f796b5947fa9d94b0542895e7b7ebe8b91eefcbc5c7604aaf281922ccac"
-        ),
-        timestamp = 1559158671800L,
-        term = CompiledRholangSource("RhoSpecContract.rho", NormalizerEnv.Empty).code
+  private val rhoSpecDeploy: Signed[DeployData] = {
+    val sk = PrivateKey(
+      ProtoUtil.stringToByteString(
+        "abaa20c1d578612b568a7c3d9b16e81c68d73b931af92cf79727e02011c558c6"
       )
     )
+
+    Signed(
+      DeployData(
+        timestamp = 1559158671800L,
+        term = CompiledRholangSource("RhoSpecContract.rho", NormalizerEnv.Empty).code,
+        phloLimit = Long.MaxValue,
+        phloPrice = 0,
+        validAfterBlockNumber = 0
+      ),
+      Secp256k1,
+      sk
+    )
+  }
 
   val result =
     getResults(testObject, extraNonGenesisDeploys, executionTimeout).runSyncUnsafe(Duration.Inf)

@@ -114,12 +114,14 @@ object Main {
 
         for {
           privateKey <- getPrivateKey
-          _ <- DeployRuntime.deployFileProgram[Task](
-                phlo,
-                phloPrice,
-                validAfterBlock,
-                privateKey,
-                location
+          _ <- privateKey.fold(Task.raiseError[Unit](new Exception("Private key is missing")))(
+                DeployRuntime.deployFileProgram[Task](
+                  phlo,
+                  phloPrice,
+                  validAfterBlock,
+                  _,
+                  location
+                )
               )
         } yield ()
       case FindDeploy(deployId)         => DeployRuntime.findDeploy[Task](deployId)

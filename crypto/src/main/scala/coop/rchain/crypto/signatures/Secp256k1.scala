@@ -23,8 +23,9 @@ import org.bouncycastle.openssl.{PEMEncryptedKeyPair, PEMParser}
 
 object Secp256k1 extends SignaturesAlg {
 
-  private val provider = new BouncyCastleProvider()
-  val name             = "secp256k1"
+  private val provider        = new BouncyCastleProvider()
+  val name                    = "secp256k1"
+  override val sigLength: Int = 32
 
   /**
     * Verifies the given secp256k1 signature in native code.

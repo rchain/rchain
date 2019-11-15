@@ -3,6 +3,7 @@ package coop.rchain.models
 import com.google.protobuf.ByteString
 import coop.rchain.casper.protocol.DeployData
 import coop.rchain.crypto.PublicKey
+import coop.rchain.crypto.signatures.Signed
 
 import scala.annotation.implicitNotFound
 
@@ -31,10 +32,10 @@ object NormalizerEnv {
       ("rho:rchain:deployerId" ->> GDeployerId(ByteString.copyFrom(deployerPk.bytes))) :: HNil
     )
 
-  def apply(deploy: DeployData) =
+  def apply(deploy: Signed[DeployData]) =
     new NormalizerEnv(
       ("rho:rchain:deployId" ->> GDeployId(deploy.sig)) ::
-        ("rho:rchain:deployerId" ->> GDeployerId(deploy.deployer)) :: HNil
+        ("rho:rchain:deployerId" ->> GDeployerId(ByteString.copyFrom(deploy.pk.bytes))) :: HNil
     )
 
   @implicitNotFound(
