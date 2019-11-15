@@ -58,6 +58,7 @@ import coop.rchain.rspace.{
 }
 import coop.rchain.shared.Log
 import monix.execution.atomic.AtomicAny
+import coop.rchain.crypto.signatures.Signed
 
 import scala.concurrent.ExecutionContext
 
@@ -128,7 +129,7 @@ object ReportingCasperData {
   ): DeployTrace =
     DeployTrace(
       ipd.deploy.sig.base16String,
-      ipd.deploy.term,
+      ipd.deploy.data.term,
       events.map(transformer.transformEvent).toList
     )
 
@@ -322,7 +323,7 @@ object ReportingCasper {
     }
 
     private def computeEffect(runtime: ReportingRuntime[F], reducer: Reduce[F])(
-        deploy: DeployData
+        deploy: Signed[DeployData]
     ): F[EvaluateResult] =
       RuntimeManager.evaluate(reducer, runtime.cost, runtime.errorLog)(deploy)
   }

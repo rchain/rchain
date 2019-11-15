@@ -21,11 +21,10 @@ import coop.rchain.shared.Time
 import coop.rchain.shared.ByteStringOps._
 import cats.syntax.either._
 import com.google.protobuf.ByteString
-import coop.rchain.casper.SignDeployment
 import coop.rchain.crypto.{PrivateKey, PublicKey}
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.hash.Blake2b256
-import coop.rchain.crypto.signatures.Secp256k1
+import coop.rchain.crypto.signatures.{Secp256k1, Signed}
 import coop.rchain.shared.ThrowableOps._
 
 object DeployRuntime {
@@ -82,7 +81,7 @@ object DeployRuntime {
       phloLimit: Long,
       phloPrice: Long,
       validAfterBlock: Long,
-      maybePrivateKey: Option[PrivateKey],
+      privateKey: PrivateKey,
       file: String
   ): F[Unit] =
     gracefulExit(
@@ -93,20 +92,15 @@ object DeployRuntime {
           for {
             timestamp <- Sync[F].delay(System.currentTimeMillis())
 
-            //TODO: allow user to specify their public key
             d = DeployData(
-              deployer = ByteString.EMPTY,
               term = code,
               timestamp = timestamp,
-              sig = ByteString.EMPTY,
-              sigAlgorithm = "",
               phloPrice = phloPrice,
               phloLimit = phloLimit,
               validAfterBlockNumber = validAfterBlock
             )
 
-            signedData = maybePrivateKey.fold(d)(SignDeployment.sign(_, d))
-            response   <- DeployService[F].deploy(signedData)
+            response <- DeployService[F].deploy(Signed(d, Secp256k1, privateKey))
           } yield response.map(r => s"Response: $r")
       }
     )

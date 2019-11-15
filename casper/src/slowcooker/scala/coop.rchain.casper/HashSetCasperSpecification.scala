@@ -1,10 +1,8 @@
 package coop.rchain.casper
 
 import scala.util.{Random, Try}
-
 import cats.effect.Sync
 import cats.implicits._
-
 import coop.rchain.blockstorage.dag.BlockDagStorage.DeployId
 import coop.rchain.casper.MultiParentCasper.ignoreDoppelgangerCheck
 import coop.rchain.casper.genesis.Genesis
@@ -14,10 +12,9 @@ import coop.rchain.casper.helper.TestNode._
 import coop.rchain.casper.protocol.{BlockMessage, DeployData}
 import coop.rchain.casper.util.{ConstructDeploy, GenesisBuilder}
 import coop.rchain.catscontrib.TaskContrib._
-import coop.rchain.crypto.signatures.Secp256k1
+import coop.rchain.crypto.signatures.{Secp256k1, Signed}
 import coop.rchain.crypto.PublicKey
 import coop.rchain.rholang.interpreter.util.RevAddress
-
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
 import org.scalacheck._
@@ -74,7 +71,7 @@ object HashSetCasperActions {
 
   def deploy(
       node: TestNode[Effect],
-      deployData: DeployData
+      deployData: Signed[DeployData]
   ): Effect[Either[DeployError, DeployId]] =
     node.casperEff.deploy(deployData)
 
@@ -92,7 +89,7 @@ object HashSetCasperActions {
       node.casperEff.addBlock(signed)
     )
 
-  def deployment(i: Int, ts: Long = System.currentTimeMillis()): DeployData =
+  def deployment(i: Int, ts: Long = System.currentTimeMillis()): Signed[DeployData] =
     ConstructDeploy.sourceDeploy(s"new x in { x!(0) }", ts)
 
   implicit class EffectOps[A](f: Effect[A]) {

@@ -1,12 +1,10 @@
 package coop.rchain.casper.api
 
 import scala.collection.immutable
-
 import cats.Monad
 import cats.effect.{Concurrent, Sync}
 import cats.effect.concurrent.Semaphore
 import cats.implicits._
-
 import coop.rchain.blockstorage.BlockStore
 import coop.rchain.casper.engine._
 import EngineCell._
@@ -17,7 +15,7 @@ import coop.rchain.casper.DeployError._
 import coop.rchain.casper.MultiParentCasper.ignoreDoppelgangerCheck
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util._
-import coop.rchain.casper.util.rholang.RuntimeManager
+import coop.rchain.casper.util.rholang.{RuntimeManager, Tools}
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.graphz._
@@ -31,8 +29,9 @@ import coop.rchain.rholang.interpreter.storage.StoragePrinter
 import coop.rchain.rspace.StableHashProvider
 import coop.rchain.rspace.trace._
 import coop.rchain.shared.Log
-
 import com.google.protobuf.ByteString
+import coop.rchain.crypto.PublicKey
+import coop.rchain.crypto.signatures.Signed
 
 object BlockAPI {
 
@@ -45,7 +44,7 @@ object BlockAPI {
   val GetBlockSource: Metrics.Source        = Metrics.Source(BlockAPIMetricsSource, "get-block")
 
   def deploy[F[_]: Monad: EngineCell: Log: Span](
-      d: DeployData
+      d: Signed[DeployData]
   ): F[ApiErr[String]] = Span[F].trace(DeploySource) {
 
     def casperDeploy(casper: MultiParentCasper[F]): F[ApiErr[String]] =
@@ -561,7 +560,7 @@ object BlockAPI {
 
   private def prettyPrintUnmatchedSends[F[_]: Concurrent](
       casper: MultiParentCasper[F],
-      deploys: Seq[DeployData]
+      deploys: Seq[Signed[DeployData]]
   ): F[String] =
     casper.getRuntimeManager >>= (
       _.withRuntimeLock(runtime => StoragePrinter.prettyPrintUnmatchedSends(deploys, runtime))
@@ -572,8 +571,7 @@ object BlockAPI {
       timestamp: Long,
       nameQty: Int
   ): F[ApiErr[Seq[ByteString]]] = {
-    val seed                = DeployDataProto().withDeployer(deployer).withTimestamp(timestamp)
-    val rand                = Blake2b512Random(DeployDataProto.toByteArray(seed))
+    val rand                = Tools.unforgeableNameRng(PublicKey(deployer.toByteArray), timestamp)
     val safeQty             = nameQty min 1024
     val ids: Seq[BlockHash] = (0 until safeQty).map(_ => ByteString.copyFrom(rand.next()))
     ids.asRight[String].pure[F]

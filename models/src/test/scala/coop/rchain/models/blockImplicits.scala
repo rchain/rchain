@@ -2,10 +2,10 @@ package coop.rchain.models
 
 import com.google.protobuf.ByteString
 import coop.rchain.casper.protocol._
-import coop.rchain.crypto.{PrivateKey, PublicKey}
+import coop.rchain.crypto.{signatures, PrivateKey, PublicKey}
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.hash.Blake2b256
-import coop.rchain.crypto.signatures.Secp256k1
+import coop.rchain.crypto.signatures.{Secp256k1, Signed}
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.Validator.Validator
 import org.scalacheck.Arbitrary.arbitrary
@@ -44,17 +44,16 @@ object blockImplicits {
       timestamp   <- arbitrary[Long]
       (sec, pub)  = Secp256k1.newKeyPair
       bytesLength <- Gen.chooseNum(128, 256)
-      randomBytes <- listOfN(bytesLength, arbitrary[Byte]).map(_.toArray)
-      hash        = Blake2b256.hash(randomBytes)
-      deployData = DeployData(
-        deployer = ByteString.copyFrom(pub.bytes),
-        term = term,
-        timestamp = timestamp,
-        sig = ByteString.copyFrom(Secp256k1.sign(hash, sec)),
-        sigAlgorithm = Secp256k1.name,
-        phloLimit = 90000,
-        phloPrice = 1L,
-        validAfterBlockNumber = 0
+      deployData = Signed(
+        DeployData(
+          term = term,
+          timestamp = timestamp,
+          phloLimit = 90000,
+          phloPrice = 1L,
+          validAfterBlockNumber = 0
+        ),
+        signatures.Secp256k1,
+        sec
       )
     } yield ProcessedDeploy(
       deploy = deployData,

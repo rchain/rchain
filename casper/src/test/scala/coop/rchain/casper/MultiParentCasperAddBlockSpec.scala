@@ -3,7 +3,6 @@ package coop.rchain.casper
 import cats.effect.Sync
 import cats.implicits._
 import com.google.protobuf.ByteString
-import coop.rchain.casper.MultiParentCasper.ignoreDoppelgangerCheck
 import coop.rchain.casper.helper.TestNode._
 import coop.rchain.casper.helper.{BlockUtil, TestNode}
 import coop.rchain.casper.protocol._
@@ -14,7 +13,7 @@ import coop.rchain.comm.rp.ProtocolHelper.packet
 import coop.rchain.crypto.PublicKey
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.hash.Blake2b256
-import coop.rchain.crypto.signatures.Secp256k1
+import coop.rchain.crypto.signatures.{Secp256k1, Signed}
 import coop.rchain.models.PCost
 import coop.rchain.p2p.EffectsTestInstances.LogicalTime
 import coop.rchain.shared.scalatestcontrib._
@@ -103,8 +102,8 @@ class MultiParentCasperAddBlockSpec extends FlatSpec with Matchers with Inspecto
                  signedBlock2,
                  Base16.encode(
                    RegistrySigGen.generateUnforgeableNameId(
-                     PublicKey(deploy2.deployer.toByteArray),
-                     deploy2.timestamp
+                     deploy2.pk,
+                     deploy2.data.timestamp
                    )
                  )
                )
@@ -131,7 +130,7 @@ class MultiParentCasperAddBlockSpec extends FlatSpec with Matchers with Inspecto
     TestNode.networkEff(genesis, networkSize = 2).use { nodes =>
       for {
         deployDatas <- (0 to 1).toList
-                        .traverse[Effect, DeployData](
+                        .traverse[Effect, Signed[DeployData]](
                           i => ConstructDeploy.basicDeployData[Effect](i)
                         )
         _ <- nodes(0).addBlock(deployDatas(0))
@@ -255,13 +254,18 @@ class MultiParentCasperAddBlockSpec extends FlatSpec with Matchers with Inspecto
     TestNode.networkEff(genesis, networkSize = 2).use { nodes =>
       for {
         deployDatas <- (0 to 2).toList
-                        .traverse[Effect, DeployData](
+                        .traverse[Effect, Signed[DeployData]](
                           i => ConstructDeploy.basicDeployData[Effect](i)
                         )
-        deployPrim0 = ConstructDeploy.sign(
-          deployDatas(1)
-            .copy(timestamp = deployDatas(0).timestamp, deployer = deployDatas(0).deployer)
+        deployPrim0 = Signed(
+          deployDatas(1).data
+            .copy(
+              timestamp = deployDatas(0).data.timestamp
+            ),
+          Secp256k1,
+          ConstructDeploy.defaultSec
         ) // deployPrim0 has the same (user, millisecond timestamp) with deployDatas(0)
+
         signedBlock1 <- nodes(0).publishBlock(deployDatas(0))(nodes: _*)
         signedBlock2 <- nodes(0).publishBlock(deployDatas(1))(nodes: _*)
         signedBlock3 <- nodes(0).publishBlock(deployDatas(2))(nodes: _*)
@@ -306,7 +310,7 @@ class MultiParentCasperAddBlockSpec extends FlatSpec with Matchers with Inspecto
     TestNode.networkEff(genesis, networkSize = 3).use { nodes =>
       for {
         deployDatas <- (0 to 5).toList
-                        .traverse[Effect, DeployData](
+                        .traverse[Effect, Signed[DeployData]](
                           i => ConstructDeploy.basicDeployData[Effect](i)
                         )
 
@@ -425,7 +429,7 @@ class MultiParentCasperAddBlockSpec extends FlatSpec with Matchers with Inspecto
 
     def deploy(
         node: TestNode[Effect],
-        dd: DeployData
+        dd: Signed[DeployData]
     ) = node.casperEff.deploy(dd)
 
     def create(

@@ -5,6 +5,7 @@ import cats.effect.Concurrent
 import cats.implicits._
 import coop.rchain.casper.protocol.DeployData
 import coop.rchain.crypto.codec.Base16
+import coop.rchain.crypto.signatures.Signed
 import coop.rchain.models.TaggedContinuation.TaggedCont.ParBody
 import coop.rchain.models._
 import coop.rchain.models.rholang.implicits._
@@ -60,7 +61,7 @@ object StoragePrinter {
     }
 
   def prettyPrintUnmatchedSends[F[_]: Concurrent](
-      deploy: DeployData,
+      deploy: Signed[DeployData],
       runtime: Runtime[F]
   ): F[String] = {
     def unmatchedSends: F[List[Par]] = runtime.space.toMap.map(getUnmatchedSends)
@@ -69,7 +70,7 @@ object StoragePrinter {
       beforeEval <- unmatchedSends
       _ <- {
         implicit val c = runtime.cost
-        Interpreter[F].evaluate(runtime, deploy.term, NormalizerEnv(deploy).toEnv)
+        Interpreter[F].evaluate(runtime, deploy.data.term, NormalizerEnv(deploy).toEnv)
       }
       afterEval <- unmatchedSends
       diff      = afterEval.diff(beforeEval)
@@ -83,7 +84,7 @@ object StoragePrinter {
   }
 
   def prettyPrintUnmatchedSends[F[_]: Concurrent](
-      deploys: Seq[DeployData],
+      deploys: Seq[Signed[DeployData]],
       runtime: Runtime[F]
   ): F[String] =
     deploys.toStream

@@ -15,6 +15,7 @@ import coop.rchain.casper.util.{ConstructDeploy, GenesisBuilder, ProtoUtil}
 import coop.rchain.catscontrib.effect.implicits._
 import coop.rchain.crypto.PublicKey
 import coop.rchain.crypto.hash.Blake2b512Random
+import coop.rchain.crypto.signatures.Signed
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.PCost
@@ -56,12 +57,13 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
 
   private def computeState[F[_]: Functor](
       runtimeManager: RuntimeManager[F],
-      deploy: DeployData
+      deploy: Signed[DeployData]
   ): F[(StateHash, ProcessedDeploy)] =
     for {
       res <- runtimeManager.computeState(ProtoUtil.postStateHash(genesis))(
               deploy :: Nil,
-              BlockData(deploy.timestamp, 0, PublicKey(genesis.sender)),
+              BlockData(deploy.data.timestamp, 0, PublicKey(genesis.sender)),
+              BlockData(deploy.data.timestamp, 0),
               Map.empty[BlockHash, Validator]
             )
       (hash, Seq(result)) = res
@@ -199,7 +201,7 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
             deploy <- ConstructDeploy.sourceDeployNowF(correctRholang)
 
             _             <- runtime.cost.set(initialPhlo)
-            term          <- ParBuilderUtil.buildNormalizedTerm[Task](deploy.term)
+            term          <- ParBuilderUtil.buildNormalizedTerm[Task](deploy.data.term)
             _             <- runtime.reducer.inj(term)
             phlosLeft     <- runtime.cost.get
             reductionCost = initialPhlo - phlosLeft

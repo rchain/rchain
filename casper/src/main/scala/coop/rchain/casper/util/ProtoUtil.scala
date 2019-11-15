@@ -14,6 +14,7 @@ import coop.rchain.casper.protocol.{DeployData, _}
 import coop.rchain.casper.util.implicits._
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.hash.Blake2b256
+import coop.rchain.crypto.signatures.Signed
 import coop.rchain.crypto.{PrivateKey, PublicKey}
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.Validator.Validator
@@ -375,22 +376,16 @@ object ProtoUtil {
   def stringToByteString(string: String): ByteString =
     ByteString.copyFrom(Base16.unsafeDecode(string))
 
-  /**
-    * Strip a deploy down to the fields we are using to seed the Deterministic name generator.
-    * Because we enforce that a deployment must be unique on the user, timestamp pair, we leave
-    * only those fields. This allows users to more readily pre-generate names for signing.
-    */
-  def stripDeployData(d: DeployData): DeployData =
-    DeployData.from(DeployDataProto().withDeployer(d.deployer).withTimestamp(d.timestamp))
-
   def computeCodeHash(dd: DeployData): Par = {
     val bytes             = dd.term.getBytes(StandardCharsets.UTF_8)
     val hash: Array[Byte] = Blake2b256.hash(bytes)
     Par(exprs = Seq(Expr(Expr.ExprInstance.GByteArray(ByteString.copyFrom(hash)))))
   }
 
-  def getRholangDeployParams(dd: DeployData): DeployParameters = {
-    val userId: Par = Par(exprs = Seq(Expr(Expr.ExprInstance.GByteArray(dd.deployer))))
+  def getRholangDeployParams(dd: Signed[DeployData]): DeployParameters = {
+    val userId: Par = Par(
+      exprs = Seq(Expr(Expr.ExprInstance.GByteArray(ByteString.copyFrom(dd.pk.bytes))))
+    )
     DeployParameters(userId)
   }
 

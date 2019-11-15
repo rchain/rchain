@@ -14,6 +14,7 @@ import coop.rchain.casper.util.rholang._
 import coop.rchain.casper.util.{ConstructDeploy, DagOperations, ProtoUtil}
 import coop.rchain.crypto.PublicKey
 import coop.rchain.crypto.codec.Base16
+import coop.rchain.crypto.signatures.Signed
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.BlockMetadata
@@ -63,8 +64,9 @@ object BlockCreator {
                             val encodedInvalidBlockHash =
                               Base16.encode(invalidBlockHash.toByteArray)
                             // TODO: Do something useful with the result of "slash".
-                            ConstructDeploy.sourceDeployNowF(
-                              s"""
+                            ConstructDeploy
+                              .sourceDeployNowF(
+                                s"""
                                #new rl(`rho:registry:lookup`), deployerId(`rho:rchain:deployerId`), posCh in {
                                #  rl!(`rho:rchain:pos`, *posCh) |
                                #  for(@(_, PoS) <- posCh) {
@@ -73,14 +75,14 @@ object BlockCreator {
                                #}
                                #
                             """.stripMargin('#'),
-                              phloPrice = 0,
-                              sec = validatorIdentity.privateKey
-                            )
+                                phloPrice = 0,
+                                sec = validatorIdentity.privateKey
+                              )
                           }
         _ <- Cell[F, CasperState].modify { s =>
               s.copy(deployHistory = s.deployHistory ++ slashingDeploys)
             }
-        _                <- updateDeployHistory(state, maxBlockNumber)
+
         deploys          <- extractDeploys(dag, parentMetadatas, maxBlockNumber, expirationThreshold)
         parents          <- parentMetadatas.toList.traverse(p => ProtoUtil.getBlock(p.blockHash))
         justifications   <- computeJustifications(dag, parents)
@@ -123,46 +125,24 @@ object BlockCreator {
       } yield signedBlock
     }
 
-  /*
-   * This mechanism is a first effort to make life of a deploying party easier.
-   * Instead of expecting the user to guess the current block number we assume that
-   * if no value is given (default: -1) rchain should try to deploy
-   * with the current known max block number.
-   *
-   * TODO: Make more developer friendly by introducing Option instead of a magic number
-   */
-  private def updateDeployHistory[F[_]: Sync: Log: Time: BlockStore](
-      state: CasperStateCell[F],
-      maxBlockNumber: Long
-  ): F[Unit] = {
-    def updateDeployValidAfterBlock(deployData: DeployData, max: Long): DeployData =
-      if (deployData.validAfterBlockNumber == -1)
-        deployData.copy(validAfterBlockNumber = max)
-      else
-        deployData
-
-    def updateDeployHistory(state: CasperState, max: Long): CasperState =
-      state.copy(deployHistory = state.deployHistory.map(deployData => {
-        updateDeployValidAfterBlock(deployData, max)
-      }))
-
-    state.modify(state => updateDeployHistory(state, maxBlockNumber))
-  }
-
   // TODO: Remove no longer valid deploys here instead of with lastFinalizedBlock call
   private def extractDeploys[F[_]: Sync: Log: Time: BlockStore](
       dag: BlockDagRepresentation[F],
       parents: Seq[BlockMetadata],
       maxBlockNumber: Long,
       expirationThreshold: Int
-  )(implicit state: CasperStateCell[F]): F[Seq[DeployData]] =
+  )(implicit state: CasperStateCell[F]): F[Seq[Signed[DeployData]]] =
     for {
       state               <- state.read
       currentBlockNumber  = maxBlockNumber + 1
       earliestBlockNumber = currentBlockNumber - expirationThreshold
       deploys             = state.deployHistory
       validDeploys = deploys.filter(
-        d => notFutureDeploy(currentBlockNumber, d) && notExpiredDeploy(earliestBlockNumber, d)
+        d =>
+          notFutureDeploy(currentBlockNumber, d.data) && notExpiredDeploy(
+            earliestBlockNumber,
+            d.data
+          )
       )
       result <- DagOperations
                  .bfTraverseF[F, BlockMetadata](parents.toList)(
@@ -205,7 +185,7 @@ object BlockCreator {
       dag: BlockDagRepresentation[F],
       runtimeManager: RuntimeManager[F],
       parents: Seq[BlockMessage],
-      deploys: Seq[DeployData],
+      deploys: Seq[Signed[DeployData]],
       justifications: Seq[Justification],
       maxBlockNumber: Long,
       sender: PublicKey,

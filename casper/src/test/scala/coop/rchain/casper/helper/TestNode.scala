@@ -30,7 +30,7 @@ import coop.rchain.comm.rp.Connect
 import coop.rchain.comm.rp.Connect._
 import coop.rchain.comm.rp.HandleMessages.handle
 import coop.rchain.crypto.PrivateKey
-import coop.rchain.crypto.signatures.Secp256k1
+import coop.rchain.crypto.signatures.{Secp256k1, Signed}
 import coop.rchain.graphz.{Graphz, StringSerializer}
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.models.BlockHash.BlockHash
@@ -116,16 +116,16 @@ class TestNode[F[_]](
   implicit val engineCell: EngineCell[F] = Cell.unsafe[F, Engine[F]](engine)
   implicit val packetHandlerEff          = CasperPacketHandler[F]
 
-  def addBlock(deployDatums: DeployData*): F[BlockMessage] =
+  def addBlock(deployDatums: Signed[DeployData]*): F[BlockMessage] =
     addBlockStatus(ValidBlock.Valid.asRight)(deployDatums: _*)
 
-  def publishBlock(deployDatums: DeployData*)(nodes: TestNode[F]*): F[BlockMessage] =
+  def publishBlock(deployDatums: Signed[DeployData]*)(nodes: TestNode[F]*): F[BlockMessage] =
     for {
       block <- addBlock(deployDatums: _*)
       _     <- nodes.toList.filter(_ != this).traverse_(_.receive())
     } yield block
 
-  def propagateBlock(deployDatums: DeployData*)(nodes: TestNode[F]*): F[BlockMessage] =
+  def propagateBlock(deployDatums: Signed[DeployData]*)(nodes: TestNode[F]*): F[BlockMessage] =
     for {
       block <- addBlock(deployDatums: _*)
       _     <- TestNode.propagate(nodes :+ this)
@@ -133,14 +133,14 @@ class TestNode[F[_]](
 
   def addBlockStatus(
       expectedStatus: ValidBlockProcessing
-  )(deployDatums: DeployData*): F[BlockMessage] =
+  )(deployDatums: Signed[DeployData]*): F[BlockMessage] =
     for {
       block  <- createBlock(deployDatums: _*)
       status <- casperEff.addBlock(block)
       _      = assert(status == expectedStatus)
     } yield block
 
-  def createBlock(deployDatums: DeployData*): F[BlockMessage] =
+  def createBlock(deployDatums: Signed[DeployData]*): F[BlockMessage] =
     for {
       _                 <- deployDatums.toList.traverse(casperEff.deploy)
       createBlockResult <- casperEff.createBlock

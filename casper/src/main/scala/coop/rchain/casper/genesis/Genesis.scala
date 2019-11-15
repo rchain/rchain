@@ -9,6 +9,7 @@ import coop.rchain.casper.util.ProtoUtil.{blockHeader, unsignedBlockProto}
 import coop.rchain.casper.util.Sorting.byteArrayOrdering
 import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
 import coop.rchain.casper.util.rholang.RuntimeManager
+import coop.rchain.crypto.signatures.Signed
 
 final case class Genesis(
     shardId: String,
@@ -25,7 +26,7 @@ object Genesis {
       posParams: ProofOfStake,
       vaults: Seq[Vault],
       supply: Long
-  ): Seq[DeployData] =
+  ): Seq[Signed[DeployData]] =
     Seq(
       StandardDeploys.registry,
       StandardDeploys.listOps,

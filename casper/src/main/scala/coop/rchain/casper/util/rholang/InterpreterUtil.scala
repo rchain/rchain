@@ -20,6 +20,8 @@ import coop.rchain.models.{BlockMetadata, NormalizerEnv, Par}
 import coop.rchain.rholang.interpreter.ParBuilder
 import coop.rchain.rholang.interpreter.Runtime.BlockData
 import coop.rchain.shared.{Log, LogSource}
+import com.google.protobuf.ByteString
+import coop.rchain.crypto.signatures.Signed
 import monix.eval.Coeval
 
 object InterpreterUtil {
@@ -157,7 +159,7 @@ object InterpreterUtil {
 
   def computeDeploysCheckpoint[F[_]: Sync: BlockStore: Log: Span](
       parents: Seq[BlockMessage],
-      deploys: Seq[DeployData],
+      deploys: Seq[Signed[DeployData]],
       dag: BlockDagRepresentation[F],
       runtimeManager: RuntimeManager[F],
       blockData: BlockData,

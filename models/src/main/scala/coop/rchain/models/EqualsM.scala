@@ -6,6 +6,7 @@ import com.google.protobuf.ByteString
 import coop.rchain.casper.protocol._
 import coop.rchain.catscontrib.Catscontrib._
 import coop.rchain.crypto.hash.Blake2b512Random
+import coop.rchain.crypto.signatures.Signed
 import monix.eval.Coeval
 
 import scala.Function.tupled
@@ -98,6 +99,12 @@ object EqualM extends EqualMDerivation {
   implicit val MatchEqual            = gen[Match]
 
   implicit val ConnectiveEqual = gen[Connective]
+  implicit def SignedEqual[A: EqualM] = new EqualM[Signed[A]] {
+    override def equal[F[_]: Sync](self: Signed[A], other: Signed[A]): F[Boolean] =
+      EqualM[A]
+        .ensuring((self.sigAlgorithm, self.sig) == (other.sigAlgorithm, other.sig))
+        .equal(self.data, other.data)
+  }
 
   implicit val ESetEqual = gen[ESet]
   implicit val EMapEqual = gen[EMap]

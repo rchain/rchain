@@ -66,11 +66,24 @@ object DeployGrpcServiceV1 {
           )
 
       def doDeploy(request: DeployDataProto): Task[DeployResponse] =
-        defer(BlockAPI.deploy[F](DeployData.from(request))) { r =>
-          import DeployResponse.Message
-          import DeployResponse.Message._
-          DeployResponse(r.fold[Message](Error, Result))
-        }
+        DeployData
+          .from(request)
+          .fold(
+            errMsg => {
+              import DeployResponse.Message._
+              Task({
+                val error = ServiceError(Seq[String](errMsg))
+                DeployResponse(Error(error))
+              })
+            },
+            dd => {
+              defer(BlockAPI.deploy[F](dd)) { r =>
+                import DeployResponse.Message
+                import DeployResponse.Message._
+                DeployResponse(r.fold[Message](Error, Result))
+              }
+            }
+          )
 
       def getBlock(request: BlockQuery): Task[BlockResponse] =
         defer(BlockAPI.getBlock[F](request.hash)) { r =>
