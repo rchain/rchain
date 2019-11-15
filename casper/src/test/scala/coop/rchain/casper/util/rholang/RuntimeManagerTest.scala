@@ -63,7 +63,6 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
       res <- runtimeManager.computeState(ProtoUtil.postStateHash(genesis))(
               deploy :: Nil,
               BlockData(deploy.data.timestamp, 0, PublicKey(genesis.sender)),
-              BlockData(deploy.data.timestamp, 0),
               Map.empty[BlockHash, Validator]
             )
       (hash, Seq(result)) = res

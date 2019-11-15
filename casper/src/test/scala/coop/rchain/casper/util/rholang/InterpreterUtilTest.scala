@@ -56,7 +56,7 @@ class InterpreterUtilTest
         deploys,
         dag,
         runtimeManager,
-        BlockData(deploys.maxBy(_.data.timestamp).timestamp, 0, PublicKey(Array[Byte]())),
+        BlockData(deploys.maxBy(_.data.timestamp).data.timestamp, 0, PublicKey(Array[Byte]())),
         Map.empty[BlockHash, Validator]
       )
       .attempt
