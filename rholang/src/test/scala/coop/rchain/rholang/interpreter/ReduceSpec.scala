@@ -2511,4 +2511,38 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
 
     task.runSyncUnsafe(timeout)
   }
+
+  "term split size max" should "be evaluated (Int16/2 - 1)" in {
+    implicit val errorLog = new ErrorLog[Task]()
+    val p                 = New(bindCount = 1)
+    val news              = Seq.fill(Short.MaxValue)(p)
+    val proc              = Par(news = news)
+
+    val result = withTestSpace(errorLog) {
+      case TestFixture(_, reducer) =>
+        implicit val env = Env[Par]()
+        val task         = reducer.eval(proc)
+        Await.result(task.runToFuture, 30.seconds)
+    }
+
+    result should be(())
+  }
+
+  "term split size" should "be limited to Int16/2" in {
+    implicit val errorLog = new ErrorLog[Task]()
+    val p                 = Send(Par(), Seq(Par()))
+    val sends             = Seq.fill(Short.MaxValue + 1)(p)
+    val proc              = Par(sends)
+
+    val result = withTestSpace(errorLog) {
+      case TestFixture(_, reducer) =>
+        implicit val env = Env[Par]()
+        val task         = reducer.eval(proc)
+        Await.result(task.failed.runToFuture, 1.seconds)
+    }
+
+    result should be(
+      ReduceError("The number of Pars in the term is 32768, which exceeds the limit of 32767.")
+    )
+  }
 }
