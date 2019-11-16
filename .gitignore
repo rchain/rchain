@@ -81,3 +81,4 @@ integration-tests/report.json
 integration-tests.log
 *.log
 .virtualenv
+.metals
