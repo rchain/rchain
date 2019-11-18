@@ -230,7 +230,7 @@ def test_slash_justification_not_correct(command_line_options: CommandLineOption
 
 
 # @pytest.mark.skipif(sys.platform in ('win32', 'cygwin', 'darwin'), reason="Only Linux docker support connection between host and container which node client needs")
-@pytest.mark.skipif
+@pytest.mark.skip
 def test_slash_invalid_validator_approve_evil_block(command_line_options: CommandLineOptions, random_generator: Random, docker_client: DockerClient) -> None:
     """Slash a validator who doesn't slash invalid block
 
