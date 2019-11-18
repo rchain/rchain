@@ -11,7 +11,6 @@ import grpc
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.backends.openssl.ec import _EllipticCurvePrivateKey
 from cryptography.hazmat.primitives.serialization import load_pem_private_key
-from docker import DockerClient
 from eth_hash.auto import keccak
 from rchain.pb import CasperMessage_pb2
 from rchain.pb.CasperMessage_pb2 import BlockMessageProto as BlockMessage, BlockRequestProto as BlockRequest
@@ -30,6 +29,7 @@ from rchain.pb.routing_pb2_grpc import (
     TransportLayerStub,
     add_TransportLayerServicer_to_server
 )
+from docker import DockerClient
 
 from .rnode import Node as RNode
 from .common import TestingContext
