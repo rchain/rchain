@@ -55,7 +55,7 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
 
   private def computeState[F[_]: Functor](
       runtimeManager: RuntimeManager[F],
-      deploy: Signed[DeployData]
+      deploy: Signed[DeployData],
       stateHash: StateHash
   ): F[(StateHash, ProcessedDeploy)] =
     for {
@@ -73,7 +73,7 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
   ): F[Either[ReplayFailure, StateHash]] =
     runtimeManager.replayComputeState(stateHash)(
       processedDeploy :: Nil,
-      BlockData(processedDeploy.deploy.timestamp, 0),
+      BlockData(processedDeploy.deploy.data.timestamp, 0),
       Map.empty[BlockHash, Validator],
       isGenesis = false
     )

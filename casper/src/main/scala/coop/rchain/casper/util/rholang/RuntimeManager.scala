@@ -12,9 +12,8 @@ import coop.rchain.casper.util.rholang.RuntimeManager.{evaluate, StateHash}
 import coop.rchain.casper.util.rholang.SystemDeployPlatformFailure._
 import coop.rchain.casper.util.rholang.SystemDeployUserError._
 import coop.rchain.casper.util.rholang.costacc.{PreChargeDeploy, RefundDeploy}
-import coop.rchain.casper.util.{ConstructDeploy, EventConverter, ProtoUtil}
+import coop.rchain.casper.util.{ConstructDeploy, EventConverter}
 import coop.rchain.crypto.codec.Base16
-import coop.rchain.crypto.PublicKey
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.crypto.signatures.Signed
 import coop.rchain.metrics.Metrics.Source
@@ -212,7 +211,6 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log](
 
   private def replaySystemDeployInternal[S <: SystemDeploy](
       runtime: Runtime[F]
-      deploy: Signed[DeployData],
   )(
       systemDeploy: S,
       expectedFailure: Option[SystemDeployUserError]
@@ -318,8 +316,8 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log](
   private def processDeploys(
       runtime: Runtime[F],
       startHash: StateHash,
-      terms: Seq[DeployData],
-      processDeploy: DeployData => F[ProcessedDeploy]
+      terms: Seq[Signed[DeployData]],
+      processDeploy: Signed[DeployData] => F[ProcessedDeploy]
   ): F[(StateHash, Seq[ProcessedDeploy])] = {
     import cats.instances.list._
 
@@ -334,19 +332,19 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log](
 
   private def processDeployWithCostAccounting(
       runtime: Runtime[F]
-  )(deploy: DeployData)(implicit Log: Log[F]) = {
+  )(deploy: Signed[DeployData])(implicit Log: Log[F]) = {
     import cats.instances.vector._
-    val rand = deploy.rng
+    val rand = Tools.rng(deploy.sig.toByteArray)
     EitherT(
       WriterT(
         Log.info(
-          s"PreCharging ${Base16.encode(deploy.deployerPk.bytes)} for ${deploy.totalPhloCharge}"
+          s"PreCharging ${Base16.encode(deploy.pk.bytes)} for ${deploy.data.totalPhloCharge}"
         ) >>
           /* execute pre-charge */
           playSystemDeployInternal(runtime)(
             new PreChargeDeploy(
-              deploy.totalPhloCharge,
-              deploy.deployerPk,
+              deploy.data.totalPhloCharge,
+              deploy.pk,
               rand
             )
           )
@@ -360,7 +358,7 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log](
           EitherT(
             WriterT(
               Log.info(
-                s"Refunding ${Base16.encode(deploy.deployerPk.bytes)} with ${pd.refundAmount}"
+                s"Refunding ${Base16.encode(deploy.pk.bytes)} with ${pd.refundAmount}"
               ) >>
                 playSystemDeployInternal(runtime)(
                   new RefundDeploy(pd.refundAmount, rand.splitByte(64))
@@ -395,7 +393,7 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log](
   }
 
   private def processDeploy(runtime: Runtime[F])(
-      deploy: DeployData
+      deploy: Signed[DeployData]
   ): F[ProcessedDeploy] = Span[F].withMarks("process-deploy") {
     for {
       fallback                     <- runtime.space.createSoftCheckpoint()
@@ -461,10 +459,10 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log](
 
     def evaluatorT: EitherT[F, ReplayFailure, Unit] =
       if (withCostAccounting) {
-        val rand            = deploy.rng
+        val rand            = Tools.rng(deploy.sig.toByteArray)
         val expectedFailure = processedDeploy.systemDeployError.map(SystemDeployError)
         replaySystemDeployInternal(runtime)(
-          new PreChargeDeploy(deploy.totalPhloCharge, deploy.deployerPk, rand),
+          new PreChargeDeploy(deploy.data.totalPhloCharge, deploy.pk, rand),
           expectedFailure
         ).flatMap(
           _ =>
@@ -510,12 +508,12 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log](
 
   def captureResults(
       start: StateHash,
-      deploy: DeployData,
+      deploy: Signed[DeployData],
       name: String = "__SCALA__"
   ): F[Seq[Par]] =
     captureResults(start, deploy, Par().withExprs(Seq(Expr(GString(name)))))
 
-  def captureResults(start: StateHash, deploy: DeployData, name: Par): F[Seq[Par]] =
+  def captureResults(start: StateHash, deploy: Signed[DeployData], name: Par): F[Seq[Par]] =
     withResetRuntimeLock(start) { runtime =>
       evaluate(runtime.reducer, runtime.cost, runtime.errorLog)(deploy)
         .ensure(

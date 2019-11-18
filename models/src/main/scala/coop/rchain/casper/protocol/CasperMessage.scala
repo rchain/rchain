@@ -310,19 +310,19 @@ final case class ProcessedDeploy(
     isFailed: Boolean,
     systemDeployError: Option[String] = None
 ) {
-  def refundAmount                  = (deploy.phloLimit - cost.cost).max(0) * deploy.phloPrice
+  def refundAmount                  = (deploy.data.phloLimit - cost.cost).max(0) * deploy.data.phloPrice
   def toProto: ProcessedDeployProto = ProcessedDeploy.toProto(this)
 }
 
 object ProcessedDeploy {
-  def empty(deploy: DeployData) = ProcessedDeploy(deploy, PCost(), List.empty, isFailed = false)
+  def empty(deploy: Signed[DeployData]) =
+    ProcessedDeploy(deploy, PCost(), List.empty, isFailed = false)
   def from(pd: ProcessedDeployProto): Either[String, ProcessedDeploy] =
     for {
-      ddProto    <- pd.deploy.toRight("DeployData not available")
-      dd         <- DeployData.from(ddProto)
-      cost       <- pd.cost.toRight("Cost not available")
-      deployLog  <- pd.deployLog.toList.traverse(Event.from)
-      paymentLog <- pd.paymentLog.toList.traverse(Event.from)
+      ddProto   <- pd.deploy.toRight("DeployData not available")
+      dd        <- DeployData.from(ddProto)
+      cost      <- pd.cost.toRight("Cost not available")
+      deployLog <- pd.deployLog.toList.traverse(Event.from)
     } yield ProcessedDeploy(
       dd,
       cost,
@@ -389,13 +389,12 @@ final case class DeployData(
     phloPrice: Long,
     phloLimit: Long,
     validAfterBlockNumber: Long
-)
+) {
+  def totalPhloCharge = phloLimit * phloPrice
+}
 
 object DeployData {
   implicit val serialize = new Serialize[DeployData] {
-  def totalPhloCharge          = phloLimit * phloPrice
-  def deployerPk               = PublicKey(deployer)
-  def rng                      = Blake2b512Random(sig.toByteArray())
     override def encode(a: DeployData): ByteVector =
       ByteVector(toProto(a).toByteArray)
 
