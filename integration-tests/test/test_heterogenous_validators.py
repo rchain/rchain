@@ -1,9 +1,9 @@
 from random import Random
 
-from docker.client import DockerClient
 import pytest
 
 from rchain.crypto import PrivateKey
+from docker.client import DockerClient
 from . import conftest
 from .common import (
     CommandLineOptions,
@@ -30,10 +30,10 @@ READONLY_PEER_KEY = PrivateKey.from_hex("3596e2e5fd14b24a6d84af04b7f0a8f13e3e68e
 
 def test_heterogenous_validators(command_line_options: CommandLineOptions, random_generator: Random, docker_client: DockerClient) -> None:
     genesis_vault = {
-        BOOTSTRAP_KEY: 500,
-        BONDED_VALIDATOR_KEY: 500,
-        JOINING_VALIDATOR_KEY: 500,
-        READONLY_PEER_KEY: 500
+        BOOTSTRAP_KEY: 50000000,
+        BONDED_VALIDATOR_KEY: 50500000000,
+        JOINING_VALIDATOR_KEY: 50000000,
+        READONLY_PEER_KEY: 50000000
     }
 
     bonded_validator_map = {
@@ -66,7 +66,9 @@ def test_heterogenous_validators(command_line_options: CommandLineOptions, rando
                 bonding_block_hash = bonded_validator.deploy_contract_with_substitution(
                     substitute_dict={"%AMOUNT": "100"},
                     rho_file_path="resources/wallets/bond.rho",
-                    private_key=JOINING_VALIDATOR_KEY
+                    private_key=JOINING_VALIDATOR_KEY,
+                    phlo_limit=100000,
+                    phlo_price=1
                 )
 
                 wait_for_node_sees_block(context, joining_validator, bonding_block_hash)
@@ -75,12 +77,13 @@ def test_heterogenous_validators(command_line_options: CommandLineOptions, rando
                 joining_validator.deploy(contract_path, JOINING_VALIDATOR_KEY)
                 latest_block_hash = joining_validator.propose()
 
+                wait_for_node_sees_block(context, bonded_validator, latest_block_hash)
                 # assure the new joining validator has 100 bonded
                 block_info = bonded_validator.show_block_parsed(latest_block_hash)
                 block_validators_map = extract_validator_stake_from_bonds_validator_str(block_info['bondsValidatorList'])
                 assert block_validators_map.get(JOINING_VALIDATOR_KEY.get_public_key().to_hex()) == 100
 
-                vault_remain = get_vault_balance(context, joining_validator, JOINING_VALIDATOR_KEY.get_public_key().get_rev_address(), JOINING_VALIDATOR_KEY)
+                vault_remain = get_vault_balance(context, joining_validator, JOINING_VALIDATOR_KEY.get_public_key().get_rev_address(), JOINING_VALIDATOR_KEY, 100000, 1)
                 assert vault_remain == 400
 
                 # add a readonly node

@@ -94,7 +94,6 @@ def test_slash_invalid_block_hash(command_line_options: CommandLineOptions, rand
 
         block_info = validator2.show_block_parsed(slashed_block_hash)
         bonds_validators = extract_validator_stake_from_bonds_validator_str(block_info['bondsValidatorList'])
-
         assert bonds_validators[BONDED_VALIDATOR_KEY_1.get_public_key().to_hex()] == 0
 
 

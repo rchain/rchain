@@ -47,6 +47,7 @@ final case class PrettyPrinter(
   def buildString(e: Expr): String             = buildStringM(e).value.cap()
   def buildString(v: Var): String              = buildStringM(v).value.cap()
   def buildString(m: GeneratedMessage): String = buildStringM(m).value.cap()
+  def buildChannelString(p: Par): String       = buildChannelStringM(p).value.cap()
 
   @SuppressWarnings(Array("org.wartremover.warts.Throw"))
   private def buildStringM(u: GUnforgeable): Coeval[String] = Coeval.defer {

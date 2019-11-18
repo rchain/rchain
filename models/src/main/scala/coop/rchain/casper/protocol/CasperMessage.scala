@@ -7,6 +7,8 @@ import coop.rchain.crypto.PublicKey
 import coop.rchain.crypto.signatures.{SignaturesAlg, Signed}
 import coop.rchain.models.{PCost, Pretty}
 import coop.rchain.models.BlockHash.BlockHash
+import coop.rchain.crypto.PublicKey
+import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.shared.Serialize
 import scodec.bits.ByteVector
 
@@ -305,12 +307,15 @@ final case class ProcessedDeploy(
     deploy: Signed[DeployData],
     cost: PCost,
     deployLog: List[Event],
-    isFailed: Boolean
+    isFailed: Boolean,
+    systemDeployError: Option[String] = None
 ) {
+  def refundAmount                  = (deploy.phloLimit - cost.cost).max(0) * deploy.phloPrice
   def toProto: ProcessedDeployProto = ProcessedDeploy.toProto(this)
 }
 
 object ProcessedDeploy {
+  def empty(deploy: DeployData) = ProcessedDeploy(deploy, PCost(), List.empty, isFailed = false)
   def from(pd: ProcessedDeployProto): Either[String, ProcessedDeploy] =
     for {
       ddProto    <- pd.deploy.toRight("DeployData not available")
@@ -322,30 +327,41 @@ object ProcessedDeploy {
       dd,
       cost,
       deployLog,
-      pd.errored
+      pd.errored,
+      if (pd.systemDeployError.isEmpty()) None else Some(pd.systemDeployError)
     )
 
-  def toProto(pd: ProcessedDeploy): ProcessedDeployProto =
-    ProcessedDeployProto()
+  def toProto(pd: ProcessedDeploy): ProcessedDeployProto = {
+    val proto = ProcessedDeployProto()
       .withDeploy(DeployData.toProto(pd.deploy))
       .withCost(pd.cost)
       .withDeployLog(pd.deployLog.map(Event.toProto))
       .withErrored(pd.isFailed)
+
+    pd.systemDeployError.fold(proto)(errorMsg => proto.withSystemDeployError(errorMsg))
+  }
 }
 
 sealed trait ProcessedSystemDeploy {
   def eventList: List[Event]
   def failed: Boolean
+  def fold[A](ifSucceeded: List[Event] => A, ifFailed: (List[Event], String) => A): A
 }
 
 object ProcessedSystemDeploy {
 
   final case class Succeeded(eventList: List[Event]) extends ProcessedSystemDeploy {
     val failed = false
+
+    override def fold[A](ifSucceeded: List[Event] => A, ifFailed: (List[Event], String) => A): A =
+      ifSucceeded(eventList)
   }
 
   final case class Failed(eventList: List[Event], errorMsg: String) extends ProcessedSystemDeploy {
     val failed = true
+
+    override def fold[A](ifSucceeded: List[Event] => A, ifFailed: (List[Event], String) => A): A =
+      ifFailed(eventList, errorMsg)
   }
 
   def from(psd: ProcessedSystemDeployProto): Either[String, ProcessedSystemDeploy] =
@@ -377,12 +393,14 @@ final case class DeployData(
 
 object DeployData {
   implicit val serialize = new Serialize[DeployData] {
+  def totalPhloCharge          = phloLimit * phloPrice
+  def deployerPk               = PublicKey(deployer)
+  def rng                      = Blake2b512Random(sig.toByteArray())
     override def encode(a: DeployData): ByteVector =
       ByteVector(toProto(a).toByteArray)
 
     override def decode(bytes: ByteVector): Either[Throwable, DeployData] =
       Right(fromProto(DeployDataProto.parseFrom(bytes.toArray)))
-
   }
 
   private def fromProto(proto: DeployDataProto): DeployData =

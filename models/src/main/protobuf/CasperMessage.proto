@@ -146,8 +146,8 @@ message ProcessedDeployProto {
     DeployDataProto deploy = 1;
     PCost cost = 2 ;
     repeated EventProto deployLog = 3; //the new terms and comm. rule reductions from this deploy
-    repeated EventProto paymentLog = 4; //the comm. rule reductions from the payment for the deploy
     bool errored = 5; //true if deploy encountered a user error
+    string systemDeployError = 6;
 }
 
 message ProcessedSystemDeployProto {
