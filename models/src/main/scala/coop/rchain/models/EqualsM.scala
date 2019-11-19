@@ -1,7 +1,8 @@
 package coop.rchain.models
 
 import cats.effect.Sync
-import cats.implicits._
+import cats.instances.stream._
+import cats.syntax.all._
 import com.google.protobuf.ByteString
 import coop.rchain.casper.protocol._
 import coop.rchain.catscontrib.Catscontrib._
@@ -101,9 +102,9 @@ object EqualM extends EqualMDerivation {
   implicit val ConnectiveEqual = gen[Connective]
   implicit def SignedEqual[A: EqualM] = new EqualM[Signed[A]] {
     override def equal[F[_]: Sync](self: Signed[A], other: Signed[A]): F[Boolean] =
-      EqualM[A]
-        .ensuring((self.sigAlgorithm, self.sig) == (other.sigAlgorithm, other.sig))
-        .equal(self.data, other.data)
+      if (self.sigAlgorithm == other.sigAlgorithm && self.sig == other.sig)
+        EqualM[A].equal(self.data, other.data)
+      else Sync[F].pure(false)
   }
 
   implicit val ESetEqual = gen[ESet]
