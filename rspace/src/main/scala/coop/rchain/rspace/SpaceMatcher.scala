@@ -23,11 +23,11 @@ private[rspace] trait SpaceMatcher[F[_], C, P, A, K] extends ISpace[F, C, P, A, 
 
   /* Consume */
 
-  type MatchingDataCandidate = (DataCandidate[C, A], Seq[(Datum[A], Int)])
+  type MatchingDataCandidate = (ConsumeCandidate[C, A], Seq[(Datum[A], Int)])
 
   /** Searches through data, looking for a match with a given pattern.
     *
-    * If there is a match, we return the matching [[DataCandidate]],
+    * If there is a match, we return the matching [[ConsumeCandidate]],
     * along with the remaining unmatched data. If an illegal state is reached
     * during searching for a match we short circuit and return the state.
     */
@@ -48,7 +48,7 @@ private[rspace] trait SpaceMatcher[F[_], C, P, A, K] extends ISpace[F, C, P, A, 
                   case Some(mat) =>
                     val indexedDatums = if (persist) data else prefix ++ remaining
                     (
-                      DataCandidate(
+                      ConsumeCandidate(
                         channel,
                         Datum(mat, persist, produceRef),
                         matchCandidate,
@@ -72,8 +72,8 @@ private[rspace] trait SpaceMatcher[F[_], C, P, A, K] extends ISpace[F, C, P, A, 
   private[rspace] final def extractDataCandidates(
       channelPatternPairs: Seq[(C, P)],
       channelToIndexedData: Map[C, Seq[(Datum[A], Int)]],
-      acc: Seq[Option[DataCandidate[C, A]]]
-  )(implicit m: Match[F, P, A]): F[Seq[Option[DataCandidate[C, A]]]] =
+      acc: Seq[Option[ConsumeCandidate[C, A]]]
+  )(implicit m: Match[F, P, A]): F[Seq[Option[ConsumeCandidate[C, A]]]] =
     for {
       res <- channelPatternPairs match {
               case (channel, pattern) +: tail =>
@@ -82,7 +82,7 @@ private[rspace] trait SpaceMatcher[F[_], C, P, A, K] extends ISpace[F, C, P, A, 
                                  case Some(indexedData) =>
                                    findMatchingDataCandidate(channel, indexedData, pattern, Nil)
                                  case None =>
-                                   none[(DataCandidate[C, A], Seq[(Datum[A], Int)])].pure[F]
+                                   none[(ConsumeCandidate[C, A], Seq[(Datum[A], Int)])].pure[F]
                                }
                   dataCandidates <- maybeTuple match {
                                      case Some((cand, rem)) =>

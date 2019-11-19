@@ -24,13 +24,6 @@ object internal {
       Datum(a, persist, Produce.create(channel, a, persist))
   }
 
-  final case class DataCandidate[C, A](
-      channel: C,
-      datum: Datum[A],
-      removedDatum: A,
-      datumIndex: Int
-  )
-
   final case class WaitingContinuation[P, K](
       patterns: Seq[P],
       continuation: K,
@@ -61,11 +54,18 @@ object internal {
       )
   }
 
+  final case class ConsumeCandidate[C, A](
+      channel: C,
+      datum: Datum[A],
+      removedDatum: A,
+      datumIndex: Int
+  )
+
   final case class ProduceCandidate[C, P, A, K](
       channels: Seq[C],
       continuation: WaitingContinuation[P, K],
       continuationIndex: Int,
-      dataCandidates: Seq[DataCandidate[C, A]]
+      dataCandidates: Seq[ConsumeCandidate[C, A]]
   )
 
   final case class Row[P, A, K](data: Seq[Datum[A]], wks: Seq[WaitingContinuation[P, K]])
