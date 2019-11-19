@@ -17,7 +17,7 @@ USER_KEY = PrivateKey.from_hex("3596e2e5fd14b24a6d84af04b7f0a8f13e3e68ee2ca91dc4
 
 def test_data_is_stored_and_served_by_node(command_line_options: CommandLineOptions, docker_client: DockerClient, random_generator: Random) -> None:
     wallets_map = {
-        USER_KEY: 1000000
+        USER_KEY: 100000000
     }
     with testing_context(command_line_options, random_generator, docker_client, wallets_dict=wallets_map) as context:
         with docker_network_with_started_bootstrap(context=context) as bootstrap_node:

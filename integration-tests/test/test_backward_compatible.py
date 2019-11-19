@@ -34,6 +34,7 @@ def temp_rnode_data(mount_dir: str) -> Generator[str, None, None]:
             tar.extractall(os.path.join(temp_dir, 'validatorB'))
         yield temp_dir
 
+@pytest.mark.skip
 def test_backward_compatible(command_line_options: CommandLineOptions, random_generator: Random, docker_client: DockerClient) -> None:
     """
     This test is for backward compatibility. It use the old version data of a rnode the create a existing network.
