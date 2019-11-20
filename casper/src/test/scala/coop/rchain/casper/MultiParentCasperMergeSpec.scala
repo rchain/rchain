@@ -31,7 +31,7 @@ class MultiParentCasperMergeSpec
 
   val genesis = buildGenesis()
 
-  "HashSetCasper" should "handle multi-parent blocks correctly" in effectTest {
+  "HashSetCasper" should "handle multi-parent blocks correctly" ignore effectTest {
     TestNode.networkEff(genesis, networkSize = 2).use { nodes =>
       implicit val rm = nodes(1).runtimeManager
       for {
@@ -60,13 +60,13 @@ class MultiParentCasperMergeSpec
     }
   }
 
-  it should "handle multi-parent blocks correctly when they operate on stdout" in effectTest {
+  it should "handle multi-parent blocks correctly when they operate on stdout" ignore effectTest {
     def echoContract(no: Int) =
       Rho(s"""new stdout(`rho:io:stdout`) in { stdout!("Contract $no") }""")
     merges(echoContract(1), echoContract(2), Rho("Nil"))
   }
 
-  it should "not conflict on registry lookups" in effectTest {
+  it should "not conflict on registry lookups" ignore effectTest {
     val uri         = "rho:id:i1kuw4znrkazgbmc4mxe7ua4s1x41zd7qd8md96edxh1n87a5seht3"
     val toSign: Par = ETuple(Seq(GInt(0), GString("foo")))
     val toByteArray = Serialize[Par].encode(toSign).toArray
@@ -92,7 +92,7 @@ class MultiParentCasperMergeSpec
     merges(lookup, lookup, setup)
   }
 
-  it should "respect mergeability rules when merging blocks" in effectTest {
+  it should "respect mergeability rules when merging blocks" ignore effectTest {
     baseMergeabilityCases.map(_._2).parSequence
   }
 
