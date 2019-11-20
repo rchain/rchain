@@ -23,17 +23,16 @@ class BlocksResponseAPITest
     extends FlatSpec
     with Matchers
     with BlockGenerator
-    with BlockDagStorageFixture {
+    with BlockDagStorageFixture
+    with UnlimitedParentsEstimatorFixture {
 
-  val v1                           = generateValidator("Validator One")
-  val v2                           = generateValidator("Validator Two")
-  val v3                           = generateValidator("Validator Three")
-  val v1Bond                       = Bond(v1, 25)
-  val v2Bond                       = Bond(v2, 20)
-  val v3Bond                       = Bond(v3, 15)
-  val bonds                        = Seq(v1Bond, v2Bond, v3Bond)
-  implicit val spanEff: Span[Task] = Span.noop
-  implicit val log                 = new Log.NOPLog[Task]()
+  val v1     = generateValidator("Validator One")
+  val v2     = generateValidator("Validator Two")
+  val v3     = generateValidator("Validator Three")
+  val v1Bond = Bond(v1, 25)
+  val v2Bond = Bond(v2, 20)
+  val v3Bond = Bond(v3, 15)
+  val bonds  = Seq(v1Bond, v2Bond, v3Bond)
   private val runtimeManagerResource: Resource[Task, RuntimeManager[Task]] =
     mkRuntimeManager("block-response-api-test")
 
@@ -91,9 +90,8 @@ class BlocksResponseAPITest
                  bonds,
                  HashMap(v1 -> b6.blockHash, v2 -> b5.blockHash, v3 -> b4.blockHash)
                )
-          dag        <- blockDagStorage.getRepresentation
-          metricsEff = new Metrics.MetricsNOP[Task]
-          tips       <- Estimator.tips[Task](dag, genesis)(Sync[Task], log, metricsEff, spanEff)
+          dag  <- blockDagStorage.getRepresentation
+          tips <- Estimator[Task].tips(dag, genesis)
           casperEffect <- NoOpsCasperEffect[Task](
                            HashMap.empty[BlockHash, BlockMessage],
                            tips
@@ -102,7 +100,7 @@ class BlocksResponseAPITest
           engine     = new EngineWithCasper[Task](casperEffect)
           engineCell <- Cell.mvarCell[Task, Engine[Task]](engine)
           cliqueOracleEffect = SafetyOracle
-            .cliqueOracle[Task](Sync[Task], logEff, metricsEff, spanEff)
+            .cliqueOracle[Task](Sync[Task], logEff, metrics, span)
           blocksResponse <- BlockAPI.showMainChain[Task](Int.MaxValue)(
                              Sync[Task],
                              engineCell,
@@ -170,7 +168,7 @@ class BlocksResponseAPITest
                )
           dag        <- blockDagStorage.getRepresentation
           metricsEff = new Metrics.MetricsNOP[Task]
-          tips       <- Estimator.tips[Task](dag, genesis)(Sync[Task], log, metricsEff, spanEff)
+          tips       <- Estimator[Task].tips(dag, genesis)
           casperEffect <- NoOpsCasperEffect[Task](
                            HashMap.empty[BlockHash, BlockMessage],
                            tips
@@ -179,7 +177,7 @@ class BlocksResponseAPITest
           engineCell <- Cell.mvarCell[Task, Engine[Task]](engine)
           logEff     = new LogStub[Task]
           cliqueOracleEffect = SafetyOracle
-            .cliqueOracle[Task](Sync[Task], logEff, metricsEff, spanEff)
+            .cliqueOracle[Task](Sync[Task], logEff, metrics, span)
           blocksResponse <- BlockAPI.getBlocks[Task](Some(Int.MaxValue))(
                              Sync[Task],
                              engineCell,
@@ -246,7 +244,7 @@ class BlocksResponseAPITest
              )
         dag        <- blockDagStorage.getRepresentation
         metricsEff = new Metrics.MetricsNOP[Task]
-        tips       <- Estimator.tips[Task](dag, genesis)(Sync[Task], log, metricsEff, spanEff)
+        tips       <- Estimator[Task].tips(dag, genesis)
         casperEffect <- NoOpsCasperEffect[Task](
                          HashMap.empty[BlockHash, BlockMessage],
                          tips
@@ -255,7 +253,7 @@ class BlocksResponseAPITest
         engine     = new EngineWithCasper[Task](casperEffect)
         engineCell <- Cell.mvarCell[Task, Engine[Task]](engine)
         cliqueOracleEffect = SafetyOracle
-          .cliqueOracle[Task](Sync[Task], logEff, metricsEff, spanEff)
+          .cliqueOracle[Task](Sync[Task], logEff, metrics, span)
         blocksResponse <- BlockAPI.getBlocks[Task](Some(2))(
                            Sync[Task],
                            engineCell,

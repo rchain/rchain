@@ -16,7 +16,9 @@ import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.dag.BlockDagRepresentation
 import coop.rchain.shared.{Log, LogSource}
 
-object Estimator {
+final class Estimator[F[_]: Monad: Log: Metrics: Span](
+    maxNumberOfParents: Int
+) {
 
   implicit val decreasingOrder = Ordering.Tuple2(
     Ordering[Long].reverse,
@@ -28,7 +30,7 @@ object Estimator {
   private val Tips0MetricsSource: Metrics.Source = Metrics.Source(EstimatorMetricsSource, "tips0")
   private val Tips1MetricsSource: Metrics.Source = Metrics.Source(EstimatorMetricsSource, "tips1")
 
-  def tips[F[_]: Monad: Log: Metrics: Span](
+  def tips(
       dag: BlockDagRepresentation[F],
       genesis: BlockMessage
   ): F[IndexedSeq[BlockHash]] =
@@ -36,14 +38,14 @@ object Estimator {
       for {
         latestMessageHashes <- dag.latestMessageHashes
         _                   <- Span[F].mark("latest-message-hashes")
-        result              <- Estimator.tips[F](dag, genesis, latestMessageHashes)
+        result              <- tips(dag, genesis, latestMessageHashes)
       } yield result
     }
 
   /**
     * When the BlockDag has an empty latestMessages, tips will return IndexedSeq(genesis.blockHash)
     */
-  def tips[F[_]: Monad: Log: Metrics: Span](
+  def tips(
       dag: BlockDagRepresentation[F],
       genesis: BlockMessage,
       latestMessagesHashes: Map[Validator, BlockHash]
@@ -66,10 +68,10 @@ object Estimator {
         .mkString(", ")
       rankedLatestMessagesHashes <- rankForkchoices(List(lca), dag, scoresMap)
       _                          <- Span[F].mark("ranked-latest-messages-hashes")
-    } yield rankedLatestMessagesHashes
+    } yield rankedLatestMessagesHashes.take(maxNumberOfParents)
   }
 
-  private def calculateLCA[F[_]: Monad](
+  private def calculateLCA(
       blockDag: BlockDagRepresentation[F],
       genesis: BlockMetadata,
       latestMessagesHashes: Map[Validator, BlockHash]
@@ -95,7 +97,7 @@ object Estimator {
                }
     } yield result
 
-  private def buildScoresMap[F[_]: Monad](
+  private def buildScoresMap(
       blockDag: BlockDagRepresentation[F],
       latestMessagesHashes: Map[Validator, BlockHash],
       lowestCommonAncestor: BlockHash
@@ -140,14 +142,14 @@ object Estimator {
     }
   }
 
-  private def rankForkchoices[F[_]: Monad](
+  private def rankForkchoices(
       blocks: List[BlockHash],
       blockDag: BlockDagRepresentation[F],
       scores: Map[BlockHash, Long]
   ): F[IndexedSeq[BlockHash]] =
     // TODO: This ListContrib.sortBy will be improved on Thursday with Pawels help
     for {
-      unsortedNewBlocks <- blocks.flatTraverse(replaceBlockHashWithChildren[F](_, blockDag, scores))
+      unsortedNewBlocks <- blocks.flatTraverse(replaceBlockHashWithChildren(_, blockDag, scores))
       newBlocks = ListContrib.sortBy[BlockHash, Long](
         unsortedNewBlocks.distinct,
         scores
@@ -168,7 +170,7 @@ object Estimator {
     * this ensures that the search does not go beyond
     * the messages defined by blockDag.latestMessages
     */
-  private def replaceBlockHashWithChildren[F[_]: Monad](
+  private def replaceBlockHashWithChildren(
       b: BlockHash,
       blockDag: BlockDagRepresentation[F],
       scores: Map[BlockHash, Long]
@@ -186,4 +188,14 @@ object Estimator {
 
   private def stillSame(blocks: List[BlockHash], newBlocks: List[BlockHash]): Boolean =
     newBlocks == blocks
+}
+
+object Estimator {
+  val UnlimitedParents = Int.MaxValue
+
+  def apply[F[_]](implicit ev: Estimator[F]): Estimator[F] =
+    ev
+
+  def apply[F[_]: Monad: Log: Metrics: Span](maxNumberOfParents: Int): Estimator[F] =
+    new Estimator(maxNumberOfParents)
 }

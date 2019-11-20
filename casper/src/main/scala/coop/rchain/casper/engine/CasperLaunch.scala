@@ -26,7 +26,7 @@ trait CasperLaunch[F[_]] {
 
 object CasperLaunch {
 
-  def of[F[_]: LastApprovedBlock: Metrics: Span: BlockStore: CommUtil: ConnectionsCell: TransportLayer: RPConfAsk: SafetyOracle: LastFinalizedBlockCalculator: Concurrent: Time: Log: EventLog: BlockDagStorage: LastFinalizedStorage: EngineCell: EnvVars: RaiseIOError: RuntimeManager: Running.RequestedBlocks: EventPublisher: SynchronyConstraintChecker](
+  def of[F[_]: LastApprovedBlock: Metrics: Span: BlockStore: CommUtil: ConnectionsCell: TransportLayer: RPConfAsk: SafetyOracle: LastFinalizedBlockCalculator: Concurrent: Time: Log: EventLog: BlockDagStorage: LastFinalizedStorage: EngineCell: EnvVars: RaiseIOError: RuntimeManager: Running.RequestedBlocks: EventPublisher: SynchronyConstraintChecker: Estimator](
       conf: CasperConf
   ): CasperLaunch[F] = new CasperLaunch[F] {
 

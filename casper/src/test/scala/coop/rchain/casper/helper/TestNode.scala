@@ -55,6 +55,7 @@ class TestNode[F[_]](
     val blockStoreDir: Path,
     blockProcessingLock: Semaphore[F],
     synchronyConstraintThreshold: Double,
+    maxNumberOfParents: Int = Estimator.UnlimitedParents,
     shardId: String = "rchain",
     finalizationRate: Int = 1
 )(
@@ -77,6 +78,7 @@ class TestNode[F[_]](
   implicit val lastFinalizedBlockCalculator = LastFinalizedBlockCalculator[F](0f)
   implicit val synchronyConstraintChecker =
     SynchronyConstraintChecker[F](synchronyConstraintThreshold)
+  implicit val estimator = Estimator[F](maxNumberOfParents)
   implicit val rpConfAsk = createRPConfAsk[F](local)
   implicit val eventBus  = EventPublisher.noop[F]
 
@@ -265,14 +267,16 @@ object TestNode {
       genesis: GenesisContext,
       networkSize: Int,
       storageSize: Long = 1024L * 1024 * 10,
-      synchronyConstraintThreshold: Double = 0d
+      synchronyConstraintThreshold: Double = 0d,
+      maxNumberOfParents: Int = Estimator.UnlimitedParents
   )(implicit scheduler: Scheduler): Resource[Effect, IndexedSeq[TestNode[Effect]]] =
     networkF[Effect](
       genesis.validatorSks.take(networkSize).toVector,
       genesis.genesisBlock,
       genesis.storageDirectory,
       Resources.mkRuntimeManagerWithHistoryAt[Effect](_)(storageSize),
-      synchronyConstraintThreshold
+      synchronyConstraintThreshold,
+      maxNumberOfParents
     )(
       Concurrent[Effect],
       TestNetwork.empty[Effect]
@@ -283,7 +287,8 @@ object TestNode {
       genesis: BlockMessage,
       storageMatrixPath: Path,
       createRuntime: Path => Resource[F, (RuntimeManager[F], RhoHistoryRepository[F])],
-      synchronyConstraintThreshold: Double
+      synchronyConstraintThreshold: Double,
+      maxNumberOfParents: Int
   ): Resource[F, IndexedSeq[TestNode[F]]] = {
     val n     = sks.length
     val names = (1 to n).map(i => s"node-$i")
@@ -306,7 +311,8 @@ object TestNode {
               storageMatrixPath,
               logicalTime,
               createRuntime,
-              synchronyConstraintThreshold
+              synchronyConstraintThreshold,
+              maxNumberOfParents
             )
         }
         .map(_.toVector)
@@ -344,7 +350,8 @@ object TestNode {
       storageMatrixPath: Path,
       logicalTime: LogicalTime[F],
       createRuntime: Path => Resource[F, (RuntimeManager[F], RhoHistoryRepository[F])],
-      synchronyConstraintThreshold: Double
+      synchronyConstraintThreshold: Double,
+      maxNumberOfParents: Int
   ): Resource[F, TestNode[F]] = {
     val tle                = new TransportLayerTestImpl[F]()
     val tls                = new TransportLayerServerTestImpl[F](currentPeerNode)
@@ -376,7 +383,7 @@ object TestNode {
                    paths.blockStoreDir,
                    blockProcessingLock,
                    synchronyConstraintThreshold,
-                   "rchain"
+                   maxNumberOfParents
                  )(
                    Concurrent[F],
                    blockStore,

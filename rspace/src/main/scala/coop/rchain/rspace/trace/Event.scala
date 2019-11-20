@@ -1,5 +1,6 @@
 package coop.rchain.rspace.trace
 
+import cats.effect.Sync
 import coop.rchain.rspace.StableHashProvider._
 import coop.rchain.rspace.internal._
 import cats.implicits._
@@ -47,6 +48,15 @@ final case class COMM(
 ) extends Event
 
 object COMM {
+  def apply[C, A](
+      dataCandidates: Seq[ConsumeCandidate[C, A]],
+      consumeRef: Consume,
+      peeks: SortedSet[Int],
+      produceCounters: (Seq[Produce]) => Map[Produce, Int]
+  ): COMM = {
+    val produceRefs = dataCandidates.map(_.datum.source)
+    COMM(consumeRef, produceRefs, peeks, produceCounters(produceRefs))
+  }
   implicit val codecInt = int32
   implicit val codecCOMM: Codec[COMM] =
     (Codec[Consume] :: Codec[Seq[Produce]] :: sortedSet(uint8) :: Codec[Map[Produce, Int]]).as[COMM]
@@ -84,6 +94,12 @@ object Produce {
       hash(channel, datum, persistent),
       persistent
     )
+
+  def createF[F[_]: Sync, C, A](channel: C, datum: A, persistent: Boolean)(
+      implicit
+      serializeC: Serialize[C],
+      serializeA: Serialize[A]
+  ): F[Produce] = Sync[F].delay(create(channel, datum, persistent))
 
   def fromHash(
       channelsHash: Blake2b256Hash,
@@ -136,6 +152,18 @@ object Consume {
       persistent
     )
   }
+
+  def createF[F[_]: Sync, C, P, K](
+      channels: Seq[C],
+      patterns: Seq[P],
+      continuation: K,
+      persistent: Boolean
+  )(
+      implicit
+      serializeC: Serialize[C],
+      serializeP: Serialize[P],
+      serializeK: Serialize[K]
+  ): F[Consume] = Sync[F].delay(create(channels, patterns, continuation, persistent))
 
   def fromHash(
       channelsHashes: Seq[Blake2b256Hash],
