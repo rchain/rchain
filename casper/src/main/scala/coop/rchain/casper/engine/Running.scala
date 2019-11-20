@@ -77,21 +77,21 @@ object Running {
     }
 
     def tryRerequest(hash: BlockHash, requested: Requested): F[(BlockHash, Option[Requested])] =
-      if (requested.waitingList.nonEmpty) {
-        val nextPeer = requested.waitingList(0)
-        def modifiedRequested(ts: Long) = requested.copy(
-          timestamp = ts,
-          waitingList = requested.waitingList.tail,
-          peers = requested.peers + nextPeer
-        )
-        for {
-          _  <- requestForBlock(nextPeer, hash)
-          ts <- Time[F].currentMillis
-        } yield ((hash -> Option(modifiedRequested(ts))))
-      } else {
-        val warnMessage = s"Could not retrieve requested block ${PrettyPrinter.buildString(hash)}. " +
-          "Removing the request from the requested blocks list. Casper will have to re-request the block."
-        Log[F].warn(warnMessage).as((hash -> none[Requested]))
+      requested.waitingList match {
+        case nextPeer :: waitingListTail =>
+          def modifiedRequested(ts: Long) = requested.copy(
+            timestamp = ts,
+            waitingList = waitingListTail,
+            peers = requested.peers + nextPeer
+          )
+          for {
+            _  <- requestForBlock(nextPeer, hash)
+            ts <- Time[F].currentMillis
+          } yield hash -> Option(modifiedRequested(ts))
+        case _ =>
+          val warnMessage = s"Could not retrieve requested block ${PrettyPrinter.buildString(hash)}. " +
+            "Removing the request from the requested blocks list. Casper will have to re-request the block."
+          Log[F].warn(warnMessage).as(hash -> none[Requested])
       }
 
     import cats.instances.list._
