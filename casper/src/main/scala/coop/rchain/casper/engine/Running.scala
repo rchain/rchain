@@ -13,6 +13,7 @@ import coop.rchain.comm.rp.Connect.{ConnectionsCell, RPConfAsk}
 import coop.rchain.comm.rp.ProtocolHelper.protocol
 import coop.rchain.comm.transport.{Blob, TransportLayer}
 import coop.rchain.comm.PeerNode
+import coop.rchain.metrics.Metrics
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.Validator.Validator
 import coop.rchain.shared.{Cell, Log, Time}
@@ -22,6 +23,9 @@ import scala.concurrent.duration._
 object Running {
 
   val timeout: FiniteDuration = 240 seconds
+
+  implicit private[this] val BlockRequesterMetricsSource =
+    Metrics.Source(CasperMetricsSource, "block-requester")
 
   final case class Requested(
       timestamp: Long,
@@ -65,7 +69,7 @@ object Running {
     * and keep the requested blocks list clean.
     * See spec RunningMaintainRequestedBlocksSpec for more details
     */
-  def maintainRequestedBlocks[F[_]: Monad: RPConfAsk: RequestedBlocks: TransportLayer: Log: Time]
+  def maintainRequestedBlocks[F[_]: Monad: RPConfAsk: RequestedBlocks: TransportLayer: Log: Time: Metrics]
       : F[Unit] = {
 
     def toMap(list: List[(BlockHash, Option[Requested])]): Map[BlockHash, Requested] = {
@@ -91,7 +95,8 @@ object Running {
         case _ =>
           val warnMessage = s"Could not retrieve requested block ${PrettyPrinter.buildString(hash)}. " +
             "Removing the request from the requested blocks list. Casper will have to re-request the block."
-          Log[F].warn(warnMessage).as(hash -> none[Requested])
+          Metrics[F].incrementCounter("block-retrieve-failed") >>
+            Log[F].warn(warnMessage).as(hash -> none[Requested])
       }
 
     import cats.instances.list._
