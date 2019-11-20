@@ -697,6 +697,7 @@ object NodeRuntime {
       synchronyConstraintChecker = SynchronyConstraintChecker[F](
         conf.server.synchronyConstraintThreshold
       )(Sync[F], blockStore, Log[F])
+      estimator = Estimator[F](conf.casper.maxNumberOfParents)(Monad[F], Log[F], Metrics[F], span)
       runtime <- {
         implicit val s  = rspaceScheduler
         implicit val sp = span
@@ -746,6 +747,7 @@ object NodeRuntime {
         implicit val eb = eventPublisher
         implicit val sc = synchronyConstraintChecker
         implicit val cu = commUtil
+        implicit val es = estimator
 
         CasperLaunch.of(conf.casper)
       }

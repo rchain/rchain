@@ -30,13 +30,11 @@ class ManyValidatorsTest
     extends FlatSpec
     with Matchers
     with BlockGenerator
-    with BlockDagStorageFixture {
+    with BlockDagStorageFixture
+    with UnlimitedParentsEstimatorFixture {
   "Get blocks" should "be processed quickly for a node with 300 validators" in {
-    val blockDagStorageDir            = BlockDagStorageTestFixture.blockDagStorageDir
-    val blockStoreDir                 = BlockDagStorageTestFixture.blockStorageDir
-    implicit val metrics              = new Metrics.MetricsNOP[Task]()
-    implicit val noopSpan: Span[Task] = NoopSpan[Task]()
-    implicit val log                  = new Log.NOPLog[Task]()
+    val blockDagStorageDir = BlockDagStorageTestFixture.blockDagStorageDir
+    val blockStoreDir      = BlockDagStorageTestFixture.blockStorageDir
     val runtimeManagerResource: Resource[Task, RuntimeManager[Task]] =
       mkRuntimeManager("many-validators-test")
 
@@ -75,7 +73,7 @@ class ManyValidatorsTest
         newBlockDagStorage        <- BlockDagStorageTestFixture.createBlockDagStorage(blockDagStorageDir)
         newIndexedBlockDagStorage <- IndexedBlockDagStorage.create(newBlockDagStorage)
         dag                       <- newIndexedBlockDagStorage.getRepresentation
-        tips                      <- Estimator.tips[Task](dag, genesis)
+        tips                      <- Estimator[Task].tips(dag, genesis)
         casperEffect <- NoOpsCasperEffect[Task](
                          HashMap.empty[BlockHash, BlockMessage],
                          tips.toIndexedSeq
