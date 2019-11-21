@@ -9,11 +9,9 @@ import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.crypto.PrivateKey
 import coop.rchain.crypto.signatures.{Secp256k1, SignaturesAlg}
 import coop.rchain.crypto.util.KeyUtil
-import coop.rchain.metrics
-import coop.rchain.metrics.Metrics
 import coop.rchain.node.configuration._
-import coop.rchain.node.diagnostics.Trace
 import coop.rchain.node.effects._
+import coop.rchain.node.web.VersionInfo
 import coop.rchain.shared.StringOps._
 import coop.rchain.shared._
 import monix.eval.Task
