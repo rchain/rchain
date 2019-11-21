@@ -31,7 +31,7 @@ READONLY_PEER_KEY = PrivateKey.from_hex("3596e2e5fd14b24a6d84af04b7f0a8f13e3e68e
 def test_heterogenous_validators(command_line_options: CommandLineOptions, random_generator: Random, docker_client: DockerClient) -> None:
     genesis_vault = {
         BOOTSTRAP_KEY: 50000000,
-        BONDED_VALIDATOR_KEY: 50500000000,
+        BONDED_VALIDATOR_KEY: 50000000,
         JOINING_VALIDATOR_KEY: 50000000,
         READONLY_PEER_KEY: 50000000
     }
@@ -63,8 +63,9 @@ def test_heterogenous_validators(command_line_options: CommandLineOptions, rando
                     joining_validator.propose()
 
                 # deploy the bond contract
+                bond_amount = 100000
                 bonding_block_hash = bonded_validator.deploy_contract_with_substitution(
-                    substitute_dict={"%AMOUNT": "100"},
+                    substitute_dict={"%AMOUNT": "{}".format(bond_amount)},
                     rho_file_path="resources/wallets/bond.rho",
                     private_key=JOINING_VALIDATOR_KEY,
                     phlo_limit=100000,
@@ -81,10 +82,10 @@ def test_heterogenous_validators(command_line_options: CommandLineOptions, rando
                 # assure the new joining validator has 100 bonded
                 block_info = bonded_validator.show_block_parsed(latest_block_hash)
                 block_validators_map = extract_validator_stake_from_bonds_validator_str(block_info['bondsValidatorList'])
-                assert block_validators_map.get(JOINING_VALIDATOR_KEY.get_public_key().to_hex()) == 100
+                assert block_validators_map.get(JOINING_VALIDATOR_KEY.get_public_key().to_hex()) == bond_amount
 
                 vault_remain = get_vault_balance(context, joining_validator, JOINING_VALIDATOR_KEY.get_public_key().get_rev_address(), JOINING_VALIDATOR_KEY, 100000, 1)
-                assert vault_remain == 400
+                assert vault_remain < 50000000 - bond_amount
 
                 # add a readonly node
                 with bootstrap_connected_peer(context=context, bootstrap=bootstrap_node, name='readonly-peer', private_key=READONLY_PEER_KEY) as readonly_peer:
