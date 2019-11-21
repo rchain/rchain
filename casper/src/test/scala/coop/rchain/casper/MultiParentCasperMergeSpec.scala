@@ -96,11 +96,11 @@ class MultiParentCasperMergeSpec
     baseMergeabilityCases.map(_._2).parSequence
   }
 
-  it should "respect mergeability rules when merging blocks containing events with peek" in effectTest {
+  it should "respect mergeability rules when merging blocks containing events with peek" ignore effectTest {
     peekMergeabilityCases.map(_._2).parSequence
   }
 
-  it should "not produce UnusedCommEvent while merging non conflicting blocks in the presence of conflicting ones" in effectTest {
+  it should "not produce UnusedCommEvent while merging non conflicting blocks in the presence of conflicting ones" ignore effectTest {
 
     val registryRho =
       """
@@ -195,7 +195,7 @@ class MultiParentCasperMergeSpec
     }
   }
 
-  it should "not merge blocks that touch the same channel involving joins" in effectTest {
+  it should "not merge blocks that touch the same channel involving joins" ignore effectTest {
     TestNode.networkEff(genesis, networkSize = 2).use { nodes =>
       for {
         current0 <- timeEff.currentMillis
@@ -229,7 +229,7 @@ class MultiParentCasperMergeSpec
     }
   }
 
-  "This spec" should "cover all mergeability cases" in {
+  "This spec" should "cover all mergeability cases" ignore {
     val allMergeabilityCases = {
       val events = List(
         "!X",
