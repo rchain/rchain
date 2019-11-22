@@ -115,7 +115,7 @@ class InterpreterUtilTest
     }
   }
 
-  it should "merge histories in case of multiple parents" in effectTest {
+  it should "merge histories in case of multiple parents" ignore effectTest {
 
     val b1Deploys = Vector(
       "@5!(5)",

@@ -178,7 +178,14 @@ class DebruijnInterpreter[M[_], F[_]](
       else rand.splitByte(id.toByte)
 
     val indexedTerms = terms.zipWithIndex.toList
-    if (terms.size <= Reduce.parallelism) {
+    // Term split size is limited to half of Int16 because other half is for injecting
+    // things to system deploys through NormalizerEnv
+    val termSplitLimit = Short.MaxValue
+    if (terms.size > termSplitLimit) {
+      ReduceError(
+        s"The number of Pars in the term is ${terms.size}, which exceeds the limit of ${termSplitLimit}."
+      ).raiseError[M, Unit]
+    } else if (terms.size <= Reduce.parallelism) {
       indexedTerms.parTraverse_ {
         case (term, index) =>
           val random = split(index)

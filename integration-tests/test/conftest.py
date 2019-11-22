@@ -17,9 +17,9 @@ import pytest
 from _pytest.terminal import TerminalReporter
 from _pytest.reports import TestReport
 from _pytest.config.argparsing import Parser
+from rchain.crypto import PrivateKey
 import docker as docker_py
 from docker.client import DockerClient
-from rchain.crypto import PrivateKey
 
 from .common import (
     CommandLineOptions,

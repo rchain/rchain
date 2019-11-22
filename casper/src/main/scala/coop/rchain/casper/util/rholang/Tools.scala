@@ -12,4 +12,6 @@ object Tools {
     Blake2b512Random(DeployDataProto.toByteArray(seed))
   }
 
+  def rng(signature: Array[Byte]): Blake2b512Random =
+    Blake2b512Random(signature)
 }

@@ -4,14 +4,12 @@ import cats.effect.Resource
 import cats.syntax.all._
 import cats.{Functor, Id}
 import coop.rchain.casper.protocol.ProcessedSystemDeploy.Failed
-import coop.rchain.casper.protocol.{DeployData, ProcessedDeploy, ProcessedSystemDeploy}
-import coop.rchain.shared.scalatestcontrib.effectTest
+import coop.rchain.casper.protocol.{DeployData, ProcessedDeploy}
 import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
-import coop.rchain.casper.util.rholang.SystemDeployPlatformFailure.UnexpectedSystemErrors
 import coop.rchain.casper.util.rholang.SystemDeployPlayResult.{PlayFailed, PlaySucceeded}
 import coop.rchain.casper.util.rholang.SystemDeployReplayResult.{ReplayFailed, ReplaySucceeded}
 import coop.rchain.casper.util.rholang.costacc.{CheckBalance, PreChargeDeploy, RefundDeploy}
-import coop.rchain.casper.util.{ConstructDeploy, GenesisBuilder, ProtoUtil}
+import coop.rchain.casper.util.{ConstructDeploy, GenesisBuilder}
 import coop.rchain.catscontrib.effect.implicits._
 import coop.rchain.crypto.PublicKey
 import coop.rchain.crypto.hash.Blake2b512Random
@@ -25,11 +23,12 @@ import coop.rchain.rholang.interpreter
 import coop.rchain.rholang.interpreter.Runtime.BlockData
 import coop.rchain.rholang.interpreter.accounting.Cost
 import coop.rchain.rholang.interpreter.{accounting, ParBuilderUtil}
+import coop.rchain.shared.scalatestcontrib.effectTest
 import coop.rchain.shared.{Log, Time}
 import coop.rchain.{metrics, rholang}
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
-import org.scalatest.{Assertion, FlatSpec, Matchers}
+import org.scalatest.{FlatSpec, Matchers}
 
 import scala.concurrent.duration._
 
@@ -57,10 +56,11 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
 
   private def computeState[F[_]: Functor](
       runtimeManager: RuntimeManager[F],
-      deploy: Signed[DeployData]
+      deploy: Signed[DeployData],
+      stateHash: StateHash
   ): F[(StateHash, ProcessedDeploy)] =
     for {
-      res <- runtimeManager.computeState(ProtoUtil.postStateHash(genesis))(
+      res <- runtimeManager.computeState(stateHash)(
               deploy :: Nil,
               BlockData(deploy.data.timestamp, 0, PublicKey(genesis.sender)),
               Map.empty[BlockHash, Validator]
@@ -68,7 +68,18 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
       (hash, Seq(result)) = res
     } yield (hash, result)
 
-  private def invalidReplay(source: String): Task[Either[ReplayFailure, StateHash]] =
+  private def replayComputeState[F[_]: Functor](runtimeManager: RuntimeManager[F])(
+      stateHash: StateHash,
+      processedDeploy: ProcessedDeploy
+  ): F[Either[ReplayFailure, StateHash]] =
+    runtimeManager.replayComputeState(stateHash)(
+      processedDeploy :: Nil,
+      BlockData(processedDeploy.deploy.data.timestamp, 0),
+      Map.empty[BlockHash, Validator],
+      isGenesis = false
+    )
+
+  "computeState" should "charge for deploys" in effectTest {
     runtimeManagerResource.use { runtimeManager =>
       for {
         deploy        <- ConstructDeploy.sourceDeployNowF(source)
@@ -92,6 +103,7 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
                  )
       } yield result
     }
+  }
 
   private def compareSuccessfulSystemDeploys[S <: SystemDeploy](
       runtimeManager: RuntimeManager[Task]
@@ -113,7 +125,7 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
                   assert(playResult == replayResult)
                   finalReplayStateHash
                 case ReplayFailed(systemDeployError) =>
-                  fail(s"Unexpected user error during replay: ${systemDeployError.errorMsg}")
+                  fail(s"Unexpected user error during replay: ${systemDeployError.errorMessage}")
               }
             case Right(Left(replayFailure)) =>
               fail(s"Unexpected replay failure: $replayFailure")
@@ -173,18 +185,82 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
     val badRholang = """ for(@x <- @"x"; @y <- @"y"){ @"xy"!(x + y) } | @"x"!(1) | @"y"!("hi") """
     for {
       deploy <- ConstructDeploy.sourceDeployNowF(badRholang)
-      result <- runtimeManagerResource.use(computeState(_, deploy))
-      _      = result._2.isFailed should be(true)
+      result <- runtimeManagerResource.use(
+                 computeState(_, deploy, genesis.body.state.postStateHash)
+               )
+      _ = result._2.isFailed should be(true)
     } yield ()
+  }
+
+  "computeState then computeBonds" should "be replayable after-all" in effectTest {
+
+    import cats.instances.vector._
+
+    val gps = genesis.body.state.postStateHash
+
+    val s0 = "@1!(1)"
+    val s1 = "@2!(2)"
+    val s2 = "for(@a <- @1){ @123!(5 * a) }"
+
+    val deploys0F = Vector(s0, s1, s2).traverse(ConstructDeploy.sourceDeployNowF(_))
+
+    val s3 = "@1!(1)"
+    val s4 = "for(@a <- @2){ @456!(5 * a) }"
+
+    val deploys1F = Vector(s3, s4).traverse(ConstructDeploy.sourceDeployNowF(_))
+
+    runtimeManagerResource.use { runtimeManager =>
+      for {
+        deploys0 <- deploys0F
+        deploys1 <- deploys1F
+        time     <- timeF.currentMillis
+        playStateHash0AndProcessedDeploys0 <- runtimeManager.computeState(gps)(
+                                               deploys0.toList,
+                                               BlockData(time, 0L),
+                                               Map.empty
+                                             )
+        (playStateHash0, processedDeploys0) = playStateHash0AndProcessedDeploys0
+        bonds0                              <- runtimeManager.computeBonds(playStateHash0)
+        replayError0OrReplayStateHash0 <- runtimeManager.replayComputeState(gps)(
+                                           processedDeploys0,
+                                           BlockData(time, 0L),
+                                           Map.empty,
+                                           isGenesis = false
+                                         )
+        Right(replayStateHash0) = replayError0OrReplayStateHash0
+        _                       = assert(playStateHash0 == replayStateHash0)
+        bonds1                  <- runtimeManager.computeBonds(playStateHash0)
+        _                       = assert(bonds0 == bonds1)
+        playStateHash1AndProcessedDeploys1 <- runtimeManager.computeState(playStateHash0)(
+                                               deploys1.toList,
+                                               BlockData(time, 0L),
+                                               Map.empty
+                                             )
+        (playStateHash1, processedDeploys1) = playStateHash1AndProcessedDeploys1
+        bonds2                              <- runtimeManager.computeBonds(playStateHash1)
+        replayError1OrReplayStateHash1 <- runtimeManager.replayComputeState(playStateHash0)(
+                                           processedDeploys1,
+                                           BlockData(time, 0L),
+                                           Map.empty,
+                                           isGenesis = false
+                                         )
+        Right(replayStateHash1) = replayError1OrReplayStateHash1
+        _                       = assert(playStateHash1 == replayStateHash1)
+        bonds3                  <- runtimeManager.computeBonds(playStateHash1)
+        _                       = assert(bonds2 == bonds3)
+      } yield ()
+    }
   }
 
   it should "capture rholang parsing errors and charge for parsing" in effectTest {
     val badRholang = """ for(@x <- @"x"; @y <- @"y"){ @"xy"!(x + y) | @"x"!(1) | @"y"!("hi") """
     for {
       deploy <- ConstructDeploy.sourceDeployNowF(badRholang)
-      result <- runtimeManagerResource.use(computeState(_, deploy))
-      _      = result._2.isFailed should be(true)
-      _      = result._2.cost.cost shouldEqual accounting.parsingCost(badRholang).value
+      result <- runtimeManagerResource.use(
+                 computeState(_, deploy, genesis.body.state.postStateHash)
+               )
+      _ = result._2.isFailed should be(true)
+      _ = result._2.cost.cost shouldEqual accounting.parsingCost(badRholang).value
     } yield ()
   }
 
@@ -207,7 +283,7 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
 
             parsingCost = accounting.parsingCost(correctRholang)
 
-            result <- computeState(runtimeManager, deploy)
+            result <- computeState(runtimeManager, deploy, genesis.body.state.postStateHash)
 
             _ = result._2.cost.cost shouldEqual (reductionCost + parsingCost).value
           } yield ()
@@ -230,7 +306,7 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
                       |  }
                       |}""".stripMargin
                   )
-        result0 <- computeState(mgr, deploy0)
+        result0 <- computeState(mgr, deploy0, genesis.body.state.postStateHash)
         hash    = result0._1
         deploy1 <- ConstructDeploy.sourceDeployNowF(
                     s""" for(nn <- @"nn"){ nn!("value", "$captureChannel") } """
@@ -273,7 +349,7 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
       runtimeManagerResource
         .use { m =>
           val hash = m.emptyStateHash
-          computeState(m, term)
+          computeState(m, term, genesis.body.state.postStateHash)
             .map(_ => hash)
         }
 
@@ -383,6 +459,116 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
     }
   }
 
+  it should "just work" in effectTest {
+    runtimeManagerResource.use { runtimeManager =>
+      val genPostState = genesis.body.state.postStateHash
+      val source =
+        """
+          #new d1,d2,d3,d4,d5,d6,d7,d8,d9 in {
+          #  contract d1(@depth) = {
+          #    if (depth <= 0) {
+          #      Nil
+          #    } else {
+          #      d1!(depth - 1) | d1!(depth - 1) | d1!(depth - 1) | d1!(depth - 1) | d1!(depth - 1) | d1!(depth - 1) | d1!(depth - 1) | d1!(depth - 1) | d1!(depth - 1) | d1!(depth - 1)  }
+          #  } |
+          #  contract d2(@depth) = {
+          #    if (depth <= 0) {
+          #      Nil
+          #    } else {
+          #      d2!(depth - 1) | d2!(depth - 1) | d2!(depth - 1) | d2!(depth - 1) | d2!(depth - 1) | d2!(depth - 1) | d2!(depth - 1) | d2!(depth - 1) | d2!(depth - 1) | d2!(depth - 1)  }
+          #  } |
+          #  contract d3(@depth) = {
+          #    if (depth <= 0) {
+          #      Nil
+          #    } else {
+          #      d3!(depth - 1) | d3!(depth - 1) | d3!(depth - 1) | d3!(depth - 1) | d3!(depth - 1) | d3!(depth - 1) | d3!(depth - 1) | d3!(depth - 1) | d3!(depth - 1) | d3!(depth - 1)  }
+          #  } |
+          #  contract d4(@depth) = {
+          #    if (depth <= 0) {
+          #      Nil
+          #    } else {
+          #      d4!(depth - 1) | d4!(depth - 1) | d4!(depth - 1) | d4!(depth - 1) | d4!(depth - 1) | d4!(depth - 1) | d4!(depth - 1) | d4!(depth - 1) | d4!(depth - 1) | d4!(depth - 1)  }
+          #  } |
+          #  contract d5(@depth) = {
+          #    if (depth <= 0) {
+          #      Nil
+          #    } else {
+          #      d5!(depth - 1) | d5!(depth - 1) | d5!(depth - 1) | d5!(depth - 1) | d5!(depth - 1) | d5!(depth - 1) | d5!(depth - 1) | d5!(depth - 1) | d5!(depth - 1) | d5!(depth - 1)  }
+          #  } |
+          #  contract d6(@depth) = {
+          #    if (depth <= 0) {
+          #      Nil
+          #    } else {
+          #      d6!(depth - 1) | d6!(depth - 1) | d6!(depth - 1) | d6!(depth - 1) | d6!(depth - 1) | d6!(depth - 1) | d6!(depth - 1) | d6!(depth - 1) | d6!(depth - 1) | d6!(depth - 1)  }
+          #  } |
+          #  contract d7(@depth) = {
+          #    if (depth <= 0) {
+          #      Nil
+          #    } else {
+          #      d7!(depth - 1) | d7!(depth - 1) | d7!(depth - 1) | d7!(depth - 1) | d7!(depth - 1) | d7!(depth - 1) | d7!(depth - 1) | d7!(depth - 1) | d7!(depth - 1) | d7!(depth - 1)  }
+          #  } |
+          #  contract d8(@depth) = {
+          #    if (depth <= 0) {
+          #      Nil
+          #    } else {
+          #      d8!(depth - 1) | d8!(depth - 1) | d8!(depth - 1) | d8!(depth - 1) | d8!(depth - 1) | d8!(depth - 1) | d8!(depth - 1) | d8!(depth - 1) | d8!(depth - 1) | d8!(depth - 1) }
+          #  } |
+          #  contract d9(@depth) = {
+          #    if (depth <= 0) {
+          #      Nil
+          #    } else {
+          #      d9!(depth - 1) | d9!(depth - 1) | d9!(depth - 1) | d9!(depth - 1) | d9!(depth - 1) | d9!(depth - 1) | d9!(depth - 1) | d9!(depth - 1) | d9!(depth - 1) | d9!(depth - 1) }
+          #  } |
+          #  d1!(2) |
+          #  d2!(2) |
+          #  d3!(2) |
+          #  d4!(2) |
+          #  d5!(2) |
+          #  d6!(2) |
+          #  d7!(2) |
+          #  d8!(2) |
+          #  d9!(2)
+          #}
+          #""".stripMargin('#')
+      ConstructDeploy.sourceDeployNowF(source = source, phloLimit = Int.MaxValue - 2) >>= {
+        deploy =>
+          computeState(runtimeManager, deploy, genPostState) >>= {
+            case (playStateHash1, processedDeploy) =>
+              replayComputeState(runtimeManager)(genPostState, processedDeploy) map {
+                case Right(replayStateHash1) =>
+                  assert(playStateHash1 != genPostState && replayStateHash1 == playStateHash1)
+                case Left(replayFailure) => fail(s"Unexpected replay failure: $replayFailure")
+              }
+          }
+      }
+    }
+  }
+
+  private def invalidReplay(source: String): Task[Either[ReplayFailure, StateHash]] =
+    runtimeManagerResource.use { runtimeManager =>
+      for {
+        deploy        <- ConstructDeploy.sourceDeployNowF(source)
+        time          <- timeF.currentMillis
+        genPostState  = genesis.body.state.postStateHash
+        blockData     = BlockData(time, 0L)
+        invalidBlocks = Map.empty[BlockHash, Validator]
+        processedDeploys <- runtimeManager
+                             .computeState(genPostState)(Seq(deploy), blockData, invalidBlocks)
+                             .map(_._2)
+        processedDeploy     = processedDeploys.head
+        processedDeployCost = processedDeploy.cost.cost
+        invalidProcessedDeploy = processedDeploy.copy(
+          cost = PCost(processedDeployCost - 1)
+        )
+        result <- runtimeManager.replayComputeState(genPostState)(
+                   Seq(invalidProcessedDeploy),
+                   blockData,
+                   invalidBlocks,
+                   isGenesis = false
+                 )
+      } yield result
+    }
+
   "replayComputeState" should "catch discrepancies in initial and replay cost when no errors are thrown" in effectTest {
     invalidReplay("@0!(0) | for(@0 <- @0){ Nil }").map {
       case Left(ReplayCostMismatch(initialCost, replayCost)) =>
@@ -393,8 +579,9 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
 
   "replayComputeState" should "not catch discrepancies in initial and replay cost when user errors are thrown" in effectTest {
     invalidReplay("@0!(0) | for(@x <- @0){ x.undefined() }").map {
-      case Right(_) => succeed
-      case _        => fail
+      case Left(ReplayCostMismatch(initialCost, replayCost)) =>
+        assert(initialCost == 395L && replayCost == 396L)
+      case _ => fail()
     }
   }
 }

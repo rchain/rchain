@@ -43,6 +43,7 @@ import coop.rchain.node.diagnostics._
 import coop.rchain.node.diagnostics.Trace.TraceId
 import coop.rchain.node.effects.{EventConsumer, RchainEvents}
 import coop.rchain.node.model.repl.ReplGrpcMonix
+import coop.rchain.node.web._
 import coop.rchain.p2p.effects._
 import coop.rchain.rholang.interpreter.Runtime
 import coop.rchain.rspace.Context
@@ -53,11 +54,6 @@ import kamon.system.SystemMetrics
 import kamon.zipkin.ZipkinReporter
 import monix.eval.Task
 import monix.execution.Scheduler
-import org.http4s.HttpRoutes
-import org.http4s.implicits._
-import org.http4s.server.blaze._
-import org.http4s.server.middleware._
-import org.http4s.server.Router
 import org.lmdbjava.Env
 
 @SuppressWarnings(Array("org.wartremover.warts.NonUnitStatements"))
@@ -542,37 +538,13 @@ class NodeRuntime private[node] (
                             )
 
       prometheusReporter = new NewPrometheusReporter()
-      prometheusService  = NewPrometheusReporter.service[Task](prometheusReporter)
-
-      eventsInfoService <- EventsInfo.service[Task]
-
-      baseRoutes = Map(
-        "/metrics"   -> CORS(prometheusService),
-        "/version"   -> CORS(VersionInfo.service[Task]),
-        "/status"    -> CORS(StatusInfo.service[Task]),
-        "/ws/events" -> CORS(eventsInfoService)
-      )
-      extraRoutes = if (conf.server.reporting)
-        Map(
-          "/reporting" -> CORS(
-            ReportingRoutes.service[Task, TaskEnv](reportingCasper)(
-              Sync[Task],
-              Applicative[TaskEnv],
-              NodeRuntime.envToTask
-            )
-          )
-        )
-      else
-        Map.empty
-      allRoutes = baseRoutes ++ extraRoutes
-
-      httpServerFiber <- BlazeServerBuilder[Task]
-                          .bindHttp(conf.server.httpPort, "0.0.0.0")
-                          .withHttpApp(Router(allRoutes.toList: _*).orNotFound)
-                          .resource
-                          .use(_ => Task.never[Unit])
-                          .start
-
+      httpServerFiber = aquireHttpServer(
+        conf.server.reporting,
+        conf.server.httpPort,
+        prometheusReporter,
+        reportingCasper
+      )(nodeDiscovery, connectionsCell, concurrent, rPConfAsk, consumer, s)
+      httpFiber <- httpServerFiber.start
       _ <- Task.delay {
             Kamon.reconfigure(conf.underlying.withFallback(Kamon.config()))
             if (conf.kamon.influxDb) Kamon.addReporter(new BatchInfluxDBReporter())
@@ -586,7 +558,7 @@ class NodeRuntime private[node] (
       transportServer,
       externalApiServer,
       internalApiServer,
-      httpServerFiber
+      httpFiber
     )
   }
 }
@@ -697,6 +669,7 @@ object NodeRuntime {
       synchronyConstraintChecker = SynchronyConstraintChecker[F](
         conf.server.synchronyConstraintThreshold
       )(Sync[F], blockStore, Log[F])
+      estimator = Estimator[F](conf.casper.maxNumberOfParents)(Monad[F], Log[F], Metrics[F], span)
       runtime <- {
         implicit val s  = rspaceScheduler
         implicit val sp = span
@@ -746,6 +719,7 @@ object NodeRuntime {
         implicit val eb = eventPublisher
         implicit val sc = synchronyConstraintChecker
         implicit val cu = commUtil
+        implicit val es = estimator
 
         CasperLaunch.of(conf.casper)
       }

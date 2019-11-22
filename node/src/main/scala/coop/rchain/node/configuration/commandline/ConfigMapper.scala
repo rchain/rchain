@@ -107,6 +107,7 @@ object ConfigMapper {
         add(keys.GenesisApproveDuration, run.duration)
         add(keys.DeployTimestamp, run.deployTimestamp)
         add(keys.FinalizationRate, run.finalizationRate)
+        add(keys.MaxNumberOfParents, run.maxNumberOfParents)
       }
     }
 

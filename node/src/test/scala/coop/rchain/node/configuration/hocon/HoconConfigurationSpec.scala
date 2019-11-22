@@ -213,6 +213,7 @@ class HoconConfigurationSpec extends FunSuite with Matchers {
         |    genesis-path = /root/.rnode/genesis
         |    deploy-timestamp = 333
         |    finalization-rate = 4
+        |    max-number-of-parents = 1
         |  }
         |}
       """.stripMargin
@@ -237,7 +238,8 @@ class HoconConfigurationSpec extends FunSuite with Matchers {
         approveGenesisInterval = 5.seconds,
         approveGenesisDuration = 5.minutes,
         deployTimestamp = Some(333),
-        finalizationRate = 4
+        finalizationRate = 4,
+        maxNumberOfParents = 1
       )
 
     val casper = Casper.fromConfig(ConfigFactory.parseString(conf))

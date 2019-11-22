@@ -1,12 +1,13 @@
-package coop.rchain.node
+package coop.rchain.node.web
 
-import cats.implicits._
 import cats.effect.Sync
+import cats.implicits._
 import cats.{~>, Applicative}
 import com.google.protobuf.ByteString
 import coop.rchain.casper.ReportingCasper
 import coop.rchain.crypto.codec.Base16
-import coop.rchain.models.BlockHash._
+import coop.rchain.models.BlockHash.BlockHash
+import io.circe.syntax._
 import org.http4s.{HttpRoutes, QueryParamDecoder}
 
 object ReportingRoutes {
@@ -15,9 +16,8 @@ object ReportingRoutes {
   )(implicit nt: M ~> F): HttpRoutes[F] = {
     val dsl = org.http4s.dsl.Http4sDsl[F]
     import dsl._
-    import io.circe.syntax._
-    import io.circe.generic.extras.auto._
     import io.circe.generic.extras.Configuration
+    import io.circe.generic.extras.auto._
     import org.http4s.circe.CirceEntityEncoder._
 
     implicit val genDevConfig: Configuration =

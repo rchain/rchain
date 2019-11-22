@@ -1,8 +1,8 @@
-package coop.rchain.node
+package coop.rchain.node.web
 
 import cats.effect.Sync
-import cats.implicits._
-
+import cats.syntax.applicative._
+import coop.rchain.node.BuildInfo
 import org.http4s.HttpRoutes
 
 object VersionInfo {
