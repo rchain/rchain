@@ -45,10 +45,18 @@ object PrettyPrinter {
   def buildString(b: ByteString): String =
     limit(Base16.encode(b.toByteArray), 10)
 
+  def buildStringSig(b: ByteString): String = {
+    val bytes = b.toByteArray
+    val str1  = Base16.encode(bytes.take(10))
+    val str2  = Base16.encode(bytes.takeRight(10))
+    s"${str1}...${str2}"
+  }
+
   def buildString(sd: Signed[DeployData]): String =
-    s"${buildString(sd.data)}, SigAlgorithm: ${sd.sigAlgorithm.name}, Sig: ${buildString(sd.sig)}"
+    s"${buildString(sd.data)}, Sig: ${buildStringSig(sd.sig)}, SigAlgorithm: ${sd.sigAlgorithm.name}, ValidAfterBlockNumber: ${sd.data.validAfterBlockNumber}"
+
   def buildString(d: DeployData): String =
-    s"DeployData #${d.timestamp} -- ${d.term}}"
+    s"DeployData #${d.timestamp} -- ${d.term}"
 
   def buildString(r: RChainState): String =
     buildString(r.postStateHash)
