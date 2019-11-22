@@ -1,7 +1,8 @@
 package coop.rchain.node.web
+
 import cats.effect.Sync
 import cats.implicits._
-import cats.{Applicative, ~>}
+import cats.{~>, Applicative}
 import com.google.protobuf.ByteString
 import coop.rchain.casper.ReportingCasper
 import coop.rchain.crypto.codec.Base16

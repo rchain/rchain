@@ -18,15 +18,17 @@ from typing import (
     Optional,
     Generator,
     AbstractSet,
-    Set)
-
+    Set
+)
+from rchain.crypto import PrivateKey
+from rchain.certificate import get_node_id_raw
+from rchain.vault import DEFAULT_PHLO_LIMIT, DEFAULT_PHLO_PRICE
+from cryptography.hazmat.primitives.serialization import load_pem_private_key
+from cryptography.hazmat.backends import default_backend
 from docker.client import DockerClient
 from docker.models.containers import Container
 from docker.models.containers import ExecResult
-from rchain.crypto import PrivateKey
-from rchain.certificate import get_node_id_raw
-from cryptography.hazmat.primitives.serialization import load_pem_private_key
-from cryptography.hazmat.backends import default_backend
+
 from .common import (
     make_tempdir,
     make_tempfile,
@@ -313,9 +315,9 @@ class Node:
     def eval(self, rho_file_path: str) -> str:
         return self.rnode_command('eval', rho_file_path)
 
-    def deploy(self, rho_file_path: str, private_key: PrivateKey) -> str:
+    def deploy(self, rho_file_path: str, private_key: PrivateKey, phlo_limit:int = DEFAULT_PHLO_LIMIT, phlo_price: int = DEFAULT_PHLO_PRICE) -> str:
         try:
-            output = self.rnode_command('deploy', '--private-key={}'.format(private_key.to_hex()), '--phlo-limit=1000000', '--phlo-price=1', rho_file_path, stderr=False)
+            output = self.rnode_command('deploy', '--private-key={}'.format(private_key.to_hex()), '--phlo-limit={}'.format(phlo_limit), '--phlo-price={}'.format(phlo_price), rho_file_path, stderr=False)
             deploy_id = extract_deploy_id_from_deploy_output(output)
             return deploy_id
         except NonZeroExitCodeError as e:
@@ -333,12 +335,14 @@ class Node:
     def get_parsed_mvdag(self) -> Dict[str, Set[str]]:
         return parse_mvdag_str(self.get_mvdag())
 
-    def deploy_string(self, rholang_code: str, private_key: str) -> str:
+    def deploy_string(self, rholang_code: str, private_key: str, phlo_limit:int = DEFAULT_PHLO_LIMIT, phlo_price: int = DEFAULT_PHLO_PRICE) -> str:
         quoted_rholang = shlex.quote(rholang_code)
-        deploy_out = self.shell_out('sh', '-c', 'echo {quoted_rholang} >/tmp/deploy_string.rho && {rnode_binary} deploy --private-key={private_key} --phlo-limit=10000000000 --phlo-price=1 /tmp/deploy_string.rho'.format(
+        deploy_out = self.shell_out('sh', '-c', 'echo {quoted_rholang} >/tmp/deploy_string.rho && {rnode_binary} deploy --private-key={private_key} --phlo-limit={phlo_limit} --phlo-price={phlo_price} /tmp/deploy_string.rho'.format(
             rnode_binary=rnode_binary,
             quoted_rholang=quoted_rholang,
-            private_key=private_key
+            private_key=private_key,
+            phlo_limit=phlo_limit,
+            phlo_price=phlo_price
         ), stderr=False)
         return extract_deploy_id_from_deploy_output(deploy_out)
 
@@ -385,7 +389,7 @@ class Node:
         log_content = self.logs()
         return Node.__log_message_rx.split(log_content)
 
-    def deploy_contract_with_substitution(self, substitute_dict: Dict[str, str], rho_file_path: str, private_key: PrivateKey) -> str:
+    def deploy_contract_with_substitution(self, substitute_dict: Dict[str, str], rho_file_path: str, private_key: PrivateKey, phlo_limit:int = DEFAULT_PHLO_LIMIT, phlo_price: int = DEFAULT_PHLO_PRICE) -> str:
         """
         Supposed that you have a contract with content like below.
 
@@ -407,7 +411,7 @@ class Node:
             '-e', substitute_rules,
             container_contract_file_path,
         )
-        self.deploy(container_contract_file_path, private_key)
+        self.deploy(container_contract_file_path, private_key, phlo_limit, phlo_price)
         block_hash = self.propose()
         return block_hash
 

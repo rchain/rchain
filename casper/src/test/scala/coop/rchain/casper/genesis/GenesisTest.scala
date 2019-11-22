@@ -26,6 +26,7 @@ import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.shared.Time
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
+import coop.rchain.shared.Log
 
 class GenesisTest extends FlatSpec with Matchers with EitherValues with BlockDagStorageFixture {
   import GenesisTest._
@@ -219,6 +220,7 @@ object GenesisTest {
   val rchainShardId   = "rchain"
 
   implicit val raiseIOError = IOError.raiseIOErrorThroughSync[Task]
+  implicit val log          = new LogStub[Task]
 
   def fromInputFiles(
       maybeBondsPath: Option[String] = None,
@@ -265,11 +267,10 @@ object GenesisTest {
     } yield genesisBlock
 
   def withRawGenResources(
-      body: (Runtime[Task], Path, LogStub[Task], LogicalTime[Task]) => Task[Unit]
+      body: (Runtime[Task], Path, LogicalTime[Task]) => Task[Unit]
   ): Task[Unit] = {
     val storePath                           = storageLocation
     val gp                                  = genesisPath
-    implicit val log                        = new LogStub[Task]
     implicit val noopMetrics: Metrics[Task] = new metrics.Metrics.MetricsNOP[Task]
     implicit val span: Span[Task]           = NoopSpan[Task]()
     val time                                = new LogicalTime[Task]
@@ -277,7 +278,7 @@ object GenesisTest {
     for {
       sar     <- Runtime.setupRSpace[Task](storePath, storageSize)
       runtime <- Runtime.createWithEmptyCost[Task]((sar._1, sar._2))
-      result  <- body(runtime, genesisPath, log, time)
+      result  <- body(runtime, genesisPath, time)
       _       <- runtime.close()
       _       <- Sync[Task].delay { storePath.recursivelyDelete() }
       _       <- Sync[Task].delay { gp.recursivelyDelete() }
@@ -288,11 +289,9 @@ object GenesisTest {
       body: (RuntimeManager[Task], Path, LogStub[Task], LogicalTime[Task]) => Task[Unit]
   )(implicit metrics: Metrics[Task], span: Span[Task]): Task[Unit] =
     withRawGenResources {
-      (runtime: Runtime[Task], genesisPath: Path, log: LogStub[Task], time: LogicalTime[Task]) =>
-        {
-          implicit val _log = log
-          RuntimeManager.fromRuntime(runtime).flatMap(body(_, genesisPath, log, time))
-        }
+      implicit val log = new LogStub[Task]
+      (runtime: Runtime[Task], genesisPath: Path, time: LogicalTime[Task]) =>
+        RuntimeManager.fromRuntime(runtime).flatMap(body(_, genesisPath, log, time))
     }
 
   def taskTest[R](f: Task[R]): R =
