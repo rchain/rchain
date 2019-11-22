@@ -81,27 +81,27 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
 
   "computeState" should "charge for deploys" in effectTest {
     runtimeManagerResource.use { runtimeManager =>
-      for {
-        deploy        <- ConstructDeploy.sourceDeployNowF(source)
-        time          <- timeF.currentMillis
-        genPostState  = genesis.body.state.postStateHash
-        blockData     = BlockData(time, 0L, PublicKey(genesis.sender))
-        invalidBlocks = Map.empty[BlockHash, Validator]
-        processedDeploys <- runtimeManager
-                             .computeState(genPostState)(Seq(deploy), blockData, invalidBlocks)
-                             .map(_._2)
-        processedDeploy     = processedDeploys.head
-        processedDeployCost = processedDeploy.cost.cost
-        invalidProcessedDeploy = processedDeploy.copy(
-          cost = PCost(processedDeployCost - 1)
-        )
-        result <- runtimeManager.replayComputeState(genPostState)(
-                   Seq(invalidProcessedDeploy),
-                   blockData,
-                   invalidBlocks,
-                   isGenesis = false
-                 )
-      } yield result
+      val genPostState = genesis.body.state.postStateHash
+      val source       = """
+                            # new rl(`rho:registry:lookup`), listOpsCh in {
+                            #   rl!(`rho:lang:listOps`, *listOpsCh) |
+                            #   for(x <- listOpsCh){
+                            #     Nil
+                            #   }
+                            # }
+                            #""".stripMargin('#')
+      // TODO: Prohibit negative gas prices and gas limits in deploys.
+      // TODO: Make minimum maximum yield for deploy parameter of node.
+      ConstructDeploy.sourceDeployNowF(source = source, phloLimit = 10000) >>= { deploy =>
+        computeState(runtimeManager, deploy, genPostState) >>= {
+          case (playStateHash1, processedDeploy) =>
+            replayComputeState(runtimeManager)(genPostState, processedDeploy) map {
+              case Right(replayStateHash1) =>
+                assert(playStateHash1 != genPostState && replayStateHash1 == playStateHash1)
+              case Left(replayFailure) => fail(s"Unexpected replay failure: $replayFailure")
+            }
+        }
+      }
     }
   }
 
