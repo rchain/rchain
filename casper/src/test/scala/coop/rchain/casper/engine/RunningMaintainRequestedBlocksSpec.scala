@@ -4,19 +4,23 @@ import Running.{Requested, RequestedBlocks}
 import coop.rchain.catscontrib.ski._
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.PrettyPrinter
-import coop.rchain.comm.{CommError, Endpoint, NodeIdentifier, PeerNode}, CommError._
+import coop.rchain.comm.{CommError, Endpoint, NodeIdentifier, PeerNode}
+import CommError._
 import coop.rchain.comm.protocol.routing.Protocol
-import coop.rchain.comm.rp.{ProtocolHelper, RPConf}, ProtocolHelper.toPacket
+import coop.rchain.comm.rp.{ProtocolHelper, RPConf}
+import ProtocolHelper.toPacket
 import coop.rchain.shared._
 import coop.rchain.p2p.EffectsTestInstances.{LogStub, LogicalTime, TransportLayerStub}
 import coop.rchain.models.BlockHash.BlockHash
 import com.google.protobuf.ByteString
+import coop.rchain.metrics.Metrics
 import monix.eval.Coeval
 import org.scalatest._
 
 class RunningMaintainRequestedBlocksSpec extends FunSpec with BeforeAndAfterEach with Matchers {
 
-  val hash = ByteString.copyFrom("hash", "UTF-8")
+  val hash             = ByteString.copyFrom("hash", "UTF-8")
+  implicit val metrics = new Metrics.MetricsNOP[Coeval]
 
   override def beforeEach(): Unit = {
     transport.reset()

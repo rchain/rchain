@@ -752,7 +752,8 @@ object NodeRuntime {
               requestedBlocks,
               TransportLayer[F],
               Log[F],
-              Time[F]
+              Time[F],
+              Metrics[F]
             )
         _ <- Time[F].sleep(30.seconds)
       } yield ()
