@@ -67,7 +67,6 @@ def get_vault_balance(context: TestingContext, node: Node, rev_addr: str, privat
     check_balance_match = wait_for_log_match_result(context, node, check_balance_pattern)
     return int(check_balance_match.group("balance"))
 
-@pytest.mark.xfail
 def test_alice_pay_bob(command_line_options: CommandLineOptions, docker_client: DockerClient, random_generator: Random) -> None:
     genesis_vault = {
         ALICE_KEY: ALICE_GENESIS_VAULT_AMOUNT
@@ -80,55 +79,37 @@ def test_alice_pay_bob(command_line_options: CommandLineOptions, docker_client: 
         transfer_amount = 2000000
         alice_rev_address = ALICE_KEY.get_public_key().get_rev_address()
         bob_rev_address = BOB_KEY.get_public_key().get_rev_address()
-        # alice balance = 5000000 - 100000 * 1 = 4900000
         alice_balance = get_vault_balance(context, bootstrap, alice_rev_address, ALICE_KEY, 100000, 1)
-        # after get_balance , alace vault would refund 82185
-        # then alice balance = 4900000 + 82185 = 4982185
-        
-        # alice balance = 4982185 - 100000 * 1 = 4882185
-        # and refund 60506  so alice = 4882185 + 60506 = 4,942,691
         bob_balance = get_vault_balance(context, bootstrap, bob_rev_address, ALICE_KEY, 100000, 1)
         assert alice_balance == ALICE_GENESIS_VAULT_AMOUNT - 100000
         assert bob_balance == 0
 
-
-        # transfer 
-        # alice balance = 4,942,691 - 2000000 - 100000 * 1 = 2842591
-        # and refund 37390 so alice = 37390 + 4842591 = 2,879,981‬
         transfer_funds(context, bootstrap, alice_rev_address, bob_rev_address, transfer_amount, ALICE_KEY, 100000, 1)
 
-        # alice balance = 2,879,981‬ - 100000 * 1 = 2779981
-        # and refund 82077 = 2,862,058
         alice_balance = get_vault_balance(context, bootstrap, alice_rev_address, ALICE_KEY, 100000, 1)
-        assert alice_balance == 2779981
 
-        bob_balance = get_vault_balance(context, bootstrap, bob_rev_address, BOB_KEY, 100000, 1)
-        # assert bob_balance == transfer_amount
+        bob_balance = get_vault_balance(context, bootstrap, bob_rev_address, ALICE_KEY, 100000, 1)
+        assert bob_balance == transfer_amount
 
-        transfer_funds(context, bootstrap, bob_rev_address, alice_rev_address, transfer_amount, BOB_KEY, 100000, 1)
 
-        alice_balance = get_vault_balance(context, bootstrap, alice_rev_address, ALICE_KEY, 100000, 1)
-        # assert alice_balance == ALICE_GENESIS_VAULT_AMOUNT
-
-        bob_balance = get_vault_balance(context, bootstrap, bob_rev_address, BOB_KEY, 100000, 1)
-        # assert bob_balance == 0
-
-@pytest.mark.xfail
 def test_transfer_failed_with_invalid_key(command_line_options: CommandLineOptions, docker_client: DockerClient, random_generator: Random) -> None:
     genesis_vault = {
-        CHARLIE_KEY: CHARLIE_GENESIS_VAULT_AMOUNT
+        CHARLIE_KEY: CHARLIE_GENESIS_VAULT_AMOUNT,
+        ALICE_KEY: ALICE_GENESIS_VAULT_AMOUNT
     }
     with testing_context(command_line_options, random_generator, docker_client, wallets_dict=genesis_vault) as context, \
             docker_network(context, context.docker) as network, \
             started_bootstrap(context=context, network=network) as bootstrap:
-
-        alice_rev_address = ALICE_KEY.get_public_key().get_rev_address()
+        wait_for_approved_block_received_handler_state(context, bootstrap)
+        bob_rev_address = BOB_KEY.get_public_key().get_rev_address()
         charlie_rev_address = CHARLIE_KEY.get_public_key().get_rev_address()
 
-        charlie_balance = get_vault_balance(context, bootstrap, charlie_rev_address, BOB_KEY, 100000, 1)
-
-        assert charlie_balance == CHARLIE_GENESIS_VAULT_AMOUNT
+        bob_balance = get_vault_balance(context, bootstrap, bob_rev_address, CHARLIE_KEY, 100000, 1)
+        charlie_balance = get_vault_balance(context, bootstrap, charlie_rev_address, CHARLIE_KEY, 100000, 1)
+        assert bob_balance == 0
 
         with pytest.raises(TransderFundsError):
-            transfer_funds(context, bootstrap, charlie_rev_address, alice_rev_address, 100, ALICE_KEY, 100000, 1)
+            transfer_funds(context, bootstrap, charlie_rev_address, bob_rev_address, 100, ALICE_KEY, 100000, 1)
+        bob_balance = get_vault_balance(context, bootstrap, bob_rev_address, CHARLIE_KEY, 100000, 1)
+        assert bob_balance == 0
 
