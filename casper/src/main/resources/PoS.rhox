@@ -33,6 +33,7 @@ new  PoS,
     fst,
     deposit, distributeRewards,
     perActiveValidatorPosVaultsCh,
+    transferFromBlockSender,
     rs(`rho:registry:insertSigned:secp256k1`),
     posId(`rho:rchain:deployerId`),
     uriOut in {
@@ -210,6 +211,36 @@ new  PoS,
                 }
               } |
 
+              contract transferFromBlockSender(@deployerRevAddress, @refundAmount, returnCh) = {
+                new getBlockData(`rho:block:data`),
+                    blockDataCh,
+                    indexSender,
+                    unfAuthKeyCh,
+                    tmpCh in {
+                  getMVar!(*stateCh, *tmpCh) |
+                  getBlockData!(*blockDataCh) |
+                  for (@state <- tmpCh; _, _, @sender <- blockDataCh) {
+                    @ListOps!("indexOf", state.get("activeValidators"), sender, *indexSender) |
+                    for (@idx <- indexSender) {
+                      for (@vaults <<- perActiveValidatorPosVaultsCh) {
+                        if (idx == -1) {
+                          returnCh!((false, "Sender is not an active validator"))
+                        } else {
+                          match vaults.nth(idx) {
+                            (unf, _, activeValidatorVault) => {
+                              @RevVault!("unforgeableAuthKey", unf, *unfAuthKeyCh) |
+                              for (@authKey <- unfAuthKeyCh) {
+                                @activeValidatorVault!("transfer", deployerRevAddress, refundAmount, authKey, *returnCh)
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              } |
+
               // Note: under no circumstances should this method be merged as is.
               //       this method, along with "chargeDeploy", "closeBlock", and "slash"
               //       must be made private, as they're only used in the protocol.
@@ -219,7 +250,7 @@ new  PoS,
                     revAddressOps!("fromDeployerId", deployerId, *revAddressCh) |
                     for(@deployerRevAddress <- revAddressCh){
                       new transferCh in {
-                        @posVault!("transfer", deployerRevAddress, refundAmount, posAuthKey, *transferCh) |
+                        transferFromBlockSender!(deployerRevAddress, refundAmount, *transferCh) |
                         for(@transferResult <- transferCh){
                           match transferResult {
                             (true, _) => {
