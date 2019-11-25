@@ -15,7 +15,7 @@ class PoSSpec
     extends RhoSpec(
       CompiledRholangSource("PoSTest.rho", NormalizerEnv.Empty),
       Seq.empty,
-      180.seconds,
+      280.seconds,
       genesisParameters = GenesisBuilder
         .buildGenesisParameters()
         .map(genesis => genesis.copy(vaults = genesis.vaults ++ PoSSpec.testVaults))
