@@ -14,7 +14,7 @@ import cats.tagless.implicits._
 import cats.temp.par.Par
 import coop.rchain.blockstorage._
 import coop.rchain.blockstorage.dag.{BlockDagFileStorage, BlockDagStorage}
-import coop.rchain.blockstorage.deploy.InMemDeployStorage
+import coop.rchain.blockstorage.deploy.{InMemDeployStorage, SQLiteDeployStorage}
 import coop.rchain.blockstorage.finality.LastFinalizedFileStorage
 import coop.rchain.blockstorage.util.io.IOError
 import coop.rchain.casper._
@@ -42,7 +42,7 @@ import coop.rchain.node.api._
 import coop.rchain.node.configuration.Configuration
 import coop.rchain.node.diagnostics._
 import coop.rchain.node.diagnostics.Trace.TraceId
-import coop.rchain.node.effects.{EventConsumer, RchainEvents}
+import coop.rchain.node.effects._
 import coop.rchain.node.model.repl.ReplGrpcMonix
 import coop.rchain.node.web._
 import coop.rchain.p2p.effects._
@@ -55,6 +55,8 @@ import kamon.system.SystemMetrics
 import kamon.zipkin.ZipkinReporter
 import monix.eval.Task
 import monix.execution.Scheduler
+import org.flywaydb.core.Flyway
+import org.flywaydb.core.api.Location
 import org.lmdbjava.Env
 
 @SuppressWarnings(Array("org.wartremover.warts.NonUnitStatements"))
@@ -578,6 +580,11 @@ object NodeRuntime {
   val taskToEnv: Task ~> TaskEnv = λ[Task ~> TaskEnv](ReaderT.liftF(_))
   val envToTask: TaskEnv ~> Task = λ[TaskEnv ~> Task](_.run(NodeCallCtx.init))
 
+  private[this] val dbConnScheduler =
+    Scheduler.cached("db-conn", 1, 4)
+  private[this] val dbIOScheduler =
+    Scheduler.cached("db-io", 1, Int.MaxValue)
+
   type CasperLoop[F[_]] = F[Unit]
   type EngineInit[F[_]] = F[Unit]
 
@@ -598,10 +605,16 @@ object NodeRuntime {
     def close(): F[Unit]
   }
 
-  def cleanup[F[_]: Sync: Log](runtime: Runtime[F], casperRuntime: Runtime[F]): Cleanup[F] =
+  def cleanup[F[_]: Sync: Log](
+      runtime: Runtime[F],
+      casperRuntime: Runtime[F],
+      transactorRelease: F[Unit]
+  ): Cleanup[F] =
     new Cleanup[F] {
       override def close(): F[Unit] =
         for {
+          _ <- Log[F].info("Shutting down SQLite transactor ...")
+          _ <- transactorRelease
           _ <- Log[F].info("Shutting down interpreter runtime ...")
           _ <- runtime.close()
           _ <- Log[F].info("Shutting down Casper runtime ...")
@@ -653,7 +666,14 @@ object NodeRuntime {
       else Span.noop[F]
       blockDagStorage      <- BlockDagFileStorage.create[F](dagConfig)
       lastFinalizedStorage <- LastFinalizedFileStorage.make[F](lastFinalizedPath)
-      deployStorage        <- InMemDeployStorage.make[F]
+      transactorAllocated <- doobieTransactor[F](
+                              connectEC = dbConnScheduler,
+                              transactEC = dbIOScheduler,
+                              conf.server.dataDir
+                            ).allocated
+      (transactor, transactorRelease) = transactorAllocated
+      _                               <- runRdmbsMigrations(conf.server.dataDir)
+      deployStorage                   <- SQLiteDeployStorage.make[F](transactor)
       oracle = {
         implicit val sp = span
         SafetyOracle.cliqueOracle[F]
@@ -762,7 +782,7 @@ object NodeRuntime {
         _ <- Time[F].sleep(30.seconds)
       } yield ()
       engineInit     = engineCell.read >>= (_.init)
-      runtimeCleanup = NodeRuntime.cleanup(runtime, casperRuntime)
+      runtimeCleanup = NodeRuntime.cleanup(runtime, casperRuntime, transactorRelease)
     } yield (
       blockStore,
       blockDagStorage,
@@ -802,4 +822,18 @@ object NodeRuntime {
     val propose               = ProposeGrpcServiceV1.instance(blockApiLock)
     APIServers(repl, propose, deploy)
   }
+
+  @SuppressWarnings(Array("org.wartremover.warts.NonUnitStatements"))
+  private def runRdmbsMigrations[F[_]: Sync](serverDataDir: Path): F[Unit] =
+    Sync[F].delay {
+      val db = serverDataDir.resolve("sqlite.db").toString
+      val conf =
+        Flyway
+          .configure()
+          .dataSource(s"jdbc:sqlite:$db", "", "")
+          .locations(new Location("classpath:/db/migration"))
+      val flyway = conf.load()
+      flyway.migrate()
+      ()
+    }
 }

@@ -451,7 +451,11 @@ lazy val blockStorage = (project in file("block-storage"))
       lmdbjava,
       catsCore,
       catsEffect,
-      catsMtl
+      catsMtl,
+      doobieCore,
+      doobieHikari,
+      flyway,
+      sqlLite
     )
   )
   .dependsOn(shared, models % "compile->compile;test->test")

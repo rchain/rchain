@@ -7,10 +7,11 @@ import cats.data.ReaderT
 import scala.concurrent.duration._
 import scala.io.Source
 import scala.tools.jline.console._
-import cats.effect.{Concurrent, Sync, Timer}
+import cats.effect.{Async, Concurrent, ContextShift, Resource, Sync, Timer}
 import cats.mtl._
 import cats.implicits._
 import cats.{Applicative, Monad}
+import com.zaxxer.hikari.HikariConfig
 import coop.rchain.comm._
 import coop.rchain.comm.discovery._
 import coop.rchain.comm.rp._
@@ -18,9 +19,13 @@ import coop.rchain.comm.rp.Connect._
 import coop.rchain.comm.transport._
 import coop.rchain.metrics.Metrics
 import coop.rchain.shared._
+import doobie.hikari.HikariTransactor
+import doobie.util.transactor.Transactor
 import monix.eval._
 import monix.execution._
 import monix.execution.atomic.AtomicAny
+
+import scala.concurrent.ExecutionContext
 
 package object effects {
 
@@ -120,4 +125,27 @@ package object effects {
       override def modify(f: S => S): ReaderT[F, E, Unit] = ReaderT.liftF(stateF.modify(f))
     }
 
+  def doobieTransactor[F[_]: Async: ContextShift](
+      connectEC: ExecutionContext,
+      transactEC: ExecutionContext,
+      serverDataDir: Path
+  ): Resource[F, Transactor[F]] = {
+    def mkConfig(poolSize: Int) = {
+      val config = new HikariConfig()
+      config.setDriverClassName("org.sqlite.JDBC")
+      config.setJdbcUrl(s"jdbc:sqlite:${serverDataDir.resolve("sqlite.db")}")
+      config.setMinimumIdle(1)
+      config.setMaximumPoolSize(poolSize)
+      config.setAutoCommit(false)
+      config
+    }
+
+    HikariTransactor
+      .fromHikariConfig[F](
+        mkConfig(10),
+        connectEC,
+        transactEC
+      )
+      .widen
+  }
 }

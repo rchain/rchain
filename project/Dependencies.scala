@@ -12,6 +12,7 @@ object Dependencies {
   val catsEffectVersion = "1.4.0"
   val catsMtlVersion    = "0.6.0"
   val slf4jVersion      = "1.7.25"
+  val doobieVersion     = "0.7.1"
 
   // format: off
   val bouncyProvCastle    = "org.bouncycastle"           % "bcprov-jdk15on"             % "1.61"
@@ -81,6 +82,12 @@ object Dependencies {
   val logstashLogback     = "net.logstash.logback"        % "logstash-logback-encoder"  % "5.3"
   val slf4j               = "org.slf4j"                   % "slf4j-api"                 % slf4jVersion
   val julToSlf4j          = "org.slf4j"                   % "jul-to-slf4j"              % slf4jVersion
+  val sqlLite             = "org.xerial"                  % "sqlite-jdbc"               % "3.28.0"
+  val flyway              = "org.flywaydb"                % "flyway-core"               % "5.2.4"
+  val doobieCore = ("org.tpolecat" %% "doobie-core" % doobieVersion)
+    .exclude("co.fs2", s"fs2-core_2.12")
+  val doobieHikari = ("org.tpolecat" %% "doobie-hikari" % doobieVersion)
+    .exclude("co.fs2", s"fs2-core_2.12")
   // format: on
 
   val overrides = Seq(
