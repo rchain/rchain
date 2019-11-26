@@ -4,13 +4,14 @@ import cats.effect.{Concurrent, Sync}
 import cats.implicits._
 import coop.rchain.blockstorage.dag.{BlockDagRepresentation, BlockDagStorage}
 import coop.rchain.blockstorage.BlockStore
+import coop.rchain.blockstorage.deploy.DeployStorage
 import coop.rchain.casper.CasperState.CasperStateCell
 import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.catscontrib.ListContrib
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.shared.Log
 
-final class LastFinalizedBlockCalculator[F[_]: Sync: Log: Concurrent: BlockStore: BlockDagStorage: SafetyOracle](
+final class LastFinalizedBlockCalculator[F[_]: Sync: Log: Concurrent: BlockStore: BlockDagStorage: SafetyOracle: DeployStorage](
     faultToleranceThreshold: Float
 ) {
   def run(dag: BlockDagRepresentation[F], lastFinalizedBlockHash: BlockHash)(
@@ -32,17 +33,11 @@ final class LastFinalizedBlockCalculator[F[_]: Sync: Log: Concurrent: BlockStore
 
   private def removeDeploysInFinalizedBlock(
       finalizedChildHash: BlockHash
-  )(implicit state: CasperStateCell[F]): F[Unit] =
+  ): F[Unit] =
     for {
-      block              <- ProtoUtil.getBlock[F](finalizedChildHash)
-      deploys            = block.body.deploys.map(_.deploy)
-      stateBefore        <- state.read
-      initialHistorySize = stateBefore.deployHistory.size
-      _ <- state.modify { s =>
-            s.copy(deployHistory = s.deployHistory -- deploys)
-          }
-      stateAfter     <- state.read
-      deploysRemoved = initialHistorySize - stateAfter.deployHistory.size
+      block          <- ProtoUtil.getBlock[F](finalizedChildHash)
+      deploys        = block.body.deploys.map(_.deploy)
+      deploysRemoved <- DeployStorage[F].remove(deploys)
       _ <- Log[F].info(
             s"Removed $deploysRemoved deploys from deploy history as we finalized block ${PrettyPrinter
               .buildString(finalizedChildHash)}."
@@ -73,7 +68,7 @@ object LastFinalizedBlockCalculator {
   def apply[F[_]](implicit ev: LastFinalizedBlockCalculator[F]): LastFinalizedBlockCalculator[F] =
     ev
 
-  def apply[F[_]: Sync: Log: Concurrent: BlockStore: BlockDagStorage: SafetyOracle](
+  def apply[F[_]: Sync: Log: Concurrent: BlockStore: BlockDagStorage: SafetyOracle: DeployStorage](
       faultToleranceThreshold: Float
   ): LastFinalizedBlockCalculator[F] =
     new LastFinalizedBlockCalculator[F](faultToleranceThreshold)
