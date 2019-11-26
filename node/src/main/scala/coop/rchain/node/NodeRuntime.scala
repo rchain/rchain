@@ -14,6 +14,7 @@ import cats.tagless.implicits._
 import cats.temp.par.Par
 import coop.rchain.blockstorage._
 import coop.rchain.blockstorage.dag.{BlockDagFileStorage, BlockDagStorage}
+import coop.rchain.blockstorage.deploy.InMemDeployStorage
 import coop.rchain.blockstorage.finality.LastFinalizedFileStorage
 import coop.rchain.blockstorage.util.io.IOError
 import coop.rchain.casper._
@@ -652,6 +653,7 @@ object NodeRuntime {
       else Span.noop[F]
       blockDagStorage      <- BlockDagFileStorage.create[F](dagConfig)
       lastFinalizedStorage <- LastFinalizedFileStorage.make[F](lastFinalizedPath)
+      deployStorage        <- InMemDeployStorage.make[F]
       oracle = {
         implicit val sp = span
         SafetyOracle.cliqueOracle[F]
@@ -664,7 +666,8 @@ object NodeRuntime {
         Concurrent[F],
         blockStore,
         blockDagStorage,
-        oracle
+        oracle,
+        deployStorage
       )
       synchronyConstraintChecker = SynchronyConstraintChecker[F](
         conf.server.synchronyConstraintThreshold
@@ -720,6 +723,7 @@ object NodeRuntime {
         implicit val sc = synchronyConstraintChecker
         implicit val cu = commUtil
         implicit val es = estimator
+        implicit val ds = deployStorage
 
         CasperLaunch.of(conf.casper)
       }

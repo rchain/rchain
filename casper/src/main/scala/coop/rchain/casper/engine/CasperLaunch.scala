@@ -6,6 +6,7 @@ import cats.effect.{Concurrent, Sync}
 import cats.implicits._
 import coop.rchain.blockstorage.BlockStore
 import coop.rchain.blockstorage.dag.BlockDagStorage
+import coop.rchain.blockstorage.deploy.DeployStorage
 import coop.rchain.blockstorage.finality.LastFinalizedStorage
 import coop.rchain.blockstorage.util.io.IOError.RaiseIOError
 import coop.rchain.casper.LastApprovedBlock.LastApprovedBlock
@@ -26,7 +27,7 @@ trait CasperLaunch[F[_]] {
 
 object CasperLaunch {
 
-  def of[F[_]: LastApprovedBlock: Metrics: Span: BlockStore: CommUtil: ConnectionsCell: TransportLayer: RPConfAsk: SafetyOracle: LastFinalizedBlockCalculator: Concurrent: Time: Log: EventLog: BlockDagStorage: LastFinalizedStorage: EngineCell: EnvVars: RaiseIOError: RuntimeManager: Running.RequestedBlocks: EventPublisher: SynchronyConstraintChecker: Estimator](
+  def of[F[_]: LastApprovedBlock: Metrics: Span: BlockStore: CommUtil: ConnectionsCell: TransportLayer: RPConfAsk: SafetyOracle: LastFinalizedBlockCalculator: Concurrent: Time: Log: EventLog: BlockDagStorage: LastFinalizedStorage: EngineCell: EnvVars: RaiseIOError: RuntimeManager: Running.RequestedBlocks: EventPublisher: SynchronyConstraintChecker: Estimator: DeployStorage](
       conf: CasperConf
   ): CasperLaunch[F] = new CasperLaunch[F] {
 

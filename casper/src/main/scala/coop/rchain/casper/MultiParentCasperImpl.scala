@@ -27,6 +27,7 @@ import coop.rchain.models.{EquivocationRecord, NormalizerEnv}
 import coop.rchain.models.Validator.Validator
 import coop.rchain.shared._
 import com.google.protobuf.ByteString
+import coop.rchain.blockstorage.deploy.DeployStorage
 import coop.rchain.blockstorage.finality.LastFinalizedStorage
 import coop.rchain.crypto.signatures.Signed
 
@@ -34,12 +35,10 @@ import coop.rchain.crypto.signatures.Signed
   Encapsulates mutable state of the MultiParentCasperImpl
 
   @param blockBuffer - holds hashes of blocks that were received but were not added because DAG does not have their parents yet
-  @param deployHistory - deploy data that will be eventually used to create block, removed when block holding it is finalizedchild
   @param dependencyDag - dependency dag for block buffer // TODO they should be one structure
   */
 final case class CasperState(
     blockBuffer: Set[BlockHash] = Set.empty[BlockHash],
-    deployHistory: Set[Signed[DeployData]] = Set.empty[Signed[DeployData]],
     dependencyDag: DoublyLinkedDag[BlockHash] = BlockDependencyDag.empty
 )
 
@@ -47,7 +46,7 @@ object CasperState {
   type CasperStateCell[F[_]] = Cell[F, CasperState]
 }
 
-class MultiParentCasperImpl[F[_]: Sync: Concurrent: Log: Time: SafetyOracle: LastFinalizedBlockCalculator: BlockStore: BlockDagStorage: LastFinalizedStorage: CommUtil: EventPublisher: SynchronyConstraintChecker: Estimator](
+class MultiParentCasperImpl[F[_]: Sync: Concurrent: Log: Time: SafetyOracle: LastFinalizedBlockCalculator: BlockStore: BlockDagStorage: LastFinalizedStorage: CommUtil: EventPublisher: SynchronyConstraintChecker: Estimator: DeployStorage](
     validatorId: Option[ValidatorIdentity],
     genesis: BlockMessage,
     postGenesisStateHash: StateHash,
@@ -181,9 +180,7 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Log: Time: SafetyOracle: Las
 
   def addDeploy(deploy: Signed[DeployData]): F[DeployId] =
     for {
-      _ <- Cell[F, CasperState].modify { s =>
-            s.copy(deployHistory = s.deployHistory + deploy)
-          }
+      _ <- DeployStorage[F].put(List(deploy))
       _ <- Log[F].info(s"Received ${PrettyPrinter.buildString(deploy)}")
     } yield deploy.sig
 
