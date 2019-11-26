@@ -56,7 +56,11 @@ class InterpreterUtilTest
         deploys,
         dag,
         runtimeManager,
-        BlockData(deploys.maxBy(_.data.timestamp).data.timestamp, 0, PublicKey(Array[Byte]())),
+        BlockData(
+          deploys.maxBy(_.data.timestamp).data.timestamp,
+          0,
+          genesisContext.validatorPks.head
+        ),
         Map.empty[BlockHash, Validator]
       )
       .attempt
@@ -364,6 +368,7 @@ class InterpreterUtilTest
       block <- createBlock[Task](
                 Seq(genesis.blockHash),
                 genesis,
+                ByteString.copyFrom(genesisContext.validatorPks.head.bytes),
                 deploys = processedDeploys,
                 tsHash = computedTsHash,
                 preStateHash = preStateHash
@@ -414,6 +419,7 @@ class InterpreterUtilTest
         block <- createBlock[Task](
                   Seq(genesis.blockHash),
                   genesis,
+                  ByteString.copyFrom(genesisContext.validatorPks.head.bytes),
                   deploys = processedDeploys,
                   tsHash = computedTsHash,
                   preStateHash = preStateHash
@@ -468,6 +474,7 @@ class InterpreterUtilTest
         block <- createBlock[Task](
                   Seq(genesis.blockHash),
                   genesis,
+                  ByteString.copyFrom(genesisContext.validatorPks.head.bytes),
                   deploys = processedDeploys,
                   tsHash = computedTsHash,
                   preStateHash = preStateHash
@@ -519,6 +526,7 @@ class InterpreterUtilTest
         block <- createBlock[Task](
                   Seq(genesis.blockHash),
                   genesis,
+                  ByteString.copyFrom(genesisContext.validatorPks.head.bytes),
                   deploys = processedDeploys,
                   tsHash = computedTsHash,
                   preStateHash = preStateHash
@@ -562,6 +570,7 @@ class InterpreterUtilTest
           block <- createBlock[Task](
                     Seq(genesis.blockHash),
                     genesis,
+                    ByteString.copyFrom(genesisContext.validatorPks.head.bytes),
                     deploys = processedDeploys,
                     tsHash = computedTsHash,
                     preStateHash = preStateHash
@@ -595,6 +604,7 @@ class InterpreterUtilTest
         block <- createBlock[Task](
                   Seq(genesis.blockHash),
                   genesis,
+                  ByteString.copyFrom(genesisContext.validatorPks.head.bytes),
                   deploys = Seq(badProcessedDeploy, processedDeploys.last),
                   tsHash = computedTsHash,
                   preStateHash = preStateHash
@@ -640,6 +650,7 @@ class InterpreterUtilTest
           block <- createBlock[Task](
                     Seq(genesis.blockHash),
                     genesis,
+                    ByteString.copyFrom(genesisContext.validatorPks.head.bytes),
                     deploys = processedDeploys,
                     tsHash = computedTsHash,
                     preStateHash = preStateHash
@@ -669,8 +680,16 @@ class InterpreterUtilTest
      */
 
     for {
-      b1 <- buildBlock[Task](Seq(genesis.blockHash), deploys = b1DeploysWithCost)
-      b2 <- buildBlock[Task](Seq(genesis.blockHash), deploys = b2DeploysWithCost)
+      b1 <- buildBlock[Task](
+             Seq(genesis.blockHash),
+             ByteString.copyFrom(genesisContext.validatorPks.head.bytes),
+             deploys = b1DeploysWithCost
+           )
+      b2 <- buildBlock[Task](
+             Seq(genesis.blockHash),
+             ByteString.copyFrom(genesisContext.validatorPks.head.bytes),
+             deploys = b2DeploysWithCost
+           )
       _ <- buildBlock[Task](
             Seq(b1.blockHash, b2.blockHash),
             deploys = b3DeploysWithCost
