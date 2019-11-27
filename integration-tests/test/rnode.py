@@ -185,7 +185,7 @@ def extract_validator_stake_from_deploy_cost_str(output: str) -> Dict[str, float
     deploy_cost_dict: Dict[str, float] = defaultdict(lambda: 0)
     deploy_cost_list = output.split(_PB_REPEATED_STR_SEP)
     for deploy_cost_str in deploy_cost_list:
-        match = re.match(r'User: (?P<user>[a-zA-Z0-9]*), Cost: (?P<cost>[0-9]*) DeployData \#(?P<timestamp>[0-9]*) -- .', deploy_cost_str)
+        match = re.match(r'User: (?P<user>[a-zA-Z0-9]*), Cost: PCost\((?P<cost>[0-9]*)\) DeployData \#(?P<timestamp>[0-9]*) -- .', deploy_cost_str)
         if match:
             deploy_cost_dict[match.group('user')] = int(match.group('cost'))
     return deploy_cost_dict

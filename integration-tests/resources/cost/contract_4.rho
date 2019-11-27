@@ -1,1 +1,4 @@
-42 | @0!(2) | for (x <- @0) { Nil }
+new ret in {
+  @"keccak256Hash"!("TEST".toByteArray(), *ret) |
+  for (_ <- ret) { Nil }
+}

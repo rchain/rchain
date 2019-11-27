@@ -145,10 +145,10 @@ def test_extract_block_hash_from_propose_output() -> None:
 
 
 def test_extract_validator_stake_from_deploy_cost_str() -> None:
-    input = r'User: 23bb89653c1d43578ed421e655e7a0ed9f3ed2e7eab820ad7739277e380cafa3, Cost: 132 DeployData #1553171134886 -- new x in { x!(0) }\\n}#$User: 1cd8bf79a2c1bd0afa160f6cdfeb8597257e48135c9bf5e4823f2875a1492c97, Cost: 132 DeployData #1553171478932 -- new x in { x!(0) }\\n}'
+    input = r'User: 04967539c162c230d6bc41f49913cb0ea2cf16f8145a0e0b369ebd5e751f983774e94d890bd0720586993d6c01945f50e846fb07e84939576d1694be40c4a771a9, Cost: PCost(97) DeployData #1574661250093 -- @0!(2), Sig: 3045022100d1ecc0e9a7...c0513c174a45702e5435, SigAlgorithm: secp256k1, ValidAfterBlockNumber: -1#$User: 04928375c162c230d6bc41f49913cb0ea2cf16f8145a0e0b369ebd5e751f983774e94d890bd0720586993d6c01945f50e846fb07e84939576d1694be40c4a771a9, Cost: PCost(197) DeployData #1574661254133 -- @0!(2) | @1!(1), Sig: 3044022013647ddbbd20...9a5ab73e799e0ec8a366, SigAlgorithm: secp256k1, ValidAfterBlockNumber: -1'
     deploy_cost = extract_validator_stake_from_deploy_cost_str(input)
-    assert deploy_cost['23bb89653c1d43578ed421e655e7a0ed9f3ed2e7eab820ad7739277e380cafa3'] == 132
-    assert deploy_cost['1cd8bf79a2c1bd0afa160f6cdfeb8597257e48135c9bf5e4823f2875a1492c97'] == 132
+    assert deploy_cost['04967539c162c230d6bc41f49913cb0ea2cf16f8145a0e0b369ebd5e751f983774e94d890bd0720586993d6c01945f50e846fb07e84939576d1694be40c4a771a9'] == 97
+    assert deploy_cost['04928375c162c230d6bc41f49913cb0ea2cf16f8145a0e0b369ebd5e751f983774e94d890bd0720586993d6c01945f50e846fb07e84939576d1694be40c4a771a9'] == 197
 
 
 
