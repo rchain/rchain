@@ -45,7 +45,10 @@ final case class COMM(
     produces: Seq[Produce],
     peeks: SortedSet[Int],
     timesRepeated: Map[Produce, Int]
-) extends Event
+) extends Event {
+  def matches(datum: Datum[_], produceCounter: => Int): Boolean =
+    timesRepeated.get(datum.source).exists(count => datum.persist || count == produceCounter)
+}
 
 object COMM {
   def apply[C, A](

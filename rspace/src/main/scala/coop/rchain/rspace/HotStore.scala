@@ -170,7 +170,7 @@ private class InMemHotStore[F[_]: Sync, C, P, A, K](
     for {
       cached <- internalGetJoins(channel)
       state  <- S.get
-    } yield (state.installedJoins.get(channel).getOrElse(Seq.empty) ++: cached)
+    } yield (state.installedJoins.getOrElse(channel, Seq.empty) ++: cached)
 
   private[this] def internalGetJoins(channel: C): F[Seq[Seq[C]]] =
     for {
