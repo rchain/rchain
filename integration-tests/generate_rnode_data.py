@@ -2,7 +2,6 @@ import contextlib
 import logging
 import os
 from random import Random
-import shutil
 import subprocess
 from typing import Generator
 from test.conftest import (CommandLineOptions, docker_client_context,
@@ -29,12 +28,12 @@ def generate_cmd_opts() -> Generator[CommandLineOptions, None, None]:
     yield CommandLineOptions(60 * 30, 60 * 30, 30, 60 * 30, None, None)
 
 
-def get_docker_folder(node: Node, target_dir: str, output_dir: str):
+def get_docker_folder(node: Node, target_dir: str, output_file: str):
     logging.info("Retrieve the data file from {} container".format(node.name))
-    if os.path.exists(output_dir):
-        shutil.rmtree(output_dir)
+    if os.path.exists(output_file):
+        os.remove(output_file)
     bits, _ = node.container.get_archive(target_dir)
-    with open(output_dir, 'wb') as f:
+    with open(output_file, 'wb') as f:
         for chunk in bits:
             f.write(chunk)
 
@@ -73,9 +72,9 @@ def generate_rnode_data() -> None:
     }
 
     wallet_map = {
-        CEREMONY_MASTER_PRIVATE: 1000,
-        VALIDATOR_A_PRIVATE: 1000,
-        VALIDATOR_B_PRIVATE: 2000
+        CEREMONY_MASTER_PRIVATE: 5000000,
+        VALIDATOR_A_PRIVATE: 5000000,
+        VALIDATOR_B_PRIVATE: 5000000
     }
     logging.info("start the genesis ceremony")
 

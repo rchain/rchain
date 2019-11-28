@@ -303,7 +303,7 @@
         },
         "pyrchain": {
             "git": "https://github.com/rchain/pyrchain.git",
-            "ref": "890ed8519d933a9e4c2d6d1df80a5e6563844b86"
+            "ref": "29263d88548beac2017f4b464b7a209fa53d33e5"
         },
         "pytest": {
             "hashes": [

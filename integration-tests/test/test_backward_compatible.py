@@ -34,7 +34,6 @@ def temp_rnode_data(mount_dir: str) -> Generator[str, None, None]:
             tar.extractall(os.path.join(temp_dir, 'validatorB'))
         yield temp_dir
 
-@pytest.mark.skip
 def test_backward_compatible(command_line_options: CommandLineOptions, random_generator: Random, docker_client: DockerClient) -> None:
     """
     This test is for backward compatibility. It use the old version data of a rnode the create a existing network.
@@ -43,12 +42,7 @@ def test_backward_compatible(command_line_options: CommandLineOptions, random_ge
     Currently we don't release our mainnet so it is Ok to fail the test. Once your pr make the test failed , you
     should shout out loudly in discord and let everybody know your update is not backward compatible.
     """
-    wallets_map = {
-        CEREMONY_MASTER_PRIVATE: 10000,
-        VALIDATOR_A_PRIVATE: 10000,
-        VALIDATOR_B_PRIVATE: 10000
-    }
-    with  testing_context(command_line_options, random_generator, docker_client, wallets_dict=wallets_map) as context, \
+    with  testing_context(command_line_options, random_generator, docker_client) as context, \
         temp_rnode_data(context.mount_dir) as temp_rnode, \
         docker_network(context, context.docker) as network, \
         started_bootstrap(context=context, network=network, extra_volumes=["{}/bootstrap/rnode:/var/lib/rnode".format(temp_rnode)]) as bootstrap_node, \
@@ -77,9 +71,9 @@ def test_backward_compatible(command_line_options: CommandLineOptions, random_ge
             validator_b.deploy(contract_path, VALIDATOR_B_PRIVATE)
             validator_b.propose()
 
-        assert get_vault_balance(context, bootstrap_node, CEREMONY_MASTER_PRIVATE.get_public_key().get_rev_address(), CEREMONY_MASTER_PRIVATE, 100000, 1) == 1200
-        assert get_vault_balance(context, validator_a, VALIDATOR_A_PRIVATE.get_public_key().get_rev_address(), VALIDATOR_A_PRIVATE, 100000, 1) == 900
-        assert get_vault_balance(context, validator_b, VALIDATOR_B_PRIVATE.get_public_key().get_rev_address(), VALIDATOR_B_PRIVATE, 100000, 1) == 1900
+        get_vault_balance(context, bootstrap_node, CEREMONY_MASTER_PRIVATE.get_public_key().get_rev_address(), CEREMONY_MASTER_PRIVATE, 100000, 1)
+        get_vault_balance(context, validator_a, VALIDATOR_A_PRIVATE.get_public_key().get_rev_address(), VALIDATOR_A_PRIVATE, 100000, 1)
+        get_vault_balance(context, validator_b, VALIDATOR_B_PRIVATE.get_public_key().get_rev_address(), VALIDATOR_B_PRIVATE, 100000, 1)
 
         bootstrap_node.deploy(contract_path, VALIDATOR_B_PRIVATE)
         bootstrap_node.propose()
