@@ -11,7 +11,9 @@ object Dummies {
       justifications: List[Justification] = List.empty,
       shardId: String = "",
       sender: ByteString = ByteString.EMPTY,
-      seqNum: Int = 0
+      seqNum: Int = 0,
+      sig: ByteString = ByteString.EMPTY,
+      sigAlgorithm: String = ""
   ): BlockMessage =
     BlockMessage(
       blockHash = blockHash,
@@ -20,8 +22,8 @@ object Dummies {
       justifications = justifications,
       sender = sender,
       seqNum = seqNum,
-      sig = ByteString.EMPTY,
-      sigAlgorithm = "",
+      sig = sig,
+      sigAlgorithm = sigAlgorithm,
       shardId = shardId
     )
 

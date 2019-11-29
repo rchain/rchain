@@ -82,3 +82,5 @@ integration-tests.log
 *.log
 .virtualenv
 .metals
+.history
+.vscode

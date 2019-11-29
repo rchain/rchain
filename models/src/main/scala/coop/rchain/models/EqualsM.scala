@@ -118,6 +118,8 @@ object EqualM extends EqualMDerivation {
 
   implicit val BlockInfoHash                  = gen[BlockInfo]
   implicit val LightBlockInfoHash             = gen[LightBlockInfo]
+  implicit val BondInfo                       = gen[BondInfo]
+  implicit val DeployInfo                     = gen[DeployInfo]
   implicit val ContinuationsWithBlockInfoHash = gen[ContinuationsWithBlockInfo]
   implicit val DataWithBlockInfoHash          = gen[DataWithBlockInfo]
   implicit val WaitingContinuationInfoHash    = gen[WaitingContinuationInfo]
