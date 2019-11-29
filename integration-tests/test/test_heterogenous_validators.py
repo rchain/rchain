@@ -11,10 +11,10 @@ from .common import (
 )
 from .rnode import (
     bootstrap_connected_peer,
-    extract_validator_stake_from_bonds_validator_str,
     started_bootstrap,
     docker_network
 )
+
 from .wait import (
     wait_for_node_sees_block,
     wait_for_peers_count_at_least,
@@ -52,8 +52,7 @@ def test_heterogenous_validators(command_line_options: CommandLineOptions, rando
             latest_block_hash = bonded_validator.propose()
             # assure the joining validator is not bonded
             block_info = bonded_validator.show_block_parsed(latest_block_hash)
-            block_validators_map = extract_validator_stake_from_bonds_validator_str(block_info['bondsValidatorList'])
-            assert block_validators_map.get(JOINING_VALIDATOR_KEY.get_public_key().to_hex()) is None
+            assert block_info.bonds.get(JOINING_VALIDATOR_KEY.get_public_key().to_hex()) is None
 
             with bootstrap_connected_peer(context=context, bootstrap=bootstrap_node, name='joining-validator', private_key=JOINING_VALIDATOR_KEY) as joining_validator:
                 wait_for_peers_count_at_least(context, bonded_validator, 2)
@@ -81,8 +80,7 @@ def test_heterogenous_validators(command_line_options: CommandLineOptions, rando
                 wait_for_node_sees_block(context, bonded_validator, latest_block_hash)
                 # assure the new joining validator has 100 bonded
                 block_info = bonded_validator.show_block_parsed(latest_block_hash)
-                block_validators_map = extract_validator_stake_from_bonds_validator_str(block_info['bondsValidatorList'])
-                assert block_validators_map.get(JOINING_VALIDATOR_KEY.get_public_key().to_hex()) == bond_amount
+                assert block_info.bonds.get(JOINING_VALIDATOR_KEY.get_public_key().to_hex()) == bond_amount
 
                 vault_remain = get_vault_balance(context, joining_validator, JOINING_VALIDATOR_KEY.get_public_key().get_rev_address(), JOINING_VALIDATOR_KEY, 100000, 1)
                 assert vault_remain < 50000000 - bond_amount

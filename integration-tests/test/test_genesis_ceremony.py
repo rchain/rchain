@@ -73,19 +73,19 @@ def test_successful_genesis_ceremony(command_line_options: CommandLineOptions, r
             ceremony_master_blocks = ceremony_master.show_blocks_parsed(2)
             assert len(ceremony_master_blocks) == 1
             ceremony_master_genesis_block = ceremony_master_blocks[0]
-            assert ceremony_master_genesis_block['mainParentHash'] == ''
+            assert ceremony_master_genesis_block.parents == []
 
             validator_a_blocks = validator_a.show_blocks_parsed(2)
             assert len(validator_a_blocks) == 1
             validator_a_genesis_block = validator_a_blocks[0]
-            assert validator_a_genesis_block['blockHash'] == ceremony_master_genesis_block['blockHash']
-            assert validator_a_genesis_block['mainParentHash'] == ''
+            assert validator_a_genesis_block.block_hash == ceremony_master_genesis_block.block_hash
+            assert validator_a_genesis_block.parents == []
 
             validator_b_blocks = validator_b.show_blocks_parsed(2)
             assert len(validator_b_blocks) == 1
             validator_b_genesis_block = validator_b_blocks[0]
-            assert validator_b_genesis_block['blockHash'] == ceremony_master_genesis_block['blockHash']
-            assert validator_b_genesis_block['mainParentHash'] == ''
+            assert validator_b_genesis_block.block_hash == ceremony_master_genesis_block.block_hash
+            assert validator_b_genesis_block.parents == []
 
             wait_for_approved_block_received_handler_state(context, readonly_a)
 

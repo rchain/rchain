@@ -2,154 +2,366 @@
 
 from rchain.crypto import PrivateKey
 
-from .rnode import (
-    extract_block_hash_from_propose_output,
-    extract_block_count_from_show_blocks,
-    parse_show_blocks_key_value_line,
-    parse_show_blocks_output,
-    parse_show_block_output,
-    extract_validator_stake_from_bonds_validator_str,
-    extract_validator_stake_from_deploy_cost_str,
-    parse_mvdag_str,
-    extract_deploy_id_from_deploy_output,
-)
 from .conftest import (
     make_wallets_file_lines,
 )
 
+from .utils import(
+    extract_block_hash_from_propose_output,
+    extract_block_count_from_show_blocks,
+    parse_show_blocks_output,
+    parse_show_block_output,
+    parse_mvdag_str,
+    extract_deploy_id_from_deploy_output,
+)
+
 
 def test_blocks_count_from_show_blocks() -> None:
-    show_blocks_output = '''
-------------- block 0 ---------------
-blockHash: "630c5372c67cc5400a9eb11459bb240226273a693bbb018df829a3119b26bbf0"
-blockSize: "99746"
-blockNumber: 0
-version: 1
-deployCount: 10
-tupleSpaceHash: "f2fdac324a5fa86f58d3e8162ad5108d9bc75773311d32bb9bc36b74c632793a"
-timestamp: 1
-faultTolerance: 1.0
-mainParentHash: ""
+    show_blocks_output = '''------------- block 0 ---------------
+blockHash: "1b69a62e5d4d57173efd918d828f3308f801a0867a22fc942b4a4775ae896958"
 sender: ""
+seqNum: 0
+sig: ""
+sigAlgorithm: ""
+shardId: "rchain"
+extraBytes: ""
+version: 1
+timestamp: 1575005928241
+headerExtraBytes: ""
+blockNumber: 0
+preStateHash: "6284b05545513fead17c469aeb6baa2a11ed5a86eeda57accaa3bb95d60d5250"
+postStateHash: "de7e15efcdfd0018497bcb40104afc863613619c0e47d5b2bf18c0c6d9e53865"
+bodyExtraBytes: ""
+bonds {
+  validator: "04ab4c08f1986bb40c57d6aa24a650a4122bd6afb6b77990a1447230fc428cefd1d8d51b75812e549e0e4f2289c8fea6389b1d26ce71a7204782d92ea6c9862a35"
+  stake: 15
+}
+bonds {
+  validator: "04ac75929e588b030989d216043d2c98117d50d863c4f6b7115d737509f2df848d7fec7ccae9a7c5a45ad94d151ec4372ab552dd8c27ae9ed09f085377ebee0519"
+  stake: 20
+}
+bonds {
+  validator: "0444f16eee91c879a70a2d53e90b329670580395c8639ffef3f39ef74bdd9364279f877cd3d7cca806c815bd6fc568bf2fc0695a9c2cd6ac3d36fc1f4864243efb"
+  stake: 60
+}
+blockSize: "192205"
+deployCount: 11
+faultTolerance: 0.2631579
 
 -----------------------------------------------------
 
 
-count: 123
+count: 22
+
 
 '''
-    assert extract_block_count_from_show_blocks(show_blocks_output) == 123
-
-
-def test_parse_show_blocks_key_value_line() -> None:
-    assert parse_show_blocks_key_value_line('''blockHash: "cf42c994ff30189c35cbd007719c6bdb361b28c70ae88889a6e54b5431b8f7eb"''') == ('blockHash', 'cf42c994ff30189c35cbd007719c6bdb361b28c70ae88889a6e54b5431b8f7eb')
-    assert parse_show_blocks_key_value_line('''blockSize: "111761"''') == ('blockSize', '111761')
-    assert parse_show_blocks_key_value_line('''blockNumber: 0''') == ('blockNumber', '0')
-    assert parse_show_blocks_key_value_line('''version: 1''') == ('version', '1')
-    assert parse_show_blocks_key_value_line('''deployCount: 10''') == ('deployCount', '10')
-    assert parse_show_blocks_key_value_line('''tupleSpaceHash: "dcd6e349d5b4ca45a11811808ad7757bdfb856b093e02c7e4a2930817f179cdb"''') == ('tupleSpaceHash', 'dcd6e349d5b4ca45a11811808ad7757bdfb856b093e02c7e4a2930817f179cdb')
-    assert parse_show_blocks_key_value_line('''timestamp: 1''') == ('timestamp', '1')
-    assert parse_show_blocks_key_value_line('''faultTolerance: -0.6666667''') == ('faultTolerance', '-0.6666667')
-    assert parse_show_blocks_key_value_line('''mainParentHash: ""''') == ('mainParentHash', '')
-    assert parse_show_blocks_key_value_line('''sender: ""''') == ('sender', '')
+    assert extract_block_count_from_show_blocks(show_blocks_output) == 22
 
 
 def test_parse_show_blocks_output() -> None:
     input = '''
-------------- block 0 ---------------
-blockHash: "cf42c994ff30189c35cbd007719c6bdb361b28c70ae88889a6e54b5431b8f7eb"
-blockSize: "111761"
-blockNumber: 0
+------------- block 1 ---------------
+blockHash: "91979d8509e6ff886d54475e7519f23631205957cb3396bb9d1e0371aa01b02a"
+sender: "0444f16eee91c879a70a2d53e90b329670580395c8639ffef3f39ef74bdd9364279f877cd3d7cca806c815bd6fc568bf2fc0695a9c2cd6ac3d36fc1f4864243efb"
+seqNum: 1
+sig: "304502210086fcc0e8e0cb391275196711f11705cddf6724498965b68a34705d3631290bed022012c661bc2102c61443ed7649dbdcf76aa35780153f90210ddf69a708467c5bbf"
+sigAlgorithm: "secp256k1"
+shardId: "rchain"
+extraBytes: ""
 version: 1
-deployCount: 10
-tupleSpaceHash: "dcd6e349d5b4ca45a11811808ad7757bdfb856b093e02c7e4a2930817f179cdb"
-timestamp: 1
-faultTolerance: -0.6666667
-mainParentHash: ""
-sender: ""
+timestamp: 1575009346798
+headerExtraBytes: ""
+parentsHashList: "2a7f8806968fb93f9a74e52502f5d7ac8f84c6a6bc303f692cb1b9e63bdca36c"
+blockNumber: 1
+preStateHash: "de7e15efcdfd0018497bcb40104afc863613619c0e47d5b2bf18c0c6d9e53865"
+postStateHash: "ce921313bee2afe2f20818931f0580b2fa86594eb8eaba3ff2bc3686d703e8b5"
+bodyExtraBytes: ""
+bonds {
+  validator: "0444f16eee91c879a70a2d53e90b329670580395c8639ffef3f39ef74bdd9364279f877cd3d7cca806c815bd6fc568bf2fc0695a9c2cd6ac3d36fc1f4864243efb"
+  stake: 60
+}
+bonds {
+  validator: "04ab4c08f1986bb40c57d6aa24a650a4122bd6afb6b77990a1447230fc428cefd1d8d51b75812e549e0e4f2289c8fea6389b1d26ce71a7204782d92ea6c9862a35"
+  stake: 15
+}
+bonds {
+  validator: "04ac75929e588b030989d216043d2c98117d50d863c4f6b7115d737509f2df848d7fec7ccae9a7c5a45ad94d151ec4372ab552dd8c27ae9ed09f085377ebee0519"
+  stake: 20
+}
+blockSize: "20939"
+deployCount: 1
+faultTolerance: 0.57894737
 
 -----------------------------------------------------
 
 
-count: 1
+------------- block 0 ---------------
+blockHash: "2a7f8806968fb93f9a74e52502f5d7ac8f84c6a6bc303f692cb1b9e63bdca36c"
+sender: ""
+seqNum: 0
+sig: ""
+sigAlgorithm: ""
+shardId: "rchain"
+extraBytes: ""
+version: 1
+timestamp: 1575008703176
+headerExtraBytes: ""
+blockNumber: 0
+preStateHash: "6284b05545513fead17c469aeb6baa2a11ed5a86eeda57accaa3bb95d60d5250"
+postStateHash: "de7e15efcdfd0018497bcb40104afc863613619c0e47d5b2bf18c0c6d9e53865"
+bodyExtraBytes: ""
+bonds {
+  validator: "04ab4c08f1986bb40c57d6aa24a650a4122bd6afb6b77990a1447230fc428cefd1d8d51b75812e549e0e4f2289c8fea6389b1d26ce71a7204782d92ea6c9862a35"
+  stake: 15
+}
+bonds {
+  validator: "04ac75929e588b030989d216043d2c98117d50d863c4f6b7115d737509f2df848d7fec7ccae9a7c5a45ad94d151ec4372ab552dd8c27ae9ed09f085377ebee0519"
+  stake: 20
+}
+bonds {
+  validator: "0444f16eee91c879a70a2d53e90b329670580395c8639ffef3f39ef74bdd9364279f877cd3d7cca806c815bd6fc568bf2fc0695a9c2cd6ac3d36fc1f4864243efb"
+  stake: 60
+}
+blockSize: "192205"
+deployCount: 11
+faultTolerance: 1.0
+
+-----------------------------------------------------
+
+
+count: 2
+
 
 '''
 
-    output = parse_show_blocks_output(input)
-    assert len(output) == 1
-    block = output[0]
-    assert block['blockHash'] == 'cf42c994ff30189c35cbd007719c6bdb361b28c70ae88889a6e54b5431b8f7eb'
-    assert block['blockSize'] == '111761'
-    assert block['blockNumber'] == '0'
-    assert block['version'] == '1'
-    assert block['deployCount'] == '10'
-    assert block['tupleSpaceHash'] == 'dcd6e349d5b4ca45a11811808ad7757bdfb856b093e02c7e4a2930817f179cdb'
-    assert block['timestamp'] == '1'
-    assert block['faultTolerance'] == '-0.6666667'
-    assert block['mainParentHash'] == ''
-    assert block['sender'] == ''
+    blocks = parse_show_blocks_output(input)
+    assert len(blocks) == 2
+    block1 = blocks[0]
+    assert block1.block_hash == '91979d8509e6ff886d54475e7519f23631205957cb3396bb9d1e0371aa01b02a'
+    assert block1.sender == '0444f16eee91c879a70a2d53e90b329670580395c8639ffef3f39ef74bdd9364279f877cd3d7cca806c815bd6fc568bf2fc0695a9c2cd6ac3d36fc1f4864243efb'
+    assert block1.seq_num == 1
+    assert block1.sig == '304502210086fcc0e8e0cb391275196711f11705cddf6724498965b68a34705d3631290bed022012c661bc2102c61443ed7649dbdcf76aa35780153f90210ddf69a708467c5bbf'
+    assert block1.sig_algorithm == 'secp256k1'
+    assert block1.shard_id == 'rchain'
+    assert block1.extra_bytes == ''
+    assert block1.version == '1'
+    assert block1.timestamp == 1575009346798
+    assert block1.header_extra_bytes == ''
+    assert block1.parents == ['2a7f8806968fb93f9a74e52502f5d7ac8f84c6a6bc303f692cb1b9e63bdca36c']
+    assert block1.block_number == 1
+    assert block1.pre_state_hash == 'de7e15efcdfd0018497bcb40104afc863613619c0e47d5b2bf18c0c6d9e53865'
+    assert block1.post_state_hash == 'ce921313bee2afe2f20818931f0580b2fa86594eb8eaba3ff2bc3686d703e8b5'
+    assert block1.body_extra_bytes == ''
+    assert block1.block_size == 20939
+    assert block1.deploy_count == 1
+    assert block1.fault_tolerance == 0.57894737
+    assert block1.bonds == {
+        '0444f16eee91c879a70a2d53e90b329670580395c8639ffef3f39ef74bdd9364279f877cd3d7cca806c815bd6fc568bf2fc0695a9c2cd6ac3d36fc1f4864243efb': 60,
+        '04ab4c08f1986bb40c57d6aa24a650a4122bd6afb6b77990a1447230fc428cefd1d8d51b75812e549e0e4f2289c8fea6389b1d26ce71a7204782d92ea6c9862a35': 15,
+        '04ac75929e588b030989d216043d2c98117d50d863c4f6b7115d737509f2df848d7fec7ccae9a7c5a45ad94d151ec4372ab552dd8c27ae9ed09f085377ebee0519': 20
+        }
+
+    block2 = blocks[1]
+    assert block2.block_hash == '2a7f8806968fb93f9a74e52502f5d7ac8f84c6a6bc303f692cb1b9e63bdca36c'
+    assert block2.sender == ''
+    assert block2.seq_num == 0
+    assert block2.sig == ''
+    assert block2.sig_algorithm == ''
+    assert block2.shard_id == 'rchain'
+    assert block2.extra_bytes == ''
+    assert block2.version == '1'
+    assert block2.timestamp == 1575008703176
+    assert block2.header_extra_bytes == ''
+    assert block2.parents == []
+    assert block2.block_number == 0
+    assert block2.pre_state_hash == '6284b05545513fead17c469aeb6baa2a11ed5a86eeda57accaa3bb95d60d5250'
+    assert block2.post_state_hash == 'de7e15efcdfd0018497bcb40104afc863613619c0e47d5b2bf18c0c6d9e53865'
+    assert block2.body_extra_bytes == ''
+    assert block2.block_size == 192205
+    assert block2.deploy_count == 11
+    assert block2.fault_tolerance == 1.0
+    assert block2.bonds == {
+        '0444f16eee91c879a70a2d53e90b329670580395c8639ffef3f39ef74bdd9364279f877cd3d7cca806c815bd6fc568bf2fc0695a9c2cd6ac3d36fc1f4864243efb': 60,
+        '04ab4c08f1986bb40c57d6aa24a650a4122bd6afb6b77990a1447230fc428cefd1d8d51b75812e549e0e4f2289c8fea6389b1d26ce71a7204782d92ea6c9862a35': 15,
+        '04ac75929e588b030989d216043d2c98117d50d863c4f6b7115d737509f2df848d7fec7ccae9a7c5a45ad94d151ec4372ab552dd8c27ae9ed09f085377ebee0519': 20
+        }
+
 
 def test_parse_show_block_output() -> None:
-    input = r'''status: "Success"
-blockInfo {
-  blockHash: "fd219ca26e55e671168fc907490a04a1a89651693544fabf4e6b74478ec2b337"
-  blockSize: "115078"
-  blockNumber: 0
-  version: 1
-  deployCount: 10
-  tupleSpaceHash: "fc138f97493733c5cde8b8d4284326023e6ce07e6e858cdfe83fa70bcb5e9550"
-  timestamp: 1
-  faultTolerance: 0.14893617
-  mainParentHash: ""
-  sender: ""
+    input = r'''blockInfo {
+  blockHash: "b3e8560f42451ee20f62c3d3bf52d00aa12131876bdf4fb2ddb6ac80937edbaf"
+  sender: "04ac75929e588b030989d216043d2c98117d50d863c4f6b7115d737509f2df848d7fec7ccae9a7c5a45ad94d151ec4372ab552dd8c27ae9ed09f085377ebee0519"
+  seqNum: 1
+  sig: "304502210086be15066503ab4cd0707f618e90eb65036eed374aa8f46c789939b93cc280c702201987cca65b56517e38629718063cb4e17f7dc07a35593ff27a19e58838b22fe8"
+  sigAlgorithm: "secp256k1"
   shardId: "rchain"
-  bondsValidatorList: "02ab69930f74b931209df3ce54e3993674ab3e7c98f715608a5e74048b332821: 43"
-  bondsValidatorList: "043c56051a613623cd024976427c073fe9c198ac2b98315a4baff9d333fbb42e: 15"
-  bondsValidatorList: "1cd8bf79a2c1bd0afa160f6cdfeb8597257e48135c9bf5e4823f2875a1492c97: 2"
-  bondsValidatorList: "23bb89653c1d43578ed421e655e7a0ed9f3ed2e7eab820ad7739277e380cafa3: 81"
-  deployCost: "User: , Cost: 132 DeployData #1553171134886 -- new x in { x!(0) }\\n}"
-  deployCost: "User: , Cost: 132 DeployData #1553171478932 -- new x in { x!(0) }\\n}"
+  extraBytes: ""
+  version: 1
+  timestamp: 1574992953104
+  headerExtraBytes: ""
+  parentsHashList: "a0e9b7870112390da059ecf1d23636efb672a5e23aacb8ac9ade5cbd60ea394b"
+  parentsHashList: "a0e9b7870112390da059ecf1d23636efb672a5e23aacb8ac9ade5cbd60ea394c"
+  blockNumber: 1
+  preStateHash: "d602762105b18cbb30747979d860657f7dd3919791bdc5db237ece9c607933a8"
+  postStateHash: "62bfc991fdc775b92252548fe06ddecdff2be024120d149a9596b3f334d798f1"
+  bodyExtraBytes: ""
+  bonds {
+    validator: "0444f16eee91c879a70a2d53e90b329670580395c8639ffef3f39ef74bdd9364279f877cd3d7cca806c815bd6fc568bf2fc0695a9c2cd6ac3d36fc1f4864243efb"
+    stake: 79
+  }
+  bonds {
+    validator: "04ab4c08f1986bb40c57d6aa24a650a4122bd6afb6b77990a1447230fc428cefd1d8d51b75812e549e0e4f2289c8fea6389b1d26ce71a7204782d92ea6c9862a35"
+    stake: 52
+  }
+  bonds {
+    validator: "04ac75929e588b030989d216043d2c98117d50d863c4f6b7115d737509f2df848d7fec7ccae9a7c5a45ad94d151ec4372ab552dd8c27ae9ed09f085377ebee0519"
+    stake: 56
+  }
+  blockSize: "20939"
+  deployCount: 1
+  faultTolerance: -1.0
+}
+deploys {
+  deployer: "04ac75929e588b030989d216043d2c98117d50d863c4f6b7115d737509f2df848d7fec7ccae9a7c5a45ad94d151ec4372ab552dd8c27ae9ed09f085377ebee0519"
+  term: "@0!(2)"
+  timestamp: 1574992934035
+  sig: "3045022100994d74bfdb230d2af95d2090e3d9cd9020eb9c70224c2285585ea0f9a3aa406c022017ed317fe3e721626a9a1dea1804b0aeea5c32b627495dbbc8458e07ae5c1605"
+  sigAlgorithm: "secp256k1"
+  phloPrice: 1
+  phloLimit: 100000
+  validAfterBlockNumber: -1
+  cost: 0
+  errored: false
+  systemDeployError: "Deploy payment failed: Insufficient funds"
 }
 
 '''
+    block = parse_show_block_output(input)
+    assert block.block_hash == 'b3e8560f42451ee20f62c3d3bf52d00aa12131876bdf4fb2ddb6ac80937edbaf'
+    assert block.sender == '04ac75929e588b030989d216043d2c98117d50d863c4f6b7115d737509f2df848d7fec7ccae9a7c5a45ad94d151ec4372ab552dd8c27ae9ed09f085377ebee0519'
+    assert block.seq_num == 1
+    assert block.sig == '304502210086be15066503ab4cd0707f618e90eb65036eed374aa8f46c789939b93cc280c702201987cca65b56517e38629718063cb4e17f7dc07a35593ff27a19e58838b22fe8'
+    assert block.sig_algorithm == 'secp256k1'
+    assert block.shard_id == 'rchain'
+    assert block.extra_bytes == ''
+    assert block.version == '1'
+    assert block.timestamp == 1574992953104
+    assert block.header_extra_bytes == ''
+    assert block.block_number == 1
+    assert block.pre_state_hash == 'd602762105b18cbb30747979d860657f7dd3919791bdc5db237ece9c607933a8'
+    assert block.post_state_hash == '62bfc991fdc775b92252548fe06ddecdff2be024120d149a9596b3f334d798f1'
+    assert block.body_extra_bytes == ''
+    assert block.block_size == 20939
+    assert block.deploy_count == 1
+    assert block.fault_tolerance == -1.0
+    assert block.parents == ['a0e9b7870112390da059ecf1d23636efb672a5e23aacb8ac9ade5cbd60ea394b', 'a0e9b7870112390da059ecf1d23636efb672a5e23aacb8ac9ade5cbd60ea394c']
+    assert block.bonds == {
+        '0444f16eee91c879a70a2d53e90b329670580395c8639ffef3f39ef74bdd9364279f877cd3d7cca806c815bd6fc568bf2fc0695a9c2cd6ac3d36fc1f4864243efb': 79,
+        '04ab4c08f1986bb40c57d6aa24a650a4122bd6afb6b77990a1447230fc428cefd1d8d51b75812e549e0e4f2289c8fea6389b1d26ce71a7204782d92ea6c9862a35': 52,
+        '04ac75929e588b030989d216043d2c98117d50d863c4f6b7115d737509f2df848d7fec7ccae9a7c5a45ad94d151ec4372ab552dd8c27ae9ed09f085377ebee0519': 56
+        }
 
-    output = parse_show_block_output(input)
+    deploy = block.deploys[0]
+    assert deploy.deployer == '04ac75929e588b030989d216043d2c98117d50d863c4f6b7115d737509f2df848d7fec7ccae9a7c5a45ad94d151ec4372ab552dd8c27ae9ed09f085377ebee0519'
+    assert deploy.term == "@0!(2)"
+    assert deploy.timestamp == 1574992934035
+    assert deploy.sig == '3045022100994d74bfdb230d2af95d2090e3d9cd9020eb9c70224c2285585ea0f9a3aa406c022017ed317fe3e721626a9a1dea1804b0aeea5c32b627495dbbc8458e07ae5c1605'
+    assert deploy.sig_algorithm == 'secp256k1'
+    assert deploy.phlo_price == 1
+    assert deploy.phlo_limit == 100000
+    assert deploy.valid_after_block_number == -1
+    assert deploy.cost == 0
+    assert deploy.error == 'false'
+    assert deploy.system_deploy_error == 'Deploy payment failed: Insufficient funds'
 
-    assert output['blockHash'] == 'fd219ca26e55e671168fc907490a04a1a89651693544fabf4e6b74478ec2b337'
-    assert output['blockSize'] == '115078'
-    assert output['blockNumber'] == '0'
-    assert output['version'] == '1'
-    assert output['deployCount'] == '10'
-    assert output['tupleSpaceHash'] == 'fc138f97493733c5cde8b8d4284326023e6ce07e6e858cdfe83fa70bcb5e9550'
-    assert output['timestamp'] == '1'
-    assert output['faultTolerance'] == '0.14893617'
-    assert output['mainParentHash'] == ''
-    assert output['sender'] == ''
-    assert output['shardId'] == 'rchain'
-    assert output['bondsValidatorList'] == '02ab69930f74b931209df3ce54e3993674ab3e7c98f715608a5e74048b332821: 43#$043c56051a613623cd024976427c073fe9c198ac2b98315a4baff9d333fbb42e: 15#$1cd8bf79a2c1bd0afa160f6cdfeb8597257e48135c9bf5e4823f2875a1492c97: 2#$23bb89653c1d43578ed421e655e7a0ed9f3ed2e7eab820ad7739277e380cafa3: 81'
-    assert output['deployCost'] == r'User: , Cost: 132 DeployData #1553171134886 -- new x in { x!(0) }\\n}#$User: , Cost: 132 DeployData #1553171478932 -- new x in { x!(0) }\\n}'
+def test_parse_show_block_output_without_parents() -> None:
+    input = r'''blockInfo {
+  blockHash: "b3e8560f42451ee20f62c3d3bf52d00aa12131876bdf4fb2ddb6ac80937edbaf"
+  sender: "04ac75929e588b030989d216043d2c98117d50d863c4f6b7115d737509f2df848d7fec7ccae9a7c5a45ad94d151ec4372ab552dd8c27ae9ed09f085377ebee0519"
+  seqNum: 1
+  sig: "304502210086be15066503ab4cd0707f618e90eb65036eed374aa8f46c789939b93cc280c702201987cca65b56517e38629718063cb4e17f7dc07a35593ff27a19e58838b22fe8"
+  sigAlgorithm: "secp256k1"
+  shardId: "rchain"
+  extraBytes: ""
+  version: 1
+  timestamp: 1574992953104
+  headerExtraBytes: ""
+  blockNumber: 1
+  preStateHash: "d602762105b18cbb30747979d860657f7dd3919791bdc5db237ece9c607933a8"
+  postStateHash: "62bfc991fdc775b92252548fe06ddecdff2be024120d149a9596b3f334d798f1"
+  bodyExtraBytes: ""
+  bonds {
+    validator: "0444f16eee91c879a70a2d53e90b329670580395c8639ffef3f39ef74bdd9364279f877cd3d7cca806c815bd6fc568bf2fc0695a9c2cd6ac3d36fc1f4864243efb"
+    stake: 79
+  }
+  bonds {
+    validator: "04ab4c08f1986bb40c57d6aa24a650a4122bd6afb6b77990a1447230fc428cefd1d8d51b75812e549e0e4f2289c8fea6389b1d26ce71a7204782d92ea6c9862a35"
+    stake: 52
+  }
+  bonds {
+    validator: "04ac75929e588b030989d216043d2c98117d50d863c4f6b7115d737509f2df848d7fec7ccae9a7c5a45ad94d151ec4372ab552dd8c27ae9ed09f085377ebee0519"
+    stake: 56
+  }
+  blockSize: "20939"
+  deployCount: 1
+  faultTolerance: -1.0
+}
+deploys {
+  deployer: "04ac75929e588b030989d216043d2c98117d50d863c4f6b7115d737509f2df848d7fec7ccae9a7c5a45ad94d151ec4372ab552dd8c27ae9ed09f085377ebee0519"
+  term: "@0!(2)"
+  timestamp: 1574992934035
+  sig: "3045022100994d74bfdb230d2af95d2090e3d9cd9020eb9c70224c2285585ea0f9a3aa406c022017ed317fe3e721626a9a1dea1804b0aeea5c32b627495dbbc8458e07ae5c1605"
+  sigAlgorithm: "secp256k1"
+  phloPrice: 1
+  phloLimit: 100000
+  validAfterBlockNumber: -1
+  cost: 0
+  errored: false
+  systemDeployError: "Deploy payment failed: Insufficient funds"
+}
 
+'''
+    block = parse_show_block_output(input)
+    assert block.block_hash == 'b3e8560f42451ee20f62c3d3bf52d00aa12131876bdf4fb2ddb6ac80937edbaf'
+    assert block.sender == '04ac75929e588b030989d216043d2c98117d50d863c4f6b7115d737509f2df848d7fec7ccae9a7c5a45ad94d151ec4372ab552dd8c27ae9ed09f085377ebee0519'
+    assert block.seq_num == 1
+    assert block.sig == '304502210086be15066503ab4cd0707f618e90eb65036eed374aa8f46c789939b93cc280c702201987cca65b56517e38629718063cb4e17f7dc07a35593ff27a19e58838b22fe8'
+    assert block.sig_algorithm == 'secp256k1'
+    assert block.shard_id == 'rchain'
+    assert block.extra_bytes == ''
+    assert block.version == '1'
+    assert block.timestamp == 1574992953104
+    assert block.header_extra_bytes == ''
+    assert block.block_number == 1
+    assert block.pre_state_hash == 'd602762105b18cbb30747979d860657f7dd3919791bdc5db237ece9c607933a8'
+    assert block.post_state_hash == '62bfc991fdc775b92252548fe06ddecdff2be024120d149a9596b3f334d798f1'
+    assert block.body_extra_bytes == ''
+    assert block.block_size == 20939
+    assert block.deploy_count == 1
+    assert block.fault_tolerance == -1.0
+    assert block.parents == []
+    assert block.bonds == {
+        '0444f16eee91c879a70a2d53e90b329670580395c8639ffef3f39ef74bdd9364279f877cd3d7cca806c815bd6fc568bf2fc0695a9c2cd6ac3d36fc1f4864243efb': 79,
+        '04ab4c08f1986bb40c57d6aa24a650a4122bd6afb6b77990a1447230fc428cefd1d8d51b75812e549e0e4f2289c8fea6389b1d26ce71a7204782d92ea6c9862a35': 52,
+        '04ac75929e588b030989d216043d2c98117d50d863c4f6b7115d737509f2df848d7fec7ccae9a7c5a45ad94d151ec4372ab552dd8c27ae9ed09f085377ebee0519': 56
+        }
 
-def test_extract_validator_stake_from_bonds_validator_str() -> None:
-    input = r'''02ab69930f74b931209df3ce54e3993674ab3e7c98f715608a5e74048b332821: 43#$043c56051a613623cd024976427c073fe9c198ac2b98315a4baff9d333fbb42e: 15#$1cd8bf79a2c1bd0afa160f6cdfeb8597257e48135c9bf5e4823f2875a1492c97: 2#$23bb89653c1d43578ed421e655e7a0ed9f3ed2e7eab820ad7739277e380cafa3: 81'''
-    validator_stake = extract_validator_stake_from_bonds_validator_str(input)
-
-    assert validator_stake['02ab69930f74b931209df3ce54e3993674ab3e7c98f715608a5e74048b332821'] == 43
-    assert validator_stake['043c56051a613623cd024976427c073fe9c198ac2b98315a4baff9d333fbb42e'] == 15
-    assert validator_stake['1cd8bf79a2c1bd0afa160f6cdfeb8597257e48135c9bf5e4823f2875a1492c97'] == 2
-    assert validator_stake['23bb89653c1d43578ed421e655e7a0ed9f3ed2e7eab820ad7739277e380cafa3'] == 81
+    deploy = block.deploys[0]
+    assert deploy.deployer == '04ac75929e588b030989d216043d2c98117d50d863c4f6b7115d737509f2df848d7fec7ccae9a7c5a45ad94d151ec4372ab552dd8c27ae9ed09f085377ebee0519'
+    assert deploy.term == "@0!(2)"
+    assert deploy.timestamp == 1574992934035
+    assert deploy.sig == '3045022100994d74bfdb230d2af95d2090e3d9cd9020eb9c70224c2285585ea0f9a3aa406c022017ed317fe3e721626a9a1dea1804b0aeea5c32b627495dbbc8458e07ae5c1605'
+    assert deploy.sig_algorithm == 'secp256k1'
+    assert deploy.phlo_price == 1
+    assert deploy.phlo_limit == 100000
+    assert deploy.valid_after_block_number == -1
+    assert deploy.cost == 0
+    assert deploy.error == 'false'
+    assert deploy.system_deploy_error == 'Deploy payment failed: Insufficient funds'
 
 def test_extract_block_hash_from_propose_output() -> None:
     response = "Response: Success! Block a91208047c created and added.\n"
     assert extract_block_hash_from_propose_output(response) == "a91208047c"
-
-
-def test_extract_validator_stake_from_deploy_cost_str() -> None:
-    input = r'User: 04967539c162c230d6bc41f49913cb0ea2cf16f8145a0e0b369ebd5e751f983774e94d890bd0720586993d6c01945f50e846fb07e84939576d1694be40c4a771a9, Cost: PCost(97) DeployData #1574661250093 -- @0!(2), Sig: 3045022100d1ecc0e9a7...c0513c174a45702e5435, SigAlgorithm: secp256k1, ValidAfterBlockNumber: -1#$User: 04928375c162c230d6bc41f49913cb0ea2cf16f8145a0e0b369ebd5e751f983774e94d890bd0720586993d6c01945f50e846fb07e84939576d1694be40c4a771a9, Cost: PCost(197) DeployData #1574661254133 -- @0!(2) | @1!(1), Sig: 3044022013647ddbbd20...9a5ab73e799e0ec8a366, SigAlgorithm: secp256k1, ValidAfterBlockNumber: -1'
-    deploy_cost = extract_validator_stake_from_deploy_cost_str(input)
-    assert deploy_cost['04967539c162c230d6bc41f49913cb0ea2cf16f8145a0e0b369ebd5e751f983774e94d890bd0720586993d6c01945f50e846fb07e84939576d1694be40c4a771a9'] == 97
-    assert deploy_cost['04928375c162c230d6bc41f49913cb0ea2cf16f8145a0e0b369ebd5e751f983774e94d890bd0720586993d6c01945f50e846fb07e84939576d1694be40c4a771a9'] == 197
-
 
 
 def test_make_wallets_file_lines() -> None:

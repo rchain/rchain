@@ -21,8 +21,7 @@ from .node_client import (NodeClient,
                           node_protocol_client)
 from .rnode import (Node,
                     bootstrap_connected_peer,
-                    docker_network_with_started_bootstrap,
-                    extract_validator_stake_from_bonds_validator_str)
+                    docker_network_with_started_bootstrap)
 from .wait import (wait_for_log_match,
                    wait_for_node_sees_block)
 
@@ -76,7 +75,7 @@ def test_slash_invalid_block_hash(command_line_options: CommandLineOptions, rand
 
         block_info = validator1.show_block_parsed(blockhash)
 
-        block_msg = client.block_request(block_info['blockHash'], validator1)
+        block_msg = client.block_request(block_info.block_hash, validator1)
         evil_block_hash = generate_block_hash()
 
         block_msg.blockHash = evil_block_hash
@@ -93,7 +92,7 @@ def test_slash_invalid_block_hash(command_line_options: CommandLineOptions, rand
         slashed_block_hash = validator2.propose()
 
         block_info = validator2.show_block_parsed(slashed_block_hash)
-        bonds_validators = extract_validator_stake_from_bonds_validator_str(block_info['bondsValidatorList'])
+        bonds_validators = block_info.bonds
         assert bonds_validators[BONDED_VALIDATOR_KEY_1.get_public_key().to_hex()] == 0
 
 
@@ -112,7 +111,7 @@ def test_slash_invalid_block_number(command_line_options: CommandLineOptions, ra
 
         block_info = validator1.show_block_parsed(blockhash)
 
-        block_msg = client.block_request(block_info['blockHash'], validator1)
+        block_msg = client.block_request(block_info.block_hash, validator1)
 
         invalid_block_num_block = BlockMessage()
         invalid_block_num_block.CopyFrom(block_msg)
@@ -129,7 +128,7 @@ def test_slash_invalid_block_number(command_line_options: CommandLineOptions, ra
         slashed_block_hash = validator2.propose()
 
         block_info = validator2.show_block_parsed(slashed_block_hash)
-        bonds_validators = extract_validator_stake_from_bonds_validator_str(block_info['bondsValidatorList'])
+        bonds_validators = block_info.bonds
 
         assert bonds_validators[BONDED_VALIDATOR_KEY_1.get_public_key().to_hex()] == 0
 
@@ -153,7 +152,7 @@ def test_slash_invalid_block_seq(command_line_options: CommandLineOptions, rando
 
         block_info = validator1.show_block_parsed(blockhash)
 
-        block_msg = client.block_request(block_info['blockHash'], validator1)
+        block_msg = client.block_request(block_info.block_hash, validator1)
 
         invalid_block_num_block = BlockMessage()
         invalid_block_num_block.CopyFrom(block_msg)
@@ -173,7 +172,7 @@ def test_slash_invalid_block_seq(command_line_options: CommandLineOptions, rando
         slashed_block_hash = validator2.propose()
 
         block_info = validator2.show_block_parsed(slashed_block_hash)
-        bonds_validators = extract_validator_stake_from_bonds_validator_str(block_info['bondsValidatorList'])
+        bonds_validators = block_info.bonds
 
         assert bonds_validators[BONDED_VALIDATOR_KEY_1.get_public_key().to_hex()] == 0.0
 
@@ -203,7 +202,7 @@ def test_slash_justification_not_correct(command_line_options: CommandLineOption
 
         block_info = validator1.show_block_parsed(blockhash)
 
-        block_msg = client.block_request(block_info['blockHash'], validator1)
+        block_msg = client.block_request(block_info.block_hash, validator1)
 
         invalid_justifications_block = BlockMessage()
         invalid_justifications_block.CopyFrom(block_msg)
@@ -224,7 +223,7 @@ def test_slash_justification_not_correct(command_line_options: CommandLineOption
         slashed_block_hash = validator2.propose()
 
         block_info = validator2.show_block_parsed(slashed_block_hash)
-        bonds_validators = extract_validator_stake_from_bonds_validator_str(block_info['bondsValidatorList'])
+        bonds_validators = block_info.bonds
 
         assert bonds_validators[BONDED_VALIDATOR_KEY_1.get_public_key().to_hex()] == 0.0
 
@@ -254,7 +253,7 @@ def test_slash_invalid_validator_approve_evil_block(command_line_options: Comman
 
         block_info = validator1.show_block_parsed(blockhash)
 
-        block_msg = client.block_request(block_info['blockHash'], validator1)
+        block_msg = client.block_request(block_info.block_hash, validator1)
 
         evil_block_hash = generate_block_hash()
 
@@ -267,12 +266,12 @@ def test_slash_invalid_validator_approve_evil_block(command_line_options: Comman
         invalid_block.header.timestamp = int(time.time()*1000)  # pylint: disable=maybe-no-member
         invalid_block.sig = BONDED_VALIDATOR_KEY_1.sign_block_hash(evil_block_hash)
         invalid_block.header.ClearField("parentsHashList")  # pylint: disable=maybe-no-member
-        invalid_block.header.parentsHashList.append(bytes.fromhex(genesis_block['blockHash']))  # pylint: disable=maybe-no-member
+        invalid_block.header.parentsHashList.append(bytes.fromhex(genesis_block.block_hash))  # pylint: disable=maybe-no-member
         invalid_block.ClearField("justifications")
         invalid_block.justifications.extend([  # pylint: disable=maybe-no-member
             Justification(validator=BONDED_VALIDATOR_KEY_1.get_public_key().to_bytes(), latestBlockHash=block_msg.blockHash),
-            Justification(validator=BONDED_VALIDATOR_KEY_2.get_public_key().to_bytes(), latestBlockHash=bytes.fromhex(genesis_block['blockHash'])),
-            Justification(validator=BOOTSTRAP_NODE_KEY.get_public_key().to_bytes(), latestBlockHash=bytes.fromhex(genesis_block['blockHash'])),
+            Justification(validator=BONDED_VALIDATOR_KEY_2.get_public_key().to_bytes(), latestBlockHash=bytes.fromhex(genesis_block.block_hash)),
+            Justification(validator=BOOTSTRAP_NODE_KEY.get_public_key().to_bytes(), latestBlockHash=bytes.fromhex(genesis_block.block_hash)),
         ])
         client.send_block(invalid_block, validator2)
 
@@ -287,13 +286,13 @@ def test_slash_invalid_validator_approve_evil_block(command_line_options: Comman
         block_not_slash_invalid_block.ClearField("justifications")
         block_not_slash_invalid_block.justifications.extend([  # pylint: disable=maybe-no-member
             Justification(validator=BONDED_VALIDATOR_KEY_1.get_public_key().to_bytes(), latestBlockHash=evil_block_hash),
-            Justification(validator=BONDED_VALIDATOR_KEY_2.get_public_key().to_bytes(), latestBlockHash=bytes.fromhex(genesis_block['blockHash'])),
-            Justification(validator=BOOTSTRAP_NODE_KEY.get_public_key().to_bytes(), latestBlockHash=bytes.fromhex(genesis_block['blockHash'])),
+            Justification(validator=BONDED_VALIDATOR_KEY_2.get_public_key().to_bytes(), latestBlockHash=bytes.fromhex(genesis_block.block_hash)),
+            Justification(validator=BOOTSTRAP_NODE_KEY.get_public_key().to_bytes(), latestBlockHash=bytes.fromhex(genesis_block.block_hash)),
         ])
         deploy_data = create_deploy_data(BONDED_VALIDATOR_KEY_2, Path("../rholang/examples/tut-hello.rho").read_text(), 1, 1000000)
         block_not_slash_invalid_block.body.deploys[0].deploy.CopyFrom(deploy_data)  # pylint: disable=maybe-no-member
         block_not_slash_invalid_block.header.ClearField("parentsHashList")  # pylint: disable=maybe-no-member
-        block_not_slash_invalid_block.header.parentsHashList.append(bytes.fromhex(genesis_block['blockHash']))  # pylint: disable=maybe-no-member
+        block_not_slash_invalid_block.header.parentsHashList.append(bytes.fromhex(genesis_block.block_hash))  # pylint: disable=maybe-no-member
         block_not_slash_invalid_block.header.timestamp = int(time.time()*1000)  # pylint: disable=maybe-no-member
         invalid_block_hash = gen_block_hash_from_block(block_not_slash_invalid_block)
         block_not_slash_invalid_block.sig = BONDED_VALIDATOR_KEY_2.sign_block_hash(invalid_block_hash)
@@ -310,7 +309,7 @@ def test_slash_invalid_validator_approve_evil_block(command_line_options: Comman
         validator3.deploy(contract, BOOTSTRAP_NODE_KEY)
         slashed_blockhash = validator3.propose()
         slashed_block_info = validator3.show_block_parsed(slashed_blockhash)
-        bonds_validators = extract_validator_stake_from_bonds_validator_str(slashed_block_info['bondsValidatorList'])
+        bonds_validators = slashed_block_info.bonds
 
         assert bonds_validators[BONDED_VALIDATOR_KEY_1.get_public_key().to_hex()] == 0
         assert bonds_validators[BONDED_VALIDATOR_KEY_2.get_public_key().to_hex()] == 0
@@ -352,13 +351,13 @@ def test_slash_GHOST_disobeyed(command_line_options: CommandLineOptions, random_
 
         block_info1 = validator1.show_block_parsed(blockhash1)
         block_info3 = validator1.show_block_parsed(blockhash3)
-        block_msg3 = client.block_request(block_info3['blockHash'], validator1)
+        block_msg3 = client.block_request(block_info3.block_hash, validator1)
 
         invalid_block =  BlockMessage()
         invalid_block.CopyFrom(block_msg3)
         invalid_block.header.ClearField("parentsHashList")  # pylint: disable=maybe-no-member
         invalid_block.body.state.blockNumber = 2  # pylint: disable=maybe-no-member
-        invalid_block.header.parentsHashList.append(bytes.fromhex(block_info1['blockHash']))  # pylint: disable=maybe-no-member
+        invalid_block.header.parentsHashList.append(bytes.fromhex(block_info1.block_hash))  # pylint: disable=maybe-no-member
         invalid_block.header.timestamp = int(time.time()*1000)  # pylint: disable=maybe-no-member
         deploy_data = create_deploy_data(BONDED_VALIDATOR_KEY_2, Path("../rholang/examples/tut-hello.rho").read_text(), 1, 1000000)
         invalid_block.body.deploys[0].deploy.CopyFrom(deploy_data)  # pylint: disable=maybe-no-member
@@ -373,5 +372,5 @@ def test_slash_GHOST_disobeyed(command_line_options: CommandLineOptions, random_
         validator2.deploy(contract, BONDED_VALIDATOR_KEY_1)
         slashed_blockhash = validator2.propose()
         slashed_block_info = validator2.show_block_parsed(slashed_blockhash)
-        bonds_validators = extract_validator_stake_from_bonds_validator_str(slashed_block_info['bondsValidatorList'])
+        bonds_validators = slashed_block_info.bonds
         assert bonds_validators[BONDED_VALIDATOR_KEY_1.get_public_key().to_hex()] == 0
