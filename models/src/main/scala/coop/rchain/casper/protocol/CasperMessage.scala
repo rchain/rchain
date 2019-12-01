@@ -312,6 +312,20 @@ final case class ProcessedDeploy(
 ) {
   def refundAmount                  = (deploy.data.phloLimit - cost.cost).max(0) * deploy.data.phloPrice
   def toProto: ProcessedDeployProto = ProcessedDeploy.toProto(this)
+  def toDeployInfo: DeployInfo =
+    DeployInfo(
+      deployer = PrettyPrinter.buildStringNoLimit(this.deploy.pk.bytes.toArray),
+      term = this.deploy.data.term,
+      timestamp = this.deploy.data.timestamp,
+      sig = PrettyPrinter.buildStringNoLimit(this.deploy.sig),
+      sigAlgorithm = this.deploy.sigAlgorithm.name,
+      phloPrice = this.deploy.data.phloPrice,
+      phloLimit = this.deploy.data.phloLimit,
+      validAfterBlockNumber = this.deploy.data.validAfterBlockNumber,
+      cost = this.cost.cost,
+      errored = this.isFailed,
+      systemDeployError = this.systemDeployError.getOrElse("")
+    )
 }
 
 object ProcessedDeploy {

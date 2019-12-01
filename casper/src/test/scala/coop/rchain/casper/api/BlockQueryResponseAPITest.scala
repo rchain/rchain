@@ -64,8 +64,15 @@ class BlockQueryResponseAPITest
   val blockHash: BlockHash = ProtoUtil.stringToByteString(secondHashString)
   val blockNumber          = 1L
   val timestamp            = 1527191665L
+  val preStateHash         = "1234567891011121314151617181231412341891011121314151617181928192"
+  val postStateHash        = "1234567891323456514151617181231412341891011121314151617181928192"
   val ps: RChainState =
-    Dummies.createRChainState(blockNumber = blockNumber, bonds = List(bondsValidator))
+    Dummies.createRChainState(
+      preStateHash = ProtoUtil.stringToByteString(preStateHash),
+      postStateHash = ProtoUtil.stringToByteString(postStateHash),
+      blockNumber = blockNumber,
+      bonds = List(bondsValidator)
+    )
   val deployCount = 10
   val randomDeploys =
     (0 until deployCount).toList
@@ -76,6 +83,8 @@ class BlockQueryResponseAPITest
   val parentsHashList: List[BlockHash] = parentsString.map(ProtoUtil.stringToByteString)
   val header: Header                   = ProtoUtil.blockHeader(body, parentsHashList, version, timestamp)
   val shardId: String                  = "abcdefgh"
+  val sigString                        = "12345678913234565141516171"
+  val sigAlgorithm                     = "Secp256k1"
   val secondBlock: BlockMessage =
     Dummies.createBlockMessage(
       blockHash = blockHash,
@@ -83,7 +92,9 @@ class BlockQueryResponseAPITest
       body = body,
       justifications = List(Justification(bondsValidator.validator, genesisBlock.blockHash)),
       sender = sender,
-      shardId = shardId
+      shardId = shardId,
+      sig = ProtoUtil.stringToByteString("12345678913234565141516171"),
+      sigAlgorithm = sigAlgorithm
     )
 
   val faultTolerance = 1f
@@ -110,18 +121,33 @@ class BlockQueryResponseAPITest
                              )
         _ = inside(blockQueryResponse) {
           case Right(blockInfo) =>
-            blockInfo.blockHash should be(secondHashString)
-            blockInfo.blockSize should be(secondBlock.toProto.serializedSize.toString)
-            blockInfo.blockNumber should be(blockNumber)
-            blockInfo.version should be(version)
-            blockInfo.deployCount should be(deployCount)
-            blockInfo.faultTolerance should be(faultTolerance)
-            blockInfo.mainParentHash should be(genesisHashString)
-            blockInfo.parentsHashList should be(parentsString)
-            blockInfo.sender should be(senderString)
-            blockInfo.shardId should be(shardId)
-            blockInfo.bondsValidatorList should be(bondValidatorHashList)
-            blockInfo.deployCost should be(deployCostList)
+            blockInfo.deploys should be(
+              randomDeploys.map(_.toDeployInfo)
+            )
+            blockInfo.blockInfo match {
+              case Some(b) =>
+                b.blockHash should be(secondHashString)
+                b.sender should be(senderString)
+                b.blockSize should be(secondBlock.toProto.serializedSize.toString)
+                b.seqNum should be(secondBlock.toProto.seqNum)
+                b.sig should be(sigString)
+                b.sigAlgorithm should be(sigAlgorithm)
+                b.shardId should be(secondBlock.toProto.shardId)
+                b.extraBytes should be(secondBlock.toProto.extraBytes)
+                b.version should be(secondBlock.header.version)
+                b.timestamp should be(secondBlock.header.timestamp)
+                b.headerExtraBytes should be(secondBlock.header.extraBytes)
+                b.parentsHashList should be(parentsString)
+                b.blockNumber should be(body.state.blockNumber)
+                b.preStateHash should be(preStateHash)
+                b.postStateHash should be(postStateHash)
+                b.bodyExtraBytes should be(body.extraBytes)
+                b.bonds should be(ps.bonds.map(ProtoUtil.bondToBondInfo))
+                b.blockSize should be(secondBlock.toProto.serializedSize.toString)
+                b.deployCount should be(secondBlock.body.deploys.length)
+                b.faultTolerance should be(faultTolerance)
+              case None => assert(false)
+            }
         }
       } yield ()
   }
@@ -166,14 +192,26 @@ class BlockQueryResponseAPITest
         _ = inside(blockQueryResponse) {
           case Right(blockInfo) =>
             blockInfo.blockHash should be(secondHashString)
-            blockInfo.blockSize should be(secondBlock.toProto.serializedSize.toString)
-            blockInfo.blockNumber should be(blockNumber)
-            blockInfo.version should be(version)
-            blockInfo.deployCount should be(deployCount)
-            blockInfo.faultTolerance should be(faultTolerance)
-            blockInfo.mainParentHash should be(genesisHashString)
-            blockInfo.parentsHashList should be(parentsString)
+            blockInfo.blockHash should be(secondHashString)
             blockInfo.sender should be(senderString)
+            blockInfo.blockSize should be(secondBlock.toProto.serializedSize.toString)
+            blockInfo.seqNum should be(secondBlock.toProto.seqNum)
+            blockInfo.sig should be(sigString)
+            blockInfo.sigAlgorithm should be(sigAlgorithm)
+            blockInfo.shardId should be(secondBlock.toProto.shardId)
+            blockInfo.extraBytes should be(secondBlock.toProto.extraBytes)
+            blockInfo.version should be(secondBlock.header.version)
+            blockInfo.timestamp should be(secondBlock.header.timestamp)
+            blockInfo.headerExtraBytes should be(secondBlock.header.extraBytes)
+            blockInfo.parentsHashList should be(parentsString)
+            blockInfo.blockNumber should be(body.state.blockNumber)
+            blockInfo.preStateHash should be(preStateHash)
+            blockInfo.postStateHash should be(postStateHash)
+            blockInfo.bodyExtraBytes should be(body.extraBytes)
+            blockInfo.bonds should be(ps.bonds.map(ProtoUtil.bondToBondInfo))
+            blockInfo.blockSize should be(secondBlock.toProto.serializedSize.toString)
+            blockInfo.deployCount should be(secondBlock.body.deploys.length)
+            blockInfo.faultTolerance should be(faultTolerance)
         }
       } yield ()
   }

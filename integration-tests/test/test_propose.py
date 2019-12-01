@@ -18,9 +18,7 @@ from .conftest import (
 from .rnode import (
     Node,
     started_bootstrap,
-    docker_network,
-    extract_validator_stake_from_deploy_cost_str,
-    parse_show_block_output
+    docker_network
 )
 from .common import (
     ParsingError
@@ -42,7 +40,7 @@ FIX_COST_RHO_CONTRACTS = {
 @contextmanager
 def start_node(command_line_options: CommandLineOptions, docker_client: DockerClient, random_generator: Random) -> Generator[Node, None, None]:
     genesis_vault = {
-        USER_KEY: 5000000
+        USER_KEY: 5000000000
     }
 
     with testing_context(command_line_options, random_generator, docker_client, wallets_dict=genesis_vault) as context, \
@@ -57,12 +55,11 @@ def test_propose_cost(command_line_options: CommandLineOptions, docker_client: D
         rho_contract, contract_cost = random_generator.choice(list(FIX_COST_RHO_CONTRACTS.items()))
         shutil.copyfile(os.path.join('resources/cost', rho_contract), os.path.join(bootstrap.local_deploy_dir, rho_contract))
         container_contract_file_path = os.path.join(bootstrap.remote_deploy_dir, rho_contract)
-        bootstrap.deploy(container_contract_file_path, USER_KEY, 100000, 1)
+        bootstrap.deploy(container_contract_file_path, USER_KEY, 100000000, 1)
         block_hash = bootstrap.propose()
-        output = bootstrap.show_block(block_hash)
-        block_info = parse_show_block_output(output)
-        cost = extract_validator_stake_from_deploy_cost_str(block_info['deployCost'])
-        assert contract_cost == cost[USER_KEY.get_public_key().to_hex()]
+        block_info = bootstrap.show_block_parsed(block_hash)
+        deploys = block_info.deploys
+        assert contract_cost == deploys[0].cost
 
 
 def test_find_block_by_deploy_id(command_line_options: CommandLineOptions, docker_client: DockerClient, random_generator: Random) -> None:
@@ -70,12 +67,12 @@ def test_find_block_by_deploy_id(command_line_options: CommandLineOptions, docke
         relative_paths = bootstrap.shell_out('sh', '-c', 'ls /opt/docker/examples/*.rho').splitlines()
         relative_path = random_generator.choice(relative_paths)
         full_path = os.path.join('/opt/docker/examples', relative_path)
-        deploy_id = bootstrap.deploy(full_path, USER_KEY, 100000, 1)
+        deploy_id = bootstrap.deploy(full_path, USER_KEY, 100000000, 1)
         block_hash = bootstrap.propose()
         block_info = bootstrap.find_deploy(deploy_id)
 
         # block_hash is not a full hash but omiited one like 1964aa120ae
-        assert block_info['blockHash'][:10] == block_hash[:10]
+        assert block_info.block_hash[:10] == block_hash[:10]
 
 
 def test_deploy_invalid_contract(command_line_options: CommandLineOptions, docker_client: DockerClient, random_generator: Random) -> None:
@@ -87,8 +84,7 @@ def test_deploy_invalid_contract(command_line_options: CommandLineOptions, docke
         with pytest.raises(ParsingError):
             bootstrap.deploy(invalid_contract_path, USER_KEY)
 
-        bootstrap.deploy('/opt/docker/examples/hello_world_again.rho', USER_KEY, 100000, 1)
+        bootstrap.deploy('/opt/docker/examples/hello_world_again.rho', USER_KEY, 100000000, 1)
         block_hash = bootstrap.propose()
-        output = bootstrap.show_block(block_hash)
-        block_info = parse_show_block_output(output)
-        assert block_info['deployCount'] == '1'
+        block_info = bootstrap.show_block_parsed(block_hash)
+        assert block_info.deploy_count == 1

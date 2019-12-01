@@ -10,7 +10,6 @@ import threading
 from threading import Event
 import contextlib
 from multiprocessing import Queue, Process
-from collections import defaultdict
 from typing import (
     Dict,
     List,
@@ -43,6 +42,21 @@ from .wait import (
     wait_for_approved_block_received_handler_state,
 )
 
+from .error import(
+    RNodeAddressNotFoundError,
+    CommandTimeoutError,
+)
+
+from .utils import (
+    extract_block_count_from_show_blocks,
+    parse_show_block_output,
+    parse_show_blocks_output,
+    extract_block_hash_from_propose_output,
+    extract_deploy_id_from_deploy_output,
+    parse_mvdag_str,
+    BlockInfo,
+    LightBlockInfo
+)
 
 DEFAULT_IMAGE = os.environ.get("DEFAULT_IMAGE", "rchain-integration-tests:latest")
 _PB_REPEATED_STR_SEP = "#$"
@@ -54,141 +68,6 @@ rnode_bonds_file = '{}/genesis/bonds.txt'.format(rnode_directory)
 rnode_wallets_file = '{}/genesis/wallets.txt'.format(rnode_directory)
 rnode_certificate_path = '{}/node.certificate.pem'.format(rnode_directory)
 rnode_key_path = '{}/node.key.pem'.format(rnode_directory)
-
-
-class RNodeAddressNotFoundError(Exception):
-    def __init__(self, regex: str) -> None:
-        super().__init__()
-        self.regex = regex
-
-
-class CommandTimeoutError(Exception):
-    def __init__(self, command: Tuple[str, ...], timeout: int) -> None:
-        super().__init__()
-        self.command = command
-        self.timeout = timeout
-
-
-class UnexpectedShowBlocksOutputFormatError(Exception):
-    def __init__(self, output: str) -> None:
-        super().__init__()
-        self.output = output
-
-
-class UnexpectedProposeOutputFormatError(Exception):
-    def __init__(self, output: str) -> None:
-        super().__init__()
-        self.output = output
-
-class UnexpectedDeployOutputFormatError(Exception):
-    def __init__(self, output: str) -> None:
-        super().__init__()
-        self.output = output
-
-
-def extract_block_count_from_show_blocks(show_blocks_output: str) -> int:
-    lines = show_blocks_output.splitlines()
-    prefix = 'count: '
-    interesting_lines = [l for l in lines if l.startswith(prefix)]
-    if len(interesting_lines) != 1:
-        raise UnexpectedShowBlocksOutputFormatError(show_blocks_output)
-    line = interesting_lines[0]
-    count = line[len(prefix):]
-    try:
-        result = int(count)
-    except ValueError:
-        raise UnexpectedShowBlocksOutputFormatError(show_blocks_output)
-    return result
-
-
-def parse_show_blocks_key_value_line(line: str) -> Tuple[str, str]:
-    match = re.match(r'(?P<key>[^:]*): "?(?P<value>.*(?<!"))', line.strip())
-    if match is None:
-        raise UnexpectedShowBlocksOutputFormatError(line)
-    return (match.group('key'), match.group('value'))
-
-
-def parse_show_blocks_output(show_blocks_output: str) -> List[Dict[str, str]]:
-    result = []
-
-    lines = show_blocks_output.splitlines()
-
-    i = 0
-    while True:
-        if i >= len(lines):
-            break
-        if lines[i].startswith('------------- block '):
-            block = {}
-            j = i + 1
-            while True:
-                if j >= len(lines):
-                    break
-                if lines[j].strip() == "":
-                    break
-                key, value = parse_show_blocks_key_value_line(lines[j])
-                block[key] = value
-                j += 1
-            result.append(block)
-            i = j
-        else:
-            i += 1
-
-    return result
-
-
-def parse_show_block_output(show_block_output: str) -> Dict[str, str]:
-    result: Dict[str, str] = {}
-
-    lines = show_block_output.splitlines()
-    bonds_validator = []
-    deploy_cost = []
-    for line in lines:
-        if line.startswith('status:') or line.startswith('blockInfo {') or line.startswith('}'):
-            continue
-        if line.strip() == '':
-            continue
-        key, value = parse_show_blocks_key_value_line(line)
-        if key == "bondsValidatorList":
-            validator_hash = value.strip('"')
-            bonds_validator.append(validator_hash)
-        elif key == "deployCost":
-            deploy_cost.append(value.strip('"'))
-        else:
-            result[key] = value
-    result['bondsValidatorList'] = _PB_REPEATED_STR_SEP.join(bonds_validator)
-    result['deployCost'] = _PB_REPEATED_STR_SEP.join(deploy_cost)
-    return result
-
-
-def extract_validator_stake_from_bonds_validator_str(out_put: str) -> Dict[str, float]:
-    validator_stake_dict = {}
-    validator_stake_list = out_put.split(_PB_REPEATED_STR_SEP)
-    for validator_stake in validator_stake_list:
-        validator, stake = validator_stake.split(': ')
-        stake_f = float(stake)
-        validator_stake_dict[validator] = stake_f
-    return validator_stake_dict
-
-
-def extract_block_hash_from_propose_output(propose_output: str) -> str:
-    """We're getting back something along the lines of:
-
-    Response: Success! Block a91208047c... created and added.\n
-    """
-    match = re.match(r'Response: Success! Block ([0-9a-f]+) created and added.', propose_output.strip())
-    if match is None:
-        raise UnexpectedProposeOutputFormatError(propose_output)
-    return match.group(1)
-
-
-def extract_validator_stake_from_deploy_cost_str(output: str) -> Dict[str, float]:
-    deploy_cost_dict: Dict[str, float] = defaultdict(lambda: 0)
-    deploy_cost_list = output.split(_PB_REPEATED_STR_SEP)
-    for deploy_cost_str in deploy_cost_list:
-        match = re.match(r'User: (?P<user>[a-zA-Z0-9]*), Cost: PCost\((?P<cost>[0-9]*)\) DeployData \#(?P<timestamp>[0-9]*) -- .', deploy_cost_str)
-        if match:
-            deploy_cost_dict[match.group('user')] = int(match.group('cost'))
-    return deploy_cost_dict
 
 
 class Node:
@@ -250,20 +129,20 @@ class Node:
         self.background_logging.join()
 
     def show_blocks_with_depth(self, depth: int) -> str:
-        return self.rnode_command('show-blocks', '--depth', str(depth))
+        return self.rnode_command('show-blocks', '--depth', str(depth), stderr=False)
 
     def show_block(self, hash: str) -> str:
-        return self.rnode_command('show-block', hash)
+        return self.rnode_command('show-block', hash, stderr=False)
 
     def get_blocks_count(self, depth: int) -> int:
         show_blocks_output = self.show_blocks_with_depth(depth)
         return extract_block_count_from_show_blocks(show_blocks_output)
 
-    def show_blocks_parsed(self, depth: int) -> List[Dict[str, str]]:
+    def show_blocks_parsed(self, depth: int) -> List[LightBlockInfo]:
         show_blocks_output = self.show_blocks_with_depth(depth)
         return parse_show_blocks_output(show_blocks_output)
 
-    def show_block_parsed(self, hash: str) -> Dict[str, str]:
+    def show_block_parsed(self, hash: str) -> BlockInfo:
         show_block_output = self.show_block(hash)
         block_info = parse_show_block_output(show_block_output)
         return block_info
@@ -327,7 +206,7 @@ class Node:
             raise e
 
     def get_vdag(self) -> str:
-        return self.rnode_command('vdag')
+        return self.rnode_command('vdag', stderr=False)
 
     def get_mvdag(self) -> str:
         return self.rnode_command('mvdag', stderr=False)
@@ -346,10 +225,10 @@ class Node:
         ), stderr=False)
         return extract_deploy_id_from_deploy_output(deploy_out)
 
-    def find_deploy(self, deploy_id: str) -> Dict[str, str]:
+    def find_deploy(self, deploy_id: str) -> LightBlockInfo:
         output = self.rnode_command("find-deploy", "--deploy-id", deploy_id, stderr=False)
-        block_info = parse_show_block_output(output)
-        return block_info
+        block_info = parse_show_blocks_output(output)
+        return block_info[0]
 
     def propose(self) -> str:
         try:
@@ -361,8 +240,8 @@ class Node:
                 raise SynchronyConstraintError(command=e.command, exit_code=e.exit_code, output=e.output)
             raise e
 
-    def last_finalized_block(self) -> Dict[str, str]:
-        output = self.rnode_command('last-finalized-block')
+    def last_finalized_block(self) -> BlockInfo:
+        output = self.rnode_command('last-finalized-block', stderr=False)
         block_info = parse_show_block_output(output)
         return block_info
 
@@ -864,18 +743,4 @@ def ready_bootstrap(
             yield node
 
 
-def parse_mvdag_str(mvdag_output: str) -> Dict[str, Set[str]]:
-    dag_dict: Dict[str, Set[str]] = defaultdict(set)
-
-    lines = mvdag_output.splitlines()
-    for line in lines:
-        parent_hash, child_hash = line.split(' ')
-        dag_dict[parent_hash].add(child_hash)
-    return dag_dict
-
-def extract_deploy_id_from_deploy_output(deploy_output: str) -> str:
-    match = re.match(r'Response: Success!\nDeployId is: ([0-9a-f]+)', deploy_output.strip())
-    if match is None:
-        raise UnexpectedDeployOutputFormatError(deploy_output)
-    return match.group(1)
 

@@ -68,7 +68,7 @@ def test_fault_tolerance(command_line_options: CommandLineOptions, random_genera
             wait_for_peers_count_at_least(context, validator1, 2)
             wait_for_peers_count_at_least(context, validator2, 2)
 
-            genesis_hash = bootstrap_node.show_blocks_parsed(1)[0]['blockHash']
+            genesis_hash = bootstrap_node.show_blocks_parsed(1)[0].block_hash
 
             bootstrap_node.deploy(contract_path, BOOTSTRAP_NODE_KEYS)
             b1_hash = bootstrap_node.propose()
@@ -105,13 +105,13 @@ def test_fault_tolerance(command_line_options: CommandLineOptions, random_genera
             wait_for_node_sees_block(context, bootstrap_node, b7_hash)
             wait_for_node_sees_block(context, validator2, b7_hash)
 
-            assert float(validator1.show_block_parsed(b1_hash)['faultTolerance']) <= float(validator1.show_block_parsed(genesis_hash)['faultTolerance'])
-            assert float(validator1.show_block_parsed(b2_hash)['faultTolerance']) <= float(validator1.show_block_parsed(b1_hash)['faultTolerance'])
-            assert float(validator1.show_block_parsed(b3_hash)['faultTolerance']) <= float(validator1.show_block_parsed(b2_hash)['faultTolerance'])
-            assert float(validator1.show_block_parsed(b4_hash)['faultTolerance']) <= float(validator1.show_block_parsed(b3_hash)['faultTolerance'])
-            assert float(validator1.show_block_parsed(b5_hash)['faultTolerance']) <= float(validator1.show_block_parsed(b4_hash)['faultTolerance'])
-            assert float(validator1.show_block_parsed(b6_hash)['faultTolerance']) <= float(validator1.show_block_parsed(b5_hash)['faultTolerance'])
-            assert float(validator1.show_block_parsed(b7_hash)['faultTolerance']) <= float(validator1.show_block_parsed(b6_hash)['faultTolerance'])
+            assert float(validator1.show_block_parsed(b1_hash).fault_tolerance) <= float(validator1.show_block_parsed(genesis_hash).fault_tolerance)
+            assert float(validator1.show_block_parsed(b2_hash).fault_tolerance) <= float(validator1.show_block_parsed(b1_hash).fault_tolerance)
+            assert float(validator1.show_block_parsed(b3_hash).fault_tolerance) <= float(validator1.show_block_parsed(b2_hash).fault_tolerance)
+            assert float(validator1.show_block_parsed(b4_hash).fault_tolerance) <= float(validator1.show_block_parsed(b3_hash).fault_tolerance)
+            assert float(validator1.show_block_parsed(b5_hash).fault_tolerance) <= float(validator1.show_block_parsed(b4_hash).fault_tolerance)
+            assert float(validator1.show_block_parsed(b6_hash).fault_tolerance) <= float(validator1.show_block_parsed(b5_hash).fault_tolerance)
+            assert float(validator1.show_block_parsed(b7_hash).fault_tolerance) <= float(validator1.show_block_parsed(b6_hash).fault_tolerance)
 
 
 @pytest.mark.skip

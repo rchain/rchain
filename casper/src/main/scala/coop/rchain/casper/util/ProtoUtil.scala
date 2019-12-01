@@ -228,6 +228,9 @@ object ProtoUtil {
   def blockNumber(b: BlockMessage): Long =
     b.body.state.blockNumber
 
+  def bondToBondInfo(bond: Bond): BondInfo =
+    BondInfo(validator = PrettyPrinter.buildStringNoLimit(bond.validator), stake = bond.stake)
+
   def maxBlockNumberMetadata(blocks: Seq[BlockMetadata]): Long = blocks.foldLeft(-1L) {
     case (acc, b) => math.max(acc, b.blockNum)
   }

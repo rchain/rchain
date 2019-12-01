@@ -413,42 +413,16 @@ object BlockAPI {
       block: BlockMessage,
       constructor: (
           BlockMessage,
-          Long,
-          BlockHash,
-          Long,
-          BlockHash,
-          Seq[BlockHash],
-          Float,
-          Float,
-          Seq[Bond],
-          Seq[ProcessedDeploy]
+          Float
       ) => F[A]
   )(implicit casper: MultiParentCasper[F]): F[A] =
     for {
-      dag             <- casper.blockDag
-      header          = block.header
-      version         = header.version
-      tsHash          = ProtoUtil.postStateHash(block)
-      timestamp       = header.timestamp
-      mainParent      = header.parentsHashList.headOption.getOrElse(ByteString.EMPTY)
-      parentsHashList = header.parentsHashList
+      dag <- casper.blockDag
       normalizedFaultTolerance <- SafetyOracle[F]
                                    .normalizedFaultTolerance(dag, block.blockHash) // TODO: Warn about parent block finalization
-      initialFault       <- casper.normalizedInitialFault(ProtoUtil.weightMap(block))
-      bondsValidatorList = ProtoUtil.bonds(block)
-      processedDeploy    = ProtoUtil.deploys(block)
-      blockInfo <- constructor(
-                    block,
-                    version,
-                    tsHash,
-                    timestamp,
-                    mainParent,
-                    parentsHashList,
-                    normalizedFaultTolerance,
-                    initialFault,
-                    bondsValidatorList,
-                    processedDeploy
-                  )
+      initialFault   <- casper.normalizedInitialFault(ProtoUtil.weightMap(block))
+      faultTolerance = normalizedFaultTolerance - initialFault
+      blockInfo      <- constructor(block, faultTolerance)
     } yield blockInfo
 
   private def getFullBlockInfo[F[_]: Monad: SafetyOracle: BlockStore](
@@ -462,57 +436,40 @@ object BlockAPI {
 
   private def constructBlockInfo[F[_]: Monad: SafetyOracle: BlockStore](
       block: BlockMessage,
-      version: Long,
-      tsHash: BlockHash,
-      timestamp: Long,
-      mainParent: BlockHash,
-      parentsHashList: Seq[BlockHash],
-      normalizedFaultTolerance: Float,
-      initialFault: Float,
-      bondsValidatorList: Seq[Bond],
-      processedDeploys: Seq[ProcessedDeploy]
+      faultTolerance: Float
   ): F[BlockInfo] =
-    BlockInfo(
-      blockHash = PrettyPrinter.buildStringNoLimit(block.blockHash),
-      blockSize = BlockMessage.toProto(block).serializedSize.toString,
-      blockNumber = ProtoUtil.blockNumber(block),
-      version = version,
-      deployCount = block.body.deploys.size,
-      tupleSpaceHash = PrettyPrinter.buildStringNoLimit(tsHash),
-      timestamp = timestamp,
-      faultTolerance = normalizedFaultTolerance - initialFault, // TODO: Fix
-      mainParentHash = PrettyPrinter.buildStringNoLimit(mainParent),
-      parentsHashList = parentsHashList.map(PrettyPrinter.buildStringNoLimit),
-      sender = PrettyPrinter.buildStringNoLimit(block.sender),
-      shardId = block.shardId,
-      bondsValidatorList = bondsValidatorList.map(PrettyPrinter.buildString),
-      deployCost = processedDeploys.map(PrettyPrinter.buildString)
-    ).pure[F]
+    for {
+      lightBlockInfo <- constructLightBlockInfo[F](block, faultTolerance)
+      deploys        = block.body.deploys.toSeq.map(_.toDeployInfo)
+    } yield BlockInfo(
+      blockInfo = Some(lightBlockInfo),
+      deploys = deploys
+    )
 
   private def constructLightBlockInfo[F[_]: Monad: SafetyOracle: BlockStore](
       block: BlockMessage,
-      version: Long,
-      tsHash: BlockHash,
-      timestamp: Long,
-      mainParent: BlockHash,
-      parentsHashList: Seq[BlockHash],
-      normalizedFaultTolerance: Float,
-      initialFault: Float,
-      bondsValidatorList: Seq[Bond],
-      processedDeploys: Seq[ProcessedDeploy]
+      faultTolerance: Float
   ): F[LightBlockInfo] =
     LightBlockInfo(
       blockHash = PrettyPrinter.buildStringNoLimit(block.blockHash),
+      sender = PrettyPrinter.buildStringNoLimit(block.sender),
+      seqNum = block.seqNum.toLong,
+      sig = PrettyPrinter.buildStringNoLimit(block.sig),
+      sigAlgorithm = block.sigAlgorithm,
+      shardId = block.shardId,
+      extraBytes = block.extraBytes,
+      version = block.header.version,
+      timestamp = block.header.timestamp,
+      headerExtraBytes = block.header.extraBytes,
+      parentsHashList = block.header.parentsHashList.map(PrettyPrinter.buildStringNoLimit),
+      blockNumber = block.body.state.blockNumber,
+      preStateHash = PrettyPrinter.buildStringNoLimit(block.body.state.preStateHash),
+      postStateHash = PrettyPrinter.buildStringNoLimit(block.body.state.postStateHash),
+      bodyExtraBytes = block.body.extraBytes,
+      bonds = block.body.state.bonds.map(ProtoUtil.bondToBondInfo),
       blockSize = block.toProto.serializedSize.toString,
-      blockNumber = ProtoUtil.blockNumber(block),
-      version = version,
-      deployCount = block.body.deploys.size,
-      tupleSpaceHash = PrettyPrinter.buildStringNoLimit(tsHash),
-      timestamp = timestamp,
-      faultTolerance = normalizedFaultTolerance - initialFault,
-      mainParentHash = PrettyPrinter.buildStringNoLimit(mainParent),
-      parentsHashList = parentsHashList.map(PrettyPrinter.buildStringNoLimit),
-      sender = PrettyPrinter.buildStringNoLimit(block.sender)
+      deployCount = block.body.deploys.length,
+      faultTolerance = faultTolerance
     ).pure[F]
 
   private def getBlock[F[_]: Monad: BlockStore](
