@@ -38,12 +38,11 @@ object blockImplicits {
 
   implicit val arbitraryJustification: Arbitrary[Justification] = Arbitrary(justificationGen)
 
-  val processedDeployGen: Gen[ProcessedDeploy] =
+  val signedDeployDataGen: Gen[Signed[DeployData]] =
     for {
-      term        <- listOfN(32, Gen.alphaNumChar).map(_.mkString)
-      timestamp   <- arbitrary[Long]
-      (sec, pub)  = Secp256k1.newKeyPair
-      bytesLength <- Gen.chooseNum(128, 256)
+      term      <- listOfN(32, Gen.alphaNumChar).map(_.mkString)
+      timestamp <- arbitrary[Long]
+      (sec, _)  = Secp256k1.newKeyPair
       deployData = Signed(
         DeployData(
           term = term,
@@ -55,6 +54,11 @@ object blockImplicits {
         signatures.Secp256k1,
         sec
       )
+    } yield deployData
+
+  val processedDeployGen: Gen[ProcessedDeploy] =
+    for {
+      deployData <- signedDeployDataGen
     } yield ProcessedDeploy(
       deploy = deployData,
       cost = PCost(0L),
