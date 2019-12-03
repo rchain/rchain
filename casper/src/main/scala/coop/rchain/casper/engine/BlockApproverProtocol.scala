@@ -169,14 +169,11 @@ object BlockApproverProtocol {
     (for {
       result                    <- EitherT(validate.pure[F])
       (blockDeploys, postState) = result
-      time                      = candidate.block.header.timestamp
-      blockNumber               = candidate.block.body.state.blockNumber
-      sender                    = PublicKey(candidate.block.sender)
       stateHash <- EitherT(
                     runtimeManager
                       .replayComputeState(runtimeManager.emptyStateHash)(
                         blockDeploys,
-                        BlockData(time, blockNumber, sender),
+                        BlockData.fromBlock(candidate.block),
                         Map.empty[BlockHash, Validator],
                         isGenesis = true
                       )

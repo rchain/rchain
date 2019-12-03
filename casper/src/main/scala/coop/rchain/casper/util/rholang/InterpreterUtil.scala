@@ -74,8 +74,6 @@ object InterpreterUtil {
   ): F[BlockProcessing[Option[StateHash]]] = {
     val preStateHash    = ProtoUtil.preStateHash(block)
     val internalDeploys = ProtoUtil.deploys(block)
-    val timestamp       = block.header.timestamp
-    val blockNumber     = block.body.state.blockNumber
     for {
       invalidBlocksSet <- dag.invalidBlocks
       unseenBlocksSet  <- ProtoUtil.unseenBlockHashes(dag, block)
@@ -86,7 +84,7 @@ object InterpreterUtil {
         .map(block => (block.blockHash, block.sender))
         .toMap
       _         <- Span[F].mark("before-process-pre-state-hash")
-      blockData = BlockData(timestamp, blockNumber, PublicKey(block.sender))
+      blockData = BlockData.fromBlock(block)
       isGenesis = block.header.parentsHashList.isEmpty
       replayResult <- runtimeManager.replayComputeState(preStateHash)(
                        internalDeploys,
@@ -229,10 +227,8 @@ object InterpreterUtil {
       dag: BlockDagRepresentation[F],
       runtimeManager: RuntimeManager[F]
   ): F[StateHash] = {
-    val deploys     = block.body.deploys
-    val timestamp   = block.header.timestamp
-    val blockNumber = block.body.state.blockNumber
-    val isGenesis   = parents.isEmpty
+    val deploys   = block.body.deploys
+    val isGenesis = parents.isEmpty
 
     (for {
       invalidBlocksSet <- dag.invalidBlocks
@@ -245,7 +241,7 @@ object InterpreterUtil {
         .toMap
       replayResult <- runtimeManager.replayComputeState(hash)(
                        deploys,
-                       BlockData(timestamp, blockNumber, PublicKey(block.sender)),
+                       BlockData.fromBlock(block),
                        invalidBlocks,
                        isGenesis //should always be false
                      )

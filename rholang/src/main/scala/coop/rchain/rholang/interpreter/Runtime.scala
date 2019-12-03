@@ -9,6 +9,7 @@ import cats.implicits._
 import cats.mtl.FunctorTell
 import cats.temp.par
 import com.google.protobuf.ByteString
+import coop.rchain.casper.protocol.BlockMessage
 import coop.rchain.crypto.PublicKey
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.hash.Blake2b512Random
@@ -86,9 +87,15 @@ object Runtime {
   type Remainder = Option[Var]
   type BodyRef   = Long
 
-  final case class BlockData(timeStamp: Long, blockNumber: Long, sender: PublicKey)
+  final case class BlockData private (timeStamp: Long, blockNumber: Long, sender: PublicKey)
   object BlockData {
     def empty: BlockData = BlockData(0, 0, PublicKey(Base16.unsafeDecode("00")))
+    def fromBlock(template: BlockMessage) =
+      BlockData(
+        template.header.timestamp,
+        template.body.state.blockNumber,
+        PublicKey(template.sender)
+      )
   }
 
   class InvalidBlocks[F[_]](val invalidBlocks: Ref[F, Par]) {

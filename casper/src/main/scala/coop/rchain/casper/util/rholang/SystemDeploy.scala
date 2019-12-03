@@ -30,7 +30,7 @@ abstract class SystemDeploy(initialRand: Blake2b512Random) {
   final def env: Map[String, Par] = normalizerEnv.toEnv(toEnvMap)
 
   implicit protected val envsReturnChannel: Contains.Aux[Env, `sys:casper:return`, GUnforgeable]
-  protected val mkReturnChannel =
+  protected def mkReturnChannel =
     "sys:casper:return" ->> GUnforgeable(GPrivateBody(GPrivate(ByteString.copyFrom(rand.next()))))
   final def returnChannel: Par = toPar(normalizerEnv.get[`sys:casper:return`])
 

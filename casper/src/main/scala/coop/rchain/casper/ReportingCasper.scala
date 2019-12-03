@@ -226,13 +226,11 @@ object ReportingCasper {
       dag: BlockDagRepresentation[F],
       runtimeManager: ReportingRuntimeManagerImpl[F]
   ): F[Either[ReplayFailure, List[(ProcessedDeploy, Seq[ReportingEvent])]]] = {
-    val hash        = ProtoUtil.preStateHash(block)
-    val deploys     = block.body.deploys
-    val timestamp   = block.header.timestamp
-    val blockNumber = block.body.state.blockNumber
+    val hash    = ProtoUtil.preStateHash(block)
+    val deploys = block.body.deploys
     runtimeManager.replayComputeState(hash)(
       deploys,
-      BlockData(timestamp, blockNumber, PublicKey(block.sender))
+      BlockData.fromBlock(block)
     )
   }
 
