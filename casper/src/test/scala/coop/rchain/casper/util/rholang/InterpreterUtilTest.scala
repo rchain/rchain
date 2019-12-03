@@ -39,16 +39,19 @@ class InterpreterUtilTest
     with BlockDagStorageFixture {
   import BlockGenerator.step
 
+  private class DiscreteTime extends Time[Task] {
+    private var currentTime                                  = 4L
+    override val currentMillis: Task[Long]                   = Task(currentTime)
+    override val nanoTime: Task[Long]                        = Task(currentTime)
+    override def sleep(duration: FiniteDuration): Task[Unit] = Task.sleep(duration)
+    def advance()                                            = Task(currentTime = currentTime + 1)
+  }
+
   implicit val logEff                    = new LogStub[Task]
   implicit val metricsEff: Metrics[Task] = new metrics.Metrics.MetricsNOP[Task]
   implicit val span: Span[Task]          = new NoopSpan[Task]
   implicit val logSource: LogSource      = LogSource(this.getClass)
-  implicit private val timeEff: Time[Task] = new Time[Task] {
-    private val constantTime                                 = 4L
-    override val currentMillis: Task[Long]                   = Task.pure(constantTime)
-    override val nanoTime: Task[Long]                        = Task.pure(constantTime)
-    override def sleep(duration: FiniteDuration): Task[Unit] = Task.sleep(duration)
-  }
+  implicit private val timeEff           = new DiscreteTime
 
   val genesisContext = GenesisBuilder.buildGenesis()
   val genesis        = genesisContext.genesisBlock
@@ -57,7 +60,8 @@ class InterpreterUtilTest
       parents: Seq[BlockMessage],
       deploys: Seq[Signed[DeployData]],
       dag: BlockDagRepresentation[F],
-      runtimeManager: RuntimeManager[F]
+      runtimeManager: RuntimeManager[F],
+      seqNum: Long = 0L
   ): F[Either[Throwable, (StateHash, StateHash, Seq[ProcessedDeploy])]] =
     Time[F].currentMillis >>= (
         now =>
@@ -69,7 +73,7 @@ class InterpreterUtilTest
               runtimeManager,
               BlockData(
                 now,
-                0,
+                seqNum,
                 genesisContext.validatorPks.head
               ),
               Map.empty[BlockHash, Validator]
@@ -553,7 +557,7 @@ class InterpreterUtilTest
 
   it should "pass tests involving races" in withGenesis(genesisContext) {
     implicit blockStore => implicit blockDagStorage => runtimeManager =>
-      (0 to 10).toList.traverse_ { _ =>
+      (0 to 10).toList.traverse_ { i =>
         val deploys =
           Vector(
             """
@@ -578,7 +582,8 @@ class InterpreterUtilTest
                                 Seq(genesis),
                                 deploys,
                                 dag1,
-                                runtimeManager
+                                runtimeManager,
+                                (i + 1).toLong
                               )
           Right((preStateHash, computedTsHash, processedDeploys)) = deploysCheckpoint
           block <- createBlock[Task](
@@ -587,7 +592,8 @@ class InterpreterUtilTest
                     ByteString.copyFrom(genesisContext.validatorPks.head.bytes),
                     deploys = processedDeploys,
                     tsHash = computedTsHash,
-                    preStateHash = preStateHash
+                    preStateHash = preStateHash,
+                    seqNum = i + 1
                   )
           dag2 <- blockDagStorage.getRepresentation
 
@@ -631,7 +637,7 @@ class InterpreterUtilTest
 
   it should "pass map update test" in withGenesis(genesisContext) {
     implicit blockStore => implicit blockDagStorage => runtimeManager =>
-      (0 to 10).toList.traverse_ { _ =>
+      (0 to 10).toList.traverse_ { i =>
         val deploys =
           Vector(
             """
@@ -658,7 +664,8 @@ class InterpreterUtilTest
                                 Seq(genesis),
                                 deploys,
                                 dag1,
-                                runtimeManager
+                                runtimeManager,
+                                seqNum = (i + 1).toLong
                               )
           Right((preStateHash, computedTsHash, processedDeploys)) = deploysCheckpoint
           block <- createBlock[Task](
@@ -667,11 +674,13 @@ class InterpreterUtilTest
                     ByteString.copyFrom(genesisContext.validatorPks.head.bytes),
                     deploys = processedDeploys,
                     tsHash = computedTsHash,
-                    preStateHash = preStateHash
+                    preStateHash = preStateHash,
+                    seqNum = i + 1
                   )
           dag2           <- blockDagStorage.getRepresentation
           validateResult <- validateBlockCheckpoint[Task](block, dag2, runtimeManager)
           Right(tsHash)  = validateResult
+          _              <- timeEff.advance()
         } yield tsHash should be(Some(computedTsHash))
       }
   }
