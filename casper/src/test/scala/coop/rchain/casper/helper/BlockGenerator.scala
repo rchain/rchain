@@ -7,21 +7,18 @@ import com.google.protobuf.ByteString
 import coop.rchain.blockstorage._
 import coop.rchain.blockstorage.dag._
 import coop.rchain.casper.CasperMetricsSource
-import coop.rchain.casper._
 import coop.rchain.casper.protocol._
-import coop.rchain.casper.util.{ConstructDeploy, ProtoUtil}
 import coop.rchain.casper.util.rholang.InterpreterUtil.computeDeploysCheckpoint
 import coop.rchain.casper.util.rholang.RuntimeManager
 import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
-import coop.rchain.crypto.PublicKey
+import coop.rchain.casper.util.{ConstructDeploy, ProtoUtil}
 import coop.rchain.crypto.hash.Blake2b256
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.Validator.Validator
 import coop.rchain.p2p.EffectsTestInstances.LogicalTime
 import coop.rchain.rholang.interpreter.Runtime.BlockData
-import coop.rchain.shared.Time
-import coop.rchain.shared.{Log, LogSource}
+import coop.rchain.shared.{Log, LogSource, Time}
 import monix.eval.Task
 
 import scala.collection.immutable.HashMap
@@ -49,7 +46,7 @@ object BlockGenerator {
                )
     } yield result
 
-  private def computeBlockCheckpoint[F[_]: Sync: Log: BlockStore: Time: Metrics: Span](
+  private def computeBlockCheckpoint[F[_]: Sync: Log: BlockStore: Metrics: Span](
       b: BlockMessage,
       genesis: BlockMessage,
       dag: BlockDagRepresentation[F],
@@ -58,13 +55,12 @@ object BlockGenerator {
     for {
       parents <- ProtoUtil.getParents[F](b)
       deploys = ProtoUtil.deploys(b).map(_.deploy)
-      now     <- Time[F].currentMillis
       result <- computeDeploysCheckpoint[F](
                  parents,
                  deploys,
                  dag,
                  runtimeManager,
-                 BlockData(now, b.body.state.blockNumber, PublicKey(b.sender)),
+                 BlockData.fromBlock(b),
                  Map.empty[BlockHash, Validator]
                ).attempt
       Right((preStateHash, postStateHash, processedDeploys)) = result
@@ -87,9 +83,10 @@ object BlockGenerator {
 }
 
 trait BlockGenerator {
-  def buildBlock[F[_]: Monad: Time](
+  def buildBlock[F[_]: Applicative](
       parentsHashList: Seq[BlockHash],
       creator: Validator = ByteString.EMPTY,
+      now: Long,
       bonds: Seq[Bond] = Seq.empty[Bond],
       justifications: collection.Map[Validator, BlockHash] = HashMap.empty[Validator, BlockHash],
       deploys: Seq[ProcessedDeploy] = Seq.empty[ProcessedDeploy],
@@ -97,26 +94,26 @@ trait BlockGenerator {
       shardId: String = "rchain",
       preStateHash: ByteString = ByteString.EMPTY,
       seqNum: Int = 0
-  ): F[BlockMessage] =
-    Time[F].currentMillis.map(now => {
-      val postState: RChainState = Dummies.createRChainState(
-        preStateHash = preStateHash,
-        postStateHash = tsHash,
-        bonds = bonds.toList
-      )
-      val header = Dummies.createHeader(
-        parentHashes = parentsHashList.toList,
-        timestamp = now
-      )
-      val blockHash = Blake2b256.hash(header.toProto.toByteArray)
-      val body      = Dummies.createBody(state = postState, deploys = deploys.toList)
-      val serializedJustifications = justifications.toList.map {
-        case (cr: Validator, latestBlockHash: BlockHash) =>
-          Justification(cr, latestBlockHash)
-      }
-      val serializedBlockHash = ByteString.copyFrom(blockHash)
+  ): F[BlockMessage] = {
+    val postState: RChainState = Dummies.createRChainState(
+      preStateHash = preStateHash,
+      postStateHash = tsHash,
+      bonds = bonds.toList
+    )
+    val header = Dummies.createHeader(
+      parentHashes = parentsHashList.toList,
+      timestamp = now
+    )
+    val blockHash = Blake2b256.hash(header.toProto.toByteArray)
+    val body      = Dummies.createBody(state = postState, deploys = deploys.toList)
+    val serializedJustifications = justifications.toList.map {
+      case (cr: Validator, latestBlockHash: BlockHash) =>
+        Justification(cr, latestBlockHash)
+    }
+    val serializedBlockHash = ByteString.copyFrom(blockHash)
 
-      Dummies.createBlockMessage(
+    Dummies
+      .createBlockMessage(
         blockHash = serializedBlockHash,
         header = header,
         body = body,
@@ -125,8 +122,9 @@ trait BlockGenerator {
         shardId = shardId,
         seqNum = seqNum
       )
+      .pure[F]
 
-    })
+  }
 
   def createGenesis[F[_]: Monad: Time: BlockStore: IndexedBlockDagStorage](
       creator: Validator = ByteString.EMPTY,
@@ -139,9 +137,11 @@ trait BlockGenerator {
       seqNum: Int = 0
   ): F[BlockMessage] =
     for {
+      now <- Time[F].currentMillis
       genesis <- buildBlock[F](
                   Seq.empty,
                   creator,
+                  now,
                   bonds,
                   justifications,
                   deploys,
@@ -168,9 +168,11 @@ trait BlockGenerator {
       invalid: Boolean = false
   ): F[BlockMessage] =
     for {
+      now <- Time[F].currentMillis
       block <- buildBlock[F](
                 parentsHashList,
                 creator,
+                now,
                 bonds,
                 justifications,
                 deploys,

@@ -5,7 +5,6 @@ import cats.implicits._
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockStore
 import coop.rchain.blockstorage.dag.BlockDagRepresentation
-import coop.rchain.casper.helper.BlockGenerator._
 import coop.rchain.casper.helper._
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.GenesisBuilder.{buildGenesis, buildGenesisParameters}
@@ -30,40 +29,53 @@ import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
 import org.scalatest._
 
+import scala.concurrent.duration.FiniteDuration
+import scala.util.Random
+
 class InterpreterUtilTest
     extends FlatSpec
     with Matchers
     with BlockGenerator
     with BlockDagStorageFixture {
+  import BlockGenerator.step
 
   implicit val logEff                    = new LogStub[Task]
   implicit val metricsEff: Metrics[Task] = new metrics.Metrics.MetricsNOP[Task]
   implicit val span: Span[Task]          = new NoopSpan[Task]
   implicit val logSource: LogSource      = LogSource(this.getClass)
+  implicit private val timeEff: Time[Task] = new Time[Task] {
+    private val constantTime                                 = 4L
+    override val currentMillis: Task[Long]                   = Task.pure(constantTime)
+    override val nanoTime: Task[Long]                        = Task.pure(constantTime)
+    override def sleep(duration: FiniteDuration): Task[Unit] = Task.sleep(duration)
+  }
 
   val genesisContext = GenesisBuilder.buildGenesis()
   val genesis        = genesisContext.genesisBlock
 
-  def computeDeploysCheckpoint[F[_]: Sync: Log: BlockStore: Span](
+  def computeDeploysCheckpoint[F[_]: Sync: Log: BlockStore: Span: Time](
       parents: Seq[BlockMessage],
       deploys: Seq[Signed[DeployData]],
       dag: BlockDagRepresentation[F],
       runtimeManager: RuntimeManager[F]
   ): F[Either[Throwable, (StateHash, StateHash, Seq[ProcessedDeploy])]] =
-    InterpreterUtil
-      .computeDeploysCheckpoint[F](
-        parents,
-        deploys,
-        dag,
-        runtimeManager,
-        BlockData(
-          deploys.maxBy(_.data.timestamp).data.timestamp,
-          0,
-          genesisContext.validatorPks.head
-        ),
-        Map.empty[BlockHash, Validator]
+    Time[F].currentMillis >>= (
+        now =>
+          InterpreterUtil
+            .computeDeploysCheckpoint[F](
+              parents,
+              deploys,
+              dag,
+              runtimeManager,
+              BlockData(
+                now,
+                0,
+                genesisContext.validatorPks.head
+              ),
+              Map.empty[BlockHash, Validator]
+            )
+            .attempt
       )
-      .attempt
 
   "computeBlockCheckpoint" should "compute the final post-state of a chain properly" in effectTest {
     val time = 0L
@@ -213,11 +225,12 @@ class InterpreterUtilTest
      *         genesis
      */
     for {
-      b1 <- buildBlock[Task](Seq(genesis.blockHash), deploys = b1DeploysWithCost)
-      b2 <- buildBlock[Task](Seq(genesis.blockHash), deploys = b2DeploysWithCost)
+      b1 <- buildBlock[Task](Seq(genesis.blockHash), deploys = b1DeploysWithCost, now = 1)
+      b2 <- buildBlock[Task](Seq(genesis.blockHash), deploys = b2DeploysWithCost, now = 1)
       b3 <- buildBlock[Task](
              Seq(b1.blockHash, b2.blockHash),
-             deploys = b3DeploysWithCost
+             deploys = b3DeploysWithCost,
+             now = 2
            )
       _         <- step(runtimeManager)(b1, genesis)
       _         <- step(runtimeManager)(b2, genesis)
@@ -255,13 +268,14 @@ class InterpreterUtilTest
      *         genesis
      */
     for {
-      b1 <- buildBlock[Task](Seq(genesis.blockHash), deploys = b1DeploysWithCost)
-      b2 <- buildBlock[Task](Seq(b1.blockHash), deploys = b2DeploysWithCost)
-      b3 <- buildBlock[Task](Seq(b1.blockHash), deploys = b3DeploysWithCost)
-      b4 <- buildBlock[Task](Seq(b3.blockHash), deploys = b4DeploysWithCost)
+      b1 <- buildBlock[Task](Seq(genesis.blockHash), deploys = b1DeploysWithCost, now = 100)
+      b2 <- buildBlock[Task](Seq(b1.blockHash), deploys = b2DeploysWithCost, now = 200)
+      b3 <- buildBlock[Task](Seq(b1.blockHash), deploys = b3DeploysWithCost, now = 200)
+      b4 <- buildBlock[Task](Seq(b3.blockHash), deploys = b4DeploysWithCost, now = 300)
       b5 <- buildBlock[Task](
              Seq(b2.blockHash, b4.blockHash),
-             deploys = b5DeploysWithCost
+             deploys = b5DeploysWithCost,
+             now = 500
            )
       _ <- step(runtimeManager)(b1, genesis)
       _ <- step(runtimeManager)(b2, genesis)
@@ -683,15 +697,18 @@ class InterpreterUtilTest
       b1 <- buildBlock[Task](
              Seq(genesis.blockHash),
              ByteString.copyFrom(genesisContext.validatorPks.head.bytes),
+             0,
              deploys = b1DeploysWithCost
            )
       b2 <- buildBlock[Task](
              Seq(genesis.blockHash),
              ByteString.copyFrom(genesisContext.validatorPks.head.bytes),
+             1,
              deploys = b2DeploysWithCost
            )
       _ <- buildBlock[Task](
             Seq(b1.blockHash, b2.blockHash),
+            now = 2,
             deploys = b3DeploysWithCost
           )
       _           <- step(runtimeManager)(b1, genesis)
