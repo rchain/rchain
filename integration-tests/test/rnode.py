@@ -742,4 +742,4 @@ def started_bootstrap_with_network(
             yield bootstrap
 
 ready_bootstrap_with_network = functools.partial(started_bootstrap_with_network,
-        wait_for_approved_block=False)
+        wait_for_approved_block=True)
