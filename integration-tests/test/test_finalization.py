@@ -12,7 +12,7 @@ from .wait import (
 )
 from .rnode import (
     bootstrap_connected_peer,
-    docker_network_with_started_bootstrap,
+    ready_bootstrap_with_network,
 )
 
 
@@ -59,7 +59,7 @@ def test_finalizes_block(command_line_options: CommandLineOptions, random_genera
     }
     FAULT_TOLERANCE_THRESHOLD = '0.5'
     with conftest.testing_context(command_line_options, random_generator, docker_client, bootstrap_key=BOOTSTRAP_NODE_KEY, peers_keys=peers_keypairs, validator_bonds_dict=validator_bonds_map, wallets_dict=wallets_map) as context, \
-        docker_network_with_started_bootstrap(context=context, cli_options={'--fault-tolerance-threshold': FAULT_TOLERANCE_THRESHOLD}) as bootstrap_node, \
+        ready_bootstrap_with_network(context=context, cli_options={'--fault-tolerance-threshold': FAULT_TOLERANCE_THRESHOLD}) as bootstrap_node, \
         bootstrap_connected_peer(context=context, bootstrap=bootstrap_node, name='bonded-validator-1', private_key=BONDED_VALIDATOR_KEY_1, cli_options={'--fault-tolerance-threshold': FAULT_TOLERANCE_THRESHOLD}) as validator1, \
         bootstrap_connected_peer(context=context, bootstrap=bootstrap_node, name='bonded-validator-2', private_key=BONDED_VALIDATOR_KEY_2, cli_options={'--fault-tolerance-threshold': FAULT_TOLERANCE_THRESHOLD}) as validator2:
             wait_for_peers_count_at_least(context, validator1, 2)

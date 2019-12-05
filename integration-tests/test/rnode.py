@@ -1,3 +1,4 @@
+import functools
 import re
 import os
 import queue
@@ -719,11 +720,13 @@ def started_bootstrap(
 
 
 @contextlib.contextmanager
-def docker_network_with_started_bootstrap(
+def started_bootstrap_with_network(
     context: TestingContext,
     cli_flags: Optional[AbstractSet] = None,
     cli_options: Optional[Dict] = None,
-    synchrony_constraint_threshold: float = 0.0
+    synchrony_constraint_threshold: float = 0.0,
+    extra_volumes: Optional[List[str]] = None,
+    wait_for_approved_block: bool = False,
 ) -> Generator[Node, None, None]:
     with docker_network(context, context.docker) as network:
         with started_bootstrap(
@@ -731,22 +734,12 @@ def docker_network_with_started_bootstrap(
                 network=network,
                 cli_flags=cli_flags,
                 cli_options=cli_options,
-                synchrony_constraint_threshold=synchrony_constraint_threshold
+                synchrony_constraint_threshold=synchrony_constraint_threshold,
+                extra_volumes=extra_volumes,
         ) as bootstrap:
-            wait_for_approved_block_received_handler_state(context, bootstrap)
+            if wait_for_approved_block:
+                wait_for_approved_block_received_handler_state(context, bootstrap)
             yield bootstrap
 
-
-@contextlib.contextmanager
-def ready_bootstrap(
-    context: TestingContext,
-    cli_flags: Optional[AbstractSet] = None,
-    cli_options: Optional[Dict] = None,
-    extra_volumes: Optional[List[str]] = None
-) -> Generator[Node, None, None]:
-    with docker_network(context, context.docker) as network:
-        with started_bootstrap(context=context, network=network, cli_flags=cli_flags, cli_options=cli_options, extra_volumes=extra_volumes) as node:
-            yield node
-
-
-
+ready_bootstrap_with_network = functools.partial(started_bootstrap_with_network,
+        wait_for_approved_block=False)

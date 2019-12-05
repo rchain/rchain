@@ -11,8 +11,8 @@ from docker.client import DockerClient
 
 from .common import CommandLineOptions
 from .conftest import testing_context
-from .rnode import (SynchronyConstraintError, docker_network,
-                    started_bootstrap, started_peer, get_absolute_path_for_mounting)
+from .rnode import (SynchronyConstraintError,
+                    started_bootstrap_with_network, started_peer, get_absolute_path_for_mounting)
 from .test_wallets import get_vault_balance
 from .wait import (wait_for_approved_block_received_handler_state,
                    wait_for_peers_count_at_least)
@@ -44,10 +44,9 @@ def test_backward_compatible(command_line_options: CommandLineOptions, random_ge
     """
     with  testing_context(command_line_options, random_generator, docker_client) as context, \
         temp_rnode_data(context.mount_dir) as temp_rnode, \
-        docker_network(context, context.docker) as network, \
-        started_bootstrap(context=context, network=network, extra_volumes=["{}/bootstrap/rnode:/var/lib/rnode".format(temp_rnode)]) as bootstrap_node, \
-        started_peer(context=context, network=network, bootstrap=bootstrap_node, name='validator-a', private_key=VALIDATOR_A_PRIVATE, extra_volumes=["{}/validatorA/rnode:/var/lib/rnode".format(temp_rnode)], synchrony_constraint_threshold=0.33) as validator_a, \
-        started_peer(context=context, network=network, bootstrap=bootstrap_node, name='validator-b', private_key=VALIDATOR_B_PRIVATE, extra_volumes=["{}/validatorB/rnode:/var/lib/rnode".format(temp_rnode)], synchrony_constraint_threshold=0.33) as validator_b:
+        started_bootstrap_with_network(context=context, extra_volumes=["{}/bootstrap/rnode:/var/lib/rnode".format(temp_rnode)]) as bootstrap_node, \
+        started_peer(context=context, network=bootstrap_node.network, bootstrap=bootstrap_node, name='validator-a', private_key=VALIDATOR_A_PRIVATE, extra_volumes=["{}/validatorA/rnode:/var/lib/rnode".format(temp_rnode)], synchrony_constraint_threshold=0.33) as validator_a, \
+        started_peer(context=context, network=bootstrap_node.network, bootstrap=bootstrap_node, name='validator-b', private_key=VALIDATOR_B_PRIVATE, extra_volumes=["{}/validatorB/rnode:/var/lib/rnode".format(temp_rnode)], synchrony_constraint_threshold=0.33) as validator_b:
 
         wait_for_approved_block_received_handler_state(context, bootstrap_node)
         wait_for_approved_block_received_handler_state(context, validator_a)

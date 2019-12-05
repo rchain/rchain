@@ -11,8 +11,7 @@ from .common import (
 )
 from .rnode import (
     bootstrap_connected_peer,
-    started_bootstrap,
-    docker_network
+    started_bootstrap_with_network,
 )
 
 from .wait import (
@@ -42,8 +41,7 @@ def test_heterogenous_validators(command_line_options: CommandLineOptions, rando
     }
 
     with conftest.testing_context(command_line_options, random_generator, docker_client, validator_bonds_dict=bonded_validator_map, wallets_dict=genesis_vault) as context, \
-        docker_network(context, context.docker) as network, \
-        started_bootstrap(context=context, network=network) as bootstrap_node, \
+        started_bootstrap_with_network(context=context) as bootstrap_node, \
         bootstrap_connected_peer(context=context, bootstrap=bootstrap_node, name='bonded-validator', private_key=BONDED_VALIDATOR_KEY) as bonded_validator:
             wait_for_peers_count_at_least(context, bonded_validator, 1)
 
