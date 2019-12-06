@@ -43,6 +43,8 @@ trait WebApi[F[_]] {
   def getBlock(hash: String): F[BlockInfo]
 
   def getBlocks(depth: Option[Int]): F[List[LightBlockInfo]]
+
+  def findDeploy(deployId: String): F[LightBlockInfo]
 }
 
 object WebApi {
@@ -84,6 +86,9 @@ object WebApi {
 
     def getBlocks(depth: Option[Int]): F[List[LightBlockInfo]] =
       BlockAPI.getBlocks[F](depth).flatMap(_.leftToError).map(_.map(toLightBlockInfo))
+
+    def findDeploy(deployId: String): F[LightBlockInfo] =
+      BlockAPI.findDeploy[F](toByteString(deployId)).flatMap(_.leftToError).map(toLightBlockInfo)
 
     def status: F[ApiStatus] =
       ApiStatus(

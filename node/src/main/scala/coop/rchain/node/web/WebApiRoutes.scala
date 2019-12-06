@@ -77,7 +77,8 @@ object WebApiRoutes {
     implicit val stringEncoder     = jsonEncoderOf[F, String]
     implicit val apiStatusEncoder  = jsonEncoderOf[F, ApiStatus]
     implicit val blockInfoEncoder  = jsonEncoderOf[F, BlockInfo]
-    implicit val lightBlockEncoder = jsonEncoderOf[F, List[LightBlockInfo]]
+    implicit val lightBlockEncoder = jsonEncoderOf[F, LightBlockInfo]
+    implicit val lightBlockListEnc = jsonEncoderOf[F, List[LightBlockInfo]]
     implicit val dataRespEncoder   = jsonEncoderOf[F, DataResponse]
     implicit val prepareEncoder    = jsonEncoderOf[F, PrepareResponse]
     // Decoders
@@ -120,6 +121,9 @@ object WebApiRoutes {
 
       case GET -> Root / "blocks" / IntVar(depth) =>
         webApi.getBlocks(depth.some).handle
+
+      case GET -> Root / "deploy" / deployId =>
+        webApi.findDeploy(deployId).handle
     }
   }
 
