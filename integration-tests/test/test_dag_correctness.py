@@ -7,7 +7,7 @@ from . import conftest
 
 from .rnode import (
     bootstrap_connected_peer,
-    docker_network_with_started_bootstrap,
+    ready_bootstrap_with_network,
     DeployThread
 )
 from .wait import (
@@ -62,7 +62,7 @@ def test_fault_tolerance(command_line_options: CommandLineOptions, random_genera
         BONDED_VALIDATOR_KEY_4: 10000
     }
     with conftest.testing_context(command_line_options, random_generator, docker_client, bootstrap_key=BOOTSTRAP_NODE_KEYS, peers_keys=peers_keypairs, validator_bonds_dict=validator_bonds_map, wallets_dict=wallets_map) as context, \
-        docker_network_with_started_bootstrap(context=context) as bootstrap_node, \
+        ready_bootstrap_with_network(context=context) as bootstrap_node, \
         bootstrap_connected_peer(context=context, bootstrap=bootstrap_node, name='bonded-validator-1', private_key=BONDED_VALIDATOR_KEY_1) as validator1, \
         bootstrap_connected_peer(context=context, bootstrap=bootstrap_node, name='bonded-validator-2', private_key=BONDED_VALIDATOR_KEY_2) as validator2:
             wait_for_peers_count_at_least(context, validator1, 2)
@@ -126,7 +126,7 @@ def test_catch_up_next_round(command_line_options: CommandLineOptions, random_ge
     peers_keypairs = [BONDED_VALIDATOR_KEY_1, BONDED_VALIDATOR_KEY_2, BONDED_VALIDATOR_KEY_3, BONDED_VALIDATOR_KEY_4]
     contract_path = '/opt/docker/examples/tut-hello.rho'
     with conftest.testing_context(command_line_options, random_generator, docker_client, bootstrap_key=BOOTSTRAP_NODE_KEYS, peers_keys=peers_keypairs, wallets_dict=wallets_map) as context, \
-        docker_network_with_started_bootstrap(context=context) as bootstrap_node, \
+        ready_bootstrap_with_network(context=context) as bootstrap_node, \
         bootstrap_connected_peer(context=context, bootstrap=bootstrap_node, name='bonded-validator-1', private_key=BONDED_VALIDATOR_KEY_1) as validator1, \
         bootstrap_connected_peer(context=context, bootstrap=bootstrap_node, name='bonded-validator-2', private_key=BONDED_VALIDATOR_KEY_2) as validator2, \
         bootstrap_connected_peer(context=context, bootstrap=bootstrap_node, name='bonded-validator-3', private_key=BONDED_VALIDATOR_KEY_3) as validator3:

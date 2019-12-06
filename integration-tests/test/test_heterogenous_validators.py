@@ -11,8 +11,7 @@ from .common import (
 )
 from .rnode import (
     bootstrap_connected_peer,
-    started_bootstrap,
-    docker_network
+    ready_bootstrap_with_network,
 )
 
 from .wait import (
@@ -28,6 +27,9 @@ BONDED_VALIDATOR_KEY = PrivateKey.from_hex("9a801debae8bb97fe54c99389cafa576c606
 JOINING_VALIDATOR_KEY = PrivateKey.from_hex("567ea426deaeb8233f134c3a266149fb196d6eea7d28b447dfefff92002cb400")
 READONLY_PEER_KEY = PrivateKey.from_hex("3596e2e5fd14b24a6d84af04b7f0a8f13e3e68ee2ca91dc4b19550f12e61502c")
 
+# The assumption that a newly bonded validator instantly becomes an active validator that can propose, is
+# currently not valid.
+@pytest.mark.skip
 def test_heterogenous_validators(command_line_options: CommandLineOptions, random_generator: Random, docker_client: DockerClient) -> None:
     genesis_vault = {
         BOOTSTRAP_KEY: 50000000,
@@ -42,8 +44,7 @@ def test_heterogenous_validators(command_line_options: CommandLineOptions, rando
     }
 
     with conftest.testing_context(command_line_options, random_generator, docker_client, validator_bonds_dict=bonded_validator_map, wallets_dict=genesis_vault) as context, \
-        docker_network(context, context.docker) as network, \
-        started_bootstrap(context=context, network=network) as bootstrap_node, \
+        ready_bootstrap_with_network(context=context) as bootstrap_node, \
         bootstrap_connected_peer(context=context, bootstrap=bootstrap_node, name='bonded-validator', private_key=BONDED_VALIDATOR_KEY) as bonded_validator:
             wait_for_peers_count_at_least(context, bonded_validator, 1)
 

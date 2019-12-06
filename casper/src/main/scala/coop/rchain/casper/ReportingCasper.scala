@@ -17,6 +17,7 @@ import coop.rchain.casper.protocol.{BlockMessage, DeployData, ProcessedDeploy}
 import coop.rchain.casper.util.{EventConverter, ProtoUtil}
 import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
 import coop.rchain.casper.util.rholang.{InternalError, ReplayFailure, RuntimeManager}
+import coop.rchain.crypto.PublicKey
 import coop.rchain.metrics.Metrics.Source
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.models.BlockHash._
@@ -225,11 +226,12 @@ object ReportingCasper {
       dag: BlockDagRepresentation[F],
       runtimeManager: ReportingRuntimeManagerImpl[F]
   ): F[Either[ReplayFailure, List[(ProcessedDeploy, Seq[ReportingEvent])]]] = {
-    val hash        = ProtoUtil.preStateHash(block)
-    val deploys     = block.body.deploys
-    val timestamp   = block.header.timestamp
-    val blockNumber = block.body.state.blockNumber
-    runtimeManager.replayComputeState(hash)(deploys, BlockData(timestamp, blockNumber))
+    val hash    = ProtoUtil.preStateHash(block)
+    val deploys = block.body.deploys
+    runtimeManager.replayComputeState(hash)(
+      deploys,
+      BlockData.fromBlock(block)
+    )
   }
 
   def fromRuntime[F[_]: Concurrent: Sync: Metrics: Span: Log](

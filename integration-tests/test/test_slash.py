@@ -21,7 +21,7 @@ from .node_client import (NodeClient,
                           node_protocol_client)
 from .rnode import (Node,
                     bootstrap_connected_peer,
-                    docker_network_with_started_bootstrap)
+                    ready_bootstrap_with_network)
 from .wait import (wait_for_log_match,
                    wait_for_node_sees_block)
 
@@ -48,7 +48,7 @@ def three_nodes_network_with_node_client(command_line_options: CommandLineOption
         BONDED_VALIDATOR_KEY_3: 10000
     }
     with conftest.testing_context(command_line_options, random_generator, docker_client, bootstrap_key=BOOTSTRAP_NODE_KEY, peers_keys=peers_keypairs, validator_bonds_dict=validator_bonds_dict, wallets_dict=wallet_map) as context, \
-        docker_network_with_started_bootstrap(context=context) as bootstrap_node, \
+        ready_bootstrap_with_network(context=context) as bootstrap_node, \
         bootstrap_connected_peer(context=context, bootstrap=bootstrap_node, name='bonded-validator-1', private_key=BONDED_VALIDATOR_KEY_1) as validator1, \
         bootstrap_connected_peer(context=context, bootstrap=bootstrap_node, name='bonded-validator-2', private_key=BONDED_VALIDATOR_KEY_2) as validator2, \
         node_protocol_client(bootstrap_node.network, docker_client, context) as client:

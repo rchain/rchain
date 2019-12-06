@@ -1260,6 +1260,28 @@ class DebruijnInterpreter[M[_], F[_]](
       } yield result
   }
 
+  private[this] val take: Method = new Method() {
+    def take(baseExpr: Expr, n: Int): M[Par] =
+      baseExpr.exprInstance match {
+        case EListBody(EList(ps, locallyFree, connectiveUsed, remainder)) =>
+          syncM.delay(EList(ps.take(n), locallyFree, connectiveUsed, remainder))
+        case other =>
+          MethodNotDefined("take", other.typ).raiseError[M, Par]
+      }
+
+    override def apply(p: Par, args: Seq[Par])(implicit env: Env[Par]): M[Par] =
+      for {
+        _ <- if (args.length != 1)
+              MethodArgumentNumberMismatch("take", 1, args.length).raiseError[M, Unit]
+            else ().pure[M]
+        baseExpr <- evalSingleExpr(p)
+        nArgRaw  <- evalToLong(args.head)
+        nArg     <- restrictToInt(nArgRaw)
+        _        <- charge[M](takeCost(nArg))
+        result   <- take(baseExpr, nArg)
+      } yield result
+  }
+
   private[this] val toList: Method = new Method() {
 
     def toList(baseExpr: Expr): M[Par] =
@@ -1391,6 +1413,7 @@ class DebruijnInterpreter[M[_], F[_]](
       "size"        -> size,
       "length"      -> length,
       "slice"       -> slice,
+      "take"        -> take,
       "toList"      -> toList,
       "toSet"       -> toSet,
       "toMap"       -> toMap

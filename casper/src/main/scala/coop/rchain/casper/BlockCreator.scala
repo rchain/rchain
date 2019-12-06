@@ -12,6 +12,7 @@ import coop.rchain.casper.util.ProtoUtil._
 import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
 import coop.rchain.casper.util.rholang._
 import coop.rchain.casper.util.{ConstructDeploy, DagOperations, ProtoUtil}
+import coop.rchain.crypto.PublicKey
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.signatures.Signed
 import coop.rchain.metrics.{Metrics, Span}
@@ -98,6 +99,7 @@ object BlockCreator {
                                 deploys,
                                 justifications,
                                 maxBlockNumber,
+                                validatorIdentity.publicKey,
                                 shardId,
                                 version,
                                 now,
@@ -123,7 +125,7 @@ object BlockCreator {
     }
 
   // TODO: Remove no longer valid deploys here instead of with lastFinalizedBlock call
-  private def extractDeploys[F[_]: Sync: Log: Time: BlockStore](
+  private def extractDeploys[F[_]: Sync: Log: BlockStore](
       dag: BlockDagRepresentation[F],
       parents: Seq[BlockMetadata],
       maxBlockNumber: Long,
@@ -185,27 +187,28 @@ object BlockCreator {
       deploys: Seq[Signed[DeployData]],
       justifications: Seq[Justification],
       maxBlockNumber: Long,
+      sender: PublicKey,
       shardId: String,
       version: Long,
       now: Long,
       invalidBlocks: Map[BlockHash, Validator]
   ): F[CreateBlockStatus] =
     (for {
+      blockData <- BlockData(now, maxBlockNumber + 1, sender).pure
       result <- InterpreterUtil.computeDeploysCheckpoint(
                  parents,
                  deploys,
                  dag,
                  runtimeManager,
-                 BlockData(now, maxBlockNumber + 1),
+                 blockData,
                  invalidBlocks
                )
       (preStateHash, postStateHash, processedDeploys) = result
       newBonds                                        <- runtimeManager.computeBonds(postStateHash)
       block = createBlock(
-        now,
+        blockData,
         parents,
         justifications,
-        maxBlockNumber,
         preStateHash,
         postStateHash,
         processedDeploys,
@@ -223,10 +226,9 @@ object BlockCreator {
       .handleError(CreateBlockStatus.internalDeployError)
 
   private def createBlock(
-      now: Long,
+      blockData: BlockData,
       p: Seq[BlockMessage],
       justifications: Seq[Justification],
-      maxBlockNumber: Long,
       preStateHash: StateHash,
       postStateHash: StateHash,
       persistableDeploys: Seq[ProcessedDeploy],
@@ -234,10 +236,10 @@ object BlockCreator {
       shardId: String,
       version: Long
   ): CreateBlockStatus = {
-    val postState = RChainState(preStateHash, postStateHash, newBonds.toList, maxBlockNumber + 1)
+    val postState = RChainState(preStateHash, postStateHash, newBonds.toList, blockData.blockNumber)
 
     val body   = Body(postState, persistableDeploys.toList)
-    val header = blockHeader(body, p.map(_.blockHash), version, now)
+    val header = blockHeader(body, p.map(_.blockHash), version, blockData.timeStamp)
     val block  = unsignedBlockProto(body, header, justifications, shardId)
     CreateBlockStatus.created(block)
   }

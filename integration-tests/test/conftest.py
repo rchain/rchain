@@ -27,7 +27,7 @@ from .common import (
 )
 from .rnode import (
     Node,
-    docker_network_with_started_bootstrap,
+    ready_bootstrap_with_network,
 )
 from .pregenerated_keypairs import PREGENERATED_KEYPAIRS
 
@@ -193,5 +193,5 @@ testing_context.__test__ = False # type: ignore
 @pytest.yield_fixture(scope='module')
 def started_standalone_bootstrap_node(command_line_options: CommandLineOptions, random_generator: Random, docker_client: DockerClient) -> Generator[Node, None, None]:
     with testing_context(command_line_options, random_generator, docker_client) as context:
-        with docker_network_with_started_bootstrap(context=context) as bootstrap_node:
+        with ready_bootstrap_with_network(context=context) as bootstrap_node:
             yield bootstrap_node

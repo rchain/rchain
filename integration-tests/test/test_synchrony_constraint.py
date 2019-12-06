@@ -11,8 +11,7 @@ from .common import (
 )
 from .rnode import (
     bootstrap_connected_peer,
-    started_bootstrap,
-    docker_network
+    ready_bootstrap_with_network,
 )
 from .wait import (
     wait_for_node_sees_block,
@@ -58,8 +57,7 @@ def test_synchrony_constraint(command_line_options: CommandLineOptions, random_g
     sample_contract = '/opt/docker/examples/hello_world_again.rho'
 
     with conftest.testing_context(command_line_options, random_generator, docker_client, validator_bonds_dict=bonded_validator_map, bootstrap_key=BOOTSTRAP_NODE_KEYS, wallets_dict=genesis_vault) as context, \
-        docker_network(context, context.docker) as network, \
-        started_bootstrap(context=context, network=network, synchrony_constraint_threshold=0) as bootstrap_node, \
+        ready_bootstrap_with_network(context=context, synchrony_constraint_threshold=0) as bootstrap_node, \
         bootstrap_connected_peer(context=context, bootstrap=bootstrap_node, name='bonded-validator-1', private_key=BONDED_VALIDATOR_KEY_1, synchrony_constraint_threshold=0.48) as bonded_validator_1, \
         bootstrap_connected_peer(context=context, bootstrap=bootstrap_node, name='bonded-validator-2',private_key=BONDED_VALIDATOR_KEY_2, synchrony_constraint_threshold=0.4) as bonded_validator_2, \
         bootstrap_connected_peer(context=context, bootstrap=bootstrap_node, name='bonded-validator-3', private_key=BONDED_VALIDATOR_KEY_3, synchrony_constraint_threshold=0.99) as bonded_validator_3:
