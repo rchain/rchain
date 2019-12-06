@@ -37,6 +37,7 @@ import coop.rchain.grpc.Server
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.node.NodeRuntime.{apply => _, _}
+import coop.rchain.node.api.WebApi.WebApiImpl
 import coop.rchain.node.api._
 import coop.rchain.node.configuration.Configuration
 import coop.rchain.node.diagnostics._
@@ -246,14 +247,22 @@ class NodeRuntime private[node] (
       casperLoop,
       engineInit,
       casperLaunch,
-      reportingCasper
+      reportingCasper,
+      webApi
     ) = result
 
     // 4. launch casper
     _ <- casperLaunch.launch()
 
     // 5. run the node program.
-    program = nodeProgram(apiServers, casperLoop, engineInit, runtimeCleanup, reportingCasper)(
+    program = nodeProgram(
+      apiServers,
+      casperLoop,
+      engineInit,
+      runtimeCleanup,
+      reportingCasper,
+      webApi
+    )(
       logEnv,
       timeEnv,
       rpConfStateEnv,
@@ -300,7 +309,8 @@ class NodeRuntime private[node] (
       casperLoop: CasperLoop[TaskEnv],
       engineInit: EngineInit[TaskEnv],
       runtimeCleanup: Cleanup[TaskEnv],
-      reportingCasper: ReportingCasper[TaskEnv]
+      reportingCasper: ReportingCasper[TaskEnv],
+      webApi: WebApi[TaskEnv]
   )(
       implicit
       logEnv: Log[TaskEnv],
@@ -372,7 +382,7 @@ class NodeRuntime private[node] (
       _     <- info
       local <- peerNodeAsk.ask
       host  = local.endpoint.host
-      servers <- acquireServers(apiServers, reportingCasper)(
+      servers <- acquireServers(apiServers, reportingCasper, webApi)(
                   kademliaStore,
                   nodeDiscoveryTask,
                   rpConnections,
@@ -488,7 +498,11 @@ class NodeRuntime private[node] (
       httpServer: Fiber[Task, Unit]
   )
 
-  def acquireServers(apiServers: APIServers, reportingCasper: ReportingCasper[TaskEnv])(
+  def acquireServers(
+      apiServers: APIServers,
+      reportingCasper: ReportingCasper[TaskEnv],
+      webApi: WebApi[TaskEnv]
+  )(
       implicit
       kademliaStore: KademliaStore[Task],
       nodeDiscovery: NodeDiscovery[Task],
@@ -542,7 +556,8 @@ class NodeRuntime private[node] (
         conf.server.reporting,
         conf.server.httpPort,
         prometheusReporter,
-        reportingCasper
+        reportingCasper,
+        webApi
       )(nodeDiscovery, connectionsCell, concurrent, rPConfAsk, consumer, s)
       httpFiber <- httpServerFiber.start
       _ <- Task.delay {
@@ -634,7 +649,8 @@ object NodeRuntime {
         CasperLoop[F],
         EngineInit[F],
         CasperLaunch[F],
-        ReportingCasper[F]
+        ReportingCasper[F],
+        WebApi[F]
     )
   ] =
     for {
@@ -759,6 +775,13 @@ object NodeRuntime {
       } yield ()
       engineInit     = engineCell.read >>= (_.init)
       runtimeCleanup = NodeRuntime.cleanup(runtime, casperRuntime)
+      webApi = {
+        implicit val ec = engineCell
+        implicit val sp = span
+        implicit val or = oracle
+        implicit val bs = blockStore
+        new WebApiImpl[F]
+      }
     } yield (
       blockStore,
       blockDagStorage,
@@ -768,7 +791,8 @@ object NodeRuntime {
       casperLoop,
       engineInit,
       casperLaunch,
-      reportingCasper
+      reportingCasper,
+      webApi
     )
 
   final case class APIServers(
