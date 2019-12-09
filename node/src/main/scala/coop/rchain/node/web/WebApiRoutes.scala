@@ -28,7 +28,7 @@ object WebApiRoutes {
       req
         .attemptAs[A]
         .value
-        .flatMap(_.leftToError[F])
+        .flatMap(_.liftTo[F])
         .flatMap(a => mf(f(a)))
         .flatMap(Ok(_))
         .handleErrorWith {

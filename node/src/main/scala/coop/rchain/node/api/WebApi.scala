@@ -56,13 +56,13 @@ object WebApi {
     def prepareDeploy(req: Option[PrepareRequest]): F[PrepareResponse] = {
       val blockNumber = BlockAPI
         .getBlocks[F](1.some)
-        .flatMap(_.leftToError)
+        .flatMap(_.liftToBlockApiErr)
         .map(_.headOption.map(_.blockNumber).getOrElse(-1L))
 
       val previewNames = req.fold(List[String]().pure) { r =>
         BlockAPI
           .previewPrivateNames[F](toByteString(r.deployer), r.timestamp, r.nameQty)
-          .flatMap(_.leftToError)
+          .flatMap(_.liftToBlockApiErr)
           .map(_.map(toHex).toList)
       }
 
@@ -70,25 +70,28 @@ object WebApi {
     }
 
     def deploy(request: Signed[DeployData]): F[String] =
-      BlockAPI.deploy(request).flatMap(_.leftToError)
+      BlockAPI.deploy(request).flatMap(_.liftToBlockApiErr)
 
     def listenForDataAtName(req: DataRequest): F[DataResponse] =
       BlockAPI
         .getListeningNameDataResponse(req.depth, toPar(req))
-        .flatMap(_.leftToError)
+        .flatMap(_.liftToBlockApiErr)
         .map(toDataResponse)
 
     def lastFinalizedBlock: F[BlockInfo] =
-      BlockAPI.lastFinalizedBlock[F].flatMap(_.leftToError).map(toBlockInfo)
+      BlockAPI.lastFinalizedBlock[F].flatMap(_.liftToBlockApiErr).map(toBlockInfo)
 
     def getBlock(hash: String): F[BlockInfo] =
-      BlockAPI.getBlock[F](hash).flatMap(_.leftToError).map(toBlockInfo)
+      BlockAPI.getBlock[F](hash).flatMap(_.liftToBlockApiErr).map(toBlockInfo)
 
     def getBlocks(depth: Option[Int]): F[List[LightBlockInfo]] =
-      BlockAPI.getBlocks[F](depth).flatMap(_.leftToError).map(_.map(toLightBlockInfo))
+      BlockAPI.getBlocks[F](depth).flatMap(_.liftToBlockApiErr).map(_.map(toLightBlockInfo))
 
     def findDeploy(deployId: String): F[LightBlockInfo] =
-      BlockAPI.findDeploy[F](toByteString(deployId)).flatMap(_.leftToError).map(toLightBlockInfo)
+      BlockAPI
+        .findDeploy[F](toByteString(deployId))
+        .flatMap(_.liftToBlockApiErr)
+        .map(toLightBlockInfo)
 
     def status: F[ApiStatus] =
       ApiStatus(
@@ -193,6 +196,9 @@ object WebApi {
   // Exception thrown by BlockAPI
   final class BlockApiException(message: String) extends Exception(message)
 
+  // Deploy signature error
+  final class SignatureException(message: String) extends Exception(message)
+
   // Conversion functions for protobuf generated types
 
   import WebApiSyntax._
@@ -201,12 +207,18 @@ object WebApi {
       sd: SignedDeploy
   ): F[Signed[DeployData]] =
     for {
-      pkBytes  <- Base16.decode(sd.deployer).noneToError("Public key is not valid base16 format.")
-      sigBytes <- Base16.decode(sd.signature).noneToError("Signature is not valid base16 format.")
-      sig      = ByteString.copyFrom(sigBytes)
-      pk       = PublicKey(pkBytes)
-      sigAlg   <- SignaturesAlg(sd.sigAlgorithm).noneToError("Signature algorithm not supported.")
-      sigData  <- Signed.fromSignedData(sd.data, pk, sig, sigAlg).noneToError("Invalid signature.")
+      pkBytes <- Base16
+                  .decode(sd.deployer)
+                  .liftToSigErr[F]("Public key is not valid base16 format.")
+      sigBytes <- Base16
+                   .decode(sd.signature)
+                   .liftToSigErr[F]("Signature is not valid base16 format.")
+      sig    = ByteString.copyFrom(sigBytes)
+      pk     = PublicKey(pkBytes)
+      sigAlg <- SignaturesAlg(sd.sigAlgorithm).liftToSigErr[F]("Signature algorithm not supported.")
+      sigData <- Signed
+                  .fromSignedData(sd.data, pk, sig, sigAlg)
+                  .liftToSigErr[F]("Invalid signature.")
     } yield sigData
 
   // Binary converters - protobuf uses ByteString and in JSON is base16 string
@@ -324,21 +336,13 @@ object WebApi {
 
   object WebApiSyntax {
     implicit final class OptionExt[A](val x: Option[A]) extends AnyVal {
-      def noneToError[F[_]: Sync](error: String): F[A] =
-        x.noneToError(new BlockApiException(error))
-
-      def noneToError[F[_]: Sync](error: Throwable): F[A] =
-        x.fold(Sync[F].raiseError[A](error))(Sync[F].pure)
+      def liftToSigErr[F[_]: Sync](error: String): F[A] =
+        x.liftTo[F](new SignatureException(error))
     }
 
     implicit final class EitherStringExt[A](val x: Either[String, A]) extends AnyVal {
-      def leftToError[F[_]: Sync]: F[A] =
-        x.fold(error => Sync[F].raiseError(new BlockApiException(error)), Sync[F].pure)
-    }
-
-    implicit final class EitherThrowExt[A](val x: Either[Throwable, A]) extends AnyVal {
-      def leftToError[F[_]: Sync]: F[A] =
-        x.fold(error => Sync[F].raiseError(error), Sync[F].pure)
+      def liftToBlockApiErr[F[_]: Sync]: F[A] =
+        x.leftMap(new BlockApiException(_)).liftTo[F]
     }
   }
 
