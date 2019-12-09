@@ -31,7 +31,7 @@ trait WebApi[F[_]] {
   def prepareDeploy(request: Option[PrepareRequest]): F[PrepareResponse]
 
   // Write data (deploy)
-  def deploy(request: Signed[DeployData]): F[String]
+  def deploy(request: DeployRequest): F[String]
 
   // Read data (listen)
   def listenForDataAtName(request: DataRequest): F[DataResponse]
@@ -69,8 +69,8 @@ object WebApi {
       previewNames.map2(blockNumber)(PrepareResponse)
     }
 
-    def deploy(request: Signed[DeployData]): F[String] =
-      BlockAPI.deploy(request).flatMap(_.liftToBlockApiErr)
+    def deploy(request: DeployRequest): F[String] =
+      toSignedDeploy(request).flatMap(BlockAPI.deploy(_)).flatMap(_.liftToBlockApiErr)
 
     def listenForDataAtName(req: DataRequest): F[DataResponse] =
       BlockAPI
@@ -100,15 +100,6 @@ object WebApi {
       ).pure
   }
 
-  // API request & response types
-
-  final case class SignedDeploy(
-      data: DeployData,
-      deployer: String,
-      signature: String,
-      sigAlgorithm: String
-  )
-
   // Rholang terms interesting for translation to JSON
 
   sealed trait RhoExpr
@@ -131,6 +122,15 @@ object WebApi {
   final case class UnforgPrivate(data: String)  extends RhoUnforg
   final case class UnforgDeploy(data: String)   extends RhoUnforg
   final case class UnforgDeployer(data: String) extends RhoUnforg
+
+  // API request & response types
+
+  final case class DeployRequest(
+      data: DeployData,
+      deployer: String,
+      signature: String,
+      sigAlgorithm: String
+  )
 
   final case class DataRequest(
       // For simplicity only one Unforgeable name is allowed
@@ -203,8 +203,8 @@ object WebApi {
 
   import WebApiSyntax._
 
-  def toSigned[F[_]: Sync](
-      sd: SignedDeploy
+  def toSignedDeploy[F[_]: Sync](
+      sd: DeployRequest
   ): F[Signed[DeployData]] =
     for {
       pkBytes <- Base16
