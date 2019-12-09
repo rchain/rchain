@@ -44,7 +44,7 @@ object WebApiRoutes {
 
     implicit class MEx[A](val ma: M[A]) {
       // Handle GET requests
-      //   case GET -> Root / "lastFinalizedBlock" =>
+      //   case GET -> Root / "last-finalized-block" =>
       //     webApi.lastFinalizedBlock.handle
       def handle(implicit encoder: EntityEncoder[F, A]): F[Response[F]] =
         mf(ma)
@@ -55,14 +55,14 @@ object WebApiRoutes {
     implicit class RequestEx(val req: Request[F]) {
       // Handle POST requests
       //   case req @ POST -> Root / "deploy" =>
-      //     req.handle[SignedDeploy, String](WebApi.toSigned[M](_) >>= webApi.deploy)
+      //     req.handle[DeployRequest, String](webApi.deploy)
       def handle[A, B](
           f: A => M[B]
       )(implicit decoder: EntityDecoder[F, A], encoder: EntityEncoder[F, B]): F[Response[F]] =
         handleRequest[A, B](req, f)
 
       // Handle POST requests without input parameters
-      //   case req @ POST -> Root / "lastFinalizedBlock" =>
+      //   case req @ POST -> Root / "last-finalized-block" =>
       //     req.handle_(webApi.lastFinalizedBlock)
       def handle_[B](
           f: M[B]
@@ -82,9 +82,9 @@ object WebApiRoutes {
     implicit val dataRespEncoder   = jsonEncoderOf[F, DataResponse]
     implicit val prepareEncoder    = jsonEncoderOf[F, PrepareResponse]
     // Decoders
-    implicit val signedDeployDecoder = jsonOf[F, SignedDeploy]
-    implicit val dataRequestDecoder  = jsonOf[F, DataRequest]
-    implicit val prepareDecoder      = jsonOf[F, PrepareRequest]
+    implicit val deployRequestDecoder = jsonOf[F, DeployRequest]
+    implicit val dataRequestDecoder   = jsonOf[F, DataRequest]
+    implicit val prepareDecoder       = jsonOf[F, PrepareRequest]
 
     HttpRoutes.of[F] {
       case GET -> Root / "status" =>
@@ -101,7 +101,7 @@ object WebApiRoutes {
       // Deploy
 
       case req @ POST -> Root / "deploy" =>
-        req.handle[SignedDeploy, String](WebApi.toSigned[M](_) >>= webApi.deploy)
+        req.handle[DeployRequest, String](webApi.deploy)
 
       // Get data
 
