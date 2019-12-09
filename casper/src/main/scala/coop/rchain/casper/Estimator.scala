@@ -214,6 +214,9 @@ object Estimator {
   def apply[F[_]](implicit ev: Estimator[F]): Estimator[F] =
     ev
 
-  def apply[F[_]: Sync: Log: Metrics: Span](maxNumberOfParents: Int): Estimator[F] =
-    new Estimator(maxNumberOfParents, None)
+  def apply[F[_]: Sync: Log: Metrics: Span](
+      maxNumberOfParents: Int,
+      maxParentDepthOpt: Option[Int]
+  ): Estimator[F] =
+    new Estimator(maxNumberOfParents, maxParentDepthOpt)
 }

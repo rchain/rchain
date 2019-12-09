@@ -364,6 +364,10 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
     val maxNumberOfParents = opt[Int](
       descr = "Maximum number of block parents."
     )
+
+    val maxParentDepth = opt[Int](
+      descr = "Maximum depth of block parents."
+    )
   }
   addSubcommand(run)
 
