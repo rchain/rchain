@@ -98,7 +98,11 @@ class ReplayRSpace[F[_]: Sync, C, P, A, K](
             )
     } yield r
 
-// TODO: refactor this monster
+  private def filterMatching(comm: COMM)(data: Seq[internal.Datum[A]]) =
+    data.iterator.zipWithIndex.filter {
+      case (data, _) => comm.matches(data, produceCounter.get(data.source))
+    }.toSeq
+
   def getCommAndConsumeCandidates(
       channels: Seq[C],
       patterns: Seq[P],
@@ -115,7 +119,7 @@ class ReplayRSpace[F[_]: Sync, C, P, A, K](
       channelToIndexedDataList <- channels.traverse { c: C =>
                                    store
                                      .getData(c)
-                                     .map(_.zipWithIndex.filter(matches(comm)))
+                                     .map(filterMatching(comm))
                                      .map(c -> _)
                                  }
       result <- extractDataCandidates(channels.zip(patterns), channelToIndexedDataList.toMap, Nil)
@@ -179,22 +183,21 @@ class ReplayRSpace[F[_]: Sync, C, P, A, K](
       channels =>
         store
           .getContinuations(channels)
-          .map(_.zipWithIndex.filter {
+          .map(_.iterator.zipWithIndex.filter {
             case (WaitingContinuation(_, _, _, _, source), _) =>
               comm.consume == source
-          }),
+          }.toSeq),
       c =>
         store
           .getData(c)
-          .map(_.zipWithIndex)
-          .map(
-            as =>
-              c -> {
-                if (c == channel)
-                  Seq((Datum(data, persist, produceRef), -1))
-                else as
-              }.filter { matches(comm) }
-          )
+          .map { as =>
+            val d = Datum(data, persist, produceRef)
+            val matching = if (c == channel) {
+              if (comm.matches(d, produceCounter.get(produceRef))) Seq(d -> -1) //WTF?
+              else Seq.empty
+            } else filterMatching(comm)(as)
+            c -> matching
+          }
     )
 
   private[this] def handleMatch(
@@ -247,15 +250,6 @@ class ReplayRSpace[F[_]: Sync, C, P, A, K](
   }
 
   override def clear(): F[Unit] = syncF.delay { replayData.clear() } >> super.clear()
-
-  private[this] def matches(comm: COMM)(datumWithIndex: (Datum[A], _)): Boolean = {
-    val datum: Datum[A] = datumWithIndex._1
-    def wasRepeatedEnoughTimes: Boolean =
-      if (!datum.persist) {
-        comm.timesRepeated(datum.source) === produceCounter.get(datum.source)
-      } else true
-    comm.produces.contains(datum.source) && wasRepeatedEnoughTimes
-  }
 
   protected override def logComm(
       dataCandidates: Seq[ConsumeCandidate[C, A]],

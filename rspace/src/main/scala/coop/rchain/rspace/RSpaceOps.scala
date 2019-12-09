@@ -52,7 +52,7 @@ abstract class RSpaceOps[F[_]: Concurrent: Metrics, C, P, A, K](
       t.map(d => Random.shuffle(d.zipWithIndex))
   }
 
-  def assertF(predicate: Boolean, errorMsg: String): F[Unit] =
+  def assertF(predicate: Boolean, errorMsg: => String): F[Unit] =
     Sync[F].raiseError(new IllegalStateException(errorMsg)).unlessA(predicate)
 
   protected[this] val eventLog: SyncVar[EventLog] = create[EventLog](Seq.empty)
