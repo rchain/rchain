@@ -2552,7 +2552,7 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
     }
 
     result should be(
-      ReduceError("The number of Pars in the term is 32768, which exceeds the limit of 32767.")
+      ReduceError("The number of terms in the Par is 32768, which exceeds the limit of 32767.")
     )
   }
 }
