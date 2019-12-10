@@ -40,7 +40,7 @@ final class PreChargeDeploy(chargeAmount: Long, pk: PublicKey, rand: Blake2b512R
        #in {
        #  rl!(`rho:rchain:pos`, *poSCh) |
        #  for(@(_, PoS) <- poSCh) {
-       #    @PoS!("chargeDeploy", *initialDeployerId, *chargeAmount, *return)
+       #    @PoS!("chargeDeploy", *initialDeployerId, *chargeAmount, *sysAuthToken, *return)
        #  }
        #}""".stripMargin('#')
 

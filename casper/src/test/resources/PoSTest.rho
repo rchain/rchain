@@ -8,6 +8,8 @@ match (
   posPubKey => {
     new
       rl(`rho:registry:lookup`),
+      makeSysAuthToken(`sys:test:authToken:make`),
+      sysAuthTokenCh,
       stdlog(`rho:io:stdlog`),
       revAddressOps(`rho:rev:address`),
       posRevAddressCh, posVaultCh,
@@ -35,11 +37,13 @@ match (
       rl!(`rho:rchain:pos`, *PoSCh) |
       rl!(`rho:lang:listOps`, *ListOpsCh) |
       rl!(`rho:id:zphjgsfy13h1k85isc8rtwtgt3t9zzt5pjd5ihykfmyapfc4wt3x5h`, *RhoSpecCh) |
+      makeSysAuthToken!(*sysAuthTokenCh) |
       for(@(_, RhoSpec) <- RhoSpecCh;
           @(_, PoS) <- PoSCh;
           @(_, RevVault) <- RevVaultCh;
           @posRevAddress <- posRevAddressCh;
-          @(_, ListOps) <- ListOpsCh) {
+          @(_, ListOps) <- ListOpsCh;
+          @sysAuthToken <- sysAuthTokenCh) {
         stdlog!("info", {"posRevAddress":posRevAddress}) |
 
         @RevVault!("findOrCreate", posRevAddress, *posVaultCh) |
@@ -228,8 +232,8 @@ match (
                     for (_ <- closeBlockCh) {
                       prepareUser!("cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc", *setupCh) |
                       for (@userPubKey, _, @userVault, @userDeployerId <- setupCh) {
-                        @PoS!("chargeDeploy", userDeployerId, 100, *retCh0) |
-                        @PoS!("refundDeploy", 0, *retCh1) |
+                        @PoS!("chargeDeploy", userDeployerId, 100, sysAuthToken, *retCh0) |
+                        @PoS!("refundDeploy", 0, sysAuthToken, *retCh1) |
                         for ( @(true, _) <- retCh0; @(true, _) <- retCh1){
                           closeBlock!(*closeBlockCh) |
                           for (_ <- closeBlockCh) {
@@ -333,8 +337,8 @@ match (
                     for(@initialPosBalance <- initialPosBalanceCh;
                         @initialUser1Balance <- initialUser1BalanceCh;
                         @initialRewards <- initialRewardsCh) {
-                      @PoS!("chargeDeploy", user1DeployerId, 100, *retCh0) |
-                      @PoS!("refundDeploy", 0, *retCh1) |
+                      @PoS!("chargeDeploy", user1DeployerId, 100, sysAuthToken, *retCh0) |
+                      @PoS!("refundDeploy", 0, sysAuthToken, *retCh1) |
                       for ( @(true, _) <- retCh0; @(true, _) <- retCh1) {
                         closeBlock!(*closeBlockCh) |
                         for (_ <- closeBlockCh) {
@@ -404,8 +408,8 @@ match (
                     for(@initialPosBalance <- posBalanceCh;
                         @initialUserBalance <- userBalanceCh;
                         @initialRewards <- rewardsCh) {
-                      @PoS!("chargeDeploy", userDeployerId, 100, *chargeDeployAck) |
-                      @PoS!("refundDeploy", 50, *refundDeployAck) |
+                      @PoS!("chargeDeploy", userDeployerId, 100, sysAuthToken, *chargeDeployAck) |
+                      @PoS!("refundDeploy", 50, sysAuthToken, *refundDeployAck) |
                       for ( @(true, _) <- chargeDeployAck; @(true, _) <- refundDeployAck) {
                         closeBlock!(*closeBlockAck) |
                         for (_ <- closeBlockAck) {
@@ -528,7 +532,7 @@ match (
                 for (@(true, _) <- setupCh) {
                   prepareUser!("0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000", *setupCh) |
                   for (@user1PubKey, _, @user1Vault, @user1DeployerId <- setupCh) {
-                    @PoS!("chargeDeploy", user1DeployerId, 100, *retCh) |
+                    @PoS!("chargeDeploy", user1DeployerId, 100, sysAuthToken, *retCh) |
                     for ( @(true, _) <- retCh) {
                       closeBlock!(*closeBlockCh) |
                       for (_ <- closeBlockCh) {
@@ -572,7 +576,7 @@ match (
 
           contract closeBlock(ackCh) = {
             new ackCh0, activeValidatorsCh, setBlockData(`rho:test:block:data:set`), blockDataSet in {
-              @PoS!("closeBlock", *ackCh0) |
+              @PoS!("closeBlock", sysAuthToken, *ackCh0) |
               @PoS!("getActiveValidators", *activeValidatorsCh) |
               for (@ack <- ackCh0; @activeValidators <- activeValidatorsCh) {
                 // For testing we need one of the active validators to be the block sender
