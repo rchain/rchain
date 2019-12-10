@@ -127,9 +127,9 @@ new TreeHashMap, rs(`rho:registry:insertSigned:secp256k1`), uriOut in {
       } |
 
       contract TreeHashMap(@"get", @map, @key, ret) = {
-        new hashCh, nybListCh in {
+        new hashCh, nybListCh, keccak256Hash(`rho:crypto:keccak256Hash`) in {
           // Hash the key to get a 256-bit array
-          @"keccak256Hash"!(key.toByteArray(), *hashCh) |
+          keccak256Hash!(key.toByteArray(), *hashCh) |
           for (@hash <- hashCh) {
             for (@depth <- @(map, "depth")) {
               // Get the bit list
@@ -147,9 +147,9 @@ new TreeHashMap, rs(`rho:registry:insertSigned:secp256k1`), uriOut in {
       // Returns Nil like "get" does if there is some other key with
       // the same prefix but no value there.
       contract TreeHashMap(@"fastUnsafeGet", @map, @key, ret) = {
-        new hashCh, nybListCh in {
+        new hashCh, nybListCh, keccak256Hash(`rho:crypto:keccak256Hash`) in {
           // Hash the key to get a 256-bit array
-          @"keccak256Hash"!(key.toByteArray(), *hashCh) |
+          keccak256Hash!(key.toByteArray(), *hashCh) |
           for (@hash <- hashCh) {
             for(@depth <- @(map, "depth")) {
               // Get the bit list
@@ -199,9 +199,9 @@ new TreeHashMap, rs(`rho:registry:insertSigned:secp256k1`), uriOut in {
       } |
 
       contract TreeHashMap(@"set", @map, @key, @newVal, ret) = {
-        new hashCh, nybListCh in {
+        new hashCh, nybListCh, keccak256Hash(`rho:crypto:keccak256Hash`) in {
           // Hash the key to get a 256-bit array
-          @"keccak256Hash"!(key.toByteArray(), *hashCh) |
+          keccak256Hash!(key.toByteArray(), *hashCh) |
           for (@hash <- hashCh) {
             for (@depth <- @(map, "depth")) {
               // Get the bit list
@@ -234,9 +234,9 @@ new TreeHashMap, rs(`rho:registry:insertSigned:secp256k1`), uriOut in {
       } |
 
       contract TreeHashMap(@"contains", @map, @key, ret) = {
-        new hashCh, nybListCh in {
+        new hashCh, nybListCh, keccak256Hash(`rho:crypto:keccak256Hash`) in {
           // Hash the key to get a 256-bit array
-          @"keccak256Hash"!(key.toByteArray(), *hashCh) |
+          keccak256Hash!(key.toByteArray(), *hashCh) |
           for (@hash <- hashCh) {
             for (@depth <- @(map, "depth")) {
               // Get the bit list

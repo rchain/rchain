@@ -202,10 +202,10 @@ class CostAccountingSpec extends FlatSpec with Matchers with PropertyChecks with
         }
      """.stripMargin, 1264L),
     // test that we charge for system processes
-    ("""new ret in {
-       |  @"keccak256Hash"!("TEST".toByteArray(), *ret) |
+    ("""new ret, keccak256Hash(`rho:crypto:keccak256Hash`) in {
+       |  keccak256Hash!("TEST".toByteArray(), *ret) |
        |  for (_ <- ret) { Nil }
-       |}""".stripMargin, 734L)
+       |}""".stripMargin, 782L)
     // TODO add a test making sure registry usage has deterministic cost too
   )
 
