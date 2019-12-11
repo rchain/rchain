@@ -83,8 +83,9 @@ class CryptoChannelsSpec
     implicit val (reduce, store) = fixture
 
     val hashChannel: Par = channelName match {
+      case "sha256Hash"     => Runtime.FixedChannels.SHA256_HASH
+      case "keccak256Hash"  => Runtime.FixedChannels.KECCAK256_HASH
       case "blake2b256Hash" => Runtime.FixedChannels.BLAKE2B256_HASH
-      case _                => GString(channelName)
     }
 
     val ackChannel                  = GString("x")
@@ -177,7 +178,7 @@ class CryptoChannelsSpec
 
       implicit val rand: Blake2b512Random = Blake2b512Random(Array.empty[Byte])
 
-      val ed25519VerifyChannel = GString("ed25519Verify")
+      val ed25519VerifyChannel = Runtime.FixedChannels.ED25519_VERIFY;
       val (secKey, pubKey)     = Ed25519.newKeyPair
 
       val ackChannel                  = GString("x")
