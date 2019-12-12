@@ -8,6 +8,7 @@ import java.security.interfaces.{ECPrivateKey, ECPublicKey}
 import java.security.spec._
 import java.util.Base64
 
+import cats.syntax.all._
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.hash.Keccak256
 import org.bouncycastle.asn1.{
@@ -20,6 +21,7 @@ import org.bouncycastle.asn1.{
 import org.bouncycastle.util.BigIntegers
 
 import scala.io.Source
+import scala.util.Try
 
 object CertificateHelper {
 
@@ -126,39 +128,55 @@ object CertificateHelper {
     cert2
   }
 
-  def encodeSignatureRStoDER(signatureRS: Array[Byte]) = {
+  def encodeSignatureRStoDER(signatureRS: Array[Byte]): Either[Throwable, Array[Byte]] = {
     def toASN1Int(bytes: Array[Byte]) = new ASN1Integer(BigIntegers.fromUnsignedByteArray(bytes))
 
-    val (r, s) = signatureRS.take(64).splitAt(32)
-    val bos    = new ByteArrayOutputStream(72)
-    val seq    = new DERSequenceGenerator(bos)
-    try {
-      seq.addObject(toASN1Int(r))
-      seq.addObject(toASN1Int(s))
-      seq.close
-      bos.toByteArray
-    } catch { case _: Throwable => Array[Byte]() } finally {
-      if (seq != null) seq.close()
-      if (bos != null) bos.close()
+    def convert = {
+      val (r, s) = signatureRS.take(64).splitAt(32)
+      val bos    = new ByteArrayOutputStream(72)
+      val seq    = new DERSequenceGenerator(bos)
+      try {
+        seq.addObject(toASN1Int(r))
+        seq.addObject(toASN1Int(s))
+        seq.close
+        bos.toByteArray
+      } finally {
+        if (seq != null) seq.close()
+        // > Closing a ByteArrayOutputStream has no effect.
+        // https://docs.oracle.com/javase/10/docs/api/java/io/ByteArrayOutputStream.html
+      }
     }
+
+    if (signatureRS.isEmpty)
+      new Exception("Input array must not be empty.").asLeft
+    else
+      Try(convert).toEither
   }
 
-  def decodeSignatureDERtoRS(signatureDER: Array[Byte]) = {
+  def decodeSignatureDERtoRS(signatureDER: Array[Byte]): Either[Throwable, Array[Byte]] = {
     def toBytes(x: ASN1Encodable) = {
       val asn1 = x.toASN1Primitive.asInstanceOf[ASN1Integer]
       BigIntegers.asUnsignedByteArray(asn1.getValue)
     }
 
-    val bis = new ByteArrayInputStream(signatureDER)
-    val asn = new ASN1InputStream(bis)
-    try {
-      val asnSeq          = asn.readObject.asInstanceOf[ASN1Sequence]
-      val Array(r, s, _*) = asnSeq.toArray
-      toBytes(r) ++ toBytes(s)
-    } catch { case _: Throwable => Array[Byte]() } finally {
-      if (bis != null) bis.close()
-      if (asn != null) asn.close()
+    def convert: Array[Byte] = {
+      val bis = new ByteArrayInputStream(signatureDER)
+      val asn = new ASN1InputStream(bis)
+      try {
+        val asnSeq          = asn.readObject.asInstanceOf[ASN1Sequence]
+        val Array(r, s, _*) = asnSeq.toArray
+        toBytes(r) ++ toBytes(s)
+      } finally {
+        if (asn != null) asn.close()
+        // > Closing a ByteArrayInputStream has no effect.
+        // https://docs.oracle.com/javase/10/docs/api/java/io/ByteArrayInputStream.html
+      }
     }
+
+    if (signatureDER.isEmpty)
+      new Exception("Input array must not be empty.").asLeft
+    else
+      Try(convert).toEither
   }
 
 }

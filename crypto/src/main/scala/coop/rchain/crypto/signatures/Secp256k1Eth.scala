@@ -38,11 +38,13 @@ object Secp256k1Eth extends SignaturesAlg {
       data: Array[Byte],
       signatureRS: Array[Byte],
       pub: Array[Byte]
-  ): Boolean = {
+  ): Boolean =
     // Convert signature to DER format
-    val sigDER = CertificateHelper.encodeSignatureRStoDER(signatureRS)
-    Secp256k1.verify(data, sigDER, pub)
-  }
+    CertificateHelper
+      .encodeSignatureRStoDER(signatureRS)
+      // DER conversion error silently returns false,
+      // DERConverterSpec checks that this is only if input array is empty.
+      .fold(_ => false, Secp256k1.verify(data, _, pub))
 
   /**
     * libsecp256k1 Create an ECDSA signature.
@@ -60,8 +62,13 @@ object Secp256k1Eth extends SignaturesAlg {
       sec: Array[Byte]
   ): Array[Byte] = {
     val sigDER = Secp256k1.sign(data, sec)
+
     // Convert signature to raw RS format
-    CertificateHelper.decodeSignatureDERtoRS(sigDER)
+    CertificateHelper
+      .decodeSignatureDERtoRS(sigDER)
+      // DER conversion error silently returns empty array,
+      // DERConverterSpec checks that this is only if input array is empty.
+      .getOrElse(Array[Byte]())
   }
 
   def secKeyVerify = Secp256k1.secKeyVerify(_)
