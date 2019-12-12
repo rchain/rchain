@@ -21,6 +21,8 @@ import org.bouncycastle.jce.provider.BouncyCastleProvider
 import org.bouncycastle.openssl.bc.BcPEMDecryptorProvider
 import org.bouncycastle.openssl.{PEMEncryptedKeyPair, PEMParser}
 
+// TODO: refactor Signature API to handle exceptions from `NativeSecp256k1` library
+
 object Secp256k1 extends SignaturesAlg {
 
   private val provider        = new BouncyCastleProvider()
@@ -99,6 +101,7 @@ object Secp256k1 extends SignaturesAlg {
       signature: Array[Byte],
       pub: Array[Byte]
   ): Boolean =
+    // WARNING: this code throws Assertion exception if input is not correct length
     NativeSecp256k1.verify(data, signature, pub)
 
   /**
@@ -116,6 +119,7 @@ object Secp256k1 extends SignaturesAlg {
       data: Array[Byte],
       sec: Array[Byte]
   ): Array[Byte] =
+    // WARNING: this code throws Assertion exception if input is not correct length
     NativeSecp256k1.sign(data, sec)
 
   /**
@@ -128,6 +132,7 @@ object Secp256k1 extends SignaturesAlg {
     * Boolean of secret key verification
     */
   def secKeyVerify(seckey: Array[Byte]): Boolean =
+    // WARNING: this code throws Assertion exception if input is not correct length
     NativeSecp256k1.secKeyVerify(seckey)
 
   /**
@@ -139,6 +144,7 @@ object Secp256k1 extends SignaturesAlg {
     * @param pubkey ECDSA Public key, 33 or 65 bytes
     */
   def toPublic(seckey: Array[Byte]): Array[Byte] =
+    // WARNING: this code throws Assertion exception if input is not correct length
     NativeSecp256k1.computePubkey(seckey)
 
   override def toPublic(sec: PrivateKey): PublicKey = PublicKey(toPublic(sec.bytes))
