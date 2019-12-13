@@ -3,10 +3,12 @@ package coop.rchain.node.web
 import cats.effect.Sync
 import cats.syntax.all._
 import cats.~>
+import io.circe.generic.semiauto._
+import com.google.protobuf.ByteString
+import coop.rchain.casper.PrettyPrinter
 import coop.rchain.node.api.WebApi
 import coop.rchain.node.api.WebApi._
 import org.http4s.{HttpRoutes, Response}
-
 object WebApiRoutes {
   import WebApiSyntax._
 
@@ -15,8 +17,10 @@ object WebApiRoutes {
   )(implicit mf: M ~> F): HttpRoutes[F] = {
     import io.circe.generic.auto._
     import io.circe.syntax._
+    import io.circe._
     import org.http4s.circe._
     import org.http4s.{EntityDecoder, EntityEncoder, InvalidMessageBodyFailure, Request}
+    import coop.rchain.casper.protocol.{BlockInfo, BondInfo, DeployInfo, LightBlockInfo}
 
     val dsl = org.http4s.dsl.Http4sDsl[F]
     import dsl._
@@ -72,7 +76,11 @@ object WebApiRoutes {
 
     // TODO: Create generic encoders/decoders for
     // ADT's with discriminator field
+    implicit val encodeByteString: Encoder[ByteString] =
+      Encoder.encodeString.contramap[ByteString](PrettyPrinter.buildStringNoLimit)
+    implicit val encodeLightBlockInfo: Encoder[LightBlockInfo] = deriveEncoder[LightBlockInfo]
 
+    implicit val encodeBlockInfo: Encoder[BlockInfo] = deriveEncoder[BlockInfo]
     // Encoders
     implicit val stringEncoder     = jsonEncoderOf[F, String]
     implicit val apiStatusEncoder  = jsonEncoderOf[F, ApiStatus]

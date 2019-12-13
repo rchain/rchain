@@ -7,14 +7,7 @@ import coop.rchain.blockstorage.BlockStore
 import coop.rchain.casper.SafetyOracle
 import coop.rchain.casper.api.BlockAPI
 import coop.rchain.casper.engine.EngineCell.EngineCell
-import coop.rchain.casper.protocol.{
-  BondInfo,
-  DataWithBlockInfo,
-  DeployData,
-  DeployInfo,
-  BlockInfo => BlockInfoProto,
-  LightBlockInfo => LightBlockInfoProto
-}
+import coop.rchain.casper.protocol.{BlockInfo, DataWithBlockInfo, DeployData, LightBlockInfo}
 import coop.rchain.crypto.PublicKey
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.signatures.{SignaturesAlg, Signed}
@@ -79,19 +72,18 @@ object WebApi {
         .map(toDataResponse)
 
     def lastFinalizedBlock: F[BlockInfo] =
-      BlockAPI.lastFinalizedBlock[F].flatMap(_.liftToBlockApiErr).map(toBlockInfo)
+      BlockAPI.lastFinalizedBlock[F].flatMap(_.liftToBlockApiErr)
 
     def getBlock(hash: String): F[BlockInfo] =
-      BlockAPI.getBlock[F](hash).flatMap(_.liftToBlockApiErr).map(toBlockInfo)
+      BlockAPI.getBlock[F](hash).flatMap(_.liftToBlockApiErr)
 
     def getBlocks(depth: Option[Int]): F[List[LightBlockInfo]] =
-      BlockAPI.getBlocks[F](depth).flatMap(_.liftToBlockApiErr).map(_.map(toLightBlockInfo))
+      BlockAPI.getBlocks[F](depth).flatMap(_.liftToBlockApiErr)
 
     def findDeploy(deployId: String): F[LightBlockInfo] =
       BlockAPI
         .findDeploy[F](toByteString(deployId))
         .flatMap(_.liftToBlockApiErr)
-        .map(toLightBlockInfo)
 
     def status: F[ApiStatus] =
       ApiStatus(
@@ -148,33 +140,6 @@ object WebApi {
   final case class RhoExprWithBlock(
       expr: RhoExpr,
       block: LightBlockInfo
-  )
-
-  final case class LightBlockInfo(
-      blockHash: String,
-      sender: String,
-      seqNum: Long,
-      sig: String,
-      sigAlgorithm: String,
-      shardId: String,
-      extraBytes: String,
-      version: Long,
-      timestamp: Long,
-      headerExtraBytes: String,
-      parentsHashList: List[String],
-      blockNumber: Long,
-      preStateHash: String,
-      postStateHash: String,
-      bodyExtraBytes: String,
-      bonds: List[BondInfo],
-      blockSize: String,
-      deployCount: Int,
-      faultTolerance: Float
-  )
-
-  final case class BlockInfo(
-      blockInfo: LightBlockInfo,
-      deploys: List[DeployInfo]
   )
 
   final case class PrepareRequest(
@@ -299,40 +264,11 @@ object WebApi {
       val exprs = data.postBlockData.flatMap(exprFromParProto)
       // Implements semantic of Par with Unit: P | Nil ==> P
       val expr  = if (exprs.size == 1) exprs.head else ExprPar(exprs.toList)
-      val block = toLightBlockInfo(data.block.get)
+      val block = data.block.get
       RhoExprWithBlock(expr, block) +: acc
     }
     DataResponse(exprsWithBlock, length)
   }
-
-  private def toLightBlockInfo(b: LightBlockInfoProto): LightBlockInfo =
-    LightBlockInfo(
-      blockHash = b.blockHash,
-      sender = b.sender,
-      seqNum = b.seqNum,
-      sig = b.sig,
-      sigAlgorithm = b.sigAlgorithm,
-      shardId = b.shardId,
-      extraBytes = toHex(b.extraBytes),
-      version = b.version,
-      timestamp = b.timestamp,
-      headerExtraBytes = toHex(b.headerExtraBytes),
-      parentsHashList = b.parentsHashList.toList,
-      blockNumber = b.blockNumber,
-      preStateHash = b.preStateHash,
-      postStateHash = b.postStateHash,
-      bodyExtraBytes = toHex(b.bodyExtraBytes),
-      bonds = b.bonds.toList,
-      blockSize = b.blockSize,
-      deployCount = b.deployCount,
-      faultTolerance = b.faultTolerance
-    )
-
-  private def toBlockInfo(b: BlockInfoProto): BlockInfo =
-    BlockInfo(
-      blockInfo = toLightBlockInfo(b.blockInfo.get),
-      deploys = b.deploys.toList
-    )
 
   object WebApiSyntax {
     implicit final class OptionExt[A](val x: Option[A]) extends AnyVal {
