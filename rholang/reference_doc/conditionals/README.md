@@ -1,9 +1,9 @@
 ## Conditionals
+Standard conditionals with `Proc` branches.
 
 ### Syntax
-- `if ( Bool ) Process`
-- `if ( Bool ) Process else Process`
+Rholang supports syntax for two conditionals: `if...then...` and `if...then...else`. The syntax is:
+- `if ( BExp ) Proc`
+- `if ( BExp ) Proc else Proc`
 
-`Bool` can be any boolean expression. (See Bool section.)
-
-Standard form similar to `match`
+where `BExp` can be any Boolean expression and `Proc` can be any process.
