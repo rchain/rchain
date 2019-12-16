@@ -1,0 +1,9 @@
+#!/bin/bash -e
+
+source ./virtualenv_init
+
+export DEFAULT_IMAGE=rchain-integration-tests:latest
+docker build -t $DEFAULT_IMAGE .
+
+export TMPDIR=${TMPDIR-/tmp}
+python3 -m pytest -v --mount-dir=$TMPDIR
