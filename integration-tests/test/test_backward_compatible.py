@@ -12,7 +12,7 @@ from docker.client import DockerClient
 from .common import CommandLineOptions
 from .conftest import testing_context
 from .rnode import (SynchronyConstraintError,
-                    started_bootstrap_with_network, started_peer, get_absolute_path_for_mounting)
+                    started_bootstrap_with_network, started_peer)
 from .test_wallets import get_vault_balance
 from .wait import (wait_for_approved_block_received_handler_state,
                    wait_for_peers_count_at_least)
@@ -23,14 +23,13 @@ VALIDATOR_B_PRIVATE = PrivateKey.from_hex("1f52d0bce0a92f5c79f2a88aae6d391ddf853
 
 
 @contextlib.contextmanager
-def temp_rnode_data(mount_dir: str) -> Generator[str, None, None]:
+def temp_rnode_data() -> Generator[str, None, None]:
     with tempfile.TemporaryDirectory() as temp_dir:
-        rnode_data_dir = get_absolute_path_for_mounting("rnode_data", mount_dir)
-        with tarfile.open(os.path.join(rnode_data_dir, 'bootstrap')) as tar:
+        with tarfile.open('resources/rnode_data/bootstrap') as tar:
             tar.extractall(os.path.join(temp_dir, 'bootstrap'))
-        with tarfile.open(os.path.join(rnode_data_dir, 'validatorA')) as tar:
+        with tarfile.open('resources/rnode_data/validatorA') as tar:
             tar.extractall(os.path.join(temp_dir, 'validatorA'))
-        with tarfile.open(os.path.join(rnode_data_dir, 'validatorB')) as tar:
+        with tarfile.open('resources/rnode_data/validatorB') as tar:
             tar.extractall(os.path.join(temp_dir, 'validatorB'))
         yield temp_dir
 
@@ -43,7 +42,7 @@ def test_backward_compatible(command_line_options: CommandLineOptions, random_ge
     should shout out loudly in discord and let everybody know your update is not backward compatible.
     """
     with  testing_context(command_line_options, random_generator, docker_client) as context, \
-        temp_rnode_data(context.mount_dir) as temp_rnode, \
+        temp_rnode_data() as temp_rnode, \
         started_bootstrap_with_network(context=context, extra_volumes=["{}/bootstrap/rnode:/var/lib/rnode".format(temp_rnode)]) as bootstrap_node, \
         started_peer(context=context, network=bootstrap_node.network, bootstrap=bootstrap_node, name='validator-a', private_key=VALIDATOR_A_PRIVATE, extra_volumes=["{}/validatorA/rnode:/var/lib/rnode".format(temp_rnode)], synchrony_constraint_threshold=0.33) as validator_a, \
         started_peer(context=context, network=bootstrap_node.network, bootstrap=bootstrap_node, name='validator-b', private_key=VALIDATOR_B_PRIVATE, extra_volumes=["{}/validatorB/rnode:/var/lib/rnode".format(temp_rnode)], synchrony_constraint_threshold=0.33) as validator_b:
