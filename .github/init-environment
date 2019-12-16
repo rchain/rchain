@@ -1,0 +1,181 @@
+#!/bin/bash
+set -eu -o pipefail
+
+# This script initializes the environment for running other tasks on GitHub
+# CI runners. It's mostly run from rchain/buildenv container but can be
+# used on runner host as well. See comments in code for further info.
+
+
+# This directory is cached by actions/cache GitHub action in the workflow.
+CACHE_ROOT=/var/cache/rchain-build
+
+
+# It may happen that we inadvertently cache something bad or the cache grows too
+# big with old unused dependencies. We would be stuck with it forever, because
+# even when build files change, new cache is initialized form previous cache via
+# restore-keys. If you want to create new cache from scratch, increase the
+# corresponding cache_epoch_ variable.
+#
+# For more information about restore-keys and caching in GitHub CI read
+# https://help.github.com/en/actions/automating-your-workflow-with-github-actions/caching-dependencies-to-speed-up-workflows
+
+cache_epoch_scala=1
+cache_epoch_python=1
+
+CACHE_KEY_PREFIX_SCALA=scala-$cache_epoch_scala-
+CACHE_KEY_PREFIX_PYTHON=python-$cache_epoch_python-
+
+
+# Usage: link_from_cache cache_dir_name [target...]
+# Creates cache directory at $CACHE_ROOT/cache_dir_name and creates symlink to
+# it from each target path.
+#
+# Before creating the cache directory, it tries to move first existing target to
+# it, to preserve existing content. For instance, ~/.sbt is already populated in
+# rchain/buildenv Docker image and we want to preserve it in cache.
+link_from_cache()
+{
+	local cache_path=$CACHE_ROOT/$1
+	shift
+
+	for target in "$@"; do
+		if [[ "$(readlink -m $target)" != $cache_path ]]; then
+			if [[ -e $target ]]; then
+				if [[ -e $cache_path ]]; then
+					rm -rf $target
+				else
+					mv $target $cache_path
+				fi
+			else
+				mkdir -p "$(dirname $target)"
+			fi
+
+			ln -s $cache_path $target
+		fi
+	done
+
+	if [[ ! -e $cache_path ]]; then
+		mkdir $cache_path
+	fi
+}
+
+# Usage: find ... | hash_files
+# Produces deterministic hash of files from file paths on standard input.
+# Missing files are silently ignored.
+#
+# This hash is used a as cache key in workflow for action/cache GitHub action.
+# For more information about caching in GitHub CI read
+# https://help.github.com/en/actions/automating-your-workflow-with-github-actions/caching-dependencies-to-speed-up-workflows
+#
+# GitHub already provides hashFiles() function that can be used in workflow to
+# create a cache key for actions/cache GitHub action. However, that function
+# only takes single glob argument and for a Scala project we need two globs to
+# match all possible sbt source files (*.sbt and */project/*).
+#
+# Moreover, caches in GitHub CI are immutable, so when there's an update to e.g.
+# snapshot dependency and no build files change (cache key stays the same), this
+# updated dependency will be downloaded every time. To account for that, the
+# hash changes every week. This does not slow down build at all because the
+# cache for non-existing key is initialized via restore-keys.
+hash_files()
+{
+	(	# Update cache every week anyway
+		echo $(( $(date +%s) / (7*24*60*60) ))
+		sort | xargs cat 2>/dev/null || true
+	) | md5sum | cut -c1-16
+}
+
+
+print_env()
+{
+	if [[ ${GITHUB_ACTIONS-} == true ]]; then
+		# This is GitHub CI's way of exporting environment variables for further
+		# steps. For more information see
+		# https://help.github.com/en/actions/automating-your-workflow-with-github-actions/development-tools-for-github-actions#set-an-environment-variable-set-env
+		echo "::set-env name=$1::$2"
+	else
+		# For `eval "$(this_script)"`.
+		echo "export $1=${2@Q}"
+	fi
+}
+
+
+# When running steps in a container specified in a workflow job, that is with
+#   jobs:
+#     foo:
+#       name: Do foo
+#       container: rchain/buildenv
+#       steps:
+#         - ...
+# GitHub CI sets the HOME variable in the container to /github/home. However,
+# the container still runs as root and root's home directory entry in
+# /etc/passwd (burned in image) still points to /root. Some programs, for
+# example sbt, look up home directory from /etc/passwd and ignore HOME variable.
+# Others may not ignore it.
+#
+# When linking directories from home directory to cache, link from both possible
+# home locations; from $HOME and $real_home (initialized below).
+
+real_home=$(getent passwd $(id -u) | cut -d: -f6)
+project_root=${GITHUB_WORKSPACE:-$(readlink -e "$(dirname "${BASH_SOURCE[0]}")/..")}
+
+
+# Initialize the cache. Move directories with build dependencies into the cache.
+#
+# Some of these directories may be unused (yet), but that's OK. Current version
+# of sbt used by RChain build (specified in project/build.properties), 1.2.8,
+# uses Ivy to fetch dependencies, but version 1.3 and onwards, use Coursier,
+# which saves files into ~/.cache/coursier. So let's leave whole ~/.cache there
+# just in case.
+#
+# The _READ_ONLY variable check is a "hack" for run_integration_tests job. See
+# comments in workflow and .github/run-integration-test-selection for more info.
+
+if [[ ${_READ_ONLY-} != 1 ]]; then
+
+	mkdir -p $CACHE_ROOT
+
+	link_from_cache sbt                 {$real_home,$HOME}/.sbt
+	link_from_cache ivy                 {$real_home,$HOME}/.ivy2
+	link_from_cache home-cache          {$real_home,$HOME}/.cache
+	link_from_cache pipenv-virtualenvs  {$real_home,$HOME}/.local/share/virtualenvs
+	link_from_cache pyenv-versions      /opt/pyenv/versions
+	link_from_cache it-venv             $project_root/integration-tests/.venv
+fi
+
+
+# Initialize cache keys from build sources (*.sbt, Pipfile, ...).
+#
+# We use separate cache keys for Scala and integration test (Python) build
+# sources because the build workflow is split into jobs where either Scala or
+# integration tests are operated upon. This way each type of job gets a cache
+# with relevant files only.
+#
+# Some of the source files may be missing. For instance integration tests do not
+# user equirements.txt, but that's OK. Keep it there in case someone decides to
+# switch build tools in future.
+
+CACHE_KEY_HASH_SCALA=$(
+	find $project_root -type f -not -name .git \
+		-not -path '*/target/*' \( -name '*.sbt' -o -path '*/project/*' \) \
+		| hash_files
+)
+
+CACHE_KEY_HASH_PYTHON=$(
+	cat <<-EOF | hash_files
+		$project_root/integration-tests/.python-version
+		$project_root/integration-tests/Pipfile
+		$project_root/integration-tests/Pipfile.lock
+		$project_root/integration-tests/requirements.txt
+	EOF
+)
+
+
+print_env CACHE_ROOT              $CACHE_ROOT
+print_env CACHE_KEY_PREFIX_SCALA  $CACHE_KEY_PREFIX_SCALA
+print_env CACHE_KEY_PREFIX_PYTHON $CACHE_KEY_PREFIX_PYTHON
+print_env CACHE_KEY_HASH_SCALA    $CACHE_KEY_HASH_SCALA
+print_env CACHE_KEY_HASH_PYTHON   $CACHE_KEY_HASH_PYTHON
+print_env PROJECT_ROOT            $project_root
+print_env CI                      true
+print_env SBT_OPTS                "${SBT_OPTS-} -Dsbt.ci=true"

@@ -4,7 +4,6 @@
 .classpath
 .project
 .springBeans
-bin
 
 .cache-main
 .cache-tests

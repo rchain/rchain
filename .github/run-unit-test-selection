@@ -1,0 +1,65 @@
+#!/usr/bin/env python3
+
+"""
+Runs unit test in sbt selected by test selection in TESTS environment variable.
+
+The TESTS environment variable should either contain valid arguments to sbt
+that'll be directly passed to sbt, or the string REMAINDER. In the latter case,
+this script reads all other sbt arguments in the "tests" axis of the job's
+matrix, finds arguments that corresponds to sbt test tasks, "empties" tests
+collections corresponding to these tasks, and runs "test" and "it:test" sbt
+tasks, which runs remaining tests.
+
+For instance if the job is defined like this:
+
+  foo:
+    strategy:
+      matrix:
+        tests:
+          - foo/it:test
+          - test
+          - REMAINDER
+
+then for the REMAINDER entry the following sbt command line will be executed:
+
+    sbt "set (test in IntegrationTest) in foo := {}" "set (test in Test) := {}" test it:test
+
+In effect only integration tests in sub-projects other than foo will run. No
+unit tests will run as these were run by the second selection.
+"""
+
+import sys, os
+import re
+import shlex
+from itertools import chain
+from subprocess import run
+
+from shared import REMAINDER, get_test_selections
+
+JOB_NAME = 'run_unit_tests'
+
+test_sel = os.environ['TESTS'].strip()
+
+if test_sel == REMAINDER:
+    sbt_args = []
+    for arg in chain(*map(shlex.split, get_test_selections(JOB_NAME))):
+        match = re.match('(?:([-\\w]+)/)?((?:it:)?test)', arg)
+        if match:
+            project, task = match[1], match[2]
+            statement = 'set (test in '
+            if task.startswith('it:'):
+                statement += 'IntegrationTest)'
+            else:
+                statement += 'Test)'
+            if project:
+                statement += ' in ' + project
+            statement += ' := {}'
+            sbt_args.append(statement)
+    sbt_args += ['test', 'it:test']
+else:
+    sbt_args = shlex.split(test_sel)
+
+command_line = ['sbt'] + sbt_args
+print('>>', ' '.join(map(shlex.quote, command_line)), flush=True)
+status = run(command_line)
+sys.exit(status.returncode)
