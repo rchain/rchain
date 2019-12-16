@@ -85,7 +85,7 @@ def command_line_options(request: Any) -> Generator[CommandLineOptions, None, No
 
 @contextlib.contextmanager
 def temporary_bonds_file(validator_bonds_dict: Dict[PrivateKey, int]) -> Generator[str, None, None]:
-    (fd, file) = tempfile.mkstemp(prefix="rchain-bonds-file-", suffix=".txt", dir="/tmp")
+    (fd, file) = tempfile.mkstemp(prefix="rchain-bonds-file-", suffix=".txt")
     try:
         with os.fdopen(fd, "w") as f:
             for private_key, bond in validator_bonds_dict.items():
