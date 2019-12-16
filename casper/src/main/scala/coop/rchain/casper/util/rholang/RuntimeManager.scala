@@ -272,7 +272,7 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log](
                      runtime,
                      startHash,
                      terms,
-                     processDeployWithCostAccounting(runtime)
+                     processDeploy(runtime)
                    )
         } yield result
       }
@@ -310,7 +310,7 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log](
                      runtime,
                      startHash,
                      terms,
-                     replayDeploy(runtime, withCostAccounting = !isGenesis)
+                     replayDeploy(runtime, withCostAccounting = false)
                    )
         } yield result
       }
@@ -333,7 +333,7 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log](
     } yield (finalStateHash.toByteString, res)
   }
 
-  private def processDeployWithCostAccounting(
+ /* private def processDeployWithCostAccounting(
       runtime: Runtime[F]
   )(deploy: Signed[DeployData])(implicit Log: Log[F]) = {
     import cats.instances.vector._
@@ -393,7 +393,7 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log](
       }
       .run // run the computation and produce the logs
       .map { case (accLog, pd) => pd.copy(deployLog = accLog.toList) }
-  }
+  }*/
 
   private def processDeploy(runtime: Runtime[F])(
       deploy: Signed[DeployData]

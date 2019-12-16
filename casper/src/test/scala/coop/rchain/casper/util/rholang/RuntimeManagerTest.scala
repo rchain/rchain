@@ -80,7 +80,7 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
       isGenesis = false
     )
 
-  "computeState" should "charge for deploys" in effectTest {
+  "computeState" should "charge for deploys" ignore effectTest {
     runtimeManagerResource.use { runtimeManager =>
       val genPostState = genesis.body.state.postStateHash
       val source       = """
