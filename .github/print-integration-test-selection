@@ -1,0 +1,44 @@
+#!/usr/bin/python3
+
+"""
+Prints integration test selection for Pytest's -k parameter by reading it from
+TESTS environment variable.
+
+The TESTS environment variable should either contain valid test selection
+that'll be directly passed to Pytest's -k parameter, or the string REMAINDER. In
+the latter case, the test selection will be formed by reading all other test
+selections in the "tests" axis of the job's matrix, joining them by OR operator,
+and finally negating the whole clause by NOT operator.
+
+For instance if the job is defined like this:
+
+  foo:
+    strategy:
+      matrix:
+        tests:
+          - test_a or test_c
+          - test_b
+          - REMAINDER
+
+then for the REMAINDER entry the following selection will be passed to Pytest:
+
+    not ((test_a or test_c) or (test_b))
+"""
+
+import os
+import shlex
+
+from shared import REMAINDER, get_test_selections
+
+JOB_NAME = 'run_integration_tests'
+
+test_sel = os.environ['TESTS'].strip()
+
+if test_sel == REMAINDER:
+    selections = [*get_test_selections(JOB_NAME)]
+    if selections:
+        test_sel = 'not ((' + ') or ('.join(selections) + '))'
+    else:
+        test_sel = 'True'
+
+print(test_sel)

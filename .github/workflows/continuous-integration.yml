@@ -1,0 +1,470 @@
+# GitHub Actions workflow for RChain continuous integration.
+#
+# For information GitHub Actions see:
+# https://help.github.com/en/actions/automating-your-workflow-with-github-actions/getting-started-with-github-actions
+# https://help.github.com/en/actions/automating-your-workflow-with-github-actions/configuring-workflows
+
+name: CI
+on:
+  push:
+    branches:
+      - staging
+      - trying
+    tags: '**'
+  pull_request:
+    branches:
+      - dev
+env:
+  _JAVA_OPTIONS: -XX:MaxRAMPercentage=80.0
+
+jobs:
+  # Most jobs run in rchain/buildenv Docker container. This container image has
+  # everything needed to build RChain and run unit and integration tests. For
+  # more information about the image see
+  # https://github.com/rchain/buildenv/blob/master/Dockerfile
+
+  # Build RChain and save it for next jobs.
+  build_base:
+    name: Build Base
+    runs-on: ubuntu-latest
+    container: rchain/buildenv
+    steps:
+      - name: Clone Repository
+        uses: actions/checkout@v1
+
+      - name: Initialize Environment
+        run: ./.github/init-environment
+
+      - name: Restore Cache
+        uses: actions/cache@v1
+        with:
+          path: ${{ env.CACHE_ROOT }}
+          key: ${{ env.CACHE_KEY_PREFIX_SCALA }}${{ env.CACHE_KEY_HASH_SCALA }}
+          restore-keys: ${{ env.CACHE_KEY_PREFIX_SCALA }}
+
+      - name: Compile
+        run: |
+          export SBT_OPTS="$SBT_OPTS -Dsbt.task.timings=true"
+          sbt update scalafmtCheckAll rholang/bnfc:generate compile
+
+      - name: Pack Working Tree
+        run: tar -H posix -czf ../rchain-worktree.tar.gz .
+
+      - name: Save Working Tree
+        uses: actions/upload-artifact@v1
+        with:
+          name: rchain-worktree
+          path: ../rchain-worktree.tar.gz
+
+
+  # Get compiled RChain and run unit tests.
+  run_unit_tests:
+    name: Unit Tests
+    needs: build_base
+    if: "!startsWith(github.ref, 'refs/tags/')"
+    runs-on: ubuntu-latest
+    container: rchain/buildenv
+    strategy:
+      matrix:
+        # This runs unit tests in parallel.
+        #
+        # For each entry a runner node is spawned with entry value in
+        # matrix.tests workflow variable, which is also put into TESTS
+        # environment variable (see below) and used by last step, execution of
+        # .github/run-unit-test-selection, which splits it according to shell
+        # rules (except for REMAINDER) and passes it as arguments to sbt.
+        #
+        # To learn about REMAINDER, see .github/run-unit-test-selection.
+        tests:
+          - casper/test
+          - REMAINDER # Do not modify/remove!
+    env:
+      TESTS: ${{ matrix.tests }}
+    steps:
+      - name: Clone Repository
+        uses: actions/checkout@v1
+
+      - name: Load Working Tree
+        uses: actions/download-artifact@v1
+        with:
+          name: rchain-worktree
+
+      - name: Restore Working Tree
+        run: tar -H posix -xzf rchain-worktree/rchain-worktree.tar.gz
+
+      - name: Initialize Environment
+        run: ./.github/init-environment
+
+      - name: Restore Cache
+        uses: actions/cache@v1
+        with:
+          path: ${{ env.CACHE_ROOT }}
+          key: ${{ env.CACHE_KEY_PREFIX_SCALA }}${{ env.CACHE_KEY_HASH_SCALA }}
+          restore-keys: ${{ env.CACHE_KEY_PREFIX_SCALA }}
+
+      - name: Run Unit Tests
+        run: |
+          export SBT_OPTS="$SBT_OPTS"
+          ./.github/run-unit-test-selection
+
+
+  # Get compiled RChain, build Docker image, and save it for next jobs.
+  build_docker_image:
+    name: Build Docker Image
+    needs: build_base
+    runs-on: ubuntu-latest
+    container: rchain/buildenv
+    steps:
+      - name: Load Working Tree
+        uses: actions/download-artifact@v1
+        with:
+          name: rchain-worktree
+
+      - name: Restore Working Tree
+        run: tar -H posix -xzf rchain-worktree/rchain-worktree.tar.gz
+
+      - name: Initialize Environment
+        run: ./.github/init-environment
+
+      - name: Restore Cache
+        uses: actions/cache@v1
+        with:
+          path: ${{ env.CACHE_ROOT }}
+          key: ${{ env.CACHE_KEY_PREFIX_SCALA }}${{ env.CACHE_KEY_HASH_SCALA }}
+          restore-keys: ${{ env.CACHE_KEY_PREFIX_SCALA }}
+
+      - name: Build Docker Image
+        run: sbt node/docker:publishLocal
+
+      - name: Export Docker Image
+        run: |
+          mkdir ../artifacts
+          git describe --tags --always >../artifacts/version.txt
+          docker image save coop.rchain/rnode \
+              | gzip >../artifacts/rnode-docker.tar.gz
+
+      - name: Save Docker Image
+        uses: actions/upload-artifact@v1
+        with:
+          name: artifacts-docker
+          path: ../artifacts/
+
+
+  # Get compiled RChain, build distro packages, and save them for next jobs.
+  build_packages:
+    name: Build Packages
+    needs: build_base
+    if: "github.event_name != 'pull_request'"
+    runs-on: ubuntu-latest
+    container: rchain/buildenv
+    steps:
+      - name: Load Working Tree
+        uses: actions/download-artifact@v1
+        with:
+          name: rchain-worktree
+
+      - name: Restore Working Tree
+        run: tar -H posix -xzf rchain-worktree/rchain-worktree.tar.gz
+
+      - name: Initialize Environment
+        run: ./.github/init-environment
+
+      - name: Restore Cache
+        uses: actions/cache@v1
+        with:
+          path: ${{ env.CACHE_ROOT }}
+          key: ${{ env.CACHE_KEY_PREFIX_SCALA }}${{ env.CACHE_KEY_HASH_SCALA }}
+          restore-keys: ${{ env.CACHE_KEY_PREFIX_SCALA }}
+
+      - name: Build Packages
+        run: sbt
+          node/universal:packageZipTarball
+          node/debian:packageBin
+          node/rpm:packageBin
+
+      - name: Export Packages
+        run: |
+          mkdir ../artifacts
+          git describe --tags --always >../artifacts/version.txt
+          cp -av \
+              node/target/universal/rnode-*.tgz \
+              node/target/rnode_*.deb \
+              node/target/rpm/RPMS/noarch/rnode-*.rpm \
+              ../artifacts/
+
+      - name: Save Packages
+        uses: actions/upload-artifact@v1
+        with:
+          name: artifacts-packages
+          path: ../artifacts/
+
+
+  # Get RNode Docker image and run integration tests.
+  # 
+  # These steps are run directly on runner's host (note there's no container key
+  # in the job configuration). That is because bind mounting in container runner
+  # is broken[1] and we need to mount host's /tmp onto container's /tmp (see
+  # "Running from Docker" in integration-tests/README.md). The host doesn't have
+  # everything we need (pipenv, pyenv), so we're going to run integration tests
+  # in rchain/buildenv container started manually as the last step.
+  #
+  # The problem is that host's runner runs everything under a non-privileged
+  # account, whereas the rchain/buildenv container runs as root by default. The
+  # container image does not have an account corresponding to the host's
+  # unprivileged account UID, so we're going to run it as root and do some
+  # workarounds (see below).
+  #
+  # [1] https://github.community/t5/GitHub-Actions/Container-volumes-key-not-mounting-volume/m-p/34798
+  run_integration_tests:
+    name: Integration Tests
+    needs: build_docker_image
+    if: "!startsWith(github.ref, 'refs/tags/')"
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        # This runs integration tests in parallel.
+        #
+        # For each entry a runner node is spawned with entry value in
+        # matrix.tests workflow variable, which is also put into TESTS
+        # environment variable (see below) and used by last step, execution of
+        # .github/run-integration-test-selection, which passes it verbatim
+        # (except for REMAINDER) to Pytest's -k parameter.
+        #
+        # To learn about REMAINDER, see github/print-integration-test-selection.
+        tests:
+          - test_backward_compatible
+          - test_dag_correctness
+          - test_finalization
+          - test_genesis_ceremony
+          - test_propose
+          - test_slash_invalid_block_hash
+          - test_slash_invalid_block_number
+          - test_slash_invalid_block_seq
+          - test_slash_justification_not_correct
+          - test_slash_GHOST_disobeyed
+          - test_storage
+          - test_synchrony_constraint
+          - test_wallets
+          - REMAINDER # Do not modify/remove!
+    env:
+      TESTS: ${{ matrix.tests }}
+      # We don't use $CACHE_ROOT in host because it may not be (it is not)
+      # writeable by host runner unprivileged account. See note above.
+      HOST_CACHE_ROOT: /tmp/rchain-build-cache
+    steps:
+      - name: Clone Repository
+        uses: actions/checkout@v1
+
+      - name: Initialize Environment
+        # Only initlialize cache keys for "Restore Cache". We're running in the
+        # host now so we don't want to prepare filesystem here.
+        run: _READ_ONLY=1 ./.github/init-environment
+
+      - name: Restore Cache
+        uses: actions/cache@v1
+        with:
+          path: ${{ env.HOST_CACHE_ROOT }}
+          key: ${{ env.CACHE_KEY_PREFIX_PYTHON }}${{ env.CACHE_KEY_HASH_PYTHON }}
+          restore-keys: ${{ env.CACHE_KEY_PREFIX_PYTHON }}
+
+      - name: Load Docker Image
+        uses: actions/download-artifact@v1
+        with:
+          name: artifacts-docker
+
+      - name: Import Docker Image
+        run: zcat artifacts-docker/rnode-docker.tar.gz | docker image load
+
+      # The cached files are owned by host runner unprivileged user. See comment
+      # in "Fix Cache Permissions (Post)" step for details. Some programs
+      # running in rchain/buildenv container as root may be unhappy about that
+      # (pip issues a warning). Change ownership to root to avoid possible
+      # problems. There are not that many cached files for integration tests so
+      # performance impact is likely minimal.
+      - name: Fix Cache Permissions (Pre)
+        run: |
+          mkdir -p ${{ env.HOST_CACHE_ROOT }}
+          sudo chown -R 0:0 ${{ env.HOST_CACHE_ROOT }}
+
+      - name: Run Integration Test
+        run: |
+          docker run --network=host \
+              -v /var/run/docker.sock:/var/run/docker.sock \
+              -v /tmp:/tmp \
+              -v $PWD:/work \
+              -v ${{ env.HOST_CACHE_ROOT }}:$CACHE_ROOT \
+              -e TESTS="$TESTS" \
+              -e _JAVA_OPTIONS="$_JAVA_OPTIONS" \
+              -w /work \
+              rchain/buildenv ./.github/run-integration-test-selection
+
+      # Files created in rchain/buildenv container are owned by root, so we need
+      # to change ownership to host runner unprivileged account here, because
+      # right after this step, the runner is going to save cache preserving file
+      # attributes, and it would fail to restore them in "Restore Cache" above
+      # in future workflow runs. See note above.
+      - name: Fix Cache Permissions (Post)
+        run: sudo chown -R $(id -u):$(id -g) ${{ env.HOST_CACHE_ROOT }}
+
+
+  release_docker_image:
+    name: Release Docker Image
+    needs:
+      - run_unit_tests
+      - run_integration_tests
+      - build_docker_image
+    if: "github.event_name == 'push' && (startsWith(github.ref, 'refs/tags/') || github.ref == 'refs/heads/staging')"
+    runs-on: ubuntu-latest
+    steps:
+      - name: Load Docker Image
+        uses: actions/download-artifact@v1
+        with:
+          name: artifacts-docker
+
+      - name: Import Docker Image
+        run: zcat artifacts-docker/rnode-docker.tar.gz | docker image load
+
+      - name: Publish Docker Image
+        env:
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          DOCKERHUB_PASSWORD: ${{ secrets.DOCKERHUB_PASSWORD }}
+          DOCKER_IMAGE_NAME: ${{ secrets.DOCKER_IMAGE_NAME }}
+        shell: bash
+        run: |
+          set -eu -o pipefail
+
+          for var in DOCKERHUB_USERNAME DOCKERHUB_PASSWORD DOCKER_IMAGE_NAME; do
+              if [[ ! -v $var || -z ${!var} ]]; then
+                  echo "Required variable $var is not set." >&2
+                  exit 1
+              fi
+          done
+
+          image_name=$DOCKER_IMAGE_NAME
+
+          if [[ $GITHUB_REF == refs/heads/* ]]; then
+              image_name+=-staging
+          fi
+
+          version=$(cat artifacts-docker/version.txt)
+
+          docker tag coop.rchain/rnode:latest $image_name:$version
+          docker tag coop.rchain/rnode:latest $image_name:latest
+
+          builtin echo "$DOCKERHUB_PASSWORD" \
+              | docker login -u "$DOCKERHUB_USERNAME" --password-stdin
+
+          set -x
+          docker push $image_name:$version
+          docker push $image_name:latest
+
+
+  release_packages:
+    name: Release Packages
+    needs:
+      - run_unit_tests
+      - run_integration_tests
+      - build_packages
+    if: "github.event_name == 'push' && (startsWith(github.ref, 'refs/tags/') || github.ref == 'refs/heads/staging')"
+    runs-on: ubuntu-latest
+    container:
+      image: rchain/buildenv
+      options: --privileged # Needed for gcsfuse
+    steps:
+      - name: Load Packages
+        uses: actions/download-artifact@v1
+        with:
+          name: artifacts-packages
+
+      - name: Publish Packages
+        env:
+          SERVICE_ACCOUNT_KEY: ${{ secrets.SERVICE_ACCOUNT_KEY }}
+          UPLOAD_BUCKET: ${{ secrets.UPLOAD_BUCKET }}
+        shell: bash
+        run: |
+          set -eu -o pipefail
+
+          for var in SERVICE_ACCOUNT_KEY UPLOAD_BUCKET; do
+              if [[ ! -v $var || -z ${!var} ]]; then
+                  echo "Required variable $var is not set." >&2
+                  exit 1
+              fi
+          done
+
+          dest_dir=release
+
+          if [[ $GITHUB_REF == refs/heads/* ]]; then
+              dest_dir=staging
+          fi
+
+          GOOGLE_APPLICATION_CREDENTIALS=$HOME/service_account_key.json
+          touch $GOOGLE_APPLICATION_CREDENTIALS
+          chmod 600 $_
+          builtin echo "$SERVICE_ACCOUNT_KEY" >$_
+          export GOOGLE_APPLICATION_CREDENTIALS
+
+          mkdir /tmp/upload
+          gcsfuse $UPLOAD_BUCKET /tmp/upload
+
+          mkdir -p /tmp/upload/$dest_dir
+          cp -av packages/* /tmp/upload/$dest_dir/
+
+
+  # The following is for Bors to work. It's copied almost verbatim from
+  # https://github.com/rust-lang/crater/blob/e8195c31/.github/workflows/bors.yml#L125
+  # Thank you Pietro Albini!
+  #
+  # Bors build status comments in PRs do not link to failed checks. This may be
+  # due to the following commit in bors-ng:
+  # https://github.com/bors-ng/bors-ng/commit/dcf52d8d
+
+  # These jobs doesn't actually test anything, but they're only used to tell
+  # bors the build completed, as there is no practical way to detect when a
+  # workflow is successful listening to webhooks only.
+  #
+  # ALL THE PREVIOUS JOBS NEEDS TO BE ADDED TO THE `needs` SECTION OF THIS JOB!
+
+  # Merge into "trying" branch (bors try) does not trigger release_* jobs.
+
+  bors_try_success:
+    name: bors build finished
+    needs: 
+      - run_unit_tests
+      - run_integration_tests
+    if: "github.event_name == 'push' && github.ref == 'refs/heads/trying' && success()"
+    runs-on: ubuntu-latest
+    steps:
+      - run: true
+
+  bors_try_failure:
+    name: bors build finished
+    needs: 
+      - run_unit_tests
+      - run_integration_tests
+    if: "github.event_name == 'push' && github.ref == 'refs/heads/trying' && !success()"
+    runs-on: ubuntu-latest
+    steps:
+      - run: false
+
+  # Merge into staging branch (bors r+ ) triggers release_* jobs which depend on
+  # run_*_tests jobs.
+
+  bors_merge_success:
+    name: bors build finished
+    needs: 
+      - release_docker_image
+      - release_packages
+    if: "github.event_name == 'push' && github.ref == 'refs/heads/staging' && success()"
+    runs-on: ubuntu-latest
+    steps:
+      - run: true
+
+  bors_merge_failure:
+    name: bors build finished
+    needs: 
+      - release_docker_image
+      - release_packages
+    if: "github.event_name == 'push' && github.ref == 'refs/heads/staging' && !success()"
+    runs-on: ubuntu-latest
+    steps:
+      - run: false

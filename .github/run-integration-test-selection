@@ -1,0 +1,56 @@
+#!/bin/bash
+set -eu -o pipefail
+
+# Run init-environment script to prepare filesystem for GitHub CI caching.
+#
+# Normally the init-environment script prints variables in format that GitHub CI
+# understands[1]. Setting GITHUB_ACTIONS to other value than true turns it into
+# format that can be fed into eval. We don't necessarily need the variables it
+# produces. Those are used only in workflow (cache related variables). But
+# someone may initialize more variables there anyway and expect to see them in
+# integration tests.
+#
+# When [2] is fixed, we can remove this and run whole job in the rchain/buildenv
+# container. See comments in run_integration_tests job for more information.
+#
+# [1] https://help.github.com/en/actions/automating-your-workflow-with-github-actions/development-tools-for-github-actions#set-an-environment-variable-set-env
+# [2] https://github.community/t5/GitHub-Actions/Container-volumes-key-not-mounting-volume/m-p/34798
+eval "$(GITHUB_ACTIONS= ./.github/init-environment || echo false)"
+
+# Store virtualenv in integration-tests/.venv instead of the magic path with
+# hash that Pipenv creates, so that it remains on known path.
+export PIPENV_VENV_IN_PROJECT=1
+
+# Pytest would read integration-tests/pytest.ini where log_file_level is set to
+# debug, which would result in real-time output from tests including logs from
+# running nodes. That's OK for local development but it makes it hard to see
+# which tests failed in CI. With ERROR level output of only failed jobs is
+# printed after all tests finish.
+export PYTEST_ADDOPTS="${PYTEST_ADDOPTS-} --log-cli-level=ERROR"
+
+test_selection="$(./.github/print-integration-test-selection)"
+
+
+cd integration-tests/
+
+if [[ $TESTS == REMAINDER ]]; then
+	# Check code (Pylint & mypy) only once, when running the REMAINDER
+	# selection. Do not remove/modify REMAINDER selection!
+	echo "integration-tests: Checking code"
+	./check_code
+fi
+
+echo "integration-tests: Running test selection: $test_selection"
+
+ret=0
+./run_tests -k "$test_selection" || ret=$?
+
+# Exit code 5:	No tests were collected
+# Source: http://doc.pytest.org/en/latest/usage.html#possible-exit-codes
+if [[ $TESTS == REMAINDER && $ret -eq 5 ]]; then
+	# This could mean that explicit test selections were exhaustive and there're
+	# no remaining tests to run. That's OK. At least we run ./check_code.
+	ret=0
+fi
+
+exit $ret
