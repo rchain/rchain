@@ -1,0 +1,6 @@
+#!/bin/bash -e
+
+source ./virtualenv_init
+
+python3 -m mypy test
+python3 -m pytest --pylint -m pylint
