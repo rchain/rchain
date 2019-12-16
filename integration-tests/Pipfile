@@ -17,6 +17,7 @@ cryptography = "*"
 eth-hash = "*"
 pycryptodome = "*"
 pyrchain = {git = "https://github.com/rchain/pyrchain.git"}
+requests = "*"
 
 [dev-packages]
 python-language-server = "*"
