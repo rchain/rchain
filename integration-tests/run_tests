@@ -1,0 +1,46 @@
+#!/bin/bash
+set -eu -o pipefail
+
+source ./virtualenv_init
+
+
+if [[ ${_SKIP_CHECK_CODE-0} != 1 ]]; then
+	echo "Checking code"
+	_SKIP_VIRTUALENV_INIT=1 ./check_code
+fi
+
+
+# This is only used to install curl. FIXME: Use vanilla RNode container image
+# and rewrite integration tests to directly make HTTP requests into containers
+# via e.g. urllib3.
+export DEFAULT_IMAGE=rchain-integration-tests:latest
+docker build -t $DEFAULT_IMAGE .
+
+
+# TEMP_RESOURCES_DIR is going to be removed after tests finish if and only if
+# it was not given to us from the environment (i.e. we're going to create new
+# one) and all tests finish successfully.
+
+cleanup=0
+
+if [[ ! -v TEMP_RESOURCES_DIR ]]; then
+	TEMP_RESOURCES_DIR=$(mktemp --tmpdir -d integration-tests.XXXXXXXXXX)
+	cleanup=1
+fi
+
+cat <<EOF
+Running tests
+  Temporary directory : $TEMP_RESOURCES_DIR
+  PYTEST_ADDOPTS      : ${PYTEST_ADDOPTS-}
+  Pytest arguments    : $@
+EOF
+
+ret=0
+TMPDIR=$TEMP_RESOURCES_DIR python3 -m pytest -v "$@" || ret=$?
+
+if (( ret == 0 && cleanup == 1 )); then
+	echo "Removing temporary directory $TEMP_RESOURCES_DIR"
+	rm -rf "$TEMP_RESOURCES_DIR"
+fi
+
+exit $ret
