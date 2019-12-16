@@ -189,9 +189,12 @@ def testing_context(command_line_options: CommandLineOptions,
 
 testing_context.__test__ = False # type: ignore
 
-
+STANDALONE_KEY = PrivateKey.from_hex("ff2ba092524bafdbc85fa0c7eddb2b41c69bc9bf066a4711a8a16f749199e5be")
 @pytest.yield_fixture(scope='module')
 def started_standalone_bootstrap_node(command_line_options: CommandLineOptions, random_generator: Random, docker_client: DockerClient) -> Generator[Node, None, None]:
-    with testing_context(command_line_options, random_generator, docker_client) as context:
+    wallet_dict = {
+        STANDALONE_KEY: 100000000
+    }
+    with testing_context(command_line_options, random_generator, docker_client, wallets_dict=wallet_dict) as context:
         with ready_bootstrap_with_network(context=context) as bootstrap_node:
             yield bootstrap_node

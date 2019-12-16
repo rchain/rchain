@@ -129,6 +129,12 @@ class Node:
                 return ''
             raise
 
+    def get_peer_node_ip(self, network_name: str) -> str:
+        self.container.reload()
+        network_config = self.container.attrs['NetworkSettings']['Networks'][network_name]
+        assert network_config is not None
+        return network_config['IPAddress']
+
     def cleanup(self) -> None:
         self.container.remove(force=True, v=True)
         self.terminate_background_logging_event.set()
