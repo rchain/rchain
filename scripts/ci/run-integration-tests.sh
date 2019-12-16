@@ -26,7 +26,8 @@ main () {
 
     ./mypy.sh
     ./pylint.sh
-    ./run_tests.sh --log-cli-level=ERROR --mount-dir="$TEMP_RESOURCES_DIR"
+	export TMPDIR=$TEMP_RESOURCES_DIR
+    ./run_tests.sh --log-cli-level=ERROR
 }
 
 

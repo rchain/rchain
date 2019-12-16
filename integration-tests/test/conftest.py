@@ -46,7 +46,6 @@ def pytest_addoption(parser: Parser) -> None:
     parser.addoption("--converge-timeout", type=int, action="store", default=60 * 30, help="timeout in seconds for network converge")
     parser.addoption("--receive-timeout", type=int, action="store", default=30, help="timeout in seconds for receiving a single block")
     parser.addoption("--command-timeout", type=int, action="store", default=60 * 30, help="timeout in seconds for executing a rnode call")
-    parser.addoption("--mount-dir", action="store", default=None, help="globally accesible directory for mounting between containers")
     parser.addoption("--random-seed", type=int, action="store", default=None, help="seed for the random numbers generator used in integration tests")
 
 def pytest_terminal_summary(terminalreporter:TerminalReporter) -> None:
@@ -71,7 +70,6 @@ def command_line_options(request: Any) -> Generator[CommandLineOptions, None, No
     converge_timeout = int(request.config.getoption("--converge-timeout"))
     receive_timeout = int(request.config.getoption("--receive-timeout"))
     command_timeout = int(request.config.getoption("--command-timeout"))
-    mount_dir = request.config.getoption("--mount-dir")
     random_seed = request.config.getoption("--random-seed")
 
     command_line_options = CommandLineOptions(
@@ -79,7 +77,6 @@ def command_line_options(request: Any) -> Generator[CommandLineOptions, None, No
         network_converge_timeout=converge_timeout,
         receive_timeout=receive_timeout,
         command_timeout=command_timeout,
-        mount_dir=mount_dir,
         random_seed=random_seed,
     )
 
@@ -180,7 +177,6 @@ def testing_context(command_line_options: CommandLineOptions,
                 network_converge_timeout=command_line_options.network_converge_timeout,
                 receive_timeout=command_line_options.receive_timeout,
                 command_timeout=command_line_options.command_timeout,
-                mount_dir=command_line_options.mount_dir,
                 random_generator=random_generator,
             )
 

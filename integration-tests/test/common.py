@@ -24,7 +24,6 @@ class CommandLineOptions:
     network_converge_timeout: int
     receive_timeout: int
     command_timeout: int
-    mount_dir: str
     random_seed: Optional[int]
 
 
@@ -37,7 +36,6 @@ class TestingContext:
     network_converge_timeout: int
     receive_timeout: int
     command_timeout: int
-    mount_dir: str
     bonds_file: str
     wallets_file: str
     bootstrap_key: PrivateKey
