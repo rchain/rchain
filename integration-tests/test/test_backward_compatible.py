@@ -12,7 +12,7 @@ from docker.client import DockerClient
 from .common import CommandLineOptions
 from .conftest import testing_context
 from .rnode import (SynchronyConstraintError,
-                    started_bootstrap_with_network, started_peer, get_absolute_path_for_mounting)
+                    started_bootstrap_with_network, started_peer)
 from .test_wallets import get_vault_balance
 from .wait import (wait_for_approved_block_received_handler_state,
                    wait_for_peers_count_at_least)
@@ -25,12 +25,11 @@ VALIDATOR_B_PRIVATE = PrivateKey.from_hex("1f52d0bce0a92f5c79f2a88aae6d391ddf853
 @contextlib.contextmanager
 def temp_rnode_data(mount_dir: str) -> Generator[str, None, None]:
     with tempfile.TemporaryDirectory() as temp_dir:
-        rnode_data_dir = get_absolute_path_for_mounting("rnode_data", mount_dir)
-        with tarfile.open(os.path.join(rnode_data_dir, 'bootstrap')) as tar:
+        with tarfile.open('resources/rnode_data/bootstrap') as tar:
             tar.extractall(os.path.join(temp_dir, 'bootstrap'))
-        with tarfile.open(os.path.join(rnode_data_dir, 'validatorA')) as tar:
+        with tarfile.open('resources/rnode_data/validatorA') as tar:
             tar.extractall(os.path.join(temp_dir, 'validatorA'))
-        with tarfile.open(os.path.join(rnode_data_dir, 'validatorB')) as tar:
+        with tarfile.open('resources/rnode_data/validatorB') as tar:
             tar.extractall(os.path.join(temp_dir, 'validatorB'))
         yield temp_dir
 
