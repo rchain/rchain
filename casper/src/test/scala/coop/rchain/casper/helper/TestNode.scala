@@ -10,7 +10,7 @@ import cats.effect.{Concurrent, Resource, Sync}
 import cats.implicits._
 import coop.rchain.blockstorage._
 import coop.rchain.blockstorage.dag.{BlockDagFileStorage, BlockDagStorage}
-import coop.rchain.blockstorage.deploy.{DeployStorage, InMemDeployStorage}
+import coop.rchain.blockstorage.deploy.{DeployStorage, InMemDeployStorage, LMDBDeployStorage}
 import coop.rchain.blockstorage.finality.{LastFinalizedFileStorage, LastFinalizedStorage}
 import coop.rchain.casper.CasperState.CasperStateCell
 import coop.rchain.casper.MultiParentCasper.ignoreDoppelgangerCheck
@@ -365,12 +365,12 @@ object TestNode {
 
       blockStore      <- Resources.mkBlockStoreAt[F](paths.blockStoreDir)
       blockDagStorage <- Resources.mkBlockDagStorageAt[F](paths.blockDagDir)
+      deployStorage   <- Resources.mkDeployStorageAt[F](paths.deployStorageDir)
       runtimeManager  <- createRuntime(paths.rspaceDir)
 
       node <- Resource.liftF(
                for {
                  lastFinalizedStorage <- LastFinalizedFileStorage.make[F](paths.lastFinalizedFile)
-                 deployStorage        <- InMemDeployStorage.make[F]
                  _                    <- TestNetwork.addPeer(currentPeerNode)
                  blockProcessingLock  <- Semaphore[F](1)
                  casperState          <- Cell.mvarCell[F, CasperState](CasperState())
