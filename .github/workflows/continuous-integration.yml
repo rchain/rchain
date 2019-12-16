@@ -1,0 +1,137 @@
+name: Continuous Integration
+on: [push]
+jobs:
+  build_base:
+    name: Compile RNode
+    runs-on: ubuntu-latest
+    container: rchain/buildenv-withdeps:latest
+    steps:
+      - name: Clone Repository
+        uses: actions/checkout@v1
+      - name: Compile
+        run: |
+          export SBT_OPTS="$SBT_OPTS -Dsbt.task.timings=true"
+          sbt scalafmtCheckAll rholang/bnfc:generate compile
+          tar -czf ../rchain-worktree.tar.gz .
+      - name: Save Working Tree
+        uses: actions/upload-artifact@v1
+        with:
+          name: rchain-worktree
+          path: ../rchain-worktree.tar.gz
+
+  run_unit_tests:
+    name: Run Unit Tests
+    needs: build_base
+    runs-on: ubuntu-latest
+    container: rchain/buildenv-withdeps:latest
+    steps:
+      - name: Load Working Tree
+        uses: actions/download-artifact@v1
+        with: { name: rchain-worktree }
+      - name: Run Unit Tests
+        run: |
+          tar -xzf rchain-worktree/rchain-worktree.tar.gz
+          export SBT_OPTS="$SBT_OPTS -Dsbt.task.timings=true"
+          sbt test it:test
+
+  build_docker_image:
+    name: Build Docker Image
+    needs: build_base
+    runs-on: ubuntu-latest
+    container: rchain/buildenv-withdeps:latest
+    steps:
+      - name: Load Working Tree
+        uses: actions/download-artifact@v1
+        with: { name: rchain-worktree }
+      - name: Create Docker Image
+        run: |
+          tar -xzf rchain-worktree/rchain-worktree.tar.gz
+          sbt node/docker:publishLocal
+          docker image save coop.rchain/rnode:latest | gzip >../rnode-docker.tar.gz
+      - name: Save Docker Image
+        uses: actions/upload-artifact@v1
+        with:
+          name: artifacts-docker
+          path: ../rnode-docker.tar.gz
+
+  build_packages:
+    name: Build Packages
+    needs: build_base
+    runs-on: ubuntu-latest
+    container: rchain/buildenv-withdeps:latest
+    steps:
+      - name: Load Working Tree
+        uses: actions/download-artifact@v1
+        with: { name: rchain-worktree }
+      - name: Create Packages
+        run: |
+          tar -xzf rchain-worktree/rchain-worktree.tar.gz
+          sbt node/universal:packageZipTarball \
+              node/debian:packageBin \
+              node/rpm:packageBin
+          mkdir ../packages
+          cp node/target/universal/rnode-*.tgz \
+              node/target/rnode_*.deb \
+              node/target/rpm/RPMS/noarch/rnode-*.rpm \
+              ../packages/
+      - name: Save Packages
+        uses: actions/upload-artifact@v1
+        with:
+          name: artifacts-packages
+          path: ../packages/
+
+  run_integration_tests:
+    name: Run Integration Tests
+    needs: build_docker_image
+    runs-on: ubuntu-latest
+    steps:
+      - name: Clone Repository
+        uses: actions/checkout@v1
+      - name: Load Docker Image
+        uses: actions/download-artifact@v1
+        with: { name: artifacts-docker }
+      - name: Run Integration Test
+        run: |
+          cd integration-tests
+          if [[ -e /var/cache/integration-tests-venv ]]; then
+              ln -s /var/cache/integration-tests-venv .venv
+              export PIPENV_VENV_IN_PROJECT=1
+          fi
+          ./check_code
+          zcat artifacts-docker/rnode-docker.tar.gz | docker image load
+          rm -r artifacts-docker
+          docker run --network=host \
+              -v /var/run/docker.sock:/var/run/docker.sock \
+              -v /tmp:/tmp \
+              -v $PWD:/work \
+              -v /var/cache/integration-tests-venv:/work/integration-tests/.venv \
+              -w /work/integration-tests \
+              -e PIPENV_VENV_IN_PROJECT=1 \
+              -e PYTEST_ADDOPTS="--log-cli-level=ERROR" \
+              rchain/buildenv-withdeps ./run_tests
+
+  release:
+    name: Release Packages
+    needs:
+      - run_unit_tests
+      - run_integration_tests
+      - build_docker_image
+      - build_packages
+    runs-on: ubuntu-latest
+    steps:
+      - name: Load Docker Image
+        uses: actions/download-artifact@v1
+        with: { name: artifacts-docker }
+      - name: Load Packages
+        uses: actions/download-artifact@v1
+        with: { name: artifacts-packages }
+      - name: Publish Packages
+        env:
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          DOCKERHUB_PASSWORD: ${{ secrets.DOCKERHUB_PASSWORD }}
+        run: |
+          zcat artifacts-docker/rnode-docker.tar.gz | docker image load
+          echo $PASSWORD | docker login -u $USERNAME --password-stdin
+          docker tag coop.rchain/rnode:latest rchain/rnode:staging-${GITHUB_SHA::8}
+          docker push rchain/rnode:staging-${GITHUB_SHA::8}
+          find . -ls
