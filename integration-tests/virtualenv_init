@@ -1,0 +1,16 @@
+if [[ ${_SKIP_VIRTUALENV_INIT-0} != 1 ]]; then
+
+	if [[ -e .python-version ]]; then
+		pyenv -s install
+	fi
+
+	pyenv exec pip3 install --user pipenv
+	pyenv exec python3 -m pipenv sync
+
+	if [[ "$(pyenv exec python3 -m pipenv run which python3)" \
+		!= "$(which python3 2>/dev/null)" ]]
+	then
+		export PATH="$(pyenv exec python3 -m pipenv --venv)/bin:$PATH"
+	fi
+
+fi

@@ -26,7 +26,7 @@ main () {
 
     ./mypy.sh
     ./pylint.sh
-	export TMPDIR=$TEMP_RESOURCES_DIR
+	export TEMP_RESOURCES_DIR
     ./run_tests.sh --log-cli-level=ERROR
 }
 
