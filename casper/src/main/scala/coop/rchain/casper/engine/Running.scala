@@ -88,12 +88,17 @@ object Running {
             peers = requested.peers + nextPeer
           )
           for {
+            _ <- Log[F].debug(
+                  s"Request ${PrettyPrinter.buildString(hash)} from ${nextPeer} " +
+                    s"remain waiting ${waitingListTail.mkString(",")}"
+                )
             _  <- requestForBlock(nextPeer, hash)
             ts <- Time[F].currentMillis
           } yield hash -> Option(modifiedRequested(ts))
         case _ =>
-          val warnMessage = s"Could not retrieve requested block ${PrettyPrinter.buildString(hash)}. " +
-            "Removing the request from the requested blocks list. Casper will have to re-request the block."
+          val warnMessage = s"Could not retrieve requested block ${PrettyPrinter.buildString(hash)} " +
+            s"from ${requested.peers.mkString(",")}. Removing the request from the requested blocks list. " +
+            s"Casper will have to re-request the block."
           Metrics[F].incrementCounter("block-retrieve-failed") >>
             Log[F].warn(warnMessage).as(hash -> none[Requested])
       }

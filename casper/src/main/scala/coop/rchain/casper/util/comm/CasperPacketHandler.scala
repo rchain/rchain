@@ -4,21 +4,20 @@ import cats._
 import cats.effect.Concurrent
 import cats.effect.concurrent.Semaphore
 import cats.syntax.all._
-
+import coop.rchain.metrics._
 import coop.rchain.casper.engine._
 import coop.rchain.casper.engine.EngineCell._
 import coop.rchain.casper.engine.Running.RequestedBlocks
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.PrettyPrinter
 import coop.rchain.comm.PeerNode
-import coop.rchain.comm.protocol.routing.Packet
 import coop.rchain.p2p.effects._
 import coop.rchain.shared.Log
-
 import com.google.protobuf.ByteString
+import coop.rchain.comm.protocol.routing.Packet
+import coop.rchain.metrics.Metrics.Source
 
 object CasperPacketHandler {
-
   def apply[F[_]: FlatMap: EngineCell: Log]: PacketHandler[F] =
     (peer: PeerNode, packet: Packet) =>
       toCasperMessageProto(packet).toEither
@@ -28,12 +27,16 @@ object CasperPacketHandler {
           message => EngineCell[F].read >>= (_.handle(peer, message))
         )
 
-  def fairDispatcher[F[_]: Concurrent: EngineCell: Running.RequestedBlocks: Log](
+  def fairDispatcher[F[_]: Concurrent: EngineCell: Running.RequestedBlocks: Log: Span: Metrics](
       maxPeerQueueSize: Int,
       giveUpAfterSkipped: Int,
       dropPeerAfterRetries: Int
-  ): F[PacketHandler[F]] = {
+  )(implicit spanF: Span[F]): F[PacketHandler[F]] = {
     import FairRoundRobinDispatcher._
+
+    implicit val fairDispatcherMetricsSource: Source =
+      Metrics.Source(Metrics.BaseSource, "fairDispatcher")
+
     implicit def showSourceHolder: Show[BlockCreator] = sh => s"[${sh.toString}]"
     implicit val showCasperMessage: Show[(PeerNode, CasperMessage)] = {
       case (_, BlockHashMessage(h, _)) =>
@@ -75,7 +78,17 @@ object CasperPacketHandler {
           .flatMap(proto => CasperMessage.from(proto))
           .fold(
             err => Log[F].warn(s"Could not extract casper message from packet sent by $peer: $err"),
-            msg => lock.withPermit(dispatcher.dispatch(BlockCreator(msg), (peer, msg)))
+            msg =>
+              spanF.trace(fairDispatcherMetricsSource) {
+                for {
+                  _ <- spanF.mark("Casper message received")
+                  _ <- Metrics[F].incrementGauge("fairDispatcher.lock")
+                  _ <- Log[F].debug(s"Received message ${msg.getClass.getSimpleName} from $peer")
+                  _ <- lock.withPermit(dispatcher.dispatch(BlockCreator(msg), (peer, msg)))
+                  _ <- Metrics[F].decrementGauge("fairDispatcher.lock")
+                  _ <- spanF.mark("Casper message handle done")
+                } yield ()
+              }
           )
       }
     }

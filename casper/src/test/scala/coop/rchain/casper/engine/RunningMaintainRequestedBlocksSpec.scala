@@ -108,7 +108,9 @@ class RunningMaintainRequestedBlocksSpec extends FunSpec with BeforeAndAfterEach
             Running.maintainRequestedBlocks[Coeval](timeout).apply()
             // then
             log.warns should contain(
-              s"Could not retrieve requested block ${PrettyPrinter.buildString(hash)}. Removing the request from the requested blocks list. Casper will have to re-request the block."
+              s"Could not retrieve requested block ${PrettyPrinter.buildString(hash)} " +
+                s"from ${requested.peers.mkString(",")}. Removing the request from the requested blocks list. " +
+                s"Casper will have to re-request the block."
             )
             log.warns.size shouldBe 1
           }
