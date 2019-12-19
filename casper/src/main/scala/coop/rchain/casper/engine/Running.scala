@@ -22,7 +22,7 @@ import scala.concurrent.duration._
 
 object Running {
 
-  val timeout: FiniteDuration = 240 seconds
+  val timeout: FiniteDuration = 30 seconds
 
   implicit private[this] val BlockRequesterMetricsSource =
     Metrics.Source(CasperMetricsSource, "block-requester")
@@ -89,6 +89,7 @@ object Running {
             peers = requested.peers + nextPeer
           )
           for {
+            _  <- Log[F].debug(s"Request ${PrettyPrinter.buildString(hash)} from ${nextPeer} remain waiting ${waitingListTail.mkString(",")}")
             _  <- requestForBlock(nextPeer, hash)
             ts <- Time[F].currentMillis
           } yield hash -> Option(modifiedRequested(ts))
