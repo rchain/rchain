@@ -118,7 +118,6 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Log: Time: SafetyOracle: Las
       dag: BlockDagRepresentation[F]
   ): F[ValidBlockProcessing] =
     for {
-      _            <- updateLastFinalizedBlock(b)
       _            <- Span[F].mark("internal-add-block")
       validFormat  <- Validate.formatOfFields(b)
       validSig     <- Validate.blockSignature(b)
@@ -305,6 +304,7 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Log: Time: SafetyOracle: Las
           _ <- Log[F].info(
                 s"Added ${PrettyPrinter.buildString(block.blockHash)}"
               )
+          _ <- updateLastFinalizedBlock(block)
         } yield updatedDag
       }
       .leftMap {
