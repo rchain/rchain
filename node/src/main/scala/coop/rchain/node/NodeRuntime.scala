@@ -404,6 +404,11 @@ class NodeRuntime private[node] (
           )
       _ <- servers.kademliaRPCServer.start.toReaderT
 
+      // HTTP server is started immediately on `acquireServers`
+      _ <- Log[TaskEnv].info(
+            s"HTTP API server started at $host:${conf.server.httpPort}"
+          )
+
       _ <- Log[TaskEnv].info(
             s"Kademlia RPC server started at $host:${servers.kademliaRPCServer.port}"
           )
