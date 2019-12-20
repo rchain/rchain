@@ -21,7 +21,7 @@
  9.  | 4,         | registry           | uri = rho:id:m3xk7h8r54dtqtwsrnxqzhe81baswey66nzw6m533nyd45ptyoybqr
  ----+------------+--------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------
  */
-new  PoS,
+new PoS,
     registryLookup(`rho:registry:lookup`),
     revAddressOps(`rho:rev:address`),
     revVaultCh, listOpsCh,
@@ -317,7 +317,6 @@ new  PoS,
             contract PoS(@"closeBlock", ackCh) = {
               new accumulateDeposits,
                   commitRewards,
-                  changeEpoch,
                   removeQuarantinedWithdrawers,
                   payValidators
               in {
@@ -332,23 +331,26 @@ new  PoS,
                   runMVar!(*stateCh, *mvarProcessCh, *ackCh) |
                   for(_, @blockNumber, _ <- blockDataCh;
                       @state, mvarResultCh <- mvarProcessCh) {
-                    // Before choosing new active validators and paying out any withdrawers,
-                    // deposits have to be accumulated into one vault for now.
-                    accumulateDeposits!(posRevAddress, *accDepositsDoneCh) |
 
-                    changeEpoch!(
-                      blockNumber,
-                      state.get("allBonds"),
-                      state.get("activeValidators"),
-                      state.get("withdrawers"),
-                      *newValidatorsCh)|
+                    // Only commit rewards and pick active validators if there is actually an epoch change.
+                    if (blockNumber % $$epochLength$$ == 0) {
 
-                    commitRewards!(
-                      state.get("pendingRewards"),
-                      state.get("committedRewards"),
-                      *commitRewardsCh) |
+                      // Before choosing new active validators and paying out any withdrawers,
+                      // deposits have to be accumulated into one vault for now.
+                      accumulateDeposits!(posRevAddress, *accDepositsDoneCh) |
+
+                      commitRewards!(
+                        state.get("pendingRewards"),
+                        state.get("committedRewards"),
+                        *commitRewardsCh)
+                    } |
 
                     for (@committedRewards <- commitRewardsCh) {
+
+                      pickActiveValidators!(
+                        state.get("allBonds"),
+                        state.get("withdrawers"),
+                        *newValidatorsCh) |
 
                       removeQuarantinedWithdrawers!(
                         blockNumber,
@@ -428,14 +430,6 @@ new  PoS,
                   } |
                   contract commitRewards(@pendingRewards, @rewards, newRewardsCh) = {
                     @ListOps!("fold", pendingRewards.toList(), rewards, *commitReward, *newRewardsCh)
-                  }
-                } |
-
-                contract changeEpoch(@currentBlockNumber, @allBonds, @activeValidators, @withdrawers, resultCh) = {
-                  if (currentBlockNumber % $$epochLength$$ == 0) {
-                    pickActiveValidators!(allBonds, withdrawers, *resultCh)
-                  } else {
-                    resultCh!(activeValidators)
                   }
                 } |
 
