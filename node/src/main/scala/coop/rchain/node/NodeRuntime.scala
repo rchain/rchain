@@ -746,7 +746,7 @@ object NodeRuntime {
       casperLoop = for {
         engine <- engineCell.read
         _      <- engine.withCasper(_.fetchDependencies, Applicative[F].unit)
-        _ <- Running.maintainRequestedBlocks[F](
+        _ <- Running.maintainRequestedBlocks[F](conf.casper.requestedBlocksTimeout)(
               Monad[F],
               rpConfAsk,
               requestedBlocks,
@@ -755,7 +755,7 @@ object NodeRuntime {
               Time[F],
               Metrics[F]
             )
-        _ <- Time[F].sleep(30.seconds)
+        _ <- Time[F].sleep(conf.casper.casperLoopInterval.seconds)
       } yield ()
       engineInit     = engineCell.read >>= (_.init)
       runtimeCleanup = NodeRuntime.cleanup(runtime, casperRuntime)

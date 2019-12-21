@@ -101,6 +101,8 @@ object ConfigMapper {
         add(keys.EpochLength, run.epochLength)
         add(keys.QuarantineLength, run.quarantineLength)
         add(keys.NumberOfActiveValidators, run.numberOfActiveValidators)
+        add(keys.CasperLoopInterval, run.casperLoopInterval)
+        add(keys.RequestedBlocksTimeout, run.requestedBlocksTimeout)
         add(keys.RequiredSignatures, run.requiredSigs)
         add(keys.Shard, run.shardId)
         add(keys.GenesisValidator, run.genesisValidator)

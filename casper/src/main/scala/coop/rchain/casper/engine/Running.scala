@@ -22,8 +22,6 @@ import scala.concurrent.duration._
 
 object Running {
 
-  val timeout: FiniteDuration = 240 seconds
-
   implicit private[this] val BlockRequesterMetricsSource =
     Metrics.Source(CasperMetricsSource, "block-requester")
 
@@ -69,8 +67,9 @@ object Running {
     * and keep the requested blocks list clean.
     * See spec RunningMaintainRequestedBlocksSpec for more details
     */
-  def maintainRequestedBlocks[F[_]: Monad: RPConfAsk: RequestedBlocks: TransportLayer: Log: Time: Metrics]
-      : F[Unit] = {
+  def maintainRequestedBlocks[F[_]: Monad: RPConfAsk: RequestedBlocks: TransportLayer: Log: Time: Metrics](
+      timeout: Int
+  ): F[Unit] = {
 
     def toMap(list: List[(BlockHash, Option[Requested])]): Map[BlockHash, Requested] = {
       val filtered = list.flatMap {
@@ -105,7 +104,7 @@ object Running {
         .traverse(hash => {
           val requested = requests(hash)
           Time[F].currentMillis
-            .map(_ - requested.timestamp > timeout.toMillis)
+            .map(_ - requested.timestamp > timeout.seconds.toMillis)
             .ifM(tryRerequest(hash, requested), (hash -> Option(requested)).pure[F])
         })
         .map(list => toMap(list))

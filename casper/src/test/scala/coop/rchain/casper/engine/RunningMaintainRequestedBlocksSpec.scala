@@ -15,12 +15,14 @@ import coop.rchain.models.BlockHash.BlockHash
 import com.google.protobuf.ByteString
 import coop.rchain.metrics.Metrics
 import monix.eval.Coeval
+import concurrent.duration._
 import org.scalatest._
 
 class RunningMaintainRequestedBlocksSpec extends FunSpec with BeforeAndAfterEach with Matchers {
 
   val hash             = ByteString.copyFrom("hash", "UTF-8")
   implicit val metrics = new Metrics.MetricsNOP[Coeval]
+  val timeout: Int     = 240
 
   override def beforeEach(): Unit = {
     transport.reset()
@@ -36,7 +38,7 @@ class RunningMaintainRequestedBlocksSpec extends FunSpec with BeforeAndAfterEach
           val requested                = Requested(timestamp = notTimedOut)
           implicit val requestedBlocks = initRequestedBlocks(init = Map(hash -> requested))
           // when
-          Running.maintainRequestedBlocks[Coeval].apply()
+          Running.maintainRequestedBlocks[Coeval](timeout).apply()
           // then
           val requestedBlocksMapAfter = requestedBlocks.read.apply
           requestedBlocksMapAfter.size should be(1)
@@ -54,7 +56,7 @@ class RunningMaintainRequestedBlocksSpec extends FunSpec with BeforeAndAfterEach
             )
             implicit val requestedBlocks = initRequestedBlocks(init = Map(hash -> requested))
             // when
-            Running.maintainRequestedBlocks[Coeval].apply()
+            Running.maintainRequestedBlocks[Coeval](timeout).apply()
             // then
             val (recipient, msg) = transport.getRequest(0)
             toBlockRequest(msg).hash should be(hash)
@@ -71,7 +73,7 @@ class RunningMaintainRequestedBlocksSpec extends FunSpec with BeforeAndAfterEach
             )
             implicit val requestedBlocks = initRequestedBlocks(init = Map(hash -> requested))
             // when
-            Running.maintainRequestedBlocks[Coeval].apply()
+            Running.maintainRequestedBlocks[Coeval](timeout).apply()
             // then
             val Some(requestedAfter) = requestedBlocks.read.apply.get(hash)
             requestedAfter.waitingList shouldBe List(peerNode("waiting2"))
@@ -86,7 +88,7 @@ class RunningMaintainRequestedBlocksSpec extends FunSpec with BeforeAndAfterEach
             )
             implicit val requestedBlocks = initRequestedBlocks(init = Map(hash -> requested))
             // when
-            Running.maintainRequestedBlocks[Coeval].apply()
+            Running.maintainRequestedBlocks[Coeval](timeout).apply()
             // then
             val Some(requestedAfter) = requestedBlocks.read.apply.get(hash)
             requestedAfter.timestamp shouldBe time.clock
@@ -103,7 +105,7 @@ class RunningMaintainRequestedBlocksSpec extends FunSpec with BeforeAndAfterEach
             )
             implicit val requestedBlocks = initRequestedBlocks(init = Map(hash -> requested))
             // when
-            Running.maintainRequestedBlocks[Coeval].apply()
+            Running.maintainRequestedBlocks[Coeval](timeout).apply()
             // then
             log.warns should contain(
               s"Could not retrieve requested block ${PrettyPrinter.buildString(hash)}. Removing the request from the requested blocks list. Casper will have to re-request the block."
@@ -120,7 +122,7 @@ class RunningMaintainRequestedBlocksSpec extends FunSpec with BeforeAndAfterEach
             )
             implicit val requestedBlocks = initRequestedBlocks(init = Map(hash -> requested))
             // when
-            Running.maintainRequestedBlocks[Coeval].apply()
+            Running.maintainRequestedBlocks[Coeval](timeout).apply()
             // then
             transport.requests.size should be(0)
           }
@@ -134,7 +136,7 @@ class RunningMaintainRequestedBlocksSpec extends FunSpec with BeforeAndAfterEach
             )
             implicit val requestedBlocks = initRequestedBlocks(init = Map(hash -> requested))
             // when
-            Running.maintainRequestedBlocks[Coeval].apply()
+            Running.maintainRequestedBlocks[Coeval](timeout).apply()
             // then
             val requestedBlocksMapAfter = requestedBlocks.read.apply
             requestedBlocksMapAfter.size should be(0)
@@ -167,7 +169,7 @@ class RunningMaintainRequestedBlocksSpec extends FunSpec with BeforeAndAfterEach
 
   private def alwaysSuccess: PeerNode => Protocol => CommErr[Unit] = kp(kp(Right(())))
 
-  private def timedOut: Long    = time.clock - (2 * Running.timeout.toMillis)
+  private def timedOut: Long    = time.clock - (2 * timeout.seconds.toMillis)
   private def notTimedOut: Long = time.clock - 1
 
 }

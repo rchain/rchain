@@ -28,6 +28,8 @@ final case class CasperConf(
     epochLength: Int,
     quarantineLength: Int,
     numberOfActiveValidators: Int,
+    casperLoopInterval: Int,
+    requestedBlocksTimeout: Int,
     requiredSigs: Int,
     shardId: String,
     createGenesis: Boolean,

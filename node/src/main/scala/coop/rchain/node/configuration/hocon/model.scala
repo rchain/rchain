@@ -273,6 +273,8 @@ object Casper {
     val BondMaximum              = "bond-maximum"
     val QuarantineLength         = "quarantine-length"
     val NumberOfActiveValidators = "number-of-active-validators"
+    val CasperLoopInterval       = "casper-loop-interval"
+    val RequestedBlocksTimeout   = "requested-blocks-timeout"
     val EpochLength              = "epoch-length"
     val RequiredSignatures       = "required-signatures"
     val Shard                    = "shard"
@@ -297,6 +299,8 @@ object Casper {
         BondMaximum,
         QuarantineLength,
         NumberOfActiveValidators,
+        CasperLoopInterval,
+        RequestedBlocksTimeout,
         EpochLength,
         RequiredSignatures,
         Shard,
@@ -329,6 +333,8 @@ object Casper {
       epochLength = casper.getInt(keys.EpochLength),
       quarantineLength = casper.getInt(keys.QuarantineLength),
       numberOfActiveValidators = casper.getInt(keys.NumberOfActiveValidators),
+      casperLoopInterval = casper.getInt(keys.CasperLoopInterval),
+      requestedBlocksTimeout = casper.getInt(keys.RequestedBlocksTimeout),
       requiredSigs = casper.getInt(keys.RequiredSignatures),
       shardId = casper.getString(keys.Shard),
       approveGenesis = casper.getBoolean(keys.GenesisValidator),
