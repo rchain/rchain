@@ -228,6 +228,7 @@ class ConfigMapperSpec extends FunSuite with Matchers {
         maximumBond = 1000L,
         epochLength = 10000,
         quarantineLength = 50000,
+        numberOfActiveValidators = 100,
         requiredSigs = 0,
         shardId = "rchain",
         createGenesis = false,

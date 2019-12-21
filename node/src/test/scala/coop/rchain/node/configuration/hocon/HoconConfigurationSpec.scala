@@ -231,6 +231,7 @@ class HoconConfigurationSpec extends FunSuite with Matchers {
         maximumBond = Long.MaxValue,
         epochLength = 10000,
         quarantineLength = 50000,
+        numberOfActiveValidators = 100,
         requiredSigs = 0,
         shardId = "rchain",
         createGenesis = false,

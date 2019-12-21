@@ -82,6 +82,7 @@ object Setup {
         genesisParams.proofOfStake.maximumBond,
         genesisParams.proofOfStake.epochLength,
         genesisParams.proofOfStake.quarantineLength,
+        genesisParams.proofOfStake.numberOfActiveValidators,
         requiredSigs
       )
       .unsafeRunSync(monix.execution.Scheduler.Implicits.global)

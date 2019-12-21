@@ -67,6 +67,7 @@ object ApproveBlockProtocol {
       maximumBond: Long,
       epochLength: Int,
       quarantineLength: Int,
+      numberOfActiveValidators: Int,
       shardId: String,
       deployTimestamp: Option[Long],
       requiredSigs: Int,
@@ -103,6 +104,7 @@ object ApproveBlockProtocol {
                              maximumBond = maximumBond,
                              epochLength = epochLength,
                              quarantineLength = quarantineLength,
+                             numberOfActiveValidators = numberOfActiveValidators,
                              validators = validators
                            ),
                            vaults = vaults,

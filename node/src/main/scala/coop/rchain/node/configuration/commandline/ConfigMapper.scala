@@ -100,6 +100,7 @@ object ConfigMapper {
         add(keys.BondMaximum, run.maximumBond)
         add(keys.EpochLength, run.epochLength)
         add(keys.QuarantineLength, run.quarantineLength)
+        add(keys.NumberOfActiveValidators, run.numberOfActiveValidators)
         add(keys.RequiredSignatures, run.requiredSigs)
         add(keys.Shard, run.shardId)
         add(keys.GenesisValidator, run.genesisValidator)

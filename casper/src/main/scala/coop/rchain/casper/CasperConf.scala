@@ -27,6 +27,7 @@ final case class CasperConf(
     maximumBond: Long,
     epochLength: Int,
     quarantineLength: Int,
+    numberOfActiveValidators: Int,
     requiredSigs: Int,
     shardId: String,
     createGenesis: Boolean,

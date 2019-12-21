@@ -15,7 +15,7 @@ final case class ProofOfStake(
     validators: Seq[Validator],
     epochLength: Int,
     quarantineLength: Int,
-    numberOfActiveValidators: Int = 100
+    numberOfActiveValidators: Int
 ) extends CompiledRholangTemplate(
       "PoS.rhox",
       NormalizerEnv.withDeployerId(

@@ -230,6 +230,7 @@ object GenesisTest {
       maximumBond: Long = Long.MaxValue,
       epochLength: Int = 10000,
       quarantineLength: Int = 50000,
+      numberOfActiveValidators: Int = 100,
       shardId: String = rchainShardId,
       deployTimestamp: Option[Long] = Some(System.currentTimeMillis())
   )(
@@ -258,6 +259,7 @@ object GenesisTest {
                            maximumBond = maximumBond,
                            epochLength = epochLength,
                            quarantineLength = quarantineLength,
+                           numberOfActiveValidators = numberOfActiveValidators,
                            validators = validators
                          ),
                          vaults = vaults,
