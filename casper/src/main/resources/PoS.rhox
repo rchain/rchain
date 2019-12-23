@@ -36,12 +36,13 @@ new PoS,
     transferFromBlockSender,
     rs(`rho:registry:insertSigned:secp256k1`),
     posId(`rho:rchain:deployerId`),
-    uriOut in {
+    uriOut
+in {
   registryLookup!(`rho:rchain:revVault`, *revVaultCh) |
   registryLookup!(`rho:lang:listOps`, *listOpsCh) |
 
-  for(@(_, RevVault) <- revVaultCh;
-      @(_, ListOps) <- listOpsCh) {
+  for (@(_, RevVault) <- revVaultCh;
+       @(_, ListOps)  <- listOpsCh) {
     new posRevAddressCh, posAuthKeyCh, posVaultCh, initialActiveCh in {
 
       @RevVault!("deployerAuthKey", *posId, *posAuthKeyCh) |
@@ -66,14 +67,14 @@ new PoS,
         }
       } |
       
-      for(@posRevAddress <- posRevAddressCh;
-          @posAuthKey <- posAuthKeyCh) {
+      for (@posRevAddress <- posRevAddressCh;
+           @posAuthKey    <- posAuthKeyCh) {
 
         @RevVault!("findOrCreate", posRevAddress, *posVaultCh) |
         pickActiveValidators!($$initialBonds$$, {}, *initialActiveCh) |
 
         for (@(true, posVault) <- posVaultCh;
-             @initialActive <- initialActiveCh) {
+             @initialActive    <- initialActiveCh) {
           new stateCh in {
             // State structure:
             // pendingRewards : Map[PublickKey, Int] - are accummulated by calling "chargeDeploy"
@@ -111,7 +112,7 @@ new PoS,
             } |
 
             contract PoS (@"getActiveValidatorVaults", returnCh) = {
-              for(@vaults <<- perActiveValidatorPosVaultsCh) {
+              for (@vaults <<- perActiveValidatorPosVaultsCh) {
                 returnCh!(vaults)
               }
             } |
@@ -133,8 +134,8 @@ new PoS,
               new userCh, depositCh, processCh in {
                 runMVar!(*stateCh, *processCh, *returnCh) |
                 getUser!(deployerId, *userCh) |
-                for(@state, resultCh <- processCh;
-                    @userPk <- userCh) {
+                for (@state, resultCh <- processCh;
+                     @userPk          <- userCh) {
                   if (state.get("allBonds").contains(userPk)) {
                     resultCh!(state, (false, "Public key is already bonded."))
                   } else if (amount < $$minimumBond$$) {
@@ -143,7 +144,7 @@ new PoS,
                     resultCh!(state, (false, "Bond is greater than maximum!"))
                   } else {
                     deposit!(deployerId, amount, state.get("activeValidators"), *depositCh) |
-                    for(@depositResult <- depositCh) {
+                    for (@depositResult <- depositCh) {
                       match depositResult {
                         (true, _) => {
                           resultCh!(
@@ -172,16 +173,16 @@ new PoS,
 
                 getBlockData!(*blockDataCh) |
                 getUser!(deployerId, *userCh) |
-                for(@state, resultCh <- processCh;
-                    @userPk <- userCh;
-                    _, @blockNumber, _ <- blockDataCh) {
+                for (@state, resultCh   <- processCh;
+                     @userPk            <- userCh;
+                     @blockNumber, _, _ <- blockDataCh) {
                   if (state.get("allBonds").contains(userPk)) {
-                    // the withdwal is in effect starting from the next epoch
+                    // Quarantine period goes into effect at the beginning of the next epoch.
                     resultCh!(
                       state.set("withdrawers",
                                 state.get("withdrawers")
                                      .set(userPk,
-                                       $$quarantineLength$$ + $$epochLength$$ * (1 + blockNumber / $$epochLength$$))),
+                                       blockNumber + $$quarantineLength$$ + $$epochLength$$ - (blockNumber % $$epochLength$$))),
                       (true, Nil))
                   } else {
                     resultCh!(state, (false, "User is not bonded"))
@@ -196,7 +197,7 @@ new PoS,
                   getMVar!(*stateCh, *tmpCh) |
                   for (@state <- tmpCh) {
                     deposit!(deployerId, amount, state.get("activeValidators"), *depositCh) |
-                    for(@depositResult <- depositCh){
+                    for (@depositResult <- depositCh){
                       match depositResult {
                         (true, _) => {
                           currentDeployerData!((deployerId, amount)) |
@@ -219,7 +220,8 @@ new PoS,
                     tmpCh in {
                   getMVar!(*stateCh, *tmpCh) |
                   getBlockData!(*blockDataCh) |
-                  for (@state <- tmpCh; _, _, @sender <- blockDataCh) {
+                  for (@state        <- tmpCh;
+                       _, _, @sender <- blockDataCh) {
                     @ListOps!("indexOf", state.get("activeValidators"), sender, *indexSender) |
                     for (@idx <- indexSender) {
                       for (@vaults <<- perActiveValidatorPosVaultsCh) {
@@ -245,18 +247,18 @@ new PoS,
               //       this method, along with "chargeDeploy", "closeBlock", and "slash"
               //       must be made private, as they're only used in the protocol.
               contract PoS (@"refundDeploy", @refundAmount, return) = {
-                for(@(deployerId, initialPaymentAmount) <- currentDeployerData){
+                for (@(deployerId, initialPaymentAmount) <- currentDeployerData){
                   new revAddressCh in {
                     revAddressOps!("fromDeployerId", deployerId, *revAddressCh) |
-                    for(@deployerRevAddress <- revAddressCh){
+                    for (@deployerRevAddress <- revAddressCh){
                       new transferCh in {
                         transferFromBlockSender!(deployerRevAddress, refundAmount, *transferCh) |
-                        for(@transferResult <- transferCh){
+                        for (@transferResult <- transferCh){
                           match transferResult {
                             (true, _) => {
                               new processRefundCh in {
                                 runMVar!(*stateCh, *processRefundCh, *return) |
-                                for(@state, refundResultCh <- processRefundCh){
+                                for (@state, refundResultCh <- processRefundCh){
                                   new newPendingCh in {
                                     distributeRewards!(
                                       initialPaymentAmount - refundAmount,
@@ -264,7 +266,7 @@ new PoS,
                                       state.get("allBonds"),
                                       state.get("pendingRewards"),
                                       *newPendingCh) |
-                                    for(@newPending <- newPendingCh){
+                                    for (@newPending <- newPendingCh){
                                       refundResultCh!(
                                         state.set("pendingRewards", newPending),
                                         (true, Nil)
@@ -293,8 +295,8 @@ new PoS,
                 getUser!(deployerId, *userCh) |
 
                 runMVar!(*stateCh, *doSlashCh, *returnCh) |
-                for (@invalidBlocks <- invalidBlocksCh;
-                     @userPk <- userCh;
+                for (@invalidBlocks        <- invalidBlocksCh;
+                     @userPk               <- userCh;
                      @state, slashResultCh <- doSlashCh) {
                   new toBeSlashed in {
                     toBeSlashed!(invalidBlocks.getOrElse(blockHash, userPk)) |
@@ -329,15 +331,15 @@ new PoS,
                   getBlockData!(*blockDataCh) |
 
                   runMVar!(*stateCh, *mvarProcessCh, *ackCh) |
-                  for(_, @blockNumber, _ <- blockDataCh;
-                      @state, mvarResultCh <- mvarProcessCh) {
+                  for (@blockNumber, _, _   <- blockDataCh;
+                       @state, mvarResultCh <- mvarProcessCh) {
 
                     // Only commit rewards and pick active validators if there is actually an epoch change.
                     if (blockNumber % $$epochLength$$ == 0) {
 
                       // Before choosing new active validators and paying out any withdrawers,
                       // deposits have to be accumulated into one vault for now.
-                      accumulateDeposits!(posRevAddress, *accDepositsDoneCh) |
+                      accumulateDeposits!(*accDepositsDoneCh) |
 
                       commitRewards!(
                         state.get("pendingRewards"),
@@ -360,9 +362,9 @@ new PoS,
                         *removeQuarantinedCh)
                     } |
 
-                    for(@newValidators <- newValidatorsCh;
-                        @(payments, newBonds, newWithdrawers, newRewards) <- removeQuarantinedCh;
-                        _ <- accDepositsDoneCh) {
+                    for (@newValidators                                    <- newValidatorsCh;
+                         @(payments, newBonds, newWithdrawers, newRewards) <- removeQuarantinedCh;
+                         _                                                 <- accDepositsDoneCh) {
 
                       payValidators!(payments, *paymentDoneCh) |
 
@@ -403,8 +405,8 @@ new PoS,
                     }
                   } |
 
-                  contract accumulateDeposits(destRevAddress, ackCh) = {
-                    for(@vaults <<- perActiveValidatorPosVaultsCh) {
+                  contract accumulateDeposits(ackCh) = {
+                    for (@vaults <<- perActiveValidatorPosVaultsCh) {
                       @ListOps!("parMap", vaults, *moveFunds, *ackCh)
                     }
                   }
@@ -459,9 +461,9 @@ new PoS,
                             @ListOps!("filter", rewards.toList(), *notWithdrawn, *newRewardsListCh) |
 
                             for (@newWithdrawersList <- newWithdrawersListCh;
-                                 @newBondsList <- newBondsListCh;
-                                 @newRewardsList <- newRewardsListCh;
-                                 @payments <- paymentsCh) {
+                                 @newBondsList       <- newBondsListCh;
+                                 @newRewardsList     <- newRewardsListCh;
+                                 @payments           <- paymentsCh) {
                               returnCh!((payments, newBondsList.toMap(), newWithdrawersList.toMap(), newRewardsList.toMap()))
                             } |
 
@@ -471,8 +473,8 @@ new PoS,
                       }
                     } |
 
-                    contract isQuarantineFinished(@(_, blockNumber), resultCh) = {
-                      resultCh!(blockNumber >= currentBlockNumber)
+                    contract isQuarantineFinished(@(_, quarantineDoneblockNumber), resultCh) = {
+                      resultCh!(currentBlockNumber >= quarantineDoneblockNumber)
                     }
                   }
                 }
@@ -484,16 +486,13 @@ new PoS,
                 getUser!(deployerId, *userCh) |
 
                 runMVar!(*stateCh, *mvarCh, *ackCh) |
-                for (@validator <- userCh;
+                for (@validator       <- userCh;
                      @state, resultCh <- mvarCh) {
                   if (state.get("randomImages").contains(validator)) {
                     resultCh!(state, (false, "Image already committed"))
                   }
                   else {
-                    resultCh!(
-                      state.set("randomImages",
-                               state.get("randomImages").set(validator, hash)),
-                      true)
+                    resultCh!(state.set("randomImages", state.get("randomImages").set(validator, hash)), true)
                   }
                }
              }
@@ -502,12 +501,11 @@ new PoS,
             contract PoS(@"revealRandom", @deployerId, @random, ackCh) = {
               new userCh, mvarCh, computeHash(`rho:crypto:keccak256Hash`), hashCh in {
                 getUser!(deployerId, *userCh) |
-
                 runMVar!(*stateCh, *mvarCh, *ackCh) |
                 computeHash!(random, *hashCh) |
-                for (@validator <- userCh;
+                for (@validator       <- userCh;
                      @state, resultCh <- mvarCh;
-                     @hash <- hashCh) {
+                     @hash            <- hashCh) {
                   if (state.get("randomImages").contains(validator)) {
                     if (hash == state.get("randomImages").get(validator))
                     {
@@ -521,7 +519,7 @@ new PoS,
                     }
                   }
                   else {
-                      resultCh! (state, (false, "Previously committed random image not found"))
+                      resultCh!(state, (false, "Previously committed random image not found"))
                   }
                }
              }
@@ -534,13 +532,16 @@ new PoS,
               revAddressCh,
               indexSender,
               getBlockData(`rho:block:data`), blockDataCh,
-              authKeyCh in {
+              authKeyCh
+          in {
             @RevVault!("deployerAuthKey", deployerId, *authKeyCh) |
             revAddressOps!("fromDeployerId", deployerId, *revAddressCh) |
-            for (@authKey <- authKeyCh; @fromRevAddress <- revAddressCh) {
+            for (@authKey        <- authKeyCh;
+                 @fromRevAddress <- revAddressCh) {
               @RevVault!("findOrCreate", fromRevAddress, *vaultCh) |
               getBlockData!(*blockDataCh) |
-              for (@(true, fromVault) <- vaultCh; _, _, @sender <- blockDataCh) {
+              for (@(true, fromVault) <- vaultCh;
+                   _, _, @sender      <- blockDataCh) {
                 @ListOps!("indexOf", activeValidators, sender, *indexSender) |
                 for (@idx <- indexSender) {
                   for (@vaults <<- perActiveValidatorPosVaultsCh) {
@@ -569,7 +570,7 @@ new PoS,
               resultCh!(acc + bonds.get(pk))
             } |
 
-            for(@totalActiveStake <- totalActiveStakeCh) {
+            for (@totalActiveStake <- totalActiveStakeCh) {
               @ListOps!("fold", activeValidators, {}, *computeDelta, *rewardsDeltaCh) |
               contract computeDelta(@pk, @acc, resultCh) = {
                 resultCh!(acc.set(pk, (amount * bonds.get(pk)) / totalActiveStake))
@@ -577,7 +578,6 @@ new PoS,
             } |
 
             for (@rewardsDelta <- rewardsDeltaCh) {
-
               @ListOps!("fold", rewardsDelta.toList(), originalRewards, *computeMergeMap, *returnCh) |
               contract computeMergeMap(@(pk, rewardDelta), @acc, resultCh) = {
                 resultCh!(acc.set(pk, acc.getOrElse(pk, 0) + rewardDelta))
@@ -588,11 +588,11 @@ new PoS,
       } |
 
       contract getMVar(varCh, returnCh) = {
-        for (@v <- varCh) {
-          varCh!(v) |
+        for (@v <<- varCh) {
           returnCh!(v)
         }
       } |
+
       contract runMVar(varCh, processCh, returnCh) = {
         new resultCh in {
           for (@v <- varCh) {
@@ -627,7 +627,9 @@ new PoS,
       contract pickActiveValidators(@allBonds, @withdrawers, returnCh) = {
         new availableValidatorsCh, isAvailable, pksCh in {
           @ListOps!("filter", allBonds.toList(), *isAvailable, *availableValidatorsCh) |
-          contract isAvailable(@(pk, _), resultCh) = { resultCh!(not withdrawers.contains(pk))} |
+          contract isAvailable(@(pk, _), resultCh) = {
+            resultCh!(not withdrawers.contains(pk))
+          } |
 
           for (@availableValidators <- availableValidatorsCh) {
             @ListOps!("map", availableValidators, *fst, *pksCh) |
