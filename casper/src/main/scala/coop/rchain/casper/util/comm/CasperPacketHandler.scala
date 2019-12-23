@@ -67,14 +67,16 @@ object CasperPacketHandler {
     def handle(holder: BlockCreator, message: (PeerNode, CasperMessage)): F[Unit] =
       EngineCell[F].read >>= (_.handle(message._1, message._2))
 
-    val fairRoundRobinDispatcherF = fairLock >>= {lock => FairRoundRobinDispatcher[F, BlockCreator, (PeerNode, CasperMessage)](
-      checkMessage,
-      handle,
-      maxPeerQueueSize,
-      giveUpAfterSkipped,
-      dropPeerAfterRetries,
-      lock
-    )}
+    val fairRoundRobinDispatcherF = fairLock >>= { lock =>
+      FairRoundRobinDispatcher[F, BlockCreator, (PeerNode, CasperMessage)](
+        checkMessage,
+        handle,
+        maxPeerQueueSize,
+        giveUpAfterSkipped,
+        dropPeerAfterRetries,
+        lock
+      )
+    }
 
     fairRoundRobinDispatcherF.map { dispatcher => (peer, packet) =>
       toCasperMessageProto(packet).toEither
@@ -84,10 +86,10 @@ object CasperPacketHandler {
           msg =>
             spanF.trace(fairDispatcherMetricsSource) {
               for {
-                _          <- spanF.mark("Casper message received")
-                _          <- Log[F].debug(s"Received message ${msg.getClass.getSimpleName} from $peer")
-                _          <- dispatcher.dispatch(BlockCreator(msg), (peer, msg))
-                _          <- spanF.mark("Casper message handle done")
+                _ <- spanF.mark("Casper message received")
+                _ <- Log[F].debug(s"Received message ${msg.getClass.getSimpleName} from $peer")
+                _ <- dispatcher.dispatch(BlockCreator(msg), (peer, msg))
+                _ <- spanF.mark("Casper message handle done")
               } yield ()
             }
         )
