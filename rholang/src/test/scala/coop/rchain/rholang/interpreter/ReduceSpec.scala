@@ -2512,7 +2512,17 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
     task.runSyncUnsafe(timeout)
   }
 
-  "term split size max" should "be evaluated (Int16/2 - 1)" in {
+  /**
+    * I chose to ignore this test for reasons mentioned in
+    * https://github.com/rchain/rchain/pull/2814
+    * To quote it here:
+    *   it doesn't matter if this test executes longer or shorter.
+    *   In this particular case the cost of thread pool management is likely much higher than the cost of evaluating terms.
+    *   The test is misguided in this sense.
+    *   The actual parallelism level is function of term complexity which is very low here, so it does not matter if it executes longer or not.
+    *   If it bothers anyone, please change the scheduler used in tests from global to TestScheduler and see the difference.
+    */
+  "term split size max" should "be evaluated (Int16/2 - 1)" ignore {
     implicit val errorLog = new ErrorLog[Task]()
     val p                 = New(bindCount = 1)
     val news              = Seq.fill(Short.MaxValue)(p)
@@ -2542,7 +2552,7 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
     }
 
     result should be(
-      ReduceError("The number of Pars in the term is 32768, which exceeds the limit of 32767.")
+      ReduceError("The number of terms in the Par is 32768, which exceeds the limit of 32767.")
     )
   }
 }

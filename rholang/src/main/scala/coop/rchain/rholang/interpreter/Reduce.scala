@@ -33,10 +33,6 @@ import scala.collection.SortedSet
 import scala.collection.immutable.BitSet
 import scala.util.{Random, Try}
 
-object Reduce {
-  val parallelism = lang.Runtime.getRuntime.availableProcessors() * 2
-}
-
 /** Reduce is the interface for evaluating Rholang expressions.
   *
   * @tparam M The kind of Monad used for evaluation.
@@ -151,6 +147,11 @@ class DebruijnInterpreter[M[_], F[_]](
           produce(chan, removedData, false)
       }
 
+  /**
+    * The evaluation of a Par is at the mercy of `Parallel` instance passed to `DebruijnInterpreter`. Therefore, if a
+    * particular concurrency semantics is desired, it should be achieved by modifying the `Parallel` instance, not by
+    * modifying this method.
+    */
   override def eval(par: Par)(
       implicit env: Env[Par],
       rand: Blake2b512Random
@@ -177,39 +178,18 @@ class DebruijnInterpreter[M[_], F[_]](
       else if (terms.size > 256) rand.splitShort(id.toShort)
       else rand.splitByte(id.toByte)
 
-    val indexedTerms = terms.zipWithIndex.toList
     // Term split size is limited to half of Int16 because other half is for injecting
     // things to system deploys through NormalizerEnv
     val termSplitLimit = Short.MaxValue
-    if (terms.size > termSplitLimit) {
+    if (terms.size > termSplitLimit)
       ReduceError(
-        s"The number of Pars in the term is ${terms.size}, which exceeds the limit of ${termSplitLimit}."
+        s"The number of terms in the Par is ${terms.size}, which exceeds the limit of ${termSplitLimit}."
       ).raiseError[M, Unit]
-    } else if (terms.size <= Reduce.parallelism) {
-      indexedTerms.parTraverse_ {
+    else
+      terms.zipWithIndex.toList.parTraverse_ {
         case (term, index) =>
-          val random = split(index)
-          eval(term)(env, random)
+          eval(term)(env, split(index))
       }
-    } else {
-      //TODO: Investigate if we can avoid the shuffling and manual parallelism limiting by tweaking:
-      // - the scheduler used
-      // - the monix ExecutionModel used
-      // Verify if using traverse-per-batch inside parTraverse means that less tasks are spawned at once
-      // (surmise: the task for the next element of a batch is not spawned until the previous one is processed)
-      // Track memory usage along with raw performance when investigating. Clean slate POC could be helpful here.
-
-      // we index terms before shuffling to have deterministic Blake2b512Random seeds for each term
-      val indexedTermsShuffled = Random.shuffle(indexedTerms)
-      val groups               = indexedTermsShuffled.groupBy(_._2 % Reduce.parallelism).values.toList
-      groups.parTraverse_ {
-        _.traverse_ {
-          case (term, index) =>
-            val random = split(index)
-            eval(term)(env, random)
-        }
-      }
-    }
   }
 
   private def eval(
