@@ -2,7 +2,6 @@ package coop.rchain.casper.util.comm
 
 import cats._
 import cats.effect.Concurrent
-import cats.effect.concurrent.Semaphore
 import cats.syntax.all._
 import coop.rchain.metrics._
 import coop.rchain.casper.engine._
@@ -16,6 +15,7 @@ import coop.rchain.shared.Log
 import com.google.protobuf.ByteString
 import coop.rchain.comm.protocol.routing.Packet
 import coop.rchain.metrics.Metrics.Source
+import coop.rchain.metrics.MetricsSemaphore
 
 object CasperPacketHandler {
   def apply[F[_]: FlatMap: EngineCell: Log]: PacketHandler[F] =
@@ -35,8 +35,9 @@ object CasperPacketHandler {
     import FairRoundRobinDispatcher._
 
     implicit val fairDispatcherMetricsSource: Source =
-      Metrics.Source(Metrics.BaseSource, "fairDispatcher")
+      Metrics.Source(Metrics.BaseSource, "CasperPacketHandler")
 
+    val fairLock                                      = MetricsSemaphore.single[F]
     implicit def showSourceHolder: Show[BlockCreator] = sh => s"[${sh.toString}]"
     implicit val showCasperMessage: Show[(PeerNode, CasperMessage)] = {
       case (_, BlockHashMessage(h, _)) =>
@@ -66,31 +67,30 @@ object CasperPacketHandler {
     def handle(holder: BlockCreator, message: (PeerNode, CasperMessage)): F[Unit] =
       EngineCell[F].read >>= (_.handle(message._1, message._2))
 
-    Semaphore[F](1) >>= { lock =>
-      FairRoundRobinDispatcher[F, BlockCreator, (PeerNode, CasperMessage)](
-        checkMessage,
-        handle,
-        maxPeerQueueSize,
-        giveUpAfterSkipped,
-        dropPeerAfterRetries
-      ).map { dispatcher => (peer, packet) =>
-        toCasperMessageProto(packet).toEither
-          .flatMap(proto => CasperMessage.from(proto))
-          .fold(
-            err => Log[F].warn(s"Could not extract casper message from packet sent by $peer: $err"),
-            msg =>
-              spanF.trace(fairDispatcherMetricsSource) {
-                for {
-                  _ <- spanF.mark("Casper message received")
-                  _ <- Metrics[F].incrementGauge("fairDispatcher.lock")
-                  _ <- Log[F].debug(s"Received message ${msg.getClass.getSimpleName} from $peer")
-                  _ <- lock.withPermit(dispatcher.dispatch(BlockCreator(msg), (peer, msg)))
-                  _ <- Metrics[F].decrementGauge("fairDispatcher.lock")
-                  _ <- spanF.mark("Casper message handle done")
-                } yield ()
-              }
-          )
-      }
+    val fairRoundRobinDispatcherF = fairLock >>= {lock => FairRoundRobinDispatcher[F, BlockCreator, (PeerNode, CasperMessage)](
+      checkMessage,
+      handle,
+      maxPeerQueueSize,
+      giveUpAfterSkipped,
+      dropPeerAfterRetries,
+      lock
+    )}
+
+    fairRoundRobinDispatcherF.map { dispatcher => (peer, packet) =>
+      toCasperMessageProto(packet).toEither
+        .flatMap(proto => CasperMessage.from(proto))
+        .fold(
+          err => Log[F].warn(s"Could not extract casper message from packet sent by $peer: $err"),
+          msg =>
+            spanF.trace(fairDispatcherMetricsSource) {
+              for {
+                _          <- spanF.mark("Casper message received")
+                _          <- Log[F].debug(s"Received message ${msg.getClass.getSimpleName} from $peer")
+                _          <- dispatcher.dispatch(BlockCreator(msg), (peer, msg))
+                _          <- spanF.mark("Casper message handle done")
+              } yield ()
+            }
+        )
     }
   }
 
