@@ -329,37 +329,38 @@ in {
                     newValidatorsCh, removeQuarantinedCh, paymentDoneCh
                 in {
                   getBlockData!(*blockDataCh) |
-
                   runMVar!(*stateCh, *mvarProcessCh, *ackCh) |
                   for (@blockNumber, _, _   <- blockDataCh;
                        @state, mvarResultCh <- mvarProcessCh) {
-
-                    // Only commit rewards and pick active validators if there is actually an epoch change.
+                    // Only commit rewards, accumulate deposits into PoS vault, and
+                    // pick active validators if there is actually an epoch change.
                     if (blockNumber % $$epochLength$$ == 0) {
-
-                      // Before choosing new active validators and paying out any withdrawers,
-                      // deposits have to be accumulated into one vault for now.
-                      accumulateDeposits!(*accDepositsDoneCh) |
-
+                      // First, commit rewards.
                       commitRewards!(
                         state.get("pendingRewards"),
                         state.get("committedRewards"),
                         *commitRewardsCh)
                     } |
-
+                    // Then, accumulate deposits.
                     for (@committedRewards <- commitRewardsCh) {
+                      // Before choosing new active validators and paying out any withdrawers,
+                      // deposits have to be accumulated into one vault for now.
+                      accumulateDeposits!(*accDepositsDoneCh) |
+                      for (_ <<- accDepositsDoneCh) {
+                        // Finally, pick new active validators and pay out
+                        // those withdrawing whose quarantine period is done.
+                        pickActiveValidators!(
+                          state.get("allBonds"),
+                          state.get("withdrawers"),
+                          *newValidatorsCh) |
 
-                      pickActiveValidators!(
-                        state.get("allBonds"),
-                        state.get("withdrawers"),
-                        *newValidatorsCh) |
-
-                      removeQuarantinedWithdrawers!(
-                        blockNumber,
-                        state.get("allBonds"),
-                        state.get("withdrawers"),
-                        committedRewards,
-                        *removeQuarantinedCh)
+                        removeQuarantinedWithdrawers!(
+                          blockNumber,
+                          state.get("allBonds"),
+                          state.get("withdrawers"),
+                          committedRewards,
+                          *removeQuarantinedCh)
+                      }
                     } |
 
                     for (@newValidators                                    <- newValidatorsCh;
