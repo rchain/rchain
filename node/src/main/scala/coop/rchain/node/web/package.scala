@@ -1,11 +1,11 @@
 package coop.rchain.node
 
-import cats.Applicative
-import cats.effect.{Concurrent, Sync}
+import cats.effect.Concurrent
 import coop.rchain.casper.ReportingCasper
 import coop.rchain.comm.discovery.NodeDiscovery
 import coop.rchain.comm.rp.Connect.{ConnectionsCell, RPConfAsk}
 import coop.rchain.node.NodeRuntime.TaskEnv
+import coop.rchain.node.api.WebApi
 import coop.rchain.node.diagnostics.NewPrometheusReporter
 import coop.rchain.node.effects.EventConsumer
 import monix.eval.Task
@@ -20,7 +20,8 @@ package object web {
       reporting: Boolean,
       httpPort: Int,
       prometheusReporter: NewPrometheusReporter,
-      reportingCasper: ReportingCasper[TaskEnv]
+      reportingCasper: ReportingCasper[TaskEnv],
+      webApiRoutes: WebApi[TaskEnv]
   )(
       implicit
       nodeDiscovery: NodeDiscovery[Task],
@@ -36,17 +37,18 @@ package object web {
         "/metrics"   -> CORS(NewPrometheusReporter.service[Task](prometheusReporter)),
         "/version"   -> CORS(VersionInfo.service[Task]),
         "/status"    -> CORS(StatusInfo.service[Task]),
-        "/ws/events" -> CORS(event)
+        "/ws/events" -> CORS(event),
+        "/api" -> CORS({
+          implicit val et = NodeRuntime.envToTask
+          WebApiRoutes.service[Task, TaskEnv](webApiRoutes)
+        })
       )
       extraRoutes = if (reporting)
         Map(
-          "/reporting" -> CORS(
-            ReportingRoutes.service[Task, TaskEnv](reportingCasper)(
-              Sync[Task],
-              Applicative[TaskEnv],
-              NodeRuntime.envToTask
-            )
-          )
+          "/reporting" -> CORS({
+            implicit val et = NodeRuntime.envToTask
+            ReportingRoutes.service[Task, TaskEnv](reportingCasper)
+          })
         )
       else
         Map.empty

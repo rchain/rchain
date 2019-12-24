@@ -8,7 +8,7 @@ object Dependencies {
   val enumeratumVersion = "1.5.13"
   val http4sVersion     = "0.21.0-M2"
   val kamonVersion      = "1.1.5"
-  val catsVersion       = "1.5.0"
+  val catsVersion       = "1.6.1"
   val catsEffectVersion = "1.2.0"
   val catsMtlVersion    = "0.4.0"
   val slf4jVersion      = "1.7.25"
