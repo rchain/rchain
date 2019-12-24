@@ -448,7 +448,7 @@ class ValidateTest
   val genesisContext = GenesisBuilder.buildGenesis()
   val genesis        = genesisContext.genesisBlock
 
-  "Parent validation" should "return true for proper justifications and false otherwise" ignore withGenesis(
+  "Parent validation" should "return true for proper justifications and false otherwise" in withGenesis(
     genesisContext
   ) { implicit blockStore => implicit blockDagStorage => runtimeManager =>
     val validotors          = GenesisBuilder.defaultValidatorPks

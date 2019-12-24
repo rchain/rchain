@@ -51,7 +51,7 @@ class EstimatorHelperTest
    *         genesis
    */
 
-  "Conflicts" should "be also detected when they occur in uncommon ancestor blocks" ignore effectTest {
+  "Conflicts" should "be also detected when they occur in uncommon ancestor blocks" in effectTest {
 
     TestNode.networkEff(genesisContext, networkSize = 4).use {
       case n1 +: n2 +: n3 +: n4 +: _ =>
