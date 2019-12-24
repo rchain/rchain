@@ -205,6 +205,9 @@ class HoconConfigurationSpec extends FunSuite with Matchers {
         |    bond-maximum = 9223372036854775807
         |    epoch-length = 10000
         |    quarantine-length = 50000
+        |    number-of-active-validators = 100
+        |    casper-loop-interval = 30
+        |    requested-blocks-timeout = 240
         |    required-signatures = 0
         |    shard = rchain
         |    genesis-validator = true
@@ -231,6 +234,9 @@ class HoconConfigurationSpec extends FunSuite with Matchers {
         maximumBond = Long.MaxValue,
         epochLength = 10000,
         quarantineLength = 50000,
+        numberOfActiveValidators = 100,
+        casperLoopInterval = 30,
+        requestedBlocksTimeout = 240,
         requiredSigs = 0,
         shardId = "rchain",
         createGenesis = false,

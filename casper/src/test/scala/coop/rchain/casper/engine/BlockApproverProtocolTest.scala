@@ -101,6 +101,7 @@ object BlockApproverProtocolTest {
           genesisParams.proofOfStake.maximumBond,
           genesisParams.proofOfStake.epochLength,
           genesisParams.proofOfStake.quarantineLength,
+          genesisParams.proofOfStake.numberOfActiveValidators,
           requiredSigs
         )
         .map(_ -> node)

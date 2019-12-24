@@ -53,6 +53,7 @@ object GenesisBuilder {
           maximumBond = Long.MaxValue,
           epochLength = 1,
           quarantineLength = 50000,
+          numberOfActiveValidators = 100,
           validators = bonds.map(Validator.tupled).toSeq
         ),
         vaults = Seq(predefinedVault(defaultPub), predefinedVault(defaultPub2)) ++

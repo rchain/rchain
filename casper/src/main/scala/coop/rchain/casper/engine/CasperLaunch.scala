@@ -94,6 +94,7 @@ object CasperLaunch {
                 conf.maximumBond,
                 conf.epochLength,
                 conf.quarantineLength,
+                conf.numberOfActiveValidators,
                 conf.requiredSigs
               )(Sync[F])
         _ <- EngineCell[F].set(
@@ -114,6 +115,7 @@ object CasperLaunch {
                   conf.maximumBond,
                   conf.epochLength,
                   conf.quarantineLength,
+                  conf.numberOfActiveValidators,
                   conf.shardId,
                   conf.deployTimestamp,
                   conf.requiredSigs,

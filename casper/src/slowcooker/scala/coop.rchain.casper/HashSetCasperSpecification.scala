@@ -56,7 +56,8 @@ object HashSetCasperActions {
             maximumBond = Long.MaxValue,
             validators = bonds.toSeq.map(Validator.tupled),
             epochLength = 10000,
-            quarantineLength = 50000
+            quarantineLength = 50000,
+            numberOfActiveValidators = 100
           ),
           timestamp = 0L,
           vaults = bonds.toList.map {

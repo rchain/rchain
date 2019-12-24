@@ -262,26 +262,29 @@ object Casper {
   val Keys: List[String] = keys.all.map(k => s"$Key.$k")
 
   object keys {
-    val ValidatorPrivateKey     = "validator-private-key"
-    val ValidatorPrivateKeyPath = "validator-private-key-path"
-    val ValidatorPublicKey      = "validator-public-key"
-    val BondsFile               = "bonds-file"
-    val KnownValidatorsFile     = "known-validators-file"
-    val Validators              = "validators"
-    val WalletsFile             = "wallets-file"
-    val BondMinimum             = "bond-minimum"
-    val BondMaximum             = "bond-maximum"
-    val QuarantineLength        = "quarantine-length"
-    val EpochLength             = "epoch-length"
-    val RequiredSignatures      = "required-signatures"
-    val Shard                   = "shard"
-    val GenesisValidator        = "genesis-validator"
-    val GenesisApproveInterval  = "genesis-approve-interval"
-    val GenesisApproveDuration  = "genesis-approve-duration"
-    val DeployTimestamp         = "deploy-timestamp"
-    val GenesisPath             = "genesis-path"
-    val FinalizationRate        = "finalization-rate"
-    val MaxNumberOfParents      = "max-number-of-parents"
+    val ValidatorPrivateKey      = "validator-private-key"
+    val ValidatorPrivateKeyPath  = "validator-private-key-path"
+    val ValidatorPublicKey       = "validator-public-key"
+    val BondsFile                = "bonds-file"
+    val KnownValidatorsFile      = "known-validators-file"
+    val Validators               = "validators"
+    val WalletsFile              = "wallets-file"
+    val BondMinimum              = "bond-minimum"
+    val BondMaximum              = "bond-maximum"
+    val QuarantineLength         = "quarantine-length"
+    val NumberOfActiveValidators = "number-of-active-validators"
+    val CasperLoopInterval       = "casper-loop-interval"
+    val RequestedBlocksTimeout   = "requested-blocks-timeout"
+    val EpochLength              = "epoch-length"
+    val RequiredSignatures       = "required-signatures"
+    val Shard                    = "shard"
+    val GenesisValidator         = "genesis-validator"
+    val GenesisApproveInterval   = "genesis-approve-interval"
+    val GenesisApproveDuration   = "genesis-approve-duration"
+    val DeployTimestamp          = "deploy-timestamp"
+    val GenesisPath              = "genesis-path"
+    val FinalizationRate         = "finalization-rate"
+    val MaxNumberOfParents       = "max-number-of-parents"
 
     val all =
       List(
@@ -295,6 +298,9 @@ object Casper {
         BondMinimum,
         BondMaximum,
         QuarantineLength,
+        NumberOfActiveValidators,
+        CasperLoopInterval,
+        RequestedBlocksTimeout,
         EpochLength,
         RequiredSignatures,
         Shard,
@@ -326,6 +332,9 @@ object Casper {
       maximumBond = casper.getLong(keys.BondMaximum),
       epochLength = casper.getInt(keys.EpochLength),
       quarantineLength = casper.getInt(keys.QuarantineLength),
+      numberOfActiveValidators = casper.getInt(keys.NumberOfActiveValidators),
+      casperLoopInterval = casper.getInt(keys.CasperLoopInterval),
+      requestedBlocksTimeout = casper.getInt(keys.RequestedBlocksTimeout),
       requiredSigs = casper.getInt(keys.RequiredSignatures),
       shardId = casper.getString(keys.Shard),
       approveGenesis = casper.getBoolean(keys.GenesisValidator),

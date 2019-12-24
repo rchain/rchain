@@ -455,7 +455,8 @@ def make_bootstrap_node(
     synchrony_constraint_threshold: float = 0.0,
     max_peer_queue_size: int = 10,
     give_up_after_skipped: int = 0,
-    drop_peer_after_retries: int = 0
+    drop_peer_after_retries: int = 0,
+    number_of_active_validators: int = 10,
 ) -> Node:
 
     container_name = make_bootstrap_name(network)
@@ -476,7 +477,8 @@ def make_bootstrap_node(
         "--synchrony-constraint-threshold": synchrony_constraint_threshold,
         "--max-peer-queue-size":            max_peer_queue_size,
         "--give-up-after-skipped":          give_up_after_skipped,
-        "--drop-peer-after-retries":        drop_peer_after_retries
+        "--drop-peer-after-retries":        drop_peer_after_retries,
+        "--number-of-active-validators":    number_of_active_validators
     }
 
     if cli_flags is not None:
@@ -537,7 +539,8 @@ def make_peer(
     synchrony_constraint_threshold: float = 0.0,
     max_peer_queue_size: int = 10,
     give_up_after_skipped: int = 0,
-    drop_peer_after_retries: int = 0
+    drop_peer_after_retries: int = 0,
+    number_of_active_validators: int = 10
 ) -> Node:
     assert isinstance(name, str)
     assert '_' not in name, 'Underscore is not allowed in host name'
@@ -562,7 +565,8 @@ def make_peer(
         "--synchrony-constraint-threshold": synchrony_constraint_threshold,
         "--max-peer-queue-size":            max_peer_queue_size,
         "--give-up-after-skipped":          give_up_after_skipped,
-        "--drop-peer-after-retries":        drop_peer_after_retries
+        "--drop-peer-after-retries":        drop_peer_after_retries,
+        "--number-of-active-validators":    number_of_active_validators
     }
 
     if cli_options is not None:

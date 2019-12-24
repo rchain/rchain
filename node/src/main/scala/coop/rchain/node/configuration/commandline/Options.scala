@@ -206,6 +206,15 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
 
     val quarantineLength = opt[Int](descr = "the length of the quarantine time in blocks")
 
+    val numberOfActiveValidators = opt[Int](descr = "the number of the active validators")
+
+    val casperLoopInterval = opt[Int](
+      descr =
+        "the interval of the casper loop to maintain requested blocks and missing dependent blocks"
+    )
+
+    val requestedBlocksTimeout = opt[Int](descr = "the timeout of the requested blocks")
+
     val bootstrap =
       opt[PeerNode](
         short = 'b',
