@@ -1,16 +1,21 @@
 package coop.rchain.casper.util.rholang.costacc
 
-import com.google.protobuf.ByteString
+import coop.rchain.casper.protocol.{DeployData, DeployDataProto}
+import coop.rchain.casper.protocol.DeployData.{fromProto, toProto}
 import coop.rchain.casper.util.rholang.{SystemDeploy, SystemDeployFailure, SystemDeployUserError}
 import coop.rchain.crypto.PublicKey
-import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.models.BlockHash._
 import coop.rchain.models.NormalizerEnv.{Contains, ToEnvMap}
 import coop.rchain.rholang.interpreter.RhoType._
+import coop.rchain.shared.Serialize
+import scodec.bits.ByteVector
 
-final class SlashDeploy(invalidBlockHash: BlockHash, pk: PublicKey, rand: Blake2b512Random)
-    extends SystemDeploy(rand) {
+final case class SlashDeploy(
+    invalidBlockHash: BlockHash,
+    pk: PublicKey,
+    initialRand: Blake2b512Random
+) extends SystemDeploy(initialRand) {
   import coop.rchain.models._
   import Expr.ExprInstance._
   import rholang.{implicits => toPar}

@@ -47,8 +47,9 @@ object Dummies {
 
   def createBody(
       state: RChainState = createRChainState(),
-      deploys: List[ProcessedDeploy] = List.empty
+      deploys: List[ProcessedDeploy] = List.empty,
+      systemDeploys: List[ProcessedSystemDeploy] = List.empty
   ): Body =
-    Body(state, deploys)
+    Body(state, deploys, systemDeploys)
 
 }

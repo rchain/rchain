@@ -9,10 +9,11 @@ import coop.rchain.blockstorage.dag._
 import coop.rchain.casper.CasperMetricsSource
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.rholang.InterpreterUtil.computeDeploysCheckpoint
-import coop.rchain.casper.util.rholang.RuntimeManager
+import coop.rchain.casper.util.rholang.{RuntimeManager, SystemDeploy}
 import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
 import coop.rchain.casper.util.{ConstructDeploy, ProtoUtil}
 import coop.rchain.crypto.hash.Blake2b256
+import coop.rchain.crypto.signatures.Signed
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.Validator.Validator
@@ -58,12 +59,13 @@ object BlockGenerator {
       result <- computeDeploysCheckpoint[F](
                  parents,
                  deploys,
+                 List.empty[SystemDeploy],
                  dag,
                  runtimeManager,
                  BlockData.fromBlock(b),
                  Map.empty[BlockHash, Validator]
                ).attempt
-      Right((preStateHash, postStateHash, processedDeploys)) = result
+      Right((preStateHash, postStateHash, processedDeploys, _)) = result
     } yield (postStateHash, processedDeploys)
   }
 

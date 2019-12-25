@@ -61,6 +61,7 @@ object HashM extends HashMDerivation {
   implicit val DoubleHash: HashM[Double]                     = opaqueHash
   implicit val StringHash: HashM[String]                     = opaqueHash
   implicit val BitSetHash: HashM[BitSet]                     = opaqueHash
+  implicit val ByteHash: HashM[Byte]                         = opaqueHash
   implicit val ByteStringHash: HashM[ByteString]             = opaqueHash
   implicit val Blake2b512RandomHash: HashM[Blake2b512Random] = opaqueHash
   implicit def alwaysEqualHash[A]: HashM[AlwaysEqual[A]]     = opaqueHash
@@ -81,6 +82,15 @@ object HashM extends HashMDerivation {
   implicit def seqHash[A: HashM]: HashM[Seq[A]] = new HashM[Seq[A]] {
 
     override def hash[F[_]: Sync](value: Seq[A]): F[Int] =
+      for {
+        hashes <- value.toList.traverse(HashM[A].hash[F])
+      } yield hashes.hashCode()
+
+  }
+
+  implicit def arrayHash[A: HashM]: HashM[Array[A]] = new HashM[Array[A]] {
+
+    override def hash[F[_]: Sync](value: Array[A]): F[Int] =
       for {
         hashes <- value.toList.traverse(HashM[A].hash[F])
       } yield hashes.hashCode()
@@ -153,6 +163,7 @@ object HashM extends HashMDerivation {
   implicit val DeployDataHash             = gen[DeployDataProto]
   implicit val HeaderHash                 = gen[HeaderProto]
   implicit val ProcessedDeployHash        = gen[ProcessedDeployProto]
+  implicit val ProcessedSystemDeployHash  = gen[ProcessedSystemDeployProto]
   implicit val RChainStateHash            = gen[RChainStateProto]
   implicit val UnapprovedBlockHash        = gen[UnapprovedBlockProto]
 

@@ -150,15 +150,22 @@ message ProcessedDeployProto {
     string systemDeployError = 6;
 }
 
+message SystemDeployDataProto {
+  bytes invalidBlockHash = 1;
+  bytes issuerPublicKey = 2;
+}
+
 message ProcessedSystemDeployProto {
-    repeated EventProto deployLog = 1;
-    string errorMsg = 2;
+    SystemDeployDataProto systemDeploy = 1;
+    repeated EventProto deployLog = 2;
+    string errorMsg = 3;
 }
 
 message BodyProto {
   RChainStateProto              state    = 1;
   repeated ProcessedDeployProto deploys      = 2;
-  bytes                    extraBytes   = 3;
+  repeated ProcessedSystemDeployProto systemDeploys = 3;
+  bytes                    extraBytes   = 4;
 }
 
 message JustificationProto {

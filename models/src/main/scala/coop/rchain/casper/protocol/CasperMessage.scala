@@ -8,7 +8,6 @@ import coop.rchain.crypto.signatures.{SignaturesAlg, Signed}
 import coop.rchain.models.{PCost, Pretty}
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.crypto.PublicKey
-import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.shared.Serialize
 import scodec.bits.ByteVector
 
@@ -240,6 +239,7 @@ object Header {
 final case class Body(
     state: RChainState,
     deploys: List[ProcessedDeploy],
+    systemDeploys: List[ProcessedSystemDeploy],
     extraBytes: ByteString = ByteString.EMPTY
 ) {
   def toProto: BodyProto = Body.toProto(this)
@@ -248,14 +248,16 @@ final case class Body(
 object Body {
   def from(b: BodyProto): Either[String, Body] =
     for {
-      state   <- b.state.toRight("RChainState not available").map(RChainState.from)
-      deploys <- b.deploys.toList.traverse(ProcessedDeploy.from)
-    } yield Body(state, deploys, b.extraBytes)
+      state         <- b.state.toRight("RChainState not available").map(RChainState.from)
+      deploys       <- b.deploys.toList.traverse(ProcessedDeploy.from)
+      systemDeploys <- b.systemDeploys.toList.traverse(ProcessedSystemDeploy.from)
+    } yield Body(state, deploys, systemDeploys, b.extraBytes)
 
   def toProto(b: Body): BodyProto =
     BodyProto()
       .withState(RChainState.toProto(b.state))
       .withDeploys(b.deploys.map(ProcessedDeploy.toProto))
+      .withSystemDeploys(b.systemDeploys.map(ProcessedSystemDeploy.toProto))
       .withExtraBytes(b.extraBytes)
 
 }
@@ -356,7 +358,34 @@ object ProcessedDeploy {
   }
 }
 
+sealed trait SystemDeployData
+
+final case class SlashSystemDeployData(invalidBlockHash: BlockHash, issuerPublicKey: PublicKey)
+    extends SystemDeployData
+object Empty extends SystemDeployData
+
+object SystemDeployData {
+  val empty: SystemDeployData = Empty
+
+  def from(invalidBlockHash: BlockHash, issuerPublicKey: PublicKey): SystemDeployData =
+    SlashSystemDeployData(invalidBlockHash, issuerPublicKey)
+
+  def fromProto(proto: SystemDeployDataProto): SystemDeployData =
+    if (!proto.invalidBlockHash.isEmpty && !proto.issuerPublicKey.isEmpty)
+      SlashSystemDeployData(proto.invalidBlockHash, PublicKey(proto.issuerPublicKey))
+    else
+      Empty
+
+  def toProto(sdd: SystemDeployData): SystemDeployDataProto =
+    sdd match {
+      case SlashSystemDeployData(invalidBlockHash, issuerPublicKey) =>
+        SystemDeployDataProto(invalidBlockHash, ByteString.copyFrom(issuerPublicKey.bytes))
+      case Empty => SystemDeployDataProto(ByteString.EMPTY, ByteString.EMPTY)
+    }
+}
+
 sealed trait ProcessedSystemDeploy {
+  val systemDeploy: SystemDeployData
   def eventList: List[Event]
   def failed: Boolean
   def fold[A](ifSucceeded: List[Event] => A, ifFailed: (List[Event], String) => A): A
@@ -364,15 +393,22 @@ sealed trait ProcessedSystemDeploy {
 
 object ProcessedSystemDeploy {
 
-  final case class Succeeded(eventList: List[Event]) extends ProcessedSystemDeploy {
+  final case class Succeeded(
+      eventList: List[Event],
+      systemDeploy: SystemDeployData
+  ) extends ProcessedSystemDeploy {
     val failed = false
 
     override def fold[A](ifSucceeded: List[Event] => A, ifFailed: (List[Event], String) => A): A =
       ifSucceeded(eventList)
   }
 
-  final case class Failed(eventList: List[Event], errorMsg: String) extends ProcessedSystemDeploy {
-    val failed = true
+  final case class Failed(
+      eventList: List[Event],
+      errorMsg: String
+  ) extends ProcessedSystemDeploy {
+    val failed                                  = true
+    override val systemDeploy: SystemDeployData = SystemDeployData.empty
 
     override def fold[A](ifSucceeded: List[Event] => A, ifFailed: (List[Event], String) => A): A =
       ifFailed(eventList, errorMsg)
@@ -383,14 +419,21 @@ object ProcessedSystemDeploy {
       .traverse(Event.from)
       .map(
         deployLog =>
-          if (psd.errorMsg.isEmpty) Succeeded(deployLog)
-          else Failed(deployLog, psd.errorMsg)
+          if (psd.errorMsg.isEmpty) {
+            Succeeded(
+              deployLog,
+              psd.systemDeploy.map(SystemDeployData.fromProto).getOrElse(SystemDeployData.empty)
+            )
+          } else Failed(deployLog, psd.errorMsg)
       )
 
   def toProto(psd: ProcessedSystemDeploy): ProcessedSystemDeployProto = {
     val deployLog = psd.eventList.map(Event.toProto)
     psd match {
-      case Succeeded(_) => ProcessedSystemDeployProto().withDeployLog(deployLog).withErrorMsg("")
+      case Succeeded(_, systemDeploy) =>
+        ProcessedSystemDeployProto()
+          .withDeployLog(deployLog)
+          .withSystemDeploy(SystemDeployData.toProto(systemDeploy))
       case Failed(_, errorMsg) =>
         ProcessedSystemDeployProto().withDeployLog(deployLog).withErrorMsg(errorMsg)
     }

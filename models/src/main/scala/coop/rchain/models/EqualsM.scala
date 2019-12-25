@@ -6,8 +6,10 @@ import cats.syntax.all._
 import com.google.protobuf.ByteString
 import coop.rchain.casper.protocol._
 import coop.rchain.catscontrib.Catscontrib._
+import coop.rchain.crypto.PublicKey
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.crypto.signatures.Signed
+import coop.rchain.models.BlockHash.BlockHash
 import monix.eval.Coeval
 
 import scala.Function.tupled
@@ -63,6 +65,7 @@ object EqualM extends EqualMDerivation {
   implicit val StringEqual: EqualM[String]                     = opaqueEqual
   implicit val BooleanEqual: EqualM[Boolean]                   = opaqueEqual
   implicit val BitSetEqual: EqualM[BitSet]                     = opaqueEqual
+  implicit val ByteEqual: EqualM[Byte]                         = opaqueEqual
   implicit val ByteStringEqual: EqualM[ByteString]             = opaqueEqual
   implicit val Blake2b512RandomEqual: EqualM[Blake2b512Random] = opaqueEqual
   implicit def alwaysEqualEqual[A]: EqualM[AlwaysEqual[A]]     = opaqueEqual
@@ -70,6 +73,16 @@ object EqualM extends EqualMDerivation {
   implicit def seqEqual[A: EqualM]: EqualM[Seq[A]] = new EqualM[Seq[A]] {
 
     override def equal[F[_]: Sync](self: Seq[A], other: Seq[A]): F[Boolean] = {
+      val pairs = self.toStream.zip(other)
+      Sync[F].delay(self.length == other.length) &&^
+        pairs.forallM(tupled(EqualM[A].equal[F]))
+    }
+
+  }
+
+  implicit def arrayEqual[A: EqualM]: EqualM[Array[A]] = new EqualM[Array[A]] {
+
+    override def equal[F[_]: Sync](self: Array[A], other: Array[A]): F[Boolean] = {
       val pairs = self.toStream.zip(other)
       Sync[F].delay(self.length == other.length) &&^
         pairs.forallM(tupled(EqualM[A].equal[F]))
@@ -134,6 +147,7 @@ object EqualM extends EqualMDerivation {
   implicit val DeployDataHash             = gen[DeployDataProto]
   implicit val HeaderHash                 = gen[HeaderProto]
   implicit val ProcessedDeployHash        = gen[ProcessedDeployProto]
+  implicit val ProcessedSystemDeployHash  = gen[ProcessedSystemDeployProto]
   implicit val RChainStateHash            = gen[RChainStateProto]
   implicit val UnapprovedBlockHash        = gen[UnapprovedBlock]
 
