@@ -30,13 +30,13 @@ final case class SlashDeploy(
   type `sys:casper:invalidBlockHash` = `sys:casper:invalidBlockHash`.T
 
   type Env =
-    (`sys:casper:deployerId` ->> GDeployerId) :: (`sys:casper:invalidBlockHash` ->> GString) :: (`sys:casper:return` ->> GUnforgeable) :: HNil
+    (`sys:casper:deployerId` ->> GDeployerId) :: (`sys:casper:invalidBlockHash` ->> GString) :: (`sys:casper:authToken` ->> GSysAuthToken) :: (`sys:casper:return` ->> GUnforgeable) :: HNil
 
   import toPar._
   protected override val envsReturnChannel = Contains[Env, `sys:casper:return`]
   protected override val toEnvMap          = ToEnvMap[Env]
   protected override val normalizerEnv = new NormalizerEnv(
-    mkDeployerId(pk) :: ("sys:casper:invalidBlockHash" ->> GString(invalidBlockHash.base16String)) :: mkReturnChannel :: HNil
+    mkDeployerId(pk) :: ("sys:casper:invalidBlockHash" ->> GString(invalidBlockHash.base16String)) :: mkSysAuthToken :: mkReturnChannel :: HNil
   )
 
   override val source: String =
@@ -44,6 +44,7 @@ final case class SlashDeploy(
        #  poSCh,
        #  deployerId(`sys:casper:deployerId`),
        #  invalidBlockHash(`sys:casper:invalidBlockHash`),
+       #  sysAuthToken(`sys:casper:authToken`),
        #  return(`sys:casper:return`)
        #in {
        #  rl!(`rho:rchain:pos`, *poSCh) |

@@ -21,9 +21,11 @@ abstract class SystemDeploy(initialRand: Blake2b512Random) {
 
   final val rand = initialRand.copy()
 
-  final val `sys:casper:return`     = Witness("sys:casper:return")
   final val `sys:casper:deployerId` = Witness("sys:casper:deployerId")
+  final val `sys:casper:authToken`  = Witness("sys:casper:authToken")
+  final val `sys:casper:return`     = Witness("sys:casper:return")
   type `sys:casper:deployerId` = `sys:casper:deployerId`.T
+  type `sys:casper:authToken`  = `sys:casper:authToken`.T
   type `sys:casper:return`     = `sys:casper:return`.T
 
   protected def toEnvMap: ToEnvMap[Env]
@@ -36,6 +38,9 @@ abstract class SystemDeploy(initialRand: Blake2b512Random) {
 
   protected def mkDeployerId(pk: PublicKey) =
     "sys:casper:deployerId" ->> GDeployerId(ByteString.copyFrom(pk.bytes))
+
+  protected def mkSysAuthToken =
+    "sys:casper:authToken" ->> GSysAuthToken()
 
   protected val normalizerEnv: NormalizerEnv[Env]
 

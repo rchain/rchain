@@ -1,6 +1,5 @@
 package coop.rchain.casper.util.rholang.costacc
 
-import com.google.protobuf.ByteString
 import coop.rchain.casper.util.rholang.{SystemDeploy, SystemDeployFailure, SystemDeployUserError}
 import coop.rchain.crypto.PublicKey
 import coop.rchain.crypto.hash.Blake2b512Random
@@ -22,13 +21,13 @@ final class PreChargeDeploy(chargeAmount: Long, pk: PublicKey, rand: Blake2b512R
   type `sys:casper:chargeAmount` = `sys:casper:chargeAmount`.T
 
   type Env =
-    (`sys:casper:deployerId` ->> GDeployerId) :: (`sys:casper:chargeAmount` ->> GInt) :: (`sys:casper:return` ->> GUnforgeable) :: HNil
+    (`sys:casper:deployerId` ->> GDeployerId) :: (`sys:casper:chargeAmount` ->> GInt) :: (`sys:casper:authToken` ->> GSysAuthToken) :: (`sys:casper:return` ->> GUnforgeable) :: HNil
 
   import toPar._
   protected override val envsReturnChannel = Contains[Env, `sys:casper:return`]
   protected override val toEnvMap          = ToEnvMap[Env]
   protected val normalizerEnv: NormalizerEnv[Env] = new NormalizerEnv(
-    mkDeployerId(pk) :: ("sys:casper:chargeAmount" ->> GInt(chargeAmount)) :: mkReturnChannel :: HNil
+    mkDeployerId(pk) :: ("sys:casper:chargeAmount" ->> GInt(chargeAmount)) :: mkSysAuthToken :: mkReturnChannel :: HNil
   )
 
   override val source: String =
@@ -36,7 +35,8 @@ final class PreChargeDeploy(chargeAmount: Long, pk: PublicKey, rand: Blake2b512R
        #  poSCh,
        #  initialDeployerId(`sys:casper:deployerId`),
        #  chargeAmount(`sys:casper:chargeAmount`),
-       #  return(`sys:casper:return`) 
+       #  sysAuthToken(`sys:casper:authToken`),
+       #  return(`sys:casper:return`)
        #in {
        #  rl!(`rho:rchain:pos`, *poSCh) |
        #  for(@(_, PoS) <- poSCh) {

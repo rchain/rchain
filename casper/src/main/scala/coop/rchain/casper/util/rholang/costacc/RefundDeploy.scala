@@ -18,20 +18,22 @@ final class RefundDeploy(refundAmount: Long, rand: Blake2b512Random) extends Sys
   val `sys:casper:refundAmount` = Witness("sys:casper:refundAmount")
   type `sys:casper:refundAmount` = `sys:casper:refundAmount`.T
 
-  type Env = (`sys:casper:refundAmount` ->> GInt) :: (`sys:casper:return` ->> GUnforgeable) :: HNil
+  type Env =
+    (`sys:casper:refundAmount` ->> GInt) :: (`sys:casper:authToken` ->> GSysAuthToken) :: (`sys:casper:return` ->> GUnforgeable) :: HNil
 
   import toPar._
   protected override val envsReturnChannel = Contains[Env, `sys:casper:return`]
   protected override val toEnvMap          = ToEnvMap[Env]
   protected override val normalizerEnv = new NormalizerEnv(
-    ("sys:casper:refundAmount" ->> GInt(refundAmount)) :: mkReturnChannel :: HNil
+    ("sys:casper:refundAmount" ->> GInt(refundAmount)) :: mkSysAuthToken :: mkReturnChannel :: HNil
   )
 
   override val source: String =
     """#new rl(`rho:registry:lookup`),
        #  poSCh,
        #  refundAmount(`sys:casper:refundAmount`),
-       #  return(`sys:casper:return`) 
+       #  sysAuthToken(`sys:casper:authToken`),
+       #  return(`sys:casper:return`)
        #in {
        #  rl!(`rho:rchain:pos`, *poSCh) |
        #  for(@(_, PoS) <- poSCh) {
