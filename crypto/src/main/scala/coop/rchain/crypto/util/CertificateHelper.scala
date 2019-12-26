@@ -138,17 +138,18 @@ object CertificateHelper {
       try {
         seq.addObject(toASN1Int(r))
         seq.addObject(toASN1Int(s))
+        // Close to write the sequence
         seq.close
         bos.toByteArray
       } finally {
-        if (seq != null) seq.close()
         // > Closing a ByteArrayOutputStream has no effect.
         // https://docs.oracle.com/javase/10/docs/api/java/io/ByteArrayOutputStream.html
+        bos.close
       }
     }
 
     if (signatureRS.isEmpty)
-      new Exception("Input array must not be empty.").asLeft
+      new IllegalArgumentException("Input array must not be empty").asLeft
     else
       Try(convert).toEither
   }
@@ -167,16 +168,18 @@ object CertificateHelper {
         val Array(r, s, _*) = asnSeq.toArray
         toBytes(r) ++ toBytes(s)
       } finally {
-        if (asn != null) asn.close()
+        asn.close
         // > Closing a ByteArrayInputStream has no effect.
         // https://docs.oracle.com/javase/10/docs/api/java/io/ByteArrayInputStream.html
+        bis.close
       }
     }
 
     if (signatureDER.isEmpty)
-      new Exception("Input array must not be empty.").asLeft
+      new IllegalArgumentException("Input array must not be empty").asLeft
     else
       Try(convert).toEither
+        .leftMap(new IllegalArgumentException("Input array is not valid DER message format", _))
   }
 
 }
