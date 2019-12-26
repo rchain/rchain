@@ -51,15 +51,16 @@ object GenesisBuilder {
         proofOfStake = ProofOfStake(
           minimumBond = 0L,
           maximumBond = Long.MaxValue,
-          epochLength = 1,
+          epochLength = 1, // TODO: change to proper quantity
           quarantineLength = 50000,
           numberOfActiveValidators = 100,
           validators = bonds.map(Validator.tupled).toSeq
         ),
         vaults = Seq(defaultPub, defaultPub2).map(predefinedVault) ++
           bonds.toList.map {
-            case (pk, stake) =>
-              RevAddress.fromPublicKey(pk).map(Vault(_, stake))
+            case (pk, _) =>
+              // Initial validator vaults contain 0 Rev
+              RevAddress.fromPublicKey(pk).map(Vault(_, 0))
           }.flattenOption,
         supply = Long.MaxValue
       )

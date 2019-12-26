@@ -83,6 +83,15 @@ in {
                 }
               }
             } |
+            // Used during genesis to create PoS vault with initial balance = sum of initial bonds.
+            for (@"createWithBalance", @ownerRevAddress, @amount, ret <- RevVault) {
+              new createVault in {
+                _getOrCreate!(ownerRevAddress, *createVault, *ret) |
+                for (retCh <- createVault) {
+                  _makeVault!(ownerRevAddress, amount, *retCh)
+                }
+              }
+            } |
 
             contract _getOrCreate(@revAddress, constructor, retCh) = {
               new revAddressValidCh,
