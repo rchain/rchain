@@ -4,7 +4,6 @@ import cats._
 import cats.implicits._
 import cats.effect.concurrent.Ref
 import cats.effect.{Concurrent, ContextShift}
-import cats.temp.par
 import coop.rchain.blockstorage._
 import coop.rchain.blockstorage.dag.{BlockDagRepresentation, InMemBlockDagStorage}
 import coop.rchain.blockstorage.finality.LastFinalizedMemoryStorage

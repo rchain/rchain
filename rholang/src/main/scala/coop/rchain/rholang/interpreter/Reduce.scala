@@ -51,7 +51,7 @@ class DebruijnInterpreter[M[_], F[_]](
     dispatcher: => RhoDispatch[M],
     urnMap: Map[String, Par]
 )(
-    implicit parallel: cats.Parallel[M, F],
+    implicit parallel: cats.Parallel[M],
     syncM: Sync[M],
     fTell: FunctorTell[M, InterpreterError],
     cost: _cost[M]

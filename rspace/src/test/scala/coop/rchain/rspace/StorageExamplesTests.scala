@@ -1,21 +1,15 @@
 package coop.rchain.rspace
 
-import coop.rchain.rspace.examples.StringExamples.StringsCaptor
-import java.nio.file.{Files, Path}
-
 import cats._
 import cats.implicits._
-import cats.effect.Sync
-import coop.rchain.rspace._
+import cats.syntax.parallel._
+import cats.instances.parallel._
 import coop.rchain.rspace.examples.AddressBookExample
 import coop.rchain.rspace.examples.AddressBookExample._
 import coop.rchain.rspace.examples.AddressBookExample.implicits._
 import coop.rchain.rspace.history.Branch
 import coop.rchain.rspace.util._
 import coop.rchain.rspace.test._
-import coop.rchain.shared.Cell
-import coop.rchain.shared.PathOps._
-import org.scalatest.BeforeAndAfterAll
 import scodec.Codec
 
 import scala.concurrent.ExecutionContext.Implicits.global
@@ -297,4 +291,6 @@ abstract class InMemoryHotStoreStorageExamplesTestsBase[F[_]]
 class InMemoryHotStoreStorageExamplesTests
     extends InMemoryHotStoreStorageExamplesTestsBase[Task]
     with TaskTests[Channel, Pattern, Entry, Entry, EntriesCaptor]
-    with StorageExamplesTests[Task]
+    with StorageExamplesTests[Task] {
+  implicit val parF = Task.catsParallel
+}

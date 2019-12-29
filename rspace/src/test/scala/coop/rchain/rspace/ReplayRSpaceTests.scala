@@ -1,6 +1,6 @@
 package coop.rchain.rspace
 
-import java.nio.file.{Files, Path, Paths}
+import java.nio.file.{Files, Path}
 
 import cats.Functor
 import coop.rchain.catscontrib.TaskContrib._
@@ -8,34 +8,26 @@ import coop.rchain.catscontrib.ski._
 import cats.effect._
 import cats.effect.concurrent.Ref
 import cats.implicits._
+import cats.syntax.parallel._
 import com.typesafe.scalalogging.Logger
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
-import coop.rchain.rspace._
 import coop.rchain.rspace.examples.StringExamples._
 import coop.rchain.rspace.examples.StringExamples.implicits._
 import coop.rchain.rspace.history._
-import coop.rchain.rspace.internal._
-import coop.rchain.rspace.history.{
-  HistoryRepository,
-  HistoryRepositoryInstances,
-  LMDBRSpaceStorageConfig,
-  StoreConfig
-}
+import coop.rchain.rspace.history.{HistoryRepositoryInstances, LMDBRSpaceStorageConfig, StoreConfig}
 import coop.rchain.rspace.trace.Consume
 import coop.rchain.rspace.test._
-import coop.rchain.shared.{Cell, Log, Serialize}
+import coop.rchain.shared.{Log, Serialize}
 import coop.rchain.shared.PathOps._
 import monix.eval.Task
 import monix.execution.Scheduler
 import monix.execution.atomic.AtomicAny
 import org.scalacheck._
-import org.scalacheck.Arbitrary._
 import org.scalatest._
 import org.scalatest.prop._
 
-import scala.util.{Random, Right}
+import scala.util.Random
 import scala.util.Random.shuffle
-import scodec.Codec
 import org.lmdbjava.EnvFlags
 
 import scala.collection.SortedSet
@@ -47,7 +39,7 @@ object SchedulerPools {
 
 //noinspection ZeroIndexToHead,NameBooleanParameters
 trait ReplayRSpaceTests extends ReplayRSpaceTestsBase[String, Pattern, String, String] {
-
+  import cats.syntax.parallel._
   import SchedulerPools.global
 
   implicit val log: Log[Task]      = new Log.NOPLog[Task]

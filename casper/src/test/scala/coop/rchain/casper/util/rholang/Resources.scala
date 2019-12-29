@@ -4,14 +4,12 @@ import java.nio.file.StandardCopyOption.REPLACE_EXISTING
 import java.nio.file.{Files, Path}
 
 import cats.effect.{Concurrent, ContextShift, Resource, Sync}
+import cats.Parallel
 import cats.implicits._
-import cats.temp.par
 import coop.rchain.blockstorage.dag.{BlockDagFileStorage, BlockDagStorage}
 import coop.rchain.blockstorage.BlockStore
-import coop.rchain.blockstorage.finality.{LastFinalizedFileStorage, LastFinalizedStorage}
 import coop.rchain.casper.helper.BlockDagStorageTestFixture
 import coop.rchain.casper.helper.TestNode.makeBlockDagFileStorageConfig
-import coop.rchain.casper.protocol.BlockMessage
 import coop.rchain.metrics
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.rholang.Resources.{mkRuntimeAt, mkTempDir}
@@ -28,7 +26,7 @@ object Resources {
   )(implicit scheduler: Scheduler): Resource[Task, RuntimeManager[Task]] =
     mkTempDir[Task](prefix) >>= (mkRuntimeManagerAt(_)(storageSize))
 
-  def mkRuntimeManagerAt[F[_]: Concurrent: par.Par: ContextShift](storageDirectory: Path)(
+  def mkRuntimeManagerAt[F[_]: Concurrent: Parallel: ContextShift](storageDirectory: Path)(
       storageSize: Long = 10 * 1024 * 1024L
   )(
       implicit scheduler: Scheduler
@@ -43,7 +41,7 @@ object Resources {
     } yield runtimeManager
   }
 
-  def mkRuntimeManagerWithHistoryAt[F[_]: Concurrent: par.Par: ContextShift](
+  def mkRuntimeManagerWithHistoryAt[F[_]: Concurrent: Parallel: ContextShift](
       storageDirectory: Path
   )(
       storageSize: Long = 10 * 1024 * 1024L

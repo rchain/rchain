@@ -8,9 +8,9 @@ object Dependencies {
   val enumeratumVersion = "1.5.13"
   val http4sVersion     = "0.21.0-M2"
   val kamonVersion      = "1.1.5"
-  val catsVersion       = "1.6.1"
-  val catsEffectVersion = "1.2.0"
-  val catsMtlVersion    = "0.4.0"
+  val catsVersion       = "2.1.0"
+  val catsEffectVersion = "2.0.0"
+  val catsMtlVersion    = "0.7.0"
   val slf4jVersion      = "1.7.25"
 
   // format: off
@@ -23,7 +23,6 @@ object Dependencies {
   val catsEffectLawsTest  = "org.typelevel"              %% "cats-effect-laws"          % catsEffectVersion % "test"
   val catsMtl             = "org.typelevel"              %% "cats-mtl-core"             % catsMtlVersion
   val catsMtlLawsTest     = "org.typelevel"              %% "cats-mtl-laws"             % catsMtlVersion % "test"
-  val catsPar             = "io.chrisdavenport"          %% "cats-par"                  % "0.3.0-M1"
   val catsTagless         = "org.typelevel"              %% "cats-tagless-macros"       % "0.9"
   val circeCore           = "io.circe"                   %% "circe-core"                % circeVersion
   val circeGeneric        = "io.circe"                   %% "circe-generic"             % circeVersion
@@ -52,7 +51,7 @@ object Dependencies {
   val lmdbjava            = "org.lmdbjava"                % "lmdbjava"                  % "0.6.1"
   val logbackClassic      = "ch.qos.logback"              % "logback-classic"           % "1.2.3"
   val lz4                 = "org.lz4"                     % "lz4-java"                  % "1.5.0"
-  val monix               = "io.monix"                   %% "monix"                     % "3.0.0-RC3"
+  val monix               = "io.monix"                   %% "monix"                     % "3.1.0"
   val scalaLogging        = "com.typesafe.scala-logging" %% "scala-logging"             % "3.9.0"
   val scalaUri            = "io.lemonlabs"               %% "scala-uri"                 % "1.1.5"
   val scalacheck          = "org.scalacheck"             %% "scalacheck"                % "1.13.5"

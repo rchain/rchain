@@ -2,7 +2,6 @@ package coop.rchain.rspace
 
 import cats.effect._
 import cats.implicits._
-import coop.rchain.rspace._
 import coop.rchain.rspace.examples.StringExamples._
 import coop.rchain.rspace.examples.StringExamples.implicits._
 import coop.rchain.rspace.test._
@@ -1169,4 +1168,6 @@ class InMemoryHotStoreStorageActionsTests
     extends InMemoryHotStoreTestsBase[Task]
     with TaskTests[String, Pattern, Nothing, String, StringsCaptor]
     with StorageActionsTests[Task]
-    with StorageTestsBase[Task, String, Pattern, String, StringsCaptor]
+    with StorageTestsBase[Task, String, Pattern, String, StringsCaptor] {
+  implicit val parF = Task.catsParallel
+}

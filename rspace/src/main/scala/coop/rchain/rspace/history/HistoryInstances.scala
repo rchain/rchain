@@ -1,9 +1,8 @@
 package coop.rchain.rspace.history
 
-import cats.{Applicative, FlatMap}
+import cats.{Applicative, FlatMap, Parallel}
 import cats.effect.Sync
 import cats.implicits._
-import cats.temp.par.Par
 import coop.rchain.rspace.Blake2b256Hash
 import coop.rchain.rspace.history.History._
 import scodec.bits.ByteVector
@@ -20,7 +19,7 @@ object HistoryInstances {
 
   def MalformedTrieError = new RuntimeException("malformed trie")
 
-  final case class MergingHistory[F[_]: Par: Sync](
+  final case class MergingHistory[F[_]: Parallel: Sync](
       root: Blake2b256Hash,
       historyStore: CachingHistoryStore[F]
   ) extends History[F] {
@@ -309,7 +308,7 @@ object HistoryInstances {
       }
 
     def process(actions: List[HistoryAction]): F[History[F]] = {
-      implicit val parallel = Par[F].parallel
+      implicit val parallel = Parallel[F]
       for {
         _ <- Sync[F].ensure(actions.pure[F])(
               new RuntimeException("Cannot process duplicate actions on one key")
@@ -559,7 +558,10 @@ object HistoryInstances {
 
   }
 
-  def merging[F[_]: Sync: Par](root: Blake2b256Hash, historyStore: HistoryStore[F]): History[F] =
+  def merging[F[_]: Sync: Parallel](
+      root: Blake2b256Hash,
+      historyStore: HistoryStore[F]
+  ): History[F] =
     new MergingHistory[F](root, CachingHistoryStore(historyStore))
 
   final case class CachingHistoryStore[F[_]: Sync](historyStore: HistoryStore[F])

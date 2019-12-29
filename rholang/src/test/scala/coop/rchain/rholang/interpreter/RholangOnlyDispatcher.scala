@@ -16,7 +16,7 @@ object RholangOnlyDispatcher {
   def create[M[_], F[_]](tuplespace: RhoTuplespace[M], urnMap: Map[String, Par] = Map.empty)(
       implicit
       cost: _cost[M],
-      parallel: Parallel[M, F],
+      parallel: Parallel[M],
       s: Sync[M],
       ft: FunctorTell[M, InterpreterError]
   ): (Dispatch[M, ListParWithRandom, TaggedContinuation], DebruijnInterpreter[M, F]) = {

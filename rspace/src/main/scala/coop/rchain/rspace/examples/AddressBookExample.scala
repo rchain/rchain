@@ -3,7 +3,7 @@ package coop.rchain.rspace.examples
 import java.io.{ByteArrayInputStream, ByteArrayOutputStream, ObjectInputStream, ObjectOutputStream}
 import java.nio.file.{Files, Path}
 
-import cats.{Applicative, Id}
+import cats.{Applicative, Id, Parallel}
 import cats.effect.{Concurrent, ContextShift}
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.rspace.ISpace.IdISpace
@@ -203,7 +203,6 @@ object AddressBookExample {
     implicit val log: Log[Id]          = Log.log
     implicit val metricsF: Metrics[Id] = new Metrics.MetricsNOP[Id]()
     implicit val spanF: Span[Id]       = NoopSpan[Id]()
-
     // Here we define a temporary place to put the store's files
     val storePath: Path = Files.createTempDirectory("rspace-address-book-example-")
 

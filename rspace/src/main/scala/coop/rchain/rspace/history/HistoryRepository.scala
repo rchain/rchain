@@ -2,7 +2,7 @@ package coop.rchain.rspace.history
 
 import cats.implicits._
 import cats.effect.Sync
-import cats.temp.par.Par
+import cats.Parallel
 import coop.rchain.rspace.{Blake2b256Hash, HistoryReader, HotStoreAction}
 import org.lmdbjava.EnvFlags
 import scodec.Codec
@@ -33,7 +33,7 @@ final case class LMDBRSpaceStorageConfig(
 
 object HistoryRepositoryInstances {
 
-  def lmdbRepository[F[_]: Sync: Par, C, P, A, K](
+  def lmdbRepository[F[_]: Sync: Parallel, C, P, A, K](
       config: LMDBRSpaceStorageConfig
   )(
       implicit codecC: Codec[C],

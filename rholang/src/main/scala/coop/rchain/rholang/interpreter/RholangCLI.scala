@@ -63,6 +63,7 @@ object RholangCLI {
     implicit val log: Log[Task]          = Log.log[Task]
     implicit val metricsF: Metrics[Task] = new Metrics.MetricsNOP[Task]()
     implicit val spanF: Span[Task]       = NoopSpan[Task]()
+    implicit val parF: Parallel[Task]    = Task.catsParallel
 
     val runtime = (for {
       sarAndHR           <- Runtime.setupRSpace[Task](conf.dataDir(), conf.mapSize())
