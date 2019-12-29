@@ -339,7 +339,6 @@ jobs:
         run: zcat artifacts-docker/rnode-docker.tar.gz | docker image load
 
       - name: Publish Docker Image
-        if: false # Disabled to not clash with Drone uploads
         env:
           DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
           DOCKERHUB_PASSWORD: ${{ secrets.DOCKERHUB_PASSWORD }}
@@ -392,7 +391,6 @@ jobs:
           name: artifacts-packages
 
       - name: Publish Packages
-        if: false # Disabled to not clash with Drone uploads
         env:
           SERVICE_ACCOUNT_KEY: ${{ secrets.SERVICE_ACCOUNT_KEY }}
           UPLOAD_BUCKET: ${{ secrets.UPLOAD_BUCKET }}
