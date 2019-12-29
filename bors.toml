@@ -1,6 +1,6 @@
 # require the below checks before bors merges anything
 status = [
-  "continuous-integration/drone/push"
+  "bors build finished"
 ]
 
 # Ensure that reviewers (all maintainers!) can't merge their own PRs without review.
@@ -8,7 +8,7 @@ status = [
 required_approvals = 2
 
 # Number of seconds from when a merge commit is created to when its statuses must pass.
-timeout_sec = 14400 #4h
+timeout_sec = 5400 #4h
 
 # A marker in the PR description that indicates boilerplate that does not belong in the merge-commit message.
 cut_body_after = "## Overview"

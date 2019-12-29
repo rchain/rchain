@@ -148,18 +148,18 @@ pipeline:
       - env JAVAC_VERSION=1.8 sbt clean compile doc node/rpm:packageBin
       - cp node/target/rpm/RPMS/noarch/rnode-*.noarch.rpm artifacts/
 
-  publish:
-    <<: *branch_build_conditions
-    <<: *buildenv
-    commands:
-      - cd ../step.package
-      - ./scripts/ci/publish-artifacts
-    secrets:
-      - docker_username
-      - docker_password
-      - ssh_private_key
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
+#  publish:
+#    <<: *branch_build_conditions
+#    <<: *buildenv
+#    commands:
+#      - cd ../step.package
+#      - ./scripts/ci/publish-artifacts
+#    secrets:
+#      - docker_username
+#      - docker_password
+#      - ssh_private_key
+#    volumes:
+#      - /var/run/docker.sock:/var/run/docker.sock
 
 
   notify:
