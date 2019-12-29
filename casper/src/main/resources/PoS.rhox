@@ -174,7 +174,7 @@ new  PoS,
                 getUser!(deployerId, *userCh) |
                 for(@state, resultCh <- processCh;
                     @userPk <- userCh;
-                    _, @blockNumber, _ <- blockDataCh) {
+                    @blockNumber, _, _ <- blockDataCh) {
                   if (state.get("allBonds").contains(userPk)) {
                     // the withdwal is in effect starting from the next epoch
                     resultCh!(
@@ -330,7 +330,7 @@ new  PoS,
                   getBlockData!(*blockDataCh) |
 
                   runMVar!(*stateCh, *mvarProcessCh, *ackCh) |
-                  for(_, @blockNumber, _ <- blockDataCh;
+                  for(@blockNumber, _, _ <- blockDataCh;
                       @state, mvarResultCh <- mvarProcessCh) {
                     // Before choosing new active validators and paying out any withdrawers,
                     // deposits have to be accumulated into one vault for now.
