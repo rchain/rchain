@@ -446,8 +446,8 @@ jobs:
     steps:
       - run: false
 
-  # Merge into staging branch (bors r+ ) triggers release_* jobs which depend on
-  # run_*_tests jobs.
+  # Merge into "staging" branch (bors r+ ) triggers release_* jobs which depend
+  # on run_*_tests jobs.
 
   bors_merge_success:
     name: bors build finished
