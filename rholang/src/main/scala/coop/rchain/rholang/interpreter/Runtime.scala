@@ -271,7 +271,7 @@ object Runtime {
     createWithEmptyCost_(spaceAndReplay, extraSystemProcesses)
   }
 
-  private def createWithEmptyCost_[F[_]: Concurrent: Log: Metrics: Span, M[_]](
+  private def createWithEmptyCost_[F[_]: Concurrent: Log: Metrics: Span](
       spaceAndReplay: ISpaceAndReplay[F],
       extraSystemProcesses: Seq[SystemProcess.Definition[F]]
   )(
@@ -333,7 +333,7 @@ object Runtime {
     )
   }
 
-  def setupReducer[F[_]: Concurrent: Log: Metrics: Span, M[_]](
+  def setupReducer[F[_]: Concurrent: Log: Metrics: Span](
       chargingRSpace: RhoTuplespace[F],
       blockDataRef: Ref[F, BlockData],
       invalidBlocks: InvalidBlocks[F],
@@ -369,7 +369,7 @@ object Runtime {
         .map(_.toProcDefs)
     } yield (blockDataRef, invalidBlocks, urnMap, procDefs)
 
-  def create[F[_]: Concurrent: Log: Metrics: Span, M[_]](
+  def create[F[_]: Concurrent: Log: Metrics: Span](
       spaceAndReplay: ISpaceAndReplay[F],
       extraSystemProcesses: Seq[SystemProcess.Definition[F]] = Seq.empty
   )(

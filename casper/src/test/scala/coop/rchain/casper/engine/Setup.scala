@@ -47,7 +47,7 @@ object Setup {
           log,
           metrics,
           span,
-          par.Par[Task]
+          Parallel[Task]
         )
         .unsafeRunSync(scheduler)
 
