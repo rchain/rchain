@@ -18,19 +18,19 @@ class DERConverterSpec extends PropSpec with GeneratorDrivenPropertyChecks with 
         val data                     = Blake2b256.hash(bytes)
         val sigRS                    = Secp256k1Eth.sign(data, privKey)
 
-        val sigDER     = CertificateHelper.encodeSignatureRStoDER(sigRS).right.get
-        val expectedRS = CertificateHelper.decodeSignatureDERtoRS(sigDER).right.get
+        val sigDER     = CertificateHelper.encodeSignatureRStoDER(sigRS).get
+        val expectedRS = CertificateHelper.decodeSignatureDERtoRS(sigDER).get
 
         // Encode / decode should get initial input for valid signature
         sigRS shouldBe expectedRS
 
         // Encoder is safe of exception for any input
-        CertificateHelper.encodeSignatureRStoDER(bytes).right.get.isEmpty shouldBe false
+        CertificateHelper.encodeSignatureRStoDER(bytes).get.isEmpty shouldBe false
 
         // Decoder should throw exception with invalid DER message format
         CertificateHelper
           .decodeSignatureDERtoRS(bytes)
-          .left
+          .failed
           .get shouldBe a[IllegalArgumentException]
       }
     }
@@ -39,14 +39,14 @@ class DERConverterSpec extends PropSpec with GeneratorDrivenPropertyChecks with 
   property("encoder should throw exception on empty input") {
     CertificateHelper
       .encodeSignatureRStoDER(Array[Byte]())
-      .left
+      .failed
       .get shouldBe a[IllegalArgumentException]
   }
 
   property("decoder should throw exception on empty input") {
     CertificateHelper
       .decodeSignatureDERtoRS(Array[Byte]())
-      .left
+      .failed
       .get shouldBe a[IllegalArgumentException]
   }
 

@@ -8,7 +8,6 @@ import java.security.interfaces.{ECPrivateKey, ECPublicKey}
 import java.security.spec._
 import java.util.Base64
 
-import cats.syntax.all._
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.hash.Keccak256
 import org.bouncycastle.asn1.{
@@ -21,7 +20,7 @@ import org.bouncycastle.asn1.{
 import org.bouncycastle.util.BigIntegers
 
 import scala.io.Source
-import scala.util.Try
+import scala.util.{Failure, Try}
 
 object CertificateHelper {
 
@@ -128,7 +127,7 @@ object CertificateHelper {
     cert2
   }
 
-  def encodeSignatureRStoDER(signatureRS: Array[Byte]): Either[Throwable, Array[Byte]] = {
+  def encodeSignatureRStoDER(signatureRS: Array[Byte]): Try[Array[Byte]] = {
     def toASN1Int(bytes: Array[Byte]) = new ASN1Integer(BigIntegers.fromUnsignedByteArray(bytes))
 
     def convert = {
@@ -149,12 +148,12 @@ object CertificateHelper {
     }
 
     if (signatureRS.isEmpty)
-      new IllegalArgumentException("Input array must not be empty").asLeft
+      Failure(new IllegalArgumentException("Input array must not be empty"))
     else
-      Try(convert).toEither
+      Try(convert)
   }
 
-  def decodeSignatureDERtoRS(signatureDER: Array[Byte]): Either[Throwable, Array[Byte]] = {
+  def decodeSignatureDERtoRS(signatureDER: Array[Byte]): Try[Array[Byte]] = {
     def toBytes(x: ASN1Encodable) = {
       val asn1 = x.toASN1Primitive.asInstanceOf[ASN1Integer]
       BigIntegers.asUnsignedByteArray(asn1.getValue)
@@ -168,18 +167,22 @@ object CertificateHelper {
         val Array(r, s, _*) = asnSeq.toArray
         toBytes(r) ++ toBytes(s)
       } finally {
-        asn.close
+        // Ensure `close` does not throw an exception
+        Try(asn.close).getOrElse(())
         // > Closing a ByteArrayInputStream has no effect.
         // https://docs.oracle.com/javase/10/docs/api/java/io/ByteArrayInputStream.html
         bis.close
       }
     }
 
+    import coop.rchain.shared.TrySyntax._
+
     if (signatureDER.isEmpty)
-      new IllegalArgumentException("Input array must not be empty").asLeft
+      Failure(new IllegalArgumentException("Input array must not be empty"))
     else
-      Try(convert).toEither
-        .leftMap(new IllegalArgumentException("Input array is not valid DER message format", _))
+      Try(convert).mapFailure(
+        new IllegalArgumentException("Input array is not valid DER message format", _)
+      )
   }
 
 }
