@@ -53,6 +53,22 @@ information](https://github.com/rchain/rchain/blob/dev/DEVELOPER.md)
 The file `pytest.ini` allows some configuration of the test execution. Information about all the available options
 can be found in [pytest.ini reference](https://docs.pytest.org/en/latest/reference.html#ini-options-ref)
 
+## Running from Docker
+
+TL;DR: If you want to run these tests from a Docker container, start the
+container with `-v /var/run/docker.sock:/var/run/docker.sock -v /tmp:/tmp`.
+
+These tests can be run from a Docker container, but in that case a) the Docker
+socket has to be accessible (writeable) by the container, and b) the temporary
+directory **in the container** (either `/tmp` or whatever is in the environment
+variable `$TMPDIR`) has to be accessible by the host as well **on the same
+path**. The reason for the latter is that tests spawn additional containers and
+need to share files with them. They do it by mounting files/directories from
+`/tmp` (or `$TMPDIR`) into new containers, i.e. by starting new containers with
+e.g. `-v /tmp/bonds.txt:/var/lib/rnode/genesis/bonds.txt` arugments. But these
+arguments are passed via shared Docker socket to Docker daemon running on the
+host. So the Docker daemon has to be able to access `/tmp/bonds.txt` as well.
+
 ## Execution
 
 The tests are run using *pytest*. If you want to have a deep understanding of the whole framework you should check
