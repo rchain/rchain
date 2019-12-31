@@ -11,7 +11,7 @@ import org.scalatest.{FlatSpec, Matchers}
 import scala.concurrent.duration._
 
 class RuntimeSpec extends FlatSpec with Matchers {
-  private val mapSize                     = 10L * 1024L * 1024L
+  private val mapSize                     = 1024L * 1024L * 1024L
   private val tmpPrefix                   = "rspace-store-"
   private val maxDuration                 = 5.seconds
   implicit val logF: Log[Task]            = Log.log[Task]

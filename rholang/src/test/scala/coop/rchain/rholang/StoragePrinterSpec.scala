@@ -20,7 +20,7 @@ import coop.rchain.crypto.signatures.{Secp256k1, Signed}
 import scala.concurrent.duration._
 
 class StoragePrinterSpec extends FlatSpec with Matchers {
-  private val mapSize     = 10L * 1024L * 1024L
+  private val mapSize     = 1024L * 1024L * 1024L
   private val tmpPrefix   = "rspace-store-"
   private val maxDuration = 5.seconds
   private val deployerSk = PrivateKey(

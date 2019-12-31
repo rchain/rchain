@@ -38,7 +38,7 @@ object Setup {
     val runtimeDir                = BlockDagStorageTestFixture.blockStorageDir
     val (space, replay, _) = {
       implicit val s = scheduler
-      Runtime.setupRSpace[Task](runtimeDir, 3024L * 1024).unsafeRunSync
+      Runtime.setupRSpace[Task](runtimeDir, 1024L * 1024 * 1024L).unsafeRunSync
     }
     val activeRuntime =
       Runtime

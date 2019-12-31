@@ -16,7 +16,7 @@ import coop.rchain.metrics.Span
 import coop.rchain.metrics.NoopSpan
 
 class InterpreterSpec extends FlatSpec with Matchers {
-  private val mapSize     = 10L * 1024L * 1024L
+  private val mapSize     = 1024L * 1024L * 1024L
   private val tmpPrefix   = "rspace-store-"
   private val maxDuration = 5.seconds
 

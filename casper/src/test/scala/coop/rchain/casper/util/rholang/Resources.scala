@@ -27,7 +27,7 @@ object Resources {
     mkTempDir[Task](prefix) >>= (mkRuntimeManagerAt(_)(storageSize))
 
   def mkRuntimeManagerAt[F[_]: Concurrent: Parallel: ContextShift](storageDirectory: Path)(
-      storageSize: Long = 10 * 1024 * 1024L
+      storageSize: Long = 1024 * 1024 * 1024L
   )(
       implicit scheduler: Scheduler
   ): Resource[F, RuntimeManager[F]] = {
@@ -44,7 +44,7 @@ object Resources {
   def mkRuntimeManagerWithHistoryAt[F[_]: Concurrent: Parallel: ContextShift](
       storageDirectory: Path
   )(
-      storageSize: Long = 10 * 1024 * 1024L
+      storageSize: Long = 1024 * 1024 * 1024L
   )(
       implicit scheduler: Scheduler
   ): Resource[F, (RuntimeManager[F], RhoHistoryRepository[F])] = {
