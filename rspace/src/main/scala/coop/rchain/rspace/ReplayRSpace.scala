@@ -5,10 +5,9 @@ import java.nio.file.Path
 import scala.collection.JavaConverters._
 import scala.collection.SortedSet
 import scala.concurrent.ExecutionContext
-import cats.Applicative
+import cats.{Applicative, Parallel}
 import cats.effect._
 import cats.implicits._
-import cats.temp.par.Par
 import coop.rchain.catscontrib._
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.metrics.implicits._
@@ -354,7 +353,7 @@ object ReplayRSpace {
       scheduler: ExecutionContext,
       metricsF: Metrics[F],
       spanF: Span[F],
-      par: Par[F]
+      par: Parallel[F]
   ): F[IReplaySpace[F, C, P, A, K]] =
     RSpace.setUp[F, C, P, A, K](dataDir, mapSize, branch).map {
       case (historyReader, store) =>

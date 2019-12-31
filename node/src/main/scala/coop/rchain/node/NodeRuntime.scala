@@ -11,7 +11,6 @@ import cats.effect.concurrent.Semaphore
 import cats.implicits._
 import cats.mtl._
 import cats.tagless.implicits._
-import cats.temp.par.Par
 import coop.rchain.blockstorage._
 import coop.rchain.blockstorage.dag.{BlockDagFileStorage, BlockDagStorage}
 import coop.rchain.blockstorage.finality.LastFinalizedFileStorage
@@ -234,7 +233,7 @@ class NodeRuntime private[node] (
                logEnv,
                eventLogEnv,
                ContextShift[TaskEnv],
-               Par[TaskEnv],
+               Parallel[TaskEnv],
                taskableEnv,
                localEnvironment
              )
@@ -628,7 +627,7 @@ object NodeRuntime {
         } yield ()
     }
 
-  def setupNodeProgramF[F[_]: Metrics: TransportLayer: Sync: Concurrent: Time: Log: EventLog: ContextShift: Par: Taskable: LocalEnvironment](
+  def setupNodeProgramF[F[_]: Metrics: TransportLayer: Sync: Concurrent: Time: Log: EventLog: ContextShift: Parallel: Taskable: LocalEnvironment](
       rpConnections: ConnectionsCell[F],
       rpConfAsk: ApplicativeAsk[F, RPConf],
       rpConfState: MonadState[F, RPConf],

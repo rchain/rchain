@@ -109,7 +109,7 @@ object BlockDagStorageTestFixture {
       .setMaxReaders(126)
       .open(path.toFile, flags: _*)
 
-  val mapSize: Long = 1024L * 1024L * 100L
+  val mapSize: Long = 1024L * 1024L * 1024L
 
   def createBlockStorage[F[_]: Concurrent: Metrics: Sync: Log](
       blockStorageDir: Path

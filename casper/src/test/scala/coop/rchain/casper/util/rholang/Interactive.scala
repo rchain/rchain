@@ -95,7 +95,7 @@ object Interactive {
     implicit val metricsEff: Metrics[Task] = new Metrics.MetricsNOP[Task]
     implicit val noopSpan: Span[Task]      = NoopSpan[Task]()
     val (space, replay, _) = Runtime
-      .setupRSpace[Task](Files.createTempDirectory("interactive-"), 1024 * 1024L)
+      .setupRSpace[Task](Files.createTempDirectory("interactive-"), 1024 * 1024L * 1024L)
       .unsafeRunSync
     new Interactive(Runtime.createWithEmptyCost[Task]((space, replay)).runSyncUnsafe(5.seconds))
   }

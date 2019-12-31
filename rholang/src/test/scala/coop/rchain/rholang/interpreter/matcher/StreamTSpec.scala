@@ -4,18 +4,15 @@ import cats.arrow.FunctionK
 import cats.data.{EitherT, WriterT}
 import cats.implicits._
 import cats.effect.laws.discipline.{BracketTests, SyncTests}
-import cats.effect.laws.discipline.arbitrary._
 import cats.laws.discipline.{AlternativeTests, MonadErrorTests, MonadTests}
 import cats.mtl.laws.discipline.MonadLayerControlTests
-import cats.tests.CatsSuite
 import cats.{~>, Eq, Monad}
 import coop.rchain.catscontrib.laws.discipline.MonadTransTests
 import coop.rchain.rholang.StackSafetySpec
 import coop.rchain.rholang.interpreter.matcher.StreamT.{SCons, Step}
 import monix.eval.Coeval
-import org.scalacheck.{Arbitrary, Gen}
-import org.scalatest.{FlatSpec, Matchers}
-
+import org.scalacheck.{Arbitrary, Gen, Prop}
+import org.scalatest.{FlatSpec, FunSuite, Matchers}
 import cats.instances.AllInstances
 import cats.syntax.AllSyntax
 
@@ -110,7 +107,7 @@ class StreamTSpec extends FlatSpec with Matchers {
 }
 
 class StreamTLawsSpec
-    extends CatsSuite
+    extends FunSuite
     with LowPriorityDerivations
     with AllInstances
     with AllSyntax {
@@ -155,44 +152,53 @@ class StreamTLawsSpec
 
   implicit def eqT: Eq[Throwable] = Eq.allEqual
 
-  checkAll(
-    "StreamT.MonadLaws",
-    MonadTests[StreamTEffect].monad[Int, Int, String]
-  )
-  checkAll(
-    "StreamT.AlternativeLaws",
-    AlternativeTests[StreamTEffect].alternative[Int, Int, String]
-  )
-  checkAll(
-    "StreamT.MonadTransLaws",
-    MonadTransTests[StreamT].monadTrans[Effect, Int, String]
-  )
-  checkAll(
-    "StreamT.MonadLayerControlLaws",
-    MonadLayerControlTests[StreamTEffect, Effect, Stream].monadLayerControl[Int, String]
-  )
-  checkAll(
-    "StreamT.MonadErrorLaws",
-    MonadErrorTests[StreamTEffect, String].monadError[Int, Int, String]
-  )
-  checkAll(
-    "StreamT.MonadErrorUnitLaws",
-    MonadErrorTests[StreamTEffect, Unit].monadError[Int, Int, String]
-  )
+  def checkProps(props: Seq[(String, Prop)]): Unit =
+    for {
+      (testName, prop) <- props
+      _                = info(testName)
+      _                = prop.check
+    } yield ()
 
-  checkAll("StreamT.SyncLaws", SyncTests[StreamTEffect].sync[Int, Int, String])
+  test("StreamT.MonadLaws") { checkProps(MonadTests[StreamTEffect].monad[Int, Int, String].props) }
 
-  checkAll(
-    "StreamT.SyncLaws", {
-      val fromEffect =
-        λ[Effect ~> StreamTEffect[?]](
-          e => StreamT.liftF(e)
-        )
-      BracketTests[StreamTEffect[?], Throwable].bracketTrans[Effect, Int, Int](
-        fromEffect
+  test("StreamT.AlternativeLaws") {
+    checkProps(AlternativeTests[StreamTEffect].alternative[Int, Int, String].props)
+  }
+
+  test("StreamT.MonadTransLaws") {
+    checkProps(MonadTransTests[StreamT].monadTrans[Effect, Int, String].props)
+  }
+  test("StreamT.MonadLayerControlLaws") {
+    checkProps(
+      MonadLayerControlTests[StreamTEffect, Effect, Stream]
+        .monadLayerControl[Int, String]
+        .props
+    )
+  }
+
+  test("StreamT.MonadErrorLaws") {
+    checkProps(MonadErrorTests[StreamTEffect, String].monadError[Int, Int, String].props)
+  }
+
+  test("StreamT.MonadErrorUnitLaws") {
+    checkProps(MonadErrorTests[StreamTEffect, Unit].monadError[Int, Int, String].props)
+  }
+
+  test("StreamT.SyncLaws") { checkProps(SyncTests[StreamTEffect].sync[Int, Int, String].props) }
+
+  test("StreamT.SyncLaws.from") {
+    val fromEffect =
+      λ[Effect ~> StreamTEffect[?]](
+        e => StreamT.liftF(e)
       )
-    }
-  )
+    checkProps(
+      BracketTests[StreamTEffect[?], Throwable]
+        .bracketTrans[Effect, Int, Int](
+          fromEffect
+        )
+        .props
+    )
+  }
 }
 
 trait LowPriorityDerivations {

@@ -7,7 +7,6 @@ import cats.effect._
 import cats.effect.concurrent.Ref
 import cats.implicits._
 import cats.mtl.FunctorTell
-import cats.temp.par
 import com.google.protobuf.ByteString
 import coop.rchain.casper.protocol.BlockMessage
 import coop.rchain.crypto.PublicKey
@@ -264,20 +263,20 @@ object Runtime {
     )
   )
 
-  def createWithEmptyCost[F[_]: Concurrent: Log: Metrics: Span: par.Par](
+  def createWithEmptyCost[F[_]: Concurrent: Log: Metrics: Span: Parallel](
       spaceAndReplay: ISpaceAndReplay[F],
       extraSystemProcesses: Seq[SystemProcess.Definition[F]] = Seq.empty
   ): F[Runtime[F]] = {
-    implicit val P = par.Par[F].parallel
+    implicit val P = Parallel[F]
     createWithEmptyCost_(spaceAndReplay, extraSystemProcesses)
   }
 
-  private def createWithEmptyCost_[F[_]: Concurrent: Log: Metrics: Span, M[_]](
+  private def createWithEmptyCost_[F[_]: Concurrent: Log: Metrics: Span](
       spaceAndReplay: ISpaceAndReplay[F],
       extraSystemProcesses: Seq[SystemProcess.Definition[F]]
   )(
       implicit
-      P: Parallel[F, M]
+      P: Parallel[F]
   ): F[Runtime[F]] =
     for {
       cost <- CostAccounting.emptyCost[F]
@@ -334,13 +333,13 @@ object Runtime {
     )
   }
 
-  def setupReducer[F[_]: Concurrent: Log: Metrics: Span, M[_]](
+  def setupReducer[F[_]: Concurrent: Log: Metrics: Span](
       chargingRSpace: RhoTuplespace[F],
       blockDataRef: Ref[F, BlockData],
       invalidBlocks: InvalidBlocks[F],
       extraSystemProcesses: Seq[SystemProcess.Definition[F]],
       urnMap: Map[String, Par]
-  )(implicit ft: FunctorTell[F, InterpreterError], cost: _cost[F], P: Parallel[F, M]): Reduce[F] = {
+  )(implicit ft: FunctorTell[F, InterpreterError], cost: _cost[F], P: Parallel[F]): Reduce[F] = {
     lazy val replayDispatchTable: RhoDispatchMap[F] =
       dispatchTableCreator(
         chargingRSpace,
@@ -370,11 +369,11 @@ object Runtime {
         .map(_.toProcDefs)
     } yield (blockDataRef, invalidBlocks, urnMap, procDefs)
 
-  def create[F[_]: Concurrent: Log: Metrics: Span, M[_]](
+  def create[F[_]: Concurrent: Log: Metrics: Span](
       spaceAndReplay: ISpaceAndReplay[F],
       extraSystemProcesses: Seq[SystemProcess.Definition[F]] = Seq.empty
   )(
-      implicit P: Parallel[F, M],
+      implicit P: Parallel[F],
       cost: _cost[F]
   ): F[Runtime[F]] = {
     val errorLog                                      = new ErrorLog[F]()
@@ -439,7 +438,7 @@ object Runtime {
     } yield ()
   }
 
-  def setupRSpace[F[_]: Concurrent: ContextShift: par.Par: Log: Metrics: Span](
+  def setupRSpace[F[_]: Concurrent: ContextShift: Parallel: Log: Metrics: Span](
       dataDir: Path,
       mapSize: Long
   )(

@@ -53,7 +53,7 @@ object StackSafetySpec extends Assertions {
 class StackSafetySpec extends FlatSpec with TableDrivenPropertyChecks with Matchers {
   import StackSafetySpec._
 
-  val mapSize     = 10L * 1024L * 1024L
+  val mapSize     = 1024L * 1024L * 1024L
   val tmpPrefix   = "rspace-store-"
   val maxDuration = 20.seconds
   val depth       = findMaxRecursionDepth()

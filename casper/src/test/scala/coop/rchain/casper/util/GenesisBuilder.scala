@@ -94,7 +94,7 @@ object GenesisBuilder {
 
     val (validavalidatorKeyPairs, genesisParameters) = parameters
     val storageDirectory                             = Files.createTempDirectory(s"hash-set-casper-test-genesis-")
-    val storageSize: Long                            = 256L * 1024 * 1024
+    val storageSize: Long                            = 1024L * 1024 * 1024
     implicit val log: Log.NOPLog[Task]               = new Log.NOPLog[Task]
     implicit val metricsEff: Metrics[Task]           = new metrics.Metrics.MetricsNOP[Task]
     implicit val spanEff                             = NoopSpan[Task]()

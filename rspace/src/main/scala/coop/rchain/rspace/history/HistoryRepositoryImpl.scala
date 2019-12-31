@@ -2,7 +2,7 @@ package coop.rchain.rspace.history
 
 import java.nio.charset.StandardCharsets
 
-import cats.Applicative
+import cats.{Applicative, Parallel}
 import cats.effect.{IO, Sync}
 import cats.implicits._
 import coop.rchain.rspace.{
@@ -22,11 +22,10 @@ import coop.rchain.rspace.internal._
 import scodec.Codec
 import scodec.bits.{BitVector, ByteVector}
 import HistoryRepositoryImpl._
-import cats.temp.par.Par
 import com.typesafe.scalalogging.Logger
 import coop.rchain.shared.Serialize
 
-final case class HistoryRepositoryImpl[F[_]: Sync: Par, C, P, A, K](
+final case class HistoryRepositoryImpl[F[_]: Sync: Parallel, C, P, A, K](
     history: History[F],
     rootsRepository: RootRepository[F],
     leafStore: ColdStore[F]
@@ -196,7 +195,7 @@ final case class HistoryRepositoryImpl[F[_]: Sync: Par, C, P, A, K](
   }
 
   override def checkpoint(actions: List[HotStoreAction]): F[HistoryRepository[F, C, P, A, K]] = {
-    implicit val P = Par[F].parallel
+    implicit val P = Parallel[F]
     val batchSize  = Math.max(1, actions.size / RSpace.parallelism)
     for {
       batches        <- Sync[F].delay(actions.grouped(batchSize).toList)

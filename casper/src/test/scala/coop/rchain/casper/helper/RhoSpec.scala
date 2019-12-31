@@ -130,7 +130,7 @@ class RhoSpec(
                         GenesisBuilder.buildGenesis(genesisParameters).storageDirectory
                       )
         runtime <- mkRuntimeAt[Task](storageDirs.rspaceDir)(
-                    storageSize = 10 * 1024 * 1024,
+                    storageSize = 1024L * 1024 * 1024,
                     additionalSystemProcesses = testFrameworkContracts(testResultCollector)
                   )
       } yield runtime._1

@@ -103,7 +103,7 @@ object CostAccountingPropertyTest {
     implicit val ms: Metrics.Source         = Metrics.BaseSource
 
     val prefix = "cost-accounting-property-test"
-    mkRuntime[Task](prefix, 1024 * 1024).use { runtime =>
+    mkRuntime[Task](prefix, 1024 * 1024 * 1024L).use { runtime =>
       for {
         _    <- runtime.cost.set(Cost.UNSAFE_MAX)
         cost <- CostAccounting.emptyCost[Task]

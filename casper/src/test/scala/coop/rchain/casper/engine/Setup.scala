@@ -4,7 +4,6 @@ import cats._
 import cats.implicits._
 import cats.effect.concurrent.Ref
 import cats.effect.{Concurrent, ContextShift}
-import cats.temp.par
 import coop.rchain.blockstorage._
 import coop.rchain.blockstorage.dag.{BlockDagRepresentation, InMemBlockDagStorage}
 import coop.rchain.blockstorage.finality.LastFinalizedMemoryStorage
@@ -39,7 +38,7 @@ object Setup {
     val runtimeDir                = BlockDagStorageTestFixture.blockStorageDir
     val (space, replay, _) = {
       implicit val s = scheduler
-      Runtime.setupRSpace[Task](runtimeDir, 3024L * 1024).unsafeRunSync
+      Runtime.setupRSpace[Task](runtimeDir, 1024L * 1024 * 1024L).unsafeRunSync
     }
     val activeRuntime =
       Runtime
@@ -48,7 +47,7 @@ object Setup {
           log,
           metrics,
           span,
-          par.Par[Task]
+          Parallel[Task]
         )
         .unsafeRunSync(scheduler)
 

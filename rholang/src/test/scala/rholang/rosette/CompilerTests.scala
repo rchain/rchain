@@ -16,7 +16,7 @@ import scala.concurrent.duration._
 import scala.io.Source
 
 class CompilerTests extends FunSuite with Matchers {
-  private val mapSize                     = 1024L * 1024L * 10
+  private val mapSize                     = 1024L * 1024L * 1024L
   private val tmpPrefix                   = "rspace-store-"
   private val maxDuration                 = 5.seconds
   implicit val logF: Log[Task]            = new Log.NOPLog[Task]

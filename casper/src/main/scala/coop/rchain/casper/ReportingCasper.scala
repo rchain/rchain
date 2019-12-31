@@ -5,9 +5,7 @@ import cats.effect.concurrent.{MVar, Ref}
 import cats.effect.{Concurrent, ContextShift, Sync}
 import cats.implicits._
 import cats.mtl.FunctorTell
-import cats.temp.par
-import cats.temp.par.{Par => CatsPar}
-import cats.{Applicative, Monad, Parallel}
+import cats.{Monad, Parallel}
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockStore
 import coop.rchain.blockstorage.dag.{BlockDagRepresentation, BlockDagStorage}
@@ -17,7 +15,6 @@ import coop.rchain.casper.protocol.{BlockMessage, DeployData, ProcessedDeploy}
 import coop.rchain.casper.util.{EventConverter, ProtoUtil}
 import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
 import coop.rchain.casper.util.rholang.{InternalError, ReplayFailure, RuntimeManager}
-import coop.rchain.crypto.PublicKey
 import coop.rchain.metrics.Metrics.Source
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.models.BlockHash._
@@ -185,7 +182,7 @@ object ReportingCasper {
   type RhoReportingRspace[F[_]] =
     ReportingRspace[F, Par, BindPattern, ListParWithRandom, TaggedContinuation]
 
-  def rhoReporter[F[_]: ContextShift: Monad: Concurrent: Log: Metrics: Span: CatsPar: BlockStore: BlockDagStorage](
+  def rhoReporter[F[_]: ContextShift: Monad: Concurrent: Log: Metrics: Span: Parallel: BlockStore: BlockDagStorage](
       historyRepository: RhoHistoryRepository[F]
   )(implicit scheduler: ExecutionContext) =
     new ReportingCasper[F] {
@@ -345,11 +342,11 @@ class ReportingRuntime[F[_]: Sync](
 object ReportingRuntime {
   implicit val RuntimeMetricsSource: Source = Metrics.Source(RholangMetricsSource, "runtime")
 
-  def createWithEmptyCost[F[_]: Concurrent: Log: Metrics: Span: par.Par](
+  def createWithEmptyCost[F[_]: Concurrent: Log: Metrics: Span: Parallel](
       reporting: RhoReportingRspace[F],
       extraSystemProcesses: Seq[SystemProcess.Definition[F]] = Seq.empty
   ): F[ReportingRuntime[F]] = {
-    implicit val P = par.Par[F].parallel
+    implicit val P = Parallel[F]
     for {
       cost <- CostAccounting.emptyCost[F]
       runtime <- {
@@ -363,7 +360,7 @@ object ReportingRuntime {
       reporting: RhoReportingRspace[F],
       extraSystemProcesses: Seq[SystemProcess.Definition[F]] = Seq.empty
   )(
-      implicit P: Parallel[F, M],
+      implicit P: Parallel[F],
       cost: _cost[F]
   ): F[ReportingRuntime[F]] = {
     val errorLog                                      = new ErrorLog[F]()

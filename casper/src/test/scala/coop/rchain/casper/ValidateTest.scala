@@ -721,7 +721,7 @@ class ValidateTest
       val genesis = GenesisBuilder.createGenesis()
 
       val storageDirectory  = Files.createTempDirectory(s"hash-set-casper-test-genesis-")
-      val storageSize: Long = 3024L * 1024
+      val storageSize: Long = 1024L * 1024L * 1024L
       for {
         sar               <- Runtime.setupRSpace[Task](storageDirectory, storageSize)
         activeRuntime     <- Runtime.createWithEmptyCost[Task]((sar._1, sar._2))

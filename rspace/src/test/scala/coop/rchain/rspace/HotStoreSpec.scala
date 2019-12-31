@@ -33,7 +33,7 @@ trait HotStoreSpec[F[_], M[_]] extends FlatSpec with Matchers with GeneratorDriv
     PropertyCheckConfiguration(minSize = 0, sizeRange = 10, minSuccessful = 20)
 
   implicit def S: Sync[F]
-  implicit def P: Parallel[F, M]
+  implicit def P: Parallel[F]
 
   type Channel      = String
   type Data         = Datum[String]
@@ -1288,8 +1288,8 @@ class History[F[_]: Sync, C, P, A, K](implicit R: Ref[F, Cache[C, P, A, K]])
 trait InMemHotStoreSpec extends HotStoreSpec[Task, Task.Par] {
 
   protected type F[A] = Task[A]
-  implicit override val S: Sync[F]                  = implicitly[Concurrent[Task]]
-  implicit override val P: Parallel[Task, Task.Par] = Task.catsParallel
+  implicit override val S: Sync[F]        = implicitly[Concurrent[Task]]
+  implicit override val P: Parallel[Task] = Task.catsParallel
   def C(
       c: Cache[String, Pattern, String, StringsCaptor] = Cache()
   ): F[Ref[F, Cache[String, Pattern, String, StringsCaptor]]]

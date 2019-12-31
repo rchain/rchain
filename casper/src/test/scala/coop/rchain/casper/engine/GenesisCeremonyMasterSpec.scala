@@ -46,7 +46,7 @@ class GenesisCeremonyMasterSpec extends WordSpec {
           startTime
         )
         _  <- EngineCell[Task].set(new GenesisCeremonyMaster[Task](abp))
-        c1 = abp.run().forkAndForget.runToFuture
+        c1 = abp.run().startAndForget.runToFuture
         c2 = GenesisCeremonyMaster
           .approveBlockInterval[Task](
             interval,
@@ -54,7 +54,7 @@ class GenesisCeremonyMasterSpec extends WordSpec {
             finalizationRate,
             Some(validatorId)
           )
-          .forkAndForget
+          .startAndForget
           .runToFuture
         blockApproval = ApproveBlockProtocolTest.approval(
           ApprovedBlockCandidate(genesis, requiredSigns),
