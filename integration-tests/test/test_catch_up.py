@@ -1,7 +1,7 @@
 from random import Random
 from rchain.crypto import PrivateKey
 from docker.client import DockerClient
-
+import pytest
 from . import conftest
 
 from .rnode import (
@@ -23,8 +23,16 @@ BONDED_VALIDATOR_KEY_2 = PrivateKey.from_hex("9a32ff7b7c6e25527e0b4e5bec70596c60
 BONDED_VALIDATOR_KEY_3 = PrivateKey.from_hex("af47862137d4e772f540029ae73ee01443c61288f3df9307a13d681de6ad2de4")
 BONDED_VALIDATOR_KEY_4 = PrivateKey.from_hex("2a6018851984203e0983f0671e94fcf649ec04b614e5924f435081f7d1e3b44b")
 
+@pytest.mark.skip
 def test_catch_up_next_round(command_line_options: CommandLineOptions, random_generator: Random, docker_client: DockerClient) -> None:
     wallets_map = {
+        BOOTSTRAP_NODE_KEYS: 1000000000,
+        BONDED_VALIDATOR_KEY_1: 1000000000,
+        BONDED_VALIDATOR_KEY_2: 1000000000,
+        BONDED_VALIDATOR_KEY_3: 1000000000,
+        BONDED_VALIDATOR_KEY_4: 1000000000
+    }
+    bonded_map = {
         BOOTSTRAP_NODE_KEYS: 10000,
         BONDED_VALIDATOR_KEY_1: 10000,
         BONDED_VALIDATOR_KEY_2: 10000,
@@ -33,7 +41,7 @@ def test_catch_up_next_round(command_line_options: CommandLineOptions, random_ge
     }
     peers_keypairs = [BONDED_VALIDATOR_KEY_1, BONDED_VALIDATOR_KEY_2, BONDED_VALIDATOR_KEY_3, BONDED_VALIDATOR_KEY_4]
     contract_path = '/opt/docker/examples/tut-hello.rho'
-    with conftest.testing_context(command_line_options, random_generator, docker_client, bootstrap_key=BOOTSTRAP_NODE_KEYS, peers_keys=peers_keypairs, wallets_dict=wallets_map) as context, \
+    with conftest.testing_context(command_line_options, random_generator, docker_client, bootstrap_key=BOOTSTRAP_NODE_KEYS, peers_keys=peers_keypairs, wallets_dict=wallets_map, validator_bonds_dict=bonded_map) as context, \
         ready_bootstrap_with_network(context=context) as bootstrap_node, \
         bootstrap_connected_peer(context=context, bootstrap=bootstrap_node, name='bonded-validator-1', private_key=BONDED_VALIDATOR_KEY_1) as validator1, \
         bootstrap_connected_peer(context=context, bootstrap=bootstrap_node, name='bonded-validator-2', private_key=BONDED_VALIDATOR_KEY_2) as validator2, \
@@ -112,6 +120,13 @@ def test_catch_up_next_round(command_line_options: CommandLineOptions, random_ge
 
 def test_catch_up(command_line_options: CommandLineOptions, random_generator: Random, docker_client: DockerClient) -> None:
     wallets_map = {
+        BOOTSTRAP_NODE_KEYS: 1000000000,
+        BONDED_VALIDATOR_KEY_1: 1000000000,
+        BONDED_VALIDATOR_KEY_2: 1000000000,
+        BONDED_VALIDATOR_KEY_3: 1000000000,
+        BONDED_VALIDATOR_KEY_4: 1000000000
+    }
+    bonded_map = {
         BOOTSTRAP_NODE_KEYS: 10000,
         BONDED_VALIDATOR_KEY_1: 10000,
         BONDED_VALIDATOR_KEY_2: 10000,
@@ -120,7 +135,7 @@ def test_catch_up(command_line_options: CommandLineOptions, random_generator: Ra
     }
     peers_keypairs = [BONDED_VALIDATOR_KEY_1, BONDED_VALIDATOR_KEY_2, BONDED_VALIDATOR_KEY_3, BONDED_VALIDATOR_KEY_4]
     contract_path = '/opt/docker/examples/tut-hello.rho'
-    with conftest.testing_context(command_line_options, random_generator, docker_client, bootstrap_key=BOOTSTRAP_NODE_KEYS, peers_keys=peers_keypairs, wallets_dict=wallets_map) as context, \
+    with conftest.testing_context(command_line_options, random_generator, docker_client, bootstrap_key=BOOTSTRAP_NODE_KEYS, peers_keys=peers_keypairs, wallets_dict=wallets_map, validator_bonds_dict=bonded_map) as context, \
         ready_bootstrap_with_network(context=context) as bootstrap_node, \
         bootstrap_connected_peer(context=context, bootstrap=bootstrap_node, name='bonded-validator-1', private_key=BONDED_VALIDATOR_KEY_1) as validator1, \
         bootstrap_connected_peer(context=context, bootstrap=bootstrap_node, name='bonded-validator-2', private_key=BONDED_VALIDATOR_KEY_2) as validator2, \
