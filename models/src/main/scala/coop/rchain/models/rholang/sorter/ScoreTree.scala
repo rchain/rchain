@@ -85,6 +85,9 @@ trait ScoreTree {
     // Shortcut to write Node(1, Leaf(1)) instead of Node(Seq(Leaf(ScoreAtom(1)), Leaf(ScoreAtom(1))))
     def apply(left: Int, right: Tree[ScoreAtom]*): Tree[ScoreAtom] =
       new Node(Seq(Leaf(left.toLong)) ++ right)
+
+    def apply(left: String, right: Tree[ScoreAtom]*): Tree[ScoreAtom] =
+      new Node(Seq(Leaf(left)) ++ right)
   }
 
   object ScoredTerm {
