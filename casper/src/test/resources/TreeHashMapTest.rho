@@ -25,7 +25,7 @@ in {
 
   new TreeHashMapCh in {
     rl!(`rho:lang:treeHashMap`, *TreeHashMapCh) |
-    for(@(_, *TreeHashMap) <- TreeHashMapCh) {
+    for(TreeHashMap <- TreeHashMapCh) {
       contract test_get_before_set(rhoSpec, _, ackCh) = {
         new ret, ch in {
           TreeHashMap!("init", 3, *ret) |

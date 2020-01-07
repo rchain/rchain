@@ -93,11 +93,4 @@ object StandardDeploys {
       1565818101792L
     )
 
-  def treeHashMap: Signed[DeployData] =
-    toDeploy(
-      CompiledRholangSource("TreeHashMap.rho"),
-      "d60d63541bb98f31b834a4acf8a5ce825a91d5b6edca4c8f2a4acf6aafa17937",
-      1566326330483L
-    )
-
 }

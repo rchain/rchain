@@ -37,8 +37,7 @@ object Genesis {
       StandardDeploys.revVault,
       StandardDeploys.multiSigRevVault,
       StandardDeploys.revGenerator(vaults, supply),
-      StandardDeploys.poSGenerator(posParams),
-      StandardDeploys.treeHashMap
+      StandardDeploys.poSGenerator(posParams)
     )
 
   def createGenesisBlock[F[_]: Concurrent](
