@@ -23,6 +23,10 @@ class Base16Spec extends PropSpec with GeneratorDrivenPropertyChecks with Matche
     }
   }
 
+  property("decode fails if given ｃ (non-hex character)") {
+    Base16.decode("ｃ") shouldBe empty
+  }
+
   property("unsafeDecode is always successful") {
     forAll { (input: String) =>
       try {

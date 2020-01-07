@@ -1,4 +1,6 @@
 package coop.rchain.crypto.codec
+import javax.xml.bind.DatatypeConverter
+
 import scala.util.Try
 
 object Base16 {
@@ -18,24 +20,16 @@ object Base16 {
     * @return None if any non-hex and non-separator characters are encountered in the input
     *         Some otherwise
     */
-  def decode(input: String, separatorsRx: String = ""): Option[Array[Byte]] = {
-    val paddedInput =
-      if (input.length % 2 == 0) input
-      else "0" + input
-
-    hex2bytes(paddedInput, separatorsRx)
-  }
+  def decode(input: String, separatorsRx: String = ""): Option[Array[Byte]] =
+    Try {
+      val digitsOnly = input.replaceAll(separatorsRx, "")
+      val padded =
+        if (digitsOnly.length % 2 == 0) digitsOnly
+        else "0" + digitsOnly
+      DatatypeConverter.parseHexBinary(padded)
+    }.toOption
 
   private def bytes2hex(bytes: Array[Byte], sep: Option[String]): String =
     bytes.map("%02x".format(_)).mkString(sep.getOrElse(""))
 
-  private def hex2bytes(hex: String, separatorsRx: String): Option[Array[Byte]] =
-    Try {
-      val digitsOnly = hex.replaceAll(separatorsRx, "")
-
-      digitsOnly
-        .sliding(2, 2)
-        .toArray
-        .map(Integer.parseInt(_, 16).toByte)
-    }.toOption
 }
