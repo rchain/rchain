@@ -50,7 +50,7 @@ object ConstructDeploy {
 
   def sourceDeployNowF[F[_]: Time: Functor](
       source: String,
-      phloLimit: Long = 100000,
+      phloLimit: Long = 1000000,
       phloPrice: Long = 1L,
       sec: PrivateKey = defaultSec
   ): F[Signed[DeployData]] =

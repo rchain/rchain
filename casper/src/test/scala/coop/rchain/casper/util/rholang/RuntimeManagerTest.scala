@@ -93,7 +93,7 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
                             #""".stripMargin('#')
       // TODO: Prohibit negative gas prices and gas limits in deploys.
       // TODO: Make minimum maximum yield for deploy parameter of node.
-      ConstructDeploy.sourceDeployNowF(source = source, phloLimit = 10000) >>= { deploy =>
+      ConstructDeploy.sourceDeployNowF(source = source, phloLimit = 100000) >>= { deploy =>
         computeState(runtimeManager, deploy, genPostState) >>= {
           case (playStateHash1, processedDeploy) =>
             replayComputeState(runtimeManager)(genPostState, processedDeploy) map {
