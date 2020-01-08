@@ -285,6 +285,7 @@ object Casper {
     val GenesisPath              = "genesis-path"
     val FinalizationRate         = "finalization-rate"
     val MaxNumberOfParents       = "max-number-of-parents"
+    val MaxParentDepth           = "max-parent-depth"
 
     val all =
       List(
@@ -310,7 +311,8 @@ object Casper {
         DeployTimestamp,
         GenesisPath,
         FinalizationRate,
-        MaxNumberOfParents
+        MaxNumberOfParents,
+        MaxParentDepth
       )
   }
 
@@ -344,7 +346,8 @@ object Casper {
       genesisPath = casper.getPath(keys.GenesisPath),
       createGenesis = false,
       finalizationRate = casper.getInt(keys.FinalizationRate),
-      maxNumberOfParents = casper.getInt(keys.MaxNumberOfParents)
+      maxNumberOfParents = casper.getInt(keys.MaxNumberOfParents),
+      maxParentDepthOpt = casper.getIntOpt(keys.MaxParentDepth)
     )
   }
 }

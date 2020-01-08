@@ -217,6 +217,7 @@ class HoconConfigurationSpec extends FunSuite with Matchers {
         |    deploy-timestamp = 333
         |    finalization-rate = 4
         |    max-number-of-parents = 1
+        |    max-parent-depth = 7
         |  }
         |}
       """.stripMargin
@@ -245,7 +246,8 @@ class HoconConfigurationSpec extends FunSuite with Matchers {
         approveGenesisDuration = 5.minutes,
         deployTimestamp = Some(333),
         finalizationRate = 4,
-        maxNumberOfParents = 1
+        maxNumberOfParents = 1,
+        maxParentDepthOpt = Some(7)
       )
 
     val casper = Casper.fromConfig(ConfigFactory.parseString(conf))

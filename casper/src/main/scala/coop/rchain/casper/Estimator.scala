@@ -2,6 +2,7 @@ package coop.rchain.casper
 
 import scala.collection.immutable.{Map, Set}
 import cats.Monad
+import cats.effect.Sync
 import cats.implicits._
 import coop.rchain.blockstorage.dag.BlockDagRepresentation
 import coop.rchain.casper.protocol.BlockMessage
@@ -16,8 +17,9 @@ import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.dag.BlockDagRepresentation
 import coop.rchain.shared.{Log, LogSource}
 
-final class Estimator[F[_]: Monad: Log: Metrics: Span](
-    maxNumberOfParents: Int
+final class Estimator[F[_]: Sync: Log: Metrics: Span](
+    maxNumberOfParents: Int,
+    maxParentDepthOpt: Option[Int]
 ) {
 
   implicit val decreasingOrder = Ordering.Tuple2(
@@ -58,18 +60,34 @@ final class Estimator[F[_]: Monad: Log: Metrics: Span](
               BlockMetadata.fromBlock(genesis, false),
               filteredLatestMessagesHashes
             )
-      _         <- Span[F].mark("lca")
-      scoresMap <- buildScoresMap(dag, filteredLatestMessagesHashes, lca)
-      _         <- Span[F].mark("score-map")
-      scoresMapString = scoresMap
-        .map {
-          case (blockHash, score) => s"${PrettyPrinter.buildString(blockHash)}: $score"
-        }
-        .mkString(", ")
+      _                          <- Span[F].mark("lca")
+      scoresMap                  <- buildScoresMap(dag, filteredLatestMessagesHashes, lca)
+      _                          <- Span[F].mark("score-map")
       rankedLatestMessagesHashes <- rankForkchoices(List(lca), dag, scoresMap)
       _                          <- Span[F].mark("ranked-latest-messages-hashes")
-    } yield rankedLatestMessagesHashes.take(maxNumberOfParents)
+      rankedShallowHashes        <- filterDeepParents(rankedLatestMessagesHashes, dag)
+      _                          <- Span[F].mark("filtered-deep-parents")
+    } yield rankedShallowHashes.take(maxNumberOfParents)
   }
+
+  private def filterDeepParents(
+      rankedLatestHashes: Vector[BlockHash],
+      dag: BlockDagRepresentation[F]
+  ): F[Vector[BlockHash]] =
+    maxParentDepthOpt match {
+      case Some(maxParentDepth) =>
+        val mainHash +: secondaryHashes = rankedLatestHashes
+
+        for {
+          maxBlockNumber   <- ProtoUtil.getBlockMetadata[F](mainHash, dag).map(_.blockNum)
+          secondaryParents <- secondaryHashes.traverse(ProtoUtil.getBlockMetadata[F](_, dag))
+          shallowParents = secondaryParents.filter(
+            p => maxBlockNumber - p.blockNum <= maxParentDepth
+          )
+        } yield mainHash +: shallowParents.map(_.blockHash)
+      case None =>
+        rankedLatestHashes.pure[F]
+    }
 
   private def calculateLCA(
       blockDag: BlockDagRepresentation[F],
@@ -146,7 +164,7 @@ final class Estimator[F[_]: Monad: Log: Metrics: Span](
       blocks: List[BlockHash],
       blockDag: BlockDagRepresentation[F],
       scores: Map[BlockHash, Long]
-  ): F[IndexedSeq[BlockHash]] =
+  ): F[Vector[BlockHash]] =
     // TODO: This ListContrib.sortBy will be improved on Thursday with Pawels help
     for {
       unsortedNewBlocks <- blocks.flatTraverse(replaceBlockHashWithChildren(_, blockDag, scores))
@@ -196,6 +214,9 @@ object Estimator {
   def apply[F[_]](implicit ev: Estimator[F]): Estimator[F] =
     ev
 
-  def apply[F[_]: Monad: Log: Metrics: Span](maxNumberOfParents: Int): Estimator[F] =
-    new Estimator(maxNumberOfParents)
+  def apply[F[_]: Sync: Log: Metrics: Span](
+      maxNumberOfParents: Int,
+      maxParentDepthOpt: Option[Int]
+  ): Estimator[F] =
+    new Estimator(maxNumberOfParents, maxParentDepthOpt)
 }
