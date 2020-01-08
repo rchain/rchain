@@ -664,7 +664,7 @@ trait MergeabilityRules {
     Vector(
       ConstructDeploy.sourceDeployNowF[Effect](base.value),
       ConstructDeploy.sourceDeployNowF[Effect](b1.value),
-      ConstructDeploy.sourceDeployNowF[Effect](b2.value),
+      ConstructDeploy.sourceDeployNowF[Effect](b2.value, sec = ConstructDeploy.defaultSec2),
       ConstructDeploy.sourceDeployNowF[Effect]("Nil")
     ).sequence[Effect, Signed[DeployData]]
       .flatMap { deploys =>

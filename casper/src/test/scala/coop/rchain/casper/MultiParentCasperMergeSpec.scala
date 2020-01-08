@@ -31,11 +31,11 @@ class MultiParentCasperMergeSpec
 
   val genesis = buildGenesis()
 
-  "HashSetCasper" should "handle multi-parent blocks correctly" ignore effectTest {
+  "HashSetCasper" should "handle multi-parent blocks correctly" in effectTest {
     TestNode.networkEff(genesis, networkSize = 2).use { nodes =>
       implicit val rm = nodes(1).runtimeManager
       for {
-        deployData0 <- ConstructDeploy.basicDeployData[Effect](0)
+        deployData0 <- ConstructDeploy.basicDeployData[Effect](0, sec = ConstructDeploy.defaultSec2)
         deployData1 <- ConstructDeploy.sourceDeployNowF("@1!(1) | for(@x <- @1){ @1!(x) }")
         deployData2 <- ConstructDeploy.basicDeployData[Effect](2)
         deploys = Vector(
@@ -60,13 +60,13 @@ class MultiParentCasperMergeSpec
     }
   }
 
-  it should "handle multi-parent blocks correctly when they operate on stdout" ignore effectTest {
+  it should "handle multi-parent blocks correctly when they operate on stdout" in effectTest {
     def echoContract(no: Int) =
       Rho(s"""new stdout(`rho:io:stdout`) in { stdout!("Contract $no") }""")
     merges(echoContract(1), echoContract(2), Rho("Nil"))
   }
 
-  it should "not conflict on registry lookups" ignore effectTest {
+  it should "not conflict on registry lookups" in effectTest {
     val uri         = "rho:id:i1kuw4znrkazgbmc4mxe7ua4s1x41zd7qd8md96edxh1n87a5seht3"
     val toSign: Par = ETuple(Seq(GInt(0), GString("foo")))
     val toByteArray = Serialize[Par].encode(toSign).toArray
@@ -100,7 +100,7 @@ class MultiParentCasperMergeSpec
     peekMergeabilityCases.map(_._2).parSequence
   }
 
-  it should "not produce UnusedCommEvent while merging non conflicting blocks in the presence of conflicting ones" ignore effectTest {
+  it should "not produce UnusedCommEvent while merging non conflicting blocks in the presence of conflicting ones" in effectTest {
 
     val registryRho =
       """
@@ -195,13 +195,14 @@ class MultiParentCasperMergeSpec
     }
   }
 
-  it should "not merge blocks that touch the same channel involving joins" ignore effectTest {
+  it should "not merge blocks that touch the same channel involving joins" in effectTest {
     TestNode.networkEff(genesis, networkSize = 2).use { nodes =>
       for {
         current0 <- timeEff.currentMillis
         deploy0 = ConstructDeploy.sourceDeploy(
           "@1!(47)",
-          current0
+          current0,
+          sec = ConstructDeploy.defaultSec2
         )
         current1 <- timeEff.currentMillis
         deploy1 = ConstructDeploy.sourceDeploy(
@@ -229,7 +230,7 @@ class MultiParentCasperMergeSpec
     }
   }
 
-  "This spec" should "cover all mergeability cases" ignore {
+  "This spec" should "cover all mergeability cases" in {
     val allMergeabilityCases = {
       val events = List(
         "!X",

@@ -14,7 +14,7 @@
  9.  | 4,         | registry           | uri = rho:id:6zcfqnwnaqcwpeyuysx1rm48ndr6sgsbbgjuwf45i5nor3io7dr76j
  ----+------------+--------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------
  */
-new 
+new
   RevVault, rs(`rho:registry:insertSigned:secp256k1`), uriOut,
   rl(`rho:registry:lookup`), RevAddress(`rho:rev:address`), MakeMintCh, AuthKeyCh, EitherCh,
   _makeVault,
@@ -31,6 +31,7 @@ in {
     for (@(_, AuthKey) <- AuthKeyCh) {
       for (@(_, Either) <- EitherCh) {
         new mintCh, vaultMapStore, initVault in {
+
           @MakeMint!(*mintCh) |
           for (mint <- mintCh) {
 
@@ -84,27 +85,50 @@ in {
             } |
 
             contract _getOrCreate(@revAddress, constructor, retCh) = {
-              new revAddressValidCh, revAddressValidEitherCh, getOrCreate in {
+              new revAddressValidCh,
+                  revAddressValidEitherCh,
+                  getOrCreate
+              in {
                 RevAddress!("validate", revAddress, *revAddressValidCh) |
                 @Either!("fromNillableError <-", *revAddressValidCh, *revAddressValidEitherCh) |
                 @Either!("flatMap <-", *revAddressValidEitherCh, *getOrCreate, *retCh) |
                 for (_, ret <- getOrCreate) {
-                  for (@vaultMap <- vaultMapStore) {
+                  // At first peek for `vaultMap` to check if vault (address) exists
+                  // - peek ensures that for existing vaults we don't have a block conflict
+                  for (@vaultMap <<- vaultMapStore) {
                     match vaultMap.get(revAddress) {
                       Nil => {
-                        new resCh in {
-                          constructor!(*resCh) |
-                          for (@eitherVault <- resCh) {
-                            match eitherVault {
-                              (true, vault) => vaultMapStore!(vaultMap.set(revAddress, vault))
-                              (false,  _    ) => vaultMapStore!(vaultMap)
-                            } |
-                            ret!(eitherVault)
+                        // Vault is not found, create new and save it in the `vaultMap`
+                        // - this means two blocks with new vaults cannot be merged
+                        for (@vaultMap <- vaultMapStore) {
+                          // We need to check again because `vaultMap` is not locked with peek
+                          match vaultMap.get(revAddress) {
+                            Nil => {
+                              new resCh in {
+                                constructor!(*resCh) |
+                                for (@eitherVault <- resCh) {
+                                  ret!(eitherVault) |
+                                  match eitherVault {
+                                    (true, vault) => vaultMapStore!(vaultMap.set(revAddress, vault))
+                                    (false, _)    => vaultMapStore!(vaultMap)
+                                  }
+                                }
+                              }
+                            }
+                            // Return already existing vault
+                            // - we can get here only if vault is created between
+                            // peek and consume on `vaultMapStore`
+                            vault => {
+                              ret!((true, vault)) |
+                              vaultMapStore!(vaultMap)
+                            }
                           }
                         }
                       }
-                      value => {
-                        vaultMapStore!(vaultMap) | ret!((true, value))
+                      // Return already existing vault
+                      // - no changes to `vaultMap`
+                      vault => {
+                        ret!((true, vault))
                       }
                     }
                   }
@@ -200,5 +224,5 @@ in {
     }
   }
 }
-  
-  
+
+
