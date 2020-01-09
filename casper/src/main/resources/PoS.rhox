@@ -640,7 +640,10 @@ in {
                         TreeHashMap!("set",
                           pendingRewardsMap, validatorKey, rewardsMap.set(collectValidatorKey, 0), *stateResetCh) |
                         for (_ <- stateResetCh) {
-                          sumReturn!(acc + rewardsMap.get(collectValidatorKey))
+                          match rewardsMap.get(collectValidatorKey) {
+                            Nil => sumReturn!(acc)
+                            val => sumReturn!(acc + rewardsMap.get(collectValidatorKey))
+                          }
                         }
                       }
                     }
