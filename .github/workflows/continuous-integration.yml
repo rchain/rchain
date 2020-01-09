@@ -72,6 +72,7 @@ jobs:
     runs-on: ubuntu-latest
     container: rchain/buildenv
     strategy:
+      fail-fast: false
       matrix:
         # This runs unit tests in parallel.
         #
@@ -227,6 +228,7 @@ jobs:
     needs: build_docker_image
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: false
       matrix:
         # This runs integration tests in parallel.
         #
