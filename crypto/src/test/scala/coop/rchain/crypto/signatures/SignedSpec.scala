@@ -1,7 +1,7 @@
 package coop.rchain.crypto.signatures
 
 import com.google.protobuf.ByteString
-import coop.rchain.crypto.hash.Blake2b256
+import coop.rchain.crypto.signatures.Signed.{signatureHash}
 import coop.rchain.shared.Serialize
 import org.scalacheck.{Arbitrary, Gen, Shrink}
 import org.scalatest.prop.GeneratorDrivenPropertyChecks
@@ -18,7 +18,7 @@ class SignedSpec extends PropSpec with GeneratorDrivenPropertyChecks with Matche
   }
 
   implicit val sigAlgorithmArbitrary: Arbitrary[SignaturesAlg] = Arbitrary(
-    Gen.oneOf(Secp256k1, Ed25519)
+    Gen.oneOf(Secp256k1, Secp256k1Eth, Ed25519)
   )
 
   property("Signed should generate a valid signature") {
@@ -26,8 +26,7 @@ class SignedSpec extends PropSpec with GeneratorDrivenPropertyChecks with Matche
       val (sk, pk) = sigAlgorithm.newKeyPair
 
       val signed = Signed(input, sigAlgorithm, sk)
-
-      val hash = Blake2b256.hash(signed.data)
+      val hash   = signatureHash(sigAlgorithm.name, signed.data)
 
       sigAlgorithm.verify(hash, signed.sig.toByteArray, pk) should be(true)
       signed.pk should be(pk)
