@@ -35,7 +35,7 @@ new  PoS,
     transferFromBlockSender,
     rs(`rho:registry:insertSigned:secp256k1`),
     posId(`rho:rchain:deployerId`),
-    PendingRewards, MergeMaps, treeHashMapCh,
+    PendingRewards, MergeIntMaps, treeHashMapCh,
     uriOut
 in {
   registryLookup!(`rho:rchain:revVault`, *revVaultCh) |
@@ -87,19 +87,19 @@ in {
             // - states must be initialized to prevent conflicts when are "set" (only lookup can be conflict free)
             PendingRewards!("init", initialActive, *pendingRewardsInitializedCh) |
             for (_ <- pendingRewardsInitializedCh) {
-              // State structure:
-              // committedRewards : Map[PublickKey, Int] - are moved from pendingRewards at each closeBlock
-              // activeValidators : List[PublicKey] - the active validators
-              // withdrawers : Map[PublicKey, Int] - the validators willing to withdraw and the blocknumber when their quarantine ends
-              //                                     This is the beggining of the next epoch after their withdrawal + quarantineLength
-              // allBonds : Map[PublickKey, Int] - each validator stake
+              // Initialize PoS state structure
               stateCh!({
-                "committedRewards":{},
-                "activeValidators":initialActive,
-                "withdrawers":{},
-                "randomImages":{},
-                "randomNumbers":{},
-                "allBonds":$$initialBonds$$
+                // Map[PublickKey, Int] - each validator stake
+                "allBonds"        : $$initialBonds$$,
+                // List[PublicKey] - the active validators
+                "activeValidators": initialActive,
+                // Map[PublickKey, Int] - are moved from pendingRewards on epoch change or slashing
+                "committedRewards": {},
+                // Map[PublicKey, Int] - the validators willing to withdraw and the blocknumber when their quarantine ends
+                //                       This is the beggining of the next epoch after their withdrawal + quarantineLength
+                "withdrawers"     : {},
+                "randomImages"    : {},
+                "randomNumbers"   : {},
               })
             } |
 
@@ -300,12 +300,13 @@ in {
                   new toBeSlashed in {
                     toBeSlashed!(invalidBlocks.getOrElse(blockHash, userPk)) |
                     for (@validator <- toBeSlashed) {
-                      new slashedRewardsCh in {
-                        PendingRewards!("collectValue", validator, state.get("activeValidators"), *slashedRewardsCh) |
-                        for (@slashedRewards <- slashedRewardsCh) {
+                      new valPendingRewardsCh in {
+                        // Collect and reset slashed validator pending rewards (from per validator states)
+                        PendingRewards!("collectValue", validator, state.get("activeValidators"), *valPendingRewardsCh) |
+                        for (@validatorPendingRewards <- valPendingRewardsCh) {
                           // TODO: Transfer to coop wallet instead of just simply setting bonds to 0
                           // Slashed rewards:
-                          // + slashedRewards
+                          // + validatorPendingRewards
                           // + state.get("committedRewards")
                           slashResultCh!(
                             state.set("committedRewards",
@@ -385,16 +386,14 @@ in {
 
                       for (_ <- paymentDoneCh) {
 
-                        mvarResultCh!(
-                          {
-                            "committedRewards":newRewards,
-                            "activeValidators":newValidators,
-                            "withdrawers":newWithdrawers,
-                            "allBonds":newBonds,
-                            "randomImages":{},
-                            "randomNumbers":{},
-                          },
-                          Nil)
+                        mvarResultCh!({
+                          "allBonds"        : newBonds,
+                          "activeValidators": newValidators,
+                          "committedRewards": newRewards,
+                          "withdrawers"     : newWithdrawers,
+                          "randomImages"    : {},
+                          "randomNumbers"   : {},
+                        }, Nil)
                       }
                     }
                   }
@@ -569,13 +568,9 @@ in {
                 // - validator key is always initialized so here we can use unsafe get
                 TreeHashMap!("fastUnsafeGet", pendingRewardsMap, validatorKey, *currentRewardsCh) |
                 for (@currentRewards <- currentRewardsCh) {
-                  new mergeFunc, mergeResultCh in {
-                    // Merge current pending rewards with new pending rewards
-                    MergeMaps!(currentRewards, newRewards, *mergeFunc, *mergeResultCh) |
-                    // Sum values for current and new rewards
-                    contract mergeFunc(@v1, @v2, valMergeRet) = {
-                      valMergeRet!(v1 + v2)
-                    } |
+                  new mergeResultCh in {
+                    // Merge (sum) current pending rewards with new pending rewards
+                    MergeIntMaps!(currentRewards, newRewards, *mergeResultCh) |
                     for (@mergeResult <- mergeResultCh) {
                       // Update pending rewards state
                       TreeHashMap!("set", pendingRewardsMap, validatorKey, mergeResult, return)
@@ -609,17 +604,7 @@ in {
 
                 // Merge pending rewards (maps) to one map of pending rewards
                 for (@mapsList <- mapsListCh) {
-                  new collector in {
-                    @ListOps!("fold", mapsList, {}, *collector, return) |
-                    contract collector(@map, @acc, @mergeRet) = {
-                      new mergeFunc in {
-                        MergeMaps!(map, acc, *mergeFunc, mergeRet) |
-                        contract mergeFunc(@v1, @v2, valMergeRet) = {
-                          valMergeRet!(v1 + v2)
-                        }
-                      }
-                    }
-                  }
+                  @ListOps!("fold", mapsList, {}, *MergeIntMaps, return)
                 }
               }
             } |
@@ -752,20 +737,18 @@ in {
       }
     } |
 
-    contract MergeMaps(@map1, @map2, mergeFunc, return) = {
+    // Merge (sum) maps with integer values
+    // MergeIntMaps({"a": 1, "b": 4}, {"a": 2, "c": 5, "d": Nil})
+    //            = {"a": 3, "b": 4, "c": 5}
+    contract MergeIntMaps(@map1, @map2, return) = {
       new mergeKey in {
         @ListOps!("fold", map2.toList(), map1, *mergeKey, *return) |
         contract mergeKey(@(key, v1), @acc, ret) = {
-          match acc.get(key) {
-            Nil => ret!(acc.set(key, v1))
-            v2  => {
-              new vMergeCh in {
-                mergeFunc!(v1, v2, *vMergeCh) |
-                for (@vMerge <- vMergeCh) {
-                  ret!(acc.set(key, vMerge))
-                }
-              }
-            }
+          match (v1, acc.get(key)) {
+            (Int, v2 /\ Int) => ret!(acc.set(key, v1 + v2))
+            (Int, _)         => ret!(acc.set(key, v1))
+            (_, v2 /\ Int)   => ret!(acc.set(key, v2))
+            _                => ret!(acc)
           }
         }
       }
