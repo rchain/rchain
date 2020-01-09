@@ -27,12 +27,12 @@ The RChain Cooperative maintains a public testnet running the latest version of 
 ### Debian/Ubuntu
 
 1. Download a `.deb` package from the [releases page](https://github.com/rchain/rchain/releases/)
-2. `$ sudo apt install ./rnode_<VERSION>.deb`, where `<VERSION>` is something like `0.8.3`
+2. `$ sudo apt install ./rnode_<VERSION>.deb`, where `<VERSION>` is something like `0.9.18`
 
 ### RedHat/Fedora
 
 1. Download a `.rpm` package from the [releases page](https://github.com/rchain/rchain/releases/)
-2. `$ sudo rpm -U ./rnode_<VERSION>.noarch.rpm`, where `<VERSION>` is something like `0.8.3`
+2. `$ sudo rpm -U ./rnode_<VERSION>.noarch.rpm`, where `<VERSION>` is something like `0.9.18`
 
 ### macOS
 
@@ -58,47 +58,47 @@ containers need to be connected to one user-defined network bridge:
 ```bash
 $ docker network create rnode-net
 
-$ docker run -v $HOME/tmp:/var/lib/rnode -dit --name rnode0 --network rnode-net rchain/rnode:latest -s
+$ docker run -v $HOME/tmp/peer0:/var/lib/rnode -dit --name rnode0 --network rnode-net rchain/rnode:latest run -s --network localnet
 
 $ docker ps
 CONTAINER ID        IMAGE                      COMMAND             CREATED             STATUS              PORTS               NAMES
 15aa78b45da4        rchain/rnode:latest        "/bin/main.sh -s"   3 seconds ago       Up 2 seconds                            rnode0
 ```
 
-In a new terminal:
+To attach terminal to RNode logstream execute
 
 ```bash
 $ docker logs -f rnode0
 [...]
-08:38:11.460 [main] INFO  logger - Listening for traffic on rnode://ee00a5357f2f4cb58b08a8a4c949da1b@172.18.0.2:40400.
+08:38:11.460 [main] INFO  logger - Listening for traffic on rnode://137200d47b8bb0fff54a753aabddf9ee2bfea089@172.18.0.2?protocol=40400&discovery=40404
 [...]
 ```
 
-A repl instance can be invoked this way:
+A repl instance can be invoked in a separate terminal using the following command:
 
 ```bash
-$ docker run -v $HOME/tmp:/var/lib/rnode -it --name rnode-repl --network rnode-net rchain/rnode:latest --grpc-host rnode0 -r
-rholang $ 5
-Storage Contents:
- for( x0 <= @{"stdout"} ) { Nil } | for( x0, x1 <= @{"stderrAck"} ) { Nil } | for( x0 <= @{"stderr"} ) { Nil } | for( x0, x1 <= @{"stdoutAck"} ) { Nil }
+$ docker run -v $HOME/tmp/rnode-repl:/var/lib/rnode -it --name rnode-repl --network rnode-net rchain/rnode:latest --grpc-host rnode0 repl
+
+  ╦═╗┌─┐┬ ┬┌─┐┬┌┐┌  ╔╗╔┌─┐┌┬┐┌─┐  ╦═╗╔═╗╔═╗╦
+  ╠╦╝│  ├─┤├─┤││││  ║║║│ │ ││├┤   ╠╦╝║╣ ╠═╝║
+  ╩╚═└─┘┴ ┴┴ ┴┴┘└┘  ╝╚╝└─┘─┴┘└─┘  ╩╚═╚═╝╩  ╩═╝
+
+rholang $
 ```
 
-The above command should result in (`rnode0` output):
+Type `5` in REPL console. This command should result in (`rnode0` output):
 ```bash
 [...]
-08:38:11.463 [main] INFO  logger - Starting stand-alone node.
-
 Evaluating:
 5
 ```
 
-A peer node can be started with the following command (note that `--bootstrap`
-takes the listening address of `rnode0`):
+A peer node can be started with the following command (note that `--bootstrap` takes the listening address of `rnode0`):
 
 ```bash
-$ docker run -v $HOME/tmp:/var/lib/rnode -it --name rnode-client --network rnode-net rchain/rnode:latest --bootstrap rnode://ee00a5357f2f4cb58b08a8a4c949da1b@172.18.0.2:40400
+$ docker run -v $HOME/tmp/peer1:/var/lib/rnode -it --name rnode1 --network rnode-net rchain/rnode:latest run --network localnet --bootstrap 'rnode://ee00a5357f2f4cb58b08a8a4c949da1b@172.18.0.2?protocol=40400&discovery=40404'
 [...]
-08:58:36.267 [main] INFO  logger - Listening for traffic on rnode://29d77e8cfd924db49e715d4cf4eeb28d@172.18.0.4:40400.
+08:58:36.267 [main] INFO  logger - Listening for traffic on rnode://d04b133a3a9a0209d8278713a0235b9fc0ec34f3@172.18.0.2?protocol=40400&discovery=40404.
 08:58:36.279 [main] INFO  logger - Bootstrapping from #{PeerNode ee00a5357f2f4cb58b08a8a4c949da1b}.
 08:58:36.294 [main] INFO  logger - Initialize first phase handshake (encryption handshake) to #{PeerNode ee00a5357f2f4cb58b08a8a4c949da1b}
 08:58:36.816 [repl-io-29] INFO  logger - Initialize second phase handshake (protocol handshake) to #{PeerNode ee00a5357f2f4cb58b08a8a4c949da1b}
