@@ -3,6 +3,8 @@ new
   stdlog(`rho:io:stdlog`),
   test_get_before_set,
   test_get_after_set,
+  test_get_after_update_nil,
+  test_get_after_update,
   test_fast_unsafe_get_after_set,
   test_contains_before_set,
   test_contains_after_set,
@@ -15,6 +17,8 @@ in {
       [
         ("Get before set returns Nil", *test_get_before_set),
         ("Get after set returns the new value", *test_get_after_set),
+        ("Get after updating a nonexistent key should return Nil", *test_get_after_update_nil),
+        ("Get after updating an existing key should return the right value", *test_get_after_update),
         ("Fast unsafe get after set returns the new value", *test_fast_unsafe_get_after_set),
         ("Contains before set returns false", *test_contains_before_set),
         ("Contains after set returns true", *test_contains_after_set),
@@ -38,7 +42,48 @@ in {
           }
         }
       } |
-    
+
+      contract test_get_after_update_nil(rhoSpec, _, ackCh) = {
+        new thmCh, ack, ch, update in {
+          TreeHashMap!("init", 3, *thmCh) |
+          contract update(@val, ret) = {
+            ret!(val + 1)
+          } |
+          for (@thm <- thmCh) {
+            TreeHashMap!("update", thm, "no such key", *update, *ack) |
+            for (_ <- ack) {
+              TreeHashMap!("get", thm, "no such key", *ch) |
+              rhoSpec!("assertMany",
+                [
+                  ((Nil, "== <-", *ch), "Getting after updating with an unused key returns Nil")
+                ], *ackCh)
+            }
+          }
+        }
+      } |
+
+      contract test_get_after_update(rhoSpec, _, ackCh) = {
+        new thmCh, ack1, ack2, ch, update in {
+          TreeHashMap!("init", 3, *thmCh) |
+          contract update(@val, ret) = {
+            ret!(val + 1)
+          } |
+          for (@thm <- thmCh) {
+            TreeHashMap!("set", thm, "key", 0, *ack1) |
+            for (_ <- ack1) {
+              TreeHashMap!("update", thm, "key", *update, *ack2) |
+              for (_ <- ack2) {
+                TreeHashMap!("get", thm, "key", *ch) |
+                rhoSpec!("assertMany",
+                  [
+                    ((1, "== <-", *ch), "Getting after updating after setting returns the right value")
+                  ], *ackCh)
+              }
+            }
+          }
+        }
+      } |
+
       contract test_get_after_set(rhoSpec, _, ackCh) = {
         new ret, ch1, ch2 in {
           TreeHashMap!("init", 3, *ret) |
