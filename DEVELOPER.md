@@ -56,7 +56,7 @@ git checkout ce7fe1fd08d9d808c14ff626c321218c5b73e38b
 stack init
 stack setup
 stack install
-export PATH="$HOME/.local/bin:$HOME"
+export PATH="$HOME/.local/bin:$PATH"
 ```
 
 #### Building and running
