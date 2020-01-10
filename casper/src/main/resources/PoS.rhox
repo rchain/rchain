@@ -586,17 +586,16 @@ in {
                 // Get pending rewards (maps) for list of validators (public keys)
                 @ListOps!("fold", validatorKeys, [], *collectMaps, *mapsListCh) |
                 contract collectMaps(@validatorKey, @acc, mergeRet) = {
-                  new currentRewardsCh in {
-                    // Get existing pending rewards (per validator)
-                    // - validator key is always initialized so here we can use unsafe get
-                    TreeHashMap!("fastUnsafeGet", pendingRewardsMap, validatorKey, *currentRewardsCh) |
-                    for (@currentRewards <- currentRewardsCh) {
-                      new stateResetCh in {
-                        // Reset per validator pending rewards state
-                        TreeHashMap!("set", pendingRewardsMap, validatorKey, {}, *stateResetCh) |
-                        for (_ <- stateResetCh) {
-                          mergeRet!(acc ++ [currentRewards])
-                        }
+                  new updateCh, updateAckCh in {
+                    // Update (per validator) pending rewards
+                    // - collect existing values and reset to empty map
+                    TreeHashMap!("update", pendingRewardsMap, validatorKey, *updateCh, *updateAckCh) |
+                    for (@rewardsMap, rewardsRet <- updateCh) {
+                      // Reset per validator pending rewards state
+                      rewardsRet!({}) |
+                      // Accumulate all reward maps
+                      for (_ <- updateAckCh) {
+                        mergeRet!(acc ++ [rewardsMap])
                       }
                     }
                   }
@@ -615,20 +614,18 @@ in {
                 // Get pending rewards (maps) for list of validators (public keys)
                 @ListOps!("fold", validatorKeys, 0, *collectRewards, return) |
                 contract collectRewards(@validatorKey, @acc, sumReturn) = {
-                  new currentRewardsCh in {
-                    // Get existing pending rewards (per validator)
-                    // - validator key is always initialized so here we can use unsafe get
-                    TreeHashMap!("fastUnsafeGet", pendingRewardsMap, validatorKey, *currentRewardsCh) |
-                    for (@rewardsMap <- currentRewardsCh) {
-                      // Reset slashed validator pending rewards
-                      new stateResetCh in {
-                        TreeHashMap!("set",
-                          pendingRewardsMap, validatorKey, rewardsMap.set(collectValidatorKey, 0), *stateResetCh) |
-                        for (_ <- stateResetCh) {
-                          match rewardsMap.get(collectValidatorKey) {
-                            Nil => sumReturn!(acc)
-                            val => sumReturn!(acc + rewardsMap.get(collectValidatorKey))
-                          }
+                  new updateCh, updateAckCh in {
+                    // Update validator pending rewards
+                    // - collect existing values and reset to zero
+                    TreeHashMap!("update", pendingRewardsMap, validatorKey, *updateCh, *updateAckCh) |
+                    for (@rewardsMap, rewardsRet <- updateCh) {
+                      // Reset validator pending rewards state
+                      rewardsRet!(rewardsMap.set(collectValidatorKey, 0)) |
+                      // Sum of validator pending rewards from all validators states
+                      for (_ <- updateAckCh) {
+                        match rewardsMap.get(collectValidatorKey) {
+                          Nil => sumReturn!(acc)
+                          val => sumReturn!(acc + rewardsMap.get(collectValidatorKey))
                         }
                       }
                     }
