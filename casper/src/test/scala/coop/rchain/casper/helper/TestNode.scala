@@ -10,6 +10,7 @@ import cats.effect.{Concurrent, Resource, Sync}
 import cats.implicits._
 import coop.rchain.blockstorage._
 import coop.rchain.blockstorage.dag.{BlockDagFileStorage, BlockDagStorage}
+import coop.rchain.blockstorage.deploy.{DeployStorage, InMemDeployStorage, LMDBDeployStorage}
 import coop.rchain.blockstorage.finality.{LastFinalizedFileStorage, LastFinalizedStorage}
 import coop.rchain.casper.CasperState.CasperStateCell
 import coop.rchain.casper.MultiParentCasper.ignoreDoppelgangerCheck
@@ -64,6 +65,7 @@ class TestNode[F[_]](
     implicit val blockStore: BlockStore[F],
     implicit val blockDagStorage: BlockDagStorage[F],
     implicit val lastFinalizedStorage: LastFinalizedStorage[F],
+    implicit val deployStorage: DeployStorage[F],
     val metricEff: Metrics[F],
     val span: Span[F],
     val casperState: CasperStateCell[F],
@@ -369,6 +371,7 @@ object TestNode {
 
       blockStore      <- Resources.mkBlockStoreAt[F](paths.blockStoreDir)
       blockDagStorage <- Resources.mkBlockDagStorageAt[F](paths.blockDagDir)
+      deployStorage   <- Resources.mkDeployStorageAt[F](paths.deployStorageDir)
       runtimeManager  <- createRuntime(paths.rspaceDir)
 
       node <- Resource.liftF(
@@ -396,6 +399,7 @@ object TestNode {
                    blockStore,
                    blockDagStorage,
                    lastFinalizedStorage,
+                   deployStorage,
                    metricEff,
                    spanEff,
                    casperState,

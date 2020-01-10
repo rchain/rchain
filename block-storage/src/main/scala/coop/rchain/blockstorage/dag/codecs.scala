@@ -1,6 +1,8 @@
 package coop.rchain.blockstorage.dag
 
 import com.google.protobuf.ByteString
+import coop.rchain.casper.protocol.{DeployData, DeployDataProto}
+import coop.rchain.crypto.signatures.Signed
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.{BlockHash, BlockMetadata, Validator}
 import scodec.Codec
@@ -28,4 +30,9 @@ object codecs {
   val codecSeqNum = int32
 
   val codecBlockHashSet = listOfN(int32, codecBlockHash).xmap[Set[BlockHash]](_.toSet, _.toList)
+
+  val codecSignedDeployData = variableSizeBytes(int32, bytes).xmap[Signed[DeployData]](
+    byteVector => DeployData.from(DeployDataProto.parseFrom(byteVector.toArray)).right.get,
+    signedDeployData => ByteVector(DeployData.toProto(signedDeployData).toByteArray)
+  )
 }

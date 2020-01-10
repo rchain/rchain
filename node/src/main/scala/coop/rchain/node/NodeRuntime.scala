@@ -13,6 +13,7 @@ import cats.mtl._
 import cats.tagless.implicits._
 import coop.rchain.blockstorage._
 import coop.rchain.blockstorage.dag.{BlockDagFileStorage, BlockDagStorage}
+import coop.rchain.blockstorage.deploy.{InMemDeployStorage, LMDBDeployStorage}
 import coop.rchain.blockstorage.finality.LastFinalizedFileStorage
 import coop.rchain.blockstorage.util.io.IOError
 import coop.rchain.casper._
@@ -76,6 +77,7 @@ class NodeRuntime private[node] (
   /** Configuration */
   private val blockstorePath           = conf.server.dataDir.resolve("blockstore")
   private val dagStoragePath           = conf.server.dataDir.resolve("dagstorage")
+  private val deployStoragePath        = conf.server.dataDir.resolve("deploystorage")
   private val lastFinalizedStoragePath = conf.server.dataDir.resolve("last-finalized-block")
   private val storagePath              = conf.server.dataDir.resolve("rspace")
   private val casperStoragePath        = storagePath.resolve("casper")
@@ -184,6 +186,10 @@ class NodeRuntime private[node] (
       mapSize = 8L * 1024L * 1024L * 1024L,
       latestMessagesLogMaxSizeFactor = 10
     )
+    deployStorageConfig = LMDBDeployStorage.Config(
+      storagePath = deployStoragePath,
+      mapSize = 1024L * 1024L * 1024L
+    )
     casperConfig = RuntimeConf(casperStoragePath, storageSize)
     cliConfig    = RuntimeConf(storagePath, 800L * 1024L * 1024L) // 800MB for cli
 
@@ -223,7 +229,8 @@ class NodeRuntime private[node] (
                lastFinalizedStoragePath,
                rspaceScheduler,
                scheduler,
-               eventBus
+               eventBus,
+               deployStorageConfig
              )(
                metricsEnv,
                transportEnv,
@@ -616,7 +623,11 @@ object NodeRuntime {
     def close(): F[Unit]
   }
 
-  def cleanup[F[_]: Sync: Log](runtime: Runtime[F], casperRuntime: Runtime[F]): Cleanup[F] =
+  def cleanup[F[_]: Sync: Log](
+      runtime: Runtime[F],
+      casperRuntime: Runtime[F],
+      deployStorageCleanup: F[Unit]
+  ): Cleanup[F] =
     new Cleanup[F] {
       override def close(): F[Unit] =
         for {
@@ -624,6 +635,8 @@ object NodeRuntime {
           _ <- runtime.close()
           _ <- Log[F].info("Shutting down Casper runtime ...")
           _ <- casperRuntime.close()
+          _ <- Log[F].info("Shutting down deploy storage ...")
+          _ <- deployStorageCleanup
         } yield ()
     }
 
@@ -642,7 +655,8 @@ object NodeRuntime {
       lastFinalizedPath: Path,
       rspaceScheduler: Scheduler,
       scheduler: Scheduler,
-      eventPublisher: EventPublisher[F]
+      eventPublisher: EventPublisher[F],
+      deployStorageConfig: LMDBDeployStorage.Config
   ): F[
     (
         BlockStore[F],
@@ -670,8 +684,10 @@ object NodeRuntime {
       span = if (conf.kamon.zipkin)
         diagnostics.effects.span(conf.server.networkId, conf.server.host.getOrElse("-"))
       else Span.noop[F]
-      blockDagStorage      <- BlockDagFileStorage.create[F](dagConfig)
-      lastFinalizedStorage <- LastFinalizedFileStorage.make[F](lastFinalizedPath)
+      blockDagStorage                       <- BlockDagFileStorage.create[F](dagConfig)
+      lastFinalizedStorage                  <- LastFinalizedFileStorage.make[F](lastFinalizedPath)
+      deployStorageAllocation               <- LMDBDeployStorage.make[F](deployStorageConfig).allocated
+      (deployStorage, deployStorageCleanup) = deployStorageAllocation
       oracle = {
         implicit val sp = span
         SafetyOracle.cliqueOracle[F]
@@ -684,7 +700,8 @@ object NodeRuntime {
         Concurrent[F],
         blockStore,
         blockDagStorage,
-        oracle
+        oracle,
+        deployStorage
       )
       synchronyConstraintChecker = SynchronyConstraintChecker[F](
         conf.server.synchronyConstraintThreshold
@@ -745,6 +762,7 @@ object NodeRuntime {
         implicit val sc = synchronyConstraintChecker
         implicit val cu = commUtil
         implicit val es = estimator
+        implicit val ds = deployStorage
 
         CasperLaunch.of(conf.casper)
       }
@@ -783,7 +801,7 @@ object NodeRuntime {
         _ <- Time[F].sleep(conf.casper.casperLoopInterval.seconds)
       } yield ()
       engineInit     = engineCell.read >>= (_.init)
-      runtimeCleanup = NodeRuntime.cleanup(runtime, casperRuntime)
+      runtimeCleanup = NodeRuntime.cleanup(runtime, casperRuntime, deployStorageCleanup)
       webApi = {
         implicit val ec = engineCell
         implicit val sp = span

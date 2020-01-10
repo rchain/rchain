@@ -16,10 +16,11 @@ import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.shared._
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.dag.BlockDagStorage
+import coop.rchain.blockstorage.deploy.DeployStorage
 import coop.rchain.blockstorage.finality.LastFinalizedStorage
 import coop.rchain.casper.util.comm.CommUtil
 
-class GenesisValidator[F[_]: Sync: Metrics: Span: Concurrent: CommUtil: TransportLayer: ConnectionsCell: RPConfAsk: Log: EventLog: Time: SafetyOracle: LastFinalizedBlockCalculator: BlockStore: LastApprovedBlock: BlockDagStorage: LastFinalizedStorage: EngineCell: RuntimeManager: Running.RequestedBlocks: EventPublisher: SynchronyConstraintChecker: Estimator](
+class GenesisValidator[F[_]: Sync: Metrics: Span: Concurrent: CommUtil: TransportLayer: ConnectionsCell: RPConfAsk: Log: EventLog: Time: SafetyOracle: LastFinalizedBlockCalculator: BlockStore: LastApprovedBlock: BlockDagStorage: LastFinalizedStorage: EngineCell: RuntimeManager: Running.RequestedBlocks: EventPublisher: SynchronyConstraintChecker: Estimator: DeployStorage](
     validatorId: ValidatorIdentity,
     shardId: String,
     finalizationRate: Int,

@@ -6,6 +6,7 @@ import cats.syntax.all._
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockStore
 import coop.rchain.blockstorage.dag.BlockDagRepresentation
+import coop.rchain.blockstorage.deploy.DeployStorage
 import coop.rchain.casper.CasperState.CasperStateCell
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.ProtoUtil._
@@ -37,7 +38,7 @@ object BlockCreator {
    *  3. Extract all valid deploys that aren't already in all ancestors of S (the parents).
    *  4. Create a new block that contains the deploys from the previous step.
    */
-  def createBlock[F[_]: Sync: Log: Time: BlockStore: SynchronyConstraintChecker: Estimator](
+  def createBlock[F[_]: Sync: Log: Time: BlockStore: SynchronyConstraintChecker: Estimator: DeployStorage](
       dag: BlockDagRepresentation[F],
       genesis: BlockMessage,
       validatorIdentity: ValidatorIdentity,
@@ -45,10 +46,7 @@ object BlockCreator {
       version: Long,
       expirationThreshold: Int,
       runtimeManager: RuntimeManager[F]
-  )(
-      implicit state: CasperStateCell[F],
-      spanF: Span[F]
-  ): F[CreateBlockStatus] =
+  )(implicit spanF: Span[F]): F[CreateBlockStatus] =
     spanF.trace(CreateBlockMetricsSource) {
       import cats.instances.list._
 
@@ -78,9 +76,7 @@ object BlockCreator {
                                 sec = validatorIdentity.privateKey
                               )
                           }
-        _ <- Cell[F, CasperState].modify { s =>
-              s.copy(deployHistory = s.deployHistory ++ slashingDeploys)
-            }
+        _ <- DeployStorage[F].add(slashingDeploys)
 
         deploys          <- extractDeploys(dag, parentMetadatas, maxBlockNumber, expirationThreshold)
         parents          <- parentMetadatas.toList.traverse(p => ProtoUtil.getBlock(p.blockHash))
@@ -125,17 +121,16 @@ object BlockCreator {
     }
 
   // TODO: Remove no longer valid deploys here instead of with lastFinalizedBlock call
-  private def extractDeploys[F[_]: Sync: Log: BlockStore](
+  private def extractDeploys[F[_]: Sync: Log: BlockStore: DeployStorage](
       dag: BlockDagRepresentation[F],
       parents: Seq[BlockMetadata],
       maxBlockNumber: Long,
       expirationThreshold: Int
-  )(implicit state: CasperStateCell[F]): F[Seq[Signed[DeployData]]] =
+  ): F[Seq[Signed[DeployData]]] =
     for {
-      state               <- state.read
+      deploys             <- DeployStorage[F].getUnfinalized
       currentBlockNumber  = maxBlockNumber + 1
       earliestBlockNumber = currentBlockNumber - expirationThreshold
-      deploys             = state.deployHistory
       validDeploys = deploys.filter(
         d =>
           notFutureDeploy(currentBlockNumber, d.data) && notExpiredDeploy(

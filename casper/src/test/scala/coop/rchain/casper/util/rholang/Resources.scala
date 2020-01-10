@@ -8,6 +8,7 @@ import cats.Parallel
 import cats.implicits._
 import coop.rchain.blockstorage.dag.{BlockDagFileStorage, BlockDagStorage}
 import coop.rchain.blockstorage.BlockStore
+import coop.rchain.blockstorage.deploy.{DeployStorage, LMDBDeployStorage}
 import coop.rchain.casper.helper.BlockDagStorageTestFixture
 import coop.rchain.casper.helper.TestNode.makeBlockDagFileStorageConfig
 import coop.rchain.metrics
@@ -74,11 +75,15 @@ object Resources {
       )(_.close())
       .widen
 
+  def mkDeployStorageAt[F[_]: Sync](path: Path): Resource[F, DeployStorage[F]] =
+    LMDBDeployStorage.make[F](LMDBDeployStorage.Config(path, BlockDagStorageTestFixture.mapSize))
+
   case class StoragePaths(
       blockStoreDir: Path,
       blockDagDir: Path,
       lastFinalizedFile: Path,
-      rspaceDir: Path
+      rspaceDir: Path,
+      deployStorageDir: Path
   )
 
   def copyStorage[F[_]: Sync](
@@ -91,11 +96,13 @@ object Resources {
       blockDagDir       = storageDirectory.resolve("block-dag-store")
       lastFinalizedFile = storageDirectory.resolve("last-finalized-blockhash")
       rspaceDir         = storageDirectory.resolve("rspace")
+      deployStorageDir  = storageDirectory.resolve("deploy-storage")
     } yield StoragePaths(
       blockStoreDir = blockStoreDir,
       blockDagDir = blockDagDir,
       lastFinalizedFile = lastFinalizedFile,
-      rspaceDir = rspaceDir
+      rspaceDir = rspaceDir,
+      deployStorageDir = deployStorageDir
     )
 
   private def copyDir[F[_]: Sync](src: Path, dest: Path): F[Unit] = Sync[F].delay {

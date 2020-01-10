@@ -50,6 +50,24 @@ final case class LMDBStore[F[_]: Sync](env: Env[ByteBuffer], dbi: Dbi[ByteBuffer
       }
     }
 
+  @SuppressWarnings(Array("org.wartremover.warts.Throw"))
+  def put(kvPairs: List[(ByteBuffer, ByteBuffer)]): F[Unit] =
+    withWriteTxnF { txn =>
+      kvPairs.foreach {
+        case (key, value) =>
+          if (!dbi.put(txn, key, value)) {
+            throw new RuntimeException("was not able to put data")
+          }
+      }
+    }
+
+  def delete(keys: List[ByteBuffer]): F[Int] =
+    withWriteTxnF { txn =>
+      keys.foldLeft(0) { (deletedCount, key) =>
+        if (dbi.delete(txn, key)) deletedCount + 1 else deletedCount
+      }
+    }
+
   def iterate[R](f: Iterator[CursorIterator.KeyVal[ByteBuffer]] => R): F[R] =
     withReadTxnF { txn =>
       withResource(dbi.iterate(txn)) { iterator =>

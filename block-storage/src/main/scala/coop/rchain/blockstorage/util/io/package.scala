@@ -7,6 +7,7 @@ import java.util.stream.Collectors
 import cats.implicits._
 import cats.effect.Sync
 import coop.rchain.blockstorage.util.io.IOError.RaiseIOError
+import coop.rchain.shared.Language.ignore
 
 import scala.collection.JavaConverters._
 import scala.util.control.NonFatal
@@ -96,6 +97,9 @@ package object io {
   def createTemporaryFile[F[_]: Sync: RaiseIOError](prefix: String, suffix: String): F[Path] =
     handleIo(Files.createTempFile(prefix, suffix), UnexpectedIOError.apply)
 
+  def createTemporaryDirectory[F[_]: Sync: RaiseIOError](prefix: String): F[Path] =
+    handleIo(Files.createTempDirectory(prefix), UnexpectedIOError.apply)
+
   def createSameDirectoryTemporaryFile[F[_]: Sync: RaiseIOError](original: Path): F[Path] = {
     val tmpFile = original.resolveSibling(original.getFileName + ".tmp")
     deleteIfExists(tmpFile) >> createFile(tmpFile)
@@ -112,6 +116,20 @@ package object io {
       case e: DirectoryNotEmptyException => DirectoryNotEmpty(e)
       case e                             => UnexpectedIOError(e)
     })
+
+  def deleteRecursively[F[_]: Sync: RaiseIOError](dirPath: Path): F[Unit] =
+    handleIo(
+      ignore {
+        Files
+          .walk(dirPath)
+          .iterator()
+          .asScala
+          .toList
+          .sorted(Ordering[Path].reverse)
+          .map(_.toFile.delete)
+      },
+      e => UnexpectedIOError(e)
+    )
 
   def writeToFile[F[_]: Sync: RaiseIOError](
       filePath: Path,
