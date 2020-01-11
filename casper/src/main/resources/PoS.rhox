@@ -563,7 +563,7 @@ in {
 
             // Sum of new pending rewards with existing state
             contract PendingRewards(@"append", @validatorKey, @newRewards, @return) = {
-              new currentRewardsMaybeCh, currentRewardsCh in {
+              new currentRewardsCh in {
                 // Get existing pending rewards (per validator)
                 // - validator key is always initialized so here we can use unsafe get
                 TreeHashMap!("fastUnsafeGet", pendingRewardsMap, validatorKey, *currentRewardsCh) |
@@ -582,7 +582,7 @@ in {
 
             // Collect pending rewards from all validators (in a map) / reset state to zero
             contract PendingRewards(@"collect", @validatorKeys, @return) = {
-              new stCh, collectMaps, mapsListCh, mergedRewardsCh in {
+              new collectMaps, mapsListCh in {
                 // Get pending rewards (maps) for list of validators (public keys)
                 @ListOps!("fold", validatorKeys, [], *collectMaps, *mapsListCh) |
                 contract collectMaps(@validatorKey, @acc, mergeRet) = {
@@ -669,9 +669,7 @@ in {
         } |
 
         contract distributeRewards(@amount, @activeValidators, @bonds, returnCh) = {
-          new computeSum, totalActiveStakeCh,
-              computeDelta, rewardsDeltaCh,
-              computeMergeMap in {
+          new computeSum, computeDelta, totalActiveStakeCh in {
             @ListOps!("fold", activeValidators, 0, *computeSum, *totalActiveStakeCh) |
             contract computeSum(@pk, @acc, resultCh) = {
               resultCh!(acc + bonds.get(pk))
