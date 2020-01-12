@@ -56,7 +56,7 @@ object GenesisBuilder {
           numberOfActiveValidators = 100,
           validators = bonds.map(Validator.tupled).toSeq
         ),
-        vaults = Seq(predefinedVault(defaultPub), predefinedVault(defaultPub2)) ++
+        vaults = Seq(defaultPub, defaultPub2).map(predefinedVault) ++
           bonds.toList.map {
             case (pk, stake) =>
               RevAddress.fromPublicKey(pk).map(Vault(_, stake))

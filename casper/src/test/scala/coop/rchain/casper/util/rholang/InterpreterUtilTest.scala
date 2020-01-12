@@ -14,7 +14,6 @@ import coop.rchain.casper.util.rholang.Resources.mkRuntimeManager
 import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
 import coop.rchain.casper.util.{ConstructDeploy, GenesisBuilder}
 import coop.rchain.crypto.signatures.Signed
-import coop.rchain.crypto.PublicKey
 import coop.rchain.metrics
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.models.BlockHash.BlockHash
@@ -135,22 +134,22 @@ class InterpreterUtilTest
     }
   }
 
-  it should "merge histories in case of multiple parents" ignore effectTest {
+  it should "merge histories in case of multiple parents" in effectTest {
 
     val b1Deploys = Vector(
       "@5!(5)",
       "@2!(2)",
       "for(@a <- @2){ @456!(5 * a) }"
-    ).map(ConstructDeploy.sourceDeployNow)
+    ).map(ConstructDeploy.sourceDeployNow(_, ConstructDeploy.defaultSec2))
 
     val b2Deploys = Vector(
       "@1!(1)",
       "for(@a <- @1){ @123!(5 * a) }"
-    ).map(ConstructDeploy.sourceDeployNow)
+    ).map(ConstructDeploy.sourceDeployNow(_))
 
     val b3Deploys = Vector(
       "for(@a <- @123; @b <- @456){ @1!(a + b) }"
-    ).map(ConstructDeploy.sourceDeployNow)
+    ).map(ConstructDeploy.sourceDeployNow(_))
 
     /*
      * DAG Looks like this:
@@ -206,11 +205,11 @@ class InterpreterUtilTest
   """.stripMargin
 
   def prepareDeploys(v: Vector[String], c: PCost) = {
-    val genesisDeploys = v.map(ConstructDeploy.sourceDeployNow)
+    val genesisDeploys = v.map(ConstructDeploy.sourceDeployNow(_))
     genesisDeploys.map(d => ProcessedDeploy(d, c, List.empty, false))
   }
 
-  it should "merge histories in case of multiple parents with complex contract" ignore withGenesis(
+  it should "merge histories in case of multiple parents with complex contract" in withGenesis(
     genesisContext
   ) { implicit blockStore => implicit blockDagStorage => runtimeManager =>
     val contract = registry
@@ -229,12 +228,12 @@ class InterpreterUtilTest
      *         genesis
      */
     for {
-      b1 <- buildBlock[Task](Seq(genesis.blockHash), deploys = b1DeploysWithCost, now = 1)
-      b2 <- buildBlock[Task](Seq(genesis.blockHash), deploys = b2DeploysWithCost, now = 1)
+      b1 <- buildBlock[Task](Seq(genesis.blockHash), deploys = b1DeploysWithCost, now = 100)
+      b2 <- buildBlock[Task](Seq(genesis.blockHash), deploys = b2DeploysWithCost, now = 200)
       b3 <- buildBlock[Task](
              Seq(b1.blockHash, b2.blockHash),
              deploys = b3DeploysWithCost,
-             now = 2
+             now = 300
            )
       _         <- step(runtimeManager)(b1, genesis)
       _         <- step(runtimeManager)(b2, genesis)
@@ -244,7 +243,7 @@ class InterpreterUtilTest
     } yield result
   }
 
-  it should "merge histories in case of multiple parents (uneven histories)" ignore withGenesis(
+  it should "merge histories in case of multiple parents (uneven histories)" in withGenesis(
     genesisContext
   ) { implicit blockStore => implicit blockDagStorage => runtimeManager =>
     val contract = registry
@@ -346,7 +345,7 @@ class InterpreterUtilTest
 
   "validateBlockCheckpoint" should "not return a checkpoint for an invalid block" in withStorage {
     implicit blockStore => implicit blockDagStorage =>
-      val deploys = Vector("@1!(1)").map(ConstructDeploy.sourceDeployNow)
+      val deploys = Vector("@1!(1)").map(ConstructDeploy.sourceDeployNow(_))
       val processedDeploys =
         deploys.map(d => ProcessedDeploy(d, PCost(1L), List.empty, false))
       val invalidHash = ByteString.EMPTY
@@ -373,7 +372,7 @@ class InterpreterUtilTest
         "@2!(5)",
         "for (@x <- @1) { @2!(x) }",
         "for (@x <- @2) { @3!(x) }"
-      ).map(ConstructDeploy.sourceDeployNow)
+      ).map(ConstructDeploy.sourceDeployNow(_))
     for {
       dag1 <- blockDagStorage.getRepresentation
       deploysCheckpoint <- computeDeploysCheckpoint[Task](
@@ -424,7 +423,7 @@ class InterpreterUtilTest
         |} |
         |@"recursionTest"!([1,2])
       """.stripMargin
-      ).map(ConstructDeploy.sourceDeployNow)
+      ).map(ConstructDeploy.sourceDeployNow(_))
       for {
         dag1 <- blockDagStorage.getRepresentation
         deploysCheckpoint <- computeDeploysCheckpoint[Task](
@@ -478,7 +477,7 @@ class InterpreterUtilTest
               for (_ <- x; @14 <- y) { Nil }
              }
           """)
-          .map(ConstructDeploy.sourceDeployNow)
+          .map(ConstructDeploy.sourceDeployNow(_))
 
       for {
         dag1 <- blockDagStorage.getRepresentation
@@ -530,7 +529,7 @@ class InterpreterUtilTest
           |  } |
           |  loop!([Nil, 7, 7 | 8, 9 | Nil, 9 | 10, Nil, 9])
           |}""".stripMargin
-        ).map(ConstructDeploy.sourceDeployNow)
+        ).map(ConstructDeploy.sourceDeployNow(_))
 
       for {
         dag1 <- blockDagStorage.getRepresentation
@@ -574,7 +573,7 @@ class InterpreterUtilTest
             |   }
             | } | @"loop"!(["a","b","c","d"])
             |""".stripMargin
-          ).map(ConstructDeploy.sourceDeployNow)
+          ).map(ConstructDeploy.sourceDeployNow(_))
 
         for {
           dag1 <- blockDagStorage.getRepresentation

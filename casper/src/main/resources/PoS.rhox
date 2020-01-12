@@ -28,7 +28,6 @@ new  PoS,
     getUser,
     getCurrentUserAddress,
     pickActiveValidators,
-    getMVar,
     runMVar,
     fst,
     deposit, distributeRewards,
@@ -36,13 +35,17 @@ new  PoS,
     transferFromBlockSender,
     rs(`rho:registry:insertSigned:secp256k1`),
     posId(`rho:rchain:deployerId`),
-    uriOut in {
+    PendingRewards, MergeIntMaps, treeHashMapCh,
+    uriOut
+in {
   registryLookup!(`rho:rchain:revVault`, *revVaultCh) |
   registryLookup!(`rho:lang:listOps`, *listOpsCh) |
+  registryLookup!(`rho:lang:treeHashMap`, *treeHashMapCh) |
 
   for(@(_, RevVault) <- revVaultCh;
-      @(_, ListOps) <- listOpsCh) {
-    new posRevAddressCh, posAuthKeyCh, posVaultCh, initialActiveCh in {
+      @(_, ListOps) <- listOpsCh;
+      TreeHashMap <- treeHashMapCh) {
+    new posRevAddressCh, posAuthKeyCh, posVaultCh, initialActiveCh, pendingRewardsMapCh in {
 
       @RevVault!("deployerAuthKey", *posId, *posAuthKeyCh) |
       getCurrentUserAddress!(*posId, *posRevAddressCh) |
@@ -65,48 +68,50 @@ new  PoS,
           @ListOps!("parMap", range, *makeVault, *perActiveValidatorPosVaultsCh)
         }
       } |
-      
+
       for(@posRevAddress <- posRevAddressCh;
           @posAuthKey <- posAuthKeyCh) {
 
         @RevVault!("findOrCreate", posRevAddress, *posVaultCh) |
         pickActiveValidators!($$initialBonds$$, {}, *initialActiveCh) |
 
+        // Initialize pending rewards Tree Hash map
+        // - each key in pending rewards state is Map[PublickKey, Int] accummulated by calling "refundDeploy"
+        TreeHashMap!("init", 3, *pendingRewardsMapCh) |
+
         for (@(true, posVault) <- posVaultCh;
-             @initialActive <- initialActiveCh) {
-          new stateCh in {
-            // State structure:
-            // pendingRewards : Map[PublickKey, Int] - are accummulated by calling "chargeDeploy"
-            // committedRewards : Map[PublickKey, Int] - are moved from pendingRewards at each closeBlock
-            // activeValidators : List[PublicKey] - the active validators
-            // withdrawers : Map[PublicKey, Int] - the validators willing to withdraw and the blocknumber when their quarantine ends
-            //                                     This is the beggining of the next epoch after their withdrawal + quarantineLength
-            // allBonds : Map[PublickKey, Int] - each validator stake
-            stateCh!({
-              "pendingRewards":{},
-              "committedRewards":{},
-              "activeValidators":initialActive,
-              "withdrawers":{},
-              "randomImages":{},
-              "randomNumbers":{},
-              "allBonds":$$initialBonds$$
-            }) |
+             @initialActive <- initialActiveCh;
+             @pendingRewardsMap <- pendingRewardsMapCh) {
+          new stateCh, pendingRewardsInitializedCh in {
+            // Initialize empty pending rewards state for each validator
+            // - states must be initialized to prevent conflicts when are "set" (only lookup can be conflict free)
+            PendingRewards!("init", initialActive, *pendingRewardsInitializedCh) |
+            for (_ <- pendingRewardsInitializedCh) {
+              // Initialize PoS state structure
+              stateCh!({
+                // Map[PublickKey, Int] - each validator stake
+                "allBonds"        : $$initialBonds$$,
+                // List[PublicKey] - the active validators
+                "activeValidators": initialActive,
+                // Map[PublickKey, Int] - are moved from pendingRewards on epoch change or slashing
+                "committedRewards": {},
+                // Map[PublicKey, Int] - the validators willing to withdraw and the blocknumber when their quarantine ends
+                //                       This is the beggining of the next epoch after their withdrawal + quarantineLength
+                "withdrawers"     : {},
+                "randomImages"    : {},
+                "randomNumbers"   : {},
+              })
+            } |
 
             contract PoS (@"getBonds", returnCh) = {
-              new tmpCh in {
-                getMVar!(*stateCh, *tmpCh) |
-                for (@state <- tmpCh) {
-                  returnCh!(state.get("allBonds"))
-                }
+              for (@state <<- stateCh) {
+                returnCh!(state.get("allBonds"))
               }
             } |
 
             contract PoS (@"getActiveValidators", returnCh) = {
-              new tmpCh in {
-                getMVar!(*stateCh, *tmpCh) |
-                for (@state <- tmpCh) {
-                  returnCh!(state.get("activeValidators"))
-                }
+              for (@state <<- stateCh) {
+                returnCh!(state.get("activeValidators"))
               }
             } |
 
@@ -121,11 +126,8 @@ new  PoS,
              * The returned map contains only the committed rewards after the last closeBlock
              */
             contract PoS (@"getRewards", returnCh) = {
-              new tmpCh in {
-                getMVar!(*stateCh, *tmpCh) |
-                for (@state <- tmpCh) {
-                  returnCh!(state.get("committedRewards"))
-                }
+              for (@state <<- stateCh) {
+                returnCh!(state.get("committedRewards"))
               }
             } |
 
@@ -174,7 +176,7 @@ new  PoS,
                 getUser!(deployerId, *userCh) |
                 for(@state, resultCh <- processCh;
                     @userPk <- userCh;
-                    _, @blockNumber, _ <- blockDataCh) {
+                    @blockNumber, _, _ <- blockDataCh) {
                   if (state.get("allBonds").contains(userPk)) {
                     // the withdwal is in effect starting from the next epoch
                     resultCh!(
@@ -192,9 +194,8 @@ new  PoS,
 
             new currentDeployerData in {
               contract PoS (@"chargeDeploy", @deployerId, @amount, return) = {
-                new depositCh, tmpCh in {
-                  getMVar!(*stateCh, *tmpCh) |
-                  for (@state <- tmpCh) {
+                new depositCh in {
+                  for (@state <<- stateCh) {
                     deposit!(deployerId, amount, state.get("activeValidators"), *depositCh) |
                     for(@depositResult <- depositCh){
                       match depositResult {
@@ -217,20 +218,21 @@ new  PoS,
                     indexSender,
                     unfAuthKeyCh,
                     tmpCh in {
-                  getMVar!(*stateCh, *tmpCh) |
                   getBlockData!(*blockDataCh) |
-                  for (@state <- tmpCh; _, _, @sender <- blockDataCh) {
-                    @ListOps!("indexOf", state.get("activeValidators"), sender, *indexSender) |
-                    for (@idx <- indexSender) {
-                      for (@vaults <<- perActiveValidatorPosVaultsCh) {
-                        if (idx == -1) {
-                          returnCh!((false, "Sender is not an active validator"))
-                        } else {
-                          match vaults.nth(idx) {
-                            (unf, _, activeValidatorVault) => {
-                              @RevVault!("unforgeableAuthKey", unf, *unfAuthKeyCh) |
-                              for (@authKey <- unfAuthKeyCh) {
-                                @activeValidatorVault!("transfer", deployerRevAddress, refundAmount, authKey, *returnCh)
+                  for (_, _, @sender <- blockDataCh) {
+                    for (@state <<- stateCh) {
+                      @ListOps!("indexOf", state.get("activeValidators"), sender, *indexSender) |
+                      for (@idx <- indexSender) {
+                        for (@vaults <<- perActiveValidatorPosVaultsCh) {
+                          if (idx == -1) {
+                            returnCh!((false, "Sender is not an active validator"))
+                          } else {
+                            match vaults.nth(idx) {
+                              (unf, _, activeValidatorVault) => {
+                                @RevVault!("unforgeableAuthKey", unf, *unfAuthKeyCh) |
+                                for (@authKey <- unfAuthKeyCh) {
+                                  @activeValidatorVault!("transfer", deployerRevAddress, refundAmount, authKey, *returnCh)
+                                }
                               }
                             }
                           }
@@ -254,22 +256,21 @@ new  PoS,
                         for(@transferResult <- transferCh){
                           match transferResult {
                             (true, _) => {
-                              new processRefundCh in {
-                                runMVar!(*stateCh, *processRefundCh, *return) |
-                                for(@state, refundResultCh <- processRefundCh){
-                                  new newPendingCh in {
-                                    distributeRewards!(
-                                      initialPaymentAmount - refundAmount,
-                                      state.get("activeValidators"),
-                                      state.get("allBonds"),
-                                      state.get("pendingRewards"),
-                                      *newPendingCh) |
-                                    for(@newPending <- newPendingCh){
-                                      refundResultCh!(
-                                        state.set("pendingRewards", newPending),
-                                        (true, Nil)
-                                      )
-                                    }
+                              new newRewardsCh, pendingUpdatedCh, blockDataCh, getBlockData(`rho:block:data`) in {
+                                for (@state <<- stateCh) {
+                                  distributeRewards!(
+                                    initialPaymentAmount - refundAmount,
+                                    state.get("activeValidators"),
+                                    state.get("allBonds"),
+                                    *newRewardsCh)
+                                } |
+                                getBlockData!(*blockDataCh) |
+                                for(@newRewards <- newRewardsCh;
+                                    _, _, @sender <- blockDataCh) {
+                                  // Add new pending rewards to validator pending rewards state
+                                  PendingRewards!("append", sender, newRewards, *pendingUpdatedCh) |
+                                  for (_ <- pendingUpdatedCh) {
+                                    return!((true, Nil))
                                   }
                                 }
                               }
@@ -299,15 +300,22 @@ new  PoS,
                   new toBeSlashed in {
                     toBeSlashed!(invalidBlocks.getOrElse(blockHash, userPk)) |
                     for (@validator <- toBeSlashed) {
-                      // TODO: Transfer to coop wallet instead of just simply setting bonds to 0
-                      slashResultCh!(
-                        state.set("pendingRewards",
-                                  state.get("pendingRewards").set(validator, 0))
-                             .set("committedRewards",
-                                  state.get("committedRewards").set(validator, 0))
-                             .set("allBonds",
-                                  state.get("allBonds").set(validator, 0)),
-                        true)
+                      new valPendingRewardsCh in {
+                        // Collect and reset slashed validator pending rewards (from per validator states)
+                        PendingRewards!("collectValue", validator, state.get("activeValidators"), *valPendingRewardsCh) |
+                        for (@validatorPendingRewards <- valPendingRewardsCh) {
+                          // TODO: Transfer to coop wallet instead of just simply setting bonds to 0
+                          // Slashed rewards:
+                          // + validatorPendingRewards
+                          // + state.get("committedRewards")
+                          slashResultCh!(
+                            state.set("committedRewards",
+                                      state.get("committedRewards").set(validator, 0))
+                                .set("allBonds",
+                                      state.get("allBonds").set(validator, 0)),
+                            true)
+                        }
+                      }
                     }
                   }
                 }
@@ -330,7 +338,7 @@ new  PoS,
                   getBlockData!(*blockDataCh) |
 
                   runMVar!(*stateCh, *mvarProcessCh, *ackCh) |
-                  for(_, @blockNumber, _ <- blockDataCh;
+                  for(@blockNumber, _, _ <- blockDataCh;
                       @state, mvarResultCh <- mvarProcessCh) {
                     // Before choosing new active validators and paying out any withdrawers,
                     // deposits have to be accumulated into one vault for now.
@@ -343,10 +351,22 @@ new  PoS,
                       state.get("withdrawers"),
                       *newValidatorsCh)|
 
-                    commitRewards!(
-                      state.get("pendingRewards"),
-                      state.get("committedRewards"),
-                      *commitRewardsCh) |
+                    new pendingRewardsAllCh in {
+                      // Collect pending rewards from all validators and reset state to zero
+                      PendingRewards!("collect", state.get("activeValidators"), *pendingRewardsAllCh) |
+                      for (@pendingRewards <- pendingRewardsAllCh) {
+                        for (@newValidatorKeys <<- newValidatorsCh) {
+                          new ackInitCh in {
+                            // Initialize empty pending rewards state with new set of validators
+                            PendingRewards!("init", newValidatorKeys, *ackInitCh) |
+                            for (_ <- ackInitCh) {
+                              // Sum of pending rewards to committed rewards
+                              commitRewards!(pendingRewards, state.get("committedRewards"), *commitRewardsCh)
+                            }
+                          }
+                        }
+                      }
+                    } |
 
                     for (@committedRewards <- commitRewardsCh) {
 
@@ -365,17 +385,15 @@ new  PoS,
                       payValidators!(payments, *paymentDoneCh) |
 
                       for (_ <- paymentDoneCh) {
-                        mvarResultCh!(
-                          {
-                            "pendingRewards":{},
-                            "committedRewards":newRewards,
-                            "activeValidators":newValidators,
-                            "withdrawers":newWithdrawers,
-                            "allBonds":newBonds,
-                            "randomImages":{},
-                            "randomNumbers":{},
-                          },
-                          Nil)
+
+                        mvarResultCh!({
+                          "allBonds"        : newBonds,
+                          "activeValidators": newValidators,
+                          "committedRewards": newRewards,
+                          "withdrawers"     : newWithdrawers,
+                          "randomImages"    : {},
+                          "randomNumbers"   : {},
+                        }, Nil)
                       }
                     }
                   }
@@ -531,7 +549,91 @@ new  PoS,
                   }
                }
              }
+            } |
+
+            // Initialize pending rewards state for each validator
+            contract PendingRewards(@"init", @validatorKeys, @return) = {
+              new createStateKeyCh in {
+                @ListOps!("map", validatorKeys, *createStateKeyCh, return) |
+                contract createStateKeyCh(@key, @ackCh) = {
+                  TreeHashMap!("set", pendingRewardsMap, key, {}, ackCh)
+                }
+              }
+            } |
+
+            // Sum of new pending rewards with existing state
+            contract PendingRewards(@"append", @validatorKey, @newRewards, @return) = {
+              new currentRewardsCh in {
+                // Get existing pending rewards (per validator)
+                // - validator key is always initialized so here we can use unsafe get
+                TreeHashMap!("fastUnsafeGet", pendingRewardsMap, validatorKey, *currentRewardsCh) |
+                for (@currentRewards <- currentRewardsCh) {
+                  new mergeResultCh in {
+                    // Merge (sum) current pending rewards with new pending rewards
+                    MergeIntMaps!(currentRewards, newRewards, *mergeResultCh) |
+                    for (@mergeResult <- mergeResultCh) {
+                      // Update pending rewards state
+                      TreeHashMap!("set", pendingRewardsMap, validatorKey, mergeResult, return)
+                    }
+                  }
+                }
+              }
+            } |
+
+            // Collect pending rewards from all validators (in a map) / reset state to zero
+            contract PendingRewards(@"collect", @validatorKeys, @return) = {
+              new collectMaps, mapsListCh in {
+                // Get pending rewards (maps) for list of validators (public keys)
+                @ListOps!("fold", validatorKeys, [], *collectMaps, *mapsListCh) |
+                contract collectMaps(@validatorKey, @acc, mergeRet) = {
+                  new updateCh, updateAckCh in {
+                    // Update (per validator) pending rewards
+                    // - collect existing values and reset to empty map
+                    TreeHashMap!("update", pendingRewardsMap, validatorKey, *updateCh, *updateAckCh) |
+                    for (@rewardsMap, rewardsRet <- updateCh) {
+                      // Reset per validator pending rewards state
+                      rewardsRet!({}) |
+                      // Accumulate all reward maps
+                      for (_ <- updateAckCh) {
+                        mergeRet!(acc ++ [rewardsMap])
+                      }
+                    }
+                  }
+                } |
+
+                // Merge pending rewards (maps) to one map of pending rewards
+                for (@mapsList <- mapsListCh) {
+                  @ListOps!("fold", mapsList, {}, *MergeIntMaps, return)
+                }
+              }
+            } |
+
+            // Collect rewards for one validator from all validators / reset this validator state to zero
+            contract PendingRewards(@"collectValue", @collectValidatorKey, @validatorKeys, @return) = {
+              new collectRewards in {
+                // Get pending rewards (maps) for list of validators (public keys)
+                @ListOps!("fold", validatorKeys, 0, *collectRewards, return) |
+                contract collectRewards(@validatorKey, @acc, sumReturn) = {
+                  new updateCh, updateAckCh in {
+                    // Update validator pending rewards
+                    // - collect existing values and reset to zero
+                    TreeHashMap!("update", pendingRewardsMap, validatorKey, *updateCh, *updateAckCh) |
+                    for (@rewardsMap, rewardsRet <- updateCh) {
+                      // Reset validator pending rewards state
+                      rewardsRet!(rewardsMap.set(collectValidatorKey, 0)) |
+                      // Sum of validator pending rewards from all validators states
+                      for (_ <- updateAckCh) {
+                        match rewardsMap.get(collectValidatorKey) {
+                          Nil => sumReturn!(acc)
+                          val => sumReturn!(acc + rewardsMap.get(collectValidatorKey))
+                        }
+                      }
+                    }
+                  }
+                }
+              }
             }
+
           }
         } |
 
@@ -566,39 +668,23 @@ new  PoS,
           }
         } |
 
-        contract distributeRewards(@amount, @activeValidators, @bonds, @originalRewards, returnCh) = {
-          new computeSum, totalActiveStakeCh,
-              computeDelta, rewardsDeltaCh,
-              computeMergeMap in {
+        contract distributeRewards(@amount, @activeValidators, @bonds, returnCh) = {
+          new computeSum, computeDelta, totalActiveStakeCh in {
             @ListOps!("fold", activeValidators, 0, *computeSum, *totalActiveStakeCh) |
             contract computeSum(@pk, @acc, resultCh) = {
               resultCh!(acc + bonds.get(pk))
             } |
 
             for(@totalActiveStake <- totalActiveStakeCh) {
-              @ListOps!("fold", activeValidators, {}, *computeDelta, *rewardsDeltaCh) |
+              @ListOps!("fold", activeValidators, {}, *computeDelta, *returnCh) |
               contract computeDelta(@pk, @acc, resultCh) = {
                 resultCh!(acc.set(pk, (amount * bonds.get(pk)) / totalActiveStake))
-              }
-            } |
-
-            for (@rewardsDelta <- rewardsDeltaCh) {
-
-              @ListOps!("fold", rewardsDelta.toList(), originalRewards, *computeMergeMap, *returnCh) |
-              contract computeMergeMap(@(pk, rewardDelta), @acc, resultCh) = {
-                resultCh!(acc.set(pk, acc.getOrElse(pk, 0) + rewardDelta))
               }
             }
           }
         }
       } |
 
-      contract getMVar(varCh, returnCh) = {
-        for (@v <- varCh) {
-          varCh!(v) |
-          returnCh!(v)
-        }
-      } |
       contract runMVar(varCh, processCh, returnCh) = {
         new resultCh in {
           for (@v <- varCh) {
@@ -645,6 +731,24 @@ new  PoS,
         }
       }
     } |
+
+    // Merge (sum) maps with integer values
+    // MergeIntMaps({"a": 1, "b": 4}, {"a": 2, "c": 5, "d": Nil})
+    //            = {"a": 3, "b": 4, "c": 5}
+    contract MergeIntMaps(@map1, @map2, return) = {
+      new mergeKey in {
+        @ListOps!("fold", map2.toList(), map1, *mergeKey, *return) |
+        contract mergeKey(@(key, v1), @acc, ret) = {
+          match (v1, acc.get(key)) {
+            (Int, v2 /\ Int) => ret!(acc.set(key, v1 + v2))
+            (Int, _)         => ret!(acc.set(key, v1))
+            (_, v2 /\ Int)   => ret!(acc.set(key, v2))
+            _                => ret!(acc)
+          }
+        }
+      }
+    } |
+
     rs!("047b43d6548b72813b89ac1b9f9ca67624a8b372feedd71d4e2da036384a3e1236812227e524e6f237cde5f80dbb921cac12e6500791e9a9ed1254a745a816fe1f".hexToBytes(),
     (9223372036854775807, bundle+{*PoS}),
     "3044022054ff4bae3984252b116e41e28d98bb5533eaa39aec2729228159166e2784f641022066a0fd99e7ea33df812fab095cbe61250f9548bce6da3ec4c6a90c741b94087f".hexToBytes(),

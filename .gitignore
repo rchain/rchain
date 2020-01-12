@@ -17,6 +17,7 @@ target
 # Bloop output #
 #################
 .bloop
+out/
 
 # Intellij IDEA Project Files
 #############################

@@ -27,6 +27,8 @@ object Genesis {
       vaults: Seq[Vault],
       supply: Long
   ): Seq[Signed[DeployData]] =
+    // Order of deploys is important for Registry to work correctly
+    // - dependencies must be defined first in the list
     Seq(
       StandardDeploys.registry,
       StandardDeploys.listOps,

@@ -21,8 +21,7 @@ object ConstructDeploy {
   val defaultSec2 = PrivateKey(
     Base16.unsafeDecode("5a0bde2f5857124b1379c78535b07a278e3b9cefbcacc02e62ab3294c02765a1")
   )
-  val defaultPub2     = Secp256k1.toPublic(defaultSec2)
-  val defaultKeyPair2 = (defaultSec2, defaultPub2)
+  val defaultPub2 = Secp256k1.toPublic(defaultSec2)
 
   def sourceDeploy(
       source: String,
@@ -44,9 +43,10 @@ object ConstructDeploy {
   }
 
   def sourceDeployNow(
-      source: String
+      source: String,
+      sec: PrivateKey = defaultSec
   ): Signed[DeployData] =
-    sourceDeploy(source = source, timestamp = System.currentTimeMillis())
+    sourceDeploy(source = source, timestamp = System.currentTimeMillis(), sec = sec)
 
   def sourceDeployNowF[F[_]: Time: Functor](
       source: String,
@@ -59,9 +59,10 @@ object ConstructDeploy {
 
   // TODO: replace usages with basicSendDeployData
   def basicDeployData[F[_]: Monad: Time](
-      id: Int
+      id: Int,
+      sec: PrivateKey = defaultSec
   ): F[Signed[DeployData]] =
-    sourceDeployNowF(source = s"@$id!($id)")
+    sourceDeployNowF(source = s"@$id!($id)", sec = sec)
 
   def basicSendDeployData[F[_]: Monad: Time](
       id: Int
