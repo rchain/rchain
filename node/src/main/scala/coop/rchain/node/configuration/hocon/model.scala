@@ -58,6 +58,7 @@ object Server {
     val MessageConsumers             = "message-consumers"
     val FaultToleranceThreshold      = "fault-tolerance-threshold"
     val SynchronyConstraintThreshold = "synchrony-constraint-threshold"
+    val HeightConstraintThreshold    = "height-constraint-threshold"
     val Reporting                    = "reporting"
 
     val all =
@@ -85,6 +86,7 @@ object Server {
         MessageConsumers,
         FaultToleranceThreshold,
         SynchronyConstraintThreshold,
+        HeightConstraintThreshold,
         Reporting
       )
   }
@@ -126,6 +128,7 @@ object Server {
       messageConsumers = server.getIntOpt(keys.MessageConsumers).getOrElse(messageConsumers),
       faultToleranceThreshold = server.getFloat(keys.FaultToleranceThreshold),
       synchronyConstraintThreshold = server.getDouble(keys.SynchronyConstraintThreshold),
+      heightConstraintThreshold = server.getLong(keys.HeightConstraintThreshold),
       reporting = server.getBoolean(keys.Reporting)
     )
   }
