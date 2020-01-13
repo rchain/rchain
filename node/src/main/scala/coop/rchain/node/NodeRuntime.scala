@@ -706,6 +706,9 @@ object NodeRuntime {
       synchronyConstraintChecker = SynchronyConstraintChecker[F](
         conf.server.synchronyConstraintThreshold
       )(Sync[F], blockStore, Log[F])
+      lastFinalizedHeightConstraintChecker = LastFinalizedHeightConstraintChecker[F](
+        Long.MaxValue
+      )(Sync[F], lastFinalizedStorage, blockStore, Log[F])
       estimator = Estimator[F](conf.casper.maxNumberOfParents, conf.casper.maxParentDepthOpt)(
         Sync[F],
         Log[F],
@@ -744,25 +747,26 @@ object NodeRuntime {
       envVars      = EnvVars.envVars[F]
       raiseIOError = IOError.raiseIOErrorThroughSync[F]
       casperLaunch = {
-        implicit val bs = blockStore
-        implicit val bd = blockDagStorage
-        implicit val lf = lastFinalizedStorage
-        implicit val ec = engineCell
-        implicit val ev = envVars
-        implicit val re = raiseIOError
-        implicit val rb = requestedBlocks
-        implicit val rm = runtimeManager
-        implicit val or = oracle
-        implicit val lc = lastFinalizedBlockCalculator
-        implicit val sp = span
-        implicit val lb = lab
-        implicit val rc = rpConnections
-        implicit val ra = rpConfAsk
-        implicit val eb = eventPublisher
-        implicit val sc = synchronyConstraintChecker
-        implicit val cu = commUtil
-        implicit val es = estimator
-        implicit val ds = deployStorage
+        implicit val bs     = blockStore
+        implicit val bd     = blockDagStorage
+        implicit val lf     = lastFinalizedStorage
+        implicit val ec     = engineCell
+        implicit val ev     = envVars
+        implicit val re     = raiseIOError
+        implicit val rb     = requestedBlocks
+        implicit val rm     = runtimeManager
+        implicit val or     = oracle
+        implicit val lc     = lastFinalizedBlockCalculator
+        implicit val sp     = span
+        implicit val lb     = lab
+        implicit val rc     = rpConnections
+        implicit val ra     = rpConfAsk
+        implicit val eb     = eventPublisher
+        implicit val sc     = synchronyConstraintChecker
+        implicit val lfhscc = lastFinalizedHeightConstraintChecker
+        implicit val cu     = commUtil
+        implicit val es     = estimator
+        implicit val ds     = deployStorage
 
         CasperLaunch.of(conf.casper)
       }

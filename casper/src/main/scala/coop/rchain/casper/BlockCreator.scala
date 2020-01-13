@@ -38,7 +38,7 @@ object BlockCreator {
    *  3. Extract all valid deploys that aren't already in all ancestors of S (the parents).
    *  4. Create a new block that contains the deploys from the previous step.
    */
-  def createBlock[F[_]: Sync: Log: Time: BlockStore: SynchronyConstraintChecker: Estimator: DeployStorage](
+  def createBlock[F[_]: Sync: Log: Time: BlockStore: SynchronyConstraintChecker: LastFinalizedHeightConstraintChecker: Estimator: DeployStorage](
       dag: BlockDagRepresentation[F],
       genesis: BlockMessage,
       validatorIdentity: ValidatorIdentity,
@@ -77,20 +77,29 @@ object BlockCreator {
                           SynchronyConstraintChecker[F]
                             .check(dag, runtimeManager, genesis, validator)
                             .ifM(
-                              processDeploysAndCreateBlock(
-                                dag,
-                                runtimeManager,
-                                parents,
-                                deploys,
-                                slashingDeploys,
-                                justifications,
-                                maxBlockNumber,
-                                validatorIdentity.publicKey,
-                                shardId,
-                                version,
-                                now,
-                                invalidBlocks
-                              ),
+                              LastFinalizedHeightConstraintChecker[F]
+                                .check(
+                                  dag,
+                                  genesis,
+                                  validator
+                                )
+                                .ifM(
+                                  processDeploysAndCreateBlock(
+                                    dag,
+                                    runtimeManager,
+                                    parents,
+                                    deploys,
+                                    slashingDeploys,
+                                    justifications,
+                                    maxBlockNumber,
+                                    validatorIdentity.publicKey,
+                                    shardId,
+                                    version,
+                                    now,
+                                    invalidBlocks
+                                  ),
+                                  CreateBlockStatus.tooFarAheadOfLastFinalized.pure[F]
+                                ),
                               CreateBlockStatus.notEnoughNewBlocks.pure[F]
                             )
                         } else {
