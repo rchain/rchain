@@ -129,7 +129,9 @@ object Setup {
     }
     implicit val lastFinalizedBlockCalculator = LastFinalizedBlockCalculator[Task](0f)
     implicit val synchronyConstraintChecker   = SynchronyConstraintChecker[Task](0d)
-    implicit val estimator                    = Estimator[Task](Estimator.UnlimitedParents, None)
+    implicit val lastFinalizedConstraintChecker =
+      LastFinalizedHeightConstraintChecker[Task](Long.MaxValue)
+    implicit val estimator = Estimator[Task](Estimator.UnlimitedParents, None)
   }
   private def endpoint(port: Int): Endpoint = Endpoint("host", port, port)
 

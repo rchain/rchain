@@ -22,6 +22,9 @@ final case object NoNewDeploys                      extends NoBlock
 final case object NotEnoughNewBlocks extends NoBlock {
   override def toString: String = "Must wait for more blocks from other validators"
 }
+final case object TooFarAheadOfLastFinalized extends NoBlock {
+  override def toString: String = "Too far ahead of the last finalized block"
+}
 
 object CreateBlockStatus {
   def created(block: BlockMessage): CreateBlockStatus       = Created(block)
@@ -30,4 +33,5 @@ object CreateBlockStatus {
   def lockUnavailable: CreateBlockStatus                    = LockUnavailable
   def noNewDeploys: CreateBlockStatus                       = NoNewDeploys
   def notEnoughNewBlocks: CreateBlockStatus                 = NotEnoughNewBlocks
+  def tooFarAheadOfLastFinalized: CreateBlockStatus         = TooFarAheadOfLastFinalized
 }
