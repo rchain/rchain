@@ -707,7 +707,7 @@ object NodeRuntime {
         conf.server.synchronyConstraintThreshold
       )(Sync[F], blockStore, Log[F])
       lastFinalizedHeightConstraintChecker = LastFinalizedHeightConstraintChecker[F](
-        Long.MaxValue
+        conf.server.heightConstraintThreshold
       )(Sync[F], lastFinalizedStorage, blockStore, Log[F])
       estimator = Estimator[F](conf.casper.maxNumberOfParents, conf.casper.maxParentDepthOpt)(
         Sync[F],

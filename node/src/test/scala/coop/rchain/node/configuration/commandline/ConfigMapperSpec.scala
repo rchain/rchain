@@ -41,6 +41,7 @@ class ConfigMapperSpec extends FunSuite with Matchers {
         "--message-consumers 8",
         "--fault-tolerance-threshold 0.2",
         "--synchrony-constraint-threshold 0.0",
+        "--height-constraint-threshold 100",
         "--reporting"
       ).mkString(" ")
 
@@ -77,6 +78,7 @@ class ConfigMapperSpec extends FunSuite with Matchers {
         messageConsumers = 8,
         faultToleranceThreshold = 0.2f,
         synchronyConstraintThreshold = 0.0d,
+        heightConstraintThreshold = 100L,
         reporting = true
       )
 

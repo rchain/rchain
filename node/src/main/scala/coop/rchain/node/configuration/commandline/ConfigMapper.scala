@@ -57,6 +57,7 @@ object ConfigMapper {
         add(keys.MessageConsumers, run.messageConsumers)
         add(keys.FaultToleranceThreshold, run.faultToleranceThreshold)
         add(keys.SynchronyConstraintThreshold, run.synchronyConstraintThreshold)
+        add(keys.HeightConstraintThreshold, run.heightConstraintThreshold)
         add(keys.Reporting, run.reporting)
       }
 
