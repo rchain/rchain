@@ -140,6 +140,9 @@ object BlockApproverProtocol {
               .either(())
               .or("Candidate didn't have required signatures number.")
         block = candidate.block
+        _ <- (block.body.systemDeploys.isEmpty)
+              .either(())
+              .or("Candidate must not contain system deploys.")
         blockBonds = block.body.state.bonds.map {
           case Bond(validator, stake) => validator -> stake
         }.toMap
@@ -179,6 +182,7 @@ object BlockApproverProtocol {
                     runtimeManager
                       .replayComputeState(runtimeManager.emptyStateHash)(
                         blockDeploys,
+                        List.empty,
                         BlockData.fromBlock(candidate.block),
                         Map.empty[BlockHash, Validator],
                         isGenesis = true

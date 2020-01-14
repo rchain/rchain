@@ -216,6 +216,9 @@ object ProtoUtil {
   def deploys(b: BlockMessage): Seq[ProcessedDeploy] =
     b.body.deploys
 
+  def systemDeploys(b: BlockMessage): Seq[ProcessedSystemDeploy] =
+    b.body.systemDeploys
+
   def postStateHash(b: BlockMessage): ByteString =
     b.body.state.postStateHash
 

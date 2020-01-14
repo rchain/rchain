@@ -75,6 +75,7 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
   ): F[Either[ReplayFailure, StateHash]] =
     runtimeManager.replayComputeState(stateHash)(
       processedDeploy :: Nil,
+      Nil,
       BlockData(processedDeploy.deploy.data.timestamp, 0, genesisContext.validatorPks.head),
       Map.empty[BlockHash, Validator],
       isGenesis = false
@@ -231,6 +232,7 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
         bonds0                              <- runtimeManager.computeBonds(playStateHash0)
         replayError0OrReplayStateHash0 <- runtimeManager.replayComputeState(gps)(
                                            processedDeploys0,
+                                           Nil,
                                            BlockData(
                                              time,
                                              0L,
@@ -256,6 +258,7 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
         bonds2                              <- runtimeManager.computeBonds(playStateHash1)
         replayError1OrReplayStateHash1 <- runtimeManager.replayComputeState(playStateHash0)(
                                            processedDeploys1,
+                                           Nil,
                                            BlockData(
                                              time,
                                              0L,
@@ -415,6 +418,7 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
         (playPostState, processedDeploys) = computeStateResult
         replayComputeStateResult <- runtimeManager.replayComputeState(genPostState)(
                                      processedDeploys,
+                                     Nil,
                                      blockData,
                                      invalidBlocks,
                                      isGenesis = false
@@ -582,6 +586,7 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
         )
         result <- runtimeManager.replayComputeState(genPostState)(
                    Seq(invalidProcessedDeploy),
+                   Nil,
                    blockData,
                    invalidBlocks,
                    isGenesis = false
