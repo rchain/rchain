@@ -12,7 +12,13 @@ final case class Signed[A] private (
     pk: PublicKey,
     sig: ByteString,
     sigAlgorithm: SignaturesAlg
-)
+) {
+  // Protect Signed data to be copied (shadow generated copy function)
+  // - hack is to prevent `unused error`
+  // https://contributors.scala-lang.org/t/removing-copy-operation-from-case-classes-with-private-constructors/2605/2
+  private def copy(): Unit = hack
+  private def hack(): Unit = copy
+}
 
 object Signed {
   def apply[A: Serialize](
