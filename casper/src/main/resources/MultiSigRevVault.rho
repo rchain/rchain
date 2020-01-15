@@ -133,7 +133,7 @@ in {
                       new idxAuthPubKeysCh, unsealedCh in {
                         verify!(auth, *idxAuthPubKeysCh, *unsealedCh) |
                         for (@idxAuthPubKeys <- idxAuthPubKeysCh; @unsealed, @info <- unsealedCh) {
-                          if (idxAuthPubKeys >= 0 or (unsealed and info.nth(1) == (*multiSig, targetRevAddress, amount, *ret))) {
+                          if (idxAuthPubKeys >= 0 or (unsealed and info.nth(1) == (bundle+{*multiSig}, targetRevAddress, amount, *ret))) {
                             for (@nonce <- @(*multiSig, *nonceStore); @nonceMap <- @(*multiSig, *nonceMapStore)) {
                               @(*multiSig, *nonceStore)!(nonce + 1) |
                               if (quorumSize == 1) {
@@ -180,7 +180,7 @@ in {
                       new idxAuthPubKeysCh, unsealedCh in {
                         verify!(auth, *idxAuthPubKeysCh, *unsealedCh) |
                         for (@idxAuthPubKeys <- idxAuthPubKeysCh; @unsealed, @info <- unsealedCh) {
-                          if (idxAuthPubKeys >= 0 or (unsealed and info.nth(1) == (*multiSig, targetRevAddress, amount, nonce, *ret))) {
+                          if (idxAuthPubKeys >= 0 or (unsealed and info.nth(1) == (bundle+{*multiSig}, targetRevAddress, amount, nonce, *ret))) {
                             for (@nonceMap <- @(*multiSig, *nonceMapStore)) {
                               match nonceMap.get(nonce) {
                                 Nil => {
