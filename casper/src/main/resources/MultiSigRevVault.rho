@@ -93,7 +93,7 @@ in {
                 match maybeRevVault {
                   (false, _) => { ret!(maybeRevVault) }
                   (true, revVault) => {
-                    ret!((true, (*multiSig, revAddr, revVault))) |
+                    ret!((true, (bundle+{*multiSig}, revAddr, revVault))) |
                     // Nonce starts at zero
                     @(*multiSig, *nonceStore)!(0) |
 
