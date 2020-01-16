@@ -162,6 +162,24 @@ in {
                   _transferTemplate!(ownRevAddress, *purse, revAddress, amount, *authKey, *ret)
                 } |
 
+                contract revVault(@"setLog", logAddress, authKey, ret) = {
+                  new authKeyValidCh in {
+                    @AuthKey!("check", *authKey, (*_revVault, ownRevAddress), *authKeyValidCh) |
+                    for (@result <- authKeyValidCh) {
+                      if (result) {
+                        new ack in {
+                          purse!("setLog", *logAddress, *ack) |
+                          for (_ <- ack) {
+                            ret!(true)
+                          }
+                        }
+                      } else {
+                        ret!(false)
+                      }
+                    }
+                  }
+                } |
+
                 contract @{ownRevAddress | bundle0{*_revVault}}(@"_deposit", depositPurse, retCh) = {
                   _depositTemplate!(*purse, *depositPurse, *retCh)
                 }

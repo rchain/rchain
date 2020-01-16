@@ -31,17 +31,24 @@ in {
         } |
         contract internalMakePurse(balance, return) = {
           //balance must be a name that NonNegativeNumber contract is listening on
-          new thisPurse in {
+          new thisPurse, logStore in {
+            logStore!(Nil) |
             new letCh in { // let thisDecr = ...
               letCh!(bundle0{bundle0{*thisPurse}|*decr}) | for (thisDecr <- letCh) {
                 contract thisPurse(@=*thisDecr, @amount, return) = {
-                  new success in {
-                    balance!("sub", amount, *success) | for (@subOk <- success) {
-                      return!(subOk, *decr)
+                  for (logCh <<- logStore) {
+                    new success in {
+                      balance!("sub", amount, *success) | for (@subOk <- success) {
+                        if (Nil != *logCh) { logCh!(["*decr", amount, subOk]) } |
+                        return!(subOk, *decr)
+                      }
                     }
                   }
                 }
               }
+            } |
+            contract thisPurse(@"setLog", logCh, ack) = {
+              for (_ <- logStore) { logStore!(*logCh) | ack!(Nil) }
             } |
             contract thisPurse(@"getBalance", return) = { balance!("value", *return) } |
             contract thisPurse(@"sprout", return) = { thisMint!("makePurse", 0, *return) } |
@@ -61,12 +68,16 @@ in {
             } |
             contract thisPurse(@"deposit", @amount, @src, success) = {
               new result in {
-                @src!(bundle0{bundle0{src}|*decr}, amount, *result) | //call src decr function.
-                for(@decrSuccess, @auth <- result) {
-                  if (decrSuccess and auth == *decr) {
-                    balance!("add", amount, *success) // add transferred amount to this purse
-                  } else {
-                    success!(false) 
+                for (logCh <<- logStore) {
+                  @src!(bundle0{bundle0{src}|*decr}, amount, *result) | //call src decr function.
+                  for(@decrSuccess, @auth <- result) {
+                    if (decrSuccess and auth == *decr) {
+                      if (Nil != *logCh) { logCh!(["deposit", amount, true]) } |
+                      balance!("add", amount, *success) // add transferred amount to this purse
+                    } else {
+                      if (Nil != *logCh) { logCh!(["deposit", amount, false]) } |
+                      success!(false) 
+                    }
                   }
                 }
               }
