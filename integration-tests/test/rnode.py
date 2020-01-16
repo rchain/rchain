@@ -438,6 +438,8 @@ def make_bootstrap_node(
     give_up_after_skipped: int = 0,
     drop_peer_after_retries: int = 0,
     number_of_active_validators: int = 10,
+    epoch_length: int = 10000,
+    quarantine_length: int = 50000
 ) -> Node:
 
     container_name = make_bootstrap_name(network)
@@ -459,7 +461,9 @@ def make_bootstrap_node(
         "--max-peer-queue-size":            max_peer_queue_size,
         "--give-up-after-skipped":          give_up_after_skipped,
         "--drop-peer-after-retries":        drop_peer_after_retries,
-        "--number-of-active-validators":    number_of_active_validators
+        "--number-of-active-validators":    number_of_active_validators,
+        "--epoch-length":                   epoch_length,
+        "--quarantine-length":              quarantine_length
     }
 
     if cli_flags is not None:
@@ -521,7 +525,9 @@ def make_peer(
     max_peer_queue_size: int = 10,
     give_up_after_skipped: int = 0,
     drop_peer_after_retries: int = 0,
-    number_of_active_validators: int = 10
+    number_of_active_validators: int = 10,
+    epoch_length: int = 10000,
+    quarantine_length: int = 50000
 ) -> Node:
     assert isinstance(name, str)
     assert '_' not in name, 'Underscore is not allowed in host name'
@@ -547,7 +553,9 @@ def make_peer(
         "--max-peer-queue-size":            max_peer_queue_size,
         "--give-up-after-skipped":          give_up_after_skipped,
         "--drop-peer-after-retries":        drop_peer_after_retries,
-        "--number-of-active-validators":    number_of_active_validators
+        "--number-of-active-validators":    number_of_active_validators,
+        "--epoch-length":                   epoch_length,
+        "--quarantine-length":              quarantine_length
     }
 
     if cli_options is not None:
@@ -581,7 +589,9 @@ def started_peer(
     cli_flags: Optional[AbstractSet] = None,
     cli_options: Optional[Dict] = None,
     extra_volumes: Optional[List[str]] = None,
-    synchrony_constraint_threshold: float = 0.0
+    synchrony_constraint_threshold: float = 0.0,
+    epoch_length: int = 10000,
+    quarantine_length: int = 50000
 ) -> Generator[Node, None, None]:
     peer = make_peer(
         docker_client=context.docker,
@@ -595,7 +605,9 @@ def started_peer(
         cli_flags=cli_flags,
         cli_options=cli_options,
         extra_volumes=extra_volumes,
-        synchrony_constraint_threshold=synchrony_constraint_threshold
+        synchrony_constraint_threshold=synchrony_constraint_threshold,
+        epoch_length=epoch_length,
+        quarantine_length=quarantine_length
     )
     try:
         wait_for_node_started(context, peer)
@@ -612,7 +624,9 @@ def bootstrap_connected_peer(
     name: str,
     private_key: PrivateKey,
     cli_options: Optional[Dict[str, str]] = None,
-    synchrony_constraint_threshold: float = 0.0
+    synchrony_constraint_threshold: float = 0.0,
+    epoch_length: int = 10000,
+    quarantine_length: int = 50000
 ) -> Generator[Node, None, None]:
     with started_peer(
         context=context,
@@ -621,48 +635,12 @@ def bootstrap_connected_peer(
         bootstrap=bootstrap,
         private_key=private_key,
         cli_options=cli_options,
-        synchrony_constraint_threshold=synchrony_constraint_threshold
+        synchrony_constraint_threshold=synchrony_constraint_threshold,
+        epoch_length=epoch_length,
+        quarantine_length=quarantine_length
     ) as peer:
         wait_for_approved_block_received_handler_state(context, peer)
         yield peer
-
-
-def create_peer_nodes(
-    *,
-    docker_client: DockerClient,
-    bootstrap: Node,
-    network: str,
-    bonds_file: str,
-    private_keys: List[PrivateKey],
-    command_timeout: int,
-    allowed_peers: Optional[List[str]] = None,
-    mem_limit: Optional[str] = None,
-) -> List[Node]:
-    assert len(set(private_keys)) == len(private_keys), "There shouldn't be any duplicates in the key pairs"
-
-    if allowed_peers is None:
-        allowed_peers = [bootstrap.name] + [make_peer_name(network, str(i)) for i in range(0, len(private_keys))]
-
-    result = []
-    try:
-        for i, private_key in enumerate(private_keys):
-            peer_node = make_peer(
-                docker_client=docker_client,
-                network=network,
-                name=str(i),
-                bonds_file=bonds_file,
-                command_timeout=command_timeout,
-                bootstrap=bootstrap,
-                private_key=private_key,
-                allowed_peers=allowed_peers,
-                mem_limit=mem_limit if mem_limit is not None else '4G',
-            )
-            result.append(peer_node)
-    except:
-        for node in result:
-            node.cleanup()
-        raise
-    return result
 
 
 def make_random_network_name(context: TestingContext, length: int) -> str:
@@ -689,7 +667,9 @@ def started_bootstrap(
     cli_flags: Optional[AbstractSet] = None,
     cli_options: Optional[Dict[str, str]] = None,
     extra_volumes: Optional[List[str]] = None,
-    synchrony_constraint_threshold: float = 0.0
+    synchrony_constraint_threshold: float = 0.0,
+    epoch_length: int = 10000,
+    quarantine_length: int = 50000
 ) -> Generator[Node, None, None]:
     bootstrap_node = make_bootstrap_node(
         docker_client=context.docker,
@@ -701,7 +681,9 @@ def started_bootstrap(
         cli_options=cli_options,
         wallets_file=context.wallets_file,
         extra_volumes=extra_volumes,
-        synchrony_constraint_threshold=synchrony_constraint_threshold
+        synchrony_constraint_threshold=synchrony_constraint_threshold,
+        epoch_length=epoch_length,
+        quarantine_length=quarantine_length
     )
     try:
         wait_for_node_started(context, bootstrap_node)
@@ -716,6 +698,8 @@ def started_bootstrap_with_network(
     cli_flags: Optional[AbstractSet] = None,
     cli_options: Optional[Dict] = None,
     synchrony_constraint_threshold: float = 0.0,
+    epoch_length: int = 10000,
+    quarantine_length: int = 50000,
     extra_volumes: Optional[List[str]] = None,
     wait_for_approved_block: bool = False,
 ) -> Generator[Node, None, None]:
@@ -727,6 +711,8 @@ def started_bootstrap_with_network(
                 cli_options=cli_options,
                 synchrony_constraint_threshold=synchrony_constraint_threshold,
                 extra_volumes=extra_volumes,
+                epoch_length=epoch_length,
+                quarantine_length=quarantine_length
         ) as bootstrap:
             if wait_for_approved_block:
                 wait_for_approved_block_received_handler_state(context, bootstrap)
