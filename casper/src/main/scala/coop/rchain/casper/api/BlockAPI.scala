@@ -571,13 +571,7 @@ object BlockAPI {
                            .pure[F]
                        case Some(givenBlockMetadata) =>
                          DagOperations
-                           .bfTraverseF(List(lastFinalizedBlockMetadata)) { b =>
-                             b.parents.traverse(dag.lookup).map { parentOpts =>
-                               parentOpts.flatten.distinct
-                                 .filter(_.blockNum >= givenBlockMetadata.blockNum)
-                             }
-                           }
-                           .contains(givenBlockMetadata)
+                           .isDescendantOf(lastFinalizedBlockMetadata, givenBlockMetadata, dag)
                            .map(_.asRight[Error])
                      }
           } yield result,
