@@ -38,61 +38,32 @@ class MatcherMonadSpec extends FlatSpec with Matchers {
   private def combineK[FF[_]: MonoidK, G[_]: Foldable, A](gfa: G[FF[A]]): FF[A] =
     gfa.foldLeft(MonoidK[FF].empty[A])(SemigroupK[FF].combineK[A])
 
-  private def runWithCost[A](f: Task[A], phlo: Int) =
-    (for {
-      _        <- cost.set(Cost(phlo, "initial cost"))
-      result   <- f
-      phloLeft <- cost.get
-    } yield (phloLeft, result)).unsafeRunSync
-
   behavior of "MatcherMonad"
 
-  it should "charge for each non-deterministic branch" in {
-    val possibleResults = Stream((0, 1), (0, 2))
-    val computation     = Alternative[F].unite(possibleResults.pure[F])
-    val sum             = computation.map { case (x, y) => x + y } >>= (charge[F](Cost(1)).as(_))
-    val (phloLeft, _)   = runWithCost(runMatcher(sum), possibleResults.size)
-    assert(phloLeft.value == 0)
+  private val modifyStates = _freeMap[F].set(Map(42 -> Par()))
 
-    val moreVariants    = sum.flatMap(x => Alternative[F].unite(Stream(x, 0, -x).pure[F]))
-    val moreComputation = moreVariants.map(x => "Do sth with " + x) >>= (charge[F](Cost(1)).as(_))
-    val (phloLeft2, _) =
-      runWithCost(runMatcher(moreComputation), possibleResults.size * 3 + possibleResults.size)
-    assert(phloLeft2.value == 0)
-
-  }
-
-  val modifyStates = for {
-    _ <- _freeMap[F].set(Map(42 -> Par()))
-    _ <- costF.modify(_ + Cost(1))
-  } yield ()
-
-  it should "retain cost and matches when attemptOpt is called on successful match" in {
-    val (phloLeft, res) = runWithCost(runFirst(attemptOpt[F, Unit](modifyStates)), 0)
-    assert(phloLeft.value == 1)
+  it should "retain matches when attemptOpt is called on successful match" in {
+    val res = runFirst(attemptOpt[F, Unit](modifyStates)).unsafeRunSync
     assert(res == Some((Map(42 -> Par()), Some(()))))
   }
 
-  it should "retain cost but discard matches when attemptOpt is called on a match failed using _short" in {
+  it should "discard matches when attemptOpt is called on a match failed using _short" in {
     val failed = for {
       _ <- modifyStates
       _ <- _short[F].raiseError[Int](())
     } yield ()
 
-    val (phloLeft, res) = runWithCost(runFirst(attemptOpt[F, Unit](failed)), 0)
-    assert(phloLeft.value == 1)
+    val res = runFirst(attemptOpt[F, Unit](failed)).unsafeRunSync
     assert(res == Some((Map.empty, None)))
-
   }
 
-  it should "retain cost but discard matches when attemptOpt is called on a match failed using `guard`" in {
+  it should "discard matches when attemptOpt is called on a match failed using `guard`" in {
     val failed = for {
       _ <- modifyStates
       _ <- A.guard(false)
     } yield ()
 
-    val (phloLeft, res) = runWithCost(runFirst(attemptOpt[F, Unit](failed)), 0)
-    assert(phloLeft.value == 1)
+    val res = runFirst(attemptOpt[F, Unit](failed)).unsafeRunSync
     assert(res == Some((Map.empty, None)))
   }
 
@@ -102,8 +73,7 @@ class MatcherMonadSpec extends FlatSpec with Matchers {
     val c: F[Int] = A.guard(true) >> 3.pure[F]
     val combined  = combineK(List(a, b, c))
 
-    val (phloLeft, res) = runWithCost(runMatcher(combined), 0)
-    assert(phloLeft.value == 0)
+    val res = runMatcher(combined).unsafeRunSync
     assert(res == Stream((Map.empty, 1), (Map.empty, 3)))
   }
 
@@ -113,36 +83,18 @@ class MatcherMonadSpec extends FlatSpec with Matchers {
     val c: F[Int] = 3.pure[F] >> _short[F].raiseError[Int](())
     val combined  = combineK(List(a, b, c))
 
-    val (phloLeft, res) = runWithCost(runMatcher(combined), 0)
-    assert(phloLeft.value == 0)
+    val res = runMatcher(combined).unsafeRunSync
     assert(res == Stream((Map.empty, 2)))
   }
 
   it should "fail all branches when using `_error[F].raise`" in {
+    case object TestError extends Throwable
     val a: F[Int] = 1.pure[F]
-    val b: F[Int] = 2.pure[F] >> _error[F].raiseError[Int](OutOfPhlogistonsError)
+    val b: F[Int] = 2.pure[F] >> MonadError[F, Throwable].raiseError[Int](TestError)
     val c: F[Int] = 3.pure[F]
 
     val combined = combineK(List(a, b, c))
-    val (_, res) = runWithCost(runMatcher(combined).attempt, 0)
-    res shouldBe (Left(OutOfPhlogistonsError))
+    val res      = runMatcher(combined).attempt.unsafeRunSync
+    res shouldBe (Left(TestError))
   }
-
-  it should "charge for each branch as long as `charge` is before a short-circuit" in {
-    val a: F[Unit] = charge[F](Cost(1))
-
-    val b: F[Unit] = charge[F](Cost(2)) >> A.guard(false)
-    val c: F[Unit] = A.guard(false) >> charge[F](Cost(4))
-
-    val d: F[Unit] = charge[F](Cost(8)) >> _short[F].raiseError[Unit](())
-    val e: F[Unit] = _short[F].raiseError[Int](()) >> charge[F](Cost(16))
-
-    val combined        = combineK(List(a, b, c, d, e))
-    val (phloLeft, res) = runWithCost(runMatcher(combined), 1 + 2 + 8)
-
-    assert(phloLeft.value == 0)
-    assert(res == Stream((Map.empty, ())))
-
-  }
-
 }

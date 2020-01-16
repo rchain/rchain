@@ -9,6 +9,7 @@ import coop.rchain.metrics.Span
 import coop.rchain.models.TaggedContinuation.TaggedCont.{Empty, ParBody, ScalaBodyRef}
 import coop.rchain.models._
 import coop.rchain.rholang.interpreter.Runtime.RhoTuplespace
+import coop.rchain.rholang.interpreter._error
 import coop.rchain.rholang.interpreter.accounting._
 import coop.rchain.rholang.interpreter.errors.BugFoundError
 import coop.rchain.rholang.interpreter.storage.ChargingRSpace.consumeId
@@ -40,7 +41,7 @@ object ChargingRSpace {
       case Empty => BugFoundError("Damn you pROTOBUF").raiseError[F, Blake2b512Random]
     }
 
-  def chargingRSpace[F[_]: Sync: Span](
+  def chargingRSpace[F[_]: Sync: Span: _error](
       space: RhoTuplespace[F]
   )(implicit cost: _cost[F]): RhoTuplespace[F] =
     new RhoTuplespace[F] {

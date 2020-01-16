@@ -51,7 +51,7 @@ class Interactive private (runtime: Runtime[Task])(implicit scheduler: Scheduler
 
   def eval(code: String): Unit = {
     TestUtil.eval(code, runtime, Map.empty).runSyncUnsafe(Duration.Inf)
-    val errors = runtime.errorLog.readAndClearErrorVector().unsafeRunSync
+    val errors = runtime.errorReporter.getAndSet(None).unsafeRunSync
     if (errors.nonEmpty) {
       println("Errors during execution:")
       errors.foreach(println)

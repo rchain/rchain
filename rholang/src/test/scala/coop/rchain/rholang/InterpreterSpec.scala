@@ -138,6 +138,7 @@ class InterpreterSpec extends FlatSpec with Matchers {
       mkRuntime[Task](tmpPrefix, mapSize)
         .use { runtime =>
           implicit val c = runtime.cost
+          implicit val e = runtime.errorReporter
           InterpreterUtil.evaluateResult(runtime, sendRho, parsingCost(sendRho) - Cost(1))
         }
         .runSyncUnsafe(maxDuration)
@@ -170,6 +171,7 @@ class InterpreterSpec extends FlatSpec with Matchers {
       source: String
   ): Task[EvaluateResult] = {
     implicit val c = runtime.cost
+    implicit val e = runtime.errorReporter
     InterpreterUtil.evaluateResult[Task](runtime, source)
   }
 

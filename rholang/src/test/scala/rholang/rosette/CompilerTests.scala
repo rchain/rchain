@@ -49,6 +49,7 @@ class CompilerTests extends FunSuite with Matchers {
         Resources.withResource(Source.fromFile(file.toString))(
           fileContents => {
             implicit val c = runtime.cost
+            implicit val e = runtime.errorReporter
             InterpreterUtil.evaluateResult(runtime, fileContents.mkString)
           }
         )

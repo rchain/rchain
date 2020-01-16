@@ -4,7 +4,6 @@ import cats.data.EitherT
 import cats.effect.concurrent.{MVar, Ref}
 import cats.effect.{Concurrent, ContextShift, Sync}
 import cats.implicits._
-import cats.mtl.FunctorTell
 import cats.{Monad, Parallel}
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockStore
@@ -12,9 +11,10 @@ import coop.rchain.blockstorage.dag.{BlockDagRepresentation, BlockDagStorage}
 import coop.rchain.casper.ReportingCasper.RhoReportingRspace
 import coop.rchain.casper.ReportingCasperData._
 import coop.rchain.casper.protocol.{BlockMessage, DeployData, ProcessedDeploy}
-import coop.rchain.casper.util.{EventConverter, ProtoUtil}
 import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
 import coop.rchain.casper.util.rholang.{InternalError, ReplayFailure, RuntimeManager}
+import coop.rchain.casper.util.{EventConverter, ProtoUtil}
+import coop.rchain.crypto.signatures.Signed
 import coop.rchain.metrics.Metrics.Source
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.models.BlockHash._
@@ -32,11 +32,11 @@ import coop.rchain.rholang.interpreter.accounting.{_cost, CostAccounting}
 import coop.rchain.rholang.interpreter.errors.InterpreterError
 import coop.rchain.rholang.interpreter.storage._
 import coop.rchain.rholang.interpreter.{
-  ErrorLog,
   EvaluateResult,
   HasCost,
   Reduce,
   Runtime,
+  _error,
   PrettyPrinter => RhoPrinter
 }
 import coop.rchain.rspace.ReportingRspace.{
@@ -55,7 +55,6 @@ import coop.rchain.rspace.{
 }
 import coop.rchain.shared.Log
 import monix.execution.atomic.AtomicAny
-import coop.rchain.crypto.signatures.Signed
 
 import scala.concurrent.ExecutionContext
 
@@ -327,12 +326,17 @@ object ReportingCasper {
 class ReportingRuntime[F[_]: Sync](
     val replayReducer: Reduce[F],
     val reportingSpace: RhoReportingRspace[F],
-    val errorLog: ErrorLog[F],
+    val errorLog: _error[F],
     val cost: _cost[F],
     val blockData: Ref[F, BlockData],
     val invalidBlocks: Runtime.InvalidBlocks[F]
 ) extends HasCost[F] {
-  def readAndClearErrorVector(): F[Vector[InterpreterError]] = errorLog.readAndClearErrorVector()
+  def readAndClearErrorVector(): F[Vector[InterpreterError]] =
+    errorLog.getAndSet(none) >>= {
+      case Some(interpreterError: InterpreterError) => Vector(interpreterError).pure[F]
+      case Some(throwable)                          => throwable.raiseError[F, Vector[InterpreterError]]
+      case None                                     => Vector.empty[InterpreterError].pure[F]
+    }
   def close(): F[Unit] =
     for {
       _ <- reportingSpace.close()
@@ -348,23 +352,23 @@ object ReportingRuntime {
   ): F[ReportingRuntime[F]] = {
     implicit val P = Parallel[F]
     for {
-      cost <- CostAccounting.emptyCost[F]
+      cost          <- CostAccounting.emptyCost[F]
+      errorReporter <- Ref.of[F, Option[Throwable]](none)
       runtime <- {
         implicit val c = cost
+        implicit val e = errorReporter
         create(reporting, extraSystemProcesses)
       }
     } yield runtime
   }
 
-  def create[F[_]: Concurrent: Log: Metrics: Span, M[_]](
+  def create[F[_]: Concurrent: Log: Metrics: Span: _error, M[_]](
       reporting: RhoReportingRspace[F],
       extraSystemProcesses: Seq[SystemProcess.Definition[F]] = Seq.empty
   )(
       implicit P: Parallel[F],
       cost: _cost[F]
-  ): F[ReportingRuntime[F]] = {
-    val errorLog                                      = new ErrorLog[F]()
-    implicit val ft: FunctorTell[F, InterpreterError] = errorLog
+  ): F[ReportingRuntime[F]] =
     for {
       mapsAndRefs                                     <- setupMapsAndRefs(extraSystemProcesses)
       (blockDataRef, invalidBlocks, urnMap, procDefs) = mapsAndRefs
@@ -378,7 +382,6 @@ object ReportingRuntime {
       res <- Runtime.introduceSystemProcesses(reporting :: Nil, procDefs)
     } yield {
       assert(res.forall(_.isEmpty))
-      new ReportingRuntime[F](reducer, reporting, errorLog, cost, blockDataRef, invalidBlocks)
+      new ReportingRuntime[F](reducer, reporting, _error[F], cost, blockDataRef, invalidBlocks)
     }
-  }
 }

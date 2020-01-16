@@ -2,6 +2,7 @@ package coop.rchain.rholang.interpreter.accounting
 
 import java.nio.file.{Files, Path}
 
+import cats.effect.concurrent.Ref
 import com.google.protobuf.ByteString
 import coop.rchain.metrics
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
@@ -19,7 +20,7 @@ import monix.execution.Scheduler.Implicits.global
 import org.scalactic.TripleEqualsSupport
 import org.scalatest.prop.PropertyChecks._
 import org.scalatest.{Assertion, BeforeAndAfterAll, Matchers, WordSpec}
-
+import cats.syntax.all._
 import scala.collection.immutable.BitSet
 import scala.concurrent.duration._
 
@@ -50,10 +51,10 @@ class RholangMethodsCostsSpec
           (listN(0), 1L)
         )
         forAll(table) { (pars, n) =>
-          implicit val errLog = new ErrorLog[Task]()
-          implicit val cost   = CostAccounting.emptyCost[Task].runSyncUnsafe(1.second)
-          implicit val env    = Env[Par]()
-          val method          = methodCall("nth", EList(pars), List(GInt(n)))
+          implicit val errLog: _error[Task] = Ref.unsafe[Task, Option[Throwable]](none)
+          implicit val cost                 = CostAccounting.emptyCost[Task].runSyncUnsafe(1.second)
+          implicit val env                  = Env[Par]()
+          val method                        = methodCall("nth", EList(pars), List(GInt(n)))
           withReducer[Assertion] { reducer =>
             for {
               err  <- reducer.evalExprToPar(method).attempt
@@ -85,7 +86,7 @@ class RholangMethodsCostsSpec
           (listN(0), 1L)
         )
         forAll(table) { (pars, n) =>
-          implicit val errLog = new ErrorLog[Task]()
+          implicit val errLog = Ref.unsafe[Task, Option[Throwable]](none)
           implicit val cost   = CostAccounting.emptyCost[Task].runSyncUnsafe(1.second)
           implicit val env    = Env[Par]()
           val method          = methodCall("nth", EList(pars), List(GInt(n)))
@@ -109,9 +110,9 @@ class RholangMethodsCostsSpec
       factor: Double,
       method: Expr
   ): Assertion = {
-    implicit val errorLog = new ErrorLog[Task]()
-    implicit val cost     = CostAccounting.emptyCost[Task].runSyncUnsafe(1.second)
-    implicit val env      = Env[Par]()
+    implicit val errLog = Ref.unsafe[Task, Option[Throwable]](none)
+    implicit val cost   = CostAccounting.emptyCost[Task].runSyncUnsafe(1.second)
+    implicit val env    = Env[Par]()
     withReducer { reducer =>
       for {
         _    <- reducer.evalExprToPar(method)
@@ -776,7 +777,7 @@ class RholangMethodsCostsSpec
   def emptyString: String = ""
 
   def test(method: Expr, expectedCost: Cost): Assertion = {
-    implicit val errLog = new ErrorLog[Task]()
+    implicit val errLog = Ref.unsafe[Task, Option[Throwable]](none)
     implicit val cost   = CostAccounting.emptyCost[Task].runSyncUnsafe(1.second)
     implicit val env    = Env[Par]()
     withReducer[Assertion] { reducer =>
@@ -788,7 +789,7 @@ class RholangMethodsCostsSpec
   }
   def withReducer[R](
       f: DebruijnInterpreter[Task, Task.Par] => Task[R]
-  )(implicit errLog: ErrorLog[Task], cost: _cost[Task]): R = {
+  )(implicit errorReporter: _error[Task], cost: _cost[Task]): R = {
 
     val test = for {
       _   <- cost.set(Cost.UNSAFE_MAX)

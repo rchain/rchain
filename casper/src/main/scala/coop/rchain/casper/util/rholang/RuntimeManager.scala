@@ -32,7 +32,7 @@ import coop.rchain.rholang.interpreter.Runtime.BlockData
 import coop.rchain.rholang.interpreter.accounting._
 import coop.rchain.rholang.interpreter.errors.BugFoundError
 import coop.rchain.rholang.interpreter.{
-  ErrorLog,
+  _error,
   EvaluateResult,
   Interpreter,
   Reduce,
@@ -102,10 +102,10 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log](
       runtime: Runtime[F]
   )(systemDeploy: S, replay: Boolean): F[EvaluateResult] = {
     implicit val c: _cost[F]         = runtime.cost
+    implicit val e: _error[F]        = runtime.errorReporter
     implicit val r: Blake2b512Random = systemDeploy.rand
     Interpreter[F].injAttempt(
       if (replay) runtime.replayReducer else runtime.reducer,
-      runtime.errorLog,
       systemDeploy.source,
       Cost.UNSAFE_MAX,
       systemDeploy.env
@@ -420,7 +420,7 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log](
   ): F[ProcessedDeploy] = Span[F].withMarks("process-deploy") {
     for {
       fallback                     <- runtime.space.createSoftCheckpoint()
-      evaluateResult               <- evaluate(runtime.reducer, runtime.cost, runtime.errorLog)(deploy)
+      evaluateResult               <- evaluate(runtime.reducer, runtime.cost, runtime.errorReporter)(deploy)
       EvaluateResult(cost, errors) = evaluateResult
       _                            <- Span[F].mark("before-process-deploy-create-soft-checkpoint")
       checkpoint                   <- runtime.space.createSoftCheckpoint()
@@ -534,7 +534,7 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log](
       .liftF {
         for {
           fallback <- runtime.replaySpace.createSoftCheckpoint()
-          result   <- evaluate(runtime.replayReducer, runtime.cost, runtime.errorLog)(deploy)
+          result   <- evaluate(runtime.replayReducer, runtime.cost, runtime.errorReporter)(deploy)
           /* Since the state of `replaySpace` is reset on each invocation of `replayComputeState`,
             and `ReplayFailure`s mean that block processing is cancelled upstream, we only need to
             reset state if the replay effects of valid deploys need to be discarded. */
@@ -609,7 +609,7 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log](
 
   def captureResults(start: StateHash, deploy: Signed[DeployData], name: Par): F[Seq[Par]] =
     withResetRuntimeLock(start) { runtime =>
-      evaluate(runtime.reducer, runtime.cost, runtime.errorLog)(deploy)
+      evaluate(runtime.reducer, runtime.cost, runtime.errorReporter)(deploy)
         .ensure(
           BugFoundError("Unexpected error while capturing results from rholang")
         )(
@@ -732,17 +732,16 @@ object RuntimeManager {
   def evaluate[F[_]: Sync](
       reducer: Reduce[F],
       costState: _cost[F],
-      errorLog: ErrorLog[F]
+      errorReporter: _error[F]
   )(deploy: Signed[DeployData]): F[EvaluateResult] = {
     import coop.rchain.models.rholang.implicits._
 
     implicit val rand: Blake2b512Random =
       Tools.unforgeableNameRng(deploy.pk, deploy.data.timestamp)
     implicit val cost: _cost[F] = costState
-
+    implicit val e              = errorReporter
     Interpreter[F].injAttempt(
       reducer,
-      errorLog,
       deploy.data.term,
       Cost(deploy.data.phloLimit),
       NormalizerEnv(deploy).toEnv

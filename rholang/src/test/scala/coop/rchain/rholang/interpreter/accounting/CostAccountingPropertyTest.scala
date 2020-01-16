@@ -80,14 +80,14 @@ object CostAccountingPropertyTest {
       .map { _.sliding(2).forall { case List(r1, r2) => r1 == r2 } }
       .runSyncUnsafe(duration)
 
-  def execute[F[_]: Sync: _cost](runtime: Runtime[F], p: Proc): F[Long] =
+  def execute[F[_]: Sync: _cost: _error](runtime: Runtime[F], p: Proc): F[Long] =
     for {
       program <- ParBuilderUtil.buildPar(p)
       res     <- evaluatePar(runtime, program)
       cost    = res.cost
     } yield cost.value
 
-  def evaluatePar[F[_]: Monad: Sync: _cost](
+  def evaluatePar[F[_]: Monad: Sync: _cost: _error](
       runtime: Runtime[F],
       par: Par
   ): F[EvaluateResult] = {
@@ -109,6 +109,7 @@ object CostAccountingPropertyTest {
         cost <- CostAccounting.emptyCost[Task]
         res <- {
           implicit val c = cost
+          implicit val e = runtime.errorReporter
           procs.toStream
             .traverse(execute(runtime, _))
             .map(_.sum)

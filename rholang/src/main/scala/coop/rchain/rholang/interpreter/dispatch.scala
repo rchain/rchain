@@ -51,7 +51,7 @@ class RholangAndScalaDispatcher[M[_]] private (
 
 object RholangAndScalaDispatcher {
 
-  def create[M[_], F[_]](
+  def create[M[_]: _error, F[_]](
       tuplespace: RhoTuplespace[M],
       dispatchTable: => Map[Long, Seq[ListParWithRandom] => M[Unit]],
       urnMap: Map[String, Par]
@@ -59,8 +59,7 @@ object RholangAndScalaDispatcher {
       implicit
       cost: _cost[M],
       parallel: Parallel[M],
-      s: Sync[M],
-      ft: FunctorTell[M, InterpreterError]
+      s: Sync[M]
   ): (Dispatch[M, ListParWithRandom, TaggedContinuation], Reduce[M]) = {
 
     implicit lazy val dispatcher: Dispatch[M, ListParWithRandom, TaggedContinuation] =

@@ -3,8 +3,8 @@ package coop.rchain.rholang.interpreter
 import java.lang
 
 import cats.effect.Sync
+import cats.effect.concurrent.Ref
 import cats.implicits._
-import cats.mtl.FunctorTell
 import cats.{Eval => _}
 import com.google.protobuf.ByteString
 import coop.rchain.crypto.codec.Base16
@@ -53,14 +53,15 @@ class DebruijnInterpreter[M[_], F[_]](
 )(
     implicit parallel: cats.Parallel[M],
     syncM: Sync[M],
-    fTell: FunctorTell[M, InterpreterError],
+    errorReporter: _error[M],
     cost: _cost[M]
 ) extends Reduce[M] {
 
+  private def runIfNoErrorsAndReport(process: M[Unit]): M[Unit] =
+    errorReporter.get >>= (_.fold(process.handleErrorWith(reportError[M]))(_ => syncM.unit))
+
   type Application =
-    Option[
-      (TaggedContinuation, Seq[(Par, ListParWithRandom, ListParWithRandom, Boolean)], Boolean)
-    ]
+    Option[(TaggedContinuation, Seq[(Par, ListParWithRandom, ListParWithRandom, Boolean)], Boolean)]
 
   /**
     * Materialize a send in the store, optionally returning the matched continuation.
@@ -75,11 +76,13 @@ class DebruijnInterpreter[M[_], F[_]](
       data: ListParWithRandom,
       persistent: Boolean
   ): M[Unit] =
-    space.produce(chan, data, persist = persistent) >>= (continue(
-      _,
-      produce(chan, data, persistent),
-      persistent
-    ))
+    runIfNoErrorsAndReport(
+      space.produce(chan, data, persist = persistent) >>= (continue(
+        _,
+        produce(chan, data, persistent),
+        persistent
+      ))
+    )
 
   /**
     * Materialize a send in the store, optionally returning the matched continuation.
@@ -95,27 +98,25 @@ class DebruijnInterpreter[M[_], F[_]](
       body: ParWithRandom,
       persistent: Boolean,
       peek: Boolean
-  ): M[Unit] = {
-    val (patterns: Seq[BindPattern], sources: Seq[Par]) = binds.unzip
-    space.consume(
-      sources.toList,
-      patterns.toList,
-      TaggedContinuation(ParBody(body)),
-      persist = persistent,
-      if (peek) SortedSet(sources.indices: _*) else SortedSet.empty[Int]
-    ) >>= (continue(_, consume(binds, body, persistent, peek), persistent))
-  }
+  ): M[Unit] =
+    runIfNoErrorsAndReport {
+      val (patterns: Seq[BindPattern], sources: Seq[Par]) = binds.unzip
+      space.consume(
+        sources.toList,
+        patterns.toList,
+        TaggedContinuation(ParBody(body)),
+        persist = persistent,
+        if (peek) SortedSet(sources.indices: _*) else SortedSet.empty[Int]
+      ) >>= (continue(_, consume(binds, body, persistent, peek), persistent))
+    }
 
-  private[this] def continue(res: Application, repeatOp: M[Unit], persistent: Boolean) =
+  // TODO: Make this return Application => M[Unit]
+  private[this] def continue(res: Application, repeatOp: M[Unit], persistent: Boolean): M[Unit] =
     res match {
       case Some((continuation, dataList, _)) if persistent =>
-        dispatchAndRun(continuation, dataList)(
-          repeatOp
-        )
+        dispatchAndRun(continuation, dataList)(repeatOp)
       case Some((continuation, dataList, peek)) if peek =>
-        dispatchAndRun(continuation, dataList)(
-          producePeeks(dataList): _*
-        )
+        dispatchAndRun(continuation, dataList)(producePeeks(dataList): _*)
       case Some((continuation, dataList, _)) =>
         dispatch(continuation, dataList)
       case None => syncM.unit
@@ -137,7 +138,7 @@ class DebruijnInterpreter[M[_], F[_]](
 
   private[this] def producePeeks(
       dataList: Seq[(Par, ListParWithRandom, ListParWithRandom, Boolean)]
-  ) =
+  ): Seq[M[Unit]] =
     dataList
       .withFilter {
         case (_, _, _, persist) => !persist
@@ -155,47 +156,47 @@ class DebruijnInterpreter[M[_], F[_]](
   override def eval(par: Par)(
       implicit env: Env[Par],
       rand: Blake2b512Random
-  ): M[Unit] = {
-
-    // for lack of a better type...
-    val terms: Seq[GeneratedMessage] = Seq(
-      par.sends,
-      par.receives,
-      par.news,
-      par.matches,
-      par.bundles,
-      par.exprs.filter { expr =>
-        expr.exprInstance match {
-          case _: EVarBody    => true
-          case _: EMethodBody => true
-          case _              => false
+  ): M[Unit] =
+    runIfNoErrorsAndReport {
+      // for lack of a better type...
+      val terms: Seq[GeneratedMessage] = Seq(
+        par.sends,
+        par.receives,
+        par.news,
+        par.matches,
+        par.bundles,
+        par.exprs.filter { expr =>
+          expr.exprInstance match {
+            case _: EVarBody    => true
+            case _: EMethodBody => true
+            case _              => false
+          }
         }
-      }
-    ).filter(_.nonEmpty).flatten
+      ).filter(_.nonEmpty).flatten
 
-    def split(id: Int): Blake2b512Random =
-      if (terms.size == 1) rand
-      else if (terms.size > 256) rand.splitShort(id.toShort)
-      else rand.splitByte(id.toByte)
+      def split(id: Int): Blake2b512Random =
+        if (terms.size == 1) rand
+        else if (terms.size > 256) rand.splitShort(id.toShort)
+        else rand.splitByte(id.toByte)
 
-    // Term split size is limited to half of Int16 because other half is for injecting
-    // things to system deploys through NormalizerEnv
-    val termSplitLimit = Short.MaxValue
-    if (terms.size > termSplitLimit)
-      ReduceError(
-        s"The number of terms in the Par is ${terms.size}, which exceeds the limit of ${termSplitLimit}."
-      ).raiseError[M, Unit]
-    else
-      terms.zipWithIndex.toList.parTraverse_ {
-        case (term, index) =>
-          eval(term)(env, split(index))
-      }
-  }
+      // Term split size is limited to half of Int16 because other half is for injecting
+      // things to system deploys through NormalizerEnv
+      val termSplitLimit = Short.MaxValue
+      if (terms.size > termSplitLimit)
+        ReduceError(
+          s"The number of terms in the Par is ${terms.size}, which exceeds the limit of ${termSplitLimit}."
+        ).raiseError[M, Unit]
+      else
+        terms.zipWithIndex.toList.parTraverse_ {
+          case (term, index) =>
+            eval(term)(env, split(index))
+        }
+    }
 
   private def eval(
       term: GeneratedMessage
   )(implicit env: Env[Par], rand: Blake2b512Random): M[Unit] =
-    reportErrors {
+    runIfNoErrorsAndReport(
       term match {
         case term: Send    => eval(term)
         case term: Receive => eval(term)
@@ -206,18 +207,11 @@ class DebruijnInterpreter[M[_], F[_]](
           term.exprInstance match {
             case e: EVarBody    => eval(e.value.v) >>= (eval(_))
             case e: EMethodBody => evalExprToPar(e) >>= (eval(_))
-            case other          => BugFoundError(s"Undefined term: \n $other").raiseError[M, Unit]
+            case other          => BugFoundError(s"Undefined term:\n$other").raiseError[M, Unit]
           }
-        case other => BugFoundError(s"Undefined term: \n $other").raiseError[M, Unit]
+        case other => BugFoundError(s"Undefined term:\n$other").raiseError[M, Unit]
       }
-    }
-
-  private def reportErrors(process: M[Unit]): M[Unit] =
-    process.handleErrorWith {
-      case error @ OutOfPhlogistonsError => error.raiseError[M, Unit]
-      case error: InterpreterError       => fTell.tell(error)
-      case error                         => error.raiseError[M, Unit]
-    }
+    )
 
   /** Algorithm as follows:
     *

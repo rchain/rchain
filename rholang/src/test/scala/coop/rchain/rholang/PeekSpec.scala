@@ -28,6 +28,7 @@ class PeekSpec extends FlatSpec with Matchers {
     mkRuntime[Task](tmpPrefix)
       .use { runtime =>
         implicit val c = runtime.cost
+        implicit val e = runtime.errorReporter
         for {
           _    <- evaluate[Task](runtime, """@1!("v1") | for(_ <<- @1) { Nil }""")
           _    <- evaluate[Task](runtime, """for(_ <- @1) { @2!("v2") }""")
@@ -44,6 +45,7 @@ class PeekSpec extends FlatSpec with Matchers {
     mkRuntime[Task](tmpPrefix)
       .use { runtime =>
         implicit val c = runtime.cost
+        implicit val e = runtime.errorReporter
         for {
           _          <- evaluate[Task](runtime, """@1!!("v1")""")
           _          <- evaluate[Task](runtime, """for(_ <<- @1) { Nil }""")
@@ -63,6 +65,7 @@ class PeekSpec extends FlatSpec with Matchers {
     mkRuntime[Task](tmpPrefix)
       .use { runtime =>
         implicit val c = runtime.cost
+        implicit val e = runtime.errorReporter
         for {
           _          <- evaluate[Task](runtime, """for(_ <<- @1) { Nil }""")
           _          <- evaluate[Task](runtime, """@1!!("v1")""")
@@ -82,6 +85,7 @@ class PeekSpec extends FlatSpec with Matchers {
     mkRuntime[Task](tmpPrefix)
       .use { runtime =>
         implicit val c = runtime.cost
+        implicit val e = runtime.errorReporter
         for {
           _   <- evaluate[Task](runtime, """for (_ <<- @0) { @1!(0) }""")
           _   <- evaluate[Task](runtime, """for (_ <<- @0) { @1!(0) }""")
@@ -96,6 +100,7 @@ class PeekSpec extends FlatSpec with Matchers {
     mkRuntime[Task](tmpPrefix)
       .use { runtime =>
         implicit val c = runtime.cost
+        implicit val e = runtime.errorReporter
         for {
           _   <- evaluate[Task](runtime, """for (_ <<- @0) { @1!(0) }""")
           _   <- evaluate[Task](runtime, """for (_ <<- @0) { @1!(0) }""")
@@ -110,6 +115,7 @@ class PeekSpec extends FlatSpec with Matchers {
     mkRuntime[Task](tmpPrefix)
       .use { runtime =>
         implicit val c = runtime.cost
+        implicit val e = runtime.errorReporter
         for {
           _  <- evaluate[Task](runtime, """for (_ <<- @0; _ <<- @1) { @2!(0) }""")
           _  <- evaluate[Task](runtime, """for (_ <<- @0; _ <<- @1) { @2!(0) }""")

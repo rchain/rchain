@@ -43,13 +43,13 @@ package object accounting extends Costs {
 
   def charge[F[_]: Monad](
       amount: Cost
-  )(implicit cost: _cost[F], error: _error[F]): F[Unit] =
+  )(implicit cost: _cost[F], errorReporter: _error[F]): F[Unit] =
     cost.withPermit(
       cost.get.flatMap { c =>
-        if (c.value < 0) error.raiseError[Unit](OutOfPhlogistonsError)
+        if (c.value < 0) reportError(OutOfPhlogistonsError)
         else cost.tell(Chain.one(amount)) >> cost.set(c - amount)
       }
-    ) >> error.ensure(cost.get)(OutOfPhlogistonsError)(_.value >= 0).void
+    ) >> cost.get.map(_.value >= 0).ifM(Monad[F].unit, reportError(OutOfPhlogistonsError))
 
   implicit def noOpCostLog[M[_]: Applicative]: FunctorTell[M, Chain[Cost]] =
     new DefaultFunctorTell[M, Chain[Cost]] {

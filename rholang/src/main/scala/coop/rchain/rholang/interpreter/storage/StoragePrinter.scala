@@ -70,6 +70,7 @@ object StoragePrinter {
       beforeEval <- unmatchedSends
       _ <- {
         implicit val c = runtime.cost
+        implicit val e = runtime.errorReporter
         Interpreter[F].evaluate(runtime, deploy.data.term, NormalizerEnv(deploy).toEnv)
       }
       afterEval <- unmatchedSends

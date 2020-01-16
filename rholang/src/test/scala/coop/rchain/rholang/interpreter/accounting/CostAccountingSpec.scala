@@ -2,6 +2,7 @@ package coop.rchain.rholang.interpreter.accounting
 
 import cats.data.Chain
 import cats.effect._
+import cats.effect.concurrent.Ref
 import cats.syntax.all._
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.metrics
@@ -35,12 +36,14 @@ class CostAccountingSpec extends FlatSpec with Matchers with PropertyChecks with
     implicit val ms: Metrics.Source        = Metrics.BaseSource
 
     val resources = for {
-      dir     <- Resources.mkTempDir[Task]("cost-accounting-spec-")
-      costLog <- Resource.liftF(costLog[Task]())
-      cost    <- Resource.liftF(CostAccounting.emptyCost[Task](implicitly, metricsEff, costLog, ms))
-      sar     <- Resource.liftF(Runtime.setupRSpace[Task](dir, 1024L * 1024 * 1024))
+      dir           <- Resources.mkTempDir[Task]("cost-accounting-spec-")
+      costLog       <- Resource.liftF(costLog[Task]())
+      cost          <- Resource.liftF(CostAccounting.emptyCost[Task](implicitly, metricsEff, costLog, ms))
+      errorReporter <- Resource.liftF(Ref.of[Task, Option[Throwable]](none))
+      sar           <- Resource.liftF(Runtime.setupRSpace[Task](dir, 1024L * 1024 * 1024))
       runtime <- {
         implicit val c = cost
+        implicit val e = errorReporter
         Resource.make(Runtime.create[Task]((sar._1, sar._2), Nil))(_.close())
       }
     } yield (runtime, costLog)
@@ -50,6 +53,7 @@ class CostAccountingSpec extends FlatSpec with Matchers with PropertyChecks with
         case (runtime, costL) =>
           costL.listen {
             implicit val cost = runtime.cost
+            implicit val e    = runtime.errorReporter
             InterpreterUtil.evaluateResult(runtime, contract, Cost(initialPhlo.toLong))
           }
       }
@@ -67,12 +71,14 @@ class CostAccountingSpec extends FlatSpec with Matchers with PropertyChecks with
     implicit val ms: Metrics.Source        = Metrics.BaseSource
 
     val resources = for {
-      dir     <- Resources.mkTempDir[Task]("cost-accounting-spec-")
-      costLog <- Resource.liftF(costLog[Task]())
-      cost    <- Resource.liftF(CostAccounting.emptyCost[Task](implicitly, metricsEff, costLog, ms))
-      sar     <- Resource.liftF(Runtime.setupRSpace[Task](dir, 1024L * 1024 * 1024))
+      dir           <- Resources.mkTempDir[Task]("cost-accounting-spec-")
+      costLog       <- Resource.liftF(costLog[Task]())
+      cost          <- Resource.liftF(CostAccounting.emptyCost[Task](implicitly, metricsEff, costLog, ms))
+      errorReporter <- Resource.liftF(Ref.of[Task, Option[Throwable]](none))
+      sar           <- Resource.liftF(Runtime.setupRSpace[Task](dir, 1024L * 1024 * 1024))
       runtime <- {
         implicit val c: _cost[Task] = cost
+        implicit val e              = errorReporter
         Resource.make(Runtime.create[Task]((sar._1, sar._2), Nil))(_.close())
       }
     } yield (runtime, costLog)
@@ -81,10 +87,10 @@ class CostAccountingSpec extends FlatSpec with Matchers with PropertyChecks with
       .use {
         case (runtime, _) =>
           implicit val c: _cost[Task]         = runtime.cost
+          implicit val e                      = runtime.errorReporter
           implicit def rand: Blake2b512Random = Blake2b512Random(Array.empty[Byte])
           Interpreter[Task].injAttempt(
             runtime.reducer,
-            runtime.errorLog,
             term,
             initialPhlo,
             Map.empty
@@ -94,7 +100,6 @@ class CostAccountingSpec extends FlatSpec with Matchers with PropertyChecks with
                 runtime.replaySpace.rigAndReset(root, log) >>
                   Interpreter[Task].injAttempt(
                     runtime.replayReducer,
-                    runtime.errorLog,
                     term,
                     initialPhlo,
                     Map.empty

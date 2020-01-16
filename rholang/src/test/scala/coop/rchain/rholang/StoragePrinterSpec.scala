@@ -39,6 +39,7 @@ class StoragePrinterSpec extends FlatSpec with Matchers {
         for {
           _ <- {
             implicit val c = runtime.cost
+            implicit val e = runtime.errorReporter
             Interpreter[Task].evaluate(
               runtime,
               "@1!(Nil) | @2!(Nil) | for(_ <- @2) { Nil }",
@@ -93,6 +94,7 @@ class StoragePrinterSpec extends FlatSpec with Matchers {
         for {
           _ <- {
             implicit val c = runtime.cost
+            implicit val e = runtime.errorReporter
             InterpreterUtil.evaluate[Task](runtime, "@0!(Nil) | for(_ <- @1) { Nil }")
           }
           deploy = mkDeploy("@1!(Nil) | @2!(Nil)")

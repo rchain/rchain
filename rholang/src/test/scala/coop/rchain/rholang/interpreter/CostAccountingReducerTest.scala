@@ -1,10 +1,12 @@
 package coop.rchain.rholang.interpreter
 
+import cats.effect.concurrent.Ref
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.models.Expr.ExprInstance.{EVarBody, GString}
 import coop.rchain.models.Var.VarInstance.FreeVar
 import coop.rchain.models._
+import cats.syntax.all._
 import coop.rchain.models.rholang.implicits._
 import coop.rchain.rholang.Resources.mkRhoISpace
 import coop.rchain.rholang.interpreter.Runtime.RhoISpace
@@ -15,11 +17,11 @@ import coop.rchain.rholang.interpreter.storage._
 import coop.rchain.rspace._
 import coop.rchain.rspace.internal.{Datum, Row}
 import coop.rchain.shared.Log
-
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
 import org.scalactic.TripleEqualsSupport
 import org.scalatest.{FlatSpec, Matchers}
+
 import scala.concurrent.duration._
 
 class CostAccountingReducerTest extends FlatSpec with Matchers with TripleEqualsSupport {
@@ -36,14 +38,17 @@ class CostAccountingReducerTest extends FlatSpec with Matchers with TripleEquals
     val termCost          = Chargeable[Par].cost(substTerm)
     val initCost          = Cost(1000)
     (for {
-      cost <- CostAccounting.initialCost[Task](initCost)
-      res <- {
+      cost          <- CostAccounting.initialCost[Task](initCost)
+      errorReporter <- Ref.of[Task, Option[Throwable]](none)
+      _ <- {
         implicit val c = cost
-        Substitute.charge(Task.now(substTerm), Cost(10000)).attempt
+        implicit val e = errorReporter
+        Substitute.charge(Task.now(substTerm), Cost(10000))
       }
-      _         = assert(res === Right(substTerm))
-      finalCost <- cost.get
-      _         = assert(finalCost === (initCost - Cost(termCost)))
+      errorOption <- errorReporter.get
+      _           = assert(errorOption === none)
+      finalCost   <- cost.get
+      _           = assert(finalCost === (initCost - Cost(termCost)))
     } yield ()).runSyncUnsafe(5.seconds)
   }
 
@@ -54,9 +59,11 @@ class CostAccountingReducerTest extends FlatSpec with Matchers with TripleEquals
     val initCost          = Cost(1000)
 
     (for {
-      cost <- CostAccounting.initialCost[Task](initCost)
+      cost          <- CostAccounting.initialCost[Task](initCost)
+      errorReporter <- Ref.of[Task, Option[Throwable]](none)
       res <- {
         implicit val c = cost
+        implicit val e = errorReporter
         Substitute
           .charge(Task.raiseError[Par](new RuntimeException("")), Cost(originalTermCost))
           .attempt
@@ -65,37 +72,6 @@ class CostAccountingReducerTest extends FlatSpec with Matchers with TripleEquals
       finalCost <- cost.get
       _         = assert(finalCost === (initCost - Cost(originalTermCost)))
     } yield ()).runSyncUnsafe(5.seconds)
-  }
-
-  it should "stop if OutOfPhloError is returned from RSpace" in {
-
-    val iSpace = new ISpaceStub[
-      Task,
-      Par,
-      BindPattern,
-      ListParWithRandom,
-      TaggedContinuation
-    ] {
-      override def produce(
-          channel: Par,
-          data: ListParWithRandom,
-          persist: Boolean
-      ): Task[
-        Option[
-          (ContResult[Par, BindPattern, TaggedContinuation], Seq[Result[Par, ListParWithRandom]])
-        ]
-      ] =
-        Task.raiseError[Option[
-          (ContResult[Par, BindPattern, TaggedContinuation], Seq[Result[Par, ListParWithRandom]])
-        ]](OutOfPhlogistonsError)
-    }
-    implicit val errorLog    = new ErrorLog[Task]()
-    implicit val rand        = Blake2b512Random(128)
-    implicit val cost        = CostAccounting.initialCost[Task](Cost(1000)).runSyncUnsafe(1.second)
-    val (_, chargingReducer) = RholangAndScalaDispatcher.create(iSpace, Map.empty, Map.empty)
-    val send                 = Send(Par(exprs = Seq(GString("x"))), Seq(Par()))
-    val test                 = chargingReducer.inj(send).attempt.runSyncUnsafe(1.second)
-    assert(test === Left(OutOfPhlogistonsError))
   }
 
   it should "stop interpreter threads as soon as deploy runs out of phlo" ignore {
@@ -112,7 +88,7 @@ class CostAccountingReducerTest extends FlatSpec with Matchers with TripleEquals
       Par(sends = Seq(Send(channel, Seq(a)), Send(channel, Seq(b))))
 
     implicit val rand            = Blake2b512Random(Array.empty[Byte])
-    implicit val errLog          = new ErrorLog[Task]()
+    implicit val errLog          = Ref.unsafe[Task, Option[Throwable]](none)
     implicit val logF: Log[Task] = Log.log[Task]
 
     def testImplementation(pureRSpace: RhoISpace[Task]): Task[
@@ -175,11 +151,9 @@ class CostAccountingReducerTest extends FlatSpec with Matchers with TripleEquals
     (for {
       res           <- mkRhoISpace[Task]("cost-accounting-reducer-test-").use(testImplementation(_))
       (result, map) = res
-      errors <- errLog
-                 .readAndClearErrorVector()
-      _ = assert(errors === Vector.empty)
-      _ = assert(result === Left(OutOfPhlogistonsError))
-      _ = assert(stored(map, a, rand.splitByte(0)) || stored(map, b, rand.splitByte(1)))
+      errors        <- errLog.get
+      _             = assert(errors === Some(OutOfPhlogistonsError))
+      _             = assert(stored(map, a, rand.splitByte(0)) || stored(map, b, rand.splitByte(1)))
     } yield ()).runSyncUnsafe(5.seconds)
 
   }

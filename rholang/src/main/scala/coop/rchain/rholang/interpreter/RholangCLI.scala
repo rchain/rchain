@@ -198,6 +198,7 @@ object RholangCLI {
 
   def evaluate(runtime: Runtime[Task], source: String): Task[Unit] = {
     implicit val c = runtime.cost
+    implicit val e = runtime.errorReporter
     Interpreter[Task].evaluate(runtime, source, Map.empty).map {
       case EvaluateResult(_, Vector()) =>
       case EvaluateResult(_, errors) =>
@@ -266,6 +267,7 @@ object RholangCLI {
             })
         result <- {
           implicit val c = runtime.cost
+          implicit val e = runtime.errorReporter
           Interpreter[Task].evaluate(runtime, source, Map.empty)
         }
       } yield result

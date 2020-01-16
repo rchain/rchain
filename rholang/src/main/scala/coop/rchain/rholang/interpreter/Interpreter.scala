@@ -7,6 +7,7 @@ import coop.rchain.models.Par
 import coop.rchain.rholang.interpreter.accounting._
 import coop.rchain.rholang.interpreter.errors.{InterpreterError, OutOfPhlogistonsError}
 
+// TODO: Allow for only one error
 final case class EvaluateResult(cost: Cost, errors: Vector[InterpreterError]) {
   val failed: Boolean    = errors.nonEmpty
   val succeeded: Boolean = !failed
@@ -29,7 +30,6 @@ trait Interpreter[F[_]] {
 
   def injAttempt(
       reducer: Reduce[F],
-      errorLog: ErrorLog[F],
       term: String,
       initialPhlo: Cost,
       normalizerEnv: Map[String, Par]
@@ -42,7 +42,8 @@ object Interpreter {
 
   implicit def interpreter[F[_]](
       implicit S: Sync[F],
-      C: _cost[F]
+      C: _cost[F],
+      E: _error[F]
   ): Interpreter[F] =
     new Interpreter[F] {
 
@@ -61,7 +62,7 @@ object Interpreter {
       ): F[EvaluateResult] = {
         implicit val rand: Blake2b512Random = Blake2b512Random(128)
         runtime.space.createSoftCheckpoint() >>= { checkpoint =>
-          injAttempt(runtime.reducer, runtime.errorLog, term, initialPhlo, normalizerEnv).attempt >>= {
+          injAttempt(runtime.reducer, term, initialPhlo, normalizerEnv).attempt >>= {
             case Right(evaluateResult) =>
               if (evaluateResult.errors.nonEmpty)
                 runtime.space.revertToSoftCheckpoint(checkpoint).as(evaluateResult)
@@ -75,45 +76,45 @@ object Interpreter {
 
       def injAttempt(
           reducer: Reduce[F],
-          errorLog: ErrorLog[F],
           term: String,
           initialPhlo: Cost,
           normalizerEnv: Map[String, Par]
       )(implicit rand: Blake2b512Random): F[EvaluateResult] = {
         val parsingCost = accounting.parsingCost(term)
         for {
-          _           <- C.set(initialPhlo)
-          parseResult <- charge[F](parsingCost).attempt
-          evaluateResult <- parseResult match {
-                             case Right(_) =>
-                               ParBuilder[F].buildNormalizedTerm(term, normalizerEnv).attempt >>= {
-                                 case Right(parsed) =>
-                                   for {
-                                     injResultEither   <- reducer.inj(parsed).attempt
-                                     phlosLeft         <- C.get
-                                     interpreterErrors <- errorLog.readAndClearErrorVector()
-                                     evaluateResult <- injResultEither.swap.toOption match {
-                                                        case Some(OutOfPhlogistonsError) =>
-                                                          EvaluateResult(
-                                                            initialPhlo - phlosLeft,
-                                                            OutOfPhlogistonsError +: interpreterErrors
-                                                          ).pure[F]
-                                                        case Some(throwable) =>
-                                                          throwable.raiseError[F, EvaluateResult]
-                                                        case None =>
-                                                          EvaluateResult(
-                                                            initialPhlo - phlosLeft,
-                                                            interpreterErrors
-                                                          ).pure[F]
-                                                      }
-                                   } yield evaluateResult
-                                 case Left(interpreterError: InterpreterError) =>
-                                   EvaluateResult(parsingCost, Vector(interpreterError)).pure[F]
-                                 case Left(throwable) => throwable.raiseError[F, EvaluateResult]
-                               }
-                             case Left(interpreterError: InterpreterError) =>
+          _          <- C.set(initialPhlo)
+          _          <- charge[F](parsingCost)
+          oopeOption <- E.getAndSet(none)
+          evaluateResult <- oopeOption.fold(
+                             ParBuilder[F].buildNormalizedTerm(term, normalizerEnv).attempt >>= {
+                               case Right(parsed) =>
+                                 for {
+                                   _                      <- reducer.inj(parsed)
+                                   phlosLeft              <- C.get
+                                   interpreterErrorOption <- E.getAndSet(none)
+                                   evaluateResult <- interpreterErrorOption.fold(
+                                                      EvaluateResult(
+                                                        initialPhlo - phlosLeft,
+                                                        Vector.empty
+                                                      ).pure[F]
+                                                    ) {
+                                                      case interpreterError: InterpreterError =>
+                                                        EvaluateResult(
+                                                          initialPhlo - phlosLeft,
+                                                          Vector(interpreterError)
+                                                        ).pure[F]
+                                                      case throwable =>
+                                                        throwable.raiseError[F, EvaluateResult]
+                                                    }
+                                 } yield evaluateResult
+                               case Left(interpreterError: InterpreterError) =>
+                                 EvaluateResult(parsingCost, Vector(interpreterError)).pure[F]
+                               case Left(throwable) => throwable.raiseError[F, EvaluateResult]
+                             }
+                           ) {
+                             case interpreterError: InterpreterError =>
                                EvaluateResult(parsingCost, Vector(interpreterError)).pure[F]
-                             case Left(throwable) => throwable.raiseError[F, EvaluateResult]
+                             case throwable => throwable.raiseError[F, EvaluateResult]
                            }
         } yield evaluateResult
       }

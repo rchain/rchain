@@ -36,12 +36,17 @@ class Runtime[F[_]: Sync] private (
     val replayReducer: Reduce[F],
     val space: RhoISpace[F],
     val replaySpace: RhoReplayISpace[F],
-    val errorLog: ErrorLog[F],
+    val errorReporter: _error[F],
     val cost: _cost[F],
     val blockData: Ref[F, BlockData],
     val invalidBlocks: InvalidBlocks[F]
 ) extends HasCost[F] {
-  def readAndClearErrorVector(): F[Vector[InterpreterError]] = errorLog.readAndClearErrorVector()
+  def readAndClearErrorVector(): F[Vector[InterpreterError]] =
+    errorReporter.getAndSet(none) >>= {
+      case Some(interpreterError: InterpreterError) => Vector(interpreterError).pure[F]
+      case Some(throwable)                          => throwable.raiseError[F, Vector[InterpreterError]]
+      case None                                     => Vector.empty[InterpreterError].pure[F]
+    }
   def close(): F[Unit] =
     for {
       _ <- space.close()
@@ -289,9 +294,11 @@ object Runtime {
       P: Parallel[F]
   ): F[Runtime[F]] =
     for {
-      cost <- CostAccounting.emptyCost[F]
+      cost          <- CostAccounting.emptyCost[F]
+      errorReporter <- Ref.of[F, Option[Throwable]](none)
       runtime <- {
         implicit val c = cost
+        implicit val e = errorReporter
         create(spaceAndReplay, extraSystemProcesses)
       }
     } yield runtime
@@ -343,13 +350,13 @@ object Runtime {
     )
   }
 
-  def setupReducer[F[_]: Concurrent: Log: Metrics: Span](
+  def setupReducer[F[_]: Concurrent: Log: Metrics: Span: _error](
       chargingRSpace: RhoTuplespace[F],
       blockDataRef: Ref[F, BlockData],
       invalidBlocks: InvalidBlocks[F],
       extraSystemProcesses: Seq[SystemProcess.Definition[F]],
       urnMap: Map[String, Par]
-  )(implicit ft: FunctorTell[F, InterpreterError], cost: _cost[F], P: Parallel[F]): Reduce[F] = {
+  )(implicit cost: _cost[F], P: Parallel[F]): Reduce[F] = {
     lazy val replayDispatchTable: RhoDispatchMap[F] =
       dispatchTableCreator(
         chargingRSpace,
@@ -384,11 +391,10 @@ object Runtime {
       extraSystemProcesses: Seq[SystemProcess.Definition[F]] = Seq.empty
   )(
       implicit P: Parallel[F],
-      cost: _cost[F]
+      cost: _cost[F],
+      errorReporter: _error[F]
   ): F[Runtime[F]] = {
-    val errorLog                                      = new ErrorLog[F]()
-    implicit val ft: FunctorTell[F, InterpreterError] = errorLog
-    val (space, replaySpace)                          = spaceAndReplay
+    val (space, replaySpace) = spaceAndReplay
     for {
       mapsAndRefs                                     <- setupMapsAndRefs(extraSystemProcesses)
       (blockDataRef, invalidBlocks, urnMap, procDefs) = mapsAndRefs
@@ -420,7 +426,7 @@ object Runtime {
         replayReducer,
         space,
         replaySpace,
-        errorLog,
+        errorReporter,
         cost,
         blockDataRef,
         invalidBlocks

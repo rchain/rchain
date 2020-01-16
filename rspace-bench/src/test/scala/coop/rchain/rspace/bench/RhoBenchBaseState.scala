@@ -1,8 +1,9 @@
 package coop.rchain.rspace.bench
 
-import coop.rchain.rholang.interpreter.{ParBuilderUtil, Runtime}
+import coop.rchain.rholang.interpreter.{_error, ParBuilderUtil, Runtime}
 import java.nio.file.{Files, Path}
 
+import cats.effect.concurrent.Ref
 import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.metrics
@@ -53,10 +54,12 @@ abstract class RhoBenchBaseState {
 
   def createRuntime(): Runtime[Task] =
     (for {
-      cost <- CostAccounting.emptyCost[Task]
-      sar  <- Runtime.setupRSpace[Task](dbDir, mapSize)
+      cost          <- CostAccounting.emptyCost[Task]
+      errorReporter <- Ref.of[Task, Option[Throwable]](None)
+      sar           <- Runtime.setupRSpace[Task](dbDir, mapSize)
       runtime <- {
-        implicit val c: _cost[Task] = cost
+        implicit val c: _cost[Task]  = cost
+        implicit val e: _error[Task] = errorReporter
         Runtime.create[Task]((sar._1, sar._2))
       }
     } yield (runtime)).unsafeRunSync
