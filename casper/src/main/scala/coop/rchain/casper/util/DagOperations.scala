@@ -118,4 +118,18 @@ object DagOperations {
         .map(_.head)
     }
   }
+
+  def isDescendantOf[F[_]: Monad](
+      candidate: BlockMetadata,
+      target: BlockMetadata,
+      dag: BlockDagRepresentation[F]
+  ): F[Boolean] =
+    DagOperations
+      .bfTraverseF(List(candidate)) { b =>
+        b.parents.traverse(dag.lookup).map { parentOpts =>
+          parentOpts.flatten.distinct
+            .filter(_.blockNum >= target.blockNum)
+        }
+      }
+      .contains(target)
 }
