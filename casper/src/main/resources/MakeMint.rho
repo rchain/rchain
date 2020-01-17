@@ -47,6 +47,7 @@ in {
                 }
               }
             } |
+            // Set to Nil to disable logging
             contract thisPurse(@"setLog", logCh, ack) = {
               for (_ <- logStore) { logStore!(*logCh) | ack!(Nil) }
             } |
@@ -68,9 +69,9 @@ in {
             } |
             contract thisPurse(@"deposit", @amount, @src, success) = {
               new result in {
-                for (logCh <<- logStore) {
-                  @src!(bundle0{bundle0{src}|*decr}, amount, *result) | //call src decr function.
-                  for(@decrSuccess, @auth <- result) {
+                @src!(bundle0{bundle0{src}|*decr}, amount, *result) | //call src decr function.
+                for(@decrSuccess, @auth <- result) {
+                  for (logCh <<- logStore) {
                     if (decrSuccess and auth == *decr) {
                       if (Nil != *logCh) { logCh!(["deposit", amount, true]) } |
                       balance!("add", amount, *success) // add transferred amount to this purse
