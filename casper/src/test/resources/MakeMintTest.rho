@@ -135,13 +135,16 @@ in {
           for (_ <- aliceAck; _ <- bobAck) {
             aliceAPurse!("deposit", 10, *bobAPurse, *depositSuccess) |
             for (@depositResult <- depositSuccess) {
-              rhoSpec!("assertMany",
-                [
-                  (depositResult, "logging should succeed"),
-                  ((["deposit", 10, true], "== <-", *aliceLog), "log deposit"),
-                  ((["*decr", 10, true], "== <-", *bobLog), "log decrement"),
-                ],
-                *ackCh)
+              for(@["deposit", amountA, src, depOk, timestampA, blockNumberA, senderA] <- aliceLog;
+                  @["*decr", amountB, subOk, timestampB, blockNumberB, senderB] <- bobLog) {
+                rhoSpec!("assertMany",
+                  [
+                    (depositResult, "logging should succeed"),
+                    (([10, true] == [amountA, depOk]), "log deposit"),
+                    (([10, true] == [amountB, subOk]), "log decrement"),
+                  ],
+                  *ackCh)
+              }
             }
           }
         }

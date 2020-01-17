@@ -199,13 +199,20 @@ match (
           withVaultAndIdentityOf!(genesisPubKey, *genesisVaultCh) |
           RevVault!("findOrCreate", aliceRevAddress, *aliceVaultCh) |
           for (genesisVault, @genesisVaultKey <- genesisVaultCh; @(true, aliceVault) <- aliceVaultCh) {
-            new ack, logCh in {
+            new ack, logCh, assertCh1, assertCh2 in {
               stdlog!("info", "calling setLog") |
-              genesisVault!("setLog", *logCh, genesisVaultKey, *ack) |
+              genesisVault!("setLog", *logCh, genesisVaultKey, *ack, *stdlog) |
               for (_ <- ack) {
                 stdlog!("info", "got ack, transfering") |
-                genesisVault!("transfer", aliceRevAddress, 1000, genesisVaultKey, *ret) |
-                rhoSpec!("assert", (["*decr", 1000, true], "== <-", *logCh), "transfer successfully logged", *ackCh)
+                genesisVault!("transfer", aliceRevAddress, 1000, genesisVaultKey, *ret, *stdlog) |
+                for (@["transfer", revAddress, amount, result, timestamp, blockNumber, sender] <- logCh) {
+                  stdlog!("info", ["got transfer log message", ["transfer", revAddress, amount, result, timestamp, blockNumber, sender]]) |
+                  stdlog!("info", ["aliceRevAddress", aliceRevAddress]) |
+                  rhoSpec!("assert", 
+                    ([aliceRevAddress, 1000, (true, Nil)] == [revAddress, amount, result]), 
+                    "transfer successfully logged", 
+                    *ackCh)
+                }
               }
             }
           }

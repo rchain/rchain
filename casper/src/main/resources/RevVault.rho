@@ -154,22 +154,59 @@ in {
 
             contract _newVault(revVault, @ownRevAddress, purse) = {
 
+              new logStore in {
+
+                logStore!(Nil) |
+
                 contract revVault(@"balance", ret) = {
                   purse!("getBalance", *ret)
                 } |
 
                 contract revVault(@"transfer", @revAddress, @amount, authKey, ret) = {
-                  _transferTemplate!(ownRevAddress, *purse, revAddress, amount, *authKey, *ret)
+                  revVault!("transfer", revAddress, amount, *authKey, *ret, Nil)
+                }|
+                contract revVault(@"transfer", @revAddress, @amount, authKey, ret, stdlog) = {
+                  new ret2 in {
+                    stdlog!("info", "calling _transferTemplate") |
+                    _transferTemplate!(ownRevAddress, *purse, revAddress, amount, *authKey, *ret2) |
+                    for (@result <- ret2) {
+                      stdlog!("info", ["returning", result]) |
+                      ret!(result) |
+                      for (logCh <<- logStore) {
+                        stdlog!("info", "got log") |
+                        if (Nil != *logCh) {
+                          stdlog!("info", "logCh not Nil") |
+                          new bd(`rho:block:data`), bdCh in {
+                            bd!(*bdCh) |
+                            for (@timestamp, @blockNumber, @sender <- bdCh) {
+                              stdlog!("info", ["got blockData, logging", ["transfer", revAddress, amount, result, timestamp, blockNumber, sender]]) |
+                              logCh!(["transfer", revAddress, amount, result, timestamp, blockNumber, sender])
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
                 } |
 
-                contract revVault(@"setLog", logAddress, authKey, ret) = {
+                // Set to Nil to disable logging
+                contract revVault(@"setLog", logCh, authKey, ret) = {
+                  revVault!("setLog", *logCh, *authKey, *ret, Nil)
+                } |
+                contract revVault(@"setLog", logCh, authKey, ret, stdlog) = {
                   new authKeyValidCh in {
+                    stdlog!("info", "in setLog, checking authKey") |
                     @AuthKey!("check", *authKey, (*_revVault, ownRevAddress), *authKeyValidCh) |
                     for (@result <- authKeyValidCh) {
+                      stdlog!("info", ["got result", result]) |
                       if (result) {
                         new ack in {
-                          purse!("setLog", *logAddress, *ack) |
+                          stdlog!("info", "Setting logCh") |
+                          logStore!(*logCh) |
+                          // Set logging on the purse so that we also see deposits into the vault
+                          purse!("setLog", *logCh, *ack) |
                           for (_ <- ack) {
+                            stdlog!("info", "succeeded in setting logCh on purse") |
                             ret!(true)
                           }
                         }
@@ -183,6 +220,8 @@ in {
                 contract @{ownRevAddress | bundle0{*_revVault}}(@"_deposit", depositPurse, retCh) = {
                   _depositTemplate!(*purse, *depositPurse, *retCh)
                 }
+
+              }
 
             } |
 
