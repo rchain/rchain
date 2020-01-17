@@ -104,7 +104,7 @@ in {
                         new bd(`rho:block:data`), bdCh in {
                           bd!(*bdCh) |
                           for (@timestamp, @blockNumber, @sender <- bdCh) {
-                            logCh!(["deposit", amount, src.toByteArray(), true, timestamp, blockNumber, sender])
+                            logCh!(["deposit", amount, src.toByteArray(), false, timestamp, blockNumber, sender])
                           }
                         }
                       }
