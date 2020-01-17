@@ -203,7 +203,7 @@ match (
               genesisVault!("setLog", *logCh, genesisVaultKey, *ack) |
               for (_ <- ack) {
                 genesisVault!("transfer", aliceRevAddress, 1000, genesisVaultKey, *ret) |
-                for (@["transfer", revAddress, amount, result, timestamp, blockNumber, sender] <- logCh) {
+                for (@["transfer", revAddress, amount, result, blockNumber, timestamp, sender] <- logCh) {
                   rhoSpec!("assert", 
                     ([aliceRevAddress, 1000, (true, Nil)] == [revAddress, amount, result]), 
                     "transfer successfully logged", 

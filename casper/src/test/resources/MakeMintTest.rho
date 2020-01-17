@@ -135,8 +135,8 @@ in {
           for (_ <- aliceAck; _ <- bobAck) {
             aliceAPurse!("deposit", 10, *bobAPurse, *depositSuccess) |
             for (@depositResult <- depositSuccess) {
-              for(@["deposit", amountA, src, depOk, timestampA, blockNumberA, senderA] <- aliceLog;
-                  @["*decr", amountB, subOk, timestampB, blockNumberB, senderB] <- bobLog) {
+              for(@["deposit", amountA, src, depOk, blockNumberA, timestampA, senderA] <- aliceLog;
+                  @["*decr", amountB, subOk, blockNumberB, timestampB, senderB] <- bobLog) {
                 rhoSpec!("assertMany",
                   [
                     (depositResult, "logging should succeed"),
