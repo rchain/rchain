@@ -422,7 +422,7 @@ in {
                                 "withdrawers"     : newWithdrawers,
                                 "randomImages"    : {},
                                 "randomNumbers"   : {},
-                              }, Nil)
+                              }, (true, Nil))
                             }
                           }
                         }
