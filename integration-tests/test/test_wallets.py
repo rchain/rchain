@@ -111,8 +111,8 @@ def test_transfer_failed_with_invalid_key(command_line_options: CommandLineOptio
 
 def test_transfer_failed_with_insufficient_funds(command_line_options: CommandLineOptions, docker_client: DockerClient, random_generator: Random) -> None:
     genesis_vault = {
-        CHARLIE_KEY: 50000000,
-        ALICE_KEY: 10000000
+        CHARLIE_KEY: 5000000,
+        ALICE_KEY: 1000000
     }
     with testing_context(command_line_options, random_generator, docker_client, wallets_dict=genesis_vault) as context, \
             started_bootstrap_with_network(context=context) as bootstrap:
@@ -120,13 +120,13 @@ def test_transfer_failed_with_insufficient_funds(command_line_options: CommandLi
         bob_rev_address = BOB_KEY.get_public_key().get_rev_address()
         alice_rev_address = ALICE_KEY.get_public_key().get_rev_address()
 
-        bob_balance = get_vault_balance(context, bootstrap, bob_rev_address, CHARLIE_KEY, 1000000, 1)
-        alice_balance = get_vault_balance(context, bootstrap, alice_rev_address, CHARLIE_KEY, 1000000, 1)
+        bob_balance = get_vault_balance(context, bootstrap, bob_rev_address, CHARLIE_KEY, 100000, 1)
+        alice_balance = get_vault_balance(context, bootstrap, alice_rev_address, CHARLIE_KEY, 100000, 1)
         assert bob_balance == 0
-        assert alice_balance < 20000000
+        assert alice_balance < 2000000
 
         with pytest.raises(TransderFundsError) as e:
-            transfer_funds(context, bootstrap, alice_rev_address, bob_rev_address, 20000000, ALICE_KEY, 1000000, 1)
+            transfer_funds(context, bootstrap, alice_rev_address, bob_rev_address, 2000000, ALICE_KEY, 100000, 1)
         assert e.value.reason == "Insufficient funds"
-        bob_balance = get_vault_balance(context, bootstrap, bob_rev_address, CHARLIE_KEY, 1000000, 1)
+        bob_balance = get_vault_balance(context, bootstrap, bob_rev_address, CHARLIE_KEY, 100000, 1)
         assert bob_balance == 0
