@@ -17,8 +17,7 @@ object RholangOnlyDispatcher {
       implicit
       cost: _cost[M],
       parallel: Parallel[M],
-      s: Sync[M],
-      ft: FunctorTell[M, InterpreterError]
+      s: Sync[M]
   ): (Dispatch[M, ListParWithRandom, TaggedContinuation], DebruijnInterpreter[M, F]) = {
 
     lazy val dispatcher: Dispatch[M, ListParWithRandom, TaggedContinuation] =

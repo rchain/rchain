@@ -49,14 +49,8 @@ class Interactive private (runtime: Runtime[Task])(implicit scheduler: Scheduler
 
   def checkpointNames: List[String] = checkpoints.keys.toList
 
-  def eval(code: String): Unit = {
+  def eval(code: String): Unit =
     TestUtil.eval(code, runtime, Map.empty).runSyncUnsafe(Duration.Inf)
-    val errors = runtime.errorLog.readAndClearErrorVector().unsafeRunSync
-    if (errors.nonEmpty) {
-      println("Errors during execution:")
-      errors.foreach(println)
-    }
-  }
   def evalFile(path: String): Unit = eval(scala.io.Source.fromFile(path).mkString)
   def query(code: String, name: String = "__out__"): Seq[Par] = {
     checkpoint("preQuery")
