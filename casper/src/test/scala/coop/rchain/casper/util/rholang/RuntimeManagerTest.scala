@@ -8,7 +8,12 @@ import coop.rchain.casper.protocol.{DeployData, ProcessedDeploy}
 import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
 import coop.rchain.casper.util.rholang.SystemDeployPlayResult.{PlayFailed, PlaySucceeded}
 import coop.rchain.casper.util.rholang.SystemDeployReplayResult.{ReplayFailed, ReplaySucceeded}
-import coop.rchain.casper.util.rholang.costacc.{CheckBalance, PreChargeDeploy, RefundDeploy}
+import coop.rchain.casper.util.rholang.costacc.{
+  CheckBalance,
+  CloseBlockDeploy,
+  PreChargeDeploy,
+  RefundDeploy
+}
 import coop.rchain.casper.util.{ConstructDeploy, GenesisBuilder}
 import coop.rchain.catscontrib.effect.implicits._
 import coop.rchain.crypto.PublicKey
@@ -173,6 +178,21 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
           }
         }
       }
+    }
+  }
+
+  "closeBlock" should "make epoch change and reward validator" in effectTest {
+    runtimeManagerResource.use { runtimeManager =>
+      compareSuccessfulSystemDeploys(runtimeManager)(genesis.body.state.postStateHash)(
+        new CloseBlockDeploy(
+          parentHash = genesis.blockHash,
+          initialRand = Blake2b512Random(Array(0.toByte))
+        ),
+        new CloseBlockDeploy(
+          parentHash = genesis.blockHash,
+          initialRand = Blake2b512Random(Array(0.toByte))
+        )
+      )(_ => true)
     }
   }
 
