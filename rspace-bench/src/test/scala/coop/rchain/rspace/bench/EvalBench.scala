@@ -17,19 +17,9 @@ class EvalBench {
 
   import EvalBench._
 
-  def processErrors(errors: Vector[Throwable]): Unit = if (errors.nonEmpty) {
-    throw new RuntimeException(
-      errors
-        .map(_.toString())
-        .mkString("Errors received during evaluation:\n", "\n", "\n")
-    )
-  }
-
-  def createTest(state: EvalBenchStateBase): Task[Vector[Throwable]] = {
+  def createTest(state: EvalBenchStateBase): Task[Unit] = {
     val par = state.term.getOrElse(throw new Error("Failed to prepare executable rholang term"))
-    state.runtime.reducer
-      .inj(par)(state.rand)
-      .flatMap(_ => state.runtime.readAndClearErrorVector())
+    state.runtime.reducer.inj(par)(state.rand)
   }
 
   //if we run multiple tests on a single-threaded scheduler
@@ -39,16 +29,14 @@ class EvalBench {
   @Threads(1)
   def reduceMVCEPPST(state: MVCEPPBenchState): Unit = {
     val runTask = createTest(state).executeOn(state.singleThreadedScheduler, forceAsync = false)
-    processErrors(
-      runTask.runSyncUnsafe(Duration.Inf)(state.singleThreadedScheduler, CanBlock.permit)
-    )
+    runTask.runSyncUnsafe(Duration.Inf)(state.singleThreadedScheduler, CanBlock.permit)
   }
 
   @Benchmark
   def reduceMVCEPPMT(state: MVCEPPBenchState): Unit = {
     implicit val scheduler: Scheduler = monix.execution.Scheduler.Implicits.global
     val runTask                       = createTest(state)
-    processErrors(Await.result(runTask.runToFuture, Duration.Inf))
+    Await.result(runTask.runToFuture, Duration.Inf)
   }
 }
 
