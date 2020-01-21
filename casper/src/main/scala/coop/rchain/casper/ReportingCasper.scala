@@ -29,10 +29,8 @@ import coop.rchain.rholang.interpreter.Runtime.{
   SystemProcess
 }
 import coop.rchain.rholang.interpreter.accounting.{_cost, CostAccounting}
-import coop.rchain.rholang.interpreter.errors.InterpreterError
 import coop.rchain.rholang.interpreter.storage._
 import coop.rchain.rholang.interpreter.{
-  ErrorLog,
   EvaluateResult,
   HasCost,
   Reduce,
@@ -320,19 +318,17 @@ object ReportingCasper {
     private def computeEffect(runtime: ReportingRuntime[F], reducer: Reduce[F])(
         deploy: Signed[DeployData]
     ): F[EvaluateResult] =
-      RuntimeManager.evaluate(reducer, runtime.cost, runtime.errorLog)(deploy)
+      RuntimeManager.evaluate(reducer, runtime.cost)(deploy)
   }
 }
 
 class ReportingRuntime[F[_]: Sync](
     val replayReducer: Reduce[F],
     val reportingSpace: RhoReportingRspace[F],
-    val errorLog: ErrorLog[F],
     val cost: _cost[F],
     val blockData: Ref[F, BlockData],
     val invalidBlocks: Runtime.InvalidBlocks[F]
 ) extends HasCost[F] {
-  def readAndClearErrorVector(): F[Vector[InterpreterError]] = errorLog.readAndClearErrorVector()
   def close(): F[Unit] =
     for {
       _ <- reportingSpace.close()
@@ -362,9 +358,7 @@ object ReportingRuntime {
   )(
       implicit P: Parallel[F],
       cost: _cost[F]
-  ): F[ReportingRuntime[F]] = {
-    val errorLog                                      = new ErrorLog[F]()
-    implicit val ft: FunctorTell[F, InterpreterError] = errorLog
+  ): F[ReportingRuntime[F]] =
     for {
       mapsAndRefs                                     <- setupMapsAndRefs(extraSystemProcesses)
       (blockDataRef, invalidBlocks, urnMap, procDefs) = mapsAndRefs
@@ -378,7 +372,6 @@ object ReportingRuntime {
       res <- Runtime.introduceSystemProcesses(reporting :: Nil, procDefs)
     } yield {
       assert(res.forall(_.isEmpty))
-      new ReportingRuntime[F](reducer, reporting, errorLog, cost, blockDataRef, invalidBlocks)
+      new ReportingRuntime[F](reducer, reporting, cost, blockDataRef, invalidBlocks)
     }
-  }
 }

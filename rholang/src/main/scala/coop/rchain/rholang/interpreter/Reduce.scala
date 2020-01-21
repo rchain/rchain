@@ -1,18 +1,12 @@
 package coop.rchain.rholang.interpreter
 
-import java.lang
-
 import cats.effect.Sync
 import cats.implicits._
-import cats.mtl.FunctorTell
 import cats.{Eval => _}
 import com.google.protobuf.ByteString
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.hash.Blake2b512Random
-import coop.rchain.metrics.Span
 import coop.rchain.models.Expr.ExprInstance._
-import coop.rchain.models.GUnforgeable.UnfInstance
-import coop.rchain.models.GUnforgeable.UnfInstance.{GDeployIdBody, GDeployerIdBody, GPrivateBody}
 import coop.rchain.models.TaggedContinuation.TaggedCont.ParBody
 import coop.rchain.models.Var.VarInstance
 import coop.rchain.models.Var.VarInstance.{BoundVar, FreeVar, Wildcard}
@@ -31,7 +25,7 @@ import scalapb.GeneratedMessage
 
 import scala.collection.SortedSet
 import scala.collection.immutable.BitSet
-import scala.util.{Random, Try}
+import scala.util.Try
 
 /** Reduce is the interface for evaluating Rholang expressions.
   *
@@ -53,7 +47,6 @@ class DebruijnInterpreter[M[_], F[_]](
 )(
     implicit parallel: cats.Parallel[M],
     syncM: Sync[M],
-    fTell: FunctorTell[M, InterpreterError],
     cost: _cost[M]
 ) extends Reduce[M] {
 

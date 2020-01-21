@@ -29,7 +29,6 @@ trait Interpreter[F[_]] {
 
   def injAttempt(
       reducer: Reduce[F],
-      errorLog: ErrorLog[F],
       term: String,
       initialPhlo: Cost,
       normalizerEnv: Map[String, Par]
@@ -61,7 +60,7 @@ object Interpreter {
       ): F[EvaluateResult] = {
         implicit val rand: Blake2b512Random = Blake2b512Random(128)
         runtime.space.createSoftCheckpoint() >>= { checkpoint =>
-          injAttempt(runtime.reducer, runtime.errorLog, term, initialPhlo, normalizerEnv).attempt >>= {
+          injAttempt(runtime.reducer, term, initialPhlo, normalizerEnv).attempt >>= {
             case Right(evaluateResult) =>
               if (evaluateResult.errors.nonEmpty)
                 runtime.space.revertToSoftCheckpoint(checkpoint).as(evaluateResult)
@@ -75,7 +74,6 @@ object Interpreter {
 
       def injAttempt(
           reducer: Reduce[F],
-          errorLog: ErrorLog[F],
           term: String,
           initialPhlo: Cost,
           normalizerEnv: Map[String, Par]
