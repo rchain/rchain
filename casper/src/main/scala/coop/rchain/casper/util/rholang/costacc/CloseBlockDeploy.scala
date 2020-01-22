@@ -4,16 +4,14 @@ import coop.rchain.casper.util.rholang.{SystemDeploy, SystemDeployFailure, Syste
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.models.NormalizerEnv.{Contains, ToEnvMap}
 import coop.rchain.rholang.interpreter.RhoType._
-import coop.rchain.models.BlockHash._
 
-final case class CloseBlockDeploy(parentHash: BlockHash, initialRand: Blake2b512Random)
-    extends SystemDeploy(initialRand) {
+final class CloseBlockDeploy(initialRand: Blake2b512Random) extends SystemDeploy(initialRand) {
   import coop.rchain.models._
   import rholang.{implicits => toPar}
   import shapeless._
 
   type Output = (RhoBoolean, Either[RhoString, RhoNil])
-  type Result = Unit
+  type Result = Boolean
 
   val `sys:casper:closeBlock` = Witness("sys:casper:closeBlock")
   type `sys:casper:closeBlock` = `sys:casper:closeBlock`.T
@@ -44,8 +42,8 @@ final case class CloseBlockDeploy(parentHash: BlockHash, initialRand: Blake2b512
 
   protected override def processResult(
       value: (Boolean, Either[String, Unit])
-  ): Either[SystemDeployFailure, Unit] = value match {
-    case (true, _)               => Right(())
+  ): Either[SystemDeployFailure, Boolean] = value match {
+    case (true, _)               => Right(true)
     case (false, Left(errorMsg)) => Left(SystemDeployUserError(errorMsg))
     case _                       => Left(SystemDeployUserError("<no cause>"))
   }

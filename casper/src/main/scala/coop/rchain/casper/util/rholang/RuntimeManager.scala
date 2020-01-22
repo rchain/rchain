@@ -10,14 +10,15 @@ import coop.rchain.casper.CasperMetricsSource
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.rholang.RuntimeManager.{evaluate, StateHash}
 import SystemDeployPlatformFailure._
-import SystemDeployPlayResult.PlaySucceeded
 import SystemDeployUserError._
-import coop.rchain.casper.util.rholang.costacc.{PreChargeDeploy, RefundDeploy, SlashDeploy}
-import coop.rchain.casper.util.rholang.costacc.{PreChargeDeploy, SlashDeploy}
-import coop.rchain.casper.util.{ConstructDeploy, EventConverter}
-import coop.rchain.crypto.PublicKey
+import coop.rchain.casper.util.rholang.costacc.{
+  CloseBlockDeploy,
+  PreChargeDeploy,
+  RefundDeploy,
+  SlashDeploy
+}
 import coop.rchain.crypto.codec.Base16
-import coop.rchain.casper.util.{ConstructDeploy, EventConverter, ProtoUtil}
+import coop.rchain.casper.util.{ConstructDeploy, EventConverter}
 import coop.rchain.crypto.PublicKey
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.crypto.signatures.Signed
@@ -244,7 +245,9 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log](
           systemDeploy.extractResult(par)
         case Some((_, unexpectedResults)) =>
           UnexpectedResult(unexpectedResults.flatMap(_.pars)).asLeft
-        case None => ConsumeFailed.asLeft
+        case None => {
+          ConsumeFailed.asLeft
+        }
       }
       .leftSemiflatMap {
         case platformFailure: SystemDeployPlatformFailure =>
@@ -285,7 +288,7 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log](
           _ <- runtime.blockData.set(blockData)
           _ <- setInvalidBlocks(invalidBlocks, runtime)
           _ <- Span[F].mark("before-process-deploys")
-          result <- processDeploys(
+          result <- processDeploysAndCloseBlock(
                      runtime,
                      startHash,
                      terms,
@@ -303,9 +306,14 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log](
     withRuntimeLock { runtime =>
       Span[F].trace(computeGenesisLabel) {
         for {
-          _          <- runtime.blockData.set(BlockData(blockTime, 0, PublicKey(Array[Byte]())))
-          _          <- Span[F].mark("before-process-deploys")
-          evalResult <- processDeploys(runtime, startHash, terms, processDeploy(runtime))
+          _ <- runtime.blockData.set(BlockData(blockTime, 0, PublicKey(Array[Byte]())))
+          _ <- Span[F].mark("before-genesis-process-deploys")
+          evalResult <- processDeploysAndCloseBlock(
+                         runtime,
+                         startHash,
+                         terms,
+                         processDeploy(runtime)
+                       )
         } yield (startHash, evalResult._1, evalResult._2)
       }
     }
@@ -336,7 +344,37 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log](
       }
     }
 
-  private def processDeploys(
+  private def replayCloseBlockDeploy(runtime: Runtime[F], startHash: StateHash)(
+      implicit Log: Log[F]
+  ) = {
+    val rand = Tools.rng(startHash.toByteArray)
+    for {
+      _                <- Log.info("Trying to replay closeBlock")
+      closeBlockDeploy = new CloseBlockDeploy(rand)
+      outcome          <- replaySystemDeployInternal(runtime)(closeBlockDeploy, None).value
+    } yield outcome
+  }
+
+  private def processCloseDeploy(runtime: Runtime[F], startHash: StateHash)(
+      implicit Log: Log[F]
+  ) = {
+    val rand = Tools.rng(startHash.toByteArray)
+    for {
+      _                <- Log.info("Trying to closeBlock")
+      closeBlockDeploy = new CloseBlockDeploy(rand)
+      outcome          <- playSystemDeployInternal(runtime)(closeBlockDeploy)
+      (logs, result)   = outcome
+      _ = result match {
+        case Right(r) =>
+          Log.info("Successfully to closeBlock")
+        case Left(e) =>
+          Log.info("Trying to closeBlock")
+      }
+
+    } yield (Unit)
+  }
+
+  private def processDeploysAndCloseBlock(
       runtime: Runtime[F],
       startHash: StateHash,
       terms: Seq[Signed[DeployData]],
@@ -347,6 +385,7 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log](
     for {
       _               <- runtime.space.reset(Blake2b256Hash.fromByteString(startHash))
       res             <- terms.toList.traverse(processDeploy)
+      _               <- processCloseDeploy(runtime, startHash)
       _               <- Span[F].mark("before-process-deploys-create-checkpoint")
       finalCheckpoint <- runtime.space.createCheckpoint()
       finalStateHash  = finalCheckpoint.root
@@ -451,6 +490,9 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log](
                 ().asRight[ReplayFailure].asRight[Seq[ProcessedDeploy]].pure[F]
               else replayDeploy(ts.head).map(_.map(_.asLeft[Unit]).toRight(ts.tail))
             }
+          )
+      _ <- EitherT.right(
+            replayCloseBlockDeploy(runtime, startHash)
           )
       _ <- EitherT(
             systemDeploys.tailRecM { ts =>
