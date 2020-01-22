@@ -686,48 +686,4 @@ class InterpreterUtilTest
         } yield tsHash should be(Some(computedTsHash))
       }
   }
-
-  "findMultiParentsBlockHashesForReplay" should "filter out duplicate ancestors of main parent block" in withGenesis(
-    genesisContext
-  ) { implicit blockStore => implicit blockDagStorage => runtimeManager =>
-    val b1DeploysWithCost = prepareDeploys(Vector("@1!(1)"), PCost(1))
-    val b2DeploysWithCost = prepareDeploys(Vector("@2!(2)"), PCost(1))
-    val b3DeploysWithCost = prepareDeploys(Vector("@3!(3)"), PCost(1))
-
-    /*
-     * DAG Looks like this:
-     *
-     *           b3
-     *          /  \
-     *        b1    b2
-     *         \    /
-     *         genesis
-     */
-
-    for {
-      b1 <- buildBlock[Task](
-             Seq(genesis.blockHash),
-             ByteString.copyFrom(genesisContext.validatorPks.head.bytes),
-             0,
-             deploys = b1DeploysWithCost
-           )
-      b2 <- buildBlock[Task](
-             Seq(genesis.blockHash),
-             ByteString.copyFrom(genesisContext.validatorPks.head.bytes),
-             1,
-             deploys = b2DeploysWithCost
-           )
-      _ <- buildBlock[Task](
-            Seq(b1.blockHash, b2.blockHash),
-            now = 2,
-            deploys = b3DeploysWithCost
-          )
-      _           <- step(runtimeManager)(b1, genesis)
-      _           <- step(runtimeManager)(b2, genesis)
-      dag         <- blockDagStorage.getRepresentation
-      blockHashes <- InterpreterUtil.findMultiParentsBlockHashesForReplay(Seq(b1, b2), dag)
-      _           = withClue("Main parent hasn't been filtered out: ") { blockHashes.size shouldBe 1 }
-    } yield ()
-  }
-
 }
