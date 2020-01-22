@@ -571,7 +571,7 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
   private def invalidReplay(source: String): Task[Either[ReplayFailure, StateHash]] =
     runtimeManagerResource.use { runtimeManager =>
       for {
-        deploy        <- ConstructDeploy.sourceDeployNowF(source)
+        deploy        <- ConstructDeploy.sourceDeployNowF(source, phloLimit = 10000)
         time          <- timeF.currentMillis
         genPostState  = genesis.body.state.postStateHash
         blockData     = BlockData(time, 0L, genesisContext.validatorPks.head)
@@ -605,7 +605,7 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
   "replayComputeState" should "not catch discrepancies in initial and replay cost when user errors are thrown" in effectTest {
     invalidReplay("@0!(0) | for(@x <- @0){ x.undefined() }").map {
       case Left(ReplayCostMismatch(initialCost, replayCost)) =>
-        assert(initialCost == 395L && replayCost == 396L)
+        assert(initialCost == 9999L && replayCost == 10000L)
       case _ => fail()
     }
   }
