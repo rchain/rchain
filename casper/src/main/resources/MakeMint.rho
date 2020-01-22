@@ -31,17 +31,36 @@ in {
         } |
         contract internalMakePurse(balance, return) = {
           //balance must be a name that NonNegativeNumber contract is listening on
-          new thisPurse in {
+          new thisPurse, logStore in {
+            logStore!(Nil) |
             new letCh in { // let thisDecr = ...
-              letCh!(bundle0{bundle0{*thisPurse}|*decr}) | for (thisDecr <- letCh) {
+              letCh!(bundle0{bundle0{*thisPurse}|*decr}) |
+              for (thisDecr <- letCh) {
                 contract thisPurse(@=*thisDecr, @amount, return) = {
                   new success in {
-                    balance!("sub", amount, *success) | for (@subOk <- success) {
-                      return!(subOk, *decr)
+                    balance!("sub", amount, *success) | 
+                    for (@subOk <- success) {
+                      return!(subOk, *decr) |
+
+                      for (logCh <<- logStore) {
+                        if (Nil != *logCh) { 
+                          new bd(`rho:block:data`), bdCh in {
+                            bd!(*bdCh) |
+                            for (@timestamp, @blockNumber, @sender <- bdCh) {
+                              logCh!(["*decr", amount, subOk, blockNumber, timestamp, sender]) 
+                            }
+                          }
+                        }
+                      }
+
                     }
                   }
                 }
               }
+            } |
+            // Set to Nil to disable logging
+            contract thisPurse(@"setLog", logCh, ack) = {
+              for (_ <- logStore) { logStore!(*logCh) | ack!(Nil) }
             } |
             contract thisPurse(@"getBalance", return) = { balance!("value", *return) } |
             contract thisPurse(@"sprout", return) = { thisMint!("makePurse", 0, *return) } |
@@ -63,10 +82,33 @@ in {
               new result in {
                 @src!(bundle0{bundle0{src}|*decr}, amount, *result) | //call src decr function.
                 for(@decrSuccess, @auth <- result) {
-                  if (decrSuccess and auth == *decr) {
-                    balance!("add", amount, *success) // add transferred amount to this purse
-                  } else {
-                    success!(false) 
+                  for (logCh <<- logStore) {
+                    if (decrSuccess and auth == *decr) {
+                      // add transferred amount to this purse
+                      balance!("add", amount, *success) |
+                      
+                      // log
+                      if (Nil != *logCh) {
+                        new bd(`rho:block:data`), bdCh in {
+                          bd!(*bdCh) |
+                          for (@timestamp, @blockNumber, @sender <- bdCh) {
+                            logCh!(["deposit", amount, src.toByteArray(), true, blockNumber, timestamp, sender])
+                          }
+                        }
+                      }
+                    } else {
+                      success!(false) |
+                      
+                      // log
+                      if (Nil != *logCh) {
+                        new bd(`rho:block:data`), bdCh in {
+                          bd!(*bdCh) |
+                          for (@timestamp, @blockNumber, @sender <- bdCh) {
+                            logCh!(["deposit", amount, src.toByteArray(), false, blockNumber, timestamp, sender])
+                          }
+                        }
+                      }
+                    }
                   }
                 }
               }

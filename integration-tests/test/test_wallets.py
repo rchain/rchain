@@ -66,32 +66,32 @@ def get_vault_balance(context: TestingContext, node: Node, rev_addr: str, privat
 
 def test_alice_pay_bob(command_line_options: CommandLineOptions, docker_client: DockerClient, random_generator: Random) -> None:
     genesis_vault = {
-        ALICE_KEY: 5000000
+        ALICE_KEY: 50000000
     }
 
     with testing_context(command_line_options, random_generator, docker_client, wallets_dict=genesis_vault) as context, \
             started_bootstrap_with_network(context=context) as bootstrap:
         wait_for_approved_block_received_handler_state(context, bootstrap)
-        transfer_amount = 2000000
+        transfer_amount = 20000000
         alice_rev_address = ALICE_KEY.get_public_key().get_rev_address()
         bob_rev_address = BOB_KEY.get_public_key().get_rev_address()
-        alice_balance = get_vault_balance(context, bootstrap, alice_rev_address, ALICE_KEY, 100000, 1)
-        bob_balance = get_vault_balance(context, bootstrap, bob_rev_address, ALICE_KEY, 100000, 1)
-        assert alice_balance == 5000000 - 100000
+        alice_balance = get_vault_balance(context, bootstrap, alice_rev_address, ALICE_KEY, 1000000, 1)
+        bob_balance = get_vault_balance(context, bootstrap, bob_rev_address, ALICE_KEY, 1000000, 1)
+        assert alice_balance == 50000000 - 1000000
         assert bob_balance == 0
 
-        transfer_funds(context, bootstrap, alice_rev_address, bob_rev_address, transfer_amount, ALICE_KEY, 100000, 1)
+        transfer_funds(context, bootstrap, alice_rev_address, bob_rev_address, transfer_amount, ALICE_KEY, 1000000, 1)
 
-        alice_balance = get_vault_balance(context, bootstrap, alice_rev_address, ALICE_KEY, 100000, 1)
+        alice_balance = get_vault_balance(context, bootstrap, alice_rev_address, ALICE_KEY, 1000000, 1)
 
-        bob_balance = get_vault_balance(context, bootstrap, bob_rev_address, ALICE_KEY, 100000, 1)
+        bob_balance = get_vault_balance(context, bootstrap, bob_rev_address, ALICE_KEY, 1000000, 1)
         assert bob_balance == transfer_amount
 
 
 def test_transfer_failed_with_invalid_key(command_line_options: CommandLineOptions, docker_client: DockerClient, random_generator: Random) -> None:
     genesis_vault = {
-        CHARLIE_KEY: 5000000,
-        ALICE_KEY: 5000000
+        CHARLIE_KEY: 50000000,
+        ALICE_KEY: 50000000
     }
     with testing_context(command_line_options, random_generator, docker_client, wallets_dict=genesis_vault) as context, \
             started_bootstrap_with_network(context=context) as bootstrap:
@@ -99,13 +99,13 @@ def test_transfer_failed_with_invalid_key(command_line_options: CommandLineOptio
         bob_rev_address = BOB_KEY.get_public_key().get_rev_address()
         charlie_rev_address = CHARLIE_KEY.get_public_key().get_rev_address()
 
-        bob_balance = get_vault_balance(context, bootstrap, bob_rev_address, CHARLIE_KEY, 100000, 1)
+        bob_balance = get_vault_balance(context, bootstrap, bob_rev_address, CHARLIE_KEY, 1000000, 1)
         assert bob_balance == 0
 
         with pytest.raises(TransderFundsError) as e:
-            transfer_funds(context, bootstrap, charlie_rev_address, bob_rev_address, 100, ALICE_KEY, 100000, 1)
+            transfer_funds(context, bootstrap, charlie_rev_address, bob_rev_address, 100, ALICE_KEY, 1000000, 1)
         assert e.value.reason == "Invalid AuthKey"
-        bob_balance = get_vault_balance(context, bootstrap, bob_rev_address, CHARLIE_KEY, 100000, 1)
+        bob_balance = get_vault_balance(context, bootstrap, bob_rev_address, CHARLIE_KEY, 1000000, 1)
         assert bob_balance == 0
 
 
