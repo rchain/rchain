@@ -96,33 +96,35 @@ object Interpreter {
 
         // Convert InterpreterError(s) to EvaluateResult
         // - all other errors are rethrown (not valid interpreter errors)
-        evaluationResult
-          .handleErrorWith {
-
-            // Parsing error consumes only parsing cost
-            case ParserError(parseError: InterpreterError) =>
-              EvaluateResult(parsingCost, Vector(parseError)).pure[F]
-
-            // Only InterpreterError(s) (multiple errors are result of parallel execution)
-            // - all phlos is consumed
-            case AggregateError(ipErrs, errs) if errs.isEmpty =>
-              EvaluateResult(initialPhlo, ipErrs).pure[F]
-
-            // Aggregate fatal errors are rethrown
-            case error: AggregateError =>
-              error.raiseError[F, EvaluateResult]
-
-            // InterpreterError is returned as a result
-            // - all phlos is consumed
-            case error: InterpreterError =>
-              EvaluateResult(initialPhlo, Vector(error)).pure[F]
-
-            // Any other error is unexpected and it's fatal, rethrow
-            case error: Throwable =>
-              error.raiseError[F, EvaluateResult]
-
-          }
-
+        evaluationResult.handleErrorWith(
+          error => C.get >>= (phlosLeft => handleError(parsingCost, initialPhlo - phlosLeft, error))
+        )
       }
+
+      def handleError(parsingCost: Cost, evalCost: Cost, error: Throwable): F[EvaluateResult] =
+        error match {
+          // Parsing error consumes only parsing cost
+          case ParserError(parseError: InterpreterError) =>
+            EvaluateResult(parsingCost, Vector(parseError)).pure[F]
+
+          // Only InterpreterError(s) (multiple errors are result of parallel execution)
+          // - all phlos is consumed
+          case AggregateError(ipErrs, errs) if errs.isEmpty =>
+            EvaluateResult(evalCost, ipErrs).pure[F]
+
+          // Aggregate fatal errors are rethrown
+          case error: AggregateError =>
+            error.raiseError[F, EvaluateResult]
+
+          // InterpreterError is returned as a result
+          // - all phlos is consumed
+          case error: InterpreterError =>
+            EvaluateResult(evalCost, Vector(error)).pure[F]
+
+          // Any other error is unexpected and it's fatal, rethrow
+          case error: Throwable =>
+            error.raiseError[F, EvaluateResult]
+        }
+
     }
 }
