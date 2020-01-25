@@ -11,22 +11,19 @@ abstract class RhoReplayBenchBaseState extends RhoBenchBaseState {
       result <- runTask
       _      <- runtime.replaySpace.createCheckpoint()
     } yield result).unsafeRunSync
-    assert(r.isEmpty)
-    bh.consume(processErrors(r))
+    bh.consume(r)
   }
 
   @Setup(value = Level.Iteration)
   override def doSetup(): Unit = {
     super.doSetup()
 
-    assert(runTask.unsafeRunSync.isEmpty)
+    runTask.unsafeRunSync
     (for {
       executionCheckpoint <- runtime.space.createCheckpoint()
       _                   <- runtime.replaySpace.rigAndReset(executionCheckpoint.root, executionCheckpoint.log)
-      _ = assert(
-        createTest(setupTerm)(readErrors, runtime.replayReducer, randSetup).unsafeRunSync.isEmpty
-      )
-      _ = runTask = createTest(Some(term))(readErrors, runtime.replayReducer, randRun)
+      _                   <- createTest(setupTerm)(runtime.replayReducer, randSetup)
+      _                   = runTask = createTest(Some(term))(runtime.replayReducer, randRun)
     } yield ()).unsafeRunSync
   }
 }

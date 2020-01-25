@@ -571,7 +571,7 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
   private def invalidReplay(source: String): Task[Either[ReplayFailure, StateHash]] =
     runtimeManagerResource.use { runtimeManager =>
       for {
-        deploy        <- ConstructDeploy.sourceDeployNowF(source)
+        deploy        <- ConstructDeploy.sourceDeployNowF(source, phloLimit = 10000)
         time          <- timeF.currentMillis
         genPostState  = genesis.body.state.postStateHash
         blockData     = BlockData(time, 0L, genesisContext.validatorPks.head)

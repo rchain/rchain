@@ -52,7 +52,7 @@ in {
       stdlog!("info", ("Defining the testSuite:", tests)) |
       new runTest, runTestOnce, retCh in {
         contract runTestOnce(@(testName, testBody), @attempt, testAckCh) = {
-          stdlog!("debug", "Running test: " ++ testName ++ " attempt " + attempt) |
+          stdlog!("debug", "Running test: " ++ testName ++ " attempt " ++ "${attempt}" %% {"attempt": attempt}) |
           new rhoSpecImpl, privateAssert in {
             contract privateAssert(@assertion, @clue, ackCh) = {
               stdlog!("debug", "asserting: " ++ clue) |

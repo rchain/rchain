@@ -84,7 +84,6 @@ class CostAccountingSpec extends FlatSpec with Matchers with PropertyChecks with
           implicit def rand: Blake2b512Random = Blake2b512Random(Array.empty[Byte])
           Interpreter[Task].injAttempt(
             runtime.reducer,
-            runtime.errorLog,
             term,
             initialPhlo,
             Map.empty
@@ -94,7 +93,6 @@ class CostAccountingSpec extends FlatSpec with Matchers with PropertyChecks with
                 runtime.replaySpace.rigAndReset(root, log) >>
                   Interpreter[Task].injAttempt(
                     runtime.replayReducer,
-                    runtime.errorLog,
                     term,
                     initialPhlo,
                     Map.empty
@@ -311,14 +309,13 @@ class CostAccountingSpec extends FlatSpec with Matchers with PropertyChecks with
     withClue("Exactly one cost should be logged past the expected ones, yet:\n") {
       elementCounts(costLog.toList) diff elementCounts(expectedCosts) should have size 1
     }
-    totalCost.value should be > initialPhlo
+    totalCost.value should be >= initialPhlo
   }
 
   private def elementCounts[A](list: Iterable[A]): Set[(A, Int)] =
     list.groupBy(identity).mapValues(_.size).toSet
 
-  // FIXME make this pass consistently - https://rchain.atlassian.net/browse/RCHAIN-3790
-  it should "stop the evaluation of all execution branches when one of them runs out of phlo with a more sophisiticated contract" ignore {
+  it should "stop the evaluation of all execution branches when one of them runs out of phlo with a more sophisiticated contract" in {
     forAll(contracts) { (contract: String, expectedTotalCost: Long) =>
       check(forAllNoShrink(Gen.choose(1L, expectedTotalCost - 1)) { initialPhlo =>
         val (EvaluateResult(_, errors), costLog) =

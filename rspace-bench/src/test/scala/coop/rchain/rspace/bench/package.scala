@@ -74,15 +74,11 @@ package object bench {
   }
 
   def createTest(t: Option[Par])(
-      implicit errorProcessor: () => Vector[Throwable],
-      reducer: Reduce[Task],
+      implicit reducer: Reduce[Task],
       rand: Blake2b512Random
-  ): Task[Vector[Throwable]] =
+  ): Task[Unit] =
     t match {
-      case Some(par) =>
-        reducer
-          .inj(par)
-          .map(_ => errorProcessor())
-      case None => Task.delay(Vector.empty)
+      case Some(par) => reducer.inj(par)
+      case None      => Task.delay(())
     }
 }
