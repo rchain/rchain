@@ -5,7 +5,11 @@ import cats.implicits._
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.models.Par
 import coop.rchain.rholang.interpreter.accounting._
-import coop.rchain.rholang.interpreter.errors.{AggregateError, InterpreterError}
+import coop.rchain.rholang.interpreter.errors.{
+  AggregateError,
+  InterpreterError,
+  OutOfPhlogistonsError
+}
 
 final case class EvaluateResult(cost: Cost, errors: Vector[InterpreterError]) {
   val failed: Boolean    = errors.nonEmpty
@@ -97,27 +101,38 @@ object Interpreter {
         // Convert InterpreterError(s) to EvaluateResult
         // - all other errors are rethrown (not valid interpreter errors)
         evaluationResult.handleErrorWith(
-          error => C.get >>= (phlosLeft => handleError(parsingCost, initialPhlo - phlosLeft, error))
+          error =>
+            C.get >>= (
+                phlosLeft => handleError(initialPhlo, parsingCost, initialPhlo - phlosLeft, error)
+            )
         )
       }
 
-      def handleError(parsingCost: Cost, evalCost: Cost, error: Throwable): F[EvaluateResult] =
+      def handleError(
+          initialCost: Cost,
+          parsingCost: Cost,
+          evalCost: Cost,
+          error: Throwable
+      ): F[EvaluateResult] =
         error match {
           // Parsing error consumes only parsing cost
           case ParserError(parseError: InterpreterError) =>
             EvaluateResult(parsingCost, Vector(parseError)).pure[F]
 
-          // Only InterpreterError(s) (multiple errors are result of parallel execution)
-          // - all phlos is consumed
+          // For Out Of Phlogistons error initial cost is used because evaluated cost can be higher
+          // - all phlos are consumed
+          case error: OutOfPhlogistonsError.type =>
+            EvaluateResult(initialCost, Vector(error)).pure[F]
+
+          // InterpreterError(s) - multiple errors are result of parallel execution
           case AggregateError(ipErrs, errs) if errs.isEmpty =>
             EvaluateResult(evalCost, ipErrs).pure[F]
 
-          // Aggregate fatal errors are rethrown
+          // Aggregated fatal errors are rethrown
           case error: AggregateError =>
             error.raiseError[F, EvaluateResult]
 
           // InterpreterError is returned as a result
-          // - all phlos is consumed
           case error: InterpreterError =>
             EvaluateResult(evalCost, Vector(error)).pure[F]
 
