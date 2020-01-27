@@ -52,7 +52,10 @@ object InterpreterUtil {
                    BlockStatus.exception(ex).asLeft[Option[StateHash]].pure
                  case Right(computedPreStateHash) =>
                    if (incomingPreStateHash == computedPreStateHash) {
-                     replayBlockDeploys(block, dag, runtimeManager)
+                     for {
+                       replayResult <- replayBlock(incomingPreStateHash, block, dag, runtimeManager)
+                       result       <- handleErrors(ProtoUtil.postStateHash(block), replayResult)
+                     } yield result
                    } else {
                      //TODO at this point we may just as well terminate the replay, there's no way it will succeed.
                      Log[F]
@@ -66,13 +69,12 @@ object InterpreterUtil {
     } yield result
   }
 
-  //TODO deduplicate with `replayBlock` below - they are virtually identical!
-  private def replayBlockDeploys[F[_]: Sync: Log: BlockStore: Span](
+  private def replayBlock[F[_]: Sync: Log: BlockStore: Span](
+      initialStateHash: StateHash,
       block: BlockMessage,
       dag: BlockDagRepresentation[F],
       runtimeManager: RuntimeManager[F]
-  ): F[BlockProcessing[Option[StateHash]]] = {
-    val preStateHash          = ProtoUtil.preStateHash(block)
+  ): F[Either[ReplayFailure, StateHash]] = {
     val internalDeploys       = ProtoUtil.deploys(block)
     val internalSystemDeploys = ProtoUtil.systemDeploys(block)
     for {
@@ -87,16 +89,14 @@ object InterpreterUtil {
       _         <- Span[F].mark("before-process-pre-state-hash")
       blockData = BlockData.fromBlock(block)
       isGenesis = block.header.parentsHashList.isEmpty
-      replayResult <- runtimeManager.replayComputeState(preStateHash)(
+      replayResult <- runtimeManager.replayComputeState(initialStateHash)(
                        internalDeploys,
                        internalSystemDeploys,
                        blockData,
                        invalidBlocks,
                        isGenesis
                      )
-      tsHash = ProtoUtil.postStateHash(block)
-      result <- handleErrors(tsHash, replayResult)
-    } yield result
+    } yield replayResult
   }
 
   private def handleErrors[F[_]: Sync: Log](
@@ -232,46 +232,18 @@ object InterpreterUtil {
       _             <- Span[F].mark("before-compute-parents-post-state-get-blocks")
       blocksToApply <- blockHashesToApply.traverse(b => ProtoUtil.getBlock(b.blockHash))
       _             <- Span[F].mark("before-compute-parents-post-state-replay")
-      replayResult <- blocksToApply.foldM(initStateHash) {
-                       replayBlock(_, _, parents, dag, runtimeManager)
+      replayResult <- blocksToApply.foldM(initStateHash) { (stateHash, block) =>
+                       (for {
+                         replayResult <- replayBlock(stateHash, block, dag, runtimeManager)
+                       } yield replayResult.leftMap[Throwable] { status =>
+                         val parentHashes =
+                           parents.map(p => Base16.encode(p.blockHash.toByteArray).take(8))
+                         new Exception(
+                           s"Failed status while computing post state of $parentHashes: $status"
+                         )
+                       }).rethrow
                      }
     } yield replayResult
-  }
-
-  private[rholang] def replayBlock[F[_]: Sync: BlockStore](
-      hash: StateHash,
-      block: BlockMessage,
-      parents: Seq[BlockMessage],
-      dag: BlockDagRepresentation[F],
-      runtimeManager: RuntimeManager[F]
-  ): F[StateHash] = {
-    val deploys       = block.body.deploys
-    val systemDeploys = block.body.systemDeploys
-    val isGenesis     = parents.isEmpty
-
-    (for {
-      invalidBlocksSet <- dag.invalidBlocks
-      unseenBlocksSet  <- ProtoUtil.unseenBlockHashes(dag, block)
-      seenInvalidBlocksSet = invalidBlocksSet.filterNot(
-        block => unseenBlocksSet.contains(block.blockHash)
-      )
-      invalidBlocks = seenInvalidBlocksSet
-        .map(block => (block.blockHash, block.sender))
-        .toMap
-      replayResult <- runtimeManager.replayComputeState(hash)(
-                       deploys,
-                       systemDeploys,
-                       BlockData.fromBlock(block),
-                       invalidBlocks,
-                       isGenesis //should always be false
-                     )
-    } yield replayResult.leftMap[Throwable] { status =>
-      val parentHashes =
-        parents.map(p => Base16.encode(p.blockHash.toByteArray).take(8))
-      new Exception(
-        s"Failed status while computing post state of $parentHashes: $status"
-      )
-    }).rethrow
   }
 
   private[rholang] def findMultiParentsBlockHashesForReplay[F[_]: Monad](
