@@ -6,7 +6,7 @@ new
   stdlog(`rho:io:stdlog`),
   setup,
   test_create_purse, test_cross_currency_deposit, test_deposit, test_split,
-  test_log_set,
+  test_log_set, test_overflow_deposit,
   roguePurse1,
   split, getBalance, deposit
 in {
@@ -16,11 +16,12 @@ in {
       @RhoSpec!("testSuite", *setup,
         [
           ("Purses should be created with the given balance", *test_create_purse),
-          // ("Cross-currency deposits should fail.", *test_cross_currency_deposit)
+          ("Cross-currency deposits should fail.", *test_cross_currency_deposit),
           ("Fake purses should not be able to forge payment.", *roguePurse1),
           ("Deposit should work as expected", *test_deposit),
           ("Split should work as expected", *test_split),
-          ("be able to set a log channel and receive notifications", *test_log_set)
+          ("be able to set a log channel and receive notifications", *test_log_set),
+          ("In case of overflow, no tranfer occurs", *test_overflow_deposit)
         ])
     }
   } |
@@ -28,27 +29,35 @@ in {
   contract setup(_, retCh) = {
     new MakeMintCh, mintACh, mintBCh in {
       rl!(`rho:rchain:makeMint`, *MakeMintCh) |
-      for(@(_, MakeMint) <- MakeMintCh) {
-        @MakeMint!(*mintACh) | @MakeMint!(*mintBCh) |
-        for(mintA <- mintACh; mintB <- mintBCh) {
-          retCh ! ((*mintA, *mintB))
+      for (@(_, MakeMint) <- MakeMintCh) {
+        @MakeMint!(*mintACh) |
+        @MakeMint!(*mintBCh) |
+        for (mintA <- mintACh;
+             mintB <- mintBCh) {
+          retCh!((*mintA, *mintB))
         }
       }
     }
   } |
 
   contract test_create_purse(rhoSpec, @(mintA, mintB), ackCh) = {
-    new aliceAPurse, bobBPurse, aliceAPurseBalance, bobBPurseBalance in {
-      @mintA!("makePurse", 100, *aliceAPurse) |
-      @mintB!("makePurse", 50, *bobBPurse) |
-      for(aliceAPurse <- aliceAPurse; bobBPurse <- bobBPurse) {
-        aliceAPurse!("getBalance", *aliceAPurseBalance) |
-        bobBPurse!("getBalance", *bobBPurseBalance) |
-        rhoSpec!("assertMany",
-          [
-            ((100, "== <-", *aliceAPurseBalance), "alice should have the initial balance"),
-            ((50, "== <-", *bobBPurseBalance), "bob should have the initial balance")
-          ], *ackCh)
+    new aliceAPurse, bobBPurse,
+        aliceAPurseBalance, bobBPurseBalance
+    in {
+      match (100, 50) {
+        (aliceAmt, bobAmt) => {
+          @mintA!("makePurse", aliceAmt, *aliceAPurse) |
+          @mintB!("makePurse", bobAmt, *bobBPurse) |
+          for(aliceAPurse <- aliceAPurse; bobBPurse <- bobBPurse) {
+            aliceAPurse!("getBalance", *aliceAPurseBalance) |
+            bobBPurse!("getBalance", *bobBPurseBalance) |
+            rhoSpec!("assertMany",
+              [
+                ((aliceAmt, "== <-", *aliceAPurseBalance), "alice should have the initial balance"),
+                ((bobAmt, "== <-", *bobBPurseBalance), "bob should have the initial balance")
+              ], *ackCh)
+          }
+        }
       }
     }
   } |
@@ -57,15 +66,20 @@ in {
     new aliceAPurse, bobBPurse, ccDep1, ccDep2 in {
       @mintA!("makePurse", 100, *aliceAPurse) |
       @mintB!("makePurse", 50, *bobBPurse) |
-      for(aliceAPurse <- aliceAPurse;
-          bobBPurse <- bobBPurse) {
+      for (aliceAPurse <- aliceAPurse;
+           bobBPurse   <- bobBPurse) {
         aliceAPurse!("deposit", 10, *bobBPurse, *ccDep1) |
         bobBPurse!("deposit", 10, *aliceAPurse, *ccDep2) |
-        rhoSpec!("assertMany",
-          [
-            ((false, *ccDep1), "deposit from bob to alice should fail"),
-            ((false, *ccDep2), "deposit from alice to bob should fail")
-          ], *ackCh)
+        for (@success1 <- ccDep1;
+             @success2 <- ccDep2) {
+          rhoSpec!("assertMany",
+            [
+              ((false, "==", success1), "deposit from bob to alice should fail"),
+              ((false, "==", success2), "deposit from alice to bob should fail")
+            ],
+            *ackCh
+          )
+        }
       }
     }
   } |
@@ -154,6 +168,9 @@ in {
 
   contract roguePurse1(rhoSpec, @(*mint1, _), ackCh) = {
     new fakePurse in {
+      contract fakePurse(@"decr", decrCh) = {
+        decrCh!("fakeDecr")
+      } |
       contract fakePurse(@stolenDecr, @amount, success) = {
         success!(true, "fakeDecr")
       } |
@@ -163,6 +180,47 @@ in {
           purse1!("deposit", 5, *fakePurse, *depositCh) | for (@depositOk <- depositCh) {
             purse1!("getBalance", *let3) | for (@bal <- let3) {
               rhoSpec!("assert", (bal, "==", 10), "real purse balance should not increase", *ackCh)
+            }
+          }
+        }
+      }
+    }
+  } |
+  // In case of an overflow during a deposit, no funds should be transferred.
+  contract test_overflow_deposit(rhoSpec, @(*mint, _), ackCh) = {
+    new alicePurseCh, bobPurseCh, successCh,
+        initialAlicePurseBalanceCh, initialBobPurseBalanceCh,
+        finalAlicePurseBalanceCh, finalBobPurseBalanceCh
+    in {
+      match (9223372036854775807, 1000) {
+        (aliceAmt, bobAmt) => {
+          // Alice's purse has maximum balance.
+          mint!("makePurse", aliceAmt, *alicePurseCh) |
+          mint!("makePurse", bobAmt, *bobPurseCh) |
+          for (alicePurse <- alicePurseCh;
+               bobPurse   <- bobPurseCh) {
+            alicePurse!("getBalance", *initialAlicePurseBalanceCh) |
+            bobPurse!("getBalance", *initialBobPurseBalanceCh) |
+            for (@initialAlicePurseBalance <- initialAlicePurseBalanceCh;
+                 @initialBobPurseBalance   <- initialBobPurseBalanceCh) {
+              // Depositing any funds to Alice results in overflow.
+              alicePurse!("deposit", 1, *bobPurse, *successCh) |
+              for (@false <- successCh) {
+                alicePurse!("getBalance", *finalAlicePurseBalanceCh) |
+                bobPurse!("getBalance", *finalBobPurseBalanceCh) |
+                for (@finalAlicePurseBalance <- finalAlicePurseBalanceCh;
+                     @finalBobPurseBalance   <- finalBobPurseBalanceCh) {
+                  rhoSpec!("assertMany",
+                    [
+                      ((aliceAmt, "==", initialAlicePurseBalance), "Alice should have the initial balance"),
+                      ((bobAmt, "==", initialBobPurseBalance), "Bob should have the initial balance"),
+                      ((finalAlicePurseBalance, "==", initialAlicePurseBalance), "Alice's balance should not change"),
+                      ((finalBobPurseBalance, "==", initialBobPurseBalance), "Bob's balance should not change")
+                    ],
+                    *ackCh
+                  )
+                }
+              }
             }
           }
         }

@@ -23,7 +23,8 @@ in {
       new thisMint, internalMakePurse, decr in {
         contract thisMint(@"makePurse", @init, return) = {
           new balanceCh in {
-            @NonNegativeNumber!(init, *balanceCh) | for(@balance <- balanceCh) {
+            @NonNegativeNumber!(init, *balanceCh) |
+            for(@balance <- balanceCh) {
               internalMakePurse!(balance, *return)
             }
           }
@@ -35,23 +36,48 @@ in {
             new letCh in { // let thisDecr = ...
               letCh!(bundle0{bundle0{*thisPurse}|*decr}) |
               for (thisDecr <- letCh) {
+                // Checks mint and either decreases the balance of this purse by the given amount and returns true or
+                // doesn't not decrease and returns false.
                 contract thisPurse(@=*thisDecr, @amount, return) = {
-                  new success in {
-                    balance!("sub", amount, *success) |
-                    for (@subOk <- success) {
-                      return!(subOk, *decr) |
+                  new success, thisPurseDecrCh, decrCh,
+                      bd(`rho:block:data`), bdCh
+                  in {
+                    // Checks that this purse has been provided with the correct decr.
+                    decrCh!(bundle0{*decr}) |
+                    thisPurse!("decr", *thisPurseDecrCh) |
+                    for (@thisPurseDecr <- thisPurseDecrCh;
+                         @decrBundle    <- decrCh) {
                       for (logCh <<- logStore) {
-                        if (Nil != *logCh) {
-                          new bd(`rho:block:data`), bdCh in {
+                        if (thisPurseDecr == decrBundle) {
+                          // Correct mint.
+                          // Calls "sub" method on balance in the NonNegativeNumber contract.
+                          balance!("sub", amount, *success) |
+                          for (@subOk <- success) {
+                            return!(subOk) |
+                            if (Nil != *logCh) {
+                              bd!(*bdCh) |
+                              for (@blockNumber, @timestamp, @sender <- bdCh) {
+                                logCh!(["*decr", amount, subOk, blockNumber, timestamp, sender])
+                              }
+                            }
+                          }
+                        } else {
+                          // Incorrect mint.
+                          return!(false) |
+                          if (Nil != *logCh) {
                             bd!(*bdCh) |
                             for (@blockNumber, @timestamp, @sender <- bdCh) {
-                              logCh!(["*decr", amount, subOk, blockNumber, timestamp, sender])
+                              logCh!(["*decr", amount, false, blockNumber, timestamp, sender])
                             }
                           }
                         }
                       }
                     }
                   }
+                } |
+                // Used to compare mints. The name decr cannot be exposed, but is needed to check equality with other mints.
+                contract thisPurse(@"decr", return) = {
+                  return!(bundle0{*decr})
                 }
               }
             } |
@@ -63,9 +89,10 @@ in {
             contract thisPurse(@"sprout", return) = { thisMint!("makePurse", 0, *return) } |
             contract thisPurse(@"split", @amount, return) = {
               new destPurseCh, successCh in {
-                thisPurse!("sprout", *destPurseCh) | for(@destPurse <- destPurseCh) {
+                thisPurse!("sprout", *destPurseCh) |
+                for (@destPurse <- destPurseCh) {
                   @destPurse!("deposit", amount, *thisPurse, *successCh) |
-                  for(@success <- successCh) {
+                  for (@success <- successCh) {
                     if (success) {
                       return!([destPurse])
                     } else {
@@ -76,27 +103,65 @@ in {
               }
             } |
             contract thisPurse(@"deposit", @amount, @src, success) = {
-              new result in {
-                @src!(bundle0{bundle0{src}|*decr}, amount, *result) | //call src decr function.
-                for(@decrSuccess, @auth <- result) {
+              new result, addSuccessCh, thisDecrCh, srcDecrCh in {
+                // Checks if mints match.
+                thisPurse!("decr", *thisDecrCh) |
+                @src!("decr", *srcDecrCh) |
+                for (@thisDecr <- thisDecrCh;
+                     @srcDecr  <- srcDecrCh) {
                   for (logCh <<- logStore) {
-                    if (decrSuccess and auth == *decr) {
-                      // add transferred amount to this purse
-                      balance!("add", amount, *success) |
-                      // log
-                      if (Nil != *logCh) {
-                        new bd(`rho:block:data`), bdCh in {
-                          bd!(*bdCh) |
-                          for (@blockNumber, @timestamp, @sender <- bdCh) {
-                            logCh!(["deposit", amount, src.toByteArray(), true, blockNumber, timestamp, sender])
+                    new bd(`rho:block:data`), bdCh in {
+                      if (thisDecr == srcDecr) {
+                        // Adds amount to this purse if same mint.
+                        // Checks balance of this purse after adding amount to it to make sure an overflow did not occur.
+                        balance!("add", amount, *addSuccessCh) |
+                        for (@addSuccess <- addSuccessCh) {
+                          if (addSuccess) {
+                            // No overflow occurred.
+                            @src!(bundle0{bundle0{src}|*decr}, amount, *result) | //call src decr function.
+                            for (@decrSuccess <- result) {
+                              if (decrSuccess) {
+                                // Proper authority to subtract amount from src, amount subtracted from src.
+                                success!(true) |
+                                // log
+                                if (Nil != *logCh) {
+                                  bd!(*bdCh) |
+                                  for (@blockNumber, @timestamp, @sender <- bdCh) {
+                                    logCh!(["deposit", amount, src.toByteArray(), true, blockNumber, timestamp, sender])
+                                  }
+                                }
+                              } else {
+                                // Insufficient funds in src purse.
+                                // The amount must now be subtracted from this purse.
+                                new subCh in {
+                                  balance!("sub", amount, *subCh) |
+                                  for (_ <- subCh) {
+                                    success!(false)
+                                  }
+                                } |
+                                if (Nil != *logCh) {
+                                  bd!(*bdCh) |
+                                  for (@blockNumber, @timestamp, @sender <- bdCh) {
+                                    logCh!(["deposit", amount, src.toByteArray(), false, blockNumber, timestamp, sender])
+                                  }
+                                }
+                              }
+                            }
+                          } else {
+                            // Failed to add funds to this purse due to overflow or negative amount.
+                            success!(false) |
+                            if (Nil != *logCh) {
+                              bd!(*bdCh) |
+                              for (@blockNumber, @timestamp, @sender <- bdCh) {
+                                logCh!(["deposit", amount, src.toByteArray(), false, blockNumber, timestamp, sender])
+                              }
+                            }
                           }
                         }
-                      }
-                    } else {
-                      success!(false) |
-                      // log
-                      if (Nil != *logCh) {
-                        new bd(`rho:block:data`), bdCh in {
+                      } else {
+                        // Mint mismatch. No transfer occurs.
+                        success!(false) |
+                        if (Nil != *logCh) {
                           bd!(*bdCh) |
                           for (@blockNumber, @timestamp, @sender <- bdCh) {
                             logCh!(["deposit", amount, src.toByteArray(), false, blockNumber, timestamp, sender])
