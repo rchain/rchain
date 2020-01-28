@@ -7,7 +7,8 @@ import coop.rchain.models.GUnforgeable.UnfInstance.{
   Empty,
   GDeployIdBody,
   GDeployerIdBody,
-  GPrivateBody
+  GPrivateBody,
+  GSysAuthTokenBody
 }
 
 private[sorter] object UnforgeableSortMatcher extends Sortable[GUnforgeable] {
@@ -23,6 +24,8 @@ private[sorter] object UnforgeableSortMatcher extends Sortable[GUnforgeable] {
       case GDeployIdBody(deployId) =>
         ScoredTerm(GUnforgeable(GDeployIdBody(deployId)), Node(Score.DEPLOY_ID, Leaf(deployId.sig)))
           .pure[F]
+      case GSysAuthTokenBody(token) =>
+        ScoredTerm(GUnforgeable(GSysAuthTokenBody(token)), Node(Score.SYS_AUTH_TOKEN)).pure[F]
       case Empty => ScoredTerm(unf, Node(Score.ABSENT)).pure[F]
     }
 }

@@ -37,6 +37,7 @@ trait SystemProcesses[F[_]] {
   def revAddress: Contract[F]
   def deployerIdOps: Contract[F]
   def registryOps: Contract[F]
+  def sysAuthTokenOps: Contract[F]
 }
 
 object SystemProcesses {
@@ -220,6 +221,18 @@ object SystemProcesses {
               val hashKeyBytes = Blake2b256.hash(ba)
               RhoType.Uri(Registry.buildURI(hashKeyBytes))
             case _ => Par()
+          }
+          produce(Seq(response), ack)
+      }
+
+      def sysAuthTokenOps: Contract[F] = {
+        case isContractCall(
+            produce,
+            Seq(RhoType.String("check"), argument, ack)
+            ) =>
+          val response = argument match {
+            case RhoType.SysAuthToken(_) => RhoType.Boolean(true)
+            case _                       => RhoType.Boolean(false)
           }
           produce(Seq(response), ack)
       }

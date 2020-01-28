@@ -3,14 +3,12 @@ package coop.rchain.casper.util.rholang
 import cats.Monad
 import cats.effect._
 import cats.syntax.all._
-import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockStore
 import coop.rchain.blockstorage.dag.BlockDagRepresentation
 import coop.rchain.casper._
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.rholang.RuntimeManager._
 import coop.rchain.casper.util.{DagOperations, ProtoUtil}
-import coop.rchain.crypto.PublicKey
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.metrics.Span
 import coop.rchain.models.BlockHash.BlockHash
@@ -21,6 +19,8 @@ import coop.rchain.rholang.interpreter.ParBuilder
 import coop.rchain.rholang.interpreter.Runtime.BlockData
 import coop.rchain.shared.{Log, LogSource}
 import com.google.protobuf.ByteString
+import coop.rchain.casper.protocol.ProcessedSystemDeploy.Failed
+import coop.rchain.casper.util.rholang.SystemDeployPlayResult.{PlayFailed, PlaySucceeded}
 import coop.rchain.crypto.signatures.Signed
 import monix.eval.Coeval
 
@@ -72,8 +72,9 @@ object InterpreterUtil {
       dag: BlockDagRepresentation[F],
       runtimeManager: RuntimeManager[F]
   ): F[BlockProcessing[Option[StateHash]]] = {
-    val preStateHash    = ProtoUtil.preStateHash(block)
-    val internalDeploys = ProtoUtil.deploys(block)
+    val preStateHash          = ProtoUtil.preStateHash(block)
+    val internalDeploys       = ProtoUtil.deploys(block)
+    val internalSystemDeploys = ProtoUtil.systemDeploys(block)
     for {
       invalidBlocksSet <- dag.invalidBlocks
       unseenBlocksSet  <- ProtoUtil.unseenBlockHashes(dag, block)
@@ -88,6 +89,7 @@ object InterpreterUtil {
       isGenesis = block.header.parentsHashList.isEmpty
       replayResult <- runtimeManager.replayComputeState(preStateHash)(
                        internalDeploys,
+                       internalSystemDeploys,
                        blockData,
                        invalidBlocks,
                        isGenesis
@@ -158,20 +160,36 @@ object InterpreterUtil {
   def computeDeploysCheckpoint[F[_]: Sync: BlockStore: Log: Span](
       parents: Seq[BlockMessage],
       deploys: Seq[Signed[DeployData]],
+      systemDeploys: Seq[SystemDeploy],
       dag: BlockDagRepresentation[F],
       runtimeManager: RuntimeManager[F],
       blockData: BlockData,
       invalidBlocks: Map[BlockHash, Validator]
-  ): F[(StateHash, StateHash, Seq[ProcessedDeploy])] = {
+  ): F[(StateHash, StateHash, Seq[ProcessedDeploy], Seq[ProcessedSystemDeploy])] = {
     import shapeless.syntax.std.tuple._
     for {
       nonEmptyParents <- parents.pure
                           .ensure(new IllegalArgumentException("Parents must not be empty"))(
                             _.nonEmpty
                           )
-      preStateHash <- computeParentsPostState(nonEmptyParents, dag, runtimeManager)
-      result       <- runtimeManager.computeState(preStateHash)(deploys, blockData, invalidBlocks)
-    } yield preStateHash +: result
+      preStateHash                  <- computeParentsPostState(nonEmptyParents, dag, runtimeManager)
+      resultDeploys                 <- runtimeManager.computeState(preStateHash)(deploys, blockData, invalidBlocks)
+      (startHash, processedDeploys) = resultDeploys
+      resultSystemDeploys <- {
+        import cats.instances.list._
+        systemDeploys.toList.foldM((startHash, Vector.empty[ProcessedSystemDeploy])) {
+          case ((startHash, processedSystemDeploys), sd) =>
+            runtimeManager.playSystemDeploy(startHash)(sd) >>= {
+              case PlaySucceeded(stateHash, processedSystemDeploy, _) =>
+                (stateHash, processedSystemDeploys :+ processedSystemDeploy).pure[F]
+              case PlayFailed(Failed(_, errorMsg)) =>
+                new Exception("Unexpected system error during play of system deploy: " + errorMsg)
+                  .raiseError[F, (StateHash, Vector[ProcessedSystemDeploy])]
+            }
+        }
+      }
+      (postStateHash, processedSystemDeploys) = resultSystemDeploys
+    } yield (preStateHash, postStateHash, processedDeploys, processedSystemDeploys)
   }
 
   private def computeParentsPostState[F[_]: Sync: BlockStore: Log: Span](
@@ -227,8 +245,9 @@ object InterpreterUtil {
       dag: BlockDagRepresentation[F],
       runtimeManager: RuntimeManager[F]
   ): F[StateHash] = {
-    val deploys   = block.body.deploys
-    val isGenesis = parents.isEmpty
+    val deploys       = block.body.deploys
+    val systemDeploys = block.body.systemDeploys
+    val isGenesis     = parents.isEmpty
 
     (for {
       invalidBlocksSet <- dag.invalidBlocks
@@ -241,6 +260,7 @@ object InterpreterUtil {
         .toMap
       replayResult <- runtimeManager.replayComputeState(hash)(
                        deploys,
+                       systemDeploys,
                        BlockData.fromBlock(block),
                        invalidBlocks,
                        isGenesis //should always be false

@@ -1,16 +1,21 @@
 package coop.rchain.casper.util.rholang.costacc
 
-import com.google.protobuf.ByteString
+import coop.rchain.casper.protocol.{DeployData, DeployDataProto}
+import coop.rchain.casper.protocol.DeployData.{fromProto, toProto}
 import coop.rchain.casper.util.rholang.{SystemDeploy, SystemDeployFailure, SystemDeployUserError}
 import coop.rchain.crypto.PublicKey
-import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.models.BlockHash._
 import coop.rchain.models.NormalizerEnv.{Contains, ToEnvMap}
 import coop.rchain.rholang.interpreter.RhoType._
+import coop.rchain.shared.Serialize
+import scodec.bits.ByteVector
 
-final class SlashDeploy(invalidBlockHash: BlockHash, pk: PublicKey, rand: Blake2b512Random)
-    extends SystemDeploy(rand) {
+final case class SlashDeploy(
+    invalidBlockHash: BlockHash,
+    pk: PublicKey,
+    initialRand: Blake2b512Random
+) extends SystemDeploy(initialRand) {
   import coop.rchain.models._
   import Expr.ExprInstance._
   import rholang.{implicits => toPar}
@@ -25,13 +30,13 @@ final class SlashDeploy(invalidBlockHash: BlockHash, pk: PublicKey, rand: Blake2
   type `sys:casper:invalidBlockHash` = `sys:casper:invalidBlockHash`.T
 
   type Env =
-    (`sys:casper:deployerId` ->> GDeployerId) :: (`sys:casper:invalidBlockHash` ->> GString) :: (`sys:casper:return` ->> GUnforgeable) :: HNil
+    (`sys:casper:deployerId` ->> GDeployerId) :: (`sys:casper:invalidBlockHash` ->> GString) :: (`sys:casper:authToken` ->> GSysAuthToken) :: (`sys:casper:return` ->> GUnforgeable) :: HNil
 
   import toPar._
   protected override val envsReturnChannel = Contains[Env, `sys:casper:return`]
   protected override val toEnvMap          = ToEnvMap[Env]
   protected override val normalizerEnv = new NormalizerEnv(
-    mkDeployerId(pk) :: ("sys:casper:invalidBlockHash" ->> GString(invalidBlockHash.base16String)) :: mkReturnChannel :: HNil
+    mkDeployerId(pk) :: ("sys:casper:invalidBlockHash" ->> GString(invalidBlockHash.base16String)) :: mkSysAuthToken :: mkReturnChannel :: HNil
   )
 
   override val source: String =
@@ -39,11 +44,12 @@ final class SlashDeploy(invalidBlockHash: BlockHash, pk: PublicKey, rand: Blake2
        #  poSCh,
        #  deployerId(`sys:casper:deployerId`),
        #  invalidBlockHash(`sys:casper:invalidBlockHash`),
+       #  sysAuthToken(`sys:casper:authToken`),
        #  return(`sys:casper:return`)
        #in {
        #  rl!(`rho:rchain:pos`, *poSCh) |
        #  for(@(_, PoS) <- poSCh) {
-       #    @PoS!("slash",  *deployerId, *invalidBlockHash.hexToBytes(), *return)
+       #    @PoS!("slash",  *deployerId, *invalidBlockHash.hexToBytes(), *sysAuthToken, *return)
        #  }
        #}""".stripMargin('#')
 

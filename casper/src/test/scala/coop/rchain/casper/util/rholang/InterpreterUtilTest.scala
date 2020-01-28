@@ -61,13 +61,16 @@ class InterpreterUtilTest
       dag: BlockDagRepresentation[F],
       runtimeManager: RuntimeManager[F],
       seqNum: Long = 0L
-  ): F[Either[Throwable, (StateHash, StateHash, Seq[ProcessedDeploy])]] =
+  ): F[
+    Either[Throwable, (StateHash, StateHash, Seq[ProcessedDeploy], Seq[ProcessedSystemDeploy])]
+  ] =
     Time[F].currentMillis >>= (
         now =>
           InterpreterUtil
             .computeDeploysCheckpoint[F](
               parents,
               deploys,
+              List.empty[SystemDeploy],
               dag,
               runtimeManager,
               BlockData(
@@ -297,9 +300,9 @@ class InterpreterUtilTest
       deploy: Signed[DeployData]*
   )(implicit blockStore: BlockStore[Task]): Task[Seq[PCost]] =
     for {
-      computeResult          <- computeDeploysCheckpoint[Task](Seq(genesis), deploy, dag, runtimeManager)
-      Right((_, _, results)) = computeResult
-    } yield results.map(_.cost)
+      computeResult                      <- computeDeploysCheckpoint[Task](Seq(genesis), deploy, dag, runtimeManager)
+      Right((_, _, processedDeploys, _)) = computeResult
+    } yield processedDeploys.map(_.cost)
 
   "computeDeploysCheckpoint" should "aggregate cost of deploying rholang programs within the block" in withGenesis(
     genesisContext
@@ -381,7 +384,7 @@ class InterpreterUtilTest
                             dag1,
                             runtimeManager
                           )
-      Right((preStateHash, computedTsHash, processedDeploys)) = deploysCheckpoint
+      Right((preStateHash, computedTsHash, processedDeploys, _)) = deploysCheckpoint
       block <- createBlock[Task](
                 Seq(genesis.blockHash),
                 genesis,
@@ -432,7 +435,7 @@ class InterpreterUtilTest
                               dag1,
                               runtimeManager
                             )
-        Right((preStateHash, computedTsHash, processedDeploys)) = deploysCheckpoint
+        Right((preStateHash, computedTsHash, processedDeploys, _)) = deploysCheckpoint
         block <- createBlock[Task](
                   Seq(genesis.blockHash),
                   genesis,
@@ -487,7 +490,7 @@ class InterpreterUtilTest
                               dag1,
                               runtimeManager
                             )
-        Right((preStateHash, computedTsHash, processedDeploys)) = deploysCheckpoint
+        Right((preStateHash, computedTsHash, processedDeploys, _)) = deploysCheckpoint
         block <- createBlock[Task](
                   Seq(genesis.blockHash),
                   genesis,
@@ -539,7 +542,7 @@ class InterpreterUtilTest
                               dag1,
                               runtimeManager
                             )
-        Right((preStateHash, computedTsHash, processedDeploys)) = deploysCheckpoint
+        Right((preStateHash, computedTsHash, processedDeploys, _)) = deploysCheckpoint
         block <- createBlock[Task](
                   Seq(genesis.blockHash),
                   genesis,
@@ -584,7 +587,7 @@ class InterpreterUtilTest
                                 runtimeManager,
                                 (i + 1).toLong
                               )
-          Right((preStateHash, computedTsHash, processedDeploys)) = deploysCheckpoint
+          Right((preStateHash, computedTsHash, processedDeploys, _)) = deploysCheckpoint
           block <- createBlock[Task](
                     Seq(genesis.blockHash),
                     genesis,
@@ -615,7 +618,7 @@ class InterpreterUtilTest
                               dag1,
                               runtimeManager
                             )
-        Right((preStateHash, computedTsHash, processedDeploys)) = deploysCheckpoint
+        Right((preStateHash, computedTsHash, processedDeploys, _)) = deploysCheckpoint
         //create single deploy with log that includes excess comm events
         badProcessedDeploy = processedDeploys.head.copy(
           deployLog = processedDeploys.head.deployLog ++ processedDeploys.last.deployLog
@@ -666,7 +669,7 @@ class InterpreterUtilTest
                                 runtimeManager,
                                 seqNum = (i + 1).toLong
                               )
-          Right((preStateHash, computedTsHash, processedDeploys)) = deploysCheckpoint
+          Right((preStateHash, computedTsHash, processedDeploys, _)) = deploysCheckpoint
           block <- createBlock[Task](
                     Seq(genesis.blockHash),
                     genesis,
@@ -725,6 +728,41 @@ class InterpreterUtilTest
       blockHashes <- InterpreterUtil.findMultiParentsBlockHashesForReplay(Seq(b1, b2), dag)
       _           = withClue("Main parent hasn't been filtered out: ") { blockHashes.size shouldBe 1 }
     } yield ()
+  }
+
+  // Test for cost mismatch between play and replay in case of out of phlo error
+  "used deploy with insufficient phlos" should "be added to a block with all phlos consumed" in effectTest {
+    val sampleTerm =
+      """
+        |  new
+        |    rl(`rho:registry:lookup`), RevVaultCh, vaultCh, balanceCh, deployId(`rho:rchain:deployId`)
+        |  in {
+        |    rl!(`rho:rchain:revVault`, *RevVaultCh) |
+        |    for (@(_, RevVault) <- RevVaultCh) {
+        |      match "1111MnCcfyG9sExhw1jQcW6hSb98c2XUtu3E4KGSxENo1nTn4e5cx" {
+        |        revAddress => {
+        |          @RevVault!("findOrCreate", revAddress, *vaultCh) |
+        |          for (@(true, vault) <- vaultCh) {
+        |            @vault!("balance", *balanceCh) |
+        |            for (@balance <- balanceCh) {
+        |              deployId!(balance)
+        |            }
+        |          }
+        |        }
+        |      }
+        |    }
+        |  }
+        |""".stripMargin
+    val deploy =
+      ConstructDeploy.sourceDeploy(sampleTerm, System.currentTimeMillis, phloLimit = 3000)
+
+    TestNode.standaloneEff(genesisContext).use { node =>
+      for {
+        b <- node.addBlock(deploy)
+        _ = b.body.deploys.size shouldBe 1
+        _ = b.body.deploys.get(0).get.cost.cost shouldBe 3000
+      } yield ()
+    }
   }
 
 }

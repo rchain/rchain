@@ -154,17 +154,59 @@ in {
 
             contract _newVault(revVault, @ownRevAddress, purse) = {
 
+              new logStore in {
+
+                logStore!(Nil) |
+
                 contract revVault(@"balance", ret) = {
                   purse!("getBalance", *ret)
                 } |
 
                 contract revVault(@"transfer", @revAddress, @amount, authKey, ret) = {
-                  _transferTemplate!(ownRevAddress, *purse, revAddress, amount, *authKey, *ret)
+                  new ret2 in {
+                    _transferTemplate!(ownRevAddress, *purse, revAddress, amount, *authKey, *ret2) |
+                    for (@result <- ret2) {
+                      ret!(result) |
+                      for (logCh <<- logStore) {
+                        if (Nil != *logCh) {
+                          new bd(`rho:block:data`), bdCh in {
+                            bd!(*bdCh) |
+                            for (@blockNumber, @timestamp, @sender <- bdCh) {
+                              logCh!(["transfer", revAddress, amount, result, blockNumber, timestamp, sender])
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                } |
+
+                // Set to Nil to disable logging
+                contract revVault(@"setLog", logCh, authKey, ret) = {
+                  new authKeyValidCh in {
+                    @AuthKey!("check", *authKey, (*_revVault, ownRevAddress), *authKeyValidCh) |
+                    for (@result <- authKeyValidCh) {
+                      if (result) {
+                        new ack in {
+                          logStore!(*logCh) |
+                          // Set logging on the purse so that we also see deposits into the vault
+                          purse!("setLog", *logCh, *ack) |
+                          for (_ <- ack) {
+                            ret!(true)
+                          }
+                        }
+                      } else {
+                        ret!(false)
+                      }
+                    }
+                  }
                 } |
 
                 contract @{ownRevAddress | bundle0{*_revVault}}(@"_deposit", depositPurse, retCh) = {
                   _depositTemplate!(*purse, *depositPurse, *retCh)
                 }
+
+              }
 
             } |
 

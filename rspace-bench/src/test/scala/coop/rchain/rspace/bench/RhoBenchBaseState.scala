@@ -28,8 +28,7 @@ abstract class RhoBenchBaseState {
       result <- runTask
       _      <- runtime.space.createCheckpoint()
     } yield result).unsafeRunSync
-    assert(r.isEmpty)
-    bh.consume(processErrors(r))
+    bh.consume(r)
   }
 
   implicit val scheduler: Scheduler = Scheduler.fixedPool(name = "rho-1", poolSize = 100)
@@ -42,9 +41,8 @@ abstract class RhoBenchBaseState {
   var randSetup: Blake2b512Random = null
   var randRun: Blake2b512Random   = null
 
-  var runTask: Task[Vector[Throwable]] = null
+  var runTask: Task[Unit] = null
 
-  implicit def readErrors                 = () => runtime.readAndClearErrorVector().unsafeRunSync
   implicit val logF: Log[Task]            = Log.log[Task]
   implicit val noopMetrics: Metrics[Task] = new metrics.Metrics.MetricsNOP[Task]
   implicit val noopSpan: Span[Task]       = NoopSpan[Task]()
@@ -93,14 +91,12 @@ abstract class RhoBenchBaseState {
 
     randSetup = rand
     randRun = rand
-    processErrors(
-      Await
-        .result(
-          createTest(setupTerm)(readErrors, runtime.reducer, randSetup).runToFuture,
-          Duration.Inf
-        )
-    )
-    runTask = createTest(Some(term))(readErrors, runtime.reducer, randRun)
+    Await
+      .result(
+        createTest(setupTerm)(runtime.reducer, randSetup).runToFuture,
+        Duration.Inf
+      )
+    runTask = createTest(Some(term))(runtime.reducer, randRun)
   }
 
   @TearDown

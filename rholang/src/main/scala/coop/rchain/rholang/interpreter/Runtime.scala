@@ -6,7 +6,6 @@ import cats._
 import cats.effect._
 import cats.effect.concurrent.Ref
 import cats.implicits._
-import cats.mtl.FunctorTell
 import com.google.protobuf.ByteString
 import coop.rchain.casper.protocol.BlockMessage
 import coop.rchain.crypto.PublicKey
@@ -14,7 +13,6 @@ import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.metrics.Metrics.Source
 import coop.rchain.metrics.{Metrics, Span}
-import coop.rchain.models.Expr.ExprInstance.GString
 import coop.rchain.models.TaggedContinuation.TaggedCont.ScalaBodyRef
 import coop.rchain.models.Var.VarInstance.FreeVar
 import coop.rchain.models._
@@ -22,7 +20,6 @@ import coop.rchain.models.rholang.implicits._
 import coop.rchain.rholang.RholangMetricsSource
 import coop.rchain.rholang.interpreter.Runtime._
 import coop.rchain.rholang.interpreter.accounting.{noOpCostLog, _}
-import coop.rchain.rholang.interpreter.errors.InterpreterError
 import coop.rchain.rholang.interpreter.registry.RegistryBootstrap
 import coop.rchain.rholang.interpreter.storage.ChargingRSpace
 import coop.rchain.rspace.history.HistoryRepository
@@ -36,12 +33,10 @@ class Runtime[F[_]: Sync] private (
     val replayReducer: Reduce[F],
     val space: RhoISpace[F],
     val replaySpace: RhoReplayISpace[F],
-    val errorLog: ErrorLog[F],
     val cost: _cost[F],
     val blockData: Ref[F, BlockData],
     val invalidBlocks: InvalidBlocks[F]
 ) extends HasCost[F] {
-  def readAndClearErrorVector(): F[Vector[InterpreterError]] = errorLog.readAndClearErrorVector()
   def close(): F[Unit] =
     for {
       _ <- space.close()
@@ -127,6 +122,7 @@ object Runtime {
     val REV_ADDRESS: Long        = 13L
     val DEPLOYER_ID_OPS: Long    = 14L
     val REG_OPS: Long            = 15L
+    val SYS_AUTHTOKEN_OPS: Long  = 16L
   }
 
   def byteName(b: Byte): Par = GPrivate(ByteString.copyFrom(Array[Byte](b)))
@@ -149,6 +145,7 @@ object Runtime {
     val REG_INSERT_RANDOM: Par  = byteName(15)
     val REG_INSERT_SIGNED: Par  = byteName(16)
     val REG_OPS: Par            = byteName(17)
+    val SYS_AUTHTOKEN_OPS: Par  = byteName(18)
   }
 
   def introduceSystemProcesses[F[_]: Sync: _cost: Span](
@@ -260,6 +257,14 @@ object Runtime {
       BodyRefs.REG_OPS, { ctx =>
         ctx.systemProcesses.registryOps
       }
+    ),
+    SystemProcess.Definition[F](
+      "sys:authToken:ops",
+      FixedChannels.SYS_AUTHTOKEN_OPS,
+      3,
+      BodyRefs.SYS_AUTHTOKEN_OPS, { ctx =>
+        ctx.systemProcesses.sysAuthTokenOps
+      }
     )
   )
 
@@ -339,7 +344,7 @@ object Runtime {
       invalidBlocks: InvalidBlocks[F],
       extraSystemProcesses: Seq[SystemProcess.Definition[F]],
       urnMap: Map[String, Par]
-  )(implicit ft: FunctorTell[F, InterpreterError], cost: _cost[F], P: Parallel[F]): Reduce[F] = {
+  )(implicit cost: _cost[F], P: Parallel[F]): Reduce[F] = {
     lazy val replayDispatchTable: RhoDispatchMap[F] =
       dispatchTableCreator(
         chargingRSpace,
@@ -376,9 +381,7 @@ object Runtime {
       implicit P: Parallel[F],
       cost: _cost[F]
   ): F[Runtime[F]] = {
-    val errorLog                                      = new ErrorLog[F]()
-    implicit val ft: FunctorTell[F, InterpreterError] = errorLog
-    val (space, replaySpace)                          = spaceAndReplay
+    val (space, replaySpace) = spaceAndReplay
     for {
       mapsAndRefs                                     <- setupMapsAndRefs(extraSystemProcesses)
       (blockDataRef, invalidBlocks, urnMap, procDefs) = mapsAndRefs
@@ -410,7 +413,6 @@ object Runtime {
         replayReducer,
         space,
         replaySpace,
-        errorLog,
         cost,
         blockDataRef,
         invalidBlocks

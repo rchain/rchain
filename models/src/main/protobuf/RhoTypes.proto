@@ -401,6 +401,7 @@ message GUnforgeable {
         GPrivate g_private_body = 1;
         GDeployId g_deploy_id_body = 2;
         GDeployerId g_deployer_id_body = 3;
+        GSysAuthToken g_sys_auth_token_body = 4;
     }
 }
 
@@ -415,3 +416,5 @@ message GDeployId {
 message GDeployerId {
     bytes publicKey = 1;
 }
+
+message GSysAuthToken {}

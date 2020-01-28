@@ -1,10 +1,10 @@
 package coop.rchain.casper.util.rholang
 
-import coop.rchain.casper.protocol.ProcessedSystemDeploy
-import coop.rchain.casper.util.EventConverter
+import coop.rchain.casper.protocol.{Event, ProcessedSystemDeploy, SystemDeployData}
 import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
 import coop.rchain.casper.util.rholang.SystemDeployUserError.SystemDeployError
-import coop.rchain.casper.protocol.Event
+import coop.rchain.crypto.PublicKey
+import coop.rchain.models.BlockHash.BlockHash
 
 sealed trait SystemDeployResult[+A] {
   val stateHashOpt: Option[StateHash]
@@ -16,8 +16,6 @@ sealed trait SystemDeployPlayResult[A] extends SystemDeployResult[A] {
 }
 
 object SystemDeployPlayResult {
-
-  import coop.rchain.rspace.trace.Log
 
   final case class PlaySucceeded[A](
       stateHash: StateHash,
@@ -31,11 +29,12 @@ object SystemDeployPlayResult {
   def playSucceeded[A](
       stateHash: StateHash,
       log: Seq[Event],
+      systemDeployData: SystemDeployData,
       result: A
   ): SystemDeployPlayResult[A] =
     PlaySucceeded(
       stateHash,
-      ProcessedSystemDeploy.Succeeded(log.toList),
+      ProcessedSystemDeploy.Succeeded(log.toList, systemDeployData),
       result
     )
 

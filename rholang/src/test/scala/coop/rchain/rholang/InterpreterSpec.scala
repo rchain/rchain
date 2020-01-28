@@ -133,17 +133,18 @@ class InterpreterSpec extends FlatSpec with Matchers {
   }
 
   it should "charge for parsing even when there's not enough phlo to complete it" in {
-    val sendRho = "@{0}!(0)"
+    val sendRho     = "@{0}!(0)"
+    val initialPhlo = parsingCost(sendRho) - Cost(1)
     val EvaluateResult(cost, errors) =
       mkRuntime[Task](tmpPrefix, mapSize)
         .use { runtime =>
           implicit val c = runtime.cost
-          InterpreterUtil.evaluateResult(runtime, sendRho, parsingCost(sendRho) - Cost(1))
+          InterpreterUtil.evaluateResult(runtime, sendRho, initialPhlo)
         }
         .runSyncUnsafe(maxDuration)
 
     errors should not be empty
-    cost.value shouldEqual (parsingCost(sendRho).value)
+    cost.value shouldEqual initialPhlo.value
   }
 
   private def storageContents(runtime: Runtime[Task]): Task[String] =

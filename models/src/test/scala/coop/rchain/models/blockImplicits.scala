@@ -92,7 +92,8 @@ object blockImplicits {
           bonds = List.empty,
           blockNumber = 0L
         ),
-        deploys = deploys.toList
+        deploys = deploys.toList,
+        systemDeploys = List.empty
       ),
       justifications = justifications.toList,
       sender = validator,
