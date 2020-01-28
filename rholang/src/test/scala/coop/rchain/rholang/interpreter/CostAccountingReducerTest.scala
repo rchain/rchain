@@ -89,7 +89,6 @@ class CostAccountingReducerTest extends FlatSpec with Matchers with TripleEquals
           (ContResult[Par, BindPattern, TaggedContinuation], Seq[Result[Par, ListParWithRandom]])
         ]](OutOfPhlogistonsError)
     }
-    implicit val errorLog    = new ErrorLog[Task]()
     implicit val rand        = Blake2b512Random(128)
     implicit val cost        = CostAccounting.initialCost[Task](Cost(1000)).runSyncUnsafe(1.second)
     val (_, chargingReducer) = RholangAndScalaDispatcher.create(iSpace, Map.empty, Map.empty)
@@ -112,7 +111,6 @@ class CostAccountingReducerTest extends FlatSpec with Matchers with TripleEquals
       Par(sends = Seq(Send(channel, Seq(a)), Send(channel, Seq(b))))
 
     implicit val rand            = Blake2b512Random(Array.empty[Byte])
-    implicit val errLog          = new ErrorLog[Task]()
     implicit val logF: Log[Task] = Log.log[Task]
 
     def testImplementation(pureRSpace: RhoISpace[Task]): Task[
@@ -175,11 +173,8 @@ class CostAccountingReducerTest extends FlatSpec with Matchers with TripleEquals
     (for {
       res           <- mkRhoISpace[Task]("cost-accounting-reducer-test-").use(testImplementation(_))
       (result, map) = res
-      errors <- errLog
-                 .readAndClearErrorVector()
-      _ = assert(errors === Vector.empty)
-      _ = assert(result === Left(OutOfPhlogistonsError))
-      _ = assert(stored(map, a, rand.splitByte(0)) || stored(map, b, rand.splitByte(1)))
+      _             = assert(result === Left(OutOfPhlogistonsError))
+      _             = assert(stored(map, a, rand.splitByte(0)) || stored(map, b, rand.splitByte(1)))
     } yield ()).runSyncUnsafe(5.seconds)
 
   }

@@ -18,6 +18,7 @@ match (
 
     new
       rl(`rho:registry:lookup`),
+      stdlog(`rho:io:stdlog`),
       RhoSpecCh,
       ListOpsCh,
       getDeployerId(`rho:test:deployerId:make`),
@@ -35,6 +36,7 @@ match (
       testInsufficeintFunds,
       testInvalidRevAddress,
       testUnfBoundVault,
+      testLogging,
       withVaultAndIdentityOf,
       transfer,
       assertBalances
@@ -53,6 +55,7 @@ match (
             ("Fail the transfer if there are insufficient funds", *testInsufficeintFunds),
             ("Fail the transfer if the destination addresss is not a valid RevAddress", *testInvalidRevAddress),
             ("Transfer from unforgeable name bound vault", *testUnfBoundVault),
+            ("Logging works", *testLogging)
           ])
       } |
 
@@ -186,6 +189,27 @@ match (
             for (@(true, vault) <- vaultCh; unfAuthKey <- unfAuthKeyCh) {
               @vault!("transfer", genesisRevAddress, 0, *unfAuthKey, *transferCh) |
               rhoSpec!("assert", ((true, Nil), "== <-", *transferCh), "transfer succeeded", *ackCh)
+            }
+          }
+        }
+      } |
+
+      contract testLogging(rhoSpec, RevVault, ackCh) = {
+        new genesisVaultCh, aliceVaultCh, ret, transferSuccessful  in {
+          withVaultAndIdentityOf!(genesisPubKey, *genesisVaultCh) |
+          RevVault!("findOrCreate", aliceRevAddress, *aliceVaultCh) |
+          for (genesisVault, @genesisVaultKey <- genesisVaultCh; @(true, aliceVault) <- aliceVaultCh) {
+            new ack, logCh, assertCh1, assertCh2 in {
+              genesisVault!("setLog", *logCh, genesisVaultKey, *ack) |
+              for (_ <- ack) {
+                genesisVault!("transfer", aliceRevAddress, 1000, genesisVaultKey, *ret) |
+                for (@["transfer", revAddress, amount, result, blockNumber, timestamp, sender] <- logCh) {
+                  rhoSpec!("assert", 
+                    ([aliceRevAddress, 1000, (true, Nil)] == [revAddress, amount, result]), 
+                    "transfer successfully logged", 
+                    *ackCh)
+                }
+              }
             }
           }
         }

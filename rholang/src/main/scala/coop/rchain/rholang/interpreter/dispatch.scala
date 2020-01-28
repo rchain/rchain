@@ -59,8 +59,7 @@ object RholangAndScalaDispatcher {
       implicit
       cost: _cost[M],
       parallel: Parallel[M],
-      s: Sync[M],
-      ft: FunctorTell[M, InterpreterError]
+      s: Sync[M]
   ): (Dispatch[M, ListParWithRandom, TaggedContinuation], Reduce[M]) = {
 
     implicit lazy val dispatcher: Dispatch[M, ListParWithRandom, TaggedContinuation] =

@@ -1,18 +1,12 @@
 package coop.rchain.rholang.interpreter
 
-import java.lang
-
 import cats.effect.Sync
 import cats.implicits._
-import cats.mtl.FunctorTell
 import cats.{Eval => _}
 import com.google.protobuf.ByteString
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.hash.Blake2b512Random
-import coop.rchain.metrics.Span
 import coop.rchain.models.Expr.ExprInstance._
-import coop.rchain.models.GUnforgeable.UnfInstance
-import coop.rchain.models.GUnforgeable.UnfInstance.{GDeployIdBody, GDeployerIdBody, GPrivateBody}
 import coop.rchain.models.TaggedContinuation.TaggedCont.ParBody
 import coop.rchain.models.Var.VarInstance
 import coop.rchain.models.Var.VarInstance.{BoundVar, FreeVar, Wildcard}
@@ -31,7 +25,7 @@ import scalapb.GeneratedMessage
 
 import scala.collection.SortedSet
 import scala.collection.immutable.BitSet
-import scala.util.{Random, Try}
+import scala.util.Try
 
 /** Reduce is the interface for evaluating Rholang expressions.
   *
@@ -53,7 +47,6 @@ class DebruijnInterpreter[M[_], F[_]](
 )(
     implicit parallel: cats.Parallel[M],
     syncM: Sync[M],
-    fTell: FunctorTell[M, InterpreterError],
     cost: _cost[M]
 ) extends Reduce[M] {
 
@@ -156,7 +149,6 @@ class DebruijnInterpreter[M[_], F[_]](
       implicit env: Env[Par],
       rand: Blake2b512Random
   ): M[Unit] = {
-
     // for lack of a better type...
     val terms: Seq[GeneratedMessage] = Seq(
       par.sends,
@@ -185,38 +177,61 @@ class DebruijnInterpreter[M[_], F[_]](
       ReduceError(
         s"The number of terms in the Par is ${terms.size}, which exceeds the limit of ${termSplitLimit}."
       ).raiseError[M, Unit]
-    else
-      terms.zipWithIndex.toList.parTraverse_ {
-        case (term, index) =>
-          eval(term)(env, split(index))
+    else {
+
+      // Collect errors from all parallel execution paths (pars)
+      terms.zipWithIndex.toVector
+        .parTraverse {
+          case (term, index) =>
+            eval(term)(env, split(index))
+              .map(_ => none[Throwable])
+              .handleError(_.some)
+        }
+        .map(_.flattenOption)
+        .flatMap(aggregateEvaluatorErrors)
+    }
+  }
+
+  private def aggregateEvaluatorErrors(errors: Vector[Throwable]) = errors match {
+    // No errors
+    case Vector() => ().pure[M]
+
+    // Out Of Phlogiston error is always single
+    // - if one execution path is out of phlo, the whole evaluation is also
+    case errList if errList.contains(OutOfPhlogistonsError) =>
+      OutOfPhlogistonsError.raiseError[M, Unit]
+
+    // Rethrow single error
+    case Vector(ex) =>
+      ex.raiseError[M, Unit]
+
+    // Collect errors from parallel execution
+    case errList =>
+      val (interpErrs, errs) = errList.foldLeft((Vector[InterpreterError](), Vector[Throwable]())) {
+        // Concat nested errors
+        case ((ipErr1, err1), AggregateError(ipErr2, err2)) => (ipErr1 ++ ipErr2, err1 ++ err2)
+        case ((ipErr, err), ex: InterpreterError)           => (ipErr :+ ex, err)
+        case ((ipErr, err), ex: Throwable)                  => (ipErr, err :+ ex)
       }
+      AggregateError(interpErrs, errs).raiseError[M, Unit]
   }
 
   private def eval(
       term: GeneratedMessage
   )(implicit env: Env[Par], rand: Blake2b512Random): M[Unit] =
-    reportErrors {
-      term match {
-        case term: Send    => eval(term)
-        case term: Receive => eval(term)
-        case term: New     => eval(term)
-        case term: Match   => eval(term)
-        case term: Bundle  => eval(term)
-        case term: Expr =>
-          term.exprInstance match {
-            case e: EVarBody    => eval(e.value.v) >>= (eval(_))
-            case e: EMethodBody => evalExprToPar(e) >>= (eval(_))
-            case other          => BugFoundError(s"Undefined term: \n $other").raiseError[M, Unit]
-          }
-        case other => BugFoundError(s"Undefined term: \n $other").raiseError[M, Unit]
-      }
-    }
-
-  private def reportErrors(process: M[Unit]): M[Unit] =
-    process.handleErrorWith {
-      case error @ OutOfPhlogistonsError => error.raiseError[M, Unit]
-      case error: InterpreterError       => fTell.tell(error)
-      case error                         => error.raiseError[M, Unit]
+    term match {
+      case term: Send    => eval(term)
+      case term: Receive => eval(term)
+      case term: New     => eval(term)
+      case term: Match   => eval(term)
+      case term: Bundle  => eval(term)
+      case term: Expr =>
+        term.exprInstance match {
+          case e: EVarBody    => eval(e.value.v) >>= (eval(_))
+          case e: EMethodBody => evalExprToPar(e) >>= (eval(_))
+          case other          => BugFoundError(s"Undefined term: \n $other").raiseError[M, Unit]
+        }
+      case other => BugFoundError(s"Undefined term: \n $other").raiseError[M, Unit]
     }
 
   /** Algorithm as follows:

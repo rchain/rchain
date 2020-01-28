@@ -5,7 +5,11 @@ import cats.implicits._
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.models.Par
 import coop.rchain.rholang.interpreter.accounting._
-import coop.rchain.rholang.interpreter.errors.{InterpreterError, OutOfPhlogistonsError}
+import coop.rchain.rholang.interpreter.errors.{
+  AggregateError,
+  InterpreterError,
+  OutOfPhlogistonsError
+}
 
 final case class EvaluateResult(cost: Cost, errors: Vector[InterpreterError]) {
   val failed: Boolean    = errors.nonEmpty
@@ -29,7 +33,6 @@ trait Interpreter[F[_]] {
 
   def injAttempt(
       reducer: Reduce[F],
-      errorLog: ErrorLog[F],
       term: String,
       initialPhlo: Cost,
       normalizerEnv: Map[String, Par]
@@ -61,7 +64,7 @@ object Interpreter {
       ): F[EvaluateResult] = {
         implicit val rand: Blake2b512Random = Blake2b512Random(128)
         runtime.space.createSoftCheckpoint() >>= { checkpoint =>
-          injAttempt(runtime.reducer, runtime.errorLog, term, initialPhlo, normalizerEnv).attempt >>= {
+          injAttempt(runtime.reducer, term, initialPhlo, normalizerEnv).attempt >>= {
             case Right(evaluateResult) =>
               if (evaluateResult.errors.nonEmpty)
                 runtime.space.revertToSoftCheckpoint(checkpoint).as(evaluateResult)
@@ -73,49 +76,70 @@ object Interpreter {
         }
       }
 
+      // Internal helper exception to mark parser error
+      case class ParserError(parseError: InterpreterError) extends Throwable
+
       def injAttempt(
           reducer: Reduce[F],
-          errorLog: ErrorLog[F],
           term: String,
           initialPhlo: Cost,
           normalizerEnv: Map[String, Par]
       )(implicit rand: Blake2b512Random): F[EvaluateResult] = {
         val parsingCost = accounting.parsingCost(term)
-        for {
-          _           <- C.set(initialPhlo)
-          parseResult <- charge[F](parsingCost).attempt
-          evaluateResult <- parseResult match {
-                             case Right(_) =>
-                               ParBuilder[F].buildNormalizedTerm(term, normalizerEnv).attempt >>= {
-                                 case Right(parsed) =>
-                                   for {
-                                     injResultEither   <- reducer.inj(parsed).attempt
-                                     phlosLeft         <- C.get
-                                     interpreterErrors <- errorLog.readAndClearErrorVector()
-                                     evaluateResult <- injResultEither.swap.toOption match {
-                                                        case Some(OutOfPhlogistonsError) =>
-                                                          EvaluateResult(
-                                                            initialPhlo - phlosLeft,
-                                                            OutOfPhlogistonsError +: interpreterErrors
-                                                          ).pure[F]
-                                                        case Some(throwable) =>
-                                                          throwable.raiseError[F, EvaluateResult]
-                                                        case None =>
-                                                          EvaluateResult(
-                                                            initialPhlo - phlosLeft,
-                                                            interpreterErrors
-                                                          ).pure[F]
-                                                      }
-                                   } yield evaluateResult
-                                 case Left(interpreterError: InterpreterError) =>
-                                   EvaluateResult(parsingCost, Vector(interpreterError)).pure[F]
-                                 case Left(throwable) => throwable.raiseError[F, EvaluateResult]
-                               }
-                             case Left(interpreterError: InterpreterError) =>
-                               EvaluateResult(parsingCost, Vector(interpreterError)).pure[F]
-                             case Left(throwable) => throwable.raiseError[F, EvaluateResult]
-                           }
-        } yield evaluateResult
+        val evaluationResult = for {
+          _ <- C.set(initialPhlo)
+          _ <- charge[F](parsingCost)
+          parsed <- ParBuilder[F]
+                     .buildNormalizedTerm(term, normalizerEnv)
+                     .handleErrorWith {
+                       case err: InterpreterError => ParserError(err).raiseError[F, Par]
+                     }
+          _         <- reducer.inj(parsed)
+          phlosLeft <- C.get
+        } yield EvaluateResult(initialPhlo - phlosLeft, Vector())
+
+        // Convert InterpreterError(s) to EvaluateResult
+        // - all other errors are rethrown (not valid interpreter errors)
+        evaluationResult.handleErrorWith(
+          error =>
+            C.get >>= (
+                phlosLeft => handleError(initialPhlo, parsingCost, initialPhlo - phlosLeft, error)
+            )
+        )
       }
+
+      def handleError(
+          initialCost: Cost,
+          parsingCost: Cost,
+          evalCost: Cost,
+          error: Throwable
+      ): F[EvaluateResult] =
+        error match {
+          // Parsing error consumes only parsing cost
+          case ParserError(parseError: InterpreterError) =>
+            EvaluateResult(parsingCost, Vector(parseError)).pure[F]
+
+          // For Out Of Phlogistons error initial cost is used because evaluated cost can be higher
+          // - all phlos are consumed
+          case error: OutOfPhlogistonsError.type =>
+            EvaluateResult(initialCost, Vector(error)).pure[F]
+
+          // InterpreterError(s) - multiple errors are result of parallel execution
+          case AggregateError(ipErrs, errs) if errs.isEmpty =>
+            EvaluateResult(evalCost, ipErrs).pure[F]
+
+          // Aggregated fatal errors are rethrown
+          case error: AggregateError =>
+            error.raiseError[F, EvaluateResult]
+
+          // InterpreterError is returned as a result
+          case error: InterpreterError =>
+            EvaluateResult(evalCost, Vector(error)).pure[F]
+
+          // Any other error is unexpected and it's fatal, rethrow
+          case error: Throwable =>
+            error.raiseError[F, EvaluateResult]
+        }
+
     }
 }

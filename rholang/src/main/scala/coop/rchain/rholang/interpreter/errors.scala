@@ -107,4 +107,12 @@ object errors {
   final case class OperatorExpectedError(op: String, expected: String, otherType: String)
       extends InterpreterError(s"Error: Operator `$op` is not defined on $otherType.")
 
+  // Errors from parallel execution
+  final case class AggregateError(
+      interpreterErrors: Vector[InterpreterError],
+      errors: Vector[Throwable]
+  ) extends InterpreterError(
+        s"Error: Aggregate Error\n${interpreterErrors.map(_.toString).mkString("\n")}"
+      )
+
 }

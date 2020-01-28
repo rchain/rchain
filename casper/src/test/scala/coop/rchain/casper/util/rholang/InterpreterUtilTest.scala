@@ -686,4 +686,39 @@ class InterpreterUtilTest
         } yield tsHash should be(Some(computedTsHash))
       }
   }
+
+  // Test for cost mismatch between play and replay in case of out of phlo error
+  "used deploy with insufficient phlos" should "be added to a block with all phlos consumed" in effectTest {
+    val sampleTerm =
+      """
+        |  new
+        |    rl(`rho:registry:lookup`), RevVaultCh, vaultCh, balanceCh, deployId(`rho:rchain:deployId`)
+        |  in {
+        |    rl!(`rho:rchain:revVault`, *RevVaultCh) |
+        |    for (@(_, RevVault) <- RevVaultCh) {
+        |      match "1111MnCcfyG9sExhw1jQcW6hSb98c2XUtu3E4KGSxENo1nTn4e5cx" {
+        |        revAddress => {
+        |          @RevVault!("findOrCreate", revAddress, *vaultCh) |
+        |          for (@(true, vault) <- vaultCh) {
+        |            @vault!("balance", *balanceCh) |
+        |            for (@balance <- balanceCh) {
+        |              deployId!(balance)
+        |            }
+        |          }
+        |        }
+        |      }
+        |    }
+        |  }
+        |""".stripMargin
+    val deploy =
+      ConstructDeploy.sourceDeploy(sampleTerm, System.currentTimeMillis, phloLimit = 3000)
+
+    TestNode.standaloneEff(genesisContext).use { node =>
+      for {
+        b <- node.addBlock(deploy)
+        _ = b.body.deploys.size shouldBe 1
+        _ = b.body.deploys.get(0).get.cost.cost shouldBe 3000
+      } yield ()
+    }
+  }
 }
