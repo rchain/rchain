@@ -8,7 +8,12 @@ import coop.rchain.casper.protocol.{DeployData, ProcessedDeploy}
 import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
 import coop.rchain.casper.util.rholang.SystemDeployPlayResult.{PlayFailed, PlaySucceeded}
 import coop.rchain.casper.util.rholang.SystemDeployReplayResult.{ReplayFailed, ReplaySucceeded}
-import coop.rchain.casper.util.rholang.costacc.{CheckBalance, PreChargeDeploy, RefundDeploy}
+import coop.rchain.casper.util.rholang.costacc.{
+  CheckBalance,
+  CloseBlockDeploy,
+  PreChargeDeploy,
+  RefundDeploy
+}
 import coop.rchain.casper.util.{ConstructDeploy, GenesisBuilder}
 import coop.rchain.catscontrib.effect.implicits._
 import coop.rchain.crypto.PublicKey
@@ -63,7 +68,7 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
     for {
       res <- runtimeManager.computeState(stateHash)(
               deploy :: Nil,
-              BlockData(deploy.data.timestamp, 0, genesisContext.validatorPks.head),
+              BlockData(deploy.data.timestamp, 0, genesisContext.validatorPks.head, Array[Byte]()),
               Map.empty[BlockHash, Validator]
             )
       (hash, Seq(result)) = res
@@ -76,7 +81,12 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
     runtimeManager.replayComputeState(stateHash)(
       processedDeploy :: Nil,
       Nil,
-      BlockData(processedDeploy.deploy.data.timestamp, 0, genesisContext.validatorPks.head),
+      BlockData(
+        processedDeploy.deploy.data.timestamp,
+        0,
+        genesisContext.validatorPks.head,
+        Array[Byte]()
+      ),
       Map.empty[BlockHash, Validator],
       isGenesis = false
     )
@@ -114,7 +124,8 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
       replaySystemDeploy: S
   )(resultAssertion: S#Result => Boolean): Task[StateHash] =
     runtimeManager.withRuntimeLock(
-      runtime => runtime.blockData.set(BlockData(0, 0, genesisContext.validatorPks.head))
+      runtime =>
+        runtime.blockData.set(BlockData(0, 0, genesisContext.validatorPks.head, Array[Byte]()))
     ) >>
       runtimeManager.playSystemDeploy(startState)(playSystemDeploy).attempt >>= {
       case Right(PlaySucceeded(finalPlayStateHash, processedSystemDeploy, playResult)) =>
@@ -176,6 +187,34 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
     }
   }
 
+  "closeBlock" should "make epoch change and reward validator" in effectTest {
+    runtimeManagerResource.use { runtimeManager =>
+      compareSuccessfulSystemDeploys(runtimeManager)(genesis.body.state.postStateHash)(
+        new CloseBlockDeploy(
+          initialRand = Blake2b512Random(Array(0.toByte))
+        ),
+        new CloseBlockDeploy(
+          initialRand = Blake2b512Random(Array(0.toByte))
+        )
+      )(_ => true)
+    }
+  }
+
+  "closeBlock replay" should "fail with different random seed" in {
+    an[Exception] should be thrownBy effectTest({
+      runtimeManagerResource.use { runtimeManager =>
+        compareSuccessfulSystemDeploys(runtimeManager)(genesis.body.state.postStateHash)(
+          new CloseBlockDeploy(
+            initialRand = Blake2b512Random(Array(0.toByte))
+          ),
+          new CloseBlockDeploy(
+            initialRand = Blake2b512Random(Array(1.toByte))
+          )
+        )(_ => true)
+      }
+    })
+  }
+
   "BalanceDeploy" should "compute REV balances" in effectTest {
     runtimeManagerResource.use { runtimeManager =>
       val userPk = ConstructDeploy.defaultPub
@@ -224,7 +263,8 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
                                                BlockData(
                                                  time,
                                                  0L,
-                                                 genesisContext.validatorPks.head
+                                                 genesisContext.validatorPks.head,
+                                                 Array[Byte]()
                                                ),
                                                Map.empty
                                              )
@@ -236,7 +276,8 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
                                            BlockData(
                                              time,
                                              0L,
-                                             genesisContext.validatorPks.head
+                                             genesisContext.validatorPks.head,
+                                             Array[Byte]()
                                            ),
                                            Map.empty,
                                            isGenesis = false
@@ -250,7 +291,8 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
                                                BlockData(
                                                  time,
                                                  0L,
-                                                 genesisContext.validatorPks.head
+                                                 genesisContext.validatorPks.head,
+                                                 Array[Byte]()
                                                ),
                                                Map.empty
                                              )
@@ -262,7 +304,8 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
                                            BlockData(
                                              time,
                                              0L,
-                                             genesisContext.validatorPks.head
+                                             genesisContext.validatorPks.head,
+                                             Array[Byte]()
                                            ),
                                            Map.empty,
                                            isGenesis = false
@@ -408,7 +451,7 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
                  )
         time          <- timeF.currentMillis
         genPostState  = genesis.body.state.postStateHash
-        blockData     = BlockData(time, 0L, genesisContext.validatorPks.head)
+        blockData     = BlockData(time, 0L, genesisContext.validatorPks.head, Array[Byte]())
         invalidBlocks = Map.empty[BlockHash, Validator]
         computeStateResult <- runtimeManager.computeState(genPostState)(
                                deploy :: Nil,
@@ -445,7 +488,7 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
                   )
         time          <- timeF.currentMillis
         genPostState  = genesis.body.state.postStateHash
-        blockData     = BlockData(time, 0L, genesisContext.validatorPks.head)
+        blockData     = BlockData(time, 0L, genesisContext.validatorPks.head, Array[Byte]())
         invalidBlocks = Map.empty[BlockHash, Validator]
         firstDeploy <- mgr
                         .computeState(genPostState)(deploy0 :: Nil, blockData, invalidBlocks)
@@ -574,7 +617,7 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
         deploy        <- ConstructDeploy.sourceDeployNowF(source, phloLimit = 10000)
         time          <- timeF.currentMillis
         genPostState  = genesis.body.state.postStateHash
-        blockData     = BlockData(time, 0L, genesisContext.validatorPks.head)
+        blockData     = BlockData(time, 0L, genesisContext.validatorPks.head, Array[Byte]())
         invalidBlocks = Map.empty[BlockHash, Validator]
         processedDeploys <- runtimeManager
                              .computeState(genPostState)(Seq(deploy), blockData, invalidBlocks)

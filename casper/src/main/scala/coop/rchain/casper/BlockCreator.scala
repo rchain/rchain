@@ -11,7 +11,7 @@ import coop.rchain.casper.CasperState.CasperStateCell
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.ProtoUtil._
 import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
-import coop.rchain.casper.util.rholang.costacc.SlashDeploy
+import coop.rchain.casper.util.rholang.costacc.{CloseBlockDeploy, SlashDeploy}
 import coop.rchain.casper.util.rholang.{SystemDeploy, _}
 import coop.rchain.casper.util.{DagOperations, ProtoUtil}
 import coop.rchain.crypto.PublicKey
@@ -49,7 +49,6 @@ object BlockCreator {
   )(implicit spanF: Span[F]): F[CreateBlockStatus] =
     spanF.trace(CreateBlockMetricsSource) {
       import cats.instances.list._
-
       val validator = ByteString.copyFrom(validatorIdentity.publicKey.bytes)
       for {
         tipHashes             <- Estimator[F].tips(dag, genesis)
@@ -73,7 +72,13 @@ object BlockCreator {
         now              <- Time[F].currentMillis
         invalidBlocksSet <- dag.invalidBlocks
         invalidBlocks    = invalidBlocksSet.map(block => (block.blockHash, block.sender)).toMap
-        unsignedBlock <- if (deploys.nonEmpty || slashingDeploys.nonEmpty) {
+        // make sure closeBlock is the last system Deploy
+        systemDeploys = if (slashingDeploys.nonEmpty)
+          slashingDeploys ++ Seq(
+            CloseBlockDeploy(Tools.rng(parents.head.blockHash.toByteArray))
+          )
+        else List.empty[SystemDeploy]
+        unsignedBlock <- if (deploys.nonEmpty || systemDeploys.nonEmpty) {
                           SynchronyConstraintChecker[F]
                             .check(dag, runtimeManager, genesis, validator)
                             .ifM(
@@ -89,7 +94,7 @@ object BlockCreator {
                                     runtimeManager,
                                     parents,
                                     deploys,
-                                    slashingDeploys,
+                                    systemDeploys,
                                     justifications,
                                     maxBlockNumber,
                                     validatorIdentity.publicKey,
@@ -189,7 +194,7 @@ object BlockCreator {
       invalidBlocks: Map[BlockHash, Validator]
   ): F[CreateBlockStatus] =
     (for {
-      blockData <- BlockData(now, maxBlockNumber + 1, sender).pure
+      blockData <- BlockData(now, maxBlockNumber + 1, sender, parents.head.blockHash.toByteArray).pure
       result <- InterpreterUtil.computeDeploysCheckpoint(
                  parents,
                  deploys,
