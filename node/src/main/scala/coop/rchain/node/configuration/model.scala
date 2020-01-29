@@ -32,6 +32,7 @@ final case class Server(
     messageConsumers: Int,
     faultToleranceThreshold: Float,
     synchronyConstraintThreshold: Double,
+    heightConstraintThreshold: Long,
     reporting: Boolean
 )
 
