@@ -362,7 +362,8 @@ sealed trait SystemDeployData
 
 final case class SlashSystemDeployData(invalidBlockHash: BlockHash, issuerPublicKey: PublicKey)
     extends SystemDeployData
-object Empty extends SystemDeployData
+object CloseBlockSystemDeployData extends SystemDeployData
+object Empty                      extends SystemDeployData
 
 object SystemDeployData {
   val empty: SystemDeployData = Empty
@@ -370,17 +371,29 @@ object SystemDeployData {
   def from(invalidBlockHash: BlockHash, issuerPublicKey: PublicKey): SystemDeployData =
     SlashSystemDeployData(invalidBlockHash, issuerPublicKey)
 
+  def from(): SystemDeployData =
+    CloseBlockSystemDeployData
+
   def fromProto(proto: SystemDeployDataProto): SystemDeployData =
-    if (!proto.invalidBlockHash.isEmpty && !proto.issuerPublicKey.isEmpty)
-      SlashSystemDeployData(proto.invalidBlockHash, PublicKey(proto.issuerPublicKey))
-    else
-      Empty
+    proto.systemDeploy match {
+      case SystemDeployDataProto.SystemDeploy.SlashSystemDeploy(sd) =>
+        SlashSystemDeployData(sd.invalidBlockHash, PublicKey(sd.issuerPublicKey))
+      case SystemDeployDataProto.SystemDeploy.CloseBlockSystemDeploy(_) =>
+        CloseBlockSystemDeployData
+      case _ => Empty
+    }
 
   def toProto(sdd: SystemDeployData): SystemDeployDataProto =
     sdd match {
       case SlashSystemDeployData(invalidBlockHash, issuerPublicKey) =>
-        SystemDeployDataProto(invalidBlockHash, ByteString.copyFrom(issuerPublicKey.bytes))
-      case Empty => SystemDeployDataProto(ByteString.EMPTY, ByteString.EMPTY)
+        SystemDeployDataProto().withSlashSystemDeploy(
+          SlashSystemDeployDataProto(invalidBlockHash, ByteString.copyFrom(issuerPublicKey.bytes))
+        )
+      case CloseBlockSystemDeployData =>
+        SystemDeployDataProto().withCloseBlockSystemDeploy(
+          CloseBlockSystemDeployDataProto()
+        )
+      case Empty => SystemDeployDataProto()
     }
 }
 
