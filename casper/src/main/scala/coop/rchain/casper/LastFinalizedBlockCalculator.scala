@@ -8,18 +8,27 @@ import coop.rchain.blockstorage.deploy.DeployStorage
 import coop.rchain.casper.CasperState.CasperStateCell
 import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.catscontrib.ListContrib
+import coop.rchain.models.BlockHash
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.shared.Log
 
 final class LastFinalizedBlockCalculator[F[_]: Sync: Log: Concurrent: BlockStore: BlockDagStorage: SafetyOracle: DeployStorage](
     faultToleranceThreshold: Float
 ) {
+
+  def sortByHash(h1: BlockHash, h2: BlockHash): Boolean =
+    BlockHash.BlockHashOps(h1).base16String > BlockHash.BlockHashOps(h2).base16String
+
   def run(dag: BlockDagRepresentation[F], lastFinalizedBlockHash: BlockHash)(
       implicit state: CasperStateCell[F]
   ): F[BlockHash] =
     for {
       maybeChildrenHashes <- dag.children(lastFinalizedBlockHash)
-      childrenHashes      = maybeChildrenHashes.getOrElse(Set.empty[BlockHash]).toList
+      // Sort childrenHashes to make sure ordering does not influence maybeFinalizedChild computing
+      childrenHashes = maybeChildrenHashes
+        .getOrElse(Set.empty[BlockHash])
+        .toList
+        .sortWith(sortByHash)
       maybeFinalizedChild <- childrenHashes.findM(isGreaterThanFaultToleranceThreshold(dag, _))
       newFinalizedBlock <- maybeFinalizedChild match {
                             case Some(finalizedChild) =>
