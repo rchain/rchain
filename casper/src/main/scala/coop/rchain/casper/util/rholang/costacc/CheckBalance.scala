@@ -1,7 +1,6 @@
 package coop.rchain.casper.util.rholang.costacc
 
 import cats.syntax.all._
-import com.google.protobuf.ByteString
 import coop.rchain.casper.util.rholang.{SystemDeploy, SystemDeployFailure}
 import coop.rchain.crypto.PublicKey
 import coop.rchain.crypto.hash.Blake2b512Random

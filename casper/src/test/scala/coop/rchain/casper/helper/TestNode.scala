@@ -81,6 +81,8 @@ class TestNode[F[_]](
   implicit val lastFinalizedBlockCalculator = LastFinalizedBlockCalculator[F](0f)
   implicit val synchronyConstraintChecker =
     SynchronyConstraintChecker[F](synchronyConstraintThreshold)
+  implicit val lastFinalizedHeightConstraintChecker =
+    LastFinalizedHeightConstraintChecker[F](Long.MaxValue)
   implicit val estimator = Estimator[F](maxNumberOfParents, maxParentDepth)
   implicit val rpConfAsk = createRPConfAsk[F](local)
   implicit val eventBus  = EventPublisher.noop[F]

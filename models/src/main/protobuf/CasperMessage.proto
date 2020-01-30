@@ -150,9 +150,19 @@ message ProcessedDeployProto {
     string systemDeployError = 6;
 }
 
-message SystemDeployDataProto {
+message SlashSystemDeployDataProto {
   bytes invalidBlockHash = 1;
   bytes issuerPublicKey = 2;
+}
+
+message CloseBlockSystemDeployDataProto{
+}
+
+message SystemDeployDataProto{
+  oneof systemDeploy{
+    SlashSystemDeployDataProto slashSystemDeploy = 1;
+    CloseBlockSystemDeployDataProto closeBlockSystemDeploy = 2;
+  }
 }
 
 message ProcessedSystemDeployProto {

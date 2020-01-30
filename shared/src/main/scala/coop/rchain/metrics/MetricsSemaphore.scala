@@ -23,7 +23,12 @@ class MetricsSemaphore[F[_]: Sync: Metrics](
 
   def tryAcquireN(n: Long): F[Boolean] = underlying.tryAcquireN(n)
   def releaseN(n: Long): F[Unit]       = underlying.releaseN(n)
-  def withPermit[A](t: F[A]): F[A]     = Sync[F].bracket(acquire)(kp(t))(kp(release))
+  def withPermit[A](t: F[A]): F[A] =
+    for {
+      _      <- Metrics[F].incrementGauge("lock.permit")
+      result <- Sync[F].bracket(acquire)(kp(t))(kp(release))
+      _      <- Metrics[F].decrementGauge("lock.permit")
+    } yield result
 }
 
 object MetricsSemaphore {

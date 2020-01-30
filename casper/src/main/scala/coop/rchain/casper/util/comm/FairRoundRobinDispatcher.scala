@@ -1,12 +1,10 @@
 package coop.rchain.casper.util.comm
 
 import scala.collection.immutable.Queue
-
 import cats.{Eq, Show}
-import cats.effect.Sync
-import cats.effect.concurrent.Ref
+import cats.effect.{Concurrent, Sync}
+import cats.effect.concurrent.{Ref, Semaphore}
 import cats.syntax.all._
-
 import FairRoundRobinDispatcher._
 import coop.rchain.shared.Log
 
@@ -19,7 +17,8 @@ class FairRoundRobinDispatcher[F[_]: Sync: Log, S: Show, M: Show: Eq](
     skipped: Ref[F, Int],
     maxSourceQueueSize: Int,
     giveUpAfterSkipped: Int,
-    dropSourceAfterRetries: Int
+    dropSourceAfterRetries: Int,
+    lock: Semaphore[F]
 ) {
   assert(maxSourceQueueSize > 0)
   assert(giveUpAfterSkipped >= 0)
@@ -28,11 +27,13 @@ class FairRoundRobinDispatcher[F[_]: Sync: Log, S: Show, M: Show: Eq](
   def dispatch(source: S, message: M): F[Unit] =
     filter(message).flatMap {
       case Handle =>
-        ensureSourceExists(source) >>
-          isDuplicate(source, message).ifM(
-            Log[F].info(s"Dropped duplicate message ${message.show} from ${source.show}"),
-            enqueueMessage(source, message) >> handleMessages
-          )
+        lock.withPermit(
+          ensureSourceExists(source) >>
+            isDuplicate(source, message).ifM(
+              Log[F].info(s"Dropped duplicate message ${message.show} from ${source.show}"),
+              enqueueMessage(source, message) >> handleMessages
+            )
+        )
       case Pass => handle(source, message)
       case Drop => ().pure
     }
@@ -137,7 +138,8 @@ object FairRoundRobinDispatcher {
       handle: (S, M) => F[Unit],
       maxSourceQueueSize: Int,
       giveUpAfterSkipped: Int,
-      dropSourceAfterRetries: Int
+      dropSourceAfterRetries: Int,
+      lock: Semaphore[F]
   ): F[FairRoundRobinDispatcher[F, S, M]] =
     for {
       queue   <- Ref.of(Queue.empty[S])
@@ -153,6 +155,7 @@ object FairRoundRobinDispatcher {
       skipped,
       maxSourceQueueSize,
       giveUpAfterSkipped,
-      dropSourceAfterRetries
+      dropSourceAfterRetries,
+      lock
     )
 }

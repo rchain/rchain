@@ -336,6 +336,11 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
         "proposed at least one block since this node's last proposal."
     )
 
+    val heightConstraintThreshold = opt[Long](
+      descr = "Long value representing how far ahead of the last finalized block the node is " +
+        "allowed to propose."
+    )
+
     val maxPeerQueueSize = opt[Int](
       descr = "Fair round robin dispatcher individual peer packet queue size. " +
         "Packets will get dropped by the dispatcher when the queue is full.",

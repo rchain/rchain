@@ -41,6 +41,7 @@ class HoconConfigurationSpec extends FunSuite with Matchers {
       |    message-consumers = 8
       |    fault-tolerance-threshold = 0.2
       |    synchrony-constraint-threshold = 0.3333333333333333
+      |    height-constraint-threshold = 100
       |    reporting = false
       |  }
       |}
@@ -76,6 +77,7 @@ class HoconConfigurationSpec extends FunSuite with Matchers {
         messageConsumers = 8,
         faultToleranceThreshold = 0.2f,
         synchronyConstraintThreshold = 0.3333333333333333d,
+        heightConstraintThreshold = 100L,
         reporting = false
       )
 
