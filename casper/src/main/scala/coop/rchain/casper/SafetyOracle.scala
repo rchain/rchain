@@ -103,19 +103,24 @@ sealed abstract class SafetyOracleInstances {
       ): F[Long] =
         computeMainParentWeightMap(blockDag, candidateMetadata).map(weightMapTotal)
 
+      /**
+        * @param blockDag
+        * @param blockMetadata
+        * @return weights of validators that agree on a block
+        */
       private def computeAgreeingValidatorToWeight(
           blockDag: BlockDagRepresentation[F],
-          candidateMetadata: BlockMetadata
+          blockMetadata: BlockMetadata
       ): F[Map[Validator, Long]] =
         for {
-          weights <- computeMainParentWeightMap(blockDag, candidateMetadata)
+          weights <- computeMainParentWeightMap(blockDag, blockMetadata)
           agreeingWeights <- weights.toList.traverse {
                               case (validator, stake) =>
                                 blockDag.latestMessageHash(validator).flatMap {
                                   case Some(latestMessageHash) =>
                                     computeCompatibility(
                                       blockDag,
-                                      candidateMetadata,
+                                      blockMetadata,
                                       latestMessageHash
                                     ).map { isCompatible =>
                                       if (isCompatible) {
@@ -205,12 +210,19 @@ sealed abstract class SafetyOracleInstances {
         }
       }
 
+      /**
+        * @param blockDag
+        * @param candidate metadata of a block examined
+        * @param target target block hash
+        * @return if candidate block is compatible with target block
+        */
       private def computeCompatibility(
           blockDag: BlockDagRepresentation[F],
-          candidateMetadata: BlockMetadata,
-          targetBlockHash: BlockHash
+          candidate: BlockMetadata,
+          target: BlockHash
       ): F[Boolean] =
-        ProtoUtil.getBlockMetadata[F](targetBlockHash, blockDag) >>=
-          (DagOperations.isDescendantOf[F](candidateMetadata, _, blockDag))
+        // Current implementation checks if candidate block is a parent of target block
+        ProtoUtil.getBlockMetadata[F](target, blockDag) >>=
+          (DagOperations.isDescendantOf[F](_, candidate, blockDag))
     }
 }
