@@ -79,7 +79,6 @@ class GrpcTransportClient(
 
   private def clientChannel(peer: PeerNode): Task[ManagedChannel] =
     for {
-      _                <- log.debug(s"Creating new channel to peer ${peer.toAddress}")
       clientSslContext <- clientSslContextTask
       c <- Task.delay {
             NettyChannelBuilder
@@ -100,9 +99,11 @@ class GrpcTransportClient(
       request: GrpcTransport.Request[A]
   ): Task[CommErr[A]] =
     (for {
+      _       <- log.debug(s"Creating new channel to peer ${peer.toAddress}")
       channel <- clientChannel(peer)
       stub    <- Task.delay(RoutingGrpcMonix.stub(channel).withDeadlineAfter(timeout))
       result  <- request(stub).doOnFinish(kp(Task.delay(channel.shutdown()).attempt.void))
+      _       <- log.debug(s"Send request to peer ${peer.toAddress} done")
       _       <- Task.unit.asyncBoundary // return control to caller thread
     } yield result).attempt.map(_.fold(e => Left(protocolException(e)), identity))
 

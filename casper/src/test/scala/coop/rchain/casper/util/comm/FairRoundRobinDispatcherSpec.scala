@@ -1,12 +1,14 @@
 package coop.rchain.casper.util.comm
 
 import scala.collection.immutable.Queue
+import cats.effect.concurrent.Semaphore
 
 import cats.{Eq, Show}
 import cats.effect.concurrent.Ref
-import cats.effect.SyncIO
+import monix.execution.Scheduler.Implicits.global
 
 import coop.rchain.shared.Log
+import monix.eval.Task
 import FairRoundRobinDispatcher._
 
 import org.scalatest.{Matchers, WordSpecLike}
@@ -603,7 +605,7 @@ class FairRoundRobinDispatcherSpec extends WordSpecLike with Matchers {
         }
 
       "pass the message on filter Pass" in
-        new TestEnv(10, 0, 0, _ => SyncIO.pure(Pass)) {
+        new TestEnv(10, 0, 0, _ => Task.pure(Pass)) {
           validate(
             for {
               _ <- dispatcher.dispatch("A", 1)
@@ -620,7 +622,7 @@ class FairRoundRobinDispatcherSpec extends WordSpecLike with Matchers {
         }
 
       "drop the message on filter Drop" in
-        new TestEnv(10, 0, 0, _ => SyncIO.pure(Drop)) {
+        new TestEnv(10, 0, 0, _ => Task.pure(Drop)) {
           validate(
             for {
               _ <- dispatcher.dispatch("A", 1)
@@ -636,24 +638,24 @@ class FairRoundRobinDispatcherSpec extends WordSpecLike with Matchers {
       maxSourceQueueSize: Int,
       giveUpAfterSkipped: Int,
       dropSourceAfterRetries: Int,
-      filter: Int => SyncIO[Dispatch] = _ => SyncIO.pure(Handle)
+      filter: Int => Task[Dispatch] = _ => Task.pure(Handle)
   ) {
-    implicit private val log: Log[SyncIO]         = new Log.NOPLog[SyncIO]
+    implicit private val log: Log[Task]           = new Log.NOPLog[Task]
     implicit private val showSource: Show[String] = s => s
     implicit private val showMessage: Show[Int]   = m => m.toString
     implicit private val eqMessage: Eq[Int]       = (x, y) => x == y
-
+    val lock                                      = Semaphore[Task](1).runSyncUnsafe()
     val (queue, messages, retries, skipped, handled) =
       (for {
-        queue    <- Ref[SyncIO].of(Queue.empty[String])
-        messages <- Ref[SyncIO].of(Map.empty[String, Queue[Int]])
-        retries  <- Ref[SyncIO].of(Map.empty[String, Int])
-        skipped  <- Ref[SyncIO].of(0)
-        handled  <- Ref[SyncIO].of(Queue.empty[(String, Int)])
-      } yield (queue, messages, retries, skipped, handled)).unsafeRunSync()
+        queue    <- Ref[Task].of(Queue.empty[String])
+        messages <- Ref[Task].of(Map.empty[String, Queue[Int]])
+        retries  <- Ref[Task].of(Map.empty[String, Int])
+        skipped  <- Ref[Task].of(0)
+        handled  <- Ref[Task].of(Queue.empty[(String, Int)])
+      } yield (queue, messages, retries, skipped, handled)).runSyncUnsafe()
 
-    val dispatcher: FairRoundRobinDispatcher[SyncIO, String, Int] =
-      new FairRoundRobinDispatcher[SyncIO, String, Int](
+    val dispatcher: FairRoundRobinDispatcher[Task, String, Int] =
+      new FairRoundRobinDispatcher[Task, String, Int](
         filter,
         (s, m) => handled.update(_.enqueue((s, m))),
         queue,
@@ -662,7 +664,8 @@ class FairRoundRobinDispatcherSpec extends WordSpecLike with Matchers {
         skipped,
         maxSourceQueueSize,
         giveUpAfterSkipped,
-        dropSourceAfterRetries
+        dropSourceAfterRetries,
+        lock
       )
 
     private val state =
@@ -674,14 +677,14 @@ class FairRoundRobinDispatcherSpec extends WordSpecLike with Matchers {
         h <- handled.get
       } yield (q, m, r, s, h)
 
-    def validate[A](block: => SyncIO[A])(
+    def validate[A](block: => Task[A])(
         expectedQueue: Queue[String] = Queue.empty,
         expectedMessages: Map[String, Queue[Int]] = Map.empty,
         expectedRetries: Map[String, Int] = Map.empty,
         expectedSkipped: Int = 0,
         expectedHandled: Queue[(String, Int)] = Queue.empty
     ): A = {
-      val (postState, result) = block.flatMap(r => state.map((_, r))).unsafeRunSync()
+      val (postState, result) = block.flatMap(r => state.map((_, r))).runSyncUnsafe()
       val (q, m, r, s, h)     = postState
       q shouldEqual expectedQueue
       m shouldEqual expectedMessages
