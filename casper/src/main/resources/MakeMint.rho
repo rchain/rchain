@@ -1,6 +1,5 @@
 /*
  The table below describes the required computations and their dependencies
-
  No. | Dependency | Computation method | Result
  ----+------------+--------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------
  1.  |            | given              | sk = de19d53f28d4cdee74bad062342d8486a90a652055f3de4b2efa5eb2fccc9d53
@@ -14,7 +13,7 @@
  9.  | 4,         | registry           | uri = rho:id:asysrwfgzf8bf7sxkiowp4b3tcsy4f8ombi3w96ysox4u3qdmn1wbc
  ----+------------+--------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------
  */
-new 
+new
   MakeMint, rs(`rho:registry:insertSigned:secp256k1`), uriOut,
   rl(`rho:registry:lookup`), NonNegativeNumberCh
 in {
@@ -38,21 +37,19 @@ in {
               for (thisDecr <- letCh) {
                 contract thisPurse(@=*thisDecr, @amount, return) = {
                   new success in {
-                    balance!("sub", amount, *success) | 
+                    balance!("sub", amount, *success) |
                     for (@subOk <- success) {
                       return!(subOk, *decr) |
-
                       for (logCh <<- logStore) {
-                        if (Nil != *logCh) { 
+                        if (Nil != *logCh) {
                           new bd(`rho:block:data`), bdCh in {
                             bd!(*bdCh) |
-                            for (@timestamp, @blockNumber, @sender <- bdCh) {
-                              logCh!(["*decr", amount, subOk, blockNumber, timestamp, sender]) 
+                            for (@blockNumber, @timestamp, @sender <- bdCh) {
+                              logCh!(["*decr", amount, subOk, blockNumber, timestamp, sender])
                             }
                           }
                         }
                       }
-
                     }
                   }
                 }
@@ -86,24 +83,22 @@ in {
                     if (decrSuccess and auth == *decr) {
                       // add transferred amount to this purse
                       balance!("add", amount, *success) |
-                      
                       // log
                       if (Nil != *logCh) {
                         new bd(`rho:block:data`), bdCh in {
                           bd!(*bdCh) |
-                          for (@timestamp, @blockNumber, @sender <- bdCh) {
+                          for (@blockNumber, @timestamp, @sender <- bdCh) {
                             logCh!(["deposit", amount, src.toByteArray(), true, blockNumber, timestamp, sender])
                           }
                         }
                       }
                     } else {
                       success!(false) |
-                      
                       // log
                       if (Nil != *logCh) {
                         new bd(`rho:block:data`), bdCh in {
                           bd!(*bdCh) |
-                          for (@timestamp, @blockNumber, @sender <- bdCh) {
+                          for (@blockNumber, @timestamp, @sender <- bdCh) {
                             logCh!(["deposit", amount, src.toByteArray(), false, blockNumber, timestamp, sender])
                           }
                         }
@@ -127,5 +122,3 @@ in {
     *uriOut
   )
 }
-  
-  
