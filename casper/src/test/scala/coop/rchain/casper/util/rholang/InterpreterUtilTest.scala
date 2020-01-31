@@ -722,4 +722,58 @@ class InterpreterUtilTest
       } yield ()
     }
   }
+
+  val multiBranchSampleTermWithError =
+    """
+      |  new rl(`rho:registry:lookup`), RevVaultCh, ackCh, out(`rho:io:stdout`)
+      |  in {
+      |    new signal in {
+      |      signal!(0) | signal!(0) | signal!(0) | signal!(0) | signal!(0) | signal!(0) | signal!(1) |
+      |      contract signal(@x) = {
+      |        rl!(`rho:rchain:revVault`, *RevVaultCh) | ackCh!(x) |
+      |        if (x == 1) {}.xxx() // Simulates error in one branch
+      |      }
+      |    } |
+      |    for (@(_, RevVault) <= RevVaultCh; @x<= ackCh) {
+      |      @(*ackCh, "parallel universe")!("Rick and Morty")
+      |    }
+      |  }
+      |""".stripMargin
+
+  "replay" should "match in case of Out of Phlo error" in effectTest {
+    val deploy =
+      ConstructDeploy.sourceDeploy(
+        multiBranchSampleTermWithError,
+        System.currentTimeMillis,
+        // Not enough phlo
+        phloLimit = 20000
+      )
+
+    TestNode.standaloneEff(genesisContext).use { node =>
+      for {
+        b <- node.addBlock(deploy)
+        _ = b.body.deploys.size shouldBe 1
+        _ = b.body.deploys.get(0).get.cost.cost shouldBe 20000
+      } yield ()
+    }
+  }
+
+  "replay" should "match in case of user execution error" in effectTest {
+    val deploy =
+      ConstructDeploy.sourceDeploy(
+        multiBranchSampleTermWithError,
+        System.currentTimeMillis,
+        // Enough phlo
+        phloLimit = 300000
+      )
+
+    TestNode.standaloneEff(genesisContext).use { node =>
+      for {
+        b <- node.addBlock(deploy)
+        _ = b.body.deploys.size shouldBe 1
+        _ = b.body.deploys.get(0).get.cost.cost shouldBe 300000
+      } yield ()
+    }
+  }
+
 }
