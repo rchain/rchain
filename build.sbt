@@ -305,6 +305,7 @@ lazy val node = (project in file("node"))
             --add-opens=java.base/sun.nio.ch=ALL-UNNAMED
             --add-opens=java.base/sun.security.util=ALL-UNNAMED
             --add-opens=java.base/sun.security.x509=ALL-UNNAMED
+            --add-opens=java.base/sun.security.provider=ALL-UNNAMED
           )
         fi
       }
