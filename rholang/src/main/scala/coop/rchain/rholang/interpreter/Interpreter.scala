@@ -100,7 +100,7 @@ object Interpreter {
                                                     ) {
                                                       case interpreterError: InterpreterError =>
                                                         EvaluateResult(
-                                                          initialPhlo - phlosLeft,
+                                                          initialPhlo,
                                                           Vector(interpreterError)
                                                         ).pure[F]
                                                       case throwable =>
