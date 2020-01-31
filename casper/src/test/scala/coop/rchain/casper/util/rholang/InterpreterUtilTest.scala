@@ -730,4 +730,92 @@ class InterpreterUtilTest
     } yield ()
   }
 
+  // Test for cost mismatch between play and replay in case of out of phlo error
+  "used deploy with insufficient phlos" should "be added to a block with all phlos consumed" in effectTest {
+    val sampleTerm =
+      """
+        |  new
+        |    rl(`rho:registry:lookup`), RevVaultCh, vaultCh, balanceCh, deployId(`rho:rchain:deployId`)
+        |  in {
+        |    rl!(`rho:rchain:revVault`, *RevVaultCh) |
+        |    for (@(_, RevVault) <- RevVaultCh) {
+        |      match "1111MnCcfyG9sExhw1jQcW6hSb98c2XUtu3E4KGSxENo1nTn4e5cx" {
+        |        revAddress => {
+        |          @RevVault!("findOrCreate", revAddress, *vaultCh) |
+        |          for (@(true, vault) <- vaultCh) {
+        |            @vault!("balance", *balanceCh) |
+        |            for (@balance <- balanceCh) {
+        |              deployId!(balance)
+        |            }
+        |          }
+        |        }
+        |      }
+        |    }
+        |  }
+        |""".stripMargin
+    val deploy =
+      ConstructDeploy.sourceDeploy(sampleTerm, System.currentTimeMillis, phloLimit = 3000)
+
+    TestNode.standaloneEff(genesisContext).use { node =>
+      for {
+        b <- node.addBlock(deploy)
+        _ = b.body.deploys.size shouldBe 1
+        _ = b.body.deploys.get(0).get.cost.cost shouldBe 3000
+      } yield ()
+    }
+  }
+
+  val multiBranchSampleTermWithError =
+    """
+      |  new rl(`rho:registry:lookup`), RevVaultCh, ackCh, out(`rho:io:stdout`)
+      |  in {
+      |    new signal in {
+      |      signal!(0) | signal!(0) | signal!(0) | signal!(0) | signal!(0) | signal!(0) | signal!(1) |
+      |      contract signal(@x) = {
+      |        rl!(`rho:rchain:revVault`, *RevVaultCh) | ackCh!(x) |
+      |        if (x == 1) {}.xxx() // Simulates error in one branch
+      |      }
+      |    } |
+      |    for (@(_, RevVault) <= RevVaultCh; @x<= ackCh) {
+      |      @(*ackCh, "parallel universe")!("Rick and Morty")
+      |    }
+      |  }
+      |""".stripMargin
+
+  "replay" should "match in case of Out of Phlo error" in effectTest {
+    val deploy =
+      ConstructDeploy.sourceDeploy(
+        multiBranchSampleTermWithError,
+        System.currentTimeMillis,
+        // Not enough phlo
+        phloLimit = 20000
+      )
+
+    TestNode.standaloneEff(genesisContext).use { node =>
+      for {
+        b <- node.addBlock(deploy)
+        _ = b.body.deploys.size shouldBe 1
+        _ = b.body.deploys.get(0).get.cost.cost shouldBe 20000
+      } yield ()
+    }
+  }
+
+  "replay" should "match in case of user execution error" in effectTest {
+    val deploy =
+      ConstructDeploy.sourceDeploy(
+        multiBranchSampleTermWithError,
+        System.currentTimeMillis,
+        // Enough phlo
+        phloLimit = 300000
+      )
+
+    TestNode.standaloneEff(genesisContext).use { node =>
+      for {
+        b <- node.addBlock(deploy)
+        _ = b.body.deploys.size shouldBe 1
+        _ = b.body.deploys.get(0).get.cost.cost shouldBe 300000
+      } yield ()
+    }
+  }
+
 }
