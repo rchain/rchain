@@ -188,11 +188,13 @@ in {
                     for (@result <- authKeyValidCh) {
                       if (result) {
                         new ack in {
-                          logStore!(*logCh) |
-                          // Set logging on the purse so that we also see deposits into the vault
-                          purse!("setLog", *logCh, *ack) |
-                          for (_ <- ack) {
-                            ret!(true)
+                          for (_ <- logStore) {
+                            logStore!(*logCh) |
+                            // Set logging on the purse so that we also see deposits into the vault
+                            purse!("setLog", *logCh, *ack) |
+                            for (_ <- ack) {
+                              ret!(true)
+                            }
                           }
                         }
                       } else {
