@@ -354,8 +354,9 @@ abstract class RSpaceOps[F[_]: Concurrent: Metrics, C, P, A, K](
   override def revertToSoftCheckpoint(checkpoint: SoftCheckpoint[C, P, A, K]): F[Unit] =
     spanF.trace(revertSoftCheckpointSpanLabel) {
       implicit val ck: Codec[K] = serializeK.toCodec
+      val history               = historyRepositoryAtom.get()
       for {
-        hotStore <- HotStore.from(checkpoint.cacheSnapshot.cache, historyRepository)
+        hotStore <- HotStore.from(checkpoint.cacheSnapshot.cache, history)
         _        = storeAtom.set(hotStore)
         _        = eventLog.take()
 
@@ -365,7 +366,7 @@ abstract class RSpaceOps[F[_]: Concurrent: Metrics, C, P, A, K](
       } yield ()
     }
 
-  override def close(): F[Unit] = historyRepository.close()
+  override def close(): F[Unit] = historyRepositoryAtom.get().close()
 
   def wrapResult(
       channels: Seq[C],
