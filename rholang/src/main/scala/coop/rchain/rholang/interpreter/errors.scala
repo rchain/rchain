@@ -1,5 +1,7 @@
 package coop.rchain.rholang.interpreter
 
+import net.logstash.logback.encoder.org.apache.commons.lang.exception.ExceptionUtils
+
 object errors {
 
   sealed abstract class InterpreterError(message: String) extends Throwable(message) {
@@ -112,7 +114,7 @@ object errors {
       interpreterErrors: Vector[InterpreterError],
       errors: Vector[Throwable]
   ) extends InterpreterError(
-        s"Error: Aggregate Error\n${interpreterErrors.map(_.toString).mkString("\n")}"
+        s"Error: Aggregate Error\n${(interpreterErrors ++ errors).map(ExceptionUtils.getFullStackTrace).mkString}"
       )
 
 }
