@@ -14,12 +14,11 @@ Table of contents are preliminary and subject to change.
 * [Bundles](bundles/)
 * [Patterns](patterns/)
 * [Shadowing](shadowing/)
-* [Pattern Matching](pattern_matching/) Derek, patterns and matching go together? Is there a need for patterns without matching?
+* [Pattern Matching](pattern_matching/)
 * [Match](match/)
 * [Normalization Process](normalization process/)
 * [Data Structures](data_structures/)
 
 ## Related Resources
-* Rholang's [Formal Symantics](https://github.com/rchain/rchain/tree/dev/rholang/src/main/k/rholang) in K-Framework.
+* Rholang's [Formal Symantics](https://github.com/rchain/rchain/tree/dev/rholang/src/main/formal_verification/k) in K-Framework.
 * A gentler [rholang tutorial](https://github.com/JoshOrndorff/LearnRholangByExample)
-
