@@ -208,8 +208,17 @@ object InterpreterUtil {
       case Seq((_, parentStateHash)) =>
         parentStateHash.pure
 
-      case (_, initStateHash) +: _ =>
-        replayIntoMergeBlock(parents, dag, runtimeManager, initStateHash)
+      case _ =>
+        findLeastEffortParentForReply(parents, dag).flatMap {
+          case (leastEfforParentIndex, blockHashesToApply) =>
+            replayIntoMergeBlock(
+              parents,
+              dag,
+              runtimeManager,
+              parentTuplespaces(leastEfforParentIndex)._2,
+              blockHashesToApply
+            )
+        }
     }
   }
 
@@ -220,17 +229,17 @@ object InterpreterUtil {
       parents: Seq[BlockMessage],
       dag: BlockDagRepresentation[F],
       runtimeManager: RuntimeManager[F],
-      initStateHash: StateHash
+      initStateHash: StateHash,
+      blockMetasToApply: Vector[BlockMetadata]
   ): F[StateHash] = {
     import cats.instances.vector._
     for {
-      _                  <- Span[F].mark("before-compute-parents-post-state-find-multi-parents")
-      blockHashesToApply <- findMultiParentsBlockHashesForReplay(parents, dag)
+      _ <- Span[F].mark("before-compute-parents-post-state-find-multi-parents")
       _ <- Log[F].info(
-            s"replayIntoMergeBlock computed number of uncommon ancestors: ${blockHashesToApply.length}"
+            s"replayIntoMergeBlock computed number of uncommon ancestors: ${blockMetasToApply.length}"
           )
       _             <- Span[F].mark("before-compute-parents-post-state-get-blocks")
-      blocksToApply <- blockHashesToApply.traverse(b => ProtoUtil.getBlock(b.blockHash))
+      blocksToApply <- blockMetasToApply.traverse(b => ProtoUtil.getBlock(b.blockHash))
       _             <- Span[F].mark("before-compute-parents-post-state-replay")
       replayResult <- blocksToApply.foldM(initStateHash) { (stateHash, block) =>
                        (for {
@@ -246,26 +255,30 @@ object InterpreterUtil {
     } yield replayResult
   }
 
-  private[rholang] def findMultiParentsBlockHashesForReplay[F[_]: Monad](
+  private[rholang] def findLeastEffortParentForReply[F[_]: Monad](
       parents: Seq[BlockMessage],
       dag: BlockDagRepresentation[F]
-  ): F[Vector[BlockMetadata]] = {
+  ): F[(Int, Vector[BlockMetadata])] = {
     import cats.instances.list._
     for {
       parentsMetadata <- parents.toList.traverse(b => dag.lookup(b.blockHash).map(_.get))
-      blockHashesToApply <- {
+      result <- {
         for {
-          uncommonAncestors          <- DagOperations.uncommonAncestors(parentsMetadata.toVector, dag)
-          ancestorsOfInitParentIndex = 0
-          // Filter out blocks that already included by starting from the chosen initial parent
-          // as otherwise we will be applying the initial parent's ancestor's twice.
-          result = uncommonAncestors
-            .filterNot { case (_, set) => set.contains(ancestorsOfInitParentIndex) }
-            .keys
-            .toVector
-            .sorted(BlockMetadata.orderingByNum) // Ensure blocks to apply is topologically sorted to maintain any causal dependencies
-        } yield result
+          uncommonAncestors <- DagOperations.uncommonAncestors(parentsMetadata.toVector, dag)
+          blocksToApplyByParent = parentsMetadata.indices.map(
+            ancestorsOfInitParentIndex =>
+              // Filter out blocks that already included by starting from the chosen initial parent
+              // as otherwise we will be applying the initial parent's ancestor's twice.
+              ancestorsOfInitParentIndex -> uncommonAncestors.filterNot {
+                case (_, set) => set.contains(ancestorsOfInitParentIndex)
+              }.keys
+          )
+          (leastEffortParentIndex, blockMetasToApply) = blocksToApplyByParent.minBy(_._2.size)
+          // Ensure blocks to apply is topologically sorted to maintain any causal dependencies
+        } yield leastEffortParentIndex -> blockMetasToApply.toVector.sorted(
+          BlockMetadata.orderingByNum
+        )
       }
-    } yield blockHashesToApply
+    } yield result
   }
 }
