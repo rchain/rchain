@@ -71,6 +71,8 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Log: Time: SafetyOracle: Las
 
   private[this] val AddBlockMetricsSource =
     Metrics.Source(CasperMetricsSource, "add-block")
+  private[this] val CreateBlockMetricsSource =
+    Metrics.Source(CasperMetricsSource, "create-block")
 
   def addBlock(b: BlockMessage): F[ValidBlockProcessing] = {
 
@@ -186,7 +188,7 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Log: Time: SafetyOracle: Las
   def estimator(dag: BlockDagRepresentation[F]): F[IndexedSeq[BlockHash]] =
     Estimator[F].tips(dag, genesis)
 
-  def createBlock: F[CreateBlockStatus] =
+  def createBlock: F[CreateBlockStatus] = spanF.trace(CreateBlockMetricsSource) {
     (validatorId match {
       case Some(validatorIdentity) =>
         BlockDagStorage[F].getRepresentation
@@ -211,6 +213,7 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Log: Time: SafetyOracle: Las
           }
       case None => CreateBlockStatus.readOnlyMode.pure
     }).timer("create-block-time")
+  }
 
   def lastFinalizedBlock: F[BlockMessage] =
     for {
