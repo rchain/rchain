@@ -55,7 +55,7 @@ class InterpreterUtilTest
   val genesisContext = GenesisBuilder.buildGenesis()
   val genesis        = genesisContext.genesisBlock
 
-  def computeDeploysCheckpoint[F[_]: Sync: Log: BlockStore: Span: Time](
+  def computeDeploysCheckpoint[F[_]: Sync: Log: BlockStore: Span: Time: Metrics](
       parents: Seq[BlockMessage],
       deploys: Seq[Signed[DeployData]],
       dag: BlockDagRepresentation[F],
