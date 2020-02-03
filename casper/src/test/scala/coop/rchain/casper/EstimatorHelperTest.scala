@@ -110,7 +110,7 @@ class EstimatorHelperTest
       }
   }
 
-  private def testConflict[F[_]: Sync: BlockStore: IndexedBlockDagStorage: Time: Log](
+  private def testConflict[F[_]: Sync: BlockStore: IndexedBlockDagStorage: Time: Log: Span](
       deployMod1: ProcessedDeploy => ProcessedDeploy
   )(
       deployMod2: ProcessedDeploy => ProcessedDeploy

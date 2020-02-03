@@ -39,7 +39,6 @@ object BlockAPI {
   type ApiErr[A] = Either[Error, A]
 
   val BlockAPIMetricsSource: Metrics.Source = Metrics.Source(Metrics.BaseSource, "block-api")
-  val CreateBlockSource: Metrics.Source     = Metrics.Source(BlockAPIMetricsSource, "create-block")
   val DeploySource: Metrics.Source          = Metrics.Source(BlockAPIMetricsSource, "deploy")
   val GetBlockSource: Metrics.Source        = Metrics.Source(BlockAPIMetricsSource, "get-block")
 
@@ -68,7 +67,7 @@ object BlockAPI {
   def createBlock[F[_]: Sync: Concurrent: EngineCell: Log: Metrics: Span](
       blockApiLock: Semaphore[F],
       printUnmatchedSends: Boolean = false
-  ): F[ApiErr[String]] = Span[F].trace(CreateBlockSource) {
+  ): F[ApiErr[String]] = {
     val errorMessage = "Could not create block, casper instance was not available yet."
     EngineCell[F].read >>= (
       _.withCasper[ApiErr[String]](

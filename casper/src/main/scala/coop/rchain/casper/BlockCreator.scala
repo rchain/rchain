@@ -7,7 +7,6 @@ import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockStore
 import coop.rchain.blockstorage.dag.BlockDagRepresentation
 import coop.rchain.blockstorage.deploy.DeployStorage
-import coop.rchain.casper.CasperState.CasperStateCell
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.ProtoUtil._
 import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
@@ -26,6 +25,8 @@ import coop.rchain.shared.{Cell, Log, Time}
 object BlockCreator {
   private[this] val CreateBlockMetricsSource =
     Metrics.Source(CasperMetricsSource, "create-block")
+  private[this] val ProcessDeploysAndCreateBlockMetricsSource =
+    Metrics.Source(CasperMetricsSource, "process-deploys-and-create-block")
 
   /*
    * Overview of createBlock
@@ -38,7 +39,7 @@ object BlockCreator {
    *  3. Extract all valid deploys that aren't already in all ancestors of S (the parents).
    *  4. Create a new block that contains the deploys from the previous step.
    */
-  def createBlock[F[_]: Sync: Log: Time: BlockStore: SynchronyConstraintChecker: LastFinalizedHeightConstraintChecker: Estimator: DeployStorage](
+  def createBlock[F[_]: Sync: Log: Time: BlockStore: SynchronyConstraintChecker: LastFinalizedHeightConstraintChecker: Estimator: DeployStorage: Metrics](
       dag: BlockDagRepresentation[F],
       genesis: BlockMessage,
       validatorIdentity: ValidatorIdentity,
@@ -108,6 +109,7 @@ object BlockCreator {
                         } else {
                           CreateBlockStatus.noNewDeploys.pure[F]
                         }
+        _ <- spanF.mark("block-created")
         signedBlock <- unsignedBlock.mapF(
                         signBlock(
                           _,
@@ -177,7 +179,7 @@ object BlockCreator {
     }
   }
 
-  private def processDeploysAndCreateBlock[F[_]: Sync: Log: BlockStore: Span](
+  private def processDeploysAndCreateBlock[F[_]: Sync: Log: BlockStore: Metrics](
       dag: BlockDagRepresentation[F],
       runtimeManager: RuntimeManager[F],
       parents: Seq[BlockMessage],
@@ -190,40 +192,43 @@ object BlockCreator {
       version: Long,
       now: Long,
       invalidBlocks: Map[BlockHash, Validator]
-  ): F[CreateBlockStatus] =
-    (for {
-      blockData <- BlockData(now, maxBlockNumber + 1, sender, parents.head.blockHash.toByteArray).pure
-      result <- InterpreterUtil.computeDeploysCheckpoint(
-                 parents,
-                 deploys,
-                 systemDeploys,
-                 dag,
-                 runtimeManager,
-                 blockData,
-                 invalidBlocks
-               )
-      (preStateHash, postStateHash, processedDeploys, processedSystemDeploys) = result
-      newBonds                                                                <- runtimeManager.computeBonds(postStateHash)
-      block = createBlock(
-        blockData,
-        parents,
-        justifications,
-        preStateHash,
-        postStateHash,
-        processedDeploys,
-        processedSystemDeploys,
-        newBonds,
-        shardId,
-        version
-      )
-    } yield block)
-    //TODO both the log message and block status seems misleading - the error could have happened anywhere,
-    // e.g. during `replayIntoMergeBlock`
-      .onError {
-        case ex =>
-          Log[F].error(s"Critical error encountered while processing deploys", ex)
-      }
-      .handleError(CreateBlockStatus.internalDeployError)
+  )(implicit spanF: Span[F]): F[CreateBlockStatus] =
+    spanF.trace(ProcessDeploysAndCreateBlockMetricsSource) {
+      (for {
+        blockData <- BlockData(now, maxBlockNumber + 1, sender, parents.head.blockHash.toByteArray).pure
+        result <- InterpreterUtil.computeDeploysCheckpoint(
+                   parents,
+                   deploys,
+                   systemDeploys,
+                   dag,
+                   runtimeManager,
+                   blockData,
+                   invalidBlocks
+                 )
+        (preStateHash, postStateHash, processedDeploys, processedSystemDeploys) = result
+        newBonds                                                                <- runtimeManager.computeBonds(postStateHash)
+        _                                                                       <- spanF.mark("before-packing-block")
+        block = createBlock(
+          blockData,
+          parents,
+          justifications,
+          preStateHash,
+          postStateHash,
+          processedDeploys,
+          processedSystemDeploys,
+          newBonds,
+          shardId,
+          version
+        )
+      } yield block)
+      //TODO both the log message and block status seems misleading - the error could have happened anywhere,
+      // e.g. during `replayIntoMergeBlock`
+        .onError {
+          case ex =>
+            Log[F].error(s"Critical error encountered while processing deploys", ex)
+        }
+        .handleError(CreateBlockStatus.internalDeployError)
+    }
 
   private def createBlock(
       blockData: BlockData,

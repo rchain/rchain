@@ -71,10 +71,10 @@ abstract class RSpaceOps[F[_]: Concurrent: Metrics, C, P, A, K](
 
   private val lockF: TwoStepLock[F, Blake2b256Hash] = new ConcurrentTwoStepLockF(MetricsSource)
 
-  private[this] val installSpanLabel         = Metrics.Source(MetricsSource, "install")
-  private[this] val restoreInstallsSpanLabel = Metrics.Source(MetricsSource, "restore-installs")
-  private[this] val createSoftCheckpointSpanLabel =
-    Metrics.Source(MetricsSource, "create-soft-checkpoint")
+  //private[this] val installSpanLabel         = Metrics.Source(MetricsSource, "install")
+  //private[this] val restoreInstallsSpanLabel = Metrics.Source(MetricsSource, "restore-installs")
+  //private[this] val createSoftCheckpointSpanLabel =
+  //  Metrics.Source(MetricsSource, "create-soft-checkpoint")
   private[this] val revertSoftCheckpointSpanLabel =
     Metrics.Source(MetricsSource, "revert-soft-checkpoint")
   private[this] val resetSpanLabel = Metrics.Source(MetricsSource, "reset")
@@ -172,14 +172,14 @@ abstract class RSpaceOps[F[_]: Concurrent: Metrics, C, P, A, K](
           store.removeDatum(candidateChannel, dataIndex).unlessA(persistData)
       }
 
-  protected[this] def restoreInstalls(): F[Unit] = spanF.trace(restoreInstallsSpanLabel) {
+  protected[this] def restoreInstalls(): F[Unit] =
+    /*spanF.trace(restoreInstallsSpanLabel)*/
     installs.get.toList
       .traverse {
         case (channels, Install(patterns, continuation)) =>
           install(channels, patterns, continuation)
       }
       .as(())
-  }
 
   override def consume(
       channels: Seq[C],
@@ -245,12 +245,12 @@ abstract class RSpaceOps[F[_]: Concurrent: Metrics, C, P, A, K](
       channels: Seq[C],
       patterns: Seq[P],
       continuation: K
-  ): F[Option[(K, Seq[A])]] = spanF.trace(installSpanLabel) {
+  ): F[Option[(K, Seq[A])]] =
+    /* spanF.trace(installSpanLabel) */
     installLockF(channels) {
       implicit val ms = MetricsSource
       lockedInstall(channels, patterns, continuation).timer("install-time")
     }
-  }
 
   @SuppressWarnings(Array("org.wartremover.warts.Throw"))
   // TODO stop throwing exceptions
@@ -341,15 +341,14 @@ abstract class RSpaceOps[F[_]: Concurrent: Metrics, C, P, A, K](
     } yield ()
 
   override def createSoftCheckpoint(): F[SoftCheckpoint[C, P, A, K]] =
-    spanF.trace(createSoftCheckpointSpanLabel) {
-      for {
-        cache    <- storeAtom.get().snapshot()
-        log      = eventLog.take()
-        _        = eventLog.put(Seq.empty)
-        pCounter = produceCounter.take()
-        _        = produceCounter.put(Map.empty.withDefaultValue(0))
-      } yield SoftCheckpoint[C, P, A, K](cache, log, pCounter)
-    }
+    /*spanF.trace(createSoftCheckpointSpanLabel) */
+    for {
+      cache    <- storeAtom.get().snapshot()
+      log      = eventLog.take()
+      _        = eventLog.put(Seq.empty)
+      pCounter = produceCounter.take()
+      _        = produceCounter.put(Map.empty.withDefaultValue(0))
+    } yield SoftCheckpoint[C, P, A, K](cache, log, pCounter)
 
   override def revertToSoftCheckpoint(checkpoint: SoftCheckpoint[C, P, A, K]): F[Unit] =
     spanF.trace(revertSoftCheckpointSpanLabel) {

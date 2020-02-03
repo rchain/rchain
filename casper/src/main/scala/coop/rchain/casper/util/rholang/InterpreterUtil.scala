@@ -10,7 +10,7 @@ import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.rholang.RuntimeManager._
 import coop.rchain.casper.util.{DagOperations, ProtoUtil}
 import coop.rchain.crypto.codec.Base16
-import coop.rchain.metrics.Span
+import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.NormalizerEnv.ToEnvMap
 import coop.rchain.models.Validator.Validator
@@ -28,6 +28,18 @@ object InterpreterUtil {
 
   implicit private val logSource: LogSource = LogSource(this.getClass)
 
+  private[this] val ComputeDeploysCheckpointMetricsSource =
+    Metrics.Source(CasperMetricsSource, "compute-deploys-checkpoint")
+
+  private[this] val ComputeParentPostStateMetricsSource =
+    Metrics.Source(CasperMetricsSource, "compute-parents-post-state")
+
+  private[this] val ReplayIntoMergeBlockMetricsSource =
+    Metrics.Source(CasperMetricsSource, "replay-into-merge-block")
+
+  private[this] val ReplayBlockMetricsSource =
+    Metrics.Source(CasperMetricsSource, "replay-block")
+
   def mkTerm[Env](rho: String, normalizerEnv: NormalizerEnv[Env])(
       implicit ev: ToEnvMap[Env]
   ): Either[Throwable, Par] =
@@ -35,7 +47,7 @@ object InterpreterUtil {
 
   //Returns (None, checkpoints) if the block's tuplespace hash
   //does not match the computed hash based on the deploys
-  def validateBlockCheckpoint[F[_]: Sync: Log: BlockStore: Span](
+  def validateBlockCheckpoint[F[_]: Sync: Log: BlockStore: Span: Metrics](
       block: BlockMessage,
       dag: BlockDagRepresentation[F],
       runtimeManager: RuntimeManager[F]
@@ -69,35 +81,36 @@ object InterpreterUtil {
     } yield result
   }
 
-  private def replayBlock[F[_]: Sync: Log: BlockStore: Span](
+  private def replayBlock[F[_]: Sync: Log: BlockStore](
       initialStateHash: StateHash,
       block: BlockMessage,
       dag: BlockDagRepresentation[F],
       runtimeManager: RuntimeManager[F]
-  ): F[Either[ReplayFailure, StateHash]] = {
-    val internalDeploys       = ProtoUtil.deploys(block)
-    val internalSystemDeploys = ProtoUtil.systemDeploys(block)
-    for {
-      invalidBlocksSet <- dag.invalidBlocks
-      unseenBlocksSet  <- ProtoUtil.unseenBlockHashes(dag, block)
-      seenInvalidBlocksSet = invalidBlocksSet.filterNot(
-        block => unseenBlocksSet.contains(block.blockHash)
-      ) // TODO: Write test in which switching this to .filter makes it fail
-      invalidBlocks = seenInvalidBlocksSet
-        .map(block => (block.blockHash, block.sender))
-        .toMap
-      _         <- Span[F].mark("before-process-pre-state-hash")
-      blockData = BlockData.fromBlock(block)
-      isGenesis = block.header.parentsHashList.isEmpty
-      replayResult <- runtimeManager.replayComputeState(initialStateHash)(
-                       internalDeploys,
-                       internalSystemDeploys,
-                       blockData,
-                       invalidBlocks,
-                       isGenesis
-                     )
-    } yield replayResult
-  }
+  )(implicit spanF: Span[F]): F[Either[ReplayFailure, StateHash]] =
+    spanF.trace(ReplayBlockMetricsSource) {
+      val internalDeploys       = ProtoUtil.deploys(block)
+      val internalSystemDeploys = ProtoUtil.systemDeploys(block)
+      for {
+        invalidBlocksSet <- dag.invalidBlocks
+        unseenBlocksSet  <- ProtoUtil.unseenBlockHashes(dag, block)
+        seenInvalidBlocksSet = invalidBlocksSet.filterNot(
+          block => unseenBlocksSet.contains(block.blockHash)
+        ) // TODO: Write test in which switching this to .filter makes it fail
+        invalidBlocks = seenInvalidBlocksSet
+          .map(block => (block.blockHash, block.sender))
+          .toMap
+        _         <- Span[F].mark("before-process-pre-state-hash")
+        blockData = BlockData.fromBlock(block)
+        isGenesis = block.header.parentsHashList.isEmpty
+        replayResult <- runtimeManager.replayComputeState(initialStateHash)(
+                         internalDeploys,
+                         internalSystemDeploys,
+                         blockData,
+                         invalidBlocks,
+                         isGenesis
+                       )
+      } yield replayResult
+    }
 
   private def handleErrors[F[_]: Sync: Log](
       tsHash: ByteString,
@@ -157,7 +170,7 @@ object InterpreterUtil {
         }
     }
 
-  def computeDeploysCheckpoint[F[_]: Sync: BlockStore: Log: Span](
+  def computeDeploysCheckpoint[F[_]: Sync: BlockStore: Log: Metrics](
       parents: Seq[BlockMessage],
       deploys: Seq[Signed[DeployData]],
       systemDeploys: Seq[SystemDeploy],
@@ -165,95 +178,106 @@ object InterpreterUtil {
       runtimeManager: RuntimeManager[F],
       blockData: BlockData,
       invalidBlocks: Map[BlockHash, Validator]
-  ): F[(StateHash, StateHash, Seq[ProcessedDeploy], Seq[ProcessedSystemDeploy])] = {
-    import shapeless.syntax.std.tuple._
-    for {
-      nonEmptyParents <- parents.pure
-                          .ensure(new IllegalArgumentException("Parents must not be empty"))(
-                            _.nonEmpty
-                          )
-      preStateHash                  <- computeParentsPostState(nonEmptyParents, dag, runtimeManager)
-      resultDeploys                 <- runtimeManager.computeState(preStateHash)(deploys, blockData, invalidBlocks)
-      (startHash, processedDeploys) = resultDeploys
-      resultSystemDeploys <- {
-        import cats.instances.list._
-        systemDeploys.toList.foldM((startHash, Vector.empty[ProcessedSystemDeploy])) {
-          case ((startHash, processedSystemDeploys), sd) =>
-            runtimeManager.playSystemDeploy(startHash)(sd) >>= {
-              case PlaySucceeded(stateHash, processedSystemDeploy, _) =>
-                (stateHash, processedSystemDeploys :+ processedSystemDeploy).pure[F]
-              case PlayFailed(Failed(_, errorMsg)) =>
-                new Exception("Unexpected system error during play of system deploy: " + errorMsg)
-                  .raiseError[F, (StateHash, Vector[ProcessedSystemDeploy])]
-            }
+  )(
+      implicit spanF: Span[F]
+  ): F[(StateHash, StateHash, Seq[ProcessedDeploy], Seq[ProcessedSystemDeploy])] =
+    spanF.trace(ComputeDeploysCheckpointMetricsSource) {
+      for {
+        nonEmptyParents <- parents.pure
+                            .ensure(new IllegalArgumentException("Parents must not be empty"))(
+                              _.nonEmpty
+                            )
+        preStateHash <- computeParentsPostState(nonEmptyParents, dag, runtimeManager)
+        resultDeploys <- runtimeManager.computeState(preStateHash)(
+                          deploys,
+                          blockData,
+                          invalidBlocks
+                        )
+        (startHash, processedDeploys) = resultDeploys
+        resultSystemDeploys <- {
+          import cats.instances.list._
+          systemDeploys.toList.foldM((startHash, Vector.empty[ProcessedSystemDeploy])) {
+            case ((startHash, processedSystemDeploys), sd) =>
+              runtimeManager.playSystemDeploy(startHash)(sd) >>= {
+                case PlaySucceeded(stateHash, processedSystemDeploy, _) =>
+                  (stateHash, processedSystemDeploys :+ processedSystemDeploy).pure[F]
+                case PlayFailed(Failed(_, errorMsg)) =>
+                  new Exception("Unexpected system error during play of system deploy: " + errorMsg)
+                    .raiseError[F, (StateHash, Vector[ProcessedSystemDeploy])]
+              }
+          }
         }
-      }
-      (postStateHash, processedSystemDeploys) = resultSystemDeploys
-    } yield (preStateHash, postStateHash, processedDeploys, processedSystemDeploys)
-  }
+        (postStateHash, processedSystemDeploys) = resultSystemDeploys
+      } yield (preStateHash, postStateHash, processedDeploys, processedSystemDeploys)
+    }
 
-  private def computeParentsPostState[F[_]: Sync: BlockStore: Log: Span](
+  private def computeParentsPostState[F[_]: Sync: BlockStore: Log: Metrics](
       parents: Seq[BlockMessage],
       dag: BlockDagRepresentation[F],
       runtimeManager: RuntimeManager[F]
-  ): F[StateHash] = {
-    val parentTuplespaces =
-      parents.map(p => p -> ProtoUtil.postStateHash(p))
+  )(implicit spanF: Span[F]): F[StateHash] =
+    spanF.trace(ComputeParentPostStateMetricsSource) {
+      val parentTuplespaces =
+        parents.map(p => p -> ProtoUtil.postStateHash(p))
 
-    parentTuplespaces match {
-      // For genesis, use empty trie's root hash
-      case Seq() =>
-        runtimeManager.emptyStateHash.pure
+      parentTuplespaces match {
+        // For genesis, use empty trie's root hash
+        case Seq() =>
+          runtimeManager.emptyStateHash.pure
 
-      case Seq((_, parentStateHash)) =>
-        parentStateHash.pure
+        case Seq((_, parentStateHash)) =>
+          parentStateHash.pure
 
-      case _ =>
-        findLeastEffortParentForReply(parents, dag).flatMap {
-          case (leastEfforParentIndex, blockHashesToApply) =>
-            replayIntoMergeBlock(
-              parents,
-              dag,
-              runtimeManager,
-              parentTuplespaces(leastEfforParentIndex)._2,
-              blockHashesToApply
-            )
-        }
+        case _ =>
+          findLeastEffortParentForReply(parents, dag).flatMap {
+            case (leastEfforParentIndex, blockHashesToApply) =>
+              replayIntoMergeBlock(
+                parents,
+                dag,
+                runtimeManager,
+                parentTuplespaces(leastEfforParentIndex)._2,
+                blockHashesToApply
+              )
+          }
+      }
     }
-  }
 
   // In the case of multiple parents we need to apply all of the deploys that have been
   // made in all of the branches of the DAG being merged. This is done by computing uncommon ancestors
   // and applying the deploys in those blocks on top of the initial parent.
-  private def replayIntoMergeBlock[F[_]: Sync: BlockStore: Log: Span](
+  private def replayIntoMergeBlock[F[_]: Sync: BlockStore: Log: Metrics](
       parents: Seq[BlockMessage],
       dag: BlockDagRepresentation[F],
       runtimeManager: RuntimeManager[F],
       initStateHash: StateHash,
       blockMetasToApply: Vector[BlockMetadata]
-  ): F[StateHash] = {
-    import cats.instances.vector._
-    for {
-      _ <- Span[F].mark("before-compute-parents-post-state-find-multi-parents")
-      _ <- Log[F].info(
-            s"replayIntoMergeBlock computed number of uncommon ancestors: ${blockMetasToApply.length}"
-          )
-      _             <- Span[F].mark("before-compute-parents-post-state-get-blocks")
-      blocksToApply <- blockMetasToApply.traverse(b => ProtoUtil.getBlock(b.blockHash))
-      _             <- Span[F].mark("before-compute-parents-post-state-replay")
-      replayResult <- blocksToApply.foldM(initStateHash) { (stateHash, block) =>
-                       (for {
-                         replayResult <- replayBlock(stateHash, block, dag, runtimeManager)
-                       } yield replayResult.leftMap[Throwable] { status =>
-                         val parentHashes =
-                           parents.map(p => Base16.encode(p.blockHash.toByteArray).take(8))
-                         new Exception(
-                           s"Failed status while computing post state of $parentHashes: $status"
-                         )
-                       }).rethrow
-                     }
-    } yield replayResult
-  }
+  )(implicit spanF: Span[F]): F[StateHash] =
+    spanF.trace(ReplayIntoMergeBlockMetricsSource) {
+      import cats.instances.vector._
+      for {
+        _ <- Span[F].mark("before-compute-parents-post-state-find-multi-parents")
+        _ <- Log[F].info(
+              s"replayIntoMergeBlock computed number of uncommon ancestors: ${blockMetasToApply.length}"
+            )
+        _ <- Metrics[F].setGauge("uncommon_ancestors", blockMetasToApply.length.toLong)(
+              ReplayIntoMergeBlockMetricsSource
+            )
+        _             <- Span[F].mark("before-compute-parents-post-state-get-blocks")
+        blocksToApply <- blockMetasToApply.traverse(b => ProtoUtil.getBlock(b.blockHash))
+        _             <- Span[F].mark("before-compute-parents-post-state-replay")
+        replayResult <- blocksToApply.foldM(initStateHash) { (stateHash, block) =>
+                         (for {
+                           replayResult <- replayBlock(stateHash, block, dag, runtimeManager)
+                         } yield replayResult.leftMap[Throwable] { status =>
+                           val parentHashes =
+                             parents.map(p => Base16.encode(p.blockHash.toByteArray).take(8))
+                           new Exception(
+                             s"Failed status while computing post state of $parentHashes: $status"
+                           )
+                         }).rethrow
+                       }
+      } yield replayResult
+    }
 
   private[rholang] def findLeastEffortParentForReply[F[_]: Monad](
       parents: Seq[BlockMessage],

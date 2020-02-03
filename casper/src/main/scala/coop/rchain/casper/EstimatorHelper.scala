@@ -3,11 +3,10 @@ package coop.rchain.casper
 import cats.Monad
 import cats.effect.Sync
 import cats.implicits._
-import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockStore
 import coop.rchain.blockstorage.dag.BlockDagRepresentation
-import coop.rchain.casper.protocol.{Event => CasperEvent, _}
 import coop.rchain.casper.util.{DagOperations, EventConverter, ProtoUtil}
+import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.BlockMetadata
 import coop.rchain.shared.Log
@@ -20,28 +19,32 @@ final case class BlockEvents(produces: Set[Produce], consumes: Set[Consume], com
 
 object EstimatorHelper {
 
+  private[this] val ChooseNonConflictingMetricsSource =
+    Metrics.Source(CasperMetricsSource, "choose-non-conflicting")
+
   def chooseNonConflicting[F[_]: Sync: Log: BlockStore](
       blockHashes: Seq[BlockHash],
       dag: BlockDagRepresentation[F]
-  ): F[Seq[BlockMetadata]] = {
-    def nonConflicting(b: BlockMetadata): BlockMetadata => F[Boolean] =
-      conflicts[F](_, b, dag).map(b => !b)
+  )(implicit spanF: Span[F]): F[Seq[BlockMetadata]] =
+    spanF.trace(ChooseNonConflictingMetricsSource) {
+      def nonConflicting(b: BlockMetadata): BlockMetadata => F[Boolean] =
+        conflicts[F](_, b, dag).map(b => !b)
 
-    for {
-      blocks <- blockHashes.toList.traverse(hash => ProtoUtil.getBlockMetadata[F](hash, dag))
-      result <- blocks
-                 .foldM(List.empty[BlockMetadata]) {
-                   case (acc, b) =>
-                     acc
-                       .forallM(nonConflicting(b))
-                       .ifM(
-                         (b :: acc).pure[F],
-                         acc.pure[F]
-                       )
-                 }
-                 .map(_.reverse)
-    } yield result
-  }
+      for {
+        blocks <- blockHashes.toList.traverse(hash => ProtoUtil.getBlockMetadata[F](hash, dag))
+        result <- blocks
+                   .foldM(List.empty[BlockMetadata]) {
+                     case (acc, b) =>
+                       acc
+                         .forallM(nonConflicting(b))
+                         .ifM(
+                           (b :: acc).pure[F],
+                           acc.pure[F]
+                         )
+                   }
+                   .map(_.reverse)
+      } yield result
+    }
 
   private[casper] def conflicts[F[_]: Monad: Log: BlockStore](
       b1: BlockMetadata,
