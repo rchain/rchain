@@ -39,7 +39,7 @@ object BlockCreator {
    *  3. Extract all valid deploys that aren't already in all ancestors of S (the parents).
    *  4. Create a new block that contains the deploys from the previous step.
    */
-  def createBlock[F[_]: Sync: Log: Time: BlockStore: SynchronyConstraintChecker: LastFinalizedHeightConstraintChecker: Estimator: DeployStorage](
+  def createBlock[F[_]: Sync: Log: Time: BlockStore: SynchronyConstraintChecker: LastFinalizedHeightConstraintChecker: Estimator: DeployStorage: Metrics](
       dag: BlockDagRepresentation[F],
       genesis: BlockMessage,
       validatorIdentity: ValidatorIdentity,
@@ -181,7 +181,7 @@ object BlockCreator {
     }
   }
 
-  private def processDeploysAndCreateBlock[F[_]: Sync: Log: BlockStore](
+  private def processDeploysAndCreateBlock[F[_]: Sync: Log: BlockStore: Metrics](
       dag: BlockDagRepresentation[F],
       runtimeManager: RuntimeManager[F],
       parents: Seq[BlockMessage],

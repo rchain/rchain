@@ -47,7 +47,7 @@ object InterpreterUtil {
 
   //Returns (None, checkpoints) if the block's tuplespace hash
   //does not match the computed hash based on the deploys
-  def validateBlockCheckpoint[F[_]: Sync: Log: BlockStore: Span](
+  def validateBlockCheckpoint[F[_]: Sync: Log: BlockStore: Span: Metrics](
       block: BlockMessage,
       dag: BlockDagRepresentation[F],
       runtimeManager: RuntimeManager[F]
@@ -170,7 +170,7 @@ object InterpreterUtil {
         }
     }
 
-  def computeDeploysCheckpoint[F[_]: Sync: BlockStore: Log](
+  def computeDeploysCheckpoint[F[_]: Sync: BlockStore: Log: Metrics](
       parents: Seq[BlockMessage],
       deploys: Seq[Signed[DeployData]],
       systemDeploys: Seq[SystemDeploy],
@@ -211,7 +211,7 @@ object InterpreterUtil {
       } yield (preStateHash, postStateHash, processedDeploys, processedSystemDeploys)
     }
 
-  private def computeParentsPostState[F[_]: Sync: BlockStore: Log](
+  private def computeParentsPostState[F[_]: Sync: BlockStore: Log: Metrics](
       parents: Seq[BlockMessage],
       dag: BlockDagRepresentation[F],
       runtimeManager: RuntimeManager[F]
@@ -245,7 +245,7 @@ object InterpreterUtil {
   // In the case of multiple parents we need to apply all of the deploys that have been
   // made in all of the branches of the DAG being merged. This is done by computing uncommon ancestors
   // and applying the deploys in those blocks on top of the initial parent.
-  private def replayIntoMergeBlock[F[_]: Sync: BlockStore: Log](
+  private def replayIntoMergeBlock[F[_]: Sync: BlockStore: Log: Metrics](
       parents: Seq[BlockMessage],
       dag: BlockDagRepresentation[F],
       runtimeManager: RuntimeManager[F],
@@ -258,6 +258,9 @@ object InterpreterUtil {
         _ <- Span[F].mark("before-compute-parents-post-state-find-multi-parents")
         _ <- Log[F].info(
               s"replayIntoMergeBlock computed number of uncommon ancestors: ${blockMetasToApply.length}"
+            )
+        _ <- Metrics[F].setGauge("uncommon_ancestors", blockMetasToApply.length.toLong)(
+              ReplayIntoMergeBlockMetricsSource
             )
         _             <- Span[F].mark("before-compute-parents-post-state-get-blocks")
         blocksToApply <- blockMetasToApply.traverse(b => ProtoUtil.getBlock(b.blockHash))
