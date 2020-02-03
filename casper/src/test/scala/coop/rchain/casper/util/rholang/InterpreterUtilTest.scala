@@ -740,7 +740,7 @@ class InterpreterUtilTest
       |  }
       |""".stripMargin
 
-  "replay" should "match in case of Out of Phlo error" in effectTest {
+  "replay" should "match in case of Out of Phlo error" ignore effectTest {
     val deploy =
       ConstructDeploy.sourceDeploy(
         multiBranchSampleTermWithError,
@@ -758,7 +758,7 @@ class InterpreterUtilTest
     }
   }
 
-  "replay" should "match in case of user execution error" in effectTest {
+  "replay" should "match in case of user execution error" ignore effectTest {
     val deploy =
       ConstructDeploy.sourceDeploy(
         multiBranchSampleTermWithError,
