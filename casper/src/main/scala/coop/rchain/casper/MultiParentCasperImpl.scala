@@ -8,18 +8,13 @@ import coop.rchain.blockstorage._
 import coop.rchain.blockstorage.dag.{BlockDagRepresentation, BlockDagStorage}
 import coop.rchain.blockstorage.dag.BlockDagStorage.DeployId
 import coop.rchain.casper.CasperState.CasperStateCell
-import coop.rchain.casper.DeployError._
-import coop.rchain.casper.engine.Running
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util._
 import coop.rchain.casper.util.ProtoUtil._
 import coop.rchain.casper.util.comm.CommUtil
-import coop.rchain.casper.util.rholang.{SystemDeploy, _}
+import coop.rchain.casper.util.rholang._
 import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
 import coop.rchain.catscontrib.BooleanF._
-import coop.rchain.catscontrib.ski._
-import coop.rchain.comm.rp.Connect.{ConnectionsCell, RPConfAsk}
-import coop.rchain.comm.transport.TransportLayer
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.metrics.implicits._
 import coop.rchain.models.BlockHash._
@@ -73,6 +68,15 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Log: Time: SafetyOracle: Las
     Metrics.Source(CasperMetricsSource, "add-block")
   private[this] val CreateBlockMetricsSource =
     Metrics.Source(CasperMetricsSource, "create-block")
+
+  def getGenesis: F[BlockMessage] = genesis.pure[F]
+
+  def getValidator: F[ByteString] =
+    validatorId match {
+      case Some(validatorIdentity) =>
+        ByteString.copyFrom(validatorIdentity.publicKey.bytes).pure[F]
+      case None => ByteString.EMPTY.pure[F]
+    }
 
   def addBlock(b: BlockMessage): F[ValidBlockProcessing] = {
 

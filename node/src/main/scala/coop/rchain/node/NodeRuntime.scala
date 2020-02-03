@@ -789,7 +789,9 @@ object NodeRuntime {
         span,
         engineCell,
         Log[F],
-        Taskable[F]
+        Taskable[F],
+        synchronyConstraintChecker,
+        lastFinalizedHeightConstraintChecker
       )
       casperLoop = for {
         engine <- engineCell.read
@@ -846,7 +848,9 @@ object NodeRuntime {
       span: Span[F],
       engineCell: EngineCell[F],
       logF: Log[F],
-      taskable: Taskable[F]
+      taskable: Taskable[F],
+      synchronyConstraintChecker: SynchronyConstraintChecker[F],
+      lastFinalizedHeightConstraintChecker: LastFinalizedHeightConstraintChecker[F]
   ): APIServers = {
     implicit val s: Scheduler = scheduler
     val repl                  = ReplGrpcService.instance(runtime, s)

@@ -12,12 +12,10 @@ import coop.rchain.blockstorage.dag.BlockDagRepresentation
 import coop.rchain.blockstorage.dag.BlockDagStorage.DeployId
 import coop.rchain.casper._
 import coop.rchain.casper.DeployError._
-import coop.rchain.casper.MultiParentCasper.ignoreDoppelgangerCheck
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util._
 import coop.rchain.casper.util.rholang.{RuntimeManager, Tools}
 import coop.rchain.crypto.codec.Base16
-import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.graphz._
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.metrics.implicits._
@@ -64,7 +62,7 @@ object BlockAPI {
     ))
   }
 
-  def createBlock[F[_]: Sync: Concurrent: EngineCell: Log: Metrics: Span](
+  def createBlock[F[_]: Sync: Concurrent: EngineCell: Log: Metrics: Span: SynchronyConstraintChecker: LastFinalizedHeightConstraintChecker](
       blockApiLock: Semaphore[F],
       printUnmatchedSends: Boolean = false
   ): F[ApiErr[String]] = {
@@ -73,39 +71,72 @@ object BlockAPI {
       _.withCasper[ApiErr[String]](
         casper => {
           Sync[F].bracket(blockApiLock.tryAcquire) {
-            case true =>
+            case true => {
               implicit val ms = BlockAPIMetricsSource
-              (for {
-                _ <- Metrics[F].incrementCounter("propose")
-                // TODO: Get rid off CreateBlockStatus and use EitherT
-                maybeBlock <- casper.createBlock
-                result <- maybeBlock match {
-                           case err: NoBlock =>
-                             s"Error while creating block: $err"
-                               .asLeft[String]
-                               .pure[F]
-                           case Created(block) =>
-                             Log[F].info(s"Proposing ${PrettyPrinter.buildString(block)}") *>
-                               casper
-                                 .addBlock(block) >>= (addResponse(
-                               _,
-                               block,
-                               casper,
-                               printUnmatchedSends
-                             ))
-                         }
-              } yield result)
-                .timer("propose-total-time")
-                .attempt
-                .map(_.leftMap(e => s"Error while creating block: ${e.getMessage}").joinRight)
-                .flatMap {
-                  case Left(error) =>
-                    Metrics[F].incrementCounter("propose-failed") >>
-                      Log[F].warn(error) >>
-                      error.asLeft[String].pure[F]
-                  case result =>
-                    result.pure[F]
-                }
+              val syncCheckFailed = Log[F]
+                .warn(s"Error: Must wait for more blocks from other validators") >>
+                s"Must wait for more blocks from other validators"
+                  .asLeft[String]
+                  .pure[F]
+              val lfhcCheckFailed = Log[F]
+                .warn(s"Too far ahead of the last finalized block") >>
+                s"Too far ahead of the last finalized block"
+                  .asLeft[String]
+                  .pure[F]
+              for {
+                genesis        <- casper.getGenesis
+                validator      <- casper.getValidator
+                dag            <- casper.blockDag
+                runtimeManager <- casper.getRuntimeManager
+                checkSynchronyConstraint = SynchronyConstraintChecker[F]
+                  .check(
+                    dag,
+                    runtimeManager,
+                    genesis,
+                    validator
+                  )
+                checkLastFinalizedHeightConstraint = LastFinalizedHeightConstraintChecker[F]
+                  .check(dag, genesis, validator)
+                createBlock = (for {
+                  _          <- Metrics[F].incrementCounter("propose")
+                  maybeBlock <- casper.createBlock
+                  result <- maybeBlock match {
+                             case err: NoBlock =>
+                               s"Error while creating block: $err"
+                                 .asLeft[String]
+                                 .pure[F]
+                             case Created(block) =>
+                               Log[F]
+                                 .info(s"Proposing ${PrettyPrinter.buildString(block)}") *>
+                                 casper
+                                   .addBlock(block) >>= (addResponse(
+                                 _,
+                                 block,
+                                 casper,
+                                 printUnmatchedSends
+                               ))
+                           }
+                } yield result)
+                  .timer("propose-total-time")
+                  .attempt
+                  .map(
+                    _.leftMap(e => s"Error while creating block: ${e.getMessage}").joinRight
+                  )
+                  .flatMap {
+                    case Left(error) =>
+                      Metrics[F].incrementCounter("propose-failed") >>
+                        Log[F].warn(error) >>
+                        error.asLeft[String].pure[F]
+                    case result =>
+                      result.pure[F]
+                  }
+                result <- checkSynchronyConstraint
+                           .ifM(
+                             checkLastFinalizedHeightConstraint.ifM(createBlock, lfhcCheckFailed),
+                             syncCheckFailed
+                           )
+              } yield result
+            }
             case false =>
               "Error: There is another propose in progress.".asLeft[String].pure[F]
           } {
