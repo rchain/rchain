@@ -7,7 +7,7 @@ import coop.rchain.models.{ListParWithRandom, Par}
 import coop.rchain.rholang.interpreter.{ContractCall, RhoType}
 import coop.rchain.rholang.interpreter.Runtime.SystemProcess
 
-object BlockDataContract {
+object CasperInvalidBlocksContract {
   import cats.implicits._
 
   def set[F[_]: Concurrent: Span](
@@ -18,21 +18,13 @@ object BlockDataContract {
     message match {
       case isContractCall(
           produce,
-          Seq(RhoType.String("sender"), RhoType.ByteArray(pk), ackCh)
+          Seq(newInvalidBlocks, ackCh)
           ) =>
         for {
-          _ <- ctx.blockData.update(_.copy(sender = PublicKey(pk)))
-          _ <- produce(Seq(Par()), ackCh)
-        } yield ()
-
-      case isContractCall(
-          produce,
-          Seq(RhoType.String("blockNumber"), RhoType.Number(n), ackCh)
-          ) =>
-        for {
-          _ <- ctx.blockData.update(_.copy(blockNumber = n))
+          _ <- ctx.invalidBlocks.setParams(newInvalidBlocks)
           _ <- produce(Seq(Par()), ackCh)
         } yield ()
     }
   }
+
 }

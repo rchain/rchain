@@ -51,15 +51,19 @@ object GenesisBuilder {
         proofOfStake = ProofOfStake(
           minimumBond = 0L,
           maximumBond = Long.MaxValue,
-          epochLength = 1,
+          // Epoch length is set to large number to prevent trigger of epoch change
+          // in PoS close block method, which causes block merge conflicts
+          // - epoch change can be set as a parameter in Rholang tests (e.g. PoSSpec)
+          epochLength = 1000,
           quarantineLength = 50000,
           numberOfActiveValidators = 100,
           validators = bonds.map(Validator.tupled).toSeq
         ),
         vaults = Seq(defaultPub, defaultPub2).map(predefinedVault) ++
           bonds.toList.map {
-            case (pk, stake) =>
-              RevAddress.fromPublicKey(pk).map(Vault(_, stake))
+            case (pk, _) =>
+              // Initial validator vaults contain 0 Rev
+              RevAddress.fromPublicKey(pk).map(Vault(_, 0))
           }.flattenOption,
         supply = Long.MaxValue
       )

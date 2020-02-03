@@ -19,7 +19,7 @@ final case class SlashDeploy(
   import record._
   import syntax.singleton._
 
-  type Output = RhoBoolean
+  type Output = (RhoBoolean, Either[RhoString, RhoNil])
   type Result = Unit
 
   val `sys:casper:invalidBlockHash` = Witness("sys:casper:invalidBlockHash")
@@ -51,7 +51,13 @@ final case class SlashDeploy(
 
   protected override val extractor = Extractor.derive
 
-  protected def processResult(value: Boolean): Either[SystemDeployFailure, Unit] =
-    Either.cond(value, (), SystemDeployUserError("Slashing failed unexpectedly"))
+  protected def processResult(
+      value: (Boolean, Either[String, Unit])
+  ): Either[SystemDeployFailure, Unit] =
+    value match {
+      case (true, _)               => Right(())
+      case (false, Left(errorMsg)) => Left(SystemDeployUserError(errorMsg))
+      case _                       => Left(SystemDeployUserError("Slashing failed unexpectedly"))
+    }
 
 }
