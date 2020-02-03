@@ -73,12 +73,10 @@ object BlockCreator {
         invalidBlocksSet <- dag.invalidBlocks
         invalidBlocks    = invalidBlocksSet.map(block => (block.blockHash, block.sender)).toMap
         // make sure closeBlock is the last system Deploy
-        systemDeploys = if (slashingDeploys.nonEmpty)
-          slashingDeploys ++ Seq(
-            CloseBlockDeploy(Tools.rng(parents.head.blockHash.toByteArray))
-          )
-        else List.empty[SystemDeploy]
-        unsignedBlock <- if (deploys.nonEmpty || systemDeploys.nonEmpty) {
+        systemDeploys = slashingDeploys :+ CloseBlockDeploy(
+          Tools.rng(parents.head.blockHash.toByteArray)
+        )
+        unsignedBlock <- if (deploys.nonEmpty || slashingDeploys.nonEmpty) {
                           SynchronyConstraintChecker[F]
                             .check(dag, runtimeManager, genesis, validator)
                             .ifM(

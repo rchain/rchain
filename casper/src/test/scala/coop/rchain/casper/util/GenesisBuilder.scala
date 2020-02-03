@@ -51,7 +51,10 @@ object GenesisBuilder {
         proofOfStake = ProofOfStake(
           minimumBond = 0L,
           maximumBond = Long.MaxValue,
-          epochLength = 1, // TODO: change to proper quantity
+          // Epoch length is set to large number to prevent trigger of epoch change
+          // in PoS close block method, which causes block merge conflicts
+          // - epoch change can be set as a parameter in Rholang tests (e.g. PoSSpec)
+          epochLength = 1000,
           quarantineLength = 50000,
           numberOfActiveValidators = 100,
           validators = bonds.map(Validator.tupled).toSeq
