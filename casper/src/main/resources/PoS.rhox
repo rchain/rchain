@@ -268,34 +268,36 @@ in {
                           new revAddressCh in {
                             revAddressOps!("fromDeployerId", deployerId, *revAddressCh) |
                             for (@deployerRevAddress <- revAddressCh){
-                              new transferCh in {
-                                transferFromBlockSender!(deployerRevAddress, refundAmount, *transferCh) |
-                                for (@transferResult <- transferCh){
-                                  match transferResult {
-                                    (true, _) => {
-                                      new newRewardsCh, pendingUpdatedCh, blockDataCh,
-                                          getBlockData(`rho:block:data`)
-                                      in {
-                                        for (@state <<- stateCh) {
-                                          distributeRewards!(
-                                            initialPaymentAmount - refundAmount,
-                                            state.get("activeValidators"),
-                                            state.get("allBonds"),
-                                            *newRewardsCh)
-                                        } |
-                                        getBlockData!(*blockDataCh) |
-                                        for (@newRewards  <- newRewardsCh;
-                                            _, _, @sender <- blockDataCh) {
-                                          // Add new pending rewards to validator pending rewards state
-                                          PendingRewards!("append", sender, newRewards, *pendingUpdatedCh) |
-                                          for (_ <- pendingUpdatedCh) {
-                                            return!((true, Nil))
+                              new transferCh, blockDataCh,
+                                  getBlockData(`rho:block:data`)
+                              in {
+                                getBlockData!(*blockDataCh) |
+                                for (_, _, @sender <- blockDataCh) {
+                                  for (@state <<- stateCh) {
+                                    transferFromBlockSender!(deployerRevAddress, state.get("activeValidators"), sender, refundAmount, *transferCh) |
+                                    for (@transferResult <- transferCh){
+                                      match transferResult {
+                                        (true, _) => {
+                                          new newRewardsCh, pendingUpdatedCh in {
+                                            distributeRewards!(
+                                              initialPaymentAmount - refundAmount,
+                                              state.get("activeValidators"),
+                                              state.get("allBonds"),
+                                              *newRewardsCh
+                                            ) |
+                                            for (@newRewards <- newRewardsCh) {
+                                              // Add new pending rewards to validator pending rewards state
+                                              PendingRewards!("append", sender, newRewards, *pendingUpdatedCh) |
+                                              for (_ <- pendingUpdatedCh) {
+                                                return!((true, Nil))
+                                              }
+                                            }
                                           }
                                         }
+                                        (_, errorMessage) => {
+                                          return!((false, "(Bug found) Deploy refund failed: " ++ errorMessage))
+                                        }
                                       }
-                                    }
-                                    (_, errorMessage) => {
-                                      return!((false, "(Bug found) Deploy refund failed: " ++ errorMessage))
                                     }
                                   }
                                 }
@@ -310,27 +312,19 @@ in {
                   }
                 } |
                 // Transfer (from sender to deployer) called in refundDeploy.
-                contract transferFromBlockSender(@deployerRevAddress, @refundAmount, returnCh) = {
-                  new getBlockData(`rho:block:data`),
-                      blockDataCh, indexSender,
-                      unfAuthKeyCh, tmpCh
-                  in {
-                    getBlockData!(*blockDataCh) |
-                    for (_, _, @sender <- blockDataCh) {
-                      for (@state <<- stateCh) {
-                        @ListOps!("indexOf", state.get("activeValidators"), sender, *indexSender) |
-                        for (@idx <- indexSender) {
-                          if (idx == -1) {
-                            returnCh!((false, "Sender is not an active validator"))
-                          } else {
-                            for (@vaults <<- perActiveValidatorPosVaultsCh) {
-                              match vaults.nth(idx) {
-                                (unf, _, activeValidatorVault) => {
-                                  @RevVault!("unforgeableAuthKey", unf, *unfAuthKeyCh) |
-                                  for (@authKey <- unfAuthKeyCh) {
-                                    @activeValidatorVault!("transfer", deployerRevAddress, refundAmount, authKey, *returnCh)
-                                  }
-                                }
+                contract transferFromBlockSender(@deployerRevAddress, @activeValidators, @sender, @refundAmount, returnCh) = {
+                  new indexSender, unfAuthKeyCh, tmpCh in {
+                    @ListOps!("indexOf", activeValidators, sender, *indexSender) |
+                    for (@idx <- indexSender) {
+                      if (idx == -1) {
+                        returnCh!((false, "Sender is not an active validator"))
+                      } else {
+                        for (@vaults <<- perActiveValidatorPosVaultsCh) {
+                          match vaults.nth(idx) {
+                            (unf, _, activeValidatorVault) => {
+                              @RevVault!("unforgeableAuthKey", unf, *unfAuthKeyCh) |
+                              for (@authKey <- unfAuthKeyCh) {
+                                @activeValidatorVault!("transfer", deployerRevAddress, refundAmount, authKey, *returnCh)
                               }
                             }
                           }
