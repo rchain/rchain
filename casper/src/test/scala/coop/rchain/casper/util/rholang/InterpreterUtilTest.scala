@@ -622,7 +622,7 @@ class InterpreterUtilTest
         Right((preStateHash, computedTsHash, processedDeploys, _)) = deploysCheckpoint
         //create single deploy with log that includes excess comm events
         badProcessedDeploy = processedDeploys.head.copy(
-          deployLog = processedDeploys.head.deployLog ++ processedDeploys.last.deployLog
+          deployLog = processedDeploys.head.deployLog ++ processedDeploys.last.deployLog.take(5)
         )
         block <- createBlock[Task](
                   Seq(genesis.blockHash),
