@@ -452,7 +452,8 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
 
     val phloPrice = opt[Long](
       descr = "The price of phlo for this transaction in units dust/phlo. Must be positive integer.",
-      validate = _ > 0,
+      // Validation here is only for negative numbers, minimum price is check in Block API
+      validate = _ >= 0,
       required = true
     )
 
