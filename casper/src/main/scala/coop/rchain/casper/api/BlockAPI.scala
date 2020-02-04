@@ -66,28 +66,25 @@ object BlockAPI {
       blockApiLock: Semaphore[F],
       printUnmatchedSends: Boolean = false
   ): F[ApiErr[String]] = {
-    val errorMessage = "Could not create block, casper instance was not available yet."
+    def logWarning(err: String) = Log[F].warn(s"Error: $err") >> err.asLeft[String].pure[F]
     EngineCell[F].read >>= (
       _.withCasper[ApiErr[String]](
         casper => {
           Sync[F].bracket(blockApiLock.tryAcquire) {
             case true => {
-              implicit val ms = BlockAPIMetricsSource
-              val syncCheckFailed = Log[F]
-                .warn(s"Error: Must wait for more blocks from other validators") >>
-                s"Must wait for more blocks from other validators"
-                  .asLeft[String]
-                  .pure[F]
-              val lfhcCheckFailed = Log[F]
-                .warn(s"Too far ahead of the last finalized block") >>
-                s"Too far ahead of the last finalized block"
-                  .asLeft[String]
-                  .pure[F]
+              implicit val ms     = BlockAPIMetricsSource
+              val syncCheckFailed = logWarning("Must wait for more blocks from other validators")
+              val lfhcCheckFailed = logWarning("Too far ahead of the last finalized block")
+              val validatorCheckFailed = new IllegalStateException(
+                "Read only node cannot create a block"
+              ).raiseError[F, PublicKey]
               for {
-                genesis        <- casper.getGenesis
-                validator      <- casper.getValidator
-                dag            <- casper.blockDag
-                runtimeManager <- casper.getRuntimeManager
+                maybeValidator  <- casper.getValidator
+                validatorPubKey <- maybeValidator.fold(validatorCheckFailed)(_.pure[F])
+                validator       = ByteString.copyFrom(validatorPubKey.bytes)
+                genesis         <- casper.getGenesis
+                dag             <- casper.blockDag
+                runtimeManager  <- casper.getRuntimeManager
                 checkSynchronyConstraint = SynchronyConstraintChecker[F]
                   .check(
                     dag,
@@ -102,14 +99,11 @@ object BlockAPI {
                   maybeBlock <- casper.createBlock
                   result <- maybeBlock match {
                              case err: NoBlock =>
-                               s"Error while creating block: $err"
-                                 .asLeft[String]
-                                 .pure[F]
+                               s"Error while creating block: $err".asLeft[String].pure[F]
                              case Created(block) =>
                                Log[F]
                                  .info(s"Proposing ${PrettyPrinter.buildString(block)}") *>
-                                 casper
-                                   .addBlock(block) >>= (addResponse(
+                                 casper.addBlock(block) >>= (addResponse(
                                  _,
                                  block,
                                  casper,
@@ -124,17 +118,13 @@ object BlockAPI {
                   )
                   .flatMap {
                     case Left(error) =>
-                      Metrics[F].incrementCounter("propose-failed") >>
-                        Log[F].warn(error) >>
-                        error.asLeft[String].pure[F]
-                    case result =>
-                      result.pure[F]
+                      logWarning(error) <* Metrics[F].incrementCounter("propose-failed")
+                    case result => result.pure[F]
                   }
-                result <- checkSynchronyConstraint
-                           .ifM(
-                             checkLastFinalizedHeightConstraint.ifM(createBlock, lfhcCheckFailed),
-                             syncCheckFailed
-                           )
+                result <- checkSynchronyConstraint.ifM(
+                           checkLastFinalizedHeightConstraint.ifM(createBlock, lfhcCheckFailed),
+                           syncCheckFailed
+                         )
               } yield result
             }
             case false =>
@@ -146,9 +136,7 @@ object BlockAPI {
               ().pure[F]
           }
         },
-        default = Log[F]
-          .warn(errorMessage)
-          .as(s"Error: $errorMessage".asLeft)
+        default = logWarning("Could not create block, casper instance was not available yet.")
       )
     )
   }

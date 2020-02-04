@@ -16,6 +16,7 @@ import coop.rchain.casper.util.comm.CommUtil
 import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
 import coop.rchain.casper.util.rholang._
 import coop.rchain.catscontrib.ski.kp2
+import coop.rchain.crypto.PublicKey
 import coop.rchain.crypto.signatures.Signed
 import coop.rchain.metrics.{Metrics, MetricsSemaphore, Span}
 import coop.rchain.models.BlockHash.BlockHash
@@ -51,7 +52,7 @@ trait Casper[F[_]] {
   def estimator(dag: BlockDagRepresentation[F]): F[IndexedSeq[BlockHash]]
   def createBlock: F[CreateBlockStatus]
   def getGenesis: F[BlockMessage]
-  def getValidator: F[ByteString]
+  def getValidator: F[Option[PublicKey]]
 }
 
 trait MultiParentCasper[F[_]] extends Casper[F] {

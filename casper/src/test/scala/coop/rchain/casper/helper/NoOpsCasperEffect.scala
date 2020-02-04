@@ -13,6 +13,7 @@ import coop.rchain.casper.protocol.{BlockMessage, DeployData, Dummies}
 import coop.rchain.casper.util.rholang.Resources.mkRuntimeManager
 import coop.rchain.casper.util.rholang.RuntimeManager
 import coop.rchain.casper.{BlockStatus, CreateBlockStatus, MultiParentCasper}
+import coop.rchain.crypto.PublicKey
 import coop.rchain.crypto.signatures.Signed
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.Validator.Validator
@@ -45,7 +46,7 @@ class NoOpsCasperEffect[F[_]: Sync: BlockStore: BlockDagStorage] private (
   def getRuntimeManager: F[RuntimeManager[F]]                         = runtimeManager.pure[F]
   def fetchDependencies: F[Unit]                                      = ().pure[F]
   def getGenesis: F[BlockMessage]                                     = Dummies.createBlockMessage().pure[F]
-  def getValidator: F[Validator]                                      = ByteString.EMPTY.pure[F]
+  def getValidator: F[Option[PublicKey]]                              = none.pure[F]
 }
 
 object NoOpsCasperEffect {

@@ -5,10 +5,8 @@ import cats.Monad
 import cats.effect.{Concurrent, Sync}
 import cats.effect.concurrent.Semaphore
 import cats.implicits._
-import coop.rchain.casper.MultiParentCasper.ignoreDoppelgangerCheck
 import coop.rchain.casper.engine._
 import EngineCell._
-import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.dag.BlockDagRepresentation
 import coop.rchain.blockstorage.dag.BlockDagStorage.DeployId
 import coop.rchain.casper.{LastFinalizedHeightConstraintChecker, SynchronyConstraintChecker, _}
@@ -19,6 +17,7 @@ import coop.rchain.casper.util._
 import coop.rchain.casper.util.ConstructDeploy.basicDeployData
 import coop.rchain.casper.util.rholang._
 import coop.rchain.catscontrib.TaskContrib._
+import coop.rchain.crypto.PublicKey
 import coop.rchain.crypto.signatures.{Secp256k1, Signed}
 import coop.rchain.metrics._
 import coop.rchain.metrics
@@ -259,8 +258,8 @@ private class SleepingMultiParentCasperImpl[F[_]: Monad: Time](underlying: Multi
   def getRuntimeManager: F[RuntimeManager[F]] = underlying.getRuntimeManager
   def fetchDependencies: F[Unit]              = underlying.fetchDependencies
 
-  def getGenesis: F[BlockMessage] = underlying.getGenesis
-  def getValidator: F[ByteString] = underlying.getValidator
+  def getGenesis: F[BlockMessage]        = underlying.getGenesis
+  def getValidator: F[Option[PublicKey]] = underlying.getValidator
 
   override def createBlock: F[CreateBlockStatus] =
     for {

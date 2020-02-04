@@ -24,6 +24,7 @@ import coop.rchain.shared._
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.deploy.DeployStorage
 import coop.rchain.blockstorage.finality.LastFinalizedStorage
+import coop.rchain.crypto.PublicKey
 import coop.rchain.crypto.signatures.Signed
 
 /**
@@ -71,12 +72,7 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Log: Time: SafetyOracle: Las
 
   def getGenesis: F[BlockMessage] = genesis.pure[F]
 
-  def getValidator: F[ByteString] =
-    validatorId match {
-      case Some(validatorIdentity) =>
-        ByteString.copyFrom(validatorIdentity.publicKey.bytes).pure[F]
-      case None => ByteString.EMPTY.pure[F]
-    }
+  def getValidator: F[Option[PublicKey]] = validatorId.map(_.publicKey).pure[F]
 
   def addBlock(b: BlockMessage): F[ValidBlockProcessing] = {
 
