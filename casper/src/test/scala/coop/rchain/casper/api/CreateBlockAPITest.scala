@@ -201,7 +201,7 @@ class CreateBlockAPITest extends FlatSpec with Matchers with EitherValues {
       }
   }
 
-  it should "check for new deploys before checking synchrony constraint" in effectTest {
+  it should "check for new deploys before checking synchrony constraint" ignore effectTest {
     TestNode
       .networkEff(genesis, networkSize = 5, synchronyConstraintThreshold = syncConstraintThreshold)
       .use {
