@@ -126,7 +126,7 @@ object Interpreter {
 
           // InterpreterError(s) - multiple errors are result of parallel execution
           case AggregateError(ipErrs, errs) if errs.isEmpty =>
-            EvaluateResult(evalCost, ipErrs).pure[F]
+            EvaluateResult(initialCost, ipErrs).pure[F]
 
           // Aggregated fatal errors are rethrown
           case error: AggregateError =>
@@ -134,7 +134,7 @@ object Interpreter {
 
           // InterpreterError is returned as a result
           case error: InterpreterError =>
-            EvaluateResult(evalCost, Vector(error)).pure[F]
+            EvaluateResult(initialCost, Vector(error)).pure[F]
 
           // Any other error is unexpected and it's fatal, rethrow
           case error: Throwable =>

@@ -541,7 +541,6 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log](
       processedDeploy: ProcessedDeploy
   ): F[Option[ReplayFailure]] = {
     import processedDeploy._
-
     val deployEvaluator = EitherT
       .liftF {
         for {
@@ -563,7 +562,7 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log](
           ReplayFailure.replayCostMismatch(cost.cost, result.cost.value)
       )(result => cost.cost == result.cost.value)
 
-    def evaluatorT: EitherT[F, ReplayFailure, Unit] =
+    def evaluatorT: EitherT[F, ReplayFailure, Boolean] =
       if (withCostAccounting) {
         val rand            = Tools.rng(deploy.sig.toByteArray)
         val expectedFailure = processedDeploy.systemDeployError.map(SystemDeployError)
@@ -576,33 +575,46 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log](
               deployEvaluator
                 .semiflatMap(
                   evalResult =>
-                    runtime.replaySpace.createSoftCheckpoint().whenA(evalResult.succeeded)
+                    runtime.replaySpace
+                      .createSoftCheckpoint()
+                      .whenA(evalResult.succeeded)
+                      .map(_ => evalResult.succeeded)
                 )
                 .flatTap(
-                  _ =>
+                  succeeded =>
                     replaySystemDeployInternal(runtime)(
                       new RefundDeploy(refundAmount, rand.splitByte(64)),
                       None
-                    )
+                    ).map(_ => succeeded)
                 )
-            else EitherT.rightT(())
+            else EitherT.rightT(true)
         )
-      } else deployEvaluator.void
+      } else deployEvaluator.map(_.succeeded)
 
     Span[F].withMarks("replay-deploy") {
       for {
         _ <- runtime.replaySpace.rig(processedDeploy.deployLog.map(EventConverter.toRspaceEvent))
         _ <- Span[F].mark("before-replay-deploy-compute-effect")
         failureOption <- evaluatorT
-                          .flatMap { _ =>
+                          .flatMap { succeeded =>
                             /* This deployment represents either correct program `Some(result)`,
                               or we have a failed pre-charge (`None`) but we agree on that it failed.
                               In both cases we want to check reply data and see if everything is in order */
-                            runtime.replaySpace.checkReplayData().attemptT.leftMap {
-                              case replayException: ReplayException =>
-                                ReplayFailure.unusedCOMMEvent(replayException)
-                              case throwable => ReplayFailure.internalError(throwable)
-                            }
+                            runtime.replaySpace
+                              .checkReplayData()
+                              .attemptT
+                              .leftMap {
+                                case replayException: ReplayException =>
+                                  ReplayFailure.unusedCOMMEvent(replayException)
+                                case throwable => ReplayFailure.internalError(throwable)
+                              }
+                              .leftFlatMap {
+                                case UnusedCOMMEvent(_) if !succeeded =>
+                                  // TODO: temp fix for replay error mismatch
+                                  // https://rchain.atlassian.net/browse/RCHAIN-3505
+                                  EitherT.rightT[F, ReplayFailure](())
+                                case ex: ReplayFailure => EitherT.leftT[F, Unit](ex)
+                              }
                           }
                           .swap
                           .value
