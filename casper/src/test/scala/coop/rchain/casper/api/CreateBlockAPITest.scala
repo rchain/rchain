@@ -136,16 +136,19 @@ class CreateBlockAPITest extends FlatSpec with Matchers with EitherValues {
     }
   }
 
+  val syncConstraintThreshold = 1d / 3d
+
   it should "not allow proposals without enough new blocks from other validators" in effectTest {
     TestNode
-      .networkEff(genesis, networkSize = 5, synchronyConstraintThreshold = 1d / 3d)
+      .networkEff(genesis, networkSize = 5, synchronyConstraintThreshold = syncConstraintThreshold)
       .use {
         case nodes @ n1 +: n2 +: _ +: _ +: _ +: Seq() =>
           import n1.{logEff, metricEff, span, timeEff}
-          val engine                              = new EngineWithCasper[Task](n1.casperEff)
-          implicit val blockStore                 = n1.blockStore
-          implicit val lastFinalizedStorage       = n1.lastFinalizedStorage
-          implicit val synchronyConstraintChecker = SynchronyConstraintChecker[Effect](0)
+          val engine                        = new EngineWithCasper[Task](n1.casperEff)
+          implicit val blockStore           = n1.blockStore
+          implicit val lastFinalizedStorage = n1.lastFinalizedStorage
+          implicit val synchronyConstraintChecker =
+            SynchronyConstraintChecker[Effect](syncConstraintThreshold)
           implicit val lastFinalizedHeightConstraintChecker =
             LastFinalizedHeightConstraintChecker[Effect](Long.MaxValue)
           for {
@@ -169,14 +172,15 @@ class CreateBlockAPITest extends FlatSpec with Matchers with EitherValues {
 
   it should "allow proposals with enough new blocks from other validators" in effectTest {
     TestNode
-      .networkEff(genesis, networkSize = 5, synchronyConstraintThreshold = 1d / 3d)
+      .networkEff(genesis, networkSize = 5, synchronyConstraintThreshold = syncConstraintThreshold)
       .use {
         case nodes @ n1 +: n2 +: n3 +: _ +: _ +: Seq() =>
           import n1.{logEff, metricEff, span, timeEff}
-          val engine                              = new EngineWithCasper[Task](n1.casperEff)
-          implicit val blockStore                 = n1.blockStore
-          implicit val lastFinalizedStorage       = n1.lastFinalizedStorage
-          implicit val synchronyConstraintChecker = SynchronyConstraintChecker[Effect](0)
+          val engine                        = new EngineWithCasper[Task](n1.casperEff)
+          implicit val blockStore           = n1.blockStore
+          implicit val lastFinalizedStorage = n1.lastFinalizedStorage
+          implicit val synchronyConstraintChecker =
+            SynchronyConstraintChecker[Effect](syncConstraintThreshold)
           implicit val lastFinalizedHeightConstraintChecker =
             LastFinalizedHeightConstraintChecker[Effect](Long.MaxValue)
           for {
@@ -199,14 +203,15 @@ class CreateBlockAPITest extends FlatSpec with Matchers with EitherValues {
 
   it should "check for new deploys before checking synchrony constraint" in effectTest {
     TestNode
-      .networkEff(genesis, networkSize = 5, synchronyConstraintThreshold = 1d / 3d)
+      .networkEff(genesis, networkSize = 5, synchronyConstraintThreshold = syncConstraintThreshold)
       .use {
         case nodes @ n1 +: n2 +: _ +: _ +: _ +: Seq() =>
           import n1.{logEff, metricEff, span, timeEff}
-          val engine                              = new EngineWithCasper[Task](n1.casperEff)
-          implicit val blockStore                 = n1.blockStore
-          implicit val lastFinalizedStorage       = n1.lastFinalizedStorage
-          implicit val synchronyConstraintChecker = SynchronyConstraintChecker[Effect](0)
+          val engine                        = new EngineWithCasper[Task](n1.casperEff)
+          implicit val blockStore           = n1.blockStore
+          implicit val lastFinalizedStorage = n1.lastFinalizedStorage
+          implicit val synchronyConstraintChecker =
+            SynchronyConstraintChecker[Effect](syncConstraintThreshold)
           implicit val lastFinalizedHeightConstraintChecker =
             LastFinalizedHeightConstraintChecker[Effect](Long.MaxValue)
           for {
