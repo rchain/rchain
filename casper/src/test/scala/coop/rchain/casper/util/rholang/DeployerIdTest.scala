@@ -30,15 +30,14 @@ class DeployerIdTest extends FlatSpec with Matchers {
     val sk = PrivateKey(
       Base16.unsafeDecode("b18e1d0045995ec3d010c387ccfeb984d783af8fbb0f40fa7db126d889f6dadd")
     )
-    val pk             = ByteString.copyFrom(Secp256k1.toPublic(sk).bytes)
-    val captureChannel = "__DEPLOYER_AUTH_VALUE__"
+    val pk = ByteString.copyFrom(Secp256k1.toPublic(sk).bytes)
     runtimeManager.use { mgr =>
       for {
         deploy <- ConstructDeploy.sourceDeployNowF(
-                   s"""new auth(`rho:rchain:deployerId`) in { @"$captureChannel"!(*auth) }""",
+                   s"""new return, auth(`rho:rchain:deployerId`) in { return!(*auth) }""",
                    sec = sk
                  )
-        result <- mgr.captureResults(mgr.emptyStateHash, deploy, captureChannel)
+        result <- mgr.captureResults(mgr.emptyStateHash, deploy)
         _      = result.size should be(1)
         _      = result.head should be(GDeployerId(pk): Par)
       } yield ()
@@ -60,20 +59,19 @@ class DeployerIdTest extends FlatSpec with Matchers {
       contractUser: PrivateKey,
       isAccessGranted: Boolean
   ): Task[Unit] = {
-    val captureChannel = "__RETURN_VALUE__"
     val checkDeployerDefinition =
       s"""
          |contract @"checkAuth"(input, ret) = {
          |  new auth(`rho:rchain:deployerId`) in {
-         |    ret!(*input == *auth) 
+         |    ret!(*input == *auth)
          |  }
          |}""".stripMargin
     val checkDeployerCall =
       s"""
-         |new auth(`rho:rchain:deployerId`), ret in {
+         |new return, auth(`rho:rchain:deployerId`), ret in {
          |  @"checkAuth"!(*auth, *ret) |
          |  for(isAuthenticated <- ret) {
-         |    @"$captureChannel"!(*isAuthenticated)
+         |    return!(*isAuthenticated)
          |  }
          |} """.stripMargin
 
@@ -83,7 +81,7 @@ class DeployerIdTest extends FlatSpec with Matchers {
         block           <- node.addBlock(contract)
         stateHash       = ProtoUtil.postStateHash(block)
         checkAuthDeploy <- ConstructDeploy.sourceDeployNowF(checkDeployerCall, sec = contractUser)
-        result          <- node.runtimeManager.captureResults(stateHash, checkAuthDeploy, captureChannel)
+        result          <- node.runtimeManager.captureResults(stateHash, checkAuthDeploy)
         _               = assert(result.size == 1)
         _               = assert(result.head == (GBool(isAccessGranted): Par))
       } yield ()

@@ -36,19 +36,10 @@ class DeployIdTest extends FlatSpec with Matchers {
   )
 
   "Deploy id" should "be equal to deploy signature" in {
-    val captureChannel = "__DEPLOY_ID_VALUE__"
-    val d =
-      deploy(sk, s"""new deployId(`rho:rchain:deployId`) in { @"$captureChannel"!(*deployId) }""")
+    val d = deploy(sk, s"""new return, deployId(`rho:rchain:deployId`) in { return!(*deployId) }""")
     val result =
       runtimeManager
-        .use(
-          mgr =>
-            mgr.captureResults(
-              mgr.emptyStateHash,
-              d,
-              captureChannel
-            )
-        )
+        .use(mgr => mgr.captureResults(mgr.emptyStateHash, d))
         .runSyncUnsafe(10.seconds)
 
     result.size should be(1)
@@ -58,21 +49,20 @@ class DeployIdTest extends FlatSpec with Matchers {
   val genesisContext = buildGenesis()
 
   it should "be resolved during normalization" in effectTest {
-    val captureChannel = "__RETURN_VALUE__"
     val contract = deploy(
       sk,
       s"""contract @"check"(input, ret) = { new deployId(`rho:rchain:deployId`) in { ret!(*input == *deployId) }}"""
     )
     val contractCall = deploy(
       sk,
-      s"""new deployId(`rho:rchain:deployId`), ret in { @"check"!(*deployId, "$captureChannel") }"""
+      s"""new return, deployId(`rho:rchain:deployId`), ret in { @"check"!(*deployId, *return) }"""
     )
 
     TestNode.standaloneEff(genesisContext).use { node =>
       for {
         block <- node.addBlock(contract)
         result <- node.runtimeManager
-                   .captureResults(ProtoUtil.postStateHash(block), contractCall, captureChannel)
+                   .captureResults(ProtoUtil.postStateHash(block), contractCall)
         _ = assert(result.size == 1)
         _ = assert(result.head == (GBool(false): Par))
       } yield ()
