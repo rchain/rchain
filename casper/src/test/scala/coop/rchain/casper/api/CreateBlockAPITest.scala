@@ -8,9 +8,10 @@ import cats.implicits._
 import coop.rchain.casper.MultiParentCasper.ignoreDoppelgangerCheck
 import coop.rchain.casper.engine._
 import EngineCell._
+import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.dag.BlockDagRepresentation
 import coop.rchain.blockstorage.dag.BlockDagStorage.DeployId
-import coop.rchain.casper._
+import coop.rchain.casper.{LastFinalizedHeightConstraintChecker, SynchronyConstraintChecker, _}
 import coop.rchain.casper.api.BlockAPI.ApiErr
 import coop.rchain.casper.helper.TestNode
 import coop.rchain.casper.protocol._
@@ -37,7 +38,9 @@ class CreateBlockAPITest extends FlatSpec with Matchers with EitherValues {
   def createBlock(blockApiLock: Semaphore[Task])(engineCell: Cell[Task, Engine[Task]])(
       implicit log: Log[Task],
       metrics: Metrics[Task],
-      span: Span[Task]
+      span: Span[Task],
+      sync: SynchronyConstraintChecker[Task],
+      lfhcc: LastFinalizedHeightConstraintChecker[Task]
   ): Task[Either[String, String]] =
     BlockAPI.createBlock[Task](blockApiLock)(
       Sync[Task],
@@ -45,7 +48,9 @@ class CreateBlockAPITest extends FlatSpec with Matchers with EitherValues {
       engineCell,
       log,
       metrics,
-      span
+      span,
+      sync,
+      lfhcc
     )
 
   val validatorKeyPairs = (1 to 5).map(_ => Secp256k1.newKeyPair)
@@ -75,7 +80,9 @@ class CreateBlockAPITest extends FlatSpec with Matchers with EitherValues {
       ).map(ConstructDeploy.sourceDeploy(_, timestamp = System.currentTimeMillis()))
 
       def createBlock(deploy: Signed[DeployData], blockApiLock: Semaphore[Effect])(
-          implicit engineCell: EngineCell[Effect]
+          implicit engineCell: EngineCell[Effect],
+          sync: SynchronyConstraintChecker[Effect],
+          lfhcc: LastFinalizedHeightConstraintChecker[Effect]
       ): Effect[ApiErr[String]] =
         for {
           _ <- BlockAPI.deploy[Effect](deploy)
@@ -83,7 +90,9 @@ class CreateBlockAPITest extends FlatSpec with Matchers with EitherValues {
         } yield r
 
       def testProgram(blockApiLock: Semaphore[Effect])(
-          implicit engineCell: EngineCell[Effect]
+          implicit engineCell: EngineCell[Effect],
+          sync: SynchronyConstraintChecker[Effect],
+          lfhcc: LastFinalizedHeightConstraintChecker[Effect]
       ): Effect[
         (
             ApiErr[String],
@@ -101,11 +110,21 @@ class CreateBlockAPITest extends FlatSpec with Matchers with EitherValues {
           r3 <- t3.join.attempt
         } yield (r1.right.value, r2.right.value, r3.right.value)
 
+      implicit val blockStore           = node.blockStore
+      implicit val lastFinalizedStorage = node.lastFinalizedStorage
       val (response1, response2, response3) = (for {
-        engine       <- new EngineWithCasper[Task](casper).pure[Task]
-        engineCell   <- Cell.mvarCell[Task, Engine[Task]](engine)
-        blockApiLock <- Semaphore[Effect](1)
-        result       <- testProgram(blockApiLock)(engineCell)
+        engine                     <- new EngineWithCasper[Task](casper).pure[Task]
+        engineCell                 <- Cell.mvarCell[Task, Engine[Task]](engine)
+        blockApiLock               <- Semaphore[Effect](1)
+        synchronyConstraintChecker = SynchronyConstraintChecker[Effect](0)
+        lastFinalizedHeightConstraintChecker = LastFinalizedHeightConstraintChecker[Effect](
+          Long.MaxValue
+        )
+        result <- testProgram(blockApiLock)(
+                   engineCell,
+                   synchronyConstraintChecker,
+                   lastFinalizedHeightConstraintChecker
+                 )
       } yield result).unsafeRunSync
 
       response1 shouldBe a[Right[_, String]]
@@ -124,18 +143,29 @@ class CreateBlockAPITest extends FlatSpec with Matchers with EitherValues {
       .use {
         case nodes @ n1 +: n2 +: _ +: _ +: _ +: Seq() =>
           import n1.{logEff, metricEff, span, timeEff}
-          val engine = new EngineWithCasper[Task](n1.casperEff)
+          val engine                        = new EngineWithCasper[Task](n1.casperEff)
+          implicit val blockStore           = n1.blockStore
+          implicit val lastFinalizedStorage = n1.lastFinalizedStorage
           for {
             deploys      <- (0 until 3).toList.traverse(i => basicDeployData[Task](i))
             engineCell   <- Cell.mvarCell[Task, Engine[Task]](engine)
             blockApiLock <- Semaphore[Effect](1)
 
-            b1 <- n1.publishBlock(deploys(0))(nodes: _*)
-            b2 <- n2.publishBlock(deploys(1))(nodes: _*)
-            _  <- n1.syncWith(n2)
-
-            _        <- n1.casperEff.addDeploy(deploys(2))
-            b3Status <- createBlock(blockApiLock)(engineCell)
+            b1                         <- n1.publishBlock(deploys(0))(nodes: _*)
+            b2                         <- n2.publishBlock(deploys(1))(nodes: _*)
+            _                          <- n1.syncWith(n2)
+            synchronyConstraintChecker = SynchronyConstraintChecker[Effect](0)
+            lastFinalizedHeightConstraintChecker = LastFinalizedHeightConstraintChecker[Effect](
+              Long.MaxValue
+            )
+            _ <- n1.casperEff.addDeploy(deploys(2))
+            b3Status <- createBlock(blockApiLock)(engineCell)(
+                         logEff,
+                         metricEff,
+                         span,
+                         synchronyConstraintChecker,
+                         lastFinalizedHeightConstraintChecker
+                       )
 
             _ = b3Status.left.value should include(
               "Must wait for more blocks from other validators"
@@ -150,19 +180,30 @@ class CreateBlockAPITest extends FlatSpec with Matchers with EitherValues {
       .use {
         case nodes @ n1 +: n2 +: n3 +: _ +: _ +: Seq() =>
           import n1.{logEff, metricEff, span, timeEff}
-          val engine = new EngineWithCasper[Task](n1.casperEff)
+          val engine                        = new EngineWithCasper[Task](n1.casperEff)
+          implicit val blockStore           = n1.blockStore
+          implicit val lastFinalizedStorage = n1.lastFinalizedStorage
           for {
             deploys      <- (0 until 4).toList.traverse(i => basicDeployData[Task](i))
             engineCell   <- Cell.mvarCell[Task, Engine[Task]](engine)
             blockApiLock <- Semaphore[Effect](1)
 
-            b1 <- n1.publishBlock(deploys(0))(nodes: _*)
-            b2 <- n2.publishBlock(deploys(1))(nodes: _*)
-            b3 <- n3.publishBlock(deploys(2))(nodes: _*)
-            _  <- n1.syncWith(n2, n3)
-
-            _        <- n1.casperEff.addDeploy(deploys(3))
-            b4Status <- createBlock(blockApiLock)(engineCell)
+            b1                         <- n1.publishBlock(deploys(0))(nodes: _*)
+            b2                         <- n2.publishBlock(deploys(1))(nodes: _*)
+            b3                         <- n3.publishBlock(deploys(2))(nodes: _*)
+            _                          <- n1.syncWith(n2, n3)
+            synchronyConstraintChecker = SynchronyConstraintChecker[Effect](0)
+            lastFinalizedHeightConstraintChecker = LastFinalizedHeightConstraintChecker[Effect](
+              Long.MaxValue
+            )
+            _ <- n1.casperEff.addDeploy(deploys(3))
+            b4Status <- createBlock(blockApiLock)(engineCell)(
+                         logEff,
+                         metricEff,
+                         span,
+                         synchronyConstraintChecker,
+                         lastFinalizedHeightConstraintChecker
+                       )
 
             _ = b4Status shouldBe a[Right[_, String]]
           } yield ()
@@ -175,16 +216,27 @@ class CreateBlockAPITest extends FlatSpec with Matchers with EitherValues {
       .use {
         case nodes @ n1 +: n2 +: _ +: _ +: _ +: Seq() =>
           import n1.{logEff, metricEff, span, timeEff}
-          val engine = new EngineWithCasper[Task](n1.casperEff)
+          val engine                        = new EngineWithCasper[Task](n1.casperEff)
+          implicit val blockStore           = n1.blockStore
+          implicit val lastFinalizedStorage = n1.lastFinalizedStorage
           for {
             deploys      <- (0 until 3).toList.traverse(i => basicDeployData[Task](i))
             engineCell   <- Cell.mvarCell[Task, Engine[Task]](engine)
             blockApiLock <- Semaphore[Effect](1)
 
-            b1 <- n1.publishBlock(deploys(0))(nodes: _*)
-            b2 <- n2.publishBlock(deploys(1))(nodes: _*)
-
-            b3Status <- createBlock(blockApiLock)(engineCell)
+            b1                         <- n1.publishBlock(deploys(0))(nodes: _*)
+            b2                         <- n2.publishBlock(deploys(1))(nodes: _*)
+            synchronyConstraintChecker = SynchronyConstraintChecker[Effect](0)
+            lastFinalizedHeightConstraintChecker = LastFinalizedHeightConstraintChecker[Effect](
+              Long.MaxValue
+            )
+            b3Status <- createBlock(blockApiLock)(engineCell)(
+                         logEff,
+                         metricEff,
+                         span,
+                         synchronyConstraintChecker,
+                         lastFinalizedHeightConstraintChecker
+                       )
 
             _ = b3Status.left.value should include("NoNewDeploys")
           } yield ()
@@ -206,6 +258,9 @@ private class SleepingMultiParentCasperImpl[F[_]: Monad: Time](underlying: Multi
   def lastFinalizedBlock: F[BlockMessage]     = underlying.lastFinalizedBlock
   def getRuntimeManager: F[RuntimeManager[F]] = underlying.getRuntimeManager
   def fetchDependencies: F[Unit]              = underlying.fetchDependencies
+
+  def getGenesis: F[BlockMessage] = underlying.getGenesis
+  def getValidator: F[ByteString] = underlying.getValidator
 
   override def createBlock: F[CreateBlockStatus] =
     for {

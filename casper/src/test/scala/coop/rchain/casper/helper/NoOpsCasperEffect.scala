@@ -44,6 +44,8 @@ class NoOpsCasperEffect[F[_]: Sync: BlockStore: BlockDagStorage] private (
   def lastFinalizedBlock: F[BlockMessage]                             = Dummies.createBlockMessage().pure[F]
   def getRuntimeManager: F[RuntimeManager[F]]                         = runtimeManager.pure[F]
   def fetchDependencies: F[Unit]                                      = ().pure[F]
+  def getGenesis: F[BlockMessage]                                     = Dummies.createBlockMessage().pure[F]
+  def getValidator: F[Validator]                                      = ByteString.EMPTY.pure[F]
 }
 
 object NoOpsCasperEffect {
