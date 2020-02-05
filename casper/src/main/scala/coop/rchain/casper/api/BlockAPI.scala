@@ -40,7 +40,7 @@ object BlockAPI {
   val DeploySource: Metrics.Source          = Metrics.Source(BlockAPIMetricsSource, "deploy")
   val GetBlockSource: Metrics.Source        = Metrics.Source(BlockAPIMetricsSource, "get-block")
 
-  def deploy[F[_]: Monad: EngineCell: Log: Span](
+  def deploy[F[_]: Sync: EngineCell: Log: Span](
       d: Signed[DeployData]
   ): F[ApiErr[String]] = Span[F].trace(DeploySource) {
 
@@ -54,11 +54,21 @@ object BlockAPI {
           )
         )
 
-    val errorMessage = "Could not deploy, casper instance was not available yet."
+    // Check if deploy has minimum phlo price
+    val minPhloPrice = 1
+    val minPriceError = new RuntimeException(
+      s"Phlo price is less than minimum price $minPhloPrice."
+    ).raiseError[F, ApiErr[String]]
+    val minPhloPriceCheck = minPriceError.whenA(d.data.phloPrice < minPhloPrice)
 
-    EngineCell[F].read >>= (_.withCasper[ApiErr[String]](
+    val errorMessage = "Could not deploy, casper instance was not available yet."
+    val logErrorMessage = Log[F]
+      .warn(errorMessage)
+      .as(s"Error: $errorMessage".asLeft[String])
+
+    minPhloPriceCheck >> EngineCell[F].read >>= (_.withCasper[ApiErr[String]](
       casperDeploy,
-      Log[F].warn(errorMessage).as(s"Error: $errorMessage".asLeft)
+      logErrorMessage
     ))
   }
 
