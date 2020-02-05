@@ -3,11 +3,14 @@ package coop.rchain.node.api
 import cats.effect.concurrent.Semaphore
 import cats.effect.Concurrent
 import cats.implicits._
-
 import coop.rchain.blockstorage.BlockStore
 import coop.rchain.casper.engine._
 import EngineCell._
-import coop.rchain.casper.SafetyOracle
+import coop.rchain.casper.{
+  LastFinalizedHeightConstraintChecker,
+  SafetyOracle,
+  SynchronyConstraintChecker
+}
 import coop.rchain.casper.api.BlockAPI
 import coop.rchain.casper.protocol.{PrintUnmatchedSendsQuery, ServiceError}
 import coop.rchain.casper.protocol.propose.v1.{ProposeResponse, ProposeServiceV1GrpcMonix}
@@ -18,12 +21,11 @@ import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.models.StacksafeMessage
 import coop.rchain.shared._
 import coop.rchain.shared.ThrowableOps._
-
 import monix.eval.Task
 import monix.execution.Scheduler
 
 object ProposeGrpcServiceV1 {
-  def instance[F[_]: Concurrent: Log: SafetyOracle: BlockStore: Metrics: Taskable: Span: EngineCell](
+  def instance[F[_]: Concurrent: Log: SafetyOracle: BlockStore: Metrics: Taskable: Span: EngineCell: SynchronyConstraintChecker: LastFinalizedHeightConstraintChecker](
       blockApiLock: Semaphore[F]
   )(
       implicit worker: Scheduler

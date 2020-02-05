@@ -28,6 +28,7 @@ import coop.rchain.p2p.EffectsTestInstances.LogicalTime
 import coop.rchain.rholang.interpreter
 import coop.rchain.rholang.interpreter.Runtime.BlockData
 import coop.rchain.rholang.interpreter.accounting.Cost
+import coop.rchain.rholang.interpreter.errors.BugFoundError
 import coop.rchain.rholang.interpreter.{accounting, ParBuilderUtil}
 import coop.rchain.shared.scalatestcontrib.effectTest
 import coop.rchain.shared.{Log, Time}
@@ -36,6 +37,7 @@ import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
 import org.scalatest.{FlatSpec, Matchers}
 
+import scala.concurrent.Await
 import scala.concurrent.duration._
 
 class RuntimeManagerTest extends FlatSpec with Matchers {
@@ -358,8 +360,7 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
   }
 
   "captureResult" should "return the value at the specified channel after a rholang computation" in effectTest {
-    val purseValue     = "37"
-    val captureChannel = "__PURSEVALUE__"
+    val purseValue = "37"
 
     runtimeManagerResource.use { mgr =>
       for {
@@ -375,9 +376,9 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
         result0 <- computeState(mgr, deploy0, genesis.body.state.postStateHash)
         hash    = result0._1
         deploy1 <- ConstructDeploy.sourceDeployNowF(
-                    s""" for(nn <- @"nn"){ nn!("value", "$captureChannel") } """
+                    s"""new return in { for(nn <- @"nn"){ nn!("value", *return) } } """
                   )
-        result1 <- mgr.captureResults(hash, deploy1, captureChannel)
+        result1 <- mgr.captureResults(hash, deploy1)
 
         _ = result1.size should be(1)
         _ = result1.head should be(ParBuilderUtil.mkTerm(purseValue).right.get)
@@ -386,16 +387,19 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
   }
 
   it should "handle multiple results and no results appropriately" in {
-    val n    = 8
-    val code = (1 to n).map(i => s""" @"__SCALA__"!($i) """).mkString("|")
-    val term = ConstructDeploy.sourceDeploy(code, timestamp = 0)
+    val n           = 8
+    val returns     = (1 to n).map(i => s""" return!($i) """).mkString("|")
+    val term        = s""" new return in { $returns } """
+    val termNoRes   = s""" new x, return in { $returns } """
+    val deploy      = ConstructDeploy.sourceDeploy(term, timestamp = 0)
+    val deployNoRes = ConstructDeploy.sourceDeploy(termNoRes, timestamp = 0)
     val manyResults =
       runtimeManagerResource
-        .use(mgr => mgr.captureResults(mgr.emptyStateHash, term))
+        .use(mgr => mgr.captureResults(mgr.emptyStateHash, deploy))
         .runSyncUnsafe(10.seconds)
     val noResults =
       runtimeManagerResource
-        .use(mgr => mgr.captureResults(mgr.emptyStateHash, term, "differentName"))
+        .use(mgr => mgr.captureResults(mgr.emptyStateHash, deployNoRes))
         .runSyncUnsafe(10.seconds)
 
     noResults.isEmpty should be(true)
@@ -404,6 +408,16 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
     (1 to n).forall(i => manyResults.contains(ParBuilderUtil.mkTerm(i.toString).right.get)) should be(
       true
     )
+  }
+
+  "captureResult" should "throw error if execution fails" in {
+    val term   = s""" new return in { return.undefined() } """
+    val deploy = ConstructDeploy.sourceDeploy(term, timestamp = 0)
+    val task =
+      runtimeManagerResource
+        .use(mgr => mgr.captureResults(mgr.emptyStateHash, deploy))
+
+    Await.result(task.failed.runToFuture, 1.seconds) shouldBe a[BugFoundError]
   }
 
   "emptyStateHash" should "not remember previous hot store state" in effectTest {

@@ -46,8 +46,7 @@ trait RuntimeManager[F[_]] {
   ): F[Either[ReplayFailure, SystemDeployReplayResult[systemDeploy.Result]]]
   def captureResults(
       startHash: StateHash,
-      deploy: Signed[DeployData],
-      name: String = "__SCALA__"
+      deploy: Signed[DeployData]
   ): F[Seq[Par]]
   def replayComputeState(startHash: StateHash)(
       terms: Seq[ProcessedDeploy],
@@ -624,21 +623,38 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log](
     }
   }
 
+  // Return channel on which result is captured is the first name
+  // in the deploy term `new return in { return!(42) }`
   def captureResults(
       start: StateHash,
-      deploy: Signed[DeployData],
-      name: String = "__SCALA__"
-  ): F[Seq[Par]] =
-    captureResults(start, deploy, Par().withExprs(Seq(Expr(GString(name)))))
+      deploy: Signed[DeployData]
+  ): F[Seq[Par]] = {
+    // Create return channel as first unforgeable name created in deploy term
+    val rand = Tools.unforgeableNameRng(deploy.pk, deploy.data.timestamp)
+    import coop.rchain.models.rholang.implicits._
+    val returnName: Par = GPrivate(ByteString.copyFrom(rand.next()))
+    captureResults(start, deploy, returnName)
+  }
 
   def captureResults(start: StateHash, deploy: Signed[DeployData], name: Par): F[Seq[Par]] =
+    captureResultsWithErrors(start, deploy, name)
+      .handleErrorWith(
+        ex =>
+          BugFoundError(s"Unexpected error while capturing results from Rholang: $ex")
+            .raiseError[F, Seq[Par]]
+      )
+
+  def captureResultsWithErrors(
+      start: StateHash,
+      deploy: Signed[DeployData],
+      name: Par
+  ): F[Seq[Par]] =
     withResetRuntimeLock(start) { runtime =>
       evaluate(runtime.reducer, runtime.cost)(deploy)
-        .ensure(
-          BugFoundError("Unexpected error while capturing results from rholang")
-        )(
-          _.errors.isEmpty
-        ) >> getData(runtime)(name)
+        .flatMap({ res =>
+          if (res.errors.nonEmpty) Sync[F].raiseError[EvaluateResult](res.errors.head)
+          else res.pure[F]
+        }) >> getData(runtime)(name)
     }
 
   private def setInvalidBlocks(
@@ -664,8 +680,10 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log](
     runtime.invalidBlocks.setParams(invalidBlocksPar)
   }
 
-  def computeBonds(hash: StateHash): F[Seq[Bond]] =
-    captureResults(hash, ConstructDeploy.sourceDeployNow(bondsQuerySource()))
+  def computeBonds(hash: StateHash): F[Seq[Bond]] = {
+    // Create a deploy with built-in private key
+    val deploy = ConstructDeploy.sourceDeployNow(bondsQuerySource)
+    captureResults(hash, deploy)
       .ensureOr(
         bondsPar =>
           new IllegalArgumentException(
@@ -675,13 +693,14 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log](
       .map { bondsPar =>
         toBondSeq(bondsPar.head)
       }
+  }
 
-  private def bondsQuerySource(name: String = "__SCALA__"): String =
+  private def bondsQuerySource: String =
     s"""
-       # new rl(`rho:registry:lookup`), poSCh in {
+       # new return, rl(`rho:registry:lookup`), poSCh in {
        #   rl!(`rho:rchain:pos`, *poSCh) |
        #   for(@(_, PoS) <- poSCh) {
-       #     @PoS!("getBonds", "$name")
+       #     @PoS!("getBonds", *return)
        #   }
        # }
        """.stripMargin('#')
