@@ -21,7 +21,7 @@ import coop.rchain.crypto.codec.Base16
 import coop.rchain.casper.util.{ConstructDeploy, EventConverter}
 import coop.rchain.crypto.PublicKey
 import coop.rchain.crypto.hash.Blake2b512Random
-import coop.rchain.crypto.signatures.Signed
+import coop.rchain.crypto.signatures.{Secp256k1, Signed}
 import coop.rchain.metrics.Metrics.Source
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.models.BlockHash.BlockHash
@@ -681,8 +681,9 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log](
   }
 
   def computeBonds(hash: StateHash): F[Seq[Bond]] = {
-    // Create a deploy with built-in private key
-    val deploy = ConstructDeploy.sourceDeployNow(bondsQuerySource)
+    // Create a deploy with newly created private key
+    val (privKey, _) = Secp256k1.newKeyPair
+    val deploy       = ConstructDeploy.sourceDeployNow(bondsQuerySource, sec = privKey)
     captureResults(hash, deploy)
       .ensureOr(
         bondsPar =>
