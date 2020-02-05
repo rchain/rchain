@@ -89,6 +89,7 @@ object WebApiRoutes {
     implicit val lightBlockListEnc = jsonEncoderOf[F, List[LightBlockInfo]]
     implicit val dataRespEncoder   = jsonEncoderOf[F, DataResponse]
     implicit val prepareEncoder    = jsonEncoderOf[F, PrepareResponse]
+    implicit val explRespEncoder   = jsonEncoderOf[F, ExploratoryDeployResponse]
     // Decoders
     implicit val deployRequestDecoder = jsonOf[F, DeployRequest]
     implicit val dataRequestDecoder   = jsonOf[F, DataRequest]
@@ -110,6 +111,9 @@ object WebApiRoutes {
 
       case req @ POST -> Root / "deploy" =>
         req.handle[DeployRequest, String](webApi.deploy)
+
+      case req @ POST -> Root / "explore-deploy" =>
+        req.handle[String, ExploratoryDeployResponse](webApi.exploratoryDeploy)
 
       // Get data
 

@@ -38,6 +38,8 @@ trait WebApi[F[_]] {
   def getBlocks(depth: Option[Int]): F[List[LightBlockInfo]]
 
   def findDeploy(deployId: String): F[LightBlockInfo]
+
+  def exploratoryDeploy(term: String): F[ExploratoryDeployResponse]
 }
 
 object WebApi {
@@ -84,6 +86,12 @@ object WebApi {
       BlockAPI
         .findDeploy[F](toByteString(deployId))
         .flatMap(_.liftToBlockApiErr)
+
+    def exploratoryDeploy(term: String): F[ExploratoryDeployResponse] =
+      BlockAPI
+        .exploratoryDeploy(term)
+        .flatMap(_.liftToBlockApiErr)
+        .map(toExploratoryResponse)
 
     def status: F[ApiStatus] =
       ApiStatus(
@@ -139,6 +147,11 @@ object WebApi {
 
   final case class RhoExprWithBlock(
       expr: RhoExpr,
+      block: LightBlockInfo
+  )
+
+  final case class ExploratoryDeployResponse(
+      expr: Seq[RhoExpr],
       block: LightBlockInfo
   )
 
@@ -224,11 +237,14 @@ object WebApi {
     // Map
     else if (exp.exprInstance.isEMapBody) {
       val fields = for {
-        (k, v) <- exp.getEMapBody.ps
-        expr   <- k.exprs.headOption
-        // Only String keys are accepted
-        ExprString(key) <- exprFromExprProto(expr)
-        value           <- exprFromParProto(v)
+        (k, v)  <- exp.getEMapBody.ps
+        keyExpr <- exprFromParProto(k)
+        key <- keyExpr match {
+                case ExprString(str) => str.some
+                case ExprBytes(str)  => str.some
+                case _               => none
+              }
+        value <- exprFromParProto(v)
       } yield (key, value)
       ExprMap(fields.toMap).some
     } else none
@@ -268,6 +284,12 @@ object WebApi {
       RhoExprWithBlock(expr, block) +: acc
     }
     DataResponse(exprsWithBlock, length)
+  }
+
+  private def toExploratoryResponse(data: (Seq[Par], LightBlockInfo)) = {
+    val (pars, lightBlockInfo) = data
+    val rhoExprs               = pars.flatMap(exprFromParProto)
+    ExploratoryDeployResponse(rhoExprs, lightBlockInfo)
   }
 
   object WebApiSyntax {
