@@ -49,10 +49,10 @@ object WebApi {
     import WebApiSyntax._
 
     def prepareDeploy(req: Option[PrepareRequest]): F[PrepareResponse] = {
-      val blockNumber = BlockAPI
+      val blockNumbers = BlockAPI
         .getBlocks[F](1.some)
         .flatMap(_.liftToBlockApiErr)
-        .map(_.headOption.map(_.blockNumber).getOrElse(-1L))
+        .map(_.headOption.map(b => (b.blockNumber, b.seqNum)).getOrElse((-1L, -1L)))
 
       val previewNames = req.fold(List[String]().pure) { r =>
         BlockAPI
@@ -61,7 +61,9 @@ object WebApi {
           .map(_.map(toHex).toList)
       }
 
-      previewNames.map2(blockNumber)(PrepareResponse)
+      previewNames.map2(blockNumbers) {
+        case (names, (blockNumber, seqNumber)) => PrepareResponse(names, blockNumber, seqNumber)
+      }
     }
 
     def deploy(request: DeployRequest): F[String] =
@@ -163,7 +165,8 @@ object WebApi {
 
   final case class PrepareResponse(
       names: List[String],
-      blockNumber: Long
+      blockNumber: Long,
+      seqNumber: Long
   )
 
   final case class ApiStatus(
