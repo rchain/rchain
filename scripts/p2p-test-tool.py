@@ -554,7 +554,7 @@ def remove_resources_by_network(args_network):
 
 
 def generate_validator_private_key():
-    ### Create --validator-private-key and --validator--public-key and add to bonds.txt # ed25519 eventually secp256k1 ###
+    ### Create secp256k1 --validator-private-key and --validator--public-key and add to bonds.txt ###
 
     # # pynacl for libsodium
     # # import nacl # libsodium/ed25519 support
