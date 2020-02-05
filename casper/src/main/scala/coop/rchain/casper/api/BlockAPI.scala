@@ -633,4 +633,35 @@ object BlockAPI {
       )
     )
   }
+
+  def exploratoryDeploy[F[_]: Monad: EngineCell: Log: SafetyOracle: BlockStore](
+      term: String
+  ): F[ApiErr[(Seq[Par], LightBlockInfo)]] = {
+    val errorMessage =
+      "Could not execute exploratory deploy, casper instance was not available yet."
+    EngineCell[F].read >>= (
+      _.withCasper(
+        implicit casper =>
+          for {
+            isReadOnly <- casper.getValidator
+            result <- isReadOnly match {
+                       case Some(_) =>
+                         "Exploratory deploy can only be executed on read-only RNode."
+                           .asLeft[(Seq[Par], LightBlockInfo)]
+                           .pure[F]
+                       case None =>
+                         for {
+                           lastFinalizedBlock <- casper.lastFinalizedBlock
+                           runtimeManager     <- casper.getRuntimeManager
+                           postStateHash      = ProtoUtil.postStateHash(lastFinalizedBlock)
+                           res                <- runtimeManager.playExploratoryDeploy(term, postStateHash)
+                           lightBlockInfo     <- getLightBlockInfo[F](lastFinalizedBlock)
+                         } yield (res, lightBlockInfo).asRight[Error]
+                     }
+          } yield result,
+        Log[F].warn(errorMessage).as(s"Error: $errorMessage".asLeft)
+      )
+    )
+  }
+
 }
