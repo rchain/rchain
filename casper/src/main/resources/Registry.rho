@@ -86,7 +86,7 @@ in {
         } |
 
         contract TreeHashMapGetter(@map, @nybList, @n, @len, @suffix, ret) = {
-          // Look up the value of the node at [map, nybList.slice(0, n + 1)]
+          // Look up the value of the node at (map, nybList.slice(0, n + 1))
           new valCh in {
             nodeGet!((map, nybList.slice(0, n)), *valCh) |
             for (@val <- valCh) {
@@ -150,7 +150,7 @@ in {
         } |
 
         contract TreeHashMapSetter(@map, @nybList, @n, @len, @newVal, @suffix, ret) = {
-          // Look up the value of the node at [map, nybList.slice(0, n + 1)
+          // Look up the value of the node at (map, nybList.slice(0, n + 1))
           new valCh, restCh in {
             match (map, nybList.slice(0, n)) {
               node => {

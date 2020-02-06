@@ -122,7 +122,7 @@ in {
                   "activeValidators": initialActive,
                   // Map[PublicKey, Int] - are moved from pendingRewards on epoch change or slashing
                   "committedRewards": {},
-                  // Map[PublicKey, Int] - the validators wishing to withdraw and the blocknumber when their quarantine ends
+                  // Map[PublicKey, Int] - the validators wishing to withdraw and the block number when their quarantine ends
                   //                       This begins at the start of the next epoch + quarantineLength.
                   "withdrawers"     : {},
                   "randomImages"    : {},
