@@ -118,7 +118,8 @@ class DebruijnInterpreter[M[_], F[_]](
       continuation: TaggedContinuation,
       dataList: Seq[(Par, ListParWithRandom, ListParWithRandom, Boolean)]
   )(ops: M[Unit]*) =
-    (dispatch(continuation, dataList) :: ops.toList).parSequence_
+    // Collect errors from all parallel execution paths (pars)
+    parTraverseSafe(dispatch(continuation, dataList) +: ops.toVector)(identity)
 
   private[this] def dispatch(
       continuation: TaggedContinuation,
