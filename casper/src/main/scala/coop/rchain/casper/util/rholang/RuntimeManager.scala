@@ -11,6 +11,8 @@ import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.rholang.RuntimeManager.{evaluate, StateHash}
 import SystemDeployPlatformFailure._
 import SystemDeployUserError._
+import coop.rchain.casper.protocol.ProcessedSystemDeploy.Failed
+import coop.rchain.casper.util.rholang.SystemDeployPlayResult.{PlayFailed, PlaySucceeded}
 import coop.rchain.casper.util.rholang.costacc.{
   CloseBlockDeploy,
   PreChargeDeploy,
@@ -57,9 +59,10 @@ trait RuntimeManager[F[_]] {
   ): F[Either[ReplayFailure, StateHash]]
   def computeState(hash: StateHash)(
       terms: Seq[Signed[DeployData]],
+      systemDeploys: Seq[SystemDeploy],
       blockData: BlockData,
       invalidBlocks: Map[BlockHash, Validator]
-  ): F[(StateHash, Seq[ProcessedDeploy])]
+  ): F[(StateHash, Seq[ProcessedDeploy], Seq[ProcessedSystemDeploy])]
   def computeGenesis(
       terms: Seq[Signed[DeployData]],
       blockTime: Long
@@ -279,22 +282,39 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log](
 
   def computeState(startHash: StateHash)(
       terms: Seq[Signed[DeployData]],
+      systemDeploys: Seq[SystemDeploy],
       blockData: BlockData,
       invalidBlocks: Map[BlockHash, Validator] = Map.empty[BlockHash, Validator]
-  ): F[(StateHash, Seq[ProcessedDeploy])] =
+  ): F[(StateHash, Seq[ProcessedDeploy], Seq[ProcessedSystemDeploy])] =
     withRuntimeLock { runtime =>
       Span[F].trace(computeStateLabel) {
         for {
           _ <- runtime.blockData.set(blockData)
           _ <- setInvalidBlocks(invalidBlocks, runtime)
           _ <- Span[F].mark("before-process-deploys")
-          result <- processDeploys(
-                     runtime,
-                     startHash,
-                     terms,
-                     processDeployWithCostAccounting(runtime)
-                   )
-        } yield result
+          deployProcessResult <- processDeploys(
+                                  runtime,
+                                  startHash,
+                                  terms,
+                                  processDeployWithCostAccounting(runtime)
+                                )
+          (startHash, processedDeploys) = deployProcessResult
+          systemDeployProcessResult <- {
+            import cats.instances.list._
+            systemDeploys.toList.foldM((startHash, Vector.empty[ProcessedSystemDeploy])) {
+              case ((startHash, processedSystemDeploys), sd) =>
+                playSystemDeploy(startHash)(sd) >>= {
+                  case PlaySucceeded(stateHash, processedSystemDeploy, _) =>
+                    (stateHash, processedSystemDeploys :+ processedSystemDeploy).pure[F]
+                  case PlayFailed(Failed(_, errorMsg)) =>
+                    new Exception(
+                      "Unexpected system error during play of system deploy: " + errorMsg
+                    ).raiseError[F, (StateHash, Vector[ProcessedSystemDeploy])]
+                }
+            }
+          }
+          (postStateHash, processedSystemDeploys) = systemDeployProcessResult
+        } yield (postStateHash, processedDeploys, processedSystemDeploys)
       }
     }
 
