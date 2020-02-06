@@ -389,6 +389,11 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
       descr = "Path to the file where the encoded private key will be written to.",
       required = true
     )
+
+    val publicKeyPath = opt[Path](
+      descr = "Path to the file where the encoded public key will be written to.",
+      required = true
+    )
   }
   addSubcommand(keygen)
 

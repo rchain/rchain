@@ -229,7 +229,11 @@ object Configuration {
       case Some(options.machineVerifiableDag) => MachineVerifiableDag
       case Some(options.run)                  => Run
       case Some(options.keygen) =>
-        Keygen(options.keygen.algorithm(), options.keygen.privateKeyPath())
+        Keygen(
+          options.keygen.algorithm(),
+          options.keygen.privateKeyPath(),
+          options.keygen.publicKeyPath()
+        )
       case Some(options.lastFinalizedBlock) => LastFinalizedBlock
       case Some(options.isFinalized)        => IsFinalized(options.isFinalized.hash())
       case Some(options.bondStatus)         => BondStatus(options.bondStatus.validatorPublicKey())

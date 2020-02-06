@@ -128,15 +128,16 @@ object Main {
       case ShowBlocks(depth)            => DeployRuntime.getBlocks[Task](depth)
       case VisualizeDag(depth, showJustificationLines) =>
         DeployRuntime.visualizeDag[Task](depth, showJustificationLines)
-      case MachineVerifiableDag              => DeployRuntime.machineVerifiableDag[Task]
-      case DataAtName(name)                  => DeployRuntime.listenForDataAtName[Task](name)
-      case ContAtName(names)                 => DeployRuntime.listenForContinuationAtName[Task](names)
-      case Keygen(algorithm, privateKeyPath) => generateKey(conf, algorithm, privateKeyPath)
-      case LastFinalizedBlock                => DeployRuntime.lastFinalizedBlock[Task]
-      case IsFinalized(hash)                 => DeployRuntime.isFinalized[Task](hash)
-      case BondStatus(publicKey)             => DeployRuntime.bondStatus[Task](publicKey)
-      case Run                               => nodeProgram(conf)
-      case _                                 => conf.printHelp()
+      case MachineVerifiableDag => DeployRuntime.machineVerifiableDag[Task]
+      case DataAtName(name)     => DeployRuntime.listenForDataAtName[Task](name)
+      case ContAtName(names)    => DeployRuntime.listenForContinuationAtName[Task](names)
+      case Keygen(algorithm, privateKeyPath, publicKeyPath) =>
+        generateKey(conf, algorithm, privateKeyPath, publicKeyPath)
+      case LastFinalizedBlock    => DeployRuntime.lastFinalizedBlock[Task]
+      case IsFinalized(hash)     => DeployRuntime.isFinalized[Task](hash)
+      case BondStatus(publicKey) => DeployRuntime.bondStatus[Task](publicKey)
+      case Run                   => nodeProgram(conf)
+      case _                     => conf.printHelp()
     }
 
     Task.delay(
@@ -152,7 +153,8 @@ object Main {
   private def generateKey(
       conf: Configuration,
       algorithm: String,
-      privateKeyPath: Path
+      privateKeyPath: Path,
+      publicKeyPath: Path
   )(implicit console: ConsoleIO[Task]): Task[Unit] =
     for {
       password       <- ConsoleIO[Task].readPassword("Password for generated private key file: ")
@@ -161,13 +163,15 @@ object Main {
             ConsoleIO[Task].println("Passwords do not match. Try again.") >> generateKey(
               conf,
               algorithm,
-              privateKeyPath
+              privateKeyPath,
+              publicKeyPath
             )
           } else if (password.isEmpty) {
             ConsoleIO[Task].println("Password is empty. Try again.") >> generateKey(
               conf,
               algorithm,
-              privateKeyPath
+              privateKeyPath,
+              publicKeyPath
             )
           } else {
             for {
@@ -177,10 +181,17 @@ object Main {
                                  Task
                                    .raiseError(new IllegalStateException("Invalid algorithm name"))
                                )
-              (sk, _) = sigAlgorithm.newKeyPair
-              _       <- KeyUtil.writePrivateKey(sk, sigAlgorithm, password, privateKeyPath)
+              (sk, pk) = sigAlgorithm.newKeyPair
+              _ <- KeyUtil.writeKeys(
+                    sk,
+                    pk,
+                    sigAlgorithm,
+                    password,
+                    privateKeyPath,
+                    publicKeyPath
+                  )
               _ <- ConsoleIO[Task].println(
-                    s"Successfully generated private key: ${privateKeyPath.toAbsolutePath}"
+                    s"Successfully generated private key: ${privateKeyPath.toAbsolutePath} and public key: ${publicKeyPath.toAbsolutePath}"
                   )
             } yield ()
           }
