@@ -92,6 +92,7 @@ class WebApiRoutesTest extends FlatSpec with Matchers {
   )
 
   val prepareBlockNumber = 1L
+  val prepareSeqNumber   = 11L
   val prepareNames       = List[String]("a", "b", "c")
   val exPRS              = ExprBool(true)
   val deployRet          = "Success!\\nDeployId is: 111111111111"
@@ -119,7 +120,8 @@ class WebApiRoutesTest extends FlatSpec with Matchers {
         .delay({
           val names       = prepareNames
           val blockNumber = prepareBlockNumber
-          WebApi.PrepareResponse(names, blockNumber)
+          val seqNumber   = prepareSeqNumber
+          WebApi.PrepareResponse(names, blockNumber, seqNumber)
         })
         .toReaderT
 
@@ -146,6 +148,9 @@ class WebApiRoutesTest extends FlatSpec with Matchers {
 
     override def findDeploy(deployId: String): TaskEnv[LightBlockInfo] =
       Task.delay(lightBlock).toReaderT
+
+    // TODO: https://rchain.atlassian.net/browse/RCHAIN-4018
+    override def exploratoryDeploy(term: String): TaskEnv[ExploratoryDeployResponse] = ???
   }
 
   implicit val decodeByteString: Decoder[ByteString] = new Decoder[ByteString] {

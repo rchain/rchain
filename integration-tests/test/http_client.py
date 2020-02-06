@@ -21,6 +21,7 @@ class ApiStatus:
 class PrepareResponse:
     names: List[str]
     block_number: int
+    seq_number: int
 
 
 @dataclass
@@ -60,7 +61,7 @@ class HttpClient():
             rep = requests.get(prepare_deploy_url)
         _check_reponse(rep)
         message = rep.json()
-        return PrepareResponse(names=message['names'], block_number=message['blockNumber'])
+        return PrepareResponse(names=message['names'], block_number=message['blockNumber'], seq_number=message['seqNumber'])
 
     def deploy(self, term: str, phlo_limit: int, phlo_price: int, valid_after_block_number: int, deployer: PrivateKey) -> str:
         timestamp = int(time.time()* 1000)

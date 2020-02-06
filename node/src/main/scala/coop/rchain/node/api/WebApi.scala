@@ -38,6 +38,8 @@ trait WebApi[F[_]] {
   def getBlocks(depth: Option[Int]): F[List[LightBlockInfo]]
 
   def findDeploy(deployId: String): F[LightBlockInfo]
+
+  def exploratoryDeploy(term: String): F[ExploratoryDeployResponse]
 }
 
 object WebApi {
@@ -47,10 +49,10 @@ object WebApi {
     import WebApiSyntax._
 
     def prepareDeploy(req: Option[PrepareRequest]): F[PrepareResponse] = {
-      val blockNumber = BlockAPI
+      val blockNumbers = BlockAPI
         .getBlocks[F](1.some)
         .flatMap(_.liftToBlockApiErr)
-        .map(_.headOption.map(_.blockNumber).getOrElse(-1L))
+        .map(_.headOption.map(b => (b.blockNumber, b.seqNum)).getOrElse((-1L, -1L)))
 
       val previewNames = req.fold(List[String]().pure) { r =>
         BlockAPI
@@ -59,7 +61,9 @@ object WebApi {
           .map(_.map(toHex).toList)
       }
 
-      previewNames.map2(blockNumber)(PrepareResponse)
+      previewNames.map2(blockNumbers) {
+        case (names, (blockNumber, seqNumber)) => PrepareResponse(names, blockNumber, seqNumber)
+      }
     }
 
     def deploy(request: DeployRequest): F[String] =
@@ -84,6 +88,12 @@ object WebApi {
       BlockAPI
         .findDeploy[F](toByteString(deployId))
         .flatMap(_.liftToBlockApiErr)
+
+    def exploratoryDeploy(term: String): F[ExploratoryDeployResponse] =
+      BlockAPI
+        .exploratoryDeploy(term)
+        .flatMap(_.liftToBlockApiErr)
+        .map(toExploratoryResponse)
 
     def status: F[ApiStatus] =
       ApiStatus(
@@ -142,6 +152,11 @@ object WebApi {
       block: LightBlockInfo
   )
 
+  final case class ExploratoryDeployResponse(
+      expr: Seq[RhoExpr],
+      block: LightBlockInfo
+  )
+
   final case class PrepareRequest(
       deployer: String,
       timestamp: Long,
@@ -150,7 +165,8 @@ object WebApi {
 
   final case class PrepareResponse(
       names: List[String],
-      blockNumber: Long
+      blockNumber: Long,
+      seqNumber: Long
   )
 
   final case class ApiStatus(
@@ -224,11 +240,14 @@ object WebApi {
     // Map
     else if (exp.exprInstance.isEMapBody) {
       val fields = for {
-        (k, v) <- exp.getEMapBody.ps
-        expr   <- k.exprs.headOption
-        // Only String keys are accepted
-        ExprString(key) <- exprFromExprProto(expr)
-        value           <- exprFromParProto(v)
+        (k, v)  <- exp.getEMapBody.ps
+        keyExpr <- exprFromParProto(k)
+        key <- keyExpr match {
+                case ExprString(str) => str.some
+                case ExprBytes(str)  => str.some
+                case _               => none
+              }
+        value <- exprFromParProto(v)
       } yield (key, value)
       ExprMap(fields.toMap).some
     } else none
@@ -268,6 +287,12 @@ object WebApi {
       RhoExprWithBlock(expr, block) +: acc
     }
     DataResponse(exprsWithBlock, length)
+  }
+
+  private def toExploratoryResponse(data: (Seq[Par], LightBlockInfo)) = {
+    val (pars, lightBlockInfo) = data
+    val rhoExprs               = pars.flatMap(exprFromParProto)
+    ExploratoryDeployResponse(rhoExprs, lightBlockInfo)
   }
 
   object WebApiSyntax {

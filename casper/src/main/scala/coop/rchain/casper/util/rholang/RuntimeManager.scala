@@ -21,7 +21,7 @@ import coop.rchain.crypto.codec.Base16
 import coop.rchain.casper.util.{ConstructDeploy, EventConverter}
 import coop.rchain.crypto.PublicKey
 import coop.rchain.crypto.hash.Blake2b512Random
-import coop.rchain.crypto.signatures.Signed
+import coop.rchain.crypto.signatures.{Secp256k1, Signed}
 import coop.rchain.metrics.Metrics.Source
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.models.BlockHash.BlockHash
@@ -71,6 +71,8 @@ trait RuntimeManager[F[_]] {
   ): F[Seq[(Seq[BindPattern], Par)]]
   def emptyStateHash: StateHash
   def withRuntimeLock[A](f: Runtime[F] => F[A]): F[A]
+  // Executes deploy as user deploy with immediate rollback
+  def playExploratoryDeploy(term: String, startHash: StateHash): F[Seq[Par]]
 }
 
 class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log](
@@ -681,8 +683,9 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log](
   }
 
   def computeBonds(hash: StateHash): F[Seq[Bond]] = {
-    // Create a deploy with built-in private key
-    val deploy = ConstructDeploy.sourceDeployNow(bondsQuerySource)
+    // Create a deploy with newly created private key
+    val (privKey, _) = Secp256k1.newKeyPair
+    val deploy       = ConstructDeploy.sourceDeployNow(bondsQuerySource, sec = privKey)
     captureResults(hash, deploy)
       .ensureOr(
         bondsPar =>
@@ -704,6 +707,20 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log](
        #   }
        # }
        """.stripMargin('#')
+
+  // Executes deploy as user deploy with immediate rollback
+  // - InterpreterError is rethrown
+  def playExploratoryDeploy(term: String, hash: StateHash): F[Seq[Par]] = {
+    // Create a deploy with newly created private key
+    val (privKey, _) = Secp256k1.newKeyPair
+    val deploy       = ConstructDeploy.sourceDeployNow(term, sec = privKey)
+    // Create return channel as first private name created in deploy term
+    val rand = Tools.unforgeableNameRng(deploy.pk, deploy.data.timestamp)
+    import coop.rchain.models.rholang.implicits._
+    val returnName: Par = GPrivate(ByteString.copyFrom(rand.next()))
+    // Execute deploy on top of specified block hash
+    captureResultsWithErrors(hash, deploy, returnName)
+  }
 
   def withRuntimeLock[A](f: Runtime[F] => F[A]): F[A] =
     Sync[F].bracket {
