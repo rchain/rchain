@@ -40,7 +40,8 @@ import coop.rchain.shared.Log
 
 trait RuntimeManager[F[_]] {
   def playSystemDeploy[S <: SystemDeploy](startHash: StateHash)(
-      systemDeploy: S
+      systemDeploy: S,
+      runtime: Runtime[F]
   ): F[SystemDeployPlayResult[systemDeploy.Result]]
   def replaySystemDeploy[S <: SystemDeploy](startHash: StateHash)(
       systemDeploy: S,
@@ -124,41 +125,41 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log](
   }
 
   def playSystemDeploy[S <: SystemDeploy](stateHash: StateHash)(
-      systemDeploy: S
+      systemDeploy: S,
+      runtime: Runtime[F]
   ): F[SystemDeployPlayResult[systemDeploy.Result]] =
-    withResetRuntimeLock(stateHash) { runtime =>
-      playSystemDeployInternal(runtime)(systemDeploy) >>= {
-        case (eventLog, Right(result)) =>
-          runtime.space.createCheckpoint().map(_.root.toByteString) >>= { finalStateHash =>
-            systemDeploy match {
-              case SlashDeploy(invalidBlockHash, pk, _) =>
-                SystemDeployPlayResult
-                  .playSucceeded(
-                    finalStateHash,
-                    eventLog,
-                    SystemDeployData.from(invalidBlockHash, pk),
-                    result
-                  )
-                  .pure
-              case CloseBlockDeploy(_) =>
-                SystemDeployPlayResult
-                  .playSucceeded(
-                    finalStateHash,
-                    eventLog,
-                    SystemDeployData.from(),
-                    result
-                  )
-                  .pure
-              case _ =>
-                SystemDeployPlayResult
-                  .playSucceeded(finalStateHash, eventLog, SystemDeployData.empty, result)
-                  .pure
-            }
+    playSystemDeployInternal(runtime)(systemDeploy) >>= {
+      case (eventLog, Right(result)) =>
+        runtime.space.createCheckpoint().map(_.root.toByteString) >>= { finalStateHash =>
+          systemDeploy match {
+            case SlashDeploy(invalidBlockHash, pk, _) =>
+              SystemDeployPlayResult
+                .playSucceeded(
+                  finalStateHash,
+                  eventLog,
+                  SystemDeployData.from(invalidBlockHash, pk),
+                  result
+                )
+                .pure
+            case CloseBlockDeploy(_) =>
+              SystemDeployPlayResult
+                .playSucceeded(
+                  finalStateHash,
+                  eventLog,
+                  SystemDeployData.from(),
+                  result
+                )
+                .pure
+            case _ =>
+              SystemDeployPlayResult
+                .playSucceeded(finalStateHash, eventLog, SystemDeployData.empty, result)
+                .pure
           }
-        case (eventLog, Left(systemDeployError)) =>
-          SystemDeployPlayResult.playFailed(eventLog, systemDeployError).pure
-      }
+        }
+      case (eventLog, Left(systemDeployError)) =>
+        SystemDeployPlayResult.playFailed(eventLog, systemDeployError).pure
     }
+
   private def playSystemDeployInternal[S <: SystemDeploy](runtime: Runtime[F])(
       systemDeploy: S
   ): F[(Vector[Event], Either[SystemDeployError, systemDeploy.Result])] =
@@ -303,7 +304,7 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log](
             import cats.instances.list._
             systemDeploys.toList.foldM((startHash, Vector.empty[ProcessedSystemDeploy])) {
               case ((startHash, processedSystemDeploys), sd) =>
-                playSystemDeploy(startHash)(sd) >>= {
+                playSystemDeploy(startHash)(sd, runtime) >>= {
                   case PlaySucceeded(stateHash, processedSystemDeploy, _) =>
                     (stateHash, processedSystemDeploys :+ processedSystemDeploy).pure[F]
                   case PlayFailed(Failed(_, errorMsg)) =>
