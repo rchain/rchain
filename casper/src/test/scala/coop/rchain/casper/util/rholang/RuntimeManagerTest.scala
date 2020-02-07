@@ -62,6 +62,8 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
     rm   <- Resource.liftF[Task, RuntimeManager[Task]](RuntimeManager.fromRuntime[Task](r))
   } yield (r, rm)
 
+  def closeBlockDeploy(hashRng: Array[Byte]) = CloseBlockDeploy(Tools.rng(hashRng))
+
   private def computeState[F[_]: Functor](
       runtimeManager: RuntimeManager[F],
       deploy: Signed[DeployData],
@@ -265,7 +267,7 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
         time     <- timeF.currentMillis
         playStateHash0AndProcessedDeploys0 <- runtimeManager.computeState(gps)(
                                                deploys0.toList,
-                                               Nil,
+                                               closeBlockDeploy(Array.empty) :: Nil,
                                                BlockData(
                                                  time,
                                                  0L,
@@ -294,7 +296,7 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
         _                       = assert(bonds0 == bonds1)
         playStateHash1AndProcessedDeploys1 <- runtimeManager.computeState(playStateHash0)(
                                                deploys1.toList,
-                                               Nil,
+                                               closeBlockDeploy(Array.empty) :: Nil,
                                                BlockData(
                                                  time,
                                                  0L,
@@ -474,7 +476,7 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
         invalidBlocks = Map.empty[BlockHash, Validator]
         computeStateResult <- runtimeManager.computeState(genPostState)(
                                deploy :: Nil,
-                               Nil,
+                               closeBlockDeploy(Array.empty) :: Nil,
                                blockData,
                                invalidBlocks
                              )
@@ -509,12 +511,11 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
         time          <- timeF.currentMillis
         genPostState  = genesis.body.state.postStateHash
         blockData     = BlockData(time, 0L, genesisContext.validatorPks.head, Array[Byte]())
-        sysDeploy     = CloseBlockDeploy(Tools.rng(blockData.parentHash))
         invalidBlocks = Map.empty[BlockHash, Validator]
         firstDeploy <- mgr
                         .computeState(genPostState)(
                           deploy0 :: Nil,
-                          sysDeploy :: Nil,
+                          closeBlockDeploy(Array.empty) :: Nil,
                           blockData,
                           invalidBlocks
                         )
@@ -522,7 +523,7 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
         secondDeploy <- mgr
                          .computeState(genPostState)(
                            deploy1 :: Nil,
-                           sysDeploy :: Nil,
+                           closeBlockDeploy(Array.empty) :: Nil,
                            blockData,
                            invalidBlocks
                          )
@@ -530,7 +531,7 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
         compoundDeploy <- mgr
                            .computeState(genPostState)(
                              deploy0 :: deploy1 :: Nil,
-                             sysDeploy :: Nil,
+                             closeBlockDeploy(Array.empty) :: Nil,
                              blockData,
                              invalidBlocks
                            )
@@ -651,17 +652,22 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
         genPostState  = genesis.body.state.postStateHash
         blockData     = BlockData(time, 0L, genesisContext.validatorPks.head, Array[Byte]())
         invalidBlocks = Map.empty[BlockHash, Validator]
-        processedDeploys <- runtimeManager
-                             .computeState(genPostState)(Seq(deploy), Nil, blockData, invalidBlocks)
-                             .map(_._2)
-        processedDeploy     = processedDeploys.head
-        processedDeployCost = processedDeploy.cost.cost
+        newState <- runtimeManager
+                     .computeState(genPostState)(
+                       Seq(deploy),
+                       Seq(closeBlockDeploy(Array.empty)),
+                       blockData,
+                       invalidBlocks
+                     )
+        (_, processedDeploys, processedSystemDeploys) = newState
+        processedDeploy                               = processedDeploys.head
+        processedDeployCost                           = processedDeploy.cost.cost
         invalidProcessedDeploy = processedDeploy.copy(
           cost = PCost(processedDeployCost - 1)
         )
         result <- runtimeManager.replayComputeState(genPostState)(
                    Seq(invalidProcessedDeploy),
-                   Nil,
+                   processedSystemDeploys,
                    blockData,
                    invalidBlocks,
                    isGenesis = false
