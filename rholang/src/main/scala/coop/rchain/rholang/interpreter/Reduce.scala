@@ -118,7 +118,8 @@ class DebruijnInterpreter[M[_], F[_]](
       continuation: TaggedContinuation,
       dataList: Seq[(Par, ListParWithRandom, ListParWithRandom, Boolean)]
   )(ops: M[Unit]*) =
-    (dispatch(continuation, dataList) :: ops.toList).parSequence_
+    // Collect errors from all parallel execution paths (pars)
+    parTraverseSafe(dispatch(continuation, dataList) +: ops.toVector)(identity)
 
   private[this] def dispatch(
       continuation: TaggedContinuation,
@@ -180,17 +181,17 @@ class DebruijnInterpreter[M[_], F[_]](
     else {
 
       // Collect errors from all parallel execution paths (pars)
-      terms.zipWithIndex.toVector
-        .parTraverse {
-          case (term, index) =>
-            eval(term)(env, split(index))
-              .map(_ => none[Throwable])
-              .handleError(_.some)
-        }
-        .map(_.flattenOption)
-        .flatMap(aggregateEvaluatorErrors)
+      parTraverseSafe(terms.zipWithIndex.toVector) {
+        case (term, index) =>
+          eval(term)(env, split(index))
+      }
     }
   }
+
+  private def parTraverseSafe[A](xs: Vector[A])(op: A => M[Unit]): M[Unit] =
+    xs.parTraverse(op(_).map(_ => none[Throwable]).handleError(_.some))
+      .map(_.flattenOption)
+      .flatMap(aggregateEvaluatorErrors)
 
   private def aggregateEvaluatorErrors(errors: Vector[Throwable]) = errors match {
     // No errors
