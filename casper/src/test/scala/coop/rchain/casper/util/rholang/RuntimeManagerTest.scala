@@ -133,7 +133,7 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
           case Right(PlaySucceeded(finalPlayStateHash, processedSystemDeploy, playResult)) =>
             assert(resultAssertion(playResult))
             runtimeManager
-              .replaySystemDeploy(startState)(replaySystemDeploy, processedSystemDeploy)
+              .replaySystemDeploy(startState)(replaySystemDeploy, processedSystemDeploy, runtime)
               .attempt
               .map {
                 case Right(Right(systemDeployReplayResult)) =>

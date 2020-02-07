@@ -45,7 +45,8 @@ trait RuntimeManager[F[_]] {
   ): F[SystemDeployPlayResult[systemDeploy.Result]]
   def replaySystemDeploy[S <: SystemDeploy](startHash: StateHash)(
       systemDeploy: S,
-      processedSystemDeploy: ProcessedSystemDeploy
+      processedSystemDeploy: ProcessedSystemDeploy,
+      runtime: Runtime[F]
   ): F[Either[ReplayFailure, SystemDeployReplayResult[systemDeploy.Result]]]
   def captureResults(
       startHash: StateHash,
@@ -128,7 +129,8 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log](
       systemDeploy: S,
       runtime: Runtime[F]
   ): F[SystemDeployPlayResult[systemDeploy.Result]] =
-    playSystemDeployInternal(runtime)(systemDeploy) >>= {
+    runtime.space.reset(Blake2b256Hash.fromByteString(stateHash)) >>
+      playSystemDeployInternal(runtime)(systemDeploy) >>= {
       case (eventLog, Right(result)) =>
         runtime.space.createCheckpoint().map(_.root.toByteString) >>= { finalStateHash =>
           systemDeploy match {
@@ -191,50 +193,50 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log](
       log                      = postDeploySoftCheckpoint.log
     } yield (log.map(EventConverter.toCasperEvent).toVector, resultOrSystemDeployError)
 
+  // TODO: method is used only in tests
   def replaySystemDeploy[S <: SystemDeploy](stateHash: StateHash)(
       systemDeploy: S,
-      processedSystemDeploy: ProcessedSystemDeploy
-  ): F[Either[ReplayFailure, SystemDeployReplayResult[systemDeploy.Result]]] = withRuntimeLock {
-    runtime =>
-      for {
-        _ <- runtime.replaySpace.rigAndReset(
-              Blake2b256Hash.fromByteString(stateHash),
-              processedSystemDeploy.eventList.map(EventConverter.toRspaceEvent)
-            )
-        expectedFailure = processedSystemDeploy
-          .fold(_ => None, (_, errorMsg) => Some(SystemDeployError(errorMsg)))
-        replayed <- replaySystemDeployInternal(runtime)(systemDeploy, expectedFailure)
-                     .flatMap(
-                       result =>
-                         runtime.replaySpace
-                           .checkReplayData()
-                           .attemptT
-                           .leftMap {
-                             case replayException: ReplayException =>
-                               ReplayFailure.unusedCOMMEvent(replayException)
-                             case throwable => ReplayFailure.internalError(throwable)
-                           }
-                           .semiflatMap(
-                             _ =>
-                               result match {
-                                 case Right(value) =>
-                                   runtime.replaySpace
-                                     .createCheckpoint()
-                                     .map(
-                                       checkpoint =>
-                                         SystemDeployReplayResult
-                                           .replaySucceeded(checkpoint.root.toByteString, value)
-                                     )
-                                 case Left(failure) =>
-                                   SystemDeployReplayResult
-                                     .replayFailed[systemDeploy.Result](failure)
-                                     .pure
-                               }
-                           )
-                     )
-                     .value
-      } yield replayed
-  }
+      processedSystemDeploy: ProcessedSystemDeploy,
+      runtime: Runtime[F]
+  ): F[Either[ReplayFailure, SystemDeployReplayResult[systemDeploy.Result]]] =
+    for {
+      _ <- runtime.replaySpace.rigAndReset(
+            Blake2b256Hash.fromByteString(stateHash),
+            processedSystemDeploy.eventList.map(EventConverter.toRspaceEvent)
+          )
+      expectedFailure = processedSystemDeploy
+        .fold(_ => None, (_, errorMsg) => Some(SystemDeployError(errorMsg)))
+      replayed <- replaySystemDeployInternal(runtime)(systemDeploy, expectedFailure)
+                   .flatMap(
+                     result =>
+                       runtime.replaySpace
+                         .checkReplayData()
+                         .attemptT
+                         .leftMap {
+                           case replayException: ReplayException =>
+                             ReplayFailure.unusedCOMMEvent(replayException)
+                           case throwable => ReplayFailure.internalError(throwable)
+                         }
+                         .semiflatMap(
+                           _ =>
+                             result match {
+                               case Right(value) =>
+                                 runtime.replaySpace
+                                   .createCheckpoint()
+                                   .map(
+                                     checkpoint =>
+                                       SystemDeployReplayResult
+                                         .replaySucceeded(checkpoint.root.toByteString, value)
+                                   )
+                               case Left(failure) =>
+                                 SystemDeployReplayResult
+                                   .replayFailed[systemDeploy.Result](failure)
+                                   .pure
+                             }
+                         )
+                   )
+                   .value
+    } yield replayed
 
   private def replaySystemDeployInternal[S <: SystemDeploy](
       runtime: Runtime[F]
