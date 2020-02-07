@@ -166,6 +166,10 @@ in {
                   returnCh!(coopVault)
                 }
               } |
+              // Exposes initial PoS vault on returnCh.
+              contract PoS(@"getInitialPosVault", returnCh) = {
+                returnCh!(posVault)
+              } |
               // Exposes epochLength parameter to PoSTest.
               contract PoS(@"getEpochLength", returnCh) = {
                 returnCh!($$epochLength$$)

@@ -45,9 +45,9 @@ match (
           @posRevAddress <- posRevAddressCh;
           @(_, ListOps)  <- ListOpsCh;
           @sysAuthToken  <- sysAuthTokenCh) {
-        stdlog!("info", {"posRevAddress":posRevAddress}) |
-        @RevVault!("findOrCreate", posRevAddress, *posVaultCh) |
-        for (@(true, posVault) <- posVaultCh) {
+        stdlog!("info", {"posRevAddress" : posRevAddress}) |
+        @PoS!("getInitialPosVault", *posVaultCh) |
+        for (@posVault <- posVaultCh) {
           @RhoSpec!("testSuite", *setup,
             [
               ("PoS is created with empty rewards", *test_make_pos_succeeds),
@@ -693,7 +693,6 @@ match (
                   }
                 }
               } |
-
               @posVault!("balance", *posVaultBalanceCh) |
               for (@posVaultBalance <- posVaultBalanceCh) {
                 @PoS!("getActiveValidatorVaults", *vaultsCh) |
