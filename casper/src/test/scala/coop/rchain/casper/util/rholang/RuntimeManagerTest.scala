@@ -70,10 +70,11 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
     for {
       res <- runtimeManager.computeState(stateHash)(
               deploy :: Nil,
+               Nil,
               BlockData(deploy.data.timestamp, 0, genesisContext.validatorPks.head, Array[Byte]()),
               Map.empty[BlockHash, Validator]
             )
-      (hash, Seq(result)) = res
+      (hash, Seq(result), _) = res
     } yield (hash, result)
 
   private def replayComputeState[F[_]: Functor](runtimeManager: RuntimeManager[F])(
