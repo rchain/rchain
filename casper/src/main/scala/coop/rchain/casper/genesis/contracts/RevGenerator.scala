@@ -18,22 +18,22 @@ object RevGenerator {
   private def vaultInitCode(userVaults: Seq[Vault]): String = {
     def initVault(userVault: Vault, index: Int): String =
       s"""initVault!(*x$index, "${userVault.revAddress.toBase58}", ${userVault.initialBalance})"""
-    def mapEntry(userVault: Vault, index: Int): String =
-      s"""  "${userVault.revAddress.toBase58}" : *x$index"""
+    def treeHashMapEntry(userVault: Vault, index: Int): String =
+      s"""TreeHashMap!("set", vaultMap, "${userVault.revAddress.toBase58}", *x$index, *ack$index)"""
 
     if (userVaults.isEmpty) {
-      "vaultMapStore!({})"
+      "Nil"
     } else {
       val vaultsMap: String =
-        s"""
-           #{
-           #${concatenate(userVaults)(mapEntry, separator = ",\n")}
-           #}
-           #""".stripMargin('#')
+        s"""${concatenate(userVaults)(treeHashMapEntry, separator = "| \n")}"""
+
+      // Sets all vaults in the TreeHashMap and catches the acknowledgements from each set.
       s"""
-         #new ${userVaults.indices.map("x" + _).mkString(", ")} in {
-         #  vaultMapStore!($vaultsMap) |
-         #  ${concatenate(userVaults)(initVault)}
+         #new ${userVaults.indices.map(i => s"x$i, ack$i").mkString(", ")} in {
+         #  $vaultsMap |
+         #  for (${userVaults.indices.map("_ <- ack" + _).mkString("; ")}) {
+         #    ${concatenate(userVaults)(initVault)}
+         #  }
          #}
          #""".stripMargin('#')
     }
@@ -46,7 +46,7 @@ object RevGenerator {
          #   for (@(_, RevVault) <- revVaultCh) {
          #     new ret in {
          #       @RevVault!("init", *ret) |
-         #       for (vaultMapStore, initVault <- ret) {
+         #       for (TreeHashMap, @vaultMap, initVault <- ret) {
          #         ${vaultInitCode(userVaults)}
          #       }
          #     }
