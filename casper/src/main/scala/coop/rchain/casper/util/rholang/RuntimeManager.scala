@@ -11,6 +11,8 @@ import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.rholang.RuntimeManager.{evaluate, StateHash}
 import SystemDeployPlatformFailure._
 import SystemDeployUserError._
+import coop.rchain.casper.protocol.ProcessedSystemDeploy.Failed
+import coop.rchain.casper.util.rholang.SystemDeployPlayResult.{PlayFailed, PlaySucceeded}
 import coop.rchain.casper.util.rholang.costacc.{
   CloseBlockDeploy,
   PreChargeDeploy,
@@ -38,11 +40,13 @@ import coop.rchain.shared.Log
 
 trait RuntimeManager[F[_]] {
   def playSystemDeploy[S <: SystemDeploy](startHash: StateHash)(
-      systemDeploy: S
+      systemDeploy: S,
+      runtime: Runtime[F]
   ): F[SystemDeployPlayResult[systemDeploy.Result]]
   def replaySystemDeploy[S <: SystemDeploy](startHash: StateHash)(
       systemDeploy: S,
-      processedSystemDeploy: ProcessedSystemDeploy
+      processedSystemDeploy: ProcessedSystemDeploy,
+      runtime: Runtime[F]
   ): F[Either[ReplayFailure, SystemDeployReplayResult[systemDeploy.Result]]]
   def captureResults(
       startHash: StateHash,
@@ -57,9 +61,10 @@ trait RuntimeManager[F[_]] {
   ): F[Either[ReplayFailure, StateHash]]
   def computeState(hash: StateHash)(
       terms: Seq[Signed[DeployData]],
+      systemDeploys: Seq[SystemDeploy],
       blockData: BlockData,
       invalidBlocks: Map[BlockHash, Validator]
-  ): F[(StateHash, Seq[ProcessedDeploy])]
+  ): F[(StateHash, Seq[ProcessedDeploy], Seq[ProcessedSystemDeploy])]
   def computeGenesis(
       terms: Seq[Signed[DeployData]],
       blockTime: Long
@@ -121,41 +126,42 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log](
   }
 
   def playSystemDeploy[S <: SystemDeploy](stateHash: StateHash)(
-      systemDeploy: S
+      systemDeploy: S,
+      runtime: Runtime[F]
   ): F[SystemDeployPlayResult[systemDeploy.Result]] =
-    withResetRuntimeLock(stateHash) { runtime =>
+    runtime.space.reset(Blake2b256Hash.fromByteString(stateHash)) >>
       playSystemDeployInternal(runtime)(systemDeploy) >>= {
-        case (eventLog, Right(result)) =>
-          runtime.space.createCheckpoint().map(_.root.toByteString) >>= { finalStateHash =>
-            systemDeploy match {
-              case SlashDeploy(invalidBlockHash, pk, _) =>
-                SystemDeployPlayResult
-                  .playSucceeded(
-                    finalStateHash,
-                    eventLog,
-                    SystemDeployData.from(invalidBlockHash, pk),
-                    result
-                  )
-                  .pure
-              case CloseBlockDeploy(_) =>
-                SystemDeployPlayResult
-                  .playSucceeded(
-                    finalStateHash,
-                    eventLog,
-                    SystemDeployData.from(),
-                    result
-                  )
-                  .pure
-              case _ =>
-                SystemDeployPlayResult
-                  .playSucceeded(finalStateHash, eventLog, SystemDeployData.empty, result)
-                  .pure
-            }
+      case (eventLog, Right(result)) =>
+        runtime.space.createCheckpoint().map(_.root.toByteString) >>= { finalStateHash =>
+          systemDeploy match {
+            case SlashDeploy(invalidBlockHash, pk, _) =>
+              SystemDeployPlayResult
+                .playSucceeded(
+                  finalStateHash,
+                  eventLog,
+                  SystemDeployData.from(invalidBlockHash, pk),
+                  result
+                )
+                .pure
+            case CloseBlockDeploy(_) =>
+              SystemDeployPlayResult
+                .playSucceeded(
+                  finalStateHash,
+                  eventLog,
+                  SystemDeployData.from(),
+                  result
+                )
+                .pure
+            case _ =>
+              SystemDeployPlayResult
+                .playSucceeded(finalStateHash, eventLog, SystemDeployData.empty, result)
+                .pure
           }
-        case (eventLog, Left(systemDeployError)) =>
-          SystemDeployPlayResult.playFailed(eventLog, systemDeployError).pure
-      }
+        }
+      case (eventLog, Left(systemDeployError)) =>
+        SystemDeployPlayResult.playFailed(eventLog, systemDeployError).pure
     }
+
   private def playSystemDeployInternal[S <: SystemDeploy](runtime: Runtime[F])(
       systemDeploy: S
   ): F[(Vector[Event], Either[SystemDeployError, systemDeploy.Result])] =
@@ -187,50 +193,50 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log](
       log                      = postDeploySoftCheckpoint.log
     } yield (log.map(EventConverter.toCasperEvent).toVector, resultOrSystemDeployError)
 
+  // TODO: method is used only in tests
   def replaySystemDeploy[S <: SystemDeploy](stateHash: StateHash)(
       systemDeploy: S,
-      processedSystemDeploy: ProcessedSystemDeploy
-  ): F[Either[ReplayFailure, SystemDeployReplayResult[systemDeploy.Result]]] = withRuntimeLock {
-    runtime =>
-      for {
-        _ <- runtime.replaySpace.rigAndReset(
-              Blake2b256Hash.fromByteString(stateHash),
-              processedSystemDeploy.eventList.map(EventConverter.toRspaceEvent)
-            )
-        expectedFailure = processedSystemDeploy
-          .fold(_ => None, (_, errorMsg) => Some(SystemDeployError(errorMsg)))
-        replayed <- replaySystemDeployInternal(runtime)(systemDeploy, expectedFailure)
-                     .flatMap(
-                       result =>
-                         runtime.replaySpace
-                           .checkReplayData()
-                           .attemptT
-                           .leftMap {
-                             case replayException: ReplayException =>
-                               ReplayFailure.unusedCOMMEvent(replayException)
-                             case throwable => ReplayFailure.internalError(throwable)
-                           }
-                           .semiflatMap(
-                             _ =>
-                               result match {
-                                 case Right(value) =>
-                                   runtime.replaySpace
-                                     .createCheckpoint()
-                                     .map(
-                                       checkpoint =>
-                                         SystemDeployReplayResult
-                                           .replaySucceeded(checkpoint.root.toByteString, value)
-                                     )
-                                 case Left(failure) =>
-                                   SystemDeployReplayResult
-                                     .replayFailed[systemDeploy.Result](failure)
-                                     .pure
-                               }
-                           )
-                     )
-                     .value
-      } yield replayed
-  }
+      processedSystemDeploy: ProcessedSystemDeploy,
+      runtime: Runtime[F]
+  ): F[Either[ReplayFailure, SystemDeployReplayResult[systemDeploy.Result]]] =
+    for {
+      _ <- runtime.replaySpace.rigAndReset(
+            Blake2b256Hash.fromByteString(stateHash),
+            processedSystemDeploy.eventList.map(EventConverter.toRspaceEvent)
+          )
+      expectedFailure = processedSystemDeploy
+        .fold(_ => None, (_, errorMsg) => Some(SystemDeployError(errorMsg)))
+      replayed <- replaySystemDeployInternal(runtime)(systemDeploy, expectedFailure)
+                   .flatMap(
+                     result =>
+                       runtime.replaySpace
+                         .checkReplayData()
+                         .attemptT
+                         .leftMap {
+                           case replayException: ReplayException =>
+                             ReplayFailure.unusedCOMMEvent(replayException)
+                           case throwable => ReplayFailure.internalError(throwable)
+                         }
+                         .semiflatMap(
+                           _ =>
+                             result match {
+                               case Right(value) =>
+                                 runtime.replaySpace
+                                   .createCheckpoint()
+                                   .map(
+                                     checkpoint =>
+                                       SystemDeployReplayResult
+                                         .replaySucceeded(checkpoint.root.toByteString, value)
+                                   )
+                               case Left(failure) =>
+                                 SystemDeployReplayResult
+                                   .replayFailed[systemDeploy.Result](failure)
+                                   .pure
+                             }
+                         )
+                   )
+                   .value
+    } yield replayed
 
   private def replaySystemDeployInternal[S <: SystemDeploy](
       runtime: Runtime[F]
@@ -279,22 +285,39 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log](
 
   def computeState(startHash: StateHash)(
       terms: Seq[Signed[DeployData]],
+      systemDeploys: Seq[SystemDeploy],
       blockData: BlockData,
       invalidBlocks: Map[BlockHash, Validator] = Map.empty[BlockHash, Validator]
-  ): F[(StateHash, Seq[ProcessedDeploy])] =
+  ): F[(StateHash, Seq[ProcessedDeploy], Seq[ProcessedSystemDeploy])] =
     withRuntimeLock { runtime =>
       Span[F].trace(computeStateLabel) {
         for {
           _ <- runtime.blockData.set(blockData)
           _ <- setInvalidBlocks(invalidBlocks, runtime)
           _ <- Span[F].mark("before-process-deploys")
-          result <- processDeploys(
-                     runtime,
-                     startHash,
-                     terms,
-                     processDeployWithCostAccounting(runtime)
-                   )
-        } yield result
+          deployProcessResult <- processDeploys(
+                                  runtime,
+                                  startHash,
+                                  terms,
+                                  processDeployWithCostAccounting(runtime)
+                                )
+          (startHash, processedDeploys) = deployProcessResult
+          systemDeployProcessResult <- {
+            import cats.instances.list._
+            systemDeploys.toList.foldM((startHash, Vector.empty[ProcessedSystemDeploy])) {
+              case ((startHash, processedSystemDeploys), sd) =>
+                playSystemDeploy(startHash)(sd, runtime) >>= {
+                  case PlaySucceeded(stateHash, processedSystemDeploy, _) =>
+                    (stateHash, processedSystemDeploys :+ processedSystemDeploy).pure[F]
+                  case PlayFailed(Failed(_, errorMsg)) =>
+                    new Exception(
+                      "Unexpected system error during play of system deploy: " + errorMsg
+                    ).raiseError[F, (StateHash, Vector[ProcessedSystemDeploy])]
+                }
+            }
+          }
+          (postStateHash, processedSystemDeploys) = systemDeployProcessResult
+        } yield (postStateHash, processedDeploys, processedSystemDeploys)
       }
     }
 

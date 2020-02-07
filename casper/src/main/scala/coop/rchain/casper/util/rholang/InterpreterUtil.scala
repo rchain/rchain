@@ -188,26 +188,13 @@ object InterpreterUtil {
                               _.nonEmpty
                             )
         preStateHash <- computeParentsPostState(nonEmptyParents, dag, runtimeManager)
-        resultDeploys <- runtimeManager.computeState(preStateHash)(
-                          deploys,
-                          blockData,
-                          invalidBlocks
-                        )
-        (startHash, processedDeploys) = resultDeploys
-        resultSystemDeploys <- {
-          import cats.instances.list._
-          systemDeploys.toList.foldM((startHash, Vector.empty[ProcessedSystemDeploy])) {
-            case ((startHash, processedSystemDeploys), sd) =>
-              runtimeManager.playSystemDeploy(startHash)(sd) >>= {
-                case PlaySucceeded(stateHash, processedSystemDeploy, _) =>
-                  (stateHash, processedSystemDeploys :+ processedSystemDeploy).pure[F]
-                case PlayFailed(Failed(_, errorMsg)) =>
-                  new Exception("Unexpected system error during play of system deploy: " + errorMsg)
-                    .raiseError[F, (StateHash, Vector[ProcessedSystemDeploy])]
-              }
-          }
-        }
-        (postStateHash, processedSystemDeploys) = resultSystemDeploys
+        result <- runtimeManager.computeState(preStateHash)(
+                   deploys,
+                   systemDeploys,
+                   blockData,
+                   invalidBlocks
+                 )
+        (postStateHash, processedDeploys, processedSystemDeploys) = result
       } yield (preStateHash, postStateHash, processedDeploys, processedSystemDeploys)
     }
 

@@ -62,6 +62,8 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
     rm   <- Resource.liftF[Task, RuntimeManager[Task]](RuntimeManager.fromRuntime[Task](r))
   } yield (r, rm)
 
+  def closeBlockDeploy(hashRng: Array[Byte]) = CloseBlockDeploy(Tools.rng(hashRng))
+
   private def computeState[F[_]: Functor](
       runtimeManager: RuntimeManager[F],
       deploy: Signed[DeployData],
@@ -70,10 +72,11 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
     for {
       res <- runtimeManager.computeState(stateHash)(
               deploy :: Nil,
+              Nil,
               BlockData(deploy.data.timestamp, 0, genesisContext.validatorPks.head, Array[Byte]()),
               Map.empty[BlockHash, Validator]
             )
-      (hash, Seq(result)) = res
+      (hash, Seq(result), _) = res
     } yield (hash, result)
 
   private def replayComputeState[F[_]: Functor](runtimeManager: RuntimeManager[F])(
@@ -127,34 +130,36 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
   )(resultAssertion: S#Result => Boolean): Task[StateHash] =
     runtimeManager.withRuntimeLock(
       runtime =>
-        runtime.blockData.set(BlockData(0, 0, genesisContext.validatorPks.head, Array[Byte]()))
-    ) >>
-      runtimeManager.playSystemDeploy(startState)(playSystemDeploy).attempt >>= {
-      case Right(PlaySucceeded(finalPlayStateHash, processedSystemDeploy, playResult)) =>
-        assert(resultAssertion(playResult))
-        runtimeManager
-          .replaySystemDeploy(startState)(replaySystemDeploy, processedSystemDeploy)
-          .attempt
-          .map {
-            case Right(Right(systemDeployReplayResult)) =>
-              systemDeployReplayResult match {
-                case ReplaySucceeded(finalReplayStateHash, replayResult) =>
-                  assert(finalPlayStateHash == finalReplayStateHash)
-                  assert(playResult == replayResult)
-                  finalReplayStateHash
-                case ReplayFailed(systemDeployError) =>
-                  fail(s"Unexpected user error during replay: ${systemDeployError.errorMessage}")
+        runtime.blockData.set(BlockData(0, 0, genesisContext.validatorPks.head, Array[Byte]())) >>
+          runtimeManager.playSystemDeploy(startState)(playSystemDeploy, runtime).attempt >>= {
+          case Right(PlaySucceeded(finalPlayStateHash, processedSystemDeploy, playResult)) =>
+            assert(resultAssertion(playResult))
+            runtimeManager
+              .replaySystemDeploy(startState)(replaySystemDeploy, processedSystemDeploy, runtime)
+              .attempt
+              .map {
+                case Right(Right(systemDeployReplayResult)) =>
+                  systemDeployReplayResult match {
+                    case ReplaySucceeded(finalReplayStateHash, replayResult) =>
+                      assert(finalPlayStateHash == finalReplayStateHash)
+                      assert(playResult == replayResult)
+                      finalReplayStateHash
+                    case ReplayFailed(systemDeployError) =>
+                      fail(
+                        s"Unexpected user error during replay: ${systemDeployError.errorMessage}"
+                      )
+                  }
+                case Right(Left(replayFailure)) =>
+                  fail(s"Unexpected replay failure: $replayFailure")
+                case Left(throwable) =>
+                  fail(s"Unexpected system error during replay: ${throwable.getMessage}")
               }
-            case Right(Left(replayFailure)) =>
-              fail(s"Unexpected replay failure: $replayFailure")
-            case Left(throwable) =>
-              fail(s"Unexpected system error during replay: ${throwable.getMessage}")
-          }
-      case Right(PlayFailed(Failed(_, errorMsg))) =>
-        fail(s"Unexpected user error during play: $errorMsg")
-      case Left(throwable) =>
-        fail(s"Unexpected system error during play: ${throwable.getMessage}")
-    }
+          case Right(PlayFailed(Failed(_, errorMsg))) =>
+            fail(s"Unexpected user error during play: $errorMsg")
+          case Left(throwable) =>
+            fail(s"Unexpected system error during play: ${throwable.getMessage}")
+        }
+    )
 
   "PreChargeDeploy" should "reduce user account balance by the correct amount" in effectTest {
     runtimeManagerResource.use { runtimeManager =>
@@ -262,6 +267,7 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
         time     <- timeF.currentMillis
         playStateHash0AndProcessedDeploys0 <- runtimeManager.computeState(gps)(
                                                deploys0.toList,
+                                               closeBlockDeploy(Array.empty) :: Nil,
                                                BlockData(
                                                  time,
                                                  0L,
@@ -270,11 +276,11 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
                                                ),
                                                Map.empty
                                              )
-        (playStateHash0, processedDeploys0) = playStateHash0AndProcessedDeploys0
-        bonds0                              <- runtimeManager.computeBonds(playStateHash0)
+        (playStateHash0, processedDeploys0, processedSysDeploys0) = playStateHash0AndProcessedDeploys0
+        bonds0                                                    <- runtimeManager.computeBonds(playStateHash0)
         replayError0OrReplayStateHash0 <- runtimeManager.replayComputeState(gps)(
                                            processedDeploys0,
-                                           Nil,
+                                           processedSysDeploys0,
                                            BlockData(
                                              time,
                                              0L,
@@ -290,6 +296,7 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
         _                       = assert(bonds0 == bonds1)
         playStateHash1AndProcessedDeploys1 <- runtimeManager.computeState(playStateHash0)(
                                                deploys1.toList,
+                                               closeBlockDeploy(Array.empty) :: Nil,
                                                BlockData(
                                                  time,
                                                  0L,
@@ -298,11 +305,11 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
                                                ),
                                                Map.empty
                                              )
-        (playStateHash1, processedDeploys1) = playStateHash1AndProcessedDeploys1
-        bonds2                              <- runtimeManager.computeBonds(playStateHash1)
+        (playStateHash1, processedDeploys1, processedSysDeploys1) = playStateHash1AndProcessedDeploys1
+        bonds2                                                    <- runtimeManager.computeBonds(playStateHash1)
         replayError1OrReplayStateHash1 <- runtimeManager.replayComputeState(playStateHash0)(
                                            processedDeploys1,
-                                           Nil,
+                                           processedSysDeploys1,
                                            BlockData(
                                              time,
                                              0L,
@@ -469,13 +476,14 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
         invalidBlocks = Map.empty[BlockHash, Validator]
         computeStateResult <- runtimeManager.computeState(genPostState)(
                                deploy :: Nil,
+                               closeBlockDeploy(Array.empty) :: Nil,
                                blockData,
                                invalidBlocks
                              )
-        (playPostState, processedDeploys) = computeStateResult
+        (playPostState, processedDeploys, processedSystemDeploys) = computeStateResult
         replayComputeStateResult <- runtimeManager.replayComputeState(genPostState)(
                                      processedDeploys,
-                                     Nil,
+                                     processedSystemDeploys,
                                      blockData,
                                      invalidBlocks,
                                      isGenesis = false
@@ -505,14 +513,25 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
         blockData     = BlockData(time, 0L, genesisContext.validatorPks.head, Array[Byte]())
         invalidBlocks = Map.empty[BlockHash, Validator]
         firstDeploy <- mgr
-                        .computeState(genPostState)(deploy0 :: Nil, blockData, invalidBlocks)
+                        .computeState(genPostState)(
+                          deploy0 :: Nil,
+                          closeBlockDeploy(Array.empty) :: Nil,
+                          blockData,
+                          invalidBlocks
+                        )
                         .map(_._2)
         secondDeploy <- mgr
-                         .computeState(genPostState)(deploy1 :: Nil, blockData, invalidBlocks)
+                         .computeState(genPostState)(
+                           deploy1 :: Nil,
+                           closeBlockDeploy(Array.empty) :: Nil,
+                           blockData,
+                           invalidBlocks
+                         )
                          .map(_._2)
         compoundDeploy <- mgr
                            .computeState(genPostState)(
                              deploy0 :: deploy1 :: Nil,
+                             closeBlockDeploy(Array.empty) :: Nil,
                              blockData,
                              invalidBlocks
                            )
@@ -633,17 +652,22 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
         genPostState  = genesis.body.state.postStateHash
         blockData     = BlockData(time, 0L, genesisContext.validatorPks.head, Array[Byte]())
         invalidBlocks = Map.empty[BlockHash, Validator]
-        processedDeploys <- runtimeManager
-                             .computeState(genPostState)(Seq(deploy), blockData, invalidBlocks)
-                             .map(_._2)
-        processedDeploy     = processedDeploys.head
-        processedDeployCost = processedDeploy.cost.cost
+        newState <- runtimeManager
+                     .computeState(genPostState)(
+                       Seq(deploy),
+                       Seq(closeBlockDeploy(Array.empty)),
+                       blockData,
+                       invalidBlocks
+                     )
+        (_, processedDeploys, processedSystemDeploys) = newState
+        processedDeploy                               = processedDeploys.head
+        processedDeployCost                           = processedDeploy.cost.cost
         invalidProcessedDeploy = processedDeploy.copy(
           cost = PCost(processedDeployCost - 1)
         )
         result <- runtimeManager.replayComputeState(genPostState)(
                    Seq(invalidProcessedDeploy),
-                   Nil,
+                   processedSystemDeploys,
                    blockData,
                    invalidBlocks,
                    isGenesis = false
