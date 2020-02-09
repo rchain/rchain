@@ -57,7 +57,9 @@ object COMM {
       peeks: SortedSet[Int],
       produceCounters: (Seq[Produce]) => Map[Produce, Int]
   ): COMM = {
-    val produceRefs = dataCandidates.map(_.datum.source)
+    val produceRefs =
+      dataCandidates.map(_.datum.source).sortBy(p => (p.channelsHash, p.hash, p.persistent))
+
     COMM(consumeRef, produceRefs, peeks, produceCounters(produceRefs))
   }
   implicit val codecInt = int32
