@@ -7,6 +7,7 @@ import cats.effect.Resource
 import coop.rchain.casper.util.comm._
 import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.crypto.PrivateKey
+import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.signatures.{Secp256k1, SignaturesAlg}
 import coop.rchain.crypto.util.KeyUtil
 import coop.rchain.node.configuration._
@@ -24,7 +25,6 @@ import scala.tools.jline.console._
 import scala.tools.jline.console.completer.StringsCompleter
 
 object Main {
-  private val RNodeDeployerPasswordEnvVar = "RNODE_DEPLOYER_PASSWORD"
 
   implicit private val logSource: LogSource     = LogSource(this.getClass)
   implicit private val log: Log[Task]           = effects.log
@@ -56,6 +56,14 @@ object Main {
       .traverse(k => log.warn(s"Unknown configuration key $k"))
       .void
 
+  private def decryptKeyFromCon(
+      encryptedPrivateKeyPath: Path
+  )(implicit console: ConsoleIO[Task]): Task[PrivateKey] =
+    for {
+      password   <- ConsoleIO[Task].readPassword("Password for private key file: ")
+      privateKey <- Secp256k1.parsePemFile[Task](encryptedPrivateKeyPath, password)
+    } yield privateKey
+
   private def mainProgram(conf: Configuration)(implicit scheduler: Scheduler): Task[Unit] = {
     implicit val replService: GrpcReplClient =
       new GrpcReplClient(
@@ -78,8 +86,6 @@ object Main {
 
     implicit val time: Time[Task] = effects.time
 
-    implicit val envVars: EnvVars[Task] = EnvVars.envVars
-
     implicit val console: ConsoleIO[Task] = consoleIO
 
     val program = conf.command match {
@@ -94,20 +100,10 @@ object Main {
           maybePrivateKeyPath,
           location
           ) =>
-        def decryptPrivateKey(encryptedPrivateKeyPath: Path): Task[PrivateKey] =
-          for {
-            maybePassword <- EnvVars[Task].get(RNodeDeployerPasswordEnvVar)
-            password <- maybePassword
-                         .map(p => p.pure[Task])
-                         .getOrElse(ConsoleIO[Task].readPassword("Password for private key file: "))
-
-            privateKey <- Secp256k1.parsePemFile[Task](encryptedPrivateKeyPath, password)
-          } yield privateKey
-
         val getPrivateKey =
           maybePrivateKey
             .map(_.pure[Task])
-            .orElse(maybePrivateKeyPath.map(decryptPrivateKey))
+            .orElse(maybePrivateKeyPath.map(decryptKeyFromCon))
             .sequence
 
         for {
@@ -197,20 +193,36 @@ object Main {
           }
     } yield ()
 
-  private def nodeProgram(conf: Configuration)(implicit scheduler: Scheduler): Task[Unit] = {
+  private def nodeProgram(
+      conf: Configuration
+  )(implicit scheduler: Scheduler, console: ConsoleIO[Task]): Task[Unit] = {
     // XXX: Enable it earlier once we have JDK with https://bugs.openjdk.java.net/browse/JDK-8218960 fixed
     // https://www.slf4j.org/legacy.html#jul-to-slf4j
     SLF4JBridgeHandler.removeHandlersForRootLogger()
     SLF4JBridgeHandler.install()
     for {
-      _             <- checkHost(conf)
-      confWithPorts <- checkPorts(conf)
-      _             <- log.info(VersionInfo.get)
-      _             <- logConfiguration(confWithPorts)
-      runtime       <- NodeRuntime(confWithPorts)
-      _             <- runtime.main.run(NodeCallCtx.init)
+      _               <- checkHost(conf)
+      confWithPorts   <- checkPorts(conf)
+      confWithDecrypt <- checkPrivateKeys(confWithPorts)
+      _               <- log.info(VersionInfo.get)
+      _               <- logConfiguration(confWithDecrypt)
+      runtime         <- NodeRuntime(confWithDecrypt)
+      _               <- runtime.main.run(NodeCallCtx.init)
     } yield ()
   }
+
+  private def checkPrivateKeys(
+      conf: Configuration
+  )(implicit console: ConsoleIO[Task]): Task[Configuration] =
+    // check if validator private key path arg is specified and decrypt
+    // otherwise do nothing
+    conf.casper.privateKey match {
+      case Some(Right(privateKeyPath)) =>
+        for {
+          privateKeyBase16 <- decryptKeyFromCon(privateKeyPath).map(sk => Base16.encode(sk.bytes))
+        } yield conf.copy(casper = conf.casper.copy(privateKey = Some(Left(privateKeyBase16))))
+      case _ => conf.pure[Task]
+    }
 
   private def checkHost(conf: Configuration): Task[Unit] = {
     import coop.rchain.comm._
