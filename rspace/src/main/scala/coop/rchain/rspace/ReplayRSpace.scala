@@ -192,7 +192,7 @@ class ReplayRSpace[F[_]: Sync, C, P, A, K](
           .map { as =>
             val d = Datum(data, persist, produceRef)
             val matching = if (c == channel) {
-              if (comm.matches(d, produceCounter.get(produceRef))) Seq(d -> -1) //WTF?
+              if (comm.matches(d, produceCounter.get(produceRef))) (d -> -1) +: as.zipWithIndex
               else Seq.empty
             } else filterMatching(comm)(as)
             c -> matching
