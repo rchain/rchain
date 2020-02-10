@@ -154,45 +154,58 @@ in {
           new valCh, restCh in {
             match (map, nybList.slice(0, n)) {
               node => {
-                // Acquire the lock on this node
-                for (@val <- @[node, *storeToken]) {
+                for (@val <<- @[node, *storeToken]) {
                   if (n == len) {
-                    // If we're at the end of the path, set the node to newVal.
-                    if (val == 0) {
-                      // Release the lock
-                      @[node, *storeToken]!({suffix: newVal}) |
-                      // Return
-                      ret!(Nil)
-                    }
-                    else {
-                      // Release the lock
-                      @[node, *storeToken]!(val.set(suffix, newVal)) |
-                      // Return
-                      ret!(Nil)
+                    // Acquire the lock on this node
+                    for (@val <- @[node, *storeToken]) {
+                      // If we're at the end of the path, set the node to newVal.
+                      if (val == 0) {
+                        // Release the lock
+                        @[node, *storeToken]!({suffix: newVal}) |
+                        // Return
+                        ret!(Nil)
+                      }
+                      else {
+                        // Release the lock
+                        @[node, *storeToken]!(val.set(suffix, newVal)) |
+                        // Return
+                        ret!(Nil)
+                      }
                     }
                   } else {
                     // Otherwise make the rest of the path exist.
                     // Bit k set means child node k exists.
                     if ((val/powers.nth(nybList.nth(n))) % 2 == 0) {
                       // Child node missing
-                      // Create node, set node to 0
-                      MakeNode!(0, (map, nybList.slice(0, n + 1))) |
-                      // Update current node to val | (1 << nybList.nth(n))
-                      match nybList.nth(n) {
-                        bit => {
-                          // val | (1 << bit)
-                          // Bitwise operators would be really nice to have!
-                          // Release the lock
-                          @[node, *storeToken]!((val % powers.nth(bit)) +
-                            (val / powers.nth(bit + 1)) * powers.nth(bit + 1) +
-                            powers.nth(bit))
+                      // Acquire the lock
+                      for (@val <- @[node, *storeToken]) {
+                        // Re-test value
+                        if ((val/powers.nth(nybList.nth(n))) % 2 == 0) {
+                          // Child node still missing
+                          // Create node, set node to 0
+                          MakeNode!(0, (map, nybList.slice(0, n + 1))) |
+                          // Update current node to val | (1 << nybList.nth(n))
+                          match nybList.nth(n) {
+                            bit => {
+                              // val | (1 << bit)
+                              // Bitwise operators would be really nice to have!
+                              // Release the lock
+                              @[node, *storeToken]!((val % powers.nth(bit)) +
+                                (val / powers.nth(bit + 1)) * powers.nth(bit + 1) +
+                                powers.nth(bit))
+                            }
+                          } |
+                          // Child node now exists, loop
+                          TreeHashMapSetter!(map, nybList, n + 1, len, newVal, suffix, *ret)
+                        } else {
+                          // Child node created between reads
+                          // Release lock
+                          @[node, *storeToken]!(val) |
+                          // Loop
+                          TreeHashMapSetter!(map, nybList, n + 1, len, newVal, suffix, *ret)
                         }
-                      } |
-                      // Child node now exists, loop
-                      TreeHashMapSetter!(map, nybList, n + 1, len, newVal, suffix, *ret)
+                      }
                     } else {
-                      // Release the lock
-                      @[node, *storeToken]!(val) |
                       // Child node exists, loop
                       TreeHashMapSetter!(map, nybList, n + 1, len, newVal, suffix, *ret)
                     }
@@ -259,32 +272,30 @@ in {
           new valCh in {
             match (map, nybList.slice(0, n)) {
               node => {
-                // Acquire the lock on this node
-                for (@val <- @[node, *storeToken]) {
+                for (@val <<- @[node, *storeToken]) {
                   if (n == len) {
                     // We're at the end of the path.
                     if (val == 0) {
                       // There's nothing here.
-                      // Release the lock
-                      @[node, *storeToken]!(val) |
                       // Return
                       ret!(Nil)
                     } else {
                       new resultCh in {
-                        // Update the current value
-                        update!(val.get(suffix), *resultCh) |
-                        for (@newVal <- resultCh) {
-                          // Release the lock
-                          @[node, *storeToken]!(val.set(suffix, newVal)) |
-                          // Return
-                          ret!(Nil)
+                        // Acquire the lock on this node
+                        for (@val <- @[node, *storeToken]) {
+                          // Update the current value
+                          update!(val.get(suffix), *resultCh) |
+                          for (@newVal <- resultCh) {
+                            // Release the lock
+                            @[node, *storeToken]!(val.set(suffix, newVal)) |
+                            // Return
+                            ret!(Nil)
+                          }
                         }
                       }
                     }
                   } else {
                     // Otherwise try to reach the end of the path.
-                    // Release the lock
-                    @[node, *storeToken]!(val) |
                     // Bit k set means child node k exists.
                     if ((val/powers.nth(nybList.nth(n))) % 2 == 0) {
                       // If the path doesn't exist, there's no value to update.
