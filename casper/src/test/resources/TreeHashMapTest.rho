@@ -9,7 +9,8 @@ new
   test_contains_before_set,
   test_contains_after_set,
   test_get_after_set_to_nil,
-  test_contains_after_set_to_nil
+  test_contains_after_set_to_nil,
+  test_contention
 in {
   rl!(`rho:id:zphjgsfy13h1k85isc8rtwtgt3t9zzt5pjd5ihykfmyapfc4wt3x5h`, *RhoSpecCh) |
   for(@(_, RhoSpec) <- RhoSpecCh) {
@@ -23,7 +24,8 @@ in {
         ("Contains before set returns false", *test_contains_before_set),
         ("Contains after set returns true", *test_contains_after_set),
         ("Get after set to Nil returns Nil", *test_get_after_set_to_nil),
-        ("Contains after set to Nil returns true", *test_contains_after_set_to_nil)
+        ("Contains after set to Nil returns true", *test_contains_after_set_to_nil),
+        ("Works under contention", *test_contention)
       ])
   } |
 
@@ -101,7 +103,7 @@ in {
           }
         }
       } |
-    
+
       contract test_fast_unsafe_get_after_set(rhoSpec, _, ackCh) = {
         new ret, ch1, ch2 in {
           TreeHashMap!("init", 3, *ret) |
@@ -117,7 +119,7 @@ in {
           }
         }
       } |
-    
+
       contract test_contains_before_set(rhoSpec, _, ackCh) = {
         new ret, ch in {
           TreeHashMap!("init", 3, *ret) |
@@ -130,7 +132,7 @@ in {
           }
         }
       } |
-    
+
       contract test_contains_after_set(rhoSpec, _, ackCh) = {
         new ret, ch1, ch2, ch3 in {
           TreeHashMap!("init", 3, *ret) |
@@ -148,7 +150,7 @@ in {
           }
         }
       } |
-    
+
       contract test_get_after_set_to_nil(rhoSpec, _, ackCh) = {
         new ret, ch1, ch2 in {
           TreeHashMap!("init", 3, *ret) |
@@ -164,7 +166,7 @@ in {
           }
         }
       } |
-    
+
       contract test_contains_after_set_to_nil(rhoSpec, _, ackCh) = {
         new ret, ch1, ch2, ch3 in {
           TreeHashMap!("init", 3, *ret) |
@@ -180,6 +182,37 @@ in {
                 ], *ackCh)
             }
           }
+        }
+      } |
+
+      contract test_contention(rhoSpec, _, ackCh) = {
+        new tryIt in {
+          contract tryIt(@n, @flag) = {
+            new out(`rho:io:stdlog`), mapCh in {
+              TreeHashMap!("init", 3, *mapCh) |
+              for (@map <- mapCh) {
+                new ret1, ret2, ret3 in {
+                  TreeHashMap!("set", map, "category", "object", *ret1) |
+                  TreeHashMap!("set", map, "category", "morphism", *ret2) |
+                  for (_ <- ret1; _ <- ret2) {
+                    TreeHashMap!("get", map, "category", *ret3) |
+                    for (@val3 <- ret3) {
+                      out!("info", [n, val3]) |
+                      if (n == 9) {
+                        rhoSpec!("assertMany",
+                        [
+                          ((flag, "==", true), "Placeholder")
+                        ], *ackCh)
+                      } else {
+                        tryIt!(n+1, flag and (val3 != Nil))
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          } |
+          tryIt!(0, true)
         }
       }
     }
