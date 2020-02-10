@@ -36,7 +36,8 @@ from .common import (
     NonZeroExitCodeError,
     GetBlockError,
     ParsingError,
-    SynchronyConstraintError
+    SynchronyConstraintError,
+    NotAnActiveValidatorError
 )
 from .wait import (
     wait_for_node_started,
@@ -250,6 +251,8 @@ class Node:
         except NonZeroExitCodeError as e:
             if "Must wait for more blocks from other validators" in e.output:
                 raise SynchronyConstraintError(command=e.command, exit_code=e.exit_code, output=e.output)
+            if "ReadOnlyMode" in e.output:
+                raise NotAnActiveValidatorError(command=e.command, exit_code=e.exit_code, output=e.output)
             raise e
 
     def last_finalized_block(self) -> BlockInfo:
