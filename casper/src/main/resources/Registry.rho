@@ -13,7 +13,7 @@ new _registryStore,
 in {
 
   // TreeHashMap is defined here because the registry uses it internally.
-  // We can't define it in another file like MakeMint or NonNegativeNumber because 
+  // We can't define it in another file like MakeMint or NonNegativeNumber because
   // that method assumes the registry already exists.
 
   // Rholang map desiderata: speedy insert & lookup,  no conflicts on lookup, no conflicts on inserts to different keys
@@ -54,9 +54,9 @@ in {
   //   }
   // }
 
-  new MakeNode, ByteArrayToNybbleList, 
+  new MakeNode, ByteArrayToNybbleList,
       TreeHashMapSetter, TreeHashMapGetter, TreeHashMapContains, TreeHashMapUpdater,
-      powersCh, storeToken, nodeGet, nodeSetBit, nodeSetMap, nodeUpdateMap in {
+      powersCh, storeToken, nodeGet in {
     match [1,2,4,8,16,32,64,128,256,512,1024,2048,4096,8192,16384,32768,65536] {
       powers => {
         contract MakeNode(@initVal, @node) = {
@@ -66,42 +66,6 @@ in {
         contract nodeGet(@node, ret) = {
           for (@val <<- @[node, *storeToken]) {
             ret!(val)
-          }
-        } |
-
-        contract nodeSetBit(@node, @bit, ack) = {
-          for (@val <- @[node, *storeToken]) {
-            // val | (1 << bit)
-            // Bitwise operators would be really nice to have!
-            @[node, *storeToken]!((val % powers.nth(bit)) +
-              (val / powers.nth(bit + 1)) * powers.nth(bit + 1) +
-              powers.nth(bit)) |
-            ack!(Nil)
-          }
-        } |
-
-        contract nodeSetMap(@node, @key, @newVal, ack) = {
-          for (@val <- @[node, *storeToken]) {
-            ack!(Nil) |
-            if (val == 0) { @[node, *storeToken]!({key: newVal}) }
-            else { @[node, *storeToken]!(val.set(key, newVal)) }
-          }
-        } |
-
-        contract nodeUpdateMap(@node, @key, update, ack) = {
-          for (@val <- @[node, *storeToken]) {
-            if (val == 0) {
-              @[node, *storeToken]!({}) |
-              ack!(Nil)
-            } else {
-              new ret in {
-                update!(val.get(key), *ret) |
-                for (@newVal <- ret) {
-                  @[node, *storeToken]!(val.set(key, newVal)) |
-                  ack!(Nil)
-                }
-              }
-            }
           }
         } |
 
@@ -188,28 +152,51 @@ in {
         contract TreeHashMapSetter(@map, @nybList, @n, @len, @newVal, @suffix, ret) = {
           // Look up the value of the node at [map, nybList.slice(0, n + 1)
           new valCh, restCh in {
-            nodeGet!((map, nybList.slice(0, n)), *valCh) |
-            for (@val <- valCh) {
-              if (n == len) {
-                // If we're at the end of the path, set the node to newVal.
-                nodeSetMap!((map, nybList), suffix, newVal, *ret)
-              } else {
-                // Otherwise make the rest of the path exist.
-                // Bit k set means node k exists.
-                if ((val/powers.nth(nybList.nth(n))) % 2 == 0) {
-                  // Node missing
-                  // Create node, set node to 0
-                  MakeNode!(0, (map, nybList.slice(0, n + 1))) |
-                  new ack in {
-                    // Atomically update current node to val | (1 << nybList.nth(n))
-                    nodeSetBit!((map, nybList.slice(0, n)), nybList.nth(n), *ack) |
-                    for (_ <- ack) {
+            match (map, nybList.slice(0, n)) {
+              node => {
+                // Acquire the lock on this node
+                for (@val <- @[node, *storeToken]) {
+                  if (n == len) {
+                    // If we're at the end of the path, set the node to newVal.
+                    if (val == 0) {
+                      // Release the lock
+                      @[node, *storeToken]!({suffix: newVal}) |
+                      // Return
+                      ret!(Nil)
+                    }
+                    else {
+                      // Release the lock
+                      @[node, *storeToken]!(val.set(suffix, newVal)) |
+                      // Return
+                      ret!(Nil)
+                    }
+                  } else {
+                    // Otherwise make the rest of the path exist.
+                    // Bit k set means child node k exists.
+                    if ((val/powers.nth(nybList.nth(n))) % 2 == 0) {
+                      // Child node missing
+                      // Create node, set node to 0
+                      MakeNode!(0, (map, nybList.slice(0, n + 1))) |
+                      // Update current node to val | (1 << nybList.nth(n))
+                      match nybList.nth(n) {
+                        bit => {
+                          // val | (1 << bit)
+                          // Bitwise operators would be really nice to have!
+                          // Release the lock
+                          @[node, *storeToken]!((val % powers.nth(bit)) +
+                            (val / powers.nth(bit + 1)) * powers.nth(bit + 1) +
+                            powers.nth(bit))
+                        }
+                      } |
+                      // Child node now exists, loop
+                      TreeHashMapSetter!(map, nybList, n + 1, len, newVal, suffix, *ret)
+                    } else {
+                      // Release the lock
+                      @[node, *storeToken]!(val) |
+                      // Child node exists, loop
                       TreeHashMapSetter!(map, nybList, n + 1, len, newVal, suffix, *ret)
                     }
                   }
-                } else {
-                  // Node exists, loop
-                  TreeHashMapSetter!(map, nybList, n + 1, len, newVal, suffix, *ret)
                 }
               }
             }
@@ -266,38 +253,53 @@ in {
             }
           }
         } |
-        
+
         contract TreeHashMapUpdater(@map, @nybList, @n, @len, update, @suffix, ret) = {
-          // Look up the value of the node at [map, nybList.slice(0, n + 1)]
-          new valCh, restCh in {
-            nodeGet!((map, nybList.slice(0, n)), *valCh) |
-            for (@val <- valCh) {
-              if (n == len) {
-                // If we're at the end of the path, update the node.
-                nodeUpdateMap!((map, nybList), suffix, *update, *ret)
-              } else {
-                // Otherwise make the rest of the path exist.
-                // Bit k set means node k exists.
-                if ((val/powers.nth(nybList.nth(n))) % 2 == 0) {
-                  // Node missing
-                  // Create node, set node to 0
-                  MakeNode!(0, (map, nybList.slice(0, n + 1))) |
-                  new ack in {
-                    // Atomically update current node to val | (1 << nybList.nth(n))
-                    nodeSetBit!((map, nybList.slice(0, n)), nybList.nth(n), *ack) |
-                    for (_ <- ack) {
+          // Look up the value of the node at [map, nybList.slice(0, n + 1)
+          new valCh in {
+            match (map, nybList.slice(0, n)) {
+              node => {
+                // Acquire the lock on this node
+                for (@val <- @[node, *storeToken]) {
+                  if (n == len) {
+                    // We're at the end of the path.
+                    if (val == 0) {
+                      // There's nothing here.
+                      // Release the lock
+                      @[node, *storeToken]!(val) |
+                      // Return
+                      ret!(Nil)
+                    } else {
+                      new resultCh in {
+                        // Update the current value
+                        update!(val.get(suffix), *resultCh) |
+                        for (@newVal <- resultCh) {
+                          // Release the lock
+                          @[node, *storeToken]!(val.set(suffix, newVal)) |
+                          // Return
+                          ret!(Nil)
+                        }
+                      }
+                    }
+                  } else {
+                    // Otherwise try to reach the end of the path.
+                    // Release the lock
+                    @[node, *storeToken]!(val) |
+                    // Bit k set means child node k exists.
+                    if ((val/powers.nth(nybList.nth(n))) % 2 == 0) {
+                      // If the path doesn't exist, there's no value to update.
+                      // Return
+                      ret!(Nil)
+                    } else {
+                      // Child node exists, loop
                       TreeHashMapUpdater!(map, nybList, n + 1, len, *update, suffix, *ret)
                     }
                   }
-                } else {
-                  // Node exists, loop
-                  TreeHashMapUpdater!(map, nybList, n + 1, len, *update, suffix, *ret)
                 }
               }
             }
           }
         } |
-
         contract TreeHashMap(@"update", @map, @key, update, ret) = {
           new hashCh, nybListCh, keccak256Hash(`rho:crypto:keccak256Hash`) in {
             // Hash the key to get a 256-bit array
@@ -371,7 +373,7 @@ in {
 
   bootstrapInsertSigned!(*insertSignedCh) | // this will work only once
   for (insertSigned <- insertSignedCh) {
-    
+
     contract insertSigned(@pubKeyBytes, @value, @sig, ret) = {
       match value {
         (nonce, data) => {
