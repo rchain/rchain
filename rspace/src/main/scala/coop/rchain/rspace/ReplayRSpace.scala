@@ -189,7 +189,7 @@ class ReplayRSpace[F[_]: Sync, C, P, A, K](
             as => {
               c -> {
                 if (c == channel)
-                  Seq((Datum(data, persist, produceRef), -1))
+                  (Datum(data, persist, produceRef), -1) +: as
                 else as
               }.filter {
                 matches(comm)
