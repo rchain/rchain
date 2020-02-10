@@ -28,6 +28,19 @@ object BlockCreator {
   private[this] val ProcessDeploysAndCreateBlockMetricsSource =
     Metrics.Source(CasperMetricsSource, "process-deploys-and-create-block")
 
+  private def isActiveValidator[F[_]: Sync](
+      block: BlockMessage,
+      runtimeManager: RuntimeManager[F],
+      validatorId: ValidatorIdentity
+  ): F[Boolean] = {
+    val lastProposedTuplespace = ProtoUtil.postStateHash(block)
+    for {
+      activeValidators <- runtimeManager.getActiveValidators(lastProposedTuplespace)
+      validator        = ByteString.copyFrom(validatorId.publicKey.bytes)
+      isActive         = activeValidators.contains(validator)
+    } yield isActive
+  }
+
   /*
    * Overview of createBlock
    *
@@ -66,8 +79,19 @@ object BlockCreator {
               Tools.rng(invalidBlockHash.toByteArray)
             )
         )
-        deploys          <- extractDeploys(dag, parentMetadatas, maxBlockNumber, expirationThreshold)
-        parents          <- parentMetadatas.toList.traverse(p => ProtoUtil.getBlock(p.blockHash))
+        deploys <- extractDeploys(dag, parentMetadatas, maxBlockNumber, expirationThreshold)
+        parents <- parentMetadatas.toList.traverse(p => ProtoUtil.getBlock(p.blockHash))
+        // there are 3 situations on judging whether the validator is active
+        // 1. it is possible that you are active in some parents but not active in other parents
+        // 2. all of the parents are in active state
+        // 3. all of the parents are not in active state
+        // Let's just talk about 1 situation because 2 and 3 are easy to judge.
+        // If one validator issue a bonding or unbonding request , it would be possible to end up with
+        // parent in 1 situation. It would be safer for the validator to make sure all parents post state
+        // are in active state.
+        isActive = parents
+          .traverse(b => isActiveValidator(b, runtimeManager, validatorIdentity))
+          .map(_.forall(identity))
         justifications   <- computeJustifications(dag, parents)
         now              <- Time[F].currentMillis
         invalidBlocksSet <- dag.invalidBlocks
@@ -76,24 +100,27 @@ object BlockCreator {
         systemDeploys = slashingDeploys :+ CloseBlockDeploy(
           Tools.rng(parents.head.blockHash.toByteArray)
         )
-        unsignedBlock <- if (deploys.nonEmpty || slashingDeploys.nonEmpty) {
-                          processDeploysAndCreateBlock(
-                            dag,
-                            runtimeManager,
-                            parents,
-                            deploys,
-                            systemDeploys,
-                            justifications,
-                            maxBlockNumber,
-                            validatorIdentity.publicKey,
-                            shardId,
-                            version,
-                            now,
-                            invalidBlocks
-                          )
-                        } else {
-                          CreateBlockStatus.noNewDeploys.pure[F]
-                        }
+        unsignedBlock <- isActive.ifM(
+                          if (deploys.nonEmpty || slashingDeploys.nonEmpty) {
+                            processDeploysAndCreateBlock(
+                              dag,
+                              runtimeManager,
+                              parents,
+                              deploys,
+                              systemDeploys,
+                              justifications,
+                              maxBlockNumber,
+                              validatorIdentity.publicKey,
+                              shardId,
+                              version,
+                              now,
+                              invalidBlocks
+                            )
+                          } else {
+                            CreateBlockStatus.noNewDeploys.pure[F]
+                          },
+                          CreateBlockStatus.readOnlyMode.pure[F]
+                        )
         _ <- spanF.mark("block-created")
         signedBlock <- unsignedBlock.mapF(
                         signBlock(
