@@ -97,11 +97,6 @@ class ReplayRSpace[F[_]: Sync, C, P, A, K](
             )
     } yield r
 
-  private def filterMatching(comm: COMM)(data: Seq[internal.Datum[A]]) =
-    data.iterator.zipWithIndex.filter {
-      case (data, _) => comm.matches(data, produceCounter.get(data.source))
-    }.toSeq
-
   def getCommAndConsumeCandidates(
       channels: Seq[C],
       patterns: Seq[P],
@@ -118,7 +113,7 @@ class ReplayRSpace[F[_]: Sync, C, P, A, K](
       channelToIndexedDataList <- channels.traverse { c: C =>
                                    store
                                      .getData(c)
-                                     .map(filterMatching(comm))
+                                     .map(_.iterator.zipWithIndex.filter(matches(comm)).toSeq)
                                      .map(c -> _)
                                  }
       result <- extractDataCandidates(channels.zip(patterns), channelToIndexedDataList.toMap, Nil)
@@ -189,15 +184,28 @@ class ReplayRSpace[F[_]: Sync, C, P, A, K](
       c =>
         store
           .getData(c)
-          .map { as =>
-            val d = Datum(data, persist, produceRef)
-            val matching = if (c == channel) {
-              if (comm.matches(d, produceCounter.get(produceRef))) (d -> -1) +: as.zipWithIndex
-              else Seq.empty
-            } else filterMatching(comm)(as)
-            c -> matching
-          }
+          .map(_.iterator.zipWithIndex.toSeq)
+          .map(
+            as => {
+              c -> {
+                if (c == channel)
+                  Seq((Datum(data, persist, produceRef), -1))
+                else as
+              }.filter {
+                matches(comm)
+              }
+            }
+          )
     )
+
+  private[this] def matches(comm: COMM)(datumWithIndex: (Datum[A], _)): Boolean = {
+    val datum: Datum[A] = datumWithIndex._1
+    def wasRepeatedEnoughTimes: Boolean =
+      if (!datum.persist) {
+        comm.timesRepeated(datum.source) === produceCounter.get(datum.source)
+      } else true
+    comm.produces.contains(datum.source) && wasRepeatedEnoughTimes
+  }
 
   private[this] def handleMatch(
       pc: ProduceCandidate[C, P, A, K],
