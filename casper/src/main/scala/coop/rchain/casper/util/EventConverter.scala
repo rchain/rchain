@@ -90,7 +90,7 @@ object EventConverter {
           consume.hash,
           consume.persistent
         ),
-        rspaceProduceCounts.keys.toSeq,
+        rspaceProduceCounts.keys.toSeq.sortBy(p => (p.channelsHash, p.hash, p.persistent)),
         SortedSet(peeks.map(_.channelIndex): _*),
         rspaceProduceCounts
       )
