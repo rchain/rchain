@@ -215,12 +215,16 @@ class MultiParentCasperAddBlockSpec extends FlatSpec with Matchers with Inspecto
       implicit val timeEff = new LogicalTime[Effect]
 
       for {
-        basicDeployData <- ConstructDeploy.basicDeployData[Effect](0)
-        block           <- node.createBlock(basicDeployData)
-        dag             <- node.blockDagStorage.getRepresentation
-        (sk, pk)        = Secp256k1.newKeyPair
-        illSignedBlock  <- ProtoUtil.signBlock(block, dag, pk, sk, Secp256k1.name, block.shardId)
-        status          <- node.casperEff.addBlock(illSignedBlock)
+        basicDeployData  <- ConstructDeploy.basicDeployData[Effect](0)
+        block            <- node.createBlock(basicDeployData)
+        dag              <- node.blockDagStorage.getRepresentation
+        (sk, pk)         = Secp256k1.newKeyPair
+        sender           = ByteString.copyFrom(pk.bytes)
+        latestMessageOpt <- dag.latestMessage(sender)
+        seqNum           = latestMessageOpt.fold(0)(_.seqNum) + 1
+        illSignedBlock = ProtoUtil
+          .signBlock(block, sk, Secp256k1.name, block.shardId, seqNum, sender)
+        status <- node.casperEff.addBlock(illSignedBlock)
       } yield (status shouldBe Left(InvalidSender))
     }
   }
@@ -546,14 +550,19 @@ class MultiParentCasperAddBlockSpec extends FlatSpec with Matchers with Inspecto
         shardId = ""
       )
     nodes(1).casperEff.blockDag.flatMap { dag =>
-      ProtoUtil.signBlock[Effect](
-        blockThatPointsToInvalidBlock,
-        dag,
-        defaultValidatorPks(1),
-        defaultValidatorSks(1),
-        "secp256k1",
-        "rchain"
-      )
+      val sender = blockThatPointsToInvalidBlock.sender
+      for {
+        latestMessageOpt <- dag.latestMessage(sender)
+        seqNum           = latestMessageOpt.fold(0)(_.seqNum) + 1
+        block = ProtoUtil.signBlock(
+          blockThatPointsToInvalidBlock,
+          defaultValidatorSks(1),
+          "secp256k1",
+          "rchain",
+          seqNum,
+          sender
+        )
+      } yield block
     }
   }
 }

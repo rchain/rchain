@@ -331,7 +331,7 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log](
       Span[F].trace(computeGenesisLabel) {
         for {
           _ <- runtime.blockData.set(
-                BlockData(blockTime, 0, PublicKey(Array[Byte]()))
+                BlockData(blockTime, 0, PublicKey(Array[Byte]()), 0)
               )
           _          <- Span[F].mark("before-process-deploys")
           evalResult <- processDeploys(runtime, startHash, terms, processDeploy(runtime))
@@ -359,7 +359,7 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log](
                      terms,
                      systemDeploys,
                      replayDeploy(runtime, withCostAccounting = !isGenesis),
-                     replaySystemDeploy(runtime, terms)
+                     replaySystemDeploy(runtime, blockData)
                    )
         } yield result
       }
@@ -548,22 +548,22 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log](
   }
   private def replaySystemDeploy(
       runtime: Runtime[F],
-      deploys: Seq[ProcessedDeploy]
+      blockData: BlockData
   )(processedSystemDeploy: ProcessedSystemDeploy): F[Option[ReplayFailure]] = {
     import processedSystemDeploy._
-
+    val sender = ByteString.copyFrom(blockData.sender.bytes)
     systemDeploy match {
       case SlashSystemDeployData(invalidBlockHash, issuerPublicKey) =>
         val slashDeploy =
           SlashDeploy(
             invalidBlockHash,
             issuerPublicKey,
-            SystemDeployUtil.generateSlashDeployRandomSeed(deploys.map(_.deploy))
+            SystemDeployUtil.generateSlashDeployRandomSeed(sender, blockData.seqNum)
           )
         replaySystemDeployInternal(runtime, slashDeploy, processedSystemDeploy)
       case CloseBlockSystemDeployData =>
         val closeBlockDeploy = CloseBlockDeploy(
-          SystemDeployUtil.generateCloseDeployRandomSeed(deploys.map(_.deploy))
+          SystemDeployUtil.generateCloseDeployRandomSeed(sender, blockData.seqNum)
         )
         replaySystemDeployInternal(runtime, closeBlockDeploy, processedSystemDeploy)
       case Empty => ReplayFailure.internalError(new Exception("Expected system deploy")).some.pure

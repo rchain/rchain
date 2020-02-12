@@ -342,39 +342,34 @@ object ProtoUtil {
       extraBytes.toByteArray
     )
 
-  def signBlock[F[_]: Applicative](
+  def signBlock(
       block: BlockMessage,
-      dag: BlockDagRepresentation[F],
-      pk: PublicKey,
       sk: PrivateKey,
       sigAlgorithm: String,
-      shardId: String
-  ): F[BlockMessage] = {
+      shardId: String,
+      seqNum: Int,
+      sender: Validator
+  ): BlockMessage = {
 
     val header = block.header
-    val sender = ByteString.copyFrom(pk.bytes)
-    for {
-      latestMessageOpt <- dag.latestMessage(sender)
-      seqNum           = latestMessageOpt.fold(0)(_.seqNum) + 1
-      blockHash = hashSignedBlock(
-        header,
-        block.body,
-        sender,
-        sigAlgorithm,
-        seqNum,
-        shardId,
-        block.extraBytes
-      )
-      sigAlgorithmBlock = block.copy(sigAlgorithm = sigAlgorithm)
-      sig               = ByteString.copyFrom(sigAlgorithmBlock.signFunction(blockHash.toByteArray, sk))
-      signedBlock = sigAlgorithmBlock.copy(
-        sender = sender,
-        sig = sig,
-        seqNum = seqNum,
-        blockHash = blockHash,
-        shardId = shardId
-      )
-    } yield signedBlock
+    val blockHash = hashSignedBlock(
+      header,
+      block.body,
+      sender,
+      sigAlgorithm,
+      seqNum,
+      shardId,
+      block.extraBytes
+    )
+    val sigAlgorithmBlock = block.copy(sigAlgorithm = sigAlgorithm)
+    val sig               = ByteString.copyFrom(sigAlgorithmBlock.signFunction(blockHash.toByteArray, sk))
+    sigAlgorithmBlock.copy(
+      sender = sender,
+      sig = sig,
+      seqNum = seqNum,
+      blockHash = blockHash,
+      shardId = shardId
+    )
   }
 
   def hashString(b: BlockMessage): String = Base16.encode(b.blockHash.toByteArray)

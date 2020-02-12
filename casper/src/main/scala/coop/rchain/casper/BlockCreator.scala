@@ -71,6 +71,9 @@ object BlockCreator {
         maxBlockNumber        = ProtoUtil.maxBlockNumberMetadata(parentMetadatas)
         invalidLatestMessages <- ProtoUtil.invalidLatestMessages(dag)
         deploys               <- extractDeploys(dag, parentMetadatas, maxBlockNumber, expirationThreshold)
+        sender                = ByteString.copyFrom(validatorIdentity.publicKey.bytes)
+        latestMessageOpt      <- dag.latestMessage(sender)
+        seqNum                = latestMessageOpt.fold(0)(_.seqNum) + 1
         // TODO: Add `slashingDeploys` to DeployStorage
         slashingDeploys = invalidLatestMessages.values.toList.map(
           invalidBlockHash =>
@@ -78,7 +81,7 @@ object BlockCreator {
             SlashDeploy(
               invalidBlockHash,
               validatorIdentity.publicKey,
-              SystemDeployUtil.generateSlashDeployRandomSeed(deploys)
+              SystemDeployUtil.generateSlashDeployRandomSeed(sender, seqNum)
             )
         )
         parents <- parentMetadatas.toList.traverse(p => ProtoUtil.getBlock(p.blockHash))
@@ -99,7 +102,7 @@ object BlockCreator {
         invalidBlocks    = invalidBlocksSet.map(block => (block.blockHash, block.sender)).toMap
         // make sure closeBlock is the last system Deploy
         systemDeploys = slashingDeploys :+ CloseBlockDeploy(
-          SystemDeployUtil.generateCloseDeployRandomSeed(deploys)
+          SystemDeployUtil.generateCloseDeployRandomSeed(sender, seqNum)
         )
         unsignedBlock <- isActive.ifM(
                           if (deploys.nonEmpty || slashingDeploys.nonEmpty) {
@@ -115,6 +118,7 @@ object BlockCreator {
                               shardId,
                               version,
                               now,
+                              seqNum,
                               invalidBlocks
                             )
                           } else {
@@ -123,16 +127,16 @@ object BlockCreator {
                           CreateBlockStatus.readOnlyMode.pure[F]
                         )
         _ <- spanF.mark("block-created")
-        signedBlock <- unsignedBlock.mapF(
-                        signBlock(
-                          _,
-                          dag,
-                          validatorIdentity.publicKey,
-                          validatorIdentity.privateKey,
-                          validatorIdentity.sigAlgorithm,
-                          shardId
-                        )
-                      )
+        signedBlock = unsignedBlock.map(
+          signBlock(
+            _,
+            validatorIdentity.privateKey,
+            validatorIdentity.sigAlgorithm,
+            shardId,
+            seqNum,
+            sender
+          )
+        )
         _ <- spanF.mark("block-signed")
       } yield signedBlock
     }
@@ -204,11 +208,12 @@ object BlockCreator {
       shardId: String,
       version: Long,
       now: Long,
+      seqNum: Int,
       invalidBlocks: Map[BlockHash, Validator]
   )(implicit spanF: Span[F]): F[CreateBlockStatus] =
     spanF.trace(ProcessDeploysAndCreateBlockMetricsSource) {
       (for {
-        blockData <- BlockData(now, maxBlockNumber + 1, sender).pure
+        blockData <- BlockData(now, maxBlockNumber + 1, sender, seqNum).pure
         result <- InterpreterUtil.computeDeploysCheckpoint(
                    parents,
                    deploys,

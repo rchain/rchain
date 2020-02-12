@@ -1,8 +1,15 @@
 package coop.rchain.casper.util.rholang
 
+import com.google.protobuf.{ByteString}
+import java.io.{ByteArrayInputStream, ByteArrayOutputStream}
+
+import com.google.protobuf.{CodedInputStream, CodedOutputStream}
+import com.google.protobuf.wrappers.Int32Value
+import coop.rchain.casper.genesis.contracts.Validator
 import coop.rchain.casper.protocol.DeployData
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.crypto.signatures.Signed
+import coop.rchain.crypto.PublicKey
 
 object SystemDeployUtil {
   // Currently we have 4 system deploys -> refund, preCharge, closeBlock, Slashing
@@ -15,27 +22,42 @@ object SystemDeployUtil {
   // deploy would come out the exact same result.
   //
   // As for closeBlock and slashing, the rnode would execute closeBlock system deploy in every block.
-  // The closeBlock system deploy would use the signature of the all user deploys in the block.
+  // So for a block seed it would be enough to have:
+  // PREFIX ++ PublicKey ++ seqNum serialized with protobuf.
+  // This way we can be completely sure that collision cannot happen.
+  // (Quote: https://github.com/rchain/rchain/pull/2879#discussion_r378948921)
+  import coop.rchain.models.Validator.Validator
 
-  def generateSystemDeployRandomSeed(deploys: Seq[Signed[DeployData]]): Blake2b512Random =
+  val SYSTEM_DEPLOY_PREFIX = 1
+
+  private def serializeInt32Fixed(value: Int): Array[Byte] = {
+    val stream = new ByteArrayOutputStream
+    val proto  = CodedOutputStream.newInstance(stream)
+    proto.writeFixed32NoTag(value)
+    proto.flush()
+    stream.toByteArray
+  }
+  def generateSystemDeployRandomSeed(sender: Validator, seqNum: Int): Blake2b512Random =
     Tools.rng(
-      deploys
-        .map(s => s.sig.toByteArray)
-        .foldLeft(Array[Byte]())(_ ++ _)
+      serializeInt32Fixed(SYSTEM_DEPLOY_PREFIX) ++ sender
+        .toByteArray() ++ serializeInt32Fixed(seqNum)
     )
 
-  // splitByte here to make sure random seed is not the same as precharge deploy when there
-  // is only one user deploy in a block
-  def generateCloseDeployRandomSeed(deploys: Seq[Signed[DeployData]]): Blake2b512Random =
-    generateSystemDeployRandomSeed(deploys).splitByte(1)
+  def generateCloseDeployRandomSeed(sender: Validator, seqNum: Int): Blake2b512Random =
+    generateSystemDeployRandomSeed(sender, seqNum).splitByte(0)
 
-  def generateSlashDeployRandomSeed(deploys: Seq[Signed[DeployData]]): Blake2b512Random =
-    generateSystemDeployRandomSeed(deploys).splitByte(2)
+  def generateCloseDeployRandomSeed(pk: PublicKey, seqNum: Int): Blake2b512Random = {
+    val sender = ByteString.copyFrom(pk.bytes)
+    generateCloseDeployRandomSeed(sender, seqNum).splitByte(0)
+  }
+
+  def generateSlashDeployRandomSeed(sender: Validator, seqNum: Int): Blake2b512Random =
+    generateSystemDeployRandomSeed(sender, seqNum).splitByte(1)
 
   def generatePreChargeDeployRandomSeed(deploy: Signed[DeployData]): Blake2b512Random =
-    Tools.rng(deploy.sig.toByteArray)
+    Tools.rng(deploy.sig.toByteArray).splitByte(0)
 
   def generateRefundDeployRandomSeed(deploy: Signed[DeployData]): Blake2b512Random =
-    Tools.rng(deploy.sig.toByteArray).splitByte(64)
+    Tools.rng(deploy.sig.toByteArray).splitByte(1)
 
 }
