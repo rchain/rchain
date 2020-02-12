@@ -76,8 +76,7 @@ class InterpreterUtilTest
               BlockData(
                 now,
                 seqNum,
-                genesisContext.validatorPks.head,
-                parents.head.blockHash.toByteArray
+                genesisContext.validatorPks.head
               ),
               Map.empty[BlockHash, Validator]
             )

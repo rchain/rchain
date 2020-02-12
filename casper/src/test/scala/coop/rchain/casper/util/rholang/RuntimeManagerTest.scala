@@ -62,8 +62,6 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
     rm   <- Resource.liftF[Task, RuntimeManager[Task]](RuntimeManager.fromRuntime[Task](r))
   } yield (r, rm)
 
-  def closeBlockDeploy(hashRng: Array[Byte]) = CloseBlockDeploy(Tools.rng(hashRng))
-
   private def computeState[F[_]: Functor](
       runtimeManager: RuntimeManager[F],
       deploy: Signed[DeployData],
@@ -73,7 +71,7 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
       res <- runtimeManager.computeState(stateHash)(
               deploy :: Nil,
               Nil,
-              BlockData(deploy.data.timestamp, 0, genesisContext.validatorPks.head, Array[Byte]()),
+              BlockData(deploy.data.timestamp, 0, genesisContext.validatorPks.head),
               Map.empty[BlockHash, Validator]
             )
       (hash, Seq(result), _) = res
@@ -89,8 +87,7 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
       BlockData(
         processedDeploy.deploy.data.timestamp,
         0,
-        genesisContext.validatorPks.head,
-        Array[Byte]()
+        genesisContext.validatorPks.head
       ),
       Map.empty[BlockHash, Validator],
       isGenesis = false
@@ -130,7 +127,7 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
   )(resultAssertion: S#Result => Boolean): Task[StateHash] =
     runtimeManager.withRuntimeLock(
       runtime =>
-        runtime.blockData.set(BlockData(0, 0, genesisContext.validatorPks.head, Array[Byte]())) >>
+        runtime.blockData.set(BlockData(0, 0, genesisContext.validatorPks.head)) >>
           runtimeManager.playSystemDeploy(startState)(playSystemDeploy, runtime).attempt >>= {
           case Right(PlaySucceeded(finalPlayStateHash, processedSystemDeploy, playResult)) =>
             assert(resultAssertion(playResult))
@@ -267,12 +264,14 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
         time     <- timeF.currentMillis
         playStateHash0AndProcessedDeploys0 <- runtimeManager.computeState(gps)(
                                                deploys0.toList,
-                                               closeBlockDeploy(Array.empty) :: Nil,
+                                               CloseBlockDeploy(
+                                                 SystemDeployUtil
+                                                   .generateCloseDeployRandomSeed(deploys0)
+                                               ) :: Nil,
                                                BlockData(
                                                  time,
                                                  0L,
-                                                 genesisContext.validatorPks.head,
-                                                 Array[Byte]()
+                                                 genesisContext.validatorPks.head
                                                ),
                                                Map.empty
                                              )
@@ -284,8 +283,7 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
                                            BlockData(
                                              time,
                                              0L,
-                                             genesisContext.validatorPks.head,
-                                             Array[Byte]()
+                                             genesisContext.validatorPks.head
                                            ),
                                            Map.empty,
                                            isGenesis = false
@@ -296,12 +294,14 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
         _                       = assert(bonds0 == bonds1)
         playStateHash1AndProcessedDeploys1 <- runtimeManager.computeState(playStateHash0)(
                                                deploys1.toList,
-                                               closeBlockDeploy(Array.empty) :: Nil,
+                                               CloseBlockDeploy(
+                                                 SystemDeployUtil
+                                                   .generateCloseDeployRandomSeed(deploys1)
+                                               ) :: Nil,
                                                BlockData(
                                                  time,
                                                  0L,
-                                                 genesisContext.validatorPks.head,
-                                                 Array[Byte]()
+                                                 genesisContext.validatorPks.head
                                                ),
                                                Map.empty
                                              )
@@ -313,8 +313,7 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
                                            BlockData(
                                              time,
                                              0L,
-                                             genesisContext.validatorPks.head,
-                                             Array[Byte]()
+                                             genesisContext.validatorPks.head
                                            ),
                                            Map.empty,
                                            isGenesis = false
@@ -472,11 +471,13 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
                  )
         time          <- timeF.currentMillis
         genPostState  = genesis.body.state.postStateHash
-        blockData     = BlockData(time, 0L, genesisContext.validatorPks.head, Array[Byte]())
+        blockData     = BlockData(time, 0L, genesisContext.validatorPks.head)
         invalidBlocks = Map.empty[BlockHash, Validator]
         computeStateResult <- runtimeManager.computeState(genPostState)(
                                deploy :: Nil,
-                               closeBlockDeploy(Array.empty) :: Nil,
+                               CloseBlockDeploy(
+                                 SystemDeployUtil.generateCloseDeployRandomSeed(Seq(deploy))
+                               ) :: Nil,
                                blockData,
                                invalidBlocks
                              )
@@ -510,12 +511,14 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
                   )
         time          <- timeF.currentMillis
         genPostState  = genesis.body.state.postStateHash
-        blockData     = BlockData(time, 0L, genesisContext.validatorPks.head, Array[Byte]())
+        blockData     = BlockData(time, 0L, genesisContext.validatorPks.head)
         invalidBlocks = Map.empty[BlockHash, Validator]
         firstDeploy <- mgr
                         .computeState(genPostState)(
                           deploy0 :: Nil,
-                          closeBlockDeploy(Array.empty) :: Nil,
+                          CloseBlockDeploy(
+                            SystemDeployUtil.generateCloseDeployRandomSeed(Seq(deploy0))
+                          ) :: Nil,
                           blockData,
                           invalidBlocks
                         )
@@ -523,7 +526,9 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
         secondDeploy <- mgr
                          .computeState(genPostState)(
                            deploy1 :: Nil,
-                           closeBlockDeploy(Array.empty) :: Nil,
+                           CloseBlockDeploy(
+                             SystemDeployUtil.generateCloseDeployRandomSeed(Seq(deploy1))
+                           ) :: Nil,
                            blockData,
                            invalidBlocks
                          )
@@ -531,7 +536,9 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
         compoundDeploy <- mgr
                            .computeState(genPostState)(
                              deploy0 :: deploy1 :: Nil,
-                             closeBlockDeploy(Array.empty) :: Nil,
+                             CloseBlockDeploy(
+                               SystemDeployUtil.generateCloseDeployRandomSeed(Seq(deploy0, deploy1))
+                             ) :: Nil,
                              blockData,
                              invalidBlocks
                            )
@@ -650,12 +657,16 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
         deploy        <- ConstructDeploy.sourceDeployNowF(source, phloLimit = 10000)
         time          <- timeF.currentMillis
         genPostState  = genesis.body.state.postStateHash
-        blockData     = BlockData(time, 0L, genesisContext.validatorPks.head, Array[Byte]())
+        blockData     = BlockData(time, 0L, genesisContext.validatorPks.head)
         invalidBlocks = Map.empty[BlockHash, Validator]
         newState <- runtimeManager
                      .computeState(genPostState)(
                        Seq(deploy),
-                       Seq(closeBlockDeploy(Array.empty)),
+                       Seq(
+                         CloseBlockDeploy(
+                           SystemDeployUtil.generateCloseDeployRandomSeed(Seq(deploy))
+                         )
+                       ),
                        blockData,
                        invalidBlocks
                      )

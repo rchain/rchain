@@ -81,23 +81,18 @@ object Runtime {
   type Remainder = Option[Var]
   type BodyRef   = Long
 
-  // parentHash in side the BlockData is only used for closeBlock system deploy random initial
-  // parentHash is not exposed in the rholang contract `rho:block:data`
-  // maybe future we will refactor this into a better way
   final case class BlockData private (
       timeStamp: Long,
       blockNumber: Long,
-      sender: PublicKey,
-      parentHash: Array[Byte]
+      sender: PublicKey
   )
   object BlockData {
-    def empty: BlockData = BlockData(0, 0, PublicKey(Base16.unsafeDecode("00")), Array[Byte]())
+    def empty: BlockData = BlockData(0, 0, PublicKey(Base16.unsafeDecode("00")))
     def fromBlock(template: BlockMessage) =
       BlockData(
         template.header.timestamp,
         template.body.state.blockNumber,
-        PublicKey(template.sender),
-        template.header.parentsHashList.headOption.getOrElse(ByteString.EMPTY).toByteArray
+        PublicKey(template.sender)
       )
   }
 

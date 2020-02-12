@@ -331,7 +331,7 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log](
       Span[F].trace(computeGenesisLabel) {
         for {
           _ <- runtime.blockData.set(
-                BlockData(blockTime, 0, PublicKey(Array[Byte]()), Array[Byte]())
+                BlockData(blockTime, 0, PublicKey(Array[Byte]()))
               )
           _          <- Span[F].mark("before-process-deploys")
           evalResult <- processDeploys(runtime, startHash, terms, processDeploy(runtime))
@@ -359,7 +359,7 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log](
                      terms,
                      systemDeploys,
                      replayDeploy(runtime, withCostAccounting = !isGenesis),
-                     replaySystemDeploy(runtime, blockData.parentHash)
+                     replaySystemDeploy(runtime, terms)
                    )
         } yield result
       }
@@ -386,7 +386,6 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log](
       runtime: Runtime[F]
   )(deploy: Signed[DeployData])(implicit Log: Log[F]) = {
     import cats.instances.vector._
-    val rand = Tools.rng(deploy.sig.toByteArray)
     EitherT(
       WriterT(
         Log.info(
@@ -397,7 +396,7 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log](
             new PreChargeDeploy(
               deploy.data.totalPhloCharge,
               deploy.pk,
-              rand
+              SystemDeployUtil.generatePreChargeDeployRandomSeed(deploy)
             )
           )
       )
@@ -413,7 +412,10 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log](
                 s"Refunding ${Base16.encode(deploy.pk.bytes)} with ${pd.refundAmount}"
               ) >>
                 playSystemDeployInternal(runtime)(
-                  new RefundDeploy(pd.refundAmount, rand.splitByte(64))
+                  new RefundDeploy(
+                    pd.refundAmount,
+                    SystemDeployUtil.generateRefundDeployRandomSeed(deploy)
+                  )
                 )
             )
           ).leftSemiflatMap(
@@ -546,17 +548,23 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log](
   }
   private def replaySystemDeploy(
       runtime: Runtime[F],
-      parentHash: Array[Byte]
+      deploys: Seq[ProcessedDeploy]
   )(processedSystemDeploy: ProcessedSystemDeploy): F[Option[ReplayFailure]] = {
     import processedSystemDeploy._
 
     systemDeploy match {
       case SlashSystemDeployData(invalidBlockHash, issuerPublicKey) =>
         val slashDeploy =
-          SlashDeploy(invalidBlockHash, issuerPublicKey, Tools.rng(invalidBlockHash.toByteArray))
+          SlashDeploy(
+            invalidBlockHash,
+            issuerPublicKey,
+            SystemDeployUtil.generateSlashDeployRandomSeed(deploys.map(_.deploy))
+          )
         replaySystemDeployInternal(runtime, slashDeploy, processedSystemDeploy)
       case CloseBlockSystemDeployData =>
-        val closeBlockDeploy = CloseBlockDeploy(Tools.rng(parentHash))
+        val closeBlockDeploy = CloseBlockDeploy(
+          SystemDeployUtil.generateCloseDeployRandomSeed(deploys.map(_.deploy))
+        )
         replaySystemDeployInternal(runtime, closeBlockDeploy, processedSystemDeploy)
       case Empty => ReplayFailure.internalError(new Exception("Expected system deploy")).some.pure
     }
@@ -589,10 +597,13 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log](
 
     def evaluatorT: EitherT[F, ReplayFailure, Boolean] =
       if (withCostAccounting) {
-        val rand            = Tools.rng(deploy.sig.toByteArray)
         val expectedFailure = processedDeploy.systemDeployError.map(SystemDeployError)
         replaySystemDeployInternal(runtime)(
-          new PreChargeDeploy(deploy.data.totalPhloCharge, deploy.pk, rand),
+          new PreChargeDeploy(
+            deploy.data.totalPhloCharge,
+            deploy.pk,
+            SystemDeployUtil.generatePreChargeDeployRandomSeed(processedDeploy.deploy)
+          ),
           expectedFailure
         ).flatMap(
           _ =>
@@ -608,7 +619,10 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log](
                 .flatTap(
                   succeeded =>
                     replaySystemDeployInternal(runtime)(
-                      new RefundDeploy(refundAmount, rand.splitByte(64)),
+                      new RefundDeploy(
+                        refundAmount,
+                        SystemDeployUtil.generateRefundDeployRandomSeed(processedDeploy.deploy)
+                      ),
                       None
                     ).map(_ => succeeded)
                 )

@@ -21,6 +21,7 @@ import coop.rchain.models.BlockMetadata
 import coop.rchain.models.Validator.Validator
 import coop.rchain.rholang.interpreter.Runtime.BlockData
 import coop.rchain.shared.{Cell, Log, Time}
+import coop.rchain.casper.util.rholang.SystemDeployUtil
 
 object BlockCreator {
   private[this] val CreateBlockMetricsSource =
@@ -69,6 +70,7 @@ object BlockCreator {
         parentMetadatas       <- EstimatorHelper.chooseNonConflicting(tipHashes, dag)
         maxBlockNumber        = ProtoUtil.maxBlockNumberMetadata(parentMetadatas)
         invalidLatestMessages <- ProtoUtil.invalidLatestMessages(dag)
+        deploys               <- extractDeploys(dag, parentMetadatas, maxBlockNumber, expirationThreshold)
         // TODO: Add `slashingDeploys` to DeployStorage
         slashingDeploys = invalidLatestMessages.values.toList.map(
           invalidBlockHash =>
@@ -76,10 +78,9 @@ object BlockCreator {
             SlashDeploy(
               invalidBlockHash,
               validatorIdentity.publicKey,
-              Tools.rng(invalidBlockHash.toByteArray)
+              SystemDeployUtil.generateSlashDeployRandomSeed(deploys)
             )
         )
-        deploys <- extractDeploys(dag, parentMetadatas, maxBlockNumber, expirationThreshold)
         parents <- parentMetadatas.toList.traverse(p => ProtoUtil.getBlock(p.blockHash))
         // there are 3 situations on judging whether the validator is active
         // 1. it is possible that you are active in some parents but not active in other parents
@@ -98,7 +99,7 @@ object BlockCreator {
         invalidBlocks    = invalidBlocksSet.map(block => (block.blockHash, block.sender)).toMap
         // make sure closeBlock is the last system Deploy
         systemDeploys = slashingDeploys :+ CloseBlockDeploy(
-          Tools.rng(parents.head.blockHash.toByteArray)
+          SystemDeployUtil.generateCloseDeployRandomSeed(deploys)
         )
         unsignedBlock <- isActive.ifM(
                           if (deploys.nonEmpty || slashingDeploys.nonEmpty) {
@@ -207,7 +208,7 @@ object BlockCreator {
   )(implicit spanF: Span[F]): F[CreateBlockStatus] =
     spanF.trace(ProcessDeploysAndCreateBlockMetricsSource) {
       (for {
-        blockData <- BlockData(now, maxBlockNumber + 1, sender, parents.head.blockHash.toByteArray).pure
+        blockData <- BlockData(now, maxBlockNumber + 1, sender).pure
         result <- InterpreterUtil.computeDeploysCheckpoint(
                    parents,
                    deploys,
