@@ -48,7 +48,7 @@ object SystemDeployUtil {
 
   def generateCloseDeployRandomSeed(pk: PublicKey, seqNum: Int): Blake2b512Random = {
     val sender = ByteString.copyFrom(pk.bytes)
-    generateCloseDeployRandomSeed(sender, seqNum).splitByte(0)
+    generateCloseDeployRandomSeed(sender, seqNum)
   }
 
   def generateSlashDeployRandomSeed(sender: Validator, seqNum: Int): Blake2b512Random =
