@@ -45,8 +45,7 @@ package object api {
   def acquireExternalServer[F[_]: Concurrent: Log: Taskable](
       port: Int,
       grpcExecutor: Scheduler,
-      deployGrpcService: DeployServiceV1GrpcMonix.DeployService,
-      proposeGrpcService: ProposeServiceV1GrpcMonix.ProposeService
+      deployGrpcService: DeployServiceV1GrpcMonix.DeployService
   ): F[Server[F]] =
     GrpcServer[F](
       NettyServerBuilder
@@ -56,10 +55,6 @@ package object api {
         .addService(
           DeployServiceV1GrpcMonix
             .bindService(deployGrpcService, grpcExecutor)
-        )
-        .addService(
-          ProposeServiceV1GrpcMonix
-            .bindService(proposeGrpcService, grpcExecutor)
         )
         .addService(ProtoReflectionService.newInstance())
         .build
