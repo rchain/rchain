@@ -551,8 +551,7 @@ class NodeRuntime private[node] (
                             .acquireExternalServer[Task](
                               conf.grpcServer.portExternal,
                               grpcScheduler,
-                              apiServers.deploy,
-                              apiServers.propose
+                              apiServers.deploy
                             )
       internalApiServer <- api
                             .acquireInternalServer(
