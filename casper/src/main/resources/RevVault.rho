@@ -40,8 +40,16 @@ in {
       for (@vaultMap <- vaultMapStore) {
         // Called from RevGenerator:
         //   RevVault!("init", *ret)
-        for (@"init", ret <- RevVault) {
-          ret!(*TreeHashMap, vaultMap, *initVault)
+        new initContinue in {
+          // REV vault initialization in genesis is done in batches.
+          // In the last batch `initContinue` channel will not receive
+          // anything so further access to `RevVault(@"init", _)` is impossible.
+          initContinue!() |
+          contract RevVault(@"init", ret) = {
+            for (<- initContinue) {
+              ret!(*TreeHashMap, vaultMap, *initVault, *initContinue)
+            }
+          }
         } |
         @MakeMint!(*mintCh) |
         for (mint <- mintCh) {
