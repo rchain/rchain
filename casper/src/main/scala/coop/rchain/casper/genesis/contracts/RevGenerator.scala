@@ -30,9 +30,10 @@ object RevGenerator {
          #             new iter in {
          #               contract iter(@[(addr, initialBalance) ... tail]) = {
          #                  iter!(tail) |
-         #                  new vault in {
+         #                  new vault, setDoneCh in {
          #                    initVault!(*vault, addr, initialBalance) |
-         #                    TreeHashMap!("set", vaultMap, addr, *vault, Nil)
+         #                    TreeHashMap!("set", vaultMap, addr, *vault, *setDoneCh) |
+         #                    for (_ <- setDoneCh) { Nil }
          #                  }
          #               } |
          #               iter!(vaults) ${if (!isLastBatch) "| initContinue!()" else ""}
