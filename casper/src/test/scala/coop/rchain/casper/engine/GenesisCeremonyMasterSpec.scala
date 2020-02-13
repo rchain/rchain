@@ -62,8 +62,8 @@ class GenesisCeremonyMasterSpec extends WordSpec {
           validatorPk
         )
         _ <- EngineCell[Task].read >>= (_.handle(local, blockApproval))
-        //wait until casper is defined, with 1 minute timeout (indicating failure)
-        possiblyCasper  <- Task.racePair(Task.sleep(1.minute), waitUtilCasperIsDefined)
+        //wait until casper is defined, with a timeout (indicating failure)
+        possiblyCasper  <- Task.racePair(Task.sleep(3.minute), waitUtilCasperIsDefined)
         _               = assert(possiblyCasper.isRight)
         blockO          <- blockStore.get(genesis.blockHash)
         _               = assert(blockO.isDefined)

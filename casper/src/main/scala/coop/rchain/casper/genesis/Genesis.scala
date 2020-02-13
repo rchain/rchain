@@ -26,21 +26,32 @@ object Genesis {
       posParams: ProofOfStake,
       vaults: Seq[Vault],
       supply: Long
-  ): Seq[Signed[DeployData]] =
+  ): Seq[Signed[DeployData]] = {
+    // Splits initial vaults creation in multiple deploys (batches)
+    val vaultBatches = vaults.grouped(100).toSeq
+    val vaultDeploys = vaultBatches.zipWithIndex.map {
+      case (batchVaults, idx) =>
+        StandardDeploys.revGenerator(
+          batchVaults,
+          supply,
+          timestamp = 1565818101792L + idx,
+          isLastBatch = 1 + idx == vaultBatches.size
+        )
+    }
+
     // Order of deploys is important for Registry to work correctly
     // - dependencies must be defined first in the list
-    Seq(
-      StandardDeploys.registry,
-      StandardDeploys.listOps,
-      StandardDeploys.either,
-      StandardDeploys.nonNegativeNumber,
-      StandardDeploys.makeMint,
-      StandardDeploys.authKey,
-      StandardDeploys.revVault,
-      StandardDeploys.multiSigRevVault,
-      StandardDeploys.revGenerator(vaults, supply),
+    StandardDeploys.registry +:
+      StandardDeploys.listOps +:
+      StandardDeploys.either +:
+      StandardDeploys.nonNegativeNumber +:
+      StandardDeploys.makeMint +:
+      StandardDeploys.authKey +:
+      StandardDeploys.revVault +:
+      StandardDeploys.multiSigRevVault +:
+      vaultDeploys :+
       StandardDeploys.poSGenerator(posParams)
-    )
+  }
 
   def createGenesisBlock[F[_]: Concurrent](
       runtimeManager: RuntimeManager[F],

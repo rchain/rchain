@@ -105,7 +105,7 @@ in {
           pickActiveValidators!($$initialBonds$$, {}, *initialActiveCh) |
           // Initializes pending rewards TreeHashMap.
           // - each key in pending rewards state is Map[PublicKey, Int] accumulated by calling "refundDeploy".
-          TreeHashMap!("init", 3, *pendingRewardsMapCh) |
+          TreeHashMap!("init", 1, *pendingRewardsMapCh) |
           for (@(true, posVault)  <- posVaultCh;
                @initialActive     <- initialActiveCh;
                @pendingRewardsMap <- pendingRewardsMapCh) {
@@ -122,7 +122,7 @@ in {
                   "activeValidators": initialActive,
                   // Map[PublicKey, Int] - are moved from pendingRewards on epoch change or slashing
                   "committedRewards": {},
-                  // Map[PublicKey, Int] - the validators wishing to withdraw and the blocknumber when their quarantine ends
+                  // Map[PublicKey, Int] - the validators wishing to withdraw and the block number when their quarantine ends
                   //                       This begins at the start of the next epoch + quarantineLength.
                   "withdrawers"     : {},
                   "randomImages"    : {},
@@ -165,6 +165,10 @@ in {
                 for (@(_, coopVault) <<- coopVaultCh) {
                   returnCh!(coopVault)
                 }
+              } |
+              // Exposes initial PoS vault on returnCh.
+              contract PoS(@"getInitialPosVault", returnCh) = {
+                returnCh!(posVault)
               } |
               // Exposes epochLength parameter to PoSTest.
               contract PoS(@"getEpochLength", returnCh) = {

@@ -9,50 +9,43 @@ final class RevGenerator private (supply: Long, code: String)
 }
 
 object RevGenerator {
-  private def concatenate(
-      userVaults: Seq[Vault]
-  )(f: (Vault, Int) => String, separator: String = " |\n\n"): String =
-    if (userVaults.nonEmpty) userVaults.zipWithIndex.map(Function.tupled(f)).mkString(separator)
-    else "Nil"
 
-  private def vaultInitCode(userVaults: Seq[Vault]): String = {
-    def initVault(userVault: Vault, index: Int): String =
-      s"""initVault!(*x$index, "${userVault.revAddress.toBase58}", ${userVault.initialBalance})"""
-    def mapEntry(userVault: Vault, index: Int): String =
-      s"""  "${userVault.revAddress.toBase58}" : *x$index"""
+  // REV vault initialization in genesis is done in batches.
+  // In the last batch `initContinue` channel will not receive
+  // anything so further access to `RevVault(@"init", _)` is impossible.
 
-    if (userVaults.isEmpty) {
-      "vaultMapStore!({})"
-    } else {
-      val vaultsMap: String =
-        s"""
-           #{
-           #${concatenate(userVaults)(mapEntry, separator = ",\n")}
-           #}
-           #""".stripMargin('#')
-      s"""
-         #new ${userVaults.indices.map("x" + _).mkString(", ")} in {
-         #  vaultMapStore!($vaultsMap) |
-         #  ${concatenate(userVaults)(initVault)}
-         #}
-         #""".stripMargin('#')
-    }
-  }
+  def apply(userVaults: Seq[Vault], supply: Long, isLastBatch: Boolean): RevGenerator = {
+    val vaultBalanceList =
+      userVaults.map(v => s"""("${v.revAddress.toBase58}", ${v.initialBalance})""").mkString(", ")
 
-  def apply(userVaults: Seq[Vault], supply: Long): RevGenerator = {
     val code: String =
       s""" new rl(`rho:registry:lookup`), revVaultCh in {
          #   rl!(`rho:rchain:revVault`, *revVaultCh) |
          #   for (@(_, RevVault) <- revVaultCh) {
-         #     new ret in {
-         #       @RevVault!("init", *ret) |
-         #       for (vaultMapStore, initVault <- ret) {
-         #         ${vaultInitCode(userVaults)}
+         #     new revVaultInitCh in {
+         #       @RevVault!("init", *revVaultInitCh) |
+         #       for (TreeHashMap, @vaultMap, initVault, initContinue <- revVaultInitCh) {
+         #         match [$vaultBalanceList] {
+         #           vaults => {
+         #             new iter in {
+         #               contract iter(@[(addr, initialBalance) ... tail]) = {
+         #                  iter!(tail) |
+         #                  new vault, setDoneCh in {
+         #                    initVault!(*vault, addr, initialBalance) |
+         #                    TreeHashMap!("set", vaultMap, addr, *vault, *setDoneCh) |
+         #                    for (_ <- setDoneCh) { Nil }
+         #                  }
+         #               } |
+         #               iter!(vaults) ${if (!isLastBatch) "| initContinue!()" else ""}
+         #             }
+         #           }
+         #         }
          #       }
          #     }
          #   }
          # }
      """.stripMargin('#')
+
     new RevGenerator(supply, code)
   }
 }

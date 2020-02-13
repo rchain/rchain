@@ -118,8 +118,8 @@ new  Either, rs(`rho:registry:insertSigned:secp256k1`), uriOut, rl(`rho:registry
     // Composes two eithers `a: A` and `b: B` using the function `f`. See cats.Apply.map2 for details.`
     contract Either(@"map2", @a, @b, @f, return) = {
       match (a, b) {
-        ((false, _), _)               => return!(a)
-        (_, (false, _))               => return!(b)
+        ((false, _), _)          => return!(a)
+        (_, (false, _))          => return!(b)
         ((true, va), (true, vb)) => {
           new ret in {
             match f {
@@ -139,8 +139,8 @@ new  Either, rs(`rho:registry:insertSigned:secp256k1`), uriOut, rl(`rho:registry
     // Like map2, but allows passing state to f instead of making f close over it.
     contract Either(@"map2Clean", @a, @b, @f, @state, return) = {
       match (a, b) {
-        ((false, _), _)               => return!(a)
-        (_, (false, _))               => return!(b)
+        ((false, _), _)          => return!(a)
+        (_, (false, _))          => return!(b)
         ((true, va), (true, vb)) => {
           new ret in {
             match f {
@@ -175,7 +175,7 @@ new  Either, rs(`rho:registry:insertSigned:secp256k1`), uriOut, rl(`rho:registry
     contract Either(@"flatMap", @either, f, return) = {
       match either {
         (true, value) => { f!(value, *return) }
-        (false, _)      => { return!(either) }
+        (false, _)    => { return!(either) }
       }
     } |
 
@@ -183,7 +183,7 @@ new  Either, rs(`rho:registry:insertSigned:secp256k1`), uriOut, rl(`rho:registry
     contract Either(@"flatMapClean", @either, f, @state, return) = {
       match either {
         (true, value) => { f!(state, value, *return) }
-        (false, _)      => { return!(either) }
+        (false, _)    => { return!(either) }
       }
     } |
 
