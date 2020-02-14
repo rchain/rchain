@@ -664,4 +664,26 @@ object BlockAPI {
     )
   }
 
+  sealed trait LatestBlockMessageError     extends Throwable
+  final case object ValidatorReadOnlyError extends LatestBlockMessageError
+  final case object NoBlockMessageError    extends LatestBlockMessageError
+
+  def getLatestMessage[F[_]: Sync: EngineCell: Log]: F[ApiErr[BlockMetadata]] = {
+    val errorMessage =
+      "Could not execute exploratory deploy, casper instance was not available yet."
+    EngineCell[F].read >>= (
+      _.withCasper(
+        implicit casper =>
+          for {
+            validatorOpt     <- casper.getValidator
+            validator        <- validatorOpt.liftTo[F](ValidatorReadOnlyError)
+            dag              <- casper.blockDag
+            latestMessageOpt <- dag.latestMessage(ByteString.copyFrom(validator.bytes))
+            latestMessage    <- latestMessageOpt.liftTo[F](NoBlockMessageError)
+          } yield latestMessage.asRight[Error],
+        Log[F].warn(errorMessage).as(s"Error: $errorMessage".asLeft)
+      )
+    )
+  }
+
 }
