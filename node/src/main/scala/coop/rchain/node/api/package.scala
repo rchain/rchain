@@ -24,6 +24,7 @@ package object api {
       port: Int,
       grpcExecutor: Scheduler,
       replGrpcService: ReplGrpcMonix.Repl,
+      deployGrpcService: DeployServiceV1GrpcMonix.DeployService,
       proposeGrpcService: ProposeServiceV1GrpcMonix.ProposeService
   ): Task[Server[Task]] =
     GrpcServer[Task](
@@ -37,6 +38,10 @@ package object api {
         .addService(
           ProposeServiceV1GrpcMonix
             .bindService(proposeGrpcService, grpcExecutor)
+        )
+        .addService(
+          DeployServiceV1GrpcMonix
+            .bindService(deployGrpcService, grpcExecutor)
         )
         .addService(ProtoReflectionService.newInstance())
         .build
