@@ -91,12 +91,11 @@ class WebApiRoutesTest extends FlatSpec with Matchers {
     deploys = deploys
   )
 
-  val prepareBlockNumber = 1L
-  val prepareSeqNumber   = 11L
-  val prepareNames       = List[String]("a", "b", "c")
-  val exPRS              = ExprBool(true)
-  val deployRet          = "Success!\\nDeployId is: 111111111111"
-  val dataAtLength       = 5
+  val prepareSeqNumber = 11
+  val prepareNames     = List[String]("a", "b", "c")
+  val exPRS            = ExprBool(true)
+  val deployRet        = "Success!\\nDeployId is: 111111111111"
+  val dataAtLength     = 5
 
   implicit class RichTask[A](t: Task[A]) {
     def toReaderT: TaskEnv[A] =
@@ -118,10 +117,9 @@ class WebApiRoutesTest extends FlatSpec with Matchers {
     ): TaskEnv[WebApi.PrepareResponse] =
       Task
         .delay({
-          val names       = prepareNames
-          val blockNumber = prepareBlockNumber
-          val seqNumber   = prepareSeqNumber
-          WebApi.PrepareResponse(names, blockNumber, seqNumber)
+          val names     = prepareNames
+          val seqNumber = prepareSeqNumber
+          WebApi.PrepareResponse(names, seqNumber)
         })
         .toReaderT
 
@@ -226,7 +224,7 @@ class WebApiRoutesTest extends FlatSpec with Matchers {
       res  <- act_resp
       _    = res.status should be(Status.Ok)
       body = res.decodeJson[PrepareResponse].runSyncUnsafe()
-      _    = body.blockNumber should be(prepareBlockNumber)
+      _    = body.seqNumber should be(prepareSeqNumber)
       _    = body.names should be(prepareNames)
     } yield ()
   }
@@ -242,7 +240,7 @@ class WebApiRoutesTest extends FlatSpec with Matchers {
       res  <- act_resp
       _    = res.status should be(Status.Ok)
       body = res.decodeJson[PrepareResponse].runSyncUnsafe()
-      _    = body.blockNumber should be(prepareBlockNumber)
+      _    = body.seqNumber should be(prepareSeqNumber)
       _    = body.names should be(prepareNames)
     } yield ()
   }

@@ -778,7 +778,12 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log](
   def playExploratoryDeploy(term: String, hash: StateHash): F[Seq[Par]] = {
     // Create a deploy with newly created private key
     val (privKey, _) = Secp256k1.newKeyPair
-    val deploy       = ConstructDeploy.sourceDeployNow(term, sec = privKey)
+    val deploy = ConstructDeploy.sourceDeploy(
+      term,
+      timestamp = System.currentTimeMillis,
+      phloLimit = Long.MaxValue,
+      sec = privKey
+    )
     // Create return channel as first private name created in deploy term
     val rand = Tools.unforgeableNameRng(deploy.pk, deploy.data.timestamp)
     import coop.rchain.models.rholang.implicits._

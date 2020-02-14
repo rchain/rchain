@@ -6,6 +6,7 @@ import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockStore
 import coop.rchain.casper.SafetyOracle
 import coop.rchain.casper.api.BlockAPI
+import coop.rchain.casper.api.BlockAPI.LatestBlockMessageError
 import coop.rchain.casper.engine.EngineCell.EngineCell
 import coop.rchain.casper.protocol.{BlockInfo, DataWithBlockInfo, DeployData, LightBlockInfo}
 import coop.rchain.crypto.PublicKey
@@ -49,10 +50,11 @@ object WebApi {
     import WebApiSyntax._
 
     def prepareDeploy(req: Option[PrepareRequest]): F[PrepareResponse] = {
-      val blockNumbers = BlockAPI
-        .getBlocks[F](1.some)
+      val seqNumber = BlockAPI
+        .getLatestMessage[F]
         .flatMap(_.liftToBlockApiErr)
-        .map(_.headOption.map(b => (b.blockNumber, b.seqNum)).getOrElse((-1L, -1L)))
+        .map(_.seqNum)
+        .handleError { case _: LatestBlockMessageError => -1 }
 
       val previewNames = req.fold(List[String]().pure) { r =>
         BlockAPI
@@ -61,9 +63,7 @@ object WebApi {
           .map(_.map(toHex).toList)
       }
 
-      previewNames.map2(blockNumbers) {
-        case (names, (blockNumber, seqNumber)) => PrepareResponse(names, blockNumber, seqNumber)
-      }
+      (previewNames, seqNumber).mapN(PrepareResponse)
     }
 
     def deploy(request: DeployRequest): F[String] =
@@ -165,8 +165,7 @@ object WebApi {
 
   final case class PrepareResponse(
       names: List[String],
-      blockNumber: Long,
-      seqNumber: Long
+      seqNumber: Int
   )
 
   final case class ApiStatus(
