@@ -558,6 +558,7 @@ class NodeRuntime private[node] (
                               conf.grpcServer.portInternal,
                               grpcScheduler,
                               apiServers.repl,
+                              apiServers.deploy,
                               apiServers.propose
                             )
 
