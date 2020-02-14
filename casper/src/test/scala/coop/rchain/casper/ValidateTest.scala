@@ -98,9 +98,12 @@ class ValidateTest
   )(implicit sk: PrivateKey, blockDagStorage: IndexedBlockDagStorage[Task]): Task[BlockMessage] = {
     val pk = Secp256k1.toPublic(sk)
     for {
-      block  <- blockDagStorage.lookupByIdUnsafe(i)
-      dag    <- blockDagStorage.getRepresentation
-      result <- ProtoUtil.signBlock[Task](block, dag, pk, sk, "secp256k1", "rchain")
+      block            <- blockDagStorage.lookupByIdUnsafe(i)
+      dag              <- blockDagStorage.getRepresentation
+      sender           = ByteString.copyFrom(pk.bytes)
+      latestMessageOpt <- dag.latestMessage(sender)
+      seqNum           = latestMessageOpt.fold(0)(_.seqNum) + 1
+      result           = ProtoUtil.signBlock(block, sk, "secp256k1", "rchain", seqNum, sender)
     } yield result
   }
 
@@ -532,18 +535,22 @@ class ValidateTest
   "Block summary validation" should "short circuit after first invalidity" in withStorage {
     implicit blockStore => implicit blockDagStorage =>
       for {
-        _        <- createChain[Task](2)
-        block    <- blockDagStorage.lookupByIdUnsafe(1)
-        dag      <- blockDagStorage.getRepresentation
-        (sk, pk) = Secp256k1.newKeyPair
-        signedBlock <- ProtoUtil.signBlock[Task](
-                        block.withBlockNumber(17).copy(seqNum = 1),
-                        dag,
-                        pk,
-                        sk,
-                        "secp256k1",
-                        "rchain"
-                      )
+        _     <- createChain[Task](2)
+        block <- blockDagStorage.lookupByIdUnsafe(1)
+        dag   <- blockDagStorage.getRepresentation
+
+        (sk, pk)         = Secp256k1.newKeyPair
+        sender           = ByteString.copyFrom(pk.bytes)
+        latestMessageOpt <- dag.latestMessage(sender)
+        seqNum           = latestMessageOpt.fold(0)(_.seqNum) + 1
+        signedBlock = ProtoUtil.signBlock(
+          block.withBlockNumber(17).copy(seqNum = 1),
+          sk,
+          "secp256k1",
+          "rchain",
+          seqNum,
+          sender
+        )
         _ <- Validate.blockSummary[Task](
               signedBlock,
               Dummies.createBlockMessage(),
@@ -745,9 +752,12 @@ class ValidateTest
       val context  = buildGenesis()
       val (sk, pk) = context.validatorKeyPairs.head
       for {
-        dag <- blockDagStorage.getRepresentation
-        genesis <- ProtoUtil
-                    .signBlock[Task](context.genesisBlock, dag, pk, sk, "secp256k1", "rchain")
+        dag              <- blockDagStorage.getRepresentation
+        sender           = ByteString.copyFrom(pk.bytes)
+        latestMessageOpt <- dag.latestMessage(sender)
+        seqNum           = latestMessageOpt.fold(0)(_.seqNum) + 1
+        genesis = ProtoUtil
+          .signBlock(context.genesisBlock, sk, "secp256k1", "rchain", seqNum, sender)
         _ <- Validate.formatOfFields[Task](genesis) shouldBeF true
         _ <- Validate.formatOfFields[Task](genesis.copy(blockHash = ByteString.EMPTY)) shouldBeF false
         _ <- Validate.formatOfFields[Task](genesis.copy(sig = ByteString.EMPTY)) shouldBeF false
@@ -766,10 +776,13 @@ class ValidateTest
     _ => implicit blockDagStorage =>
       val context  = buildGenesis()
       val (sk, pk) = context.validatorKeyPairs.head
+      val sender   = ByteString.copyFrom(pk.bytes)
       for {
-        dag <- blockDagStorage.getRepresentation
-        genesis <- ProtoUtil
-                    .signBlock[Task](context.genesisBlock, dag, pk, sk, "secp256k1", "rchain")
+        dag              <- blockDagStorage.getRepresentation
+        latestMessageOpt <- dag.latestMessage(sender)
+        seqNum           = latestMessageOpt.fold(0)(_.seqNum) + 1
+        genesis = ProtoUtil
+          .signBlock(context.genesisBlock, sk, "secp256k1", "rchain", seqNum, sender)
         _ <- Validate.blockHash[Task](genesis) shouldBeF Right(Valid)
         result <- Validate.blockHash[Task](
                    genesis.copy(blockHash = ByteString.copyFromUtf8("123"))
@@ -780,11 +793,21 @@ class ValidateTest
   "Block version validation" should "work" in withStorage { _ => implicit blockDagStorage =>
     val context  = buildGenesis()
     val (sk, pk) = context.validatorKeyPairs.head
+    val sender   = ByteString.copyFrom(pk.bytes)
     for {
-      dag     <- blockDagStorage.getRepresentation
-      genesis <- ProtoUtil.signBlock(context.genesisBlock, dag, pk, sk, "secp256k1", "rchain")
-      _       <- Validate.version[Task](genesis, -1) shouldBeF false
-      result  <- Validate.version[Task](genesis, 1) shouldBeF true
+      dag              <- blockDagStorage.getRepresentation
+      latestMessageOpt <- dag.latestMessage(sender)
+      seqNum           = latestMessageOpt.fold(0)(_.seqNum) + 1
+      genesis = ProtoUtil.signBlock(
+        context.genesisBlock,
+        sk,
+        "secp256k1",
+        "rchain",
+        seqNum,
+        sender
+      )
+      _      <- Validate.version[Task](genesis, -1) shouldBeF false
+      result <- Validate.version[Task](genesis, 1) shouldBeF true
     } yield result
   }
 

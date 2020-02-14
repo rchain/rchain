@@ -21,6 +21,7 @@ import coop.rchain.models.BlockMetadata
 import coop.rchain.models.Validator.Validator
 import coop.rchain.rholang.interpreter.Runtime.BlockData
 import coop.rchain.shared.{Cell, Log, Time}
+import coop.rchain.casper.util.rholang.SystemDeployUtil
 
 object BlockCreator {
   private[this] val CreateBlockMetricsSource =
@@ -69,6 +70,10 @@ object BlockCreator {
         parentMetadatas       <- EstimatorHelper.chooseNonConflicting(tipHashes, dag)
         maxBlockNumber        = ProtoUtil.maxBlockNumberMetadata(parentMetadatas)
         invalidLatestMessages <- ProtoUtil.invalidLatestMessages(dag)
+        deploys               <- extractDeploys(dag, parentMetadatas, maxBlockNumber, expirationThreshold)
+        sender                = ByteString.copyFrom(validatorIdentity.publicKey.bytes)
+        latestMessageOpt      <- dag.latestMessage(sender)
+        seqNum                = latestMessageOpt.fold(0)(_.seqNum) + 1
         // TODO: Add `slashingDeploys` to DeployStorage
         slashingDeploys = invalidLatestMessages.values.toList.map(
           invalidBlockHash =>
@@ -76,10 +81,9 @@ object BlockCreator {
             SlashDeploy(
               invalidBlockHash,
               validatorIdentity.publicKey,
-              Tools.rng(invalidBlockHash.toByteArray)
+              SystemDeployUtil.generateSlashDeployRandomSeed(sender, seqNum)
             )
         )
-        deploys <- extractDeploys(dag, parentMetadatas, maxBlockNumber, expirationThreshold)
         parents <- parentMetadatas.toList.traverse(p => ProtoUtil.getBlock(p.blockHash))
         // there are 3 situations on judging whether the validator is active
         // 1. it is possible that you are active in some parents but not active in other parents
@@ -98,7 +102,7 @@ object BlockCreator {
         invalidBlocks    = invalidBlocksSet.map(block => (block.blockHash, block.sender)).toMap
         // make sure closeBlock is the last system Deploy
         systemDeploys = slashingDeploys :+ CloseBlockDeploy(
-          Tools.rng(parents.head.blockHash.toByteArray)
+          SystemDeployUtil.generateCloseDeployRandomSeed(sender, seqNum)
         )
         unsignedBlock <- isActive.ifM(
                           if (deploys.nonEmpty || slashingDeploys.nonEmpty) {
@@ -114,6 +118,7 @@ object BlockCreator {
                               shardId,
                               version,
                               now,
+                              seqNum,
                               invalidBlocks
                             )
                           } else {
@@ -122,16 +127,16 @@ object BlockCreator {
                           CreateBlockStatus.readOnlyMode.pure[F]
                         )
         _ <- spanF.mark("block-created")
-        signedBlock <- unsignedBlock.mapF(
-                        signBlock(
-                          _,
-                          dag,
-                          validatorIdentity.publicKey,
-                          validatorIdentity.privateKey,
-                          validatorIdentity.sigAlgorithm,
-                          shardId
-                        )
-                      )
+        signedBlock = unsignedBlock.map(
+          signBlock(
+            _,
+            validatorIdentity.privateKey,
+            validatorIdentity.sigAlgorithm,
+            shardId,
+            seqNum,
+            sender
+          )
+        )
         _ <- spanF.mark("block-signed")
       } yield signedBlock
     }
@@ -203,11 +208,12 @@ object BlockCreator {
       shardId: String,
       version: Long,
       now: Long,
+      seqNum: Int,
       invalidBlocks: Map[BlockHash, Validator]
   )(implicit spanF: Span[F]): F[CreateBlockStatus] =
     spanF.trace(ProcessDeploysAndCreateBlockMetricsSource) {
       (for {
-        blockData <- BlockData(now, maxBlockNumber + 1, sender, parents.head.blockHash.toByteArray).pure
+        blockData <- BlockData(now, maxBlockNumber + 1, sender, seqNum).pure
         result <- InterpreterUtil.computeDeploysCheckpoint(
                    parents,
                    deploys,

@@ -60,7 +60,8 @@ class InterpreterUtilTest
       deploys: Seq[Signed[DeployData]],
       dag: BlockDagRepresentation[F],
       runtimeManager: RuntimeManager[F],
-      seqNum: Long = 0L
+      blockNumber: Long = 0L,
+      seqNum: Int = 0
   ): F[
     Either[Throwable, (StateHash, StateHash, Seq[ProcessedDeploy], Seq[ProcessedSystemDeploy])]
   ] =
@@ -75,9 +76,10 @@ class InterpreterUtilTest
               runtimeManager,
               BlockData(
                 now,
-                seqNum,
+                // TODO this should be blockNumber
+                blockNumber,
                 genesisContext.validatorPks.head,
-                parents.head.blockHash.toByteArray
+                seqNum
               ),
               Map.empty[BlockHash, Validator]
             )
@@ -586,7 +588,8 @@ class InterpreterUtilTest
                                 deploys,
                                 dag1,
                                 runtimeManager,
-                                (i + 1).toLong
+                                (i + 1).toLong,
+                                (i + 1)
                               )
           Right((preStateHash, computedTsHash, processedDeploys, _)) = deploysCheckpoint
           block <- createBlock[Task](
@@ -668,7 +671,8 @@ class InterpreterUtilTest
                                 deploys,
                                 dag1,
                                 runtimeManager,
-                                seqNum = (i + 1).toLong
+                                (i + 1).toLong,
+                                (i + 1)
                               )
           Right((preStateHash, computedTsHash, processedDeploys, _)) = deploysCheckpoint
           block <- createBlock[Task](
