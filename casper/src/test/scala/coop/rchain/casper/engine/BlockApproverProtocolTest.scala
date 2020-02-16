@@ -88,7 +88,7 @@ object BlockApproverProtocolTest {
       val node = nodes.head
       BlockApproverProtocol
         .of[Effect](
-          node.validatorId,
+          node.validatorId.get,
           genesisParams.timestamp,
           Traverse[List]
             .traverse(genesisParams.proofOfStake.validators.map(_.pk).toList)(

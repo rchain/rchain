@@ -59,7 +59,8 @@ class TestNode[F[_]](
     maxNumberOfParents: Int = Estimator.UnlimitedParents,
     maxParentDepth: Option[Int] = None,
     shardId: String = "rchain",
-    finalizationRate: Int = 1
+    finalizationRate: Int = 1,
+    isReadOnly: Boolean = false
 )(
     implicit concurrentF: Concurrent[F],
     implicit val blockStore: BlockStore[F],
@@ -94,7 +95,9 @@ class TestNode[F[_]](
 
   val defaultTimeout: FiniteDuration = FiniteDuration(1000, MILLISECONDS)
 
-  val validatorId = ValidatorIdentity(Secp256k1.toPublic(sk), sk, "secp256k1")
+  val validatorId: Option[ValidatorIdentity] =
+    if (isReadOnly) none[ValidatorIdentity]
+    else Some(ValidatorIdentity(Secp256k1.toPublic(sk), sk, "secp256k1"))
 
   val approvedBlock =
     ApprovedBlock(
@@ -111,7 +114,7 @@ class TestNode[F[_]](
   implicit val commUtil: CommUtil[F] = CommUtil.of[F]
 
   implicit val casperEff = new MultiParentCasperImpl[F](
-    Some(validatorId),
+    validatorId,
     genesis,
     postGenesisStateHash,
     shardId,
@@ -119,7 +122,7 @@ class TestNode[F[_]](
     blockProcessingLock
   )
 
-  val engine                             = new Running(casperEff, approvedBlock, Some(validatorId), ().pure[F])
+  val engine                             = new Running(casperEff, approvedBlock, validatorId, ().pure[F])
   implicit val engineCell: EngineCell[F] = Cell.unsafe[F, Engine[F]](engine)
   implicit val packetHandlerEff          = CasperPacketHandler[F]
 
@@ -274,16 +277,18 @@ object TestNode {
       storageSize: Long = 1024L * 1024 * 10,
       synchronyConstraintThreshold: Double = 0d,
       maxNumberOfParents: Int = Estimator.UnlimitedParents,
-      maxParentDepth: Option[Int] = None
+      maxParentDepth: Option[Int] = None,
+      withReadOnlySize: Int = 0
   )(implicit scheduler: Scheduler): Resource[Effect, IndexedSeq[TestNode[Effect]]] =
     networkF[Effect](
-      genesis.validatorSks.take(networkSize).toVector,
+      genesis.validatorSks.take(networkSize + withReadOnlySize).toVector,
       genesis.genesisBlock,
       genesis.storageDirectory,
       Resources.mkRuntimeManagerWithHistoryAt[Effect](_)(storageSize),
       synchronyConstraintThreshold,
       maxNumberOfParents,
-      maxParentDepth
+      maxParentDepth,
+      withReadOnlySize
     )(
       Concurrent[Effect],
       TestNetwork.empty[Effect]
@@ -296,11 +301,13 @@ object TestNode {
       createRuntime: Path => Resource[F, (RuntimeManager[F], RhoHistoryRepository[F])],
       synchronyConstraintThreshold: Double,
       maxNumberOfParents: Int,
-      maxParentDepth: Option[Int]
+      maxParentDepth: Option[Int],
+      withReadOnlySize: Int
   ): Resource[F, IndexedSeq[TestNode[F]]] = {
-    val n     = sks.length
-    val names = (1 to n).map(i => s"node-$i")
-    val peers = names.map(peerNode(_, 40400))
+    val n          = sks.length
+    val names      = (1 to n).map(i => if (i <= (n - withReadOnlySize)) s"node-$i" else s"readOnly-$i")
+    val isReadOnly = (1 to n).map(i => if (i <= (n - withReadOnlySize)) false else true)
+    val peers      = names.map(peerNode(_, 40400))
 
     val logicalTime: LogicalTime[F] = new LogicalTime[F]
 
@@ -308,9 +315,10 @@ object TestNode {
       names
         .zip(peers)
         .zip(sks)
+        .zip(isReadOnly)
         .toList
         .traverse {
-          case ((name, currentPeerNode), sk) =>
+          case (((name, currentPeerNode), sk), isReadOnly) =>
             createNode(
               name,
               currentPeerNode,
@@ -321,7 +329,8 @@ object TestNode {
               createRuntime,
               synchronyConstraintThreshold,
               maxNumberOfParents,
-              maxParentDepth
+              maxParentDepth,
+              isReadOnly
             )
         }
         .map(_.toVector)
@@ -361,7 +370,8 @@ object TestNode {
       createRuntime: Path => Resource[F, (RuntimeManager[F], RhoHistoryRepository[F])],
       synchronyConstraintThreshold: Double,
       maxNumberOfParents: Int,
-      maxParentDepth: Option[Int]
+      maxParentDepth: Option[Int],
+      isReadOnly: Boolean
   ): Resource[F, TestNode[F]] = {
     val tle                = new TransportLayerTestImpl[F]()
     val tls                = new TransportLayerServerTestImpl[F](currentPeerNode)
@@ -395,7 +405,8 @@ object TestNode {
                    blockProcessingLock,
                    synchronyConstraintThreshold,
                    maxNumberOfParents,
-                   maxParentDepth
+                   maxParentDepth,
+                   isReadOnly = isReadOnly
                  )(
                    Concurrent[F],
                    blockStore,
