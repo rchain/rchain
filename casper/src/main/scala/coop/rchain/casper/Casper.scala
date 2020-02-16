@@ -89,22 +89,37 @@ sealed abstract class MultiParentCasperInstances {
       validatorId: Option[ValidatorIdentity],
       genesis: BlockMessage,
       shardId: String,
-      finalizationRate: Int
+      finalizationRate: Int,
+      skipValidateGenesis: Boolean
   )(implicit runtimeManager: RuntimeManager[F]): F[MultiParentCasper[F]] =
     Span[F].trace(genesisLabel) {
       for {
         dag <- BlockDagStorage[F].getRepresentation
-        maybePostGenesisStateHash <- InterpreterUtil
-                                      .validateBlockCheckpoint(genesis, dag, runtimeManager)
-        postGenesisStateHash <- maybePostGenesisStateHash match {
-                                 case Left(BlockError.BlockException(ex)) =>
-                                   ex.raiseError[F, StateHash]
-                                 case Left(error) =>
-                                   new Exception(s"Block error: $error").raiseError[F, StateHash]
-                                 case Right(None) =>
-                                   new Exception("Genesis tuplespace validation failed!")
-                                     .raiseError[F, StateHash]
-                                 case Right(Some(hash)) => hash.pure
+        postGenesisStateHash <- if (skipValidateGenesis) {
+                                 Log[F].warn("Skip genesis block validation!") >> genesis.body.state.postStateHash.pure
+                               } else {
+                                 for {
+                                   maybePostGenesisStateHash <- InterpreterUtil
+                                                                 .validateBlockCheckpoint(
+                                                                   genesis,
+                                                                   dag,
+                                                                   runtimeManager
+                                                                 )
+                                   postGenesisStateHash <- maybePostGenesisStateHash match {
+                                                            case Left(
+                                                                BlockError.BlockException(ex)
+                                                                ) =>
+                                                              ex.raiseError[F, StateHash]
+                                                            case Left(error) =>
+                                                              new Exception(s"Block error: $error")
+                                                                .raiseError[F, StateHash]
+                                                            case Right(None) =>
+                                                              new Exception(
+                                                                "Genesis tuplespace validation failed!"
+                                                              ).raiseError[F, StateHash]
+                                                            case Right(Some(hash)) => hash.pure
+                                                          }
+                                 } yield postGenesisStateHash
                                }
         blockProcessingLock <- MetricsSemaphore.single[F]
         casperState         <- Cell.mvarCell[F, CasperState](CasperState())

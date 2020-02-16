@@ -60,7 +60,13 @@ object CasperLaunch {
         validatorId <- ValidatorIdentity.fromConfig[F](conf)
         genesis     = approvedBlock.candidate.block
         casper <- MultiParentCasper
-                   .hashSetCasper[F](validatorId, genesis, conf.shardId, conf.finalizationRate)
+                   .hashSetCasper[F](
+                     validatorId,
+                     genesis,
+                     conf.shardId,
+                     conf.finalizationRate,
+                     skipValidateGenesis = true
+                   )
         _ <- Engine
               .transitionToRunning[F](
                 casper,
