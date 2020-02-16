@@ -68,6 +68,10 @@ message BondStatusQuery {
   bytes publicKey = 1;
 }
 
+message ExploratoryDeployQuery{
+  string term = 1;
+}
+
 message BondInfo{
   string validator = 1;
   int64  stake = 2;
