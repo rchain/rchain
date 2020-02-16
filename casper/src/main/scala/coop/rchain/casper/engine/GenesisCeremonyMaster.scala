@@ -56,7 +56,13 @@ object GenesisCeremonyMaster {
                  for {
                    _ <- insertIntoBlockAndDagStore[F](genesis, approvedBlock)
                    casper <- MultiParentCasper
-                              .hashSetCasper[F](validatorId, genesis, shardId, finalizationRate)
+                              .hashSetCasper[F](
+                                validatorId,
+                                genesis,
+                                shardId,
+                                finalizationRate,
+                                skipValidateGenesis = false
+                              )
                    _ <- Engine
                          .transitionToRunning[F](casper, approvedBlock, validatorId, ().pure[F])
                    _ <- CommUtil[F].sendForkChoiceTipRequest

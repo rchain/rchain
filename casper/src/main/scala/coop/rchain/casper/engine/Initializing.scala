@@ -77,7 +77,8 @@ class Initializing[F[_]: Sync: Metrics: Span: Concurrent: BlockStore: CommUtil: 
                                      validatorId,
                                      genesis,
                                      shardId,
-                                     finalizationRate
+                                     finalizationRate,
+                                     skipValidateGenesis = false
                                    )
                         _ <- Engine
                               .transitionToRunning[F](
