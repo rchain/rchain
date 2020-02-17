@@ -39,6 +39,8 @@ final case class CasperConf(
     deployTimestamp: Option[Long],
     finalizationRate: Int,
     maxNumberOfParents: Int,
+    forkChioceStaleThreshold: FiniteDuration,
+    forkChioceCheckIfStaleInterval: FiniteDuration,
     maxParentDepthOpt: Option[Int]
 )
 

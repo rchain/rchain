@@ -6,6 +6,7 @@ import cats.{Applicative, Monad}
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockStore
 import coop.rchain.casper._
+import coop.rchain.casper.engine.EngineCell.EngineCell
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.comm.CommUtil
 import coop.rchain.comm.protocol.routing.Packet
@@ -17,6 +18,7 @@ import coop.rchain.metrics.Metrics
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.Validator.Validator
 import coop.rchain.shared.{Cell, Log, Time}
+import monix.eval.Task
 
 import scala.concurrent.duration._
 
@@ -61,6 +63,39 @@ object Running {
       peer: PeerNode,
       blockHash: BlockHash
   ) = requestForBlock(peer, blockHash) >> addNewEntry(blockHash, Some(peer))
+
+  /**
+    * As we introduced synchrony constraint - there might be situation when node is stuck.
+    * As an edge case with `sync = 0.99`, if node misses the block that is the last one to meet sync constraint,
+    * it has no way to request it after it was broadcasted. So it will never meet synchrony constraint.
+    * To mitigate this issue we can update fork choice tips if current fork-choice tip has old timestamp,
+    * which means node does not propose new blocks and no new blocks were received recently.
+    */
+  def updateForkChoiceTipsIfStuck[F[_]: Sync: CommUtil: Log: Time: BlockStore: EngineCell](
+      delayThreshold: FiniteDuration
+  ): F[Unit] =
+    for {
+      engine <- EngineCell[F].read
+      _ <- engine.withCasper(
+            casper => {
+              for {
+                tip   <- MultiParentCasper.forkChoiceTip[F](casper)
+                tipts = tip.header.timestamp
+                _ <- Time[F].currentMillis
+                      .map(_ - tipts > delayThreshold.toMillis)
+                      .ifM(
+                        Log[F].info(
+                          "Updating fork choice tips as current FCT " +
+                            s"is more then ${delayThreshold.toString} old. " +
+                            s"Might be network is faulty."
+                        ) >> CommUtil[F].sendForkChoiceTipRequest,
+                        ().pure
+                      )
+              } yield ()
+            },
+            ().pure[F]
+          )
+    } yield ()
 
   /**
     * This method should be called periodically to maintain liveness of the protocol
