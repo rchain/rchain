@@ -224,5 +224,14 @@ object DeployGrpcServiceV1 {
           import BondStatusResponse.Message._
           BondStatusResponse(r.fold[Message](Error, IsBonded))
         }
+
+      def exploratoryDeploy(request: ExploratoryDeployQuery): Task[ExploratoryDeployResponse] =
+        defer(BlockAPI.exploratoryDeploy[F](request.term)) { r =>
+          import ExploratoryDeployResponse.Message
+          import ExploratoryDeployResponse.Message._
+          ExploratoryDeployResponse(r.fold[Message](Error, {
+            case (par, block) => Result(DataWithBlockInfo(par, Some(block)))
+          }))
+        }
     }
 }

@@ -53,6 +53,15 @@ service DeployService {
   // Check if a given validator is bonded.
   // Returns on success BondStatusResponse
   rpc bondStatus(BondStatusQuery) returns (BondStatusResponse) {}
+  // Executes deploy as user deploy with immediate rollback and return result
+  rpc exploratoryDeploy(ExploratoryDeployQuery) returns (ExploratoryDeployResponse) {}
+}
+
+message ExploratoryDeployResponse{
+  oneof message{
+    ServiceError error = 1;
+    DataWithBlockInfo result = 2;
+  }
 }
 
 // doDeploy

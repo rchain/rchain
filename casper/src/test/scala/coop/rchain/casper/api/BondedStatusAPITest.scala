@@ -48,9 +48,9 @@ class BondedStatusAPITest
   "bondStatus" should "return true for bonded validator" in effectTest {
     TestNode.networkEff(genesisContext, networkSize = 3).use {
       case n1 +: n2 +: n3 +: _ =>
-        (bondedStatus(n1.validatorId.publicKey)(n1) shouldBeF true) >>
-          (bondedStatus(n2.validatorId.publicKey)(n1) shouldBeF true) >>
-          (bondedStatus(n3.validatorId.publicKey)(n1) shouldBeF true)
+        (bondedStatus(n1.validatorId.get.publicKey)(n1) shouldBeF true) >>
+          (bondedStatus(n2.validatorId.get.publicKey)(n1) shouldBeF true) >>
+          (bondedStatus(n3.validatorId.get.publicKey)(n1) shouldBeF true)
     }
   }
 
@@ -66,20 +66,20 @@ class BondedStatusAPITest
       case nodes @ n1 +: n2 +: n3 +: n4 +: _ =>
         for {
           produceDeploys <- (0 until 3).toList.traverse(i => basicDeployData[Task](i))
-          bondDeploy     <- BondingUtil.bondingDeploy[Task](1000, n4.validatorId.privateKey)
+          bondDeploy     <- BondingUtil.bondingDeploy[Task](1000, n4.validatorId.get.privateKey)
 
-          _  <- bondedStatus(n4.validatorId.publicKey)(n1) shouldBeF false
+          _  <- bondedStatus(n4.validatorId.get.publicKey)(n1) shouldBeF false
           b1 <- n1.propagateBlock(bondDeploy)(nodes: _*)
           b2 <- n2.propagateBlock(produceDeploys(0))(nodes: _*)
 
           // n4 is still not bonded since b1 is not finalized yet
-          _ <- bondedStatus(n4.validatorId.publicKey)(n1) shouldBeF false
+          _ <- bondedStatus(n4.validatorId.get.publicKey)(n1) shouldBeF false
 
           b3 <- n3.propagateBlock(produceDeploys(1))(nodes: _*)
           b4 <- n1.propagateBlock(produceDeploys(2))(nodes: _*)
 
           // b1 is now finalized, hence n4 is now bonded
-          _ <- bondedStatus(n4.validatorId.publicKey)(n1) shouldBeF true
+          _ <- bondedStatus(n4.validatorId.get.publicKey)(n1) shouldBeF true
         } yield ()
     }
   }
