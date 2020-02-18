@@ -219,6 +219,8 @@ class HoconConfigurationSpec extends FunSuite with Matchers {
         |    deploy-timestamp = 333
         |    finalization-rate = 4
         |    max-number-of-parents = 1
+        |    fork-choice-stale-threshold = 3h
+        |    fork-choice-check-if-stale-interval = 3h
         |    max-parent-depth = 7
         |  }
         |}
@@ -249,6 +251,8 @@ class HoconConfigurationSpec extends FunSuite with Matchers {
         deployTimestamp = Some(333),
         finalizationRate = 4,
         maxNumberOfParents = 1,
+        forkChoiceStaleThreshold = 3.hour,
+        forkChoiceCheckIfStaleInterval = 3.hour,
         maxParentDepthOpt = Some(7)
       )
 
