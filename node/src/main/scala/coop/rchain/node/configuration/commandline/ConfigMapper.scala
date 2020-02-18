@@ -113,6 +113,8 @@ object ConfigMapper {
         add(keys.FinalizationRate, run.finalizationRate)
         add(keys.MaxNumberOfParents, run.maxNumberOfParents)
         add(keys.MaxParentDepth, run.maxParentDepth)
+        add(keys.forkChoiceStaleThreshold, run.forkChoiceStaleThreshold)
+        add(keys.forkChoiceCheckIfStaleInterval, run.forkChoiceCheckIfStaleInterval)
       }
     }
 

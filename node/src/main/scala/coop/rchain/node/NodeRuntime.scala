@@ -817,15 +817,15 @@ object NodeRuntime {
             )
         _ <- Time[F].sleep(conf.casper.casperLoopInterval.seconds)
       } yield ()
-      // Broadcast fork choice tips request if current fork choice is more then `forkChioceStaleThreshold` minutes old.
+      // Broadcast fork choice tips request if current fork choice is more then `forkChoiceStaleThreshold` minutes old.
       // For why - look at updateForkChoiceTipsIfStuck method description.
       updateForkChoiceLoop = {
         implicit val cu = commUtil
         implicit val ec = engineCell
         implicit val bs = blockStore
         for {
-          _ <- Running.updateForkChoiceTipsIfStuck(conf.casper.forkChioceStaleThreshold)
-          _ <- Time[F].sleep(conf.casper.forkChioceCheckIfStaleInterval)
+          _ <- Running.updateForkChoiceTipsIfStuck(conf.casper.forkChoiceStaleThreshold)
+          _ <- Time[F].sleep(conf.casper.forkChoiceCheckIfStaleInterval)
         } yield ()
       }
       engineInit     = engineCell.read >>= (_.init)

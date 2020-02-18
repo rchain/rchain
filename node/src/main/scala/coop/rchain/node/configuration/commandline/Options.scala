@@ -373,6 +373,20 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
     val maxParentDepth = opt[Int](
       descr = "Maximum depth of block parents."
     )
+
+    val forkChoiceStaleThreshold =
+      opt[FiniteDuration](
+        default = Option(FiniteDuration(5, scala.concurrent.duration.MINUTES)),
+        descr =
+          "Node will request for fork choice tips if the latest FCT is more then " +
+            "forkChoiceStaleThreshold old. Default 5 min."
+      )
+
+    val forkChoiceCheckIfStaleInterval =
+      opt[FiniteDuration](
+        default = Option(FiniteDuration(1, scala.concurrent.duration.MINUTES)),
+        descr = "Interval for check if fork choice tip is stale. Default 1 min."
+      )
   }
   addSubcommand(run)
 
