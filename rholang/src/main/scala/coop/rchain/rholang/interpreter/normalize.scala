@@ -890,6 +890,12 @@ object ProcNormalizeMatcher {
           bindingsTrimmed                                                  = bindingsProcessed.map(b => (b._1, b._2, b._3, b._4))
           receipts <- ReceiveBindsSortMatcher
                        .preSortBinds[M, VarSort](bindingsTrimmed)
+          // Check if receive contains the same channels
+          channels        = receipts.map(_._1.source)
+          hasSameChannels = channels.size > channels.toSet.size
+          _ <- ReceiveOnSameChannelsError(p.line_num, p.col_num)
+                .raiseError[M, Unit]
+                .whenA(hasSameChannels)
           mergedFrees <- receipts.toList
                           .foldM[M, DebruijnLevelMap[VarSort]](DebruijnLevelMap[VarSort]())(
                             (env, receipt) =>

@@ -117,4 +117,12 @@ object errors {
         s"Error: Aggregate Error\n${(interpreterErrors ++ errors).map(ExceptionUtils.getFullStackTrace).mkString}"
       )
 
+  // Current implementation of SpaceMatcher (extractDataCandidates) causes unmatched comms
+  // with the same binding channels and overlapping patterns.
+  // Temporarily these kind of joins `for (<- @2; <- @2)` are not allowed.
+  // https://rchain.atlassian.net/browse/RCHAIN-4032
+  final case class ReceiveOnSameChannelsError(line: Int, col: Int)
+      extends InterpreterError(
+        s"Receiving on the same channels is currently not allowed (at $line:$col). Ref. RCHAIN-4032."
+      )
 }

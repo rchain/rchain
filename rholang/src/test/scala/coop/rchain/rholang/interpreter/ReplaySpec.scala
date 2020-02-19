@@ -27,7 +27,10 @@ class ReplaySpec extends FlatSpec with Matchers {
   //  with in-memory version used here.
   // https://github.com/rchain/rchain/blob/1f9554f68a/rholang/src/test/scala/coop/rchain/rholang/interpreter/accounting/CostAccountingSpec.scala#L231
 
-  "multi joins (2/2)" should "execute successfully in replay" in {
+  // Temporarily disabled tests with joins on the same channels
+  // https://rchain.atlassian.net/browse/RCHAIN-4032
+
+  "multi joins (2/2)" should "execute successfully in replay" ignore {
     val term =
       """
         |new x in {
@@ -37,7 +40,7 @@ class ReplaySpec extends FlatSpec with Matchers {
     testRholangTerm(term, 500, 30.seconds)
   }
 
-  "multi joins (4/2)" should "execute successfully in replay" in {
+  "multi joins (4/2)" should "execute successfully in replay" ignore {
     val term =
       """
         |new x in {

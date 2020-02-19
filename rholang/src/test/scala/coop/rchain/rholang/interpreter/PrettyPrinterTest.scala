@@ -289,27 +289,28 @@ class ProcPrinterSpec extends FlatSpec with Matchers {
     listBindings1.add(new NameVar("z"))
     val listLinearBinds = new ListLinearBind()
     listLinearBinds.add(
-      new LinearBindImpl(listBindings, new NameRemainderEmpty(), new NameVar("x"))
+      new LinearBindImpl(listBindings, new NameRemainderEmpty(), new NameVar("x0"))
     )
     listLinearBinds.add(
-      new LinearBindImpl(listBindings1, new NameRemainderEmpty(), new NameVar("x"))
+      new LinearBindImpl(listBindings1, new NameRemainderEmpty(), new NameVar("x1"))
     )
     val linearSimple = new LinearSimple(listLinearBinds)
     val receipt      = new ReceiptLinear(linearSimple)
     val cont         = new PPar(new PEval(new NameVar("y")), new PEval(new NameVar("z")))
     val receive      = new PInput(receipt, cont)
     val nameDec      = new ListNameDecl()
-    nameDec.add(new NameDeclSimpl("x"))
+    nameDec.add(new NameDeclSimpl("x0"))
+    nameDec.add(new NameDeclSimpl("x1"))
     val source = new PNew(nameDec, receive)
     val result =
       PrettyPrinter().buildString(
         ProcNormalizeMatcher.normalizeMatch[Coeval](source, inputs).value.par
       )
     val target =
-      """new x0 in {
-        |  for( @{x1} <- x0 ; @{x2} <- x0 ) {
+      """new x0, x1 in {
+        |  for( @{x2} <- x1 ; @{x3} <- x0 ) {
         |    x2 |
-        |    x1
+        |    x3
         |  }
         |}""".stripMargin
     result shouldBe target
