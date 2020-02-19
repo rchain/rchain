@@ -19,8 +19,6 @@ import coop.rchain.rholang.interpreter.ParBuilder
 import coop.rchain.rholang.interpreter.Runtime.BlockData
 import coop.rchain.shared.{Log, LogSource}
 import com.google.protobuf.ByteString
-import coop.rchain.casper.protocol.ProcessedSystemDeploy.Failed
-import coop.rchain.casper.util.rholang.SystemDeployPlayResult.{PlayFailed, PlaySucceeded}
 import coop.rchain.crypto.signatures.Signed
 import monix.eval.Coeval
 
@@ -64,9 +62,28 @@ object InterpreterUtil {
                    BlockStatus.exception(ex).asLeft[Option[StateHash]].pure
                  case Right(computedPreStateHash) =>
                    if (incomingPreStateHash == computedPreStateHash) {
+                     val replayBlockF =
+                       replayBlock(incomingPreStateHash, block, dag, runtimeManager)
+                     val postStateHash = ProtoUtil.postStateHash(block)
+                     // TODO: temporary solution as workaround for replay bug (hash mismatch)
+                     // https://rchain.atlassian.net/browse/RCHAIN-4035
+                     val maxRetries = 1000
                      for {
-                       replayResult <- replayBlock(incomingPreStateHash, block, dag, runtimeManager)
-                       result       <- handleErrors(ProtoUtil.postStateHash(block), replayResult)
+                       replayResult <- withRetry[F, Either[ReplayFailure, StateHash]](
+                                        replayBlockF,
+                                        retries = maxRetries,
+                                        // Retry in case of hash mismatch
+                                        _.fold(_ => false, _ != postStateHash), {
+                                          case (Right(hash), n) =>
+                                            // Log retries
+                                            Log[F].warn(
+                                              s"Replay block hash mismatch (retry $n/$maxRetries): ${PrettyPrinter
+                                                .buildString(hash)} != ${PrettyPrinter.buildString(postStateHash)}."
+                                            )
+                                          case _ => ().pure[F]
+                                        }
+                                      )
+                       result <- handleErrors(ProtoUtil.postStateHash(block), replayResult)
                      } yield result
                    } else {
                      //TODO at this point we may just as well terminate the replay, there's no way it will succeed.
@@ -79,6 +96,24 @@ object InterpreterUtil {
                    }
                }
     } yield result
+  }
+
+  // Retry F[A] while condition is satisfied
+  private def withRetry[F[_]: Monad, A](
+      fa: F[A],
+      retries: Int,
+      condition: A => Boolean,
+      onRetry: (A, Int) => F[Unit]
+  ): F[A] = {
+    def loop(n: Int): F[Either[Int, A]] =
+      for {
+        a           <- fa
+        shouldRetry = n < retries && condition(a)
+        _           <- if (shouldRetry) onRetry(a, n) else ().pure
+        res <- if (shouldRetry) (n + 1).asLeft[A].pure
+              else a.asRight[Int].pure
+      } yield res
+    Monad[F].tailRecM(0)(loop)
   }
 
   private def replayBlock[F[_]: Sync: Log: BlockStore](
