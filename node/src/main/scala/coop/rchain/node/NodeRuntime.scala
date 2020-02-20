@@ -251,6 +251,7 @@ class NodeRuntime private[node] (
       packetHandler,
       apiServers,
       casperLoop,
+      updateForkChoiceLoop,
       engineInit,
       casperLaunch,
       reportingCasper,
@@ -264,6 +265,7 @@ class NodeRuntime private[node] (
     program = nodeProgram(
       apiServers,
       casperLoop,
+      updateForkChoiceLoop,
       engineInit,
       runtimeCleanup,
       reportingCasper,
@@ -313,6 +315,7 @@ class NodeRuntime private[node] (
   private def nodeProgram(
       apiServers: APIServers,
       casperLoop: CasperLoop[TaskEnv],
+      updateForkChoiceLoop: CasperLoop[TaskEnv],
       engineInit: EngineInit[TaskEnv],
       runtimeCleanup: Cleanup[TaskEnv],
       reportingCasper: ReportingCasper[TaskEnv],
@@ -445,6 +448,11 @@ class NodeRuntime private[node] (
       _ <- Concurrent[TaskEnv].start(engineInit)
       _ <- Task
             .defer(casperLoop.forever.run(NodeCallCtx.init))
+            .executeOn(loopScheduler)
+            .start
+            .toReaderT
+      _ <- Task
+            .defer(updateForkChoiceLoop.forever.run(NodeCallCtx.init))
             .executeOn(loopScheduler)
             .toReaderT
     } yield ()
@@ -665,6 +673,7 @@ object NodeRuntime {
         PacketHandler[F],
         APIServers,
         CasperLoop[F],
+        CasperLoop[F],
         EngineInit[F],
         CasperLaunch[F],
         ReportingCasper[F],
@@ -743,6 +752,7 @@ object NodeRuntime {
         implicit val sp = span
         RuntimeManager.fromRuntime[F](casperRuntime)
       }
+
       engineCell   <- EngineCell.init[F]
       envVars      = EnvVars.envVars[F]
       raiseIOError = IOError.raiseIOErrorThroughSync[F]
@@ -807,6 +817,17 @@ object NodeRuntime {
             )
         _ <- Time[F].sleep(conf.casper.casperLoopInterval.seconds)
       } yield ()
+      // Broadcast fork choice tips request if current fork choice is more then `forkChoiceStaleThreshold` minutes old.
+      // For why - look at updateForkChoiceTipsIfStuck method description.
+      updateForkChoiceLoop = {
+        implicit val cu = commUtil
+        implicit val ec = engineCell
+        implicit val bs = blockStore
+        for {
+          _ <- Running.updateForkChoiceTipsIfStuck(conf.casper.forkChoiceStaleThreshold)
+          _ <- Time[F].sleep(conf.casper.forkChoiceCheckIfStaleInterval)
+        } yield ()
+      }
       engineInit     = engineCell.read >>= (_.init)
       runtimeCleanup = NodeRuntime.cleanup(runtime, casperRuntime, deployStorageCleanup)
       webApi = {
@@ -823,6 +844,7 @@ object NodeRuntime {
       packetHandler,
       apiServers,
       casperLoop,
+      updateForkChoiceLoop,
       engineInit,
       casperLaunch,
       reportingCasper,
