@@ -73,27 +73,38 @@ sealed abstract class SafetyOracleInstances {
           candidateBlockHash: BlockHash
       ): F[Float] = Span[F].trace(SafetyOracleMetricsSource) {
         for {
-          candidateMetadata <- blockDag.lookup(candidateBlockHash).map(_.get)
-          totalWeight       <- computeTotalWeight(blockDag, candidateMetadata)
-          _                 <- Span[F].mark("total-weight")
-          agreeingValidatorToWeight <- computeAgreeingValidatorToWeight(
-                                        blockDag,
-                                        candidateMetadata
-                                      )
-          _ <- Span[F].mark("agreeing-validator-to-weight")
-          maxCliqueWeight <- if (2L * agreeingValidatorToWeight.values.sum < totalWeight) {
-                              0L.pure[F]
-                            } else {
-                              agreementGraphMaxCliqueWeight(
-                                blockDag,
-                                candidateMetadata,
-                                agreeingValidatorToWeight
-                              )
-                            }
-          _ <- Span[F].mark("max-clique-weight")
+          maybeCandidateMetadata <- blockDag.lookup(candidateBlockHash)
+          faultTolerance <- maybeCandidateMetadata match {
+                             case Some(candidateMetadata) =>
+                               for {
+                                 totalWeight <- computeTotalWeight(blockDag, candidateMetadata)
+                                 _           <- Span[F].mark("total-weight")
+                                 agreeingValidatorToWeight <- computeAgreeingValidatorToWeight(
+                                                               blockDag,
+                                                               candidateMetadata
+                                                             )
+                                 _ <- Span[F].mark("agreeing-validator-to-weight")
+                                 maxCliqueWeight <- if (2L * agreeingValidatorToWeight.values.sum < totalWeight) {
+                                                     0L.pure[F]
+                                                   } else {
+                                                     agreementGraphMaxCliqueWeight(
+                                                       blockDag,
+                                                       candidateMetadata,
+                                                       agreeingValidatorToWeight
+                                                     )
+                                                   }
+                                 _ <- Span[F].mark("max-clique-weight")
 
-          faultTolerance = 2 * maxCliqueWeight - totalWeight
-        } yield faultTolerance.toFloat / totalWeight
+                                 faultTolerance = 2 * maxCliqueWeight - totalWeight
+                               } yield faultTolerance.toFloat / totalWeight
+                             // if the node can to find the block, it would return -1 and regard that block as orphaned
+                             case None =>
+                               Log[F].info(
+                                 s"blockHash ${candidateBlockHash} can not found in local data"
+                               ) >> (-1L).toFloat
+                                 .pure[F]
+                           }
+        } yield faultTolerance
       }
 
       private def computeTotalWeight(
@@ -134,8 +145,9 @@ sealed abstract class SafetyOracleInstances {
           candidateMetadata: BlockMetadata
       ): F[Map[BlockHash, Long]] =
         candidateMetadata.parents.headOption match {
-          case Some(parent) => blockDag.lookup(parent).map(_.get.weightMap)
-          case None         => candidateMetadata.weightMap.pure[F]
+          case Some(parent) =>
+            blockDag.lookup(parent).map(_.fold(candidateMetadata.weightMap)(_.weightMap))
+          case None => candidateMetadata.weightMap.pure[F]
         }
 
       private def agreementGraphMaxCliqueWeight(
