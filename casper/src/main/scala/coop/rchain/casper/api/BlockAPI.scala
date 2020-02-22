@@ -422,8 +422,15 @@ object BlockAPI {
         dag        <- MultiParentCasper[F].blockDag
         maybeBlock <- getBlock[F](hash, dag)
         blockInfo <- maybeBlock match {
-                      case Some(block) =>
-                        getFullBlockInfo[F](block).map(_.asRight[Error])
+                      case Some(block) => {
+                        val blockAdded = dag.contains(block.blockHash)
+                        blockAdded.ifM(
+                          getFullBlockInfo[F](block).map(_.asRight[Error]),
+                          s"Error: Block with hash $hash received but not added yet"
+                            .asLeft[BlockInfo]
+                            .pure[F]
+                        )
+                      }
                       case None =>
                         s"Error: Failure to find block with hash $hash"
                           .asLeft[BlockInfo]
