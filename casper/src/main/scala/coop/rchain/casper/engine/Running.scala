@@ -219,7 +219,7 @@ object Running {
     ) >>= (
         tip =>
           streamToPeer(peer)(ToPacket(tip.toProto)) <* Log[F].info(
-            s"Sending Block ${tip.blockHash} to $peer"
+            s"Sending Block ${PrettyPrinter.buildString(tip.blockHash)} to $peer"
           )
       )
 

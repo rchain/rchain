@@ -31,7 +31,7 @@ object GenesisBuilder {
   def createGenesis(): BlockMessage =
     buildGenesis().genesisBlock
 
-  val defaultValidatorKeyPairs                   = (1 to 4).map(_ => Secp256k1.newKeyPair)
+  val defaultValidatorKeyPairs                   = (1 to 20).map(_ => Secp256k1.newKeyPair)
   val (defaultValidatorSks, defaultValidatorPks) = defaultValidatorKeyPairs.unzip
 
   def buildGenesisParameters(
@@ -70,7 +70,8 @@ object GenesisBuilder {
     )
 
   private def predefinedVault(pub: PublicKey): Vault =
-    Vault(RevAddress.fromPublicKey(pub).get, 9000000)
+//    Vault(RevAddress.fromPublicKey(pub).get, 90000000000L)
+    Vault(RevAddress.fromPublicKey(pub).get, 0L)
 
   type GenesisParameters = (Iterable[(PrivateKey, PublicKey)], Genesis)
 

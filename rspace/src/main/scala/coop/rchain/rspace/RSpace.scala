@@ -220,6 +220,22 @@ class RSpace[F[_], C, P, A, K](
     produceRef
   }
 
+  def calculateHash(changes: List[HotStoreAction]) =
+    historyRepositoryAtom.get().checkpoint(changes).map(_.history.root)
+
+  override def createCheckpointWithRetry(postRoot: Blake2b256Hash): F[Checkpoint] =
+    for {
+      changes     <- storeAtom.get().changes()
+      nextHistory <- historyRepositoryAtom.get().checkpointWithRetry(changes.toList, postRoot)
+      _           = historyRepositoryAtom.set(nextHistory)
+      _           <- createNewHotStore(nextHistory)(serializeK.toCodec)
+      log         = eventLog.take()
+      _           = eventLog.put(Seq.empty)
+      _           = produceCounter.take()
+      _           = produceCounter.put(Map.empty.withDefaultValue(0))
+      _           <- restoreInstalls()
+    } yield Checkpoint(nextHistory.history.root, log, changes)
+
   override def createCheckpoint(): F[Checkpoint] =
     for {
       changes     <- storeAtom.get().changes()
@@ -231,7 +247,7 @@ class RSpace[F[_], C, P, A, K](
       _           = produceCounter.take()
       _           = produceCounter.put(Map.empty.withDefaultValue(0))
       _           <- restoreInstalls()
-    } yield Checkpoint(nextHistory.history.root, log)
+    } yield Checkpoint(nextHistory.history.root, log, changes)
 }
 
 object RSpace {

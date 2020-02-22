@@ -31,6 +31,7 @@ trait ISpace[F[_], C, P, A, K] extends Tuplespace[F, C, P, A, K] {
     * @return A [[Checkpoint]]
     */
   def createCheckpoint(): F[Checkpoint]
+  def createCheckpointWithRetry(postRoot: Blake2b256Hash): F[Checkpoint]
 
   /** Resets the store to the given root.
     *

@@ -116,6 +116,15 @@ class ReportingRspace[F[_]: Sync, C, P, A, K](
       _ <- Sync[F].delay(report.update(s => s :+ ReportingProduce(channel, data)))
     } yield produceRef
 
+  override def createCheckpointWithRetry(postRoot: Blake2b256Hash): F[Checkpoint] =
+    checkReplayData >> syncF.defer {
+      val historyRepository = historyRepositoryAtom.get()
+      for {
+        _ <- createNewHotStore(historyRepository)(serializeK.toCodec)
+        _ <- restoreInstalls()
+      } yield (Checkpoint(historyRepository.history.root, Seq.empty))
+    }
+
   /** Creates a checkpoint.
     *
     * @return A [[Checkpoint]]

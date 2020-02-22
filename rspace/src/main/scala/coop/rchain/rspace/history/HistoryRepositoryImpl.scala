@@ -2,7 +2,7 @@ package coop.rchain.rspace.history
 
 import java.nio.charset.StandardCharsets
 
-import cats.{Applicative, Parallel}
+import cats.{Applicative, Monad, Parallel}
 import cats.effect.{IO, Sync}
 import cats.implicits._
 import coop.rchain.rspace.{
@@ -23,6 +23,7 @@ import scodec.Codec
 import scodec.bits.{BitVector, ByteVector}
 import HistoryRepositoryImpl._
 import com.typesafe.scalalogging.Logger
+import coop.rchain.crypto.codec.Base16
 import coop.rchain.shared.Serialize
 
 final case class HistoryRepositoryImpl[F[_]: Sync: Parallel, C, P, A, K](
@@ -194,9 +195,119 @@ final case class HistoryRepositoryImpl[F[_]: Sync: Parallel, C, P, A, K](
     leafStore.put(toBeStored).map(_ => leafs.map(_._3))
   }
 
+  case class ChStat(
+      insertData: Int = 0,
+      insertJoins: Int = 0,
+      insertConts: Int = 0,
+      deleteData: Int = 0,
+      deleteJoins: Int = 0,
+      deleteConts: Int = 0,
+      contNotBalanced: Boolean = false
+  ) {
+    def append(s: ChStat) =
+      ChStat(
+        insertData = insertData + s.insertData,
+        insertJoins = insertJoins + s.insertJoins,
+        insertConts = insertConts + s.insertConts,
+        deleteData = deleteData + s.deleteData,
+        deleteJoins = deleteJoins + s.deleteJoins,
+        deleteConts = deleteConts + s.deleteConts
+      )
+    def isValid = {
+      val hasDupe = insertData > 1 || insertJoins > 1 || insertConts > 1 || deleteData > 1 || deleteJoins > 1 || deleteConts > 1
+      !(contNotBalanced || hasDupe)
+    }
+  }
+
+  def checkpointWithRetry(
+      actions: List[HotStoreAction],
+      expectedRoot: Blake2b256Hash
+  ): F[HistoryRepository[F, C, P, A, K]] = {
+    implicit val P                  = Parallel[F]
+    def toHex(hash: Blake2b256Hash) = hash.bytes.take(5).toHex
+
+    def inc(ch: C, m: Map[C, ChStat], stat: ChStat) = {
+      val v = m.getOrElse(ch, ChStat())
+      m.updated(ch, v.append(stat))
+    }
+    val chDistrib = actions.foldl(Map[C, ChStat]()) {
+      case (m, act) =>
+        act match {
+          case i: InsertData[C, A] => inc(i.channel, m, ChStat(insertData = 1))
+          case i: InsertJoins[C]   => inc(i.channel, m, ChStat(insertJoins = 1))
+          case i: InsertContinuations[C, P, K] =>
+            val isBalanced = i.channels.size == i.continuations.size
+            i.channels.toVector.foldl(m)({
+              case (m1, c) => inc(c, m1, ChStat(insertConts = 1, contNotBalanced = isBalanced))
+            })
+          case d: DeleteData[C]  => inc(d.channel, m, ChStat(deleteData = 1))
+          case d: DeleteJoins[C] => inc(d.channel, m, ChStat(deleteJoins = 1))
+          case d: DeleteContinuations[C] =>
+            d.channels.toVector.foldl(m)({ case (m1, c) => inc(c, m1, ChStat(deleteConts = 1)) })
+          case _ => m
+        }
+    }
+    println(s"DISTRIBUTION size: ${chDistrib.toSeq.size}\n")
+    implicit val ordChStat = Ordering.by(ChStat.unapply)
+    val distribStr = chDistrib.toSeq
+      .filterNot(_._2.isValid)
+      .sortBy(_._2)
+      .map {
+        case (c, stat) =>
+          val chStr = serializeC.encode(c).toHex
+          s"    $stat, ch: $chStr"
+      }
+      .mkString("\n")
+    println(s"$distribStr")
+
+    val mkCP = for {
+      _              <- println(s"CHECKPOINT root: ${toHex(history.root)}, changes: ${actions.size}").pure[F]
+      historyActions <- List(actions).parFlatTraverse(transformAndStore)
+      next           <- history.process(historyActions)
+//      _ <- println(
+//            s"       root (${toHex(next.root)}, ${toHex(expectedRoot)}, ${toHex(history.root)}: (new, expected, old)"
+//          ).pure[F]
+    } yield next
+    val maxRetries = 5
+    for {
+      next <- withRetry[F, History[F]](
+               mkCP,
+               maxRetries, {
+                 case next => next.root != expectedRoot
+               }, {
+                 case (next, n) =>
+                   println(
+                     s"History root hash mismatch (retry $n/$maxRetries): expected: ${toHex(expectedRoot)}, new: ${toHex(next.root)}"
+                   ).pure[F]
+               }
+             )
+      _ <- rootsRepository.commit(next.root)
+      _ <- measure(actions)
+    } yield this.copy(history = next)
+  }
+
+  // Retry F[A] while condition is satisfied
+  def withRetry[M[_]: Monad, T](
+      fa: M[T],
+      retries: Int,
+      condition: T => Boolean,
+      onRetry: (T, Int) => M[Unit]
+  ): M[T] = {
+    def loop(n: Int): M[Either[Int, T]] =
+      for {
+        a           <- fa
+        shouldRetry = n < retries && condition(a)
+        _           <- if (shouldRetry) onRetry(a, n) else ().pure[M]
+        res <- if (shouldRetry) (n + 1).asLeft[T].pure[M]
+              else a.asRight[Int].pure[M]
+      } yield res
+    Monad[M].tailRecM(0)(loop)
+  }
+
   override def checkpoint(actions: List[HotStoreAction]): F[HistoryRepository[F, C, P, A, K]] = {
     implicit val P = Parallel[F]
-    val batchSize  = Math.max(1, actions.size / RSpace.parallelism)
+//    Thread.sleep(2000)
+    val batchSize = Math.max(1, actions.size / RSpace.parallelism)
     for {
       batches        <- Sync[F].delay(actions.grouped(batchSize).toList)
       historyActions <- batches.parFlatTraverse(transformAndStore)

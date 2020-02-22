@@ -9,6 +9,10 @@ import scodec.Codec
 
 trait HistoryRepository[F[_], C, P, A, K] extends HistoryReader[F, C, P, A, K] {
   def checkpoint(actions: List[HotStoreAction]): F[HistoryRepository[F, C, P, A, K]]
+  def checkpointWithRetry(
+      actions: List[HotStoreAction],
+      postRoot: Blake2b256Hash
+  ): F[HistoryRepository[F, C, P, A, K]]
 
   def reset(root: Blake2b256Hash): F[HistoryRepository[F, C, P, A, K]]
 

@@ -35,7 +35,7 @@ import coop.rchain.rholang.interpreter.Runtime.BlockData
 import coop.rchain.rholang.interpreter.accounting._
 import coop.rchain.rholang.interpreter.errors.BugFoundError
 import coop.rchain.rholang.interpreter.{EvaluateResult, Interpreter, Reduce, RhoType, Runtime}
-import coop.rchain.rspace.{Blake2b256Hash, ReplayException}
+import coop.rchain.rspace.{Blake2b256Hash, Checkpoint, ReplayException}
 import coop.rchain.shared.Log
 
 trait RuntimeManager[F[_]] {
@@ -59,6 +59,14 @@ trait RuntimeManager[F[_]] {
       invalidBlocks: Map[BlockHash, Validator],
       isGenesis: Boolean
   ): F[Either[ReplayFailure, StateHash]]
+  def replayComputeStateDebug(startHash: StateHash)(
+      terms: Seq[ProcessedDeploy],
+      systemDeploys: Seq[ProcessedSystemDeploy],
+      blockData: BlockData,
+      invalidBlocks: Map[BlockHash, Validator],
+      isGenesis: Boolean,
+      postRoot: Blake2b256Hash
+  ): F[Either[ReplayFailure, Checkpoint]]
   def computeState(hash: StateHash)(
       terms: Seq[Signed[DeployData]],
       systemDeploys: Seq[SystemDeploy],
@@ -340,6 +348,33 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log](
     }
   }
 
+  def replayComputeStateDebug(startHash: StateHash)(
+      terms: Seq[ProcessedDeploy],
+      systemDeploys: Seq[ProcessedSystemDeploy],
+      blockData: BlockData,
+      invalidBlocks: Map[BlockHash, Validator] = Map.empty[BlockHash, Validator],
+      isGenesis: Boolean, //FIXME have a better way of knowing this. Pass the replayDeploy function maybe?
+      postRoot: Blake2b256Hash
+  ): F[Either[ReplayFailure, Checkpoint]] =
+    withRuntimeLock { runtime =>
+      Span[F].trace(replayComputeStateLabel) {
+        for {
+          _ <- runtime.blockData.set(blockData)
+          _ <- setInvalidBlocks(invalidBlocks, runtime)
+          _ <- Span[F].mark("before-replay-deploys")
+          result <- replayDeploysDebug(
+                     runtime,
+                     startHash,
+                     terms,
+                     systemDeploys,
+                     replayDeploy(runtime, withCostAccounting = !isGenesis),
+                     replaySystemDeploy(runtime, blockData),
+                     postRoot
+                   )
+        } yield result
+      }
+    }
+
   def replayComputeState(startHash: StateHash)(
       terms: Seq[ProcessedDeploy],
       systemDeploys: Seq[ProcessedSystemDeploy],
@@ -465,6 +500,37 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log](
           else Applicative[F].unit
     } yield deployResult
   }
+
+  private def replayDeploysDebug(
+      runtime: Runtime[F],
+      startHash: StateHash,
+      terms: Seq[ProcessedDeploy],
+      systemDeploys: Seq[ProcessedSystemDeploy],
+      replayDeploy: ProcessedDeploy => F[Option[ReplayFailure]],
+      replaySystemDeploy: ProcessedSystemDeploy => F[Option[ReplayFailure]],
+      postRoot: Blake2b256Hash
+  ): F[Either[ReplayFailure, Checkpoint]] =
+    (for {
+      _ <- EitherT.right(runtime.replaySpace.reset(Blake2b256Hash.fromByteString(startHash)))
+      _ <- EitherT(
+            terms.tailRecM { ts =>
+              if (ts.isEmpty)
+                ().asRight[ReplayFailure].asRight[Seq[ProcessedDeploy]].pure[F]
+              else replayDeploy(ts.head).map(_.map(_.asLeft[Unit]).toRight(ts.tail))
+            }
+          )
+      _ <- EitherT(
+            systemDeploys.tailRecM { ts =>
+              if (ts.isEmpty)
+                ().asRight[ReplayFailure].asRight[Seq[ProcessedSystemDeploy]].pure[F]
+              else
+                replaySystemDeploy(ts.head).map(_.map(_.asLeft[Unit]).toRight(ts.tail))
+            }
+          )
+      _ <- EitherT.right(Span[F].mark("before-replay-deploys-create-checkpoint"))
+//      res <- EitherT.right[ReplayFailure](runtime.replaySpace.createCheckpoint)
+      res <- EitherT.right[ReplayFailure](runtime.replaySpace.createCheckpointWithRetry(postRoot))
+    } yield res).value
 
   private def replayDeploys(
       runtime: Runtime[F],

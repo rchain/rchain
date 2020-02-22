@@ -17,9 +17,10 @@ import coop.rchain.models.Validator.Validator
 import coop.rchain.models.{BlockMetadata, NormalizerEnv, Par}
 import coop.rchain.rholang.interpreter.ParBuilder
 import coop.rchain.rholang.interpreter.Runtime.BlockData
-import coop.rchain.shared.{Log, LogSource}
+import coop.rchain.shared.{Cell, Log, LogSource}
 import com.google.protobuf.ByteString
 import coop.rchain.crypto.signatures.Signed
+import coop.rchain.rspace.{Blake2b256Hash, Checkpoint, HotStoreAction}
 import monix.eval.Coeval
 
 object InterpreterUtil {
@@ -62,28 +63,57 @@ object InterpreterUtil {
                    BlockStatus.exception(ex).asLeft[Option[StateHash]].pure
                  case Right(computedPreStateHash) =>
                    if (incomingPreStateHash == computedPreStateHash) {
-                     val replayBlockF =
-                       replayBlock(incomingPreStateHash, block, dag, runtimeManager)
                      val postStateHash = ProtoUtil.postStateHash(block)
+                     val replayBlockF =
+                       replayBlockDebug(
+                         incomingPreStateHash,
+                         block,
+                         dag,
+                         runtimeManager,
+                         Blake2b256Hash.fromByteString(postStateHash)
+                       )
                      // TODO: temporary solution as workaround for replay bug (hash mismatch)
                      // https://rchain.atlassian.net/browse/RCHAIN-4035
                      val maxRetries = 1000
+//                     val lastChanges: Cell[cats.Id, Seq[HotStoreAction]] = Cell.id(Seq())
                      for {
-                       replayResult <- withRetry[F, Either[ReplayFailure, StateHash]](
+                       replayResult <- withRetry[F, Either[ReplayFailure, Checkpoint]](
                                         replayBlockF,
                                         retries = maxRetries,
                                         // Retry in case of hash mismatch
-                                        _.fold(_ => false, _ != postStateHash), {
+                                        _.fold(
+                                          _ => false, {
+                                            case cp: Checkpoint =>
+//                                              println(s"CHECKPOINT ${cp.root.toByteString}")
+//                                              println(
+//                                                s"   SAME HASH ${cp.root.toByteString == postStateHash} ${PrettyPrinter
+//                                                  .buildString(cp.root.toByteString)} == ${PrettyPrinter
+//                                                  .buildString(postStateHash)}"
+//                                              )
+//                                              println(s"   ROOT ${cp.root}")
+//                                              println(s"   LOG SIZE ${cp.log.size}")
+//                                              println(s"   CHANGES SIZE ${cp.changes.size}")
+//                                              if (cp.log.nonEmpty)
+//                                                println(
+//                                                  s"   LOG \n    ${cp.log.map(x => s"$x").mkString("\n    ")}"
+//                                                )
+//                                              println(
+//                                                s"   CHANGES \n    ${cp.changes.take(5).map(x => s"$x").mkString("\n    ")}"
+//                                              )
+                                              cp.root.toByteString != postStateHash
+                                          }
+                                        ), {
                                           case (Right(hash), n) =>
                                             // Log retries
                                             Log[F].warn(
                                               s"Replay block hash mismatch (retry $n/$maxRetries): ${PrettyPrinter
-                                                .buildString(hash)} != ${PrettyPrinter.buildString(postStateHash)}."
+                                                .buildString(hash.root.toByteString)} != ${PrettyPrinter
+                                                .buildString(postStateHash)}."
                                             )
                                           case _ => ().pure[F]
                                         }
                                       )
-                       result <- handleErrors(ProtoUtil.postStateHash(block), replayResult)
+                       result <- handleErrors(postStateHash, replayResult.map(_.root.toByteString))
                      } yield result
                    } else {
                      //TODO at this point we may just as well terminate the replay, there's no way it will succeed.
@@ -115,6 +145,39 @@ object InterpreterUtil {
       } yield res
     Monad[F].tailRecM(0)(loop)
   }
+
+  private def replayBlockDebug[F[_]: Sync: Log: BlockStore](
+      initialStateHash: StateHash,
+      block: BlockMessage,
+      dag: BlockDagRepresentation[F],
+      runtimeManager: RuntimeManager[F],
+      postRoot: Blake2b256Hash
+  )(implicit spanF: Span[F]): F[Either[ReplayFailure, Checkpoint]] =
+    spanF.trace(ReplayBlockMetricsSource) {
+      val internalDeploys       = ProtoUtil.deploys(block)
+      val internalSystemDeploys = ProtoUtil.systemDeploys(block)
+      for {
+        invalidBlocksSet <- dag.invalidBlocks
+        unseenBlocksSet  <- ProtoUtil.unseenBlockHashes(dag, block)
+        seenInvalidBlocksSet = invalidBlocksSet.filterNot(
+          block => unseenBlocksSet.contains(block.blockHash)
+        ) // TODO: Write test in which switching this to .filter makes it fail
+        invalidBlocks = seenInvalidBlocksSet
+          .map(block => (block.blockHash, block.sender))
+          .toMap
+        _         <- Span[F].mark("before-process-pre-state-hash")
+        blockData = BlockData.fromBlock(block)
+        isGenesis = block.header.parentsHashList.isEmpty
+        replayResult <- runtimeManager.replayComputeStateDebug(initialStateHash)(
+                         internalDeploys,
+                         internalSystemDeploys,
+                         blockData,
+                         invalidBlocks,
+                         isGenesis,
+                         postRoot
+                       )
+      } yield replayResult
+    }
 
   private def replayBlock[F[_]: Sync: Log: BlockStore](
       initialStateHash: StateHash,
@@ -192,6 +255,9 @@ object InterpreterUtil {
       case Right(computedStateHash) =>
         if (tsHash == computedStateHash) {
           // state hash in block matches computed hash!
+          println(
+            s"MATCH HASH ${PrettyPrinter.buildString(tsHash)} == ${PrettyPrinter.buildString(computedStateHash)}"
+          )
           computedStateHash.some.asRight[BlockError].pure
         } else {
           // state hash in block does not match computed hash -- invalid!
@@ -200,7 +266,10 @@ object InterpreterUtil {
             .warn(
               s"Tuplespace hash ${PrettyPrinter.buildString(tsHash)} does not match computed hash ${PrettyPrinter
                 .buildString(computedStateHash)}."
-            )
+            ) >> println(
+            s"Tuplespace hash ${PrettyPrinter.buildString(tsHash)} does not match computed hash ${PrettyPrinter
+              .buildString(computedStateHash)}."
+          ).pure[F]
             .as(none[StateHash].asRight[BlockError])
         }
     }

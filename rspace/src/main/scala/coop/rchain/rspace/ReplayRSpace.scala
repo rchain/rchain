@@ -246,6 +246,17 @@ class ReplayRSpace[F[_]: Sync, C, P, A, K](
     }
   }
 
+  override def createCheckpointWithRetry(postRoot: Blake2b256Hash): F[Checkpoint] =
+    checkReplayData >> syncF.defer {
+      for {
+        changes     <- storeAtom.get().changes()
+        nextHistory <- historyRepositoryAtom.get().checkpointWithRetry(changes.toList, postRoot)
+        _           = historyRepositoryAtom.set(nextHistory)
+        _           <- createNewHotStore(nextHistory)(serializeK.toCodec)
+        _           <- restoreInstalls()
+      } yield (Checkpoint(nextHistory.history.root, Seq.empty, changes))
+    }
+
   override def createCheckpoint(): F[Checkpoint] = checkReplayData >> syncF.defer {
     for {
       changes     <- storeAtom.get().changes()
@@ -253,7 +264,7 @@ class ReplayRSpace[F[_]: Sync, C, P, A, K](
       _           = historyRepositoryAtom.set(nextHistory)
       _           <- createNewHotStore(nextHistory)(serializeK.toCodec)
       _           <- restoreInstalls()
-    } yield (Checkpoint(nextHistory.history.root, Seq.empty))
+    } yield (Checkpoint(nextHistory.history.root, Seq.empty, changes))
   }
 
   override def clear(): F[Unit] = syncF.delay { replayData.clear() } >> super.clear()

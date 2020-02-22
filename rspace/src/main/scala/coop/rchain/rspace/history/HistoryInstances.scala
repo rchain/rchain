@@ -10,6 +10,7 @@ import scodec.bits.ByteVector
 import Ordering.Implicits.seqDerivedOrdering
 import scala.collection.concurrent.TrieMap
 import scala.Function.tupled
+import scala.util.Random
 
 object HistoryInstances {
 
@@ -308,23 +309,30 @@ object HistoryInstances {
       }
 
     def process(actions: List[HistoryAction]): F[History[F]] = {
-      implicit val parallel = Parallel[F]
+      implicit val parallel           = Parallel[F]
+      def toHex(hash: Blake2b256Hash) = hash.bytes.take(5).toHex
       for {
         _ <- Sync[F].ensure(actions.pure[F])(
               new RuntimeException("Cannot process duplicate actions on one key")
             )(hasNoDuplicates)
         unsortedPartitions = actions.groupBy(_.key.head).toList
         partitions         = unsortedPartitions.map(v => v.map(p => p.sortBy(_.key)))
-        roots              <- partitions.parTraverse(tupled(processSubtree(this.root)))
-        modified           = roots.flatMap(tupled(extractSubtrieAtIndex))
-        unmodified         <- extractUnmodifiedRootElements(partitions)
-        all                = modified ++ unmodified
-        results            <- constructRoot(all)
-        (newRoot, tries)   = results
-        _                  <- historyStore.put(newRoot :: tries)
-        newRootHash        = Trie.hash(newRoot)
-        _                  <- historyStore.commit(newRootHash)
-        _                  <- historyStore.clear()
+//        roots              <- partitions.parTraverse(tupled(processSubtree(this.root)))
+        // TODO: sequential traversal (insert/delete) because of non consistent root hash
+        roots <- partitions.traverse(tupled(processSubtree(this.root)))
+        _ = println(
+          s"HISTORY_PROCESS: ${toHex(this.root)}, roots: ${roots.size}"
+        )
+        modified         = roots.flatMap(tupled(extractSubtrieAtIndex))
+        unmodified       <- extractUnmodifiedRootElements(partitions)
+        all              = modified ++ unmodified
+        _                = println(s"HISTORY_PROCESS modified: ${modified.size}, unmodified: ${unmodified.size}")
+        results          <- constructRoot(all)
+        (newRoot, tries) = results
+        _                <- historyStore.put(newRoot +: tries)
+        newRootHash      = Trie.hash(newRoot)
+        _                <- historyStore.commit(newRootHash)
+        _                <- historyStore.clear()
       } yield this.copy(root = newRootHash)
     }
 
