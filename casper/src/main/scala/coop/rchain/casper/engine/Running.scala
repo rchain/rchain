@@ -196,14 +196,20 @@ object Running {
         )
     )
 
-  def handleBlockMessage[F[_]: Monad: Log: RequestedBlocks](peer: PeerNode, b: BlockMessage)(
+  def handleBlockMessage[F[_]: Monad: Log: RequestedBlocks: BlockStore](
+      peer: PeerNode,
+      b: BlockMessage
+  )(
       blockStoreContains: BlockHash => F[Boolean],
       casperAdd: BlockMessage => F[ValidBlockProcessing]
   ): F[Unit] =
     blockStoreContains(b.blockHash)
       .ifM(
         Log[F].info(s"Received block ${PrettyPrinter.buildString(b.blockHash)} again."),
-        Log[F].info(s"Received ${PrettyPrinter.buildString(b)}.") >> casperAdd(b) >>= (
+        Log[F].info(s"Received ${PrettyPrinter.buildString(b)}.") >> {
+          // TODO check if block is valid here before placing in block store
+          BlockStore[F].put(b)
+        } >> casperAdd(b) >>= (
             status =>
               Applicative[F].whenA(BlockStatus.isInDag(status.merge))(
                 RequestedBlocks.remove(b.blockHash)
