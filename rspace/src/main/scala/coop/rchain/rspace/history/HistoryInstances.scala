@@ -315,16 +315,19 @@ object HistoryInstances {
             )(hasNoDuplicates)
         unsortedPartitions = actions.groupBy(_.key.head).toList
         partitions         = unsortedPartitions.map(v => v.map(p => p.sortBy(_.key)))
-        roots              <- partitions.parTraverse(tupled(processSubtree(this.root)))
-        modified           = roots.flatMap(tupled(extractSubtrieAtIndex))
-        unmodified         <- extractUnmodifiedRootElements(partitions)
-        all                = modified ++ unmodified
-        results            <- constructRoot(all)
-        (newRoot, tries)   = results
-        _                  <- historyStore.put(newRoot :: tries)
-        newRootHash        = Trie.hash(newRoot)
-        _                  <- historyStore.commit(newRootHash)
-        _                  <- historyStore.clear()
+        // TODO: make processing of subtries parallel again,
+        //  sequential execution is now to prevent the bug with root hash mismatch.
+        // https://rchain.atlassian.net/browse/RCHAIN-3940
+        roots            <- partitions.traverse(tupled(processSubtree(this.root)))
+        modified         = roots.flatMap(tupled(extractSubtrieAtIndex))
+        unmodified       <- extractUnmodifiedRootElements(partitions)
+        all              = modified ++ unmodified
+        results          <- constructRoot(all)
+        (newRoot, tries) = results
+        _                <- historyStore.put(newRoot :: tries)
+        newRootHash      = Trie.hash(newRoot)
+        _                <- historyStore.commit(newRootHash)
+        _                <- historyStore.clear()
       } yield this.copy(root = newRootHash)
     }
 
