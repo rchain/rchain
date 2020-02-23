@@ -420,7 +420,7 @@ object BlockAPI {
     ): F[ApiErr[BlockInfo]] =
       for {
         dag        <- MultiParentCasper[F].blockDag
-        maybeBlock <- getBlock[F](hash, dag)
+        maybeBlock <- getBlockFromStore[F](hash)
         blockInfo <- maybeBlock match {
                       case Some(block) => {
                         val blockAdded = dag.contains(block.blockHash)
@@ -507,9 +507,8 @@ object BlockAPI {
       faultTolerance = faultTolerance
     ).pure[F]
 
-  private def getBlock[F[_]: Monad: BlockStore](
-      hash: String,
-      dag: BlockDagRepresentation[F]
+  def getBlockFromStore[F[_]: Monad: BlockStore](
+      hash: String
   ): F[Option[BlockMessage]] =
     for {
       findResult <- BlockStore[F].find(h => Base16.encode(h.toByteArray).startsWith(hash))
