@@ -806,15 +806,17 @@ object NodeRuntime {
       casperLoop = for {
         engine <- engineCell.read
         _      <- engine.withCasper(_.fetchDependencies, Applicative[F].unit)
-        _ <- Running.maintainRequestedBlocks[F](conf.casper.requestedBlocksTimeout)(
-              Monad[F],
-              rpConfAsk,
-              requestedBlocks,
-              TransportLayer[F],
-              Log[F],
-              Time[F],
-              Metrics[F]
-            )
+        _ <- Running
+              .maintainRequestedBlocks[F](conf.casper.requestedBlocksTimeout)(
+                Monad[F],
+                rpConfAsk,
+                requestedBlocks,
+                TransportLayer[F],
+                Log[F],
+                Time[F],
+                Metrics[F],
+                blockStore
+              )
         _ <- Time[F].sleep(conf.casper.casperLoopInterval.seconds)
       } yield ()
       // Broadcast fork choice tips request if current fork choice is more then `forkChoiceStaleThreshold` minutes old.

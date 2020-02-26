@@ -102,7 +102,7 @@ object Running {
     * and keep the requested blocks list clean.
     * See spec RunningMaintainRequestedBlocksSpec for more details
     */
-  def maintainRequestedBlocks[F[_]: Monad: RPConfAsk: RequestedBlocks: TransportLayer: Log: Time: Metrics](
+  def maintainRequestedBlocks[F[_]: Monad: RPConfAsk: RequestedBlocks: TransportLayer: Log: Time: Metrics: BlockStore](
       timeout: Int
   ): F[Unit] = {
 
@@ -143,9 +143,21 @@ object Running {
       requests.keys.toList
         .traverse(hash => {
           val requested = requests(hash)
-          Time[F].currentMillis
-            .map(_ - requested.timestamp > timeout.seconds.toMillis)
-            .ifM(tryRerequest(hash, requested), (hash -> Option(requested)).pure[F])
+          // Block is kept in RequestedBlocks until it is added to the DAG
+          // so we have to check if block is already in block store to restrain node from making
+          // unnecessary request
+          BlockStore[F]
+            .contains(hash)
+            .ifM(
+              (hash -> Option(requested)).pure[F],
+              // Request block if waiting timeout expired
+              Time[F].currentMillis
+                .map(_ - requested.timestamp > timeout.seconds.toMillis)
+                .ifM(
+                  tryRerequest(hash, requested),
+                  (hash -> Option(requested)).pure[F]
+                )
+            )
         })
         .map(list => toMap(list))
     })
