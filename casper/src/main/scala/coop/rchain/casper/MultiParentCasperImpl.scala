@@ -85,6 +85,17 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Log: Time: SafetyOracle: Las
 
     def add: F[ValidBlockProcessing] = spanF.trace(AddBlockMetricsSource) {
       for {
+        // Blocks received from peers land first in BlockStore, so Casper don't have to add it.
+        // But when node proposes a block, it should put it in BlockStore at some point.
+        // So we are adding block here. TODO might be there is a better place
+        _ <- BlockStore[F]
+              .contains(b.blockHash)
+              .ifM(
+                ().pure[F],
+                Log[F].warn("Casper did not find block in block store. Inserting now") >>
+                  BlockStore[F].put(b) >>
+                  spanF.mark("block-store-put")
+              )
         dag    <- blockDag
         status <- internalAddBlock(b, dag)
         _      <- spanF.mark("block-added-status")
