@@ -15,14 +15,22 @@ import coop.rchain.models.BlockHash.BlockHash
 import com.google.protobuf.ByteString
 import coop.rchain.metrics.Metrics
 import monix.eval.Coeval
+import cats.effect.concurrent.Ref
+import coop.rchain.blockstorage.InMemBlockStore
+import coop.rchain.metrics.Metrics.MetricsNOP
+
 import concurrent.duration._
 import org.scalatest._
 
 class RunningMaintainRequestedBlocksSpec extends FunSpec with BeforeAndAfterEach with Matchers {
 
-  val hash             = ByteString.copyFrom("hash", "UTF-8")
-  implicit val metrics = new Metrics.MetricsNOP[Coeval]
-  val timeout: Int     = 240
+  val hash         = ByteString.copyFrom("hash", "UTF-8")
+  val timeout: Int = 240
+
+  implicit val metrics          = new MetricsNOP[Coeval]()
+  implicit val blockMap         = Ref.unsafe[Coeval, Map[BlockHash, BlockMessageProto]](Map.empty)
+  implicit val approvedBlockRef = Ref.unsafe[Coeval, Option[ApprovedBlock]](None)
+  implicit val blockStore       = InMemBlockStore.create[Coeval]
 
   override def beforeEach(): Unit = {
     transport.reset()

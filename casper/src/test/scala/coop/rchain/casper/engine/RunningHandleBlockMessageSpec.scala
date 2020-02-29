@@ -1,10 +1,7 @@
 package coop.rchain.casper.engine
 
 import cats.implicits._
-
 import Running.{Requested, RequestedBlocks}
-import coop.rchain.catscontrib.ski._
-import coop.rchain.casper.{BlockStatus}
 import coop.rchain.casper.protocol._
 import coop.rchain.catscontrib.ski._
 import coop.rchain.comm._
@@ -15,15 +12,22 @@ import coop.rchain.comm.rp.RPConf
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.p2p.EffectsTestInstances.{LogStub, TransportLayerStub}
 import coop.rchain.shared._
-
 import com.google.protobuf.ByteString
 import monix.eval.Coeval
+import coop.rchain.blockstorage.InMemBlockStore
+import cats.effect.concurrent.Ref
+import coop.rchain.metrics.Metrics.MetricsNOP
 import org.scalatest._
 
 class RunningHandleBlockMessageSpec extends FunSpec with BeforeAndAfterEach with Matchers {
 
   val hash = ByteString.copyFrom("hash", "UTF-8")
   val bm   = Dummies.createBlockMessage(blockHash = hash)
+
+  implicit val metrics          = new MetricsNOP[Coeval]()
+  implicit val blockMap         = Ref.unsafe[Coeval, Map[BlockHash, BlockMessageProto]](Map.empty)
+  implicit val approvedBlockRef = Ref.unsafe[Coeval, Option[ApprovedBlock]](None)
+  implicit val blockStore       = InMemBlockStore.create[Coeval]
 
   override def beforeEach(): Unit = {
     transport.reset()
