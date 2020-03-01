@@ -16,9 +16,7 @@ import coop.rchain.comm.transport.{Blob, TransportLayer}
 import coop.rchain.comm.PeerNode
 import coop.rchain.metrics.Metrics
 import coop.rchain.models.BlockHash.BlockHash
-import coop.rchain.models.Validator.Validator
 import coop.rchain.shared.{Cell, Log, Time}
-import monix.eval.Task
 
 import scala.concurrent.duration._
 
@@ -30,6 +28,7 @@ object Running {
   final case class Requested(
       timestamp: Long,
       peers: Set[PeerNode] = Set.empty,
+      received: Boolean,
       waitingList: List[PeerNode] = List.empty
   )
 
@@ -145,7 +144,11 @@ object Running {
           val requested = requests(hash)
           Time[F].currentMillis
             .map(_ - requested.timestamp > timeout.seconds.toMillis)
-            .ifM(tryRerequest(hash, requested), (hash -> Option(requested)).pure[F])
+            .ifM(
+              if (requested.received) (hash -> Option(requested)).pure[F]
+              else tryRerequest(hash, requested),
+              (hash -> Option(requested)).pure[F]
+            )
         })
         .map(list => toMap(list))
     })
@@ -156,8 +159,9 @@ object Running {
       peer: Option[PeerNode] = None
   ): F[Unit] =
     Log[F].info(s"Creating new entry for the ${PrettyPrinter.buildString(hash)} request") >> Time[F].currentMillis >>= (
-        ts => RequestedBlocks.put(hash, Requested(timestamp = ts, peers = peer.toSet))
-    )
+        ts =>
+          RequestedBlocks.put(hash, Requested(timestamp = ts, peers = peer.toSet, received = false))
+      )
 
   def handleHasBlock[F[_]: Monad: RPConfAsk: RequestedBlocks: TransportLayer: Time: Log](
       peer: PeerNode,
@@ -295,7 +299,14 @@ class Running[F[_]: Sync: BlockStore: CommUtil: TransportLayer: ConnectionsCell:
           s"There is another node $peer proposing using the same private key as you. Or did you restart your node?"
         )
       )
+    } >> {
+      for {
+        req <- RequestedBlocks.get(b.blockHash)
+      } yield RequestedBlocks.put(b.blockHash, req.get.copy(received = true))
     } >>
+      Log[F].info(
+        s"Block ${PrettyPrinter.buildString(b.blockHash)} marked as received."
+      ) >>
       casper.addBlock(b)
   }
 
