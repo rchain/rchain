@@ -45,7 +45,13 @@ class RunningHandleHasBlockSpec extends FunSpec with BeforeAndAfterEach with Mat
             // given
             val sender = peerNode("somePeer", 40400)
             val requestedBefore =
-              Map(hash -> Requested(timestamp = System.currentTimeMillis, peers = Set(sender)))
+              Map(
+                hash -> Requested(
+                  timestamp = System.currentTimeMillis,
+                  peers = Set(sender),
+                  received = false
+                )
+              )
             implicit val requestedBlocks = initRequestedBlocks(init = requestedBefore)
             val casperContains           = alwaysFalse
             // when
@@ -58,7 +64,13 @@ class RunningHandleHasBlockSpec extends FunSpec with BeforeAndAfterEach with Mat
             val sender    = peerNode("somePeer", 40400)
             val otherPeer = peerNode("otherPeer", 40400)
             val requestedBefore =
-              Map(hash -> Requested(timestamp = System.currentTimeMillis, peers = Set(otherPeer)))
+              Map(
+                hash -> Requested(
+                  timestamp = System.currentTimeMillis,
+                  peers = Set(otherPeer),
+                  received = false
+                )
+              )
             implicit val requestedBlocks = initRequestedBlocks(init = requestedBefore)
             val casperContains           = alwaysFalse
             // when
@@ -80,6 +92,7 @@ class RunningHandleHasBlockSpec extends FunSpec with BeforeAndAfterEach with Mat
                 hash -> Requested(
                   timestamp = System.currentTimeMillis,
                   peers = Set.empty,
+                  received = false,
                   waitingList = List.empty
                 )
               )

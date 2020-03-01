@@ -35,7 +35,7 @@ class RunningHandleBlockMessageSpec extends FunSpec with BeforeAndAfterEach with
       it("should remove entry from requested blocks once block ended up in casper DAG") {
         // given
         val sender                   = peerNode("peer", 40400)
-        val requestedBefore          = Map(hash -> Requested(timestamp = 0))
+        val requestedBefore          = Map(hash -> Requested(timestamp = 0, received = false))
         implicit val requestedBlocks = initRequestedBlocks(init = requestedBefore)
         // when
         Running.handleBlockMessage[Coeval](sender, bm)(alwaysDoesntContain, blockInDag).apply()
@@ -46,7 +46,7 @@ class RunningHandleBlockMessageSpec extends FunSpec with BeforeAndAfterEach with
       it("should NOT remove entry from requested blocks if block did NOT end up in casper DAG") {
         // given
         val sender                   = peerNode("peer", 40400)
-        val requestedBefore          = Map(hash -> Requested(timestamp = 0))
+        val requestedBefore          = Map(hash -> Requested(timestamp = 0, received = false))
         implicit val requestedBlocks = initRequestedBlocks(init = requestedBefore)
         // when
         Running.handleBlockMessage[Coeval](sender, bm)(alwaysDoesntContain, blockNotInDag).apply()

@@ -35,7 +35,7 @@ class RunningMaintainRequestedBlocksSpec extends FunSpec with BeforeAndAfterEach
     describe("maintainRequestedBlocks, for every block that was requested") {
       describe("if block request is still within a timeout") {
         it("should keep the request not touch") {
-          val requested                = Requested(timestamp = notTimedOut)
+          val requested                = Requested(timestamp = notTimedOut, received = false)
           implicit val requestedBlocks = initRequestedBlocks(init = Map(hash -> requested))
           // when
           Running.maintainRequestedBlocks[Coeval](timeout).apply()
@@ -52,6 +52,7 @@ class RunningMaintainRequestedBlocksSpec extends FunSpec with BeforeAndAfterEach
             val requested = Requested(
               timestamp = timedOut,
               peers = Set(peerNode("peer")),
+              received = false,
               waitingList = waitingList
             )
             implicit val requestedBlocks = initRequestedBlocks(init = Map(hash -> requested))
@@ -69,6 +70,7 @@ class RunningMaintainRequestedBlocksSpec extends FunSpec with BeforeAndAfterEach
             val requested = Requested(
               timestamp = timedOut,
               peers = Set(peerNode("peer")),
+              received = false,
               waitingList = waitingList
             )
             implicit val requestedBlocks = initRequestedBlocks(init = Map(hash -> requested))
@@ -84,6 +86,7 @@ class RunningMaintainRequestedBlocksSpec extends FunSpec with BeforeAndAfterEach
             val requested = Requested(
               timestamp = timedOut,
               peers = Set(peerNode("peer")),
+              received = false,
               waitingList = waitingList
             )
             implicit val requestedBlocks = initRequestedBlocks(init = Map(hash -> requested))
@@ -101,6 +104,7 @@ class RunningMaintainRequestedBlocksSpec extends FunSpec with BeforeAndAfterEach
             val requested = Requested(
               timestamp = timedOut,
               peers = Set(peerNode("peer")),
+              received = false,
               waitingList = waitingList
             )
             implicit val requestedBlocks = initRequestedBlocks(init = Map(hash -> requested))
@@ -120,6 +124,7 @@ class RunningMaintainRequestedBlocksSpec extends FunSpec with BeforeAndAfterEach
             val requested = Requested(
               timestamp = timedOut,
               peers = Set(peerNode("peer")),
+              received = false,
               waitingList = waitingList
             )
             implicit val requestedBlocks = initRequestedBlocks(init = Map(hash -> requested))
@@ -134,6 +139,7 @@ class RunningMaintainRequestedBlocksSpec extends FunSpec with BeforeAndAfterEach
             val requested = Requested(
               timestamp = timedOut,
               peers = Set(peerNode("peer")),
+              received = false,
               waitingList = waitingList
             )
             implicit val requestedBlocks = initRequestedBlocks(init = Map(hash -> requested))
