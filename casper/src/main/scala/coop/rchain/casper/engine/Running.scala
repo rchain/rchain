@@ -287,7 +287,10 @@ class Running[F[_]: Sync: BlockStore: CommUtil: TransportLayer: ConnectionsCell:
       casper.contains(hash),
       RequestedBlocks.contains(hash)
     ).mapN(_ || _)
-      .ifM(true.pure[F], false.pure[F])
+      .ifM(
+        RequestedBlocks.get(hash).map(_.get.received).ifM(true.pure[F], false.pure[F]),
+        false.pure[F]
+      )
 
   private def casperAdd(peer: PeerNode)(b: BlockMessage): F[ValidBlockProcessing] = {
     import cats.instances.option._
