@@ -304,12 +304,19 @@ class Running[F[_]: Sync: BlockStore: CommUtil: TransportLayer: ConnectionsCell:
       )
     } >> {
       for {
-        req <- RequestedBlocks.get(b.blockHash)
-      } yield RequestedBlocks.put(b.blockHash, req.get.copy(received = true))
+        maybeReq <- RequestedBlocks.get(b.blockHash)
+        _ <- maybeReq match {
+              // There might be block that are not maintained by RequestedBlocks, e.g. fork choice tip
+              case None => Log[F].info("BlockMessage is not present in RequestedBlocks.")
+              case Some(requested) => {
+                RequestedBlocks.put(b.blockHash, requested.copy(received = true)) >>
+                  Log[F].info(
+                    s"RequestedBlock ${PrettyPrinter.buildString(b.blockHash)} marked as received."
+                  )
+              }
+            }
+      } yield ()
     } >>
-      Log[F].info(
-        s"Block ${PrettyPrinter.buildString(b.blockHash)} marked as received."
-      ) >>
       casper.addBlock(b)
   }
 
