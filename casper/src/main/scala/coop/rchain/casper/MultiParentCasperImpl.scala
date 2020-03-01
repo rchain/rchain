@@ -85,7 +85,6 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Log: Time: SafetyOracle: Las
 
     def add: F[ValidBlockProcessing] = spanF.trace(AddBlockMetricsSource) {
       for {
-        _      <- BlockStore[F].put(b)
         _      <- spanF.mark("block-store-put")
         dag    <- blockDag
         status <- internalAddBlock(b, dag)
@@ -95,6 +94,7 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Log: Time: SafetyOracle: Las
 
     import cats.instances.either._
     for {
+      _ <- BlockStore[F].put(b)
       status <- blockProcessingLock.withPermit {
                  val exists = for {
                    dag         <- blockDag
