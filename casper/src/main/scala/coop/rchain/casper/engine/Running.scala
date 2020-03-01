@@ -197,10 +197,10 @@ object Running {
     )
 
   def handleBlockMessage[F[_]: Monad: Log: RequestedBlocks](peer: PeerNode, b: BlockMessage)(
-      casperContains: BlockHash => F[Boolean],
+      repeatedCasperMessage: BlockHash => F[Boolean],
       casperAdd: BlockMessage => F[ValidBlockProcessing]
   ): F[Unit] =
-    casperContains(b.blockHash)
+    repeatedCasperMessage(b.blockHash)
       .ifM(
         Log[F].info(s"Received block ${PrettyPrinter.buildString(b.blockHash)} again."),
         Log[F].info(s"Received ${PrettyPrinter.buildString(b)}.") >> casperAdd(b) >>= (
@@ -281,6 +281,13 @@ class Running[F[_]: Sync: BlockStore: CommUtil: TransportLayer: ConnectionsCell:
   private val F    = Applicative[F]
   private val noop = F.unit
 
+  private def repeatedCasperMessage(hash: BlockHash): F[Boolean] =
+    (
+      casper.contains(hash),
+      RequestedBlocks.contains(hash)
+    ).mapN(_ || _)
+      .ifM(true.pure[F], false.pure[F])
+
   private def casperAdd(peer: PeerNode)(b: BlockMessage): F[ValidBlockProcessing] = {
     import cats.instances.option._
 
@@ -299,7 +306,7 @@ class Running[F[_]: Sync: BlockStore: CommUtil: TransportLayer: ConnectionsCell:
 
   override def handle(peer: PeerNode, msg: CasperMessage): F[Unit] = msg match {
     case blockHash: BlockHashMessage => handleBlockHashMessage(peer, blockHash)(casper.contains)
-    case b: BlockMessage             => handleBlockMessage(peer, b)(casper.contains, casperAdd(peer))
+    case b: BlockMessage             => handleBlockMessage(peer, b)(repeatedCasperMessage, casperAdd(peer))
     case br: BlockRequest            => handleBlockRequest(peer, br)
     case hbr: HasBlockRequest        => handleHasBlockRequest(peer, hbr)(casper.contains)
     case hb: HasBlock                => handleHasBlock(peer, hb)(casper.contains)
