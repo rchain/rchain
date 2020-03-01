@@ -45,7 +45,7 @@ def pytest_addoption(parser: Parser) -> None:
     parser.addoption("--startup-timeout", type=int, action="store", default=60 * 30, help="timeout in seconds for starting a node")
     parser.addoption("--converge-timeout", type=int, action="store", default=60 * 30, help="timeout in seconds for network converge")
     parser.addoption("--receive-timeout", type=int, action="store", default=30, help="timeout in seconds for receiving a single block")
-    parser.addoption("--command-timeout", type=int, action="store", default=60 * 30, help="timeout in seconds for executing a rnode call")
+    parser.addoption("--command-timeout", type=int, action="store", default=60 * 3, help="timeout in seconds for executing a rnode call")
     parser.addoption("--random-seed", type=int, action="store", default=None, help="seed for the random numbers generator used in integration tests")
 
 def pytest_terminal_summary(terminalreporter:TerminalReporter) -> None:

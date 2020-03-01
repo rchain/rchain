@@ -291,6 +291,11 @@ def wait_for_log_match_result(context: TestingContext, node: 'Node', pattern: Pa
     wait_using_wall_clock_time_or_fail(predicate, context.command_timeout)
     return predicate.result
 
+def wait_for_log_match_result_raise(context: TestingContext, node: 'Node', pattern: Pattern) -> Match:
+    predicate = LogsReMatchWithResult(node, pattern)
+    wait_using_wall_clock_time(predicate, context.command_timeout)
+    return predicate.result
+
 
 def wait_for_block_finalized(context: TestingContext, node: 'Node', *, block_hash_prefix: str) -> None:
     predicate = BlockFinalized(node, block_hash_prefix)
