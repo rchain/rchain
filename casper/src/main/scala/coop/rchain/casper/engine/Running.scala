@@ -16,9 +16,8 @@ import coop.rchain.comm.transport.{Blob, TransportLayer}
 import coop.rchain.comm.PeerNode
 import coop.rchain.metrics.Metrics
 import coop.rchain.models.BlockHash.BlockHash
-import coop.rchain.models.Validator.Validator
 import coop.rchain.shared.{Cell, Log, Time}
-import monix.eval.Task
+import coop.rchain.catscontrib.Catscontrib.ToBooleanF
 
 import scala.concurrent.duration._
 
@@ -30,6 +29,7 @@ object Running {
   final case class Requested(
       timestamp: Long,
       peers: Set[PeerNode] = Set.empty,
+      received: Boolean = false,
       waitingList: List[PeerNode] = List.empty
   )
 
@@ -143,9 +143,14 @@ object Running {
       requests.keys.toList
         .traverse(hash => {
           val requested = requests(hash)
-          Time[F].currentMillis
-            .map(_ - requested.timestamp > timeout.seconds.toMillis)
-            .ifM(tryRerequest(hash, requested), (hash -> Option(requested)).pure[F])
+          for {
+            received <- requested.received.pure[F]
+            expired  <- Time[F].currentMillis.map(_ - requested.timestamp > timeout.seconds.toMillis)
+            rerequest <- if (expired && !received)
+                          tryRerequest(hash, requested)
+                        else
+                          (hash -> Option(requested)).pure[F]
+          } yield rerequest
         })
         .map(list => toMap(list))
     })
@@ -163,7 +168,7 @@ object Running {
       peer: PeerNode,
       hb: HasBlock
   )(
-      casperContains: BlockHash => F[Boolean]
+      repeatedCasperMessage: BlockHash => F[Boolean]
   ): F[Unit] = {
 
     val hashStr = PrettyPrinter.buildString(hb.hash)
@@ -175,7 +180,7 @@ object Running {
       )
 
     val logIntro = s"Received confirmation from $peer that it has block $hashStr."
-    Log[F].info(logIntro) >> casperContains(hb.hash).ifM(
+    Log[F].info(logIntro) >> repeatedCasperMessage(hb.hash).ifM(
       Applicative[F].unit,
       RequestedBlocks.get(hb.hash) >>= (_.fold(requestForNewBlock(peer, hb.hash))(
         req =>
@@ -197,10 +202,10 @@ object Running {
     )
 
   def handleBlockMessage[F[_]: Monad: Log: RequestedBlocks](peer: PeerNode, b: BlockMessage)(
-      casperContains: BlockHash => F[Boolean],
+      repeatedCasperMessage: BlockHash => F[Boolean],
       casperAdd: BlockMessage => F[ValidBlockProcessing]
   ): F[Unit] =
-    casperContains(b.blockHash)
+    repeatedCasperMessage(b.blockHash)
       .ifM(
         Log[F].info(s"Received block ${PrettyPrinter.buildString(b.blockHash)} again."),
         Log[F].info(s"Received ${PrettyPrinter.buildString(b)}.") >> casperAdd(b) >>= (
@@ -214,11 +219,8 @@ object Running {
   def handleBlockHashMessage[F[_]: Monad: Log: ConnectionsCell: TransportLayer: Time: RPConfAsk: RequestedBlocks](
       peer: PeerNode,
       blockHashMessage: BlockHashMessage
-  )(casperContains: BlockHash => F[Boolean]): F[Unit] =
-    (
-      casperContains(blockHashMessage.blockHash),
-      RequestedBlocks.contains(blockHashMessage.blockHash)
-    ).mapN(_ || _)
+  )(repeatedCasperMessage: BlockHash => F[Boolean]): F[Unit] =
+    repeatedCasperMessage(blockHashMessage.blockHash)
       .ifM(
         Log[F]
           .info(
@@ -281,6 +283,38 @@ class Running[F[_]: Sync: BlockStore: CommUtil: TransportLayer: ConnectionsCell:
   private val F    = Applicative[F]
   private val noop = F.unit
 
+  /**
+    * Message that relates to a block (e.g. block message or block hash broadcast message) shall be considered
+    * as repeated and dropped if corresponding block is marked as received in RequestedBlocks or already added to DAG.
+    * Otherwise - that is a new message and shall be processed normal way.
+    *
+    * RequestedBlocks is a part of Casper loop maintaining liveness of the protocol.
+    * It keeping records of blocks being requested and re-request them on schedule if failed first time.
+    * It is expected to get lots of duplicate messages from different peers, so check for duplicate is required.
+    * Processing of duplicate blocks puts load on Casper and highly discouraged.
+    *
+    * When block is received from some peer first time - it is
+    * - marked as `received` in RequestedBlocks,
+    * - added to the block store and
+    * - sent to Casper.
+    * Block is being kept in RequestedBlocks until it is added to the DAG so we can detect duplicates.
+    *
+    * If either RequestedBlocks shows that block was received (but not yet added to Casper)
+    * or block was already added by Casper (so removed from RequestedBlocks) - related message
+    * considered as repeated.
+    *
+    * @param hash Block hash
+    * @return If message is repeated
+    */
+  private def repeatedCasperMessage(hash: BlockHash): F[Boolean] =
+    RequestedBlocks.get(hash).map(x => x.nonEmpty && x.get.received) ||^ casper.contains(hash)
+
+  /**
+    * Wrapper for Casper add block.
+    * @param peer originator of the block
+    * @param b block
+    * @return block processing result
+    */
   private def casperAdd(peer: PeerNode)(b: BlockMessage): F[ValidBlockProcessing] = {
     import cats.instances.option._
 
@@ -293,18 +327,34 @@ class Running[F[_]: Sync: BlockStore: CommUtil: TransportLayer: ConnectionsCell:
             s"There is another node $peer proposing using the same private key as you. Or did you restart your node?"
           )
         )
-      } >>
+      } >> {
+      for {
+        maybeReq <- RequestedBlocks.get(b.blockHash)
+        _ <- maybeReq match {
+              // There might be blocks that are not maintained by RequestedBlocks, e.g. genesis ceremony messages
+              case None => Log[F].info("BlockMessage is not present in RequestedBlocks.")
+              case Some(requested) => {
+                // Make Casper loop aware that the block has been received
+                RequestedBlocks.put(b.blockHash, requested.copy(received = true)) >>
+                  Log[F].info(
+                    s"Block ${PrettyPrinter.buildString(b.blockHash)} marked as received."
+                  )
+              }
+            }
+      } yield ()
+    } >>
       casper.addBlock(b)
   }
 
   override def init: F[Unit] = theInit
 
   override def handle(peer: PeerNode, msg: CasperMessage): F[Unit] = msg match {
-    case blockHash: BlockHashMessage => handleBlockHashMessage(peer, blockHash)(casper.contains)
-    case b: BlockMessage             => handleBlockMessage(peer, b)(casper.contains, casperAdd(peer))
-    case br: BlockRequest            => handleBlockRequest(peer, br)
-    case hbr: HasBlockRequest        => handleHasBlockRequest(peer, hbr)(casper.contains)
-    case hb: HasBlock                => handleHasBlock(peer, hb)(casper.contains)
+    case blockHash: BlockHashMessage =>
+      handleBlockHashMessage(peer, blockHash)(repeatedCasperMessage)
+    case b: BlockMessage      => handleBlockMessage(peer, b)(repeatedCasperMessage, casperAdd(peer))
+    case br: BlockRequest     => handleBlockRequest(peer, br)
+    case hbr: HasBlockRequest => handleHasBlockRequest(peer, hbr)(casper.contains)
+    case hb: HasBlock         => handleHasBlock(peer, hb)(repeatedCasperMessage)
     case _: ForkChoiceTipRequest.type =>
       handleForkChoiceTipRequest(peer, ForkChoiceTipRequest)(casper)
     case abr: ApprovedBlockRequest    => handleApprovedBlockRequest(peer, abr, approvedBlock)
