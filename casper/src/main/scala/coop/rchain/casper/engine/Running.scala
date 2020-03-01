@@ -214,11 +214,8 @@ object Running {
   def handleBlockHashMessage[F[_]: Monad: Log: ConnectionsCell: TransportLayer: Time: RPConfAsk: RequestedBlocks](
       peer: PeerNode,
       blockHashMessage: BlockHashMessage
-  )(casperContains: BlockHash => F[Boolean]): F[Unit] =
-    (
-      casperContains(blockHashMessage.blockHash),
-      RequestedBlocks.contains(blockHashMessage.blockHash)
-    ).mapN(_ || _)
+  )(repeatedCasperMessage: BlockHash => F[Boolean]): F[Unit] =
+    repeatedCasperMessage(blockHashMessage.blockHash)
       .ifM(
         Log[F]
           .info(
@@ -305,11 +302,12 @@ class Running[F[_]: Sync: BlockStore: CommUtil: TransportLayer: ConnectionsCell:
   override def init: F[Unit] = theInit
 
   override def handle(peer: PeerNode, msg: CasperMessage): F[Unit] = msg match {
-    case blockHash: BlockHashMessage => handleBlockHashMessage(peer, blockHash)(casper.contains)
-    case b: BlockMessage             => handleBlockMessage(peer, b)(repeatedCasperMessage, casperAdd(peer))
-    case br: BlockRequest            => handleBlockRequest(peer, br)
-    case hbr: HasBlockRequest        => handleHasBlockRequest(peer, hbr)(casper.contains)
-    case hb: HasBlock                => handleHasBlock(peer, hb)(casper.contains)
+    case blockHash: BlockHashMessage =>
+      handleBlockHashMessage(peer, blockHash)(repeatedCasperMessage)
+    case b: BlockMessage      => handleBlockMessage(peer, b)(repeatedCasperMessage, casperAdd(peer))
+    case br: BlockRequest     => handleBlockRequest(peer, br)
+    case hbr: HasBlockRequest => handleHasBlockRequest(peer, hbr)(casper.contains)
+    case hb: HasBlock         => handleHasBlock(peer, hb)(casper.contains)
     case _: ForkChoiceTipRequest.type =>
       handleForkChoiceTipRequest(peer, ForkChoiceTipRequest)(casper)
     case abr: ApprovedBlockRequest    => handleApprovedBlockRequest(peer, abr, approvedBlock)
