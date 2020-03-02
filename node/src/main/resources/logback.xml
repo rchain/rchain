@@ -18,7 +18,7 @@
 
   <appender name="FILE" class="ch.qos.logback.core.FileAppender">
     <file>${rnode.data.dir}/rnode.log</file>
-    <append>false</append>
+    <append>true</append>
     <encoder>
       <pattern>%d{ISO8601, UTC} [%thread] %-5level %logger - %msg%n</pattern>
     </encoder>
