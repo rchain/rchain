@@ -87,15 +87,20 @@ object StreamHandler {
       }({
         // failed while collecting stream
         case (stmd, Right(Left(_))) =>
-          gracefullyClose[Task](stmd.fos).as(()) >>
+          Log[Task].warn("Failed collecting stream.") >>
+            gracefullyClose[Task](stmd.fos).as(()) >>
             stmd.path.deleteSingleFile[Task]
         // should not happend (errors handled witin bracket) but covered for safety
         case (stmd, Left(_)) =>
-          gracefullyClose[Task](stmd.fos).as(()) >>
+          Log[Task].error(
+            "Stream collection ended unexpected way. Please contact RNode code maintainer."
+          ) >>
+            gracefullyClose[Task](stmd.fos).as(()) >>
             stmd.path.deleteSingleFile[Task]
         // succesfully collected
         case (stmd, _) =>
-          gracefullyClose[Task](stmd.fos).as(())
+          Log[Task].debug("Stream collected.") >>
+            gracefullyClose[Task](stmd.fos).as(())
       })
       .attempt
       .map(_.leftMap(StreamError.unexpected).flatten)

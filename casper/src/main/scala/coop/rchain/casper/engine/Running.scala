@@ -228,7 +228,7 @@ object Running {
           ),
         Log[F].info(
           s"Received block hash ${PrettyPrinter.buildString(blockHashMessage.blockHash)}. Requesting ..."
-        ) *> requestForNewBlock(peer, blockHashMessage.blockHash)
+        ) >> requestForNewBlock(peer, blockHashMessage.blockHash)
       )
 
   def handleBlockRequest[F[_]: Monad: RPConfAsk: BlockStore: Log: TransportLayer](
@@ -241,7 +241,7 @@ object Running {
       _ <- maybeBlock match {
             case None => Log[F].info(logIntro + "No response given since block not found.")
             case Some(block) =>
-              streamToPeer(peer)(ToPacket(block.toProto)) <* Log[F].info(
+              streamToPeer(peer)(ToPacket(block.toProto)) >> Log[F].info(
                 logIntro + "Response sent."
               )
           }
@@ -255,9 +255,9 @@ object Running {
       casper
     ) >>= (
         tip =>
-          streamToPeer(peer)(ToPacket(tip.toProto)) <* Log[F].info(
-            s"Sending Block ${tip.blockHash} to $peer"
-          )
+          Log[F].info(
+            s"Streaming block ${tip.blockHash} to $peer"
+          ) >> streamToPeer(peer)(ToPacket(tip.toProto))
       )
 
   def handleApprovedBlockRequest[F[_]: Monad: RPConfAsk: Log: TransportLayer](
@@ -267,7 +267,7 @@ object Running {
   ): F[Unit] =
     Log[F].info(s"Received ApprovedBlockRequest from $peer") >> streamToPeer(peer)(
       ToPacket(approvedBlock.toProto)
-    ) <* Log[F].info(s"Sending ApprovedBlock to $peer")
+    ) >> Log[F].info(s"ApprovedBlock sent to $peer")
 
 }
 
@@ -332,7 +332,10 @@ class Running[F[_]: Sync: BlockStore: CommUtil: TransportLayer: ConnectionsCell:
         maybeReq <- RequestedBlocks.get(b.blockHash)
         _ <- maybeReq match {
               // There might be blocks that are not maintained by RequestedBlocks, e.g. genesis ceremony messages
-              case None => Log[F].info("BlockMessage is not present in RequestedBlocks.")
+              case None =>
+                Log[F].info(
+                  s"Block ${PrettyPrinter.buildString(b.blockHash)} is not present in RequestedBlocks."
+                )
               case Some(requested) => {
                 // Make Casper loop aware that the block has been received
                 RequestedBlocks.put(b.blockHash, requested.copy(received = true)) >>
