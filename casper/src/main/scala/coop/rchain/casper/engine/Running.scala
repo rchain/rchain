@@ -240,7 +240,7 @@ object Running {
       _ <- maybeBlock match {
             case None => Log[F].info(logIntro + "No response given since block not found.")
             case Some(block) =>
-              streamToPeer(peer)(ToPacket(block.toProto)) <* Log[F].info(
+              streamToPeer(peer)(ToPacket(block.toProto)) >> Log[F].info(
                 logIntro + "Response sent."
               )
           }
