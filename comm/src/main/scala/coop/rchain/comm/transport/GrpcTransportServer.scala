@@ -47,12 +47,7 @@ class GrpcTransportServer(
   implicit val metricsSource: Metrics.Source =
     Metrics.Source(CommMetricsSource, "rp.transport")
 
-  private val queueScheduler =
-    Scheduler.fixedPool(
-      "tl-dispatcher-server-queue",
-      parallelism,
-      reporter = UncaughtExceptionLogger
-    )
+  private val queueScheduler = scheduler
 
   private val serverSslContextTask: Task[SslContext] =
     Task

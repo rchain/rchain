@@ -60,7 +60,7 @@ class GrpcTransportClient(
 
   // Start to consume the stream queue immediately
   private val _ = streamQueue.subscribe()(
-    Scheduler.fixedPool("tl-client-stream-queue", parallelism, reporter = UncaughtExceptionLogger)
+    scheduler
   )
 
   private val clientSslContextTask: Task[SslContext] =

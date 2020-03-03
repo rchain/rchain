@@ -69,8 +69,17 @@ class NodeRuntime private[node] (
 
   private[this] val loopScheduler =
     Scheduler.fixedPool("loop", 4, reporter = UncaughtExceptionLogger)
-  private[this] val grpcScheduler =
-    Scheduler.cached("grpc-io", 4, 64, reporter = UncaughtExceptionLogger)
+  private[this] val kademliaScheduler =
+    Scheduler.cached("kademlia", 4, 64, reporter = UncaughtExceptionLogger)
+  private[this] val grpcTransportClientScheduler =
+    Scheduler.cached("grpc-transport-client", 4, 64, reporter = UncaughtExceptionLogger)
+  private[this] val grpcTransportServerScheduler =
+    Scheduler.cached("grpc-transport-server", 4, 64, reporter = UncaughtExceptionLogger)
+  private[this] val grpcAPIScheduler =
+    Scheduler.cached("grpc-api", 4, 64, reporter = UncaughtExceptionLogger)
+  // for now we process one block at a time. TODO install this sheduler
+  //private[this] val blockProcessingScheduler =
+  //  Scheduler.singleThread("block-processing", reporter = UncaughtExceptionLogger)
   private[this] val rspaceScheduler         = RChainScheduler.interpreterScheduler
   implicit private val logSource: LogSource = LogSource(this.getClass)
 
@@ -127,7 +136,7 @@ class NodeRuntime private[node] (
                     conf.server.maxMessageSize,
                     conf.server.packetChunkSize,
                     commTmpFolder
-                  )(grpcScheduler, log, metrics)
+                  )(grpcTransportClientScheduler, log, metrics)
                   .toReaderT
     rpConnections   <- effects.rpConnections[Task].toReaderT
     initPeer        = if (conf.server.standalone) None else Some(conf.server.bootstrap)
@@ -153,7 +162,7 @@ class NodeRuntime private[node] (
       defaultTimeout,
       conf.server.allowPrivateAddresses
     )(
-      grpcScheduler,
+      kademliaScheduler,
       peerNodeAsk,
       metrics
     )
@@ -539,7 +548,7 @@ class NodeRuntime private[node] (
                               conf.server.kademliaPort,
                               KademliaHandleRPC.handlePing[Task],
                               KademliaHandleRPC.handleLookup[Task]
-                            )(grpcScheduler)
+                            )(kademliaScheduler)
 
       transportServer <- Task
                           .delay(
@@ -552,19 +561,19 @@ class NodeRuntime private[node] (
                               conf.server.maxStreamMessageSize,
                               conf.server.dataDir.resolve("tmp").resolve("comm"),
                               conf.server.messageConsumers
-                            )(grpcScheduler, rPConfAsk, log, metrics)
+                            )(grpcTransportServerScheduler, rPConfAsk, log, metrics)
                           )
 
       externalApiServer <- api
                             .acquireExternalServer[Task](
                               conf.grpcServer.portExternal,
-                              grpcScheduler,
+                              grpcAPIScheduler,
                               apiServers.deploy
                             )
       internalApiServer <- api
                             .acquireInternalServer(
                               conf.grpcServer.portInternal,
-                              grpcScheduler,
+                              grpcAPIScheduler,
                               apiServers.repl,
                               apiServers.deploy,
                               apiServers.propose
