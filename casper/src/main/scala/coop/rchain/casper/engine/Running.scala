@@ -283,13 +283,22 @@ class Running[F[_]: Sync: BlockStore: CommUtil: TransportLayer: ConnectionsCell:
   private val noop = F.unit
 
   private def repeatedCasperMessage(hash: BlockHash): F[Boolean] =
-    (
-      casper.contains(hash),
-      RequestedBlocks.contains(hash)
-    ).mapN(_ || _)
+    casper
+      .contains(hash)
       .ifM(
-        RequestedBlocks.get(hash).map(_.get.received).ifM(true.pure[F], false.pure[F]),
-        false.pure[F]
+        true.pure[F],
+        RequestedBlocks
+          .contains(hash)
+          .ifM(
+            RequestedBlocks
+              .get(hash)
+              .map(_.get.received)
+              .ifM(
+                true.pure[F],
+                false.pure[F]
+              ),
+            false.pure[F]
+          )
       )
 
   private def casperAdd(peer: PeerNode)(b: BlockMessage): F[ValidBlockProcessing] = {
