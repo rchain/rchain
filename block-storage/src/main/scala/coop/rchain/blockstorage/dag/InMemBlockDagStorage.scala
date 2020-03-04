@@ -46,8 +46,13 @@ final class InMemBlockDagStorage[F[_]: Concurrent: Sync: Log: BlockStore](
       dataLookup.contains(blockHash).pure[F]
     def lookupByDeployId(deployId: DeployId): F[Option[BlockHash]] =
       blockHashesByDeploy.get(deployId).pure[F]
-    def topoSort(startBlockNumber: Long): F[Vector[Vector[BlockHash]]] =
-      topoSortVector.drop(startBlockNumber.toInt).pure[F]
+    def topoSort(
+        startBlockNumber: Long,
+        maybeEndBlockNumber: Option[Long]
+    ): F[Vector[Vector[BlockHash]]] = {
+      val endBlockNumber: Long = maybeEndBlockNumber.getOrElse(topoSortVector.length.toLong)
+      topoSortVector.slice(startBlockNumber.toInt, endBlockNumber.toInt + 1).pure[F]
+    }
     def topoSortTail(tailLength: Int): F[Vector[Vector[BlockHash]]] =
       topoSortVector.takeRight(tailLength).pure[F]
     def latestMessageHash(validator: Validator): F[Option[BlockHash]] =

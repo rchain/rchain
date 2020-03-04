@@ -215,7 +215,7 @@ class BlockDagFileStorageTest extends BlockDagStorageTest {
              }
       latestMessageHashes <- dag.latestMessageHashes
       latestMessages      <- dag.latestMessages
-      topoSort            <- dag.topoSort(topoSortStartBlockNumber)
+      topoSort            <- dag.topoSort(topoSortStartBlockNumber, none)
       topoSortTail        <- dag.topoSortTail(topoSortTailLength)
     } yield (list, latestMessageHashes, latestMessages, topoSort, topoSortTail)
 
