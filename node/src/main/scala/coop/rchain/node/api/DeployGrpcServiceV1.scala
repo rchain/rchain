@@ -233,5 +233,20 @@ object DeployGrpcServiceV1 {
             case (par, block) => Result(DataWithBlockInfo(par, Some(block)))
           }))
         }
+
+      def getBlocksByHeights(request: BlocksQueryByHeight): Observable[BlockInfoResponse] =
+        Observable
+          .fromTask(
+            deferList(
+              BlockAPI
+                .getBlocksByHeights[F](request.startBlockNumber, request.endBlockNumber)
+                .map(_.getOrElse(List.empty[LightBlockInfo]))
+            ) { r =>
+              import BlockInfoResponse.Message
+              import BlockInfoResponse.Message._
+              BlockInfoResponse(r.fold[Message](Error, BlockInfo))
+            }
+          )
+          .flatMap(Observable.fromIterable)
     }
 }
