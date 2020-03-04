@@ -466,6 +466,44 @@ object BlockAPI {
       ))
   }
 
+  private def findBlockByDeployId[F[_]: Sync: SafetyOracle: BlockStore](
+      id: DeployId
+  )(implicit casper: MultiParentCasper[F]) =
+    for {
+      dag            <- casper.blockDag
+      maybeBlockHash <- dag.lookupByDeployId(id)
+      maybeBlock     <- maybeBlockHash.traverse(BlockStore[F].getUnsafe)
+    } yield maybeBlock
+
+  private def getDeployFromBlock(deployId: DeployId)(block: BlockMessage): Option[DeployInfo] =
+    block.body.deploys.find(d => d.deploy.sig == deployId).map(_.toDeployInfo)
+
+  def getDeploy[F[_]: Sync: EngineCell: Log: SafetyOracle: BlockStore](
+      id: DeployId
+  ): F[ApiErr[DeployWithBlockInfo]] =
+    EngineCell[F].read >>= (
+      _.withCasper[ApiErr[DeployWithBlockInfo]](
+        implicit casper =>
+          for {
+            maybeBlock <- findBlockByDeployId(id)
+            response <- maybeBlock.traverse(b => {
+                         for {
+                           lightBlock <- getLightBlockInfo[F](b)
+                           deploy     = getDeployFromBlock(id)(b)
+                         } yield DeployWithBlockInfo(deploy, lightBlock.some)
+                       })
+          } yield response.fold(
+            s"Couldn't find deploy with id: ${PrettyPrinter
+              .buildStringNoLimit(id)}".asLeft[DeployWithBlockInfo]
+          )(
+            _.asRight[Error]
+          ),
+        Log[F]
+          .warn("Could not get deploy, casper instance was not available yet.")
+          .as(s"Error: Couldn't find deploy with id ${PrettyPrinter.buildStringNoLimit(id)}".asLeft)
+      )
+    )
+
   def findDeploy[F[_]: Sync: EngineCell: Log: SafetyOracle: BlockStore](
       id: DeployId
   ): F[ApiErr[LightBlockInfo]] =
@@ -473,9 +511,7 @@ object BlockAPI {
       _.withCasper[ApiErr[LightBlockInfo]](
         implicit casper =>
           for {
-            dag            <- casper.blockDag
-            maybeBlockHash <- dag.lookupByDeployId(id)
-            maybeBlock     <- maybeBlockHash.traverse(BlockStore[F].getUnsafe)
+            maybeBlock     <- findBlockByDeployId(id)
             response       <- maybeBlock.traverse(getLightBlockInfo[F])
           } yield response.fold(
             s"Couldn't find block containing deploy with id: ${PrettyPrinter

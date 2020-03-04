@@ -275,6 +275,38 @@ class BlockQueryResponseAPITest
       } yield ()
   }
 
+  "getDeploy" should "return deployInfo" in withStorage {
+    implicit blockStore => implicit blockDagStorage =>
+      for {
+        effects                                 <- effectsForSimpleCasperSetup(blockStore, blockDagStorage)
+        (logEff, casperRef, cliqueOracleEffect) = effects
+        targetDeploy                            = randomDeploys.head
+        deployId                                = targetDeploy.deploy.sig
+        blockQueryResponse <- BlockAPI.getDeploy[Task](deployId)(
+                               Sync[Task],
+                               casperRef,
+                               logEff,
+                               cliqueOracleEffect,
+                               blockStore
+                             )
+        _ = inside(blockQueryResponse) {
+          case Right(deployInfo) =>
+            deployInfo.sigAlgorithm should be(targetDeploy.deploy.sigAlgorithm.name)
+            deployInfo.sig should be(PrettyPrinter.buildStringNoLimit(targetDeploy.deploy.sig))
+            deployInfo.cost should be(targetDeploy.cost.cost)
+            deployInfo.term should be(targetDeploy.deploy.data.term)
+            deployInfo.timestamp should be(targetDeploy.deploy.data.timestamp)
+            deployInfo.phloLimit should be(targetDeploy.deploy.data.phloLimit)
+            deployInfo.phloPrice should be(targetDeploy.deploy.data.phloPrice)
+            deployInfo.validAfterBlockNumber should be(
+              targetDeploy.deploy.data.validAfterBlockNumber
+            )
+            deployInfo.errored should be(targetDeploy.isFailed)
+            deployInfo.systemDeployError should be(targetDeploy.systemDeployError.getOrElse(""))
+        }
+      } yield ()
+  }
+
   it should "return an error when no block contains the deploy with the given signature" in withStorage {
     implicit blockStore => implicit blockDagStorage =>
       for {
