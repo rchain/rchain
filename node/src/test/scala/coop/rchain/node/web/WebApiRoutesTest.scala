@@ -149,6 +149,10 @@ class WebApiRoutesTest extends FlatSpec with Matchers {
 
     // TODO: https://rchain.atlassian.net/browse/RCHAIN-4018
     override def exploratoryDeploy(term: String): TaskEnv[ExploratoryDeployResponse] = ???
+    override def getBlocksByHeights(
+        startBlockNumber: Long,
+        endBlockNumber: Long
+    ): TaskEnv[List[LightBlockInfo]] = ???
   }
 
   implicit val decodeByteString: Decoder[ByteString] = new Decoder[ByteString] {

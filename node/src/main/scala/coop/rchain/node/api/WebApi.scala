@@ -41,6 +41,8 @@ trait WebApi[F[_]] {
   def findDeploy(deployId: String): F[LightBlockInfo]
 
   def exploratoryDeploy(term: String): F[ExploratoryDeployResponse]
+
+  def getBlocksByHeights(startBlockNumber: Long, endBlockNumber: Long): F[List[LightBlockInfo]]
 }
 
 object WebApi {
@@ -100,6 +102,9 @@ object WebApi {
         version = 1,
         message = "OK"
       ).pure
+
+    def getBlocksByHeights(startBlockNumber: Long, endBlockNumber: Long): F[List[LightBlockInfo]] =
+      BlockAPI.getBlocksByHeights(startBlockNumber, endBlockNumber).flatMap(_.liftToBlockApiErr)
   }
 
   // Rholang terms interesting for translation to JSON
