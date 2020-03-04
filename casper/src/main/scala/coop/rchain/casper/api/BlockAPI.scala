@@ -312,6 +312,37 @@ object BlockAPI {
     ))
   }
 
+  def getBlocksByHeights[F[_]: Sync: EngineCell: Log: SafetyOracle: BlockStore](
+      startBlockNumber: Long,
+      endBlockNumber: Long
+  ): F[ApiErr[List[LightBlockInfo]]] = {
+    val errorMessage = s"Could not retrieve blocks from ${startBlockNumber} to ${endBlockNumber}"
+
+    def casperResponse(implicit casper: MultiParentCasper[F]): F[ApiErr[List[LightBlockInfo]]] =
+      for {
+        dag         <- MultiParentCasper[F].blockDag
+        topoSortDag <- dag.topoSort(startBlockNumber, Some(endBlockNumber))
+        result <- topoSortDag
+                   .foldM(List.empty[LightBlockInfo]) {
+                     case (blockInfosAtHeightAcc, blockHashesAtHeight) =>
+                       for {
+                         blocksAtHeight <- blockHashesAtHeight.traverse(ProtoUtil.getBlock[F])
+                         blockInfosAtHeight <- blocksAtHeight.traverse(
+                                                getLightBlockInfo[F]
+                                              )
+                       } yield blockInfosAtHeightAcc ++ blockInfosAtHeight
+                   }
+                   .map(_.asRight[Error])
+      } yield result
+
+    EngineCell[F].read >>= (_.withCasper[ApiErr[List[LightBlockInfo]]](
+      casperResponse(_),
+      Log[F]
+        .warn(errorMessage)
+        .as(s"Error: $errorMessage".asLeft)
+    ))
+  }
+
   def visualizeDag[
       F[_]: Monad: Sync: EngineCell: Log: SafetyOracle: BlockStore,
       G[_]: Monad: GraphSerializer,
