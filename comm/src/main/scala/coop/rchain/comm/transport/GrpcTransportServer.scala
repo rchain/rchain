@@ -106,7 +106,9 @@ class GrpcTransportServer(
                          .subscribe()(queueScheduler)
                      )
       blobConsumer <- Task.delay(
-                       blobBuffer.mapEval(dispatchBlob).subscribe()(queueScheduler)
+                       blobBuffer
+                         .mapParallelUnordered(parallelism)(dispatchBlob)
+                         .subscribe()(queueScheduler)
                      )
     } yield Cancelable.collection(receiver, tellConsumer, blobConsumer)
   }
