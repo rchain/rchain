@@ -8,7 +8,7 @@
 
   <appender name="STDOUT" class="ch.qos.logback.core.ConsoleAppender">
     <filter class="ch.qos.logback.classic.filter.ThresholdFilter">
-      <level>INFO</level>
+      <level>DEBUG</level>
     </filter>
     <!-- encoders are  by default assigned the type ch.qos.logback.classic.encoder.PatternLayoutEncoder -->
     <encoder>

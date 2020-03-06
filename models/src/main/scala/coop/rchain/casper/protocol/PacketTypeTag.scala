@@ -4,6 +4,7 @@ import java.io.IOException
 
 import com.google.protobuf.ByteString
 import coop.rchain.comm.protocol.routing.Packet
+import coop.rchain.crypto.codec.Base16
 import enumeratum._
 import scalapb.{GeneratedMessage, GeneratedMessageCompanion, Message}
 
@@ -105,11 +106,19 @@ object FromPacket {
 trait ToPacket[A] {
   type Tag <: PacketTypeTag
   def witness: ValueOf[Tag]
-  final def mkPacket(model: A): Packet = Packet(witness.tag, content(model))
+  final def mkPacket(model: A): Packet = Packet(witness.tag, content(model), s"TAG_${witness.tag}")
   protected def content(a: A): ByteString
 }
+
 object ToPacket {
   def apply[A](msg: A)(implicit ev: ToPacket[A]) = ev.mkPacket(msg)
+  // Specializes (override) default converters
+  def apply(msg: BlockMessageProto) =
+    Packet(
+      "BlockMessage",
+      msg.toByteString,
+      s"BlockMessage_${Base16.encode(msg.blockHash.toByteArray)}"
+    )
 
   def protoMessageImpl[A <: GeneratedMessage, Tag0 <: PacketTypeTag](
       implicit witness0: ValueOf[Tag0]

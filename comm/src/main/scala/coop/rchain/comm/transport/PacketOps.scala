@@ -27,7 +27,7 @@ object PacketOps {
   implicit class RichPacket(packet: Packet) {
     def store[F[_]: Sync](folder: Path): F[CommErr[Path]] =
       Resource
-        .make(createPacketFile[F](folder, "_packet.bts")) {
+        .make(createPacketFile[F](folder, s"_packet_${packet.extra}.bts")) {
           case (_, fos) => Sync[F].delay(fos.close())
         }
         .use {
