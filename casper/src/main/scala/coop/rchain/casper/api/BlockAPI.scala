@@ -300,10 +300,11 @@ object BlockAPI {
 
     def casperResponse(implicit casper: MultiParentCasper[F]): F[ApiErr[A]] =
       for {
-        dag      <- MultiParentCasper[F].blockDag
-        depth    <- maybeDepth.fold(dag.topoSort(0L, none).map(_.length - 1))(_.pure[F])
-        topoSort <- dag.topoSortTail(depth)
-        result   <- doIt(casper, topoSort)
+        dag              <- MultiParentCasper[F].blockDag
+        totalBlockNumber <- dag.topoSort(0L, none).map(_.length)
+        depth            = maybeDepth.getOrElse(totalBlockNumber)
+        topoSort         <- dag.topoSort((totalBlockNumber - depth).toLong, none)
+        result           <- doIt(casper, topoSort)
       } yield result
 
     EngineCell[F].read >>= (_.withCasper[ApiErr[A]](

@@ -34,7 +34,7 @@ trait BlockDagRepresentation[F[_]] {
       startBlockNumber: Long,
       maybeEndBlockNumber: Option[Long]
   ): F[Vector[Vector[BlockHash]]]
-  def topoSortTail(tailLength: Int): F[Vector[Vector[BlockHash]]]
+  def latestBlockNumber: F[Long]
   def latestMessageHash(validator: Validator): F[Option[BlockHash]]
   def latestMessage(validator: Validator): F[Option[BlockMetadata]]
   def latestMessageHashes: F[Map[Validator, BlockHash]]

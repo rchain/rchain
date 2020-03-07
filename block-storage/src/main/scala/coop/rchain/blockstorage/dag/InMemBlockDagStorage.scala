@@ -53,8 +53,9 @@ final class InMemBlockDagStorage[F[_]: Concurrent: Sync: Log: BlockStore](
       val endBlockNumber: Long = maybeEndBlockNumber.getOrElse(topoSortVector.length.toLong)
       topoSortVector.slice(startBlockNumber.toInt, endBlockNumber.toInt + 1).pure[F]
     }
-    def topoSortTail(tailLength: Int): F[Vector[Vector[BlockHash]]] =
-      topoSortVector.takeRight(tailLength).pure[F]
+
+    def latestBlockNumber: F[Long] = (topoSortVector.length - 1L).pure[F]
+
     def latestMessageHash(validator: Validator): F[Option[BlockHash]] =
       latestMessagesMap.get(validator).pure[F]
     def latestMessage(validator: Validator): F[Option[BlockMetadata]] =

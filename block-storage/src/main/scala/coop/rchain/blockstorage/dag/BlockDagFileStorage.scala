@@ -149,7 +149,15 @@ final class BlockDagFileStorage[F[_]: Concurrent: Sync: Log: RaiseIOError] priva
         } yield result
       )
 
+    def latestBlockNumber: F[Long] = (sortOffset + topoSortVector.length - 1).pure[F]
+
     /** Get the blocks from the dag based on the startBlockNumber and maybeEndBlockNUmber
+      * There is one thing has to be careful when calculating the index.Because the genesis block number
+      * is 0. The chain is calculating from 0 to infinite.
+      *
+      * Warn: I can not find codes about the value of sortOffset(Is it a blockNumber or index of vector?),
+      * calculation related to checkpoint can be wrong(the second and third (if) case). Commented by Will.
+      *
       *  @param startBlockNumber the start blockNumber from the fragment in the dag
       *  @param maybeEndBlockNumber this param can be optional, if it is none, it would choose the last blockNumber
       *                             in the dag store
@@ -185,11 +193,6 @@ final class BlockDagFileStorage[F[_]: Concurrent: Sync: Log: RaiseIOError] priva
       }
     }
 
-    // TODO should startBlockNumber have topoSortVector.length - 1 (off by one error)?
-    def topoSortTail(tailLength: Int): F[Vector[Vector[BlockHash]]] = {
-      val startBlockNumber = Math.max(0L, sortOffset - (tailLength - topoSortVector.length))
-      topoSort(startBlockNumber, none)
-    }
     def latestMessageHash(validator: Validator): F[Option[BlockHash]] =
       latestMessagesMap.get(validator).pure[F]
     def latestMessage(validator: Validator): F[Option[BlockMetadata]] =

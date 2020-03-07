@@ -101,8 +101,8 @@ class BlocksResponseAPITest
       runtimeManagerResource.use { implicit runtimeManager =>
         for {
           genesis <- createDagWith8Blocks(blockStore, blockDagStorage)
-          dag  <- blockDagStorage.getRepresentation
-          tips <- Estimator[Task].tips(dag, genesis)
+          dag     <- blockDagStorage.getRepresentation
+          tips    <- Estimator[Task].tips(dag, genesis)
           casperEffect <- NoOpsCasperEffect[Task](
                            HashMap.empty[BlockHash, BlockMessage],
                            tips
@@ -154,7 +154,7 @@ class BlocksResponseAPITest
   it should "return until depth" in withStorage { implicit blockStore => implicit blockDagStorage =>
     runtimeManagerResource.use { implicit runtimeManager =>
       for {
-        genesis <- createDagWith8Blocks(blockStore, blockDagStorage)
+        genesis    <- createDagWith8Blocks(blockStore, blockDagStorage)
         dag        <- blockDagStorage.getRepresentation
         metricsEff = new Metrics.MetricsNOP[Task]
         tips       <- Estimator[Task].tips(dag, genesis)
