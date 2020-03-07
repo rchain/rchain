@@ -345,8 +345,35 @@ class Running[F[_]: Sync: BlockStore: CommUtil: TransportLayer: ConnectionsCell:
               }
             }
       } yield ()
-    } >>
-      casper.addBlock(b)
+    } >> processUnfinishedParentsAndAddBlock(b)
+  }
+
+  /**
+    * Add parents that are already in block store and then block itself
+    * @param b block
+    * @return Result of block processing
+    */
+  private def processUnfinishedParentsAndAddBlock(b: BlockMessage): F[ValidBlockProcessing] =
+    processUnfinishedParents(b) >> casper.addBlock(b)
+
+  /**
+    * Adds parents that are in block store but not in DAG yet
+    * @param b block
+    * @return F[Unit]
+    */
+  private def processUnfinishedParents(b: BlockMessage): F[Unit] = {
+    import cats.instances.list._
+    for {
+      // Parents that are in block store but not in DAG yet and not being currently handled
+      unfinishedParents <- b.header.parentsHashList.traverse { hash =>
+                            for {
+                              block <- repeatedCasperMessage(hash)
+                                        .ifM(none[BlockMessage].pure[F], BlockStore[F].get(hash))
+                            } yield block
+                          }
+      // Try to add block to DAG. We don't care of results, just make an attempt.
+      _ <- unfinishedParents.flatten.traverse_(processUnfinishedParentsAndAddBlock)
+    } yield ()
   }
 
   override def init: F[Unit] = theInit
