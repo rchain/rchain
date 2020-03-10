@@ -291,7 +291,7 @@ object BlockAPI {
   private def toposortDag[
       F[_]: Monad: EngineCell: Log: SafetyOracle: BlockStore,
       A
-  ](depth: Int)(
+  ](depth: Int, maxDepthLimit: Int)(
       doIt: (MultiParentCasper[F], Vector[Vector[BlockHash]]) => F[ApiErr[A]]
   ): F[ApiErr[A]] = {
 
@@ -300,21 +300,25 @@ object BlockAPI {
 
     def casperResponse(implicit casper: MultiParentCasper[F]): F[ApiErr[A]] =
       for {
-        dag              <- MultiParentCasper[F].blockDag
+        dag               <- MultiParentCasper[F].blockDag
         latestBlockNumber <- dag.latestBlockNumber
-        topoSort         <- dag.topoSort((latestBlockNumber - depth).toLong, none)
-        result           <- doIt(casper, topoSort)
+        topoSort          <- dag.topoSort((latestBlockNumber - depth).toLong, none)
+        result            <- doIt(casper, topoSort)
       } yield result
 
-    EngineCell[F].read >>= (_.withCasper[ApiErr[A]](
-      casperResponse(_),
-      Log[F].warn(errorMessage).as(errorMessage.asLeft)
-    ))
+    if (depth > maxDepthLimit)
+      s"Your request depth ${depth} exceed the max limit ${maxDepthLimit}".asLeft[A].pure[F]
+    else
+      EngineCell[F].read >>= (_.withCasper[ApiErr[A]](
+        casperResponse(_),
+        Log[F].warn(errorMessage).as(errorMessage.asLeft)
+      ))
   }
 
   def getBlocksByHeights[F[_]: Sync: EngineCell: Log: SafetyOracle: BlockStore](
       startBlockNumber: Long,
-      endBlockNumber: Long
+      endBlockNumber: Long,
+      maxBlocksLimit: Int
   ): F[ApiErr[List[LightBlockInfo]]] = {
     val errorMessage = s"Could not retrieve blocks from ${startBlockNumber} to ${endBlockNumber}"
 
@@ -335,12 +339,17 @@ object BlockAPI {
                    .map(_.asRight[Error])
       } yield result
 
-    EngineCell[F].read >>= (_.withCasper[ApiErr[List[LightBlockInfo]]](
-      casperResponse(_),
-      Log[F]
-        .warn(errorMessage)
-        .as(s"Error: $errorMessage".asLeft)
-    ))
+    if (endBlockNumber - startBlockNumber > maxBlocksLimit)
+      s"Your request startBlockNumber ${startBlockNumber} and endBlockNumber ${endBlockNumber} exceed the max limit ${maxBlocksLimit}"
+        .asLeft[List[LightBlockInfo]]
+        .pure[F]
+    else
+      EngineCell[F].read >>= (_.withCasper[ApiErr[List[LightBlockInfo]]](
+        casperResponse(_),
+        Log[F]
+          .warn(errorMessage)
+          .as(s"Error: $errorMessage".asLeft)
+      ))
   }
 
   def visualizeDag[
@@ -349,10 +358,11 @@ object BlockAPI {
       R
   ](
       depth: Int,
+      maxDepthLimit: Int,
       visualizer: (Vector[Vector[BlockHash]], String) => F[G[Graphz[G]]],
       serialize: G[Graphz[G]] => R
   ): F[ApiErr[R]] =
-    toposortDag[F, R](depth) {
+    toposortDag[F, R](depth, maxDepthLimit) {
       case (casper, topoSort) =>
         for {
           lfb   <- casper.lastFinalizedBlock
@@ -362,8 +372,8 @@ object BlockAPI {
 
   def machineVerifiableDag[
       F[_]: Monad: Sync: EngineCell: Log: SafetyOracle: BlockStore
-  ](depth: Int): F[ApiErr[String]] =
-    toposortDag[F, String](depth) {
+  ](depth: Int, maxDepthLimit: Int): F[ApiErr[String]] =
+    toposortDag[F, String](depth, maxDepthLimit) {
       case (_, topoSort) =>
         val fetchParents: BlockHash => F[List[BlockHash]] = { blockHash =>
           ProtoUtil.getBlock[F](blockHash) map (_.header.parentsHashList)
@@ -375,9 +385,10 @@ object BlockAPI {
     }
 
   def getBlocks[F[_]: Sync: EngineCell: Log: SafetyOracle: BlockStore](
-      depth: Int
+      depth: Int,
+      maxDepthLimit: Int
   ): F[ApiErr[List[LightBlockInfo]]] =
-    toposortDag[F, List[LightBlockInfo]](depth) {
+    toposortDag[F, List[LightBlockInfo]](depth, maxDepthLimit) {
       case (casper, topoSort) =>
         implicit val ev: MultiParentCasper[F] = casper
         topoSort
@@ -394,7 +405,8 @@ object BlockAPI {
     }
 
   def showMainChain[F[_]: Sync: EngineCell: Log: SafetyOracle: BlockStore](
-      depth: Int
+      depth: Int,
+      maxDepthLimit: Int
   ): F[List[LightBlockInfo]] = {
 
     val errorMessage =
@@ -410,10 +422,13 @@ object BlockAPI {
         blockInfos <- mainChain.toList.traverse(getLightBlockInfo[F])
       } yield blockInfos
 
-    EngineCell[F].read >>= (_.withCasper[List[LightBlockInfo]](
-      casperResponse(_),
-      Log[F].warn(errorMessage).as(List.empty[LightBlockInfo])
-    ))
+    if (depth > maxDepthLimit)
+      List.empty[LightBlockInfo].pure[F]
+    else
+      EngineCell[F].read >>= (_.withCasper[List[LightBlockInfo]](
+        casperResponse(_),
+        Log[F].warn(errorMessage).as(List.empty[LightBlockInfo])
+      ))
   }
 
   def findDeploy[F[_]: Sync: EngineCell: Log: SafetyOracle: BlockStore](

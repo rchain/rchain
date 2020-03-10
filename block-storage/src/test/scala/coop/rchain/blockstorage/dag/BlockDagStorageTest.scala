@@ -199,8 +199,7 @@ class BlockDagFileStorageTest extends BlockDagStorageTest {
   private def lookupElements(
       blockElements: List[BlockMessage],
       storage: BlockDagStorage[Task],
-      topoSortStartBlockNumber: Long = 0,
-      topoSortTailLength: Int = 5
+      topoSortStartBlockNumber: Long = 0
   ): Task[LookupResult] =
     for {
       dag <- storage.getRepresentation
@@ -262,9 +261,9 @@ class BlockDagFileStorageTest extends BlockDagStorageTest {
                                                 Vector.empty
                                               )) {
       topoSortLevel.toSet shouldBe realTopoSortLevel.toSet
+      latestBlockNumber shouldBe topoSort.length
     }
 
-    latestBlockNumber shouldBe blockElements.length
   }
 
   it should "be able to restore state on startup" in {

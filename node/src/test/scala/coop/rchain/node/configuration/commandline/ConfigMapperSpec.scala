@@ -42,7 +42,8 @@ class ConfigMapperSpec extends FunSuite with Matchers {
         "--fault-tolerance-threshold 0.2",
         "--synchrony-constraint-threshold 0.0",
         "--height-constraint-threshold 100",
-        "--reporting"
+        "--reporting",
+        "--api-max-blocks-limit 50"
       ).mkString(" ")
 
     val options = Options(args.split(' '))
@@ -79,7 +80,8 @@ class ConfigMapperSpec extends FunSuite with Matchers {
         faultToleranceThreshold = 0.2f,
         synchronyConstraintThreshold = 0.0d,
         heightConstraintThreshold = 100L,
-        reporting = true
+        reporting = true,
+        apiMaxBlocksLimit = 50
       )
 
     val server = hocon.Server.fromConfig(config)
@@ -214,7 +216,8 @@ class ConfigMapperSpec extends FunSuite with Matchers {
         "--max-number-of-parents 1",
         "--fork-choice-stale-threshold 3h",
         "--fork-choice-check-if-stale-interval 3h",
-        "--max-parent-depth 7"
+        "--max-parent-depth 7",
+        "--api-max-blocks-limit 50"
       ).mkString(" ")
 
     val options              = Options(args.split(' '))

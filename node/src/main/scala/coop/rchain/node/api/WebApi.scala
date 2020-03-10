@@ -36,7 +36,7 @@ trait WebApi[F[_]] {
 
   def getBlock(hash: String): F[BlockInfo]
 
-  def getBlocks(depth: Option[Int]): F[List[LightBlockInfo]]
+  def getBlocks(depth: Int): F[List[LightBlockInfo]]
 
   def findDeploy(deployId: String): F[LightBlockInfo]
 
@@ -47,8 +47,9 @@ trait WebApi[F[_]] {
 
 object WebApi {
 
-  class WebApiImpl[F[_]: Sync: Concurrent: EngineCell: Log: Span: SafetyOracle: BlockStore]
-      extends WebApi[F] {
+  class WebApiImpl[F[_]: Sync: Concurrent: EngineCell: Log: Span: SafetyOracle: BlockStore](
+      apiMaxBlocksLimit: Int
+  ) extends WebApi[F] {
     import WebApiSyntax._
 
     def prepareDeploy(req: Option[PrepareRequest]): F[PrepareResponse] = {
@@ -83,8 +84,8 @@ object WebApi {
     def getBlock(hash: String): F[BlockInfo] =
       BlockAPI.getBlock[F](hash).flatMap(_.liftToBlockApiErr)
 
-    def getBlocks(depth: Option[Int]): F[List[LightBlockInfo]] =
-      BlockAPI.getBlocks[F](depth).flatMap(_.liftToBlockApiErr)
+    def getBlocks(depth: Int): F[List[LightBlockInfo]] =
+      BlockAPI.getBlocks[F](depth, apiMaxBlocksLimit).flatMap(_.liftToBlockApiErr)
 
     def findDeploy(deployId: String): F[LightBlockInfo] =
       BlockAPI
@@ -104,7 +105,9 @@ object WebApi {
       ).pure
 
     def getBlocksByHeights(startBlockNumber: Long, endBlockNumber: Long): F[List[LightBlockInfo]] =
-      BlockAPI.getBlocksByHeights(startBlockNumber, endBlockNumber).flatMap(_.liftToBlockApiErr)
+      BlockAPI
+        .getBlocksByHeights(startBlockNumber, endBlockNumber, apiMaxBlocksLimit)
+        .flatMap(_.liftToBlockApiErr)
   }
 
   // Rholang terms interesting for translation to JSON

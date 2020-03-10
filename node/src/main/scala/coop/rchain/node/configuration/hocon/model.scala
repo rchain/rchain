@@ -60,6 +60,7 @@ object Server {
     val SynchronyConstraintThreshold = "synchrony-constraint-threshold"
     val HeightConstraintThreshold    = "height-constraint-threshold"
     val Reporting                    = "reporting"
+    val ApiMaxBlocksLimit            = "api-max-blocks-limit"
 
     val all =
       List(
@@ -87,7 +88,8 @@ object Server {
         FaultToleranceThreshold,
         SynchronyConstraintThreshold,
         HeightConstraintThreshold,
-        Reporting
+        Reporting,
+        ApiMaxBlocksLimit
       )
   }
 
@@ -129,7 +131,8 @@ object Server {
       faultToleranceThreshold = server.getFloat(keys.FaultToleranceThreshold),
       synchronyConstraintThreshold = server.getDouble(keys.SynchronyConstraintThreshold),
       heightConstraintThreshold = server.getLong(keys.HeightConstraintThreshold),
-      reporting = server.getBoolean(keys.Reporting)
+      reporting = server.getBoolean(keys.Reporting),
+      apiMaxBlocksLimit = server.getInt(keys.ApiMaxBlocksLimit)
     )
   }
 }

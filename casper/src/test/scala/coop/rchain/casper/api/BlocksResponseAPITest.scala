@@ -38,6 +38,7 @@ class BlocksResponseAPITest
   val bonds  = Seq(v1Bond, v2Bond, v3Bond)
   private val runtimeManagerResource: Resource[Task, RuntimeManager[Task]] =
     mkRuntimeManager("block-response-api-test")
+  val maxBlockLimit = 50
 
   private def createDagWith8Blocks(
       implicit blockstore: BlockStore[Task],
@@ -112,7 +113,7 @@ class BlocksResponseAPITest
           engineCell <- Cell.mvarCell[Task, Engine[Task]](engine)
           cliqueOracleEffect = SafetyOracle
             .cliqueOracle[Task](Sync[Task], logEff, metrics, span)
-          blocksResponse <- BlockAPI.showMainChain[Task](Int.MaxValue)(
+          blocksResponse <- BlockAPI.showMainChain[Task](10, maxBlockLimit)(
                              Sync[Task],
                              engineCell,
                              logEff,
@@ -140,7 +141,7 @@ class BlocksResponseAPITest
           logEff     = new LogStub[Task]
           cliqueOracleEffect = SafetyOracle
             .cliqueOracle[Task](Sync[Task], logEff, metrics, span)
-          blocksResponse <- BlockAPI.getBlocks[Task](Some(Int.MaxValue))(
+          blocksResponse <- BlockAPI.getBlocks[Task](10, maxBlockLimit)(
                              Sync[Task],
                              engineCell,
                              logEff,
@@ -167,7 +168,7 @@ class BlocksResponseAPITest
         engineCell <- Cell.mvarCell[Task, Engine[Task]](engine)
         cliqueOracleEffect = SafetyOracle
           .cliqueOracle[Task](Sync[Task], logEff, metrics, span)
-        blocksResponse <- BlockAPI.getBlocks[Task](Some(2))(
+        blocksResponse <- BlockAPI.getBlocks[Task](2, maxBlockLimit)(
                            Sync[Task],
                            engineCell,
                            logEff,
@@ -195,7 +196,7 @@ class BlocksResponseAPITest
           engineCell <- Cell.mvarCell[Task, Engine[Task]](engine)
           cliqueOracleEffect = SafetyOracle
             .cliqueOracle[Task](Sync[Task], logEff, metrics, span)
-          blocksResponse <- BlockAPI.getBlocksByHeights[Task](2, 5)(
+          blocksResponse <- BlockAPI.getBlocksByHeights[Task](2, 5, maxBlockLimit)(
                              Sync[Task],
                              engineCell,
                              logEff,

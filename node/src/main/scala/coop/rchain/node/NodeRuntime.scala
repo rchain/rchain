@@ -791,18 +791,19 @@ object NodeRuntime {
         )
       }
       blockApiLock <- Semaphore[F](1)
-      apiServers = NodeRuntime.acquireAPIServers[F](runtime, blockApiLock, scheduler)(
-        blockStore,
-        oracle,
-        Concurrent[F],
-        Metrics[F],
-        span,
-        engineCell,
-        Log[F],
-        Taskable[F],
-        synchronyConstraintChecker,
-        lastFinalizedHeightConstraintChecker
-      )
+      apiServers = NodeRuntime
+        .acquireAPIServers[F](runtime, blockApiLock, scheduler, conf.server.apiMaxBlocksLimit)(
+          blockStore,
+          oracle,
+          Concurrent[F],
+          Metrics[F],
+          span,
+          engineCell,
+          Log[F],
+          Taskable[F],
+          synchronyConstraintChecker,
+          lastFinalizedHeightConstraintChecker
+        )
       casperLoop = for {
         engine <- engineCell.read
         _      <- engine.withCasper(_.fetchDependencies, Applicative[F].unit)
@@ -835,7 +836,7 @@ object NodeRuntime {
         implicit val sp = span
         implicit val or = oracle
         implicit val bs = blockStore
-        new WebApiImpl[F]
+        new WebApiImpl[F](conf.server.apiMaxBlocksLimit)
       }
     } yield (
       blockStore,
@@ -860,7 +861,8 @@ object NodeRuntime {
   def acquireAPIServers[F[_]](
       runtime: Runtime[F],
       blockApiLock: Semaphore[F],
-      scheduler: Scheduler
+      scheduler: Scheduler,
+      apiMaxBlocksLimit: Int
   )(
       implicit
       blockStore: BlockStore[F],
@@ -876,7 +878,7 @@ object NodeRuntime {
   ): APIServers = {
     implicit val s: Scheduler = scheduler
     val repl                  = ReplGrpcService.instance(runtime, s)
-    val deploy                = DeployGrpcServiceV1.instance(blockApiLock)
+    val deploy                = DeployGrpcServiceV1.instance(blockApiLock, apiMaxBlocksLimit)
     val propose               = ProposeGrpcServiceV1.instance(blockApiLock)
     APIServers(repl, propose, deploy)
   }

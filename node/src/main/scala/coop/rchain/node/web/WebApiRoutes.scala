@@ -135,13 +135,13 @@ object WebApiRoutes {
         webApi.getBlock(hash).handle
 
       case GET -> Root / "blocks" =>
-        webApi.getBlocks(none).handle
+        webApi.getBlocks(1).handle
 
       case GET -> Root / "blocks" / IntVar(startBlockNumber) / IntVar(endBlockNumber) =>
         webApi.getBlocksByHeights(startBlockNumber.toLong, endBlockNumber.toLong).handle
 
       case GET -> Root / "blocks" / IntVar(depth) =>
-        webApi.getBlocks(depth.some).handle
+        webApi.getBlocks(depth).handle
 
       case GET -> Root / "deploy" / deployId =>
         webApi.findDeploy(deployId).handle

@@ -149,7 +149,7 @@ final class BlockDagFileStorage[F[_]: Concurrent: Sync: Log: RaiseIOError] priva
         } yield result
       )
 
-    def latestBlockNumber: F[Long] = (sortOffset + topoSortVector.length - 1).pure[F]
+    def latestBlockNumber: F[Long] = (sortOffset + topoSortVector.length).pure[F]
 
     /** Get the blocks from the dag based on the startBlockNumber and maybeEndBlockNUmber
       * There is one thing has to be careful when calculating the index.Because the genesis block number
