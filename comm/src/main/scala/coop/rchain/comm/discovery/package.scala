@@ -16,17 +16,18 @@ package object discovery {
       networkId: String,
       port: Int,
       pingHandler: PeerNode => Task[Unit],
+      ioScheduler: Scheduler,
       lookupHandler: (PeerNode, Array[Byte]) => Task[Seq[PeerNode]]
-  )(implicit scheduler: Scheduler): Task[Server[Task]] =
+  )(implicit mainScheduler: Scheduler): Task[Server[Task]] =
     GrpcServer[Task](
       NettyServerBuilder
         .forPort(port)
-        .executor(scheduler)
+        .executor(ioScheduler)
         .addService(
           KademliaGrpcMonix
             .bindService(
               new GrpcKademliaRPCServer(networkId, pingHandler, lookupHandler),
-              scheduler
+              mainScheduler
             )
         )
         .build

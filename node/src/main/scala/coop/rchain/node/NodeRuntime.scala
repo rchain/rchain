@@ -153,15 +153,15 @@ class NodeRuntime private[node] (
     )
 
     defaultTimeout = conf.server.defaultTimeout
-    kademliaRPC = effects.kademliaRPC(
-      conf.server.networkId,
-      defaultTimeout,
-      conf.server.allowPrivateAddresses
-    )(
-      ioScheduler,
-      peerNodeAsk,
-      metrics
-    )
+    kademliaRPC = {
+      implicit val p = peerNodeAsk
+      implicit val m = metrics
+      effects.kademliaRPC(
+        conf.server.networkId,
+        defaultTimeout,
+        conf.server.allowPrivateAddresses
+      )
+    }
     kademliaStore = effects.kademliaStore(id)(kademliaRPC, metrics)
     _             <- initPeer.fold(Task.unit)(p => kademliaStore.updateLastSeen(p)).toReaderT
     nodeDiscovery = effects.nodeDiscovery(id)(Monad[Task], kademliaStore, kademliaRPC)
@@ -543,8 +543,9 @@ class NodeRuntime private[node] (
                               conf.server.networkId,
                               conf.server.kademliaPort,
                               KademliaHandleRPC.handlePing[Task],
+                              ioScheduler,
                               KademliaHandleRPC.handleLookup[Task]
-                            )(ioScheduler)
+                            )
 
       transportServer <- Task
                           .delay(
