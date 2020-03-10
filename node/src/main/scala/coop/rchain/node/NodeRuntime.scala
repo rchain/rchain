@@ -585,7 +585,7 @@ class NodeRuntime private[node] (
         prometheusReporter,
         reportingCasper,
         webApi
-      )(nodeDiscovery, connectionsCell, concurrent, rPConfAsk, consumer, s)
+      )
       httpFiber <- httpServerFiber.start
       _ <- Task.delay {
             Kamon.reconfigure(conf.underlying.withFallback(Kamon.config()))

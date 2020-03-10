@@ -29,7 +29,7 @@ package object web {
       concurrent: Concurrent[Task],
       rPConfAsk: RPConfAsk[Task],
       consumer: EventConsumer[Task],
-      scheduler: Scheduler
+      mainScheduler: Scheduler
   ): Task[Unit] =
     for {
       event <- EventsInfo.service[Task]
