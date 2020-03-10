@@ -291,7 +291,7 @@ object BlockAPI {
   private def toposortDag[
       F[_]: Monad: EngineCell: Log: SafetyOracle: BlockStore,
       A
-  ](maybeDepth: Option[Int])(
+  ](depth: Int)(
       doIt: (MultiParentCasper[F], Vector[Vector[BlockHash]]) => F[ApiErr[A]]
   ): F[ApiErr[A]] = {
 
@@ -301,9 +301,8 @@ object BlockAPI {
     def casperResponse(implicit casper: MultiParentCasper[F]): F[ApiErr[A]] =
       for {
         dag              <- MultiParentCasper[F].blockDag
-        totalBlockNumber <- dag.topoSort(0L, none).map(_.length)
-        depth            = maybeDepth.getOrElse(totalBlockNumber)
-        topoSort         <- dag.topoSort((totalBlockNumber - depth).toLong, none)
+        latestBlockNumber <- dag.latestBlockNumber
+        topoSort         <- dag.topoSort((latestBlockNumber - depth).toLong, none)
         result           <- doIt(casper, topoSort)
       } yield result
 
@@ -349,7 +348,7 @@ object BlockAPI {
       G[_]: Monad: GraphSerializer,
       R
   ](
-      depth: Option[Int],
+      depth: Int,
       visualizer: (Vector[Vector[BlockHash]], String) => F[G[Graphz[G]]],
       serialize: G[Graphz[G]] => R
   ): F[ApiErr[R]] =
@@ -363,8 +362,8 @@ object BlockAPI {
 
   def machineVerifiableDag[
       F[_]: Monad: Sync: EngineCell: Log: SafetyOracle: BlockStore
-  ]: F[ApiErr[String]] =
-    toposortDag[F, String](maybeDepth = None) {
+  ](depth: Int): F[ApiErr[String]] =
+    toposortDag[F, String](depth) {
       case (_, topoSort) =>
         val fetchParents: BlockHash => F[List[BlockHash]] = { blockHash =>
           ProtoUtil.getBlock[F](blockHash) map (_.header.parentsHashList)
@@ -376,7 +375,7 @@ object BlockAPI {
     }
 
   def getBlocks[F[_]: Sync: EngineCell: Log: SafetyOracle: BlockStore](
-      depth: Option[Int]
+      depth: Int
   ): F[ApiErr[List[LightBlockInfo]]] =
     toposortDag[F, List[LightBlockInfo]](depth) {
       case (casper, topoSort) =>

@@ -33,6 +33,8 @@ object DeployGrpcServiceV1 {
   ): DeployServiceV1GrpcMonix.DeployService =
     new DeployServiceV1GrpcMonix.DeployService {
 
+      val apiMaxBlocksLimit = 50
+
       private def defer[A, R <: StacksafeMessage[R]](
           task: F[Either[String, A]]
       )(
@@ -97,7 +99,7 @@ object DeployGrpcServiceV1 {
         implicit val ser: GraphSerializer[Effect]             = new ListSerializer[Effect]
         val serialize: Effect[Graphz[Effect]] => List[String] = _.runS(Vector.empty).value.toList
 
-        val depth  = if (request.depth <= 0) None else Some(request.depth)
+        val depth  = if (request.depth <= 0) apiMaxBlocksLimit else request.depth
         val config = GraphConfig(request.showJustificationLines)
 
         Observable
@@ -120,7 +122,7 @@ object DeployGrpcServiceV1 {
       }
 
       def machineVerifiableDag(request: MachineVerifyQuery): Task[MachineVerifyResponse] =
-        defer(BlockAPI.machineVerifiableDag[F]) { r =>
+        defer(BlockAPI.machineVerifiableDag[F](apiMaxBlocksLimit)) { r =>
           import MachineVerifyResponse.Message
           import MachineVerifyResponse.Message._
           MachineVerifyResponse(r.fold[Message](Error, Content))
@@ -142,7 +144,7 @@ object DeployGrpcServiceV1 {
           .fromTask(
             deferList(
               BlockAPI
-                .getBlocks[F](Some(request.depth))
+                .getBlocks[F](request.depth)
                 .map(_.getOrElse(List.empty[LightBlockInfo]))
             ) { r =>
               import BlockInfoResponse.Message
