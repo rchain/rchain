@@ -41,7 +41,7 @@ object Main {
     System.setProperty("rnode.data.dir", configuration.server.dataDir.toString) // NonUnitStatements
 
     implicit val scheduler: Scheduler = Scheduler.computation(
-      Math.max(java.lang.Runtime.getRuntime.availableProcessors(), 2),
+      Math.max(java.lang.Runtime.getRuntime.availableProcessors() * 2, 2),
       "node-runner",
       reporter = UncaughtExceptionLogger
     )
