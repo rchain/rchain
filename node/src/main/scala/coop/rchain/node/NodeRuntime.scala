@@ -61,11 +61,13 @@ import org.lmdbjava.Env
 class NodeRuntime private[node] (
     conf: Configuration,
     id: NodeIdentifier,
-    mainScheduler: Scheduler
+    scheduler: Scheduler
 )(
     implicit log: Log[Task],
     eventLog: EventLog[Task]
 ) {
+
+  implicit private val mainScheduler = scheduler
   // IO scheduler is only for IO blocking tasks
   // mainScheduler should be used for all CPU bounded tasks
   private[this] val ioScheduler =
@@ -118,16 +120,20 @@ class NodeRuntime private[node] (
             Task.unit
           )
           .toReaderT
-    transport <- effects
-                  .transportClient(
-                    conf.server.networkId,
-                    conf.tls.certificate,
-                    conf.tls.key,
-                    conf.server.maxMessageSize,
-                    conf.server.packetChunkSize,
-                    commTmpFolder
-                  )(ioScheduler, log, metrics)
-                  .toReaderT
+    transport <- {
+      implicit val m = metrics
+      effects
+        .transportClient(
+          conf.server.networkId,
+          conf.tls.certificate,
+          conf.tls.key,
+          conf.server.maxMessageSize,
+          conf.server.packetChunkSize,
+          ioScheduler,
+          commTmpFolder
+        )
+        .toReaderT
+    }
     rpConnections   <- effects.rpConnections[Task].toReaderT
     initPeer        = if (conf.server.standalone) None else Some(conf.server.bootstrap)
     peerNode        = rpConf(local, initPeer)

@@ -31,9 +31,10 @@ class GrpcTransportClient(
     maxMessageSize: Int,
     packetChunkSize: Int,
     tempFolder: Path,
+    ioScheduler: Scheduler,
     clientQueueSize: Int
 )(
-    implicit scheduler: Scheduler,
+    implicit mainScheduler: Scheduler,
     val log: Log[Task],
     val metrics: Metrics[Task]
 ) extends TransportLayer[Task] {
@@ -46,7 +47,8 @@ class GrpcTransportClient(
   private def certInputStream  = new ByteArrayInputStream(cert.getBytes())
   private def keyInputStream   = new ByteArrayInputStream(key.getBytes())
   private val streamObservable = new StreamObservable(clientQueueSize, tempFolder)
-  private val parallelism      = Math.max(Runtime.getRuntime.availableProcessors(), 2)
+  // Number of parallel message consumers
+  private val parallelism = Math.max(Runtime.getRuntime.availableProcessors(), 2)
   private val streamQueue =
     streamObservable
       .flatMap { s =>
@@ -59,9 +61,7 @@ class GrpcTransportClient(
       }
 
   // Start to consume the stream queue immediately
-  private val _ = streamQueue.subscribe()(
-    Scheduler.fixedPool("tl-client-stream-queue", parallelism, reporter = UncaughtExceptionLogger)
-  )
+  private val _ = streamQueue.subscribe()(mainScheduler)
 
   private val clientSslContextTask: Task[SslContext] =
     Task
@@ -83,7 +83,7 @@ class GrpcTransportClient(
       c <- Task.delay {
             NettyChannelBuilder
               .forAddress(peer.endpoint.host, peer.endpoint.tcpPort)
-              .executor(scheduler)
+              .executor(ioScheduler)
               .maxInboundMessageSize(maxMessageSize)
               .negotiationType(NegotiationType.TLS)
               .sslContext(clientSslContext)

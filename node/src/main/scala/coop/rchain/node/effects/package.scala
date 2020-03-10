@@ -58,16 +58,26 @@ package object effects {
       keyPath: Path,
       maxMessageSize: Int,
       packetChunkSize: Int,
+      ioScheduler: Scheduler,
       folder: Path
   )(
-      implicit scheduler: Scheduler,
+      implicit mainScheduler: Scheduler,
       log: Log[Task],
       metrics: Metrics[Task]
   ): Task[TransportLayer[Task]] =
     Task.delay {
       val cert = Resources.withResource(Source.fromFile(certPath.toFile))(_.mkString)
       val key  = Resources.withResource(Source.fromFile(keyPath.toFile))(_.mkString)
-      new GrpcTransportClient(networkId, cert, key, maxMessageSize, packetChunkSize, folder, 100)
+      new GrpcTransportClient(
+        networkId,
+        cert,
+        key,
+        maxMessageSize,
+        packetChunkSize,
+        folder,
+        ioScheduler,
+        100
+      )
     }
 
   def consoleIO(consoleReader: ConsoleReader): ConsoleIO[Task] = new JLineConsoleIO(consoleReader)
