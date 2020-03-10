@@ -61,16 +61,15 @@ import org.lmdbjava.Env
 class NodeRuntime private[node] (
     conf: Configuration,
     id: NodeIdentifier,
-    scheduler: Scheduler
+    mainScheduler: Scheduler
 )(
     implicit log: Log[Task],
     eventLog: EventLog[Task]
 ) {
-
-  private[this] val loopScheduler =
-    Scheduler.fixedPool("loop", 4, reporter = UncaughtExceptionLogger)
-  private[this] val grpcScheduler =
-    Scheduler.cached("grpc-io", 4, 64, reporter = UncaughtExceptionLogger)
+  // IO scheduler is only for IO blocking tasks
+  // mainScheduler should be used for all CPU bounded tasks
+  private[this] val ioScheduler =
+    Scheduler.io("io", reporter = UncaughtExceptionLogger)
   private[this] val rspaceScheduler         = RChainScheduler.interpreterScheduler
   implicit private val logSource: LogSource = LogSource(this.getClass)
 
@@ -127,7 +126,7 @@ class NodeRuntime private[node] (
                     conf.server.maxMessageSize,
                     conf.server.packetChunkSize,
                     commTmpFolder
-                  )(grpcScheduler, log, metrics)
+                  )(ioScheduler, log, metrics)
                   .toReaderT
     rpConnections   <- effects.rpConnections[Task].toReaderT
     initPeer        = if (conf.server.standalone) None else Some(conf.server.bootstrap)
@@ -153,7 +152,7 @@ class NodeRuntime private[node] (
       defaultTimeout,
       conf.server.allowPrivateAddresses
     )(
-      grpcScheduler,
+      ioScheduler,
       peerNodeAsk,
       metrics
     )
@@ -228,7 +227,7 @@ class NodeRuntime private[node] (
                blockstorePath,
                lastFinalizedStoragePath,
                rspaceScheduler,
-               scheduler,
+               mainScheduler,
                eventBus,
                deployStorageConfig
              )(
@@ -435,12 +434,12 @@ class NodeRuntime private[node] (
       _       <- EventLog[TaskEnv].publish(Event.NodeStarted(address))
       _ <- Task
             .defer(nodeDiscoveryLoop.forever.run(NodeCallCtx.init))
-            .executeOn(loopScheduler)
+            .executeOn(mainScheduler)
             .start
             .toReaderT
       _ <- Task
             .defer(clearConnectionsLoop.forever.run(NodeCallCtx.init))
-            .executeOn(loopScheduler)
+            .executeOn(mainScheduler)
             .start
             .toReaderT
       _ <- if (conf.server.standalone) ().pure[TaskEnv]
@@ -448,12 +447,12 @@ class NodeRuntime private[node] (
       _ <- Concurrent[TaskEnv].start(engineInit)
       _ <- Task
             .defer(casperLoop.forever.run(NodeCallCtx.init))
-            .executeOn(loopScheduler)
+            .executeOn(mainScheduler)
             .start
             .toReaderT
       _ <- Task
             .defer(updateForkChoiceLoop.forever.run(NodeCallCtx.init))
-            .executeOn(loopScheduler)
+            .executeOn(mainScheduler)
             .toReaderT
     } yield ()
   }
@@ -494,7 +493,7 @@ class NodeRuntime private[node] (
       _ <- Log[TaskEnv].info("Bringing BlockStore down ...")
       _ <- blockStore.close()
       _ <- Log[TaskEnv].info("Goodbye.")
-    } yield ()).run(NodeCallCtx.init).unsafeRunSync(scheduler)
+    } yield ()).run(NodeCallCtx.init).unsafeRunSync(mainScheduler)
 
   private def exit0: Task[Unit] = Task.delay(System.exit(0))
 
@@ -531,7 +530,7 @@ class NodeRuntime private[node] (
       rPConfAsk: RPConfAsk[Task],
       consumer: EventConsumer[Task]
   ): Task[Servers] = {
-    implicit val s: Scheduler = scheduler
+    implicit val s: Scheduler = mainScheduler
     for {
       kademliaRPCServer <- discovery
                             .acquireKademliaRPCServer(
@@ -539,7 +538,7 @@ class NodeRuntime private[node] (
                               conf.server.kademliaPort,
                               KademliaHandleRPC.handlePing[Task],
                               KademliaHandleRPC.handleLookup[Task]
-                            )(grpcScheduler)
+                            )(ioScheduler)
 
       transportServer <- Task
                           .delay(
@@ -552,19 +551,19 @@ class NodeRuntime private[node] (
                               conf.server.maxStreamMessageSize,
                               conf.server.dataDir.resolve("tmp").resolve("comm"),
                               conf.server.messageConsumers
-                            )(grpcScheduler, rPConfAsk, log, metrics)
+                            )(ioScheduler, rPConfAsk, log, metrics)
                           )
 
       externalApiServer <- api
                             .acquireExternalServer[Task](
                               conf.grpcServer.portExternal,
-                              grpcScheduler,
+                              ioScheduler,
                               apiServers.deploy
                             )
       internalApiServer <- api
                             .acquireInternalServer(
                               conf.grpcServer.portInternal,
-                              grpcScheduler,
+                              ioScheduler,
                               apiServers.repl,
                               apiServers.deploy,
                               apiServers.propose
