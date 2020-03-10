@@ -35,9 +35,10 @@ object GrpcTransportReceiver {
       tellBuffer: LimitedBuffer[Send],
       blobBuffer: LimitedBuffer[StreamMessage],
       askTimeout: FiniteDuration = 5.second,
+      ioScheduler: Scheduler,
       tempFolder: Path
   )(
-      implicit scheduler: Scheduler,
+      implicit mainScheduler: Scheduler,
       rPConfAsk: RPConfAsk[Task],
       logger: Log[Task],
       metrics: Metrics[Task]
@@ -113,10 +114,10 @@ object GrpcTransportReceiver {
 
       val server = NettyServerBuilder
         .forPort(port)
-        .executor(scheduler)
+        .executor(ioScheduler)
         .maxMessageSize(maxMessageSize)
         .sslContext(serverSslContext)
-        .addService(RoutingGrpcMonix.bindService(service, scheduler))
+        .addService(RoutingGrpcMonix.bindService(service, mainScheduler))
         .intercept(new SslSessionServerInterceptor(networkId))
         .build
         .start

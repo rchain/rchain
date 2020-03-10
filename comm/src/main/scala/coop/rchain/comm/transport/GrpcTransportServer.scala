@@ -34,9 +34,10 @@ class GrpcTransportServer(
     maxMessageSize: Int,
     maxStreamMessageSize: Long,
     tempFolder: Path,
+    ioScheduler: Scheduler,
     parallelism: Int
 )(
-    implicit scheduler: Scheduler,
+    implicit mainScheduler: Scheduler,
     rPConfAsk: RPConfAsk[Task],
     log: Log[Task],
     metrics: Metrics[Task]
@@ -46,13 +47,6 @@ class GrpcTransportServer(
 
   implicit val metricsSource: Metrics.Source =
     Metrics.Source(CommMetricsSource, "rp.transport")
-
-  private val queueScheduler =
-    Scheduler.fixedPool(
-      "tl-dispatcher-server-queue",
-      parallelism,
-      reporter = UncaughtExceptionLogger
-    )
 
   private val serverSslContextTask: Task[SslContext] =
     Task
@@ -98,17 +92,18 @@ class GrpcTransportServer(
                    maxStreamMessageSize,
                    tellBuffer,
                    blobBuffer,
+                   ioScheduler = ioScheduler,
                    tempFolder = tempFolder
                  )
       tellConsumer <- Task.delay(
                        tellBuffer
                          .mapParallelUnordered(parallelism)(dispatchSend)
-                         .subscribe()(queueScheduler)
+                         .subscribe()(mainScheduler)
                      )
       blobConsumer <- Task.delay(
                        blobBuffer
                          .mapParallelUnordered(parallelism)(dispatchBlob)
-                         .subscribe()(queueScheduler)
+                         .subscribe()(mainScheduler)
                      )
     } yield Cancelable.collection(receiver, tellConsumer, blobConsumer)
   }
@@ -123,6 +118,7 @@ object GrpcTransportServer {
       maxMessageSize: Int,
       maxStreamMessageSize: Long,
       folder: Path,
+      ioScheduler: Scheduler,
       parallelism: Int
   )(
       implicit scheduler: Scheduler,
@@ -141,6 +137,7 @@ object GrpcTransportServer {
         maxMessageSize,
         maxStreamMessageSize,
         folder,
+        ioScheduler,
         parallelism
       )
     )
