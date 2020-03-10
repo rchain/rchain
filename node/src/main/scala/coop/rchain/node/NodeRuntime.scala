@@ -234,6 +234,7 @@ class NodeRuntime private[node] (
                lastFinalizedStoragePath,
                rspaceScheduler,
                mainScheduler,
+               ioScheduler,
                eventBus,
                deployStorageConfig
              )(
@@ -535,8 +536,7 @@ class NodeRuntime private[node] (
       metrics: Metrics[Task],
       rPConfAsk: RPConfAsk[Task],
       consumer: EventConsumer[Task]
-  ): Task[Servers] = {
-    implicit val s: Scheduler = mainScheduler
+  ): Task[Servers] =
     for {
       kademliaRPCServer <- discovery
                             .acquireKademliaRPCServer(
@@ -567,6 +567,7 @@ class NodeRuntime private[node] (
                               ioScheduler,
                               apiServers.deploy
                             )
+
       internalApiServer <- api
                             .acquireInternalServer(
                               conf.grpcServer.portInternal,
@@ -600,7 +601,6 @@ class NodeRuntime private[node] (
       internalApiServer,
       httpFiber
     )
-  }
 }
 
 final case class NodeCallCtx(trace: TraceId) {
@@ -668,7 +668,8 @@ object NodeRuntime {
       blockstorePath: Path,
       lastFinalizedPath: Path,
       rspaceScheduler: Scheduler,
-      scheduler: Scheduler,
+      mainScheduler: Scheduler,
+      ioScheduler: Scheduler,
       eventPublisher: EventPublisher[F],
       deployStorageConfig: LMDBDeployStorage.Config
   ): F[
@@ -803,7 +804,8 @@ object NodeRuntime {
       }*/
       blockApiLock <- Semaphore[F](1)
       apiServers = NodeRuntime
-        .acquireAPIServers[F](runtime, blockApiLock, scheduler, conf.server.apiMaxBlocksLimit)(
+        .acquireAPIServers[F](runtime, blockApiLock, ioScheduler, conf.server.apiMaxBlocksLimit)(
+          mainScheduler,
           blockStore,
           oracle,
           Concurrent[F],
@@ -872,10 +874,11 @@ object NodeRuntime {
   def acquireAPIServers[F[_]](
       runtime: Runtime[F],
       blockApiLock: Semaphore[F],
-      scheduler: Scheduler,
+      ioScheduler: Scheduler,
       apiMaxBlocksLimit: Int
   )(
       implicit
+      mainScheduler: Scheduler,
       blockStore: BlockStore[F],
       oracle: SafetyOracle[F],
       concurrent: Concurrent[F],
@@ -887,10 +890,9 @@ object NodeRuntime {
       synchronyConstraintChecker: SynchronyConstraintChecker[F],
       lastFinalizedHeightConstraintChecker: LastFinalizedHeightConstraintChecker[F]
   ): APIServers = {
-    implicit val s: Scheduler = scheduler
-    val repl                  = ReplGrpcService.instance(runtime, s)
-    val deploy                = DeployGrpcServiceV1.instance(blockApiLock, apiMaxBlocksLimit)
-    val propose               = ProposeGrpcServiceV1.instance(blockApiLock)
+    val repl    = ReplGrpcService.instance(runtime, mainScheduler)
+    val deploy  = DeployGrpcServiceV1.instance(blockApiLock, apiMaxBlocksLimit, mainScheduler)
+    val propose = ProposeGrpcServiceV1.instance(blockApiLock, mainScheduler)
     APIServers(repl, propose, deploy)
   }
 }

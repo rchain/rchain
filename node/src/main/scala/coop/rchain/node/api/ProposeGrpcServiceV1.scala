@@ -26,9 +26,8 @@ import monix.execution.Scheduler
 
 object ProposeGrpcServiceV1 {
   def instance[F[_]: Concurrent: Log: SafetyOracle: BlockStore: Metrics: Taskable: Span: EngineCell: SynchronyConstraintChecker: LastFinalizedHeightConstraintChecker](
-      blockApiLock: Semaphore[F]
-  )(
-      implicit worker: Scheduler
+      blockApiLock: Semaphore[F],
+      worker: Scheduler
   ): ProposeServiceV1GrpcMonix.ProposeService =
     new ProposeServiceV1GrpcMonix.ProposeService {
 

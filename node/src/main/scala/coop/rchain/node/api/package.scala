@@ -22,7 +22,7 @@ package object api {
 
   def acquireInternalServer(
       port: Int,
-      grpcExecutor: Scheduler,
+      ioScheduler: Scheduler,
       replGrpcService: ReplGrpcMonix.Repl,
       deployGrpcService: DeployServiceV1GrpcMonix.DeployService,
       proposeGrpcService: ProposeServiceV1GrpcMonix.ProposeService
@@ -30,18 +30,18 @@ package object api {
     GrpcServer[Task](
       NettyServerBuilder
         .forPort(port)
-        .executor(grpcExecutor)
+        .executor(ioScheduler)
         .maxMessageSize(maxMessageSize)
         .addService(
-          ReplGrpcMonix.bindService(replGrpcService, grpcExecutor)
+          ReplGrpcMonix.bindService(replGrpcService, ioScheduler)
         )
         .addService(
           ProposeServiceV1GrpcMonix
-            .bindService(proposeGrpcService, grpcExecutor)
+            .bindService(proposeGrpcService, ioScheduler)
         )
         .addService(
           DeployServiceV1GrpcMonix
-            .bindService(deployGrpcService, grpcExecutor)
+            .bindService(deployGrpcService, ioScheduler)
         )
         .addService(ProtoReflectionService.newInstance())
         .build
@@ -49,17 +49,17 @@ package object api {
 
   def acquireExternalServer[F[_]: Concurrent: Log: Taskable](
       port: Int,
-      grpcExecutor: Scheduler,
+      ioScheduler: Scheduler,
       deployGrpcService: DeployServiceV1GrpcMonix.DeployService
   ): F[Server[F]] =
     GrpcServer[F](
       NettyServerBuilder
         .forPort(port)
-        .executor(grpcExecutor)
+        .executor(ioScheduler)
         .maxMessageSize(maxMessageSize)
         .addService(
           DeployServiceV1GrpcMonix
-            .bindService(deployGrpcService, grpcExecutor)
+            .bindService(deployGrpcService, ioScheduler)
         )
         .addService(ProtoReflectionService.newInstance())
         .build

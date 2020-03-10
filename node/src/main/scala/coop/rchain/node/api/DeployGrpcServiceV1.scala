@@ -28,9 +28,8 @@ import monix.reactive.Observable
 object DeployGrpcServiceV1 {
   def instance[F[_]: Concurrent: Log: SafetyOracle: BlockStore: Taskable: Span: EngineCell](
       blockApiLock: Semaphore[F],
-      apiMaxBlocksLimit: Int
-  )(
-      implicit worker: Scheduler
+      apiMaxBlocksLimit: Int,
+      worker: Scheduler
   ): DeployServiceV1GrpcMonix.DeployService =
     new DeployServiceV1GrpcMonix.DeployService {
 
