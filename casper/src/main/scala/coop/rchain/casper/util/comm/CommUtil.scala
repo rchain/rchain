@@ -3,7 +3,6 @@ package coop.rchain.casper.util.comm
 import scala.concurrent.duration._
 
 import cats.effect._
-import cats.syntax.apply._
 import cats.syntax.flatMap._
 import cats.syntax.functor._
 import cats.tagless.autoFunctorK
@@ -47,9 +46,8 @@ object CommUtil {
     new CommUtil[F] {
 
       def sendBlockHash(hash: BlockHash, blockCreator: ByteString): F[Unit] =
-        sendToPeers(BlockHashMessageProto(hash, blockCreator)) <* Log[F].info(
-          s"Sent hash ${PrettyPrinter.buildString(hash)} to peers"
-        )
+        sendToPeers(BlockHashMessageProto(hash, blockCreator)) >>
+          Log[F].info(s"Sent hash ${PrettyPrinter.buildString(hash)} to peers")
 
       def sendBlockRequest(hash: BlockHash): F[Unit] =
         Running
@@ -58,15 +56,15 @@ object CommUtil {
           .flatMap(
             requested =>
               Applicative[F].unlessA(requested.contains(hash))(
-                Running.addNewEntry(hash) >> sendToPeers(HasBlockRequestProto(hash)) <* Log[F]
-                  .info(s"Requested missing block ${PrettyPrinter.buildString(hash)} from peers")
+                Running.addNewEntry(hash) >> sendToPeers(HasBlockRequestProto(hash)) >>
+                  Log[F]
+                    .info(s"Requested missing block ${PrettyPrinter.buildString(hash)} from peers")
               )
           )
 
       def sendForkChoiceTipRequest: F[Unit] =
-        sendToPeers(ForkChoiceTipRequest.toProto) <* Log[F].info(
-          s"Requested fork tip from peers"
-        )
+        sendToPeers(ForkChoiceTipRequest.toProto) >>
+          Log[F].info(s"Requested fork tip from peers")
 
       def sendToPeers(message: Packet): F[Unit] =
         for {

@@ -780,7 +780,12 @@ object NodeRuntime {
 
         CasperLaunch.of(conf.casper)
       }
-      packetHandler <- {
+      packetHandler = {
+        implicit val ec = engineCell
+        CasperPacketHandler[F]
+      }
+      // Bypass fair dispatcher
+      /*packetHandler <- {
         implicit val ec = engineCell
         implicit val rb = requestedBlocks
         implicit val sp = span
@@ -789,7 +794,7 @@ object NodeRuntime {
           conf.roundRobinDispatcher.giveUpAfterSkipped,
           conf.roundRobinDispatcher.dropPeerAfterRetries
         )
-      }
+      }*/
       blockApiLock <- Semaphore[F](1)
       apiServers = NodeRuntime.acquireAPIServers[F](runtime, blockApiLock, scheduler)(
         blockStore,

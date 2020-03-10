@@ -83,7 +83,10 @@ object GrpcTransportReceiver {
                   .delay(blobBuffer.pushNext(msg))
                   .ifM(
                     List(
-                      logger.debug(s"Enqueued for handling packet ${msg.path}"),
+                      logger.debug(
+                        s"Enqueued for handling packet with message ${msg.typeId} " +
+                          s"from ${msg.sender.endpoint.host} size of ${msg.contentLength}. Packet ${msg.path}"
+                      ),
                       metrics.incrementCounter("enqueued.packets")
                     ).sequence,
                     List(

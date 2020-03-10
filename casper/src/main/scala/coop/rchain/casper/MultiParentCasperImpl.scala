@@ -85,7 +85,6 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Log: Time: SafetyOracle: Las
 
     def add: F[ValidBlockProcessing] = spanF.trace(AddBlockMetricsSource) {
       for {
-        _      <- BlockStore[F].put(b)
         _      <- spanF.mark("block-store-put")
         dag    <- blockDag
         status <- internalAddBlock(b, dag)
@@ -95,8 +94,20 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Log: Time: SafetyOracle: Las
 
     import cats.instances.either._
     for {
+      // Save block in block store before waiting for blockProcessingLock
+      // This is called inside block message handler as well, but required here in case block is not received from peer
+      // but proposed by node itself.
+      _ <- BlockStore[F].contains(b.blockHash).ifM(().pure[F], BlockStore[F].put(b))
+      _ <- Log[F].info(
+            s"Block ${PrettyPrinter.buildString(b.blockHash)} asks for blockProcessingLock."
+          )
+      // ATM Casper is allowed to add only one block at a time
       status <- blockProcessingLock.withPermit {
                  val exists = for {
+                   _ <- Log[F].info(
+                         s"Block ${PrettyPrinter.buildString(b.blockHash)} " +
+                           s"got blockProcessingLock."
+                       )
                    dag         <- blockDag
                    cst         <- state.read
                    dagContains <- dag.contains(b.blockHash)

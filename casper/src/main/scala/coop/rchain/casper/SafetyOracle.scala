@@ -73,7 +73,9 @@ sealed abstract class SafetyOracleInstances {
           candidateBlockHash: BlockHash
       ): F[Float] = Span[F].trace(SafetyOracleMetricsSource) {
         for {
-          _                      <- Log[F].debug(s"Calculating faultTolearance of block ${candidateBlockHash} ")
+          _ <- Log[F].debug(
+                s"Calculating faultTolearance of block ${PrettyPrinter.buildString(candidateBlockHash)} "
+              )
           maybeCandidateMetadata <- blockDag.lookup(candidateBlockHash)
           faultTolerance <- maybeCandidateMetadata match {
                              case Some(candidateMetadata) =>
@@ -101,7 +103,7 @@ sealed abstract class SafetyOracleInstances {
                              // if the node can to find the block, it would return -1 and regard that block as orphaned
                              case None =>
                                Log[F].info(
-                                 s"calculate faultTolerance blockHash ${candidateBlockHash} failed because it can not be found in store."
+                                 s"calculate faultTolerance blockHash ${PrettyPrinter.buildString(candidateBlockHash)} failed because it can not be found in store."
                                ) >> (-1L).toFloat
                                  .pure[F]
                            }
