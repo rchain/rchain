@@ -1,6 +1,7 @@
 package coop.rchain.catscontrib
 
-import cats._, cats.data._, cats.implicits._
+import cats._
+import cats.syntax.all._
 import org.scalatest._
 
 class BooleanFSpec extends FunSpec with Matchers with ToBooleanF {
@@ -32,7 +33,6 @@ class BooleanFSpec extends FunSpec with Matchers with ToBooleanF {
   }
 
   describe("boolean NOT") {
-
     import BooleanF._
 
     it("~TRUE=FALSE & ~FALSE=TRUE") {
@@ -42,6 +42,44 @@ class BooleanFSpec extends FunSpec with Matchers with ToBooleanF {
       ~^(b2) shouldBe (b1)
     }
 
+  }
+
+  describe("evaluation of boolean combinators arguments") {
+    import BooleanF._
+
+    def traceExecution[F[_]: Monad](
+        aInit: Boolean,
+        bInit: Boolean,
+        f: (=> F[Boolean], => F[Boolean]) => F[Boolean]
+    ) = {
+      var aCounter = 0
+      var bCounter = 0
+
+      def a = {
+        aCounter = aCounter + 1
+        aInit.pure[F]
+      }
+
+      def b = {
+        bCounter = bCounter + 1
+        bInit.pure[F]
+      }
+
+      f(a, b) >> (aCounter, bCounter).pure[F]
+    }
+
+    it("AND and OR should be lazy to evaluate second argument") {
+      traceExecution[Id](false, true, (x, y) => x &&^ y) shouldBe (1, 0)
+
+      traceExecution[Id](true, true, (x, y) => x ||^ y) shouldBe (1, 0)
+    }
+
+    it("NOT should be eager to evaluate argument") {
+      traceExecution[Id](true, true, (x, y) => {
+        val _ = (~^(x), y.not)
+        true.pure
+      }) shouldBe (1, 1)
+    }
   }
 
 }
