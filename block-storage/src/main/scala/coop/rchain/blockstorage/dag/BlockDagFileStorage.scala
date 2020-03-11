@@ -130,21 +130,30 @@ final class BlockDagFileStorage[F[_]: Concurrent: Sync: Log: RaiseIOError] priva
     def lookupByDeployId(deployId: DeployId): F[Option[BlockHash]] =
       blockHashesByDeploy.get(deployId).pure[F]
 
-    private def topoSortBeforeOffset(startBlockNumber: Long): F[Vector[Vector[BlockHash]]] =
+    private def topoSortBeforeOffset(
+        startBlockNumber: Long,
+        endBlockNumber: Long
+    ): F[Vector[Vector[BlockHash]]] =
       lock.withPermit(
         for {
           checkpoints          <- getCheckpoints
           checkpointsWithIndex = checkpoints.zipWithIndex
-          checkpointsToLoad    = checkpointsWithIndex.filter(startBlockNumber < _._1.end)
+          checkpointsToLoad = checkpointsWithIndex.filter(
+            cp => startBlockNumber < cp._1.end && endBlockNumber > cp._1.start
+          )
           checkpointsDagInfos <- checkpointsToLoad.traverse {
                                   case (startingCheckpoint, index) =>
                                     loadCheckpointDagInfo(startingCheckpoint, index)
                                 }
-          result = checkpointsDagInfos.toVector.flatMap { checkpointsDagInfo =>
-            val offset = startBlockNumber - checkpointsDagInfo.sortOffset
-            assert(offset.isValidInt)
-            // offset is always a valid Int since the method result's length was validated before
-            checkpointsDagInfo.topoSort.drop(offset.toInt) // negative drops are ignored
+          result = checkpointsDagInfos.toVector.flatMap {
+            checkpointsDagInfo =>
+              val offset     = startBlockNumber - checkpointsDagInfo.sortOffset
+              val offsetTail = endBlockNumber - checkpointsDagInfo.sortOffset
+              assert(offset.isValidInt)
+              assert(offsetTail.isValidInt)
+              // offset is always a valid Int since the method result's length was validated before
+              checkpointsDagInfo.topoSort
+                .slice(offset.toInt, offsetTail.toInt) // negative drops are ignored
           }
         } yield result
       )
@@ -176,13 +185,13 @@ final class BlockDagFileStorage[F[_]: Concurrent: Sync: Log: RaiseIOError] priva
         topoSortVector.slice(offsetHead.toInt, offsetTail.toInt).pure[F]
       } else if (startBlockNumber < sortOffset && endBlockNumber > sortOffset) {
         for {
-          topoSortPrefix <- topoSortBeforeOffset(startBlockNumber.toLong)
+          topoSortPrefix <- topoSortBeforeOffset(startBlockNumber.toLong, sortOffset)
           topoSortTail   = topoSortVector.take((endBlockNumber - sortOffset + 1).toInt)
           result         = topoSortPrefix ++ topoSortTail
         } yield result
       } else if (startBlockNumber < sortOffset && endBlockNumber <= sortOffset) {
         for {
-          topoSortPrefix <- topoSortBeforeOffset(startBlockNumber.toLong)
+          topoSortPrefix <- topoSortBeforeOffset(startBlockNumber, endBlockNumber)
           offsetTail     = sortOffset - endBlockNumber
           result         = topoSortPrefix.dropRight(offsetTail.toInt)
         } yield result
