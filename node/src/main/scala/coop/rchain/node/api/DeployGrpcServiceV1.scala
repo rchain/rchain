@@ -27,7 +27,8 @@ import monix.reactive.Observable
 
 object DeployGrpcServiceV1 {
   def instance[F[_]: Concurrent: Log: SafetyOracle: BlockStore: Taskable: Span: EngineCell](
-      blockApiLock: Semaphore[F]
+      blockApiLock: Semaphore[F],
+      apiMaxBlocksLimit: Int
   )(
       implicit worker: Scheduler
   ): DeployServiceV1GrpcMonix.DeployService =
@@ -97,7 +98,7 @@ object DeployGrpcServiceV1 {
         implicit val ser: GraphSerializer[Effect]             = new ListSerializer[Effect]
         val serialize: Effect[Graphz[Effect]] => List[String] = _.runS(Vector.empty).value.toList
 
-        val depth  = if (request.depth <= 0) None else Some(request.depth)
+        val depth  = if (request.depth <= 0) apiMaxBlocksLimit else request.depth
         val config = GraphConfig(request.showJustificationLines)
 
         Observable
@@ -106,6 +107,7 @@ object DeployGrpcServiceV1 {
               BlockAPI
                 .visualizeDag[F, Effect, List[String]](
                   depth,
+                  apiMaxBlocksLimit,
                   (ts, lfb) => GraphzGenerator.dagAsCluster[F, Effect](ts, lfb, config),
                   serialize
                 )
@@ -120,7 +122,7 @@ object DeployGrpcServiceV1 {
       }
 
       def machineVerifiableDag(request: MachineVerifyQuery): Task[MachineVerifyResponse] =
-        defer(BlockAPI.machineVerifiableDag[F]) { r =>
+        defer(BlockAPI.machineVerifiableDag[F](apiMaxBlocksLimit, apiMaxBlocksLimit)) { r =>
           import MachineVerifyResponse.Message
           import MachineVerifyResponse.Message._
           MachineVerifyResponse(r.fold[Message](Error, Content))
@@ -129,7 +131,7 @@ object DeployGrpcServiceV1 {
       def showMainChain(request: BlocksQuery): Observable[BlockInfoResponse] =
         Observable
           .fromTask(
-            deferList(BlockAPI.showMainChain[F](request.depth)) { r =>
+            deferList(BlockAPI.showMainChain[F](request.depth, apiMaxBlocksLimit)) { r =>
               import BlockInfoResponse.Message
               import BlockInfoResponse.Message._
               BlockInfoResponse(r.fold[Message](Error, BlockInfo))
@@ -142,7 +144,7 @@ object DeployGrpcServiceV1 {
           .fromTask(
             deferList(
               BlockAPI
-                .getBlocks[F](Some(request.depth))
+                .getBlocks[F](request.depth, apiMaxBlocksLimit)
                 .map(_.getOrElse(List.empty[LightBlockInfo]))
             ) { r =>
               import BlockInfoResponse.Message
@@ -233,5 +235,24 @@ object DeployGrpcServiceV1 {
             case (par, block) => Result(DataWithBlockInfo(par, Some(block)))
           }))
         }
+
+      def getBlocksByHeights(request: BlocksQueryByHeight): Observable[BlockInfoResponse] =
+        Observable
+          .fromTask(
+            deferList(
+              BlockAPI
+                .getBlocksByHeights[F](
+                  request.startBlockNumber,
+                  request.endBlockNumber,
+                  apiMaxBlocksLimit
+                )
+                .map(_.getOrElse(List.empty[LightBlockInfo]))
+            ) { r =>
+              import BlockInfoResponse.Message
+              import BlockInfoResponse.Message._
+              BlockInfoResponse(r.fold[Message](Error, BlockInfo))
+            }
+          )
+          .flatMap(Observable.fromIterable)
     }
 }

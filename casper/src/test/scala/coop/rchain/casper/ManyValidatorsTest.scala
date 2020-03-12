@@ -82,7 +82,7 @@ class ManyValidatorsTest
         engine             = new EngineWithCasper[Task](casperEffect)
         engineCell         <- Cell.mvarCell[Task, Engine[Task]](engine)
         cliqueOracleEffect = SafetyOracle.cliqueOracle[Task]
-        result <- BlockAPI.getBlocks[Task](Some(Int.MaxValue))(
+        result <- BlockAPI.getBlocks[Task](Int.MaxValue, 50)(
                    Sync[Task],
                    engineCell,
                    logEff,

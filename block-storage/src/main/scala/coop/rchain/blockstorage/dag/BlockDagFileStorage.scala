@@ -129,39 +129,79 @@ final class BlockDagFileStorage[F[_]: Concurrent: Sync: Log: RaiseIOError] priva
       }
     def lookupByDeployId(deployId: DeployId): F[Option[BlockHash]] =
       blockHashesByDeploy.get(deployId).pure[F]
-    def topoSort(startBlockNumber: Long): F[Vector[Vector[BlockHash]]] =
-      if (startBlockNumber >= sortOffset) {
-        val offset = startBlockNumber - sortOffset
-        assert(offset.isValidInt)
-        topoSortVector.drop(offset.toInt).pure[F]
-      } else if (sortOffset - startBlockNumber + topoSortVector.length < Int.MaxValue) { // Max Vector length
-        lock.withPermit(
-          for {
-            checkpoints          <- getCheckpoints
-            checkpointsWithIndex = checkpoints.zipWithIndex
-            checkpointsToLoad    = checkpointsWithIndex.filter(startBlockNumber < _._1.end)
-            checkpointsDagInfos <- checkpointsToLoad.traverse {
-                                    case (startingCheckpoint, index) =>
-                                      loadCheckpointDagInfo(startingCheckpoint, index)
-                                  }
-            topoSortPrefix = checkpointsDagInfos.toVector.flatMap { checkpointsDagInfo =>
-              val offset = startBlockNumber - checkpointsDagInfo.sortOffset
+
+    private def topoSortBeforeOffset(
+        startBlockNumber: Long,
+        endBlockNumber: Long
+    ): F[Vector[Vector[BlockHash]]] =
+      lock.withPermit(
+        for {
+          checkpoints          <- getCheckpoints
+          checkpointsWithIndex = checkpoints.zipWithIndex
+          checkpointsToLoad = checkpointsWithIndex.filter(
+            cp => startBlockNumber < cp._1.end && endBlockNumber > cp._1.start
+          )
+          checkpointsDagInfos <- checkpointsToLoad.traverse {
+                                  case (startingCheckpoint, index) =>
+                                    loadCheckpointDagInfo(startingCheckpoint, index)
+                                }
+          result = checkpointsDagInfos.toVector.flatMap {
+            checkpointsDagInfo =>
+              val offset     = startBlockNumber - checkpointsDagInfo.sortOffset
+              val offsetTail = endBlockNumber - checkpointsDagInfo.sortOffset
+              assert(offset.isValidInt)
+              assert(offsetTail.isValidInt)
               // offset is always a valid Int since the method result's length was validated before
-              checkpointsDagInfo.topoSort.drop(offset.toInt) // negative drops are ignored
-            }
-            result = topoSortPrefix ++ topoSortVector
-          } yield result
-        )
+              checkpointsDagInfo.topoSort
+                .slice(offset.toInt, offsetTail.toInt) // negative drops are ignored
+          }
+        } yield result
+      )
+
+    def latestBlockNumber: F[Long] = (sortOffset + topoSortVector.length).pure[F]
+
+    /** Get the blocks from the dag based on the startBlockNumber and maybeEndBlockNUmber
+      * There is one thing has to be careful when calculating the index.Because the genesis block number
+      * is 0. The chain is calculating from 0 to infinite.
+      *
+      * Warn: I can not find codes about the value of sortOffset(Is it a blockNumber or index of vector?),
+      * calculation related to checkpoint can be wrong(the second and third (if) case). Commented by Will.
+      *
+      *  @param startBlockNumber the start blockNumber from the fragment in the dag
+      *  @param maybeEndBlockNumber this param can be optional, if it is none, it would choose the last blockNumber
+      *                             in the dag store
+      */
+    def topoSort(
+        startBlockNumber: Long,
+        maybeEndBlockNumber: Option[Long]
+    ): F[Vector[Vector[BlockHash]]] = {
+      val endBlockNumber = maybeEndBlockNumber.getOrElse(sortOffset + topoSortVector.length)
+      if (startBlockNumber >= sortOffset && startBlockNumber <= endBlockNumber) {
+        val offsetHead = startBlockNumber - sortOffset
+        // minus 1 to include endBlockNumber
+        val offsetTail = endBlockNumber - sortOffset + 1
+        assert(offsetHead.isValidInt)
+        assert(offsetTail.isValidInt)
+        topoSortVector.slice(offsetHead.toInt, offsetTail.toInt).pure[F]
+      } else if (startBlockNumber < sortOffset && endBlockNumber > sortOffset) {
+        for {
+          topoSortPrefix <- topoSortBeforeOffset(startBlockNumber.toLong, sortOffset)
+          topoSortTail   = topoSortVector.take((endBlockNumber - sortOffset + 1).toInt)
+          result         = topoSortPrefix ++ topoSortTail
+        } yield result
+      } else if (startBlockNumber < sortOffset && endBlockNumber <= sortOffset) {
+        for {
+          topoSortPrefix <- topoSortBeforeOffset(startBlockNumber, endBlockNumber)
+          offsetTail     = sortOffset - endBlockNumber
+          result         = topoSortPrefix.dropRight(offsetTail.toInt)
+        } yield result
       } else {
         Sync[F].raiseError(
-          TopoSortLengthIsTooBig(sortOffset - startBlockNumber + topoSortVector.length)
+          TopoSortFragmentParameterError(startBlockNumber, endBlockNumber)
         )
       }
-    // TODO should startBlockNumber have topoSortVector.length - 1 (off by one error)?
-    def topoSortTail(tailLength: Int): F[Vector[Vector[BlockHash]]] = {
-      val startBlockNumber = Math.max(0L, sortOffset - (tailLength - topoSortVector.length))
-      topoSort(startBlockNumber)
     }
+
     def latestMessageHash(validator: Validator): F[Option[BlockHash]] =
       latestMessagesMap.get(validator).pure[F]
     def latestMessage(validator: Validator): F[Option[BlockMetadata]] =

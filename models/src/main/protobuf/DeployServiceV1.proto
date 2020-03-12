@@ -55,6 +55,8 @@ service DeployService {
   rpc bondStatus(BondStatusQuery) returns (BondStatusResponse) {}
   // Executes deploy as user deploy with immediate rollback and return result
   rpc exploratoryDeploy(ExploratoryDeployQuery) returns (ExploratoryDeployResponse) {}
+  // get blocks by block height
+  rpc getBlocksByHeights(BlocksQueryByHeight) returns (stream BlockInfoResponse){}
 }
 
 message ExploratoryDeployResponse{

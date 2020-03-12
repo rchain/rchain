@@ -33,7 +33,8 @@ final case class Server(
     faultToleranceThreshold: Float,
     synchronyConstraintThreshold: Double,
     heightConstraintThreshold: Long,
-    reporting: Boolean
+    reporting: Boolean,
+    apiMaxBlocksLimit: Int
 )
 
 final case class RoundRobinDispatcher(

@@ -387,6 +387,11 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
         default = Option(FiniteDuration(1, scala.concurrent.duration.MINUTES)),
         descr = "Interval for check if fork choice tip is stale. Default 1 min."
       )
+
+    val apiMaxBlocksLimit = opt[Int](
+      descr = "The max block numbers you can aquire from api",
+      validate = _ >= 0
+    )
   }
   addSubcommand(run)
 

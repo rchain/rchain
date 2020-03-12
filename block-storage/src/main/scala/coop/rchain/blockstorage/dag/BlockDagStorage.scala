@@ -30,8 +30,11 @@ trait BlockDagRepresentation[F[_]] {
   def lookup(blockHash: BlockHash): F[Option[BlockMetadata]]
   def contains(blockHash: BlockHash): F[Boolean]
   def lookupByDeployId(deployId: DeployId): F[Option[BlockHash]]
-  def topoSort(startBlockNumber: Long): F[Vector[Vector[BlockHash]]]
-  def topoSortTail(tailLength: Int): F[Vector[Vector[BlockHash]]]
+  def topoSort(
+      startBlockNumber: Long,
+      maybeEndBlockNumber: Option[Long]
+  ): F[Vector[Vector[BlockHash]]]
+  def latestBlockNumber: F[Long]
   def latestMessageHash(validator: Validator): F[Option[BlockHash]]
   def latestMessage(validator: Validator): F[Option[BlockMetadata]]
   def latestMessageHashes: F[Map[Validator, BlockHash]]

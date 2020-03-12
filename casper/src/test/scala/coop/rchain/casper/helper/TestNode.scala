@@ -94,6 +94,7 @@ class TestNode[F[_]](
   import scalatestAssertions._
 
   val defaultTimeout: FiniteDuration = FiniteDuration(1000, MILLISECONDS)
+  val apiMaxBlocksLimit              = 50
 
   val validatorId: Option[ValidatorIdentity] =
     if (isReadOnly) none[ValidatorIdentity]
@@ -229,7 +230,8 @@ class TestNode[F[_]](
       _.runS(new StringBuffer("")).value.toString
 
     val result: F[Either[String, String]] = BlockAPI.visualizeDag[F, G, String](
-      depth = None,
+      Int.MaxValue,
+      apiMaxBlocksLimit,
       (ts, lfb) =>
         GraphzGenerator.dagAsCluster[F, G](
           ts,

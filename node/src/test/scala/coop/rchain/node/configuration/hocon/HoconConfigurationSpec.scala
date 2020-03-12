@@ -43,6 +43,7 @@ class HoconConfigurationSpec extends FunSuite with Matchers {
       |    synchrony-constraint-threshold = 0.3333333333333333
       |    height-constraint-threshold = 100
       |    reporting = false
+      |    api-max-blocks-limit = 50
       |  }
       |}
     """.stripMargin
@@ -78,7 +79,8 @@ class HoconConfigurationSpec extends FunSuite with Matchers {
         faultToleranceThreshold = 0.2f,
         synchronyConstraintThreshold = 0.3333333333333333d,
         heightConstraintThreshold = 100L,
-        reporting = false
+        reporting = false,
+        apiMaxBlocksLimit = 50
       )
 
     val server = Server.fromConfig(ConfigFactory.parseString(conf))
@@ -222,6 +224,7 @@ class HoconConfigurationSpec extends FunSuite with Matchers {
         |    fork-choice-stale-threshold = 3h
         |    fork-choice-check-if-stale-interval = 3h
         |    max-parent-depth = 7
+        |    api-max-blocks-limit = 50
         |  }
         |}
       """.stripMargin

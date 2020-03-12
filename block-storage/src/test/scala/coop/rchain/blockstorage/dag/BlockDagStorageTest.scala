@@ -193,14 +193,13 @@ class BlockDagFileStorageTest extends BlockDagStorageTest {
         Map[Validator, BlockHash],
         Map[Validator, BlockMetadata],
         Vector[Vector[BlockHash]],
-        Vector[Vector[BlockHash]]
+        Long
     )
 
   private def lookupElements(
       blockElements: List[BlockMessage],
       storage: BlockDagStorage[Task],
-      topoSortStartBlockNumber: Long = 0,
-      topoSortTailLength: Int = 5
+      topoSortStartBlockNumber: Long = 0
   ): Task[LookupResult] =
     for {
       dag <- storage.getRepresentation
@@ -215,17 +214,15 @@ class BlockDagFileStorageTest extends BlockDagStorageTest {
              }
       latestMessageHashes <- dag.latestMessageHashes
       latestMessages      <- dag.latestMessages
-      topoSort            <- dag.topoSort(topoSortStartBlockNumber)
-      topoSortTail        <- dag.topoSortTail(topoSortTailLength)
-    } yield (list, latestMessageHashes, latestMessages, topoSort, topoSortTail)
+      topoSort            <- dag.topoSort(topoSortStartBlockNumber, none)
+      latestBlockNumber   <- dag.latestBlockNumber
+    } yield (list, latestMessageHashes, latestMessages, topoSort, latestBlockNumber)
 
   private def testLookupElementsResult(
       lookupResult: LookupResult,
-      blockElements: List[BlockMessage],
-      topoSortStartBlockNumber: Long = 0,
-      topoSortTailLength: Int = 5
+      blockElements: List[BlockMessage]
   ): Unit = {
-    val (list, latestMessageHashes, latestMessages, topoSort, topoSortTail) = lookupResult
+    val (list, latestMessageHashes, latestMessages, topoSort, latestBlockNumber) = lookupResult
     val realLatestMessages = blockElements.foldLeft(Map.empty[Validator, BlockMetadata]) {
       case (lm, b) =>
         // Ignore empty sender for genesis block
@@ -264,14 +261,9 @@ class BlockDagFileStorageTest extends BlockDagStorageTest {
                                                 Vector.empty
                                               )) {
       topoSortLevel.toSet shouldBe realTopoSortLevel.toSet
+      latestBlockNumber shouldBe topoSort.length
     }
-    for ((topoSortLevel, realTopoSortLevel) <- topoSortTail.zipAll(
-                                                realTopoSort.takeRight(topoSortTailLength),
-                                                Vector.empty,
-                                                Vector.empty
-                                              )) {
-      topoSortLevel.toSet shouldBe realTopoSortLevel.toSet
-    }
+
   }
 
   it should "be able to restore state on startup" in {

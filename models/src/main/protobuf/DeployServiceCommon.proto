@@ -33,6 +33,11 @@ message BlocksQuery {
   int32 depth = 1;
 }
 
+message BlocksQueryByHeight{
+  int64 startBlockNumber = 1;
+  int64 endBlockNumber = 2;
+}
+
 message DataAtNameQuery {
   int32 depth = 1;
   Par name = 2;

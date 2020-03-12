@@ -59,6 +59,7 @@ object ConfigMapper {
         add(keys.SynchronyConstraintThreshold, run.synchronyConstraintThreshold)
         add(keys.HeightConstraintThreshold, run.heightConstraintThreshold)
         add(keys.Reporting, run.reporting)
+        add(keys.ApiMaxBlocksLimit, run.apiMaxBlocksLimit)
       }
 
       {

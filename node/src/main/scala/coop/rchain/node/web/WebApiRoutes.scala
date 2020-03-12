@@ -19,7 +19,13 @@ object WebApiRoutes {
     import io.circe.syntax._
     import io.circe._
     import org.http4s.circe._
-    import org.http4s.{EntityDecoder, EntityEncoder, InvalidMessageBodyFailure, Request}
+    import org.http4s.{
+      EntityDecoder,
+      EntityEncoder,
+      InvalidMessageBodyFailure,
+      QueryParamDecoder,
+      Request
+    }
     import coop.rchain.casper.protocol.{BlockInfo, BondInfo, DeployInfo, LightBlockInfo}
 
     val dsl = org.http4s.dsl.Http4sDsl[F]
@@ -129,10 +135,13 @@ object WebApiRoutes {
         webApi.getBlock(hash).handle
 
       case GET -> Root / "blocks" =>
-        webApi.getBlocks(none).handle
+        webApi.getBlocks(1).handle
+
+      case GET -> Root / "blocks" / IntVar(startBlockNumber) / IntVar(endBlockNumber) =>
+        webApi.getBlocksByHeights(startBlockNumber.toLong, endBlockNumber.toLong).handle
 
       case GET -> Root / "blocks" / IntVar(depth) =>
-        webApi.getBlocks(depth.some).handle
+        webApi.getBlocks(depth).handle
 
       case GET -> Root / "deploy" / deployId =>
         webApi.findDeploy(deployId).handle
