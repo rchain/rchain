@@ -189,7 +189,7 @@ trait InMemoryHistoryRepositoryTestBase extends InMemoryHistoryTestBase {
           maybeCurrentRoot
         }
 
-      override def validateRoot(key: Blake2b256Hash): Task[Option[Blake2b256Hash]] =
+      override def validateAndSetCurrentRoot(key: Blake2b256Hash): Task[Option[Blake2b256Hash]] =
         Task.delay {
           if (roots.contains(key)) {
             maybeCurrentRoot = Some(key)

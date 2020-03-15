@@ -208,7 +208,7 @@ final case class HistoryRepositoryImpl[F[_]: Sync: Parallel, C, P, A, K](
 
   override def reset(root: Blake2b256Hash): F[HistoryRepository[F, C, P, A, K]] =
     for {
-      _    <- rootsRepository.validateRoot(root)
+      _    <- rootsRepository.validateAndSetCurrentRoot(root)
       next = history.reset(root = root)
     } yield this.copy(history = next)
 
