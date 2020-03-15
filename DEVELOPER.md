@@ -9,7 +9,7 @@ __Note__ Successfully building from source requires attending to all of the prer
 * [sbt](https://www.scala-sbt.org/download.html)
 * For Rholang
      - [jflex](http://jflex.de/)
-     - Build [BNFC](http://bnfc.digitalgrammars.com/) from the following commit or later: [BNFC/bnfc@7c9e859](https://github.com/BNFC/bnfc/commit/7c9e859). Official RChain builds use BNFC build from commit `ce7fe1fd08d9d808c14ff626c321218c5b73e38b`. Use the installation command `cabal install bnfc --global` or [stack](#build-bnfc-with-stack).
+     - [BNFC](https://github.com/BNFC/bnfc/releases) >= 2.8.3
 
 #### Development environment on macOS
 
@@ -17,6 +17,9 @@ __Note__ Successfully building from source requires attending to all of the prer
 brew install git
 brew install sbt
 brew install jflex
+curl --proto '=https' --tlsv1.2 -sSf https://get-ghcup.haskell.org | sh
+cabal update
+cabal install bnfc
 ```
 
 Download and run the installer of the [Haskell Platform](https://www.haskell.org/platform/mac.html#osx)
@@ -30,6 +33,8 @@ sudo apt-get install sbt
 
 sudo apt-get install jflex
 sudo apt-get install haskell-platform
+cabal update
+cabal install bnfc
 ```
 
 #### Development environment on Fedora
@@ -38,6 +43,8 @@ sudo dnf remove sbt # uninstalling sbt if sbt 0.13 was installed (may not be nec
 sudo dnf --enablerepo=bintray--sbt-rpm install sbt
 sudo dnf install jflex
 sudo dnf install haskell-platform
+cabal update
+cabal install bnfc
 ```
 
 #### Development environment on ArchLinux
@@ -46,17 +53,8 @@ You can use `pacaur` or other AUR installer instead of [`trizen`](https://github
 sudo pacman -S stack ghc # for building BNFC
 sudo pacman -S jdk8-openjdk sbt
 trizen -S jflex
-```
-
-#### <a name="build-bnfc-with-stack"></a> Building BNFC with [`stack`](https://docs.haskellstack.org)
-```
-git clone https://github.com/BNFC/bnfc
-cd bnfc
-git checkout ce7fe1fd08d9d808c14ff626c321218c5b73e38b
-stack init
-stack setup
-stack install
-export PATH="$HOME/.local/bin:$PATH"
+cabal update
+cabal install bnfc
 ```
 
 #### Building and running
