@@ -24,6 +24,18 @@ import coop.rchain.shared.SyncVarOps._
 
 import scala.concurrent.{ExecutionContext, SyncVar}
 
+/**
+  * ReportingRspace works exactly like how ReplayRspace works. It can replay the deploy and try to find if the
+  * deploy can be replayed well. But instead of just replaying the deploy, the ReportingRspace also save the comm
+  * event data into the `report` val.
+  *
+  * Currently only the unmatched comm event data are left in the tuplespace which means that the comm event data
+  * happened in the processing of the deploy does not save anywhere in the software. It is believed that if we save
+  * every comm event data during processing the deploy, the execution of Rholang would be much slower. But this(not
+  * saving all comm event data) also leads to another problem that a developer can not get history data of deploy which
+  * some of the comm event data are important to them. This ReportingRspace is trying to address this issue and let
+  * people get the comm event data from replay.
+  */
 object ReportingRspace {
   trait ReportingEvent
 
@@ -116,19 +128,16 @@ class ReportingRspace[F[_]: Sync, C, P, A, K](
       _ <- Sync[F].delay(report.update(s => s :+ ReportingProduce(channel, data)))
     } yield produceRef
 
-  /** Creates a checkpoint.
+  /** ReportingCasper would reset(empty) the report data in every createCheckpoint.
     *
-    * @return A [[Checkpoint]]
     */
   override def createCheckpoint(): F[Checkpoint] = checkReplayData >> syncF.defer {
     val historyRepository = historyRepositoryAtom.get()
     for {
       _ <- createNewHotStore(historyRepository)(serializeK.toCodec)
       _ <- restoreInstalls()
+      _ = report.update(_ => Seq.empty[ReportingEvent])
     } yield (Checkpoint(historyRepository.history.root, Seq.empty))
   }
-
-  override def createSoftCheckpoint(): F[SoftCheckpoint[C, P, A, K]] =
-    Sync[F].delay(report.update(_ => Seq.empty[ReportingEvent])) >> super.createSoftCheckpoint()
 
 }
