@@ -36,14 +36,11 @@ class MultiParentCasperReportingSpec extends FlatSpec with Matchers with Inspect
         estimate    <- node.casperEff.estimator(dag)
         _           = estimate shouldBe IndexedSeq(signedBlock.blockHash)
         trace       <- reportingCasper.trace(signedBlock.blockHash)
-        _           = trace shouldBe a[BlockTracesReport]
-        _           = trace.asInstanceOf[BlockTracesReport].hash shouldBe signedBlock.blockHash.base16String
-        _ = signedBlock.body.deploys.head.deployLog.size shouldBe trace
-          .asInstanceOf[BlockTracesReport]
-          .traces
-          .head
-          .events
-          .size
+        result = trace.get match {
+          case Right(value) => value.head._2.length
+          case Left(_) => 0
+        }
+        _ = signedBlock.body.deploys.head.deployLog.size shouldBe(result)
       } yield ()
     }
   }

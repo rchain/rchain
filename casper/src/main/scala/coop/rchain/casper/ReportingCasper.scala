@@ -87,123 +87,18 @@ import coop.rchain.models.Var.VarInstance.FreeVar
 import scala.concurrent.ExecutionContext
 
 trait ReportingCasper[F[_]] {
-  def trace(hash: BlockHash): F[Report]
-}
-
-class ReportingEventTransformer[C, P, A, K](
-    serializeC: C => String,
-    serializeP: P => String,
-    serializeA: A => String,
-    serializeK: K => String
-) {
-  type RhoReportingComm    = ReportingComm[C, P, A, K]
-  type RhoReportingProduce = ReportingProduce[C, A]
-  type RhoReportingConsume = ReportingConsume[C, P, K]
-
-  def serializeConsume(
-      rc: RhoReportingConsume
-  ): RhoConsume = {
-    val k   = serializeK(rc.continuation)
-    val chs = rc.channels.map(serializeC).mkString("[", ";", "]")
-    val ps  = rc.patterns.map(serializeP).mkString("[", ";", "]")
-    RhoConsume(channels = chs, patterns = ps, continuation = k)
-  }
-
-  def serializeProduce(rp: RhoReportingProduce): RhoProduce = {
-    val d  = serializeA(rp.data)
-    val ch = serializeC(rp.channel)
-    RhoProduce(channel = ch, data = d)
-  }
-
-  def transformEvent(re: ReportingEvent): RhoEvent = re match {
-    case comm: RhoReportingComm =>
-      RhoComm(serializeConsume(comm.consume), comm.produces.map(serializeProduce).toList)
-    case cons: RhoReportingConsume => serializeConsume(cons)
-    case prod: RhoReportingProduce => serializeProduce(prod)
-
-  }
-}
-
-object ReportingCasperData {
-  sealed trait RhoEvent
-  final case class RhoComm(consume: RhoConsume, produces: List[RhoProduce]) extends RhoEvent
-  final case class RhoProduce(channel: String, data: String)                extends RhoEvent
-  final case class RhoConsume(channels: String, patterns: String, continuation: String)
-      extends RhoEvent
-
-  final case class DeployTrace(deployHash: String, source: String, events: List[RhoEvent])
-
-  sealed trait Report
-
-  final case class BlockTracesReport(
-      hash: String,
-      seqNum: Int,
-      creator: String,
-      traces: List[DeployTrace],
-      parents: List[String]
-  ) extends Report
-  final case class BlockNotFound(hash: String)    extends Report
-  final case class BlockReplayError(hash: String) extends Report
-  final case class BlockReplayFailed(hash: String, msg: String, deployId: Option[String])
-      extends Report
-
-  def transformDeploy[C, P, A, K](transformer: ReportingEventTransformer[C, P, A, K])(
-      ipd: ProcessedDeploy,
-      events: Seq[ReportingEvent]
-  ): DeployTrace =
-    DeployTrace(
-      ipd.deploy.sig.base16String,
-      ipd.deploy.data.term,
-      events.map(transformer.transformEvent).toList
-    )
-
-  def createResponse[C, P, A, K](
-      hash: BlockHash,
-      state: Option[
-        (Either[ReplayFailure, List[(ProcessedDeploy, Seq[ReportingEvent])]], BlockMessage)
-      ],
-      transformer: ReportingEventTransformer[C, P, A, K]
-  ): Report =
-    state match {
-      case None => BlockNotFound(hash.base16String)
-      case Some((Left(internalError @ InternalError(_)), _)) =>
-        BlockReplayFailed(
-          hash.base16String,
-          internalError.toString,
-          None
-        )
-      case Some((Left(failed), _)) =>
-        BlockReplayFailed(hash.base16String, failed.toString, None)
-      case Some((Right(deploys), bm)) =>
-        val t = transformDeploy(transformer)(_, _)
-        BlockTracesReport(
-          hash.base16String,
-          bm.seqNum,
-          bm.sender.base16String,
-          deploys.map(Function.tupled(t)),
-          bm.header.parentsHashList.map(_.base16String)
-        )
-      case _ => BlockReplayError(hash.base16String)
-    }
-
-  def setupTransformer(prettyPrinter: RhoPrinter) =
-    new ReportingEventTransformer[Par, BindPattern, ListParWithRandom, TaggedContinuation](
-      serializeC = channel => prettyPrinter.buildString(channel),
-      serializeP = p => p.patterns.map(prettyPrinter.buildString).mkString("[", ";", "]"),
-      serializeA = data => data.pars.map(prettyPrinter.buildString).mkString("[", ";", "]"),
-      serializeK = k =>
-        k.taggedCont match {
-          case ParBody(value)      => prettyPrinter.buildString(value.body)
-          case ScalaBodyRef(value) => s"ScalaBodyRef($value)"
-          case Empty               => "empty"
-        }
-    )
+  def trace(
+      hash: BlockHash
+  ): F[Option[Either[ReplayFailure, List[(ProcessedDeploy, Seq[ReportingEvent])]]]]
 }
 
 object ReportingCasper {
   def noop[F[_]: Sync]: ReportingCasper[F] = new ReportingCasper[F] {
-    override def trace(hash: BlockHash): F[Report] =
-      Sync[F].delay(BlockNotFound(hash.toStringUtf8))
+
+    override def trace(
+        hash: BlockHash
+    ): F[Option[Either[ReplayFailure, List[(ProcessedDeploy, Seq[ReportingEvent])]]]] =
+      Sync[F].delay(none)
   }
 
   type RhoReportingRspace[F[_]] =
@@ -215,10 +110,10 @@ object ReportingCasper {
     new ReportingCasper[F] {
       val codecK                                                     = serializeTaggedContinuation.toCodec
       implicit val m: RSpaceMatch[F, BindPattern, ListParWithRandom] = matchListPar[F]
-      val prettyPrinter                                              = RhoPrinter()
-      val transformer                                                = setupTransformer(prettyPrinter)
 
-      override def trace(hash: BlockHash): F[Report] =
+      override def trace(
+          hash: BlockHash
+      ): F[Option[Either[ReplayFailure, List[(ProcessedDeploy, Seq[ReportingEvent])]]]] =
         for {
           replayStore <- HotStore.empty(historyRepository)(codecK, Concurrent[F])
           reporting = new ReportingRspace[
@@ -239,12 +134,9 @@ object ReportingCasper {
           invalidBlocksSet <- dag.invalidBlocks
           invalidBlocks    = invalidBlocksSet.map(block => (block.blockHash, block.sender)).toMap
           result <- bmO.traverse(
-                     bm =>
-                       replayBlock(bm, dag, manager, invalidBlocks)
-                         .map(s => (s, bm))
+                     bm => replayBlock(bm, dag, manager, invalidBlocks)
                    )
-          response = createResponse(hash, result, transformer)
-        } yield response
+        } yield result
 
     }
 
