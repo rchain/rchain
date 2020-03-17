@@ -90,6 +90,7 @@ message ChunkHeader {
   bool   compressed         = 3;
   int32  contentLength      = 4;
   string networkId          = 5;
+  string extra              = 6;
 }
 
 message ChunkData {

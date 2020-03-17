@@ -23,7 +23,8 @@ final case class Header(
     typeId: String,
     contentLength: Int,
     networkId: String,
-    compressed: Boolean
+    compressed: Boolean,
+    extra: String
 )
 
 sealed trait Circuit {
@@ -113,7 +114,7 @@ object StreamHandler {
       init: Streamed,
       stream: Observable[Chunk],
       circuitBreaker: CircuitBreaker
-  ): EitherT[Task, StreamError, Streamed] = {
+  )(implicit log: Log[Task]): EitherT[Task, StreamError, Streamed] = {
 
     def collectStream: Task[Streamed] =
       stream.foldWhileLeftL(init) {
@@ -121,17 +122,20 @@ object StreamHandler {
             stmd,
             Chunk(
               Chunk.Content
-                .Header(ChunkHeader(Some(sender), typeId, compressed, cl, nid))
+                .Header(ChunkHeader(Some(sender), typeId, compressed, cl, nid, extra))
             )
             ) =>
+          val _ = log.debug(s"Received new chunk header for msg ${typeId}, ${extra}.")
           val newStmd = stmd.copy(
-            header = Some(Header(ProtocolHelper.toPeerNode(sender), typeId, cl, nid, compressed))
+            header =
+              Some(Header(ProtocolHelper.toPeerNode(sender), typeId, cl, nid, compressed, extra))
           )
           val circuit = circuitBreaker(newStmd)
           if (circuit.broken) Right(newStmd.copy(circuit = circuit))
           else Left(newStmd)
 
         case (stmd, Chunk(Chunk.Content.Data(ChunkData(newData)))) =>
+          val _ = log.debug(s"Writing chunk to ${init.path}.")
           val array = newData.toByteArray
           stmd.fos.write(array)
           stmd.fos.flush()
@@ -165,14 +169,15 @@ object StreamHandler {
     EitherT(Task.delay {
       stmd match {
         case Streamed(
-            Some(Header(sender, packetType, contentLength, _, compressed)),
+            Some(Header(sender, packetType, contentLength, _, compressed, extra)),
             readSoFar,
             _,
             path,
             _
             ) =>
           val result =
-            StreamMessage(sender, packetType, path, compressed, contentLength).asRight[StreamError]
+            StreamMessage(sender, packetType, path, compressed, contentLength, extra)
+              .asRight[StreamError]
           if (!compressed && readSoFar != contentLength) notFullError
           else result
 

@@ -13,5 +13,6 @@ final case class StreamMessage(
     typeId: String,
     path: Path,
     compressed: Boolean,
-    contentLength: Int
+    contentLength: Int,
+    extra: String
 ) extends ServerMessage

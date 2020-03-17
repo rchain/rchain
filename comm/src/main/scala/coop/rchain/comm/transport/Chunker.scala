@@ -7,7 +7,12 @@ import monix.eval._
 
 object Chunker {
 
-  def chunkIt(networkId: String, blob: Blob, maxMessageSize: Int): Task[Iterator[Chunk]] =
+  def chunkIt(
+      networkId: String,
+      blob: Blob,
+      maxMessageSize: Int,
+      extra: String
+  ): Task[Iterator[Chunk]] =
     Task.delay {
       val raw      = blob.packet.content.toByteArray
       val kb500    = 1024 * 500
@@ -22,6 +27,7 @@ object Chunker {
             .withSender(ProtocolHelper.node(blob.sender))
             .withTypeId(blob.packet.typeId)
             .withNetworkId(networkId)
+            .withExtra(extra)
         )
       val buffer    = 2 * 1024 // 2 kbytes for protobuf related stuff
       val chunkSize = maxMessageSize - buffer
