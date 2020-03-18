@@ -15,6 +15,7 @@ object LimitedBufferObservable {
 
       def pushNext(elem: A): Boolean = in.pushNext(elem)
       def complete(): Unit           = in.complete()
+      def getQueueLength(): Int      = in.getQueueLength()
       def unsafeSubscribeFn(subscriber: Subscriber[A]): Cancelable =
         subject.unsafeSubscribeFn(subscriber)
     }

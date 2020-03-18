@@ -135,7 +135,7 @@ object StreamHandler {
           else Left(newStmd)
 
         case (stmd, Chunk(Chunk.Content.Data(ChunkData(newData)))) =>
-          val _ = log.debug(s"Writing chunk to ${init.path}.")
+          val _     = log.debug(s"Writing chunk to ${init.path}.")
           val array = newData.toByteArray
           stmd.fos.write(array)
           stmd.fos.flush()

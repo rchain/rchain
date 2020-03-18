@@ -19,6 +19,7 @@ import monix.reactive.observers.Subscriber
 trait LimitedBuffer[A] {
   def pushNext(elem: A): Boolean
   def complete(): Unit
+  def getQueueLength(): Int
 }
 
 @SuppressWarnings(Array("org.wartremover.warts.Return", "org.wartremover.warts.Var"))
@@ -38,6 +39,8 @@ private final class DropNewBuffer[A](out: Subscriber[A], bufferSize: Int) extend
   private[this] var downstreamIsComplete          = false
   private[this] var upstreamIsComplete            = false
   private[this] var lastIterationAck: Future[Ack] = _
+
+  override def getQueueLength(): Int = itemsToPush.get
 
   def pushNext(elem: A): Boolean =
     if (upstreamIsComplete || downstreamIsComplete) false
