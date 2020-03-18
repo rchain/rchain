@@ -83,14 +83,17 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Log: Time: SafetyOracle: Las
         )
         .as(BlockStatus.processing.asLeft)
 
-    def add: F[ValidBlockProcessing] = spanF.trace(AddBlockMetricsSource) {
-      for {
-        _      <- spanF.mark("block-store-put")
-        dag    <- blockDag
-        status <- internalAddBlock(b, dag)
-        _      <- spanF.mark("block-added-status")
-      } yield status
-    }
+    def add: F[ValidBlockProcessing] =
+      spanF
+        .trace(AddBlockMetricsSource) {
+          for {
+            _      <- spanF.mark("block-store-put")
+            dag    <- blockDag
+            status <- internalAddBlock(b, dag)
+            _      <- spanF.mark("block-added-status")
+          } yield status
+        }
+        .timer("add-block-time")
 
     import cats.instances.either._
     for {
@@ -120,7 +123,7 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Log: Time: SafetyOracle: Las
               EventPublisher[F].publish(MultiParentCasperImpl.addedEvent(b))
           }
     } yield status
-  }.timer("add-block-time")
+  }
 
   private def updateLastFinalizedBlock(newBlock: BlockMessage): F[Unit] =
     lastFinalizedBlock.whenA(newBlock.body.state.blockNumber % finalizationRate == 0)
