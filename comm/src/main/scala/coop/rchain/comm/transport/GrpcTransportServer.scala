@@ -97,12 +97,21 @@ class GrpcTransportServer(
                  )
       tellConsumer <- Task.delay(
                        tellBuffer
-                         .mapParallelUnordered(parallelism)(dispatchSend)
+                         .mapParallelUnordered(4 * parallelism)(dispatchSend)
                          .subscribe()(mainScheduler)
                      )
+      // Block message consumption can take quite a long time because
+      // dispatchBlob calls adding block message. Which can take a lot of time to process a block.
+      // And during this time one task from `parallelism` pool will be occupied, even if CPU thread is freed.
+      // Therefore we nee to set a high number for `parallelism`, so there is enough room for incoming
+      // blocks processing when such long lasting blocks processing happen.
+      // One strategy might be to set ths to a number equal number of validators, so node can acquire
+      // blocks when all nodes propose at one time.
+      // Node wont't add those blocks simultaneously, but still can do all front end work like
+      // saving block into block store.
       blobConsumer <- Task.delay(
                        blobBuffer
-                         .mapParallelUnordered(parallelism)(dispatchBlob)
+                         .mapParallelUnordered(4 * parallelism)(dispatchBlob)
                          .subscribe()(mainScheduler)
                      )
     } yield Cancelable.collection(receiver, tellConsumer, blobConsumer)
