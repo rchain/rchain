@@ -24,11 +24,12 @@ import coop.rchain.shared.ThrowableOps._
 import monix.eval.Task
 import monix.execution.Scheduler
 import monix.reactive.Observable
-
+import coop.rchain.casper.{ReportingCasper, _}
 object DeployGrpcServiceV1 {
   def instance[F[_]: Concurrent: Log: SafetyOracle: BlockStore: Taskable: Span: EngineCell](
       blockApiLock: Semaphore[F],
-      apiMaxBlocksLimit: Int
+      apiMaxBlocksLimit: Int,
+      reportingCasper: ReportingCasper[F]
   )(
       implicit worker: Scheduler
   ): DeployServiceV1GrpcMonix.DeployService =
@@ -234,6 +235,13 @@ object DeployGrpcServiceV1 {
           ExploratoryDeployResponse(r.fold[Message](Error, {
             case (par, block) => Result(DataWithBlockInfo(par, Some(block)))
           }))
+        }
+
+      override def getEventByHash(request: BlockQuery): Task[EventInfoResponse] =
+        defer(BlockAPI.blockReport[F](request.hash)(reportingCasper)) { r =>
+          import EventInfoResponse.Message
+          import EventInfoResponse.Message._
+          EventInfoResponse(r.fold[Message](Error, Result))
         }
 
       def getBlocksByHeights(request: BlocksQueryByHeight): Observable[BlockInfoResponse] =

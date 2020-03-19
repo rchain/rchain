@@ -14,22 +14,30 @@ import coop.rchain.casper._
 import coop.rchain.casper.DeployError._
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util._
-import coop.rchain.casper.util.rholang.{RuntimeManager, Tools}
+import coop.rchain.casper.util.rholang.{ReplayFailure, RuntimeManager, Tools}
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.graphz._
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.metrics.implicits._
-import coop.rchain.models.{BlockMetadata, Par}
+import coop.rchain.models.{BindPattern, BlockMetadata, ListParWithRandom, Par, TaggedContinuation}
+import coop.rchain.casper.ReportingCasper
 import coop.rchain.models.rholang.sorter.Sortable._
 import coop.rchain.models.serialization.implicits.mkProtobufInstance
 import coop.rchain.models.BlockHash.{BlockHash, _}
 import coop.rchain.rholang.interpreter.storage.StoragePrinter
-import coop.rchain.rspace.StableHashProvider
+import coop.rchain.rspace.{ReportingRspace, ReportingTransformer, StableHashProvider}
 import coop.rchain.rspace.trace._
 import coop.rchain.shared.Log
 import com.google.protobuf.ByteString
 import coop.rchain.crypto.PublicKey
 import coop.rchain.crypto.signatures.Signed
+import coop.rchain.rspace.ReportingRspace.{
+  ReportingComm,
+  ReportingConsume,
+  ReportingEvent,
+  ReportingProduce
+}
+import coop.rchain.casper.ReportingProtoTransformer
 
 object BlockAPI {
 
@@ -39,6 +47,8 @@ object BlockAPI {
   val BlockAPIMetricsSource: Metrics.Source = Metrics.Source(Metrics.BaseSource, "block-api")
   val DeploySource: Metrics.Source          = Metrics.Source(BlockAPIMetricsSource, "deploy")
   val GetBlockSource: Metrics.Source        = Metrics.Source(BlockAPIMetricsSource, "get-block")
+
+  val reportTransformer = new ReportingProtoTransformer()
 
   def deploy[F[_]: Sync: EngineCell: Log: Span](
       d: Signed[DeployData]
@@ -453,6 +463,48 @@ object BlockAPI {
           .as(s"Error: errorMessage".asLeft)
       )
     )
+  def blockReport[F[_]: Monad: EngineCell: Log: SafetyOracle: BlockStore: Span](
+      hash: String
+  )(reportingCasper: ReportingCasper[F]): F[ApiErr[BlockEventInfo]] = {
+    val errorMessage =
+      "Could not get event data."
+    def casperResponse(
+        implicit casper: MultiParentCasper[F]
+    ): F[ApiErr[BlockEventInfo]] =
+      for {
+        reportResult <- reportingCasper.trace(ByteString.copyFrom(Base16.unsafeDecode(hash)))
+        mayberesult  = createBlockReportResponse(reportResult)
+        block        <- getBlockFromStore[F](hash)
+        lightBlock   <- block.traverse(getLightBlockInfo[F](_))
+
+        result = mayberesult.map(BlockEventInfo(lightBlock, _))
+      } yield result
+    EngineCell[F].read >>= (_.withCasper[ApiErr[BlockEventInfo]](
+      casperResponse(_),
+      Log[F].warn(errorMessage).as(s"Error: $errorMessage".asLeft)
+    ))
+  }
+  private def createBlockReportResponse(
+      maybeResult: Option[Either[ReplayFailure, List[(ProcessedDeploy, Seq[ReportingEvent])]]]
+  ): ApiErr[List[DeployInfoWithEventData]] =
+    maybeResult match {
+      case None          => Left("Block not found")
+      case Some(Left(_)) => Left("Block replayed error")
+      case Some(Right(result)) =>
+        result
+          .map(
+            p =>
+              DeployInfoWithEventData(
+                deployInfo = p._1.toDeployInfo.some,
+                report = p._2.map(reportTransformer.transformEvent(_) match {
+                  case rc: ReportConsumeProto => ReportProto(ReportProto.Report.Consume(rc))
+                  case rp: ReportProduceProto => ReportProto(ReportProto.Report.Produce(rp))
+                  case rcm: ReportCommProto   => ReportProto(ReportProto.Report.Comm(rcm))
+                })
+              )
+          )
+          .asRight[Error]
+    }
 
   def getBlock[F[_]: Monad: EngineCell: Log: SafetyOracle: BlockStore: Span](
       hash: String

@@ -9,7 +9,6 @@ import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockStore
 import coop.rchain.blockstorage.dag.{BlockDagRepresentation, BlockDagStorage}
 import coop.rchain.casper.ReportingCasper.RhoReportingRspace
-import coop.rchain.casper.ReportingCasperData._
 import coop.rchain.casper.protocol.{BlockMessage, ProcessedDeploy, ProcessedSystemDeploy}
 import coop.rchain.casper.util.{EventConverter, ProtoUtil}
 import coop.rchain.casper.util.rholang.RuntimeManager.{evaluate, StateHash}
@@ -21,7 +20,6 @@ import coop.rchain.casper.util.rholang.SystemDeployPlatformFailure.{
 import coop.rchain.casper.util.rholang.SystemDeployUserError.SystemDeployError
 import coop.rchain.casper.util.rholang.costacc.{PreChargeDeploy, RefundDeploy}
 import coop.rchain.casper.util.rholang.{
-  InternalError,
   ReplayFailure,
   SystemDeploy,
   SystemDeployPlatformFailure,

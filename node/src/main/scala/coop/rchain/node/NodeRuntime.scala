@@ -16,7 +16,7 @@ import coop.rchain.blockstorage.dag.{BlockDagFileStorage, BlockDagStorage}
 import coop.rchain.blockstorage.deploy.{InMemDeployStorage, LMDBDeployStorage}
 import coop.rchain.blockstorage.finality.LastFinalizedFileStorage
 import coop.rchain.blockstorage.util.io.IOError
-import coop.rchain.casper._
+import coop.rchain.casper.{ReportingCasper, _}
 import coop.rchain.casper.engine._
 import coop.rchain.casper.engine.EngineCell._
 import coop.rchain.casper.engine.Running.Requested
@@ -807,7 +807,8 @@ object NodeRuntime {
           Log[F],
           Taskable[F],
           synchronyConstraintChecker,
-          lastFinalizedHeightConstraintChecker
+          lastFinalizedHeightConstraintChecker,
+          reportingCasper
         )
       casperLoop = for {
         engine <- engineCell.read
@@ -879,11 +880,12 @@ object NodeRuntime {
       logF: Log[F],
       taskable: Taskable[F],
       synchronyConstraintChecker: SynchronyConstraintChecker[F],
-      lastFinalizedHeightConstraintChecker: LastFinalizedHeightConstraintChecker[F]
+      lastFinalizedHeightConstraintChecker: LastFinalizedHeightConstraintChecker[F],
+      reportingCasper: ReportingCasper[F]
   ): APIServers = {
     implicit val s: Scheduler = scheduler
     val repl                  = ReplGrpcService.instance(runtime, s)
-    val deploy                = DeployGrpcServiceV1.instance(blockApiLock, apiMaxBlocksLimit)
+    val deploy                = DeployGrpcServiceV1.instance(blockApiLock, apiMaxBlocksLimit, reportingCasper)
     val propose               = ProposeGrpcServiceV1.instance(blockApiLock)
     APIServers(repl, propose, deploy)
   }

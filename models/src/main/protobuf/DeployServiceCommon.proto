@@ -19,6 +19,7 @@ option (scalapb.options) = {
   package_name: "coop.rchain.casper.protocol"
   flat_package: true
   single_file: true
+  preamble: "sealed trait ReportEventProto"
 };
 
 message FindDeployQuery {
@@ -144,4 +145,47 @@ message ContinuationsWithBlockInfo {
 message WaitingContinuationInfo {
   repeated BindPattern postBlockPatterns = 1;
   Par postBlockContinuation = 2;
+}
+
+
+message ReportProduceProto{
+  option (scalapb.message).extends = "ReportEventProto";
+
+  Par channel = 1;
+  ListParWithRandom data = 2;
+}
+
+message ReportConsumeProto{
+  option (scalapb.message).extends = "ReportEventProto";
+
+  repeated Par channels = 1;
+  repeated BindPattern patterns=2;
+  // disable because can not work and it is not important actually
+  // TaggedContinuation continuation=3;
+  repeated PeekProto peeks=4;
+}
+
+message ReportCommProto{
+  option (scalapb.message).extends = "ReportEventProto";
+
+  ReportConsumeProto consume = 1;
+  repeated ReportProduceProto produces = 2;
+}
+
+message ReportProto{
+  oneof report {
+    ReportProduceProto produce = 1;
+    ReportConsumeProto consume = 2;
+    ReportCommProto comm = 3;
+  }
+}
+
+message DeployInfoWithEventData{
+  DeployInfo deployInfo = 1;
+  repeated ReportProto report =2;
+}
+
+message BlockEventInfo{
+  LightBlockInfo blockInfo = 1;
+  repeated DeployInfoWithEventData deploys= 2;
 }
