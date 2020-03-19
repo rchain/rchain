@@ -81,9 +81,8 @@ object MultiParentCasper extends MultiParentCasperInstances {
 }
 
 sealed abstract class MultiParentCasperInstances {
-  implicit val MetricsSource: Metrics.Source =
-    Metrics.Source(CasperMetricsSource, "casper")
-  private[this] val genesisLabel = Metrics.Source(MetricsSource, "genesis")
+  implicit val MetricsSource: Metrics.Source = CasperMetricsSource
+  private[this] val genesisLabel             = Metrics.Source(MetricsSource, "genesis")
 
   def hashSetCasper[F[_]: Sync: Metrics: Concurrent: CommUtil: Log: Time: SafetyOracle: LastFinalizedBlockCalculator: BlockStore: BlockDagStorage: LastFinalizedStorage: Span: Running.RequestedBlocks: EventPublisher: SynchronyConstraintChecker: LastFinalizedHeightConstraintChecker: Estimator: DeployStorage](
       validatorId: Option[ValidatorIdentity],

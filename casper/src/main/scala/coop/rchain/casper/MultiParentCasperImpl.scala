@@ -10,7 +10,7 @@ import coop.rchain.blockstorage.dag.BlockDagStorage.DeployId
 import coop.rchain.casper.CasperState.CasperStateCell
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util._
-import coop.rchain.casper.util.ProtoUtil._
+import coop.rchain.casper.util.ProtoUtil.{blockNumber, _}
 import coop.rchain.casper.util.comm.CommUtil
 import coop.rchain.casper.util.rholang._
 import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
@@ -242,6 +242,9 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Log: Time: SafetyOracle: Las
             )
             .whenA(lastFinalizedBlockHash != updatedLastFinalizedBlockHash)
       blockMessage <- ProtoUtil.getBlock(updatedLastFinalizedBlockHash)
+      _ <- metricsF
+            .setGauge("last-finalised-block-height", blockNumber(blockMessage))
+            .whenA(lastFinalizedBlockHash != updatedLastFinalizedBlockHash)
     } yield blockMessage
 
   def blockDag: F[BlockDagRepresentation[F]] =
