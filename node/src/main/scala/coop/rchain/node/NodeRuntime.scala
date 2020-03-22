@@ -724,14 +724,14 @@ object NodeRuntime {
         Metrics[F],
         span
       )
-      runtime <- {
+      evalRuntime <- {
         implicit val s  = rspaceScheduler
         implicit val sp = span
         Runtime.setupRSpace[F](cliConf.storage, cliConf.size) >>= {
           case (space, replay, _) => Runtime.createWithEmptyCost[F]((space, replay), Seq.empty)
         }
       }
-      _ <- Runtime.bootstrapRegistry[F](runtime)
+      _ <- Runtime.bootstrapRegistry[F](evalRuntime)
       casperRuntimeAndReporter <- {
         implicit val s  = rspaceScheduler
         implicit val sp = span
@@ -797,7 +797,7 @@ object NodeRuntime {
       }*/
       blockApiLock <- Semaphore[F](1)
       apiServers = NodeRuntime
-        .acquireAPIServers[F](runtime, blockApiLock, scheduler, conf.server.apiMaxBlocksLimit)(
+        .acquireAPIServers[F](evalRuntime, blockApiLock, scheduler, conf.server.apiMaxBlocksLimit)(
           blockStore,
           oracle,
           Concurrent[F],
@@ -836,7 +836,7 @@ object NodeRuntime {
         } yield ()
       }
       engineInit     = engineCell.read >>= (_.init)
-      runtimeCleanup = NodeRuntime.cleanup(runtime, casperRuntime, deployStorageCleanup)
+      runtimeCleanup = NodeRuntime.cleanup(evalRuntime, casperRuntime, deployStorageCleanup)
       webApi = {
         implicit val ec = engineCell
         implicit val sp = span
