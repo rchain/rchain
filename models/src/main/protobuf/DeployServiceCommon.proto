@@ -161,7 +161,7 @@ message ReportConsumeProto{
   repeated Par channels = 1;
   repeated BindPattern patterns=2;
   // disable because can not work and it is not important actually
-  // TaggedContinuation continuation=3;
+//  TaggedContinuation continuation=3;
   repeated PeekProto peeks=4;
 }
 
@@ -180,9 +180,13 @@ message ReportProto{
   }
 }
 
+message SingleReport{
+  repeated ReportProto events = 1;
+}
+
 message DeployInfoWithEventData{
   DeployInfo deployInfo = 1;
-  repeated ReportProto report =2;
+  repeated SingleReport report =2;
 }
 
 message BlockEventInfo{

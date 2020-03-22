@@ -1,6 +1,5 @@
 package coop.rchain.casper
 
-import coop.rchain.casper.ReportingCasperData.BlockTracesReport
 import coop.rchain.casper.helper.TestNode
 import coop.rchain.casper.helper.TestNode.Effect
 import coop.rchain.casper.util.ConstructDeploy
@@ -37,10 +36,10 @@ class MultiParentCasperReportingSpec extends FlatSpec with Matchers with Inspect
         _           = estimate shouldBe IndexedSeq(signedBlock.blockHash)
         trace       <- reportingCasper.trace(signedBlock.blockHash)
         result = trace.get match {
-          case Right(value) => value.head._2.length
-          case Left(_) => 0
+          case Right(value) => value.head._2.foldLeft(0)(_ + _.length)
+          case Left(_)      => 0
         }
-        _ = signedBlock.body.deploys.head.deployLog.size shouldBe(result)
+        _ = signedBlock.body.deploys.head.deployLog.size shouldBe (result)
       } yield ()
     }
   }

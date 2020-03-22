@@ -87,7 +87,7 @@ import scala.concurrent.ExecutionContext
 trait ReportingCasper[F[_]] {
   def trace(
       hash: BlockHash
-  ): F[Option[Either[ReplayFailure, List[(ProcessedDeploy, Seq[ReportingEvent])]]]]
+  ): F[Option[Either[ReplayFailure, List[(ProcessedDeploy, Seq[Seq[ReportingEvent]])]]]]
 }
 
 object ReportingCasper {
@@ -95,7 +95,7 @@ object ReportingCasper {
 
     override def trace(
         hash: BlockHash
-    ): F[Option[Either[ReplayFailure, List[(ProcessedDeploy, Seq[ReportingEvent])]]]] =
+    ): F[Option[Either[ReplayFailure, List[(ProcessedDeploy, Seq[Seq[ReportingEvent]])]]]] =
       Sync[F].delay(none)
   }
 
@@ -111,7 +111,7 @@ object ReportingCasper {
 
       override def trace(
           hash: BlockHash
-      ): F[Option[Either[ReplayFailure, List[(ProcessedDeploy, Seq[ReportingEvent])]]]] =
+      ): F[Option[Either[ReplayFailure, List[(ProcessedDeploy, Seq[Seq[ReportingEvent]])]]]] =
         for {
           replayStore <- HotStore.empty(historyRepository)(codecK, Concurrent[F])
           reporting = new ReportingRspace[
@@ -129,6 +129,7 @@ object ReportingCasper {
           manager          <- fromRuntime(runtime)
           dag              <- BlockDagStorage[F].getRepresentation
           bmO              <- BlockStore[F].get(hash)
+          _                <- Log[F].info(s"trace block ${bmO}")
           invalidBlocksSet <- dag.invalidBlocks
           invalidBlocks    = invalidBlocksSet.map(block => (block.blockHash, block.sender)).toMap
           result <- bmO.traverse(
@@ -143,7 +144,7 @@ object ReportingCasper {
       dag: BlockDagRepresentation[F],
       runtimeManager: ReportingRuntimeManagerImpl[F],
       invalidBlocks: Map[BlockHash, Validator]
-  ): F[Either[ReplayFailure, List[(ProcessedDeploy, Seq[ReportingEvent])]]] = {
+  ): F[Either[ReplayFailure, List[(ProcessedDeploy, Seq[Seq[ReportingEvent]])]]] = {
     val hash          = ProtoUtil.preStateHash(block)
     val deploys       = block.body.deploys
     val systemDeploys = block.body.systemDeploys
@@ -209,8 +210,8 @@ object ReportingCasper {
         terms: Seq[ProcessedDeploy],
         sysDeploys: Seq[ProcessedSystemDeploy],
         blockData: BlockData,
-        invalidBlocks: Map[BlockHash, Validator]
-    ): F[Either[ReplayFailure, List[(ProcessedDeploy, Seq[ReportingEvent])]]] =
+        invalidBlocks: Map[BlockHash, Validator],
+    ): F[Either[ReplayFailure, List[(ProcessedDeploy, Seq[Seq[ReportingEvent]])]]] =
       Sync[F].bracket {
         runtimeContainer.take
       } { runtime =>
@@ -233,16 +234,16 @@ object ReportingCasper {
         startHash: StateHash,
         terms: Seq[ProcessedDeploy],
         systemDeploys: Seq[ProcessedSystemDeploy],
-        replayDeploy: ProcessedDeploy => F[Either[ReplayFailure, Seq[ReportingEvent]]]
+        replayDeploy: ProcessedDeploy => F[Either[ReplayFailure, Seq[Seq[ReportingEvent]]]]
 //        replaySystemDeploy: ProcessedSystemDeploy => F[Either[ReplayFailure, Seq[ReportingEvent]]]
-    ): F[Either[ReplayFailure, List[(ProcessedDeploy, Seq[ReportingEvent])]]] =
+    ): F[Either[ReplayFailure, List[(ProcessedDeploy, Seq[Seq[ReportingEvent]])]]] =
       (for {
         _ <- EitherT.right(runtime.reportingSpace.reset(Blake2b256Hash.fromByteString(startHash)))
         res <- EitherT.right(terms.toList.traverse { term =>
                 for {
                   rd <- replayDeploy(term)
                   r = rd match {
-                    case Left(_)  => Seq.empty[ReportingEvent]
+                    case Left(_)  => Seq.empty[Seq[ReportingEvent]]
                     case Right(s) => s
                   }
                 } yield (term, r)
@@ -252,7 +253,7 @@ object ReportingCasper {
 
     private def replayDeploy(runtime: ReportingRuntime[F], withCostAccounting: Boolean)(
         processedDeploy: ProcessedDeploy
-    ): F[Either[ReplayFailure, Seq[ReportingEvent]]] = {
+    ): F[Either[ReplayFailure, Seq[Seq[ReportingEvent]]]] = {
       import processedDeploy._
       val deployEvaluator = EitherT
         .liftF {

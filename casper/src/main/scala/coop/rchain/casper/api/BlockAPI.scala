@@ -485,7 +485,7 @@ object BlockAPI {
     ))
   }
   private def createBlockReportResponse(
-      maybeResult: Option[Either[ReplayFailure, List[(ProcessedDeploy, Seq[ReportingEvent])]]]
+      maybeResult: Option[Either[ReplayFailure, List[(ProcessedDeploy, Seq[Seq[ReportingEvent]])]]]
   ): ApiErr[List[DeployInfoWithEventData]] =
     maybeResult match {
       case None          => Left("Block not found")
@@ -496,11 +496,15 @@ object BlockAPI {
             p =>
               DeployInfoWithEventData(
                 deployInfo = p._1.toDeployInfo.some,
-                report = p._2.map(reportTransformer.transformEvent(_) match {
-                  case rc: ReportConsumeProto => ReportProto(ReportProto.Report.Consume(rc))
-                  case rp: ReportProduceProto => ReportProto(ReportProto.Report.Produce(rp))
-                  case rcm: ReportCommProto   => ReportProto(ReportProto.Report.Comm(rcm))
-                })
+                report = p._2
+                  .map(
+                    a =>
+                      SingleReport(events = a.map(reportTransformer.transformEvent(_) match {
+                        case rc: ReportConsumeProto => ReportProto(ReportProto.Report.Consume(rc))
+                        case rp: ReportProduceProto => ReportProto(ReportProto.Report.Produce(rp))
+                        case rcm: ReportCommProto   => ReportProto(ReportProto.Report.Comm(rcm))
+                      }))
+                  )
               )
           )
           .asRight[Error]

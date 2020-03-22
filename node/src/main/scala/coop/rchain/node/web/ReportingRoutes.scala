@@ -34,7 +34,7 @@ object ReportingRoutes {
         }
     )
 
-  final case class DeployTrace(deployHash: String, source: String, events: List[RhoEvent])
+  final case class DeployTrace(deployHash: String, source: String, events: List[List[RhoEvent]])
   sealed trait Report
   final case class BlockTracesReport(
       hash: String,
@@ -47,18 +47,18 @@ object ReportingRoutes {
 
   def transformDeploy[C, P, A, K](transformer: ReportingTransformer[C, P, A, K, RhoEvent])(
       ipd: ProcessedDeploy,
-      events: Seq[ReportingEvent]
+      events: Seq[Seq[ReportingEvent]]
   ): DeployTrace =
     DeployTrace(
       ipd.deploy.sig.base16String,
       ipd.deploy.data.term,
-      events.map(transformer.transformEvent).toList
+      events.map(a => a.map(transformer.transformEvent).toList).toList
     )
 
   def transforResult[F[_]: Sync](
       hash: BlockHash,
       state: F[Option[
-        Either[ReplayFailure, List[(ProcessedDeploy, Seq[ReportingEvent])]]
+        Either[ReplayFailure, List[(ProcessedDeploy, Seq[Seq[ReportingEvent]])]]
       ]]
   ): F[Report] =
     state.map(

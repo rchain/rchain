@@ -76,9 +76,17 @@ class ReportingRspace[F[_]: Sync, C, P, A, K](
   implicit protected[this] override lazy val MetricsSource: Metrics.Source =
     Metrics.Source(RSpaceMetricsSource, "reporting")
 
-  val report: SyncVar[Seq[ReportingEvent]] = create[Seq[ReportingEvent]](Seq.empty)
+  /**
+    * in order to distinguish the system deploy(precharge and refund) in the a normal user deploy
+    * It might be more easily to analyse the report with data structure
+    * Seq(Seq[ReportingEvent](Precharge), Seq[ReportingEvent](userDeploy), Seq[ReportingEvent](Refund))
+    * It would be seperated by the softcheckpoint creation.
+    */
+  val report: SyncVar[Seq[Seq[ReportingEvent]]] = create[Seq[Seq[ReportingEvent]]](Seq.empty)
+  val softReport: SyncVar[Seq[ReportingEvent]]  = create[Seq[ReportingEvent]](Seq.empty)
 
-  def getReport: F[Seq[ReportingEvent]] = Sync[F].delay(report.get)
+  def getReport: F[Seq[Seq[ReportingEvent]]]        = Sync[F].delay(report.get)
+  private def getSoftReport: F[Seq[ReportingEvent]] = Sync[F].delay(softReport.get)
 
   protected override def logComm(
       dataCandidates: Seq[ConsumeCandidate[C, A]],
@@ -92,7 +100,7 @@ class ReportingRspace[F[_]: Sync, C, P, A, K](
       reportingConsume  = ReportingConsume(channels, wk.patterns, wk.continuation, wk.peeks.toSeq)
       reportingProduces = dataCandidates.map(dc => ReportingProduce(dc.channel, dc.datum.a))
       _ <- Sync[F].delay(
-            report.update(s => s :+ ReportingComm(reportingConsume, reportingProduces))
+            softReport.update(s => s :+ ReportingComm(reportingConsume, reportingProduces))
           )
     } yield commRef
 
@@ -114,7 +122,7 @@ class ReportingRspace[F[_]: Sync, C, P, A, K](
             peeks
           )
       reportingConsume = ReportingConsume(channels, patterns, continuation, peeks.toSeq)
-      _                <- Sync[F].delay(report.update(s => s :+ reportingConsume))
+      _                <- Sync[F].delay(softReport.update(s => s :+ reportingConsume))
     } yield consumeRef
 
   protected override def logProduce(
@@ -125,7 +133,7 @@ class ReportingRspace[F[_]: Sync, C, P, A, K](
   ): F[Produce] =
     for {
       _ <- super.logProduce(produceRef, channel, data, persist)
-      _ <- Sync[F].delay(report.update(s => s :+ ReportingProduce(channel, data)))
+      _ <- Sync[F].delay(softReport.update(s => s :+ ReportingProduce(channel, data)))
     } yield produceRef
 
   /** ReportingCasper would reset(empty) the report data in every createCheckpoint.
@@ -136,8 +144,16 @@ class ReportingRspace[F[_]: Sync, C, P, A, K](
     for {
       _ <- createNewHotStore(historyRepository)(serializeK.toCodec)
       _ <- restoreInstalls()
-      _ = report.update(_ => Seq.empty[ReportingEvent])
+      _ = softReport.update(_ => Seq.empty[ReportingEvent])
+      _ = report.update(_ => Seq.empty[Seq[ReportingEvent]])
     } yield (Checkpoint(historyRepository.history.root, Seq.empty))
   }
 
+  override def createSoftCheckpoint(): F[SoftCheckpoint[C, P, A, K]] =
+    for {
+      sReport    <- getSoftReport
+      _          = report.update(s => s :+ sReport)
+      _          = softReport.update(_ => Seq.empty[ReportingEvent])
+      checkpoint <- super.createSoftCheckpoint()
+    } yield checkpoint
 }
