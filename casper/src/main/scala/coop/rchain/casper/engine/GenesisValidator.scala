@@ -14,11 +14,11 @@ import coop.rchain.comm.transport.TransportLayer
 import coop.rchain.comm.PeerNode
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.shared._
-import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.dag.BlockDagStorage
 import coop.rchain.blockstorage.deploy.DeployStorage
 import coop.rchain.blockstorage.finality.LastFinalizedStorage
 import coop.rchain.casper.util.comm.CommUtil
+import coop.rchain.models.BlockHash.BlockHash
 
 class GenesisValidator[F[_]: Sync: Metrics: Span: Concurrent: CommUtil: TransportLayer: ConnectionsCell: RPConfAsk: Log: EventLog: Time: SafetyOracle: LastFinalizedBlockCalculator: BlockStore: LastApprovedBlock: BlockDagStorage: LastFinalizedStorage: EngineCell: RuntimeManager: Running.RequestedBlocks: EventPublisher: SynchronyConstraintChecker: LastFinalizedHeightConstraintChecker: Estimator: DeployStorage](
     validatorId: ValidatorIdentity,
@@ -30,13 +30,26 @@ class GenesisValidator[F[_]: Sync: Metrics: Span: Concurrent: CommUtil: Transpor
   private val F    = Applicative[F]
   private val noop = F.unit
 
+  private val seenCandidates                          = Cell.unsafe[F, Map[BlockHash, Boolean]](Map.empty)
+  private def isRepeated(hash: BlockHash): F[Boolean] = seenCandidates.reads(_.contains(hash))
+  private def ack(hash: BlockHash): F[Unit]           = seenCandidates.modify(_ + (hash -> true))
+
   override val init = noop
   override def handle(peer: PeerNode, msg: CasperMessage): F[Unit] = msg match {
     case br: ApprovedBlockRequest => sendNoApprovedBlockAvailable(peer, br.identifier)
     case ub: UnapprovedBlock =>
-      blockApprover.unapprovedBlockPacketHandler(peer, ub) >> {
-        Engine.transitionToInitializing(shardId, finalizationRate, Some(validatorId), init = noop)
-      }
+      isRepeated(ub.candidate.block.blockHash)
+        .ifM(
+          Log[F].warn(
+            s"UnapprovedBlock ${PrettyPrinter.buildString(ub.candidate.block.blockHash)} is already being verified. " +
+              s"Dropping repeated message."
+          ),
+          ack(ub.candidate.block.blockHash) >> blockApprover
+            .unapprovedBlockPacketHandler(peer, ub) >> {
+            Engine
+              .transitionToInitializing(shardId, finalizationRate, Some(validatorId), init = noop)
+          }
+        )
     case na: NoApprovedBlockAvailable => logNoApprovedBlockAvailable[F](na.nodeIdentifer)
     case _                            => noop
   }

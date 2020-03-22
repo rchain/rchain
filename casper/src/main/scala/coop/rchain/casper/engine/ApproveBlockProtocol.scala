@@ -194,6 +194,7 @@ object ApproveBlockProtocol {
     private def internalRun(): F[Unit] =
       for {
         _    <- sendUnapprovedBlock
+        _    <- Time[F].sleep(interval)
         t    <- Time[F].currentMillis
         sigs <- sigsF.get
         _    <- completeIf(t, sigs)
@@ -215,7 +216,13 @@ object ApproveBlockProtocol {
           _ <- LastApprovedBlock[F].set(ApprovedBlock(candidate, signatures.toList))
           _ <- sendApprovedBlock
         } yield ()
-      } else Time[F].sleep(interval) >> internalRun()
+      } else
+        Log[F].info(
+          s"Failed to meet approval conditions. " +
+            s"Signatures: ${signatures.size} of ${requiredSigs} required. " +
+            s"Duration ${time - start} ms of ${duration.toMillis} ms minimum. " +
+            s"Continue broadcasting UnapprovedBlock..."
+        ) >> internalRun()
 
     private def sendApprovedBlock: F[Unit] =
       for {
