@@ -472,12 +472,24 @@ object BlockAPI {
         implicit casper: MultiParentCasper[F]
     ): F[ApiErr[BlockEventInfo]] =
       for {
-        reportResult <- reportingCasper.trace(ByteString.copyFrom(Base16.unsafeDecode(hash)))
-        mayberesult  = createBlockReportResponse(reportResult)
-        block        <- getBlockFromStore[F](hash)
-        lightBlock   <- block.traverse(getLightBlockInfo[F](_))
+        isReadOnly <- casper.getValidator
+        result <- isReadOnly match {
+                   case None =>
+                     for {
+                       reportResult <- reportingCasper.trace(
+                                        ByteString.copyFrom(Base16.unsafeDecode(hash))
+                                      )
+                       mayberesult = createBlockReportResponse(reportResult)
+                       block       <- getBlockFromStore[F](hash)
+                       lightBlock  <- block.traverse(getLightBlockInfo[F](_))
 
-        result = mayberesult.map(BlockEventInfo(lightBlock, _))
+                       res = mayberesult.map(BlockEventInfo(lightBlock, _))
+                     } yield res
+                   case Some(_) =>
+                     "Block report can only be executed on read-only RNode."
+                       .asLeft[BlockEventInfo]
+                       .pure[F]
+                 }
       } yield result
     EngineCell[F].read >>= (_.withCasper[ApiErr[BlockEventInfo]](
       casperResponse(_),
