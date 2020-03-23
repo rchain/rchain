@@ -19,7 +19,7 @@ class MultiParentCasperReportingSpec extends FlatSpec with Matchers with Inspect
 
   "ReportingCasper" should "behave the same way as MultiParentCasper" in effectTest {
     val correctRholang =
-      """ for(@x <- @"x"; @y <- @"y"){ @"xy"!(x + y) | @"x"!(1) | @"y"!(2) } | @"x"!("x") | @"y"!("y")  """
+      """ for(@a <- @"1"){ Nil } | @"1"!("x") """
     TestNode.standaloneEff(genesis).use { node =>
       import node._
       implicit val timeEff = new LogicalTime[Effect]

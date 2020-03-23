@@ -85,7 +85,21 @@ class ReportingRspace[F[_]: Sync, C, P, A, K](
   val report: SyncVar[Seq[Seq[ReportingEvent]]] = create[Seq[Seq[ReportingEvent]]](Seq.empty)
   val softReport: SyncVar[Seq[ReportingEvent]]  = create[Seq[ReportingEvent]](Seq.empty)
 
-  def getReport: F[Seq[Seq[ReportingEvent]]]        = Sync[F].delay(report.get)
+  private def collectReport =
+    for {
+      sReport <- getSoftReport
+      _ = if (sReport.nonEmpty) {
+        report.update(s => s :+ sReport)
+        softReport.update(_ => Seq.empty[ReportingEvent])
+      }
+    } yield ()
+
+  def getReport: F[Seq[Seq[ReportingEvent]]] =
+    for {
+      _      <- collectReport
+      result = report.get
+      _      = report.update(_ => Seq.empty[Seq[ReportingEvent]])
+    } yield result
   private def getSoftReport: F[Seq[ReportingEvent]] = Sync[F].delay(softReport.get)
 
   protected override def logComm(
@@ -151,9 +165,7 @@ class ReportingRspace[F[_]: Sync, C, P, A, K](
 
   override def createSoftCheckpoint(): F[SoftCheckpoint[C, P, A, K]] =
     for {
-      sReport    <- getSoftReport
-      _          = report.update(s => s :+ sReport)
-      _          = softReport.update(_ => Seq.empty[ReportingEvent])
+      _          <- collectReport
       checkpoint <- super.createSoftCheckpoint()
     } yield checkpoint
 }

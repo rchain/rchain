@@ -125,15 +125,19 @@ object ReportingCasper {
             AtomicAny(replayStore),
             Branch.REPLAY
           )
-          runtime          <- ReportingRuntime.createWithEmptyCost[F](reporting, Seq.empty)
-          manager          <- fromRuntime(runtime)
-          dag              <- BlockDagStorage[F].getRepresentation
-          bmO              <- BlockStore[F].get(hash)
+          runtime <- ReportingRuntime.createWithEmptyCost[F](reporting, Seq.empty)
+          manager <- fromRuntime(runtime)
+          dag     <- BlockDagStorage[F].getRepresentation
+          bmO     <- BlockStore[F].get(hash)
+          genesis <- BlockStore[F].getApprovedBlock
+          isGenesis = genesis
+            .flatMap(a => bmO.map(b => b.blockHash == a.candidate.block.blockHash))
+            .getOrElse(false)
           _                <- Log[F].info(s"trace block ${bmO}")
           invalidBlocksSet <- dag.invalidBlocks
           invalidBlocks    = invalidBlocksSet.map(block => (block.blockHash, block.sender)).toMap
           result <- bmO.traverse(
-                     bm => replayBlock(bm, dag, manager, invalidBlocks)
+                     bm => replayBlock(bm, dag, manager, invalidBlocks, isGenesis)
                    )
         } yield result
 
@@ -143,16 +147,16 @@ object ReportingCasper {
       block: BlockMessage,
       dag: BlockDagRepresentation[F],
       runtimeManager: ReportingRuntimeManagerImpl[F],
-      invalidBlocks: Map[BlockHash, Validator]
+      invalidBlocks: Map[BlockHash, Validator],
+      isGenesis: Boolean
   ): F[Either[ReplayFailure, List[(ProcessedDeploy, Seq[Seq[ReportingEvent]])]]] = {
     val hash          = ProtoUtil.preStateHash(block)
     val deploys       = block.body.deploys
-    val systemDeploys = block.body.systemDeploys
     runtimeManager.replayComputeState(hash)(
       deploys,
-      systemDeploys,
       BlockData.fromBlock(block),
-      invalidBlocks
+      invalidBlocks,
+      isGenesis
     )
   }
 
@@ -208,9 +212,9 @@ object ReportingCasper {
 
     def replayComputeState(startHash: StateHash)(
         terms: Seq[ProcessedDeploy],
-        sysDeploys: Seq[ProcessedSystemDeploy],
         blockData: BlockData,
         invalidBlocks: Map[BlockHash, Validator],
+        isGenesis: Boolean
     ): F[Either[ReplayFailure, List[(ProcessedDeploy, Seq[Seq[ReportingEvent]])]]] =
       Sync[F].bracket {
         runtimeContainer.take
@@ -222,9 +226,7 @@ object ReportingCasper {
                      runtime,
                      startHash,
                      terms,
-                     sysDeploys,
-                     replayDeploy(runtime, true)
-//                     replaySystemDeploy(runtime)
+                     replayDeploy(runtime, !isGenesis)
                    )
         } yield result
       }(runtimeContainer.put)
@@ -233,9 +235,7 @@ object ReportingCasper {
         runtime: ReportingRuntime[F],
         startHash: StateHash,
         terms: Seq[ProcessedDeploy],
-        systemDeploys: Seq[ProcessedSystemDeploy],
         replayDeploy: ProcessedDeploy => F[Either[ReplayFailure, Seq[Seq[ReportingEvent]]]]
-//        replaySystemDeploy: ProcessedSystemDeploy => F[Either[ReplayFailure, Seq[ReportingEvent]]]
     ): F[Either[ReplayFailure, List[(ProcessedDeploy, Seq[Seq[ReportingEvent]])]]] =
       (for {
         _ <- EitherT.right(runtime.reportingSpace.reset(Blake2b256Hash.fromByteString(startHash)))
