@@ -830,8 +830,8 @@ object NodeRuntime {
         implicit val ec = engineCell
         implicit val bs = blockStore
         for {
-          _ <- Running.updateForkChoiceTipsIfStuck(conf.casper.forkChoiceStaleThreshold)
           _ <- Time[F].sleep(conf.casper.forkChoiceCheckIfStaleInterval)
+          _ <- Running.updateForkChoiceTipsIfStuck(conf.casper.forkChoiceStaleThreshold)
         } yield ()
       }
       engineInit     = engineCell.read >>= (_.init)
