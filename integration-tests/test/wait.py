@@ -60,17 +60,17 @@ class ApprovedBlockReceived(LogsContainMessage):
 
 class SentUnapprovedBlock(LogsContainMessage):
     def __init__(self, node: 'Node') -> None:
-        super().__init__(node, 'c.r.c.e.ApproveBlockProtocol$ApproveBlockProtocolImpl - Sent UnapprovedBlock')
+        super().__init__(node, 'c.r.c.e.ApproveBlockProtocol$ApproveBlockProtocolImpl - Broadcasting UnapprovedBlock')
 
 
 class BlockApproval(LogsContainMessage):
     def __init__(self, node: 'Node') -> None:
-        super().__init__(node, 'c.r.c.e.ApproveBlockProtocol$ApproveBlockProtocolImpl - received block approval from')
+        super().__init__(node, 'c.r.c.e.ApproveBlockProtocol$ApproveBlockProtocolImpl - Received block approval from')
 
 
 class SentApprovedBlock(LogsContainMessage):
     def __init__(self, node: 'Node') -> None:
-        super().__init__(node, 'c.r.c.e.ApproveBlockProtocol$ApproveBlockProtocolImpl - Sent ApprovedBlock')
+        super().__init__(node, 'c.r.c.e.ApproveBlockProtocol$ApproveBlockProtocolImpl - Sending ApprovedBlock')
 
 
 class LogsReMatch:

@@ -245,8 +245,8 @@ class ApproveBlockProtocolTest extends FlatSpec with Matchers {
     // I know that testing the logs is not the best way but I comparing messages sent won't work
     // because we attach `System.currentMillis` to every message.
     ctx.tick(4.millisecond)
-    infosContain("Sent UnapprovedBlock", 1)
-    infosContain("received block approval from", 0)
+    infosContain("Broadcasting UnapprovedBlock", 1)
+    infosContain("Received block approval from", 0)
     metricsTest.counters.get(METRICS_APPROVAL_COUNTER_NAME) should be(None)
 
     val a = ApproveBlockProtocolTest.approval(candidate, validatorSk, validatorPk)
@@ -255,8 +255,8 @@ class ApproveBlockProtocolTest extends FlatSpec with Matchers {
     ctx.tick(1.millisecond)
     sigsF.get.unsafeRunSync.size should be(1)
     metricsTest.counters(METRICS_APPROVAL_COUNTER_NAME) should be(1)
-    infosContain("received block approval from", 1)
-    infosContain("Sent UnapprovedBlock", 2)
+    infosContain("Received block approval from", 1)
+    infosContain("Broadcasting UnapprovedBlock", 2)
     cancelToken.cancel()
   }
 
@@ -275,8 +275,8 @@ class ApproveBlockProtocolTest extends FlatSpec with Matchers {
 
     // I know that testing the logs is not the best way but I comparing messages sent won't work
     // because we attach `System.currentMillis` to every message.
-    logStub.infos.filter(_.startsWith("received block approval from")).size should be(0)
-    logStub.infos.filter(_.startsWith("Sent ApprovedBlock")).size should be(0)
+    logStub.infos.filter(_.startsWith("Received block approval from")).size should be(0)
+    logStub.infos.filter(_.startsWith("Sending ApprovedBlock")).size should be(0)
     metricsTest.counters.get(METRICS_APPROVAL_COUNTER_NAME) should be(None)
 
     val a = ApproveBlockProtocolTest.approval(candidate, validatorSk, validatorPk)
@@ -286,10 +286,10 @@ class ApproveBlockProtocolTest extends FlatSpec with Matchers {
     ctx.tick(1.millisecond)
 
     sigsF.get.unsafeRunSync.size should be(1)
-    logStub.infos.filter(_.startsWith("received block approval from")).size should be(1)
+    logStub.infos.filter(_.startsWith("Received block approval from")).size should be(1)
     metricsTest.counters(METRICS_APPROVAL_COUNTER_NAME) should be(1)
     ctx.tick(1.millisecond)
-    logStub.infos.filter(_.startsWith("Sent ApprovedBlock")).size should be(1)
+    logStub.infos.filter(_.startsWith("Sending ApprovedBlock")).size should be(1)
     cancelToken.cancel()
   }
 }
