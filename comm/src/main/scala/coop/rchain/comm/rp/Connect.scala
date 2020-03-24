@@ -148,12 +148,12 @@ object Connect {
     (
       for {
         address <- peer.toAddress.pure[F]
-        _       <- Log[F].debug(s"Connecting to $address")
-        _       <- Metrics[F].incrementCounter("connect")
-        _       <- Log[F].debug(s"Initialize protocol handshake to $address")
-        conf    <- RPConfAsk[F].ask
-        ph      = protocolHandshake(conf.local, conf.networkId)
-        res     <- TransportLayer[F].send(peer, ph)
+        //_       <- Log[F].debug(s"Connecting to $address")
+        _ <- Metrics[F].incrementCounter("connect")
+        //_       <- Log[F].debug(s"Initialize protocol handshake to $address")
+        conf <- RPConfAsk[F].ask
+        ph   = protocolHandshake(conf.local, conf.networkId)
+        res  <- TransportLayer[F].send(peer, ph)
       } yield res
     ).timer("connect-time")
 
