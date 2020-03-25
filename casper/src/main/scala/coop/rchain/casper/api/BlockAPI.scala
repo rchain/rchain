@@ -40,7 +40,6 @@ import coop.rchain.rspace.ReportingRspace.{
 import coop.rchain.casper.ReportingProtoTransformer
 
 object BlockAPI {
-
   type Error     = String
   type ApiErr[A] = Either[Error, A]
 
@@ -497,12 +496,12 @@ object BlockAPI {
     ))
   }
   private def createBlockReportResponse(
-      maybeResult: Option[Either[ReplayFailure, List[(ProcessedDeploy, Seq[Seq[ReportingEvent]])]]]
+      maybeResult: Either[ReportError, List[(ProcessedDeploy, Seq[Seq[ReportingEvent]])]]
   ): ApiErr[List[DeployInfoWithEventData]] =
     maybeResult match {
-      case None          => Left("Block not found")
-      case Some(Left(_)) => Left("Block replayed error")
-      case Some(Right(result)) =>
+      case Left(ReportBlockNotFound(hash)) => Left(s"Block ${hash} not found")
+      case Left(ReportReplayError(r))      => Left(s"Block replayed error ${r}")
+      case Right(result) =>
         result
           .map(
             p =>

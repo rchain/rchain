@@ -4,6 +4,7 @@ import cats.effect.Sync
 import cats.implicits._
 import cats.{~>, Applicative}
 import com.google.protobuf.ByteString
+import coop.rchain.casper.{ReportBlockNotFound, ReportError, ReportReplayError}
 import coop.rchain.models.BlockHash._
 import coop.rchain.casper.ReportingCasper
 import coop.rchain.casper.protocol.ProcessedDeploy
@@ -57,23 +58,21 @@ object ReportingRoutes {
 
   def transforResult[F[_]: Sync](
       hash: BlockHash,
-      state: F[Option[
-        Either[ReplayFailure, List[(ProcessedDeploy, Seq[Seq[ReportingEvent]])]]
-      ]]
+      state: F[
+        Either[ReportError, List[(ProcessedDeploy, Seq[Seq[ReportingEvent]])]]
+      ]
   ): F[Report] =
     state.map(
       s =>
         s match {
-          case None => BlockNotFound(hash.base16String)
-          case Some((Left(internalError @ InternalError(_)))) =>
+          case Left(ReportBlockNotFound(hash)) => BlockNotFound(hash.base16String)
+          case Left(ReportReplayError(error)) =>
             BlockReplayFailed(
               hash.base16String,
-              internalError.toString,
+              error.toString,
               None
             )
-          case Some(Left(failed)) =>
-            BlockReplayFailed(hash.base16String, failed.toString, None)
-          case Some(Right(deploys)) =>
+          case Right(deploys) =>
             val t = transformDeploy(transformer)(_, _)
             BlockTracesReport(
               hash.base16String,

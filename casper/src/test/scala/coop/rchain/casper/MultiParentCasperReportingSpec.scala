@@ -35,7 +35,7 @@ class MultiParentCasperReportingSpec extends FlatSpec with Matchers with Inspect
         estimate    <- node.casperEff.estimator(dag)
         _           = estimate shouldBe IndexedSeq(signedBlock.blockHash)
         trace       <- reportingCasper.trace(signedBlock.blockHash)
-        result = trace.get match {
+        result = trace match {
           case Right(value) => value.head._2.foldLeft(0)(_ + _.length)
           case Left(_)      => 0
         }

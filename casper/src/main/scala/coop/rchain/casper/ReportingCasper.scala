@@ -9,7 +9,7 @@ import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockStore
 import coop.rchain.blockstorage.dag.{BlockDagRepresentation, BlockDagStorage}
 import coop.rchain.casper.ReportingCasper.RhoReportingRspace
-import coop.rchain.casper.protocol.{BlockMessage, ProcessedDeploy, ProcessedSystemDeploy}
+import coop.rchain.casper.protocol.{BlockMessage, ProcessedDeploy}
 import coop.rchain.casper.util.{EventConverter, ProtoUtil}
 import coop.rchain.casper.util.rholang.RuntimeManager.{evaluate, StateHash}
 import coop.rchain.casper.util.rholang.SystemDeployPlatformFailure.{
@@ -31,7 +31,6 @@ import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.metrics.Metrics.Source
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.models.BlockHash._
-import coop.rchain.models.TaggedContinuation.TaggedCont.{Empty, ParBody, ScalaBodyRef}
 import coop.rchain.models.{
   BindPattern,
   EVar,
@@ -84,10 +83,14 @@ import coop.rchain.models.Var.VarInstance.FreeVar
 
 import scala.concurrent.ExecutionContext
 
+sealed trait ReportError
+final case class ReportBlockNotFound(hash: BlockHash)    extends ReportError
+final case class ReportReplayError(error: ReplayFailure) extends ReportError
+
 trait ReportingCasper[F[_]] {
   def trace(
       hash: BlockHash
-  ): F[Option[Either[ReplayFailure, List[(ProcessedDeploy, Seq[Seq[ReportingEvent]])]]]]
+  ): F[Either[ReportError, List[(ProcessedDeploy, Seq[Seq[ReportingEvent]])]]]
 }
 
 object ReportingCasper {
@@ -95,8 +98,8 @@ object ReportingCasper {
 
     override def trace(
         hash: BlockHash
-    ): F[Option[Either[ReplayFailure, List[(ProcessedDeploy, Seq[Seq[ReportingEvent]])]]]] =
-      Sync[F].delay(none)
+    ): F[Either[ReportError, List[(ProcessedDeploy, Seq[Seq[ReportingEvent]])]]] =
+      Sync[F].delay(Right(List.empty[(ProcessedDeploy, Seq[Seq[ReportingEvent]])]))
   }
 
   type RhoReportingRspace[F[_]] =
@@ -111,7 +114,7 @@ object ReportingCasper {
 
       override def trace(
           hash: BlockHash
-      ): F[Option[Either[ReplayFailure, List[(ProcessedDeploy, Seq[Seq[ReportingEvent]])]]]] =
+      ): F[Either[ReportError, List[(ProcessedDeploy, Seq[Seq[ReportingEvent]])]]] =
         for {
           replayStore <- HotStore.empty(historyRepository)(codecK, Concurrent[F])
           reporting = new ReportingRspace[
@@ -136,9 +139,14 @@ object ReportingCasper {
           _                <- Log[F].info(s"trace block ${bmO}")
           invalidBlocksSet <- dag.invalidBlocks
           invalidBlocks    = invalidBlocksSet.map(block => (block.blockHash, block.sender)).toMap
-          result <- bmO.traverse(
-                     bm => replayBlock(bm, dag, manager, invalidBlocks, isGenesis)
-                   )
+          res <- bmO.traverse(
+                  bm => replayBlock(bm, dag, manager, invalidBlocks, isGenesis)
+                )
+          result = res match {
+            case None                    => ReportBlockNotFound(hash).asLeft
+            case Some(Left(replayError)) => ReportReplayError(replayError).asLeft
+            case Some(Right(r))          => r.asRight
+          }
         } yield result
 
     }
@@ -150,8 +158,8 @@ object ReportingCasper {
       invalidBlocks: Map[BlockHash, Validator],
       isGenesis: Boolean
   ): F[Either[ReplayFailure, List[(ProcessedDeploy, Seq[Seq[ReportingEvent]])]]] = {
-    val hash          = ProtoUtil.preStateHash(block)
-    val deploys       = block.body.deploys
+    val hash    = ProtoUtil.preStateHash(block)
+    val deploys = block.body.deploys
     runtimeManager.replayComputeState(hash)(
       deploys,
       BlockData.fromBlock(block),
