@@ -376,16 +376,14 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
 
     val forkChoiceStaleThreshold =
       opt[FiniteDuration](
-        default = Option(FiniteDuration(5, scala.concurrent.duration.MINUTES)),
         descr =
           "Node will request for fork choice tips if the latest FCT is more then " +
-            "forkChoiceStaleThreshold old. Default 5 min."
+            "forkChoiceStaleThreshold old. Default 10 min."
       )
 
     val forkChoiceCheckIfStaleInterval =
       opt[FiniteDuration](
-        default = Option(FiniteDuration(1, scala.concurrent.duration.MINUTES)),
-        descr = "Interval for check if fork choice tip is stale. Default 1 min."
+        descr = "Interval for check if fork choice tip is stale. Default 11 min."
       )
 
     val apiMaxBlocksLimit = opt[Int](
