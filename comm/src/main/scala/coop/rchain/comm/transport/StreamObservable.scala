@@ -25,7 +25,7 @@ class StreamObservable(bufferSize: Int, folder: Path)(implicit log: Log[Task], s
   def stream(peers: Seq[PeerNode], blob: Blob): Task[Unit] = {
 
     val logStreamInformation =
-      log.info(s"Streaming packet (type = ${blob.packet.typeId}) to peers ${peers.mkString(", ")}")
+      log.debug(s"Streaming packet (type = ${blob.packet.typeId}) to peers ${peers.mkString(", ")}")
 
     val storeBlob: Task[Option[Path]] =
       blob.packet.store[Task](folder) >>= {

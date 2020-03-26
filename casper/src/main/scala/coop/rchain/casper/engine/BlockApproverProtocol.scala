@@ -9,6 +9,7 @@ import coop.rchain.casper.ValidatorIdentity
 import coop.rchain.casper.genesis.Genesis
 import coop.rchain.casper.genesis.contracts._
 import coop.rchain.casper.protocol._
+import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.casper.util.rholang.RuntimeManager
 import coop.rchain.catscontrib.Catscontrib._
 import coop.rchain.comm.PeerNode
@@ -45,33 +46,37 @@ final case class BlockApproverProtocol private (
       u: UnapprovedBlock
   ): F[Unit] = {
     val candidate = u.candidate
-    BlockApproverProtocol
-      .validateCandidate(
-        candidate,
-        requiredSigs,
-        deployTimestamp,
-        vaults,
-        _bonds,
-        minimumBond,
-        maximumBond,
-        epochLength,
-        quarantineLength,
-        numberOfActiveValidators
-      )
-      .flatMap {
-        case Right(_) =>
-          for {
-            local <- RPConfAsk[F].reader(_.local)
-            serializedApproval = BlockApproverProtocol
-              .getApproval(candidate, validatorId)
-              .toProto
-            msg = Blob(local, ToPacket(serializedApproval))
-            _   <- TransportLayer[F].stream(peer, msg)
-            _   <- Log[F].info(s"Received expected candidate from $peer. Approval sent in response.")
-          } yield ()
-        case Left(errMsg) =>
-          Log[F].warn(s"Received unexpected candidate from $peer because: $errMsg")
-      }
+    Log[F].info(s"Received expected genesis block candidate from $peer. Verifying...") >>
+      BlockApproverProtocol
+        .validateCandidate(
+          candidate,
+          requiredSigs,
+          deployTimestamp,
+          vaults,
+          _bonds,
+          minimumBond,
+          maximumBond,
+          epochLength,
+          quarantineLength,
+          numberOfActiveValidators
+        )
+        .flatMap {
+          case Right(_) =>
+            for {
+              local <- RPConfAsk[F].reader(_.local)
+              serializedApproval = BlockApproverProtocol
+                .getApproval(candidate, validatorId)
+                .toProto
+              msg = Blob(local, ToPacket(serializedApproval))
+              _   <- TransportLayer[F].stream(peer, msg)
+              _ <- Log[F].info(
+                    s"Approved genesis block candidate from $peer. " +
+                      s"Approval sent in response."
+                  )
+            } yield ()
+          case Left(errMsg) =>
+            Log[F].warn(s"Received unexpected genesis block candidate from $peer because: $errMsg")
+        }
   }
 }
 

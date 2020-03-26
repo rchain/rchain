@@ -58,7 +58,8 @@ class BlockApproverProtocolTest extends FlatSpec with Matchers {
                 differentUnapproved2
               )
 
-          _ = node.logEff.warns.count(_.contains("Received unexpected candidate")) should be(2)
+          _ = node.logEff.warns
+            .count(_.contains("Received unexpected genesis block candidate")) should be(2)
           queue <- {
             implicit val network = node.transportLayerEff.testNetworkF
             TestNetwork.peerQueue(node.local)

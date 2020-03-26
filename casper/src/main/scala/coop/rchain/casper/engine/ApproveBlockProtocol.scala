@@ -158,15 +158,15 @@ object ApproveBlockProtocol {
             (before, after) = modifyResult
 
             _ <- if (after > before)
-                  Log[F].info("APPROVAL: New signature received") >>
+                  Log[F].info("New signature received") >>
                     Metrics[F].incrementCounter("genesis")
                 else
-                  Log[F].info("APPROVAL: No new sigs received")
+                  Log[F].info("No new sigs received")
 
-            _ <- Log[F].info(s"APPROVAL: received block approval from $sender")
+            _ <- Log[F].info(s"Received block approval from $sender")
 
             _ <- Log[F].info(
-                  s"APPROVAL: ${after.size} approvals received: ${after
+                  s"${after.size} approvals received: ${after
                     .map(s => PrettyPrinter.buildString(s.publicKey))
                     .mkString(", ")}"
                 )
@@ -179,8 +179,8 @@ object ApproveBlockProtocol {
                 )
 
           } yield ()
-        } else Log[F].warn(s"APPROVAL: ignoring invalid block approval from $sender")
-      } else Log[F].warn(s"APPROVAL: Received BlockApproval from untrusted validator.")
+        } else Log[F].warn(s"Ignoring invalid block approval from $sender")
+      } else Log[F].warn(s"Received BlockApproval from untrusted validator.")
     }
 
     private def signedByTrustedValidator(a: BlockApproval): Boolean =
@@ -194,6 +194,7 @@ object ApproveBlockProtocol {
     private def internalRun(): F[Unit] =
       for {
         _    <- sendUnapprovedBlock
+        _    <- Time[F].sleep(interval)
         t    <- Time[F].currentMillis
         sigs <- sigsF.get
         _    <- completeIf(t, sigs)
@@ -203,9 +204,8 @@ object ApproveBlockProtocol {
     //      received a valid signature from yet
     private def sendUnapprovedBlock: F[Unit] =
       for {
-        _ <- Log[F].info(s"APPROVAL: Beginning send of UnapprovedBlock $candidateHash to peers...")
+        _ <- Log[F].info(s"Broadcasting UnapprovedBlock $candidateHash...")
         _ <- CommUtil[F].streamToPeers(serializedUnapprovedBlock)
-        _ <- Log[F].info(s"APPROVAL: Sent UnapprovedBlock $candidateHash to peers.")
         _ <- EventLog[F].publish(shared.Event.SentUnapprovedBlock(candidateHash))
       } yield ()
 
@@ -215,22 +215,27 @@ object ApproveBlockProtocol {
           _ <- LastApprovedBlock[F].set(ApprovedBlock(candidate, signatures.toList))
           _ <- sendApprovedBlock
         } yield ()
-      } else Time[F].sleep(interval) >> internalRun()
+      } else
+        Log[F].info(
+          s"Failed to meet approval conditions. " +
+            s"Signatures: ${signatures.size} of ${requiredSigs} required. " +
+            s"Duration ${time - start} ms of ${duration.toMillis} ms minimum. " +
+            s"Continue broadcasting UnapprovedBlock..."
+        ) >> internalRun()
 
     private def sendApprovedBlock: F[Unit] =
       for {
         apbO <- LastApprovedBlock[F].get
         _ <- apbO match {
               case None =>
-                Log[F].warn(s"APPROVAL: Expected ApprovedBlock but was None.")
+                Log[F].warn(s"Expected ApprovedBlock but was None.")
               case Some(b) =>
                 val serializedApprovedBlock = ToPacket(b.toProto)
                 for {
                   _ <- Log[F].info(
-                        s"APPROVAL: Beginning send of ApprovedBlock $candidateHash to peers..."
+                        s"Sending ApprovedBlock $candidateHash to peers..."
                       )
                   _ <- CommUtil[F].streamToPeers(serializedApprovedBlock)
-                  _ <- Log[F].info(s"APPROVAL: Sent ApprovedBlock $candidateHash to peers.")
                   _ <- EventLog[F].publish(shared.Event.SentApprovedBlock(candidateHash))
                 } yield ()
             }

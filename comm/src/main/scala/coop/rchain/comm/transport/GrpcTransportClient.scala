@@ -99,12 +99,12 @@ class GrpcTransportClient(
       request: GrpcTransport.Request[A]
   ): Task[CommErr[A]] =
     (for {
-      _       <- log.debug(s"Creating new channel to peer ${peer.toAddress}")
+      //_       <- log.debug(s"Creating new channel to peer ${peer.toAddress}")
       channel <- clientChannel(peer)
       stub    <- Task.delay(RoutingGrpcMonix.stub(channel).withDeadlineAfter(timeout))
       result  <- request(stub).doOnFinish(kp(Task.delay(channel.shutdown()).attempt.void))
-      _       <- log.debug(s"Send request to peer ${peer.toAddress} done")
-      _       <- Task.unit.asyncBoundary // return control to caller thread
+      //_       <- log.debug(s"Send request to peer ${peer.toAddress} done")
+      _ <- Task.unit.asyncBoundary // return control to caller thread
     } yield result).attempt.map(_.fold(e => Left(protocolException(e)), identity))
 
   def send(peer: PeerNode, msg: Protocol): Task[CommErr[Unit]] =
@@ -137,7 +137,7 @@ class GrpcTransportClient(
             log.debug(
               s"Error while streaming packet to $peer (timeout: ${timeout(packet).toMillis}ms): ${error.message}"
             )
-          case Right(_) => log.info(s"Streamed packet $path to $peer")
+          case Right(_) => log.debug(s"Streamed packet $path to $peer")
         }
       case Left(error) =>
         log.error(s"Error while streaming packet $path to $peer: ${error.message}")
