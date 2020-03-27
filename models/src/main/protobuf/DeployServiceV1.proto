@@ -57,6 +57,15 @@ service DeployService {
   rpc exploratoryDeploy(ExploratoryDeployQuery) returns (ExploratoryDeployResponse) {}
   // get blocks by block height
   rpc getBlocksByHeights(BlocksQueryByHeight) returns (stream BlockInfoResponse){}
+  // temporary api for testing
+  rpc getEventByHash(BlockQuery) returns (EventInfoResponse){}
+}
+
+message EventInfoResponse{
+  oneof message{
+    ServiceError error = 1;
+    BlockEventInfo result = 2;
+  }
 }
 
 message ExploratoryDeployResponse{

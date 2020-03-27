@@ -1,6 +1,5 @@
 package coop.rchain.casper
 
-import coop.rchain.casper.ReportingCasperData.BlockTracesReport
 import coop.rchain.casper.helper.TestNode
 import coop.rchain.casper.helper.TestNode.Effect
 import coop.rchain.casper.util.ConstructDeploy
@@ -18,9 +17,9 @@ class MultiParentCasperReportingSpec extends FlatSpec with Matchers with Inspect
 
   val genesis = buildGenesis()
 
-  "ReportingCasper" should "behave the same way as MultiParentCasper" ignore effectTest {
+  "ReportingCasper" should "behave the same way as MultiParentCasper" in effectTest {
     val correctRholang =
-      """ for(@x <- @"x"; @y <- @"y"){ @"xy"!(x + y) | @"x"!(1) | @"y"!(2) } | @"x"!("x") | @"y"!("y")  """
+      """ for(@a <- @"1"){ Nil } | @"1"!("x") """
     TestNode.standaloneEff(genesis).use { node =>
       import node._
       implicit val timeEff = new LogicalTime[Effect]
@@ -36,14 +35,11 @@ class MultiParentCasperReportingSpec extends FlatSpec with Matchers with Inspect
         estimate    <- node.casperEff.estimator(dag)
         _           = estimate shouldBe IndexedSeq(signedBlock.blockHash)
         trace       <- reportingCasper.trace(signedBlock.blockHash)
-        _           = trace shouldBe a[BlockTracesReport]
-        _           = trace.asInstanceOf[BlockTracesReport].hash shouldBe signedBlock.blockHash.base16String
-        _ = signedBlock.body.deploys.head.deployLog.size shouldBe trace
-          .asInstanceOf[BlockTracesReport]
-          .traces
-          .head
-          .events
-          .size
+        result = trace match {
+          case Right(value) => value.head._2.foldLeft(0)(_ + _.length)
+          case Left(_)      => 0
+        }
+        _ = signedBlock.body.deploys.head.deployLog.size shouldBe (result)
       } yield ()
     }
   }

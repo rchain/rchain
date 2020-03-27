@@ -16,7 +16,7 @@ import coop.rchain.blockstorage.dag.{BlockDagFileStorage, BlockDagStorage}
 import coop.rchain.blockstorage.deploy.{InMemDeployStorage, LMDBDeployStorage}
 import coop.rchain.blockstorage.finality.LastFinalizedFileStorage
 import coop.rchain.blockstorage.util.io.IOError
-import coop.rchain.casper._
+import coop.rchain.casper.{ReportingCasper, _}
 import coop.rchain.casper.engine._
 import coop.rchain.casper.engine.EngineCell._
 import coop.rchain.casper.engine.Running.Requested
@@ -724,14 +724,14 @@ object NodeRuntime {
         Metrics[F],
         span
       )
-      runtime <- {
+      evalRuntime <- {
         implicit val s  = rspaceScheduler
         implicit val sp = span
         Runtime.setupRSpace[F](cliConf.storage, cliConf.size) >>= {
           case (space, replay, _) => Runtime.createWithEmptyCost[F]((space, replay), Seq.empty)
         }
       }
-      _ <- Runtime.bootstrapRegistry[F](runtime)
+      _ <- Runtime.bootstrapRegistry[F](evalRuntime)
       casperRuntimeAndReporter <- {
         implicit val s  = rspaceScheduler
         implicit val sp = span
@@ -797,7 +797,7 @@ object NodeRuntime {
       }*/
       blockApiLock <- Semaphore[F](1)
       apiServers = NodeRuntime
-        .acquireAPIServers[F](runtime, blockApiLock, scheduler, conf.server.apiMaxBlocksLimit)(
+        .acquireAPIServers[F](evalRuntime, blockApiLock, scheduler, conf.server.apiMaxBlocksLimit)(
           blockStore,
           oracle,
           Concurrent[F],
@@ -807,7 +807,8 @@ object NodeRuntime {
           Log[F],
           Taskable[F],
           synchronyConstraintChecker,
-          lastFinalizedHeightConstraintChecker
+          lastFinalizedHeightConstraintChecker,
+          reportingCasper
         )
       casperLoop = for {
         engine <- engineCell.read
@@ -835,7 +836,7 @@ object NodeRuntime {
         } yield ()
       }
       engineInit     = engineCell.read >>= (_.init)
-      runtimeCleanup = NodeRuntime.cleanup(runtime, casperRuntime, deployStorageCleanup)
+      runtimeCleanup = NodeRuntime.cleanup(evalRuntime, casperRuntime, deployStorageCleanup)
       webApi = {
         implicit val ec = engineCell
         implicit val sp = span
@@ -879,11 +880,12 @@ object NodeRuntime {
       logF: Log[F],
       taskable: Taskable[F],
       synchronyConstraintChecker: SynchronyConstraintChecker[F],
-      lastFinalizedHeightConstraintChecker: LastFinalizedHeightConstraintChecker[F]
+      lastFinalizedHeightConstraintChecker: LastFinalizedHeightConstraintChecker[F],
+      reportingCasper: ReportingCasper[F]
   ): APIServers = {
     implicit val s: Scheduler = scheduler
     val repl                  = ReplGrpcService.instance(runtime, s)
-    val deploy                = DeployGrpcServiceV1.instance(blockApiLock, apiMaxBlocksLimit)
+    val deploy                = DeployGrpcServiceV1.instance(blockApiLock, apiMaxBlocksLimit, reportingCasper)
     val propose               = ProposeGrpcServiceV1.instance(blockApiLock)
     APIServers(repl, propose, deploy)
   }
