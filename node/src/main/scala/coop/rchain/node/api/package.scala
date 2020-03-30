@@ -16,16 +16,13 @@ import monix.execution.Scheduler
 
 package object api {
 
-  // 16 MB is max message size allowed by HTTP2 RFC 7540
-  // grpc and netty can however work with bigger values
-  val maxMessageSize: Int = 16 * 1024 * 1024
-
   def acquireInternalServer(
       port: Int,
       grpcExecutor: Scheduler,
       replGrpcService: ReplGrpcMonix.Repl,
       deployGrpcService: DeployServiceV1GrpcMonix.DeployService,
-      proposeGrpcService: ProposeServiceV1GrpcMonix.ProposeService
+      proposeGrpcService: ProposeServiceV1GrpcMonix.ProposeService,
+      maxMessageSize: Int
   ): Task[Server[Task]] =
     GrpcServer[Task](
       NettyServerBuilder
@@ -50,7 +47,8 @@ package object api {
   def acquireExternalServer[F[_]: Concurrent: Log: Taskable](
       port: Int,
       grpcExecutor: Scheduler,
-      deployGrpcService: DeployServiceV1GrpcMonix.DeployService
+      deployGrpcService: DeployServiceV1GrpcMonix.DeployService,
+      maxMessageSize: Int
   ): F[Server[F]] =
     GrpcServer[F](
       NettyServerBuilder

@@ -559,7 +559,8 @@ class NodeRuntime private[node] (
                             .acquireExternalServer[Task](
                               conf.grpcServer.portExternal,
                               grpcScheduler,
-                              apiServers.deploy
+                              apiServers.deploy,
+                              conf.grpcServer.maxMessageSize
                             )
       internalApiServer <- api
                             .acquireInternalServer(
@@ -567,7 +568,8 @@ class NodeRuntime private[node] (
                               grpcScheduler,
                               apiServers.repl,
                               apiServers.deploy,
-                              apiServers.propose
+                              apiServers.propose,
+                              conf.grpcServer.maxMessageSize
                             )
 
       prometheusReporter = new NewPrometheusReporter()
