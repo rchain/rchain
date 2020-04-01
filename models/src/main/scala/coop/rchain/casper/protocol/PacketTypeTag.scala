@@ -1,13 +1,11 @@
 package coop.rchain.casper.protocol
 
-import java.io.IOException
-
 import com.google.protobuf.ByteString
 import coop.rchain.comm.protocol.routing.Packet
 import enumeratum._
 import scalapb.{GeneratedMessage, GeneratedMessageCompanion, Message}
 
-import scala.util.{Failure, Try}
+import scala.util.Try
 
 sealed abstract class PacketTypeTag extends EnumEntry
 
@@ -18,11 +16,17 @@ object PacketTypeTag extends Enum[PacketTypeTag] {
   case object HasBlock                 extends PacketTypeTag
   case object BlockRequest             extends PacketTypeTag
   case object ForkChoiceTipRequest     extends PacketTypeTag
+  case object ForkChoiceTipResponse    extends PacketTypeTag
   case object ApprovedBlock            extends PacketTypeTag
   case object ApprovedBlockRequest     extends PacketTypeTag
   case object BlockApproval            extends PacketTypeTag
   case object UnapprovedBlock          extends PacketTypeTag
   case object NoApprovedBlockAvailable extends PacketTypeTag
+  // Last finalized state messages
+  case object LastFinalizedBlockRequest  extends PacketTypeTag
+  case object LastFinalizedBlockResponse extends PacketTypeTag
+  case object StoreItemsMessageRequest   extends PacketTypeTag
+  case object StoreItemsMessage          extends PacketTypeTag
 
   override val values = findValues
 
@@ -46,12 +50,24 @@ object PacketTypeTag extends Enum[PacketTypeTag] {
     implicit val valueOfForkChoiceTipRequest: ValueOf[ForkChoiceTipRequest.type] = summon(
       ForkChoiceTipRequest
     )
+    implicit val valueOfForkChoiceTipResponse: ValueOf[ForkChoiceTipResponse.type] = summon(
+      ForkChoiceTipResponse
+    )
     implicit val valueOfApprovedBlockRequest: ValueOf[ApprovedBlockRequest.type] = summon(
       ApprovedBlockRequest
     )
     implicit val valueOfApprovedBlockAvailable: ValueOf[NoApprovedBlockAvailable.type] = summon(
       NoApprovedBlockAvailable
     )
+    // Last finalized state messages
+    implicit val valueOfLastFinalizedBlockRequest: ValueOf[LastFinalizedBlockRequest.type] =
+      summon(LastFinalizedBlockRequest)
+    implicit val valueOfLastFinalizedBlockResponse: ValueOf[LastFinalizedBlockResponse.type] =
+      summon(LastFinalizedBlockResponse)
+    implicit val valueOfStoreItemsMessageRequest: ValueOf[StoreItemsMessageRequest.type] =
+      summon(StoreItemsMessageRequest)
+    implicit val valueOfStoreItemsMessage: ValueOf[StoreItemsMessage.type] =
+      summon(StoreItemsMessage)
   }
 
 }
@@ -80,7 +96,7 @@ object PacketParseResult {
   @inline def fromTry[A](a: Try[A]): PacketParseResult[A] = a.fold(Failure, Success(_))
 }
 
-import PacketParseResult._
+import coop.rchain.casper.protocol.PacketParseResult._
 
 trait FromPacket[Tag <: PacketTypeTag] {
   type To

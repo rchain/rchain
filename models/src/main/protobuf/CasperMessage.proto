@@ -38,6 +38,11 @@ message ForkChoiceTipRequestProto {
   option (scalapb.message).extends = "CasperMessageProto";
 }
 
+message ForkChoiceTipResponseProto {
+  option (scalapb.message).extends = "CasperMessageProto";
+  bytes hash = 1;
+}
+
 // ---------- Signing Protocol ---------
 message ApprovedBlockCandidateProto {
   option (scalapb.message).extends = "CasperMessageProto";
@@ -228,4 +233,44 @@ message BondProto {
   bytes validator = 1;
   int64 stake     = 2;
 }
+
+message LastFinalizedBlockRequestProto {
+  option (scalapb.message).extends = "CasperMessageProto";
+}
+
+message LastFinalizedBlockResponseProto {
+  option (scalapb.message).extends = "CasperMessageProto";
+//  bytes hash      = 1;
+//  bytes stateHash = 2;
+  BlockMessageProto block = 1 [(scalapb.field).no_box = true];
+}
 // --------- End Core Protocol  --------
+
+// --------- Last finalized state  --------
+
+message StoreNodeKeyProto {
+  bytes hash  = 1;
+  int32 index = 2;
+}
+
+message StoreItemsMessageRequestProto {
+  option (scalapb.message).extends = "CasperMessageProto";
+  repeated StoreNodeKeyProto startPath = 1 [(scalapb.field).collection_type="collection.immutable.List"];
+  int32 skip                           = 2;
+  int32 take                           = 3;
+}
+
+message StoreItemProto {
+  bytes key   = 1;
+  bytes value = 2;
+}
+
+message StoreItemsMessageProto {
+  option (scalapb.message).extends = "CasperMessageProto";
+  repeated StoreNodeKeyProto startPath = 1 [(scalapb.field).collection_type="collection.immutable.List"];
+  repeated StoreNodeKeyProto lastPath  = 2 [(scalapb.field).collection_type="collection.immutable.List"];
+  repeated StoreItemProto historyItems = 3 [(scalapb.field).collection_type="collection.immutable.List"];
+  repeated StoreItemProto dataItems    = 4 [(scalapb.field).collection_type="collection.immutable.List"];
+}
+
+// --------- End Last finalized state  --------
