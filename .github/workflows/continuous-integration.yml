@@ -14,6 +14,8 @@ on:
   pull_request:
     branches:
       - dev
+      - feature/*
+    
 env:
   # This is read by every new JVM. Every JVM thinks it can use up to 80% of
   # total memory available to the system (used or unused). This may not be
