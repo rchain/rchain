@@ -1,7 +1,7 @@
 package coop.rchain.casper.engine
 
 import cats.effect.{Concurrent, Sync}
-import cats.implicits._
+import cats.syntax.all._
 import cats.Applicative
 import coop.rchain.blockstorage.BlockStore
 import coop.rchain.blockstorage.dag.BlockDagStorage
@@ -21,7 +21,9 @@ import coop.rchain.comm.PeerNode
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.shared._
 import coop.rchain.shared
+import coop.rchain.catscontrib._
 import scala.concurrent.duration._
+import Catscontrib._
 import scala.language.higherKinds
 
 /** Node in this state will query peers in the network with [[ApprovedBlockRequest]] message
@@ -43,6 +45,7 @@ class Initializing[F[_]: Sync: Metrics: Span: Concurrent: BlockStore: CommUtil: 
   override def handle(peer: PeerNode, msg: CasperMessage): F[Unit] = msg match {
     case ab: ApprovedBlock =>
       onApprovedBlockTransition(
+        peer,
         ab,
         validatorId,
         shardId,
@@ -57,14 +60,16 @@ class Initializing[F[_]: Sync: Metrics: Span: Concurrent: BlockStore: CommUtil: 
   }
 
   private def onApprovedBlockTransition(
+      sender: PeerNode,
       approvedBlock: ApprovedBlock,
       validatorId: Option[ValidatorIdentity],
       shardId: String,
       finalizationRate: Int
-  ): F[Unit] =
+  ): F[Unit] = {
+    val senderIsBootstrap = RPConfAsk[F].ask.map(_.bootstrap.exists(_ == sender))
     for {
       _       <- Log[F].info("Received ApprovedBlock message.")
-      isValid <- Validate.approvedBlock[F](approvedBlock)
+      isValid <- senderIsBootstrap &&^ Validate.approvedBlock[F](approvedBlock)
       maybeCasper <- if (isValid) {
                       for {
                         _ <- Log[F].info("Valid ApprovedBlock received!")
@@ -103,4 +108,5 @@ class Initializing[F[_]: Sync: Metrics: Span: Concurrent: BlockStore: CommUtil: 
           )
 
     } yield ()
+  }
 }
