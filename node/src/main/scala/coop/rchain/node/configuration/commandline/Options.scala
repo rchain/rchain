@@ -1,6 +1,6 @@
 package coop.rchain.node.configuration.commandline
 
-import java.nio.file.Path
+import java.nio.file.{Path, Paths}
 
 import coop.rchain.casper.util.comm.ListenAtName.{Name, PrivName, PubName}
 import coop.rchain.comm.PeerNode
@@ -495,23 +495,18 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
   addSubcommand(run)
 
   val keygen = new Subcommand("keygen") {
-    descr("Generate a public/private key pair.")
+    descr(
+      "Generates a public/private key pair. Files created are: \n" +
+        "- password protected private key in PEM format, \n" +
+        "- public key in PEM format, \n" +
+        "- public key in as a HEX string"
+    )
     helpWidth(width)
 
-    val algorithm = opt[String](
-      descr = "Algorithm to be used for key generation. Must be one of ed25519 or secp256k1.",
-      validate = (s: String) => { s == "ed25519" || s == "secp256k1" },
-      required = true
-    )
-
-    val privateKeyPath = opt[Path](
-      descr = "Path to the file where the encoded private key will be written to.",
-      required = true
-    )
-
-    val publicKeyPath = opt[Path](
-      descr = "Path to the file where the encoded public key will be written to.",
-      required = true
+    val location = trailArg[Path](
+      descr = "Folder to save keyfies. Defaults to './' ",
+      default = Some(Paths.get("")),
+      required = false
     )
   }
   addSubcommand(keygen)

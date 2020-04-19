@@ -4,7 +4,7 @@ import java.io.File
 import java.nio.file.Path
 
 import cats.implicits._
-import cats.effect.Resource
+import cats.effect.{Resource, Sync}
 import coop.rchain.casper.util.comm._
 import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.crypto.PrivateKey
@@ -16,7 +16,7 @@ import coop.rchain.node.configuration._
 import coop.rchain.node.effects._
 import coop.rchain.node.web.VersionInfo
 import coop.rchain.shared.StringOps._
-import coop.rchain.shared._
+import coop.rchain.shared.{EnvVars, _}
 import monix.eval.Task
 import monix.execution.Scheduler
 import org.slf4j.LoggerFactory
@@ -32,6 +32,15 @@ object Main {
   implicit private val log: Log[Task]           = effects.log
   implicit private val eventLog: EventLog[Task] = EventLog.eventLogger
 
+  // Main scheduler for all CPU bounded tasks
+  // Should always be passed as implicit dependency.
+  // All other schedulers should be explicit.
+  implicit val scheduler: Scheduler = Scheduler.computation(
+    Math.max(java.lang.Runtime.getRuntime.availableProcessors(), 2),
+    "node-runner",
+    reporter = UncaughtExceptionLogger
+  )
+
   /**
     * Main entry point
     * @param args input args
@@ -42,15 +51,6 @@ object Main {
     Thread.setDefaultUncaughtExceptionHandler((thread, ex) => {
       LoggerFactory.getLogger(getClass).error("Unhandled exception in thread " + thread.getName, ex)
     })
-
-    // Main scheduler for all CPU bounded tasks
-    // Should always be passed as implicit dependency.
-    // All other schedulers should be explicit.
-    implicit val scheduler: Scheduler = Scheduler.computation(
-      Math.max(java.lang.Runtime.getRuntime.availableProcessors(), 2),
-      "node-runner",
-      reporter = UncaughtExceptionLogger
-    )
     implicit val console: ConsoleIO[Task] = consoleIO
 
     // Parse CLI options
@@ -168,11 +168,10 @@ object Main {
       case ShowBlocks(depth)            => DeployRuntime.getBlocks[Task](depth)
       case VisualizeDag(depth, showJustificationLines) =>
         DeployRuntime.visualizeDag[Task](depth, showJustificationLines)
-      case MachineVerifiableDag => DeployRuntime.machineVerifiableDag[Task]
-      case DataAtName(name)     => DeployRuntime.listenForDataAtName[Task](name)
-      case ContAtName(names)    => DeployRuntime.listenForContinuationAtName[Task](names)
-      case Keygen(algorithm, privateKeyPath, publicKeyPath) =>
-        generateKey(algorithm, privateKeyPath, publicKeyPath)
+      case MachineVerifiableDag  => DeployRuntime.machineVerifiableDag[Task]
+      case DataAtName(name)      => DeployRuntime.listenForDataAtName[Task](name)
+      case ContAtName(names)     => DeployRuntime.listenForContinuationAtName[Task](names)
+      case Keygen(path)          => generateKey(path)
       case LastFinalizedBlock    => DeployRuntime.lastFinalizedBlock[Task]
       case IsFinalized(hash)     => DeployRuntime.isFinalized[Task](hash)
       case BondStatus(publicKey) => DeployRuntime.bondStatus[Task](publicKey)
@@ -215,71 +214,83 @@ object Main {
         VisualizeDag(depth.getOrElse(-1), showJustificationLines.getOrElse(false))
       case Some(options.machineVerifiableDag) => MachineVerifiableDag
       case Some(options.run)                  => Run
-      case Some(options.keygen) =>
-        Keygen(
-          options.keygen.algorithm(),
-          options.keygen.privateKeyPath(),
-          options.keygen.publicKeyPath()
-        )
-      case Some(options.lastFinalizedBlock) => LastFinalizedBlock
-      case Some(options.isFinalized)        => IsFinalized(options.isFinalized.hash())
-      case Some(options.bondStatus)         => BondStatus(options.bondStatus.validatorPublicKey())
-      case Some(options.dataAtName)         => DataAtName(options.dataAtName.name())
-      case Some(options.contAtName)         => ContAtName(options.contAtName.name())
-      case _                                => Help
+      case Some(options.keygen)               => Keygen(options.keygen.location())
+      case Some(options.lastFinalizedBlock)   => LastFinalizedBlock
+      case Some(options.isFinalized)          => IsFinalized(options.isFinalized.hash())
+      case Some(options.bondStatus)           => BondStatus(options.bondStatus.validatorPublicKey())
+      case Some(options.dataAtName)           => DataAtName(options.dataAtName.name())
+      case Some(options.contAtName)           => ContAtName(options.contAtName.name())
+      case _                                  => Help
     }
 
   private def decryptKeyFromCon(
       encryptedPrivateKeyPath: Path
   )(implicit console: ConsoleIO[Task]): Task[PrivateKey] =
-    for {
-      password   <- ConsoleIO[Task].readPassword("Password for private key file: ")
-      privateKey <- Secp256k1.parsePemFile[Task](encryptedPrivateKeyPath, password)
-    } yield privateKey
+    Secp256k1.parsePemFile[Task](encryptedPrivateKeyPath, getValidatorPassword)
 
   private def generateKey(
-      algorithm: String,
-      privateKeyPath: Path,
-      publicKeyPath: Path
+      path: Path
   )(implicit console: ConsoleIO[Task]): Task[Unit] =
     for {
-      password       <- ConsoleIO[Task].readPassword("Password for generated private key file: ")
+      password       <- ConsoleIO[Task].readPassword("Enter password for keyfile: ")
       passwordRepeat <- ConsoleIO[Task].readPassword("Repeat password: ")
       _ <- if (password != passwordRepeat) {
-            ConsoleIO[Task].println("Passwords do not match. Try again.") >> generateKey(
-              algorithm,
-              privateKeyPath,
-              publicKeyPath
-            )
+            ConsoleIO[Task].println("Passwords do not match. Try again:") >> generateKey(path)
           } else if (password.isEmpty) {
-            ConsoleIO[Task].println("Password is empty. Try again.") >> generateKey(
-              algorithm,
-              privateKeyPath,
-              publicKeyPath
-            )
+            ConsoleIO[Task].println("Password is empty. Try again:") >> generateKey(path)
           } else {
             for {
-              sigAlgorithm <- SignaturesAlg(algorithm)
+              sigAlgorithm <- SignaturesAlg(Secp256k1.name)
                                .map(_.pure[Task])
                                .getOrElse(
                                  Task
                                    .raiseError(new IllegalStateException("Invalid algorithm name"))
                                )
               (sk, pk) = sigAlgorithm.newKeyPair
+
+              privatePemKeyPath = path.resolve("rnode.key")
+              publicPemKeyPath  = path.resolve("rnode.pub.pem")
+              publicKeyHexFile  = path.resolve("rnode.pub.hex")
               _ <- KeyUtil.writeKeys(
                     sk,
                     pk,
                     sigAlgorithm,
                     password,
-                    privateKeyPath,
-                    publicKeyPath
+                    privatePemKeyPath,
+                    publicPemKeyPath,
+                    publicKeyHexFile
                   )
               _ <- ConsoleIO[Task].println(
-                    s"Successfully generated private key: ${privateKeyPath.toAbsolutePath} and public key: ${publicKeyPath.toAbsolutePath}"
+                    s"\nSuccess!\n" +
+                      s"Private key file (encrypted PEM format):  ${privatePemKeyPath.toAbsolutePath}\n" +
+                      s"Public  key file (PEM format):            ${publicPemKeyPath.toAbsolutePath}\n" +
+                      s"Public  key file (HEX format):            ${publicKeyHexFile.toAbsolutePath}"
                   )
             } yield ()
           }
     } yield ()
+
+  private val RNodeValidatorPasswordEnvVar = "RNODE_VALIDATOR_PASSWORD"
+
+  /**
+    * Reads validator password from RNODE_VALIDATOR_PASSWORD env variable, if not set - asks for console
+    * @param console
+    * @return
+    */
+  def getValidatorPassword(implicit console: ConsoleIO[Task]): String =
+    sys.env.get(RNodeValidatorPasswordEnvVar) match {
+      case Some(password) =>
+        if (password.length > 0) password else requestForPassword
+      case None => requestForPassword
+    }
+
+  def requestForPassword(implicit console: ConsoleIO[Task]): String =
+    console
+      .readPassword(
+        "Variable RNODE_VALIDATOR_PASSWORD is not set, please enter password for keyfile. \n" +
+          "Password for keyfile: "
+      )
+      .unsafeRunSync
 
   /**
     * Loads validator key from file into configuration.
