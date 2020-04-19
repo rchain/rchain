@@ -14,6 +14,7 @@ import coop.rchain.crypto.{PrivateKey, PublicKey}
 import coop.rchain.shared.{EnvVars, Log, LogSource}
 
 import scala.language.higherKinds
+import scala.util.Try
 
 final case class ValidatorIdentity(
     publicKey: PublicKey,
@@ -44,27 +45,55 @@ object ValidatorIdentity {
       conf: CasperConf,
       privateKey: PrivateKey
   ): F[Option[ValidatorIdentity]] = {
-    val maybePublicKey = conf.publicKeyBase16.map(pk => PublicKey(Base16.unsafeDecode(pk)))
+    val maybePublicKey = conf.validatorPublicKey.map(pk => PublicKey(Base16.unsafeDecode(pk)))
 
-    val publicKey =
-      CasperConf.publicKey(maybePublicKey, Secp256k1.name, privateKey)
-
-    ValidatorIdentity(publicKey, privateKey, Secp256k1.name).some.pure[F]
+    ValidatorIdentity(
+      publicKey(maybePublicKey, Secp256k1.name, privateKey),
+      privateKey,
+      Secp256k1.name
+    ).some.pure[F]
   }
 
-  def fromConfig[F[_]: Sync: EnvVars: Log](conf: CasperConf): F[Option[ValidatorIdentity]] =
-    conf.privateKey match {
-      case Some(Left(privateKeyBase16)) =>
+  def fromPrivateKey[F[_]: Sync: EnvVars: Log](conf: CasperConf): F[Option[ValidatorIdentity]] =
+    conf.validatorPrivateKey match {
+      case Some(privateKeyBase16) =>
         createValidatorIdentity(conf, PrivateKey(Base16.unsafeDecode(privateKeyBase16)))
-      case Some(Right(privateKeyPath)) =>
-        for {
-          password          <- getEnvVariablePassword
-          privateKey        <- Secp256k1.parsePemFile(privateKeyPath, password)
-          validatorIdentity <- createValidatorIdentity(conf, privateKey)
-        } yield validatorIdentity
       case None =>
         Log[F]
           .warn("No private key detected, cannot create validator identification.")
           .map(_ => none[ValidatorIdentity])
     }
+
+  @SuppressWarnings(Array("org.wartremover.warts.Throw"))
+  def publicKey(
+      givenPublicKey: Option[PublicKey],
+      sigAlgorithm: String,
+      privateKey: PrivateKey
+  ): PublicKey = {
+
+    val maybeInferred = sigAlgorithm match {
+      case "secp256k1" =>
+        Try(Secp256k1.toPublic(privateKey)).toOption
+
+      case _ => None
+    }
+
+    (maybeInferred, givenPublicKey) match {
+      case (Some(k1), Some(k2)) =>
+        if (keysMatch(k1.bytes, k2.bytes)) k1
+        else throw new Exception("Public key not compatible with given private key!")
+
+      case (Some(k1), None) => k1
+
+      //TODO: Should this case be an error?
+      //Will all supported algorithms be able to infer the public key from private?
+      case (None, Some(k2)) => k2
+
+      case (None, None) =>
+        throw new Exception("Public key must be specified, cannot infer from private key.")
+    }
+  }
+
+  private def keysMatch(k1: Array[Byte], k2: Array[Byte]): Boolean =
+    k1.zip(k2).forall { case (x, y) => x == y }
 }
