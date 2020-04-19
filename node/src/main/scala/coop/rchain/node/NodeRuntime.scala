@@ -41,7 +41,7 @@ import coop.rchain.node.NodeRuntime.{apply => _, _}
 import coop.rchain.node.api.WebApi.WebApiImpl
 import coop.rchain.node.api._
 import coop.rchain.node.configuration.{Configuration, NodeConf}
-import coop.rchain.node.diagnostics._
+import coop.rchain.node.diagnostics.{NewPrometheusReporter, _}
 import coop.rchain.node.diagnostics.Trace.TraceId
 import coop.rchain.node.effects.{EventConsumer, RchainEvents}
 import coop.rchain.node.model.repl.ReplGrpcMonix
@@ -405,18 +405,18 @@ class NodeRuntime private[node] (
       _ <- servers.externalApiServer.start.toReaderT
 
       _ <- Log[TaskEnv].info(
-            s"External API server started at $host:${servers.externalApiServer.port}"
+            s"External API server started at ${nodeConf.apiServer.host}:${servers.externalApiServer.port}"
           )
       _ <- servers.internalApiServer.start.toReaderT
 
       _ <- Log[TaskEnv].info(
-            s"Internal API server started at $host:${servers.internalApiServer.port}"
+            s"Internal API server started at ${nodeConf.apiServer.host}:${servers.internalApiServer.port}"
           )
       _ <- servers.kademliaRPCServer.start.toReaderT
 
       // HTTP server is started immediately on `acquireServers`
       _ <- Log[TaskEnv].info(
-            s"HTTP API server started at $host:${nodeConf.apiServer.portHttp}"
+            s"HTTP API server started at ${nodeConf.apiServer.host}:${nodeConf.apiServer.portHttp}"
           )
 
       _ <- Log[TaskEnv].info(
@@ -562,6 +562,7 @@ class NodeRuntime private[node] (
       externalApiServer <- api
                             .acquireExternalServer[Task](
                               //conf.apiServer
+                              nodeConf.apiServer.host,
                               nodeConf.apiServer.portGrpcExternal,
                               grpcScheduler,
                               apiServers.deploy,
@@ -569,6 +570,7 @@ class NodeRuntime private[node] (
                             )
       internalApiServer <- api
                             .acquireInternalServer(
+                              nodeConf.apiServer.host,
                               nodeConf.apiServer.portGrpcInternal,
                               grpcScheduler,
                               apiServers.repl,
@@ -580,6 +582,7 @@ class NodeRuntime private[node] (
       prometheusReporter = new NewPrometheusReporter()
       httpServerFiber = aquireHttpServer(
         nodeConf.apiServer.enableReporting,
+        nodeConf.apiServer.host,
         nodeConf.apiServer.portHttp,
         prometheusReporter,
         reportingCasper,

@@ -78,7 +78,7 @@ class HoconConfigurationSpec extends FunSuite with Matchers {
         initWaitLoopInterval = 1.second
       ),
       apiServer = ApiServer(
-        host = None,
+        host = "0.0.0.0",
         portGrpcExternal = 40401,
         portGrpcInternal = 40402,
         grpcMaxReceiveMessageLength = 16777216,

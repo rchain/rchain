@@ -161,7 +161,7 @@ class ConfigMapperSpec extends FunSuite with Matchers {
         initWaitLoopInterval = 111111.seconds
       ),
       apiServer = ApiServer(
-        host = Some("localhost"),
+        host = "localhost",
         portGrpcExternal = 111111,
         portGrpcInternal = 111111,
         portHttp = 111111,

@@ -57,7 +57,7 @@ final case class PeersDiscovery(
 )
 
 final case class ApiServer(
-    host: Option[String],
+    host: String,
     portGrpcExternal: Int,
     portGrpcInternal: Int,
     grpcMaxReceiveMessageLength: Long,
