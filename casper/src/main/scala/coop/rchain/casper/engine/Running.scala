@@ -103,7 +103,7 @@ object Running {
     * See spec RunningMaintainRequestedBlocksSpec for more details
     */
   def maintainRequestedBlocks[F[_]: Monad: RPConfAsk: RequestedBlocks: TransportLayer: Log: Time: Metrics](
-      timeout: Int
+      timeout: FiniteDuration
   ): F[Unit] = {
 
     def toMap(list: List[(BlockHash, Option[Requested])]): Map[BlockHash, Requested] = {
@@ -145,7 +145,7 @@ object Running {
           val requested = requests(hash)
           for {
             received <- requested.received.pure[F]
-            expired  <- Time[F].currentMillis.map(_ - requested.timestamp > timeout.seconds.toMillis)
+            expired  <- Time[F].currentMillis.map(_ - requested.timestamp > timeout.toMillis)
             rerequest <- if (expired && !received)
                           tryRerequest(hash, requested)
                         else

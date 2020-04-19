@@ -37,12 +37,12 @@ object CasperLaunch {
           val msg    = "Found ApprovedBlock in storage, reconnecting to existing network"
           val action = connectToExistingNetwork(approvedBlock)
           (msg, action)
-        case None if (conf.approveGenesis) =>
+        case None if (conf.genesisCeremony.genesisValidatorMode) =>
           val msg =
             "ApprovedBlock not found in storage, taking part in ceremony as genesis validator"
           val action = connectAsGenesisValidator()
           (msg, action)
-        case None if (conf.createGenesis) =>
+        case None if (conf.genesisCeremony.ceremonyMasterMode) =>
           val msg =
             "ApprovedBlock not found in storage, taking part in ceremony as ceremony master"
           val action = initBootstrap()
@@ -57,13 +57,13 @@ object CasperLaunch {
 
     private def connectToExistingNetwork(approvedBlock: ApprovedBlock): F[Unit] =
       for {
-        validatorId <- ValidatorIdentity.fromConfig[F](conf)
+        validatorId <- ValidatorIdentity.fromPrivateKey[F](conf)
         genesis     = approvedBlock.candidate.block
         casper <- MultiParentCasper
                    .hashSetCasper[F](
                      validatorId,
                      genesis,
-                     conf.shardId,
+                     conf.shardName,
                      conf.finalizationRate,
                      skipValidateGenesis = true
                    )
@@ -78,63 +78,63 @@ object CasperLaunch {
 
     private def connectAsGenesisValidator(): F[Unit] =
       for {
-        timestamp <- conf.deployTimestamp.fold(Time[F].currentMillis)(_.pure[F])
+        timestamp <- conf.genesisBlockData.deployTimestamp.fold(Time[F].currentMillis)(_.pure[F])
         bonds <- BondsParser.parse[F](
-                  conf.bondsFile,
-                  conf.genesisPath.resolve("bonds.txt"),
-                  conf.numValidators,
-                  conf.genesisPath
+                  conf.genesisBlockData.bondsFile,
+                  conf.genesisBlockData.genesisDataDir.resolve("bonds.txt"),
+                  conf.genesisCeremony.autogenShardSize,
+                  conf.genesisBlockData.genesisDataDir
                 )
 
-        validatorId <- ValidatorIdentity.fromConfig[F](conf)
+        validatorId <- ValidatorIdentity.fromPrivateKey[F](conf)
         vaults <- VaultParser.parse(
-                   conf.walletsFile
+                   conf.genesisBlockData.walletsFile
                      .map(Paths.get(_))
-                     .getOrElse(conf.genesisPath.resolve("wallets.txt"))
+                     .getOrElse(conf.genesisBlockData.genesisDataDir.resolve("wallets.txt"))
                  )
         bap <- BlockApproverProtocol.of(
                 validatorId.get,
                 timestamp,
                 vaults,
                 bonds,
-                conf.minimumBond,
-                conf.maximumBond,
-                conf.epochLength,
-                conf.quarantineLength,
-                conf.numberOfActiveValidators,
-                conf.requiredSigs
+                conf.genesisBlockData.bondMinimum,
+                conf.genesisBlockData.bondMaximum,
+                conf.genesisBlockData.epochLength,
+                conf.genesisBlockData.quarantineLength,
+                conf.genesisBlockData.numberOfActiveValidators,
+                conf.genesisCeremony.requiredSignatures
               )(Sync[F])
         _ <- EngineCell[F].set(
-              new GenesisValidator(validatorId.get, conf.shardId, conf.finalizationRate, bap)
+              new GenesisValidator(validatorId.get, conf.shardName, conf.finalizationRate, bap)
             )
       } yield ()
 
     private def initBootstrap(): F[Unit] =
       for {
-        validatorId <- ValidatorIdentity.fromConfig[F](conf)
+        validatorId <- ValidatorIdentity.fromPrivateKey[F](conf)
         abp <- ApproveBlockProtocol
                 .of[F](
-                  conf.bondsFile,
-                  conf.numValidators,
-                  conf.genesisPath,
-                  conf.walletsFile,
-                  conf.minimumBond,
-                  conf.maximumBond,
-                  conf.epochLength,
-                  conf.quarantineLength,
-                  conf.numberOfActiveValidators,
-                  conf.shardId,
-                  conf.deployTimestamp,
-                  conf.requiredSigs,
-                  conf.approveGenesisDuration,
-                  conf.approveGenesisInterval
+                  conf.genesisBlockData.bondsFile,
+                  conf.genesisCeremony.autogenShardSize,
+                  conf.genesisBlockData.genesisDataDir,
+                  conf.genesisBlockData.walletsFile,
+                  conf.genesisBlockData.bondMinimum,
+                  conf.genesisBlockData.bondMaximum,
+                  conf.genesisBlockData.epochLength,
+                  conf.genesisBlockData.quarantineLength,
+                  conf.genesisBlockData.numberOfActiveValidators,
+                  conf.shardName,
+                  conf.genesisBlockData.deployTimestamp,
+                  conf.genesisCeremony.requiredSignatures,
+                  conf.genesisCeremony.approveDuration,
+                  conf.genesisCeremony.approveInterval
                 )
         // TODO track fiber
         _ <- Concurrent[F].start(
               GenesisCeremonyMaster
                 .approveBlockInterval[F](
-                  conf.approveGenesisInterval,
-                  conf.shardId,
+                  conf.genesisCeremony.approveInterval,
+                  conf.shardName,
                   conf.finalizationRate,
                   validatorId
                 )
@@ -144,9 +144,9 @@ object CasperLaunch {
 
     private def connectAndQueryApprovedBlock(): F[Unit] =
       for {
-        validatorId <- ValidatorIdentity.fromConfig[F](conf)
+        validatorId <- ValidatorIdentity.fromPrivateKey[F](conf)
         _ <- Engine.transitionToInitializing(
-              conf.shardId,
+              conf.shardName,
               conf.finalizationRate,
               validatorId,
               CommUtil[F].requestApprovedBlock

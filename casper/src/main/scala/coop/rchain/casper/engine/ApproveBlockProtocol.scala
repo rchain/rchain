@@ -60,7 +60,7 @@ object ApproveBlockProtocol {
 
   def of[F[_]: Sync: Concurrent: RaiseIOError: CommUtil: Log: EventLog: Time: Metrics: RuntimeManager: LastApprovedBlock](
       maybeBondsPath: Option[String],
-      numValidators: Int,
+      autogenShardSize: Int,
       genesisPath: Path,
       maybeVaultsPath: Option[String],
       minimumBond: Long,
@@ -82,7 +82,7 @@ object ApproveBlockProtocol {
       bonds <- BondsParser.parse[F](
                 maybeBondsPath,
                 genesisPath.resolve("bonds.txt"),
-                numValidators,
+                autogenShardSize,
                 genesisPath
               )
 

@@ -4,15 +4,14 @@ import java.io.File
 import java.security.cert.X509Certificate
 
 import scala.util._
-
-import cats._, cats.data._, cats.implicits._
-
+import cats._
+import cats.data._
+import cats.implicits._
 import coop.rchain.comm._
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.util.CertificateHelper
-import coop.rchain.node.configuration.Configuration
+import coop.rchain.node.configuration.{NodeConf}
 import coop.rchain.shared.Log
-
 import monix.eval.Task
 import monix.execution.Scheduler
 
@@ -20,9 +19,9 @@ object NodeEnvironment {
 
   class InitializationException(msg: String) extends RuntimeException
 
-  def create(conf: Configuration)(implicit log: Log[Task]): Task[NodeIdentifier] =
+  def create(conf: NodeConf)(implicit log: Log[Task]): Task[NodeIdentifier] =
     for {
-      dataDir <- Task.delay(conf.server.dataDir.toFile)
+      dataDir <- Task.delay(conf.storage.dataDir.toFile)
       _       <- canCreateDataDir(dataDir)
       _       <- haveAccessToDataDir(dataDir)
       _       <- log.info(s"Using data dir: ${dataDir.getAbsolutePath}")
@@ -36,10 +35,10 @@ object NodeEnvironment {
     if (pred) Task.raiseError(new RuntimeException(msg))
     else Task.unit
 
-  private def name(conf: Configuration): Task[String] = {
+  private def name(conf: NodeConf): Task[String] = {
     val certificate: Task[X509Certificate] =
       Task
-        .delay(CertificateHelper.fromFile(conf.tls.certificate.toFile))
+        .delay(CertificateHelper.fromFile(conf.tls.certificatePath.toFile))
         .attempt
         .map(
           _.leftMap(
@@ -77,13 +76,13 @@ object NodeEnvironment {
     s"The data dir must be a directory and have read and write permissions:\n${dataDir.getAbsolutePath}"
   )
 
-  private def hasCertificate(conf: Configuration): Task[Unit] = isValid(
-    !conf.tls.certificate.toFile.exists(),
-    s"Certificate file ${conf.tls.certificate} not found"
+  private def hasCertificate(conf: NodeConf): Task[Unit] = isValid(
+    !conf.tls.certificatePath.toFile.exists(),
+    s"Certificate file ${conf.tls.certificatePath} not found"
   )
 
-  private def hasKey(conf: Configuration): Task[Unit] = isValid(
-    !conf.tls.key.toFile.exists(),
-    s"Secret key file ${conf.tls.certificate} not found"
+  private def hasKey(conf: NodeConf): Task[Unit] = isValid(
+    !conf.tls.keyPath.toFile.exists(),
+    s"Secret key file ${conf.tls.certificatePath} not found"
   )
 }
